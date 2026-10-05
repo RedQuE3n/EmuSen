@@ -22,6 +22,9 @@ pub struct Vdp {
     pub hint_pending: bool,
     hint_counter: u8,
     pub pal: bool,
+    /// The external interrupt, and the HV counter latched by it while register 0's bit 1 is set.
+    pub ext_pending: bool,
+    hv_latch: Option<u16>,
 }
 
 /// A transfer from the 68000's bus the control port has started: the source, the words, and the destination's code.
@@ -41,6 +44,8 @@ pub struct VdpRegs {
     pub vint_pending: bool,
     pub hint_pending: bool,
     pub hint_counter: u8,
+    pub ext_pending: bool,
+    pub hv_latch: Option<u16>,
 }
 
 impl Vdp {
@@ -54,6 +59,8 @@ impl Vdp {
             vint_pending: self.vint_pending,
             hint_pending: self.hint_pending,
             hint_counter: self.hint_counter,
+            ext_pending: self.ext_pending,
+            hv_latch: self.hv_latch,
         }
     }
 
@@ -66,6 +73,8 @@ impl Vdp {
         self.vint_pending = s.vint_pending;
         self.hint_pending = s.hint_pending;
         self.hint_counter = s.hint_counter;
+        self.ext_pending = s.ext_pending;
+        self.hv_latch = s.hv_latch;
     }
 
     pub fn new(pal: bool) -> Vdp {
@@ -82,6 +91,8 @@ impl Vdp {
             hint_pending: false,
             hint_counter: 0,
             pal,
+            ext_pending: false,
+            hv_latch: None,
         }
     }
 
@@ -228,9 +239,21 @@ impl Vdp {
     /// The V counter from the line, with NTSC's jump from $EA to $E5 and PAL's from $F2 to $D2; the H counter from the
     /// position as a fraction of the line (argued, stage 4's to make exact).
     pub fn hv(&self, line: u32, dot: u64) -> u16 {
+        if let Some(l) = self.hv_latch.filter(|_| self.regs[0] & 2 != 0) {
+            return l;
+        }
         let v = if self.pal { if line > 0xF2 { line - 0x39 } else { line } } else if line > 0xEA { line - 6 } else { line };
         let h = (dot * 0x100 / LINE) as u16;
         ((v & 0xFF) as u16) << 8 | h
+    }
+
+    /// TH changed on a port whose interrupt is enabled: the external interrupt, and the HV counter latched.
+    pub fn external(&mut self, line: u32, dot: u64) {
+        self.ext_pending = true;
+        if self.regs[0] & 2 != 0 {
+            self.hv_latch = None;
+            self.hv_latch = Some(self.hv(line, dot));
+        }
     }
 
     /// The line counter at the start of `line`: decremented through the active lines and line 224, an interrupt where
@@ -254,6 +277,8 @@ impl Vdp {
             6
         } else if self.hint_pending && self.regs[0] & 0x10 != 0 {
             4
+        } else if self.ext_pending && self.regs[11] & 8 != 0 {
+            2
         } else {
             0
         }
@@ -263,6 +288,7 @@ impl Vdp {
         match level {
             6 => self.vint_pending = false,
             4 => self.hint_pending = false,
+            2 => self.ext_pending = false,
             _ => {}
         }
     }

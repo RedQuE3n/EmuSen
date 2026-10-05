@@ -47,6 +47,38 @@ fn pad(id: &str, label: &str, six: bool) -> Controller {
     }
 }
 
+/// The settings that choose each port's pad, read at create and between frames.
+pub const PAD_KEYS: [&str; 2] = ["pad1", "pad2"];
+
+fn pad_setting(port: usize) -> Setting {
+    Setting {
+        key: PAD_KEYS[port].into(),
+        label: format!("Port {} controller", port + 1),
+        help: "The pad plugged into the port: Sega's three-button Control Pad, or the six-button Arcade Pad, which a game reads through the same port and which some games use for X, Y, Z and Mode.".into(),
+        kind: SettingKind::Choice(vec![
+            Choice { value: "md.pad3".into(), label: "3-Button Control Pad".into(), help: None },
+            Choice { value: "md.pad6".into(), label: "6-Button Arcade Pad".into(), help: None },
+        ]),
+        default: "md.pad3".into(),
+        scope: Scope::Run,
+        category: Some("Controllers".into()),
+        effect: Effect::None,
+        advanced: false,
+        hidden: false,
+        restart: false,
+    }
+}
+
+impl Machine {
+    fn apply_pads(&mut self, settings: &Settings) {
+        for (port, key) in PAD_KEYS.iter().enumerate() {
+            if let Some(v) = settings.get(key) {
+                self.six_button[port] = v == "md.pad6";
+            }
+        }
+    }
+}
+
 fn controllers() -> Vec<Controller> {
     vec![pad("md.pad3", "3-Button Control Pad", false), pad("md.pad6", "6-Button Arcade Pad", true)]
 }
@@ -59,6 +91,9 @@ pub const CD_BIOS_J: u32 = 4;
 pub const S32X_68K: u32 = 5;
 pub const S32X_MASTER: u32 = 6;
 pub const S32X_SLAVE: u32 = 7;
+/// Sonic & Knuckles' lock-on: the player's cartridge on top, and the cartridge's second, 256 KiB ROM.
+pub const LOCK_ON: u32 = 8;
+pub const SK_PATCH: u32 = 9;
 
 fn firmware(which: u32, name: &str, label: &str, size: u64, cost: &str) -> Firmware {
     Firmware { which, name: name.into(), label: label.into(), size, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: cost.into() }) }
@@ -92,6 +127,28 @@ fn s32x_boot() -> Vec<Firmware> {
         firmware(S32X_MASTER, "32X_M_BIOS.BIN", "The 32X's master SH-2 boot ROM (2,048 bytes)", 2048, S32X_COST),
         firmware(S32X_SLAVE, "32X_S_BIOS.BIN", "The 32X's slave SH-2 boot ROM (1,024 bytes)", 1024, S32X_COST),
     ]
+}
+
+/// The files Sonic & Knuckles takes beside its own image: the player's cartridges, not firmware; a combined image
+/// carries them already.
+fn lock_on_files() -> Vec<Firmware> {
+    let cart = |which, name: &str, label: &str, size| Firmware {
+        which,
+        name: name.into(),
+        label: label.into(),
+        size,
+        required: false,
+        parts: vec![vec![name.into()]],
+        replacement: Some(Replacement::None { cost: "Without it Sonic & Knuckles runs alone, as the cartridge does with nothing on top.".into() }),
+    };
+    vec![
+        cart(LOCK_ON, "lockon.bin", "The cartridge locked on top of Sonic & Knuckles", 0x20_0000),
+        cart(SK_PATCH, "sk2chip.bin", "Sonic & Knuckles' second ROM, for Sonic 2 on top (262,144 bytes)", 0x4_0000),
+    ]
+}
+
+fn takes_lock_on(media: &Media, image_len: usize) -> bool {
+    media.header.as_ref().is_some_and(|h| h.serial.starts_with(crate::cart::LOCK_ON_SERIAL)) && image_len <= 0x20_0000
 }
 
 fn system(id: &str, name: &str, extensions: &[&str], firmware: Vec<Firmware>) -> emusen_native::core::System {
@@ -136,10 +193,15 @@ impl Core for Machine {
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
         let media = Media::read(image);
         match media.system {
+            System::Md if takes_lock_on(&media, image.len()) => lock_on_files(),
             System::Md => Vec::new(),
             System::Mcd => vec![cd_bios(media.bios_region())],
             System::S32x => s32x_boot(),
         }
+    }
+
+    fn settings_schema() -> Vec<Setting> {
+        vec![pad_setting(0), pad_setting(1)]
     }
 
     fn status_text(code: i32) -> Option<String> {
@@ -155,11 +217,16 @@ impl Core for Machine {
             detail(&format!("the image is {} bytes; a cartridge's vectors and header take 512", request.image.len()));
             return Err(STATUS_IMAGE_TOO_SHORT);
         }
-        if let Some(f) = request.files.iter().find(|f| f.which > S32X_SLAVE) {
+        if let Some(f) = request.files.iter().find(|f| f.which > SK_PATCH) {
             detail(&format!("file {} is not one Nephrite names", f.which));
             return Err(status::BAD_FILE);
         }
         let mut m = Machine::new(request.image, Media::read(request.image));
+        m.apply_pads(&request.settings);
+        if let Some(top) = request.files.iter().find(|f| f.which == LOCK_ON) {
+            let patch = request.files.iter().find(|f| f.which == SK_PATCH).map_or(Vec::new(), |f| f.data.to_vec());
+            m.genesis.hw.cart.lock_on(top.data.to_vec(), patch);
+        }
         m.firmware = request.files.iter().filter(|f| f.which != 0).map(|f| f.which).collect();
         if let (Some(id), Some(file)) = (m.battery_id(), request.files.iter().find(|f| f.which == 0)) {
             let bytes = m.bytes_mut(id).expect("the battery's memory");
@@ -178,7 +245,7 @@ impl Core for Machine {
             frame_rate: if pal { PAL_FRAME } else { NTSC_FRAME },
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: 320, max_height: 480, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
-            ports: vec![Port { port: 0, controller: Some("md.pad3".into()) }, Port { port: 1, controller: Some("md.pad3".into()) }],
+            ports: (0..2).map(|p| Port { port: p as u32, controller: Some(if self.six_button[p] { "md.pad6" } else { "md.pad3" }.into()) }).collect(),
             spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", ..Space::new(m.id, m.name) }).collect(),
             processors: Vec::new(),
             battery: self.battery_id().map(|_| Battery { which: 0, suffix: if self.media.system == System::Mcd { ".brm" } else { ".srm" }.into() }).into_iter().collect(),
@@ -187,6 +254,7 @@ impl Core for Machine {
             patches: None,
             skip_rendering_state_neutral: true,
             firmware: match self.media.system {
+                System::Md if takes_lock_on(&self.media, self.genesis.hw.cart.rom.len()) => vec![named(LOCK_ON), named(SK_PATCH)],
                 System::Md => Vec::new(),
                 System::Mcd => vec![named(cd_bios(self.media.bios_region()).which)],
                 System::S32x => vec![named(S32X_68K), named(S32X_MASTER), named(S32X_SLAVE)],
@@ -228,6 +296,11 @@ impl Core for Machine {
     }
 
     fn set_audio_limit(&mut self, _samples: usize) {}
+
+    fn set_settings(&mut self, settings: &Settings) -> Result<(), i32> {
+        self.apply_pads(settings);
+        Ok(())
+    }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
         let p = self.pads.get_mut(port as usize).ok_or(status::NO_SUCH_PORT)?;
@@ -325,7 +398,7 @@ mod tests {
         let m = create(&cartridge("SEGA GENESIS", "U", Some(ra)), vec![emusen_native::abi::File { which: 0, data: &save }]).unwrap();
         assert_eq!(m.battery(0).unwrap().0, &save[..]);
         assert_eq!(m.machine_info().battery[0].suffix, ".srm");
-        assert_eq!(create(&cartridge("SEGA GENESIS", "U", None), vec![emusen_native::abi::File { which: 9, data: &save }]).err(), Some(status::BAD_FILE));
+        assert_eq!(create(&cartridge("SEGA GENESIS", "U", None), vec![emusen_native::abi::File { which: 10, data: &save }]).err(), Some(status::BAD_FILE));
     }
 
     #[test]
@@ -346,5 +419,19 @@ mod tests {
             assert_eq!(s.controllers.iter().map(|c| c.buttons.len()).collect::<Vec<_>>(), [8, 12]);
             assert!(s.firmware.iter().all(|f| !f.required));
         }
+    }
+
+    #[test]
+    fn the_pad_settings_choose_each_ports_controller() {
+        assert!(Machine::settings_schema().iter().all(|s| s.check().is_ok()));
+        let image = cartridge("SEGA GENESIS", "U", None);
+        let settings = Settings::from_pairs(vec![("pad2".into(), "md.pad6".into())]);
+        let mut m = Machine::create(&Create { image: &image, settings, files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
+        let ports = |m: &Machine| m.machine_info().ports.iter().map(|p| p.controller.clone().unwrap()).collect::<Vec<_>>();
+        assert_eq!(ports(&m), ["md.pad3", "md.pad6"]);
+        m.set_settings(&Settings::from_pairs(vec![("pad1".into(), "md.pad6".into()), ("pad2".into(), "md.pad3".into())])).unwrap();
+        assert_eq!(ports(&m), ["md.pad6", "md.pad3"]);
+        m.advance();
+        assert!(m.genesis.hw.io.pads[0].six && !m.genesis.hw.io.pads[1].six);
     }
 }

@@ -138,11 +138,11 @@ mod tests {
                 "139570 1 bool M68000.TracePending\n139571 4 u32 M68000.TraceResume\n139575 8 u16[4] Z80.Main\n139583 8 u16[4] Z80.Alternate\n",
                 "139591 4 u16[2] Z80.Index\n139595 2 u16 Z80.Sp\n139597 2 u16 Z80.Pc\n139599 1 u8 Z80.I\n139600 1 u8 Z80.R\n139601 2 u16 Z80.Wz\n",
                 "139603 1 u8 Z80.Q\n139604 1 bool Z80.P\n139605 1 bool Z80.Iff1\n139606 1 bool Z80.Iff2\n139607 1 u8 Z80.Im\n",
-                "139608 1 bool Z80.EiPending\n139609 1 bool Z80.Halted\n139610 24 u8[24] VdpRegisters\n139634 4 bool[4] VdpLatches\n",
-                "139638 1 u8 VdpCode\n139639 2 u16 VdpAddress\n139641 1 u8 VdpLineCounter\n139642 3 u8[3] IoData\n139645 3 u8[3] IoCtrl\n",
-                "139648 3 u8[3] IoTx\n139651 3 u8[3] IoSctrl\n139654 2 bool[2] PadTh\n139656 2 u8[2] PadFalls\n139658 16 u64[2] PadLastFall\n",
-                "139674 1 u8 SramRegister\n139675 1 bool Mapper\n139676 8 u8[8] MapperPages\n139684 56 u64[7] Clocks\n139740 4 u32 Line\n",
-                "139744 2 u16 Z80Bank\n139746 4 bool[4] Lines\n139750 4 u8[4] Tmss\n"
+                "139608 1 bool Z80.EiPending\n139609 1 bool Z80.Halted\n139610 24 u8[24] VdpRegisters\n139634 5 bool[5] VdpLatches\n",
+                "139639 4 u32 HvLatch\n139643 1 u8 VdpCode\n139644 2 u16 VdpAddress\n139646 1 u8 VdpLineCounter\n139647 3 u8[3] IoData\n",
+                "139650 3 u8[3] IoCtrl\n139653 3 u8[3] IoTx\n139656 3 u8[3] IoSctrl\n139659 2 bool[2] PadTh\n139661 2 u8[2] PadFalls\n",
+                "139663 16 u64[2] PadLastFall\n139679 1 u8 SramRegister\n139680 1 bool Mapper\n139681 8 u8[8] MapperPages\n",
+                "139689 56 u64[7] Clocks\n139745 4 u32 Line\n139749 2 u16 Z80Bank\n139751 4 bool[4] Lines\n139755 4 u8[4] Tmss\n"
             )
         );
     }

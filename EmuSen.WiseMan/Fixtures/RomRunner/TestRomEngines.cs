@@ -132,9 +132,11 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
         private readonly IReadOnlyList<KeyValuePair<string, string>> _options;
         private readonly string? _system;
         private readonly string? _systemDir;
+        private readonly IReadOnlyCollection<string> _wordSwapped;
 
-        public LibretroProbeEngine(string name, string corePath, string cacheRoot, IReadOnlyDictionary<string, string>? options = null, string? system = null, string? systemDir = null)
+        public LibretroProbeEngine(string name, string corePath, string cacheRoot, IReadOnlyDictionary<string, string>? options = null, string? system = null, string? systemDir = null, IReadOnlyCollection<string>? wordSwapped = null)
         {
+            _wordSwapped = wordSwapped ?? Array.Empty<string>();
             Name = name;
             _core = corePath;
             _cache = cacheRoot;
@@ -151,6 +153,14 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
         public bool Available => File.Exists(ProbePath) && File.Exists(_core);
 
         private static int Gcd(int a, int b) => b == 0 ? a : Gcd(b, a % b);
+
+        // A space a core holds as little-endian words, put back in the 68000's byte order.
+        public static byte[] SwapWords(byte[] b)
+        {
+            var o = (byte[])b.Clone();
+            for (int i = 0; i + 1 < o.Length; i += 2) (o[i], o[i + 1]) = (b[i + 1], b[i]);
+            return o;
+        }
 
         public RomRun Run(string rom, IReadOnlyList<int> frames, IReadOnlyList<RomPress>? presses = null, bool audio = false)
         {
@@ -213,6 +223,7 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
                 var doc = JsonNode.Parse(File.ReadAllText(manifest))!;
                 var mem = new Dictionary<string, byte[]>();
                 foreach (var s in doc["spaces"]!.AsArray()) mem[s!["name"]!.GetValue<string>()] = File.ReadAllBytes(Path.Combine(dir, s["file"]!.GetValue<string>()));
+                foreach (string name in _wordSwapped.Where(mem.ContainsKey)) mem[name] = SwapWords(mem[name]);
                 RomPicture? picture = null;
                 if (doc["screen"] is JsonObject screen)
                     picture = RomPicture.FromProbe(File.ReadAllBytes(Path.Combine(dir, screen["file"]!.GetValue<string>())), screen["width"]!.GetValue<int>(), screen["height"]!.GetValue<int>(), screen["format"]!.GetValue<string>());

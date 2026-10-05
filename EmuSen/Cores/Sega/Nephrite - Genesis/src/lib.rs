@@ -6,6 +6,7 @@
 //! crates; the picture is stage 4's.
 
 pub mod cart;
+pub mod eeprom;
 pub mod genesis;
 pub mod io;
 pub mod machine;

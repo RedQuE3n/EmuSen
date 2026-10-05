@@ -169,6 +169,42 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(roms.Count, ran + refused);
         }
 
+        public const string GamesVariable = "EMUSEN_NEPHRITE_GAMES";
+
+        // The 68000's RAM against Genesis Plus GX's at frames 120 and 600 over every game in a folder, a measurement written to EMUSEN_NEPHRITE_REPORT - see Nephrite_Native.md §10.
+        [Fact]
+        public void The_ram_against_genesis_plus_gx_at_anchors_over_the_games()
+        {
+            string? folder = Environment.GetEnvironmentVariable(GamesVariable);
+            var gpgx = new LibretroProbeEngine("genesis_plus_gx", ReferenceCore("genesis_plus_gx"), Path.Combine(Path.GetDirectoryName(folder ?? "") ?? _root, "runs"), system: "megadrive", wordSwapped: new[] { "ram" });
+            if (folder is null || !Directory.Exists(folder) || !gpgx.Available)
+            {
+                _output.WriteLine($"{GamesVariable} names no folder, or no probe or Genesis Plus GX core here: not run");
+                return;
+            }
+            var nephrite = new CoreAbiTestRomEngine(LibraryPath);
+            var frames = new[] { 120, 600 };
+            var lines = new List<string> { "game\tequal_f120\tequal_f600" };
+            var games = Directory.EnumerateFiles(folder).Where(p => Path.GetExtension(p).ToLowerInvariant() is ".bin" or ".md" or ".gen").Order().ToList();
+            foreach (string game in games)
+            {
+                string row;
+                try
+                {
+                    var diffs = TestRomDifferential.Compare(nephrite.Run(game, frames), gpgx.Run(game, frames), new Dictionary<string, string> { ["wram"] = "ram" });
+                    row = string.Join("\t", frames.Select(f => diffs.FirstOrDefault(d => d.Frame == f) is { } d && d.SpaceBytes.TryGetValue("wram", out int n) ? (65536 - n).ToString() : "-"));
+                }
+                catch (Exception e) when (e is CoreRefusedException or InvalidOperationException)
+                {
+                    row = $"error\t{e.Message.Split('\n')[0]}";
+                }
+                lines.Add($"{Path.GetFileName(game)}\t{row}");
+            }
+            if (Environment.GetEnvironmentVariable("EMUSEN_NEPHRITE_REPORT") is { Length: > 0 } report) File.WriteAllLines(report, lines);
+            _output.WriteLine($"{games.Count} games compared");
+            Assert.Equal(games.Count + 1, lines.Count);
+        }
+
         private static string ReferenceCore(string name) =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "probe", "libretro", "cores", $"{name}_libretro.so");
 

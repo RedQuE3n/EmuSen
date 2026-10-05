@@ -1,7 +1,8 @@
 #!/bin/bash
 # Builds the referee benches with Verilator into work directories that also hold each core's microcode files and a copy
 # of the bench (make cannot take a path with a space): fx68k from the MegaCD MiSTer checkout, Nuked-MD's m68kcpu from
-# the Mega Drive MiSTer checkout. Beryl_M68k.md section 6. Usage: build-referees.sh [fx68k|nuked|both]
+# the Mega Drive MiSTer checkout, and that checkout's whole board for Nephrite_Disputes.md D-1.
+# Beryl_M68k.md section 6. Usage: build-referees.sh [fx68k|nuked|both|board]
 set -euo pipefail
 WHICH="${1:-both}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,6 +28,12 @@ build() {  # work-dir top-module extra-flags... -- sources...
 if [ "$WHICH" = fx68k ] || [ "$WHICH" = both ]; then
     W="$CACHE/probe/fx68k"; mkdir -p "$W"; cp "$FX/microrom.mem" "$FX/nanorom.mem" "$W/"
     build "$W" fx68k -- "$FX/fx68k.sv" "$FX/fx68kAlu.sv" "$FX/uaddrPla.sv"
+fi
+if [ "$WHICH" = board ]; then
+    W="$CACHE/probe/nukedmd-board"; mkdir -p "$W"; cp "$NUKED/68k_ucode.txt" "$NUKED/68k_ncode.txt" "$HERE/tb_md.cpp" "$HERE/vram_ip.v" "$W/"
+    "$VBIN" "${FLAGS[@]}" -O2 --top-module md_board -Mdir "$W/obj" -o "$W/tb_md" "$NUKED"/*.v "$W/vram_ip.v" "$W/tb_md.cpp" \
+        > "$W/build.log" 2>&1 || { tail -30 "$W/build.log"; exit 1; }
+    echo "$W/tb_md"
 fi
 if [ "$WHICH" = nuked ] || [ "$WHICH" = both ]; then
     W="$CACHE/probe/nuked68k"; mkdir -p "$W"; cp "$NUKED/68k_ucode.txt" "$NUKED/68k_ncode.txt" "$W/"

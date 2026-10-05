@@ -96,6 +96,12 @@ use the same instrument, so the line between them is drawn by rules about how a 
 > the DSP-1's limit angle on Azs, past which the projection commands change course. It is treated as a measured
 > latency is, with the measurement and its precision in the record. No other value past the limit is admitted: what
 > the chip does there is stated as formulas with declared families under R2.
+>
+> *Amended 2026-10-04* (decided; `VenusRT_Native.md` §55). The exception is widened from one constant to a class:
+> **whole-number behavioural parameters of the chip's program logic**, such as gate widths, masks, shifts, step sizes
+> and thresholds, found by black-box probing. Each is recorded with how it was measured. A value fitted by minimising
+> an error against the LLE's outputs remains forbidden, whatever its type, as §48.2 of that record withdrew 07h's K
+> and c. Admitted under this class: the DSP-1's limit angle (§52.3) and ST010 05h's constants (§54.2, listed in §55).
 
 **The argument for exactness without copying.** A model with b bits of free choice that reproduces N independent
 output bits, with N much larger than b, carries at most b bits of information taken from the oracle; everything else

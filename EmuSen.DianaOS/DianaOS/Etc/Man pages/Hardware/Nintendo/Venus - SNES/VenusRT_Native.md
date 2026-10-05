@@ -6015,3 +6015,46 @@ replacement's cost text says so.
      frame 1,019.
 2. **F4's tie.** It was broken by a set aimed at the boundary, which neither §52.4's rank nor §52.8's tie rule names.
    It changes 05h's time by one cycle when the sum equals the wanted speed, and no value.
+
+## 55. The NEC DSP replacements: the R1 amendment widened, and the tie-break by boundary cases (2026-10-04)
+
+### 55.1 The decision, and the amendment it makes
+
+*Decided 2026-10-04*, on §54.6. Plan §1.3's R1 exception is widened from one constant to a class: **whole-number
+behavioural parameters of the chip's program logic**, such as gate widths, masks, shifts, step sizes and thresholds,
+found by black-box probing, each recorded with how it was measured. **Values fitted by minimising an error against
+the image's outputs remain forbidden.** The plan's §1.3 carries the amendment. The distinction is one of method, not
+of type: the DSP-1's limit angle (§52.3) was read off as the threshold at which a branch is taken, and 05h's
+constants below were each fixed by single probes that hold exactly. 07h's K and c (§43.1) were chosen as the values
+of a shape that came closest to 176 outputs, which stays a breach (§48.2).
+
+### 55.2 ST010 05h's constants, admitted, and how each was measured
+
+All with `dsp_oracle mailbatch 05` against a zero RAM unless said; each holds exactly on the 65,536 seeded cases and
+98,150 traced cases of §54.3.
+
+| Constant | Value | How it was measured |
+|---|---|---|
+| The gate's half-widths | 127 and 7 | the waypoint placed at every offset from -300 to 300 along each axis with the other held at 0, 3, 7 and 8: the next waypoint is taken for \|Dx\| <= 127 with \|Dy\| <= 7, and the axes exchange with 6Dh's bit 15 |
+| The gate's orientation bit | 6Dh bit 15 | the traced values 0 and FFFFh, then seeded 6Dh: the box follows bit 15 alone |
+| The next waypoint's masks | 70h AND 0FFFh; bit 15 to 6Dh | seeded 70h: T_y takes bits 0-11 and 6Dh = FFFFh exactly when bit 15 is set |
+| The flag set on passing | 6Eh bit 3 | traced 0, 4 and 5 became 8, Ch and Dh; seeded 6Eh keeps its other bits |
+| The position's width | 13 bits (mod 2000h) | positions of 0, 1, 1FFFh, 2000h, 2001h, 3FFFh, 4000h, 7FFFh, 8000h, C000h, FFFFh, with and without a move |
+| The turn step | 0280h | heading 0 with bearings from 1 to 359 degrees: the heading moves by exactly +0280h, -0280h or 0; the 98,150 traced turns are all one of the three |
+| The turn's dead band | e's high byte zero | the traced errors in steps of 80h: +80h no turn, -80h a turn down |
+| The speed rule's threshold | \|e\| >= 1000h | the traced speeds by \|e\|'s high byte: the fall begins at 10h exactly |
+| The speed rule's shift | \|e\| >> 4 | headings 2^14 from the bearing give a fall of 0418h, 0428h, 0438h for errors 4180h, 4280h, 4380h; an error of A000h a fall of 0600h |
+| The move's factor and shifts | 2, v >> 8, S >> 5 | speed FF00h at every one of the 256 headings: each step equals 2·⌊v/256⌋·⌊S/32⌋ exactly, and speeds 1000h and 1010h move alike |
+
+The cycle counts of §54.1 are latencies, admitted before this amendment. The angle's rounding (A1) and its zero rule
+(A2) are choices within a declared family, not constants.
+
+### 55.3 The tie-break by boundary cases
+
+§52.8's tie rule ranks two members within 1% on the seeded cases by their exact share on the games' traced traffic.
+**Accepted 2026-10-04**: when the traced traffic cannot separate the two, because the choice concerns time, which the
+trace does not carry, or a case the trace never reaches, they are ranked by **cases aimed at the boundary between
+them**, drawn by a seeded generator written before the ranking, the counts recorded either way. §54.3's F4 is the
+first such tie: 3,336 cases with the wanted speed within 3 of the sum, 333 on it, gave "at least" 3,336 exact and
+"above" 3,013, and "at least" is built.
+

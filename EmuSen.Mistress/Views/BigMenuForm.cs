@@ -19,6 +19,9 @@ namespace EmuSen.Mistress.Views
     // A desktop settings sheet drawn as ES-DE's menus in a big-screen session: its controls, moved out of their field rows into menu rows, pages as submenus - see EmuSen_Settings_Reference.md §4.72.8.
     public sealed class BigMenuForm
     {
+        // Set on a field whose hint is read letter for letter, such as a folder's path: its footer keeps its case whatever case the look draws words in.
+        public static readonly AttachedProperty<bool> VerbatimHintProperty = AvaloniaProperty.RegisterAttached<FieldRow, bool>("VerbatimHint", typeof(BigMenuForm));
+
         // One screen of the form: its title, and what its rows are made from each time it is shown.
         private sealed record Page(string Title, Func<IReadOnlyList<Control>> Rows);
 
@@ -33,6 +36,7 @@ namespace EmuSen.Mistress.Views
         private readonly Stack<Page> _stack = new();
         private readonly Dictionary<Control, List<Control>> _converted = new();
         private readonly Dictionary<Control, string> _hints = new();
+        private readonly HashSet<Control> _verbatim = new();
         private readonly Dictionary<Control, List<Control>> _extras = new();
         private List<Control> _pending = new();
         private readonly Dictionary<int, Button> _pageRows = new();
@@ -202,7 +206,12 @@ namespace EmuSen.Mistress.Views
         private void ShowHint(Control? source)
         {
             for (Control? c = source; c is not null && !ReferenceEquals(c, _rows); c = c.Parent as Control)
-                if (_hints.TryGetValue(c, out string? hint)) { Menu.Footer = hint.Length > 0 ? hint : null; return; }
+                if (_hints.TryGetValue(c, out string? hint))
+                {
+                    Menu.FooterLetterCase = _verbatim.Contains(c) ? EmuSen.LunaP.Media.LetterCase.None : null;
+                    Menu.Footer = hint.Length > 0 ? hint : null;
+                    return;
+                }
             Menu.Footer = null;
         }
 
@@ -280,7 +289,11 @@ namespace EmuSen.Mistress.Views
                 {
                     Control? content = field.Content as Control;
                     field.Content = null;
-                    foreach (Control row in Content(content, field.Label ?? "", field.Hint ?? "")) yield return row;
+                    foreach (Control row in Content(content, field.Label ?? "", field.Hint ?? ""))
+                    {
+                        if (field.GetValue(VerbatimHintProperty)) _verbatim.Add(row);
+                        yield return row;
+                    }
                     yield break;
                 }
                 case EmptyState empty:

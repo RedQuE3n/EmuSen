@@ -129,8 +129,11 @@ namespace EmuSen.Cores.Native
         public IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath) =>
             Library.FirmwareFor(File.ReadAllBytes(romPath)).Select(Request).ToArray();
 
-        private FirmwareRequest Request(CoreFirmware f) =>
-            new(Info.Name, f.Label, f.Name, (int)f.Size, f.Required ? "required" : "optional")
+        private FirmwareRequest Request(CoreFirmware f) => Request(Info.Name, f);
+
+        // A v1 core's firmware entry as the library's request; static so the firmware page asks from a sidecar's info with no library loaded.
+        public static FirmwareRequest Request(string core, CoreFirmware f) =>
+            new(core, f.Label, f.Name, (int)f.Size, f.Required ? "required" : "optional")
             {
                 Parts = f.Parts, Required = f.Required, ReplacementEffect = f.Replacement?.Effect, ReplacementCost = f.Replacement?.Cost,
             };

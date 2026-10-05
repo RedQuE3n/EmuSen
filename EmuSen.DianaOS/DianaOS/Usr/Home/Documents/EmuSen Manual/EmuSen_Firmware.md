@@ -78,6 +78,11 @@ The prompt is deliberately *not* in the core. A core deep in a constructor canno
 
 Because `Install` copies into the library, this is a once-ever prompt per chip, not once per launch.
 
+*Since 2026-10-03 only a request a core marks `required` is prompted for, and no core the project builds marks one
+(§0).* What a player sees instead is **Preferences ▸ Firmware** (2026-10-05, `EmuSen_Settings_Reference.md` §4.89): per
+system, each file an engine can use, whether EmuSen's open version or the player's own file is running, what the open
+version changes, and the folder a file goes in. It lists and explains; it installs, fetches and asks for nothing.
+
 **`EmuSen.Hotaru`** (Avalonia, but shell-driven) — no OS picker; ROMs arrive from the DianaOS shell. It gets the log path below.
 
 **`EmuSen.Pharaoh`** (headless CLI, including its no-ROM `--singlestep`/`--diffshot`/`--tracediff` verbs) — must never block on a prompt. It gets the log path too.

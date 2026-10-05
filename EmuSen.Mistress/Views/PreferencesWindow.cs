@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using EmuSen.Common.Firmware;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
@@ -16,7 +15,7 @@ using EmuSen.Mistress.Input;
 
 namespace EmuSen.Mistress.Views
 {
-    // OpenEmu's preference panes, as tabs: Library, Gameplay, Appearance, System Files - see EmuSen_Settings_Reference.md §4.36.
+    // OpenEmu's preference panes, as tabs: Library, Gameplay, Appearance, and Firmware where OpenEmu has System Files - see EmuSen_Settings_Reference.md §4.36 and §4.89.
     public class PreferencesWindow : ToolWindow, IPadDriven
     {
         private static readonly (string Value, string Text)[] ResumeChoices =
@@ -53,8 +52,14 @@ namespace EmuSen.Mistress.Views
 
         public const string ScrapingTab = "Scraping";
         public const string ControllersTab = "Controllers";
+        public const string FirmwareTab = "Firmware";
 
         private readonly Tabs _tabs = new() { Name = "PreferenceTabs" };
+        private readonly FirmwarePane _firmware;
+        private readonly Panel _firmwareRows;
+
+        // The Firmware tab read again from the folder and the engine choices; true when its rows changed.
+        public bool RefreshFirmware() => _firmware.Refresh(_firmwareRows);
 
         // Opens on a named tab, as the pad menu's "Scrape Games..." opens on Scraping.
         public void ShowTab(string header)
@@ -221,7 +226,12 @@ namespace EmuSen.Mistress.Views
             var controllers = new ControllerPreferencesPane(settings, pads, ports);
             Closed += (_, _) => controllers.Dispose();
             tabs.Add(ControllersTab, Pane(controllers.Rows()));
-            tabs.Add("System Files", Pane(SystemFiles()));
+            // Read again when the window comes back to the front, as after a file is dropped in the folder; a big-screen sheet reads it when it opens.
+            _firmware = new FirmwarePane(menu is not null);
+            var firmwarePane = (ScrollViewer)Pane(_firmware.Rows());
+            _firmwareRows = (Panel)firmwarePane.Content!;
+            tabs.Add(FirmwareTab, firmwarePane);
+            if (menu is null) Activated += (_, _) => RefreshFirmware();
 
             // A dock and scrolling panes, so a sheet shorter than the window still shows Close - see EmuSen_Settings_Reference.md §4.45.3.
             Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
@@ -312,17 +322,6 @@ namespace EmuSen.Mistress.Views
         }
 
         private static Control Pane(params Control[] rows) => new ScrollViewer { Content = Ui.Stack(12, rows).Margin(4, 12, 4, 4) };
-
-        // Nothing to install here: a game that needs a chip's dump asks for it the first time it starts - see EmuSen_Firmware.md §3.
-        private static Control SystemFiles()
-        {
-            string directory = FirmwareLibrary.Directory;
-            string[] files = Directory.Exists(directory) ? Directory.GetFiles(directory).Select(Path.GetFileName).OfType<string>().OrderBy(f => f).ToArray() : System.Array.Empty<string>();
-            Control list = files.Length == 0
-                ? new EmptyState { Message = "No system files installed.", Detail = "A game that needs a coprocessor's firmware asks for it the first time it starts." }
-                : Ui.Stack(4, files.Select(f => (Control)Ui.Mono(f)).ToArray());
-            return new FieldRow { Label = "Firmware", Hint = $"Installed in {directory}", Content = list };
-        }
 
         // Saves immediately on every change rather than needing a Save button - there is nothing here worth staging and discarding.
         private PathPickerRow Picker(string name, string placeholder, string title, string? current, System.Action<string> apply)

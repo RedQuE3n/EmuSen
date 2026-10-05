@@ -1118,7 +1118,7 @@ OpenEmu's toolbar switches between Library, Save States and Screenshots, and so 
 
 ### 4.36 Preferences as OpenEmu's panes (2026-09-21)
 
-The Preferences window is tabs: **Library** (the ROM, cover art, save state and log folders), **Gameplay** (what happens when a game with a resume state starts, pausing in the background, big screen), **Appearance** (the theme of §4.25) and **System Files** (the firmware installed, and where). OpenEmu's Controls pane is Settings > Controller Bindings here, which already had tabs per console, and its Cores pane has no counterpart because the cores are built in.
+The Preferences window is tabs: **Library** (the ROM, cover art, save state and log folders), **Gameplay** (what happens when a game with a resume state starts, pausing in the background, big screen), **Appearance** (the theme of §4.25) and **System Files** (the firmware installed, and where; *since 2026-10-05 this tab is **Firmware**, §4.89*). OpenEmu's Controls pane is Settings > Controller Bindings here, which already had tabs per console, and its Cores pane has no counterpart because the cores are built in.
 
 **The "Emulator Core" dropdown is gone.** It was scaffolding from when one core existed, it said it drove nothing, and it wrote `AppSettings.SelectedCore`, which by then was the library's console filter (§4.23); so choosing a "core" in Preferences silently changed which games the library showed. The sidebar is now the one place that value is chosen.
 
@@ -4757,7 +4757,7 @@ Over the library, titled *Main Menu*:
 | Scrape This Game... | a game is selected and no run is going (§4.60) |
 | *divider* | when any of the three above is shown |
 | Library ▸ | Collections (over the themed view, §4.58) · Scrape Games... or *Scraping (n of m)...* · Theme Settings (big picture) |
-| Settings ▸ | Players & Controllers · Controller Bindings · Graphics · Shaders · Cheats · Preferences |
+| Settings ▸ | Players & Controllers · Controller Bindings · Graphics · Shaders · Cheats · Firmware (since 2026-10-05, §4.89) · Preferences |
 | EmuSen ▸ | Full Screen (desktop only) · Big Picture or Exit Big Picture (not in Game Mode) · Exit EmuSen... |
 
 *Players & Controllers* opens Preferences on its Controllers tab, where the players' rows of `EmuSen_Input.md` §8.9 are.
@@ -5121,7 +5121,7 @@ setting, *Back* under the rows, and the help bar at the bottom of the screen.
   New Custom Collection, Group Custom Collections, the custom collections' switches, the default sort order, the
   favourites and folders switches and the random button.
 - **Preferences** is a row for each of Library, Scraping, Gameplay, Appearance, Controllers and System Files, each
-  opening its screen.
+  opening its screen. *The last is Firmware since 2026-10-05 (§4.89).*
 
 Rows show what the sheet showed: a **choice** between `<` and `>` (Left and Right step it, A opens its list, §4.72.9), a
 **switch** named in ES-DE's words (*Display clock*), a **text or folder** as a row that A opens on the keyboard
@@ -7799,3 +7799,110 @@ identity paths already check): a Preferences window closing because the program 
 and on the big screen: it opens Preferences, closes the main window and asserts Preferences closed without a fault.
 Without the fix the desktop case throws the exception above; on the toolkit before §90.7, the big-screen case fails
 because Preferences is still open.
+
+### 4.89 The Firmware page (2026-10-05)
+
+*Decided by the tester 2026-10-05:* Settings gets a page that tells a player with no technical knowledge what each
+console's firmware is doing. It follows the firmware policy (`EmuSen_Firmware.md` §0): the open version is the normal
+path, a file of the player's own is optional, and nothing prompts for one. The page is information and a folder, never
+a demand. It is the "firmware window" `VenusRT_DspHle.md` §7.3 planned and `VenusRT_Native.md` §66.1 found missing.
+
+#### 4.89.1 Where it is
+
+- **Desktop:** Preferences ▸ **Firmware**, the tab that was *System Files* (§4.36). The old tab listed whatever files
+  were in the folder and said a game would ask for a chip's dump when it first started. Neither holds under the
+  policy, and the new page replaces both.
+- **Big picture:** the pad menu's Settings ▸ **Firmware** (§4.69.8), which opens Preferences on that tab. In a
+  big-screen session Preferences is ES-DE's menu (§4.72.8), so the page is a menu of rows, under a theme as without
+  one. It is also reached as Preferences' last row.
+
+#### 4.89.2 What a row says
+
+One row for each firmware file a system's engine can use:
+
+| Part | Words | From |
+|---|---|---|
+| The name | "SNES sound chip start-up (spc700.rom)" | the entry's `label` and `name` in the core's info |
+| Which version runs | "Using EmuSen's open version", "Using your own file", or "No open version yet" | whether a file of the entry's size, whole or as its split parts, is in the folder (`FirmwareLibrary.IsInstalled`), and the entry's `replacement.effect` |
+| What the open version changes | "Games may start a fraction of a second later." | the first sentence of the entry's `replacement.cost` |
+| A note, when it applies | "The file here is not 64 bytes, so it is not used." | a file of the entry's name whose length is not the entry's size (`EmuSen_Firmware.md` §2.1) |
+
+- **The fixed words.** An `exact` replacement reads "Exact: games run the same either way." An entry with no
+  replacement, or one whose effect is `none`, reads "Games that need this chip need your own file." With the player's
+  file in use the line reads "Runs as on the console."
+- **The whole cost** the core states is the row's tooltip on the desktop. The big-screen menu shows the first sentence
+  only, since its footer holds two lines.
+- **A system with no firmware** is listed with "Needs no firmware files.", so a player sees that it was not forgotten.
+- **The folder** is the first thing on the page: its path, the words "Every file here is optional, and EmuSen never
+  downloads firmware. A file of your own, put in the folder below, is used in place of EmuSen's open version the next
+  time a game starts.", and on the desktop an **Open Folder** button.
+  - The button makes the folder if it is not there and hands its path to the platform's opener (`xdg-open` on Linux,
+    the shell elsewhere). It opens nothing else.
+  - The page has no other button, no link, no picker and no download.
+
+#### 4.89.3 The rows come from the cores
+
+`FirmwareOverview.Build` holds no table of chips. For each console of the catalog it takes the engine a game would run
+on (the stored choice, else the row's default, §4.44):
+
+- **A discovered v1 engine** (VenusRT): the `firmware` list of its system in the core's info, read from the sidecar.
+  No library is loaded to show the page.
+- **Otherwise the reference core** (the engine chosen, or the fallback where the discovered engine's library is not
+  beside its sidecar): what the C# core itself asks the firmware library for. Venus (C#) asks for the seven NEC DSP
+  images and has no replacement for any, so each reads "No open version yet". The other three ask for none.
+- **Any other system a discovered core runs** follows the catalog's consoles, by the name its info gives it.
+- **A core in development is left out**, by its sidecar's `development` mark, even in a session where discovery lists
+  such cores (`EMUSEN_DEVELOPMENT_CORES=1`). Nephrite's entries therefore do not appear.
+
+As built, with VenusRT the SNES default, the page lists the NES, the Game Boy and Game Boy Color, the Super Nintendo
+with eight rows (the SPC700 boot program, DSP-1, DSP-1B, DSP-2, DSP-3, DSP-4, ST010 and ST011), and the Nintendo 64.
+No shipped core reads a Game Boy boot ROM, so there is no row for one.
+
+*The core's side* is `VenusRT_Native.md` §67: core info now lists each NEC image as its own entry with its own label
+and cost, where it had one entry for all seven, and every cost opens on a sentence in a player's words.
+`EmuSen_CoreAPI.md` §6.2 records the convention for any core.
+
+#### 4.89.4 Kept current
+
+- The desktop tab is read again each time the Preferences window comes back to the front, as after a file is dropped
+  into the folder from the file manager. Its rows are rebuilt only when the folder or an engine choice changed.
+- The big-screen sheet reads the folder when it opens.
+- A file takes effect the next time a game starts, which the page says.
+
+#### 4.89.5 As a big-screen menu
+
+- **Read only.** No row changes or opens anything, and there is no Open Folder: a Game Mode session has no file
+  manager to open. The folder's path is a row's footer, so a player can find it later from a desktop.
+- **Every fact is a row a pad lands on.** A line nobody can land on scrolls out of reach in a list this long, so
+  each row is one of the menu's action rows: the name on the left, "Open version", "Your own file", "None yet" or
+  "None needed" on the right, and the sentence in the footer while the row has the focus.
+- **A path keeps its case.** ES-DE's look draws a menu's words in capitals, footer included, and a Linux path in
+  capitals is a different path. `BigMenuForm.VerbatimHint`, set on a field, makes the footer keep its case while that
+  field's row has the focus. Only the folder's row sets it.
+- **The longest footers** are the words about the player's own files (181 characters) and the ST010's with a file of
+  the wrong size (175). Both fit the footer's two lines at both sizes; the audit below holds every row's.
+
+#### 4.89.6 Tests (measured 2026-10-05)
+
+| Test | What it holds |
+|---|---|
+| `FirmwareOverviewTests` (6) | the SNES rows equal VenusRT's info entry for entry, label, name, size, effect and cost; the four systems in order; the words with no file, a file one byte short, the file, and the file removed; a split program and data pair counted as the file; `none` and a missing replacement; with Venus (C#) chosen, or VenusRT's library gone, the reference core's own requests; Nephrite left out with development cores listed |
+| `FirmwarePageTests` (3) | the desktop tab's headers, rows, tooltips and folder against the overview; Open Folder hands the opener exactly the folder, makes it, writes nothing into it, and is the page's only button; the rows follow the folder on a refresh and on reopening |
+| `WindowFitAuditTests.The_firmware_page_in_preferences_is_whole_at_both_sizes` (4) | reached through the pad menu's Settings ▸ Firmware, on the desktop and the big screen at 1280 × 800 and 1920 × 1200, with one file in use and one of the wrong size: nothing cut or overlapping; on the big screen with the focus on each of the thirteen rows in turn, no footer cut, the folder's footer in its own case, every row and Back reached by the d-pad, and B back to Preferences and then out |
+| `EsdeSettingsMenusTests.The_firmware_page_under_a_theme_is_a_menu_of_rows_the_pad_reads` (2) | under an ES-DE theme: the menu centred and drawn inside its panel as the other tabs are, the rows' labels and values, each row's footer whole, A on a row changing and opening nothing |
+| VenusRT's crate, `core_info_lists_every_image_a_game_can_name_with_a_summary_first` | every image a cartridge can name is in core info with the label, size, parts and replacement the game's own answer gives, and each cost opens on a sentence under 100 characters with no engine name or address in it |
+
+Pictures from the headless renderer (`EMUSEN_WINDOW_FIT_PNG=firmware-page`) are written to
+`~/.cache/emusen/probe/window-look/trials/firmware-page/`.
+
+#### 4.89.7 Not covered, and owed
+
+- **The opener itself is not run by a test**, by design: the harness's `RecordingUrlLauncher` records the path and
+  launches nothing.
+  That `xdg-open` shows the folder is to be confirmed by hand on the desktop.
+- **A frontend still asks for a file a foreign core marks `required`** (`EmuSen_Firmware.md` §3). No shipped core
+  marks one, and the page does not change that path.
+- **A system outside the catalog** that a shipped discovered core runs would be listed after the four consoles. No
+  shipped core runs one, so no test exercises that branch.
+- **Hotaru and Pharaoh** have no such page; their log line (`EmuSen_Firmware.md` §3) is unchanged.
+

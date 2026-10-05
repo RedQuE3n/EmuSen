@@ -686,6 +686,8 @@ kit gains one case: a core whose entries are all `required: false` creates every
   `none` it says the game runs without its chip and names the file that would supply it, without opening a picker.
 - **The firmware window** lists the entries from core info as optional, each with its replacement's effect. *Not
   built as of 2026-10-05: Mistress has no firmware window, so the cost is read from the core's info and these pages.*
+  *Built later the same day as Preferences' Firmware tab, with the pad menu's Settings ▸ Firmware on the big screen
+  (`EmuSen_Settings_Reference.md` §4.89). Core info lists each chip as its own entry for it (`VenusRT_Native.md` §67).*
 - **Venus (C#)** has no replacement, and its requests stay required until the decision of §10, Q6.
 - **Pharaoh and Hotaru** keep the log path of `EmuSen_Firmware.md` §3, which becomes a notice rather than a complaint.
 

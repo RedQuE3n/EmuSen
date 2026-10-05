@@ -6986,7 +6986,7 @@ never prompted or nagged. The pad-walk defect §65.2 found is to be fixed.
   - these pages (§35.3, `VenusRT_DspHle.md` §5.5).
 
   The "firmware window" that `VenusRT_DspHle.md` §7.3 planned was never built, so Mistress shows the cost nowhere
-  today. That page now says so.
+  today. That page now says so. *Built the same day: §67 and `EmuSen_Settings_Reference.md` §4.89.*
 - **The two test baselines of §65.2 are reverted.** The fit audit and the pad sheet tests measure from the running
   line again, as before §65: with no notice it is one line, under the long title too, so nothing else wraps it.
 
@@ -7072,4 +7072,53 @@ sweep of every Mistress, Hotaru and Pharaoh test found or confirmed two more, be
 | The other windows whose tests reach a control through `PadAudit.Reach` (16 classes) | 193 of 194; the one failure was §66.3's |
 | `CoreFactoryCheatWiringTests`, `PadCheatsTests`, every `Cheat` class and `CoreAdapterTests` after §66.3's fix | 330 of 331; the one failure was §66.4's cast |
 | Every Mistress, Hotaru and Pharaoh test, with `CoreFactoryCheatWiringTests`, after §66.3 and §66.4 | 1,747 passed, 51 skipped (the picture tools), none failed |
+
+## 67. Core info for the firmware page: one entry a chip, plain labels, and a cost that opens on a summary (2026-10-05)
+
+*Decided by the tester 2026-10-05:* Mistress gets a firmware page (`EmuSen_Settings_Reference.md` §4.89). Its rows are
+read from the core's info, so three things in VenusRT's declarations changed. None changes what a game runs on.
+
+### 67.1 What changed in `v1.rs`
+
+- **One entry for each NEC image.** The system's `firmware` list had two entries: the boot program, and one
+  `dsp.rom` of size 0 standing for all seven chips, with one cost for the lot. A page built from that would show
+  one row no file could ever satisfy. The list is now the boot program and `dsp1`, `dsp1b`, `dsp2`, `dsp3`, `dsp4`,
+  `st010` and `st011`, each the entry `firmware_for` gives a game that names it: the same label, size, parts and
+  replacement. The seven share `which` 2, since a cartridge carries one of them.
+- **Labels in plain words.** "The SPC700's boot program (64 bytes)" is now "SNES sound chip start-up", and each chip
+  is "DSP-1 cartridge chip" and so on. The page adds the file name in brackets. The size is the entry's `size`.
+- **Each cost opens on its summary.** The page shows a cost's first sentence alone (`EmuSen_CoreAPI.md` §6.2, amended
+  the same day). The technical sentence each cost already was is kept whole after it:
+
+  | Entry | The first sentence | Rests on |
+  |---|---|---|
+  | `spc700.rom` | Games may start a fraction of a second later. | §64: within 3.4 frames of the image on seventeen games |
+  | `dsp1.rom` | Pilotwings plays close to how it does with your own file. | §52.6: level flight draws its ground as the image does; commands within a few units |
+  | `dsp1b.rom` | Games play close to how they do with your own file, but Lock On draws no ground. | §52.6 |
+  | `dsp2.rom` | Dungeon Master plays as it does with your own file. | §42 |
+  | `dsp4.rom` | Top Gear 3000's menus work, but its races stay black. | §48.3 |
+  | `st010.rom` | F1 ROC II plays as it does with your own file, with the other cars a little off their lines. | §43, §54, §57: opponents within a few units of the image's lines |
+
+  `dsp3.rom` and `st011.rom` keep their `none` and its one sentence. The page gives them its own words, "Games that
+  need this chip need your own file."
+- **The DSP-1 and DSP-1B costs are now two.** They shared one text. Lock On is a DSP-1B cartridge by
+  `Cartridge::nec_firmware`'s title rule, so the DSP-1 row, which is Pilotwings', no longer mentions it in its summary.
+  The detail after the summary is the same text for both.
+
+### 67.2 What did not change
+
+- `firmware_for`'s answer for a game has the same files, numbers, sizes and parts. Only its labels and the costs'
+  first sentences differ.
+- No machine, state or timing code was touched. The crate's other tests were not rerun for that reason; `v1`'s
+  eighteen were.
+
+### 67.3 Checks (measured 2026-10-05)
+
+| Check | Result |
+|---|---|
+| The crate's `v1` tests, with the new `core_info_lists_every_image_a_game_can_name_with_a_summary_first` | 18 of 18 |
+| The registration golden | re-recorded: the boot entry's label, on four lines |
+| `VenusRtCoreAbiTests`' two cost assertions | now read the summary and the detail after it |
+| The blast radius: every Mistress test, and the discovery, VenusRT, registration, ABI, adapter, firmware, Nephrite, NEC DSP, factory and catalog tests | 1,956 of 1,958 passed, 51 skipped (the picture tools) |
+| The two failures, both the new themed-page case | it asserted that the harness's recording launcher was empty, and earlier tests in the same process had left Steam keyboard requests in it; it now asserts that the page added none. Rerun with `EsdeSettingsMenusTests`, `FirmwarePageTests` and `ThemedSwitchesTests`: 47 of 47 |
 

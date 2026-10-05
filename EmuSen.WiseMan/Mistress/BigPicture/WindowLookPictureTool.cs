@@ -220,9 +220,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
                     Play(window, 120);
                     pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
-                    string[] lines = window.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
-                    pad.Down(Array.FindIndex(lines, l => l.StartsWith("Rewind", StringComparison.Ordinal)));
-                    pad.A();
+                    PadMenu.Choose(window, pad, "Rewind");
                     WaitFor(() => Sheets(window).Current is RewindReelWindow, "the reel");
                     Save(window, $"rewind-reel-{p}", _out);
                     CloseAll(window);
@@ -256,9 +254,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 try
                 {
                     pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
-                    string[] lines = window.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
-                    pad.Down(Array.FindIndex(lines, l => l.StartsWith("Close Game", StringComparison.Ordinal)));
-                    pad.A();
+                    PadMenu.Choose(window, pad, "Quit Game");
+                    PadMenu.Answer(window, pad, yes: true);
                     pad.A();
                     Assert.IsType<ResumeWindow>(Sheets(window).Current);
                     Save(window, $"resume-{w}x{h}", _out);

@@ -200,7 +200,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(1000);
             s.Pad.A();
             Assert.Equal(Path.Combine(s.RomDirectory, "SNES", "Racing", VelvetRally + ".sfc"), Running(s.Window));
-            ThemedLibraryFlowTests.Choose(s, "Game Library");
+            ThemedLibraryFlowTests.Choose(s, "Back to Library");
             Assert.Equal(("snes", "Racing", VelvetRally), (s.System, s.Themed.CurrentFolder, s.Game));
             RenderedFrame back = s.Capture();
             SceneData data = s.Themed.Stage!.Current.Data;
@@ -292,7 +292,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public Task The_settings_sheet_flattens_a_console_at_once_and_keeps_it_in_appsettings() => Run(s =>
         {
-            ThemedCollectionsTests.Choose(s, "Game Collection Settings");
+            ThemedCollectionsTests.Choose(s, "Collections");
             LunaSwitch flatten = ThemedCollectionsTests.Named<LunaSwitch>(s, "Flatten_nes");
             Assert.False(flatten.IsChecked);
             flatten.IsChecked = true;
@@ -342,7 +342,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             Assert.Equal(["launch"], s.Sounds);
             Assert.Equal(velvet, Running(s.Window));
-            ThemedLibraryFlowTests.Choose(s, "Game Library");
+            ThemedLibraryFlowTests.Choose(s, "Back to Library");
             Assert.Equal(("", "Racing"), (s.Themed.CurrentFolder, s.Game));
 
             ThemedCollectionsTests.OpenMenu(s);

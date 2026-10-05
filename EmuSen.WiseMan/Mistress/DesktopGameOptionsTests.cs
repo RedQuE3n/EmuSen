@@ -300,7 +300,7 @@ namespace EmuSen.WiseMan.Mistress
             {
                 ThemedLibraryPadTests.Enter(s, "snes");
                 s.Pad.Start();
-                string[] lines = s.Window.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
+                string[] lines = PadMenu.Lines(s.Window);
                 Assert.DoesNotContain("Game Options...", lines);
                 Assert.Contains("Scrape This Game...", lines);
             }

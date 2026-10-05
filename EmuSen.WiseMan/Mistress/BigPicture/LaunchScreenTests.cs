@@ -158,7 +158,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.Equal(art is null ? 256.0 : 437.0, screen.CardBounds.Height, 3);
                 s.Run(3000);
                 Assert.Equal(Rom(s, game), Running(s.Window));
-                ThemedLibraryFlowTests.Choose(s, "Close Game");
+                ThemedLibraryFlowTests.QuitGame(s);
                 Assert.Null(Running(s.Window));
                 if (s.View != "gamelist") s.Pad.A();
                 Assert.Equal("gamelist", s.View);
@@ -212,14 +212,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(4500);
             Assert.True(GameShown(s));
 
-            ThemedLibraryFlowTests.Choose(s, "Game Library");
+            ThemedLibraryFlowTests.Choose(s, "Back to Library");
             Assert.True(s.Shown);
             ThemedCollectionsTests.Choose(s, "Back to");
             Assert.True(GameShown(s));
             Assert.False(s.Window.IsPaused);
             Assert.Null(Screen(s));
 
-            ThemedLibraryFlowTests.Choose(s, "Game Library");
+            ThemedLibraryFlowTests.Choose(s, "Back to Library");
             s.Pad.B();
             Assert.Equal("system", s.View);
             s.Pad.B();
@@ -243,7 +243,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             Assert.NotNull(Screen(s));
             s.Run(3000);
-            ThemedLibraryFlowTests.Choose(s, "Close Game");
+            ThemedLibraryFlowTests.QuitGame(s);
 
             s.Pad.A();
             Assert.IsType<ResumeWindow>(Sheets(s).Current);
@@ -308,7 +308,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(first, Screen(s)?.GameName);
             s.Run(1700);
             Assert.NotNull(Running(s.Window));
-            ThemedLibraryFlowTests.Choose(s, "Close Game");
+            ThemedLibraryFlowTests.QuitGame(s);
 
             s.Pad.A();
             s.Pad.Press(EmuSen.Mistress.Input.UiButton.Random);
@@ -317,7 +317,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             Assert.Equal(random, Screen(s)?.GameName);
             s.Run(1700);
-            ThemedLibraryFlowTests.Choose(s, "Close Game");
+            ThemedLibraryFlowTests.QuitGame(s);
 
             string racing = Path.Combine(s.RomDirectory, "SNES", "Racing");
             ThemedCollectionsTests.Records(s).SaveEdits(racing, new Dictionary<string, string?> { [EmuSen.Mistress.Library.GameMetadata.FolderLink] = ThemedFoldersTests.VelvetRally + ".sfc" }, DateTime.Now);

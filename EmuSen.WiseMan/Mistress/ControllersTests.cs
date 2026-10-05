@@ -66,17 +66,13 @@ namespace EmuSen.WiseMan.Mistress
 
         private static bool MenuOpen(MainWindow w) => w.GetControl<Control>("PadMenuPanel").IsVisible;
 
-        private static string[] MenuLines(MainWindow w) =>
-            w.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
+        private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
         private static void MenuEntry(MainWindow window, PadDriver pad, string entry)
         {
             pad.Start();
             Assert.True(MenuOpen(window));
-            int at = Array.FindIndex(MenuLines(window), l => l.StartsWith(entry, StringComparison.Ordinal));
-            Assert.True(at >= 0, $"No '{entry}' in the pad menu");
-            pad.Down(at);
-            pad.A();
+            PadMenu.Choose(window, pad, entry);
         }
 
         private static T Named<T>(Control root, string name) where T : Control =>
@@ -234,8 +230,10 @@ namespace EmuSen.WiseMan.Mistress
             StringAssert(window.GetControl<TextBlock>("PadMenuHint").Text, "B  Choose      A  Close");
 
             first.Start();
-            int at = Array.FindIndex(MenuLines(window), l => l.StartsWith("Preferences", StringComparison.Ordinal));
-            first.Down(at);
+            first.Down(Array.IndexOf(PadMenu.Lines(window), MainWindow.SettingsMenu));
+            first.B();
+            Assert.Equal(2, PadMenu.Depth(window));
+            first.Down(Array.IndexOf(PadMenu.Lines(window), "Preferences"));
             first.B();
             Assert.IsType<PreferencesWindow>(window.GetControl<SheetLayer>("Sheets").Current);
             first.A();

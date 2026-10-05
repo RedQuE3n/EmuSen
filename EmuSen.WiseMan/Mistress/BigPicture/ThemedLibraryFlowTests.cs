@@ -28,18 +28,21 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         public ThemedLibraryFlowTests(ITestOutputHelper output) => _out = output;
 
-        private static string[] MenuLines(MainWindow w) =>
-            w.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
+        private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
         // The in-game chord, then down to the entry and A, as a player would.
         internal static void Choose(ThemedSession s, string entry)
         {
             s.Pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
             Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
-            int at = Array.FindIndex(MenuLines(s.Window), l => l.StartsWith(entry, StringComparison.Ordinal));
-            Assert.True(at >= 0, $"No '{entry}' in the pad menu: {string.Join(", ", MenuLines(s.Window))}");
-            s.Pad.Down(at);
-            s.Pad.A();
+            PadMenu.Choose(s.Window, s.Pad, entry);
+        }
+
+        // Quit Game... from the in-game menu, and Yes to its question.
+        internal static void QuitGame(ThemedSession s)
+        {
+            Choose(s, "Quit Game");
+            PadMenu.Answer(s.Window, s.Pad, yes: true);
         }
 
         private static void Stop(MainWindow window) =>
@@ -80,7 +83,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("snes", s.System);
             Assert.Null(s.WakeAt);
 
-            Choose(s, "Game Library");
+            Choose(s, "Back to Library");
             Assert.True(s.Shown);
             Assert.True(s.Window.GetControl<Control>("LibraryView").IsVisible);
             Assert.True(s.Window.IsPaused);
@@ -97,7 +100,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Window.GetControl<Control>("GameFrame").IsVisible);
             Assert.False(s.Window.IsPaused);
 
-            Choose(s, "Close Game");
+            QuitGame(s);
             Assert.True(s.Shown);
             Assert.Null(Running(s.Window));
             Assert.Equal("system", s.View);
@@ -116,7 +119,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Down(2);
             s.Run(1000);
             s.Pad.A();
-            Choose(s, "Game Library");
+            Choose(s, "Back to Library");
             Assert.Equal("Cobalt Harbor (Synthetic)", s.Game);
             RenderedFrame back = s.Capture();
 
@@ -139,7 +142,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Down();
             s.Pad.A();
             Assert.True(s.Window.GetControl<Control>("GameFrame").IsVisible);
-            Choose(s, "Close Game");
+            QuitGame(s);
             Assert.True(s.Shown);
             Assert.Equal("Brass Lantern (Synthetic)", s.Game);
 

@@ -80,18 +80,14 @@ namespace EmuSen.WiseMan.Mistress
 
         public static TheoryData<double> EveryShorter => new(Enumerable.Range(0, 17).Select(h => (double)h));
 
-        private static string[] MenuLines(MainWindow w) =>
-            w.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
+        private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
         // Up from the top wraps to the bottom, so any entry is found by walking down from the first.
         private static void Choose(MainWindow window, PadDriver pad, string entry)
         {
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
             Assert.True(window.GetControl<Control>("PadMenuPanel").IsVisible);
-            int at = Array.FindIndex(MenuLines(window), l => l.StartsWith(entry, StringComparison.Ordinal));
-            Assert.True(at >= 0, $"No '{entry}' in the pad menu: {string.Join(", ", MenuLines(window))}");
-            pad.Down(at);
-            pad.A();
+            PadMenu.Choose(window, pad, entry);
         }
 
         private static SheetLayer Sheets(MainWindow w) => w.GetControl<SheetLayer>("Sheets");
@@ -128,7 +124,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Theory]
-        [InlineData("Graphics Settings")]
+        [InlineData("Graphics")]
         [InlineData("Shaders")]
         [InlineData("Controller Bindings")]
         [InlineData("Preferences")]
@@ -170,7 +166,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task An_open_dropdown_drawn_in_the_window_moves_its_highlight_and_not_the_page() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Graphics Settings");
+            Choose(window, pad, "Graphics");
             TabTo(window, pad, "N64");
             var engine = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "N64.Engine" });
             ScrollViewer page = engine.FindAncestorOfType<ScrollViewer>()!;
@@ -210,7 +206,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task Graphics_by_pad_tabs_a_dropdown_stepped_opened_committed_and_cancelled_a_switch_and_reset() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Graphics Settings");
+            Choose(window, pad, "Graphics");
             Assert.Equal("SNES", (Tabs(window).SelectedItem as TabItem)?.Header);
             Picture(window, "graphics-snes");
 
@@ -391,7 +387,8 @@ namespace EmuSen.WiseMan.Mistress
             var pad = new PadDriver(window);
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             pad.A();
-            Choose(window, pad, "Close Game");
+            Choose(window, pad, "Quit Game");
+            PadMenu.Answer(window, pad, yes: true);
             Assert.True(window.GetControl<Control>("LibraryView").IsVisible);
 
             pad.A();
@@ -415,7 +412,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             ShaderSettingsWindowTests.FakePack();
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Graphics Settings");
+            Choose(window, pad, "Graphics");
             var graphics = Sheets(window).Current;
             Reach(window, pad, e => e is Button { Name: "SNES.Shaders" });
             pad.A();
@@ -616,7 +613,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_tab_change_back_to_a_scrolled_page_starts_at_a_control_in_view() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Graphics Settings");
+            Choose(window, pad, "Graphics");
             TabTo(window, pad, "N64");
             ScrollViewer page = (ScrollViewer)((Avalonia.Controls.Presenters.ContentPresenter)Tabs(window).GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_SelectedContentHost")).Content!;
             InputElement last = PadAudit.Operable(page).OrderBy(e => ((Visual)e).TranslatePoint(default, page)?.Y ?? 0).Last();

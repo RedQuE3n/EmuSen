@@ -568,7 +568,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.NotNull(Running(s));
             s.Run(600000, step: 1000);
             Assert.Null(Saver(s));
-            ThemedLibraryFlowTests.Choose(s, "Game Library");
+            ThemedLibraryFlowTests.Choose(s, "Back to Library");
             s.Run(61000, step: 1000);
             Assert.NotNull(Saver(s));
             LaunchScreenTests.Stop(s.Window);

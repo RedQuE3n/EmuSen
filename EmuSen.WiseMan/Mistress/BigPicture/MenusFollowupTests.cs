@@ -377,12 +377,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Settle();
             var pad = s.Window.GetControl<MenuPanel>("PadMenuBig");
             Assert.True(pad.IsVisible);
-            // Its entries run past the panel at 800 lines, as the pictures of §32 show; Up from the first wraps to the last.
-            Assert.Equal(MenuScrollIndicator.Down, pad.ScrollIndicator);
+            // Since §4.69.8 the main menu's rows all show at 800 lines, so its scroller shows no indicator, even with Up wrapped to the last row.
             Assert.NotNull(pad.Child!.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault());
+            Assert.Equal(MenuScrollIndicator.None, pad.ScrollIndicator);
             s.Pad.Up();
             s.Settle();
-            Assert.Equal(MenuScrollIndicator.Up, pad.ScrollIndicator);
+            Assert.Equal(PadMenu.Lines(s.Window).Length - 1, PadMenu.Selected(s.Window));
+            Assert.Equal(MenuScrollIndicator.None, pad.ScrollIndicator);
         });
 
         // ---- the help glyphs ----

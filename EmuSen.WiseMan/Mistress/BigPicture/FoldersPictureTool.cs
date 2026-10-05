@@ -114,7 +114,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 s.Pad.B();
                 s.Pad.Left();
                 Assert.Equal(("system", "nes"), (s.View, s.System));
-                ThemedCollectionsTests.Choose(s, "Game Collection Settings");
+                ThemedCollectionsTests.Choose(s, "Collections");
                 ThemedCollectionsTests.Reach(s, e => e is LunaSwitch { Name: "Flatten_nes" });
                 s.Pad.A();
                 s.Settle();

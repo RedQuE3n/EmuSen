@@ -53,8 +53,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private static SheetLayer Sheets(MainWindow w) => w.GetControl<SheetLayer>("Sheets");
         private static string SelectedCore() => AppSettings.Load().SelectedCore;
 
-        private static string[] MenuLines(MainWindow w) =>
-            w.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
+        private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
         internal static IReadOnlyList<LunaAction> ViewMenu(MainWindow w) =>
             w.GetControl<MenuBar>("MenuStrip").Menus.Single(m => m.Title == "_View").Items.ToList();
@@ -80,10 +79,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             s.Pad.Start();
             Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
-            int at = Array.FindIndex(MenuLines(s.Window), l => l == entry);
-            Assert.True(at >= 0, $"No '{entry}' in the pad menu: {string.Join(", ", MenuLines(s.Window))}");
-            s.Pad.Down(at);
-            s.Pad.A();
+            PadMenu.Choose(s.Window, s.Pad, entry, exact: true);
             s.Settle();
         }
 

@@ -63,11 +63,11 @@ namespace EmuSen.Mistress.Views
             ShowLibraryEntries();
         }
 
-        // ES-DE's main menu entry, in the pad menu over the themed view; the gamelist options are Select's menu (§4.58).
+        // ES-DE's Game Collection Settings, as the pad menu's Library ▸ Collections over the themed view; the gamelist options are Select's menu (§4.58, §4.69.8).
         private void AddCollectionMenuEntries(List<Input.PadMenuEntry> entries)
         {
             if (!ThemedLibraryShown || !LibraryView.IsVisible || _themed is null) return;
-            entries.Add(new Input.PadMenuEntry(() => "Game Collection Settings", ShowCollectionSettings) { Opens = true });
+            entries.Add(new Input.PadMenuEntry(() => "Collections", ShowCollectionSettings) { Opens = true });
         }
 
         // Jump To, Sort Games By and Filter Gamelist first in Select's menu, then Search, which ES-DE has not (§4.58).

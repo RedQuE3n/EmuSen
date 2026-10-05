@@ -102,15 +102,10 @@ namespace EmuSen.WiseMan.Mistress
 
         private static void ChooseInOpenMenu(MainWindow window, PadDriver pad, string entry)
         {
-            string[] lines = MenuLines(window);
-            int at = Array.FindIndex(lines, l => l.StartsWith(entry, StringComparison.Ordinal));
-            Assert.True(at >= 0, $"No '{entry}' in the pad menu: {string.Join(", ", lines)}");
-            pad.Down(at);
-            pad.A();
+            PadMenu.Choose(window, pad, entry);
         }
 
-        private static string[] MenuLines(MainWindow window) =>
-            window.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
+        private static string[] MenuLines(MainWindow window) => PadMenu.Lines(window);
 
         private static RewindReelWindow OpenReel(MainWindow window, PadDriver pad)
         {

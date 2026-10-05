@@ -111,7 +111,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task Game_collection_settings_is_one_menu_of_switches_options_and_a_create_row(int width, int height) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(width, height);
-            ThemedCollectionsTests.Choose(s, "Game Collection Settings");
+            ThemedCollectionsTests.Choose(s, "Collections");
             s.Settle();
             var sheet = Assert.IsType<CollectionSettingsWindow>(Sheets(s).Current);
             AssertEsdeMenu(s, sheet.Form!.Menu, "Game Collection Settings");

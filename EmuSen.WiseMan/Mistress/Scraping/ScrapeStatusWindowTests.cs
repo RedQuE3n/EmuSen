@@ -536,7 +536,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             window.ScrapeStatusShown!.Close();
 
             Invoke(window, "OpenPadMenu");
-            PadMenu(window).Single(e => e.Text() == "Scraping (0 of 3)...").Accept();
+            PadMenu(window).Single(e => e.Text() == MainWindow.LibraryMenu).Submenu!().Single(e => e.Text() == "Scraping (0 of 3)...").Accept();
             Invoke(window, "ClosePadMenu");
             Assert.NotNull(window.ScrapeStatusShown);
             window.ScrapeStatusShown!.Close();
@@ -589,11 +589,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.True(window.ScrapeRunning);
 
             pad.Start();
-            List<PadMenuEntry> entries = PadMenu(window);
-            int at = entries.FindIndex(e => e.Text().StartsWith("Scraping (", StringComparison.Ordinal));
-            Assert.True(at >= 0, string.Join(", ", entries.Select(e => e.Text())));
-            pad.Down(at);
-            pad.A();
+            EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, "Scraping (");
             Assert.IsType<ScrapeStatusWindow>(Sheets(window).Current);
         });
 

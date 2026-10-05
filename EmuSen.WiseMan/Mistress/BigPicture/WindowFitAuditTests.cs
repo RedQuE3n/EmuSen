@@ -28,7 +28,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 {
     // Every window a big-screen session shows, framed as a menu at 1280 by 800 and 1920 by 1200, audited for anything cut, past its panel or drawn over something else - see EmuSen_Settings_Reference.md §4.83.
     [Collection(TestCollections.ProcessGlobals)]
-    public class WindowFitAuditTests : IDisposable
+    public partial class WindowFitAuditTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(WindowFitAuditTests).GetTypeInfo().Assembly);
@@ -282,7 +282,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "Resume":
                 case "ResumeLongTitle":
-                    Choose(window, pad, "Close Game");
+                    Choose(window, pad, "Quit Game");
+                    PadMenu.Answer(window, pad, yes: true);
                     pad.A();
                     Assert.IsType<ResumeWindow>(Sheets(window).Current);
                     break;
@@ -365,9 +366,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private static void Choose(MainWindow window, PadDriver pad, string entry)
         {
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
-            string[] lines = window.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
-            pad.Down(Array.FindIndex(lines, l => l.StartsWith(entry, StringComparison.Ordinal)));
-            pad.A();
+            PadMenu.Choose(window, pad, entry);
         }
 
         private ThemedSession Themed(int w, int h)

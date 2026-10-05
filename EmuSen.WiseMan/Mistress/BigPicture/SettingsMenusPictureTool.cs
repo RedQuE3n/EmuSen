@@ -62,7 +62,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             s.Settle();
 
-            ThemedCollectionsTests.Choose(s, "Game Collection Settings");
+            ThemedCollectionsTests.Choose(s, "Collections");
             Save(s, $"{p}-collection-settings");
             s.Pad.Down(9);
             Save(s, $"{p}-collection-settings-lower");

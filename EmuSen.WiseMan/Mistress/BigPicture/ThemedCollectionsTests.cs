@@ -68,17 +68,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("gamelist", s.View);
         }
 
-        private static string[] MenuLines(ThemedSession s) =>
-            s.Window.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
+        private static string[] MenuLines(ThemedSession s) => PadMenu.AllLines(s.Window);
 
         // Start, then down to the entry and A, as a player would.
         internal static void Choose(ThemedSession s, string entry)
         {
             s.Pad.Start();
-            int at = Array.FindIndex(MenuLines(s), l => l.StartsWith(entry, StringComparison.Ordinal));
-            Assert.True(at >= 0, $"No '{entry}' in the pad menu: {string.Join(", ", MenuLines(s))}");
-            s.Pad.Down(at);
-            s.Pad.A();
+            PadMenu.Choose(s.Window, s.Pad, entry);
             s.Settle();
         }
 
@@ -192,7 +188,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             long id = records.CreateCollection("Platform", DateTime.Now)!.Value;
             records.AddToCollection(id, Rom(s, ThemedSession.SnesGames[0]));
             Refresh(s);
-            Choose(s, "Game Collection Settings");
+            Choose(s, "Collections");
             var settings = (AppSettings)typeof(MainWindow).GetField("_appSettings", Hidden)!.GetValue(s.Window)!;
 
             Reach(s, e => e is LunaSwitch { Name: "Autoall" });
@@ -324,7 +320,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public Task A_collection_created_in_big_picture_is_the_library_s_own_and_North_edits_it_until_its_editing_is_finished() => Run(s =>
         {
-            Choose(s, "Game Collection Settings");
+            Choose(s, "Collections");
             Assert.IsType<CollectionSettingsWindow>(Sheets(s).Current);
             Reach(s, e => e is Button { Name: "CollectionCreate" });
             s.Pad.A();
@@ -405,7 +401,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             // The pad menu keeps ES-DE's main-menu entry only; the gamelist options are Select's (Q12).
             s.Pad.Start();
-            Assert.Contains("Game Collection Settings", MenuLines(s));
+            Assert.Contains("Collections", MenuLines(s));
             Assert.DoesNotContain(MenuLines(s), l => l.StartsWith("Gamelist", StringComparison.Ordinal));
             s.Pad.B();
 
@@ -541,14 +537,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Theory]
         [InlineData("Select menu in a custom collection")]
         [InlineData("Filter Gamelist")]
-        [InlineData("Game Collection Settings")]
+        [InlineData("Collections")]
         public Task Every_control_of_the_collection_sheets_is_reached_by_the_pad(string sheet) => Run(s =>
         {
             GameRecords records = Records(s);
             long id = records.CreateCollection("Platform", DateTime.Now)!.Value;
             records.AddToCollection(id, Rom(s, ThemedSession.SnesGames[0]));
             Scraped(s, new() { [ThemedSession.SnesGames[0]] = ("Racing", 0.8f), [ThemedSession.SnesGames[1]] = ("Puzzle", null) });
-            if (sheet == "Game Collection Settings") Choose(s, sheet);
+            if (sheet == "Collections") Choose(s, sheet);
             else
             {
                 Enter(s, sheet == "Filter Gamelist" ? "snes" : "collections");

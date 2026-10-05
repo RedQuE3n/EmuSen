@@ -71,7 +71,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
             s.Run(5000);
             LaunchScreenTests.Stop(s.Window);
-            ThemedLibraryFlowTests.Choose(s, "Close Game");
+            ThemedLibraryFlowTests.QuitGame(s);
             if (s.View != "gamelist") s.Pad.A();
         }
 

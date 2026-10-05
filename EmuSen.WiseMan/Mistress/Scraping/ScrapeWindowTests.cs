@@ -469,7 +469,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Single(_server.JeuInfos);
 
             Invoke(window, "OpenPadMenu");
-            entries.Single(e => e.Text() == "Scrape Games...").Accept();
+            entries.Single(e => e.Text() == MainWindow.LibraryMenu).Submenu!().Single(e => e.Text() == "Scrape Games...").Accept();
             Pump(100);
             PreferencesWindow prefs = window.OwnedWindows.OfType<PreferencesWindow>().Single();
             TabControl tabs = prefs.GetVisualDescendants().OfType<TabControl>().Single(t => t.Name == "PreferenceTabs");

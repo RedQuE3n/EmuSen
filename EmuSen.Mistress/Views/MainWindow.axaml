@@ -163,20 +163,30 @@
             <Border x:Name="PadMenuPanel" IsVisible="False" Background="#D0000000">
                 <Panel>
                     <Border x:Name="PadMenuDesk" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Padding="28,22" CornerRadius="10" MinWidth="460"
+                            Padding="28,22" CornerRadius="10" MinWidth="460" MaxWidth="720"
                             Background="{DynamicResource LunaVoid}"
                             BorderBrush="{DynamicResource LunaMuted}" BorderThickness="1">
                         <DockPanel x:Name="PadMenuDock">
-                            <TextBlock DockPanel.Dock="Top" x:Name="PadMenuTitle" FontSize="24" Margin="0,0,0,12" />
+                            <TextBlock DockPanel.Dock="Top" x:Name="PadMenuTitle" FontSize="24" Margin="0,0,0,12" TextWrapping="Wrap" />
+                            <TextBlock DockPanel.Dock="Top" x:Name="PadMenuDetail" IsVisible="False" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource LunaMuted}" Margin="0,0,0,12" />
                             <TextBlock DockPanel.Dock="Bottom" x:Name="PadMenuHint"
                                        Foreground="{DynamicResource LunaMuted}" Margin="0,12,0,0" />
                             <lunac:LunaList x:TypeArguments="input:PadMenuEntry"
                                             x:Name="PadMenuList"
                                             AutomationProperties.Name="Menu"
-                                            FontSize="20" Background="Transparent" MaxHeight="520" />
+                                            FontSize="20" Background="Transparent" />
                         </DockPanel>
                     </Border>
                     <lunac:MenuPanel x:Name="PadMenuBig" IsVisible="False" />
+                    <!-- The state slot's picture and saved time beside the menu while Save State or Load State is on - see EmuSen_Settings_Reference.md §4.69.8. -->
+                    <Border x:Name="PadSlotCard" IsVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top"
+                            CornerRadius="8" Padding="8" Background="#F01B1B1E" BorderBrush="#FF333337" BorderThickness="1">
+                        <StackPanel Spacing="6">
+                            <Image x:Name="PadSlotPicture" Stretch="Uniform" />
+                            <TextBlock x:Name="PadSlotCaption" TextWrapping="Wrap" TextAlignment="Center" Foreground="#FFD2D2D6" />
+                        </StackPanel>
+                    </Border>
                 </Panel>
             </Border>
 

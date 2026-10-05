@@ -5404,3 +5404,53 @@ Project is close in 28,185 of 31,086 results (90.7%, from 82.1%).
 
 The percentages are of sprites alike on both machines in frames that differ (§51.1). The pixel shares fall in the
 racing games: Suzuka 8 Hours' median from 5.6% to 3.8%, Andretti's from 7.7% to 7.2%, and the race's from 8.7% to 4.1%.
+
+### 52.3 The limit angle, measured, and the branch characterised
+
+**The constant** (measured 2026-10-04, `dsp_oracle chains` on the DSP-1B; the DSP-1 alike). Parameter was given Fx = Fy
+= 0, Fz = 100, Lfe = 64, Aas = 0 and Les = 7FFFh, 4000h and 1000h, with Azs stepped by one from 38B0h to 38F0h.
+
+- Vva changes at every step up to 38CDh, by about 3 a step at Les = 7FFFh, and from 38CEh on it holds: -5,847 at
+  7FFFh, -2,924 at 4000h, -731 at 1000h. Vof is 0 up to 38CDh and grows from 38CEh.
+- The held value is -Les·cot(38CEh) within one unit at Les = 7FFFh, where one step of Azs moves Vva by 3. So the
+  angle at which Vva is held is 38CEh to within a third of a step.
+- §49.1 found the same threshold at every Les, Fz and Lfe tried from 40h to 400h.
+
+**The limit is 38CEh, 79.882°, to within one step of Azs (2^-16 of a turn, 0.0055°)**, the threshold at or above which
+the branch is taken. It is the one constant §52.1 admits. A mirrored threshold sits at C732h, its negative: from 8000h
+to C732h Vva holds +Les·cot(38CEh) and Vof is negative, and C800h is ordinary again.
+
+**The branch**, characterised as real-valued errors of stated formulas against the image (300 to 400 seeded cases each,
+Azs from 3900h to 4200h; Les from 64 to 512). With z_v the limit, Δ = Azs - z_v, and the eye placed by Azs itself:
+
+- **Vof** = Les·tan Δ: within 1 to 3 up to 95°, 5,845 against 5,848 at 90° with Les = 7FFFh. Past 100° the chip's value
+  departs (20,668 against 20,970 at 112.5°), and from 135° it follows another course.
+- **Vva** is not held exactly. It is -Les·cot z_v / cos Δ: -5,938 at 90° against 5,847.6/cos 10.12° = 5,940, and
+  -6,921 at 112.5° against 6,943. So the virtual screen stands at Les/cos Δ.
+- **(Cx, Cy)** is where the limit's axis meets the ground from the eye at Azs: E as §49.1 places it for Azs, then E's
+  height times tan z_v along (sin a, -cos a). Within about 1%.
+- **Raster** keeps the limit's horizon on every line, and its scale follows the eye's height at Azs: 1.4 to 1.7% median
+  relative error with the screen at Les or Les/cos Δ, no line offset. Shifting the lines by Vof either way is 28% or
+  worse. Dn/An is cos z_v times about 1/cos Δ.
+- **Project is untouched by the limit.** It is §49.1's projection at Azs itself, within 1 of the image's results; the
+  virtual camera with V moved by Vof comes close only because the two nearly agree.
+- **Target** is the virtual camera's: the ray from the eye at Azs through (H, V) on the screen at the limit, V not moved,
+  within 1% median. The image's Target no longer equals C plus Raster's matrix (§50.1) here, which fits Raster's Dn/An
+  departing from cos z_v while Target's ground offset keeps it.
+
+### 52.4 The branch's family, declared before the first comparison
+
+For lim ≤ Azs < 8000h, with z_v = 38CEh (and for 8000h ≤ Azs ≤ C732h, z_v = C732h), Δ = Azs - z_v, sine and arithmetic
+as §52.2's member:
+
+- **Vof** = Les·sin Δ/cos Δ. **B1, its rounding**: floor, or half up (2).
+- **Vva** = -Les_v·cos z_v/sin z_v. **B2, the screen Les_v**: Les, or Les/cos Δ, also used by Raster and Target (2).
+- **(Cx, Cy)**: §52.2's Parameter with the eye from Azs and t = Ez(Azs)·sin z_v/cos z_v.
+- **Raster**: n = ⌊Les_v·cos z_v⌋ + ⌊v·sin z_v⌋, k = 256·Ez(Azs)/n. **B3, K**: k/cos z_v, or k·cos Δ/cos z_v (2).
+- **Target**: §50.3's formula with the branch's (Cx, Cy), n and k, and K = k/cos z_v, the virtual camera's ground offset.
+- **Project. B4**: §52.2's Project at Azs, with no branch; or the virtual camera at z_v with Vof added to V (2).
+
+That is 16 members, 4 bits, beside the one constant. They are ranked as §52.1 ranks Project, by exact results over both
+sets, ties to the most close. The sets: 2^16 seeded cases in §49.2's ranges with Azs from 38CEh to 4800h (101°), and the
+traced Parameter, Raster, Project and Target commands of Lock On, Ballz 3D and Pilotwings past the limit. Past 4800h,
+and past B800h on the negative side, the same formulas run ungraded, a named loss.

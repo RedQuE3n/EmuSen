@@ -1,16 +1,16 @@
-//! Beryl's Motorola 68000, written from the M68000 Family Programmer's Reference Manual and the M68000 User's Manual
-//! and graded by SingleStepTests' 68000 suite. Shared by the Genesis's main CPU and the Sega CD's sub-CPU, and by any
-//! later core with a 68000. The interface is Beryl_M68k.md §2; the oracle §3.
-//!
-//! Stage 0: the bus, the registers and the step's signature. No instruction executes until stage 1 (`BUILT`).
+//! Beryl's Motorola 68000, written from the M68000 Family Programmer's Reference Manual and the M68000 User's Manual,
+//! with the order of bus cycles from Yacht.txt, and graded by SingleStepTests' 68000 suite and TomHarte's 680x0 tests.
+//! Shared by the Genesis's main CPU and the Sega CD's sub-CPU, and by any later core with a 68000. The interface is
+//! Beryl_M68k.md §2; the oracle §3; what each step built §4 on.
 
 pub use emusen_native::debug::{Observer, Unobserved};
 
+mod exec;
 #[cfg(test)]
 mod singlestep;
 
-/// Whether the processor executes; the single-step suite skips while it is false.
-pub const BUILT: bool = false;
+/// Whether the processor executes; the single-step suite runs once it is.
+pub const BUILT: bool = true;
 
 /// The width of a bus cycle: UDS and LDS both, or one of them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,7 +61,9 @@ pub trait Bus {
     fn reset_devices(&mut self) {}
 }
 
-/// The programmer's model (M68000PRM §1.1-1.3), with the two prefetch words the user's manual names IRC and IRD.
+/// The programmer's model (M68000PRM §1.1-1.3), with the two prefetch words the user's manual names IRD and IRC.
+/// Between instructions `pc` is the address of the instruction in `prefetch[0]`, and `prefetch[1]` holds the word
+/// after it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Registers {
     pub d: [u32; 8],
@@ -98,17 +100,18 @@ pub enum Step {
     Stopped,
     /// A double bus fault halted the processor.
     Halted,
+    /// The observer stopped the step before the instruction ran: its reasons.
+    Observed(u32),
 }
-
-/// The processor cannot step yet.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NotBuilt;
 
 #[derive(Clone, Debug, Default)]
 pub struct M68000 {
     pub regs: Registers,
     pub stopped: bool,
     pub halted: bool,
+    /// The processor number the observer is told, and the space its stores are reported in.
+    pub processor: usize,
+    pub space: u32,
 }
 
 impl M68000 {
@@ -117,12 +120,12 @@ impl M68000 {
     }
 
     /// One instruction, or one exception, through `bus`.
-    pub fn step<B: Bus>(&mut self, bus: &mut B) -> Result<Step, NotBuilt> {
+    pub fn step<B: Bus>(&mut self, bus: &mut B) -> Step {
         self.step_observed(bus, &mut Unobserved)
     }
 
     /// The step a debugger watches: `observer.before` at the instruction boundary, stores and calls as they happen.
-    pub fn step_observed<B: Bus, O: Observer>(&mut self, _bus: &mut B, _observer: &mut O) -> Result<Step, NotBuilt> {
-        Err(NotBuilt)
+    pub fn step_observed<B: Bus, O: Observer>(&mut self, bus: &mut B, observer: &mut O) -> Step {
+        exec::step(self, bus, observer)
     }
 }

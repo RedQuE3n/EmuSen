@@ -568,6 +568,10 @@ ran. **The effort is predicted** (P3). A stage's oracle must be met, or its miss
 | 13 | Speed (§5.5): the exact levers for the 32X, measured on the bench and the handheld | §5.5's budget | 3 |
 | 14 | The gates of §7, the goldens, the clone check | §7 | 2 |
 
+*Stage 0 was run on 2026-10-04 (`Nephrite_Native.md` §1). Stage 1's first step, the same day, passed every case of
+SingleStepTests' 68000 suite with every transaction (`Beryl_M68k.md` §4); interrupts, the disassembler and the state
+remain for its later steps.*
+
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other
 and may swap.

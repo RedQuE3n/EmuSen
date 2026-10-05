@@ -71,3 +71,94 @@ dispute):
 The Genesis's bus (its waits, the Z80's window, DMA's hold), interrupts arriving mid-instruction, and anything over
 more than one instruction. Those are the console test programs' (`Nephrite_Plan.md` §3.2): the BCD verifier, the opcode
 sizes and the illegal-instruction test, and Yacht.txt for the order of cycles.
+
+### 3.3 Where the two suites disagree
+
+TomHarte's suite and SingleStepTests' disagree with each other on whole classes of case. Measured 2026-10-04 by
+`the_second_suite_disagreements` (opt-in through `EMUSEN_BERYL_DISAGREEMENTS`), with the processor of §4 passing every
+case of SingleStepTests' suite, each failing case of TomHarte's put in the first class that holds:
+
+| Class | Cases | What differs |
+|---|---|---|
+| Address errors | 178,087 | TomHarte's suite records no abandoned cycle and four idle clocks before the stacking where SingleStepTests' records the abandoned cycle and eight; it advances a long postincrement before the fault; its stacked PC follows another rule |
+| Function code only | 4,362 | TomHarte's suite reads the PC-relative modes' operands in data space; SingleStepTests' in program space, as the Programmer's Reference Manual's Section 2 classifies them ("these accesses classify as program references") |
+| RTE, RTR | 8,049 | TomHarte's suite reads the stacked PC's high word before the status word |
+| CHK, DIVS, DIVU | 9,949 | Internal delays |
+| ASR | 3,736 | With a count at or above the operand's width, TomHarte's suite clears C and X where the bits shifted out are the sign |
+| LINK A7 | 1,005 | TomHarte's suite stacks A7 less four; SingleStepTests' the original A7 |
+| ADD.l, SUB.l, ASL.b | 733 | Not yet read |
+
+**Decided for stage 1 (argued):** SingleStepTests' suite is the oracle that gates (G1), because it was generated from
+a model of the 68000's own microcode, and TomHarte's from an implementation written by hand. Each class above is a
+candidate disputes entry, to be settled by the documents and then by the referees' 68000s (fx68k in the MegaCD core,
+Nuked-MD's microcoded `68k.v`) in logged dispute steps; none has been read. TomHarte's suite stays a measurement until
+then.
+
+## 4. Stage 1, step 1: the whole instruction set (2026-10-04)
+
+### 4.1 What it built
+
+`src/exec.rs`: every 68000 instruction, the group 1 and 2 exceptions (illegal, line A and F, privilege, TRAP, TRAPV,
+CHK, division by zero), group 0 processing for address errors with its seven-word frame, STOP, RESET's pulse, and the
+observer calls (the instruction boundary, each stored byte, calls, exceptions and returns). Semantics are the
+Programmer's Reference Manual's; each instruction's bus cycles and internal delays are Yacht.txt's (§2), in the order it
+gives them, through the bus of §2. Where the suite showed another order or another delay, the suite's was taken, and
+§4.2 lists each such reading.
+
+**Measured 2026-10-04, SingleStepTests' 68000 suite: 317,500 of 317,500 cases, registers, memory and every
+transaction.** The first build passed 259,410 (81.7%); the readings of §4.2 took it to all. TomHarte's suite: 794,139
+of 1,000,060, its failures the classes of §3.3. Both suites together run in 5.7 s of wall time on four threads,
+JSON parsing included.
+
+### 4.2 Readings taken from the suite
+
+Each is a rule the suite's data shows and the documents leave open, stated in hardware terms. They are measured
+against SingleStepTests' suite only, which §3.3's disagreements make a single source; each is therefore also a
+candidate for a dispute step.
+
+- **The PC a group 0 frame stacks.** The opcode's address plus two, advanced by two for each absolute address or
+  immediate word fetched and, for a word or byte operand, by two at a predecrement; the displacements of `(d16,An)`,
+  `(d8,An,Xn)` and the PC-relative modes do not advance it. MOVE stacks the prefetch address as its destination phase
+  begins, plus two for an absolute long destination; MOVEM the prefetch address as its transfers begin; JSR its return
+  address; BSR its target; DBcc, CMPM, ADDX and SUBX to memory, and UNLK, the prefetch address.
+- **The access address** in the frame is the whole 32-bit address, its top byte included; the bus sees 24 bits.
+- **The instruction register** in the frame, and in the status word's top eleven bits, is the opcode, except for MOVE
+  of a byte or word to `-(An)`, whose store follows the final prefetch, which stacks the next opcode.
+- **Postincrement and predecrement on a fault.** A long `(An)+` operand advances its register only after both words
+  are read; MOVE's `(An)+` destination only after its store, whatever the size; MOVE.L's `-(An)` destination only after
+  both words are stored; ADDX.L and SUBX.L adjust each register only after its operand's two reads; CMPM advances its
+  source before each read (two at a time for a long) and its destination after.
+- **MOVE.L's flags when its first store faults:** with an `(An)` or `(An)+` destination, untouched from a register or
+  immediate source and taken from the low word from a memory source; N and Z set and V and C untouched for a register
+  source to `(d16,An)` or `(d8,An,Xn)`; from the low word for an absolute long destination from memory; otherwise set
+  in full. Byte and word moves set them in full before the store.
+- **CHK.** Without a trap: six idle clocks, then the prefetch. With one: eight idle clocks, or ten when the register is
+  negative and the bound less the register, as a 16-bit difference, is not negative. N is the register's sign; Z, V and
+  C are cleared, Z set for a zero register.
+- **DBcc** writes its decremented counter only after the branch's prefetch succeeds.
+- **TRAPV's trap** enters supervisor mode before its prefetch, which therefore reads supervisor program space.
+- **ORI, ANDI and EORI to CCR or SR, and MOVE to CCR or SR,** refill the prefetch queue from the word after the
+  instruction: the word already in IRC is read again.
+- **DIVU and DIVS on overflow** set N and V and clear Z and C. Their timing is Yacht.txt's flowcharts read as rules
+  per quotient bit, the formulation also published as Jorge Cwik's analysis of the 68000's division timing.
+- **ABCD, SBCD and NBCD** follow the BCD verifier's reference model (`flamewing/68k-bcd-verifier`, its README and its
+  expected-results source, read as a test program's statement of what it expects): the binary carries of each nibble
+  and the decimal carries choose the correction, and the undefined V and N follow from it.
+- **LINK A7** stacks the original A7.
+- **UNLK** reads before it moves the stack pointer, so a fault leaves A7 alone.
+- **BTST** with an immediate destination idles two clocks after its prefetch, as with a data register.
+
+### 4.3 What stage 1 still owes
+
+Interrupts (IPL sampling at the instruction boundary, the acknowledge cycle, autovectors and the spurious vector) and
+the reset exception; trace mode; a check of the decoder against TomHarte's instruction map (`map/68000.official.json`);
+the disassembler for `DEBUG_DISASSEMBLE`; the registers as a `StateWriter` block; and the processor's own cost on the
+desktop. None is exercised by the single-step suites, which begin and end at instruction boundaries with no interrupt
+pending.
+
+### 4.4 Provenance
+
+Read to write this step: the Programmer's Reference Manual and the User's Manual (Motorola), Yacht.txt, the BCD
+verifier's README and expected-results model, and the two suites' data and READMEs. No emulator source was opened, the
+suites' generators included.
+

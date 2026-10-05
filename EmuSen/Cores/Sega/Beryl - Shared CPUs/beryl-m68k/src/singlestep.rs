@@ -112,8 +112,13 @@ fn same(a: &Transaction, b: &Transaction) -> bool {
     }
 }
 
-/// The registers a case names, A7 as the stack pointer of the mode its SR selects.
-pub fn registers(v: &Value) -> Registers {
+/// The PC each suite records, less the opcode's address: SingleStepTests' is the next prefetch's, four on.
+pub fn pc_offset(suite: &str) -> u32 {
+    if suite.starts_with("m68000") { 4 } else { 0 }
+}
+
+/// The registers a case names, A7 as the stack pointer of the mode its SR selects, PC as the opcode's address.
+pub fn registers(v: &Value, offset: u32) -> Registers {
     let mut r = Registers::default();
     for i in 0..8 {
         r.d[i] = int(v, &format!("d{i}"));
@@ -122,7 +127,7 @@ pub fn registers(v: &Value) -> Registers {
         r.a[i] = int(v, &format!("a{i}"));
     }
     r.sr = int(v, "sr") as u16;
-    r.pc = int(v, "pc");
+    r.pc = int(v, "pc").wrapping_sub(offset);
     let (usp, ssp) = (int(v, "usp"), int(v, "ssp"));
     (r.a[7], r.other_sp) = if r.supervisor() { (ssp, usp) } else { (usp, ssp) };
     let p = v.get("prefetch").and_then(Value::as_array).expect("prefetch");
@@ -212,12 +217,12 @@ impl Outcome {
 }
 
 /// A case run through `processor`, which steps once over the bus and returns the registers it ends with.
-pub fn grade(case: &Value, processor: &mut dyn FnMut(&Value, &mut FlatBus) -> Registers) -> Outcome {
+pub fn grade(case: &Value, offset: u32, processor: &mut dyn FnMut(&Value, u32, &mut FlatBus) -> Registers) -> Outcome {
     let initial = case.get("initial").expect("initial");
     let fin = case.get("final").expect("final");
     let mut bus = FlatBus { ram: ram(initial).into_iter().collect(), log: Vec::new() };
-    let got = processor(case, &mut bus);
-    let want = registers(fin);
+    let got = processor(case, offset, &mut bus);
+    let want = registers(fin, offset);
     let mut o = Outcome { registers: got == want, ..Outcome::default() };
     if !o.registers {
         o.first_difference = Some(format!("registers: got {got:X?} want {want:X?}"));
@@ -238,7 +243,7 @@ pub fn grade(case: &Value, processor: &mut dyn FnMut(&Value, &mut FlatBus) -> Re
 }
 
 /// The positive control: the suite's own transactions performed through the bus, ending in the suite's registers.
-pub fn replay(case: &Value, bus: &mut FlatBus) -> Registers {
+pub fn replay(case: &Value, offset: u32, bus: &mut FlatBus) -> Registers {
     for t in case.get("transactions").and_then(Value::as_array).expect("transactions").iter().flat_map(cycles) {
         match t {
             Transaction::Idle(n) => bus.idle(n),
@@ -255,12 +260,12 @@ pub fn replay(case: &Value, bus: &mut FlatBus) -> Registers {
             }
         }
     }
-    registers(case.get("final").expect("final"))
+    registers(case.get("final").expect("final"), offset)
 }
 
 /// The processor under test, from the case's initial registers, for one step.
-pub fn processor(case: &Value, bus: &mut FlatBus) -> Registers {
-    let mut cpu = M68000 { regs: registers(case.get("initial").expect("initial")), ..M68000::new() };
+pub fn processor(case: &Value, offset: u32, bus: &mut FlatBus) -> Registers {
+    let mut cpu = M68000 { regs: registers(case.get("initial").expect("initial"), offset), ..M68000::new() };
     let _ = cpu.step(bus);
     cpu.regs
 }
@@ -277,7 +282,7 @@ pub struct Tally {
 
 /// Every file through `run`, a few at a time, each case graded with `processor`; the first `limit` cases a file, when
 /// given.
-pub fn run_suite(files: &[PathBuf], limit: Option<usize>, processor: fn(&Value, &mut FlatBus) -> Registers) -> Vec<(String, Tally)> {
+pub fn run_suite(files: &[PathBuf], offset: u32, limit: Option<usize>, processor: fn(&Value, u32, &mut FlatBus) -> Registers) -> Vec<(String, Tally)> {
     let next = Mutex::new(0usize);
     let out = Mutex::new(Vec::new());
     let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4));
@@ -293,7 +298,7 @@ pub fn run_suite(files: &[PathBuf], limit: Option<usize>, processor: fn(&Value, 
                     let Some(path) = files.get(i) else { break };
                     let mut t = Tally::default();
                     for case in read_cases(path).iter().take(limit.unwrap_or(usize::MAX)) {
-                        let o = grade(case, &mut |c, b| processor(c, b));
+                        let o = grade(case, offset, &mut |c, f, b| processor(c, f, b));
                         t.cases += 1;
                         t.passed += o.passed() as usize;
                         t.registers += o.registers as usize;
@@ -347,21 +352,20 @@ mod tests {
         assert_eq!(transaction(&tomharte), t[1]);
         let tas = json::parse(br#"["t", 10, 5, 2001, ".b", 9]"#).unwrap();
         assert_eq!(cycles(&tas).len(), 3);
-        let r = registers(c.get("initial").unwrap());
-        assert_eq!((r.a[7], r.other_sp, r.ssp(), r.usp()), (32, 16, 32, 16));
+        let r = registers(c.get("initial").unwrap(), 4);
+        assert_eq!((r.a[7], r.other_sp, r.ssp(), r.usp(), r.pc), (32, 16, 32, 16, 1020));
     }
 
     #[test]
     fn the_replay_passes_and_a_spoiled_replay_fails_on_the_inline_case() {
         let c = json::parse(CASE.as_bytes()).unwrap();
-        assert!(grade(&c, &mut replay).passed());
-        let o = grade(&c, &mut |c, b| {
-            let mut r = replay(c, b);
+        assert!(grade(&c, 4, &mut replay).passed());
+        let o = grade(&c, 4, &mut |c, f, b| {
+            let mut r = replay(c, f, b);
             r.sr ^= 1;
             r
         });
         assert!(!o.registers && o.memory && o.cycles);
-        assert!(!grade(&c, &mut processor).passed(), "an unbuilt processor cannot pass");
     }
 
     fn corpus(suite: &str) -> Option<Vec<PathBuf>> {
@@ -377,7 +381,7 @@ mod tests {
     fn the_replay_control_passes_every_case() {
         for suite in SUITES {
             let Some(files) = corpus(suite) else { continue };
-            let reports = run_suite(&files, None, replay);
+            let reports = run_suite(&files, pc_offset(suite), None, replay);
             let t = total(&reports);
             eprintln!("{suite}: replay {} of {} in {} files", t.passed, t.cases, reports.len());
             for (f, r) in reports.iter().filter(|(_, r)| r.passed != r.cases) {
@@ -393,35 +397,120 @@ mod tests {
         for suite in SUITES {
             let Some(files) = corpus(suite) else { continue };
             let sample: Vec<PathBuf> = files.iter().step_by(8).cloned().collect();
-            let carry = |c: &Value, b: &mut FlatBus| {
-                let mut r = replay(c, b);
+            let carry = |c: &Value, f: u32, b: &mut FlatBus| {
+                let mut r = replay(c, f, b);
                 r.sr ^= 1;
                 r
             };
-            let dropped = |c: &Value, b: &mut FlatBus| {
-                let r = replay(c, b);
+            let dropped = |c: &Value, f: u32, b: &mut FlatBus| {
+                let r = replay(c, f, b);
                 b.log.pop();
                 r
             };
-            for (name, spoil) in [("carry", carry as fn(&Value, &mut FlatBus) -> Registers), ("last transaction", dropped)] {
-                let t = total(&run_suite(&sample, Some(200), spoil));
+            for (name, spoil) in [("carry", carry as fn(&Value, u32, &mut FlatBus) -> Registers), ("last transaction", dropped)] {
+                let t = total(&run_suite(&sample, pc_offset(suite), Some(200), spoil));
                 eprintln!("{suite}: spoiled ({name}) {} of {}", t.passed, t.cases);
                 assert_eq!(t.passed, 0, "{suite} spoiled by {name}");
             }
         }
     }
 
-    /// The processor against the suites; unrun until it is built.
+    /// The processor against the suites, file by file, written to `EMUSEN_BERYL_REPORT` when it is set. Every case of
+    /// SingleStepTests' suite must pass; TomHarte's is measured, its disagreements being Beryl_M68k.md §3.3's.
     #[test]
     fn the_processor_against_the_suites() {
-        if !crate::BUILT {
-            eprintln!("the 68000 is not built yet: not run");
-            return;
-        }
+        let mut lines = Vec::new();
+        let mut failed_primary = false;
         for suite in SUITES {
             let Some(files) = corpus(suite) else { continue };
-            let t = total(&run_suite(&files, None, processor));
-            eprintln!("{suite}: {} of {} (registers {}, memory {}, cycles {})", t.passed, t.cases, t.registers, t.memory, t.cycles);
+            let reports = run_suite(&files, pc_offset(suite), None, processor);
+            let t = total(&reports);
+            let line = format!("{suite}: {} of {} (registers {}, memory {}, cycles {})", t.passed, t.cases, t.registers, t.memory, t.cycles);
+            eprintln!("{line}");
+            lines.push(line);
+            for (f, r) in &reports {
+                lines.push(format!("  {f}\t{}\t{}\t{}\t{}\t{}\t{}", r.cases, r.passed, r.registers, r.memory, r.cycles, r.first_failure.as_deref().unwrap_or("")));
+            }
+            if suite == SUITES[0] {
+                failed_primary = t.passed != t.cases;
+            }
+        }
+        if let Some(path) = std::env::var_os("EMUSEN_BERYL_REPORT") {
+            std::fs::write(path, lines.join("\n") + "\n").unwrap();
+        }
+        assert!(!failed_primary, "a SingleStepTests case fails");
+    }
+
+    /// A development aid: `EMUSEN_BERYL_EXPLAIN=<suite folder>/<file>[:<skip>]` prints the first failing cases of a
+    /// file after `skip`, with both transaction lists and the registers.
+    #[test]
+    fn explain() {
+        let Some(spec) = std::env::var("EMUSEN_BERYL_EXPLAIN").ok() else { return };
+        let (path, skip) = spec.split_once(':').map_or((spec.as_str(), 0), |(p, n)| (p, n.parse().unwrap_or(0)));
+        let suite = SUITES.iter().find(|s| path.starts_with(*s)).expect("a suite folder");
+        let file = Path::new(&std::env::var_os(CORPUS_VARIABLE).unwrap()).join(path);
+        let offset = pc_offset(suite);
+        let mut shown = 0;
+        for case in read_cases(&file).iter().skip(skip) {
+            let o = grade(case, offset, &mut processor);
+            if o.passed() {
+                continue;
+            }
+            let initial = case.get("initial").unwrap();
+            let mut bus = FlatBus { ram: ram(initial).into_iter().collect(), log: Vec::new() };
+            let got = processor(case, offset, &mut bus);
+            eprintln!("== {} {}", case.get("name").and_then(Value::as_str).unwrap_or("?"), o.first_difference.unwrap_or_default());
+            eprintln!("   initial {:X?}", registers(initial, offset));
+            eprintln!("   want    {:X?}", registers(case.get("final").unwrap(), offset));
+            eprintln!("   got     {got:X?}");
+            eprintln!("   want tx {:?}", merged(case.get("transactions").unwrap().as_array().unwrap().iter().flat_map(cycles)));
+            eprintln!("   got tx  {:?}", merged(bus.log));
+            shown += 1;
+            if shown == 4 {
+                break;
+            }
+        }
+    }
+
+    /// TomHarte's suite against SingleStepTests', where they disagree: each failing case of the second suite put in
+    /// the first of the classes Beryl_M68k.md §3.3 names, printed with counts; a measurement, failing nothing.
+    #[test]
+    fn the_second_suite_disagreements() {
+        if std::env::var_os("EMUSEN_BERYL_DISAGREEMENTS").is_none() {
+            return;
+        }
+        let Some(files) = corpus(SUITES[1]) else { return };
+        let mut classes: BTreeMap<String, usize> = BTreeMap::new();
+        for path in &files {
+            let file = path.file_name().unwrap().to_string_lossy().into_owned();
+            for case in read_cases(path) {
+                if grade(&case, 0, &mut processor).passed() {
+                    continue;
+                }
+                let initial = case.get("initial").unwrap();
+                let mut bus = FlatBus { ram: ram(initial).into_iter().collect(), log: Vec::new() };
+                let mut cpu = M68000 { regs: registers(initial, 0), ..M68000::new() };
+                let step = cpu.step(&mut bus);
+                let want = merged(case.get("transactions").unwrap().as_array().unwrap().iter().flat_map(cycles));
+                let got = merged(bus.log.clone());
+                let strip = |l: &[Transaction]| -> Vec<Transaction> {
+                    l.iter().map(|t| match *t {
+                        Transaction::Cycle { kind, address, word, value, .. } => Transaction::Cycle { kind, function: 0, address, word, value },
+                        t => t,
+                    }).collect()
+                };
+                let class = if step == crate::Step::Exception(3) {
+                    "address error".to_string()
+                } else if strip(&want) == strip(&got) && registers(case.get("final").unwrap(), 0) == cpu.regs {
+                    "function code only".to_string()
+                } else {
+                    format!("other: {file}")
+                };
+                *classes.entry(class).or_default() += 1;
+            }
+        }
+        for (c, n) in &classes {
+            eprintln!("{n:8} {c}");
         }
     }
 }

@@ -1,0 +1,195 @@
+using EmuSen.Cores;
+using EmuSen.Cores.Native;
+using EmuSen.DianaOS.DianaOS.Sys.Systems;
+using EmuSen.DianaOS.DianaOS.Sys.Systems.Genesis;
+using EmuSen.Galaxia.Input;
+using EmuSen.Galaxia.Library;
+using EmuSen.WiseMan.Fixtures;
+using EmuSen.WiseMan.Fixtures.RomRunner;
+using Xunit.Abstractions;
+
+namespace EmuSen.WiseMan.Cores
+{
+    // Nephrite's stage 0 through the generic test-ROM runner, the v1 adapter and discovery, and the runner's own comparisons - see Nephrite_Native.md §2-§3.
+    [Collection(TestCollections.ProcessGlobals)]
+    public class NephriteTests : IDisposable
+    {
+        public const string CorpusVariable = "EMUSEN_NEPHRITE_CORPUS";
+        public static readonly TestRomCorpus Corpus = new(CorpusVariable);
+
+        private readonly ITestOutputHelper _output;
+        private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenNephrite_" + Guid.NewGuid().ToString("N"));
+
+        public NephriteTests(ITestOutputHelper output)
+        {
+            _output = output;
+            Directory.CreateDirectory(_root);
+            DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+            CoreDiscovery.UseDevelopment(true);
+        }
+
+        public void Dispose()
+        {
+            CoreDiscovery.UseDevelopment(null);
+            DataStore.OverrideDirectory = null;
+            try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
+        }
+
+        public static string LibraryPath => CoreAdapterTests.LibraryPath("nephrite");
+
+        private string Write(string name, byte[] image)
+        {
+            string path = Path.Combine(_root, name);
+            File.WriteAllBytes(path, image);
+            return path;
+        }
+
+        [Fact]
+        public void The_library_is_on_the_core_abi_and_its_systems_are_the_packs()
+        {
+            var library = CoreLibrary.Open(LibraryPath);
+            Assert.True(library.Available, library.Report);
+            Assert.Equal(("nephrite", "Nephrite", 0ul), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            var packs = new[] { GenesisSystems.MegaDrive, GenesisSystems.MegaCd, GenesisSystems.S32x };
+            Assert.Equal(packs.Select(p => p.Id), library.Info.Systems.Select(s => s.Id));
+            foreach (var (pack, system) in packs.Zip(library.Info.Systems))
+            {
+                Assert.Equal(pack.Extensions, system.Extensions);
+                Assert.Same(pack, SystemPacks.For(system.Id)!.Entry);
+                Assert.All(system.Firmware, f => Assert.False(f.Required));
+                Assert.Equal(new[] { 8, 12 }, system.Controllers.Select(c => c.Buttons.Count));
+            }
+            Assert.Empty(library.FirmwareFor(SyntheticMdRom.Cartridge()));
+            Assert.Equal(new[] { "32X_G_BIOS.BIN", "32X_M_BIOS.BIN", "32X_S_BIOS.BIN" }, library.FirmwareFor(SyntheticMdRom.Cartridge("SEGA 32X")).Select(f => f.Name));
+            Assert.Equal("bios_CD_J.bin", library.FirmwareFor(SyntheticMdRom.Disc("J")).Single().Name);
+        }
+
+        [Fact]
+        public void The_stub_runs_each_system_through_the_generic_runner()
+        {
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            Assert.True(engine.Available, engine.Report);
+            foreach (var (name, image, spaces) in new (string, byte[], string[])[]
+            {
+                ("game.md", SyntheticMdRom.Cartridge(saveBytes: 8192), new[] { "wram", "z80ram", "vram", "cram", "vsram", "sram", "rom" }),
+                ("game.32x", SyntheticMdRom.Cartridge("SEGA 32X"), new[] { "wram", "z80ram", "vram", "cram", "vsram", "rom", "sdram", "framebuffer", "palette" }),
+                ("game.iso", SyntheticMdRom.Disc(), new[] { "wram", "z80ram", "vram", "cram", "vsram", "prgram", "wordram", "pcmram", "bram" }),
+            })
+            {
+                var run = engine.Run(Write(name, image), new[] { 1, 60 }, new[] { new RomPress(10, PadButton.Start) });
+                var last = run.At(60)!;
+                Assert.Equal(spaces.Order(), last.Spaces.Keys.Order());
+                Assert.Equal((65536, 128, 80), (last.Spaces["wram"].Length, last.Spaces["cram"].Length, last.Spaces["vsram"].Length));
+                Assert.Equal((320, 224), (last.Picture!.Width, last.Picture.Height));
+                Assert.All(last.Picture.Rgb, b => Assert.Equal(0, b));
+                Assert.Equal(48000, run.AudioRate);
+                Assert.True(TestRomDifferential.Steady(run, 1, 60));
+                Assert.Equal(RomOutcome.Visual, new TestRomGrader(Array.Empty<RomProtocol>()).Grade(name, run).Outcome);
+            }
+            Assert.Equal(8192, engine.Run(Write("save.md", SyntheticMdRom.Cartridge(saveBytes: 8192)), new[] { 1 }).At(1)!.Spaces["sram"].Length);
+        }
+
+        [Fact]
+        public void A_genesis_image_opens_on_the_discovered_engine_with_no_code_naming_it()
+        {
+            Assert.Contains(CoreDiscovery.Found, c => c.Info.Id == "nephrite");
+            string rom = Write("game.gen", SyntheticMdRom.Cartridge(region: "E"));
+            Assert.True(CoreFactory.IsSupported(rom));
+            Assert.Null(CoreCatalog.ConsoleForRom(rom));
+            var bundle = CoreFactory.Load(rom);
+            var core = Assert.IsType<CoreEngine>(bundle.Core);
+            Assert.Equal(("nephrite", "md", "pal"), (core.Info.Id, core.Machine.Info.System, core.Machine.Info.Region));
+            core.RunFrame();
+            Assert.Equal((320, 224), (core.ScreenWidth, core.ScreenHeight));
+            Assert.InRange(core.FrameRateHz, 49.70, 49.71);
+            Assert.Null(bundle.CheatAutoDetectCodec);
+            Assert.Null(bundle.Notice);
+            (core as IDisposable)?.Dispose();
+        }
+
+        // Until its Genesis gate the core is in development: built and tested, never offered to a player - see EmuSen_CoreAPI.md §27.
+        [Fact]
+        public void A_player_is_not_offered_the_core_in_development()
+        {
+            var sidecar = CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))!;
+            Assert.True(sidecar.Development);
+            CoreDiscovery.UseDevelopment(false);
+            Assert.DoesNotContain(CoreDiscovery.Found, c => c.Info.Id == "nephrite");
+            foreach (string ext in new[] { ".md", ".gen", ".bin", ".iso", ".32x" })
+            {
+                Assert.False(CoreFactory.IsSupported("game" + ext), ext);
+                Assert.False(CoreCatalog.IsRomExtension(ext), ext);
+                Assert.DoesNotContain(ext, EmuSen.Mistress.Library.RomLibrary.Extensions);
+            }
+            Assert.Throws<NotSupportedException>(() => CoreFactory.Create(Write("game.gen", SyntheticMdRom.Cartridge())));
+        }
+
+        [Fact]
+        public void Pictures_compare_exactly_and_up_to_a_colour_map()
+        {
+            var a = new RomPicture(4, 1, new byte[] { 0, 0, 0, 10, 10, 10, 10, 10, 10, 0, 0, 0 });
+            var b = new RomPicture(4, 1, new byte[] { 1, 1, 1, 12, 12, 12, 12, 12, 12, 1, 1, 1 });
+            Assert.Equal((4, 4), TestRomDifferential.Pictures(a, b));
+            Assert.Equal(0, TestRomDifferential.OffColourMap(a, b));
+            b.Rgb[9] = 12;
+            Assert.Equal(1, TestRomDifferential.OffColourMap(a, b));
+            var merged = new RomPicture(4, 1, new byte[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 });
+            Assert.Equal(2, TestRomDifferential.OffColourMap(a, merged));
+            Assert.Equal((0, 255, 0), RomPicture.FromProbe(new byte[] { 0xE0, 0x07 }, 1, 1, "Rgb565")!.At(0, 0) with { Item2 = (byte)(RomPicture.FromProbe(new byte[] { 0xE0, 0x07 }, 1, 1, "Rgb565")!.At(0, 0).G | 3) });
+            Assert.Equal(((byte)3, (byte)2, (byte)1), RomPicture.FromProbe(new byte[] { 1, 2, 3, 0 }, 1, 1, "Xrgb8888")!.At(0, 0));
+        }
+
+        // Every ROM of the fetched corpus is taken by the stub and runs, or is refused with words; nothing is graded yet.
+        [Fact]
+        public void The_corpus_runs_on_the_stub()
+        {
+            var roms = Corpus.Unique();
+            if (roms.Count == 0)
+            {
+                _output.WriteLine($"{CorpusVariable} is not set or holds no unique-roms.txt: not run");
+                return;
+            }
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            int ran = 0, refused = 0;
+            foreach (var (md5, path) in roms)
+            {
+                try
+                {
+                    var run = engine.Run(path, new[] { 60 });
+                    Assert.NotNull(run.At(60)!.Picture);
+                    ran++;
+                }
+                catch (CoreRefusedException e)
+                {
+                    refused++;
+                    _output.WriteLine($"refused {md5} {Path.GetFileName(path)}: {e.Message}");
+                }
+            }
+            _output.WriteLine($"{ran} ran, {refused} refused, of {roms.Count}");
+            Assert.Equal(roms.Count, ran + refused);
+        }
+
+        // The reference engines answer through the same runner: Genesis Plus GX and PicoDrive on the corpus's first cartridge.
+        [Fact]
+        public void The_reference_engines_run_a_cartridge_through_the_probe()
+        {
+            string? rom = Corpus.Unique().Select(r => r.Path).FirstOrDefault(p => Path.GetExtension(p) is ".md" or ".gen");
+            string cores = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "probe", "libretro", "cores");
+            var engines = new[] { "genesis_plus_gx", "picodrive" }.Select(n => new LibretroProbeEngine(n, Path.Combine(cores, $"{n}_libretro.so"), Path.Combine(Corpus.Root ?? _root, "runs"))).ToArray();
+            if (rom is null || !engines.All(e => e.Available))
+            {
+                _output.WriteLine("no corpus cartridge, probe or reference core here: not run");
+                return;
+            }
+            var runs = engines.Select(e => e.Run(rom, new[] { 600 })).ToArray();
+            foreach (var run in runs)
+            {
+                var shot = run.At(600)!;
+                Assert.Equal(65536, shot.Spaces["ram"].Length);
+                Assert.Equal(320, shot.Picture!.Width);
+            }
+            var diff = TestRomDifferential.Compare(runs[0], runs[1]).Single();
+            _output.WriteLine($"{Path.GetFileName(rom)} at 600: ram differs in {diff.SpaceBytes["ram"]} bytes, {diff.PixelsDiffering} of {diff.PixelsCompared} pixels, {diff.PixelsOffMap} off the colour map");
+        }
+    }
+}

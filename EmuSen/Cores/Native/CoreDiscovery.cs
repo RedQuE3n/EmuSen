@@ -11,6 +11,9 @@ namespace EmuSen.Cores.Native
     // A library's sidecar, <file>.core.json: its info and settings schema and its SHA-256, so a core can be listed without loading it - see EmuSen_CoreAPI.md §7.1, §19.
     public sealed record CoreSidecar(string SidecarPath, string LibraryPath, string Sha256, string Abi, ulong Capabilities, CoreInfo Info, JsonNode InfoJson, string SettingsText)
     {
+        // A core not yet offered to players, which discovery skips unless asked - see EmuSen_CoreAPI.md §27.
+        public bool Development { get; init; }
+
         public const string Suffix = ".core.json";
 
         public static string PathFor(string libraryPath) => libraryPath + Suffix;
@@ -22,7 +25,7 @@ namespace EmuSen.Cores.Native
         }
 
         // Loads the library once, as the build step does, and writes its sidecar beside it.
-        public static CoreSidecar Write(string libraryPath)
+        public static CoreSidecar Write(string libraryPath, bool development = false)
         {
             var library = CoreLibrary.Open(libraryPath);
             if (!library.Available) throw new InvalidOperationException(library.Report);
@@ -36,6 +39,7 @@ namespace EmuSen.Cores.Native
                 ["info"] = JsonNode.Parse(library.Info.Text),
                 ["settings"] = JsonNode.Parse(library.SettingsText),
             };
+            if (development) doc["development"] = true;
             string path = PathFor(libraryPath);
             File.WriteAllText(path, doc.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
             return Read(path) ?? throw new InvalidDataException($"{path} could not be read back");
@@ -51,7 +55,8 @@ namespace EmuSen.Cores.Native
                 if (name is null || name != System.IO.Path.GetFileName(name) || doc["info"] is not JsonObject info) return null;
                 string library = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(sidecarPath)!, name);
                 return new CoreSidecar(sidecarPath, library, doc["sha256"]?.GetValue<string>() ?? "", doc["abi"]?.GetValue<string>() ?? "",
-                    doc["capabilities"]?.GetValue<ulong>() ?? 0, CoreDescriptorReader.Info(info.ToJsonString()), info.DeepClone(), doc["settings"]?.ToJsonString() ?? "[]");
+                    doc["capabilities"]?.GetValue<ulong>() ?? 0, CoreDescriptorReader.Info(info.ToJsonString()), info.DeepClone(), doc["settings"]?.ToJsonString() ?? "[]")
+                { Development = doc["development"]?.GetValue<bool>() == true };
             }
             catch (Exception e) when (e is JsonException or IOException or InvalidOperationException or FormatException or UnauthorizedAccessException)
             {
@@ -93,8 +98,21 @@ namespace EmuSen.Cores.Native
     // The v1 engines in the cores directories, listed from their sidecars alone, so starting a frontend runs no core code - see EmuSen_CoreAPI.md §7.1, §19.
     public static class CoreDiscovery
     {
+        public const string DevelopmentVariable = "EMUSEN_DEVELOPMENT_CORES";
+
         private static IReadOnlyList<DiscoveredCore>? _found;
         private static IReadOnlyList<string>? _directories;
+        private static bool? _includeDevelopment;
+
+        // Whether cores still in development are listed: off for players, on with EMUSEN_DEVELOPMENT_CORES=1 or when a test asks.
+        public static bool IncludeDevelopment => _includeDevelopment ?? Environment.GetEnvironmentVariable(DevelopmentVariable) == "1";
+
+        // Set in place of the variable, null for the variable's answer; the next question scans again.
+        public static void UseDevelopment(bool? include)
+        {
+            _includeDevelopment = include;
+            _found = null;
+        }
 
         // Beside the assemblies, and its cores folder.
         public static IReadOnlyList<string> Directories => _directories ?? new[] { AppContext.BaseDirectory, System.IO.Path.Combine(AppContext.BaseDirectory, "cores") };
@@ -118,7 +136,7 @@ namespace EmuSen.Cores.Native
                 if (!Directory.Exists(dir)) continue;
                 foreach (string file in Directory.EnumerateFiles(dir, "*" + CoreSidecar.Suffix).Order(StringComparer.Ordinal))
                     if (CoreSidecar.Read(file) is { } sidecar && sidecar.Abi.StartsWith($"{CoreInterface.Major}.", StringComparison.Ordinal)
-                        && !list.Any(c => c.Info.Id == sidecar.Info.Id))
+                        && (!sidecar.Development || IncludeDevelopment) && !list.Any(c => c.Info.Id == sidecar.Info.Id))
                         list.Add(new DiscoveredCore(sidecar));
             }
             return list;

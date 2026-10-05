@@ -126,7 +126,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     std::fs::create_dir_all(&dir).unwrap();
     let lib = dir.join(library("kit_test_core").file_name().unwrap());
     std::fs::copy(library("kit_test_core"), &lib).unwrap();
-    let path = sidecar::write(&lib).unwrap();
+    let path = sidecar::write(&lib, false).unwrap();
     assert_eq!(path, PathBuf::from(format!("{}.core.json", lib.display())));
     let v = json::parse(&std::fs::read(&path).unwrap()).unwrap();
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
@@ -136,5 +136,9 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x3FFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
+    assert!(v.get("development").is_none());
+    let marked = json::parse(&std::fs::read(sidecar::write(&lib, true).unwrap()).unwrap()).unwrap();
+    assert_eq!(marked.get("development").map(|d| matches!(d, Value::Bool(true))), Some(true));
+    assert_eq!(marked.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     std::fs::remove_dir_all(&dir).unwrap();
 }

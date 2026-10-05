@@ -27,7 +27,7 @@ namespace EmuSen.DianaOS.DianaOS.Sys.Systems
     // The packs by system id; a system without one is shown by its engine's own name and has no codecs.
     public static class SystemPacks
     {
-        public static IReadOnlyList<SystemPack> All { get; } = new[] { Snes.SnesSystem.Pack };
+        public static IReadOnlyList<SystemPack> All { get; } = new[] { Snes.SnesSystem.Pack, Genesis.GenesisSystems.MegaDrivePack, Genesis.GenesisSystems.MegaCdPack, Genesis.GenesisSystems.S32xPack };
 
         public static SystemPack? For(string? systemId) => All.FirstOrDefault(p => p.Entry.Id == systemId);
     }

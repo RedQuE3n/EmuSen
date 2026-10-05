@@ -1,6 +1,6 @@
 //! `emusen-core-conform --core LIB --image FILE [--self-delimiting] [--frames N] [--input SCRIPT] [--settings KEY=VALUE]... [--file WHICH=PATH]...
-//! [--report REPORT.json]` runs the core suite and exits 0 when every case passes; `emusen-core-conform --sidecar LIB`
-//! writes the library's sidecar. See EmuSen_CoreAPI.md §12.3 and §21.
+//! [--report REPORT.json]` runs the core suite and exits 0 when every case passes; `emusen-core-conform --sidecar LIB
+//! [--development]` writes the library's sidecar. See EmuSen_CoreAPI.md §12.3 and §21.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -9,7 +9,7 @@ use emusen_core_conform::{Options, Script, run, sidecar};
 
 fn usage() -> ExitCode {
     eprintln!("usage: emusen-core-conform --core LIB --image FILE [--self-delimiting] [--frames N] [--input SCRIPT] [--settings KEY=VALUE]... [--file WHICH=PATH]... [--report REPORT.json]");
-    eprintln!("       emusen-core-conform --sidecar LIB");
+    eprintln!("       emusen-core-conform --sidecar LIB [--development]");
     ExitCode::from(2)
 }
 
@@ -34,7 +34,8 @@ fn main() -> ExitCode {
         let Some(v) = value else { return usage() };
         match args[i].as_str() {
             "--sidecar" => {
-                return match sidecar::write(&PathBuf::from(&v)) {
+                let development = args[i + 2..].iter().any(|a| a == "--development");
+                return match sidecar::write(&PathBuf::from(&v), development) {
                     Ok(path) => {
                         println!("{}", path.display());
                         ExitCode::SUCCESS

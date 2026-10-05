@@ -39,6 +39,9 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Roms/*
 *.smc
 *.sfc
 *.nes
+*.gen
+*.smd
+*.32x
 
 # Reference-emulator dumps written by the probe (see EmuSen.WiseMan/Reference),
 # whichever backend produced them - the profile directories it sites beside them

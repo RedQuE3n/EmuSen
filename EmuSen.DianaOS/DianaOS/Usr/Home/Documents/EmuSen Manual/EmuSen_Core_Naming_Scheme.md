@@ -59,11 +59,37 @@ Folder: `Cores/Sega/`
 | Console | Codename | Folder | Status |
 |---|---|---|---|
 | Master System | **Endou** | `Cores/Sega/Endou - Master System/` | Not started — reserved. Renamed from Endymion, see §10 |
-| Genesis / Mega Drive | **Beryl** | `Cores/Sega/Beryl - Genesis/` | Not started — reserved |
+| Genesis / Mega Drive, with the Sega CD and the 32X | **Nephrite** | `Cores/Sega/Nephrite - Genesis/` | Planned; stage 0 built 2026-10-04 — the crate `nephrite`, see `Man pages/Hardware/Sega/Nephrite - Genesis/Nephrite_Plan.md` |
+| Sega CD / Mega-CD | **Nephrite** | (the same core) | An attachment of the Genesis, emulated inside Nephrite |
+| 32X | **Nephrite** | (the same core) | An attachment of the Genesis, emulated inside Nephrite |
 | Game Gear | **Jadeite** | `Cores/Sega/Jadeite - Game Gear/` | Not started — reserved |
-| 32X | **Nephrite** | `Cores/Sega/Nephrite - 32X/` | Not started — reserved |
 | Saturn | **Zoisite** | `Cores/Sega/Zoisite - Saturn/` | Not started — reserved |
 | Dreamcast | **Kunzite** | `Cores/Sega/Kunzite - Dreamcast/` | Not started — reserved |
+
+Not a console:
+
+| What | Codename | Folder | Status |
+|---|---|---|---|
+| The shared CPU library of the Sega cores: the 68000, the Z80 and the SH-2, one crate each | **Beryl** | `Cores/Sega/Beryl - Shared CPUs/` | Skeletons built 2026-10-04: `beryl-m68k`, `beryl-z80`, `beryl-sh2`, see `Man pages/Hardware/Sega/Beryl - Shared CPUs/README.md` |
+
+**Decided 2026-10-04: Nephrite is the Genesis, and the Sega CD and the 32X are its attachments.** Neither add-on
+runs without a Genesis beneath it: the Sega CD's sub-68000 and the 32X's two SH-2s share the bus, the controllers and
+the video output of the console they plug into, so emulating either apart from the Genesis would mean a second copy of
+the Genesis inside it. One core holds all three. Nephrite had been reserved for the 32X alone; it moved to the base
+console, its folder renamed from `Nephrite - 32X` to `Nephrite - Genesis`.
+
+**Decided 2026-10-04: Beryl names the shared CPU library, not a console.** Beryl had been reserved for the Genesis.
+In the series Queen Beryl commands the Shitennou (Jadeite, Nephrite, Zoisite and Kunzite), which fits the library the
+Sega cores are built on: the 68000 serves Nephrite's Genesis and Sega CD, the Z80 Nephrite's sound CPU and later
+Endou's and Jadeite's main CPU, and the SH-2 Nephrite's 32X and later Zoisite. Its folder is `Beryl - Shared CPUs`:
+the `Codename - Console` form of §9, with the console replaced by what the folder holds, as no single console
+describes it. The crates are used beyond Sega (a 68000 serves other manufacturers' machines too); they are filed under
+`Cores/Sega/` because the Sega cores are their first users and the name is drawn from the Sega faction.
+
+**Crate names.** The Rust cores that are ports of a C# core carry an `RT` suffix (MoonRT, MercuryRT, VenusRT, MarsRT),
+which tells a port from its C# reference while both exist. Nephrite has no C# predecessor and none will be written, so
+the suffix would distinguish it from nothing: its crate is `nephrite`, its folder `Nephrite - Genesis`, and its display
+name `Nephrite`. The shared CPU crates take the library's name as a prefix, `beryl-<cpu>`.
 
 ---
 

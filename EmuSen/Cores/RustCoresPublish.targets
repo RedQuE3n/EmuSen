@@ -20,15 +20,17 @@
     <ItemGroup>
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
                              Condition="$(_EmuSenHostLibraryNames.Contains(';%(Filename)%(Extension);'))" />
-      <_EmuSenForeignLibrary Include="@(EmuSenRustCrate)">
+      <_EmuSenForeignLibrary Include="@(EmuSenRustCrate)" Condition="'%(EmuSenRustCrate.InDevelopment)' != 'true'">
         <PublishFile>$(EmuSenPublishLibraryPrefix)%(Identity)$(EmuSenPublishLibrarySuffix)</PublishFile>
       </_EmuSenForeignLibrary>
       <_EmuSenForeignLibrary Condition="'$(EmuSenNativePrebuilt)' != ''">
         <Prebuilt>$(EmuSenNativePrebuilt)/$(RuntimeIdentifier)/%(PublishFile)</Prebuilt>
       </_EmuSenForeignLibrary>
     </ItemGroup>
-    <Warning Condition="'%(_EmuSenForeignLibrary.Prebuilt)' == '' Or !Exists('%(_EmuSenForeignLibrary.Prebuilt)')"
+    <Warning Condition="('%(_EmuSenForeignLibrary.Prebuilt)' == '' Or !Exists('%(_EmuSenForeignLibrary.Prebuilt)')) And '%(_EmuSenForeignLibrary.Fallback)' != ''"
              Text="No %(_EmuSenForeignLibrary.Core) library for $(RuntimeIdentifier): this publish runs %(_EmuSenForeignLibrary.Console) on %(_EmuSenForeignLibrary.Fallback) alone. Build %(_EmuSenForeignLibrary.PublishFile) with the Rust cores workflow and pass -p:EmuSenNativePrebuilt=&lt;dir&gt; holding $(RuntimeIdentifier)/%(_EmuSenForeignLibrary.PublishFile)." />
+    <Warning Condition="('%(_EmuSenForeignLibrary.Prebuilt)' == '' Or !Exists('%(_EmuSenForeignLibrary.Prebuilt)')) And '%(_EmuSenForeignLibrary.Fallback)' == ''"
+             Text="No %(_EmuSenForeignLibrary.Core) library for $(RuntimeIdentifier): this publish has no engine for %(_EmuSenForeignLibrary.Console). Build %(_EmuSenForeignLibrary.PublishFile) with the Rust cores workflow and pass -p:EmuSenNativePrebuilt=&lt;dir&gt; holding $(RuntimeIdentifier)/%(_EmuSenForeignLibrary.PublishFile)." />
     <ItemGroup>
       <_EmuSenForeignPrebuilt Include="@(_EmuSenForeignLibrary->'%(Prebuilt)')" Condition="'%(_EmuSenForeignLibrary.Prebuilt)' != '' And Exists('%(_EmuSenForeignLibrary.Prebuilt)')" />
       <ResolvedFileToPublish Include="@(_EmuSenForeignPrebuilt)" RelativePath="%(_EmuSenForeignPrebuilt.PublishFile)" CopyToPublishDirectory="PreserveNewest" AssetType="native" />

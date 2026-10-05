@@ -1,0 +1,12 @@
+[package]
+name = "beryl-m68k"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Beryl's Motorola 68000: the Genesis's main CPU and the Sega CD's sub-CPU, written from Motorola's manuals and graded by SingleStepTests. See Nephrite_Plan.md §8 and Beryl_M68k.md.
+[lib]
+name = "beryl_m68k"
+
+[dependencies]
+emusen-native = { path = "../../../Shared/emusen-native" }

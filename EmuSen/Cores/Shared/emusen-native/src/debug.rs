@@ -386,6 +386,64 @@ pub fn drain_coverage(hooks: &mut Hooks, processor: usize, out: &mut [u8], recor
     c.bits.len()
 }
 
+/// What a CPU tells its core's debugger, at no cost when unobserved: a step generic over `O: Observer` is compiled
+/// once with `Unobserved` and once with `Hooks`. The Beryl CPU crates call it (Beryl - Shared CPUs/README.md).
+pub trait Observer {
+    /// Before the instruction at `pc` on `processor`: the stop reasons, zero to run it.
+    #[inline(always)]
+    fn before(&mut self, _processor: usize, _pc: u32) -> u32 {
+        stop::FRAME
+    }
+
+    /// One byte of a store, after it has landed.
+    #[inline(always)]
+    fn wrote(&mut self, _space: u32, _address: u32, _value: u8, _pc: u32) {}
+
+    /// A call, an interrupt or an exception taken, with `kind::` kinds.
+    #[inline(always)]
+    fn called(&mut self, _source: u32, _target: u32, _kind: u32) {}
+
+    #[inline(always)]
+    fn returned(&mut self) {}
+}
+
+/// The plain run's observer, which observes nothing.
+pub struct Unobserved;
+
+impl Observer for Unobserved {}
+
+/// Processor 0's stops are the hooks' own; another processor's step records its coverage, its breakpoints being its
+/// core's to keep.
+impl Observer for Hooks {
+    #[inline(always)]
+    fn before(&mut self, processor: usize, pc: u32) -> u32 {
+        if processor == 0 {
+            self.record(pc);
+            self.stop_before(pc)
+        } else {
+            self.record_on(processor, pc);
+            stop::FRAME
+        }
+    }
+
+    #[inline(always)]
+    fn wrote(&mut self, space: u32, address: u32, value: u8, pc: u32) {
+        if self.writes {
+            self.note_write(space, address, value, pc);
+        }
+    }
+
+    #[inline(always)]
+    fn called(&mut self, source: u32, target: u32, kind: u32) {
+        self.note_call(source, target, kind);
+    }
+
+    #[inline(always)]
+    fn returned(&mut self) {
+        self.note_return();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -536,5 +594,19 @@ mod tests {
         h.configure(0, i32::MIN, -1);
         assert_eq!(drain_coverage(&mut h, 0, &mut a, &mut n), 0);
         assert!(!h.armed());
+    }
+
+    #[test]
+    fn an_observer_stops_where_the_hooks_would_and_the_unobserved_one_never() {
+        let mut h = Hooks::new(&[24, 16]);
+        h.set_breakpoints(&[0x200, 0x200]);
+        assert_eq!(Observer::before(&mut h, 0, 0x200), stop::BREAKPOINT);
+        assert_eq!(Observer::before(&mut h, 1, 0x200), stop::FRAME);
+        assert_eq!(Unobserved.before(0, 0x200), stop::FRAME);
+        h.configure(flag::CALLS, i32::MIN, -1);
+        Observer::called(&mut h, 0x100, 0x200, kind::CALL);
+        assert_eq!(h.depth(), 1);
+        Observer::returned(&mut h);
+        assert_eq!(h.depth(), 0);
     }
 }

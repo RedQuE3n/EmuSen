@@ -1949,7 +1949,8 @@ carry them per system in a later minor (§4.4 permits the field), and §15 does 
   and writes it, which is the build step's job (§7.1). The library is named by file name only and must sit beside its
   sidecar.
 - **The scan** reads the sidecars in the directories beside the assemblies (and their `cores` folder) and loads
-  nothing. Two sidecars with one `id` keep the first.
+  nothing. Two sidecars with one `id` keep the first. A sidecar marked `"development": true` is skipped unless
+  development cores are asked for (§27, added 2026-10-04).
 - **Opening** a discovered core, when a game is opened on it, checks the library's SHA-256 against the sidecar's
   before loading, and its info against the sidecar's (as JSON, field by field) after. Either difference refuses it with
   a report that the engine notice carries.
@@ -2495,6 +2496,46 @@ mean; a quiet run remains owed for the per-game figures, as it does for §22.2's
   sends; when both are on `WiseMan` they can become one class with the registries as parameters.
 - **The pre-stable set's deletion** (§13.5), with `NativeRtCore`, `MoonMachine` and `MercuryMachine` and the moving of
   their machine and state tests onto the v1 handle, waits for VenusRT to drop its own.
+
+---
+
+## 27. Cores in development, 2026-10-04
+
+### 27.1 The rule
+
+A core may be built and tested long before it is fit to offer: Nephrite's stage 0 is a stub that recognises an image
+and shows a black picture (`Nephrite_Native.md` §1). Discovery would offer it for any file its systems claim. *Decided
+2026-10-04:* such a core is marked **in development** until its gate, and is then never offered to a player, while the
+tests and the conformance kit run it as any other core. The mark names no core in code; it is a property of a build.
+
+### 27.2 The mechanism
+
+- **`RustCores.props`**: a crate's row carries `<InDevelopment>true</InDevelopment>` (an item definition defaults it to
+  false). Removing the line is the whole of offering the core.
+- **The sidecar**: the build runs `emusen-core-conform --sidecar LIB --development` for such a crate, which adds
+  `"development": true` to the sidecar of §19.2. The field is the host's, outside core info, so the library, its info
+  and the kit are unchanged, and an older host that ignores the field lists the core as before.
+- **Discovery**: `CoreDiscovery` skips a development sidecar unless `IncludeDevelopment` holds: with
+  `EMUSEN_DEVELOPMENT_CORES=1` in the environment, for a developer trying the core in a frontend, or when a test calls
+  `CoreDiscovery.UseDevelopment(true)`. Skipped, the core claims no extension, so `CoreFactory.IsSupported` and
+  `Create` do not reach it, and no engine row lists it.
+- **Publish**: the library and its sidecar are copied into the build output, beside the tests, but marked
+  `CopyToPublishDirectory="Never"`, and a publish for another platform neither takes nor asks for a prebuilt copy.
+- **CI**: `rust-cores.yml` passes `--development` for a crate whose matrix row says `development: true`.
+- **The library's shelves** are unaffected by design: Mistress lists the extensions of `CoreCatalog`'s console rows,
+  and a system reached only through discovery has no row (`Nephrite_Plan.md` §8.3).
+
+### 27.3 What was tested (2026-10-04)
+
+`CoreDiscoveryTests.A_core_in_development_is_listed_only_when_asked_for`, on the test core: a development sidecar is
+not listed, its extension is unsupported and `Create` refuses it; asked for, it is listed and supported; the sidecar
+rewritten without the mark is listed either way. `NephriteTests.A_player_is_not_offered_the_core_in_development`: the
+built sidecar carries the mark, and with development cores not asked for, no Genesis, Sega CD or 32X extension is
+supported, claimed by the catalogue or listed by Mistress's library, and `Create` refuses a `.gen` file. The kit's
+`a_sidecar_carries_the_librarys_own_descriptors_and_hash` checks the field is written only when asked. **Measured:** a
+Release publish of `EmuSen.csproj` holds the other four libraries and their sidecars and no `libnephrite.so`; the
+registration golden of §25 is byte-identical to its state before Nephrite existed, since a player's discovery no
+longer sees the core.
 
 ---
 

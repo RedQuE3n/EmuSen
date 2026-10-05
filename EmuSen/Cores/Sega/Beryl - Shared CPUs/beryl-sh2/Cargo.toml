@@ -1,0 +1,12 @@
+[package]
+name = "beryl-sh2"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Beryl's Hitachi SH-2 (SH7604): the 32X's two CPUs, and later the Saturn's, written from Hitachi's manuals. See Nephrite_Plan.md §8 and Beryl_SH2.md.
+[lib]
+name = "beryl_sh2"
+
+[dependencies]
+emusen-native = { path = "../../../Shared/emusen-native" }

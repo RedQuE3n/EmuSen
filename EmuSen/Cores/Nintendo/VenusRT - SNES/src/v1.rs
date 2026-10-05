@@ -31,6 +31,19 @@ const BUTTONS: [(Control, &str); 12] = [
     (Control::R, "R"),
 ];
 
+/// The SA-1 catch-up setting's key and its values, instructions between catch-ups; "1" is the exact default.
+pub const SA1_CATCH_UP: &str = "sa1_catch_up";
+const SA1_BOUNDS: [(&str, &str); 3] = [
+    ("1", "After every S-CPU instruction (exact)"),
+    ("4", "Every 4 S-CPU instructions"),
+    ("16", "Every 16 S-CPU instructions"),
+];
+
+/// The setting's value as the machine's bound, or None outside the schema's choices.
+fn sa1_bound(value: &str) -> Option<u32> {
+    SA1_BOUNDS.iter().find(|c| c.0 == value).and_then(|c| c.0.parse().ok())
+}
+
 /// Master clocks a second over a frame's: NTSC 236,250,000/11 Hz over 357,366 (262 lines of 1,364 with the short
 /// line every other frame), PAL 21,281,370 Hz over 425,568 (312 lines).
 const NTSC_FRAME: (u64, u64) = (236_250_000, 11 * 357_366);
@@ -161,7 +174,7 @@ impl Machine {
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::RESET | caps::SNAPSHOT | caps::BATTERY_DIRTY | caps::ROM_PATCHES | caps::CHEAT_POKES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
+    const CAPABILITIES: u64 = caps::RESET | caps::SNAPSHOT | caps::BATTERY_DIRTY | caps::ROM_PATCHES | caps::CHEAT_POKES | caps::SETTINGS | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -189,6 +202,33 @@ impl Core for Machine {
             deterministic: true,
             ..Info::default()
         }
+    }
+
+    /// The SA-1 catch-up bound, plan Q3's first lever, exact by default (VenusRT_Native.md §58).
+    fn settings_schema() -> Vec<Setting> {
+        vec![Setting {
+            key: SA1_CATCH_UP.into(),
+            label: "SA-1 catch-up".into(),
+            help: "How often the SA-1, the second processor in Super Mario RPG, Kirby Super Star and other SA-1 games, is brought level with the console's own CPU while that CPU works outside the cartridge. Whenever the CPU touches the cartridge it is brought level at once, whatever this says.".into(),
+            kind: SettingKind::Choice(SA1_BOUNDS.iter().map(|&(v, l)| Choice { value: v.into(), label: l.into(), help: None }).collect()),
+            default: "1".into(),
+            scope: Scope::Run,
+            category: Some("Performance".into()),
+            effect: Effect::Accuracy {
+                cost: "The SA-1 can fall up to 4 or 16 instructions of the console's CPU behind it. Its interrupt to that CPU can arrive that much later, and the two processors' contention for ROM and BW-RAM inside that span is timed differently from the console's. Some games' internal state then differs from the exact setting's at some frames, though the pictures measured were the same. It saves about 3% of the time of Super Mario RPG's heaviest scene, and nothing in games without an SA-1.".into(),
+                accurate: "1".into(),
+            },
+            advanced: true,
+            hidden: false,
+            restart: false,
+        }]
+    }
+
+    fn set_settings(&mut self, settings: &Settings) -> Result<(), i32> {
+        if let Some(v) = settings.get(SA1_CATCH_UP) {
+            self.sys.sa1_every = sa1_bound(v).ok_or(status::BAD_SETTING)?;
+        }
+        Ok(())
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
@@ -220,6 +260,7 @@ impl Core for Machine {
         }
         m.refresh_st_battery();
         m.battery_copy = m.battery_bytes().to_vec();
+        <Machine as Core>::set_settings(&mut m, &request.settings)?;
         Ok(m)
     }
 
@@ -464,7 +505,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; reset, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble);
+emusen_native::core_exports!(Machine; reset, rom_patches, cheat_pokes, settings, debug, debug_stack, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {
@@ -502,6 +543,39 @@ mod tests {
         assert_eq!(named(b"F1 ROC II", 0xF6)[1], "2 st010.rom 53248");
         assert_eq!(named(b"MORITA SHOGI", 0xF6)[1], "2 st011.rom 53248");
         assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| f.which >= 1));
+    }
+
+    // The SA-1 catch-up setting: exact by default, refused outside its choices, and under a bound the SA-1 left behind
+    // while the S-CPU runs from WRAM, caught up at the frame's end and on every instruction of a debugger's frame.
+    #[test]
+    fn the_sa1_catch_up_bound_defers_only_outside_the_board_and_the_debugger() {
+        for s in <Machine as Core>::settings_schema() {
+            s.check().unwrap();
+        }
+        // LDA #$80, STA $0000, LDA #$FE, STA $0001, JMP $0000: a BRA to itself in WRAM.
+        let mut image = crate::machine::tests::rom(&[0xA9, 0x80, 0x8D, 0x00, 0x00, 0xA9, 0xFE, 0x8D, 0x01, 0x00, 0x4C, 0x00, 0x00]);
+        (image[0x7FD5], image[0x7FD6], image[0x7FD8]) = (0x23, 0x34, 0x03);
+        let make = |text: &[u8]| <Machine as Core>::create(&Create { image: &image, settings: Settings::parse(text).unwrap(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION });
+        assert_eq!(make(b"").unwrap().sys.sa1_every, 1);
+        assert_eq!(make(b"sa1_catch_up=3").err(), Some(status::BAD_SETTING));
+        let lag = |m: &mut Machine| {
+            while m.cpu.pc >= 0x8000 {
+                m.step();
+            }
+            for _ in 0..3 {
+                m.step();
+            }
+            m.sys.timing.clock - m.sys.cart.sa1.as_ref().unwrap().clock.min(m.sys.timing.clock)
+        };
+        assert_eq!(lag(&mut make(b"sa1_catch_up=1").unwrap()), 0);
+        let mut bound = make(b"sa1_catch_up=16").unwrap();
+        assert!(lag(&mut bound) > 0);
+        bound.run_frame();
+        assert!(bound.sys.cart.sa1.as_ref().unwrap().clock >= bound.sys.timing.clock && bound.sys.sa1_since == 0);
+        bound.debug_open = Some(bound.sys.timing.frame);
+        assert_eq!(lag(&mut bound), 0);
+        <Machine as Core>::set_settings(&mut bound, &Settings::parse(b"sa1_catch_up=4").unwrap()).unwrap();
+        assert_eq!(bound.sys.sa1_every, 4);
     }
 
     // A DSP's firmware whole as file 2, or as its program in file 2 and its data in file 3; the data alone is refused.

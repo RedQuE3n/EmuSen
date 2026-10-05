@@ -32,7 +32,7 @@ pub struct Sa1 {
     pub clock: u64,
     /// D-36: the S-CPU's holds on a memory (from, to, which) ahead of the SA-1, the SA-1's own accesses past the
     /// catch-up's target, and that target.
-    holds: Vec<(u64, u64, u8)>,
+    holds: std::collections::VecDeque<(u64, u64, u8)>,
     log: Vec<(u64, u64, u8)>,
     horizon: u64,
     /// The debugger's seam, fitted for an observed frame only; not in the state.
@@ -101,7 +101,7 @@ impl Sa1 {
             cpu: Cpu::default(),
             iram: vec![0; 0x800].into(),
             clock: 0,
-            holds: Vec::new(),
+            holds: std::collections::VecDeque::new(),
             log: Vec::new(),
             horizon: 0,
             probe: None,
@@ -342,7 +342,7 @@ impl Sa1 {
         }
         self.log.retain(|e| e.1 > from);
         if to > self.clock {
-            self.holds.push((from, to, kind));
+            self.holds.push_back((from, to, kind));
         }
     }
 
@@ -351,6 +351,10 @@ impl Sa1 {
     fn access(&mut self, kind: u8, cost: u64) {
         let mut at = self.clock;
         if kind != 0 {
+            // A hold ended before the SA-1's clock can delay nothing it does from here on.
+            while self.holds.front().is_some_and(|h| h.1 <= at) {
+                self.holds.pop_front();
+            }
             while let Some(h) = self.holds.iter().find(|h| h.2 == kind && h.0 < at + cost && at < h.1) {
                 at = h.1;
             }

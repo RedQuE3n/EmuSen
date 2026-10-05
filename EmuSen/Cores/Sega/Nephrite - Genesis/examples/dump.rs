@@ -6,7 +6,7 @@ use nephrite::media::Media;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let image = std::fs::read(&args[1]).expect("the image");
+    let image = nephrite::media::cartridge_bytes(&std::fs::read(&args[1]).expect("the image")).into_owned();
     let dir = std::path::Path::new(&args[2]);
     std::fs::create_dir_all(dir).expect("the folder");
     let mut frames: Vec<i64> = args[3..].iter().map(|f| f.parse().expect("a frame")).collect();

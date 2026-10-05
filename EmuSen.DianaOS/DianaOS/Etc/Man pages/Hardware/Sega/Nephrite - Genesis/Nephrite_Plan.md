@@ -341,8 +341,9 @@ carry them. Nothing here needs per-core code in a frontend (`EmuSen_CoreAPI.md` 
 
 The system packs in `DianaOS/Sys/Systems/Genesis/` carry these for any engine. The system is decided by the image's
 contents, not its extension, because the ABI passes only bytes: a disc by `SEGADISCSYSTEM` at the start of its first
-sector's data, a 32X cartridge by its header's system name, and anything else as a Genesis cartridge. **Later:**
-`.smd` (interleaved, with a 512-byte header), `.cue` with its track files and `.chd` (§5.8, §9 Q5), `.68k`, `.sgd`.
+sector's data, a 32X cartridge by its header's system name, and anything else as a Genesis cartridge. `.smd`
+(interleaved, with a 512-byte header) joined `md` at stage 3 (`Nephrite_Native.md` §11.2). **Later:** `.cue` with its
+track files and `.chd` (§5.8, §9 Q5), `.68k`, `.sgd`.
 
 ### 4.2 Controllers
 
@@ -578,7 +579,11 @@ instruction set, its interrupts, the disassembler, the state and the CP/M shim: 
 suite, ZEXDOC and ZEXALL pass (`Beryl_Z80.md` §4-§6). Its second step, the same day, did the probe's work of §1.6
 (`Nephrite_Native.md` §8), which ends stage 2. Stage 3's first step, the same day, built the buses, the cartridge, I/O,
 the scheduler and the interrupts; the BCD verifier, the opcode sizes and the illegal-instruction test pass
-(`Nephrite_Native.md` §9).*
+(`Nephrite_Native.md` §9). Its second built the EEPROM boards the documents wired, Sonic & Knuckles' lock-on, the pads
+chosen by setting, the external interrupt and the references' anchors over the game corpus (§10 there); its third
+measured the Z80's window on Nuked-MD's board, stripped copier headers, traced Sonic 2's lead to the 68000's timing
+over its boot checksum, opening the main RAM's refresh (D-2), and wired the EEPROM boards of Eke's document (§11
+there).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

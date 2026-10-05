@@ -28,13 +28,15 @@ int main(int argc, char** argv) {
     b->M3 = 1; b->cart_m3_pause = 0; b->ext_dtack = 0; b->pal = 0; b->jap = 0; b->tmss_enable = 0; b->tmss_data = 0;
     b->PA_i = 0x7F; b->PB_i = 0x7F; b->PC_i = 0x7F; b->vdp_cramdot_dis = 0; b->ym2612_status_enable = 1;
     b->dma_68k_req = 0; b->dma_z80_req = 0;
-    bool cart_was = false, ram_was = false;
+    bool cwr_was = false, cart_was = false, ram_was = false;
     uint16_t held = 0xFFFF;
     int hold = 0, hold_len = getenv("TB_HOLD") ? atoi(getenv("TB_HOLD")) : 8;
     for (uint64_t t = 0; t < cycles; t++) {
         if (t == reset_len) b->ext_reset = !asserted;
         uint32_t ca = b->cart_address;
-        bool cart = !b->cart_cs && !b->cart_oe;
+        // cart_cs and cart_oe stay low on the 68000's other cycles, its RAM's included: the cartridge answers only its
+        // own range, the first 4 MiB.
+        bool cart = !b->cart_cs && !b->cart_oe && 2 * ca < 0x400000;
         // A ROM keeps its data a little after OE rises: the last word held for `hold` MCLK2 cycles.
         if (cart) { held = (uint16_t)(rom[(2 * ca) & 0x3FFFFF] << 8 | rom[(2 * ca + 1) & 0x3FFFFF]); hold = hold_len; }
         else if (hold > 0) hold--;
@@ -44,7 +46,9 @@ int main(int argc, char** argv) {
         b->ram_z80_o = zram[b->ram_z80_address & 0x1FFF];
         b->MCLK2 = 0; b->eval();
         b->MCLK2 = 1; b->eval();
-        if (t >= trace_from && t < trace_to) printf("t %llu wren %d addr %05x be %d data %04x\n", (unsigned long long)t, b->ram_68k_wren, 2 * (b->ram_68k_address & 0x7FFF), b->ram_68k_byteena, b->ram_68k_data);
+        if (t >= trace_from && t < trace_to)
+            printf("t %llu cs %d oe %d lwr %d uwr %d ca %06x en %d | wren %d ra %05x be %d vd %04x\n", (unsigned long long)t, b->cart_cs, b->cart_oe, b->cart_lwr, b->cart_uwr,
+                   2 * b->cart_address, b->cart_data_en, b->ram_68k_wren, 2 * (b->ram_68k_address & 0x7FFF), b->ram_68k_byteena, b->ram_68k_data);
         if (b->ram_68k_wren) {
             uint16_t& w = ram[b->ram_68k_address & 0x7FFF];
             if (b->ram_68k_byteena & 2) w = (w & 0x00FF) | (b->ram_68k_data & 0xFF00);
@@ -55,6 +59,10 @@ int main(int argc, char** argv) {
         if (b->ram_z80_wren) zram[b->ram_z80_address & 0x1FFF] = b->ram_z80_data;
         if (cart && !cart_was) printf("c %llu %06x\n", (unsigned long long)t, 2 * ca);
         cart_was = cart;
+        // A write to the cartridge's range, which the ROM ignores: the strobes are positive logic and come with cart_cs high.
+        bool cwr = (b->cart_lwr || b->cart_uwr) && 2 * ca < 0x400000;
+        if (cwr && !cwr_was) printf("x %llu %06x\n", (unsigned long long)t, 2 * ca);
+        cwr_was = cwr;
     }
     delete b;
     return 0;

@@ -5555,3 +5555,18 @@ ranked by exact share on the games' own traced traffic**, plan §4.2's trace ora
 justified, on Super Mario Kart's traced Project (§52.2). For B5 the traffic is the traced Parameter and Raster commands
 past the limit of every DSP-1 title that passes it. Whichever member the rule ranks first is built, and the result is
 recorded either way.
+
+### 52.9 B5 regraded under the tie rule (measured 2026-10-04)
+
+`dsp_limit dsp1b 65536`, then each bench trace alone. Only Lock On, Ballz 3D and Pilotwings pass the limit; Super Mario
+Kart, Suzuka 8 Hours, Michael Andretti's Indy Car Challenge and Super Bases Loaded 2 never do.
+
+- **The seeded cases.** Floor has 320,147 exact results and toward zero 293,396, a difference of 26,751, which is 8.4%.
+  The two differ only in Parameter's Vva: 71,187 against 44,436. **The tie rule's condition, under 1%, is not met.**
+  §52.7's figure of 14,417 in 1.78 million (0.8%) was over both sets together, not the seeded cases.
+- **The traced traffic past the limit**, measured since the rule asks for it as the tie's measure: Parameter and Raster
+  exact results are 1,260,721 for floor and 1,273,055 toward zero. That is Lock On's Parameter, 19,684 against 30,652;
+  Ballz 3D's, 3,685 against 5,082; and Pilotwings', 368 against 337. Raster is the same under both.
+
+**By the rule as written, floor stays, and nothing is rebuilt.** Lock On keeps drawing no ground (§52.6). Had the
+condition been read over both sets, the traced traffic would have ranked toward zero first.

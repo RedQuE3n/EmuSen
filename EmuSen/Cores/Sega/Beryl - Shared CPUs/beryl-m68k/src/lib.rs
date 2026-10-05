@@ -5,9 +5,15 @@
 
 pub use emusen_native::debug::{Observer, Unobserved};
 
+#[cfg(test)]
+mod boundary;
+pub mod disasm;
+#[cfg(test)]
+mod decodemap;
 mod exec;
 #[cfg(test)]
 mod singlestep;
+mod state;
 
 /// Whether the processor executes; the single-step suite runs once it is.
 pub const BUILT: bool = true;
@@ -49,8 +55,9 @@ pub trait Bus {
     fn idle(&mut self, clocks: u32);
     /// IPL2-IPL0 as sampled now: 0 none, 7 the non-maskable level.
     fn interrupt_level(&mut self) -> u8;
-    /// The acknowledge cycle for `level`: the vector number the device places on the bus, or `None` when VPA asks
-    /// for the autovector.
+    /// The acknowledge cycle for `level`, in CPU space (FC 7): the vector number the device places on the bus, or
+    /// `None` when VPA asks for the autovector. The bus counts the cycle's clocks, four and any waits, or the E clock's
+    /// synchronisation for an autovector.
     fn acknowledge(&mut self, level: u8) -> Option<u8>;
     /// A word cycle at an odd address, abandoned without AS before the address error exception: its clocks pass
     /// and nothing on the bus sees it.
@@ -112,6 +119,10 @@ pub struct M68000 {
     /// The processor number the observer is told, and the space its stores are reported in.
     pub processor: usize,
     pub space: u32,
+    /// The interrupt level last sampled, so that a rise to level 7 interrupts even at mask 7.
+    pub last_level: u8,
+    /// A trace exception owed by the last instruction, and the PC it stacks.
+    pub trace_pending: Option<u32>,
 }
 
 impl M68000 {
@@ -127,5 +138,10 @@ impl M68000 {
     /// The step a debugger watches: `observer.before` at the instruction boundary, stores and calls as they happen.
     pub fn step_observed<B: Bus, O: Observer>(&mut self, bus: &mut B, observer: &mut O) -> Step {
         exec::step(self, bus, observer)
+    }
+
+    /// The reset exception, as when RESET and HALT are released.
+    pub fn reset<B: Bus>(&mut self, bus: &mut B) {
+        exec::reset(self, bus)
     }
 }

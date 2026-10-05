@@ -148,17 +148,116 @@ candidate for a dispute step.
 - **UNLK** reads before it moves the stack pointer, so a fault leaves A7 alone.
 - **BTST** with an immediate destination idles two clocks after its prefetch, as with a data register.
 
-### 4.3 What stage 1 still owes
+### 4.3 What stage 1 still owed
 
-Interrupts (IPL sampling at the instruction boundary, the acknowledge cycle, autovectors and the spurious vector) and
-the reset exception; trace mode; a check of the decoder against TomHarte's instruction map (`map/68000.official.json`);
-the disassembler for `DEBUG_DISASSEMBLE`; the registers as a `StateWriter` block; and the processor's own cost on the
-desktop. None is exercised by the single-step suites, which begin and end at instruction boundaries with no interrupt
-pending.
+Interrupts, the reset exception, trace mode, a check of the decoder against TomHarte's instruction map, the
+disassembler, the state block and the processor's own cost, none of which the single-step suites exercise. Step 2
+built them (§5).
 
 ### 4.4 Provenance
 
 Read to write this step: the Programmer's Reference Manual and the User's Manual (Motorola), Yacht.txt, the BCD
 verifier's README and expected-results model, and the two suites' data and READMEs. No emulator source was opened, the
 suites' generators included.
+
+## 5. Stage 1, step 2: between instructions, the decoder, the state and the cost (2026-10-05)
+
+### 5.1 The order of a step
+
+A step is one instruction or one exception, decided at the instruction boundary in this order:
+
+1. **A trace owed by the previous instruction** (vector 9). Trace is group 1's highest priority, so it is taken before
+   a pending interrupt. Recording it as owed, rather than taking it inside the traced instruction's step, keeps a step
+   one instruction long, which is also what the single-step suites assume: many of their cases start with T set and
+   end before any trace.
+2. **A pending interrupt.** The User's Manual (§6.3.2): requests "are made pending" and "are detected between
+   instruction executions"; one above the mask is taken; level 7 cannot be masked and "is generated each time the
+   interrupt request level changes from some lower level to level 7", and "may still be caused by the level comparison
+   if the request level is a 7 and the processor priority is set to a lower level by an instruction". The processor
+   samples IPL once per boundary and keeps the level it last saw, which the state carries, so that a rise to 7
+   interrupts even at mask 7 and a level 7 held into its handler does not interrupt again until the mask is lowered.
+   *Argued, not measured:* when within an instruction a change of IPL becomes pending, relative to its last bus cycle,
+   is below this granularity; the VDP's interrupt timing tests at stage 4 are the oracle that will say whether it
+   matters.
+3. **STOP** idles four clocks a step until an interrupt (or a trace) ends it. The PC stacked when an interrupt ends
+   STOP is the instruction after it, four bytes on; the suite's STOP cases leave the PC on STOP itself, as SingleStepTests
+   records it.
+4. **The instruction**, with the observer's stop first.
+
+### 5.2 The sequences (Yacht.txt's tables, with the two clocks the suite showed between the handler's prefetches)
+
+| Exception | Bus activity | Clocks |
+|---|---|---|
+| Interrupt | 6 idle; PC low stacked; the acknowledge cycle (FC 7), its clocks the bus's; 4 idle; SR, PC high; vector; prefetch, 2 idle, prefetch | 44 with a four-clock acknowledge |
+| Reset | 14 idle; SSP and PC from 0-7 in supervisor program space; prefetch, 2 idle, prefetch | 40 |
+| Trace | 4 idle; PC low, SR, PC high; vector 9; prefetch, 2 idle, prefetch | 34 |
+
+These are the User's Manual's totals (44, 40 and 34 clocks), which Yacht.txt notes it falls two clocks short of in
+each; the two clocks between the handler's two prefetches, measured for every other exception in the suite (§4),
+account for the difference in all three. The acknowledge cycle is the bus's to time, because on the Genesis it is an
+autovector whose length follows the E clock. An interrupt sets the mask to its level, enters supervisor mode and clears
+T; a device's vector is used when the bus returns one, the autovector (24 plus the level, the User's Manual's "$18 plus the
+interrupt level") otherwise. The spurious interrupt (a bus error during the acknowledge) and the uninitialised vector
+(15) are the bus's to return as vectors; the Genesis needs neither. Trace follows an
+instruction that completes and the group 2 exceptions (TRAP, TRAPV, CHK, division by zero), whose handler's first
+instruction is then the one stacked; it does not follow an illegal instruction, a privilege violation or an address
+error. Reset sets S, clears T and sets the mask to 7, leaving the condition codes.
+
+`src/boundary.rs` pins each against a recording bus: the cycle order and the totals above, a masked level, a device
+vector, level 7's rise and its comparison once an instruction lowers the mask, STOP ended by an interrupt, reset, trace after an ordinary instruction and after TRAP, and none
+after ILLEGAL. **These rules are argued from the manuals and Yacht.txt; no single-step oracle covers them**, and the
+Genesis's own interrupt tests at stage 3 and 4 are their test.
+
+### 5.3 Two decoder defects, found by the instruction map
+
+`decodemap::every_opcode_against_the_map` runs the processor on each of the 65,536 opcodes in supervisor mode and asks
+whether it takes an illegal or line A/F exception, against the map's "None". *Measured before the fix:* 13 opcodes
+disagreed, all decoded by the processor and absent from the map: CMPI with a PC-relative destination (`0C3A`, `0C3B`,
+`0C7A`, `0C7B`, `0CBA`, `0CBB`), which the Programmer's Reference Manual's CMPI page marks as not applying to the
+MC68000 ("PC relative addressing modes do not apply to MC68000"), and `4E78`-`4E7F`, mode 7 of the miscellaneous group, which the processor
+read as `4E70`-`4E77`. Neither is in either single-step suite, which test valid opcodes only. Both now take the
+illegal-instruction exception; *measured after:* 0 of 65,536 disagree, and both suites still pass (§4).
+
+### 5.4 The state block
+
+`State` for `M68000` (`src/state.rs`): D0-D7, A0-A7, the other stack pointer, SR, PC, the two prefetch words, STOP and
+the halt, the last sampled IPL and an owed trace with its PC, 86 bytes. The layout is pinned by a test, and a short
+block is refused with the processor unchanged. A core writes it as a group of its own state.
+
+### 5.5 The disassembler
+
+`src/disasm.rs`: the Programmer's Reference Manual's syntax (`MOVE.W #$1234,-$10(A5)`, `MOVEM.L D0-D1/A0-A1,-(A7)`,
+`$00FF0000.L`, targets as addresses), with `DC.W` for an opcode the 68000 does not decode, and the static reference
+the words alone give: JSR and BSR targets as calls, absolute and PC-relative operands as reads, an absolute destination
+of a store as a write. **Measured:** the map test also renders every opcode in the map's own notation (its names for
+the special forms, its mode words, the quick operands' numbers) and compares: 0 of 65,536 differ. A second test runs
+every instruction that falls through, 40,242 of them, and finds the disassembler's length equal to the words the
+processor consumed in every case. Golden lines pin the syntax.
+
+### 5.6 The processor's own cost (measured 2026-10-05)
+
+`examples/cost.rs`: a loop of ordinary instructions (a long copy with postincrement, ADD, LSL, MULU, CMP, a branch,
+ADDQ, JSR and RTS, DBRA) on a flat RAM bus that only counts clocks, 50 million instructions, median of three runs, on
+the desktop (Ryzen 7 7700X) at CPU weight 20, load average 0.9: **16.3 ns an instruction**, 14.2 clocks an instruction,
+873 million emulated clocks a second, 114 times the Genesis's 7.67 MHz. A frame's worth of 68000 work (128,006
+clocks) takes **0.147 ms**, and the Sega CD's sub-CPU at 12.5 MHz would add about 0.24 ms. Two runs gave the same
+figures to the third digit. The bus here is the cheapest possible, so these are the processor's cost alone; Nephrite's
+bus with its map and waits will add to it, and `Nephrite_Plan.md` §5.5's budget of 1.5 ms for the Genesis leaves the
+68000 about a tenth of it (argued).
+
+### 5.7 What the dispute step would cover
+
+Not opened. It would take §3.3's classes one at a time, in the order of recourse of `Nephrite_Plan.md` §1.3
+(documents, then a test program, then the referees' 68000s, fx68k in the MegaCD core and Nuked-MD's `68k.v`, each file
+logged), and end each with a rule in hardware terms:
+
+1. Address errors: the abandoned cycle and the idle clocks before the stacking, the stacked PC's rule (§4.2), and
+   whether a long postincrement advances before the fault.
+2. The function code of PC-relative operand reads (program space by the PRM's Section 2; TomHarte's suite says data).
+3. RTE's and RTR's read order.
+4. CHK's and the divisions' internal delays.
+5. ASR's C and X with a count at or above the operand's width.
+6. LINK A7's stacked value.
+7. The 733 ADD.l, SUB.l and ASL.b cases not yet read, and the rest of §4.2's readings, which rest on one suite.
+8. Interrupt sampling within an instruction's last bus cycle (§5.1), if the Genesis's tests need it.
 

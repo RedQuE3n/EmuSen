@@ -26,9 +26,9 @@ namespace EmuSen.Cores.Nintendo.Moon
         // "MOON" little-endian, then the format version - see EmuSen_Save_States.md §3.
         public const uint StateMagic = 0x4E4F4F4D;
         // 3 when the timeline folded into the core (Moon_Core.md §5); 4 the DMA's tail (Moon_Native.md §3.9).
-        public const int StateVersion = 5;
+        public const int StateVersion = 6;
 
-        // Version 4 adds the DMA's tail after version 3's walks, version 5 the mixer after it; versions 3 and 4 still load - see Moon_Native.md §3.9, §3.13.
+        // Version 4 adds the DMA's tail after version 3's walks, version 5 the mixer, version 6 the PPU's RenderingSince; 3 to 5 still load - see Moon_Native.md §3.14.
         public const int OldestReadableVersion = 3;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
@@ -306,6 +306,7 @@ namespace EmuSen.Cores.Nintendo.Moon
             w.Write(Bus.OamDmaPending);
             w.Write(Bus.OamDmaPage);
             Apu.WriteMixer(w);
+            w.Write(Ppu.RenderingSince);
         }
 
         public void LoadState(Stream stream)
@@ -350,6 +351,8 @@ namespace EmuSen.Cores.Nintendo.Moon
             Bus.OamDmaPage = tail ? r.ReadByte() : (byte)0;
             // Before version 5 the mixer was not in the state: it keeps what it held, as it did then.
             if (version >= 5) Apu.ReadMixer(r);
+            // Before version 6 rendering counts as switched on long ago, which only a state saved within 20 dots of the switch can tell.
+            Ppu.RenderingSince = version >= 6 ? r.ReadInt64() : long.MinValue;
             Bus.ForgetLastRead();
             Bus.InternalBus = Bus.OpenBus;
             Apu.FrameIrqReadable = Apu.FrameIrqPending;

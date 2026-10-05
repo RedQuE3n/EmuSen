@@ -20,7 +20,7 @@ What that buys, and what it does not:
 | Odd-frame dot skip | **implemented** |
 | PPU address bus / A12 for mapper IRQs | **per fetch** (`Moon_Memory.md` §4.6a) |
 | Pixel output | still composed once per line, at dot 256 |
-| Sprite 0 *hit* | still reported for the line, not at the pixel |
+| Sprite 0 *hit* | **exact dot**: the dot its pixel is output on (§3.4) |
 | Mid-line `$2005`/`$2006`/`$2001` writes | still apply to the whole line |
 
 So raster splits done at a scanline boundary work, splits done mid-line do not, and everything that depends on *when* a flag changes rather than *what a pixel is* is now right.
@@ -121,9 +121,26 @@ OAM byte 0 holds the sprite's top scanline *minus one*, so a sprite is on line `
 
 The first opaque sprite pixel found in OAM order wins. It is drawn over the background when its priority bit says "front" or when the background pixel is transparent; otherwise the background wins.
 
-Sprite 0 hit sets when sprite 0's opaque pixel meets an opaque background pixel, with both layers enabled and `x != 255`. The rightmost-pixel exclusion is real hardware behaviour, not an off-by-one guard.
+Sprite 0 hit sets when sprite 0's opaque pixel meets an opaque background pixel, with both layers enabled and `x != 255`. The rightmost-pixel exclusion is real hardware behaviour, not an off-by-one guard. The hit is not decided here but on its own dot, by §3.4.
 
 Left-column masking (`PPUMASK` bits 1 and 2) is applied to both layers and to the hit test.
+
+### 3.4 Sprite 0 hit, on its pixel's dot
+
+Pixel `x` of a visible line is output on dot `x + 1`, and the hit flag rises on that dot. Until 2026-10-04 the flag rose at dot 256 for any `x`, when the line was composed; a game that times a raster split from the hit then wrote its scroll up to 165 dots late, which is what drew Super Mario Bros.' slivers under its status bar (`Moon_Native.md` §3.14).
+
+`DetectSprite0Hit` (`detect_sprite0_hit` in MoonRT) runs on dots 1–256 of a visible line until the flag is set, and only on the dots within sprite 0's eight columns, which keeps its cost to a few percent (`Moon_Native.md` §3.14.4). On dot `x + 1` it tests, with the registers as they stand on that dot:
+
+- both layers on, `x != 255`, and for `x < 8` both left-column bits;
+- sprite 0 on the line by the same rule as sprite evaluation, and opaque at column `x − OAM[3]`;
+- the background opaque at `x`: stream position `x + FineX` from `RenderV`, the line's start, with fine X as it is on the dot, since hardware's fine X picks its shifter tap at once;
+- the tile under that position loaded while rendering was on.
+
+**The last rule is the shifters'.** Hardware's background shift registers neither shift nor reload while rendering is off (NES_MiSTer's `bgp_en`, `ppu.sv:1531`). Tile `k` of the line's 33 is reloaded on dot `8k − 7`, and tiles 0 and 1 on dots 329 and 337 of the line before. If rendering was switched on after that reload, the tile is not in the shifters and cannot hit. `Ppu.RenderingSince`, the PPU clock of the last write to `$2001` that turned rendering on from off, holds this; it is written in the state's tail (version 6). What the stalled shifters really hold is not modelled: such a tile counts as transparent.
+
+The reads are peeks. `IMapper.PeekChr` returns the byte `ReadChr` would without its side effects, which only MMC2's latch has, so the detector cannot move a latch that the line's composition at dot 256 then reads differently. The cost is that a tile in a latch-switched bank is tested with the latch as it stands, not as the fetches 16 dots ahead would have left it.
+
+The line is still composed at dot 256, and it no longer touches the flag.
 
 ### 3.5 Colour
 
@@ -135,8 +152,7 @@ Fast-forward (`SkipRendering`) skips only the framebuffer writes. Sprite evaluat
 
 ## 4. Not implemented
 
-- The per-dot *fetch pipeline* and shift registers — the clock is per dot, the renderer is not (§1).
-- Sprite 0 reported at the pixel rather than for the line (§1).
+- The per-dot *fetch pipeline* and shift registers — the clock is per dot, the renderer is not (§1). Sprite 0's hit is decided per dot (§3.4), but from `RenderV` and peeks, not from shifters.
 - Emphasis bits (§3.5).
 - The sprite overflow hardware bug (§3.2).
 - The `$2003`/`$2004` OAM corruption quirks.
@@ -158,4 +174,4 @@ It emits one line per write: frame, scanline, dot, register and value. On SMB3's
 
 That trace is what turned "the floor is in the wrong place" into "the IRQ fires six scanlines early", because the line number in the first column *is* the answer — see `Moon_Memory.md` §4.6b.
 
-**A caution about the renderer this feeds.** `RenderV` is latched at dot 257, so a write landing in dots 258-320 does not reach the line hardware would apply it to. That is a real deviation, and moving the latch to 321 was tried on 2026-08-07: it changed no pixel on SMB3 and was reverted rather than kept unproven. If a game turns up whose split lands one line off, this is the first thing to re-examine.
+**A caution about the renderer this feeds.** `RenderV` is latched at dot 257, so a write landing in dots 258-320 does not reach the line hardware would apply it to. That is a real deviation, and moving the latch to 321 was tried on 2026-08-07: it changed no pixel on SMB3 and was reverted rather than kept unproven. If a game turns up whose split lands one line off, this is the first thing to re-examine. Super Mario Bros.' split did land one line off (2026-10-04), and the latch was not the cause: the writes came after dot 257 because the sprite 0 hit they wait for rose at dot 256 instead of its pixel's dot. With the hit on time they land near dot 100, and the latch never comes into it (§3.4, `Moon_Native.md` §3.14).

@@ -52,6 +52,9 @@ impl Ppu {
     #[inline(always)]
     fn run_visible_dot(&mut self, board: &mut Board) {
         self.fetch_for_dot(board);
+        if self.cycle <= 256 && ((self.cycle - 1 - self.oam[3] as i32) as u32) < 8 && (self.status & 0x40) == 0 {
+            self.detect_sprite0_hit(board);
+        }
         if self.cycle == 256 {
             self.render_scanline(self.scanline, board);
             if self.rendering_enabled() {

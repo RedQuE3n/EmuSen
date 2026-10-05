@@ -329,7 +329,7 @@ built.factory[NES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
 built.factory[NES plain <null>].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES plain <null>].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES plain <null>].axes = []
-built.factory[NES plain <null>].state-version = 5
+built.factory[NES plain <null>].state-version = 6
 built.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -344,7 +344,7 @@ built.factory[NES plain Moon (C#)].codec-explicit = Game Genie | RomPatch | <nul
 built.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES plain Moon (C#)].axes = []
-built.factory[NES plain Moon (C#)].state-version = 5
+built.factory[NES plain Moon (C#)].state-version = 6
 built.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -359,7 +359,7 @@ built.factory[NES plain MoonRT (Rust)].codec-explicit = Game Genie | RomPatch | 
 built.factory[NES plain MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES plain MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES plain MoonRT (Rust)].axes = []
-built.factory[NES plain MoonRT (Rust)].state-version = 5
+built.factory[NES plain MoonRT (Rust)].state-version = 6
 built.factory[NES plain MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain MoonRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain MoonRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -374,7 +374,7 @@ built.factory[NES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
 built.factory[NES plain Nope].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES plain Nope].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES plain Nope].axes = []
-built.factory[NES plain Nope].state-version = 5
+built.factory[NES plain Nope].state-version = 6
 built.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -389,7 +389,7 @@ built.factory[NES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <nu
 built.factory[NES plain Venus (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES plain Venus (C#)].axes = []
-built.factory[NES plain Venus (C#)].state-version = 5
+built.factory[NES plain Venus (C#)].state-version = 6
 built.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -404,7 +404,7 @@ built.factory[NES battery <null>].codec-explicit = Game Genie | RomPatch | <null
 built.factory[NES battery <null>].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES battery <null>].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES battery <null>].axes = []
-built.factory[NES battery <null>].state-version = 5
+built.factory[NES battery <null>].state-version = 6
 built.factory[NES battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery <null>].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
@@ -420,7 +420,7 @@ built.factory[NES battery Moon (C#)].codec-explicit = Game Genie | RomPatch | <n
 built.factory[NES battery Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES battery Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES battery Moon (C#)].axes = []
-built.factory[NES battery Moon (C#)].state-version = 5
+built.factory[NES battery Moon (C#)].state-version = 6
 built.factory[NES battery Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES battery Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Moon (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
@@ -436,7 +436,7 @@ built.factory[NES battery MoonRT (Rust)].codec-explicit = Game Genie | RomPatch 
 built.factory[NES battery MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES battery MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES battery MoonRT (Rust)].axes = []
-built.factory[NES battery MoonRT (Rust)].state-version = 5
+built.factory[NES battery MoonRT (Rust)].state-version = 6
 built.factory[NES battery MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES battery MoonRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery MoonRT (Rust)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
@@ -452,7 +452,7 @@ built.factory[NES battery Nope].codec-explicit = Game Genie | RomPatch | <null>
 built.factory[NES battery Nope].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES battery Nope].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES battery Nope].axes = []
-built.factory[NES battery Nope].state-version = 5
+built.factory[NES battery Nope].state-version = 6
 built.factory[NES battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Nope].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
@@ -468,7 +468,7 @@ built.factory[NES battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <
 built.factory[NES battery Venus (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 built.factory[NES battery Venus (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 built.factory[NES battery Venus (C#)].axes = []
-built.factory[NES battery Venus (C#)].state-version = 5
+built.factory[NES battery Venus (C#)].state-version = 6
 built.factory[NES battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Venus (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
@@ -1338,7 +1338,7 @@ nothing-discovered.factory[NES plain <null>].codec-explicit = Game Genie | RomPa
 nothing-discovered.factory[NES plain <null>].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[NES plain <null>].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 nothing-discovered.factory[NES plain <null>].axes = []
-nothing-discovered.factory[NES plain <null>].state-version = 5
+nothing-discovered.factory[NES plain <null>].state-version = 6
 nothing-discovered.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[NES plain Moon (C#)].supported = True
 nothing-discovered.factory[NES plain Moon (C#)].probe = MoonCore
@@ -1351,7 +1351,7 @@ nothing-discovered.factory[NES plain Moon (C#)].codec-explicit = Game Genie | Ro
 nothing-discovered.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 nothing-discovered.factory[NES plain Moon (C#)].axes = []
-nothing-discovered.factory[NES plain Moon (C#)].state-version = 5
+nothing-discovered.factory[NES plain Moon (C#)].state-version = 6
 nothing-discovered.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[NES plain MoonRT (Rust)].supported = True
 nothing-discovered.factory[NES plain MoonRT (Rust)].probe = MoonRtCore
@@ -1364,7 +1364,7 @@ nothing-discovered.factory[NES plain MoonRT (Rust)].codec-explicit = Game Genie 
 nothing-discovered.factory[NES plain MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[NES plain MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 nothing-discovered.factory[NES plain MoonRT (Rust)].axes = []
-nothing-discovered.factory[NES plain MoonRT (Rust)].state-version = 5
+nothing-discovered.factory[NES plain MoonRT (Rust)].state-version = 6
 nothing-discovered.factory[NES plain MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[NES plain Nope].supported = True
 nothing-discovered.factory[NES plain Nope].probe = MoonCore
@@ -1377,7 +1377,7 @@ nothing-discovered.factory[NES plain Nope].codec-explicit = Game Genie | RomPatc
 nothing-discovered.factory[NES plain Nope].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[NES plain Nope].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 nothing-discovered.factory[NES plain Nope].axes = []
-nothing-discovered.factory[NES plain Nope].state-version = 5
+nothing-discovered.factory[NES plain Nope].state-version = 6
 nothing-discovered.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[NES plain Venus (C#)].supported = True
 nothing-discovered.factory[NES plain Venus (C#)].probe = MoonCore
@@ -1390,7 +1390,7 @@ nothing-discovered.factory[NES plain Venus (C#)].codec-explicit = Game Genie | R
 nothing-discovered.factory[NES plain Venus (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 nothing-discovered.factory[NES plain Venus (C#)].axes = []
-nothing-discovered.factory[NES plain Venus (C#)].state-version = 5
+nothing-discovered.factory[NES plain Venus (C#)].state-version = 6
 nothing-discovered.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain <null>].supported = True
 nothing-discovered.factory[GB plain <null>].probe = MercuryCore
@@ -1670,7 +1670,7 @@ refused-discovered.factory[NES plain <null>].codec-explicit = Game Genie | RomPa
 refused-discovered.factory[NES plain <null>].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 refused-discovered.factory[NES plain <null>].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 refused-discovered.factory[NES plain <null>].axes = []
-refused-discovered.factory[NES plain <null>].state-version = 5
+refused-discovered.factory[NES plain <null>].state-version = 6
 refused-discovered.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[NES plain Moon (C#)].supported = True
 refused-discovered.factory[NES plain Moon (C#)].probe = MoonCore
@@ -1683,7 +1683,7 @@ refused-discovered.factory[NES plain Moon (C#)].codec-explicit = Game Genie | Ro
 refused-discovered.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 refused-discovered.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 refused-discovered.factory[NES plain Moon (C#)].axes = []
-refused-discovered.factory[NES plain Moon (C#)].state-version = 5
+refused-discovered.factory[NES plain Moon (C#)].state-version = 6
 refused-discovered.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[NES plain MoonRT (Rust)].supported = True
 refused-discovered.factory[NES plain MoonRT (Rust)].probe = MoonRtCore
@@ -1696,7 +1696,7 @@ refused-discovered.factory[NES plain MoonRT (Rust)].codec-explicit = Game Genie 
 refused-discovered.factory[NES plain MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 refused-discovered.factory[NES plain MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 refused-discovered.factory[NES plain MoonRT (Rust)].axes = []
-refused-discovered.factory[NES plain MoonRT (Rust)].state-version = 5
+refused-discovered.factory[NES plain MoonRT (Rust)].state-version = 6
 refused-discovered.factory[NES plain MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[NES plain Nope].supported = True
 refused-discovered.factory[NES plain Nope].probe = MoonCore
@@ -1709,7 +1709,7 @@ refused-discovered.factory[NES plain Nope].codec-explicit = Game Genie | RomPatc
 refused-discovered.factory[NES plain Nope].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 refused-discovered.factory[NES plain Nope].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 refused-discovered.factory[NES plain Nope].axes = []
-refused-discovered.factory[NES plain Nope].state-version = 5
+refused-discovered.factory[NES plain Nope].state-version = 6
 refused-discovered.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[NES plain Venus (C#)].supported = True
 refused-discovered.factory[NES plain Venus (C#)].probe = MoonCore
@@ -1722,7 +1722,7 @@ refused-discovered.factory[NES plain Venus (C#)].codec-explicit = Game Genie | R
 refused-discovered.factory[NES plain Venus (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 refused-discovered.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 refused-discovered.factory[NES plain Venus (C#)].axes = []
-refused-discovered.factory[NES plain Venus (C#)].state-version = 5
+refused-discovered.factory[NES plain Venus (C#)].state-version = 6
 refused-discovered.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain <null>].supported = True
 refused-discovered.factory[GB plain <null>].probe = MercuryCore
@@ -2231,7 +2231,7 @@ off.factory[NES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[NES plain <null>].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES plain <null>].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES plain <null>].axes = []
-off.factory[NES plain <null>].state-version = 5
+off.factory[NES plain <null>].state-version = 6
 off.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -2246,7 +2246,7 @@ off.factory[NES plain Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES plain Moon (C#)].axes = []
-off.factory[NES plain Moon (C#)].state-version = 5
+off.factory[NES plain Moon (C#)].state-version = 6
 off.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES plain Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -2261,7 +2261,7 @@ off.factory[NES plain MoonRT (Rust)].codec-explicit = Game Genie | RomPatch | <n
 off.factory[NES plain MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES plain MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES plain MoonRT (Rust)].axes = []
-off.factory[NES plain MoonRT (Rust)].state-version = 5
+off.factory[NES plain MoonRT (Rust)].state-version = 6
 off.factory[NES plain MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES plain MoonRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain MoonRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -2276,7 +2276,7 @@ off.factory[NES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[NES plain Nope].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES plain Nope].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES plain Nope].axes = []
-off.factory[NES plain Nope].state-version = 5
+off.factory[NES plain Nope].state-version = 6
 off.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -2291,7 +2291,7 @@ off.factory[NES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null
 off.factory[NES plain Venus (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES plain Venus (C#)].axes = []
-off.factory[NES plain Venus (C#)].state-version = 5
+off.factory[NES plain Venus (C#)].state-version = 6
 off.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -2306,7 +2306,7 @@ off.factory[NES battery <null>].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[NES battery <null>].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES battery <null>].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES battery <null>].axes = []
-off.factory[NES battery <null>].state-version = 5
+off.factory[NES battery <null>].state-version = 6
 off.factory[NES battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES battery <null>].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
@@ -2322,7 +2322,7 @@ off.factory[NES battery Moon (C#)].codec-explicit = Game Genie | RomPatch | <nul
 off.factory[NES battery Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES battery Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES battery Moon (C#)].axes = []
-off.factory[NES battery Moon (C#)].state-version = 5
+off.factory[NES battery Moon (C#)].state-version = 6
 off.factory[NES battery Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES battery Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES battery Moon (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
@@ -2338,7 +2338,7 @@ off.factory[NES battery MoonRT (Rust)].codec-explicit = Game Genie | RomPatch | 
 off.factory[NES battery MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES battery MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES battery MoonRT (Rust)].axes = []
-off.factory[NES battery MoonRT (Rust)].state-version = 5
+off.factory[NES battery MoonRT (Rust)].state-version = 6
 off.factory[NES battery MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES battery MoonRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES battery MoonRT (Rust)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
@@ -2354,7 +2354,7 @@ off.factory[NES battery Nope].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[NES battery Nope].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES battery Nope].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES battery Nope].axes = []
-off.factory[NES battery Nope].state-version = 5
+off.factory[NES battery Nope].state-version = 6
 off.factory[NES battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES battery Nope].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
@@ -2370,7 +2370,7 @@ off.factory[NES battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <nu
 off.factory[NES battery Venus (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
 off.factory[NES battery Venus (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
 off.factory[NES battery Venus (C#)].axes = []
-off.factory[NES battery Venus (C#)].state-version = 5
+off.factory[NES battery Venus (C#)].state-version = 6
 off.factory[NES battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[NES battery Venus (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f

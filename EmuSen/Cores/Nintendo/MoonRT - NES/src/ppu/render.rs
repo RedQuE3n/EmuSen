@@ -106,7 +106,6 @@ impl Ppu {
         let frame_offset = line * SCREEN_WIDTH as i32 * 4;
         let show_sprites = self.show_sprites();
         let show_sprites_left = self.show_sprites_left();
-        let show_background = self.show_background();
         let show_background_left = self.show_background_left();
         for x in 0..SCREEN_WIDTH as i32 {
             let bg_entry = self.bg_line[x as usize] as i32;
@@ -114,7 +113,6 @@ impl Ppu {
 
             let mut sprite_entry = 0;
             let mut sprite_in_front = false;
-            let mut sprite_is_zero = false;
 
             if show_sprites && (x >= 8 || show_sprites_left) {
                 for s in 0..*self.sprite_count as usize {
@@ -124,20 +122,15 @@ impl Ppu {
                     if !(0..8).contains(&column) {
                         continue;
                     }
-                    let color = self.sprite_pixel(index, line, column, height, board);
+                    let color = self.sprite_pixel(index, line, column, height, false, board);
                     if color == 0 {
                         continue;
                     }
                     let attributes = self.oam[(index * 4 + 2) as usize] as i32;
                     sprite_entry = 0x10 + (attributes & 0x03) * 4 + color;
                     sprite_in_front = (attributes & 0x20) == 0;
-                    sprite_is_zero = index == 0;
                     break;
                 }
-            }
-
-            if sprite_is_zero && bg_opaque && x != SCREEN_WIDTH as i32 - 1 && show_background {
-                self.set_sprite0_hit(true);
             }
 
             let entry = if sprite_entry != 0 && (sprite_in_front || !bg_opaque) {
@@ -166,7 +159,49 @@ impl Ppu {
         }
     }
 
-    fn sprite_pixel(&mut self, index: i32, line: i32, column: i32, height: i32, board: &mut Board) -> i32 {
+    /// `DetectSprite0Hit`: pixel x is output on dot x + 1, and sprite 0 hits on that dot - see Moon_PPU.md §3.4.
+    pub(super) fn detect_sprite0_hit(&mut self, board: &mut Board) {
+        let x = self.cycle - 1;
+        if x == SCREEN_WIDTH as i32 - 1 || !self.show_background() || !self.show_sprites() {
+            return;
+        }
+        if x < 8 && (!self.show_background_left() || !self.show_sprites_left()) {
+            return;
+        }
+        let height = if self.sprites_are_8x16() { 16 } else { 8 };
+        let row = self.scanline - self.oam[0] as i32 - 1;
+        let column = x - self.oam[3] as i32;
+        if row < 0 || row >= height || !(0..8).contains(&column) {
+            return;
+        }
+        if self.sprite_pixel(0, self.scanline, column, height, true, board) == 0 {
+            return;
+        }
+        let position = x + self.fine_x as i32;
+        let tile = position >> 3;
+        let since_load = match tile {
+            0 => self.cycle + 12,
+            1 => self.cycle + 4,
+            _ => self.cycle - (tile * 8 - 7),
+        };
+        if self.ppu_clock - since_load as i64 <= *self.rendering_since {
+            return;
+        }
+        let mut v = self.render_v;
+        for _ in 0..tile {
+            increment_coarse_x(&mut v);
+        }
+        let name = self.read_ciram(0x2000 | (v & 0x0FFF), board) as i32;
+        let pattern_address = self.background_pattern_base() + name * 16 + ((self.render_v >> 12) & 0x07) as i32;
+        let bit = 7 - (position & 7);
+        let low = board.mapper.peek_chr(&board.cart, pattern_address as u16) as i32;
+        let high = board.mapper.peek_chr(&board.cart, (pattern_address + 8) as u16) as i32;
+        if ((low >> bit) & 0x01) | (((high >> bit) & 0x01) << 1) != 0 {
+            self.set_sprite0_hit(true);
+        }
+    }
+
+    fn sprite_pixel(&mut self, index: i32, line: i32, column: i32, height: i32, peek: bool, board: &mut Board) -> i32 {
         let tile = self.oam[(index * 4 + 1) as usize] as i32;
         let attributes = self.oam[(index * 4 + 2) as usize] as i32;
         let mut row = line - self.oam[(index * 4) as usize] as i32 - 1;
@@ -188,8 +223,12 @@ impl Ppu {
         } else {
             self.sprite_pattern_base() + tile * 16 + row
         };
-        let low = board.mapper.read_chr(&board.cart, pattern_address as u16) as i32;
-        let high = board.mapper.read_chr(&board.cart, (pattern_address + 8) as u16) as i32;
+        let (low, high) = if peek {
+            (board.mapper.peek_chr(&board.cart, pattern_address as u16), board.mapper.peek_chr(&board.cart, (pattern_address + 8) as u16))
+        } else {
+            (board.mapper.read_chr(&board.cart, pattern_address as u16), board.mapper.read_chr(&board.cart, (pattern_address + 8) as u16))
+        };
+        let (low, high) = (low as i32, high as i32);
         let bit = 7 - column;
         ((low >> bit) & 0x01) | (((high >> bit) & 0x01) << 1)
     }

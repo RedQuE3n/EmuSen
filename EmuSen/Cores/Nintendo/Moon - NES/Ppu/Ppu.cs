@@ -56,6 +56,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
         // Where the line being drawn starts, latched before the fetches walk V along it - see Moon_PPU.md §3.1.
         public ushort RenderV;
 
+        // The dot rendering was last switched on, written in the state's tail - see Moon_PPU.md §3.4.
+        [SkipInState] public long RenderingSince = long.MinValue;
+
         // Set while the PPU wants the CPU's NMI line asserted; the CPU latches the edge itself.
         public bool NmiOutput => NmiEnabled && VBlankFlag;
 
@@ -117,6 +120,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             PpuClock = 0;
             FrameComplete = false;
             BusAddress = 0;
+            RenderingSince = long.MinValue;
             Array.Clear(Ciram);
             Array.Clear(PaletteRam);
             Array.Clear(Oam);
@@ -234,6 +238,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
                     break;
 
                 case 1:
+                    if (!RenderingEnabled && (value & 0x18) != 0) RenderingSince = PpuClock;
                     Mask = value;
                     break;
 

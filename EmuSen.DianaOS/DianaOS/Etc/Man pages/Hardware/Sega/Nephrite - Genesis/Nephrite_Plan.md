@@ -569,8 +569,9 @@ ran. **The effort is predicted** (P3). A stage's oracle must be met, or its miss
 | 14 | The gates of §7, the goldens, the clone check | §7 | 2 |
 
 *Stage 0 was run on 2026-10-04 (`Nephrite_Native.md` §1). Stage 1's first step, the same day, passed every case of
-SingleStepTests' 68000 suite with every transaction (`Beryl_M68k.md` §4); interrupts, the disassembler and the state
-remain for its later steps.*
+SingleStepTests' 68000 suite with every transaction (`Beryl_M68k.md` §4); its second, on 2026-10-05, built interrupts,
+reset, trace, the disassembler and the state, checked the decoder against TomHarte's instruction map, and measured the
+processor at 0.147 ms a frame of 68000 work (§5 there). The dispute step on the two suites' disagreements remains.*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

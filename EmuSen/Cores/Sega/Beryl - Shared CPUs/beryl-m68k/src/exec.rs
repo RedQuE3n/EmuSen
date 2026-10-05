@@ -107,11 +107,28 @@ struct Run<'a, B: Bus, O: Observer> {
     post: Option<(usize, u32)>,
 }
 
-/// One instruction or exception.
+/// One instruction or exception: a pending trace first, then a pending interrupt, then the instruction, which leaves
+/// its trace pending (Beryl_M68k.md §5).
 pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut M68000, b: &mut B, o: &mut O) -> Step {
     if cpu.halted {
         b.idle(4);
         return Step::Halted;
+    }
+    if let Some(resume) = cpu.trace_pending.take() {
+        cpu.stopped = false;
+        return run(cpu, b, o, |x| {
+            x.idle(4);
+            x.exception(9, resume)
+        });
+    }
+    let level = b.interrupt_level() & 7;
+    let edge = level == 7 && cpu.last_level < 7;
+    cpu.last_level = level;
+    let mask = ((cpu.regs.sr >> 8) & 7) as u8;
+    if edge || level > mask {
+        let resume = if cpu.stopped { cpu.regs.pc.wrapping_add(4) } else { cpu.regs.pc };
+        cpu.stopped = false;
+        return run(cpu, b, o, |x| x.interrupt(level, resume));
     }
     if cpu.stopped {
         b.idle(4);
@@ -122,14 +139,52 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut M68000, b: &mut B, o: &mut O) 
     if why != 0 {
         return Step::Observed(why);
     }
+    let traced = cpu.regs.sr & 0x8000 != 0;
+    let step = run(cpu, b, o, |x| x.execute());
+    if traced && matches!(step, Step::Instruction | Step::Stopped | Step::Exception(5..=7 | 32..=47)) {
+        cpu.trace_pending = Some(if step == Step::Stopped { cpu.regs.pc.wrapping_add(4) } else { cpu.regs.pc });
+    }
+    step
+}
+
+/// One piece of work over a fresh run at the instruction boundary, an address error turned into group 0 processing.
+fn run<B: Bus, O: Observer>(cpu: &mut M68000, b: &mut B, o: &mut O, work: impl FnOnce(&mut Run<'_, B, O>) -> R<Step>) -> Step {
+    let pc = cpu.regs.pc;
     let mut x = Run { au: pc.wrapping_add(4), pc, pcv: pc.wrapping_add(2), post: None, ir: cpu.regs.prefetch[0], cpu, b, o };
-    let result = x.execute();
-    let step = match result {
+    let step = match work(&mut x) {
         Ok(s) => s,
         Err(f) => x.address_error(f),
     };
     x.cpu.regs.pc = x.au.wrapping_sub(4);
     step
+}
+
+/// The reset exception: supervisor mode at mask 7, the stack pointer and PC from vectors 0 and 1 in supervisor program
+/// space, and the queue filled from the PC (Beryl_M68k.md §5.2).
+pub(crate) fn reset<B: Bus>(cpu: &mut M68000, b: &mut B) {
+    cpu.halted = false;
+    cpu.stopped = false;
+    let sr = cpu.regs.sr;
+    let mut o = crate::Unobserved;
+    let pc = cpu.regs.pc;
+    let mut x = Run { au: pc.wrapping_add(4), pc, pcv: pc.wrapping_add(2), post: None, ir: 0, cpu, b, o: &mut o };
+    x.set_sr((sr & 0x00FF) | 0x2700);
+    x.idle(14);
+    let r = (|| -> R<()> {
+        let ssp = x.read16(0, Size::Word, 6)? as u32;
+        let ssp = ssp << 16 | x.read16(2, Size::Word, 6)? as u32;
+        let hi = x.read16(4, Size::Word, 6)? as u32;
+        let pc = hi << 16 | x.read16(6, Size::Word, 6)? as u32;
+        x.set_a(7, ssp);
+        x.au = pc;
+        x.prefetch()?;
+        x.idle(2);
+        x.next()
+    })();
+    if r.is_err() {
+        x.cpu.halted = true;
+    }
+    x.cpu.regs.pc = x.au.wrapping_sub(4);
 }
 
 impl<B: Bus, O: Observer> Run<'_, B, O> {
@@ -545,6 +600,29 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         Ok(Step::Exception(vector))
     }
 
+    /// An interrupt at `level`: six idle clocks, the PC's low word stacked, the acknowledge cycle (the bus counts its
+    /// clocks) or the autovector, four more idle clocks, the SR and the PC's high word, then the vector.
+    fn interrupt(&mut self, level: u8, pc: u32) -> R<Step> {
+        self.idle(6);
+        let old = self.sr();
+        self.set_sr((old | 0x2000) & !0x8700 | (level as u16) << 8);
+        let sp = self.a(7).wrapping_sub(6);
+        self.set_a(7, sp);
+        let fc = self.fc_data();
+        self.write16(sp.wrapping_add(4), Size::Word, pc as u16, fc)?;
+        let vector = self.b.acknowledge(level).unwrap_or(24 + level);
+        self.idle(4);
+        self.write16(sp, Size::Word, old, fc)?;
+        self.write16(sp.wrapping_add(2), Size::Word, (pc >> 16) as u16, fc)?;
+        let handler = self.read(vector as u32 * 4, W::L, false)?;
+        self.o.called(pc, handler, if level == 7 { kind::NMI } else { kind::IRQ });
+        self.au = handler;
+        self.prefetch()?;
+        self.idle(2);
+        self.next()?;
+        Ok(Step::Exception(vector))
+    }
+
     /// Group 0: the access that faulted, stacked with the instruction register and the PC (Beryl_M68k.md §4).
     fn address_error(&mut self, f: AddressFault) -> Step {
         self.idle(8);
@@ -642,7 +720,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             return self.imm_sr(op);
         }
         let Some(w) = W::from_bits(op >> 6) else { return self.illegal(4) };
-        if kind == 7 || mode == 1 || (mode == 7 && reg > if kind == 6 { 3 } else { 1 }) {
+        if kind == 7 || mode == 1 || (mode == 7 && reg > 1) {
             return self.illegal(4);
         }
         self.pcv = self.pcv.wrapping_add(if w == W::L { 4 } else { 2 });
@@ -1211,7 +1289,8 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     self.next()?;
                     self.ok()
                 }
-                _ => self.line4e_misc(op),
+                6 => self.line4e_misc(op),
+                _ => self.illegal(4),
             },
             2 | 3 => self.jump(op, op & 0x40 == 0),
             _ => self.illegal(4),

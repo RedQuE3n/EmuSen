@@ -105,6 +105,10 @@ struct Run<'a, B: Bus, O: Observer> {
     ir: u16,
     /// An address register's update deferred until its operand has been transferred: the register and its value.
     post: Option<(usize, u32)>,
+    /// A postincrement made before its operand's first access, undone if that access faults: the register and its old value.
+    undo: Option<(usize, u32)>,
+    /// A final store begun after the next opcode was fetched, whose fault sets I/N if an exception is next (§6).
+    final_store: bool,
 }
 
 /// One instruction or exception: a pending trace first, then a pending interrupt, then the instruction, which leaves
@@ -150,10 +154,15 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut M68000, b: &mut B, o: &mut O) 
 /// One piece of work over a fresh run at the instruction boundary, an address error turned into group 0 processing.
 fn run<B: Bus, O: Observer>(cpu: &mut M68000, b: &mut B, o: &mut O, work: impl FnOnce(&mut Run<'_, B, O>) -> R<Step>) -> Step {
     let pc = cpu.regs.pc;
-    let mut x = Run { au: pc.wrapping_add(4), pc, pcv: pc.wrapping_add(2), post: None, ir: cpu.regs.prefetch[0], cpu, b, o };
+    let mut x = Run { au: pc.wrapping_add(4), pc, pcv: pc.wrapping_add(2), post: None, undo: None, final_store: false, ir: cpu.regs.prefetch[0], cpu, b, o };
     let step = match work(&mut x) {
         Ok(s) => s,
-        Err(f) => x.address_error(f),
+        Err(f) => {
+            if let Some((r, a)) = x.undo.take() {
+                x.set_a(r, a);
+            }
+            x.address_error(f)
+        }
     };
     x.cpu.regs.pc = x.au.wrapping_sub(4);
     step
@@ -167,7 +176,7 @@ pub(crate) fn reset<B: Bus>(cpu: &mut M68000, b: &mut B) {
     let sr = cpu.regs.sr;
     let mut o = crate::Unobserved;
     let pc = cpu.regs.pc;
-    let mut x = Run { au: pc.wrapping_add(4), pc, pcv: pc.wrapping_add(2), post: None, ir: 0, cpu, b, o: &mut o };
+    let mut x = Run { au: pc.wrapping_add(4), pc, pcv: pc.wrapping_add(2), post: None, undo: None, final_store: false, ir: 0, cpu, b, o: &mut o };
     x.set_sr((sr & 0x00FF) | 0x2700);
     x.idle(14);
     let r = (|| -> R<()> {
@@ -334,6 +343,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             self.b.address_error(access, false);
             return Err(AddressFault { address: raw, write: false, function });
         }
+        self.undo = None;
         Ok(self.b.read(access))
     }
 
@@ -344,6 +354,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             self.b.address_error(access, true);
             return Err(AddressFault { address: raw, write: true, function });
         }
+        self.undo = None;
         self.b.write(access, value);
         match size {
             Size::Byte => self.o.wrote(self.cpu.space, address, value as u8, self.pc),
@@ -479,6 +490,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 if w == W::L || why == Use::MoveDest {
                     self.post = Some((r, a.wrapping_add(step)));
                 } else {
+                    self.undo = Some((r, a));
                     self.set_a(r, a.wrapping_add(step));
                 }
                 Ea::M(a, false)
@@ -623,13 +635,21 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         Ok(Step::Exception(vector))
     }
 
+    /// Whether the step after `op` was fetched is an exception: a trace, or `op` illegal, line A or F, or privileged
+    /// in user mode.
+    fn exception_next(&self, sr: u16, op: u16) -> bool {
+        let mnemonic = crate::disasm::disassemble(&|_| op, 0).mnemonic;
+        let privileged = matches!(op, 0x007C | 0x027C | 0x0A7C | 0x46C0..=0x46FF | 0x4E60..=0x4E70 | 0x4E72 | 0x4E73);
+        sr & 0x8000 != 0 || mnemonic == "DC.W" || mnemonic == "ILLEGAL" || (sr & 0x2000 == 0 && privileged)
+    }
+
     /// Group 0: the access that faulted, stacked with the instruction register and the PC (Beryl_M68k.md §4).
     fn address_error(&mut self, f: AddressFault) -> Step {
         self.idle(8);
         let old = self.sr();
         self.set_sr((old | 0x2000) & !0x8000);
         let ir = self.ir;
-        let status = (ir & !0x1F) | if f.write { 0 } else { 0x10 } | f.function as u16;
+        let status = (ir & !0x1F) | if f.write { 0 } else { 0x10 } | if self.final_store && self.exception_next(old, ir) { 0x08 } else { 0 } | f.function as u16;
         let pc = self.pcv;
         let sp = self.a(7).wrapping_sub(14);
         self.set_a(7, sp);
@@ -880,6 +900,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 self.next()?;
                 if w != W::L {
                     self.ir = self.cpu.regs.prefetch[0];
+                    self.final_store = true;
                 }
                 if let Ea::M(a, _) = ea {
                     self.write_low_first(a, w, v)?;
@@ -909,8 +930,8 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         self.ok()
     }
 
-    /// The flags MOVE has set when its first store faults: all of them for a byte or word; for a long, what the
-    /// suite records by destination and source (Beryl_M68k.md §4.2).
+    /// The flags MOVE has set when its first store faults: all of them for a byte or word; for a long, by destination
+    /// and source (Beryl_M68k.md §4.2, §6.3).
     fn store_flags(&mut self, v: u32, w: W, dm: u16, dr: u16, src_mem: bool) {
         if w != W::L {
             return self.logic(v, w);
@@ -918,7 +939,12 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         match (dm, dr, src_mem) {
             (2 | 3, _, false) => {}
             (2 | 3, _, true) | (7, 1, true) => self.logic(v & 0xFFFF, W::W),
-            (5 | 6, _, false) => self.nz(v, W::L),
+            (5 | 6, _, false) => {
+                self.put(N, v & 0x8000_0000 != 0);
+                if v >> 16 != 0 {
+                    self.put(Z, false);
+                }
+            }
             _ => self.logic(v, W::L),
         }
     }
@@ -1201,7 +1227,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             },
         };
         let program = mode == 7 && reg >= 2;
-        self.pcv = self.au;
+        self.pcv = if to_regs && (mode == 6 || (mode == 7 && reg == 3)) { self.au.wrapping_sub(4) } else { self.au };
         if to_regs {
             for i in 0..16 {
                 if mask & (1 << i) != 0 {
@@ -1343,9 +1369,9 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             }
             6 => {
                 if self.flag(V) {
+                    self.next()?;
                     let old = self.sr();
                     self.set_sr((old | 0x2000) & !0x8000);
-                    self.next()?;
                     let pc = self.au.wrapping_sub(4);
                     return self.exception_from(old, 7, pc);
                 }
@@ -1402,7 +1428,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             }
             _ => return self.illegal(4),
         };
-        if jsr {
+        if jsr && mode == 7 && reg <= 1 {
             self.pcv = ret;
         }
         self.au = target;
@@ -1487,7 +1513,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         self.idle(2);
         let target = self.au.wrapping_sub(2).wrapping_add(self.irc() as i16 as i32 as u32);
         if count != 0xFFFF {
-            self.pcv = self.au;
+            self.pcv = self.au.wrapping_sub(2);
             self.fill(target)?;
             self.set_d(r, W::W, count as u32);
             return self.ok();
@@ -1690,7 +1716,9 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         let s = self.get(ea, W::W)? as u16;
         let d = self.d(dn);
         if s == 0 {
-            self.put(C, false);
+            self.put(V | C, false);
+            self.put(N, !signed && d & 0x8000_0000 != 0);
+            self.put(Z, signed || d >> 16 == 0);
             self.idle(8);
             let pc = self.au.wrapping_sub(2);
             return self.exception(5, pc);
@@ -1908,16 +1936,8 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         if mode == 1 {
             self.pcv = self.au;
             let ay = (op & 7) as usize;
-            let s = if w == W::L {
-                let a = self.a(ay);
-                self.set_a(ay, a.wrapping_add(2));
-                let v = self.read(a, W::L, false)?;
-                self.set_a(ay, a.wrapping_add(4));
-                v
-            } else {
-                self.postinc_read(ay, w, false)?
-            };
-            let d = self.postinc_read(rn, w, true)?;
+            let s = self.postinc_read(ay, w)?;
+            let d = self.postinc_read(rn, w)?;
             self.sub(s, d, false, w, false, true);
             self.next()?;
             return self.ok();
@@ -1937,17 +1957,12 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         self.ok()
     }
 
-    /// A postincrement read, the register advanced before the read or, `late`, after it.
-    fn postinc_read(&mut self, r: usize, w: W, late: bool) -> R<u32> {
+    /// A postincrement read, the register advanced after the read, so a fault leaves it (Beryl_M68k.md §6).
+    fn postinc_read(&mut self, r: usize, w: W) -> R<u32> {
         let a = self.a(r);
         let step = if w == W::B && r == 7 { 2 } else { w.bytes() };
-        if !late {
-            self.set_a(r, a.wrapping_add(step));
-        }
         let v = self.read(a, w, false)?;
-        if late {
-            self.set_a(r, a.wrapping_add(step));
-        }
+        self.set_a(r, a.wrapping_add(step));
         Ok(v)
     }
 

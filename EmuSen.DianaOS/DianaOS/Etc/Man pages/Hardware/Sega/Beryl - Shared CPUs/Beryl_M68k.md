@@ -18,8 +18,8 @@ The crate's skeleton and its oracle: the bus trait, the programmer's model and t
   does.
 - **`Bus`**: `read` and `write` (four clocks each, plus the waits the bus adds), `idle` (clocks without the bus, in the
   manual's order among the cycles), `interrupt_level` (IPL2–IPL0 as sampled), `acknowledge` (the vector, or `None` for
-  the autovector), `address_error` (a word cycle at an odd address abandoned without AS: by default four idle clocks)
-  and `reset_devices` (the RESET instruction's pulse).
+  the autovector), `address_error` (a word cycle at an odd address, abandoned ~~without AS~~ with AS and neither data
+  strobe, §6.3's D-1: by default four idle clocks) and `reset_devices` (the RESET instruction's pulse).
 - **`Registers`**: D0–D7, A0–A7 with A7 the current mode's stack pointer and `other_sp` the other's, SR, PC, and the two
   prefetch words (IRD and IRC in the user's manual).
 - **`M68000::step`** is `step_observed` with `Unobserved`; `step_observed` is generic over `emusen-native`'s
@@ -92,7 +92,9 @@ case of SingleStepTests' suite, each failing case of TomHarte's put in the first
 a model of the 68000's own microcode, and TomHarte's from an implementation written by hand. Each class above is a
 candidate disputes entry, to be settled by the documents and then by the referees' 68000s (fx68k in the MegaCD core,
 Nuked-MD's microcoded `68k.v`) in logged dispute steps; none has been read. TomHarte's suite stays a measurement until
-then.
+then. *Settled 2026-10-05 in §6: every class for SingleStepTests' reading except the overflow flags of the divisions
+(D-9), which stay open. The referees also overturned SingleStepTests on four points (D-2, D-3, D-4, D-15) and refined
+a reading its data could not test (D-5).*
 
 ## 4. Stage 1, step 1: the whole instruction set (2026-10-04)
 
@@ -119,28 +121,36 @@ candidate for a dispute step.
 - **The PC a group 0 frame stacks.** The opcode's address plus two, advanced by two for each absolute address or
   immediate word fetched and, for a word or byte operand, by two at a predecrement; the displacements of `(d16,An)`,
   `(d8,An,Xn)` and the PC-relative modes do not advance it. MOVE stacks the prefetch address as its destination phase
-  begins, plus two for an absolute long destination; MOVEM the prefetch address as its transfers begin; JSR its return
-  address; BSR its target; DBcc, CMPM, ADDX and SUBX to memory, and UNLK, the prefetch address.
+  begins, plus two for an absolute long destination; MOVEM the prefetch address as its transfers begin, less four when
+  it reads registers through an index (§6.3, D-2); JSR its return address only through `(An)` and the absolute modes,
+  and the opcode's address plus two through a displacement or an index (D-2); BSR its target; ~~DBcc,~~ CMPM, ADDX and
+  SUBX to memory, and UNLK, the prefetch address; DBcc the opcode's address plus two (D-2).
 - **The access address** in the frame is the whole 32-bit address, its top byte included; the bus sees 24 bits.
-- **The instruction register** in the frame, and in the status word's top eleven bits, is the opcode, except for MOVE
-  of a byte or word to `-(An)`, whose store follows the final prefetch, which stacks the next opcode.
-- **Postincrement and predecrement on a fault.** A long `(An)+` operand advances its register only after both words
-  are read; MOVE's `(An)+` destination only after its store, whatever the size; MOVE.L's `-(An)` destination only after
-  both words are stored; ADDX.L and SUBX.L adjust each register only after its operand's two reads; CMPM advances its
-  source before each read (two at a time for a long) and its destination after.
+- **The instruction register** in the frame, and in the status word's top eleven bits, is the opcode, except for MOVE of
+  a byte or word to `-(An)`, whose store follows the final prefetch, which stacks the next opcode; that store's fault
+  sets the status word's I/N bit when an exception follows the next opcode's fetch (D-4).
+- **Postincrement and predecrement on a fault.** ~~A long `(An)+` operand advances its register only after both words
+  are read~~ An `(An)+` operand of any size advances its register only after its access (D-3); MOVE's `(An)+`
+  destination only after its store, whatever the size; MOVE.L's `-(An)` destination only after both words are stored;
+  ADDX.L and SUBX.L adjust each register only after its operand's two reads; CMPM advances ~~its source before each read
+  (two at a time for a long) and its destination after~~ each register after its read (D-3).
 - **MOVE.L's flags when its first store faults:** with an `(An)` or `(An)+` destination, untouched from a register or
-  immediate source and taken from the low word from a memory source; N and Z set and V and C untouched for a register
-  source to `(d16,An)` or `(d8,An,Xn)`; from the low word for an absolute long destination from memory; otherwise set
-  in full. Byte and word moves set them in full before the store.
+  immediate source and taken from the low word from a memory source; ~~N and Z set~~ N from bit 31 and Z cleared when
+  the high word is not zero, otherwise kept, and V and C untouched, for a register source to `(d16,An)` or `(d8,An,Xn)`
+  (D-5); from the low word for an absolute long destination from memory; otherwise set in full. Byte and word moves set
+  them in full before the store.
 - **CHK.** Without a trap: six idle clocks, then the prefetch. With one: eight idle clocks, or ten when the register is
   negative and the bound less the register, as a 16-bit difference, is not negative. N is the register's sign; Z, V and
   C are cleared, Z set for a zero register.
 - **DBcc** writes its decremented counter only after the branch's prefetch succeeds.
-- **TRAPV's trap** enters supervisor mode before its prefetch, which therefore reads supervisor program space.
+- **TRAPV's trap** ~~enters supervisor mode before its prefetch, which therefore reads supervisor program space~~
+  follows its prefetch, which reads the program space of the mode TRAPV ran in (D-15).
 - **ORI, ANDI and EORI to CCR or SR, and MOVE to CCR or SR,** refill the prefetch queue from the word after the
   instruction: the word already in IRC is read again.
-- **DIVU and DIVS on overflow** set N and V and clear Z and C. Their timing is Yacht.txt's flowcharts read as rules
-  per quotient bit, the formulation also published as Jorge Cwik's analysis of the 68000's division timing.
+- **DIVU and DIVS on overflow** set N and V and clear Z and C (N and Z open: D-9). By zero, they leave X, clear V and C,
+  and set N and Z from the dividend's high word for DIVU, Z alone for DIVS (D-10). Their timing is Yacht.txt's
+  flowcharts read as rules per quotient bit, the formulation also published as Jorge Cwik's analysis of the 68000's
+  division timing.
 - **ABCD, SBCD and NBCD** follow the BCD verifier's reference model (`flamewing/68k-bcd-verifier`, its README and its
   expected-results source, read as a test program's statement of what it expects): the binary carries of each nibble
   and the decimal carries choose the correction, and the undefined V and N follow from it.
@@ -247,9 +257,9 @@ bus with its map and waits will add to it, and `Nephrite_Plan.md` §5.5's budget
 
 ### 5.7 What the dispute step would cover
 
-Not opened. It would take §3.3's classes one at a time, in the order of recourse of `Nephrite_Plan.md` §1.3
-(documents, then a test program, then the referees' 68000s, fx68k in the MegaCD core and Nuked-MD's `68k.v`, each file
-logged), and end each with a rule in hardware terms:
+*Opened 2026-10-05; §6 is the step.* It would take §3.3's classes one at a time, in the order of recourse of
+`Nephrite_Plan.md` §1.3 (documents, then a test program, then the referees' 68000s, fx68k in the MegaCD core and
+Nuked-MD's `68k.v`, each file logged), and end each with a rule in hardware terms:
 
 1. Address errors: the abandoned cycle and the idle clocks before the stacking, the stacked PC's rule (§4.2), and
    whether a long postincrement advances before the fault.
@@ -261,3 +271,268 @@ logged), and end each with a rule in hardware terms:
 7. The 733 ADD.l, SUB.l and ASL.b cases not yet read, and the rest of §4.2's readings, which rest on one suite.
 8. Interrupt sampling within an instruction's last bus cycle (§5.1), if the Genesis's tests need it.
 
+
+## 6. Stage 1, the dispute step: the two suites' disagreements (2026-10-05)
+
+§5.7's classes, taken in its order and each settled in the order of recourse of `Nephrite_Plan.md` §1.3: the
+documents, then a test program, then the referees' 68000s. No hardware is at hand to run a test program on, and none in
+the corpus isolates any of these classes, so the second rung was empty for every class; where the documents left a
+class open, the referees decided it. The referees were **run, not read**: each was compiled into a simulation and given
+the suites' cases, and only its outputs were compared. The files read to build the benches are logged in §6.4. No
+emulator source was opened.
+
+This page holds the step's disputes log (`Nephrite_Plan.md` §1.4: a CPU dispute belongs to every core that uses the
+crate), §6.3, in the entry shape of `VenusRT_Disputes.md`. The step itself changed no processor code; the rules it
+ended with were implemented in the commit after it, which each entry's last line names.
+
+### 6.1 The referees, run as black boxes
+
+- **The simulator.** Verilator 5.046, from Fedora 44's packages (`verilator-5.046-3.fc44` and `gperftools-libs`),
+  unpacked under `~/.cache/emusen/toolchains/verilator` rather than installed.
+- **fx68k**, from the MegaCD MiSTer checkout (`~/Projects/megacd-mister-reference`, `a3a3da8`, 2026-07-30): `fx68k.sv`,
+  `fx68kAlu.sv`, `uaddrPla.sv` and the microcode and nanocode tables. Two waivers: Verilator refuses a structure
+  assigned both ways in one module (`BLKANDNBLK`), and the ALU's `unique case` checks fire on the reset state, so
+  assertions are off at run time.
+- **Nuked-MD's `m68kcpu`**, from the MegaDrive MiSTer checkout (`~/Projects/megadrive-mister-reference`, `4b11b2c`,
+  2026-10-01): `68k.v` with `68k_ucode.txt` and `68k_ncode.txt`. A transcription of the NMOS 68000's die; its README
+  calls it "Done, needs more testing & bugfixing".
+- **The bench**, `EmuSen.WiseMan/Reference/rtl68k/tb68k.cpp`, built for either core by `build-referees.sh` into
+  `~/.cache/emusen/probe/{fx68k,nuked68k}`. Memory answers at once (DTACK with AS), interrupts and the other inputs are
+  held inactive. fx68k is given two of its clocks to each half of the 68000's clock, its phase enables alternating;
+  Nuked-MD seven of its master clocks. After reset a boot program loads the case: the reset vectors point at code placed
+  away from every byte the case names, which sets USP (`MOVEA.L`, `MOVE A0,USP`), loads D0-D7 and A0-A6 (`MOVEM.L` from
+  a table) and runs `RTE` from a frame holding the case's SR and PC. RTE's two prefetches are answered with the case's
+  own prefetch words, which TomHarte's cases do not hold in memory. The case starts as the second prefetch ends.
+- **What is recorded.** Every bus cycle from the case's start: its clock, read or write, the function code, the address
+  with A0 from the data strobes, and the value on the strobed lane. A cycle with AS and neither data strobe is recorded
+  as abandoned. TAS's read-modify-write cycle holds AS from its read through its write, so it is recorded as two cycles,
+  split where R/W turns. A second run plants a probe at the case's final PC, `MOVEM.L D0-D7/A0-A7,abs.L` and
+  `MOVE SR,abs.L`, which stores the registers and the status register. The probe's first prefetch, a strobed read of its
+  third word, marks where the instruction ended, which gives the instruction's length. Where the final PC is the case's
+  PC plus two, the next opcode is already in the queue when the case starts, so the probe's first word is put there too.
+  A case that a trace follows is compared on the bus only, and so is STOP, which waits for an interrupt that never
+  comes; an address error clears T, so its cases are probed.
+- **The comparison**, `referee.py`. The timelines are compared cycle by cycle in clocks from the instruction's start. A
+  suite's abandoned cycle (`re`, `we`) is compared by kind, function code and word address. The length is compared, and
+  so are D0-D7, A0-A6, the active A7 and SR. The inactive stack pointer and the prefetch queue are not seen. `suite`
+  grades one suite's cases, `disputes` the cases a listing names (with Beryl's own result beside each), `divzero` the
+  flags of division by zero from every condition code. The listings come from `singlestep.rs`
+  (`EMUSEN_BERYL_DISAGREEMENTS`, `EMUSEN_BERYL_MISSES`).
+
+### 6.2 The controls (measured 2026-10-05)
+
+- **fx68k over every SingleStepTests case** agrees with the suite on 310,649 of 317,500: on the bus and the length in
+  315,094, and on the registers in 179,712 of the 184,157 cases the probe reached. The 6,851 it does not agree on are
+  those of D-2, D-3, D-4 and D-15 (§6.3), in each of which Nuked-MD agrees with fx68k. Every other reading §4.2 took
+  from this suite alone is therefore confirmed by the referee.
+- **Nuked-MD over 200 cases of each SingleStepTests file** (25,400) agrees with the suite on 24,803. Of the 597 it
+  does not agree on, 516 are the ruled cases above, where it agrees with fx68k; 78 are divisions' overflows; 3 are a
+  rotate with a zero count. Over all 55,606 address-error cases it gives the same bus cycles, stacked values and
+  registers as fx68k, once its complemented access address (below) is allowed.
+- **Nuked-MD's three differences**, found by these controls, two of them defects. It stacks a group 0 frame's access
+  address complemented, both words: $5C32 where fx68k and SingleStepTests stack $A3CD. The User's Manual's frame (Figure
+  6-7) holds the access address itself, so `referee.py --complement` accepts a word written as the complement of the
+  reference's, and nothing else. It clears C after ROXL.L or ROXR.L with a zero count and X set, where the Programmer's
+  Reference Manual sets C to X. On a division's overflow it sets Z and clears N, where fx68k and SingleStepTests set N
+  and clear Z; that is D-9's split, which stays open.
+- **Bench artifacts**, which the conclusions do not rest on. One TomHarte case (MOVEM.l (d16,PC)) reads its operands
+  from the final PC, where the probe was planted, so its registers there are the probe's words. Four faults of the bench
+  were found by the first full run over SingleStepTests and corrected before the final runs: TAS recorded as one cycle
+  (2,108 cases); backward branches whose probe overwrote the branch itself in the queue (79); traced cases whose trace
+  happened to reach the probe (11); and an end marker that matched an abandoned cycle at the probe's third word (3).
+
+### 6.3 The disputes log
+
+#### D-1. Address error: the abandoned cycle runs on the bus as AS without either data strobe, four clocks, and eight internal clocks follow before the stacking
+- Opened: 2026-10-04, by §3.3's address-error class: 178,087 TomHarte cases record no abandoned cycle and four idle
+  clocks before the stacking.
+- Documents read: User's Manual §6.3.10 ("The bus cycle is aborted"), which does not say whether AS is asserted or how
+  long the processor waits.
+- Test program: none.
+- Referee: fx68k and Nuked-MD, run (§6.1). Both run the faulting cycle with AS and no data strobe and begin the
+  stacking's first write twelve clocks after that cycle begins, as SingleStepTests records it, in all 55,606 of its
+  address-error cases. In TomHarte's address-error class, fx68k matched TomHarte's bus on none of the 178,087
+  cases.
+- Emulator source: none.
+- Conclusion: SingleStepTests' form; TomHarte's suite is wrong for this class. The `Bus::address_error` hook stays a
+  four-clock cycle that transfers nothing; its description, which said AS was not asserted, is corrected. Measured.
+- Pinned by: `the_processor_against_the_suites`.
+- Implemented in: stage 1 step 1, unchanged; the description, the commit after this step's.
+
+#### D-2. Address error: the stacked PC of DBcc, of JSR through a displacement or an index, and of MOVEM to registers through an index
+- Opened: 2026-10-05, by the controls: fx68k and Nuked-MD both stack another PC than SingleStepTests in these forms.
+- Documents read: User's Manual §6.2: the PC stacked for an address error "is unpredictable and may be incremented from
+  the address of the instruction that caused the error". The documents leave it open.
+- Test program: none.
+- Referee: both cores, identical on every case. DBcc taking its branch to an odd target stacks the opcode's address plus
+  two, not plus four (632 SingleStepTests cases). JSR with `(d16,An)`, `(d8,An,Xn)`, `(d16,PC)` or `(d8,PC,Xn)` stacks
+  the opcode's address plus two, as JMP does, not its return address (762); with `(An)` and the absolute modes it
+  stacks its return address, as SingleStepTests has it. MOVEM to registers through `(d8,An,Xn)` or `(d8,PC,Xn)` stacks
+  four less than through the other modes (306).
+- Emulator source: none.
+- Conclusion: as the referees; SingleStepTests' suite is wrong for these 1,700 cases. Measured.
+- Pinned by: `the_processor_against_the_suites` (each file's ruled misses).
+- Implemented in: the commit after this step's.
+
+#### D-3. Address error: a postincrement is not applied before its operand's access, so a faulting `(An)+` leaves An unchanged
+- Opened: 2026-10-05, by the controls: both cores leave a word `(An)+` register unadvanced on a fault, where both suites
+  advance it. §4.2's reading already held this for a long operand and for MOVE's destination.
+- Documents read: none says.
+- Test program: none.
+- Referee: both cores, every case. It holds for every instruction with a word `(An)+` operand, source or destination,
+  and for CMPM's source, which §4.2 advanced before each read.
+- Emulator source: none.
+- Conclusion: as the referees. Both suites are wrong here: 4,445 SingleStepTests cases, and TomHarte's equivalents,
+  which already fail on D-1. Measured.
+- Pinned by: `the_processor_against_the_suites`.
+- Implemented in: the commit after this step's.
+
+#### D-4. Address error: the status word's I/N bit, for a MOVE's word store to `-(An)` made after the final prefetch, is set when the step after the next opcode's fetch is an exception
+- Opened: 2026-10-05, by the controls: 83 SingleStepTests cases where both cores set I/N and the suite clears it.
+- Documents read: User's Manual Figure 6-7: I/N is "Instruction=0, Not=1", without a rule for this point.
+- Test program: none.
+- Referee: both cores. The store follows the fetch of the next opcode (§4.2), and I/N is set exactly when what follows
+  that fetch is an exception: a pending trace, or a next opcode that is illegal, line A or F, or privileged in user mode
+  (by the instruction map). Measured on all 452 such faults in both suites: 452 agree.
+- Emulator source: none.
+- Conclusion: as the referees; SingleStepTests' suite is wrong for these 83 cases. Measured.
+- Pinned by: `the_processor_against_the_suites`.
+- Implemented in: the commit after this step's.
+
+#### D-5. Address error: MOVE.L from a register to `(d16,An)` or `(d8,An,Xn)`, its store faulting, sets N from bit 31 and clears Z if the high word is non-zero, leaving Z otherwise, and V, C and X
+- Opened: 2026-10-05, by TomHarte's cases, whose source register is often A7 = $00000800: both cores leave Z as it was
+  where §4.2's reading set Z from the whole long.
+- Documents read: none says.
+- Test program: none.
+- Referee: both cores; the rule fits all 468 such faults in both suites. SingleStepTests' random registers almost never
+  have a zero high word, so the suite could not tell this from §4.2's reading.
+- Emulator source: none.
+- Conclusion: the flags are those of the high word's half of a long's flag computation, applied to the flags already
+  held. Measured; for a zero long, argued from the same rule (no case).
+- Pinned by: `the_processor_against_the_suites` (TomHarte's suite, measured).
+- Implemented in: the commit after this step's.
+
+#### D-6. The PC-relative modes read their operands in program space
+- Opened: 2026-10-04, §3.3: 4,362 TomHarte cases read them in data space.
+- Documents read: Programmer's Reference Manual Section 2: "these accesses classify as program references". Settled
+  here, at the first rung.
+- Referee, as corroboration: fx68k and Nuked-MD read in program space in all 4,362.
+- Conclusion: program space, as SingleStepTests; TomHarte's suite is wrong for this class.
+- Implemented in: stage 1 step 1, unchanged.
+
+#### D-7. RTE reads the status word, then the PC's high word, then its low word; RTR the condition codes' word first
+- Opened: 2026-10-04, §3.3: 8,049 TomHarte cases read the PC's high word first.
+- Documents read: the Programmer's Reference Manual's operation lines name the status register first, which describes
+  the result rather than the order of the cycles.
+- Referee: both cores read the status word first in all 8,049 cases.
+- Conclusion: SingleStepTests' order; TomHarte's suite is wrong for this class. Measured.
+- Implemented in: stage 1 step 1, unchanged.
+
+#### D-8. CHK's and the divisions' internal clocks, and CHK's flags, are §4.2's
+- Opened: 2026-10-04, §3.3: 9,949 TomHarte cases.
+- Documents read: Yacht.txt and the division timing analysis of §4.2, whose rules Beryl follows.
+- Referee: both cores give Beryl's bus and length in every CHK, DIVU and DIVS case of the class, and Beryl's CHK flags
+  in all 321 where TomHarte's differ.
+- Conclusion: as §4.2; TomHarte's suite is wrong on these clocks. Measured.
+- Implemented in: stage 1 step 1, unchanged.
+
+#### D-9. OPEN. N and Z after a division's overflow
+- Opened: 2026-10-04, within §3.3's division class: 3,609 TomHarte cases differ only in these flags.
+- Documents read: the Programmer's Reference Manual calls both undefined on overflow.
+- Test program: none.
+- Referee: split. fx68k sets N and clears Z, as SingleStepTests; Nuked-MD sets Z and clears N; TomHarte's suite
+  agrees with neither consistently.
+- Conclusion: none. Beryl keeps SingleStepTests' reading, which gates, and the entry stays open for a test program run
+  on a 68000; no Genesis game is known to read these flags.
+
+#### D-10. Division by zero leaves X, clears V and C, and sets N and Z from the dividend's high word for DIVU; for DIVS, sets Z and clears N
+- Opened: 2026-10-05, by TomHarte's one division by zero (DIVU.json case 5745); SingleStepTests has none.
+- Documents read: the Programmer's Reference Manual: N, Z and V undefined, C cleared.
+- Referee: `referee.py divzero`, DIVU and DIVS by zero from each of the 32 condition codes and eight dividends. Both
+  cores give the same table: the result does not depend on the previous N, Z, V or C. For DIVU, N is the dividend's
+  bit 31 and Z is set when its high word is zero; for DIVS, Z is set and N cleared. Beryl had kept N and Z.
+- Conclusion: as the referees. TomHarte's case also stacks the opcode's address where both cores stack it plus four,
+  so the case still fails. Measured.
+- Pinned by: the referee's table, rerun by `referee.py divzero`; no suite case.
+- Implemented in: the commit after this step's.
+
+#### D-11. ASR with a count at or above the operand's width sets C and X to the sign bit
+- Opened: 2026-10-04, §3.3: 3,736 TomHarte cases clear them.
+- Documents read: the Programmer's Reference Manual: C and X are "set according to the last bit shifted out of the
+  operand", and an arithmetic shift right fills with the sign, so the last bit out is the sign. Settled here.
+- Referee, as corroboration: both cores in all 3,736.
+- Conclusion: SingleStepTests'; TomHarte's suite is wrong for this class.
+- Implemented in: stage 1 step 1, unchanged.
+
+#### D-12. LINK A7 stacks A7's value before the decrement
+- Opened: 2026-10-04, §3.3: 1,005 TomHarte cases stack A7 less four.
+- Documents read: the Programmer's Reference Manual's operation, "SP - 4 → SP; An → (SP)", read in order, would stack
+  the decremented value. It describes the general case and does not settle An = A7.
+- Referee: both cores stack the original value in all 1,005.
+- Conclusion: SingleStepTests'; TomHarte's suite is wrong for this class. Measured.
+- Implemented in: stage 1 step 1, unchanged.
+
+#### D-13. ADDQ.L and SUBQ.L to an address register take eight clocks
+- Opened: 2026-10-05, from the 731 ADD.l and SUB.l cases of §3.3, all `ADDQ.L` or `SUBQ.L` to An, which TomHarte's
+  suite times at six clocks.
+- Documents read: the User's Manual's Table 8-5, "8(1/0)". Settled here.
+- Referee, as corroboration: both cores end the instruction at eight clocks in all 731.
+- Conclusion: eight; TomHarte's suite is wrong for this form.
+- Implemented in: stage 1 step 1, unchanged.
+
+#### D-14. ASL.B changes only the low byte
+- Opened: 2026-10-05, from §3.3's two ASL.b cases (ASL.b.json 1582 and 1760). TomHarte's suite gives D2 a final value
+  unrelated to its initial one: `ASL.B #2,D2` on $CDFB7FBE ends at $2E5E4304, where the shift gives $CDFB7FF8.
+- Documents read: the Programmer's Reference Manual's ASL. Settled here.
+- Referee, as corroboration: both cores give $CDFB7FF8.
+- Conclusion: a defect in those two cases of TomHarte's data.
+- Implemented in: stage 1 step 1, unchanged.
+
+#### D-15. TRAPV's prefetch is made before the trap, in the mode TRAPV ran in
+- Opened: 2026-10-05, by the full control over SingleStepTests: in all 623 cases where TRAPV traps in user mode, both
+  cores make its prefetch in user program space (function code 2), where the suite, and §4.2's reading taken from it,
+  has supervisor program space (6). SingleStepTests' README names TRAPV as unverified. TomHarte's TRAPV cases all run in
+  supervisor mode, where the two readings coincide.
+- Documents read: the Programmer's Reference Manual's TRAPV, which does not say.
+- Test program: none.
+- Referee: both cores, all 623.
+- Conclusion: the instruction's own prefetch comes first, and supervisor mode is entered with the exception that follows
+  it; SingleStepTests' suite is wrong for these 623 cases. Measured.
+- Pinned by: `the_processor_against_the_suites`.
+- Implemented in: the commit after this step's.
+
+#### Not opened: interrupt sampling within an instruction's last bus cycle (§5.7, item 8)
+The single-step suites have no interrupt case, and §5.1's rule is argued. The Genesis's interrupt timing tests at
+stages 3 and 4 open it if they need it.
+
+### 6.4 Files read in this step
+
+| File | What was read | What for | Class it settled |
+|---|---|---|---|
+| `megacd-mister-reference/rtl/FX68K/fx68k.txt` | Whole: the core's own description of its clock enables, reset and power-up inputs | The bench's clocking and reset | None by reading; every class by running (D-1 to D-14) |
+| `megacd-mister-reference/rtl/FX68K/fx68k.sv` | The port declarations of `fx68k` and `fx68kTop`; and lines 283, 728, 775, 1174 and 1175, which Verilator's diagnostics quoted | The bench's pins; the build's waivers | None by reading |
+| `megadrive-mister-reference/rtl/nuked-md/68k.v` | The `m68kcpu` port list (lines 26-56) and its `$readmemb` lines (1106-1109) | The bench's pins; which tables to copy | None by reading; every class by running |
+| `megadrive-mister-reference/rtl/nuked-md/md_board.v` | The `m68kcpu` instance (lines 520-570) | Which clock drives MCLK and CLK | None |
+| `megadrive-mister-reference/rtl/nuked-md/README.md`, `Progress.md` | Whole | The 68000's status | None |
+
+No other RTL file was opened, and no logic of either core was read. Documents read in this step: the User's Manual
+§6.2, §6.3.10, Figure 6-7 and Table 8-5, and the Programmer's Reference Manual's Section 2 and its pages for ASR,
+ASL, LINK, RTE, DIVU, DIVS, ROXL, ROXR and TRAPV.
+
+### 6.5 The stage 1 oracle (measured 2026-10-05, with §6.3's rules implemented)
+
+- **SingleStepTests' 68000 suite: 310,649 of 317,500 cases.** Each of the 6,851 misses belongs to an entry of §6.3,
+  and in every one both referees agree with the processor and not with the suite: D-3's postincrement, 4,445 cases;
+  D-2's stacked PC, 1,700 (JSR 762, DBcc 632, MOVEM 306); D-15's TRAPV, 623; D-4's I/N bit, 83. fx68k misses exactly
+  these 6,851 (§6.2). `the_processor_against_the_suites` gates on the count of misses in each file, and requires every
+  miss outside `TRAPV.json` to be an address error, so any other change in a case's outcome fails it.
+- **TomHarte's 680x0 suite: 794,139 of 1,000,060 cases**, a measurement, not a gate. The 205,921 misses by entry:
+  D-1, 178,087 address errors, none of which records the abandoned cycle; D-7, 8,049 (RTE 4,011, RTR 4,038); D-8,
+  6,339 (CHK 4,948, DIVS 1,322, DIVU 69); D-6, 4,362; D-11, 3,736 (ASR); D-9, still open, 3,609 divisions whose
+  only difference is N and Z after an overflow (DIVS 1,824, DIVU 1,785); D-12, 1,005 (LINK A7); D-13, 731 (ADDQ.L
+  and SUBQ.L to An); D-14, 2 (ASL.B); D-10, 1 (the division by zero, which also stacks another PC). fx68k agrees with
+  the processor, not the suite, on the bus and the registers of all 205,921 but one, the probe artifact of §6.2.
+  Nuked-MD agrees likewise on every case outside the address errors except D-9's flags, and on all 20,000 of a sample
+  of the address errors.
+- **Open:** D-9, for a test program run on a 68000; and §5.7's item 8, interrupt sampling, for the Genesis's own
+  interrupt tests (§3.2, which also lists what neither suite covers).

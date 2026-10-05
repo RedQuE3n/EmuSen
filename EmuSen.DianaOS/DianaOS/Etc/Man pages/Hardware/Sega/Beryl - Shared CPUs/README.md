@@ -5,7 +5,7 @@ Not a console core: the processors the Sega cores are built on, one crate each i
 Nephrite is their first user; each crate's own record is beside this page.
 
 - [`Beryl_M68k.md`](Beryl_M68k.md) — `beryl-m68k`, the Motorola 68000, graded by SingleStepTests' 68000 suite and
-  TomHarte's 680x0 tests.
+  TomHarte's 680x0 tests, their disagreements refereed by fx68k and Nuked-MD's 68000 run as black boxes (its §6).
 - [`Beryl_Z80.md`](Beryl_Z80.md) — `beryl-z80`, the Zilog Z80, graded by SingleStepTests' Z80 suite and ZEXALL.
 - [`Beryl_SH2.md`](Beryl_SH2.md) — `beryl-sh2`, the Hitachi SH-2 (SH7604), for which no single-step suite exists.
 

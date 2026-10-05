@@ -138,15 +138,22 @@ mod tests {
 
     /// The disputes log's named exceptions, file by file: each must fail and every other case of the file pass.
     /// D-2's files are graded with the two pointer reads' VDA and VPA exchanged; their own failures are then D-3's.
+    /// D-41's are graded with WDM's second cycle allowed to be a program fetch where the suite has an internal cycle.
     fn disputed(dir: &std::path::Path) -> Vec<(String, Vec<String>)> {
         let swapped = |got: &w::Cycle, want: &w::Cycle| {
             got == want
                 || matches!((got.signals, want.signals), (Some(g), Some(w)) if g.vpa && !g.vda && w.vda && !w.vpa
                     && got.address == want.address && got.value == want.value && Signals { vda: true, vpa: false, ..g } == w)
         };
+        let fetched = |got: &w::Cycle, want: &w::Cycle| {
+            got == want
+                || matches!((got.signals, want.signals), (Some(g), Some(w)) if g.vpa && !g.vda && !w.vda && !w.vpa
+                    && got.address == want.address && want.value.is_none() && got.value.is_some() && Signals { vpa: false, ..g } == w)
+        };
         let mut out = Vec::new();
         let indexed_indirect = ["01", "21", "41", "61", "81", "a1", "c1", "e1"].map(|o| (format!("{o}.e.json"), "D-1"));
-        let rest = [("7c.n.json", "D-2"), ("7c.e.json", "D-2"), ("fc.n.json", "D-2"), ("fc.e.json", "D-3")].map(|(f, r)| (f.to_owned(), r));
+        let rest = [("7c.n.json", "D-2"), ("7c.e.json", "D-2"), ("fc.n.json", "D-2"), ("fc.e.json", "D-3"), ("42.n.json", "D-41"), ("42.e.json", "D-41")]
+            .map(|(f, r)| (f.to_owned(), r));
         for (file, rule) in indexed_indirect.into_iter().chain(rest) {
             let file = file.as_str();
             let mut strict_failures = 0;
@@ -169,6 +176,8 @@ mod tests {
                 strict_failures += !strict as usize;
                 let o = if rule == "D-2" || file == "fc.e.json" {
                     run_case_with(&mut Cpu::default(), &mut FlatBus::default(), &want, swapped)
+                } else if rule == "D-41" {
+                    run_case_with(&mut Cpu::default(), &mut FlatBus::default(), &want, fetched)
                 } else {
                     run_case(&mut Cpu::default(), &mut FlatBus::default(), &want)
                 };
@@ -177,7 +186,10 @@ mod tests {
                     failing.push(name);
                 }
             }
-            if rule == "D-2" || file == "fc.e.json" {
+            if rule == "D-41" {
+                assert_eq!(strict_failures, 10_000, "{file}: every case differs in WDM's second cycle");
+                out.push((file.to_owned(), vec![String::new(); 10_000]));
+            } else if rule == "D-2" || file == "fc.e.json" {
                 assert_eq!(strict_failures, 10_000, "{file}: every case differs in D-2's pins");
                 out.push((file.to_owned(), vec![String::new(); 10_000]));
             } else {

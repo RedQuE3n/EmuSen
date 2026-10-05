@@ -1,11 +1,12 @@
-//! The VDP's picture a line at a time (stage 4, steps 2 and 3). Mode 5: planes A and B with full, cell and line
-//! horizontal scrolling and full or 2-cell vertical scrolling, the window and its bug, sprites through the link list
-//! parsed on the line before they show, with their per-line and per-frame limits and masking, priority,
-//! shadow/highlight, interlace's double resolution, the eight-colour palette and the CRAM dots. Mode 4, the Master
-//! System's. MacDonald's "Sega Genesis VDP documentation" §12-§17 and "Sega Master System VDP documentation" §7-§10
-//! are the sources, with Nemesis's sprite masking and overflow findings (SpritesMind topic 541), plutiedev's
-//! shadow/highlight page and TmEE's measured output levels (topic 2188), and what Nuked-MD's board showed where they
-//! are silent (Nephrite_Disputes.md D-4 to D-8). Nephrite_Native.md §14 and §15 are the record, with what is argued.
+//! The VDP's picture (stage 4, steps 2 to 4), mode 5's lines drawn in spans up to each write that changes them. Mode
+//! 5: planes A and B with full, cell and line horizontal scrolling and full or 2-cell vertical scrolling, the window
+//! and its bug, sprites through the link list parsed on the line before they show, with their per-line and per-frame
+//! limits and masking, priority, shadow/highlight, interlace's double resolution, the eight-colour palette and the
+//! CRAM dots. Mode 4, the Master System's. MacDonald's "Sega Genesis VDP documentation" §12-§17 and "Sega Master
+//! System VDP documentation" §7-§10 are the sources, with Nemesis's sprite masking and overflow findings (SpritesMind
+//! topic 541), plutiedev's shadow/highlight page and TmEE's measured output levels (topic 2188), and what Nuked-MD's
+//! board showed where they are silent (Nephrite_Disputes.md D-4 to D-10). Nephrite_Native.md §14 to §16 are the
+//! record, with what is argued.
 
 use crate::vdp::Vdp;
 
@@ -158,7 +159,7 @@ impl Vdp {
 
     /// One plane's pixels on picture row `y`: A (or B) scrolled, through its name table. `bug` is the screen range
     /// whose name table data the window's bug fetches from the next column.
-    fn plane(&mut self, y: usize, b: bool, bug: Option<(usize, usize)>, out: &mut [Px]) {
+    fn plane(&mut self, y: usize, b: bool, bug: Option<(usize, usize)>, from: usize, to: usize, out: &mut [Px]) {
         let (rows, row_shift) = if self.doubled() { (16, 4) } else { (8, 3) };
         let (wc, hc) = self.plane_cells();
         let base = if b { ((self.regs[4] & 7) as usize) << 13 } else { ((self.regs[2] & 0x38) as usize) << 10 };
@@ -170,7 +171,7 @@ impl Vdp {
         let fine = hs & 15;
         let (mut column, mut vs) = (usize::MAX, 0);
         let mut cached = (usize::MAX, [Px::default(); 8]);
-        for (x, px) in out.iter_mut().enumerate() {
+        for (x, px) in out.iter_mut().enumerate().take(to).skip(from) {
             // The 2-cell column the VDP fetched this pixel in; the partial one at the left reads column 0 (argued).
             let c = if x < fine { 0 } else { (x - fine) / 16 };
             if c != column {
@@ -357,89 +358,251 @@ impl Vdp {
         self.vscroll_latch = self.vsram_word(1) & 0x3FF;
     }
 
-    /// One line of the picture: the planes and the composite only when drawing; the sprite pass for the next line
-    /// (or, in double resolution, this one's rows) always, since its flags are the VDP's state. Double resolution
-    /// draws both rows of a line each field, the other field's from this field's state (argued, §15.2), and takes the
-    /// sprite flags from the field's own row.
-    pub fn render_line(&mut self, line: usize, draw: bool, frame: &mut Frame) {
-        if line == 0 {
-            frame.width = self.width();
-            frame.height = self.height() * if self.doubled() { 2 } else { 1 };
-        }
-        if self.mode4() {
-            if self.regs[0] & 4 != 0 {
-                self.render_mode4(line, draw, frame);
-            } else if draw && line < MAX_H {
-                // Mode 5 and mode 4 both off select the TMS9918's modes, which the Genesis shows black (MacDonald's
-                // SMS VDP document, §13).
-                frame.rgba[line * MAX_W * 4..(line + 1) * MAX_W * 4].chunks_mut(4).for_each(|p| p.copy_from_slice(&[0, 0, 0, 255]));
-            }
-            self.cram_dots.clear();
-            return;
-        }
-        let rows: &[usize] = if self.doubled() { &[0, 1] } else { &[0] };
-        for &p in rows {
-            let y = if self.doubled() { 2 * line + p } else { line };
-            let sprites = if self.doubled() {
-                // The other field's row leaves the dot overflow its own field carries.
-                let carry = self.dot_overflow_line;
-                let s = if self.display() { self.sprites(y) } else { SpriteLine::empty() };
-                if p != self.odd as usize {
-                    self.dot_overflow_line = carry;
-                }
-                s
-            } else {
-                let mut s = SpriteLine::empty();
-                for (px, &b) in s.px.iter_mut().zip(self.sprite_buffer.iter()) {
-                    *px = Px::unpack(b);
-                }
-                s
-            };
-            if self.doubled() && p == self.odd as usize {
-                self.sprite_overflow |= sprites.overflow;
-                self.sprite_collision |= sprites.collision;
-            }
-            if draw && y < MAX_H {
-                self.compose(line, y, &sprites, frame);
-            }
-        }
-        self.cram_dots.clear();
-        if line + 1 < self.height() {
-            self.parse_sprites(line + 1);
+    /// The line and pixel the beam is on: a line's pixels run from H $18 to its width past it, through the V
+    /// counter's step into the next line's first H values; between them, before the next line's pixel 0 (`false`).
+    fn beam(&self, delay: u64) -> (usize, usize, bool) {
+        let at = (self.time + delay).saturating_sub(self.cur_line_start).min(crate::vdp::LINE - 1);
+        let h = self.timing().h(at) as usize;
+        let (step, width) = if self.h40() { (0x14A, 320) } else { (0x10A, 256) };
+        let line = self.cur_line as usize;
+        if (0x18..step).contains(&h) {
+            (line, h - 0x18, true)
+        } else if (step..0x18 + width).contains(&h) && line > 0 {
+            (line - 1, h - 0x18, true)
+        } else {
+            (line, 0, false)
         }
     }
 
-    fn compose(&mut self, line: usize, y: usize, sprites: &SpriteLine, frame: &mut Frame) {
-        let width = self.width();
-        let row = &mut frame.rgba[y * MAX_W * 4..(y + 1) * MAX_W * 4];
-        // A line narrower than the frame (the width changed within it) leaves black, never an older frame's pixels.
-        for p in row.chunks_mut(4).skip(width) {
-            p.copy_from_slice(&[0, 0, 0, 255]);
+    /// Before a write that changes what mode 5's picture reads: the line under the beam drawn up to it, and a CRAM
+    /// write's dot of its colour on the beam's pixel (D-6).
+    pub fn before_change(&mut self, dot: Option<u16>) {
+        self.before_change_after(dot, 0);
+    }
+
+    /// The same for a change that shows `delay` master clocks after it is made.
+    pub fn before_change_after(&mut self, dot: Option<u16>, delay: u64) {
+        if self.mode4() {
+            return;
         }
+        let (line, x, on) = self.beam(delay);
+        if line >= self.height() {
+            // Past the last shown line's last pixel: that line is finished with the state before this write.
+            if self.open.is_some_and(|o| o < line) {
+                self.finish();
+            }
+            return;
+        }
+        self.goto(line, x);
+        if let Some(v) = dot
+            && on
+            && self.display()
+            && x < self.width()
+            && self.open == Some(line)
+            && self.span_x == x
+        {
+            if self.draw {
+                for r in 0..self.rows() {
+                    let at = (r * MAX_W + x) * 4;
+                    let level = |c: u16| LADDER[2 * (c & 7) as usize];
+                    self.span_rgba[at..at + 4].copy_from_slice(&[level(v >> 1), level(v >> 5), level(v >> 9), 255]);
+                }
+            }
+            self.span_x = x + 1;
+        }
+    }
+
+    /// The display enable changed mid-line: blanking begins twelve pixels after a register write would show, and the
+    /// planes return at the first 16-pixel boundary from 24 pixels after it (measured in part, D-9).
+    pub fn display_change(&mut self, on: bool, delay: u64) {
+        if self.mode4() {
+            return;
+        }
+        let (line, x, beam_on) = self.beam(delay);
+        if line >= self.height() {
+            if self.open.is_some_and(|o| o < line) {
+                self.finish();
+            }
+            return;
+        }
+        // Off blanks 12 pixels on; on brings the planes back at the first 16-pixel boundary 24 pixels on.
+        let x = if !beam_on { x } else if on { (x + 24).div_ceil(16) * 16 } else { x + 12 };
+        self.goto(line, x);
+    }
+
+    fn rows(&self) -> usize {
+        if self.doubled() { 2 } else { 1 }
+    }
+
+    /// The open line drawn to `x` on `line`, the line before finished first.
+    fn goto(&mut self, line: usize, x: usize) {
+        match self.open {
+            Some(o) if o == line => {}
+            Some(o) if o > line => return,
+            Some(_) => {
+                self.finish();
+                self.open_line(line);
+            }
+            None => self.open_line(line),
+        }
+        self.advance(x);
+    }
+
+    /// A line opened: its sprite pixels taken, from the line buffer or, in double resolution, parsed for both rows
+    /// with the flags and the dot-overflow carry from the field's own row.
+    fn open_line(&mut self, line: usize) {
+        if line == 0 {
+            self.frame.width = self.width();
+            self.frame.height = self.height() * self.rows();
+            // CRAM written from outside the ports (a state, a memory editor) is seen from the next frame.
+            self.palette_dirty = true;
+        }
+        self.open = Some(line);
+        self.span_x = 0;
+        self.span_latch.0.copy_from_slice(&self.line_vsram);
+        (self.span_latch.1, self.span_latch.2) = (self.line_hscroll, self.line_window);
+        if self.doubled() {
+            for p in 0..2 {
+                let carry = self.dot_overflow_line;
+                let s = if self.display() { self.sprites(2 * line + p) } else { SpriteLine::empty() };
+                if p != self.odd as usize {
+                    self.dot_overflow_line = carry;
+                } else {
+                    self.sprite_overflow |= s.overflow;
+                    self.sprite_collision |= s.collision;
+                }
+                for (b, px) in self.span_sprites[p * MAX_W..(p + 1) * MAX_W].iter_mut().zip(s.px.iter()) {
+                    *b = px.packed();
+                }
+            }
+        } else {
+            self.span_sprites[..MAX_W].copy_from_slice(&self.sprite_buffer[..MAX_W]);
+        }
+    }
+
+    /// The open line's pixels from where it was drawn to up to `x`, from the present state.
+    fn advance(&mut self, x: usize) {
+        let x = x.min(self.width());
+        let Some(line) = self.open else { return };
+        if x <= self.span_x {
+            return;
+        }
+        if self.draw {
+            let mut buf = std::mem::take(&mut self.span_rgba);
+            self.swap_latch();
+            for r in 0..self.rows() {
+                let y = if self.doubled() { 2 * line + r } else { line };
+                self.compose(line, y, r, self.span_x, x, &mut buf[r * MAX_W * 4..(r + 1) * MAX_W * 4]);
+            }
+            self.swap_latch();
+            self.span_rgba = buf;
+        }
+        self.span_x = x;
+    }
+
+    /// The open line's latched scroll and window values exchanged with the present line's.
+    fn swap_latch(&mut self) {
+        std::mem::swap(&mut self.line_vsram, &mut self.span_latch.0);
+        std::mem::swap(&mut self.line_hscroll, &mut self.span_latch.1);
+        std::mem::swap(&mut self.line_window, &mut self.span_latch.2);
+    }
+
+    /// After a state's load: the open line's pixels so far drawn again from the state.
+    pub fn redraw_open_line(&mut self) {
+        if self.open.is_some() {
+            let x = std::mem::take(&mut self.span_x);
+            self.advance(x);
+        }
+    }
+
+    /// The open line drawn to its end and put into the frame.
+    fn finish(&mut self) {
+        let Some(line) = self.open else { return };
+        let width = self.width();
+        self.advance(width);
+        if self.draw {
+            for r in 0..self.rows() {
+                let y = if self.doubled() { 2 * line + r } else { line };
+                if y < MAX_H {
+                    let row = &mut self.frame.rgba[y * MAX_W * 4..(y + 1) * MAX_W * 4];
+                    row[..width * 4].copy_from_slice(&self.span_rgba[r * MAX_W * 4..r * MAX_W * 4 + width * 4]);
+                    // A line narrower than the frame (the width changed within it) leaves black, never an older frame's pixels.
+                    row[width * 4..].chunks_mut(4).for_each(|p| p.copy_from_slice(&[0, 0, 0, 255]));
+                }
+            }
+        }
+        self.open = None;
+    }
+
+    /// The V counter's step that ends `line`: mode 5's line drawn to the beam (its last pixels come after the step),
+    /// the line before finished, and the next line's sprites parsed (or, after the last line of the frame, line 0's);
+    /// mode 4's line drawn whole. Drawing is skipped when the frame is not drawn; the sprite pass runs either way.
+    pub fn line_end(&mut self, line: usize) {
+        if self.mode4() {
+            self.open = None;
+            if line < self.height() {
+                let mut frame = std::mem::replace(&mut self.frame, Frame { rgba: Vec::new(), width: 0, height: 0 });
+                if line == 0 {
+                    (frame.width, frame.height) = (self.width(), self.height());
+                }
+                if self.regs[0] & 4 != 0 {
+                    self.render_mode4(line, self.draw, &mut frame);
+                } else if self.draw && line < MAX_H {
+                    // Mode 5 and mode 4 both off select the TMS9918's modes, which the Genesis shows black (MacDonald's
+                    // SMS VDP document, §13).
+                    frame.rgba[line * MAX_W * 4..(line + 1) * MAX_W * 4].chunks_mut(4).for_each(|p| p.copy_from_slice(&[0, 0, 0, 255]));
+                }
+                self.frame = frame;
+            } else {
+                self.blank_line();
+            }
+        } else if line < self.height() {
+            let step = if self.h40() { 0x14A } else { 0x10A };
+            self.goto(line, step - 0x18);
+        } else {
+            if self.open.is_some_and(|o| o < line) {
+                self.finish();
+            }
+            self.blank_line();
+        }
+        if line + 1 < self.height() {
+            self.parse_sprites(line + 1);
+        } else if line as u32 == self.lines() - 1 {
+            self.parse_sprites(0);
+        }
+    }
+
+    /// Pixels `from` to `to` of picture row `y` of `line` (the open line's row `r`) into `out`.
+    fn compose(&mut self, line: usize, y: usize, r: usize, from: usize, to: usize, out: &mut [u8]) {
+        let width = self.width();
         let backdrop = self.regs[7] & 0x3F;
         if !self.display() {
             let c = self.rgb(backdrop, 1);
-            for p in row.chunks_mut(4).take(width) {
+            for p in out[from * 4..to * 4].chunks_mut(4) {
                 p.copy_from_slice(&c);
             }
             return;
         }
         let mut a = [Px::default(); MAX_W];
         let mut b = [Px::default(); MAX_W];
-        self.plane(y, true, None, &mut b[..width]);
+        self.plane(y, true, None, from, to, &mut b[..width]);
         let bug = self.window_bug(line, width);
-        self.plane(y, false, bug, &mut a[..width]);
-        if let Some((from, to)) = self.window_span(line, width) {
-            self.window(y, from, to, &mut a);
+        self.plane(y, false, bug, from, to, &mut a[..width]);
+        if let Some((wf, wt)) = self.window_span(line, width) {
+            self.window(y, wf.max(from), wt.min(to), &mut a);
         }
         let sh = self.regs[12] & 8 != 0;
         let blank_left = self.regs[0] & 0x20 != 0;
-        let mut palette = [[0u8; 4]; 192];
-        for (i, c) in palette.iter_mut().enumerate() {
-            *c = self.rgb((i & 63) as u8, (i >> 6) as u8);
+        if self.palette_dirty {
+            let mut palette = [[0u8; 4]; 192];
+            for (i, c) in palette.iter_mut().enumerate() {
+                *c = self.rgb((i & 63) as u8, (i >> 6) as u8);
+            }
+            (self.palette, self.palette_dirty) = (palette, false);
         }
-        for x in 0..width {
-            let (s, pa, pb) = (sprites.px[x], a[x], b[x]);
+        let palette = self.palette;
+        for x in from..to {
+            let (s, pa, pb) = (Px::unpack(self.span_sprites[r * MAX_W + x]), a[x], b[x]);
             let order = [(s, true, true), (pa, true, false), (pb, true, false), (s, false, true), (pa, false, false), (pb, false, false)];
             let mut top: Option<(Px, bool)> = None;
             let mut under: Option<Px> = None;
@@ -475,34 +638,7 @@ impl Vdp {
                 }
             };
             let c = if blank_left && x < 8 { palette[64 + backdrop as usize] } else { palette[(intensity as usize) << 6 | (colour as usize & 63)] };
-            row[x * 4..x * 4 + 4].copy_from_slice(&c);
-        }
-        self.draw_dots(row, width);
-    }
-
-    /// The CRAM dots: a CRAM write while a line is shown appears, as the colour written, at the pixel the beam is on
-    /// (MacDonald's "CRAM write dots"; the dot's width of one pixel is argued).
-    /// The dots written after the V counter's step, on the rows of the line before, which the frame holds.
-    pub fn draw_late_dots(&mut self, draw: bool, frame: &mut Frame) {
-        for (line, x, v) in std::mem::take(&mut self.late_dots) {
-            let y = if self.doubled() { 2 * line as usize + self.odd as usize } else { line as usize };
-            if draw && y < frame.height && (x as usize) < frame.width {
-                let row = &mut frame.rgba[y * MAX_W * 4..(y + 1) * MAX_W * 4];
-                self.draw_dot(row, x as usize, v);
-            }
-        }
-    }
-
-    fn draw_dot(&self, row: &mut [u8], x: usize, v: u16) {
-        let level = |c: u16| LADDER[2 * (c & 7) as usize];
-        row[x * 4..x * 4 + 4].copy_from_slice(&[level(v >> 1), level(v >> 5), level(v >> 9), 255]);
-    }
-
-    fn draw_dots(&self, row: &mut [u8], width: usize) {
-        for &(x, v) in &self.cram_dots {
-            if (x as usize) < width {
-                self.draw_dot(row, x as usize, v);
-            }
+            out[x * 4..x * 4 + 4].copy_from_slice(&c);
         }
     }
 

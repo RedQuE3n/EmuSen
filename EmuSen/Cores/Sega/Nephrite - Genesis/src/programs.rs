@@ -129,7 +129,7 @@ fn the_window_bug_takes_the_partial_column_from_the_next() {
     let at = image.windows(4).position(|p| p == [0xE8, 0x48, 0x02, 0x40]).expect("the scroll's shift");
     image[at..at + 2].copy_from_slice(&[0x4E, 0x71]);
     let mut m = Machine::new(&image, Media::read(&image));
-    let px = |m: &Machine, x: usize, y: usize| m.genesis.hw.frame.rgba[(y * crate::render::MAX_W + x) * 4..][..3].to_vec();
+    let px = |m: &Machine, x: usize, y: usize| m.genesis.hw.vdp.frame.rgba[(y * crate::render::MAX_W + x) * 4..][..3].to_vec();
     for _ in 0..24 {
         m.advance();
     }

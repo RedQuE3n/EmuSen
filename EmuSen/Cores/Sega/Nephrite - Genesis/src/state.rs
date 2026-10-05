@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 5;
+pub const STATE_VERSION: i32 = 6;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -147,11 +147,13 @@ mod tests {
                 "139675 32 u64[4] VdpDma\n139707 16 u64[2] VdpTimes\n139723 320 u8[320] SpriteCache\n",
                 "140043 3 bool[3] SpriteFlags\n140046 2 u16 VscrollLatch\n140048 2 u8[2] Field\n",
                 "140050 320 u8[320] SpriteLineBuffer\n140370 80 u8[80] LineVsram\n140450 4 u16[2] LineHscroll\n",
-                "140454 2 u8[2] LineWindow\n140456 148 u16[74] CramDots\n140604 3 u8[3] IoData\n",
-                "140607 3 u8[3] IoCtrl\n140610 3 u8[3] IoTx\n140613 3 u8[3] IoSctrl\n140616 2 bool[2] PadTh\n",
-                "140618 2 u8[2] PadFalls\n140620 16 u64[2] PadLastFall\n140636 1 u8 SramRegister\n",
-                "140637 1 bool Mapper\n140638 8 u8[8] MapperPages\n140646 56 u64[7] Clocks\n140702 4 u32 Line\n",
-                "140706 2 u16 Z80Bank\n140708 2 u16 OpenBus\n140710 4 bool[4] Lines\n140714 4 u8[4] Tmss\n"
+                "140454 2 u8[2] LineWindow\n140456 4 u16[2] OpenLine\n140460 640 u8[640] OpenLineSprites\n",
+                "141100 80 u8[80] OpenLineVsram\n141180 4 u16[2] OpenLineScroll\n141184 2 u8[2] OpenLineWindow\n",
+                "141186 3 u8[3] IoData\n141189 3 u8[3] IoCtrl\n141192 3 u8[3] IoTx\n141195 3 u8[3] IoSctrl\n",
+                "141198 2 bool[2] PadTh\n141200 2 u8[2] PadFalls\n141202 16 u64[2] PadLastFall\n",
+                "141218 1 u8 SramRegister\n141219 1 bool Mapper\n141220 8 u8[8] MapperPages\n",
+                "141228 56 u64[7] Clocks\n141284 4 u32 Line\n141288 2 u16 Z80Bank\n141290 2 u16 OpenBus\n",
+                "141292 4 bool[4] Lines\n141296 4 u8[4] Tmss\n"
             )
         );
     }

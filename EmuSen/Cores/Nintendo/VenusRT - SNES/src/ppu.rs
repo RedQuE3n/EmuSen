@@ -171,6 +171,25 @@ const MODE7_EXTBG: [(usize, u16); 7] = [(OBJ, 3), (OBJ, 2), (1, 1), (OBJ, 1), (0
 /// A line-buffer entry whose low 8 bits are a direct colour and bits 10-12 its palette bits, not a CGRAM index.
 const DIRECT: u16 = 0x4000;
 
+/// Each layer's place in the mode's priority order by its pixel's priority, larger nearer the front and 0 where the
+/// order has no such entry; the front-most pixel is the opaque one of greatest rank (VenusRT_Native.md §58).
+type Ranks = [[u8; 4]; 5];
+
+/// A bitplane byte spread one bit a byte, the leftmost pixel (bit 7) in the lowest byte.
+const SPREAD: [u64; 256] = {
+    let mut t = [0u64; 256];
+    let mut b = 0;
+    while b < 256 {
+        let mut i = 0;
+        while i < 8 {
+            t[b] |= (((b >> (7 - i)) & 1) as u64) << (8 * i);
+            i += 1;
+        }
+        b += 1;
+    }
+    t
+};
+
 /// OBSEL's sizes as (small, large), each (width, height) (fullsnes, OBSEL, with its two undocumented settings).
 const OBJ_SIZES: [((u16, u16), (u16, u16)); 8] = [
     ((8, 8), (16, 16)), ((8, 8), (32, 32)), ((8, 8), (64, 64)), ((16, 16), (32, 32)),
@@ -609,10 +628,11 @@ impl Ppu {
 
     /// Composes and writes the span's pixels, `per` buffer pixels a picture pixel: 1 into `narrow`, 2 into `canvas`.
     fn draw_span(&mut self, from: u16, to: u16, brightness: u32, hires: bool, row: usize, per: usize) {
-        let scale = |c: u16| -> u8 {
-            let c = (c as u32 & 31) * (brightness + 1) / 16;
+        let scale: [u8; 32] = std::array::from_fn(|c| {
+            let c = c as u32 * (brightness + 1) / 16;
             ((c << 3) | (c >> 2)) as u8
-        };
+        });
+        let ranks = self.ranks();
         self.tall |= self.half_lines();
         if from == 0 {
             self.before = Mix::default();
@@ -625,16 +645,16 @@ impl Ppu {
                 windows = self.windows_at(x);
                 until = self.next_window_edge(x).min(to);
             }
-            let mix = self.mix(x, windows);
-            let left = if hires { self.sub_half_pixel(x, self.before, windows) } else { mix.colour };
+            let mix = self.mix_ranked(x, windows, &ranks);
+            let left = if hires { self.sub_half_ranked(x, self.before, windows, &ranks) } else { mix.colour };
             self.before = mix;
             let at = row + x as usize * 4 * per;
             let out = if per == 1 { &mut self.narrow } else { &mut self.canvas };
             for (k, colour) in [left, mix.colour].into_iter().enumerate().skip(2 - per) {
                 let at = at + 4 * (k + per - 2);
-                out[at] = scale(colour);
-                out[at + 1] = scale(colour >> 5);
-                out[at + 2] = scale(colour >> 10);
+                out[at] = scale[(colour & 31) as usize];
+                out[at + 1] = scale[((colour >> 5) & 31) as usize];
+                out[at + 2] = scale[((colour >> 10) & 31) as usize];
             }
         }
     }
@@ -754,7 +774,12 @@ impl Ppu {
             } else {
                 self.decode_chunk(bg, mode, px & !7, line.wrapping_add(vofs), &mut chunk);
             }
-            self.bg_line[bg][at..at + n].copy_from_slice(&chunk[first..first + n]);
+            // A whole chunk is copied at its fixed length, which compiles to moves rather than a call (VenusRT_Native.md §58).
+            if n == 8 {
+                self.bg_line[bg][at..at + 8].copy_from_slice(&chunk);
+            } else {
+                self.bg_line[bg][at..at + n].copy_from_slice(&chunk[first..first + n]);
+            }
             x += n as u16;
         }
     }
@@ -820,9 +845,16 @@ impl Ppu {
         }
         let depth = DEPTHS[mode as usize][bg] as u16;
         let words = self.tile_row(bg, depth, (entry & 0x3FF) + (fx >> 3) + ((fy >> 3) << 4), fy);
+        // All eight pixels' colour numbers at once, one a byte, each plane's byte spread and shifted to its bit.
+        let mut pixels = 0u64;
+        for (plane, w) in words.iter().enumerate().take(depth as usize / 2) {
+            pixels |= SPREAD[(w & 0xFF) as usize] << (2 * plane) | SPREAD[(w >> 8) as usize] << (2 * plane + 1);
+        }
+        if hflip {
+            pixels = pixels.swap_bytes();
+        }
         for (i, o) in out.iter_mut().enumerate() {
-            let bit = if hflip { i as u16 } else { 7 - i as u16 };
-            *o = self.encode(bg, mode, depth, entry, &words, bit);
+            *o = self.entry_of(bg, mode, depth, entry, (pixels >> (8 * i)) as u16 & 0xFF);
         }
     }
 
@@ -868,6 +900,12 @@ impl Ppu {
         for (plane, w) in words.iter().enumerate().take(depth as usize / 2) {
             colour |= (((w >> bit) & 1) | (((w >> (bit + 8)) & 1) << 1)) << (2 * plane);
         }
+        self.entry_of(bg, mode, depth, entry, colour)
+    }
+
+    /// A pixel's colour number as a line-buffer entry under its map entry.
+    #[inline(always)]
+    fn entry_of(&self, bg: usize, mode: u8, depth: u16, entry: u16, colour: u16) -> u16 {
         if colour == 0 {
             return 0;
         }
@@ -904,18 +942,10 @@ impl Ppu {
         }
     }
 
-    /// The front-most pixel of the layers `enabled` shows and `masked` does not hide inside its window, as (colour,
-    /// layer, CGRAM index), the layer 0-3 a background and 4 the sprites; None where all are transparent.
-    fn front(&self, enabled: u8, masked: u8, windows: u8, x: u16, sub: bool) -> Option<(u16, usize, u16)> {
-        let order: &[(usize, u16)] = match self.regs[0x05] & 7 {
-            0 => &MODE0,
-            1 if self.regs[0x05] & 0x08 != 0 => &MODE1_BG3_HIGH,
-            1 => &MODE1,
-            2..=5 => &MODE2,
-            6 => &MODE6,
-            _ if self.regs[0x33] & 0x40 != 0 => &MODE7_EXTBG,
-            _ => &MODE7,
-        };
+    /// `front` as the priority chart reads, walking the mode's order from the front; the tests' reference for the ranks.
+    #[cfg(test)]
+    fn front_by_order(&self, enabled: u8, masked: u8, windows: u8, x: u16, sub: bool) -> Option<(u16, usize, u16)> {
+        let order = self.order();
         let halves = sub && matches!(self.regs[0x05] & 7, 5 | 6);
         for &(layer, priority) in order {
             let bit = 1 << layer;
@@ -930,17 +960,71 @@ impl Ppu {
                 self.bg_line[layer][x as usize]
             };
             if p != 0 && (p >> 8) & 3 == priority {
-                let colour = if layer != OBJ && p & DIRECT != 0 {
-                    // BBGGGRRR and the palette's bgr make Red=RRRr0, Green=GGGg0, Blue=BBb00 (anomie, "Direct Color Mode").
-                    let (c, bgr) = (p & 0xFF, (p >> 10) & 7);
-                    ((c & 7) << 2 | (bgr & 1) << 1) | ((c >> 3 & 7) << 2 | (bgr >> 1 & 1) << 1) << 5 | ((c >> 6) << 3 | (bgr >> 2) << 2) << 10
-                } else {
-                    self.cgram[(p & 0xFF) as usize]
-                };
-                return Some((colour, layer, p & 0xFF));
+                return Some((self.colour_of(p, layer), layer, p & 0xFF));
             }
         }
         None
+    }
+
+    /// The mode's layers from the front, as (layer, priority).
+    fn order(&self) -> &'static [(usize, u16)] {
+        match self.regs[0x05] & 7 {
+            0 => &MODE0,
+            1 if self.regs[0x05] & 0x08 != 0 => &MODE1_BG3_HIGH,
+            1 => &MODE1,
+            2..=5 => &MODE2,
+            6 => &MODE6,
+            _ if self.regs[0x33] & 0x40 != 0 => &MODE7_EXTBG,
+            _ => &MODE7,
+        }
+    }
+
+    /// The order as ranks, found once for a span.
+    fn ranks(&self) -> Ranks {
+        let order = self.order();
+        let mut ranks = [[0u8; 4]; 5];
+        for (i, &(layer, priority)) in order.iter().enumerate() {
+            ranks[layer][priority as usize] = (order.len() - i) as u8;
+        }
+        ranks
+    }
+
+    /// An opaque pixel's colour: its CGRAM entry, or a background's direct colour.
+    #[inline(always)]
+    fn colour_of(&self, p: u16, layer: usize) -> u16 {
+        if layer != OBJ && p & DIRECT != 0 {
+            // BBGGGRRR and the palette's bgr make Red=RRRr0, Green=GGGg0, Blue=BBb00 (anomie, "Direct Color Mode").
+            let (c, bgr) = (p & 0xFF, (p >> 10) & 7);
+            ((c & 7) << 2 | (bgr & 1) << 1) | ((c >> 3 & 7) << 2 | (bgr >> 1 & 1) << 1) << 5 | ((c >> 6) << 3 | (bgr >> 2) << 2) << 10
+        } else {
+            self.cgram[(p & 0xFF) as usize]
+        }
+    }
+
+    /// The front-most pixel of the layers `enabled` shows and `masked` does not hide inside its window, as (colour,
+    /// layer, CGRAM index), the layer 0-3 a background and 4 the sprites; None where all are transparent.
+    #[inline(always)]
+    fn front(&self, enabled: u8, masked: u8, windows: u8, x: u16, sub: bool, ranks: &Ranks) -> Option<(u16, usize, u16)> {
+        let active = enabled & !(masked & windows);
+        let halves = sub && matches!(self.regs[0x05] & 7, 5 | 6);
+        let (mut best, mut pick, mut at) = (0u8, 0u16, 0usize);
+        for layer in 0..5 {
+            if active & (1 << layer) == 0 || ranks[layer] == [0; 4] {
+                continue;
+            }
+            let p = if layer == OBJ {
+                self.obj_line[x as usize]
+            } else if halves {
+                self.bg_sub_line[layer][x as usize]
+            } else {
+                self.bg_line[layer][x as usize]
+            };
+            let rank = if p != 0 { ranks[layer][((p >> 8) & 3) as usize] } else { 0 };
+            if rank > best {
+                (best, pick, at) = (rank, p, layer);
+            }
+        }
+        (best != 0).then(|| (self.colour_of(pick, at), at, pick & 0xFF))
     }
 
     /// One pixel of the picture: the main screen's front-most pixel, clipped to black and mathed with the sub screen
@@ -999,8 +1083,14 @@ impl Ppu {
             .unwrap_or(WIDTH as u16)
     }
 
+    #[cfg(test)]
     fn mix(&self, x: u16, windows: u8) -> Mix {
-        let (main, layer, index) = self.front(self.regs[0x2C], self.regs[0x2E], windows, x, false).unwrap_or((self.cgram[0], 5, 0));
+        self.mix_ranked(x, windows, &self.ranks())
+    }
+
+    #[inline(always)]
+    fn mix_ranked(&self, x: u16, windows: u8, ranks: &Ranks) -> Mix {
+        let (main, layer, index) = self.front(self.regs[0x2C], self.regs[0x2E], windows, x, false, ranks).unwrap_or((self.cgram[0], 5, 0));
         let cgwsel = self.regs[0x30];
         let cgadsub = self.regs[0x31];
         let colour_window = windows & 0x20 != 0;
@@ -1018,7 +1108,7 @@ impl Ppu {
             return Mix { colour: main, before: main, clip, ..Mix::default() };
         }
         let (sub, math, sub_backdrop) = if cgwsel & 2 != 0 {
-            match self.front(self.regs[0x2D], self.regs[0x2F], windows, x, true) {
+            match self.front(self.regs[0x2D], self.regs[0x2F], windows, x, true, ranks) {
                 Some((c, _, _)) => (c, 2, false),
                 None => (self.fixed_colour(), 1, true),
             }
@@ -1032,8 +1122,13 @@ impl Ppu {
 
     /// The sub screen's half-pixel at `x` on a hi-res line: its front-most pixel over colour 0 (fullsnes, "Hires
     /// Notes"), clipped and mathed as the main pixel before it was (anomie; D-19).
+    #[cfg(test)]
     fn sub_half_pixel(&self, x: u16, before: Mix, windows: u8) -> u16 {
-        let raw = self.front(self.regs[0x2D], self.regs[0x2F], windows, x, true).map_or(self.cgram[0], |p| p.0);
+        self.sub_half_ranked(x, before, windows, &self.ranks())
+    }
+
+    fn sub_half_ranked(&self, x: u16, before: Mix, windows: u8, ranks: &Ranks) -> u16 {
+        let raw = self.front(self.regs[0x2D], self.regs[0x2F], windows, x, true, ranks).map_or(self.cgram[0], |p| p.0);
         let raw = if before.clip { 0 } else { raw };
         match before.math {
             0 => raw,
@@ -1049,6 +1144,76 @@ mod tests {
 
     fn blank() -> Beam {
         Beam { line: 230, dot: 0, vblank: true, ..Beam::default() }
+    }
+
+    // The ranks pick what walking the priority order picks, for every mode, layer enable, window mask and pixel mix.
+    #[test]
+    fn the_ranked_front_equals_the_order_walked_from_the_front() {
+        let mut p = Ppu::default();
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for c in 0..256 {
+            p.cgram[c] = (next() & 0x7FFF) as u16;
+        }
+        for _ in 0..20_000 {
+            p.regs[0x05] = next() as u8;
+            p.regs[0x33] = next() as u8 & 0x40;
+            let pixel = |r: u64| if r & 3 == 0 { 0 } else { 0x8000 | (r as u16 & 0x47FF) };
+            for layer in 0..4 {
+                p.bg_line[layer][0] = pixel(next());
+            }
+            for layer in 0..2 {
+                p.bg_sub_line[layer][0] = pixel(next());
+            }
+            p.obj_line[0] = pixel(next()) & 0x83FF;
+            let (enabled, masked, windows, sub) = (next() as u8, next() as u8, next() as u8, next() & 1 != 0);
+            let ranks = p.ranks();
+            assert_eq!(p.front(enabled, masked, windows, 0, sub, &ranks), p.front_by_order(enabled, masked, windows, 0, sub));
+        }
+    }
+
+    // A tile row decoded through the spread bytes equals the pixel-at-a-time decode, flipped or not, at every depth.
+    #[test]
+    fn a_chunk_decodes_as_its_pixels_one_at_a_time() {
+        let mut p = Ppu::default();
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+        for w in p.vram.iter_mut() {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            *w = seed as u16;
+        }
+        for mode in 0..7u8 {
+            for direct in [0u8, 1] {
+                p.regs[0x05] = mode | 0x30;
+                p.regs[0x30] = direct;
+                for bg in 0..4 {
+                    let depth = DEPTHS[mode as usize][bg] as u16;
+                    if depth == 0 || matches!(mode, 5 | 6) {
+                        continue;
+                    }
+                    for (px, py) in [(0u16, 0u16), (8, 3), (136, 77), (512, 250), (1016, 1023)] {
+                        let mut out = [0u16; 8];
+                        p.decode_chunk(bg, mode, px, py, &mut out);
+                        let size = if p.regs[0x05] & (0x10 << bg) != 0 { 16u16 } else { 8 };
+                        let entry = p.map_entry(bg, px, py);
+                        let hflip = entry & 0x4000 != 0;
+                        let fx = if hflip { size - 1 - (px & (size - 1)) } else { px & (size - 1) };
+                        let fy = if entry & 0x8000 != 0 { size - 1 - (py & (size - 1)) } else { py & (size - 1) };
+                        let words = p.tile_row(bg, depth, (entry & 0x3FF) + (fx >> 3) + ((fy >> 3) << 4), fy);
+                        for (i, &o) in out.iter().enumerate() {
+                            let bit = if hflip { i as u16 } else { 7 - i as u16 };
+                            assert_eq!(o, p.encode(bg, mode, depth, entry, &words, bit), "mode {mode} bg {bg} ({px}, {py}) pixel {i}");
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // fullsnes: 8, 9 and 10 bits rotated left by three; the prefetch taken before the step; a write leaves it alone.

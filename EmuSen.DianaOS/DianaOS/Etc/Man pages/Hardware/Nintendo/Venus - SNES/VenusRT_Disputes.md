@@ -1497,3 +1497,25 @@ their data.
   read, in `rtl/65C816/MCode.vhd`: the rows for opcode $42, their last field, the VDA and VPA pair, alone. Also, in
   `rtl/CPU.vhd`, nothing beyond the access-speed lines 368-382 already read for D-24, to see whether a cycle's speed
   depends on VDA and VPA. Nothing else of the core.
+- Read 2026-10-05 as logged: `MCode.vhd` line 616 (the row heading for $42) and line 617 (its one microcode row),
+  the last field alone. For calibration, the last field of two rows whose kind the datasheet states: CLC's second
+  cycle (the row D-24 read, an internal cycle) and LDX immediate's operand rows. What they say:
+  - The VDA and VPA pair is 00 in CLC's internal cycle and 01 in LDX's operand fetch.
+  - It is **01 in WDM's second cycle**, the operand fetch's pair, with the program counter stepped.
+  - D-24's read of `CPU.vhd` 368-382 already showed the referee timing a cycle by its address whenever VDA or VPA is
+    set. So in the referee WDM's second cycle is a program fetch, timed by its address: reading (1).
+- Weight: the referee's 65C816 is real support (`Venus_Referee.md` §0), transcribed from the datasheet. The datasheet
+  has no Table 5-7 row for WDM, so on this row the referee's choice is not a transcription. It is the implementer's,
+  and its agreement counts for less than on a tabulated row. It agrees with the console's result and with
+  fullsnes's operand, and disagrees with the suite.
+- Mesen's source: none.
+- Conclusion, 2026-10-05: WDM's second cycle is a program fetch of PBR,PC+1, with VPA set, timed as any read of that
+  address, and its byte dropped. Measured on `test_hdmatiming`'s console table, where it is the only difference
+  between test 1's timing and test 2's. Argued for the pins, from the referee, fullsnes's operand and anomie's
+  6-clock rule for internal cycles, against SingleStepTests.
+- **G2's named exception.** All 20,000 cases of `42.n` and `42.e` differ from the suite in the second cycle: VPA set
+  and the byte read, where the suite has an internal cycle with no value. The suite is graded on those files with
+  that one cycle allowed to be the fetch, and every case must then pass.
+- Pinned by: `test_hdmatiming`; `the_cpu_through_the_whole_suite`'s D-41 files; `wdm_fetches_its_second_byte` in
+  `cpu/control.rs`.
+- Implemented in: the commit after this entry's, "VenusRT's WDM fetches its second byte (D-41)".

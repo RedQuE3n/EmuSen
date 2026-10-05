@@ -5546,3 +5546,12 @@ results in 1.78 million. That choice leaves Lock On without its ground, which th
 
 The difference is one line in `Projection::parameter`. The image's Vva past the limit is not quite either member's,
 which the seeded set's exact counts show (71,187 and 44,436 of 262,144).
+
+### 52.8 Amendment: a tie rule on the trace oracle, written before the regrade
+
+*Decided 2026-10-04*, on §52.7. A member is not chosen by which game it draws. The rank of §52.4 (exact results over
+both sets) gains a tie rule: **when two declared members' exact counts on the seeded cases differ by under 1%, they are
+ranked by exact share on the games' own traced traffic**, plan §4.2's trace oracle. That is how Project's choice was
+justified, on Super Mario Kart's traced Project (§52.2). For B5 the traffic is the traced Parameter and Raster commands
+past the limit of every DSP-1 title that passes it. Whichever member the rule ranks first is built, and the result is
+recorded either way.

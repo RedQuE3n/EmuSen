@@ -6094,3 +6094,22 @@ The open routes are for the tester to choose:
 2. A further amendment admitting a value found by an exact match of a declared structure against one command's
    outputs, as distinct from a least-squares fit. That would be a change of rule, not a reading of §55.1.
 3. The player's image, the exact path, which the policy already provides.
+
+## 57. The NEC DSP replacements: constants by exact match, and ST010 07h's perspective (2026-10-04)
+
+### 57.1 The decision, and the amendment it makes
+
+*Decided 2026-10-04*, on §56's second route, narrowly. Plan §1.3 gains a rule for **constants by exact match**:
+
+- a command's constants may be found by exact match when no input moves them and no document gives them;
+- the structure is declared and committed in advance;
+- it has at most three whole-number parameters, each searched over a range declared in advance;
+- a member is accepted only if it reproduces every output of the command exactly at every probed input; for 07h, all
+  176 words of each array at all 256 high-byte angles;
+- any shortfall rejects it, and there is no closest member;
+- if more than one member matches exactly, that is reported, not chosen between;
+- least-squares and other error-minimising fits stay forbidden.
+
+The rule differs from §43.1's fit in what it can conclude. A fit always yields a member, the closest. This rule yields a
+member only when the declared structure is the command's, and otherwise says that it is not.
+

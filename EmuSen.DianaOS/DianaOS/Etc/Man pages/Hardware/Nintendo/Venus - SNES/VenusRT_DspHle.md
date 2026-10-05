@@ -102,6 +102,13 @@ use the same instrument, so the line between them is drawn by rules about how a 
 > and thresholds, found by black-box probing. Each is recorded with how it was measured. A value fitted by minimising
 > an error against the LLE's outputs remains forbidden, whatever its type, as §48.2 of that record withdrew 07h's K
 > and c. Admitted under this class: the DSP-1's limit angle (§52.3) and ST010 05h's constants (§54.2, listed in §55).
+>
+> *Amended 2026-10-04* (decided; `VenusRT_Native.md` §57.1). **Constants by exact match**, narrowly. A command's
+> constants may be found by exact match when no input moves them and no document gives them. The structure is declared
+> and committed in advance, with at most three whole-number parameters, each searched over a range declared in advance.
+> A member is accepted only if it reproduces every output of the command exactly at every probed input. Any shortfall
+> rejects it: there is no closest member. If more than one member matches exactly, that is reported, not chosen
+> between. Least-squares and other error-minimising fits stay forbidden.
 
 **The argument for exactness without copying.** A model with b bits of free choice that reproduces N independent
 output bits, with N much larger than b, carries at most b bits of information taken from the oracle; everything else

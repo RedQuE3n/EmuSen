@@ -1,0 +1,29 @@
+[package]
+name = "nephrite"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Nephrite, the Genesis / Mega Drive core in Rust with the Sega CD and the 32X as its attachments, on the core ABI v1. See Nephrite_Plan.md and Nephrite_Native.md.
+[lib]
+name = "nephrite"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+emusen-native = { path = "../../Shared/emusen-native" }
+beryl-m68k = { path = "../Beryl - Shared CPUs/beryl-m68k" }
+beryl-z80 = { path = "../Beryl - Shared CPUs/beryl-z80" }
+beryl-sh2 = { path = "../Beryl - Shared CPUs/beryl-sh2" }
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"
+
+# What ships: release without the line tables a sampler reads - see Mars_Native.md §6.3.
+[profile.dist]
+inherits = "release"
+debug = false
+strip = "debuginfo"

@@ -9,6 +9,8 @@ on:
       - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
       - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
       - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
+      - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
+      - 'EmuSen/Cores/Sega/Beryl - Shared CPUs/**'
       - 'EmuSen/Cores/Shared/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
@@ -18,6 +20,7 @@ on:
       - 'EmuSen.WiseMan/Cores/MercuryRt*'
       - 'EmuSen.WiseMan/Cores/MoonRt*'
       - 'EmuSen.WiseMan/Cores/VenusRt*'
+      - 'EmuSen.WiseMan/Cores/Nephrite*'
       - 'EmuSen.WiseMan/Cores/CoreAbi*'
       - 'EmuSen.WiseMan/Cores/CoreAdapter*'
       - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
@@ -30,6 +33,8 @@ on:
       - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
       - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
       - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
+      - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
+      - 'EmuSen/Cores/Sega/Beryl - Shared CPUs/**'
       - 'EmuSen/Cores/Shared/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
@@ -39,6 +44,7 @@ on:
       - 'EmuSen.WiseMan/Cores/MercuryRt*'
       - 'EmuSen.WiseMan/Cores/MoonRt*'
       - 'EmuSen.WiseMan/Cores/VenusRt*'
+      - 'EmuSen.WiseMan/Cores/Nephrite*'
       - 'EmuSen.WiseMan/Cores/CoreAbi*'
       - 'EmuSen.WiseMan/Cores/CoreAdapter*'
       - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
@@ -46,7 +52,7 @@ on:
       - '.github/workflows/rust-cores.yml'
 
 jobs:
-  # The crates every core builds with (EmuSen/Cores/Shared/), tested on their own; no library of theirs ships.
+  # The crates every core builds with (EmuSen/Cores/Shared/) and Beryl's CPUs, tested on their own; no library of theirs ships.
   shared:
     name: Shared crates ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -61,7 +67,7 @@ jobs:
       - name: Test
         shell: bash
         run: |
-          for crate in EmuSen/Cores/Shared/*/; do
+          for crate in EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl - Shared CPUs"/*/; do
             case "$crate" in *emusen-core-abi-check/) continue ;; esac
             (cd "$crate" && cargo test --release)
           done
@@ -144,6 +150,9 @@ jobs:
           - name: venusrt
             dir: 'EmuSen/Cores/Nintendo/VenusRT - SNES'
             symbol: emusen_native_
+          - name: nephrite
+            dir: 'EmuSen/Cores/Sega/Nephrite - Genesis'
+            symbol: emusen_core_
         platform:
           # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it.
           - rid: linux-x64
@@ -325,6 +334,11 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          name: nephrite-${{ matrix.rid }}
+          path: native
+
+      - uses: actions/download-artifact@v4
+        with:
           name: v1-test-cores-${{ runner.os }}
           path: native
 
@@ -339,7 +353,7 @@ jobs:
           out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
           cp native/* "$out/"
           chmod +x "$out"/emusen-core-conform* || true
-          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*v1_test_core* "$out"/*v1_plain_core*
+          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*v1_test_core* "$out"/*v1_plain_core*
 
       # Printed in full, so each platform's digests can be read off the log.
       - name: Test the platform digests
@@ -348,7 +362,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

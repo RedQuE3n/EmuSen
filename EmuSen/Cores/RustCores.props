@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Identity is the crate's library name; the fallback names the C# core a console runs on without the library; CoreAbi 1 marks a library on the core ABI v1, whose sidecar the build writes. -->
+    <!-- Identity is the crate's library name; the fallback names the C# core a console runs on without the library, empty where there is none; CoreAbi 1 marks a library on the core ABI v1, whose sidecar the build writes. -->
     <EmuSenRustCrate Include="marsrt">
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MarsRT - N64\</Dir>
       <Core>MarsRT</Core>
@@ -24,6 +24,13 @@
       <Core>MoonRT</Core>
       <Console>the NES</Console>
       <Fallback>Moon (C#)</Fallback>
+      <CoreAbi>1</CoreAbi>
+    </EmuSenRustCrate>
+    <EmuSenRustCrate Include="nephrite">
+      <Dir>$(MSBuildThisFileDirectory)Sega\Nephrite - Genesis\</Dir>
+      <Core>Nephrite</Core>
+      <Console>the Genesis, the Sega CD and the 32X</Console>
+      <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="venusrt">

@@ -65,7 +65,7 @@
     <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.dll</EmuSenHostLibrarySuffix>
     <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('OSX'))">.dylib</EmuSenHostLibrarySuffix>
     <EmuSenHostLibrarySuffix Condition="'$(EmuSenHostLibrarySuffix)' == ''">.so</EmuSenHostLibrarySuffix>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**;Cores/*/*RT - */pgo/**;Cores/Shared/*/target/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**;Cores/*/*RT - */pgo/**;Cores/Shared/*/target/**;Cores/Sega/Nephrite - Genesis/target/**;Cores/Sega/Beryl - Shared CPUs/*/target/**</DefaultItemExcludes>
     <!-- A crate holding pgo/<name>.<this machine's Rust target>.profdata is built profile-guided unless this is false - see Mars_Native.md §6.17. -->
     <EmuSenPgo Condition="'$(EmuSenPgo)' == ''">true</EmuSenPgo>
     <_EmuSenHostArch>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</_EmuSenHostArch>
@@ -84,7 +84,7 @@
     <PropertyGroup>
       <CargoFound Condition="'$(CargoExitCode)' == '0'">true</CargoFound>
     </PropertyGroup>
-    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: @(EmuSenRustCrate->'%(Core)', ' and ') are not built, and their consoles run on the C# cores alone." />
+    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: @(EmuSenRustCrate->'%(Core)', ' and ') are not built, and their consoles run on the C# cores alone where one exists." />
   </Target>
 
   <!-- One cargo build per crate of RustCores.props, in its order; the first to fail stops the build. -->

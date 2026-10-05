@@ -571,7 +571,10 @@ ran. **The effort is predicted** (P3). A stage's oracle must be met, or its miss
 *Stage 0 was run on 2026-10-04 (`Nephrite_Native.md` §1). Stage 1's first step, the same day, passed every case of
 SingleStepTests' 68000 suite with every transaction (`Beryl_M68k.md` §4); its second, on 2026-10-05, built interrupts,
 reset, trace, the disassembler and the state, checked the decoder against TomHarte's instruction map, and measured the
-processor at 0.147 ms a frame of 68000 work (§5 there). The dispute step on the two suites' disagreements remains.*
+processor at 0.147 ms a frame of 68000 work (§5 there). Its dispute step, the same day, refereed the two
+suites' disagreements with fx68k and Nuked-MD (§6 there). Stage 2's first step, on 2026-10-05, built the Z80's
+instruction set, its interrupts, the disassembler, the state and the CP/M shim: every case of SingleStepTests' Z80
+suite, ZEXDOC and ZEXALL pass (`Beryl_Z80.md` §4-§6). The probe's work of §1.6 remains.*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

@@ -6427,3 +6427,65 @@ Not done, and why:
   budget, so neither was built.
 - **The bound stays an opt-in setting**, though it does not help the p99. It is kept because it is plan Q3's named
   lever, it lowers the mean, and a weaker machine than the quota proxy may be bound by the mean; its cost is stated.
+
+## 59. Blocker 3: `test_irqb` case 5, D-24 settled by elimination (2026-10-05)
+
+§41.10's blocker 3 proposed the referee's 65C816 interrupt sequence, in the logged step D-24 named. That step was
+taken at §41.16 and did not settle the entry: the referee strobes no read on an internal cycle, so it reads $2180 once
+where the ROM's console expectation is twice. The next rung, Mesen's source, is outside what this work may read. The
+entry was settled instead from the ROM's own five console expectations, with Mesen run as a black box to locate the
+access (`VenusRT_Disputes.md` D-24, 2026-10-05).
+
+### 59.1 The argument, and what was measured
+
+- **Measured: the second read costs no time.** Mesen's CPU trace through the probe and VenusRT's `cpu_trace` are the
+  same from power-on to the handler of case 5, instruction by instruction, with every instruction's master clocks
+  equal. The handler's record holds the same latched counters in both (H $06, $7A and $CF); Mesen's starts one byte
+  further on in WRAM. The extra WMDATA read is therefore made in a cycle VenusRT already times.
+- **Argued: two cycles qualify.** Only two internal cycles address $2180 there: CLC's second cycle (Table 5-7, row 19a,
+  PBR,PC+1) and the interrupt's second (row 22a, PBR,PC).
+- **Measured: case 1 excludes the interrupt's.** Its interrupt's internal cycle addresses $2137, and a read there
+  moves the latched H from 7 to 9 (D-24, 2026-10-02). §41.16's remark that a strobe on every internal cycle fits cases
+  1 to 4 overlooked that row 22a addresses the cycle at PBR,PC; it is struck through in the entry.
+- **Measured: how far the rule reaches.** Two trial builds, not kept: T1, the second cycle of row 19a's 25 opcodes and
+  XBA's; T2, every internal cycle but the interrupt's. Both pass all five cases. Over the corpus's 304 images and 17
+  games (the bench set and the goldens), each state hashed every 60 frames to frame 3,600 with no input:
+  - T1 changes `test_irqb` alone;
+  - T2 also changes VitorVilela7's `speed_test_v51` from frame 60, and Super Mario RPG at frame 3,600, where a read
+    of the SA-1's addresses catches the SA-1 up.
+
+  `speed_test_v51`'s VRAM at frame 3,600 is 42 bytes from Mesen's under either build, so no ROM here separates the two
+  readings by an oracle.
+
+### 59.2 What was built
+
+The narrowest reading, T1, restricted to the B bus. The internal second cycle of a one-byte implied instruction strobes
+a read of PBR,PC+1 when that address is a B-bus register ($2100-$21FF in banks $00-$3F and $80-$BF). The byte is
+dropped and the MDR kept, as anomie's open-bus document says of internal cycles. In code it is `Bus::implied_cycle`,
+whose default is an ordinary internal cycle, so only the S-CPU's bus answers it: the single-step harness and the
+SA-1's 65C816 are unchanged. Open, and named in the entry:
+- whether other internal cycles strobe too;
+- whether the A bus and the S-CPU's registers at $4000-$43FF see the strobe;
+- XBA's third cycle.
+
+### 59.3 Checks (measured 2026-10-05)
+
+| Check | Result |
+|---|---|
+| `test_irqb` | passes, all five cases, with VenusRT's boot program and with the tester's image |
+| The corpus and 17 games, state hashes every 60 frames to 3,600 | only `test_irqb` differs from the previous commit's; every hash equals T1's |
+| The 65816 single-step suite | `the_cpu_through_the_whole_suite` passes: D-1, D-2 and D-3's cases and no others |
+| The crate | 137 of 137, among them `an_implied_instructions_internal_cycle_reads_a_b_bus_register`, shown failing with the read disabled |
+| WiseMan, VenusRt, CoreAbi, Snes, CoreDebug and Conform filters, the goldens against Mesen included | 121 of 121; all 36 anchors keep their recorded outcomes and hashes |
+| `frame_cost`, best of three over 1,200 frames, base and new interleaved three times under the timing lock (load 2.0-2.8) | Super Mario World 1.538-1.545 against 1.530-1.539 ms; A Link to the Past 1.401-1.406 against 1.398-1.404; Super Mario RPG 2.089-2.106 against 2.096-2.120; Yoshi's Island 1.380-1.385 against 1.383-1.390. Within the runs' spread: no cost |
+
+The corpus runner itself was not rerun. Its VenusRT columns are functions of the machine's state and pictures at
+frames 1,800 and 3,600, and those hashes are unchanged on every image but `test_irqb`, as §58.2 argued for its levers.
+
+### 59.4 G1 after blocker 3
+
+**114 of Mesen's 117** self-grading passes with the tester's images, and 113 without, against §41.19's 113 and 112.
+`spc_smp` is still the one ROM excepted without images. Every C# Venus pass passes. Left:
+- `spc_dsp6` (§41.17);
+- `test_timer_stop2` (D-26);
+- `blobs/test_hdmatiming` (D-40's test 2, one dot).

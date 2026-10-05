@@ -74,7 +74,7 @@ fn replacement(stem: Option<&str>) -> Replacement {
             cost: "Without the image, VenusRT's open replacement for the DSP-2 runs: every command Dungeon Master gives answers as the chip does, to the cycle, and the game runs as with the image; the data ROM transfer gives zeros, the scaling command's timing is estimated, and counts beyond the chip's buffers are not reproduced (VenusRT_Native.md §42).".into(),
         },
         Some("st010") => Replacement::Accuracy {
-            cost: "Without the image, VenusRT's open replacement for the ST010 runs: its mailbox to the cycle, the sort, scale, distance and multiply commands exact, the rotation command within one unit, the raster command without its perspective, and the driver simulation not computed yet, so the opponents' cars do not move as with the image; the battery file is the same on both (VenusRT_Native.md §43).".into(),
+            cost: "Without the image, VenusRT's open replacement for the ST010 runs: its mailbox to the cycle, the sort, scale, distance and multiply commands exact, the angle command and the driver simulation exact but where a bearing falls on two entries of the chip's angle table, the rotation command within one unit, and the raster command without its perspective, so F1 ROC II's road is drawn flat and the opponents' cars leave the image's paths some seconds into a race; the battery file is the same on both (VenusRT_Native.md §43, §54).".into(),
         },
         Some("dsp3") => without("DSP-3"),
         Some("dsp4") => Replacement::Accuracy {

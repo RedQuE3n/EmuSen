@@ -821,6 +821,63 @@ mod tests {
         }
     }
 
+    // VenusRT_Native.md §54: 01h and 05h agree in value and time, but where the bearing falls on one of the two angle
+    // entries the formula does not reproduce; -32768 never completes on either engine.
+    #[test]
+    fn the_st010_driver_and_angle_agree_with_the_image() {
+        use super::super::dsphle::Program;
+        let Some(idle) = chip("st010") else { return };
+        let fresh = || {
+            let mut h = Hle::new(Program::St010);
+            st_ready(&mut h, &mut Host::steady()).unwrap();
+            h
+        };
+        let host = || Host { cap: 100_000, ..Host::steady() };
+        let (mut lle, mut hle) = (idle.clone(), fresh());
+        let mut p = Pcg::new(0x5754);
+        let (mut cases, mut angle) = (0, 0);
+        for command in [0x05u8, 0x01, 0x0D] {
+            for k in 0..768 {
+                let word = |p: &mut Pcg| match p.next() % 3 {
+                    0 => p.word() & 0xFF,
+                    1 => (p.word() & 0xFF).wrapping_neg(),
+                    _ => p.word(),
+                };
+                let mut set: Vec<(usize, u16)> = if command == 0x01 {
+                    (0..2).map(|w| (w, word(&mut p))).collect()
+                } else {
+                    [0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70].iter().map(|&w| (w, word(&mut p))).collect()
+                };
+                if command != 0x01 && k % 2 == 0 {
+                    set[0].1 = set[3].1.wrapping_add((p.next() % 300) as u16).wrapping_sub(150);
+                    set[1].1 = set[5].1.wrapping_add((p.next() % 300) as u16).wrapping_sub(150);
+                }
+                if k % 97 == 0 {
+                    set[0].1 = if command == 0x01 { 0x8000 } else { set[3].1 ^ 0x8000 };
+                }
+                for _ in 0..p.next() % 9 {
+                    lle.tick();
+                    hle.tick();
+                }
+                let (x, y) = (mailbox(&mut lle, &mut host(), command, &set), mailbox(&mut hle, &mut host(), command, &set));
+                cases += 1;
+                if x.ram[8] != y.ram[8] {
+                    assert_eq!(x.ram[8].abs_diff(y.ram[8]), 0x100, "{command:02X} {set:04X?}");
+                    angle += 1;
+                } else {
+                    let differ: Vec<usize> = (0..x.ram.len()).filter(|&w| x.ram[w] != y.ram[w]).collect();
+                    assert!(x.latency == y.latency && differ.is_empty(), "{command:02X} {set:04X?}: {:?}/{:?}, words {differ:03X?}", x.latency, y.latency);
+                }
+                if x.latency.is_none() {
+                    (lle, hle) = (idle.clone(), fresh());
+                } else {
+                    hle.dsp.ram.copy_from_slice(&x.ram);
+                }
+            }
+        }
+        assert!(angle * 100 <= cases, "{angle} of {cases} cases on the angle's two entries");
+    }
+
     // VenusRT_Native.md §44: Inverse within 2 with its timing exact; the DSP-1B's Distance within 4 below 2^30; the
     // attitude family within 24 after an Attitude, against both images.
     #[test]

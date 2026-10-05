@@ -342,6 +342,12 @@ offsets.
 > S-CPU has read the word it writes to DR at power-on**; without that read no command completes. fullsnes's
 > "RAM[0010h]" for 00h is the chip's word 0010h, the mailbox, which every command clears on completion: 00h changes
 > nothing else. The busy flag is polled every 3 cycles. F1 ROC II uses all seven computing commands, 02h-08h.
+>
+> *Amended 2026-10-04* (measured, `VenusRT_Native.md` §54). 01h is the angle of the vector (X, Y), measured as
+> atan2(-X, -Y) to a 256th of a turn from a 32-by-32 table after normalisation. 05h is one driver's step toward a
+> waypoint: the bearing by 01h's routine, a turn of 0280h, a speed rule, a step along the heading, and a gate that
+> passes to the next waypoint. Words 60h-70h are its waypoint, position, heading, speed, acceleration, wanted speed,
+> gate and next waypoint. Both are built, exact but at two entries of the angle table.
 
 The battery file is the chip's RAM, read and written as now (`VenusRT_Native.md` §33.1). The replacement must write
 exactly the RAM the program writes, work areas included, or a save written under one engine differs from one written

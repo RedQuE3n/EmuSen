@@ -5690,3 +5690,133 @@ not, 05h returns to the named loss of §43.1.
   and they reach the S-CPU in the frame of the first 05h. The race's cars nevertheless follow the image's for some
   hundreds of frames.
 - **P54.4.** 01h is exact on every seeded case except at the same two entries.
+
+### 54.3 Chosen, built, and the grade (measured 2026-10-04)
+
+**The choice.** The family of §54.2 was ranked in the probe cache's Python model against the image's outputs: 40,000
+seeded 05h cases (value and time) and the 98,150 traced ones (value only, the trace's times being the game's).
+
+| Member | Seeded exact | Traced exact | Together |
+|---|---|---|---|
+| A1 half up, A2 set to 1, F1 ⌊v'/256⌋, F2 floor, F3 h' >> 8, F4 at least | 39,955 | 98,038 | **137,993** |
+| the same, F4 above | 39,954 | 98,038 | 137,992 |
+| A2 the shifted-out bit carried | 22,966 | 73,886 | 96,852 |
+| A1 raised | 20,380 | 61,881 | 82,261 |
+| A1 floored | 20,690 | 61,426 | 82,116 |
+
+Every member with F1, F2 or F3 changed ranks below these. F4 is a choice of time alone, and its two members differ by
+one seeded case, under §52.8's 1%; the traced traffic, which carries no time, cannot separate them. A set aimed at the
+boundary does: 3,336 cases with the wanted speed within 3 of the sum, 333 of them on it, of which the "at least"
+member gives 3,336 exactly and the "above" member 3,013. The first member is built. For 01h alone, over 26,611 seeded
+cases (the whole square from -40 to 40, 20,000 drawn over every magnitude, 50 with -32768), half up with values set to
+1 gives 26,596 exact, the carried bit 17,042, and the floored and raised roundings 14,649 and 15,055.
+
+**Built** in `chips/st010.rs`:
+
+- `bearing`, 01h's routine, with its words, its time and the case that never completes;
+- `drive`, 05h's step, calling it;
+- the angle table, generated at first use from the formula, never a literal (`atan_n`, `atan_image`).
+
+01h, 05h and their mirrors take their time from these in place of the constants §43 gave the frame. A command that
+never completes keeps the busy bit set and its due edge at the end of time, so the state needs nothing new and its
+version stays 22. `st010_tables.py --atan` is the independent generator. The crate test
+`the_st010_angle_equals_the_independent_generator` holds the table to it. `the_st010_angle_and_driver_follow_their_formulas`
+holds the formulas with no image. `the_st010_driver_and_angle_agree_with_the_image` holds 2,304 seeded cases on the
+image, value and time, but at the angle's entries, which it bounds at 1%. `dsp_stgrade` now gives 05h's words, counts
+a command that never completes on both engines, starts both afresh after one, and carries the image's RAM into the
+next case, so that a difference is not counted twice.
+
+**The grade** (`dsp_stgrade`, seeded phases and inputs, 8 threads):
+
+| Code | Cases | Never complete, on both | RAM differs | of which word 8 differs | Latency differs |
+|---|---|---|---|---|---|
+| 05h | 65,536 | 598 | 94 (0.14%) | 94 | 2, both among the 94 |
+| 01h | 65,536 | 6,394 | 48 (0.07%) | 48 | 0 |
+| 0Dh, 09h, 15h, F9h, the mirrors | 4,000 each | | 0 | | 0 |
+| 03h, 06h, 07h, 08h, again | 65,536 or 4,000 | 0 | as §43.2 and §48.2 | | 0 |
+
+**P54.1 holds**, and so does **P54.4**: every difference is a bearing one 256th of a turn from the image's, the two
+entries of §54.1, and through 05h the turn, speed and step that follow from it. **P54.2 holds exactly**: on the traced
+traffic, 98,038 of 98,150 are exact, and the 112 misses are all at those entries. In the first five misses (frames
+1,246 to 1,337) only words 8 and 67h differ, and the first that changes a turn, and so a position, is in frame 1,366.
+
+**firmwarecheck** (`dsp_oracle tables` writes `st010.atan.bin`, byte-identical to `st010_tables.py --atan`'s):
+
+| Against | Plain | `--forced` |
+|---|---|---|
+| the data half (4,096 bytes) | 548 of 2,048 bytes equal at the same offset (26.8%); common runs of 659 and 1,341 bytes; FAIL, the expected outcome of a formula found in the data | residual 0; **PASS**; formula coverage 3,199 of 4,096 bytes (78.1%) |
+| the program half (49,152) | 25.7% equal; longest run 65 bytes; FAIL | residual 0; **PASS**; coverage 96.9% |
+
+The two long runs in the data half end at entries 329 and 1,000 of the formula image, which are (10, 9) and (31, 8):
+the program's table is the formula broken at exactly the two entries §54.1 found, as §43.2 found for its sine. The
+coverages are upper bounds. The table's words have zero low bytes and its first row is zero, so runs over zero bytes
+in either half count.
+
+### 54.4 F1 ROC II in lockstep (measured 2026-10-04)
+
+`dsp_lockstep` now reports each space's first differing frame. `dsp_cars` is new. It runs the two machines apart from
+power-on under one pad script, records the position each completed 05h leaves, and compares the n-th 05h of a frame on
+one machine with the n-th on the other. 7,200 frames from power-on with no input, the attract mode's four demo races,
+before (WiseMan f4ec8031, built in a throwaway worktree and removed) and after:
+
+| | Before | After |
+|---|---|---|
+| First differing frame: chip RAM, picture | 1,019, 1,025 | 1,019, 1,025 |
+| WRAM, the APU's RAM, the clock | 1,020 | **1,367** |
+| OAM, VRAM, CGRAM | 1,021, 1,046, 1,285 | 1,989, 3,623, 5,730 |
+| Pictures equal | 3,284 of 7,194 | 3,284 of 7,194 |
+| Pixels differing per frame, median, 95th percentile | 59.7%, 73.0% | 28.6%, 58.6% |
+| Sprites alike on both in frames that differ: compared, placed alike, unmatched | 15,262; 248; 29,078 | 41,536; 41,236 (99.3%); 197 |
+| Drivers placed alike, frames 1,200-1,499 | 0 of 6,832, median 1,552 units off | 7,190 of 7,493; largest 7.8 units |
+
+**P54.3 is false in its first half.** The chip's RAM parts at frame 1,019, when 07h's arrays lose their perspective
+(§48.2). Those arrays reach the picture from frame 1,025 but never WRAM, and the game's state stays identical to the
+image's until frame 1,367. That frame follows the first 05h whose bearing falls on one of the two entries and changes a
+turn (frame 1,366, above). **Its second half holds.** Selected windows of 300 frames over the demo races; the whole
+table is `cars-f1roc2.txt`:
+
+| Frames | Drivers compared | Alike | Within 16 units | 95th percentile | Largest |
+|---|---|---|---|---|---|
+| 1,200-1,499 | 7,493 | 7,190 | 7,493 | 0 | 7.8 |
+| 1,500-1,799 | 7,500 | 6,762 | 7,241 | 2.7 | 42.2 |
+| 1,800-2,099 | 7,506 | 6,498 | 7,206 | 2.8 | 38.5 |
+| 2,100-2,399 | 2,992 | 2,211 | 2,801 | 30.2 | 2,423.5 |
+| 3,600-3,899 | 7,491 | 6,849 | 7,454 | 1.2 | 274.1 |
+| 5,700-5,999 | 7,505 | 5,507 | 6,971 | 36.8 | 2,555.1 |
+
+Each demo race starts alike: the windows that open the second, third and fourth races (frames 2,700-3,299,
+4,800-5,099 and 6,600-7,199) are alike throughout. Within a race most drivers stay within a few units of the image's.
+The largest distances come in windows where a frame holds a different count of 05h on the two machines, so
+that the n-th of one is another driver's. Before 05h was built, no driver was ever placed alike after frame 1,019.
+
+**With a player** (a script of 12 Start presses through the menus to Moon City's qualifying, then B and A held and
+the pad steered, 2,700 frames): WRAM, VRAM, CGRAM, OAM, the APU's RAM and the clock **never part**. Only the chip's RAM
+(frame 1,468) and the picture (frame 1,474) differ, and the speed and lap times on the screen are the image's frame
+for frame. Qualifying has no opponents. The pictures are in the cache's `shots/`.
+
+**Does it play?** Yes, as a game: its menus, qualifying and races run with the game's state identical to the image's
+until a driver's bearing falls on one of the two angle entries. After that, the opponents drive the image's course
+within a few units for most of a race, and the player's car is the image's. **It does not look like the game.** The
+road is drawn as a flat plane seen from above, not in perspective, because 07h's perspective is still a named loss
+(§48.2). That loss, not 05h, is now what separates F1 ROC II on the replacement from F1 ROC II on the image. The
+replacement's cost text says so.
+
+### 54.5 What remains
+
+- **The angle's two entries**, (10, 9) and (31, 8), are a named loss as the sine's are. The table is the formula
+  everywhere else, and firmwarecheck shows the program's own table broken at those two places.
+- **07h's perspective** (§48.2) is the largest loss left in F1 ROC II.
+- **08h's sine** (§43.2) is unchanged.
+
+### 54.6 What is put for decision
+
+1. **R1 and 05h's constants.** §54.2 lists the integers 05h's model takes from the oracle: the gate's half-widths,
+   the waypoint word's masks, the 13-bit position, the turn step 0280h, the speed rule's threshold 1000h and shift 4,
+   and the move's shifts. Each holds exactly and none was fitted by error. The amended R1 admits only the DSP-1's
+   limit angle, though, and the black-box characterisation of plan §1.3 and Q4 cannot work without such constants.
+   The tester may:
+   - admit them as the structure of a command no document describes, recorded as here;
+   - or not, and 05h and 01h return to the named loss of §43.1, which costs F1 ROC II every opponent's line from
+     frame 1,019.
+2. **F4's tie.** It was broken by a set aimed at the boundary, which neither §52.4's rank nor §52.8's tie rule names.
+   It changes 05h's time by one cycle when the sum equals the wanted speed, and no value.

@@ -60,6 +60,8 @@ struct Pair {
     sprites_unmatched: u64,
     name: String,
     shots: Vec<u64>,
+    /// Each space's first differing frame.
+    parted: std::collections::BTreeMap<&'static str, u64>,
 }
 
 /// The on-screen sprites of an OAM image by index: (x, y, tile and attributes), from the low and high tables.
@@ -189,6 +191,10 @@ impl Pair {
             ("DSPRAM", a.sys.cart.dsp.as_ref().is_none_or(|(d, _)| !d.st()) || a.sys.cart.dsp.as_ref().map(|(d, _)| d.ram()) == b.sys.cart.dsp.as_ref().map(|(d, _)| d.ram())),
         ];
         let differ: Vec<&str> = spaces.iter().filter(|s| !s.1).map(|s| s.0).collect();
+        let frame = self.lle.sys.timing.frame;
+        for space in &differ {
+            self.parted.entry(space).or_insert(frame);
+        }
         let state = differ.is_empty() && state_without_chip(a) == state_without_chip(b);
         if self.first.is_none() && (!differ.is_empty() || !state) {
             let what = if differ.is_empty() { "state".to_string() } else { differ.join(", ") };
@@ -316,6 +322,7 @@ fn main() {
         sprites_unmatched: 0,
         name: name.clone(),
         shots,
+        parted: Default::default(),
     };
     if let Some(path) = a.get(3) {
         script(&mut p, &std::fs::read_to_string(path).expect("the script"), frames);
@@ -335,6 +342,8 @@ fn main() {
             (Some(_), None) => "states not equal again".to_string(),
         }
     );
+    let parted: Vec<String> = p.parted.iter().map(|(s, f)| format!("{s} {f}")).collect();
+    let _ = writeln!(out, "  each space's first differing frame: {}", if parted.is_empty() { "none".to_string() } else { parted.join(", ") });
     let mut shares = p.pixel_shares.clone();
     shares.sort_by(f64::total_cmp);
     let at = |v: &[f64], q: f64| v.get(((v.len() as f64 - 1.0) * q) as usize).copied().unwrap_or(0.0) * 100.0;

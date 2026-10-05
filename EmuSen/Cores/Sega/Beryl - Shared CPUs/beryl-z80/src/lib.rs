@@ -1,16 +1,18 @@
 //! Beryl's Zilog Z80, written from Zilog's Z80 CPU User Manual and "The Undocumented Z80 Documented", and graded by
-//! SingleStepTests' Z80 suite. The Genesis's sound CPU, and later the Master System's and the Game Gear's. The
-//! interface is Beryl_Z80.md §2; the oracle §3.
-//!
-//! Stage 0: the bus, the registers and the step's signature. No instruction executes until stage 1 (`BUILT`).
+//! SingleStepTests' Z80 suite, ZEXDOC and ZEXALL. The Genesis's sound CPU, and later the Master System's and the Game
+//! Gear's. The interface is Beryl_Z80.md §2; the oracle §3; the build §4-§6.
 
 pub use emusen_native::debug::{Observer, Unobserved};
 
 #[cfg(test)]
+mod boundary;
+#[cfg(test)]
+mod cpm;
+pub mod disasm;
+mod exec;
+mod state;
+#[cfg(test)]
 mod singlestep;
-
-/// Whether the processor executes; the single-step suite skips while it is false.
-pub const BUILT: bool = false;
 
 /// What the processor's pins meet. The bus owns the clock: each machine cycle reports its T-states through the call
 /// that performs it, and the bus adds the wait states WAIT asks for; the processor keeps no clock of its own.
@@ -28,8 +30,8 @@ pub trait Bus {
     fn int_line(&mut self) -> bool;
     /// Whether NMI has fallen since it was last asked.
     fn nmi_edge(&mut self) -> bool;
-    /// The interrupt acknowledge cycle: the byte a device places on the data bus (mode 0's instruction, mode 2's
-    /// vector), 0xFF from an open bus.
+    /// The interrupt acknowledge cycle, an M1 with IORQ and its two automatic wait states, six T-states the bus counts:
+    /// the byte a device places on the data bus (mode 0's instruction, mode 2's vector), 0xFF from an open bus.
     fn acknowledge(&mut self) -> u8;
 }
 
@@ -68,16 +70,17 @@ pub enum Step {
     Interrupt(u32),
     /// HALT repeats its NOP until an interrupt.
     Halted,
+    /// The observer stopped the step before the instruction ran: its reasons.
+    Observed(u32),
 }
-
-/// The processor cannot step yet.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NotBuilt;
 
 #[derive(Clone, Debug, Default)]
 pub struct Z80 {
     pub regs: Registers,
     pub halted: bool,
+    /// The processor number the observer is told, and the space its stores are reported in.
+    pub processor: usize,
+    pub space: u32,
 }
 
 impl Z80 {
@@ -85,12 +88,13 @@ impl Z80 {
         Z80::default()
     }
 
-    pub fn step<B: Bus>(&mut self, bus: &mut B) -> Result<Step, NotBuilt> {
+    /// One instruction through `bus`.
+    pub fn step<B: Bus>(&mut self, bus: &mut B) -> Step {
         self.step_observed(bus, &mut Unobserved)
     }
 
     /// The step a debugger watches: `observer.before` at the instruction boundary, stores and calls as they happen.
-    pub fn step_observed<B: Bus, O: Observer>(&mut self, _bus: &mut B, _observer: &mut O) -> Result<Step, NotBuilt> {
-        Err(NotBuilt)
+    pub fn step_observed<B: Bus, O: Observer>(&mut self, bus: &mut B, observer: &mut O) -> Step {
+        exec::step(self, bus, observer)
     }
 }

@@ -1,6 +1,6 @@
 //! The single-step harness over SingleStepTests' Z80 suite (`z80/v1`): registers, memory, the I/O transactions and
-//! the bus T-state by T-state. The corpus is found through `EMUSEN_BERYL_CORPUS`; without it, or while the processor
-//! is not built, the corpus tests pass unrun. Beryl_Z80.md §3.1 is the protocol.
+//! the bus T-state by T-state. The corpus is found through `EMUSEN_BERYL_CORPUS`; without it the corpus tests pass
+//! unrun. Beryl_Z80.md §3.1 is the protocol.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -336,7 +336,7 @@ mod tests {
             r
         });
         assert!(!dropped.cycles);
-        assert!(!grade(&c, &mut processor).passed(), "an unbuilt processor cannot pass");
+        assert!(grade(&c, &mut processor).passed(), "the processor fails the inline case");
     }
 
     fn corpus() -> Option<Vec<PathBuf>> {
@@ -383,12 +383,13 @@ mod tests {
 
     #[test]
     fn the_processor_against_the_suite() {
-        if !crate::BUILT {
-            eprintln!("the Z80 is not built yet: not run");
-            return;
-        }
         let Some(files) = corpus() else { return };
-        let t = total(&run_suite(&files, None, processor));
+        let reports = run_suite(&files, None, processor);
+        let t = total(&reports);
         eprintln!("{SUITE}: {} of {} (registers {}, memory {}, cycles {})", t.passed, t.cases, t.registers, t.memory, t.cycles);
+        for (f, r) in reports.iter().filter(|(_, r)| r.passed != r.cases).take(40) {
+            eprintln!("  {f}: {} of {}; {}", r.passed, r.cases, r.first_failure.as_deref().unwrap_or(""));
+        }
+        assert_eq!(t.passed, t.cases, "a case fails");
     }
 }

@@ -1638,3 +1638,67 @@ their data.
   12); an anchor on a deterministic scene would replace it. Argued from the measurements above.
 - Pinned by: G5's recorded hash for the anchor.
 
+### D-45. PPU: a mid-line INIDISP brightness write takes effect two dots later than VenusRT applies it (`test_hello`)
+- Opened: 2026-10-04, by G3 (`VenusRT_Native.md` §41.5): byuu's `test_hello` draws "HELLO" in sheared letters by
+  writing INIDISP's brightness at timed points in each line (`stx $00` and `sty $00` with D at $2100). VenusRT's
+  picture is 809 pixels from Mesen's at frame 3,600; VRAM is equal.
+- Measured 2026-10-05: on every line that differs (59), each brightness edge in VenusRT's picture lies exactly 2 pixels
+  left of Mesen's (42 lines with two edges, 17 with four), and no line differs in any other way. VenusRT applies a
+  brightness write at the span the write lands in; Mesen shows it two dots later.
+- Documents read: none states the latency. This is the INIDISP write-during-display behaviour that plan §5.1 names as
+  a loss (with `inidisp_brightness_delay`, whose subject is the same delay), kept unmodelled by plan §9's Q10 until a
+  golden needs it; none of G5's 36 anchors does.
+- Referee: not read. Mesen's source: none.
+- Conclusion, 2026-10-05: `test_hello` joins plan §5.1's named INIDISP loss, as `test_noise` did (§41.16). Measured as
+  a 2-dot latency; not built.
+- Pinned by: the corpus runner's picture column for `test_hello`.
+
+### D-46. PPU: forced blank set during H-blank leaves the next line without sprites (Motive's `HblankEmuTest`)
+- Opened: 2026-10-04, by G3: VenusRT draws "Incorrect Behaviour -Emulator" with no sprites; Mesen draws parts of a
+  sprite word over it on alternate lines (622 pixels, 41 lines). VRAM is equal.
+- Documents read: the ROM's own description, posted by its author with it (the corpus's `Motive-test-ROMs/README.md`):
+  the test checks "what happens to sprites as you force blank during h-blank. It should not load them, causing them to
+  disappear", with the caveat that "there are many quirks surrounding this and that test doesn't really show those".
+  anomie's "SPRITES" puts each line's sprite evaluation and tile loads in the line before it. anomie's register
+  document, INIDISP, adds that when forced blank ends mid-line "the internal rendering buffers will not have been
+  updated during force blank" and that "OBJ will be glitched for the entire scanline", a current theory, not a
+  measurement.
+- VenusRT: a line's sprites are chosen and their tiles loaded only when the PPU is not in forced blank at that point,
+  so a forced blank held across the H-blank leaves the next line with none. That is the behaviour the ROM's author
+  describes for the console. Mesen loads some of them.
+- Referee: not read. Mesen's source: none.
+- Conclusion, 2026-10-05: no change. VenusRT's picture is the one the ROM's author describes for the console; argued
+  from that description, the only console account, with the author's own caveat. Mesen is recorded as differing.
+- Pinned by: the corpus runner's picture column for `HblankEmuTest`.
+
+### D-47. DMA and PPU: an HDMA burst of forced blank, VRAM data and unblank that meets a line's start (93143's `hvdma`)
+- Opened: 2026-10-04, by G3, after D-40: VenusRT's VRAM differs from Mesen's in 16 bytes at frame 3,600 and its
+  picture in 252 pixels, on lines 1 and 107, where the eight-channel burst meets the start of a line.
+- Documents read: the ROM's README (the author's forum post) and its console photograph, `expected-output.jpg`. The
+  photograph shows the tile change halfway down the screen and cannot resolve a single line. The post adds that on
+  the author's console "the sprite layer on the line following the data burst ... shows white flickering segments",
+  which neither engine models and which would change those lines anyway.
+- Referee: D-40's reading of the HDMA machine applies; no further reading.
+- Mesen's source: none.
+- Conclusion, 2026-10-05: no oracle at the resolution of the difference. The 16 bytes are the burst's first or last
+  bytes landing in VRAM inside or outside the forced blank, by a few clocks of D-40's run timing, which the console
+  tables of `test_hdmasync` and `test_hdmatiming` settle elsewhere. Recorded as a difference without an oracle; no
+  change.
+- Pinned by: the corpus runner's VRAM and picture columns for `hvdma`.
+
+### D-48. Multiplier: what RDMPY holds when WRMPYB is written again 2 to 9 cycles into a product (undisbeliever's `wrmpyb-in-flight`)
+- Opened: 2026-10-04, by G3: the printed table differs from Mesen's in digits for 3 to 5 cycles between the writes
+  (VRAM 25 bytes, 602 pixels).
+- Documents read: fullsnes and anomie describe the multiplier's 8-cycle product and leave a rewrite in flight unstated
+  (plan §2.2's thin areas). The ROM's source states the test and records no console result; its repository has none.
+- VenusRT: the step rule is jonasquinn's `muldiv_tests` notes (a product adds the shifter to RDMPY when RDDIV's low bit
+  is set, one step a cycle). A second WRMPYB write clears RDMPY and stores the operand without restarting a product in
+  flight. That last part has no source and is argued as the plainest reading of a running shifter.
+- Referee: `Venus_Referee.md` §0 rates the referee's multiply unit as following emulators' rules (nearly no support);
+  not read.
+- Mesen's source: none.
+- Conclusion, 2026-10-05: no oracle; recorded as a difference with Mesen. A console run of the ROM would settle it.
+  Of the games, only NHL '94 was measured: over 2,200 frames it writes WRMPYB and WRDIVB about 17,000 times and never
+  during a product, nor reads a result during one (`VenusRT_Native.md` §63).
+- Pinned by: the corpus runner's VRAM and picture columns for `wrmpyb-in-flight`.
+

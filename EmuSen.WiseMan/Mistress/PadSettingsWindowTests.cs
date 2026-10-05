@@ -80,6 +80,8 @@ namespace EmuSen.WiseMan.Mistress
 
         public static TheoryData<double> EveryShorter => new(Enumerable.Range(0, 17).Select(h => (double)h));
 
+        public static TheoryData<double> MuchShorter => new() { 60, 61, 62, 66, 70, 74, 75, 80 };
+
         private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
         // Up from the top wraps to the bottom, so any entry is found by walking down from the first.
@@ -571,6 +573,11 @@ namespace EmuSen.WiseMan.Mistress
             Stop(window);
             window.Close();
         }, default);
+
+        // The same walk under a status bar two lines taller, where a first search from the category found no path from 61 to 74 and at 80 pixels shorter - see VenusRT_Native.md §66.
+        [Theory]
+        [MemberData(nameof(MuchShorter))]
+        public Task A_long_preset_s_sliders_are_reached_under_a_much_taller_status_bar(double tallerBar) => A_long_preset_s_sliders_on_the_sheet_are_reached_and_walked_by_pad(tallerBar);
 
         // The parameter search on the sheet: reached by pad, typed with the on-screen keyboard, and the one row it leaves moved by pad - see EmuSen_Settings_Reference.md §4.48.10.
         [Fact]

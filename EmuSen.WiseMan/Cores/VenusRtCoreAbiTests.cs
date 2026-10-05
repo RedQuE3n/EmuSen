@@ -84,14 +84,17 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_snes_row_offers_venusrt_through_discovery_with_venus_the_default()
+        public void The_snes_row_offers_venusrt_through_discovery_as_the_default_with_venus_a_choice()
         {
             if (Discovered is null) return;
             Assert.False(CoreCatalog.IsRegisteredEngine(Engine));
             var row = CoreCatalog.EngineFor("SNES")!;
-            Assert.Equal(new[] { CoreCatalog.VenusEngine, Engine }, row.Choices);
-            Assert.Equal(CoreCatalog.VenusEngine, row.Default);
+            Assert.Equal(new[] { Engine, CoreCatalog.VenusEngine }, row.Choices);
+            Assert.Equal(Engine, row.Default);
+            Assert.Equal(Engine, CoreCatalog.EngineChosen("SNES", null));
+            Assert.Equal(CoreCatalog.VenusEngine, CoreCatalog.EngineChosen("SNES", CoreCatalog.VenusEngine));
             Assert.IsType<VenusCore>(CoreFactory.Create("game.sfc"));
+            Assert.IsType<VenusCore>(CoreFactory.Create("game.sfc", engine: CoreCatalog.VenusEngine));
             using var engine = Assert.IsType<CoreEngine>(CoreFactory.Create("game.sfc", engine: Engine));
             Assert.Equal("venusrt", engine.Info.Id);
             Assert.Null(CoreFactory.EngineNotice("game.sfc", Engine, engine));
@@ -112,7 +115,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(library, File.ReadAllBytes(found.Sidecar.LibraryPath).Concat(new byte[] { 0 }).ToArray());
             File.Copy(CoreSidecar.PathFor(found.Sidecar.LibraryPath), CoreSidecar.PathFor(library));
             CoreDiscovery.UseDirectories(new[] { dir });
-            Assert.Equal(new[] { CoreCatalog.VenusEngine, Engine }, CoreCatalog.EngineFor("SNES")!.Choices);
+            Assert.Equal(new[] { Engine, CoreCatalog.VenusEngine }, CoreCatalog.EngineFor("SNES")!.Choices);
             ICore swapped = CoreFactory.Create("game.sfc", engine: Engine);
             Assert.IsType<VenusCore>(swapped);
             string notice = CoreFactory.EngineNotice("game.sfc", Engine, swapped)!;
@@ -122,7 +125,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(CoreLibrary.IsOpen(library));
         }
 
-        // VenusRT_DspHle.md §7.3: a DSP-1 cartridge and an empty firmware folder; nothing is missing, the game is created on the replacement, its state carries the replacement's tag, machine info says so, and the notice names the cost.
+        // VenusRT_DspHle.md §7.3: a DSP-1 cartridge and an empty firmware folder; nothing is missing, the game is created on the replacement, its state carries the replacement's tag, machine info says so, and only a chip with none is noticed (VenusRT_Native.md §66).
         [Fact]
         public void A_dsp_cartridge_runs_on_the_replacement_with_no_firmware()
         {
@@ -136,7 +139,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement"), new CoreFirmwareSource(2, "replacement") }, engine.Machine.Info.Firmware);
             Assert.DoesNotContain(engine.Machine.Info.Processors, p => p.Name == "DSP");
             Assert.Contains("Coprocessor.DspHle", engine.Machine.Layout(0));
-            Assert.StartsWith("VenusRT's open replacement for dsp1b.rom - Without the image", engine.FirmwareNotice);
+            Assert.Null(engine.FirmwareNotice);
+            Assert.StartsWith("Without the image", engine.GetFirmwareRequirements(rom).Single(r => r.FileName == "dsp1b.rom").ReplacementCost);
             string gear = Path.Combine(_root, "gear.sfc");
             File.WriteAllBytes(gear, SyntheticRom.BuildNecDsp("TOP GEAR 3000"));
             Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(gear, Engine));
@@ -162,7 +166,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(("spc700.rom", 64, false, "accuracy"), (request.FileName, request.Size, request.Required, request.ReplacementEffect));
             engine.LoadRom(rom);
             Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement") }, engine.Machine.Info.Firmware);
-            Assert.StartsWith("VenusRT's open replacement for spc700.rom", engine.FirmwareNotice);
+            Assert.Null(engine.FirmwareNotice);
+            Assert.StartsWith("Without the image, VenusRT's own boot program runs", request.ReplacementCost);
             byte[] image = new byte[64];
             (image[0], image[1], image[62], image[63]) = (0x2F, 0xFE, 0xC0, 0xFF);
             File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "spc700.rom"), image);

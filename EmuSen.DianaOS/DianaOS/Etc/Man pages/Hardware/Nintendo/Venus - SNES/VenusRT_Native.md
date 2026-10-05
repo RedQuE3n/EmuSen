@@ -6889,3 +6889,187 @@ Frames with the SPC700 in the boot program, from power-on, under the old program
 | WiseMan, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters, the goldens against Mesen included | 121 of 121, after eleven anchors' hashes were re-recorded. Every anchor keeps its outcome. Yoshi's Island's lags move from +1, -10 and -10 to -4, -5 and -5, Metal Combat's from -6, -5 and -5 to -2, -1 and 0, and Super Mario RPG's attract lead from 40 to 41 frames at 1200 (42 at 2400 as before) |
 | Cost | none to measure: the program runs only until a game's driver starts |
 
+
+## 65. Stage 9, first half: VenusRT the SNES default (2026-10-05)
+
+*Decided by the tester 2026-10-05:* "You may make venus the default." The default flips with every gate of §63.5 in its
+state there. G6's run on the handheld on battery is still owed, and stays recorded as owed. C# Venus is removed only
+after plan §7's four weeks of play as the default with no open regression.
+
+### 65.1 What changed
+
+- **The default, through discovery.** `CoreCatalog` gains a table of discovered engines that are a console's default
+  whenever their library is found, with one row: the SNES, VenusRT (Rust).
+  - When `EngineFor` builds a console's row from discovery and that engine is among those found, the row lists it
+    first and makes it the default. The reference, Venus (C#), comes second, and the row carries its own description.
+  - Nothing registers VenusRT by hand, so `IsRegisteredEngine` stays false and the factory still opens it through
+    the generic v1 branch (`EmuSen_CoreAPI.md` §22). That is the least invasive way: one table and one branch in
+    `EngineFor`, with no change to `CoreFactory` and none to how the N64, NES and Game Boy rows are built.
+- **What runs when.**
+  - With the library missing, there is no row and Venus (C#) runs, as before VenusRT existed.
+  - With the library refused (a sidecar that does not match), the row stays and Venus (C#) runs with the "not
+    available" notice.
+  - A stored Venus (C#) wins. A config that stores nothing, the tester's own included, plays on VenusRT.
+  - `CoreFactory.Create` with no engine named still builds Venus (C#), the reference, as for every console.
+- **The row's words**, for the player: VenusRT is the default; Venus (C#) is the reference, kept for now, and runs
+  where VenusRT's library is missing; a state made by Venus (C#) does not load in VenusRT, though battery saves
+  cross; the change takes effect when a game is next loaded.
+- **Pharaoh and Hotaru** read the configured engine through `CoreFactory.ConfiguredEngine`, so they now run VenusRT
+  for the SNES unless graphics.json names Venus (C#). Nothing in them was changed. Hotaru's three Venus-only debugging hotkeys (the backdrop and
+  window dump, the OAM dump and the scroll print, behind its `Venus` property) do nothing under VenusRT, as they
+  already did when VenusRT was chosen; its DianaOS console works through the generic debug target.
+
+### 65.2 A finding: the open boot program's notice on every SNES game
+
+On VenusRT with no SPC700 image, the status line carries "VenusRT's open replacement for spc700.rom - …" and §35.3's
+cost after the game's name. That was already so when VenusRT was chosen. As the default, every ordinary SNES game now
+shows it.
+- **In a big screen it wraps** to two or three lines under a long title. That broke two tests' assumptions, not the
+  fit:
+  - the fit audit measured "one line" from the running status;
+  - the pad sheet tests made the bar taller from the running status.
+
+  Both now measure from a one-line status. The audit's fault checks on the running line itself pass unchanged.
+- **Measured before that change:** with the notice's lines under it, the Game Mode Shaders sheet on a 944-parameter
+  preset could not be walked by pad when made 10 or 13 pixels shorter still ("No pad path to the control asked
+  for"). That is a sheet-height defect in the pad walk of the kind §4.83.7 of the settings reference recorded at
+  other heights. It is reachable in play now that the default's status line is taller, and it is not fixed here.
+- **Put to the tester:**
+  - (a) shorten the boot program's status notice to a few words, keeping §35.3's cost in the firmware window and
+    the core's info;
+  - (b) fix the pad walk at those sheet heights;
+  - (c) both.
+- *Decided by the tester 2026-10-05: (c), with (a) taken further. The status line says nothing about a running
+  replacement, and the pad walk is fixed. Both are §66.*
+
+### 65.3 Tests (measured 2026-10-05)
+
+| Check | Result |
+|---|---|
+| The registration golden | re-recorded with `EMUSEN_RECORD_REGISTRATION=1` after a rebuild. The SNES row's default, order and words change, and the configured engine with nothing stored is VenusRT. Without the library the row is absent; refused, it falls back to Venus (C#) with its notice |
+| `VenusRtEngineTests.A_game_runs_on_venusrt_by_default_and_on_venus_once_venus_is_chosen` (new) | a fresh config: no stored engine, `ConfiguredEngine` gives VenusRT, and Mistress runs the .sfc on the v1 adapter with rewind and no notice. Venus (C#) stored: Mistress runs it, with no notice |
+| The SNES tab's row, the state record, the fallback and discovery tests | updated to the new order and default |
+| The blast radius: CoreCatalog, CoreFactory, CoreRegistration, CoreDiscovery, VenusRt, Snes, MarsRtFrontend, GraphicsSettings, BatterySave, FitAudit, Pharaoh, Hotaru, CoreAbi, Settings and Engine filters | listed in §65.4 |
+
+### 65.4 The blast radius (measured 2026-10-05)
+
+- **The filters:** CoreCatalog, CoreFactory, CoreRegistration, CoreDiscovery, VenusRt, Snes, MarsRtFrontend,
+  GraphicsSettings, BatterySave, FitAudit, Pharaoh, Hotaru, CoreAbi, Settings, Engine and PadSettings. **608 passed,
+  3 skipped**, the skipped being the opt-in picture tools.
+- **Before the two test baselines of §65.2 were changed,** the same set failed eight:
+  - the registration golden, read from the build before it was re-recorded;
+  - the two `VenusRtCoreAbiTests` that pinned the old default;
+  - the fit audit's big-screen status line at both sizes;
+  - the 944-parameter pad walk at sheets 10 and 13 pixels shorter.
+- **The battery crossing**, `A_battery_save_crosses_between_venus_and_venusrt_both_ways`, with the corpus's firmware
+  and the ten games of §41.7: passes.
+
+## 66. No status-line notice for an open replacement, and the pad walk under a taller bar (2026-10-05)
+
+*Decided by the tester 2026-10-05*, after §65.2: when an open replacement runs, the running status line says nothing
+about firmware, not even a short notice. The firmware policy makes the open version the normal path, and the player is
+never prompted or nagged. The pad-walk defect §65.2 found is to be fixed.
+
+### 66.1 The status line
+
+- **What changed.** `CoreEngine`'s firmware notice no longer has the replacement case. It is now set only when a file
+  is absent and the core has no replacement for it ("… would supply the chip"), as for a DSP-3 cartridge without its
+  image. That is a game running without its chip, not the normal path. A player's own image says nothing either, as
+  before.
+- **Every core alike.** The change is in the one adapter every v1 engine runs on, so it holds for VenusRT and for
+  Nephrite, the other core that declares replacements. MoonRT, MercuryRT and MarsRT declare none and never showed a
+  notice. The C# cores have no firmware notice on the running line at all (`ICore.FirmwareNotice` is null for them);
+  C# Venus prompts for a missing DSP image before a game starts, and that is unchanged.
+- **Where the cost is still found:**
+  - the core's info, through `firmware_for` and the requests' `ReplacementCost`, which the tests now read in place
+    of the notice;
+  - these pages (§35.3, `VenusRT_DspHle.md` §5.5).
+
+  The "firmware window" that `VenusRT_DspHle.md` §7.3 planned was never built, so Mistress shows the cost nowhere
+  today. That page now says so.
+- **The two test baselines of §65.2 are reverted.** The fit audit and the pad sheet tests measure from the running
+  line again, as before §65: with no notice it is one line, under the long title too, so nothing else wraps it.
+
+### 66.2 The pad walk at the heights that failed
+
+- **Measured 2026-10-05**, with the notice gone and the harness as it was: the 944-parameter walk on the Game Mode
+  Shaders sheet, with the status bar made taller by 0 to 80 pixels, **failed at 61 to 74 and at 80** ("No pad path to
+  the control asked for"). It passed elsewhere, 75 to 79 included. So the defect did not need the notice; the notice's
+  extra lines had, argued from the line height, only moved §65.2's 10 and 13 pixels toward that range.
+- **The cause was in the harness, not the window**, found by logging the failing walk.
+  - The walk began on the Category dropdown, where the tab change leaves the focus. Down from Category entered the
+    preset list at one row on the first press, and at another when the walk replayed that path from the restored
+    start. So the walk marked the path failed and ran out of paths.
+  - A second walk, from where the first left the window, found a path to the slider and ended on it when pressed. A
+    player can reach it by pad.
+  - Argued, not measured: the list's re-entry depends on a row it remembers, which the walk's restoration of
+    selections and scrolling does not put back.
+  - `PadAudit.Reach` was built to try again from where a walk ends (six attempts), but only for a walk whose path
+    ended on another control. One that found no path asserted at once.
+- **The fix.** A walk that finds no path is tried again from where it left the window, like one whose path ended
+  elsewhere, and the failure message names both cases. The control must still be reached by pressing the found path
+  with the pad alone, so the test still holds the window to being navigable.
+- **The test.** `A_long_preset_s_sliders_are_reached_under_a_much_taller_status_bar` runs the same walk at 60, 61, 62,
+  66, 70, 74, 75 and 80 pixels shorter; the six failing heights among them failed before the fix. The full sweep from
+  0 to 80 passed, 81 of 81, after it.
+
+### 66.3 A paused Apply Cheats did nothing on VenusRT
+
+- **Found by the flip.** `PadCheatsTests`' flow (`EmuSen_Settings_Reference.md` §4.45.5) adds `7E010042` and presses
+  Apply Cheats with the game paused under the sheet, then reads `$7E:0100`. On Venus (C#) it reads `0x42`. On VenusRT,
+  the default since §65, it read 0. It failed in the run that reached the other windows' `PadAudit.Reach` tests, and
+  not in §65's blast radius, which had no cheat filter.
+- **Prediction, written before the fix:** two holes in series.
+  - `CoreDebugTarget` did not override `IDebugTarget.ApplyCheats`, whose default body is empty. Mistress's paused
+    Apply calls it directly. This is the hole `EmuSen_Cheats.md` §6 closed for Mercury and Moon in 2026-09, met again
+    by the generic target.
+  - Behind it, `CoreEngine.ApplyCheats` applied only the host's share. A core that claims `CHEAT_POKES` (VenusRT does,
+    §32) is handed every simple poke to apply at its own frame's end, and a paused game has no frame's end coming.
+
+  So the forward alone should leave the test failing.
+- **Measured 2026-10-05**, with a new engine-level case,
+  `CoreFactoryCheatWiringTests.A_venusrt_debug_target_pokes_without_waiting_for_a_frame` (a WRAM poke and a CpuBus
+  poke, then the target's `ApplyCheats`, then both read back):
+
+  | Build | The new case | `PadCheatsTests`' flow |
+  |---|---|---|
+  | before | fails, 0 for 0x42 | fails, 0 for 0x42 |
+  | the forward only | fails, 0 for 0x42 | fails, 0 for 0x42 |
+  | the forward and the engine's apply | passes | passes |
+
+  The prediction held: each hole alone hides the fix of the other.
+- **The fix.**
+  - `CoreDebugTarget.ApplyCheats` forwards to the engine.
+  - `CoreEngine.ApplyCheats`, which is the "apply now" call, first brings the patches and pokes up to the registry.
+    It then applies every enabled poke through `space_write`, the ones the core gates included.
+  - The frame's end still applies only the host's share, as before.
+
+  An apply between frames passes over a core's gate, as `MarsCore.ApplyCheats` does for a paused Apply while its
+  frame-end apply waits on interrupts (`Mars_Cheats.md`). The core's own apply at the next frame's end writes the same
+  values again.
+- **Who else it reaches.** Every v1 engine through `CoreEngine`. MoonRT and MercuryRT already forwarded through their
+  own targets. They claim no `CHEAT_POKES`, so their host share was the whole registry and nothing changes for them.
+
+### 66.4 Two more tests that assumed Venus (C#) under Mistress
+
+§65's blast radius missed Mistress tests that start a game from the library and then reach into the C# core. The
+sweep of every Mistress, Hotaru and Pharaoh test found or confirmed two more, besides §66.3's.
+- **`MainWindowCheatListTests.The_running_core_shares_the_windows_own_cheat_registry`** cast the running target to
+  `SnesDebugTarget` and failed on VenusRT's `CoreDebugTarget`. What it asserts, one registry shared by the window and
+  the running core, is a property of every target, so it now reads `IDebugTarget.Cheats`. It passes on VenusRT.
+- **`MultiplayerTests`** reads the two auto-read words from Venus (C#)'s bus to see which pad plays which player.
+  VenusRT has no such view from outside, so the class pins Venus (C#) in its config, as §65's state-record test does.
+  This one was changed on reading: `Assert.IsType<VenusCore>` cannot pass on a `CoreEngine`. Mistress's routing of
+  pads to ports is the same code above either engine.
+
+### 66.5 Checks (measured 2026-10-05)
+
+| Check | Result |
+|---|---|
+| The crate-side tests that read the notice | the DSP and boot-image cases now assert no notice on the replacement and read its cost from the requests; the DSP-3 case keeps its "would supply the chip" notice |
+| Mistress, `An_ordinary_game_on_venusrt_prompts_for_no_firmware` | the DSP-1 cartridge runs on the replacement with a status line that names no replacement |
+| The blast radius of §65.4 with the PadAudit, Firmware, Nephrite, MoonRt, MercuryRt and V1 filters added | 1,026 passed and none failed when the run reached its 30-minute limit, in the long MoonRT and MercuryRT machine cases. Every SNES, registration, fit-audit, pad-sheet and Nephrite case had run |
+| The other windows whose tests reach a control through `PadAudit.Reach` (16 classes) | 193 of 194; the one failure was §66.3's |
+| `CoreFactoryCheatWiringTests`, `PadCheatsTests`, every `Cheat` class and `CoreAdapterTests` after §66.3's fix | 330 of 331; the one failure was §66.4's cast |
+| Every Mistress, Hotaru and Pharaoh test, with `CoreFactoryCheatWiringTests`, after §66.3 and §66.4 | 1,747 passed, 51 skipped (the picture tools), none failed |
+

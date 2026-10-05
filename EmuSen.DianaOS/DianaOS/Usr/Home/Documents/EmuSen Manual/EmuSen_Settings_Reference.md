@@ -1387,6 +1387,29 @@ asserts rewind empty on Mars and filling on MarsRT, and `Holding_rewind_on_MarsR
 holds the hotkey; the ROM patches, the phases and rewind have their evidence and mutants in `Mars_Native.md` §6.6.1 to
 §6.6.3.*
 
+**The SNES's engine, VenusRT (Rust) by default since 2026-10-05.** The SNES tab has the same Engine row, stored as
+`Consoles.SNES.Engine`. Its choices are *VenusRT (Rust)*, listed first and the default, and *Venus (C#)*, the
+reference, kept for now. *Decided by the tester 2026-10-05* (`VenusRT_Native.md` §65).
+- **How the row is built.** Unlike the N64's, it is not registered by hand. Discovery finds VenusRT's library, and
+  `CoreCatalog.EngineFor` builds the row from it, with VenusRT the default and Venus (C#) the second choice. So
+  `IsRegisteredEngine` stays false for VenusRT and the factory opens it through the generic v1 branch
+  (`EmuSen_CoreAPI.md` §22).
+- **Without the library**, the row is absent and every SNES game runs on Venus (C#). A library that is present but
+  refused keeps the row and runs Venus (C#) with the "not available" line.
+- **The stored choice wins**, as for the N64: a player who chose Venus (C#) keeps it. A config that stores nothing
+  plays on VenusRT.
+- **What crosses.** A save state made by Venus (C#) does not load in VenusRT; the refusal names the engine that
+  made it (`VenusRT_Native.md` §41.12). Battery saves cross between the two both ways.
+- **When it takes effect.** At the next load of a game.
+- **The status line.** ~~On VenusRT with no SPC700 image in the firmware folder, the status line names VenusRT's open
+  boot program and its cost after the game's name. That is the notice of §38.4 of that page, which every ordinary
+  SNES game now shows, since few players have the image.~~ *Decided by the tester 2026-10-05: a running open
+  replacement says nothing on the status line, for any v1 core, since the open version is the normal path. Only a chip
+  that runs with no replacement at all is named there (`VenusRT_Native.md` §66).*
+- **The other frontends.** Hotaru, Pharaoh and the probe read the same value through `CoreFactory.ConfiguredEngine`,
+  so they run VenusRT for the SNES as well unless graphics.json names Venus (C#). The factory asked for no engine
+  still builds Venus (C#), the reference.
+
 ### 4.45 Every window from the pad, and Game Mode's one window (2026-09-24)
 
 §4.29 made the library and a menu over the game work from a controller, and drove every other window through the keys
@@ -6586,6 +6609,9 @@ failed. Four causes were found, two in the harness and two in the window:
   settle (120 ms) left the parameter list empty while the walk tried to put the focus back on its starting slider. The
   walk now waits, up to two seconds, for the rows its start is among before putting the scroll back, and a replay whose
   start cannot be focused counts as failed rather than pressing on from wherever the focus is.
+  *Since 2026-10-05 a walk that finds no path at all is tried again from where it left the window, as one whose path
+  ended elsewhere already was. Under a status bar 61 to 74 and 80 pixels taller the first walk from the Category
+  dropdown found none, its replays of Down entering the preset list at different rows (`VenusRT_Native.md` §66.2).*
 - **The harness asked a built row into view.** Putting the focus back on a slider called the list's `ScrollIntoView`
   every time. With that call made every time, the parameter list was later found with no row built, and the shaders
   case failed at every height from 10 to 16 pixels shorter. It is now asked only for a row that is not built.

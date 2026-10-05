@@ -23,7 +23,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // VenusRT in Mistress through discovery alone: the SNES tab's engine row, a game played on the generic adapter with rewind, and Venus (C#) the default - see VenusRT_Native.md §33.
+    // VenusRT in Mistress through discovery alone: the SNES tab's engine row, a game played on the generic adapter with rewind, and VenusRT the default since VenusRT_Native.md §65.
     [Collection(TestCollections.ProcessGlobals)]
     public class VenusRtEngineTests : IDisposable
     {
@@ -65,37 +65,42 @@ namespace EmuSen.WiseMan.Mistress
             var window = new GraphicsSettingsWindow(config, console => told = console, "SNES");
             window.Show();
             Dropdown engine = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"SNES.{CoreCatalog.EngineKey}").Distinct().Single();
-            Assert.Equal(new[] { CoreCatalog.VenusEngine, VenusRtCoreAbiTests.Engine }, engine.Items.Cast<object>().Select(o => o.ToString()));
-            Assert.Equal(CoreCatalog.VenusEngine, engine.SelectedItem);
+            Assert.Equal(new[] { VenusRtCoreAbiTests.Engine, CoreCatalog.VenusEngine }, engine.Items.Cast<object>().Select(o => o.ToString()));
+            Assert.Equal(VenusRtCoreAbiTests.Engine, engine.SelectedItem);
 
-            engine.SelectedItem = VenusRtCoreAbiTests.Engine;
+            engine.SelectedItem = CoreCatalog.VenusEngine;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("SNES", told);
-            Assert.Equal(VenusRtCoreAbiTests.Engine, GraphicsConfig.Load().Value("SNES", CoreCatalog.EngineKey));
+            Assert.Equal(CoreCatalog.VenusEngine, GraphicsConfig.Load().Value("SNES", CoreCatalog.EngineKey));
             window.Close();
         }, default);
 
+        // A fresh config runs an .sfc on VenusRT on the adapter with rewind, and a stored Venus (C#) choice is honoured.
         [Fact]
-        public Task A_game_runs_on_venus_until_venusrt_is_chosen_and_then_on_the_adapter_with_rewind() => Session.Dispatch(() =>
+        public Task A_game_runs_on_venusrt_by_default_and_on_venus_once_venus_is_chosen() => Session.Dispatch(() =>
         {
             if (!Found) return;
+            Assert.Null(GraphicsConfig.Load().Value("SNES", CoreCatalog.EngineKey));
+            Assert.Equal(VenusRtCoreAbiTests.Engine, CoreFactory.ConfiguredEngine(_rom));
             MainWindow window = Start();
-            Assert.IsType<VenusCore>(Game(window).Core);
-            window.Close();
-
-            GraphicsConfig config = GraphicsConfig.Load();
-            config.SetValue("SNES", CoreCatalog.EngineKey, VenusRtCoreAbiTests.Engine);
-            config.Save();
-            window = Start();
             EmulatorSession game = Game(window);
             var core = Assert.IsType<CoreEngine>(game.Core);
             Assert.Equal("venusrt", core.Info.Id);
             Assert.Null(game.EngineNotice);
             WaitFor(() => game.TotalFrames > 60 && Rewind(window).Depth > 0);
             window.Close();
+
+            GraphicsConfig config = GraphicsConfig.Load();
+            config.SetValue("SNES", CoreCatalog.EngineKey, CoreCatalog.VenusEngine);
+            config.Save();
+            Assert.Equal(CoreCatalog.VenusEngine, CoreFactory.ConfiguredEngine(_rom));
+            window = Start();
+            Assert.IsType<VenusCore>(Game(window).Core);
+            Assert.Null(Game(window).EngineNotice);
+            window.Close();
         }, default);
 
-        // An empty firmware folder and VenusRT chosen: neither an ordinary game nor a DSP-1 cartridge asks for anything, and the cartridge runs with the replacement's notice (VenusRT_DspHle.md §7.3).
+        // An empty firmware folder and VenusRT chosen: neither an ordinary game nor a DSP-1 cartridge asks for anything, and the cartridge runs on the replacement with no notice (VenusRT_Native.md §66).
         [Fact]
         public Task An_ordinary_game_on_venusrt_prompts_for_no_firmware() => Session.Dispatch(async () =>
         {
@@ -117,7 +122,8 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(before, status.Text);
             typeof(MainWindow).GetMethod("LoadRom", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(string), typeof(string) }, null)!.Invoke(window, new object[] { dsp, "Pilot.sfc" });
             WaitFor(() => Game(window).TotalFrames > 20);
-            Assert.Contains("VenusRT's open replacement for dsp1.rom", status.Text);
+            Assert.StartsWith("Running: ", status.Text);
+            Assert.DoesNotContain("replacement", status.Text);
             window.Close();
         }, default);
 
@@ -126,6 +132,9 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_states_record_names_its_engine_and_another_engines_version_is_not_compared() => Session.Dispatch(() =>
         {
             if (!Found) return;
+            GraphicsConfig config = GraphicsConfig.Load();
+            config.SetValue("SNES", CoreCatalog.EngineKey, CoreCatalog.VenusEngine);
+            config.Save();
             MainWindow window = Start();
             EmulatorSession venus = Game(window);
             string statePath = Path.Combine(_root, "venus.state");

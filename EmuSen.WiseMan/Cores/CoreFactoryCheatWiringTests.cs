@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mars;
@@ -197,6 +198,23 @@ namespace EmuSen.WiseMan.Cores
             session.RunFrame();
 
             Assert.Equal(0x42, ((MarsCore)session.Core!).Bus!.Rdram[0x100]);
+        }
+
+        // A v1 engine's target, VenusRT's, whose core gates its own pokes at a frame's end: a paused Apply pokes at once all the same - see VenusRT_Native.md §66.3.
+        [Fact]
+        public void A_venusrt_debug_target_pokes_without_waiting_for_a_frame()
+        {
+            var cheats = new CheatRegistry();
+            CoreBundle bundle = CoreFactory.Load(_snes, headless: true, cheats, engine: CoreCatalog.VenusRtEngine);
+            Assert.IsAssignableFrom<EmuSen.Cores.Native.CoreEngine>(bundle.Core);
+
+            cheats.AddRamPoke("WRAM", 0x0100, 0x42, "poke");
+            cheats.AddRamPoke("CpuBus", 0x7E0200, 0x43, "poke");
+            bundle.DebugTarget.ApplyCheats();
+
+            Assert.Equal(0x42, bundle.DebugTarget.GetMemorySpaces().First(s => s.Name == "WRAM").Read(0x0100));
+            Assert.Equal(0x43, bundle.DebugTarget.GetMemorySpaces().First(s => s.Name == "CpuBus").Read(0x7E0200));
+            ((IDisposable)bundle.Core).Dispose();
         }
 
         // The core the seam was written for, and the one that already routes it - see EmuSen_Cheats.md §4.

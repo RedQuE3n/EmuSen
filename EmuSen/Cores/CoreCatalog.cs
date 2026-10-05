@@ -242,6 +242,14 @@ namespace EmuSen.Cores
         };
 
         public const string VenusEngine = "Venus (C#)";
+        public const string VenusRtEngine = "VenusRT (Rust)";
+
+        // A discovered engine that is a console's default whenever its library is found, the reference staying a choice - see EmuSen_Settings_Reference.md §4.44.
+        private static readonly Dictionary<string, (string Engine, string Description)> DefaultDiscoveredByConsole = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SNES"] = (VenusRtEngine,
+                "Which implementation runs the console. VenusRT (Rust) is the default. Venus (C#) is the reference, kept for now, and runs instead where VenusRT's library is missing. A save state made by Venus (C#) does not load in VenusRT, though battery saves cross between the two. Takes effect when a game is next loaded."),
+        };
 
         // The system ids of EmuSen_CoreAPI.md §6.3 each console answers to, so a v1 core's info is matched to it.
         private static readonly Dictionary<string, string[]> SystemIdsByConsole = new(StringComparer.OrdinalIgnoreCase)
@@ -281,6 +289,9 @@ namespace EmuSen.Cores
             if (row is null)
             {
                 if (!ReferenceEngineByConsole.TryGetValue(console, out var reference)) return null;
+                if (DefaultDiscoveredByConsole.TryGetValue(console, out var first) && found.Contains(first.Engine))
+                    return new CoreSetting(EngineKey, "Engine", first.Description, CoreSettingKind.Choice, first.Engine,
+                        Choices: new[] { first.Engine, reference }.Concat(found.Where(n => n != first.Engine)).ToArray());
                 row = new CoreSetting(EngineKey, "Engine",
                     $"Which implementation runs the console. {reference} is the reference and the default; each other engine is a core found beside the program and described by its own info. Takes effect when a game is next loaded.",
                     CoreSettingKind.Choice, reference, Choices: new[] { reference });

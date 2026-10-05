@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.Fixtures
             {
                 if (TryReach(root, pad, target, limit) is { } reached) return reached;
             }
-            Assert.Fail($"No pad walk ends on the control asked for; the focus is on {Describe((InputElement)top.FocusManager!.GetFocusedElement()!)}.");
+            Assert.Fail($"No pad path to the control asked for, or none that a walk ends on; the focus is on {Describe((InputElement)top.FocusManager!.GetFocusedElement()!)}.");
             return null!;
         }
 
@@ -67,9 +67,9 @@ namespace EmuSen.WiseMan.Fixtures
             TopLevel top = TopLevel.GetTopLevel(root)!;
             System.Action[] presses = { () => pad.Up(), () => pad.Down(), () => pad.Left(), () => pad.Right() };
 
-            // The walk itself ends by pressing the path it found from the state it began in (§4.83.7).
+            // The walk itself ends by pressing the path it found from the state it began in (§4.83.7); a walk that found none is tried again from where it left the window, as one whose path ended elsewhere is (VenusRT_Native.md §66).
             Walk(root, presses, target, limit, out object? found);
-            Assert.True(found is not null, "No pad path to the control asked for.");
+            if (found is null) return null;
             return top.FocusManager!.GetFocusedElement() is InputElement end && Equals(KeyOf(end), found) && target(end) ? end : null;
         }
 

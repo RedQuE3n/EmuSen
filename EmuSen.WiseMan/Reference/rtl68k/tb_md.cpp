@@ -37,6 +37,10 @@ int main(int argc, char** argv) {
         sscanf(pv, "%4095[^:]:%llu:%llu", path, (unsigned long long*)&pic_from, (unsigned long long*)&pic_to);
         pic = fopen(path, "wb");
     }
+    // TB_AUDIO=path writes, at each MCLK2 cycle where they change, the YM2612's output pins and the PSG's: the
+    // cycle (u64), MOL_2612, MOR_2612 and PSG (u16 each).
+    FILE* aud = getenv("TB_AUDIO") ? fopen(getenv("TB_AUDIO"), "wb") : nullptr;
+    uint16_t last_mol = 0xFFFF, last_mor = 0xFFFF, last_psg = 0xFFFF;
     uint16_t held = 0xFFFF;
     int hold = 0, hold_len = getenv("TB_HOLD") ? atoi(getenv("TB_HOLD")) : 8;
     for (uint64_t t = 0; t < cycles; t++) {
@@ -63,6 +67,12 @@ int main(int argc, char** argv) {
                              b->V_R, b->V_G, b->V_B};
             fwrite(px, 1, 4, pic);
         }
+        if (aud && (b->MOL_2612 != last_mol || b->MOR_2612 != last_mor || b->PSG != last_psg)) {
+            last_mol = b->MOL_2612; last_mor = b->MOR_2612; last_psg = b->PSG;
+            uint64_t tt = t;
+            uint16_t v[3] = {last_mol, last_mor, last_psg};
+            fwrite(&tt, 8, 1, aud); fwrite(v, 2, 3, aud);
+        }
         if (t >= trace_from && t < trace_to)
             printf("t %llu cs %d oe %d lwr %d uwr %d ca %06x en %d | wren %d ra %05x be %d vd %04x | dma %d cas2 %d vdma %d early %d\n", (unsigned long long)t, b->cart_cs, b->cart_oe, b->cart_lwr, b->cart_uwr,
                    2 * b->cart_address, b->cart_data_en, b->ram_68k_wren, 2 * (b->ram_68k_address & 0x7FFF), b->ram_68k_byteena, b->ram_68k_data,
@@ -83,6 +93,7 @@ int main(int argc, char** argv) {
         cwr_was = cwr;
     }
     if (pic) fclose(pic);
+    if (aud) fclose(aud);
     delete b;
     return 0;
 }

@@ -731,7 +731,112 @@ def psg_tone():
     return program([0x8004, 0x8104, 0x8F02], [], w(0x47F9, 0x00C0, 0x0011, 0x16BC, 0x008E, 0x16BC, 0x000F,
                                                    0x16BC, 0x0090, 0x60FE))
 
-SOUNDS = {"dac-square": dac_square, "psg-tone": psg_tone}
+def dac_ramp():
+    """Channel 6's DAC through $00-$FF, each value held about four samples (a dbra of 60 rounds), then again."""
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000, 0x14BC, 0x002B, 0x157C, 0x0080, 0x0001, 0x7000)          # d0 = 0
+    loop = w(0x14BC, 0x002A, 0x1540, 0x0001, 0x323C, 60, 0x51C9, 0xFFFE, 0x5200)                            # $2A = d0; wait; addq.b
+    loop += w(0x6000, (-(len(loop) + 2)) & 0xFFFF)
+    return program([0x8004, 0x8104, 0x8F02], [], code + loop)
+
+def ym_writes(pairs, part=0, settle=True):
+    """68000 code writing each (register, value) to the YM2612 through $A04000 (a2), part 0 or 1, then waiting out
+    the busy flag. With `settle`, a further wait of about two samples, since a write waits for its
+    operator's turn and a later one before then replaces it, the busy flag not yet set when read at once
+    (Nephrite_Disputes.md D-15)."""
+    code = bytearray()
+    for r, v in pairs:
+        code += w(0x14BC if part == 0 else 0x157C, r) if part == 0 else w(0x157C, r, 0x0002)
+        code += w(0x157C, v, 0x0001 if part == 0 else 0x0003)
+        code += w(0x4A12, 0x6BFC)                                                   # tst.b (a2); bmi.s the tst
+        if settle:
+            # 80 NOPs, about 2.2 samples: on the bench a taken branch after an operator's write loses the write
+            # (Nephrite_Native.md §19.4), so the wait is straight-line code.
+            code += w(*([0x4E71] * 80))
+    return bytes(code)
+
+def op_alone(test21, test2c=0x10, reads=12000):
+    """Channel 1's operator S4 alone at TL 0, its phase one step a sample (block 1, fnum 1,024, multiple 1), the
+    other three at TL $7F; then the test registers `$21` and `$2C` set and the status read `reads` times into RAM from
+    $FF0000, an unrolled loop of reads 20 clocks apart, which drift across the sample's 24 slots (Nephrite_Disputes.md D-15)."""
+    setup = [(0x22, 0), (0x27, 0), (0x28, 0), (0x2B, 0), (0xB0, 0x07), (0xB4, 0xC0)]
+    for slot, tl in ((0x00, 0x7F), (0x04, 0x7F), (0x08, 0x7F), (0x0C, 0x00)):
+        setup += [(0x30 + slot, 0x01), (0x40 + slot, tl), (0x50 + slot, 0x1F), (0x60 + slot, 0), (0x70 + slot, 0), (0x80 + slot, 0x0F), (0x90 + slot, 0)]
+    setup += [(0xA4, 0x0C), (0xA0, 0x00), (0x28, 0xF0), (0x21, test21), (0x2C, test2c)]
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000, 0x47F9, 0x00FF, 0x0000) + ym_writes(setup)
+    code += w(0x303C, reads // 8 - 1)                                               # d0 = rounds
+    loop = w(*([0x16D2, 0x4E71, 0x4E71] * 8))                                       # move.b (a2),(a3)+; two nops
+    loop += w(0x51C8, (-(len(loop) + 2)) & 0xFFFF)
+    return program([0x8004, 0x8104, 0x8F02], [], code + loop + w(0x60FE))
+
+def fm_voice(ops, alg=7, fb=0, fnum=1024, block=1, channel=0, keys=0xF0, extra=()):
+    """One FM channel's voice written through $A04000, keyed on, then the 68000 idles: `ops` gives S1-S4 as
+    (dt_mul, tl, ks_ar, am_dr, sr, sl_rr); the channel's algorithm, feedback, frequency, and any `extra` writes after
+    the key-on, each (register, value) or (register, value, frames to wait first) (Nephrite_Native.md §19)."""
+    part, i = channel // 3, channel % 3
+    pairs = [(0x22, 0), (0x27, 0), (0x28, 0), (0x2B, 0)]
+    regs = [(0xB0 + i, fb << 3 | alg), (0xB4 + i, 0xC0)]
+    for slot, op in zip((0x00, 0x08, 0x04, 0x0C), ops):
+        for base, v in zip((0x30, 0x40, 0x50, 0x60, 0x70, 0x80), op):
+            regs.append((base + slot + i, v))
+        regs.append((0x90 + slot + i, 0))
+    regs += [(0xA4 + i, block << 3 | fnum >> 8), (0xA0 + i, fnum & 0xFF)]
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000) + ym_writes(pairs) + ym_writes(regs, part)
+    code += ym_writes([(0x28, keys | (part << 2 | i))])
+    for e in extra:
+        if len(e) == 3:
+            code += w(0x303C, e[2] * 1000) + w(0x51C8, 0xFFFE)     # about e[2] * 1,000 rounds of 10 clocks
+        code += ym_writes([e[:2]], part if e[0] >= 0x30 else 0)
+    return program([0x8004, 0x8104, 0x8F02], [], code + w(0x60FE))
+
+def z80_writer(writes, wait=40):
+    """A program in which the Z80 writes each (part, register, value) to the YM2612 at $4000-$4003, with a `wait`
+    djnz loop after each, then halts; the 68000 loads it into the Z80's RAM and releases the Z80. Writes from the
+    68000 through $A04000 were lost on the bench in ways no wait length settled (Nephrite_Native.md §19.4)."""
+    z = bytearray()
+    for part, r, v in writes:
+        z += bytes([0x3E, r, 0x32, 0x00 | 2 * part, 0x40, 0x3E, v, 0x32, 0x01 | 2 * part, 0x40])   # ld a,r; ld ($4000+2p),a ...
+        z += bytes([0x06, wait, 0x10, 0xFE])                                                     # ld b,wait; djnz $
+    z += bytes([0x76])                                                                           # halt
+    code = w(0x33FC, 0x0100, 0x00A1, 0x1100, 0x33FC, 0x0100, 0x00A1, 0x1200,                    # BUSREQ, RESET released
+             0x0839, 0x0000, 0x00A1, 0x1100, 0x66F6, 0x41FA, 0x0000)                             # wait; lea z(pc),a0
+    lea_at = len(code) - 2
+    code += w(0x43F9, 0x00A0, 0x0000, 0x303C, len(z) - 1, 0x12D8, 0x51C8, 0xFFFC)               # copy to $A00000
+    code += w(0x33FC, 0x0000, 0x00A1, 0x1200, 0x33FC, 0x0000, 0x00A1, 0x1100,                   # RESET, BUSREQ off
+              0x33FC, 0x0100, 0x00A1, 0x1200, 0x60FE)                                            # RESET released; idle
+    code = bytearray(code)
+    z_at = len(code)
+    code[lea_at:lea_at + 2] = (z_at - lea_at).to_bytes(2, "big")
+    return program([0x8004, 0x8104, 0x8F02], [], bytes(code + z))
+
+def fm_writes(ops, alg=7, fb=0, fnum=1024, block=1, channel=0, keys=0xF0, extra=()):
+    """`fm_voice`'s writes as (part, register, value), for the Z80 writer."""
+    part, i = channel // 3, channel % 3
+    out = [(0, 0x22, 0), (0, 0x27, 0), (0, 0x2B, 0), (part, 0xB0 + i, fb << 3 | alg), (part, 0xB4 + i, 0xC0)]
+    for slot, op in zip((0x00, 0x08, 0x04, 0x0C), ops):
+        for base, v in zip((0x30, 0x40, 0x50, 0x60, 0x70, 0x80), op):
+            out.append((part, base + slot + i, v))
+        out.append((part, 0x90 + slot + i, 0))
+    out += [(part, 0xA4 + i, block << 3 | fnum >> 8), (part, 0xA0 + i, fnum & 0xFF), (0, 0x28, keys | (part << 2 | i))]
+    return out + [(part if r >= 0x30 else 0, r, v) for r, v in extra]
+
+SINE = (0x01, 0x00, 0x1F, 0x00, 0x00, 0x0F)
+QUIET = (0x01, 0x7F, 0x1F, 0x00, 0x00, 0x0F)
+
+SOUNDS = {"dac-square": dac_square, "psg-tone": psg_tone, "dac-ramp": dac_ramp}
+# The voices the references are compared on (Nephrite_Native.md §19.3): 440 Hz-ish (frequency 1,081, block 4).
+A4 = dict(fnum=1081, block=4)
+SOUNDS["fm-sine"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), **A4)
+SOUNDS["fm-sine-ch5"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), channel=4, **A4)
+SOUNDS["fm-tl16"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x10, 0x1F, 0, 0, 0x0F)), **A4)
+SOUNDS["fm-mul3"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x03, 0x00, 0x1F, 0, 0, 0x0F)), **A4)
+SOUNDS["fm-chain"] = lambda: fm_voice(((0x01, 0x30, 0x1F, 0, 0, 0x0F), (0x02, 0x28, 0x1F, 0, 0, 0x0F), (0x01, 0x20, 0x1F, 0, 0, 0x0F), SINE), alg=0, **A4)
+SOUNDS["fm-feedback5"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), fb=5, **A4)
+SOUNDS["fm-decay"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0x1F, 0x08, 0x04, 0x4F)), **A4)
+SOUNDS["fm-dt3"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x31, 0x00, 0x1F, 0, 0, 0x0F)), **A4)
+SOUNDS["fm-dt7"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x71, 0x00, 0x1F, 0, 0, 0x0F)), **A4)
+SOUNDS["fm-attack"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0x0C, 0, 0, 0x0F)), **A4)
+for _t in (0x40, 0xC0):
+    SOUNDS[f"op-alone-{_t:02x}"] = lambda t=_t: op_alone(t)
 
 PAL_PICTURES = {"pal-v30"}
 

@@ -1240,3 +1240,110 @@ as a black box, MDFourier) and the stage's dispute step (D-13, D-14).
 The YM2612 stays in Nephrite: of the Sega cores to come only the Genesis carries one (the Master System's FM unit is
 the YM2413), so it is not a Beryl crate by the rule of 2026-10-05; `ym2612.rs` keeps the Genesis's clock out of the
 chip's rules all the same.
+
+## 19. Stage 5, step 2: the FM operators (2026-10-05)
+
+### 19.1 What it built
+
+`fm.rs`, the YM2612's FM unit a sample at a time, fed by `ym2612.rs`'s registers:
+
+- **The phase generator** (Nemesis's account, topic 386, 2008; the YM2608 manual §2-4): the 11-bit frequency
+  number shifted by the block into 17 bits (block 0 shifting down one and losing its low bit), the detune added
+  there (its magnitude from the key code and the manual's Table 2-6, whose Hz values are whole steps of 0.053 Hz, one
+  of the phase increment's at the manual's 8 MHz; a negative detune wrapping in 17 bits), the multiple applied (a
+  half for 0) into 20 bits, the counter's top ten bits the operator's phase, and the counter cleared at key-on. The
+  key code is the manual's (block and two bits of the frequency number).
+- **The envelope generator** (Nemesis, 2008 and his 2010 corrections; the manual §2-5): a cycle every third sample
+  advancing a global counter; each operator's rate, recomputed each cycle, twice its register plus the key code scaled
+  by KS, 0 for a register of 0, at most 63, the release rate's register doubled plus one; an update on the cycles the
+  rate's shift selects, its increment the next of the rate's eight from Nemesis's measured tables; the attack
+  stepping `attenuation += (~attenuation × increment) >> 4` and the others adding the increment, to `$3FF`; the attack
+  ending at 0, the decay at the sustain level (16 steps of `$20`, the last `$3FF`), one way; a rate of 62 or 63 setting
+  the attenuation to 0 at key-on and stalling an attack already begun; keys taken every sample; TL added as `TL << 3`,
+  to `$3FF`.
+- **The operator** (Nemesis's and Sauraen's prose): the phase plus the modulation, a quarter-wave log-sine table of
+  256 entries in 4.8 fixed point with the phase's bits 8 and 9 mirroring and signing it, the attenuation shifted into
+  4.8 and added, a 256-entry exponent table of eleven bits shifted by the sum's whole part, a 14-bit signed result.
+  The tables are written out as constants so that every machine has the same bits; how their entries' last bits were
+  fixed is D-16.
+- **The algorithms**, evaluated as Sauraen read the die (2015-16): operators in the order 1, 3, 2, 4; operator 1
+  modulated by the sum of its own last two outputs shifted right by 10 less the feedback (which gives the manual's
+  Table 2-3, π/16 at 1 to 4π at 7); operator 3 by the stored outputs of 1 and 2; operator 2 by operator 1's newest;
+  operator 4 by the stored 1 and 2 and operator 3's newest; a modulator's 14-bit output summed and shifted down one
+  into the ten-bit phase. The carriers' outputs, cut to their top nine bits (Sauraen), are summed per channel and
+  saturated to −256..255; channel 6's DAC replaces it when enabled.
+- **The frequency registers**: `$A4`-`$A6` and `$AC`-`$AE` held in a latch per part until the low byte's write
+  carries them in (the manual's order of writing; whether the latch is the channel's or the part's is D-15's kind of
+  question, argued here); channel 3's own frequencies for S1-S3 in its special modes.
+- **For comparison**: a channel trace (`Ym2612::trace`, off and outside the state), `examples/fmtrace.rs`, and the FM
+  voices of `mdboard.py`'s `SOUNDS` (`fm-sine`, `fm-tl16`, `fm-mul3`, `fm-dt3`, `fm-dt7`, `fm-chain`, `fm-feedback5`,
+  `fm-decay`, `fm-attack`).
+- **The state**, version 9, adds every operator's phase, attenuation, envelope phase, key and last output, the
+  channels' stored outputs and keys, the envelope's counter and divider, and the latches.
+- **Not built in this step**: the LFO, SSG-EG and CSM, the test register, the ladder effect and the model 1 filter,
+  and the write timing of D-15.
+
+### 19.2 The sources, and one that was not clean
+
+Read as documents: the YM2608 manual in its translated edition (`docs/yamaha/YM2608J_Translated.PDF`, §2); topic 386's
+prose and, of its code blocks, only those that are its authors' tables and statements of the hardware's arithmetic:
+Nemesis's attenuation weighting, his Tables 1 and 2 (counter shifts and increments), his statements of the update
+cycle and of the attack and decay steps (page 8, and their 2010 corrections on page 28), his tables of the block
+shift and the key code (page 12). A block quoting MAME's source in a member's post (page 8) was displayed and not
+used. Nemesis's page 11 blocks building the two tables and converting the exponent turned out to be his emulator's
+code (one is a method of its YM2612 class) and were displayed before that was seen: the form of the tables is in the
+prose beside them, the two offsets that fix their entries' last bits are not, and Nephrite's offsets are therefore
+recorded as not cleanly sourced (D-16) until a measurement replaces them. Two page 12 blocks carrying an emulator's
+identifiers were not opened, found by a search for them; of his page 28 SSG-EG code, which he says is taken from his
+core, only a two-line fragment was displayed, and none of it is used. No RTL file
+was opened; the board's OPN2 was run as a black box through its output pins (D-15, D-16).
+
+### 19.3 Measured (2026-10-05): the references' audio
+
+Each voice through Genesis Plus GX, PicoDrive, BlastEm and ClownMDEmu (`--wav`) and Nephrite (`examples/wav.rs`),
+the fundamental and harmonics measured over one second:
+
+| Voice | Nephrite | Genesis Plus GX | PicoDrive | BlastEm | ClownMDEmu |
+|---|---|---|---|---|---|
+| `fm-sine` (frequency 1,081, block 4): frequency | 439.30 Hz | 439.30 | 439.00 | 439.30 | 439.35 |
+| its level over the DAC square's swing | 0.500 | 0.504 | 0.501 | 0.500 | 0.497 |
+| `fm-tl16`: level over `fm-sine`'s | 0.250 | 0.263 | 0.250 | 0.263 | 0.262 |
+| `fm-mul3`: frequency | 1,318.0 Hz | 1,318.0 | 1,317.0 | 1,318.0 | 1,318.0 |
+| `fm-dt3`, `fm-dt7`: offset from `fm-sine` | +0.46, −0.46 Hz | +0.46, −0.46 | +0.46, −0.44 | +0.46, −0.46 | +0.46, −0.46 |
+| `fm-chain` (algorithm 0): harmonics 2-5 over the fundamental | 10.96, 0.61, 3.63, 1.18 | 10.96, 0.57, 3.51, 1.15 | 11.03, 0.60, 3.65, 1.19 | 10.72, 0.52, 3.11, 0.96 | 11.05, 0.55, 3.22, 0.98 |
+| `fm-feedback5`: harmonics 2-5 over the fundamental | 0.596, 0.311, 0.213, 0.171 | 0.597, 0.310, 0.211, 0.167 | 0.585, 0.310, 0.211, 0.171 | 0.579, 0.286, 0.184, 0.138 | 0.579, 0.287, 0.185, 0.138 |
+| `fm-decay`: level 0.78 s after the key-on | −7.6 dB | −7.2 | −7.7 | −7.0 | −7.6 |
+| `fm-attack` (AR 12): −6 dB to −1 dB | 40 ms | 50 | 40 | 40 | 40 |
+
+The three references that put small sines at 0.263 rather than 0.250, and give a pure sine odd harmonics of 0.5-2%,
+model the ladder effect, which Nephrite and PicoDrive do not yet; BlastEm's and ClownMDEmu's weaker upper harmonics
+in `fm-chain` and `fm-feedback5` fit a model 1 output filter. The attack's first 20 dB come up faster in Nephrite and
+PicoDrive than in the others (25 ms against 45-50 from −40 dB): those two cut each carrier to its top nine bits, as
+Sauraen reads the die, so the attack's quietest part is silent in them; between −6 and −1 dB they agree.
+
+- **The crate's tests**: 66 pass, among them the phase increment against Nemesis's worked examples (block, detune,
+  multiple, detune overflow, block 0's lost bit), the rate formula and increments, the operator's quarter-wave
+  symmetry and levels, the tables against their description, a sine at 439.3 Hz peaking at 255 and TL 16 at 63, and
+  feedback 5's harmonics against the references within 3% (which fails with the feedback shifted by 9 less FB).
+- **The conformance kit**, `--frames 600`: C1-C15 pass on the 240p suite, Sonic the Hedgehog and its sequel,
+  Phantasy Star IV, OutRun, Thunder Force IV, VDPFIFOTesting, TiTAN's Overdrive 2, Nemesis's CSM and detune tests,
+  `fm-chain`, `fm-feedback5`, `fm-decay` and `dac-square`.
+- **The cost**, best of five runs of 600 frames beside the stage's starting point (`94a87e39`): Sonic the Hedgehog
+  0.710 s against 0.622, Thunder Force IV 0.806 against 0.720, Phantasy Star IV 0.733 against 0.621, about 0.15 ms a
+  frame for the FM unit, inside §5.5's 1.5 ms.
+- **The corpus at anchors** (944 games): no game's RAM or picture at frames 120 and 600 differs from step 1's, the FM
+  unit changing what is heard and nothing a game reads. WiseMan's Nephrite, runner, discovery and registration tests
+  pass (31).
+
+### 19.4 Open, and the bench
+
+- **The bench as a referee for the FM unit.** `tb_md.cpp` logs the OPN2's output pins (`TB_AUDIO`): each channel's
+  value appears once a sample in its slot, `value + 1` when positive and `value + 1024` when negative, the DAC's
+  register showing there as a signed value. A single operator plays a clean sine when its setup writes come without
+  waits; with waits between all writes, from the 68000 or from a Z80 program, the channel stays at rest, and a 68000
+  write followed by a taken branch was lost where the same with no-operations in its place was not. Until the bench's
+  YM2612 is understood (D-16), the references' audio is this step's oracle; MDFourier and Nemesis's recordings come
+  with the stage's oracle step.
+- **D-15**, the write timing; **D-16**, the tables' last bits.
+- **Next**, in the plan's order: the LFO, SSG-EG, CSM and channel 3's special mode's key-ons, the test register,
+  the ladder effect and the multiplexed output, the YM3438 of model 2 as a setting, and the model 1 filter.

@@ -599,7 +599,9 @@ start (D-11) and the status register's flags (D-12) on the board, its cartridge 
 was closed (§17 there), its oracle met, with D-2, mode 4's left column and the 128 KiB mode's display reads carried
 forward. Stage 5's first step, the same day, built the PSG as a shared crate (Beryl's SN76489), the YM2612's
 ports, timers, busy flag and DAC, and the mix, resampled to 48 kHz by a band-limited step synthesiser in emusen-native;
-the FM operators are its next step (§18 there, D-13 and D-14).*
+the FM operators are its next step (§18 there, D-13 and D-14). Its second built the FM operators (phase and envelope
+generators, the operator and its tables, the algorithms and feedback) and graded them against the references' audio,
+the bench's YM2612 not yet usable as a referee (§19 there, D-15 and D-16).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

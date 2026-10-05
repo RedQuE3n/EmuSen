@@ -1,9 +1,13 @@
 //! The YM2612 (OPN2) as the buses see it: the address register and its part, the register file of both parts, the
-//! two timers and the status register with its busy flag, and channel 6's DAC; the FM operators are stage 5's next
-//! step. A sample is 144 of the chip's clocks (the 68000's), 1,008 master clocks. Nephrite_Native.md §18 is the
+//! two timers and the status register with its busy flag, channel 6's DAC, and the FM unit (`fm.rs`) each sample. A
+//! sample is 144 of the chip's clocks (the 68000's), 1,008 master clocks. Nephrite_Native.md §18 and §19 are the
 //! record, with the sources each rule comes from.
 
 use emusen_native::{StateReader, StateWriter, Truncated};
+
+use crate::fm::{Fm, Tables};
+
+static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
 
 /// Master clocks a sample, and the busy flag's span after a data write: 32 of the chip's internal clocks, which are
 /// six of its input clocks each (Eke's measurement on the YM2612 and the ASIC alike; Nephrite_Native.md §18).
@@ -29,8 +33,12 @@ pub struct Ym2612 {
     pub discrete: bool,
     /// The master clock of the next sample.
     pub next: u64,
-    /// The left and right output last made.
+    /// The left and right output last made, and each channel's nine-bit output.
     pub out: [i32; 2],
+    pub channels: [i32; 6],
+    pub fm: Fm,
+    /// Each sample's channel outputs, kept while set for comparison with a recording; not part of a state.
+    pub trace: Option<Vec<[i32; 6]>>,
 }
 
 impl Ym2612 {
@@ -39,7 +47,7 @@ impl Ym2612 {
         for part in &mut regs {
             part[0xB4..=0xB6].fill(0xC0);
         }
-        Ym2612 { regs, address: 0, part: 0, counter_a: 0, counter_b: 0, divider_b: 0, flags: 0, busy_until: 0, discrete, next: SAMPLE, out: [0; 2] }
+        Ym2612 { regs, address: 0, part: 0, counter_a: 0, counter_b: 0, divider_b: 0, flags: 0, busy_until: 0, discrete, next: SAMPLE, out: [0; 2], channels: [0; 6], fm: Fm::default(), trace: None }
     }
 
     fn timer_a(&self) -> u16 {
@@ -68,6 +76,14 @@ impl Ym2612 {
             return;
         }
         let was = self.regs[part][a];
+        match a {
+            0x28 => self.fm.key(v),
+            0xA0..=0xA6 | 0xA8..=0xAE => {
+                self.fm.frequency(&mut self.regs, part, a, v);
+                return;
+            }
+            _ => {}
+        }
         self.regs[part][a] = v;
         if part == 0 && a == 0x27 {
             if v & 1 != 0 && was & 1 == 0 {
@@ -103,13 +119,18 @@ impl Ym2612 {
                 self.flags |= control >> 2 & 2;
             }
         }
+        let tables = TABLES.get_or_init(Tables::new);
+        self.channels = self.fm.sample(&self.regs, tables);
+        if let Some(d) = self.dac() {
+            self.channels[5] = d;
+        }
+        if let Some(t) = &mut self.trace {
+            t.push(self.channels);
+        }
         let mut out = [0i32; 2];
         for ch in 0..6 {
             let (part, i) = (ch / 3, ch % 3);
-            let value = match (ch, self.dac()) {
-                (5, Some(d)) => d,
-                _ => 0,
-            };
+            let value = self.channels[ch];
             let pan = self.regs[part][0xB4 + i];
             if pan & 0x80 != 0 {
                 out[0] += value;
@@ -138,6 +159,8 @@ impl Ym2612 {
         w.u16s("Counters", &[self.counter_a, self.counter_b]);
         w.u64s("Times", &[self.busy_until, self.next]);
         w.i32s("Out", &self.out);
+        w.i32s("Channels", &self.channels);
+        self.fm.write_state(w);
     }
 
     pub fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
@@ -153,7 +176,8 @@ impl Ym2612 {
         r.u64s(&mut t)?;
         (self.busy_until, self.next) = (t[0], t[1]);
         r.i32s(&mut self.out)?;
-        Ok(())
+        r.i32s(&mut self.channels)?;
+        self.fm.read_state(r)
     }
 }
 

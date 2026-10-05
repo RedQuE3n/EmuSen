@@ -431,3 +431,42 @@ CPUs' disputes in their own record pages.
 - Conclusion: open. Nephrite gives the access the 68000's four clocks, as for any other address.
 - Pinned by: nothing yet.
 - Implemented in: not yet.
+
+### D-15. OPEN. When an operator's or a channel's register write takes effect, and which writes are lost
+- Opened: 2026-10-05, at stage 5 step 2, by the board's FM output (`mdboard.py sound fm-sine` and its variants):
+  writes made through `$A04000` at the pace of a busy-flag loop were partly lost, the multiple of operator S4 among
+  them, which halved its frequency.
+- Documents read: SpritesMind topic 386, as prose: Sauraen's reading of the die (2015) that the chip-level registers
+  `$21`-`$2F` take a write at once, while a write to an operator's or a channel's register is held in one address
+  register and one data register until that operator's turn in the chip's circular register file comes round, a later
+  write before then replacing the held one; that the busy flag is a timer started by the data write and may read clear
+  for up to 18 of the 68000's clocks after it.
+- Test program: `mdboard.py sound fm-sine` and the other FM voices, with and without waits between writes.
+- Referee: the board as in D-1, its OPN2 output pins logged by `tb_md.cpp`'s `TB_AUDIO`; no RTL file was opened.
+  Writes after the key-on took effect (multiple 2 halved the period as the phase generator's rule says). The board's
+  results with waits between all writes were not consistent enough to settle the rule (D-16).
+- Conclusion: open. Nephrite applies every write at once, which is what a program that waits between writes sees.
+- Pinned by: nothing yet.
+- Implemented in: not yet.
+
+### D-16. OPEN. The operator's log-sine and exponent tables, and the bench's FM output
+- Opened: 2026-10-05, at stage 5 step 2, by the operator unit's two tables, whose form the documents give (a
+  quarter-wave of 256 log-sine entries in 4.8 fixed point; 256 entries of 2^−x as eleven bits whose top one is set;
+  Nemesis's and Sauraen's prose, topic 386) but not the two offsets that fix every entry's last bit: where in each
+  entry the sine is taken, and whether the exponent's index starts at 0 or 1.
+- Documents read: topic 386's prose on the operator unit (Nemesis, 2008; Sauraen, 2015-16). The offsets Nephrite
+  uses (each sine at its entry's middle; the exponent at index plus one) were in code blocks of Nemesis's post that
+  were displayed before they were identified as his emulator's code (blocks 24-27 of page 11, one of them a method of
+  his emulator's YM2612 class); they are the one item of the step not drawn from a clean source, and are to be
+  replaced by whatever a measurement shows.
+- Test program: `mdboard.py sound op-alone-40` and `op-alone-c0` (the test registers `$21` and `$2C` with the status
+  read as the 68000's samples): the reads give a channel's nine-bit output over four slots, not an operator's
+  fourteen-bit one, so the tables were not read. The FM voices on the board: see below.
+- Referee: the board as in D-1. A single operator plays a clean sine on the board when its setup writes come
+  without waits, some of them lost; with every write applied, through the 68000 with any wait or through a Z80
+  program, the board's channel stays at rest, though a Z80 program's DAC writes show. The bench's YM2612 is not yet
+  understood well enough to referee the operator unit; the references' audio graded this step instead
+  (`Nephrite_Native.md` §19.3). At the nine-bit output the two tables' offsets change nothing measurable in that audio.
+- Conclusion: open.
+- Pinned by: `fm.rs`'s `the_tables_are_their_description` (the construction as written).
+- Implemented in: not yet.

@@ -873,6 +873,24 @@ their data.
   half or another duty to reach 04 would fit one printed number with a free parameter, which is not evidence, and was
   not done. The entry stays open on the same terms: a console ROM sweeping the toggle rate is what would separate the
   readings.
+- **The ROM's SPC700 program, disassembled 2026-10-05** with VenusRT's own disassembler (`disasm/spc700.rs`), each
+  instruction decoded from APU RAM in the frame it first ran. `test_timer_stop2` sets CONTROL to $87 and T0DIV to 2,
+  reads T0OUT until it is non-zero (so the program starts just after a first-stage tick), pads with two XCN, then
+  writes TEST $0B and $0A alternately, 14 times each, one `MOV $F0,X` or `MOV $F0,Y` every 4 cycles, and reads T0OUT
+  into port 2. TEST is therefore $0B (bit 0 set, timers stopped) and $0A (normal) in turns of 4 cycles, over 115
+  cycles. `test_timer_stop` sets CONTROL to $81 and T0DIV to 1, syncs the same way, then runs ten loops of 128 cycles
+  each, TEST $02 (bit 3 clear) for about 72 cycles and $0A for about 56. VenusRT's cycle trace of `test_timer_stop2`
+  (a scratch tool stepping the SPC700 alone from the sync) puts the 14 writes of $0B at cycles 236 to 340 after the
+  sync's start and one first-stage tick at 340; it counts one stage step and prints 00. A model in which a gated
+  first stage clocks the second on an edge has to make eight to nine stage steps out of those 115 cycles; a model
+  that only stops and starts the count cannot make more than one.
+- **Referee, logged 2026-10-05 before reading.** The question is the one the 2026-10-02 read did not ask in these
+  terms: does the second stage count on an *edge* of a signal that TEST gates (so that stopping and starting it while
+  the first stage's output is in one state makes counts), or on an enable sampled with a tick (so that it cannot)?
+  And what is the first stage's output over its period: a pulse at the tick, or a level for part of the period?
+  To be read for that only, in SNES_MiSTer `rtl/SMP.vhd`: the lines of the timers' first-stage counters and the
+  signals they drive, the lines that increment each timer's second stage and the condition on them, and the lines
+  that compute the timers' enable from TEST. Nothing of the SPC700 core, the DSP, the ports or the boot ROM.
 ### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
 - Opened: 2026-10-02, at stage 4 step 1, by blargg 2010 `test_timer_speed` and `test_timer_speed2`: they write TEST
   with bits 4 to 7 set and count timer ticks against a loop; VenusRT ignores those bits and prints 2731 for every

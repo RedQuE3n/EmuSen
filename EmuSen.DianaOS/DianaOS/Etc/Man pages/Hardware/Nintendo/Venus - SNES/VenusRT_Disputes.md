@@ -1453,9 +1453,47 @@ their data.
   - **The init.** The same ending step: both `test_hdma` ROMs now pass. D-14's two dots were this 10-clock
     overhead.
   - **Left open.**
-    - `test_hdmatiming`'s test 2: its second latch is 0x34 against the console's 0x35, one dot. No sampling point and
-      no resume rule tried moved it without breaking another row.
+    - ~~`test_hdmatiming`'s test 2: its second latch is 0x34 against the console's 0x35, one dot. No sampling point and
+      no resume rule tried moved it without breaking another row.~~ **Not HDMA (2026-10-05):** the dot is the cost of
+      the three WDM instructions test 2 puts in front of its NOPs, D-41. With D-41 the row equals the console's and
+      this entry's rules are unchanged.
     - General DMA's own start, alignment and overhead are as before. Inside a general DMA the line's run keeps the
       old trigger at dot 278.
 - Pinned by: `test_hdmasync`, both `test_hdma`, the two `hdmaen_latch_test` pictures in the corpus, and
   `a_line_run_comes_two_cycles_after_hblank_and_decrements_the_whole_counter` in `scpu.rs`.
+
+### D-41. 65C816: WDM's second cycle reads the byte after the opcode as a program fetch, timed as any read of its address
+- Opened: 2026-10-05, by byuu's `test_hdmatiming` (2008-08-03), test 2, the one row of its eight that VenusRT left
+  different (D-40): the second H latch is $34 against the console's $35. The first latch, $006, is equal, and the code
+  between the two latches is the same as test 1's, which is equal. So VenusRT's CPU stands 1 to 3 clocks early within
+  the dot after test 2's HDMA run.
+- What test 2 does differently, from its source: three `WDM #$00` (`db $42,$00`) in front of the `nop #80` that
+  test 1 has alone, with the comment "CPU sync cycle = 8" against test 1's "CPU sync cycle = 6". The WDMs are there to
+  move the CPU's cycle phase at the HDMA start. In VenusRT they cost 14 clocks each, an 8-clock opcode fetch and a
+  6-clock internal cycle. That is a NOP's cost, so the phase does not move: VenusRT's cycles around H-blank on line 0
+  are the same in tests 1 and 2 (an 8-clock fetch at 1094, a 6-clock cycle at 1102 seeing H-blank, an 8-clock fetch at
+  1108, the run at 1116), and the run resumes into a 6-clock cycle in both. `seek_frame` returns at line 0, clock 0
+  in both, as its header says it should.
+- Documents read:
+  - the W65C816S datasheet, §7.16 ("It performs no operation") and the opcode matrix, where WDM is two bytes. Table
+    5-7 has no row for it.
+  - fullsnes, the 65XX opcode table: "42 nn 2 WDM #nn" with an operand byte.
+  - anomie's timing document: "Internal operation CPU cycles always take 6 master cycles."
+
+  None states the second cycle's kind.
+- Single-step suite: every `42.n` and `42.e` case gives the second cycle as PBR,PC+1 with neither VDA nor VPA and no
+  value, an internal cycle, as VenusRT built it. The suite's provenance is not stated.
+- Test ROM, measured 2026-10-05 in a trial build not kept: with WDM's second cycle a program fetch of PBR,PC+1, 8
+  clocks in test 2's slow ROM, all eight of `test_hdmatiming`'s graded rows equal the console's, and the ROM passes.
+  Its four ungraded rows (HDMA during DMA) are as before.
+
+- **Two readings fit the ROM, and they differ in what the processor drives.**
+  - (1) The second cycle is a program fetch: VPA set and the byte read, so the bus times it by its address. This
+    agrees with fullsnes's operand and with anomie's rule that internal cycles take 6. It disagrees with the suite's
+    pins on its 20,000 WDM cases.
+  - (2) It is an internal cycle that the S-CPU nonetheless times by its address. This agrees with the suite. It
+    contradicts anomie's rule for this one cycle.
+- **Referee, logged 2026-10-05 before reading.** `Venus_Referee.md` §0 rates SNES_MiSTer's 65C816 real support. To be
+  read, in `rtl/65C816/MCode.vhd`: the rows for opcode $42, their last field, the VDA and VPA pair, alone. Also, in
+  `rtl/CPU.vhd`, nothing beyond the access-speed lines 368-382 already read for D-24, to see whether a cycle's speed
+  depends on VDA and VPA. Nothing else of the core.

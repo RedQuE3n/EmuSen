@@ -18,8 +18,8 @@ The crate's skeleton and its oracle: the bus trait, the programmer's model and t
   does.
 - **`Bus`**: `read` and `write` (four clocks each, plus the waits the bus adds), `idle` (clocks without the bus, in the
   manual's order among the cycles), `interrupt_level` (IPL2–IPL0 as sampled), `acknowledge` (the vector, or `None` for
-  the autovector), `address_error` (a word cycle at an odd address abandoned without AS: by default four idle clocks)
-  and `reset_devices` (the RESET instruction's pulse).
+  the autovector), `address_error` (a word cycle at an odd address, abandoned ~~without AS~~ with AS and neither data
+  strobe, §6.3's D-1: by default four idle clocks) and `reset_devices` (the RESET instruction's pulse).
 - **`Registers`**: D0–D7, A0–A7 with A7 the current mode's stack pointer and `other_sp` the other's, SR, PC, and the two
   prefetch words (IRD and IRC in the user's manual).
 - **`M68000::step`** is `step_observed` with `Unobserved`; `step_observed` is generic over `emusen-native`'s
@@ -121,28 +121,36 @@ candidate for a dispute step.
 - **The PC a group 0 frame stacks.** The opcode's address plus two, advanced by two for each absolute address or
   immediate word fetched and, for a word or byte operand, by two at a predecrement; the displacements of `(d16,An)`,
   `(d8,An,Xn)` and the PC-relative modes do not advance it. MOVE stacks the prefetch address as its destination phase
-  begins, plus two for an absolute long destination; MOVEM the prefetch address as its transfers begin; JSR its return
-  address; BSR its target; DBcc, CMPM, ADDX and SUBX to memory, and UNLK, the prefetch address.
+  begins, plus two for an absolute long destination; MOVEM the prefetch address as its transfers begin, less four when
+  it reads registers through an index (§6.3, D-2); JSR its return address only through `(An)` and the absolute modes,
+  and the opcode's address plus two through a displacement or an index (D-2); BSR its target; ~~DBcc,~~ CMPM, ADDX and
+  SUBX to memory, and UNLK, the prefetch address; DBcc the opcode's address plus two (D-2).
 - **The access address** in the frame is the whole 32-bit address, its top byte included; the bus sees 24 bits.
-- **The instruction register** in the frame, and in the status word's top eleven bits, is the opcode, except for MOVE
-  of a byte or word to `-(An)`, whose store follows the final prefetch, which stacks the next opcode.
-- **Postincrement and predecrement on a fault.** A long `(An)+` operand advances its register only after both words
-  are read; MOVE's `(An)+` destination only after its store, whatever the size; MOVE.L's `-(An)` destination only after
-  both words are stored; ADDX.L and SUBX.L adjust each register only after its operand's two reads; CMPM advances its
-  source before each read (two at a time for a long) and its destination after.
+- **The instruction register** in the frame, and in the status word's top eleven bits, is the opcode, except for MOVE of
+  a byte or word to `-(An)`, whose store follows the final prefetch, which stacks the next opcode; that store's fault
+  sets the status word's I/N bit when an exception follows the next opcode's fetch (D-4).
+- **Postincrement and predecrement on a fault.** ~~A long `(An)+` operand advances its register only after both words
+  are read~~ An `(An)+` operand of any size advances its register only after its access (D-3); MOVE's `(An)+`
+  destination only after its store, whatever the size; MOVE.L's `-(An)` destination only after both words are stored;
+  ADDX.L and SUBX.L adjust each register only after its operand's two reads; CMPM advances ~~its source before each read
+  (two at a time for a long) and its destination after~~ each register after its read (D-3).
 - **MOVE.L's flags when its first store faults:** with an `(An)` or `(An)+` destination, untouched from a register or
-  immediate source and taken from the low word from a memory source; N and Z set and V and C untouched for a register
-  source to `(d16,An)` or `(d8,An,Xn)`; from the low word for an absolute long destination from memory; otherwise set
-  in full. Byte and word moves set them in full before the store.
+  immediate source and taken from the low word from a memory source; ~~N and Z set~~ N from bit 31 and Z cleared when
+  the high word is not zero, otherwise kept, and V and C untouched, for a register source to `(d16,An)` or `(d8,An,Xn)`
+  (D-5); from the low word for an absolute long destination from memory; otherwise set in full. Byte and word moves set
+  them in full before the store.
 - **CHK.** Without a trap: six idle clocks, then the prefetch. With one: eight idle clocks, or ten when the register is
   negative and the bound less the register, as a 16-bit difference, is not negative. N is the register's sign; Z, V and
   C are cleared, Z set for a zero register.
 - **DBcc** writes its decremented counter only after the branch's prefetch succeeds.
-- **TRAPV's trap** enters supervisor mode before its prefetch, which therefore reads supervisor program space.
+- **TRAPV's trap** ~~enters supervisor mode before its prefetch, which therefore reads supervisor program space~~
+  follows its prefetch, which reads the program space of the mode TRAPV ran in (D-15).
 - **ORI, ANDI and EORI to CCR or SR, and MOVE to CCR or SR,** refill the prefetch queue from the word after the
   instruction: the word already in IRC is read again.
-- **DIVU and DIVS on overflow** set N and V and clear Z and C. Their timing is Yacht.txt's flowcharts read as rules
-  per quotient bit, the formulation also published as Jorge Cwik's analysis of the 68000's division timing.
+- **DIVU and DIVS on overflow** set N and V and clear Z and C (N and Z open: D-9). By zero, they leave X, clear V and C,
+  and set N and Z from the dividend's high word for DIVU, Z alone for DIVS (D-10). Their timing is Yacht.txt's
+  flowcharts read as rules per quotient bit, the formulation also published as Jorge Cwik's analysis of the 68000's
+  division timing.
 - **ABCD, SBCD and NBCD** follow the BCD verifier's reference model (`flamewing/68k-bcd-verifier`, its README and its
   expected-results source, read as a test program's statement of what it expects): the binary carries of each nibble
   and the decimal carries choose the correction, and the undefined V and N follow from it.
@@ -510,3 +518,21 @@ stages 3 and 4 open it if they need it.
 No other RTL file was opened, and no logic of either core was read. Documents read in this step: the User's Manual
 §6.2, §6.3.10, Figure 6-7 and Table 8-5, and the Programmer's Reference Manual's Section 2 and its pages for ASR,
 ASL, LINK, RTE, DIVU, DIVS, ROXL, ROXR and TRAPV.
+
+### 6.5 The stage 1 oracle (measured 2026-10-05, with §6.3's rules implemented)
+
+- **SingleStepTests' 68000 suite: 310,649 of 317,500 cases.** Each of the 6,851 misses belongs to an entry of §6.3,
+  and in every one both referees agree with the processor and not with the suite: D-3's postincrement, 4,445 cases;
+  D-2's stacked PC, 1,700 (JSR 762, DBcc 632, MOVEM 306); D-15's TRAPV, 623; D-4's I/N bit, 83. fx68k misses exactly
+  these 6,851 (§6.2). `the_processor_against_the_suites` gates on the count of misses in each file, and requires every
+  miss outside `TRAPV.json` to be an address error, so any other change in a case's outcome fails it.
+- **TomHarte's 680x0 suite: 794,139 of 1,000,060 cases**, a measurement, not a gate. The 205,921 misses by entry:
+  D-1, 178,087 address errors, none of which records the abandoned cycle; D-7, 8,049 (RTE 4,011, RTR 4,038); D-8,
+  6,339 (CHK 4,948, DIVS 1,322, DIVU 69); D-6, 4,362; D-11, 3,736 (ASR); D-9, still open, 3,609 divisions whose
+  only difference is N and Z after an overflow (DIVS 1,824, DIVU 1,785); D-12, 1,005 (LINK A7); D-13, 731 (ADDQ.L
+  and SUBQ.L to An); D-14, 2 (ASL.B); D-10, 1 (the division by zero, which also stacks another PC). fx68k agrees with
+  the processor, not the suite, on the bus and the registers of all 205,921 but one, the probe artifact of §6.2.
+  Nuked-MD agrees likewise on every case outside the address errors except D-9's flags, and on all 20,000 of a sample
+  of the address errors.
+- **Open:** D-9, for a test program run on a 68000; and §5.7's item 8, interrupt sampling, for the Genesis's own
+  interrupt tests (§3.2, which also lists what neither suite covers).

@@ -59,8 +59,8 @@ pub trait Bus {
     /// `None` when VPA asks for the autovector. The bus counts the cycle's clocks, four and any waits, or the E clock's
     /// synchronisation for an autovector.
     fn acknowledge(&mut self, level: u8) -> Option<u8>;
-    /// A word cycle at an odd address, abandoned without AS before the address error exception: its clocks pass
-    /// and nothing on the bus sees it.
+    /// A word cycle at an odd address, abandoned before the address error exception: AS without either data strobe,
+    /// so nothing transfers, and its four clocks pass (Beryl_M68k.md §6.3).
     fn address_error(&mut self, _access: Access, _write: bool) {
         self.idle(4);
     }

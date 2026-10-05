@@ -9,7 +9,8 @@ use emusen_native::core::schema;
 use crate::api::Lib;
 
 /// Writes the sidecar beside the library and returns its path; refuses a library whose info or schema does not validate.
-pub fn write(library: &Path) -> Result<PathBuf, String> {
+/// `development` marks a core not yet offered to players, which discovery skips unless asked (EmuSen_CoreAPI.md §27).
+pub fn write(library: &Path, development: bool) -> Result<PathBuf, String> {
     let lib = Lib::open(library)?;
     let version = unsafe { (lib.f.abi_version)() };
     if version >> 16 != 1 {
@@ -29,8 +30,11 @@ pub fn write(library: &Path) -> Result<PathBuf, String> {
         .field_str("library", name)
         .field_str("sha256", &crate::digest::sha256_hex(&bytes))
         .field_str("abi", &format!("{}.{}", version >> 16, version & 0xFFFF))
-        .field_uint("capabilities", lib.capabilities())
-        .end_object();
+        .field_uint("capabilities", lib.capabilities());
+    if development {
+        head.field_bool("development", true);
+    }
+    head.end_object();
     let head = head.finish();
     // The descriptors are placed as the library wrote them, so that the host compares the very text it will be given.
     let text = format!("{},\"info\":{info},\"settings\":{settings}}}\n", &head[..head.len() - 1]);

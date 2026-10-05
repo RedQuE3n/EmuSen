@@ -91,9 +91,12 @@
   <Target Name="BuildRustCores" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo;BuildRustCore;WriteCoreSidecars" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
     <ItemGroup>
       <_EmuSenRustLibrary Include="@(EmuSenRustCrate->'$(EmuSenCargoTargetRoot)/%(Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(Identity)$(EmuSenHostLibrarySuffix)')" />
-      <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)')" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
       <_EmuSenRustSidecar Include="@(_EmuSenRustLibrary->'%(Identity).core.json')" />
-      <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)')" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <!-- A crate InDevelopment reaches the build output, for the tests and the kit, but never a publish - see EmuSen_CoreAPI.md §27. -->
+      <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)') And '%(_EmuSenRustLibrary.InDevelopment)' != 'true'" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)') And '%(_EmuSenRustLibrary.InDevelopment)' == 'true'" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+      <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)') And '%(_EmuSenRustSidecar.InDevelopment)' != 'true'" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)') And '%(_EmuSenRustSidecar.InDevelopment)' == 'true'" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
     </ItemGroup>
   </Target>
 
@@ -105,7 +108,8 @@
       <_EmuSenConformRunner Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(_EmuSenConformRunner).exe</_EmuSenConformRunner>
     </PropertyGroup>
     <Exec WorkingDirectory="$(_EmuSenConformDir)" Command="cargo build --release --bin emusen-core-conform --manifest-path &quot;$(_EmuSenConformDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/emusen-core-conform&quot;" StandardOutputImportance="low" />
-    <Exec Condition="'%(EmuSenRustCrate.CoreAbi)' == '1'" Command="&quot;$(_EmuSenConformRunner)&quot; --sidecar &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(EmuSenRustCrate.Identity)$(EmuSenHostLibrarySuffix)&quot;" StandardOutputImportance="low" />
+    <Exec Condition="'%(EmuSenRustCrate.CoreAbi)' == '1' And '%(EmuSenRustCrate.InDevelopment)' != 'true'" Command="&quot;$(_EmuSenConformRunner)&quot; --sidecar &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(EmuSenRustCrate.Identity)$(EmuSenHostLibrarySuffix)&quot;" StandardOutputImportance="low" />
+    <Exec Condition="'%(EmuSenRustCrate.CoreAbi)' == '1' And '%(EmuSenRustCrate.InDevelopment)' == 'true'" Command="&quot;$(_EmuSenConformRunner)&quot; --sidecar &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(EmuSenRustCrate.Identity)$(EmuSenHostLibrarySuffix)&quot; --development" StandardOutputImportance="low" />
   </Target>
 
   <!-- Batched: once per crate. Its profile for this target is used from a copy named by its hash, so a refreshed profile rebuilds every crate it guides; no profile, no flag and no warning - see Mars_Native.md §6.17. -->

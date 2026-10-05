@@ -4,8 +4,14 @@
     <EmuSenRustCoresImported>true</EmuSenRustCoresImported>
   </PropertyGroup>
 
+  <ItemDefinitionGroup>
+    <EmuSenRustCrate>
+      <InDevelopment>false</InDevelopment>
+    </EmuSenRustCrate>
+  </ItemDefinitionGroup>
+
   <ItemGroup>
-    <!-- Identity is the crate's library name; the fallback names the C# core a console runs on without the library, empty where there is none; CoreAbi 1 marks a library on the core ABI v1, whose sidecar the build writes. -->
+    <!-- Identity is the crate's library name; the fallback names the C# core a console runs on without the library, empty where there is none; CoreAbi 1 marks a library on the core ABI v1, whose sidecar the build writes; InDevelopment true keeps a core from players until its gate, see EmuSen_CoreAPI.md §27. -->
     <EmuSenRustCrate Include="marsrt">
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MarsRT - N64\</Dir>
       <Core>MarsRT</Core>
@@ -32,6 +38,7 @@
       <Console>the Genesis, the Sega CD and the 32X</Console>
       <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
+      <InDevelopment>true</InDevelopment>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="venusrt">
       <Dir>$(MSBuildThisFileDirectory)Nintendo\VenusRT - SNES\</Dir>

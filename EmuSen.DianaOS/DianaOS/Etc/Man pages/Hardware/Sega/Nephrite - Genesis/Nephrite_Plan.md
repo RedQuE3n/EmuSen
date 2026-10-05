@@ -105,7 +105,7 @@ separate, supervised step whose only product is an entry in the disputes log (§
 | Source | A writer | A dispute step | Notes |
 |---|---|---|---|
 | Hardware documents (§2): Motorola's, Zilog's and Hitachi's manuals, datasheets, Charles MacDonald's documents, plutiedev, the public research write-ups | yes | yes | The primary sources |
-| Sega's developer manuals (§2.2: the Genesis Software Manual, the Mega-CD BIOS, hardware and software manuals, the 32X hardware manual) | per §9, Q1 | per §9, Q1 | Sega-confidential documents that circulated without Sega's release; the one description of the Sega CD BIOS's call interface |
+| Sega's developer manuals (§2.2: the Genesis Software Manual, the Mega-CD BIOS, hardware and software manuals, the 32X hardware manual) | yes, each use cited by manual and section (§9, Q1) | yes | Sega-confidential documents that circulated without Sega's release; the one description of the Sega CD BIOS's call interface |
 | A listing or disassembly of any firmware (the Sega CD BIOS, the 32X boot ROMs, TMSS), wherever published: for example the SpritesMind topic t=2061, "Sega CD (US) BIOS Disassembly" | **no** for whoever writes or reviews an open replacement; others per the general rules | no | Marked "excluded for replacement writers" in the corpus's `docs/DOCS.txt`, with the pages still to be screened |
 | Test programs, their sources and READMEs (§3) | yes | yes | A test's source says what it expects |
 | Reference emulators **run** through the probe (§1.6): Genesis Plus GX, PicoDrive, BlastEm, ClownMDEmu | yes | yes | Outputs only: memory, picture, sound |
@@ -222,8 +222,9 @@ and its source, date and status in `DOCS.txt`.
 ### 2.2 Sega's confidential documents
 
 Sega's developer documents, hosted on Sega Retro and in the 32XDK release with no licence or provenance statement:
-confidential manuals that circulated without Sega's release. Whether a writer may use them is §9's Q1; until it is
-decided, each is listed here with what the plan would rely on it for, and nothing is written from them.
+confidential manuals that circulated without Sega's release. *Decided 2026-10-04 (§9, Q1):* a writer may use them, each
+use cited by manual and section; the replacement writers' rule of §1.3 stands beside it. Each is listed with what the
+plan relies on it for.
 
 | Document | Relied on for | Would a public source do? |
 |---|---|---|
@@ -278,7 +279,7 @@ its source, version and MD5, and `unique-roms.txt` 105 ROM-like files, 91 distin
 | **mcd-verificator** (krikzz) | `MEGA-PRO` @`8b72838` (2025-01-06), V1.02 | GPL-3.0 at that commit | Sega CD RAM cartridge, gate-array registers, interrupts, CDC registers, PRG-RAM, Word RAM in both modes | **Self-grading** text, "OK" or "ERROR"; it **runs in place of the BIOS** or as a mode-1 cartridge, so it needs no firmware |
 | **ZEXDOC/ZEXALL** (Frank Cringle) | `agn453/ZEXALL` @`8f71d41` | GPL-2.0 | The Z80's instructions with their flags, documented and all | CP/M text; the CRCs were taken on real Z80s, so this is the one hardware-grounded Z80 oracle; run in the crate under a small CP/M shim |
 | **The probe** | §1.6 | — | Everything, frame by frame | RAM, SRAM, VRAM (two cores), CRAM (one), picture, sound |
-| **Commercial games** | the tester's own dumps; the library has none for these systems (§9, Q13) | not redistributable | Integration; §7's goldens | References at anchors |
+| **Commercial games** | the tester's Genesis library, `AppSettings.RomDirectory`'s `genesis/` (948 files, 946 of them `.bin`, added 2026-10-04), read only and copied to scratch, with a copy at `~/.cache/emusen/probe/nephrite/games/genesis/`; no Sega CD or 32X games yet (§9, Q13) | not redistributable | Integration; §7's goldens | References at anchors |
 
 **Nothing like AccuracyCoin exists for the Genesis** (searched 2026-10-04, a negative result). The self-grading programs
 are VDPFIFOTesting, the BCD verifier, the opcode sizes, the illegal-instruction test and, for the Sega CD,
@@ -557,7 +558,7 @@ ran. **The effort is predicted** (P3). A stage's oracle must be met, or its miss
 | 3 | The Genesis's bus: the memory map, cartridges (ROM, SRAM, EEPROM, SSF2, lock-on), the Z80's bus and window with its waits, I/O and the pads, the version register, TMSS, the scheduler and interrupts | BCD verifier, opcode sizes, illegal test, memory test on the console; RAM against the references at anchors | 3 |
 | 4 | The VDP: ports, FIFO and DMA on the slot schedule; HV counter; interrupts; planes, window, scrolling; sprites and limits; shadow/highlight; H32/H40, V28/V30, interlace, PAL; mode 4; CRAM dots; the slot-stamped renderer | VDPFIFOTesting (self-grading); the logic-analyser ROMs through the pad-port receiver; pictures against references up to a colour map; the sprite-masking photographs; skip-versus-draw state test | 8 |
 | 5 | Sound: the YM2612 (envelope, phase, LFO, SSG-EG, CSM, DAC, timers, busy, ladder effect), the PSG, the mix, the model 1 filter, the output resampler | Nemesis's FM tests against recordings; MDFourier; references' audio envelopes | 5 |
-| 6 | The Genesis to players: the system packs' codecs (Game Genie, Pro Action Replay); settings (region, model, pads); battery files and EEPROM by serial; a shelf for consoles with only a discovered engine (a frontend change through the system packs); the kit on games | The kit's C1–C15 on games; `.srm` round trips; the fit audit | 3 |
+| 6 | The Genesis to players, ending with the `InDevelopment` mark removed (`EmuSen_CoreAPI.md` §27): the system packs' codecs (Game Genie, Pro Action Replay); settings (region, model, pads); battery files and EEPROM by serial; a shelf for consoles with only a discovered engine (a frontend change through the system packs); the kit on games | The kit's C1–C15 on games; `.srm` round trips; the fit audit | 3 |
 | 7 | The debugger: processors `M68K` and `Z80` through the Beryl observers; registers; disassembly; breakpoints, stepping, coverage, the call stack | Each claim a test; every table armed gives the plain run's digests (C15) | 3 |
 | 8 | Sega CD hardware: the sub CPU, gate array, PRG-RAM, Word RAM modes, comm registers, interrupts and timer, backup RAM and cartridge, the CDC and CDD, CD-DA, disc images (§5.8) | mcd-verificator (self-grading, no BIOS) | 6 |
 | 9 | Sega CD, the rest: the graphics ASIC, the RF5C164, the fader and mix | Sega CD tests with the player's BIOS against Genesis Plus GX; mcd-verificator | 4 |
@@ -587,7 +588,7 @@ default for its files), applied per system: the Genesis after stage 6, the Sega 
   colour map, or the difference is a disputes entry or a named loss of §5.2.
 - **G4, the frontend.** The kit's C1–C15 pass on each system's games; battery files round-trip; the fit audit passes;
   the system's cheats decode.
-- **G5, the goldens.** Commercial games per system (the tester's dumps, §9 Q13), each at three anchors, equal to the
+- **G5, the goldens.** Commercial games per system (the tester's library, §9 Q13), each at three anchors, equal to the
   references in picture and RAM, or dispute-logged.
 - **G6, speed.** §5.5's budget at 33% quota on the bench set, and full speed on the Legion Go S on battery.
 - **G7, the debugger.** Breakpoints, stepping, watches, coverage and the call stack on each processor, each a test.
@@ -644,51 +645,45 @@ mode. Both could become shared crates when Endou starts, as the CPUs are now.
 
 ---
 
-## 9. Questions for the tester's decision
+## 9. Questions, decided 2026-10-04
 
-Each with the recommendation this page makes.
+Each question as it was put, and its decision. Q1, Q2, Q4 and Q13 were decided by the tester in their own terms; every
+other recommendation this page made was accepted as written.
 
 1. **Q1, may Sega's developer manuals be used as sources?** They are Sega's, circulated without its permission, like
-   the SNES Development Manual that VenusRT's Q1 excluded. Unlike the SNES's case, no public document describes the Sega
-   CD BIOS's call interface or the 32X's boot protocol, and the open replacements of §5.6 depend on both.
-   *Recommended:* allowed, each citation naming the manual and section, with the exclusion kept for the Genesis's own
-   hardware wherever the public documents suffice. §2.2 lists each manual with what it would be relied on for, so the
-   decision can be taken document by document. Whatever is decided, firmware listings stay excluded for replacement
-   writers (§1.3).
-2. **Q2, the references.** Genesis Plus GX and PicoDrive are licensed for non-commercial use, BlastEm under GPLv3,
-   ClownMDEmu under AGPLv3. *Recommended:* all four run as local black boxes only, never distributed, their sources
-   never read; the other emulators' sources excluded as VenusRT's Q4 decided.
-3. **Q3, the CPU suites' generators.** The 68000 suite was generated from MAME's microcoded 68000, the Z80 suite from a
-   translation of another emulator's core; grading against them makes agreement with those cores the target.
-   *Recommended:* accepted as primary oracles, as VenusRT's 65816 suite was, with TomHarte's suite, the BCD verifier
-   and ZEXALL (hardware CRCs) as independent checks and every disagreement a disputes entry.
-4. **Q4, the Sega CD BIOS replacement's form.** An open 68000 program run by the emulated CPUs, or calls trapped and
-   answered in Rust. *Recommended:* the program (§5.6), with the documented interface first and the undocumented
-   routines added game by game.
-5. **Q5, disc images.** *Recommended:* the system pack parses `.cue` and the host passes the tracks as numbered files;
-   whole-image copies at create accepted; CHD later; a streaming minor not proposed until a measurement shows the copy
-   matters.
-6. **Q6, regions and names.** When a cartridge allows several markets, which does the console become? *Recommended:*
-   the Americas, then Japan, then Europe, with a Region setting to override. Names: "Genesis" for the console row and
-   ES-DE's `genesis`/`segacd`/`sega32x`, or "Mega Drive" and `megadrive`/`megacd`?
-7. **Q7, the default model.** *Recommended:* a model 1 console (YM2612 with its ladder distortion, the model 1 audio
-   filter, no TMSS), the hardware most games were written against, with model 2 (YM3438, TMSS) as a setting.
-8. **Q8, `.md` and `.bin`.** `.md` is also Markdown's extension and `.bin` is claimed by many systems; No-Intro and
-   ES-DE use both for the Genesis. *Recommended:* claim both, with the system decided by the contents, as stage 0 does.
-9. **Q9, shared sound and video crates.** *Recommended:* the SN76489 (and mode 4) shared with Endou and Jadeite when
-   those start; whether they join Beryl or take names of their own.
-10. **Q10, the default pad.** *Recommended:* the 3-button pad, since a few games misread the 6-button pad's extra reads;
-    the 6-button pad per port as a setting.
-11. **Q11, the speed budget and its levers.** *Recommended:* §5.5's budget per system; for the 32X, the exact levers
-    (decoded-block cache, idle-loop skipping, then the recompiler) before any accuracy setting.
-12. **Q12, the special cartridges.** *Recommended in scope for the Genesis gate:* SRAM, EEPROM, SSF2, lock-on, the
-    J-Cart and both multitaps. *After:* the SVP (its internal ROM needs an open replacement), Sega Channel, the light
-    guns and the mouse, the Pico.
-13. **Q13, commercial games.** The ROM library has no Genesis, Sega CD or 32X dumps; G5's goldens need the tester's.
-14. **Q14, Sega's own test programs.** The 32X "Mars Check Program" and MD Soft Checker are self-grading but hosted
-    only on ROM sites. *Recommended:* used if the tester supplies them locally, never fetched by the project.
-15. **Q15, the border.** The picture is 320×224 (or 240) of active display; the 240p suite's overscan tests read the
-    border. *Recommended:* active display only, as VenusRT does, the border a later setting.
+   the SNES Development Manual that VenusRT's Q1 excluded; unlike that case, no public document describes the Sega CD
+   BIOS's call interface or the 32X's boot protocol. *Decided:* they may be used, each use cited by manual and section
+   (§2.2). The exclusion rules stay: no firmware listing or disassembly is read by a replacement writer (§1.3).
+2. **Q2, the references.** *Decided:* Genesis Plus GX, PicoDrive, BlastEm and ClownMDEmu run as local black boxes only,
+   never distributed, their sources never read; every other emulator's source stays excluded (§1.3, §1.6).
+3. **Q3, the CPU suites' generators.** *Decided as recommended:* the emulator-generated suites are primary oracles,
+   with TomHarte's suite, the BCD verifier and ZEXALL as independent checks and every disagreement a disputes entry.
+4. **Q4, the Sega CD BIOS replacement's form.** *Decided:* an open 68000 program run by the emulated CPUs (§5.6), the
+   documented interface first and the undocumented routines added game by game.
+5. **Q5, disc images.** *Decided as recommended:* the system pack parses `.cue` and the host passes the tracks as
+   numbered files; whole-image copies at create are accepted; CHD later; no streaming minor until a measurement shows
+   the copy matters.
+6. **Q6, regions and names.** *Decided as recommended:* a cartridge allowing several markets runs as the Americas, then
+   Japan, then Europe, with a Region setting to override; the console row and ES-DE's names stay "Genesis",
+   `genesis`, `segacd`, `sega32x`.
+7. **Q7, the default model.** *Decided as recommended:* model 1 (YM2612 with its ladder distortion, the model 1 audio
+   filter, no TMSS), with model 2 (YM3438, TMSS) as a setting.
+8. **Q8, `.md` and `.bin`.** *Decided as recommended:* both claimed, the system decided by the contents. The tester's
+   library bears it out: 946 of its 948 files are `.bin`.
+9. **Q9, shared sound and video crates.** *Decided as recommended:* the SN76489 and mode 4 become shared crates when
+   Endou and Jadeite start; whether they join Beryl or take names of their own is settled then.
+10. **Q10, the default pad.** *Decided as recommended:* the 3-button pad, the 6-button pad per port as a setting.
+11. **Q11, the speed budget and its levers.** *Decided as recommended:* §5.5's budget per system; for the 32X, the
+    exact levers before any accuracy setting.
+12. **Q12, the special cartridges.** *Decided as recommended:* SRAM, EEPROM, SSF2, lock-on, the J-Cart and both
+    multitaps for the Genesis gate; the SVP (with an open replacement for its internal ROM), Sega Channel, the light
+    guns, the mouse and the Pico after it.
+13. **Q13, commercial games.** *Decided:* the tester's Genesis library is `AppSettings.RomDirectory`'s `genesis/`
+    (948 files), read only and copied to scratch for every use, with a copy at
+    `~/.cache/emusen/probe/nephrite/games/genesis/`. No Sega CD or 32X games yet; their goldens wait for them.
+14. **Q14, Sega's own test programs.** *Decided as recommended:* used if the tester supplies them locally, never
+    fetched by the project.
+15. **Q15, the border.** *Decided as recommended:* active display only, the border a later setting.
 
 ---
 

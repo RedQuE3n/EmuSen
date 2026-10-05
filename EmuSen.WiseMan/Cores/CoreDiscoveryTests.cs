@@ -25,6 +25,7 @@ namespace EmuSen.WiseMan.Cores
         public void Dispose()
         {
             CoreDiscovery.UseDirectories(null);
+            CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
@@ -76,6 +77,31 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.NotNull(found.Open());
             Assert.True(CoreLibrary.IsOpen(listed));
+        }
+
+        // A sidecar marked development is skipped, so a player is never offered the core, until a developer or a test asks for it - see EmuSen_CoreAPI.md §27.
+        [Fact]
+        public void A_core_in_development_is_listed_only_when_asked_for()
+        {
+            string built = Path.Combine(_root, "build");
+            Directory.CreateDirectory(built);
+            string copy = Path.Combine(built, Path.GetFileName(CoreAdapterTests.LibraryPath("v1_test_core")));
+            File.Copy(CoreAdapterTests.LibraryPath("v1_test_core"), copy);
+            Assert.True(CoreSidecar.Write(copy, development: true).Development);
+            CoreDiscovery.UseDirectories(new[] { built });
+
+            CoreDiscovery.UseDevelopment(false);
+            Assert.Empty(CoreDiscovery.Found);
+            Assert.False(CoreFactory.IsSupported("game.tst"));
+            Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.tst"));
+
+            CoreDiscovery.UseDevelopment(true);
+            Assert.True(CoreDiscovery.Found.Single().Sidecar.Development);
+            Assert.True(CoreFactory.IsSupported("game.tst"));
+
+            Assert.False(CoreSidecar.Write(copy).Development);
+            CoreDiscovery.UseDevelopment(false);
+            Assert.Single(CoreDiscovery.Found);
         }
 
         // The build step's tool writes the sidecar; the host's discovery reads it and opens the library it describes.

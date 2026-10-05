@@ -29,9 +29,11 @@ The plan's §6 row 0. What it built:
 - **The system packs** for `md`, `mcd` and `32x` in `DianaOS/Sys/Systems/Genesis/` (§2.4).
 - **The generic test-ROM runner** in `EmuSen.WiseMan/Fixtures/RomRunner/` and Nephrite's tests through it (§3).
 - **The corpus, the referees and the references**, fetched and pinned outside the repository (§4).
-- **The build's wiring**: `RustCores.props` names the crate with `CoreAbi 1`, so the build writes its sidecar and the
-  test host discovers it; `rust-cores.yml` builds, tests and export-checks it on the four platforms and tests the Beryl
-  crates with the shared ones.
+- **The build's wiring**: `RustCores.props` names the crate with `CoreAbi 1` and `InDevelopment` true, so the build
+  writes its sidecar marked for development: the tests and the kit run the core, a player's discovery never lists it,
+  and a publish leaves it out until the Genesis gate (`EmuSen_CoreAPI.md` §27, added the same day after review; the
+  first version of stage 0 offered the stub for any `.gen` file). `rust-cores.yml` builds, tests and export-checks it
+  on the four platforms and tests the Beryl crates with the shared ones.
 
 It wrote no emulation rule. The protocol of the plan's §1.3 applied throughout: no emulator source and no firmware was
 read. The probe's own source was read to learn its command line and its dumps.
@@ -166,25 +168,27 @@ menu identically up to such a map, and an exact comparison reports 91–96% of p
   entry optional, both pads on each; `firmware_for` answers for a cartridge, a 32X cartridge and a Japanese disc;
 - the stub runs each system through the generic runner: the spaces each system has, a black 320×224 picture standing
   still, 48 kHz, a `Visual` verdict, and the declared SRAM's size;
-- a `.gen` file opens through `CoreFactory` on the discovered engine with no code naming it: the generic adapter, the
-  system and a PAL region from the header, 49.70 Hz, no codecs and no notice;
+- a `.gen` file opens through `CoreFactory` on the discovered engine with no code naming it, when development cores are
+  asked for: the generic adapter, the system and a PAL region from the header, 49.70 Hz, no codecs and no notice;
+- without them, nothing offers the core: no extension is supported, claimed or listed by Mistress's library;
 - the colour-map comparison and the probe's screen formats;
 - the corpus (`EMUSEN_NEPHRITE_CORPUS`, opt-in): every ROM of the manifest taken by the stub and run, or refused with
   words;
 - the references (the corpus and the probe's cores present): Genesis Plus GX and PicoDrive on the corpus's first
   cartridge to frame 600, through the same runner.
 
-**Measured 2026-10-04.** The six tests pass, with the corpus. Of the manifest's 105 files the stub took 95 and refused
+**Measured 2026-10-04.** The seven tests pass, with the corpus. Of the manifest's 105 files the stub took 95 and refused
 10 with words, every refusal a file shorter than 512 bytes (palette and configuration blobs and three cue sheets,
 which the manifest lists by extension). The two references on the corpus's first cartridge (Sega's multitap sample
 program) at frame 600: their 68000 RAM differs in 20 bytes, their pictures in 7,174 of 71,680 pixels exactly and in 288
 up to a colour map, an agreement of the order the probe's survey found and the first case for the gates' rule that
 references are compared, not trusted.
 
-**The registration golden** (`EmuSen_CoreAPI.md` §25) gained three lines and lost none, re-recorded with
-`EMUSEN_RECORD_REGISTRATION=1`: the discovered engine `nephrite` with its three systems, opening in the `built` and
-`off` worlds and refused, with the sidecar's words, in the `refused-discovered` world. No other console's answers moved:
-no C# core claims these extensions, so no engine row changed.
+**The registration golden** (`EmuSen_CoreAPI.md` §25), re-recorded with `EMUSEN_RECORD_REGISTRATION=1`, first gained
+three lines (the discovered engine `nephrite` in the `built`, `off` and `refused-discovered` worlds) and, once the core
+was marked in development, lost them again: it is byte-identical to its state before Nephrite, since a player's
+discovery does not see the core. The tests that run Nephrite through discovery ask for development cores
+(`CoreDiscovery.UseDevelopment(true)`), and `A_player_is_not_offered_the_core_in_development` checks the other side.
 
 **The blast radius run**: WiseMan's `Nephrite`, `CoreDiscovery`, `CoreAdapter`, `CoreAbi`, `CoreRegistration` and
 `SystemPack` tests, 67 of 67 after the re-recording; `emusen-native`'s 53 tests (one new, for `Observer`).

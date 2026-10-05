@@ -153,6 +153,7 @@ jobs:
           - name: nephrite
             dir: 'EmuSen/Cores/Sega/Nephrite - Genesis'
             symbol: emusen_core_
+            development: true
         platform:
           # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it.
           - rid: linux-x64
@@ -267,7 +268,7 @@ jobs:
           file="target/${{ matrix.platform.target }}/dist/$LIBRARY"
           py=$(command -v python3 || command -v python)
           if "$py" -c "import ctypes, sys; sys.exit(0 if hasattr(ctypes.CDLL(sys.argv[1]), 'emusen_core_abi_version') else 1)" "$file"; then
-            cargo run --release --manifest-path ../../Shared/emusen-core-conform/Cargo.toml -- --sidecar "$file"
+            cargo run --release --manifest-path ../../Shared/emusen-core-conform/Cargo.toml -- --sidecar "$file" ${{ matrix.crate.development && '--development' || '' }}
           else
             echo "not on the core ABI v1: no sidecar"
           fi

@@ -25,10 +25,12 @@ namespace EmuSen.WiseMan.Cores
             _output = output;
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+            CoreDiscovery.UseDevelopment(true);
         }
 
         public void Dispose()
         {
+            CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
@@ -103,6 +105,23 @@ namespace EmuSen.WiseMan.Cores
             Assert.Null(bundle.CheatAutoDetectCodec);
             Assert.Null(bundle.Notice);
             (core as IDisposable)?.Dispose();
+        }
+
+        // Until its Genesis gate the core is in development: built and tested, never offered to a player - see EmuSen_CoreAPI.md §27.
+        [Fact]
+        public void A_player_is_not_offered_the_core_in_development()
+        {
+            var sidecar = CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))!;
+            Assert.True(sidecar.Development);
+            CoreDiscovery.UseDevelopment(false);
+            Assert.DoesNotContain(CoreDiscovery.Found, c => c.Info.Id == "nephrite");
+            foreach (string ext in new[] { ".md", ".gen", ".bin", ".iso", ".32x" })
+            {
+                Assert.False(CoreFactory.IsSupported("game" + ext), ext);
+                Assert.False(CoreCatalog.IsRomExtension(ext), ext);
+                Assert.DoesNotContain(ext, EmuSen.Mistress.Library.RomLibrary.Extensions);
+            }
+            Assert.Throws<NotSupportedException>(() => CoreFactory.Create(Write("game.gen", SyntheticMdRom.Cartridge())));
         }
 
         [Fact]

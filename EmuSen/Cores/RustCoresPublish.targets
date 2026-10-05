@@ -20,7 +20,7 @@
     <ItemGroup>
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
                              Condition="$(_EmuSenHostLibraryNames.Contains(';%(Filename)%(Extension);'))" />
-      <_EmuSenForeignLibrary Include="@(EmuSenRustCrate)">
+      <_EmuSenForeignLibrary Include="@(EmuSenRustCrate)" Condition="'%(EmuSenRustCrate.InDevelopment)' != 'true'">
         <PublishFile>$(EmuSenPublishLibraryPrefix)%(Identity)$(EmuSenPublishLibrarySuffix)</PublishFile>
       </_EmuSenForeignLibrary>
       <_EmuSenForeignLibrary Condition="'$(EmuSenNativePrebuilt)' != ''">

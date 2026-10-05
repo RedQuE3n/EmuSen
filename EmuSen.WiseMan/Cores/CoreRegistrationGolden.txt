@@ -183,7 +183,6 @@ built.registered[<null>] = False
 built.available = MoonRT=True MercuryRT=True MarsRT=True
 built.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
 built.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True
-built.discovered[nephrite] = Nephrite systems=[md, mcd, 32x] opens=True
 built.discovered[venusrt] = VenusRT (Rust) systems=[snes] opens=True
 built.factory[SNES plain <null>].supported = True
 built.factory[SNES plain <null>].probe = VenusCore
@@ -1607,7 +1606,6 @@ refused-discovered.registered[<null>] = False
 refused-discovered.available = MoonRT=True MercuryRT=True MarsRT=True
 refused-discovered.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=False report=<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=False report=<lib moonrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
-refused-discovered.discovered[nephrite] = Nephrite systems=[md, mcd, 32x] opens=False report=libnephrite.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[venusrt] = VenusRT (Rust) systems=[snes] opens=False report=<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.factory[SNES plain <null>].supported = True
 refused-discovered.factory[SNES plain <null>].probe = VenusCore
@@ -2087,7 +2085,6 @@ off.registered[<null>] = False
 off.available = MoonRT=False MercuryRT=False MarsRT=False
 off.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
 off.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True
-off.discovered[nephrite] = Nephrite systems=[md, mcd, 32x] opens=True
 off.discovered[venusrt] = VenusRT (Rust) systems=[snes] opens=True
 off.factory[SNES plain <null>].supported = True
 off.factory[SNES plain <null>].probe = VenusCore

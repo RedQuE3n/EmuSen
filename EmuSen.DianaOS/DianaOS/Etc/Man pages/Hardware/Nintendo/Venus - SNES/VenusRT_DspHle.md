@@ -92,6 +92,11 @@ use the same instrument, so the line between them is drawn by rules about how a 
   curve is the program's data, not a computation. The command is then recorded as not replaceable from documents and
   becomes a named loss. It is not probed entry by entry.
 
+> *Amended 2026-10-04* (decided; `VenusRT_Native.md` §52.1). R1 admits one behavioural constant measured from the LLE:
+> the DSP-1's limit angle on Azs, past which the projection commands change course. It is treated as a measured
+> latency is, with the measurement and its precision in the record. No other value past the limit is admitted: what
+> the chip does there is stated as formulas with declared families under R2.
+
 **The argument for exactness without copying.** A model with b bits of free choice that reproduces N independent
 output bits, with N much larger than b, carries at most b bits of information taken from the oracle; everything else
 came from the formula. A sine table of 256 sixteen-bit words is 4,096 bits; a family of table lengths, three rounding

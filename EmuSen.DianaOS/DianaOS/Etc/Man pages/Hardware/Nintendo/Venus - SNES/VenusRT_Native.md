@@ -5142,6 +5142,9 @@ Every Parameter result that is not close lies past the limit. The four games tha
 Parameter and Raster result. Michael Andretti's Indy Car Challenge's Project misses are the eye's own rounding (§49.4):
 F itself is drawn at an enlargement of 1,024 against the image's 1,068.
 
+> *Amended 2026-10-04* (measured, §52.2). The figure of 1,024 was another member's. The member built here draws F at
+> 1,042 and 4 lines low, against the image's 1,068 on its line.
+
 The crate test `the_replacements_projection_stays_close_to_the_image` holds the shares on both images, and
 `a_raster_run_ends_on_a_write` the run's end.
 
@@ -5336,3 +5339,210 @@ The pictures named are in `~/.cache/emusen/probe/venusrt/dsp-hle/shots/`.
   needing the player's image.
 - **Project's member** (§49.6): choose by exact share, or admit the coordinate-wise eye. Either would bring Michael
   Andretti's Indy Car Challenge's car to the image's size.
+
+## 52. The NEC DSP replacements: the limit angle admitted and Project chosen by exact share (2026-10-04)
+
+### 52.1 The two decisions, and the amendments they make
+
+*Decided 2026-10-04*, on §51.4's questions.
+
+- **The limit angle is admitted.** R1 (plan §1.3) gains one exception: the DSP-1's limit angle on Azs, measured from
+  the image as a latency is, with the method and the precision recorded (§52.3). It is the only constant admitted.
+  The branch past it, Vof = Les·tan(z - limit), (Cx, Cy), Raster, Project and Target there, follows the ordinary rules:
+  formulas characterised from the oracle, families declared before they are graded. The plan's §1.3 carries the
+  amendment.
+- **Project is chosen by exact share.** §49.2's rule chose by close results, and §49.5 found the member ranked 69th by
+  it exact twice as often. The family is now ranked by exact results over both sets together. Since the family's
+  shared choices S1-S3 make it one implementation, the choice is of the whole member, and it changes Parameter's and
+  Raster's arithmetic too; §52.2 grades all three. Target's family, graded on §49.5's member, is graded again on the new
+  one.
+- **The coordinate-wise eye** of §49.4 (E = F - ⌊Lfe·f⌋ coordinate by coordinate, w floored) is not added: §49.4's one
+  widening is used. It stays an open lead.
+
+### 52.2 Project, Parameter and Raster by exact share (measured 2026-10-04)
+
+`DSP_PROJ_BY=exact dsp_projection dsp1b 65536` with the seven traces ranked the 1,536 members by exact results over
+both sets. **The first is §49.5's 69th**, with 1,586,842 exact results against the old member's 1,278,903 (ranked
+196th): S1 the eye's height whole for Parameter and Raster, S2 exact division, S3 floor, P1 the triple product scaled
+once, R1 the sum of floors, J1 the view's elements floored, J2 each sum floored once, J3 Project's eye with both its
+fractions, J4 w taken whole. It is the member exact in 97% of Super Mario Kart's traced Project results.
+
+Target's family was graded again on it (`dsp_target_gyrate`, the same sets): the same member wins by close and by exact
+results, T1 at full width, T2 each triple product scaled once, T3 floor; 129,194 of 131,072 seeded results close,
+32,021 exact. Gyrate does not use the projection and is unchanged.
+
+**Through the ports** (`DSP_PROJ_PORTS=1`, `DSP_TG_PORTS=1`, 65,536 seeded cases, half jittered):
+
+| Command | All close, before | after | All exact, before | after |
+|---|---|---|---|---|
+| 02h Parameter | 65,301 | 65,296 | 3,997 | 1,679 |
+| 0Ah Raster, two lines | 65,434 | 65,397 | 10,733 | 13,310 |
+| 06h Project | 64,587 | 64,724 | 9,151 (14.0%) | 41,042 (62.6%) |
+| 0Eh Target | 63,994 | 64,202 | 3,138 | 2,202 |
+
+**On the traces.** Super Mario Kart's Project is exact in 28,178 of 30,400 transactions and close in 30,330. Its Raster
+lines lose closeness where the old member had it: 48,340 of 49,600 close (97.5%, from 100%) though 34,553 exact (from
+30,706); the misses are Bn and Dn off by 3 in 300, the floored k divided again. Michael Andretti's Indy Car Challenge's
+Project is close in 28,185 of 31,086 results (90.7%, from 82.1%).
+
+**Andretti's car.** F itself, about 1,280 of the game's 10,362 Projects, is now drawn on the image's line (V = 0, from
+-4) but at an enlargement of 1,024 against the image's 1,068, from 1,042: 4.1% small, from 2.4%. The difference is w,
+24 here against the chip's 23, which is the coordinate-wise eye (§52.1), not this family.
+
+**The seven titles in lockstep** (`dsp_lockstep`, 7,200 frames, as §51.2), before and after:
+
+| Game | Pictures equal | Sprites placed alike | Within 1 | Within 2 |
+|---|---|---|---|---|
+| Super Mario Kart | 3,893, unchanged | 72.8% to 95.6% | 98.1% to 98.5% | 98.6% to 98.7% |
+| Super Mario Kart, `smk_race.txt` | 1,289, unchanged | 78.0% to 97.1% | 99.2% to 99.3% | 99.5% to 99.5% |
+| Michael Andretti's Indy Car Challenge | 3,310, unchanged | 79.7% to 75.3% | 80.9% to 94.4% | 86.6% to 99.7% |
+| Suzuka 8 Hours | 1,499, unchanged | 95.5% to 100% | 100% | 100% |
+| Super Bases Loaded 2 | 3,054 to 3,191 | 72.6% to 80.8% | 93.8% to 95.4% | 94.2% to 95.9% |
+| Ballz 3D | 2,528 to 2,607 | 13.9% to 43.0% | 69.7% to 76.4% | 76.7% to 77.5% |
+| Pilotwings | 1,802, unchanged | 86.2% to 87.4% | 90.4% to 90.5% | 91.9% to 92.0% |
+| Lock On | 1,525, unchanged | 97.9% to 97.9% | 98.0% to 98.0% | 98.3% to 98.4% |
+
+The percentages are of sprites alike on both machines in frames that differ (§51.1). The pixel shares fall in the
+racing games: Suzuka 8 Hours' median from 5.6% to 3.8%, Andretti's from 7.7% to 7.2%, and the race's from 8.7% to 4.1%.
+
+### 52.3 The limit angle, measured, and the branch characterised
+
+**The constant** (measured 2026-10-04, `dsp_oracle chains` on the DSP-1B; the DSP-1 alike). Parameter was given Fx = Fy
+= 0, Fz = 100, Lfe = 64, Aas = 0 and Les = 7FFFh, 4000h and 1000h, with Azs stepped by one from 38B0h to 38F0h.
+
+- Vva changes at every step up to 38CDh, by about 3 a step at Les = 7FFFh, and from 38CEh on it holds: -5,847 at
+  7FFFh, -2,924 at 4000h, -731 at 1000h. Vof is 0 up to 38CDh and grows from 38CEh.
+- The held value is -Les·cot(38CEh) within one unit at Les = 7FFFh, where one step of Azs moves Vva by 3. So the
+  angle at which Vva is held is 38CEh to within a third of a step.
+- §49.1 found the same threshold at every Les, Fz and Lfe tried from 40h to 400h.
+
+**The limit is 38CEh, 79.882°, to within one step of Azs (2^-16 of a turn, 0.0055°)**, the threshold at or above which
+the branch is taken. It is the one constant §52.1 admits. A mirrored threshold sits at C732h, its negative: from 8000h
+to C732h Vva holds +Les·cot(38CEh) and Vof is negative, and C800h is ordinary again.
+
+**The branch**, characterised as real-valued errors of stated formulas against the image (300 to 400 seeded cases each,
+Azs from 3900h to 4200h; Les from 64 to 512). With z_v the limit, Δ = Azs - z_v, and the eye placed by Azs itself:
+
+- **Vof** = Les·tan Δ: within 1 to 3 up to 95°, 5,845 against 5,848 at 90° with Les = 7FFFh. Past 100° the chip's value
+  departs (20,668 against 20,970 at 112.5°), and from 135° it follows another course.
+- **Vva** is not held exactly. It is -Les·cot z_v / cos Δ: -5,938 at 90° against 5,847.6/cos 10.12° = 5,940, and
+  -6,921 at 112.5° against 6,943. So the virtual screen stands at Les/cos Δ.
+- **(Cx, Cy)** is where the limit's axis meets the ground from the eye at Azs: E as §49.1 places it for Azs, then E's
+  height times tan z_v along (sin a, -cos a). Within about 1%.
+- **Raster** keeps the limit's horizon on every line, and its scale follows the eye's height at Azs: 1.4 to 1.7% median
+  relative error with the screen at Les or Les/cos Δ, no line offset. Shifting the lines by Vof either way is 28% or
+  worse. Dn/An is cos z_v times about 1/cos Δ.
+- **Project is untouched by the limit.** It is §49.1's projection at Azs itself, within 1 of the image's results; the
+  virtual camera with V moved by Vof comes close only because the two nearly agree.
+- **Target** is the virtual camera's: the ray from the eye at Azs through (H, V) on the screen at the limit, V not moved,
+  within 1% median. The image's Target no longer equals C plus Raster's matrix (§50.1) here, which fits Raster's Dn/An
+  departing from cos z_v while Target's ground offset keeps it.
+
+### 52.4 The branch's family, declared before the first comparison
+
+For lim ≤ Azs < 8000h, with z_v = 38CEh (and for 8000h ≤ Azs ≤ C732h, z_v = C732h), Δ = Azs - z_v, sine and arithmetic
+as §52.2's member:
+
+- **Vof** = Les·sin Δ/cos Δ. **B1, its rounding**: floor, or half up (2).
+- **Vva** = -Les_v·cos z_v/sin z_v. **B2, the screen Les_v**: Les, or Les/cos Δ, also used by Raster and Target (2).
+- **(Cx, Cy)**: §52.2's Parameter with the eye from Azs and t = Ez(Azs)·sin z_v/cos z_v.
+- **Raster**: n = ⌊Les_v·cos z_v⌋ + ⌊v·sin z_v⌋, k = 256·Ez(Azs)/n. **B3, K**: k/cos z_v, or k·cos Δ/cos z_v (2).
+- **Target**: §50.3's formula with the branch's (Cx, Cy), n and k, and K = k/cos z_v, the virtual camera's ground offset.
+- **Project. B4**: §52.2's Project at Azs, with no branch; or the virtual camera at z_v with Vof added to V (2).
+
+That is 16 members, 4 bits, beside the one constant. They are ranked as §52.1 ranks Project, by exact results over both
+sets, ties to the most close. The sets: 2^16 seeded cases in §49.2's ranges with Azs from 38CEh to 4800h (101°), and the
+traced Parameter, Raster, Project and Target commands of Lock On, Ballz 3D and Pilotwings past the limit. Past 4800h,
+and past B800h on the negative side, the same formulas run ungraded, a named loss.
+
+### 52.5 The branch's family widened once, in writing (plan §5.2, rule 4)
+
+`dsp_limit dsp1b 65536` with the three traces graded §52.4's 16 members. By exact results the first is: Vof half up,
+the screen at Les/cos Δ, K times cos Δ, and Project with no branch. Built that way, Pilotwings' frame 2,120 draws the
+island under the glider as the image does. **Lock On draws no ground at all**: sea-blue from the horizon down.
+
+The cause was found by one measured difference. Lock On's Parameter (Les = 256, Azs = 4000h) gives Vva = -46 on the
+image and -47 on the member, -46.4 floored. Built for this measurement alone with Vva rounded toward zero, and not kept,
+Lock On draws its ground at frame 1,600 as the image does. The game's own horizon test turns on Vva's last unit. The
+image's Vva past the limit lies nearer zero than the floored formula elsewhere too: -5,938 against -5,940 at Les =
+7FFFh and 90° (§52.3).
+
+**The family is widened once**, by one choice, before it is graded:
+
+- **B5, Vva's rounding past the limit**: floor, as §52.2's member rounds quotients; or toward zero (2).
+
+That is 32 members, 5 bits, beside the constant. The rank is §52.4's. No further widening follows.
+
+### 52.6 The branch chosen, built, and the grade (measured 2026-10-04)
+
+**The choice.** `dsp_limit dsp1b 65536` with the traces of Lock On, Ballz 3D and Pilotwings ranked the 32 members by exact
+results. The first keeps **B5 at floor**: Vof half up, the screen at Les/cos Δ, K times cos Δ, Project with no branch,
+Vva floored. It has 1,781,381 exact results. The member with Vva toward zero has 1,766,964, though it has more close
+results (3,649,852 against 3,649,824). It gains in Lock On's Parameter (30,652 exact against 19,684) and Ballz 3D's
+(5,082 against 3,685), and loses more in the seeded set's (44,436 against 71,187). By the declared rank the floored
+member is built.
+
+**Built** in `dsphle.rs`. `Projection` takes the branch when lim ≤ Azs < 8000h or 8000h ≤ Azs ≤ C732h:
+
+- the view is placed at the limit, or its negative, and the eye at Azs;
+- Vof = Les·tan Δ, half up;
+- Vva and Raster's denominator use the screen at Les/cos Δ;
+- Raster's K is k·cos Δ/cos z_v;
+- Target uses the virtual camera;
+- Project does not change.
+
+Below the limit every result is as §52.2's. **Timing** past the limit, the medians of 4,096 seeded cases
+(`DSP_PROJ_AZS=38CE-4800 DSP_PROJ_TIMING`): Parameter's last input at work 541 and notice 499 (506-581, 464-539),
+Project's at notice 354, Target's at 118, and a raster line's first result at 130/118 and later ones at 117. No table
+was added; the constant is `LIMIT`. The state did not change, so its version stays 22.
+
+**Through the ports** (`DSP_LIMIT_PORTS=1 dsp_limit`, 65,536 seeded cases with Azs from 38CEh to 4800h, half jittered;
+the DSP-1 and DSP-1B alike):
+
+| Command | All results close | All exact | Transfers or SR differ |
+|---|---|---|---|
+| 02h Parameter | 40,714 (62.1%) | 169 | 0 |
+| 0Ah Raster, two lines | 32,362 (49.4%) | 304 | 0 |
+| 06h Project | 64,468 (98.4%) | 47,574 (72.6%) | 0 |
+| 0Eh Target | 40,505 (61.8%) | 611 | 0 |
+
+Without the limit (§49.3), none of these but Project came near the image. The misses left are of 1 to 2%: Bn and Dn
+about 1.4% large, and (Cx, Cy) 5 to 20 off at distances of thousands. Below the limit the ports' grades are unchanged
+to the case. **On the traces**:
+
+| Game | Parameter | Raster |
+|---|---|---|
+| Lock On | 43,752 of 43,872 close | 2,560,736 of 2,647,288 lines (96.7%, from 2.2%) |
+| Ballz 3D | 5,588 of 5,588 | none given |
+| Pilotwings, past the limit | 567 of 756 | 104,914 of 133,056 lines |
+
+Pilotwings' Target past the limit is close in 195 of 378. The crate test
+`the_replacements_branch_past_the_limit_stays_close_to_the_image` holds the ports' shares on both images.
+
+**In lockstep** (7,200 frames, the pictures in `~/.cache/emusen/probe/venusrt/dsp-hle/shots/`; those before the limit
+was built in `shots/before-limit/`):
+
+- **Pilotwings' level flight is fixed.** At frames 2,080, 2,120 and 2,160 the replacement draws the island under the
+  glider as the image does (`pilotwings-f2120.png`, against `before-limit/pilotwings-f2120.png`, which showed sea). The
+  demo still diverges later, as §51.3 found, from the flight model's values.
+- **Lock On draws no ground** (`lockon-f1600.png`, `lockon-f2000.png`): the floored Vva, -47 against the image's -46,
+  fails the game's horizon test. With Vva toward zero the ground is drawn and matches the image's closely
+  (`exp/lockon-trunc.png`). Pictures equal: 1,532 of 7,198. The median of differing pixels is 58.6%, from 37.3% when
+  the ground was drawn as streaks.
+- **Super Mario Kart, Suzuka 8 Hours and Michael Andretti's Indy Car Challenge** never pass the limit and are unchanged
+  from §52.2.
+- **Ballz 3D** is unchanged: it passes the limit, but nothing it draws comes from Parameter's results.
+- **Super Bases Loaded 2's** camera never passes the limit on the image. Its attract sequence took another course on
+  the replacement: pictures equal 3,031, from 3,191, and sprites within 1 pixel 94.8%, from 95.4%.
+
+### 52.7 What is put for decision
+
+**B5, Vva's rounding past the limit.** The declared rank, exact results over both sets, chose floor by 14,417 exact
+results in 1.78 million. That choice leaves Lock On without its ground, which the other member draws. The tester may:
+
+- keep the rank, and Lock On needs the player's image;
+- or choose B5 toward zero for Lock On's sake. That is a re-ranking within the declared family and adds nothing from
+  the image.
+
+The difference is one line in `Projection::parameter`. The image's Vva past the limit is not quite either member's,
+which the seeded set's exact counts show (71,187 and 44,436 of 262,144).

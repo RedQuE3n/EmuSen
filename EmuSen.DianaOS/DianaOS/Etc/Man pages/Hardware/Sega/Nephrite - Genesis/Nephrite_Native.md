@@ -320,7 +320,10 @@ Each is a rule in hardware terms that the documents leave open or that a test sh
 - **The open bus is the last word the 68000 read in program space**, which by an operand's read is the next
   instruction (its prefetch). An unmapped read returns that word's high byte with the low byte zero, for bytes and
   words alike, as MacDonald's notes say and as the expected values his memory test prints beside its results show.
-  Genesis Plus GX and BlastEm return the whole word to a word read; the document is followed. The VDP's unused
+  Genesis Plus GX and BlastEm return the whole word to a word read; the document is followed. That was seen by running
+  them as black boxes through the reference probe on `memtest_68k.bin` to frame 600: in both, the test's record at
+  `$FF0000`, its word read of `$400000`-`$7FFFFF`, holds `$4E71` in the 68000's RAM (Nephrite holds `$4E00`), and their
+  pictures show `4E71` in that row. The VDP's unused
   addresses return the whole word, its status register's top six bits are taken from it, and `$A11100` reads it with
   bit 0 (or 8) the bus's state. **Measured** with the memory test (`memtest_68k.bin`, no source): twelve of its
   thirteen rows match the values printed as expected. The thirteenth is open (§9.4).

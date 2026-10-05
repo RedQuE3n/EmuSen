@@ -1174,6 +1174,24 @@ their data.
   stores between a flush's accesses, the ROM port's priority between a buffer load and a cache fill, back-to-back R14
   writes, and STOP's wait for the ports.
 - Pinned by: Star Fox's $15BB, Vortex's $198C, and the GSU test ROMs staying passed.
+- **Yoshi's Island's stork at frame 1800, measured 2026-10-05 (G5).** WRAM, GSU RAM and OAM were compared with Mesen's
+  dumps frame by frame, each VenusRT frame matched to Mesen's nearest within a window:
+  - **VenusRT's own boot program accounts for 7 frames of a 9-frame lag.** With it, WRAM equals Mesen's to within
+    about 20 bytes at a lag of 7 frames from frame 100, and 9 from 300 on. With the tester's boot image, the lag is
+    0 to frame 300 and 2 after it. D-38's program, then, uploads this game's sound data more slowly than the
+    console's program; no rule follows from it, since D-38 fixes the protocol, not its speed.
+  - **The rest is one lag frame of the game's main loop.** The stork scene's scroll counter, WRAM $39, steps by 2
+    every frame from 1226 to 1353 in Mesen. In VenusRT (image) it steps the same from 1227, except once, at frame
+    1340, where it steps by 4: the main loop missed a frame and caught up. From 1225 on, GSU RAM differs from Mesen's
+    at every lag in $0094, the object table from $02C2 and the OAM buffer at $0AA0 (100-150 bytes). WRAM stays
+    within about 20 bytes at the scene's own lag.
+  - **The picture at 1800 does not depend on the power-on position.** Ten S-CPU positions from 0 to 800 clocks give
+    one picture, 1,374 pixels from Mesen's nearest frame (1790) with VenusRT's program, and 1,565 from 1797 with the
+    image.
+  - Argued, not measured: a frame whose GSU work overruns the frame on VenusRT and not on Mesen. That is the shape of
+    a GSU cost difference, and of this entry's unmodelled overlaps above.
+  - **No console oracle times the GSU.** Mesen is the only comparison, and this entry's built costs are the referee's.
+    G5's stork anchor is therefore put to the tester as dispute-logged GSU drift (`VenusRT_Native.md` §63).
 
 
 ### D-36. SA-1: who waits, and for how long, when the S-CPU and the SA-1 reach the cartridge's ROM, BW-RAM or I-RAM together
@@ -1590,4 +1608,33 @@ their data.
 - Pinned by: "Random/echo data" singly and `spc_dsp6` in order; `a_fir_tap_at_minus_128_wraps_in_16_bits` in
   `apu/dsp.rs`.
 - Implemented in: the commit after this entry's (D-42's).
+
+### D-44. NHL '94: the credits' puck at frame 2200 follows a random-number generator that the game steps in its idle loop
+- Opened: 2026-10-04, by G5's anchor at 2200 (`VenusRT_Native.md` §41.6): the spinning puck in the credits, a
+  sprite of about 5 by 3 pixels, differs from Mesen's by 10-11 pixels, and no Mesen frame within ±100 is equal.
+- Measured 2026-10-05, black box, from both engines' WRAM after each frame and their CPU traces:
+  - **WRAM agrees with Mesen's to within about 50 bytes to frame 1510**, at a lag of one frame (VenusRT a frame
+    early). The constant differences are a few counters and an RNG at $0793-$0795.
+  - **The RNG is stepped in the idle loop.** From frame 182 the game advances it about 420 times a frame, at
+    $80:8663 and $80:8671, in the loop that waits for the next frame. Its value at any frame therefore counts the
+    CPU's spare cycles since frame 182. Mesen's value at frame 185 occurs in VenusRT's sequence of states, reached
+    at VenusRT's frame 184. The generator is the same; the two engines stand a different number of steps along it.
+  - **From frame 1512 the credits' state parts**, in the direct page at $6B-$7B and the buffer from $7F:007C. Over
+    frames 1550-2200 about 2,000-3,000 WRAM bytes differ at every lag. The puck's tile data in VRAM never equals
+    Mesen's at frame 2200 in any VenusRT frame from 1 to 2,400.
+  - The traces agree instruction for instruction, apart from where wait loops end, where IRQs land and which
+    instruction the DRAM refresh falls in. Those 40-clock differences come in symmetric pairs.
+  - The game's start-of-play timer, $00BD = $0083 + $2D0, is set from the frame counter by the code at $9F:F5FF. It
+    is $3B with VenusRT's boot program and $3C with the tester's image and in Mesen. The image does not change the
+    1512 parting or the puck.
+  - **VenusRT's own picture of the puck at 2200 depends on the power-on position.** Ten S-CPU positions from 0 to 800
+    clocks give two different puck pictures, five each, and neither is Mesen's.
+- Documents read: none bear on it; the RNG and the scene are the game's.
+- Referee: not read. Mesen's source: none.
+- Conclusion, 2026-10-05: no emulation rule is implicated. What the anchor shows is a function of the CPU's spare
+  cycles per frame since frame 182, and so of the power-on position, which the console does not fix (D-6). Mesen
+  reaches one value of it and VenusRT, depending on where it powers on, two others. The anchor is put to the tester as
+  dispute-logged drift of the same class as Super Mario RPG's attract lead (`VenusRT_Native.md` §41.20, blocker
+  12); an anchor on a deterministic scene would replace it. Argued from the measurements above.
+- Pinned by: G5's recorded hash for the anchor.
 

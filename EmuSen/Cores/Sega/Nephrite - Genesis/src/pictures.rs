@@ -5,7 +5,7 @@ use crate::machine::Machine;
 use crate::media::Media;
 use crate::render::{vram4_address, MAX_W};
 
-fn w(words: &[u16]) -> Vec<u8> {
+pub(crate) fn w(words: &[u16]) -> Vec<u8> {
     words.iter().flat_map(|v| v.to_be_bytes()).collect()
 }
 
@@ -18,7 +18,7 @@ fn cram(a: u32) -> u32 {
 }
 
 /// A cartridge whose code sets `regs`, writes each block through the data port after its command, then runs `tail`.
-fn program(regs: &[u16], blocks: &[(u32, Vec<u16>)], tail: &[u16]) -> Vec<u8> {
+pub(crate) fn program(regs: &[u16], blocks: &[(u32, Vec<u16>)], tail: &[u16]) -> Vec<u8> {
     let mut r = vec![0xFFu8; 0x8000];
     r[0..8].copy_from_slice(&w(&[0x00FF, 0xFE00, 0x0000, 0x0200]));
     r[0x100..0x110].copy_from_slice(b"SEGA MEGA DRIVE ");

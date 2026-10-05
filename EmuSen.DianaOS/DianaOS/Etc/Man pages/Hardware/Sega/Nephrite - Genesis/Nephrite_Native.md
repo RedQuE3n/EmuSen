@@ -1139,3 +1139,104 @@ read time and the status-register ROMs.
   in part (§16.2).
 - From stage 3, unchanged: the seven EEPROM boards no document wires, Barver Battle Saga's protection device and the
   Z80 window's alignment (§12).
+
+## 18. Stage 5, step 1: the PSG, the YM2612's interface, the mix and the output (2026-10-05)
+
+### 18.1 What it built
+
+- **The PSG**, as Beryl's `beryl-sn76489` (`Beryl-HW/Beryl_SN76489.md`): crates shared between the Sega cores live
+  in Beryl (decided 2026-10-05), and the Master System and the Game Gear carry the same chip. Nephrite gives it
+  Sega's variant (16-bit noise register, bits 0 and 3 tapped) and its clock, the Z80's over 16 (240 master clocks a
+  tick), and writes it through `$C00011`-`$C00017` from the 68000 and `$7F11`-`$7F17` from the Z80, each write at the
+  master clock of the processor making it.
+- **The YM2612's interface** (`ym2612.rs`): its four ports at the Z80's `$4000`-`$5FFF`, which the 68000 reaches
+  through `$A04000` with the Z80's bus. Its rules, each from a document read as prose:
+  - one address register of nine bits, the address and the part of the port it was written through, so that data
+    through either data port goes to that part (Nemesis's test, SpritesMind topic 386);
+  - the chip's own registers, `$21`-`$2F`, are part 0's only (Sauraen's reading of the die, the same topic);
+  - every register is zero at power-on but the left and right bits of `$B4`-`$B6`, which are set (Nemesis and Snake,
+    the same topic);
+  - timer A counts once a sample, from its ten-bit value to 1,024; timer B once every sixteen samples, from its value
+    to 256; loading either (bit 0 or 1 of `$27` rising) starts it from its value, an overflow reloads it and, with
+    bit 2 or 3 set, raises its flag, which bit 4 or 5 written as 1 clears (plutiedev's register page, the MegaDrive
+    Wiki and the YM2608's terms, as Nemesis's test confirmed them);
+  - the busy flag reads set for 32 internal clocks, 192 of the 68000's, after a data write and not after an address
+    write, and only at port 0 of the discrete YM2612 (Eke's tests; D-13);
+  - channel 6's DAC is `$2A` with `$2C` bit 3 as a ninth bit below it, enabled by `$2B` bit 7, in channel 6's place on
+    the sides its `$B6` names (plutiedev; Sauraen's reading of `$2C`).
+  The FM operators are not built: until the next step every channel but the DAC puts out nothing.
+- **The mix and the output.** Each chip is caught up when touched and at the frame's end, and each has its own step
+  synthesiser (`EmuSen_NativeCores.md` §12.6), so that its changes come in time order; the two are summed into a
+  `SampleQueue` and drained at 48 kHz through the v1 calls. A step of the YM2612's nine-bit output is 16 units, a PSG
+  level a quarter of its 8,192: a PSG square at full volume is 0.251 of the DAC's whole swing (§18.3).
+- **Accesses ahead of the frame.** The Z80 runs up to an instruction past the 68000's clock, so the sound keeps the
+  latest time any access or frame's end brought it to, and takes an access from behind that time as made then, an
+  error of under one Z80 instruction. The first WiseMan run of this step found the need: a Z80 write to the PSG after
+  the frame's last 68000 clock left the PSG's synthesiser a sample ahead of the YM2612's, and summing the two indexed
+  past the shorter (the core's panic aborted the test host). `sound.rs`'s
+  `an_access_ahead_of_the_frames_end_moves_the_end_with_it` fails the same way without the rule.
+- **The state**, version 8, keeps both chips, the PSG's clock and the sound's latest time, and both synthesisers'
+  pending differences.
+- **For the bench and the references**: `mdboard.py sound dac-square` (the DAC's whole swing as a square, written by
+  the 68000 through `$A04000`) and `sound psg-tone` (tone 0 at full volume), and Nephrite's `examples/wav.rs`, which
+  records its own output.
+
+### 18.2 Argued
+
+- **The mix's levels**: from the references (§18.3), the four of which put the PSG's square at 0.214 to 0.282 of the
+  DAC's swing; Nephrite's 0.251 is their median. No recording of a model 1 is in the corpus.
+- **The analogue path**: none yet. The PSG's output is unipolar, as the chip's is, and no filter or coupling
+  capacitor removes its offset; the model 1 filter is a later step of the stage.
+- **Timer B's divider** runs free, so that its first count after a load falls anywhere in sixteen samples; a timer's
+  count falls on the sample's boundary, and a register write takes effect at the next sample.
+- **Writes while busy are taken.** Sauraen reads the busy flag as a timer that blocks nothing; TmEE's report that DAC
+  writes beyond about 26 kHz garble is not modelled.
+- **The 68000's accesses to the YM2612** take its four clocks, as any access does (D-14).
+
+### 18.3 Measured (2026-10-05)
+
+- **Against the references**, `dac-square` and `psg-tone` at frame 180, one second from 1 s, the square measured as
+  the median of its samples above the mean less the median below:
+
+  | Core | DAC square | PSG tone | PSG over DAC | DAC square's frequency |
+  |---|---|---|---|---|
+  | Genesis Plus GX | 16,487 | 4,186 | 0.254 | about 530 Hz |
+  | PicoDrive | 14,241 | 4,018 | 0.282 | 535.3 Hz |
+  | BlastEm | 10,815 | 2,315 | 0.214 | 535.0 Hz |
+  | ClownMDEmu | 8,264 | 2,044 | 0.247 | 543.7 Hz |
+  | Nephrite | 8,160 | 2,048 | 0.251 | 543.6 Hz |
+
+  The tone is 440.4 Hz on all five. The square's frequency is the 68000's loop timing: BlastEm and PicoDrive give its
+  accesses to `$A04000` about 110 more of its clocks a half period than Nephrite and ClownMDEmu (D-14).
+- **The crate's tests**: 60 pass, among them the YM2612's (the address register's part, the busy flag by port and
+  model, the timers' periods and reset, the DAC's panning), the mix's (a PSG tone at its frequency, the DAC and the PSG
+  adding, an access ahead of the frame's end) and two 68000 programs polling `$A04000` (the busy flag for 192 clocks
+  at port 0 alone; timer A at `$3F0` overflowing 15 to 16 samples after its load); VDPFIFOTesting 122 of 122.
+  `beryl-sn76489`'s 8 and the step synthesiser's 5 pass; Beryl's CPU crates pass from their new folder (68000 20, Z80
+  15, SH-2 1).
+- **The conformance kit**, `--frames 600`: C1-C15 pass on the 240p suite, Sonic the Hedgehog and its sequel, Phantasy
+  Star IV, OutRun, VDPFIFOTesting, TiTAN's Overdrive 2, `dac-square`, `psg-tone` and Nemesis's CSM test, the audio
+  now part of C8's digests across a save and load (801 samples a frame on NTSC, 960 on PAL).
+- **The cost**, best of five runs of 600 frames beside the stage's starting point (`94a87e39`) in the same minute:
+  Sonic the Hedgehog 0.628 s against 0.622, Thunder Force IV 0.730 against 0.722, Phantasy Star IV 0.629 against 0.623.
+- **The corpus at anchors** (944 games, against Genesis Plus GX), now that the YM2612's status answers: pictures
+  matching up to the colour map, 718 at frame 120 and 630 at frame 600 (715 and 626 at stage 4's close); 24 pictures
+  changed, 16 nearer the reference at frame 600 and 7 further. Rampart, Super Kick Off, Hit the Ice, Alien Storm and
+  Slap Fight now match there, games that wait on the chip's timers or its busy flag. Devilish, which matched, is now
+  8,019 pixels off: its intro's text is on screen at frame 600 where the reference still shows the screen before it,
+  Nephrite running ahead through the sound driver's waits; to be looked at again with the FM operators built and D-13
+  and D-14 settled. The RAM's median equal bytes, 65,523 and 65,506 of 65,536 (65,522.5 and 65,504.5). WiseMan's
+  Nephrite, runner, discovery and registration tests pass (31).
+
+### 18.4 Next
+
+The FM operators: the phase generator (frequency number, block, detune and multiple), the envelope generator (its
+rates, key scaling, sustain and release), the operator's output through the sine and exponent tables as the documents
+describe them, the algorithms and feedback, and the LFO's amplitude and phase modulation. After them, in the plan's
+order: SSG-EG, CSM and channel 3's special mode, the multiplexed output and its ladder effect, the YM3438 of model 2
+as a setting, the model 1 filter; then the oracle (Nemesis's tests against the recording and the board's output pins
+as a black box, MDFourier) and the stage's dispute step (D-13, D-14).
+
+The YM2612 stays in Nephrite: of the Sega cores to come only the Genesis carries one (the Master System's FM unit is
+the YM2413), so it is not a Beryl crate by the rule of 2026-10-05; `ym2612.rs` keeps the Genesis's clock out of the
+chip's rules all the same.

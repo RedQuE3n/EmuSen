@@ -52,7 +52,7 @@ on:
       - '.github/workflows/rust-cores.yml'
 
 jobs:
-  # The crates every core builds with (EmuSen/Cores/Shared/) and Beryl's CPUs, tested on their own; no library of theirs ships.
+  # The crates every core builds with (EmuSen/Cores/Shared/) and Beryl's (the Sega cores' shared CPUs and chips), tested on their own; no library of theirs ships.
   shared:
     name: Shared crates ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

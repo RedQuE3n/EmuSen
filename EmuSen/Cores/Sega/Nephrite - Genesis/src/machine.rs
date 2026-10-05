@@ -5,6 +5,7 @@
 use crate::cart::Cart;
 use crate::genesis::{Genesis, Model};
 use crate::media::{Media, System};
+use emusen_native::SampleQueue;
 
 /// A memory of the attachments, by its space name and id (Nephrite_Plan.md §4.3).
 pub struct Memory {
@@ -47,6 +48,8 @@ pub struct Machine {
     pub six_button: [bool; 2],
     /// The firmware files given at create, by number; none is used yet.
     pub firmware: Vec<u32>,
+    /// The samples made and not yet drained, stereo at `sound::RATE`.
+    pub audio: SampleQueue,
 }
 
 /// The model a machine starts as: the header's market, overseas first, and no TMSS (Nephrite_Native.md §9).
@@ -78,7 +81,7 @@ impl Machine {
         for &(id, name, size) in list {
             extra.push(Memory { id, name, bytes: vec![0; size] });
         }
-        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], six_button: [false; 2], firmware: Vec::new() }
+        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], six_button: [false; 2], firmware: Vec::new(), audio: SampleQueue::default() }
     }
 
     /// The spaces in id order: the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
@@ -141,6 +144,8 @@ impl Machine {
             }
             self.genesis.hw.draw = !self.skip;
             self.genesis.run_frame();
+            let (hw, audio) = (&mut self.genesis.hw, &mut self.audio);
+            hw.sound.take(hw.clock, |l, r| audio.push_pair(l, r));
             if !self.skip {
                 let f = &self.genesis.hw.vdp.frame;
                 self.picture.clear();

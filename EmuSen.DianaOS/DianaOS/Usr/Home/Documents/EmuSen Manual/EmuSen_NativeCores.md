@@ -1440,3 +1440,49 @@ Together that is about 60 lines in each shim.
 - the PGO retrain;
 - whether its placement matters as MercuryRT's did. PGO lays out the hot code already, so the prediction is that it
   does not, and 5b's interleaved timing is the check.
+
+### 12.6 The band-limited step synthesiser, `emusen_native::steps` (2026-10-05)
+
+Built for Nephrite's stage 5 (`Nephrite_Native.md` §18), and in this crate because nothing in it knows a console: any
+core whose sound sources hold a level between changes can use it.
+
+**Why steps.** The Genesis's sources are held levels: the YM2612's DAC holds each sample for 1,008 master clocks, and
+the PSG's channels are squares whose edges fall on its 223.7 kHz clock. A source that holds a level between changes
+is exactly a sum of steps, and a band-limited step placed at the change's own time, at the output rate, is that
+source's output with nothing above the cutoff and no alias of what lies above the output's Nyquist frequency. The
+alternative, running each source at its own rate and then resampling its samples, treats the held levels as points
+and needs a second filter for the images of the 53 kHz and 223.7 kHz rates; the step method has one filter and costs
+a kernel's taps per change, not per input sample.
+
+**The mechanism.** `Steps::new(num, den, rate)` takes the input clock as an exact fraction of a second (Nephrite's
+NTSC master clock is 4,725,000,000/88 Hz) and the output rate. `set(t, [l, r])` says the source holds those levels
+from clock `t`; the change is placed at its exact position in output samples, to 1/256 of a sample, and the
+kernel's 32 taps for that phase, scaled by the change, are added to a ring of differences. A sample is summed once no
+later change can reach it, 16 samples behind the present; `take(t, out)` hands over every finished sample. Two
+sources caught up separately each need their own synthesiser, since a synthesiser's changes must come in time order;
+their outputs are summed sample by sample.
+
+**The kernel** is a sinc at 0.45 of the output rate under a Blackman window 32 samples wide, and each tap is the
+band-limited step's rise over one output sample: the windowed sinc's integral from one sample to the next (Simpson's
+rule on 1/256 of a sample), not the sinc's value at the sample. *A first version used the sinc's values.* Its
+square-wave test read the fundamental of a 6,857 Hz square 3.4% high and its steps half a sample early. Summing an
+impulse's samples is a discrete integrator, whose gain against the true integral is (ω/2)/sin(ω/2), which is 1.0343
+at 6,857 Hz on 48 kHz; the test's figure was that factor exactly. With the integral's differences, a step reads half
+its height at its own time and the square's harmonics come out at their size. Every phase's taps are rounded to sum to
+exactly 2^15, so that a step settles on its level to the unit.
+
+**What it measures.** The kernel's response (its spectrum, computed from the same windowed sinc): 0.00 dB to 17 kHz,
+−0.02 dB at 18 kHz, −1.2 dB at 20 kHz, −6.0 dB at the 21.6 kHz cutoff, −28 dB at 24 kHz and at most −75 dB from 26 kHz
+up. In the crate's tests a 1,714 Hz square keeps its first, third and fifth harmonics within 1% of their size, and a
+6,857 Hz square on a 960 kHz clock shows less than 1/1000 of its fundamental at 13,714 Hz, where its fifth harmonic
+would alias and where a square has nothing of its own.
+
+**Determinism and state.** The kernel is computed at construction with additions, multiplications, divisions and a
+sine of the crate's own (its series after range reduction), so that it is the same on every machine and in every
+build; no platform's `sin` is involved. The state is a fixed block: the levels held, the running sums, the first
+unsummed sample and the 64 pending differences in order from it. The finished samples are not in it, since a state is
+taken between frames, when they have been handed over; a loaded state continues sample for sample, which the
+conformance kit's C8 checks through the audio digest across a save and load.
+
+**Cost.** A change costs 64 multiply-adds. On the Genesis that is about 53,000 changes a second from the YM2612 and
+a few thousand from the PSG; Nephrite's frame cost rose by about 1% with both in place (`Nephrite_Native.md` §18).

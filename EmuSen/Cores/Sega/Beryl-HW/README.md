@@ -6,6 +6,8 @@ first were the processors.
 - `beryl-m68k` — the Motorola 68000: Nephrite's Genesis and Sega CD, and later any core with a 68000.
 - `beryl-z80` — the Zilog Z80: Nephrite's sound CPU, and later Endou (Master System) and Jadeite (Game Gear).
 - `beryl-sh2` — the Hitachi SH-2 (SH7604): Nephrite's 32X, and later Zoisite (Saturn).
+- `beryl-sn76489` — the Texas Instruments SN76489 and Sega's copy of it in the VDP: the Genesis's PSG, and later
+  Endou's and Jadeite's (with the Game Gear's stereo register).
 
 Named for Queen Beryl, who commands the Shitennou (`EmuSen_Core_Naming_Scheme.md` §3). The interface and each crate's
 record are in `Man pages/Hardware/Sega/Beryl-HW/`.

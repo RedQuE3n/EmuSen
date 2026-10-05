@@ -597,7 +597,9 @@ write placed as the board shows it (D-9, D-10); a transfer's start latency (D-11
 the stage open (§16 there). The stage's dispute step, the same day, settled the FIFO's write path and a transfer's
 start (D-11) and the status register's flags (D-12) on the board, its cartridge now serving the VDP's reads; stage 4
 was closed (§17 there), its oracle met, with D-2, mode 4's left column and the 128 KiB mode's display reads carried
-forward.*
+forward. Stage 5's first step, the same day, built the PSG as a shared crate (Beryl's SN76489), the YM2612's
+ports, timers, busy flag and DAC, and the mix, resampled to 48 kHz by a band-limited step synthesiser in emusen-native;
+the FM operators are its next step (§18 there, D-13 and D-14).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other
@@ -664,7 +666,9 @@ oracle and record page:
 ### 8.2 What else the cores could share (a proposal, §9 Q9)
 
 The SN76489 is also the Master System's and the Game Gear's PSG, and the VDP's mode 4 is the Master System's video
-mode. Both could become shared crates when Endou starts, as the CPUs are now.
+mode. Both could become shared crates when Endou starts, as the CPUs are now. *Done for the SN76489 on 2026-10-05, at stage 5 rather
+than when Endou starts: `beryl-sn76489`, in Beryl, where every crate shared between the Sega cores lives (decided
+2026-10-05; `Beryl-HW/README.md`). Mode 4's renderer follows the same rule when it is separated.*
 
 ### 8.3 What the framework should gain, found by planning this core
 

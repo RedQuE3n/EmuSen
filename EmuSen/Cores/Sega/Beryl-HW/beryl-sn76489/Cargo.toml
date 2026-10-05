@@ -1,0 +1,12 @@
+[package]
+name = "beryl-sn76489"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Beryl's SN76489: the PSG of the Genesis, and later of the Master System and the Game Gear, written from SMS Power's document and TI's datasheet. See Nephrite_Plan.md §8 and Beryl_SN76489.md.
+[lib]
+name = "beryl_sn76489"
+
+[dependencies]
+emusen-native = { path = "../../../Shared/emusen-native" }

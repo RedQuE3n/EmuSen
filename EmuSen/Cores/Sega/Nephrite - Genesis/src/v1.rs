@@ -12,8 +12,8 @@ use crate::state::{STATE_VERSION, STATUS_OTHER_SYSTEM};
 pub const STATUS_IMAGE_TOO_SHORT: i32 = -9;
 pub const MIN_IMAGE: usize = 0x200;
 
-/// The output rate before the sound chips exist; the resampled mix keeps it (Nephrite_Plan.md §5.5).
-pub const AUDIO_RATE: i32 = 48_000;
+/// The output rate, the step synthesisers' (`sound.rs`).
+pub const AUDIO_RATE: i32 = crate::sound::RATE as i32;
 
 /// Master clocks a second over a frame's (argued, Nephrite_Native.md §2.3): NTSC 15 times the colour subcarrier,
 /// 4,725,000,000/88 Hz, over 262 lines of 3,420; PAL 12 times 4.43361875 MHz over 313 lines.
@@ -179,7 +179,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. At this stage it runs the Genesis's two processors, buses, cartridges, pads and picture; the sound is still to come.".into()),
+            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. At this stage it runs the Genesis's two processors, buses, cartridges, pads and picture, and the PSG and the YM2612's DAC; the FM synthesis is still to come.".into()),
             systems: vec![
                 system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()]),
                 system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')]),
@@ -291,14 +291,16 @@ impl Core for Machine {
     }
 
     fn audio_buffered(&self) -> usize {
-        0
+        self.audio.len()
     }
 
-    fn drain_audio(&mut self, _out: &mut [i16], _max_frames: usize) -> usize {
-        0
+    fn drain_audio(&mut self, out: &mut [i16], max_frames: usize) -> usize {
+        self.audio.drain(out, max_frames)
     }
 
-    fn set_audio_limit(&mut self, _samples: usize) {}
+    fn set_audio_limit(&mut self, samples: usize) {
+        self.audio.set_limit(samples);
+    }
 
     fn set_settings(&mut self, settings: &Settings) -> Result<(), i32> {
         self.apply_pads(settings);

@@ -6,7 +6,7 @@ registers are kept: **measured** is a number taken here, on the desktop (Ryzen 7
 1.98.1), with the tool named beside it; **argued** is reasoning with no measurement behind it; **predicted** is one of
 the plan's P1–P8, retired where a measurement reaches it.
 
-The CPUs' records are their crates' own pages in `../Beryl - Shared CPUs/`.
+The CPUs' records are their crates' own pages in `../Beryl-HW/`.
 
 ---
 
@@ -16,12 +16,12 @@ The plan's §6 row 0. What it built:
 
 - **The naming**, decided by the tester on 2026-10-04: Nephrite is the Genesis with the Sega CD and the 32X as its
   attachments, its folders renamed from `Nephrite - 32X` to `Nephrite - Genesis`; Beryl is the shared CPU library, its
-  folders renamed from `Beryl - Genesis` to `Beryl - Shared CPUs` (`EmuSen_Core_Naming_Scheme.md` §3, with the reasoning
+  folders renamed from `Beryl - Genesis` to the library's own name, and on 2026-10-05 to `Beryl-HW` (`EmuSen_Core_Naming_Scheme.md` §3, with the reasoning
   for the crate's plain name).
 - **The crate** `nephrite`, `EmuSen/Cores/Sega/Nephrite - Genesis/`, on the core ABI v1 from its first commit, with a
   stub machine and its own state format (§2). No part of any console is emulated.
 - **The three Beryl crates**, `beryl-m68k`, `beryl-z80` and `beryl-sh2`, as skeletons: each processor's bus trait,
-  registers and step signature, which refuses to step until the processor is built (`Beryl - Shared CPUs/README.md`).
+  registers and step signature, which refuses to step until the processor is built (`Beryl-HW/README.md`).
 - **`Observer` in `emusen-native`**, the trait through which a Beryl CPU reports to the shared `Hooks` at no cost when
   unobserved (`debug.rs`).
 - **The single-step harnesses** in `beryl-m68k` and `beryl-z80`, with positive and negative controls run over the whole

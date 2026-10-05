@@ -1,8 +1,10 @@
-# Beryl (the shared CPUs of the Sega cores)
+# Beryl Hardware (the shared hardware of the Sega cores)
 
-Not a console core: the processors the Sega cores are built on, one crate each in
-`EmuSen/Cores/Sega/Beryl - Shared CPUs/`, so that each can be used alone. Planned in `Nephrite_Plan.md` §8, since
-Nephrite is their first user; each crate's own record is beside this page.
+Not a console core: the chips more than one Sega core uses, one crate each in `EmuSen/Cores/Sega/Beryl-HW/`, so that
+each can be used alone. The processors came first, planned in `Nephrite_Plan.md` §8 since Nephrite is their first
+user; each crate's own record is beside this page. *Decided 2026-10-05: crates shared between the Sega cores live in
+Beryl, whatever the chip; the folder, once named for the CPUs alone, is `Beryl-HW` (Beryl Hardware).* The interface
+below is the processors'; a crate of another kind keeps the contract its own section gives.
 
 - [`Beryl_M68k.md`](Beryl_M68k.md) — `beryl-m68k`, the Motorola 68000, graded by SingleStepTests' 68000 suite and
   TomHarte's 680x0 tests, their disagreements refereed by fx68k and Nuked-MD's 68000 run as black boxes (its §6).

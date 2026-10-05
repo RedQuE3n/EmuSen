@@ -14,7 +14,7 @@ The page keeps three registers apart, as VenusRT's does:
 
 The CPUs are not Nephrite's own. They are the Beryl crates (`beryl-m68k`, `beryl-z80`, `beryl-sh2`), shared with the
 later Sega cores and with any other core that has one of these processors (§8). Each Beryl crate has its own oracle
-and its own record (`Beryl - Shared CPUs/`); this page plans them because Nephrite is their first user.
+and its own record (`Beryl-HW/`); this page plans them because Nephrite is their first user.
 
 ---
 
@@ -635,7 +635,7 @@ default for its files), applied per system: the Genesis after stage 6, the Sega 
 
 ### 8.1 The Beryl crates
 
-`EmuSen/Cores/Sega/Beryl - Shared CPUs/`, one crate per processor so that each can be used alone, each with its own
+`EmuSen/Cores/Sega/Beryl-HW/`, one crate per processor so that each can be used alone, each with its own
 oracle and record page:
 
 | Crate | Users | Oracle |
@@ -644,7 +644,7 @@ oracle and record page:
 | `beryl-z80` | Nephrite's sound CPU; later Endou (Master System) and Jadeite (Game Gear) | SingleStepTests Z80, T-state by T-state; ZEXDOC/ZEXALL |
 | `beryl-sh2` | Nephrite's 32X; later Zoisite (Saturn) | test programs from the manual; the SH-4 suite's shared instructions |
 
-**The interface the cores use** (built at stage 0 as signatures; `Beryl - Shared CPUs/README.md`):
+**The interface the cores use** (built at stage 0 as signatures; `Beryl-HW/README.md`):
 
 - **A bus trait per processor**, in the processor's own terms: the 68000's `Access` (address with A0, width, function
   code, locked for TAS) with read, write, idle, interrupt level, acknowledge, address error and the RESET pulse; the

@@ -5570,3 +5570,199 @@ Kart, Suzuka 8 Hours, Michael Andretti's Indy Car Challenge and Super Bases Load
 
 **By the rule as written, floor stays, and nothing is rebuilt.** Lock On keeps drawing no ground (§52.6). Had the
 condition been read over both sets, the traced traffic would have ranked toward zero first.
+
+## 53. The DSP replacements' clone check (2026-10-04)
+
+`VenusRT_DspHle.md` §5.4 asks for the replacements' sources to be compared mechanically with the DSP code most likely to
+have contaminated a writer. §41.9 ran that comparison once, as part of G8, when only `dsphle.rs` and `dspengine.rs`
+existed. This section repeats it on the finished set of replacements. It was run by a reader who has written none of
+the replacement code and writes none of it. The reference sources were read by the tool. The reader looked at them only
+at the lines a flagged match pointed to, and this section describes them only by file name, count and offset, as §4.1
+requires. Every number below was **measured** on 2026-10-04 at WiseMan `f4ec8031`.
+
+### 53.1 What was audited
+
+- **The replacements**, `src/chips/`: `dsphle.rs` (1,130 lines; 1,218 fingerprints at §4.1's k and window), `dsp2.rs`
+  (645; 722), `st010.rs` (206; 226), `dsp4.rs` (288; 238) and `dspengine.rs` (112; 40).
+- **The independent generators**, `EmuSen.WiseMan/Reference/analysis/dsp1_tables.py` and `st010_tables.py`.
+- **The generated tables**, written by `dsp_oracle tables` (the DSP-1's sine S and derivative D, 256 words each; the
+  ST010's sine, 256 words). Each image is byte-identical to its generator's output. The crate tests
+  `no_replacement_source_holds_a_table_literal`, `the_tables_equal_the_independent_generator` and
+  `the_st010_sine_equals_the_independent_generator` pass.
+- **As a supplement**, `src/chips/dsporacle.rs` and the thirteen `examples/dsp_*.rs` files (4,271 lines). They hold the
+  oracle and the declared formula families, which a copied formula would pass through first.
+
+### 53.2 The comparison set
+
+Everything was fetched into `~/.cache/emusen/probe/venusrt/clonecheck/dsp/`, outside the repository.
+`PROVENANCE.txt` there gives each source's URL, commit and licence, and `scripts/` and `runs/` hold the commands and
+their full output.
+
+| Set | Source | Files, lines |
+|---|---|---|
+| `bsnes-hle` | bsnes `0c2fa0db`, `sfc/coprocessor/` dsp1, dsp2, dsp4, st0010 | 19, 5,152 |
+| `bsnesmercury-hle` | bsnes-mercury `79d7f9de`, `sfc/chip/` dsp1-dsp4, st0010 | 21, 6,427 |
+| `bsnes059-hle` | bsnes 0.59 as carried by beetle-bsnes `5f05e4c7`: dsp1-dsp4, st010, st011 | 23, 6,414 |
+| `snes9x-dsp` | snes9x `1bcc369e`: `dsp.cpp`, `dsp.h`, `dsp1.cpp`-`dsp4.cpp`, `seta.cpp`, `seta.h`, `seta010.cpp`, `seta011.cpp` | 10, 6,544 |
+| `mame0140-hle` | MAME tag `mame0140`: `snesdsp1.c`-`snesdsp4.c`, `snesdsp4.h`, `snesst10.c` | 6, 6,200 |
+| `wiki-st010` | the superfamicom wiki's ST010 page, its nine code blocks (page of 2022-05-24) | 1, 249 |
+| `bsnes-lle` | bsnes `0c2fa0db`: `sfc/coprocessor/necdsp`, `processor/upd96050` | 9, 837 |
+| `bsnesplus-necdsp` | bsnes-plus `a9789fab`: `snes/chip/necdsp` | 6, 748 |
+| `mame-upd` | MAME `c2334733`: `bus/snes/upd`, `cpu/upd7725` | 6, 1,908 |
+| `mesen` | Mesen2 `b9fa69dd`, `Core/SNES` (its DSP files unmodified in the local checkout) | 164 |
+
+**What this adds to §41.9's set.** §41.9 recorded that no bsnes or higan `sfc/coprocessor/` HLE could be found. Current
+bsnes carries one (dsp1, dsp2, dsp4 and st0010), and so does bsnes-mercury, with dsp3 as well. Both are included. The
+other sources are at §41.9's commits, except current MAME, which is at a newer head. snes9x has no `st010.cpp`, and its
+ST010 is `seta010.cpp`. MAME 0.140 has no ST011 file.
+
+**The sets against each other**, run as a check that the tool sees these sources' known lineage:
+
+| Pair | Pairs over 12 | Highest |
+|---|---|---|
+| bsnes current HLE, bsnes-mercury | 10 | 1.000 (`dsp4emu.c`, 767 shared) |
+| bsnes 0.59, bsnes current HLE | 10 | 1.000 |
+| bsnes 0.59, snes9x | 9 | 0.777 (`dsp4emu.c` ~ `dsp4.cpp`, 591) |
+| bsnes 0.59, MAME 0.140 | 10 | 1.000 (`st010_data.hpp` ~ `snesst10.c`, 361) |
+| the wiki's ST010 code, bsnes 0.59 | 2 | 0.601 (217) |
+| bsnes-plus necdsp, current MAME upd7725 | 3 | 0.553 (26) |
+
+The HLE sources form one family. The bsnes lineages are one code base, and snes9x and MAME 0.140 share most of it. A
+copy from any of them would be a copy from all.
+
+### 53.3 Structure
+
+**The runs.** `clonecheck.py <audited> <set>` for each of the two audited groups against each of the ten sets, with
+§41.9's vocabularies (fullsnes, anomie's documents, the WDC datasheet, the pinned DSP pages, and MoonRT's, MercuryRT's
+and MarsRT's `src/`). The threshold is §4.2's 12 shared fingerprints, at k = 16 and a window of 8. Each pair was run a
+second time with `--min-shared 1`, so that the largest pair under the threshold is known as well. The tool reads no
+`.py` file, so the generators were run through a wrapper that adds the extension and blanks docstrings. The tool itself
+was not changed.
+
+**No pair reaches the threshold.** The largest number of fingerprints any audited file shares with any reference file
+is 1:
+
+| | bsnes HLE | mercury | 0.59 | snes9x | MAME 0.140 | wiki | bsnes LLE | bsnes-plus | MAME upd | Mesen |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `dsphle.rs` | 1 | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 1 |
+| `dsp2.rs` | 0 | 0 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 1 |
+| `st010.rs` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
+| `dsp4.rs`, `dspengine.rs` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| the two generators | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+§4.2's negative control, two unrelated cores, peaked at 4. One shared 16-token k-gram is below that noise floor, and
+none of the single matches was examined further. The supplement peaks at 1 as well. In particular, `st010.rs` shares
+nothing with the wiki's ST010 code, the one source that `VenusRT_DspHle.md` §1.4 records as seen by the author of the
+plan.
+
+### 53.4 Tables
+
+**The tool's signal** (runs of eight or more literals, at least four distinct, matched by value) finds no shared table
+in any of the twenty runs. It sees fifteen runs in `dsphle.rs`, all in `dsp1_timing`, the cycle counts §39.3 measured,
+and one in a `st010.rs` test. None of them occurs in a reference.
+
+**A supplementary scan**, because the tool's runs break at a minus sign and cannot see a generated table. Every
+comma-separated run of eight or more literals in the references, signs kept and compared modulo 2^16 (229 runs), was
+matched in 8-word windows against the three generated tables and against the literal runs of the audited sources. The
+results:
+
+- **T1. The DSP-1's sine S** coincides with a 256-entry sine table that five references print: bsnes's three lineages,
+  snes9x and MAME 0.140, all identical to one another. 241 of S's 249 windows match, and 255 of 256 entries are equal.
+  The references' table is exactly §40.4's formula, floor(2^15·sin(2πi/256)) quarter-mirrored, at all 256 entries. The
+  one difference is at the formula's saturation point, where §40.3's member saturates after negating. S is produced by
+  `tables()` and `quarter_sine()` in `dsphle.rs`, a Taylor series in f64, and independently by `dsp1_tables.py`.
+  Neither holds a literal. **Verdict: (a)**, convergence forced by a documented formula. The replacement's copy is
+  generated by code, which is allowed. The entry where the two differ is evidence against copying.
+- **T2. The same S** also coincides with a 1,024-word literal in four references (bsnes's three lineages and snes9x).
+  Compared byte for byte, without printing, that literal **is the DSP-1B's data image**: those references embed the
+  program's data as a literal. S's words 0-127 sit in it at byte 556, and words 64-191 at byte 812. These are the two
+  formula-forced runs that `firmwarecheck --forced` found against the image in §40.4. **Verdict: (a)**, the same forced
+  run as T1, already proved formula-forced with zero residual. That these references embed the firmware's data is one
+  more reason why `VenusRT_DspHle.md` §1.2 keeps them unread.
+- **T3. The ST010's sine** coincides with a 256-entry table that six sources print: the wiki's code, bsnes's three
+  lineages, snes9x and MAME 0.140, all identical. 180 of 249 windows match, and 240 of 256 entries are equal. The
+  replacement is exactly round(32,767·sin(2πk/256)) by quadrant, §43.2's closest member, at all 256 entries. The
+  references' table departs from that formula at 16 entries, and the replacement carries none of the 16. It is
+  generated by `sine()` in `st010.rs` on `dsphle::quarter_sine`, and independently by `st010_tables.py`. **Verdict:
+  (a)**, generated by code, which is allowed. That the replacement keeps the formula where the references depart from
+  it is direct evidence that it was not taken from them. It also agrees with §43.2's finding that the image's table is
+  the formula broken at single entries.
+- **Cross-hits.** S matches 26 windows of the ST010 tables, and the ST010 sine matches 32 windows of the DSP-1's. These
+  are two sines of amplitude 2^15 and 2^15 - 1 agreeing wherever their roundings meet. **(a).**
+- **The derivative table D** matches nothing. Neither do the audited sources' own literal runs: the two in `dsp2.rs`
+  are a test's inputs, with fewer than four distinct values.
+- **T4 (supplement).** `dsporacle.rs:761`, the DSP-2 test's list of command numbers, which opens 00h, 01h, ... 07h,
+  matches an ascending run in `dsp3emu.c`, `dsp3.cpp` and `upd7725.cpp`. **(b)**, a coincidence of trivial code.
+
+### 53.5 Names
+
+**The tool's signal**, identifiers of six or more characters outside the vocabularies, gives one name: `necdsp`, against
+the bsnes LLE, bsnes-mercury, bsnes-plus and Mesen. The supplement adds `chipread` and `chipwrite` against current MAME.
+
+**A wider pass**, because the DSP-1's documented parameter names are short (Vof, Vva, Les, Lfe, Azs). It took every
+identifier of three or more characters. Of the audited code's 352, 89 occur in some reference. 85 of those are in the
+documents or the other cores. Vof, Vva, Les, Lfe and the command names are among them, as SnesLab's pages print them.
+The four that are not:
+
+- **`necdsp`** (`NecDsp` in `dspengine.rs` and `dsphle.rs`): the chip family's name, NEC's DSP, and the name of
+  VenusRT's own LLE module since §24. It escapes the vocabulary only because fullsnes writes it as two words. **(a).**
+- **`usf0`** (`USF0`, `usf0` in `dsp2.rs`): the status register's user flag 0. fullsnes prints it as "USF1-0", which the
+  folding splits. **(a).**
+- **`ceil`** (`st010.rs`): Rust's `f64::ceil`. **(b).**
+- **`tag`** (`dspengine.rs`, `dsphle.rs`): the state's engine tag, an ordinary word. **(b).**
+- **`chipread`, `chipwrite`** (supplement): the variants `Transfer::ChipRead` and `ChipWrite` of VenusRT's LLE, named
+  for what they are. **(b).**
+
+### 53.6 Constants
+
+The audited code holds 33 distinct non-trivial integer literals: at least 256, and neither a power of two, a power of two
+plus or minus one, nor a byte mask. 11 also occur in some reference. To read that count, the base rate: the references
+together contain 30.3% of all values in 256-1,023, 1.8% of those in 1,024-4,095 and 1.1% of those in 4,096-65,535,
+almost all inside their large data tables.
+
+- **C1. 38CEh**, `dsphle.rs`'s `LIMIT`, the DSP-1's limit angle on Azs. It is in no document. In five references
+  (bsnes's three lineages, snes9x, MAME 0.140) it occurs as one entry of a longer numeric table, not as a code
+  constant. The replacement holds the single value, which §52.1's amendment admits as measured. §52.3 records how: Azs
+  stepped by one through 38B0h-38F0h at three values of Les, the change found at 38CEh, and the held Vva checked
+  against -Les·cot(38CEh) to a third of a step. **The measurement was repeated here** with `dsp_oracle chains` on the
+  DSP-1B image (Fx = Fy = 0, Fz = 100, Lfe = 64, Aas = 0, Azs from 38C8h to 38D4h by one). At Les = 7FFFh, Vof is 0
+  through 38CDh and non-zero from 38CEh, and Vva stops changing at 38CEh. Les = 1000h gives the same threshold, and so
+  does the DSP-1 image at 7FFFh. **Verdict: (a)**, in the extended sense that the convergence is forced by a property
+  of the chip, measured and reproduced, rather than by a document. Any correct model must hold this value.
+- **C2. 272, 311, 362, 499, 527, 541, 600, 735 and FFF2h.** The first eight are cycle counts measured from the image
+  (§39.3, §42, §43, §52.6) or a test's tick, and FFF2h is -14, a test's expected word. Every occurrence in the
+  references is inside a data table of eight or more literals, none in code. 9 of the audited code's 18 values in
+  256-1,023 recur (these eight and C3's 768), against the 5.5 that the 30.3% base rate predicts, about 1.8 standard
+  deviations over. That is
+  within chance for a handful of values, and no recurrence sits where a cycle count could be read. **(b).**
+- **C3. 768** (300h), an offset in `dsp2.rs`'s state layout (`d[base + 768..]`), occurs in code only in the references'
+  DSP-3 files. VenusRT has no DSP-3 replacement. It is 3·256. **(b).**
+
+### 53.7 Verdict
+
+| Item | What | Verdict |
+|---|---|---|
+| Structure | no pair over 12; the largest share is 1 fingerprint, against a noise floor of 4 | nothing to judge |
+| T1 | DSP-1 sine ~ the references' sine table, 255/256 | (a), generated |
+| T2 | DSP-1 sine ~ the DSP-1B data image embedded in four references, at bytes 556 and 812 | (a), generated, §40.4's forced runs |
+| T3 | ST010 sine ~ the references' ST010 table, 240/256; the replacement keeps the formula at the 16 where they depart | (a), generated |
+| T4 | an ascending list of command numbers (supplement) | (b) |
+| Names | `necdsp`, `usf0`; `ceil`, `tag`, `chipread`, `chipwrite` | (a); (b) |
+| C1 | 38CEh, the limit angle | (a), a measured chip property, reproduced |
+| C2, C3 | cycle counts, -14, 768 | (b) |
+
+**No item is evidence of copying (c).** The replacements share no code structure with any DSP emulation in the set,
+nor with Mesen. Every shared table is one that the replacement generates from a stated formula, and two of the three
+differ from the references exactly where the formula says they should. The one undocumented shared constant is a
+measured fact about the chip, and the measurement reproduces.
+
+**What this does not show.** §4.2's calibration found that a port which restructures the code escapes the tool, so
+"nothing found" bounds statement-order copying only. A rule taken from a reference and rewritten in new code would pass
+this check. Against that, the record of each step stands: the declared families, the R1-R4 rules, and the one exposure
+`VenusRT_DspHle.md` §1.4 records. Nor can the check tell what a writer has seen. It can only say that what was written does
+not carry the references' text, their tables or their departures from the formulas.
+
+**Two observations, not findings.** `no_replacement_source_holds_a_table_literal` covers `dsphle.rs`, `dsp2.rs`,
+`st010.rs` and `dsp4.rs` but not `dspengine.rs`, which holds no array literal today. And `dsp1_timing`'s fifteen tuple
+runs escape that guard's count by their parentheses. They are measured latencies, which R1 admits, and none recurs in a
+reference.

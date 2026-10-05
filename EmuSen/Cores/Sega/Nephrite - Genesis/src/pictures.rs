@@ -285,9 +285,9 @@ fn row_hashes(m: &Machine) -> Vec<u32> {
 }
 
 /// Transfers through the shown lines into CRAM (40 entries, and one entry alone), a pattern's rows and VSRAM, whose
-/// writes land slot by slot whatever the 68000's timing: with the board's start delay for a transfer from RAM (D-11),
-/// the CRAM and VSRAM pictures are the board's on every row, and the pattern picture on all but four, each two pixels
-/// wide (Nephrite_Disputes.md D-9; `mdboard.py picture cram-dma`, `cram-dma-one`, `vsram-dma`, `pattern-dma`).
+/// writes land slot by slot whatever the 68000's timing: with the write path's start and the transfer's first read of
+/// D-11, the CRAM and VSRAM pictures are the board's on every row, and the pattern picture on all but four, each two
+/// pixels wide (Nephrite_Disputes.md D-9; `mdboard.py picture cram-dma`, `cram-dma-one`, `vsram-dma`, `pattern-dma`).
 #[test]
 fn mid_line_transfers_draw_as_the_board_does() {
     use crate::board_rows::*;
@@ -312,7 +312,6 @@ fn mid_line_transfers_draw_as_the_board_does() {
         ("vsram-dma", &vsram_dma, &VSRAM_DMA, 224),
     ] {
         let mut m = Machine::new(image, Media::read(image));
-        m.genesis.hw.transfer_start_delay = 270;
         while m.frames < 3 {
             m.advance();
         }
@@ -375,4 +374,69 @@ fn register_writes_show_where_the_board_shows_them() {
     let total: u32 = off.iter().map(|(_, n)| **n).sum();
     let near: u32 = off.iter().filter(|((_, d), _)| (21..=23).contains(d)).map(|(_, n)| **n).sum();
     assert!(near * 10 >= total * 9, "the blanking's offsets {off:?}");
+}
+
+/// The first change along line 150 of frame 3: the first write's pixel.
+fn first_write(image: &[u8]) -> Option<usize> {
+    let (m, wd, _) = run(image, 3);
+    (140..175).find_map(|y| (0..wd).find(|&x| px(&m, x, y) != if x == 0 { px(&m, wd - 1, y - 1) } else { px(&m, x - 1, y) }))
+}
+
+/// `mdboard.py`'s `write_landing`: the line interrupt after line 150 sets CRAM's address to entry 1 (or, the display
+/// off, entry 0, the backdrop), waits `nops` NOPs and writes one word, a new colour each frame.
+fn write_landing(nops: usize, display: bool, h40: bool) -> Vec<u8> {
+    let regs = [0x8014, if display { 0x8174 } else { 0x8134 }, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A96, if h40 { 0x8C81 } else { 0x8C00 }, 0x8D3F, 0x8F02, 0x9001];
+    let mut r = program(&regs, &[(cram(0), colours(16)), (vram(0x20), vec![0x1111; 16]), (vram(0xC000), vec![1; 2048])], &[0x46FC, 0x2000, 0x60FE]);
+    let entry = if display { cram(2) } else { cram(0) };
+    let mut hint = vec![0x32BC, 0x8F00, 0x22BC, (entry >> 16) as u16, entry as u16];
+    hint.extend(std::iter::repeat_n(0x4E71, nops));
+    hint.extend([0x0645, 0x0246, 0x3085, 0x5445, 0x4E73]);
+    let hint = w(&hint);
+    r[0x1000..0x1000 + hint.len()].copy_from_slice(&hint);
+    r[0x1100..0x1102].copy_from_slice(&w(&[0x4E73]));
+    r[0x70..0x74].copy_from_slice(&0x1000u32.to_be_bytes());
+    r[0x78..0x7C].copy_from_slice(&0x1100u32.to_be_bytes());
+    r
+}
+
+/// `mdboard.py`'s `dma_start`: 64 words from `source` into CRAM entry 1 from the line interrupt after line 150, the
+/// command after `nops` NOPs.
+fn dma_start(nops: usize, source: u32) -> Vec<u8> {
+    let regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A96, 0x8C81, 0x8D3F, 0x8F02, 0x9001];
+    let values: Vec<u16> = (0..64u16).map(|j| (j * 0x2B5 + (j >> 3) * 0x13 + 0x222) & 0xEEE).collect();
+    let mut r = dma_into(0xC002_0000, &values, &regs, &[(cram(0), colours(16)), (vram(0x20), vec![0x1111; 16]), (vram(0xC000), vec![1; 2048])], false, 0);
+    let mut hint = vec![0x32BC, 0x8F00, 0x32BC, 0x9340, 0x32BC, 0x9400, 0x32BC, 0x9500 | (source >> 1 & 0xFF) as u16, 0x32BC, 0x9600 | (source >> 9 & 0xFF) as u16, 0x32BC, 0x9700 | (source >> 17 & 0x7F) as u16];
+    hint.extend(std::iter::repeat_n(0x4E71, nops));
+    hint.extend([0x22BC, 0xC002, 0x0080, 0x4E73]);
+    let hint = w(&hint);
+    r[0x1000..0x1100].fill(0xFF);
+    r[0x1000..0x1000 + hint.len()].copy_from_slice(&hint);
+    r
+}
+
+/// Where a write through the data port, and a transfer's first word, land after the line interrupt, as the board's
+/// sweeps show them: the write path's start of 176 master clocks for a word arriving at an empty FIFO, and a
+/// transfer's first read 88 after its command (D-11; `mdboard.py picture write-landing-*`, `dma-start-*`).
+#[test]
+fn writes_land_where_the_board_lands_them() {
+    // The board's first changed pixel (or the two it alternates between) for 10, 12, ... 24 NOPs.
+    let board: [(bool, bool, [&[usize]; 8]); 4] = [
+        (true, true, [&[13, 45], &[45], &[45], &[45], &[45], &[61], &[61], &[77]]),
+        (true, false, [&[13], &[13, 45], &[45], &[45], &[45], &[45], &[45], &[61]]),
+        (false, true, [&[11, 15], &[19, 23], &[25, 31], &[33, 37], &[39, 43], &[47, 51], &[53, 57], &[61, 65]]),
+        (false, false, [&[7, 9], &[13, 17], &[19, 21], &[23, 27], &[31, 35], &[37, 39], &[41, 45], &[47, 49]]),
+    ];
+    for (display, h40, xs) in board {
+        for (k, xs) in xs.iter().enumerate() {
+            let x = first_write(&write_landing(10 + 2 * k, display, h40)).unwrap();
+            // The display off, a residual of up to 4 pixels is open (D-11).
+            let near = |b: &usize| if display { x == *b } else { x.abs_diff(*b) <= 4 };
+            assert!(xs.iter().any(near), "{} NOPs, display {display}, H40 {h40}: {x} against the board's {xs:?}", 10 + 2 * k);
+        }
+    }
+    for (nops, board) in [(0, 45), (4, 45), (6, 61), (8, 61), (10, 77)] {
+        for source in [0xFF0000, 0x4000] {
+            assert_eq!(first_write(&dma_start(nops, source)), Some(board), "{nops} NOPs from {source:06X}");
+        }
+    }
 }

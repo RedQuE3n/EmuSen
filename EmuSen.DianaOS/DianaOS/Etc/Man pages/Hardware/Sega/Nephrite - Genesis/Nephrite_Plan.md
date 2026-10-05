@@ -593,8 +593,11 @@ corpus's 944 pictures at frame 600 match the reference's up to a colour map (§1
 PAL and V30, mode 4, the eight-colour mode, CRAM dots, sprites parsed on the line before and MacDonald's window bug,
 each measured against Nuked-MD's board through its video pins where the documents are silent (D-4 to D-8); the
 slot-stamped renderer is its next step (§15 there). Its fourth drew lines in spans up to each write, each kind of
-write placed as the board shows it (D-9, D-10); a transfer's start latency (D-11) and the logic-analyser ROMs keep
-the stage open (§16 there).*
+write placed as the board shows it (D-9, D-10); a transfer's start latency (D-11) and the logic-analyser ROMs kept
+the stage open (§16 there). The stage's dispute step, the same day, settled the FIFO's write path and a transfer's
+start (D-11) and the status register's flags (D-12) on the board, its cartridge now serving the VDP's reads; stage 4
+was closed (§17 there), its oracle met, with D-2, mode 4's left column and the 128 KiB mode's display reads carried
+forward.*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

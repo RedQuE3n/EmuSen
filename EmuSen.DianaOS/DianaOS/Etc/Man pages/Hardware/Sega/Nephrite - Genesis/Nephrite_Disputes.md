@@ -294,7 +294,7 @@ CPUs' disputes in their own record pages.
 - Pinned by: nothing yet in the crate; `Nephrite_Native.md` §16.3 records the comparison.
 - Implemented in: the commit "Nephrite, stage 4 step 4".
 
-### D-11. OPEN. A transfer from the 68000's bus: its first write's delay after the command, and the busy flag
+### D-11. The FIFO's write path: a word reaching an empty FIFO is written 176 master clocks on, a transfer reads 88 after its command
 - Opened: 2026-10-05, at stage 4 step 4, by the transfer pictures of D-9 landing every write one slot earlier in
   Nephrite than on the board.
 - Documents read: none gives the start latency.
@@ -317,9 +317,85 @@ CPUs' disputes in their own record pages.
   log): the V counter steps between the 8-bit H `$9C`-`$9F` and `$A5`-`$A8` on both, but the board's pairs of reads
   8 clocks apart differ by one or two H values where Nephrite's always differ by the same, the VDP's answer to a
   port read not taking a fixed time on the board.
-- Conclusion: open. Nephrite keeps no start delay (`Hw::transfer_start_delay` 0), VDPFIFOTesting's 122 passing; the
+- ~~Conclusion: open. Nephrite keeps no start delay (`Hw::transfer_start_delay` 0), VDPFIFOTesting's 122 passing; the
   tests set 270 to hold the renderer to the board. The next dispute step: the bench's cartridge for the VDP's reads,
   then the latency with a cartridge source against VDPFIFOTesting, the busy flag at the 68000's release, and the
-  port's read time.
-- Pinned by: nothing yet.
-- Implemented in: not yet.
+  port's read time.~~ Superseded by the second step, below.
+- Second step (2026-10-05, the stage's dispute step). **The bench's cartridge**: during a transfer from the cartridge
+  the board raises `cart_dma` and `vdp_dma` and leaves `cart_cs` high, as the bench's trace of the pins shows;
+  `tb_md.cpp` now answers the cartridge's range then as well. A transfer from `$4000`
+  (`mdboard.py picture dma-start-rom-0` to `-10`) lands where the same transfer from RAM does, and `PAL512`, one
+  colour on the board before, now matches Nephrite at frames 3 to 5 on every pixel, up to a one-to-one map of
+  colours.
+- Second step's test programs: `mdboard.py picture write-landing-10` to `-24` (and `-off-`, `-h32-`, `-off-h32-`):
+  the line interrupt after line 150 sets CRAM's address, waits 10 to 24 NOPs and writes one word through the data
+  port, so the first changed pixel on line 150 is the write; in H40 and H32, the display on and off. The sweep
+  pictures above, again. And `mdboard.py picture fifo-wait-states`, the first step's replica of VDPFIFOTesting's
+  tenth part, now a named program.
+- Second step's referee: the board as in D-1; no RTL file was opened. The 68000's single writes land on the board
+  176 master clocks after the word reaches an empty FIFO, at the first slot from then: with that start Nephrite
+  lands all sixteen points with the display on exactly (in both widths), and with the display off five of eight
+  (H40) and four of eight (H32) on the board's pixel, the rest 2 to 4 pixels away (the board itself alternates
+  between two pixels 2 to 6 apart from frame to frame). A transfer's first read follows its command by 88 master
+  clocks, and its first word, reaching an empty FIFO, waits the same start: 264 in all, inside the first step's
+  bracket of 256 to 284, and the transfer sweeps (`dma-start-*` from RAM and from the cartridge) match the board at
+  all twelve points. The first step put the whole delay before the transfer's first read, which is why it broke
+  VDPFIFOTesting: its tenth part queues three writes before the transfer, so the transfer's words reach a FIFO that
+  is not empty and follow without the start, filling it as the console sees; the start belongs to the write path,
+  not to the transfer. A start of 264 before the first read, with the transfer's words exempt from the write path's
+  start, fails that part (the FIFO never full). **The busy flag**: with the cartridge answering, the board running
+  `fifo-wait-states` at 64 phases shows no busy sample (753 samples empty, 335 neither), and neither does
+  Nephrite; on both the FIFO's empty flag returns 7 to 10 samples after the command. The 53 busy samples of the
+  first step were the bench's: its cartridge did not answer the transfer's reads. The board shows the FIFO full at
+  none of the 64 phases and Nephrite at one; the console sees it within 2,048 iterations, which 64 phases sample too
+  coarsely to test. Holding the busy flag while the FIFO drains fails VDPFIFOTesting's FIFO Wait States, as holding
+  later control-port writes while it drains fails many parts; the flag is set only while a transfer reads.
+  **With the display off, a transfer's words** do not wait the start: MD1536 (the Genesis Plus GX suite's), whose
+  colours are made by CRAM transfers with the display off, run on the board to its frame 300 (about forty minutes of
+  the bench), is Nephrite's frame 300 on every pixel up to a one-to-one map of colours, and 259 pixels of CRAM dots
+  differ when the start is applied to those words. Its early frames (3 to 6, on the board) are the board's either way.
+  Why the display's state matters here is not known; the rule is the measurement.
+- Conclusion: **measured**, and one rule satisfies the console and the board: a word that reaches an empty FIFO,
+  with nothing waiting to be written, is written at the first slot at least 176 master clocks on; a word behind
+  others follows them; a transfer from the 68000's bus reads first 88 master clocks after its command and then
+  every 20, the 68000 released at its last read; the words of a transfer made with the display off do not wait the
+  start; the busy flag is set only while the transfer reads.
+  The two measurements did not conflict: the first step's busy samples and its cartridge transfers were the bench's
+  unanswered reads, and its delay was placed on the transfer where it belongs to the write path. **Open**: the
+  display-off residual of 2 to 4 pixels for single writes, and why a transfer with the display off is exempt.
+- Pinned by: `pictures.rs`'s `writes_land_where_the_board_lands_them` (the board's sweeps; it fails with the write
+  path's start at 0 and with the transfer's first read at 0) and `mid_line_transfers_draw_as_the_board_does` (fails
+  with the start at 0); `programs.rs`'s `vdpfifotesting_passes_every_test` (121 of 122 with the busy flag held while
+  the FIFO drains) and `md1536_shows_the_boards_picture` (fails with the display-off transfer's words waiting).
+- Implemented in: the commit "Nephrite, stage 4: D-11 settled".
+
+### D-12. The status flags and the port's read: vertical blanking at H `$14C` or `$10C`, the odd flag at the frame interrupt
+- Opened: 2026-10-05, at the stage 4 dispute step, by the plan's oracle for the stage (the logic-analyser ROMs
+  through the pad-port receiver) and by the HV ROM's reads of D-11's first step, whose durations varied on the board.
+- Documents read: MacDonald's "Sega Genesis VDP documentation" (the status register's bits) and his `m5hvc.txt`
+  (vertical blanking from H `$A8` of the 8-bit counter in H40 and `$87` in H32).
+- Test program: Nemesis's "sr logic analyser noint - H40V28", "- H32V28" and "intnorm - H40V28" and "hv logic
+  analyser noint - H32V28" (and "- H40V28", D-11), each run on the board with port 1's C held for its start and its
+  samples (status, then the HV counter, eight clocks apart) read from the RAM log in place of the receiver; Nephrite
+  runs the same images to frame 30 and its samples are read from its RAM. And programs written for the purpose:
+  `mdboard.py picture status-hv-h40` and `-h32` (the status register and the HV counter read as one long in a loop,
+  a NOP every other round so that the reads drift across the line) and `status-boot` (the status register at
+  power-on and after mode 4 and mode 5 are set, about four frames apart), their samples in the pictures' RAM logs.
+- Referee: the board as in D-1; no RTL file was opened. **The V counter** steps at the same H on both. **Horizontal
+  blanking** sets and clears on both within one sample of each other (from H `$E4` to `$06`-`$07` in H40, from
+  `$E9`-`$EA` to `$05`-`$06` in H32). **Vertical blanking** sets on the board two pixels after the V counter's step to
+  line 224, at H `$14C` of the 9-bit counter in H40 and `$10C` in H32, where Nephrite, after `m5hvc.txt`, had `$150`
+  and `$10E`; it clears with the step to line 255 on both. **The odd flag**, in "intnorm", changes on the board
+  between H `$01` and `$09` of line 224, the frame interrupt's H, where Nephrite had changed it as the line began; it
+  now changes with the frame interrupt, between `$FE` and `$0A`. **F**, the frame interrupt pending, sets on line 224
+  between H `$FA` and `$10` on both, and stays set in these programs, which do not take the interrupt. `status-boot`'s
+  five reads agree but for the hblank bit of two, which depends on where in the line each read falls. **The port's
+  read time**: every status and HV read on the board takes the same 56 of the bench's clocks (28 master clocks, four
+  68000 clocks); the varying intervals of D-11's first step are the 68000's RAM writes, 24 of 278 taking 98 of the
+  bench's clocks where the rest take 56, the refresh of D-2.
+- Conclusion: **measured**: vertical blanking at H `$14C` (H40) and `$10C` (H32), not `m5hvc.txt`'s; the odd flag with
+  the frame interrupt; horizontal blanking and F as Nephrite had them; the port's read has no wait of its own. The RAM
+  write's loss is D-2's, still open.
+- Pinned by: `vdp.rs`'s `the_blanking_flag_changes_two_pixels_after_the_v_counter`; the odd flag's time by nothing
+  yet.
+- Implemented in: the commit "Nephrite, stage 4: D-11 settled".

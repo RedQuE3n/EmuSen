@@ -45,6 +45,10 @@ int main(int argc, char** argv) {
         // cart_cs and cart_oe stay low on the 68000's other cycles, its RAM's included: the cartridge answers only its
         // own range, the first 4 MiB.
         bool cart = !b->cart_cs && !b->cart_oe && 2 * ca < 0x400000;
+        // The VDP's own reads of the cartridge (a transfer): the board raises cart_dma and vdp_dma and leaves cart_cs
+        // high, as the pins show; the cartridge answers its range then too.
+        bool vdp_read = b->cart_dma && b->vdp_dma && 2 * ca < 0x400000;
+        cart = cart || vdp_read;
         // A ROM keeps its data a little after OE rises: the last word held for `hold` MCLK2 cycles.
         if (cart) { held = (uint16_t)(rom[(2 * ca) & 0x3FFFFF] << 8 | rom[(2 * ca + 1) & 0x3FFFFF]); hold = hold_len; }
         else if (hold > 0) hold--;
@@ -60,8 +64,9 @@ int main(int argc, char** argv) {
             fwrite(px, 1, 4, pic);
         }
         if (t >= trace_from && t < trace_to)
-            printf("t %llu cs %d oe %d lwr %d uwr %d ca %06x en %d | wren %d ra %05x be %d vd %04x\n", (unsigned long long)t, b->cart_cs, b->cart_oe, b->cart_lwr, b->cart_uwr,
-                   2 * b->cart_address, b->cart_data_en, b->ram_68k_wren, 2 * (b->ram_68k_address & 0x7FFF), b->ram_68k_byteena, b->ram_68k_data);
+            printf("t %llu cs %d oe %d lwr %d uwr %d ca %06x en %d | wren %d ra %05x be %d vd %04x | dma %d cas2 %d vdma %d early %d\n", (unsigned long long)t, b->cart_cs, b->cart_oe, b->cart_lwr, b->cart_uwr,
+                   2 * b->cart_address, b->cart_data_en, b->ram_68k_wren, 2 * (b->ram_68k_address & 0x7FFF), b->ram_68k_byteena, b->ram_68k_data,
+                   b->cart_dma, b->cart_cas2, b->vdp_dma, b->vdp_dma_oe_early);
         if (b->ram_68k_wren) {
             uint16_t& w = ram[b->ram_68k_address & 0x7FFF];
             if (b->ram_68k_byteena & 2) w = (w & 0x00FF) | (b->ram_68k_data & 0xFF00);

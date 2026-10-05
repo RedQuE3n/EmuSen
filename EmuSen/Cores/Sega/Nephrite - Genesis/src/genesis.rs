@@ -179,22 +179,30 @@ impl Hw {
                 self.vdp.vint_pending = true;
                 self.z80_int = (t, t + Z80_INT);
             } else {
+                self.vdp.draw_late_dots(self.draw, &mut self.frame);
                 if (self.line as usize) < self.vdp.height() {
                     let (line, draw) = (self.line as usize, self.draw);
                     self.vdp.render_line(line, draw, &mut self.frame);
                 } else {
                     self.vdp.blank_line();
+                    self.vdp.cram_dots.clear();
+                    if self.line == self.vdp.lines() - 1 {
+                        self.vdp.parse_sprites(0);
+                    }
                 }
                 self.line_begun = next_line;
                 self.line += 1;
-                if self.line == self.vdp.lines() {
+                // A frame shortened under its current line (V30 cleared on an NTSC board) ends at once.
+                if self.line >= self.vdp.lines() {
                     self.line = 0;
                     self.frame_done = true;
                 }
                 self.vdp.line_start(self.line);
+                (self.vdp.cur_line, self.vdp.cur_line_start) = (self.line, self.line_begun);
                 let line = self.line as usize;
                 self.vdp.latch_line(line);
                 if self.line == self.vdp.vint_line() {
+                    self.vdp.field_start();
                     self.vint_at = Some(self.line_begun + self.vdp.timing().vint);
                 }
             }
@@ -599,6 +607,31 @@ fn dma_from(d: [u64; 4]) -> crate::vdp::Dma {
     }
 }
 
+/// The CRAM dots a line has gathered and not yet drawn, at most 24 and 8: their counts, then pixel and colour, then
+/// line, pixel and colour.
+const DOTS_WORDS: usize = 2 + 2 * 24 + 3 * 8;
+
+/// A line's dots and the dots on the line before.
+type Dots = (Vec<(u16, u16)>, Vec<(u16, u16, u16)>);
+
+fn dots_words(dots: &[(u16, u16)], late: &[(u16, u16, u16)]) -> [u16; DOTS_WORDS] {
+    let mut w = [0u16; DOTS_WORDS];
+    let (n, m) = (dots.len().min(24), late.len().min(8));
+    (w[0], w[1]) = (n as u16, m as u16);
+    for (i, &(x, v)) in dots.iter().take(n).enumerate() {
+        (w[2 + 2 * i], w[3 + 2 * i]) = (x, v);
+    }
+    for (i, &(l, x, v)) in late.iter().take(m).enumerate() {
+        (w[50 + 3 * i], w[51 + 3 * i], w[52 + 3 * i]) = (l, x, v);
+    }
+    w
+}
+
+fn dots_from_words(w: &[u16; DOTS_WORDS]) -> Dots {
+    let (n, m) = ((w[0] as usize).min(24), (w[1] as usize).min(8));
+    ((0..n).map(|i| (w[2 + 2 * i], w[3 + 2 * i])).collect(), (0..m).map(|i| (w[50 + 3 * i], w[51 + 3 * i], w[52 + 3 * i])).collect())
+}
+
 /// Everything of the Genesis a state holds beyond its memories, read whole before any of it is applied.
 pub struct Saved {
     cpu: M68000,
@@ -606,6 +639,9 @@ pub struct Saved {
     vdp: crate::vdp::VdpRegs,
     sat_cache: Vec<u8>,
     line_scroll: (Vec<u8>, (u16, u16)),
+    line_window: [u8; 2],
+    dots: Dots,
+    sprite_buffer: Vec<u8>,
     io: crate::io::IoRegs,
     sram_reg: u8,
     banks: Option<[u8; 8]>,
@@ -647,8 +683,12 @@ impl Genesis {
         w.bytes("SpriteCache", &h.vdp.sat_cache);
         w.bools("SpriteFlags", &v.sprite_flags);
         w.u16("VscrollLatch", v.vscroll_latch);
+        w.bytes("Field", &[v.interlace, v.odd as u8]);
+        w.bytes("SpriteLineBuffer", &h.vdp.sprite_buffer);
         w.bytes("LineVsram", &h.vdp.line_vsram);
         w.u16s("LineHscroll", &[h.vdp.line_hscroll.0, h.vdp.line_hscroll.1]);
+        w.bytes("LineWindow", &h.vdp.line_window);
+        w.u16s("CramDots", &dots_words(&h.vdp.cram_dots, &h.vdp.late_dots));
         let io = h.io.regs_state();
         w.bytes("IoData", &io.data);
         w.bytes("IoCtrl", &io.ctrl);
@@ -703,10 +743,19 @@ impl Genesis {
         r.bytes(&mut cache)?;
         r.bools(&mut v.sprite_flags)?;
         v.vscroll_latch = r.u16()?;
+        let mut field = [0u8; 2];
+        r.bytes(&mut field)?;
+        (v.interlace, v.odd) = (field[0] & 3, field[1] != 0);
+        let mut sprite_buffer = vec![0u8; 320];
+        r.bytes(&mut sprite_buffer)?;
         let mut line_vsram = vec![0u8; 80];
         r.bytes(&mut line_vsram)?;
         let mut hs = [0u16; 2];
         r.u16s(&mut hs)?;
+        let mut line_window = [0u8; 2];
+        r.bytes(&mut line_window)?;
+        let mut dots = [0u16; DOTS_WORDS];
+        r.u16s(&mut dots)?;
         let mut io = crate::io::IoRegs::default();
         r.bytes(&mut io.data)?;
         r.bytes(&mut io.ctrl)?;
@@ -734,6 +783,9 @@ impl Genesis {
             vdp: v,
             sat_cache: cache,
             line_scroll: (line_vsram, (hs[0], hs[1])),
+            line_window,
+            dots: dots_from_words(&dots),
+            sprite_buffer,
             io,
             sram_reg,
             banks: mapper.then_some(pages),
@@ -761,12 +813,16 @@ impl Genesis {
         h.vdp.set_regs_state(s.vdp);
         h.vdp.sat_cache = s.sat_cache;
         (h.vdp.line_vsram, h.vdp.line_hscroll) = s.line_scroll;
+        h.vdp.line_window = s.line_window;
+        (h.vdp.cram_dots, h.vdp.late_dots) = s.dots;
+        h.vdp.sprite_buffer = s.sprite_buffer;
         h.io.set_regs_state(s.io);
         h.cart.sram_reg = s.sram_reg;
         if h.cart.banks.is_some() {
             h.cart.banks = s.banks;
         }
         (h.clock, h.z80_clock, h.z80_int, h.line, h.line_begun, h.vint_at) = (s.clock, s.z80_clock, s.z80_int, s.line, s.line_begun, s.vint_at);
+        (h.vdp.cur_line, h.vdp.cur_line_start) = (h.line, h.line_begun);
         h.prefetch = s.prefetch;
         (h.z80_bank, h.z80_busreq, h.z80_reset, h.tmss_unlocked, h.tmss, h.locked_up, h.stall) =
             (s.z80_bank, s.z80_busreq, s.z80_reset, s.tmss_unlocked, s.tmss, s.locked_up, s.stall);

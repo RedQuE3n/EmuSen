@@ -123,3 +123,119 @@ CPUs' disputes in their own record pages.
   transparent for priority. No console photograph of these programs is in the corpus.
 - Pinned by: nothing yet in the crate (the comparison needs the reference); `Nephrite_Native.md` §14.3 records it.
 - Implemented in: the commit "Nephrite, stage 4 step 2".
+
+### D-4. The V counter in PAL and V30, the interlaced fields, and NTSC's V30: measured on the board
+- Opened: 2026-10-05, at stage 4 step 3, by step 1's argued PAL jumps (`Nephrite_Native.md` §13.1: MacDonald gives
+  NTSC's jump from `$EA` to `$1E5`; no document in the corpus gives PAL's, nor the counter in V30 or interlace).
+- Documents read: MacDonald, "Sega Genesis VDP documentation" §5 (the HV counter: NTSC V28's jump; "VC0 is replaced
+  with VC8 when in interlace mode 2", from the manual); plutiedev, "Screen resolution" (V30 "only works properly on
+  PAL systems ... the console will misbehave" on NTSC, without saying how; double resolution's fields and the status
+  register's bit 4, 0 for even lines and 1 for odd).
+- Test program: the bench's own, `mdboard.py vcounter` and `interlace`: the 68000, from its RAM, sets register 1
+  (V28 or V30) and register 12 (H40 or H32, and the interlace mode), then reads the HV counter in a loop and stores
+  it to RAM, the bench printing each store; the V counter's changes and the H counter beside each give the jumps,
+  where the counter steps and how many lines a field has. `TB_PAL` in the bench's environment makes the board PAL
+  (an empty value counts as set). And a picture program, `mdboard.py picture ntsc-v30` (rows of colour in V30 on an
+  NTSC board), whose display enables the bench captures.
+- Referee: Nuked-MD's board run as a black box, as in D-1. **NTSC V28** jumps from `$EA` to `$1E5`, as MacDonald
+  says; **NTSC V30** does not jump: the counter runs on to `$1FF`, and the board's vertical display enable rises
+  every 512 lines, 240 shown, with one vertical sync in the capture (the "misbehaving" of plutiedev's page: a frame
+  of 512 lines). **PAL V28** jumps from `$102` to `$1CA` and **PAL V30** from `$10A` to `$1D2`, the values step 1
+  argued. The counter steps where Nemesis's tables put it, at the 8-bit H `$A5` in H40 and `$85` in H32. In
+  **interlace mode 1** the port gives the counter's low byte with bit 0 replaced by bit 8; in **mode 2** the counter
+  doubled, bit 8 below it. **The fields**: NTSC alternates 262 and 263 lines, the longer jumping one line lower
+  (`$1E4`); PAL alternates 313 and 312, jumping one line earlier, after `$101`, to `$1C9` or `$1CA`. PAL V30's
+  picture (`picture pal-v30`, its header Europe's) shows 240 lines and matches Nephrite's exactly.
+  Files read in this step: the port list of the bench's generated model header (`obj/Vmd_board.h`, lines 31-109),
+  to find the board's video pins (`V_R`, `V_G`, `V_B`, `vdp_de_h`, `vdp_de_v`, `V_HS`, `V_VS`, `vdp_hclk1`,
+  `vdp_intfield`, `vdp_m5`); no RTL source file was opened.
+- Conclusion: **measured**: the jumps and formats above; NTSC V30 a frame of 512 lines with 240 shown; V30 shows
+  240 lines on either board. Which of the two fields is the longer one is argued (the odd one), since the counter
+  program did not read the status register beside it.
+- Pinned by: `vdp.rs`'s `the_v_counter_jumps_where_the_board_does`, and `pictures.rs`'s
+  `ntsc_v30_runs_the_counter_to_512_lines`.
+- Implemented in: the commit "Nephrite, stage 4 step 3".
+
+### D-5. MacDonald's window bug takes only the fine scroll's partial column, and the window's registers take effect at the next line
+- Opened: 2026-10-05, at stage 4 step 3, by MacDonald's own test program and Genesis Plus GX disagreeing: the
+  program's comment (`window_distortion_src/MAIN.ASM`) says the two plane A columns after a left window "have their
+  name table data fetched from the next two columns over" when plane A's scroll has its low four bits set; the
+  reference, at frame 300 of the same program, shows no shift; Nephrite then shifted 16 pixels.
+- Documents read: the program's source comment; MacDonald §17 (registers 17 and 18).
+- Test program: MacDonald's "Window distortion bug" (its source in the corpus), with its `lsr.w #4,d0` made a `nop`
+  so that the scroll steps every frame, run on the board through 16 frames (every fine scroll); its RAM clear
+  shortened for the bench's sake (the board's RAM starts zero).
+- Referee: the board as a black box, its pictures taken from the video pins (`tb_md.cpp`'s `TB_PICTURE`: the pins
+  each MCLK2 cycle, cut into frames by the display enables and sampled mid-pixel on `vdp_hclk1`). With fine scroll
+  `s`, the pixels from the window's edge to the edge plus `s` show plane A as it lies 16 pixels on, and the rest of
+  the line its own: the partial 2-cell column the scroll exposes takes the next column's data; at `s` 0 nothing is
+  shifted. The line on which the program turns the window off, after reading the V counter at 111, still shows the
+  window: a write to register 17 during a line moves the next line's window. Nephrite with both rules matches the
+  board's 16 frames exactly up to the colour map, and Genesis Plus GX's frame 300 too.
+- Conclusion: **measured**: as stated, registers 17 and 18 taken as the line begins, beside the scroll values.
+- Pinned by: `programs.rs`'s `the_window_bug_takes_the_partial_column_from_the_next` (fails with a 16-pixel band and
+  with the registers read at the line's end; both mutations tried).
+- Implemented in: the commit "Nephrite, stage 4 step 3".
+
+### D-6. A CRAM dot is the pixel at H minus $18, and the first blank line keeps the active slots until H $14E or $10E
+- Opened: 2026-10-05, at stage 4 step 3: no document places the dots (MacDonald calls them "CRAM write dots", and
+  the reference draws none), and the step's first placement put them two pixels left of where the board shows.
+- Documents read: MacDonald §16; the Exodus collection's "CRAM flicker" program (no source).
+- Test program: `mdboard.py picture cram-dots` and `cram-dots-h32`: the display all backdrop and the 68000 writing
+  CRAM entry 2, which nothing shows, as fast as the FIFO takes it; and the Exodus "CRAM flicker" program to frame 32.
+- Referee: the board as in D-5. The dots fall on the pixel at H minus `$18` in both widths, one pixel each; those the
+  FIFO lands after the V counter's step fall on the last pixels of the line before (to x 315); on the last shown
+  line the FIFO's queued writes drain into the first blank line's free slots from H `$14F` (H40) and `$10F` (H32),
+  not from the line's start. With these, every line of the picture programs matches but seven of H40's 224, where
+  the 68000's loop meets the slots a write apart (the refresh's loss of D-2, which Nephrite does not take, is the
+  likely cause), and on the last line of each width one dot more in Nephrite, the 68000's write after the drain; the CRAM flicker program's dots match on every line of two
+  frames and all but one of the third.
+- Conclusion: **measured**, as stated.
+- Pinned by: `pictures.rs`'s `cram_dots_fall_where_the_board_shows_them`.
+- Implemented in: the commit "Nephrite, stage 4 step 3".
+
+### D-7. Mode 4 on the Genesis: its map of VRAM, its step of one, its CRAM, and its colours
+- Opened: 2026-10-05, at stage 4 step 3: the documents describe mode 4 as the Master System's (MacDonald's "SMS VDP
+  documentation" §7-§10 and §13, his Genesis document's register 1, bit 2) and say nothing of where its 16 KiB lie
+  in the Genesis's 64 or of its colours; the step's first renderer, reading VRAM as the Master System's, drew the
+  board's picture as noise.
+- Documents read: those; MacDonald's `newreg.txt` (the left column's garbage under a fine scroll).
+- Test program: `mdboard.py mode4-ports`: in mode 4, bytes written after one-word commands, a marker at each address
+  bit, words at an even and an odd address, four bytes with register 15 at 2, and CRAM's 32 bytes; then mode 5
+  reads all of VRAM and CRAM back to RAM. And four pictures: patterns, names and sprites written in mode 5 and shown
+  in mode 4; the same written in mode 4 a byte at a time; the 64 Master System colours in mode 4 (`mode4-colours-0`
+  and `-32`).
+- Referee: the board as in D-5. **VRAM**: mode 4's address bits 1-8 lie one place up in VRAM's, its bit 9 at bit 1,
+  bits 10-13 in place; a write writes the word there (a 68000 byte write, which puts the byte on both halves, fills
+  both bytes), an odd address swapping the word's bytes as in mode 5; the renderer reads an even address's byte from
+  the word's low byte. **The step** is one whatever register 15 holds (which mode 4 does not take). **CRAM**: an entry
+  a byte address, keeping the word's bits 0-2, 3-5 and 9-11 as the entry's red, green and blue. **Colours**: the
+  entry's red and green fields hold the Master System's six bits, `--BBGGRR`, each two bits shown at the board's
+  levels 0, 95, 161, 255 (blue 0, 109, 161, 255). With these, the two colour pictures match exactly and the other
+  two but for the left five pixels, where under a scroll of 5 the board shows the garbage `newreg.txt` reports.
+- Conclusion: **measured**, as stated; the left column's garbage under a fine scroll is not modelled (the wrapped
+  tile is drawn). The levels are the board's DAC model's; no measurement of a console's mode 4 output is in the corpus.
+- Pinned by: `pictures.rs`'s `mode_4_writes_land_where_the_board_put_them` and `mode_4_shows_the_master_system_colours`.
+- Implemented in: the commit "Nephrite, stage 4 step 3".
+
+### D-8. The eight-colour mode, double resolution's patterns, and which rows a field shows
+- Opened: 2026-10-05, at stage 4 step 3. MacDonald §17 says register 0's bit 2 clear keeps "only the LSB of each
+  colour component" without saying at what level it is shown; he says double resolution ignores a name's bit 0,
+  where plutiedev calls an 8x16 tile "two consecutive 8x8 tiles", which puts name n at n x 64 instead; Genesis Plus
+  GX's `wtest_i2` drew its window from tile 2 as n x 64 has it.
+- Documents read: MacDonald §6, §9, §17; plutiedev, "Screen resolution"; the MegaDrive Wiki's VDP article.
+- Test program: `mdboard.py picture palette64` and `palette8` (64 colours whose components step differently, with
+  the bit set and clear); `interlace1` and `interlace2` (16-row cells, each row its own colour); `field-colour`
+  (every pixel colour 1, which the 68000 sets in vertical blanking from the status register's odd-field bit).
+- Referee: the board as in D-5. The eight-colour mode shows each component's lowest bit at the level of step 1, and
+  matches Nephrite exactly with that rule. In double resolution each field is 224 lines: the board's fields, its
+  field pin alternating, are the odd and even rows of Nephrite's 448 exactly, with name n at n x 64; the field whose
+  pin is set, and in which the status register's bit 4 reads 1, shows the odd rows.
+- Conclusion: **measured**, as stated. **Argued**: Nephrite draws both rows of each line every field, from the
+  state of the field being drawn, where the board shows only the field's own rows. The other field's rows are not
+  the VDP's state, and keeping them would put a 448-line picture into every state (the kit's C7 and C8 require the
+  picture to follow from the state); a program that changes the picture between fields (as `field-colour` does)
+  shows both rows in the colour of the field drawn.
+- Pinned by: `pictures.rs`'s `the_eight_colour_mode_keeps_each_components_low_bit`,
+  `double_resolution_patterns_are_sixty_four_bytes` and `each_field_draws_in_the_colour_its_status_bit_chose`.
+- Implemented in: the commit "Nephrite, stage 4 step 3".

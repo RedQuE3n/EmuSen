@@ -850,3 +850,124 @@ the eight-colour palette mode: the steps after this one.
 - **The crate's tests**: 37 pass, the state's layout re-pinned (version 4: the sprite cache, the sprite flags, the
   VSRAM latch, the line's scroll values and the open-bus word). The conformance kit, `--frames 600`, passes C1-C15 on
   the 240p suite, Sonic the Hedgehog, Phantasy Star IV, OutRun, Castlevania: Bloodlines and the sprite masking test.
+
+## 15. Stage 4, step 3: interlace, PAL and V30, mode 4, the eight-colour mode, CRAM dots, the window bug (2026-10-05)
+
+### 15.1 What it built
+
+- **Interlace.** Register 12's interlace bits are taken at the start of vertical blanking, where the field changes;
+  the status register's bit 4 is set in the odd field. Fields alternate 262 and 263 lines (PAL 313 and 312), and the
+  V counter's jumps and its port formats in both modes are the board's (D-4). Double resolution (mode 2) doubles the
+  plane's rows to 16 a cell, its vertical scroll to 11 bits and the sprites' Y to 10 bits (from 256), with a pattern
+  64 bytes, name n at n x 64 (D-8), and a sprite's cells stepping by one name. The picture is 448 lines, both rows
+  of a line drawn each field (§15.2); the sprite pass's flags and dot-overflow carry come from the field's own row.
+- **PAL and V30.** PAL's V counter jumps as the board showed, `$102` to `$1CA` in V28 and `$10A` to `$1D2` in V30,
+  which settles step 1's argued values; V30 shows 240 lines on either board, and on an NTSC board the counter runs
+  to `$1FF`, a frame of 512 lines (D-4). A frame whose length falls under its current line, V30 cleared late in such
+  a frame, now ends at once: 777 Casino boots with V30 set on its NTSC board for two frames, and the frame's end,
+  tested for equality, was never reached (a sweep of the corpus, 600 frames a game, found it hung).
+- **Mode 4**, the Master System's (register 1, bit 2 clear): MacDonald's SMS VDP document's name table, planar
+  patterns, scroll locks, left-column mask and eight sprites a line from a 64-entry table, 192 lines with the frame
+  interrupt at line `$C0` and a status read clearing the pending interrupts (MacDonald's `vdpint.txt`), read through
+  mode 4's map of VRAM; a write lands there as a word, the address steps by
+  one whatever register 15 holds, CRAM takes a Master System colour byte an entry, and colours are shown at the
+  board's four levels a channel (D-7).
+- **The TMS9918's modes** (register 1's bit 2 and register 0's bit 2 both clear, as at power-on) show black, 256 by
+  224, as MacDonald's SMS VDP document says the Genesis does and the board's first frames show; mode 4 needs
+  register 0's bit 2 set.
+- **The eight-colour mode** (register 0, bit 2 clear): each component's lowest bit, at the level of step 1 (D-8).
+- **CRAM dots**: a CRAM write while a mode 5 line is shown draws its colour on the pixel at H minus `$18`; one after
+  the V counter's step falls on the last pixels of the line before, which the next line event patches; the first
+  blank line keeps the active line's slots until H `$14E` (H40) or `$10E` (H32), so that a full FIFO drains where the
+  board drains it (D-6).
+- **Sprites are parsed on the line before** they show, into a 320-pixel line buffer (colour and priority) that the
+  next line composes; the pass runs on every line, the last line of the frame parsing line 0's. From the MegaDrive
+  Wiki's VDP article ("tile data for sprites is also fetched during the blanking interval of the line before") and
+  Eke's topic 1291; no program in the corpus separates it from parsing on the line itself.
+- **MacDonald's window bug**: with the window on the left, not covering the line, and plane A's fine scroll `s` not
+  zero, the `s` pixels after the window take plane A's data from 16 pixels on; and registers 17 and 18, like the
+  scroll, are taken as the line begins (D-5).
+- **Register 16's prohibited width** `10` shows the name table's first row on every line, the pattern's row still
+  following the line (MacDonald §17): step 2 had forced the pattern row to 0 as well, which drew stripes where the
+  window tests show text.
+- **The state** (version 5) gains the field (interlace and odd), the sprite line buffer, the line's window registers
+  and the CRAM dots a line has gathered and not drawn. Restoring a state set the VDP's current line from the
+  machine's line before restoring that line, so a state loaded mid-run drew its first line's dots from the old line
+  (the kit's C7 and C8 on the CRAM dots program found it); the order is now right.
+
+### 15.2 Argued
+
+- **Both rows each field.** On the board a double-resolution field is 224 lines of its own rows; Nephrite draws both
+  rows every field from the field's state. The other field's rows are not the VDP's state, and the kit's C7 and C8
+  hold the picture to follow from the state; keeping them would add a 448-line picture to every state. A program
+  that changes the picture between fields shows both rows as the field being drawn has them (D-8).
+- **Mode 4's left column under a fine scroll**: the board shows garbage there, as MacDonald's `newreg.txt` reports;
+  Nephrite draws the wrapped tile. **Mode 4's levels** are the board's DAC model's; the corpus has no measurement of
+  a console's mode 4 output. **H40 in mode 4** (320 by 192, its left eight columns garbage) is not modelled.
+- **Which interlaced field is the longer** (the odd one): the counter program did not read the status register.
+- **Sprites parsed on the line before**, from the documents above.
+
+### 15.3 The board's pictures
+
+`tb_md.cpp` gains `TB_PICTURE=path:from:to`, which writes, for each MCLK2 cycle in the window, the board's video
+pins: the two display enables, the syncs, the field, the pixel clock and mode 5, then red, green and blue.
+`mdboard.py`'s `frames()` cuts a capture into frames by the display enables and samples each pixel mid-way on the
+pixel clock; `picture <name>` builds one of its programs (a register list, blocks written through the data port and
+a tail), runs the board for a few frames and writes the frames as PNGs beside the program's image, which Nephrite
+then runs. The board's DAC levels for mode 5 (49, 84, 114, 142, 172, 206, 255 for steps 2-14 of the even ladder)
+are within three of TmEE's measured ladder (52, 87, 116, 144, 172, 206, 255), so pictures are compared on that map
+exactly, or up to a colour map. A frame of the board costs about 8 seconds on the desktop. The programs:
+`palette64`, `palette8`, `cram-dots`, `cram-dots-h32`, `mode4`, `mode4-bytes`, `mode4-colours-0` and `-32`,
+`interlace1`, `interlace2`, `field-colour`, `pal-v30` (the board in PAL) and `ntsc-v30`; and `mode4-ports`, which
+reads mode 4's writes back through mode 5. `pictures.rs` builds the same programs and holds Nephrite to the board's
+results. No RTL source was opened; the video pins' names came from the generated model's port list (D-4).
+
+### 15.4 Measured (2026-10-05)
+
+- **Against the board**, every program of §15.3: `palette64`, `palette8`, `interlace1`, `interlace2` (each board
+  field against Nephrite's rows of its parity), `pal-v30`, `ntsc-v30` and both mode 4 colour pictures match exactly;
+  the mode 4 pictures written in mode 5 and in mode 4 match but for the five garbage pixels at the left (§15.2); the
+  CRAM dots match on every line but seven of H40's 224 (D-2's class) and one dot on each width's last line; MacDonald's
+  window bug program, its scroll stepped every frame, matches all 16 fine scrolls exactly; the Exodus CRAM flicker
+  program's dots match on two frames of three exactly and on all but one line of the third. Genesis Plus GX draws no
+  CRAM dots, so it shows that program black.
+- **Against Genesis Plus GX at frame 300**, up to a colour map: `wtest`, `wtest_i1`, `wbug`, MacDonald's window bug,
+  Fonzie's window test, `vctest`, `VDPTEST`, `TEST1536`, `MD1536`, `SHLTEST`, `SHLTEST2` and `stetest` match
+  exactly; `wtest_i2` matches the reference's field exactly on Nephrite's rows of that field's parity, at frames 300
+  and 301 alike; `STETEST2` is as step 2 left it; Tristan Seifert's register test differs by 362 pixels: 336 as at
+  step 2, in its colour-cycled bars, and a line of CRAM dots from its palette cycling. The PAL colour programs `512PAL`, `960PAL` and `PAL512` change
+  CRAM within the line and differ from the reference by 7,936, 5,472 and 5,149 pixels (7,808, 5,120 and 2,880 at step
+  2, before the dots); the board's `512PAL` looks like neither (§15.5).
+- **The crate's tests**: 46 pass, among them `pictures.rs`'s seven, the window bug's and the V counter's; the state's
+  layout re-pinned (version 5). VDPFIFOTesting stays at 122 of 122.
+- **The conformance kit**, `--frames 600`: C1-C15 pass on the 240p suite, Sonic the Hedgehog, Sonic the Hedgehog 2,
+  Phantasy Star IV, OutRun, Castlevania: Bloodlines, the sprite masking test, `wtest_i2`, MacDonald's window bug
+  program, and the board programs `mode4-colours-0`, `mode4-bytes`, `cram-dots`, `cram-dots-h32`, `field-colour`,
+  `pal-v30` and `ntsc-v30`.
+- **The corpus at anchors** (944 games, against Genesis Plus GX): at frame 120, 716 pictures match up to the colour
+  map (717 at step 2) and 862 are within 1,000 pixels; at frame 600, 626 and 727 (626 and 728), the 90th percentile
+  8,129 pixels as before; the RAM's median at frame 600 is 65,506 equal bytes with 18 games below 60,000, as at
+  step 2. 74 games moved by a few bytes or pixels: the dots, which the reference does not draw (Hurricanes, Jammit
+  and Steel Talons gain a few pixels at frame 120), the slots of §15.1 shifting a 68000's timing by a little (VR
+  Troopers is at another point of its logo's fade at frame 600), and 777 Casino's two frames of 512 lines. A sweep of
+  every game through 600 frames found the one hang of §15.1 and no panic. WiseMan's Nephrite, runner, discovery
+  and registration tests pass (31); the TMS9918 rule of §15.1 is what two of them needed, whose synthetic cartridge
+  leaves both mode bits clear and expects 256 by 224.
+- **The cost**, the machine busy with other work (load average about 6), best of five runs of 600 frames beside the
+  step 2 build in the same minutes: Sonic the Hedgehog 0.66 s against 0.62, Thunder Force IV 0.68 against 0.65,
+  about 1.1 ms a frame against the plan's 1.5. The plane's per-pixel wrap, a division once the cell's rows became a
+  variable, is a mask now (the plane sizes are powers of two); before that change the step cost 15 % more.
+
+### 15.5 Not yet, and the next step
+
+- **The slot-stamped renderer** of the plan's §5.2 was not reached: a register, VRAM or CRAM change during a line
+  still takes effect for the whole line (the scroll and the window's registers excepted, which are taken as the line
+  begins). It is the next step. Its first oracle is the PAL colour programs: `512PAL` on the board in PAL (frames
+  3-5, captured with `TB_PICTURE` and `TB_PAL`) shows bands of colour with dense columns of dots where Nephrite and
+  Genesis Plus GX each show a grid of 512 colours, unlike each other; the board's picture is the one to meet. The
+  display enable taking effect at the pixel belongs to it too.
+- **D-2**, the main RAM's refresh, is still open; the CRAM dots program shows its trace as seven lines whose dots
+  the 68000 lands a slot apart from the board's.
+- **Mode 4's** left-column garbage and its H40 mode (§15.2); and the cartridge's M3 pin, which puts the machine in
+  the Master System's mode for a Master System cartridge through a converter, not modelled.
+

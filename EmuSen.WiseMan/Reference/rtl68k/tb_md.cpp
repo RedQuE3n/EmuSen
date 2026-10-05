@@ -25,10 +25,17 @@ int main(int argc, char** argv) {
     std::vector<uint8_t> zram(0x2000, 0);
     auto* b = new Vmd_board;
     b->ext_reset = asserted; b->reset_button = 0; b->ext_vres = 0; b->ext_zres = 0;
-    b->M3 = 1; b->cart_m3_pause = 0; b->ext_dtack = 0; b->pal = 0; b->jap = 0; b->tmss_enable = 0; b->tmss_data = 0;
+    b->M3 = 1; b->cart_m3_pause = 0; b->ext_dtack = 0; b->pal = getenv("TB_PAL") ? 1 : 0; b->jap = 0; b->tmss_enable = 0; b->tmss_data = 0;
     b->PA_i = 0x7F; b->PB_i = 0x7F; b->PC_i = 0x7F; b->vdp_cramdot_dis = 0; b->ym2612_status_enable = 1;
     b->dma_68k_req = 0; b->dma_z80_req = 0;
     bool cwr_was = false, cart_was = false, ram_was = false;
+    // TB_PICTURE=path:from:to writes, for each MCLK2 cycle in that window, the video pins: flags then R, G and B.
+    FILE* pic = nullptr; uint64_t pic_from = UINT64_MAX, pic_to = 0;
+    if (const char* pv = getenv("TB_PICTURE")) {
+        static char path[4096];
+        sscanf(pv, "%4095[^:]:%llu:%llu", path, (unsigned long long*)&pic_from, (unsigned long long*)&pic_to);
+        pic = fopen(path, "wb");
+    }
     uint16_t held = 0xFFFF;
     int hold = 0, hold_len = getenv("TB_HOLD") ? atoi(getenv("TB_HOLD")) : 8;
     for (uint64_t t = 0; t < cycles; t++) {
@@ -46,6 +53,11 @@ int main(int argc, char** argv) {
         b->ram_z80_o = zram[b->ram_z80_address & 0x1FFF];
         b->MCLK2 = 0; b->eval();
         b->MCLK2 = 1; b->eval();
+        if (pic && t >= pic_from && t < pic_to) {
+            uint8_t px[4] = {(uint8_t)(b->vdp_de_h | b->vdp_de_v << 1 | b->V_HS << 2 | b->V_VS << 3 | b->vdp_intfield << 4 | b->vdp_hclk1 << 5 | b->vdp_m5 << 6),
+                             b->V_R, b->V_G, b->V_B};
+            fwrite(px, 1, 4, pic);
+        }
         if (t >= trace_from && t < trace_to)
             printf("t %llu cs %d oe %d lwr %d uwr %d ca %06x en %d | wren %d ra %05x be %d vd %04x\n", (unsigned long long)t, b->cart_cs, b->cart_oe, b->cart_lwr, b->cart_uwr,
                    2 * b->cart_address, b->cart_data_en, b->ram_68k_wren, 2 * (b->ram_68k_address & 0x7FFF), b->ram_68k_byteena, b->ram_68k_data);
@@ -64,6 +76,7 @@ int main(int argc, char** argv) {
         if (cwr && !cwr_was) printf("x %llu %06x\n", (unsigned long long)t, 2 * ca);
         cwr_was = cwr;
     }
+    if (pic) fclose(pic);
     delete b;
     return 0;
 }

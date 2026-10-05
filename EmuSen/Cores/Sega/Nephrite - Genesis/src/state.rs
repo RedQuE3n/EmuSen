@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 4;
+pub const STATE_VERSION: i32 = 5;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -145,12 +145,13 @@ mod tests {
                 "139643 1 u8 VdpCode\n139644 2 u16 VdpAddress\n139646 1 u8 VdpLineCounter\n",
                 "139647 24 u16[12] VdpFifo\n139671 2 u8[2] VdpFifoPointers\n139673 2 u16 VdpReadBuffer\n",
                 "139675 32 u64[4] VdpDma\n139707 16 u64[2] VdpTimes\n139723 320 u8[320] SpriteCache\n",
-                "140043 3 bool[3] SpriteFlags\n140046 2 u16 VscrollLatch\n140048 80 u8[80] LineVsram\n",
-                "140128 4 u16[2] LineHscroll\n140132 3 u8[3] IoData\n140135 3 u8[3] IoCtrl\n140138 3 u8[3] IoTx\n",
-                "140141 3 u8[3] IoSctrl\n140144 2 bool[2] PadTh\n140146 2 u8[2] PadFalls\n",
-                "140148 16 u64[2] PadLastFall\n140164 1 u8 SramRegister\n140165 1 bool Mapper\n",
-                "140166 8 u8[8] MapperPages\n140174 56 u64[7] Clocks\n140230 4 u32 Line\n140234 2 u16 Z80Bank\n",
-                "140236 2 u16 OpenBus\n140238 4 bool[4] Lines\n140242 4 u8[4] Tmss\n"
+                "140043 3 bool[3] SpriteFlags\n140046 2 u16 VscrollLatch\n140048 2 u8[2] Field\n",
+                "140050 320 u8[320] SpriteLineBuffer\n140370 80 u8[80] LineVsram\n140450 4 u16[2] LineHscroll\n",
+                "140454 2 u8[2] LineWindow\n140456 148 u16[74] CramDots\n140604 3 u8[3] IoData\n",
+                "140607 3 u8[3] IoCtrl\n140610 3 u8[3] IoTx\n140613 3 u8[3] IoSctrl\n140616 2 bool[2] PadTh\n",
+                "140618 2 u8[2] PadFalls\n140620 16 u64[2] PadLastFall\n140636 1 u8 SramRegister\n",
+                "140637 1 bool Mapper\n140638 8 u8[8] MapperPages\n140646 56 u64[7] Clocks\n140702 4 u32 Line\n",
+                "140706 2 u16 Z80Bank\n140708 2 u16 OpenBus\n140710 4 bool[4] Lines\n140714 4 u8[4] Tmss\n"
             )
         );
     }

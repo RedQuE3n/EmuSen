@@ -117,3 +117,35 @@ fn the_sprite_masking_test_passes_in_both_widths() {
         assert_eq!((c[&(0, 255, 0)], c.values().sum::<usize>()), (1574, w * 224));
     }
 }
+
+/// MacDonald's window bug program, its scroll stepped every frame (its `lsr.w #4` made a `nop`): each frame, the
+/// fine scroll's partial column after the window shows plane A's data from 16 pixels on and the rest of the line its
+/// own, and line 111, where the program turns the window off, still shows it, as the board does (Nephrite_Disputes.md
+/// D-5). The window's text rows repeat every 8 lines, so the bottom half, the window off, is the reference.
+#[test]
+fn the_window_bug_takes_the_partial_column_from_the_next() {
+    let Some(root) = std::env::var_os(ROMS_VARIABLE) else { return };
+    let mut image = std::fs::read(std::path::Path::new(&root).join("exodus-techdocs/window_distortion/Window distortion bug.BIN")).expect("the program");
+    let at = image.windows(4).position(|p| p == [0xE8, 0x48, 0x02, 0x40]).expect("the scroll's shift");
+    image[at..at + 2].copy_from_slice(&[0x4E, 0x71]);
+    let mut m = Machine::new(&image, Media::read(&image));
+    let px = |m: &Machine, x: usize, y: usize| m.genesis.hw.frame.rgba[(y * crate::render::MAX_W + x) * 4..][..3].to_vec();
+    for _ in 0..24 {
+        m.advance();
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for _ in 0..16 {
+        m.advance();
+        let text_at = (0..320).find(|&x| px(&m, x, 200) != px(&m, 300, 200)).expect("the text");
+        let s = text_at - 81;
+        seen.insert(s);
+        assert_ne!(px(&m, 50, 111), px(&m, 50, 112), "line 111 still in the window");
+        for y in 0..104 {
+            for x in 112..128 {
+                let from = if x < 112 + s { x + 16 } else { x };
+                assert_eq!(px(&m, x, y), px(&m, from, y + 112), "scroll {s}, pixel {x}, line {y}");
+            }
+        }
+    }
+    assert_eq!(seen.len(), 16, "every fine scroll: {seen:?}");
+}

@@ -971,3 +971,78 @@ results. No RTL source was opened; the video pins' names came from the generated
 - **Mode 4's** left-column garbage and its H40 mode (§15.2); and the cartridge's M3 pin, which puts the machine in
   the Master System's mode for a Master System cartridge through a converter, not modelled.
 
+
+## 16. Stage 4, step 4: the slot-stamped renderer (2026-10-05)
+
+### 16.1 What it built
+
+- **A line drawn in spans.** The VDP holds the line being shown, the picture's rows and its sprite pixels, taken as
+  the line opens. Before any write that changes what mode 5's picture reads (VRAM, CRAM, VSRAM, a register), the line
+  under the beam is drawn up to the beam's pixel from the state before the write; at the V counter's step the line is
+  drawn to the step and finished when its last pixels, after the step, have passed. A line with no write in it is
+  drawn once, as before. The beam's pixel is H minus `$18`; a line's last 14 pixels in H40 (and in H32) come after
+  the V counter's step, and the next line's scroll and window values, taken at the step, are kept apart from the
+  open line's. The CRAM dots of step 3 are now this mechanism's: a CRAM write draws its colour on the beam's pixel
+  and the new colour from there. The frame lives in the VDP. Mode 4 is still drawn a line at a time.
+- **Where each write shows** (D-9): CRAM at the beam's pixel; VSRAM by 2-cell column, a column's scroll read 27
+  pixels before it is shown, so that a write reaches the columns read after it, on the present line and the next;
+  VRAM with the 8 pixels fetched before the write drawn from the old data; a register two and a half pixels after
+  the 68000 writes it (20 master clocks in H40, 25 in H32); the display bit's blanking 12 pixels later than that, and
+  its return on the first 16-pixel boundary 24 pixels on.
+- **Register 1's bit 7**, the 128 KiB mode, writes VRAM as a 64 KiB board does: one byte, the word's low one, at the
+  interleaved address (D-10).
+- **The palette** is kept between the writes that change it (CRAM, register 0) and made again at each frame's
+  start, so that a line drawn in many spans does not make it again for each.
+- **The state** (version 6) keeps the open line's number, how far it was drawn, its sprite pixels and its latched
+  scroll and window values, not its pixels, which are the picture's: whether frames were drawn must not change a
+  state (the kit's C8 caught the first version, which kept them), and a loaded state draws the line so far again.
+- **The bench**: `tb_md.cpp`'s `TB_PA` holds port 1's pins (a button for the whole run); `mdboard.py`'s pictures
+  keep the 68000's RAM writes beside the frames, and gained the transfer programs, the register programs, the
+  transfer-start sweep and `vram128` (§16.3, D-9 to D-11).
+
+### 16.2 Argued, and measured in part
+
+- VRAM's fetch lead of 8 pixels is weakly bracketed (4 to 16); the display bit's return fits 0.56 of the board's
+  distribution, whose returns fall mostly on 16-pixel boundaries and partly on 8-pixel ones.
+- Writes after a line's V counter step that change VRAM or a register reach that line's last 14 pixels from the state
+  at the next change, not at their own pixel, except CRAM and the dot, which are exact.
+- Mode 4 and the TMS9918 modes are drawn a line at a time.
+
+### 16.3 Measured (2026-10-05)
+
+- **The board's transfer pictures** (D-9), with D-11's start delay set for the comparison: `cram-dma` and
+  `cram-dma-one` match on every row of two frames, `vsram-dma` on every row, `pattern-dma` on all but 4 rows (9
+  pixels). Without the delay (the shipped setting) every write lands one slot earlier: `cram-dma` differs by 1,736
+  pixels on 82 rows, `vsram-dma` by 208 on 13.
+- **Registers** (D-9): the backdrop's change 9 to 11 pixels after the HV read, as the board's, in H40 and H32; the
+  display's blanking 21 to 23 after.
+- **`512PAL`** on the board in PAL: 10,544 pixels from the board's picture with the 128 KiB writes (65,348
+  without); with register 1's bit 7 cleared, 2,028 to 2,208, the 68000's timing. `960PAL` resembles the board's
+  picture in its structure (the same mode); `PAL512`'s transfers come from the cartridge, which the bench cannot
+  serve (D-11).
+- **The HV logic-analyser ROM** (Nemesis, H40 V28) on the board, its samples read from the RAM log: the V counter
+  steps at the same H; the board's port reads vary in duration where Nephrite's do not (D-11).
+- **Against Genesis Plus GX at frame 300**: unchanged from step 3 (§15.4) but for `512PAL` and `960PAL` (75,492 and
+  60,368 pixels; the reference ignores the 128 KiB bit) and `PAL512` (7,387: mid-line CRAM, which it draws a line at
+  a time).
+- **The crate's tests**: 48 pass, the state's layout re-pinned (version 6). VDPFIFOTesting 122 of 122.
+- **The conformance kit**, `--frames 600`: C1-C15 pass on the 240p suite, Sonic the Hedgehog and its sequel,
+  Phantasy Star IV, OutRun, Castlevania: Bloodlines, 777 Casino, `512PAL`, `wtest_i2`, both of TiTAN's Overdrive
+  demos and the board programs `cram-dma`, `pattern-dma`, `vsram-dma`, `reg-backdrop`, `reg-display`, `cram-dots`,
+  `mode4-bytes` and `field-colour`.
+- **The corpus at anchors** (944 games, against Genesis Plus GX): no game's picture or RAM at frames 120 and 600
+  differs from step 3's (716 and 626 pictures matching up to the colour map); the reference draws mid-line changes a
+  line at a time, so the anchors neither gain nor lose by the spans. WiseMan's Nephrite, runner, discovery and
+  registration tests pass (31).
+- **The cost**, best of five runs of 600 frames beside step 3's build in the same minute: Sonic the Hedgehog 0.62 s
+  against 0.62, Thunder Force IV 0.71 against 0.65 (its mid-line writes; 1.03 before the palette was kept between
+  changes).
+
+### 16.4 Stage 4's oracle
+
+Of the plan's oracle for stage 4: VDPFIFOTesting passes 122 of 122; the pictures against the references and the
+board, the sprite-masking photographs and the skip-versus-draw state test (the kit's C8) are met. The logic-analyser
+ROMs are not: the HV ROM, run on the board in place of the pad-port receiver, shows the port's read time varying on
+the board and not in Nephrite, and the status-register ROMs are not yet run. With D-11 open, stage 4 stays open for
+one more step: the bench's cartridge serving the VDP's reads, the transfer's start and busy flag (D-11), the port's
+read time and the status-register ROMs.

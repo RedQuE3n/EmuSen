@@ -6,6 +6,17 @@
 
 use std::sync::OnceLock;
 
+/// The VRAM byte a 128 KiB-mode access to `a` reaches on a board with 64 KiB: address bit 1 inverted at bit 0, bits
+/// 2-9 in place, bit 10 at bit 1 and bits 11-15 one place down (measured on the board, Nephrite_Disputes.md D-10).
+pub fn vram128_address(a: usize) -> usize {
+    (a >> 1 & 1 ^ 1) | (a & 0x3FC) | (a >> 9 & 2) | (a & 0xF800) >> 1
+}
+
+/// Pixels before a 2-cell column is shown that the VDP reads its vertical scroll (bracketed on the board between 20 and
+/// 34), and its name table and patterns (between 4 and 16, weakly); Nephrite_Disputes.md D-9.
+pub const VSCROLL_LEAD: i64 = 27;
+pub const PATTERN_LEAD: u64 = 8;
+
 /// Master clocks a line.
 pub const LINE: u64 = 3420;
 
@@ -21,6 +32,8 @@ pub struct Timing {
     /// Where the vertical interrupt and the blanking flag's change fall.
     pub vint: u64,
     pub vblank: u64,
+    /// Where the line's pixel 0 begins (H $18), in master clocks from the line's start.
+    pub pixel0: u64,
     hblank_set: u16,
     hblank_clear: u16,
 }
@@ -91,6 +104,7 @@ fn build(h40: bool) -> Timing {
     let edge = if h40 { at(0x14E) } else { at(0x10E) } as u16;
     let first_blank = active.iter().filter(|&&m| m < edge).chain(blank.iter().filter(|&&m| m >= edge)).copied().collect();
     Timing {
+        pixel0: at(0x018),
         h: hm,
         active,
         blank,
@@ -183,12 +197,9 @@ pub struct Vdp {
     /// The interlace mode latched at vertical blanking (0, 1, or 3 for double resolution), and the odd field.
     pub interlace: u8,
     pub odd: bool,
-    /// The next line's sprite pixels as parsed on this one (colour, priority in bit 7), the CRAM dots of the line
-    /// being shown (pixel and colour), and the line the slots are in and where it began.
+    /// The next line's sprite pixels as parsed on this one (colour, priority in bit 7), and the line the slots are
+    /// in and where it began.
     pub sprite_buffer: Vec<u8>,
-    pub cram_dots: Vec<(u16, u16)>,
-    /// The dots that fell on the last pixels of the line before: line, pixel and colour.
-    pub late_dots: Vec<(u16, u16, u16)>,
     pub cur_line: u32,
     pub cur_line_start: u64,
     /// VSRAM and the line's horizontal scroll as the line began, which its fetches read (Nephrite_Native.md §14.1).
@@ -196,6 +207,21 @@ pub struct Vdp {
     pub line_hscroll: (u16, u16),
     /// Registers 17 and 18 as the line began: a write later in it moves the next line's window (measured, D-5).
     pub line_window: [u8; 2],
+    /// The line whose pixels are being drawn, drawn up to `span_x` in its one or two rows, with the sprite pixels it
+    /// took as it opened: each change to what the picture reads draws the line up to the beam first (Nephrite_Native.md
+    /// §16).
+    pub open: Option<usize>,
+    pub span_x: usize,
+    pub span_rgba: Vec<u8>,
+    pub span_sprites: Vec<u8>,
+    /// The open line's scroll and window values as it began, since the next line's are taken before its last pixels.
+    pub span_latch: (Vec<u8>, (u16, u16), [u8; 2]),
+    /// The 64 colours at the three intensities as CRAM and register 0 give them, made again after either changes.
+    pub palette: [[u8; 4]; 192],
+    pub palette_dirty: bool,
+    /// The picture being drawn, and whether this frame's is drawn at all (the sprite pass runs either way).
+    pub frame: crate::render::Frame,
+    pub draw: bool,
 }
 
 /// The VDP's registers and latches, for the state; the memories are spaces of their own.
@@ -255,6 +281,7 @@ impl Vdp {
     }
 
     pub fn set_regs_state(&mut self, s: VdpRegs) {
+        self.palette_dirty = true;
         self.regs = s.regs;
         self.pending = s.pending;
         self.code = s.code;
@@ -308,13 +335,20 @@ impl Vdp {
             interlace: 0,
             odd: false,
             sprite_buffer: vec![0; 320],
-            cram_dots: Vec::new(),
-            late_dots: Vec::new(),
             cur_line: 0,
             cur_line_start: 0,
             line_vsram: vec![0; 80],
             line_hscroll: (0, 0),
             line_window: [0, 0],
+            open: None,
+            span_x: 0,
+            span_rgba: vec![0; 2 * crate::render::MAX_W * 4],
+            span_sprites: vec![0; 2 * crate::render::MAX_W],
+            span_latch: (vec![0; 80], (0, 0), [0, 0]),
+            palette: [[0; 4]; 192],
+            palette_dirty: true,
+            frame: crate::render::Frame::new(),
+            draw: true,
         }
     }
 
@@ -520,6 +554,8 @@ impl Vdp {
     /// A byte into VRAM, the sprite cache taking it when it falls in the first half of a sprite's entry.
     pub fn vram_write(&mut self, a: usize, v: u8) {
         let a = a & 0xFFFF;
+        // The pixels the VDP has fetched already are drawn from the old data (D-9).
+        self.before_change_after(None, PATTERN_LEAD * if self.h40() { 8 } else { 10 });
         self.vram[a] = v;
         let base = ((self.regs[5] & if self.h40() { 0x7E } else { 0x7F }) as usize) << 9;
         let off = a.wrapping_sub(base);
@@ -549,6 +585,11 @@ impl Vdp {
     fn write_entry(&mut self, e: Entry) {
         let a = e.address as usize;
         match e.code {
+            1 if self.regs[1] & 0x84 == 0x84 => {
+                // Register 1's bit 7, the 128 KiB mode, on a board with 64: one byte, the word's low one, at the
+                // address the expansion's interleave gives (measured, D-10).
+                self.vram_write(vram128_address(a), e.data as u8);
+            }
             1 => {
                 let (hi, lo) = ((e.data >> 8) as u8, e.data as u8);
                 let (x, y) = if a & 1 == 0 { (hi, lo) } else { (lo, hi) };
@@ -567,32 +608,41 @@ impl Vdp {
         // Mode 4 addresses an entry a byte, and keeps bits 0-2, 3-5 and 9-11 of the word as red, green and blue (D-7).
         let (a, v) = if self.regs[1] & 4 == 0 { ((a & 0x1F) << 1, v & 0xE00 | (v >> 3 & 7) << 5 | (v & 7) << 1) } else { (a, v) };
         let v = v & CRAM_BITS;
-        self.cram_dot(v);
+        self.before_change(Some(v));
+        self.palette_dirty = true;
         self.cram[a & 0x7E] = (v >> 8) as u8;
         self.cram[(a & 0x7E) | 1] = v as u8;
     }
 
-    /// A CRAM write while a line is shown leaves a dot of its colour where the beam is, the pixel at H minus $18
-    /// (measured on the board, Nephrite_Disputes.md D-6); one after the V counter's step falls on the last pixels of
-    /// the line before, drawn already, which the next line event patches.
-    fn cram_dot(&mut self, v: u16) {
-        if !self.display() || self.regs[1] & 4 == 0 {
-            return;
-        }
-        let h = self.timing().h(self.time.saturating_sub(self.cur_line_start));
-        let (left, start, width) = if self.h40() { (0x018, 0x14A, 320) } else { (0x018, 0x10A, 256) };
-        if (left..start).contains(&h) && self.cur_line < self.vint_line() {
-            self.cram_dots.push((h - left, v));
-        } else if h >= start && h - left < width && (1..=self.vint_line()).contains(&self.cur_line) {
-            self.late_dots.push((self.cur_line as u16 - 1, h - left, v));
-        }
-    }
-
     fn write_vsram(&mut self, a: usize, v: u16) {
         if a & 0x7E < 80 {
+            self.before_change(None);
+            self.vsram_fetch_order(a & 0x7E, v & VSRAM_BITS);
             let v = v & VSRAM_BITS;
             self.vsram[a & 0x7E] = (v >> 8) as u8;
             self.vsram[(a & 0x7E) | 1] = v as u8;
+        }
+    }
+
+    /// A VSRAM write reaches the present line's columns whose scroll the VDP reads after it: a column's is read
+    /// `VSCROLL_LEAD` pixels before it is shown (measured, D-9); those read already keep the old value.
+    fn vsram_fetch_order(&mut self, a: usize, v: u16) {
+        if self.regs[1] & 4 == 0 {
+            return;
+        }
+        let t = self.timing();
+        let off = self.time.saturating_sub(self.cur_line_start) as i64;
+        let ppx = if self.h40() { 8 } else { 10 };
+        let x = (off - t.pixel0 as i64).div_euclid(ppx);
+        let lead: i64 = VSCROLL_LEAD;
+        let column = (a / 4) as i64;
+        if 16 * column - lead >= x {
+            self.line_vsram[a] = (v >> 8) as u8;
+            self.line_vsram[a | 1] = v as u8;
+            if self.open == Some(self.cur_line as usize) {
+                self.span_latch.0[a] = (v >> 8) as u8;
+                self.span_latch.0[a | 1] = v as u8;
+            }
         }
     }
 
@@ -637,7 +687,15 @@ impl Vdp {
             // command's first word sets (VDPFIFOTesting's register tests).
             let r = ((v >> 8) & 0x1F) as usize;
             if r < 24 && (r <= 10 || self.regs[1] & 4 != 0) {
+                // A register write shows two and a half pixels after the 68000 makes it (measured, D-9).
+                let delay = if self.h40() { 20 } else { 25 };
+                if r == 1 && (self.regs[1] ^ v as u8) & 0x40 != 0 {
+                    self.display_change(v as u8 & 0x40 != 0, delay);
+                } else {
+                    self.before_change_after(None, delay);
+                }
                 self.regs[r] = v as u8;
+                self.palette_dirty |= r == 0;
             }
             self.code &= !3;
             return;

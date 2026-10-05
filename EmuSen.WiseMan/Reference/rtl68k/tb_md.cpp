@@ -26,7 +26,8 @@ int main(int argc, char** argv) {
     auto* b = new Vmd_board;
     b->ext_reset = asserted; b->reset_button = 0; b->ext_vres = 0; b->ext_zres = 0;
     b->M3 = 1; b->cart_m3_pause = 0; b->ext_dtack = 0; b->pal = getenv("TB_PAL") ? 1 : 0; b->jap = 0; b->tmss_enable = 0; b->tmss_data = 0;
-    b->PA_i = 0x7F; b->PB_i = 0x7F; b->PC_i = 0x7F; b->vdp_cramdot_dis = 0; b->ym2612_status_enable = 1;
+    // TB_PA sets port 1's pins (0x7F, all high, by default): a button held for the whole run.
+    b->PA_i = getenv("TB_PA") ? (uint8_t)strtoul(getenv("TB_PA"), nullptr, 16) : 0x7F; b->PB_i = 0x7F; b->PC_i = 0x7F; b->vdp_cramdot_dis = 0; b->ym2612_status_enable = 1;
     b->dma_68k_req = 0; b->dma_z80_req = 0;
     bool cwr_was = false, cart_was = false, ram_was = false;
     // TB_PICTURE=path:from:to writes, for each MCLK2 cycle in that window, the video pins: flags then R, G and B.

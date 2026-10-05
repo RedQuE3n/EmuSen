@@ -142,7 +142,7 @@ impl Machine {
             self.genesis.hw.draw = !self.skip;
             self.genesis.run_frame();
             if !self.skip {
-                let f = &self.genesis.hw.frame;
+                let f = &self.genesis.hw.vdp.frame;
                 self.picture.clear();
                 for y in 0..f.height {
                     self.picture.extend_from_slice(&f.rgba[y * crate::render::MAX_W * 4..][..f.width * 4]);

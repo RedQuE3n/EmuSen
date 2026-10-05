@@ -27,7 +27,7 @@ fn main() {
         for s in m.spaces().into_iter().filter(|s| !s.read_only) {
             std::fs::write(dir.join(format!("nephrite_{}_f{f:05}.bin", s.name.to_lowercase())), m.bytes(s.id).unwrap()).expect("a dump");
         }
-        let fr = &m.genesis.hw.frame;
+        let fr = &m.genesis.hw.vdp.frame;
         std::fs::write(dir.join(format!("nephrite_screen_f{f:05}_{}x{}.rgba", fr.width, fr.height)), &m.picture).expect("the picture");
     }
     eprintln!("{} frames in {:.3} s", m.frames, started.elapsed().as_secs_f64());

@@ -8,6 +8,7 @@ Nephrite_Native.md §10 and §15.3 are the method.
   mdboard.py vcounter|interlace [cycles]   the HV counter's changes in V28 and V30, or in interlace modes 1 and 2
   mdboard.py mode4-ports [cycles]   mode 4's writes, read back through mode 5
   mdboard.py picture <name> [frames] [dir]   one of PICTURES' programs, its ROM and the board's frames as PNGs in dir
+  mdboard.py vram128 [cycles]   the 128 KiB mode's writes, read back with it clear
 
 Times are in MCLK2 cycles, two to a master clock; the bench prints cartridge reads (c) and 68000 RAM writes (w).
 
@@ -272,8 +273,14 @@ def picture(name, nframes=4, outdir=None):
     open(path, "wb").write(image)
     cycles = 2 * (1070460 if name in PAL_PICTURES else 896040) * (nframes + 1)
     pic = os.path.join(outdir, name + ".pic")
-    subprocess.run([os.path.join(WORK, "tb_md"), path, str(cycles)], stdout=subprocess.DEVNULL, cwd=WORK, check=True,
-                   env=dict(os.environ, LD_LIBRARY_PATH=LIB, TB_PICTURE=f"{pic}:0:{cycles}", **({"TB_PAL": "1"} if name in PAL_PICTURES else {})))
+    env = dict(os.environ, LD_LIBRARY_PATH=LIB, TB_PICTURE=f"{pic}:0:{cycles}", **({"TB_PAL": "1"} if name in PAL_PICTURES else {}))
+    # The 68000's RAM writes are kept beside the frames, for the programs that store there.
+    with open(os.path.join(outdir, name + ".ram"), "w") as log:
+        p = subprocess.Popen([os.path.join(WORK, "tb_md"), path, str(cycles)], stdout=subprocess.PIPE, text=True, cwd=WORK, env=env)
+        for line in p.stdout:
+            if line.startswith("w "):
+                log.write(line)
+        assert p.wait() == 0
     for k, (width, rows, field) in enumerate(frames(pic)):
         if len(rows) < 100: continue
         im = Image.frombytes("RGB", (width, len(rows)), b"".join(rows))
@@ -321,6 +328,41 @@ def mode4_ports(cycles=0):
         print(f"  {a:#06x} (value {v:#04x}) -> {[hex(x) for x in where.get(v, [])][:8]}")
     print("CRAM words:", [hex(x) for x in cr])
     open(os.path.join(WORK, "mode4-vram.bin"), "wb").write(bytes(b))
+
+def vram128(cycles=0):
+    """Register 1's bit 7, the 128 KiB VRAM mode, on a board with 64: words written with it set to an address at each
+    address bit, an odd address and a run of eight, then read back with it clear, and read with it set."""
+    code = bytearray(w(0x46FC, 0x2700, 0x43F9, 0x00C0, 0x0004, 0x41F9, 0x00C0, 0x0000, 0x47F9, 0x00FF, 0x1000))
+    code += w(0x32BC, 0x8004, 0x32BC, 0x8184, 0x32BC, 0x8F02)              # mode 5, display off, 128 KiB mode
+    marks = [(1 << b, 0xC000 | b << 8 | b) for b in range(1, 16)] + [(0x0000, 0xA5A5), (0x0101, 0x1234)]
+    for a, v in marks:
+        cmd = vram(a)
+        code += w(0x22BC, cmd >> 16, cmd & 0xFFFF, 0x30BC, v)               # move.l #cmd,(a1); move.w #v,(a0)
+    cmd = vram(0x2200)
+    code += w(0x22BC, cmd >> 16, cmd & 0xFFFF)
+    for k in range(8):
+        code += w(0x30BC, 0x5100 + k * 0x11)                                 # eight words in a run
+    code += w(0x32BC, 0x8104, 0x22BC, 0x0000, 0x0000)                       # 64 KiB mode; VRAM read from 0
+    code += w(0x303C, 0x7FFF, 0x3690, 0x51C8, 0xFFFC)                       # 32768 words to RAM
+    code += w(0x32BC, 0x8184, 0x22BC, 0x0000, 0x0000)                       # 128 KiB mode; read the first 64 words
+    code += w(0x303C, 0x003F, 0x3690, 0x51C8, 0xFFFC)
+    code += w(0x36BC, 0x5A5A, 0x60FE)
+    r = bytearray(b"\xff" * 0x1000)
+    r[0:8] = w(0x00FF, 0xFE00, 0x0000, 0x0200)
+    r[0x100:0x110] = b"SEGA MEGA DRIVE "
+    r[0x200:0x200 + len(code)] = code
+    ev = run(bytes(r), cycles or 18000000)
+    words = [d for k, t, a, d in ev if k == "w" and a == MARK]
+    if words and words[-1] == 0x5A5A: words = words[:-1]
+    print(f"{len(words)} words read back")
+    b = bytearray()
+    for x in words[:32768]: b += x.to_bytes(2, "big")
+    for a, v in marks + [(0x2200 + 2 * k, 0x5100 + k * 0x11) for k in range(8)]:
+        hi, lo = v >> 8, v & 0xFF
+        at = [i for i in range(len(b) - 1) if b[i] in (hi, lo) and (b[i] == hi or b[i] == lo) and (b[i:i+1] == bytes([hi]) or b[i:i+1] == bytes([lo]))]
+        print(f"  {a:#07x} {v:#06x}: high byte at {[hex(i) for i in range(len(b)) if b[i] == hi][:6]}, low at {[hex(i) for i in range(len(b)) if b[i] == lo][:6]}")
+    print("read in 128 KiB mode from 0:", [hex(x) for x in words[32768:32768 + 64]])
+    open(os.path.join(WORK, "vram128.bin"), "wb").write(bytes(b))
 
 PICTURES = {}
 
@@ -426,6 +468,107 @@ def mode4_bytes():
     return bytes(r)
 PICTURES["mode4-bytes"] = mode4_bytes
 
+def cram_dma():
+    """40 columns of solid tiles showing 40 CRAM entries, and transfers into CRAM through the shown lines, whose writes
+    land slot by slot whatever the 68000's timing."""
+    names = [(c % 16) | ((c // 16) % 4) << 13 for r in range(32) for c in range(64)]
+    regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A63, 0x8C81, 0x8D3F, 0x8F02, 0x9001]
+    values = [(k * 0x2B5 + (k >> 3) * 0x13) & 0xEEE for k in range(1024)]
+    return dma_into(0xC000_0000, 99, 1024, values, regs, [(cram(0), colours(64)), (vram(0), solid_tiles()), (vram(0xC000), names)])
+PICTURES["cram-dma"] = cram_dma
+
+def cram_dma_one():
+    """Every pixel CRAM entry 1, and transfers into that entry alone (register 15 at 0) through the shown lines: each
+    write's dot and the colour after it, along the line."""
+    regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A63, 0x8C81, 0x8D3F, 0x8F02, 0x9001]
+    values = [(k * 0x2B5 + (k >> 3) * 0x13 + 0x222) & 0xEEE for k in range(1024)]
+    return dma_into(0xC002_0000, 99, 1024, values, regs, [(cram(0), colours(16)), (vram(0x20), [0x1111] * 16),
+                    (vram(0xC000), [1] * 2048)], step=0)
+PICTURES["cram-dma-one"] = cram_dma_one
+
+def dma_start(nops):
+    """When a transfer's first word lands: 64 words into CRAM entry 1 from the line interrupt after line 150, its
+    registers set first and then `nops` NOPs before the command, so that the command's time steps by 28 master
+    clocks; the first change along line 150 is the first write (Nephrite_Disputes.md D-11)."""
+    words, ram = 64, 0xFF0000
+    regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A96, 0x8C81, 0x8D3F, 0x8F02, 0x9001]
+    values = [(j * 0x2B5 + (j >> 3) * 0x13 + 0x222) & 0xEEE for j in range(words)]
+    r = bytearray(dma_into(0xC002_0000, 150, words, values, regs, [(cram(0), colours(16)), (vram(0x20), [0x1111] * 16),
+                                                              (vram(0xC000), [1] * 2048)], step=0))
+    setregs = w(0x32BC, 0x8F00, 0x32BC, 0x9300 | words, 0x32BC, 0x9400, 0x32BC, 0x9500 | (ram >> 1) & 0xFF,
+                0x32BC, 0x9600 | (ram >> 9) & 0xFF, 0x32BC, 0x9700 | (ram >> 17) & 0x7F)
+    hint = setregs + w(*([0x4E71] * nops)) + w(0x22BC, 0xC002, 0x0080, 0x4E73)
+    r[0x1000:0x1100] = b"\xff" * 0x100
+    r[0x1000:0x1000 + len(hint)] = hint
+    return bytes(r)
+for _n in (0, 2, 4, 6, 8, 10):
+    PICTURES[f"dma-start-{_n}"] = lambda n=_n: dma_start(n)
+
+def register_loop(first, second, regs, blocks):
+    """The 68000 reading the HV counter and writing a register in a loop, alternately `first` and `second`, each read
+    stored to RAM from $FF0000: the picture shows where each write takes effect, the RAM where it was made (D-9)."""
+    tail = w(0x303C, first, 0x323C, second, 0x47F9, 0x00FF, 0x0000, 0x3639, 0x00C0, 0x0008, 0x3280, 0x36C3,
+             0x3639, 0x00C0, 0x0008, 0x3281, 0x36C3, 0x60EA)
+    return program(regs, blocks, tail)
+_REG_CRAM = [0x000, 0x00E, 0x0E0, 0xE00] + [0] * 60
+PICTURES["reg-backdrop"] = lambda: register_loop(0x8701, 0x8702, MODE5, [(cram(0), _REG_CRAM)])
+PICTURES["reg-backdrop-h32"] = lambda: register_loop(0x8701, 0x8702, [r if r >> 8 != 0x8C else 0x8C00 for r in MODE5], [(cram(0), _REG_CRAM)])
+PICTURES["reg-display"] = lambda: register_loop(0x8174, 0x8134, [0x8004, 0x8174, 0x8230, 0x8407, 0x8578, 0x8702, 0x8C81, 0x8D3F, 0x8F02, 0x9001],
+                                                [(cram(0), _REG_CRAM), (vram(0x20), [0x1111] * 16), (vram(0xC000), [1] * 2048)])
+
+def dma_into(target, start, words, values, regs, blocks, flip=False, step=2):
+    """The cartridge for a transfer into `target` (a command's two words) started by every line interrupt, after lines
+    `start` and 2 x `start` + 1 (both shown): the values copied to RAM first; with `flip` the frame interrupt
+    inverts them, so that every frame's transfers change what they write."""
+    tail = w(0x45F9, 0x0000, 0x4000, 0x47F9, 0x00FF, 0x0000, 0x303C, words - 1, 0x36DA, 0x51C8, 0xFFFC,
+             0x46FC, 0x2000, 0x60FE)
+    r = bytearray(program(regs, blocks, tail))
+    for k, v in enumerate(values):
+        r[0x4000 + 2 * k:0x4002 + 2 * k] = v.to_bytes(2, "big")
+    ram = 0xFF0000
+    cmd = target | 0x80
+    hint = w(0x32BC, 0x8F00 | step, 0x32BC, 0x9300 | words & 0xFF, 0x32BC, 0x9400 | words >> 8, 0x32BC, 0x9500 | (ram >> 1) & 0xFF,
+             0x32BC, 0x9600 | (ram >> 9) & 0xFF, 0x32BC, 0x9700 | (ram >> 17) & 0x7F,
+             0x22BC, cmd >> 16, cmd & 0xFFFF, 0x4E73)
+    vint = w(0x4E73)
+    if flip:
+        # The frame interrupt inverts the source first, so that every frame's transfer changes what it writes.
+        vint = w(0x49F9, 0x00FF, 0x0000, 0x3E3C, words - 1, 0x0A5C, 0xFFFF, 0x51CF, 0xFFFA) + vint
+    r[0x1000:0x1000 + len(hint)] = hint
+    r[0x1100:0x1100 + len(vint)] = vint
+    r[0x70:0x74] = (0x1000).to_bytes(4, "big")
+    r[0x78:0x7C] = (0x1100).to_bytes(4, "big")
+    return bytes(r)
+
+def vsram_dma():
+    """Plane A in bands, a colour a cell row, scrolled per 2-cell column, and a transfer into VSRAM through the
+    shown lines: where each column takes a write shows when the VDP reads that column's scroll."""
+    names = [(r % 15) + 1 for r in range(32) for c in range(64)]
+    regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A00 | 99, 0x8B04, 0x8C81, 0x8D3F, 0x8F02, 0x9001]
+    values = [(k * 5 + (k >> 4)) & 0x3FF for k in range(1024)]
+    return dma_into(0x4000_0010, 99, 1024, values, regs, [(cram(0), colours(16)), (vram(0), solid_tiles()), (vram(0xC000), names)])
+PICTURES["vsram-dma"] = vsram_dma
+
+def vram_dma():
+    """Plane A's name table rewritten by a transfer through the shown lines, its entries naming solid tiles: where a
+    column takes its new name shows when the VDP reads the name table."""
+    names = [(c % 15) + 1 for r in range(32) for c in range(64)]
+    regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A00 | 99, 0x8C81, 0x8D3F, 0x8F02, 0x9001]
+    values = [((k * 7) % 15) + 1 for k in range(1024)]
+    return dma_into(0x4000_0000 | (0xC000 & 0x3FFF) << 16 | 0xC000 >> 14, 99, 1024, values, regs,
+                    [(cram(0), colours(16)), (vram(0), solid_tiles()), (vram(0xC000), names)])
+PICTURES["vram-dma"] = vram_dma
+
+def pattern_dma():
+    """Plane A's columns naming tiles 1 to 15, every line showing a row of each, and a transfer rewriting those
+    tiles' patterns through the shown lines: a write to the row being shown changes it from where the VDP next
+    fetches that tile, which places the pattern fetches against the beam."""
+    names = [(c % 15) + 1 for r in range(32) for c in range(64)]
+    regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A00 | 99, 0x8C81, 0x8D3F, 0x8F02, 0x9001]
+    values = [((k * 0x3A7) ^ (k >> 2) * 0x1111) & 0xFFFF for k in range(240)]
+    return dma_into(0x4020_0000, 99, 240, values, regs, [(cram(0), colours(16)), (vram(0), solid_tiles()), (vram(0xC000), names)], flip=True)
+PICTURES["pattern-dma"] = pattern_dma
+
 def mode4_colours(first):
     """Mode 4 from the first write: VRAM in words (a byte pair, the even address's byte low), a command for each, then
     CRAM's 32 entries a byte at a time, the Master System colours first to first + 31; tiles 0 to 15 each
@@ -509,4 +652,4 @@ if __name__ == "__main__":
         busreq_tight(cycles, 0x8000)
         busreq_tight(cycles, 0x1000)
     else:
-        {"window": window, "window-write": lambda c: window(c, 0x32), "busreq": busreq, "rom-loop": rom_loop, "vcounter": vcounter, "interlace": interlace, "mode4-ports": mode4_ports}[what](cycles)
+        {"window": window, "window-write": lambda c: window(c, 0x32), "busreq": busreq, "rom-loop": rom_loop, "vcounter": vcounter, "interlace": interlace, "mode4-ports": mode4_ports, "vram128": vram128}[what](cycles)

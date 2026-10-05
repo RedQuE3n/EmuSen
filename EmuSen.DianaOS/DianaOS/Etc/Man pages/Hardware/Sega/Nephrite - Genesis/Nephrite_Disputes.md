@@ -239,3 +239,87 @@ CPUs' disputes in their own record pages.
 - Pinned by: `pictures.rs`'s `the_eight_colour_mode_keeps_each_components_low_bit`,
   `double_resolution_patterns_are_sixty_four_bytes` and `each_field_draws_in_the_colour_its_status_bit_chose`.
 - Implemented in: the commit "Nephrite, stage 4 step 3".
+
+### D-9. Mid-line changes: where each kind of write takes effect along the line
+- Opened: 2026-10-05, at stage 4 step 4, by the slot-stamped renderer of `Nephrite_Plan.md` §5.2: no document says
+  how far along a line a write to CRAM, VSRAM, VRAM or a register shows, and Genesis Plus GX applies them a line at a
+  time.
+- Documents read: MacDonald §16 (the CRAM dots); the MegaDrive Wiki's VDP article (access slots, the line's fetches).
+- Test program: the bench's, each written for the purpose (`mdboard.py picture <name>`). Transfers from the 68000's
+  RAM started by the line interrupt, whose writes land slot by slot whatever the 68000's timing: `cram-dma` (40 CRAM
+  entries shown as 40 columns), `cram-dma-one` (one entry under every pixel), `vsram-dma` (bands scrolled per 2-cell
+  column), `pattern-dma` (tiles' rows rewritten, inverted every frame). The 68000 reading the HV counter, writing a
+  register and storing the reading in a loop: `reg-backdrop` (register 7, H40), `reg-backdrop-h32` and `reg-display`
+  (register 1's display bit), the RAM log beside each picture.
+- Referee: the board as in D-5. **CRAM**: a write shows from its own pixel, H minus `$18`, the dot of D-6 being that
+  pixel in the written colour; with the transfer's start of D-11, `cram-dma` and `cram-dma-one` match the board on
+  every row of two frames. **VSRAM**: a column's vertical scroll is read before the column is shown; a write
+  reaches the columns whose read comes after it, which with D-11's start matches the board exactly for any lead from
+  20 to 34 pixels (outside it, 256 or 272 pixels differ). **VRAM**: the pixels the VDP has fetched already show the
+  old patterns; a lead of 4 to 16 pixels leaves 9 pixels on 4 rows of `pattern-dma` (2 pixels each, single pattern
+  bytes), 0 leaves 10 and 24 or more leave 15 or more, so the lead is weakly bracketed. **Registers**: the backdrop's
+  change falls 9 to 11 pixels after the HV read before the write (the board's 410, 828 and 432 of 1,725 in H40; 835
+  and 805 at 8 and 9 in H32), which Nephrite gives with the write shown 20 master clocks (H40) or 25 (H32) after the
+  68000 makes it, two and a half pixels. **The display bit**: blanking begins 12 pixels later than that (the board's
+  21 to 23 after the read, overlap 0.95 with Nephrite's); the planes come back mostly on a 16-pixel boundary (669 of
+  845 changes, 114 on an 8-pixel one, 57 one pixel after), modelled as the first 16-pixel boundary from 24 pixels on,
+  which gives 0.56 of the board's distribution. No RTL file was opened.
+- Conclusion: **measured**: CRAM at the beam's pixel; VSRAM by column, read 27 pixels before the column is shown;
+  registers 2.5 pixels after the write; the display bit's blanking 12 pixels later still. **Measured in part**: VRAM's
+  lead of 8 pixels, and the display bit's return.
+- Pinned by: `pictures.rs`'s `mid_line_transfers_draw_as_the_board_does` (the board's rows, hashed in
+  `board_rows.rs`; it fails with CRAM writes applied at the line's end, 142 rows of 224, and with VSRAM applied at
+  once, 192) and `register_writes_show_where_the_board_shows_them` (fails without the write's delay).
+- Implemented in: the commit "Nephrite, stage 4 step 4".
+
+### D-10. Register 1's bit 7, the 128 KiB VRAM mode, on a board with 64 KiB: where a write lands
+- Opened: 2026-10-05, at stage 4 step 4, by `512PAL`, whose register table sets register 1 to `$FC`: the board's
+  picture of it looked like neither Nephrite's nor Genesis Plus GX's, which both ignore the bit.
+- Documents read: the MegaDrive Wiki's VDP article (bit 7 "allows use of an additional 64 KB of external VRAM";
+  "the additional VRAM is interleaved with the regular 64KB", so that the mode on a console without it garbles the
+  graphics; the interleave's reference, Nemesis's SpritesMind post, is not in the corpus).
+- Test program: `mdboard.py vram128`: words written with the mode set to an address at each address bit, an odd
+  address and a run of eight, then VRAM read back with it clear, and read with it set.
+- Referee: the board as in D-1. A word written in the mode stores one byte, the word's low one, at the byte address
+  with address bit 1 inverted at bit 0, bits 2-9 in place, bit 10 at bit 1 and bits 11-15 one place down; a read in
+  the mode returns that byte as the word's low half (its high half the last written word's high byte). With the
+  writes modelled, `512PAL`'s picture differs from the board's by 10,544 pixels where it differed by 65,348; the
+  rest is how the display reads VRAM in the mode, which a fetch of the low byte at the same address with 0 or `$FF`
+  for the missing one made worse (38,052 and 43,796), and the 68000's timing. The same program with the bit cleared
+  differs from the board by 2,028 to 2,208 pixels, on 64 rows: its line interrupt's CRAM writes begin one to four
+  slots earlier in Nephrite, the 68000 running its two-line handler a little faster than the board's (D-2's
+  class).
+- Conclusion: **measured** for writes, which Nephrite models; reads through the port and the display's fetches in
+  the mode are open (Nephrite reads VRAM as in 64 KiB mode).
+- Pinned by: nothing yet in the crate; `Nephrite_Native.md` §16.3 records the comparison.
+- Implemented in: the commit "Nephrite, stage 4 step 4".
+
+### D-11. OPEN. A transfer from the 68000's bus: its first write's delay after the command, and the busy flag
+- Opened: 2026-10-05, at stage 4 step 4, by the transfer pictures of D-9 landing every write one slot earlier in
+  Nephrite than on the board.
+- Documents read: none gives the start latency.
+- Test program: `mdboard.py picture dma-start-0` to `dma-start-10`: a transfer of 64 words from RAM into one CRAM
+  entry from the line interrupt after line 150, its command delayed by 0 to 10 NOPs (28 master clocks each); the
+  first colour change along line 150 is the first write. And the last part of VDPFIFOTesting's FIFO Wait States (its
+  source in the corpus), repeated 64 times at stepped phases with its samples stored to RAM.
+- Referee: the board as in D-1, Nephrite's own command and slot times logged beside it. The 68000's handler runs as
+  the board's within a few master clocks (its first fetch 585 to 615 clocks before line 99's pixel 0 against
+  Nephrite's 540 to 586). The board's first write lands at the first external slot at least 256 to 284 master clocks
+  after the command's second word, Nephrite's at the first slot after the command: with 270 added before the first
+  read, all six sweep pictures, `cram-dma`, `cram-dma-one` and `vsram-dma` match the board exactly. But the delay
+  breaks VDPFIFOTesting's FIFO Wait States, whose tenth part, on the console, sees the FIFO full after a three-word
+  transfer begun with three writes queued; and the board, running that part at 64 phases, shows the busy flag
+  (status bit 1) in 53 samples, which Nephrite, holding the 68000 until the transfer's last read, never shows. The
+  bench's cartridge does not answer the VDP's reads (the board drives `cart_cs` and `cart_oe` high for them, which
+  the bench does not decode), so transfers from the cartridge, VDPFIFOTesting's own, are not measured on the board.
+  `PAL512` shows the board's picture as one colour for the same reason. The HV logic-analyser ROM (Nemesis, "hv
+  logic analyser noint - H40V28", run with port 1's C held for its start and its 30,722 samples read from the RAM
+  log): the V counter steps between the 8-bit H `$9C`-`$9F` and `$A5`-`$A8` on both, but the board's pairs of reads
+  8 clocks apart differ by one or two H values where Nephrite's always differ by the same, the VDP's answer to a
+  port read not taking a fixed time on the board.
+- Conclusion: open. Nephrite keeps no start delay (`Hw::transfer_start_delay` 0), VDPFIFOTesting's 122 passing; the
+  tests set 270 to hold the renderer to the board. The next dispute step: the bench's cartridge for the VDP's reads,
+  then the latency with a cartridge source against VDPFIFOTesting, the busy flag at the 68000's release, and the
+  port's read time.
+- Pinned by: nothing yet.
+- Implemented in: not yet.

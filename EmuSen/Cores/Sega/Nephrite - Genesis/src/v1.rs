@@ -278,7 +278,7 @@ impl Core for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        let f = &self.genesis.hw.frame;
+        let f = &self.genesis.hw.vdp.frame;
         if self.picture.len() == f.width * f.height * 4 { FrameInfo::rgba(f.width as i32, f.height as i32) } else { FrameInfo::rgba(WIDTH as i32, HEIGHT as i32) }
     }
 

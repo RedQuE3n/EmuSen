@@ -52,13 +52,13 @@ fn run(image: &[u8], frames: u32) -> (Machine, usize, usize) {
     for _ in 0..frames {
         m.advance();
     }
-    let f = &m.genesis.hw.frame;
+    let f = &m.genesis.hw.vdp.frame;
     let (wd, ht) = (f.width, f.height);
     (m, wd, ht)
 }
 
 fn px(m: &Machine, x: usize, y: usize) -> [u8; 3] {
-    let p = &m.genesis.hw.frame.rgba[(y * MAX_W + x) * 4..][..3];
+    let p = &m.genesis.hw.vdp.frame.rgba[(y * MAX_W + x) * 4..][..3];
     [p[0], p[1], p[2]]
 }
 
@@ -121,7 +121,7 @@ fn each_field_draws_in_the_colour_its_status_bit_chose() {
         if f < 2 {
             continue;
         }
-        assert_eq!(m.genesis.hw.frame.height, 448);
+        assert_eq!(m.genesis.hw.vdp.frame.height, 448);
         // The field just drawn is the one before the flag's change at this frame's vertical blanking.
         let want = if m.genesis.hw.vdp.odd { [0, 255, 0] } else { [255, 0, 0] };
         for y in [0, 101, 446, 447] {
@@ -238,5 +238,141 @@ fn ntsc_v30_runs_the_counter_to_512_lines() {
     let before = m.genesis.hw.clock;
     m.advance();
     let lines = ((m.genesis.hw.clock - before) as f64 / 3420.0).round();
-    assert_eq!((ht, m.genesis.hw.frame.height, lines), (240, 240, 512.0));
+    assert_eq!((ht, m.genesis.hw.vdp.frame.height, lines), (240, 240, 512.0));
+}
+
+fn solid_tiles() -> Vec<u16> {
+    (0..16u16).flat_map(|i| std::iter::repeat_n((i | i << 4) * 0x101, 16)).collect()
+}
+
+/// `mdboard.py`'s `dma_into`: transfers from the 68000's RAM into `target` (a command's two words) started by every line
+/// interrupt with register 15 at `step`, the values copied to RAM first; with `flip` the frame interrupt inverts them.
+fn dma_into(target: u32, values: &[u16], regs: &[u16], blocks: &[(u32, Vec<u16>)], flip: bool, step: u16) -> Vec<u8> {
+    let n = values.len() as u16;
+    let tail = [0x45F9, 0x0000, 0x4000, 0x47F9, 0x00FF, 0x0000, 0x303C, n - 1, 0x36DA, 0x51C8, 0xFFFC, 0x46FC, 0x2000, 0x60FE];
+    let mut r = program(regs, blocks, &tail);
+    for (k, v) in values.iter().enumerate() {
+        r[0x4000 + 2 * k..0x4002 + 2 * k].copy_from_slice(&v.to_be_bytes());
+    }
+    let cmd = target | 0x80;
+    let hint = w(&[0x32BC, 0x8F00 | step, 0x32BC, 0x9300 | (n & 0xFF), 0x32BC, 0x9400 | n >> 8, 0x32BC, 0x9500, 0x32BC, 0x9680, 0x32BC, 0x977F, 0x22BC, (cmd >> 16) as u16, cmd as u16, 0x4E73]);
+    let mut vint = Vec::new();
+    if flip {
+        vint.extend(w(&[0x49F9, 0x00FF, 0x0000, 0x3E3C, n - 1, 0x0A5C, 0xFFFF, 0x51CF, 0xFFFA]));
+    }
+    vint.extend(w(&[0x4E73]));
+    r[0x1000..0x1000 + hint.len()].copy_from_slice(&hint);
+    r[0x1100..0x1100 + vint.len()].copy_from_slice(&vint);
+    r[0x70..0x74].copy_from_slice(&0x1000u32.to_be_bytes());
+    r[0x78..0x7C].copy_from_slice(&0x1100u32.to_be_bytes());
+    r
+}
+
+/// Each row's FNV-1a hash of red, green and blue, as `board_rows.rs` holds the board's.
+fn row_hashes(m: &Machine) -> Vec<u32> {
+    let f = &m.genesis.hw.vdp.frame;
+    (0..f.height)
+        .map(|y| {
+            let mut h = 0x811c9dc5u32;
+            for x in 0..f.width {
+                for &c in &f.rgba[(y * MAX_W + x) * 4..][..3] {
+                    h = (h ^ c as u32).wrapping_mul(0x01000193);
+                }
+            }
+            h
+        })
+        .collect()
+}
+
+/// Transfers through the shown lines into CRAM (40 entries, and one entry alone), a pattern's rows and VSRAM, whose
+/// writes land slot by slot whatever the 68000's timing: with the board's start delay for a transfer from RAM (D-11),
+/// the CRAM and VSRAM pictures are the board's on every row, and the pattern picture on all but four, each two pixels
+/// wide (Nephrite_Disputes.md D-9; `mdboard.py picture cram-dma`, `cram-dma-one`, `vsram-dma`, `pattern-dma`).
+#[test]
+fn mid_line_transfers_draw_as_the_board_does() {
+    use crate::board_rows::*;
+    let regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A63, 0x8C81, 0x8D3F, 0x8F02, 0x9001];
+    let column_names: Vec<u16> = (0..32 * 64).map(|i| ((i % 64) % 16 | ((i % 64) / 16 % 4) << 13) as u16).collect();
+    let cram_values: Vec<u16> = (0..1024u16).map(|k| (k.wrapping_mul(0x2B5).wrapping_add((k >> 3).wrapping_mul(0x13))) & 0xEEE).collect();
+    let cram_dma = dma_into(0xC000_0000, &cram_values, &regs, &[(cram(0), colours(64)), (vram(0), solid_tiles()), (vram(0xC000), column_names)], false, 2);
+    let one_values: Vec<u16> = cram_values.iter().enumerate().map(|(k, _)| ((k as u16).wrapping_mul(0x2B5).wrapping_add((k as u16 >> 3).wrapping_mul(0x13)).wrapping_add(0x222)) & 0xEEE).collect();
+    let cram_one = dma_into(0xC002_0000, &one_values, &regs, &[(cram(0), colours(16)), (vram(0x20), vec![0x1111; 16]), (vram(0xC000), vec![1; 2048])], false, 0);
+    let tile_names: Vec<u16> = (0..32 * 64).map(|i| (i % 64 % 15 + 1) as u16).collect();
+    let pattern_values: Vec<u16> = (0..240u32).map(|k| ((k * 0x3A7) ^ (k >> 2) * 0x1111) as u16).collect();
+    let pattern_dma = dma_into(vram(0x20), &pattern_values, &regs, &[(cram(0), colours(16)), (vram(0), solid_tiles()), (vram(0xC000), tile_names)], true, 2);
+    let band_names: Vec<u16> = (0..32 * 64).map(|i| (i / 64 % 15 + 1) as u16).collect();
+    let vsram_values: Vec<u16> = (0..1024u16).map(|k| (k * 5 + (k >> 4)) & 0x3FF).collect();
+    let mut column_regs = regs.to_vec();
+    column_regs.insert(7, 0x8B04);
+    let vsram_dma = dma_into(0x4000_0010, &vsram_values, &column_regs, &[(cram(0), colours(16)), (vram(0), solid_tiles()), (vram(0xC000), band_names)], false, 2);
+    for (name, image, board, least) in [
+        ("cram-dma", &cram_dma, &CRAM_DMA, 224),
+        ("cram-dma-one", &cram_one, &CRAM_DMA_ONE, 224),
+        ("pattern-dma", &pattern_dma, &PATTERN_DMA, 220),
+        ("vsram-dma", &vsram_dma, &VSRAM_DMA, 224),
+    ] {
+        let mut m = Machine::new(image, Media::read(image));
+        m.genesis.hw.transfer_start_delay = 270;
+        while m.frames < 3 {
+            m.advance();
+        }
+        let ours = row_hashes(&m);
+        let equal = ours.iter().zip(board.iter()).filter(|(a, b)| a == b).count();
+        assert!(equal >= least, "{name}: {equal} rows of 224 are the board's");
+    }
+}
+
+/// The 68000 reading the HV counter and writing a register in a loop, each read stored to RAM: for each colour change
+/// on the lines of frame 3, its pixel less the pixel of the HV read that preceded the write, counted.
+fn register_offsets(first: u16, second: u16, regs: &[u16], blocks: &[(u32, Vec<u16>)]) -> std::collections::BTreeMap<(u8, i32), u32> {
+    let tail = [0x303C, first, 0x323C, second, 0x47F9, 0x00FF, 0x0000, 0x3639, 0x00C0, 0x0008, 0x3280, 0x36C3, 0x3639, 0x00C0, 0x0008, 0x3281, 0x36C3, 0x60EA];
+    let image = program(regs, blocks, &tail);
+    let (m, wd, _) = run(&image, 3);
+    let ram = &m.genesis.hw.wram;
+    let records: Vec<u16> = (0..0x8000).map(|i| u16::from_be_bytes([ram[2 * i], ram[2 * i + 1]])).take_while(|&r| r != 0).collect();
+    // The records split into frames where the V counter comes back past its jump; the last two are frames 2 and 3.
+    let mut starts = vec![0];
+    for i in 1..records.len() {
+        if records[i] >> 8 < 0x10 && records[i - 1] >> 8 >= 0xE5 {
+            starts.push(i);
+        }
+    }
+    let from = starts[starts.len() - 2];
+    let mut counts = std::collections::BTreeMap::new();
+    for y in 20..200 {
+        for x in 1..wd {
+            let (c, before) = (px(&m, x, y), px(&m, x - 1, y));
+            if c == before {
+                continue;
+            }
+            let colour = if c[0] > c[1] { 1 } else { 2 };
+            let read = (from..records.len())
+                .filter(|&i| (records[i] >> 8) as usize == y && (if i % 2 == 0 { 1 } else { 2 }) == colour)
+                .map(|i| 2 * (records[i] & 0xFF) as i32 - 0x18)
+                .filter(|&r| r <= x as i32)
+                .max();
+            if let Some(r) = read {
+                *counts.entry((colour, x as i32 - r)).or_insert(0) += 1;
+            }
+        }
+    }
+    counts
+}
+
+/// A register write shows two and a half pixels after the 68000 makes it: the backdrop's change falls 9 to 11 pixels
+/// after the HV read before it, the board's 9 to 11 (410, 828 and 432 of them); the display's blanking 21 to 23 after
+/// (the board's 21 to 23); D-9, `mdboard.py`'s register programs.
+#[test]
+fn register_writes_show_where_the_board_shows_them() {
+    let backdrop = register_offsets(0x8701, 0x8702, &MODE5, &[(cram(0), [0x000, 0x00E, 0x0E0, 0xE00].into_iter().chain(std::iter::repeat_n(0, 60)).collect())]);
+    let total: u32 = backdrop.values().sum();
+    let near: u32 = backdrop.iter().filter(|((_, d), _)| (9..=11).contains(d)).map(|(_, n)| n).sum();
+    assert!(near * 10 >= total * 9, "the backdrop's offsets {backdrop:?}");
+    let regs = [0x8004, 0x8174, 0x8230, 0x8407, 0x8578, 0x8702, 0x8C81, 0x8D3F, 0x8F02, 0x9001];
+    let blocks = [(cram(0), [0x000, 0x00E, 0x0E0, 0xE00].into_iter().chain(std::iter::repeat_n(0, 60)).collect()), (vram(0x20), vec![0x1111; 16]), (vram(0xC000), vec![1; 2048])];
+    let display = register_offsets(0x8174, 0x8134, &regs, &blocks);
+    let off: Vec<_> = display.iter().filter(|((c, _), _)| *c == 2).collect();
+    let total: u32 = off.iter().map(|(_, n)| **n).sum();
+    let near: u32 = off.iter().filter(|((_, d), _)| (21..=23).contains(d)).map(|(_, n)| **n).sum();
+    assert!(near * 10 >= total * 9, "the blanking's offsets {off:?}");
 }

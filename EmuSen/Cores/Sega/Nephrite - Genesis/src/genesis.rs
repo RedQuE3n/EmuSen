@@ -78,9 +78,11 @@ pub struct Hw {
     stall: u64,
     /// The last word the 68000 read in program space: the next instruction, which an unmapped read returns.
     pub prefetch: u16,
-    /// The picture being drawn, and whether this frame's is drawn at all (the sprite pass runs either way).
-    pub frame: crate::render::Frame,
+    /// Whether this frame's picture is drawn at all (the sprite pass runs either way); the VDP holds the picture.
     pub draw: bool,
+    /// Master clocks from a bus transfer's command to its first read: 0, which VDPFIFOTesting's wait states need,
+    /// until Nephrite_Disputes.md D-11 is settled; 270 is what the board shows for transfers from the 68000's RAM.
+    pub transfer_start_delay: u64,
 }
 
 pub struct Genesis {
@@ -113,8 +115,8 @@ impl Genesis {
             locked_up: false,
             stall: 0,
             prefetch: 0,
-            frame: crate::render::Frame::new(),
             draw: true,
+            transfer_start_delay: 0,
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
         g.cpu.reset(&mut MainBus(&mut g.hw));
@@ -123,6 +125,7 @@ impl Genesis {
 
     /// One frame: the 68000 instruction by instruction, the VDP's line events and the Z80 caught up after each.
     pub fn run_frame(&mut self) {
+        self.hw.vdp.draw = self.hw.draw;
         loop {
             if self.hw.vdp.bus_dma() {
                 // A transfer's hold that a frame's end interrupted.
@@ -179,17 +182,7 @@ impl Hw {
                 self.vdp.vint_pending = true;
                 self.z80_int = (t, t + Z80_INT);
             } else {
-                self.vdp.draw_late_dots(self.draw, &mut self.frame);
-                if (self.line as usize) < self.vdp.height() {
-                    let (line, draw) = (self.line as usize, self.draw);
-                    self.vdp.render_line(line, draw, &mut self.frame);
-                } else {
-                    self.vdp.blank_line();
-                    self.vdp.cram_dots.clear();
-                    if self.line == self.vdp.lines() - 1 {
-                        self.vdp.parse_sprites(0);
-                    }
-                }
+                self.vdp.line_end(self.line as usize);
                 self.line_begun = next_line;
                 self.line += 1;
                 // A frame shortened under its current line (V30 cleared on an NTSC board) ends at once.
@@ -418,8 +411,12 @@ impl Hw {
             }
             0x04 | 0x06 => {
                 let latch = self.vdp.regs[0] & 2;
+                let was = self.vdp.bus_dma();
                 self.vdp.control(v);
                 self.vdp.fetch_at = self.clock;
+                if !was && self.vdp.bus_dma() {
+                    self.vdp.fetch_at += self.transfer_start_delay;
+                }
                 if latch == 0 && self.vdp.regs[0] & 2 != 0 {
                     let (line, dot) = (self.line, self.dot());
                     self.vdp.latch_hv(line, dot);
@@ -607,29 +604,13 @@ fn dma_from(d: [u64; 4]) -> crate::vdp::Dma {
     }
 }
 
-/// The CRAM dots a line has gathered and not yet drawn, at most 24 and 8: their counts, then pixel and colour, then
-/// line, pixel and colour.
-const DOTS_WORDS: usize = 2 + 2 * 24 + 3 * 8;
-
-/// A line's dots and the dots on the line before.
-type Dots = (Vec<(u16, u16)>, Vec<(u16, u16, u16)>);
-
-fn dots_words(dots: &[(u16, u16)], late: &[(u16, u16, u16)]) -> [u16; DOTS_WORDS] {
-    let mut w = [0u16; DOTS_WORDS];
-    let (n, m) = (dots.len().min(24), late.len().min(8));
-    (w[0], w[1]) = (n as u16, m as u16);
-    for (i, &(x, v)) in dots.iter().take(n).enumerate() {
-        (w[2 + 2 * i], w[3 + 2 * i]) = (x, v);
-    }
-    for (i, &(l, x, v)) in late.iter().take(m).enumerate() {
-        (w[50 + 3 * i], w[51 + 3 * i], w[52 + 3 * i]) = (l, x, v);
-    }
-    w
-}
-
-fn dots_from_words(w: &[u16; DOTS_WORDS]) -> Dots {
-    let (n, m) = ((w[0] as usize).min(24), (w[1] as usize).min(8));
-    ((0..n).map(|i| (w[2 + 2 * i], w[3 + 2 * i])).collect(), (0..m).map(|i| (w[50 + 3 * i], w[51 + 3 * i], w[52 + 3 * i])).collect())
+/// The line being drawn when a state was taken: its number plus one (0 for none) and how far it was drawn, its sprite
+/// pixels and its latched scroll and window values. Its pixels are not kept, being the picture's and not the machine's
+/// (a state must not depend on whether frames were drawn); a loaded state draws them again from itself.
+pub struct OpenLine {
+    open: [u16; 2],
+    sprites: Vec<u8>,
+    latch: (Vec<u8>, (u16, u16), [u8; 2]),
 }
 
 /// Everything of the Genesis a state holds beyond its memories, read whole before any of it is applied.
@@ -640,7 +621,7 @@ pub struct Saved {
     sat_cache: Vec<u8>,
     line_scroll: (Vec<u8>, (u16, u16)),
     line_window: [u8; 2],
-    dots: Dots,
+    open_line: OpenLine,
     sprite_buffer: Vec<u8>,
     io: crate::io::IoRegs,
     sram_reg: u8,
@@ -688,7 +669,11 @@ impl Genesis {
         w.bytes("LineVsram", &h.vdp.line_vsram);
         w.u16s("LineHscroll", &[h.vdp.line_hscroll.0, h.vdp.line_hscroll.1]);
         w.bytes("LineWindow", &h.vdp.line_window);
-        w.u16s("CramDots", &dots_words(&h.vdp.cram_dots, &h.vdp.late_dots));
+        w.u16s("OpenLine", &[h.vdp.open.map_or(0, |l| l as u16 + 1), h.vdp.span_x as u16]);
+        w.bytes("OpenLineSprites", &h.vdp.span_sprites);
+        w.bytes("OpenLineVsram", &h.vdp.span_latch.0);
+        w.u16s("OpenLineScroll", &[h.vdp.span_latch.1.0, h.vdp.span_latch.1.1]);
+        w.bytes("OpenLineWindow", &h.vdp.span_latch.2);
         let io = h.io.regs_state();
         w.bytes("IoData", &io.data);
         w.bytes("IoCtrl", &io.ctrl);
@@ -754,8 +739,16 @@ impl Genesis {
         r.u16s(&mut hs)?;
         let mut line_window = [0u8; 2];
         r.bytes(&mut line_window)?;
-        let mut dots = [0u16; DOTS_WORDS];
-        r.u16s(&mut dots)?;
+        let mut open = [0u16; 2];
+        r.u16s(&mut open)?;
+        let mut sprites = vec![0u8; 2 * crate::render::MAX_W];
+        r.bytes(&mut sprites)?;
+        let mut span_vsram = vec![0u8; 80];
+        r.bytes(&mut span_vsram)?;
+        let mut span_scroll = [0u16; 2];
+        r.u16s(&mut span_scroll)?;
+        let mut span_window = [0u8; 2];
+        r.bytes(&mut span_window)?;
         let mut io = crate::io::IoRegs::default();
         r.bytes(&mut io.data)?;
         r.bytes(&mut io.ctrl)?;
@@ -784,7 +777,7 @@ impl Genesis {
             sat_cache: cache,
             line_scroll: (line_vsram, (hs[0], hs[1])),
             line_window,
-            dots: dots_from_words(&dots),
+            open_line: OpenLine { open, sprites, latch: (span_vsram, (span_scroll[0], span_scroll[1]), span_window) },
             sprite_buffer,
             io,
             sram_reg,
@@ -814,7 +807,10 @@ impl Genesis {
         h.vdp.sat_cache = s.sat_cache;
         (h.vdp.line_vsram, h.vdp.line_hscroll) = s.line_scroll;
         h.vdp.line_window = s.line_window;
-        (h.vdp.cram_dots, h.vdp.late_dots) = s.dots;
+        let o = s.open_line;
+        (h.vdp.open, h.vdp.span_x) = ((o.open[0] != 0).then(|| o.open[0] as usize - 1), o.open[1] as usize);
+        (h.vdp.span_sprites, h.vdp.span_latch) = (o.sprites, o.latch);
+        h.vdp.redraw_open_line();
         h.vdp.sprite_buffer = s.sprite_buffer;
         h.io.set_regs_state(s.io);
         h.cart.sram_reg = s.sram_reg;

@@ -810,8 +810,7 @@ mod tests {
                 assert_eq!(x.latency, y.latency, "{command:02X} {set:04X?}");
                 for w in 0..x.ram.len() {
                     let e = (x.ram[w] as i16 as i32 - y.ram[w] as i16 as i32).abs();
-                    let arrays = command == 0x07 && (0x78..0x338).contains(&w);
-                    assert!(e == 0 || matches!(command, 0x07 | 0x08) && e <= 1 || arrays && e <= 640, "{command:02X} word {w:03X} {set:04X?}");
+                    assert!(e == 0 || matches!(command, 0x07 | 0x08) && e <= 1, "{command:02X} word {w:03X} {set:04X?}");
                 }
                 // The approximate commands' results are not carried into the next case.
                 for w in 0..x.ram.len() {

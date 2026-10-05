@@ -382,6 +382,7 @@ fn main() {
             std::fs::write(&path, venusrt::chips::dsphle::tables_image()).unwrap();
             std::fs::write(cache().join("st010.tables.bin"), venusrt::chips::st010::sine_image()).unwrap();
             std::fs::write(cache().join("st010.atan.bin"), venusrt::chips::st010::atan_image()).unwrap();
+            std::fs::write(cache().join("st010.perspective.bin"), venusrt::chips::st010::perspective_image()).unwrap();
             println!("{} bytes to {}", venusrt::chips::dsphle::tables_image().len(), path.display());
         }
         Some("rate") => rate(&a[2], u8::from_str_radix(&a[3], 16).unwrap(), num(4, 1 << 20)),

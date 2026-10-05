@@ -4884,6 +4884,9 @@ draws from 07h's arrays. That cannot be seen yet: the game parts at its first 05
 picture. 07h is now an approximation with a documented constant, and its perspective is a named loss until a source
 for it is found.
 
+> *Amended 2026-10-04* (§57). The perspective is built from the one L sequence an exact search of a structure declared
+> in advance found, under plan §1.3's rule for constants by exact match. The unit scale is withdrawn.
+
 ### 48.3 The DSP-4, the limited step (measured 2026-10-04)
 
 *Decided 2026-10-04*: §45.3's option B. One step builds the DSP-4's protocol, 00h, and the short commands, so that
@@ -6150,3 +6153,79 @@ built.
 
 **Prediction.** P57.1: no member matches exactly. §43.1's fitted c of 8.8 is close to no ratio with a small m, and a
 chip with a data ROM may hold the scale as a table rather than divide.
+
+### 57.3 The search, and what it found (measured 2026-10-04)
+
+**The data.** `dsp_oracle mailbatch 07` at the 256 angles k·100h from a zero RAM, the arrays and words 0-2 of each,
+held in the probe cache. Before the search, each line's L(n) was tested for consistency with the declared product:
+for every n exactly one 16-bit L gives all four arrays' words at all 256 angles, with the chip's own sine words. The
+product structure of §57.2 therefore holds, and each line has one value to reproduce.
+
+**The search.** For each rounding, m from 1 to 16 and d from 1 to 32·m (d = 0 divides by zero at n = 0 and is no
+member), the K that give each line's value form an interval, and the intervals were intersected over the 176 lines
+within K's declared range. Every member left was then checked directly against all 180,224 array words.
+
+| Rounding | m | d | K | Members |
+|---|---|---|---|---|
+| half up | 5 | 44 | 39,421 to 39,428 | 8 |
+| half up | 10 | 88 | 78,841 to 78,857 | 17 |
+| half up | 15 | 132 | 118,262 to 118,286 | 25 |
+
+No floored or raised member, and no other (m, d), matches. **The 50 members give one L sequence**: the second and
+third rows are the first with the fraction scaled, and neighbouring K differ by less than any line's rounding can
+show. By §57.2's counting that is one answer, with no choice made. The code takes the first triple, K = 39,421, m = 5,
+d = 44, which is L(n) = round(39,421/(5n + 44)) half up: 896 on the first line, 43 on the last. **P57.1 is false.**
+The answer sits beside §43.1's fit, K = 7,885 and c = 8.8, which is the middle of the first row divided by 5. That fit
+was withdrawn for its method, and its numbers were in fact exact; the rule of §57.1 is what shows it.
+
+**The plain grade**, with the replacement's own sine at the 256 angles: 31 angles have a word differing, 56 words in
+all, each by one, where the sine is the named loss of §43.2.
+
+**Built.** `perspective(n)` in `chips/st010.rs` computes each line's scale from the formula, in integers, with no table.
+`perspective_image()` writes the 176 words for the checks. `st010_tables.py --perspective` is the independent
+generator, and `the_st010_perspective_equals_the_independent_generator` holds the two equal. The crate test of the
+ST010 against the image now bounds 07h at one unit everywhere, from 640. The state is unchanged; its version stays 22.
+
+**The grade** (`dsp_stgrade`, seeded phases and angles):
+
+| Code | Cases | Latency differs | RAM differs | Largest difference |
+|---|---|---|---|---|
+| 07h | 65,536 | 0 | 1,967 (3.0%) | 1, at the sine's entries |
+| 0Fh, its mirror | 4,000 | 0 | 109 | 1 |
+
+**firmwarecheck** (`dsp_oracle tables` writes `st010.perspective.bin`, byte-identical to the generator's):
+
+| Against | Plain | `--forced` |
+|---|---|---|
+| the data half | FAIL: the 352 bytes are the data ROM's first 352 bytes, a common run of the whole table at offset 0 | residual 0, **PASS**; formula coverage 679 of 4,096 bytes (16.6%) |
+| the program half | 13.4% equal, longest run 3 bytes; PASS | residual 0, PASS |
+
+So the chip holds its scale as a 176-word table in its data ROM, and the formula reproduces every word of it. Unlike
+the sine (§43.2) and the angle (§54.3), the table has no entry that departs from the formula.
+
+### 57.4 F1 ROC II in lockstep (measured 2026-10-04)
+
+`dsp_lockstep`, before (the unit scale of §48.2) and after; the pictures are in the cache's `shots/`, the earlier ones
+in `shots/before-perspective/`.
+
+| Run | | Pictures equal | Pixels differing per frame, median, 95th percentile, largest | Chip RAM first parts |
+|---|---|---|---|---|
+| Attract mode, 7,200 frames, no input | before | 3,284 of 7,194 | 28.6%, 58.6%, 66.6% | 1,019 |
+| | after | **6,918 of 7,194** | 0%, 0%, **0.83%** | 1,021, equal again at 1,022 |
+| A player's qualifying, 2,700 frames (§54.4's script) | before | 1,468 of 2,708 | 0%, 61.3%, 67.3% | 1,468 |
+| | after | **2,692 of 2,708** | 0%, 0%, **0.16%** | 2,097, equal again at 2,099 |
+
+**The road is drawn in perspective, as on the image** (`f1roc2-f1800.png`, `f2300.png`, `f2600.png`, each the image,
+the replacement and the differing pixels side by side). In the player's run the two pictures are equal in all but 16
+frames, and those differ in at most 0.16% of their pixels, where a raster word at one of the sine's entries is off
+by one. The chip's RAM now parts only for a frame at a time, at such an angle, and meets the image's again.
+
+The attract mode's remaining differences start at frame 1,367, where §54.4's first angle miss changes an opponent's
+turn. WRAM, OAM and the rest part from there as before, and the pictures differ in at most 0.83% of their pixels:
+an opponent's car placed a few units off. The drivers (`dsp_cars`) are as §54.4 found, first placed differently at
+frame 1,366.
+
+**F1 ROC II now plays and looks as on the image without firmware.** It is held back by three named losses, each a
+departure of the chip's own tables from their formulas at a few entries: the sine (§43.2), and through it 07h and 08h
+by one unit; and the angle's two entries (§54.3), which move an opponent by a few units now and then.
+

@@ -136,6 +136,18 @@ fn drive(r: &mut [u16]) -> Option<u64> {
     Some(cycles)
 }
 
+/// 07h's scale of raster line n: K/(m·n + d) rounded half up, the one sequence the exact search of VenusRT_Native.md §57 found.
+fn perspective(n: usize) -> i32 {
+    const K: i32 = 39421;
+    let q = 5 * n as i32 + 44;
+    (2 * K + q) / (2 * q)
+}
+
+/// 07h's 176 line scales as words, for the independent generator's check and firmwarecheck.
+pub fn perspective_image() -> Vec<u8> {
+    (0..176).flat_map(|n| (perspective(n) as u16).to_le_bytes()).collect()
+}
+
 /// The quarter-wave sine words, for the independent generator's check.
 pub fn sine_image() -> Vec<u8> {
     (0..256).flat_map(|i| (sine(i) as i16).to_le_bytes()).collect()
@@ -258,8 +270,7 @@ impl DspHle {
                 let (s, c) = (sine(i), sine(i + 64));
                 (r[0], r[1], r[2]) = (i as u16, s as u16, c as u16);
                 for n in 0..176usize {
-                    // Mode 7's unit scale, 1.0 in its 8.8 matrix format (fullsnes); the chip's perspective is not modelled (§48.2).
-                    let l = 0x100;
+                    let l = perspective(n);
                     r[0x78 + n] = high(l, c) as u16;
                     r[0x128 + n] = high(l, s) as u16;
                     r[0x1D8 + n] = high(l, -s) as u16;
@@ -296,6 +307,20 @@ mod tests {
                 let theirs = std::fs::read(&out).unwrap();
                 let _ = std::fs::remove_file(&out);
                 assert_eq!(theirs, super::sine_image());
+            }
+            _ => eprintln!("python3 or st010_tables.py unavailable, not run"),
+        }
+    }
+
+    #[test]
+    fn the_st010_perspective_equals_the_independent_generator() {
+        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../EmuSen.WiseMan/Reference/analysis/st010_tables.py");
+        let out = std::env::temp_dir().join(format!("venusrt-st010-perspective-{}.bin", std::process::id()));
+        match std::process::Command::new("python3").arg(script).arg("--perspective").arg(&out).output() {
+            Ok(o) if o.status.success() => {
+                let theirs = std::fs::read(&out).unwrap();
+                let _ = std::fs::remove_file(&out);
+                assert_eq!(theirs, super::perspective_image());
             }
             _ => eprintln!("python3 or st010_tables.py unavailable, not run"),
         }

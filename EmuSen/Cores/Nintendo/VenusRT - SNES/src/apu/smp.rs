@@ -59,6 +59,9 @@ pub struct Smp {
     pub cycles: u64,
     /// The timers' first stages, one for timers 0 and 1 and one for timer 2, counting toward 384 and 48 (D-27).
     pub prescale: [u16; 2],
+    /// TEST as the timers' last cycle saw it, which with `prescale` gives each first stage's gated level then (D-26); at
+    /// an instruction's boundary it is TEST itself.
+    pub gate_test: u8,
     pub ratio: (u64, u64),
     /// The boot program mapped at $FFC0-$FFFF: VenusRT's own (D-38), or the player's 64-byte image, `boot_file`.
     pub boot: [u8; 64],
@@ -91,6 +94,7 @@ impl Smp {
             timers: Default::default(),
             cycles: 0,
             prescale: [0; 2],
+            gate_test: 0x0A,
             ratio: if pal { PAL_RATIO } else { NTSC_RATIO },
             boot: image.unwrap_or(BOOT),
             boot_file: image.is_some(),
@@ -230,9 +234,11 @@ impl Smp {
     }
 
     /// The timers' part of a cycle, after the SPC700's access in it, so that a TEST or CONTROL write counts at once (D-27).
+    #[inline]
     fn timer_step(&mut self) {
         let clk = (self.test >> 6) as usize;
         let step = (1u16 << clk) + (2u16 << ((self.test >> 4) & 3));
+        let before = self.prescale;
         let mut fire = [false; 3];
         self.prescale[0] += step;
         if self.prescale[0] >= 384 {
@@ -244,9 +250,14 @@ impl Smp {
             self.prescale[1] -= 48;
             fire[2] = true;
         }
-        // TEST bit 3 lets the timers count and bit 0 stops them; the first stage runs regardless (fullsnes, TEST; D-26).
-        if self.test & 0x09 != 0x08 {
-            return;
+        // D-26: TEST bit 3 set and bit 0 clear gate each first stage's level, high over the period's second half, and a
+        // second stage counts the gated level's falls. With TEST unchanged a fall is a wrap while the gate is open.
+        if self.test == self.gate_test {
+            if self.test & 0x09 != 0x08 {
+                return;
+            }
+        } else {
+            fire = self.gate_changed(before);
         }
         for (i, t) in self.timers.iter_mut().enumerate() {
             if self.control & (1 << i) == 0 || !fire[i] {
@@ -258,6 +269,22 @@ impl Smp {
                 t.out = (t.out + 1) & 0x0F;
             }
         }
+    }
+
+    /// A TEST write's cycle: which timers the gated levels' falls clock, between the last cycle's TEST and this one's.
+    #[cold]
+    fn gate_changed(&mut self, before: [u16; 2]) -> [bool; 3] {
+        let was = Self::levels(self.gate_test, before);
+        let now = Self::levels(self.test, self.prescale);
+        self.gate_test = self.test;
+        let fall = [was[0] && !now[0], was[1] && !now[1]];
+        [fall[0], fall[0], fall[1]]
+    }
+
+    /// The two first stages' levels under a TEST value, from the stages' counts: high over the second half of each period.
+    fn levels(test: u8, prescale: [u16; 2]) -> [bool; 2] {
+        let run = test & 0x09 == 0x08;
+        [run && prescale[0] >= 192, run && prescale[1] >= 24]
     }
 
     fn io_read(&mut self, a: u16) -> u8 {
@@ -472,6 +499,35 @@ pub(crate) mod tests {
         }
         s.write(0xF1, 0x84);
         assert_eq!(s.timers[2].out, 1);
+    }
+
+    // D-26: TEST bit 0 set while timer 2's first stage is high counts once; set while it is low, or held, counts nothing.
+    #[test]
+    fn stopping_the_timers_while_the_first_stage_is_high_counts_once() {
+        let mut s = Smp::new(false);
+        use spc700::Bus;
+        s.write(0xFC, 1);
+        s.write(0xF1, 0x84);
+        while s.timers[2].out == 0 {
+            s.idle();
+        }
+        while s.prescale[1] < 24 {
+            s.idle();
+        }
+        s.write(0xF0, 0x0B);
+        assert_eq!(s.timers[2].out, 2);
+        for _ in 0..64 {
+            s.idle();
+        }
+        assert_eq!(s.timers[2].out, 2);
+        s.write(0xF0, 0x0A);
+        while s.prescale[1] >= 24 {
+            s.idle();
+        }
+        let out = s.timers[2].out;
+        s.write(0xF0, 0x0B);
+        s.write(0xF0, 0x0A);
+        assert_eq!(s.timers[2].out, out);
     }
 
     // The boot program's reset vector starts the CPU, and run_to keeps the SPC700 at the master clock's share.

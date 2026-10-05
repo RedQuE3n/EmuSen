@@ -207,7 +207,7 @@ impl Machine {
                 crate::cpu::Bus::idle(&mut self.sys, at, 0);
             } else {
                 self.cpu.step(&mut self.sys);
-                self.sys.catch_up_sa1();
+                self.instruction_end();
                 return;
             }
         }
@@ -233,13 +233,27 @@ impl Machine {
         self.record(opcode, 0);
         let clock = self.sys.timing.clock;
         self.cpu.step(&mut self.sys);
-        self.sys.catch_up_sa1();
+        self.instruction_end();
         if let Some(t) = &mut self.trace {
             let n = t.len();
             t[n - 4..].copy_from_slice(&((self.sys.timing.clock - clock) as u32).to_le_bytes());
         }
         let after = self.cpu.p & crate::cpu::flag::I != 0;
         self.i_checked = if matches!(opcode, 0x58 | 0x78 | 0x28 | 0xC2 | 0xE2) { before } else { after };
+    }
+
+    /// An S-CPU instruction's end: the cartridge's processor caught up, or with an SA-1 under a catch-up bound, every
+    /// `sa1_every`th instruction; the debugger's observed frames always catch up (VenusRT_Native.md §58).
+    #[inline]
+    fn instruction_end(&mut self) {
+        let s = &mut self.sys;
+        if s.sa1_every > 1 && self.debug_open.is_none() && s.cart.sa1.is_some() {
+            s.sa1_since += 1;
+            if s.sa1_since < s.sa1_every {
+                return;
+            }
+        }
+        s.catch_up_sa1();
     }
 
     /// The probe's CPU trace record (EmuSen_Debugging_Tools_Reference_v5.md §3.40): address, opcode, kind, A, X, Y, S, D,

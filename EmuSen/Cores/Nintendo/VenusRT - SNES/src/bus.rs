@@ -204,6 +204,11 @@ pub struct System {
     pub patches: Vec<(u32, u8, u32)>,
     /// The S-CPU's and DMA's stores as (space, offset, value) while a debugger watches them; not in the state.
     pub stores: Option<Vec<(u32, u32, u8)>>,
+    /// The SA-1 catch-up setting: caught up after every `sa1_every`th S-CPU instruction outside the board's accesses,
+    /// 1 being every instruction, and the instructions since the last catch-up; the host's and zero at every frame's
+    /// end, so neither is in the state (VenusRT_Native.md §58).
+    pub sa1_every: u32,
+    pub sa1_since: u32,
 }
 
 impl System {
@@ -230,6 +235,7 @@ impl System {
     /// Runs the cartridge's processor (the SA-1 or the GSU) to the S-CPU's clock and takes its IRQ line.
     #[inline]
     pub fn catch_up_sa1(&mut self) {
+        self.sa1_since = 0;
         let clock = self.timing.clock;
         let c = &mut self.cart;
         if let Some(sa1) = c.sa1.as_mut() {
@@ -264,6 +270,8 @@ impl System {
             cart_irq: false,
             patches: Vec::new(),
             stores: None,
+            sa1_every: 1,
+            sa1_since: 0,
         }
     }
 

@@ -6240,3 +6240,190 @@ output" as the array words would reject a scale proven exact because of a loss t
 reading recorded in §57.2 before the search, scales checked against the chip's own trigonometric words, is therefore
 the one adopted; the built code uses the formula's sine throughout, and its one-unit array differences remain charged to
 §43.2.
+
+## 58. Super Mario RPG's p99: two neutral levers, and the SA-1 catch-up bound as a setting (2026-10-04)
+
+§41.18 left G6's Super Mario RPG half open: a p99 of 18.2-18.9 ms at 33% quota against the budget's 16.6, from one
+scene (timed frames 1,800-2,100), with optimisation on hold. **Decided 2026-10-04 by the tester: the fix goes ahead**,
+for this scope only. The rule it was built under is the project's: the default stays exact, and a lever that changes
+behaviour becomes an opt-in setting with its cost stated. The order was therefore fixed in advance: levers that change
+nothing first, kept on by default; then plan §9 Q3's first lever, the SA-1 catch-up bound, made a setting unless it
+too proved neutral; then the measurements.
+
+### 58.1 The scene, profiled again (measured 2026-10-04)
+
+A scratch replay tool runs the bench's script (Start and A tapped, Right held after frame 1,200) to frame 3,000, saves
+the state, and replays frames 3,000-3,300 from it, so that the whole sample falls inside the heavy scene. Unquota'd
+on the desktop the scene costs 3.79-3.85 ms a frame (best and worst of eight replays), against §41.18's p90 of 3.82.
+The sampler was §41.18's ptrace sampler of instruction pointers, extended to name each sample by its innermost inlined
+function and source line through `addr2line`, and samples inside libc by the caller's return address.
+
+What that finer naming showed, against §41.18's coarser reading:
+
+- **§41.18's "catch-up loop itself, 10%" was not the catch-up.** The lines it falls on are the two statements of
+  `Sa1::run_until` that copy the SA-1's 65C816 out of the chip and back, around each instruction (4.4% and 6.3% of the
+  scene). The copy exists because the CPU borrows the rest of the chip as its bus. It is paid once per SA-1
+  *instruction*, not once per catch-up, so a bound on catch-ups could not remove it (argued here, measured in §58.4).
+- **The compositor's priority walk is the largest single cost**: `Ppu::front` 23%, most of it on the loop over the
+  mode's order and its per-entry tests.
+- **3.7% is libc's `memcpy`**, called from `fill_row`'s variable-length copy of each decoded chunk into the line buffer.
+- The SA-1's bus reads 5.1% and `rom_offset` 2.8%; the tile decode (`encode`, `decode_chunk`) 9.6%.
+
+### 58.2 The neutral levers (built 2026-10-04)
+
+| Lever | What it does | Scene, ms a frame (best of 8) |
+|---|---|---|
+| None (0c0335c1) | | 3.79 |
+| The CPU taken out once per catch-up | `run_until` copies the 65C816 out of the chip once per run and back at its end; nothing else in the chip reads it during the run | 3.57 |
+| The SA-1 bus's ROM decode as a per-bank table | each bank's linear window in ROM, (first offset, last offset, base), built from the MMC registers and rebuilt when one is written or a state loads; the vectors the SA-1 supplies at 00/80:FFEA-FFFD and every non-ROM address keep the decode as before; a bank is in the table only if its window is linear in the mirrored ROM | 3.41 |
+| The compositor by rank | the mode's priority order turned once a span into a rank for each (layer, priority), and the front-most pixel found as the opaque layer of greatest rank, over at most five layers instead of up to twelve order entries; a layer absent from the order is never read, as before | |
+| Tile rows eight pixels at once | each bitplane byte spread one bit a byte through a 256-entry table, so a chunk's eight colour numbers are assembled with one OR a plane, and byte-swapped for a horizontal flip | |
+| A whole chunk copied at its fixed length | the line buffer takes an 8-entry chunk as a fixed-size copy, which compiles to moves; a partial chunk at a span's edge copies as before | |
+| Brightness by table | the five-bit to eight-bit scaling at the span's brightness read from a 32-entry table made per span | 2.47 (the four PPU rows together) |
+
+Together the scene's frame falls from 3.79 to 2.47 ms, by 35%. The first two rows are one commit (the SA-1's), the
+last four another (the PPU's).
+
+**The proof that they change nothing**, run on each commit:
+
+- **State and picture hashes**: the state's FNV-1a hash every 60th frame and a running hash of every frame's picture,
+  identical to the baseline's for the nine bench games and the five SA-1 games of §25.2 (Super Mario RPG, Kirby Super
+  Star, PGA European Tour, PGA Tour 96, Power Rangers Zeo), each under the bench's script to frame 4,200 and with no
+  input to frame 2,400.
+- **The corpus**: the same hashes every 60th frame to frame 3,600 with no input, identical on all 295 ROMs of the
+  manifest. Since every VenusRT column of the corpus runner is a function of the machine's state and pictures at frames
+  1,800 and 3,600, those columns cannot move; the runner was also run on the final commit (§58.5).
+- **Skip-versus-draw**: `skip_check` over the thirteen games for 1,200 frames, and the state hashes with the picture
+  skipped equal to the drawn ones under the script to frame 4,200 for Super Mario RPG, Kirby Super Star, Yoshi's Island
+  and Star Fox.
+- **Unit tests holding the new paths to the old**: the rank against the order walked from the front over 20,000 random
+  modes, enables, masks and pixels; the spread decode against the pixel-at-a-time decode at every depth and flip; the
+  bank table against `rom_offset` for five ROM sizes (one not a multiple of 64 KiB, which the table refuses) and three
+  MMC settings.
+- **The conformance kit**, from the final commit's release library, on §31.2's eleven images with no boot file:
+  compliant on every one.
+
+### 58.3 The SA-1 catch-up bound (built 2026-10-04)
+
+The SA-1 is caught up after every S-CPU instruction and before every S-CPU access to the board (§25.1). The bound
+defers the first kind: under `sa1_catch_up` = 4 or 16 the SA-1 is caught up after that many S-CPU instructions, while
+every S-CPU access to the board, its registers, I-RAM, BW-RAM and ROM alike, still catches it up first, as do a
+frame's end and every instruction of a debugger's observed frame. A state is therefore never written with the SA-1
+behind the S-CPU, and nothing new enters the state. Holds that ended before the SA-1's clock are now dropped as it
+runs, since the deferred SA-1 meets more of them queued; that changes nothing.
+
+How much it can defer was counted in the scene, by a counter not kept: per frame, 16,605 catch-ups that ran the SA-1
+and 2,102 that found it already there; the S-CPU's accesses to the board were 6,162, of which only 1,223 were ROM. **The
+S-CPU runs the scene from WRAM**, so most catch-ups are the per-instruction kind the bound defers.
+
+**It is not neutral.** The default, 1, is today's behaviour, and its hashes equal the previous commit's everywhere.
+At 2, 4 or 8, the pictures stay identical over every frame of all thirteen games' runs, but the state differs:
+
+| sa1_catch_up | Super Mario RPG, frames whose state differs (every 60th, script / none) | Kirby Super Star | The other eleven games |
+|---|---|---|---|
+| 2 | 60-360 and 540 / 60-360 | none / none | none |
+| 4 and 8 | the same | 14 frames between 240 and 4,020 / 25 between 300 and 2,400 | none |
+
+The likely reading, not measured: the SA-1's position at a frame's end and the D-36 holds it met inside the span
+differ, and the games' own loops absorb the difference, as §28.2 found for contention generally. The setting is
+therefore declared with `effect: accuracy`:
+
+- **key** `sa1_catch_up`, a choice of 1 (exact, the default), 4 and 16, in the Performance category, marked advanced,
+  applied between frames;
+- **cost**, in the words the frontend shows: the SA-1 can fall up to 4 or 16 instructions of the console's CPU
+  behind it; its interrupt to that CPU can arrive that much later, and the two processors' contention for ROM and
+  BW-RAM inside that span is timed differently from the console's; some games' internal state then differs from the
+  exact setting's at some frames, though the pictures measured were the same; it saves about 3% of the time of Super
+  Mario RPG's heaviest scene, and nothing in games without an SA-1.
+
+The core declares `SETTINGS` among its capabilities; the registration golden gained only the setting's rows.
+
+### 58.4 Super Mario RPG at 33% quota (measured 2026-10-04)
+
+Every row is the bench through `ICore` (`venusrtbench`, rebuilt against this branch so that a setting can be passed),
+with each build's library swapped in, under `flock ~/.cache/emusen/probe/timing.lock` and
+`systemd-run --scope -p CPUQuota=33% -p CPUQuotaPeriodSec=5ms`, the variants interleaved within each round. The
+load average was read before each run. The bench's own state hash after 4,200 frames, A13DD00F173D23E2, was the same
+for every build and setting. p99 in ms:
+
+| Round (load) | Baseline | + SA-1 levers | + PPU levers (the defaults) | Defaults, again | Defaults, catch-up 16 | Defaults, catch-up 4 | Baseline + bound only, 1 | Baseline + bound only, 16 |
+|---|---|---|---|---|---|---|---|---|
+| 1 (4.0-8.2) | 19.72 | 20.81 | 18.98 | 19.14 | 18.80 | 18.80 | 19.75 | 19.56 |
+| 2 (3.2-5.3) | 18.95 | 15.60 | 15.08 | 14.90 | 14.27 | 13.88 | 18.86 | 18.80 |
+| 3 (2.9-8.0) | 18.75 | 15.38 | 13.71 | 13.87 | 15.21 | 17.80 (load 6.7) | 19.30 | 19.13 |
+| 4 (2.7-6.5) | 18.91 | | | 14.22 | 14.17 | 15.98 | | 18.59 (load 6.5) |
+| 5 (2.1-3.9) | 15.34 | | | 13.89 | 13.42 | 16.01 | | 22.19 |
+| 6 (2.2-2.6) | 20.08 | | | 13.90 | 13.56 | 13.72 | | 18.44 |
+| All-games round 1 (2.0) | 18.63 | | | 13.75 | | | | |
+| All-games round 2 (1.5) | 18.12 | | | 13.57 | | | | |
+
+The means over the rounds at load under 5.5: baseline 11.1-12.0 ms; with the SA-1 levers 10.5; with the defaults
+8.2-8.8; at catch-up 16, 8.2-8.7; at 4, 8.3-8.9; the bound alone on the baseline 11.7-12.8. Unquota'd, the defaults
+run the bench at a mean of 2.51-2.61 ms and a p99 of 2.87-2.91, against §41.8's 3.33 (3.88). On the desktop, the
+scene replays at 2.42-2.50 ms a frame with the bound at 4 to 64 against 2.52-2.58 at 1, and on the baseline at 3.86
+with the bound at 16 against 3.93 at 1.
+
+- **The defaults meet the budget.** In every round at load average under 5.5, Super Mario RPG's p99 is 13.6-15.1 ms
+  with the defaults (the PPU commit's and the final commit's runs together; the final commit's alone 13.6-14.9),
+  against the baseline's 15.3-20.1 (median 18.8). The SA-1 levers alone bring it to 15.4-15.7.
+- **The bound adds nothing measurable to the p99.** At 16 its median is 14.2 ms against the defaults' 13.9; at 4 the
+  spread is wider (13.7-16.0). It lowers the mean by about 3%, as on the desktop.
+- **Under heavy load nothing meets it.** Round 1 ran while other test hosts loaded the desktop to 4-8, and every
+  variant's p99 was 18.8 ms or more. The quota proxy is sensitive to the machine's load as well as to the scene's work,
+  so the verdict below rests on the rounds at the load §41.8 ran at (3.4-3.9) or lower.
+
+**The predictions.** §41.18 predicted (its P8), before any measurement, that the bound alone takes the p99 under 16.6
+ms and the decode table alone does not. Written before this section's matrix, from the desktop measurements of
+§58.1-§58.3 and one pair of quota runs on the first bench:
+
+- **P8, retired, false in both halves.** The bound alone on the baseline leaves the p99 at 18.4-22.2 ms (P58.3 below).
+  The SA-1 commit, the decode table with the CPU copy, brings it to 15.4-15.7, under the budget. P8's reading of the
+  sampler took the copy for the catch-up.
+- **P58.1, false by a hair**: with the defaults the p99 was to be at most 15.0 ms in every round. At load under 5.5 the
+  final commit's largest is 14.90, but the PPU commit, the same machine one commit earlier, gave 15.08 in round 2; and
+  round 1, at load 6.9, gave 19.14.
+- **P58.2, holds**: the bound at 16 lowers the p99 by less than 1 ms against the defaults; it does not lower it
+  measurably at all.
+- **P58.3, holds**: the bound alone on the baseline leaves the p99 above 16.6 ms, in every round.
+- **P58.4, holds**: no other bench game is worse (§58.5).
+
+### 58.5 Every bench game, and the corpus runner (measured 2026-10-04)
+
+The nine bench games at 33% quota, the baseline against the defaults, two interleaved rounds at load 1.4-3.2; mean
+(p99) in ms, and the bench's state hash equal between the builds in every row:
+
+| Game | Baseline, round 1 | Defaults, round 1 | Baseline, round 2 | Defaults, round 2 |
+|---|---|---|---|---|
+| Super Mario World | 7.10 (13.75) | 5.17 (9.56) | 6.85 (10.29) | 5.18 (9.91) |
+| Super Metroid | 6.66 (10.38) | 5.42 (9.26) | 6.72 (10.33) | 5.49 (9.81) |
+| Donkey Kong Country | 6.32 (10.39) | 4.87 (9.64) | 6.26 (10.59) | 4.77 (9.46) |
+| A Link to the Past | 7.67 (10.08) | 5.89 (9.37) | 7.61 (13.31) | 5.61 (9.25) |
+| Yoshi's Island (GSU-2) | 8.67 (14.28) | 6.94 (13.87) | 8.65 (14.20) | 6.72 (10.33) |
+| Star Fox (GSU) | 7.24 (10.20) | 6.13 (10.35) | 7.61 (13.57) | 6.15 (10.17) |
+| Super Mario RPG (SA-1) | 11.67 (18.63) | 8.30 (13.75) | 11.22 (18.12) | 8.41 (13.57) |
+| Pilotwings (DSP-1, image) | 8.78 (14.45) | 6.94 (10.12) | 8.51 (14.33) | 6.94 (12.91) |
+| Super Mario Kart (DSP-1B, image) | 9.59 (14.51) | 7.81 (13.18) | 9.47 (14.36) | 7.83 (13.42) |
+
+Every mean falls, by 15-29%, the PPU levers acting on every game. Every p99 but one falls or stays within the rounds'
+spread; Star Fox's round-1 p99 is 0.15 ms higher, inside it.
+
+**The corpus runner** (`The_corpus_reproduces_the_recorded_baseline` with VenusRT as its third engine, no firmware,
+six threads), on the final commit and, with the baseline's library swapped into the same test build, on the baseline:
+**every VenusRT column of all 295 ROMs identical** between the two (verdict, detail, and VRAM, CGRAM, OAM and picture
+against Mesen's), with 112 self-graded passes, §41.19's count without firmware. C# Venus's and Mesen's cells reproduced
+the committed baseline in both runs.
+
+### 58.6 G6, and what is left
+
+**G6's Super Mario RPG half is met** at the defaults: its 33%-quota p99 is 13.6-14.9 ms in every round at the load
+§41.8 measured under, and every bench game's mean and p99 is within the budget. No accuracy was traded for it: the
+defaults' machine is the baseline's, frame for frame. G6 as a whole is still **not met**, because the handheld's battery
+run (§41.8) is owed.
+
+Not done, and why:
+
+- **The SA-1's hold queue** (`Sa1::access`, 9.5% of the scene after the levers) and the compositor's per-pixel colour
+  math are the largest costs left. Both could be made cheaper without changing behaviour; neither is needed for the
+  budget, so neither was built.
+- **The bound stays an opt-in setting**, though it does not help the p99. It is kept because it is plan Q3's named
+  lever, it lowers the mean, and a weaker machine than the quota proxy may be bound by the mean; its cost is stated.

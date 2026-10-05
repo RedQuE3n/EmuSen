@@ -80,7 +80,7 @@ namespace EmuSen.WiseMan.Cores
             var library = found.Open();
             Assert.True(library is { Available: true }, found.Report);
             Assert.Equal(CoreInterface.CapReset | CoreInterface.CapSnapshot | CoreInterface.CapBatteryDirty | CoreInterface.CapRomPatches | CoreInterface.CapCheatPokes
-                | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble, library!.Capabilities);
+                | CoreInterface.CapSettings | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble, library!.Capabilities);
         }
 
         [Fact]

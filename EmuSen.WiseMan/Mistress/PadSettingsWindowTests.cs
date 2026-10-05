@@ -70,8 +70,6 @@ namespace EmuSen.WiseMan.Mistress
         private static void TallerBar(MainWindow window, double by)
         {
             var bar = window.GetControl<Border>("StatusBar");
-            // From a one-line status, so the heights are the ones §4.83.7 names whatever notice the engine adds (VenusRT_Native.md §65).
-            window.GetControl<TextBlock>("StatusText").Text = "Running: Game";
             window.UpdateLayout();
             bar.MinHeight = bar.Bounds.Height + by;
             window.UpdateLayout();
@@ -81,6 +79,8 @@ namespace EmuSen.WiseMan.Mistress
         public static TheoryData<double> Shorter => new() { 0, 3, 5, 7, 8, 10, 13 };
 
         public static TheoryData<double> EveryShorter => new(Enumerable.Range(0, 17).Select(h => (double)h));
+
+        public static TheoryData<double> MuchShorter => new() { 60, 61, 62, 66, 70, 74, 75, 80 };
 
         private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
@@ -573,6 +573,11 @@ namespace EmuSen.WiseMan.Mistress
             Stop(window);
             window.Close();
         }, default);
+
+        // The same walk under a status bar two lines taller, where a first search from the category found no path from 61 to 74 and at 80 pixels shorter - see VenusRT_Native.md §66.
+        [Theory]
+        [MemberData(nameof(MuchShorter))]
+        public Task A_long_preset_s_sliders_are_reached_under_a_much_taller_status_bar(double tallerBar) => A_long_preset_s_sliders_on_the_sheet_are_reached_and_walked_by_pad(tallerBar);
 
         // The parameter search on the sheet: reached by pad, typed with the on-screen keyboard, and the one row it leaves moved by pad - see EmuSen_Settings_Reference.md §4.48.10.
         [Fact]

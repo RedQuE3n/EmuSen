@@ -125,7 +125,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(CoreLibrary.IsOpen(library));
         }
 
-        // VenusRT_DspHle.md §7.3: a DSP-1 cartridge and an empty firmware folder; nothing is missing, the game is created on the replacement, its state carries the replacement's tag, machine info says so, and the notice names the cost.
+        // VenusRT_DspHle.md §7.3: a DSP-1 cartridge and an empty firmware folder; nothing is missing, the game is created on the replacement, its state carries the replacement's tag, machine info says so, and only a chip with none is noticed (VenusRT_Native.md §66).
         [Fact]
         public void A_dsp_cartridge_runs_on_the_replacement_with_no_firmware()
         {
@@ -139,7 +139,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement"), new CoreFirmwareSource(2, "replacement") }, engine.Machine.Info.Firmware);
             Assert.DoesNotContain(engine.Machine.Info.Processors, p => p.Name == "DSP");
             Assert.Contains("Coprocessor.DspHle", engine.Machine.Layout(0));
-            Assert.StartsWith("VenusRT's open replacement for dsp1b.rom - Without the image", engine.FirmwareNotice);
+            Assert.Null(engine.FirmwareNotice);
+            Assert.StartsWith("Without the image", engine.GetFirmwareRequirements(rom).Single(r => r.FileName == "dsp1b.rom").ReplacementCost);
             string gear = Path.Combine(_root, "gear.sfc");
             File.WriteAllBytes(gear, SyntheticRom.BuildNecDsp("TOP GEAR 3000"));
             Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(gear, Engine));
@@ -165,7 +166,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(("spc700.rom", 64, false, "accuracy"), (request.FileName, request.Size, request.Required, request.ReplacementEffect));
             engine.LoadRom(rom);
             Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement") }, engine.Machine.Info.Firmware);
-            Assert.StartsWith("VenusRT's open replacement for spc700.rom", engine.FirmwareNotice);
+            Assert.Null(engine.FirmwareNotice);
+            Assert.StartsWith("Without the image, VenusRT's own boot program runs", request.ReplacementCost);
             byte[] image = new byte[64];
             (image[0], image[1], image[62], image[63]) = (0x2F, 0xFE, 0xC0, 0xFF);
             File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "spc700.rom"), image);

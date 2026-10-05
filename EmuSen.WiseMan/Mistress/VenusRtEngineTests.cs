@@ -100,7 +100,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // An empty firmware folder and VenusRT chosen: neither an ordinary game nor a DSP-1 cartridge asks for anything, and the cartridge runs with the replacement's notice (VenusRT_DspHle.md §7.3).
+        // An empty firmware folder and VenusRT chosen: neither an ordinary game nor a DSP-1 cartridge asks for anything, and the cartridge runs on the replacement with no notice (VenusRT_Native.md §66).
         [Fact]
         public Task An_ordinary_game_on_venusrt_prompts_for_no_firmware() => Session.Dispatch(async () =>
         {
@@ -122,7 +122,8 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(before, status.Text);
             typeof(MainWindow).GetMethod("LoadRom", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(string), typeof(string) }, null)!.Invoke(window, new object[] { dsp, "Pilot.sfc" });
             WaitFor(() => Game(window).TotalFrames > 20);
-            Assert.Contains("VenusRT's open replacement for dsp1.rom", status.Text);
+            Assert.StartsWith("Running: ", status.Text);
+            Assert.DoesNotContain("replacement", status.Text);
             window.Close();
         }, default);
 

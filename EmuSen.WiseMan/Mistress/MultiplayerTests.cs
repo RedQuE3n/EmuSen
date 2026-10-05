@@ -40,6 +40,10 @@ namespace EmuSen.WiseMan.Mistress
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             CoreOptions.BatteryRamDisabled = true;
+            // SnesPads reads Venus (C#)'s auto-read words, so the SNES cases pin it over the default - see VenusRT_Native.md §66.4.
+            GraphicsConfig config = GraphicsConfig.Load();
+            config.SetValue("SNES", CoreCatalog.EngineKey, CoreCatalog.VenusEngine);
+            config.Save();
         }
 
         public void Dispose()

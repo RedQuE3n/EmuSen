@@ -135,7 +135,7 @@ namespace EmuSen.Cores.Native
                 Parts = f.Parts, Required = f.Required, ReplacementEffect = f.Replacement?.Effect, ReplacementCost = f.Replacement?.Cost,
             };
 
-        // One line for the status bar when a file runs on a replacement short of exact, or is absent with none, the last such file first - see VenusRT_DspHle.md §7.3.
+        // One line for the status bar only when a file is absent with no replacement; a running replacement is the normal path and says nothing - see VenusRT_Native.md §66.
         public string? FirmwareNotice { get; private set; }
 
         private string? NoticeFor(CoreMachine machine, IReadOnlyList<CoreFirmware> wanted)
@@ -143,7 +143,6 @@ namespace EmuSen.Cores.Native
             foreach (CoreFirmwareSource used in machine.Info.Firmware.Reverse())
             {
                 if (wanted.FirstOrDefault(f => f.Which == used.Which) is not { } f || f.Replacement is not { } r || r.Effect == "exact") continue;
-                if (used.Source == "replacement") return $"{Info.Name}'s open replacement for {f.Name} - {r.Cost}";
                 if (used.Source == "absent") return $"{r.Cost} {f.Name} would supply the chip.";
             }
             return null;
@@ -252,7 +251,7 @@ namespace EmuSen.Cores.Native
         private void EndFrame(CoreMachine m)
         {
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
-            ApplyCheats();
+            if (_machine is not null) _hostCheats.ApplyAll(ReadSpace, WriteSpace);
             Breakpoints.NoteFrame(TotalFrames);
             if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
         }
@@ -424,9 +423,12 @@ namespace EmuSen.Cores.Native
             _hostCheats = host;
         }
 
+        // Apply now, between frames: every enabled poke, the ones the core gates at its frame's end too - see VenusRT_Native.md §66.3.
         public void ApplyCheats()
         {
-            if (_machine is not null) _hostCheats.ApplyAll(ReadSpace, WriteSpace);
+            if (_machine is not { } m) return;
+            RefreshCheats(m);
+            _cheats.ApplyAll(ReadSpace, WriteSpace);
         }
 
         private uint? SpaceOf(string name) => _machine?.Info.Spaces.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;

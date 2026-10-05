@@ -567,13 +567,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Border bar = window.GetControl<Border>("StatusBar");
                 Assert.StartsWith("Running: ", status.Text);
                 List<string> faults = StatusFaults(window, bar, status, fps, bigScreen, name);
-                string running = status.Text!;
-                // One line measured on a short status, since the running line may itself wrap: VenusRT adds its boot program's notice (VenusRT_Native.md §65).
-                status.Text = "Running: A Game";
-                window.UpdateLayout();
                 double oneLine = bar.Bounds.Height;
-                status.Text = running;
-                window.UpdateLayout();
                 Assert.True(bar.IsVisible);
                 // A big screen shows performance in its HUD, not in the status line.
                 Assert.Equal(!bigScreen, fps.IsEffectivelyVisible);

@@ -76,6 +76,9 @@ namespace EmuSen.Cores.Native
         public BreakpointRegistry Breakpoints => _engine.Breakpoints;
         public CheatRegistry Cheats => _engine.Cheats;
 
+        // Mistress's paused Apply, forwarded as every other core's target does - see EmuSen_Cheats.md §6 and VenusRT_Native.md §66.3.
+        public void ApplyCheats() => _engine.ApplyCheats();
+
         // With DEBUG the bridge's registries, processor 0's at the target's level and the cartridge's as the coprocessor's.
         public CoverageRegistry? Coverage => Halts ? _engine.Debug.Coverage.FirstOrDefault() : null;
         public CallStackRegistry? CallStack => Halts ? _engine.Debug.CallStack : null;

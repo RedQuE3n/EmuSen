@@ -680,10 +680,12 @@ kit gains one case: a core whose entries are all `required: false` creates every
   returns only required requests. VenusRT then asks for nothing, and the picker never opens for it. A WiseMan test pins
   it: VenusRT, a DSP-1 cartridge built by `SyntheticRom`, an empty firmware folder; no request is missing, the game is
   created, its state carries the replacement's tag, and machine info says `replacement`.
-- **The notice.** The status bar shows one line when a game runs on a replacement whose `effect` is not `exact`: the
-  chip, "VenusRT's open replacement", and the cost. With `none` it says the game runs without its chip and names the
-  file that would supply it, without opening a picker.
-- **The firmware window** lists the entries from core info as optional, each with its replacement's effect.
+- **The notice.** ~~The status bar shows one line when a game runs on a replacement whose `effect` is not `exact`: the
+  chip, "VenusRT's open replacement", and the cost.~~ *Since 2026-10-05 a running replacement puts nothing on the status
+  line, since the open program is the normal path (`VenusRT_Native.md` §66); its cost stays in the core's info.* With
+  `none` it says the game runs without its chip and names the file that would supply it, without opening a picker.
+- **The firmware window** lists the entries from core info as optional, each with its replacement's effect. *Not
+  built as of 2026-10-05: Mistress has no firmware window, so the cost is read from the core's info and these pages.*
 - **Venus (C#)** has no replacement, and its requests stay required until the decision of §10, Q6.
 - **Pharaoh and Hotaru** keep the log path of `EmuSen_Firmware.md` §3, which becomes a notice rather than a complaint.
 

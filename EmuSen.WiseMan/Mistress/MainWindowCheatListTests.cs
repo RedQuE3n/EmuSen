@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
@@ -79,7 +78,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             Launch(window, 0);
 
-            var target = (SnesDebugTarget?)Field(window, "_debugTarget");
+            var target = (EmuSen.DianaOS.DianaOS.Lib.IDebugTarget?)Field(window, "_debugTarget");
             Assert.NotNull(target);
             Assert.Same(Cheats(window), target!.Cheats);
 

@@ -6113,3 +6113,40 @@ The open routes are for the tester to choose:
 The rule differs from §43.1's fit in what it can conclude. A fit always yields a member, the closest. This rule yields a
 member only when the declared structure is the command's, and otherwise says that it is not.
 
+### 57.2 07h's structure and ranges, declared before the search
+
+**What is already fixed** (§43.1, §43.2, §48.2): word 0 = θ >> 8, words 1 and 2 = S(θ >> 8) and S((θ >> 8) + 64), and
+the four arrays from words 78h, 128h, 1D8h and 288h are, line by line for n = 0 to 175,
+
+    A(n) = H(L(n), C),  B(n) = H(L(n), S),  C(n) = H(L(n), -S),  D(n) = H(L(n), C),   H(k, l) = (k·l·2) >> 16 (arithmetic)
+
+with S and C the sine and cosine of the angle and L(n) a 16-bit whole number per line. Only L(n) is open.
+
+**The structure:**
+
+    L(n) = R(K / (m·n + d))
+
+- R, the rounding: floor, half up, or ceiling, three variants.
+- K, the numerator: a whole number from 1 to 2^24 - 1.
+- m, the lines' step in the denominator: a whole number from 1 to 16.
+- d, the denominator's offset: a whole number from 0 to 32·m, so up to 32 lines.
+
+That is three parameters, at the limit §57.1 sets. The structure is a perspective divisor: a line's scale is a height
+over its distance below a horizon, m and d placing the horizon in units of a fraction of a line.
+
+**The criterion**, as §57.1 sets it, with one reading made explicit. The sine is a named loss (§43.2): at some angles
+the chip's words 1 and 2 differ from the replacement's by one, and the arrays' products carry that difference. No L
+can mend that. So for the search each angle's arrays are computed from **the chip's own words 1 and 2 at that
+angle**, and a member is accepted only if all 704 array words equal the image's at all 256 high-byte angles: 180,224
+words. Those two words are outputs of the same command, and they are used only to set aside a loss already named.
+Nothing of them enters the code, which keeps the replacement's sine. The grade with the replacement's own sine is
+reported beside the search's.
+
+**Counting members.** Two members count as one when they give the same L(n) at every n from 0 to 175, since no input
+can tell them apart: (jK, jm, jd) is the same function as (K, m, d), and neighbouring K often give the same 176
+values. If the members that match exactly all share one L sequence, the search has one answer, and the record lists
+every triple that gives it. If members giving different L sequences match, the record reports them and nothing is
+built.
+
+**Prediction.** P57.1: no member matches exactly. §43.1's fitted c of 8.8 is close to no ratio with a small m, and a
+chip with a data ROM may hold the scale as a table rather than divide.

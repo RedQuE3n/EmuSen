@@ -1,0 +1,12 @@
+[package]
+name = "beryl-z80"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Beryl's Zilog Z80: the Genesis's sound CPU, and later the Master System's and the Game Gear's main CPU, written from Zilog's manual and graded by SingleStepTests. See Nephrite_Plan.md §8 and Beryl_Z80.md.
+[lib]
+name = "beryl_z80"
+
+[dependencies]
+emusen-native = { path = "../../../Shared/emusen-native" }

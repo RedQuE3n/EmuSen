@@ -240,9 +240,9 @@ EmuSen Project/
 │   │   │   └── Artemis - 3DS-New3DS/README.md   # Reserved - future 3DS/New 3DS core (guardian cat)
 │   │   ├── Sega/                             # Dark Kingdom / Shitennou codenames
 │   │   │   ├── Endymion - Master System/README.md  # Reserved - future Master System core
-│   │   │   ├── Beryl - Genesis/README.md     # Reserved - future Genesis/Mega Drive core
+│   │   │   ├── Beryl - Shared CPUs/          # Shared CPU crates: beryl-m68k, beryl-z80, beryl-sh2
 │   │   │   ├── Jadeite - Game Gear/README.md # Reserved - future Game Gear core
-│   │   │   ├── Nephrite - 32X/README.md      # Reserved - future 32X core
+│   │   │   ├── Nephrite - Genesis/           # Genesis / Mega Drive with Sega CD and 32X (crate nephrite)
 │   │   │   ├── Zoisite - Saturn/README.md    # Reserved - future Saturn core
 │   │   │   └── Kunzite - Dreamcast/README.md # Reserved - future Dreamcast core
 │   │   ├── Sony/                             # Black Moon Clan codenames

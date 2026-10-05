@@ -235,3 +235,55 @@ Recorded in full in the plan's §1.5, §1.6 and §3.1; in short, all outside the
 - No emulation: every Nephrite verdict in the runner is `Visual`, correct for a blank machine and saying nothing yet.
 - No speed measurement of Nephrite; the references' times are the plan's §5.5.
 - The documents are pinned by hash but not yet read for the design; each stage cites the sections it reads.
+
+## 8. Stage 2, the probe's work (2026-10-05)
+
+The plan's §1.6 asked five things of the reference probe's libretro backend (`EmuSen.WiseMan/Reference/probe-rs`,
+`src/backends/libretro.rs`). Each is built; the references are run as black boxes throughout, their outputs read and
+nothing else.
+
+- **Core options.** The backend keeps the options each core declares (`SET_VARIABLES`, `SET_CORE_OPTIONS` and its V2,
+  with their international forms; `GET_CORE_OPTIONS_VERSION` is answered 2). It answers `GET_VARIABLE` with the value
+  pinned by `--option KEY=VALUE`, or else the default the core declared; a key the core never declared gets no
+  answer. Stage 0's probe answered nothing, and a core refused an answer falls back on defaults of its own, which need
+  not be the declared ones: ClownMDEmu came up Japanese that way. Every run prints each option with its value and
+  whether it was pinned; a pinned key the core does not declare, or a value it does not list, is a warning;
+  `--list-options` prints the allowed values and stops. **Measured:** Genesis Plus GX declares 62 options, PicoDrive
+  21, BlastEm 21, ClownMDEmu 32. ClownMDEmu now runs its declared `clownmdemu_overseas_region=elsewhere`; pinned to
+  `japan`, its picture at frame 600 of the 240p suite changes and its RAM differs in 19 bytes.
+- **Memory maps as named spaces.** `SET_MEMORY_MAPS`'s descriptors become spaces named by where they start
+  (`map_ff0000`), beside the standard ones. A core that declares or replaces its maps after a frame has its spaces
+  rebuilt then, and the probe says so. **Measured:** ClownMDEmu declares five at load, among them `map_ff0000` (64 KiB)
+  and `map_a00000` (8 KiB); PicoDrive declares its 32X maps at frame 3 of the 32X 240p suite, `map_6000000` among
+  them (256 KiB). `--memory-id NAME=ID` dumps a memory id the ABI does not name: PicoDrive's id 4 is 128 bytes, its
+  CRAM.
+- **The loader.** libm is opened into the global namespace before the core, on Linux; the loader's error is printed,
+  as before; `--system NAME` names the machine where the extension cannot (`.bin`, `.cue`, `.iso`), and `.32x` is
+  read as the 32X.
+- **The cores, pinned by hash.** `EmuSen.WiseMan/Reference/libretro-cores.sha256` pins each reference core by the
+  SHA-256 of its unpacked binary, per buildbot directory. `build-probe.sh libretro-core <core>` uses a cached copy
+  only when its hash matches. Otherwise it fetches the buildbot's nightly into `~/.cache/emusen/probe/libretro/cores`,
+  unpacks only the core's binary, and refuses a nightly whose hash has moved on, keeping nothing of it; re-pinning is
+  a deliberate edit of the file. Fedora packages none of the four. **Measured:** the four cached cores match their
+  pins; a fresh fetch of ClownMDEmu matched; a deliberately wrong pin was refused with the download deleted.
+- **Firmware only from a person's own dumps.** `GET_SYSTEM_DIRECTORY` is the folder `--sysdir` names, or without it
+  an empty folder beside the run's dumps; the probe fetches no firmware from anywhere. A run whose system needs
+  firmware (the Sega CD), refused by the core while `--sysdir` is absent or holds no file, is reported `[SKIP]` and
+  exits 4. WiseMan's `LibretroProbeEngine` turns that into `FirmwareSkippedException`, and takes pinned options,
+  `--system` and `--sysdir` into its cache key. **Measured with a blank disc image**, there being no BIOS on the
+  machine: Genesis Plus GX, PicoDrive and BlastEm are skipped, with no `--sysdir` and with an empty one, and the empty
+  folder stays empty; ClownMDEmu boots its own replacement and runs.
+- **The picture gate up to a colour map** was built at stage 0 (§3.2).
+
+**Agreement after the change (measured 2026-10-05).** On the 240p suite's menu at frame 600, with the declared defaults
+answered, the pairs of references agree in 65,326–65,532 of 65,536 bytes of the 68000's RAM, as at stage 0
+(65,325–65,530).
+
+**A consequence beyond Nephrite.** Every core the libretro probe drives now receives its declared defaults rather than
+no answer. For a core whose built-in defaults are the declared ones nothing changes; the reference-dump fixtures
+recorded earlier for other machines were not re-recorded in this step, and `LibretroProbeEngine` re-makes its cached
+sets because its key includes the probe's build.
+
+Pinned by `probe-rs`'s unit tests (the option answer's order of precedence, the legacy variable's default, the map
+spaces' names, the firmware folder, the system from the extension) and by `NephriteTests`'
+`The_reference_probe_skips_a_sega_cd_run_without_the_players_firmware` and `The_reference_probe_pins_a_core_option`.

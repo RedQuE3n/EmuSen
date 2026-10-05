@@ -42,6 +42,83 @@ struct Shared {
     // Interleaved stereo, accumulated across the whole run - see Mercury_Gameplan.md §3.1.
     audio: Vec<i16>,
     capture_audio: bool,
+    // What the core declared, in its order, and what was pinned with --option.
+    options: Vec<CoreOption>,
+    pinned: Vec<(String, String)>,
+    // The answers handed to GET_VARIABLE, kept alive because the core holds the pointer.
+    answers: Vec<CString>,
+    system_dir: CString,
+    // SET_MEMORY_MAPS's descriptors, copied, and whether they changed since the spaces were cached.
+    maps: Vec<MapRegion>,
+    maps_dirty: bool,
+}
+
+/// One option a core declared: its key, its allowed values in order, and its default.
+#[derive(Clone, Debug, PartialEq)]
+struct CoreOption {
+    key: String,
+    values: Vec<String>,
+    default: String,
+}
+
+#[derive(Clone, Copy)]
+struct MapRegion {
+    start: usize,
+    data: *const u8,
+    len: usize,
+}
+
+/// A legacy SET_VARIABLES value, "Description; first|second|third": the values, the first the default.
+fn parse_variable(value: &str) -> (Vec<String>, String) {
+    let list = value.split_once("; ").map_or(value, |(_, l)| l);
+    let values: Vec<String> = list.split('|').map(str::to_string).collect();
+    let default = values.first().cloned().unwrap_or_default();
+    (values, default)
+}
+
+/// GET_VARIABLE's answer: the pinned value if there is one, the declared default otherwise.
+fn answer(options: &[CoreOption], pinned: &[(String, String)], key: &str) -> Option<String> {
+    if let Some((_, v)) = pinned.iter().rev().find(|(k, _)| k == key) {
+        return Some(v.clone());
+    }
+    options.iter().find(|o| o.key == key).map(|o| o.default.clone())
+}
+
+/// A map space's name, from where it sits in the core's address space.
+fn map_name(start: usize) -> String {
+    format!("map_{start:06x}")
+}
+
+/// Firmware a system cannot start without on the cores that need it; such a run is skipped, never supplied.
+fn needs_firmware(system: &str) -> bool {
+    system == "segacd"
+}
+
+/// Whether a --sysdir holds any file at all.
+fn has_dumps(dir: &str) -> bool {
+    !dir.is_empty() && std::fs::read_dir(dir).is_ok_and(|mut d| d.any(|e| e.is_ok_and(|e| e.path().is_file())))
+}
+
+fn cstr(p: *const c_char) -> Option<String> {
+    if p.is_null() { None } else { Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()) }
+}
+
+/// The definitions of SET_CORE_OPTIONS and its V2, both arrays ending at a null key.
+unsafe fn declare_definitions(state: &mut Shared, key_at: impl Fn(usize) -> (*const c_char, *const sys::retro_core_option_value, *const c_char)) {
+    state.options.clear();
+    for i in 0.. {
+        let (key, values, default) = key_at(i);
+        let Some(key) = cstr(key) else { break };
+        let mut list = Vec::new();
+        for j in 0..sys::RETRO_NUM_CORE_OPTION_VALUES_MAX as usize {
+            match cstr(unsafe { (*values.add(j)).value }) {
+                Some(v) => list.push(v),
+                None => break,
+            }
+        }
+        let default = cstr(default).or_else(|| list.first().cloned()).unwrap_or_default();
+        state.options.push(CoreOption { key, values: list, default });
+    }
 }
 
 // Safety: the pointer is installed by load() before the core can call anything
@@ -82,6 +159,7 @@ fn system_from_rom(rom_path: &str) -> &'static str {
         "gba" => "gba",
         "sms" | "gg" => "sms",
         "md" | "gen" | "smd" => "megadrive",
+        "32x" => "32x",
         _ => "unknown",
     }
 }
@@ -95,9 +173,14 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
             true
         }
 
-        sys::RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY
-        | sys::RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY
-        | sys::RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY => {
+        // The system directory is --sysdir, a person's own dumps, or an empty
+        // folder beside the dumps: firmware is never supplied by the probe.
+        sys::RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY => {
+            unsafe { *data.cast::<*const c_char>() = state.system_dir.as_ptr() };
+            true
+        }
+
+        sys::RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY | sys::RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY => {
             unsafe { *data.cast::<*const c_char>() = state.home_folder.as_ptr() };
             true
         }
@@ -107,29 +190,102 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
             true
         }
 
-        // Every core option is left at its default, deliberately: a probe that
-        // silently ran with different settings than the one it is compared
-        // against is the same class of error as a muted reference.
+        // A pinned value, else the default the core declared - answered rather
+        // than refused, because a core refused falls back to defaults of its own
+        // that need not be the declared ones (Nephrite_Native.md §8).
         sys::RETRO_ENVIRONMENT_GET_VARIABLE => {
-            unsafe { (*data.cast::<sys::retro_variable>()).value = std::ptr::null() };
-            false
+            let variable = unsafe { &mut *data.cast::<sys::retro_variable>() };
+            let Some(key) = cstr(variable.key) else { return false };
+            match answer(&state.options, &state.pinned, &key) {
+                Some(value) => {
+                    state.answers.push(CString::new(value).unwrap_or_default());
+                    variable.value = state.answers.last().unwrap().as_ptr();
+                    true
+                }
+                None => {
+                    variable.value = std::ptr::null();
+                    false
+                }
+            }
         }
+
+        sys::RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION => {
+            unsafe { *data.cast::<c_uint>() = 2 };
+            true
+        }
+
+        sys::RETRO_ENVIRONMENT_SET_VARIABLES => {
+            state.options.clear();
+            let mut v = data.cast::<sys::retro_variable>().cast_const();
+            while let Some(key) = cstr(unsafe { (*v).key }) {
+                let (values, default) = parse_variable(&cstr(unsafe { (*v).value }).unwrap_or_default());
+                state.options.push(CoreOption { key, values, default });
+                v = unsafe { v.add(1) };
+            }
+            true
+        }
+
+        sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL => {
+            let defs = if cmd == sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS {
+                data.cast::<sys::retro_core_option_definition>().cast_const()
+            } else {
+                unsafe { (*data.cast::<sys::retro_core_options_intl>()).us }.cast_const()
+            };
+            if !defs.is_null() {
+                unsafe {
+                    declare_definitions(state, |i| {
+                        let d = &*defs.add(i);
+                        (d.key, d.values.as_ptr(), d.default_value)
+                    })
+                };
+            }
+            true
+        }
+
+        sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2 | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL => {
+            let options = if cmd == sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2 {
+                data.cast::<sys::retro_core_options_v2>().cast_const()
+            } else {
+                unsafe { (*data.cast::<sys::retro_core_options_v2_intl>()).us }.cast_const()
+            };
+            if !options.is_null() {
+                let defs = unsafe { (*options).definitions }.cast_const();
+                if !defs.is_null() {
+                    unsafe {
+                        declare_definitions(state, |i| {
+                            let d = &*defs.add(i);
+                            (d.key, d.values.as_ptr(), d.default_value)
+                        })
+                    };
+                }
+            }
+            true
+        }
+
+        sys::RETRO_ENVIRONMENT_SET_MEMORY_MAPS => {
+            let map = unsafe { &*data.cast::<sys::retro_memory_map>() };
+            state.maps.clear();
+            for i in 0..map.num_descriptors as usize {
+                let d = unsafe { &*map.descriptors.add(i) };
+                if !d.ptr.is_null() && d.len > 0 {
+                    state.maps.push(MapRegion { start: d.start, data: unsafe { d.ptr.cast::<u8>().add(d.offset) }, len: d.len });
+                }
+            }
+            state.maps_dirty = true;
+            true
+        }
+
+        sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY => true,
 
         sys::RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE => {
             unsafe { *data.cast::<bool>() = false };
             true
         }
 
-        sys::RETRO_ENVIRONMENT_SET_VARIABLES
-        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS
-        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL
-        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2
-        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL
-        | sys::RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL
+        sys::RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS
         | sys::RETRO_ENVIRONMENT_SET_CONTROLLER_INFO
         | sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
-        | sys::RETRO_ENVIRONMENT_SET_MEMORY_MAPS
         | sys::RETRO_ENVIRONMENT_SET_GEOMETRY => true,
 
         sys::RETRO_ENVIRONMENT_GET_LOG_INTERFACE => {
@@ -256,8 +412,12 @@ struct SpaceRef {
 pub struct LibretroBackend {
     core_path: String,
     name: String,
-    system: &'static str,
+    system: String,
+    // libm opened with RTLD_GLOBAL before the core, for cores built expecting a host that has it.
+    libm: Option<Library>,
     library: Option<Library>,
+    memory_ids: Vec<(String, u32)>,
+    skip: Option<String>,
     api: Option<CoreApi>,
     shared: Box<Shared>,
     rom_data: Vec<u8>,
@@ -292,8 +452,11 @@ impl LibretroBackend {
             // load() replaces this with the core's own library_name, but the
             // probe needs a name before then to site the profile directory.
             name: core_stem(core_path),
-            system: "unknown",
+            system: "unknown".to_string(),
+            libm: None,
             library: None,
+            memory_ids: Vec::new(),
+            skip: None,
             api: None,
             shared: Box::new(Shared {
                 pixel_format: sys::retro_pixel_format_RETRO_PIXEL_FORMAT_0RGB1555,
@@ -307,12 +470,43 @@ impl LibretroBackend {
                 frame: 0,
                 audio: Vec::new(),
                 capture_audio: false,
+                options: Vec::new(),
+                pinned: Vec::new(),
+                answers: Vec::new(),
+                system_dir: CString::default(),
+                maps: Vec::new(),
+                maps_dirty: false,
             }),
             rom_data: Vec::new(),
             spaces: Vec::new(),
             loaded: false,
             wav_path: String::new(),
             sample_rate: 0,
+        }
+    }
+
+    /// The options as the run uses them, each pinned or default; a pinned key the core never declared, or a value
+    /// it does not list, is a warning, since the run would not be what the command line says.
+    fn report_options(&self, all_values: bool) {
+        let state = &self.shared;
+        for o in &state.options {
+            let pinned = state.pinned.iter().rev().find(|(k, _)| *k == o.key);
+            let value = pinned.map_or(o.default.as_str(), |(_, v)| v.as_str());
+            println!("[INFO] option {}={} ({})", o.key, value, if pinned.is_some() { "pinned" } else { "default" });
+            if all_values {
+                println!("[INFO]   values: {}", o.values.join("|"));
+            }
+            if let Some((_, v)) = pinned
+                && !o.values.is_empty()
+                && !o.values.contains(v)
+            {
+                println!("[WARN] option {} has no value '{v}' (values: {})", o.key, o.values.join("|"));
+            }
+        }
+        for (k, _) in &state.pinned {
+            if !state.options.iter().any(|o| o.key == *k) {
+                println!("[WARN] option {k} is not one the core declares");
+            }
         }
     }
 
@@ -334,6 +528,13 @@ impl LibretroBackend {
         self.add_space("sram", sys::RETRO_MEMORY_SAVE_RAM);
         self.add_space("vram", sys::RETRO_MEMORY_VIDEO_RAM);
         self.add_space("rtc", sys::RETRO_MEMORY_RTC);
+        for (name, id) in self.memory_ids.clone() {
+            self.add_space(&name, id);
+        }
+        for region in self.shared.maps.clone() {
+            self.spaces.push(SpaceRef { name: map_name(region.start), data: region.data, size: region.len });
+        }
+        self.shared.maps_dirty = false;
     }
 }
 
@@ -372,17 +573,35 @@ impl ProbeBackend for LibretroBackend {
     }
 
     fn system(&self) -> &str {
-        self.system
+        &self.system
     }
 
     fn anchor_space(&self) -> &str {
         if self.system == "snes" || self.system == "gb" { "wram" } else { "ram" }
     }
 
+    fn skipped(&self) -> Option<String> {
+        self.skip.clone()
+    }
+
     fn load(&mut self, rom_path: &str, options: &ProbeOptions) -> bool {
-        self.system = system_from_rom(rom_path);
+        self.system = if options.system.is_empty() { system_from_rom(rom_path).to_string() } else { options.system.clone() };
+        self.memory_ids = options.memory_ids.clone();
         self.shared.home_folder = CString::new(options.home_folder.as_str()).unwrap_or_default();
+        self.shared.pinned = options.core_options.clone();
+        let system_dir = if options.system_dir.is_empty() {
+            let empty = std::path::Path::new(&options.home_folder).join("system");
+            let _ = std::fs::create_dir_all(&empty);
+            empty.to_string_lossy().into_owned()
+        } else {
+            options.system_dir.clone()
+        };
+        self.shared.system_dir = CString::new(system_dir).unwrap_or_default();
         SHARED.store(&raw mut *self.shared, Ordering::Relaxed);
+        #[cfg(target_os = "linux")]
+        {
+            self.libm = unsafe { Library::open(Some("libm.so.6"), libc_rtld_now_global()) }.ok();
+        }
 
         let library = match open_core(&self.core_path) {
             Ok(library) => library,
@@ -467,10 +686,20 @@ impl ProbeBackend for LibretroBackend {
 
         let api = self.api.as_ref().unwrap();
         if !unsafe { (api.load_game)(&raw const game) } {
+            if needs_firmware(&self.system) && !has_dumps(&options.system_dir) {
+                self.skip = Some(format!(
+                    "{} refused {rom_path}: a {} run needs the player's own firmware dumps, and {}",
+                    self.name,
+                    self.system,
+                    if options.system_dir.is_empty() { "no --sysdir was given".to_string() } else { format!("{} holds none", options.system_dir) }
+                ));
+                return false;
+            }
             println!("[ERROR] core refused {rom_path}");
             return false;
         }
         self.loaded = true;
+        self.report_options(options.list_options);
 
         unsafe { (api.set_controller_port_device)(0, sys::RETRO_DEVICE_JOYPAD) };
 
@@ -513,6 +742,7 @@ impl ProbeBackend for LibretroBackend {
         // Dropping the Library is the dlclose, and it has to happen after the
         // last call through a pointer that lives inside it.
         self.library = None;
+        self.libm = None;
         SHARED.store(null_mut(), Ordering::Relaxed);
     }
 
@@ -521,9 +751,15 @@ impl ProbeBackend for LibretroBackend {
     // needed a source patch to solve.
     fn run_until(&mut self, frame: u32) {
         let Some(api) = self.api.as_ref() else { return };
+        let run = api.run;
         while self.shared.frame < frame {
-            unsafe { (api.run)() };
+            unsafe { run() };
             self.shared.frame += 1;
+            // A core may declare or change its maps after the first frame.
+            if self.shared.maps_dirty {
+                self.cache_spaces();
+                println!("[INFO] memory maps changed at frame {}: {} spaces", self.shared.frame, self.spaces.len());
+            }
         }
     }
 
@@ -611,6 +847,14 @@ fn libc_rtld_now_local() -> i32 {
     RTLD_NOW | RTLD_LOCAL
 }
 
+// libm into the global namespace, for a core linked expecting its host to carry it.
+#[cfg(target_os = "linux")]
+fn libc_rtld_now_global() -> i32 {
+    const RTLD_NOW: i32 = 0x2;
+    const RTLD_GLOBAL: i32 = 0x100;
+    RTLD_NOW | RTLD_GLOBAL
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -649,6 +893,8 @@ mod tests {
         assert_eq!(system_from_rom("/roms/tetris.gb"), "gb");
         assert_eq!(system_from_rom("/roms/x.gba"), "gba");
         assert_eq!(system_from_rom("/roms/sonic.md"), "megadrive");
+        assert_eq!(system_from_rom("/roms/knuckles.32x"), "32x");
+        assert_eq!(system_from_rom("/roms/sonic.bin"), "unknown", "ambiguous: --system says");
         assert_eq!(system_from_rom("/roms/noextension"), "unknown");
         assert_eq!(system_from_rom("/roms/x.zip"), "unknown");
     }
@@ -658,14 +904,51 @@ mod tests {
     #[test]
     fn anchor_space_follows_the_system() {
         let mut backend = LibretroBackend::new("/dev/null");
-        backend.system = "nes";
+        backend.system = "nes".to_string();
         assert_eq!(backend.anchor_space(), "ram");
-        backend.system = "snes";
+        backend.system = "snes".to_string();
         assert_eq!(backend.anchor_space(), "wram");
-        backend.system = "gb";
+        backend.system = "gb".to_string();
         assert_eq!(backend.anchor_space(), "wram");
-        backend.system = "megadrive";
+        backend.system = "megadrive".to_string();
         assert_eq!(backend.anchor_space(), "ram");
+    }
+
+    #[test]
+    fn a_legacy_variable_lists_its_values_the_first_its_default() {
+        assert_eq!(parse_variable("Region; auto|ntsc-u|pal|ntsc-j"), (vec!["auto".into(), "ntsc-u".into(), "pal".into(), "ntsc-j".into()], "auto".into()));
+        assert_eq!(parse_variable("enabled|disabled").1, "enabled");
+    }
+
+    // A pinned value wins, the last of several; an unpinned key gets the declared
+    // default; a key nobody declared gets nothing, so the core keeps its own.
+    #[test]
+    fn get_variable_answers_the_pin_then_the_declared_default() {
+        let declared = vec![CoreOption { key: "region".into(), values: vec!["auto".into(), "pal".into()], default: "auto".into() }];
+        let pinned = vec![("region".to_string(), "ntsc".to_string()), ("region".to_string(), "pal".to_string())];
+        assert_eq!(answer(&declared, &pinned, "region").as_deref(), Some("pal"));
+        assert_eq!(answer(&declared, &[], "region").as_deref(), Some("auto"));
+        assert_eq!(answer(&declared, &[], "model"), None);
+        assert_eq!(answer(&declared, &[("model".into(), "va1".into())], "model").as_deref(), Some("va1"));
+    }
+
+    #[test]
+    fn a_map_space_is_named_by_where_it_sits() {
+        assert_eq!(map_name(0xFF0000), "map_ff0000");
+        assert_eq!(map_name(0xA00000), "map_a00000");
+    }
+
+    // A Sega CD run without dumps is a skip; an empty --sysdir is the same as none.
+    #[test]
+    fn firmware_is_looked_for_only_in_the_persons_own_folder() {
+        assert!(needs_firmware("segacd") && !needs_firmware("megadrive"));
+        assert!(!has_dumps(""));
+        let dir = std::env::temp_dir().join(format!("probe-sysdir-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!has_dumps(dir.to_str().unwrap()), "an empty folder holds no dumps");
+        std::fs::write(dir.join("dump.bin"), b"x").unwrap();
+        assert!(has_dumps(dir.to_str().unwrap()));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

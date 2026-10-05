@@ -15,6 +15,8 @@ use audio::AudioFormat;
 use dump::{BlobCache, SignatureWriter};
 
 const NO_FRAME: u32 = 0xFFFF_FFFF;
+// The exit code of a run that needs firmware nobody supplied: not a failure.
+const SKIPPED: i32 = 4;
 
 fn usage() {
     println!("usage: probe <rom> <outDir> <startFrame> <endFrame> [stride] [anchorAddr] [traceUntilFrame] [flags]");
@@ -39,6 +41,9 @@ fn usage() {
     println!("                       what deep troubleshooting wants; also what a failed");
     println!("                       or unverifiable encode leaves behind");
     println!("  --ramstate zeros|ones|random   power-on RAM fill (default zeros)");
+    println!("  --system NAME    the machine, where the ROM's extension cannot say");
+    println!("  --sysdir DIR     a folder of the person's own firmware dumps; without it a");
+    println!("                       run that needs firmware is reported skipped (exit 4)");
     println!("  --sig            also write <backend>_sig.csv: one row of CRCs per frame");
     println!("                       from frame 0, which is what locates a divergence");
     println!("                       rather than measuring one at the end - see §3.48");
@@ -217,6 +222,37 @@ fn parse_args(argv: &[String]) -> Result<Args, i32> {
                     args.audio_path = v;
                 }
             }
+            "--option" => {
+                if let Some(v) = value() {
+                    let Some((key, val)) = v.split_once('=') else {
+                        println!("[ERROR] --option wants KEY=VALUE");
+                        return Err(1);
+                    };
+                    args.options.core_options.push((key.to_string(), val.to_string()));
+                }
+            }
+            "--list-options" => args.options.list_options = true,
+            "--system" => {
+                if let Some(v) = value() {
+                    args.options.system = v;
+                }
+            }
+            "--sysdir" => {
+                if let Some(v) = value() {
+                    args.options.system_dir = v;
+                }
+            }
+            "--memory-id" => {
+                if let Some(v) = value() {
+                    match v.split_once('=').and_then(|(n, id)| id.parse().ok().map(|id| (n.to_string(), id))) {
+                        Some(entry) => args.options.memory_ids.push(entry),
+                        None => {
+                            println!("[ERROR] --memory-id wants NAME=ID");
+                            return Err(1);
+                        }
+                    }
+                }
+            }
             "--ramstate" => {
                 if let Some(v) = value() {
                     args.options.ram_state = v;
@@ -327,8 +363,17 @@ fn run(argv: &[String]) -> i32 {
     }
 
     if !backend.load(&args.rom_path, &args.options) {
+        if let Some(why) = backend.skipped() {
+            println!("[SKIP] {why}");
+            backend.shutdown();
+            return SKIPPED;
+        }
         println!("[ERROR] failed to load {}", args.rom_path);
         return 1;
+    }
+    if args.options.list_options {
+        backend.shutdown();
+        return 0;
     }
 
     let prefix = backend.name().to_string();

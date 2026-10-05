@@ -2774,6 +2774,25 @@ Two other tests failed in the same full runs and passed alone, both timing tests
 and `ScraperTests.Never_more_requests_at_once_than_maxthreads` (a 10-second wait for a result, once, before it). Neither
 was investigated here.
 
+### 3.64 The libretro backend answers core options, reads memory maps, and takes firmware only from a person's folder
+
+Built 2026-10-05 for Nephrite's references; the measurements are `Nephrite_Native.md` §8.
+
+- **`GET_VARIABLE` is answered.** The backend used to refuse every option, on the reasoning that a core left alone runs
+  its defaults. A refused core falls back on defaults of its own, which need not be the ones it declares (ClownMDEmu
+  came up Japanese), so the backend now keeps what each core declares (`SET_VARIABLES`, `SET_CORE_OPTIONS` and V2,
+  their international forms) and answers with `--option KEY=VALUE`'s pin or the declared default. Each run prints
+  every option with its value and whether it was pinned; `--list-options` prints the allowed values and stops. This
+  applies to every core the probe drives, not only the Genesis's.
+- **`SET_MEMORY_MAPS` becomes spaces** named `map_<start>`, rebuilt whenever a core redeclares its maps after a frame
+  (PicoDrive's 32X maps arrive at frame 3). `--memory-id NAME=ID` dumps an id the ABI does not name.
+- **The loader:** libm in the global namespace before the core (Linux); `--system NAME` where the extension cannot say.
+- **Pinned cores:** `EmuSen.WiseMan/Reference/libretro-cores.sha256` and `build-probe.sh libretro-core <core>`, which
+  takes a buildbot nightly only if its unpacked binary has the pinned SHA-256, and keeps nothing of one that does not.
+- **Firmware:** `GET_SYSTEM_DIRECTORY` is `--sysdir`, a folder a person filled with their own dumps, or an empty
+  folder beside the run's dumps. A run that needs firmware the core refuses without, with no dumps given, prints
+  `[SKIP]` and exits 4; the probe never fetches firmware.
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

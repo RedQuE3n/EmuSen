@@ -6783,3 +6783,45 @@ is open.
   copies nothing; §63.2's seven frames are its measure.
 
 With these, G5 is met with named exceptions. **What remains before the flip** is G6's handheld run on battery.
+
+## 64. The open boot program's upload made faster (D-38, 2026-10-05)
+
+§63.6 decided that a game's upload through VenusRT's own boot program should end as near the console image's time as
+the protocol allows. §63.2's seven frames on Yoshi's Island are the measure. The work is from the transfer protocol
+(fullsnes, D-38) and from black-box timing of the tester's image. The timing is the frames the SPC700 spends with its
+program counter in $FFC0-$FFFF and the boot ROM mapped, read from outside. The image's bytes were not read or
+disassembled.
+
+### 64.1 Where the time goes (measured 2026-10-05, before any change)
+
+| Game | Bytes the open program stores | In the boot program, open program | In the boot program, the image | Difference |
+|---|---|---|---|---|
+| Yoshi's Island | 45,196 | 77.76 frames | 69.83 | 7.93 |
+| A Link to the Past | 54,031 | 89.05 | 80.86 | 8.19 |
+| Super Mario World | 11,974 | 21.73 | 19.61 | 2.12 |
+| Super Mario RPG | 5,668 | 10.06 | 9.06 | 1.00 |
+| Donkey Kong Country | 40 | 4.64 | 4.63 | 0.01 |
+
+The open program's poll of port 0 (its `CMP Y,$F4`) runs once per byte stored: 45,225 polls for 45,196 bytes on
+Yoshi's Island. The next index is therefore already waiting each time the SPC700 looks, and the upload is bound by the
+program's own block loop: 28 SPC700 cycles a byte. The image takes about 3 cycles a byte fewer on every game
+uploading enough to show it (Yoshi's Island 63 master clocks a byte).
+
+### 64.2 The change, and the prediction (written before measuring)
+
+- **The command test leaves the hot path.** The loop was `CMP Y,$F4`, `BMI` to the command, `BNE` to wait, then the
+  byte. It becomes `CMP Y,$F4` and `BNE` to a miss, then the byte. The miss is a `BPL` back to the poll placed in front
+  of the command code, so a command falls into it. The rule is unchanged: Y minus port 0, zero is data, negative is
+  a command, positive waits. That saves 2 cycles a byte and costs 2 in the wait loop (9 to 11). The program stays at
+  64 bytes, with no byte moved but the loop's.
+- **The echo stays `MOV !$00F4,Y`**, one cycle slower than the direct-page form. D-38 measured the direct-page form in
+  this loop as an 8-byte run of the console's bytes, and the similarity rule forbids it. That cycle is the rule's
+  price, so the loop goes from 28 cycles to 26, not 25.
+- **Prediction P64.1:** with the loop still the bound, each game's time in the boot program falls by bytes × 2 cycles
+  × 20.97 master clocks:
+  - Yoshi's Island to 72.5 frames, 2.6 behind the image;
+  - A Link to the Past to 82.7, 1.9 behind;
+  - Super Mario World to 20.3, 0.7 behind;
+  - Super Mario RPG to 9.4, 0.3 behind.
+
+  Should the S-CPU's side become the bound at 26 cycles, the gain is smaller, and P64.1 fails on that game.

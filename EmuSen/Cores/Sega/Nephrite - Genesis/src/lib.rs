@@ -2,10 +2,16 @@
 //! machine, on the core ABI v1. Written from hardware documents under Nephrite_Plan.md §1's clean-room protocol; the
 //! build record is Nephrite_Native.md.
 //!
-//! Stage 0: the image is recognised and reported, the memories exist, the picture is blank. The CPUs come from the
-//! Beryl crates (`beryl-m68k`, `beryl-z80`, `beryl-sh2`) as they are built.
+//! Stage 3: the Genesis's buses, cartridges, I/O, the scheduler and the interrupts, with the CPUs from the Beryl
+//! crates; the picture is stage 4's.
 
+pub mod cart;
+pub mod genesis;
+pub mod io;
 pub mod machine;
 pub mod media;
+#[cfg(test)]
+mod programs;
 pub mod state;
 pub mod v1;
+pub mod vdp;

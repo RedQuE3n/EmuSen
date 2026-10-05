@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 2;
+pub const STATE_VERSION: i32 = 3;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -139,10 +139,12 @@ mod tests {
                 "139591 4 u16[2] Z80.Index\n139595 2 u16 Z80.Sp\n139597 2 u16 Z80.Pc\n139599 1 u8 Z80.I\n139600 1 u8 Z80.R\n139601 2 u16 Z80.Wz\n",
                 "139603 1 u8 Z80.Q\n139604 1 bool Z80.P\n139605 1 bool Z80.Iff1\n139606 1 bool Z80.Iff2\n139607 1 u8 Z80.Im\n",
                 "139608 1 bool Z80.EiPending\n139609 1 bool Z80.Halted\n139610 24 u8[24] VdpRegisters\n139634 5 bool[5] VdpLatches\n",
-                "139639 4 u32 HvLatch\n139643 1 u8 VdpCode\n139644 2 u16 VdpAddress\n139646 1 u8 VdpLineCounter\n139647 3 u8[3] IoData\n",
-                "139650 3 u8[3] IoCtrl\n139653 3 u8[3] IoTx\n139656 3 u8[3] IoSctrl\n139659 2 bool[2] PadTh\n139661 2 u8[2] PadFalls\n",
-                "139663 16 u64[2] PadLastFall\n139679 1 u8 SramRegister\n139680 1 bool Mapper\n139681 8 u8[8] MapperPages\n",
-                "139689 56 u64[7] Clocks\n139745 4 u32 Line\n139749 2 u16 Z80Bank\n139751 4 bool[4] Lines\n139755 4 u8[4] Tmss\n"
+                "139639 4 u32 HvLatch\n139643 1 u8 VdpCode\n139644 2 u16 VdpAddress\n139646 1 u8 VdpLineCounter\n139647 24 u16[12] VdpFifo\n",
+                "139671 2 u8[2] VdpFifoPointers\n139673 2 u16 VdpReadBuffer\n139675 32 u64[4] VdpDma\n139707 16 u64[2] VdpTimes\n",
+                "139723 3 u8[3] IoData\n139726 3 u8[3] IoCtrl\n139729 3 u8[3] IoTx\n139732 3 u8[3] IoSctrl\n139735 2 bool[2] PadTh\n",
+                "139737 2 u8[2] PadFalls\n139739 16 u64[2] PadLastFall\n139755 1 u8 SramRegister\n139756 1 bool Mapper\n",
+                "139757 8 u8[8] MapperPages\n139765 56 u64[7] Clocks\n139821 4 u32 Line\n139825 2 u16 Z80Bank\n139827 4 bool[4] Lines\n",
+                "139831 4 u8[4] Tmss\n"
             )
         );
     }

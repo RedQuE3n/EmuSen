@@ -629,3 +629,124 @@ both anchors and lowered 4 at frame 600: the three above and John Madden '93 by 
 - **WiseMan**: the Nephrite, runner, registration and discovery tests, 31, pass, `.smd` among the extensions a player
   is not offered while the core is in development; the anchors over the corpus took 3 min 26 s with the reference's
   runs cached.
+
+## 12. Stage 3 closed (2026-10-05)
+
+**The oracle** (the plan's §6, row 3), as met:
+
+- **The BCD verifier, the opcode sizes and the illegal-instruction test** pass on the console (§9.3), and still did
+  at each later step.
+- **The memory test**: twelve of its thirteen rows match the values it prints as the hardware's (§9.2). The
+  thirteenth, the first `$A11100` row, reads "busy" twice where the hardware reads "busy" then "granted"; the test's
+  BUSREQ and RESET sequence is unknown without its source, and its own screen can now be read, so it goes to stage 4.
+- **The RAM against Genesis Plus GX at anchors over the corpus** (§11.4): of 944 games, at frame 120 a median of
+  65,518 equal bytes of 65,536 and 888 at 65,000 or more; at frame 600 a median of 65,491 and 839. The differences
+  that remain are, as far as they have been examined, the VDP's and the sound chips' timing (stages 4 and 5) and the
+  68000's refresh (D-2).
+
+**Carried forward:**
+
+- **D-2, the main RAM's refresh**: two clocks lost every 128 on the cartridge measured on the board, the RAM's pattern
+  not yet separated; to be settled beside the VDP's DMA and refresh slots at stage 4 if those measurements need it.
+- **Seven EEPROM boards** that Eke's document does not list: Putter Golf, and Accolade's Barkley Shut Up and Jam 2,
+  Brett Hull Hockey '95, Jack Nicklaus' Power Challenge Golf, Pelé!, Pelé's World Tournament Soccer and Unnecessary
+  Roughness '95. They run without their EEPROM until a document wires them.
+- **Barver Battle Saga's protection device** at `$400004`/`$400006`, which no document in the corpus describes.
+- **The memory test's first `$A11100` row** (above).
+- **The window's alignment**: its waits are the measured means, not their dependence on where the Z80's access meets
+  the 68000's bus cycle (§11.1).
+- **Not built at stage 3**, though in the plan's §1.2: the multitaps (Team Player, EA 4-Way Play) and the J-Cart's
+  extra ports, for stage 6's controller settings; the light gun that would drive the external interrupt.
+
+## 13. Stage 4, step 1: the VDP's ports, FIFO and DMA on the slot schedule, the HV counter, the interrupts (2026-10-05)
+
+### 13.1 The line, from the documents
+
+A line now begins where the V counter is incremented, and everything in it is placed in master clocks from there
+(`vdp.rs`'s `Timing`, built once per width):
+
+- **The H counter** (Nemesis's tables, SpritesMind topic 1291, from his logic analyser): H32 counts `$000`-`$127`
+  then `$1D2`-`$1FF`, every pixel ten master clocks; H40 counts `$000`-`$16C` then `$1C9`-`$1FF`, eight master clocks
+  a pixel but in hsync, where the serial clock runs at MCLK/5 save for three pixels at MCLK/4, and `$1ED` at MCLK/5.
+  Both sum to 3,420. The V counter increments at `$10A` (H32) and `$14A` (H40), which is where a line starts. The HV
+  counter port gives the 9-bit counter's top eight bits, MacDonald's 8-bit table (`m5hvc.txt`) in agreement.
+- **The access slots** (Nemesis's VRAM timing charts, H32 and H40, in the documentation folder): a slot is four serial
+  clock ticks, slot 1 begins at H `$1E9` in both widths, which places hsync where the charts and the H counter tables
+  agree. On an active line the external slots are H40's 15, 23, 31 and every 32 after to 159, then 174, 175 and 199
+  (18), and H32's to 127, then 142, 143, 157 and 171 (16); refresh takes 39 and every 32 after (5 and 4). On a blank
+  line every slot but refresh is external: 205 and 167, the counts of Sega's DMA table. A line follows the active
+  pattern when the display is on and it is drawn, or it is the frame's last, whose blanking flag clears for the first
+  line's sprites (Eke and Nemesis, topics 851 and 1291); the two slots at the change of render line within a line are
+  given to the line they fall in (argued).
+- **The interrupts and flags**: the line interrupt at the line's start, as before; the vertical interrupt and the F
+  flag at H `$001` of line 224 (Nemesis: H `$000` to `$001`), where MacDonald had "roughly H counter cycle 08h"; the
+  vertical blanking flag at H `$150` (H40) and `$10E` (H32) of lines 224 and the last (MacDonald's `m5hvc.txt`), forced
+  on while the display is off; the horizontal blanking flag set at `$166` and `$126` and cleared at `$00B` and `$00A`
+  (Nemesis).
+- **The V counter**: NTSC's jump from `$EA` to `$1E5` (MacDonald §5). PAL's jumps, `$102` to `$1CA` in V28 and `$10A`
+  to `$1D2` in V30, are argued from the line count: no document in the corpus gives them, and the board can measure
+  them.
+
+### 13.2 The FIFO, the read buffer and DMA, from VDPFIFOTesting
+
+VDPFIFOTesting's sources (Nemesis, the test program and not an emulator) give each test's expectation as measured on
+consoles; the rules below are the ones its tests demonstrate, each traced to the test that failed without it.
+
+- **The FIFO is a ring of four entries** that keep their data after they are written out. A 68000 write takes the next
+  entry with the code and address it was made under; the 68000 waits while all four are pending. A slot writes the
+  oldest pending entry: a VRAM word takes two slots, a CRAM or VSRAM word one. A write to a target that is not one
+  still takes an entry and its slots.
+- **A CRAM or VSRAM read** returns that memory's bits (`$0EEE`, `$07FF`) with the rest from the entry the next write
+  will take (FIFO Buffer Size, Separate FIFO Read/Write Buffer). VSRAM past its 40 words reads its first (argued: the
+  test shows the scroll value the VDP last fetched, which the renderer will supply). The 8-bit VRAM target (`01100`)
+  reads one byte, bit 0 of the address inverted, under the next entry's high byte. Reads wait for the FIFO to empty
+  and are made at a slot; the 68000 waits for the read buffer.
+- **A 68000 transfer** reads the bus once a bus cycle while the FIFO has room, so the FIFO fills between slots, and
+  its source counts within its 128 KiB (Source Address Wrapping); the 68000 is held until the last word is read. The
+  length and source registers count as it goes.
+- **A fill** waits for its data word, which is written as an ordinary entry; then each slot writes one byte with bit 0
+  of the address inverted (MacDonald's pseudocode, once the address has passed the first word). VRAM takes the data's
+  high byte, CRAM and VSRAM the next entry's word (DMA Fill to CRAM, to VSRAM). A word written during a fill is
+  written where the fill is, and becomes its data. A fill advances the source registers as a copy does (DMA Fill
+  Source Reg Update).
+- **A copy** reads a byte and writes it, a slot each, both addresses with bit 0 inverted (the DMA Copy tests' odd and
+  even addresses and their overlapping copies).
+- **Starting and the busy flag**: a second command word with CD5 set and DMA enabled starts a DMA, and nothing else
+  does: CD5 left set while DMA was off does not start one when a first word follows (DMA Busy Flag DMA Toggle Fill),
+  and disabling DMA does not stop a fill already set up. The busy flag is set from the command until the DMA ends, a
+  fill's wait for its data included.
+- **Register writes**: in mode 4 only registers 0-10 take a write (Register Write Mode4 Mask); any register write
+  clears the two code bits a command's first word sets, the rest of the code and the address kept (Register Writes and
+  Code Reg).
+- **The HV latch**: setting register 0's bit 1 holds the HV counter at its value then until the bit is cleared (HV
+  Counter Latch); TH takes it after that, as stage 3 built.
+
+### 13.3 Measured (2026-10-05)
+
+- **VDPFIFOTesting**, A pressed at frame 60 to run it through every page, its records read from RAM by
+  `fifo_records.rs` (the reader the plan's §3.3 owed) and counted as the program counts them: **121 of 122 pass**,
+  from 25 before this step. The one left is FIFO Wait States' tenth part, which writes three words and then sets up a
+  transfer without writing register 23, so that the DMA it starts is whatever the earlier tests left there: the console
+  sees the FIFO full at some point after it and Nephrite does not. Pinned by `programs.rs`'s
+  `vdpfifotesting_passes_all_but_one`.
+- **The cost**: 600 frames of Sonic the Hedgehog in 0.252 s on the desktop, of Sonic 2 in 0.247 s, Thunder Force IV
+  0.218 s and Streets of Rage 2 0.223 s, about 0.4 ms a frame, from 0.2-0.3 before the slots, against the plan's
+  1.5 ms.
+- **The crate's tests**: 36 pass, the slot counts and counter ranges of both widths, a fill, a CRAM read through the
+  FIFO and the state's layout (version 3: the FIFO, the read buffer, the DMA and the VDP's clocks) among them.
+- **The RAM against Genesis Plus GX at anchors over the corpus** (944 games), stage 3's last report against this
+  step's: at frame 120 a median of 65,523 equal bytes (from 65,518), 903 games at 65,000 or more (from 888), 3 below
+  60,000 (from 6); at frame 600 a median of 65,506 (from 65,491), a 10th percentile of 65,214 (from 64,849), 872 at
+  65,000 or more (from 839), 18 below 60,000 (from 33); 503 games rose at frame 600 and 216 fell, the largest falls
+  X-Men 2 (64,925 to 61,468) and Pete Sampras Tennis 96 (64,633 to 61,552), not yet examined.
+- **The conformance kit**, `--frames 600`: C1-C15 pass on the 240p suite, Sonic the Hedgehog, Phantasy Star IV and
+  VDPFIFOTesting. WiseMan's Nephrite, runner, registration and discovery tests, 31, pass.
+
+### 13.4 What the next steps owe
+
+- **The logic-analyser ROMs** of Nemesis (status register and HV counter sampled at known points, sent out of pad port
+  2 by a nibble handshake) need the pad-port receiver; they are the oracle for §13.1's placements, which are argued
+  from the documents until then.
+- **PAL's V counter**, on the board or by those ROMs.
+- **FIFO Wait States' tenth part** (§13.3).
+- **The planes, the window, scrolling and sprites** (the next step), which also give VSRAM's latch its source.

@@ -8,7 +8,7 @@ use emusen_native::{StateReader, StateWriter, Truncated};
 
 use crate::cart::Cart;
 use crate::io::Io;
-use crate::vdp::{LINE, VINT_OFFSET, Vdp};
+use crate::vdp::{LINE, Vdp};
 
 /// Master clocks a 68000 clock, and a Z80 T-state.
 pub const M68K: u64 = 7;
@@ -20,6 +20,18 @@ pub const Z80_INT: u64 = LINE;
 /// (9.5 clocks, 66.5 rounded down), measured means (Nephrite_Disputes.md D-1).
 pub const WINDOW_Z80_WAIT: u64 = 41;
 pub const WINDOW_68K_STALL: u64 = 66;
+
+/// Master clocks between a transfer's reads of the 68000's bus: one bus cycle (argued; the transfer fills the FIFO
+/// between slots, as VDPFIFOTesting's wait states show).
+pub const DMA_FETCH: u64 = 4 * M68K;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Event {
+    Line,
+    Slot,
+    Fetch,
+    Vint,
+}
 
 /// The model: its version register's low nibble, and whether it has TMSS (from version 1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,31 +133,84 @@ impl Genesis {
 }
 
 impl Hw {
-    /// The line events up to the present, then the Z80 to the same time.
-    fn catch_up(&mut self, z80: &mut Z80) {
+    /// The VDP's slots, the line starts and the vertical interrupt up to `to`, in the order they fall.
+    fn run_vdp(&mut self, to: u64) {
         loop {
             let next_line = self.line_begun + LINE;
-            let vint = self.vint_at.filter(|&t| t <= self.clock);
-            if let Some(t) = vint.filter(|&t| t < next_line) {
+            let mut t = next_line;
+            let mut kind = Event::Line;
+            if self.vdp.busy()
+                && let Some(s) = self.next_slot(self.vdp.time)
+                && s < t
+            {
+                (t, kind) = (s, Event::Slot);
+            }
+            if self.vdp.dma_fetch().is_some() {
+                let f = self.vdp.fetch_at.max(self.vdp.time);
+                if f < t {
+                    (t, kind) = (f, Event::Fetch);
+                }
+            }
+            if let Some(v) = self.vint_at.filter(|&v| v < t || (v == t && kind == Event::Line)) {
+                (t, kind) = (v, Event::Vint);
+            }
+            if t > to {
+                self.vdp.time = self.vdp.time.max(to);
+                return;
+            }
+            self.vdp.time = t;
+            if kind == Event::Fetch {
+                let a = self.vdp.dma_fetch().expect("a transfer with room");
+                let w = self.dma_read(a);
+                self.vdp.dma_fetched(w);
+                self.vdp.fetch_at = t + DMA_FETCH;
+            } else if kind == Event::Slot {
+                self.vdp.slot();
+            } else if kind == Event::Vint {
                 self.vint_at = None;
                 self.vdp.vint_pending = true;
                 self.z80_int = (t, t + Z80_INT);
-                continue;
-            }
-            if self.clock < next_line {
-                break;
-            }
-            self.line_begun = next_line;
-            self.line += 1;
-            if self.line == self.vdp.lines() {
-                self.line = 0;
-                self.frame_done = true;
-            }
-            self.vdp.line_start(self.line);
-            if self.line == self.vdp.vint_line() {
-                self.vint_at = Some(self.line_begun + VINT_OFFSET);
+            } else {
+                self.line_begun = next_line;
+                self.line += 1;
+                if self.line == self.vdp.lines() {
+                    self.line = 0;
+                    self.frame_done = true;
+                }
+                self.vdp.line_start(self.line);
+                if self.line == self.vdp.vint_line() {
+                    self.vint_at = Some(self.line_begun + self.vdp.timing().vint);
+                }
             }
         }
+    }
+
+    /// The first external slot of the present line after `after`.
+    fn next_slot(&self, after: u64) -> Option<u64> {
+        let off = after.saturating_sub(self.line_begun);
+        let slots = self.vdp.slots(self.line);
+        let i = slots.partition_point(|&m| (m as u64) <= off);
+        slots.get(i).map(|&m| self.line_begun + m as u64)
+    }
+
+    /// The 68000 held until `done`: the clock moved slot by slot.
+    fn vdp_wait(&mut self, done: fn(&Vdp) -> bool) {
+        self.run_vdp(self.clock);
+        while !done(&self.vdp) {
+            let next = self.next_slot(self.vdp.time).unwrap_or(self.line_begun + LINE);
+            self.clock = self.clock.max(next);
+            self.run_vdp(self.clock);
+        }
+    }
+
+    /// A word a transfer reads from the 68000's bus; the VDP's own addresses give nothing.
+    fn dma_read(&mut self, a: u32) -> u16 {
+        if (0xC0_0000..=0xDF_FFFF).contains(&(a & 0xFF_FFFF)) { 0 } else { self.read16(a) }
+    }
+
+    /// The line events up to the present, then the Z80 to the same time.
+    fn catch_up(&mut self, z80: &mut Z80) {
+        self.run_vdp(self.clock);
         if self.z80_reset {
             reset_z80(z80);
         }
@@ -291,6 +356,10 @@ impl Hw {
         if !Self::vdp_valid(a) || self.vdp_locked() {
             return 0;
         }
+        self.run_vdp(self.clock);
+        if a & 0x1E < 4 {
+            self.vdp_wait(Vdp::read_ready);
+        }
         let (line, dot) = (self.line, self.dot());
         match a & 0x1E {
             0x00 | 0x02 => self.vdp.read_data(),
@@ -309,14 +378,22 @@ impl Hw {
         if !Self::vdp_valid(a) || self.vdp_locked() {
             return;
         }
+        self.run_vdp(self.clock);
         match a & 0x1E {
-            0x00 | 0x02 => self.vdp.data(v),
+            0x00 | 0x02 => {
+                self.vdp_wait(|v| !v.fifo_full());
+                self.vdp.data(v);
+            }
             0x04 | 0x06 => {
-                if let Some(t) = self.vdp.control(v) {
-                    for i in 0..t.words {
-                        let w = self.read16(t.source.wrapping_add(2 * i) & 0xFF_FFFE);
-                        self.vdp.data(w);
-                    }
+                let latch = self.vdp.regs[0] & 2;
+                self.vdp.control(v);
+                self.vdp.fetch_at = self.clock;
+                if latch == 0 && self.vdp.regs[0] & 2 != 0 {
+                    let (line, dot) = (self.line, self.dot());
+                    self.vdp.latch_hv(line, dot);
+                }
+                if self.vdp.bus_dma() {
+                    self.vdp_wait(|v| !v.bus_dma());
                 }
             }
             _ => {}
@@ -472,6 +549,29 @@ impl Z80BusTrait for Z80Bus<'_> {
     }
 }
 
+/// A DMA in four words: its kind, then its source, length and data or byte.
+fn dma_words(d: crate::vdp::Dma) -> [u64; 4] {
+    use crate::vdp::Dma;
+    match d {
+        Dma::None => [0, 0, 0, 0],
+        Dma::Bus { source, left } => [1, source as u64, left as u64, 0],
+        Dma::FillWait => [2, 0, 0, 0],
+        Dma::Fill { data, left, started } => [3, started as u64, left as u64, data as u64],
+        Dma::Copy { source, left, byte } => [4, source as u64, left as u64, byte.map_or(u64::MAX, u64::from)],
+    }
+}
+
+fn dma_from(d: [u64; 4]) -> crate::vdp::Dma {
+    use crate::vdp::Dma;
+    match d[0] {
+        1 => Dma::Bus { source: d[1] as u32 & 0xFF_FFFE, left: d[2] as u32 },
+        2 => Dma::FillWait,
+        3 => Dma::Fill { data: d[3] as u16, left: d[2] as u32, started: d[1] != 0 },
+        4 => Dma::Copy { source: d[1] as u16, left: d[2] as u32, byte: (d[3] != u64::MAX).then_some(d[3] as u8) },
+        _ => Dma::None,
+    }
+}
+
 /// Everything of the Genesis a state holds beyond its memories, read whole before any of it is applied.
 pub struct Saved {
     cpu: M68000,
@@ -503,11 +603,17 @@ impl Genesis {
         let h = &self.hw;
         let v = h.vdp.regs_state();
         w.bytes("VdpRegisters", &v.regs);
-        w.bools("VdpLatches", &[v.pending, v.fill, v.vint_pending, v.hint_pending, v.ext_pending]);
+        w.bools("VdpLatches", &[v.pending, v.read_ready, v.vint_pending, v.hint_pending, v.ext_pending]);
         w.u32("HvLatch", v.hv_latch.map_or(u32::MAX, u32::from));
         w.u8("VdpCode", v.code);
         w.u16("VdpAddress", v.address);
         w.u8("VdpLineCounter", v.hint_counter);
+        let fifo: Vec<u16> = v.fifo.iter().flat_map(|e| [e.code as u16 | (e.half as u16) << 8, e.address, e.data]).collect();
+        w.u16s("VdpFifo", &fifo);
+        w.bytes("VdpFifoPointers", &[v.fifo_count, v.fifo_next]);
+        w.u16("VdpReadBuffer", v.read_buf);
+        w.u64s("VdpDma", &dma_words(v.dma));
+        w.u64s("VdpTimes", &[v.time, v.fetch_at]);
         let io = h.io.regs_state();
         w.bytes("IoData", &io.data);
         w.bytes("IoCtrl", &io.ctrl);
@@ -536,12 +642,27 @@ impl Genesis {
         r.bytes(&mut v.regs)?;
         let mut latches = [false; 5];
         r.bools(&mut latches)?;
-        [v.pending, v.fill, v.vint_pending, v.hint_pending, v.ext_pending] = latches;
+        [v.pending, v.read_ready, v.vint_pending, v.hint_pending, v.ext_pending] = latches;
         let latch = r.u32()?;
         v.hv_latch = (latch != u32::MAX).then_some(latch as u16);
         v.code = r.u8()?;
         v.address = r.u16()?;
         v.hint_counter = r.u8()?;
+        let mut fifo = [0u16; 12];
+        r.u16s(&mut fifo)?;
+        for (e, f) in v.fifo.iter_mut().zip(fifo.chunks(3)) {
+            *e = crate::vdp::Entry { code: f[0] as u8, half: f[0] >> 8 != 0, address: f[1], data: f[2] };
+        }
+        let mut p = [0u8; 2];
+        r.bytes(&mut p)?;
+        [v.fifo_count, v.fifo_next] = [p[0].min(4), p[1] & 3];
+        v.read_buf = r.u16()?;
+        let mut d = [0u64; 4];
+        r.u64s(&mut d)?;
+        v.dma = dma_from(d);
+        let mut times = [0u64; 2];
+        r.u64s(&mut times)?;
+        [v.time, v.fetch_at] = times;
         let mut io = crate::io::IoRegs::default();
         r.bytes(&mut io.data)?;
         r.bytes(&mut io.ctrl)?;

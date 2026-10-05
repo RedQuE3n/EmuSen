@@ -158,6 +158,14 @@ impl Hw {
         }
     }
 
+    /// A device on `port` driving TH, as a light gun does: the external interrupt when the port enables it.
+    pub fn device_th(&mut self, port: usize, th: bool) {
+        if self.io.device_th(port, th) {
+            let (line, dot) = (self.line, self.dot());
+            self.vdp.external(line, dot);
+        }
+    }
+
     fn dot(&self) -> u64 {
         self.clock.saturating_sub(self.line_begun).min(LINE - 1)
     }
@@ -178,7 +186,7 @@ impl Hw {
     fn read8(&mut self, a: u32) -> u8 {
         let a = a & 0xFF_FFFF;
         match a {
-            0x00_0000..=0x3F_FFFF => self.cart.read8(a),
+            0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read8(a),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
                     self.z80_space_read(a as u16 & 0x7FFF)
@@ -197,7 +205,7 @@ impl Hw {
     fn read16(&mut self, a: u32) -> u16 {
         let a = a & 0xFF_FFFE;
         match a {
-            0x00_0000..=0x3F_FFFF => self.cart.read16(a),
+            0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read16(a),
             0xA0_0000..=0xA0_FFFF if self.has_z80_bus() => {
                 let b = self.read8(a) as u16;
                 b << 8 | b
@@ -494,7 +502,8 @@ impl Genesis {
         let h = &self.hw;
         let v = h.vdp.regs_state();
         w.bytes("VdpRegisters", &v.regs);
-        w.bools("VdpLatches", &[v.pending, v.fill, v.vint_pending, v.hint_pending]);
+        w.bools("VdpLatches", &[v.pending, v.fill, v.vint_pending, v.hint_pending, v.ext_pending]);
+        w.u32("HvLatch", v.hv_latch.map_or(u32::MAX, u32::from));
         w.u8("VdpCode", v.code);
         w.u16("VdpAddress", v.address);
         w.u8("VdpLineCounter", v.hint_counter);
@@ -524,9 +533,11 @@ impl Genesis {
         z80.read_state(r)?;
         let mut v = crate::vdp::VdpRegs::default();
         r.bytes(&mut v.regs)?;
-        let mut latches = [false; 4];
+        let mut latches = [false; 5];
         r.bools(&mut latches)?;
-        [v.pending, v.fill, v.vint_pending, v.hint_pending] = latches;
+        [v.pending, v.fill, v.vint_pending, v.hint_pending, v.ext_pending] = latches;
+        let latch = r.u32()?;
+        v.hv_latch = (latch != u32::MAX).then_some(latch as u16);
         v.code = r.u8()?;
         v.address = r.u16()?;
         v.hint_counter = r.u8()?;
@@ -586,5 +597,32 @@ impl Genesis {
         (h.clock, h.z80_clock, h.z80_int, h.line, h.line_begun, h.vint_at) = (s.clock, s.z80_clock, s.z80_int, s.line, s.line_begun, s.vint_at);
         (h.z80_bank, h.z80_busreq, h.z80_reset, h.tmss_unlocked, h.tmss, h.locked_up, h.stall) =
             (s.z80_bank, s.z80_busreq, s.z80_reset, s.tmss_unlocked, s.tmss, s.locked_up, s.stall);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_device_on_th_raises_level_2_and_latches_the_hv_counter() {
+        let mut rom = vec![0u8; 0x400];
+        rom[0..8].copy_from_slice(&[0, 0xFF, 0, 0, 0, 0, 2, 0]);
+        let mut g = Genesis::new(Cart::new(rom, None, "SEGA GENESIS", ""), Model { overseas: true, pal: false, version: 0 });
+        let hw = &mut g.hw;
+        hw.vdp.regs[0] = 2;
+        hw.vdp.regs[11] = 8;
+        hw.device_th(0, false);
+        assert_eq!(hw.vdp.level(), 0, "TH an input but the port's interrupt off");
+        hw.io.write(0xA1_0009, 0x80, 0);
+        hw.clock = 5 * LINE + 1000;
+        hw.line = 5;
+        hw.line_begun = 5 * LINE;
+        hw.device_th(0, true);
+        assert_eq!(hw.vdp.level(), 2);
+        let latched = hw.vdp.hv(5, 1000);
+        assert_eq!(hw.vdp.hv(100, 3000), latched, "the counter holds what TH latched");
+        hw.vdp.acknowledge(2);
+        assert_eq!(hw.vdp.level(), 0);
     }
 }

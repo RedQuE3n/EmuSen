@@ -1,6 +1,7 @@
 //! The cartridge on the 68000's bus: ROM up to 4 MiB with its mirrors, save RAM on its declared lanes and range, the
 //! `$A130F1` register that maps it over ROM, and the Sega mapper of `$A130F3`-`$A130FF`. Nephrite_Native.md §9.
 
+use crate::eeprom::{self, Eeprom};
 use crate::media::SaveRam;
 
 pub struct Cart {
@@ -16,16 +17,71 @@ pub struct Cart {
     sram_always: bool,
     /// The Sega mapper's pages for the eight 512 KiB banks, bank 0 fixed at page 0; absent on a plain board.
     pub banks: Option<[u8; 8]>,
+    /// A serial EEPROM board's chip, which takes the place of the save RAM its header declares.
+    pub eeprom: Option<Eeprom>,
+    /// Sonic & Knuckles' lock-on: the cartridge on top, seen at `$200000`, and the 256 KiB patch ROM that `$A130F1`'s
+    /// bit 0 maps over `$300000`-`$3FFFFF` (plutiedev's "Sonic & Knuckles Lock-on").
+    pub lockon: Option<Box<Cart>>,
+    pub patch: Vec<u8>,
+    /// Sonic & Knuckles' board, whose upper 2 MiB is the slot on top: nothing there with no cartridge in it.
+    slot_on_top: bool,
 }
 
+/// Sonic & Knuckles' serial, whose cartridge takes another on top.
+pub const LOCK_ON_SERIAL: &str = "GM MK-1563";
+
 impl Cart {
-    /// The board an image's header describes: the mapper for "SEGA SSF" or an image above 4 MiB.
-    pub fn new(rom: Vec<u8>, save: Option<SaveRam>, system_type: &str) -> Cart {
+    /// The board an image's header describes: the mapper for "SEGA SSF" or an image above 4 MiB, a serial EEPROM for
+    /// a serial the documents know.
+    pub fn new(rom: Vec<u8>, save: Option<SaveRam>, system_type: &str, serial: &str) -> Cart {
         let mask = rom.len().max(2).next_power_of_two() - 1;
+        let eeprom = eeprom::board(serial).map(Eeprom::new);
+        let save = if eeprom.is_some() { None } else { save };
         let sram = save.map_or(Vec::new(), |s| vec![0xFF; s.bytes()]);
         let sram_always = save.is_some_and(|s| s.start as usize >= rom.len());
         let mapper = system_type.starts_with("SEGA SSF") || rom.len() > 0x40_0000;
-        Cart { rom, mask, sram, save, sram_reg: 0, sram_always, banks: mapper.then_some([0, 1, 2, 3, 4, 5, 6, 7]) }
+        Cart { rom, mask, sram, save, sram_reg: 0, sram_always, banks: mapper.then_some([0, 1, 2, 3, 4, 5, 6, 7]), eeprom, lockon: None, patch: Vec::new(), slot_on_top: serial.starts_with(LOCK_ON_SERIAL) }
+    }
+
+    /// A cartridge locked on top of this one, with Sonic & Knuckles' patch ROM when given. The cartridge on top keeps
+    /// its own save RAM, switched by the register Sonic & Knuckles passes on.
+    pub fn lock_on(&mut self, top: Vec<u8>, patch: Vec<u8>) {
+        let h = crate::media::Header::read(&top, 0x100).unwrap_or_default();
+        let mut c = Cart::new(top, h.save, &h.system_type, &h.serial);
+        c.sram_always = false;
+        self.lockon = Some(Box::new(c));
+        self.patch = if patch.len().is_power_of_two() { patch } else { Vec::new() };
+    }
+
+    /// Whether the cartridge answers at `a`: not in Sonic & Knuckles' empty slot on top, which reads the open bus.
+    pub fn answers(&self, a: u32) -> bool {
+        !(self.slot_on_top && self.lockon.is_none() && a >= 0x20_0000)
+    }
+
+    /// Whether a battery keeps anything: an EEPROM, battery-backed save RAM, or the cartridge on top's.
+    pub fn has_battery(&self) -> bool {
+        if let Some(l) = &self.lockon {
+            return l.has_battery();
+        }
+        self.eeprom.is_some() || (self.save.is_some_and(|s| s.battery) && !self.sram.is_empty())
+    }
+
+    /// The bytes the battery keeps: the cartridge on top's, the EEPROM's, or the save RAM's.
+    pub fn battery(&self) -> &[u8] {
+        if let Some(l) = &self.lockon {
+            return l.battery();
+        }
+        self.eeprom.as_ref().map_or(&self.sram, |e| &e.memory)
+    }
+
+    pub fn battery_mut(&mut self) -> &mut [u8] {
+        if let Some(l) = self.lockon.as_mut() {
+            return l.battery_mut();
+        }
+        match self.eeprom.as_mut() {
+            Some(e) => &mut e.memory,
+            None => &mut self.sram,
+        }
     }
 
     fn sram_index(&self, a: u32) -> Option<usize> {
@@ -51,6 +107,15 @@ impl Cart {
     }
 
     pub fn read8(&self, a: u32) -> u8 {
+        if let Some(l) = self.lockon.as_ref().filter(|_| a >= 0x20_0000) {
+            if a >= 0x30_0000 && !self.patch.is_empty() && self.sram_reg & 1 != 0 {
+                return self.patch[a as usize & (self.patch.len() - 1)];
+            }
+            return l.read8(a);
+        }
+        if let Some(e) = self.eeprom.as_ref().filter(|e| e.board.address == a) {
+            return (e.sda() as u8) << e.board.sda;
+        }
         match self.sram_index(a) {
             Some(i) => self.sram[i],
             None => self.rom_byte(a),
@@ -63,6 +128,12 @@ impl Cart {
     }
 
     pub fn write8(&mut self, a: u32, v: u8) {
+        if let Some(l) = self.lockon.as_mut().filter(|_| a >= 0x20_0000) {
+            return l.write8(a, v);
+        }
+        if let Some(e) = self.eeprom.as_mut().filter(|e| e.board.address == a) {
+            return e.write(v);
+        }
         if self.sram_reg & 2 != 0 {
             return;
         }
@@ -73,6 +144,9 @@ impl Cart {
 
     /// `$A130F1`-`$A130FF`, odd bytes: the save RAM's register, then the mapper's pages.
     pub fn register(&mut self, a: u32, v: u8) {
+        if let Some(l) = self.lockon.as_mut() {
+            l.register(a, v);
+        }
         match a & 0xFF {
             0xF1 => self.sram_reg = v & 3,
             r @ 0xF3..=0xFF if r & 1 == 1 => {
@@ -95,16 +169,16 @@ mod tests {
 
     #[test]
     fn a_small_rom_mirrors_and_a_short_one_reads_ff_past_its_end() {
-        let c = Cart::new(rom(0x8_0000), None, "SEGA GENESIS");
+        let c = Cart::new(rom(0x8_0000), None, "SEGA GENESIS", "");
         assert_eq!(c.read8(0x8_1234), c.read8(0x1234));
-        let c = Cart::new(rom(0x30_0000), None, "SEGA GENESIS");
+        let c = Cart::new(rom(0x30_0000), None, "SEGA GENESIS", "");
         assert_eq!(c.read8(0x38_0000), 0xFF);
     }
 
     #[test]
     fn odd_lane_save_ram_above_the_rom_is_always_mapped() {
         let save = SaveRam { battery: true, lanes: 3, start: 0x20_0001, end: 0x20_3FFF };
-        let mut c = Cart::new(rom(0x10_0000), Some(save), "SEGA GENESIS");
+        let mut c = Cart::new(rom(0x10_0000), Some(save), "SEGA GENESIS", "");
         assert_eq!(c.sram.len(), 0x2000);
         c.write8(0x20_0001, 0x5A);
         c.write8(0x20_0003, 0xA5);
@@ -119,7 +193,7 @@ mod tests {
     #[test]
     fn save_ram_over_rom_needs_the_register() {
         let save = SaveRam { battery: true, lanes: 3, start: 0x20_0001, end: 0x20_3FFF };
-        let mut c = Cart::new(rom(0x30_0000), Some(save), "SEGA GENESIS");
+        let mut c = Cart::new(rom(0x30_0000), Some(save), "SEGA GENESIS", "");
         let under = c.read8(0x20_0001);
         c.write8(0x20_0001, !under);
         assert_eq!(c.read8(0x20_0001), under, "unmapped: ROM");
@@ -133,11 +207,26 @@ mod tests {
     #[test]
     fn the_mapper_pages_512_kib_banks_but_not_the_first() {
         let r = rom(0x50_0000);
-        let mut c = Cart::new(r.clone(), None, "SEGA SSF");
+        let mut c = Cart::new(r.clone(), None, "SEGA SSF", "");
         assert_eq!(c.read8(0x08_0010), r[0x08_0010]);
         c.register(0xA1_30FF, 9);
         assert_eq!(c.read8(0x38_0010), r[0x48_0010]);
         c.register(0xA1_30F1, 0);
         assert_eq!(c.read8(0x10), r[0x10]);
+    }
+
+    #[test]
+    fn a_cartridge_on_top_shows_above_2_mib_and_the_register_swaps_in_the_patch() {
+        let sk = vec![0x11u8; 0x20_0000];
+        let top: Vec<u8> = (0..0x10_0000).map(|i| (i >> 12) as u8).collect();
+        let patch = vec![0x77u8; 0x4_0000];
+        let mut c = Cart::new(sk, None, "SEGA GENESIS", "GM MK-1563 -00");
+        c.lock_on(top.clone(), patch);
+        assert_eq!(c.read8(0x1F_FFFF), 0x11);
+        assert_eq!(c.read8(0x20_5000), top[0x5000], "a 1 MiB cartridge mirrors into the upper 2 MiB");
+        assert_eq!(c.read8(0x30_5000), top[0x5000]);
+        c.register(0xA1_30F1, 1);
+        assert_eq!(c.read8(0x30_5000), 0x77);
+        assert_eq!(c.read8(0x20_5000), top[0x5000]);
     }
 }

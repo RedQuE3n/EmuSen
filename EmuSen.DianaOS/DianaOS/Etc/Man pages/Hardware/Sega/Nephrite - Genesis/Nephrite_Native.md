@@ -381,3 +381,90 @@ Each is a rule in hardware terms that the documents leave open or that a test sh
 - Serial EEPROM boards (by serial, MacDonald's §4.1 and his `eeprom.txt`), Sonic & Knuckles lock-on (a second image),
   the window's waits measured, BUSREQ's latency, the external interrupt, the six-button pad chosen by the frontend, and
   the references at anchors through WiseMan's runner over the game corpus.
+
+## 10. Stage 3, step 2: EEPROM, lock-on, the pads chosen, the external interrupt, the anchors (2026-10-05)
+
+### 10.1 Serial EEPROM boards
+
+`src/eeprom.rs`: a two-wire EEPROM, the X24C01's protocol as MacDonald's commented Monster World routines drive it
+(`eeprom.txt`): a start (SDA falling while SCL is high), a byte of seven address bits and R/W, data bytes each followed
+by an acknowledge on the ninth clock, writes in pages of four that wrap within the page, sequential reads, a stop. A
+board is known by its serial, the header saying only that it has one: Sega's Technical Overview (§5's header table,
+field 10) defines the field as `'RA', %1x1yz000, %00100000`, the last byte `$20` for RAM, and the boards with an
+EEPROM carry `$40` there, which is what Monster World's routine tests. The documents give two boards' wiring, both an
+X24C01 of 128 bytes with SDA on bit 0 and SCL on bit 1 of `$200001` (`gen-eeprom.txt`, `gen-hw.txt` §4.1): Monster
+World III / Wonder Boy in Monster World (G-4060) and Mega Man: The Wily Wars / Rockman Megaworld (T-12046, T-12053).
+The EEPROM's bytes are the battery's; its transfer in progress is not kept in a state.
+
+**Owed:** the other boards whose headers mark an EEPROM, sixteen in the corpus (NBA Jam, NFL Quarterback
+Club and its '96, College Slam, Frank Thomas Big Hurt Baseball, Evander Holyfield's Real Deal Boxing, Greatest
+Heavyweights, Putter Golf, Dodge Ball, MLBPA Sports Talk Baseball, and Accolade's Barkley 2, Brett Hull Hockey '95,
+Jack Nicklaus' Power Challenge Golf, Pelé!, Pelé's World Tournament Soccer, Unnecessary Roughness '95), whose wiring no
+document in the corpus gives. SpritesMind topic 2227 names a document of Eke's on the Genesis's save EEPROMs; it is
+to be fetched into the corpus as a document. Until then those boards run without their EEPROM.
+
+### 10.2 Sonic & Knuckles' lock-on
+
+Plutiedev's "Sonic & Knuckles Lock-on": the cartridge on top shows at `$200000`-`$3FFFFF`, its own upper 2 MiB, mirrored
+as its own ROM mirrors; `$A130F1`'s bit 0 maps the 256 KiB patch ROM over `$300000`-`$3FFFFF` and is passed on to the
+cartridge on top, whose save RAM it switches (Sonic 3's). The cartridge on top and the patch ROM are files 8 and 9 beside
+the image, the player's own cartridges and not firmware, declared for Sonic & Knuckles (`GM MK-1563`) only; a combined
+dump is split at 2 MiB, the patch ROM taken from its end when what follows is a whole number of mebibytes and 256 KiB.
+**Sonic & Knuckles alone**: its upper 2 MiB is the empty slot and reads the open bus, where at first it mirrored the
+cartridge's own 2 MiB, which made the game find its own header there as if a cartridge were on top. **Measured** (bytes
+of the 68000's RAM equal to Genesis Plus GX's, of 65,536):
+
+| Image | Frame 120 | Frame 600 | Frame 1200 |
+|---|---|---|---|
+| Sonic & Knuckles, slot mirrored (before) | 24,364 | 21,411 | 21,287 |
+| Sonic & Knuckles, slot empty | 65,517 | 65,436 | 65,502 |
+| with Sonic 1 (Blue Spheres) | 65,451 | 65,447 | 65,453 |
+| with Sonic 2 and the patch ROM | 65,432 | 65,358 | 47,339 |
+| with Sonic 3 | 65,532 | 65,485 | 65,496 |
+| Wonder Boy in Monster World (EEPROM) | 65,525 | 65,528 | 65,518 |
+| Mega Man: The Wily Wars (EEPROM) | 65,536 | 65,534 | 65,503 |
+| Rockman Megaworld (EEPROM) | 65,536 | 65,493 | 65,486 |
+
+Sonic 2 locked on parts from the reference by frame 1200; not yet examined.
+
+### 10.3 The pads chosen, and the external interrupt
+
+- **The pads.** Two settings, `pad1` and `pad2` ("Port 1 controller"), each `md.pad3` or `md.pad6`, applied between
+  frames; the port's controller in the machine information follows them. The core ABI has no call for a controller,
+  so the frontend chooses through these.
+- **The external interrupt.** A device driving TH on a port where TH is an input and the port's control bit 7 is set
+  raises level 2 when register 11's bit 3 enables it, and with register 0's bit 1 set the HV counter is latched and
+  read as latched (MacDonald's VDP document §4). Pads drive no TH, so nothing raises it yet; a light gun will.
+- **The Z80's INT** lasts one line: Sega's Technical Overview (p. 91) gives the interrupt as "generated 16ms period
+  and 64ms length", read as 64 µs.
+
+### 10.4 The window's waits and BUSREQ's latency
+
+No document and no test program gives them; `Nephrite_Disputes.md` D-1 opens the dispute step, with Nuked-MD's whole
+board run as a black box. Its bench builds and boots and is not yet measuring; the provisional values of §9.2 stand.
+
+### 10.5 The references at anchors through WiseMan's runner
+
+`NephriteTests.The_ram_against_genesis_plus_gx_at_anchors_over_the_games`, opt-in through `EMUSEN_NEPHRITE_GAMES`
+(a folder of games, the corpus's copy), runs every game through Nephrite's library and Genesis Plus GX's through the
+probe at frames 120 and 600 and writes the bytes of the 68000's RAM that agree to `EMUSEN_NEPHRITE_REPORT`.
+`LibretroProbeEngine` takes the spaces a reference holds as little-endian words and puts them back in the 68000's
+order. **Measured 2026-10-05 over the corpus's 946 games**, in 5 min 41 s: 944 compared; the two others (a 32X
+image and an unlicensed one) crashed the reference's probe. Bytes of the 68000's RAM equal, of 65,536:
+
+| Frame | Median | 25th percentile | 10th percentile | Identical | 65,000 or more | Below 60,000 |
+|---|---|---|---|---|---|---|
+| 120 | 65,518 | 65,482 | 65,324 | 118 | 879 | 9 |
+| 600 | 65,489 | 65,376 | 64,514 | 36 | 828 | 40 |
+
+The lowest at frame 600 are games whose logic the VDP's or the sound chips' timing reaches (Ninja Gaiden, Sub-Terrania,
+Mega Turrican, Bubba 'n' Stix), two EEPROM boards the documents do not wire (§10.1: Greatest Heavyweights, Evander
+Holyfield's Real Deal Boxing), and a Sonic 3 image of 2,097,664 bytes, a copier's 512-byte header before the ROM,
+which Nephrite does not strip yet.
+
+### 10.6 Measured
+
+The crate's tests: 29 pass (EEPROM, lock-on, the pad settings, the external interrupt and the latch, and §9's, the
+three console test programs included). The state layout grew by the external interrupt's latch and the HV latch. The
+conformance kit passes C1-C15 on Sonic & Knuckles alone, with Sonic 3, and on Mega Man: The Wily Wars; WiseMan's
+Nephrite, runner, registration and discovery tests, 31, pass.

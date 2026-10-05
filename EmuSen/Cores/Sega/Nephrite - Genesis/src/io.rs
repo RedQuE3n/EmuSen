@@ -73,6 +73,8 @@ pub struct Io {
     tx: [u8; 3],
     sctrl: [u8; 3],
     pub pads: [Pad; 2],
+    /// TH as a device drives it, for the external interrupt.
+    th_in: [bool; 3],
 }
 
 impl Io {
@@ -99,7 +101,7 @@ impl Io {
     pub fn new(overseas: bool, pal: bool, version: u8) -> Io {
         let v = (overseas as u8) << 7 | (pal as u8) << 6 | 1 << 5 | (version & 0xF);
         let pads = [Pad { th: true, ..Pad::default() }; 2];
-        Io { version: v, data: [0x7F; 3], ctrl: [0; 3], tx: [0xFF; 3], sctrl: [0; 3], pads }
+        Io { version: v, data: [0x7F; 3], ctrl: [0; 3], tx: [0xFF; 3], sctrl: [0; 3], pads, th_in: [true; 3] }
     }
 
     /// TH as driven: the data register's bit 6 when the control register makes it an output, pulled high otherwise.
@@ -108,6 +110,14 @@ impl Io {
         if let Some(p) = self.pads.get_mut(port) {
             p.set_th(th, clock);
         }
+    }
+
+    /// A device on `port` driving TH (a light gun; a pad drives none): whether the change interrupts, TH being an
+    /// input there with the port's interrupt bit, control bit 7, set (MacDonald's VDP document §4).
+    pub fn device_th(&mut self, port: usize, th: bool) -> bool {
+        let input = self.ctrl[port] & 0x40 == 0;
+        let changed = std::mem::replace(&mut self.th_in[port], th) != th;
+        changed && input && self.ctrl[port] & 0x80 != 0
     }
 
     /// A byte of `$A10000`-`$A1001F`, the even and odd address of each register alike.

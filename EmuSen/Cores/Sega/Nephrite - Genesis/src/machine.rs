@@ -43,6 +43,8 @@ pub struct Machine {
     pub picture: Vec<u8>,
     pub skip: bool,
     pub pads: [u32; 2],
+    /// Each port's pad: the six-button one when true (the settings `pad1` and `pad2`).
+    pub six_button: [bool; 2],
     /// The firmware files given at create, by number; none is used yet.
     pub firmware: Vec<u32>,
 }
@@ -62,7 +64,11 @@ impl Machine {
     pub fn with_model(image: &[u8], media: Media, model: Model) -> Machine {
         let header = media.header.clone().unwrap_or_default();
         let rom = if media.system == System::Mcd { Vec::new() } else { image.to_vec() };
-        let cart = Cart::new(rom, header.save, &header.system_type);
+        let (rom, top, patch) = split_lock_on(rom, &header.serial);
+        let mut cart = Cart::new(rom, header.save, &header.system_type, &header.serial);
+        if let Some(top) = top {
+            cart.lock_on(top, patch);
+        }
         let mut extra = Vec::new();
         let list: &[(u32, &'static str, usize)] = match media.system {
             System::Mcd => &MCD_MEMORIES,
@@ -72,7 +78,7 @@ impl Machine {
         for &(id, name, size) in list {
             extra.push(Memory { id, name, bytes: vec![0; size] });
         }
-        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], firmware: Vec::new() }
+        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], six_button: [false; 2], firmware: Vec::new() }
     }
 
     /// The spaces in id order: the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
@@ -80,7 +86,7 @@ impl Machine {
         let mut v = [(WRAM_ID, "WRAM"), (Z80RAM_ID, "Z80RAM"), (VRAM_ID, "VRAM"), (CRAM_ID, "CRAM"), (VSRAM_ID, "VSRAM")]
             .map(|(id, name)| SpaceRef { id, name, read_only: false })
             .to_vec();
-        if self.media.battery_bytes() > 0 {
+        if self.genesis.hw.cart.has_battery() {
             v.push(SpaceRef { id: SRAM_ID, name: "SRAM", read_only: false });
         }
         if self.media.system != System::Mcd {
@@ -98,22 +104,22 @@ impl Machine {
             VRAM_ID => &hw.vdp.vram,
             CRAM_ID => &hw.vdp.cram,
             VSRAM_ID => &hw.vdp.vsram,
-            SRAM_ID if self.media.battery_bytes() > 0 => &hw.cart.sram,
+            SRAM_ID if hw.cart.has_battery() => hw.cart.battery(),
             ROM_ID if self.media.system != System::Mcd => &hw.cart.rom,
             _ => return self.extra.iter().find(|m| m.id == id).map(|m| m.bytes.as_slice()),
         })
     }
 
     pub fn bytes_mut(&mut self, id: u32) -> Option<&mut [u8]> {
-        let battery = self.media.battery_bytes() > 0;
         let hw = &mut self.genesis.hw;
+        let battery = hw.cart.has_battery();
         Some(match id {
             WRAM_ID => &mut hw.wram,
             Z80RAM_ID => &mut hw.zram,
             VRAM_ID => &mut hw.vdp.vram,
             CRAM_ID => &mut hw.vdp.cram,
             VSRAM_ID => &mut hw.vdp.vsram,
-            SRAM_ID if battery => &mut hw.cart.sram,
+            SRAM_ID if battery => hw.cart.battery_mut(),
             _ => return self.extra.iter_mut().find(|m| m.id == id).map(|m| m.bytes.as_mut_slice()),
         })
     }
@@ -122,20 +128,34 @@ impl Machine {
     pub fn battery_id(&self) -> Option<u32> {
         match self.media.system {
             System::Mcd => Some(20),
-            _ => (self.media.battery_bytes() > 0).then_some(SRAM_ID),
+            _ => self.genesis.hw.cart.has_battery().then_some(SRAM_ID),
         }
     }
 
     /// One frame: a Mega Drive image runs one frame of the Genesis with the pads as set; the attachments only count.
     pub fn advance(&mut self) {
         if self.media.system == System::Md {
-            for (pad, &buttons) in self.genesis.hw.io.pads.iter_mut().zip(&self.pads) {
-                pad.buttons = buttons;
+            for (i, pad) in self.genesis.hw.io.pads.iter_mut().enumerate() {
+                pad.buttons = self.pads[i];
+                pad.six = self.six_button[i];
             }
             self.genesis.run_frame();
         }
         self.frames += 1;
     }
+}
+
+/// A combined Sonic & Knuckles image, its 2 MiB followed by the cartridge on top and, when the rest is a whole number
+/// of mebibytes and 256 KiB, the patch ROM last.
+pub fn split_lock_on(image: Vec<u8>, serial: &str) -> (Vec<u8>, Option<Vec<u8>>, Vec<u8>) {
+    const SK: usize = 0x20_0000;
+    if !serial.starts_with(crate::cart::LOCK_ON_SERIAL) || image.len() <= SK {
+        return (image, None, Vec::new());
+    }
+    let mut sk = image;
+    let mut top = sk.split_off(SK);
+    let patch = if top.len() % 0x10_0000 == 0x4_0000 { top.split_off(top.len() - 0x4_0000) } else { Vec::new() };
+    (sk, Some(top), patch)
 }
 
 /// An opaque black frame, RGBA.

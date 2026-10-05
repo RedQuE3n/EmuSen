@@ -656,8 +656,8 @@ fn inverse(a: i16, b: i16) -> (i16, i16, u16, bool) {
     (r as i16, (1 + s as i32 - b as i32) as i16, s, m == 0x4000 || m == -0x8000)
 }
 
-/// The DSP-1's projection from Parameter's inputs, by VenusRT_Native.md §49.5's member of §49.2's family: the
-/// Inverse routine's reciprocal, quotients rounded half up, the eye's height whole, its horizontal offset scaled once.
+/// The DSP-1's projection from Parameter's inputs, by the member of §49.2's family chosen by exact share
+/// (VenusRT_Native.md §52.2): exact quotients floored, the eye's height whole, its horizontal offset scaled once.
 struct Projection {
     f: [i64; 3],
     lfe: i64,
@@ -678,9 +678,18 @@ impl Projection {
         Projection { f: [w(0), w(1), w(2)], lfe: w(3), les: w(4), sa, ca, sz, cz, ez: w(2) + ((w(3) * cz) >> 15) }
     }
 
-    /// num/den through the Inverse routine, half up, saturated; a zero denominator saturates by the numerator's sign.
+    /// num/den exactly, floored and saturated; a zero denominator saturates by the numerator's sign.
     fn quotient(num: i128, den: i128) -> i64 {
-        Self::divide(num, den, true, (-0x8000, 0x7FFF))
+        Self::floor_div(num, den, (-0x8000, 0x7FFF))
+    }
+
+    /// num/den exactly, floored, held within `range`.
+    fn floor_div(num: i128, den: i128, range: (i64, i64)) -> i64 {
+        if den == 0 {
+            return if num >= 0 { range.1 } else { range.0 };
+        }
+        let (n, d) = if den < 0 { (-num, -den) } else { (num, den) };
+        n.div_euclid(d).clamp(range.0 as i128, range.1 as i128) as i64
     }
 
     /// num/den through the Inverse routine, rounded half up or floored, held within `range`.
@@ -720,25 +729,26 @@ impl Projection {
         let [_, _, cx, cy] = self.parameter();
         let wide = (i64::MIN / 4, i64::MAX / 4);
         let n = ((self.les * self.cz) >> 15) + ((v * self.sz) >> 15);
-        let k = Self::divide(256 * self.ez as i128, n as i128, true, wide) as i128;
-        let kk = Self::divide(k << 15, self.cz as i128, true, wide) as i128;
+        let k = Self::floor_div(256 * self.ez as i128, n as i128, wide) as i128;
+        let kk = Self::floor_div(k << 15, self.cz as i128, wide) as i128;
         let (h, v, sa, ca) = (h as i128, v as i128, self.sa as i128, self.ca as i128);
         let dx = (((h * k * ca) >> 15) - ((v * kk * sa) >> 15)) >> 8;
         let dy = (((v * kk * ca) >> 15) - ((h * k * sa) >> 15)) >> 8;
         [(cx as i128 + dx).clamp(-0x8000, 0x7FFF) as i64, (cy as i128 + dy).clamp(-0x8000, 0x7FFF) as i64]
     }
 
-    /// H, V and M for a point: its offset from the eye along the screen's right, down and forward axes.
+    /// H, V and M for a point: its offset from the eye along the screen's right, down and forward axes; the view's
+    /// elements floored, the eye with its fractions, and the depth w taken whole.
     fn project(&self, p: [i64; 3]) -> [i64; 3] {
         let (sa, ca, sz, cz) = (self.sa, self.ca, self.sz, self.cz);
+        let m = |a: i64, b: i64| ((a * b) >> 15) << 15;
         let r = [ca << 15, sa << 15, 0];
-        let u = [-sa * cz, ca * cz, -sz << 15];
-        let f = [sa * sz, -ca * sz, -cz << 15];
-        // The eye in Q15: its horizontal position with its fraction, its height whole.
-        let e = [(self.f[0] << 15) - ((self.lfe * f[0]) >> 15), (self.f[1] << 15) - ((self.lfe * f[1]) >> 15), self.ez << 15];
+        let u = [m(-sa, cz), m(ca, cz), -sz << 15];
+        let f = [m(sa, sz), m(-ca, sz), -cz << 15];
+        let e = [(self.f[0] << 15) - ((self.lfe * f[0]) >> 15), (self.f[1] << 15) - ((self.lfe * f[1]) >> 15), (self.f[2] << 15) + self.lfe * cz];
         let d = [(p[0] << 15) - e[0], (p[1] << 15) - e[1], (p[2] << 15) - e[2]];
         let dot = |row: [i64; 3]| (0..3).map(|k| d[k] as i128 * row[k] as i128).sum::<i128>() >> 30;
-        let (x, y, w) = (dot(r), dot(u), dot(f));
+        let (x, y, w) = (dot(r), dot(u), (dot(f) >> 15) << 15);
         let les = self.les as i128;
         [Self::quotient(les * x, w), Self::quotient(les * y, w), Self::quotient((256 * les) << 15, w)]
     }

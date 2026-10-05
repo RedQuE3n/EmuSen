@@ -31,7 +31,7 @@ fn quot(routine: bool, half: bool, wide: bool, num: i128, den: i128) -> i64 {
     q.clamp(lim.0 as i128, lim.1 as i128) as i64
 }
 
-/// Target by member m (T1 wide, T2 combined, T3 half up), on §49.5's Parameter and Raster.
+/// Target by member m (T1 wide, T2 combined, T3 half up), on the Parameter and Raster of VenusRT_Native.md §52.2.
 fn target(m: u32, p: &[i64], h: i64, v: i64) -> [i64; 2] {
     let (wide, combined, half) = (m & 1 != 0, m & 2 != 0, m & 4 != 0);
     let (a, z) = (p[5] as u16, p[6] as u16);
@@ -40,11 +40,11 @@ fn target(m: u32, p: &[i64], h: i64, v: i64) -> [i64; 2] {
     let ez = p[2] + mul(lfe, cz);
     let ex = p[0] - ((lfe * sz * sa) >> 30);
     let ey = p[1] + ((lfe * sz * ca) >> 30);
-    let t = quot(true, true, false, ez as i128 * sz as i128, cz as i128);
+    let t = quot(false, false, false, ez as i128 * sz as i128, cz as i128);
     let (cx, cy) = ((ex + mul(t, sa)).clamp(-0x8000, 0x7FFF), (ey - mul(t, ca)).clamp(-0x8000, 0x7FFF));
     let n = mul(les, cz) + mul(v, sz);
-    let k = quot(true, true, wide, 256 * ez as i128, n as i128);
-    let kk = quot(true, true, wide, (k as i128) << 15, cz as i128);
+    let k = quot(false, false, wide, 256 * ez as i128, n as i128);
+    let kk = quot(false, false, wide, (k as i128) << 15, cz as i128);
     let div = |x: i128| -> i64 { (if half { (x + 128) >> 8 } else { x >> 8 }) as i64 };
     let (dx, dy) = if combined {
         let s = |x: i128| -> i128 { x >> 15 };

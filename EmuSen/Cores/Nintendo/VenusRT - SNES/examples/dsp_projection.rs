@@ -429,7 +429,9 @@ fn main() {
                 sum.merge(&t.raster[k as usize]);
                 sum.merge(&t.project[j as usize]);
             }
-            combos.push((k, j, sum.close, sum.worst));
+            // DSP_PROJ_BY=exact ranks by exact results, as the amendment of VenusRT_Native.md §52.1 chooses Project.
+            let score = if std::env::var("DSP_PROJ_BY").is_ok_and(|v| v == "exact") { sum.exact } else { sum.close };
+            combos.push((k, j, score, sum.worst));
         }
     }
     combos.sort_by(|x, y| y.2.cmp(&x.2).then(x.3.cmp(&y.3)));
@@ -438,7 +440,7 @@ fn main() {
     let listed: Vec<(u32, u32)> = std::env::var("DSP_PROJ_LIST").map(|v| v.split(';').filter_map(|m| m.split_once(',').map(|(x, y)| (x.parse().unwrap(), y.parse().unwrap()))).collect()).unwrap_or_default();
     let picked: Vec<(usize, (u32, u32, u64, i64))> = combos.iter().copied().enumerate().filter(|(r, c)| *r < 6 || listed.contains(&(c.0, c.1))).collect();
     for (rank, (k, j, close, worst)) in picked {
-        println!("  rank {rank}:");
+        println!("  rank {rank} (score {close}):");
         let (m, n) = (Member::pr(k), Member::pj(j));
         println!(
             "  member {k},{j}: S1 whole {} S2 routine {} S3 half {} P1 floored {} R1 {} J1 floored {} J2 terms {} J3 height frac {} horizontal frac {} J4 w whole {}: close {close}, largest {worst}",

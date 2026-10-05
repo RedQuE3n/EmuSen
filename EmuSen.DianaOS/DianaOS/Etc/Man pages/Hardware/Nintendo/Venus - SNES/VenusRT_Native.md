@@ -5142,6 +5142,9 @@ Every Parameter result that is not close lies past the limit. The four games tha
 Parameter and Raster result. Michael Andretti's Indy Car Challenge's Project misses are the eye's own rounding (§49.4):
 F itself is drawn at an enlargement of 1,024 against the image's 1,068.
 
+> *Amended 2026-10-04* (measured, §52.2). The figure of 1,024 was another member's. The member built here draws F at
+> 1,042 and 4 lines low, against the image's 1,068 on its line.
+
 The crate test `the_replacements_projection_stays_close_to_the_image` holds the shares on both images, and
 `a_raster_run_ends_on_a_write` the run's end.
 
@@ -5355,3 +5358,49 @@ The pictures named are in `~/.cache/emusen/probe/venusrt/dsp-hle/shots/`.
   one.
 - **The coordinate-wise eye** of §49.4 (E = F - ⌊Lfe·f⌋ coordinate by coordinate, w floored) is not added: §49.4's one
   widening is used. It stays an open lead.
+
+### 52.2 Project, Parameter and Raster by exact share (measured 2026-10-04)
+
+`DSP_PROJ_BY=exact dsp_projection dsp1b 65536` with the seven traces ranked the 1,536 members by exact results over
+both sets. **The first is §49.5's 69th**, with 1,586,842 exact results against the old member's 1,278,903 (ranked
+196th): S1 the eye's height whole for Parameter and Raster, S2 exact division, S3 floor, P1 the triple product scaled
+once, R1 the sum of floors, J1 the view's elements floored, J2 each sum floored once, J3 Project's eye with both its
+fractions, J4 w taken whole. It is the member exact in 97% of Super Mario Kart's traced Project results.
+
+Target's family was graded again on it (`dsp_target_gyrate`, the same sets): the same member wins by close and by exact
+results, T1 at full width, T2 each triple product scaled once, T3 floor; 129,194 of 131,072 seeded results close,
+32,021 exact. Gyrate does not use the projection and is unchanged.
+
+**Through the ports** (`DSP_PROJ_PORTS=1`, `DSP_TG_PORTS=1`, 65,536 seeded cases, half jittered):
+
+| Command | All close, before | after | All exact, before | after |
+|---|---|---|---|---|
+| 02h Parameter | 65,301 | 65,296 | 3,997 | 1,679 |
+| 0Ah Raster, two lines | 65,434 | 65,397 | 10,733 | 13,310 |
+| 06h Project | 64,587 | 64,724 | 9,151 (14.0%) | 41,042 (62.6%) |
+| 0Eh Target | 63,994 | 64,202 | 3,138 | 2,202 |
+
+**On the traces.** Super Mario Kart's Project is exact in 28,178 of 30,400 transactions and close in 30,330. Its Raster
+lines lose closeness where the old member had it: 48,340 of 49,600 close (97.5%, from 100%) though 34,553 exact (from
+30,706); the misses are Bn and Dn off by 3 in 300, the floored k divided again. Michael Andretti's Indy Car Challenge's
+Project is close in 28,185 of 31,086 results (90.7%, from 82.1%).
+
+**Andretti's car.** F itself, about 1,280 of the game's 10,362 Projects, is now drawn on the image's line (V = 0, from
+-4) but at an enlargement of 1,024 against the image's 1,068, from 1,042: 4.1% small, from 2.4%. The difference is w,
+24 here against the chip's 23, which is the coordinate-wise eye (§52.1), not this family.
+
+**The seven titles in lockstep** (`dsp_lockstep`, 7,200 frames, as §51.2), before and after:
+
+| Game | Pictures equal | Sprites placed alike | Within 1 | Within 2 |
+|---|---|---|---|---|
+| Super Mario Kart | 3,893, unchanged | 72.8% to 95.6% | 98.1% to 98.5% | 98.6% to 98.7% |
+| Super Mario Kart, `smk_race.txt` | 1,289, unchanged | 78.0% to 97.1% | 99.2% to 99.3% | 99.5% to 99.5% |
+| Michael Andretti's Indy Car Challenge | 3,310, unchanged | 79.7% to 75.3% | 80.9% to 94.4% | 86.6% to 99.7% |
+| Suzuka 8 Hours | 1,499, unchanged | 95.5% to 100% | 100% | 100% |
+| Super Bases Loaded 2 | 3,054 to 3,191 | 72.6% to 80.8% | 93.8% to 95.4% | 94.2% to 95.9% |
+| Ballz 3D | 2,528 to 2,607 | 13.9% to 43.0% | 69.7% to 76.4% | 76.7% to 77.5% |
+| Pilotwings | 1,802, unchanged | 86.2% to 87.4% | 90.4% to 90.5% | 91.9% to 92.0% |
+| Lock On | 1,525, unchanged | 97.9% to 97.9% | 98.0% to 98.0% | 98.3% to 98.4% |
+
+The percentages are of sprites alike on both machines in frames that differ (§51.1). The pixel shares fall in the
+racing games: Suzuka 8 Hours' median from 5.6% to 3.8%, Andretti's from 7.7% to 7.2%, and the race's from 8.7% to 4.1%.

@@ -6229,3 +6229,14 @@ frame 1,366.
 departure of the chip's own tables from their formulas at a few entries: the sine (§43.2), and through it 07h and 08h
 by one unit; and the angle's two entries (§54.3), which move an opponent by a few units now and then.
 
+
+### 57.5 How the exact-match rule was read for 07h (decided 2026-10-04)
+
+The rule (§57.1) asks that every output of the command be reproduced exactly. For 07h the outputs the search could
+decide are its 176 line scales, and each is reproduced exactly: the formula's table equals, word for word, the first
+352 bytes of the chip's data, with no exception (§57.4). The array words are products of those scales with the sine and
+cosine, whose two-entry departures from the formula are the named loss already recorded in §43.2. Reading "every
+output" as the array words would reject a scale proven exact because of a loss the rule was not written to judge. The
+reading recorded in §57.2 before the search, scales checked against the chip's own trigonometric words, is therefore
+the one adopted; the built code uses the formula's sine throughout, and its one-unit array differences remain charged to
+§43.2.

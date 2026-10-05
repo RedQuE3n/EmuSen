@@ -126,6 +126,45 @@ pub fn disc_offset(image: &[u8]) -> Option<usize> {
     [0usize, 16].into_iter().find(|&o| image.get(o..o + DISC_SIGNATURE.len()) == Some(DISC_SIGNATURE.as_slice()))
 }
 
+/// A copier's 512-byte header and 16 KiB blocks (Nephrite_Native.md §11.2).
+pub const COPIER_HEADER: usize = 0x200;
+pub const COPIER_BLOCK: usize = 0x4000;
+
+fn names_sega(image: &[u8]) -> bool {
+    image.get(0x100..0x110).is_some_and(|f| f.windows(4).any(|w| w == b"SEGA"))
+}
+
+/// A Super Magic Drive block in the cartridge's order: its first half holds the bytes at odd addresses, its second
+/// those at even ones.
+fn deinterleave(body: &[u8]) -> Vec<u8> {
+    let mut out = vec![0u8; body.len()];
+    for (o, block) in out.chunks_mut(COPIER_BLOCK).zip(body.chunks(COPIER_BLOCK)) {
+        let (odd, even) = block.split_at(block.len() / 2);
+        for (i, (&e, &d)) in even.iter().zip(odd).enumerate() {
+            (o[2 * i], o[2 * i + 1]) = (e, d);
+        }
+    }
+    out
+}
+
+/// The cartridge's bytes in an image a copier wrote: a 512-byte header before whole 16 KiB blocks, interleaved when
+/// the header carries the Super Magic Drive's $AA $BB and the result names SEGA at $100; anything else is unchanged.
+pub fn cartridge_bytes(image: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    use std::borrow::Cow;
+    let n = image.len();
+    if n <= COPIER_HEADER || (n - COPIER_HEADER) % COPIER_BLOCK != 0 || disc_offset(image).is_some() || names_sega(image) {
+        return Cow::Borrowed(image);
+    }
+    let body = &image[COPIER_HEADER..];
+    if image[8..10] == [0xAA, 0xBB] {
+        let rom = deinterleave(body);
+        if names_sega(&rom) {
+            return Cow::Owned(rom);
+        }
+    }
+    if names_sega(body) { Cow::Borrowed(body) } else { Cow::Borrowed(image) }
+}
+
 /// An image as the stub reads it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Media {
@@ -215,6 +254,19 @@ mod tests {
         raw[16..30].copy_from_slice(DISC_SIGNATURE);
         assert_eq!(Media::read(&raw).sector, 2352);
         assert_eq!(Media::read(&[0u8; 16]).header, None);
+    }
+
+    #[test]
+    fn a_copier_header_is_stripped_and_its_blocks_deinterleaved() {
+        let rom: Vec<u8> = cartridge("SEGA GENESIS", "U", None).iter().enumerate().map(|(i, &b)| if (0x100..0x200).contains(&i) { b } else { i as u8 ^ (i >> 8) as u8 }).collect();
+        let mut header = vec![0u8; COPIER_HEADER];
+        (header[0], header[1], header[8], header[9]) = ((rom.len() / COPIER_BLOCK) as u8, 3, 0xAA, 0xBB);
+        let smd: Vec<u8> = rom.chunks(COPIER_BLOCK).flat_map(|b| b.iter().skip(1).step_by(2).chain(b.iter().step_by(2)).copied().collect::<Vec<_>>()).collect();
+        assert_eq!(&*cartridge_bytes(&[header.clone(), smd].concat()), &rom[..]);
+        assert_eq!(&*cartridge_bytes(&[vec![0u8; COPIER_HEADER], rom.clone()].concat()), &rom[..]);
+        assert_eq!(&*cartridge_bytes(&rom), &rom[..]);
+        let unknown = [header, vec![0x5Au8; rom.len()]].concat();
+        assert_eq!(&*cartridge_bytes(&unknown), &unknown[..]);
     }
 
     #[test]

@@ -115,7 +115,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(sidecar.Development);
             CoreDiscovery.UseDevelopment(false);
             Assert.DoesNotContain(CoreDiscovery.Found, c => c.Info.Id == "nephrite");
-            foreach (string ext in new[] { ".md", ".gen", ".bin", ".iso", ".32x" })
+            foreach (string ext in new[] { ".md", ".gen", ".bin", ".smd", ".iso", ".32x" })
             {
                 Assert.False(CoreFactory.IsSupported("game" + ext), ext);
                 Assert.False(CoreCatalog.IsRomExtension(ext), ext);
@@ -185,7 +185,7 @@ namespace EmuSen.WiseMan.Cores
             var nephrite = new CoreAbiTestRomEngine(LibraryPath);
             var frames = new[] { 120, 600 };
             var lines = new List<string> { "game\tequal_f120\tequal_f600" };
-            var games = Directory.EnumerateFiles(folder).Where(p => Path.GetExtension(p).ToLowerInvariant() is ".bin" or ".md" or ".gen").Order().ToList();
+            var games = Directory.EnumerateFiles(folder).Where(p => Path.GetExtension(p).ToLowerInvariant() is ".bin" or ".md" or ".gen" or ".smd").Order().ToList();
             foreach (string game in games)
             {
                 string row;

@@ -401,7 +401,8 @@ Club and its '96, College Slam, Frank Thomas Big Hurt Baseball, Evander Holyfiel
 Heavyweights, Putter Golf, Dodge Ball, MLBPA Sports Talk Baseball, and Accolade's Barkley 2, Brett Hull Hockey '95,
 Jack Nicklaus' Power Challenge Golf, Pelé!, Pelé's World Tournament Soccer, Unnecessary Roughness '95), whose wiring no
 document in the corpus gives. SpritesMind topic 2227 names a document of Eke's on the Genesis's save EEPROMs; it is
-to be fetched into the corpus as a document. Until then those boards run without their EEPROM.
+to be fetched into the corpus as a document. Until then those boards run without their EEPROM. *Fetched and wired at
+step 3, §11.4.*
 
 ### 10.2 Sonic & Knuckles' lock-on
 
@@ -425,7 +426,8 @@ of the 68000's RAM equal to Genesis Plus GX's, of 65,536):
 | Mega Man: The Wily Wars (EEPROM) | 65,536 | 65,534 | 65,503 |
 | Rockman Megaworld (EEPROM) | 65,536 | 65,493 | 65,486 |
 
-Sonic 2 locked on parts from the reference by frame 1200; not yet examined.
+Sonic 2 locked on parts from the reference by frame 1200; not yet examined. *Examined at step 3, §11.3: Sonic 2's own
+lead, not the lock-on's.*
 
 ### 10.3 The pads chosen, and the external interrupt
 
@@ -442,6 +444,7 @@ Sonic 2 locked on parts from the reference by frame 1200; not yet examined.
 
 No document and no test program gives them; `Nephrite_Disputes.md` D-1 opens the dispute step, with Nuked-MD's whole
 board run as a black box. Its bench builds and boots and is not yet measuring; the provisional values of §9.2 stand.
+*Measured at step 3, §11.1.*
 
 ### 10.5 The references at anchors through WiseMan's runner
 
@@ -460,7 +463,7 @@ image and an unlicensed one) crashed the reference's probe. Bytes of the 68000's
 The lowest at frame 600 are games whose logic the VDP's or the sound chips' timing reaches (Ninja Gaiden, Sub-Terrania,
 Mega Turrican, Bubba 'n' Stix), two EEPROM boards the documents do not wire (§10.1: Greatest Heavyweights, Evander
 Holyfield's Real Deal Boxing), and a Sonic 3 image of 2,097,664 bytes, a copier's 512-byte header before the ROM,
-which Nephrite does not strip yet.
+which Nephrite does not strip yet. *Stripped from step 3, §11.2.*
 
 ### 10.6 Measured
 
@@ -468,3 +471,161 @@ The crate's tests: 29 pass (EEPROM, lock-on, the pad settings, the external inte
 three console test programs included). The state layout grew by the external interrupt's latch and the HV latch. The
 conformance kit passes C1-C15 on Sonic & Knuckles alone, with Sonic 3, and on Mega Man: The Wily Wars; WiseMan's
 Nephrite, runner, registration and discovery tests, 31, pass.
+
+## 11. Stage 3, step 3: the window measured, copier images, Sonic 2's lead, the EEPROM boards (2026-10-05)
+
+### 11.1 The window's waits and BUSREQ's latency, measured
+
+`Nephrite_Disputes.md` D-1 is settled by Nuked-MD's board run as a black box. The `$FFFF`s of step 2 were the bench's
+own: the board leaves the cartridge's `cart_cs` and `cart_oe` low on cycles that are not the cartridge's, and the
+bench's cartridge drove the bus whenever they were, so the 68000's RAM took `$FF`s. Its cartridge now decodes its own
+4 MiB, as a cartridge does. **Measured:** a window access costs the Z80 2.75 T-states on average, reads and writes
+alike, and the 68000 9.5 of its clocks; BUSREQ was granted by the 68000's first poll in every one of 1,406 requests.
+Nephrite takes the means, 41 and 66 master clocks (`genesis.rs`), where it had the plan's provisional three T-states
+and three clocks, and keeps the grant at the next instruction boundary. The wait's dependence on where the Z80's access
+meets the 68000's bus cycle (the Z80's rounds fall on the 68000's clock, 2.5 to 3.5 T-states of wait) is not modelled.
+
+**The bench.** `EmuSen.WiseMan/Reference/rtl68k/`: `build-referees.sh board` builds `tb_md.cpp` against Nuked-MD's
+`md_board` (Verilator, the VRAM's FPGA memory block replaced by `vram_ip.v`) into `~/.cache/emusen/probe/nukedmd-board`;
+`python3 mdboard.py <program> [MCLK2 cycles]` writes a hand-assembled cartridge, runs it and reads the pins. Programs:
+`window` and `window-write` (the Z80 reading or writing the cartridge through the window beside the 68000 counting in
+its RAM, against a control with the Z80 in its own RAM), `busreq` and `busreq-tight` (a request and polls, marked in
+RAM), `rom-loop` (§11.3). The bench prints `c` for a cartridge read, `x` for a write to its range and `w` for a write
+of the 68000's RAM, with the time in MCLK2 cycles (twice the master clock); `TB_TRACE=from:to` prints the pins each
+cycle. The RAM's address lines are `{ VA14, IA14, VA12-VA0 }`, so `$FF1000` shows as `$5000`.
+
+**The anchors** over the corpus, before and after (bytes of the 68000's RAM equal to Genesis Plus GX's, the medians
+unchanged at 65,518 and 65,490): of 944 games, 35 rose and 28 fell at frame 120, 77 rose and 71 fell at frame 600.
+One fell far, Barver Battle Saga (65,391 to 16,302 at frame 600): its Z80 writes `$400004` and reads `$400006`
+through the window, a protection device that no document in the corpus describes; Nephrite answers with the open
+bus, the 68000's prefetch, so the value the game indexes a table by follows where the 68000 is when the Z80 reads, and
+the new stall moved it to one that sends the 68000 into an address error. The device is owed to a document.
+
+### 11.2 Copier images
+
+`media::cartridge_bytes`, applied to the image and to the cartridge on top of Sonic & Knuckles before anything reads
+them. A Super Magic Drive image (d0nut and Felipe XnaK, "The complete documentation about Genesis ROM format" 1.1,
+1998, now in the corpus) is a 512-byte header (the number of 16 KiB blocks, `$03`, the split flag, `$AA $BB` at bytes
+8 and 9) before 16 KiB blocks, each holding one half of the cartridge's bytes and then the other. An image is taken
+for one when its size is 512 bytes past a whole number of blocks, its own `$100` does not name SEGA, its header
+carries `$AA $BB`, and the deinterleaved image names SEGA at `$100`; one with a header and no interleave is stripped
+when what follows names SEGA. Anything else is left as it is. **The document's even and odd are counted from one:**
+its "even bytes at the beginning" are the bytes at odd addresses, as the corpus shows: the five copier images in it
+(Sonic the Hedgehog 3 (E), Sub-Terrania, Mega Turrican, Bubba 'n' Stix, D&D: Warriors of the Eternal Sun, all named
+`.bin`) read `SEGA GENESIS` or `SEGA MEGA DRIVE` at `$100` with the first half at odd addresses and garbage the other
+way. `.smd` joins the Genesis's extensions, in the core and in the system pack. The `.md` format of the same document
+(the whole image interleaved, no header) is not detected: nothing in its bytes tells it from a plain image, and the
+corpus's `.md` files are plain.
+
+| Image | Frame 120, before | after | Frame 600, before | after |
+|---|---|---|---|---|
+| Sonic the Hedgehog 3 (E) | 57,644 | 65,532 | 13,564 | 65,496 |
+| Sub-Terrania (E) | 33,014 | 65,532 | 14,101 | 48,145 |
+| Mega Turrican (E) | 55,807 | 65,513 | 14,643 | 65,494 |
+| Bubba 'n' Stix (U) | 61,411 | 65,510 | 19,752 | 65,531 |
+| D&D: Warriors of the Eternal Sun (U) | 65,187 | 65,526 | 20,827 | 65,529 |
+
+### 11.3 Sonic 2 locked on, and Sonic 2 alone
+
+The difference of step 2 (47,339 bytes at frame 1200) is not the lock-on's. Nephrite's RAM at frame 1191 matches
+Genesis Plus GX's at 1200 in 64,776 bytes: the game is the same, nine frames ahead, at a moment when a level is being
+loaded and the RAM changes fast. Sonic 2 alone runs ahead in the same way, by 12 frames from frame 600 on. The lead
+starts at boot: the game's checksum of its own ROM (`$326`-`$33C`: `add.w (a0)+,d1`, `cmp.l a0,d0`, `bcc.s` over
+524,032 words), a loop of the 68000 alone, ends in Nephrite at frame 101, and the vertical-interrupt counter at
+`$FFFE0C` first counts at frame 114 in Nephrite and 118 in Genesis Plus GX; further leads come at the later loads.
+Neither the window's waits (0, 41 or 120 master clocks) nor a stall for DMA (33 or 66 master clocks a word) changed
+the lead; both were tried and reverted.
+
+The loop takes 24 clocks a round by the 68000's manual, which is what Nephrite charges. **Nuked-MD's board takes
+24.38** (`mdboard.py rom-loop`): one round in about five, 446 of 2,341, takes 26, one loss of two clocks every 128.0
+clocks, the main RAM's refresh period that the MegaDrive Wiki gives. The board puts the real console about 1.5 frames
+behind Nephrite over the checksum and Genesis Plus GX about 3 frames behind the board, so neither reference's lead is
+the hardware's. `Nephrite_Disputes.md` D-2 opens the refresh: the cartridge's loss is clear, the RAM's (24.94 a round,
+in losses of two, three and five clocks) is not yet separated, and Nephrite takes no refresh until it is.
+
+### 11.4 The EEPROM boards of Eke's document
+
+Eke's document, "Serial EEPROMs in Sega Genesis / Mega Drive cartridges" (version 2, 2010), is in the archive
+SpritesMind topic 2227 links (`md_tech.zip`), fetched on 2026-10-05 and recorded in the corpus's `DOCS.txt` with its
+URL, date and hashes; only it and the archive's EEPROM data sheets were taken out of the archive, and the archive's
+one source file, a disassembler plug-in's, was not opened. It describes the protocol in three modes (seven address bits
+in the command byte; a word address after it, with the command's three device bits above it, for 24C01-24C16; two
+address bytes after it for 24C32 and up), each read going on from an address counter that a write's address sets, and
+lists the games by company with their lines, mode, size and page. It names games, not serials; the serials are read
+from the corpus's images. `eeprom.rs` now carries a board's three lines separately (SDA written, SDA read, SCL), its
+mode, size and page; a word write that reaches both of a board's lines changes them together, as one bus cycle does.
+
+Wired, by serial (21 boards):
+
+| Company | Lines | Games in the corpus (chip) |
+|---|---|---|
+| Sega, Capcom | SDA bit 0, SCL bit 1, `$200001` | Wonder Boy in Monster World, Monster World III, Mega Man: The Wily Wars, Rockman Megaworld, Evander Holyfield's Real Deal Boxing, Greatest Heavyweights, Honoo no Toukyuuji Dodge Danpei (the corpus's "Dodge Ball"), MLBPA Sports Talk Baseball (X24C01) |
+| Acclaim, first type | SDA in bit 0, SDA out and SCL bit 1, `$200001` | NBA Jam (24C02) |
+| Acclaim, second type | SDA bit 0 of `$200001`, SCL bit 0 of `$200000` | NBA Jam Tournament Edition, NFL Quarterback Club (24C02); NFL Quarterback Club 96 (24C16); College Slam, Frank Thomas Big Hurt Baseball (24C64) |
+| Codemasters | SDA in bit 0 and SCL bit 1 of `$300000`, SDA out bit 7 of `$380001` | Brian Lara Cricket (X24C01); Micro Machines 2 (24C08); Micro Machines Military (24C08), Micro Machines 96 (24C16), told by checksum from Micro Machines, which shares their serial and has none; Brian Lara Cricket 96, Shane Warne Cricket (24C64) |
+| Electronic Arts | SDA bit 7, SCL bit 6, `$200001` | John Madden Football '93 Championship Edition, NHLPA Hockey '93, Rings of Power (X24C01) |
+
+Not wired, because the document does not list them: Putter Golf and Accolade's six (Barkley Shut Up and Jam 2, Brett
+Hull Hockey '95, Jack Nicklaus' Power Challenge Golf, Pelé!, Pelé's World Tournament Soccer, Unnecessary Roughness
+'95). Not wired because the corpus has no image to read a serial from: NBA Jam (J), Bill Walsh College Football, John
+Madden Football '93, Ninja Burai Densetsu. Blockbuster Competition 2 carries NBA Jam Tournament Edition's serial and
+header and is wired as it is.
+
+**Brian Lara Cricket 96's page.** The document leaves it open ("PAGE_MASK: ?"). The 24C65 data sheet in the same
+archive gives eight-byte pages gathered in a cache of 64 bytes, a write's six low address bits counting; with pages of
+eight, the game's signature landed in pieces and its RAM fell to 63,561 bytes at frame 600, and with the datasheet's
+64 its EEPROM holds what Genesis Plus GX's holds (`31 41 59 26 00 96`, then zeros) and its RAM is back to 65,529.
+
+**Measured** against Genesis Plus GX at frames 120 and 600 (its save memory as the probe dumps it beside the RAM):
+the EEPROM's bytes are identical at frame 600 for Micro Machines 2 (928 bytes written), Frank Thomas (8,190), John
+Madden '93 (127), NHLPA Hockey '93 (127) and Shane Warne Cricket, and College Slam's agree in their first 6,632 of
+8,192 bytes. In Micro Machines Military and Micro Machines 96 the game writes its signature (`hasreset`) in Nephrite
+and nothing in Genesis Plus GX, whose memory stays `$FF`, which looks like a reference that does not wire these two
+images; the document is followed. The RAM, before the boards and the copier headers (with §11.1's window) and after:
+
+| Game | Frame 120, before | after | Frame 600, before | after |
+|---|---|---|---|---|
+| Greatest Heavyweights of the Ring | 60,506 | 65,534 | 26,086 | 65,503 |
+| Evander Holyfield's Real Deal Boxing | 63,653 | 65,535 | 33,165 | 65,490 |
+| College Slam | 63,964 | 65,435 | 55,763 | 65,524 |
+| NBA Jam Tournament Edition | 63,965 | 65,438 | 57,600 | 65,490 |
+| NFL Quarterback Club 96 | 65,407 | 65,520 | 59,232 | 63,151 |
+| Frank Thomas Big Hurt Baseball | 65,410 | 65,515 | 63,869 | 65,397 |
+| Brian Lara Cricket | 62,228 | 65,345 | 64,503 | 65,521 |
+| Honoo no Toukyuuji Dodge Danpei | 65,507 | 65,507 | 64,917 | 65,520 |
+| Rings of Power | 59,627 | 62,670 | 65,483 | 65,483 |
+| NHLPA Hockey '93 | 65,324 | 65,324 | 64,588 | 65,011 |
+| Micro Machines 2 | 65,496 | 65,496 | 56,286 | 57,466 |
+| Micro Machines Military | 65,505 | 65,505 | 58,000 | 56,624 |
+| Micro Machines 96 | 65,509 | 65,509 | 54,451 | 46,719 |
+| Blockbuster Competition 2 | 63,954 | 65,438 | 64,043 | 58,772 |
+
+The two Micro Machines that fell are the two whose EEPROM the reference leaves untouched. Blockbuster Competition 2
+rose at frame 120 and fell at 600, when its menu has passed to a game; it is wired by NBA Jam Tournament Edition's
+serial, which it carries, and the document does not list it. NBA Jam, Shane Warne Cricket, Brian Lara Cricket 96 and
+MLBPA Sports Talk Baseball are unchanged within 10 bytes.
+
+**Over the corpus**, step 2's report against this step's (944 games compared; the 32X image and the unlicensed one
+still crash the reference's probe):
+
+| Frame | Median | 25th percentile | 10th percentile | 65,000 or more | Below 60,000 |
+|---|---|---|---|---|---|
+| 120, step 2 | 65,518 | 65,483 | 65,324 | 879 | 9 |
+| 120, step 3 | 65,518 | 65,486 | 65,390 | 888 | 6 |
+| 600, step 2 | 65,489 | 65,377 | 64,514 | 828 | 40 |
+| 600, step 3 | 65,491 | 65,384 | 64,849 | 839 | 33 |
+
+Of the window's change alone (§11.1) the medians did not move; the copier images and the EEPROM boards are what the
+percentiles show. Against the run with the window's change alone, the copier headers and the boards raised 17 games at
+both anchors and lowered 4 at frame 600: the three above and John Madden '93 by 20 bytes.
+
+### 11.5 Measured
+
+- **The crate's tests**: 33 pass, among them the copier header (stripped, deinterleaved, left alone when neither
+  names SEGA), mode 2 with the command's upper bits and a random read, mode 3 on Codemasters' lines, a word write that
+  changes both lines at once, and the boards by serial and checksum; the three console test programs still pass.
+- **The conformance kit**, `--frames 600`: C1-C15 pass on Sonic the Hedgehog 3 (E) (a copier image), College Slam,
+  Shane Warne Cricket, NFL Quarterback Club 96 and Sonic the Hedgehog 2.
+- **WiseMan**: the Nephrite, runner, registration and discovery tests, 31, pass, `.smd` among the extensions a player
+  is not offered while the core is in development; the anchors over the corpus took 3 min 26 s with the reference's
+  runs cached.

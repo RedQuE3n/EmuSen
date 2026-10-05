@@ -5,7 +5,7 @@ use emusen_native::abi::Region;
 use emusen_native::core::*;
 
 use crate::machine::{HEIGHT, Machine, WIDTH};
-use crate::media::{Media, System};
+use crate::media::{Media, System, cartridge_bytes};
 use crate::state::{STATE_VERSION, STATUS_OTHER_SYSTEM};
 
 /// An image too short for a cartridge's vector table and header.
@@ -164,7 +164,7 @@ fn system(id: &str, name: &str, extensions: &[&str], firmware: Vec<Firmware>) ->
 
 /// The extensions each system claims (Nephrite_Plan.md §4.1); a `.bin` disc image is told from a cartridge by its
 /// contents.
-pub const MD_EXTENSIONS: [&str; 3] = [".md", ".gen", ".bin"];
+pub const MD_EXTENSIONS: [&str; 4] = [".md", ".gen", ".bin", ".smd"];
 pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
@@ -191,6 +191,7 @@ impl Core for Machine {
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
+        let image = &*cartridge_bytes(image);
         let media = Media::read(image);
         match media.system {
             System::Md if takes_lock_on(&media, image.len()) => lock_on_files(),
@@ -221,11 +222,12 @@ impl Core for Machine {
             detail(&format!("file {} is not one Nephrite names", f.which));
             return Err(status::BAD_FILE);
         }
-        let mut m = Machine::new(request.image, Media::read(request.image));
+        let image = cartridge_bytes(request.image);
+        let mut m = Machine::new(&image, Media::read(&image));
         m.apply_pads(&request.settings);
         if let Some(top) = request.files.iter().find(|f| f.which == LOCK_ON) {
             let patch = request.files.iter().find(|f| f.which == SK_PATCH).map_or(Vec::new(), |f| f.data.to_vec());
-            m.genesis.hw.cart.lock_on(top.data.to_vec(), patch);
+            m.genesis.hw.cart.lock_on(cartridge_bytes(top.data).into_owned(), patch);
         }
         m.firmware = request.files.iter().filter(|f| f.which != 0).map(|f| f.which).collect();
         if let (Some(id), Some(file)) = (m.battery_id(), request.files.iter().find(|f| f.which == 0)) {

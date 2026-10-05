@@ -14,7 +14,7 @@ namespace EmuSen.DianaOS.DianaOS.Sys.Systems.Genesis
             "Genesis",
             "Sega",
             1988,
-            new[] { ".md", ".gen", ".bin" },
+            new[] { ".md", ".gen", ".bin", ".smd" },
             new[] { "Sega - Mega Drive - Genesis" },
             new[] { "MD" },
             file => file,

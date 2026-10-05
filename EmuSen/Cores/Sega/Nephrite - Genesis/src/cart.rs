@@ -35,7 +35,8 @@ impl Cart {
     /// a serial the documents know.
     pub fn new(rom: Vec<u8>, save: Option<SaveRam>, system_type: &str, serial: &str) -> Cart {
         let mask = rom.len().max(2).next_power_of_two() - 1;
-        let eeprom = eeprom::board(serial).map(Eeprom::new);
+        let checksum = rom.get(0x18E..0x190).map_or(0, |c| u16::from_be_bytes([c[0], c[1]]));
+        let eeprom = eeprom::board(serial, checksum).map(Eeprom::new);
         let save = if eeprom.is_some() { None } else { save };
         let sram = save.map_or(Vec::new(), |s| vec![0xFF; s.bytes()]);
         let sram_always = save.is_some_and(|s| s.start as usize >= rom.len());
@@ -113,8 +114,8 @@ impl Cart {
             }
             return l.read8(a);
         }
-        if let Some(e) = self.eeprom.as_ref().filter(|e| e.board.address == a) {
-            return (e.sda() as u8) << e.board.sda;
+        if let Some(v) = self.eeprom.as_ref().and_then(|e| e.read(a)) {
+            return v;
         }
         match self.sram_index(a) {
             Some(i) => self.sram[i],
@@ -131,8 +132,8 @@ impl Cart {
         if let Some(l) = self.lockon.as_mut().filter(|_| a >= 0x20_0000) {
             return l.write8(a, v);
         }
-        if let Some(e) = self.eeprom.as_mut().filter(|e| e.board.address == a) {
-            return e.write(v);
+        if let Some(e) = self.eeprom.as_mut().filter(|e| e.takes(a)) {
+            return e.write(&[(a, v)]);
         }
         if self.sram_reg & 2 != 0 {
             return;
@@ -140,6 +141,20 @@ impl Cart {
         if let Some(i) = self.sram_index(a) {
             self.sram[i] = v;
         }
+    }
+
+    /// A word: an EEPROM whose lines it reaches sees both bytes in the one bus cycle.
+    pub fn write16(&mut self, a: u32, v: u16) {
+        if let Some(l) = self.lockon.as_mut().filter(|_| a >= 0x20_0000) {
+            return l.write16(a, v);
+        }
+        let bytes = [(a & !1, (v >> 8) as u8), (a | 1, v as u8)];
+        if let Some(e) = self.eeprom.as_mut().filter(|e| bytes.iter().any(|&(b, _)| e.takes(b))) {
+            let taken: Vec<(u32, u8)> = bytes.into_iter().filter(|&(b, _)| e.takes(b)).collect();
+            return e.write(&taken);
+        }
+        self.write8(bytes[0].0, bytes[0].1);
+        self.write8(bytes[1].0, bytes[1].1);
     }
 
     /// `$A130F1`-`$A130FF`, odd bytes: the save RAM's register, then the mapper's pages.

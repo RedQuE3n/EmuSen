@@ -16,10 +16,10 @@ pub const Z80_T: u64 = 15;
 /// The Z80's INT, raised with the vertical interrupt, held for one line (argued: a pulse the Z80 misses with
 /// interrupts disabled, as MacDonald says).
 pub const Z80_INT: u64 = LINE;
-/// A Z80 access through its window onto the 68000's bus: T-states the Z80 waits and master clocks the 68000 loses.
-/// Provisional (Nephrite_Plan.md P5); the plan's §2.3 lists the Z80's waits as thin.
-pub const WINDOW_Z80_WAIT: u32 = 3;
-pub const WINDOW_68K_STALL: u64 = 3 * M68K;
+/// A Z80 access through its window onto the 68000's bus: master clocks the Z80 waits (2.75 T) and the 68000 loses
+/// (9.5 clocks, 66.5 rounded down), measured means (Nephrite_Disputes.md D-1).
+pub const WINDOW_Z80_WAIT: u64 = 41;
+pub const WINDOW_68K_STALL: u64 = 66;
 
 /// The model: its version register's low nibble, and whether it has TMSS (from version 1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -251,6 +251,7 @@ impl Hw {
                 self.wram[a as usize & 0xFFFF] = (v >> 8) as u8;
                 self.wram[(a as usize & 0xFFFF) | 1] = v as u8;
             }
+            0x00_0000..=0x3F_FFFF => self.cart.write16(a, v),
             _ => {
                 self.write8(a, (v >> 8) as u8);
                 self.write8(a | 1, v as u8);
@@ -416,7 +417,7 @@ impl Z80Bus<'_> {
         if a < 0x8000 {
             return self.0.z80_space_read(a);
         }
-        self.t(WINDOW_Z80_WAIT);
+        self.0.z80_clock += WINDOW_Z80_WAIT;
         self.0.stall += WINDOW_68K_STALL;
         let addr = self.0.window_address(a);
         if (0xA0_0000..=0xA0_FFFF).contains(&addr) { 0xFF } else { self.0.read8(addr) }
@@ -426,7 +427,7 @@ impl Z80Bus<'_> {
         if a < 0x8000 {
             return self.0.z80_space_write(a, v);
         }
-        self.t(WINDOW_Z80_WAIT);
+        self.0.z80_clock += WINDOW_Z80_WAIT;
         self.0.stall += WINDOW_68K_STALL;
         let addr = self.0.window_address(a);
         if !(0xA0_0000..=0xA0_FFFF).contains(&addr) {

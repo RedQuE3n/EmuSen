@@ -1329,6 +1329,157 @@ version 5, so a player's older states load as they always did; every state writt
   `5D8C02E36AA890C0` (148,320), Punch-Out!! `EF1FEC5B2CFF3B66` (148,271).
 - The conformance kit's C1–C8, C10 and C11 pass on all four games.
 
+### 3.14 Sprite 0 on its pixel's dot: Super Mario Bros.' split (2026-10-04)
+
+**The report.** The tester, on MoonRT, in Super Mario Bros.' first level: right below the status bar, the part held
+still by the split, thin black bars about a tile wide appear at random and dance across under the timer. SMB holds its
+status bar with a sprite 0 hit: it polls `$2002` until the hit, waits in a fixed loop of about 100 CPU cycles, then
+writes the X scroll to `$2005` twice and the nametable to `$2000`. Thin slivers that move from frame to frame just
+below that split suggested a timing defect. Five hypotheses were set down before anything was measured: the hit flagged
+on the wrong dot or line; a mid-line write landing on the wrong dot, or the copy at dot 257 mistimed; the fetch pipeline
+wrong across a mid-line scroll change; a rendering enable toggling; the frame's encoding for the frontend.
+
+#### 3.14.1 The prediction, recorded before the RTL was read
+
+*Written before `ppu.sv`'s hit logic was opened; only a search for identifiers had been run.* The question was on which
+dot `$2002` bit 6 first reads set, given the first overlapping opaque pixel of sprite 0 at `x` on line `L`.
+
+- Both Moon engines: dot 256 of `L`, whatever `x` is, because the line is composed there (§3.10, P6).
+- The NESdev wiki: the hit is detected as the pixel is output, and dots 1–256 output pixels 0–255.
+- Prediction: the RTL raises the flag within dots `x + 1` to `x + 3`, and a `$2002` read on that dot sees it.
+- Its consequence for SMB, written down at the same time: the hit's first pixel at `x` = 90 on line 30 puts the flag
+  near dot 91, the read within one 27-dot poll, and the writes about 339 dots after the read, on line 31 between dots
+  90 and 120. That is before dot 257, so line 32 would take the new coarse X.
+
+**The RTL's answer.** `spr0_hit` is combinational on the cycle that outputs the pixel, with `cycle != 256` standing
+for "x != 255", so pixel `x` is cycle `x + 1` (`ppu.sv:1673-1681`). `$2002` reads `spr0_hit || sprite0_hit_bg`
+(`:1904`), so a read on that dot sees it. The prediction held at its lower bound, `x + 1`. Weight: real, since the
+PPU is the core's own and not borrowed.
+
+#### 3.14.2 The evidence
+
+**Reproduced headless, in both engines.** SMB was run into 1-1 through `MoonRtPair`, the engines compared in state,
+sound and picture every frame, and its pictures and the PPU's register writes were captured with their dots
+(`Moon_PPU.md` §7). The engines were identical in every frame. The defect was in both, so it was not in MoonRT's
+picture path or in the frontend's encoding. Pictures and crops are in `~/.cache/emusen/probe/moonrt/smb-split/`.
+
+**The trace (frames 330–341, unmodified):**
+
+- The hit was flagged on line 30, dot 256, every frame; its first pixel was `x` = 90.
+- The poll read it on dots 256–280.
+- The first `$2005` write landed on line 31 between dots 254 and 278, the second 24 dots later, and `$2000` on dots
+  311–335.
+- In 11 of the 12 frames the first write came after dot 257. Line 32 then started from the status bar's coarse X and
+  nametable, which the copy at 257 had already taken, but with the level's new fine X. That is row 4 of nametable 0
+  drawn at the wrong horizontal place, and in 1-1 that row holds the tops of the clouds: four-pixel black outlines,
+  one line thick, placed by the nametable rather than by the scroll and shifted by fine X from frame to frame.
+
+**Against Mesen**, run black-box through the reference probe with the same presses: 384 frames could be paired by
+identical rows 40–199. On the unmodified build, 162 of them differ on rows 31–39, every one on row 32 alone. With the
+fix, none differ.
+
+**A longer walk** (2,820 frames, walking right and jumping), the unmodified rule against the fixed one on the C#
+engine: 1,909 frames differ, and only on row 32. The unmodified rule draws black on row 32 where the fixed one draws
+none in 1,263 frames, and misses black the fixed one draws in 1,897. The first are the tester's bars, for example at
+`x` = 79–89 in frames 1,592–1,628, stepping left with the scroll and jumping back by eight. The second are the real
+cloud outlines that row 32 should show.
+
+**Ruled out.** The copy at dot 257, and `RenderV` latched there (`Moon_PPU.md` §7's caution), are right: with the hit
+on time, the same code takes the writes at the same dots. No rendering enable toggles: in the frames traced, SMB writes
+`$2001` only in vblank, on lines 241–255. The frontend's encoding is not involved, since both engines' raw pixels show
+the bars.
+
+#### 3.14.3 The fix
+
+C# Moon first, then MoonRT, with the same rule (`Moon_PPU.md` §3.4):
+
+- **The hit is decided on dots 1–256 of a visible line**, pixel `x` on dot `x + 1`, with the registers as they stand
+  on that dot. The background pixel is read at stream position `x + FineX` from `RenderV`, and fine X is taken as it is
+  on that dot.
+- **The line composed at dot 256 no longer touches the flag.**
+- **The reads are peeks.** `IMapper.PeekChr` and MoonRT's `peek_chr` return what `ReadChr` would, without moving
+  MMC2's latch.
+- **A tile counts only if it was in the shifters.** Hardware's background shift registers stand still while rendering
+  is off (`bgp_en`, `ppu.sv:1531`). Tile `k` is reloaded on dot `8k − 7`, and tiles 0 and 1 on dots 329 and 337 of the
+  line before. A tile reloaded before rendering was last switched on cannot hit. `Ppu.RenderingSince` is the PPU clock
+  of that switch.
+
+**State version 6.** `RenderingSince` holds a value across instruction boundaries, so it joins the state as one
+little-endian `long` after version 5's mixer, in both engines. Versions 3 to 5 still load, with rendering counting as
+switched on long ago. Only a state saved within 20 dots after a switch could tell the difference, since tile 0 is
+reloaded 12 dots before its line and shown by dot 8. The registration golden's NES state versions were re-recorded,
+5 → 6 and nothing else.
+
+**What 2c's look-ahead lacked (§3.10.3).** It set the flag on the pixel's dot from a look-ahead taken at dot 1. It
+moved no witness and sent Rendering Flag Behaviour from code 2 back to 1, so it was not kept. Both results have a
+reading now:
+
+- Its witnesses were not graded. blargg's sprite 0 timing ROMs report at `$F8` and on the screen, not by `$6000`, so
+  the corpus runner never read them.
+- That test's first case passes only if the hit misses when rendering is switched on within 16 dots of it. The
+  unmodified core passed it by accident. By the test's own count its read comes near dot 140, before the flag at dot
+  256. The look-ahead flagged the pixel without asking whether the shifters held the tile. The shifter rule is what
+  makes that case pass on its merits.
+
+#### 3.14.4 The proofs
+
+**Tests that fail on the unmodified core** (`MoonSpriteZeroTests`, measured by restoring the C# core's directory):
+
+- `Sprite_zero_hits_on_the_dot_its_pixel_is_output`: dot 89 for `x` = 88; the unmodified core gave 256.
+- `A_hit_needs_the_tile_loaded_while_rendering_was_on`: switched on at dot 85, the tile reloaded at 81 cannot hit;
+  switched on at 60, it hits on dot 89. The unmodified core hit on dot 256 in the first.
+- `A_split_timed_from_the_hit_scrolls_the_line_after_next`: a synthetic ROM with SMB's split in miniature. It waits
+  for a hit on line 30, waits 129 cycles, and writes `$2005`. Line 32 must equal line 33. The unmodified core drew line
+  32 with the old coarse X.
+- `A_split_timed_from_the_hit_scrolls_alike_in_both_engines`: the same ROM through the pair.
+- `Super_mario_bros_draws_no_slivers_below_its_split`: SMB from `EMUSEN_MOONRT_ROMS`, 1,700 frames of the walk, both
+  engines. Every black pixel on line 32 must sit over something on line 33 that is not sky. The unmodified core had
+  101 such frames of the 1,168 checked; the fixed one has none.
+- `Blarggs_2005_sprite_hit_tests_pass_on_both_engines`: blargg's eleven sprite 0 ROMs, from `EMUSEN_MOONRT_CORPUS`,
+  `$F8` = 1 on each engine. The unmodified core failed `09.timing_basics` and `10.timing_order`, each with code 3,
+  "upper-left corner too late". All eleven pass now; blargg ran them on a real NES.
+
+**AccuracyCoin: 126 → 127 of 144.** Rendering Flag Behaviour (`$0486`) now passes, code 2 → pass. No other result
+byte changed. The table is drawn at frame 3,650 instead of 3,620, because a passing test runs all of its cases.
+
+**The corpus transcript is unchanged**: 263 ROMs, 105 passed, every line of C#'s transcript as at §3.12. On both
+engines it runs identically ROM by ROM. The runner grades none of the sprite 0 ROMs; the test above grades them.
+
+**The bench:**
+
+- With the version field put back to 5 and the eight new bytes removed, all eight states are byte-identical to
+  before. That covers the four games at frames 900 and 3,900, with the bench's input.
+- All eight pictures are byte-identical.
+- So the hashes change only by the format. The frame 3,900 hashes, the same from both engines: Super Mario Bros.
+  `49D78F982291B4E0`, The Legend of Zelda `08016E5D454D2408`, Super Mario Bros. 3 `EDDC69C75EFB8D86`, Punch-Out!!
+  `09F72D84CA291525`. Before: `0ED799A150F20023`, `C615B5D3AB959325`, `5D8C02E36AA890C0`, `EF1FEC5B2CFF3B66`, as §3.13
+  recorded.
+
+**The suites:**
+
+- 503 Moon-filtered WiseMan cases pass, with the corpus and AccuracyCoin present. They include the corpus test on both
+  engines (255 ROMs run, 8 refused by both, 363,935 frames identical in state, 114 verdicts, 105 passed, as before),
+  the state oracles with version 5 states added to the older-state case, and the registration golden.
+- The crate's 6 pass.
+
+**The cost.** Every visible dot first asks whether it lies within sprite 0's eight columns, and only those dots call
+the detector. This was measured on 2026-10-04 on a loaded desktop (load average 8–10), in three interleaved rounds of
+the bench's 3,000 timed frames. On C# Moon the plain frame rose 0.7–2.7% on Super Mario Bros., 0.6–3.1% on Super
+Mario Bros. 3 and 1.4–4.8% on Zelda. Calling the detector on every dot instead cost 0.7–3.0%, 5–7% and 10–13%. MoonRT's
+frame with the column check is 7–14% faster than with the call on every dot on Zelda and Super Mario Bros. 3, and the
+same on Super Mario Bros. No pre-fix MoonRT library was kept, so MoonRT has no before-and-after number.
+
+#### 3.14.5 What is left
+
+- **A mid-line fine X write still applies to the whole line it lands on.** With the hit on time, SMB's write lands
+  near dot 100 of line 31, and Moon draws all of line 31 with the new fine X; hardware shifts only the pixels after the
+  write. SMB's line 31 has no opaque background there, so nothing shows, and Mesen's pictures agree. A game with
+  background on its split line would show it. It belongs to P8, the per-dot pipeline (§3.10.5).
+- **The shifters' stale contents** are taken as transparent, and an MMC2 latch is peeked as it stands, not as the
+  fetches 16 dots ahead would leave it. Both wait for P8.
+- **The RTL's two-dot delay on `$2001`** (`re_sr`, `ppu.sv:1442-1444`) is not modelled. Moon applies `$2001` at once,
+  here as everywhere.
+
 ## 4. Stages
 
 MercuryRT's stages 1–5 were done in one day; Moon's machine is about 5,200 lines of C#: the folder's 6,609, less the

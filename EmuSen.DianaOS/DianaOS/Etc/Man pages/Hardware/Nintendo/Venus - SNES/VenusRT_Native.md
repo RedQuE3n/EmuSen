@@ -6058,3 +6058,39 @@ them**, drawn by a seeded generator written before the ranking, the counts recor
 first such tie: 3,336 cases with the wanted speed within 3 of the sum, 333 on it, gave "at least" 3,336 exact and
 "above" 3,013, and "at least" is built.
 
+
+## 56. The NEC DSP replacements: ST010 07h's perspective, probed, and stopped (2026-10-04)
+
+§54.4 found 07h's flat road the largest loss left in F1 ROC II. Under §55.1's class, 07h's scale could be built if it
+came from documented mode-7 quantities and whole-number parameters exposed by probing the chip's behaviour. This
+section asks whether any input exposes them. It was written after the probes below, and no structure was graded,
+since none could be declared without fitting.
+
+**What the probes show** (measured 2026-10-04, `dsp_oracle mailbatch 07`):
+
+- **The arrays depend on word 0's high byte alone.** With word 0 = 0, twenty seeded fills of the other 2,046 RAM words
+  left all 176 values of the first array unchanged. Over 1,024 angles in steps of 40h, the four angles sharing a high
+  byte gave identical RAM in 768 of 768 comparisons.
+- **The time is a constant**, 4,988 cycles from the poll, at every one of the 1,024 angles and every fill.
+- **The scale is the chip's alone.** By §43.1 each array is a sequence L(n) times a sine. L(n) falls with the line the
+  way a perspective divisor K/(n + c) does, but no word the game writes enters it.
+
+**Why this is a stop under §55.1.** A gate width or a threshold is found by varying an input until the behaviour
+changes, and reading off where it changes. Neither K nor c, nor any whole-number form of them (a divisor m·n + d, a
+numerator, a rounding), has an input that moves it. The only way to obtain them is to choose values that make the
+formula's 176 outputs equal the image's. Requiring whole numbers and an exact match does not change that this is a
+fit. It is §43.1's fit with a smaller search space, which §48.2 withdrew and §55.1 keeps forbidden. Whether such
+whole numbers exist was therefore not tested: the test is the fit itself.
+
+**No document supplies them.** fullsnes names 07h "Raster Data Calculation" and gives nothing more. Plan §3.5's
+addresses give where the arrays are, not what is in them. fullsnes's mode-7 chapter documents the PPU's 8.8 matrix,
+which fixes the units (§48.2's 100h), not a camera height or a distance to the screen. The array's length, 176 lines,
+fixes n's range but not the scale.
+
+**What stays.** 07h keeps §48.2's unit scale and its named loss. F1 ROC II's road is drawn flat on the replacement.
+The open routes are for the tester to choose:
+
+1. A document that states the ST010's perspective constants, or F1 ROC II's camera, if one is found.
+2. A further amendment admitting a value found by an exact match of a declared structure against one command's
+   outputs, as distinct from a least-squares fit. That would be a change of rule, not a reading of §55.1.
+3. The player's image, the exact path, which the policy already provides.

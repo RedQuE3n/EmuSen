@@ -6889,3 +6889,75 @@ Frames with the SPC700 in the boot program, from power-on, under the old program
 | WiseMan, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters, the goldens against Mesen included | 121 of 121, after eleven anchors' hashes were re-recorded. Every anchor keeps its outcome. Yoshi's Island's lags move from +1, -10 and -10 to -4, -5 and -5, Metal Combat's from -6, -5 and -5 to -2, -1 and 0, and Super Mario RPG's attract lead from 40 to 41 frames at 1200 (42 at 2400 as before) |
 | Cost | none to measure: the program runs only until a game's driver starts |
 
+
+## 65. Stage 9, first half: VenusRT the SNES default (2026-10-05)
+
+*Decided by the tester 2026-10-05:* "You may make venus the default." The default flips with every gate of §63.5 in its
+state there. G6's run on the handheld on battery is still owed, and stays recorded as owed. C# Venus is removed only
+after plan §7's four weeks of play as the default with no open regression.
+
+### 65.1 What changed
+
+- **The default, through discovery.** `CoreCatalog` gains a table of discovered engines that are a console's default
+  whenever their library is found, with one row: the SNES, VenusRT (Rust).
+  - When `EngineFor` builds a console's row from discovery and that engine is among those found, the row lists it
+    first and makes it the default. The reference, Venus (C#), comes second, and the row carries its own description.
+  - Nothing registers VenusRT by hand, so `IsRegisteredEngine` stays false and the factory still opens it through
+    the generic v1 branch (`EmuSen_CoreAPI.md` §22). That is the least invasive way: one table and one branch in
+    `EngineFor`, with no change to `CoreFactory` and none to how the N64, NES and Game Boy rows are built.
+- **What runs when.**
+  - With the library missing, there is no row and Venus (C#) runs, as before VenusRT existed.
+  - With the library refused (a sidecar that does not match), the row stays and Venus (C#) runs with the "not
+    available" notice.
+  - A stored Venus (C#) wins. A config that stores nothing, the tester's own included, plays on VenusRT.
+  - `CoreFactory.Create` with no engine named still builds Venus (C#), the reference, as for every console.
+- **The row's words**, for the player: VenusRT is the default; Venus (C#) is the reference, kept for now, and runs
+  where VenusRT's library is missing; a state made by Venus (C#) does not load in VenusRT, though battery saves
+  cross; the change takes effect when a game is next loaded.
+- **Pharaoh and Hotaru** read the configured engine through `CoreFactory.ConfiguredEngine`, so they now run VenusRT
+  for the SNES unless graphics.json names Venus (C#). Nothing in them was changed. Hotaru's three Venus-only debugging hotkeys (the backdrop and
+  window dump, the OAM dump and the scroll print, behind its `Venus` property) do nothing under VenusRT, as they
+  already did when VenusRT was chosen; its DianaOS console works through the generic debug target.
+
+### 65.2 A finding: the open boot program's notice on every SNES game
+
+On VenusRT with no SPC700 image, the status line carries "VenusRT's open replacement for spc700.rom - …" and §35.3's
+cost after the game's name. That was already so when VenusRT was chosen. As the default, every ordinary SNES game now
+shows it.
+- **In a big screen it wraps** to two or three lines under a long title. That broke two tests' assumptions, not the
+  fit:
+  - the fit audit measured "one line" from the running status;
+  - the pad sheet tests made the bar taller from the running status.
+
+  Both now measure from a one-line status. The audit's fault checks on the running line itself pass unchanged.
+- **Measured before that change:** with the notice's lines under it, the Game Mode Shaders sheet on a 944-parameter
+  preset could not be walked by pad when made 10 or 13 pixels shorter still ("No pad path to the control asked
+  for"). That is a sheet-height defect in the pad walk of the kind §4.83.7 of the settings reference recorded at
+  other heights. It is reachable in play now that the default's status line is taller, and it is not fixed here.
+- **Put to the tester:**
+  - (a) shorten the boot program's status notice to a few words, keeping §35.3's cost in the firmware window and
+    the core's info;
+  - (b) fix the pad walk at those sheet heights;
+  - (c) both.
+
+### 65.3 Tests (measured 2026-10-05)
+
+| Check | Result |
+|---|---|
+| The registration golden | re-recorded with `EMUSEN_RECORD_REGISTRATION=1` after a rebuild. The SNES row's default, order and words change, and the configured engine with nothing stored is VenusRT. Without the library the row is absent; refused, it falls back to Venus (C#) with its notice |
+| `VenusRtEngineTests.A_game_runs_on_venusrt_by_default_and_on_venus_once_venus_is_chosen` (new) | a fresh config: no stored engine, `ConfiguredEngine` gives VenusRT, and Mistress runs the .sfc on the v1 adapter with rewind and no notice. Venus (C#) stored: Mistress runs it, with no notice |
+| The SNES tab's row, the state record, the fallback and discovery tests | updated to the new order and default |
+| The blast radius: CoreCatalog, CoreFactory, CoreRegistration, CoreDiscovery, VenusRt, Snes, MarsRtFrontend, GraphicsSettings, BatterySave, FitAudit, Pharaoh, Hotaru, CoreAbi, Settings and Engine filters | listed in §65.4 |
+
+### 65.4 The blast radius (measured 2026-10-05)
+
+- **The filters:** CoreCatalog, CoreFactory, CoreRegistration, CoreDiscovery, VenusRt, Snes, MarsRtFrontend,
+  GraphicsSettings, BatterySave, FitAudit, Pharaoh, Hotaru, CoreAbi, Settings, Engine and PadSettings. **608 passed,
+  3 skipped**, the skipped being the opt-in picture tools.
+- **Before the two test baselines of §65.2 were changed,** the same set failed eight:
+  - the registration golden, read from the build before it was re-recorded;
+  - the two `VenusRtCoreAbiTests` that pinned the old default;
+  - the fit audit's big-screen status line at both sizes;
+  - the 944-parameter pad walk at sheets 10 and 13 pixels shorter.
+- **The battery crossing**, `A_battery_save_crosses_between_venus_and_venusrt_both_ways`, with the corpus's firmware
+  and the ten games of §41.7: passes.

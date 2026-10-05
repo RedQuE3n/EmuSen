@@ -866,6 +866,9 @@ environment trigger is now a gamescope session, and `SteamDeck=1` counts only wh
 settings windows, Full Screen, Game Library, Close Game and Exit. In the library the game's entries give way to a
 single "Back to" line when a game is suspended. State Slot and Speed are changed with left and right and do not
 close the menu; every other entry closes it first and then acts, so a window it opens is not opened behind it.
+*Superseded 2026-10-04 by §4.69.8:* the menu is now pages. The game's actions come first, the settings windows are one
+submenu, and the ways out are last. Left and Right change the slot on the Save and Load rows themselves, and Restart,
+Quit and Exit ask first. East goes back one page and closes the menu only from its first.
 
 **Coverage.** `PadNavigationTests`, twelve cases: the repeat timing to the millisecond, accept never repeating, the
 chord firing once, `Forget`; the library's moves and the clamp at either end; the console filter stepping and being
@@ -4580,14 +4583,17 @@ over the screen blurred and darkened:
 - a **chevron** on a row that opens another screen (Cheats, Graphics Settings, Preferences, Theme Settings, Game
   Collection Settings, Edit This Game's Metadata, Filter Gamelist and the others);
 - a value at the right of a row that has one (*Slot 1* beside Save State, the reason Rewind cannot run), and **arrows**
-  around a value that Left and Right step (State Slot, Speed, Jump To…, Sort Games By);
-- a small footer line, *EmuSen 0.9.0*, the program's version (§4.69.7), under the pad menu;
+  around a value that Left and Right step (State Slot, Speed, Jump To…, Sort Games By); *since §4.69.8 the slot is
+  stepped on the Save and Load rows, and State Slot is gone*;
+- a small footer line, *EmuSen 0.9.0*, the program's version (§4.69.7), under the pad menu; *since §4.69.8 it is under
+  the EmuSen submenu only*;
 - **no Close button**: B and Start close the pad menu, B applies and Select cancels a game's options, as before. A game's
   options that apply something (the themed gamelist's) keep an Apply and a Cancel button under the rows;
 - **one help bar** at the bottom centre, the pad's own buttons drawn with upper-case labels (*Close Menu*, *Select*,
   *Change*, *Choose*); the theme's help bar is put away while the menu is open and comes back when it closes.
 
-The rows are the same entries, in the same order, doing the same things. What changed is only how they are drawn. The
+The rows are the same entries, in the same order, doing the same things. What changed is only how they are drawn.
+*Retired 2026-10-04: §4.69.8 reorganised the entries into pages, with the drawing of this section kept and extended.* The
 desktop's pad menu, the desktop library and every desktop window are unchanged, and so are the settings sheets.
 
 #### 4.69.2 The typeface: Barlow Condensed
@@ -4628,6 +4634,8 @@ every dependency MIT (LunaP §181.2); LunaP's controls take any font file's path
 - **Size**: everything is laid out for a screen 800 pixels high and scaled by the window's height over 800
   (`MenuPanel.Scale`, set once on the window). The panel is 0.66 of the width, but no wider than 1.05 times the height.
   The rows show whole: at 1280×800 the library's pad menu shows nine of its eleven rows and scrolls to the rest.
+  *Since §4.69.8 every page shows whole at both audited sizes, except the game's first page under a title that wraps
+  to two lines, which shows nine of its ten rows.*
 
 #### 4.69.4 Pad and keyboard
 
@@ -4680,6 +4688,169 @@ The places that read it:
 ScreenScraper's `softname` does not come from it and is unchanged. A state recorded by an earlier build keeps the
 *1.0.0* its record says; whether a state loads is decided by its state version, never by this. BigPicture §32.11 has
 the survey.
+
+#### 4.69.8 The Start menu reorganised into pages (2026-10-04)
+
+Decided by the tester on 2026-10-04: the pad menu, which §4.29 built as one flat list and §4.69 redrew in ES-DE's look,
+is reorganised for a player with no technical knowledge. It is shown in big picture and, on the desktop, wherever a
+controller opens it. The decision allowed the layout to depart from ES-DE's, ES-DE having been scaffolding, on one
+condition: the ES-DE themes keep working exactly as they do. BigPicture §45 is the build record: the measurements, the
+predictions and the pictures.
+
+**Why the flat list had to go.** The list over a game had seventeen rows, and over the library up to fifteen. The
+three things a player opens the menu for in the middle of a game (to save, to load, to leave) sat among five settings
+windows, a display switch and two ways out whose difference ("Game Library" leaves the game paused, "Close Game" ends
+it) was not in their names. A State Slot row set the slot for two other rows, so saving to slot 3 took two rows and an
+inference. Exit, Close Game and Reset acted on one press of A, with nothing to undo them. At 800 lines the big panel
+showed nine rows of the list, so the ways out lay below the fold. None of this is a defect of any one row; it is the
+cost of a list whose order recorded the order in which the rows were added.
+
+**The structure.** The menu is now pages. A row that opens a submenu carries a chevron in the big panel and a `›` on the
+desktop. A row ending in an ellipsis asks before it acts.
+
+Over a game, titled with the game's name as the library shows it:
+
+| Row | What it does |
+|---|---|
+| Resume | closes the menu |
+| Rewind | the reel, as before (§4.49) |
+| Save State ◂ Slot 1 ▸ | A saves to the slot shown; Left and Right change the slot |
+| Load State ◂ Slot 1 ▸ | A loads the slot shown; Left and Right change the same slot |
+| Speed ◂ 100% ▸ | as before |
+| Restart Game... | asks, then a power cycle (§4.12) |
+| *divider* | |
+| Game Settings ▸ | Cheats · Players & Controllers · Controller Bindings · Graphics · Shaders |
+| *divider* | |
+| Back to Library | the library, the game paused under it (was *Game Library*) |
+| Quit Game... | asks, then ends the game (was *Close Game*) |
+| EmuSen ▸ | Preferences · Full Screen (desktop only) · Big Picture or Exit Big Picture (not in Game Mode) · Exit EmuSen... |
+
+Over the library, titled *Main Menu*:
+
+| Row | When |
+|---|---|
+| Back to *game* | a game is paused under the library |
+| Game Options... | the sidebar library has a game selected (§4.63) |
+| Scrape This Game... | a game is selected and no run is going (§4.60) |
+| *divider* | when any of the three above is shown |
+| Library ▸ | Collections (over the themed view, §4.58) · Scrape Games... or *Scraping (n of m)...* · Theme Settings (big picture) |
+| Settings ▸ | Players & Controllers · Controller Bindings · Graphics · Shaders · Cheats · Preferences |
+| EmuSen ▸ | Full Screen (desktop only) · Big Picture or Exit Big Picture (not in Game Mode) · Exit EmuSen... |
+
+*Players & Controllers* opens Preferences on its Controllers tab, where the players' rows of `EmuSen_Input.md` §8.9 are.
+*Graphics* is the window that was *Graphics Settings*; *Collections* is ES-DE's *Game Collection Settings*, whose
+window keeps that title. Every row keeps its old action and its old condition: Full Screen only outside big picture,
+Exit Big Picture hidden where big picture is forced (§4.43), the collection entry only over the themed view, scraping
+started only by the player's choice (§4.60), and the game paused before the menu shows (§4.18).
+
+**The argument for the grouping.** The first section is what a player does to the game, in the order of how often it
+is done: carry on, go back a little, save, load, change the speed, start again. The second is a single row for the
+game's settings, since a player who wants a settings window wants it for this game, and a submenu of five costs one
+press of A where five rows cost five rows of scrolling past on every visit. The third is the ways out, from the
+mildest (the game waits in the library) to the strongest (EmuSen closes), with the program's own business (Preferences,
+the display, quitting) under EmuSen, a name a player can read without knowing what a frontend is. The main menu has the
+same shape. What concerns the selected game comes first, then three pages named by what they hold. *Settings* there
+carries the same windows as *Game Settings* plus Preferences, so a player finds a window under either name.
+
+The decision does not generalise to every list. The menu has ten rows on its first page and no page deeper than one
+submenu and a question. A tree deeper than that would trade the scrolling it removes for a memory of where things are,
+and nothing here measured where that trade turns.
+
+**Navigation.** Up and Down move and wrap. A enters a submenu or chooses a row. B goes back one page, to the row the
+page was entered from, and closes the menu from its first page. Start closes the whole menu from any page. Left and
+Right change a value. A submenu opens on the row it was last left on, for as long as the window lives, kept apart for
+the game's menu and the main menu. A new opening of the menu starts on its first row, Resume over a game. On the
+desktop, the arrow keys, Enter, Backspace and F4 now drive the menu as they already did in big picture (§4.52a). A
+row clicked is chosen, as A chooses it, and the right mouse button goes back a page, as B does.
+
+**The questions.** Restart Game..., Quit Game... and Exit EmuSen... open a page of two rows, *No* then *Yes*, with *No*
+selected. A press of A straight through the question therefore changes nothing. B is *No*, and the help bar says so.
+The page's title is the question (*Restart Game?*), and a sentence under it says what *Yes* does: *The game starts
+again from the beginning. Progress since your last save is lost.* for a restart (true, since a restart writes no
+resume state, §4.31), *The game closes and the library comes back.* for quitting, and *EmuSen closes.* or *The game
+closes, then EmuSen.* for exiting. No sentence claims a loss the program does not cause. Quitting a game writes its
+resume state (§4.31), so the quitting question says nothing about lost progress.
+
+**Departures from ES-DE's layout.** Each of these is drawn by Mistress's own menu. None touches the theme loader, the
+system or gamelist views, or anything a theme sets.
+
+- *Dividers.* In the big panel the last row of a section has its rule drawn lighter (`#707076` on the rows' `#333337`),
+  a hairline across the panel. It takes no height, so the panel's whole-row arithmetic (§4.69.3) holds. On the
+  desktop the first row of a section has a gap of 9 pixels and a line above it.
+- *A breadcrumb.* A submenu's subtitle names the page B returns to, after a `‹` (*‹ MAIN MENU*, *‹ COBALT HARBOR
+  (SYNTHETIC)*). A name too long for the panel is broken at spaces into lines the panel holds whole. The desktop's title
+  line joins the pages' titles with `›`.
+- *The question's sentence* is the subtitle, in sentence case rather than capitals, since it is a sentence.
+- *A value column for the slot.* The Save and Load rows show *Slot n* between arrows, and *Slot n (Empty)* where
+  nothing is saved, so the Load row says before A is pressed whether there is anything to load.
+- *The slot's card.* While Save State or Load State is the chosen row, a card beside the menu shows the slot's picture,
+  the one every save already writes beside its state (§4.13; the resume question reads the same file), and *Saved Sat 4
+  Oct, 14:32*, or *Empty*. It goes to the right of the panel, under its title, up to 240 design pixels wide. Where the
+  screen leaves less than 150 design pixels beside the panel, it is not shown, and the row's value carries the same
+  fact.
+- *The version* moved from the first page's footer to the EmuSen submenu's. The first page gains the 58 design pixels
+  between the footer band and the bare padding (§4.69.3's 78 against 20), which is the difference between nine of its
+  ten rows and all ten (BigPicture §45.2).
+- *The help bar* says *Back* for B on a submenu and *No* on a question. *Change* appears only on a page with a value to
+  change, on the desktop now as in big picture.
+
+**How it is built.** `MainWindow.PadMenu.cs` holds the pages: a stack of `PadMenuPage`s, each with a title, a builder
+for its rows, the row last on and, for a question, its sentence. `OpenPadMenu` pushes the first page, a submenu row
+pushes another, a question row pushes a page of two rows, and B pops one. `PadMenuEntry` gains `Submenu` (the rows'
+builder), `Question` and `QuestionDetail`, `StartsSection` and `ShowsSlot`. Its `Text`, `Label` and `Value` are as
+before, so a test that reads the lines still reads the same strings, now one page at a time. The list's panel is a
+plain `StackPanel` rather than the virtualizing one. With the desktop's gaps the virtualizing panel left the viewport up
+to 40 pixels short of the rows, which the fit audit found (BigPicture §45.3).
+
+**Tests.** `PadMenuTests` (WiseMan, headless), 27 cases:
+
+- the game's menu, on the desktop and in big picture: the rows, the two dividers, the adjustable rows, the questions,
+  Game Settings' and EmuSen's rows, the title, and the help;
+- the main menu over the sidebar library with a game paused, and over the themed view with no game, where Library holds
+  Collections and Theme Settings, no divider stands above the first row, and the EmuSen page carries the version and
+  the breadcrumb;
+- a submenu entered and left with B to the row it was entered from, its row remembered across B and across a new
+  opening, Start closing the whole menu from inside it, and the game paused throughout and running after;
+- the slot changed by Left and Right on the Save row and on the Load row, both rows following, A saving to slot 2 and
+  not to slot 1, the Load row then reading *Slot 2*, and the card showing *Empty*, then the saved time and the picture,
+  and going away on another row;
+- each question opening on *No*, *No* and B changing nothing (the same session object, the game still loaded, the window
+  still open), and *Yes* restarting (a new session, running), quitting (no game, the library), and closing the window;
+- Back to Library leaving the game paused, with no frame run in the library, and Back to the game resuming it;
+- every moved row opening its window: the six of the game's menu and the nine of the main menu, Players & Controllers
+  on Preferences' Controllers tab and Scrape Games... on its Scraping tab;
+- the desktop's keys and the pointer driving the menu.
+
+`WindowFitAuditTests.Every_page_of_the_pad_menu_…` (twelve cases) opens every page of the game's menu, of the game's
+menu under a No-Intro-length title, and of the main menu, every submenu and every question, and the Save State row with
+its card, on the desktop and in big picture at 1280×800 and 1920×1200. It runs §4.83's audit over the menu and, in big
+picture, also measures every row's label and value against the parts `MenuRow.Layout` gives them, every subtitle line
+against the panel, and asks that no page scroll under a one-line title. On the desktop it asks that the rows not scroll
+and the box stay inside the window, and everywhere that the card stay inside the window, clear of the panel and of the
+help bar.
+
+The tests that read the old names and order were changed to the new ones, and nothing else in them. The menu helpers
+of `PadNavigationTests`, `PadSettingsWindowTests`, `PadCheatsTests`, `PadRewindReelTests`, `ControllersTests`,
+`SheetLookTests`, `ThemedLibraryFlowTests`, `ThemedCollectionsTests`, `BigPictureSwitchTests` and `WindowFitAuditTests`
+now walk the menu through the shared `Fixtures/PadMenu`. It finds a row on the page shown or one submenu down and walks
+to it with Down and A, as a player would. *Close Game* became *Quit Game* and Yes, *Game Library* became *Back to
+Library*, *Graphics Settings* became *Graphics*, and *Game Collection Settings* became *Collections*. The State Slot case
+of `PadNavigationTests` became the slot changed on the Save and Load rows. `EsdeMenusTests` reads no footer on the
+first page. `MenusFollowupTests` reads no scroll indicator on the main menu, which now shows whole. The themed views'
+tests are unchanged. Eight mutants of the menu's code were run. Seven were caught, and the eighth showed a line to be
+inert, which was then removed (BigPicture §45.4).
+
+**What it does not do.**
+
+- *No thumbnail on a narrow screen.* At an aspect ratio narrower than about 4:3 the card does not fit beside the panel
+  and is not shown. Only the two audited sizes were measured.
+- *The card's caption is in the desktop face*, not Barlow Condensed, since `MenuPanel` draws its own text and the card is
+  an ordinary `TextBlock`.
+- *A long title still scrolls the first page.* A two-line title takes a row's height, and the first page then shows nine
+  of its ten rows with the scroll indicator, as §4.69.3's pages always did.
+- *The library's own menus* (the sidebar's context menu, the themed view's Select menu) are unchanged.
+- *A row's place is remembered only while the window lives.* It is not saved.
+- Nothing ran on the handheld or with a real pad. ES-DE was not run or read for this section.
 
 ### 4.71 Big picture: the launch screen (2026-09-27)
 

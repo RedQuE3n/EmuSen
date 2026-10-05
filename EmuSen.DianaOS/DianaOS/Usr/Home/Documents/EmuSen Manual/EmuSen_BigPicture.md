@@ -7212,6 +7212,9 @@ guess from this stage's pace and not a measurement:
 - A real pad, the handheld, and ES-DE running beside Mistress for a live comparison.
 - The desktop's pad menu, deliberately.
 
+*Since §45 (2026-10-04) the pad menu is reorganised into pages, on the desktop and in big picture alike. The rows of
+this stage are kept in their look and regrouped, and the version moved to the EmuSen submenu's footer.*
+
 ### 32.10 Open questions
 
 *All seven were answered on 2026-09-27, with stage 1's look approved; the answers are in §10.1 and were built as §32.11
@@ -11106,3 +11109,100 @@ first and stays selected", are superseded by this section.
 `EmuSen.WiseMan.Mistress.BigPicture`, with `GameRecordsTests`, `LibraryScreenTests`, `IdentityAndCollectionsTests`,
 `DesktopGameOptionsTests` and `GameMetadataTests`. **969 tests: 928 passed, 41 skipped (the picture, survey and live
 tools), none failed, in 4 min 17 s.**
+
+## 45. The Start menu reorganised into pages (2026-10-04)
+
+*Built on branch `bigpicture-menus`, from WiseMan at `0c0335c1`. LunaP unchanged.* Decided by the tester on 2026-10-04:
+reorganise the pad menu for a player with no technical knowledge, in big picture and on the desktop, with the freedom to
+depart from ES-DE's layout so long as the ES-DE theming is not broken. The player's account of the result, with the
+structure and the reasons for it, is §4.69.8 of the settings reference. This section is the record: what was measured,
+what was predicted, what the audit found, and what the tests hold.
+
+**Scope.** Only Mistress's own menu drawing changed: `MainWindow.PadMenu.cs` (new), `MainWindow.Pad.cs`,
+`MainWindow.BigMenus.cs`, `MainWindow.ThemedKeys.cs`, `MainWindow.BigPictureCollections.cs` (one label),
+`PadMenuEntry` and the pad menu's part of `MainWindow.axaml`. No file under `BigPicture/` (the theme loader, the scene,
+the views) changed, and neither did LunaP. The rows are drawn by §32's `MenuPanel` and `MenuRow` with their own
+properties (`Subtitle`, `Footer`, `TitleMinScale`, `TitleMaxLines`, `RuleColor`), none added.
+
+### 45.1 The structure
+
+Over a game: Resume, Rewind, Save State ◂ slot ▸, Load State ◂ slot ▸, Speed, Restart Game... | Game Settings ▸ |
+Back to Library, Quit Game..., EmuSen ▸. Over the library: Back to *game*, Game Options..., Scrape This Game... (each
+where it applied before) | Library ▸, Settings ▸, EmuSen ▸. The submenus, the questions and every row's condition are
+§4.69.8's tables. The first page over a game has ten rows where it had seventeen, and the main menu has three to six
+where it had up to fifteen.
+
+### 45.2 Predictions
+
+Written from §32.1's measured constants before the audit was run:
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P400 | With the version footer on the first page, its rows' room at 800 lines is 800 − ~58 (help bar) − 48 (edges) − 100 (title) − 78 (footer) ≈ 516, so nine whole rows of 54. §4.69.3's *nine of eleven* is the same capacity | not re-measured; §4.69.3's record agrees | consistent |
+| P401 | Without it (a bare 20), the room is ≈ 574, so ten rows, and the game's ten-row first page shows whole at 1280×800 and 1920×1200 | 10 rows, no scroll indicator, at both sizes | held |
+| P402 | Section dividers that add height would push the first page past the whole-row floor of 540, so they must take none | the lighter rule takes none; 10 rows show | held (by construction) |
+| P403 | A title of a No-Intro name's length (103 characters) wraps to two lines at the shrink floor and the first page scrolls, showing nine rows | 2 title lines, scroll indicator *Down*, at both sizes | held |
+| P404 | The same name as a breadcrumb needs two subtitle lines at 26 design pixels | 2 lines (`…THE DIRECTOR'S CUT` / `(USA, EUROPE) (REV 1) (BETA)`) | held |
+| P405 | The slot card fits beside the panel at both sizes: the panel is centred and no wider than 1.05 times the area's height, which on a 16:10 screen leaves more than the card needs at its 150-design-pixel floor | 202 pixels wide at 1280×800 and 303 at 1920×1200, clear of the panel and the help bar | held |
+| P406 | The desktop's ten rows and two gaps (about 510 pixels) fit the old 520-pixel list | **failed**: the rows scrolled by 10 to 40 pixels on every page | see §45.3 |
+
+### 45.3 What the audit found
+
+`WindowFitAuditTests.Every_page_of_the_pad_menu_…` failed all six desktop cases on its first run, and passed the six
+big-screen ones. On every failing page the list's first row lay above its viewport, so it was drawn cut at the top: by
+40 pixels on the game's first page (ten rows and two gaps, 510 pixels of rows in a viewport of 470) and by 10 or 20
+pixels on the shorter pages, including pages with no gap of their own. The rows were 49 pixels and a gap 10 (9 of
+margin and a 1-pixel line). The shortfall is therefore not the gaps' height alone, and the mechanism inside
+`VirtualizingStackPanel` was not isolated. What was established is this. Removing the list's 520-pixel cap changed
+nothing: the next run measured the same 470 against 510. Replacing the list's panel with a plain `StackPanel` fixed all
+six cases. Restoring the virtualizing panel fails the audit again (mutant M6, §45.4). The menu has at most ten rows on a
+page, so virtualization bought nothing there. The cap stays removed, so the list takes the height its rows need and
+scrolls only in a window shorter than that.
+
+A reset of a page's scroll offset when it is turned to was written for the same symptom. With the plain panel the
+mutant that removed it survived (M8): an offset past a shorter page's rows is clamped by the scroller itself, and no
+page but the first can scroll. The reset was taken out.
+
+### 45.4 Tests
+
+- `PadMenuTests`, 27 cases (§4.69.8 lists them): the structure in-game and main, desktop and big picture; submenus, B
+  back to the row entered from, and the remembered row; the slot on the Save and Load rows and the card; each question
+  with *No* and B changing nothing and *Yes* acting; Back to Library leaving the game paused with no frame run; each
+  moved row opening its window; the desktop's keys and the pointer.
+- `WindowFitAuditTests.Every_page_of_the_pad_menu_…`, 12 cases: every page, submenu and question, and the card, at
+  both sizes, desktop and big picture, with a long title.
+- The tests that held the old names and order were updated (§4.69.8 lists them); their helpers walk the menu through the
+  shared `Fixtures/PadMenu` as a player walks it.
+
+**The run.** The blast radius was run on the final build under a memory cap of 8 GB: every test in
+`EmuSen.WiseMan.Mistress` (the big picture, pad, menu, sheet, scraping and fit-audit tests among them) with the
+accessibility and pad audits. **1,753 tests: 1,702 passed, 51 skipped (the picture, survey and live tools), none failed,
+in 8 min 51 s.**
+
+**Mutants.** Eight, each applied to `MainWindow.PadMenu.cs` alone, built, and run against `PadMenuTests` and the pad
+menu's fit audit, the source restored after each:
+
+| # | Mutant | Caught by |
+|---|---|---|
+| M1 | the question lists Yes first, so A straight through says Yes | the questions' case |
+| M2 | B returns to a page's first row, not the row it was entered from | the submenu case, the keys-and-pointer case, the questions' case |
+| M3 | a submenu forgets its row | the submenu case |
+| M4 | Back to Library resumes the game | the Back to Library case |
+| M5 | Left and Right on the Load row step the slot the other way | the slot case |
+| M6 | the virtualizing panel kept | the fit audit (desktop pages) |
+| M7 | Start goes back a page instead of closing the menu | the submenu case, the questions' case |
+| M8 | a page turned to keeps the scroll offset of the page before | **survived**; the line was found inert and removed (§45.3) |
+
+### 45.5 Pictures
+
+`EMUSEN_WINDOW_FIT_PNG=<folder>` writes every audited page to `~/.cache/emusen/probe/window-look/trials/<folder>/`
+as `PadMenu-<menu>-<BigScreen|Desktop>-<size>-<page>.png`. The pictures of this section were looked at page by page.
+The dividers read as hairlines between the sections in the big panel and as a gap and a line on the desktop. The
+breadcrumb wraps under a long title, and the question's sentence sits under its title in sentence case.
+
+### 45.6 Not done
+
+- The handheld and a real pad were not tried.
+- No aspect ratio but 16:10 was audited. On a 4:3 screen the card's room beside the panel falls below its 150-pixel floor
+  and it is not shown. That follows from the constants and was not measured.
+- The card's caption is drawn in the desktop face (§4.69.8).

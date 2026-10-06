@@ -85,7 +85,7 @@ CPUs' disputes in their own record pages.
   (`Nephrite_Native.md` §11.1); no test program reaches the window's timing.
 - Implemented in: the commit "Nephrite, stage 3 step 3".
 
-### D-2. OPEN. The 68000 loses clocks to the main RAM's refresh, on the cartridge's bus as well as its own RAM
+### D-2. The 68000 loses clocks to two refreshes: the bus's, every 128 clocks, on the cartridge, and the main RAM's, on the RAM
 - Opened: 2026-10-05, at stage 3 step 3, by Sonic the Hedgehog 2 running about 12 frames ahead of Genesis Plus GX
   (`Nephrite_Native.md` §11.3): the lead starts in its boot program's checksum of the ROM, a loop of the 68000 alone
   over the cartridge, which Nephrite times by the 68000's manual.
@@ -97,11 +97,49 @@ CPUs' disputes in their own record pages.
   24 clocks by the manual, with the Z80 held in reset. Summing the cartridge, 2,341 rounds take 24.38 clocks on
   average: 1,895 take 24 and 446 take 26, one loss of two clocks every 128.0 clocks. Summing the 68000's RAM, 2,288
   rounds take 24.94: 1,532 take 24, 298 take 26, 370 take 27 and 88 take 29. No RTL file was opened.
-- Conclusion: open. The cartridge's figure agrees with the wiki's period and not with its one clock; the RAM's needs
-  a model of where in the 68000's bus cycle the refresh falls, which these loops do not separate. Nephrite takes no
-  refresh yet.
-- Pinned by: nothing yet.
-- Implemented in: not yet.
+- ~~Conclusion: open.~~ The cartridge's figure agrees with the wiki's period and not with its one clock; the RAM's needs
+  a model of where in the 68000's bus cycle the refresh falls, which these loops do not separate. ~~Nephrite takes no
+  refresh yet.~~
+- Measured 2026-10-05, at stage 5's 68000 step, on the board's cartridge reads (the bench's `c` lines) in programs
+  written for it: a voice (`fm-dr39`), the busy-flag sweep of D-13, and `mdboard.py`'s `RAM_LOOPS`, unrolled RAM
+  reads with 0 to 9 NOPs between and long reads. The board's 68000 was followed read by read against Nephrite's, and
+  the board's main-RAM and video strobes logged (`TB_MEM`); no RTL file was opened. There are two refreshes:
+  - **The bus's**, every 896 master clocks (128 of the 68000's clocks), its phase in the idle loop's 95 periods
+    fixed to within the 68000's clock. The first access at or after one waits two clocks if it is to the
+    cartridge's area. If that access is to the Z80's area, the I/O area or the main RAM, it passes without a wait
+    and the refresh is spent: seen at a write to `$A11200`, at a read of the YM2612 that began on the refresh, and
+    at the first RAM read of the RAM loops. Accesses to the VDP pass too: making them wait breaks
+    `register_writes_show_where_the_board_shows_them` and VDPFIFOTesting. This is the 2 clocks in 128 of the
+    cartridge loop above.
+  - **The main RAM's**, which is not periodic in time. A RAM access within 133 master clocks of a request waits
+    three clocks, and the next request comes 806 after that access began; a request no RAM access meets in its 133
+    is served without a wait, and the next comes 806 after the 133 run out. The intervals between waits are then
+    as the board's: 819 and 861 for reads 56 apart, 931 for reads 224 apart, 875 for reads 140 apart. The rule was
+    fitted to the board's reads in ten programs: seven agree read for read (1,000 to 2,900 reads each); three
+    keep the board's time until one wait, where the board waits four or five clocks, or none, and the rule three.
+    `RAS1` and `CAS1`, the only such strobes among the board's nets, cycle every 20 master clocks with a CAS-before-RAS
+    cycle 640 apart, video RAM's by their pace; nothing on the bench shows the main RAM's own refresh, and the rule
+    is the timing's, not a mechanism read.
+  - **Checked against this entry's first measurement**, which the rules were not fitted to: Nephrite running the
+    cartridge loop takes 26 clocks in 19.1% of its rounds (the board 19.0%), the RAM loop 26, 27 and 29 in 13.2%,
+    16.2% and 3.7% (the board 13.0%, 16.2% and 3.8%).
+  - **Where they fall.** The phases were measured from the board's 68000 start, which comes 0.61 of a frame
+    (544,592 master clocks, modulo a frame) later against the picture than Nephrite's: the frame offset of stage 4's
+    picture tests, Nephrite's frame 3 the board's 2. Placed by the 68000's start, the bus refresh makes a voice's
+    reads the board's to the master clock and leaves one point of D-11's write sweep (H32, the display on, 24 NOPs)
+    a slot late; placed against the picture, as the board has it there (762 master clocks after power-on in
+    Nephrite), the whole sweep is the board's and a voice's samples still are, its reads 113 master clocks from the
+    board's around each refresh. Nephrite places it against the picture. The RAM's, whose next request depends on
+    the accesses made, keeps the place fitted from the 68000's start (its first request at 1,414).
+- Conclusion: **measured on the board**, the RAM's rule as a fit with the residuals above. Nephrite implements both.
+  Open: the RAM's few four- and five-clock waits; why the 68000 starts at another point of the frame than on the
+  board, which is stage 4's.
+- Pinned by: `genesis.rs`'s `ram_loops_keep_the_boards_time_through_both_refreshes` (three loops read for read
+  against `board_bus.rs`, with the bus refresh at the board run's phase; it fails with either refresh taken out) and
+  `the_refreshes_cost_the_boards_share_of_rounds` (this entry's loops); `pictures.rs`'s
+  `register_writes_show_where_the_board_shows_them` and `writes_land_where_the_board_lands_them` fail with either
+  refresh taken out, and the second with the bus refresh at the 68000-start phase.
+- Implemented in: the commit "Nephrite, stage 5: the 68000's side".
 
 ### D-3. Shadow/highlight: palette 3's colour 14 brightens and colour 15 darkens, and an operator pixel gives no priority
 - Opened: 2026-10-05, at stage 4 step 2, by two documents in disagreement. MacDonald's "Sega Genesis VDP
@@ -368,6 +406,11 @@ CPUs' disputes in their own record pages.
   with the start at 0); `programs.rs`'s `vdpfifotesting_passes_every_test` (121 of 122 with the busy flag held while
   the FIFO drains) and `md1536_shows_the_boards_picture` (fails with the display-off transfer's words waiting).
 - Implemented in: the commit "Nephrite, stage 4: D-11 settled".
+- 2026-10-05, at stage 5's 68000 step: with D-2's two refreshes in, the write path's start and the transfer's first
+  read keep their values, 176 and 88; every point of both sweeps and VDPFIFOTesting's 122 still pass, the bus
+  refresh placed against the picture as on the board (D-2). Making the VDP's accesses wait for the bus refresh breaks
+  `register_writes_show_where_the_board_shows_them` at every pair of the two values tried, and the transfer start
+  the write sweep then wants (46) fails VDPFIFOTesting's FIFO Wait States.
 
 ### D-12. The status flags and the port's read: vertical blanking at H `$14C` or `$10C`, the odd flag at the frame interrupt
 - Opened: 2026-10-05, at the stage 4 dispute step, by the plan's oracle for the stage (the logic-analyser ROMs
@@ -426,13 +469,26 @@ CPUs' disputes in their own record pages.
 - The flag's length on the board, from a voice's bus log (D-14): it reads set at every poll up to 2,534 cycles after
   the data strobe rises and clear at every poll from 3,066, and either way at 2,800: about 1,400 master clocks, 200 of
   the 68000's, where Nephrite counts 1,344 (Eke's 192) from the write.
-- Conclusion, 2026-10-05: **the ASIC's half measured on the board; the discrete chip's still argued** from Eke's
-  tests. Nephrite's two models are unchanged.
-- Pinned by: `ym2612.rs`'s `the_busy_flag_follows_a_data_write_for_192_of_the_68000s_clocks_and_reads_at_port_0_on_the_discrete_chip`
-  and `sounds.rs`'s `a_program_sees_the_busy_flag_for_192_clocks_at_port_0_only`.
-- Implemented in: the commit "Nephrite, stage 5 step 1".
+- ~~Conclusion, 2026-10-05: **the ASIC's half measured on the board; the discrete chip's still argued** from Eke's
+  tests. Nephrite's two models are unchanged.~~
+- The flag's length, measured 2026-10-05 at stage 5's 68000 step (a program writing `$2A` and reading the status
+  once, 44 to 51 NOPs later, at 14 places in the sample: 112 trials, the strobes from the bus log): the flag reads
+  set until the 33rd slot edge after the first edge at or after the data strobe, and clear from it, in all 112. A
+  slot is 42 master clocks, six of the chip's input clocks; the edges fall at the slots' starts as channel 1's turn
+  on the pins gives them, 22 master clocks into a slot after a sample's deadline in Nephrite's terms. So the flag
+  stands 1,386 to 1,428 master clocks, and a flat 1,344 from the write is short by one to two slots. A fit of a
+  plain length, or of edges every 6 or 252 master clocks, fails trials; the 42 fits with the edge placed within 7
+  master clocks.
+- **Which chip that speaks for**: the board's YM3438 of the model 2 ASIC (D-16). Eke found the flag the same length
+  on both chips, so Nephrite gives the discrete YM2612 the same rule; that half is argued.
+- Conclusion: **the flag at ports 1-3 and its length, measured for the ASIC**; for the discrete chip, the port
+  measured by Eke and the length argued from his finding that the two agree.
+- Pinned by: `ym2612.rs`'s `the_busy_flag_runs_33_slots_from_the_next_slot_edge_and_reads_at_port_0_on_the_discrete_chip`,
+  `sounds.rs`'s `a_program_sees_the_busy_flag_for_192_clocks_at_port_0_only`, and `voices.rs`'s
+  `the_whole_machine_plays_every_voice_as_the_board_does` (it fails with 32 slots).
+- Implemented in: the commit "Nephrite, stage 5 step 1"; the length in "Nephrite, stage 5: the 68000's side".
 
-### D-14. OPEN. The 68000's accesses to the YM2612 through the Z80's area: how long each takes
+### D-14. The 68000's accesses to the Z80's area take five clocks, and their strobe on the Z80's bus ends four clocks before the 68000's cycle
 - Opened: 2026-10-05, at stage 5 step 1, by `mdboard.py sound dac-square`: a 68000 loop writing the DAC through
   `$A04000` runs at 543.6 Hz on Nephrite and ClownMDEmu and at 535 Hz on BlastEm and PicoDrive, about 110 more of the
   68000's clocks for each half period's two writes.
@@ -459,10 +515,21 @@ CPUs' disputes in their own record pages.
   longer (D-13), which costs a round of the poll in most writes. Until these are in, a 68000's key-on lands in
   another sample than the board's, and an envelope on the whole machine starts a few samples out
   (`Nephrite_Native.md` §21.4).
-- Conclusion: **measured.** An access to the YM2612 through the Z80's area takes the 68000 five clocks; the slower
-  loop of BlastEm and PicoDrive is D-2's refresh. Nephrite gives the access four clocks and takes no refresh.
-- Pinned by: nothing yet.
-- Implemented in: not yet.
+- ~~Conclusion: **measured.** An access to the YM2612 through the Z80's area takes the 68000 five clocks; the slower
+  loop of BlastEm and PicoDrive is D-2's refresh. Nephrite gives the access four clocks and takes no refresh.~~
+- Measured further 2026-10-05, at stage 5's 68000 step: reads and writes of the Z80's RAM through `$A00000` take
+  five clocks as the YM2612's do (the next fetch 63 master clocks after the one before, against 56); writes to
+  `$A11100` and `$A11200` take four. On the Z80's bus the access's strobe ends 28 master clocks, four clocks, before
+  the 68000's cycle does, for a read (its data taken then) and a write alike, and the Z80's reset line moves in a
+  write to `$A11200` as early, at the cycle's start. Nephrite hands the YM2612 that time. With these, D-2's refreshes
+  and D-13's length, the 68000's reads in a voice's program are the board's to the master clock (3,930 reads, the
+  bus refresh at the board run's phase), and every voice's samples are the board's on the whole machine.
+- Conclusion: **measured.** Every access to `$A00000`-`$A0FFFF` takes the 68000 five clocks, and reaches the Z80's
+  bus four clocks before the cycle ends; the slower loop of BlastEm and PicoDrive is D-2's refresh.
+- Pinned by: `voices.rs`'s `the_whole_machine_plays_every_voice_as_the_board_does` (fails with four clocks). The
+  strobe's lead is pinned by no test: with the bus refresh against the picture the voices' samples do not show it;
+  the bus log does.
+- Implemented in: the commit "Nephrite, stage 5: the 68000's side".
 
 ### D-15. OPEN. When an operator's or a channel's register write takes effect, and which writes are lost
 - Opened: 2026-10-05, at stage 5 step 2, by the board's FM output (`mdboard.py sound fm-sine` and its variants):
@@ -750,3 +817,6 @@ CPUs' disputes in their own record pages.
   replays; it fails for a restart outside 76 to 100, a leeway outside 56 to 80, or a first cycle other than the
   fourth sample) and `the_z80s_reset_line_resets_the_ym2612` (the line's wiring through the 68000's `$A11200`).
 - Implemented in: the commit "Nephrite, stage 5: the board's FM rules".
+- 2026-10-05, at stage 5's 68000 step: the power-on cycle, where the line starts asserted, now has its first
+  deadline 793 master clocks after power-on, where the board's falls against the picture (D-2's placement); it was
+  458, the board's against the 68000's start. Both give every voice the board's samples on the whole machine.

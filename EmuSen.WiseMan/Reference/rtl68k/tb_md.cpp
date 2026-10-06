@@ -53,6 +53,10 @@ int main(int argc, char** argv) {
     // TB_ZBUS=from:to prints the Z80 bus as the board carries it, at each change of its strobes, address or data
     // ("b cycle rd wr address data"); the YM2612 is addressed at $4000-$4003 on it.
     uint64_t zbus_from = 1, zbus_to = 0; uint32_t last_zbus = 0xFFFFFFFF;
+    // TB_MEM=from:to prints the 68000 bus's strobes and the main RAM's at each change ("m cycle as uds lds rw dtack
+    // ras1 cas1 oe1 cart_cs"), four more of the board's nets read by name.
+    uint64_t mem_from = 1, mem_to = 0; uint32_t last_mem = 0xFFFFFFFF;
+    if (const char* mm = getenv("TB_MEM")) sscanf(mm, "%llu:%llu", (unsigned long long*)&mem_from, (unsigned long long*)&mem_to);
     if (const char* zb = getenv("TB_ZBUS")) sscanf(zb, "%llu:%llu", (unsigned long long*)&zbus_from, (unsigned long long*)&zbus_to);
     uint16_t held = 0xFFFF;
     int hold = 0, hold_len = getenv("TB_HOLD") ? atoi(getenv("TB_HOLD")) : 8;
@@ -100,6 +104,12 @@ int main(int argc, char** argv) {
             if (b->fm_clk1 && !last_fclk) fclk_edges++;
             last_fclk = b->fm_clk1;
             if (t % 100000 == 99999) { printf("f %llu %llu\n", (unsigned long long)t, (unsigned long long)fclk_edges); fclk_edges = 0; }
+        }
+        if (t >= mem_from && t < mem_to) {
+            auto* r = b->rootp;
+            uint32_t m = r->md_board__DOT__AS << 8 | r->md_board__DOT__UDS << 7 | r->md_board__DOT__LDS << 6 | r->md_board__DOT__RW << 5
+                | r->md_board__DOT__DTACK << 4 | r->md_board__DOT__RAS1 << 3 | r->md_board__DOT__CAS1 << 2 | r->md_board__DOT__OE1 << 1 | b->cart_cs;
+            if (m != last_mem) { last_mem = m; printf("m %llu %d %d %d %d %d %d %d %d %d\n", (unsigned long long)t, m >> 8 & 1, m >> 7 & 1, m >> 6 & 1, m >> 5 & 1, m >> 4 & 1, m >> 3 & 1, m >> 2 & 1, m >> 1 & 1, m & 1); }
         }
         if (t >= zbus_from && t < zbus_to) {
             auto* r = b->rootp;

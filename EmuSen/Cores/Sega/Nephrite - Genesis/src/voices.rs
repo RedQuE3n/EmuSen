@@ -240,19 +240,24 @@ fn a_voice_replayed_after_a_reset_is_the_boards_wherever_the_release_falls() {
     assert_eq!(REPLAYS.len(), 40);
 }
 
-/// The whole machine running the 68000's programs, on its own timing: the algorithm and level voices, in which no
-/// envelope moves, are the board's all the same. The others are not yet, their key-on coming three and a half
-/// samples sooner than the board's 68000 makes it (Nephrite_Native.md §21.4).
+/// The whole machine running the 68000's programs on its own timing, every voice the board's to the sample: the
+/// 68000's five-clock access to the Z80's area and the refreshes it waits for (D-2, D-14), the busy flag's length
+/// (D-13) and the chip's cycle against the 68000 (D-19) put each write in the board's sample.
 #[test]
-fn the_whole_machine_plays_the_algorithms_as_the_board_does() {
+fn the_whole_machine_plays_every_voice_as_the_board_does() {
+    let mut wrong = Vec::new();
     let (mut equal_samples, mut samples) = (0, 0);
-    for v in VOICES.iter().filter(|v| !["fm-attack", "fm-envelope", "fm-dr", "fm-ar", "fm-rom"].iter().any(|p| v.name.starts_with(p))) {
-        let (_, ours) = machine(&voice(v.name).image(), (v.samples as i64 + 400) / 880 + 2);
+    for v in VOICES {
+        let (_, ours) = machine(&voice(v.name).image(), (v.samples as i64 + 2500) / 880 + 2);
         let first = ours.iter().position(|&x| x != 0 && x != -1).expect("the voice leaves rest");
-        equal_samples += equal(&ours[first..], v.samples, v.blocks);
-        samples += v.samples;
+        let e = equal(&ours[first..], v.samples, v.blocks);
+        if e != v.samples {
+            wrong.push((v.name, e, v.samples));
+        }
+        (equal_samples, samples) = (equal_samples + e, samples + v.samples);
     }
-    assert_eq!((equal_samples, samples), (67_482, 67_482));
+    assert!(wrong.is_empty(), "voices unlike the board's: {wrong:?}");
+    assert_eq!((equal_samples, samples), (200_220, 200_220));
 }
 
 /// The 68000 asserts the Z80's reset under a sounding voice and releases it: the voice stops, the registers are as

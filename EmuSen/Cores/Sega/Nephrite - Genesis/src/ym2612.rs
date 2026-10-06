@@ -9,15 +9,21 @@ use crate::fm::{Fm, Tables};
 
 static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
 
-/// Master clocks a sample, and the busy flag's span after a data write: 32 of the chip's internal clocks, which are
-/// six of its input clocks each (Eke's measurement on the YM2612 and the ASIC alike; Nephrite_Native.md §18).
+/// Master clocks a sample, and of one of its 24 slots, six of the chip's input clocks.
 pub const SAMPLE: u64 = 144 * 7;
-pub const BUSY: u64 = 32 * 6 * 7;
+pub const SLOT: u64 = 6 * 7;
+/// The busy flag after a data write: from the first slot's edge at or after the write, 33 slots, as the board's
+/// ASIC has it (Nephrite_Disputes.md D-13). The slots' edges fall this far into each slot after a sample's deadline.
+pub const BUSY: u64 = 33 * SLOT;
+pub const SLOT_EDGE: u64 = 22;
 /// The reset line, as the board has it (Nephrite_Disputes.md D-19). The sample cycle restarts at the line's
 /// assertion: a write is in time for the sample `RESTART` master clocks after it and every 1,008 from there. A
 /// release up to `RELEASE_LEEWAY` after one of those moments still starts the envelope's counter with that sample,
 /// and the counter's first cycle is the fourth sample from its start.
 pub const RESTART: u64 = 87;
+/// The first sample's deadline after power-on, where the reset line starts asserted: where the board's falls against
+/// the picture (Nephrite_Disputes.md D-2, D-19).
+pub const POWER_ON: u64 = 793;
 pub const RELEASE_LEEWAY: u64 = 67;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -98,7 +104,8 @@ impl Ym2612 {
             self.part = (port >> 1 & 1) as u8;
             return;
         }
-        self.busy_until = t + BUSY;
+        let into_slot = (t as i64 - (self.next + SLOT_EDGE) as i64).rem_euclid(SLOT as i64) as u64;
+        self.busy_until = t + (SLOT - into_slot) % SLOT + BUSY;
         let (part, a) = (self.part as usize, self.address as usize);
         // The chip's own registers, $21-$2F, are part 0's only.
         if part == 1 && (0x21..=0x2F).contains(&a) {
@@ -239,15 +246,19 @@ mod tests {
         assert_eq!((y.regs[0][0x2A], y.regs[1][0x2A]), (0, 0), "the chip's own registers are part 0's");
     }
 
+    /// The busy flag (D-13): from the first slot's edge at or after a data write, 33 slots, the edges falling 22 master
+    /// clocks into each slot after a sample's deadline; and only at port 0 on the discrete chip.
     #[test]
-    fn the_busy_flag_follows_a_data_write_for_192_of_the_68000s_clocks_and_reads_at_port_0_on_the_discrete_chip() {
+    fn the_busy_flag_runs_33_slots_from_the_next_slot_edge_and_reads_at_port_0_on_the_discrete_chip() {
         let mut y = Ym2612::new(true);
-        y.write(0, 0x2A, 1000);
-        assert_eq!(y.read(0, 1001), 0, "an address write does not set it");
-        y.write(1, 0x80, 1000);
-        assert_eq!(y.read(0, 1000 + BUSY - 1), 0x80);
-        assert_eq!(y.read(0, 1000 + BUSY), 0);
-        assert_eq!((y.read(1, 1001), y.read(2, 1001), y.read(3, 1001)), (0, 0, 0));
+        let edge = y.next + SLOT_EDGE;
+        y.write(0, 0x2A, edge - 5);
+        assert_eq!(y.read(0, edge - 4), 0, "an address write does not set it");
+        for (at, until) in [(edge - 5, edge + BUSY), (edge, edge + BUSY), (edge + 1, edge + SLOT + BUSY)] {
+            y.write(1, 0x80, at);
+            assert_eq!((y.read(0, until - 1), y.read(0, until)), (0x80, 0), "a write {} from an edge", at as i64 - edge as i64);
+        }
+        assert_eq!((y.read(1, edge + 2), y.read(2, edge + 2), y.read(3, edge + 2)), (0, 0, 0));
         let mut asic = Ym2612::new(false);
         asic.write(1, 0, 0);
         assert_eq!((asic.read(1, 1), asic.read(3, 1)), (0x80, 0x80));

@@ -13,6 +13,24 @@ use crate::vdp::{LINE, Vdp};
 
 /// Master clocks a 68000 clock, and a Z80 T-state.
 pub const M68K: u64 = 7;
+/// The bus's refresh, every 128 of the 68000's clocks, placed against the picture as the board has it: the first access
+/// at or after one waits two clocks if it is to the cartridge's area, and passes it without a wait if it is anywhere
+/// else (Nephrite_Disputes.md D-2).
+pub const REFRESH: u64 = 128 * M68K;
+pub const REFRESH_FIRST: u64 = 762;
+pub const REFRESH_WAIT: u64 = 2 * M68K;
+/// The main RAM's refresh (D-2): first requested at `RAM_REFRESH_FIRST`, then `RAM_REFRESH_AFTER` after each one
+/// is done. A RAM access within `RAM_REFRESH_WINDOW` of a request waits three clocks while it is done; with none, it
+/// is done at the window's end without a wait.
+pub const RAM_REFRESH_FIRST: u64 = 1414;
+pub const RAM_REFRESH_AFTER: u64 = 806;
+pub const RAM_REFRESH_WINDOW: u64 = 133;
+pub const RAM_REFRESH_WAIT: u64 = 3 * M68K;
+/// An access to the Z80's area, `$A00000`-`$A0FFFF`, takes the 68000 a clock more than four, and its strobe on the
+/// Z80's bus ends four clocks before the 68000's cycle does; the reset line moves as early in a write to `$A11200`
+/// (Nephrite_Disputes.md D-14, D-19).
+pub const Z80_AREA_WAIT: u64 = M68K;
+pub const Z80_AREA_LEAD: u64 = 4 * M68K;
 pub const Z80_T: u64 = 15;
 /// The Z80's INT, raised with the vertical interrupt, held for one line (argued: a pulse the Z80 misses with
 /// interrupts disabled, as MacDonald says).
@@ -78,6 +96,10 @@ pub struct Hw {
     pub locked_up: bool,
     /// Master clocks the 68000 owes the Z80's window, paid at its next access.
     stall: u64,
+    /// The master clocks of the next refresh of the bus and of the main RAM, each paid by the 68000's next access
+    /// it applies to (Nephrite_Disputes.md D-2).
+    pub refresh_at: u64,
+    pub ram_refresh_at: u64,
     /// The last word the 68000 read in program space: the next instruction, which an unmapped read returns.
     pub prefetch: u16,
     /// Whether this frame's picture is drawn at all (the sprite pass runs either way); the VDP holds the picture.
@@ -115,13 +137,16 @@ impl Genesis {
             tmss: [0; 4],
             locked_up: false,
             stall: 0,
+            refresh_at: REFRESH_FIRST,
+            ram_refresh_at: RAM_REFRESH_FIRST,
             prefetch: 0,
             draw: true,
             sound: if model.pal { Sound::new(53_203_425, 1, true) } else { Sound::new(4_725_000_000, 88, true) },
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
-        // The YM2612 is held with the Z80 from power-on, its sample cycle left as it starts (Nephrite_Disputes.md D-19).
-        g.hw.sound.ym.held = true;
+        // The YM2612 is held with the Z80 from power-on, its sample cycle where the board's is (Nephrite_Disputes.md D-19).
+        let ym = &mut g.hw.sound.ym;
+        (ym.held, ym.next, ym.held_at) = (true, crate::ym2612::POWER_ON, crate::ym2612::POWER_ON);
         g.cpu.reset(&mut MainBus(&mut g.hw));
         g
     }
@@ -224,6 +249,20 @@ impl Hw {
         }
     }
 
+    /// A 68000 access to the main RAM about to begin: the RAM's refresh, if one has been requested by now.
+    fn ram_refresh(&mut self) {
+        let at = self.clock;
+        while self.ram_refresh_at <= at {
+            let requested = self.ram_refresh_at;
+            if at - requested < RAM_REFRESH_WINDOW {
+                self.clock += RAM_REFRESH_WAIT;
+                self.ram_refresh_at = at + RAM_REFRESH_AFTER;
+            } else {
+                self.ram_refresh_at = requested + RAM_REFRESH_WINDOW + RAM_REFRESH_AFTER;
+            }
+        }
+    }
+
     /// One step of the 68000's hold during a transfer: the clock to the transfer's next bus read or slot.
     fn dma_hold(&mut self) {
         self.run_vdp(self.clock);
@@ -283,7 +322,7 @@ impl Hw {
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read8(a),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
-                    self.z80_space_read(a as u16 & 0x7FFF, self.clock)
+                    self.z80_space_read(a as u16 & 0x7FFF, self.clock - Z80_AREA_LEAD)
                 } else {
                     self.open8(a)
                 }
@@ -321,7 +360,7 @@ impl Hw {
             0x00_0000..=0x3F_FFFF => self.cart.write8(a, v),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
-                    self.z80_space_write(a as u16 & 0x7FFF, v, self.clock);
+                    self.z80_space_write(a as u16 & 0x7FFF, v, self.clock - Z80_AREA_LEAD);
                 }
             }
             0xA1_0000..=0xA1_001F => self.io.write(a, v, self.clock),
@@ -358,7 +397,7 @@ impl Hw {
             self.z80_clock = self.clock;
         }
         if self.z80_reset != held {
-            self.sound.ym_reset(held, self.clock);
+            self.sound.ym_reset(held, self.clock - Z80_AREA_LEAD);
         }
         self.z80_reset = held;
     }
@@ -488,15 +527,27 @@ fn reset_z80(z80: &mut Z80) {
 pub struct MainBus<'a>(pub &'a mut Hw);
 
 impl MainBus<'_> {
-    fn cycle(&mut self) {
+    /// A bus cycle to `a`: any refresh's wait that has come due, the Z80 area's extra clock, then four clocks.
+    fn cycle(&mut self, a: u32) {
         let hw = &mut *self.0;
-        hw.clock += 4 * M68K + std::mem::take(&mut hw.stall);
+        let a = a & 0xFF_FFFF;
+        if hw.clock >= hw.refresh_at {
+            if a < 0x80_0000 {
+                hw.clock += REFRESH_WAIT;
+            }
+            hw.refresh_at += (hw.clock - hw.refresh_at) / REFRESH * REFRESH + REFRESH;
+        }
+        if a >= 0xE0_0000 {
+            hw.ram_refresh();
+        }
+        let area = if (0xA0_0000..=0xA0_FFFF).contains(&a) { Z80_AREA_WAIT } else { 0 };
+        hw.clock += 4 * M68K + area + std::mem::take(&mut hw.stall);
     }
 }
 
 impl MainBusTrait for MainBus<'_> {
     fn read(&mut self, a: Access) -> u16 {
-        self.cycle();
+        self.cycle(a.address);
         let v = match a.size {
             Size::Word => self.0.read16(a.address),
             Size::Byte => self.0.read8(a.address) as u16,
@@ -508,7 +559,7 @@ impl MainBusTrait for MainBus<'_> {
     }
 
     fn write(&mut self, a: Access, v: u16) {
-        self.cycle();
+        self.cycle(a.address);
         match a.size {
             Size::Word => self.0.write16(a.address, v),
             Size::Byte => self.0.write8(a.address, v as u8),
@@ -682,6 +733,8 @@ pub struct Saved {
     tmss: [u8; 4],
     locked_up: bool,
     stall: u64,
+    refresh_at: u64,
+    ram_refresh_at: u64,
 }
 
 impl Genesis {
@@ -729,7 +782,7 @@ impl Genesis {
         w.u8("SramRegister", h.cart.sram_reg);
         w.bool("Mapper", h.cart.banks.is_some());
         w.bytes("MapperPages", &h.cart.banks.unwrap_or_default());
-        w.u64s("Clocks", &[h.clock, h.z80_clock, h.z80_int.0, h.z80_int.1, h.line_begun, h.vint_at.unwrap_or(u64::MAX), h.stall]);
+        w.u64s("Clocks", &[h.clock, h.z80_clock, h.z80_int.0, h.z80_int.1, h.line_begun, h.vint_at.unwrap_or(u64::MAX), h.stall, h.refresh_at, h.ram_refresh_at]);
         w.u32("Line", h.line);
         w.u16("Z80Bank", h.z80_bank);
         w.u16("OpenBus", h.prefetch);
@@ -810,7 +863,7 @@ impl Genesis {
         let mapper = r.bool()?;
         let mut pages = [0u8; 8];
         r.bytes(&mut pages)?;
-        let mut c = [0u64; 7];
+        let mut c = [0u64; 9];
         r.u64s(&mut c)?;
         let line = r.u32()?;
         let z80_bank = r.u16()?;
@@ -841,6 +894,8 @@ impl Genesis {
             line_begun: c[4],
             vint_at: (c[5] != u64::MAX).then_some(c[5]),
             stall: c[6],
+            refresh_at: c[7],
+            ram_refresh_at: c[8],
             line,
             z80_bank,
             prefetch,
@@ -877,6 +932,7 @@ impl Genesis {
         h.prefetch = s.prefetch;
         (h.z80_bank, h.z80_busreq, h.z80_reset, h.tmss_unlocked, h.tmss, h.locked_up, h.stall) =
             (s.z80_bank, s.z80_busreq, s.z80_reset, s.tmss_unlocked, s.tmss, s.locked_up, s.stall);
+        (h.refresh_at, h.ram_refresh_at) = (s.refresh_at, s.ram_refresh_at);
     }
 }
 
@@ -905,4 +961,91 @@ mod tests {
         hw.vdp.acknowledge(2);
         assert_eq!(hw.vdp.level(), 0);
     }
+
+    /// `mdboard.py`'s RAM loops, from the 68000's start as on the board: the start of each instruction's last read of
+    /// the cartridge, which is its prefetch, made when the instruction ends.
+    fn loop_fetches(name: &str, words: &[u16], count: usize) -> Vec<u32> {
+        let mut code = vec![0x47F9, 0x00FF, 0x0100];
+        for _ in 0..count {
+            code.extend_from_slice(words);
+        }
+        code.push(0x60FE);
+        let image = crate::pictures::program(&[0x8004, 0x8104, 0x8F02], &[], &code);
+        let board = crate::board_bus::LOOPS.iter().find(|l| l.name == name).unwrap();
+        let fnv = image.iter().fold(0x811C_9DC5u32, |h, &b| (h ^ b as u32).wrapping_mul(0x0100_0193));
+        assert_eq!(fnv, board.image, "{name}: the program is not the one the board ran");
+        let mut m = crate::machine::Machine::new(&image, crate::media::Media::read(&image));
+        // The board's run had its bus refresh this far from its 68000's first bus cycle, which comes 98 into Nephrite's.
+        m.genesis.hw.refresh_at = 98 + 777;
+        let g = &mut m.genesis;
+        let end = 0x222 + 2 * (words.len() * count) as u32;
+        let mut ends = Vec::new();
+        while g.cpu.regs.pc < end {
+            let pc = g.cpu.regs.pc;
+            let _: Step = g.cpu.step(&mut MainBus(&mut g.hw));
+            if pc >= 0x222 {
+                ends.push((g.hw.clock - 98 - 4 * M68K) as u32);
+            }
+        }
+        ends
+    }
+
+    /// The refreshes against the board (D-2): in loops of RAM reads, every instruction ends when the board's does.
+    #[test]
+    fn ram_loops_keep_the_boards_time_through_both_refreshes() {
+        for (name, words, count) in [("ram-reads", &[0x3013][..], 400), ("ram-longs", &[0x2013][..], 300), ("ram-reads-3", &[0x3013, 0x4E71, 0x4E71, 0x4E71][..], 400)] {
+            let board = &crate::board_bus::LOOPS.iter().find(|l| l.name == name).unwrap().fetches;
+            let ends = loop_fetches(name, words, count);
+            let last = *board.last().unwrap();
+            let wrong: Vec<u32> = ends.iter().copied().filter(|t| *t < last && !board.contains(t)).collect();
+            assert!(wrong.is_empty(), "{name}: {} of {} instructions end off the board's reads, the first at {:?}", wrong.len(), ends.len(), wrong.first());
+        }
+        // Six NOPs between reads: the board's one late refresh, a wait of four clocks where the rule gives three, at 2,366.
+        let board = &crate::board_bus::LOOPS.iter().find(|l| l.name == "ram-reads-6").unwrap().fetches;
+        let ends = loop_fetches("ram-reads-6", &[0x3013, 0x4E71, 0x4E71, 0x4E71, 0x4E71, 0x4E71, 0x4E71], 228);
+        let first_wrong = ends.iter().find(|t| !board.contains(t));
+        assert_eq!(first_wrong, Some(&2415), "ram-reads-6 keeps the board's time until its four-clock wait");
+    }
+
+    /// `mdboard.py rom-loop`: `add.w (a0)+,d1; cmp.l a0,d0; bcc.s`, 24 clocks by the manual, over the cartridge or the
+    /// main RAM; each round's length in clocks, counted.
+    fn rom_loop(base: u32) -> std::collections::BTreeMap<u64, usize> {
+        let w = |v: &[u16]| v.iter().flat_map(|x| x.to_be_bytes()).collect::<Vec<u8>>();
+        let mut r = vec![0xFFu8; 0x2000];
+        r[0..8].copy_from_slice(&w(&[0x00FF, 0xFE00, 0x0000, 0x0200]));
+        r[0x100..0x110].copy_from_slice(b"SEGA MEGA DRIVE ");
+        let end = base + 0xFFFE;
+        r[0x200..0x218].copy_from_slice(&w(&[0x46FC, 0x2700, 0x207C, (base >> 16) as u16, base as u16, 0x203C, (end >> 16) as u16, end as u16, 0x7200, 0xD258, 0xB088, 0x64FA]));
+        let mut m = crate::machine::Machine::new(&r, crate::media::Media::read(&r));
+        let g = &mut m.genesis;
+        let mut times = Vec::new();
+        while times.len() < 4000 {
+            let pc = g.cpu.regs.pc;
+            let _: Step = g.cpu.step(&mut MainBus(&mut g.hw));
+            if pc == 0x212 {
+                times.push(g.hw.clock);
+            }
+        }
+        let mut rounds = std::collections::BTreeMap::new();
+        for p in times.windows(2).skip(10) {
+            *rounds.entry((p[1] - p[0]) / M68K).or_insert(0) += 1;
+        }
+        rounds
+    }
+
+    /// D-2's first measurement, which the refreshes' rules were not fitted to: on the board 19.1% of the cartridge's
+    /// rounds take 26 clocks, and of the RAM's 13.0% take 26, 16.2% 27 and 3.8% 29, the rest 24.
+    #[test]
+    fn the_refreshes_cost_the_boards_share_of_rounds() {
+        let share = |rounds: &std::collections::BTreeMap<u64, usize>, k: u64| 100.0 * *rounds.get(&k).unwrap_or(&0) as f64 / rounds.values().sum::<usize>() as f64;
+        let cartridge = rom_loop(0x1000);
+        assert_eq!(cartridge.keys().copied().collect::<Vec<_>>(), [24, 26]);
+        assert!((share(&cartridge, 26) - 19.1).abs() < 1.0, "{cartridge:?}");
+        let ram = rom_loop(0xFF_0000);
+        assert_eq!(ram.keys().copied().collect::<Vec<_>>(), [24, 26, 27, 29]);
+        for (k, board) in [(26, 13.0), (27, 16.2), (29, 3.8)] {
+            assert!((share(&ram, k) - board).abs() < 1.0, "{k} clocks: {ram:?}");
+        }
+    }
 }
+

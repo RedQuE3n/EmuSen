@@ -125,8 +125,67 @@ impl Ym2612 {
     /// A read of port `port & 3` at master clock `t`: the status register, its busy flag missing outside port 0 on
     /// the discrete chip.
     pub fn read(&self, port: u16, t: u64) -> u8 {
+        if self.regs[0][0x21] & 0x40 != 0 && !self.held {
+            return self.test_read(t);
+        }
         let busy = t < self.busy_until && (port & 3 == 0 || !self.discrete);
         (busy as u8) << 7 | self.flags | (t >= self.rise[0]) as u8 | ((t >= self.rise[1]) as u8) << 1
+    }
+
+    /// The chip as the sample of deadline `deadline` leaves it: itself where that is the sample last made, and
+    /// otherwise a copy run on to it, with the writes known so far.
+    fn after_sample(&self, deadline: u64) -> std::borrow::Cow<'_, Ym2612> {
+        if deadline < self.next {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut ahead = self.clone();
+        ahead.trace = None;
+        ahead.make(deadline, true, |_, _| {});
+        std::borrow::Cow::Owned(ahead)
+    }
+
+    /// A read with the test register's bit 6 set (Nephrite_Disputes.md D-23): a byte of what the chip is working
+    /// on in the slot the read ends in. With `$2C` bit 4 clear it is an operator's fourteen-bit output: the sample of
+    /// deadline D gives its operators from its 19th slot edge, a slot each, S1 of the six channels, then S3, S2 and
+    /// S4. With the bit set it is a channel's nine-bit output, from the sample's 50th edge, four slots each, in the
+    /// order the pins carry them: 1, 5, 3, 2, 6, 4. `$21` bit 7 picks the high byte, whose top bit is ten low bits of
+    /// channel 4's S4's phase, one a slot from the slot that operator is read in, and whose next bit, with `$21` bit 0
+    /// set, is a pulse in each sample's 20th slot; with it clear, whether an operator's envelope took an increment in
+    /// the cycle of its sample, from the 16th edge in the same order as the outputs.
+    fn test_read(&self, t: u64) -> u8 {
+        // The slot edges are counted from the deadline last passed, which may be several samples on from `next`.
+        let slots = |from: i64| (t as i64 - SLOT_EDGE as i64 - from).div_euclid(SLOT as i64);
+        let grid = |first: i64| {
+            // The deadline D on the grid with `first <= slots(D) < first + 24`, and that slot less `first`.
+            let n = (slots(self.next as i64) - first).div_euclid(24);
+            let d = self.next as i64 + n * SAMPLE as i64;
+            (d as u64, (slots(d) - first) as usize)
+        };
+        let high = self.regs[0][0x21] & 0x80 != 0;
+        let value = if self.regs[0][0x2C] & 0x10 == 0 {
+            let (d, j) = grid(19);
+            let (channel, op) = (j % 6, [0, 2, 1, 3][j / 6]);
+            self.after_sample(d).fm.ch[channel].ops[op].out as u16 & 0x3FFF
+        } else {
+            let (d, j) = grid(50);
+            self.after_sample(d).channels[[0, 4, 2, 1, 5, 3][j / 4]] as u16 & 0x1FF
+        };
+        if !high {
+            return value as u8;
+        }
+        // Channel 4's S4 is read in a sample's 40th slot: its phase as that sample began, a bit a slot for ten.
+        let (d, bit) = grid(40);
+        let sync = bit < 10 && d >= SAMPLE && self.after_sample(d - SAMPLE).fm.ch[3].ops[3].phase >> bit & 1 != 0;
+        let pulse = if self.regs[0][0x21] & 1 != 0 {
+            grid(20).1 == 0
+        } else {
+            // An operator's envelope step shows three slots before its output would, in the sample of the cycle.
+            let (d, j) = grid(16);
+            let (channel, op) = (j % 6, [0, 2, 1, 3][j / 6]);
+            let cycle = d >= SAMPLE && self.after_sample(d - SAMPLE).fm.eg_div == 0;
+            cycle && { let after = self.after_sample(d); after.fm.eg_stepped(&after.regs, channel, op, after.fm.eg_counter) }
+        };
+        (sync as u8) << 7 | (pulse as u8) << 6 | (value >> 8) as u8
     }
 
     /// The reset line at master clock `t`, the chip already brought up to `t`. Its assertion puts every register,
@@ -185,10 +244,14 @@ impl Ym2612 {
             self.regs[0][a] = v;
             return;
         }
+        // So are the bits of the test read, which is the reader's and no sample's.
         if part == 0 && a == 0x21 {
-            self.regs[0][0x21] = self.regs[0][0x21] & !4 | v & 4;
+            self.regs[0][0x21] = self.regs[0][0x21] & !0xC5 | v & 0xC5;
         }
-        let (fields, n) = Self::takes(a, v);
+        if part == 0 && a == 0x2C {
+            self.regs[0][0x2C] = self.regs[0][0x2C] & !0x10 | v & 0x10;
+        }
+        let (fields, n) = Self::takes(part, a, v);
         for &(mask, after) in &fields[..n] {
             let need = t as i64 - after - self.next as i64;
             let due = if need <= 0 { self.next } else { self.next + (need as u64).div_ceil(SAMPLE) * SAMPLE };
@@ -202,7 +265,7 @@ impl Ym2612 {
 
     /// The parts of register `a` taken at their own moments: the bits of each, and how long after a sample's deadline
     /// a write may come and still be taken by it (Nephrite_Disputes.md D-25).
-    fn takes(a: usize, v: u8) -> ([(u8, i64); 5], usize) {
+    fn takes(part: usize, a: usize, v: u8) -> ([(u8, i64); 5], usize) {
         let mut f = [(0xFF, 0); 5];
         let n = match a {
             0x28 => {
@@ -210,8 +273,8 @@ impl Ym2612 {
                 1
             }
             0x21 => {
-                f = [(0x02, 0), (0x08, edge(TAKE_PHASE_TEST)), (0x10, edge(TAKE_TOP_BIT_TEST)), (0x20, edge(TAKE_EG_TEST)), (0xC1, 0)];
-                5
+                f[..4].copy_from_slice(&[(0x02, 0), (0x08, edge(TAKE_PHASE_TEST)), (0x10, edge(TAKE_TOP_BIT_TEST)), (0x20, edge(TAKE_EG_TEST))]);
+                4
             }
             0x22 => {
                 f[0].1 = edge(TAKE_LFO);
@@ -226,7 +289,7 @@ impl Ym2612 {
                 1
             }
             0x2C => {
-                f[..3].copy_from_slice(&[(0x20, edge(TAKE_DAC_TEST)), (0x08, edge(TAKE_DAC)), (0xD7, 0)]);
+                f[..3].copy_from_slice(&[(0x20, edge(TAKE_DAC_TEST)), (0x08, edge(TAKE_DAC)), (0xC7, 0)]);
                 3
             }
             0x30..=0x9F => {
@@ -234,7 +297,9 @@ impl Ym2612 {
                 1
             }
             0xA0..=0xAE => {
-                f[0].1 = edge(TAKE_FREQUENCY);
+                // A slot later for each channel after the first, as the keys are; channel 3's own frequencies as channel 3's.
+                let channel = if a >= 0xA8 { 2 } else { part as i64 * 3 + (a & 3) as i64 };
+                f[0].1 = edge(TAKE_FREQUENCY + channel);
                 1
             }
             0xB0..=0xB2 => {

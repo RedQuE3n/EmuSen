@@ -1610,6 +1610,12 @@ LANDING = {
     "dac-all": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x2A, 0xA0)], extra=[(0x2C, 0x20, 2, k)], **A4),
     "special": lambda k: fm_voice((SINE, QUIET, QUIET, QUIET), channel=2, pre=OWN_1500, extra=[(0x27, 0x40, 2, k)], **A4),
     "csm": lambda k: csm((QUIET, QUIET, QUIET, PLUCK), pre_nops=k),
+    # The test register's bits cleared, and bit 1 set, as a voice sounds (Nephrite_Disputes.md D-23).
+    "pg-off": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x21, 0x08, 2), (0x21, 0x00, 1, k)], **A4),
+    "eg-off": lambda k: fm_voice((QUIET, QUIET, QUIET, DECAY), extra=[(0x21, 0x20, 2), (0x21, 0x00, 1, k)], **A4),
+    "ugly-off": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x21, 0x10, 2), (0x21, 0x00, 1, k)], **A4),
+    "lfo-test": lambda k: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=8 | 7, b4=0xC0 | 3 << 4, extra=[(0x21, 0x02, 2, k)], **A4),
+    "dac-all-off": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x2A, 0xA0)], extra=[(0x2C, 0x20, 2), (0x2C, 0x00, 1, k)], **A4),
 }
 for _c in range(6):
     for _k in range(4):
@@ -1837,6 +1843,104 @@ pub struct Landing {
 }
 '''
 
+# ---- the test read (Nephrite_Disputes.md D-23)
+
+def read_ops(i, slot, op):
+    """An operator's registers $30-$90 for channel `i` of its part: (dt_mul, tl, ks_ar, am_dr, sr, sl_rr), SSG-EG off."""
+    return [(base + slot + i, v) for base, v in zip((0x30, 0x40, 0x50, 0x60, 0x70, 0x80), op)] + [(0x90 + slot + i, 0)]
+
+def read_channel(c, fnum, tls, ops=None):
+    """Channel `c` (0-5), algorithm 7, both sides: S1-S4 at multiples 1, 2, 3, 5 and the TLs `tls`, or `ops`, at
+    block 4 and frequency number `fnum`."""
+    i = c % 3
+    regs = [(0xB0 + i, 7), (0xB4 + i, 0xC0)]
+    for k, slot in enumerate((0, 8, 4, 12)):
+        regs += read_ops(i, slot, ops[k] if ops else ((1, 2, 3, 5)[k], tls[k], 0x1F, 0, 0, 0x0F))
+    return regs + [(0xA4 + i, 4 << 3 | fnum >> 8), (0xA0 + i, fnum & 0xFF)]
+
+def read_program(parts, after, reads=1536):
+    """The writes to part 0 and part 1, then `after` (part 0), then the status port read `reads` times into RAM
+    from $FF0000, a read every 23 of the 68000's clocks, which drift across the sample's 24 slots."""
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000, 0x47F9, 0x00FF, 0x0000) + ym_writes([(0x22, 0), (0x27, 0), (0x2B, 0)])
+    code += ym_writes(parts[0]) + ym_writes(parts[1], 1) + ym_writes(after)
+    code += w(0x303C, reads - 1, 0x16D2, 0x51C8, 0xFFFC)
+    return program([0x8004, 0x8104, 0x8F02], [], code + w(0x60FE))
+
+def _all_channels():
+    """Every channel sounding, its four operators at their own levels and the channel at its own frequency."""
+    parts = ([], [])
+    for c in range(6):
+        parts[c // 3].extend(read_channel(c, 600 + 97 * c, [4 + 3 * k + c for k in range(4)]))
+    return parts
+
+ALL_KEYS = [(0x28, 0xF0 | k) for k in (0, 1, 2, 4, 5, 6)]
+CH4 = lambda c: read_channel(c, 891, [8] * 4)
+# Channel 4's S4 alone, its other operators never written: a decay taking a step every few envelope cycles.
+DECAY_S4 = [(0xB0, 7), (0xB4, 0xC0)] + [(base + 0x0C, v) for base, v in zip((0x30, 0x40, 0x50, 0x60, 0x70, 0x80), (0x01, 0x00, 0x1F, 18, 0x00, 0xFF))] + [(0xA4, 4 << 3 | 891 >> 8), (0xA0, 891 & 0xFF)]
+TEST_READS = {
+    # $21 and $2C as named; every channel sounding.
+    **{f"read-{r21:02x}-{r2c:02x}": lambda r21=r21, r2c=r2c: read_program(_all_channels(), ALL_KEYS + [(0x2C, r2c), (0x21, r21)])
+       for r21, r2c in ((0x40, 0x00), (0xC0, 0x00), (0x40, 0x10), (0xC0, 0x10), (0xC1, 0x00), (0xC1, 0x10))},
+    # Channel 4 alone written, never keyed, then keyed and released: the high byte's top bits.
+    "read-unkeyed": lambda: read_program(([], CH4(0)), [(0x2C, 0), (0x21, 0xC0)]),
+    "read-released": lambda: read_program(([], CH4(0)), [(0x28, 0xF4), (0x28, 0x04), (0x2C, 0), (0x21, 0xC0)]),
+    # Channel 1 written as channel 4 is and keyed, channel 4 not: each channel's frequency taken a slot after the last's.
+    "read-ch1-keyed": lambda: read_program((CH4(0), CH4(0)), [(0x28, 0xF0), (0x2C, 0), (0x21, 0xC0)]),
+    "read-decay": lambda: read_program(([], DECAY_S4), [(0x28, 0x84), (0x2C, 0), (0x21, 0xC0)]),
+    "read-decay-c1": lambda: read_program(([], DECAY_S4), [(0x28, 0x84), (0x2C, 0), (0x21, 0xC1)]),
+}
+
+def read_events(lines, release):
+    """A run's YM2612 accesses after `release` as the chip takes them, in master clocks: each write at its strobe's
+    fall and 48 cycles (`ym_latches`), each read after the last write at its strobe's rise, with the byte the 68000
+    read; the busy flag's polls between the writes are left out."""
+    bus = [(int(l[1]), int(l[2]), int(l[3]), int(l[4], 16), int(l[5], 16)) for l in lines if l[0] == "b" and int(l[1]) >= release]
+    ev, wfall = [], None
+    for was, e in zip(bus, bus[1:]):
+        if was[2] == 1 and e[2] == 0 and 0x4000 <= e[3] < 0x4004:
+            wfall = e[0]
+        if was[2] == 0 and e[2] == 1 and 0x4000 <= was[3] < 0x4004:
+            ev.append(((wfall + 48) // 2, was[3] & 3, was[4]))
+        if was[1] == 0 and e[1] == 1 and 0x4000 <= was[3] < 0x4004:
+            ev.append((e[0] // 2, 0x80 | was[3] & 3, was[4]))
+    ev.sort(key=lambda x: x[0])
+    last = max(k for k, x in enumerate(ev) if x[1] < 0x80)
+    return [x for k, x in enumerate(ev) if x[1] < 0x80 or k > last]
+
+def board_reads(at):
+    """Nephrite's `board_reads.rs`: for each of `TEST_READS`, its program's hash and its YM2612 accesses from the
+    reset line's release (`read_events`), each four bytes: the port (with $80 for a read, $40 for a wait alone), the
+    value written or read, and the master clocks since the last, big-endian; the logs (`<name>.bus`) made if missing."""
+    out = ["pub const TEST_READS: &[(&str, u32, &str)] = &["]
+    release = None
+    for name, make in TEST_READS.items():
+        image = make()
+        if not os.path.exists(at(name + ".bus")):
+            lines = [l for l in bench(image, 2600000, zbus=True) if l[0] in "zb"]
+            open(at(name + ".bus"), "w").write("\n".join(" ".join(l) for l in lines) + "\n")
+        lines = [l.split() for l in open(at(name + ".bus"))]
+        r = edges(lines)[1][0]
+        assert release in (None, r), (name, r, release)
+        release = r
+        data, last = bytearray(), r // 2
+        for t, port, v in read_events(lines, r):
+            gap = t - last
+            while gap > 0xFFFF:
+                data += bytes([0x40, 0, 0xFF, 0xFF])
+                gap -= 0xFFFF
+            data += bytes([port, v, gap >> 8, gap & 0xFF])
+            last = t
+        out.append(f'    ("{name}", 0x{fnv(image):08x}, "{data.hex()}"),')
+    out.append("];\n")
+    out.append(f"pub const READS_RELEASE: u64 = {release};\n")
+    return BOARD_READS_HEAD + "\n".join(out)
+
+BOARD_READS_HEAD = '''//! Generated by `EmuSen.WiseMan/Reference/rtl68k/mdboard.py board-reads <logs>`; do not edit. The test read's
+//! programs of Nephrite_Disputes.md D-23 as the board ran them: each program's hash and its accesses to the YM2612,
+//! the bytes its 68000 read among them, and the master clock in MCLK2 at which the reset line was released.
+
+'''
+
 if __name__ == "__main__":
     what = sys.argv[1]
     if what == "sound":
@@ -1857,6 +1961,9 @@ if __name__ == "__main__":
         sys.exit()
     if what == "board-chip":
         sys.stdout.write(board_chip(sys.argv[2]))
+        sys.exit()
+    if what == "board-reads":
+        sys.stdout.write(board_reads(lambda name: os.path.join(os.path.abspath(sys.argv[2]), name)))
         sys.exit()
     if what == "read-after-write":
         read_after_write_report(int(sys.argv[2]) if len(sys.argv) > 2 else 0, "dac" in sys.argv[3:], "timers" in sys.argv[3:])

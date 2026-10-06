@@ -580,12 +580,12 @@ fn sweep_image(kind: &str, k: u16) -> Vec<u8> {
     fm_voice_on(ops, 7, 0, 1081, 4, &[], Setup { channel: c, key_nops: k, ..PLAIN }).image()
 }
 
-/// The same voices on the whole machine, placed as the board is against its 68000's start: 114 are the board's to the
-/// sample, as on the chip: the six test-register voices of `TEST_LANDINGS` are not.
+/// The same voices on the whole machine, placed as the board is against its 68000's start: 115 are the board's to the
+/// sample, as on the chip: the five test-register voices of `TEST_LANDINGS` are not.
 #[test]
 fn the_chip_voices_on_the_whole_machine_at_the_boards_placement() {
     let exact = CHIP_VOICES.iter().filter(|v| chip_equal(v) == v.samples.max(1)).count();
-    assert_eq!(exact, 114);
+    assert_eq!(exact, 115);
 }
 
 /// Each key of S1-S4 on all six channels, and CSM's timer, moved by NOPs across the sample: on the whole machine
@@ -621,18 +621,18 @@ fn equal_on_the_chip(name: &str, channel: usize, samples: usize, blocks: &[u32])
     }
 }
 
-/// The test register's voices that still differ with every write taken by its edge (Nephrite_Disputes.md D-25), each
-/// held to the samples it has now so that a change is seen.
-const TEST_LANDINGS: [(&str, usize); 6] = [
-    ("fm-test-lfo-late", 1408), ("fm-test-eg", 4120), ("fm-test-ugly", 8536), ("fm-test-pg0", 1408), ("fm-test-2c", 8536),
-    ("fm-test-2c-dac", 8536),
+/// The test register's voices that still differ with every write taken by its edge, each held to the samples it has
+/// now so that a change is seen: a bit that changes as a voice sounds reaches the operators slot by slot, which the
+/// sample-at-a-time unit does not follow (Nephrite_Disputes.md D-23).
+const TEST_LANDINGS: [(&str, usize); 5] = [
+    ("fm-test-lfo-late", 1408), ("fm-test-eg", 4120), ("fm-test-ugly", 8536), ("fm-test-2c", 8536), ("fm-test-2c-dac", 8536),
 ];
 
 /// The voices of SSG-EG, CSM, the timers' test bit, the test register and the channel's sum on the chip alone, each
 /// write at the master clock the board's 68000 made it (Nephrite_Native.md §24): every SSG-EG pattern, its attack,
 /// release, hold and its register written as it runs, on a modulator and on each operator's place; CSM by period,
 /// operator and mode, with a manual key; the timers counting a slot at a time; the test register's bits; carriers
-/// past nine bits. All the board's to the sample but the nine of `TEST_LANDINGS`.
+/// past nine bits. All the board's to the sample but the five of `TEST_LANDINGS`.
 #[test]
 fn the_chip_voices_are_the_boards_sample_for_sample() {
     let (mut wrong, mut exact, mut samples) = (Vec::new(), 0, 0);
@@ -646,7 +646,7 @@ fn the_chip_voices_are_the_boards_sample_for_sample() {
         }
     }
     assert!(wrong.is_empty(), "voices unlike the board's: {wrong:?}");
-    assert_eq!((CHIP_VOICES.len(), exact, samples), (120, 114, 917_186));
+    assert_eq!((CHIP_VOICES.len(), exact, samples), (120, 115, 925_786));
 }
 
 /// The LFO's voices on the chip alone: every one the board's to the sample, channel 3's special mode under the
@@ -759,4 +759,107 @@ fn every_write_is_taken_by_the_boards_sample_on_the_whole_machine() {
         }
     }
     assert_eq!(wrong, [("lfo", 40)], "runs unlike the board's");
+}
+
+/// `mdboard.py`'s `read_channel`: channel `c`, algorithm 7, S1-S4 at multiples 1, 2, 3 and 5 and the TLs given, or the
+/// operators given, at block 4 and frequency number `fnum`.
+fn read_channel(c: u8, fnum: u16, tls: [u8; 4]) -> Vec<(u8, u8)> {
+    let i = c % 3;
+    let mut regs = vec![(0xB0 + i, 7), (0xB4 + i, 0xC0)];
+    for (k, slot) in [0u8, 8, 4, 12].into_iter().enumerate() {
+        for (n, v) in [[1, 2, 3, 5][k], tls[k], 0x1F, 0, 0, 0x0F].into_iter().enumerate() {
+            regs.push((0x30 + 0x10 * n as u8 + slot + i, v));
+        }
+        regs.push((0x90 + slot + i, 0));
+    }
+    regs.extend_from_slice(&[(0xA4 + i, 4 << 3 | (fnum >> 8) as u8), (0xA0 + i, fnum as u8)]);
+    regs
+}
+
+/// `mdboard.py`'s `TEST_READS`: the writes to each part, the test register's, then 1,536 reads of the status port into
+/// RAM from `$FF0000`, a read every 23 of the 68000's clocks (Nephrite_Disputes.md D-23).
+fn read_image(name: &str) -> Vec<u8> {
+    let (mut p0, mut p1) = (Vec::new(), Vec::new());
+    let ch4 = |c: u8| read_channel(c, 891, [8; 4]);
+    let after: Vec<(u8, u8)> = match name {
+        "read-unkeyed" | "read-released" | "read-ch1-keyed" => {
+            p1 = ch4(3);
+            match name {
+                "read-unkeyed" => vec![(0x2C, 0), (0x21, 0xC0)],
+                "read-released" => vec![(0x28, 0xF4), (0x28, 0x04), (0x2C, 0), (0x21, 0xC0)],
+                _ => {
+                    p0 = ch4(0);
+                    vec![(0x28, 0xF0), (0x2C, 0), (0x21, 0xC0)]
+                }
+            }
+        }
+        "read-decay" | "read-decay-c1" => {
+            p1 = vec![(0xB0, 7), (0xB4, 0xC0), (0x3C, 0x01), (0x4C, 0x00), (0x5C, 0x1F), (0x6C, 18), (0x7C, 0x00), (0x8C, 0xFF), (0xA4, 4 << 3 | (891 >> 8) as u8), (0xA0, 891u16 as u8)];
+            vec![(0x28, 0x84), (0x2C, 0), (0x21, if name == "read-decay" { 0xC0 } else { 0xC1 })]
+        }
+        _ => {
+            for c in 0..6u8 {
+                let regs = read_channel(c, 600 + 97 * c as u16, std::array::from_fn(|k| 4 + 3 * k as u8 + c));
+                if c < 3 { p0.extend(regs) } else { p1.extend(regs) }
+            }
+            let (r21, r2c) = (u8::from_str_radix(&name[5..7], 16).unwrap(), u8::from_str_radix(&name[8..10], 16).unwrap());
+            [0u8, 1, 2, 4, 5, 6].map(|k| (0x28, 0xF0 | k)).into_iter().chain([(0x2C, r2c), (0x21, r21)]).collect()
+        }
+    };
+    let mut code = Z80_BUS.to_vec();
+    code.extend_from_slice(&[0x47F9, 0x00FF, 0x0000]);
+    ym_writes(&mut code, &[(0x22, 0), (0x27, 0), (0x2B, 0)], 0);
+    ym_writes(&mut code, &p0, 0);
+    ym_writes(&mut code, &p1, 1);
+    ym_writes(&mut code, &after, 0);
+    code.extend_from_slice(&[0x303C, 1535, 0x16D2, 0x51C8, 0xFFFC, 0x60FE]);
+    program(&[0x8004, 0x8104, 0x8F02], &[], &code)
+}
+
+/// A test-read program on the chip alone, each access at the master clock the board's 68000 made it, from the
+/// reset line's release: how many of its reads are the board's, of how many. The whole machine's 68000 does not yet
+/// keep the board's time through a loop that stores to its RAM (D-2), so the chip is given the board's times.
+fn reads_on_the_chip(name: &str, image: u32, events: &str) -> (usize, usize) {
+    assert_eq!(fnv(read_image(name)), image, "{name}: the program is not the one the board ran");
+    let bytes: Vec<u8> = (0..events.len()).step_by(2).map(|k| u8::from_str_radix(&events[k..k + 2], 16).unwrap()).collect();
+    let mut y = Ym2612::new(true);
+    (y.held, y.next, y.timers_next, y.held_at) = (true, BOARD_POWER_ON, BOARD_POWER_ON, BOARD_POWER_ON);
+    let mut t = crate::board_reads::READS_RELEASE / 2;
+    y.run(t, |_, _| {});
+    y.reset_line(false, t);
+    let (mut equal, mut reads) = (0, 0);
+    for e in bytes.chunks(4) {
+        t += u16::from_be_bytes([e[2], e[3]]) as u64;
+        y.run(t, |_, _| {});
+        match e[0] {
+            0x40 => {}
+            p if p & 0x80 != 0 => {
+                reads += 1;
+                equal += usize::from(y.read((p & 3) as u16, t) == e[1]);
+            }
+            p => y.write(p as u16, e[1], t),
+        }
+    }
+    (equal, reads)
+}
+
+/// The test read (D-23): an operator's output from the 19th edge or a channel's from the 50th, either byte; channel 4's
+/// S4's phase and the envelope's steps in the high byte; the phases' power-on value; each channel's frequency taken a
+/// slot after the last's. Every read of nine programs is the board's on the chip given the board's times; two stay
+/// open at the counts they have: an operator's lowest bit in a decay, and bit 6 with `$21` bit 0 set.
+#[test]
+fn the_test_read_is_the_boards() {
+    let mut wrong = Vec::new();
+    for &(name, image, board) in crate::board_reads::TEST_READS {
+        let held = match name {
+            "read-decay" => 1527,
+            "read-decay-c1" => 956,
+            _ => 1536,
+        };
+        let (equal, reads) = reads_on_the_chip(name, image, board);
+        if (equal, reads) != (held, 1536) {
+            wrong.push((name, equal, reads, held));
+        }
+    }
+    assert!(wrong.is_empty(), "test reads unlike the board's: {wrong:?}");
 }

@@ -2197,9 +2197,139 @@ emulator's source was read.
 
 - **D-27's open items**: the right side's weaker agreement; the model 1 DAC's levels that stand high; model 2's
   distortion and its PSG's level; the boards not offered.
-- **The test register's read side**, the six test-register voices and the `lfo` sweep (§26.3).
+- ~~**The test register's read side**, the six test-register voices and the `lfo` sweep (§26.3).~~ At §29.
 - **Carried forward from D-26**, not chased here: the sweeps' frame alternation, the FIFO at the frame's last line,
   the H counter in horizontal sync and on lines 229 to 234, mode 4's HV read.
 - **D-2**'s long RAM waits and **D-15**.
-- **Next**: the stage's closing oracle, Nemesis's FM tests against his recording, MDFourier's own comparison and the
-  references' audio envelopes.
+- ~~**Next**: the stage's closing oracle, Nemesis's FM tests against his recording, MDFourier's own comparison and the
+  references' audio envelopes.~~ At §29, which closes the stage.
+
+## 29. Stage 5, the test read and the stage's close (2026-10-06)
+
+### 29.1 What it built
+
+- **The test read** (`ym2612.rs`'s `test_read`, D-23): with `$21` bit 6 set, a read of the status port gives a byte
+  of what the chip is working on in the slot the read ends in. With `$2C` bit 4 clear it is an operator's fourteen-bit
+  output, from the sample's 19th slot edge, a slot each in the order S1 of the six channels, S3, S2, S4; with it set,
+  a channel's nine bits from the 50th edge, four slots each in the pins' order. `$21` bit 7 picks the high byte, whose
+  bit 7 carries channel 4's S4's phase a bit a slot from the 40th edge and whose bit 6 carries each operator's
+  envelope step from the 16th edge (or, with `$21` bit 0 set, a pulse in the 20th slot). A read in a sample not yet
+  made runs a copy of the chip on to it.
+- **The phase counters' power-on value**: all ones, as the test read shows them; a key-on still starts one from 0.
+- **A key-on under `$21` bit 3**: its sample's phase starts from 0, the next ones from one increment (D-23).
+- **Each channel's frequency taken a slot after the last channel's**, as the keys are (D-25).
+- **The bench**: `mdboard.py`'s `TEST_READS` and `board-reads`, which writes `board_reads.rs` (each program's hash
+  and its accesses to the chip with the bytes the board's 68000 read); five sweeps in `LANDING` that clear a test bit
+  as a voice sounds, or set bit 1 (`pg-off`, `eg-off`, `ugly-off`, `dac-all-off`, `lfo-test`); `examples/wav` takes
+  `NEPHRITE_PAL=1`.
+
+### 29.2 Measured (2026-10-06)
+
+- **The test read**, on the chip given the board's accesses at their master clocks: every one of the 1,536 reads of
+  nine programs is the board's (both bytes of both forms, the phase bits, the envelope's steps, the frequency's slot
+  by channel), and every read of twelve further runs not kept. Two programs stay open at their counts: the decaying
+  operator's high byte one apart in nine reads (1,527), and bit 6 with `$21` bit 0 set in the decaying channel's
+  program (956).
+- **On the whole machine** the same programs give 1,030 to 1,491 reads of 1,536 as the board did. Their loop stores
+  each read to the main RAM, where D-2's long waits are not built, and the whole machine's time through it is the
+  first suspect; it is not traced, and the test is held on the chip.
+- **The voices**: 115 of the 120 of D-21 to D-23 are the board's to the sample, on the chip and on the whole machine,
+  `fm-test-pg0` now among them. The five others change a test bit as the voice sounds, and that bit reaches the
+  operators slot by slot, where the unit makes a sample's four at once (D-23): `fm-test-ugly`, `-2c` and `-2c-dac`
+  differ in the one or two samples at the change, `fm-test-eg` by an envelope step in alternate runs of twelve samples
+  after the clear, and `fm-test-lfo-late` from its first sample under bit 1.
+- **The crate's tests**: 102 pass. **The conformance kit**, `--frames 600`: C1-C15 on §24's 17 images. **WiseMan**'s
+  Nephrite, runner, discovery and registration tests pass (31). **The corpus at anchors**: every game's pictures and
+  RAM are §28's; the step changes only what is heard and the test read, which no game in the corpus uses.
+
+### 29.3 The closing oracle
+
+**Nemesis's FM tests against recordings.** Of his six YM2612 tests, one has a recording: his own of
+`ym2612csmmode`, 96 kHz, one channel. Its CSM retrigger comes every 19.396 ms, which is timer A's longest period
+(1,024 samples) on a PAL console's clock and not on an NTSC one's (19.229 ms); the recording is of a PAL console. Run
+as a PAL model 1 (`NEPHRITE_PAL=1`) against the recording resampled to 48 kHz:
+
+| | The recording | Nephrite, PAL model 1 | Nephrite, PAL model 2 |
+|---|---|---|---|
+| Retrigger period, median and mean | 19.3958, 19.4009 ms | 19.3958, 19.4008 ms | the same |
+| The three largest spectral peaks | 876.0, 878.9, 928.7 Hz | the same | the same |
+| One retrigger's envelope, against the recording's | | correlation 0.99996, 0.4% of the peak rms | 0.99993, 1.2% |
+| Decay, dB a second, from -6 to -12 and -12 to -18 dB | -1,922, -1,853 | -1,913, -1,842 | -2,019, -2,062 |
+| Peak to -10 dB, to -20 dB | 4.48, 9.79 ms | 4.56, 9.88 ms | 4.42, 9.13 ms |
+| The level the decay settles at | -28.0 dB | -27.4 dB | -32.4 dB |
+
+The recording's console has the discrete YM2612's ladder: the floor a decaying voice settles on is the ladder's
+rest (D-27), which model 1 has and model 2 does not. The decay's rate, the retrigger and the pitch are Nephrite's.
+
+The other five have no recording. All six were run on the board for 19 million of its cycles (0.18 s of sound), and
+every channel each sounds on is the board's to the sample from its first sound on the whole machine: `csmmode` 4,075
+samples, `detune` 4,079, `FrequencyWriteOrder` 4,077, `ssg-eg` 4,077, and `multiplexing`'s six channels 3,950 to
+3,962. Run longer and compared at the place the others share (the whole machine 695 samples ahead of the board's
+count): `multiplexing` over 0.4 s, 14,367 to 14,379 samples a channel, every one the board's; `ssg-eg` over 1.2 s,
+58,821 of 58,828; `attackandrelease` over 1.1 s, 53,826 of 53,868. The 49 samples apart are a level of one apart in
+quiet passages. In `multiplexing` the six key-ons come 2.15 samples apart on the board and 2.0 in Nephrite, so a
+channel's first sound falls up to two samples from the board's against its neighbours; the 68000's time through the
+test's write routine is not traced.
+
+**MDFourier.** The 240p suite's sequence against MDFourier's recordings of 21 consoles is §28.2: a model 1's left side
+is Nephrite's to 0.21-0.24 dB rms, all partials within 1 dB, on all seven boards offered. MDFourier's own program was
+not run; the sequence was cut and measured by `mdrecordings.py`.
+
+**The references' audio envelopes**, as corroboration: each test through Genesis Plus GX, PicoDrive, BlastEm and
+ClownMDEmu (`probe --wav`), its envelope in 10 ms windows against Nephrite's (NTSC, model 1) at the best of ±1 s of
+lag, two to eight seconds in:
+
+| Test | Genesis Plus GX | PicoDrive | BlastEm | ClownMDEmu |
+|---|---|---|---|---|
+| `csmmode` | 0.27 dB | 7.43 | 0.12 | 0.76 |
+| `attackandrelease` | 0.13 | 2.27 | 0.10 | 0.14 |
+| `detune` | 0.00 | 0.02, at 2,756.8 Hz against the others' 3,329.6 | 0.08 | 0.02 |
+| `FrequencyWriteOrder` | 0.00 | 0.06 | 0.01 | 0.05 |
+| `ssg-eg`, its first 800 ms | 19.71 | 2.27 | 17.02 | 1.70 |
+
+Genesis Plus GX and BlastEm agree with Nephrite within 0.3 dB on the CSM, attack and frequency tests and ClownMDEmu
+within 0.8; PicoDrive's CSM and detune are its own. On `ssg-eg` the references are 1.7 to 19.7 dB from Nephrite and as far from one another; the board
+referees it, and it is Nephrite's. On `multiplexing` three references sound a 13.3 kHz tone for the whole run where
+BlastEm and Nephrite fall silent after the key-on burst; the board's channels are Nephrite's sample for sample, so
+the tone is the references' rendering of the multiplexed output.
+
+### 29.4 The stage's oracle
+
+The plan's oracle for stage 5 (§3.2, §6) and its scope:
+
+| Criterion | Met? |
+|---|---|
+| Nemesis's FM tests against recordings | Met for the one test with a recording, `csmmode`, on a PAL model 1. The other five have none; the board grades them, every channel to the sample. |
+| MDFourier from the 240p suite | Met on the left side of the seven model 1 boards offered (§28). Exceptions: the right side (1.5 dB rms), model 2 (1.7 to 1.8 dB), MDFourier's own program not run. |
+| The references' audio envelopes | Corroborate: within 0.8 dB for three of the four on the four tests where they agree among themselves. |
+| The scope: envelope, phase, LFO, SSG-EG, CSM, DAC, timers, busy, ladder effect, PSG, mix, model 1 filter, resampler | Built, each refereed on the board or the recordings. Exceptions: the five test-register voices and the `lfo` sweep, D-15's status read. |
+| P1, at most 1.5 ms a frame on the bench games | Met, as §24.2 measures it: Sonic the Hedgehog 1.278 ms, its sequel 1.160, Thunder Force IV 1.260, Streets of Rage 2 1.052, Phantasy Star IV 1.335; the mean 1.217. |
+
+Stage 5 is closed with the exceptions above carried forward.
+
+### 29.5 Carried forward
+
+- **D-15**: a status read straight after a data write leaves the register at 0 on the board; whether a console does
+  needs a console.
+- **D-26's leftovers**: the sweeps' alternation between frames, the FIFO entering the frame's last line, the H counter
+  in horizontal sync and on lines 229 to 234, the status's horizontal-blank bit, mode 4's HV read, and the refresh's
+  one-clock overlap seen a few times off the rule.
+- **D-27's open items**: the right side's weaker agreement; Kabuto's model 1 DAC levels that stand high; the other
+  model 1 boards (VA1, VA2, VA7, not offered); model 2's distortion and its PSG's level.
+- **Streets of Rage's loading phase**, 0.09% faster in Nephrite than on the board (§23.4).
+- **D-19's short pulses**: a reset held under about 1.8 samples does not always take on the board, and always does in
+  Nephrite.
+- **D-2**'s long RAM waits, with the test read's programs and `multiplexing`'s key-ons as two more places they may
+  show.
+- **The test register**: the five voices and the `lfo` sweep (slot-by-slot changes the unit does not make), bit 6
+  with `$21` bit 0 set, `$21` bit 7's sense against Sauraen's report, and whether the channel form shows the DAC
+  (D-23).
+- **An operator's output a little apart from the board's** at some levels: nine reads of a decaying operator (D-23)
+  and 49 samples a level of one apart in the quiet passages of `attackandrelease` and `ssg-eg`.
+
+### 29.6 The sources
+
+SpritesMind topic 386, Sauraen's test register posts, as prose. Nemesis's six YM2612 test programs, run as they are,
+and his recording of the CSM test. MDFourier's recordings as §28. The references run through the probe, their audio
+as corroboration only. Every rule was measured on the board's bus and pins; no RTL file was opened; no emulator's
+source was read.

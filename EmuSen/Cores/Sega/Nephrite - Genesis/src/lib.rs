@@ -31,6 +31,8 @@ mod board_fm;
 #[cfg(test)]
 mod board_chip;
 #[cfg(test)]
+mod board_reads;
+#[cfg(test)]
 mod board_rows;
 #[cfg(test)]
 pub(crate) mod pictures;

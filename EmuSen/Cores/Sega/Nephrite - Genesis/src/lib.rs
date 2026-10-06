@@ -10,6 +10,8 @@
 pub mod cart;
 pub mod eeprom;
 pub mod fifo_records;
+#[allow(dead_code)]
+mod fm_tables;
 pub mod genesis;
 pub mod io;
 pub mod machine;

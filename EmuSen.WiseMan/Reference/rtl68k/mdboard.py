@@ -771,19 +771,21 @@ def op_alone(test21, test2c=0x10, reads=12000):
     loop += w(0x51C8, (-(len(loop) + 2)) & 0xFFFF)
     return program([0x8004, 0x8104, 0x8F02], [], code + loop + w(0x60FE))
 
-def fm_voice(ops, alg=7, fb=0, fnum=1024, block=1, channel=0, keys=0xF0, extra=()):
+def fm_voice(ops, alg=7, fb=0, fnum=1024, block=1, channel=0, keys=0xF0, extra=(), lfo=0, b4=0xC0, pre=()):
     """One FM channel's voice written through $A04000, keyed on, then the 68000 idles: `ops` gives S1-S4 as
-    (dt_mul, tl, ks_ar, am_dr, sr, sl_rr); the channel's algorithm, feedback, frequency, and any `extra` writes after
-    the key-on, each (register, value) or (register, value, frames to wait first) (Nephrite_Native.md §19)."""
+    (dt_mul, tl, ks_ar, am_dr, sr, sl_rr); the channel's algorithm, feedback, frequency, the LFO's register `$22` and
+    the channel's `$B4` (panning, AMS, PMS), any `pre` writes (part 0) before the key-on, and any `extra` writes after
+    the key-on, each (register, value) or
+    (register, value, thousands of dbra rounds of 10 clocks to wait first) (Nephrite_Native.md §19, §23)."""
     part, i = channel // 3, channel % 3
-    pairs = [(0x22, 0), (0x27, 0), (0x28, 0), (0x2B, 0)]
-    regs = [(0xB0 + i, fb << 3 | alg), (0xB4 + i, 0xC0)]
+    pairs = [(0x22, lfo), (0x27, 0), (0x28, 0), (0x2B, 0)]
+    regs = [(0xB0 + i, fb << 3 | alg), (0xB4 + i, b4)]
     for slot, op in zip((0x00, 0x08, 0x04, 0x0C), ops):
         for base, v in zip((0x30, 0x40, 0x50, 0x60, 0x70, 0x80), op):
             regs.append((base + slot + i, v))
         regs.append((0x90 + slot + i, 0))
     regs += [(0xA4 + i, block << 3 | fnum >> 8), (0xA0 + i, fnum & 0xFF)]
-    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000) + ym_writes(pairs) + ym_writes(regs, part)
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000) + ym_writes(pairs) + ym_writes(regs, part) + ym_writes(list(pre))
     code += ym_writes([(0x28, keys | (part << 2 | i))])
     for e in extra:
         if len(e) == 3:
@@ -1072,6 +1074,7 @@ def board_fm(logs):
             series = board[off_rest(board):][:REPLAY_SAMPLES]
             assert len(series) == REPLAY_SAMPLES
             replays.append((r - a, [t - r for t, _, _ in strobes], series))
+    out.append(board_lfo(at))
     out.append("pub const REPLAY_WRITES: [(u8, u8); 72] = [\n" + "\n".join("    " + " ".join(f"({p}, 0x{v:02x})," for p, v in values[i:i + 12]) for i in range(0, 72, 12)) + "\n];\n")
     out.append("pub const REPLAYS: &[BoardReplay] = &[")
     for held, times, series in sorted(replays):
@@ -1081,6 +1084,31 @@ def board_fm(logs):
     return "\n".join(out) + "\n"
 
 REPLAY_SAMPLES = 512
+
+# The LFO's voices (Nephrite_Native.md section 23): the slow ones run 36,000,000 cycles and keep 17,000 samples.
+LFO_SLOW = ("fm-lfo0", "fm-lfo1", "fm-lfo2", "fm-lfo3", "fm-lfo4", "fm-lfo5", "fm-lfo-off", "fm-lfo-restart")
+
+def lfo_voice_names():
+    return [n for n in SOUNDS if n.startswith(("fm-lfo", "fm-ams", "fm-am-", "fm-pms", "fm-pm-"))]
+
+def lfo_channel(name):
+    """The channel a voice plays on: `fm-pm-c<n>s<k>` and `fm-am-c<n>s<k>` name it, `fm-pm-ch3` is channel 3."""
+    import re
+    m = re.match(r"fm-(?:pm|am)-c(\d)s", name)
+    return int(m.group(1)) - 1 if m else 2 if name.startswith("fm-pm-ch3") else 0
+
+def board_lfo(at):
+    """The LFO's part of `board_fm.rs`: each LFO voice's channel and samples, its pins made if missing."""
+    out = ["\npub const LFO_VOICES: &[BoardLfoVoice] = &["]
+    for name in lfo_voice_names():
+        slow = name in LFO_SLOW
+        if not os.path.exists(at(name + ".pins")):
+            bench(SOUNDS[name](), 36000000 if slow else 19000000, audio=at(name + ".pins"))
+        _, board = board_channel(at(name + ".pins"))
+        b0 = off_rest(board)
+        series = board[b0:b0 + (17000 if slow else 8600)]
+        out.append(f'    BoardLfoVoice {{ name: "{name}", image: 0x{fnv(SOUNDS[name]()):08x}, channel: {lfo_channel(name)}, samples: {len(series)}, blocks: &[\n{block_hashes(series)}\n    ] }},')
+    return "\n".join(out) + "\n];\n"
 BOARD_FM_HEAD = '''//! The board's FM pins for `mdboard.py`'s voices and reset sweeps, written by `mdboard.py board-fm`. Times are
 //! MCLK2 cycles, two to a master clock; samples are a channel's levels from its first that is neither 0 nor -1, held
 //! as the FNV-1a hash of each block of 64 as little-endian i16 (Nephrite_Disputes.md D-16 to D-19,
@@ -1090,6 +1118,15 @@ BOARD_FM_HEAD = '''//! The board's FM pins for `mdboard.py`'s voices and reset s
 pub struct BoardVoice {
     pub name: &'static str,
     pub image: u32,
+    pub samples: usize,
+    pub blocks: &'static [u32],
+}
+
+/// A voice for the LFO, on `channel` (0-5): its program's hash and the samples of that channel held.
+pub struct BoardLfoVoice {
+    pub name: &'static str,
+    pub image: u32,
+    pub channel: usize,
     pub samples: usize,
     pub blocks: &'static [u32],
 }
@@ -1386,6 +1423,48 @@ for _r in range(44, 60):
     SOUNDS[f"fm-ar{_r}"] = lambda r=_r: rate_voice(r, attack=True)
 for _i in range(len(ROM_VOICES)):
     SOUNDS[f"fm-rom{_i}"] = lambda i=_i: rom_voice(i)
+# The LFO (Nephrite_Native.md §23): S4 alone at full level with its AM switch on (bit 7 of $6C), at each LFO speed with
+# AMS 3; AMS 1 and 2; the switch off; the LFO off; its speed and its off and on again mid-note; a modulator's AM; PMS.
+AM_S4 = (0x01, 0x00, 0x1F, 0x80, 0x00, 0x0F)
+for _f in range(8):
+    SOUNDS[f"fm-lfo{_f}"] = lambda f=_f: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=8 | f, b4=0xC0 | 3 << 4, **A4)
+for _a in (1, 2):
+    SOUNDS[f"fm-ams{_a}"] = lambda a=_a: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=8 | 7, b4=0xC0 | a << 4, **A4)
+SOUNDS["fm-am-off"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), lfo=8 | 7, b4=0xC0 | 3 << 4, **A4)
+SOUNDS["fm-lfo-off"] = lambda: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=7, b4=0xC0 | 3 << 4, **A4)
+SOUNDS["fm-lfo-restart"] = lambda: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=8 | 6, b4=0xC0 | 3 << 4,
+                                              extra=[(0x22, 0x07, 3), (0x22, 0x0E, 2), (0x22, 0x0B, 4)], **A4)
+SOUNDS["fm-am-mod"] = lambda: fm_voice(((0x01, 0x30, 0x1F, 0, 0, 0x0F), (0x02, 0x28, 0x1F, 0, 0, 0x0F), (0x01, 0x10, 0x1F, 0x80, 0, 0x0F), SINE),
+                                       alg=0, lfo=8 | 6, b4=0xC0 | 2 << 4, **A4)
+for _p in range(1, 8):
+    SOUNDS[f"fm-pms{_p}"] = lambda p=_p: fm_voice((QUIET, QUIET, QUIET, SINE), lfo=8 | 6, b4=0xC0 | p, **A4)
+# Whether the key code follows the vibrato: detune 3 just under the edge of key codes 18 and 19 (frequency 1,151 =
+# $47F at block 4), where detune 3 is 9 steps below it and 10 above, PMS 7.
+SOUNDS["fm-pm-kc"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x31, 0x00, 0x1F, 0, 0, 0x0F)), lfo=8 | 6, b4=0xC7, fnum=1151, block=4)
+# The same vibrato on channel 1 at channel 3's special frequency below, and on channel 3 without the special mode.
+SOUNDS["fm-pm-1500"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), lfo=8 | 6, b4=0xC7, fnum=1500, block=4)
+SOUNDS["fm-pm-s1"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), lfo=8 | 6, b4=0xC7, fnum=1500, block=4)
+# Every operator of every channel alone under the vibrato (frequency 1,500, block 4, PMS 7, rate 6), and S1-S3 of
+# channel 1 under the tremolo (AMS 3, rate 7): where in the sample each takes the LFO's count.
+def _alone(op, k, sound=SINE):
+    ops = [QUIET] * 4
+    ops[k] = sound
+    return tuple(ops)
+for _c in range(6):
+    for _k in range(4):
+        SOUNDS[f"fm-pm-c{_c + 1}s{_k + 1}"] = lambda c=_c, k=_k: fm_voice(_alone(None, k), channel=c, lfo=8 | 6, b4=0xC7, fnum=1500, block=4)
+for _k in range(3):
+    SOUNDS[f"fm-am-s{_k + 1}"] = lambda k=_k: fm_voice(_alone(None, k, AM_S4), lfo=8 | 7, b4=0xC0 | 3 << 4, **A4)
+for _c, _k in ((1, 0), (3, 0), (5, 0), (5, 1), (5, 2), (5, 3)):
+    SOUNDS[f"fm-am-c{_c + 1}s{_k + 1}"] = lambda c=_c, k=_k: fm_voice(_alone(None, k, AM_S4), channel=c, lfo=8 | 7, b4=0xC0 | 3 << 4, **A4)
+SOUNDS["fm-pm-ch3-normal"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), channel=2, lfo=8 | 6, b4=0xC7, fnum=1500, block=4)
+# Channel 3's special mode under the vibrato: S1 alone at its own frequency (1,500, block 4; the channel's 1,081).
+SOUNDS["fm-pm-ch3-p0"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), channel=2, lfo=8 | 6, b4=0xC0, fnum=1081, block=4,
+                                          pre=[(0xAD, 4 << 3 | 1500 >> 8), (0xA9, 1500 & 0xFF), (0x27, 0x40)])
+SOUNDS["fm-pm-ch3-swap"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), channel=2, lfo=8 | 6, b4=0xC7, fnum=1500, block=4,
+                                            pre=[(0xAD, 4 << 3 | 1081 >> 8), (0xA9, 1081 & 0xFF), (0x27, 0x40)])
+SOUNDS["fm-pm-ch3"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), channel=2, lfo=8 | 6, b4=0xC7, fnum=1081, block=4,
+                                       pre=[(0xAD, 4 << 3 | 1500 >> 8), (0xA9, 1500 & 0xFF), (0x27, 0x40)])
 
 PAL_PICTURES = {"pal-v30"}
 

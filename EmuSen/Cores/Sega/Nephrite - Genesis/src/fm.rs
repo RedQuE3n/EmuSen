@@ -1,8 +1,8 @@
 //! The YM2612's FM unit, a sample at a time: each operator's phase generator, envelope generator and output through
 //! the log-sine and exponent tables, the four operators of a channel in the order the chip evaluates them, and each
 //! channel's nine-bit output. Its rules and their sources are Nephrite_Native.md §19, and §21 for those the board's
-//! pins settled (Nephrite_Disputes.md D-17, D-18); the register file is `ym2612.rs`'s. SSG-EG, the LFO and CSM are
-//! stage 5's next step.
+//! pins settled (Nephrite_Disputes.md D-17, D-18), and §23 for the LFO (D-20); the register file is `ym2612.rs`'s.
+//! SSG-EG and CSM are stage 5's next steps.
 
 use emusen_native::{StateReader, StateWriter, Truncated};
 
@@ -117,7 +117,41 @@ pub struct Fm {
     pub eg_counter: u32,
     pub eg_div: u8,
     pub latch: [[u8; 2]; 2],
+    /// The LFO: its 7-bit count, the count it had before this sample's step, and its divider, which runs on while
+    /// the LFO is off (Nephrite_Native.md §23).
+    pub lfo_count: u8,
+    pub lfo_prev: u8,
+    pub lfo_div: u8,
 }
+
+/// Samples per LFO count at each rate of `$22`, 128 counts a cycle (Nephrite_LfoTables.md §4).
+const LFO_PERIOD: [u8; 8] = [108, 77, 71, 67, 62, 44, 8, 5];
+
+/// Which of the LFO's counts each operator takes, by its place in the chip's sample: S1 of channels 1-5 the count the
+/// next sample will have, S2-S4 of channel 6 the one before, the rest this sample's (Nephrite_Native.md §23).
+#[derive(Clone, Copy)]
+enum LfoTake {
+    Next,
+    This,
+    Before,
+}
+
+fn lfo_take(channel: usize, op: usize) -> LfoTake {
+    match (channel, op) {
+        (0..=4, 0) => LfoTake::Next,
+        (5, 1..=3) => LfoTake::Before,
+        _ => LfoTake::This,
+    }
+}
+
+/// The tremolo's attenuation at an LFO count, before AMS: a triangle from 126 down to 0 and back, in steps of 2.
+fn tremolo(count: u8) -> u32 {
+    let c = count as u32;
+    if c < 64 { (63 - c) * 2 } else { (c - 64) * 2 }
+}
+
+/// AMS 1-3 shift the tremolo down by 3, 1 and 0: at most 15, 63 and 126 steps of the attenuation's 0.09375 dB.
+const AMS_SHIFT: [u32; 4] = [0, 3, 1, 0];
 
 /// What a register file read gives the FM unit: both parts' registers.
 pub type Regs = [[u8; 256]; 2];
@@ -176,6 +210,11 @@ impl Fm {
     /// nine of its carriers' fourteen bits summed and saturated), the phases' advance, and last, every third sample,
     /// the envelope's cycle, whose step shows from the next sample (Nephrite_Disputes.md D-17).
     pub fn sample(&mut self, regs: &Regs, t: &Tables) -> [i32; 6] {
+        let r22 = regs[0][0x22];
+        self.lfo(r22);
+        let next = if r22 & 8 != 0 && self.lfo_div + 1 >= LFO_PERIOD[(r22 & 7) as usize] { (self.lfo_count + 1) & 127 } else { self.lfo_count };
+        let counts = [next, self.lfo_count, self.lfo_prev];
+        let count_of = |c: usize, o: usize| counts[lfo_take(c, o) as usize];
         let update = self.eg_div == 0;
         self.eg_div = if update { 2 } else { self.eg_div - 1 };
         if update {
@@ -188,9 +227,12 @@ impl Fm {
             let r = &regs[part];
             let mut kcs = [0u8; 4];
             let mut freq = [(0u16, 0u8); 4];
+            let pms = r[0xB4 + i] & 7;
             for o in 0..4 {
                 let (fnum, block) = Self::fnum_block(regs, c, o);
-                (kcs[o], freq[o]) = (Self::key_code(fnum, block), (fnum, block));
+                // The vibrato moves the frequency the phase counts by; the key code keeps the register's.
+                let half = crate::lfo_tables::pm_fnum(fnum, pms, count_of(c, o) >> 2);
+                (kcs[o], freq[o]) = (Self::key_code(fnum, block), (half, block));
                 let base = SLOT[o] + i;
                 let key = self.ch[c].keys[o];
                 let op = &mut self.ch[c].ops[o];
@@ -208,7 +250,14 @@ impl Fm {
             let alg = r[0xB0 + i] & 7;
             let fb = r[0xB0 + i] >> 3 & 7;
             let ch = &mut self.ch[c];
-            let att = |o: usize, ops: &[Op; 4]| -> u16 { (ops[o].att as u32 + ((r[0x40 + SLOT[o] + i] as u32 & 0x7F) << 3)).min(0x3FF) as u16 };
+            let ams = (r[0xB4 + i] >> 4 & 3) as usize;
+            let am: [u32; 4] = std::array::from_fn(|o| {
+                if ams == 0 || r[0x60 + SLOT[o] + i] & 0x80 == 0 { 0 } else { tremolo(count_of(c, o)) >> AMS_SHIFT[ams] }
+            });
+            let att = |o: usize, ops: &[Op; 4]| -> u16 {
+                let on = am[o];
+                (ops[o].att as u32 + ((r[0x40 + SLOT[o] + i] as u32 & 0x7F) << 3) + on).min(0x3FF) as u16
+            };
             let phase10 = |op: &Op| (op.phase >> 10) as u16;
             // The modulation of a phase: a sum of up to two 14-bit outputs shifted down by one (Nephrite_Native.md §19).
             let modu = |a: i32, b: i32| -> u16 { ((a + b) >> 1) as u16 };
@@ -256,7 +305,7 @@ impl Fm {
             for o in 0..4 {
                 let (fnum, block) = freq[o];
                 let base = SLOT[o] + i;
-                let inc = Self::increment(fnum, block, r[0x30 + base], kcs[o]);
+                let inc = Self::increment_half(fnum, block, r[0x30 + base], kcs[o]);
                 let op = &mut self.ch[c].ops[o];
                 op.phase = (op.phase + inc) & 0xF_FFFF;
                 if update {
@@ -267,10 +316,27 @@ impl Fm {
         outs
     }
 
+    /// One sample of the LFO, before the operators: its divider counts the rate `$22` gives whether the LFO is on or
+    /// off; on, the count steps when the divider wraps; off, the count is held at 0.
+    fn lfo(&mut self, r22: u8) {
+        self.lfo_prev = self.lfo_count;
+        self.lfo_div += 1;
+        let wrapped = self.lfo_div >= LFO_PERIOD[(r22 & 7) as usize];
+        if wrapped {
+            self.lfo_div = 0;
+        }
+        self.lfo_count = if r22 & 8 == 0 { 0 } else if wrapped { (self.lfo_count + 1) & 127 } else { self.lfo_count };
+    }
+
     /// The phase increment: the frequency number shifted by the block into 17 bits, the detune added there, then the
     /// multiple applied (a half for 0) into 20 bits (Nemesis's account of the phase generator, topic 386).
     pub fn increment(fnum: u16, block: u8, dt_mul: u8, kc: u8) -> u32 {
-        let shifted = ((fnum as u32) << block) >> 1;
+        Self::increment_half(fnum << 1, block, dt_mul, kc)
+    }
+
+    /// The same from a frequency number in half steps, twelve bits, as the vibrato leaves it (Nephrite_LfoTables.md).
+    pub fn increment_half(half: u16, block: u8, dt_mul: u8, kc: u8) -> u32 {
+        let shifted = ((half as u32) << block) >> 2;
         let dt = dt_mul >> 4 & 7;
         let step = DETUNE[kc as usize][(dt & 3) as usize] as u32;
         let detuned = if dt & 4 != 0 { shifted.wrapping_sub(step) } else { shifted + step } & 0x1_FFFF;
@@ -334,6 +400,7 @@ impl Fm {
         w.bools("FmKeys", &keys);
         w.u64s("FmEnvelope", &[self.eg_counter as u64, self.eg_div as u64]);
         w.bytes("FmLatches", &[self.latch[0][0], self.latch[0][1], self.latch[1][0], self.latch[1][1]]);
+        w.bytes("FmLfo", &[self.lfo_count, self.lfo_prev, self.lfo_div]);
     }
 
     pub fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
@@ -345,6 +412,9 @@ impl Fm {
         r.u64s(&mut e)?;
         let mut l = [0u8; 4];
         r.bytes(&mut l)?;
+        let mut lfo = [0u8; 3];
+        r.bytes(&mut lfo)?;
+        (self.lfo_count, self.lfo_prev, self.lfo_div) = (lfo[0], lfo[1], lfo[2]);
         for (c, ch) in self.ch.iter_mut().enumerate() {
             let s = &ops[c * 22..];
             for (o, op) in ch.ops.iter_mut().enumerate() {

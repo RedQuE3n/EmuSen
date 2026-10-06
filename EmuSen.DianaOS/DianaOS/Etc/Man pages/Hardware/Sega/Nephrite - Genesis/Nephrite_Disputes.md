@@ -820,3 +820,50 @@ CPUs' disputes in their own record pages.
 - 2026-10-05, at stage 5's 68000 step: the power-on cycle, where the line starts asserted, now has its first
   deadline 793 master clocks after power-on, where the board's falls against the picture (D-2's placement); it was
   458, the board's against the 68000's start. Both give every voice the board's samples on the whole machine.
+
+### D-20. The LFO: a 128-count cycle whose divider never stops, a triangle of tremolo, and each operator taking the count at its own place in the sample
+- Opened: 2026-10-06, at stage 5's LFO step, by the documents giving the LFO's speeds in Hz and its depths in cents
+  and dB and nothing of its counting or of when an operator reads it.
+- Documents read: the YM2608 manual §2-6 (`$22`: bit 3 the switch, bits 2-0 the speed, 3.98 to 72.2 Hz; PMS 0-7 as 0
+  to 80 cents; AMS 0-3 as 0, 1.4, 5.9 and 11.8 dB; AMON, bit 7 of `$60`-`$6E`, per operator). `Nephrite_LfoTables.md`
+  for the vibrato's offsets and its §4 for the counter's steps as measured there (108, 77, 71, 67, 62, 44, 8 and 5
+  samples a count; the first step short after the LFO is turned on).
+- Test program: `mdboard.py`'s LFO voices (`fm-lfo0` to `fm-lfo7`, `fm-ams1`, `fm-ams2`, `fm-am-off`, `fm-lfo-off`,
+  `fm-lfo-restart`, `fm-am-mod`, `fm-pms1` to `fm-pms7`, `fm-pm-kc`, `fm-pm-c1s1` to `fm-pm-c6s4`, `fm-am-s1` to
+  `fm-am-s3`, `fm-am-c2s1` to `fm-am-c6s4`, `fm-pm-1500`, `fm-pm-ch3-normal`, `fm-pm-ch3-p0`, `fm-pm-ch3`,
+  `fm-pm-ch3-swap`): 61 voices, 8,600 samples each, 17,000 for the slow speeds.
+- Referee: the board as in D-16 (the model 2 ASIC's YM3438), each voice's pins against the whole machine's trace
+  from the first sample off rest. No RTL file was opened. Each rule was tried against its alternatives:
+  - **The counter.** Seven bits, stepping every 108, 77, 71, 67, 62, 44, 8 or 5 samples by `$22`'s speed, before the
+    sample's operators. Off, the count is held at 0; the divider that times its steps runs on regardless, which is
+    why the first step after the LFO is turned on again is short (`fm-lfo-restart`: off, on at another speed, and
+    the speed changed again, 17,096 samples of 17,096; with the divider cleared while off, 16,852; with it stopped,
+    16,382).
+  - **The tremolo.** The count as a triangle, 126 at count 0 down by 2 a count to 0 at 63, then 0 at 64 up to 126
+    at 127; shifted right by 3, 1 and 0 for AMS 1, 2 and 3 (at most 15, 63 and 126 of the attenuation's steps of
+    0.09375 dB: 1.4, 5.9 and 11.8 dB, the manual's); added to the operator's attenuation with TL when its AMON bit
+    is set, on a modulator as on a carrier. A triangle that rises first, or 126 − 2c without the repeated 0, fails
+    from the first samples.
+  - **The key code under vibrato** is the register's: with detune 3 just under the edge of key codes 18 and 19 and
+    PMS 7, taking the key code from the modulated frequency gives 2,138 samples of 8,663, the register's all.
+  - **Each operator's place.** S1 of channels 1 to 5 takes the count the next sample will have; S1 of channel 6 and
+    S2-S4 of channels 1 to 5 this sample's; S2-S4 of channel 6 the one before. It is the same for the vibrato (all
+    24 operators measured alone) and the tremolo (ten measured: S1-S4 of channels 1 and 6, S1 of 2 and 4); giving
+    any of them a neighbouring count fails within 80 samples.
+  - **The vibrato's table** (`lfo_tables.rs`) agrees with the board in every voice here: PMS 1 to 7 at frequency
+    1,081 and PMS 7 at 1,151 and 1,500, 8,663 samples each.
+- Not settled: **channel 3's special mode under the vibrato.** Without vibrato the special mode is the board's
+  (8,656 of 8,656). With it, S1 at its own frequency keeps the board's samples to the 65th and 76% of them after
+  (the two frequencies swapped: to the 25th, 83%); taking the offset from the channel's frequency, or none, fails
+  within six. The board's phase then runs ahead by about one of its 1,024 steps in thirty samples, and no one
+  frequency for each vibrato step explains its samples: the frequency moves within a step, which no normal channel's
+  does. Nephrite gives S1-S3 the vibrato of their own frequencies.
+- Recorded, not resolved: the manual's speeds are those of a counter one sample longer a step at the YM2608's rate
+  (`Nephrite_LfoTables.md` §4); the board's figures are implemented.
+- Conclusion: **measured on the board**, the special mode under the vibrato open.
+- Pinned by: `voices.rs`'s `the_lfo_voices_are_the_boards_sample_for_sample` (59 voices exact, 574,600 samples; it
+  fails with every operator given this sample's count, the triangle rising first, AMS 1 shifted by 2, the divider
+  cleared while off, or the key code from the modulated frequency; and it holds the two special-mode voices to
+  their first agreement and no further, so that a rule that mends them is noticed).
+- Implemented in: the commit "Nephrite, stage 5: the LFO".
+

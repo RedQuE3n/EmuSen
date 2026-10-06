@@ -3,7 +3,7 @@
 //! 68000's or the Z80's timing is in the comparison (`board_fm.rs`; Nephrite_Disputes.md D-16 to D-19,
 //! Nephrite_Native.md §21).
 
-use crate::board_fm::{BLOCK, BoardVoice, REPLAY_WRITES, REPLAYS, VOICE_RELEASE, VOICE_WRITES, VOICES};
+use crate::board_fm::{BLOCK, BoardVoice, LFO_VOICES, REPLAY_WRITES, REPLAYS, VOICE_RELEASE, VOICE_WRITES, VOICES};
 use crate::machine::Machine;
 use crate::media::Media;
 use crate::pictures::program;
@@ -34,24 +34,42 @@ pub(crate) fn ym_writes(code: &mut Vec<u16>, pairs: &[(u8, u8)], part: u8) {
     }
 }
 
-/// A voice on channel 1 as `mdboard.py`'s `fm_voice` writes it: its 37 register writes up to the key-on, and what
-/// follows the key-on (a register, its value, thousands of `dbra` rounds to wait first).
+/// A voice as `mdboard.py`'s `fm_voice` writes it: its register writes up to the key-on, each with the part it goes
+/// to, and what follows the key-on (a register, its value, thousands of `dbra` rounds to wait first).
 struct Voice {
-    writes: Vec<(u8, u8)>,
-    extra: Vec<(u8, u8, u16)>,
+    writes: Vec<(u8, u8, u8)>,
+    extra: Vec<(u8, u8, u8, u16)>,
 }
+
+/// The rest of `fm_voice`'s settings: the channel (0-5), `$22`, the channel's `$B4`, writes before the key-on.
+struct Setup {
+    channel: u8,
+    lfo: u8,
+    b4: u8,
+    pre: Vec<(u8, u8)>,
+}
+
+const PLAIN: Setup = Setup { channel: 0, lfo: 0, b4: 0xC0, pre: Vec::new() };
 
 /// S1-S4, the algorithm and feedback, the frequency, then every key on.
 fn fm_voice(ops: [Op; 4], alg: u8, fb: u8, fnum: u16, block: u8, extra: &[(u8, u8, u16)]) -> Voice {
-    let mut writes = vec![(0x22, 0), (0x27, 0), (0x28, 0), (0x2B, 0), (0xB0, fb << 3 | alg), (0xB4, 0xC0)];
+    fm_voice_on(ops, alg, fb, fnum, block, extra, PLAIN)
+}
+
+fn fm_voice_on(ops: [Op; 4], alg: u8, fb: u8, fnum: u16, block: u8, extra: &[(u8, u8, u16)], setup: Setup) -> Voice {
+    let (part, i) = (setup.channel / 3, setup.channel % 3);
+    let mut writes = vec![(0, 0x22, setup.lfo), (0, 0x27, 0), (0, 0x28, 0), (0, 0x2B, 0), (part, 0xB0 + i, fb << 3 | alg), (part, 0xB4 + i, setup.b4)];
     for (slot, op) in [0x00u8, 0x08, 0x04, 0x0C].into_iter().zip(ops) {
         for (k, v) in op.into_iter().enumerate() {
-            writes.push((0x30 + 0x10 * k as u8 + slot, v));
+            writes.push((part, 0x30 + 0x10 * k as u8 + slot + i, v));
         }
-        writes.push((0x90 + slot, 0));
+        writes.push((part, 0x90 + slot + i, 0));
     }
-    writes.extend_from_slice(&[(0xA4, block << 3 | (fnum >> 8) as u8), (0xA0, fnum as u8), (0x28, 0xF0)]);
-    Voice { writes, extra: extra.to_vec() }
+    writes.extend_from_slice(&[(part, 0xA4 + i, block << 3 | (fnum >> 8) as u8), (part, 0xA0 + i, fnum as u8)]);
+    writes.extend(setup.pre.iter().map(|&(r, v)| (0, r, v)));
+    writes.push((0, 0x28, 0xF0 | part << 2 | i));
+    let extra = extra.iter().map(|&(r, v, wait)| (if r >= 0x30 { part } else { 0 }, r, v, wait)).collect();
+    Voice { writes, extra }
 }
 
 impl Voice {
@@ -63,10 +81,12 @@ impl Voice {
     /// The same with `tail` run after the voice's writes, before the idle loop.
     fn image_then(&self, tail: &[u16]) -> Vec<u8> {
         let mut code = Z80_BUS.to_vec();
-        ym_writes(&mut code, &self.writes, 0);
-        for &(r, v, wait) in &self.extra {
+        for &(part, r, v) in &self.writes {
+            ym_writes(&mut code, &[(r, v)], part);
+        }
+        for &(part, r, v, wait) in &self.extra {
             code.extend_from_slice(&[0x303C, wait * 1000, 0x51C8, 0xFFFE]);
-            ym_writes(&mut code, &[(r, v)], 0);
+            ym_writes(&mut code, &[(r, v)], part);
         }
         code.extend_from_slice(tail);
         code.push(0x60FE);
@@ -108,6 +128,8 @@ fn voice(name: &str) -> Voice {
                 by_rate(rate, false)
             } else if let Some(rate) = number("fm-ar") {
                 by_rate(rate, true)
+            } else if let Some(v) = lfo_voice(name) {
+                v
             } else if let Some(i) = number("fm-rom") {
                 let (mm, tl, dr, cm, fnum, block) = ROM_VOICES[i as usize];
                 fm_voice([QUIET, QUIET, [mm, tl, 0x1F, dr, 0x00, 0xFF], level(cm, 0x00)], 4, 0, fnum, block, &[])
@@ -118,18 +140,76 @@ fn voice(name: &str) -> Voice {
     }
 }
 
+/// `mdboard.py`'s LFO voices (Nephrite_Native.md §23).
+fn lfo_voice(name: &str) -> Option<Voice> {
+    const AM_S4: Op = [0x01, 0x00, 0x1F, 0x80, 0x00, 0x0F];
+    let setup = |channel: u8, lfo: u8, b4: u8| Setup { channel, lfo, b4, pre: Vec::new() };
+    let alone = |k: usize, op: Op| {
+        let mut ops = [QUIET; 4];
+        ops[k] = op;
+        ops
+    };
+    let digit = |prefix: &str| name.strip_prefix(prefix).and_then(|n| n.parse::<u8>().ok());
+    let a4 = |ops: [Op; 4], extra: &[(u8, u8, u16)], s: Setup| fm_voice_on(ops, 7, 0, 1081, 4, extra, s);
+    let at_1500 = |ops: [Op; 4], s: Setup| fm_voice_on(ops, 7, 0, 1500, 4, &[], s);
+    let special = |s1: u16, ch: u16, b4: u8| {
+        let pre = vec![(0xAD, 4 << 3 | (s1 >> 8) as u8), (0xA9, s1 as u8), (0x27, 0x40)];
+        fm_voice_on([SINE, QUIET, QUIET, QUIET], 7, 0, ch, 4, &[], Setup { channel: 2, lfo: 8 | 6, b4, pre })
+    };
+    // `fm-pm-c<n>s<k>` and `fm-am-c<n>s<k>`: operator k of channel n alone.
+    let by_op = |prefix: &str| -> Option<(u8, usize)> {
+        let rest = name.strip_prefix(prefix)?;
+        let (c, k) = rest.split_once('s')?;
+        Some((c.parse::<u8>().ok()? - 1, k.parse::<usize>().ok()? - 1))
+    };
+    Some(match name {
+        "fm-am-off" => a4([QUIET, QUIET, QUIET, SINE], &[], setup(0, 8 | 7, 0xC0 | 3 << 4)),
+        "fm-lfo-off" => a4([QUIET, QUIET, QUIET, AM_S4], &[], setup(0, 7, 0xC0 | 3 << 4)),
+        "fm-lfo-restart" => a4([QUIET, QUIET, QUIET, AM_S4], &[(0x22, 0x07, 3), (0x22, 0x0E, 2), (0x22, 0x0B, 4)], setup(0, 8 | 6, 0xC0 | 3 << 4)),
+        "fm-am-mod" => fm_voice_on([level(0x01, 0x30), level(0x02, 0x28), [0x01, 0x10, 0x1F, 0x80, 0, 0x0F], SINE], 0, 0, 1081, 4, &[], setup(0, 8 | 6, 0xC0 | 2 << 4)),
+        "fm-pm-kc" => fm_voice_on([QUIET, QUIET, QUIET, [0x31, 0x00, 0x1F, 0, 0, 0x0F]], 7, 0, 1151, 4, &[], setup(0, 8 | 6, 0xC7)),
+        "fm-pm-1500" => at_1500([QUIET, QUIET, QUIET, SINE], setup(0, 8 | 6, 0xC7)),
+        "fm-pm-s1" => at_1500([SINE, QUIET, QUIET, QUIET], setup(0, 8 | 6, 0xC7)),
+        "fm-pm-ch3-normal" => at_1500([SINE, QUIET, QUIET, QUIET], setup(2, 8 | 6, 0xC7)),
+        "fm-pm-ch3" => special(1500, 1081, 0xC7),
+        "fm-pm-ch3-p0" => special(1500, 1081, 0xC0),
+        "fm-pm-ch3-swap" => special(1081, 1500, 0xC7),
+        _ => {
+            if let Some(f) = digit("fm-lfo") {
+                a4([QUIET, QUIET, QUIET, AM_S4], &[], setup(0, 8 | f, 0xC0 | 3 << 4))
+            } else if let Some(a) = digit("fm-ams") {
+                a4([QUIET, QUIET, QUIET, AM_S4], &[], setup(0, 8 | 7, 0xC0 | a << 4))
+            } else if let Some(p) = digit("fm-pms") {
+                a4([QUIET, QUIET, QUIET, SINE], &[], setup(0, 8 | 6, 0xC0 | p))
+            } else if let Some((c, k)) = by_op("fm-pm-c") {
+                at_1500(alone(k, SINE), setup(c, 8 | 6, 0xC7))
+            } else if let Some((c, k)) = by_op("fm-am-c") {
+                a4(alone(k, AM_S4), &[], setup(c, 8 | 7, 0xC0 | 3 << 4))
+            } else {
+                let k = digit("fm-am-s")?;
+                a4(alone(k as usize - 1, AM_S4), &[], setup(0, 8 | 7, 0xC0 | 3 << 4))
+            }
+        }
+    })
+}
+
 fn fnv(bytes: impl IntoIterator<Item = u8>) -> u32 {
     bytes.into_iter().fold(0x811C_9DC5u32, |h, b| (h ^ b as u32).wrapping_mul(0x0100_0193))
 }
 
 /// The machine after `frames` frames of `image`, and channel 1's output for every sample of them.
 fn machine(image: &[u8], frames: i64) -> (Machine, Vec<i32>) {
+    machine_channel(image, frames, 0)
+}
+
+/// The same for any channel's output.
+fn machine_channel(image: &[u8], frames: i64, channel: usize) -> (Machine, Vec<i32>) {
     let mut m = Machine::new(image, Media::read(image));
     m.genesis.hw.sound.ym.trace = Some(Vec::new());
     while m.frames < frames {
         m.advance();
     }
-    let trace = m.genesis.hw.sound.ym.trace.take().unwrap().iter().map(|c| c[0]).collect();
+    let trace = m.genesis.hw.sound.ym.trace.take().unwrap().iter().map(|c| c[channel]).collect();
     (m, trace)
 }
 
@@ -167,7 +247,7 @@ fn equal(ours: &[i32], samples: usize, blocks: &[u32]) -> usize {
 fn equal_samples(v: &BoardVoice) -> usize {
     let voice = voice(v.name);
     assert_eq!(fnv(voice.image()), v.image, "{}: the program is not the one the board ran", v.name);
-    let ports = voice.writes.iter().flat_map(|&(r, value)| [(0u16, r), (1, value)]);
+    let ports = voice.writes.iter().flat_map(|&(part, r, value)| [(2 * part as u16, r), (2 * part as u16 + 1, value)]);
     let writes = VOICE_WRITES.iter().zip(ports).map(|(&t, (port, value))| (t / 2, port, value));
     equal(&chip(0, VOICE_RELEASE / 2, writes, v.samples), v.samples, v.blocks)
 }
@@ -276,3 +356,33 @@ fn the_z80s_reset_line_resets_the_ym2612() {
     assert_eq!((ym.regs[0][0x3C], ym.regs[0][0x4C], ym.regs[0][0xA4], ym.regs[0][0xB4]), (0, 0, 0, 0xC0), "the voice's registers are gone");
     assert_eq!(ym.regs[0][0x2A], 0x55, "a write after the release lands");
 }
+
+/// The LFO's voices on the whole machine against the board's (Nephrite_Native.md §23): each LFO rate and AMS, the AM
+/// switch, the LFO off and turned off and on again, a modulator's tremolo, every PMS, the key code under vibrato, and
+/// every operator of every channel under the vibrato and the tremolo, which take the LFO's count at their own places
+/// in the sample. Channel 3's special mode under the vibrato keeps the board's samples only to its 65th and 25th.
+#[test]
+fn the_lfo_voices_are_the_boards_sample_for_sample() {
+    let mut wrong = Vec::new();
+    let (mut equal_samples, mut samples) = (0, 0);
+    for v in LFO_VOICES {
+        let image = voice(v.name).image();
+        assert_eq!(fnv(image.iter().copied()), v.image, "{}: the program is not the one the board ran", v.name);
+        let (_, ours) = machine_channel(&image, (v.samples as i64 + 2500) / 880 + 2, v.channel);
+        let first = ours.iter().position(|&x| x != 0 && x != -1).expect("the voice leaves rest");
+        let ours = &ours[first..];
+        let e = equal(ours, v.samples, v.blocks);
+        match v.name {
+            "fm-pm-ch3" | "fm-pm-ch3-swap" => {
+                let held = if v.name == "fm-pm-ch3" { 64 } else { 0 };
+                assert_eq!(equal(ours, held, &v.blocks[..held / BLOCK]), held, "{}: the board's first block", v.name);
+                assert!(e < v.samples, "{}: the special mode under the vibrato now matches; record it", v.name);
+            }
+            _ if e != v.samples => wrong.push((v.name, e, v.samples)),
+            _ => (equal_samples, samples) = (equal_samples + e, samples + v.samples),
+        }
+    }
+    assert!(wrong.is_empty(), "LFO voices unlike the board's: {wrong:?}");
+    assert_eq!((LFO_VOICES.len(), equal_samples, samples), (61, 574_600, 574_600));
+}
+

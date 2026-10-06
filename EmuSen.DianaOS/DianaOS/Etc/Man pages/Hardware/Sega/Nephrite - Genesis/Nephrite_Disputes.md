@@ -428,7 +428,17 @@ CPUs' disputes in their own record pages.
 - Documents read: none gives a wait for the 68000's accesses to `$A00000`-`$A0FFFF` beyond the bus request itself.
 - Test program: `dac-square` (above).
 - Referee: none yet; the board's pins time a 68000 access to that area directly, as D-1 timed the Z80's window.
-- Conclusion: open. Nephrite gives the access the 68000's four clocks, as for any other address.
+- ~~Conclusion: open. Nephrite gives the access the 68000's four clocks, as for any other address.~~
+- Measured 2026-10-05, at stage 5's bench step (`mdboard.py pins dac-square`, the log read by `pin_records`; no RTL
+  file opened): the board's square is 535.04 Hz, a half period of 7,168.2 of the 68000's clocks where the loop's
+  instructions add up to the 7,055 Nephrite takes, 112.9 more. D-2's refresh, two clocks lost in every 128 on the
+  cartridge's bus, is 110.2 of them; the 2.7 left are 1.3 for each of the half period's two writes. The Z80 bus's
+  strobes (`TB_ZBUS`) say the same of single accesses: an address write's and its data write's begin 17 clocks apart,
+  and a data write's and a status read's 9, where the instructions give 16 and 8.
+- Conclusion: **measured in part.** The slower loop of BlastEm and PicoDrive is D-2's refresh, which this entry had
+  taken for the access; an access to the YM2612 costs the 68000 about one clock more than four on the board. Open:
+  whether it is always one, or one or two by where the access falls, which a sweep of the bus log would say. Nephrite
+  gives the access four clocks and takes no refresh.
 - Pinned by: nothing yet.
 - Implemented in: not yet.
 
@@ -443,13 +453,42 @@ CPUs' disputes in their own record pages.
   for up to 18 of the 68000's clocks after it.
 - Test program: `mdboard.py sound fm-sine` and the other FM voices, with and without waits between writes.
 - Referee: the board as in D-1, its OPN2 output pins logged by `tb_md.cpp`'s `TB_AUDIO`; no RTL file was opened.
-  Writes after the key-on took effect (multiple 2 halved the period as the phase generator's rule says). The board's
-  results with waits between all writes were not consistent enough to settle the rule (D-16).
-- Conclusion: open. Nephrite applies every write at once, which is what a program that waits between writes sees.
+  Writes after the key-on took effect (multiple 2 halved the period as the phase generator's rule says). ~~The board's
+  results with waits between all writes were not consistent enough to settle the rule (D-16).~~
+- ~~Conclusion: open. Nephrite applies every write at once, which is what a program that waits between writes sees.~~
+- Measured 2026-10-05, at stage 5's bench step (`mdboard.py read-after-write`; the Z80 bus as the board carries it,
+  its strobes, address and data, printed by `tb_md.cpp`'s `TB_ZBUS`; no RTL file opened): **the lost writes were a
+  read's doing, not the register file's.** The first voices polled the busy flag in the instruction after each data
+  write. With nothing between the two, the read's strobe falls 39 master clocks after the write's strobe rises (53
+  where the board stretches the access), and the outcome follows from one thing, where in a slot of six of the chip's
+  clocks the read's strobe ends: at two of the six places the register is left holding 0 in place of the byte
+  written, in 18 trials of 18; at the other four the byte is kept, in 31 of 31.
+  - It is the same for a chip-level register: the DAC's data was left at 0 at those two places in 16 trials of 16 and
+    kept at the others in 33 of 33. The slot-held write of Sauraen's reading is therefore not what is lost.
+  - The 0 is not the status byte: with both timers overflowed, the status reading `$03`, TL was left at 0 and not
+    at 3, in 14 trials of 14 at the two places, and kept at the others in 35 of 35 (`read-after-write 0 timers`).
+  - One NOP between the write and the read (the read's strobe 67 master clocks after the write's) keeps every write,
+    49 of 49, and so do two.
+  - The busy bit is not yet steady at the early read: of the first fourteen trials it read clear in eight, set in
+    four and rose while the strobe was low in two; one NOP later it read set in thirteen and rose during the read in
+    one. That is Sauraen's "may read clear" for a time after the write, in kind.
+  - So the voices' lost multiple and levels were writes left at 0, a third of them, by where each fell: a multiple of 0
+    is a half, which halved S4's frequency, and a TL of 0 is full level. `ym_writes` now leaves four NOPs after each
+    data write, and every write of every voice since has taken effect (D-16).
+  - ~~A write followed by a taken branch is lost~~ (`Nephrite_Native.md` §19.4, as first written): the branch was
+    the busy poll's, and it was the poll's read, coming at once, that mattered.
+- Not measured: when a held write lands. Every voice compared since makes its writes before its key-on and at least
+  16 of the 68000's clocks apart, where applying a write at once and holding it for its operator's turn give the
+  same samples.
+- Conclusion: **open, on two counts.** Whether a console leaves 0 in a register that is read at once after its
+  write is not known: no document read here says so, a driver that polled the busy flag in the instruction after a
+  data write would lose a third of its writes, and the board is a model of the chip, not the chip. A program for a
+  console can be made from `read_after_write`, whose outcome a recording of the DAC's level would show. And Sauraen's
+  held write is unmeasured. Nephrite applies every write at once and loses none.
 - Pinned by: nothing yet.
 - Implemented in: not yet.
 
-### D-16. The operator's log-sine and exponent tables (settled), and the bench's FM output (open)
+### D-16. The operator's log-sine and exponent tables (settled), and the bench's FM output (measured: it plays every write and referees the FM unit)
 - Opened: 2026-10-05, at stage 5 step 2, by the operator unit's two tables, whose form the documents give (a
   quarter-wave of 256 log-sine entries in 4.8 fixed point; 256 entries of 2^−x as eleven bits whose top one is set;
   Nemesis's and Sauraen's prose, topic 386) but not the two offsets that fix every entry's last bit: where in each
@@ -463,11 +502,11 @@ CPUs' disputes in their own record pages.
   read as the 68000's samples): the reads give a channel's nine-bit output over four slots, not an operator's
   fourteen-bit one, so the tables were not read. The FM voices on the board: see below.
 - Referee: the board as in D-1. A single operator plays a clean sine on the board when its setup writes come
-  without waits, some of them lost; with every write applied, through the 68000 with any wait or through a Z80
+  without waits, some of them lost; ~~with every write applied, through the 68000 with any wait or through a Z80
   program, the board's channel stays at rest, though a Z80 program's DAC writes show. The bench's YM2612 is not yet
-  understood well enough to referee the operator unit; the references' audio graded this step instead
+  understood well enough to referee the operator unit;~~ the references' audio graded this step instead
   (`Nephrite_Native.md` §19.3). At the nine-bit output the two tables' offsets change nothing measurable in that audio.
-- ~~Conclusion: open.~~ Superseded for the tables by the next entry; the bench's half stays open.
+- ~~Conclusion: open.~~ Superseded for the tables by the next entry, and for the bench by the one after it.
 - The tables, 2026-10-05: written again, independently, by someone who had seen none of the excluded material,
   from "OPLx decapsulated" (Matthew Gambrell and Olli Niemitalo, 2008), whose Tables I and II print every entry of the
   OPL2's log-sine and exponent ROMs (`fm_tables.rs`, its provenance in `Nephrite_OperatorTables.md`). Their log-sine
@@ -476,6 +515,146 @@ CPUs' disputes in their own record pages.
   `EXP[255 − f] + 1024`) and its own copies are gone; every crate test and every FM trace is unchanged. The excluded
   blocks are the source of nothing; the record that they were displayed stands.
 - Open, for the bench if it can answer: no clean source yet says that the OPN2's ROMs are the OPL2's.
-- Conclusion: **the tables: documented** (the OPL2's ROMs, printed); **the bench: open**.
+- ~~Conclusion: **the tables: documented** (the OPL2's ROMs, printed); **the bench: open**.~~
+- The bench, 2026-10-05, at stage 5's bench step. No RTL file was opened. Two files Verilator generates from the
+  board were searched for names and nothing else: `Vmd_board.h`, for the top level's ports, and
+  `Vmd_board___024root.h`, for the board's own nets, of which `ZA`, `ZD`, `ZRD` and `ZWR` (the Z80 bus between the
+  chips) are now printed by `TB_ZBUS`. The names of the generated files were listed with them; one is named for a
+  YM3438's channel register, and the top level offers the nine-bit `MOL`/`MOR` beside the ten-bit
+  `MOL_2612`/`MOR_2612` this step logs, so the board's FM unit may be the YM3438 with the YM2612's output as a
+  choice. Which it is matters to the ladder effect and to D-13, and is for those steps to find out.
+  - **Why it stayed at rest.** It did not. The earlier runs were read at the wrong place in the sample: the turn of
+    channel 1 on the pins moves with the Z80's reset line (D-19), 1,223 cycles into the sample in a program that only
+    releases the line and 915 in one that pulses it to load a Z80 program, and the first comparisons looked at 1,223
+    in both. The voices that did go wrong had writes left at 0 by a status read (D-15).
+  - **Reading the pins.** Times are MCLK2 cycles, two to a master clock: a sample is 2,016 of them and a slot 84. A
+    channel's value is on `MOL_2612` for four slots of every sample, its level plus one when that is not negative and
+    its ten-bit two's complement when it is; at rest the pin reads 1. Channel 1's turn begins 1,226 cycles after the
+    reset line's assertion, in every sample; channel 6's, where the DAC's register shows as twice its signed value,
+    1,344 after channel 1's, the fifth turn of six, as the order 1, 5, 3, 2, 6, 4 of the thread's page 54 has it.
+    `mdboard.py pins` logs a program's pins and `mdboard.py fm` compares the busiest channel with `fmtrace`'s output,
+    each from its first sample that is neither 0 nor −1, with no other alignment.
+  - **What was compared**: 62 voices, 200,220 samples. The thirteen of the algorithms, levels, multiples, detune and
+    feedback (`fm-sine`, `fm-tl16`, `fm-mul3`, `fm-dt7`, `fm-feedback5`, `fm-chain`, `fm-alg1` to `fm-alg7`), 5,191
+    samples each; three envelopes (`fm-attack`, `fm-envelope` to its key-off, `fm-envelope-ks`); twenty decays and
+    sixteen attacks by rate (`fm-dr38` to `fm-dr61`, `fm-ar44` to `fm-ar59`); and ten voices of a decaying S3 into S4
+    (`fm-rom0` to `fm-rom9`).
+
+    | The FM unit | Samples equal to the board's, of 200,220 |
+    |---|---|
+    | as committed | 129,855 |
+    | with operator 1's output used a sample late (D-17) | 154,137 |
+    | and the envelope's step taken after the sample's output (D-17) | 190,269 |
+    | and rates 48 to 59 doubling on the board's cycles (D-18) | 200,220 |
+
+    The last three rows are builds made outside the tree; the committed unit is the first row and is not changed by
+    this step. As committed, the five voices with one sounding operator and no moving envelope are already exact
+    (`fm-sine`, `fm-tl16`, `fm-mul3`, `fm-dt7`, `fm-feedback5`: 25,954 samples of 25,954).
+  - **The two ROMs.** With all three rules in, each of the 512 entries was moved up one and down one, one at a time,
+    in a build made outside the tree for the purpose (the tables in the tree were not touched, and no entry was
+    changed to fit anything). Nine of the 1,024 changes would take a zero entry below zero, which a ROM cannot hold;
+    every one of the other 1,015 alters at least one of the 200,220 samples. The first 52
+    voices alone leave 5 log-sine entries unpinned in each direction and 135 and 106 of the exponent's; the ten
+    `fm-rom` voices, in which every bit of S3's output moves S4's phase, pin the rest. So the board's FM unit
+    computes with a log-sine and an exponent ROM equal, entry for entry, to the OPL2's as "OPLx decapsulated" prints
+    them and `fm_tables.rs` holds them. This is the measurement the tables' entry left open, and it changes no entry.
+  - **What that is worth.** It is agreement between the printed OPL2 tables and a model of the Genesis's chip, taken
+    through the model's pins. It is evidence about the console only so far as the model's ROM contents were read from
+    the OPN2's die, which its pins cannot say and which nothing read here says. A change of one in a single entry is
+    excluded; a set of changes that cancel in every one of the compared samples is not.
+  - **Not done.** The test register's fourteen-bit read of one operator: the reads still give a channel's nine-bit
+    output. The pins give nothing finer than nine bits a channel, so the operator's own output is seen only through
+    what it does to another's phase.
+- Conclusion: **the tables: documented** (the OPL2's ROMs, printed) **and, on the board, measured**; **the bench:
+  plays every write and referees the FM unit to the sample.** What it found against the committed unit is D-17 and
+  D-18.
 - Pinned by: `fm_tables.rs`'s tests (the formulas, spot checks against the printed tables, the exponent's identity).
-- Implemented in: the commit "Merge nephrite-fmtables".
+  The board's comparison is run by hand (`mdboard.py pins`, `examples/fmtrace.rs`, `mdboard.py fm`).
+- Implemented in: the commit "Merge nephrite-fmtables"; the bench's tools in the commit "Nephrite, stage 5: the bench
+  step".
+
+### D-17. The FM unit's order within a sample: operator 1's output reaches the others and the sum a sample late, and an envelope step shows from the next sample
+- Opened: 2026-10-05, at stage 5's bench step, by the board's pins once every write was applied (D-16): the voices
+  with one sounding operator agreed with Nephrite's to the sample, those in which operator 1 modulates another or
+  sounds beside the others did not (`fm-chain` 3,328 samples of 5,191, `fm-alg7` 557), and no voice with a moving
+  envelope did (`fm-envelope` 297 of 2,900).
+- Documents read: Sauraen's account of the die (topic 386, 2015-16) as step 2 took it (`Nephrite_Native.md` §19.1):
+  operators evaluated in the order 1, 3, 2, 4, operator 3 taking the stored outputs of 1 and 2, operators 2 and 4
+  operator 1's newest. In this step, the thread's page 54, a table of the chip's 24 slots (the channels in the order
+  1, 5, 3, 2, 6, 4, the operators by sixes; "channel output always store value from 24 cycles back"), read as a
+  table; three lines of that post, which carry code, were not displayed.
+- Test program: the voices of D-16, by name in `mdboard.py`'s `SOUNDS`.
+- Referee: the board as in D-16; no RTL file opened. Each rule below was tried as a build of `fm.rs` outside the tree,
+  traced by `examples/fmtrace.rs` and compared with the pins.
+  - Operator 1 a sample late: the thirteen algorithm and level voices go from 43,200 samples of 67,482 to 67,482 of
+    67,482, every algorithm among them. Using the stored output in operator 2 alone, or the newest in operator 3,
+    fits some algorithms and not others.
+  - The envelope's step after the output: `fm-attack` goes from 5,759 of 5,800 to 5,800, `fm-envelope` from 297 of
+    2,900 to 2,900, and the decays D-18 leaves alone and the ten `fm-rom` voices to every sample. Keeping the step
+    before the output and moving the envelope's divider by one sample instead is not the same thing, and does not
+    fit: it agrees on the slow voices and fails the fast attacks (`fm-ar47` 35 samples of 3,000). The two
+    arrangements differ only in what becomes of a key taken on the sample the step would move to.
+- Conclusion: **measured on the board.**
+  1. Operator 1's output is used a sample after it is made. Operator 2, operator 4 and, in algorithm 7, the
+     channel's sum take the output operator 1 made in the previous sample; operator 3 takes the one before that.
+     Operator 1's own feedback, from its last two outputs, is as argued, and so are operator 2's stored output into
+     operators 3 and 4 and operator 3's newest into operator 4.
+  2. On a sample in which the envelope's cycle comes, every operator sounds at the attenuation it had, and the step
+     shows from the next sample. A key taken at that sample's start is stepped at its end.
+  The committed `fm.rs` has step 2's argued order; the writer's step that follows implements these and cites this
+  entry.
+- Pinned by: nothing yet.
+- Implemented in: not yet.
+
+### D-18. The envelope's rates 48 to 59: the double step falls on cycle 0 of each four, on 0 and 2, or on 0, 1 and 2
+- Opened: 2026-10-05, at stage 5's bench step, by the decays by rate: with D-17's order in, every rate below 48 and
+  rates 48, 52, 56, 60 and 61 agreed with the board to the sample, and rates 49-51, 53-55 and 57-59 did not
+  (`fm-dr49` 1,829 samples of 1,919; `fm-ar51` 23 of 3,000).
+- Documents read: Nemesis's table of increments (topic 386, 2008) as step 2 read it into `fm.rs`: at rates 48 to 59
+  a step of 1, 2 or 4, doubled on some of the counter's eight cycles, which for a rate's low two bits of 1, 2 and 3
+  it put on cycle 3 of each four, on 1 and 3, and on 1, 2 and 3. A search of the saved thread for the table's rows,
+  by their digits alone, found none, and the post was not otherwise read again in this step.
+- Test program: `fm-dr38` to `fm-dr61` and `fm-ar44` to `fm-ar59` (`rate_voice`: S4 alone with key scaling 3, where
+  the rate is twice the register plus a key code of 18 or 19), and `fm-envelope-ks`, whose attack is rate 54.
+- Referee: the board as in D-16; no RTL file opened. Turning the eight cycles round by one amount does not mend it:
+  the rates of low bits 1 want a turn of 3 or 7, those of 2 any odd turn, those of 3 a turn of 1 or 5, while rate 47,
+  which misses one step in eight, fixes the turn at 0. With the double steps on cycle 0 of each four, on 0 and 2,
+  and on 0, 1 and 2, all twenty decays (31,038 samples) and all sixteen attacks (48,000) agree to the sample, and
+  `fm-envelope-ks` goes from 2,748 of 3,000 to 3,000.
+- Conclusion: **measured on the board.** Numbering the envelope counter's cycles so that rate 47 takes no step on
+  cycle 0 of eight, as rates 44 to 47 are tabled and as the board has them, a rate of 48 to 59 whose low two bits are
+  1 doubles its step on cycle 0 of each four, one whose low bits are 2 on cycles 0 and 2, one whose low bits are 3 on
+  cycles 0, 1 and 2. These are step 2's three rows read backwards. Whether the table or step 2's reading of its
+  columns is at fault is not established; the board's cycles stand either way. Rates below 48 are as step 2 has them
+  (38, 39 and 42 to 47 compared).
+- Pinned by: nothing yet.
+- Implemented in: not yet.
+
+### D-19. The Z80's reset line resets the YM2612: its voices stop, its sample cycle restarts from the line's assertion, and its envelope counter from the release
+- Opened: 2026-10-05, at stage 5's bench step, by channel 1's turn on the pins, which came 1,223 cycles into the
+  sample in a program that only releases the Z80's reset and 915 in one that pulses it (D-16).
+- Documents read: Charles MacDonald, `gen-hw.txt`, on `$A11200`: "The /RESET line is shared with the YM2612. For as
+  long as the Z80 is reset, the YM2612 cannot be used."
+- Test program: `mdboard.py reset-replay`: a Z80 program plays S4's attack at AR 12, and the 68000 pulses the reset
+  twice, so that the Z80 writes the same voice again, at the same cycles after each release to within 2.
+- Referee: the board as in D-16, its reset line and pins logged (`TB_PINS`, `TB_AUDIO`); no RTL file opened.
+  - A sounding voice stops at the pulse and the pins rest until the Z80 has written it again.
+  - Channel 1's turn comes 1,226 cycles after the line's assertion, to the cycle, after every pulse whose voice
+    sounded: eight in three runs, held 0.28, 1.28, 14.4 and 14.6 samples. After the release it comes wherever that
+    leaves it (666, 414, 1,982 and 2,010 cycles on). From power-on, where the line starts asserted, it is 1,223.
+  - After a pulse of 1.28 or 14.4 samples the replayed attack leaves rest 868 samples after the release, each time:
+    the same count after pulses of different lengths, and after two releases 1,464.8 samples apart, where a counter
+    left running would put the envelope's steps 25 samples elsewhere. So the envelope's counter runs from the release.
+  - After the 0.28-sample pulse a Z80 loader makes, the attack leaves rest at 855, not 868: that pulse restarted the
+    cycle and seemingly not the counter. One case, the same in every run, and not resolved.
+  - After one pulse of 1.26 samples the voice did not sound again, though the Z80 made the same 72 writes; after one
+    of 1.28 it did. A reset shorter than about a sample and a third leaves the board's chip in no dependable state.
+- Conclusion: **measured on the board**, and documented in its first part. Asserting the Z80's reset resets the
+  YM2612: its voices stop at once, its 24-slot cycle restarts from the assertion, and its envelope counter is held
+  until the release. Whether every register is cleared, or the keys alone, was not separated: the replay writes them
+  all. Nephrite does not reset the YM2612 with the line at all; its envelope voices agree with the board's
+  because a program that only releases the line does so 0.79 of a sample after the 68000 starts (1,596 cycles on the
+  board), inside Nephrite's first. The writer's step that follows implements the reset and cites this entry; how
+  short a pulse may be is left at the board's 1.28 samples.
+- Pinned by: nothing yet.
+- Implemented in: not yet.

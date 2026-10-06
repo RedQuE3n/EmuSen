@@ -10,8 +10,10 @@ Nephrite_Native.md §10 and §15.3 are the method.
   mdboard.py picture <name> [frames] [dir]   one of PICTURES' programs, its ROM and the board's frames as PNGs in dir
   mdboard.py vram128 [cycles]   the 128 KiB mode's writes, read back with it clear
   mdboard.py sound <name> <out.bin>   one of SOUNDS' programs, written out for a reference or the bench
-
-Times are in MCLK2 cycles, two to a master clock; the bench prints cartridge reads (c) and 68000 RAM writes (w).
+  mdboard.py pins <name> <out.log> [cycles]   one of SOUNDS' programs on the board, its sound pins logged
+  mdboard.py fm <pins.log> <trace> [channel]   a channel on the board's pins against Nephrite's fmtrace output
+  mdboard.py read-after-write [nops] [dac] [timers]   a status read after a data write, at 49 places in the sample
+  mdboard.py reset-replay [rounds]   one voice replayed after each pulse of the Z80's reset line
 
 Times are in MCLK2 cycles, two to a master clock; the bench prints cartridge reads (c) and 68000 RAM writes (w).
 """
@@ -738,20 +740,17 @@ def dac_ramp():
     loop += w(0x6000, (-(len(loop) + 2)) & 0xFFFF)
     return program([0x8004, 0x8104, 0x8F02], [], code + loop)
 
-def ym_writes(pairs, part=0, settle=True):
-    """68000 code writing each (register, value) to the YM2612 through $A04000 (a2), part 0 or 1, then waiting out
-    the busy flag. With `settle`, a further wait of about two samples, since a write waits for its
-    operator's turn and a later one before then replaces it, the busy flag not yet set when read at once
-    (Nephrite_Disputes.md D-15)."""
+def ym_writes(pairs, part=0):
+    """68000 code writing each (register, value) to the YM2612 through $A04000 (a2), part 0 or 1: the busy flag waited
+    out first, then the address and the data, then four NOPs. On the board a status read whose bus cycle follows a
+    data write's at once leaves 0 in the register at two of every six places in a slot (Nephrite_Disputes.md D-15),
+    so the next poll of the busy flag comes no sooner than 16 clocks after."""
     code = bytearray()
     for r, v in pairs:
-        code += w(0x14BC if part == 0 else 0x157C, r) if part == 0 else w(0x157C, r, 0x0002)
-        code += w(0x157C, v, 0x0001 if part == 0 else 0x0003)
         code += w(0x4A12, 0x6BFC)                                                   # tst.b (a2); bmi.s the tst
-        if settle:
-            # 80 NOPs, about 2.2 samples: on the bench a taken branch after an operator's write loses the write
-            # (Nephrite_Native.md §19.4), so the wait is straight-line code.
-            code += w(*([0x4E71] * 80))
+        code += w(0x14BC, r) if part == 0 else w(0x157C, r, 0x0002)
+        code += w(0x157C, v, 0x0001 if part == 0 else 0x0003)
+        code += w(0x4E71, 0x4E71, 0x4E71, 0x4E71)
     return bytes(code)
 
 def op_alone(test21, test2c=0x10, reads=12000):
@@ -788,10 +787,11 @@ def fm_voice(ops, alg=7, fb=0, fnum=1024, block=1, channel=0, keys=0xF0, extra=(
         code += ym_writes([e[:2]], part if e[0] >= 0x30 else 0)
     return program([0x8004, 0x8104, 0x8F02], [], code + w(0x60FE))
 
-def z80_writer(writes, wait=40):
+def z80_writer(writes, wait=40, then=None):
     """A program in which the Z80 writes each (part, register, value) to the YM2612 at $4000-$4003, with a `wait`
-    djnz loop after each, then halts; the 68000 loads it into the Z80's RAM and releases the Z80. Writes from the
-    68000 through $A04000 were lost on the bench in ways no wait length settled (Nephrite_Native.md §19.4)."""
+    djnz loop after each, then halts; the 68000 loads it into the Z80's RAM, releases the Z80 and runs `then`
+    (an idle loop by default). The Z80's reset line resets the YM2612 too, so a pulse of it replays the program on a
+    chip at rest (Nephrite_Disputes.md D-19)."""
     z = bytearray()
     for part, r, v in writes:
         z += bytes([0x3E, r, 0x32, 0x00 | 2 * part, 0x40, 0x3E, v, 0x32, 0x01 | 2 * part, 0x40])   # ld a,r; ld ($4000+2p),a ...
@@ -802,7 +802,7 @@ def z80_writer(writes, wait=40):
     lea_at = len(code) - 2
     code += w(0x43F9, 0x00A0, 0x0000, 0x303C, len(z) - 1, 0x12D8, 0x51C8, 0xFFFC)               # copy to $A00000
     code += w(0x33FC, 0x0000, 0x00A1, 0x1200, 0x33FC, 0x0000, 0x00A1, 0x1100,                   # RESET, BUSREQ off
-              0x33FC, 0x0100, 0x00A1, 0x1200, 0x60FE)                                            # RESET released; idle
+              0x33FC, 0x0100, 0x00A1, 0x1200) + (then if then is not None else w(0x60FE))         # RESET released
     code = bytearray(code)
     z_at = len(code)
     code[lea_at:lea_at + 2] = (z_at - lea_at).to_bytes(2, "big")
@@ -822,6 +822,173 @@ def fm_writes(ops, alg=7, fb=0, fnum=1024, block=1, channel=0, keys=0xF0, extra=
 SINE = (0x01, 0x00, 0x1F, 0x00, 0x00, 0x0F)
 QUIET = (0x01, 0x7F, 0x1F, 0x00, 0x00, 0x0F)
 
+def rate_voice(rate, attack=False):
+    """S4 alone with key scaling 3 at block 4, where the envelope's rate is twice the register plus the key code (18
+    at frequency 1,081, 19 at 1,152): its decay at `rate` from an instant attack, or its attack at `rate` to a held
+    level (Nephrite_Disputes.md D-18)."""
+    r, fnum = (rate - 18) // 2, 1152 if rate & 1 else 1081
+    op = (0x01, 0x00, 0xC0 | r, 0x00, 0x00, 0x0F) if attack else (0x01, 0x00, 0xDF, r, 0x00, 0xFF)
+    return fm_voice((QUIET, QUIET, QUIET, op), fnum=fnum, block=4)
+
+# (S3's multiple, its TL and decay rate, S4's multiple, frequency, block): S3 at or near full level, decaying, into S4.
+ROM_VOICES = [(1, 0, 16, 1, 1081, 4), (1, 0, 16, 2, 1081, 4), (2, 0, 17, 1, 1081, 4), (1, 1, 16, 3, 1081, 4), (3, 0, 15, 0, 1081, 4),
+              (1, 0, 16, 1, 1151, 3), (1, 0, 17, 2, 777, 4), (2, 2, 16, 1, 1999, 2), (1, 3, 15, 5, 613, 5), (1, 0, 18, 7, 1333, 3)]
+
+def rom_voice(i):
+    """Algorithm 4's second pair, a decaying S3 modulating S4: S3's every output bit moves S4's phase, which is what
+    lets the nine-bit pins say what the two ROMs hold (Nephrite_Disputes.md D-16)."""
+    mm, tl, dr, cm, fnum, block = ROM_VOICES[i]
+    return fm_voice((QUIET, QUIET, (mm, tl, 0x1F, dr, 0x00, 0xFF), (cm, 0x00, 0x1F, 0, 0, 0x0F)), alg=4, fnum=fnum, block=block)
+
+TRIALS, TRIAL_MARK = 49, 0x7000
+
+def read_after_write(nops=0, dac=False, timers=False):
+    """A Z80 program sets a voice on channel 1 (or, with `dac`, the 68000 enables the DAC); then the 68000, 49
+    times: `p` NOPs to move along the sample, a mark in RAM ($7000 + p at $FF0006), a register's address and data
+    written, `nops` NOPs, the status read, and a wait. The register is S4's TL, $10 and $18 in turn, or the DAC's
+    data, $90 + p; with `timers` both timers have overflowed first, so that the status reads $03
+    (Nephrite_Disputes.md D-15)."""
+    tail = w(0x303C, 8000, 0x51C8, 0xFFFE)                                                # the Z80's writes finish
+    tail += w(0x33FC, 0x0100, 0x00A1, 0x1100, 0x0839, 0x0000, 0x00A1, 0x1100, 0x66F6, 0x45F9, 0x00A0, 0x4000)
+    if dac:
+        tail += ym_writes([(0x2B, 0x80), (0x2A, 0x80)])
+    if timers:
+        tail += ym_writes([(0x24, 0xFF), (0x25, 0x03), (0x26, 0xFF), (0x27, 0x0F)]) + w(0x303C, 3000, 0x51C8, 0xFFFE)
+    for p in range(TRIALS):
+        r, v = (0x2A, 0x90 + p) if dac else (0x4C, 0x18 if p & 1 else 0x10)
+        tail += w(*([0x4E71] * p)) + w(0x33FC, TRIAL_MARK + p, 0x00FF, 0x0006)
+        tail += w(0x14BC, r, 0x157C, v, 0x0001) + w(*([0x4E71] * nops)) + w(0x4A12)       # address; data; tst.b (a2)
+        tail += w(0x303C, 800, 0x51C8, 0xFFFE)
+    tail += w(0x33FC, TRIAL_MARK + TRIALS, 0x00FF, 0x0006, 0x60FE)
+    voice = (QUIET, QUIET, QUIET, QUIET if dac else SINE)
+    return z80_writer(fm_writes(voice, keys=0x00 if dac else 0x80, fnum=1081, block=6), then=tail)
+
+def reset_replay(rounds=200, gaps=(20000, 20555)):
+    """A Z80 program plays S4's attack at AR 12; after each of `gaps` (dbra rounds of ten clocks) the 68000 holds the
+    Z80's reset for `rounds` more, or for 40 NOPs if that is 0, and releases it, so that the Z80 writes the voice
+    again (Nephrite_Disputes.md D-19)."""
+    hold = w(0x323C, rounds, 0x51C9, 0xFFFE) if rounds else w(*([0x4E71] * 40))
+    pulse = w(0x33FC, 0x0000, 0x00A1, 0x1200) + hold + w(0x33FC, 0x0100, 0x00A1, 0x1200)
+    tail = b"".join(w(0x303C, g, 0x51C8, 0xFFFE) + pulse for g in gaps) + w(0x60FE)
+    return z80_writer(fm_writes((QUIET, QUIET, QUIET, (0x01, 0x00, 0x0C, 0, 0, 0x0F)), **A4), then=tail)
+
+# ---- the board's sound pins read back (Nephrite_Disputes.md D-16): an FM sample is 2,016 MCLK2 cycles of 24 slots.
+SAMPLE, SLOT = 2016, 84
+
+def bench(image, cycles, audio=None, zbus=False, pins=False):
+    """The board run on `image`, with its sound pins logged to `audio`, the Z80 bus printed (b lines) and the Z80's
+    reset and bus acknowledge printed (z lines) as asked; its output's lines, split."""
+    path = os.path.join(WORK, "program.bin")
+    open(path, "wb").write(image)
+    env = dict(os.environ, LD_LIBRARY_PATH=LIB)
+    if audio: env["TB_AUDIO"] = audio
+    if zbus: env["TB_ZBUS"] = f"0:{cycles}"
+    if pins: env["TB_PINS"] = "1"
+    out = subprocess.run([os.path.join(WORK, "tb_md"), path, str(cycles)], capture_output=True, text=True, cwd=WORK, env=env, check=True).stdout
+    return [line.split() for line in out.splitlines()]
+
+def pin_records(path):
+    """The log's records: (cycle, MOL_2612, MOR_2612, PSG), one at each change."""
+    import struct
+    d = open(path, "rb").read()
+    return [struct.unpack("<QHHH", d[i:i + 14]) for i in range(0, len(d) - 13, 14)]
+
+def fm_level(pin):
+    """A ten-bit FM pin as the channel's signed nine-bit output: the pins carry it one higher when it is not negative."""
+    return pin - 1 if pin < 512 else pin - 1024
+
+def channel_slot(recs, origin=0):
+    """Where in the sample, counted from `origin`, the pins take the most different values: the busiest channel's turn."""
+    seen = {}
+    for t, mol, _, _ in recs:
+        seen.setdefault((t - origin) % SAMPLE, set()).add(mol)
+    return max(seen, key=lambda k: len(seen[k])) if seen else None
+
+def fm_series(recs, slot, origin=0):
+    """The channel whose turn comes `slot` cycles into each sample from `origin`: {sample number: level} where it shows."""
+    return {(t - origin) // SAMPLE: fm_level(mol) for t, mol, _, _ in recs if (t - origin) % SAMPLE == slot}
+
+def fm_compare(log, trace, channel=0, settle=1300000):
+    """The board's busiest channel against Nephrite's `fmtrace` output (six little-endian i16 a sample), each from its
+    first sample that is neither 0 nor -1: (samples compared, samples equal, the first differences)."""
+    import struct
+    recs = [r for r in pin_records(log) if r[0] > settle]
+    slot = channel_slot(recs)
+    held, board, i = [r for r in pin_records(log)], [], 0
+    k = recs[0][0] // SAMPLE
+    while k * SAMPLE + slot + 1 < held[-1][0]:
+        t = k * SAMPLE + slot + 1
+        while i + 1 < len(held) and held[i + 1][0] <= t:
+            i += 1
+        board.append(fm_level(held[i][1]))
+        k += 1
+    raw = open(trace, "rb").read()
+    neph = list(struct.unpack("<%dh" % (len(raw) // 2), raw))[channel::6]
+    first = lambda xs: next(i for i, x in enumerate(xs) if x not in (0, -1))
+    b0, n0 = first(board), first(neph)
+    n = min(len(board) - b0, len(neph) - n0)
+    diffs = [(j, board[b0 + j], neph[n0 + j]) for j in range(n) if board[b0 + j] != neph[n0 + j]]
+    return slot, n, n - len(diffs), diffs[:5]
+
+def trial_marks(lines):
+    return [int(l[1]) for l in lines if l[0] == "w" and l[2] == "04006" and int(l[3], 16) >= TRIAL_MARK]
+
+def read_after_write_report(nops=0, dac=False, timers=False, cycles=12000000):
+    """Runs `read_after_write` and prints, for each place in a slot the read's strobe ended at, how many trials kept
+    the written value, how many were left with 0 and how many with anything else."""
+    log = os.path.join(WORK, "audio.log")
+    lines = bench(read_after_write(nops, dac, timers), cycles, audio=log, zbus=True, pins=True)
+    recs, marks = pin_records(log), trial_marks(lines)
+    z = [(int(l[1]), l[2]) for l in lines if l[0] == "z"]
+    asserted = [t for (t, v), (_, was) in zip(z[1:], z) if v == "1" and was == "0"][-1]
+    bus = [(int(l[1]), l[2], l[3]) for l in lines if l[0] == "b"]
+    slot = (asserted + CHANNEL_1) % SAMPLE if not dac else channel_slot([r for r in recs if r[0] > marks[0]])
+    tally, gaps = {}, set()
+    for p, (a, b) in enumerate(zip(marks, marks[1:])):
+        ev = [e for e in bus if a <= e[0] < b]
+        wr_rise = [e[0] for e, was in zip(ev[1:], ev) if e[2] == "1" and was[2] == "0"][1]
+        rd_fall = [e[0] for e, was in zip(ev[1:], ev) if e[1] == "0" and was[1] == "1"][0]
+        rd_rise = [e[0] for e, was in zip(ev[1:], ev) if e[1] == "1" and was[1] == "0"][0]
+        seen = [fm_level(mol) for t, mol, _, _ in recs if a + 16000 <= t < b and t % SAMPLE == slot]
+        if dac:
+            outcome = 1 if -256 in seen else 0 if 2 * (0x10 + p) in seen else 2
+        else:                                                    # a sine's peak: 63 at TL $10, 31 at $18, 255 at 0
+            outcome = 1 if max(seen) >= 250 else 0 if abs(max(seen) - (31 if p & 1 else 63)) <= 2 else 2
+        place = (rd_rise - asserted - CHANNEL_1) % SLOT
+        tally.setdefault(place, [0, 0, 0])[outcome] += 1
+        gaps.add(rd_fall - wr_rise)
+    print(f"{'the DAC data' if dac else 'TL'} written, {nops} NOPs, then the status read{' of $03' if timers else ''}; the read's strobe falls {sorted(gaps)} cycles after the write's rises")
+    for place in sorted(tally):
+        kept, zero, other = tally[place]
+        print(f"  read ending {place:2d} cycles into a slot: {kept:2d} kept, {zero:2d} left with 0, {other:2d} with something else")
+
+# Channel 1's turn on the pins comes this many cycles after the Z80's reset line is asserted, in every sample.
+CHANNEL_1 = 1226
+
+def reset_replay_report(rounds=200, cycles=11500000):
+    """Runs `reset_replay` and prints, for each release of the reset, where channel 1's turn falls after the pulse's
+    start and after its end, and the first sample of the replayed attack that leaves rest."""
+    log = os.path.join(WORK, "audio.log")
+    lines = bench(reset_replay(rounds), cycles, audio=log, pins=True)
+    recs = pin_records(log)
+    z = [(int(l[1]), l[2]) for l in lines if l[0] == "z"]
+    asserts = [t for (t, v), (_, was) in zip(z[1:], z) if v == "1" and was == "0"]
+    releases = [t for (t, v), (_, was) in zip(z[1:], z) if v == "0" and was == "1"][1:]
+    first = None
+    for i, (a, r) in enumerate(zip(asserts, releases)):
+        end = asserts[i + 1] if i + 1 < len(asserts) else cycles
+        seg = [x for x in recs if r < x[0] < end]
+        slot = channel_slot(seg, r)
+        series = fm_series(seg, slot, r) if seg else {}
+        if len(series) < 50:
+            print(f"  reset held {(r - a) / SAMPLE:5.2f} samples: the voice does not sound again")
+            continue
+        first = first or series
+        common = sorted(set(first) & set(series))
+        print(f"  reset held {(r - a) / SAMPLE:5.2f} samples: channel 1 comes {(r + slot - a) % SAMPLE} cycles after the pulse's start, "
+              f"{slot} after its end; the attack leaves rest {min(series)} samples after the release; "
+              f"{sum(first[j] == series[j] for j in common)} of {len(common)} samples as the first replay's")
+
 SOUNDS = {"dac-square": dac_square, "psg-tone": psg_tone, "dac-ramp": dac_ramp}
 # The voices the references are compared on (Nephrite_Native.md §19.3): 440 Hz-ish (frequency 1,081, block 4).
 A4 = dict(fnum=1081, block=4)
@@ -834,9 +1001,23 @@ SOUNDS["fm-feedback5"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), fb=5, **A
 SOUNDS["fm-decay"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0x1F, 0x08, 0x04, 0x4F)), **A4)
 SOUNDS["fm-dt3"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x31, 0x00, 0x1F, 0, 0, 0x0F)), **A4)
 SOUNDS["fm-dt7"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x71, 0x00, 0x1F, 0, 0, 0x0F)), **A4)
+for _alg in range(1, 7):
+    SOUNDS[f"fm-alg{_alg}"] = lambda a=_alg: fm_voice(((0x01, 0x28, 0x1F, 0, 0, 0x0F), (0x02, 0x24, 0x1F, 0, 0, 0x0F),
+                                                       (0x03, 0x20, 0x1F, 0, 0, 0x0F), (0x01, 0x08, 0x1F, 0, 0, 0x0F)), alg=a, fb=3, **A4)
+SOUNDS["fm-alg7"] = lambda: fm_voice(((0x01, 0x10, 0x1F, 0, 0, 0x0F), (0x02, 0x14, 0x1F, 0, 0, 0x0F), (0x03, 0x18, 0x1F, 0, 0, 0x0F),
+                                      (0x05, 0x1C, 0x1F, 0, 0, 0x0F)), alg=7, fb=4, **A4)
+SOUNDS["fm-envelope"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0x14, 0x14, 0x0E, 0x48)), extra=[(0x28, 0x00, 43)], **A4)
+SOUNDS["fm-envelope-ks"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0xD2, 0x10, 0x0C, 0x46)), extra=[(0x28, 0x00, 43)], **A4)
 SOUNDS["fm-attack"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0x0C, 0, 0, 0x0F)), **A4)
 for _t in (0x40, 0xC0):
     SOUNDS[f"op-alone-{_t:02x}"] = lambda t=_t: op_alone(t)
+# The voices of the board's comparison (Nephrite_Disputes.md D-16 to D-18): decays and attacks by rate, and the ROMs' ten.
+for _r in (38, 39, 42, 43, *range(46, 62)):
+    SOUNDS[f"fm-dr{_r}"] = lambda r=_r: rate_voice(r)
+for _r in range(44, 60):
+    SOUNDS[f"fm-ar{_r}"] = lambda r=_r: rate_voice(r, attack=True)
+for _i in range(len(ROM_VOICES)):
+    SOUNDS[f"fm-rom{_i}"] = lambda i=_i: rom_voice(i)
 
 PAL_PICTURES = {"pal-v30"}
 
@@ -844,6 +1025,19 @@ if __name__ == "__main__":
     what = sys.argv[1]
     if what == "sound":
         open(sys.argv[3], "wb").write(SOUNDS[sys.argv[2]]())
+        sys.exit()
+    if what == "pins":
+        bench(SOUNDS[sys.argv[2]](), int(sys.argv[4]) if len(sys.argv) > 4 else 10000000, audio=os.path.abspath(sys.argv[3]))
+        sys.exit()
+    if what == "fm":
+        slot, n, equal, diffs = fm_compare(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 0)
+        print(f"the channel at cycle {slot} of the sample: {n} samples compared, {equal} equal; first differences (sample, board, trace) {diffs}")
+        sys.exit()
+    if what == "read-after-write":
+        read_after_write_report(int(sys.argv[2]) if len(sys.argv) > 2 else 0, "dac" in sys.argv[3:], "timers" in sys.argv[3:])
+        sys.exit()
+    if what == "reset-replay":
+        reset_replay_report(int(sys.argv[2]) if len(sys.argv) > 2 else 200)
         sys.exit()
     if what == "picture":
         picture(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 4, sys.argv[4] if len(sys.argv) > 4 else None)

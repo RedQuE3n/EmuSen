@@ -2,6 +2,7 @@
 // the cartridge pins, the two RAMs answered on theirs, and every cartridge read and 68000 RAM write printed with the
 // master clock it began on. Nephrite_Native.md §10 is the method; mdboard.py builds the programs and reads the output.
 #include "Vmd_board.h"
+#include "Vmd_board___024root.h"
 #include "verilated.h"
 #include <cstdio>
 #include <cstdlib>
@@ -41,6 +42,14 @@ int main(int argc, char** argv) {
     // cycle (u64), MOL_2612, MOR_2612 and PSG (u16 each).
     FILE* aud = getenv("TB_AUDIO") ? fopen(getenv("TB_AUDIO"), "wb") : nullptr;
     uint16_t last_mol = 0xFFFF, last_mor = 0xFFFF, last_psg = 0xFFFF;
+    // TB_PINS prints the Z80's reset and bus acknowledge at each change ("z cycle res ack"), and every 100,000 cycles
+    // the YM2612 clock's rising edges in them ("f cycle edges").
+    bool pins = getenv("TB_PINS") != nullptr;
+    int last_res = -1, last_ack = -1, last_fclk = 0; uint64_t fclk_edges = 0;
+    // TB_ZBUS=from:to prints the Z80 bus as the board carries it, at each change of its strobes, address or data
+    // ("b cycle rd wr address data"); the YM2612 is addressed at $4000-$4003 on it.
+    uint64_t zbus_from = 1, zbus_to = 0; uint32_t last_zbus = 0xFFFFFFFF;
+    if (const char* zb = getenv("TB_ZBUS")) sscanf(zb, "%llu:%llu", (unsigned long long*)&zbus_from, (unsigned long long*)&zbus_to);
     uint16_t held = 0xFFFF;
     int hold = 0, hold_len = getenv("TB_HOLD") ? atoi(getenv("TB_HOLD")) : 8;
     for (uint64_t t = 0; t < cycles; t++) {
@@ -72,6 +81,20 @@ int main(int argc, char** argv) {
             uint64_t tt = t;
             uint16_t v[3] = {last_mol, last_mor, last_psg};
             fwrite(&tt, 8, 1, aud); fwrite(v, 2, 3, aud);
+        }
+        if (pins) {
+            if (b->res_z80 != last_res || b->dma_z80_ack != last_ack) {
+                last_res = b->res_z80; last_ack = b->dma_z80_ack;
+                printf("z %llu %d %d\n", (unsigned long long)t, last_res, last_ack);
+            }
+            if (b->fm_clk1 && !last_fclk) fclk_edges++;
+            last_fclk = b->fm_clk1;
+            if (t % 100000 == 99999) { printf("f %llu %llu\n", (unsigned long long)t, (unsigned long long)fclk_edges); fclk_edges = 0; }
+        }
+        if (t >= zbus_from && t < zbus_to) {
+            auto* r = b->rootp;
+            uint32_t z = (uint32_t)r->md_board__DOT__ZRD << 25 | (uint32_t)r->md_board__DOT__ZWR << 24 | (uint32_t)r->md_board__DOT__ZA << 8 | r->md_board__DOT__ZD;
+            if (z != last_zbus) { last_zbus = z; printf("b %llu %d %d %04x %02x\n", (unsigned long long)t, z >> 25 & 1, z >> 24 & 1, z >> 8 & 0xFFFF, z & 0xFF); }
         }
         if (t >= trace_from && t < trace_to)
             printf("t %llu cs %d oe %d lwr %d uwr %d ca %06x en %d | wren %d ra %05x be %d vd %04x | dma %d cas2 %d vdma %d early %d\n", (unsigned long long)t, b->cart_cs, b->cart_oe, b->cart_lwr, b->cart_uwr,

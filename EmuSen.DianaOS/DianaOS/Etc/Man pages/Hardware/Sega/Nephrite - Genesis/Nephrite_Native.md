@@ -1344,10 +1344,98 @@ their sourcing describe the step as committed (D-16).*
 - **The bench as a referee for the FM unit.** `tb_md.cpp` logs the OPN2's output pins (`TB_AUDIO`): each channel's
   value appears once a sample in its slot, `value + 1` when positive and `value + 1024` when negative, the DAC's
   register showing there as a signed value. A single operator plays a clean sine when its setup writes come without
-  waits; with waits between all writes, from the 68000 or from a Z80 program, the channel stays at rest, and a 68000
-  write followed by a taken branch was lost where the same with no-operations in its place was not. Until the bench's
+  waits; ~~with waits between all writes, from the 68000 or from a Z80 program, the channel stays at rest, and a 68000
+  write followed by a taken branch was lost where the same with no-operations in its place was not.~~ Until the bench's
   YM2612 is understood (D-16), the references' audio is this step's oracle; MDFourier and Nemesis's recordings come
-  with the stage's oracle step.
+  with the stage's oracle step. *Both struck statements were wrong, and §20 has what was: the channel played and was
+  looked for at the wrong place in the sample, and the lost writes were left at 0 by the busy poll's read.*
 - **D-15**, the write timing; **D-16**, the tables' last bits.
 - **Next**, in the plan's order: the LFO, SSG-EG, CSM and channel 3's special mode's key-ons, the test register,
   the ladder effect and the multiplexed output, the YM3438 of model 2 as a setting, and the model 1 filter.
+
+## 20. Stage 5, the bench step: the board made the FM unit's referee (2026-10-05)
+
+A dispute step: it changes no code of the core and ends in rules (`Nephrite_Disputes.md` D-14 to D-19). It was put
+before the LFO and SSG-EG so that those, the ladder effect and the filter have something to be measured against that
+is not another emulator.
+
+### 20.1 What it settled
+
+- **The bench plays, with every write applied** (D-16). It always had: channel 1's turn on the pins moves with the
+  Z80's reset line, and step 2 looked for it where a program of another kind puts it. `mdboard.py pins` logs a
+  program's pins and `mdboard.py fm` compares the busiest channel with `examples/fmtrace.rs`'s output, sample for
+  sample, aligned on nothing but each one's first sample off rest.
+- **The lost writes** (D-15). A status read in the instruction after a data write leaves 0 in the register at two of
+  every six places in a slot, on the board, for an operator's register and a chip-level one alike; one NOP between
+  the two keeps every write. The first voices polled the busy flag at once, and lost a third of their writes to it.
+  Sauraen's write held for its operator's turn is not what was lost, and remains unmeasured.
+- **The tables on the board** (D-16). With the board's order in, moving any one of the 512 entries of the two ROMs up
+  or down by one (1,015 changes, a zero entry not going down) changes at least one of 200,220 compared samples, and
+  as they stand none differs: the board's FM unit computes with the OPL2's ROMs as printed. The tables in the tree
+  were not touched.
+- **Three rules the committed unit does not have**, each measured on the board and left for the writer's step that
+  follows:
+  - operator 1's output reaches operators 2 and 4 and the sum a sample late, and operator 3 a sample later still;
+    the envelope's step shows from the sample after its cycle (D-17);
+  - rates 48 to 59 take their double steps on other cycles of the four than step 2 read from Nemesis's table (D-18);
+  - the Z80's reset line resets the YM2612, which Nephrite does not do at all (D-19).
+- **The square's slower loop** (D-14) is D-2's refresh, not the access: the board's `dac-square` is 535.04 Hz with
+  BlastEm and PicoDrive, 112.9 of the 68000's clocks a half period over Nephrite's, of which the refresh is 110.2.
+
+### 20.2 Measured (2026-10-05)
+
+Against the board's pins, 62 voices and 200,220 samples (the voices by name in D-16):
+
+| The FM unit | Algorithms and levels (13 voices, 67,482) | Envelopes (3 voices, 11,700) | Decays by rate (20, 31,038) | Attacks by rate (16, 48,000) | S3 into S4 (10, 42,000) | All |
+|---|---|---|---|---|---|---|
+| as committed | 43,200 | 7,603 | 28,821 | 9,523 | 40,708 | 129,855 |
+| operator 1 a sample late | 67,482 | 7,603 | 28,821 | 9,523 | 40,708 | 154,137 |
+| and the envelope's step after the output | 67,482 | 11,448 | 30,439 | 38,900 | 42,000 | 190,269 |
+| and rates 48 to 59 on the board's cycles | 67,482 | 11,700 | 31,038 | 48,000 | 42,000 | 200,220 |
+
+Only the first row is the tree's `fm.rs`; the others were builds made outside it for the comparison, and none of them
+is committed. The measure counts exact samples and nothing else: an envelope whose step comes a sample early or late
+differs in most of the samples that follow, so 9,523 of 48,000 says that the attacks' steps are misplaced, not how
+far their levels are out, which §19.3's figures against the references bound. Those figures are the committed unit's
+and stand as measured; how the three rules move them is for the writer's step to measure.
+
+- **The writes**: `mdboard.py read-after-write` with 0, 1 and 2 NOPs, 49 trials each: 18 writes left at 0 and 31 kept;
+  49 kept; 49 kept. On the DAC's register with none: 16 left at 0, 33 kept. With the status reading `$03`: 14 left
+  at 0, 35 kept, none at 3.
+- **The reset**: `mdboard.py reset-replay`, with the line held 14.4 samples and with it held 1.3: D-19's figures.
+- **The crate's tests** were not run again for this step: nothing they build changed. `mdboard.py`'s new programs
+  were checked to be the ones measured, byte for byte, for the 46 voices added to `SOUNDS` and for the reset's two.
+
+### 20.3 The bench's tools
+
+- `tb_md.cpp`: `TB_PINS` (the Z80's reset and bus acknowledge at each change, and the YM2612 clock's edges counted)
+  and `TB_ZBUS` (the Z80 bus between the chips, at each change of its strobes, address or data). The second reads four
+  of the board's own nets by name, which the top level does not bring out; the generated headers were searched for the
+  names and no logic was read (D-16).
+- `mdboard.py`: `rate_voice`, `rom_voice`, `read_after_write` and `reset_replay`, with 46 voices more in `SOUNDS`;
+  `bench`, `pin_records`, `channel_slot`, `fm_series` and `fm_compare`; the commands `pins`, `fm`, `read-after-write`
+  and `reset-replay`. `ym_writes` now waits out the busy flag before each write and leaves four NOPs after it, where
+  step 2's left eighty; every voice's key-on therefore comes sooner than in §19.3's runs, none of whose figures is
+  taken from when it comes. `z80_writer` takes the 68000's code to run once the Z80 is started.
+
+### 20.4 The sources
+
+No RTL file was opened. Two files Verilator generates from the board were searched for the names of pins and nets,
+and the names of the generated files listed (D-16). Of topic 386, from the copy saved at step 2: page 54's table of
+the chip's 24 slots, read as a table with the three lines of that post that carry code left undisplayed (D-17), and,
+in passing while looking for the increments' table, Nemesis's table of the block's shift, which step 2 had already
+read, its neighbouring lines that carry code likewise left undisplayed. Charles MacDonald's `gen-hw.txt` on `$A11200`
+(D-19). No emulator's source was read, and no entry of either operator table was written or changed.
+
+### 20.5 Open, and next
+
+- **For a console, not the board**: whether a register read at once after its write is left at 0 (D-15). The board
+  is a model of the chip, and this is the one finding of the step that the board alone should not decide: a driver
+  that polls the busy flag straight after a write would be made to lose notes by it.
+- **Unmeasured still**: when a write held for its operator's turn lands (D-15); the status at ports 1-3 (D-13), for
+  which the board has an input; whether an access costs one clock more or sometimes two (D-14); the short reset
+  pulse's one odd case (D-19). The ten-bit pins show a level that is not negative one higher than a negative one,
+  which looks like the ladder's step and is for the step that builds the ladder effect to measure there.
+- **Next**: a writer's step that puts D-17, D-18 and D-19 into `fm.rs` and `ym2612.rs` and pins each with a test
+  that the board's samples decide; then, in the plan's order, the LFO, SSG-EG, CSM, the test register, the ladder
+  effect, the YM3438 of model 2 as a setting, and the model 1 filter, each against the board's pins.

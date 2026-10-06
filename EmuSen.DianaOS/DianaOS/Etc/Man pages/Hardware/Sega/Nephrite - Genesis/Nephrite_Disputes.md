@@ -140,6 +140,20 @@ CPUs' disputes in their own record pages.
   `register_writes_show_where_the_board_shows_them` and `writes_land_where_the_board_lands_them` fail with either
   refresh taken out, and the second with the bus refresh at the 68000-start phase.
 - Implemented in: the commit "Nephrite, stage 5: the 68000's side".
+- 2026-10-06, at stage 5's placement step: **the bus refresh and the Z80's area.** Loops of `$A04000` reads and
+  writes with 0 to 7 NOPs, and key sweeps on both parts, with the 68000's strobes logged by `TB_MEM`, show the rule
+  this record left out. The refresh is requested every 896 master clocks, its phase fitted from the board's own slow
+  cycles: in three loops, 670 of 670 cartridge cycles that are the first after a request wait the two clocks (DTACK
+  41 cycles of the bench's clock after AS, not 13). Where the first cycle after a request is to the Z80's area, one
+  that starts within a clock of it (6 master clocks) has the ordinary five clocks (27) and the cartridge cycle after
+  it no wait, so it took the refresh free; one that starts two or four clocks after it (14, 28) is a clock longer
+  (41). Nephrite holds a cycle to the Z80's area that starts one to six of the 68000's clocks after the latest
+  request (`REFRESH_Z80_LATE`). The held cycle's strobe on the Z80's bus is held with it, and the YM2612 takes the
+  write where the strobe falls and 48 cycles of the bench's clock, where it would rise without the wait: of 36,180
+  data writes in the sweeps and status loops, the busy flag of every one ends where D-13's rule has it counted from
+  that place. With both, all 83,451 of the 68000's cycles in 16 traced runs (12 loops, four key sweeps on both
+  parts) start at the board's master clock when Nephrite is placed as the board is; it was the drift on channels 4
+  to 6 (`Nephrite_Native.md` §24.3, §25.2), and is the six-clock read of the YM2612 left open in §22.5 there.
 
 ### D-3. Shadow/highlight: palette 3's colour 14 brightens and colour 15 darkens, and an operator pixel gives no priority
 - Opened: 2026-10-05, at stage 4 step 2, by two documents in disagreement. MacDonald's "Sega Genesis VDP
@@ -851,6 +865,9 @@ CPUs' disputes in their own record pages.
 - 2026-10-06, at stage 5's SSG-EG and CSM step: in D-24's frame the 87 and the 793 above are key moments, and a
   sample's deadline comes 472 after its key moment: `RESTART` is 559 and `POWER_ON` 1,265, the same placements. The
   board's first deadline after power-on, in its own clock, is 537 (D-24).
+- 2026-10-06, at stage 5's placement step: `POWER_ON` is 910, the board's first deadline against its 68000's start
+  (the key and CSM sweeps of all six channels each in the board's sample on the whole machine there, 1,000 runs),
+  as decided in `Nephrite_Native.md` §22.3.
 
 ### D-20. The LFO: a 128-count cycle whose divider never stops, a triangle of tremolo, and each operator taking the count at its own place in the sample
 - Opened: 2026-10-06, at stage 5's LFO step, by the documents giving the LFO's speeds in Hz and its depths in cents

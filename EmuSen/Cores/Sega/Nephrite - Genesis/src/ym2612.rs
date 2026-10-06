@@ -23,8 +23,8 @@ pub const SLOT_EDGE: u64 = 32;
 /// and the counter's first cycle is the fourth sample from its start.
 pub const RESTART: u64 = 87 + KEY_LEAD;
 /// The first sample's deadline after power-on, where the reset line starts asserted: where the board's falls against
-/// the picture (Nephrite_Disputes.md D-2, D-19), its key moment at 793 (Nephrite_Native.md §24).
-pub const POWER_ON: u64 = 793 + KEY_LEAD;
+/// its 68000's start (Nephrite_Disputes.md D-19, Nephrite_Native.md §25).
+pub const POWER_ON: u64 = 910;
 pub const RELEASE_LEEWAY: u64 = 67;
 /// A sample's deadline is the moment up to which a write to most registers is in time for it. The key register is
 /// taken sooner, a channel at a time, a slot apart: a write keying channel 1 must come `KEY_LEAD` master clocks

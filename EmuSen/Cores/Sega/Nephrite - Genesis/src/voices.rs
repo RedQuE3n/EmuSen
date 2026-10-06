@@ -349,10 +349,10 @@ fn machine_channel(image: &[u8], frames: i64, channel: usize) -> (Machine, Vec<i
 }
 
 /// Where the board has its bus refresh and its YM2612's first deadline against its 68000's start, in Nephrite's
-/// clock: placed there, the whole machine makes each YM2612 write of a program on part 0 at the board's master clock
-/// (Nephrite_Native.md §24; §22.3 for the placement against the picture that Nephrite keeps).
+/// clock: placed there, the whole machine makes each YM2612 write of a program on either part at the board's master
+/// clock (Nephrite_Native.md §24, §25; §22.3 for the bus refresh's placement against the picture that Nephrite keeps).
 const BOARD_REFRESH: u64 = 98 + 777;
-const BOARD_YM: u64 = 910;
+const BOARD_YM: u64 = crate::ym2612::POWER_ON;
 
 /// A machine just made, its bus refresh and its YM2612's cycle moved to where the board has them against its 68000.
 pub(crate) fn place_as_the_board(m: &mut Machine) {
@@ -552,16 +552,26 @@ fn the_z80s_reset_line_resets_the_ym2612() {
     assert_eq!(ym.regs[0][0x2A], 0x55, "a write after the release lands");
 }
 
-/// The LFO's voices on the whole machine against the board's (Nephrite_Native.md §23, §24), whose chip is the board's
+/// The LFO voices unlike the board's on the whole machine at Nephrite's placement, where the bus refresh stands against
+/// the picture and the YM2612's cycle against the 68000 (Nephrite_Native.md §25): the programs make some of their
+/// writes a refresh's wait from the board's.
+const LFO_UNLIKE_AT_NEPHRITES_PLACEMENT: [&str; 45] = [
+    "fm-lfo0", "fm-lfo1", "fm-lfo2", "fm-lfo3", "fm-lfo4", "fm-lfo5", "fm-lfo6", "fm-lfo7", "fm-ams1", "fm-ams2", "fm-lfo-restart",
+    "fm-am-mod", "fm-pms1", "fm-pms2", "fm-pms3", "fm-pms4", "fm-pms5", "fm-pms6", "fm-pms7", "fm-pm-kc", "fm-pm-1500", "fm-pm-s1",
+    "fm-pm-c1s1", "fm-pm-c1s2", "fm-pm-c1s3", "fm-pm-c1s4", "fm-pm-c2s1", "fm-pm-c2s2", "fm-pm-c2s3", "fm-pm-c2s4", "fm-pm-c3s1",
+    "fm-pm-c3s2", "fm-pm-c3s3", "fm-pm-c3s4", "fm-pm-c5s1", "fm-pm-c5s2", "fm-pm-c5s3", "fm-pm-c5s4", "fm-am-s1", "fm-am-s2",
+    "fm-am-s3", "fm-am-c2s1", "fm-pm-ch3-normal", "fm-pm-ch3-swap", "fm-pm-ch3",
+];
+
+/// The LFO's voices on the whole machine against the board's (Nephrite_Native.md §23, §24, §25), whose chip is the board's
 /// in all of them but `fm-lfo-restart` (`the_lfo_voices_on_the_chip_are_the_boards`). Placed as the board is against
-/// its 68000's start, the whole machine is the board's in all but that one and nine on part 1, whose writes the 68000
-/// makes a poll of the busy flag early or late; at Nephrite's placement against the picture, in all but that one and
-/// channel 3's two in its special mode, which then take the vibrato's count a sample out.
+/// its 68000's start, the whole machine is the board's in all but that one; at Nephrite's placement, with the bus
+/// refresh against the picture, in 16.
 #[test]
 fn the_lfo_voices_are_the_boards_sample_for_sample() {
     for (board, known) in [
-        (true, &["fm-lfo-restart", "fm-pm-c4s1", "fm-pm-c4s2", "fm-pm-c4s3", "fm-pm-c4s4", "fm-pm-c5s1", "fm-pm-c5s2", "fm-pm-c5s3", "fm-pm-c5s4", "fm-am-c4s1"][..]),
-        (false, &["fm-lfo-restart", "fm-pm-ch3-swap", "fm-pm-ch3"][..]),
+        (true, &["fm-lfo-restart"][..]),
+        (false, &LFO_UNLIKE_AT_NEPHRITES_PLACEMENT[..]),
     ] {
         let mut wrong = Vec::new();
         for v in LFO_VOICES {
@@ -591,8 +601,8 @@ fn chip_equal(v: &crate::board_chip::BoardChipVoice, board: bool) -> usize {
     }
 }
 
-/// The program of one of `mdboard.py`'s landing sweeps: S1-S4 of channels 1-3 keyed, or CSM's timer loaded, `k`
-/// NOPs late.
+/// The program of one of `mdboard.py`'s landing sweeps: S1-S4 of a channel keyed, or CSM's timer loaded, `k` NOPs
+/// late.
 fn sweep_image(kind: &str, k: u16) -> Vec<u8> {
     if kind == "csm" {
         const PLUCK: Op = [0x01, 0x00, 0x1F, 0x00, 0x00, 0x0A];
@@ -605,27 +615,25 @@ fn sweep_image(kind: &str, k: u16) -> Vec<u8> {
     fm_voice_on(ops, 7, 0, 1081, 4, &[], Setup { channel: c, key_nops: k, ..PLAIN }).image()
 }
 
-/// The same voices on the whole machine. Placed as the board is against its 68000's start, 108 are the board's to the
-/// sample: the test register's nine and three envelopes on part 1, whose writes the 68000 makes a poll of the busy
-/// flag early or late there, are not.
+/// The same voices on the whole machine. Placed as the board is against its 68000's start, 111 are the board's to the
+/// sample, as on the chip: the test register's nine are not.
 #[test]
 fn the_chip_voices_on_the_whole_machine_at_the_boards_placement() {
     let exact = CHIP_VOICES.iter().filter(|v| chip_equal(v, true) == v.samples.max(1)).count();
-    assert_eq!(exact, 108);
+    assert_eq!(exact, 111);
 }
 
-/// The same voices at Nephrite's own placement, the YM2612's cycle against the picture (§22.3): a third of a sample
-/// from where the board has it against the 68000, so that a write the 68000 times lands in another sample now and
-/// then, CSM's timer load and the test register's among them. Held as a count.
+/// The same voices at Nephrite's own placement, the bus refresh against the picture (§25): the 68000's writes are a
+/// refresh's wait from the board's here and there, so that one lands in another sample now and then. Held as a count.
 #[test]
 fn the_chip_voices_at_nephrites_placement() {
     let exact = CHIP_VOICES.iter().filter(|v| chip_equal(v, false) == v.samples.max(1)).count();
-    assert_eq!(exact, 89);
+    assert_eq!(exact, 94);
 }
 
-/// Each key of S1-S4 on channels 1-3, and CSM's timer, moved by NOPs across the sample: on the whole machine placed
-/// as the board is, each lands in the board's sample. The key is taken a slot later on each channel, S1's a sample
-/// after the others', and the timer's load in the sample its tick follows (Nephrite_Native.md §24).
+/// Each key of S1-S4 on all six channels, and CSM's timer, moved by NOPs across the sample: on the whole machine
+/// placed as the board is, each lands in the board's sample, part 1's with its writes held by the bus refresh as
+/// the board's are (Nephrite_Native.md §24, §25).
 #[test]
 fn keys_and_the_timers_load_land_in_the_boards_samples() {
     let mut wrong = Vec::new();

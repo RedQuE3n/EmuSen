@@ -19,6 +19,9 @@ pub const M68K: u64 = 7;
 pub const REFRESH: u64 = 128 * M68K;
 pub const REFRESH_FIRST: u64 = 762;
 pub const REFRESH_WAIT: u64 = 2 * M68K;
+/// A cycle to the Z80's area that starts one to six of the 68000's clocks after a refresh's request waits a clock
+/// more, after its strobe on the Z80's bus (Nephrite_Disputes.md D-2).
+pub const REFRESH_Z80_LATE: std::ops::RangeInclusive<u64> = M68K..=6 * M68K;
 /// The main RAM's refresh (D-2): first requested at `RAM_REFRESH_FIRST`, then `RAM_REFRESH_AFTER` after each one
 /// is done. A RAM access within `RAM_REFRESH_WINDOW` of a request waits three clocks while it is done; with none, it
 /// is done at the window's end without a wait.
@@ -96,6 +99,8 @@ pub struct Hw {
     pub locked_up: bool,
     /// Master clocks the 68000 owes the Z80's window, paid at its next access.
     stall: u64,
+    /// The clock a cycle to the Z80's area waits after its strobe, this cycle.
+    area_late: u64,
     /// The master clocks of the next refresh of the bus and of the main RAM, each paid by the 68000's next access
     /// it applies to (Nephrite_Disputes.md D-2).
     pub refresh_at: u64,
@@ -137,6 +142,7 @@ impl Genesis {
             tmss: [0; 4],
             locked_up: false,
             stall: 0,
+            area_late: 0,
             refresh_at: REFRESH_FIRST,
             ram_refresh_at: RAM_REFRESH_FIRST,
             prefetch: 0,
@@ -323,7 +329,7 @@ impl Hw {
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read8(a),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
-                    self.z80_space_read(a as u16 & 0x7FFF, self.clock - Z80_AREA_LEAD)
+                    self.z80_space_read(a as u16 & 0x7FFF, self.clock - Z80_AREA_LEAD - self.area_late)
                 } else {
                     self.open8(a)
                 }
@@ -361,7 +367,7 @@ impl Hw {
             0x00_0000..=0x3F_FFFF => self.cart.write8(a, v),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
-                    self.z80_space_write(a as u16 & 0x7FFF, v, self.clock - Z80_AREA_LEAD);
+                    self.z80_space_write(a as u16 & 0x7FFF, v, self.clock - Z80_AREA_LEAD - self.area_late);
                 }
             }
             0xA1_0000..=0xA1_001F => self.io.write(a, v, self.clock),
@@ -541,8 +547,11 @@ impl MainBus<'_> {
         if a >= 0xE0_0000 {
             hw.ram_refresh();
         }
-        let area = if (0xA0_0000..=0xA0_FFFF).contains(&a) { Z80_AREA_WAIT } else { 0 };
-        hw.clock += 4 * M68K + area + std::mem::take(&mut hw.stall);
+        let z80 = (0xA0_0000..=0xA0_FFFF).contains(&a);
+        let last = hw.refresh_at.checked_sub(REFRESH);
+        hw.area_late = if z80 && last.is_some_and(|r| REFRESH_Z80_LATE.contains(&(hw.clock - r))) { M68K } else { 0 };
+        let area = if z80 { Z80_AREA_WAIT } else { 0 };
+        hw.clock += 4 * M68K + area + hw.area_late + std::mem::take(&mut hw.stall);
     }
 }
 

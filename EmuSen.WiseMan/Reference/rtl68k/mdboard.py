@@ -1657,6 +1657,12 @@ def board_chip(logs):
     out.append(board_write_times(at, chip_voice_names() + lfo_voice_names()))
     return "\n".join(out)
 
+def ym_latches(lines, start):
+    """The YM2612's writes after `start` as the chip takes them: a strobe's fall and 48 cycles, where the strobe rises
+    unless the 68000's cycle was held a clock by the bus refresh (Nephrite_Disputes.md D-2)."""
+    bus = [(int(l[1]), int(l[3]), int(l[4], 16)) for l in lines if l[0] == "b" and start <= int(l[1])]
+    return [e[0] + 48 for was, e in zip(bus, bus[1:]) if e[1] == 0 and was[1] == 1 and 0x4000 <= e[2] < 0x4004]
+
 def board_write_times(at, names):
     """For each voice, the MCLK2 cycles from the reset line's release to the rise of its first YM2612 write's strobe
     and from each strobe to the next, address and data, from the 68000's: their bus logs (`<name>.bus`, the Z80 bus
@@ -1672,11 +1678,11 @@ def board_write_times(at, names):
         r = edges(lines)[1][0]
         assert release in (None, r), (name, r, release)
         release = r
-        times = [t for t, _, _ in ym_strobes(lines, r, 1 << 40)]
+        times = ym_latches(lines, r)
         out.append(f'    ("{name}", &[{", ".join(str(t - u) for t, u in zip(times, [r] + times))}]),')
     return "\n".join(out) + f"\n];\n\npub const WRITES_RELEASE: u64 = {release};\n"
 
-SWEEPS = [f"key{_c}s{_k}" for _c in (1, 2, 3) for _k in (1, 2, 3, 4)] + ["csm"]
+SWEEPS = [f"key{_c}s{_k}" for _c in range(1, 7) for _k in (1, 2, 3, 4)] + ["csm"]
 
 def sweep_log(kind, k):
     """A landing sweep's run as its log is named: S4's key sweeps carry no operator in the name."""

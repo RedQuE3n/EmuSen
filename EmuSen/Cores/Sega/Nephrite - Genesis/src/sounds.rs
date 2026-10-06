@@ -45,13 +45,12 @@ fn a_program_sees_the_busy_flag_for_192_clocks_at_port_0_only() {
 }
 
 /// Timer A at `$3F0` counts sixteen samples from the tick after its load. The board's program polls its flag 77 times,
-/// and so does Nephrite placed as the board is; placed against the picture, the load falls in another sample and
-/// the flag comes two polls later (Nephrite_Native.md §24).
+/// and so does Nephrite, placed as the board is and at its own placement (Nephrite_Native.md §24, §25).
 #[test]
 fn a_program_sees_timer_a_overflow_after_its_period() {
     let start = [0x14BC, 0x0024, 0x157C, 0x00FC, 0x0001, 0x14BC, 0x0025, 0x157C, 0x0000, 0x0001, 0x14BC, 0x0027, 0x157C, 0x0005, 0x0001];
     assert_eq!(polls_placed(&start, 0, 0, true, true), 77, "polls until timer A's flag, as the board");
-    assert_eq!(polls(&start, 0, 0, true), 79, "at Nephrite's placement");
+    assert_eq!(polls(&start, 0, 0, true), 77, "at Nephrite's placement");
 }
 
 /// A 68000 program writing `writes` (part, register, value) through `$A04000` and idling, run `frames` frames with the

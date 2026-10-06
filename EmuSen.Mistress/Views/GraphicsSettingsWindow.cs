@@ -48,7 +48,7 @@ namespace EmuSen.Mistress.Views
             MinHeight = 400;
             CanResize = true;
 
-            var consoles = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList();
+            var consoles = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).Concat(CoreCatalog.DiscoveredConsoles).ToList();
             foreach (string console in consoles)
             {
                 _tabs.Add(console, new ScrollViewer { Content = BuildConsolePanel(console) });
@@ -147,11 +147,14 @@ namespace EmuSen.Mistress.Views
             }
 
             var dropdown = new Dropdown { Name = name, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 120 };
-            string[] items = setting.Kind == CoreSettingKind.Count
+            string[] values = setting.Kind == CoreSettingKind.Count
                 ? Enumerable.Range(setting.Min, setting.Max - setting.Min + 1).Select(n => n.ToString()).ToArray()
                 : (setting.Choices ?? Array.Empty<string>()).ToArray();
-            dropdown.Chose += chosen => { if (!_filling && chosen is string value) Changed(console, setting.Key, value); };
-            void Fill() { _filling = true; string current = Current(); dropdown.Fill(items, items.Contains(current) ? current : setting.Default); _filling = false; }
+            // A choice the core names in words is shown by them and stored by its value - see §4.90.
+            string[] items = setting.ChoiceLabels is { } labels && labels.Count == values.Length ? labels.ToArray() : values;
+            string Shown(string value) => items[Math.Max(0, Array.IndexOf(values, value))];
+            dropdown.Chose += chosen => { if (!_filling && chosen is string shown && Array.IndexOf(items, shown) is >= 0 and int i) Changed(console, setting.Key, values[i]); };
+            void Fill() { _filling = true; string current = Current(); dropdown.Fill(items, Shown(values.Contains(current) ? current : setting.Default)); _filling = false; }
             Fill();
             return (dropdown, Fill);
         }

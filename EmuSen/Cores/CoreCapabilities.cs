@@ -40,7 +40,7 @@ namespace EmuSen.Cores
 
     // One setting a console offers its frontend, every value in its text form; the default is the frontend's, not the core's constructed state - see EmuSen_Multicore.md §13.
     // Note, given the console's values by key, is a sentence for beside the row when the core will not use the value as chosen, else null - see EmuSen_Multicore.md §13.1.
-    public sealed record CoreSetting(string Key, string Label, string Hint, CoreSettingKind Kind, string Default, int Min = 0, int Max = 0, IReadOnlyList<string>? Choices = null, Func<Func<string, string>, string?>? Note = null);
+    public sealed record CoreSetting(string Key, string Label, string Hint, CoreSettingKind Kind, string Default, int Min = 0, int Max = 0, IReadOnlyList<string>? Choices = null, Func<Func<string, string>, string?>? Note = null, IReadOnlyList<string>? ChoiceLabels = null);
 
     // A core whose video settings a frontend reads and writes by key, on the emulation thread between frames - see EmuSen_Multicore.md §13.
     public interface ICoreSettings

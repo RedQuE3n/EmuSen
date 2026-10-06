@@ -213,7 +213,31 @@ namespace EmuSen.Cores
         };
 
         public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>
-            SettingsByConsole.TryGetValue(console, out var settings) ? settings : Array.Empty<CoreSetting>();
+            SettingsByConsole.TryGetValue(console, out var settings) ? settings
+            : DiscoveredFor(console) is { } found ? CoreSidecarSettings(found) : Array.Empty<CoreSetting>();
+
+        // A console no catalog core runs, whose system pack names it and a discovered engine serves it - see EmuSen_Settings_Reference.md §4.90.
+        public static IReadOnlyList<string> DiscoveredConsoles =>
+            DianaOS.DianaOS.Sys.Systems.SystemPacks.All.Select(p => p.Entry)
+                .Where(e => ConsoleForSystem(e.Id) is null && Native.CoreDiscovery.ForSystem(e.Id).Any(c => !IsRegisteredEngine(c.EngineName)))
+                .OrderBy(e => e.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.ReleaseYear)
+                .Select(e => e.Console).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        // The pack console of a system only a discovered engine serves, or null for a catalog console's or an unknown system.
+        public static string? DiscoveredConsoleForSystem(string? systemId) =>
+            systemId is not null && ConsoleForSystem(systemId) is null && DianaOS.DianaOS.Sys.Systems.SystemPacks.For(systemId) is { } pack ? pack.Entry.Console : null;
+
+        // The console a discovered engine runs a file as, by the pack of the engine's system that claims the extension.
+        public static string? DiscoveredConsoleForFile(string romPath, Native.CoreInfo info) =>
+            info.SystemFor(System.IO.Path.GetExtension(romPath)) is { } system ? DiscoveredConsoleForSystem(system.Id) : null;
+
+        private static Native.DiscoveredCore? DiscoveredFor(string console) =>
+            DianaOS.DianaOS.Sys.Systems.SystemPacks.All.Where(p => string.Equals(p.Entry.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(p.Entry.Id) is null)
+                .SelectMany(p => Native.CoreDiscovery.ForSystem(p.Entry.Id)).FirstOrDefault(c => !IsRegisteredEngine(c.EngineName));
+
+        // The engine's schema as the window lists it, from the library its sidecar names.
+        private static IReadOnlyList<CoreSetting> CoreSidecarSettings(Native.DiscoveredCore found) =>
+            found.Open() is { } library ? library.Settings.Where(s => !s.Hidden).Select(s => s.AsCoreSetting()).OfType<CoreSetting>().ToArray() : Array.Empty<CoreSetting>();
 
         // The graphics.json key a console's engine is stored under; no core declares it, so no core is handed it - see EmuSen_Settings_Reference.md §4.44.
         public const string EngineKey = "Engine";

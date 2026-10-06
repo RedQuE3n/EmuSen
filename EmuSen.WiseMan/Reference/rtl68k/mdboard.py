@@ -17,6 +17,7 @@ Nephrite_Native.md §10 and §15.3 are the method.
   mdboard.py read-after-write [nops] [dac] [timers]   a status read after a data write, at 49 places in the sample
   mdboard.py reset-replay [rounds]   one voice replayed after each pulse of the Z80's reset line
   mdboard.py status-ports   the YM2612's four ports read under the busy flag and after, the board's status input each way
+  mdboard.py lfo <logs> [first last]   the vibrato's offset for every frequency number, PMS and step (numpy), runs made if missing
 
 Times are in MCLK2 cycles, two to a master clock; the bench prints cartridge reads (c) and 68000 RAM writes (w).
 """
@@ -1177,6 +1178,185 @@ def reset_replay_report(rounds=200, cycles=11500000):
               f"{slot} after its end; the attack leaves rest {min(series)} samples after the release; "
               f"{sum(first[j] == series[j] for j in common)} of {len(common)} samples as the first replay's")
 
+# ---- the LFO's vibrato on the board (Nephrite_LfoTables.md): six channels, S4 alone in each, at chosen frequencies.
+
+YM_TABLE = 0x4000
+# The 68000's loop over (part << 8 | register, value) words at a3: busy wait, write, four NOPs; $FFFF waits, $FFFE ends.
+YM_TABLE_LOOP = w(0x321B, 0x341B, 0x4A41, 0x6B24, 0x4A12, 0x6BFC, 0x0801, 0x0008, 0x6608, 0x1481, 0x1542, 0x0001,
+                  0x6008, 0x1541, 0x0002, 0x1542, 0x0003, 0x4E71, 0x4E71, 0x4E71, 0x4E71, 0x60D4, 0x0C41, 0xFFFE,
+                  0x6706, 0x51CA, 0xFFFE, 0x60C8, 0x60FE)
+CHANNEL_KEYS = (0, 1, 2, 4, 5, 6)
+
+def ym_table(entries):
+    """The 68000 writes the YM2612 from a table: (part, register, value) entries, or (None, n) for n + 1 dbra rounds."""
+    table = b"".join(w(0xFFFF, e[1]) if e[0] is None else w(e[0] << 8 | e[1], e[2]) for e in entries) + w(0xFFFE, 0)
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000, 0x47F9, 0x0000, YM_TABLE) + YM_TABLE_LOOP
+    image = bytearray(program([0x8004, 0x8104, 0x8F02], [], code))
+    image += b"\xff" * max(0, YM_TABLE + len(table) - len(image))
+    image[YM_TABLE:YM_TABLE + len(table)] = table
+    return bytes(image)
+
+def lfo_sweep(configs, rate=7, block=7, hold=12000, mul=1, ams=0, enable_late=False, extra=(), amon=False):
+    """Six channels of S4 alone, the LFO on, each config's (frequency, PMS) keyed and held (Nephrite_LfoTables.md §3.1)."""
+    e = [(0, 0x22, 0), (0, 0x27, 0), (0, 0x2B, 0)] + [(0, 0x28, k) for k in CHANNEL_KEYS]
+    for c in range(6):
+        part, i = c // 3, c % 3
+        e.append((part, 0xB0 + i, 0x07))
+        for slot, op in zip((0x00, 0x08, 0x04, 0x0C), (QUIET, QUIET, QUIET, (mul, 0x00, 0x1F, 0x80 if amon else 0, 0, 0x0F))):
+            for base, v in zip((0x30, 0x40, 0x50, 0x60, 0x70, 0x80), op):
+                e.append((part, base + slot + i, v))
+            e.append((part, 0x90 + slot + i, 0))
+    if not enable_late:
+        e.append((0, 0x22, 0x08 | rate))
+    for n, config in enumerate(configs):
+        for c, (fnum, pms) in enumerate(config):
+            part, i = c // 3, c % 3
+            e += [(part, 0xB4 + i, 0xC0 | ams << 4 | pms), (part, 0xA4 + i, block << 3 | fnum >> 8), (part, 0xA0 + i, fnum & 0xFF)]
+        e += [(0, 0x28, k) for k in CHANNEL_KEYS] + [(0, 0x28, 0x80 | k) for k in CHANNEL_KEYS]
+        if enable_late and n == 0:
+            e.append((0, 0x22, 0x08 | rate))
+        e.append((None, hold))
+    return ym_table(e + list(extra))
+
+# ---- the vibrato read back (Nephrite_LfoTables.md): each channel's frequency number recovered sample by sample.
+
+TURN_ORDER = (0, 4, 2, 1, 5, 3)   # the channel whose turn is the k-th of six, 336 cycles apart from channel 1's
+LFO_SHARD, LFO_HOLD, LFO_STEP = 240, 10000, 20   # items a run, dbra rounds a configuration, samples a PM step at rate 7
+
+def channel_levels(log, slot1, samples):
+    """Every channel's level for samples 0 to `samples`, each read a cycle into its turn, channel 1's at `slot1`."""
+    import bisect
+    recs = pin_records(log)
+    times = [r[0] for r in recs]
+    out = [None] * 6
+    for k, c in enumerate(TURN_ORDER):
+        out[c] = [fm_level(recs[max(0, bisect.bisect_right(times, s * SAMPLE + slot1 + 336 * k + 1) - 1)][1]) for s in range(samples)]
+    return out
+
+def carrier_levels():
+    """A lone carrier at TL 0: its nine-bit level for each ten-bit phase, from the operator tables' formulas."""
+    import math
+    ls = [round(-math.log2(math.sin((x + 0.5) * math.pi / 512)) * 256) for x in range(256)]
+    ex = [round((2 ** (x / 256) - 1) * 1024) for x in range(256)]
+    def level(p):
+        i = 0xFF - (p & 0xFF) if p & 0x100 else p & 0xFF
+        mag = ((ex[255 - (ls[i] & 0xFF)] + 1024) << 2) >> (ls[i] >> 8)
+        return (-mag if p & 0x200 else mag) >> 5
+    return [level(p) for p in range(1024)]
+
+def ym_register_writes(lines):
+    """The YM2612's register writes among the bench's b lines: (the data strobe's cycle, part, register, value)."""
+    st = ym_strobes(lines, 0, 1 << 62)
+    return [(b[0], a[1] >> 1, a[2], b[2]) for a, b in zip(st, st[1:]) if a[1] in (0, 2) and b[1] == a[1] + 1]
+
+def lfo_items():
+    """Every frequency number at every PMS, in the order the runs take them."""
+    import random
+    items = [(f, p) for p in range(8) for f in range(2048)]
+    random.Random(386).shuffle(items)
+    return items
+
+def lfo_run(items, at, rate=7, block=7, mul=15):
+    """`items`, six (frequency, PMS) a configuration, on the board at multiple `mul`: its pins and bus kept at `at`."""
+    items = list(items) + [items[-1]] * (-len(items) % 6)
+    configs = [items[i:i + 6] for i in range(0, len(items), 6)]
+    cycles = 900000 + (len(configs) + 1) * (LFO_HOLD * 140 + 160000)
+    if not os.path.exists(at + ".bus"):
+        lines = bench(lfo_sweep(configs, rate=rate, block=block, hold=LFO_HOLD, mul=mul), cycles, audio=at + ".pins", zbus=True, pins=True)
+        open(at + ".bus", "w").write("\n".join(" ".join(l) for l in lines if l[0] in "zb") + "\n")
+    return configs, cycles
+
+def lfo_fit(at, configs, cycles, block=7, mul=15, step=LFO_STEP, sets=False):
+    """Each item's 32 offsets in half steps, kept where every explanation of the record agrees (Nephrite_LfoTables.md §3.2)."""
+    import numpy as np
+    levels = np.array(carrier_levels())
+    off = np.arange(-400, 401)
+    writes = ym_register_writes([l.split() for l in open(at + ".bus")])
+    enable = [t for t, p, r, v in writes if p == 0 and r == 0x22 and v & 8][0] // SAMPLE
+    keys = [t for t, p, r, v in writes if p == 0 and r == 0x28 and v & 0x80]
+    starts = [t for t, p, r, v in writes if p == 0 and r == 0xB4]
+    ch = channel_levels(at + ".pins", 1223, cycles // SAMPLE - 2)
+    def explain(obs, k0, fnum, g0, end):
+        g = (2 * fnum + off) & 0xFFF
+        inc = ((((g << block) >> 2) * mul) & 0xFFFFF).astype(np.int64)
+        states, n, segs = {0}, k0, []
+        while n < end:
+            span = min(g0 + step * ((n - g0) // step + 1), end) - n
+            o = np.asarray(obs[n:n + span])
+            moves = []
+            for a in states:
+                acc = (a + np.outer(inc, np.arange(span))) & 0xFFFFF
+                moves += [(a, int(off[i]), (a + span * int(inc[i])) & 0xFFFFF) for i in np.nonzero((levels[acc >> 10] == o[None, :]).all(axis=1))[0]]
+            if not moves:
+                return None
+            segs.append((n, span, moves))
+            states, n = {b for _, _, b in moves}, n + span
+        # Back from the end: a step's offsets are those of the moves that some whole explanation of the record makes.
+        out, live = [], states
+        for n, span, moves in reversed(segs):
+            kept = [(a, o) for a, o, b in moves if b in live]
+            out.append((n, span, {o for _, o in kept}))
+            live = {a for a, _ in kept}
+        return out[::-1]
+    def item(n, c, g0):
+        """Every explanation's steps, for each sample the key-on may have reset the phase at that explains the record."""
+        end = starts[n + 1] // SAMPLE - 1 if n + 1 < len(configs) else cycles // SAMPLE - 3
+        k = keys[6 * n + c] // SAMPLE
+        return [seg for k0 in range(k - 1, k + 4) for seg in explain(ch[c], k0, configs[n][c][0], g0, end) or ()]
+    # The grid of PM steps: the one phase at which the three deepest items are explained.
+    deep = sorted(((configs[n][c][0] * configs[n][c][1], n, c) for n in range(len(configs)) for c in range(6)), reverse=True)[:3]
+    g0 = [g for g in range(enable - step, enable + step + 1) if all(item(n, c, g) for _, n, c in deep)][0]
+    out = {}
+    for n, config in enumerate(configs):
+        for c, key in enumerate(config):
+            seen = {}
+            for s, span, offsets in item(n, c, g0) or ():
+                if span == step:
+                    seen.setdefault((s - g0) // step % 32, set()).update(offsets)
+            got = [seen.get(q, set()) if sets else next(iter(seen[q])) if len(seen.get(q, ())) == 1 else None for q in range(32)]
+            was = out.get(tuple(key))
+            if was and not sets:
+                assert all(a is None or b is None or a == b for a, b in zip(was, got)), key
+                got = [b if a is None else a for a, b in zip(was, got)]
+            out[tuple(key)] = got
+    return out, g0
+
+def lfo_table(logs, first=0, last=None):
+    """{(fnum, pms): 32 offsets} from runs in `logs`, made if missing; undecided items are run four times more."""
+    global WORK
+    items, home, table = lfo_items(), WORK, {}
+    def measured(run, at):
+        global WORK
+        WORK = at + ".work"
+        os.makedirs(WORK, exist_ok=True)
+        for f in ("tb_md", "68k_ncode.txt", "68k_ucode.txt"):
+            if not os.path.exists(os.path.join(WORK, f)):
+                os.symlink(os.path.join(home, f), os.path.join(WORK, f))
+        configs, cycles = lfo_run(run, at)
+        WORK = home
+        return lfo_fit(at, configs, cycles)[0]
+    for i in list(range(0, len(items), LFO_SHARD))[first:last]:
+        table.update(measured(items[i:i + LFO_SHARD], os.path.join(os.path.abspath(logs), f"lfo{i // LFO_SHARD:02d}")))
+    open_items = sorted(k for k, v in table.items() if None in v)
+    if open_items:
+        again = (open_items * 4)[1:] + open_items[:1]
+        for k, v in measured(again, os.path.join(os.path.abspath(logs), "lfo-again")).items():
+            for s, x in enumerate(v):
+                assert x is None or table[k][s] in (None, x), (k, s)
+                table[k][s] = table[k][s] if x is None else x
+    return table
+
+def lfo_report(table):
+    """The table's FNV-1a hash as `lfo_tables.rs` tests it, the undecided items, and the low-bit groups that disagree."""
+    import struct
+    undecided = [k for k, v in table.items() if None in v]
+    groups = {}
+    for (f, p), v in table.items():
+        groups.setdefault((f >> 4, p), set()).add(tuple(v))
+    full = len(table) == 2048 * 8 and not undecided
+    h = fnv(b"".join(struct.pack("<32h", *table[(f, p)]) for p in range(8) for f in range(2048))) if full else None
+    return h, undecided, sum(1 for g in groups.values() if len(g) > 1)
+
 SOUNDS = {"dac-square": dac_square, "psg-tone": psg_tone, "dac-ramp": dac_ramp}
 # The voices the references are compared on (Nephrite_Native.md §19.3): 440 Hz-ish (frequency 1,081, block 4).
 A4 = dict(fnum=1081, block=4)
@@ -1234,6 +1414,12 @@ if __name__ == "__main__":
         for enable in (1, 0):
             reads = [l[3][-2:] for l in bench(status_ports(), 2600000, status_enable=enable) if l[0] == "w"]
             print(f"ym2612_status_enable {enable}: ports 0-3 under the busy flag ${', $'.join(reads[:4])}; after it ${', $'.join(reads[4:])}")
+        sys.exit()
+    if what == "lfo":
+        table = lfo_table(sys.argv[2], *(int(a) for a in sys.argv[3:5]))
+        h, undecided, low = lfo_report(table)
+        print(f"{len(table)} items, {len(undecided)} with a step the board leaves open; {low} groups of sixteen frequency numbers "
+              f"that differ only in their low four bits and do not agree" + (f"; the table's hash 0x{h:08x}" if h is not None else ""))
         sys.exit()
     if what == "reset-replay":
         reset_replay_report(int(sys.argv[2]) if len(sys.argv) > 2 else 200)

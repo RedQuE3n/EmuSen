@@ -12,5 +12,8 @@ crate `nephrite`). Written from hardware documents under a clean-room protocol, 
 - `Nephrite_Disputes.md` — the disputes log, created with its first entry.
 - [`Nephrite_OperatorTables.md`](Nephrite_OperatorTables.md) — the YM2612 operator's log-sine and exponent ROM tables:
   their sources, the two sampling offsets, and the open question of whether the OPN2 shares the OPL2's ROMs.
+- [`Nephrite_LfoTables.md`](Nephrite_LfoTables.md) — the YM2612's vibrato: the offset the LFO adds to a channel's
+  frequency number for each PMS and LFO step, measured on the board's YM3438 for every frequency number, with the LFO's
+  step timing at each rate.
 
 The CPUs and the PSG are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware).

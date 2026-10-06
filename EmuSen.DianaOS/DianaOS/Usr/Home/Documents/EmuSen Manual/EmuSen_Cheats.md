@@ -2,7 +2,7 @@
 
 How a typed cheat code becomes a running cheat, and what a core has to supply to take part. The mechanism itself — write widths, byte order, repeat runs, bit positions, the master switch — is `man cheat` and `CheatRegistry`'s own header; this document is only about the **seam between a core and the cheat engine**, which is what a second core exercised for the first time.
 
-Per-console behaviour: `Hardware/Nintendo/Moon - NES/Moon_Cheats.md` for the NES, `Venus_Memory.md` §6 for the SNES, `Hardware/Nintendo/Mars - N64/Mars_Cheats.md` for the N64.
+Per-console behaviour: `Hardware/Nintendo/Moon - NES/Moon_Cheats.md` for the NES, `Venus_Memory.md` §6 for the SNES, `Hardware/Nintendo/Mars - N64/Mars_Cheats.md` for the N64, §9 below for the Genesis.
 
 ---
 
@@ -53,7 +53,7 @@ Moon's arrangement is the better one and is where Venus should end up; it was no
 
 ## 5. Not done
 
-- **`.cht` import cannot produce ROM patches.** `ChtFile.ReadCode` builds `CheatWrite.Poke` unconditionally, so a database file full of Game Genie codes decodes to RAM pokes at ROM addresses, which do nothing. RetroArch's own model has no ROM-patch concept, which is where the shape came from. For the NES this matters more than it did for the SNES, because NES cheats are overwhelmingly published as Game Genie codes — the auto-detect slot is the raw `AAAA:VV` format precisely so a mis-import is a visible failure rather than a silent wrong cheat.
+- ~~**`.cht` import cannot produce ROM patches.**~~ It can when it is given the explicit codec, since 2026-10-06 (§8). `ChtFile.ReadCode` builds `CheatWrite.Poke` unconditionally, so a database file full of Game Genie codes decodes to RAM pokes at ROM addresses, which do nothing. RetroArch's own model has no ROM-patch concept, which is where the shape came from. For the NES this matters more than it did for the SNES, because NES cheats are overwhelmingly published as Game Genie codes — the auto-detect slot is the raw `AAAA:VV` format precisely so a mis-import is a visible failure rather than a silent wrong cheat.
 - **No Pro Action Rocky codec.** The NES equivalent of Action Replay is a real encrypted 8-hex-digit format (Mesen's `ConvertFromNesProActionRocky` has the key and shift table). There are only two codec slots and Game Genie earns the explicit one, so this needs the slots to become a list first.
 - **The cheat device ROMs themselves.** A real Game Genie was a passthrough cartridge with its own ROM and code-entry screen. Booting one and handing off to the game is a separate feature — see `Moon_Cheats.md` §5.
 
@@ -87,6 +87,26 @@ Moon's arrangement is the better one and is where Venus should end up; it was no
 **`cheat export` skips a cheat containing a test**, and counts it beside the ROM patches it already skipped. The handler form holds one write per entry; a test written alone would lose what it guards, and written as `cheat_type` 4 it would round-trip into the defect below.
 
 **A defect this surfaced and did not fix: RetroArch's comparison entries import as writes.** `ChtFile.ReadExplicit` maps `cheat_type` 1, 2 and 3 and sends everything else to `Set`, so an entry of type 4–7 ("run next if equal", "not equal", "less", "greater") imports as a write of its *compare value* to its address. Demonstrated on 2026-09-18 with a two-entry handler-form file — `cheat_type = 4` at address 16 with value 3, then a `Set` of 9 at 32 — which parsed to two `Set` writes, the first writing 3; the file came back with nothing skipped. It predates the test type and is untouched here, because fixing it well means turning RetroArch's cross-entry "next" into one cheat of several writes, which is an import feature rather than a repair. Until then such an entry does something neither RetroArch nor its author meant.
+
+## 8. ROM patches from a `.cht` file, and patches wider than a byte
+
+*2026-10-06, with the Genesis (§9).* The libretro database's Genesis files are two thirds Game Genie codes, and §5's first item made every one of them a skipped entry. `ChtFile.Parse` and `CheatImport` take the explicit codec as an optional last argument, `patchCodec`. An entry's code is a ROM patch when the patch codec claims it, every part of a `+`-joined code if not the whole, and the auto-detect codec does not: §2's rule, with no punctuation tie-break, because a file's code is never typed by hand. Such an entry carries `ChtCheat.Kind`, and the import adds it as a `RomPatch`. A patch codec that answers `DecodeWrites` is handed the whole code; one that does not is asked for a byte per part, and a part with a compare skips the entry, since an entry has nowhere to keep one (§3). `cheat import` and `cheat load` pass the target's explicit codec, and Mistress's cheat database window the one its console's codecs name. Without the argument nothing changes, which is why the SNES and NES tests that count skipped entries are unchanged.
+
+The same day a ROM patch format first decoded to more than a byte. `cheat add`, `cheat gg` and the Active Cheats window's Add button ask the explicit codec for `DecodeWrites` before `Decode`, as they already asked the auto-detect one, and add what it answers as one `RomPatch` cheat; `ResolveRomPatches` already gave such a cheat to the core a byte at a time. No explicit codec before the Genesis's answers, so none of them changed.
+
+**Coverage**: `EmuSen.WiseMan/DianaOS/GenesisCheatFormatsTests.cs`.
+
+## 9. The Genesis's two formats
+
+*2026-10-06, the system pack's codecs (`Sys/Systems/Genesis/GenesisCheatFormats.cs`), shared by the console, the Sega CD and the 32X as `Nephrite_Plan.md` §4.5 has it.*
+
+**The Game Genie** (`ABCD-EFGH`, the explicit codec, a ROM patch). Written from "Sega Genesis Game Genie Conversion Method", a text after Merlyn LeRoy's newsgroup postings, the one Charles MacDonald's `genhw.txt` points to for the encoding, as prose: thirty-two digits, `A` to `Z` without `I`, `O`, `Q` and `U`, then `0` to `9`, each five bits; the forty bits rearranged by the string `ijklm nopIJ KLMNO PABCD EFGHd efgha bcQRS TUVWX` into a 24-bit address (`A` to `X`) and a 16-bit word (`a` to `p`). Its worked example, `SCRA-BJX0` to `$009C76` and `$5478`, is a test. The code is a word on the cartridge port's sixteen data lines; the port carries the 68000's address lines from A1 (`genhw.txt`, "The cartridge port presents the 68000's 23 address lines"), so a code whose address is odd patches the word it falls in, which is argued. The word is sent to the core as its two bytes, high byte first. The dash is required, so eight bare digits stay the Action Replay's.
+
+**The Action Replay** (the auto-detect codec, a RAM poke in `WRAM`). Sega Retro's "Action Replay (Mega Drive)" gives the device's own print, an address and a value as `FFFFE 00001` (`$FFFFE0` set to 1), and the forms emulators print, `FFFFE0:0001` and `FFFFE0:1`. Taken: `AAAAAA:V` to `AAAAAA:VVVV` and `AAAAAA:VVVVVVVV`, `AAAAA AVVVV` with a space or a dash, and the same bare as ten or eight digits. The value's digits give its width, one or two a byte, three or four a word, eight a long word, written high byte first from the address given, odd or even; the libretro database prints a byte as two digits and a word as four, and the device's own form, always four, is a word. An address from `$E00000` up is the main RAM through its mirrors, poked at its low sixteen bits. An address in the cartridge's range, `$000000` to `$3FFFFF`, is a ROM patch, which the explicit codec claims; anything else is refused. Codes joined with `+` are one cheat in both formats; a code that mixes the two is refused, since a cheat is one kind.
+
+**Measured against the libretro database** (the "Sega - Mega Drive - Genesis" files a published build carries, 2,094 games): 36,727 of the 38,546 entries load, 24,427 as Game Genie or cartridge patches and 12,300 as pokes; without the patch codec the same import loads only the 12,300. The 1,819 skipped are mostly entries with no code or a `??` the player is to fill in.
+
+**What is argued, not measured**: a word at an odd address (2,571 of the database's four-digit pokes are at odd addresses, 2,442 of them with a high byte of 0, which may mean a byte); the value's width from its digits; the Game Genie on the Sega CD, which has no cartridge for it, and whose patches Nephrite's machine info gives no range for, so the frontend sends none.
 
 ## The two combinations `AddCheat` refuses
 

@@ -29,6 +29,7 @@ namespace EmuSen.Mistress.Views
         private readonly Func<CheatRegistry?>? _activeCheats;
 
         private readonly ICheatCodeCodec? _codec;
+        private readonly ICheatCodeCodec? _patchCodec;
 
         // Raised after a load, so an Active Cheats window already open shows
         // the new list without being reopened.
@@ -73,7 +74,7 @@ namespace EmuSen.Mistress.Views
 
         public CheatDatabaseWindow(AppSettings settings, Func<CheatRegistry?>? activeCheats = null, ICheatCodeCodec? codec = null,
             Action? changed = null, Action? openActiveCheats = null,
-            Func<IReadOnlyCollection<string>>? supportedSystems = null, string? console = null)
+            Func<IReadOnlyCollection<string>>? supportedSystems = null, string? console = null, ICheatCodeCodec? patchCodec = null)
         {
             InitializeComponent();
             if (Content is DockPanel body) EmuSen.LunaP.Controls.MenuLook.WhenApplied(body, () => InLook(body));
@@ -83,6 +84,7 @@ namespace EmuSen.Mistress.Views
             _settings = settings;
             _activeCheats = activeCheats;
             _codec = codec;
+            _patchCodec = patchCodec;
             _changed = changed;
             _openActiveCheats = openActiveCheats;
             _supportedSystems = supportedSystems;
@@ -247,7 +249,7 @@ namespace EmuSen.Mistress.Views
             }
 
             CheatImportResult result;
-            try { result = CheatImport.FromChtFile(registry, game.Path, _codec, replace: true); }
+            try { result = CheatImport.FromChtFile(registry, game.Path, _codec, replace: true, patchCodec: _patchCodec); }
             catch (Exception ex)
             {
                 ErrorLog.Error("cheats", $"Couldn't read {game.Game}", ex);

@@ -192,7 +192,7 @@ pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = 0;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES;
 
     fn info() -> Info {
         Info {
@@ -278,7 +278,7 @@ impl Core for Machine {
             battery: self.battery_id().map(|_| Battery { which: 0, suffix: if self.media.system == System::Mcd { ".brm" } else { ".srm" }.into() }).into_iter().collect(),
             state: StateFormat { format: "NPHR".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
             phases: Vec::new(),
-            patches: None,
+            patches: (self.media.system == System::Md).then_some((0, 0x3F_FFFF)),
             skip_rendering_state_neutral: true,
             firmware: match self.media.system {
                 System::Md if takes_lock_on(&self.media, self.genesis.hw.cart.rom.len()) => vec![named(LOCK_ON), named(SK_PATCH)],
@@ -363,6 +363,12 @@ impl Core for Machine {
         Ok(())
     }
 
+    /// `ROM_PATCHES`: the Game Genie's patches on the cartridge port, compared with the board's byte when a compare is given.
+    fn set_rom_patches(&mut self, triples: &[u32]) -> Result<(), i32> {
+        self.genesis.hw.cart.patches = triples.chunks_exact(3).map(|t| (t[0] & 0x3F_FFFF, t[1] as u8, t[2])).collect();
+        Ok(())
+    }
+
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
         match (which, self.battery_id()) {
             (0, Some(id)) => Ok((self.bytes(id).expect("the battery's memory"), 0)),
@@ -372,7 +378,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine;);
+emusen_native::core_exports!(Machine; rom_patches);
 
 #[cfg(test)]
 mod tests {
@@ -449,6 +455,21 @@ mod tests {
             assert_eq!(s.controllers.iter().map(|c| c.buttons.len()).collect::<Vec<_>>(), [8, 12]);
             assert!(s.firmware.iter().all(|f| !f.required));
         }
+    }
+
+    /// ROM_PATCHES: a patch answers every read of the cartridge at its address, a compare only where the board's byte is
+    /// it; clearing them gives the board's bytes back. The range is the cartridge port's, on the Genesis alone.
+    #[test]
+    fn rom_patches_answer_for_the_cartridge_port() {
+        let mut m = create(&cartridge("SEGA GENESIS", "U", None), vec![]).unwrap();
+        assert_eq!(m.machine_info().patches, Some((0, 0x3F_FFFF)));
+        let board = m.genesis.hw.cart.read16(0x100);
+        assert_eq!(board, u16::from_be_bytes(*b"SE"));
+        m.set_rom_patches(&[0x100, 0x12, sys::flags::NO_COMPARE, 0x101, 0x34, b'E' as u32, 0x102, 0x56, 0x00]).unwrap();
+        assert_eq!((m.genesis.hw.cart.read16(0x100), m.genesis.hw.cart.read8(0x102)), (0x1234, b'G'));
+        m.set_rom_patches(&[]).unwrap();
+        assert_eq!(m.genesis.hw.cart.read16(0x100), board);
+        assert_eq!(create(&cartridge("SEGA 32X", "U", None), vec![]).unwrap().machine_info().patches, None);
     }
 
     /// The model setting chooses the sound chip and the output circuit at create: model 1 unless model 2 is asked for.

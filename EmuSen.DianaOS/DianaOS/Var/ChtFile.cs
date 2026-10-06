@@ -13,6 +13,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public string Description { get; init; }
         public bool Enabled { get; init; }
         public IReadOnlyList<CheatWrite> Writes { get; init; }
+
+        // A code the patch codec claims is a ROM patch; everything else a RAM poke.
+        public CheatKind Kind { get; init; }
     }
 
     public readonly struct ChtParseResult
@@ -37,7 +40,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
         private const int TypeIncrease = 2;
         private const int TypeDecrease = 3;
 
-        public static ChtParseResult Parse(string text, ICheatCodeCodec? codeDecoder, string spaceName)
+        public static ChtParseResult Parse(string text, ICheatCodeCodec? codeDecoder, string spaceName, ICheatCodeCodec? patchCodec = null)
         {
             Dictionary<string, string> fields = ReadFields(text);
             var cheats = new List<ChtCheat>();
@@ -51,14 +54,14 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
             for (int i = 0; i < count; i++)
             {
-                if (TryReadCheat(fields, i, codeDecoder, spaceName, out ChtCheat cheat)) cheats.Add(cheat);
+                if (TryReadCheat(fields, i, codeDecoder, spaceName, patchCodec, out ChtCheat cheat)) cheats.Add(cheat);
                 else skipped++;
             }
 
             return new ChtParseResult { Cheats = cheats, Skipped = skipped };
         }
 
-        private static bool TryReadCheat(Dictionary<string, string> fields, int index, ICheatCodeCodec? codeDecoder, string spaceName, out ChtCheat cheat)
+        private static bool TryReadCheat(Dictionary<string, string> fields, int index, ICheatCodeCodec? codeDecoder, string spaceName, ICheatCodeCodec? patchCodec, out ChtCheat cheat)
         {
             cheat = default;
 
@@ -66,13 +69,15 @@ namespace EmuSen.DianaOS.DianaOS.Var
             string description = Get(fields, prefix + "desc") ?? $"cheat{index}";
             bool enabled = string.Equals(Get(fields, prefix + "enable"), "true", StringComparison.OrdinalIgnoreCase);
 
+            string? code = Get(fields, prefix + "code");
+            bool patch = !HasField(fields, prefix + "address") && ClaimsPatch(code, codeDecoder, patchCodec);
             List<CheatWrite>? writes = HasField(fields, prefix + "address")
                 ? ReadExplicit(fields, prefix, spaceName)
-                : ReadCode(Get(fields, prefix + "code"), codeDecoder, spaceName);
+                : patch ? ReadPatch(code!, patchCodec!) : ReadCode(code, codeDecoder, spaceName);
 
             if (writes is null || writes.Count == 0) return false;
 
-            cheat = new ChtCheat { Description = description, Enabled = enabled, Writes = writes };
+            cheat = new ChtCheat { Description = description, Enabled = enabled, Writes = writes, Kind = patch ? CheatKind.RomPatch : CheatKind.RamPoke };
             return true;
         }
 
@@ -119,6 +124,32 @@ namespace EmuSen.DianaOS.DianaOS.Var
                     RepeatAddValue = (uint)Long(fields, prefix + "repeat_add_to_value", 0),
                 },
             };
+        }
+
+        // A code is a patch when only the patch codec claims it, the same rule `cheat add` follows - see EmuSen_Cheats.md §8.
+        private static bool ClaimsPatch(string? code, ICheatCodeCodec? codeDecoder, ICheatCodeCodec? patchCodec) =>
+            !string.IsNullOrWhiteSpace(code) && patchCodec is not null && codeDecoder?.CanDecode(code) != true &&
+            (patchCodec.CanDecode(code) || code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).All(patchCodec.CanDecode));
+
+        // A patch with a compare value has nowhere to keep it here, so it is skipped rather than made wrong - see EmuSen_Cheats.md §3.
+        private static List<CheatWrite>? ReadPatch(string code, ICheatCodeCodec patchCodec)
+        {
+            try
+            {
+                if (patchCodec.DecodeWrites(code) is { } whole) return whole.ToList();
+                var writes = new List<CheatWrite>();
+                foreach (string token in code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (patchCodec.DecodeCompare(token) is not null) return null;
+                    (int address, byte value) = patchCodec.Decode(token);
+                    writes.Add(CheatWrite.Patch(address, value));
+                }
+                return writes;
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
         }
 
         // The core-native form: one or more codes joined with '+'.

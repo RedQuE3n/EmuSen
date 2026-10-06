@@ -1,6 +1,8 @@
+using EmuSen.DianaOS.DianaOS.Lib;
+
 namespace EmuSen.DianaOS.DianaOS.Sys.Systems.Genesis
 {
-    // The Genesis's three system packs, the console and its two attachments; their codecs are scheduled with Nephrite's frontend stage - see Nephrite_Plan.md §4.1, §6.
+    // The Genesis's three system packs, the console and its two attachments, which share the console's two cheat formats - see Nephrite_Plan.md §4.1, §4.5.
     public static class GenesisSystems
     {
         public const string MegaDriveId = "md", MegaCdId = "mcd", S32xId = "32x";
@@ -53,8 +55,14 @@ namespace EmuSen.DianaOS.DianaOS.Sys.Systems.Genesis
             "Sega Mega Drive 32X",
             SelfDelimitingImages: false);
 
-        public static readonly SystemPack MegaDrivePack = new(MegaDrive, null, null);
-        public static readonly SystemPack MegaCdPack = new(MegaCd, null, null);
-        public static readonly SystemPack S32xPack = new(S32x, null, null);
+        public static ICheatCodeCodec ActionReplay() => new DelegateCheatCodec("Action Replay", CheatCodeKind.RamPoke, Wram,
+            GenesisCheatFormats.IsActionReplay, GenesisCheatFormats.DecodeActionReplay, decodeWrites: GenesisCheatFormats.ActionReplayWrites);
+
+        public static ICheatCodeCodec GameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
+            GenesisCheatFormats.IsPatch, GenesisCheatFormats.DecodePatch, decodeWrites: GenesisCheatFormats.PatchWrites);
+
+        public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie);
+        public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie);
+        public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie);
     }
 }

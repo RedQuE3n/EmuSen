@@ -559,7 +559,7 @@ ran. **The effort is predicted** (P3). A stage's oracle must be met, or its miss
 | 2 | Beryl Z80: instructions with WZ, Q and P; interrupts in all modes; the disassembler; the CP/M shim; the probe's work of §1.6 | The Z80 suite T-state by T-state; ZEXDOC and ZEXALL | 3 + 2 |
 | 3 | The Genesis's bus: the memory map, cartridges (ROM, SRAM, EEPROM, SSF2, lock-on), the Z80's bus and window with its waits, I/O and the pads, the version register, TMSS, the scheduler and interrupts | BCD verifier, opcode sizes, illegal test, memory test on the console; RAM against the references at anchors | 3 |
 | 4 | The VDP: ports, FIFO and DMA on the slot schedule; HV counter; interrupts; planes, window, scrolling; sprites and limits; shadow/highlight; H32/H40, V28/V30, interlace, PAL; mode 4; CRAM dots; the slot-stamped renderer | VDPFIFOTesting (self-grading); the logic-analyser ROMs through the pad-port receiver; pictures against references up to a colour map; the sprite-masking photographs; skip-versus-draw state test | 8 |
-| 5 | Sound: the YM2612 (envelope, phase, LFO, SSG-EG, CSM, DAC, timers, busy, ladder effect), the PSG, the mix, the model 1 filter, the output resampler | Nemesis's FM tests against recordings; MDFourier; references' audio envelopes | 5 |
+| 5 | Sound: the YM2612 (envelope, phase, LFO, SSG-EG, CSM, DAC, timers, busy, ladder effect), the PSG, the mix, the model 1 filter, the output resampler | Nemesis's FM tests against recordings; MDFourier; references' audio envelopes | 5 (closed 2026-10-06 after 12, its exceptions carried forward) |
 | 6 | The Genesis to players, ending with the `InDevelopment` mark removed (`EmuSen_CoreAPI.md` §27): the system packs' codecs (Game Genie, Pro Action Replay); settings (region, model, pads); battery files and EEPROM by serial; a shelf for consoles with only a discovered engine (a frontend change through the system packs); the kit on games | The kit's C1–C15 on games; `.srm` round trips; the fit audit | 3 |
 | 7 | The debugger: processors `M68K` and `Z80` through the Beryl observers; registers; disassembly; breakpoints, stepping, coverage, the call stack | Each claim a test; every table armed gives the plain run's digests (C15) | 3 |
 | 8 | Sega CD hardware: the sub CPU, gate array, PRG-RAM, Word RAM modes, comm registers, interrupts and timer, backup RAM and cartridge, the CDC and CDD, CD-DA, disc images (§5.8) | mcd-verificator (self-grading, no BIOS) | 6 |
@@ -628,7 +628,13 @@ against the VDP and the refresh that the move exposed found on the board; every 
 placement, and the corpus's anchors are recorded again (§27 there, D-26). The output stage followed, measured on
 MDFourier's recordings of 21 consoles: the discrete YM2612's ladder effect and pulsed output, the YM3438's linear one
 behind a Model setting, model 1's first-order filter at 3,216 Hz and the PSG at 0.324 of the DAC's swing; a model 1's
-left side is Nephrite's to a quarter of a decibel (§28 there, D-27).*
+left side is Nephrite's to a quarter of a decibel (§28 there, D-27). The test read followed, measured on the board
+and built: an operator's or a channel's output, a phase's low bits and the envelope's steps, with the phases' power-on
+value and each channel's frequency taken a slot apart; 115 of the 120 voices are the board's, the five others a test
+bit reaching the operators slot by slot. Stage 5 was closed the same day (§29 there): Nemesis's CSM test is his PAL
+model 1's recording in period, pitch and decay, his other five tests are the board's on every channel, MDFourier as
+§28, the references corroborating, and P1 met. Carried forward: D-15, D-26's leftovers, D-27's open items, the test
+register's slot-by-slot voices, Streets of Rage's loading phase, D-19's short pulses and D-2's long RAM waits.*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other
@@ -762,7 +768,9 @@ other recommendation this page made was accepted as written.
 
 ## 11. Predictions to be retired
 
-- **P1.** The Genesis's desktop mean is at most 1.5 ms a frame on the bench games at the end of stage 5.
+- **P1.** The Genesis's desktop mean is at most 1.5 ms a frame on the bench games at the end of stage 5. *Retired
+  2026-10-06, at stage 5's close (`Nephrite_Native.md` §29.4): 1.052 to 1.335 ms on the five bench games, the mean
+  1.217; met.*
 - **P2.** The 32X misses §5.5's budget with the interpreter alone, and meets it with the exact levers of stage 13.
 - **P3.** The whole is about 65 steps; the VDP, the Sega CD BIOS and the SH-2 are the stages most likely to overrun.
 - **P4.** Stage 1 passes both 68000 suites' state on every case before any bus exists, with the transactions on all

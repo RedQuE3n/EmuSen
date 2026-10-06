@@ -104,7 +104,7 @@ pub struct Op {
 
 impl Default for Op {
     fn default() -> Self {
-        Op { phase: 0, att: 0x3FF, eg: Eg::Release, key: false, out: 0, flip: false, shown: 0x3FF }
+        Op { phase: 0xF_FFFF, att: 0x3FF, eg: Eg::Release, key: false, out: 0, flip: false, shown: 0x3FF }
     }
 }
 
@@ -251,7 +251,8 @@ impl Fm {
                 // S1 has a key written a sample after the others have it; CSM's key reaches all four at once.
                 let key = if o == 0 { self.ch[c].key1 } else { self.ch[c].keys[o] } || (c == 2 && csm);
                 let op = &mut self.ch[c].ops[o];
-                if key && !op.key {
+                let keyed = key && !op.key;
+                if keyed {
                     op.eg = Eg::Attack;
                     op.phase = 0;
                     op.flip = false;
@@ -267,8 +268,8 @@ impl Fm {
                     op.eg = Eg::Release;
                 }
                 op.key = key;
-                // The test register's bit 3 has the phase start each sample from nothing.
-                if test & 8 != 0 {
+                // The test register's bit 3 has the phase start each sample from nothing; a key-on's sample starts at nothing (D-23).
+                if test & 8 != 0 && !keyed {
                     op.phase = incs[o];
                 }
             }
@@ -423,6 +424,31 @@ impl Fm {
         }
     }
 
+    /// An operator's envelope rate in the phase it is in.
+    fn eg_rate(op: &Op, r: &[u8; 256], base: usize, kc: u8) -> u8 {
+        let reg = match op.eg {
+            Eg::Attack => r[0x50 + base] & 0x1F,
+            Eg::Decay => r[0x60 + base] & 0x1F,
+            Eg::Sustain => r[0x70 + base] & 0x1F,
+            Eg::Release => (r[0x80 + base] & 15) << 1 | 1,
+        };
+        Self::rate(reg, r[0x50 + base] >> 6, kc)
+    }
+
+    /// A rate's increment in the envelope cycle at `counter`: none on the cycles its shift passes over.
+    fn eg_increment(rate: u8, counter: u32) -> u16 {
+        let shift = SHIFT[(rate >> 2) as usize] as u32;
+        if counter & ((1 << shift) - 1) != 0 { 0 } else { increment(rate, (counter >> shift & 7) as usize) }
+    }
+
+    /// Whether operator `o` of channel `c`, as it stands after an envelope cycle at `counter`, took an increment in
+    /// it: what the test read's high byte shows in its bit 6 (Nephrite_Disputes.md D-23).
+    pub fn eg_stepped(&self, regs: &Regs, c: usize, o: usize, counter: u32) -> bool {
+        let (fnum, block) = Self::fnum_block(regs, c, o);
+        let op = &self.ch[c].ops[o];
+        Self::eg_increment(Self::eg_rate(op, &regs[c / 3], SLOT[o] + c % 3, Self::key_code(fnum, block)), counter) != 0
+    }
+
     /// One envelope cycle for an operator: its phase's change, then its rate's increment on the cycles its shift
     /// selects (Nemesis, topic 386, with his 2010 corrections).
     fn envelope(op: &mut Op, r: &[u8; 256], base: usize, kc: u8, counter: u32) {
@@ -436,20 +462,8 @@ impl Fm {
         if op.eg == Eg::Decay && op.att >= sl {
             op.eg = Eg::Sustain;
         }
-        let ks = r[0x50 + base] >> 6;
-        let reg = match op.eg {
-            Eg::Attack => r[0x50 + base] & 0x1F,
-            Eg::Decay => r[0x60 + base] & 0x1F,
-            Eg::Sustain => r[0x70 + base] & 0x1F,
-            Eg::Release => (r[0x80 + base] & 15) << 1 | 1,
-        };
-        let rate = Self::rate(reg, ks, kc);
-        let shift = SHIFT[(rate >> 2) as usize] as u32;
-        if counter & ((1 << shift) - 1) != 0 {
-            return;
-        }
-        let cycle = (counter >> shift & 7) as usize;
-        let inc = increment(rate, cycle);
+        let rate = Self::eg_rate(op, r, base, kc);
+        let inc = Self::eg_increment(rate, counter);
         if op.eg == Eg::Attack {
             if rate < 62 && inc != 0 {
                 let a = op.att as i32;

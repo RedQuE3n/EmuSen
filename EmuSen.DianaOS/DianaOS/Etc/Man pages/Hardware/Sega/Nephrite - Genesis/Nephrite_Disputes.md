@@ -619,7 +619,9 @@ CPUs' disputes in their own record pages.
   replaced by whatever a measurement shows.
 - Test program: `mdboard.py sound op-alone-40` and `op-alone-c0` (the test registers `$21` and `$2C` with the status
   read as the 68000's samples): the reads give a channel's nine-bit output over four slots, not an operator's
-  fourteen-bit one, so the tables were not read. The FM voices on the board: see below.
+  fourteen-bit one, so the tables were not read. The FM voices on the board: see below. *2026-10-06: `op_alone`
+  sets `$2C` bit 4, which picks the channel's form; with it clear the read gives an operator's fourteen bits, and 24
+  operators' are the board's to the bit in 1,536 reads (D-23).*
 - Referee: the board as in D-1. A single operator plays a clean sine on the board when its setup writes come
   without waits, some of them lost; ~~with every write applied, through the 68000 with any wait or through a Z80
   program, the board's channel stays at rest, though a Z80 program's DAC writes show. The bench's YM2612 is not yet
@@ -1013,12 +1015,78 @@ CPUs' disputes in their own record pages.
   - A channel's sum: its carriers' top nine bits added one at a time in the order S1, S3, S2, S4, the sum held to
     nine bits at each addition (`fm-clip7` and the silent carriers under bit 4 tell the order; adding all and
     clamping once fails both).
-  - Not built: the test read (`$21` bits 0, 6 and 7, `$2C` bit 4), whose status reads were not measured here; D-16's
-    note on the bench's test read stands.
+  - ~~Not built: the test read (`$21` bits 0, 6 and 7, `$2C` bit 4), whose status reads were not measured here; D-16's
+    note on the bench's test read stands.~~ Measured and built at stage 5's closing step, below.
 - 111 of the 120 voices of D-21 to D-23 are the board's to the sample on the chip; the nine others are this entry's,
   whose test register write lands a sample or more earlier on the board than at once (D-15), and differ there.
 - Pinned by: `voices.rs`'s `the_chip_voices_are_the_boards_sample_for_sample` (the nine held to their counts).
 - Implemented in: the commit "Nephrite, stage 5: SSG-EG, CSM and the test register".
+- *2026-10-06, at stage 5's closing step: the test read.*
+  - Test programs: `mdboard.py`'s `TEST_READS` (11), each its writes, then `$2C` and `$21`, then the status port
+    read 1,536 times into RAM, a read every 23 of the 68000's clocks, which drift across the sample's 24 slots:
+    every channel sounding, its operators at 24 levels and its own frequency, with `$21` at `$40`, `$C0` and `$C1`
+    and `$2C` at `$00` and `$10`; channel 4 alone written, never keyed, and keyed and released; channel 1 written as
+    channel 4 is and keyed, channel 4 not; channel 4's S4 alone, decaying, with `$21` at `$C0` and `$C1`. Twelve more
+    runs, three operators on three channels under seven settings and channels 1 and 4 written or keyed otherwise,
+    are summed up here, every read of them the board's, but not kept. Each run's reads are
+    compared on the chip given the board's writes and reads at the master clocks its bus carried them, a write at its
+    strobe's fall and 24, a read at its strobe's rise (`board_reads.rs`), every byte against the byte the 68000 read.
+  - Referee: the board, as in D-21; no RTL file was opened.
+  - `$21` bit 6 replaces the status with the test read at port 0, the port read; Nephrite gives it at every port,
+    which is argued. Bit 7 picks the byte: set, the high byte;
+    clear, the low one. Sauraen's report from a YM3438 on hardware (topic 386, prose) has bit 7 clear give the high
+    byte; the board's reading is the one built, and which a console has is not known.
+  - `$2C` bit 4 clear: an operator's fourteen-bit output. The sample of deadline D shows its operators from its 19th
+    slot edge, one a slot (the window opens 829 to 832 master clocks after D by the read's strobe, 0 reads of 1,536
+    outside it), in the order S1 of channels 1 to 6, then S3, S2 and S4: the low byte its low eight bits, the high
+    byte's low six its top six.
+  - `$2C` bit 4 set: a channel's nine-bit output, from the sample's 50th edge, four slots each, in the order the pins
+    carry the channels, 1, 5, 3, 2, 6, 4: the low byte its low eight bits, the high byte's bit 0 its ninth, its bits
+    1 to 5 reading 0. Whether this form shows the DAC on channel 6 was not measured.
+  - The high byte's bit 7: the low ten bits of channel 4's S4's phase counter as its sample began, bit b in the slot
+    of the (40+b)th edge, from the edge at which that operator is read; 0 in the rest of the sample.
+  - The phase counters at power-on: all ones. Channel 4 written and never keyed reads ones in bits 0 to 2 with an
+    increment whose low three bits are 0, and every bit matches the counter run from all ones a sample at a time;
+    after a key-on the counter runs from 0. The voices whose operators sound without a key-on are unchanged by it.
+  - The high byte's bit 6, with `$21` bit 0 clear: whether an operator's envelope took a non-zero increment in its
+    sample's envelope cycle, shown in the slot three before its output's, from the 16th edge, in the same order; 0 in
+    the two samples of every three without a cycle. An increment at the limit counts: a released operator at full
+    attenuation with a fast release pulses every cycle, and one with the release rate at 0 never. Channel 1's
+    operators pulse with channel 1 written and not keyed, never with it unwritten or keyed to a held sustain.
+  - With `$21` bit 0 set, bit 6 pulses in the 20th slot of every sample in the programs with every channel sounding;
+    in the decaying channel's program it is set in 580 of the 1,536 reads, in slots that rule does not give. Open.
+  - Each channel's frequency is taken a slot after the last channel's (D-25): with channel 4's taken by the 24th edge,
+    as channel 1's is, 267 and 271 reads of channel 4's phase are unlike the board's in the two runs that write
+    channel 1 as well; by the 30th, 268 in the run that writes channel 4 alone; by the 27th, none in any.
+  - Nine of the 64 reads of the decaying operator's high byte, of the program's 1,536, are one apart from the
+    board's (`$1C` against `$1B`, `$24` against `$25`), scattered through the slot and at samples where Nephrite's
+    envelope stands still: the output a few tens apart, as a step of the envelope makes it. Open. The 1,536 reads of
+    `$21` at `$40` and `$2C` at `$00`, 24 operators at fixed levels, are the board's to the bit (D-16).
+- *The voices that still differed (D-25), the same day.* Five clear sweeps were run (`mdboard.py`'s `LANDING`:
+  `pg-off`, `eg-off`, `ugly-off` and `dac-all-off`, each bit set as the voice sounds and cleared 70 samples later by
+  a write moved by NOPs across the sample, 40 runs; `lfo-test`, bit 1 set the same way) and compared on the chip as
+  D-25's sweeps are.
+  - Bit 3's clear is taken by the 11th edge, as its set is (40 of 40). `fm-test-pg0`, the bit set before the key-on,
+    sounded a sample early in Nephrite: a key-on's sample starts its phase from 0 under the bit, and only the samples
+    after it from one increment. Built; the voice is now the board's.
+  - Bit 4's clear: 30 of 40 at every edge from the 11th to the 53rd; the ten others, and `fm-test-ugly`, differ in the
+    one sample whose S1 to S3 are made before the slot the clear reaches and S4 after, which reads -256 on the board
+    (three silent operators with their top bit inverted, saturating) and the sine in Nephrite, whose unit applies a
+    bit to a sample's four operators at once.
+  - `$2C` bit 5's clear: none of 40 at any edge from the 24th to the 72nd, each run one or two samples apart (12,750
+    of 12,800 samples), reading 255 and 0, or 0, where the DAC's level gives way to the sine: the same mixed sample.
+  - Bit 5's clear: none of 40 at any edge from the 7th to the 55th; after it the envelope stands a step from
+    Nephrite's in alternate runs of twelve samples, and no offset of the envelope's counter (0 to 15) and no restart
+    of its three-sample divider at the clear makes a run the board's. Open.
+  - Bit 1 set: none of 40, the first sample under the bit already unlike, which fits the LFO stepping a slot at a time
+    from the slot the bit reaches rather than for a whole sample. Open.
+  - Conclusion: **measured**: a test bit that changes as a voice sounds reaches the operators slot by slot, and the
+    unit, which makes a sample's operators at once, cannot follow it; `fm-test-ugly`, `-2c`, `-2c-dac`, `-eg` and
+    `-lfo-late` are held to their counts.
+- Pinned by: `voices.rs`'s `the_test_read_is_the_boards` (nine programs every read, `read-decay` at 1,527 and
+  `read-decay-c1` at 956), `the_chip_voices_are_the_boards_sample_for_sample` and `..._on_the_whole_machine_...`
+  (115 of 120, the five held).
+- Implemented in: the commit "Nephrite, stage 5: the test read, and the stage closed".
 
 ### D-24. The operators' order and the key's moment: S1 is keyed a sample after S2-S4 and its output used at once, each channel's key is taken a slot after the last channel's, the LFO's count and the envelope's cycle are the same for every operator
 - Opened: 2026-10-06, at stage 5's CSM step, by the CSM key, which reaches the four operators of channel 3 at once
@@ -1122,7 +1190,12 @@ CPUs' disputes in their own record pages.
   then before they act. Parts not measured are argued: the other operators' registers (`$30`-`$9F` but those above)
   by the 18th edge, the DAC's ninth bit (`$2C` bit 3) with the DAC, `$21`'s bits 0, 1, 6 and 7 and the rest of `$2C`
   at the deadline. Only S4 of channel 1 was swept; whether another operator's or channel's part is taken a slot
-  apart, as the key is, is not measured, and every one is taken by the same edge.
+  apart, as the key is, is not measured, and every one is taken by the same edge. *2026-10-06, at stage 5's closing
+  step: measured for the frequency, through the test read's phase bits (D-23): each channel's is taken a slot after
+  the last channel's, channel 4's by the 27th edge; channel 3's own frequencies (`$A8`-`$AE`) are taken as channel
+  3's are, which is argued. The other parts are still taken by one edge for every channel.*
+- *2026-10-06:* with the frequency taken a channel at a time, every sweep, voice and LFO voice below is as it was, and
+  `fm-test-pg0` is the board's by D-23's key-on rule: 115 of the 120.
 - Result, on the chip given the board's write times: 20 of the 21 sweeps the board's in every run; the step's 120
   voices 114 (the test register's `fm-test-pg`, `fm-test-ugly-chain` and `fm-test-eg0` now among them); §23's 61 LFO
   voices all (`fm-lfo-restart` now among them). On the whole machine placed as the board is, the same: the sweeps'

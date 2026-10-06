@@ -1562,3 +1562,88 @@ only to within its poll's round; it is a matter of the comparison's exactness an
 - **Next**, in the plan's order: the LFO, SSG-EG, CSM and the test register, each refereed on the bench, the LFO's
   tables measured there.
 
+## 22. Stage 5, the 68000's side: the whole machine to the board's samples (2026-10-05)
+
+### 22.1 What it built
+
+- **The Z80's area** (`genesis.rs`, D-14): an access to `$A00000`-`$A0FFFF` takes the 68000 five clocks, and the
+  YM2612, its Z80 RAM or the reset line sees it four clocks before the 68000's cycle ends, when its strobe on the
+  Z80's bus does (`Z80_AREA_WAIT`, `Z80_AREA_LEAD`).
+- **The busy flag** (`ym2612.rs`, D-13): 33 slots of 42 master clocks from the first slot edge at or after the data
+  write, on both chips.
+- **Two refreshes** (`genesis.rs`, D-2): the bus's, every 128 of the 68000's clocks, two clocks to the first access
+  at or after one if it is to the cartridge's area and none if it is anywhere else; the main RAM's, three clocks to
+  a RAM access within 133 master clocks of its request, the next request 806 after that access or after the 133.
+  Both are part of the state, version 11.
+- **The phases** (D-2, D-19): the bus refresh and the YM2612's power-on cycle are placed where the board has them
+  against the picture (762 and 793 master clocks after power-on), the RAM refresh's first request from the 68000's
+  start (1,414).
+- **Tests**: `voices.rs`'s `the_whole_machine_plays_every_voice_as_the_board_does`, the 62 voices on the whole
+  machine; `genesis.rs`'s `ram_loops_keep_the_boards_time_through_both_refreshes`, three RAM loops read for read
+  against the board's (`board_bus.rs`, written by `mdboard.py board-bus`), and
+  `the_refreshes_cost_the_boards_share_of_rounds`, D-2's first loops; `ym2612.rs`'s busy flag at the slot edges.
+- **The bench**: `tb_md.cpp`'s `TB_MEM` (the 68000's strobes and the board's memory strobes); `mdboard.py`'s
+  `RAM_LOOPS` and `board-bus`. Every earlier command is unchanged.
+
+### 22.2 Measured (2026-10-05)
+
+| On the whole machine, against the board | Before this step | After |
+|---|---|---|
+| The 62 voices' samples | 181,342 of 200,220 | 200,220 of 200,220 |
+| A voice's 3,930 reads, at the board's 68000-start phase | from the first access to the Z80's area, 7 to 3,570 master clocks out | every read to the master clock |
+| D-2's cartridge loop: rounds of 26 clocks | 0% (the board 19.0%) | 19.1% |
+| D-2's RAM loop: rounds of 26, 27, 29 | 0%, 0%, 0% (13.0, 16.2, 3.8) | 13.2%, 16.2%, 3.7% |
+| D-13's busy sweep, 112 reads | (not run) | 107 the board's |
+
+The busy sweep's five others are reads near the flag's end, not traced one by one; run from the board's 68000-start
+phase, the first place its reads leave the board's is a read of the YM2612 that took six clocks where a bus refresh
+fell, which no rule here gives.
+
+- **Stage 4's tests**: every one passes, VDPFIFOTesting 122 of 122, the write and transfer sweeps at every point
+  with the write path's start and the transfer's first read unchanged (176, 88; D-11). With the bus refresh placed
+  from the 68000's start instead of against the picture, one point of the write sweep moves a slot; with either
+  refresh taken out, the register sweep and the write sweep fail, which they did not before the refreshes, so those
+  pictures now depend on them.
+- **The crate's tests**: 82 pass. **The conformance kit**, `--frames 600`: C1-C15 on the 240p suite, Sonic the
+  Hedgehog and its sequel, Phantasy Star IV, Thunder Force IV, VDPFIFOTesting, the CSM test, `fm-chain`,
+  `fm-decay`, two of the reset programs, `ram-reads-3` and the busy sweep.
+- **The corpus at anchors** (944 games, against Genesis Plus GX at frames 120 and 600): 789 games move, and toward
+  the reference. Pictures on the reference's to the pixel, up to a colour map: 718 to 827 at frame 120 and 630 to
+  772 at frame 600; of the pictures that change, 361 come nearer and 61 go further. RAM's median equal bytes: 65,523
+  to 65,527 and 65,506 to 65,514; of the RAM counts that change, 806 come nearer and 423 go further. No game fails to
+  run. The largest moves are pictures whole frames apart before and the reference's after (International Rugby,
+  ECCO, Heavy Unit, OutRun, Traysia), with Streets of Rage the other way at frame 600. WiseMan's Nephrite, runner,
+  discovery and registration tests pass (31).
+
+### 22.3 Why the phases are placed as they are
+
+Nephrite's 68000 starts 0.61 of a frame later against the picture than the board's: the board's line interrupt on
+line 150 comes 864,577 master clocks after its 68000's first bus cycle, Nephrite's 1,409,169 after its own, the
+picture otherwise the board's to within its interrupt latency. It is why stage 4's picture tests compare Nephrite's
+frame 3 with the board's frame 2. Every phase the board shows is fixed to its own power-on, so one of two things in
+Nephrite must differ from the board: the refreshes' and the sound's place against the 68000's start, or their place
+against the picture. The picture is what a game is timed by, its sound drivers by the vertical interrupt, and the
+write sweep of D-11 shows it: placed from the 68000's start, the bus refresh moves one of its points. So the bus
+refresh and the YM2612's cycle are placed against the picture, and the voices, which start from the 68000's start,
+still give the board's every sample, their reads 113 master clocks from the board's where a refresh falls. The RAM
+refresh's next request follows the accesses made, so it has no place against the picture to keep; its first is
+where the fit put it.
+
+Moving Nephrite's picture to the board's place against the 68000's start would remove the choice, and would move
+every game's frames against Genesis Plus GX at the corpus anchors and every stage 4 picture test by a frame. It is
+not done here.
+
+### 22.4 The sources
+
+No RTL file was opened. The generated header was searched for the names of eight more of the board's nets (`AS`,
+`UDS`, `LDS`, `RW`, `DTACK`, `RAS1`, `CAS1`, `OE1`), read by `TB_MEM`. Charles MacDonald's notes and the
+68000's manual, as before, for the accesses' lengths. No emulator's source was read.
+
+### 22.5 Open, and next
+
+- **D-2**: the RAM's few four- and five-clock waits, and one six-clock read of the YM2612 where a bus refresh fell.
+- **Stage 4's frame offset** (§22.3): Nephrite's picture against its 68000's start.
+- **D-15** stays open and unimplemented; **D-19's short pulses** as before.
+- **Next**, in the plan's order: the LFO (its vibrato table written separately, on `nephrite-lfotables`), SSG-EG,
+  CSM and the test register, each refereed on the bench.
+

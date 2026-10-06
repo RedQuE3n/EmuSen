@@ -13,6 +13,7 @@ Nephrite_Native.md §10 and §15.3 are the method.
   mdboard.py pins <name> <out.log> [cycles]   one of SOUNDS' programs on the board, its sound pins logged
   mdboard.py fm <pins.log> <trace> [channel]   a channel on the board's pins against Nephrite's fmtrace output
   mdboard.py board-fm <logs>   Nephrite's board_fm.rs from the board's logs in a directory, made if missing
+  mdboard.py board-bus <logs>   Nephrite's board_bus.rs, the RAM loops' cartridge reads, likewise
   mdboard.py read-after-write [nops] [dac] [timers]   a status read after a data write, at 49 places in the sample
   mdboard.py reset-replay [rounds]   one voice replayed after each pulse of the Z80's reset line
   mdboard.py status-ports   the YM2612's four ports read under the busy flag and after, the board's status input each way
@@ -894,6 +895,51 @@ def reset_sweep(first=60, step=4, count=9, gap=12000):
         tail += w(0x33FC, 0x0100, 0x00A1, 0x1200)
     return z80_writer(fm_writes((QUIET, QUIET, QUIET, (0x01, 0x00, 0xDF, 10, 0x00, 0xFF)), fnum=1152, block=4), then=tail + w(0x60FE))
 
+# ---- the 68000's bus against the refreshes (Nephrite_Disputes.md D-2): unrolled loops over the main RAM at $FF0100.
+RAM_LOOPS = {"ram-reads": ([0x3013], 400), "ram-longs": ([0x2013], 300), "ram-reads-3": ([0x3013, 0x4E71, 0x4E71, 0x4E71], 400),
+             "ram-reads-6": ([0x3013] + [0x4E71] * 6, 228)}
+
+def ram_loop(name):
+    """`move.w (a3),d0` or `move.l (a3),d0` unrolled, some with NOPs between, then an idle loop."""
+    words, count = RAM_LOOPS[name]
+    return program([0x8004, 0x8104, 0x8F02], [], w(0x47F9, 0x00FF, 0x0100) + w(*(words * count)) + w(0x60FE))
+
+def fetches(lines):
+    """The cartridge reads' starts in master clocks from the 68000's first, each read once (a repeated strobe within
+    35 master clocks is the same read): [(time, address)]."""
+    ev = [(int(l[1]), int(l[2], 16)) for l in lines if l[0] == "c"]
+    start = min(t for t, a in ev if t > 1000000)
+    out = []
+    for t, a in [((t - start) / 2, a) for t, a in ev if t >= start]:
+        if out and out[-1][1] == a and t - out[-1][0] <= 35:
+            out[-1] = (t, a)
+        else:
+            out.append((t, a))
+    return out
+
+def board_bus(logs):
+    """Nephrite's `board_bus.rs`: for each of `RAM_LOOPS`, its program's hash and the starts of its loop's cartridge
+    reads on the board, from the logs `<name>.lines` in the directory `logs` (made if missing)."""
+    at = lambda name: os.path.join(os.path.abspath(logs), name)
+    out = [BOARD_BUS_HEAD]
+    for name in RAM_LOOPS:
+        lines = logged(at(name + ".lines"), lambda: [l for l in bench(ram_loop(name), 1600000) if l[0] == "c"])
+        body = [int(t) for t, a in fetches(lines) if 0x222 <= a < 0x222 + 2 * len(RAM_LOOPS[name][0]) * RAM_LOOPS[name][1]]
+        rows = "\n".join("        " + " ".join(f"{t}," for t in body[i:i + 14]) for i in range(0, len(body), 14))
+        out.append(f'    BoardLoop {{ name: "{name}", image: 0x{fnv(ram_loop(name)):08x}, fetches: &[\n{rows}\n    ] }},')
+    return "\n".join(out) + "\n];\n"
+
+BOARD_BUS_HEAD = '''//! The board's cartridge reads in `mdboard.py`'s RAM loops, written by `mdboard.py board-bus`: the start of each read
+//! of the loop, in master clocks from the 68000's first bus cycle (Nephrite_Disputes.md D-2, Nephrite_Native.md §22).
+
+pub struct BoardLoop {
+    pub name: &'static str,
+    pub image: u32,
+    pub fetches: &'static [u32],
+}
+
+pub const LOOPS: &[BoardLoop] = &['''
+
 # ---- the board's sound pins read back (Nephrite_Disputes.md D-16): an FM sample is 2,016 MCLK2 cycles of 24 slots.
 SAMPLE, SLOT = 2016, 84
 
@@ -1174,6 +1220,9 @@ if __name__ == "__main__":
     if what == "fm":
         slot, n, equal, diffs = fm_compare(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 0)
         print(f"the channel at cycle {slot} of the sample: {n} samples compared, {equal} equal; first differences (sample, board, trace) {diffs}")
+        sys.exit()
+    if what == "board-bus":
+        sys.stdout.write(board_bus(sys.argv[2]))
         sys.exit()
     if what == "board-fm":
         sys.stdout.write(board_fm(sys.argv[2]))

@@ -608,7 +608,9 @@ the output, the fast rates' cycles, the YM2612's reset by the Z80's line) wait f
 to D-19). The writer's step put the three into the tree with the board's samples as its tests, the chip driven at
 the board's own write times: 200,220 of 200,220, and 40 replays after a reset. It found the bench's chip to be the
 YM3438 of the model 2 ASIC, and that the whole machine's envelopes wait on the 68000's side of D-2, D-13 and D-14
-(§21 there).*
+(§21 there). The 68000's side followed: a fifth clock for the Z80's area, the busy flag at the board's length, and
+the bus's and the main RAM's refreshes, measured on the board; the whole machine gives every voice the board's
+samples, and stage 4's tests all pass with the refreshes in (§22 there).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

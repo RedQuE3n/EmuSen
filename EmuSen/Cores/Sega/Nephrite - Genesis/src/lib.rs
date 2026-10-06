@@ -22,6 +22,8 @@ pub mod sound;
 mod sounds;
 pub mod media;
 #[cfg(test)]
+mod board_bus;
+#[cfg(test)]
 mod board_fm;
 #[cfg(test)]
 mod board_rows;

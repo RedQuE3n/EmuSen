@@ -605,7 +605,10 @@ the bench's YM2612 not yet usable as a referee (§19 there, D-15 and D-16). A be
 the board plays every write and referees the FM unit to the sample, its ROMs are the printed OPL2's entry for entry,
 and three rules it found against the committed unit (operator 1's output a sample late and the envelope's step after
 the output, the fast rates' cycles, the YM2612's reset by the Z80's line) wait for the writer's step (§20 there, D-14
-to D-19).*
+to D-19). The writer's step put the three into the tree with the board's samples as its tests, the chip driven at
+the board's own write times: 200,220 of 200,220, and 40 replays after a reset. It found the bench's chip to be the
+YM3438 of the model 2 ASIC, and that the whole machine's envelopes wait on the 68000's side of D-2, D-13 and D-14
+(§21 there).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

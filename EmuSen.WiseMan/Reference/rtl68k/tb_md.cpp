@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
     b->ext_reset = asserted; b->reset_button = 0; b->ext_vres = 0; b->ext_zres = 0;
     b->M3 = 1; b->cart_m3_pause = 0; b->ext_dtack = 0; b->pal = getenv("TB_PAL") ? 1 : 0; b->jap = 0; b->tmss_enable = 0; b->tmss_data = 0;
     // TB_PA sets port 1's pins (0x7F, all high, by default): a button held for the whole run.
-    b->PA_i = getenv("TB_PA") ? (uint8_t)strtoul(getenv("TB_PA"), nullptr, 16) : 0x7F; b->PB_i = 0x7F; b->PC_i = 0x7F; b->vdp_cramdot_dis = 0; b->ym2612_status_enable = 1;
+    b->PA_i = getenv("TB_PA") ? (uint8_t)strtoul(getenv("TB_PA"), nullptr, 16) : 0x7F; b->PB_i = 0x7F; b->PC_i = 0x7F; b->vdp_cramdot_dis = 0; b->ym2612_status_enable = getenv("TB_YMSTATUS") ? atoi(getenv("TB_YMSTATUS")) : 1;
     b->dma_68k_req = 0; b->dma_z80_req = 0;
     bool cwr_was = false, cart_was = false, ram_was = false;
     // TB_PICTURE=path:from:to writes, for each MCLK2 cycle in that window, the video pins: flags then R, G and B.
@@ -42,6 +42,10 @@ int main(int argc, char** argv) {
     // cycle (u64), MOL_2612, MOR_2612 and PSG (u16 each).
     FILE* aud = getenv("TB_AUDIO") ? fopen(getenv("TB_AUDIO"), "wb") : nullptr;
     uint16_t last_mol = 0xFFFF, last_mor = 0xFFFF, last_psg = 0xFFFF;
+    // TB_MOL=path writes records of the same shape for the board's two forms of the FM output's left side: the
+    // cycle, MOL (nine bits), MOL_2612 (ten bits) and 0. TB_YMSTATUS sets the board's ym2612_status_enable input.
+    FILE* mol = getenv("TB_MOL") ? fopen(getenv("TB_MOL"), "wb") : nullptr;
+    uint16_t last_mol9 = 0xFFFF, last_mol10 = 0xFFFF;
     // TB_PINS prints the Z80's reset and bus acknowledge at each change ("z cycle res ack"), and every 100,000 cycles
     // the YM2612 clock's rising edges in them ("f cycle edges").
     bool pins = getenv("TB_PINS") != nullptr;
@@ -82,6 +86,12 @@ int main(int argc, char** argv) {
             uint16_t v[3] = {last_mol, last_mor, last_psg};
             fwrite(&tt, 8, 1, aud); fwrite(v, 2, 3, aud);
         }
+        if (mol && (b->MOL != last_mol9 || b->MOL_2612 != last_mol10)) {
+            last_mol9 = b->MOL; last_mol10 = b->MOL_2612;
+            uint64_t tt = t;
+            uint16_t v[3] = {last_mol9, last_mol10, 0};
+            fwrite(&tt, 8, 1, mol); fwrite(v, 2, 3, mol);
+        }
         if (pins) {
             if (b->res_z80 != last_res || b->dma_z80_ack != last_ack) {
                 last_res = b->res_z80; last_ack = b->dma_z80_ack;
@@ -117,6 +127,7 @@ int main(int argc, char** argv) {
     }
     if (pic) fclose(pic);
     if (aud) fclose(aud);
+    if (mol) fclose(mol);
     delete b;
     return 0;
 }

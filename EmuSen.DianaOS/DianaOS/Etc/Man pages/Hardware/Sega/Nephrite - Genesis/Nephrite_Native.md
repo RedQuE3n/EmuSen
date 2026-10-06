@@ -1335,6 +1335,10 @@ Sauraen reads the die, so the attack's quietest part is silent in them; between 
   unit changing what is heard and nothing a game reads. WiseMan's Nephrite, runner, discovery and registration tests
   pass (31).
 
+*Added 2026-10-05: the two tables now come from `fm_tables.rs`, written independently from "OPLx decapsulated"'s
+printed ROMs (`Nephrite_OperatorTables.md`); they agree with this step's to the bit, and the sentences above about
+their sourcing describe the step as committed (D-16).*
+
 ### 19.4 Open, and the bench
 
 - **The bench as a referee for the FM unit.** `tb_md.cpp` logs the OPN2's output pins (`TB_AUDIO`): each channel's

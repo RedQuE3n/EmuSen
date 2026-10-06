@@ -449,7 +449,7 @@ CPUs' disputes in their own record pages.
 - Pinned by: nothing yet.
 - Implemented in: not yet.
 
-### D-16. OPEN. The operator's log-sine and exponent tables, and the bench's FM output
+### D-16. The operator's log-sine and exponent tables (settled), and the bench's FM output (open)
 - Opened: 2026-10-05, at stage 5 step 2, by the operator unit's two tables, whose form the documents give (a
   quarter-wave of 256 log-sine entries in 4.8 fixed point; 256 entries of 2^−x as eleven bits whose top one is set;
   Nemesis's and Sauraen's prose, topic 386) but not the two offsets that fix every entry's last bit: where in each
@@ -467,6 +467,15 @@ CPUs' disputes in their own record pages.
   program, the board's channel stays at rest, though a Z80 program's DAC writes show. The bench's YM2612 is not yet
   understood well enough to referee the operator unit; the references' audio graded this step instead
   (`Nephrite_Native.md` §19.3). At the nine-bit output the two tables' offsets change nothing measurable in that audio.
-- Conclusion: open.
-- Pinned by: `fm.rs`'s `the_tables_are_their_description` (the construction as written).
-- Implemented in: not yet.
+- ~~Conclusion: open.~~ Superseded for the tables by the next entry; the bench's half stays open.
+- The tables, 2026-10-05: written again, independently, by someone who had seen none of the excluded material,
+  from "OPLx decapsulated" (Matthew Gambrell and Olli Niemitalo, 2008), whose Tables I and II print every entry of the
+  OPL2's log-sine and exponent ROMs (`fm_tables.rs`, its provenance in `Nephrite_OperatorTables.md`). Their log-sine
+  table is Nephrite's to the bit; their exponent table, the ROM's ascending order with its leading one implied, is
+  Nephrite's read backwards with 1,024 added. `fm.rs` now reads both from `fm_tables.rs` (2^−x for a fraction f being
+  `EXP[255 − f] + 1024`) and its own copies are gone; every crate test and every FM trace is unchanged. The excluded
+  blocks are the source of nothing; the record that they were displayed stands.
+- Open, for the bench if it can answer: no clean source yet says that the OPN2's ROMs are the OPL2's.
+- Conclusion: **the tables: documented** (the OPL2's ROMs, printed); **the bench: open**.
+- Pinned by: `fm_tables.rs`'s tests (the formulas, spot checks against the printed tables, the exponent's identity).
+- Implemented in: the commit "Merge nephrite-fmtables".

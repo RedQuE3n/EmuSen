@@ -87,6 +87,8 @@ impl Sound {
     pub fn ym_reset(&mut self, held: bool, t: u64) {
         let t = self.now(t);
         self.run_ym(t);
+        let steps = &mut self.fm_steps;
+        self.ym.flush(t, |at, out| steps.set(at, [out[0] * FM_GAIN, out[1] * FM_GAIN]));
         self.ym.reset_line(held, t);
     }
 

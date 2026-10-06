@@ -1960,5 +1960,88 @@ Charles MacDonald's notes and the 68000's manual, as before. No emulator's sourc
 
 - **Stage 4's frame offset** (§22.3): moving Nephrite's picture to the board's place against its 68000's start would
   let the refresh stand where the board's does and bring Nephrite's own placement to the board's sound.
-- **D-15**, when each register's write is taken: next, as the write pipeline.
+- ~~**D-15**, when each register's write is taken: next, as the write pipeline.~~ §26, D-25.
 - **The test read** and **D-2**'s few long RAM waits, as in §24.5.
+
+## 26. Stage 5, the write pipeline (2026-10-06)
+
+### 26.1 What it built
+
+- **The pipeline** (`ym2612.rs`, D-25): a write to any register but the timers' waits, in the order made, with the
+  deadline of the sample that takes it: the first whose slot edge for that part of the register comes at or after
+  the write. Each part has its edge, measured (D-25's table): the operator's registers and the algorithm the 18th
+  after the deadline, the feedback the 6th, the frequency and the LFO's sensitivities the 24th, the panning the 42nd,
+  `$22` and `$21` bit 4 the 35th, `$21` bit 3 the 11th and bit 5 the 31st, channel 3's mode the 13th, `$2C` bit 5 the
+  48th, the DAC's data and enable the 64th; the key the 12th before, a slot less for each channel after the first, as
+  D-24 had it. A sample is made once its 64th edge has passed (`TAKE_LAG`, 2,720 master clocks), the writes it takes
+  applied first. The timers keep their own moment ahead of it and leave CSM's key for the sample it falls in. Both
+  edges of the reset line make every sample already due before they act, so that a sample is made under the line as
+  it stood at its deadline. The state holds up to 64 waiting writes, version 14; a program that writes faster has its
+  oldest taken at once.
+- **The trace** (`ym2612.rs`): each channel as the left output pins carry it, 0 where `$B4` takes it off the left and
+  -1 where it is then negative, as the board's pins show. The sound is the samples as before, each handed to the
+  output as it is made, `TAKE_LAG` (51 µs) after its deadline.
+- **The bench**: `mdboard.py`'s `board-chip` writes `LANDINGS` into `board_chip.rs`: for each of the 21 sweeps, its
+  writes at the master clocks the board's chip took them, each run's differences from the first, its program's hash
+  and its channel from its first sample not at rest; the DAC's on channel 6.
+- **Tests** (`voices.rs`): `every_write_is_taken_by_the_boards_sample`, the sweeps on the chip at the board's write
+  times; `every_write_is_taken_by_the_boards_sample_on_the_whole_machine`, the same programs, rebuilt as `LANDING`
+  builds them and checked by hash, on the whole machine placed as the board is; the chip voices, the LFO voices and the
+  timer tests at their new counts. `ym2612.rs`'s tests read the registers once the samples taking their writes are
+  made.
+
+### 26.2 Measured (2026-10-06)
+
+| Against the board | Before (§24, §25) | With the pipeline |
+|---|---|---|
+| The 21 landing sweeps, 40 runs each, on the chip at the board's write times | 227 runs; 2 sweeps in every run | 800 runs; 20 sweeps in every run (`lfo` in none) |
+| The same programs on the whole machine placed as the board is | (not run) | the same |
+| §24's 120 voices, on the chip; on the whole machine placed as the board is; at Nephrite's placement | 111; 111; 94 | 114; 114; 96 |
+| §23's 61 LFO voices, on the chip; placed as the board is; at Nephrite's placement | 60; 60; 16 | 61; 61; 16 |
+| §21's 62 voices, the key and CSM sweeps (1,000 runs), on the whole machine | all | all |
+
+The "before" counts of the sweeps are the take-at-once chip given the same data, its trace as before.
+
+- **The crate's tests**: 98 pass, VDPFIFOTesting 122 of 122 and stage 4's picture tests among them. **The
+  conformance kit**, `--frames 600`: C1-C15 on §24's 17 images. **WiseMan**'s Nephrite, runner, discovery and
+  registration tests pass (31).
+- **The corpus at anchors** (944 games): no game moves from §25's, in pictures or RAM at frames 120 and 600. The
+  pipeline moves a write's effect on the output by under three samples and changes nothing a program reads: the
+  status register, its busy flag and the timers keep their own moments.
+- **The frame cost**, best of five runs of 600 frames, the desktop, release build, §25's build and this one measured
+  back to back:
+
+  | Game | Mean per frame | At §25 |
+  |---|---|---|
+  | Sonic the Hedgehog | 1.245 ms | 1.242 ms |
+  | Sonic the Hedgehog 2 | 1.148 ms | 1.132 ms |
+  | Thunder Force IV | 1.257 ms | 1.252 ms |
+  | Streets of Rage 2 | 1.035 ms | 1.027 ms |
+  | Phantasy Star IV | 1.320 ms | 1.300 ms |
+
+  All within P1's 1.5 ms; the pipeline costs up to 1.6%.
+
+### 26.3 What it leaves
+
+- **`lfo`**, the LFO switched on just before the key-on: unlike the board's in every run, before the pipeline and
+  with it, and at every moment of `$22` tried. A level louder than the board's in many samples from the attack on,
+  it is a question for the LFO's model (D-20), not for when the write is taken.
+- **Six test-register voices**: `fm-test-lfo-late` (no moment of `$21` bit 1 changes a sample of it), `fm-test-pg0`,
+  `fm-test-eg`, `fm-test-ugly`, `fm-test-2c` and `fm-test-2c-dac`, not traced.
+- **The other operators and channels**: only S4 of channel 1 was swept, and every operator and channel takes a part
+  by the same edge. The key is taken a slot later on each channel (D-24); whether the other registers are is not
+  measured, and needs the sweeps run on another operator and channel.
+- **D-15**, a status read straight after a data write leaving the register at 0 on the board: open and not built,
+  until a console is recorded.
+
+### 26.4 The sources
+
+As §24: the board's pins and Z80 bus under `tb_md`, the sweeps of `mdboard.py`'s `LANDING`. Sauraen's reading of the
+die (topic 386, as prose) that an operator's write is held until the register file's turn for it, of which the edges
+are the measured form. No RTL file was opened; no emulator's source was read.
+
+### 26.5 Open, and next
+
+- The three items of §26.3, **stage 4's frame offset** (§25.5), **the test read** and **D-2**'s few long RAM waits.
+- **Next**, in the plan's order: the multiplexed output and its ladder effect, the YM3438 of model 2 as a setting,
+  and the model 1 filter.

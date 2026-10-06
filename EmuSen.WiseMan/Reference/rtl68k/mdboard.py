@@ -1584,7 +1584,7 @@ SOUNDS["fm-test-read"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0
 SOUNDS["fm-test-2c"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x2C, 0x10, 20), (0x2C, 0x20, 5), (0x2C, 0x40, 5), (0x2C, 0x80, 5), (0x2C, 0x00, 5)], **A4)
 SOUNDS["fm-test-2c-dac"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x2A, 0xA0), (0x2B, 0x80)], extra=[(0x2C, 0x20, 20), (0x2C, 0x00, 5)], **A4)
 
-# When a write takes effect (Nephrite_Disputes.md D-15): one write of each kind moved across the sample by `k` NOPs,
+# When a write takes effect (Nephrite_Disputes.md D-25): one write of each kind moved across the sample by `k` NOPs,
 # 28 master clocks each, after its wait for the busy flag. Each is S4 of channel 1 unless its line says otherwise.
 DECAY = (0x01, 0x00, 0x1F, 20, 0x00, 0xFA)
 LANDING = {
@@ -1655,6 +1655,7 @@ def board_chip(logs):
     out.append("];\n")
     out.append(board_sweeps(at))
     out.append(board_write_times(at, chip_voice_names() + lfo_voice_names()))
+    out.append(board_landings(at, int(out[-1].rsplit("WRITES_RELEASE: u64 = ", 1)[1].split(";")[0])))
     return "\n".join(out)
 
 def ym_latches(lines, start):
@@ -1704,6 +1705,51 @@ def board_sweeps(at):
         out.append(f'    ("{kind}", [{", ".join(str(f - firsts[0]) for f in firsts)}]),')
     return "\n".join(out) + "\n];\n"
 
+# The landing sweeps of D-25 other than the keys': each moves one write by NOPs, heard on channel 1, but special's on
+# channel 3 and the DAC's on channel 6.
+LANDING_WRITES = ["lfo", "lfo-off", "ams", "amon", "pms", "pg", "eg", "ugly", "tl", "ssg", "fnum", "mul", "fb", "alg", "pan", "dr",
+                  "key-off", "dac", "dac-on", "dac-all", "special"]
+
+def board_landings(at, release):
+    """For each of `LANDING_WRITES`, its writes as the chip takes them (`ym_latches`), the first run's cycles from
+    `release` and each other run's gaps that differ from it, and every run's channel from its first sample not at
+    rest, 320 samples held as block hashes (256 on channel 6, whose DAC leaves rest later), and how many samples after
+    the first run's that first sample comes, with each run's program's hash (Nephrite_Disputes.md D-25)."""
+    out = ["pub const LANDINGS: &[Landing] = &["]
+    for kind in LANDING_WRITES:
+        ch = {"special": 2, "dac": 5, "dac-on": 5}.get(kind, 0)
+        held = 256 if ch == 5 else 320
+        runs = []
+        for k in range(40):
+            name = sweep_log(kind, k)
+            assert open(at(name + ".bin"), "rb").read() == LANDING[kind](k)
+            lines = [l.split() for l in open(at(name + ".bus"))]
+            bus = [(int(l[1]), int(l[3]), int(l[4], 16), int(l[5], 16)) for l in lines if l[0] == "b" and int(l[1]) >= release]
+            ports = [(was[2] & 3, was[3]) for was, e in zip(bus, bus[1:]) if e[1] == 1 and was[1] == 0 and 0x4000 <= was[2] < 0x4004]
+            times = ym_latches(lines, release)
+            assert len(times) == len(ports), name
+            gaps = [t - u for t, u in zip(times, [release] + times)]
+            recs = [r for r in pin_records(at(name + ".pins")) if r[0] > 1300000]
+            slot = [1223, 215, 1895, 887, 1559, 551][ch]
+            board, i, q = [], 0, 1300000 // SAMPLE
+            while q * SAMPLE + slot + 1 < 2400000:
+                t = q * SAMPLE + slot + 1
+                while i + 1 < len(recs) and recs[i + 1][0] <= t:
+                    i += 1
+                board.append(fm_level(recs[i][1]) if recs and recs[i][0] <= t else 0)
+                q += 1
+            b0 = next(j for j, x in enumerate(board) if x not in (0, -1))
+            runs.append((ports, gaps, board[b0:b0 + held], b0))
+        ports, gaps, _, first = runs[0]
+        assert all(r[0] == ports for r in runs), kind
+        out.append(f'    Landing {{ kind: "{kind}", channel: {ch}, samples: {held}, writes: &[{", ".join(f"({p}, 0x{v:02x}, {g})" for (p, v), g in zip(ports, gaps))}], runs: &[')
+        for k, (_, g, series, b0) in enumerate(runs):
+            assert len(series) == held, kind
+            moved = ", ".join(f"({j}, {x})" for j, (x, y) in enumerate(zip(g, gaps)) if x != y)
+            out.append(f'        (&[{moved}], {b0 - first}, 0x{fnv(LANDING[kind](k)):08x}, &[{" ".join(f"0x{h:08x}," for h in [fnv(__import__("struct").pack("<%dh" % len(series[i:i + FIXTURE_BLOCK]), *series[i:i + FIXTURE_BLOCK])) for i in range(0, held, FIXTURE_BLOCK)])}]),')
+        out.append("    ] },")
+    return "\n".join(out) + "\n];\n"
+
 BOARD_CHIP_HEAD = '''//! The board's FM pins for `mdboard.py`'s voices of SSG-EG, CSM, the timers, the test register and the channel's sum,
 //! written by `mdboard.py board-chip`: each voice's channel from its first sample that is neither 0 nor -1 (nor -256
 //! for the voices with the test register's bit 4 set before the key-on), 8,600 samples held as the FNV-1a hash of
@@ -1716,6 +1762,17 @@ pub struct BoardChipVoice {
     pub channel: usize,
     pub samples: usize,
     pub blocks: &'static [u32],
+}
+
+/// A landing sweep of D-25: its writes (the port, the value, master clocks of the bench's from the last, the first
+/// from the reset line's release), and each of its 40 runs' gaps that differ from them, how many samples after the
+/// first run's it leaves rest, its program's hash and its samples' hashes.
+pub struct Landing {
+    pub kind: &'static str,
+    pub channel: usize,
+    pub samples: usize,
+    pub writes: &'static [(u16, u8, u32)],
+    pub runs: &'static [(&'static [(usize, u32)], i32, u32, &'static [u32])],
 }
 '''
 

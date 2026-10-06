@@ -619,7 +619,10 @@ special mode settled; when each register's write is taken measured and left unim
 to D-24). The YM2612's cycle was then placed against the 68000's start, and the bus refresh's extra clock on the
 Z80's area found on the board: placed as the board is, every 68000 cycle traced and every voice but D-15's is the
 board's; the refresh stays against the picture, which stage 4's frame offset keeps from the board's sound (§25 there,
-D-2).*
+D-2). The write pipeline followed: each register part taken by the slot edge measured for it, up to 64 after its
+sample's deadline, each sample made once its last has passed; 20 of the 21 landing sweeps, 114 of the 120 voices and
+all 61 LFO voices the board's (§26 there, D-25). The zeroing of a write by a status read straight after it stays open
+and unbuilt (D-15).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

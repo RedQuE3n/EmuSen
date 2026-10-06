@@ -1647,3 +1647,122 @@ No RTL file was opened. The generated header was searched for the names of eight
 - **Next**, in the plan's order: the LFO (its vibrato table written separately, on `nephrite-lfotables`), SSG-EG,
   CSM and the test register, each refereed on the bench.
 
+
+## 23. Stage 5, the LFO (2026-10-06)
+
+### 23.1 What it built
+
+- **The counter** (`fm.rs`, D-20): seven bits, a step every 108, 77, 71, 67, 62, 44, 8 or 5 samples by `$22`'s
+  speed, taken at the start of a sample before its operators. Turned off, the count is held at 0 and the divider
+  that times its steps runs on, so the first step after it is turned on again is short.
+- **The tremolo**: the count as a triangle, 126 down to 0 and up to 126 again, shifted by AMS (none, 3, 1, 0) and
+  added with TL to the attenuation of each operator whose AMON bit is set.
+- **The vibrato**: PMS and the channel's frequency through `lfo_tables.rs`'s `pm_fnum`, the table written and
+  measured separately (`Nephrite_LfoTables.md`); the phase's increment from the modulated frequency, the key code
+  (detune and key scaling) from the register's.
+- **Each operator's count**: S1 of channels 1 to 5 take the count the next sample will have, S1 of channel 6 and
+  S2-S4 of channels 1 to 5 this sample's, S2-S4 of channel 6 the one before, for the tremolo and the vibrato alike.
+- **Channel 3's special mode**: S1-S3 take the vibrato of their own frequencies (§23.3).
+- **The state**: version 12, the count, the one before it and the divider (`Sound.FmLfo`).
+- **Tests**: `voices.rs`'s `the_lfo_voices_are_the_boards_sample_for_sample`, the 61 LFO voices against the board's
+  samples (`board_fm.rs`'s `LFO_VOICES`, written by `mdboard.py board-fm`).
+- **The bench**: `mdboard.py`'s LFO voices (D-20 lists them) and `fm_voice`'s `lfo`, `b4` and `pre`; every earlier
+  image is byte for byte what it was.
+
+### 23.2 Measured (2026-10-06)
+
+| Against the board | Voices | Samples |
+|---|---|---|
+| The eight speeds, AMS 1-3, the switch off and on, AMON on a modulator | 14 | every one |
+| PMS 1-7, PMS 7 at frequencies 1,151 and 1,500, the key code under vibrato, S1 alone | 10 | every one |
+| The 24 operators under vibrato alone, nine more under tremolo alone | 33 | every one |
+| Channel 3's special mode without vibrato, and with it on the normal mode | 2 | every one |
+| Channel 3's special mode under vibrato (`fm-pm-ch3`, `fm-pm-ch3-swap`) | 2 | to the 65th and the 25th |
+
+59 voices of 61 are the board's to the sample, 574,600 samples. Every rule in §23.1 was tried against its
+alternatives and the test fails with each alternative (D-20).
+
+The rate counter's figures in `Nephrite_LfoTables.md` §4 were checked, not assumed: the steps of 432, 308, 284, 268,
+248, 176, 32 and 20 samples a vibrato step are four of these counts; the tremolo steps four times a vibrato step;
+clearing bit 3 zeroes the count at the next sample, so the offset within two; and turning the LFO on again starts at
+count 0 with a first step as short as the free-running divider leaves it, which is the short first step measured
+there. The manual's speeds in Hz are those of a counter one sample longer a step; the board's are implemented and
+the difference is recorded in D-20.
+
+The vibrato table agrees with the board in every voice that uses it.
+
+- **The crate's tests**: 90 pass, with the ROMs.
+- **The conformance kit**, `--frames 600`: C1-C15 on the 240p suite, Sonic the Hedgehog and its sequel, Phantasy
+  Star IV, Thunder Force IV, VDPFIFOTesting, the CSM test, `fm-chain`, `fm-decay`, two of the reset programs,
+  `ram-reads-3`, `fm-lfo-restart` and `fm-pm-c6s2`.
+- **The corpus at anchors** (944 games, against Genesis Plus GX at frames 120 and 600): no game's picture or RAM
+  moves from §22's; the two the reference cannot run are as before. WiseMan's Nephrite, runner, discovery and
+  registration tests pass (31).
+- **The frame cost** after the refreshes and the LFO (best of five runs of 600 frames, the desktop, release build):
+
+| Game | Mean per frame |
+|---|---|
+| Sonic the Hedgehog | 1.255 ms |
+| Sonic the Hedgehog 2 | 1.147 ms |
+| Thunder Force IV | 1.269 ms |
+| Streets of Rage 2 | 1.045 ms |
+| Phantasy Star IV | 1.314 ms |
+
+  All are within P1's 1.5 ms. Sonic the Hedgehog was 1.18 ms at stage 5's second step.
+
+### 23.3 Channel 3's special mode under the vibrato
+
+Without vibrato the special mode is the board's. With it, no rule found gives the board's samples past the first
+few dozen: S1 at its own frequency keeps them to the 65th and 76% of them after (the two frequencies swapped, the
+25th and 83%), the channel's frequency for all three or no offset at all fails within six. The board's phase runs
+ahead by about one of its 1,024 steps in thirty samples, and no one frequency for each vibrato step explains it:
+within a step the frequency moves, which no normal channel's does. The rule implemented is the best of those tried,
+and the test holds both voices to their first agreement and no further, so that a rule that mends them shows.
+
+### 23.4 Streets of Rage at frame 600
+
+At §22 Streets of Rage's picture at frame 600 left Genesis Plus GX's. The board was run to frame 604, its pictures
+captured from frame 596 and every write to the 68000's RAM logged, and Nephrite's writes were traced the same way.
+Nephrite is now the board's.
+
+- **The game is the board's, interrupt for interrupt.** From the vertical interrupt of frame 80, where the game's
+  frame loop begins, to that of frame 600, every interval between two vertical interrupts holds the same writes on
+  the board and in Nephrite: 483 intervals of 483. In each interval, every write is within 607 master clocks of the
+  board's place, and in the median interval the largest difference is 179. The 38 intervals of a loading phase
+  between frames 288 and 326 are left out of that count, because the interrupt does not fall in the game's wait
+  loop there. That phase's 81,389 writes are the board's, in the board's order. By its end Nephrite's are up to
+  27,000 master clocks early (0.09% of the phase), and the wait that ends it brings them back.
+- **The picture.** The intro scrolls its city by a line every fourth frame. The scroll is written to VSRAM in the
+  vertical interrupt and shown in the next picture, on the board as in Nephrite. Each of the board's pictures from
+  frame 597 to 602 is named by the frame its first line is drawn in. Named that way, each is Nephrite's picture of
+  the same frame to the pixel, up to a colour map, and the scroll moves between frames 600 and 601 on both.
+- **Before §22.** Without the refreshes' waits, Nephrite's game ran two vertical interrupts ahead of the board's.
+  At frame 600 its frame counter at `$FFFB09` read 232, where the board's game and Nephrite's now give 230.
+- **The reference.** Genesis Plus GX's RAM at frame 600 is Nephrite's, 65,521 bytes of 65,536 with the same frame
+  counter. Its picture, though, is the board's picture of frame 601, so it shows a game state one frame earlier
+  than the board does. A picture one frame off a four-frame scroll differs on one frame in four. At §22, Nephrite
+  went from one frame early, which agreed with the reference at frame 600, to the board's place, which is one frame
+  behind the reference and differs from it there.
+
+Nephrite and the board stand differently against their own power-on. Nephrite's 68000 makes its first write
+0.02 of a frame after power-on and the board's 0.80, and a given vertical interrupt comes 1.17 frames sooner in
+Nephrite than on the board. The comparison therefore pairs the board's interrupt at 0.03 of a frame with
+Nephrite's at 0.86 of the frame two before. That a picture named by the frame it starts in then agrees is a
+finding for this game; it is not a rule for stage 4's frame offset (§22.3).
+
+The bench: `tb_md`'s RAM writes (its `w` lines) give the RAM's own address, which is the 68000's with bit 14
+inverted. The comparison corrects for it.
+
+### 23.5 The sources
+
+The YM2608's manual (§2-6) for `$22`, PMS, AMS and AMON; `Nephrite_LfoTables.md` for the vibrato's offsets and the
+counter's steps as measured there. The tremolo's triangle, its shifts and every operator's place were taken from
+the board's samples alone. No RTL file was opened; no emulator's source was read.
+
+### 23.6 Open, and next
+
+- **D-20**: channel 3's special mode under the vibrato.
+- **D-15** stays open and unimplemented; **D-2**'s few long RAM waits and **stage 4's frame offset** as in §22.5.
+- **Streets of Rage's loading phase** runs 0.09% faster in Nephrite than on the board (§23.4). It is not yet
+  traced to a rule.
+- **Next**, in the plan's order: SSG-EG, CSM and the test register, each refereed on the bench.

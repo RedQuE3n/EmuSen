@@ -15,6 +15,8 @@ pub mod fm;
 pub mod fm_tables;
 pub mod genesis;
 pub mod io;
+#[allow(dead_code)]
+mod lfo_tables;
 pub mod machine;
 pub mod render;
 pub mod sound;

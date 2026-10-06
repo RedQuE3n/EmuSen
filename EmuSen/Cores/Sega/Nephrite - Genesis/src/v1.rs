@@ -179,7 +179,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. At this stage it runs the Genesis's two processors, buses, cartridges, pads and picture, and the PSG and the YM2612's DAC; the FM synthesis is still to come.".into()),
+            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. At this stage it runs the Genesis's two processors, buses, cartridges, pads and picture, and its sound, the PSG and the YM2612's FM operators and DAC; the LFO, SSG-EG and the analogue output are still to come.".into()),
             systems: vec![
                 system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()]),
                 system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')]),

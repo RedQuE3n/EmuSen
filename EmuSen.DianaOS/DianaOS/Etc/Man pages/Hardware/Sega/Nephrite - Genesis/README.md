@@ -10,5 +10,7 @@ crate `nephrite`). Written from hardware documents under a clean-room protocol, 
   Beryl CPU crates and the questions for the tester.
 - [`Nephrite_Native.md`](Nephrite_Native.md) — the build record, from stage 0.
 - `Nephrite_Disputes.md` — the disputes log, created with its first entry.
+- [`Nephrite_OperatorTables.md`](Nephrite_OperatorTables.md) — the YM2612 operator's log-sine and exponent ROM tables:
+  their sources, the two sampling offsets, and the open question of whether the OPN2 shares the OPL2's ROMs.
 
 The CPUs and the PSG are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware).

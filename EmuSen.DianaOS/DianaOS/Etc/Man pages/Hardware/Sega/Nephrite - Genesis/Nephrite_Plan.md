@@ -622,7 +622,10 @@ board's; the refresh stays against the picture, which stage 4's frame offset kee
 D-2). The write pipeline followed: each register part taken by the slot edge measured for it, up to 64 after its
 sample's deadline, each sample made once its last has passed; 20 of the 21 landing sweeps, 114 of the 120 voices and
 all 61 LFO voices the board's (§26 there, D-25). The zeroing of a write by a status read straight after it stays open
-and unbuilt (D-15).*
+and unbuilt (D-15). The picture was then placed against the 68000's start as the board's is, stage 4's frame offset
+removed: the VDP on line 159 as the 68000 starts, measured from the HV counter, and the rules of the 68000's cycle
+against the VDP and the refresh that the move exposed found on the board; every stage 4 test passes, every voice is the board's at the one
+placement, and the corpus's anchors are recorded again (§27 there, D-26).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

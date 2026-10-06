@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 14;
+pub const STATE_VERSION: i32 = 15;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -152,21 +152,21 @@ mod tests {
                 "141476 4 u16[2] OpenLineScroll\n141480 2 u8[2] OpenLineWindow\n141482 3 u8[3] IoData\n",
                 "141485 3 u8[3] IoCtrl\n141488 3 u8[3] IoTx\n141491 3 u8[3] IoSctrl\n141494 2 bool[2] PadTh\n",
                 "141496 2 u8[2] PadFalls\n141498 16 u64[2] PadLastFall\n141514 1 u8 SramRegister\n",
-                "141515 1 bool Mapper\n141516 8 u8[8] MapperPages\n141524 72 u64[9] Clocks\n141596 4 u32 Line\n",
-                "141600 2 u16 Z80Bank\n141602 2 u16 OpenBus\n141604 4 bool[4] Lines\n141608 4 u8[4] Tmss\n",
-                "141612 256 u8[256] Sound.Part0\n141868 256 u8[256] Sound.Part1\n",
-                "142124 6 u8[6] Sound.AddressPartFlags\n142130 4 u16[2] Sound.Counters\n",
-                "142134 24 u64[3] Sound.Times\n142158 8 i32[2] Sound.Out\n142166 24 i32[6] Sound.Channels\n",
-                "142190 5 u8[5] Sound.Timers\n142195 40 u64[5] Sound.TimersAndCounts\n",
-                "142235 1024 u64[128] Sound.Writes\n143259 32 u64[4] Sound.Csm\n",
-                "143291 1056 u64[132] Sound.FmOperators\n144347 24 bool[24] Sound.FmKeys\n",
-                "144371 16 u64[2] Sound.FmEnvelope\n144387 4 u8[4] Sound.FmLatches\n144391 3 u8[3] Sound.FmLfo\n",
-                "144394 31 bool[31] Sound.FmSsgKeys\n144425 48 u16[24] Sound.FmShown\n",
-                "144473 6 u16[3] Sound.Tone\n144479 4 u8[4] Sound.Volume\n144483 3 u8[3] Sound.NoiseLatchStereo\n",
-                "144486 8 u16[4] Sound.Counter\n144494 4 bool[4] Sound.Bit\n144498 2 u16 Sound.Shift\n",
-                "144500 16 u64[2] Sound.PsgTimeAndTime\n144516 8 i32[2] Sound.Level\n144524 24 u64[3] Sound.Sum\n",
-                "144548 1024 u64[128] Sound.Pending\n145572 8 i32[2] Sound.Level\n145580 24 u64[3] Sound.Sum\n",
-                "145604 1024 u64[128] Sound.Pending\n",
+                "141515 1 bool Mapper\n141516 8 u8[8] MapperPages\n141524 80 u64[10] Clocks\n141604 4 u32 Line\n",
+                "141608 2 u16 Z80Bank\n141610 2 u16 OpenBus\n141612 4 bool[4] Lines\n141616 4 u8[4] Tmss\n",
+                "141620 256 u8[256] Sound.Part0\n141876 256 u8[256] Sound.Part1\n",
+                "142132 6 u8[6] Sound.AddressPartFlags\n142138 4 u16[2] Sound.Counters\n",
+                "142142 24 u64[3] Sound.Times\n142166 8 i32[2] Sound.Out\n142174 24 i32[6] Sound.Channels\n",
+                "142198 5 u8[5] Sound.Timers\n142203 40 u64[5] Sound.TimersAndCounts\n",
+                "142243 1024 u64[128] Sound.Writes\n143267 32 u64[4] Sound.Csm\n",
+                "143299 1056 u64[132] Sound.FmOperators\n144355 24 bool[24] Sound.FmKeys\n",
+                "144379 16 u64[2] Sound.FmEnvelope\n144395 4 u8[4] Sound.FmLatches\n144399 3 u8[3] Sound.FmLfo\n",
+                "144402 31 bool[31] Sound.FmSsgKeys\n144433 48 u16[24] Sound.FmShown\n",
+                "144481 6 u16[3] Sound.Tone\n144487 4 u8[4] Sound.Volume\n144491 3 u8[3] Sound.NoiseLatchStereo\n",
+                "144494 8 u16[4] Sound.Counter\n144502 4 bool[4] Sound.Bit\n144506 2 u16 Sound.Shift\n",
+                "144508 16 u64[2] Sound.PsgTimeAndTime\n144524 8 i32[2] Sound.Level\n144532 24 u64[3] Sound.Sum\n",
+                "144556 1024 u64[128] Sound.Pending\n145580 8 i32[2] Sound.Level\n145588 24 u64[3] Sound.Sum\n",
+                "145612 1024 u64[128] Sound.Pending\n",
             )
         );
     }

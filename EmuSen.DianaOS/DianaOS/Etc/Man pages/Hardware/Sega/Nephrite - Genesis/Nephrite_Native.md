@@ -1637,9 +1637,18 @@ two, the 68000's cycles in a sound program fall a refresh's wait from the board'
 what that costs the sound's tests; placed as the board is in both, every cycle of every program measured is the
 board's.
 
-Moving Nephrite's picture to the board's place against the 68000's start would remove the choice, and would move
+~~Moving Nephrite's picture to the board's place against the 68000's start would remove the choice, and would move
 every game's frames against Genesis Plus GX at the corpus anchors and every stage 4 picture test by a frame. It is
-not done here.
+not done here.~~
+
+*Decided 2026-10-06, at stage 5's picture step (§27):* the picture is moved. As the 68000 starts, Nephrite's VDP
+stands where the board's does, 745 master clocks into line 159, measured from the HV counter; the bus refresh, the
+RAM's and the YM2612's cycle are placed against the 68000's start as the board has them; and the frame offset is
+gone. The move did not cost a stage 4 point: the points that moved with it on the way (the write sweep's 24 NOPs,
+a transfer sweep's 4, VDPFIFOTesting's FIFO Wait States, the register sweep) were each traced on the board to a rule
+of the 68000's cycle against the VDP (D-26), and every stage 4 test passes with those rules. Nephrite's picture after n
+frames is the board's frame n-1 counted from 0, the same frame, Nephrite's first being the rest of the board's
+frame 0 from line 159.
 
 ### 22.4 The sources
 
@@ -2042,6 +2051,82 @@ are the measured form. No RTL file was opened; no emulator's source was read.
 
 ### 26.5 Open, and next
 
-- The three items of §26.3, **stage 4's frame offset** (§25.5), **the test read** and **D-2**'s few long RAM waits.
+- The three items of §26.3, ~~**stage 4's frame offset** (§25.5)~~ (removed at §27), **the test read** and **D-2**'s
+  few long RAM waits.
 - **Next**, in the plan's order: the multiplexed output and its ladder effect, the YM3438 of model 2 as a setting,
   and the model 1 filter.
+
+## 27. Stage 5, the picture placed against the 68000's start (2026-10-06)
+
+### 27.1 What it built
+
+- **The start** (`genesis.rs`, D-26): as the 68000 starts, the VDP stands 745 master clocks into line 159
+  (`START_LINE`, `START`), as the board's does; the line is begun as a line's start begins it, and the picture's
+  size taken as its frame's line 0 would have taken it (`size_frame`). The machine's first frame is the rest of the
+  board's frame 0, from line 159, so that Nephrite's picture after n frames is the board's frame n-1.
+- **The bus refresh from power-on**: its request before the 68000's start is pending at the first access, and the
+  placements against the 68000's start count that wait: the bus refresh at 889, the RAM's first request at 1,428,
+  the YM2612's first deadline at 924 (`ym2612.rs`). Nephrite's own placement is now the board's, and the voices'
+  tests have one placement only; `place_as_the_board` is gone.
+- **The 68000's clock**: every bus cycle starts on one of the 68000's clocks from its start.
+- **A write held for a full FIFO** ends 24 master clocks after the slot that frees an entry (`FIFO_RELEASE`); a bus
+  refresh requested during the hold is done in it, a cartridge read starting within 126 master clocks of the request
+  waiting for its end, two clocks at most (`REFRESH_BUSY`, kept in the state, version 15).
+- **The control port** is taken 14 master clocks before the 68000's cycle ends: the status and the HV counter read
+  there, a write to it taken there (`HV_LATE`); the data port at the cycle's end, as before.
+- **The bench**: `mdboard.py port-zbus` (the HV counter or the status read through the Z80's area from the reset
+  vector) and `landing-frames` (a picture program's first changed pixel in each of the board's frames).
+- **Tests**: every stage 4 test unchanged but MD1536's picture, re-recorded (§27.3); `genesis.rs`'s RAM loops
+  counted from the board's first strobe; the voices and the timer poll at the one placement.
+
+### 27.2 Measured (2026-10-06)
+
+| Against the board | Before (§26) | Moved |
+|---|---|---|
+| The HV program's 5,806 bytes | (not run) | 5,715; the rest in horizontal sync and on lines 229 to 234 (D-26) |
+| The status program's 5,800 bytes | (not run) | 5,796 |
+| §23's 61 LFO voices on the whole machine | 16 | 61 |
+| §24's 120 voices on the whole machine | 96 | 114, as on the chip |
+| §21's 62 voices, the key and CSM sweeps, the 21 landing sweeps | all, 20 | all, 20 |
+| MD1536 at Nephrite's frames 298 to 302 | (not compared) | the board's frames 297 to 301 to the pixel, up to a colour map |
+| The write-landing and transfer sweeps, frame by frame (264 points) | (not compared) | 213 to D-11's tolerance, 168 exactly |
+
+- **The crate's tests**: 97 pass (one fewer, the placement now single), VDPFIFOTesting 122 of 122. **The
+  conformance kit**, `--frames 600`: C1-C15 on §24's 17 images. **WiseMan**'s Nephrite, runner, discovery and
+  registration tests pass (31), its goldens for the first frame's size among them: the frame the machine starts in
+  takes the power-on registers' size, 256 by 224, as before.
+- **The corpus at anchors** (944 games, against Genesis Plus GX at frames 120 and 600): 719 games move. Pictures on
+  the reference's to the pixel, up to a colour map: 827 to 888 at frame 120 and 773 to 803 at frame 600; of the
+  pictures that change, 84 of 100 come nearer at frame 120 and 90 of 158 at frame 600. RAM's median equal bytes:
+  65,527 to 65,528 and 65,513.5 to 65,515; of the RAM counts that change, 330 of 518 come nearer at frame 120 and 365
+  of 605 at frame 600. No game fails to run. The reference shows a game's picture a frame early against the board
+  (§23.4), so a picture counted equal may be a frame from the board's, and the counts are the corpus's movement, not
+  a grade.
+- **The frame cost**, as §24.2: Sonic the Hedgehog 1.252 ms, its sequel 1.140, Thunder Force IV 1.252, Streets of
+  Rage 2 1.028, Phantasy Star IV 1.305; within P1.
+
+### 27.3 The re-baseline
+
+Moving the picture moves every game against its own power-on and against the reference, so the corpus's anchors are
+recorded again, and §27.2 gives what moved. Of stage 4's goldens, only MD1536's frame-300 hash
+changes: it is now the board's frame 299, checked with the board run to its frame 302 and compared at five frames;
+the old hash was Nephrite's frame 300 under the frame offset (D-11). Every other stage 4 test holds its
+old expected values and passes: they are sets of what the board shows across its frames, or relative measures, and
+the board's frames are where they were. That the per-frame sweeps are 213 of 264 points says the sets are wider than
+Nephrite's frame-by-frame agreement, which §27.4 leaves open.
+
+### 27.4 Open, and next
+
+- **The sweeps frame by frame** (D-26): the board's alternation between two slots in `write-landing-10` comes on the
+  other frames in Nephrite; the interrupt's entry against the 68000's loop is the first suspect, not traced.
+- **The FIFO entering the frame's last line**, **the H counter in horizontal sync and on lines 229 to 234**, **the
+  status's horizontal-blank bit**, **mode 4's HV read**, and the refresh's one-clock overlap seen a few times off
+  the rule (D-26).
+- **D-2**'s long RAM waits, **D-15**, **the test read**, `lfo` and the six test-register voices as in §26.
+- **Next**, in the plan's order: the multiplexed output and its ladder effect, the YM3438 of model 2 as a setting,
+  and the model 1 filter.
+
+### 27.5 The sources
+
+No RTL file was opened; the board's nets read were those `TB_MEM`, `TB_PICTURE` and `TB_ZBUS` already name. The
+68000's manual for DTACK and the cycle's states. No emulator's source was read.

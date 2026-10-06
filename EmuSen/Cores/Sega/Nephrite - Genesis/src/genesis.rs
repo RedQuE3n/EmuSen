@@ -13,11 +13,16 @@ use crate::vdp::{LINE, Vdp};
 
 /// Master clocks a 68000 clock, and a Z80 T-state.
 pub const M68K: u64 = 7;
-/// The bus's refresh, every 128 of the 68000's clocks, placed against the picture as the board has it: the first access
-/// at or after one waits two clocks if it is to the cartridge's area, and passes it without a wait if it is anywhere
-/// else (Nephrite_Disputes.md D-2).
+/// Where the VDP stands when the 68000 starts, as the board's does: the line, and master clocks into it. The 68000's
+/// cycles start `START` master clocks after that line's, and everything placed against the 68000 counts from there
+/// (Nephrite_Disputes.md D-26).
+pub const START_LINE: u32 = 159;
+pub const START: u64 = 745;
+/// The bus's refresh, every 128 of the 68000's clocks from power-on, placed where the board has it against the 68000's
+/// start, the request before that start pending at its first access: the first access at or after one waits two clocks
+/// if it is to the cartridge's area, and passes it without a wait if it is anywhere else (Nephrite_Disputes.md D-2).
 pub const REFRESH: u64 = 128 * M68K;
-pub const REFRESH_FIRST: u64 = 762;
+pub const REFRESH_FIRST: u64 = START + 889 - REFRESH;
 pub const REFRESH_WAIT: u64 = 2 * M68K;
 /// A cycle to the Z80's area that starts one to six of the 68000's clocks after a refresh's request waits a clock
 /// more, after its strobe on the Z80's bus (Nephrite_Disputes.md D-2).
@@ -25,7 +30,7 @@ pub const REFRESH_Z80_LATE: std::ops::RangeInclusive<u64> = M68K..=6 * M68K;
 /// The main RAM's refresh (D-2): first requested at `RAM_REFRESH_FIRST`, then `RAM_REFRESH_AFTER` after each one
 /// is done. A RAM access within `RAM_REFRESH_WINDOW` of a request waits three clocks while it is done; with none, it
 /// is done at the window's end without a wait.
-pub const RAM_REFRESH_FIRST: u64 = 1414;
+pub const RAM_REFRESH_FIRST: u64 = START + 1428;
 pub const RAM_REFRESH_AFTER: u64 = 806;
 pub const RAM_REFRESH_WINDOW: u64 = 133;
 pub const RAM_REFRESH_WAIT: u64 = 3 * M68K;
@@ -33,6 +38,15 @@ pub const RAM_REFRESH_WAIT: u64 = 3 * M68K;
 /// Z80's bus ends four clocks before the 68000's cycle does; the reset line moves as early in a write to `$A11200`
 /// (Nephrite_Disputes.md D-14, D-19).
 pub const Z80_AREA_WAIT: u64 = M68K;
+/// A write held for a full FIFO: its DTACK falls 4 master clocks after the slot that frees an entry, and the 68000's
+/// cycle ends on the first of its own clocks at least 24 after that slot (Nephrite_Disputes.md D-26).
+pub const FIFO_RELEASE: u64 = 24;
+/// The VDP takes an access to its control port, and gives the status and the HV counter, this many master clocks
+/// before the 68000's cycle ends; the data port at the end (D-26).
+pub const HV_LATE: u64 = 14;
+/// A bus refresh requested while a write is held is done in the hold, the bus its own for `REFRESH_BUSY` master clocks
+/// from its request: a cartridge access starting before then waits until it ends, two clocks at most (D-26).
+pub const REFRESH_BUSY: u64 = 126;
 pub const Z80_AREA_LEAD: u64 = 4 * M68K;
 pub const Z80_T: u64 = 15;
 /// The Z80's INT, raised with the vertical interrupt, held for one line (argued: a pulse the Z80 misses with
@@ -99,6 +113,10 @@ pub struct Hw {
     pub locked_up: bool,
     /// Master clocks the 68000 owes the Z80's window, paid at its next access.
     stall: u64,
+    /// The master clock the 68000 started at, the origin of its clock's edges.
+    start: u64,
+    /// The clocks the next cartridge access waits for a bus refresh still being done from a held write.
+    refresh_owed: u64,
     /// The clock a cycle to the Z80's area waits after its strobe, this cycle.
     area_late: u64,
     /// The master clocks of the next refresh of the bus and of the main RAM, each paid by the 68000's next access
@@ -122,7 +140,7 @@ pub struct Genesis {
 impl Genesis {
     pub fn new(cart: Cart, model: Model) -> Genesis {
         let hw = Hw {
-            clock: 0,
+            clock: START,
             cart,
             io: Io::new(model.overseas, model.pal, model.version),
             vdp: Vdp::new(model.pal),
@@ -133,7 +151,7 @@ impl Genesis {
             z80_reset: true,
             z80_clock: 0,
             z80_int: (0, 0),
-            line: 0,
+            line: START_LINE,
             line_begun: 0,
             vint_at: None,
             frame_done: false,
@@ -142,6 +160,8 @@ impl Genesis {
             tmss: [0; 4],
             locked_up: false,
             stall: 0,
+            start: START,
+            refresh_owed: 0,
             area_late: 0,
             refresh_at: REFRESH_FIRST,
             ram_refresh_at: RAM_REFRESH_FIRST,
@@ -150,9 +170,15 @@ impl Genesis {
             sound: if model.pal { Sound::new(53_203_425, 1, true) } else { Sound::new(4_725_000_000, 88, true) },
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
+        // The VDP is part-way through its frame: the line the 68000 starts on, begun at 0, as a line's start makes it.
+        g.hw.vdp.line_start(START_LINE);
+        (g.hw.vdp.cur_line, g.hw.vdp.cur_line_start) = (START_LINE, 0);
+        g.hw.vdp.latch_line(START_LINE as usize);
+        g.hw.vdp.size_frame();
+        g.hw.z80_clock = START;
         // The YM2612 is held with the Z80 from power-on, its sample cycle where the board's is (Nephrite_Disputes.md D-19).
         let ym = &mut g.hw.sound.ym;
-        let po = crate::ym2612::POWER_ON;
+        let po = START + crate::ym2612::POWER_ON;
         (ym.held, ym.next, ym.timers_next, ym.held_at) = (true, po, po, po);
         g.cpu.reset(&mut MainBus(&mut g.hw));
         g
@@ -306,6 +332,18 @@ impl Hw {
         }
     }
 
+    /// Where the control port is read in the 68000's cycle: `HV_LATE` before the cycle ends, in the line before when
+    /// that falls before the line's start (Nephrite_Disputes.md D-26).
+    fn hv_point(&self) -> (u32, u64) {
+        let t = self.clock - HV_LATE;
+        if t >= self.line_begun {
+            (self.line, t.saturating_sub(self.line_begun).min(LINE - 1))
+        } else {
+            let line = if self.line == 0 { self.vdp.lines() - 1 } else { self.line - 1 };
+            (line, LINE - (self.line_begun - t))
+        }
+    }
+
     fn dot(&self) -> u64 {
         self.clock.saturating_sub(self.line_begun).min(LINE - 1)
     }
@@ -438,7 +476,7 @@ impl Hw {
         if a & 0x1E < 4 {
             self.vdp_wait(Vdp::read_ready);
         }
-        let (line, dot) = (self.line, self.dot());
+        let (line, dot) = self.hv_point();
         match a & 0x1E {
             0x00 | 0x02 => self.vdp.read_data(),
             0x04 | 0x06 => (self.vdp.status(line, dot) & 0x03FF) | (self.prefetch & 0xFC00),
@@ -462,10 +500,23 @@ impl Hw {
             self.sound.psg_write(v as u8, t);
             return;
         }
-        self.run_vdp(self.clock);
+        // The control port is taken where the HV counter is read, the data port at the cycle's end (D-26).
+        self.run_vdp(if a & 0x1E >= 4 { self.clock - HV_LATE } else { self.clock });
         match a & 0x1E {
             0x00 | 0x02 => {
+                let held = self.vdp.fifo_full();
                 self.vdp_wait(|v| !v.fifo_full());
+                if held {
+                    self.clock += FIFO_RELEASE;
+                    let next = self.start + (self.clock - self.start).div_ceil(M68K) * M68K;
+                    while self.refresh_at < next {
+                        let late = (self.refresh_at + REFRESH_BUSY).saturating_sub(next);
+                        if late >= REFRESH_WAIT {
+                            break;
+                        }
+                        (self.refresh_owed, self.refresh_at) = (late, self.refresh_at + REFRESH);
+                    }
+                }
                 self.vdp.data(v);
             }
             0x04 | 0x06 => {
@@ -538,6 +589,12 @@ impl MainBus<'_> {
     fn cycle(&mut self, a: u32) {
         let hw = &mut *self.0;
         let a = a & 0xFF_FFFF;
+        // A wait on the VDP ends on one of the 68000's own clocks.
+        hw.clock = hw.start + (hw.clock - hw.start).div_ceil(M68K) * M68K;
+        let owed = std::mem::take(&mut hw.refresh_owed);
+        if a < 0x80_0000 {
+            hw.clock += owed;
+        }
         if hw.clock >= hw.refresh_at {
             if a < 0x80_0000 {
                 hw.clock += REFRESH_WAIT;
@@ -743,6 +800,7 @@ pub struct Saved {
     tmss: [u8; 4],
     locked_up: bool,
     stall: u64,
+    refresh_owed: u64,
     refresh_at: u64,
     ram_refresh_at: u64,
 }
@@ -792,7 +850,7 @@ impl Genesis {
         w.u8("SramRegister", h.cart.sram_reg);
         w.bool("Mapper", h.cart.banks.is_some());
         w.bytes("MapperPages", &h.cart.banks.unwrap_or_default());
-        w.u64s("Clocks", &[h.clock, h.z80_clock, h.z80_int.0, h.z80_int.1, h.line_begun, h.vint_at.unwrap_or(u64::MAX), h.stall, h.refresh_at, h.ram_refresh_at]);
+        w.u64s("Clocks", &[h.clock, h.z80_clock, h.z80_int.0, h.z80_int.1, h.line_begun, h.vint_at.unwrap_or(u64::MAX), h.stall, h.refresh_at, h.ram_refresh_at, h.refresh_owed]);
         w.u32("Line", h.line);
         w.u16("Z80Bank", h.z80_bank);
         w.u16("OpenBus", h.prefetch);
@@ -873,7 +931,7 @@ impl Genesis {
         let mapper = r.bool()?;
         let mut pages = [0u8; 8];
         r.bytes(&mut pages)?;
-        let mut c = [0u64; 9];
+        let mut c = [0u64; 10];
         r.u64s(&mut c)?;
         let line = r.u32()?;
         let z80_bank = r.u16()?;
@@ -904,6 +962,7 @@ impl Genesis {
             line_begun: c[4],
             vint_at: (c[5] != u64::MAX).then_some(c[5]),
             stall: c[6],
+            refresh_owed: c[9],
             refresh_at: c[7],
             ram_refresh_at: c[8],
             line,
@@ -940,8 +999,8 @@ impl Genesis {
         (h.clock, h.z80_clock, h.z80_int, h.line, h.line_begun, h.vint_at) = (s.clock, s.z80_clock, s.z80_int, s.line, s.line_begun, s.vint_at);
         (h.vdp.cur_line, h.vdp.cur_line_start) = (h.line, h.line_begun);
         h.prefetch = s.prefetch;
-        (h.z80_bank, h.z80_busreq, h.z80_reset, h.tmss_unlocked, h.tmss, h.locked_up, h.stall) =
-            (s.z80_bank, s.z80_busreq, s.z80_reset, s.tmss_unlocked, s.tmss, s.locked_up, s.stall);
+        (h.z80_bank, h.z80_busreq, h.z80_reset, h.tmss_unlocked, h.tmss, h.locked_up, h.stall, h.refresh_owed) =
+            (s.z80_bank, s.z80_busreq, s.z80_reset, s.tmss_unlocked, s.tmss, s.locked_up, s.stall, s.refresh_owed);
         (h.refresh_at, h.ram_refresh_at) = (s.refresh_at, s.ram_refresh_at);
     }
 }
@@ -985,8 +1044,8 @@ mod tests {
         let fnv = image.iter().fold(0x811C_9DC5u32, |h, &b| (h ^ b as u32).wrapping_mul(0x0100_0193));
         assert_eq!(fnv, board.image, "{name}: the program is not the one the board ran");
         let mut m = crate::machine::Machine::new(&image, crate::media::Media::read(&image));
-        // The board's run had its bus refresh this far from its 68000's first bus cycle, which comes 98 into Nephrite's.
-        m.genesis.hw.refresh_at = 98 + 777;
+        // The board's times count from its first cartridge read's strobe, which the refresh pending at the 68000's start
+        // holds 14 master clocks after the first bus cycle, itself 98 into Nephrite's start.
         let g = &mut m.genesis;
         let end = 0x222 + 2 * (words.len() * count) as u32;
         let mut ends = Vec::new();
@@ -994,7 +1053,7 @@ mod tests {
             let pc = g.cpu.regs.pc;
             let _: Step = g.cpu.step(&mut MainBus(&mut g.hw));
             if pc >= 0x222 {
-                ends.push((g.hw.clock - 98 - 4 * M68K) as u32);
+                ends.push((g.hw.clock - START - 98 - REFRESH_WAIT - 4 * M68K) as u32);
             }
         }
         ends

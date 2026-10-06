@@ -154,6 +154,12 @@ CPUs' disputes in their own record pages.
   that place. With both, all 83,451 of the 68000's cycles in 16 traced runs (12 loops, four key sweeps on both
   parts) start at the board's master clock when Nephrite is placed as the board is; it was the drift on channels 4
   to 6 (`Nephrite_Native.md` §24.3, §25.2), and is the six-clock read of the YM2612 left open in §22.5 there.
+- 2026-10-06, at stage 5's picture step (D-26): **the refresh runs from power-on**, and its request before the
+  68000's start is pending at the 68000's first access, which waits two clocks on the board. Counted with that wait,
+  the placements fitted against the 68000's start move 14 master clocks later, the same against the board's power-on:
+  the bus refresh's first request after the start at 889 (it was 875), the main RAM's at 1,428 (1,414). **A refresh
+  requested while a write waits for a full FIFO** is done in the hold, the bus the refresh's for some 126 master
+  clocks from its request: a cartridge read starting before then waits until it ends, two clocks at most.
 
 ### D-3. Shadow/highlight: palette 3's colour 14 brightens and colour 15 darkens, and an operator pixel gives no priority
 - Opened: 2026-10-05, at stage 4 step 2, by two documents in disagreement. MacDonald's "Sega Genesis VDP
@@ -425,6 +431,10 @@ CPUs' disputes in their own record pages.
   refresh placed against the picture as on the board (D-2). Making the VDP's accesses wait for the bus refresh breaks
   `register_writes_show_where_the_board_shows_them` at every pair of the two values tried, and the transfer start
   the write sweep then wants (46) fails VDPFIFOTesting's FIFO Wait States.
+- 2026-10-06, at stage 5's picture step (D-26): with the picture placed against the 68000's start as the board's
+  is, a write held for a full FIFO ends 24 master clocks after its slot, on the 68000's own clock, its DTACK 4 after
+  the slot in 1,243 holds of 1,243; and the control port is taken 14 before the 68000's cycle ends. The write path's
+  start and the transfer's first read keep 176 and 88, and every point of both sweeps and VDPFIFOTesting's 122 pass.
 
 ### D-12. The status flags and the port's read: vertical blanking at H `$14C` or `$10C`, the odd flag at the frame interrupt
 - Opened: 2026-10-05, at the stage 4 dispute step, by the plan's oracle for the stage (the logic-analyser ROMs
@@ -846,6 +856,8 @@ CPUs' disputes in their own record pages.
 - 2026-10-06, at stage 5's placement step: `POWER_ON` is 910, the board's first deadline against its 68000's start
   (the key and CSM sweeps of all six channels each in the board's sample on the whole machine there, 1,000 runs),
   as decided in `Nephrite_Native.md` §22.3.
+- 2026-10-06, at stage 5's picture step: `POWER_ON` is 924 from the 68000's start, the same deadline against the
+  board's power-on, now that the 68000's first access waits the pending bus refresh (D-26).
 
 ### D-20. The LFO: a 128-count cycle whose divider never stops, a triangle of tremolo, and each operator taking the count at its own place in the sample
 - Opened: 2026-10-06, at stage 5's LFO step, by the documents giving the LFO's speeds in Hz and its depths in cents
@@ -1123,3 +1135,72 @@ CPUs' disputes in their own record pages.
   `the_chip_voices_are_the_boards_sample_for_sample`, `the_lfo_voices_on_the_chip_are_the_boards`,
   `the_lfo_voices_are_the_boards_sample_for_sample`.
 - Implemented in: the commit "Nephrite, stage 5: D-15's write pipeline".
+
+### D-26. The picture's place against the 68000's start, and where the VDP takes the 68000's cycle: the VDP on line 159, 745 master clocks in, as the 68000 starts; its control port read and written 14 master clocks before the cycle ends; a write held for a full FIFO released 24 after its slot, on the 68000's own clock
+- Opened: 2026-10-06, at stage 5's picture step, by the decision to remove stage 4's frame offset (`Nephrite_Native.md`
+  §22.3): Nephrite's picture started 0.61 of a frame from the board's against the 68000's start, measured only to within
+  an interrupt's latency.
+- Documents read: none new. The 68000's manual, for the cycle's states and DTACK, as before.
+- Test programs (run on the board and in Nephrite alike; every one starts at the reset vector):
+  - **HV through the Z80's area** (`mdboard.py port-zbus 8`): the Z80's bus taken, H40 and mode 5 set, then 4,000 rounds
+    of a word read of `$C00008` stored as two bytes into the Z80's RAM, with a shift of 1 to 8 between rounds so that
+    the reads drift across the line. No access to the 68000's RAM, whose refresh's few long waits are not modelled
+    (D-2); the bus refresh, which is, times the loop. The board's 5,806 stored bytes are read from its Z80 bus
+    (`TB_ZBUS`).
+  - **The status the same way** (`port-zbus 4`), reading `$C00004`.
+  - **The same through the 68000's RAM**, in modes 4 and 5: abandoned, the RAM's waits of four and five clocks making
+    the loop drift (36 of 750 writes).
+  - `write-landing-*` and `dma-start-*`, now captured frame by frame from power-on (`mdboard.py landing-frames`).
+- Referee: the board as in D-1: `TB_MEM`'s strobes, `TB_PICTURE`'s display enables and syncs, `TB_ZBUS`. No RTL file was
+  opened.
+- Measured:
+  - **Power-on.** The board's VDP runs from power-on, its first display period starting 153,962.5 master clocks in; the
+    68000's first bus cycle comes at 698,238, on line 159 of that frame.
+  - **The VDP's place.** Nephrite's VDP placed at line 159 and moved a master clock at a time against the 68000's start,
+    the HV program's bytes are the board's in all but 91 of 5,806 at 745 (and 744, the H counter's step being two clocks
+    there), and in 391 or more at every other place from 735 to 756. The 91 are H values in horizontal sync one count
+    from the board's, and the first half of a few vertical-blank lines two counts from it, left open.
+  - **The first bus cycle.** The board's first cycle waits the bus refresh (its DTACK at 41 cycles of the bench's clock,
+    not 13): the refresh runs from power-on, and the request before the 68000's start is pending at its first access,
+    111.5 master clocks old. Nephrite had no wait there, so every later cycle of its was 14 master clocks early against
+    the board's, which every placement fitted against the 68000's start had absorbed. With the wait, those placements
+    are the same against the board's power-on and 14 later against the 68000's start: the bus refresh's 875 becomes 889,
+    the main RAM's first request 1,414 becomes 1,428 and the YM2612's first deadline 910 becomes 924; `genesis.rs`'s RAM
+    loops count from the first cartridge read's strobe, which the wait holds.
+  - **The 68000's clock.** Of 3,000 bus cycles on the board, every one starts on the 68000's clock (the bench's cycle 4
+    modulo 14). Nephrite's started off it after every wait on the VDP, the wait ending at a slot.
+  - **A write held for a full FIFO.** In the write-landing program's set-up, 1,243 data-port writes wait for the FIFO;
+    on the board every one's DTACK falls exactly 4 master clocks after the slot that frees an entry in Nephrite's
+    tables, and the next cycle starts on the first of the 68000's clocks at least 24 after that slot (24 to 30 by the
+    slot's place among the 68000's clocks, 177 or so of each).
+  - **A refresh during the hold.** Where the bus refresh's request falls inside a held write, the next cartridge read on
+    the board waits two clocks when the request came up to 118.5 master clocks before that read starts, one clock at
+    125.5 and none from 132.5, in every hold the trace has: the refresh is done in the hold, the bus its own for some
+    126 master clocks from the request in Nephrite's clock, and a read starting before then waits for it, two clocks at
+    most, the wait of a pending request.
+  - **The control port.** With the VDP placed from the HV program and the FIFO's releases from the board's DTACKs, the
+    two disagree by 14 master clocks unless the HV counter is read 14 before the 68000's cycle ends, where Nephrite read
+    it at the end; `register_writes_show_where_the_board_shows_them` then fails unless a write to the control port is
+    taken there too; and the status program's bytes are the board's in all but 4 of 5,800 with the status read there, 22
+    at the end. The data port's writes stay at the cycle's end, where D-11's start of 176 and the FIFO's releases fit
+    them.
+  - **Mode 4's H counter.** At power-on, before mode 5 is set, the board's HV read gives H `$00` on every read while V
+    counts; Nephrite's H runs. Not built; mode 4's HV read is left open.
+- Conclusion: **the picture moved.** At the 68000's start the VDP stands 745 master clocks into line 159 (`START_LINE`,
+  `START`); the bus refresh's request before it is pending; the 68000's cycles keep its clock; a held write ends 24
+  after its slot; a refresh in the hold is done there; the control port is taken 14 before the cycle ends (`HV_LATE`).
+  The picture after Nephrite's first frame, which is lines 159 to 261 of the board's frame 0, is the board's frame 1, so
+  that Nephrite's picture after n frames is the board's frame n-1 counted from 0.
+- With all of these, the write-landing program's first 7,114 cycles from the reset vector, its set-up of 1,243 held
+  writes among them, start where the board's do but for five: a cartridge read the board holds one clock where the
+  refresh's request came 126 master clocks before it in Nephrite's clock, the edge of the rule above, which the board's
+  half-clock phase leaves undecided. From the frame's last line on they part (below).
+- Open: the refresh's one-clock overlap at its edge; the H counter in horizontal sync and on some vertical-blank lines;
+  the status's horizontal-blank bit in 4 reads; the FIFO's count entering the frame's last line (one entry more in
+  Nephrite than on the board, seen once, a write held 126 master clocks longer); mode 4's HV read; and the write-landing
+  and transfer sweeps frame by frame, where 213 of 264 points are the board's to D-11's tolerance and the rest are a
+  slot from it, the board's own alternation between two slots coming on the other frames in Nephrite
+  (`write-landing-10`). Stage 4's tests, which hold Nephrite's value to those the board shows across its frames, all
+  pass.
+- Pinned by: every stage 4 test with the move; `genesis.rs`'s RAM loops; the voices' tests at the one placement.
+- Implemented in: the commit "Nephrite, stage 5: the picture placed against the 68000's start".

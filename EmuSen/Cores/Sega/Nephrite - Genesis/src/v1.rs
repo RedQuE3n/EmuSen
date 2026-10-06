@@ -4,7 +4,8 @@
 use emusen_native::abi::Region;
 use emusen_native::core::*;
 
-use crate::machine::{HEIGHT, Machine, WIDTH};
+use crate::genesis::Model;
+use crate::machine::{HEIGHT, Machine, WIDTH, default_model};
 use crate::media::{Media, System, cartridge_bytes};
 use crate::state::{STATE_VERSION, STATUS_OTHER_SYSTEM};
 
@@ -66,6 +67,28 @@ fn pad_setting(port: usize) -> Setting {
         advanced: false,
         hidden: false,
         restart: false,
+    }
+}
+
+/// The setting that chooses the console's model, read at create.
+pub const MODEL_KEY: &str = "model";
+
+fn model_setting() -> Setting {
+    Setting {
+        key: MODEL_KEY.into(),
+        label: "Console model".into(),
+        help: "The console the game runs on. A model 1 has the discrete YM2612, whose converter gives quiet sounds their grain, and a soft output filter; a model 2 has the YM3438 inside its main chip, clean at low levels, and a brighter, steeper filter.".into(),
+        kind: SettingKind::Choice(vec![
+            Choice { value: "md.model1".into(), label: "Model 1".into(), help: None },
+            Choice { value: "md.model2".into(), label: "Model 2".into(), help: None },
+        ]),
+        default: "md.model1".into(),
+        scope: Scope::Run,
+        category: Some("Console".into()),
+        effect: Effect::None,
+        advanced: false,
+        hidden: false,
+        restart: true,
     }
 }
 
@@ -202,7 +225,7 @@ impl Core for Machine {
     }
 
     fn settings_schema() -> Vec<Setting> {
-        vec![pad_setting(0), pad_setting(1)]
+        vec![model_setting(), pad_setting(0), pad_setting(1)]
     }
 
     fn status_text(code: i32) -> Option<String> {
@@ -223,7 +246,9 @@ impl Core for Machine {
             return Err(status::BAD_FILE);
         }
         let image = cartridge_bytes(request.image);
-        let mut m = Machine::new(&image, Media::read(&image));
+        let media = Media::read(&image);
+        let model = Model { model2: request.settings.get(MODEL_KEY) == Some("md.model2"), ..default_model(&media) };
+        let mut m = Machine::with_model(&image, media, model);
         m.apply_pads(&request.settings);
         if let Some(top) = request.files.iter().find(|f| f.which == LOCK_ON) {
             let patch = request.files.iter().find(|f| f.which == SK_PATCH).map_or(Vec::new(), |f| f.data.to_vec());
@@ -424,6 +449,17 @@ mod tests {
             assert_eq!(s.controllers.iter().map(|c| c.buttons.len()).collect::<Vec<_>>(), [8, 12]);
             assert!(s.firmware.iter().all(|f| !f.required));
         }
+    }
+
+    /// The model setting chooses the sound chip and the output circuit at create: model 1 unless model 2 is asked for.
+    #[test]
+    fn the_model_setting_chooses_the_sound_chip_and_circuit() {
+        let image = cartridge("SEGA GENESIS", "U", None);
+        let made = |settings: Vec<(String, String)>| Machine::create(&Create { image: &image, settings: Settings::from_pairs(settings), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
+        let sound = |m: &Machine| (m.genesis.hw.sound.ym.discrete, m.genesis.hw.sound.circuit);
+        assert_eq!(sound(&made(vec![])), (true, crate::sound::Circuit::MODEL1));
+        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model1".into())])), (true, crate::sound::Circuit::MODEL1));
+        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model2".into())])), (false, crate::sound::Circuit::MODEL2));
     }
 
     #[test]

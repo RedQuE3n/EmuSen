@@ -56,7 +56,7 @@ pub struct Machine {
 pub fn default_model(media: &Media) -> Model {
     let m = media.header.as_ref().map(|h| h.markets).unwrap_or_default();
     let overseas = m.americas || m.europe || !m.japan;
-    Model { overseas, pal: media.pal(), version: 0 }
+    Model { overseas, pal: media.pal(), version: 0, model2: false }
 }
 
 impl Machine {

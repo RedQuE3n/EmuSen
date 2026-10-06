@@ -99,7 +99,7 @@ pub struct Ym2612 {
     /// sample of the cycle its assertion started.
     pub held: bool,
     pub held_at: u64,
-    /// The left and right output last made, and each channel's nine-bit output.
+    /// The left and right pins' sums over the sample last made (`turn`), and each channel's nine-bit output.
     pub out: [i32; 2],
     pub channels: [i32; 6],
     pub fm: Fm,
@@ -320,7 +320,7 @@ impl Ym2612 {
     /// One sample: the timers count, then each channel's nine-bit output goes to the sides its `$B4` register names.
     fn sample(&mut self) {
         if self.held {
-            (self.channels, self.out) = ([0; 6], [0; 2]);
+            (self.channels, self.out) = ([0; 6], [self.rest(); 2]);
             if let Some(t) = &mut self.trace {
                 t.push(self.channels);
             }
@@ -343,18 +343,36 @@ impl Ym2612 {
             let (part, i) = (ch / 3, ch % 3);
             let value = self.channels[ch];
             let pan = self.regs[part][0xB4 + i];
-            if pan & 0x80 != 0 {
-                out[0] += value;
-            }
-            if pan & 0x40 != 0 {
-                out[1] += value;
+            for (side, bit) in [0x80, 0x40].into_iter().enumerate() {
+                out[side] += Self::turn(self.discrete, value, pan & bit != 0);
             }
         }
         self.out = out;
     }
 
+    /// A channel's turn at an output pin, summed over its four slots in DAC steps (Nephrite_Disputes.md D-27). The
+    /// YM3438's DAC is linear: the level in one slot, nothing in the others, nothing at all on a side the channel is
+    /// panned off. The discrete YM2612's has its two halves a step apart, so that a level of 0 or more stands a step
+    /// higher, and rests a step to the sign's side of the middle in the turn's other three slots, and in all four on a
+    /// side the channel is panned off: the ladder effect.
+    pub fn turn(discrete: bool, level: i32, on: bool) -> i32 {
+        match (discrete, on, level >= 0) {
+            (false, true, _) => level,
+            (false, false, _) => 0,
+            (true, true, true) => level + 1 + 3,
+            (true, true, false) => level - 3,
+            (true, false, true) => 4,
+            (true, false, false) => -4,
+        }
+    }
+
+    /// What the pins sum to with every channel at rest: the discrete chip's six turns at a step above the middle.
+    pub fn rest(&self) -> i32 {
+        if self.discrete { 6 * 4 } else { 0 }
+    }
+
     /// Every sample no write can still reach by `t`, `TAKE_LAG` past its deadline, each output handed to `level` with
-    /// the master clock it is made at; the timers tick at their own moment ahead of it.
+    /// the master clock it is made at, where its pulse ends; the timers tick at their own moment ahead of it.
     pub fn run(&mut self, t: u64, level: impl FnMut(u64, [i32; 2])) {
         self.make(t, false, level);
     }
@@ -568,21 +586,37 @@ mod tests {
         }
     }
 
+    /// The discrete chip's DAC about the middle: from a level of -1 to 0 its turn rises eight steps where the YM3438's
+    /// rises one, and from the DAC register's `$7F` to `$80`, two levels apart, nine, which is 4.5 of that register's
+    /// steps: Kabuto's diagram of a model 1 shows 4.0 and 4.5 there (Nephrite_Disputes.md D-27).
+    #[test]
+    fn the_discrete_dacs_halves_stand_apart_at_the_middle() {
+        let step = |discrete: bool, from: i32, to: i32| Ym2612::turn(discrete, to, true) - Ym2612::turn(discrete, from, true);
+        assert_eq!((step(false, -1, 0), step(true, -1, 0), step(true, -2, 0), step(true, -1, 1)), (1, 8, 9, 9));
+        assert_eq!((step(true, 0, 1), step(true, -2, -1), step(true, 100, 102)), (1, 1, 2), "a step is a step either side");
+        assert_eq!((Ym2612::turn(true, 5, false), Ym2612::turn(true, -5, false), Ym2612::turn(false, -5, false)), (4, -4, 0), "a side the channel is panned off");
+    }
+
+    /// The DAC in channel 6's place on the sides its panning names. The YM3438 gives its level and nothing on a side
+    /// it is panned off; the discrete YM2612's ladder puts every channel at rest four steps up, a level of 0 or more
+    /// four steps higher, a negative one three lower, and a negative channel panned off a side four below the middle.
     #[test]
     fn the_dac_takes_channel_sixs_place_on_the_sides_its_panning_names() {
-        let mut y = Ym2612::new(true);
-        // Each sample is made `TAKE_LAG` after its deadline; the writes after one is made are taken by the next.
-        set(&mut y, 0, 0x2A, 0xFF, 0);
-        y.run(SAMPLE + TAKE_LAG + 1, |_, _| {});
-        assert_eq!(y.out, [0, 0], "off until $2B enables it");
-        set(&mut y, 0, 0x2B, 0x80, SAMPLE + TAKE_LAG + 1);
-        set(&mut y, 0, 0x2C, 0x08, SAMPLE + TAKE_LAG + 1);
-        y.run(2 * SAMPLE + TAKE_LAG + 1, |_, _| {});
-        assert_eq!(y.out, [255, 255], "the ninth bit below $2A's eight");
-        set(&mut y, 1, 0xB6, 0x80, 2 * SAMPLE + TAKE_LAG + 1);
-        set(&mut y, 0, 0x2A, 0x00, 2 * SAMPLE + TAKE_LAG + 1);
-        set(&mut y, 0, 0x2C, 0x00, 2 * SAMPLE + TAKE_LAG + 1);
-        y.run(3 * SAMPLE + TAKE_LAG + 1, |_, _| {});
-        assert_eq!(y.out, [-256, 0]);
+        for (discrete, rest, on, low) in [(false, [0, 0], [255, 255], [-256, 0]), (true, [24, 24], [20 + 259, 20 + 259], [20 - 259, 20 - 4])] {
+            let mut y = Ym2612::new(discrete);
+            // Each sample is made `TAKE_LAG` after its deadline; the writes after one is made are taken by the next.
+            set(&mut y, 0, 0x2A, 0xFF, 0);
+            y.run(SAMPLE + TAKE_LAG + 1, |_, _| {});
+            assert_eq!(y.out, rest, "off until $2B enables it");
+            set(&mut y, 0, 0x2B, 0x80, SAMPLE + TAKE_LAG + 1);
+            set(&mut y, 0, 0x2C, 0x08, SAMPLE + TAKE_LAG + 1);
+            y.run(2 * SAMPLE + TAKE_LAG + 1, |_, _| {});
+            assert_eq!(y.out, on, "the ninth bit below $2A's eight");
+            set(&mut y, 1, 0xB6, 0x80, 2 * SAMPLE + TAKE_LAG + 1);
+            set(&mut y, 0, 0x2A, 0x00, 2 * SAMPLE + TAKE_LAG + 1);
+            set(&mut y, 0, 0x2C, 0x00, 2 * SAMPLE + TAKE_LAG + 1);
+            y.run(3 * SAMPLE + TAKE_LAG + 1, |_, _| {});
+            assert_eq!(y.out, low);
+        }
     }
 }

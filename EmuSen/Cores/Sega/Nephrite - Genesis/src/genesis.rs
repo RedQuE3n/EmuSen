@@ -70,12 +70,15 @@ enum Event {
     Vint,
 }
 
-/// The model: its version register's low nibble, and whether it has TMSS (from version 1).
+/// The model: its version register's low nibble, and whether it has TMSS (from version 1); and whether it is a model
+/// 2, whose sound is the YM3438 in the ASIC and its own output circuit, where a model 1 has the discrete YM2612 and
+/// its filter (Nephrite_Disputes.md D-27).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Model {
     pub overseas: bool,
     pub pal: bool,
     pub version: u8,
+    pub model2: bool,
 }
 
 impl Model {
@@ -167,7 +170,7 @@ impl Genesis {
             ram_refresh_at: RAM_REFRESH_FIRST,
             prefetch: 0,
             draw: true,
-            sound: if model.pal { Sound::new(53_203_425, 1, true) } else { Sound::new(4_725_000_000, 88, true) },
+            sound: if model.pal { Sound::new(53_203_425, 1, !model.model2) } else { Sound::new(4_725_000_000, 88, !model.model2) },
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
         // The VDP is part-way through its frame: the line the 68000 starts on, begun at 0, as a line's start makes it.
@@ -1013,7 +1016,7 @@ mod tests {
     fn a_device_on_th_raises_level_2_and_latches_the_hv_counter() {
         let mut rom = vec![0u8; 0x400];
         rom[0..8].copy_from_slice(&[0, 0xFF, 0, 0, 0, 0, 2, 0]);
-        let mut g = Genesis::new(Cart::new(rom, None, "SEGA GENESIS", ""), Model { overseas: true, pal: false, version: 0 });
+        let mut g = Genesis::new(Cart::new(rom, None, "SEGA GENESIS", ""), Model { overseas: true, pal: false, version: 0, model2: false });
         let hw = &mut g.hw;
         hw.vdp.regs[0] = 2;
         hw.vdp.regs[11] = 8;

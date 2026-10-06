@@ -1183,10 +1183,11 @@ read time and the status-register ROMs.
 
 ### 18.2 Argued
 
-- **The mix's levels**: from the references (§18.3), the four of which put the PSG's square at 0.214 to 0.282 of the
-  DAC's swing; Nephrite's 0.251 is their median. No recording of a model 1 is in the corpus.
-- **The analogue path**: none yet. The PSG's output is unipolar, as the chip's is, and no filter or coupling
-  capacitor removes its offset; the model 1 filter is a later step of the stage.
+- ~~**The mix's levels**: from the references (§18.3), the four of which put the PSG's square at 0.214 to 0.282 of the
+  DAC's swing; Nephrite's 0.251 is their median. No recording of a model 1 is in the corpus.~~ Measured on seven
+  model 1 consoles' recordings at §28: 0.324.
+- ~~**The analogue path**: none yet. The PSG's output is unipolar, as the chip's is, and no filter or coupling
+  capacitor removes its offset; the model 1 filter is a later step of the stage.~~ Built at §28.
 - **Timer B's divider** runs free, so that its first count after a load falls anywhere in sixteen samples; a timer's
   count falls on the sample's boundary, and a register write takes effect at the next sample.
 - **Writes while busy are taken.** Sauraen reads the busy flag as a timer that blocks nothing; TmEE's report that DAC
@@ -2130,3 +2131,75 @@ Nephrite's frame-by-frame agreement, which §27.4 leaves open.
 
 No RTL file was opened; the board's nets read were those `TB_MEM`, `TB_PICTURE` and `TB_ZBUS` already name. The
 68000's manual for DTACK and the cycle's states. No emulator's source was read.
+
+
+## 28. Stage 5, the output stage (2026-10-06)
+
+### 28.1 What it built
+
+- **The DAC** (`ym2612.rs`, D-27): a channel's turn at each output pin. The YM3438's is linear. The discrete
+  YM2612's has the ladder effect: a level of 0 or more a step higher, and a rest a step to the sign's side of the
+  middle in the three slots of its turn that do not carry it, and in all four on a side it is panned off.
+- **The pins' pulses** (`sound.rs`): the pins carry each channel for a part of its sixth of the sample, so the band has
+  each sample at full strength. The step synthesiser still holds each sample, and seven taps on the FM stream at the
+  output rate undo the hold's droop (2.1 dB at 20 kHz) to 0.08 dB; the PSG waits three output samples beside it.
+- **The output circuits** (`Circuit`): the mix goes through the model's, a digital filter at 48 kHz fitted to the
+  analogue magnitude up to 20 kHz. Model 1: a first-order low-pass at 3,216 Hz and a high-pass at 23 Hz. Model 2: a
+  second-order low-pass at 5,805 Hz with a Q of 1.16, a first-order one at 4,111 Hz and a high-pass at 16 Hz.
+- **The PSG's level**: a channel at full volume is 0.324 of the DAC's swing (it was 0.251).
+- **The Model setting** (`v1.rs`, key `model`, read at create): `md.model1`, the default, is the discrete YM2612 and
+  model 1's circuit; `md.model2` the YM3438 and model 2's. TMSS, which the plan gives the model 2, joins the setting
+  with its boot program.
+- **The state**, version 16: the circuit and each side's place in it, and the two streams' waiting samples.
+- **The bench**: `mdrecordings.py`, which cuts a recording of the 240p suite's MDFourier sequence by its sync trains
+  and measures it against Nephrite's run; `examples/wav` takes pad presses, the model and `NEPHRITE_CIRCUIT=flat`.
+
+### 28.2 Measured (2026-10-06)
+
+Against MDFourier's recordings of consoles, each cut by its own sync trains (3,500 frames between them on all 21 and in
+Nephrite), with a gain alone between the recording and Nephrite's finished output:
+
+| Console, by its recording's name | Left side's FM partials, 40 Hz to 16 kHz | Right side's | PSG against FM |
+|---|---|---|---|
+| Model 1, VA3 (two consoles) | 0.21 and 0.23 dB rms, all within 1 dB | 1.54 dB, 90% within 1 dB | +0.03, -0.07 dB |
+| Model 1, VA6 (four) | 0.21 to 0.24 dB, all within 1 dB | 1.52 to 1.54 dB, 89 to 91% | -0.57 to +0.27 dB |
+| Model 1, VA6.5 | 0.22 dB, all within 1 dB | 1.51 dB, 92% | -0.20 dB |
+| Model 1, VA1 and VA2 (not offered) | 0.43 and 0.53 dB | 1.52 dB | +0.78, +0.07 dB |
+| Model 2, VA0, VA1, VA1.8 (two) | 1.69 to 1.83 dB, 88 to 90% within 1 dB | 1.62 to 1.68 dB, 79 to 82% | -0.69 to -2.03 dB |
+
+- **The ladder**: the partials Nephrite has only with it are in five model 1 recordings at -0.5 to +0.5 dB of the
+  model's level on the left side, and absent from the YM3438 boards' (D-27).
+- **The crate's tests**: 101 pass. **The conformance kit**, `--frames 600`: C1-C15 on §24's 17 images.
+  **WiseMan**'s Nephrite, runner, discovery and registration tests pass (31).
+- **The corpus at anchors**: no game moves from §27's in pictures or RAM; the step changes only what is heard.
+- **The frame cost**, as §24.2: Sonic the Hedgehog 1.258 ms, its sequel 1.150, Thunder Force IV 1.257, Streets of
+  Rage 2 1.052, Phantasy Star IV 1.333; within P1.
+
+### 28.3 What the two models speak for
+
+Model 1 is the boards VA3 to VA6.5, seven consoles whose left sides fit one first-order low-pass between 3,165 and
+3,320 Hz. VA1 and VA2 are 500 to 600 Hz higher and VA7 is another circuit; none of the three is offered. Model 2 is
+the boards whose YM3438 is inside the main chip, VA0 to VA1.8: their amplifier distorts, no filter fits them to
+better than 2.4 dB, and the circuit built is the nearest one. The model 2 board VA2.3 carries a discrete YM2612,
+ladder and all, behind a clean second-order filter; it and VA3, VA4, the Nomad and the model 3s are measured in D-27
+and not offered.
+
+### 28.4 The sources
+
+SpritesMind topic 386 and Kabuto's hardware notes, as prose, their sections named in D-27; the YM3438's data sheet;
+MDFourier's recordings of 21 consoles. The ladder's constants are as Eke's post in the topic gives them from Nuked's
+reading of the die, held here to Kabuto's measured DAC levels and to the recordings; the circuits' corners and the
+PSG's level are fitted to the recordings and come from nowhere else. The bench's `MOL_2612`, a model of the discrete
+DAC and not the die, referees none of it. The four references' audio was not used. No RTL file was opened; no
+emulator's source was read.
+
+### 28.5 Open, and next
+
+- **D-27's open items**: the right side's weaker agreement; the model 1 DAC's levels that stand high; model 2's
+  distortion and its PSG's level; the boards not offered.
+- **The test register's read side**, the six test-register voices and the `lfo` sweep (§26.3).
+- **Carried forward from D-26**, not chased here: the sweeps' frame alternation, the FIFO at the frame's last line,
+  the H counter in horizontal sync and on lines 229 to 234, mode 4's HV read.
+- **D-2**'s long RAM waits and **D-15**.
+- **Next**: the stage's closing oracle, Nemesis's FM tests against his recording, MDFourier's own comparison and the
+  references' audio envelopes.

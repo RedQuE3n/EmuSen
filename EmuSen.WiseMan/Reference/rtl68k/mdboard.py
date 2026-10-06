@@ -771,26 +771,41 @@ def op_alone(test21, test2c=0x10, reads=12000):
     loop += w(0x51C8, (-(len(loop) + 2)) & 0xFFFF)
     return program([0x8004, 0x8104, 0x8F02], [], code + loop + w(0x60FE))
 
-def fm_voice(ops, alg=7, fb=0, fnum=1024, block=1, channel=0, keys=0xF0, extra=(), lfo=0, b4=0xC0, pre=()):
+def status_loop(writes, reads=1536, nops=0):
+    """The YM2612 given `writes` (register, value), the last of them `nops` NOPs after its wait for the busy flag,
+    then its status read `reads` times into RAM from $FF0000, a read every 23 clocks, which drift across the sample:
+    what the timers' flags and the busy flag read, and when (Nephrite_Native.md section 24)."""
+    last = ym_writes(writes[-1:])
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000, 0x47F9, 0x00FF, 0x0000) + ym_writes(writes[:-1]) + last[:4] + w(*[0x4E71] * nops) + last[4:]
+    code += w(0x303C, reads - 1, 0x16D2, 0x51C8, 0xFFFC)                             # move.b (a2),(a3)+; dbra d0
+    return program([0x8004, 0x8104, 0x8F02], [], code + w(0x60FE))
+
+def fm_voice(ops, alg=7, fb=0, fnum=1024, block=1, channel=0, keys=0xF0, extra=(), lfo=0, b4=0xC0, pre=(), ssg=(0, 0, 0, 0), mode=0, pre_nops=0, key_nops=0):
     """One FM channel's voice written through $A04000, keyed on, then the 68000 idles: `ops` gives S1-S4 as
     (dt_mul, tl, ks_ar, am_dr, sr, sl_rr); the channel's algorithm, feedback, frequency, the LFO's register `$22` and
-    the channel's `$B4` (panning, AMS, PMS), any `pre` writes (part 0) before the key-on, and any `extra` writes after
-    the key-on, each (register, value) or
-    (register, value, thousands of dbra rounds of 10 clocks to wait first) (Nephrite_Native.md §19, §23)."""
+    the channel's `$B4` (panning, AMS, PMS), S1-S4's SSG-EG registers `ssg`, `$27` as `mode`, any `pre` writes (part 0)
+    before the key-on, and any `extra` writes after the key-on, each (register, value), (register, value, thousands
+    of dbra rounds of 10 clocks to wait first) or the same with a count of NOPs before the write
+    (Nephrite_Native.md §19, §23, §24)."""
     part, i = channel // 3, channel % 3
-    pairs = [(0x22, lfo), (0x27, 0), (0x28, 0), (0x2B, 0)]
+    pairs = [(0x22, lfo), (0x27, mode), (0x28, 0), (0x2B, 0)]
     regs = [(0xB0 + i, fb << 3 | alg), (0xB4 + i, b4)]
-    for slot, op in zip((0x00, 0x08, 0x04, 0x0C), ops):
+    for slot, op, eg in zip((0x00, 0x08, 0x04, 0x0C), ops, ssg):
         for base, v in zip((0x30, 0x40, 0x50, 0x60, 0x70, 0x80), op):
             regs.append((base + slot + i, v))
-        regs.append((0x90 + slot + i, 0))
+        regs.append((0x90 + slot + i, eg))
     regs += [(0xA4 + i, block << 3 | fnum >> 8), (0xA0 + i, fnum & 0xFF)]
-    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000) + ym_writes(pairs) + ym_writes(regs, part) + ym_writes(list(pre))
-    code += ym_writes([(0x28, keys | (part << 2 | i))])
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000) + ym_writes(pairs) + ym_writes(regs, part) + ym_writes(list(pre)[:-1])
+    # `pre_nops` NOPs before the last of the `pre` writes and `key_nops` before the key-on, each after the write's wait
+    # for the busy flag, move it across the sample.
+    late = lambda pairs, nops: b"".join(ym_writes([pr])[:4] + w(*[0x4E71] * nops) + ym_writes([pr])[4:] for pr in pairs)
+    code += late(list(pre)[-1:], pre_nops) + late([(0x28, keys | (part << 2 | i))], key_nops)
     for e in extra:
-        if len(e) == 3:
+        if len(e) >= 3:
             code += w(0x303C, e[2] * 1000) + w(0x51C8, 0xFFFE)     # about e[2] * 1,000 rounds of 10 clocks
-        code += ym_writes([e[:2]], part if e[0] >= 0x30 else 0)
+        # A fourth entry is NOPs after the write's wait for the busy flag, which move it across the sample.
+        one = ym_writes([e[:2]], part if e[0] >= 0x30 else 0)
+        code += one[:4] + w(*[0x4E71] * (e[3] if len(e) > 3 else 0)) + one[4:]
     return program([0x8004, 0x8104, 0x8F02], [], code + w(0x60FE))
 
 def z80_writer(writes, wait=40, then=None):
@@ -1466,7 +1481,237 @@ SOUNDS["fm-pm-ch3-swap"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), channel
 SOUNDS["fm-pm-ch3"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), channel=2, lfo=8 | 6, b4=0xC7, fnum=1081, block=4,
                                        pre=[(0xAD, 4 << 3 | 1500 >> 8), (0xA9, 1500 & 0xFF), (0x27, 0x40)])
 
+# SSG-EG (Nephrite_Native.md section 24): S4 alone with `$9C` set, an instant attack and a decay of rate 42 to the
+# bottom unless told otherwise.
+def ssg_s4(eg, ar=0x1F, dr=20, sr=0, sl_rr=0xF8, tl=0, **kw):
+    return fm_voice((QUIET, QUIET, QUIET, (0x01, tl, ar, dr, sr, sl_rr)), ssg=(0, 0, 0, eg), **dict(A4, **kw))
+for _m in range(8, 16):
+    SOUNDS[f"fm-ssg{_m:x}"] = lambda m=_m: ssg_s4(m)
+    # Released in its second pass or its hold, and keyed again 208 samples into the release.
+    SOUNDS[f"fm-ssg-rel{_m:x}"] = lambda m=_m: ssg_s4(m, sl_rr=0xFA, extra=[(0x28, 0x00, 20)])
+    SOUNDS[f"fm-ssg-rekey{_m:x}"] = lambda m=_m: ssg_s4(m, sl_rr=0xFA, extra=[(0x28, 0x00, 20), (0x28, 0xF0, 3)])
+    # With an attack of rate 38 in every pass.
+    SOUNDS[f"fm-ssg-ar{_m:x}"] = lambda m=_m: ssg_s4(m, ar=0x12)
+for _m in (8, 10, 13, 14):
+    # A decay to SL 4 and a slower sustain rate from there; and the fastest decay.
+    SOUNDS[f"fm-ssg-sl{_m:x}"] = lambda m=_m: ssg_s4(m, dr=24, sr=14, sl_rr=0x48)
+    SOUNDS[f"fm-ssg-fast{_m:x}"] = lambda m=_m: ssg_s4(m, dr=31)
+SOUNDS["fm-ssg-tl"] = lambda: ssg_s4(14, tl=0x18)
+SOUNDS["fm-ssg-am"] = lambda: ssg_s4(14, dr=0x80 | 20, lfo=8 | 7, b4=0xC0 | 3 << 4)
+# `$9C` written while the envelope runs: SSG-EG turned on in a plain decay, its attack bit set in a pass, and it
+# turned off in an inverted pass.
+SOUNDS["fm-ssg-on"] = lambda: ssg_s4(0, dr=13, extra=[(0x9C, 0x08, 20)])
+SOUNDS["fm-ssg-flip"] = lambda: ssg_s4(8, extra=[(0x9C, 0x0C, 20)])
+SOUNDS["fm-ssg-off"] = lambda: ssg_s4(12, extra=[(0x9C, 0x00, 20)])
+# `$9C` written in a hold or towards one: the hold left by turning SSG-EG off or by setting its attack bit, and the
+# hold bit set in an inverted pass or cleared in a hold.
+SOUNDS["fm-ssg-hold-off"] = lambda: ssg_s4(9, extra=[(0x9C, 0x00, 20)])
+SOUNDS["fm-ssg-hold-att"] = lambda: ssg_s4(9, extra=[(0x9C, 0x0D, 20)])
+SOUNDS["fm-ssg-a-to-b"] = lambda: ssg_s4(10, extra=[(0x9C, 0x0B, 20)])
+SOUNDS["fm-ssg-b-to-a"] = lambda: ssg_s4(11, extra=[(0x9C, 0x0A, 21)])
+# A key-off in an attack of rate 38, 208 or 347 samples in.
+for _m in (12, 14):
+    for _w in (3, 5):
+        SOUNDS[f"fm-ssg-ar-rel{_m:x}-{_w}"] = lambda m=_m, w=_w: ssg_s4(m, ar=0x12, sl_rr=0xFA, extra=[(0x28, 0x00, w)])
+# On a modulator: S3 into S4 (algorithm 4), its passes restarting its phase or turning about.
+SOUNDS["fm-ssg-mod8"] = lambda: fm_voice((QUIET, QUIET, (0x01, 0x10, 0x1F, 20, 0, 0xF8), SINE), alg=4, ssg=(0, 0, 8, 0), **A4)
+SOUNDS["fm-ssg-mode"] = lambda: fm_voice((QUIET, QUIET, (0x01, 0x10, 0x1F, 20, 0, 0xF8), SINE), alg=4, ssg=(0, 0, 14, 0), **A4)
+# Each operator's place: one alone on channel 1 or 6 with pattern 8 or 14.
+for _c, _k, _m in ((0, 0, 8), (0, 0, 14), (0, 1, 8), (0, 2, 8), (5, 0, 8), (5, 3, 8), (5, 3, 14)):
+    SOUNDS[f"fm-ssg-c{_c + 1}s{_k + 1}-{_m:x}"] = lambda c=_c, k=_k, m=_m: fm_voice(
+        _alone(None, k, (0x01, 0x00, 0x1F, 20, 0, 0xF8)), channel=c, ssg=tuple(m if j == k else 0 for j in range(4)), **A4)
+
+# The envelope by operator: one alone with an attack of rate 38, a decay of 42 to SL 4, a sustain rate of 18 and a
+# key-off 2,986 samples in, on the operators and channels whose place in the sample differs.
+for _c, _k in ((0, 0), (2, 0), (4, 0), (5, 0), (5, 1), (5, 2), (5, 3), (1, 1), (3, 2)):
+    SOUNDS[f"fm-eg-c{_c + 1}s{_k + 1}"] = lambda c=_c, k=_k: fm_voice(_alone(None, k, (0x01, 0x00, 0x12, 20, 8, 0x4A)), channel=c,
+                                                                     extra=[(0x28, 0x00 | (c // 3) << 2 | c % 3, 43)], **A4)
+
+# CSM (Nephrite_Native.md section 24): channel 3's operators keyed by timer A's overflow every `period` samples, `$27`
+# written as `mode` once the timer's value is, and no key-on written unless `keys` gives one.
+PLUCK = (0x01, 0x00, 0x1F, 0x00, 0x00, 0x0A)
+FALL = (0x01, 0x00, 0x1F, 20, 0x00, 0xFA)
+def csm(ops, period=100, mode=0x81, alg=7, keys=0x00, pre=(), **kw):
+    value = 1024 - period
+    return fm_voice(ops, alg=alg, channel=2, keys=keys, pre=list(pre) + [(0x24, value >> 2), (0x25, value & 3), (0x27, mode)], **dict(A4, **kw))
+SOUNDS["fm-csm"] = lambda: csm((QUIET, QUIET, QUIET, PLUCK))
+SOUNDS["fm-csm-all"] = lambda: csm(((0x01, 0x10, 0x1F, 0, 0, 0x0A), (0x02, 0x14, 0x1F, 0, 0, 0x0A), (0x03, 0x18, 0x1F, 0, 0, 0x0A), (0x05, 0x1C, 0x1F, 0, 0, 0x0A)))
+# Each operator alone under CSM, S1-S3 at their own frequency of 1,500 and S4 at the channel's; twelve NOPs put the
+# timer's load where `fm-csm` has it in the sample, and eighteen the key-on of the hand-over voices clear of channel
+# 3's own deadline (Nephrite_Disputes.md D-15).
+OWN_1500 = [(a + 4, 4 << 3 | 1500 >> 8) for a in (0xA9, 0xAA, 0xA8)] + [(a, 1500 & 0xFF) for a in (0xA9, 0xAA, 0xA8)]
+for _k in range(4):
+    SOUNDS[f"fm-csm-o{_k + 1}"] = lambda k=_k: csm(_alone(None, k, PLUCK), pre=OWN_1500, pre_nops=12)
+for _p in (1, 2, 3):
+    SOUNDS[f"fm-csm-p{_p}"] = lambda p=_p: csm((QUIET, QUIET, QUIET, FALL), period=p)
+SOUNDS["fm-csm-ar"] = lambda: csm((QUIET, QUIET, QUIET, (0x01, 0x00, 0x14, 0x00, 0x00, 0x0A)))
+SOUNDS["fm-csm-ar-p1"] = lambda: csm((QUIET, QUIET, QUIET, (0x01, 0x00, 0x14, 0x00, 0x00, 0x0A)), period=1)
+SOUNDS["fm-csm-11"] = lambda: csm((QUIET, QUIET, QUIET, PLUCK), mode=0xC1)
+SOUNDS["fm-csm-noload"] = lambda: csm((QUIET, QUIET, QUIET, PLUCK), mode=0x80)
+SOUNDS["fm-csm-flags"] = lambda: csm((QUIET, QUIET, QUIET, PLUCK), mode=0x8F)
+SOUNDS["fm-csm-key"] = lambda: csm((QUIET, QUIET, QUIET, FALL), keys=0xF0, key_nops=18, extra=[(0x28, 0x02, 20)])
+SOUNDS["fm-csm-key-plain"] = lambda: csm((QUIET, QUIET, QUIET, FALL), mode=0x01, keys=0xF0, key_nops=18)
+SOUNDS["fm-csm-off"] = lambda: csm((QUIET, QUIET, QUIET, PLUCK), extra=[(0x27, 0x01, 20), (0x27, 0x81, 5)])
+# The test register `$21`, a bit at a time, and `$2C`'s.
+SOUNDS["fm-test-lfo-am"] = lambda: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=8 | 7, b4=0xC0 | 3 << 4, pre=[(0x21, 0x02)], **A4)
+SOUNDS["fm-test-lfo-pm"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), lfo=8 | 6, b4=0xC7, pre=[(0x21, 0x02)], **A4)
+SOUNDS["fm-test-lfo-late"] = lambda: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=8 | 7, b4=0xC0 | 3 << 4, extra=[(0x21, 0x02, 20), (0x21, 0x00, 5)], **A4)
+SOUNDS["fm-test-pg"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x21, 0x08, 20), (0x21, 0x00, 5)], **A4)
+SOUNDS["fm-test-eg"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0x1F, 13, 0x00, 0xFA)), extra=[(0x21, 0x20, 20), (0x21, 0x00, 5)], **A4)
+SOUNDS["fm-test-ugly"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x21, 0x10, 20), (0x21, 0x00, 5)], **A4)
+SOUNDS["fm-test-ugly-chain"] = lambda: fm_voice(((0x01, 0x30, 0x1F, 0, 0, 0x0F), (0x02, 0x28, 0x1F, 0, 0, 0x0F), (0x01, 0x20, 0x1F, 0, 0, 0x0F), SINE), alg=0,
+                                                extra=[(0x21, 0x10, 20), (0x21, 0x00, 5)], **A4)
+SOUNDS["fm-test-timer"] = lambda: csm((QUIET, QUIET, QUIET, PLUCK), pre=[(0x21, 0x04)])
+for _p in (7, 24, 48, 50, 96, 97, 120, 200):
+    SOUNDS[f"fm-test-timer-{_p}"] = lambda p=_p: csm((QUIET, QUIET, QUIET, PLUCK), period=p, pre=[(0x21, 0x04)])
+# Each bit set before the key-on, where the sample its write lands in is of no account.
+SOUNDS["fm-test-pg0"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x21, 0x08)], extra=[(0x21, 0x00, 20)], **A4)
+SOUNDS["fm-test-eg0"] = lambda: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0x1F, 20, 0x00, 0xFA)), pre=[(0x21, 0x20)], **A4)
+SOUNDS["fm-test-ugly0"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x21, 0x10)], **A4)
+for _k in range(3):
+    SOUNDS[f"fm-test-ugly0-s{_k + 1}"] = lambda k=_k: fm_voice(_alone(None, k), pre=[(0x21, 0x10)], **A4)
+SOUNDS["fm-test-ugly0-chain"] = lambda: fm_voice(((0x01, 0x30, 0x1F, 0, 0, 0x0F), (0x02, 0x28, 0x1F, 0, 0, 0x0F), (0x01, 0x20, 0x1F, 0, 0, 0x0F), SINE), alg=0,
+                                                 pre=[(0x21, 0x10)], **A4)
+SOUNDS["fm-test-ugly0-fb"] = lambda: fm_voice((SINE, QUIET, QUIET, QUIET), fb=5, pre=[(0x21, 0x10)], **A4)
+SOUNDS["fm-test-dac0"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x2A, 0xA0), (0x2B, 0x80), (0x2C, 0x20)], **A4)
+SOUNDS["fm-test-dac0-off"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x2A, 0xA0), (0x2C, 0x20)], **A4)
+# Carriers that together pass the nine bits: how a channel's sum is held to them.
+LOUD = lambda mul: (mul, 0x00, 0x1F, 0, 0, 0x0F)
+SOUNDS["fm-clip7"] = lambda: fm_voice((LOUD(1), LOUD(2), LOUD(3), LOUD(5)), alg=7, **A4)
+SOUNDS["fm-clip5"] = lambda: fm_voice(((0x01, 0x18, 0x1F, 0, 0, 0x0F), LOUD(2), LOUD(3), LOUD(5)), alg=5, **A4)
+SOUNDS["fm-clip4"] = lambda: fm_voice(((0x01, 0x18, 0x1F, 0, 0, 0x0F), LOUD(1), (0x03, 0x18, 0x1F, 0, 0, 0x0F), LOUD(3)), alg=4, **A4)
+SOUNDS["fm-test-read"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x21, 0x01, 20), (0x21, 0x40, 5), (0x21, 0x80, 5), (0x21, 0xC1, 5), (0x21, 0x00, 5)], **A4)
+SOUNDS["fm-test-2c"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x2C, 0x10, 20), (0x2C, 0x20, 5), (0x2C, 0x40, 5), (0x2C, 0x80, 5), (0x2C, 0x00, 5)], **A4)
+SOUNDS["fm-test-2c-dac"] = lambda: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x2A, 0xA0), (0x2B, 0x80)], extra=[(0x2C, 0x20, 20), (0x2C, 0x00, 5)], **A4)
+
+# When a write takes effect (Nephrite_Disputes.md D-15): one write of each kind moved across the sample by `k` NOPs,
+# 28 master clocks each, after its wait for the busy flag. Each is S4 of channel 1 unless its line says otherwise.
+DECAY = (0x01, 0x00, 0x1F, 20, 0x00, 0xFA)
+LANDING = {
+    "lfo": lambda k: fm_voice((QUIET, QUIET, QUIET, AM_S4), b4=0xF0, pre=[(0x22, 0x0F)], pre_nops=k, **A4),
+    "lfo-off": lambda k: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=0x0F, b4=0xF0, extra=[(0x22, 0x00, 2, k)], **A4),
+    "ams": lambda k: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=0x0F, b4=0xF0, extra=[(0xB4, 0xC0, 2, k)], **A4),
+    "amon": lambda k: fm_voice((QUIET, QUIET, QUIET, AM_S4), lfo=0x0F, b4=0xF0, extra=[(0x6C, 0x00, 2, k)], **A4),
+    "pms": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), lfo=0x0E, b4=0xC0, extra=[(0xB4, 0xC7, 2, k)], **A4),
+    "pg": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x21, 0x08, 2, k)], **A4),
+    "eg": lambda k: fm_voice((QUIET, QUIET, QUIET, DECAY), extra=[(0x21, 0x20, 2, k)], **A4),
+    "ugly": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), alg=0, extra=[(0x21, 0x10, 2, k)], **A4),
+    "tl": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x4C, 0x20, 2, k)], **A4),
+    "ssg": lambda k: ssg_s4(8, extra=[(0x9C, 0x0C, 2, k)]),
+    "fnum": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0xA4, 4 << 3 | 1500 >> 8, 2), (0xA0, 1500 & 0xFF, 0, k)], **A4),
+    "mul": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0x3C, 0x03, 2, k)], **A4),
+    "fb": lambda k: fm_voice((SINE, QUIET, QUIET, QUIET), extra=[(0xB0, 0x3F, 2, k)], **A4),
+    "alg": lambda k: fm_voice((QUIET, QUIET, (0x02, 0x10, 0x1F, 0, 0, 0x0F), SINE), alg=7, extra=[(0xB0, 0x04, 2, k)], **A4),
+    "pan": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), extra=[(0xB4, 0x40, 2, k)], **A4),
+    "dr": lambda k: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0x1F, 0, 0x00, 0xFA)), extra=[(0x6C, 31, 2, k)], **A4),
+    "key-off": lambda k: fm_voice((QUIET, QUIET, QUIET, (0x01, 0x00, 0x1F, 0, 0, 0x0F)), extra=[(0x28, 0x00, 2, k)], **A4),
+    "dac": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x2A, 0x80), (0x2B, 0x80)], extra=[(0x2A, 0xC0, 2, k)], **A4),
+    "dac-on": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x2A, 0xC0)], extra=[(0x2B, 0x80, 2, k)], **A4),
+    "dac-all": lambda k: fm_voice((QUIET, QUIET, QUIET, SINE), pre=[(0x2A, 0xA0)], extra=[(0x2C, 0x20, 2, k)], **A4),
+    "special": lambda k: fm_voice((SINE, QUIET, QUIET, QUIET), channel=2, pre=OWN_1500, extra=[(0x27, 0x40, 2, k)], **A4),
+    "csm": lambda k: csm((QUIET, QUIET, QUIET, PLUCK), pre_nops=k),
+}
+for _c in range(6):
+    for _k in range(4):
+        LANDING[f"key{_c + 1}s{_k + 1}"] = lambda k, c=_c, o=_k: fm_voice(_alone(None, o), channel=c, key_nops=k, **A4)
+
 PAL_PICTURES = {"pal-v30"}
+
+# The voices of SSG-EG, CSM, the timers' test bit, the test register and the channel's sum (Nephrite_Native.md
+# section 24): each run 19,000,000 cycles and held for 8,600 samples from the first that is neither 0 nor -1, nor -256
+# where the test register's bit 4 leaves a silent channel there; a voice that never leaves rest holds none.
+def chip_voice_names():
+    return [n for n in SOUNDS if n.startswith(("fm-ssg", "fm-csm", "fm-test", "fm-clip", "fm-eg-"))]
+
+def chip_channel(name):
+    import re
+    m = re.search(r"-c(\d)s", name)
+    return int(m.group(1)) - 1 if m else 2 if name.startswith(("fm-csm", "fm-test-timer")) else 0
+
+def chip_rest(name):
+    return (0, -1, -256) if name.startswith("fm-test-ugly0") else (0, -1)
+
+def board_chip(logs):
+    """Nephrite's `board_chip.rs`: each of `chip_voice_names`' channel as the board's pins give it, the pins made in
+    `logs` if missing."""
+    at = lambda name: os.path.join(os.path.abspath(logs), name)
+    out = [BOARD_CHIP_HEAD, "pub const CHIP_VOICES: &[BoardChipVoice] = &["]
+    for name in chip_voice_names():
+        if not os.path.exists(at(name + ".pins")):
+            bench(SOUNDS[name](), 19000000, audio=at(name + ".pins"))
+        recs = pin_records(at(name + ".pins"))
+        slot = [1223, 215, 1895, 887, 1559, 551][chip_channel(name)]
+        board, i, k = [], 0, 1300000 // SAMPLE
+        while k * SAMPLE + slot + 1 < 19000000:
+            t = k * SAMPLE + slot + 1
+            while i + 1 < len(recs) and recs[i + 1][0] <= t:
+                i += 1
+            board.append(fm_level(recs[i][1]) if recs[i][0] <= t else 0)
+            k += 1
+        rest = chip_rest(name)
+        b0 = next((j for j, x in enumerate(board) if x not in rest), None)
+        series = [] if b0 is None else board[b0:b0 + 8600]
+        out.append(f'    BoardChipVoice {{ name: "{name}", image: 0x{fnv(SOUNDS[name]()):08x}, channel: {chip_channel(name)}, samples: {len(series)}, blocks: &[\n{block_hashes(series)}\n    ] }},')
+    out.append("];\n")
+    out.append(board_sweeps(at))
+    out.append(board_write_times(at, chip_voice_names() + lfo_voice_names()))
+    return "\n".join(out)
+
+def board_write_times(at, names):
+    """For each voice, the MCLK2 cycles from the reset line's release to the rise of its first YM2612 write's strobe
+    and from each strobe to the next, address and data, from the 68000's: their bus logs (`<name>.bus`, the Z80 bus
+    and the reset line) made if missing. Every voice releases the reset line at the same cycle."""
+    out = ["pub const WRITE_TIMES: &[(&str, &[u32])] = &["]
+    release = None
+    for name in names:
+        if not os.path.exists(at(name + ".bus")):
+            cycles = 36000000 if name in LFO_SLOW else 19000000
+            lines = [l for l in bench(SOUNDS[name](), cycles, audio=at(name + ".pins"), zbus=True, pins=True) if l[0] in "zb"]
+            open(at(name + ".bus"), "w").write("\n".join(" ".join(l) for l in lines) + "\n")
+        lines = [l.split() for l in open(at(name + ".bus"))]
+        r = edges(lines)[1][0]
+        assert release in (None, r), (name, r, release)
+        release = r
+        times = [t for t, _, _ in ym_strobes(lines, r, 1 << 40)]
+        out.append(f'    ("{name}", &[{", ".join(str(t - u) for t, u in zip(times, [r] + times))}]),')
+    return "\n".join(out) + f"\n];\n\npub const WRITES_RELEASE: u64 = {release};\n"
+
+SWEEPS = [f"key{_c}s{_k}" for _c in (1, 2, 3) for _k in (1, 2, 3, 4)] + ["csm"]
+
+def sweep_log(kind, k):
+    """A landing sweep's run as its log is named: S4's key sweeps carry no operator in the name."""
+    return f"sw-{kind[:-2] if kind.startswith('key') and kind.endswith('s4') else kind}-{k}"
+
+def board_sweeps(at):
+    """For each of `SWEEPS`, the sample in which each of its 40 runs first sounds, less the first run's: where each
+    write lands in the board's sample as the NOPs move it (Nephrite_Native.md section 24)."""
+    out = ["pub const SWEEPS: &[(&str, [i8; 40])] = &["]
+    for kind in SWEEPS:
+        firsts = []
+        for k in range(40):
+            name = sweep_log(kind, k)
+            if not os.path.exists(at(name + ".pins")):
+                bench(LANDING[kind](k), 1800000, audio=at(name + ".pins"))
+            assert open(at(name + ".bin"), "rb").read() == LANDING[kind](k) if os.path.exists(at(name + ".bin")) else True
+            recs = [r for r in pin_records(at(name + ".pins")) if r[0] > 1300000 and fm_level(r[1]) not in (0, -1)]
+            firsts.append(recs[0][0] // SAMPLE)
+        out.append(f'    ("{kind}", [{", ".join(str(f - firsts[0]) for f in firsts)}]),')
+    return "\n".join(out) + "\n];\n"
+
+BOARD_CHIP_HEAD = '''//! The board's FM pins for `mdboard.py`'s voices of SSG-EG, CSM, the timers, the test register and the channel's sum,
+//! written by `mdboard.py board-chip`: each voice's channel from its first sample that is neither 0 nor -1 (nor -256
+//! for the voices with the test register's bit 4 set before the key-on), 8,600 samples held as the FNV-1a hash of
+//! each block of 64 as little-endian i16 (Nephrite_Native.md §24).
+
+/// A voice on `channel` (0-5): its program's hash and the samples held; none for a voice that never sounds.
+pub struct BoardChipVoice {
+    pub name: &'static str,
+    pub image: u32,
+    pub channel: usize,
+    pub samples: usize,
+    pub blocks: &'static [u32],
+}
+'''
 
 if __name__ == "__main__":
     what = sys.argv[1]
@@ -1485,6 +1730,9 @@ if __name__ == "__main__":
         sys.exit()
     if what == "board-fm":
         sys.stdout.write(board_fm(sys.argv[2]))
+        sys.exit()
+    if what == "board-chip":
+        sys.stdout.write(board_chip(sys.argv[2]))
         sys.exit()
     if what == "read-after-write":
         read_after_write_report(int(sys.argv[2]) if len(sys.argv) > 2 else 0, "dac" in sys.argv[3:], "timers" in sys.argv[3:])

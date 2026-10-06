@@ -1766,3 +1766,115 @@ the board's samples alone. No RTL file was opened; no emulator's source was read
 - **Streets of Rage's loading phase** runs 0.09% faster in Nephrite than on the board (§23.4). It is not yet
   traced to a rule.
 - **Next**, in the plan's order: SSG-EG, CSM and the test register, each refereed on the bench.
+
+## 24. Stage 5, SSG-EG, CSM and the test register (2026-10-06)
+
+### 24.1 What it built
+
+- **SSG-EG** (`fm.rs`, D-21): the four bits of `$90`-`$9E`; the decay, sustain and release four times as fast and
+  stopping at `$200`; each sample's turn at `$200` (restart, alternate, hold); the output inverted about `$200`; a
+  key-on clearing the inversion.
+- **The key-off** (D-21): the release starts from the level the envelope last put out, for every operator.
+- **CSM** (`ym2612.rs`, `fm.rs`, D-22): in mode `10` the load of timer A and each overflow at a sample's tick key
+  channel 3's four operators for that sample, OR'd with `$28`'s keys.
+- **The timers** (D-22): a tick `LOAD_LEAD` before each deadline, timer B's every sixteenth; a load taken at the
+  next tick and its value a slot later; a flag reading set from 276 (timer A) or 234 (timer B) master clocks before
+  the deadline of its overflow's sample; `$27` taken at once.
+- **The test register** (D-23): `$21` bits 1 to 5 (the LFO and the timers by slots, the phase from nothing, the
+  outputs' top bit, the envelopes held at full level), `$2C` bit 5 (the DAC on every channel), the DAC's data at `$80`
+  from reset.
+- **The channel's sum** (D-23): the carriers added S1, S3, S2, S4, held to nine bits at each addition.
+- **The operators' order and the key** (D-24): S1 keyed a sample after S2-S4 and its output used at once; each
+  channel's key taken a slot after the last channel's, channel 1's `KEY_LEAD` (472 master clocks) before the
+  deadline, a key that comes later waiting for the next sample; the LFO's count before its step and the envelope's
+  cycle the same for every operator. D-20's open item, channel 3's special mode under the vibrato, is settled by it.
+- **The frame** (D-24, D-19): a deadline is the last moment a write is in time for its sample; `RESTART` 559 and
+  `POWER_ON` 1,265, D-19's placements expressed in it. The busy flag's slot edges 32 master clocks into a slot (D-13).
+- **The state**: version 13: the timers' loads, the control register as they have it, their next tick, the flags'
+  rises, up to eight keys waiting, SSG-EG's inversion and the envelope's last level for every operator, S1's keys,
+  CSM's key.
+- **Tests** (`voices.rs`):
+  - `the_chip_voices_are_the_boards_sample_for_sample`: the step's 120 voices on the chip alone, each write at the
+    master clock the board's 68000 made it (`board_chip.rs`, written by `mdboard.py board-chip`).
+  - `the_lfo_voices_on_the_chip_are_the_boards`: §23's 61 voices the same way.
+  - `keys_and_the_timers_load_land_in_the_boards_samples`: the key sweeps of channels 1 to 3 and the CSM sweep on the
+    whole machine placed as the board is.
+  - The whole-machine tests at both placements (§24.3).
+  - `ym2612.rs`'s timer tests and `sounds.rs`'s polling programs, at the board's counts.
+- **The bench**: `mdboard.py`'s `fm_voice` with SSG-EG registers, `$27`, NOPs before a write and after one; the
+  voices of D-21 to D-23 and `LANDING`'s sweeps; `status_loop`; `board-chip`. `examples/chip.rs` gives the chip a bus
+  log's writes and reads. Every earlier image is byte for byte what it was.
+
+### 24.2 Measured (2026-10-06)
+
+| On the chip alone, each write at the board's master clock | Voices or runs | The board's to the sample |
+|---|---|---|
+| SSG-EG (D-21) | 62 | 62 |
+| CSM, the envelope by operator, the channel's sum | 29 | 29 |
+| The test register (D-23) | 29 | 20, and 9 that differ where their write lands (D-15) |
+| The LFO's voices of §23 | 61 | 60, and `fm-lfo-restart` where its `$22` writes land |
+| The key sweeps, S1-S4 of channels 1-6 | 960 | 960, each in the board's sample |
+| The CSM sweep | 40 | 40 |
+| The status loops: the timers' flags; the busy flag | 103 | 103; 102 |
+
+- **The crate's tests**: 96 pass. **The conformance kit**, `--frames 600`: C1-C15 on §23's 14 images and
+  `fm-ssge`, `fm-csm` and `fm-test-timer`. **WiseMan**'s Nephrite, runner, discovery and registration tests pass
+  (31).
+- **The corpus at anchors** (944 games, against Genesis Plus GX at frames 120 and 600): 79 games move from §23's,
+  their sound drivers timed by the busy flag, the timers and the keys. Pictures on the reference's to the pixel are
+  827 and 772, as before; of the five pictures that change at frame 600, two come nearer and three go further. Of the
+  RAM counts that change, 11 of 22 come nearer at frame 120 and 31 of 70 at frame 600; the medians are 65,527 and
+  65,513 (65,514). The two games the reference cannot run are as before, and no game fails to run.
+- **The frame cost**, best of five runs of 600 frames, the desktop, release build:
+
+  | Game | Mean per frame | At §23 |
+  |---|---|---|
+  | Sonic the Hedgehog | 1.270 ms | 1.255 ms |
+  | Sonic the Hedgehog 2 | 1.160 ms | 1.147 ms |
+  | Thunder Force IV | 1.258 ms | 1.269 ms |
+  | Streets of Rage 2 | 1.060 ms | 1.045 ms |
+  | Phantasy Star IV | 1.345 ms | 1.314 ms |
+
+  All within P1's 1.5 ms.
+
+### 24.3 Where the whole machine stands
+
+The chip was refereed alone because the whole machine is not the board's in these programs' timing. Its 68000 makes
+the YM2612's writes at the board's master clocks only when the bus refresh and the YM2612's cycle are placed where the
+board has them against its 68000's start (the refresh 875 after power-on, as `genesis.rs`'s RAM loop test places it,
+and the first deadline 910): then every write of a program on part 0 lands at the board's master clock, and the key
+sweeps of channels 1 to 3 and the CSM sweep are the board's. Programs on part 1 still drift there, by a poll of the
+busy flag here and there and once by 15 of the 68000's clocks, which is not traced (§24.5).
+
+Nephrite keeps §22.3's placement against the picture, a third of a sample from the board's against the 68000, so that
+a write the 68000 times lands in another sample now and then:
+
+| On the whole machine | Placed as the board is | Nephrite's placement |
+|---|---|---|
+| §21's 62 voices | 62 | 62 |
+| §23's 61 LFO voices | 51 (`fm-lfo-restart`, nine on part 1) | 58 (`fm-lfo-restart`, channel 3's two in its special mode) |
+| The step's 120 voices | 108 (the test register's nine, three on part 1) | 89 |
+| The key and CSM sweeps, channels 1-3 | 520 of 520 | not tested |
+
+The earlier per-operator LFO counts (D-20) and the busy flag's edge (D-13) were fitted on the whole machine at
+Nephrite's placement, and absorbed it; on the chip they are replaced by D-24's rules and D-13's new edge. Whether the
+YM2612's cycle, or the refresh with it, should be placed against the 68000's start, as the sound's tests are, rather
+than against the picture is §22.3's decision, and is not changed here.
+
+### 24.4 The sources
+
+The YM2608 manual (§2-6) for `$90`-`$9E`, `$27` and CSM. SpritesMind topic 386, as prose: Nemesis's SSG-EG and CSM
+sections and his 2010 corrections; Sauraen's test register posts. The thread was read for this step with its code
+blocks withheld, and none was displayed; of the page 28 SSG-EG code, the two lines displayed at stage 5 step 2
+(§19.2) are not used. Every rule was measured on the board's pins and bus, its alternatives tried. No RTL file was
+opened; no emulator's source was read.
+
+### 24.5 Open, and next
+
+- **D-15**: when each register's write is taken, measured for 15 kinds (D-15's table) and not implemented: the
+  unit would make each sample up to two samples after its deadline.
+- **The test read** (`$21` bits 0, 6, 7, `$2C` bit 4): not built.
+- **The whole machine's placement** (§24.3) and **the 68000's drift on part 1**.
+- **D-2**'s few long RAM waits, **stage 4's frame offset** and **Streets of Rage's loading phase** as in §23.6.
+- **Next**, in the plan's order: the multiplexed output and its ladder effect, the YM3438 of model 2 as a setting,
+  and the model 1 filter.

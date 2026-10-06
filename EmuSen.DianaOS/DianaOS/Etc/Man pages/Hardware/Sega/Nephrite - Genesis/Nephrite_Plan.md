@@ -613,7 +613,10 @@ the bus's and the main RAM's refreshes, measured on the board; the whole machine
 samples, and stage 4's tests all pass with the refreshes in (§22 there). The LFO followed: its counter, the tremolo,
 the vibrato through the separately written table, and each operator's place in the count, all measured on the board;
 59 of its 61 voices are the board's to the sample, channel 3's special mode under the vibrato left open (§23 there,
-D-20).*
+D-20). SSG-EG, CSM, the timers and the test register followed, refereed with the chip given the board's own write
+times: every SSG-EG and CSM voice the board's, the key's place in the sample by channel and operator, the LFO's
+special mode settled; when each register's write is taken measured and left unimplemented (§24 there, D-15 and D-21
+to D-24).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

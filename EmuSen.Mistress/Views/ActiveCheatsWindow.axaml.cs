@@ -501,9 +501,9 @@ namespace EmuSen.Mistress.Views
             try
             {
                 // Same whole-code path `cheat add` takes for a format wider than a byte - see EmuSen_Cheats.md §7.
-                if (!gameGenie && codec.DecodeWrites(code) is { } writes)
+                if (codec.DecodeWrites(code) is { } writes)
                 {
-                    _registry.AddCheat(CheatKind.RamPoke, writes, null, description);
+                    _registry.AddCheat(gameGenie ? CheatKind.RomPatch : CheatKind.RamPoke, writes, null, description);
                 }
                 else
                 {

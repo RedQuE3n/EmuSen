@@ -2333,3 +2333,46 @@ SpritesMind topic 386, Sauraen's test register posts, as prose. Nemesis's six YM
 and his recording of the CSM test. MDFourier's recordings as §28. The references run through the probe, their audio
 as corroboration only. Every rule was measured on the board's bus and pins; no RTL file was opened; no emulator's
 source was read.
+
+## 30. Stage 6, the cheat codecs (2026-10-06)
+
+The plan's §6 row 6, its first item: the system packs' codecs (§4.5 there).
+
+### 30.1 What it built
+
+- **The Genesis's two formats** in the system pack (`Sys/Systems/Genesis/GenesisCheatFormats.cs`), shared by the
+  console, the Sega CD and the 32X: the Game Genie as the explicit codec, a 16-bit ROM patch, and the Action Replay as
+  the auto-detect codec, a byte, word or long word poked into `WRAM`, its codes for the cartridge's range taken as ROM
+  patches. The formats, their sources and what is argued are `EmuSen_Cheats.md` §9.
+- **`ROM_PATCHES` in the core** (`cart.rs`, `v1.rs`): every read of the cartridge port at a patch's address answers
+  its byte, with its compare where one is given; the range is `$000000`-`$3FFFFF`, on the Genesis alone. The patches
+  are the host's and not in the state.
+- **The frontend's two gaps the Genesis met** (`EmuSen_Cheats.md` §8): a ROM patch format wider than a byte, added
+  whole by `cheat add`, `cheat gg` and the Active Cheats window, and `.cht` files whose Game Genie codes import as ROM
+  patches when the explicit codec is passed, which `cheat import`, `cheat load` and the cheat database window now do.
+
+### 30.2 Measured (2026-10-06)
+
+- The Game Genie's worked example (`SCRA-BJX0`, `$009C76`, `$5478`) and 2,000 random codes round-trip; the Action
+  Replay's forms, mirrors, widths and joined codes; the ROM patch reaching the core as two bytes high first.
+- The libretro database's 2,094 Genesis files: 36,727 of 38,546 entries load, 24,427 of them as ROM patches, where the
+  import loaded 12,300 before.
+- **The crate's tests**: 103 pass, a patch answering the cartridge port among them. **WiseMan**'s cheat, `.cht` and
+  Nephrite tests: 438 pass.
+
+### 30.3 The gate's evidence, begun
+
+`Nephrite_Plan.md` §7's gates for the Genesis, as each step of the stage adds to them:
+
+| Gate | So far |
+|---|---|
+| G4, the frontend | The system's cheats decode (§30.2). The kit on games, the battery round trips and the fit audit are this stage's later steps. |
+
+The other gates are assembled at the stage's later steps. G6's handheld half is the tester's, after one install at the
+stage's end; G8's reading of the disputes log is a reader's who did not write it.
+
+### 30.4 The sources
+
+"Sega Genesis Game Genie Conversion Method" (after Merlyn LeRoy's postings) and Charles MacDonald's `genhw.txt`, as
+prose; Sega Retro's "Action Replay (Mega Drive)"; the libretro database's code strings, read for their forms. No
+emulator's source and no decoder program was read.

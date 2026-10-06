@@ -526,7 +526,8 @@ namespace EmuSen.Mistress.Views
                 () => _activeCheatsWindow.Current?.Refresh(),
                 ShowActiveCheats,
                 () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems,
-                CheatConsole));
+                CheatConsole,
+                ConsoleCodecs(CheatConsole).Explicit));
         }
 
         

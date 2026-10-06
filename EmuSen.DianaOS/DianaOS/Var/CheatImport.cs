@@ -17,9 +17,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
         // Where a decoded RAM poke lands when a codec names no space of its own.
         public const string DefaultSpaceName = "CpuBus";
 
-        public static CheatImportResult FromChtText(CheatRegistry registry, string text, ICheatCodeCodec? codec, bool replace = false)
+        public static CheatImportResult FromChtText(CheatRegistry registry, string text, ICheatCodeCodec? codec, bool replace = false, ICheatCodeCodec? patchCodec = null)
         {
-            ChtParseResult parsed = ChtFile.Parse(text, codec, codec?.SpaceName ?? DefaultSpaceName);
+            ChtParseResult parsed = ChtFile.Parse(text, codec, codec?.SpaceName ?? DefaultSpaceName, patchCodec);
 
             if (replace) registry.Clear();
 
@@ -27,14 +27,14 @@ namespace EmuSen.DianaOS.DianaOS.Var
             foreach (ChtCheat cheat in parsed.Cheats)
             {
                 // Always disabled, however the file flagged it - see `man cheat`.
-                try { registry.AddCheat(CheatKind.RamPoke, cheat.Writes, null, cheat.Description, enabled: false); loaded++; }
+                try { registry.AddCheat(cheat.Kind, cheat.Writes, null, cheat.Description, enabled: false); loaded++; }
                 catch (ArgumentException) { }
             }
 
             return new CheatImportResult { Loaded = loaded, Skipped = parsed.Skipped };
         }
 
-        public static CheatImportResult FromChtFile(CheatRegistry registry, string path, ICheatCodeCodec? codec, bool replace = false) =>
-            FromChtText(registry, System.IO.File.ReadAllText(path), codec, replace);
+        public static CheatImportResult FromChtFile(CheatRegistry registry, string path, ICheatCodeCodec? codec, bool replace = false, ICheatCodeCodec? patchCodec = null) =>
+            FromChtText(registry, System.IO.File.ReadAllText(path), codec, replace, patchCodec);
     }
 }

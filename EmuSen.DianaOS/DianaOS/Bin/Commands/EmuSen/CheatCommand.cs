@@ -129,6 +129,15 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         private bool PrefersExplicitCodec(string code) =>
             PrefersExplicitCodec(_explicitCodec, _autoDetectCodec, code);
 
+        // A patch format wider than a byte adds its code whole, as a poke format does - see EmuSen_Cheats.md §8.
+        private static string? AddPatchWrites(CheatRegistry cheats, ICheatCodeCodec codec, string code, string description)
+        {
+            if (codec.DecodeWrites(code) is not { } writes) return null;
+            int id = cheats.AddCheat(CheatKind.RomPatch, writes, null, description);
+            string what = writes.Count == 1 ? FormatWrite(writes[0], CheatKind.RomPatch) : $"{writes.Count} writes";
+            return $"Cheat #{id} added (detected {codec.Name} format): ROM {what} ({description})";
+        }
+
         // A cheat is one toggle however many addresses it drives, and the list must show that.
         private static string FormatCheat(CheatInfo c)
         {
@@ -187,6 +196,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     if (PrefersExplicitCodec(code))
                     {
                         if (_explicitCodec is null) return "No Game Genie-style cheat codec is registered for this target.";
+                        if (AddPatchWrites(cheats, _explicitCodec, code, description) is { } added) return added;
                         (int ggAddress, byte ggValue) = _explicitCodec.Decode(code);
                         byte? ggCompare = _explicitCodec.DecodeCompare(code);
                         int ggId = cheats.AddRomPatch(ggAddress, ggValue, ggCompare, description);
@@ -223,9 +233,10 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 {
                     if (parts.Length < 3) return "Usage: cheat gg <code> [description]";
                     if (_explicitCodec is null) return "No Game Genie-style cheat codec is registered for this target.";
+                    string ggDescription = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : parts[2];
+                    if (AddPatchWrites(cheats, _explicitCodec, parts[2], ggDescription) is { } added) return added;
                     (int ggAddress, byte ggValue) = _explicitCodec.Decode(parts[2]);
                     byte? ggCompare = _explicitCodec.DecodeCompare(parts[2]);
-                    string ggDescription = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : parts[2];
                     int ggId = cheats.AddRomPatch(ggAddress, ggValue, ggCompare, ggDescription);
                     string ggIfText = ggCompare.HasValue ? $" if==0x{ggCompare.Value:X2}" : "";
                     return $"Cheat #{ggId} added: ROM 0x{ggAddress:X6} = 0x{ggValue:X2}{ggIfText} ({ggDescription})";
@@ -322,7 +333,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     if (!System.IO.File.Exists(importPath)) return $"cheat import: no file at {importPath}";
 
                     CheatImportResult imported;
-                    try { imported = CheatImport.FromChtFile(cheats, importPath, _autoDetectCodec); }
+                    try { imported = CheatImport.FromChtFile(cheats, importPath, _autoDetectCodec, patchCodec: _explicitCodec); }
                     catch (Exception ex) { return $"cheat import: {ex.Message}"; }
 
                     string skippedText = imported.Skipped > 0 ? $", {imported.Skipped} skipped" : "";
@@ -389,7 +400,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                             }
 
                             CheatImportResult found;
-                            try { found = CheatImport.FromChtFile(cheats, match.Path, _autoDetectCodec); }
+                            try { found = CheatImport.FromChtFile(cheats, match.Path, _autoDetectCodec, patchCodec: _explicitCodec); }
                             catch (Exception ex) { return $"cheat db load: {ex.Message}"; }
 
                             string dbSkipped = found.Skipped > 0 ? $", {found.Skipped} skipped" : "";

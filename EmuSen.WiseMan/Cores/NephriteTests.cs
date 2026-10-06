@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("nephrite", "Nephrite", 0ul), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(("nephrite", "Nephrite", CoreInterface.CapRomPatches), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             var packs = new[] { GenesisSystems.MegaDrive, GenesisSystems.MegaCd, GenesisSystems.S32x };
             Assert.Equal(packs.Select(p => p.Id), library.Info.Systems.Select(s => s.Id));
             foreach (var (pack, system) in packs.Zip(library.Info.Systems))
@@ -102,7 +102,8 @@ namespace EmuSen.WiseMan.Cores
             core.RunFrame();
             Assert.Equal((256, 224), (core.ScreenWidth, core.ScreenHeight));
             Assert.InRange(core.FrameRateHz, 49.70, 49.71);
-            Assert.Null(bundle.CheatAutoDetectCodec);
+            Assert.Equal(("Action Replay", "Game Genie"), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatExplicitCodec!.Name));
+            Assert.Equal(((long?)0, (long?)0x3F_FFFF), (core.Machine.Info.PatchLow, core.Machine.Info.PatchHigh));
             Assert.Null(bundle.Notice);
             (core as IDisposable)?.Dispose();
         }

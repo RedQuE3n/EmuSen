@@ -25,6 +25,9 @@ pub struct Cart {
     pub patch: Vec<u8>,
     /// Sonic & Knuckles' board, whose upper 2 MiB is the slot on top: nothing there with no cartridge in it.
     slot_on_top: bool,
+    /// ROM patches as a Game Genie makes them on the cartridge port, (address, value, compare or `NO_COMPARE`): every
+    /// read of the cartridge at the address answers the value, the save RAM's included; the host's, not in the state.
+    pub patches: Vec<(u32, u8, u32)>,
 }
 
 /// Sonic & Knuckles' serial, whose cartridge takes another on top.
@@ -41,7 +44,7 @@ impl Cart {
         let sram = save.map_or(Vec::new(), |s| vec![0xFF; s.bytes()]);
         let sram_always = save.is_some_and(|s| s.start as usize >= rom.len());
         let mapper = system_type.starts_with("SEGA SSF") || rom.len() > 0x40_0000;
-        Cart { rom, mask, sram, save, sram_reg: 0, sram_always, banks: mapper.then_some([0, 1, 2, 3, 4, 5, 6, 7]), eeprom, lockon: None, patch: Vec::new(), slot_on_top: serial.starts_with(LOCK_ON_SERIAL) }
+        Cart { rom, mask, sram, save, sram_reg: 0, sram_always, banks: mapper.then_some([0, 1, 2, 3, 4, 5, 6, 7]), eeprom, lockon: None, patch: Vec::new(), slot_on_top: serial.starts_with(LOCK_ON_SERIAL), patches: Vec::new() }
     }
 
     /// A cartridge locked on top of this one, with Sonic & Knuckles' patch ROM when given. The cartridge on top keeps
@@ -107,7 +110,18 @@ impl Cart {
         self.rom.get(a).copied().unwrap_or(0xFF)
     }
 
+    /// A byte as the cartridge port gives it: the board's, or a patch's where one stands at the address and its compare,
+    /// if any, is the board's byte.
     pub fn read8(&self, a: u32) -> u8 {
+        let v = self.board8(a);
+        if self.patches.is_empty() {
+            return v;
+        }
+        let at = a & 0x3F_FFFF;
+        self.patches.iter().find(|&&(p, _, c)| p == at && (c == u32::MAX || c as u8 == v)).map_or(v, |&(_, value, _)| value)
+    }
+
+    fn board8(&self, a: u32) -> u8 {
         if let Some(l) = self.lockon.as_ref().filter(|_| a >= 0x20_0000) {
             if a >= 0x30_0000 && !self.patch.is_empty() && self.sram_reg & 1 != 0 {
                 return self.patch[a as usize & (self.patch.len() - 1)];

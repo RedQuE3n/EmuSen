@@ -151,9 +151,9 @@ fn the_window_bug_takes_the_partial_column_from_the_next() {
 }
 
 /// The Genesis Plus GX suite's MD1536, its colours made by CRAM transfers with the display off: frame 300's picture, a
-/// 32-bit FNV-1a hash of its red, green and blue, which is the board's up to a one-to-one map of colours (the bench
-/// run to its frame 300, Nephrite_Disputes.md D-11). With the write path's start applied to those transfers' words,
-/// 259 pixels of CRAM dots appear that the board does not show.
+/// 32-bit FNV-1a hash of its red, green and blue, which is the board's frame 299 up to a one-to-one map of colours, as
+/// frames 298 to 302 are the board's 297 to 301 (Nephrite_Disputes.md D-11, D-26). With the write path's start applied
+/// to those transfers' words, 259 pixels of CRAM dots appear that the board does not show.
 #[test]
 fn md1536_shows_the_boards_picture() {
     let Some(mut m) = program("gpgx-md_test/MD1536.bin") else { return };
@@ -169,5 +169,5 @@ fn md1536_shows_the_boards_picture() {
             }
         }
     }
-    assert_eq!((f.width, f.height, h), (320, 224, 0x6690a945));
+    assert_eq!((f.width, f.height, h), (320, 224, 0xcf7b6245));
 }

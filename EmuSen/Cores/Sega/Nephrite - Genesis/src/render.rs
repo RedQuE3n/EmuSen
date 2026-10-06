@@ -446,6 +446,15 @@ impl Vdp {
         self.advance(x);
     }
 
+    /// The picture's size as a frame's line 0 takes it, for the frame the machine starts in the middle of.
+    pub fn size_frame(&mut self) {
+        if self.mode4() {
+            (self.frame.width, self.frame.height) = (self.width(), self.height());
+        } else {
+            (self.frame.width, self.frame.height) = (self.width(), self.height() * self.rows());
+        }
+    }
+
     /// A line opened: its sprite pixels taken, from the line buffer or, in double resolution, parsed for both rows
     /// with the flags and the dot-overflow carry from the field's own row.
     fn open_line(&mut self, line: usize) {

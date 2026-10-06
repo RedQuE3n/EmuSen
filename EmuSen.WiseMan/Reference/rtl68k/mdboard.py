@@ -1750,6 +1750,67 @@ def board_landings(at, release):
         out.append("    ] },")
     return "\n".join(out) + "\n];\n"
 
+# ---- the picture against the 68000's start (Nephrite_Disputes.md D-26)
+
+def port_zbus(port=0x08, rounds=4000):
+    """From the reset vector: the Z80's bus taken, mode 5 and H40 set, then `rounds` word reads of the VDP's port at
+    `$C00000 + port` (the HV counter at 8, the status at 4), each stored as its low byte then its high one into the
+    Z80's RAM, with `lsl.l` of 1 to 8 between rounds so that the reads drift across the line. The 68000's RAM is never
+    used, its refresh's long waits being outside Nephrite's model (D-2)."""
+    code = w(0x46FC, 0x2700, 0x33FC, 0x0100, 0x00A1, 0x1200, 0x33FC, 0x0100, 0x00A1, 0x1100, 0x0839, 0x0000, 0x00A1, 0x1100, 0x66F6)
+    code += w(0x45F9, 0x00C0, 0x0004, 0x34BC, 0x8004, 0x34BC, 0x8104, 0x34BC, 0x8C81)
+    code += w(0x41F9, 0x00C0, port, 0x43F9, 0x00A0, 0x0000)
+    for k in range(rounds):
+        code += w(0x3010, 0x12C0, 0xE048, 0x12C0, 0xE389 | ((k % 8 + 1) & 7) << 9)   # move.w (a0),d0; two move.b; lsl.l
+    code += w(0x60FE)
+    r = bytearray(b"\xff" * 0x10000)
+    r[0:8] = w(0x00FF, 0xFE00, 0x0000, 0x0200)
+    r[0x100:0x110] = b"SEGA MEGA DRIVE "
+    r[0x200:0x200 + len(code)] = code
+    return bytes(r)
+
+def port_zbus_bytes(port, cycles=4000000):
+    """The board's stored bytes for `port_zbus`, read from its Z80 bus: each write to the Z80's RAM at its strobe."""
+    lines = [l for l in bench(port_zbus(port), cycles, zbus=True) if l[0] == "b"]
+    bus = [(int(l[1]), int(l[3]), int(l[4], 16), int(l[5], 16)) for l in lines]
+    z = bytearray(0x2000)
+    n = 0
+    for was, e in zip(bus, bus[1:]):
+        if e[1] == 1 and was[1] == 0 and was[2] < 0x2000:
+            z[was[2]], n = was[3], n + 1
+    return bytes(z[:n])
+
+def landing_frames(name, nframes=7):
+    """A picture program's first changed pixel near line 150 in each of the board's frames from power-on, each frame
+    named by when its display starts (frame 0 at 307,925 cycles of the bench's clock): `write-landing-*` and
+    `dma-start-*` frame by frame, for Nephrite's picture after n frames, which is the board's frame n-1."""
+    frame, first = 1792080, 307925
+    path = os.path.join(WORK, "program.bin")
+    open(path, "wb").write(PICTURES[name]())
+    pic = os.path.join(WORK, name + ".pic")
+    end = first + frame * nframes
+    subprocess.run([os.path.join(WORK, "tb_md"), path, str(end)], cwd=WORK, env=dict(os.environ, LD_LIBRARY_PATH=LIB, TB_PICTURE=f"{pic}:0:{end}"), capture_output=True, check=True)
+    d = open(pic, "rb").read()
+    os.remove(pic)
+    f = d[0::4]
+    lines, start = [], None
+    for i, fl in enumerate(f):
+        if fl & 3 == 3 and start is None: start = i
+        if fl & 3 != 3 and start is not None: lines.append((start, i)); start = None
+    out, g = {}, []
+    for ln in lines + [(1 << 60, 0)]:
+        if g and ln[0] - g[-1][0] > 6840 * 4:
+            s0 = g[0][0]
+            rises = [j for j in range(s0 + 1, s0 + 400) if f[j] & 32 and not f[j - 1] & 32]
+            cpp = round((rises[-1] - rises[0]) / (len(rises) - 1))
+            width = (g[0][1] - g[0][0]) // cpp
+            rows = [[d[4 * (s + x * cpp + cpp // 2) + 1:4 * (s + x * cpp + cpp // 2) + 4] for x in range(width)] for s, _ in g]
+            hit = next((x for y in range(140, min(175, len(rows))) for x in range(width) if rows[y][x] != (rows[y - 1][width - 1] if x == 0 else rows[y][x - 1])), None)
+            if len(rows) >= 170: out[round((s0 - first) / frame)] = hit
+            g = []
+        g.append(ln)
+    return out
+
 BOARD_CHIP_HEAD = '''//! The board's FM pins for `mdboard.py`'s voices of SSG-EG, CSM, the timers, the test register and the channel's sum,
 //! written by `mdboard.py board-chip`: each voice's channel from its first sample that is neither 0 nor -1 (nor -256
 //! for the voices with the test register's bit 4 set before the key-on), 8,600 samples held as the FNV-1a hash of
@@ -1813,6 +1874,13 @@ if __name__ == "__main__":
         sys.exit()
     if what == "reset-replay":
         reset_replay_report(int(sys.argv[2]) if len(sys.argv) > 2 else 200)
+        sys.exit()
+    if what == "port-zbus":
+        sys.stdout.write(port_zbus_bytes(int(sys.argv[2], 16) if len(sys.argv) > 2 else 8).hex() + "\n")
+        sys.exit()
+    if what == "landing-frames":
+        for name in sys.argv[2:]:
+            print(name, landing_frames(name))
         sys.exit()
     if what == "picture":
         picture(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 4, sys.argv[4] if len(sys.argv) > 4 else None)

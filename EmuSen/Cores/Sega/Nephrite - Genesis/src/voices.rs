@@ -345,28 +345,12 @@ fn machine(image: &[u8], frames: i64) -> (Machine, Vec<i32>) {
 
 /// The same for any channel's output.
 fn machine_channel(image: &[u8], frames: i64, channel: usize) -> (Machine, Vec<i32>) {
-    machine_placed(image, frames, channel, false)
+    machine_placed(image, frames, channel)
 }
 
-/// Where the board has its bus refresh and its YM2612's first deadline against its 68000's start, in Nephrite's
-/// clock: placed there, the whole machine makes each YM2612 write of a program on either part at the board's master
-/// clock (Nephrite_Native.md §24, §25; §22.3 for the bus refresh's placement against the picture that Nephrite keeps).
-const BOARD_REFRESH: u64 = 98 + 777;
-const BOARD_YM: u64 = crate::ym2612::POWER_ON;
-
-/// A machine just made, its bus refresh and its YM2612's cycle moved to where the board has them against its 68000.
-pub(crate) fn place_as_the_board(m: &mut Machine) {
-    m.genesis.hw.refresh_at = BOARD_REFRESH;
-    let ym = &mut m.genesis.hw.sound.ym;
-    (ym.next, ym.timers_next, ym.held_at) = (BOARD_YM, BOARD_YM, BOARD_YM);
-}
-
-/// The whole machine, at Nephrite's placement or at the board's against its 68000's start.
-fn machine_placed(image: &[u8], frames: i64, channel: usize, board: bool) -> (Machine, Vec<i32>) {
+/// The whole machine running `image`, and the trace of `channel`.
+fn machine_placed(image: &[u8], frames: i64, channel: usize) -> (Machine, Vec<i32>) {
     let mut m = Machine::new(image, Media::read(image));
-    if board {
-        place_as_the_board(&mut m);
-    }
     m.genesis.hw.sound.ym.trace = Some(Vec::new());
     while m.frames < frames {
         m.advance();
@@ -512,27 +496,25 @@ fn a_voice_replayed_after_a_reset_is_the_boards_wherever_the_release_falls() {
     assert_eq!(REPLAYS.len(), 40);
 }
 
-/// The whole machine running the 68000's programs on its own timing, every voice the board's to the sample at
-/// Nephrite's placement and at the board's: the 68000's five-clock access to the Z80's area and the refreshes it
+/// The whole machine running the 68000's programs on its own timing, every voice the board's to the sample: the
+/// 68000's five-clock access to the Z80's area and the refreshes it
 /// waits for (D-2, D-14), the busy flag's length (D-13) and the chip's cycle against the 68000 (D-19, D-24) put each
 /// write in the board's sample.
 #[test]
 fn the_whole_machine_plays_every_voice_as_the_board_does() {
-    for board in [false, true] {
-        let mut wrong = Vec::new();
-        let (mut equal_samples, mut samples) = (0, 0);
-        for v in VOICES {
-            let (_, ours) = machine_placed(&voice(v.name).image(), (v.samples as i64 + 2500) / 880 + 2, 0, board);
-            let first = ours.iter().position(|&x| x != 0 && x != -1).expect("the voice leaves rest");
-            let e = equal(&ours[first..], v.samples, v.blocks);
-            if e != v.samples {
-                wrong.push((v.name, e, v.samples));
-            }
-            (equal_samples, samples) = (equal_samples + e, samples + v.samples);
+    let mut wrong = Vec::new();
+    let (mut equal_samples, mut samples) = (0, 0);
+    for v in VOICES {
+        let (_, ours) = machine_placed(&voice(v.name).image(), (v.samples as i64 + 2500) / 880 + 2, 0);
+        let first = ours.iter().position(|&x| x != 0 && x != -1).expect("the voice leaves rest");
+        let e = equal(&ours[first..], v.samples, v.blocks);
+        if e != v.samples {
+            wrong.push((v.name, e, v.samples));
         }
-        assert!(wrong.is_empty(), "voices unlike the board's, placed as the board is: {board}: {wrong:?}");
-        assert_eq!((equal_samples, samples), (200_220, 200_220));
+        (equal_samples, samples) = (equal_samples + e, samples + v.samples);
     }
+    assert!(wrong.is_empty(), "voices unlike the board's: {wrong:?}");
+    assert_eq!((equal_samples, samples), (200_220, 200_220));
 }
 
 /// The 68000 asserts the Z80's reset under a sounding voice and releases it: the voice stops, the registers are as
@@ -552,47 +534,30 @@ fn the_z80s_reset_line_resets_the_ym2612() {
     assert_eq!(ym.regs[0][0x2A], 0x55, "a write after the release lands");
 }
 
-/// The LFO voices unlike the board's on the whole machine at Nephrite's placement, where the bus refresh stands against
-/// the picture and the YM2612's cycle against the 68000 (Nephrite_Native.md §25): the programs make some of their
-/// writes a refresh's wait from the board's.
-const LFO_UNLIKE_AT_NEPHRITES_PLACEMENT: [&str; 45] = [
-    "fm-lfo0", "fm-lfo1", "fm-lfo2", "fm-lfo3", "fm-lfo4", "fm-lfo5", "fm-lfo6", "fm-lfo7", "fm-ams1", "fm-ams2", "fm-lfo-restart",
-    "fm-am-mod", "fm-pms1", "fm-pms2", "fm-pms3", "fm-pms4", "fm-pms5", "fm-pms6", "fm-pms7", "fm-pm-kc", "fm-pm-1500", "fm-pm-s1",
-    "fm-pm-c1s1", "fm-pm-c1s2", "fm-pm-c1s3", "fm-pm-c1s4", "fm-pm-c2s1", "fm-pm-c2s2", "fm-pm-c2s3", "fm-pm-c2s4", "fm-pm-c3s1",
-    "fm-pm-c3s2", "fm-pm-c3s3", "fm-pm-c3s4", "fm-pm-c5s1", "fm-pm-c5s2", "fm-pm-c5s3", "fm-pm-c5s4", "fm-am-s1", "fm-am-s2",
-    "fm-am-s3", "fm-am-c2s1", "fm-pm-ch3-normal", "fm-pm-ch3-swap", "fm-pm-ch3",
-];
-
 /// The LFO's voices on the whole machine against the board's (Nephrite_Native.md §23, §24, §25), whose chip is the board's
-/// in all of them but `fm-lfo-restart` (`the_lfo_voices_on_the_chip_are_the_boards`). Placed as the board is against
-/// its 68000's start, the whole machine is the board's in all but that one; at Nephrite's placement, with the bus
-/// refresh against the picture, in 16.
+/// in all of them (`the_lfo_voices_on_the_chip_are_the_boards`), and so is the whole machine, placed as the board is
+/// against its 68000's start (Nephrite_Disputes.md D-26).
 #[test]
 fn the_lfo_voices_are_the_boards_sample_for_sample() {
-    for (board, known) in [
-        (true, &[][..]),
-        (false, &LFO_UNLIKE_AT_NEPHRITES_PLACEMENT[..]),
-    ] {
-        let mut wrong = Vec::new();
-        for v in LFO_VOICES {
-            let image = voice(v.name).image();
-            assert_eq!(fnv(image.iter().copied()), v.image, "{}: the program is not the one the board ran", v.name);
-            let (_, ours) = machine_placed(&image, (v.samples as i64 + 2500) / 880 + 2, v.channel, board);
-            let first = ours.iter().position(|&x| x != 0 && x != -1).expect("the voice leaves rest");
-            if equal(&ours[first..], v.samples, v.blocks) != v.samples {
-                wrong.push(v.name);
-            }
+    let mut wrong = Vec::new();
+    for v in LFO_VOICES {
+        let image = voice(v.name).image();
+        assert_eq!(fnv(image.iter().copied()), v.image, "{}: the program is not the one the board ran", v.name);
+        let (_, ours) = machine_placed(&image, (v.samples as i64 + 2500) / 880 + 2, v.channel);
+        let first = ours.iter().position(|&x| x != 0 && x != -1).expect("the voice leaves rest");
+        if equal(&ours[first..], v.samples, v.blocks) != v.samples {
+            wrong.push(v.name);
         }
-        assert_eq!(wrong, known, "LFO voices unlike the board's, placed as the board is: {board}");
     }
+    assert_eq!(wrong, Vec::<&str>::new(), "LFO voices unlike the board's");
 }
 
-/// A chip voice on the whole machine, at the board's placement or Nephrite's: the samples held that are the board's,
+/// A chip voice on the whole machine: the samples held that are the board's,
 /// from the first sample that is not at rest (Nephrite_Native.md §24).
-fn chip_equal(v: &crate::board_chip::BoardChipVoice, board: bool) -> usize {
+fn chip_equal(v: &crate::board_chip::BoardChipVoice) -> usize {
     let image = voice(v.name).image();
     assert_eq!(fnv(image.iter().copied()), v.image, "{}: the program is not the one the board ran", v.name);
-    let (_, ours) = machine_placed(&image, 8600 / 880 + 5, v.channel, board);
+    let (_, ours) = machine_placed(&image, 8600 / 880 + 5, v.channel);
     let rest: &[i32] = if v.name.starts_with("fm-test-ugly0") { &[0, -1, -256] } else { &[0, -1] };
     match ours.iter().position(|x| !rest.contains(x)) {
         None => if v.samples == 0 { 1 } else { 0 },
@@ -615,20 +580,12 @@ fn sweep_image(kind: &str, k: u16) -> Vec<u8> {
     fm_voice_on(ops, 7, 0, 1081, 4, &[], Setup { channel: c, key_nops: k, ..PLAIN }).image()
 }
 
-/// The same voices on the whole machine. Placed as the board is against its 68000's start, 111 are the board's to the
-/// sample, as on the chip: the test register's nine are not.
+/// The same voices on the whole machine, placed as the board is against its 68000's start: 114 are the board's to the
+/// sample, as on the chip: the six test-register voices of `TEST_LANDINGS` are not.
 #[test]
 fn the_chip_voices_on_the_whole_machine_at_the_boards_placement() {
-    let exact = CHIP_VOICES.iter().filter(|v| chip_equal(v, true) == v.samples.max(1)).count();
+    let exact = CHIP_VOICES.iter().filter(|v| chip_equal(v) == v.samples.max(1)).count();
     assert_eq!(exact, 114);
-}
-
-/// The same voices at Nephrite's own placement, the bus refresh against the picture (§25): the 68000's writes are a
-/// refresh's wait from the board's here and there, so that one lands in another sample now and then. Held as a count.
-#[test]
-fn the_chip_voices_at_nephrites_placement() {
-    let exact = CHIP_VOICES.iter().filter(|v| chip_equal(v, false) == v.samples.max(1)).count();
-    assert_eq!(exact, 96);
 }
 
 /// Each key of S1-S4 on all six channels, and CSM's timer, moved by NOPs across the sample: on the whole machine
@@ -641,7 +598,7 @@ fn keys_and_the_timers_load_land_in_the_boards_samples() {
         let channel = if kind == "csm" { 2 } else { kind[3..4].parse::<usize>().unwrap() - 1 };
         let firsts: Vec<usize> = (0..40)
             .map(|k| {
-                let (_, ours) = machine_placed(&sweep_image(kind, k), 3, channel, true);
+                let (_, ours) = machine_placed(&sweep_image(kind, k), 3, channel);
                 ours.iter().position(|&x| x != 0 && x != -1).expect("the voice sounds")
             })
             .collect();
@@ -790,7 +747,7 @@ fn every_write_is_taken_by_the_boards_sample_on_the_whole_machine() {
         for (k, &(_, shift, image, blocks)) in l.runs.iter().enumerate() {
             let program = landing_image(l.kind, k as u16);
             assert_eq!(fnv(program.iter().copied()), image, "{} {k}: the program is not the one the board ran", l.kind);
-            let (_, ours) = machine_placed(&program, 4, l.channel, true);
+            let (_, ours) = machine_placed(&program, 4, l.channel);
             let first = ours.iter().position(|&x| x != 0 && x != -1).expect("the voice sounds");
             firsts.push(first);
             if equal(&ours[first..], l.samples, blocks) != l.samples || first as i32 - firsts[0] as i32 != shift {

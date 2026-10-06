@@ -487,6 +487,10 @@ CPUs' disputes in their own record pages.
   `sounds.rs`'s `a_program_sees_the_busy_flag_for_192_clocks_at_port_0_only`, and `voices.rs`'s
   `the_whole_machine_plays_every_voice_as_the_board_does` (it fails with 32 slots).
 - Implemented in: the commit "Nephrite, stage 5 step 1"; the length in "Nephrite, stage 5: the 68000's side".
+- 2026-10-06, at stage 5's SSG-EG and CSM step: the edges, measured again with the chip given the board's writes and
+  answering at the board's read strobes (D-22's 103 status runs), fall 32 master clocks into a slot after a sample's
+  deadline in D-24's frame; at 29 to 34 one read of the 103 runs differs, at 22 dozens do. The 22 above was fitted on
+  the whole machine, whose 68000 timing had placed the reads (D-24). The length is unchanged.
 
 ### D-14. The 68000's accesses to the Z80's area take five clocks, and their strobe on the Z80's bus ends four clocks before the 68000's cycle
 - Opened: 2026-10-05, at stage 5 step 1, by `mdboard.py sound dac-square`: a 68000 loop writing the DAC through
@@ -578,6 +582,28 @@ CPUs' disputes in their own record pages.
   held write is unmeasured. Nephrite applies every write at once and loses none.
 - Pinned by: nothing yet.
 - Implemented in: not yet.
+- Measured 2026-10-06, at stage 5's SSG-EG and CSM step, not implemented. `mdboard.py`'s `LANDING` sweeps move one
+  write across the sample by NOPs after its wait for the busy flag, 40 runs 28 master clocks apart, and the chip,
+  given the board's other writes, is compared without that write to find the first sample the board shows it in.
+  Counted from that sample's deadline in D-24's frame, the write came:
+
+  | Write (S4 of channel 1 unless named) | From the deadline, master clocks |
+  |---|---|
+  | The key, each channel (D-24) | 472 before for channel 1, a slot less for each after |
+  | `$22` turning the LFO off; `$21` bit 3 | 469 after to 511 before |
+  | `$27` setting channel 3's special mode | 455 to 1,435 before |
+  | `$4C` TL, `$9C` SSG-EG, `$6C` AMON, `$B0` algorithm | 777 after to 203 before |
+  | `$B0` feedback | 273 after to 707 before |
+  | `$3C` multiple; `$A0` frequency | 231 to 1,211 before; 28 after to 952 before |
+  | `$B4` AMS; `$B4` panning | 1,029 to 49 after; 1,785 to 805 after |
+  | `$21` bit 5; bit 4; `$2C` bit 5 | 1,323 to 364 after; 1,477 to 497 after; 2,037 to 1,050 after |
+  | `$2A` and `$2B`, the DAC | at once, in every run |
+
+  A write a register reads late in the sample is taken by a sample whose deadline has passed, by up to two samples
+  for `$2C`: the chip's registers are read at their own places in a pipeline longer than a sample, which Nephrite's
+  sample-at-a-deadline unit does not have. The multiple's and the frequency's ranges include the sample a changed
+  phase step takes to show. So the entry stays open: implementing it needs the unit to make each sample up to two
+  samples after its deadline, with every register read at its place. Nephrite takes all of these at once.
 
 ### D-16. The operator's log-sine and exponent tables (settled), and the bench's FM output (measured: it plays every write and referees the FM unit)
 - Opened: 2026-10-05, at stage 5 step 2, by the operator unit's two tables, whose form the documents give (a
@@ -720,6 +746,8 @@ CPUs' disputes in their own record pages.
   `the_envelopes_are_the_boards_sample_for_sample`, `the_decays_by_rate…`, `the_attacks_by_rate…` and
   `a_modulator_into_a_carrier…` (the second: with the step before the output all four fail).
 - Implemented in: the commit "Nephrite, stage 5: the board's FM rules".
+- 2026-10-06, at stage 5's SSG-EG and CSM step: the first rule is restated by D-24, S1 keyed a sample after S2-S4
+  and its output used at once; the voices above are the board's under either.
 
 ### D-18. The envelope's rates 48 to 59: the double step falls on cycle 0 of each four, on 0 and 2, or on 0, 1 and 2
 - Opened: 2026-10-05, at stage 5's bench step, by the decays by rate: with D-17's order in, every rate below 48 and
@@ -820,6 +848,9 @@ CPUs' disputes in their own record pages.
 - 2026-10-05, at stage 5's 68000 step: the power-on cycle, where the line starts asserted, now has its first
   deadline 793 master clocks after power-on, where the board's falls against the picture (D-2's placement); it was
   458, the board's against the 68000's start. Both give every voice the board's samples on the whole machine.
+- 2026-10-06, at stage 5's SSG-EG and CSM step: in D-24's frame the 87 and the 793 above are key moments, and a
+  sample's deadline comes 472 after its key moment: `RESTART` is 559 and `POWER_ON` 1,265, the same placements. The
+  board's first deadline after power-on, in its own clock, is 537 (D-24).
 
 ### D-20. The LFO: a 128-count cycle whose divider never stops, a triangle of tremolo, and each operator taking the count at its own place in the sample
 - Opened: 2026-10-06, at stage 5's LFO step, by the documents giving the LFO's speeds in Hz and its depths in cents
@@ -866,4 +897,149 @@ CPUs' disputes in their own record pages.
   cleared while off, or the key code from the modulated frequency; and it holds the two special-mode voices to
   their first agreement and no further, so that a rule that mends them is noticed).
 - Implemented in: the commit "Nephrite, stage 5: the LFO".
+- 2026-10-06, at stage 5's SSG-EG and CSM step: ~~each operator's place~~ and ~~the special mode under the vibrato
+  open~~ are replaced by D-24. With the chip given the board's writes, every operator takes the count before its
+  sample's step, S1 is keyed a sample after the others, and the special mode's two voices are the board's (60 of the
+  61 voices; `fm-lfo-restart` differs where its `$22` writes land, D-15). The per-operator counts above fitted the
+  whole machine, whose 68000 timing and placement against the picture put the voices a sample from the board's
+  against the LFO's divider.
 
+
+### D-21. SSG-EG: a pass ends when the attenuation reaches `$200`, the output inverts about `$200`, the decay runs four times as fast, and a key-off keeps the level the output had
+- Opened: 2026-10-06, at stage 5's SSG-EG step, by the YM2608 manual's eight shapes for `$90`-`$9E`, which give the
+  envelope's form and nothing of the counting behind it.
+- Documents read: the YM2608 manual §2-6 (the register: bit 3 the switch, bits 2-0 the shape; the eight shapes drawn;
+  AR to be `$1F`). SpritesMind topic 386 as prose: Nemesis's SSG-EG section (2008; the bits as enable, attack,
+  alternate and hold; the decay and sustain repeated; an inverted pass; the hold; a slow attack inside each pass) and
+  his 2010 corrections (the decay's step four times the normal one, not six, in the decay, sustain and release; the
+  pass ending at an attenuation of `$200`, not `$3FF`; the inversion "centred at `$200`", a two's complement and not a
+  complement of bits; the SSG-EG steps taken each output sample, before the envelope's cycle). The posts' code blocks
+  were withheld when the thread was read for this step; none was displayed. Of the page 28 code, two lines were
+  displayed at stage 5 step 2 (`Nephrite_Native.md` §19.2); nothing here was taken from them.
+- Test program: `mdboard.py`'s SSG-EG voices (62): S4 alone with each of the eight shapes (`fm-ssg8` to `fm-ssgf`),
+  each released in its second pass and keyed again, each with an attack of rate 38 in every pass, a decay to SL 4 with
+  a slower sustain, the fastest decay, a TL, the tremolo, a modulator (`fm-ssg-mod8`, `fm-ssg-mode`), the operators
+  of channels 1 and 6 alone, a key-off inside a slow attack (`fm-ssg-ar-rel*`), and `$9C` written as the envelope
+  runs (`fm-ssg-on`, `-off`, `-flip`, `-hold-off`, `-hold-att`, `-a-to-b`, `-b-to-a`).
+- Referee: the board as in D-16, 19,000,000 cycles a voice; Nephrite's chip given each write at the master clock the
+  board's 68000 made it (`examples/chip.rs`, the bus logged by `TB_ZBUS`), every sample compared absolutely; no RTL
+  file opened.
+- Conclusion: **measured on the board.** With bit 3 set:
+  - In the decay, the sustain and the release each step adds four times its increment, and none once the
+    attenuation is `$200` or more.
+  - Each sample, after the output and the phase's advance, an attenuation of `$200` or more ends the pass: in the
+    release it goes to `$3FF`; with hold, the alternate bit sets the inversion once and, outside the attack, an output
+    not then inverted is held at `$3FF`; without hold, the alternate bit toggles the inversion or, clear, the phase
+    restarts, and the envelope starts its attack again (the attenuation to 0 at once for a rate of 62 or 63).
+  - The output is inverted where the attack bit and the toggled inversion differ, outside the release: `$200` less
+    the attenuation, kept to ten bits, before TL and the tremolo are added.
+  - A key-on clears the toggled inversion.
+  - A key-off takes, as the release's attenuation, the level the envelope last put out: in an inverted pass the
+    inverted level, and in any pass a step made in the cycle just before it set aside. This holds without SSG-EG
+    too (`fm-csm-key`, D-22), and moves none of the earlier voices.
+  - Each alternative was tried on the chip against the voices: a pass ending at `$3FF` fails 61 of the 62, the
+    inversion as a complement of bits 40, the step six times all 62; the hold setting the inversion only outside the
+    attack fails the slow attacks with hold, and the key-off converting the attenuation of its moment the voices
+    keyed off just after a step (`fm-ssg-ar-relc-3`, `fm-ssg-ar-rele-3`, `fm-csm-key`).
+- All 62 voices are the board's to the sample on the chip.
+- Pinned by: `voices.rs`'s `the_chip_voices_are_the_boards_sample_for_sample`.
+- Implemented in: the commit "Nephrite, stage 5: SSG-EG, CSM and the test register".
+
+### D-22. CSM and the timers: timer A's overflow, and its load, key channel 3's operators for one sample in mode `10`; a load waits for the next tick, a count is taken a slot later, a flag reads set a fixed time before its sample
+- Opened: 2026-10-06, at stage 5's CSM step, by the documents giving CSM's key in words and the timers' counting in
+  samples, with nothing of where in a sample a load, a count or a flag falls.
+- Documents read: the YM2608 manual §2-6 (`$27`'s mode bits; CSM speech synthesis keyed by timer A). SpritesMind topic
+  386 as prose: Nemesis's CSM section (2008; mode `10` alone, not `11`; timer A to be loaded; the key-on and key-off
+  at the overflow; only AR `$1E`-`$1F` sounding; a manual key masking the CSM key) and his 2010 corrections (the CSM
+  key a flag set by the overflow and taken at the next update, OR'd with the manual key; held on by an overflow every
+  sample). Sauraen's list of the test register's bits (2016), as prose: `$21` bit 2 counting the timers every
+  internal clock. Plutiedev's register page for the timers' values.
+- Test program: `mdboard.py`'s CSM voices (17: by period 1, 2, 3 and 100, every operator alone at its own frequency,
+  all four, a slow attack, modes `11` and `10` without the load, the flags' enable bits, CSM turned off and on, a
+  manual key held through it and its plain twin), the timer test bit's voices (`fm-test-timer`, at periods 7 to 200),
+  `status_loop` (the status read every 23 of the 68000's clocks after a load: timers A and B at several periods, with
+  and without the test bit, 103 runs with the loads moved across the sample by NOPs), the CSM sweep (the load moved by
+  NOPs, 40 runs), and `sounds.rs`'s program polling timer A's flag, run on the board.
+- Referee: the board as in D-21; the chip given the board's writes, and reads answered at the board's read strobes.
+- Conclusion: **measured on the board.** In the frame of D-24, where a sample's deadline is the last moment a write
+  is in time for it:
+  - A timer's tick comes `LOAD_LEAD` (388 master clocks) before a sample's deadline, timer B's every sixteenth. A load
+    bit rising before the tick is taken by it; the counter takes its value a slot later and counts from the next
+    tick. An overflow raises the flag, which reads set from 276 master clocks before the deadline for timer A and 234
+    for timer B, and the value comes back a slot later.
+  - In mode `10`, the load and every overflow at a sample's tick key channel 3's four operators for that sample, the
+    key OR'd with `$28`'s: a held manual key masks the CSM key-off, and CSM's key-on is lost on an operator already
+    keyed. With an overflow every sample the key stays on, and a slow attack runs (`fm-csm-ar-p1`).
+  - `$21` bit 2 makes every slot of the 24 a tick for both timers, timer B without its divider: a period of `n`
+    counts takes `n` + 1 slots, and the CSM key comes only where an overflow falls on the sample's own tick.
+  - `$27` reaches the timers at once, not with the key's lead.
+- All 17 CSM voices and 9 of the timer test bit are the board's to the sample on the chip; the CSM sweep's 40 runs
+  first sound in the board's sample; of the 103 status runs the timers' flags read as the board's at every read and
+  the busy flag at all but one read (`sls-a30t-12`, at its last slot's edge). The polling program reads timer A's flag
+  77 times on the board and on Nephrite placed as the board is (D-24); 79 at Nephrite's own placement.
+- Pinned by: `voices.rs`'s `the_chip_voices_are_the_boards_sample_for_sample` and
+  `keys_and_the_timers_load_land_in_the_boards_samples`; `ym2612.rs`'s
+  `the_timers_overflow_at_their_periods_and_their_flags_clear_by_reset` and
+  `the_test_registers_bit_2_counts_the_timers_by_slots`; `sounds.rs`'s `a_program_sees_timer_a_overflow_after_its_period`.
+- Implemented in: the commit "Nephrite, stage 5: SSG-EG, CSM and the test register".
+
+### D-23. The test register and the channel's sum: `$21`'s bits 1 to 5 as measured, `$2C`'s bit 5 putting the DAC on every channel, the DAC's data at `$80` from reset, and the carriers summed S1, S3, S2, S4, held to nine bits at each step
+- Opened: 2026-10-06, at stage 5's test register step, by Sauraen's list of the test bits, which says what each bit
+  reaches on the die and, for several, that it was not tested.
+- Documents read: SpritesMind topic 386, Sauraen's test register posts (2015-16) as prose: `$21` bit 1 "some LFO
+  control", bit 2 the timers per clock, bit 3 freezing the phase generator, bit 4 inverting the operators' top bit,
+  bit 5 freezing the envelope generator, bits 6, 7 and 0 the test read; `$2C` bit 3 the DAC's ninth bit, bit 4 the
+  test read's form, bit 5 the DAC over all channels, bits 6 and 7 the TEST pin. Code blocks withheld.
+- Test program: `mdboard.py`'s test voices (29): each bit set before a key-on and as a voice sounds, the DAC over the
+  channels with `$2B` on and off, the read bits; three voices whose carriers together pass nine bits (`fm-clip7`,
+  `-5`, `-4`).
+- Referee: the board as in D-21, the six channels read from the pins in their turns.
+- Conclusion: **measured on the board**, for the bits that reach the output:
+  - `$21` bit 1: the LFO's divider counts slots, 24 a sample, a count taking its rate's steps and one slot more; the
+    tremolo is then four slots ahead of the vibrato, as S4 of channel 1 has them.
+  - Bit 2: D-22. Bit 3: every phase starts each sample from nothing, so an operator sounds one increment's worth.
+    Bit 4: the top bit of every operator's fourteen-bit output is inverted, so a silent channel reads -256. Bit 5:
+    every envelope holds where it is, and puts out no attenuation.
+  - `$2C` bit 5: every channel carries the DAC's level, whether `$2B` enables the DAC or not; bits 4, 6 and 7 change
+    nothing on the pins.
+  - The DAC's data reads `$80` from reset (channel 6 at 0 with the DAC enabled and never written).
+  - A channel's sum: its carriers' top nine bits added one at a time in the order S1, S3, S2, S4, the sum held to
+    nine bits at each addition (`fm-clip7` and the silent carriers under bit 4 tell the order; adding all and
+    clamping once fails both).
+  - Not built: the test read (`$21` bits 0, 6 and 7, `$2C` bit 4), whose status reads were not measured here; D-16's
+    note on the bench's test read stands.
+- 111 of the 120 voices of D-21 to D-23 are the board's to the sample on the chip; the nine others are this entry's,
+  whose test register write lands a sample or more earlier on the board than at once (D-15), and differ there.
+- Pinned by: `voices.rs`'s `the_chip_voices_are_the_boards_sample_for_sample` (the nine held to their counts).
+- Implemented in: the commit "Nephrite, stage 5: SSG-EG, CSM and the test register".
+
+### D-24. The operators' order and the key's moment: S1 is keyed a sample after S2-S4 and its output used at once, each channel's key is taken a slot after the last channel's, the LFO's count and the envelope's cycle are the same for every operator
+- Opened: 2026-10-06, at stage 5's CSM step, by the CSM key, which reaches the four operators of channel 3 at once
+  and did not reach S1 when Nephrite expected it to, and by the chip given the board's write times (D-21), which
+  showed where the whole machine's 68000 timing had been absorbed by earlier fits.
+- Documents read: those of D-17 and D-20.
+- Test program: the key sweeps (`mdboard.py`'s `LANDING`: S1, S2, S3 or S4 alone on each of the six channels, its key
+  moved across the sample by NOPs after the wait for the busy flag, 40 runs each, 960 in all), the CSM sweep, the
+  envelope by operator (`fm-eg-c<n>s<k>`), and the LFO's 61 voices of D-20 run again with their buses logged.
+- Referee: the board as in D-21.
+- Conclusion: **measured on the board.**
+  - A key written to `$28` is taken by a sample if it comes `KEY_LEAD` (472 master clocks) before the sample's
+    deadline for channel 1, a slot less for each channel after it in the order 1, 2, 3, 4, 5, 6. S1 has its key a
+    sample after S2-S4 (in all 960 runs S1 first sounds a sample after the others at the same place), and the CSM key
+    of D-22 reaches all four at once.
+  - S1's output is used in the sample it is made by S2, S4 and the sum, and by S3 in the next; with S1 a sample
+    behind, this is D-17's first rule seen from the other side, and the voices of D-17 to D-19 are unchanged by it.
+  - Every operator takes the LFO's count as it stood before its sample's step, and every channel the envelope's
+    cycle of its sample. D-20's per-operator counts and channel 6's earlier count were S1's key and the whole
+    machine's placement seen through the voices; with the chip given the board's writes, 60 of the 61 LFO voices are
+    the board's under these rules, channel 3's special mode under the vibrato among them (D-20's open item), and the
+    61st, `fm-lfo-restart`, differs only where its writes to `$22` land (D-15).
+  - The frame: a deadline is now the last moment a write is in time for its sample, 472 master clocks after D-19's
+    key moment. D-19's reset restarts the cycle with a key moment 87 after the assertion (`RESTART` 559), and its
+    release rule counts from the key moment. The board's first deadline after power-on falls 537 master clocks into
+    its clock (every key of the 960 runs and the CSM sweep's 40 in the board's sample with it there, and not with it
+    7 either side). Nephrite's whole machine keeps D-2's placement against the picture: the key moment 793 after
+    power-on, the deadline 1,265 (`POWER_ON`).
+- Pinned by: `voices.rs`'s `keys_and_the_timers_load_land_in_the_boards_samples`, `the_lfo_voices_on_the_chip_are_the_boards`,
+  `the_chip_voices_are_the_boards_sample_for_sample`, and the earlier voices' tests, which all pass under the frame.
+- Implemented in: the commit "Nephrite, stage 5: SSG-EG, CSM and the test register".

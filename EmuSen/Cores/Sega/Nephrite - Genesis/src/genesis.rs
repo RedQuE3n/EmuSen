@@ -146,7 +146,8 @@ impl Genesis {
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
         // The YM2612 is held with the Z80 from power-on, its sample cycle where the board's is (Nephrite_Disputes.md D-19).
         let ym = &mut g.hw.sound.ym;
-        (ym.held, ym.next, ym.held_at) = (true, crate::ym2612::POWER_ON, crate::ym2612::POWER_ON);
+        let po = crate::ym2612::POWER_ON;
+        (ym.held, ym.next, ym.timers_next, ym.held_at) = (true, po, po, po);
         g.cpu.reset(&mut MainBus(&mut g.hw));
         g
     }

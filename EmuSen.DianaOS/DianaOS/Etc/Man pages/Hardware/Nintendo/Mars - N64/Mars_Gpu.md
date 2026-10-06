@@ -116,6 +116,27 @@ means publishing `Silk.NET.MoltenVK.Native` with the macOS builds, which is a pu
 machine to check it on. Until someone does, "Metal support" means that nothing in the design stands in its way, and
 no more than that.
 
+**KosmicKrisp, noted 2026-10-05 and not yet acted on.** LunarG's Vulkan-on-Metal driver, KosmicKrisp, is built
+within Mesa. It is a Khronos-conformant Vulkan 1.4 implementation, in the Vulkan SDK released 2026-09-29, for Apple
+Silicon (M1 and later) on macOS 26 and later
+([LunarG](https://www.lunarg.com/kosmickrisp-achieves-vulkan-1-4-conformance-on-apple-silicon/)). It is a candidate in
+place of MoltenVK as the driver the macOS builds carry. The candidacy rests on three observations:
+
+1. Since neither driver has been shipped, the choice is the first driver rather than a migration.
+2. A conformant driver would not need the portability-subset branches described above. They would stay only for a
+   fall-back to MoltenVK on Macs that KosmicKrisp does not cover.
+3. The instance would still ask for Vulkan 1.1. A 1.4 driver satisfies that request. Raising the requirement to 1.4 would buy
+   nothing on a Mac, and it would exclude the older Windows Intel graphics that the weak-machine effort targets.
+
+The questions that remain open are:
+
+- how the driver and its loader would be packaged for a .NET publish, for which no package is known;
+- how it compares with MoltenVK on Mars's shaders;
+- whether either runs this core at all.
+
+The obvious test is a headless run of the GPU tests on the M1 machine with that SDK installed. It was deferred until
+after Nephrite's sound stage.
+
 ## 5. Phase 1: memory, rows, tiles, and the fill cycle (2026-09-21)
 
 **The exit was** fill scenes identical to the CPU path at the multiple. It is met at two, three and four, byte for

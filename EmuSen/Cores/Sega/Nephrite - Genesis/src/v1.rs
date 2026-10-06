@@ -70,6 +70,43 @@ fn pad_setting(port: usize) -> Setting {
     }
 }
 
+/// The setting that chooses the console's region, read at create: the cartridge's header, or a console of one market.
+pub const REGION_KEY: &str = "region";
+
+/// Each region's version register: overseas (bit 7) and PAL (bit 6).
+pub const REGIONS: [(&str, &str, bool, bool); 4] = [
+    ("md.us", "Americas (NTSC)", true, false),
+    ("md.eu", "Europe (PAL)", true, true),
+    ("md.jp", "Japan (NTSC)", false, false),
+    ("md.asia", "Asia (PAL)", false, true),
+];
+
+fn region_setting() -> Setting {
+    let mut choices = vec![Choice { value: "auto".into(), label: "From the cartridge".into(), help: None }];
+    choices.extend(REGIONS.iter().map(|&(value, label, _, _)| Choice { value: value.into(), label: label.into(), help: None }));
+    Setting {
+        key: REGION_KEY.into(),
+        label: "Region".into(),
+        help: "The console's market, which a game reads from its version register and which sets the picture's rate: 60 frames a second for NTSC, 50 for PAL. From the cartridge, a game made for the Americas or several markets runs as an American console, one for Europe alone as a European, one for Japan alone as a Japanese. A game that checks its market may refuse the others. Takes effect when a game is next loaded.".into(),
+        kind: SettingKind::Choice(choices),
+        default: "auto".into(),
+        scope: Scope::Create,
+        category: Some("Console".into()),
+        effect: Effect::None,
+        advanced: false,
+        hidden: false,
+        restart: true,
+    }
+}
+
+/// The model's market as the region setting asks for it, the header's where it says `auto` or nothing.
+pub fn region_model(model: Model, setting: Option<&str>) -> Model {
+    match REGIONS.iter().find(|r| Some(r.0) == setting) {
+        Some(&(_, _, overseas, pal)) => Model { overseas, pal, ..model },
+        None => model,
+    }
+}
+
 /// The setting that chooses the console's model, read at create.
 pub const MODEL_KEY: &str = "model";
 
@@ -77,13 +114,13 @@ fn model_setting() -> Setting {
     Setting {
         key: MODEL_KEY.into(),
         label: "Console model".into(),
-        help: "The console the game runs on. A model 1 has the discrete YM2612, whose converter gives quiet sounds their grain, and a soft output filter; a model 2 has the YM3438 inside its main chip, clean at low levels, and a brighter, steeper filter.".into(),
+        help: "The console the game runs on. A model 1 has the discrete YM2612, whose converter gives quiet sounds their grain, and a soft output filter; a model 2 has the YM3438 inside its main chip, clean at low levels, and a brighter, steeper filter. Takes effect when a game is next loaded.".into(),
         kind: SettingKind::Choice(vec![
             Choice { value: "md.model1".into(), label: "Model 1".into(), help: None },
             Choice { value: "md.model2".into(), label: "Model 2".into(), help: None },
         ]),
         default: "md.model1".into(),
-        scope: Scope::Run,
+        scope: Scope::Create,
         category: Some("Console".into()),
         effect: Effect::None,
         advanced: false,
@@ -192,7 +229,7 @@ pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::ROM_PATCHES;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS;
 
     fn info() -> Info {
         Info {
@@ -202,7 +239,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. At this stage it runs the Genesis's two processors, buses, cartridges, pads and picture, and its sound, the PSG and the YM2612's FM operators and DAC; the LFO, SSG-EG and the analogue output are still to come.".into()),
+            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. It runs the Genesis's two processors, buses, cartridges, pads, picture and sound, the PSG and the YM2612 with each model's output; the Sega CD and the 32X are still to come.".into()),
             systems: vec![
                 system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()]),
                 system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')]),
@@ -225,7 +262,7 @@ impl Core for Machine {
     }
 
     fn settings_schema() -> Vec<Setting> {
-        vec![model_setting(), pad_setting(0), pad_setting(1)]
+        vec![model_setting(), region_setting(), pad_setting(0), pad_setting(1)]
     }
 
     fn status_text(code: i32) -> Option<String> {
@@ -247,7 +284,7 @@ impl Core for Machine {
         }
         let image = cartridge_bytes(request.image);
         let media = Media::read(&image);
-        let model = Model { model2: request.settings.get(MODEL_KEY) == Some("md.model2"), ..default_model(&media) };
+        let model = region_model(Model { model2: request.settings.get(MODEL_KEY) == Some("md.model2"), ..default_model(&media) }, request.settings.get(REGION_KEY));
         let mut m = Machine::with_model(&image, media, model);
         m.apply_pads(&request.settings);
         if let Some(top) = request.files.iter().find(|f| f.which == LOCK_ON) {
@@ -264,7 +301,7 @@ impl Core for Machine {
     }
 
     fn machine_info(&self) -> MachineInfo {
-        let pal = self.media.pal();
+        let pal = self.genesis.hw.model.pal;
         let named = |which: u32| (which, if self.firmware.contains(&which) { FirmwareSource::File } else { FirmwareSource::Absent });
         MachineInfo {
             system: self.media.system.id().into(),
@@ -378,7 +415,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; rom_patches);
+emusen_native::core_exports!(Machine; rom_patches, settings);
 
 #[cfg(test)]
 mod tests {
@@ -470,6 +507,21 @@ mod tests {
         m.set_rom_patches(&[]).unwrap();
         assert_eq!(m.genesis.hw.cart.read16(0x100), board);
         assert_eq!(create(&cartridge("SEGA 32X", "U", None), vec![]).unwrap().machine_info().patches, None);
+    }
+
+    /// The region setting chooses the version register's market and the picture's rate at create; `auto` is the header's.
+    #[test]
+    fn the_region_setting_chooses_the_market_and_the_rate() {
+        let image = cartridge("SEGA GENESIS", "U", None);
+        let made = |region: &str| Machine::create(&Create { image: &image, settings: Settings::from_pairs(vec![(REGION_KEY.into(), region.into())]), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
+        for (region, overseas, pal) in [("auto", true, false), ("md.us", true, false), ("md.eu", true, true), ("md.jp", false, false), ("md.asia", false, true)] {
+            let m = made(region);
+            let version = m.genesis.hw.io.read(0xA1_0001, 0);
+            assert_eq!((version >> 7 & 1 != 0, version >> 6 & 1 != 0), (overseas, pal), "{region}");
+            assert_eq!(m.machine_info().frame_rate, if pal { PAL_FRAME } else { NTSC_FRAME }, "{region}");
+        }
+        assert!(Machine::settings_schema().iter().all(|s| s.check().is_ok()));
+        assert!(Machine::settings_schema().iter().filter(|s| [MODEL_KEY, REGION_KEY].contains(&s.key.as_str())).all(|s| matches!(s.scope, Scope::Create)));
     }
 
     /// The model setting chooses the sound chip and the output circuit at create: model 1 unless model 2 is asked for.

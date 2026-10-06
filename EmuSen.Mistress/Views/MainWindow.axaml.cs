@@ -930,7 +930,7 @@ namespace EmuSen.Mistress.Views
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
 
                 // The catalogue's console, not the core's name: a Game Boy core says GBC while it is a Color, and the GB tab is its settings - see §4.47.
-                _activeConsole = console == "Unknown" ? _session.CoreName : console;
+                _activeConsole = console == "Unknown" ? EmuSen.Cores.CoreCatalog.DiscoveredConsoleForSystem((_session.Core as EmuSen.Cores.Native.CoreEngine)?.Machine.Info.System) ?? _session.CoreName : console;
 
                 // What the graphics window holds for this console, or each setting's own default - see EmuSen_Settings_Reference.md §4.26.
                 ApplyConsoleSettings(_session, _activeConsole);

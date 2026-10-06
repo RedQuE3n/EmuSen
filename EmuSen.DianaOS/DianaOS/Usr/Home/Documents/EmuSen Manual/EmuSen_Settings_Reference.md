@@ -7919,3 +7919,50 @@ Pictures from the headless renderer (`EMUSEN_WINDOW_FIT_PNG=firmware-page`) are 
   shipped core runs one, so no test exercises that branch.
 - **Hotaru and Pharaoh** have no such page; their log line (`EmuSen_Firmware.md` §3) is unchanged.
 
+
+### 4.90 The Genesis's settings: Region, Console model and the two pads (2026-10-06)
+
+**What the player sees.** Graphics Settings has a **Genesis** tab after the four catalog consoles, and a **Sega CD** and
+a **32X** tab after it, each the settings of the engine that runs the console, Nephrite. The tabs appear only when
+that engine is found beside the program; while it is in development (`EmuSen_CoreAPI.md` §27) that is only in a build
+run with development cores shown, so a player sees none of them yet.
+
+| Row | Key | Choices, the default first | When it acts |
+|---|---|---|---|
+| Console model | `model` | Model 1 (`md.model1`), Model 2 (`md.model2`) | When a game is next loaded |
+| Region | `region` | From the cartridge (`auto`), Americas (NTSC) (`md.us`), Europe (PAL) (`md.eu`), Japan (NTSC) (`md.jp`), Asia (PAL) (`md.asia`) | When a game is next loaded |
+| Port 1 controller | `pad1` | 3-Button Control Pad (`md.pad3`), 6-Button Arcade Pad (`md.pad6`) | Between frames |
+| Port 2 controller | `pad2` | the same | Between frames |
+
+- **Console model** is `Nephrite_Native.md` §28's: the discrete YM2612 and model 1's output circuit, or the YM3438
+  and model 2's.
+- **Region** sets the version register's two market bits, overseas and PAL, and with PAL the picture's rate, 50 frames
+  a second instead of 60. *From the cartridge* is the header's: a game for the Americas, or for several markets, runs
+  as an American console; one for Europe alone as a European; one for Japan alone as a Japanese. A game that checks
+  its market may refuse the others, as on the console. The Sega CD's BIOS is still chosen by the disc's header, not by
+  this row.
+- **The pads.** The three-button pad gives Up, Down, Left, Right, A, B, C and Start; the six-button pad adds X, Y, Z
+  and Mode. Both reach the controller as the RetroPad's buttons (`Nephrite_Plan.md` §4.2): A on Y, B on B, C on A, X
+  on L, Y on X, Z on R, Start on Start, Mode on Select, so the three face buttons lie on the RetroPad's bottom row as
+  a Genesis pad's do. No `PadButton` was added. A game that does not know the six-button pad reads its first eight
+  buttons as a three-button pad's.
+
+**How it is wired.**
+
+- **The console's name.** A console no catalog core runs takes its name from its system pack (`SystemEntry.Console`)
+  when a discovered engine, not registered by hand, serves the pack's system (`CoreCatalog.DiscoveredConsoles`).
+  `CoreCatalog.SettingsFor` answers for such a console with the engine's schema, each setting the info's `settings`
+  entry not marked hidden. When a game runs on that engine, Mistress's running console is the pack's console of the
+  game's system, so the tab, `graphics.json` and the settings applied to the session use one name.
+- **Words for choices.** A choice in a v1 core's schema has a value and a label. The window shows the label and stores
+  the value (`CoreSettingDescriptor.ChoiceLabels`, `CoreSetting.ChoiceLabels`); a setting whose schema gives no labels
+  is shown by its values as before.
+- **Settings read at create.** `CoreFactory.Create` hands a v1 engine the values `graphics.json` holds for the console
+  the file runs as (the catalog's console, else the pack's of the engine's system that claims the extension), so a
+  create-scope setting reaches the machine as it is made. Before this a v1 engine was made with its defaults and the
+  stored values reached it only after `LoadRom`, too late for a setting read at create. Nephrite now also takes
+  run-scope settings between frames (`SETTINGS`), so a pad changed during a game is the game's at the next frame.
+
+**Coverage**: `EmuSen.WiseMan/Mistress/GenesisSettingsTests.cs` (the consoles named, the rows in words, a choice
+stored by its value, a stored region and pad reaching the machine at create), the Genesis tab in the window fit audit
+at both sizes (`GraphicsSettingsGenesis`), and the crate's `the_region_setting_chooses_the_market_and_the_rate`.

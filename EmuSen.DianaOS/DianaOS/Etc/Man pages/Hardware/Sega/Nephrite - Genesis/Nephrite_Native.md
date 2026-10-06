@@ -2376,3 +2376,33 @@ stage's end; G8's reading of the disputes log is a reader's who did not write it
 "Sega Genesis Game Genie Conversion Method" (after Merlyn LeRoy's postings) and Charles MacDonald's `genhw.txt`, as
 prose; Sega Retro's "Action Replay (Mega Drive)"; the libretro database's code strings, read for their forms. No
 emulator's source and no decoder program was read.
+
+## 31. Stage 6, the settings (2026-10-06)
+
+The row's second item: the region, the model and the pads (`EmuSen_Settings_Reference.md` §4.90).
+
+### 31.1 What it built
+
+- **Region** (`v1.rs`, key `region`, read at create): from the cartridge's header, or the Americas, Europe, Japan or
+  Asia, each its version register's overseas and PAL bits; PAL also sets the frame's rate, which machine info now
+  takes from the machine's model rather than the header. **Console model** is read at create too, as both now say.
+- **The pads** were chosen by setting since stage 3 (§10); the core now exports `SETTINGS`, so a change reaches a
+  running game between frames. Their buttons reach the RetroPad as §4.2 of the plan gives them; no `PadButton` was
+  added.
+- **The frontend's path for a console only a discovered engine runs**: the system pack names it (Genesis, Sega CD,
+  32X), `CoreCatalog.SettingsFor` gives the engine's schema for it, Graphics Settings has its tab after the catalog's,
+  a choice is shown by its label and stored by its value, and `CoreFactory` hands a v1 engine the stored values at
+  create, which no v1 engine had been given before.
+
+### 31.2 Measured (2026-10-06)
+
+- **The crate's tests**: 104 pass, the region's five choices against the version register and the rate among them.
+- **WiseMan**: the Genesis's settings, the graphics window, the Nephrite, Mercury model, descriptor and engine tests
+  (33), and the window fit audit with the Genesis tab at 1280×800 and 1920×1200, the VenusRT, factory, discovery and
+  registration tests (209), pass.
+
+### 31.3 The gate's evidence
+
+| Gate | So far |
+|---|---|
+| G4, the frontend | The cheats decode (§30). The fit audit passes with the Genesis tab of Graphics Settings at both sizes. |

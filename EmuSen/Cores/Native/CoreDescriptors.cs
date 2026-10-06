@@ -65,12 +65,15 @@ namespace EmuSen.Cores.Native
     public sealed record CoreSettingDescriptor(string Key, string Label, string Help, string Kind, string Default, int Min, int Max, IReadOnlyList<string> Choices,
         bool CreateScope, string? Category, string Effect, string? Cost, bool Advanced, bool Hidden, bool Restart)
     {
+        // The words each choice is shown by, in the order of Choices; a value is its own label where the schema gives none.
+        public IReadOnlyList<string> ChoiceLabels { get; init; } = Array.Empty<string>();
+
         // As the settings window lists it; a text setting has no row there yet, so null.
         public CoreSetting? AsCoreSetting() => Kind switch
         {
             "switch" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Switch, Default),
             "count" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Count, Default, Min, Max),
-            "choice" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Choice, Default, Choices: Choices),
+            "choice" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Choice, Default, Choices: Choices, ChoiceLabels: ChoiceLabels.Count == Choices.Count ? ChoiceLabels : null),
             _ => null,
         };
 
@@ -168,7 +171,8 @@ namespace EmuSen.Cores.Native
             if (doc.RootElement.ValueKind != JsonValueKind.Array) return Array.Empty<CoreSettingDescriptor>();
             return doc.RootElement.EnumerateArray().Select(s => new CoreSettingDescriptor(Str(s, "key"), Str(s, "label"), Str(s, "help"), Str(s, "kind"), Str(s, "default"),
                 (int)Long(s, "min"), (int)Long(s, "max"), Arr(s, "choices").Select(c => Str(c, "value")).ToArray(), Str(s, "scope") == "create", OptStr(s, "category"),
-                Str(s, "effect", "none"), OptStr(s, "cost"), Bool(s, "advanced"), Bool(s, "hidden"), Bool(s, "restart"))).ToArray();
+                Str(s, "effect", "none"), OptStr(s, "cost"), Bool(s, "advanced"), Bool(s, "hidden"), Bool(s, "restart"))
+            { ChoiceLabels = Arr(s, "choices").Select(c => Str(c, "label", Str(c, "value"))).ToArray() }).ToArray();
         }
 
         // key -> sentence, from setting_notes.

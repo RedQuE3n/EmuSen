@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores.Nintendo.Mars;
@@ -39,7 +40,7 @@ namespace EmuSen.Cores
 
         // <headless> only means anything to a core that owns a window-ish resource; <engine> is a CoreCatalog.EngineFor name, and null is the reference core, not the player's default - see EmuSen_Settings_Reference.md §4.44.
         public static ICore Create(string romPath, bool headless = true, string? engine = null) =>
-            V1Library(Extension(romPath), engine) is { } v1 ? new Native.CoreEngine(v1) : Extension(romPath) switch
+            V1Library(Extension(romPath), engine) is { } v1 ? new Native.CoreEngine(v1, StoredSettings(romPath, v1)) : Extension(romPath) switch
         {
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => engine == CoreCatalog.MoonRtEngine && MoonRtCore.Available ? new MoonRtCore() : new MoonCore(),
@@ -48,6 +49,15 @@ namespace EmuSen.Cores
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
         };
+
+        // What graphics.json holds for the console the file runs as, so a setting read only at create reaches the machine - see EmuSen_Settings_Reference.md §4.90.
+        private static IReadOnlyDictionary<string, string> StoredSettings(string romPath, Native.CoreLibrary library)
+        {
+            string? console = CoreCatalog.ConsoleForRom(romPath) ?? CoreCatalog.DiscoveredConsoleForFile(romPath, library.Info);
+            if (console is null) return new Dictionary<string, string>();
+            var config = GraphicsConfig.Load();
+            return library.Settings.Select(s => (s.Key, Value: config.Value(console, s.Key))).Where(p => p.Value is not null).ToDictionary(p => p.Key, p => p.Value!);
+        }
 
         // The one generic branch for v1 engines: the one asked for by name, or the first for an extension no C# core claims; null when it is not loadable - see EmuSen_CoreAPI.md §19.
         private static Native.CoreLibrary? V1Library(string extension, string? engine)

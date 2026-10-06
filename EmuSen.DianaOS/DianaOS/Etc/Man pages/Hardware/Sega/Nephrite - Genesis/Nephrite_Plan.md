@@ -625,7 +625,10 @@ all 61 LFO voices the board's (§26 there, D-25). The zeroing of a write by a st
 and unbuilt (D-15). The picture was then placed against the 68000's start as the board's is, stage 4's frame offset
 removed: the VDP on line 159 as the 68000 starts, measured from the HV counter, and the rules of the 68000's cycle
 against the VDP and the refresh that the move exposed found on the board; every stage 4 test passes, every voice is the board's at the one
-placement, and the corpus's anchors are recorded again (§27 there, D-26).*
+placement, and the corpus's anchors are recorded again (§27 there, D-26). The output stage followed, measured on
+MDFourier's recordings of 21 consoles: the discrete YM2612's ladder effect and pulsed output, the YM3438's linear one
+behind a Model setting, model 1's first-order filter at 3,216 Hz and the PSG at 0.324 of the DAC's swing; a model 1's
+left side is Nephrite's to a quarter of a decibel (§28 there, D-27).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

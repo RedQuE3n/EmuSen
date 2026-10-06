@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 15;
+pub const STATE_VERSION: i32 = 16;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -161,12 +161,13 @@ mod tests {
                 "142243 1024 u64[128] Sound.Writes\n143267 32 u64[4] Sound.Csm\n",
                 "143299 1056 u64[132] Sound.FmOperators\n144355 24 bool[24] Sound.FmKeys\n",
                 "144379 16 u64[2] Sound.FmEnvelope\n144395 4 u8[4] Sound.FmLatches\n144399 3 u8[3] Sound.FmLfo\n",
-                "144402 31 bool[31] Sound.FmSsgKeys\n144433 48 u16[24] Sound.FmShown\n",
-                "144481 6 u16[3] Sound.Tone\n144487 4 u8[4] Sound.Volume\n144491 3 u8[3] Sound.NoiseLatchStereo\n",
-                "144494 8 u16[4] Sound.Counter\n144502 4 bool[4] Sound.Bit\n144506 2 u16 Sound.Shift\n",
-                "144508 16 u64[2] Sound.PsgTimeAndTime\n144524 8 i32[2] Sound.Level\n144532 24 u64[3] Sound.Sum\n",
-                "144556 1024 u64[128] Sound.Pending\n145580 8 i32[2] Sound.Level\n145588 24 u64[3] Sound.Sum\n",
-                "145612 1024 u64[128] Sound.Pending\n",
+                "144402 31 bool[31] Sound.FmSsgKeys\n144433 48 u16[24] Sound.FmShown\n144481 6 u16[3] Sound.Tone\n",
+                "144487 4 u8[4] Sound.Volume\n144491 3 u8[3] Sound.NoiseLatchStereo\n144494 8 u16[4] Sound.Counter\n",
+                "144502 4 bool[4] Sound.Bit\n144506 2 u16 Sound.Shift\n144508 16 u64[2] Sound.PsgTimeAndTime\n",
+                "144524 80 i32[20] Sound.Lines\n144604 8 i32[2] Sound.Level\n144612 24 u64[3] Sound.Sum\n",
+                "144636 1024 u64[128] Sound.Pending\n145660 8 i32[2] Sound.Level\n145668 24 u64[3] Sound.Sum\n",
+                "145692 1024 u64[128] Sound.Pending\n146716 88 u64[11] Sound.Circuit\n",
+                "146804 160 u64[20] Sound.CircuitSides\n",
             )
         );
     }

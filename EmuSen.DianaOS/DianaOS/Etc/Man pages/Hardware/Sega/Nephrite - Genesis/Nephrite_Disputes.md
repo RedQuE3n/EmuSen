@@ -1204,3 +1204,96 @@ CPUs' disputes in their own record pages.
   pass.
 - Pinned by: every stage 4 test with the move; `genesis.rs`'s RAM loops; the voices' tests at the one placement.
 - Implemented in: the commit "Nephrite, stage 5: the picture placed against the 68000's start".
+
+### D-27. The sound's output: the discrete YM2612's DAC stands a step higher from 0 up and rests a step to the sign's side in a channel's idle slots (the ladder effect), the YM3438's is linear; the pins carry pulses, not held samples; model 1's circuit is a first-order low-pass at 3,216 Hz; the PSG at full volume is 0.324 of the DAC's swing
+- Opened: 2026-10-06, at stage 5's output step, by the plan's ladder effect, YM3438 and model 1 filter, and by §18's
+  mix, whose 0.251 was the median of four emulators.
+- Documents read, as prose:
+  - SpritesMind topic 386. **Eke, 2017-10-24** (page 56), reporting Nuked's reading of the YM3438's die: the ladder
+    effect has two causes. The DAC's resistor array reaches the middle from neither side, 0 and -1 being the same
+    resistance either side of it, so the gap between them is twice a step: "a +1 offset on positive or zero channel
+    output". And the sign bit still acts when the output is silenced, which it is on a side a channel is panned off and
+    between channels' outputs, a channel's output being active one of the chip's internal cycles and held low for three:
+    "the output is actually forced to either +1 or -1", "a +3/-3 offset (+4/-4 when channel is muted)". This is prose
+    about an implementation, and the two constants below are as it gives them; they were then held to a published
+    measurement and to recordings, below. **Sauraen, 2015-09-21 and 2016-08-14** (pages 48, 55): the DAC is a resistor
+    string whose halves "don't quite meet in the middle"; the top nine bits of the operator's fourteen go to the
+    accumulator. **HardWareMan and Eke, 2013-05-18** (page 46): an 8 by 32 matrix of levels and a sign that turns the
+    array to the supply or to ground. **GManiac, 2016-08-13** (page 54): the step from -1 to 0 is three to four times a
+    step, from memory. **TmEE, 2008** (pages 15, 17) and **HardWareMan** (page 19): a model 1's ladder is strong, a
+    model 2's ASIC has little of it. **Aly James, 2013-05-31** (page 46): a muted channel is still heard, distorted, at
+    a lower level.
+  - **Kabuto, "SEGA Mega Drive / Genesis hardware notes" 1.5**, its section on the YM2612: published measurements of
+    model 1s and model 2s. On a model 1 the DAC "just outputs a short pulse for each voice, one voice after another in a
+    cycle", on a model 2 it holds longer but within the voice's sixth of the sample; the DAC's levels, measured through
+    `$2A` with `$2C` bit 3 clear and set, jump "3 samples between $7F and $80" on a model 1 with "a few further values
+    quite off", and hardly on a model 2; the model 1's filter is first-order, the model 2's second-order behind an
+    amplifier that distorts. Its diagrams were read by pixel (`mdrecordings.py dac-steps`): on the model 1 the step from
+    `$7F` to `$80` is 4.0 of the register's steps with bit 3 clear and 4.5 with it set, and with bit 3 clear the levels
+    `$A0`, `$B0` to `$F0` stand 0.75 to 2.75 steps high; on the model 2 there is no step at the middle.
+  - The YM3438's data sheet (Yamaha, pages 2-45 and 2-56): a nine-bit stereo DAC, with a buffer and a low-pass filter
+    after each pin in the recommended circuit.
+- Recordings (public audio, no firmware): MDFourier's "MegaDrive/Sega Genesis and Sega CD recordings 2020-06-14", 21
+  consoles running the 240p Test Suite's MDFourier sequence, which Nephrite runs from the suite's 1.32 image: 3,500
+  frames between the two sync trains on every recording and in Nephrite. By their file names they speak for: model 1
+  boards VA1 and VA6 (Japan), VA2, VA3 (two consoles), VA6 (three), VA6.5 and VA7 (US); model 2 boards VA0, VA1, VA1.8
+  (two), VA2.3, VA3 and VA4; a Nomad; and two model 3s. Nemesis's recording of his CSM test is the closing oracle's, not
+  this record's.
+- Not a referee: the bench's `MOL_2612` is the board model's emulation of the discrete DAC, not the die. It shows the
+  same form (a pin one higher when the level is not negative, and a muted negative channel at -1), which the trace keeps
+  for comparing with it, and it decides nothing here.
+- Method (`mdrecordings.py`): each recording is cut by its own sync trains, and every partial of each of the 96 FM notes
+  within 20 dB of its note's strongest is measured against the same partial in Nephrite's run; the 40 PSG tones'
+  fundamentals likewise.
+- Measured:
+  - **The ladder is in the model 1s at the model's strength.** The 683 partials that Nephrite's left side has 30 times
+    stronger with the ladder than without it are in the recordings of VA1, VA3 (two), VA6 and VA6.5 at a median of -0.5
+    to +0.5 dB of the model's level (quartiles within 2.7 dB), and 26 dB above the run without it. On the right side,
+    142 partials, they are 3.5 to 4.6 dB above the model's, not traced. On the model 2 boards VA1 and VA1.8 the same
+    partials are 18 to 27 dB below the model's, within 8 dB of the run without the ladder on the left and 2 dB on the
+    right: their YM3438 is linear. The model 2 board VA2.3 has them at +0.1 and +0.7 dB of the model's: its chip is a
+    discrete YM2612.
+  - **The middle of the DAC.** The model's turn of a channel (below) rises nine steps from the DAC register's `$7F` to
+    `$80`, 4.5 of that register's steps: Kabuto's diagram shows 4.0 and 4.5.
+  - **Pulses, not held samples.** Against a Nephrite that held each sample, a first-order low-pass fitted the left side
+    of a VA6 to 0.34 dB at 3,456 Hz; with the hold's droop taken out of Nephrite, to 0.29 dB at 3,265 Hz. The PSG's
+    tones, a true square with no samples to hold, follow that low-pass to 0.04 to 0.06 dB over 40 tones on every model 1
+    from VA3 to VA6.5: the FM agrees with the PSG's filter only as pulses.
+  - **Model 1's circuit.** With the ladder and the droop out, the left sides fit a first-order low-pass and a
+    first-order high-pass to 0.19 to 0.23 dB: VA3 3,165 and 3,180 Hz; VA6 3,170, 3,183, 3,250 and 3,320; VA6.5 3,195;
+    their mean 3,209 with the hold undone by the taps, 3,216 as first fitted, which is the value built; high-pass 23.5
+    to 26.4 Hz left and 20.6 to 22.9 right, 23 built. VA1 is at 3,721 Hz and VA2 at 3,842; VA7's circuit is another (no
+    first-order filter fits it, 3.5 dB), and one VA3 recorded from its AV output another again.
+  - **Model 2's.** VA2.3 fits a second-order low-pass at 5,385 to 5,659 Hz with a Q of 0.63 to 0.35 dB, but is not a
+    YM3438. The YM3438's boards, VA0, VA1 and VA1.8, fit no filter well: a second-order low-pass at 5,805 Hz with a Q of
+    1.16 and a first-order one at 4,111 Hz, with a high-pass at 16 Hz, come to 2.4 to 2.6 dB on the left sides and
+    differ on the right, the amplifier's distortion being in it as Kabuto says. VA3 and VA4 fit a second-order one near
+    4,700 Hz to 0.8 dB.
+  - **The PSG's level.** With Nephrite's PSG at 0.251 of the DAC's swing, the seven model 1 consoles from VA3 to VA6.5
+    have the PSG 1.85 to 2.44 dB louder against FM, 2.21 in the mean: 0.324.
+- Conclusion, built:
+  - **A channel's turn** at a pin, in DAC steps summed over its four slots (`Ym2612::turn`): the YM3438's is its level,
+    and nothing on a side it is panned off; the discrete YM2612's is its level and four more from 0 up (the step the
+    upper half stands higher, and three slots at rest a step above the middle), its level less three below 0, and four
+    above or below the middle on a side it is panned off.
+  - **The pins' pulses**: the step synthesiser holds each sample, which keeps its images down, and seven taps on the FM
+    stream at the output rate undo the hold's droop to 0.08 dB up to 20 kHz (`UNHOLD`). The six turns' places within the
+    sample are not kept.
+  - **The circuits** (`sound.rs`'s `Circuit`), digital filters at 48 kHz fitted to the analogue magnitudes up to 20 kHz:
+    model 1 a first-order low-pass at 3,216 Hz and a high-pass at 23 Hz, speaking for boards VA3 to VA6.5; model 2 the
+    YM3438 boards' second-order and first-order low-passes and 16 Hz high-pass, without the distortion.
+  - **The PSG** at full volume is 0.324 of the DAC's swing (`PSG_GAIN`), on either model.
+- Result, Nephrite's finished model 1 against the seven consoles with a gain alone between them: the left sides'
+  partials from 40 Hz to 16 kHz are within 0.21 to 0.24 dB (rms), every one within 1 dB; the right sides', 1.5 dB with
+  nine in ten within 1 dB; the PSG's level against FM within -0.57 to +0.27 dB. The model 2 against VA0, VA1 and VA1.8:
+  1.7 to 1.8 dB, nine in ten within 1 dB on the left.
+- Open: the right side's weaker agreement, and its ladder partials 4 dB above the model's; the model 1 levels that stand
+  high with `$2C` bit 3 clear (Kabuto's diagram), not built; boards VA1, VA2 and VA7 of model 1, which the Model setting
+  does not offer; model 2's distortion, its PSG's level (1 to 3 dB below the built one against FM, with a spread of 3 to
+  4 dB over the tones, the PSG's path being another there) and its other boards; whatever the multiplexing does within a
+  sample.
+- Pinned by: `ym2612.rs`'s `the_discrete_dacs_halves_stand_apart_at_the_middle` and
+  `the_dac_takes_channel_sixs_place_on_the_sides_its_panning_names`; `sound.rs`'s
+  `the_circuits_follow_their_analogue_responses`, `the_unhold_taps_undo_a_held_samples_droop` and
+  `the_dac_and_the_psg_add`; `v1.rs`'s `the_model_setting_chooses_the_sound_chip_and_circuit`.
+- Implemented in: the commit "Nephrite, stage 5: the output stage".

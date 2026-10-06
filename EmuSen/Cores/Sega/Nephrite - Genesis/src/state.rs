@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 13;
+pub const STATE_VERSION: i32 = 14;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -157,15 +157,16 @@ mod tests {
                 "141612 256 u8[256] Sound.Part0\n141868 256 u8[256] Sound.Part1\n",
                 "142124 6 u8[6] Sound.AddressPartFlags\n142130 4 u16[2] Sound.Counters\n",
                 "142134 24 u64[3] Sound.Times\n142158 8 i32[2] Sound.Out\n142166 24 i32[6] Sound.Channels\n",
-                "142190 6 u8[6] Sound.Timers\n142196 152 u64[19] Sound.TimersAndLate\n",
-                "142348 1056 u64[132] Sound.FmOperators\n143404 24 bool[24] Sound.FmKeys\n",
-                "143428 16 u64[2] Sound.FmEnvelope\n143444 4 u8[4] Sound.FmLatches\n143448 3 u8[3] Sound.FmLfo\n",
-                "143451 31 bool[31] Sound.FmSsgKeys\n143482 48 u16[24] Sound.FmShown\n",
-                "143530 6 u16[3] Sound.Tone\n143536 4 u8[4] Sound.Volume\n143540 3 u8[3] Sound.NoiseLatchStereo\n",
-                "143543 8 u16[4] Sound.Counter\n143551 4 bool[4] Sound.Bit\n143555 2 u16 Sound.Shift\n",
-                "143557 16 u64[2] Sound.PsgTimeAndTime\n143573 8 i32[2] Sound.Level\n143581 24 u64[3] Sound.Sum\n",
-                "143605 1024 u64[128] Sound.Pending\n144629 8 i32[2] Sound.Level\n144637 24 u64[3] Sound.Sum\n",
-                "144661 1024 u64[128] Sound.Pending\n",
+                "142190 5 u8[5] Sound.Timers\n142195 40 u64[5] Sound.TimersAndCounts\n",
+                "142235 1024 u64[128] Sound.Writes\n143259 32 u64[4] Sound.Csm\n",
+                "143291 1056 u64[132] Sound.FmOperators\n144347 24 bool[24] Sound.FmKeys\n",
+                "144371 16 u64[2] Sound.FmEnvelope\n144387 4 u8[4] Sound.FmLatches\n144391 3 u8[3] Sound.FmLfo\n",
+                "144394 31 bool[31] Sound.FmSsgKeys\n144425 48 u16[24] Sound.FmShown\n",
+                "144473 6 u16[3] Sound.Tone\n144479 4 u8[4] Sound.Volume\n144483 3 u8[3] Sound.NoiseLatchStereo\n",
+                "144486 8 u16[4] Sound.Counter\n144494 4 bool[4] Sound.Bit\n144498 2 u16 Sound.Shift\n",
+                "144500 16 u64[2] Sound.PsgTimeAndTime\n144516 8 i32[2] Sound.Level\n144524 24 u64[3] Sound.Sum\n",
+                "144548 1024 u64[128] Sound.Pending\n145572 8 i32[2] Sound.Level\n145580 24 u64[3] Sound.Sum\n",
+                "145604 1024 u64[128] Sound.Pending\n",
             )
         );
     }

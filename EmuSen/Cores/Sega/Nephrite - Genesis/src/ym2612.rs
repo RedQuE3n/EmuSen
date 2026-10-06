@@ -1,7 +1,7 @@
 //! The YM2612 (OPN2) as the buses see it: the address register and its part, the register file of both parts, the
 //! two timers and the status register with its busy flag, channel 6's DAC, and the FM unit (`fm.rs`) each sample. A
 //! sample is 144 of the chip's clocks (the 68000's), 1,008 master clocks. The chip shares the Z80's reset line.
-//! Nephrite_Native.md §18, §19, §21 and §24 are the record, with the sources each rule comes from.
+//! Nephrite_Native.md §18, §19, §21, §24 and §26 are the record, with the sources each rule comes from.
 
 use emusen_native::{StateReader, StateWriter, Truncated};
 
@@ -23,19 +23,44 @@ pub const SLOT_EDGE: u64 = 32;
 /// and the counter's first cycle is the fourth sample from its start.
 pub const RESTART: u64 = 87 + KEY_LEAD;
 /// The first sample's deadline after power-on, where the reset line starts asserted: where the board's falls against
-/// the picture (Nephrite_Disputes.md D-2, D-19), its key moment at 793 (Nephrite_Native.md §24).
-pub const POWER_ON: u64 = 793 + KEY_LEAD;
+/// its 68000's start (Nephrite_Disputes.md D-19, Nephrite_Native.md §25).
+pub const POWER_ON: u64 = 910;
 pub const RELEASE_LEEWAY: u64 = 67;
-/// A sample's deadline is the moment up to which a write to most registers is in time for it. The key register is
-/// taken sooner, a channel at a time, a slot apart: a write keying channel 1 must come `KEY_LEAD` master clocks
-/// before the deadline, channel 6's five slots less. A timer's load bit must come `LOAD_LEAD` before it; the timers
-/// tick then, and a flag the tick raises reads set from `FLAG_LEAD` before the deadline (Nephrite_Disputes.md D-15,
-/// Nephrite_Native.md §24).
+/// A sample's deadline is the moment its slot edges are counted from, each register part taken by its own (`TAKE_*`).
+/// The key register is taken before it, a channel at a time, a slot apart: a write keying channel 1 must come
+/// `KEY_LEAD` master clocks before the deadline, channel 6's five slots less. A timer's load bit must come `LOAD_LEAD`
+/// before it; the timers tick then, and a flag the tick raises reads set from `FLAG_LEAD` before the deadline
+/// (Nephrite_Disputes.md D-24, D-25, Nephrite_Native.md §24).
 pub const KEY_LEAD: u64 = 472;
 pub const LOAD_LEAD: u64 = KEY_LEAD - 2 * SLOT;
 pub const FLAG_LEAD: [u64; 2] = [KEY_LEAD - 196, KEY_LEAD - 196 - SLOT];
-/// Writes that can wait for their sample at once.
-const LATE: usize = 8;
+/// The slot edges after a sample's deadline by which a write must come to be taken by it, by what it writes, as D-25's
+/// landing sweeps measured them on S4 of channel 1 (Nephrite_Disputes.md D-25, Nephrite_Native.md §26): the operator's
+/// registers and the algorithm by the 18th, the feedback by the 6th, the frequency and the LFO's sensitivities by the
+/// 24th, the panning by the 42nd, the LFO and the top-bit test by the 35th, the phase test by the 11th, the envelope
+/// test by the 31st, channel 3's mode by the 13th, the DAC on every channel by the 48th, the DAC's data and enable by
+/// the 64th. A key's is the 12th edge before. A sample is made once its last edge, `TAKE_LAG`, has passed.
+pub const TAKE_OPERATOR: i64 = 18;
+pub const TAKE_FEEDBACK: i64 = 6;
+pub const TAKE_FREQUENCY: i64 = 24;
+pub const TAKE_PAN: i64 = 42;
+pub const TAKE_LFO: i64 = 35;
+pub const TAKE_PHASE_TEST: i64 = 11;
+pub const TAKE_TOP_BIT_TEST: i64 = 35;
+pub const TAKE_EG_TEST: i64 = 31;
+pub const TAKE_SPECIAL: i64 = 13;
+pub const TAKE_DAC_TEST: i64 = 48;
+pub const TAKE_DAC: i64 = 64;
+pub const TAKE_LAG: u64 = SLOT_EDGE + TAKE_DAC as u64 * SLOT;
+/// Writes that can wait to be taken at once, and samples CSM can be keyed in ahead of their making; a program that
+/// writes faster than that has its oldest write taken at once.
+const PENDING: usize = 64;
+const CSM_AHEAD: usize = 4;
+
+/// Master clocks from a sample's deadline to its `n`th slot edge.
+const fn edge(n: i64) -> i64 {
+    SLOT_EDGE as i64 + n * SLOT as i64
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ym2612 {
@@ -57,10 +82,11 @@ pub struct Ym2612 {
     pub timers_next: u64,
     /// The master clock from which each timer's flag, raised by a tick, reads set; none while it is `u64::MAX`.
     pub rise: [u64; 2],
-    /// Writes that came too late for the sample then due (its deadline, the part, the register, the value): they
-    /// are taken once it is made. Only the key register waits, and a program that writes it faster than the chip
-    /// takes it has its oldest key taken at once.
-    pub late: Vec<(u64, u8, u8, u8)>,
+    /// Writes not yet taken, in the order made: the deadline of the sample that takes each, the part, the register,
+    /// the value and the bits taken then.
+    pub pending: std::collections::VecDeque<(u64, u8, u8, u8, u8)>,
+    /// The deadlines of the samples the timers have keyed CSM in, made or not.
+    pub csm_at: Vec<u64>,
     /// Bits 0 and 1: timer A's and timer B's overflow flags.
     pub flags: u8,
     /// The master clock until which the busy flag reads set.
@@ -89,7 +115,7 @@ impl Ym2612 {
         }
         // The DAC's data stands at the middle of its range, as the board's does before any write (§24).
         regs[0][0x2A] = 0x80;
-        Ym2612 { regs, address: 0, part: 0, counter_a: 0, counter_b: 0, divider_b: 0, load: [false; 2], reload: [false; 2], control: 0, timers_next: SAMPLE, rise: [u64::MAX; 2], late: Vec::new(), flags: 0, busy_until: 0, discrete, next: SAMPLE, held: false, held_at: 0, out: [0; 2], channels: [0; 6], fm: Fm::default(), trace: None }
+        Ym2612 { regs, address: 0, part: 0, counter_a: 0, counter_b: 0, divider_b: 0, load: [false; 2], reload: [false; 2], control: 0, timers_next: SAMPLE, rise: [u64::MAX; 2], pending: std::collections::VecDeque::new(), csm_at: Vec::new(), flags: 0, busy_until: 0, discrete, next: SAMPLE, held: false, held_at: 0, out: [0; 2], channels: [0; 6], fm: Fm::default(), trace: None }
     }
 
     fn timer_a(&self) -> u16 {
@@ -107,6 +133,9 @@ impl Ym2612 {
     /// the timers, the keys and the operators back to their power-on state and restarts the sample cycle from that
     /// moment; its release starts the envelope's counter from 0 (Nephrite_Disputes.md D-19).
     pub fn reset_line(&mut self, held: bool, t: u64) {
+        if held != self.held {
+            self.flush(t, |_, _| {});
+        }
         if held && !self.held {
             let fresh = Ym2612::new(self.discrete);
             let trace = self.trace.take();
@@ -116,7 +145,7 @@ impl Ym2612 {
             // was the last is the counter's first if the release is within the leeway of that moment, the one after
             // it if not, and the counter's first cycle is the fourth sample from there. `due` is that sample's
             // deadline, which may be past.
-            let due = self.next - (self.next + SAMPLE - KEY_LEAD - t - 1) / SAMPLE * SAMPLE;
+            let due = (self.next as i64 - (self.next as i64 + (SAMPLE - KEY_LEAD) as i64 - t as i64 - 1).div_euclid(SAMPLE as i64) * SAMPLE as i64) as u64;
             let with_last = due >= self.held_at && t + KEY_LEAD - due <= RELEASE_LEEWAY;
             let first = if with_last { due } else { due + SAMPLE };
             (self.fm.eg_counter, self.fm.eg_div) = (0, ((first + 3 * SAMPLE - self.next) / SAMPLE) as u8);
@@ -150,40 +179,84 @@ impl Ym2612 {
             self.load = [self.load[0] || (v & 1 != 0 && was & 1 == 0), self.load[1] || (v & 2 != 0 && was & 2 == 0)];
             self.control = v;
         }
-        // A write that comes within its register's lead of the sample due, or behind one still waiting for the
-        // same register, waits until that sample is made.
-        let same = |w: &(u64, u8, u8, u8)| w.1 == part as u8 && w.2 == a as u8 && (a != 0x28 || w.3 & 7 == v & 7);
-        if self.next < t + Self::lead(a, v) || self.late.iter().any(same) {
-            if self.late.len() == LATE {
-                let (_, p, r, value) = self.late.remove(0);
-                self.apply(p as usize, r as usize, value);
+        // The timers' registers and the test register's timer bit are theirs at once; everything else waits for the
+        // sample that takes it, each part of a register by its own moment.
+        if part == 0 && (0x24..=0x26).contains(&a) {
+            self.regs[0][a] = v;
+            return;
+        }
+        if part == 0 && a == 0x21 {
+            self.regs[0][0x21] = self.regs[0][0x21] & !4 | v & 4;
+        }
+        let (fields, n) = Self::takes(a, v);
+        for &(mask, after) in &fields[..n] {
+            let need = t as i64 - after - self.next as i64;
+            let due = if need <= 0 { self.next } else { self.next + (need as u64).div_ceil(SAMPLE) * SAMPLE };
+            if self.pending.len() == PENDING {
+                let (_, p, r, value, m) = self.pending.pop_front().unwrap();
+                self.apply(p as usize, r as usize, value, m);
             }
-            self.late.push((self.next, part as u8, a as u8, v));
-        } else {
-            self.apply(part, a, v);
+            self.pending.push_back((due, part as u8, a as u8, v, mask));
         }
     }
 
-    /// How long before a sample's deadline a write to register `a` must come to be in time for it: a channel's key
-    /// is taken a slot after the last channel's; every other register is taken at once (Nephrite_Disputes.md D-15).
-    fn lead(a: usize, v: u8) -> u64 {
-        match a {
-            0x28 => KEY_LEAD - ((v as u64 & 7) / 4 * 3 + (v as u64 & 3)).min(5) * SLOT,
-            _ => 0,
-        }
+    /// The parts of register `a` taken at their own moments: the bits of each, and how long after a sample's deadline
+    /// a write may come and still be taken by it (Nephrite_Disputes.md D-25).
+    fn takes(a: usize, v: u8) -> ([(u8, i64); 5], usize) {
+        let mut f = [(0xFF, 0); 5];
+        let n = match a {
+            0x28 => {
+                f[0].1 = -((KEY_LEAD - ((v as u64 & 7) / 4 * 3 + (v as u64 & 3)).min(5) * SLOT) as i64);
+                1
+            }
+            0x21 => {
+                f = [(0x02, 0), (0x08, edge(TAKE_PHASE_TEST)), (0x10, edge(TAKE_TOP_BIT_TEST)), (0x20, edge(TAKE_EG_TEST)), (0xC1, 0)];
+                5
+            }
+            0x22 => {
+                f[0].1 = edge(TAKE_LFO);
+                1
+            }
+            0x27 => {
+                f[0].1 = edge(TAKE_SPECIAL);
+                1
+            }
+            0x2A | 0x2B => {
+                f[0].1 = edge(TAKE_DAC);
+                1
+            }
+            0x2C => {
+                f[..3].copy_from_slice(&[(0x20, edge(TAKE_DAC_TEST)), (0x08, edge(TAKE_DAC)), (0xD7, 0)]);
+                3
+            }
+            0x30..=0x9F => {
+                f[0].1 = edge(TAKE_OPERATOR);
+                1
+            }
+            0xA0..=0xAE => {
+                f[0].1 = edge(TAKE_FREQUENCY);
+                1
+            }
+            0xB0..=0xB2 => {
+                f[..2].copy_from_slice(&[(0x07, edge(TAKE_OPERATOR)), (0x38, edge(TAKE_FEEDBACK))]);
+                2
+            }
+            0xB4..=0xB6 => {
+                f[..2].copy_from_slice(&[(0x37, edge(TAKE_FREQUENCY)), (0xC0, edge(TAKE_PAN))]);
+                2
+            }
+            _ => 1,
+        };
+        (f, n)
     }
 
-    /// A write's effect on the registers and the FM unit.
-    fn apply(&mut self, part: usize, a: usize, v: u8) {
+    /// A write's effect on the registers and the FM unit, of the bits `mask` names.
+    fn apply(&mut self, part: usize, a: usize, v: u8, mask: u8) {
         match a {
             0x28 => self.fm.key(v),
-            0xA0..=0xA6 | 0xA8..=0xAE => {
-                self.fm.frequency(&mut self.regs, part, a, v);
-                return;
-            }
-            _ => {}
+            0xA0..=0xA6 | 0xA8..=0xAE => self.fm.frequency(&mut self.regs, part, a, v),
+            _ => self.regs[part][a] = self.regs[part][a] & !mask | v & mask,
         }
-        self.regs[part][a] = v;
     }
 
     /// The flags whose rise has come by `t` join the status.
@@ -263,7 +336,7 @@ impl Ym2612 {
             self.channels = [self.dac_level(); 6];
         }
         if let Some(t) = &mut self.trace {
-            t.push(self.channels);
+            t.push(std::array::from_fn(|c| if self.regs[c / 3][0xB4 + c % 3] & 0x80 != 0 { self.channels[c] } else { -((self.channels[c] < 0) as i32) }));
         }
         let mut out = [0i32; 2];
         for ch in 0..6 {
@@ -280,28 +353,45 @@ impl Ym2612 {
         self.out = out;
     }
 
-    /// Every sample whose time has come by `t`, each output handed to `level` with the sample's master clock.
-    pub fn run(&mut self, t: u64, mut level: impl FnMut(u64, [i32; 2])) {
+    /// Every sample no write can still reach by `t`, `TAKE_LAG` past its deadline, each output handed to `level` with
+    /// the master clock it is made at; the timers tick at their own moment ahead of it.
+    pub fn run(&mut self, t: u64, level: impl FnMut(u64, [i32; 2])) {
+        self.make(t, false, level);
+    }
+
+    /// Every sample whose deadline has come by `t`, writes still to come or not, each output handed to `level` at `t`:
+    /// before the reset line clears the chip.
+    pub fn flush(&mut self, t: u64, level: impl FnMut(u64, [i32; 2])) {
+        self.make(t, true, level);
+    }
+
+    fn make(&mut self, t: u64, now: bool, mut level: impl FnMut(u64, [i32; 2])) {
         loop {
-            if self.timers_next <= self.next && self.timers_next < t + LOAD_LEAD {
-                // The timers of the sample due tick once no load can still reach them, and key CSM in that sample.
+            if self.timers_next < t + LOAD_LEAD {
+                // The timers of a sample tick once no load can still reach them, and key CSM in that sample.
                 let at = self.timers_next;
                 self.settle(at.saturating_sub(SAMPLE));
-                self.fm.csm = self.timers(at);
+                if self.timers(at) {
+                    self.csm_at.push(at);
+                }
                 self.timers_next += SAMPLE;
-            } else if self.next <= t {
+            } else if if now { self.next <= t } else { self.next + TAKE_LAG < t } {
                 let at = self.next;
-                self.sample();
-                level(at, self.out);
-                self.next += SAMPLE;
-                let waiting = std::mem::take(&mut self.late);
-                for (due, part, a, v) in waiting {
-                    if due <= at {
-                        self.apply(part as usize, a as usize, v);
+                // The writes this sample takes, in the order made; one taken by a later sample stays.
+                let mut k = 0;
+                while k < self.pending.len() {
+                    if self.pending[k].0 <= at {
+                        let (_, part, a, v, mask) = self.pending.remove(k).unwrap();
+                        self.apply(part as usize, a as usize, v, mask);
                     } else {
-                        self.late.push((due, part, a, v));
+                        k += 1;
                     }
                 }
+                self.fm.csm = self.csm_at.contains(&at);
+                self.csm_at.retain(|&c| c > at);
+                self.sample();
+                level(if now { t } else { at + TAKE_LAG }, self.out);
+                self.next += SAMPLE;
             } else {
                 break;
             }
@@ -316,13 +406,17 @@ impl Ym2612 {
         w.u64s("Times", &[self.busy_until, self.next, self.held_at]);
         w.i32s("Out", &self.out);
         w.i32s("Channels", &self.channels);
-        w.bytes("Timers", &[self.load[0] as u8, self.load[1] as u8, self.reload[0] as u8, self.reload[1] as u8, self.control, self.late.len() as u8]);
-        let mut times = vec![self.timers_next, self.rise[0], self.rise[1]];
-        for k in 0..LATE {
-            let (due, part, r, v) = self.late.get(k).copied().unwrap_or_default();
-            times.extend_from_slice(&[due, (part as u64) << 16 | (r as u64) << 8 | v as u64]);
+        w.bytes("Timers", &[self.load[0] as u8, self.load[1] as u8, self.reload[0] as u8, self.reload[1] as u8, self.control]);
+        w.u64s("TimersAndCounts", &[self.timers_next, self.rise[0], self.rise[1], self.pending.len() as u64, self.csm_at.len() as u64]);
+        let mut pending = [0u64; 2 * PENDING];
+        for (k, &(due, part, r, v, mask)) in self.pending.iter().enumerate() {
+            (pending[2 * k], pending[2 * k + 1]) = (due, (part as u64) << 24 | (r as u64) << 16 | (v as u64) << 8 | mask as u64);
         }
-        w.u64s("TimersAndLate", &times);
+        w.u64s("Writes", &pending);
+        let mut csm = [0u64; CSM_AHEAD];
+        let n = self.csm_at.len().min(CSM_AHEAD);
+        csm[..n].copy_from_slice(&self.csm_at[..n]);
+        w.u64s("Csm", &csm);
         self.fm.write_state(w);
     }
 
@@ -340,16 +434,19 @@ impl Ym2612 {
         (self.busy_until, self.next, self.held_at) = (t[0], t[1], t[2]);
         r.i32s(&mut self.out)?;
         r.i32s(&mut self.channels)?;
-        let mut b = [0u8; 6];
+        let mut b = [0u8; 5];
         r.bytes(&mut b)?;
         (self.load, self.reload, self.control) = ([b[0] != 0, b[1] != 0], [b[2] != 0, b[3] != 0], b[4]);
-        let mut times = [0u64; 3 + 2 * LATE];
+        let mut times = [0u64; 5];
         r.u64s(&mut times)?;
         (self.timers_next, self.rise) = (times[0], [times[1], times[2]]);
-        self.late = (0..(b[5] as usize).min(LATE)).map(|k| {
-            let packed = times[4 + 2 * k];
-            (times[3 + 2 * k], (packed >> 16) as u8, (packed >> 8) as u8, packed as u8)
-        }).collect();
+        let mut pending = [0u64; 2 * PENDING];
+        r.u64s(&mut pending)?;
+        let n = (times[3] as usize).min(PENDING);
+        self.pending = pending[..2 * n].chunks(2).map(|w| (w[0], (w[1] >> 24) as u8, (w[1] >> 16) as u8, (w[1] >> 8) as u8, w[1] as u8)).collect();
+        let mut csm = [0u64; CSM_AHEAD];
+        r.u64s(&mut csm)?;
+        self.csm_at = csm[..(times[4] as usize).min(CSM_AHEAD)].to_vec();
         self.fm.read_state(r)
     }
 }
@@ -371,8 +468,10 @@ mod tests {
         y.write(3, 0x11, 0);
         y.write(2, 0x31, 0);
         y.write(1, 0x22, 0);
+        y.run(SAMPLE + TAKE_LAG + 1, |_, _| {});
         assert_eq!((y.regs[0][0x30], y.regs[1][0x30], y.regs[1][0x31], y.regs[0][0x31]), (0x11, 0, 0x22, 0));
-        set(&mut y, 1, 0x2A, 0x99, 0);
+        set(&mut y, 1, 0x2A, 0x99, SAMPLE + TAKE_LAG + 1);
+        y.run(3 * SAMPLE + TAKE_LAG + 1, |_, _| {});
         assert_eq!((y.regs[0][0x2A], y.regs[1][0x2A]), (0x80, 0), "the chip's own registers are part 0's, the DAC's at its middle");
     }
 
@@ -457,7 +556,8 @@ mod tests {
         y.reset_line(false, 160 + 5 * SAMPLE);
         assert_eq!((y.fm.eg_counter, y.fm.eg_div), (0, 3), "released before any sample of the new cycle");
         set(&mut y, 0, 0x30, 0x22, 170 + 5 * SAMPLE);
-        assert_eq!(y.regs[0][0x30], 0x22);
+        y.run(100 + 5 * SAMPLE + RESTART + TAKE_LAG + 1, |_, _| {});
+        assert_eq!(y.regs[0][0x30], 0x22, "taken by the new cycle's first sample");
         for (after_a_key_moment, wait) in [(RELEASE_LEEWAY, 3), (RELEASE_LEEWAY + 1, 4), (SAMPLE - 1, 3)] {
             let mut y = Ym2612::new(true);
             y.reset_line(true, 10);
@@ -471,17 +571,18 @@ mod tests {
     #[test]
     fn the_dac_takes_channel_sixs_place_on_the_sides_its_panning_names() {
         let mut y = Ym2612::new(true);
+        // Each sample is made `TAKE_LAG` after its deadline; the writes after one is made are taken by the next.
         set(&mut y, 0, 0x2A, 0xFF, 0);
-        y.run(SAMPLE, |_, _| {});
+        y.run(SAMPLE + TAKE_LAG + 1, |_, _| {});
         assert_eq!(y.out, [0, 0], "off until $2B enables it");
-        set(&mut y, 0, 0x2B, 0x80, SAMPLE);
-        set(&mut y, 0, 0x2C, 0x08, SAMPLE);
-        y.run(2 * SAMPLE, |_, _| {});
+        set(&mut y, 0, 0x2B, 0x80, SAMPLE + TAKE_LAG + 1);
+        set(&mut y, 0, 0x2C, 0x08, SAMPLE + TAKE_LAG + 1);
+        y.run(2 * SAMPLE + TAKE_LAG + 1, |_, _| {});
         assert_eq!(y.out, [255, 255], "the ninth bit below $2A's eight");
-        set(&mut y, 1, 0xB6, 0x80, 2 * SAMPLE);
-        set(&mut y, 0, 0x2A, 0x00, 2 * SAMPLE);
-        set(&mut y, 0, 0x2C, 0x00, 2 * SAMPLE);
-        y.run(3 * SAMPLE, |_, _| {});
+        set(&mut y, 1, 0xB6, 0x80, 2 * SAMPLE + TAKE_LAG + 1);
+        set(&mut y, 0, 0x2A, 0x00, 2 * SAMPLE + TAKE_LAG + 1);
+        set(&mut y, 0, 0x2C, 0x00, 2 * SAMPLE + TAKE_LAG + 1);
+        y.run(3 * SAMPLE + TAKE_LAG + 1, |_, _| {});
         assert_eq!(y.out, [-256, 0]);
     }
 }

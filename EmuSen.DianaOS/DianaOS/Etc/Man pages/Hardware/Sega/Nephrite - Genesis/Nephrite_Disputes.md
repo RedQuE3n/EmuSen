@@ -140,6 +140,20 @@ CPUs' disputes in their own record pages.
   `register_writes_show_where_the_board_shows_them` and `writes_land_where_the_board_lands_them` fail with either
   refresh taken out, and the second with the bus refresh at the 68000-start phase.
 - Implemented in: the commit "Nephrite, stage 5: the 68000's side".
+- 2026-10-06, at stage 5's placement step: **the bus refresh and the Z80's area.** Loops of `$A04000` reads and
+  writes with 0 to 7 NOPs, and key sweeps on both parts, with the 68000's strobes logged by `TB_MEM`, show the rule
+  this record left out. The refresh is requested every 896 master clocks, its phase fitted from the board's own slow
+  cycles: in three loops, 670 of 670 cartridge cycles that are the first after a request wait the two clocks (DTACK
+  41 cycles of the bench's clock after AS, not 13). Where the first cycle after a request is to the Z80's area, one
+  that starts within a clock of it (6 master clocks) has the ordinary five clocks (27) and the cartridge cycle after
+  it no wait, so it took the refresh free; one that starts two or four clocks after it (14, 28) is a clock longer
+  (41). Nephrite holds a cycle to the Z80's area that starts one to six of the 68000's clocks after the latest
+  request (`REFRESH_Z80_LATE`). The held cycle's strobe on the Z80's bus is held with it, and the YM2612 takes the
+  write where the strobe falls and 48 cycles of the bench's clock, where it would rise without the wait: of 36,180
+  data writes in the sweeps and status loops, the busy flag of every one ends where D-13's rule has it counted from
+  that place. With both, all 83,451 of the 68000's cycles in 16 traced runs (12 loops, four key sweeps on both
+  parts) start at the board's master clock when Nephrite is placed as the board is; it was the drift on channels 4
+  to 6 (`Nephrite_Native.md` §24.3, §25.2), and is the six-clock read of the YM2612 left open in §22.5 there.
 
 ### D-3. Shadow/highlight: palette 3's colour 14 brightens and colour 15 darkens, and an operator pixel gives no priority
 - Opened: 2026-10-05, at stage 4 step 2, by two documents in disagreement. MacDonald's "Sega Genesis VDP
@@ -535,7 +549,10 @@ CPUs' disputes in their own record pages.
   the bus log does.
 - Implemented in: the commit "Nephrite, stage 5: the 68000's side".
 
-### D-15. OPEN. When an operator's or a channel's register write takes effect, and which writes are lost
+### D-15. OPEN. A status read straight after a data write: the board leaves the register at 0, and whether a console does is not known
+- *Split 2026-10-06, at stage 5's write pipeline step: this record keeps the writes a read leaves at 0; when each
+  register's write is taken, measured here at first, is D-25. Until then it was "When an operator's or a channel's
+  register write takes effect, and which writes are lost".*
 - Opened: 2026-10-05, at stage 5 step 2, by the board's FM output (`mdboard.py sound fm-sine` and its variants):
   writes made through `$A04000` at the pace of a busy-flag loop were partly lost, the multiple of operator S4 among
   them, which halved its frequency.
@@ -570,40 +587,15 @@ CPUs' disputes in their own record pages.
     data write, and every write of every voice since has taken effect (D-16).
   - ~~A write followed by a taken branch is lost~~ (`Nephrite_Native.md` §19.4, as first written): the branch was
     the busy poll's, and it was the poll's read, coming at once, that mattered.
-- Not measured: when a held write lands. Every voice compared since makes its writes before its key-on and at least
-  16 of the 68000's clocks apart, where applying a write at once and holding it for its operator's turn give the
-  same samples. *The writer's step measured it for the key register alone: a key-on is in time for a sample if its
-  strobe rises no later than 87 master clocks into the cycle the reset line's assertion started (D-19). Nephrite
-  takes every other write by the same moment, which is argued.*
-- Conclusion: **open, on two counts.** Whether a console leaves 0 in a register that is read at once after its
-  write is not known: no document read here says so, a driver that polled the busy flag in the instruction after a
-  data write would lose a third of its writes, and the board is a model of the chip, not the chip. A program for a
-  console can be made from `read_after_write`, whose outcome a recording of the DAC's level would show. And Sauraen's
-  held write is unmeasured. Nephrite applies every write at once and loses none.
+- ~~Not measured: when a held write lands.~~ Moved to D-25 with the measurements that followed.
+- ~~Conclusion: **open, on two counts.**~~ Sauraen's held write is D-25's, and measured there.
+- Conclusion: **open.** Whether a console leaves 0 in a register that is read at once after its write is not known:
+  no document read here says so, a driver that polled the busy flag in the instruction after a data write would lose
+  a third of its writes, and the board is a model of the chip, not the chip. A program for a console can be made from
+  `read_after_write`, whose outcome a recording of the DAC's level would show. Nephrite loses no write to a read, and
+  will not until a console has been recorded.
 - Pinned by: nothing yet.
-- Implemented in: not yet.
-- Measured 2026-10-06, at stage 5's SSG-EG and CSM step, not implemented. `mdboard.py`'s `LANDING` sweeps move one
-  write across the sample by NOPs after its wait for the busy flag, 40 runs 28 master clocks apart, and the chip,
-  given the board's other writes, is compared without that write to find the first sample the board shows it in.
-  Counted from that sample's deadline in D-24's frame, the write came:
-
-  | Write (S4 of channel 1 unless named) | From the deadline, master clocks |
-  |---|---|
-  | The key, each channel (D-24) | 472 before for channel 1, a slot less for each after |
-  | `$22` turning the LFO off; `$21` bit 3 | 469 after to 511 before |
-  | `$27` setting channel 3's special mode | 455 to 1,435 before |
-  | `$4C` TL, `$9C` SSG-EG, `$6C` AMON, `$B0` algorithm | 777 after to 203 before |
-  | `$B0` feedback | 273 after to 707 before |
-  | `$3C` multiple; `$A0` frequency | 231 to 1,211 before; 28 after to 952 before |
-  | `$B4` AMS; `$B4` panning | 1,029 to 49 after; 1,785 to 805 after |
-  | `$21` bit 5; bit 4; `$2C` bit 5 | 1,323 to 364 after; 1,477 to 497 after; 2,037 to 1,050 after |
-  | `$2A` and `$2B`, the DAC | at once, in every run |
-
-  A write a register reads late in the sample is taken by a sample whose deadline has passed, by up to two samples
-  for `$2C`: the chip's registers are read at their own places in a pipeline longer than a sample, which Nephrite's
-  sample-at-a-deadline unit does not have. The multiple's and the frequency's ranges include the sample a changed
-  phase step takes to show. So the entry stays open: implementing it needs the unit to make each sample up to two
-  samples after its deadline, with every register read at its place. Nephrite takes all of these at once.
+- Implemented in: not, deliberately (above).
 
 ### D-16. The operator's log-sine and exponent tables (settled), and the bench's FM output (measured: it plays every write and referees the FM unit)
 - Opened: 2026-10-05, at stage 5 step 2, by the operator unit's two tables, whose form the documents give (a
@@ -851,6 +843,9 @@ CPUs' disputes in their own record pages.
 - 2026-10-06, at stage 5's SSG-EG and CSM step: in D-24's frame the 87 and the 793 above are key moments, and a
   sample's deadline comes 472 after its key moment: `RESTART` is 559 and `POWER_ON` 1,265, the same placements. The
   board's first deadline after power-on, in its own clock, is 537 (D-24).
+- 2026-10-06, at stage 5's placement step: `POWER_ON` is 910, the board's first deadline against its 68000's start
+  (the key and CSM sweeps of all six channels each in the board's sample on the whole machine there, 1,000 runs),
+  as decided in `Nephrite_Native.md` §22.3.
 
 ### D-20. The LFO: a 128-count cycle whose divider never stops, a triangle of tremolo, and each operator taking the count at its own place in the sample
 - Opened: 2026-10-06, at stage 5's LFO step, by the documents giving the LFO's speeds in Hz and its depths in cents
@@ -1043,3 +1038,88 @@ CPUs' disputes in their own record pages.
 - Pinned by: `voices.rs`'s `keys_and_the_timers_load_land_in_the_boards_samples`, `the_lfo_voices_on_the_chip_are_the_boards`,
   `the_chip_voices_are_the_boards_sample_for_sample`, and the earlier voices' tests, which all pass under the frame.
 - Implemented in: the commit "Nephrite, stage 5: SSG-EG, CSM and the test register".
+
+### D-25. When each register's write is taken: by a slot edge after its sample's deadline, measured part by part, up to 64 edges after; each sample made once its last edge has passed
+- *Split from D-15 on 2026-10-06: the first two entries are D-15's as they were written.*
+- ~~Not measured: when a held write lands.~~ (D-15, 2026-10-05) Every voice compared since makes its writes before its
+  key-on and at least 16 of the 68000's clocks apart, where applying a write at once and holding it for its operator's turn give the
+  same samples. *The writer's step measured it for the key register alone: a key-on is in time for a sample if its
+  strobe rises no later than 87 master clocks into the cycle the reset line's assertion started (D-19). Nephrite
+  takes every other write by the same moment, which is argued.*
+- Measured 2026-10-06, at stage 5's SSG-EG and CSM step, not implemented. `mdboard.py`'s `LANDING` sweeps move one
+  write across the sample by NOPs after its wait for the busy flag, 40 runs 28 master clocks apart, and the chip,
+  given the board's other writes, is compared without that write to find the first sample the board shows it in.
+  Counted from that sample's deadline in D-24's frame, the write came:
+
+  | Write (S4 of channel 1 unless named) | From the deadline, master clocks |
+  |---|---|
+  | The key, each channel (D-24) | 472 before for channel 1, a slot less for each after |
+  | `$22` turning the LFO off; `$21` bit 3 | 469 after to 511 before |
+  | `$27` setting channel 3's special mode | 455 to 1,435 before |
+  | `$4C` TL, `$9C` SSG-EG, `$6C` AMON, `$B0` algorithm | 777 after to 203 before |
+  | `$B0` feedback | 273 after to 707 before |
+  | `$3C` multiple; `$A0` frequency | 231 to 1,211 before; 28 after to 952 before |
+  | `$B4` AMS; `$B4` panning | 1,029 to 49 after; 1,785 to 805 after |
+  | `$21` bit 5; bit 4; `$2C` bit 5 | 1,323 to 364 after; 1,477 to 497 after; 2,037 to 1,050 after |
+  | `$2A` and `$2B`, the DAC | at once, in every run |
+
+  A write a register reads late in the sample is taken by a sample whose deadline has passed, by up to two samples
+  for `$2C`: the chip's registers are read at their own places in a pipeline longer than a sample, which Nephrite's
+  sample-at-a-deadline unit does not have. The multiple's and the frequency's ranges include the sample a changed
+  phase step takes to show. So the entry stays open: implementing it needs the unit to make each sample up to two
+  samples after its deadline, with every register read at its place. Nephrite takes all of these at once.
+- *2026-10-06, at stage 5's write pipeline step:* ~~`$2A` and `$2B`, the DAC: at once, in every run~~: the DAC's two
+  sweeps were heard on channel 1, which the DAC does not reach, so they showed nothing. ~~So the entry stays open
+  ... Nephrite takes all of these at once.~~ Measured, below, and implemented.
+- Measured 2026-10-06, at stage 5's write pipeline step (`board-chip`'s `LANDINGS`: each sweep's writes at the
+  master clocks the board's chip took them, from `ym_latches`, and each run's channel from its first sample not at
+  rest, 320 samples, with how many samples after the first run's it leaves rest; the DAC's sweeps heard on channel 6,
+  256 samples). The chip is given each run's writes and each register part's moment moved 7 master clocks at a time
+  until all 40 runs are the board's. Every part has a window about 21 wide, the sweep's 28 less a step, and in every
+  window falls one of the chip's slot edges, which D-13 placed 32 master clocks into each slot after a deadline:
+
+  | Write (S4 of channel 1 unless named) | All 40 runs the board's from ... to ... after the deadline | The edge | Master clocks |
+  |---|---|---|---|
+  | `$4C` TL, `$3C` multiple | 782 to 803 | 18th | 788 |
+  | `$9C` SSG-EG, `$6C` AMON, `$B0` algorithm | 777 to 798 | 18th | 788 |
+  | `$B0` feedback | 275 to 296 | 6th | 284 |
+  | `$A0` frequency, `$A4` with it | 1,039 to 1,060 | 24th | 1,040 |
+  | `$B4` AMS; `$B4` PMS | 1,034 to 1,055; the same | 24th | 1,040 |
+  | `$B4` panning | 1,791 to 1,812 | 42nd | 1,796 |
+  | `$22` turning the LFO off | 1,477 to 1,498, and 1,502 | 35th | 1,502 |
+  | `$21` bit 3; bit 5; bit 4 | 471 to 492, and 494; 1,327 to 1,369; 1,477 to 1,498, and 1,502 | 11th; 31st; 35th | 494; 1,334; 1,502 |
+  | `$27` bit 6, channel 3's special mode | 557 to 578 | 13th | 578 |
+  | `$2C` bit 5 | 2,034 to 2,055 | 48th | 2,048 |
+  | `$2A`, `$2B`, the DAC's data and enable, on channel 6 | 2,712 (2,650 and 2,750 not) | 64th | 2,720 |
+  | The key, channel 1 (D-24) | | 12th before | 472 before |
+
+  Each edge was then run alone and every run was the board's at it. The first table's times differ from these where
+  the part reaches the output a sample or more after the sample that takes it: the multiple, the frequency, channel
+  3's mode and the LFO by one sample in Nephrite's unit, PMS by nearly two. `$6C`'s decay rate (its sweep fits from
+  before 300 to 1,000 after, the envelope's cycle coming every third sample) and the key-off (D-24's lead) agree with
+  the table. The DAC's level in a sample's output may be written up to the 64th edge after its deadline, 2.7 samples,
+  where every other part is taken by the 48th.
+- One sweep fits no moment: `lfo`, the LFO switched on just before the key-on, is unlike the board's in all 40 runs at
+  every moment of `$22` from 1,500 before to 2,500 after, with the switch-on taken apart from the switch-off as well,
+  and was before the pipeline too. Its output is a level louder than the board's in many samples from the attack on;
+  it is the LFO's (D-20), not this record's.
+- Implemented 2026-10-06 (`ym2612.rs`): every write but the timers' (`$24`-`$26`, `$27`'s timer bits, `$21` bit 2)
+  waits in order with the deadline of the sample that takes it, each part of a register by its own edge (`takes`);
+  a sample is made `TAKE_LAG`, the 64th edge, after its deadline, the writes it takes applied first; the timers tick
+  at their own moment ahead of it and leave CSM's key for it; both edges of the reset line make every sample due by
+  then before they act. Parts not measured are argued: the other operators' registers (`$30`-`$9F` but those above)
+  by the 18th edge, the DAC's ninth bit (`$2C` bit 3) with the DAC, `$21`'s bits 0, 1, 6 and 7 and the rest of `$2C`
+  at the deadline. Only S4 of channel 1 was swept; whether another operator's or channel's part is taken a slot
+  apart, as the key is, is not measured, and every one is taken by the same edge.
+- Result, on the chip given the board's write times: 20 of the 21 sweeps the board's in every run; the step's 120
+  voices 114 (the test register's `fm-test-pg`, `fm-test-ugly-chain` and `fm-test-eg0` now among them); §23's 61 LFO
+  voices all (`fm-lfo-restart` now among them). On the whole machine placed as the board is, the same: the sweeps'
+  840 programs, rebuilt in `voices.rs` and checked against the board's by hash, 800 the board's (`lfo`'s 40 not), 114
+  of the 120, all 61. Six test-register voices still differ (`fm-test-lfo-late`, `fm-test-pg0`, `fm-test-eg`,
+  `fm-test-ugly`, `fm-test-2c`, `fm-test-2c-dac`); for `fm-test-lfo-late`, no moment of `$21` bit 1 from 100 edges
+  before to 64 after changes a sample, so its difference is not when the write is taken. The others are not traced.
+- Conclusion: **settled for the parts in the table, on S4 of channel 1**, and argued for the rest as above.
+- Pinned by: `voices.rs`'s `every_write_is_taken_by_the_boards_sample` and `..._on_the_whole_machine`,
+  `the_chip_voices_are_the_boards_sample_for_sample`, `the_lfo_voices_on_the_chip_are_the_boards`,
+  `the_lfo_voices_are_the_boards_sample_for_sample`.
+- Implemented in: the commit "Nephrite, stage 5: D-15's write pipeline".

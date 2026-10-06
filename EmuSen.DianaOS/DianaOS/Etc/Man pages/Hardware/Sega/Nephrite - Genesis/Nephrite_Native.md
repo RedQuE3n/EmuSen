@@ -1622,12 +1622,20 @@ line 150 comes 864,577 master clocks after its 68000's first bus cycle, Nephrite
 picture otherwise the board's to within its interrupt latency. It is why stage 4's picture tests compare Nephrite's
 frame 3 with the board's frame 2. Every phase the board shows is fixed to its own power-on, so one of two things in
 Nephrite must differ from the board: the refreshes' and the sound's place against the 68000's start, or their place
-against the picture. The picture is what a game is timed by, its sound drivers by the vertical interrupt, and the
+against the picture. ~~The picture is what a game is timed by, its sound drivers by the vertical interrupt, and the
 write sweep of D-11 shows it: placed from the 68000's start, the bus refresh moves one of its points. So the bus
 refresh and the YM2612's cycle are placed against the picture, and the voices, which start from the 68000's start,
-still give the board's every sample, their reads 113 master clocks from the board's where a refresh falls. The RAM
+still give the board's every sample, their reads 113 master clocks from the board's where a refresh falls.~~ The RAM
 refresh's next request follows the accesses made, so it has no place against the picture to keep; its first is
 where the fit put it.
+
+*Decided 2026-10-06, at stage 5's placement step (§25.1):* the YM2612's cycle is placed where the board has it
+against its 68000's start, its first deadline 910 master clocks after power-on. The bus refresh stays against the
+picture (762): placed from the 68000's start (875) it still moves one point of D-11's write sweep (H40, the display
+on, 18 NOPs: master clock 61 where the board has 45), which the decision made a condition of moving it. Between the
+two, the 68000's cycles in a sound program fall a refresh's wait from the board's here and there, and §25.3 gives
+what that costs the sound's tests; placed as the board is in both, every cycle of every program measured is the
+board's.
 
 Moving Nephrite's picture to the board's place against the 68000's start would remove the choice, and would move
 every game's frames against Genesis Plus GX at the corpus anchors and every stage 4 picture test by a frame. It is
@@ -1641,7 +1649,8 @@ No RTL file was opened. The generated header was searched for the names of eight
 
 ### 22.5 Open, and next
 
-- **D-2**: the RAM's few four- and five-clock waits, and one six-clock read of the YM2612 where a bus refresh fell.
+- **D-2**: the RAM's few four- and five-clock waits, and ~~one six-clock read of the YM2612 where a bus refresh fell~~
+  (the Z80's area under a refresh, §25.2).
 - **Stage 4's frame offset** (§22.3): Nephrite's picture against its 68000's start.
 - **D-15** stays open and unimplemented; **D-19's short pulses** as before.
 - **Next**, in the plan's order: the LFO (its vibrato table written separately, on `nephrite-lfotables`), SSG-EG,
@@ -1874,7 +1883,165 @@ opened; no emulator's source was read.
 - **D-15**: when each register's write is taken, measured for 15 kinds (D-15's table) and not implemented: the
   unit would make each sample up to two samples after its deadline.
 - **The test read** (`$21` bits 0, 6, 7, `$2C` bit 4): not built.
-- **The whole machine's placement** (§24.3) and **the 68000's drift on part 1**.
+- ~~**The whole machine's placement** (§24.3) and **the 68000's drift on part 1**.~~ Both at §25.
 - **D-2**'s few long RAM waits, **stage 4's frame offset** and **Streets of Rage's loading phase** as in §23.6.
+- **Next**, in the plan's order: the multiplexed output and its ladder effect, the YM3438 of model 2 as a setting,
+  and the model 1 filter.
+
+## 25. Stage 5, the placement and part 1's drift (2026-10-06)
+
+### 25.1 What it built
+
+- **The YM2612's cycle** (`ym2612.rs`, D-19, D-24): placed where the board has it against its 68000's start,
+  `POWER_ON` 910 (it was 1,265, against the picture), as §22.3 now decides.
+- **The bus refresh**: kept against the picture, `REFRESH_FIRST` 762. Placed from the 68000's start (875) it moves
+  one point of D-11's write sweep, H40 with the display on and 18 NOPs, to master clock 61 where the board has 45
+  (`pictures::writes_land_where_the_board_lands_them`), and the decision made every stage 4 test a condition of
+  moving it.
+- **The Z80's area under a refresh** (`genesis.rs`, D-2): a cycle to `$A00000`-`$A0FFFF` that starts one to six of
+  the 68000's clocks after the latest refresh request waits a clock more, after its strobe on the Z80's bus
+  (`REFRESH_Z80_LATE`); the YM2612, the Z80's RAM and the reset line see the access where they would without it.
+- **The bench**: `mdboard.py`'s `ym_latches`, a write's moment from its strobe's fall rather than its rise, which a
+  held cycle moves; `board_chip.rs`'s write times regenerated from it (28 voices' times change), and `SWEEPS`
+  extended to the key sweeps of all six channels.
+- **Tests** (`voices.rs`): `keys_and_the_timers_load_land_in_the_boards_samples` over all six channels' key sweeps
+  and the CSM sweep; the LFO's and the step's voices on the whole machine at both placements, each with its own
+  expected list or count; `sounds.rs`'s timer poll at both.
+
+### 25.2 The drift on part 1
+
+§24.3 left the 68000's writes on channels 4 to 6 drifting from the board's, by a poll of the busy flag here and
+there and once by 15 clocks. Loops of `$A04000` reads and writes, 0 to 7 NOPs apart, were traced on the board with
+`TB_MEM` and compared with Nephrite's cycles one by one. The bus refresh's request comes every 896 master clocks at a
+phase the board's own slow cycles fix: in three loops, each of the 670 cartridge cycles first after a request waits
+its two clocks. A cycle to the Z80's area first after a request does what D-2 had not recorded: starting within a
+clock of it, it has its ordinary five clocks and the cartridge cycle after it waits nothing, the refresh taken free;
+starting two or four clocks after it, it takes six. With that rule every cycle of the part 1 sweeps traced starts at
+the board's master clock, the slip and the extra polls gone. The held cycle's strobe rises a clock late on the Z80's
+bus, but the YM2612 takes the write where the strobe would have risen: the busy flag of all 36,180 data writes in the
+sweeps and status loops ends where D-13's edge has it from that moment, and from the late rise the held ones' do not.
+
+### 25.3 Measured (2026-10-06)
+
+| On the whole machine | Placed as the board is | Nephrite's placement (762, 910) | Before: 762, 1,265, without the rule |
+|---|---|---|---|
+| The 68000's cycles of 16 traced runs (12 loops, 4 key sweeps) | 83,451 of 83,451 at the board's master clock | not compared | (the drift) |
+| §21's 62 voices | 62 | 62 | 62 |
+| §23's 61 LFO voices | 60 (`fm-lfo-restart`, D-15) | 16 | 58 |
+| §24's 120 voices | 111, as on the chip (the test register's nine, D-15) | 94 | 89 |
+| The key and CSM sweeps, 25 of 40 runs | 1,000 of 1,000 | not tested | channels 1-3 only |
+| Timer A's poll (the board: 77) | 77 | 77 | 79 |
+
+Placed as the board is, the whole machine is now what the chip alone is: every voice that differs differs at D-15.
+At Nephrite's own placement it is not. Its refresh stands 113 master clocks from the board's against the YM2612's
+cycle, so the 68000's sound programs meet the refresh, and the Z80's area its extra clock, at other cycles than the
+board's, and a write that falls near a sample's deadline goes to the other sample. Kept at 1,265 instead, with the
+rule, the counts are 50 LFO voices and 82 of the 120, with the timer's poll 79: neither placement of the YM2612 gives
+the board's sound while the refresh is kept against the picture. The cause is stage 4's frame offset, Nephrite's
+picture 0.61 of a frame from the board's against its 68000's start (§22.3): with the picture moved to the board's
+place, the refresh could stand at 875 and the stage 4 sweep would keep its point.
+
+- **The crate's tests**: 96 pass, VDPFIFOTesting 122 of 122 and stage 4's picture tests among them, the write
+  sweep's H32 point included. **The conformance kit**, `--frames 600`: C1-C15 on §24's 17 images. **WiseMan**'s
+  Nephrite, runner, discovery and registration tests pass (31).
+- **The corpus at anchors** (944 games, against Genesis Plus GX at frames 120 and 600): 239 games move from §24's,
+  their sound drivers' writes now landing where the YM2612's new cycle takes them. Pictures on the reference's to the
+  pixel: 827 at frame 120, as before, and 772 to 773 at frame 600; of the 11 pictures that change at frame 600, 7 come
+  nearer and 4 go further, and of the 2 at frame 120, one each way. Of the RAM counts that change, 61 of 116 come
+  nearer at frame 120 and 88 of 176 at frame 600; the medians are 65,527 and 65,513 (65,513.5). No game fails to
+  run.
+
+### 25.4 The sources
+
+No RTL file was opened. `TB_MEM`'s strobes, `TB_ZBUS`'s Z80 bus and the board's pins, as at §22 and §24;
+Charles MacDonald's notes and the 68000's manual, as before. No emulator's source was read.
+
+### 25.5 Open, and next
+
+- **Stage 4's frame offset** (§22.3): moving Nephrite's picture to the board's place against its 68000's start would
+  let the refresh stand where the board's does and bring Nephrite's own placement to the board's sound.
+- ~~**D-15**, when each register's write is taken: next, as the write pipeline.~~ §26, D-25.
+- **The test read** and **D-2**'s few long RAM waits, as in §24.5.
+
+## 26. Stage 5, the write pipeline (2026-10-06)
+
+### 26.1 What it built
+
+- **The pipeline** (`ym2612.rs`, D-25): a write to any register but the timers' waits, in the order made, with the
+  deadline of the sample that takes it: the first whose slot edge for that part of the register comes at or after
+  the write. Each part has its edge, measured (D-25's table): the operator's registers and the algorithm the 18th
+  after the deadline, the feedback the 6th, the frequency and the LFO's sensitivities the 24th, the panning the 42nd,
+  `$22` and `$21` bit 4 the 35th, `$21` bit 3 the 11th and bit 5 the 31st, channel 3's mode the 13th, `$2C` bit 5 the
+  48th, the DAC's data and enable the 64th; the key the 12th before, a slot less for each channel after the first, as
+  D-24 had it. A sample is made once its 64th edge has passed (`TAKE_LAG`, 2,720 master clocks), the writes it takes
+  applied first. The timers keep their own moment ahead of it and leave CSM's key for the sample it falls in. Both
+  edges of the reset line make every sample already due before they act, so that a sample is made under the line as
+  it stood at its deadline. The state holds up to 64 waiting writes, version 14; a program that writes faster has its
+  oldest taken at once.
+- **The trace** (`ym2612.rs`): each channel as the left output pins carry it, 0 where `$B4` takes it off the left and
+  -1 where it is then negative, as the board's pins show. The sound is the samples as before, each handed to the
+  output as it is made, `TAKE_LAG` (51 µs) after its deadline.
+- **The bench**: `mdboard.py`'s `board-chip` writes `LANDINGS` into `board_chip.rs`: for each of the 21 sweeps, its
+  writes at the master clocks the board's chip took them, each run's differences from the first, its program's hash
+  and its channel from its first sample not at rest; the DAC's on channel 6.
+- **Tests** (`voices.rs`): `every_write_is_taken_by_the_boards_sample`, the sweeps on the chip at the board's write
+  times; `every_write_is_taken_by_the_boards_sample_on_the_whole_machine`, the same programs, rebuilt as `LANDING`
+  builds them and checked by hash, on the whole machine placed as the board is; the chip voices, the LFO voices and the
+  timer tests at their new counts. `ym2612.rs`'s tests read the registers once the samples taking their writes are
+  made.
+
+### 26.2 Measured (2026-10-06)
+
+| Against the board | Before (§24, §25) | With the pipeline |
+|---|---|---|
+| The 21 landing sweeps, 40 runs each, on the chip at the board's write times | 227 runs; 2 sweeps in every run | 800 runs; 20 sweeps in every run (`lfo` in none) |
+| The same programs on the whole machine placed as the board is | (not run) | the same |
+| §24's 120 voices, on the chip; on the whole machine placed as the board is; at Nephrite's placement | 111; 111; 94 | 114; 114; 96 |
+| §23's 61 LFO voices, on the chip; placed as the board is; at Nephrite's placement | 60; 60; 16 | 61; 61; 16 |
+| §21's 62 voices, the key and CSM sweeps (1,000 runs), on the whole machine | all | all |
+
+The "before" counts of the sweeps are the take-at-once chip given the same data, its trace as before.
+
+- **The crate's tests**: 98 pass, VDPFIFOTesting 122 of 122 and stage 4's picture tests among them. **The
+  conformance kit**, `--frames 600`: C1-C15 on §24's 17 images. **WiseMan**'s Nephrite, runner, discovery and
+  registration tests pass (31).
+- **The corpus at anchors** (944 games): no game moves from §25's, in pictures or RAM at frames 120 and 600. The
+  pipeline moves a write's effect on the output by under three samples and changes nothing a program reads: the
+  status register, its busy flag and the timers keep their own moments.
+- **The frame cost**, best of five runs of 600 frames, the desktop, release build, §25's build and this one measured
+  back to back:
+
+  | Game | Mean per frame | At §25 |
+  |---|---|---|
+  | Sonic the Hedgehog | 1.245 ms | 1.242 ms |
+  | Sonic the Hedgehog 2 | 1.148 ms | 1.132 ms |
+  | Thunder Force IV | 1.257 ms | 1.252 ms |
+  | Streets of Rage 2 | 1.035 ms | 1.027 ms |
+  | Phantasy Star IV | 1.320 ms | 1.300 ms |
+
+  All within P1's 1.5 ms; the pipeline costs up to 1.6%.
+
+### 26.3 What it leaves
+
+- **`lfo`**, the LFO switched on just before the key-on: unlike the board's in every run, before the pipeline and
+  with it, and at every moment of `$22` tried. A level louder than the board's in many samples from the attack on,
+  it is a question for the LFO's model (D-20), not for when the write is taken.
+- **Six test-register voices**: `fm-test-lfo-late` (no moment of `$21` bit 1 changes a sample of it), `fm-test-pg0`,
+  `fm-test-eg`, `fm-test-ugly`, `fm-test-2c` and `fm-test-2c-dac`, not traced.
+- **The other operators and channels**: only S4 of channel 1 was swept, and every operator and channel takes a part
+  by the same edge. The key is taken a slot later on each channel (D-24); whether the other registers are is not
+  measured, and needs the sweeps run on another operator and channel.
+- **D-15**, a status read straight after a data write leaving the register at 0 on the board: open and not built,
+  until a console is recorded.
+
+### 26.4 The sources
+
+As §24: the board's pins and Z80 bus under `tb_md`, the sweeps of `mdboard.py`'s `LANDING`. Sauraen's reading of the
+die (topic 386, as prose) that an operator's write is held until the register file's turn for it, of which the edges
+are the measured form. No RTL file was opened; no emulator's source was read.
+
+### 26.5 Open, and next
+
+- The three items of §26.3, **stage 4's frame offset** (§25.5), **the test read** and **D-2**'s few long RAM waits.
 - **Next**, in the plan's order: the multiplexed output and its ladder effect, the YM3438 of model 2 as a setting,
   and the model 1 filter.

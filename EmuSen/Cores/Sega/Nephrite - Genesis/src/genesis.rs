@@ -120,6 +120,8 @@ impl Genesis {
             sound: if model.pal { Sound::new(53_203_425, 1, true) } else { Sound::new(4_725_000_000, 88, true) },
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
+        // The YM2612 is held with the Z80 from power-on, its sample cycle left as it starts (Nephrite_Disputes.md D-19).
+        g.hw.sound.ym.held = true;
         g.cpu.reset(&mut MainBus(&mut g.hw));
         g
     }
@@ -354,6 +356,9 @@ impl Hw {
     fn set_z80_reset(&mut self, held: bool) {
         if self.z80_reset && !held {
             self.z80_clock = self.clock;
+        }
+        if self.z80_reset != held {
+            self.sound.ym_reset(held, self.clock);
         }
         self.z80_reset = held;
     }

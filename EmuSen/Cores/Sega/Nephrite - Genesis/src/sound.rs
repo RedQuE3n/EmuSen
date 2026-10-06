@@ -83,6 +83,13 @@ impl Sound {
         self.ym.write(port, v, t);
     }
 
+    /// The reset line the YM2612 shares with the Z80, changed at `t`.
+    pub fn ym_reset(&mut self, held: bool, t: u64) {
+        let t = self.now(t);
+        self.run_ym(t);
+        self.ym.reset_line(held, t);
+    }
+
     pub fn ym_read(&mut self, port: u16, t: u64) -> u8 {
         let t = self.now(t);
         self.run_ym(t);

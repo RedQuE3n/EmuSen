@@ -1,7 +1,7 @@
 //! The YM2612 (OPN2) as the buses see it: the address register and its part, the register file of both parts, the
 //! two timers and the status register with its busy flag, channel 6's DAC, and the FM unit (`fm.rs`) each sample. A
-//! sample is 144 of the chip's clocks (the 68000's), 1,008 master clocks. Nephrite_Native.md §18 and §19 are the
-//! record, with the sources each rule comes from.
+//! sample is 144 of the chip's clocks (the 68000's), 1,008 master clocks. The chip shares the Z80's reset line.
+//! Nephrite_Native.md §18, §19 and §21 are the record, with the sources each rule comes from.
 
 use emusen_native::{StateReader, StateWriter, Truncated};
 
@@ -13,6 +13,12 @@ static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
 /// six of its input clocks each (Eke's measurement on the YM2612 and the ASIC alike; Nephrite_Native.md §18).
 pub const SAMPLE: u64 = 144 * 7;
 pub const BUSY: u64 = 32 * 6 * 7;
+/// The reset line, as the board has it (Nephrite_Disputes.md D-19). The sample cycle restarts at the line's
+/// assertion: a write is in time for the sample `RESTART` master clocks after it and every 1,008 from there. A
+/// release up to `RELEASE_LEEWAY` after one of those moments still starts the envelope's counter with that sample,
+/// and the counter's first cycle is the fourth sample from its start.
+pub const RESTART: u64 = 87;
+pub const RELEASE_LEEWAY: u64 = 67;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ym2612 {
@@ -33,6 +39,10 @@ pub struct Ym2612 {
     pub discrete: bool,
     /// The master clock of the next sample.
     pub next: u64,
+    /// The reset line, the Z80's: while it is held the chip is at rest and takes no write. `held_at` is the first
+    /// sample of the cycle its assertion started.
+    pub held: bool,
+    pub held_at: u64,
     /// The left and right output last made, and each channel's nine-bit output.
     pub out: [i32; 2],
     pub channels: [i32; 6],
@@ -47,7 +57,7 @@ impl Ym2612 {
         for part in &mut regs {
             part[0xB4..=0xB6].fill(0xC0);
         }
-        Ym2612 { regs, address: 0, part: 0, counter_a: 0, counter_b: 0, divider_b: 0, flags: 0, busy_until: 0, discrete, next: SAMPLE, out: [0; 2], channels: [0; 6], fm: Fm::default(), trace: None }
+        Ym2612 { regs, address: 0, part: 0, counter_a: 0, counter_b: 0, divider_b: 0, flags: 0, busy_until: 0, discrete, next: SAMPLE, held: false, held_at: 0, out: [0; 2], channels: [0; 6], fm: Fm::default(), trace: None }
     }
 
     fn timer_a(&self) -> u16 {
@@ -61,9 +71,28 @@ impl Ym2612 {
         (busy as u8) << 7 | self.flags
     }
 
+    /// The reset line at master clock `t`, the chip already brought up to `t`. Its assertion puts every register,
+    /// the timers, the keys and the operators back to their power-on state and restarts the sample cycle from that
+    /// moment; its release starts the envelope's counter from 0 (Nephrite_Disputes.md D-19).
+    pub fn reset_line(&mut self, held: bool, t: u64) {
+        if held && !self.held {
+            let fresh = Ym2612::new(self.discrete);
+            let trace = self.trace.take();
+            *self = Ym2612 { next: t + RESTART, held: true, held_at: t + RESTART, trace, ..fresh };
+        } else if !held && self.held {
+            // The last sample made since the assertion is the counter's first if the release is within the leeway of it.
+            let with_last = self.next > self.held_at && t - (self.next - SAMPLE) <= RELEASE_LEEWAY;
+            (self.fm.eg_counter, self.fm.eg_div) = (0, if with_last { 2 } else { 3 });
+        }
+        self.held = held;
+    }
+
     /// A write of `v` to port `port & 3` at master clock `t`, the chip already brought up to `t`: an address
     /// through port 0 or 2, which also names the part; data through either data port, to that part.
     pub fn write(&mut self, port: u16, v: u8, t: u64) {
+        if self.held {
+            return;
+        }
         if port & 1 == 0 {
             self.address = v;
             self.part = (port >> 1 & 1) as u8;
@@ -103,6 +132,13 @@ impl Ym2612 {
 
     /// One sample: the timers count, then each channel's nine-bit output goes to the sides its `$B4` register names.
     fn sample(&mut self) {
+        if self.held {
+            (self.channels, self.out) = ([0; 6], [0; 2]);
+            if let Some(t) = &mut self.trace {
+                t.push(self.channels);
+            }
+            return;
+        }
         let control = self.regs[0][0x27];
         if control & 1 != 0 {
             self.counter_a += 1;
@@ -155,9 +191,9 @@ impl Ym2612 {
     pub fn write_state(&self, w: &mut StateWriter) {
         w.bytes("Part0", &self.regs[0]);
         w.bytes("Part1", &self.regs[1]);
-        w.bytes("AddressPartFlags", &[self.address, self.part, self.flags, self.divider_b, self.discrete as u8]);
+        w.bytes("AddressPartFlags", &[self.address, self.part, self.flags, self.divider_b, self.discrete as u8, self.held as u8]);
         w.u16s("Counters", &[self.counter_a, self.counter_b]);
-        w.u64s("Times", &[self.busy_until, self.next]);
+        w.u64s("Times", &[self.busy_until, self.next, self.held_at]);
         w.i32s("Out", &self.out);
         w.i32s("Channels", &self.channels);
         self.fm.write_state(w);
@@ -166,15 +202,15 @@ impl Ym2612 {
     pub fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
         r.bytes(&mut self.regs[0])?;
         r.bytes(&mut self.regs[1])?;
-        let mut b = [0u8; 5];
+        let mut b = [0u8; 6];
         r.bytes(&mut b)?;
-        (self.address, self.part, self.flags, self.divider_b, self.discrete) = (b[0], b[1], b[2], b[3], b[4] != 0);
+        (self.address, self.part, self.flags, self.divider_b, self.discrete, self.held) = (b[0], b[1], b[2], b[3], b[4] != 0, b[5] != 0);
         let mut c = [0u16; 2];
         r.u16s(&mut c)?;
         (self.counter_a, self.counter_b) = (c[0], c[1]);
-        let mut t = [0u64; 2];
+        let mut t = [0u64; 3];
         r.u64s(&mut t)?;
-        (self.busy_until, self.next) = (t[0], t[1]);
+        (self.busy_until, self.next, self.held_at) = (t[0], t[1], t[2]);
         r.i32s(&mut self.out)?;
         r.i32s(&mut self.channels)?;
         self.fm.read_state(r)
@@ -249,6 +285,34 @@ mod tests {
         let c = y.counter_a;
         y.run(400 * SAMPLE, |_, _| {});
         assert_eq!(y.counter_a, c, "a timer not loaded stands still");
+    }
+
+    /// The reset line (D-19): asserted, the registers and timers go and writes are not taken; the sample cycle
+    /// restarts 87 master clocks on; released, the envelope's counter has three samples before its first cycle, or
+    /// two when the release is within 67 of a sample already made.
+    #[test]
+    fn the_reset_line_clears_the_chip_restarts_its_cycle_and_starts_the_envelopes_counter() {
+        let mut y = Ym2612::new(true);
+        set(&mut y, 0, 0x30, 0x71, 0);
+        set(&mut y, 0, 0x27, 0x05, 0);
+        y.run(5 * SAMPLE, |_, _| {});
+        assert_eq!(y.flags, 0, "timer A at 0 has 1,024 samples to go");
+        y.reset_line(true, 100 + 5 * SAMPLE);
+        assert_eq!((y.regs[0][0x30], y.regs[0][0x27], y.regs[0][0xB4], y.next), (0, 0, 0xC0, 100 + 5 * SAMPLE + RESTART));
+        set(&mut y, 0, 0x30, 0x22, 150 + 5 * SAMPLE);
+        assert_eq!(y.regs[0][0x30], 0, "held, it takes no write");
+        y.reset_line(false, 160 + 5 * SAMPLE);
+        assert_eq!((y.fm.eg_counter, y.fm.eg_div), (0, 3), "released before any sample of the new cycle");
+        set(&mut y, 0, 0x30, 0x22, 170 + 5 * SAMPLE);
+        assert_eq!(y.regs[0][0x30], 0x22);
+        for (after_a_sample, wait) in [(RELEASE_LEEWAY, 2), (RELEASE_LEEWAY + 1, 3), (SAMPLE - 1, 3)] {
+            let mut y = Ym2612::new(true);
+            y.reset_line(true, 10);
+            let released = 10 + RESTART + 2 * SAMPLE + after_a_sample;
+            y.run(released, |_, _| {});
+            y.reset_line(false, released);
+            assert_eq!(y.fm.eg_div, wait, "released {after_a_sample} after a sample");
+        }
     }
 
     #[test]

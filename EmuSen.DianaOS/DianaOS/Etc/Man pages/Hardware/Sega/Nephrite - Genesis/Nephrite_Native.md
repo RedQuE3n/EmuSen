@@ -1439,3 +1439,126 @@ read, its neighbouring lines that carry code likewise left undisplayed. Charles 
 - **Next**: a writer's step that puts D-17, D-18 and D-19 into `fm.rs` and `ym2612.rs` and pins each with a test
   that the board's samples decide; then, in the plan's order, the LFO, SSG-EG, CSM, the test register, the ladder
   effect, the YM3438 of model 2 as a setting, and the model 1 filter, each against the board's pins.
+
+## 21. Stage 5, the writer's step: the board's FM rules in the tree (2026-10-05)
+
+### 21.1 What it built
+
+- **D-17 and D-18 in `fm.rs`.** Operators 2 and 4 and algorithm 7's sum take operator 1's output of the last sample
+  and operator 3 its output of the one before; the envelope's cycle is taken after the sample's output and the
+  phases' advance; rates 48 to 59 double their step on the board's cycles. The channel's stored copy of operator
+  2's output, which was the operator's own, is gone.
+- **D-19 in `ym2612.rs`, `sound.rs` and `genesis.rs`.** The YM2612 has the Z80's reset line (`reset_line`, called
+  where `$A11200` changes it): its assertion puts every register, the timers, the keys and the operators back to
+  their power-on state and restarts the sample cycle from that moment (`RESTART`, 87 master clocks to the first
+  sample); held, the chip makes silence and takes no write; its release starts the envelope's counter with the
+  sample it comes before, or the one it follows by no more than `RELEASE_LEEWAY`, 67; and the counter's first cycle
+  is the fourth sample from its start, for which the envelope's divider now counts down the samples before its next
+  cycle. At power-on the line starts asserted and the sample cycle is left where Nephrite starts it.
+- **The state** is version 10: the held line and its first sample, and one stored output fewer in each channel.
+- **`board_fm.rs` and `voices.rs`** (tests): the board's samples as block hashes, the voices built as `mdboard.py`
+  builds them and checked by their programs' hashes to be the ones the board ran, and the chip driven at the board's
+  own write times (§21.2).
+- **`mdboard.py`**: `board-fm <logs>` writes `board_fm.rs` from the board's logs, making any that is missing;
+  `reset_sweep` and `status_ports`; `board_channel` reads a window of a log; the bench takes `TB_MOL` (both forms of
+  the FM output) and `TB_YMSTATUS` (the board's `ym2612_status_enable` input).
+
+### 21.2 How the tests hold it
+
+The board's 62 voices and 200,220 samples (§20.2) are in the tree as the FNV-1a hash of each block of 64, with the
+cycle at which the board's bus carried each of a voice's 74 strobes. A test gives the chip, `Ym2612` alone, the reset
+line's release and each write at those cycles and counts the blocks that are the board's. Nothing of the 68000's
+timing is in it, which is the point: the first form of these tests ran each program on the whole machine, passed
+200,220 of 200,220 with D-17 and D-18 in, and was found to pass for a wrong reason (§21.4).
+
+| Test (`voices.rs`) | Voices | Samples the board's |
+|---|---|---|
+| `the_algorithms_and_levels_are_the_boards_sample_for_sample` | 13 | 67,482 of 67,482 |
+| `the_envelopes_are_the_boards_sample_for_sample` | 3 | 11,700 of 11,700 |
+| `the_decays_by_rate_are_the_boards_sample_for_sample` | 20 | 31,038 of 31,038 |
+| `the_attacks_by_rate_are_the_boards_sample_for_sample` | 16 | 48,000 of 48,000 |
+| `a_modulator_into_a_carrier_is_the_boards_sample_for_sample` | 10 | 42,000 of 42,000 |
+| `a_voice_replayed_after_a_reset_is_the_boards_wherever_the_release_falls` | 40 replays | 20,480 of 20,480 |
+
+Each rule was taken out in turn and the tests run: with step 2's rows for rates 48 to 59 the envelopes, decays and
+attacks fail (`fm-dr49` 895 samples of 1,919); with operator 2 taking operator 1's newest output `fm-chain` has no
+block of the board's, and with the sum taking it `fm-alg7` has none; with the envelope's step before the output the
+envelopes, decays, attacks and modulator voices all fail; with the counter's first cycle a sample sooner or later,
+49 voices and all 40 replays fail. `the_whole_machine_plays_the_algorithms_as_the_board_does` runs the 13 voices in
+which no envelope moves through the 68000 and the whole core, and `the_z80s_reset_line_resets_the_ym2612` the line
+through `$A11200`.
+
+### 21.3 Measured (2026-10-05)
+
+- **The reset rule** (D-19), on 36 pulses of 1.83 to 2.82 samples and the loader's four of 0.28: every replay is the
+  board's for a restart of 76 to 100 master clocks, a leeway of 56 to 80 and a first cycle on the fourth sample, and
+  for nothing outside them at the steps of 4 tried. On the pins themselves a key-on written 73 master clocks into the
+  sample is heard a sample sooner than one written 103 into it.
+- **Which chip** (D-16): the bench's FM chip is the YM3438 inside the FC1004, the model 2 ASIC. Its busy flag reads
+  at every port with the board's `ym2612_status_enable` at 1 and at 0 (D-13); its `MOL` is the YM3438's output, level
+  plus 256 over three slots of a channel's four, and its `MOL_2612` a rendering of the YM2612's DAC, the level in
+  the first slot and a rest of +1 or −1 by its sign in the other three. The two carry the same level in every sample
+  compared. Every FM measurement of this stage therefore speaks for the ASIC's YM3438, and for model 1's YM2612 as far
+  as the two share their logic.
+- **The increments' table** (D-18): Nemesis's Table 2 reads as step 2 read it; it is the table that differs from the
+  board, in which cycles of four take a rate's doubled steps and not in how many.
+- **The 68000's side** (D-13, D-14): the busy poll's round is 19 clocks on the board where the instructions make 18,
+  21 where the refresh falls; the busy flag stands about 1,400 master clocks where Nephrite counts 1,344; a voice's
+  key-on is written 65,702 master clocks after the 68000 starts on the board and 62,132 on Nephrite.
+- **The crate's tests**: 80 pass. **The conformance kit**, `--frames 600`: C1-C15 pass on the 240p suite, Sonic the
+  Hedgehog and its sequel, Phantasy Star IV, Thunder Force IV, VDPFIFOTesting, Nemesis's CSM test, `fm-chain`,
+  `fm-decay` and two of the reset programs.
+- **The corpus at anchors** (944 games, against Genesis Plus GX at frames 120 and 600): 40 games' RAM moves by a few
+  bytes, 21 nearer the reference and 21 further, between −17 and +27; the medians stay 65,523 and 65,506. Two
+  pictures move at frame 600: Jerry Glanville's Pigskin Footbrawl, 53 to 58 pixels off the colour map, and OutRun,
+  45,990 to 46,143. A sound driver that resets the Z80 now resets the YM2612 and its timers with it, so its timer
+  polls come out otherwise; no game stopped or failed to boot. WiseMan's Nephrite, runner, discovery and
+  registration tests pass (31).
+
+### 21.4 What the whole machine does, and why it is less than the chip
+
+The same programs run on the whole core, on its own 68000's timing, and compared with the pins as in §20.2:
+
+| The tree | Algorithms and levels (67,482) | Envelopes (11,700) | Decays (31,038) | Attacks (48,000) | S3 into S4 (42,000) | All (200,220) |
+|---|---|---|---|---|---|---|
+| step 2's unit | 43,200 | 7,603 | 28,821 | 9,523 | 40,708 | 129,855 |
+| with D-17 and D-18, the counter cycling on its first sample | 67,482 | 11,700 | 31,038 | 48,000 | 42,000 | 200,220 |
+| with D-19's counter as the board has it (this step) | 67,482 | 8,411 | 28,770 | 38,563 | 38,116 | 181,342 |
+| the chip alone, at the board's write times (this step) | 67,482 | 11,700 | 31,038 | 48,000 | 42,000 | 200,220 |
+
+The second row is what §20.2 reported from builds outside the tree, and it was right about D-17 and D-18 and wrong
+in what it seemed to say of the envelope's timing. Two things were each out by one envelope cycle of three samples
+and hid each other: Nephrite's counter cycled on the first sample after the reset's release where the board's waits
+for the fourth, and Nephrite's 68000 wrote the key-on 3.54 samples before the board's (D-14). The reset sweeps,
+where the Z80 writes the voice and the 68000's timing is not in the question, showed the first; the board's bus log
+showed the second. With the counter right, the whole machine's envelopes start a cycle out against the board's
+until its 68000 polls the busy flag at the board's pace: the poll's fifth clock, the refresh of D-2 and the busy
+flag's length. Every voice in which no envelope moves is unaffected. The difference is an envelope's steps falling
+three samples from where the board has them, some 56 microseconds, relative to a key-on the program itself placed
+only to within its poll's round; it is a matter of the comparison's exactness and not of anything heard.
+
+### 21.5 The sources
+
+- **Opened, as a logged search**: the bench's `md_board.v` and `fc1004.v`, for how the FM chip is instantiated and
+  configured, the lines listed in D-16. Two lines of the board's mix were printed by the search; they are noted as
+  seen and used for nothing. No other RTL file was opened.
+- **Topic 386, from the copy saved at step 2**: Nemesis's Table 2 on page 8, its rows read with every identifier
+  in the block masked (D-18). **The same search printed, masked the same way, the numeric rows of two blocks in C
+  array form on pages 32 and 33**, eight values to a row, which look like tables of vibrato depth and sit in blocks
+  that carry an emulator's identifiers. They were not sought, are used for nothing, and are recorded here as
+  displayed: the step that builds the LFO must not take its vibrato table from memory of them, and has the board to
+  measure it on instead.
+- No emulator's source was read otherwise, and the operator tables were not touched.
+
+### 21.6 Open, and next
+
+- **For the 68000's side**, to bring the whole machine to the board's 200,220: D-14's fifth clock for an access to
+  the Z80's area, D-13's busy flag at the board's length, and D-2's refresh, which the stage 4 measurements were all
+  made without. It is a step of its own, with stage 4's tests in its blast radius.
+- **D-15** stays open and unimplemented: a status read straight after a write needs a console, and
+  `read_after_write` is kept as its program. When a write other than a key lands is still unmeasured.
+- **D-19's short pulses**: a reset held less than about 1.8 samples does not always take on the board; Nephrite's
+  always does.
+- **Next**, in the plan's order: the LFO, SSG-EG, CSM and the test register, each refereed on the bench, the LFO's
+  tables measured there.
+

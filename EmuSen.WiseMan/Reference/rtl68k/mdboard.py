@@ -12,8 +12,10 @@ Nephrite_Native.md §10 and §15.3 are the method.
   mdboard.py sound <name> <out.bin>   one of SOUNDS' programs, written out for a reference or the bench
   mdboard.py pins <name> <out.log> [cycles]   one of SOUNDS' programs on the board, its sound pins logged
   mdboard.py fm <pins.log> <trace> [channel]   a channel on the board's pins against Nephrite's fmtrace output
+  mdboard.py board-fm <logs>   Nephrite's board_fm.rs from the board's logs in a directory, made if missing
   mdboard.py read-after-write [nops] [dac] [timers]   a status read after a data write, at 49 places in the sample
   mdboard.py reset-replay [rounds]   one voice replayed after each pulse of the Z80's reset line
+  mdboard.py status-ports   the YM2612's four ports read under the busy flag and after, the board's status input each way
 
 Times are in MCLK2 cycles, two to a master clock; the bench prints cartridge reads (c) and 68000 RAM writes (w).
 """
@@ -872,18 +874,41 @@ def reset_replay(rounds=200, gaps=(20000, 20555)):
     tail = b"".join(w(0x303C, g, 0x51C8, 0xFFFE) + pulse for g in gaps) + w(0x60FE)
     return z80_writer(fm_writes((QUIET, QUIET, QUIET, (0x01, 0x00, 0x0C, 0, 0, 0x0F)), **A4), then=tail)
 
+def status_ports():
+    """Both timers overflowed, so that the status reads $03; then a data write and, 8 clocks on, ports 0 to 3 read
+    into $FF0000-$FF0006 while the busy flag stands; then, long after, the four read again into $FF0008-$FF000E
+    (Nephrite_Disputes.md D-13)."""
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000) + ym_writes([(0x24, 0xFF), (0x25, 0x03), (0x26, 0xFF), (0x27, 0x0F)])
+    code += w(0x303C, 3000, 0x51C8, 0xFFFE, 0x4A12, 0x6BFC, 0x14BC, 0x002A, 0x157C, 0x0080, 0x0001, 0x4E71, 0x4E71)
+    reads = lambda at: w(0x13D2, 0x00FF, at) + b"".join(w(0x13EA, port, 0x00FF, at + 2 * port) for port in (1, 2, 3))
+    return program([0x8004, 0x8104, 0x8F02], [], code + reads(0x0000) + w(0x303C, 300, 0x51C8, 0xFFFE) + reads(0x0008) + w(0x60FE))
+
+def reset_sweep(first=60, step=4, count=9, gap=12000):
+    """A Z80 program plays S4's decay at rate 39 from an instant attack; the 68000 then pulses the Z80's reset `count`
+    times, `gap` dbra rounds apart, holding it for `first`, `first + step`, ... NOPs, so that each release, and the
+    key-on 339 master clocks further round the sample, falls somewhere else in the chip's cycle (Nephrite_Disputes.md
+    D-19)."""
+    tail = b""
+    for k in range(count):
+        tail += w(0x303C, gap, 0x51C8, 0xFFFE, 0x33FC, 0x0000, 0x00A1, 0x1200) + w(*([0x4E71] * (first + k * step)))
+        tail += w(0x33FC, 0x0100, 0x00A1, 0x1200)
+    return z80_writer(fm_writes((QUIET, QUIET, QUIET, (0x01, 0x00, 0xDF, 10, 0x00, 0xFF)), fnum=1152, block=4), then=tail + w(0x60FE))
+
 # ---- the board's sound pins read back (Nephrite_Disputes.md D-16): an FM sample is 2,016 MCLK2 cycles of 24 slots.
 SAMPLE, SLOT = 2016, 84
 
-def bench(image, cycles, audio=None, zbus=False, pins=False):
-    """The board run on `image`, with its sound pins logged to `audio`, the Z80 bus printed (b lines) and the Z80's
-    reset and bus acknowledge printed (z lines) as asked; its output's lines, split."""
+def bench(image, cycles, audio=None, zbus=False, pins=False, mol=None, status_enable=None):
+    """The board run on `image`, with its sound pins logged to `audio`, both forms of the FM output's left side to
+    `mol`, the Z80 bus printed (b lines), the Z80's reset and bus acknowledge printed (z lines) and the board's
+    `ym2612_status_enable` input set, as asked; its output's lines, split."""
     path = os.path.join(WORK, "program.bin")
     open(path, "wb").write(image)
     env = dict(os.environ, LD_LIBRARY_PATH=LIB)
     if audio: env["TB_AUDIO"] = audio
     if zbus: env["TB_ZBUS"] = f"0:{cycles}"
     if pins: env["TB_PINS"] = "1"
+    if mol: env["TB_MOL"] = mol
+    if status_enable is not None: env["TB_YMSTATUS"] = str(status_enable)
     out = subprocess.run([os.path.join(WORK, "tb_md"), path, str(cycles)], capture_output=True, text=True, cwd=WORK, env=env, check=True).stdout
     return [line.split() for line in out.splitlines()]
 
@@ -908,24 +933,141 @@ def fm_series(recs, slot, origin=0):
     """The channel whose turn comes `slot` cycles into each sample from `origin`: {sample number: level} where it shows."""
     return {(t - origin) // SAMPLE: fm_level(mol) for t, mol, _, _ in recs if (t - origin) % SAMPLE == slot}
 
-def fm_compare(log, trace, channel=0, settle=1300000):
-    """The board's busiest channel against Nephrite's `fmtrace` output (six little-endian i16 a sample), each from its
-    first sample that is neither 0 nor -1: (samples compared, samples equal, the first differences)."""
-    import struct
-    recs = [r for r in pin_records(log) if r[0] > settle]
+def off_rest(xs):
+    """The first sample that is neither 0 nor -1."""
+    return next(i for i, x in enumerate(xs) if x not in (0, -1))
+
+def board_channel(log, settle=1300000, end=None):
+    """The board's busiest channel a sample at a time from cycle `settle` to `end`, read a cycle into its turn: (its
+    turn's place, its levels)."""
+    held = [r for r in pin_records(log) if end is None or r[0] < end]
+    recs = [r for r in held if r[0] > settle]
     slot = channel_slot(recs)
-    held, board, i = [r for r in pin_records(log)], [], 0
+    board, i = [], 0
     k = recs[0][0] // SAMPLE
-    while k * SAMPLE + slot + 1 < held[-1][0]:
+    while k * SAMPLE + slot + 1 < (end or held[-1][0]):
         t = k * SAMPLE + slot + 1
         while i + 1 < len(held) and held[i + 1][0] <= t:
             i += 1
         board.append(fm_level(held[i][1]))
         k += 1
+    return slot, board
+
+def fnv(data):
+    h = 0x811C9DC5
+    for b in data:
+        h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+    return h
+
+FIXTURE_BLOCK = 64
+
+def block_hashes(series, indent="        "):
+    """The FNV-1a hash of each block of 64 levels, as little-endian i16, ten to a row of Rust."""
+    import struct
+    blocks = [fnv(struct.pack("<%dh" % len(series[i:i + FIXTURE_BLOCK]), *series[i:i + FIXTURE_BLOCK])) for i in range(0, len(series), FIXTURE_BLOCK)]
+    return "\n".join(indent + " ".join(f"0x{h:08x}," for h in blocks[i:i + 10]) for i in range(0, len(blocks), 10))
+
+def edges(lines):
+    """The Z80 reset line's assertions and releases among the bench's z lines."""
+    z = [(int(l[1]), l[2]) for l in lines if l[0] == "z"]
+    return ([t for (t, v), (_, was) in zip(z[1:], z) if v == "1" and was == "0"],
+            [t for (t, v), (_, was) in zip(z[1:], z) if v == "0" and was == "1"])
+
+def ym_strobes(lines, start, end):
+    """The YM2612's writes among the bench's b lines from `start` to `end`: (the cycle its strobe rises, port, value)."""
+    bus = [(int(l[1]), int(l[3]), int(l[4], 16), int(l[5], 16)) for l in lines if l[0] == "b" and start <= int(l[1]) < end]
+    return [(e[0], was[2] & 3, was[3]) for was, e in zip(bus, bus[1:]) if e[1] == 1 and was[1] == 0 and 0x4000 <= was[2] < 0x4004]
+
+# The samples of each voice Nephrite's `board_fm.rs` holds, from its first off rest; `fm-envelope` to before its key-off.
+VOICE_SAMPLES = {"fm-attack": 5800, "fm-envelope": 2900, "fm-envelope-ks": 3000}
+BOARD_VOICES = (["fm-sine", "fm-tl16", "fm-mul3", "fm-dt7", "fm-feedback5", "fm-chain"] + [f"fm-alg{a}" for a in range(1, 8)]
+                + ["fm-attack", "fm-envelope", "fm-envelope-ks"] + [f"fm-dr{r}" for r in (38, 39, 42, 43, *range(46, 62))]
+                + [f"fm-ar{r}" for r in range(44, 60)] + [f"fm-rom{i}" for i in range(len(ROM_VOICES))])
+
+def logged(path, make):
+    """The bench's output lines kept at `path`, made by `make` if they are not there."""
+    if not os.path.exists(path):
+        open(path, "w").write("\n".join(" ".join(l) for l in make()) + "\n")
+    return [l.split() for l in open(path)]
+
+def board_fm(logs):
+    """Nephrite's `board_fm.rs`, from the board's logs in the directory `logs`, each made here if it is missing: every
+    voice's pins (`<name>.pins`, 12,000,000 cycles; 10,000,000 for the `fm-rom` voices), one voice's bus (`voice.bus`)
+    and four reset sweeps' pins and buses (`reset-sweep<n>`). Nephrite_Native.md section 21."""
+    at = lambda name: os.path.join(os.path.abspath(logs), name)
+    out = [BOARD_FM_HEAD]
+    lines = logged(at("voice.bus"), lambda: bench(SOUNDS["fm-dr39"](), 1750000, zbus=True, pins=True))
+    release = edges(lines)[1][0]
+    strobes = ym_strobes(lines, release, 1750000)
+    assert len(strobes) == 74
+    out.append(f"pub const VOICE_RELEASE: u64 = {release};")
+    out.append("pub const VOICE_WRITES: [u64; 74] = [\n" + "\n".join("    " + " ".join(f"{t}," for t, _, _ in strobes[i:i + 12]) for i in range(0, 74, 12)) + "\n];\n")
+    out.append("pub const VOICES: &[BoardVoice] = &[")
+    for name in BOARD_VOICES:
+        if not os.path.exists(at(name + ".pins")):
+            bench(SOUNDS[name](), 10000000 if name.startswith("fm-rom") else 12000000, audio=at(name + ".pins"))
+        _, board = board_channel(at(name + ".pins"))
+        b0 = off_rest(board)
+        series = board[b0:b0 + VOICE_SAMPLES.get(name, 3000 if name[3:5] in ("dr", "ar") else 5191)]
+        out.append(f'    BoardVoice {{ name: "{name}", image: 0x{fnv(SOUNDS[name]()):08x}, samples: {len(series)}, blocks: &[\n{block_hashes(series)}\n    ] }},')
+    out.append("];\n")
+    replays, values = [], None
+    for n in range(4):
+        cycles = 19000000
+        lines = logged(at(f"reset-sweep{n}.bus"), lambda: [l for l in bench(reset_sweep(60 + n), cycles, audio=at(f"reset-sweep{n}.pins"), zbus=True, pins=True) if l[0] in "zb"])
+        asserts, releases = edges(lines)
+        for i, (a, r) in enumerate(zip(asserts, releases[1:])):
+            end = asserts[i + 1] if i + 1 < len(asserts) else cycles
+            strobes = ym_strobes(lines, r, end)
+            values = values or [(p, v) for _, p, v in strobes]
+            assert values == [(p, v) for _, p, v in strobes]
+            _, board = board_channel(at(f"reset-sweep{n}.pins"), settle=r, end=end)
+            series = board[off_rest(board):][:REPLAY_SAMPLES]
+            assert len(series) == REPLAY_SAMPLES
+            replays.append((r - a, [t - r for t, _, _ in strobes], series))
+    out.append("pub const REPLAY_WRITES: [(u8, u8); 72] = [\n" + "\n".join("    " + " ".join(f"({p}, 0x{v:02x})," for p, v in values[i:i + 12]) for i in range(0, 72, 12)) + "\n];\n")
+    out.append("pub const REPLAYS: &[BoardReplay] = &[")
+    for held, times, series in sorted(replays):
+        out.append(f"    BoardReplay {{ held: {held}, times: &[\n" + "\n".join("        " + " ".join(f"{t}," for t in times[i:i + 12]) for i in range(0, 72, 12))
+                   + f"\n    ], blocks: &[\n{block_hashes(series)}\n    ] }},")
+    out.append("];")
+    return "\n".join(out) + "\n"
+
+REPLAY_SAMPLES = 512
+BOARD_FM_HEAD = '''//! The board's FM pins for `mdboard.py`'s voices and reset sweeps, written by `mdboard.py board-fm`. Times are
+//! MCLK2 cycles, two to a master clock; samples are a channel's levels from its first that is neither 0 nor -1, held
+//! as the FNV-1a hash of each block of 64 as little-endian i16 (Nephrite_Disputes.md D-16 to D-19,
+//! Nephrite_Native.md §21).
+
+/// A voice the 68000 writes after power-on: its program's hash, and the samples of channel 1 held.
+pub struct BoardVoice {
+    pub name: &'static str,
+    pub image: u32,
+    pub samples: usize,
+    pub blocks: &'static [u32],
+}
+
+/// A voice the Z80 writes again after a pulse of its reset line held `held` cycles: the cycle after the release at
+/// which each of `REPLAY_WRITES` has its strobe rise, and 512 samples of channel 1.
+pub struct BoardReplay {
+    pub held: u64,
+    pub times: &'static [u64],
+    pub blocks: &'static [u32],
+}
+
+pub const BLOCK: usize = 64;
+
+/// Every 68000-written voice makes the same 37 writes at the same cycles from power-on, where the reset line starts
+/// asserted: the line's release, and each write's address strobe and data strobe as they rise.'''
+
+def fm_compare(log, trace, channel=0, settle=1300000):
+    """The board's busiest channel against Nephrite's `fmtrace` output (six little-endian i16 a sample), each from its
+    first sample that is neither 0 nor -1: (samples compared, samples equal, the first differences)."""
+    import struct
+    slot, board = board_channel(log, settle)
     raw = open(trace, "rb").read()
     neph = list(struct.unpack("<%dh" % (len(raw) // 2), raw))[channel::6]
-    first = lambda xs: next(i for i, x in enumerate(xs) if x not in (0, -1))
-    b0, n0 = first(board), first(neph)
+    b0, n0 = off_rest(board), off_rest(neph)
     n = min(len(board) - b0, len(neph) - n0)
     diffs = [(j, board[b0 + j], neph[n0 + j]) for j in range(n) if board[b0 + j] != neph[n0 + j]]
     return slot, n, n - len(diffs), diffs[:5]
@@ -1033,8 +1175,16 @@ if __name__ == "__main__":
         slot, n, equal, diffs = fm_compare(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 0)
         print(f"the channel at cycle {slot} of the sample: {n} samples compared, {equal} equal; first differences (sample, board, trace) {diffs}")
         sys.exit()
+    if what == "board-fm":
+        sys.stdout.write(board_fm(sys.argv[2]))
+        sys.exit()
     if what == "read-after-write":
         read_after_write_report(int(sys.argv[2]) if len(sys.argv) > 2 else 0, "dac" in sys.argv[3:], "timers" in sys.argv[3:])
+        sys.exit()
+    if what == "status-ports":
+        for enable in (1, 0):
+            reads = [l[3][-2:] for l in bench(status_ports(), 2600000, status_enable=enable) if l[0] == "w"]
+            print(f"ym2612_status_enable {enable}: ports 0-3 under the busy flag ${', $'.join(reads[:4])}; after it ${', $'.join(reads[4:])}")
         sys.exit()
     if what == "reset-replay":
         reset_replay_report(int(sys.argv[2]) if len(sys.argv) > 2 else 200)

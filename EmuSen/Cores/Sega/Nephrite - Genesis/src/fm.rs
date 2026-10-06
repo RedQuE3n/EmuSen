@@ -1,7 +1,8 @@
 //! The YM2612's FM unit, a sample at a time: each operator's phase generator, envelope generator and output through
 //! the log-sine and exponent tables, the four operators of a channel in the order the chip evaluates them, and each
-//! channel's nine-bit output. Its rules and their sources are Nephrite_Native.md §19; the register file is
-//! `ym2612.rs`'s. SSG-EG, the LFO and CSM are stage 5's next step.
+//! channel's nine-bit output. Its rules and their sources are Nephrite_Native.md §19, and §21 for those the board's
+//! pins settled (Nephrite_Disputes.md D-17, D-18); the register file is `ym2612.rs`'s. SSG-EG, the LFO and CSM are
+//! stage 5's next step.
 
 use emusen_native::{StateReader, StateWriter, Truncated};
 
@@ -18,8 +19,9 @@ const DETUNE: [[u8; 4]; 32] = [
 /// increments: Nemesis's Table 1 and Table 2 (SpritesMind topic 386), measured on the YM2612.
 const SHIFT: [u8; 16] = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0];
 const STEPS: [[u8; 8]; 4] = [[0, 1, 0, 1, 0, 1, 0, 1], [0, 1, 0, 1, 1, 1, 0, 1], [0, 1, 1, 1, 0, 1, 1, 1], [0, 1, 1, 1, 1, 1, 1, 1]];
-/// From rate 48 the increments are 1 plus these, doubling every four rates up to 60, where they are all 8.
-const EXTRA: [[u8; 8]; 4] = [[0; 8], [0, 0, 0, 1, 0, 0, 0, 1], [0, 1, 0, 1, 0, 1, 0, 1], [0, 1, 1, 1, 0, 1, 1, 1]];
+/// From rate 48 the increments are 1 plus these, doubling every four rates up to 60, where they are all 8. The
+/// cycles the doubled steps fall on are the board's (Nephrite_Disputes.md D-18).
+const EXTRA: [[u8; 8]; 4] = [[0; 8], [1, 0, 0, 0, 1, 0, 0, 0], [1, 0, 1, 0, 1, 0, 1, 0], [1, 1, 1, 0, 1, 1, 1, 0]];
 
 fn increment(rate: u8, cycle: usize) -> u16 {
     match rate {
@@ -96,10 +98,9 @@ impl Default for Op {
 pub struct Channel {
     /// Operators S1-S4, numbered as algorithm 0 chains them.
     pub ops: [Op; 4],
-    /// The stored outputs the chip keeps between operators: operator 1's last and the one before, operator 2's.
+    /// Operator 1's output of the last sample and of the one before: its feedback, and what the others take of it.
     pub old1: i16,
     pub out1: i16,
-    pub out2: i16,
     /// The keys `$28` last wrote, S1-S4.
     pub keys: [bool; 4],
 }
@@ -107,8 +108,9 @@ pub struct Channel {
 /// Each operator's register offset within its channel's: S1 at +0, S2 at +8, S3 at +4, S4 at +12.
 const SLOT: [usize; 4] = [0, 8, 4, 12];
 
-/// The FM unit's state: six channels, the envelope generator's cycle counter and the samples to its next cycle,
-/// and the frequency registers' high-byte latches (one each for `$A4`-`$A6` and `$AC`-`$AE`, in each part).
+/// The FM unit's state: six channels, the envelope generator's cycle counter and the samples before its next cycle
+/// (a cycle every third), and the frequency registers' high-byte latches (one each for `$A4`-`$A6` and `$AC`-`$AE`,
+/// in each part).
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Fm {
     pub ch: [Channel; 6],
@@ -170,14 +172,16 @@ impl Fm {
         block << 2 | (n4 << 1 | n3) as u8
     }
 
-    /// One sample: keys, the envelope's update every third sample, the phases and the operators, and each channel's
-    /// nine-bit output, the top nine of its carriers' fourteen bits summed and saturated.
+    /// One sample: the keys, the operators at the attenuation they have, each channel's nine-bit output (the top
+    /// nine of its carriers' fourteen bits summed and saturated), the phases' advance, and last, every third sample,
+    /// the envelope's cycle, whose step shows from the next sample (Nephrite_Disputes.md D-17).
     pub fn sample(&mut self, regs: &Regs, t: &Tables) -> [i32; 6] {
         let update = self.eg_div == 0;
-        self.eg_div = (self.eg_div + 1) % 3;
+        self.eg_div = if update { 2 } else { self.eg_div - 1 };
         if update {
             self.eg_counter = self.eg_counter.wrapping_add(1);
         }
+        let counter = self.eg_counter;
         let mut outs = [0i32; 6];
         for (c, channel_out) in outs.iter_mut().enumerate() {
             let (part, i) = (c / 3, c % 3);
@@ -200,9 +204,6 @@ impl Fm {
                     op.eg = Eg::Release;
                 }
                 op.key = key;
-                if update {
-                    Self::envelope(op, r, base, kcs[o], self.eg_counter);
-                }
             }
             let alg = r[0xB0 + i] & 7;
             let fb = r[0xB0 + i] >> 3 & 7;
@@ -211,39 +212,36 @@ impl Fm {
             let phase10 = |op: &Op| (op.phase >> 10) as u16;
             // The modulation of a phase: a sum of up to two 14-bit outputs shifted down by one (Nephrite_Native.md §19).
             let modu = |a: i32, b: i32| -> u16 { ((a + b) >> 1) as u16 };
+            // Operator 1's output of the last sample and of the one before, and operator 2's of the last: what this
+            // sample's operators and sum take of them (Nephrite_Disputes.md D-17).
+            let (before1, last1, last2) = (ch.old1 as i32, ch.out1 as i32, ch.ops[1].out as i32);
             // Operator 1, from its own last two outputs.
-            ch.out2 = ch.ops[1].out;
-            let fbm = if fb == 0 { 0 } else { ((ch.old1 as i32 + ch.out1 as i32) >> (10 - fb)) as u16 };
+            let fbm = if fb == 0 { 0 } else { ((before1 + last1) >> (10 - fb)) as u16 };
             let o1 = t.output(phase10(&ch.ops[0]).wrapping_add(fbm), att(0, &ch.ops));
             ch.ops[0].out = o1;
-            // Operator 3, from the stored operator 1 and operator 2.
+            (ch.old1, ch.out1) = (ch.out1, o1);
+            // Operator 3, from operator 1's output of two samples ago and operator 2's of the last.
             let m3 = match alg {
-                0 => modu(ch.out2 as i32, 0),
-                1 => modu(ch.out1 as i32, ch.out2 as i32),
-                2 => modu(ch.out2 as i32, 0),
-                3 => 0,
-                4 => 0,
-                5 => modu(ch.out1 as i32, 0),
+                0 | 2 => modu(last2, 0),
+                1 => modu(before1, last2),
+                5 => modu(before1, 0),
                 _ => 0,
             };
             let o3 = t.output(phase10(&ch.ops[2]).wrapping_add(m3), att(2, &ch.ops));
             ch.ops[2].out = o3;
-            // Operator 2, from operator 1's newest output.
+            // Operator 2, from operator 1's output of the last sample.
             let m2 = match alg {
-                0 | 3 | 4 | 5 | 6 => modu(o1 as i32, 0),
+                0 | 3 | 4 | 5 | 6 => modu(last1, 0),
                 _ => 0,
             };
             let o2 = t.output(phase10(&ch.ops[1]).wrapping_add(m2), att(1, &ch.ops));
             ch.ops[1].out = o2;
-            ch.old1 = ch.out1;
-            ch.out1 = o1;
-            // Operator 4, from the stored 1 and 2 and operator 3's newest output.
+            // Operator 4, from operator 1's and operator 2's outputs of the last sample and operator 3's of this one.
             let m4 = match alg {
-                0 | 1 => modu(o3 as i32, 0),
-                2 => modu(ch.out1 as i32, o3 as i32),
-                3 => modu(ch.out2 as i32, o3 as i32),
-                4 => modu(o3 as i32, 0),
-                5 => modu(ch.out1 as i32, 0),
+                0 | 1 | 4 => modu(o3 as i32, 0),
+                2 => modu(last1, o3 as i32),
+                3 => modu(last2, o3 as i32),
+                5 => modu(last1, 0),
                 _ => 0,
             };
             let o4 = t.output(phase10(&ch.ops[3]).wrapping_add(m4), att(3, &ch.ops));
@@ -252,7 +250,7 @@ impl Fm {
                 0..=3 => &[o4],
                 4 => &[o2, o4],
                 5 | 6 => &[o2, o3, o4],
-                _ => &[o1, o2, o3, o4],
+                _ => &[last1 as i16, o2, o3, o4],
             };
             *channel_out = carriers.iter().map(|&o| (o >> 5) as i32).sum::<i32>().clamp(-256, 255);
             for o in 0..4 {
@@ -261,6 +259,9 @@ impl Fm {
                 let inc = Self::increment(fnum, block, r[0x30 + base], kcs[o]);
                 let op = &mut self.ch[c].ops[o];
                 op.phase = (op.phase + inc) & 0xF_FFFF;
+                if update {
+                    Self::envelope(op, r, base, kcs[o], counter);
+                }
             }
         }
         outs
@@ -326,7 +327,7 @@ impl Fm {
             for o in &c.ops {
                 ops.extend_from_slice(&[o.phase as u64, o.att as u64, o.eg as u64, o.key as u64, o.out as u16 as u64]);
             }
-            ops.extend_from_slice(&[c.old1 as u16 as u64, c.out1 as u16 as u64, c.out2 as u16 as u64]);
+            ops.extend_from_slice(&[c.old1 as u16 as u64, c.out1 as u16 as u64]);
             keys.extend(c.keys);
         }
         w.u64s("FmOperators", &ops);
@@ -336,7 +337,7 @@ impl Fm {
     }
 
     pub fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
-        let mut ops = [0u64; 6 * 23];
+        let mut ops = [0u64; 6 * 22];
         r.u64s(&mut ops)?;
         let mut keys = [false; 24];
         r.bools(&mut keys)?;
@@ -345,12 +346,12 @@ impl Fm {
         let mut l = [0u8; 4];
         r.bytes(&mut l)?;
         for (c, ch) in self.ch.iter_mut().enumerate() {
-            let s = &ops[c * 23..];
+            let s = &ops[c * 22..];
             for (o, op) in ch.ops.iter_mut().enumerate() {
                 let v = &s[o * 5..];
                 *op = Op { phase: v[0] as u32, att: v[1] as u16, eg: [Eg::Attack, Eg::Decay, Eg::Sustain, Eg::Release][v[2] as usize & 3], key: v[3] != 0, out: v[4] as u16 as i16 };
             }
-            (ch.old1, ch.out1, ch.out2) = (s[20] as u16 as i16, s[21] as u16 as i16, s[22] as u16 as i16);
+            (ch.old1, ch.out1) = (s[20] as u16 as i16, s[21] as u16 as i16);
             ch.keys.copy_from_slice(&keys[c * 4..c * 4 + 4]);
         }
         (self.eg_counter, self.eg_div) = (e[0] as u32, e[1] as u8);
@@ -386,8 +387,11 @@ mod tests {
         assert_eq!(Fm::rate(12, 3, 18), 42);
         assert_eq!(Fm::rate(31, 3, 31), 63);
         assert_eq!(increment(48, 3), 1);
-        assert_eq!(increment(51, 3), 2);
+        assert_eq!((0..4).map(|c| increment(49, c)).collect::<Vec<_>>(), [2, 1, 1, 1], "the board's cycles (D-18)");
+        assert_eq!((0..4).map(|c| increment(50, c)).collect::<Vec<_>>(), [2, 1, 2, 1]);
+        assert_eq!((0..8).map(|c| increment(51, c)).collect::<Vec<_>>(), [2, 2, 2, 1, 2, 2, 2, 1]);
         assert_eq!(increment(55, 1), 4);
+        assert_eq!((0..8).map(|c| increment(47, c)).collect::<Vec<_>>(), [0, 1, 1, 1, 1, 1, 1, 1], "the cycle rate 47 misses numbers them");
         assert_eq!(increment(60, 0), 8);
         assert_eq!(increment(7, 0), 0);
     }

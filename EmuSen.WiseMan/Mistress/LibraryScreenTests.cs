@@ -173,30 +173,31 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // A console only a discovered engine runs has its shelf, in the sidebar and in big picture's systems, only while that engine in development is shown - see EmuSen_Settings_Reference.md §4.92.
+        // A console only a discovered engine runs has its shelf, in the sidebar and in big picture's systems, with no development switch since the Genesis is offered; the Sega CD and the 32X, marked in development in the core's info, have none - see EmuSen_Settings_Reference.md §4.92, §4.94.
         [Fact]
-        public Task The_genesis_has_a_shelf_only_while_its_engine_in_development_is_shown() => Session.Dispatch(() =>
+        public Task The_genesis_has_a_shelf_and_its_attachments_have_none() => Session.Dispatch(() =>
         {
             Rom("Alpha.sfc");
             File.WriteAllBytes(Path.Combine(_romDir, "Harbor.md"), SyntheticMdRom.Cartridge());
+            File.WriteAllBytes(Path.Combine(_romDir, "Disc.iso"), SyntheticMdRom.Disc());
+            File.WriteAllBytes(Path.Combine(_romDir, "Wide.32x"), SyntheticMdRom.Cartridge("SEGA 32X"));
             try
             {
                 EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
-                MainWindow plain = Open(AppSettings.LibraryList);
-                Assert.DoesNotContain("Genesis", Sidebar(plain).GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? ""));
-                plain.Close();
-
-                EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(true);
                 MainWindow window = Open(AppSettings.LibraryList);
                 string[] rows = Sidebar(window).GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
                 int genesis = Array.IndexOf(rows, "Genesis");
                 Assert.True(genesis >= 0, string.Join(" | ", rows));
                 Assert.Equal("1", rows[genesis + 1]);
+                Assert.DoesNotContain("Sega CD", rows);
+                Assert.DoesNotContain("32X", rows);
                 UiTest.Dump("library-genesis-sidebar", UiTest.Capture(window));
                 Choose(window, MainWindow.ConsoleKeyPrefix + "Genesis (Nephrite)");
                 Assert.Equal(new[] { "Harbor.md" }, Shown(window));
                 var shelves = (System.Collections.IEnumerable)typeof(MainWindow).GetMethod("ThemedShelves", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null)!;
-                Assert.Contains(shelves.Cast<object>(), s => s.ToString()!.Contains("genesis", StringComparison.Ordinal));
+                string[] systems = shelves.Cast<object>().Select(s => s.ToString()!).ToArray();
+                Assert.Contains(systems, s => s.Contains("genesis", StringComparison.Ordinal));
+                Assert.DoesNotContain(systems, s => s.Contains("segacd", StringComparison.Ordinal) || s.Contains("sega32x", StringComparison.Ordinal));
                 window.Close();
             }
             finally

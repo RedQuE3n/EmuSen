@@ -7854,10 +7854,12 @@ on (the stored choice, else the row's default, §4.44):
   images and has no replacement for any, so each reads "No open version yet". The other three ask for none.
 - **Any other system a discovered core runs** follows the catalog's consoles, by the name its info gives it.
 - **A core in development is left out**, by its sidecar's `development` mark, even in a session where discovery lists
-  such cores (`EMUSEN_DEVELOPMENT_CORES=1`). Nephrite's entries therefore do not appear.
+  such cores (`EMUSEN_DEVELOPMENT_CORES=1`). *Amended 2026-10-07:* Nephrite is no longer marked (§4.94), so its
+  Genesis row appears; its Sega CD and 32X, marked in development in its info, do not.
 
 As built, with VenusRT the SNES default, the page lists the NES, the Game Boy and Game Boy Color, the Super Nintendo
-with eight rows (the SPC700 boot program, DSP-1, DSP-1B, DSP-2, DSP-3, DSP-4, ST010 and ST011), and the Nintendo 64.
+with eight rows (the SPC700 boot program, DSP-1, DSP-1B, DSP-2, DSP-3, DSP-4, ST010 and ST011), and the Nintendo 64;
+since 2026-10-07 also the Sega Genesis / Mega Drive, with one row, the optional TMSS boot ROM `bios_MD.bin`.
 No shipped core reads a Game Boy boot ROM, so there is no row for one.
 
 *The core's side* is `VenusRT_Native.md` §67: core info now lists each NEC image as its own entry with its own label
@@ -7899,7 +7901,7 @@ and cost, where it had one entry for all seven, and every cost opens on a senten
 
 | Test | What it holds |
 |---|---|
-| `FirmwareOverviewTests` (6) | the SNES rows equal VenusRT's info entry for entry, label, name, size, effect and cost; the four systems in order; the words with no file, a file one byte short, the file, and the file removed; a split program and data pair counted as the file; `none` and a missing replacement; with Venus (C#) chosen, or VenusRT's library gone, the reference core's own requests; Nephrite left out with development cores listed |
+| `FirmwareOverviewTests` (7) | the SNES rows equal VenusRT's info entry for entry, label, name, size, effect and cost; the five systems in order; the words with no file, a file one byte short, the file, and the file removed; a split program and data pair counted as the file; `none` and a missing replacement; with Venus (C#) chosen, or VenusRT's library gone, the reference core's own requests; a copy of Nephrite's library with a development sidecar left out with development cores listed; the Genesis's TMSS row, and no Sega CD or 32X row |
 | `FirmwarePageTests` (3) | the desktop tab's headers, rows, tooltips and folder against the overview; Open Folder hands the opener exactly the folder, makes it, writes nothing into it, and is the page's only button; the rows follow the folder on a refresh and on reopening |
 | `WindowFitAuditTests.The_firmware_page_in_preferences_is_whole_at_both_sizes` (4) | reached through the pad menu's Settings ▸ Firmware, on the desktop and the big screen at 1280 × 800 and 1920 × 1200, with one file in use and one of the wrong size: nothing cut or overlapping; on the big screen with the focus on each of the thirteen rows in turn, no footer cut, the folder's footer in its own case, each file name a value in its own case, the hints Back and Choose alone and the four again on Preferences, every row and Back reached by the d-pad, and B back to Preferences and then out |
 | `EsdeSettingsMenusTests.The_firmware_page_under_a_theme_is_a_menu_of_rows_the_pad_reads` (2) | under an ES-DE theme: the menu centred and drawn inside its panel as the other tabs are, the rows' labels and values, the file names and the folder's name in their own case, the two hints, each row's footer whole, A on a row changing and opening nothing |
@@ -7925,7 +7927,7 @@ Pictures from the headless renderer (`EMUSEN_WINDOW_FIT_PNG=firmware-page`) are 
 **What the player sees.** Graphics Settings has a **Genesis** tab after the four catalog consoles, the settings of the
 engine that runs the console, Nephrite. The tab appears only when that engine is found beside the program; while it is
 in development (`EmuSen_CoreAPI.md` §27) that is only in a build run with development cores shown, so a player sees
-none yet. *Amended 2026-10-06: the first build of this entry gave the Sega CD and the 32X tabs too. Nephrite's info now
+none yet. *Amended 2026-10-07: the Genesis is offered to players, and the tab is in every build (§4.94).* *Amended 2026-10-06: the first build of this entry gave the Sega CD and the 32X tabs too. Nephrite's info now
 marks both systems in development (§27.4 there), and a console gets its tab only once its engine says its games run, so
 their tabs come with their own stages and no frontend change.*
 
@@ -8002,7 +8004,8 @@ names its Graphics Settings tab has (§4.90). The catalog's consoles keep their 
 has a **Genesis** shelf after the four Nintendo consoles: the sidebar's row with its count, the console filter's
 "Genesis (Nephrite)", its covers and list, and big picture's **genesis** system, under the theme's own art for ES-DE's
 `genesis` and its full name "Sega Genesis". Its games are the files of the extensions its system pack names (`.md`,
-`.gen`, `.bin`, `.smd`). Without the mark shown there is no Genesis shelf, row, tab or extension, as before. The Sega CD
+`.gen`, `.bin`, `.smd`). Without the mark shown there is no Genesis shelf, row, tab or extension, as before. *Amended
+2026-10-07: Nephrite is no longer marked, so the shelf is in every build (§4.94).* The Sega CD
 and the 32X get none yet, being marked in development in the core's own info (§4.90).
 
 **How it is wired.** `CoreCatalog`'s lists (`Cores`, `ConsolesInReleaseOrder`, `ShelvesInReleaseOrder`, `RomExtensions`,
@@ -8024,7 +8027,8 @@ for any such console:
 
 Big picture draws the shelf with the same scaling as every other; nothing about its quality changed.
 
-**Coverage**: `LibraryScreenTests.The_genesis_has_a_shelf_only_while_its_engine_in_development_is_shown`; the window fit
+**Coverage**: `LibraryScreenTests.The_genesis_has_a_shelf_only_while_its_engine_in_development_is_shown`, since
+2026-10-07 `The_genesis_has_a_shelf_and_its_attachments_have_none`; the window fit
 audit's `ActiveCheatsGenesis`, `ShaderSettingsGenesis`, `ControllerBindingsGenesis` and `GraphicsSettingsGenesis` at
 1280×800 and 1920×1200, each with the Genesis's tab; `NephriteTests`, whose `.gen` file now has the Genesis as its
 console.
@@ -8061,3 +8065,24 @@ under a theme with a picture for `genesis`, as a theme that knows the console ha
 carousel's entry is the system's name in words, as for any system a theme has no picture for, and at the test theme's
 item width "Sega Genesis" is shortened with an ellipsis; that is the carousel's rule for every such system and is not
 changed here.
+
+### 4.94 The Genesis offered to players (2026-10-07)
+
+*Decided 2026-10-07: the Genesis is offered to players* (`Nephrite_Plan.md` §7). Nephrite's build no longer marks
+the core in development (`EmuSen_CoreAPI.md` §27.2), so every build, a player's among them, has:
+
+- the **Genesis shelf** of §4.92: the sidebar's row and count, the console filter's "Genesis (Nephrite)", and big
+  picture's `genesis` system;
+- the **Genesis tabs** of Graphics Settings (§4.90), Controller Bindings (§4.93), Shader Settings and Active Cheats;
+- the **firmware page's** Sega Genesis / Mega Drive row (§4.89.3), the optional TMSS boot ROM;
+- **`.md`, `.gen`, `.bin` and `.smd`** opened by Nephrite, and its battery files under `Saves/Genesis` (§4.91).
+
+The **Sega CD and the 32X** appear nowhere: Nephrite's info still marks both systems in development (§27.4 there), so
+their `.iso` and `.32x` files are not listed or opened, and they have no shelf, tab or firmware row,
+until their own stages remove the mark.
+
+**Coverage**: `NephriteTests.A_player_is_offered_the_genesis_and_not_the_sega_cd_or_the_32x` (the sidecar unmarked;
+the four extensions supported and listed, `.iso` and `.32x` neither; a `.gen` file made into an engine; the one
+console and shelf; the settings and twelve controls; the firmware row and no Sega CD or 32X one);
+`LibraryScreenTests.The_genesis_has_a_shelf_and_its_attachments_have_none`; `FirmwareOverviewTests.The_genesis_is_listed_and_its_attachments_are_not`;
+and §4.90-§4.93's tests and fit audits, run since 2026-10-07 with development cores off.

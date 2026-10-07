@@ -228,10 +228,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Settle(window);
         }
 
-        // A console only a discovered engine serves, whose tab the window adds after the catalog's, with the core in development shown - see EmuSen_Settings_Reference.md §4.90.
+        // A console only a discovered engine serves, whose tab the window adds after the catalog's, with no core in development shown - see EmuSen_Settings_Reference.md §4.90 and §4.94.
         internal static void ShowDiscoveredTab(MainWindow window, string console)
         {
-            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(true);
+            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             Call(window, "ShowGraphicsSettings");
             Settle(window);
             var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
@@ -505,8 +505,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task Nothing_in_the_window_is_cut_off_past_its_panel_or_drawn_over_anything_else(string which, int width, int height) => Session.Dispatch(() =>
         {
             string name = $"{which}-{width}x{height}";
-            // A console only a discovered engine runs has its tabs and shelf only while that engine in development is shown.
-            if (which.Contains("Genesis", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(true);
+            // A console only a discovered engine runs has its tabs and shelf with no core in development shown, as a player's build has them - see EmuSen_Settings_Reference.md §4.94.
+            if (which.Contains("Genesis", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),

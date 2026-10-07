@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.Cores
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(true);
+            CoreDiscovery.UseDevelopment(false);
             CoreOptions.BatteryRamDisabled = false;
         }
 

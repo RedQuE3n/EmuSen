@@ -38,7 +38,6 @@
       <Console>the Genesis, the Sega CD and the 32X</Console>
       <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
-      <InDevelopment>true</InDevelopment>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="venusrt">
       <Dir>$(MSBuildThisFileDirectory)Nintendo\VenusRT - SNES\</Dir>

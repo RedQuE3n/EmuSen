@@ -648,6 +648,13 @@ Nephrite replaces nothing, so its gate is the one to **offer a system to players
 default for its files), applied per system: the Genesis after stage 6, the Sega CD after stage 10, the 32X after stage
 12.
 
+*Decided 2026-10-07: the Genesis is offered to players.* The tester decided it ahead of the gates' evidence: the
+`InDevelopment` mark is removed from Nephrite's row of `RustCores.props` (`EmuSen_CoreAPI.md` §27.2), while the Sega CD
+and the 32X stay marked in development in the core's own info (§27.4 there) and are offered to no player. Neither the
+kit on games across the corpus nor a reading of the gates below was made first; the tester tests the published build
+and reports what breaks. The gates still measure the Genesis, and those not yet met are its follow-up list
+(`Nephrite_Native.md` §36).
+
 - **G1, the CPU suites.** 100% of both 68000 suites and the Z80 suite, state and cycles, except cases named in a
   disputes entry (the 68000 suite's TAS and TRAPV caveats are the likely ones); ZEXDOC and ZEXALL pass.
 - **G2, the self-grading programs.** VDPFIFOTesting, the BCD verifier, the opcode sizes and the illegal test pass,

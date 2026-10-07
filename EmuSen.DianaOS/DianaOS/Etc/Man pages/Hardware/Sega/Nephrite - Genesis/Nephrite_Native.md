@@ -2551,3 +2551,28 @@ right for it, and it needs no board entry. A save made in play was not traced.
 - **WiseMan**: the window fit audit (every case, the Genesis's new ones among them), the controller bindings, input
   settings, library screen, pad navigation and settings, Genesis settings, Nephrite, player preferences, accessibility
   and hand-rolled control tests: 288 pass.
+
+## 36. Stage 6, the Genesis offered to players (2026-10-07)
+
+*Decided 2026-10-07: the Genesis is offered to players* (the plan's §7), before the kit on games and the gates' table.
+
+- **What changed.** Nephrite's row of `RustCores.props` no longer carries `InDevelopment`, nor its row of
+  `rust-cores.yml` `development: true`, so its sidecar is written without the mark, a normal build discovers it, and a
+  publish carries `libnephrite.so` and its sidecar beside the other cores' (`EmuSen_CoreAPI.md` §27.2). A publish for
+  another platform takes the prebuilt library from `EmuSenNativePrebuilt` as for the other cores, and without it warns
+  that the publish has no engine for the Genesis. The core's info is unchanged: the Sega CD and the 32X stay marked in
+  development (§27.4 there), so their extensions are unclaimed and they have no shelf, tab or firmware row.
+- **What the player sees** is `EmuSen_Settings_Reference.md` §4.94: the Genesis shelf, its Graphics Settings and
+  Controller Bindings tabs, its firmware page row (the optional TMSS boot ROM), and `.md`, `.gen`, `.bin` and `.smd`
+  opened by Nephrite, in every build.
+- **The tests** that switched development cores on only to reach the Genesis now run with them off: the Genesis's
+  settings, battery, pad drawing, shelf and window fit audits. `NephriteTests.A_player_is_offered_the_genesis_and_not_the_sega_cd_or_the_32x`
+  replaces the test that the core was not offered. `FirmwareOverviewTests` lists the Genesis's row and keeps its test
+  of a core in development on a copy of Nephrite's library with its sidecar rewritten with the mark. The registration
+  golden (`EmuSen_CoreAPI.md` §25) is re-recorded; its difference is the Genesis's lines alone (the catalogue's cores,
+  release order, filter, extensions and cheat systems, the Genesis's core and shelf rows, and Nephrite discovered in
+  each scenario).
+- **Measured (2026-10-07)**, with development cores off: the discovery, registration, firmware overview and page,
+  Nephrite, Genesis settings and battery, Genesis shelf, Genesis pad and the sidebar and carousel fit audits, 47 pass;
+  the window fit audit's ten Genesis cases pass. A run of the kit across the corpus was begun and stopped unread at the
+  tester's request; it is not a result, and the kit on games remains owed under G4.

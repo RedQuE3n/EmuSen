@@ -153,7 +153,6 @@ jobs:
           - name: nephrite
             dir: 'EmuSen/Cores/Sega/Nephrite - Genesis'
             symbol: emusen_core_
-            development: true
         platform:
           # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it.
           - rid: linux-x64

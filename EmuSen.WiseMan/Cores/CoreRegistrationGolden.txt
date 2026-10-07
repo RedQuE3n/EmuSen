@@ -8,11 +8,11 @@ catalog.registry[n64] = Nintendo 64 (Mars)
 catalog.registry[nes] = NES (Moon)
 catalog.registry[snes] = SNES (Venus)
 catalog.registry[venus] = SNES (Venus)
-catalog.cores = [SNES (Venus), NES (Moon), Game Boy (Mercury), Nintendo 64 (Mars)]
-catalog.release-order = [NES (Moon), Game Boy (Mercury), SNES (Venus), Nintendo 64 (Mars)]
-catalog.filter-choices = [All consoles, SNES (Venus), NES (Moon), Game Boy (Mercury), Game Boy Color (Mercury), Nintendo 64 (Mars)]
-catalog.rom-extensions = [.smc, .sfc, .nes, .gb, .gbc, .z64, .n64, .v64]
-catalog.cheat-systems = [Nintendo - Game Boy, Nintendo - Game Boy Color, Nintendo - Nintendo 64, Nintendo - Nintendo Entertainment System, Nintendo - Satellaview, Nintendo - Super Nintendo Entertainment System]
+catalog.cores = [SNES (Venus), NES (Moon), Game Boy (Mercury), Nintendo 64 (Mars), Genesis (Nephrite)]
+catalog.release-order = [NES (Moon), Game Boy (Mercury), SNES (Venus), Nintendo 64 (Mars), Genesis (Nephrite)]
+catalog.filter-choices = [All consoles, SNES (Venus), NES (Moon), Game Boy (Mercury), Game Boy Color (Mercury), Nintendo 64 (Mars), Genesis (Nephrite)]
+catalog.rom-extensions = [.smc, .sfc, .nes, .gb, .gbc, .z64, .n64, .v64, .md, .gen, .bin, .smd]
+catalog.cheat-systems = [Nintendo - Game Boy, Nintendo - Game Boy Color, Nintendo - Nintendo 64, Nintendo - Nintendo Entertainment System, Nintendo - Satellaview, Nintendo - Super Nintendo Entertainment System, Sega - Mega Drive - Genesis]
 catalog.all-consoles = All consoles
 catalog.engine-key = Engine
 catalog.gbc-shelf = Game Boy Color (Mercury)
@@ -50,11 +50,18 @@ catalog.core[Nintendo 64 (Mars)].openvgdb = [N64]
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[plain] = 4096 b618e72c0c4f6131
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[eeprom] = 4096 e0f98e2ff4cb68bb
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[byteswapped] = 4096 b618e72c0c4f6131
+catalog.core[Genesis (Nephrite)].console = Genesis
+catalog.core[Genesis (Nephrite)].extensions = [.md, .gen, .bin, .smd]
+catalog.core[Genesis (Nephrite)].cheat-systems = [Sega - Mega Drive - Genesis]
+catalog.core[Genesis (Nephrite)].maker-year = Sega 1988
+catalog.core[Genesis (Nephrite)].cover-aspect = 0.7
+catalog.core[Genesis (Nephrite)].openvgdb = [MD]
 catalog.shelf[NES (Moon)] = NES NES (Moon) nes Nintendo Entertainment System
 catalog.shelf[Game Boy (Mercury)] = GB Game Boy (Mercury) gb Game Boy
 catalog.shelf[Game Boy Color (Mercury)] = GBC Game Boy (Mercury) gbc Game Boy Color
 catalog.shelf[SNES (Venus)] = SNES SNES (Venus) snes Super Nintendo
 catalog.shelf[Nintendo 64 (Mars)] = N64 Nintendo 64 (Mars) n64 Nintendo 64
+catalog.shelf[Genesis (Nephrite)] = Genesis Genesis (Nephrite) genesis Sega Genesis
 catalog.shelf-by-name[SNES (Venus)] = SNES (Venus)
 catalog.shelf-by-name[NES (Moon)] = NES (Moon)
 catalog.shelf-by-name[Game Boy (Mercury)] = Game Boy (Mercury)
@@ -183,6 +190,7 @@ built.registered[<null>] = False
 built.available = MoonRT=True MercuryRT=True MarsRT=True
 built.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
 built.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True
+built.discovered[nephrite] = Nephrite systems=[md, mcd, 32x] opens=True
 built.discovered[venusrt] = VenusRT (Rust) systems=[snes] opens=True
 built.factory[SNES plain <null>].supported = True
 built.factory[SNES plain <null>].probe = VenusCore
@@ -1611,6 +1619,7 @@ refused-discovered.registered[<null>] = False
 refused-discovered.available = MoonRT=True MercuryRT=True MarsRT=True
 refused-discovered.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=False report=<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=False report=<lib moonrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
+refused-discovered.discovered[nephrite] = Nephrite systems=[md, mcd, 32x] opens=False report=libnephrite.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[venusrt] = VenusRT (Rust) systems=[snes] opens=False report=<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.factory[SNES plain <null>].supported = True
 refused-discovered.factory[SNES plain <null>].probe = VenusCore
@@ -1915,11 +1924,11 @@ catalog.registry[n64] = Nintendo 64 (Mars)
 catalog.registry[nes] = NES (Moon)
 catalog.registry[snes] = SNES (Venus)
 catalog.registry[venus] = SNES (Venus)
-catalog.cores = [SNES (Venus), NES (Moon), Game Boy (Mercury), Nintendo 64 (Mars)]
-catalog.release-order = [NES (Moon), Game Boy (Mercury), SNES (Venus), Nintendo 64 (Mars)]
-catalog.filter-choices = [All consoles, SNES (Venus), NES (Moon), Game Boy (Mercury), Game Boy Color (Mercury), Nintendo 64 (Mars)]
-catalog.rom-extensions = [.smc, .sfc, .nes, .gb, .gbc, .z64, .n64, .v64]
-catalog.cheat-systems = [Nintendo - Game Boy, Nintendo - Game Boy Color, Nintendo - Nintendo 64, Nintendo - Nintendo Entertainment System, Nintendo - Satellaview, Nintendo - Super Nintendo Entertainment System]
+catalog.cores = [SNES (Venus), NES (Moon), Game Boy (Mercury), Nintendo 64 (Mars), Genesis (Nephrite)]
+catalog.release-order = [NES (Moon), Game Boy (Mercury), SNES (Venus), Nintendo 64 (Mars), Genesis (Nephrite)]
+catalog.filter-choices = [All consoles, SNES (Venus), NES (Moon), Game Boy (Mercury), Game Boy Color (Mercury), Nintendo 64 (Mars), Genesis (Nephrite)]
+catalog.rom-extensions = [.smc, .sfc, .nes, .gb, .gbc, .z64, .n64, .v64, .md, .gen, .bin, .smd]
+catalog.cheat-systems = [Nintendo - Game Boy, Nintendo - Game Boy Color, Nintendo - Nintendo 64, Nintendo - Nintendo Entertainment System, Nintendo - Satellaview, Nintendo - Super Nintendo Entertainment System, Sega - Mega Drive - Genesis]
 catalog.all-consoles = All consoles
 catalog.engine-key = Engine
 catalog.gbc-shelf = Game Boy Color (Mercury)
@@ -1957,11 +1966,18 @@ catalog.core[Nintendo 64 (Mars)].openvgdb = [N64]
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[plain] = 4096 b618e72c0c4f6131
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[eeprom] = 4096 e0f98e2ff4cb68bb
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[byteswapped] = 4096 b618e72c0c4f6131
+catalog.core[Genesis (Nephrite)].console = Genesis
+catalog.core[Genesis (Nephrite)].extensions = [.md, .gen, .bin, .smd]
+catalog.core[Genesis (Nephrite)].cheat-systems = [Sega - Mega Drive - Genesis]
+catalog.core[Genesis (Nephrite)].maker-year = Sega 1988
+catalog.core[Genesis (Nephrite)].cover-aspect = 0.7
+catalog.core[Genesis (Nephrite)].openvgdb = [MD]
 catalog.shelf[NES (Moon)] = NES NES (Moon) nes Nintendo Entertainment System
 catalog.shelf[Game Boy (Mercury)] = GB Game Boy (Mercury) gb Game Boy
 catalog.shelf[Game Boy Color (Mercury)] = GBC Game Boy (Mercury) gbc Game Boy Color
 catalog.shelf[SNES (Venus)] = SNES SNES (Venus) snes Super Nintendo
 catalog.shelf[Nintendo 64 (Mars)] = N64 Nintendo 64 (Mars) n64 Nintendo 64
+catalog.shelf[Genesis (Nephrite)] = Genesis Genesis (Nephrite) genesis Sega Genesis
 catalog.shelf-by-name[SNES (Venus)] = SNES (Venus)
 catalog.shelf-by-name[NES (Moon)] = NES (Moon)
 catalog.shelf-by-name[Game Boy (Mercury)] = Game Boy (Mercury)
@@ -2090,6 +2106,7 @@ off.registered[<null>] = False
 off.available = MoonRT=False MercuryRT=False MarsRT=False
 off.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
 off.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True
+off.discovered[nephrite] = Nephrite systems=[md, mcd, 32x] opens=True
 off.discovered[venusrt] = VenusRT (Rust) systems=[snes] opens=True
 off.factory[SNES plain <null>].supported = True
 off.factory[SNES plain <null>].probe = VenusCore

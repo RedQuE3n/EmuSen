@@ -141,6 +141,28 @@ impl Eeprom {
         }
     }
 
+    /// Where a transfer stands, for the state: the step, the lines, the byte being shifted, its bits, the bytes taken,
+    /// the address, the command's upper bits and the read and acknowledge flags (Nephrite_Native.md §39).
+    pub fn protocol(&self) -> [u16; 11] {
+        let state = match self.state {
+            State::Idle => 0,
+            State::Receive => 1,
+            State::Send => 2,
+        };
+        [state, self.scl as u16, self.sda_in as u16, self.sda_out as u16, self.shift as u16, self.bits as u16, self.taken as u16, self.address, self.upper, self.read as u16, self.ack as u16]
+    }
+
+    pub fn set_protocol(&mut self, p: [u16; 11]) {
+        self.state = match p[0] {
+            1 => State::Receive,
+            2 => State::Send,
+            _ => State::Idle,
+        };
+        (self.scl, self.sda_in, self.sda_out) = (p[1] != 0, p[2] != 0, p[3] != 0);
+        (self.shift, self.bits, self.taken) = (p[4] as u8, p[5] as u8, p[6] as u8);
+        (self.address, self.upper, self.read, self.ack) = (p[7], p[8], p[9] != 0, p[10] != 0);
+    }
+
     /// SDA as the console reads it: the wire, low if either side pulls it low.
     pub fn sda(&self) -> bool {
         self.sda_in && self.sda_out
@@ -337,6 +359,32 @@ mod tests {
             self.lines(!more, false);
             v
         }
+    }
+
+    // A state taken in the middle of a transfer carries where it stood: a board given the bytes alone answers otherwise (Nephrite_Native.md §39).
+    #[test]
+    fn a_transfer_taken_into_another_board_goes_on_as_it_would_have() {
+        let mut m = Master::new("GM T-081586-00", 0);
+        for (i, b) in m.0.memory.iter_mut().enumerate() {
+            *b = (i * 7) as u8;
+        }
+        m.start();
+        assert!(m.send(0xA0 | 1 << 1));
+        assert!(m.send(0x40));
+        m.start();
+        assert!(m.send(0xA1 | 1 << 1));
+        assert_eq!(m.receive(true), (0x140 * 7) as u8);
+        let mut taken = Master(Eeprom::new(m.0.board));
+        taken.0.memory.copy_from_slice(&m.0.memory);
+        taken.0.set_protocol(m.0.protocol());
+        let mut bytes_alone = Master(Eeprom::new(m.0.board));
+        bytes_alone.0.memory.copy_from_slice(&m.0.memory);
+        let next = |m: &mut Master| (m.receive(true), m.receive(false));
+        let expected = ((0x141 * 7) as u8, (0x142 * 7) as u8);
+        assert_eq!(next(&mut m), expected);
+        assert_eq!(next(&mut taken), expected);
+        assert_eq!(taken.0.protocol(), m.0.protocol());
+        assert_ne!(next(&mut bytes_alone), expected);
     }
 
     #[test]

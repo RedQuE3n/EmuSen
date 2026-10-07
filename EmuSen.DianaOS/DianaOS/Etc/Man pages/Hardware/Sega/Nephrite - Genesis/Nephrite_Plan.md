@@ -677,6 +677,10 @@ and reports what breaks. The gates still measure the Genesis, and those not yet 
   nine gaps in the record and no rule taken from an excluded source; they are closed (`Nephrite_Native.md` §37).
   The clone check was not run, so §1.3's third rule, that the code carries no emulator's identifiers, has no
   mechanical test behind it.
+
+*The Genesis's gates as of 2026-10-07* are tabled in `Nephrite_Native.md` §40: G1, G3 and G9 met with named
+exceptions, G2 and G4 met, G6 met in part, G5 and G7 not met, G8 decided as above. Since the Genesis is offered, the
+gates not met are its follow-up list there.
 - **G9, firmware.** Every game the replacement is claimed to run runs with no firmware folder, and its machine info
   names the replacement; with the player's image, the same game runs on it.
 

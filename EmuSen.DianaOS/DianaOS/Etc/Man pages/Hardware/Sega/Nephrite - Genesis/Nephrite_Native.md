@@ -2630,3 +2630,63 @@ The clone check has not been run, and the unfinished constants above were not ch
 blocks anything since the decision of §37.1; both are on the follow-up list of the gates' table.
 
 No code changed in this step, and no test was run for it.
+
+## 38. Stage 6, the kit on games made quick: the corpus form and the sample (2026-10-07)
+
+The row's last item, the kit on games, was first run one process an image, and a run over the corpus was stopped at
+the tester's request (§36): each image repeated the cases whose answer does not depend on the game. The kit now has a
+corpus form that runs those once (`EmuSen_CoreAPI.md` §28), and Nephrite a sample to run it on.
+
+### 38.1 The sample
+
+`EmuSen/Cores/Sega/Nephrite - Genesis/kit/genesis-sample.txt`: 64 names of the corpus's images, with what each is
+there for, and no image. It is what the kit is run on after a change to Nephrite; the whole corpus is the occasional
+run.
+
+```
+emusen-core-conform --core libnephrite.so --images kit/genesis-sample.txt --from ~/.cache/emusen/probe/nephrite/games/genesis
+```
+
+| Group | Images | Chosen by |
+|---|---|---|
+| The EEPROM boards | 22 | One for each of `eeprom.rs`'s 21 boards, by the serial or checksum that names it, and Putter Golf, which declares an EEPROM the database does not list |
+| Save RAM layouts | 10 | Each form of the header's declaration in the corpus: 1, 2, 4, 16 and 64 KiB on the odd lane; 16 and 64 KiB at `$300001`; Rent A Hero's even start; the type bytes `$E0` and `$20` |
+| Mappers, lock-on, a coprocessor | 4 | Super Street Fighter II (the corpus's one image, 4 MiB, so the mapper's banks past 4 MiB are not reached); Sonic & Knuckles alone and combined with Sonic 3; Virtua Racing, whose SVP Nephrite does not have |
+| Pads and multitaps | 6 | The header's `6` and `4`, and two four-player games whose headers declare neither |
+| One market only | 5 | Europe and Japan, by the letters and by the digit |
+| Largest and smallest | 3 | 4 MiB; the Game Genie's 31,973 bytes; 128 KiB |
+| The record's own games | 8 | Those §11 to §29 and the disputes log measure with |
+| Out of the ordinary | 6 | Two copier images, a 32X cartridge, two images with no header and one whose header is `$FF` |
+
+Several images serve two groups (three EEPROM boards are also 4 MiB; two are one market's). The sample cannot hold
+what the corpus does not: a 5 MiB Super Street Fighter II and an 8 MiB image are not in it.
+
+### 38.2 Measured (2026-10-07)
+
+600 frames, sixteen images at once, the release library of this commit.
+
+| | One process an image, as before | The corpus form |
+|---|---|---|
+| The sample, 64 images | 156.2 s | 37.3 s |
+| The corpus, 948 files | about 39 minutes by the sample's rate; not run | 8 min 19 s |
+
+- **The same verdicts**: every one of the sample's images passes or fails in the corpus form as in the old, case by
+  case, the evidence equal to the digest (`EmuSen_CoreAPI.md` §28.6).
+- **The sample**: the core's cases pass; 62 of 64 images pass. **Frank Thomas Big Hurt Baseball** and **John Madden
+  Football 93** fail C7 and C8.
+- **The corpus**: the core's cases pass; 941 of 948 files pass. Six games fail C7 and C8, the two above and **FIFA
+  Soccer 2000 Gold Edition**, **Mickey Mouse - Fantasia**, **Pirates! Gold** and **Worms**; the seventh is
+  `delete.me`, a file of one byte that is no game and is refused with words, which is the right answer to it.
+- **What the six have in common**: a machine loaded with another's state shows other pictures than the machine the
+  state came from over the next 300 frames, and the same sound to the sample (C7's "B, loaded with A's state, did
+  not continue as A"; C8's "across a save and load at frame 300 the run differs"). Two machines fed alike without a
+  load agree. So something that reaches the picture is not in the state, or is not restored from it. It is not
+  traced here; it is a defect, and the gates' table takes it up.
+
+### 38.3 What was run
+
+`emusen-core-conform`'s own tests, 20 (`EmuSen_CoreAPI.md` §28.5); the old and the new runner on the sample and on
+two images each of MoonRT, MercuryRT and VenusRT; the corpus form on the corpus, once. No WiseMan test: nothing of
+the frontends or of Nephrite's source changed, and the runner's `--sidecar`, which the build and `CoreDiscoveryTests`
+use, writes the bytes it wrote.
+

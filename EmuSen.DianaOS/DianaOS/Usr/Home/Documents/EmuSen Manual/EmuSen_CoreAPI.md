@@ -5,7 +5,7 @@ and §13.2's items 1 and 2 built: the header, the `core` module with `core_expor
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
 conformance kit's core suite (§21); and MoonRT's and MercuryRT's exports onto v1 beside their pre-stable ones (§22,
 §23). Since then, 2026-10-04: the registration-equivalence test, D1's oracle (§25), and MoonRT's and MercuryRT's
-shims as subclasses of the adapter (§26). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -1488,7 +1488,8 @@ emusen-core-conform --core ./libmycore.so --image game.bin --frames 1200 \
 ```
 
 The exit status is 0 when every mandatory case passes. The report lists each case with its verdict and evidence, the
-kit's version and the core's `abi`, `id` and `version`. A core is described as "EmuSen v1.N compliant" with the report
+kit's version and the core's `abi`, `id` and `version`. *Since 2026-10-07 `--images DIR|LIST` runs a library of
+images, the cases that do not depend on the image once and the rest for every image, several at a time (§28).* A core is described as "EmuSen v1.N compliant" with the report
 that showed it.
 
 **Images.** The kit runs on images the author supplies; it ships none. The project's own CI uses images it builds
@@ -2067,7 +2068,7 @@ emusen-core-conform --sidecar LIB
 
 The exit status is 0 when every case passes; the report lists each case's verdict and evidence with the kit's version
 and the core's `abi`, `id` and `version`. `--sidecar` writes `<LIB>.core.json` in §19.2's format, with the descriptors
-as the library wrote them, for the build step §7.1 asks for.
+as the library wrote them, for the build step §7.1 asks for. (*The corpus form, `--images`, is §28.*)
 
 - **Input** is Pharaoh's hold, release and tap as lines `hold F PORT MASK`, `release F PORT MASK`, `tap F PORT MASK`
   (the mask in hex, `tap` holding for one frame). Without a script, port 0's buttons are pressed in turn, eight frames
@@ -2580,6 +2581,122 @@ may carry `"development": true`.
 - **Tested**: `NephriteTests.A_shipped_core_offers_only_the_systems_its_info_says_run`, on Nephrite's library with its
   sidecar written as shipped: `.md` supported, `.iso` and `.32x` not; with development cores asked for, both
   supported and still no Sega CD or 32X tab.
+
+---
+
+## 28. The kit's corpus form, 2026-10-07: the cases that do not depend on the image run once
+
+### 28.1 Why
+
+The kit of §21 and §24 runs fifteen cases on one image. Run over a library of games, one process an image, it repeats
+for every game the cases whose answer does not depend on the game: Nephrite's 948 images took about 2.4 s each with
+sixteen processes at once, some 13,500 frames an image, of which C12 alone, which runs C6 to C8 twice more under two
+skewed hosts, is 7,200 (§28.6). The corpus form runs those cases once and the rest for every image. The single-image
+form is unchanged: the same fifteen cases, the same report, byte for byte but for C13's count of rounds.
+
+### 28.2 Which cases run where
+
+| Run | Cases | Why there |
+|---|---|---|
+| Once, on one image (the **reference**) | C1, C2, C3; C4's empty and garbage images and its defaults; C5; C9; C10; C11; C12; C13; C15 | They ask about the library, its descriptors, its settings and its conduct towards a host: loading, info, the schema, refusals, capability honesty, exact settings, isolation, error paths, skew, the library-level calls, the debugger |
+| For every image | C4's half image and its firmware rule; C6; C7; C8; C14 | They ask about a machine made from that image: its refusal or its run when cut in half, the firmware it asks for, its frames, its state, its determinism, and its descriptors against its exports |
+
+- **C4 is in both, by its parts**, and each report lists the outcomes of the malformed images it ran. A core passes
+  C4 as the single-image form has it when both parts pass.
+- **C11 runs after the images**, since it holds `status_text` to every status the run returned, the images' among
+  them.
+- **The reference** is the image given with `--image`, or the corpus's first. The cases run once still need a machine,
+  and what they find they find on that one. *Argued, not shown:* that their answers are the same on every image. Where
+  one is not (a setting that is exact for one cartridge and not another, a debugger table that disturbs one game) the
+  corpus form does not see it; the single-image form on that image does. One dependence was **measured**: on the two
+  sample images whose state does not round-trip (§28.6), the single-image form fails C12 as well as C7 and C8, because
+  C12 reruns those two; the corpus form reports the image's C7 and C8 and, the reference being another image, passes
+  C12.
+
+### 28.3 C6's run is C8's first
+
+C8 ran a machine for N frames, saving its state at N/2, and compared it with a second machine and with one loaded
+from that state. C6 had just run the same image for the same N frames. C6's run is now C8's first: before frame
+N/2 it saves the state and states the buttons again (as C8's run, split there, did), and keeps the digests up to
+that frame and from it. C8 takes them when the C6 before it ran the frames C8 would (`Session::first`), and runs its
+own machine as before when it did not, which is a run of one frame. A state saved in the middle of C6's run changes
+nothing C6 reports, and C8's words are what they were: both were checked to the digest (§28.5, §28.6). It holds in
+both forms, and in C12, which runs C6, C7 and C8 in turn.
+
+### 28.4 The runner
+
+```
+emusen-core-conform --core LIB --images DIR|LIST [--from DIR] [--image FILE] [--jobs N] [--report-dir DIR]
+                    [--self-delimiting] [--frames N] [--input SCRIPT] [--settings KEY=VALUE]... [--file WHICH=PATH]... [--report SUMMARY.json]
+```
+
+- **The images**: every file of a directory, in name order, or the names a list file gives, one a line, found in
+  `--from` or beside the list. In a list a `#` begins a comment at a line's start or after two spaces, so a name may
+  hold one. A name the directory does not have is an error before anything runs. A list holds names and no images, so
+  it can be kept with a core: Nephrite's is `kit/genesis-sample.txt` (`Nephrite_Native.md` §38).
+- **At once**: `--jobs` images, each on a thread of its own in the one process, the machines sharing the library as
+  C10 and C13 already require a core to allow. Without `--jobs`, one for each processor, and no more than the memory
+  allowed holds at 256 MiB an image: the tightest `memory.max` of the process's control groups, or the memory
+  available. The core's own cases run beside them on a library handle of their own, since C12's skewed host is a
+  property of the handle. The image is read by the thread that runs it, so a corpus is never held whole.
+- **A hang**: an image whose cases have not ended in 600 seconds is reported as failing C6 with those words, its
+  thread left and another started in its place, as C4 leaves a malformed image that hangs (§21.4). A crash ends the
+  process, which is itself the failure, and takes the images running beside it: the single-image form on the image
+  named last in the output finds it.
+- **The output**: a line for each image as it ends (`pass` or `FAIL` with the cases failed and their first words),
+  the core's cases in the single-image form's layout, and the count. `--report-dir` writes a report for each image,
+  in the single-image report's shape with the image's name and its five cases, and `summary.json`: the core's cases
+  in full, the counts, and each image with its verdict, the cases it failed, its time and its report's file.
+  `--report` writes the summary alone. The exit status is 0 when the core's cases and every image pass.
+
+### 28.5 What was tested
+
+`emusen-core-conform`'s tests, 20, of which seven are new:
+
+- `c8_says_the_same_with_c6s_run_as_with_its_own` and `c6_of_one_frame_leaves_c8_its_own_run` (in the library, on
+  the test cores): C8 after C6 and C8 alone give the same verdict and the same evidence, digests and all, over 120,
+  121 and 2 frames; C6's digests are those of a run with no save in it; the core whose machines differ fails both
+  ways.
+- `a_corpus_runs_the_cores_cases_once_and_the_images_cases_for_every_image`: the two lists of §28.2, which together
+  are the fifteen, each case passing on the test cores over three images.
+- `a_corpus_says_of_each_image_what_the_single_image_form_says`: for the test core, the lenient one and the faulty
+  one, one image at a time and three, each image's C6, C7, C8 and C14 with the single-image form's verdict and
+  evidence, C4's two parts with its outcomes and together its verdict, and the core's cases with the single-image
+  form's on the reference.
+- `the_seeded_faults_fail_the_same_cases_in_a_corpus`: the first faulty build fails C4, C9, C10, C12 and C13 among
+  the core's cases and C7 and C8 on every image; the full one C9, C12, C13 and C15, and C14 on every image. Together
+  those are §24.2's sets.
+- `the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image`, and the list's comment rule.
+- `a_single_image_report_is_as_it_was`.
+
+Not tested: the 600-second deadline, there being no test core that hangs on a well-formed image.
+
+### 28.6 Measured (2026-10-07)
+
+On the development desktop (16 processors), 600 frames, Nephrite's release library, under an 8 GiB memory limit.
+
+| Run | Old form, one process an image, 16 at once | Corpus form | |
+|---|---|---|---|
+| Nephrite's sample, 64 images | 156.2 s | 37.3 s | 4.2 times |
+| Nephrite's corpus, 948 files | about 39 minutes, **not run**: the sample's 2.44 s an image, times 948 | 499.0 s (8 min 19 s) | about 4.6 times |
+
+- **The frames.** An image of Nephrite's cost the single-image form, as it was, about 13,500 frames (C4 1,200, C6
+  600, C7 900, C8 2,100, C10 900, C12 7,200, C13 600; it has no exact setting and does not claim the debugger, and it
+  runs a garbage image and most half images). It costs the corpus form 3,300 (C4's half image 300, C6 600, C7 900,
+  C8 1,500), with 8,400 once for the core; and the single-image form now 11,700, C8 being 600 shorter there and in
+  each of C12's two.
+- **The memory**: 243 MiB at the most for the whole process with sixteen images at once.
+- **The verdicts are the same.** On the sample, for each of the 64 images, C6, C7, C8 and C14 have the old form's
+  verdict and the old form's evidence to the digest (256 of 256), C4's parts its verdict and its half image's
+  outcome, and the image passes in one exactly when it passes in the other: 62 pass, and Frank Thomas Big Hurt
+  Baseball and John Madden Football 93 fail C7 and C8 in both. The cases run once pass, as they do on every image
+  in the old form but C12 on those two (§28.2). A run of the old form over the corpus stopped at 139 images on
+  2026-10-07 agrees with the corpus form on all 139 the same way (556 of 556).
+- **The other cores.** MoonRT (Super Mario Bros., The Legend of Zelda, with `--self-delimiting`), MercuryRT (Tetris,
+  Kirby's Dream Land) and VenusRT (A Link to the Past, Donkey Kong Country): the single-image report of the kit as
+  it was and as it is are identical on all six but for C13's count of rounds, all fifteen passing; and the corpus
+  form on each core's two images passes, each image's four cases the old report's. MarsRT is not on the core ABI
+  v1 and the kit does not load it. `--sidecar`, with and without `--development`, writes the bytes it wrote.
 
 ---
 

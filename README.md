@@ -4,7 +4,7 @@ EmuSen is a multi-console emulator built as a personal project. The goal was to 
 
 Around the cores there is a frontend, a debugging shell built into the emulator, and a headless harness that most of the testing runs through.
 
-**License:** GPL-3.0 · **Platforms:** Linux, Windows, macOS · **Consoles:** SNES, NES, Game Boy / Game Boy Color, Nintendo 64
+**License:** GPL-3.0 · **Platforms:** Linux, Windows, macOS · **Consoles:** SNES, NES, Game Boy / Game Boy Color, Nintendo 64, Sega Genesis / Mega Drive
 
 ## What works today
 
@@ -14,6 +14,7 @@ Around the cores there is a frontend, a debugging shell built into the emulator,
 | SNES | **Venus** (C#) | Runs commercial games, including SA-1, SuperFX, NEC DSP and OBC1 cartridges. Several play well; none has a verified playthrough |
 | Game Boy / Color | **Mercury** (C#), the default; **MercuryRT** (Rust) | Everything but the boot ROM, the link cable and the Super Game Boy. Passes 94 of the 173 blargg and mooneye hardware test ROMs |
 | NES | **Moon** (C#) | CPU, PPU, full APU and sixteen mapper boards. Plays Super Mario Bros. 3 and others, but has had far less play-testing than the SNES core |
+| Sega Genesis / Mega Drive | **Nephrite** (Rust) | Offered to players since October 2026. Runs commercial cartridges with battery and EEPROM saves, cheat codes and the three- and six-button pads; none has a verified playthrough. The Sega CD and the 32X are not offered yet |
 
 Every other console is an empty, reserved folder. Per-game results are in [the games list](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md).
 

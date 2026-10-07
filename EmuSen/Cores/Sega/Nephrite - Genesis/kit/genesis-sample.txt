@@ -1,0 +1,84 @@
+# The conformance kit's sample of Genesis images: names only, chosen by what each exercises, found in the directory
+# given with --from. A comment begins at a line's start or after two spaces. See Nephrite_Native.md §38 and EmuSen_CoreAPI.md §28.
+#
+#   emusen-core-conform --core libnephrite.so --images kit/genesis-sample.txt --from <the corpus's directory>
+
+# The EEPROM boards of eeprom.rs, one image for each of the 21.
+Wonder Boy In Monster World (UE) [!].bin                     # G-4060, Sega's board, 128 bytes
+Mega Man - The Wily Wars (E).bin                             # T-12046; Europe only
+Rockman Megaworld (J) [!].bin                                # T-12053; Japan only
+Evander Holyfield's Real Deal Boxing (U) [!].bin             # MK-1215
+Greatest Heavyweights of the Ring (U) [!].bin                # MK-1228
+Dodge Ball - Kuy Kid (J).bin                                 # 00004076
+MLBPA Sports Talk Baseball (U) [!].bin                       # 00001211
+NBA Jam (EU) (REV 01) [!].bin                                # T-081326, Acclaim's, 256 bytes, its output on a line of its own
+NBA Jam Tournament Edition (JUE) (REV 00) [!].bin            # T-81406, Acclaim's, 256 bytes
+NFL Quarterback Club (JUE) [!].bin                           # T-081276
+NFL Quarterback Club 96 (F) [!].bin                          # T-081586, 2 KiB; 4 MiB of ROM
+College Slam (4) [!].bin                                     # T-81576, 8 KiB; 4 MiB of ROM
+Frank Thomas Big Hurt Baseball (F) [!].bin                   # T-81476, 8 KiB; 4 MiB of ROM
+Brian Lara Cricket (E) (Jun 1995) [c][!].bin                 # T-120106, Codemasters', 128 bytes
+Micro Machines II (UE).bin                                   # T-120096, Codemasters', 1 KiB
+Micro Machines Military - It's a Blast! (E) [c].bin          # no serial, checksum $168B
+Micro Machines 96 (V1.1) (E) [a1].bin                        # no serial, checksum $2C41, 2 KiB
+Brian Lara Cricket 96 (E) (Mar 1996) [c][!].bin              # T-120146, 8 KiB
+John Madden Football 93 - Championship Edition (U) [!].bin   # T-50516, Electronic Arts', 128 bytes
+NHLPA NHL '93 (U) (REV 00).bin                               # T-50396
+Rings of Power (U) [!].bin                                   # T-50176
+Putter Golf (J) [!].bin                                      # declares an EEPROM the database does not list
+
+# The save RAM layouts a header declares.
+Phantasy Star IV (4) [!].bin                                 # 16 KiB on the odd lane, battery
+HardBall 94 (JUE) [!].bin                                    # 64 KiB on the odd lane
+J. League Pro Striker (JE) (REV 03) [c][!].bin               # 1 KiB
+Brett Hull Hockey 95 (JUE) [!].bin                           # 2 KiB
+Barkley Shut Up and Jam 2 (JUE) [!].bin                      # 4 KiB
+HardBall 95 (F) [!].bin                                      # 64 KiB at $300001
+NBA Hang Time (4) [!].bin                                    # 16 KiB at $300001
+Rent A Hero (J) [!].bin                                      # the odd lane declared from an even start; Japan only
+Tecmo Super Bowl (U) (Oct 1993) [!].bin                      # type byte $E0
+Mahjongg Lover (Unl) [c][!].bin                              # type byte $20, declared over the 68000's RAM
+
+# Mappers, lock-on and a coprocessor the core does not have.
+Super Street Fighter II - The New Challengers (U) [b1].bin   # the corpus's one image of it, 4 MiB
+Sonic and Knuckles (JUE) [!].bin                             # the lock-on cartridge alone
+Sonic and Knuckles & Sonic 3 (JUE) [!].bin                   # a combined image, 4 MiB
+Virtua Racing (U).bin                                        # the SVP, which Nephrite does not run
+
+# Pads and multitaps.
+Street Fighter 2 Special Champion Edition (E) [!].bin        # six buttons; Europe only
+Mortal Kombat 3 (4) [!].bin                                  # six buttons and a multitap; 4 MiB
+Comix Zone (4) [!].bin                                       # six buttons
+Mega Bomberman (UE).bin                                      # a multitap
+Gauntlet 4 (UE) (Sep 1993).bin                               # four players, with no multitap in its header
+General Chaos (UEJ) [!].bin                                  # four players, with no multitap in its header
+
+# One market only.
+Castlevania - The New Generation (E) [!].bin                 # Europe
+Hellfire (E).bin                                             # Europe; D-13's busy flag
+Mickey Mania - Timeless Adventures of Mickey Mouse (E) [!].bin   # Europe
+Phantasy Star - The End of the Millenium (J) [!].bin         # Japan
+Slam Dunk - Shikyou Gekitotsu! (1).bin                       # Japan by the region digit
+
+# The largest and the smallest.
+Duke Nukem 3D (F).bin                                        # 4 MiB
+Game Genie (Unl) (Feb 1992) [c][!].bin                       # 31,973 bytes, an odd length
+Columns (JU) (REV 00).bin                                    # 128 KiB
+
+# The games the build record and the disputes log measure with.
+Sonic the Hedgehog (JUE) [!].bin
+Sonic the Hedgehog 2 (JUE) [!].bin                           # D-2's refresh
+Streets of Rage (JUE) (REV 00) [!].bin
+Streets of Rage 2 (U) [!].bin
+Thunder Force IV (U).bin
+OutRun (JU) [!].bin
+Castlevania - Bloodlines (U) [!].bin
+777 Casino (Unl) [c].bin
+
+# Images out of the ordinary.
+Mega Turrican (E).bin                                        # a copier's interleaved image
+Sonic the Hedgehog 3 (E).bin                                 # a copier's interleaved image
+Knuckles Chaotix 32X (A) [!].bin                             # a 32X cartridge, which Nephrite does not offer
+Exodus (Unl) [c][!].bin                                      # no header
+Pocket Monsters (Unl) [c][!].bin                             # no header
+Whac-A-Critter (Unl) [!].bin                                 # a header of $FF

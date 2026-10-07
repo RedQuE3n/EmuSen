@@ -25,7 +25,12 @@ impl Default for Digests {
 
 impl Digests {
     pub fn frame(&mut self, picture: &[u8]) {
-        self.frames = (self.frames ^ frame_hash(picture)).wrapping_mul(FNV_PRIME);
+        self.frame_hashed(frame_hash(picture));
+    }
+
+    /// A frame whose hash is already taken, so that two digests of one run hash each picture once.
+    pub fn frame_hashed(&mut self, hash: u64) {
+        self.frames = (self.frames ^ hash).wrapping_mul(FNV_PRIME);
     }
 
     pub fn sound(&mut self, samples: &[i16]) {

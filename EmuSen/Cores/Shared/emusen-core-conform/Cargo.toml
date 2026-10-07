@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# The conformance kit's core suite: loads a library through the core ABI v1 and nothing else, and runs C1-C8, C10 and
-# C11 on an image its author supplies; also writes a library's sidecar. See EmuSen_CoreAPI.md §12 and §21.
+# The conformance kit's core suite: loads a library through the core ABI v1 and nothing else, and runs C1-C15 on an
+# image its author supplies, or on a library of images; also writes a library's sidecar. See EmuSen_CoreAPI.md §12,
+# §21, §24 and §28.
 [lib]
 name = "emusen_core_conform"
 

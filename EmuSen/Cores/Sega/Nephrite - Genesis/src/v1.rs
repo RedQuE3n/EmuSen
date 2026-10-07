@@ -232,7 +232,7 @@ pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::DEBUG | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -318,7 +318,7 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: 320, max_height: 480, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: (0..2).map(|p| Port { port: p as u32, controller: Some(if self.six_button[p] { "md.pad6" } else { "md.pad3" }.into()) }).collect(),
-            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", ..Space::new(m.id, m.name) }).collect(),
+            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::debugger::Z80BUS_ID, ..Space::new(m.id, m.name) }).collect(),
             processors: self.processors(),
             battery: self.battery_id().map(|_| Battery { which: 0, suffix: if self.media.system == System::Mcd { ".brm" } else { ".srm" }.into() }).into_iter().collect(),
             state: StateFormat { format: "NPHR".into(), version: STATE_VERSION as i64, loads_from: (OLDEST_STATE_VERSION..=STATE_VERSION).map(i64::from).collect() },
@@ -426,6 +426,28 @@ impl Core for Machine {
         Ok(())
     }
 
+    fn debug_hooks(&mut self) -> Option<&mut emusen_native::debug::Hooks> {
+        Some(&mut self.hooks)
+    }
+
+    /// The 68000's breakpoints are the shared hooks'; the Z80's the core's own.
+    fn debug_breakpoints(&mut self, processor: u32, pairs: &[i32]) -> Result<(), i32> {
+        match processor {
+            crate::debugger::M68K => self.hooks.set_breakpoints(pairs),
+            crate::debugger::Z80 => self.z80_breakpoints = pairs.chunks_exact(2).map(|p| (p[0], p[1])).collect(),
+            _ => return Err(status::NOT_SUPPORTED),
+        }
+        Ok(())
+    }
+
+    fn debug_run_frame(&mut self, flags: u32, _detail: &mut u64) -> Result<u32, i32> {
+        Ok(self.run_frame_debug(flags))
+    }
+
+    fn debug_stopped(&self) -> u32 {
+        self.debug_stopped
+    }
+
     fn debug_pc(&self, processor: u32) -> Option<u64> {
         Machine::debug_pc(self, processor)
     }
@@ -450,7 +472,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; rom_patches, settings, debug_registers, debug_disassemble);
+emusen_native::core_exports!(Machine; rom_patches, settings, debug, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {
@@ -468,6 +490,7 @@ mod tests {
         let info = m.machine_info();
         assert_eq!(info.processors.iter().map(|p| (p.name.as_str(), p.pc_bits, p.registers.len(), p.code_space)).collect::<Vec<_>>(), [("M68K", 24, 20, Some(0)), ("Z80", 16, 18, Some(1))]);
         assert_eq!(info.state.loads_from, [16, 17]);
+        assert_eq!(info.spaces.iter().filter(|s| s.view).map(|s| (s.name.as_str(), s.read_only)).collect::<Vec<_>>(), [("M68KBUS", true), ("Z80BUS", true)]);
         assert_eq!((Core::space_size(&m, 0), Core::space_size(&m, 1)), (Ok(1 << 24), Ok(1 << 16)));
         let mut out = [0u8; 16];
         Core::space_read(&mut m, 0, 0x100, &mut out).unwrap();

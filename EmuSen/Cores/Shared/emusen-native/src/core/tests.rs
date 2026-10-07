@@ -112,6 +112,18 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
 }
 
+// A view is written as one more of a space's flags, which the schema leaves open, and a space without it is as before.
+#[test]
+fn a_view_is_a_flag_of_its_space() {
+    use super::desc::{MachineInfo, Space};
+    let m = MachineInfo { spaces: vec![Space { read_only: true, view: true, ..Space::new(0, "CPUBUS") }, Space::new(1, "WRAM")], ..MachineInfo::default() };
+    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0 };
+    let mi = super::desc::machine_info_json(&m, &measured);
+    assert!(mi.contains(r#"{"id":0,"name":"CPUBUS","size":16777216,"flags":["read_only","view"]}"#), "{mi}");
+    assert!(mi.contains(r#"{"id":1,"name":"WRAM","size":65536,"flags":[]}"#), "{mi}");
+    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
+}
+
 #[test]
 fn a_schema_violation_is_reported_by_path() {
     assert_eq!(schema::validate(schema::FIRMWARE, r#"[{"which":0,"name":"a","label":"b","size":1}]"#), vec!["$[0]: required is required", "$[0].which: 0 is below 1"]);

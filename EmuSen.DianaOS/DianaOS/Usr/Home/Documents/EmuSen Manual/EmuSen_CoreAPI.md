@@ -5,7 +5,7 @@ and §13.2's items 1 and 2 built: the header, the `core` module with `core_expor
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
 conformance kit's core suite (§21); and MoonRT's and MercuryRT's exports onto v1 beside their pre-stable ones (§22,
 §23). Since then, 2026-10-04: the registration-equivalence test, D1's oracle (§25), and MoonRT's and MercuryRT's
-shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28) and the `view` flag of a space (§29). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -689,7 +689,7 @@ What depends on the game, read after create:
 | **`video`** | `base_width`, `base_height`, `max_width`, `max_height`, `aspect` as a ratio, `formats` the core can produce |
 | **`audio`** | `rate` at start; `channels`: the names `set_mutes`' bits stand for |
 | **`ports`** | which controller each port holds |
-| **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats` (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
+| **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats` and, since 2026-10-07, `view` (§29) (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
 | `processors` | `{ id, name, pc_bits, registers: [{ name, bits }], code_space }`, main processor first; `IDebugTarget.DebugCpus` and `regs` from data. `code_space`, appended 2026-10-04 for VenusRT's SPC700 (`VenusRT_Native.md` §36), is the id of the space the processor's code is listed from; absent, the host takes the space named `<name>BUS`, else `<name>PRG`, else for processor 0 the first space |
 | `battery` | `{ which, suffix, length }`: `.srm`, the N64's pak; the path rule stays the runtime's (`SaveLibrary.SramPathFor`) |
 | **`state`** | `{ format, version, kinds, loads_from }`: the magic and version a frontend records beside a state (`IStateFormat`), the kinds, and the versions it reads |
@@ -2699,6 +2699,38 @@ On the development desktop (16 processors), 600 frames, Nephrite's release libra
   it was and as it is are identical on all six but for C13's count of rounds, all fifteen passing; and the corpus
   form on each core's two images passes, each image's four cases the old report's. MarsRT is not on the core ABI
   v1 and the kit does not load it. `--sidecar`, with and without `--development`, writes the bytes it wrote.
+
+---
+
+## 29. A space that is a view, 2026-10-07
+
+### 29.1 The flag
+
+A space may be a **view**: a read-only window onto memory that other spaces hold, as a processor's bus is, with its
+cartridge, its RAMs and its mirrors. It holds nothing of its own. Machine info says so with one more string among the
+space's `flags`, `view`, beside `read_only`; `emusen-native`'s `Space` has the field `view`, false unless set.
+
+- **Additive** under §4.2: `flags` is an open array of strings, so `info.schema.json` and `machine-info.schema.json`
+  are unchanged, a host that does not know the string ignores it, and every core that does not set it writes what it
+  wrote.
+- **What a host does with it**: a host that copies every memory, for a snapshot, a dump or a comparison, leaves a view
+  out, since the memories it shows are copied already. A debugger reads it as any other space; it is where a
+  processor's code is listed from (§6.4's `code_space`).
+- **What a core promises**: a view is also `read_only`, and its reads change nothing.
+
+### 29.2 Why
+
+Nephrite's two buses (`Nephrite_Native.md` §41) are views of 16 MiB and 64 KiB. WiseMan's generic ROM runner copied
+every space at every snapshot, so each snapshot of a Genesis game copied 16 MiB that its other spaces already held.
+The runner (`TestRomEngines.cs`) now leaves views out. Marking it in the descriptor was preferred to a rule of size
+(a read-only space larger than the others together), which would also have dropped a ROM larger than the RAMs.
+
+### 29.3 Tested
+
+`emusen-native`'s `a_view_is_a_flag_of_its_space` (the flag written after `read_only`, absent from a space without it,
+the document valid against the schema); Nephrite's `the_processors_and_their_buses_reach_the_host` (its two buses, and
+only they, views and read-only); WiseMan's `NephriteTests.The_stub_runs_each_system_through_the_generic_runner` (the
+runner's snapshots without the two buses, on all three systems).
 
 ---
 

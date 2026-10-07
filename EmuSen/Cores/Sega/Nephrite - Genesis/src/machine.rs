@@ -6,6 +6,7 @@ use crate::cart::Cart;
 use crate::genesis::{Genesis, Model};
 use crate::media::{Media, System};
 use emusen_native::SampleQueue;
+use emusen_native::debug::Hooks;
 
 /// A memory of the attachments, by its space name and id (Nephrite_Plan.md §4.3).
 pub struct Memory {
@@ -52,6 +53,12 @@ pub struct Machine {
     pub audio: SampleQueue,
     /// A save RAM's battery file as the host is given it, remade when its bytes change; not part of a state.
     pub battery_file: Vec<u8>,
+    /// The debugger's tables and logs, the 68000's breakpoints among them; the Z80's breakpoints; the processor the
+    /// last stop was on; and whether a stop left the frame open (Nephrite_Native.md §42).
+    pub hooks: Hooks,
+    pub z80_breakpoints: Vec<(i32, i32)>,
+    pub debug_stopped: u32,
+    pub debug_open: bool,
 }
 
 /// The model a machine starts as: the header's market, overseas first, and no TMSS (Nephrite_Native.md §9).
@@ -83,7 +90,7 @@ impl Machine {
         for &(id, name, size) in list {
             extra.push(Memory { id, name, bytes: vec![0; size] });
         }
-        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], six_button: [false; 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new() }
+        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], six_button: [false; 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false }
     }
 
     /// The spaces in id order: the two buses, the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
@@ -143,12 +150,45 @@ impl Machine {
     /// One frame: a Mega Drive image runs one frame of the Genesis with the pads as set; the attachments only count.
     pub fn advance(&mut self) {
         if self.media.system == System::Md {
-            for (i, pad) in self.genesis.hw.io.pads.iter_mut().enumerate() {
-                pad.buttons = self.pads[i];
-                pad.six = self.six_button[i];
-            }
-            self.genesis.hw.draw = !self.skip;
+            self.begin_frame();
             self.genesis.run_frame();
+        }
+        self.end_frame();
+    }
+
+    /// The frame through the observed loop: the stop's reasons, zero at the frame's end. A stop leaves the frame open,
+    /// and the next call goes on from it; `run::UNCHECKED` runs the stopped processor's next instruction unasked.
+    pub fn run_frame_debug(&mut self, flags: u32) -> u32 {
+        let skip = (flags & emusen_native::debug::run::UNCHECKED != 0).then_some(self.debug_stopped);
+        if self.media.system == System::Md {
+            if !self.debug_open {
+                self.begin_frame();
+                self.debug_open = true;
+            }
+            let (why, processor) = self.genesis.run_frame_observed(&mut self.hooks, &self.z80_breakpoints, skip);
+            if why != 0 {
+                self.debug_stopped = processor;
+                return why;
+            }
+        }
+        self.debug_stopped = 0;
+        self.end_frame();
+        0
+    }
+
+    /// The pads and the drawing switch as a frame takes them.
+    fn begin_frame(&mut self) {
+        for (i, pad) in self.genesis.hw.io.pads.iter_mut().enumerate() {
+            pad.buttons = self.pads[i];
+            pad.six = self.six_button[i];
+        }
+        self.genesis.hw.draw = !self.skip;
+    }
+
+    /// The frame's sound and picture taken, and the count and the battery file brought up to it.
+    fn end_frame(&mut self) {
+        self.debug_open = false;
+        if self.media.system == System::Md {
             let (hw, audio) = (&mut self.genesis.hw, &mut self.audio);
             hw.sound.take(hw.clock, |l, r| audio.push_pair(l, r));
             if !self.skip {

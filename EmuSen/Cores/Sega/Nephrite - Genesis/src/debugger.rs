@@ -2,6 +2,7 @@
 //! side effects, and each processor's code disassembled from its bus (Nephrite_Native.md §41).
 
 use emusen_native::core::{Instruction, Processor};
+use emusen_native::debug::{Hooks, Observer, stop};
 
 use crate::genesis::Hw;
 use crate::machine::Machine;
@@ -26,6 +27,52 @@ pub const Z80_REGISTERS: [(&str, u32); 18] = [
     ("AF", 16), ("BC", 16), ("DE", 16), ("HL", 16), ("AF'", 16), ("BC'", 16), ("DE'", 16), ("HL'", 16),
     ("IX", 16), ("IY", 16), ("SP", 16), ("PC", 16), ("I", 8), ("R", 8), ("WZ", 16), ("IM", 2), ("IFF1", 1), ("IFF2", 1),
 ];
+
+/// The 68000's observer in the observed frame: its stop is asked before its step, so here it records the step, its
+/// stores and its calls into the hooks.
+pub struct MainWatch<'a>(pub &'a mut Hooks);
+
+impl Observer for MainWatch<'_> {
+    fn before(&mut self, _processor: usize, pc: u32) -> u32 {
+        self.0.record(pc & 0xFF_FFFF);
+        stop::FRAME
+    }
+    fn wrote(&mut self, space: u32, address: u32, value: u8, pc: u32) {
+        if self.0.writes {
+            self.0.note_write(space, address & 0xFF_FFFF, value, pc & 0xFF_FFFF);
+        }
+    }
+    fn called(&mut self, source: u32, target: u32, kind: u32) {
+        self.0.note_call(source & 0xFF_FFFF, target & 0xFF_FFFF, kind);
+    }
+    fn returned(&mut self) {
+        self.0.note_return();
+    }
+}
+
+/// The Z80's observer: its own breakpoints asked before each instruction, its coverage and its stores into the hooks.
+/// Its calls are not the call stack's, which is the 68000's.
+pub struct Z80Watch<'a> {
+    pub hooks: &'a mut Hooks,
+    pub breakpoints: &'a [(i32, i32)],
+    /// The first instruction runs unasked, as the host's resume past a Z80 stop asks.
+    pub skip: &'a mut bool,
+}
+
+impl Observer for Z80Watch<'_> {
+    fn before(&mut self, processor: usize, pc: u32) -> u32 {
+        if !std::mem::take(self.skip) && self.breakpoints.iter().any(|&(a, b)| (pc as i32) >= a && (pc as i32) <= b) {
+            return stop::BREAKPOINT;
+        }
+        self.hooks.record_on(processor, pc);
+        stop::FRAME
+    }
+    fn wrote(&mut self, space: u32, address: u32, value: u8, pc: u32) {
+        if self.hooks.writes {
+            self.hooks.note_write(space, address, value, pc);
+        }
+    }
+}
 
 impl Hw {
     /// A byte of the 68000's space as a debugger reads it: the cartridge, the Z80's RAM and the 68000's RAM as the bus
@@ -161,6 +208,110 @@ mod tests {
         let mut m = Machine::new(&r, Media::read(&r));
         m.advance();
         m
+    }
+
+    /// A 68000 that calls a routine at $300 in a loop, the routine counting in D2; a Z80 out of reset that counts in A
+    /// and jumps back, from its RAM.
+    fn looping() -> Machine {
+        let mut r = vec![0xFFu8; 0x1_0000];
+        r[0..8].copy_from_slice(&w(&[0x00FF, 0xFE00, 0x0000, 0x0200]));
+        r[0x100..0x110].copy_from_slice(b"SEGA MEGA DRIVE ");
+        r[0x200..0x20C].copy_from_slice(&w(&[0x7005, 0x4EB9, 0x0000, 0x0300, 0x60F8, 0x4E71]));
+        r[0x300..0x304].copy_from_slice(&w(&[0x5282, 0x4E75]));
+        let mut m = Machine::new(&r, Media::read(&r));
+        m.genesis.hw.zram[..4].copy_from_slice(&[0x3C, 0xC3, 0x00, 0x00]);
+        (m.genesis.hw.z80_reset, m.genesis.hw.z80_busreq) = (false, false);
+        m
+    }
+
+    fn state(m: &Machine) -> Vec<u8> {
+        use emusen_native::ffi::StateMachine;
+        let mut v = vec![0; m.state_size()];
+        let n = m.save_state(&mut v).unwrap();
+        v.truncate(n);
+        v
+    }
+
+    fn run_out(m: &mut Machine) -> u32 {
+        let mut stops = 0;
+        while m.run_frame_debug(emusen_native::debug::run::UNCHECKED | emusen_native::debug::run::CONTINUE) != 0 {
+            stops += 1;
+        }
+        stops
+    }
+
+    // Every table armed with nothing to hit gives the plain frame, picture and state (the kit's C15, on both processors).
+    #[test]
+    fn an_armed_frame_with_nothing_to_hit_is_the_plain_frame() {
+        use emusen_native::debug::flag;
+        let (mut a, mut b) = (looping(), looping());
+        b.hooks.configure(flag::CALLS | flag::WRITES | flag::PROFILING | 1 << flag::COVERAGE | 1 << (flag::COVERAGE + 1), i32::MIN, -1);
+        b.hooks.set_breakpoints(&[-2, -2]);
+        b.z80_breakpoints = vec![(-2, -2)];
+        for _ in 0..3 {
+            a.advance();
+            assert_eq!(b.run_frame_debug(0), 0);
+            assert_eq!((state(&b), &b.picture), (state(&a), &a.picture));
+        }
+        let mut covered = 0;
+        assert!(emusen_native::debug::drain_coverage(&mut b.hooks, 1, &mut vec![0; 1 << 13], &mut covered) > 0 && covered > 0, "the Z80's steps are recorded");
+        assert!(b.hooks.calls_log.iter().any(|c| c.target == 0x300), "the 68000's calls are logged");
+    }
+
+    // A 68000 breakpoint stops in front of its instruction on processor 0, and an unchecked resume runs past it.
+    #[test]
+    fn a_68000_breakpoint_stops_in_front_of_its_instruction() {
+        let mut m = looping();
+        m.hooks.set_breakpoints(&[0x300, 0x300]);
+        assert_eq!(m.run_frame_debug(0), stop::BREAKPOINT);
+        assert_eq!((m.debug_stopped, m.debug_pc(M68K)), (M68K, Some(0x300)));
+        let d2 = m.genesis.cpu.regs.d[2];
+        assert_eq!(m.run_frame_debug(emusen_native::debug::run::UNCHECKED | emusen_native::debug::run::CONTINUE), stop::BREAKPOINT);
+        assert_eq!((m.debug_pc(M68K), m.genesis.cpu.regs.d[2]), (Some(0x300), d2 + 1), "one pass of the routine between the stops");
+        assert_eq!(m.frames, 0, "the frame stays open");
+    }
+
+    // A Z80 breakpoint stops in front of its instruction on processor 1, the 68000 left where it was, and resumes the same way.
+    #[test]
+    fn a_z80_breakpoint_stops_in_front_of_its_instruction() {
+        let mut m = looping();
+        m.z80_breakpoints = vec![(1, 1)];
+        assert_eq!(m.run_frame_debug(0), stop::BREAKPOINT);
+        assert_eq!((m.debug_stopped, m.debug_pc(Z80)), (Z80, Some(1)));
+        let (a, main_pc) = (m.genesis.z80.regs.af >> 8, m.debug_pc(M68K));
+        assert_eq!(m.run_frame_debug(emusen_native::debug::run::UNCHECKED | emusen_native::debug::run::CONTINUE), stop::BREAKPOINT);
+        assert_eq!((m.debug_stopped, m.debug_pc(Z80), m.genesis.z80.regs.af >> 8), (Z80, Some(1), (a + 1) & 0xFF));
+        assert!(m.genesis.hw.z80_clock <= m.genesis.hw.clock, "the Z80 stopped behind the 68000");
+        let _ = main_pc;
+    }
+
+    // Stops on either processor, each resumed, leave the frame as a plain one makes it: the Z80 finishes its turn first.
+    #[test]
+    fn a_frame_stopped_and_resumed_is_the_plain_frame() {
+        let (mut a, mut b) = (looping(), looping());
+        b.hooks.set_breakpoints(&[0x300, 0x300]);
+        b.z80_breakpoints = vec![(0, 0)];
+        for _ in 0..2 {
+            a.advance();
+            assert!(run_out(&mut b) > 100);
+            assert_eq!((state(&b), &b.picture), (state(&a), &a.picture));
+        }
+    }
+
+    // EACH stops in front of every 68000 instruction, and each unchecked step moves the machine by one.
+    #[test]
+    fn each_stops_in_front_of_every_68000_instruction() {
+        use emusen_native::debug::{flag, run};
+        let mut m = looping();
+        m.hooks.configure(flag::EACH, i32::MIN, -1);
+        assert_eq!(m.run_frame_debug(0), stop::EACH);
+        let mut seen = Vec::new();
+        for _ in 0..6 {
+            seen.push(m.debug_pc(M68K).unwrap());
+            assert_eq!(m.run_frame_debug(run::UNCHECKED | run::CONTINUE), stop::EACH);
+        }
+        let start = seen.iter().position(|&p| p == 0x300).unwrap();
+        assert_eq!(&seen[start..start + 4], [0x300, 0x302, 0x208, 0x202], "ADDQ, RTS, BRA, JSR");
     }
 
     #[test]

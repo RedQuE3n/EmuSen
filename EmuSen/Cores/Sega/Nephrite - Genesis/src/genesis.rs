@@ -2,7 +2,7 @@
 //! bus and its window onto the 68000's, BUSREQ and RESET, TMSS, and the interrupts. Charles MacDonald's "Sega Genesis
 //! hardware notes" §1-§2 is the map; Nephrite_Plan.md §5.1 and §5.3 the scheduling; Nephrite_Native.md §9 the record.
 
-use beryl_m68k::{Access, Bus as MainBusTrait, M68000, Size, Step};
+use beryl_m68k::{Access, Bus as MainBusTrait, M68000, Observer, Size, Step, Unobserved};
 use beryl_z80::{Bus as Z80BusTrait, Z80};
 use emusen_native::{StateReader, StateWriter, Truncated};
 
@@ -194,18 +194,54 @@ impl Genesis {
     pub fn run_frame(&mut self) {
         self.hw.vdp.draw = self.hw.draw;
         loop {
-            if self.hw.vdp.bus_dma() {
-                // A transfer's hold that a frame's end interrupted.
-                self.hw.dma_hold();
-            } else if self.hw.locked_up || self.cpu.halted {
-                self.hw.clock += 4 * M68K;
-            } else {
-                let _: Step = self.cpu.step(&mut MainBus(&mut self.hw));
-            }
-            self.hw.catch_up(&mut self.z80);
+            self.step_main(&mut Unobserved);
+            self.hw.catch_up(&mut self.z80, &mut Unobserved);
             if std::mem::take(&mut self.hw.frame_done) {
                 break;
             }
+        }
+    }
+
+    /// The 68000's turn: a transfer's hold, a halted machine's time, or one instruction or exception.
+    #[inline(always)]
+    fn step_main<O: Observer>(&mut self, o: &mut O) {
+        if self.hw.vdp.bus_dma() {
+            // A transfer's hold that a frame's end interrupted.
+            self.hw.dma_hold();
+        } else if self.hw.locked_up || self.cpu.halted {
+            self.hw.clock += 4 * M68K;
+        } else {
+            let _: Step = self.cpu.step_observed(&mut MainBus(&mut self.hw), o);
+        }
+    }
+
+    /// Whether the 68000's next turn runs an instruction, the only turn a debugger stops in front of.
+    fn main_runs_instruction(&self) -> bool {
+        !self.hw.vdp.bus_dma() && !self.hw.locked_up && !self.cpu.halted && !self.cpu.stopped
+    }
+
+    /// The frame as `run_frame` runs it, each processor asked before its instruction (Nephrite_Native.md §42): the
+    /// stop's reasons and the processor stopped on, or zero at the frame's end. `skip` is the processor whose next
+    /// instruction runs unasked. A stop leaves the frame where it stood, the Z80 behind the 68000 if it stopped.
+    pub fn run_frame_observed(&mut self, hooks: &mut emusen_native::debug::Hooks, z80_breakpoints: &[(i32, i32)], skip: Option<u32>) -> (u32, u32) {
+        use crate::debugger::{MainWatch, Z80Watch};
+        self.hw.vdp.draw = self.hw.draw;
+        let (mut skip_main, mut skip_z80) = (skip == Some(0), skip == Some(1));
+        loop {
+            let why = self.hw.catch_up(&mut self.z80, &mut Z80Watch { hooks, breakpoints: z80_breakpoints, skip: &mut skip_z80 });
+            if why != 0 {
+                return (why, 1);
+            }
+            if std::mem::take(&mut self.hw.frame_done) {
+                return (0, 0);
+            }
+            if self.main_runs_instruction() && !std::mem::take(&mut skip_main) {
+                let why = hooks.stop_before(self.cpu.regs.pc & 0xFF_FFFF);
+                if why != 0 {
+                    return (why, 0);
+                }
+            }
+            self.step_main(&mut MainWatch(hooks));
         }
     }
 }
@@ -316,18 +352,23 @@ impl Hw {
     }
 
     /// The line events up to the present, then the Z80 to the same time.
-    fn catch_up(&mut self, z80: &mut Z80) {
+    /// The VDP and the Z80 brought up to the 68000; an observer's stop ends it early with its reasons, else zero.
+    #[inline(always)]
+    fn catch_up<O: Observer>(&mut self, z80: &mut Z80, o: &mut O) -> u32 {
         self.run_vdp(self.clock);
         if self.z80_reset {
             reset_z80(z80);
         }
         if self.z80_reset || self.z80_busreq {
             self.z80_clock = self.z80_clock.max(self.clock);
-            return;
+            return 0;
         }
         while self.z80_clock < self.clock && !self.z80_busreq {
-            z80.step(&mut Z80Bus(self));
+            if let beryl_z80::Step::Observed(why) = z80.step_observed(&mut Z80Bus(self), o) {
+                return why;
+            }
         }
+        0
     }
 
     /// A device on `port` driving TH, as a light gun does: the external interrupt when the port enables it.

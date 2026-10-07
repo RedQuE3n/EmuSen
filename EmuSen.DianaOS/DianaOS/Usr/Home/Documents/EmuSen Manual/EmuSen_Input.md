@@ -289,6 +289,7 @@ the count with no game loaded, for the bindings window.
 | SNES | VenusRT (Rust, ABI v1) | 2 | machine info's `ports` (`EmuSen_CoreAPI.md` §6.4) | player 2 |
 | Game Boy | Mercury (C#), MercuryRT (Rust) | 1 | the console | none, by the hardware |
 | N64 | Mars (C#), MarsRT (Rust) | 4 | `MarsCore.Ports` | players 2, 3 and 4 |
+| Genesis | Nephrite (Rust, ABI v1) | 2 to 8, by its two port settings | machine info's `ports`; with no game loaded, the console's pack (§8.11) | players 2 to 8 *(added 2026-10-07)* |
 
 **A v1 engine is read from its descriptors, not from a table.** `CoreEngine` lives with the ABI host and does not
 override the member; `ControllerPorts.Of` reads the highest port that machine info names a controller for, and, where
@@ -524,3 +525,40 @@ pads and a kept seat the Controllers tab made it 1,080 pixels, past a 1280 by 80
   conflict checking across players and a second set of defaults that no hotkey holds.
 - **Seats remembered between sessions** (§8.2).
 - **Hotaru's keyboard on another player**: Hotaru has no settings to move it.
+- **Hotaru following a port count that changes mid-game** (§8.11).
+
+### 8.11 A console whose ports its settings decide (2026-10-07)
+
+**The Genesis is the first console whose port count is not a constant.** A Team Player or a 4 Way Play on a port
+(`EmuSen_Settings_Reference.md` §4.101) makes four pads of it, so the console has two to eight players, and which it
+has is a setting the player can change while a game runs. §8.1 assumed a count per console and §8.5 a count per game.
+Three things follow, and none of them widens what §8 built: the seats, the bindings and the router already went to
+`PlayerSlots.MaxPlayers`, eight.
+
+- **With no game loaded**, the Controller Bindings window has no machine to ask. `ControllerPorts.ForConsole(console,
+  stored)` asks the console's pack for each player's controller as the stored settings stand
+  (`SystemPack.PlayerControllers`; §4.102 there), and falls back on §8.1's count for a console whose pack has no rule.
+- **A running core's count is read on every poll**, not kept from the game's start. `ControllerPorts.Of` already read
+  machine info; a v1 core raises `MACHINE_INFO` when its ports change and the host reads the descriptor again
+  (`EmuSen_CoreAPI.md` §6.19), growing the buttons it holds for the core to the new ports.
+- **`PortRouter.Resize(ports)`** is the router's part, called by Mistress's poll when the session's count differs
+  from the router's. It is not §8.5's `Reset`, which forgets everything sent, as a new game requires. A resize keeps
+  what the ports that stay were sent, so a button player 1 is holding is neither sent again nor dropped; and a port
+  taken away is sent a release of each button it held, because a port's buttons are kept below the router while the
+  port is gone, and would otherwise be found still down when the adapter is plugged in again.
+
+**Why not `Reset`.** With `Reset` where `Resize` is, a button let go in the same poll as the count changed is never
+released to the core, `Reset` having forgotten that it was sent; a button still held would be sent a second time,
+which is `Reset`'s purpose (`PortRouterTests.A_reset_forgets_what_was_sent`). The first was predicted from reading
+`Reset`, then shown: the first of the two router tests below, with its `Resize(5)` made a `Reset(5, …)`, fails with
+the press sent and no release after it (measured 2026-10-07).
+
+**Hotaru** resets its router when a game is loaded or swapped and not otherwise, so it plays the ports a game starts
+with. Following a change there wants a test that drives Hotaru's game window with pads, which the harness does not
+yet have; it is left until then rather than added unexercised.
+
+**Coverage**: `PortRouterTests.Ports_added_while_the_game_runs_hear_their_players_and_the_rest_keep_what_they_were_sent`
+and `A_port_taken_away_while_the_game_runs_lets_go_of_its_buttons`;
+`MultiplayerTests.Four_pads_play_a_genesis_team_player_set_while_the_game_runs`, four pads plugged into Mistress, a
+Team Player set on port 1 after the game has started, and players 1, 3 and 4's buttons found in the adapter's packet
+as a test cartridge reads it.

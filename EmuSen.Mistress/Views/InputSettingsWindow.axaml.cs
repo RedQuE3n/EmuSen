@@ -237,7 +237,9 @@ namespace EmuSen.Mistress.Views
         private void ShowPlayerBar()
         {
             string? console = ShownConsole;
-            int ports = EmuSen.Cores.ControllerPorts.ForConsole(console);
+            // The players the console's ports hold as its settings stand: an adapter's four where one is set.
+            var config = GraphicsConfig.Load();
+            int ports = EmuSen.Cores.ControllerPorts.ForConsole(console, key => config.Value(console!, key));
             PlayerBar.IsVisible = console is not null && ports > 1;
             if (!PlayerBar.IsVisible) return;
             _playerChoice.Fill(Enumerable.Range(1, ports).Select(PlayerPreferencesRows.Player).ToArray(), PlayerPreferencesRows.Player(Math.Min(PlayerOf(console!), ports)));

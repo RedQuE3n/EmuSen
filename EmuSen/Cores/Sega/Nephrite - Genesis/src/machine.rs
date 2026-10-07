@@ -62,10 +62,11 @@ pub struct Machine {
     pub debug_open: bool,
 }
 
-/// The model a machine starts as: the header's market, overseas first, and no TMSS (Nephrite_Native.md §9).
+/// The model a machine starts as: the first of the Americas, Japan and Europe the header allows (Nephrite_Plan.md §9,
+/// Q6), the Americas where it names none, and no TMSS (Nephrite_Native.md §9, §45.4).
 pub fn default_model(media: &Media) -> Model {
     let m = media.header.as_ref().map(|h| h.markets).unwrap_or_default();
-    let overseas = m.americas || m.europe || !m.japan;
+    let overseas = m.americas || !m.japan;
     Model { overseas, pal: media.pal(), version: 0, model2: false }
 }
 

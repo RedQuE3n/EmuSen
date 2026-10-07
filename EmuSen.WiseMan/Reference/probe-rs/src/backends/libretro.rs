@@ -51,6 +51,8 @@ struct Shared {
     // SET_MEMORY_MAPS's descriptors, copied, and whether they changed since the spaces were cached.
     maps: Vec<MapRegion>,
     maps_dirty: bool,
+    // SET_CONTROLLER_INFO's declarations: for each port, each device's description and id.
+    devices: Vec<Vec<(String, c_uint)>>,
 }
 
 /// One option a core declared: its key, its allowed values in order, and its default.
@@ -282,9 +284,25 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
             true
         }
 
+        sys::RETRO_ENVIRONMENT_SET_CONTROLLER_INFO => {
+            // An array of ports ended by one with no types; each type a description and the id the core takes for it.
+            state.devices.clear();
+            let mut port = data.cast::<sys::retro_controller_info>();
+            while !port.is_null() && unsafe { !(*port).types.is_null() } {
+                let (types, count) = unsafe { ((*port).types, (*port).num_types as usize) };
+                let list = (0..count)
+                    .map(|i| unsafe { *types.add(i) })
+                    .filter(|t| !t.desc.is_null())
+                    .map(|t| (unsafe { CStr::from_ptr(t.desc) }.to_string_lossy().into_owned(), t.id))
+                    .collect();
+                state.devices.push(list);
+                port = unsafe { port.add(1) };
+            }
+            true
+        }
+
         sys::RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS
-        | sys::RETRO_ENVIRONMENT_SET_CONTROLLER_INFO
         | sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
         | sys::RETRO_ENVIRONMENT_SET_GEOMETRY => true,
 
@@ -352,7 +370,7 @@ unsafe extern "C" fn video_refresh(data: *const c_void, width: c_uint, height: c
 unsafe extern "C" fn input_poll() {}
 
 unsafe extern "C" fn input_state(port: c_uint, device: c_uint, _index: c_uint, id: c_uint) -> i16 {
-    if port != 0 || device != sys::RETRO_DEVICE_JOYPAD {
+    if device != sys::RETRO_DEVICE_JOYPAD {
         return 0;
     }
     let Some(state) = shared() else { return 0 };
@@ -361,8 +379,9 @@ unsafe extern "C" fn input_state(port: c_uint, device: c_uint, _index: c_uint, i
         if joypad_id(button) != id {
             continue;
         }
-        let live = state.live & (1u32 << button.index()) != 0;
-        return i16::from(live || state.schedule.held_at(state.frame, button));
+        // The live override of --pressuntil is the first pad's; the schedule holds any pad's.
+        let live = port == 0 && state.live & (1u32 << button.index()) != 0;
+        return i16::from(live || state.schedule.held_on(port, state.frame, button));
     }
     0
 }
@@ -476,6 +495,7 @@ impl LibretroBackend {
                 system_dir: CString::default(),
                 maps: Vec::new(),
                 maps_dirty: false,
+                devices: Vec::new(),
             }),
             rom_data: Vec::new(),
             spaces: Vec::new(),
@@ -487,6 +507,35 @@ impl LibretroBackend {
 
     /// The options as the run uses them, each pinned or default; a pinned key the core never declared, or a value
     /// it does not list, is a warning, since the run would not be what the command line says.
+    /// --device and --list-devices: each port's device chosen from what the core declared, by its number or by words of
+    /// its description, the description matched whole first.
+    fn set_devices(&self, options: &ProbeOptions) {
+        let Some(api) = self.api.as_ref() else { return };
+        let declared = &self.shared.devices;
+        if options.list_devices {
+            for (port, list) in declared.iter().enumerate() {
+                for (desc, id) in list {
+                    println!("[INFO] port {} device {id}: {desc}", port + 1);
+                }
+            }
+        }
+        for (port, name) in &options.devices {
+            let list = declared.get(*port as usize).map(Vec::as_slice).unwrap_or(&[]);
+            let wanted = name.to_lowercase();
+            let found = name.parse::<c_uint>().ok().or_else(|| {
+                list.iter().find(|d| d.0.to_lowercase() == wanted).or_else(|| list.iter().find(|d| d.0.to_lowercase().contains(&wanted))).map(|d| d.1)
+            });
+            match found {
+                Some(id) => {
+                    let desc = list.iter().find(|d| d.1 == id).map_or("undeclared", |d| d.0.as_str());
+                    println!("[INFO] port {} holds device {id} ({desc})", port + 1);
+                    unsafe { (api.set_controller_port_device)(*port, id) };
+                }
+                None => println!("[WARN] port {} declares no device '{name}'", port + 1),
+            }
+        }
+    }
+
     fn report_options(&self, all_values: bool) {
         let state = &self.shared;
         for o in &state.options {
@@ -702,6 +751,7 @@ impl ProbeBackend for LibretroBackend {
         self.report_options(options.list_options);
 
         unsafe { (api.set_controller_port_device)(0, sys::RETRO_DEVICE_JOYPAD) };
+        self.set_devices(options);
 
         // The core reports its own rate; assuming 44100 would resample nothing and
         // mislabel everything - see EmuSen_Debugging_Tools_Reference_v5.md §3.51.

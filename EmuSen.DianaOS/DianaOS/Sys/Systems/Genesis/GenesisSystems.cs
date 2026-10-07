@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using EmuSen.DianaOS.DianaOS.Lib;
 
 namespace EmuSen.DianaOS.DianaOS.Sys.Systems.Genesis
@@ -61,8 +64,29 @@ namespace EmuSen.DianaOS.DianaOS.Sys.Systems.Genesis
         public static ICheatCodeCodec GameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
             GenesisCheatFormats.IsPatch, GenesisCheatFormats.DecodePatch, decodeWrites: GenesisCheatFormats.PatchWrites);
 
-        public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie);
-        public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie);
-        public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie);
+        public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie, PlayerControllers);
+        public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie, PlayerControllers);
+        public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie, PlayerControllers);
+
+        public const string Pad3 = "md.pad3", Pad6 = "md.pad6";
+
+        // Each player's pad from the two port settings: port 1's pads, then port 2's unless a 4 Way Play has it - see EmuSen_Settings_Reference.md §4.101.
+        public static IReadOnlyList<string> PlayerControllers(Func<string, string?> setting)
+        {
+            static (int Pads, string Kind, bool BothPorts) Plug(string? value) => value switch
+            {
+                "md.pad6" => (1, Pad6, false),
+                "md.teamplayer3" => (4, Pad3, false),
+                "md.teamplayer6" => (4, Pad6, false),
+                "md.4way3" => (4, Pad3, true),
+                "md.4way6" => (4, Pad6, true),
+                _ => (1, Pad3, false),
+            };
+            var first = Plug(setting("pad1"));
+            var players = Enumerable.Repeat(first.Kind, first.Pads).ToList();
+            // The 4 Way Play is port 1's choice alone; on port 2 it reads as a pad of its kind.
+            if (!first.BothPorts && Plug(setting("pad2")) is var second) players.AddRange(Enumerable.Repeat(second.Kind, second.BothPorts ? 1 : second.Pads));
+            return players;
+        }
     }
 }

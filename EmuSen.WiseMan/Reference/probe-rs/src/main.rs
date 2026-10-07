@@ -28,6 +28,9 @@ fn usage() {
     println!("  exposes, plus <backend>_screen_f<frame>.bin and a manifest naming all of");
     println!("  them with sizes and the screen's pixel format.");
     println!("  --press F:BTN[:DUR]  holds BTN on port 1 from frame F for DUR frames");
+    println!("  --presson P:F:BTN[:DUR]  the same on pad P, from 1: a multitap's players are further pads");
+    println!("  --device P=NAME  what port P, from 1, holds: a name or number from --list-devices");
+    println!("  --list-devices   print what each port may hold, as the core lists it");
     println!("                       (default 4), repeatable - needed to reach any scene");
     println!("                       behind a menu. A/B/X/Y/L/R/Up/Down/Left/Right/Start/Select");
     println!("  --pressuntil BTN:ADDR:VALUE[:CAP[:EVERY]]  taps BTN until the word at ADDR");
@@ -276,6 +279,30 @@ fn parse_args(argv: &[String]) -> Result<Args, i32> {
                         cap: fields.get(3).map_or(6000, |f| atoi(f)),
                         every: fields.get(4).map_or(40, |f| atoi(f)),
                     });
+                }
+            }
+            "--list-devices" => args.options.list_devices = true,
+            "--device" => {
+                if let Some(v) = value() {
+                    let Some((port, name)) = v.split_once('=') else {
+                        println!("[ERROR] --device wants PORT=NAME");
+                        return Err(1);
+                    };
+                    args.options.devices.push((atoi(port).saturating_sub(1), name.to_string()));
+                }
+            }
+            "--presson" => {
+                if let Some(v) = value() {
+                    let fields: Vec<&str> = v.split(':').collect();
+                    let button = fields.get(2).and_then(|b| ProbeButton::from_name(b));
+                    let (Some(button), true) = (button, fields.len() >= 3 && atoi(fields[0]) >= 1) else {
+                        println!("[ERROR] --presson wants P:F:BTN[:DUR], P from 1");
+                        return Err(1);
+                    };
+                    let (port, start) = (atoi(fields[0]) - 1, atoi(fields[1]));
+                    let duration = fields.get(3).map_or(4, |f| atoi(f));
+                    args.schedule.add_on(port, start, duration, button);
+                    println!("[INFO] press {} on pad {} frames {}..{}", fields[2], port + 1, start, start + duration - 1);
                 }
             }
             "--press" => {
@@ -768,6 +795,18 @@ mod tests {
         assert_eq!(strtoul_hex("0x1e1a"), 0x1E1A);
         assert_eq!(strtoul_hex("ffff"), 0xFFFF);
         assert_eq!(strtoul_hex("zz"), 0);
+    }
+
+    // --presson names a pad from 1 and --device a port from 1; both reach the
+    // backend from 0, and a pad of 0 is refused. See Nephrite_Native.md §45.
+    #[test]
+    fn a_press_and_a_device_name_their_port_from_one() {
+        let argv = args(&["probe", "r.md", "/out", "0", "120", "--presson", "3:10:Up:5", "--device", "1=Team Player", "--device", "2=257"]);
+        let parsed = parse_args(&argv).ok().unwrap();
+        assert!(parsed.schedule.held_on(2, 14, ProbeButton::Up) && !parsed.schedule.held_on(2, 15, ProbeButton::Up));
+        assert!(!parsed.schedule.held_at(12, ProbeButton::Up));
+        assert_eq!(parsed.options.devices, vec![(0, "Team Player".to_string()), (1, "257".to_string())]);
+        assert!(parse_args(&args(&["probe", "r.md", "/out", "0", "120", "--presson", "0:10:Up"])).is_err());
     }
 
     // The quirk that lets --press follow endFrame directly: a leading '-' keeps

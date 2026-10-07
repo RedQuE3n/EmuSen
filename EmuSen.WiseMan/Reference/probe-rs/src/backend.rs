@@ -170,6 +170,10 @@ pub struct ProbeOptions {
     pub system_dir: String,
     // --memory-id NAME=ID: a space under a memory id the ABI does not name.
     pub memory_ids: Vec<(String, u32)>,
+    // --device PORT=NAME: what a port holds, by the name or number the core declares for it (a multitap, a six-button pad).
+    pub devices: Vec<(u32, String)>,
+    // --list-devices: print what the core declares each port may hold.
+    pub list_devices: bool,
 }
 
 impl Default for ProbeOptions {
@@ -183,6 +187,8 @@ impl Default for ProbeOptions {
             system: String::new(),
             system_dir: String::new(),
             memory_ids: Vec::new(),
+            devices: Vec::new(),
+            list_devices: false,
         }
     }
 }
@@ -201,14 +207,21 @@ pub struct ScheduleEntry {
     pub start_frame: u32,
     pub end_frame: u32,
     pub button: ProbeButton,
+    // The pad, from 0: a multitap's players are further ports of the core's - see Nephrite_Native.md §45.
+    pub port: u32,
 }
 
 impl InputSchedule {
     pub fn add(&mut self, start: u32, duration: u32, button: ProbeButton) {
+        self.add_on(0, start, duration, button);
+    }
+
+    pub fn add_on(&mut self, port: u32, start: u32, duration: u32, button: ProbeButton) {
         self.entries.push(ScheduleEntry {
             start_frame: start,
             end_frame: start + duration,
             button,
+            port,
         });
     }
 
@@ -218,9 +231,14 @@ impl InputSchedule {
     // reaches this, and that absence is correct rather than dead.
     #[allow(dead_code)]
     pub fn held_at(&self, frame: u32, button: ProbeButton) -> bool {
+        self.held_on(0, frame, button)
+    }
+
+    #[allow(dead_code)]
+    pub fn held_on(&self, port: u32, frame: u32, button: ProbeButton) -> bool {
         self.entries
             .iter()
-            .any(|e| e.button == button && frame >= e.start_frame && frame < e.end_frame)
+            .any(|e| e.port == port && e.button == button && frame >= e.start_frame && frame < e.end_frame)
     }
 }
 
@@ -304,6 +322,16 @@ mod tests {
     fn button_index_matches_declaration_order() {
         assert_eq!(ProbeButton::A.index(), 0);
         assert_eq!(ProbeButton::Select.index(), 11);
+    }
+
+    // A press belongs to its pad: a multitap's third player is not the first's - see Nephrite_Native.md §45.
+    #[test]
+    fn a_press_is_its_own_pads() {
+        let mut schedule = InputSchedule::default();
+        schedule.add_on(2, 10, 4, ProbeButton::Up);
+        schedule.add(10, 4, ProbeButton::Start);
+        assert!(schedule.held_on(2, 11, ProbeButton::Up) && !schedule.held_on(0, 11, ProbeButton::Up) && !schedule.held_on(3, 11, ProbeButton::Up));
+        assert!(schedule.held_at(11, ProbeButton::Start) && !schedule.held_on(2, 11, ProbeButton::Start));
     }
 
     #[test]

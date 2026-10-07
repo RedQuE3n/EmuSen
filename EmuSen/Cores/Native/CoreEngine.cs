@@ -277,7 +277,12 @@ namespace EmuSen.Cores.Native
                     case CoreInterface.EventAudioRate: _audioRate = (int)e.A; break;
                     case CoreInterface.EventLog: KeepLog(m.DrainLog()); break;
                     case CoreInterface.EventBattery: if (Library.Has(CoreInterface.CapBatteryDirty)) SaveSram(); break;
-                    case CoreInterface.EventMachineInfo: m.ReadInfo(); _shape = m.FrameInfo; break;
+                    case CoreInterface.EventMachineInfo:
+                        m.ReadInfo();
+                        _shape = m.FrameInfo;
+                        // A port added while the game runs, as by an adapter plugged in, has its buttons held from now.
+                        if (m.Info.Ports.Count > _buttons.Length) Array.Resize(ref _buttons, m.Info.Ports.Count);
+                        break;
                 }
             }
             if (_frame.Length < _shape.Bytes) _frame = new byte[_shape.Bytes];

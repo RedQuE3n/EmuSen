@@ -1,6 +1,7 @@
 //! Runs an image to each frame named and writes its memories there as `nephrite_<space>_f<frame>.bin`, the reference
 //! probe's naming, and the picture as RGBA, for comparison with the references' dumps (Nephrite_Native.md §9, §14).
-//! `dump <image> <dir> <frames...>`.
+//! `dump <image> <dir> <frames...>`. `NEPHRITE_PRESS` holds pads' buttons and `NEPHRITE_PLUGS` names what the two ports
+//! hold, for the references' runs with an adapter (Nephrite_Native.md §45).
 
 use nephrite::machine::Machine;
 use nephrite::media::Media;
@@ -13,15 +14,22 @@ fn main() {
     let mut frames: Vec<i64> = args[3..].iter().map(|f| f.parse().expect("a frame")).collect();
     frames.sort();
     let mut m = Machine::new(&image, Media::read(&image));
-    // NEPHRITE_PRESS="frame:bits:frames,..." holds pad 1's bits (Up 0 ... Start 7) for the frames given.
-    let presses: Vec<(i64, u32, i64)> = std::env::var("NEPHRITE_PRESS").unwrap_or_default().split(',').filter(|p| !p.is_empty()).map(|p| {
+    // NEPHRITE_PRESS="frame:bits:frames[:pad],..." holds a pad's bits (Up 0 ... Start 7, then Z Y X Mode) for the frames given; the pad is 1 unless named.
+    let presses: Vec<(i64, u32, i64, usize)> = std::env::var("NEPHRITE_PRESS").unwrap_or_default().split(',').filter(|p| !p.is_empty()).map(|p| {
         let v: Vec<i64> = p.split(':').map(|x| x.parse().expect("a press")).collect();
-        (v[0], v[1] as u32, v.get(2).copied().unwrap_or(4))
+        (v[0], v[1] as u32, v.get(2).copied().unwrap_or(4), v.get(3).copied().unwrap_or(1) as usize - 1)
     }).collect();
+    // NEPHRITE_PLUGS="pad1,pad2" in the settings' values (md.teamplayer6,md.pad3): what each port holds.
+    for (port, value) in std::env::var("NEPHRITE_PLUGS").unwrap_or_default().split(',').filter(|v| !v.is_empty()).enumerate().take(2) {
+        let &(_, _, plug, six) = nephrite::v1::PLUGS.iter().find(|p| p.0 == value).expect("a plug of the pad settings");
+        m.plugged[port] = (plug, six);
+    }
     let started = std::time::Instant::now();
     for f in frames {
         while m.frames < f {
-            m.pads[0] = presses.iter().filter(|p| (p.0..p.0 + p.2).contains(&m.frames)).fold(0, |a, p| a | p.1);
+            for pad in 0..m.pads.len() {
+                m.pads[pad] = presses.iter().filter(|p| p.3 == pad && (p.0..p.0 + p.2).contains(&m.frames)).fold(0, |a, p| a | p.1);
+            }
             m.advance();
         }
         for s in m.spaces().into_iter().filter(|s| !s.read_only) {

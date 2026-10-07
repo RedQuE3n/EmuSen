@@ -90,6 +90,35 @@ namespace EmuSen.WiseMan.Mistress
             }
         });
 
+        // With an adapter on a port the window offers each player its ports hold, and draws that player's pad - see EmuSen_Settings_Reference.md §4.102.
+        [Fact]
+        public Task The_genesis_tab_offers_an_adapters_players_and_draws_each_ones_pad() => UiTest.Run(() =>
+        {
+            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
+            try
+            {
+                var config = GraphicsConfig.Load();
+                config.SetValue("Genesis", "pad1", "md.teamplayer6");
+                config.SetValue("Genesis", "pad2", "md.pad3");
+                config.Save();
+                Rig rig = Open("Genesis");
+                Dropdown player = rig.Window.GetVisualDescendants().OfType<Dropdown>().Single(d => d.Name == "PlayerSelector");
+                Assert.Equal(new[] { "Player 1", "Player 2", "Player 3", "Player 4", "Player 5" }, player.Items.Cast<string>());
+                foreach (var (name, layout, buttons) in new[] { ("Player 3", ControllerLayout.GenesisSixButton, 12), ("Player 4", ControllerLayout.GenesisSixButton, 12), ("Player 5", ControllerLayout.Genesis, 8) })
+                {
+                    player.SelectedItem = name;
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(layout, rig.Diagram.Layout);
+                    Assert.Equal(buttons, rig.Diagram.Regions.Count);
+                }
+                rig.Window.Close();
+            }
+            finally
+            {
+                EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(null);
+            }
+        });
+
         // The Genesis's drawing is the pad its port is set to: every button of that pad has a region named as the engine names the button, hit where it is drawn and bound by a click, and the drawing follows the player shown - see EmuSen_Settings_Reference.md §4.93.
         [Theory]
         [InlineData("md.pad3", ControllerLayout.Genesis, 8)]

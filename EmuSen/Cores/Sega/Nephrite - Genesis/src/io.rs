@@ -90,16 +90,15 @@ impl Tap {
         (self.th, self.tr) = (th, tr);
     }
 
-    /// TL and D3-D0: at rest `%0011`, which with the packet's start gives the peripheral ID 7; `%1111` when TH has
-    /// fallen and nothing is asked; then the packet's nibbles, TL following TR as each is ready. Past the packet's
-    /// end the lines are released (argued: no document says what is there).
+    /// TL and D3-D0. TL follows TR, at rest too (measured: Gauntlet 4 waits for it there, and the reference gives
+    /// it). D3-D0: at rest `%0011`, which with the packet's start gives the peripheral ID 7; `%1111` when TH has
+    /// fallen and nothing is asked; then the packet's nibbles. Past the packet's end the lines are released (argued:
+    /// no document says what is there).
     fn lines(&self, pads: &[Pad]) -> u8 {
-        if self.th {
-            return 0x13;
-        }
-        let nibble = match self.asked {
-            0 => 0xF,
-            n => packet(pads).get(n as usize - 1).copied().unwrap_or(0xF),
+        let nibble = match (self.th, self.asked) {
+            (true, _) => 0x3,
+            (false, 0) => 0xF,
+            (false, n) => packet(pads).get(n as usize - 1).copied().unwrap_or(0xF),
         };
         (self.tr as u8) << 4 | nibble
     }
@@ -232,18 +231,16 @@ impl Io {
     }
 
     /// The six lines below TH as what `port` holds gives them. A 4 Way Play gives on port A the pad that port B's
-    /// lines 6 to 4 choose, 0 to 3; 7 asks for its mark, D1 and D0 low; port B itself gives nothing.
+    /// lines 5 and 4 choose, or with line 6 high its mark, D1 and D0 low; port B itself gives nothing.
     fn device(&self, port: usize, clock: u64) -> u8 {
         let first = self.first_pad(port);
         match self.plug(port) {
             Plug::Pad => self.pads[first].lines(clock),
             Plug::TeamPlayer => self.taps[port].lines(&self.pads[first..first + 4]) | (self.driven(port, 0x20) as u8) << 5,
             Plug::FourWay if port == 0 => {
-                let chosen = [0x40u8, 0x20, 0x10].iter().fold(0, |n, &bit| n << 1 | self.driven(1, bit) as usize);
-                match chosen {
-                    0..=3 => self.pads[chosen].lines(clock),
-                    7 => 0x3C,
-                    _ => 0x3F,
+                match self.driven(1, 0x40) {
+                    false => self.pads[(self.driven(1, 0x20) as usize) << 1 | self.driven(1, 0x10) as usize].lines(clock),
+                    true => 0x3C,
                 }
             }
             Plug::FourWay => 0x3F,
@@ -366,6 +363,9 @@ mod tests {
         io.pads[1].buttons = RIGHT | START;
         io.pads[2] = Pad { buttons: A | X | MODE, six: true, ..io.pads[2] };
         io.pads[3].buttons = C;
+        io.write(0xA1_0009, 0x60, 0);
+        io.write(0xA1_0003, 0x40, 0);
+        assert_eq!(io.read(0xA1_0003, 0) & 0x1F, 0x03, "at rest with TR low, TL is low: Gauntlet 4 waits for it");
         let got = read_team_player(&mut io, 0, 6 + 2 + 2 + 3 + 2 + 2);
         assert_eq!(got[..2], [0x3, 0xF], "the two checks");
         assert_eq!(got[2..8], [0, 0, 0, 0, 1, 0], "two zeroes, then each port's kind");
@@ -420,6 +420,8 @@ mod tests {
         }
         assert_eq!(read, [UP, RIGHT | B, A, START | C], "S A C B R L D U of each pad");
         assert_eq!(io.read(0xA1_0005, 0) & 0x7F, 0x3C, "port B reads back what it drives");
+        io.write(0xA1_0005, 0x4C, 0);
+        assert_eq!(io.read(0xA1_0003, 0) & 0x3F, 0x3C, "any choice with line 6 high is the mark");
         io.plugs[0] = Plug::Pad;
         io.write(0xA1_0005, 0x7C, 0);
         io.write(0xA1_0003, 0x40, 0);

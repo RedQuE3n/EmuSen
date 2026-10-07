@@ -206,5 +206,47 @@ namespace EmuSen.WiseMan.Input
             Assert.Equal(2, output.Sent.Count(s => s.Button == PadButton.B && s.Held));
             Assert.True(router.PadHeld(1, PadButton.B));
         }
+
+        // Ports added mid-game hear their players at once, and a button already held on a port that stays is not sent again.
+        [Fact]
+        public void Ports_added_while_the_game_runs_hear_their_players_and_the_rest_keep_what_they_were_sent()
+        {
+            SimulatedPad one = new(), two = new(), three = new();
+            (_, _, PortRouter router, Ports output) = Start(2, null, one, two, three);
+            one.Press(SDL.GamepadButton.South);
+            three.Press(SDL.GamepadButton.Start);
+            router.PollPads();
+            Assert.Equal(new[] { (0, PadButton.B, true) }, output.Sent);
+
+            // Let go in the very poll the ports changed: the release still goes, which a reset in the resize's place would lose.
+            router.Resize(5);
+            Assert.Equal(5, router.Ports);
+            one.Release(SDL.GamepadButton.South);
+            router.PollPads();
+            Assert.Equal(new[] { (0, PadButton.B, true), (0, PadButton.B, false), (2, PadButton.Start, true) }, output.Sent);
+            Assert.True(output.Connected[2]);
+        }
+
+        // A port taken away mid-game lets go of what its player held, so the port comes back with nothing down.
+        [Fact]
+        public void A_port_taken_away_while_the_game_runs_lets_go_of_its_buttons()
+        {
+            SimulatedPad one = new(), two = new(), three = new();
+            (_, _, PortRouter router, Ports output) = Start(3, null, one, two, three);
+            one.Press(SDL.GamepadButton.South);
+            three.Press(SDL.GamepadButton.Start);
+            router.PollPads();
+
+            router.Resize(2);
+            Assert.False(output.Held(2, PadButton.Start));
+            Assert.True(output.Held(0, PadButton.B));
+            router.PollPads();
+            Assert.Equal(3, output.Sent.Count);
+
+            router.Resize(3);
+            router.PollPads();
+            Assert.True(output.Held(2, PadButton.Start));
+            Assert.Equal(4, output.Sent.Count);
+        }
     }
 }

@@ -901,6 +901,7 @@ impl Genesis {
         w.bools("PadTh", &io.th);
         w.bytes("PadFalls", &io.falls);
         w.u64s("PadLastFall", &io.last_fall);
+        w.bytes("Taps", &io.taps);
         w.u8("SramRegister", h.cart.sram_reg);
         w.bool("Mapper", h.cart.banks.is_some());
         w.bytes("MapperPages", &h.cart.banks.unwrap_or_default());
@@ -917,7 +918,8 @@ impl Genesis {
         w.group("Sound", |w| h.sound.write_state(w));
     }
 
-    /// The state of `version`, 16 or 17: 16 lacks `FrameSize` and `EepromTransfer` (Nephrite_Native.md §39.4).
+    /// The state of `version`, 16 to 18: 16 lacks `FrameSize` and `EepromTransfer` (Nephrite_Native.md §39.4), and 16
+    /// and 17 hold two pads where 18 holds eight and the taps (§44.4).
     pub fn read_state(&self, r: &mut StateReader, version: i32) -> Result<Saved, Truncated> {
         use emusen_native::State;
         let mut cpu = self.cpu.clone();
@@ -990,9 +992,16 @@ impl Genesis {
         r.bytes(&mut io.ctrl)?;
         r.bytes(&mut io.tx)?;
         r.bytes(&mut io.sctrl)?;
-        r.bools(&mut io.th)?;
-        r.bytes(&mut io.falls)?;
-        r.u64s(&mut io.last_fall)?;
+        // Before version 18 a state held the two ports' pads alone (Nephrite_Native.md §44.4): the others are at rest.
+        let held = if version >= 18 { crate::io::PADS } else { 2 };
+        io.th = [true; crate::io::PADS];
+        r.bools(&mut io.th[..held])?;
+        r.bytes(&mut io.falls[..held])?;
+        r.u64s(&mut io.last_fall[..held])?;
+        io.taps = [1, 1, 0, 1, 1, 0];
+        if version >= 18 {
+            r.bytes(&mut io.taps)?;
+        }
         let sram_reg = r.u8()?;
         let mapper = r.bool()?;
         let mut pages = [0u8; 8];

@@ -7938,6 +7938,8 @@ their tabs come with their own stages and no frontend change.*
 | Port 1 controller | `pad1` | 3-Button Control Pad (`md.pad3`), 6-Button Arcade Pad (`md.pad6`) | Between frames |
 | Port 2 controller | `pad2` | the same | Between frames |
 
+*Amended 2026-10-07: each port may also hold an adapter for four players (§4.100).*
+
 - **Console model** is `Nephrite_Native.md` §28's: the discrete YM2612 and model 1's output circuit, or the YM3438
   and model 2's.
 - **Region** sets the version register's two market bits, overseas and PAL, and with PAL the picture's rate, 50 frames
@@ -8249,3 +8251,28 @@ Each fills the picture's rectangle for its own game and harms the other (`EmuSen
 **Tests.** `GameRecordsTests`: a crop kept across a reopening, a crop of nothing told from none, a crop following a move and not overwriting one already there, cleared without losing the row, and a schema-5 file migrated. `GameCropTests`: the window opening on the console's numbers and on the game's own; a typed number, a comma, a word and a number out of range; Use the Console's Setting; which files are offered it; from the desktop's game options as an owned window, stored for that game and no other; from the themed gamelist's options in big picture as a framed sheet, every control of it reached by the pad. `PadSettingsWindowTests`: in a game, from the pad menu, the game's crop replacing a television's overscan as it is typed, staying while the console's setting changes, Graphics Settings' line on that console's tab and no other, and the console's crop back when cleared; the sheet in the walk of every settings sheet. The fit audit at 1280 × 800 and 1920 × 1200: `GameCrop` in a game, `GameCropLongTitle` over the themed library with a title of two lines, and `GraphicsSettingsGameCropNote`. The lists of a game's options and of Game Settings in the menus' own tests carry the new entry.
 
 **Mutants** (17, each caught): the game's crop not applied; added to the console's; a running game not redrawn; a cleared crop left stored; a typed one not stored; no line in Graphics Settings, and the line on every console's tab; offered for the Game Boy; offered for a file no console claims; a crop left behind by a move, and a move overwriting the crop already there; clearing a crop deleting the game's row; right and top confused; the window starting from nothing; Use the Console's Setting leaving the boxes, and always enabled; a typed edge replacing the others. One survived its first run and was not a gap in the tests but dead code: the entry was also offered for a file whose console is unknown, which no listed game is, and that branch and the window's wording for it were removed.
+
+### 4.100 The Genesis's four-player adapters: Team Player and 4 Way Play (2026-10-07)
+
+**What the player sees.** The Genesis tab's two controller rows (§4.90) offer four more choices:
+
+| Row | Added choices | What it is |
+|---|---|---|
+| Port 1 controller (`pad1`) | Team Player with 3-Button Control Pads (`md.teamplayer3`), Team Player with 6-Button Arcade Pads (`md.teamplayer6`), 4 Way Play with 3-Button Control Pads (`md.4way3`), 4 Way Play with 6-Button Arcade Pads (`md.4way6`) | Sega's adapter in its MULTI setting, four pads on one port; or Electronic Arts' adapter, four pads on both ports |
+| Port 2 controller (`pad2`) | the two Team Player choices | A Team Player on the second port |
+
+- **Which to choose.** A game is made for one adapter or the other, and its box or manual says which: most
+  four-player games read Sega's Team Player, and Electronic Arts' games of 1993 and 1994 read the 4 Way Play. A
+  cartridge's header says only that some adapter is supported, not which, so Nephrite does not choose for the player.
+  A game not made for an adapter does not see a pad through one: leave the port on a pad for it.
+- **The players** are counted from port 1's pads on: with a Team Player on port 1, players 1 to 4 are its pads and
+  player 5 is port 2's; with a pad on port 1 and a Team Player on port 2, player 1 is the pad and players 2 to 5 the
+  adapter's. The 4 Way Play plugs into both ports, so port 2's row is not used while port 1 holds it, and the row
+  says so. Mistress gives its four players to the first four.
+- **The pads' kind** is the adapter's choice, all four alike. A Team Player tells the game each pad's kind; through
+  a 4 Way Play a game reads each pad as it would on the port.
+- The default is unchanged, a three-button pad on each port. The values act between frames, as §4.90's.
+
+**Coverage**: the crate's `the_pad_settings_plug_in_the_adapters_and_number_the_players`; `GenesisSettingsTests`
+(the rows' choices in words); the Genesis tab in the window fit audit at both sizes with the longer choices.
+

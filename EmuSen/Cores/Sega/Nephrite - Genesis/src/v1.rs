@@ -5,6 +5,7 @@ use emusen_native::abi::Region;
 use emusen_native::core::*;
 
 use crate::genesis::Model;
+use crate::io::Plug;
 use crate::machine::{HEIGHT, Machine, WIDTH, default_model};
 use crate::media::{Media, System, cartridge_bytes};
 use crate::debugger::{M68KBUS_ID, M68KBUS_SIZE, Z80BUS_ID, Z80BUS_SIZE};
@@ -43,7 +44,7 @@ fn pad(id: &str, label: &str, six: bool) -> Controller {
     Controller {
         id: id.into(),
         label: label.into(),
-        ports: vec![0, 1],
+        ports: (0..crate::io::PADS as u32).collect(),
         buttons: BUTTONS.iter().filter(|b| six || b.0 < 8).map(|&(bit, c, l)| Button { bit, control: Some(c), label: l.into() }).collect(),
         axes: Vec::new(),
     }
@@ -52,15 +53,23 @@ fn pad(id: &str, label: &str, six: bool) -> Controller {
 /// The settings that choose each port's pad, read at create and between frames.
 pub const PAD_KEYS: [&str; 2] = ["pad1", "pad2"];
 
+/// What a port's setting may hold: the value, its words, the plug and whether the pads are six-button ones. The 4
+/// Way Play plugs into both ports, so it is port 1's choice alone.
+pub const PLUGS: [(&str, &str, Plug, bool); 6] = [
+    ("md.pad3", "3-Button Control Pad", Plug::Pad, false),
+    ("md.pad6", "6-Button Arcade Pad", Plug::Pad, true),
+    ("md.teamplayer3", "Team Player with 3-Button Control Pads", Plug::TeamPlayer, false),
+    ("md.teamplayer6", "Team Player with 6-Button Arcade Pads", Plug::TeamPlayer, true),
+    ("md.4way3", "4 Way Play with 3-Button Control Pads", Plug::FourWay, false),
+    ("md.4way6", "4 Way Play with 6-Button Arcade Pads", Plug::FourWay, true),
+];
+
 fn pad_setting(port: usize) -> Setting {
     Setting {
         key: PAD_KEYS[port].into(),
         label: format!("Port {} controller", port + 1),
-        help: "The pad plugged into the port: Sega's three-button Control Pad, or the six-button Arcade Pad, which a game reads through the same port and which some games use for X, Y, Z and Mode.".into(),
-        kind: SettingKind::Choice(vec![
-            Choice { value: "md.pad3".into(), label: "3-Button Control Pad".into(), help: None },
-            Choice { value: "md.pad6".into(), label: "6-Button Arcade Pad".into(), help: None },
-        ]),
+        help: "What is plugged into the port. A pad: Sega's three-button Control Pad, or the six-button Arcade Pad, which a game reads through the same port and which some games use for X, Y, Z and Mode. Or an adapter for four players, for the games made for it: Sega's Team Player, which most four-player games read, or on port 1 Electronic Arts' 4 Way Play, which takes both ports and which Electronic Arts' games read. The players are counted from port 1's pads on.".into(),
+        kind: SettingKind::Choice(PLUGS.iter().filter(|p| port == 0 || p.2 != Plug::FourWay).map(|&(value, label, _, _)| Choice { value: value.into(), label: label.into(), help: None }).collect()),
         default: "md.pad3".into(),
         scope: Scope::Run,
         category: Some("Controllers".into()),
@@ -131,10 +140,20 @@ fn model_setting() -> Setting {
 }
 
 impl Machine {
+    /// Each player's pad in order, true a six-button one: port 1's pads, then port 2's unless the 4 Way Play has it.
+    pub fn pad_kinds(&self) -> Vec<bool> {
+        let [(a, six_a), (b, six_b)] = self.plugged;
+        let mut kinds = vec![six_a; crate::io::pads_of(a)];
+        if a != Plug::FourWay {
+            kinds.extend(vec![six_b; crate::io::pads_of(b)]);
+        }
+        kinds
+    }
+
     fn apply_pads(&mut self, settings: &Settings) {
         for (port, key) in PAD_KEYS.iter().enumerate() {
-            if let Some(v) = settings.get(key) {
-                self.six_button[port] = v == "md.pad6";
+            if let Some(&(_, _, plug, six)) = settings.get(key).and_then(|v| PLUGS.iter().find(|p| p.0 == v)) {
+                self.plugged[port] = (if port == 1 && plug == Plug::FourWay { Plug::Pad } else { plug }, six);
             }
         }
     }
@@ -232,7 +251,7 @@ pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::SETTING_NOTES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -317,7 +336,7 @@ impl Core for Machine {
             frame_rate: if pal { PAL_FRAME } else { NTSC_FRAME },
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: 320, max_height: 480, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
-            ports: (0..2).map(|p| Port { port: p as u32, controller: Some(if self.six_button[p] { "md.pad6" } else { "md.pad3" }.into()) }).collect(),
+            ports: self.pad_kinds().iter().enumerate().map(|(p, &six)| Port { port: p as u32, controller: Some(if six { "md.pad6" } else { "md.pad3" }.into()) }).collect(),
             spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::debugger::Z80BUS_ID, reports_stores: crate::debugger::reports_stores(m.id), ..Space::new(m.id, m.name) }).collect(),
             processors: self.processors(),
             battery: self.battery_id().map(|_| Battery { which: 0, suffix: if self.media.system == System::Mcd { ".brm" } else { ".srm" }.into() }).into_iter().collect(),
@@ -375,6 +394,14 @@ impl Core for Machine {
     fn set_settings(&mut self, settings: &Settings) -> Result<(), i32> {
         self.apply_pads(settings);
         Ok(())
+    }
+
+    /// The 4 Way Play takes both ports, so port 2's choice is not used while port 1 holds it.
+    fn setting_notes(&self) -> Vec<(String, String)> {
+        match self.plugged[0].0 {
+            Plug::FourWay => vec![(PAD_KEYS[1].into(), "The 4 Way Play on port 1 plugs into both ports, so port 2's controller is not used.".into())],
+            _ => Vec::new(),
+        }
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
@@ -472,7 +499,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; rom_patches, settings, debug, debug_stack, debug_registers, debug_disassemble);
+emusen_native::core_exports!(Machine; rom_patches, settings, setting_notes, debug, debug_stack, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {
@@ -489,7 +516,7 @@ mod tests {
         let mut m = create(&cartridge("SEGA GENESIS", "JUE", None), vec![]).unwrap();
         let info = m.machine_info();
         assert_eq!(info.processors.iter().map(|p| (p.name.as_str(), p.pc_bits, p.registers.len(), p.code_space)).collect::<Vec<_>>(), [("M68K", 24, 20, Some(0)), ("Z80", 16, 18, Some(1))]);
-        assert_eq!(info.state.loads_from, [16, 17]);
+        assert_eq!(info.state.loads_from, [16, 17, 18]);
         assert_eq!(info.spaces.iter().filter(|s| s.view).map(|s| (s.name.as_str(), s.read_only)).collect::<Vec<_>>(), [("M68KBUS", true), ("Z80BUS", true)]);
         assert_eq!((Core::space_size(&m, 0), Core::space_size(&m, 1)), (Ok(1 << 24), Ok(1 << 16)));
         let mut out = [0u8; 16];
@@ -558,7 +585,7 @@ mod tests {
         m.set_buttons(0, 0b1010, 0b1111).unwrap();
         m.set_buttons(0, 0b0001, 0b0001).unwrap();
         assert_eq!(m.pads[0], 0b1011);
-        assert_eq!(m.set_buttons(2, 1, 1), Err(status::NO_SUCH_PORT));
+        assert_eq!((m.set_buttons(7, 1, 1), m.set_buttons(8, 1, 1)), (Ok(()), Err(status::NO_SUCH_PORT)), "eight pads at the most, a Team Player on each port");
     }
 
     #[test]
@@ -670,5 +697,44 @@ mod tests {
         assert_eq!(ports(&m), ["md.pad6", "md.pad3"]);
         m.advance();
         assert!(m.genesis.hw.io.pads[0].six && !m.genesis.hw.io.pads[1].six);
+    }
+
+    // A port may hold an adapter: the players are port 1's pads and then port 2's, each of its port's kind, and every player's buttons reach its pad (Nephrite_Native.md §44).
+    #[test]
+    fn the_pad_settings_plug_in_the_adapters_and_number_the_players() {
+        use crate::io::Plug;
+        let schema = Machine::settings_schema();
+        let choices = |key: &str| match &schema.iter().find(|s| s.key == key).unwrap().kind {
+            SettingKind::Choice(c) => c.iter().map(|c| c.value.clone()).collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
+        assert_eq!(choices("pad1"), ["md.pad3", "md.pad6", "md.teamplayer3", "md.teamplayer6", "md.4way3", "md.4way6"]);
+        assert_eq!(choices("pad2"), ["md.pad3", "md.pad6", "md.teamplayer3", "md.teamplayer6"]);
+        let image = cartridge("SEGA GENESIS", "U", None);
+        let mut m = create(&image, vec![]).unwrap();
+        let ports = |m: &Machine| m.machine_info().ports.iter().map(|p| p.controller.clone().unwrap()).collect::<Vec<_>>();
+        let set = |m: &mut Machine, a: &str, b: &str| m.set_settings(&Settings::from_pairs(vec![("pad1".into(), a.into()), ("pad2".into(), b.into())])).unwrap();
+        set(&mut m, "md.teamplayer6", "md.pad3");
+        assert_eq!(ports(&m), ["md.pad6", "md.pad6", "md.pad6", "md.pad6", "md.pad3"]);
+        assert!(m.setting_notes().is_empty());
+        set(&mut m, "md.pad6", "md.teamplayer3");
+        assert_eq!(ports(&m), ["md.pad6", "md.pad3", "md.pad3", "md.pad3", "md.pad3"]);
+        for port in 0..5 {
+            Core::set_buttons(&mut m, port, 1 << port, u32::MAX).unwrap();
+        }
+        m.advance();
+        let io = &m.genesis.hw.io;
+        assert_eq!((io.plugs, io.pad_count()), ([Plug::Pad, Plug::TeamPlayer], 5));
+        assert_eq!(io.pads.map(|p| (p.buttons, p.six))[..6], [(1, true), (2, false), (4, false), (8, false), (16, false), (0, false)]);
+        set(&mut m, "md.teamplayer3", "md.teamplayer6");
+        assert_eq!(ports(&m).len(), 8);
+        set(&mut m, "md.4way3", "md.pad6");
+        assert_eq!(ports(&m), ["md.pad3"; 4]);
+        assert_eq!(m.setting_notes().iter().map(|n| n.0.as_str()).collect::<Vec<_>>(), ["pad2"]);
+        m.advance();
+        assert_eq!(m.genesis.hw.io.plugs[0], Plug::FourWay);
+        set(&mut m, "md.pad3", "md.4way3");
+        assert_eq!(ports(&m), ["md.pad3", "md.pad3"], "the 4 Way Play is port 1's choice alone");
+        assert_eq!(Core::set_buttons(&mut m, 8, 1, 1), Err(status::NO_SUCH_PORT));
     }
 }

@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 17;
+pub const STATE_VERSION: i32 = 18;
 /// The oldest version a state may have and still load: 16, the first the Genesis was offered to players with, lacks
 /// only what 17 added, which a load supplies as Nephrite_Native.md §39.4 says.
 pub const OLDEST_STATE_VERSION: i32 = 16;
@@ -155,25 +155,24 @@ mod tests {
                 "140666 80 u8[80] LineVsram\n140746 4 u16[2] LineHscroll\n140750 2 u8[2] LineWindow\n",
                 "140752 4 u16[2] OpenLine\n140756 640 u8[640] OpenLineSprites\n141396 80 u8[80] OpenLineVsram\n",
                 "141476 4 u16[2] OpenLineScroll\n141480 2 u8[2] OpenLineWindow\n141482 4 u16[2] FrameSize\n",
-                "141486 3 u8[3] IoData\n",
-                "141489 3 u8[3] IoCtrl\n141492 3 u8[3] IoTx\n141495 3 u8[3] IoSctrl\n141498 2 bool[2] PadTh\n",
-                "141500 2 u8[2] PadFalls\n141502 16 u64[2] PadLastFall\n141518 1 u8 SramRegister\n",
-                "141519 1 bool Mapper\n141520 8 u8[8] MapperPages\n141528 80 u64[10] Clocks\n141608 4 u32 Line\n",
-                "141612 2 u16 Z80Bank\n141614 2 u16 OpenBus\n141616 4 bool[4] Lines\n141620 4 u8[4] Tmss\n",
-                "141624 256 u8[256] Sound.Part0\n141880 256 u8[256] Sound.Part1\n",
-                "142136 6 u8[6] Sound.AddressPartFlags\n142142 4 u16[2] Sound.Counters\n",
-                "142146 24 u64[3] Sound.Times\n142170 8 i32[2] Sound.Out\n142178 24 i32[6] Sound.Channels\n",
-                "142202 5 u8[5] Sound.Timers\n142207 40 u64[5] Sound.TimersAndCounts\n",
-                "142247 1024 u64[128] Sound.Writes\n143271 32 u64[4] Sound.Csm\n",
-                "143303 1056 u64[132] Sound.FmOperators\n144359 24 bool[24] Sound.FmKeys\n",
-                "144383 16 u64[2] Sound.FmEnvelope\n144399 4 u8[4] Sound.FmLatches\n144403 3 u8[3] Sound.FmLfo\n",
-                "144406 31 bool[31] Sound.FmSsgKeys\n144437 48 u16[24] Sound.FmShown\n144485 6 u16[3] Sound.Tone\n",
-                "144491 4 u8[4] Sound.Volume\n144495 3 u8[3] Sound.NoiseLatchStereo\n144498 8 u16[4] Sound.Counter\n",
-                "144506 4 bool[4] Sound.Bit\n144510 2 u16 Sound.Shift\n144512 16 u64[2] Sound.PsgTimeAndTime\n",
-                "144528 80 i32[20] Sound.Lines\n144608 8 i32[2] Sound.Level\n144616 24 u64[3] Sound.Sum\n",
-                "144640 1024 u64[128] Sound.Pending\n145664 8 i32[2] Sound.Level\n145672 24 u64[3] Sound.Sum\n",
-                "145696 1024 u64[128] Sound.Pending\n146720 88 u64[11] Sound.Circuit\n",
-                "146808 160 u64[20] Sound.CircuitSides\n",
+                "141486 3 u8[3] IoData\n141489 3 u8[3] IoCtrl\n141492 3 u8[3] IoTx\n141495 3 u8[3] IoSctrl\n",
+                "141498 8 bool[8] PadTh\n141506 8 u8[8] PadFalls\n141514 64 u64[8] PadLastFall\n141578 6 u8[6] Taps\n",
+                "141584 1 u8 SramRegister\n141585 1 bool Mapper\n141586 8 u8[8] MapperPages\n",
+                "141594 80 u64[10] Clocks\n141674 4 u32 Line\n141678 2 u16 Z80Bank\n141680 2 u16 OpenBus\n",
+                "141682 4 bool[4] Lines\n141686 4 u8[4] Tmss\n141690 256 u8[256] Sound.Part0\n",
+                "141946 256 u8[256] Sound.Part1\n142202 6 u8[6] Sound.AddressPartFlags\n",
+                "142208 4 u16[2] Sound.Counters\n142212 24 u64[3] Sound.Times\n142236 8 i32[2] Sound.Out\n",
+                "142244 24 i32[6] Sound.Channels\n142268 5 u8[5] Sound.Timers\n",
+                "142273 40 u64[5] Sound.TimersAndCounts\n142313 1024 u64[128] Sound.Writes\n",
+                "143337 32 u64[4] Sound.Csm\n143369 1056 u64[132] Sound.FmOperators\n",
+                "144425 24 bool[24] Sound.FmKeys\n144449 16 u64[2] Sound.FmEnvelope\n144465 4 u8[4] Sound.FmLatches\n",
+                "144469 3 u8[3] Sound.FmLfo\n144472 31 bool[31] Sound.FmSsgKeys\n144503 48 u16[24] Sound.FmShown\n",
+                "144551 6 u16[3] Sound.Tone\n144557 4 u8[4] Sound.Volume\n144561 3 u8[3] Sound.NoiseLatchStereo\n",
+                "144564 8 u16[4] Sound.Counter\n144572 4 bool[4] Sound.Bit\n144576 2 u16 Sound.Shift\n",
+                "144578 16 u64[2] Sound.PsgTimeAndTime\n144594 80 i32[20] Sound.Lines\n144674 8 i32[2] Sound.Level\n",
+                "144682 24 u64[3] Sound.Sum\n144706 1024 u64[128] Sound.Pending\n145730 8 i32[2] Sound.Level\n",
+                "145738 24 u64[3] Sound.Sum\n145762 1024 u64[128] Sound.Pending\n146786 88 u64[11] Sound.Circuit\n",
+                "146874 160 u64[20] Sound.CircuitSides\n",
             )
         );
     }
@@ -223,20 +222,48 @@ mod tests {
         assert_eq!(b.genesis.hw.cart.eeprom.as_ref().unwrap().protocol(), taken);
     }
 
-    /// A state as version 16 wrote it: this version's bytes without the fields 17 added, and its version number.
-    fn as_version_16(m: &Machine) -> Vec<u8> {
+    /// A state as an older version wrote it: this version's bytes without the fields added since (17's `FrameSize` and
+    /// `EepromTransfer`; 18's `Taps` and its six more pads), and that version's number.
+    fn as_version(m: &Machine, version: i32) -> Vec<u8> {
         let mut s = vec![0; m.state_size()];
         m.save_state(&mut s).unwrap();
         let mut out = Vec::new();
         for line in m.layout().lines() {
             let w: Vec<&str> = line.split_whitespace().collect();
             let (at, len): (usize, usize) = (w[0].parse().unwrap(), w[1].parse().unwrap());
-            if !matches!(w[3], "FrameSize" | "EepromTransfer") {
-                out.extend_from_slice(&s[at..at + len]);
-            }
+            let kept = match w[3] {
+                "FrameSize" | "EepromTransfer" if version < 17 => 0,
+                "Taps" if version < 18 => 0,
+                "PadTh" | "PadFalls" | "PadLastFall" if version < 18 => len / 4,
+                _ => len,
+            };
+            out.extend_from_slice(&s[at..at + kept]);
         }
-        out[4..8].copy_from_slice(&16i32.to_le_bytes());
+        out[4..8].copy_from_slice(&version.to_le_bytes());
         out
+    }
+
+    fn as_version_16(m: &Machine) -> Vec<u8> {
+        as_version(m, 16)
+    }
+
+    // A version 17 state, with two pads and no taps, loads: the six other pads and the taps at rest (Nephrite_Native.md §44.4).
+    #[test]
+    fn a_version_17_state_loads_with_the_other_pads_at_rest() {
+        let mut a = machine("SEGA GENESIS");
+        a.advance();
+        a.genesis.hw.io.write(0xA1_0009, 0x40, 0);
+        a.genesis.hw.io.write(0xA1_0003, 0x00, 0);
+        let old = as_version(&a, 17);
+        assert_eq!(old.len(), a.state_size() - 6 - 6 - 48 - 6);
+        let mut b = machine("SEGA GENESIS");
+        b.load_state(&old).unwrap();
+        let (was, now) = (a.genesis.hw.io.regs_state(), b.genesis.hw.io.regs_state());
+        assert_eq!((now.data, now.ctrl, now.th[..2].to_vec(), now.falls[0]), (was.data, was.ctrl, vec![false, true], 1));
+        assert_eq!((now.th[2..].to_vec(), now.taps), (vec![true; 6], [1, 1, 0, 1, 1, 0]));
+        a.advance();
+        b.advance();
+        assert_eq!(b.picture, a.picture);
     }
 
     // A version 16 state, the players' before 17, loads: the picture's size from its registers and an EEPROM board at rest, which 16 did not hold (Nephrite_Native.md §39.4).
@@ -249,7 +276,7 @@ mod tests {
         }
         a.genesis.hw.vdp.before_change(None);
         let old = as_version_16(&a);
-        assert_eq!(old.len(), a.state_size() - 4);
+        assert_eq!(old.len(), a.state_size() - 4 - 66);
         let mut b = machine("SEGA GENESIS");
         b.load_state(&old).unwrap();
         assert_eq!((b.genesis.hw.vdp.frame.width, b.genesis.hw.vdp.frame.height), (320, 224));
@@ -266,7 +293,7 @@ mod tests {
         c.genesis.hw.cart.eeprom.as_mut().unwrap().write(&[(0x20_0001, 0), (0x20_0000, 1)]);
         c.genesis.hw.cart.eeprom.as_mut().unwrap().memory[5] = 0x42;
         let old = as_version_16(&c);
-        assert_eq!(old.len(), c.state_size() - 4 - 22);
+        assert_eq!(old.len(), c.state_size() - 4 - 22 - 66);
         let mut d = eeprom_cart();
         d.load_state(&old).unwrap();
         let e = d.genesis.hw.cart.eeprom.as_ref().unwrap();
@@ -281,7 +308,7 @@ mod tests {
         let a = machine("SEGA GENESIS");
         let mut b = machine("SEGA GENESIS");
         b.frames = 9;
-        for version in [15, 2, 18] {
+        for version in [15, 2, 19] {
             let mut s = as_version_16(&a);
             s[4..8].copy_from_slice(&i32::to_le_bytes(version));
             let e = b.load_state(&s).unwrap_err();

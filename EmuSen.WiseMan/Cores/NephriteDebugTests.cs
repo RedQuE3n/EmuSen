@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // A 68000 that starts a Z80 loop and calls a counting routine with the vertical interrupt on - see Nephrite_Native.md §43.
-        private static byte[] CallsRom()
+        private static byte[] CallsRom(bool interrupt)
         {
             var r = SyntheticMdRom.Cartridge();
             Put(r, 0, 0x00FF, 0xFE00, 0x0000, 0x0200);
@@ -58,17 +58,20 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < z80.Length; i++) loader.AddRange(new ushort[] { 0x13FC, z80[i], 0x00A0, (ushort)i });
             loader.AddRange(new ushort[] { 0x33FC, 0x0000, 0x00A1, 0x1200, 0x33FC, 0x0000, 0x00A1, 0x1100, 0x33FC, 0x0100, 0x00A1, 0x1200, 0x4EF9, 0x0000, 0x0280 });
             Put(r, 0x200, loader.ToArray());
-            Put(r, 0x280, 0x33FC, 0x8164, 0x00C0, 0x0004, 0x027C, 0xF8FF, 0x4EB9, 0x0000, 0x0300, 0x60F8);
+            // Without the interrupt the six words that turn it on are NOPs, so the loop stays at $28C.
+            if (interrupt) Put(r, 0x280, 0x33FC, 0x8164, 0x00C0, 0x0004, 0x027C, 0xF8FF);
+            else Put(r, 0x280, 0x4E71, 0x4E71, 0x4E71, 0x4E71, 0x4E71, 0x4E71);
+            Put(r, 0x28C, 0x4EB9, 0x0000, 0x0300, 0x60F8);
             Put(r, 0x300, 0x5282, 0x13C2, 0x00FF, 0x0020, 0x4E75);
             Put(r, 0x400, 0x4E73);
             return r;
         }
 
-        private (CoreEngine Engine, CoreDebugTarget Target) Load()
+        private (CoreEngine Engine, CoreDebugTarget Target) Load(bool interrupt = true)
         {
             var found = CoreDiscovery.Found.Single(c => c.Info.Id == "nephrite");
             string rom = Path.Combine(_root, "calls.md");
-            File.WriteAllBytes(rom, CallsRom());
+            File.WriteAllBytes(rom, CallsRom(interrupt));
             var engine = new CoreEngine(found.Open()!);
             engine.LoadRom(rom);
             return (engine, engine.CreateDebugTarget());
@@ -127,7 +130,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Each_processor_steps_one_instruction_at_a_time()
         {
-            var (engine, t) = Load();
+            // The interrupt is left off: a step that fell on it would land in the handler, and the test is of the steps' order.
+            var (engine, t) = Load(interrupt: false);
             using (engine)
             {
                 engine.RunFrame();

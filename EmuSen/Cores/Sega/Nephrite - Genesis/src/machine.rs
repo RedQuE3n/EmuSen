@@ -44,9 +44,10 @@ pub struct Machine {
     pub frames: i64,
     pub picture: Vec<u8>,
     pub skip: bool,
-    pub pads: [u32; 2],
-    /// Each port's pad: the six-button one when true (the settings `pad1` and `pad2`).
-    pub six_button: [bool; 2],
+    /// Each pad's buttons in the players' order: port 1's pads, then port 2's (`io::Io::first_pad`).
+    pub pads: [u32; crate::io::PADS],
+    /// What each port holds, and whether its pads are six-button ones (the settings `pad1` and `pad2`).
+    pub plugged: [(crate::io::Plug, bool); 2],
     /// The firmware files given at create, by number; none is used yet.
     pub firmware: Vec<u32>,
     /// The samples made and not yet drained, stereo at `sound::RATE`.
@@ -90,7 +91,7 @@ impl Machine {
         for &(id, name, size) in list {
             extra.push(Memory { id, name, bytes: vec![0; size] });
         }
-        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], six_button: [false; 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false }
+        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::io::PADS], plugged: [(crate::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false }
     }
 
     /// The spaces in id order: the two buses, the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
@@ -178,9 +179,12 @@ impl Machine {
 
     /// The pads and the drawing switch as a frame takes them.
     fn begin_frame(&mut self) {
-        for (i, pad) in self.genesis.hw.io.pads.iter_mut().enumerate() {
-            pad.buttons = self.pads[i];
-            pad.six = self.six_button[i];
+        let io = &mut self.genesis.hw.io;
+        io.plugs = [self.plugged[0].0, self.plugged[1].0];
+        let (second, count) = (io.first_pad(1), io.pad_count());
+        for (i, pad) in io.pads.iter_mut().enumerate() {
+            pad.buttons = if i < count { self.pads[i] } else { 0 };
+            pad.six = self.plugged[(i >= second && self.plugged[0].0 != crate::io::Plug::FourWay) as usize].1;
         }
         self.genesis.hw.draw = !self.skip;
     }

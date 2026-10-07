@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("nephrite", "Nephrite", CoreInterface.CapRomPatches | CoreInterface.CapSettings | CoreInterface.CapDebug | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(("nephrite", "Nephrite", CoreInterface.CapRomPatches | CoreInterface.CapSettings | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             var packs = new[] { GenesisSystems.MegaDrive, GenesisSystems.MegaCd, GenesisSystems.S32x };
             Assert.Equal(packs.Select(p => p.Id), library.Info.Systems.Select(s => s.Id));
             foreach (var (pack, system) in packs.Zip(library.Info.Systems))

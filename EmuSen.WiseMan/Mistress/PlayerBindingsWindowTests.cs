@@ -74,8 +74,9 @@ namespace EmuSen.WiseMan.Mistress
                 tabs.SelectedIndex = i + 1;
                 counts[i] = bar.IsVisible ? choice.ItemCount : 1;
             }
-            Assert.Equal(Consoles.Select(ControllerPorts.ForConsole), counts);
-            Assert.Equal(new[] { 2, 1, 2, 4 }, counts);
+            // The Genesis's two pads as its port rows stand by default; an adapter set there adds its players.
+            Assert.Equal(Consoles.Select(c => ControllerPorts.ForConsole(c, _ => null)), counts);
+            Assert.Equal(new[] { 2, 1, 2, 4, 2 }, counts);
             tabs.SelectedIndex = 0;
             Assert.False(bar.IsVisible);
             tabs.SelectedIndex = Array.IndexOf(Consoles, "SNES") + 1;

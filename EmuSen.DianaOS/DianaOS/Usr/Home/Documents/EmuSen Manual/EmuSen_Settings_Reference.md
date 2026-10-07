@@ -7938,13 +7938,16 @@ their tabs come with their own stages and no frontend change.*
 | Port 1 controller | `pad1` | 3-Button Control Pad (`md.pad3`), 6-Button Arcade Pad (`md.pad6`) | Between frames |
 | Port 2 controller | `pad2` | the same | Between frames |
 
-*Amended 2026-10-07: each port may also hold an adapter for four players (§4.100).*
+*Amended 2026-10-07: each port may also hold an adapter for four players (§4.101).*
 
 - **Console model** is `Nephrite_Native.md` §28's: the discrete YM2612 and model 1's output circuit, or the YM3438
   and model 2's.
 - **Region** sets the version register's two market bits, overseas and PAL, and with PAL the picture's rate, 50 frames
   a second instead of 60. *From the cartridge* is the header's: a game for the Americas, or for several markets, runs
-  as an American console; one for Europe alone as a European; one for Japan alone as a Japanese. A game that checks
+  as an American console; one for Europe alone as a European; one for Japan alone as a Japanese. *(Corrected
+  2026-10-07: a game runs as the first console its header allows of an American, a Japanese and a European one, so a
+  game for Japan and Europe runs as a Japanese console; it had run as an American one, which its header does not
+  allow. `Nephrite_Native.md` §45.4.)* A game that checks
   its market may refuse the others, as on the console. The Sega CD's BIOS is still chosen by the disc's header, not by
   this row.
 - **The pads.** The three-button pad gives Up, Down, Left, Right, A, B, C and Start; the six-button pad adds X, Y, Z
@@ -8252,7 +8255,7 @@ Each fills the picture's rectangle for its own game and harms the other (`EmuSen
 
 **Mutants** (17, each caught): the game's crop not applied; added to the console's; a running game not redrawn; a cleared crop left stored; a typed one not stored; no line in Graphics Settings, and the line on every console's tab; offered for the Game Boy; offered for a file no console claims; a crop left behind by a move, and a move overwriting the crop already there; clearing a crop deleting the game's row; right and top confused; the window starting from nothing; Use the Console's Setting leaving the boxes, and always enabled; a typed edge replacing the others. One survived its first run and was not a gap in the tests but dead code: the entry was also offered for a file whose console is unknown, which no listed game is, and that branch and the window's wording for it were removed.
 
-### 4.100 The Genesis's four-player adapters: Team Player and 4 Way Play (2026-10-07)
+### 4.101 The Genesis's four-player adapters: Team Player and 4 Way Play (2026-10-07)
 
 **What the player sees.** The Genesis tab's two controller rows (§4.90) offer four more choices:
 
@@ -8268,7 +8271,7 @@ Each fills the picture's rectangle for its own game and harms the other (`EmuSen
 - **The players** are counted from port 1's pads on: with a Team Player on port 1, players 1 to 4 are its pads and
   player 5 is port 2's; with a pad on port 1 and a Team Player on port 2, player 1 is the pad and players 2 to 5 the
   adapter's. The 4 Way Play plugs into both ports, so port 2's row is not used while port 1 holds it, and the row
-  says so. Mistress gives its four players to the first four.
+  says so. Each player's pad, bindings and drawing are §4.102's.
 - **The pads' kind** is the adapter's choice, all four alike. A Team Player tells the game each pad's kind; through
   a 4 Way Play a game reads each pad as it would on the port.
 - The default is unchanged, a three-button pad on each port. The values act between frames, as §4.90's.
@@ -8276,3 +8279,37 @@ Each fills the picture's rectangle for its own game and harms the other (`EmuSen
 **Coverage**: the crate's `the_pad_settings_plug_in_the_adapters_and_number_the_players`; `GenesisSettingsTests`
 (the rows' choices in words); the Genesis tab in the window fit audit at both sizes with the longer choices.
 
+### 4.102 The Genesis's players past the second: pads, bindings and the drawing (2026-10-07)
+
+**What the player sees.** With an adapter on a Genesis port (§4.101), the pads plugged into the computer play as that
+many players, in the order Preferences ▸ Controllers seats them (`EmuSen_Input.md` §8.2): four with a 4 Way Play, five
+with a Team Player and a pad, eight with two Team Players. Nothing else is set; the adapter's row is the whole of it.
+
+- **In a game.** Each player's pad reaches its own pad of the adapter through the RetroPad mapping of §4.90, the same
+  for every player. The row may be changed while the game runs, as §4.90's pad rows can: the adapter is plugged in
+  between frames, and the players past the second are heard from the next poll of the pads, with what player 1 holds
+  kept (`EmuSen_Input.md` §8.11). Whether the game notices an adapter plugged in after it looked for one is the
+  game's affair, as on a console, so setting the row before starting the game is the sure way.
+- **In Controller Bindings.** The Genesis tab's *Player* selector lists the players its two rows hold as they are
+  stored, with no game loaded: two by default, up to eight. Each player has bindings of its own or player 1's, as on
+  every console (§8.4 there), and the drawing is that player's pad, three buttons or six by its port's row
+  (§4.93). A player past those the rows hold is not listed.
+- **What it rests on.** A running engine says its ports in machine info, and Nephrite's are the pads plugged in. With
+  no game loaded there is no machine, so the console's pack answers instead: `SystemPack.PlayerControllers` takes the
+  stored settings and gives each player's controller id, `GenesisSystems.PlayerControllers` being the Genesis's rule
+  (port 1's pads, then port 2's unless a 4 Way Play has it). `CoreCatalog.PlayerControllersFor` reads a setting not
+  stored at the engine's default; `ControllerPorts.ForConsole(console, stored)` counts the players and
+  `CoreCatalog.ControllerFor` names one player's pad. A console whose pack gives no rule is counted as before.
+- **Nothing of the platform's player model was widened.** Eight seats, eight sets of bindings and a router to eight
+  ports were there (`PlayerSlots.MaxPlayers`); the Genesis is the first console to use more than four of them.
+- **Hotaru** plays the ports a game starts with, adapters included, and does not follow a row changed while the game
+  runs.
+
+**Coverage**: `NephritePlayersTests` (the rows to each player's pad and the counts; four players' buttons through a
+Team Player by the path a frontend takes; an adapter set while the game runs; two games of the tester's library read
+with four pads, `Nephrite_Native.md` §45.3); `MultiplayerTests.Four_pads_play_a_genesis_team_player_set_while_the_game_runs`
+(Mistress's own poll, four pads plugged in); `ControllerBindingsDiagramTests.The_genesis_tab_offers_an_adapters_players_and_draws_each_ones_pad`;
+the window fit audit's `ControllerBindingsGenesisTeamPlayer` at 1280×800 and 1920×1200, five players listed and the
+fourth's six-button pad drawn. The audit's two older Genesis cases of this window had been measuring the SNES tab,
+the window opening on the first console that has a game; all three now choose the Genesis tab and assert it is
+shown.

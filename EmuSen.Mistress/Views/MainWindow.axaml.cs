@@ -335,6 +335,9 @@ namespace EmuSen.Mistress.Views
             if (PadBelongsToTheInterface()) return;
             if (_session is not { IsRomLoaded: true }) return;
 
+            // A core whose ports changed while the game runs, as by an adapter set on a port, is heard on its new ports - see EmuSen_Input.md §8.11.
+            if (_session.ControllerPorts != _ports.Ports) _ports.Resize(_session.ControllerPorts);
+
             // Buttons go when they change; a stick moves without crossing any threshold, so the axes go every poll.
             RoutePlayers();
             _ports.PollPads();

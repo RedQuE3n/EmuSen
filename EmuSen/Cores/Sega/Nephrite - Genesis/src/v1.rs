@@ -97,7 +97,7 @@ fn region_setting() -> Setting {
     Setting {
         key: REGION_KEY.into(),
         label: "Region".into(),
-        help: "The console's market, which a game reads from its version register and which sets the picture's rate: 60 frames a second for NTSC, 50 for PAL. From the cartridge, a game made for the Americas or several markets runs as an American console, one for Europe alone as a European, one for Japan alone as a Japanese. A game that checks its market may refuse the others. Takes effect when a game is next loaded.".into(),
+        help: "The console's market, which a game reads from its version register and which sets the picture's rate: 60 frames a second for NTSC, 50 for PAL. From the cartridge, a game runs as the first console its header allows of an American, a Japanese and a European one. A game that checks its market may refuse the others. Takes effect when a game is next loaded.".into(),
         kind: SettingKind::Choice(choices),
         default: "auto".into(),
         scope: Scope::Create,
@@ -392,7 +392,12 @@ impl Core for Machine {
     }
 
     fn set_settings(&mut self, settings: &Settings) -> Result<(), i32> {
+        let before = self.pad_kinds();
         self.apply_pads(settings);
+        // The ports' pads are machine info's, so a host that keeps it reads it again.
+        if self.pad_kinds() != before {
+            emit(event::MACHINE_INFO, 0, 0);
+        }
         Ok(())
     }
 
@@ -623,6 +628,12 @@ mod tests {
             let version = m.genesis.hw.io.read(0xA1_0001, 0);
             assert_eq!((version >> 7 & 1 != 0, version >> 6 & 1 != 0), (overseas, pal), "{region}");
             assert_eq!(m.machine_info().frame_rate, if pal { PAL_FRAME } else { NTSC_FRAME }, "{region}");
+        }
+        // From the cartridge: the first of the Americas, Japan and Europe the header allows (the plan's Q6).
+        for (header, overseas, pal) in [("JUE", true, false), ("U", true, false), ("JU", true, false), ("UE", true, false), ("J", false, false), ("JE", false, false), ("E", true, true), ("", true, false)] {
+            let m = create(&cartridge("SEGA GENESIS", header, None), vec![]).unwrap();
+            let version = m.genesis.hw.io.read(0xA1_0001, 0);
+            assert_eq!((version >> 7 & 1 != 0, version >> 6 & 1 != 0), (overseas, pal), "a header of {header:?}");
         }
         assert!(Machine::settings_schema().iter().all(|s| s.check().is_ok()));
         assert!(Machine::settings_schema().iter().filter(|s| [MODEL_KEY, REGION_KEY].contains(&s.key.as_str())).all(|s| matches!(s.scope, Scope::Create)));

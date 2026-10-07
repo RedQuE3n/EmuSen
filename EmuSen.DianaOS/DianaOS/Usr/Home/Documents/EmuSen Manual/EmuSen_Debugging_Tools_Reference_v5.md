@@ -2793,6 +2793,30 @@ Built 2026-10-05 for Nephrite's references; the measurements are `Nephrite_Nativ
   folder beside the run's dumps. A run that needs firmware the core refuses without, with no dumps given, prints
   `[SKIP]` and exits 4; the probe never fetches firmware.
 
+### 3.65 The probe gives input to every port, and plugs a named device into each
+
+Built 2026-10-07 for Nephrite's four-player adapters; what it measured is `Nephrite_Native.md` §45.
+
+**The schedule's entries carry a pad.** `--press`, `--tap` and the rest named no pad and the libretro backend answered
+port 0 alone, every other port reading nothing; a game with a multitap could not be given its third player, so no
+reference could say where such a game keeps what it reads of one. `--presson P:F:BTN[:DUR]` is `--press` on pad P,
+counted from 1 as a player is, and reaches the backend from 0. `InputSchedule.held_on(port, frame, button)` is what a
+backend samples; `held_at` is port 0's, so every existing schedule and backend reads as it did. The live override of
+`--pressuntil` stays the first pad's.
+
+**A port's device is chosen as a frontend would choose it.** A libretro core lists what each port may hold
+(`SET_CONTROLLER_INFO`: a description and a number per device), and a multitap is one of those devices, not an
+option. `--list-devices` prints the list. `--device P=NAME` plugs one into port P after the game is loaded, NAME being
+the number, the whole description, or words of it, tried in that order so that a short name cannot take a longer
+device that contains it when the exact one is listed. A name the core does not list is a `[WARN]` and the port is
+left alone, and each port set is printed, so a run's log says what was plugged in.
+
+**What it does not do.** The pad is a pad: no mouse, no light gun, no analogue stick. The other
+backends take the schedule's port and ignore pads past the first, as before; nothing of theirs was changed.
+
+**Coverage**: `backend.rs`'s `a_press_is_its_own_pads`, `main.rs`'s `a_press_and_a_device_name_their_port_from_one`,
+and the runs of §45 there, which are the libretro backend's half.
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

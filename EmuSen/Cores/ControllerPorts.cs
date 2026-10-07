@@ -21,6 +21,10 @@ namespace EmuSen.Cores
             return Math.Max(1, listed);
         }
 
+        // The players a console's ports hold as its settings stand, where its pack counts them, else the console's most.
+        public static int ForConsole(string? console, Func<string, string?> stored) =>
+            console is not null && CoreCatalog.PlayerControllersFor(console, stored) is { Count: > 0 } players ? players.Count : ForConsole(console);
+
         // The C# cores' own counts, which every engine of the console shares; a console this build does not know reads one.
         public static int ForConsole(string? console) => console?.ToUpperInvariant() switch
         {

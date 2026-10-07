@@ -8,6 +8,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using EmuSen.Common;
 using EmuSen.Cores;
+using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia;
@@ -15,6 +16,7 @@ using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Cores;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
 
@@ -178,6 +180,38 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new sbyte[] { 0, 0, 0, 127 }, ports.Select(p => p.StickX));
             Assert.Equal(5, first.Gamepad.Players.PlayerOf(first.Gamepad.Pads[4]));
             window.Close();
+        }, default);
+
+        // A Team Player set on the Genesis's first port while the game runs: players 3 and 4 are heard from the next poll, and player 1's held button is kept - see EmuSen_Input.md §8.11.
+        [Fact]
+        public Task Four_pads_play_a_genesis_team_player_set_while_the_game_runs() => Session.Dispatch(() =>
+        {
+            CoreDiscovery.UseDirectories(null);
+            CoreDiscovery.UseDevelopment(false);
+            try
+            {
+                (MainWindow window, PadDriver first) = Playing("Four.md", NephritePlayersTests.TeamPlayerReader());
+                var core = Assert.IsType<CoreEngine>(SessionOf(window).Core);
+                PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
+                first.Pad.Press(SDL.GamepadButton.DPadUp);
+                others[1].Pad.Press(SDL.GamepadButton.DPadLeft);
+                others[2].Pad.Press(SDL.GamepadButton.Start);
+                Poll(window);
+                Assert.Equal(2, SessionOf(window).ControllerPorts);
+
+                core.Set("pad1", "md.teamplayer3");
+                core.RunFrame();
+                Assert.Equal(5, SessionOf(window).ControllerPorts);
+                Poll(window);
+                for (int f = 0; f < 4; f++) core.RunFrame();
+                int[] nibbles = Enumerable.Range(6, 8).Select(n => core.ReadSpace("WRAM", n) & 0xF).ToArray();
+                Assert.Equal(new[] { 0xE, 0xF, 0xF, 0xF, 0xB, 0xF, 0xF, 0x7 }, nibbles);
+                window.Close();
+            }
+            finally
+            {
+                CoreDiscovery.UseDevelopment(null);
+            }
         }, default);
     }
 }

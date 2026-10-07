@@ -50,6 +50,19 @@ namespace EmuSen.Endymion.Input
             Array.Clear(_padAxes);
         }
 
+        // The running game's ports changed in number: a port taken away lets go of its buttons, the rest keep what they were sent - see EmuSen_Input.md §8.11.
+        public void Resize(int ports)
+        {
+            ports = Math.Max(0, ports);
+            for (int port = ports; port < Ports; port++)
+                foreach (PadButton button in Buttons)
+                    if (_sent[port, (int)button]) _setButton(port, button, false);
+            var sent = new bool[ports, Buttons.Length];
+            for (int port = 0; port < Math.Min(ports, Ports); port++)
+                foreach (PadButton button in Buttons) sent[port, (int)button] = _sent[port, (int)button];
+            _sent = sent;
+        }
+
         // Reads the pad of each player a port hears, then sends what changed and every axis.
         public void PollPads()
         {

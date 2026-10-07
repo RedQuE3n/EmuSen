@@ -2798,9 +2798,9 @@ From the gates and the tester's requests, in the order they would be taken:
 
 1. ~~**G7, the debugger**: stage 7, next in the plan's order.~~ Done 2026-10-07 (§43), but for the Z80's call stack.
 2. **The multitaps (Team Player, EA 4-Way Play) and the J-Cart's two ports**, at high priority (*added 2026-10-07;
-   the two adapters are in the core since §44, the frontend's players 3 and 4 and the J-Cart still to come*).
-   The tester has asked for players two to four across the platform, and four-player Genesis games run with two pads
-   today (§12). Not a gate; it ranks with the first.
+   the two adapters are in the core since §44 and their players in the frontend since §45, where the games read with
+   four pads are named; the J-Cart is still to come*). The tester has asked for players two to four across the
+   platform. Not a gate; it ranks with the first.
 3. **G5, the goldens**: a third anchor, and the differing games examined one by one.
 4. **G6**: the bench at a 33% quota, and a battery run on the handheld.
 5. **G9**: the TMSS boot program run from the player's image.
@@ -2823,6 +2823,9 @@ Not gates, carried from the stages and still open:
 - **From stage 3** (§12, §17.3): the seven EEPROM boards no document wires (Putter Golf and Accolade's six); Barver
   Battle Saga's protection device; the Z80 window's alignment.
 - **A CRAM dot on line 0 when a state is taken** (§39.2), argued and not shown to matter.
+- **From the four-player adapters** (§45.5): Madden NFL 98 does not start; a 4 Way Play left on the ports under a
+  game not made for it; the Team Player's lines where no document speaks; Hotaru and a port count that changes
+  while a game runs.
 
 ## 41. Stage 7, step 1: the processors, their registers, their buses and their code (2026-10-07)
 
@@ -2985,8 +2988,8 @@ adapters in the core, behind the port settings; the frontend's players 3 and 4 a
   C B and, for a six-button pad, Mode X Y Z.
 - **The 4 Way Play.** Port B's lines 6 to 4, as the console drives them, choose what port A reads: 0 to 3 a pad, read
   as a pad on the port is; 7 the adapter's mark, D1 and D0 low. The four pads share port A's TH, so a six-button pad
-  counts every fall, chosen or not.
-- **The settings** `pad1` and `pad2` gain the adapters' choices (`EmuSen_Settings_Reference.md` §4.100), and
+  counts every fall, chosen or not. *Amended by §45.2: line 6 high is the mark whatever lines 5 and 4 are.*
+- **The settings** `pad1` and `pad2` gain the adapters' choices (`EmuSen_Settings_Reference.md` §4.101), and
   `SETTING_NOTES` says port 2's choice is not used while port 1 holds the 4 Way Play. Nothing is chosen from the
   cartridge: the header's `4` says an adapter is supported and not which (plutiedev).
 - **The state is version 18**: the eight pads' TH and counts where 17 held two, and each tap's place in its packet.
@@ -2996,9 +2999,10 @@ adapters in the core, behind the port settings; the frontend's players 3 and 4 a
 - **Past the packet's end** a Team Player gives `%1111`. No document says what is there; Sega's sample stops at the
   end.
 - **TL at rest** is high, and **TL after TH's fall, before any nibble is asked**, follows TR. The documents state TL
-  only for a nibble asked.
+  only for a nibble asked. *Retired by §45.2: a game waits for TL to follow TR at rest, so it does there too.*
 - **The 4 Way Play's other lines under its mark** are high (`$7C`), and a choice of 4 to 6 gives nothing (`$7F`).
   MacDonald measured the two low bits alone, on a Team Player in EXTRA mode and not on Electronic Arts' own adapter.
+  *The second half retired by §45.2: a choice of 4 to 6 gives the mark.*
 - **The Team Player's packet is made when it is read**, from the buttons as they stand. A real adapter reads its
   pads as the packet goes; the buttons do not change within a frame here, so nothing shows the difference.
 - **The mouse** through a Team Player (kind 2) is not built: Nephrite has no mouse.
@@ -3051,3 +3055,161 @@ interrupt off (the six words that turn it on are NOPs, the loop where it was): a
 land in the handler, and the test is of the steps' order, not of the interrupt, which the crate's call-stack test
 covers.
 
+## 45. The four-player adapters, step 2: the probe's ports, the players past the second, and the games read with four pads (2026-10-07)
+
+§44 put the two adapters in the core and verified no game with them, because the probe gave input to its first port
+alone and no frontend gave a Genesis game a third player. This step is those two things, and the games.
+
+### 45.1 What it built
+
+- **The probe gives input to every port** (`EmuSen_Debugging_Tools_Reference_v5.md` §3.65): `--presson P:F:BTN[:DUR]`
+  holds a button on pad P, `--device P=NAME` plugs one of the devices a libretro core lists into port P, and
+  `--list-devices` prints the list. A reference's adapter is chosen the way its own frontend would choose it, by the
+  core's own name for the device, so nothing of the reference is read to run it.
+- **Two programs beside the probe** (`Reference/analysis/`). `fourpads.py` asks of a game, for each of four pads,
+  which bytes of the 68000's RAM a held direction moves in the reference, and whether Nephrite's bytes at those
+  addresses hold the reference's values with the direction held and without (§45.3). `padprotocol.py` builds a
+  cartridge that writes a list of values to the two ports and stores each read, and runs it on both (§45.2). The
+  crate's `dump` example takes the port settings and a pad for each press from its environment for them.
+- **The players in the frontends.** The platform's player model already went to eight (`PlayerSlots.MaxPlayers`, the
+  seats, the bindings per player and the router: `EmuSen_Input.md` §8), so nothing of it was widened; what was missing
+  is how many players a Genesis has, which its settings decide. `EmuSen_Settings_Reference.md` §4.102 and
+  `EmuSen_Input.md` §8.11 have it: machine info's ports, read again when a port setting changes; a console's pack
+  saying each player's pad from the stored settings, for the Controller Bindings window with no game loaded; and the
+  router following a port count that changes while a game runs. No `PadButton` was added.
+- **The core says when its ports change**: `set_settings` raises `MACHINE_INFO` when the pads plugged in differ, the
+  event on which a host reads machine info again (`EmuSen_CoreAPI.md` §6.2, §6.19).
+
+### 45.2 What the references and the games changed in the core
+
+`padprotocol.py`'s cartridge on Genesis Plus GX and on Nephrite, a Team Player with three-button pads, then with
+six-button pads, then a 4 Way Play, each pad holding other buttons. Two differences were Nephrite's to change, and a
+game showed each to matter:
+
+- **A Team Player's TL follows TR at rest too.** §44.2 argued TL high with TH high. Gauntlet 4 writes TR low with TH
+  high and waits for TL to fall before it starts a packet; with TL held high it never read the adapter. Pinned in
+  `io.rs`'s Team Player test.
+- **The 4 Way Play gives its mark for any choice with port B's line 6 high**, lines 5 and 4 choosing the pad when it
+  is low. §44.1 took 7 alone for the mark and gave nothing for 4 to 6; the reference gives the mark for `$4C` as for
+  `$7C`, and the games that look for the adapter write either. Pinned in `io.rs`'s 4 Way Play test.
+
+What still differs from the reference, and is left as argued, because a second emulator's answer is not a
+measurement of the adapter and no document speaks:
+
+| Where | Reference | Nephrite | Why it is left |
+|---|---|---|---|
+| Team Player, the first read after power-on, before any write to the port | `$0F` | `$73`, the rest state | The port's data latch at power-on; a game writes before it reads |
+| Team Player, nibbles asked past the packet's end | pad 1's first nibble again | `%1111` | §44.2; Sega's sample stops at the end, and so does every game seen |
+| Team Player, TR made an input | TR reads 0 | TR reads 1, the pull-up's | MacDonald's I/O document has an input line pulled high |
+| 4 Way Play, port B's choosing lines left inputs | a pad on port A | the mark, the lines pulled high | The same pull-ups; see §45.5 |
+
+### 45.3 The games read with four pads
+
+**The method.** Each game from power-on to frame 900 with no input but one pad's, a direction held from frame 200
+(pad 1 Up, pad 2 Down, pad 3 Left, pad 4 Right), once for each pad and once with nothing held, in Genesis Plus GX
+through the probe and in Nephrite. The bytes of RAM that the held direction moves in the reference are where the
+game keeps what it read of that pad. A pad is *exact* when every one of them holds the reference's two values in
+Nephrite; *read* when some do, the rest being the game's course, which the two do not run frame for frame; *unread*
+when the direction moves nothing in the reference, the game not reading that pad at a title screen; *missing* when it
+moves the reference and nothing of it is in Nephrite. A game is counted only when all four pads are exact or read.
+What this shows is that the game found the adapter and read four different pads through it, each where the reference
+has it read them; it is not four people playing a match, which no headless run is.
+
+**Sega's Team Player, three-button pads, on port 1: 39 games of 46 tried** (images picked from the corpus by title
+against Sega Retro's list of the adapter's games).
+
+- *Exact on all four pads (22)*: ATP Tour Championship Tennis, Double Dribble: The Playoff Edition, Dragon: The Bruce
+  Lee Story, Head-On Soccer, International Superstar Soccer Deluxe, J. League Pro Striker, J. League Pro Striker 2,
+  Mortal Kombat 3, NBA Jam, NBA Jam Tournament Edition, NCAA College Football, NCAA Final Four College Basketball,
+  NFL Quarterback Club, NFL Quarterback Club 96, Olympic Summer Games Atlanta 96, Pengo, Slam Dunk: Shikyou
+  Gekitotsu!, Tiny Toon Adventures: Acme All-Stars, Ultimate Mortal Kombat 3, Unnecessary Roughness 95, World
+  Championship Soccer 2, WWF Raw.
+- *All four read, some exact (17)*: Barkley Shut Up and Jam!, Barkley Shut Up and Jam 2, College Football's National
+  Championship, College Slam, Gauntlet 4, Joe Montana NFL 95, Mega Bomberman, NBA Action, NBA Action 95, NBA Hang
+  Time, NBA Live 98, NFL 98, NFL Prime Time, Pele's World Tournament Soccer, Ultimate Soccer, Wayne Gretzky and the
+  NHLPA All-Stars, World Cup USA 94.
+- *Not counted (7)*: Blockbuster Competition 2 (NBA Jam and Judge Dredd) and Columns III read one and three of the
+  pads at that point, each exact; General Chaos, Hyper Dunk: The Playoff Edition, Micro Machines and NHL 98 read none
+  of the four there in the reference either (General Chaos and NHL 98 read the other adapter, below); Madden NFL 98
+  does not start in Nephrite (§45.5), and its pads move nothing in the reference under this adapter.
+
+**Electronic Arts' 4 Way Play, three-button pads: 22 games of 101 tried** (the corpus's images whose header carries
+Electronic Arts' maker code, T-50, and a few named for the adapter besides; most are games for one or two players,
+tried because the header does not say which are not).
+
+- *Exact on all four pads (2)*: MLBPA Baseball, NBA Showdown 94.
+- *All four read (20)*: Bill Walsh College Football 95, FIFA International Soccer, FIFA Soccer 95, 96, 97 Gold
+  Edition, 98: Road to World Cup and 2000 Gold Edition (an unlicensed image), General Chaos, IMG International Tour
+  Tennis, Madden NFL 95, 96 and 97, Mutant League Hockey, NBA Live 95, NHL Hockey 94, NHL 95, 96, 97 and 98, Rugby
+  World Cup 95.
+- *Not counted (79)*: 11 where no pad moves anything in the reference; 3 that read one or two of the pads; 64 in
+  which pad 1 alone moves the reference and nothing of it is in Nephrite (§45.5); and Madden NFL 98, all four pads
+  missing because it does not start.
+
+**Through the frontend's path** (`NephritePlayersTests`, WiseMan): the stored port settings, `CoreFactory`, and each
+player's buttons given by port as a frontend's router gives them. NBA Jam with a Team Player and NBA Showdown 94 with
+a 4 Way Play, four players each holding a direction from frame 200, have at frame 900 the four bytes the reference
+has (`$FF02B5` and `$FF801D` on, every second byte: 1, 2, 4, 8). Beside them a cartridge of the test's own that reads
+a Team Player as plutiedev's page has it, with four players' buttons found in the four pads' nibbles, and in Mistress
+itself (`MultiplayerTests`) the same cartridge with four pads plugged in and the adapter set while the game runs.
+
+The lists are `~/.cache/emusen/probe/nephrite/runs/fourpads-2026-10-07/`; the games are the tester's library and are
+not in the repository, so the two game cases run only where `EMUSEN_NEPHRITE_GAMES` names their folder.
+
+### 45.4 Found on the way: a game for Japan and Europe ran as an overseas console
+
+J. League Pro Striker never touched the ports under a Team Player. Its header allows Japan and Europe; `default_model`
+called a machine overseas when the header allowed the Americas *or Europe*, and PAL only for Europe alone, so the
+game ran as an American console, which its header does not allow, and never reached its reads of the ports. The
+plan's §9 (Q6) had already decided the order, the Americas, then Japan, then Europe, and §2 states it for the Sega
+CD's BIOS; the cartridge's model had not followed it. `default_model` now does: overseas when the header allows the
+Americas or does not allow Japan.
+
+**Measured.** Three images of the corpus's 948 allow Japan and Europe and not the Americas. The bytes of RAM equal to
+Genesis Plus GX's at frames 120 and 600 (§10's anchors), and the pixels off the map between the two pictures, before
+(the last run over the corpus, 2026-10-06) and after:
+
+| Game | RAM equal, frame 120 | RAM equal, frame 600 | Pixels off the map, 120 / 600 |
+|---|---|---|---|
+| Ball Jacks | 65,532 → 65,532 | 65,507 → 65,507 | 0 / 0 → 0 / 0 |
+| Golden Axe III | 63,533 → 65,515 | 50,457 → 65,513 | 5,330 / 29,798 → 0 / 2,251 |
+| J. League Pro Striker | 61,835 → 65,500 | 61,774 → 65,451 | 3,607 / 12,531 → 0 / 0 |
+
+No other image's model changes: a header with the Americas was overseas before and is now, one with Japan alone or
+Europe alone likewise. Pinned by `v1.rs`'s region test over eight headers. The Region row's help says the order
+(`EmuSen_Settings_Reference.md` §4.90).
+
+### 45.5 What stands open
+
+- **Madden NFL 98 does not start**: a black screen, the 68000 in a loop at `$0462E0` over a table at `$FFEBB0` with
+  the interrupt mask at 7, with plain pads as with an adapter. It is not the adapters'; it is on the follow-up list.
+- **A 4 Way Play under a game not made for it.** In 64 of the games tried, pad 1 moves the reference's RAM and not
+  Nephrite's. `padprotocol.py` shows the one difference that would do it: with port B's choosing lines left inputs,
+  which is how a game that does not know the adapter leaves them, Nephrite pulls them high, the adapter's mark, and
+  the reference gives pad 1. It was not traced in one of the games. On the argument of the pull-ups a console would do
+  as Nephrite does, and the settings' text says to leave the port on a pad for such a game
+  (`EmuSen_Settings_Reference.md` §4.101); but nothing here measured an adapter, and giving pad 1 would be the kinder
+  thing for a player who leaves the setting on. Not decided.
+- **The three Team Player rows of §45.2's table**, argued.
+- **Hotaru** does not follow a port count that changes while a game runs; it hears the ports the game started with
+  (`EmuSen_Input.md` §8.11).
+- **Six-button pads through either adapter** were compared by `padprotocol.py` and by Sega's program (§44.3), not
+  game by game.
+
+### 45.6 Measured (2026-10-07)
+
+- **The crate's tests**, all 132 with the roms found: the two `io.rs` tests of §45.2 and the region test of §45.4
+  among them.
+- **The kit**, the corpus form on the sample: 64 of 64.
+- **The probe's tests**, 49: `a_press_is_its_own_pads` and `a_press_and_a_device_name_their_port_from_one` new.
+- **WiseMan**: `NephritePlayersTests` (the port settings to each player's pad; four players through a Team Player;
+  an adapter set while the game runs; the two games), `PortRouterTests` (ports added and taken away mid-game),
+  `MultiplayerTests` (four pads and a Team Player set mid-game in Mistress), `ControllerBindingsDiagramTests` (the
+  Genesis tab's five players and each one's pad drawn), the window fit audit's Genesis cases at both sizes, the new
+  one a Team Player's five players with the fourth shown, and the tests of what the change touches beside them:
+  `ControllerPortTests`, `PlayerBindingsWindowTests`, `InputSettingsWindowTests`, `GenesisSettingsTests`,
+  `NephriteTests`, `NephriteDebugTests`, the registration golden, `CoreAdapterTests` and the Genesis battery tests.
+- **Two expectations found stale and corrected**: `InputSettingsWindowTests` listed the window's tabs without the
+  Genesis's, and `PlayerBindingsWindowTests` the consoles' player counts without it; both had failed since §36. The
+  fit audit's three Genesis cases of Controller Bindings had been measuring the SNES tab, the window opening on the
+  first console with a game; they now choose the Genesis tab and say so.

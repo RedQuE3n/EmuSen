@@ -210,9 +210,19 @@ namespace EmuSen.Cores
         // The controller a port of a console discovery added is set to, by its id: the engine's "pad<n>" setting as stored, else its default; null where the engine has no such setting.
         public static string? ControllerFor(string console, int port, Func<string, string?> stored)
         {
-            if (DiscoveredSystem(console) is not { } system || SettingsFor(console).FirstOrDefault(s => s.Key == $"pad{port + 1}") is not { } setting) return null;
+            if (DiscoveredSystem(console) is not { } system) return null;
+            if (PlayerControllersFor(console, stored) is { } players) return port >= 0 && port < players.Count && system.Controllers.Any(c => c.Id == players[port]) ? players[port] : null;
+            if (SettingsFor(console).FirstOrDefault(s => s.Key == $"pad{port + 1}") is not { } setting) return null;
             string value = stored(setting.Key) ?? setting.Default;
             return system.Controllers.Any(c => c.Id == value) ? value : null;
+        }
+
+        // Each player's controller where the console's pack counts them from its settings, a setting not stored read at the engine's default; null where it does not.
+        public static IReadOnlyList<string>? PlayerControllersFor(string console, Func<string, string?> stored)
+        {
+            if (DiscoveredSystem(console) is null || PackOf(console) is not { } entry || DianaOS.DianaOS.Sys.Systems.SystemPacks.For(entry.Id)?.PlayerControllers is not { } players) return null;
+            var settings = SettingsFor(console);
+            return players(key => stored(key) ?? settings.FirstOrDefault(s => s.Key == key)?.Default);
         }
 
         // The system entry of a console discovery added, from the engine's info, for its pad and its ports.

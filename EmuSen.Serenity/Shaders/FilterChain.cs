@@ -19,6 +19,30 @@ namespace EmuSen.Serenity.Shaders
         private SKSurface?[] _surfaces = Array.Empty<SKSurface?>();
         private SKSurface?[] _earlier = Array.Empty<SKSurface?>();
         private bool _built, _newFrame;
+
+        // A frame drawn at a whole multiple of the console's picture, brought back to it: each pixel the mean of the square drawn for it - see EmuSen_CRT.md §16.
+        private const string ReduceSksl = @"
+uniform shader source;
+uniform float by;
+half4 main(float2 coord) {
+    float2 corner = floor(coord) * by;
+    float4 sum = float4(0.0);
+    for (int j = 0; j < 8; j++) {
+        for (int i = 0; i < 8; i++) {
+            if (float(i) < by && float(j) < by) sum += source.eval(corner + float2(float(i) + 0.5, float(j) + 0.5));
+        }
+    }
+    return half4(sum / (by * by));
+}";
+        public const int MostRowsToALine = 8;
+        // The chain's own, since a builder's disposal takes its effect with it.
+        private SKRuntimeEffect? _reduceEffect;
+        private SKRuntimeShaderBuilder? _reduceBuilder;
+        private SKSurface? _reduced;
+
+        // How many rows of the frame are one of the console's lines, for a filter that counts lines; one when the frame is not a whole multiple.
+        public int RowsToALine(int rows, int lines) =>
+            Filter.RowsOnce && Filter.History == 0 && lines > 0 && rows > lines && rows % lines == 0 && rows / lines <= MostRowsToALine ? rows / lines : 1;
         private readonly List<SKImage> _history = new();
         private GRContext? _context;
         private long _frames;
@@ -252,7 +276,7 @@ namespace EmuSen.Serenity.Shaders
         }
 
         // Draws the filtered picture and says so; false, nothing was drawn, and the caller draws the picture plain - see EmuSen_Serenity.md §3.10.
-        public bool Draw(SKCanvas canvas, GRContext? context, SKImage original, int rowRepeat, SKRect destination, PictureCrop crop = default)
+        public bool Draw(SKCanvas canvas, GRContext? context, SKImage original, int rowRepeat, SKRect destination, PictureCrop crop = default, int lines = 0)
         {
             if (context is null && Filter.RequiresDevice && !DrawInSoftware) return false;
             _crop = crop.IsNone ? PictureCrop.None : crop;
@@ -274,6 +298,8 @@ namespace EmuSen.Serenity.Shaders
             }
 
             if (Filter.RowsOnce) rowRepeat = 1;
+            var made = new List<IDisposable>();
+            if (RowsToALine(original.Height, lines) is > 1 and int by && original.Width % by == 0) original = Reduced(original, by, made);
             int originalWidth = original.Width, originalHeight = original.Height * rowRepeat;
             int viewWidth = Math.Max(1, (int)Math.Round(destination.Width)), viewHeight = Math.Max(1, (int)Math.Round(destination.Height));
             SKMatrix total = canvas.TotalMatrix;
@@ -282,7 +308,6 @@ namespace EmuSen.Serenity.Shaders
             bool sourceIsOriginal = true;
             int sourceWidth = originalWidth, sourceHeight = originalHeight;
             var named = new Dictionary<string, Output>(StringComparer.Ordinal);
-            var made = new List<IDisposable>();
 
             try
             {
@@ -331,6 +356,30 @@ namespace EmuSen.Serenity.Shaders
                 foreach (IDisposable item in made) item.Dispose();
             }
             return true;
+        }
+
+        // The frame at the console's own size, drawn on the device where there is one; the passes then read it as they would a frame sent at that size.
+        private SKImage Reduced(SKImage original, int by, List<IDisposable> made)
+        {
+            int width = original.Width / by, height = original.Height / by;
+            if (_reduced is null || _reduced.Canvas.DeviceClipBounds.Width != width || _reduced.Canvas.DeviceClipBounds.Height != height)
+            {
+                _reduced?.Dispose();
+                var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+                _reduced = (_context is not null ? SKSurface.Create(_context, false, info) : null) ?? SKSurface.Create(info);
+            }
+            _reduceEffect ??= SKRuntimeEffect.CreateShader(ReduceSksl, out string errors) ?? throw new InvalidOperationException($"The reducing pass did not compile: {errors}");
+            _reduceBuilder ??= new SKRuntimeShaderBuilder(_reduceEffect);
+            SKShader source = original.ToShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, Nearest);
+            made.Add(source);
+            _reduceBuilder.Children["source"] = source;
+            _reduceBuilder.Uniforms["by"] = (float)by;
+            using SKShader shader = _reduceBuilder.Build();
+            using var paint = new SKPaint { Shader = shader, BlendMode = SKBlendMode.Src };
+            _reduced.Canvas.DrawRect(new SKRect(0, 0, width, height), paint);
+            SKImage image = _reduced.Snapshot();
+            made.Add(image);
+            return image;
         }
 
         // The part of the picture kept, for a filter that places it itself.
@@ -413,6 +462,8 @@ namespace EmuSen.Serenity.Shaders
 
         private void DisposeSurfaces()
         {
+            _reduced?.Dispose();
+            _reduced = null;
             foreach (SKSurface?[] set in new[] { _surfaces, _earlier })
             {
                 for (int i = 0; i < set.Length; i++)
@@ -430,6 +481,9 @@ namespace EmuSen.Serenity.Shaders
             _pending = null;
             _staged?.Dispose();
             _staged = null;
+            _reduceBuilder?.Dispose();
+            _reduceEffect?.Dispose();
+            (_reduceBuilder, _reduceEffect) = (null, null);
             foreach (SKImage image in _blanks.Values) image.Dispose();
             _blanks.Clear();
             Unbuild();

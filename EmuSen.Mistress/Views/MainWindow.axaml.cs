@@ -158,7 +158,7 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
-            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect));
+            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines));
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);
@@ -419,7 +419,7 @@ namespace EmuSen.Mistress.Views
                 // On the emulation thread, between frames, and only when the running game is that console's - see §4.26.
                 if (_session is not null && console == _activeConsole) RequestOnEmulationThread(session => ApplyConsoleSettings(session, console));
                 if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
-            }, _session is null ? null : _activeConsole, HttpFactory) { ShadersChanged = ShaderChanged };
+            }, _session is null ? null : _activeConsole, HttpFactory, overscanNote: RunningGameCropNote) { ShadersChanged = ShaderChanged };
             _ = SheetLayer.Show(window, this);
         }
 
@@ -443,7 +443,7 @@ namespace EmuSen.Mistress.Views
             // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
             GameFrame.FilterConsole = console;
             GameFrame.SquarePixels = _graphics.Value(console, GraphicsSettingsWindow.PictureShapeKey) == GraphicsSettingsWindow.SquarePixels;
-            GameFrame.Crop = GraphicsSettingsWindow.CropFor(_graphics, console);
+            GameFrame.Crop = RunningCrop(console);
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();
@@ -1304,7 +1304,7 @@ namespace EmuSen.Mistress.Views
                     _debugTarget?.RefreshProviders();
                     session.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, aspect: session.DisplayAspect);
+                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, aspect: session.DisplayAspect, lines: session.DisplayLines);
                     offeredSerial = null;
                     RunCoreRequests(session);
                     SleepUntil(nextTick, clock);
@@ -1379,7 +1379,7 @@ namespace EmuSen.Mistress.Views
                     {
                         byte[] frame = session.GetFrameBufferRgba();
                         if (captured) Picture(session, frame, serial);
-                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, session.TotalFrames, session.DisplayAspect);
+                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, session.TotalFrames, session.DisplayAspect, session.DisplayLines);
                         offeredSerial = serial;
                         offeredInWindow++;
                         PresentationTrace.Frame(session.TotalFrames, frameStart, Stopwatch.GetTimestamp(), true);
@@ -1470,9 +1470,9 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0)
         {
-            _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect);
+            _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect, lines);
         }
 
         private void OnExitClick(object? sender, RoutedEventArgs e)

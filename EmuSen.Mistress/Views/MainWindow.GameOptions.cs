@@ -115,6 +115,7 @@ namespace EmuSen.Mistress.Views
         {
             options.Add(new GameOption(_records.IsFavourite(path) ? "Remove from Favourites" : "Add to Favourites", toggleFavourite));
             options.Add(new GameOption("Edit This Game's Metadata", () => ShowMetadataEditor(path, title)) { Opens = true });
+            if (CropOffered(path)) options.Add(new GameOption(CropThisGame, () => ShowGameCrop(path, title)) { Opens = true });
             AddCoverEntries(options, path, title);
             // Scraping only ever starts where the player asks for it - see EmuSen_BigPicture.md §17.14.
             if (!ScrapeRunning) options.Add(new GameOption("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(path))) { Opens = true });

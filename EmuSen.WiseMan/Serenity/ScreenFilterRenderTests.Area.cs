@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using EmuSen.Serenity;
+using EmuSen.Serenity.Shaders;
 
 namespace EmuSen.WiseMan.Serenity
 {
@@ -124,6 +125,126 @@ namespace EmuSen.WiseMan.Serenity
                 Assert.True(picture.Luminance(108, 1, 4, 4) < 0.01, $"the tube's corner is dark: {picture.Luminance(108, 1, 4, 4):F4}");
                 Assert.True(picture.Luminance(150, 40, 8, 40) > 0.2, $"and the picture inside it lit: {picture.Luminance(150, 40, 8, 40):F4}");
             }
+        }, default);
+
+        // Each pixel of a frame drawn again as a square of them: what a core drawing at a multiple of the console's picture hands over, for a picture with no finer detail.
+        private static byte[] Enlarged(byte[] frame, int width, int height, int by)
+        {
+            var large = new byte[frame.Length * by * by];
+            for (int y = 0; y < height * by; y++) for (int x = 0; x < width * by; x++)
+                Buffer.BlockCopy(frame, (y / by * width + x / by) * 4, large, (y * width * by + x) * 4, 4);
+            return large;
+        }
+
+        // A picture with an edge every way, so that a line, a column or a colour misplaced by the multiple shows.
+        private static byte[] Pattern(int width, int height) => Paint(width, height, (x, y) =>
+            ((x / 40 + y / 12) % 2 == 0 ? 0.9 : 0.1, x * 1.0 / width, y % 2 == 0 ? 0.8 : 0.2));
+
+        // The defect of §15.1: at an internal resolution of n the tube drew n times the console's lines, and from two up took them for woven fields.
+        [Theory]
+        [InlineData(0, 240)]
+        [InlineData(1, 240)]
+        [InlineData(2, 240)]
+        [InlineData(0, 288)]
+        [InlineData(1, 288)]
+        [InlineData(2, 288)]
+        public Task Under_the_crt_filter_a_frame_at_any_internal_resolution_is_drawn_as_the_console_s_own(int quality, int lines) => Session.Dispatch(() =>
+        {
+            (string, float)[] set = { ("quality", quality), ("level", 0f) };
+            byte[] frame = Pattern(640, lines);
+            if (Scaled(0, PictureCrop.None, "N64", 640, lines, 2, 1280, 800, Twice(frame), set) is not { } own) return;
+            Assert.True(own.Luminance(400, 300, 480, 200) > 0.02, "it is a picture");
+            foreach (int by in new[] { 1, 2, 3, 4 })
+            {
+                if (Scaled(lines, PictureCrop.None, "N64", 640 * by, lines * by, 2, 1280, 800, Twice(Enlarged(frame, 640, lines, by)), set) is not { } scaled) return;
+                // The mean of a square of equal values is that value to a float's last place, and a last place can turn a rounding: one code value, in a few values of a thousand.
+                int differing = 0, worst = 0;
+                for (int y = 0; y < 800; y++) for (int x = 0; x < 1280; x++) for (int c = 0; c < 3; c++)
+                {
+                    int d = Math.Abs(own.Code(x, y, c) - scaled.Code(x, y, c));
+                    if (d > 0) differing++;
+                    worst = Math.Max(worst, d);
+                }
+                Assert.True(worst <= 1 && differing < 1280 * 800 * 3 / 200, $"{lines} lines at {by} times, quality {quality}: {differing} values differ from the console's own frame, by at most {worst}");
+            }
+        }, default);
+
+        // The scanlines themselves, counted: a white field's lines down a quarter of the tube, and how far the light swings across them.
+        private static (int Lines, double Low, double High) Scanlines(Crt picture)
+        {
+            double[] column = Enumerable.Range(0, 800).Select(y => picture.Mean(600, y, 80, 1)[1]).ToArray();
+            double mean = column.Average();
+            int peaks = 0;
+            for (int y = 1; y < 799; y++) if (column[y] > mean && column[y] >= column[y - 1] && column[y] > column[y + 1]) peaks++;
+            return (peaks, column.Min(), column.Max());
+        }
+
+        [Theory]
+        [InlineData(240, 60)]
+        [InlineData(288, 72)]
+        public Task The_tube_draws_the_console_s_lines_at_every_internal_resolution(int lines, int inAQuarter) => Session.Dispatch(() =>
+        {
+            (string, float)[] set = With(Plain, ("signal", 0f), ("mask", 1f), ("subpixels", 0f));
+            var seen = new List<(int Lines, double Low, double High)>();
+            foreach (int by in new[] { 1, 2, 3, 4 })
+            {
+                if (Scaled(lines, PictureCrop.Enlarged(4), "N64", 640 * by, lines * by, 2, 1280, 800, Twice(Grey(640 * by, lines * by, 1)), set) is not { } picture) return;
+                seen.Add(Scanlines(picture));
+            }
+            Assert.All(seen, s => Assert.Equal(inAQuarter, s.Lines));
+            Assert.All(seen, s => Assert.Equal(seen[0], s));
+            Assert.True(seen[0].High > 2 * seen[0].Low, $"and they are lines, dark between: {seen[0].Low:F3} to {seen[0].High:F3}");
+
+            // Without its lines told, the same frame at four times is the defect: four times the lines, and no dark between them.
+            if (Scaled(0, PictureCrop.Enlarged(4), "N64", 2560, lines * 4, 2, 1280, 800, Twice(Grey(2560, lines * 4, 1)), set) is not { } untold) return;
+            Assert.True(Scanlines(untold).High < 1.2 * Scanlines(untold).Low, "a frame that does not say its lines is drawn row for line, as before");
+        }, default);
+
+        [Fact]
+        public void The_n64_s_cores_report_the_console_s_lines_from_the_frame_s_width()
+        {
+            Assert.Equal(240, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(640, 240));
+            Assert.Equal(240, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(2560, 960));
+            Assert.Equal(288, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(1920, 864));
+            Assert.Equal(480, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(1280, 960));
+            Assert.Equal(0, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(320, 240));
+            Assert.Equal(0, ((EmuSen.Cores.ICore)new EmuSen.Cores.Nintendo.Moon.MoonCore()).DisplayLines);
+
+            // Before a game is loaded each engine's frame is 640 by 480, both fields of a picture at the console's own size.
+            Assert.Equal(480, ((EmuSen.Cores.ICore)new EmuSen.Cores.Nintendo.Mars.MarsCore()).DisplayLines);
+            if (!EmuSen.Cores.Nintendo.MarsRT.MarsRtCore.Available) return;
+            using var native = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
+            Assert.Equal(480, ((EmuSen.Cores.ICore)native).DisplayLines);
+        }
+
+        // A frame at twice the console's picture whose pixels alternate white and black: every square of four is half white, so each line is drawn as a grey one.
+        [Fact]
+        public Task Each_of_the_console_s_pixels_is_the_mean_of_the_square_drawn_for_it() => Session.Dispatch(() =>
+        {
+            (string, float)[] set = With(Plain, ("signal", 0f), ("mask", 1f));
+            byte[] checker = Paint(1280, 480, (x, y) => (x + y) % 2 == 0 ? (1.0, 1.0, 1.0) : (0.0, 0.0, 0.0));
+            if (Scaled(240, PictureCrop.None, "N64", 1280, 480, 2, 1280, 800, Twice(checker), set) is not { } mixed) return;
+            if (Scaled(0, PictureCrop.None, "N64", 640, 240, 2, 1280, 800, Twice(Grey(640, 240, 0.5)), set) is not { } grey) return;
+            foreach (var (x, y) in new[] { (200, 100), (640, 400), (1000, 650) })
+                Within(grey.Luminance(x, y, 80, 80), mixed.Luminance(x, y, 80, 80), 0.02, $"the light at ({x}, {y})");
+            Assert.Equal(Scanlines(grey).Lines, Scanlines(mixed).Lines);
+        }, default);
+
+        // The console's lines are for a filter that draws a screen; any other filter is given the frame as it is.
+        [Fact]
+        public Task A_filter_that_draws_no_screen_takes_the_frame_at_its_internal_resolution() => Session.Dispatch(() =>
+        {
+            if (CrtDevice.Value is not { } device) return;
+            const string through = "uniform shader source; uniform float2 inputSize; uniform float2 outputSize; half4 main(float2 coord) { return source.eval(coord * inputSize / outputSize); }";
+            byte[] columns = Paint(1280, 480, (x, _) => x % 2 == 0 ? (1.0, 1.0, 1.0) : (0.0, 0.0, 0.0));
+            byte[] Drawn(int lines)
+            {
+                var filter = new ScreenFilter("through", new[] { new FilterPass(through, PassScale.Viewport) }, null, "");
+                return ShaderBench.Picture(new GameFrameControl { ActiveFilter = filter }, new byte[]?[] { columns }, 1280, 480, 1, 1280, 480, device, lines);
+            }
+            byte[] told = Drawn(240), untold = Drawn(0);
+            Assert.Equal(untold, told);
+            Assert.Equal((255, 0), (told[1], told[5]));
         }, default);
     }
 }

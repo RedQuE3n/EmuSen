@@ -78,6 +78,12 @@ namespace EmuSen.Mistress.Library
                 PRIMARY KEY (path, field)
             );
             """,
+            """
+            ALTER TABLE game ADD COLUMN crop_left REAL;
+            ALTER TABLE game ADD COLUMN crop_right REAL;
+            ALTER TABLE game ADD COLUMN crop_top REAL;
+            ALTER TABLE game ADD COLUMN crop_bottom REAL;
+            """,
         };
 
         public static int SchemaVersion => Migrations.Length;
@@ -227,7 +233,11 @@ namespace EmuSen.Mistress.Library
                     play_seconds = play_seconds + (SELECT play_seconds FROM game WHERE path = $from),
                     last_played  = MAX(COALESCE(last_played, ''), COALESCE((SELECT last_played FROM game WHERE path = $from), '')),
                     md5          = COALESCE(md5, (SELECT md5 FROM game WHERE path = $from)),
-                    bytes        = COALESCE(bytes, (SELECT bytes FROM game WHERE path = $from))
+                    bytes        = COALESCE(bytes, (SELECT bytes FROM game WHERE path = $from)),
+                    crop_right   = CASE WHEN crop_left IS NULL THEN (SELECT crop_right FROM game WHERE path = $from) ELSE crop_right END,
+                    crop_top     = CASE WHEN crop_left IS NULL THEN (SELECT crop_top FROM game WHERE path = $from) ELSE crop_top END,
+                    crop_bottom  = CASE WHEN crop_left IS NULL THEN (SELECT crop_bottom FROM game WHERE path = $from) ELSE crop_bottom END,
+                    crop_left    = COALESCE(crop_left, (SELECT crop_left FROM game WHERE path = $from))
                 WHERE path = $to
                 """, ("$from", from), ("$to", to));
             Execute(_db, step, "UPDATE game SET last_played = NULL WHERE path = $to AND last_played = ''", ("$to", to));

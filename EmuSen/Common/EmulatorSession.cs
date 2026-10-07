@@ -122,6 +122,8 @@ namespace EmuSen.Common
         // The screen's shape the core reports for the frame on show; 0 when it reports none - see EmuSen_Serenity.md §2.9.
         public double DisplayAspect => _core?.DisplayAspect ?? 0;
 
+        public int DisplayLines => _core?.DisplayLines ?? 0;
+
         public byte[] GetFrameBufferRgba()
         {
             if (_core is null) throw new InvalidOperationException("GetFrameBufferRgba() called before LoadRom().");

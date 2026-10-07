@@ -130,6 +130,7 @@ namespace EmuSen.WiseMan.Mistress
         [InlineData("Shaders")]
         [InlineData("Controller Bindings")]
         [InlineData("Preferences")]
+        [InlineData(MainWindow.CropThisGame)]
         public Task Every_control_of_each_settings_sheet_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
@@ -782,6 +783,64 @@ namespace EmuSen.WiseMan.Mistress
             List<InputElement> operable = PadAudit.Operable(other);
             Assert.Equal(new[] { "NES.CropBottom", "NES.CropLeft", "NES.CropRight", "NES.CropTop" }, operable.OfType<TextBox>().Select(b => b.Name).Order());
             Assert.Empty(operable.Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
+            window.Close();
+        }, default);
+
+        // The explicit exception to a console's games being drawn alike: a crop of the running game's own, from the pad menu, replacing the console's as it is typed - see EmuSen_Settings_Reference.md §4.100.
+        [Fact]
+        public Task A_crop_of_the_running_game_s_own_replaces_its_console_s_and_graphics_settings_says_so() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            var frame = window.GetControl<EmuSen.Serenity.GameFrameControl>("GameFrame");
+            var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+            var records = (EmuSen.Mistress.Library.GameRecords)typeof(MainWindow).GetField("_records", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+            string rom = Path.Combine(_romDir, "Game.sfc");
+            graphics.SetValue("SNES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.TvOverscan);
+
+            Choose(window, pad, MainWindow.CropThisGame);
+            var crop = Assert.IsType<GameCropWindow>(Sheets(window).Current);
+            Assert.Empty(window.OwnedWindows);
+            T Named<T>(string name) where T : Control => Sheet(window).GetVisualDescendants().OfType<T>().First(c => c.Name == name);
+
+            // Until it has one of its own the boxes show the console's, here a television's 3.3% at each edge.
+            Assert.Equal("3.3", Named<TextBox>("GameCrop.CropTop").Text);
+            Assert.Contains("the SNES's setting", Named<HintText>("GameCropStatus").Text);
+            Assert.False(Named<Button>("GameCropUseConsole").IsEnabled);
+            Assert.Null(records.Crop(rom));
+
+            Named<TextBox>("GameCrop.CropTop").Text = "8.7";
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new EmuSen.Mistress.Library.GameCrop(3.3, 3.3, 8.7, 3.3), records.Crop(rom));
+            Assert.Equal(EmuSen.Serenity.PictureCrop.Percent(3.3, 8.7, 3.3, 3.3), frame.Crop);
+            Assert.Equal("This game has a crop of its own.", Named<HintText>("GameCropStatus").Text);
+            pad.B();
+            Assert.False(Sheets(window).IsPresenting);
+
+            // The console's row says what replaces it; another console's says nothing.
+            Choose(window, pad, "Graphics");
+            Control sheet = Sheet(window);
+            HintText note = sheet.GetVisualDescendants().OfType<HintText>().Single(t => t.Name == "SNES.Overscan.Note");
+            Assert.True(note.IsVisible);
+            Assert.StartsWith("Game has a crop of its own", note.Text);
+            Assert.False(Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(sheet).OfType<HintText>().First(t => t.Name == "N64.Overscan.Note").IsVisible);
+            pad.B();
+
+            // The console's own setting changed meanwhile does not reach the frame while the game has its own.
+            graphics.SetValue("SNES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.NoOverscan);
+            typeof(MainWindow).GetMethod("ApplyScreenFilter", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { "SNES" });
+            Assert.Equal(EmuSen.Serenity.PictureCrop.Percent(3.3, 8.7, 3.3, 3.3), frame.Crop);
+
+            Choose(window, pad, MainWindow.CropThisGame);
+            crop = Assert.IsType<GameCropWindow>(Sheets(window).Current);
+            Assert.Equal("8.7", Named<TextBox>("GameCrop.CropTop").Text);
+            Named<Button>("GameCropUseConsole").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Null(records.Crop(rom));
+            Assert.Equal(EmuSen.Serenity.PictureCrop.None, frame.Crop);
+            Assert.Equal("0", Named<TextBox>("GameCrop.CropTop").Text);
+            pad.B();
+
+            Stop(window);
             window.Close();
         }, default);
     }

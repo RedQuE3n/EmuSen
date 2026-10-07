@@ -119,6 +119,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // The screen's shape: a television's 4:3 at every VI width and in PAL - see EmuSen_Serenity.md §2.9.
         public double DisplayAspect => EmuSen.Serenity.DisplayShape.Television;
 
+        public int DisplayLines => MarsCore.LinesOf(_screenWidth, _screenHeight);
+
         public double FrameRateHz => MarsCore.ProcessorClockHz / (double)(_handle == 0 ? MarsCore.CycleCap : Counter(2));
         public bool IsRomLoaded => _handle != 0;
         public long TotalFrames => _handle == 0 ? 0 : Counter(1);

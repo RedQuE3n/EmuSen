@@ -15,10 +15,11 @@ namespace EmuSen.Serenity
     public sealed class GameFrameControl : Control
     {
         // One offered picture, its rows' repeat (§2.7) and who can still read its array - see EmuSen_Serenity.md §2.8.
-        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0)
+        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0)
         {
             public readonly byte[] Rgba = rgba;
             public readonly double Aspect = aspect;
+            public readonly int Lines = lines;
             public readonly long Sequence = sequence;
             public readonly int Width = width, Height = height, RowRepeat = rowRepeat;
             public readonly long Version = version;
@@ -249,13 +250,14 @@ namespace EmuSen.Serenity
 
         // Stores the frame and asks for a repaint; release, if given, is called once with the array when nothing here can read it again - see EmuSen_Serenity.md §2.8.
         // aspect is the screen's width over height as the core reports it, 0 for none - see EmuSen_Serenity.md §2.9.
-        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0)
+        // lines is the console's own count in a frame drawn at a multiple of its picture, 0 for the frame's rows - see EmuSen_CRT.md §16.
+        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0)
         {
             if (RenderFps > 0 && GraphicsSettings.SyncToDisplay) HoldRenderRate();
             lock (_offerLock)
             {
                 Offer? previous = _current;
-                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence, aspect);
+                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence, aspect, lines);
                 if (previous is not null)
                 {
                     previous.Superseded = true;
@@ -590,9 +592,9 @@ namespace EmuSen.Serenity
             {
                 SKRect destination = Destination(source, chain.Filter.Aspect);
                 // A filter that models the screen keeps its glass where it is and moves the picture under it.
-                if (chain.Filter.CropsItself) return chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, _owner._crop);
+                if (chain.Filter.CropsItself) return chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, _owner._crop, source.Lines);
                 bool cropped = BeginCrop(canvas, ref destination);
-                bool drawn = chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination);
+                bool drawn = chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, lines: source.Lines);
                 if (cropped) canvas.Restore();
                 return drawn;
             }

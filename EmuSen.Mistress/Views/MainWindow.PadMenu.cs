@@ -88,14 +88,20 @@ namespace EmuSen.Mistress.Views
             return rows;
         }
 
-        private List<PadMenuEntry> GameSettingsRows() =>
-        [
-            Opens("Cheats", ShowActiveCheats),
-            Opens("Players & Controllers", () => ShowPreferencesAt(PreferencesWindow.ControllersTab)),
-            Opens("Controller Bindings", ShowControllerBindings),
-            Opens("Graphics", ShowGraphicsSettings),
-            Opens("Shaders", ShowShaderSettings),
-        ];
+        private List<PadMenuEntry> GameSettingsRows()
+        {
+            List<PadMenuEntry> rows =
+            [
+                Opens("Cheats", ShowActiveCheats),
+                Opens("Players & Controllers", () => ShowPreferencesAt(PreferencesWindow.ControllersTab)),
+                Opens("Controller Bindings", ShowControllerBindings),
+                Opens("Graphics", ShowGraphicsSettings),
+                Opens("Shaders", ShowShaderSettings),
+            ];
+            // The running game's own crop, where its console has an overscan to replace - see EmuSen_Settings_Reference.md §4.100.
+            if (_currentRomPath is string rom && GraphicsSettingsWindow.HasOverscan(_activeConsole)) rows.Add(Opens(CropThisGame, () => ShowGameCrop(rom, RunningGameTitle())));
+            return rows;
+        }
 
         private List<PadMenuEntry> LibraryRows()
         {

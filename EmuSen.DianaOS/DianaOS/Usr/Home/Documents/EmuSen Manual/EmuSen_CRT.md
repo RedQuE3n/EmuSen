@@ -1781,7 +1781,7 @@ lines whatever the field; the spot sized by both fields of a frame.
 | | 3 | 1920 × 864, rows shown twice | the same | 216 | 152 to 159 |
 | | 4 | 2560 × 1152, rows shown twice | the same | 288 | 148 to 155 |
 
-**The area meets §14's rule at every scale. The scanlines do not.** The filter counts the frame's rows as the tube's lines, so at a scale of two it draws 480 beams where the console sent 240, and since a frame of more than 300 rows is taken for two woven fields (§11.1) the lines all but vanish: the light across them varies by 6 of 255 where at a scale of one it varies by 121. A game at an internal resolution above one therefore does not look as the same game does at one under this filter, in the scanlines, though it is the same size. **This is a defect against the rule, found and not yet fixed.** The reason it is not fixed here is that the frame does not say how many of its rows are one of the console's lines: the filter would need the core to report the console's own line count beside the frame, as it reports the screen's shape, so that it draws 240 or 288 beams and samples each from the rows drawn for it. That is a change to what a core reports and a decision on what an internal resolution should mean under a tube (more detail along and within each line, the same number of lines), and is put to the tester rather than assumed.
+**The area meets §14's rule at every scale. The scanlines do not.** The filter counts the frame's rows as the tube's lines, so at a scale of two it draws 480 beams where the console sent 240, and since a frame of more than 300 rows is taken for two woven fields (§11.1) the lines all but vanish: the light across them varies by 6 of 255 where at a scale of one it varies by 121. A game at an internal resolution above one therefore does not look as the same game does at one under this filter, in the scanlines, though it is the same size. **This is a defect against the rule, found and not yet fixed.** The reason it is not fixed here is that the frame does not say how many of its rows are one of the console's lines: the filter would need the core to report the console's own line count beside the frame, as it reports the screen's shape, so that it draws 240 or 288 beams and samples each from the rows drawn for it. That is a change to what a core reports and a decision on what an internal resolution should mean under a tube (more detail along and within each line, the same number of lines), and is put to the tester rather than assumed. *(Decided 2026-10-07: fix it; fixed in §16, where the meaning settled on is narrower than the one guessed here.)*
 
 ### 15.2 PAL games of the other consoles, examined
 
@@ -1800,3 +1800,58 @@ Every one fills the tube as its NTSC counterpart does. None of the four handed o
 ### 15.3 Tests and mutants
 
 `ScreenFilterRenderTests.Under_the_crt_filter_a_crop_shows_the_part_the_plain_picture_shows` (three qualities): for an uneven crop and for the television's, on a 240-line and a 288-line N64 field, a frame white over the part kept lights the tube within 2 pixels of (107, 0) to (1173, 800), a frame white over the part to be hidden leaves the tube's inside below 0.4% of white, and the same frame with nothing hidden is lit to the glass's edges. `Under_the_crt_filter_a_crop_moves_the_picture_and_not_the_glass`: enlarged by half, the tube's rounded corner is as dark as it was and the picture beside it lit. The cases that asked the filter for an overscan now give the control the equal crop. The mutants are listed with the rest in `EmuSen_Settings_Reference.md` §4.99.
+
+## 16. The tube draws the console's lines at any internal resolution (2026-10-07)
+
+**Decided 2026-10-07: §15.1's finding is a defect under the rule of §14, since the same game displayed differently at another internal resolution, and is fixed. The core reports the console's own line count with the frame, and the tube draws those lines.**
+
+### 16.1 What a core reports, and where
+
+`ICore.DisplayLines`: the console's own lines in the frame on show, where a core draws the frame at a whole multiple of the console's picture; 0, the default, says the frame's rows are its lines. The multiple is taken to be the same across and down, which is what an internal resolution is; rows the frontend is to show twice (`RowRepeat`) are not part of it.
+
+- **Mars and MarsRT** report it from the frame itself: their raster is 640 wide at the console's own size, so a frame 640 × n wide is at n times, and its lines are its rows over n. A PAL field at four times, 2560 × 1152, is 288 lines; an interlaced NTSC frame at twice, 1280 × 960, is 480, both fields. One function, `MarsCore.LinesOf`, serves both engines, and nothing was added to MarsRT's library.
+- **Every other core** leaves the default: none draws at a multiple.
+- It travels with the frame as the shape does (`EmulatorSession.DisplayLines`, the hand-off, `GameFrameControl.UpdateFrame(..., lines)`), so a frame in flight when the setting changes is drawn by its own count.
+
+**Why an `ICore` member and not yet a field of the v1 frame.** Both are additive (`EmuSen_CoreAPI.md` §4.2). The two cores that draw at a multiple are a C# core and a shim over a library that is not on the v1 interface, so the member is the one that has something to carry today. `emusen_frame_info` keeps a reserved word for the day a v1 core gains an internal resolution: named `lines` in a later minor, its zero is already what every v1.0 core means, and `CoreEngine` would pass it on. It is not named now, because a field of the stable header that no core fills is a promise with no test behind it (`EmuSen_CoreAPI.md` §6.6 carries the note).
+
+### 16.2 What the filter does with it
+
+A filter that draws a screen (`ScreenFilter.RowsOnce`) is given the frame at the console's own size: where the frame's rows are a whole multiple n of the lines reported, up to 8, each of the console's pixels is the mean of the n × n square drawn for it. The chain does it in one pass before the filter's own, on the device (`FilterChain.Reduced`), and the passes then read that as they would a frame the console had sent. Any other filter, a RetroArch preset and the plain picture are given the frame as it is.
+
+**Both ways, not only down the lines.** §15.1 guessed that the lines should be the console's and the detail along each line kept. Measured against the filter as built, that is not available: the encoder's pass reaches four frame pixels to either side of a sample (§11.3), which is three standard deviations of its chroma filter at 640 pixels to a line and less than one at 2560, so a frame four times as wide went through a filter cut short, and the Performance tier's signal pass, which is twice the frame's width, would be 5120 samples. And little would be kept if it were: a composite or S-Video luma of 5 MHz carries 263 cycles across the line, which 640 samples already hold. **So under this filter an internal resolution above one is an antialiasing of the console's picture**, each of its pixels the mean of the finer ones, and the tube is otherwise the one the console drove. The finer picture is still what the plain picture, the simple effects and the presets show.
+
+**The mean is of the frame's code values**, not of light. That is a choice: it is what a console's video output does to the pixels it blends, before the encoder, and it makes a frame of equal squares come back to exactly the frame it was enlarged from; a mean in light would be the other defensible one and would brighten fine detail.
+
+### 16.3 Measured
+
+Each game run 400 frames at each scale on each engine and drawn at Accurate in a 1280 × 800 window (2026-10-07; the scanlines counted as in §15.1):
+
+| Game | Engine | RenderScale | Frame | Lines reported | Area | Scanlines in a quarter of the tube | Light across them, of 255 |
+|---|---|---|---|---|---|---|---|
+| Mario Kart 64 (USA) | Mars; MarsRT with its GPU | 1 | 640 × 240 | 240 | 1067 × 800 at (107, 0) | 60 | 84 to 205 |
+| | | 2 | 1280 × 480 | 240 | the same | 60 | 84 to 205 |
+| | | 3 | 1920 × 720 | 240 | the same | 60 | 84 to 205 |
+| | | 4 | 2560 × 960 | 240 | the same | 60 | 84 to 205 |
+| Kirby 64 (Europe) | Mars; MarsRT with its GPU | 1 | 640 × 288 | 288 | the same | 72 | 84 to 205 |
+| | | 2 | 1280 × 576 | 288 | the same | 72 | 84 to 205 |
+| | | 3 | 1920 × 864 | 288 | the same | 72 | 84 to 205 |
+| | | 4 | 2560 × 1152 | 288 | the same | 72 | 84 to 205 |
+
+All sixteen runs, eight to an engine, gave their row of the table exactly. Before, the count was 60, 120, 180 and 240 (72 to 288) and the light across the lines varied by 6 of 255 from a scale of two up.
+
+### 16.4 Tests and mutants
+
+`ScreenFilterRenderTests`, on the RX 6800:
+
+- *A frame at any internal resolution is drawn as the console's own* (three qualities, 240 and 288 lines): a patterned 640-wide frame, and the same frame with each pixel drawn as a square of 1, 4, 9 and 16, offered with its lines, draw the same picture: no value differs by more than one code value, and fewer than one in two hundred differ at all. They are not bit-identical, and the reason is known: the mean of nine equal values is that value to a float's last place, and a last place turns a rounding somewhere in three million.
+- *The tube draws the console's lines at every internal resolution* (240 and 288): a white field at one to four times has 60 or 72 lines in a quarter of the tube and the same light across them, to the last digit; and the same frame at four times offered without its lines is the defect, row for line with nothing dark between.
+- *Each of the console's pixels is the mean of the square drawn for it*: a frame at twice whose pixels alternate white and black is drawn as the grey frame is.
+- *A filter that draws no screen takes the frame at its internal resolution*, unchanged by the lines it is told.
+- The N64's cores report their lines from the frame's width; a core that draws at no multiple reports none.
+
+`FrameHandOffTests`: a frame's lines are presented with it.
+
+**Mutants** (11, each caught): the lines ignored by the chain; not kept with the frame; not given to the tube; dropped by the hand-off; one pixel of each square taken for its mean; the rows reduced and the columns not; the mean of the wrong square; Mars reporting the frame's rows, and nothing; MarsRT reporting nothing; a filter that draws no screen reduced. The mutant that reduced the rows alone was caught by the white field too, whose light changed: a frame left at 2560 wide does go through the encoder's filter cut short, as §16.2 says.
+
+**Not done.** A RetroArch preset that counts lines is given the frame at its internal resolution, as RetroArch gives it, and so draws that many times the lines; presets are other people's models of a screen, and each has its own idea of its input. A filter that looks back at earlier frames is not reduced either (none that draws a screen does). The reducing pass is compiled when first used, on the render thread, a program of one loop.

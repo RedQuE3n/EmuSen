@@ -61,11 +61,15 @@ namespace EmuSen.WiseMan.Serenity
         private static Crt? Draw(string console, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, IReadOnlyList<byte[]?> frames, params (string Id, float Value)[] set) =>
             Cropped(Overscanned(set), console, sourceWidth, sourceHeight, rowRepeat, windowWidth, windowHeight, frames, set);
 
-        private static Crt? Cropped(PictureCrop crop, string console, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, IReadOnlyList<byte[]?> frames, params (string Id, float Value)[] set)
+        private static Crt? Cropped(PictureCrop crop, string console, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, IReadOnlyList<byte[]?> frames, params (string Id, float Value)[] set) =>
+            Scaled(0, crop, console, sourceWidth, sourceHeight, rowRepeat, windowWidth, windowHeight, frames, set);
+
+        // The frame offered with the console's own line count, as a core that draws at a multiple of the console's picture offers it - see EmuSen_CRT.md §16.
+        private static Crt? Scaled(int lines, PictureCrop crop, string console, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, IReadOnlyList<byte[]?> frames, params (string Id, float Value)[] set)
         {
             if (CrtDevice.Value is not { } device) return null;
             var control = new GameFrameControl { FilterConsole = console, ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter, Crop = crop };
-            return new Crt(ShaderBench.Picture(control, frames, sourceWidth, sourceHeight, rowRepeat, windowWidth, windowHeight, device), windowWidth, windowHeight);
+            return new Crt(ShaderBench.Picture(control, frames, sourceWidth, sourceHeight, rowRepeat, windowWidth, windowHeight, device, lines), windowWidth, windowHeight);
         }
 
         // A case's "overscan", a percentage the raster reaches past the glass, as the crop the control is given; it is no parameter of the filter's - see EmuSen_CRT.md §15.

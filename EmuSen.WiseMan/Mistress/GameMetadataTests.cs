@@ -92,7 +92,7 @@ namespace EmuSen.WiseMan.Mistress
             string db = Path.Combine(_dir, "games.db");
             using (GameRecords records = GameRecords.Open(db))
             {
-                Assert.Equal(5, GameRecords.SchemaVersion);
+                Assert.Equal(6, GameRecords.SchemaVersion);
                 records.Identify(Rom, "abc", 1024);
                 records.SaveEdits(Rom, new Dictionary<string, string?> { [GameMetadata.Name] = "Mine", [GameMetadata.Rating] = "0.5" }, DateTime.UtcNow);
                 records.SaveEdits(Rom, new Dictionary<string, string?> { [GameMetadata.Rating] = null }, DateTime.UtcNow);
@@ -123,7 +123,7 @@ namespace EmuSen.WiseMan.Mistress
             {
                 raw.Open();
                 using SqliteCommand back = raw.CreateCommand();
-                back.CommandText = "DROP TABLE game_edit; PRAGMA user_version = 4;";
+                back.CommandText = "DROP TABLE game_edit; ALTER TABLE game DROP COLUMN crop_left; ALTER TABLE game DROP COLUMN crop_right; ALTER TABLE game DROP COLUMN crop_top; ALTER TABLE game DROP COLUMN crop_bottom; PRAGMA user_version = 4;";
                 back.ExecuteNonQuery();
             }
             using (GameRecords records = GameRecords.Open(db))
@@ -139,7 +139,7 @@ namespace EmuSen.WiseMan.Mistress
             read.CommandText = "SELECT (SELECT user_version FROM pragma_user_version), field, value, edited FROM game_edit";
             using SqliteDataReader row = read.ExecuteReader();
             Assert.True(row.Read());
-            Assert.Equal((5L, GameMetadata.Hidden, GameMetadata.Yes), (row.GetInt64(0), row.GetString(1), row.GetString(2)));
+            Assert.Equal((6L, GameMetadata.Hidden, GameMetadata.Yes), (row.GetInt64(0), row.GetString(1), row.GetString(2)));
             Assert.StartsWith("2026-09-26T12:00:00", row.GetString(3));
         }
 

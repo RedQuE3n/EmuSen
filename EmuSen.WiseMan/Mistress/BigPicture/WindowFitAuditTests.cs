@@ -36,16 +36,16 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
-            "FindByNameLongTitle", "CoverPickerLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
+            "FindByNameLongTitle", "CoverPickerLongTitle", "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
 
         // Which window each case opens; the scraping status's running and finished states and Find by Name's results are WindowFitScrapeAuditTests'.
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
             ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
@@ -288,6 +288,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "GraphicsSettingsCustomCrop":
                     ShowCustomCrop(window);
                     break;
+                case "GraphicsSettingsGameCropNote":
+                    ((EmuSen.Mistress.Library.GameRecords)Field(window, "_records")).SetCrop((string)Field(window, "_currentRomPath"), new EmuSen.Mistress.Library.GameCrop(1.3, 1.1, 8.7, 9));
+                    ShowEngineTab(window, "SNES");
+                    Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == "SNES.Overscan.Note" && c.IsEffectivelyVisible);
+                    break;
+                case "GameCrop":
+                    ((EmuSen.Mistress.Library.GameRecords)Field(window, "_records")).SetCrop((string)Field(window, "_currentRomPath"), new EmuSen.Mistress.Library.GameCrop(12.5, 12.5, 12.5, 12.5));
+                    Call(window, "ShowGameCrop", (string)Field(window, "_currentRomPath"), "Cobalt Harbor (Synthetic)");
+                    break;
                 case "ShaderSettingsGenesis":
                     Call(window, "ShowShaderSettings");
                     SelectTab(window, "Genesis");
@@ -461,10 +470,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "FindByNameLongTitle":
                 case "CoverPickerLongTitle":
+                case "GameCropLongTitle":
                     string longRom = Path.Combine(s.RomDirectory, LongTitle + ".sfc");
                     if (File.Exists(rom)) File.Copy(rom, longRom, overwrite: true);
                     else File.WriteAllBytes(longRom, PadRewindReelTests.ChangingBackdrop());
-                    Call(s.Window, which == "FindByNameLongTitle" ? "ShowFindByName" : "ShowCoverPicker", longRom, LongTitle);
+                    Call(s.Window, which == "FindByNameLongTitle" ? "ShowFindByName" : which == "GameCropLongTitle" ? "ShowGameCrop" : "ShowCoverPicker", longRom, LongTitle);
                     break;
                 case "ThemeBrowserLongName":
                 case "ThemeDetailLongName":

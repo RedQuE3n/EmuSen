@@ -176,5 +176,63 @@ namespace EmuSen.WiseMan.Mistress
             command.CommandText = $"PRAGMA user_version = {version}";
             command.ExecuteNonQuery();
         }
+
+        // A game's own crop, kept in its row - see EmuSen_Settings_Reference.md §4.100.
+        [Fact]
+        public void A_game_s_crop_is_kept_cleared_and_follows_the_game_to_a_new_path()
+        {
+            var crop = new GameCrop(1.3, 1.1, 8.7, 9);
+            using (GameRecords records = GameRecords.Open(Db))
+            {
+                Assert.Null(records.Crop("/r/a.z64"));
+                records.SetCrop("/r/a.z64", crop);
+                records.SetCrop("/r/b.z64", new GameCrop(0, 0, 0, 0));
+                records.ToggleFavourite("/r/c.z64");
+            }
+
+            using GameRecords reopened = GameRecords.Open(Db);
+            Assert.Equal(crop, reopened.Crop("/r/a.z64"));
+            Assert.Equal(EmuSen.Serenity.PictureCrop.Percent(1.3, 8.7, 1.1, 9), crop.Picture);
+            // A crop of nothing is still the game's own: the whole picture, whatever its console hides.
+            Assert.Equal(new GameCrop(0, 0, 0, 0), reopened.Crop("/r/b.z64"));
+            Assert.Null(reopened.Crop("/r/c.z64"));
+            Assert.False(reopened.IsFavourite("/r/a.z64"));
+
+            // Renamed, a game keeps its crop; moved onto a game that has one, that one's stays.
+            reopened.Move("/r/a.z64", "/r/moved.z64");
+            Assert.Equal(crop, reopened.Crop("/r/moved.z64"));
+            Assert.Null(reopened.Crop("/r/a.z64"));
+            reopened.Move("/r/moved.z64", "/r/b.z64");
+            Assert.Equal(new GameCrop(0, 0, 0, 0), reopened.Crop("/r/b.z64"));
+
+            reopened.ClearCrop("/r/b.z64");
+            Assert.Null(reopened.Crop("/r/b.z64"));
+            Assert.NotNull(reopened.Find("/r/b.z64"));
+        }
+
+        [Fact]
+        public void A_library_from_before_a_game_could_have_a_crop_gains_the_columns_and_keeps_its_rows()
+        {
+            using (GameRecords records = GameRecords.Open(Db)) records.ToggleFavourite("/r/a.z64");
+            using (var raw = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Db, Pooling = false }.ToString()))
+            {
+                raw.Open();
+                foreach (string sql in new[] { "ALTER TABLE game DROP COLUMN crop_left", "ALTER TABLE game DROP COLUMN crop_right", "ALTER TABLE game DROP COLUMN crop_top", "ALTER TABLE game DROP COLUMN crop_bottom", "PRAGMA user_version = 5" })
+                {
+                    using SqliteCommand command = raw.CreateCommand();
+                    command.CommandText = sql;
+                    command.ExecuteNonQuery();
+                }
+            }
+
+            using GameRecords migrated = GameRecords.Open(Db);
+            Assert.Equal(6, GameRecords.SchemaVersion);
+            Assert.Equal(GameRecords.SchemaVersion, UserVersion());
+            Assert.True(migrated.IsFavourite("/r/a.z64"));
+            Assert.Null(migrated.Crop("/r/a.z64"));
+            migrated.SetCrop("/r/a.z64", new GameCrop(2.4, 2.5, 3.5, 3.5));
+            Assert.Equal(new GameCrop(2.4, 2.5, 3.5, 3.5), migrated.Crop("/r/a.z64"));
+            Assert.True(migrated.IsFavourite("/r/a.z64"));
+        }
     }
 }

@@ -419,7 +419,7 @@ namespace EmuSen.Mistress.Views
                 // On the emulation thread, between frames, and only when the running game is that console's - see §4.26.
                 if (_session is not null && console == _activeConsole) RequestOnEmulationThread(session => ApplyConsoleSettings(session, console));
                 if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
-            }, _session is null ? null : _activeConsole, HttpFactory) { ShadersChanged = ShaderChanged };
+            }, _session is null ? null : _activeConsole, HttpFactory, overscanNote: RunningGameCropNote) { ShadersChanged = ShaderChanged };
             _ = SheetLayer.Show(window, this);
         }
 
@@ -443,7 +443,7 @@ namespace EmuSen.Mistress.Views
             // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
             GameFrame.FilterConsole = console;
             GameFrame.SquarePixels = _graphics.Value(console, GraphicsSettingsWindow.PictureShapeKey) == GraphicsSettingsWindow.SquarePixels;
-            GameFrame.Crop = GraphicsSettingsWindow.CropFor(_graphics, console);
+            GameFrame.Crop = RunningCrop(console);
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();

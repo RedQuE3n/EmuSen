@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        internal static readonly string[] GameSettings = ["Cheats", "Players & Controllers", "Controller Bindings", "Graphics", "Shaders"];
+        internal static readonly string[] GameSettings = ["Cheats", "Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Crop This Game..."];
         internal static readonly string[] Settings = ["Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Cheats", "Firmware", "Preferences"];
 
         // One synthetic game, started from the library: as Game Mode starts it with a big screen, else on the desktop.

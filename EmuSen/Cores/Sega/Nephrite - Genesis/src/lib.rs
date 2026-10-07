@@ -10,6 +10,7 @@
 //! test register, measured on the board.
 
 pub mod cart;
+pub mod debugger;
 pub mod eeprom;
 pub mod fifo_records;
 pub mod fm;

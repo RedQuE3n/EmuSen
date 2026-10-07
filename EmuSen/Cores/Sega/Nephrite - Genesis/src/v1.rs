@@ -7,7 +7,8 @@ use emusen_native::core::*;
 use crate::genesis::Model;
 use crate::machine::{HEIGHT, Machine, WIDTH, default_model};
 use crate::media::{Media, System, cartridge_bytes};
-use crate::state::{STATE_VERSION, STATUS_OTHER_SYSTEM};
+use crate::debugger::{M68KBUS_ID, M68KBUS_SIZE, Z80BUS_ID, Z80BUS_SIZE};
+use crate::state::{OLDEST_STATE_VERSION, STATE_VERSION, STATUS_OTHER_SYSTEM};
 
 /// An image too short for a cartridge's vector table and header.
 pub const STATUS_IMAGE_TOO_SHORT: i32 = -9;
@@ -231,7 +232,7 @@ pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -318,9 +319,9 @@ impl Core for Machine {
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: (0..2).map(|p| Port { port: p as u32, controller: Some(if self.six_button[p] { "md.pad6" } else { "md.pad3" }.into()) }).collect(),
             spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", ..Space::new(m.id, m.name) }).collect(),
-            processors: Vec::new(),
+            processors: self.processors(),
             battery: self.battery_id().map(|_| Battery { which: 0, suffix: if self.media.system == System::Mcd { ".brm" } else { ".srm" }.into() }).into_iter().collect(),
-            state: StateFormat { format: "NPHR".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
+            state: StateFormat { format: "NPHR".into(), version: STATE_VERSION as i64, loads_from: (OLDEST_STATE_VERSION..=STATE_VERSION).map(i64::from).collect() },
             phases: Vec::new(),
             patches: (self.media.system == System::Md).then_some((0, 0x3F_FFFF)),
             skip_rendering_state_neutral: true,
@@ -383,10 +384,21 @@ impl Core for Machine {
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
-        self.bytes(space).map(|m| m.len() as i64).ok_or(status::NO_SUCH_SPACE)
+        match space {
+            M68KBUS_ID => Ok(M68KBUS_SIZE as i64),
+            Z80BUS_ID => Ok(Z80BUS_SIZE as i64),
+            _ => self.bytes(space).map(|m| m.len() as i64).ok_or(status::NO_SUCH_SPACE),
+        }
     }
 
     fn space_read(&mut self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
+        if space == M68KBUS_ID || space == Z80BUS_ID {
+            let size = if space == M68KBUS_ID { M68KBUS_SIZE } else { Z80BUS_SIZE };
+            let n = out.len().min(size.saturating_sub(address as usize));
+            self.read_bus(space, address, &mut out[..n]);
+            out[n..].fill(0);
+            return Ok(());
+        }
         let m = self.bytes(space).ok_or(status::NO_SUCH_SPACE)?;
         for (i, b) in out.iter_mut().enumerate() {
             *b = m.get(address as usize + i).copied().unwrap_or(0);
@@ -414,6 +426,21 @@ impl Core for Machine {
         Ok(())
     }
 
+    fn debug_pc(&self, processor: u32) -> Option<u64> {
+        Machine::debug_pc(self, processor)
+    }
+
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+        Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
+    }
+
+    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
+        if processor > crate::debugger::Z80 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        Machine::debug_disassemble(self, processor, space, address, count).ok_or(status::NO_SUCH_SPACE)
+    }
+
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
         match (which, self.battery_id()) {
             (0, Some(_)) => Ok((self.battery_bytes().expect("the battery's memory"), 0)),
@@ -423,7 +450,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; rom_patches, settings);
+emusen_native::core_exports!(Machine; rom_patches, settings, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {
@@ -434,12 +461,31 @@ mod tests {
         Machine::create(&Create { image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION })
     }
 
+    // The debugger's two processors and their buses through the ABI: listed, sized, read without side effects, refused a write (Nephrite_Native.md §41).
+    #[test]
+    fn the_processors_and_their_buses_reach_the_host() {
+        let mut m = create(&cartridge("SEGA GENESIS", "JUE", None), vec![]).unwrap();
+        let info = m.machine_info();
+        assert_eq!(info.processors.iter().map(|p| (p.name.as_str(), p.pc_bits, p.registers.len(), p.code_space)).collect::<Vec<_>>(), [("M68K", 24, 20, Some(0)), ("Z80", 16, 18, Some(1))]);
+        assert_eq!(info.state.loads_from, [16, 17]);
+        assert_eq!((Core::space_size(&m, 0), Core::space_size(&m, 1)), (Ok(1 << 24), Ok(1 << 16)));
+        let mut out = [0u8; 16];
+        Core::space_read(&mut m, 0, 0x100, &mut out).unwrap();
+        assert_eq!(&out, b"SEGA GENESIS    ");
+        Core::space_read(&mut m, 1, 0xFFF8, &mut out).unwrap();
+        assert_eq!(out[8..], [0; 8], "past the bus's end reads zero");
+        assert_eq!(Core::space_write(&mut m, 0, 0xFF_0000, &[1]), Err(status::READ_ONLY));
+        assert_eq!(Core::debug_registers(&m, 0).map(|r| r.len()), Ok(20));
+        assert_eq!(Core::debug_disassemble(&mut m, 2, 0, 0, 1).map(|l| l.len()), Err(status::NOT_SUPPORTED));
+        assert_eq!(Core::debug_disassemble(&mut m, 0, 0, 0x100, 1).map(|l| l.len()), Ok(1));
+    }
+
     #[test]
     fn the_stub_reports_each_system_and_a_blank_picture() {
         let md = create(&cartridge("SEGA GENESIS", "JUE", None), vec![]).unwrap();
         let info = md.machine_info();
         assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("md", Some(Region::Ntsc), NTSC_FRAME));
-        assert_eq!(info.spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["WRAM", "Z80RAM", "VRAM", "CRAM", "VSRAM", "ROM"]);
+        assert_eq!(info.spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["M68KBUS", "Z80BUS", "WRAM", "Z80RAM", "VRAM", "CRAM", "VSRAM", "ROM"]);
         assert!(md.frame().chunks(4).all(|p| p == [0, 0, 0, 255]) && md.frame().len() == 320 * 224 * 4);
 
         let pal = create(&cartridge("SEGA MEGA DRIVE", "E", None), vec![]).unwrap();

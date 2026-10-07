@@ -68,7 +68,7 @@ namespace EmuSen.Cores
             foreach (DiscoveredCore core in CoreDiscovery.Found)
             {
                 if (Shipped(core) is null) continue;
-                foreach (CoreSystem system in core.Info.Systems.Where(s => CoreCatalog.ConsoleForSystem(s.Id) is null && systems.All(known => known.Name != s.Name)))
+                foreach (CoreSystem system in core.Info.Systems.Where(s => !s.Development && CoreCatalog.ConsoleForSystem(s.Id) is null && systems.All(known => known.Name != s.Name)))
                     systems.Add(new FirmwareSystem(system.Name, core.EngineName, system.Firmware.Select(f => Item(CoreEngine.Request(core.Info.Name, f), f.Label)).ToArray()));
             }
             return systems;

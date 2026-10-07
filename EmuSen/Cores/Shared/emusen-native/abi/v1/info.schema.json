@@ -38,7 +38,8 @@
         "extensions": { "type": "array", "items": { "type": "string" } },
         "regions": { "type": "array", "items": { "type": "string" } },
         "controllers": { "type": "array", "items": { "$ref": "#/$defs/controller" } },
-        "firmware": { "type": "array", "items": { "$ref": "#/$defs/firmware" } }
+        "firmware": { "type": "array", "items": { "$ref": "#/$defs/firmware" } },
+        "development": { "type": "boolean" }
       }
     },
     "controller": {

@@ -55,6 +55,7 @@ impl v1::Core for Machine {
                     axes: Vec::new(),
                 }],
                 firmware: Vec::<Firmware>::new(),
+                development: false,
             }],
             deterministic: true,
             accuracy: Some(v1::Accuracy { measured_with: "defaults".into(), suite: "Moon (C#), the reference it is graded against".into(), notes: String::new() }),

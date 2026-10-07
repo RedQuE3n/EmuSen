@@ -142,11 +142,15 @@ namespace EmuSen.Cores.Native
             return list;
         }
 
-        // The engines whose systems claim this extension.
-        public static IEnumerable<DiscoveredCore> ForExtension(string extension) => Found.Where(c => c.Info.Claims(extension));
+        // A system its core marks in development is offered only where development cores are asked for - see EmuSen_CoreAPI.md §27.4.
+        public static bool Offered(CoreSystem system) => !system.Development || IncludeDevelopment;
 
-        // The engines that run a system, by its id.
-        public static IEnumerable<DiscoveredCore> ForSystem(string systemId) => Found.Where(c => c.Info.Systems.Any(s => s.Id == systemId));
+        // The engines whose offered systems claim this extension.
+        public static IEnumerable<DiscoveredCore> ForExtension(string extension) =>
+            Found.Where(c => c.Info.Systems.Any(s => Offered(s) && s.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase)));
+
+        // The engines that offer a system, by its id.
+        public static IEnumerable<DiscoveredCore> ForSystem(string systemId) => Found.Where(c => c.Info.Systems.Any(s => s.Id == systemId && Offered(s)));
 
         public static DiscoveredCore? ByEngineName(string? name) => name is null ? null : Found.FirstOrDefault(c => c.EngineName == name);
     }

@@ -142,3 +142,14 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(marked.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// A system marked in development is listed, and refused where it shares an extension with a system the core offers (EmuSen_CoreAPI.md §27.4).
+#[test]
+fn a_system_in_development_shares_no_extension_with_an_offered_one() {
+    let info = |second: &str| format!(r#"{{"systems":[{{"id":"md","extensions":[".md",".bin"]}},{{"id":"mcd","extensions":[{second}],"development":true}},{{"id":"32x","extensions":[".32x"],"development":false}}]}}"#);
+    assert_eq!(emusen_core_conform::systems_in_development(&info(r#"".iso""#)), (Vec::<String>::new(), vec!["mcd".to_owned()]));
+    let (problems, ids) = emusen_core_conform::systems_in_development(&info(r#"".iso",".BIN""#));
+    assert_eq!((problems.len(), ids), (1, vec!["mcd".to_owned()]));
+    assert!(problems[0].contains(".BIN"), "{problems:?}");
+    assert_eq!(emusen_core_conform::systems_in_development(r#"{"systems":[{"id":"snes","extensions":[".sfc"]}]}"#), (Vec::<String>::new(), Vec::<String>::new()));
+}

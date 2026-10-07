@@ -156,8 +156,9 @@ namespace EmuSen.Cores.Native
         {
             byte[] image = File.ReadAllBytes(path);
             string extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
-            // The battery folder is the system's, as the library files it: a .gbc game's saves are under GBC, not the shelf's GB.
-            string console = Info.SystemFor(extension)?.Id.ToUpperInvariant() ?? CoreCatalog.ConsoleForRom(path) ?? Info.Id;
+            // The battery folder is the system's, as the library files it: a .gbc game's saves are under GBC, not the shelf's GB; a system only discovery runs, its pack's console's.
+            string? systemId = Info.SystemFor(extension)?.Id;
+            string console = CoreCatalog.DiscoveredConsoleForSystem(systemId) ?? systemId?.ToUpperInvariant() ?? CoreCatalog.ConsoleForRom(path) ?? Info.Id;
             var firmware = new List<(uint, byte[])>();
             // Each file whole by its name and size, else its first split form found, part n as file Which + n - see EmuSen_CoreAPI.md §6.2.
             foreach (var f in Library.FirmwareFor(image))

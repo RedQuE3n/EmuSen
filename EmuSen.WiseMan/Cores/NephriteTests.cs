@@ -108,6 +108,37 @@ namespace EmuSen.WiseMan.Cores
             (core as IDisposable)?.Dispose();
         }
 
+        // The Sega CD and the 32X are marked in development in the core's own info, so a shipped Nephrite would offer the Genesis alone; a developer asking for development cores can still open their files - see EmuSen_CoreAPI.md §27.4.
+        [Fact]
+        public void A_shipped_core_offers_only_the_systems_its_info_says_run()
+        {
+            string built = Path.Combine(_root, "shipped");
+            Directory.CreateDirectory(built);
+            string copy = Path.Combine(built, Path.GetFileName(LibraryPath));
+            File.Copy(LibraryPath, copy);
+            Assert.False(CoreSidecar.Write(copy).Development);
+            CoreDiscovery.UseDirectories(new[] { built });
+            try
+            {
+                CoreDiscovery.UseDevelopment(false);
+                var info = CoreDiscovery.Found.Single().Info;
+                Assert.Equal(new[] { false, true, true }, info.Systems.Select(s => s.Development));
+                Assert.True(CoreFactory.IsSupported("game.md"));
+                Assert.False(CoreFactory.IsSupported("game.iso") || CoreFactory.IsSupported("game.32x"));
+                Assert.Equal(new[] { "Genesis" }, CoreCatalog.DiscoveredConsoles);
+                Assert.Equal(new[] { "model", "region", "pad1", "pad2" }, CoreCatalog.SettingsFor("Genesis").Select(s => s.Key));
+                Assert.Empty(CoreCatalog.SettingsFor("Sega CD"));
+
+                CoreDiscovery.UseDevelopment(true);
+                Assert.True(CoreFactory.IsSupported("game.iso") && CoreFactory.IsSupported("game.32x"));
+                Assert.Equal(new[] { "Genesis" }, CoreCatalog.DiscoveredConsoles);
+            }
+            finally
+            {
+                CoreDiscovery.UseDirectories(null);
+            }
+        }
+
         // Until its Genesis gate the core is in development: built and tested, never offered to a player - see EmuSen_CoreAPI.md §27.
         [Fact]
         public void A_player_is_not_offered_the_core_in_development()

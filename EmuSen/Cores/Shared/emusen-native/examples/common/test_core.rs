@@ -181,6 +181,7 @@ impl Core for TestCore {
                     axes: vec![AxisControl { axis: Axis::LeftX as u32, control: Some(Axis::LeftX), trigger: false, label: "Stick".into() }],
                 }],
                 firmware: vec![Firmware { which: 16, name: "boot.rom".into(), label: "Boot ROM".into(), size: 64, required: false, parts: vec![], replacement: None }],
+                development: false,
             }],
             deterministic: true,
             accuracy: Some(Accuracy { measured_with: "defaults".into(), suite: "the crate's tests".into(), notes: String::new() }),

@@ -211,7 +211,8 @@ fn takes_lock_on(media: &Media, image_len: usize) -> bool {
     media.header.as_ref().is_some_and(|h| h.serial.starts_with(crate::cart::LOCK_ON_SERIAL)) && image_len <= 0x20_0000
 }
 
-fn system(id: &str, name: &str, extensions: &[&str], firmware: Vec<Firmware>) -> emusen_native::core::System {
+/// A system whose games do not run yet is marked in development, so that no host offers it (EmuSen_CoreAPI.md §27.4).
+fn system(id: &str, name: &str, extensions: &[&str], firmware: Vec<Firmware>, development: bool) -> emusen_native::core::System {
     emusen_native::core::System {
         id: id.into(),
         name: name.into(),
@@ -219,6 +220,7 @@ fn system(id: &str, name: &str, extensions: &[&str], firmware: Vec<Firmware>) ->
         regions: vec![Region::Ntsc, Region::Pal],
         controllers: controllers(),
         firmware,
+        development,
     }
 }
 
@@ -241,9 +243,9 @@ impl Core for Machine {
             authors: vec!["EmuSen".into()],
             description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. It runs the Genesis's two processors, buses, cartridges, pads, picture and sound, the PSG and the YM2612 with each model's output; the Sega CD and the 32X are still to come.".into()),
             systems: vec![
-                system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()]),
-                system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')]),
-                system("32x", "Sega 32X", &S32X_EXTENSIONS, [vec![tmss()], s32x_boot()].concat()),
+                system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()], false),
+                system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')], true),
+                system("32x", "Sega 32X", &S32X_EXTENSIONS, [vec![tmss()], s32x_boot()].concat(), true),
             ],
             deterministic: true,
             ..Info::default()
@@ -293,9 +295,13 @@ impl Core for Machine {
         }
         m.firmware = request.files.iter().filter(|f| f.which != 0).map(|f| f.which).collect();
         if let (Some(id), Some(file)) = (m.battery_id(), request.files.iter().find(|f| f.which == 0)) {
-            let bytes = m.bytes_mut(id).expect("the battery's memory");
-            let n = bytes.len().min(file.data.len());
-            bytes[..n].copy_from_slice(&file.data[..n]);
+            if id == crate::machine::SRAM_ID {
+                m.genesis.hw.cart.load_battery(file.data);
+            } else {
+                let bytes = m.bytes_mut(id).expect("the battery's memory");
+                let n = bytes.len().min(file.data.len());
+                bytes[..n].copy_from_slice(&file.data[..n]);
+            }
         }
         Ok(m)
     }
@@ -522,6 +528,31 @@ mod tests {
         }
         assert!(Machine::settings_schema().iter().all(|s| s.check().is_ok()));
         assert!(Machine::settings_schema().iter().filter(|s| [MODEL_KEY, REGION_KEY].contains(&s.key.as_str())).all(|s| matches!(s.scope, Scope::Create)));
+    }
+
+    /// A battery file round-trips; a one-lane RAM's file in the two-lane form most references write is read by its lane,
+    /// and an EEPROM's is its bytes (Nephrite_Native.md §32).
+    #[test]
+    fn a_battery_file_round_trips_and_the_references_two_lane_form_is_read() {
+        let mut ra = [0u8; 12];
+        ra[..4].copy_from_slice(&[b'R', b'A', 0xF8, 0x20]);
+        ra[4..8].copy_from_slice(&0x20_0001u32.to_be_bytes());
+        ra[8..12].copy_from_slice(&0x20_03FFu32.to_be_bytes());
+        let image = cartridge("SEGA GENESIS", "U", Some(ra));
+        let made = |file: &[u8]| create(&image, vec![emusen_native::abi::File { which: 0, data: file }]).unwrap();
+        let lane: Vec<u8> = (0..512u32).map(|i| (i * 7 + 3) as u8).collect();
+        let m = made(&lane);
+        assert_eq!(m.battery(0).unwrap().0, &lane[..]);
+        assert_eq!(made(m.battery(0).unwrap().0).battery(0).unwrap().0, &lane[..]);
+        for (len, fill) in [(1024usize, 0xFFu8), (65536, 0x00)] {
+            let mut both = vec![fill; len];
+            lane.iter().enumerate().for_each(|(i, &b)| both[2 * i + 1] = b);
+            assert_eq!(made(&both).battery(0).unwrap().0, &lane[..], "{len}");
+        }
+        let mut m = made(&lane);
+        assert_eq!(m.genesis.hw.cart.read8(0x20_0003), lane[1]);
+        m.genesis.hw.cart.sram_reg = 1;
+        assert_eq!(m.genesis.hw.cart.read8(0x20_0003), lane[1]);
     }
 
     /// The model setting chooses the sound chip and the output circuit at create: model 1 unless model 2 is asked for.

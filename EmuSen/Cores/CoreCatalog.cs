@@ -219,7 +219,7 @@ namespace EmuSen.Cores
         // A console no catalog core runs, whose system pack names it and a discovered engine serves it - see EmuSen_Settings_Reference.md §4.90.
         public static IReadOnlyList<string> DiscoveredConsoles =>
             DianaOS.DianaOS.Sys.Systems.SystemPacks.All.Select(p => p.Entry)
-                .Where(e => ConsoleForSystem(e.Id) is null && Native.CoreDiscovery.ForSystem(e.Id).Any(c => !IsRegisteredEngine(c.EngineName)))
+                .Where(e => ConsoleForSystem(e.Id) is null && Native.CoreDiscovery.ForSystem(e.Id).Any(c => !IsRegisteredEngine(c.EngineName) && Runs(c, e.Id)))
                 .OrderBy(e => e.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.ReleaseYear)
                 .Select(e => e.Console).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
@@ -233,7 +233,10 @@ namespace EmuSen.Cores
 
         private static Native.DiscoveredCore? DiscoveredFor(string console) =>
             DianaOS.DianaOS.Sys.Systems.SystemPacks.All.Where(p => string.Equals(p.Entry.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(p.Entry.Id) is null)
-                .SelectMany(p => Native.CoreDiscovery.ForSystem(p.Entry.Id)).FirstOrDefault(c => !IsRegisteredEngine(c.EngineName));
+                .SelectMany(p => Native.CoreDiscovery.ForSystem(p.Entry.Id).Where(c => Runs(c, p.Entry.Id))).FirstOrDefault(c => !IsRegisteredEngine(c.EngineName));
+
+        // A console gets its tab and shelf only once its engine says its games run, even where development cores are shown - see EmuSen_CoreAPI.md §27.4.
+        private static bool Runs(Native.DiscoveredCore core, string systemId) => core.Info.Systems.Any(s => s.Id == systemId && !s.Development);
 
         // The engine's schema as the window lists it, from the library its sidecar names.
         private static IReadOnlyList<CoreSetting> CoreSidecarSettings(Native.DiscoveredCore found) =>

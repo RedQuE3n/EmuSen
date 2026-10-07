@@ -215,6 +215,7 @@ impl Core for Machine {
                     axes: Vec::new(),
                 }],
                 firmware: std::iter::once(boot()).chain(NEC_CHIPS.iter().map(|&(stem, size, _)| dsp(stem, size))).collect(),
+                development: false,
             }],
             deterministic: true,
             ..Info::default()

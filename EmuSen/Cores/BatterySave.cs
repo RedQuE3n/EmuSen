@@ -20,7 +20,7 @@ namespace EmuSen.Cores
         public static bool IsFlushFrame(long frame) => frame % FlushEveryNFrames == 0;
 
         // The save folders, one per console as the ROM library names them.
-        public const string Nes = "NES", Snes = "SNES", N64 = "N64", GameBoy = "GB", GameBoyColor = "GBC";
+        public const string Nes = "NES", Snes = "SNES", N64 = "N64", GameBoy = "GB", GameBoyColor = "GBC", Genesis = "Genesis", SegaCd = "Sega CD", S32x = "32X";
 
         // By the file's extension alone, as the library files them: a setting or a header never moves a Game Boy save.
         public static string GameBoyFolder(string romPath) =>
@@ -40,6 +40,9 @@ namespace EmuSen.Cores
         {
             Snes or N64 => System.IO.Path.ChangeExtension(SaveLibrary.FlatSramPathFor(romPath), extension),
             Nes or GameBoy or GameBoyColor => System.IO.Path.ChangeExtension(romPath, extension),
+            // Before 2026-10-06 a development build filed them under the system's id - see EmuSen_Settings_Reference.md §4.91.
+            Genesis => System.IO.Path.ChangeExtension(SaveLibrary.SramPathFor(romPath, "MD"), extension),
+            SegaCd => System.IO.Path.ChangeExtension(SaveLibrary.SramPathFor(romPath, "MCD"), extension),
             _ => null,
         };
 

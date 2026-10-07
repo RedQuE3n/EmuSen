@@ -51,6 +51,7 @@ impl v1::Core for Machine {
             regions: vec![Region::Ntsc],
             controllers: vec![pad()],
             firmware: Vec::new(),
+            development: false,
         };
         Info {
             id: "mercuryrt".into(),

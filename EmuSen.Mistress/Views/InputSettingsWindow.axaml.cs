@@ -227,6 +227,7 @@ namespace EmuSen.Mistress.Views
                 if (ShownConsole is not { } console || chosen is not string text || !int.TryParse(text.AsSpan("Player ".Length), out int player)) return;
                 CancelCapture();
                 _playerByConsole[console] = player;
+                RefreshDiagramLayout(console);
                 RefreshPadLabels();
             };
             Tabs.SelectionChanged += (_, _) => ShowPlayerBar();

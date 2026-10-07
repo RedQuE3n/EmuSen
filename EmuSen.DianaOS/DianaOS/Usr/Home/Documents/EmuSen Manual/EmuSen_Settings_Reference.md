@@ -8028,3 +8028,36 @@ Big picture draws the shelf with the same scaling as every other; nothing about 
 audit's `ActiveCheatsGenesis`, `ShaderSettingsGenesis`, `ControllerBindingsGenesis` and `GraphicsSettingsGenesis` at
 1280×800 and 1920×1200, each with the Genesis's tab; `NephriteTests`, whose `.gen` file now has the Genesis as its
 console.
+
+### 4.93 Controller Bindings: the Genesis pad drawn (2026-10-07)
+
+*Asked by the tester 2026-10-06:* the Genesis tab of Controller Bindings shows a Genesis controller, not the generic
+gamepad.
+
+- **The drawings** are LunaP's `ControllerLayout.Genesis`, Sega's three-button pad, and `GenesisSixButton`, drawn as
+  the other consoles' pads are, from geometry in code with no picture file (`docs/LunaP.md` §198.12 in the toolkit):
+  two round lobes on a bridge that arches up underneath, the cross on a round plate, Start, and A, B and C rising to
+  the right; the six-button pad adds X, Y and Z above them and Mode on the right shoulder. The labels, lines, the
+  ring round the chosen button and the lit colour of a pressed one are the window's and the theme's, as for every pad.
+- **Which one is shown.** The pad the shown player's port is set to (§4.90's Port 1 and Port 2 controller rows, as
+  `graphics.json` stores them or at their default, the three-button pad): `CoreCatalog.ControllerFor` reads the
+  engine's `pad<n>` setting and `ControllerDiagrams.LayoutFor` takes the controller's id. Changing the player in the
+  window draws that player's pad. A console whose engine has no such setting, or a value the engine's info does not
+  name, is drawn as the six-button pad.
+- **The buttons.** Each drawn button is the RetroPad control the core gives it (§4.90): A is Y, B is B, C is A, X is L,
+  Y is X, Z is R, Start is Start and Mode is Select (`ControllerDiagrams.RegionFor`), so a click on the drawn A binds
+  what the game reads as A, and a press lights it. The list under the drawing keeps all twelve controls whichever pad
+  is drawn, so the six-button pad's four can be bound while a port is set to three buttons.
+- **The Sega CD and the 32X** use the same pads and will draw them when their tabs appear.
+
+**Coverage**: `ControllerBindingsDiagramTests.Every_button_of_the_genesis_pad_the_port_is_set_to_has_a_hit_region`
+(each pad: a region for every button, named as the engine names the button, hit where it is drawn and bound by a
+click; the other player's pad drawn when the player changes); the window fit audit's `ControllerBindingsGenesis` (the
+three-button pad) and `ControllerBindingsGenesisSix` at 1280×800 and 1920×1200; LunaP's own tests over every layout.
+
+*Also 2026-10-07, the fit audit's two gaps of §4.92:* `The_sidebar_with_the_genesis_shelf_is_whole_and_nothing_on_it_overlaps`
+and `The_system_carousel_with_the_genesis_shelf_is_whole_on_every_system`, each at both sizes. The carousel's is run
+under a theme with a picture for `genesis`, as a theme that knows the console has. Under a theme with none, the
+carousel's entry is the system's name in words, as for any system a theme has no picture for, and at the test theme's
+item width "Sega Genesis" is shortened with an ellipsis; that is the carousel's rule for every such system and is not
+changed here.

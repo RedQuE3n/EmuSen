@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using EmuSen.Cores;
 using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Input;
+using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Windowing;
@@ -153,7 +154,7 @@ namespace EmuSen.Mistress.Views
         // The drawing over the page's list; the drawing takes the height the page shows, and the list is scrolled to below it.
         private Control WithDiagram(string console, ScrollViewer page, Control list)
         {
-            var diagram = new ControllerDiagram { Layout = ControllerDiagrams.LayoutFor(console), Name = "Diagram" };
+            var diagram = new ControllerDiagram { Layout = LayoutOf(console), Name = "Diagram" };
             Avalonia.Automation.AutomationProperties.SetName(diagram, $"{console} controller");
             diagram.RegionInvoked += (_, e) => ChooseRegion(console, e.Region);
             // Up past the drawing's top row is the player selector, which stands outside the tab's page.
@@ -175,6 +176,21 @@ namespace EmuSen.Mistress.Views
 
             var allBindings = new TextBlock { Text = "All Bindings", FontWeight = Avalonia.Media.FontWeight.Bold, Margin = new Thickness(0, 18, 0, 0) };
             return new StackPanel { Spacing = 4, Children = { host, allBindings, list } };
+        }
+
+        // The pad the shown player's port is set to, where the console's engine has a setting for it; the drawing follows it.
+        private ControllerLayout LayoutOf(string console)
+        {
+            var config = GraphicsConfig.Load();
+            return ControllerDiagrams.LayoutFor(console, CoreCatalog.ControllerFor(console, PlayerOf(console) - 1, key => config.Value(console, key)));
+        }
+
+        // The drawing of a console whose pad differs by port is drawn again for the player now shown.
+        private void RefreshDiagramLayout(string console)
+        {
+            if (DiagramFor(console) is not { } diagram || diagram.Layout == LayoutOf(console)) return;
+            diagram.Layout = LayoutOf(console);
+            RefreshDiagramLabels();
         }
 
         private sealed class Observer<T>(Action<T> next) : IObserver<T>

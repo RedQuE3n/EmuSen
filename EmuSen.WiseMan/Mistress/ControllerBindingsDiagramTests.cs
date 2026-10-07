@@ -58,8 +58,10 @@ namespace EmuSen.WiseMan.Mistress
         {
             var pad = new SimulatedPad { Name = "Test Pad" };
             var gamepad = new GamepadManager(new GamepadBindingMap(), start: true, SimulatedPads.With(pad));
-            var keys = new ControllerKeyBindings(Consoles);
-            var pads = new GamepadBindings(Consoles);
+            // The consoles as the catalog lists them now, which a test that shows a development core has changed.
+            string[] consoles = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToArray();
+            var keys = new ControllerKeyBindings(consoles);
+            var pads = new GamepadBindings(consoles);
             var window = new InputSettingsWindow(keys, pads, gamepad, new AppSettings(), new HotkeyBindingMap(), console) { Width = width, Height = height };
             window.Show();
             window.CaptureRenderedFrame();
@@ -85,6 +87,54 @@ namespace EmuSen.WiseMan.Mistress
                 foreach (string region in regions)
                     Assert.True(ControllerDiagrams.ControlFor(console, region, controls) is not null, $"{console}'s {region} stands for no control");
                 Assert.Equal(regions.Count, diagram.Regions.Count);
+            }
+        });
+
+        // The Genesis's drawing is the pad its port is set to: every button of that pad has a region named as the engine names the button, hit where it is drawn and bound by a click, and the drawing follows the player shown - see EmuSen_Settings_Reference.md §4.93.
+        [Theory]
+        [InlineData("md.pad3", ControllerLayout.Genesis, 8)]
+        [InlineData("md.pad6", ControllerLayout.GenesisSixButton, 12)]
+        public Task Every_button_of_the_genesis_pad_the_port_is_set_to_has_a_hit_region(string pad, ControllerLayout layout, int buttons) => UiTest.Run(() =>
+        {
+            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(true);
+            try
+            {
+                var config = GraphicsConfig.Load();
+                config.SetValue("Genesis", "pad1", pad);
+                config.SetValue("Genesis", "pad2", pad == "md.pad3" ? "md.pad6" : "md.pad3");
+                config.Save();
+                Rig rig = Open("Genesis");
+                Assert.Equal(layout, rig.Diagram.Layout);
+                var controller = CoreCatalog.DiscoveredSystem("Genesis")!.Controllers.Single(c => c.Id == pad);
+                Assert.Equal(buttons, controller.Buttons.Count);
+                Assert.Equal(controller.Buttons.Select(b => b.Label).Order(), rig.Diagram.Regions.Select(r => r.Id).Order());
+                IReadOnlyList<PadControl> controls = CoreCatalog.ControlsFor("Genesis");
+                foreach (var button in controller.Buttons)
+                {
+                    PadControl control = PadControls.For(new[] { button.Control!.Value }, Array.Empty<PadAxis>()).Single();
+                    string region = ControllerDiagrams.RegionFor("Genesis", control);
+                    Assert.Equal(button.Label, region);
+                    Assert.Equal(control, ControllerDiagrams.ControlFor("Genesis", region, controls));
+                    Assert.Equal(region, rig.Diagram.RegionAt(rig.Diagram.PointIn(region)!.Value));
+
+                    rig.Window.MouseDown(InWindow(rig, region), MouseButton.Left);
+                    rig.Window.MouseUp(InWindow(rig, region), MouseButton.Left);
+                    Assert.NotEqual(PadCapture.None, rig.Window.Capturing);
+                    Assert.Equal(region, rig.Diagram.SelectedRegion);
+                    Assert.Equal("Press a button", rig.Diagram.BindingOf(region).Pad);
+                    rig.Window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.None, null);
+                    Assert.Equal(PadCapture.None, rig.Window.Capturing);
+                }
+
+                Dropdown player = rig.Window.GetVisualDescendants().OfType<Dropdown>().Single(d => d.Name == "PlayerSelector");
+                player.SelectedItem = "Player 2";
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(layout == ControllerLayout.Genesis ? ControllerLayout.GenesisSixButton : ControllerLayout.Genesis, rig.Diagram.Layout);
+                rig.Window.Close();
+            }
+            finally
+            {
+                EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(null);
             }
         });
 

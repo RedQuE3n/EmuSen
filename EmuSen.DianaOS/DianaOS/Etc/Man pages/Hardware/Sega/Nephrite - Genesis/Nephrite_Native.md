@@ -2486,8 +2486,9 @@ The file is 64 KiB whatever the layout, each byte at its address less the RAM's 
 writes that form now (`Cart::battery_file`), longer only for a range past 64 KiB, which no header in the corpus
 declares. Rent A Hero is the one layout where the two differ in more than form: its header names the odd lane from an
 even start, Genesis Plus GX keeps writes to the even addresses too, and Nephrite, taking the header's lane, keeps the
-odd ones alone; its file has the same bytes on the odd offsets and `$FF` on the even. Not chased: the game's own
-writes decide whether it matters. Mahjongg Lover's header names `$FF0000`-`$FFFFFF`, the main RAM, and Sonic & Knuckles' `$20200001`, past the bus; neither is a save.
+odd ones alone; its file has the same bytes on the odd offsets and `$FF` on the even. ~~Not chased: the game's own
+writes decide whether it matters.~~ *Checked 2026-10-07 (§35.3): the game uses the odd addresses alone, so the header
+is right for it and it needs no board entry.* Mahjongg Lover's header names `$FF0000`-`$FFFFFF`, the main RAM, and Sonic & Knuckles' `$20200001`, past the bus; neither is a save.
 
 ### 33.2 What it built
 
@@ -2519,3 +2520,34 @@ waited for. The Sega CD and the 32X stay off every list until their systems drop
 | Gate | So far |
 |---|---|
 | G4, the frontend | The cheats decode (§30); the battery files round-trip, now in Genesis Plus GX's form (§32.2, §33); the fit audit passes with the Genesis's tabs and shelf at both sizes (§31, §34). The kit on games is the stage's next step. |
+
+## 35. Stage 6, the Genesis pad drawn, the fit audit's gaps and Rent A Hero (2026-10-07)
+
+### 35.1 The pad in Controller Bindings
+
+Asked by the tester: the Genesis tab shows a Genesis controller. The two pads are drawn in LunaP as its other pads are
+(its `docs/LunaP.md` §198.12, on the toolkit's branch `genesis-pad`, which merges before this), and the window shows
+the one the player's port is set to, its buttons bound through the RetroPad mapping of the plan's §4.2
+(`EmuSen_Settings_Reference.md` §4.93).
+
+### 35.2 The fit audit's gaps
+
+The library's sidebar and big picture's system carousel are audited with the Genesis shelf present at 1280×800 and
+1920×1200 (§4.93 there), beside §34's four windows; `ControllerBindingsGenesisSix` adds the six-button drawing.
+
+### 35.3 Rent A Hero
+
+Its header declares save RAM on the odd lane from an even start, `$200000`-`$203FFF`, where Genesis Plus GX keeps
+writes to both lanes (§33.1). Traced on 2026-10-07 with every access of the cartridge at `$200000`-`$20FFFF` printed:
+through the title and its menu the game touches none of it; choosing Continue reads 45 bytes, all at odd addresses, in
+three blocks from `$200011`, `$200F91` and `$201F11`, the three saves it looks for. It read no even address and wrote
+nothing, there being no save to load and none made. The game's use is the odd lane, as its header says: the header is
+right for it, and it needs no board entry. A save made in play was not traced.
+
+### 35.4 Measured (2026-10-07)
+
+- **LunaP**: its controller diagram tests over every layout, 96 pass; its whole suite, 1,559, with the public surface's
+  baseline approved for the two new layouts.
+- **WiseMan**: the window fit audit (every case, the Genesis's new ones among them), the controller bindings, input
+  settings, library screen, pad navigation and settings, Genesis settings, Nephrite, player preferences, accessibility
+  and hand-rolled control tests: 288 pass.

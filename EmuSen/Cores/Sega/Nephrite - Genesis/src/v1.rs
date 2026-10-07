@@ -303,6 +303,7 @@ impl Core for Machine {
                 bytes[..n].copy_from_slice(&file.data[..n]);
             }
         }
+        m.refresh_battery_file();
         Ok(m)
     }
 
@@ -403,6 +404,7 @@ impl Core for Machine {
                 *d = b;
             }
         }
+        self.refresh_battery_file();
         Ok(())
     }
 
@@ -414,7 +416,7 @@ impl Core for Machine {
 
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
         match (which, self.battery_id()) {
-            (0, Some(id)) => Ok((self.bytes(id).expect("the battery's memory"), 0)),
+            (0, Some(_)) => Ok((self.battery_bytes().expect("the battery's memory"), 0)),
             (0, None) => Ok((&[], 0)),
             _ => Err(status::BAD_FILE),
         }
@@ -475,7 +477,7 @@ mod tests {
         ra[8..12].copy_from_slice(&0x20_3FFFu32.to_be_bytes());
         let save = vec![0xA5u8; 8192];
         let m = create(&cartridge("SEGA GENESIS", "U", Some(ra)), vec![emusen_native::abi::File { which: 0, data: &save }]).unwrap();
-        assert_eq!(m.battery(0).unwrap().0, &save[..]);
+        assert!(m.battery(0).unwrap().0.iter().skip(1).step_by(2).take(8192).eq(save.iter()), "the save RAM's odd lane, by address");
         assert_eq!(m.machine_info().battery[0].suffix, ".srm");
         assert_eq!(create(&cartridge("SEGA GENESIS", "U", None), vec![emusen_native::abi::File { which: 10, data: &save }]).err(), Some(status::BAD_FILE));
     }
@@ -530,10 +532,11 @@ mod tests {
         assert!(Machine::settings_schema().iter().filter(|s| [MODEL_KEY, REGION_KEY].contains(&s.key.as_str())).all(|s| matches!(s.scope, Scope::Create)));
     }
 
-    /// A battery file round-trips; a one-lane RAM's file in the two-lane form most references write is read by its lane,
-    /// and an EEPROM's is its bytes (Nephrite_Native.md §32).
+    /// A save RAM's battery file is Genesis Plus GX's: 64 KiB, each byte at its address less the RAM's even start, `$FF`
+    /// between; it round-trips, and the one-lane form BlastEm writes, and PicoDrive's range in both lanes, are read too
+    /// (Nephrite_Native.md §33).
     #[test]
-    fn a_battery_file_round_trips_and_the_references_two_lane_form_is_read() {
+    fn a_battery_file_is_genesis_plus_gxs_and_the_other_forms_are_read() {
         let mut ra = [0u8; 12];
         ra[..4].copy_from_slice(&[b'R', b'A', 0xF8, 0x20]);
         ra[4..8].copy_from_slice(&0x20_0001u32.to_be_bytes());
@@ -541,18 +544,38 @@ mod tests {
         let image = cartridge("SEGA GENESIS", "U", Some(ra));
         let made = |file: &[u8]| create(&image, vec![emusen_native::abi::File { which: 0, data: file }]).unwrap();
         let lane: Vec<u8> = (0..512u32).map(|i| (i * 7 + 3) as u8).collect();
+        let mut gpgx = vec![0xFFu8; 0x1_0000];
+        lane.iter().enumerate().for_each(|(i, &b)| gpgx[2 * i + 1] = b);
         let m = made(&lane);
-        assert_eq!(m.battery(0).unwrap().0, &lane[..]);
-        assert_eq!(made(m.battery(0).unwrap().0).battery(0).unwrap().0, &lane[..]);
-        for (len, fill) in [(1024usize, 0xFFu8), (65536, 0x00)] {
-            let mut both = vec![fill; len];
-            lane.iter().enumerate().for_each(|(i, &b)| both[2 * i + 1] = b);
-            assert_eq!(made(&both).battery(0).unwrap().0, &lane[..], "{len}");
-        }
+        assert_eq!(m.battery(0).unwrap().0, &gpgx[..]);
+        assert_eq!(made(m.battery(0).unwrap().0).battery(0).unwrap().0, &gpgx[..]);
+        let mut pico = vec![0u8; 1024];
+        lane.iter().enumerate().for_each(|(i, &b)| pico[2 * i + 1] = b);
+        assert_eq!(made(&pico).battery(0).unwrap().0, &gpgx[..]);
         let mut m = made(&lane);
         assert_eq!(m.genesis.hw.cart.read8(0x20_0003), lane[1]);
-        m.genesis.hw.cart.sram_reg = 1;
-        assert_eq!(m.genesis.hw.cart.read8(0x20_0003), lane[1]);
+        m.space_write(crate::machine::SRAM_ID, 1, &[0x5A]).unwrap();
+        assert_eq!(m.battery(0).unwrap().0[3], 0x5A);
+        let state = { let mut b = vec![0; m.state_size()]; let n = m.save_state(&mut b).unwrap(); b.truncate(n); b };
+        m.space_write(crate::machine::SRAM_ID, 1, &[0x00]).unwrap();
+        m.load_state(&state).unwrap();
+        assert_eq!(m.battery(0).unwrap().0[3], 0x5A);
+    }
+
+    /// A save RAM on both lanes from an odd start, as Tecmo Super Bowl's header declares it, is filed by address too.
+    #[test]
+    fn a_two_lane_save_ram_is_filed_by_address() {
+        let mut ra = [0u8; 12];
+        ra[..4].copy_from_slice(&[b'R', b'A', 0xE0, 0x20]);
+        ra[4..8].copy_from_slice(&0x20_0001u32.to_be_bytes());
+        ra[8..12].copy_from_slice(&0x20_3FFFu32.to_be_bytes());
+        let image = cartridge("SEGA GENESIS", "U", Some(ra));
+        let mut m = create(&image, vec![]).unwrap();
+        m.space_write(crate::machine::SRAM_ID, 0, &[0x10, 0x11]).unwrap();
+        let file = m.battery(0).unwrap().0.to_vec();
+        assert_eq!((file.len(), file[0], file[1], file[2], file[3]), (0x1_0000, 0xFF, 0x10, 0x11, 0xFF));
+        let again = create(&image, vec![emusen_native::abi::File { which: 0, data: &file }]).unwrap();
+        assert_eq!(again.battery(0).unwrap().0, &file[..]);
     }
 
     /// The model setting chooses the sound chip and the output circuit at create: model 1 unless model 2 is asked for.

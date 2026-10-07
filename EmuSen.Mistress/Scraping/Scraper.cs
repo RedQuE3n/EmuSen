@@ -31,7 +31,7 @@ namespace EmuSen.Mistress.Scraping
         // ScreenScraper's systemeid for each ES-DE system name the library's shelves carry (§5.3).
         public static readonly IReadOnlyDictionary<string, int> SystemIds = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            ["nes"] = 3, ["snes"] = 4, ["gb"] = 9, ["gbc"] = 10, ["n64"] = 14,
+            ["nes"] = 3, ["snes"] = 4, ["gb"] = 9, ["gbc"] = 10, ["n64"] = 14, ["genesis"] = 1, ["segacd"] = 20, ["sega32x"] = 19,
         };
 
         public const int MaxAttempts = 5;

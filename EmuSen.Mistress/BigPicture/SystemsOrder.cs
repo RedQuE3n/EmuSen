@@ -15,10 +15,10 @@ namespace EmuSen.Mistress.BigPicture
             (BigPictureInterface.SortReleaseYear, "Release year"),
         ];
 
-        // Each system's first release, which was Japan's for all five.
+        // Each system's first release, which was Japan's for all eight.
         public static readonly IReadOnlyDictionary<string, int> FirstRelease = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            ["nes"] = 1983, ["gb"] = 1989, ["snes"] = 1990, ["n64"] = 1996, ["gbc"] = 1998,
+            ["nes"] = 1983, ["genesis"] = 1988, ["gb"] = 1989, ["snes"] = 1990, ["segacd"] = 1991, ["sega32x"] = 1994, ["n64"] = 1996, ["gbc"] = 1998,
         };
 
         // The shelves in the chosen order; a system with no known year goes last, and ties keep the order given.

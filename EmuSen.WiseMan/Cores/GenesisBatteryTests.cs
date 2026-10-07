@@ -5,7 +5,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The Genesis's battery files through the frontend: a .srm round trip for save RAM and an EEPROM, the references' two-lane form read, a development build's save copied in, and --nobattery - see Nephrite_Native.md §32.
+    // The Genesis's battery files through the frontend: Genesis Plus GX's form for save RAM and the bytes for an EEPROM, the one-lane form read, a development build's save copied in, and --nobattery - see Nephrite_Native.md §33.
     [Collection(TestCollections.ProcessGlobals)]
     public class GenesisBatteryTests : IDisposable
     {
@@ -47,6 +47,14 @@ namespace EmuSen.WiseMan.Cores
 
         private static byte[] Space(CoreEngine core, int length) => Enumerable.Range(0, length).Select(i => core.ReadSpace("SRAM", i)).ToArray();
 
+        // A one-lane save RAM at $200001 as Genesis Plus GX files it: 64 KiB by address from $200000, $FF where the RAM has no byte.
+        private static byte[] ByAddress(byte[] lane)
+        {
+            byte[] file = Enumerable.Repeat((byte)0xFF, 0x10000).ToArray();
+            for (int i = 0; i < lane.Length; i++) file[2 * i + 1] = lane[i];
+            return file;
+        }
+
         [Theory]
         [InlineData(false, 512)]
         [InlineData(true, 128)]
@@ -60,25 +68,23 @@ namespace EmuSen.WiseMan.Cores
                 core.SaveSram();
             }
             string path = SaveLibrary.SramPathFor(rom, BatterySave.Genesis);
-            Assert.Equal(written, File.ReadAllBytes(path));
+            Assert.Equal(eeprom ? written : ByAddress(written), File.ReadAllBytes(path));
             using var again = Load(rom);
             Assert.Equal(written, Space(again, length));
         }
 
         [Fact]
-        public void A_references_two_lane_save_is_read_by_its_lane()
+        public void A_one_lane_save_as_blastem_writes_it_is_read_and_written_back_in_genesis_plus_gxs_form()
         {
             string rom = Rom("lanes.md", SyntheticMdRom.Cartridge(saveBytes: 512));
             byte[] lane = Enumerable.Range(0, 512).Select(i => (byte)(i ^ 0x5A)).ToArray();
-            byte[] both = Enumerable.Repeat((byte)0xFF, 0x10000).ToArray();
-            for (int i = 0; i < lane.Length; i++) both[2 * i + 1] = lane[i];
             string path = SaveLibrary.SramPathFor(rom, BatterySave.Genesis);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllBytes(path, both);
+            File.WriteAllBytes(path, lane);
             using var core = Load(rom);
             Assert.Equal(lane, Space(core, 512));
             core.SaveSram();
-            Assert.Equal(lane, File.ReadAllBytes(path));
+            Assert.Equal(ByAddress(lane), File.ReadAllBytes(path));
         }
 
         [Fact]

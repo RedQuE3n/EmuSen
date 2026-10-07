@@ -42,7 +42,7 @@ namespace EmuSen.WiseMan.Mistress
             window.CaptureRenderedFrame();
 
             var tabs = ByName<Tabs>(window, "ConsoleTabs");
-            Assert.Equal(CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).Concat(CoreCatalog.DiscoveredConsoles), tabs.Items.Cast<TabItem>().Select(t => (string)t.Header!));
+            Assert.Equal(CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console), tabs.Items.Cast<TabItem>().Select(t => (string)t.Header!));
             Assert.Equal("N64", (string)((TabItem)tabs.Items[tabs.SelectedIndex]!).Header!);
         }, default);
 

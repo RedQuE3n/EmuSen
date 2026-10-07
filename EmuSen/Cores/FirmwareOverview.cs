@@ -57,6 +57,7 @@ namespace EmuSen.Cores
             var systems = new List<FirmwareSystem>();
             foreach (var console in CoreCatalog.ConsolesInReleaseOrder)
             {
+                if (CoreCatalog.IsDiscovered(console)) continue;
                 string name = string.Join(" and ", CoreCatalog.ShelvesInReleaseOrder.Where(s => ReferenceEquals(s.Core, console)).Select(s => s.EsdeFullName));
                 string? chosen = CoreCatalog.EngineChosen(console.Console, config.Value(console.Console, CoreCatalog.EngineKey));
                 if (Shipped(CoreDiscovery.ByEngineName(chosen)) is { } v1)

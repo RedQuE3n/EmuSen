@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "ShaderSettings", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
             ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
@@ -217,6 +217,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == $"{console}.{EmuSen.Cores.CoreCatalog.EngineKey}" && c.IsEffectivelyVisible);
         }
 
+        // The open sheet's tab headed by the console, which the window has only while its engine in development is shown.
+        internal static void SelectTab(MainWindow window, string console)
+        {
+            Settle(window);
+            var sheet = Sheets(window).SheetOf(Sheets(window).Current!)!;
+            var tabs = sheet.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First();
+            int at = tabs.Items.Cast<object>().Select((t, i) => (t, i)).First(p => (p.t as TabItem)?.Header?.ToString() == console).i;
+            tabs.SelectedIndex = at;
+            Settle(window);
+        }
+
         // A console only a discovered engine serves, whose tab the window adds after the catalog's, with the core in development shown - see EmuSen_Settings_Reference.md §4.90.
         internal static void ShowDiscoveredTab(MainWindow window, string console)
         {
@@ -224,7 +235,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Call(window, "ShowGraphicsSettings");
             Settle(window);
             var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
-            var consoles = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).Concat(EmuSen.Cores.CoreCatalog.DiscoveredConsoles).ToList();
+            var consoles = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList();
             tabs.SelectedIndex = consoles.IndexOf(console);
             Settle(window);
             Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == $"{console}.region" && c.IsEffectivelyVisible);
@@ -263,6 +274,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "GraphicsSettingsGenesis":
                     ShowDiscoveredTab(window, "Genesis");
+                    break;
+                case "ShaderSettingsGenesis":
+                    Call(window, "ShowShaderSettings");
+                    SelectTab(window, "Genesis");
+                    break;
+                case "ActiveCheatsGenesis":
+                    Call(window, "ShowActiveCheats");
+                    SelectTab(window, "Genesis");
+                    break;
+                case "ControllerBindingsGenesis":
+                    Call(window, "ShowControllerBindings");
                     break;
                 case "ControllerBindings":
                     Call(window, "ShowControllerBindings");
@@ -477,6 +499,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task Nothing_in_the_window_is_cut_off_past_its_panel_or_drawn_over_anything_else(string which, int width, int height) => Session.Dispatch(() =>
         {
             string name = $"{which}-{width}x{height}";
+            // A console only a discovered engine runs has its tabs and shelf only while that engine in development is shown.
+            if (which.EndsWith("Genesis", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(true);
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),

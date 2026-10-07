@@ -81,19 +81,55 @@ namespace EmuSen.Cores
                 ["n64"] = Mars,
             };
 
-        // What `cheat db prune` keeps.
+        // What `cheat db prune` keeps: the catalog's systems and those of the consoles discovery adds.
         public static IReadOnlyCollection<string> SupportedCheatSystems =>
-            CoreDescriptor.SupportedCheatSystems(Registry.Values);
+            CoreDescriptor.SupportedCheatSystems(Registry.Values.Concat(Lists.Discovered));
 
-        // One entry per real core, not per alias - what a "which console?" list shows.
-        public static IReadOnlyList<CoreDescriptor> Cores { get; } = new[] { Venus, Moon, Mercury, Mars };
+        // The C# cores this build registers by hand.
+        private static readonly CoreDescriptor[] CatalogCores = { Venus, Moon, Mercury, Mars };
+
+        // One entry per real core, not per alias - what a "which console?" list shows; a console only a discovered engine runs follows the catalog's - see EmuSen_Settings_Reference.md §4.92.
+        public static IReadOnlyList<CoreDescriptor> Cores => Lists.Cores;
 
         // Cores sorted for display: grouped by manufacturer, oldest console first - see EmuSen_Input.md §5.1.
-        public static IReadOnlyList<CoreDescriptor> ConsolesInReleaseOrder { get; } =
-            Cores.OrderBy(c => c.Manufacturer, StringComparer.OrdinalIgnoreCase)
-                 .ThenBy(c => c.ReleaseYear)
-                 .ThenBy(c => c.Console, StringComparer.OrdinalIgnoreCase)
-                 .ToArray();
+        public static IReadOnlyList<CoreDescriptor> ConsolesInReleaseOrder => Lists.Consoles;
+
+        // A row discovery added rather than a C# core of this build.
+        public static bool IsDiscovered(CoreDescriptor core) => !CatalogCores.Contains(core);
+
+        // Whether a C# core of this build claims the extension, which is what decides the factory's branch.
+        public static bool IsCatalogExtension(string extension) => CatalogCores.Any(c => c.SupportsExtension(extension));
+
+        // The catalog's lists with the consoles discovery adds, made again whenever discovery scans again.
+        private sealed record CatalogLists(IReadOnlyList<Native.DiscoveredCore>? Found, CoreDescriptor[] Discovered, CoreDescriptor[] Cores, CoreDescriptor[] Consoles,
+            LibraryShelf[] Shelves, string[] Extensions, string[] Filters);
+
+        private static CatalogLists? _lists;
+
+        // A console's row, built once from its system pack, so a row compared by reference stays the same row.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, CoreDescriptor> DiscoveredRows = new(StringComparer.OrdinalIgnoreCase);
+
+        private static CatalogLists Lists
+        {
+            get
+            {
+                var found = Native.CoreDiscovery.Found;
+                if (_lists is { } cached && ReferenceEquals(cached.Found, found)) return cached;
+                var discovered = DiscoveredConsoles.Select(console => DiscoveredRows.GetOrAdd(console, DiscoveredRow)).ToArray();
+                var cores = CatalogCores.Concat(discovered).ToArray();
+                var consoles = cores.OrderBy(c => c.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(c => c.ReleaseYear).ThenBy(c => c.Console, StringComparer.OrdinalIgnoreCase).ToArray();
+                var shelves = consoles.SelectMany(Shelves).ToArray();
+                var extensions = cores.SelectMany(c => c.Extensions).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var filters = new[] { AllConsoles }.Concat(cores.SelectMany(c => ReferenceEquals(c, Mercury) ? new[] { c.DisplayName, GameBoyColorShelf } : new[] { c.DisplayName })).ToArray();
+                return _lists = new CatalogLists(found, discovered, cores, consoles, shelves, extensions, filters);
+            }
+        }
+
+        private static DianaOS.DianaOS.Sys.Systems.SystemEntry? PackOf(string console) =>
+            DianaOS.DianaOS.Sys.Systems.SystemPacks.All.Select(p => p.Entry).FirstOrDefault(e => string.Equals(e.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(e.Id) is null);
+
+        // "Genesis (Nephrite)": the pack's console and the engine that runs it, as "SNES (Venus)" is.
+        private static CoreDescriptor DiscoveredRow(string console) => FromSystem($"{console} ({DiscoveredFor(console)?.EngineName ?? console})", PackOf(console)!);
 
         // What the library's console filter and sidebar list: one shelf per core, but two for the Game Boy's, whose games a player knows as two consoles - see EmuSen_Settings_Reference.md §4.46.
         public sealed record LibraryShelf(string Name, string Label, CoreDescriptor Core)
@@ -113,10 +149,16 @@ namespace EmuSen.Cores
             ["GB"] = ("gb", "Game Boy"),
         };
 
-        public static IReadOnlyList<LibraryShelf> ShelvesInReleaseOrder { get; } =
-            ConsolesInReleaseOrder.SelectMany(c => ReferenceEquals(c, Mercury)
-                ? new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = "gb", EsdeFullName = "Game Boy" }, new LibraryShelf(GameBoyColorShelf, "GBC", c) { EsdeSystem = "gbc", EsdeFullName = "Game Boy Color" } }
-                : new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = EsdeNames[c.Console].System, EsdeFullName = EsdeNames[c.Console].FullName } }).ToArray();
+        public static IReadOnlyList<LibraryShelf> ShelvesInReleaseOrder => Lists.Shelves;
+
+        // A console's shelves; a discovered console's ES-DE names are its pack's.
+        private static IEnumerable<LibraryShelf> Shelves(CoreDescriptor c)
+        {
+            if (ReferenceEquals(c, Mercury))
+                return new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = "gb", EsdeFullName = "Game Boy" }, new LibraryShelf(GameBoyColorShelf, "GBC", c) { EsdeSystem = "gbc", EsdeFullName = "Game Boy Color" } };
+            var (system, fullName) = EsdeNames.TryGetValue(c.Console, out var names) ? names : (PackOf(c.Console)!.EsdeSystem, PackOf(c.Console)!.EsdeFullName);
+            return new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = system, EsdeFullName = fullName } };
+        }
 
 
         // Null for AllConsoles or a name no shelf has.
@@ -161,7 +203,13 @@ namespace EmuSen.Cores
 
         // The console's pad with no ROM loaded, or every button for a console this build does not know.
         public static IReadOnlyList<Galaxia.Input.PadButton> ButtonsFor(string console) =>
-            ButtonsByConsole.TryGetValue(console, out var buttons) ? buttons : Enum.GetValues<Galaxia.Input.PadButton>();
+            ButtonsByConsole.TryGetValue(console, out var buttons) ? buttons
+            : DiscoveredSystem(console) is { } system && system.Controllers.SelectMany(c => c.Buttons).Select(b => b.Control).OfType<Galaxia.Input.PadButton>().Distinct().ToArray() is { Length: > 0 } pad ? pad
+            : Enum.GetValues<Galaxia.Input.PadButton>();
+
+        // The system entry of a console discovery added, from the engine's info, for its pad and its ports.
+        public static Native.CoreSystem? DiscoveredSystem(string console) =>
+            DiscoveredFor(console) is { } core && PackOf(console) is { } pack ? core.Info.Systems.FirstOrDefault(s => s.Id == pack.Id) : null;
 
         // Only a console with a stick is listed; every other one reads no axis - see EmuSen_Input.md §7.
         private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadAxis>> AxesByConsole =
@@ -178,8 +226,7 @@ namespace EmuSen.Cores
             Galaxia.Input.PadControls.For(ButtonsFor(console), AxesFor(console));
 
         // Every extension any core in this build claims - see EmuSen_Multicore.md §3.
-        public static IReadOnlyList<string> RomExtensions { get; } =
-            Cores.SelectMany(c => c.Extensions).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        public static IReadOnlyList<string> RomExtensions => Lists.Extensions;
 
         public static bool IsRomExtension(string extension) =>
             Cores.Any(c => c.SupportsExtension(extension));
@@ -331,7 +378,6 @@ namespace EmuSen.Cores
         // The engine a frontend runs for a console: the stored choice, else the row's default; null for a console with one - see EmuSen_Settings_Reference.md §4.44.
         public static string? EngineChosen(string console, string? stored) => stored ?? EngineFor(console)?.Default;
 
-        public static IReadOnlyList<string> FilterChoices { get; } =
-            new[] { AllConsoles }.Concat(Cores.SelectMany(c => ReferenceEquals(c, Mercury) ? new[] { c.DisplayName, GameBoyColorShelf } : new[] { c.DisplayName })).ToArray();
+        public static IReadOnlyList<string> FilterChoices => Lists.Filters;
     }
 }

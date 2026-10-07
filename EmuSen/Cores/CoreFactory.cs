@@ -63,7 +63,7 @@ namespace EmuSen.Cores
         private static Native.CoreLibrary? V1Library(string extension, string? engine)
         {
             var found = engine is not null ? Native.CoreDiscovery.ForExtension(extension).FirstOrDefault(c => c.EngineName == engine)
-                : CoreCatalog.IsRomExtension(extension) ? null : Native.CoreDiscovery.ForExtension(extension).FirstOrDefault();
+                : CoreCatalog.IsCatalogExtension(extension) ? null : Native.CoreDiscovery.ForExtension(extension).FirstOrDefault();
             return found is null || CoreCatalog.IsRegisteredEngine(found.EngineName) ? null : found.Open();
         }
 
@@ -203,6 +203,9 @@ namespace EmuSen.Cores
             if (core.SupportsExtension(".nes")) return MoonCheatCodecs.Pair();
             if (core.SupportsExtension(".gb")) return MercuryCheatCodecs.Pair();
             if (core.SupportsExtension(".z64")) return MarsCheatCodecs.Pair();
+            // A console discovery added has its system pack's codecs, as a game of it running does.
+            if (CoreCatalog.IsDiscovered(core) && DianaOS.DianaOS.Sys.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console) is { } pack)
+                return (pack.AutoDetectCodec?.Invoke(), pack.ExplicitCodec?.Invoke());
 
             return (null, null);
         }

@@ -48,7 +48,7 @@ namespace EmuSen.Mistress.Views
             MinHeight = 400;
             CanResize = true;
 
-            var consoles = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).Concat(CoreCatalog.DiscoveredConsoles).ToList();
+            var consoles = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList();
             foreach (string console in consoles)
             {
                 _tabs.Add(console, new ScrollViewer { Content = BuildConsolePanel(console) });

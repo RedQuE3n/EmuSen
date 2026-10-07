@@ -20,6 +20,7 @@ namespace EmuSen.Serenity.Shaders
         public enum Signal { Rgb, SVideo, Composite }
         public enum Mask { None, ApertureGrille, Slot, Dot }
         public enum Decoder { Notch, Comb }
+        public enum Quality { Performance, Balanced, Accurate }
 
         // One class of set: its picture, its mask, its spot, its receiver and its glass, each sourced or marked a choice in EmuSen_CRT.md §11.2.
         public sealed record Screen(string Label, double WidthMillimetres, Mask Mask, double TriadsAcross, double SpotMinimum, double SpotMaximum,
@@ -72,13 +73,18 @@ namespace EmuSen.Serenity.Shaders
         private static SlangParameter Choice(string id, string label, int initial, params string[] choices) =>
             new(id, label, initial, 0, choices.Length - 1, 1) { Choices = choices };
 
+        // Where white sits on the display when the picture is drawn bright, as a share of its peak - see EmuSen_CRT.md §12.3.
+        public const double BrightWhite = 0.75;
+
         public static IReadOnlyList<SlangParameter> Parameters { get; } = new SlangParameter[]
         {
+            Choice("quality", "Quality", (int)Quality.Balanced, "Performance", "Balanced", "Accurate"),
             Choice("signal", "Signal", (int)Signal.Composite, "RGB", "S-Video", "Composite"),
             Choice("screen", "Screen", DefaultScreen, Screens.Select(s => s.Label).ToArray()),
             Choice("colour", "Colour", 0, Colours.Select(c => c.Label).ToArray()),
             new("curvature", "Curvature", 1f, 0f, 2f, 0.05f),
             new("overscan", "Overscan (0 shows the whole picture)", 0f, 0f, 10f, 0.5f),
+            Choice("level", "Picture brightness", 0, "Bright", "The tube's own"),
             new("displayNits", "Display brightness, cd/m²", 300f, 100f, 1000f, 10f),
             Choice("subpixels", "Display subpixels", 1, "None", "RGB", "BGR"),
             Choice("gamut", "Display colours", 0, Displays.Select(d => d.Label).ToArray()),
@@ -100,7 +106,7 @@ namespace EmuSen.Serenity.Shaders
         };
 
         // The parameters that decide which passes exist or what is written into them as constants.
-        public static IReadOnlyList<string> Structural { get; } = new[] { "signal", "screen", "colour", "gamut", "mask", "decoder", "chroma" };
+        public static IReadOnlyList<string> Structural { get; } = new[] { "quality", "signal", "screen", "colour", "gamut", "mask", "decoder", "chroma" };
 
         private static Dictionary<string, float> Timing(double activeMicroseconds, double cyclesAcross, double phaseLine, double phaseFrame) => new()
         {
@@ -134,11 +140,12 @@ namespace EmuSen.Serenity.Shaders
         private static int At(IReadOnlyDictionary<string, float> values, string id, int count) => Math.Clamp((int)MathF.Round(values[id]), 0, count - 1);
 
         // What the screen and the player's overrides come to: the mask drawn, the decoder used and the chroma channel's width in subcarrier cycles.
-        public sealed record Resolved(Screen Screen, Signal Signal, Mask Mask, Decoder Decoder, int ChromaCycles, Colour Colour, Colour Display);
+        public sealed record Resolved(Screen Screen, Signal Signal, Mask Mask, Decoder Decoder, int ChromaCycles, Colour Colour, Colour Display, Quality Quality, int Samples);
 
         public static Resolved Resolve(IReadOnlyDictionary<string, float> values)
         {
             Screen screen = Screens[At(values, "screen", Screens.Count)];
+            var quality = (Quality)At(values, "quality", 3);
             int mask = At(values, "mask", 5), decoder = At(values, "decoder", 3);
             double megahertz = screen.ChromaMegahertz * values["chroma"];
 
@@ -147,13 +154,20 @@ namespace EmuSen.Serenity.Shaders
             Decoder wanted = decoder == 0 ? screen.Decoder : (Decoder)(decoder - 1);
             return new Resolved(screen, (Signal)At(values, "signal", 3), mask == 0 ? screen.Mask : (Mask)(mask - 1),
                 wanted == Decoder.Comb && combGain < 0.25 ? Decoder.Notch : wanted,
-                Math.Clamp((int)Math.Round(0.72 * SubcarrierMegahertz / megahertz), 1, 6), Colours[At(values, "colour", Colours.Count)], Displays[At(values, "gamut", Displays.Count)]);
+                Math.Clamp((int)Math.Round(0.72 * SubcarrierMegahertz / megahertz), 1, 6), Colours[At(values, "colour", Colours.Count)], Displays[At(values, "gamut", Displays.Count)],
+                quality, quality == Quality.Accurate ? SignalSamples : (int)Math.Round(4 * values["cyclesAcross"]));
         }
 
         public static IReadOnlyList<FilterPass> Passes(IReadOnlyDictionary<string, float> values)
         {
             Resolved r = Resolve(values);
-            var signal = new PassSize(PassAxis.Fixed, SignalSamples);
+            if (r.Quality == Quality.Performance)
+                return new[]
+                {
+                    new FilterPass(Blend(r, values), PassScale.Source) { Name = "gun", Float = true, Width = new PassSize(PassAxis.Source, 2) },
+                    new FilterPass(Face(r), PassScale.Viewport) { Linear = new[] { "gun" } },
+                };
+            var signal = new PassSize(PassAxis.Fixed, r.Samples);
             FilterPass Line(string sksl, string name, bool feedback = false, params string[] linear) =>
                 new(sksl, PassScale.Source) { Width = signal, Float = true, Name = name, Feedback = feedback, Linear = linear };
             FilterPass Small(string sksl, string name, params string[] linear) =>
@@ -168,12 +182,17 @@ namespace EmuSen.Serenity.Shaders
                 passes.Add(Line(Drive(r), "gun"));
             }
             passes.Add(Line(State, "state", feedback: true));
-            passes.Add(Line(Beam(r, spot: false), "beam"));
-            passes.Add(Line(Beam(r, spot: true), "spot"));
-            passes.Add(Small(GlareGather(r), "small", "beam"));
+            bool accurate = r.Quality == Quality.Accurate;
+            if (accurate)
+            {
+                passes.Add(Line(Beam(r, spot: false), "beam"));
+                passes.Add(Line(Beam(r, spot: true), "spot"));
+            }
+            string lit = accurate ? "beam" : "gun";
+            passes.Add(Small(GlareGather(lit), "small", lit));
             passes.Add(Small(GlareBlur(horizontal: true), "wide"));
             passes.Add(Small(GlareBlur(horizontal: false), "haze"));
-            passes.Add(new FilterPass(Face(r), PassScale.Viewport) { Linear = new[] { "beam", "spot", "haze" } });
+            passes.Add(new FilterPass(Face(r), PassScale.Viewport) { Linear = accurate ? new[] { "beam", "spot", "haze" } : new[] { "gun", "state", "haze" } });
             return passes;
         }
 
@@ -259,7 +278,7 @@ half4 main(float2 coord) {
             string above = "(row < 1.0 ? 0.0 : source.eval(float2(x + 0.5, row - 0.5)).r)";
 
             // The loop reaches as far as the longer window does on this console, and no further.
-            int reach = (int)Math.Ceiling(Math.Max(r.ChromaCycles, 2) * SignalSamples / values["cyclesAcross"] / 2);
+            int reach = (int)Math.Ceiling(Math.Max(r.ChromaCycles, 2) * r.Samples / values["cyclesAcross"] / 2);
             return @"
 uniform shader source;
 uniform float2 inputSize;
@@ -326,6 +345,60 @@ half4 main(float2 coord) {
     float gy = -(0.299 * ry + 0.114 * by) / 0.587;
     return half4(light(float3(y + ry, y + gy, y + by)), 1.0);
 }";
+
+        // The Performance tier's signal: the frame's own pixels, luma and chroma blurred at the bandwidths the cable and the receiver leave them, no subcarrier - see EmuSen_CRT.md §12.1.
+        private static string Blend(Resolved r, IReadOnlyDictionary<string, float> values)
+        {
+            double video = r.Screen.VideoMegahertz, chroma = 0.72 * SubcarrierMegahertz / r.ChromaCycles;
+            bool rgb = r.Signal == Signal.Rgb, notch = r.Signal == Signal.Composite && r.Decoder == Decoder.Notch;
+
+            // The notch acts on the encoder's output and the video stage after it, whose gains at the subcarrier scale the band it takes away.
+            double encoder = values["lumaMHz"], through = Math.Exp(-0.5 * Math.Log(2) * SubcarrierMegahertz * SubcarrierMegahertz * (1 / (encoder * encoder) + 1 / (video * video)));
+            return @"
+uniform shader original;
+uniform float2 originalSize;
+uniform float activeUs;
+uniform float lumaMHz;
+uniform float chromaMHz;
+uniform float cyclesAcross;
+" + Functions + Transfer + @"
+
+// The integral of the receiver's notch band, a Hann window two subcarrier cycles long times the subcarrier, from the window's centre.
+float band(float u, float reach, float w) {
+    u = clamp(u, -reach, reach);
+    float a = 3.14159265 / reach;
+    return (2.0 / reach) * (0.5 * sin(w * u) / w + 0.25 * (sin((w + a) * u) / (w + a) + sin((w - a) * u) / (w - a)));
+}
+
+half4 main(float2 coord) {
+    float width = originalSize.x;
+    float x = coord.x * 0.5;
+    float row = floor(coord.y) + 0.5;
+    float rate = width / activeUs;
+    float reach = width / cyclesAcross;
+    float w = 6.2831853 / reach;
+    float sy = 0.132532 * rate * sqrt(1.0 / (lumaMHz * lumaMHz) + " + N(1 / (video * video)) + @");
+    float sc = 0.132532 * rate * sqrt(1.0 / (chromaMHz * chromaMHz) + " + N(1 / (chroma * chroma)) + @");
+    float first = floor(x);
+    float3 wide = float3(0.0);
+    float2 narrow = float2(0.0);
+    for (int i = -4; i <= 4; i++) {
+        float k = first + float(i);
+        if (k < 0.0 || k >= width) continue;
+        float3 rgb = original.eval(float2(k + 0.5, row)).rgb;
+        float wy = cdf((k + 1.0 - x) / sy) - cdf((k - x) / sy)" + (notch ? " - " + N(through) + " * (band(x - k, reach, w) - band(x - k - 1.0, reach, w))" : "") + @";
+" + (rgb ? @"        wide += wy * rgb;
+    }
+    return half4(light(wide), 1.0);
+}" : @"        float wc = cdf((k + 1.0 - x) / sc) - cdf((k - x) / sc);
+        float y = dot(rgb, float3(0.299, 0.587, 0.114));
+        wide.x += wy * y;
+        narrow += wc * float2(rgb.b - y, rgb.r - y);
+    }
+    float gy = -(0.299 * narrow.y + 0.114 * narrow.x) / 0.587;
+    return half4(light(float3(wide.x + narrow.y, wide.x + gy, wide.x + narrow.x)), 1.0);
+}");
+        }
 
         // Green's and blue's slow light, two sums each over the frames before; red's is gone inside the frame - see EmuSen_CRT.md §11.4.
         private static string State => @"
@@ -397,7 +470,7 @@ float2 pictureOf(float2 face, float rows) {
 ";
 
         // The picture's light gathered into cells of the face, for the glass to spread - see EmuSen_CRT.md §11.6.
-        private static string GlareGather(Resolved r) => @"
+        private static string GlareGather(string lit) => (@"
 uniform shader beam;
 uniform float2 beamSize;
 uniform float2 outputSize;
@@ -413,7 +486,7 @@ half4 main(float2 coord) {
         }
     }
     return half4(sum / 18.0, 1.0);
-}";
+}").Replace("beam", lit);
 
         // One axis of the glare's Gaussian; light that would land outside the face is lost.
         private static string GlareBlur(bool horizontal) => @"
@@ -501,6 +574,16 @@ float runIntegral(float x, float lit, float period) {
     float part = n * lit * f + (f < lit ? 0.5 * f * f : lit * (f - 0.5 * lit));
     return whole + part;
 }
+float runLength(float x, float lit, float period) {
+    float n = floor(x / period);
+    return n * lit + min(x - n * period, lit);
+}
+float boxed(float x, float reach, float start, float lit, float period) {
+    float base = floor((x - reach - start) / period) * period + start;
+    float u = x - base;
+    float h = max(reach, 0.0001);
+    return (runLength(u + h, lit, period) - runLength(u - h, lit, period)) / (2.0 * h);
+}
 float covered(float x, float reach, float start, float lit, float period) {
     float base = floor((x - reach - start) / period) * period + start;
     float u = x - base;
@@ -509,61 +592,36 @@ float covered(float x, float reach, float start, float lit, float period) {
 }
 ";
 
-        // The tube's face seen from the front: the glass's curve, each gun's beam over five lines, the mask per subpixel, the glare, and the display's limits - see EmuSen_CRT.md §11.
+        // The tube's face seen from the front: the glass's curve, each gun's beam, the mask per subpixel, the glare, and the display's limits; the lower tiers draw less of it - see EmuSen_CRT.md §11 and §12.
         private static string Face(Resolved r)
         {
             Layout layout = LayoutOf(r.Mask);
             double[][] m = GunsToDisplay(r.Colour, r.Display);
             double radius = r.Screen.RadiusOverWidth * 2, distance = 6;
             double halfWidth = r.Screen.WidthMillimetres / 2;
-            string mask = r.Mask == Mask.None ? "    cover = float3(1.0);\n" : string.Concat(Enumerable.Range(0, 3).Select(c =>
+            bool accurate = r.Quality == Quality.Accurate, performance = r.Quality == Quality.Performance;
+
+            // Accurate weighs the mask over a tent two pixels wide, the others over the pixel's box.
+            string cover = accurate ? "covered" : "boxed";
+            // The rows of a slot or dot mask are the same two for every colour, level and half a pitch down, so they are weighed once.
+            string rowsOf = layout.VerticalPitch <= 0 ? "" :
+                $"    float rowLevel = {cover}(triad.y, footprint.y, 0.0, {N(layout.VerticalPitch * layout.VerticalLit)}, {N(layout.VerticalPitch)});\n"
+                + $"    float rowDown = {cover}(triad.y, footprint.y, {N(layout.VerticalPitch * 0.5)}, {N(layout.VerticalPitch * layout.VerticalLit)}, {N(layout.VerticalPitch)});\n";
+            string mask = r.Mask == Mask.None ? "    cover = float3(1.0);\n" : rowsOf + string.Concat(Enumerable.Range(0, 3).Select(c =>
             {
                 string channel = "rgb"[c].ToString();
                 string phase = $"(triad.x + shift.{channel} * grain.x * across)";
-                if (layout.VerticalPitch <= 0) return $"    cover.{channel} = covered({phase}, footprint.x, {N(layout.Start[c])}, {N(layout.Width)}, 1.0);\n";
-                string even = $"covered({phase}, footprint.x, {N(layout.Start[c])}, {N(layout.Width)}, 2.0)";
-                string odd = $"covered({phase}, footprint.x, {N(layout.Start[c] + 1)}, {N(layout.Width)}, 2.0)";
-                string down = layout.Shifted[c] ? "0.5" : "0.0", up = layout.Shifted[c] ? "0.0" : "0.5";
-                return $"    cover.{channel} = {even} * covered(triad.y, footprint.y, {N(layout.VerticalPitch)} * {down}, {N(layout.VerticalPitch * layout.VerticalLit)}, {N(layout.VerticalPitch)})"
-                    + $" + {odd} * covered(triad.y, footprint.y, {N(layout.VerticalPitch)} * {up}, {N(layout.VerticalPitch * layout.VerticalLit)}, {N(layout.VerticalPitch)});\n";
+                if (layout.VerticalPitch <= 0) return $"    cover.{channel} = {cover}({phase}, footprint.x, {N(layout.Start[c])}, {N(layout.Width)}, 1.0);\n";
+                string even = $"{cover}({phase}, footprint.x, {N(layout.Start[c])}, {N(layout.Width)}, 2.0)";
+                string odd = $"{cover}({phase}, footprint.x, {N(layout.Start[c] + 1)}, {N(layout.Width)}, 2.0)";
+                return layout.Shifted[c] ? $"    cover.{channel} = {even} * rowDown + {odd} * rowLevel;\n" : $"    cover.{channel} = {even} * rowLevel + {odd} * rowDown;\n";
             }));
 
-            return @"
+            string beams = accurate ? @"
 uniform shader beam;
 uniform shader spot;
-uniform shader haze;
 uniform float2 beamSize;
-uniform float2 hazeSize;
-uniform float2 outputSize;
-uniform float pixelScale;
-uniform float2 pixelOrigin;
-uniform float frameCount;
-uniform float curvature;
-uniform float displayNits;
-uniform float tubeNits;
-uniform float subpixels;
-uniform float maskPitch;
-uniform float maskDepth;
-uniform float glare;
-uniform float convergence;
-uniform float interlace;
-" + Functions + Raster + Coverage + @"
-
-float2 faceOf(float2 screen) {
-    if (curvature <= 0.0) return screen;
-    float radius = " + N(radius) + @" / curvature;
-    float eye = " + N(distance) + @";
-    float edgeX = radius - sqrt(radius * radius - 1.0);
-    float edgeY = " + (r.Screen.Cylinder ? "0.0" : "radius - sqrt(radius * radius - 0.5625)") + @";
-    float2 s = screen * float2(eye / (eye + edgeX), eye / (eye + edgeY));
-    float a = " + (r.Screen.Cylinder ? "s.x * s.x" : "dot(s, s)") + @" + eye * eye;
-    float b = eye * (eye + radius);
-    float c = eye * eye + 2.0 * eye * radius;
-    float t = (b - sqrt(max(b * b - a * c, 0.0))) / a;
-    return s * t;
-}
-
-float beamOf(float2 picture, float tall, float channel, float field) {
+float beamOf(float2 picture, float tall, float channel, float field, inout float lineMean, inout float linePeak) {
     float2 p = picture * beamSize;
     if (picture.x < 0.0 || picture.x > 1.0) return 0.0;
     float scale = beamSize.y > 300.0 ? 2.0 : 1.0;
@@ -580,9 +638,123 @@ float beamOf(float2 picture, float tall, float channel, float field) {
         float d = p.y - (row + 0.5);
         float lit = scale > 1.5 && interlace > 0.5 ? (mod(row + field, 2.0) < 0.5 ? 2.0 : 0.0) : 1.0;
         sum += lit * light * (cdf((d + 0.5 * tall) / sigma) - cdf((d - 0.5 * tall) / sigma)) / tall;
+        float near = max(1.0 - abs(d) / scale, 0.0);
+        lineMean += lit * light * near / scale;
+        if (near > 0.0) linePeak = max(linePeak, lit * light / (sigma * 2.5066283));
     }
     return sum;
 }
+" : @"
+uniform shader gun;
+uniform float2 gunSize;
+uniform float spotSize;
+uniform float spotGrowth;
+" + (performance ? @"
+float3 lightAt(float2 p) { return gun.eval(p).rgb; }
+" : @"
+uniform shader state;
+uniform float persistence;
+float3 lightAt(float2 p) {
+    float3 e = gun.eval(p).rgb;
+    half4 st = state.eval(p);
+    float2 fast = persistence * float2(" + N(TailScale * GreenFast) + ", " + N(TailScale * BlueFast) + @");
+    float2 slow = persistence * float2(" + N(TailScale * GreenSlow) + ", " + N(TailScale * BlueSlow) + @");
+    float2 kept = 1.0 / (1.0 + fast * " + N(TailFast / (1 - TailFast)) + " + slow * " + N(TailSlow / (1 - TailSlow)) + @");
+    float2 now = float2(e.g, e.b);
+    float2 lit = kept * (now + fast * (float2(st.r, st.b) - now) + slow * (float2(st.g, st.a) - now));
+    return float3(e.r, lit.x, lit.y);
+}
+") + @"
+float3 beamsOf(float2 picture, float3 across, float field, inout float3 lineMean, inout float3 linePeak) {
+    float2 p = picture * gunSize;
+    if (picture.x < 0.0 || picture.x > 1.0) return float3(0.0);
+    float scale = gunSize.y > 300.0 ? 2.0 : 1.0;
+    float first = floor(p.y - 0.5);
+    float3 sum = float3(0.0);
+    for (int j = " + (performance ? "0" : "-1") + @"; j <= " + (performance ? "1" : "1") + @"; j++) {
+        float row = first + float(j)" + (performance ? "" : " + 0.0") + @";
+        if (row < 0.0 || row >= gunSize.y) continue;
+        float3 l = " + (performance ? "lightAt(float2(p.x, row + 0.5))" : "float3(lightAt(float2(across.r * gunSize.x, row + 0.5)).r, lightAt(float2(across.g * gunSize.x, row + 0.5)).g, lightAt(float2(across.b * gunSize.x, row + 0.5)).b)") + @";
+        " + (performance ? "float" : "float3") + @" v = spotSize * spotSize * (" + N(r.Screen.SpotMinimum * r.Screen.SpotMinimum) + " + " + N(r.Screen.SpotMaximum * r.Screen.SpotMaximum - r.Screen.SpotMinimum * r.Screen.SpotMinimum) + @" * spotGrowth * clamp(" + (performance ? "dot(l, float3(0.299, 0.587, 0.114))" : "l") + @", 0.0, 1.5));
+        " + (performance ? "float" : "float3") + @" sigma = scale * sqrt(v);
+        float d = p.y - (row + 0.5);
+        float lit = scale > 1.5 && interlace > 0.5 ? (mod(row + field, 2.0) < 0.5 ? 2.0 : 0.0) : 1.0;
+        sum += lit * l * exp(-0.5 * d * d / (sigma * sigma)) / (sigma * 2.5066283);
+        float near = max(1.0 - abs(d) / scale, 0.0);
+        lineMean += lit * l * near / scale;
+        if (near > 0.0) linePeak = max(linePeak, lit * l / (sigma * 2.5066283));
+    }
+    return sum;
+}
+";
+            if (!accurate && !performance) beams = beams.Replace("float first = floor(p.y - 0.5);", "float first = floor(p.y);");
+
+            string guns = accurate ? @"
+    float spread = convergence * (" + N(r.Screen.ConvergenceCentre / halfWidth / 2) + " + " + N((r.Screen.ConvergenceEdge - r.Screen.ConvergenceCentre) / halfWidth / 2) + @" * dot(face, face) / 1.5625);
+    float2 miss = float2(pictureOf(face + float2(spread, 0.0), beamSize.y).x - before.x, 0.0);
+    float3 lineMean = float3(0.0);
+    float3 linePeak = float3(0.0);
+    float3 guns = float3(
+        beamOf(before + float2(shift.r * perPixel.x, 0.0) - miss, tall, 0.0, frameCount, lineMean.r, linePeak.r),
+        beamOf(before + float2(shift.g * perPixel.x, 0.0), tall, 1.0, frameCount, lineMean.g, linePeak.g),
+        beamOf(before + float2(shift.b * perPixel.x, 0.0) + miss, tall, 2.0, frameCount, lineMean.b, linePeak.b));
+" : performance ? @"
+    float3 lineMean = float3(0.0);
+    float3 linePeak = float3(0.0);
+    float3 guns = beamsOf(before, float3(before.x), frameCount, lineMean, linePeak);
+" : @"
+    float spread = convergence * (" + N(r.Screen.ConvergenceCentre / halfWidth / 2) + " + " + N((r.Screen.ConvergenceEdge - r.Screen.ConvergenceCentre) / halfWidth / 2) + @" * dot(face, face) / 1.5625);
+    float miss = pictureOf(face + float2(spread, 0.0), gunSize.y).x - before.x;
+    float3 lineMean = float3(0.0);
+    float3 linePeak = float3(0.0);
+    float3 guns = beamsOf(before, before.x + shift * perPixel.x + float3(-miss, 0.0, miss), frameCount, lineMean, linePeak);
+";
+            string rows = accurate ? "beamSize.y" : "gunSize.y";
+            string glass = performance ? @"
+    float3 direct = float3(dot(" + Row(m[0]) + ", guns), dot(" + Row(m[1]) + ", guns), dot(" + Row(m[2]) + @", guns));
+    float3 even = float3(dot(" + Row(m[0]) + ", lineMean), dot(" + Row(m[1]) + ", lineMean), dot(" + Row(m[2]) + @", lineMean));
+    float3 peak = float3(dot(" + Row(m[0]) + ", linePeak), dot(" + Row(m[1]) + ", linePeak), dot(" + Row(m[2]) + @", linePeak));
+    float3 veil = float3(0.0);
+" : @"
+    float spill = " + N(GlareWeight) + @" * glare;
+    float3 scattered = haze.eval((face / float2(1.0, 0.75) * 0.5 + 0.5) * hazeSize).rgb;
+    float3 direct = (1.0 - spill) * float3(dot(" + Row(m[0]) + ", guns), dot(" + Row(m[1]) + ", guns), dot(" + Row(m[2]) + @", guns));
+    float3 even = (1.0 - spill) * float3(dot(" + Row(m[0]) + ", lineMean), dot(" + Row(m[1]) + ", lineMean), dot(" + Row(m[2]) + @", lineMean));
+    float3 peak = (1.0 - spill) * float3(dot(" + Row(m[0]) + ", linePeak), dot(" + Row(m[1]) + ", linePeak), dot(" + Row(m[2]) + @", linePeak));
+    float3 veil = spill * float3(dot(" + Row(m[0]) + ", scattered), dot(" + Row(m[1]) + ", scattered), dot(" + Row(m[2]) + @", scattered));
+";
+
+            return @"
+uniform float2 outputSize;
+uniform float pixelScale;
+uniform float2 pixelOrigin;
+uniform float frameCount;
+uniform float displayNits;
+uniform float tubeNits;
+uniform float level;
+uniform float subpixels;
+uniform float maskPitch;
+uniform float maskDepth;
+uniform float interlace;
+" + (performance ? "uniform float curvature;\n" : @"uniform shader haze;
+uniform float2 hazeSize;
+uniform float curvature;
+uniform float glare;
+") + (performance ? "" : "uniform float convergence;\n") + Functions + Raster + Coverage + beams + @"
+
+float2 faceOf(float2 screen) {
+" + (@"    if (curvature <= 0.0) return screen;
+    float radius = " + N(radius) + @" / curvature;
+    float eye = " + N(distance) + @";
+    float edgeX = radius - sqrt(radius * radius - 1.0);
+    float edgeY = " + (r.Screen.Cylinder ? "0.0" : "radius - sqrt(radius * radius - 0.5625)") + @";
+    float2 s = screen * float2(eye / (eye + edgeX), eye / (eye + edgeY));
+    float a = " + (r.Screen.Cylinder ? "s.x * s.x" : "dot(s, s)") + @" + eye * eye;
+    float b = eye * (eye + radius);
+    float c = eye * eye + 2.0 * eye * radius;
+    float t = (b - sqrt(max(b * b - a * c, 0.0))) / a;
+    return s * t;
+") + @"}
 
 float3 encode(float3 c) {
     return float3(c.r <= 0.0031308 ? c.r * 12.92 : 1.055 * pow(c.r, 0.41666667) - 0.055,
@@ -603,37 +775,31 @@ half4 main(float2 coord) {
     float3 shift = subpixels < 0.5 ? float3(0.0) : subpixels < 1.5 ? float3(-1.0, 0.0, 1.0) / 3.0 : float3(1.0, 0.0, -1.0) / 3.0;
     float across = " + N(r.Screen.TriadsAcross) + @" * 0.5 / maskPitch;
     float2 triad = face * across;
-    float2 footprint = grain * across;
+    float2 footprint = grain * across" + (accurate ? "" : " * 0.5") + @";
     float3 cover;
 " + mask + @"
     float litFraction = " + N(layout.LitFraction) + @";
 
-    float2 before = pictureOf(face, beamSize.y);
-    float2 perPixel = float2(pictureOf(face + float2(grain.x, 0.0), beamSize.y).x - before.x, pictureOf(face + float2(0.0, grain.y), beamSize.y).y - before.y);
-    float tall = perPixel.y * beamSize.y;
-    float spread = convergence * (" + N(r.Screen.ConvergenceCentre / halfWidth / 2) + " + " + N((r.Screen.ConvergenceEdge - r.Screen.ConvergenceCentre) / halfWidth / 2) + @" * dot(face, face) / 1.5625);
-    float2 miss = float2(pictureOf(face + float2(spread, 0.0), beamSize.y).x - before.x, 0.0);
-    float3 guns = float3(
-        beamOf(before + float2(shift.r * perPixel.x, 0.0) - miss, tall, 0.0, frameCount),
-        beamOf(before + float2(shift.g * perPixel.x, 0.0), tall, 1.0, frameCount),
-        beamOf(before + float2(shift.b * perPixel.x, 0.0) + miss, tall, 2.0, frameCount));
-
-    float spill = " + N(GlareWeight) + @" * glare;
-    float3 scattered = haze.eval((face / float2(1.0, 0.75) * 0.5 + 0.5) * hazeSize).rgb;
-    float3 direct = (1.0 - spill) * float3(dot(" + Row(m[0]) + ", guns), dot(" + Row(m[1]) + ", guns), dot(" + Row(m[2]) + @", guns));
-    float3 veil = spill * float3(dot(" + Row(m[0]) + ", scattered), dot(" + Row(m[1]) + ", scattered), dot(" + Row(m[2]) + @", scattered));
+    float2 before = pictureOf(face, " + rows + @");
+    float2 perPixel = float2(pictureOf(face + float2(grain.x, 0.0), " + rows + ").x - before.x, pictureOf(face + float2(0.0, grain.y), " + rows + @").y - before.y);
+    float tall = perPixel.y * " + rows + @";
+" + guns + glass + @"
     float luminance = dot(direct, float3(0.2126, 0.7152, 0.0722));
     float lowest = min(direct.r, min(direct.g, direct.b));
     if (lowest < 0.0) direct = luminance + (direct - luminance) * (luminance / max(luminance - lowest, 0.000001));
 
-    float headroom = displayNits / tubeNits;
+    float headroom = level < 0.5 ? " + N(1 / BrightWhite) + @" : displayNits / tubeNits;
+
+    // A scanline brighter at its centre than the display can go is drawn flatter, toward its line's even light, by just enough for its peak.
+    direct = even + (direct - even) * clamp((headroom - even) / max(peak - even, float3(0.000001)), 0.0, 1.0);
     float3 depth = maskDepth * clamp((headroom / max(direct, float3(0.000001)) - 1.0) / (1.0 / litFraction - 1.0 + 0.000001), 0.0, 1.0);
     float3 shown = (direct * (1.0 + depth * (cover / litFraction - 1.0)) + veil) / headroom;
-
+" + (performance ? @"    return half4(encode(clamp(shown * inside, 0.0, 1.0)), 1.0);
+}" : @"
     float2 device = coord * pixelScale + pixelOrigin;
     float noise = fract(52.9829189 * fract(dot(floor(device), float2(0.06711056, 0.00583715)))) - 0.5;
     return half4(clamp(encode(clamp(shown * inside, 0.0, 1.0)) + noise / 255.0, 0.0, 1.0), 1.0);
-}";
+}");
         }
 
         public const double CornerRadius = 0.04;

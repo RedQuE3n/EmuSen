@@ -93,6 +93,9 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public int ScreenHeight => ScreenHeightPixels;
 
         // 4194304 / 70224 ~= 59.7275 - see Mercury_Core.md §2.
+        // The screen's shape: the LCD's 160 by 144 square pixels - see EmuSen_Serenity.md §2.9.
+        public double DisplayAspect => EmuSen.Serenity.DisplayShape.GameBoy;
+
         public double FrameRateHz => CpuClockHz / (double)CyclesPerFrame;
 
         public bool IsRomLoaded => Bus != null;

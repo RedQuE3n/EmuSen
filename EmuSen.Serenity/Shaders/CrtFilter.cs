@@ -130,7 +130,7 @@ namespace EmuSen.Serenity.Shaders
             Build = Passes,
             Structural = Structural,
             ConsoleDefaults = ConsoleTiming,
-            Aspect = 4.0 / 3.0,
+            Aspect = DisplayShape.Television,
             RowsOnce = true,
             RequiresDevice = true,
         };

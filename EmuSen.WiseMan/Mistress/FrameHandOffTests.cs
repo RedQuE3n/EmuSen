@@ -26,6 +26,19 @@ namespace EmuSen.WiseMan.Mistress
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FrameHandOffTests).GetTypeInfo().Assembly);
 
+        // The screen's shape a core reports for a frame is presented with that frame - see EmuSen_Serenity.md §2.9.
+        [Fact]
+        public Task A_frame_s_shape_is_presented_with_it() => Session.Dispatch(() =>
+        {
+            var shapes = new List<double>();
+            var handOff = new FrameHandOff((_, _, _, _, _, _, aspect) => shapes.Add(aspect));
+            handOff.Offer(new byte[4], 1, 1, 1, null, aspect: 4.0 / 3.0);
+            Dispatcher.UIThread.RunJobs();
+            handOff.Offer(new byte[4], 1, 1, 1, null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { 4.0 / 3.0, 0.0 }, shapes);
+        }, default);
+
         [Fact]
         public async Task Frames_replaced_before_the_screen_took_them_go_back_once_and_a_presented_one_is_the_screen_s()
         {
@@ -33,7 +46,7 @@ namespace EmuSen.WiseMan.Mistress
             {
                 var presented = new List<byte[]>();
                 var released = new List<byte[]>();
-                var handOff = new FrameHandOff((pixels, _, _, _, _, _) => presented.Add(pixels));
+                var handOff = new FrameHandOff((pixels, _, _, _, _, _, _) => presented.Add(pixels));
                 byte[] a = new byte[4], b = new byte[4], c = new byte[4], d = new byte[4];
 
                 handOff.Offer(a, 1, 1, 1, released.Add);
@@ -87,7 +100,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void A_core_that_does_not_lend_gets_no_route_and_one_that_does_keeps_its_route_until_the_session_ends()
         {
-            var handOff = new FrameHandOff((_, _, _, _, _, _) => { });
+            var handOff = new FrameHandOff((_, _, _, _, _, _, _) => { });
             Assert.Null(handOff.ReleaseFor(null));
             var pool = new CountingPool();
             var core = new PoolCore(pool);
@@ -122,7 +135,7 @@ namespace EmuSen.WiseMan.Mistress
             await Session.Dispatch(() =>
             {
                 var control = new GameFrameControl();
-                var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _) => control.UpdateFrame(pixels, width, height, rowRepeat, release));
+                var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _, _) => control.UpdateFrame(pixels, width, height, rowRepeat, release));
                 var (core, pool) = ShowOneAndEnd(handOff, control);
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
@@ -179,7 +192,7 @@ namespace EmuSen.WiseMan.Mistress
                     var copies = new Dictionary<byte[], byte[]>(ReferenceEqualityComparer.Instance);
                     var releasedTwice = 0;
                     var pictures = new List<(byte[] Copy, int Width, int Height)> { default };
-                    var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _) =>
+                    var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _, _) =>
                     {
                         pictures.Add(((byte[])pixels.Clone(), width, height));
                         control.UpdateFrame(pixels, width, height, rowRepeat, release);
@@ -263,7 +276,7 @@ namespace EmuSen.WiseMan.Mistress
                     var control = new GameFrameControl();
                     var copies = new Dictionary<byte[], byte[]>(ReferenceEqualityComparer.Instance);
                     int releasedTwice = 0, offered = 0, steps = 0, frames = 0, draws = 0;
-                    var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _) => control.UpdateFrame(pixels, width, height, rowRepeat, release));
+                    var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _, _) => control.UpdateFrame(pixels, width, height, rowRepeat, release));
                     Action<byte[]> giveBack = buffer =>
                     {
                         if (!copies.Remove(buffer)) releasedTwice++;
@@ -344,7 +357,7 @@ namespace EmuSen.WiseMan.Mistress
                     using var core = new MarsRtCore(batteryRamDisabled: true) { DeferredPresentation = false };
                     core.LoadRom(rom);
                     var control = new GameFrameControl();
-                    var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _) => control.UpdateFrame(pixels, width, height, rowRepeat, release));
+                    var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _, _) => control.UpdateFrame(pixels, width, height, rowRepeat, release));
                     Action<byte[]> release = handOff.ReleaseFor(core)!;
                     using var surface = SKSurface.Create(new SKImageInfo(64, 64, SKColorType.Rgba8888, SKAlphaType.Premul));
 

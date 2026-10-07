@@ -16,6 +16,9 @@ namespace EmuSen.Cores
         int ScreenWidth { get; }
         int ScreenHeight { get; }
 
+        // Width over height of the screen the console was made for, whatever the frame's pixel count; 0 is unknown, drawn with square pixels - see EmuSen_Serenity.md §2.9.
+        double DisplayAspect => 0;
+
         // Hardware refresh rate, for frontend frame pacing - see Venus_CPU.md §8.5b.
         double FrameRateHz { get; }
 

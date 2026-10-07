@@ -119,6 +119,9 @@ namespace EmuSen.Common
         // How many times the frontend shows each row of the frame; one for a core that repeats its own - see EmuSen_Multicore.md §15.
         public int RowRepeat => (_core as EmuSen.Cores.IRepeatedRows)?.RowRepeat ?? 1;
 
+        // The screen's shape the core reports for the frame on show; 0 when it reports none - see EmuSen_Serenity.md §2.9.
+        public double DisplayAspect => _core?.DisplayAspect ?? 0;
+
         public byte[] GetFrameBufferRgba()
         {
             if (_core is null) throw new InvalidOperationException("GetFrameBufferRgba() called before LoadRom().");

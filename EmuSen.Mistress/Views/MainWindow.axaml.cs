@@ -158,7 +158,7 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
-            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence));
+            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect));
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);
@@ -442,6 +442,7 @@ namespace EmuSen.Mistress.Views
             GameFrame.ActiveEffect = choice.Effect;
             // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
             GameFrame.FilterConsole = console;
+            GameFrame.SquarePixels = _graphics.Value(console, GraphicsSettingsWindow.PictureShapeKey) == GraphicsSettingsWindow.SquarePixels;
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();
@@ -1302,7 +1303,7 @@ namespace EmuSen.Mistress.Views
                     _debugTarget?.RefreshProviders();
                     session.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release);
+                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, aspect: session.DisplayAspect);
                     offeredSerial = null;
                     RunCoreRequests(session);
                     SleepUntil(nextTick, clock);
@@ -1377,7 +1378,7 @@ namespace EmuSen.Mistress.Views
                     {
                         byte[] frame = session.GetFrameBufferRgba();
                         if (captured) Picture(session, frame, serial);
-                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, session.TotalFrames);
+                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, session.TotalFrames, session.DisplayAspect);
                         offeredSerial = serial;
                         offeredInWindow++;
                         PresentationTrace.Frame(session.TotalFrames, frameStart, Stopwatch.GetTimestamp(), true);
@@ -1468,9 +1469,9 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0)
         {
-            _frames.Offer(pixels, width, height, rowRepeat, release, sequence);
+            _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect);
         }
 
         private void OnExitClick(object? sender, RoutedEventArgs e)

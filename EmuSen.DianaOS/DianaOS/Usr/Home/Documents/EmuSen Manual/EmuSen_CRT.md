@@ -1619,6 +1619,8 @@ and its longest choices against their defaults), and LunaP's `SliderRowTests` an
 filter still hashes identically, through the raster path and on the device. **Mutants** (8, each caught): the console
 not told; the choices not shown; the CRT not listed; and §3.10's five in `EmuSen_Serenity.md`.
 
+**The tube's shape and the unfiltered picture's are one constant** since 2026-10-07: `DisplayShape.Television`, which the cores report and the filter's `Aspect` is (`EmuSen_Serenity.md` §2.9). The filter keeps its tube under the Square pixels setting.
+
 **What is not done.** The tester's bench runs on the handheld and the laptop (§12.7, §12.9), and what they decide for
 Performance; the NES's raw signal (§9, decision 5); the decoders' axes (decision 11); and moving one program's compile
 off the render thread, which Skia's GL backend gives no way to do (`EmuSen_Serenity.md` §3.10).

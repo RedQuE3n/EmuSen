@@ -72,6 +72,9 @@ namespace EmuSen.Cores.Nintendo.Moon
         public int ScreenHeight => Video.Ppu.ScreenHeight;
 
         // 21477272 / (262 * 1364) ~= 60.0985 - see Moon_Core.md §2.
+        // The screen's shape: a television's 4:3 - see EmuSen_Serenity.md §2.9.
+        public double DisplayAspect => EmuSen.Serenity.DisplayShape.Television;
+
         public double FrameRateHz => MasterClockHz / (double)(Video.Ppu.TotalScanlines * MasterClocksPerScanline);
 
         public bool IsRomLoaded => Bus != null;

@@ -35,6 +35,7 @@ namespace EmuSen.WiseMan.Serenity
         private static Picture Show(ScreenFilter filter, int width, int height, int windowWidth, int windowHeight, params byte[][] frames)
         {
             var control = new GameFrameControl { ActiveFilter = filter };
+            control.WaitForFilter();
             var window = new Window { Width = windowWidth, Height = windowHeight, Content = control };
             window.Show();
             try
@@ -177,6 +178,7 @@ namespace EmuSen.WiseMan.Serenity
         public Task A_lottes_parameter_set_while_it_runs_reaches_the_picture_without_a_new_frame() => Session.Dispatch(() =>
         {
             var control = new GameFrameControl { ActiveFilter = CrtFilters.Lottes };
+            control.WaitForFilter();
             var window = new Window { Width = 64, Height = 64, Content = control };
             window.Show();
             control.UpdateFrame(Solid(16, 16, 0xC0, 0xC0, 0xC0), 16, 16);
@@ -203,6 +205,7 @@ namespace EmuSen.WiseMan.Serenity
             int i = (1 * 4 + 1) * 4;
             (frame[i], frame[i + 1], frame[i + 2]) = (0, 0, 0);
             var control = new GameFrameControl { ActiveFilter = HandheldFilters.DmgLcd, ShaderParameters = new System.Collections.Generic.Dictionary<string, float> { ["shadowOpacity"] = 0f } };
+            control.WaitForFilter();
             var window = new Window { Width = 64, Height = 64, Content = control };
             window.Show();
             for (int n = 0; n < 4; n++) { control.UpdateFrame(frame, 4, 4); Redraw(window); }
@@ -217,6 +220,7 @@ namespace EmuSen.WiseMan.Serenity
         public Task A_filter_keeps_the_frames_it_looks_back_at() => Session.Dispatch(() =>
         {
             var control = new GameFrameControl { ActiveFilter = HandheldFilters.DmgLcd };
+            control.WaitForFilter();
             var window = new Window { Width = 8, Height = 8, Content = control };
             window.Show();
             for (int i = 0; i < 6; i++)

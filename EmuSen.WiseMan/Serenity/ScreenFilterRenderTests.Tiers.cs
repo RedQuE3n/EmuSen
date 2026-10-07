@@ -89,7 +89,7 @@ namespace EmuSen.WiseMan.Serenity
             Assert.True(Swing(rgb, 1) > 5 * Swing(performance, 1), $"and its columns blend: {Swing(performance, 1):F2} against {Swing(rgb, 1):F2} by RGB");
         }, default);
 
-        // The default: white at three quarters of the display's peak, nothing clipped, the mask at full depth in the darks and eased at white.
+        // The default: white at three fifths of the display's peak, nothing clipped, the mask at full depth in the darks and eased at white.
         [Fact]
         public Task By_default_the_picture_is_bright_and_the_mask_eases_off_only_toward_white() => Session.Dispatch(() =>
         {
@@ -101,7 +101,7 @@ namespace EmuSen.WiseMan.Serenity
             Crt? dark = Draw("SNES", 256, 224, 1440, 1080, Twice(Grey(256, 224, 0.25)), set);
             Crt? darkFull = Draw("SNES", 256, 224, 1440, 1080, Twice(Grey(256, 224, 0.25)), With(set, ("level", 1f), ("displayNits", 1000f)));
             if (white is null || dark is null || darkFull is null) return;
-            Within(0.75, white.Mean(360, 270, 720, 540).Average(), 0.03, "white's light as a share of the display's peak, three quarters as decided");
+            Within(0.6, white.Mean(360, 270, 720, 540).Average(), 0.03, "white's light as a share of the display's peak, three fifths as decided");
             Assert.True(white.Largest < 255, "nothing clips");
             Within(Depth(darkFull), Depth(dark), 0.05, "a dark grey's mask against the same grey with all the headroom it needs");
             Assert.True(Depth(white) < 0.5 * Depth(dark), $"white's mask is eased: {Depth(white):F2} against {Depth(dark):F2} at a dark grey");

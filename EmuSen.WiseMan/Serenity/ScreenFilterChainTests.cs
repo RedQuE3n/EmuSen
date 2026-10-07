@@ -39,6 +39,7 @@ namespace EmuSen.WiseMan.Serenity
 
             public (int R, int G, int B) Frame(byte[]? frame, int x, int y, int width = 8, int height = 8)
             {
+                control.WaitForFilter();
                 if (frame is not null) control.UpdateFrame(frame, width, height);
                 else control.InvalidateVisual();
                 using WriteableBitmap captured = window.CaptureRenderedFrame()!;
@@ -46,6 +47,8 @@ namespace EmuSen.WiseMan.Serenity
                 int i = (y * capture.Width + x) * 4;
                 return (capture.Rgba[i], capture.Rgba[i + 1], capture.Rgba[i + 2]);
             }
+
+            public Window Window => window;
 
             public void Dispose() => window.Close();
         }
@@ -56,6 +59,18 @@ namespace EmuSen.WiseMan.Serenity
             var window = new Window { Width = windowWidth, Height = windowHeight, Content = control };
             window.Show();
             return new Shown(control, window);
+        }
+
+        private static Window WindowOf(Shown shown) => shown.Window;
+
+        // A capture without waiting for a build, so what is drawn while one runs can be read.
+        private static (int R, int G, int B) Draw(Shown shown)
+        {
+            shown.Control.InvalidateVisual();
+            using WriteableBitmap captured = shown.Window.CaptureRenderedFrame()!;
+            var capture = EmuSen.WiseMan.Fixtures.UiTest.Capture(captured);
+            int i = (4 * capture.Width + 4) * 4;
+            return (capture.Rgba[i], capture.Rgba[i + 1], capture.Rgba[i + 2]);
         }
 
         private static ScreenFilter Of(params FilterPass[] passes) => new("test", passes, null, "");
@@ -193,6 +208,7 @@ namespace EmuSen.WiseMan.Serenity
             foreach (var (filter, rows) in new[] { (Of(pass), 16), (Of(pass) with { RowsOnce = true }, 8) })
             {
                 var control = new GameFrameControl { ActiveFilter = filter };
+                control.WaitForFilter();
                 var window = new Window { Width = 16, Height = 16, Content = control };
                 window.Show();
                 control.UpdateFrame(frame, 8, 8, rowRepeat: 2);
@@ -201,6 +217,69 @@ namespace EmuSen.WiseMan.Serenity
                 window.Close();
                 Assert.Equal(rows, capture.Rgba[(8 * capture.Width + 8) * 4]);
             }
+        }, default);
+
+        private static FilterPass Colour(string rgb) => new($"half4 main(float2 coord) {{ return half4({rgb}, 1.0); }}", PassScale.Viewport);
+
+        // A filter whose build waits for the test, so the render thread's behaviour while it builds can be seen.
+        private static ScreenFilter Held(System.Threading.ManualResetEventSlim gate, string rgb) => new("held", Array.Empty<FilterPass>(), null, "", new[] { Stages })
+        {
+            Structural = new[] { "stages" },
+            Build = values => { gate.Wait(TimeSpan.FromSeconds(10)); return new[] { Colour(values["stages"] > 1.5f ? "0.0, 0.0, 0.8" : rgb) }; },
+        };
+
+        [Fact]
+        public Task While_a_new_filter_builds_the_one_before_it_is_drawn_and_the_render_thread_never_waits() => Session.Dispatch(() =>
+        {
+            using var gate = new System.Threading.ManualResetEventSlim(false);
+            byte[] frame = Solid(8, 8, 0, 51, 0);
+            using Shown shown = Show(Of(Colour("0.8, 0.0, 0.0")));
+            Near((204, 0, 0), shown.Frame(frame, 4, 4), 1, "the first filter");
+
+            shown.Control.ActiveFilter = Held(gate, "0.0, 0.8, 0.0");
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            using (WriteableBitmap _ = WindowOf(shown).CaptureRenderedFrame()!) { }
+            Assert.True(clock.ElapsedMilliseconds < 2000, $"a draw while the next filter builds took {clock.ElapsedMilliseconds} ms");
+            Near((204, 0, 0), Draw(shown), 1, "the first filter, while the second builds");
+
+            gate.Set();
+            Near((0, 204, 0), shown.Frame(null, 4, 4), 1, "the second, once built");
+
+            // A structural change on the running filter: its old passes go on being drawn until the new ones are built.
+            gate.Reset();
+            shown.Control.ShaderParameters = new Dictionary<string, float> { ["stages"] = 2f };
+            Near((0, 204, 0), Draw(shown), 1, "the old passes, while the new ones build");
+            gate.Set();
+            Near((0, 0, 204), shown.Frame(null, 4, 4), 1, "the new passes, once built");
+        }, default);
+
+        [Fact]
+        public Task The_first_filter_is_preceded_by_the_plain_picture_not_by_nothing() => Session.Dispatch(() =>
+        {
+            using var gate = new System.Threading.ManualResetEventSlim(false);
+            var control = new GameFrameControl { ActiveFilter = Held(gate, "0.0, 0.8, 0.0") };
+            var window = new Window { Width = 8, Height = 8, Content = control };
+            window.Show();
+            control.UpdateFrame(Solid(8, 8, 0, 0, 153), 8, 8);
+            using (WriteableBitmap captured = window.CaptureRenderedFrame()!)
+            {
+                var capture = EmuSen.WiseMan.Fixtures.UiTest.Capture(captured);
+                int i = (4 * capture.Width + 4) * 4;
+                Assert.Equal((0, 0, 153), (capture.Rgba[i], capture.Rgba[i + 1], capture.Rgba[i + 2]));
+            }
+            gate.Set();
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task A_filter_that_needs_a_device_is_drawn_plain_in_software_unless_asked_otherwise() => Session.Dispatch(() =>
+        {
+            byte[] frame = Solid(8, 8, 0, 0, 153);
+            using (Shown plain = Show(Of(Colour("0.8, 0.0, 0.0")) with { RequiresDevice = true }))
+                Near((0, 0, 153), plain.Frame(frame, 4, 4), 1, "drawn plain on the headless raster path");
+            using Shown asked = Show(Of(Colour("0.8, 0.0, 0.0")) with { RequiresDevice = true });
+            asked.Control.DrawDeviceFiltersInSoftware = true;
+            Near((204, 0, 0), asked.Frame(frame, 4, 4), 1, "drawn when asked to");
         }, default);
 
         [Fact]

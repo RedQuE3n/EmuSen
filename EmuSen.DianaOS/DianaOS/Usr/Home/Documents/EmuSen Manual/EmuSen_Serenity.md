@@ -318,6 +318,59 @@ Six additions to `FilterChain`, `FilterPass`, `ScreenFilter` and `GameFrameContr
 
 **Nothing drawn before has changed**, measured 2026-10-07 on the commit before and the commit after: all ten of §3.1's choices (None, Lottes, the six LCDs, Scanlines, Simple CRT) over five frames of a moving pattern at 160×144 in a 643×481 window through the headless raster path, the last two frames of each hashed, 20 hashes identical; and the same ten on the RX 6800 through the bench of §8.1 at 1920×1080, three hashed pictures each, 30 identical. The existing `ScreenFilterRenderTests`, `GameFrameControl` tests, `SlangFrameControlTests` and `ShaderSettingsWindowTests` pass unchanged.
 
+### 3.10 A filter built off the render thread, and one that needs a device (2026-10-07)
+
+**What was measured before.** A filter's passes were compiled at its first draw, on the render thread: for the CRT
+filter of `EmuSen_CRT.md`, SkSL's compile of ten passes took 22 ms the first time in a process and 2 ms after, and
+the first draw with them, where the GL driver compiles its programs, 32 ms with Mesa's shader cache warm and 98 ms
+with it off (`EmuSen_CRT.md` §11.10). Choosing the filter, or changing one of its structural settings, dropped one to
+six frames.
+
+**As built.** `GameFrameControl` makes a chain when a filter or console is chosen, not at the next draw, and makes it
+*in the background*: `FilterChain(filter, console, values, background: true)` compiles its passes on a pool thread.
+Until the new chain is ready **the one before it goes on drawing**, and with no chain before it the plain picture is
+drawn; a structural change to a running chain does the same within it, its old passes drawn until the new ones are
+ready. A later request discards an earlier result that finishes after it.
+
+**Warming.** A finished build is not used at once. Each of its passes is first drawn once into a one-pixel surface
+of the format it will draw into, with children of the formats it will read, a pass a draw, so that the driver
+compiles one program per frame instead of all of them in the frame that switches. Then it takes over. Measured on
+the RX 6800 at 1920 × 1080 (`switch` in the CRT tool beside the bench), the longest single draw on the render
+thread, GPU work included:
+
+| Change | Before (§11.10) | With the build off the thread | And warmed a pass a draw |
+|---|---|---|---|
+| Choosing the CRT filter, driver cache warm | 32.9 ms | 16.7 to 17.3 | 12.6 to 21.7 |
+| Its Quality to Accurate, cache warm | 4 to 10 | 15.1 to 16.3 | **5.3 to 5.9** |
+| Its Signal to RGB, cache warm | | 3.3 to 3.5 | 3.6 to 8.5 |
+| Choosing CRT (Lottes), cache warm | | 3.0 to 3.5 | 6.3 to 24.9 |
+| Choosing the CRT filter, cache off | 98.5 | 56.5 | 26.3 |
+| Its Quality to Accurate, cache off | 51.5 | 72.0 | 29.4 |
+
+**What is left on the render thread** is one program's compile: the largest single program of a filter (the CRT's
+signal pass, or Lottes's one pass) is compiled in the draw that warms it, and no API Skia offers on GL moves that
+compile to another thread. A settings change no longer drops more than that one compile; choosing a filter for the
+first time on a machine can still drop a frame. The order of the warm is the passes' own; a filter with one large pass
+gains nothing from it.
+
+**A filter that needs a device.** `ScreenFilter.RequiresDevice` marks a filter whose software path would take
+seconds a frame: the CRT filter takes 12.8 s a frame at 640 × 480 through Skia's raster code (`EmuSen_CRT.md`
+§11.9). Without a `GRContext` such a filter is drawn **plain**, which is what a machine falling back to Avalonia's
+software renderer now sees instead of a frozen window, and what every headless window and pad test sees: they test
+the window, not the picture, and the plain picture is their stand-in. `GameFrameControl.DrawDeviceFiltersInSoftware`
+(internal) asks for the real filter on the software path, for the two cases that test that path on purpose.
+
+**For tests.** `GameFrameControl.WaitForFilter` (internal) blocks until the chosen filter is built and puts it in
+use without warming, so a test's first frame is filtered; `ShaderBench.Picture` and the bench call it.
+
+**Tests.** `ScreenFilterChainTests`: while a filter whose build is held by the test is chosen, a draw takes under 2 s
+and shows the filter before it; released, the new one; a structural change shows the old passes until the new ones
+are built; the first filter is preceded by the plain picture; a filter that needs a device is drawn plain without
+one and filtered when asked. `ScreenFilterDeviceTests`: on the RX 6800, a three-pass filter takes over at the third
+draw after it is chosen, the filter before it shown at the first two. **Mutants** (5, each caught): no warming; the
+build on the render thread; the chain before dropped at once; the software path drawing a device filter; the next
+chain never prepared.
+
 ---
 
 ## 4. `FramePresenter` — the bundle nothing consumes yet

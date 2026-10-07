@@ -8106,3 +8106,36 @@ row carries its count and Prune Unsupported keeps it, since a core now claims it
 single system fetched alone, since the database is published as one archive.
 
 **Coverage**: `CheatDatabasePruneWindowTests.A_supported_system_missing_from_the_folder_is_listed_as_not_downloaded`.
+
+### 4.96 The modelled CRT in the Shaders window (2026-10-07)
+
+**Where it is.** Each of the NES's, SNES's, Genesis's and N64's tabs lists **CRT** among the built-in filters, after
+None and before CRT (Lottes): `ScreenFilters.NamesFor` (`EmuSen_Serenity.md` §3.3), the filter of `EmuSen_CRT.md`.
+No console uses it until the player chooses it; the default stays None.
+
+**Its settings.** 25 parameters (`CrtFilter.Parameters`), in the order the filter declares them. Ten are choices,
+drawn as named steps (`LunaP.md` §199): Quality (Performance, Balanced, Accurate; Balanced by default), Signal (RGB,
+S-Video, Composite; Composite), Screen (six classes of set; Consumer TV, 20-inch), Colour (North America, Japan,
+Europe), Picture brightness (Bright, The tube's own), Display subpixels, Display colours, Mask, Luma and chroma
+separation, and Interlaced pictures. The rest are numbers, most of them multipliers of what the screen class sets
+(`EmuSen_CRT.md` §11.2). A built-in filter's defaults on a tab are now that console's (`ScreenFilter.DefaultFor`); for
+the CRT they are the same on all four tabs, since what differs by console (the subcarrier's phase, the picture's
+timing) is a constant the player is not given. Values are stored as numbers, a choice's being its place in the list,
+under `ShaderParameters` as every other parameter's (§4.48.3).
+
+**What a running game does with it.** Choosing the filter, or changing a setting that alters its passes (Quality,
+Signal, Screen, Colour, Display colours, Mask, the separation, the chroma bandwidth), builds the new passes off the
+render thread while the picture before goes on being shown (`EmuSen_Serenity.md` §3.10). On a machine whose display
+has no GPU context, the filter draws the plain picture (`RequiresDevice`).
+
+**Fit.** `WindowFitAuditTests`' new case `ShaderSettingsCrt` shows the filter with the professional 20-inch screen
+and the tube's own brightness stored, so the Screen row carries its longest name against "default Consumer TV,
+20-inch", at 1280 × 800 and 1920 × 1200: nothing cut off or overlapping.
+
+**A pad test's route.** `The_shaders_window_from_the_pad_menu_adjusts_a_built_in_filter_and_resets_it_all` reached
+Reset All and Use by `PadAudit.Reach`, a breadth-first search over pad presses. With one more row in the list its
+search went left from the sliders onto a list row, which shows another shader and so changes the controls being
+searched, and it found no path in any of its seven rows. The test now presses the player's route, up the column of
+sliders to the row of Reset All and Use (`UpTo`). The window is unchanged, and a pad still reaches both buttons in
+that route. **The fragility is the search's**: a walk whose moves change the panel it walks can fail where a person
+would not, and `Reach` is not the right tool for a target past a list that previews what it selects.

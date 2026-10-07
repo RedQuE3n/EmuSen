@@ -34,6 +34,40 @@ namespace EmuSen.WiseMan.Serenity
             Near((128, 128, 128), At(picture, 16, 8, 8), 1, "through a float surface on the device");
         }, default);
 
+        // A newly chosen filter takes over only after each of its passes has been drawn once at one pixel, a pass a draw, the one before drawn meanwhile - see EmuSen_Serenity.md §3.10.
+        [Fact]
+        public Task On_a_device_a_new_filter_is_warmed_a_pass_a_draw_before_it_takes_over() => Session.Dispatch(() =>
+        {
+            if (string.IsNullOrEmpty(Device)) return;
+            static FilterPass Pass(string body, bool last) => new($"uniform shader source; half4 main(float2 coord) {{ {body} }}", last ? PassScale.Viewport : PassScale.Source) { Float = !last };
+            var red = new ScreenFilter("red", new[] { Pass("return half4(0.8, 0.0, 0.0, 1.0);", true) }, null, "");
+            var green = new ScreenFilter("green", new[] { Pass("return half4(0.0, 0.8, 0.0, 1.0);", false), Pass("return source.eval(coord);", false), Pass("return half4(source.eval(coord).rgb, 1.0);", true) }, null, "");
+
+            using var gl = ShaderBench.GlContext.Create(Device);
+            using SkiaSharp.GRGlInterface glInterface = SkiaSharp.GRGlInterface.CreateOpenGl(name => ShaderBench.GlContext.GetProc(name))!;
+            using SkiaSharp.GRContext context = SkiaSharp.GRContext.CreateGl(glInterface)!;
+            using SkiaSharp.SKSurface target = SkiaSharp.SKSurface.Create(context, true, new SkiaSharp.SKImageInfo(16, 16, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul))!;
+            var control = new GameFrameControl { ActiveFilter = red };
+            control.WaitForFilter();
+            byte[] frame = new byte[8 * 8 * 4];
+            (int R, int G, int B) Draw()
+            {
+                control.UpdateFrame(frame, 8, 8);
+                using (var op = control.CaptureDrawOp(new Avalonia.Size(16, 16))!) op.RenderTo(target.Canvas, context);
+                var pixel = new SkiaSharp.SKBitmap(16, 16);
+                target.ReadPixels(pixel.Info, pixel.GetPixels(), pixel.RowBytes, 0, 0);
+                SkiaSharp.SKColor c = pixel.GetPixel(8, 8);
+                return (c.Red, c.Green, c.Blue);
+            }
+            Near((204, 0, 0), Draw(), 1, "the first filter");
+            control.ActiveFilter = green;
+            System.Threading.Thread.Sleep(500);
+            Near((204, 0, 0), Draw(), 1, "the first filter while the second's first pass is warmed");
+            Near((204, 0, 0), Draw(), 1, "and its second");
+            Near((0, 204, 0), Draw(), 1, "the second filter, once its third pass is warmed");
+            control.ActiveFilter = null;
+        }, default);
+
         [Fact]
         public Task On_a_device_a_feedback_pass_counts_frames_and_not_redraws() => Session.Dispatch(() =>
         {

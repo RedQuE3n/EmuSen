@@ -159,6 +159,13 @@ namespace EmuSen.WiseMan.Mistress
 
         private static InputElement Reach(MainWindow w, PadDriver pad, Func<InputElement, bool> target) => PadAudit.Reach(Sheet(w), pad, target);
 
+        // Presses Up until the focus is on the control asked for, failing after as many presses as a long column could need.
+        private static void UpTo(MainWindow w, PadDriver pad, Func<InputElement, bool> target)
+        {
+            for (int i = 0; i < 60 && !(Focused(w) is { } f && target(f)); i++) pad.Up();
+            Assert.True(Focused(w) is { } at && target(at), $"Up never reached the control asked for; the focus is on {(Focused(w) is { } e ? PadAudit.Describe(e) : "nothing")}.");
+        }
+
         private static void Picture(MainWindow w, string name) => UiTest.Dump("pad-" + name, UiTest.Capture(w));
 
         private static string? Stored(string console, string key) => GraphicsConfig.Load().Value(console, key);
@@ -517,7 +524,10 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(frame.ActiveFilter);
             Picture(window, "shaders-lottes");
 
-            Reach(window, pad, e => e is Button { Name: "SNES.ResetShader" });
+            // Up the column of sliders to the row of Reset All and Use: the route a player takes, pressed rather than searched for, since a search that wanders onto the list changes the shader shown - see EmuSen_Settings_Reference.md §4.96.
+            UpTo(window, pad, e => e is Button { Name: "SNES.UseShader" or "SNES.ResetShader" });
+            if ((Focused(window) as Control)?.Name == "SNES.UseShader") pad.Left();
+            Assert.Equal("SNES.ResetShader", (Focused(window) as Control)?.Name);
             pad.A();
             Assert.Empty(GraphicsConfig.Load().ShaderParameters);
             Assert.IsType<Button>(Focused(window));
@@ -525,11 +535,14 @@ namespace EmuSen.WiseMan.Mistress
 
             Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Mask dark" });
             pad.Left();
-            Reach(window, pad, e => e is Button { Name: "SNES.UseShader" });
+            UpTo(window, pad, e => e is Button { Name: "SNES.UseShader" or "SNES.ResetShader" });
+            if ((Focused(window) as Control)?.Name == "SNES.ResetShader") pad.Right();
+            Assert.Equal("SNES.UseShader", (Focused(window) as Control)?.Name);
             pad.A();
             Assert.IsType<Button>(Focused(window));
             Assert.Equal("CRT (Lottes)", Stored("SNES", GraphicsSettingsWindow.ScreenFilterKey));
             Assert.Equal("CRT (Lottes)", frame.ActiveFilter?.Name);
+            Assert.Equal("SNES", frame.FilterConsole);
             Assert.Equal(0.4f, frame.ShaderParameters!["maskDark"], 4);
 
             pad.B();

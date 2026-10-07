@@ -107,6 +107,7 @@ namespace EmuSen.WiseMan.Serenity
                 default: throw new ArgumentException(c.Kind);
             }
 
+            control.WaitForFilter();
             double? shape = control.ActiveFilter?.Aspect;
             var frames = Enumerable.Range(0, 8).Select(k => Pattern(c.SourceWidth, c.SourceHeight, k)).ToArray();
             var probe = new Probe();
@@ -204,6 +205,7 @@ namespace EmuSen.WiseMan.Serenity
             using SKSurface target = SKSurface.Create(context, true, new SKImageInfo(windowWidth, windowHeight, SKColorType.Rgba8888, SKAlphaType.Premul))
                 ?? throw new InvalidOperationException("no GPU surface");
             var pixels = new byte[windowWidth * windowHeight * 4];
+            control.WaitForFilter();
             foreach (byte[]? frame in frames)
             {
                 if (frame is not null) control.UpdateFrame(frame, sourceWidth, sourceHeight, rowRepeat);

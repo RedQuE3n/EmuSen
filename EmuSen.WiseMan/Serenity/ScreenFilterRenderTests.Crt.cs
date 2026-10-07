@@ -129,6 +129,10 @@ namespace EmuSen.WiseMan.Serenity
         public void The_crt_suits_the_consoles_that_had_a_television_draws_a_4_to_3_tube_and_counts_scanlines()
         {
             Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64" }, CrtFilter.Filter.Consoles);
+            foreach (string console in CrtFilter.Filter.Consoles!) Assert.Contains(CrtFilter.Name, ScreenFilters.NamesFor(console));
+            Assert.DoesNotContain(CrtFilter.Name, ScreenFilters.NamesFor("GB"));
+            Assert.Equal(ScreenFilters.None, ScreenFilters.NamesFor("Genesis")[0]);
+            Assert.True(CrtFilter.Filter.RequiresDevice);
             Assert.Equal(4.0 / 3.0, CrtFilter.Filter.Aspect);
             Assert.True(CrtFilter.Filter.RowsOnce);
             foreach (string console in CrtFilter.Filter.Consoles!) Assert.True(CrtFilter.ConsoleTiming.ContainsKey(console), $"{console} has no timing");
@@ -138,8 +142,9 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task Drawn_in_software_a_white_field_keeps_its_light_and_its_colour() => Session.Dispatch(() =>
         {
-            var control = new GameFrameControl { FilterConsole = "SNES", ActiveFilter = CrtFilter.Filter };
+            var control = new GameFrameControl { FilterConsole = "SNES", ActiveFilter = CrtFilter.Filter, DrawDeviceFiltersInSoftware = true };
             control.ShaderParameters = Values(Reference.Concat(With(Plain, ("signal", 0f), ("overscan", 900f))));
+            control.WaitForFilter();
             var window = new Avalonia.Controls.Window { Width = 240, Height = 180, Content = control };
             window.Show();
             try
@@ -569,7 +574,8 @@ namespace EmuSen.WiseMan.Serenity
             byte[] frame = Paint(48, 16, (x, y) => (x / 47.0, y / 15.0, (x * 7 + y * 3) % 16 / 15.0));
             (string, float)[] set = { ("overscan", 300f) };
             if (Draw("Genesis", 48, 16, 240, 180, Twice(frame), set) is not { } device) return;
-            var control = new GameFrameControl { FilterConsole = "Genesis", ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter };
+            var control = new GameFrameControl { FilterConsole = "Genesis", ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter, DrawDeviceFiltersInSoftware = true };
+            control.WaitForFilter();
             var window = new Avalonia.Controls.Window { Width = 240, Height = 180, Content = control };
             window.Show();
             try

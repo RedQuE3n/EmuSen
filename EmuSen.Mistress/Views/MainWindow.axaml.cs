@@ -440,6 +440,8 @@ namespace EmuSen.Mistress.Views
             // Before the shader, so a chain or runner built for it starts from the player's values - see EmuSen_Settings_Reference.md §4.48.3.
             GameFrame.ShaderParameters = ShaderParameterValues(console, stored ?? choice.Name);
             GameFrame.ActiveEffect = choice.Effect;
+            // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
+            GameFrame.FilterConsole = console;
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();

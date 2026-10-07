@@ -8086,3 +8086,23 @@ the four extensions supported and listed, `.iso` and `.32x` neither; a `.gen` fi
 console and shelf; the settings and twelve controls; the firmware row and no Sega CD or 32X one);
 `LibraryScreenTests.The_genesis_has_a_shelf_and_its_attachments_have_none`; `FirmwareOverviewTests.The_genesis_is_listed_and_its_attachments_are_not`;
 and §4.90-§4.93's tests and fit audits, run since 2026-10-07 with development cores off.
+
+### 4.95 The cheat database window names a playable console whose cheats are missing (2026-10-07)
+
+**The defect.** The tester reported on 2026-10-07 that the Cheat Database window offered only Nintendo systems after
+the Genesis was offered to players (§4.94). The window lists the folders the cheat directory holds, and that
+directory had been pruned (§4.16) while the Nintendo consoles were the only ones with a core: pruning deletes every
+folder no core claims, so `Sega - Mega Drive - Genesis` was gone. A console added later therefore had no row, and
+nothing in the window said why or what to do. The handheld's folder held six systems, all Nintendo's, where a fresh
+download holds fifty-one.
+
+**The change.** `CheatDatabaseWindow.MissingSystems` takes the folders the build's cores claim
+(`CoreCatalog.SupportedCheatSystems`, narrowed to the selected console's when the library's filter has one) and
+keeps those the directory lacks. Each is listed after the systems on disk as `<system>  (not downloaded)`, and the
+status line ends `<system> not downloaded: Download fetches it.` Download installs the whole database, after which the
+row carries its count and Prune Unsupported keeps it, since a core now claims it.
+
+**What was not done.** The window does not fetch on its own: a download is the player's request (§4.14). Nor is a
+single system fetched alone, since the database is published as one archive.
+
+**Coverage**: `CheatDatabasePruneWindowTests.A_supported_system_missing_from_the_folder_is_listed_as_not_downloaded`.

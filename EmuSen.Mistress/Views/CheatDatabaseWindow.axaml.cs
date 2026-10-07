@@ -79,7 +79,7 @@ namespace EmuSen.Mistress.Views
             InitializeComponent();
             if (Content is DockPanel body) EmuSen.LunaP.Controls.MenuLook.WhenApplied(body, () => InLook(body));
             EmuSen.LunaP.Controls.MenuLook.SetWidthFraction(this, 0.8);
-            SystemsList.Label = r => $"{r.System}  ({r.Count})";
+            SystemsList.Label = r => r.Count > 0 ? $"{r.System}  ({r.Count})" : $"{r.System}  (not downloaded)";
             SystemsList.Key = r => r.System;
             _settings = settings;
             _activeCheats = activeCheats;
@@ -184,19 +184,34 @@ namespace EmuSen.Mistress.Views
             return all.Where(s => only.Contains(s.System, StringComparer.OrdinalIgnoreCase)).ToList();
         }
 
+        // The folders a playable console claims that this folder lacks, as a pruned database does for a console added since - see EmuSen_Settings_Reference.md §4.95.
+        private IReadOnlyList<string> MissingSystems(IReadOnlyList<(string System, int Count)> shown)
+        {
+            if (_supportedSystems?.Invoke() is not { } supported) return Array.Empty<string>();
+            IReadOnlyList<string>? only = ConsoleSystems;
+
+            return supported
+                .Where(s => only is null || only.Contains(s, StringComparer.OrdinalIgnoreCase))
+                .Where(s => !shown.Any(have => have.System.Equals(s, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         private void Refresh()
         {
             _db = new CheatDatabase(Directory);
             IReadOnlyList<(string System, int Count)> systems = VisibleSystems();
             int total = systems.Sum(s => s.Count);
 
-            SystemsList.Refresh(systems.Select(s => new CheatSystemRow(s.System, s.Count)));
+            IReadOnlyList<string> missing = MissingSystems(systems);
+            SystemsList.Refresh(systems.Select(s => new CheatSystemRow(s.System, s.Count)).Concat(missing.Select(s => new CheatSystemRow(s, 0))));
             SystemsList.SelectedIndex = -1; // Refresh restores by Key; this window starts with none.
 
             string scope = ConsoleSystems is null ? "" : $" for {_console}";
             StatusText.Text = total > 0
                 ? $"{total:N0} cheat file(s){scope} in {Directory}"
                 : $"No cheat files{scope} in {Directory}";
+            if (missing.Count > 0) StatusText.Text += $"  -  {string.Join(", ", missing)} not downloaded: Download fetches {(missing.Count == 1 ? "it" : "them")}.";
 
             _selectedSystem = null;
             ShowGames();

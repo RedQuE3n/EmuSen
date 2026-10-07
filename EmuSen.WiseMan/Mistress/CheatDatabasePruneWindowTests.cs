@@ -2,6 +2,7 @@ using EmuSen.Galaxia.Library;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -97,6 +98,22 @@ namespace EmuSen.WiseMan.Mistress
 
             // The systems pane must not still be offering what was deleted.
             Assert.Single(window.GetControl<ListBox>("SystemsList").ItemsSource!);
+
+            window.Close();
+        }, default);
+
+        // A database pruned before a console was added lacks its folder; the window names it and how to get it (§4.95).
+        [Fact]
+        public Task A_supported_system_missing_from_the_folder_is_listed_as_not_downloaded() => Session.Dispatch(() =>
+        {
+            WriteSystem("Nintendo - Super Nintendo Entertainment System", 2);
+            var window = Open(() => new[] { Snes[0], "Sega - Mega Drive - Genesis" });
+
+            var rows = window.GetControl<ListBox>("SystemsList").ItemsSource!.Cast<string>().ToList();
+
+            Assert.Equal(2, rows.Count);
+            Assert.Equal("Sega - Mega Drive - Genesis  (not downloaded)", rows[1]);
+            Assert.Contains("Sega - Mega Drive - Genesis not downloaded: Download fetches it.", Status(window));
 
             window.Close();
         }, default);

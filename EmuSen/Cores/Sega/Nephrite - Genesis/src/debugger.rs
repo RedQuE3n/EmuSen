@@ -37,9 +37,16 @@ impl Observer for MainWatch<'_> {
         self.0.record(pc & 0xFF_FFFF);
         stop::FRAME
     }
-    fn wrote(&mut self, space: u32, address: u32, value: u8, pc: u32) {
+    fn wrote(&mut self, _space: u32, address: u32, value: u8, pc: u32) {
         if self.0.writes {
-            self.0.note_write(space, address & 0xFF_FFFF, value, pc & 0xFF_FFFF);
+            let (a, pc) = (address & 0xFF_FFFF, pc & 0xFF_FFFF);
+            self.0.note_write(M68KBUS_ID, a, value, pc);
+            // The same store in the memory it lands in, so a watch on WRAM or Z80RAM sees it.
+            match a {
+                0xE0_0000..=0xFF_FFFF => self.0.note_write(crate::machine::WRAM_ID, a & 0xFFFF, value, pc),
+                0xA0_0000..=0xA0_3FFF => self.0.note_write(crate::machine::Z80RAM_ID, a & 0x1FFF, value, pc),
+                _ => {}
+            }
         }
     }
     fn called(&mut self, source: u32, target: u32, kind: u32) {
@@ -67,11 +74,19 @@ impl Observer for Z80Watch<'_> {
         self.hooks.record_on(processor, pc);
         stop::FRAME
     }
-    fn wrote(&mut self, space: u32, address: u32, value: u8, pc: u32) {
+    fn wrote(&mut self, _space: u32, address: u32, value: u8, pc: u32) {
         if self.hooks.writes {
-            self.hooks.note_write(space, address, value, pc);
+            self.hooks.note_write(Z80BUS_ID, address & 0xFFFF, value, pc);
+            if address & 0xFFFF < 0x4000 {
+                self.hooks.note_write(crate::machine::Z80RAM_ID, address & 0x1FFF, value, pc);
+            }
         }
     }
+}
+
+/// The spaces a store is reported in: the two buses, and the RAMs a store through either lands in.
+pub fn reports_stores(space: u32) -> bool {
+    matches!(space, M68KBUS_ID | Z80BUS_ID | crate::machine::WRAM_ID | crate::machine::Z80RAM_ID)
 }
 
 impl Hw {
@@ -312,6 +327,138 @@ mod tests {
         }
         let start = seen.iter().position(|&p| p == 0x300).unwrap();
         assert_eq!(&seen[start..start + 4], [0x300, 0x302, 0x208, 0x202], "ADDQ, RTS, BRA, JSR");
+    }
+
+    /// The vertical interrupt on, then a call in a loop to a routine that counts in D2 and stores it at $FF0020; the
+    /// interrupt's handler returns at once. The Z80 counts in A and stores it at $0100 of its RAM.
+    fn calls() -> Machine {
+        let mut r = vec![0xFFu8; 0x1_0000];
+        r[0..8].copy_from_slice(&w(&[0x00FF, 0xFE00, 0x0000, 0x0200]));
+        r[0x78..0x7C].copy_from_slice(&w(&[0x0000, 0x0400]));
+        r[0x100..0x110].copy_from_slice(b"SEGA MEGA DRIVE ");
+        let main = w(&[0x33FC, 0x8164, 0x00C0, 0x0004, 0x027C, 0xF8FF, 0x4EB9, 0x0000, 0x0300, 0x60F8]);
+        r[0x200..0x200 + main.len()].copy_from_slice(&main);
+        r[0x300..0x30A].copy_from_slice(&w(&[0x5282, 0x13C2, 0x00FF, 0x0020, 0x4E75]));
+        r[0x400..0x402].copy_from_slice(&w(&[0x4E73]));
+        let mut m = Machine::new(&r, Media::read(&r));
+        m.genesis.hw.zram[..7].copy_from_slice(&[0x3C, 0x32, 0x00, 0x01, 0xC3, 0x00, 0x00]);
+        (m.genesis.hw.z80_reset, m.genesis.hw.z80_busreq) = (false, false);
+        m
+    }
+
+    const RESUME: u32 = emusen_native::debug::run::UNCHECKED | emusen_native::debug::run::CONTINUE;
+
+    // A step on the Z80, as the host asks it (a breakpoint over its whole space), stops in front of each instruction it runs, in order, on processor 1.
+    #[test]
+    fn a_z80_step_stops_in_front_of_each_of_its_instructions() {
+        let mut m = calls();
+        m.z80_breakpoints = vec![(0, i32::MAX)];
+        let mut seen = Vec::new();
+        let mut why = m.run_frame_debug(0);
+        for _ in 0..9 {
+            assert_eq!((why, m.debug_stopped), (stop::BREAKPOINT, Z80));
+            seen.push(m.debug_pc(Z80).unwrap());
+            why = m.run_frame_debug(RESUME);
+        }
+        assert_eq!(seen, [0, 1, 4, 0, 1, 4, 0, 1, 4], "INC A, LD (nn),A, JP");
+        assert_eq!(m.genesis.hw.zram[0x100] as u16, m.genesis.z80.regs.af >> 8, "the third store has run, the third JP not");
+    }
+
+    // Stepping the 68000 while the Z80 is the one stopped finishes the Z80's catch-up first; a frame stepped through on both is the plain frame.
+    #[test]
+    fn a_frame_stepped_on_both_processors_is_the_plain_frame() {
+        use emusen_native::debug::flag;
+        let (mut a, mut b) = (calls(), calls());
+        a.advance();
+        b.z80_breakpoints = vec![(0, i32::MAX)];
+        assert_eq!(b.run_frame_debug(0), stop::BREAKPOINT);
+        assert_eq!(b.debug_stopped, Z80);
+        b.z80_breakpoints.clear();
+        b.hooks.configure(flag::EACH, i32::MIN, -1);
+        let mut steps = 0;
+        let mut why = b.run_frame_debug(RESUME);
+        assert_eq!((why, b.debug_stopped), (stop::EACH, M68K));
+        assert!(b.genesis.hw.z80_clock >= b.genesis.hw.clock, "the Z80's catch-up finished before the 68000 was asked");
+        while why != 0 {
+            steps += 1;
+            if steps % 50 == 0 {
+                b.z80_breakpoints = vec![(0, i32::MAX)];
+            } else if b.debug_stopped == Z80 {
+                b.z80_breakpoints.clear();
+            }
+            why = b.run_frame_debug(RESUME);
+        }
+        assert!(steps > 1000);
+        assert_eq!((state(&b), &b.picture), (state(&a), &a.picture));
+    }
+
+    // The call stack: a JSR pushes a call, the interrupt an IRQ frame, RTS and RTE pop; a depth target steps out of the routine.
+    #[test]
+    fn the_call_stack_follows_calls_interrupts_and_returns() {
+        use emusen_native::debug::{flag, kind};
+        let mut m = calls();
+        m.hooks.configure(flag::CALLS, i32::MIN, -1);
+        m.hooks.set_breakpoints(&[0x302, 0x302]);
+        assert_eq!(m.run_frame_debug(0), stop::BREAKPOINT);
+        assert_eq!(m.hooks.stack, [(0x20C, 0x300)]);
+        m.hooks.set_breakpoints(&[]);
+        m.hooks.configure(flag::CALLS, 0, -1);
+        assert_eq!(m.run_frame_debug(RESUME), stop::DEPTH);
+        assert_eq!((m.debug_pc(M68K), m.hooks.stack.len()), (Some(0x212), 0), "out of the routine at the BRA");
+        m.hooks.configure(flag::CALLS | flag::INTERRUPTS, i32::MIN, -1);
+        assert_eq!(m.run_frame_debug(RESUME), stop::INTERRUPT);
+        assert_eq!(m.debug_pc(M68K), Some(0x400));
+        let top = *m.hooks.calls_log.last().unwrap();
+        assert_eq!((top.kind, top.target), (kind::IRQ, 0x400));
+        assert_eq!(m.hooks.stack.last().map(|f| f.1), Some(0x400));
+        let depth = m.hooks.stack.len();
+        m.hooks.configure(flag::CALLS | flag::EACH, i32::MIN, -1);
+        assert_eq!(m.run_frame_debug(RESUME), stop::EACH);
+        assert_eq!(m.hooks.stack.len(), depth - 1, "RTE pops the interrupt's frame");
+    }
+
+    // A write watch logs the routine's store in WRAM and on the bus, with the storing instruction's address; a data breakpoint stops in front of the 68000's next instruction.
+    #[test]
+    fn watches_and_data_breakpoints_see_each_processors_stores() {
+        use emusen_native::debug::flag;
+        use crate::machine::{WRAM_ID, Z80RAM_ID};
+        let mut m = calls();
+        m.hooks.configure(flag::WRITES, i32::MIN, -1);
+        m.hooks.set_ranges(0, &[WRAM_ID, 0x20, 0x20, M68KBUS_ID, 0xFF_0020, 0xFF_0020, Z80RAM_ID, 0x100, 0x100]);
+        assert_eq!(m.run_frame_debug(0), 0);
+        let log = std::mem::take(&mut m.hooks.writes_log);
+        let main: Vec<_> = log.iter().filter(|w| w.space == WRAM_ID).collect();
+        assert!(!main.is_empty());
+        assert!(main.iter().all(|w| (w.address, w.pc) == (0x20, 0x302)));
+        assert_eq!(main.last().unwrap().value, m.genesis.cpu.regs.d[2] & 0xFF);
+        assert_eq!(log.iter().filter(|w| w.space == M68KBUS_ID).count(), main.len(), "the same stores on the bus");
+        assert!(log.iter().any(|w| w.space == Z80RAM_ID && w.address == 0x100 && w.pc == 1), "the Z80's store");
+        m.hooks.set_ranges(0, &[]);
+        m.hooks.set_ranges(1, &[WRAM_ID, 0x20, 0x20]);
+        assert_eq!(m.run_frame_debug(0), stop::DATA);
+        assert_eq!((m.debug_stopped, m.debug_pc(M68K)), (M68K, Some(0x308)), "in front of the RTS after the store");
+    }
+
+    // Coverage is each processor's over its own width, and the profile charges the routine's instructions to it.
+    #[test]
+    fn coverage_is_per_processor_and_the_profile_charges_the_routine() {
+        use emusen_native::debug::{drain_coverage, drain_profile, flag};
+        let mut m = calls();
+        m.hooks.configure(flag::CALLS | flag::PROFILING | 1 << flag::COVERAGE | 1 << (flag::COVERAGE + 1), i32::MIN, -1);
+        assert_eq!(m.run_frame_debug(0), 0);
+        let (mut main, mut z80) = (vec![0u8; 1 << 21], vec![0u8; 1 << 13]);
+        let (mut a, mut b) = (0, 0);
+        drain_coverage(&mut m.hooks, 0, &mut main, &mut a);
+        drain_coverage(&mut m.hooks, 1, &mut z80, &mut b);
+        let hit = |bits: &[u8], at: u32| bits[(at >> 3) as usize] >> (at & 7) & 1 != 0;
+        assert!(a > 0 && b > 0);
+        assert!([0x20C, 0x212, 0x300, 0x302, 0x308].iter().all(|&at| hit(&main, at)) && !hit(&main, 0x304));
+        assert!([0, 1, 4].iter().all(|&at| hit(&z80, at)) && !hit(&z80, 2));
+        let mut pairs = vec![0i64; 64];
+        let n = drain_profile(&mut m.hooks, &mut pairs);
+        let routine = pairs[..2 * n].chunks(2).find(|p| p[0] == 0x300).map(|p| p[1]).unwrap();
+        let calls = m.hooks.calls_log.iter().filter(|c| c.target == 0x300).count() as i64;
+        assert!(calls > 0 && (3 * calls - 2..=3 * calls).contains(&routine), "three instructions a call, the frame's last call perhaps unfinished: {routine} for {calls}");
     }
 
     #[test]

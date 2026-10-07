@@ -2788,7 +2788,7 @@ anything; what is not met is the follow-up list, §40.2.
 | **G4**, the frontend | Met | The kit's C1-C15 on the corpus, 941 of 948 files (§38.2), the six state failures since fixed and passing (§39), the seventh a one-byte file refused with words; the sample, 64 of 64 (§39.3). Battery files round-trip in Genesis Plus GX's form, save RAM and EEPROM (§32, §33). The fit audit with the Genesis's tabs, shelf, pad drawings, sidebar and carousel at both sizes (§31, §34, §35). The cheats decode (§30) | — |
 | **G5**, the goldens | Not met | The corpus at two anchors, frames 120 and 600, against Genesis Plus GX: pictures equal up to a colour map in 827 to 888 games of 944 at frame 120 and 773 to 803 at frame 600; the RAM's median 65,527 and 65,513 bytes of 65,536 (§27.2) | A third anchor; the games that differ, about 150 at frame 600, each examined and logged as a dispute or mended; and a grade that allows for the reference showing a game's picture a frame early against the board (§23.4) |
 | **G6**, speed | Met in part | §5.5's desktop budget: 1.217 ms a frame on the bench games, at most 1.335 (§29.4), against 1.5. The tester reports the Genesis plays well on the Legion Go S | The bench at a 33% CPU quota, not measured; a run on the handheld on battery, not confirmed |
-| **G7**, the debugger | Not met | The kit's C15: `DEBUG` not claimed | All of it: breakpoints, stepping, watches, coverage and the call stack on the 68000 and the Z80, each a test. It is stage 7 |
+| **G7**, the debugger | ~~Not met~~ *Met, with a named exception, since 2026-10-07 (§41-§43)* | ~~The kit's C15: `DEBUG` not claimed~~ Breakpoints, single steps, watches, data breakpoints and coverage on both processors, the call stack and the profile on the 68000, each a test in the crate and through DianaOS's generic debugger (`NephriteDebugTests`); the kit's C15 on the sample and on eight games | ~~All of it~~ The Z80's call stack: the ABI's call stack is processor 0's, and the host keeps one; the Z80's calls are not tracked |
 | **G8**, the clean room | Decided otherwise | *Decided 2026-10-07:* the separate review is skipped and the references are cited on the repository's `README.md` (§37) | The clone check was not run, so the code's freedom from emulators' identifiers has no mechanical test; the rest of the second reader's constant check (§37.2) |
 | **G9**, firmware | Met, with a named exception | Every game runs with no firmware folder: the TMSS boot ROM is optional and its replacement `none`, Nephrite running as a console without TMSS (§2, `v1.rs`), which machine info and the firmware page name | With the player's `bios_MD.bin`, the same game does not yet run on it: `v1.rs` takes the file and machine info names it as the player's, but its boot program is not run |
 
@@ -2796,7 +2796,7 @@ anything; what is not met is the follow-up list, §40.2.
 
 From the gates and the tester's requests, in the order they would be taken:
 
-1. **G7, the debugger**: stage 7, next in the plan's order.
+1. ~~**G7, the debugger**: stage 7, next in the plan's order.~~ Done 2026-10-07 (§43), but for the Z80's call stack.
 2. **The multitaps (Team Player, EA 4-Way Play) and the J-Cart's two ports**, at high priority (*added 2026-10-07*).
    The tester has asked for players two to four across the platform, and four-player Genesis games run with two pads
    today (§12). Not a gate; it ranks with the first.
@@ -2916,4 +2916,50 @@ read the logs and coverage the shared hooks keep.
 
 Step 3: the call stack (`DEBUG_STACK`), watches and data breakpoints, coverage and the profile, each claim a test, and
 the generic debugger in DianaOS shown working on a Genesis game, which is what G7 asks.
+
+## 43. Stage 7, step 3: the call stack, watches, coverage, the profile and the Z80's steps; stage 7 closed (2026-10-07)
+
+### 43.1 What it built
+
+- **Stepping the Z80.** The host steps a processor other than processor 0 with a breakpoint over its whole space
+  (`CoreDebugBridge`, as for VenusRT's SPC700), which the Z80's own breakpoints already ask before each instruction it
+  runs, its catch-up included. A step on the Z80 therefore stops in front of its next instruction and names processor
+  1. A step on the 68000 while the Z80 is the processor stopped runs the Z80's instruction unasked, finishes its
+  catch-up, and stops in front of the 68000's next instruction, the order of §42.1. No new flag was needed:
+  `EACH` stays the 68000's, as the ABI's §6.14 and the host have it.
+- **The call stack** (`DEBUG_STACK`): the 68000's JSR and BSR push a call, its interrupts and exceptions an IRQ frame
+  (level 7 an NMI), and RTS, RTR and RTE pop, as Beryl's 68000 reports them; the host pushes its stack down at the
+  frame's start. Depth targets give step over and step out. The Z80's calls are not the call stack's.
+- **Watches and data breakpoints.** A 68000 store is reported in `M68KBUS` at its bus address and, where it lands in
+  the 68000's RAM or the Z80's, in `WRAM` or `Z80RAM` at its offset too, so a watch on any of the four sees it; a Z80
+  store in `Z80BUS` and, below `$4000`, in `Z80RAM`. Those four spaces say `reports_stores`. Not reported: stores
+  through the VDP's ports (VRAM, CRAM, VSRAM), stores to a cartridge's save RAM, and a Z80 store through its bank
+  window, which is reported in `Z80BUS` alone.
+- **Coverage** on each processor over its own width, and **the profile**, which charges the 68000's instructions to
+  the routine they run in, as §42 recorded them; both now under test.
+
+### 43.2 Measured (2026-10-07)
+
+- **The crate's tests**, all 125. New in `debugger.rs`: a Z80 step stops in front of each of its instructions in
+  order on processor 1; a frame stepped through on both processors (more than a thousand 68000 steps, the Z80 stepped
+  every fiftieth, its catch-up finished before each 68000 step) is the plain frame, state and picture; the call stack
+  follows a JSR, the vertical interrupt and RTE, and a depth target steps out of the routine; watches see each
+  processor's stores, with the storing instruction's address, in the RAM and on the bus, and a data breakpoint stops
+  in front of the 68000's next instruction; coverage is each processor's, and the profile charges the routine three
+  instructions a call.
+- **WiseMan**, `NephriteDebugTests`, eight tests through DianaOS's generic debugger (`CoreDebugTarget`, the debug
+  bridge and the shell) on a synthetic cartridge whose 68000 loads and starts the Z80: the processors, spaces and
+  registers (`cpus`, `regs z80`); a 68000 breakpoint halts and resumes; each processor steps one instruction at a time
+  (`step z80 3`); the call stack holds the JSR (`bt`) and a step over runs the routine whole; write watches on `WRAM`
+  and `Z80RAM`; coverage per processor; disassembly from each bus (`disasm z80`); every registry armed with nothing to
+  hit gives the plain run's state frame for frame. With `NephriteTests` and the registration golden, 22 pass.
+- **The kit**: the corpus form on the sample, the core's cases with C5 finding `DEBUG_STACK` answering and C15
+  passing, and 64 of 64 images.
+
+### 43.3 Stage 7 closed
+
+The plan's oracle for stage 7, "each claim a test; every table armed gives the plain run's digests (C15)", is met:
+each claim of §41-§43 is a test in the crate or in WiseMan, and C15 passes on the sample's reference image and on the
+eight games of §42.2. G7 is met but for the Z80's call stack, which the ABI does not carry for a second processor
+(§40.1).
 

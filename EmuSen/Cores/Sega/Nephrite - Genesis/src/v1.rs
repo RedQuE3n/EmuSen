@@ -232,7 +232,7 @@ pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::DEBUG | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -318,7 +318,7 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: 320, max_height: 480, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: (0..2).map(|p| Port { port: p as u32, controller: Some(if self.six_button[p] { "md.pad6" } else { "md.pad3" }.into()) }).collect(),
-            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::debugger::Z80BUS_ID, ..Space::new(m.id, m.name) }).collect(),
+            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::debugger::Z80BUS_ID, reports_stores: crate::debugger::reports_stores(m.id), ..Space::new(m.id, m.name) }).collect(),
             processors: self.processors(),
             battery: self.battery_id().map(|_| Battery { which: 0, suffix: if self.media.system == System::Mcd { ".brm" } else { ".srm" }.into() }).into_iter().collect(),
             state: StateFormat { format: "NPHR".into(), version: STATE_VERSION as i64, loads_from: (OLDEST_STATE_VERSION..=STATE_VERSION).map(i64::from).collect() },
@@ -472,7 +472,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; rom_patches, settings, debug, debug_registers, debug_disassemble);
+emusen_native::core_exports!(Machine; rom_patches, settings, debug, debug_stack, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {

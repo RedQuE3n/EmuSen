@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 16;
+pub const STATE_VERSION: i32 = 17;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -150,27 +150,73 @@ mod tests {
                 "140342 2 u16 VscrollLatch\n140344 2 u8[2] Field\n140346 320 u8[320] SpriteLineBuffer\n",
                 "140666 80 u8[80] LineVsram\n140746 4 u16[2] LineHscroll\n140750 2 u8[2] LineWindow\n",
                 "140752 4 u16[2] OpenLine\n140756 640 u8[640] OpenLineSprites\n141396 80 u8[80] OpenLineVsram\n",
-                "141476 4 u16[2] OpenLineScroll\n141480 2 u8[2] OpenLineWindow\n141482 3 u8[3] IoData\n",
-                "141485 3 u8[3] IoCtrl\n141488 3 u8[3] IoTx\n141491 3 u8[3] IoSctrl\n141494 2 bool[2] PadTh\n",
-                "141496 2 u8[2] PadFalls\n141498 16 u64[2] PadLastFall\n141514 1 u8 SramRegister\n",
-                "141515 1 bool Mapper\n141516 8 u8[8] MapperPages\n141524 80 u64[10] Clocks\n141604 4 u32 Line\n",
-                "141608 2 u16 Z80Bank\n141610 2 u16 OpenBus\n141612 4 bool[4] Lines\n141616 4 u8[4] Tmss\n",
-                "141620 256 u8[256] Sound.Part0\n141876 256 u8[256] Sound.Part1\n",
-                "142132 6 u8[6] Sound.AddressPartFlags\n142138 4 u16[2] Sound.Counters\n",
-                "142142 24 u64[3] Sound.Times\n142166 8 i32[2] Sound.Out\n142174 24 i32[6] Sound.Channels\n",
-                "142198 5 u8[5] Sound.Timers\n142203 40 u64[5] Sound.TimersAndCounts\n",
-                "142243 1024 u64[128] Sound.Writes\n143267 32 u64[4] Sound.Csm\n",
-                "143299 1056 u64[132] Sound.FmOperators\n144355 24 bool[24] Sound.FmKeys\n",
-                "144379 16 u64[2] Sound.FmEnvelope\n144395 4 u8[4] Sound.FmLatches\n144399 3 u8[3] Sound.FmLfo\n",
-                "144402 31 bool[31] Sound.FmSsgKeys\n144433 48 u16[24] Sound.FmShown\n144481 6 u16[3] Sound.Tone\n",
-                "144487 4 u8[4] Sound.Volume\n144491 3 u8[3] Sound.NoiseLatchStereo\n144494 8 u16[4] Sound.Counter\n",
-                "144502 4 bool[4] Sound.Bit\n144506 2 u16 Sound.Shift\n144508 16 u64[2] Sound.PsgTimeAndTime\n",
-                "144524 80 i32[20] Sound.Lines\n144604 8 i32[2] Sound.Level\n144612 24 u64[3] Sound.Sum\n",
-                "144636 1024 u64[128] Sound.Pending\n145660 8 i32[2] Sound.Level\n145668 24 u64[3] Sound.Sum\n",
-                "145692 1024 u64[128] Sound.Pending\n146716 88 u64[11] Sound.Circuit\n",
-                "146804 160 u64[20] Sound.CircuitSides\n",
+                "141476 4 u16[2] OpenLineScroll\n141480 2 u8[2] OpenLineWindow\n141482 4 u16[2] FrameSize\n",
+                "141486 3 u8[3] IoData\n",
+                "141489 3 u8[3] IoCtrl\n141492 3 u8[3] IoTx\n141495 3 u8[3] IoSctrl\n141498 2 bool[2] PadTh\n",
+                "141500 2 u8[2] PadFalls\n141502 16 u64[2] PadLastFall\n141518 1 u8 SramRegister\n",
+                "141519 1 bool Mapper\n141520 8 u8[8] MapperPages\n141528 80 u64[10] Clocks\n141608 4 u32 Line\n",
+                "141612 2 u16 Z80Bank\n141614 2 u16 OpenBus\n141616 4 bool[4] Lines\n141620 4 u8[4] Tmss\n",
+                "141624 256 u8[256] Sound.Part0\n141880 256 u8[256] Sound.Part1\n",
+                "142136 6 u8[6] Sound.AddressPartFlags\n142142 4 u16[2] Sound.Counters\n",
+                "142146 24 u64[3] Sound.Times\n142170 8 i32[2] Sound.Out\n142178 24 i32[6] Sound.Channels\n",
+                "142202 5 u8[5] Sound.Timers\n142207 40 u64[5] Sound.TimersAndCounts\n",
+                "142247 1024 u64[128] Sound.Writes\n143271 32 u64[4] Sound.Csm\n",
+                "143303 1056 u64[132] Sound.FmOperators\n144359 24 bool[24] Sound.FmKeys\n",
+                "144383 16 u64[2] Sound.FmEnvelope\n144399 4 u8[4] Sound.FmLatches\n144403 3 u8[3] Sound.FmLfo\n",
+                "144406 31 bool[31] Sound.FmSsgKeys\n144437 48 u16[24] Sound.FmShown\n144485 6 u16[3] Sound.Tone\n",
+                "144491 4 u8[4] Sound.Volume\n144495 3 u8[3] Sound.NoiseLatchStereo\n144498 8 u16[4] Sound.Counter\n",
+                "144506 4 bool[4] Sound.Bit\n144510 2 u16 Sound.Shift\n144512 16 u64[2] Sound.PsgTimeAndTime\n",
+                "144528 80 i32[20] Sound.Lines\n144608 8 i32[2] Sound.Level\n144616 24 u64[3] Sound.Sum\n",
+                "144640 1024 u64[128] Sound.Pending\n145664 8 i32[2] Sound.Level\n145672 24 u64[3] Sound.Sum\n",
+                "145696 1024 u64[128] Sound.Pending\n146720 88 u64[11] Sound.Circuit\n",
+                "146808 160 u64[20] Sound.CircuitSides\n",
             )
         );
+    }
+
+    // A state is taken at a frame's end, with the next frame's line 0 already open and the picture's size taken from it; a machine that loads it keeps that size, whatever its own was (Nephrite_Native.md §39).
+    #[test]
+    fn a_loaded_state_keeps_the_size_line_0_gave_the_frame() {
+        let mut a = machine("SEGA GENESIS");
+        (a.genesis.hw.vdp.regs[1], a.genesis.hw.vdp.regs[12]) = (0x44, 0x81);
+        for _ in 0..3 {
+            a.advance();
+        }
+        // A write at the frame's first slots opens line 0 in H40, and the width is then set to H32 for the frame after.
+        a.genesis.hw.vdp.before_change(None);
+        a.genesis.hw.vdp.regs[12] = 0;
+        assert_eq!((a.genesis.hw.vdp.open, a.genesis.hw.vdp.frame.width, a.genesis.hw.vdp.width()), (Some(0), 320, 256));
+        let mut s = vec![0; a.state_size()];
+        a.save_state(&mut s).unwrap();
+        let mut b = machine("SEGA GENESIS");
+        b.load_state(&s).unwrap();
+        assert_eq!((b.genesis.hw.vdp.frame.width, b.genesis.hw.vdp.frame.height), (320, a.genesis.hw.vdp.frame.height));
+        a.advance();
+        b.advance();
+        assert_eq!((b.picture.len(), &b.picture), (320 * 224 * 4, &a.picture));
+    }
+
+    // An EEPROM board's transfer under way is in the state, beside its bytes (Nephrite_Native.md §39).
+    #[test]
+    fn a_loaded_state_keeps_an_eeprom_transfer_where_it_stood() {
+        let eeprom_cart = || {
+            let mut rom = cartridge("SEGA GENESIS", "U", None);
+            rom[0x180..0x18E].copy_from_slice(b"GM T-081586-00");
+            Machine::new(&rom, Media::read(&rom))
+        };
+        let mut a = eeprom_cart();
+        let e = a.genesis.hw.cart.eeprom.as_mut().expect("the board");
+        // SDA on bit 0 of $200001 and SCL on bit 0 of $200000: a start, then three bits of a command clocked in.
+        for (sda, scl) in [(1, 1), (0, 1), (0, 0), (1, 0), (1, 1), (0, 0), (0, 1), (1, 0), (1, 1), (1, 0)] {
+            e.write(&[(0x20_0001, sda), (0x20_0000, scl)]);
+        }
+        let taken = e.protocol();
+        assert_ne!(taken, crate::eeprom::Eeprom::new(e.board).protocol());
+        let mut s = vec![0; a.state_size()];
+        a.save_state(&mut s).unwrap();
+        let mut b = eeprom_cart();
+        b.load_state(&s).unwrap();
+        assert_eq!(b.genesis.hw.cart.eeprom.as_ref().unwrap().protocol(), taken);
     }
 
     #[test]

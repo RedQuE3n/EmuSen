@@ -766,12 +766,14 @@ fn landing_from(w: &[u64; LANDING_WORDS]) -> std::collections::VecDeque<(u64, cr
 }
 
 /// The line being drawn when a state was taken: its number plus one (0 for none) and how far it was drawn, its sprite
-/// pixels and its latched scroll and window values. Its pixels are not kept, being the picture's and not the machine's
-/// (a state must not depend on whether frames were drawn); a loaded state draws them again from itself.
+/// pixels and its latched scroll and window values, and the picture's size as the frame's line 0 took it. Its pixels
+/// are not kept, being the picture's and not the machine's (a state must not depend on whether frames were drawn); a
+/// loaded state draws them again from itself.
 pub struct OpenLine {
     open: [u16; 2],
     sprites: Vec<u8>,
     latch: (Vec<u8>, (u16, u16), [u8; 2]),
+    size: [u16; 2],
 }
 
 /// Everything of the Genesis a state holds beyond its memories, read whole before any of it is applied.
@@ -788,6 +790,7 @@ pub struct Saved {
     sprite_buffer: Vec<u8>,
     io: crate::io::IoRegs,
     sram_reg: u8,
+    eeprom: [u16; 11],
     banks: Option<[u8; 8]>,
     clock: u64,
     z80_clock: u64,
@@ -842,6 +845,8 @@ impl Genesis {
         w.bytes("OpenLineVsram", &h.vdp.span_latch.0);
         w.u16s("OpenLineScroll", &[h.vdp.span_latch.1.0, h.vdp.span_latch.1.1]);
         w.bytes("OpenLineWindow", &h.vdp.span_latch.2);
+        // The size line 0 gave the frame, which a state taken after it and the width changed since cannot work out (Nephrite_Native.md §39).
+        w.u16s("FrameSize", &[h.vdp.frame.width as u16, h.vdp.frame.height as u16]);
         let io = h.io.regs_state();
         w.bytes("IoData", &io.data);
         w.bytes("IoCtrl", &io.ctrl);
@@ -853,6 +858,10 @@ impl Genesis {
         w.u8("SramRegister", h.cart.sram_reg);
         w.bool("Mapper", h.cart.banks.is_some());
         w.bytes("MapperPages", &h.cart.banks.unwrap_or_default());
+        if let Some(e) = &h.cart.eeprom {
+            // A transfer under way when the state was taken (Nephrite_Native.md §39); the board's bytes are its SRAM space.
+            w.u16s("EepromTransfer", &e.protocol());
+        }
         w.u64s("Clocks", &[h.clock, h.z80_clock, h.z80_int.0, h.z80_int.1, h.line_begun, h.vint_at.unwrap_or(u64::MAX), h.stall, h.refresh_at, h.ram_refresh_at, h.refresh_owed]);
         w.u32("Line", h.line);
         w.u16("Z80Bank", h.z80_bank);
@@ -922,6 +931,8 @@ impl Genesis {
         r.u16s(&mut span_scroll)?;
         let mut span_window = [0u8; 2];
         r.bytes(&mut span_window)?;
+        let mut size = [0u16; 2];
+        r.u16s(&mut size)?;
         let mut io = crate::io::IoRegs::default();
         r.bytes(&mut io.data)?;
         r.bytes(&mut io.ctrl)?;
@@ -934,6 +945,10 @@ impl Genesis {
         let mapper = r.bool()?;
         let mut pages = [0u8; 8];
         r.bytes(&mut pages)?;
+        let mut eeprom = [0u16; 11];
+        if self.hw.cart.eeprom.is_some() {
+            r.u16s(&mut eeprom)?;
+        }
         let mut c = [0u64; 10];
         r.u64s(&mut c)?;
         let line = r.u32()?;
@@ -953,11 +968,12 @@ impl Genesis {
             sat_cache: cache,
             line_scroll: (line_vsram, (hs[0], hs[1])),
             line_window,
-            open_line: OpenLine { open, sprites, latch: (span_vsram, (span_scroll[0], span_scroll[1]), span_window) },
+            open_line: OpenLine { open, sprites, latch: (span_vsram, (span_scroll[0], span_scroll[1]), span_window), size },
             write_path: (fifo_at, landing_from(&landing)),
             sprite_buffer,
             io,
             sram_reg,
+            eeprom,
             banks: mapper.then_some(pages),
             clock: c[0],
             z80_clock: c[1],
@@ -992,10 +1008,14 @@ impl Genesis {
         let o = s.open_line;
         (h.vdp.open, h.vdp.span_x) = ((o.open[0] != 0).then(|| o.open[0] as usize - 1), o.open[1] as usize);
         (h.vdp.span_sprites, h.vdp.span_latch) = (o.sprites, o.latch);
+        (h.vdp.frame.width, h.vdp.frame.height) = (o.size[0] as usize, o.size[1] as usize);
         h.vdp.redraw_open_line();
         h.vdp.sprite_buffer = s.sprite_buffer;
         h.io.set_regs_state(s.io);
         h.cart.sram_reg = s.sram_reg;
+        if let Some(e) = h.cart.eeprom.as_mut() {
+            e.set_protocol(s.eeprom);
+        }
         if h.cart.banks.is_some() {
             h.cart.banks = s.banks;
         }

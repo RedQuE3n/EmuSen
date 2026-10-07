@@ -2681,7 +2681,7 @@ what the corpus does not: a 5 MiB Super Street Fighter II and an 8 MiB image are
   state came from over the next 300 frames, and the same sound to the sample (C7's "B, loaded with A's state, did
   not continue as A"; C8's "across a save and load at frame 300 the run differs"). Two machines fed alike without a
   load agree. So something that reaches the picture is not in the state, or is not restored from it. It is not
-  traced here; it is a defect, and the gates' table takes it up.
+  traced here; it is a defect, and the gates' table takes it up. *Traced and fixed 2026-10-07, §39: two things the state did not hold. All six pass.*
 
 ### 38.3 What was run
 
@@ -2689,4 +2689,103 @@ what the corpus does not: a 5 MiB Super Street Fighter II and an 8 MiB image are
 two images each of MoonRT, MercuryRT and VenusRT; the corpus form on the corpus, once. No WiseMan test: nothing of
 the frontends or of Nephrite's source changed, and the runner's `--sidecar`, which the build and `CoreDiscoveryTests`
 use, writes the bytes it wrote.
+
+## 39. Stage 6, two things a state did not hold (2026-10-07)
+
+§38's corpus run found six games in which a machine loaded with another's state drew other pictures than the
+machine the state came from. Players use save states and rewind daily, so it was fixed before the gates' table.
+
+### 39.1 Found
+
+`examples/statediff.rs` runs an image to a frame, saves, loads the state into a second machine, runs both on with the
+same pads, and prints the first frame whose picture or state differs and the state's fields that differ
+(`NEPHRITE_KIT_PADS=1` presses pad 1's buttons in turn as the kit does). Two causes, **measured**:
+
+- **The picture's size.** A frame runs from line 0 to line 0, and a state is taken at a frame's end, after the step
+  that started the next frame. A write to the VDP in that step's remaining clocks opens line 0, and line 0 is where
+  the picture takes its size from the registers. The size was not in the state. A machine that loaded such a state
+  kept its own: 256 × 224, from its power-on registers, where the machine saved from had 320 × 224. Its next frame was
+  then cut to 256 pixels a row, and the frame after was right again. Worms, FIFA Soccer 2000 Gold Edition and Mickey
+  Mouse - Fantasia at frame 300, each with line 0 open: the state equal in both machines frame after frame, the
+  first frame's picture differing on 45 to 152 rows. Pirates! Gold and John Madden Football 93 are the same case
+  under the kit's input.
+- **An EEPROM transfer under way.** The board's bytes were in the state (its `SRAM` space), and the transfer was not:
+  the step of the protocol, the two lines, the byte being shifted and its bits, the bytes taken, the address and the
+  read and acknowledge flags. Frank Thomas Big Hurt Baseball reads its EEPROM across the frame the kit saves at, so
+  the loaded machine read other bits, and one frame later its RAM, its 68000's registers and its EEPROM's bytes all
+  differed from the machine it came from.
+
+Each cause was shown alone with a library built without the other's fix: without the size, five of the six fail C7
+and C8 and Frank Thomas passes; without the EEPROM's transfer, Frank Thomas alone fails.
+
+### 39.2 Fixed
+
+- **`FrameSize`**, the size line 0 gave the frame, after `OpenLineWindow`, and applied on load. It is taken whether or
+  not the frame is drawn, so a state stays independent of drawing, which the kit's C8 checks. The open line's pixels
+  are still not kept: a loaded state draws them again from itself, as before. *Argued, not shown:* a CRAM dot that
+  fell on the open line before the save is not drawn again, since the dot is the write's and not the state's. A state
+  at a frame's end with a CRAM write in line 0's first pixels would show it, for one row of one frame.
+- **`EepromTransfer`**, eleven words after `MapperPages`, written only for a cartridge with an EEPROM board, since the
+  layout is the machine's.
+- **The state is version 17.** A version 16 state is refused with words, as every older one is.
+
+**Pinned by** `state.rs`'s `a_loaded_state_keeps_the_size_line_0_gave_the_frame` (line 0 opened in H40, the width then
+set to H32; it fails without the size applied) and `a_loaded_state_keeps_an_eeprom_transfer_where_it_stood` (a start
+and three bits of a command; it fails without the transfer applied), and `eeprom.rs`'s
+`a_transfer_taken_into_another_board_goes_on_as_it_would_have` (a board given the bytes alone reads other bytes);
+`the_layout_is_pinned` holds the new layout.
+
+### 39.3 Measured (2026-10-07)
+
+- **The kit's corpus form**, 600 frames: the six games, 6 of 6 pass; the sample, the core's cases and 64 of 64
+  images pass, where Frank Thomas Big Hurt Baseball and John Madden Football 93 failed before.
+- **The crate's tests** in the state's blast radius: `state.rs`, `eeprom.rs` and `v1.rs`'s, 23 pass.
+
+## 40. Stage 6's gates, as the follow-up list (2026-10-07)
+
+`Nephrite_Plan.md` §7's gates for the Genesis. The Genesis is offered to players (§36), so none of these blocks
+anything; what is not met is the follow-up list, §40.2.
+
+### 40.1 The gates
+
+| Gate | Status | The evidence | What is missing |
+|---|---|---|---|
+| **G1**, the CPU suites | Met, with named exceptions | SingleStepTests' 68000 suite: 310,649 of 317,500, every miss in a disputes entry on which both referees agree with the processor (D-2, D-3, D-4, D-15; `Beryl_M68k.md` §6.5). Its Z80 suite: 1,604,000 of 1,604,000. ZEXDOC and ZEXALL: 67 of 67 each (`Beryl_Z80.md` §6.1). TomHarte's 680x0 suite: 794,139 of 1,000,060, every miss in an entry | D-9, open: 3,609 divisions whose N and Z after an overflow are in dispute, for a test program on a 68000 |
+| **G2**, the self-grading programs | Met | VDPFIFOTesting 122 of 122 (§17.3); the BCD verifier, the opcode sizes and the illegal-instruction test (§12); the memory test's thirteen rows (§17.2) | Nothing for the Genesis; mcd-verificator is the Sega CD's |
+| **G3**, the pictures | Met, with named exceptions | The test programs against the references up to a colour map and against the board where the two differ (§14.3, §15.4, §16.3, §17.3); MD1536 the board's to the pixel (§27.2); Nemesis's sprite-masking test as on his console | `512PAL`'s 9,700 pixels, the display's reads in the 128 KiB mode (D-10); mode 4's left column under a fine scroll (D-7); single writes with the display off 2 to 4 pixels from the board's (D-11); VRAM's fetch lead and the display bit's return, measured in part (D-9) |
+| **G4**, the frontend | Met | The kit's C1-C15 on the corpus, 941 of 948 files (§38.2), the six state failures since fixed and passing (§39), the seventh a one-byte file refused with words; the sample, 64 of 64 (§39.3). Battery files round-trip in Genesis Plus GX's form, save RAM and EEPROM (§32, §33). The fit audit with the Genesis's tabs, shelf, pad drawings, sidebar and carousel at both sizes (§31, §34, §35). The cheats decode (§30) | — |
+| **G5**, the goldens | Not met | The corpus at two anchors, frames 120 and 600, against Genesis Plus GX: pictures equal up to a colour map in 827 to 888 games of 944 at frame 120 and 773 to 803 at frame 600; the RAM's median 65,527 and 65,513 bytes of 65,536 (§27.2) | A third anchor; the games that differ, about 150 at frame 600, each examined and logged as a dispute or mended; and a grade that allows for the reference showing a game's picture a frame early against the board (§23.4) |
+| **G6**, speed | Met in part | §5.5's desktop budget: 1.217 ms a frame on the bench games, at most 1.335 (§29.4), against 1.5. The tester reports the Genesis plays well on the Legion Go S | The bench at a 33% CPU quota, not measured; a run on the handheld on battery, not confirmed |
+| **G7**, the debugger | Not met | The kit's C15: `DEBUG` not claimed | All of it: breakpoints, stepping, watches, coverage and the call stack on the 68000 and the Z80, each a test. It is stage 7 |
+| **G8**, the clean room | Decided otherwise | *Decided 2026-10-07:* the separate review is skipped and the references are cited on the repository's `README.md` (§37) | The clone check was not run, so the code's freedom from emulators' identifiers has no mechanical test; the rest of the second reader's constant check (§37.2) |
+| **G9**, firmware | Met, with a named exception | Every game runs with no firmware folder: the TMSS boot ROM is optional and its replacement `none`, Nephrite running as a console without TMSS (§2, `v1.rs`), which machine info and the firmware page name | With the player's `bios_MD.bin`, the same game does not yet run on it: `v1.rs` takes the file and machine info names it as the player's, but its boot program is not run |
+
+### 40.2 The follow-up list
+
+From the gates, in the order they would be taken:
+
+1. **G7, the debugger**: stage 7, next in the plan's order.
+2. **G5, the goldens**: a third anchor, and the differing games examined one by one.
+3. **G6**: the bench at a 33% quota, and a battery run on the handheld.
+4. **G9**: the TMSS boot program run from the player's image.
+5. **G8**: the clone check, if it is ever wanted, and the constants not yet read by a second reader.
+6. **D-9**, for a 68000 test program (G1); **D-10**, **D-7**, **D-11**'s display-off residual and **D-9**'s VRAM lead
+   (G3).
+
+Not gates, carried from the stages and still open:
+
+- **Super Street Fighter II's mapper above 4 MiB.** The corpus's one image of it is 4 MiB, so no test reaches the
+  banks the mapper adds, and the sample cannot hold what the corpus does not (§38.1).
+- **D-15**: whether a status read straight after a data write leaves the register at 0 on a console, as on the
+  board. It needs a console, and it is not implemented until one answers.
+- **§29.5's list**: D-26's leftovers (the sweeps' alternation between frames, the FIFO entering the frame's last
+  line, the H counter in horizontal sync and on lines 229 to 234, the status's horizontal-blank bit, mode 4's HV
+  read, the refresh's one-clock overlap); D-27's open items (the right side's weaker agreement, Kabuto's model 1 DAC
+  levels, the model 1 boards not offered, model 2's distortion and its PSG's level); Streets of Rage's loading phase,
+  0.09% fast; D-19's short reset pulses; D-2's long RAM waits; the test register's five voices, the `lfo` sweep and
+  its other bits; an operator's output a level apart from the board's at some levels.
+- **From stage 3** (§12, §17.3): the seven EEPROM boards no document wires (Putter Golf and Accolade's six); Barver
+  Battle Saga's protection device; the Z80 window's alignment; the multitaps (Team Player, EA 4-Way Play) and the
+  J-Cart's ports, not built, so four-player games run with two pads.
+- **A CRAM dot on line 0 when a state is taken** (§39.2), argued and not shown to matter.
 

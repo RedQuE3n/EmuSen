@@ -2689,7 +2689,9 @@ On the development desktop (16 processors), 600 frames, Nephrite's release libra
 - **The verdicts are the same.** On the sample, for each of the 64 images, C6, C7, C8 and C14 have the old form's
   verdict and the old form's evidence to the digest (256 of 256), C4's parts its verdict and its half image's
   outcome, and the image passes in one exactly when it passes in the other: 62 pass, and Frank Thomas Big Hurt
-  Baseball and John Madden Football 93 fail C7 and C8 in both. The cases run once pass, as they do on every image
+  Baseball and John Madden Football 93 fail C7 and C8 in both. (*Those two, and four more of the corpus, were
+  Nephrite's: a state that did not hold the picture's size or an EEPROM transfer under way. Fixed 2026-10-07,
+  `Nephrite_Native.md` §39; all pass since.*) The cases run once pass, as they do on every image
   in the old form but C12 on those two (§28.2). A run of the old form over the corpus stopped at 139 images on
   2026-10-07 agrees with the corpus form on all 139 the same way (556 of 556).
 - **The other cores.** MoonRT (Super Mario Bros., The Legend of Zelda, with `--self-delimiting`), MercuryRT (Tetris,

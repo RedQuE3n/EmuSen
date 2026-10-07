@@ -288,6 +288,10 @@ A `ScreenFilter` may now list `Parameters`, each a `SlangParameter` (id, label, 
 
 **Tests.** `A_lottes_parameter_set_while_it_runs_reaches_the_picture_without_a_new_frame`: a grey picture under Lottes, then `brightBoost` 0 set on the running `GameFrameControl` with no new frame, draws black at the next paint, and `null` draws the first picture again; the chain's own value is read back, and an undeclared id alongside is ignored. `A_dmg_whose_dot_shadow_is_set_to_zero_casts_none`: the shadow of §3.5's magnified case disappears, which shows a value reaching a filter's second pass. Mutants: a chain that ignores the values (both red), and a control that does not hand a new value to a running chain (the Lottes case red).
 
+### 3.8 A physically modelled CRT, designed (2026-10-07)
+
+`EmuSen_CRT.md` is the design of a CRT filter computed from the display chain (the console's encoder, the receiver's decoder, the beam, the phosphors, the mask at a physical pitch, the glass, and the player's own display) in three tiers. It is a built-in for every tier, on this section's `FilterChain`, and its §4.2 lists the six things the chain must learn first: half-float passes, pass sizes other than the frame's and the viewport's, feedback, earlier passes by name, a filter built from its settings with defaults per console, and a filter that states the picture's shape. Nothing here has changed yet.
+
 ---
 
 ## 4. `FramePresenter` — the bundle nothing consumes yet

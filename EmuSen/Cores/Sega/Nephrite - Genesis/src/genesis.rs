@@ -773,7 +773,8 @@ pub struct OpenLine {
     open: [u16; 2],
     sprites: Vec<u8>,
     latch: (Vec<u8>, (u16, u16), [u8; 2]),
-    size: [u16; 2],
+    /// None in a version 16 state, which did not hold it: the registers' size is taken, as line 0 would have read it.
+    size: Option<[u16; 2]>,
 }
 
 /// Everything of the Genesis a state holds beyond its memories, read whole before any of it is applied.
@@ -790,7 +791,8 @@ pub struct Saved {
     sprite_buffer: Vec<u8>,
     io: crate::io::IoRegs,
     sram_reg: u8,
-    eeprom: [u16; 11],
+    /// None in a version 16 state, which did not hold it: the board is left idle.
+    eeprom: Option<[u16; 11]>,
     banks: Option<[u8; 8]>,
     clock: u64,
     z80_clock: u64,
@@ -871,7 +873,8 @@ impl Genesis {
         w.group("Sound", |w| h.sound.write_state(w));
     }
 
-    pub fn read_state(&self, r: &mut StateReader) -> Result<Saved, Truncated> {
+    /// The state of `version`, 16 or 17: 16 lacks `FrameSize` and `EepromTransfer` (Nephrite_Native.md §39.4).
+    pub fn read_state(&self, r: &mut StateReader, version: i32) -> Result<Saved, Truncated> {
         use emusen_native::State;
         let mut cpu = self.cpu.clone();
         cpu.read_state(r)?;
@@ -931,8 +934,13 @@ impl Genesis {
         r.u16s(&mut span_scroll)?;
         let mut span_window = [0u8; 2];
         r.bytes(&mut span_window)?;
-        let mut size = [0u16; 2];
-        r.u16s(&mut size)?;
+        let size = if version >= 17 {
+            let mut size = [0u16; 2];
+            r.u16s(&mut size)?;
+            Some(size)
+        } else {
+            None
+        };
         let mut io = crate::io::IoRegs::default();
         r.bytes(&mut io.data)?;
         r.bytes(&mut io.ctrl)?;
@@ -945,10 +953,13 @@ impl Genesis {
         let mapper = r.bool()?;
         let mut pages = [0u8; 8];
         r.bytes(&mut pages)?;
-        let mut eeprom = [0u16; 11];
-        if self.hw.cart.eeprom.is_some() {
-            r.u16s(&mut eeprom)?;
-        }
+        let eeprom = if self.hw.cart.eeprom.is_some() && version >= 17 {
+            let mut e = [0u16; 11];
+            r.u16s(&mut e)?;
+            Some(e)
+        } else {
+            None
+        };
         let mut c = [0u64; 10];
         r.u64s(&mut c)?;
         let line = r.u32()?;
@@ -1008,13 +1019,16 @@ impl Genesis {
         let o = s.open_line;
         (h.vdp.open, h.vdp.span_x) = ((o.open[0] != 0).then(|| o.open[0] as usize - 1), o.open[1] as usize);
         (h.vdp.span_sprites, h.vdp.span_latch) = (o.sprites, o.latch);
-        (h.vdp.frame.width, h.vdp.frame.height) = (o.size[0] as usize, o.size[1] as usize);
+        match o.size {
+            Some(size) => (h.vdp.frame.width, h.vdp.frame.height) = (size[0] as usize, size[1] as usize),
+            None => h.vdp.size_frame(),
+        }
         h.vdp.redraw_open_line();
         h.vdp.sprite_buffer = s.sprite_buffer;
         h.io.set_regs_state(s.io);
         h.cart.sram_reg = s.sram_reg;
         if let Some(e) = h.cart.eeprom.as_mut() {
-            e.set_protocol(s.eeprom);
+            e.set_protocol(s.eeprom.unwrap_or(crate::eeprom::Eeprom::IDLE));
         }
         if h.cart.banks.is_some() {
             h.cart.banks = s.banks;

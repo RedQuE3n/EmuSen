@@ -526,6 +526,11 @@ then each block in a fixed order, a block present only for the system that has i
 test, there being no other record of what a version means. Sizes (argued from the memories): about 147 KiB for a
 Genesis, 1 MiB with the Sega CD, 660 KiB with the 32X; rewind's snapshots are those sizes.
 
+*Since 2026-10-07, which versions load:* a state is read in its own version's layout back to the oldest a player has
+had (`state.rs`'s `OLDEST_STATE_VERSION`), the fields a later version added supplied as the build record says, with
+any cost of supplying them stated there; an older version is refused with the ABI's words. Version 16 is the oldest
+(`Nephrite_Native.md` §39.4).
+
 ### 5.8 Disc images and the ABI
 
 Two facts of the v1 ABI meet the Sega CD (argued; to be decided, §9 Q5):

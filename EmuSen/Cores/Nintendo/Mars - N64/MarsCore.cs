@@ -226,6 +226,11 @@ namespace EmuSen.Cores.Nintendo.Mars
         // The screen's shape: a television's 4:3 at every VI width and in PAL - see EmuSen_Serenity.md §2.9.
         public double DisplayAspect => EmuSen.Serenity.DisplayShape.Television;
 
+        // The raster is 640 wide at the console's own resolution, so the frame's width says what multiple it is drawn at - see EmuSen_CRT.md §16.
+        public int DisplayLines => LinesOf(ScreenWidth, ScreenHeight);
+
+        public static int LinesOf(int width, int height) => width >= ScreenWidthPixels && width % ScreenWidthPixels == 0 ? height / (width / ScreenWidthPixels) : 0;
+
         public double FrameRateHz => ProcessorClockHz / (double)_lastFrameCycles;
 
         public bool IsRomLoaded => Bus != null;

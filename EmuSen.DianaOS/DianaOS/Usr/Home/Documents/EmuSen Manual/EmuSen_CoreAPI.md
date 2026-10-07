@@ -739,6 +739,12 @@ word (Appendix A; 56 bytes, **measured** by `_Static_assert` under gcc and clang
 - **`row_repeat`** (`ROW_REPEAT`) and **`serial`** (`FRAME_SERIAL`) keep their meanings: rows shown more than once,
   and a serial that moves only when the picture does (`EmuSen_Multicore.md` §14, §15). Without the bit, `row_repeat`
   is 1 and `serial` is the frame count; `core_exports!` writes both, so a core cannot report otherwise.
+- **The console's own lines** are not in `emusen_frame_info` at 1.0, and the reserved word is where they go. A core that
+  draws its frame at a whole multiple of the console's picture (an internal resolution) says how many of the console's
+  lines the frame holds, so that a filter which draws a screen draws those and not the frame's rows
+  (`EmuSen_CRT.md` §16); zero, which every 1.0 core writes, means the rows are the lines. Decided 2026-10-07: the
+  frontends take it from `ICore.DisplayLines` now, since the only cores that draw at a multiple are not on this
+  interface, and the word is named in the minor that first has a core to fill it.
 
 ### 6.7 Sound, and what its rate means
 

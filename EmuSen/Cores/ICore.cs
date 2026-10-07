@@ -19,6 +19,9 @@ namespace EmuSen.Cores
         // Width over height of the screen the console was made for, whatever the frame's pixel count; 0 is unknown, drawn with square pixels - see EmuSen_Serenity.md §2.9.
         double DisplayAspect => 0;
 
+        // The console's own lines in the frame on show, where a core draws it at a whole multiple of the console's picture; 0 says the frame's rows are its lines - see EmuSen_CRT.md §16.
+        int DisplayLines => 0;
+
         // Hardware refresh rate, for frontend frame pacing - see Venus_CPU.md §8.5b.
         double FrameRateHz { get; }
 

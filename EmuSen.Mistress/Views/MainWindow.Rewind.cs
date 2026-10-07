@@ -110,7 +110,7 @@ namespace EmuSen.Mistress.Views
                     _debugTarget?.RefreshProviders();
                     session.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.Reset();
-                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat, _frames.ReleaseFor(session.Core), aspect: session.DisplayAspect);
+                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat, _frames.ReleaseFor(session.Core), aspect: session.DisplayAspect, lines: session.DisplayLines);
                 }
 
                 Dispatcher.UIThread.Post(() =>

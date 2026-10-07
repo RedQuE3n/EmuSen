@@ -139,21 +139,34 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // Until its Genesis gate the core is in development: built and tested, never offered to a player - see EmuSen_CoreAPI.md §27.
+        // Decided 2026-10-07: the Genesis is offered to players; the Sega CD and the 32X stay marked in development in the core's info - see EmuSen_CoreAPI.md §27.4.
         [Fact]
-        public void A_player_is_not_offered_the_core_in_development()
+        public void A_player_is_offered_the_genesis_and_not_the_sega_cd_or_the_32x()
         {
             var sidecar = CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))!;
-            Assert.True(sidecar.Development);
+            Assert.False(sidecar.Development);
             CoreDiscovery.UseDevelopment(false);
-            Assert.DoesNotContain(CoreDiscovery.Found, c => c.Info.Id == "nephrite");
-            foreach (string ext in new[] { ".md", ".gen", ".bin", ".smd", ".iso", ".32x" })
+            Assert.Contains(CoreDiscovery.Found, c => c.Info.Id == "nephrite");
+            foreach (string ext in new[] { ".md", ".gen", ".bin", ".smd" })
+            {
+                Assert.True(CoreFactory.IsSupported("game" + ext), ext);
+                Assert.True(CoreCatalog.IsRomExtension(ext), ext);
+                Assert.Contains(ext, EmuSen.Mistress.Library.RomLibrary.Extensions);
+            }
+            foreach (string ext in new[] { ".iso", ".32x" })
             {
                 Assert.False(CoreFactory.IsSupported("game" + ext), ext);
-                Assert.False(CoreCatalog.IsRomExtension(ext), ext);
                 Assert.DoesNotContain(ext, EmuSen.Mistress.Library.RomLibrary.Extensions);
             }
-            Assert.Throws<NotSupportedException>(() => CoreFactory.Create(Write("game.gen", SyntheticMdRom.Cartridge())));
+            Assert.IsType<CoreEngine>(CoreFactory.Create(Write("game.gen", SyntheticMdRom.Cartridge())));
+            Assert.Equal(new[] { "Genesis" }, CoreCatalog.DiscoveredConsoles);
+            Assert.Contains(CoreCatalog.ShelvesInReleaseOrder, s => s.Name == "Genesis (Nephrite)" && s.EsdeSystem == "genesis");
+            Assert.DoesNotContain(CoreCatalog.ShelvesInReleaseOrder, s => s.EsdeSystem is "segacd" or "sega32x");
+            Assert.Equal(new[] { "model", "region", "pad1", "pad2" }, CoreCatalog.SettingsFor("Genesis").Select(s => s.Key));
+            Assert.Equal(12, CoreCatalog.ButtonsFor("Genesis").Count);
+            var firmware = FirmwareOverview.Build(new EmuSen.Galaxia.Models.GraphicsConfig());
+            Assert.Contains(firmware, f => f.Name == "Sega Genesis / Mega Drive");
+            Assert.DoesNotContain(firmware, f => f.Name is "Sega CD / Mega-CD" or "Sega 32X");
         }
 
         [Fact]

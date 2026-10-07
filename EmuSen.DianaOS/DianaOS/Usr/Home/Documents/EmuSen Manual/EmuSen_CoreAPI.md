@@ -2548,6 +2548,12 @@ Release publish of `EmuSen.csproj` holds the other four libraries and their side
 registration golden of §25 is byte-identical to its state before Nephrite existed, since a player's discovery no
 longer sees the core.
 
+*Amended 2026-10-07: the Genesis is offered to players* (`Nephrite_Plan.md` §7). Nephrite's row carries no mark, the
+registration golden is re-recorded with the Genesis's lines, and the Nephrite test is now
+`NephriteTests.A_player_is_offered_the_genesis_and_not_the_sega_cd_or_the_32x`. The core-level mark is exercised by
+the test core in `CoreDiscoveryTests` and by a copy of Nephrite's library with a development sidecar in
+`FirmwareOverviewTests`; the Sega CD and the 32X stay marked by §27.4.
+
 ### 27.4 A system in development, 2026-10-06
 
 A core may run one of its systems before the others: Nephrite runs the Genesis at stage 6, and its Sega CD and 32X

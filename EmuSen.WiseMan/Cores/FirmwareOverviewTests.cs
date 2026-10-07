@@ -46,8 +46,8 @@ namespace EmuSen.WiseMan.Cores
         public void The_rows_are_what_the_engine_in_use_declares_and_every_shipped_system_is_listed()
         {
             var systems = FirmwareOverview.Build(new GraphicsConfig());
-            Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64"], systems.Select(s => s.Name));
-            Assert.All(systems.Where(s => s.Name != "Super Nintendo"), s => Assert.Empty(s.Items));
+            Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64", "Sega Genesis / Mega Drive"], systems.Select(s => s.Name));
+            Assert.All(systems.Where(s => s.Name is not ("Super Nintendo" or "Sega Genesis / Mega Drive")), s => Assert.Empty(s.Items));
 
             FirmwareSystem snes = Snes();
             CoreSystem declared = VenusRt.Info.Systems.Single(s => s.Id == "snes");
@@ -127,16 +127,40 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // A core in development, here Nephrite's library with its sidecar written as it was before 2026-10-07, is left out even when discovery lists it.
         [Fact]
         public void A_core_in_development_is_left_out_even_when_discovery_lists_it()
         {
-            CoreDiscovery.UseDevelopment(true);
-            DiscoveredCore nephrite = CoreDiscovery.Found.Single(c => c.Info.Id == "nephrite");
-            Assert.True(nephrite.Sidecar.Development);
-            Assert.Contains(nephrite.Info.Systems, s => s.Firmware.Count > 0);
+            string built = Path.Combine(_root, "development");
+            Directory.CreateDirectory(built);
+            string copy = Path.Combine(built, Path.GetFileName(NephriteTests.LibraryPath));
+            File.Copy(NephriteTests.LibraryPath, copy);
+            Assert.True(CoreSidecar.Write(copy, development: true).Development);
+            CoreDiscovery.UseDirectories(new[] { built });
+            try
+            {
+                CoreDiscovery.UseDevelopment(true);
+                DiscoveredCore nephrite = CoreDiscovery.Found.Single(c => c.Info.Id == "nephrite");
+                Assert.True(nephrite.Sidecar.Development);
+                Assert.Contains(nephrite.Info.Systems, s => s.Firmware.Count > 0);
+                var systems = FirmwareOverview.Build(new GraphicsConfig());
+                Assert.DoesNotContain(systems, s => s.Engine == nephrite.EngineName || nephrite.Info.Systems.Any(n => n.Name == s.Name));
+            }
+            finally
+            {
+                CoreDiscovery.UseDirectories(null);
+            }
+        }
+
+        // Decided 2026-10-07: the Genesis is offered, so its row is listed; the Sega CD and the 32X, marked in development in the core's info, are not - see EmuSen_CoreAPI.md §27.4.
+        [Fact]
+        public void The_genesis_is_listed_and_its_attachments_are_not()
+        {
             var systems = FirmwareOverview.Build(new GraphicsConfig());
-            Assert.DoesNotContain(systems, s => s.Engine == nephrite.EngineName || nephrite.Info.Systems.Any(n => n.Name == s.Name));
-            Assert.Equal(4, systems.Count);
+            FirmwareSystem genesis = systems.Single(s => s.Name == "Sega Genesis / Mega Drive");
+            Assert.Equal(CoreDiscovery.Found.Single(c => c.Info.Id == "nephrite").EngineName, genesis.Engine);
+            Assert.Equal(["bios_MD.bin"], genesis.Items.Select(i => i.FileName));
+            Assert.DoesNotContain(systems, s => s.Name is "Sega CD / Mega-CD" or "Sega 32X");
         }
     }
 }

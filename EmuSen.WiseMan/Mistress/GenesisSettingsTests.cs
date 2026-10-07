@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_dir);
             ConfigStore.OverrideDirectory = _dir;
             DataStore.OverrideDirectory = Path.Combine(_dir, "Home");
-            CoreDiscovery.UseDevelopment(true);
+            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
@@ -53,8 +53,8 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { "Genesis" }, CoreCatalog.DiscoveredConsoles);
             Assert.Equal(("Genesis", "Sega CD", "32X"), (CoreCatalog.DiscoveredConsoleForSystem("md"), CoreCatalog.DiscoveredConsoleForSystem("mcd"), CoreCatalog.DiscoveredConsoleForSystem("32x")));
             Assert.Null(CoreCatalog.DiscoveredConsoleForSystem("snes"));
-            CoreDiscovery.UseDevelopment(false);
-            Assert.Empty(CoreCatalog.DiscoveredConsoles);
+            CoreDiscovery.UseDevelopment(true);
+            Assert.Equal(new[] { "Genesis" }, CoreCatalog.DiscoveredConsoles);
         }
 
         [Fact]

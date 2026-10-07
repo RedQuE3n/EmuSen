@@ -96,7 +96,7 @@ namespace EmuSen.WiseMan.Mistress
         [InlineData("md.pad6", ControllerLayout.GenesisSixButton, 12)]
         public Task Every_button_of_the_genesis_pad_the_port_is_set_to_has_a_hit_region(string pad, ControllerLayout layout, int buttons) => UiTest.Run(() =>
         {
-            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(true);
+            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             try
             {
                 var config = GraphicsConfig.Load();

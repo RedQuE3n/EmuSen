@@ -489,7 +489,7 @@ namespace EmuSen.Serenity
             {
                 // A filter that states the picture's shape is given a rectangle of that shape - see EmuSen_Serenity.md §3.9.
                 double shapeWidth = source.Width, shapeHeight = source.Height * source.RowRepeat;
-                if (aspect is { } shape) (shapeWidth, shapeHeight) = (shapeHeight * shape, shapeHeight);
+                if (aspect is { } shape) shapeWidth = shapeHeight * shape;
                 var (x, y, w, h) = ComputeLetterboxRect(shapeWidth, shapeHeight, Bounds.Width, Bounds.Height);
                 return new SKRect((float)x, (float)y, (float)x + Math.Max(1, (int)Math.Round(w)), (float)y + Math.Max(1, (int)Math.Round(h)));
             }

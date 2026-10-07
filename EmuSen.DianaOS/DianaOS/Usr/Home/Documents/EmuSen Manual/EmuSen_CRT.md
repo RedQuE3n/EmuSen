@@ -1,13 +1,13 @@
 # EmuSen_CRT — a physically modelled CRT filter
 
-A design (2026-10-07), with its Accurate tier built the same day (§11). The request was for a very accurate CRT filter, offered in tiers if it turns
+A design (2026-10-07), with its Accurate tier (§11) and its two lower tiers (§12) built the same day. The request was for a very accurate CRT filter, offered in tiers if it turns
 out to be a performance hog: the lowest tier for performance, the highest for accuracy. This document is step 1 of
 four: the survey of existing shaders, the physical literature with a source for every number, the choice of
 delivery path, the model, the tiers with their predicted costs, the player's settings, and the questions that needed
 a decision before any shader was written, with their answers. Step 2, the Accurate tier, is §11; steps 3 and 4 (the two reductions, the settings window) will add their
 sections as they are built.
 
-**Reading order.** §11 for what exists and what it measured. §1 for what is modelled. §4 for where it runs and what `FilterChain` must learn first. §6 for
+**Reading order.** §11 and §12 for what exists and what it measured. §1 for what is modelled. §4 for where it runs and what `FilterChain` must learn first. §6 for
 the tiers. §9 for the decisions. §2 and §3 are reference: who already does what, and what the hardware
 measured.
 
@@ -25,7 +25,7 @@ located and no number is used.
 |---|---|---|
 | 1 | Research and design (this document) | written 2026-10-07 |
 | 2 | The Accurate tier, its render tests, its cost on the RX 6800 at 1080p and 4K | built 2026-10-07: §11, with `FilterChain`'s extensions in `EmuSen_Serenity.md` §3.9 |
-| 3 | Balanced and Performance as reductions, each measured against Accurate | not started |
+| 3 | Balanced and Performance as reductions, each measured against Accurate | built 2026-10-07: §12 |
 | 4 | Graphics settings per console, the settings reference, the fit audit | not started |
 
 The filter exists as `CrtFilter.Filter` and is drawn by the tests and the bench; **it is not yet in a console's list**
@@ -991,7 +991,7 @@ size, turned by 30°. A real set's burst passes through the same comb and is tur
 chroma control restores the size, so colours are right; the filter divides by the same complex factor.
 **[D]**, and the test below confirms the bars come back. On a Genesis the phase does not move from line to
 line, the factor is zero, and a comb has nothing to subtract: the screen's separation falls back to the notch
-when the factor's squared size is under ¼ **[C]**. What real comb sets did with a Genesis was not found.
+when the factor's squared size is under ¼ **[C]**, a choice accepted on 2026-10-07 (§11.12). What real comb sets did with a Genesis was not found.
 
 **Video bandwidth and drive.** The separated luma passes a Gaussian of the screen's video bandwidth; chroma is
 matrixed on the standard's axes (decision 11: the ideal decoder only); and the three voltages go through
@@ -1177,7 +1177,7 @@ a tube of 100 cd/m² on a display of 300, a slot mask is at full depth for light
 third of its depth at white; scanlines are untouched. **Measured**: with no headroom at all, a 75% grey keeps
 its light within 2%, nothing clips, and the mask is under a third as deep as with ten times the headroom.
 
-**The default picture is a third as bright as the display can go**, by this arithmetic and on purpose: it is a
+*(Superseded as the default on 2026-10-07 by §12.3's bright picture; what follows is now the **The tube's own** setting.)* **The default picture is a third as bright as the display can go**, by this arithmetic and on purpose: it is a
 100 cd/m² tube on a 300 cd/m² display. A player whose display is dimmer than 300 sets Display brightness to
 what it is, and the picture brightens while the mask flattens. Whether that is the right default for a first
 impression is §11.12's second question.
@@ -1328,17 +1328,243 @@ misses one. It was not moved off the thread.
 - **Any measurement on the handheld, the laptop or a Mac.** The filter has been drawn on one GPU and one
   driver, and through Skia's raster code.
 
-### 11.12 Questions this step raises
+### 11.12 Questions this step raised, and their answers
 
 1. **Persistence's default** (§11.4). The strength called measured in step 1 was an extrapolation that the
-   built model shows to be unphysical. The default is now 4% of a sustained white in the first dark frame, from
-   the vision literature, with the slider reaching the old figure. To be confirmed, or set to zero until a
-   television's phosphor is measured.
+   built model shows to be unphysical. **Decided 2026-10-07: 4% of a held white in the first dark frame, the
+   García-Pérez and Peli figure, is the default, with the slider.**
 2. **The default brightness** (§11.8). A 100 cd/m² tube on a 300 cd/m² display is a picture a third as bright
-   as the display's peak, with the full mask in the darker two fifths of the range. A brighter default (a tube
-   of 150 or 200 cd/m², or a display assumed at 200) trades mask depth in bright areas for it.
+   as the display's peak. **Decided 2026-10-07 by the tester: brighter by default, using most of the display's
+   brightness, with the mask at full depth in dark and mid tones and easing off only in the brightest areas;
+   the tube's true brightness stays available as a setting.** Built in §12.3, where the measurements show that
+   an SDR display cannot give both halves of it at once.
 3. **The default screen** is the 20-inch consumer slot-mask set, whose mask at 1080p is 2.8 pixels a triad:
-   drawn, softened. On a 1280 × 800 handheld it is 2.1, faint.
-4. **The comb on a Genesis** (§11.3) falls back to the notch, a choice.
-5. **Moving the build off the render thread** (§11.10): six missed frames once per machine, one per settings
-   change. Left as it is unless that is judged too much.
+   drawn, softened. On a 1280 × 800 handheld it is 2.1, faint. Not decided; it stays.
+4. **Showing the filter in the Shaders window** (§11.11). **Decided 2026-10-07: in step 4, done properly:
+   Mistress tells the frame control which console is running; the settings that are choices are drawn as
+   choices; and the window's and the pad's tests never draw a real CRT frame through Skia's software path,
+   using the device where they need a real picture and a stand-in filter where they test only the window, and
+   saying which.**
+5. **The comb on a Genesis** (§11.3) falls back to the notch. **Decided 2026-10-07: accepted, as a choice**; it
+   is marked **[C]** where §11.3 states it.
+6. **Moving the build off the render thread** (§11.10). **Decided 2026-10-07: moved off it, with the previous
+   picture, filtered or plain, kept on screen until the new filter is ready, so that a settings change never
+   drops a frame; in step 3 or 4, whichever touches that code first.** Step 3 did not touch it (§12.8).
+
+---
+
+## 12. Balanced and Performance, as built (2026-10-07)
+
+Both lower tiers are reductions of §11's Accurate tier in the same file, chosen by the **Quality** setting
+(`quality`, a structural parameter: Performance, Balanced, Accurate). **Balanced is the default.** Each was
+judged by its distance from Accurate on rendered frames (§12.4) and its cost (§12.5). This section also builds
+§11.12's second decision, the bright picture (§12.3).
+
+### 12.1 What each tier keeps
+
+| | Performance | Balanced | Accurate (§11) |
+|---|---|---|---|
+| Passes | 2 | 8 by composite, 6 by RGB | 10 by composite, 8 by RGB |
+| Signal | the frame at twice its width, half-float: luma and chroma blurred at the encoder's and receiver's bandwidths, and by composite through a notch, but no subcarrier | the real encode and decode of §11.3 at 4 samples a subcarrier cycle (683 a line on the 21.48 MHz consoles, 753 on the N64) | 2048 samples a line |
+| Transfer | in the signal pass | in the receiver's pass, as Accurate | §11.3 |
+| Persistence | none | §11.4's tails | the same |
+| Beam | the two nearest lines, one read each, a Gaussian sampled at the pixel's centre, one width for the three guns from the line's luma | three lines, one read per gun, sampled, each gun its own width | five lines per gun, integrated over the pixel, the spot scattered along the line first |
+| Convergence | none | §11.2's, by reading each gun at its own place | the same |
+| Mask | box footprint, per subpixel | box footprint, per subpixel | tent footprint |
+| Glass | curvature only | curvature and glare | the same |
+| Dither | none | yes | yes |
+
+**What is the same in all three**: the screen's physical mask pitch and proportions, the colour matrix, the
+picture's placement and overscan, interlace, and §12.3's headroom rules. The mask is in every tier because §11.10
+showed it is cheap (0.05 ms of Performance's frame, measured with the mask turned off).
+
+**Performance's notch** is the one part of a lower tier with its own derivation. Without a subcarrier there is
+no chroma for a notch to separate, but a notch receiver still removes luma from 2.3 to 4.9 MHz, and that is
+what blends the Genesis's dithered columns (§11.3). The pass subtracts the notch's band from the luma directly:
+the same two-cycle Hann window times the subcarrier that §11.3 demodulates with, integrated over each source
+pixel in closed form, scaled by the encoder's and the video stage's gain at the subcarrier, since in Accurate
+the notch acts between them. Two things had to be found by measurement before the columns blended:
+
+- **The Gaussians' gain was taken at −6 dB instead of −3 dB** in the first build (`ln 2` where `ln 2 / 2`
+  belongs), which scaled the band to 0.42 of what it should take away and left the columns at 37% of their RGB
+  swing. The −3 dB definition (an amplitude of 1/√2) is §11.3's; the formula now uses it, and they are at 8%.
+- **One sample per source pixel cannot carry the pattern.** Alternate columns are at half the source's sampling
+  rate, and a filter evaluated only at pixel centres caught their harmonics, so a correct notch still left
+  alternate samples a third of the swing apart; bilinear reading of those samples then beat with the display's
+  pixels (a 79-pixel moiré). Evaluated at twice the width, the same filter blends them. The pass costs no more
+  than its 512 × 224 samples, which is nothing beside the face pass.
+
+**Performance's composite has no rainbow and no crawl**, by design (§6): its colour artifacts are absent, its
+blending is present. Balanced keeps both, at 4 samples a cycle.
+
+### 12.2 Balanced's convergence, and what it is worth
+
+The first Balanced read each line once for all three guns and left out convergence, as §6 planned. Its
+distance from Accurate on *Super Mario World 2* was 3.2 ΔE; with the glare off it was 3.5, with convergence off
+in both tiers 1.3. Convergence was most of the difference. Reading each gun at its own place (three reads a
+line instead of one, the subpixel position and the convergence error together, as Accurate does) brought
+Balanced to **1.0 ΔE for 0.04 ms** at 1080p flat out. It is in.
+
+### 12.3 The bright picture, and the conflict in the request
+
+**As built.** A new setting, **Picture brightness**: *Bright* (the default) or *The tube's own*. Bright puts the
+tube's white at **three quarters of the display's peak** (`BrightWhite`, 0.75), whatever the display; the
+tube's own is §11.8's absolute arithmetic, the Display brightness and Tube white settings. Both then use the
+same headroom rules, now two of them:
+
+1. **A scanline brighter at its centre than the display can go is drawn flatter**, toward its line's even
+   light, by just enough that its peak fits. The flattening is the same across the whole line, so its light is
+   kept. This is new: §11.8 flattened only the mask, and with white at three quarters a narrow line's centre
+   (1.84 times its mean at white on the default screen) clipped, losing a third of the picture's light (white
+   measured 0.47 of the peak instead of 0.75). Two versions were wrong before this one: easing each pixel by its
+   own excess left the gaps dark and the centres cut, and lost the same third.
+2. **The mask then gives way** where a colour's lit stripes would still exceed the peak, as §11.8.
+
+**What the request asked for, and what an SDR display allows.** The decision asked for both a picture that
+uses most of the display's brightness and a mask at full depth through the mid tones. Measured on the
+Accurate tier at 1440 × 1080 (`depth.py`: the green channel's swing along a line across the mask, over its
+mean; full depth is 2.43):
+
+| Grey (drive) | White at 0.75 of peak (the default) | at 0.6 | at 0.5 | the tube's own at 100 of 300 cd/m² |
+|---|---|---|---|---|
+| 0.25 | 2.43 (full) | 2.43 | 2.43 | 2.44 |
+| 0.5 | 1.18 | 1.47 | 1.71 | 2.43 |
+| 0.75 | 0.52 | 0.70 | 0.87 | 2.43 |
+| 1.0 (white) | 0.14 | 0.29 | 0.43 | 2.27 |
+
+A slot mask lights a seventh of the face, and a mid-grey line's centre is about three times its mean, so full
+depth at a drive of 0.5 needs white at a quarter of the display's peak or less. No setting gives a bright
+picture and a deep mid-tone mask together on an SDR display; HDR would (§4.1). The default is the request's first
+half, three quarters, with the mask full in the darks and half deep at mid grey; **a lower share is §12.9's
+first question**, with the table as its evidence.
+
+### 12.4 How far each tier is from Accurate
+
+**Method** (`compare.py`). Each frame is drawn by all three tiers at 1440 × 1080 with the defaults (Composite,
+the 20-inch consumer set, Bright), six frames each so persistence has settled. Both pictures are averaged in
+linear light over 8 × 8 blocks (about two scanlines and three triads, so mask and line structure average out
+and the picture remains), converted to CIELAB against the reference's brightest block, and compared by ΔE*ab
+(1976). A difference near 2.3 is the usual estimate of one just-noticeable step. The frames are resume
+screenshots from the library, copied to scratch (*Sonic the Hedgehog*, *Sonic 3*, *Super Mario World 2*,
+*Super Mario All-Stars*, *Super Mario Bros. 3*, a 512-wide SNES scene, *Bomberman 64* at 480 lines) and colour
+bars.
+
+| Frame | Performance: mean ΔE, 95th percentile | Balanced: mean ΔE, 95th percentile |
+|---|---|---|
+| Sonic the Hedgehog (Genesis) | 7.3, 17.2 | 1.07, 2.9 |
+| Sonic 3 (Genesis) | 3.5, 11.5 | 0.98, 2.5 |
+| Super Mario World 2 (SNES) | 6.9, 22.5 | 0.97, 2.7 |
+| Super Mario All-Stars (SNES) | 7.3, 22.8 | 0.93, 2.6 |
+| Super Mario Bros. 3 (NES) | 7.8, 27.8 | 0.81, 2.5 |
+| A 512-wide SNES scene | 5.1, 16.9 | 0.69, 2.4 |
+| Bomberman 64, 480 lines | 4.2, 11.1 | 0.70, 3.0 |
+| Colour bars | 4.1, 10.0 | 0.78, 1.9 |
+
+**Balanced is under one just-noticeable difference on average everywhere, and its 95th percentile is at about
+one**: a player stepping down from Accurate to Balanced should not see the picture change, only the fine
+structure within a triad (the full-resolution difference is 9 to 11 code values, from the box against the
+tent footprint and sampled against integrated lines).
+
+**Performance is 3.5 to 7.8 on average, visibly different, and the breakdown says where** (Super Mario World 2,
+each feature turned off in both tiers in turn): glare 1.1, convergence 0.9, persistence 0.05, **the composite
+signal 3.5**, the mask and the beam the last 1.4. Most of Performance's difference is the colour artifacts it
+does not draw, which is what it was designed to leave out; by RGB, with the glass, convergence and persistence off in both, it is 1.4 from Accurate. Its picture
+is 2 to 3% brighter, the glare's light that is not scattered; *Bomberman 64* is 5% darker, because two lines
+are too few for an interlaced picture's doubled spots.
+
+**Earlier versions, recorded**: Performance was 7 to 12 ΔE with the glass flat, half of it the curvature's
+geometry; curvature costs it 0.01 ms (§12.5) and it now has it.
+
+### 12.5 What they cost, and the predictions' verdicts
+
+§11.10's bench and protocol, the three tiers interleaved over three rounds; and, since this card's paced clock
+makes light frames look heavier than they are (§11.10), the same 1080p cases once more flat out (`pace=0`),
+where the card runs at its full clock. Cases and results: `cases-tiers.txt`, `results-tiers.txt` beside the
+bench.
+
+| Case (SNES 256 × 224, composite) | Performance | Balanced | Accurate | Built-in Lottes |
+|---|---|---|---|---|
+| 1080p, paced, GPU ms | **0.49** | **0.71** | 1.77 | 0.74 |
+| 1080p, flat out, GPU ms | **0.20** | **0.40** | 1.08 | 0.42 |
+| 1280 × 800, paced | 0.39 | 0.57 | 1.58 | |
+| 4K, paced | 0.90 | 1.39 | 3.36 | 1.89 |
+| 1080p by RGB, paced | 0.46 | 0.60 | | |
+| N64 640 × 240, 1080p, paced | 0.54 | 0.71 | | |
+| Render thread, ms | 0.11 | 0.17 | 0.20 | 0.09 |
+
+As a share of the built-in Lottes at the same output, flat out at 1080p: Performance 0.47, Balanced 0.96,
+Accurate 2.6.
+
+**Accurate is slower than in §11.10**: 1.77 against 1.70 ms at 1080p and 3.36 against 2.86 at 4K, paced. The
+scanline flattening of §12.3 (a line's even light and peak, tracked for each of five lines and three guns) is
+the change; it is the price of the bright default not clipping.
+
+| | Prediction (§6.1) | Verdict |
+|---|---|---|
+| C1 | Performance: 0.10 to 0.13 ms at 1080p, 0.25 to 0.35 at 4K | **Refuted, high**: 0.49 and 0.90 paced, 0.20 flat out. The estimate counted texel reads and transcendental functions against Lottes's and found Performance an eighth of it; measured, it is half. What the count missed is the arithmetic between them: the closed-form mask (eight piecewise integrals a pixel), the curvature's mapping three times a pixel, the placement of the picture and the headroom rules each carry tens of instructions with no read in them |
+| C2 | Balanced: 0.3 to 0.45 ms at 1080p, 0.6 to 0.95 at 4K | **Refuted, high**: 0.71 and 1.39 paced, 0.40 flat out, for the same reason, and for convergence's three reads a line (§12.2), which the prediction did not include |
+| C6 | On the laptop only Performance holds 60 fps | Untested. Scaled by the Lottes ratio, Performance there would be about half of Lottes's 10 to 17 ms estimate: 5 to 8 ms, which fits a frame; Balanced would be about Lottes's own |
+
+**The weak-machine case rests on Performance at about half a Lottes**, not the eighth predicted. Whether that
+holds 60 fps on the laptop's integrated graphics is the question §12.7 asks to be measured.
+
+### 12.6 Tests and mutants
+
+`ScreenFilterRenderTests.Tiers.cs`, 4 cases beside §11.9's, on the GL device:
+
+- **A flat field keeps its light and colour** in Balanced and Performance: white and a 50% grey within 3% and
+  neutral within 1.5%, at 1440 and 2880 wide and with the spot twice the screen's.
+- **Each lower tier stays within its measured distance of Accurate** on a synthetic scene (bars, a ramp, a
+  checker, a colour sweep): Balanced under 2 ΔE, Performance under 8 and more than Balanced.
+- **Balanced keeps the Genesis's rainbow** (30 source pixels long within 4%, blue swinging by more than its
+  mean) **and Performance blends the columns without one** (green and blue swing under 0.2 of the mean, five
+  times less than by RGB).
+- **The default is bright**: Quality's default is Balanced and Picture brightness's is Bright; white is 0.75 of
+  the display's peak within 3%, nothing clips, a dark grey's mask is as deep as with all the headroom it needs,
+  and white's is under half of it.
+
+§11.9's cases now draw Accurate at the tube's own brightness unless they say otherwise, so their figures still
+mean what §11 says; all of them pass with the scanline flattening in place.
+
+**Mutants** (12, each caught): Performance without its notch; its notch at the wrong gain; one sample per source
+pixel; its transfer left out; Balanced without convergence; Balanced's signal at 2 samples a cycle; Balanced
+drawing one line; white at half the peak; no scanline flattening; the flattening by the pixel rather than the
+line; Accurate or the tube's own brightness as the default. The white-at-half mutant survived the first
+version of the brightness case, which asserted the filter's own constant; it asserts 0.75 now. The one-line
+mutant survived the first flat-field case, whose spots were too narrow for a missing line to lose light; the
+case now also draws spots twice the size.
+
+### 12.7 Measurements wanted on the handheld and the laptop
+
+The tiers exist, so this is the ask of §9's ninth decision. **Nothing has been run on either machine.**
+
+**A build to hand over**: `~/.cache/emusen/probe/crt/handover/crt-bench.tgz` (51 MB; the bench of §8.1 with
+this branch's Serenity, self-contained for linux-x64, its native libraries asking for glibc 2.27 at most). It
+holds `run.sh`, `matrix.sh` and `cases.txt`: no filter, Lottes and the three tiers at the panel's 1920 × 1200
+and at 1280 × 800, and Performance for the N64 and the Genesis, three interleaved rounds, about twelve minutes.
+
+On the handheld, as the tester runs it:
+
+1. Copy `crt-bench.tgz` to the handheld and unpack it: `tar xzf crt-bench.tgz` (it makes `crt-bench/`).
+2. Run it under a user scope, so that closing the terminal or the SSH session does not kill it:
+   `systemd-run --user --scope bash crt-bench/run.sh 3`. On the charger or on battery, but say which; §8.4
+   there found the two differ.
+3. Send back `crt-bench/results-<hostname>.txt` and `crt-bench/machine-<hostname>.txt`.
+
+The laptop needs the same, with permission asked first.
+
+### 12.8 What is not done
+
+- **Compiling off the render thread** (§11.12, decision 6). Step 3 changed no code that builds the chain, so it
+  goes with step 4, which adds the frontend's settings changes that would trigger it.
+- **The Shaders window** (decision 4), step 4.
+- **Performance for an interlaced picture** draws two lines where a 480-line picture's doubled spots reach
+  three; it is 5% darker than Accurate there (§12.4).
+
+### 12.9 Questions this step raises
+
+1. **The bright default's share** (§12.3): three quarters of the display's peak, with the mask half deep at mid
+   grey, or a lower share for a deeper mask. The table there is the trade.
+2. **Performance's cost** (§12.5): half a Lottes on the RX 6800. If the laptop shows that is too much, the next
+   reductions are the curvature (0.01 ms here), the mask's slot rows, and a single beam read; each would be
+   measured against §12.4's distance first.

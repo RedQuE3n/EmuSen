@@ -49,6 +49,9 @@ namespace EmuSen.WiseMan.Serenity
             catch (Exception) { return null; }
         });
 
+        // The Accurate tier at the tube's own brightness, which every case below measures unless it says otherwise.
+        private static readonly (string, float)[] Reference = { ("quality", 2f), ("level", 1f) };
+
         // Glass, persistence, convergence and curvature off, so a case measures the one thing it turns back on.
         private static readonly (string, float)[] Plain = { ("persistence", 0f), ("glare", 0f), ("convergence", 0f), ("curvature", 0f) };
 
@@ -58,7 +61,7 @@ namespace EmuSen.WiseMan.Serenity
         private static Crt? Draw(string console, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, IReadOnlyList<byte[]?> frames, params (string Id, float Value)[] set)
         {
             if (CrtDevice.Value is not { } device) return null;
-            var control = new GameFrameControl { FilterConsole = console, ShaderParameters = Values(set), ActiveFilter = CrtFilter.Filter };
+            var control = new GameFrameControl { FilterConsole = console, ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter };
             return new Crt(ShaderBench.Picture(control, frames, sourceWidth, sourceHeight, rowRepeat, windowWidth, windowHeight, device), windowWidth, windowHeight);
         }
 
@@ -113,12 +116,12 @@ namespace EmuSen.WiseMan.Serenity
         {
             Type chainType = typeof(GameFrameControl).Assembly.GetType("EmuSen.Serenity.Shaders.FilterChain")!;
             foreach (string? console in new[] { "NES", "SNES", "Genesis", "N64", null })
-                for (int signal = 0; signal < 3; signal++) for (int mask = 0; mask < 5; mask++) for (int decoder = 0; decoder < 3; decoder++)
+                for (int quality = 0; quality < 3; quality++) for (int signal = 0; signal < 3; signal++) for (int mask = 0; mask < 5; mask++) for (int decoder = 0; decoder < 3; decoder++)
                     foreach (int screen in signal == 2 && mask == 0 ? Enumerable.Range(0, CrtFilter.Screens.Count) : new[] { CrtFilter.DefaultScreen })
                     {
                         using var chain = (IDisposable)Activator.CreateInstance(chainType, CrtFilter.Filter, console)!;
-                        chainType.GetMethod("SetParameters")!.Invoke(chain, new object[] { new Dictionary<string, float> { ["signal"] = signal, ["mask"] = mask, ["decoder"] = decoder, ["screen"] = screen } });
-                        Assert.True((int)chainType.GetProperty("PassCount")!.GetValue(chain)! >= 8);
+                        chainType.GetMethod("SetParameters")!.Invoke(chain, new object[] { new Dictionary<string, float> { ["quality"] = quality, ["signal"] = signal, ["mask"] = mask, ["decoder"] = decoder, ["screen"] = screen } });
+                        Assert.True((int)chainType.GetProperty("PassCount")!.GetValue(chain)! >= new[] { 2, 6, 8 }[quality]);
                     }
         }
 
@@ -136,7 +139,7 @@ namespace EmuSen.WiseMan.Serenity
         public Task Drawn_in_software_a_white_field_keeps_its_light_and_its_colour() => Session.Dispatch(() =>
         {
             var control = new GameFrameControl { FilterConsole = "SNES", ActiveFilter = CrtFilter.Filter };
-            control.ShaderParameters = Values(With(Plain, ("signal", 0f), ("overscan", 900f)));
+            control.ShaderParameters = Values(Reference.Concat(With(Plain, ("signal", 0f), ("overscan", 900f))));
             var window = new Avalonia.Controls.Window { Width = 240, Height = 180, Content = control };
             window.Show();
             try
@@ -566,7 +569,7 @@ namespace EmuSen.WiseMan.Serenity
             byte[] frame = Paint(48, 16, (x, y) => (x / 47.0, y / 15.0, (x * 7 + y * 3) % 16 / 15.0));
             (string, float)[] set = { ("overscan", 300f) };
             if (Draw("Genesis", 48, 16, 240, 180, Twice(frame), set) is not { } device) return;
-            var control = new GameFrameControl { FilterConsole = "Genesis", ShaderParameters = Values(set), ActiveFilter = CrtFilter.Filter };
+            var control = new GameFrameControl { FilterConsole = "Genesis", ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter };
             var window = new Avalonia.Controls.Window { Width = 240, Height = 180, Content = control };
             window.Show();
             try

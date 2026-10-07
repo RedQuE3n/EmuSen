@@ -246,7 +246,8 @@ CPUs' disputes in their own record pages.
   line the FIFO's queued writes drain into the first blank line's free slots from H `$14F` (H40) and `$10F` (H32),
   not from the line's start. With these, every line of the picture programs matches but seven of H40's 224, where
   the 68000's loop meets the slots a write apart (the refresh's loss of D-2, which Nephrite does not take, is the
-  likely cause), and on the last line of each width one dot more in Nephrite, the 68000's write after the drain; the CRAM flicker program's dots match on every line of two
+  likely cause; *2026-10-07: Nephrite takes both refreshes since the commit "Nephrite, stage 5: the 68000's side",
+  D-2, and these seven lines were not measured again with them*), and on the last line of each width one dot more in Nephrite, the 68000's write after the drain; the CRAM flicker program's dots match on every line of two
   frames and all but one of the third.
 - Conclusion: **measured**, as stated.
 - Pinned by: `pictures.rs`'s `cram_dots_fall_where_the_board_shows_them`.
@@ -323,8 +324,20 @@ CPUs' disputes in their own record pages.
   845 changes, 114 on an 8-pixel one, 57 one pixel after), modelled as the first 16-pixel boundary from 24 pixels on,
   which gives 0.56 of the board's distribution. No RTL file was opened.
 - Conclusion: **measured**: CRAM at the beam's pixel; VSRAM by column, read 27 pixels before the column is shown;
-  registers 2.5 pixels after the write; the display bit's blanking 12 pixels later still. **Measured in part**: VRAM's
-  lead of 8 pixels, and the display bit's return.
+  registers 2.5 pixels after the write; the display bit's blanking 12 pixels later still. **Measured in part**: ~~VRAM's
+  lead of 8 pixels~~ VRAM's lead, 24 pixels since 2026-10-05 (the correction below), and the display bit's return.
+- Corrected 2026-10-07: **VRAM's lead is 24 pixels, not 8.** The commit "Nephrite, stage 4: D-11 settled"
+  (`59dba444`, 2026-10-05) changed `vdp.rs`'s `PATTERN_LEAD` from 8 to 24 and its comment's bracket from "between 4
+  and 16" to "between 20 and 32, weakly", and this entry was not brought up to date with it. The 8 was fitted with
+  the transfer's start delay of D-11's first step set for the comparison (`Nephrite_Native.md` §16.3). That commit
+  settled D-11 by taking the delay off the transfer and putting the start on the write path (a word reaching an
+  empty FIFO written 176 master clocks on, a transfer's first read 88 after its command), so `pattern-dma`'s writes
+  land elsewhere along the line than they did under the first setting, and the lead was fitted again to the board's
+  rows: with the shipped settings `pattern-dma` matches on 220 of 224 rows (§17.2 there), as it did before. That
+  the new start is why the lead moved is **argued**: the commit records the value and its bracket and no reason,
+  and the pixels each lead leaves under the new start were not written down. The referee's sentence above, that a
+  lead of 24 or more leaves 15 or more pixels, was measured under the first setting and does not hold under the
+  second. The lead stays **measured in part**, weakly bracketed.
 - Pinned by: `pictures.rs`'s `mid_line_transfers_draw_as_the_board_does` (the board's rows, hashed in
   `board_rows.rs`; it fails with CRAM writes applied at the line's end, 142 rows of 224, and with VSRAM applied at
   once, 192) and `register_writes_show_where_the_board_shows_them` (fails without the write's delay).
@@ -462,12 +475,13 @@ CPUs' disputes in their own record pages.
   bench's clocks where the rest take 56, the refresh of D-2.
 - Conclusion: **measured**: vertical blanking at H `$14C` (H40) and `$10C` (H32), not `m5hvc.txt`'s; the odd flag with
   the frame interrupt; horizontal blanking and F as Nephrite had them; the port's read has no wait of its own. The RAM
-  write's loss is D-2's, still open.
+  write's loss is D-2's, ~~still open~~ *measured and implemented since the commit "Nephrite, stage 5: the 68000's
+  side" (D-2; noted 2026-10-07)*.
 - Pinned by: `vdp.rs`'s `the_blanking_flag_changes_two_pixels_after_the_v_counter`; the odd flag's time by nothing
   yet.
 - Implemented in: the commit "Nephrite, stage 4: D-11 settled".
 
-### D-13. OPEN. The YM2612's status at ports 1-3: the discrete chip of model 1 gives its timer flags without the busy flag there, the model 2 ASIC gives the busy flag at every port
+### D-13. ~~OPEN.~~ Measured for the ASIC; for the discrete chip, the port measured by Eke and the length argued. The YM2612's status at ports 1-3: the discrete chip of model 1 gives its timer flags without the busy flag there, the model 2 ASIC gives the busy flag at every port
 - Opened: 2026-10-05, at stage 5 step 1, by the documents' disagreement over what a read of the YM2612's ports 1-3
   returns.
 - Documents read: SpritesMind topic 386 ("New Documentation: An authoritative reference on the YM2612"), as prose:
@@ -505,6 +519,8 @@ CPUs' disputes in their own record pages.
   master clocks.
 - **Which chip that speaks for**: the board's YM3438 of the model 2 ASIC (D-16). Eke found the flag the same length
   on both chips, so Nephrite gives the discrete YM2612 the same rule; that half is argued.
+- Retitled 2026-10-07: the title read "OPEN." after the conclusion below had closed it. Nothing is open here but the
+  discrete chip's length, which stays argued until a console with a discrete YM2612 is measured.
 - Conclusion: **the flag at ports 1-3 and its length, measured for the ASIC**; for the discrete chip, the port
   measured by Eke and the length argued from his finding that the two agree.
 - Pinned by: `ym2612.rs`'s `the_busy_flag_runs_33_slots_from_the_next_slot_edge_and_reads_at_port_0_on_the_discrete_chip`,
@@ -700,6 +716,13 @@ CPUs' disputes in their own record pages.
   with the PSG, printed by the search, noted as seen and used for nothing); `fc1004.v` lines 68, 211, 387
   (`ym3438 fm`), 405 and 409. **The bench's FM chip is the YM3438 inside the FC1004, the model 2 ASIC**; its
   `MOL_2612` is that model's rendering of the YM2612's DAC, not a second chip.
+  - Acknowledged 2026-10-07: **this was a breach of the step rule.** `Nephrite_Plan.md` §1.3 gives a writer no
+    access to the MiSTer RTL; only a dispute step may open it, after the documents and a test program. The search of
+    `md_board.v` and `fc1004.v` above was made in a writer's step. What was opened is the lines listed, found by a
+    search for seven names; the step's code took nothing from them (the chip's identity decides which console a
+    measurement speaks for, and changes no rule the chip is given), and the two lines of the board's mix were used
+    for nothing: D-27's output stage is fitted to recordings and its mix level comes from them. It is recorded here
+    as an exception to the rule, not turned into a dispute step after the fact.
   - What each measurement therefore speaks for. The logic (the operators and their order, the envelope, the two
     ROMs, the reset line, the busy flag and the status ports, the read after a write): the YM3438 as the ASIC has
     it. For model 1's discrete YM2612 these stand as far as the two chips share their logic, which is argued, not
@@ -782,6 +805,16 @@ CPUs' disputes in their own record pages.
   doubt. The table and the board give every rate the same steps in each four cycles; they differ in which cycles
   take them, which a measurement of an envelope's length does not see and the board's samples do. The board's are
   implemented.
+- The ruling this reading rests on, stated 2026-10-07 because no entry had stated it. `Nephrite_Plan.md` §1.3
+  excludes other emulators' source wherever it is published, and a forum shows both an author's tables and pasted
+  program code in the same kind of block. As applied from stage 5 step 2 (`Nephrite_Native.md` §19.2): **a table or
+  a statement of the hardware's arithmetic that a post's author sets out as their own finding is a document, in a
+  code block or out of one; program code quoted or pasted into a post, an emulator's or a tool's, is not,** and is
+  left undisplayed wherever it can be told beforehand, by a search for identifiers or by masking them. Nemesis's
+  Tables 1 and 2 and his page 12 tables were read under the first half. Where the two could not be told apart
+  before display the exposure is logged: his page 11 blocks, which turned out to be his emulator's code (D-16),
+  and, on page 8, a block quoting MAME's source in a member's post, displayed at step 2 and used for nothing. The
+  board overrode Table 2 where it differs, so no value in the code rests on a block of either kind.
 - Pinned by: `voices.rs`'s `the_decays_by_rate…`, `the_attacks_by_rate…` and `the_envelopes…` (with step 2's rows
   `fm-dr49` has 895 samples of 1,919), and `fm.rs`'s increments by cycle for rates 47, 49, 50 and 51.
 - Implemented in: the commit "Nephrite, stage 5: the board's FM rules".
@@ -912,6 +945,16 @@ CPUs' disputes in their own record pages.
   61 voices; `fm-lfo-restart` differs where its `$22` writes land, D-15). The per-operator counts above fitted the
   whole machine, whose 68000 timing and placement against the picture put the voices a sample from the board's
   against the LFO's divider.
+- 2026-10-07, an exposure entered here that only `Nephrite_Native.md` §21.5 had recorded: at stage 5's writer's
+  step, the search of the saved topic 386 for D-18's table also printed, identifiers masked, the numeric rows of two
+  blocks in C array form on pages 32 and 33, eight values to a row, which look like tables of vibrato depth and sit
+  in blocks that carry an emulator's identifiers. They were not sought and are used for nothing. **Who wrote the
+  vibrato's table:** `lfo_tables.rs` and `Nephrite_LfoTables.md` were written afterwards, in a step of their own on
+  the branch `nephrite-lfotables` (the commit "Nephrite, stage 5: the LFO's vibrato offsets, measured on the board"),
+  by a writer other than the one those rows were displayed to. That writer read §21.5's sentence that the rows had
+  been displayed and was never shown them; the page's §7 lists every file opened for the table, and the topic is
+  not among them. The table is the board's alone: each of the 524,288 offsets was recovered from the pins and the
+  rule's hash is held by the crate's tests, so it would stand whoever had seen what.
 
 
 ### D-21. SSG-EG: a pass ends when the attenuation reaches `$200`, the output inverts about `$200`, the decay runs four times as fast, and a key-off keeps the level the output had
@@ -1344,7 +1387,15 @@ CPUs' disputes in their own record pages.
     4,700 Hz to 0.8 dB.
   - **The PSG's level.** With Nephrite's PSG at 0.251 of the DAC's swing, the seven model 1 consoles from VA3 to VA6.5
     have the PSG 1.85 to 2.44 dB louder against FM, 2.21 in the mean: 0.324.
-- Conclusion, built:
+- Decided 2026-10-07: **the tester accepts the ladder's two constants as prose.** The step a level stands higher
+  from 0 up, and the three and four steps of a channel's idle slots, are as Eke's post gives them, and that post
+  relays Nuked's reading of the die, whose published form is Nuked-OPN2's code, excluded source (`Nephrite_Plan.md`
+  §1.3). The constants were taken from the post's sentences and from no code, and are accepted on that footing,
+  held to Kabuto's measured levels and to the recordings above.
+- Conclusion, built. **Measured** against the recordings and Kabuto's diagrams: the ladder's presence and strength
+  on the model 1 boards and its absence on the YM3438's, the pulses, the circuits' corners and the PSG's level.
+  **From prose, then held to those measurements**: the ladder's two constants. **Not measured**: what the six
+  turns' places within a sample do, which the built stage does not keep (Open, below).
   - **A channel's turn** at a pin, in DAC steps summed over its four slots (`Ym2612::turn`): the YM3438's is its level,
     and nothing on a side it is panned off; the discrete YM2612's is its level and four more from 0 up (the step the
     upper half stands higher, and three slots at rest a step above the middle), its level less three below 0, and four

@@ -509,7 +509,7 @@ stages 3 and 4 open it if they need it.
 
 | File | What was read | What for | Class it settled |
 |---|---|---|---|
-| `megacd-mister-reference/rtl/FX68K/fx68k.txt` | Whole: the core's own description of its clock enables, reset and power-up inputs | The bench's clocking and reset | None by reading; every class by running (D-1 to D-14) |
+| `megacd-mister-reference/rtl/FX68K/fx68k.txt` | Whole: the core's own description of its clock enables, reset and power-up inputs | The bench's clocking and reset | None by reading; every class by running (D-1 to D-15; *corrected 2026-10-07, the cell read D-14, and D-15's TRAPV was settled by running too*) |
 | `megacd-mister-reference/rtl/FX68K/fx68k.sv` | The port declarations of `fx68k` and `fx68kTop`; and lines 283, 728, 775, 1174 and 1175, which Verilator's diagnostics quoted | The bench's pins; the build's waivers | None by reading |
 | `megadrive-mister-reference/rtl/nuked-md/68k.v` | The `m68kcpu` port list (lines 26-56) and its `$readmemb` lines (1106-1109) | The bench's pins; which tables to copy | None by reading; every class by running |
 | `megadrive-mister-reference/rtl/nuked-md/md_board.v` | The `m68kcpu` instance (lines 520-570) | Which clock drives MCLK and CLK | None |

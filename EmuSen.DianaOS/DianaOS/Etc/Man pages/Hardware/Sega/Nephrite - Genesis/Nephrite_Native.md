@@ -2842,7 +2842,8 @@ comes with the next.
   port gives it (its mapper, its save RAM or EEPROM, its patches), the 68000's RAM in its mirrors, the Z80's RAM in
   its mirror and, through the Z80's bank window, the 68000's space. What a read would change is not read: the VDP's
   ports, the I/O ports, the YM2612, the bank register, the PSG and the bus arbiter read as `$FF` here, as do unmapped
-  addresses. The buses hold nothing of their own, so they are not in the state; the memories they show are.
+  addresses. The buses hold nothing of their own, so they are not in the state; the memories they show are. *Since 2026-10-07
+  both are flagged `view` (`EmuSen_CoreAPI.md` §29), and a host that copies every memory leaves them out.*
 - **Disassembly** (`DEBUG_DISASSEMBLE`) by Beryl's two disassemblers: the instruction set is the space's where the
   space is one processor's (`M68KBUS` the 68000's, `Z80BUS` and `Z80RAM` the Z80's), else the processor's asked. A
   68000 instruction starts at an even address.

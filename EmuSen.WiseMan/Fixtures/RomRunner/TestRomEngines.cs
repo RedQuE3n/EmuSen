@@ -104,7 +104,8 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
                     if (audio) sound.AddRange(s);
                 }
                 var mem = new Dictionary<string, byte[]>();
-                foreach (var space in m.Info.Spaces)
+                // A view holds nothing the other spaces do not, so a snapshot leaves it out - see EmuSen_CoreAPI.md §29.
+                foreach (var space in m.Info.Spaces.Where(s => !s.View))
                 {
                     var bytes = new byte[space.Size];
                     m.ReadSpace(space.Id, 0, bytes);

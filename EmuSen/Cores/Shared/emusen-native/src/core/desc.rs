@@ -209,11 +209,14 @@ pub struct Space {
     pub side_effects: bool,
     pub reports_stores: bool,
     pub cheats: bool,
+    /// A read-only window onto memory other spaces hold, as a processor's bus is: it holds nothing of its own, so a host
+    /// that copies every memory leaves it out (EmuSen_CoreAPI.md §29).
+    pub view: bool,
 }
 
 impl Space {
     pub fn new(id: u32, name: &str) -> Space {
-        Space { id, name: name.to_owned(), read_only: false, side_effects: false, reports_stores: false, cheats: false }
+        Space { id, name: name.to_owned(), read_only: false, side_effects: false, reports_stores: false, cheats: false, view: false }
     }
 }
 
@@ -477,7 +480,7 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>) -> String {
     j.end_array();
     j.key("spaces").begin_array();
     for s in &m.spaces {
-        let flags: Vec<&str> = [(s.read_only, "read_only"), (s.side_effects, "side_effects"), (s.reports_stores, "reports_stores"), (s.cheats, "cheats")]
+        let flags: Vec<&str> = [(s.read_only, "read_only"), (s.side_effects, "side_effects"), (s.reports_stores, "reports_stores"), (s.cheats, "cheats"), (s.view, "view")]
             .iter()
             .filter(|f| f.0)
             .map(|f| f.1)

@@ -46,6 +46,8 @@ namespace EmuSen.Cores.Native
         public bool ReadOnly => Flags.Contains("read_only");
         public bool SideEffects => Flags.Contains("side_effects");
         public bool ReportsStores => Flags.Contains("reports_stores");
+        // A window onto other spaces' memory, holding none of its own - see EmuSen_CoreAPI.md §29.
+        public bool View => Flags.Contains("view");
     }
 
     public sealed record CoreProcessor(uint Id, string Name, int PcBits, IReadOnlyList<(string Name, int Bits)> Registers, uint? CodeSpace = null);

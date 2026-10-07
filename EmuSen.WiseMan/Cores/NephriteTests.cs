@@ -64,6 +64,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal("bios_CD_J.bin", library.FirmwareFor(SyntheticMdRom.Disc("J")).Single().Name);
         }
 
+        // The two buses are views, which the runner's snapshots leave out (EmuSen_CoreAPI.md §29).
         [Fact]
         public void The_stub_runs_each_system_through_the_generic_runner()
         {
@@ -71,9 +72,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(engine.Available, engine.Report);
             foreach (var (name, image, spaces) in new (string, byte[], string[])[]
             {
-                ("game.md", SyntheticMdRom.Cartridge(saveBytes: 8192), new[] { "m68kbus", "z80bus", "wram", "z80ram", "vram", "cram", "vsram", "sram", "rom" }),
-                ("game.32x", SyntheticMdRom.Cartridge("SEGA 32X"), new[] { "m68kbus", "z80bus", "wram", "z80ram", "vram", "cram", "vsram", "rom", "sdram", "framebuffer", "palette" }),
-                ("game.iso", SyntheticMdRom.Disc(), new[] { "m68kbus", "z80bus", "wram", "z80ram", "vram", "cram", "vsram", "prgram", "wordram", "pcmram", "bram" }),
+                ("game.md", SyntheticMdRom.Cartridge(saveBytes: 8192), new[] { "wram", "z80ram", "vram", "cram", "vsram", "sram", "rom" }),
+                ("game.32x", SyntheticMdRom.Cartridge("SEGA 32X"), new[] { "wram", "z80ram", "vram", "cram", "vsram", "rom", "sdram", "framebuffer", "palette" }),
+                ("game.iso", SyntheticMdRom.Disc(), new[] { "wram", "z80ram", "vram", "cram", "vsram", "prgram", "wordram", "pcmram", "bram" }),
             })
             {
                 var run = engine.Run(Write(name, image), new[] { 1, 60 }, new[] { new RomPress(10, PadButton.Start) });

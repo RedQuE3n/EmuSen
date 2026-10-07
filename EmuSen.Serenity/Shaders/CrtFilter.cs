@@ -67,8 +67,8 @@ namespace EmuSen.Serenity.Shaders
         // A black of 0.01 cd/m² under a white of 176, the PVM-20L5's - see EmuSen_CRT.md §3.3.
         public const double BlackLevel = 0.01 / 176.0;
 
-        // The standard's active line in microseconds and a field's active lines, which a console's picture is placed inside - see EmuSen_CRT.md §11.1.
-        public const double StandardActiveMicroseconds = 52.66, StandardFieldLines = 241.5, SubcarrierMegahertz = 3.579545;
+        // The standard's active line in microseconds, for a console the timing table does not name, and its subcarrier - see EmuSen_CRT.md §3.1.
+        public const double StandardActiveMicroseconds = 52.66, SubcarrierMegahertz = 3.579545;
 
         private static SlangParameter Choice(string id, string label, int initial, params string[] choices) =>
             new(id, label, initial, 0, choices.Length - 1, 1) { Choices = choices };
@@ -437,12 +437,11 @@ float3 variance(float3 l) {
         // The spot's own width along the line, scattered from each sample; the second pass keeps the energy-weighted variance for the width across lines - see EmuSen_CRT.md §11.5.
         private static string Beam(Resolved r, bool spot) => @"
 uniform float2 outputSize;
-uniform float activeUs;
 " + Functions + Spot(r) + @"
 half4 main(float2 coord) {
     float s = floor(coord.x);
     float row = floor(coord.y) + 0.5;
-    float perLine = outputSize.x * 0.75 / (" + N(StandardFieldLines) + " * activeUs / " + N(StandardActiveMicroseconds) + @");
+    float perLine = outputSize.x * 0.75 / (outputSize.y > 300.0 ? outputSize.y * 0.5 : outputSize.y);
     float3 sum = float3(0.0);
     float3 weighted = float3(0.0);
     for (int t = -8; t <= 8; t++) {
@@ -457,15 +456,11 @@ half4 main(float2 coord) {
     }
 " + (spot ? "    return half4(weighted / max(sum, float3(0.000001)) + step(sum, float3(0.000001)) * variance(float3(0.0)), 1.0);\n}" : "    return half4(sum, 1.0);\n}");
 
-        // Where a point of the tube's face falls in the console's picture: the standard raster, zoomed by the overscan, with the picture inside it - see EmuSen_CRT.md §11.1.
+        // Where a point of the tube's face falls in the picture: the frame fills the face whatever its rows, width or region, enlarged past it by the overscan - see EmuSen_CRT.md §14.
         private static string Raster => @"
-uniform float activeUs;
 uniform float overscan;
-float2 pictureOf(float2 face, float rows) {
-    float fieldRows = rows > 300.0 ? rows * 0.5 : rows;
-    float2 fill = float2(activeUs / " + N(StandardActiveMicroseconds) + ", fieldRows / " + N(StandardFieldLines) + @");
-    float zoom = overscan > 0.0 ? 1.0 + overscan * 0.01 : min(1.0 / fill.x, 1.0 / fill.y);
-    return face / (fill * zoom * float2(1.0, 0.75)) * 0.5 + 0.5;
+float2 pictureOf(float2 face) {
+    return face / ((1.0 + overscan * 0.01) * float2(1.0, 0.75)) * 0.5 + 0.5;
 }
 ";
 
@@ -480,7 +475,7 @@ half4 main(float2 coord) {
     for (int i = 0; i < 6; i++) {
         for (int j = 0; j < 3; j++) {
             float2 cell = (floor(coord) + float2((float(i) + 0.5) / 6.0, (float(j) + 0.5) / 3.0)) / outputSize;
-            float2 p = pictureOf((cell * 2.0 - 1.0) * float2(1.0, 0.75), beamSize.y);
+            float2 p = pictureOf((cell * 2.0 - 1.0) * float2(1.0, 0.75));
             if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) continue;
             sum += beam.eval(p * beamSize).rgb;
         }
@@ -691,7 +686,7 @@ float3 beamsOf(float2 picture, float3 across, float field, inout float3 lineMean
 
             string guns = accurate ? @"
     float spread = convergence * (" + N(r.Screen.ConvergenceCentre / halfWidth / 2) + " + " + N((r.Screen.ConvergenceEdge - r.Screen.ConvergenceCentre) / halfWidth / 2) + @" * dot(face, face) / 1.5625);
-    float2 miss = float2(pictureOf(face + float2(spread, 0.0), beamSize.y).x - before.x, 0.0);
+    float2 miss = float2(pictureOf(face + float2(spread, 0.0)).x - before.x, 0.0);
     float3 lineMean = float3(0.0);
     float3 linePeak = float3(0.0);
     float3 guns = float3(
@@ -704,7 +699,7 @@ float3 beamsOf(float2 picture, float3 across, float field, inout float3 lineMean
     float3 guns = beamsOf(before, float3(before.x), frameCount, lineMean, linePeak);
 " : @"
     float spread = convergence * (" + N(r.Screen.ConvergenceCentre / halfWidth / 2) + " + " + N((r.Screen.ConvergenceEdge - r.Screen.ConvergenceCentre) / halfWidth / 2) + @" * dot(face, face) / 1.5625);
-    float miss = pictureOf(face + float2(spread, 0.0), gunSize.y).x - before.x;
+    float miss = pictureOf(face + float2(spread, 0.0)).x - before.x;
     float3 lineMean = float3(0.0);
     float3 linePeak = float3(0.0);
     float3 guns = beamsOf(before, before.x + shift * perPixel.x + float3(-miss, 0.0, miss), frameCount, lineMean, linePeak);
@@ -780,8 +775,8 @@ half4 main(float2 coord) {
 " + mask + @"
     float litFraction = " + N(layout.LitFraction) + @";
 
-    float2 before = pictureOf(face, " + rows + @");
-    float2 perPixel = float2(pictureOf(face + float2(grain.x, 0.0), " + rows + ").x - before.x, pictureOf(face + float2(0.0, grain.y), " + rows + @").y - before.y);
+    float2 before = pictureOf(face);
+    float2 perPixel = float2(pictureOf(face + float2(grain.x, 0.0)).x - before.x, pictureOf(face + float2(0.0, grain.y)).y - before.y);
     float tall = perPixel.y * " + rows + @";
 " + guns + glass + @"
     float luminance = dot(direct, float3(0.2126, 0.7152, 0.0722));

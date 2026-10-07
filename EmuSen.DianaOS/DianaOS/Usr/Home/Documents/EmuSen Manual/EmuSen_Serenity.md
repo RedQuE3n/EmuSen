@@ -234,7 +234,7 @@ compositor's order of rendering and disposing was not instrumented; the rules do
 
 **How it reaches the screen.** `GameFrameControl.UpdateFrame` takes the shape with the frame (`aspect`, 0 for none), and each offered frame keeps its own. The rectangle is decided in one place, `DrawOp.Destination`:
 
-1. a filter that states a shape (§3.9; the CRT's tube) is drawn in it, whatever the setting, since a tube has no square-pixel form and its picture is placed inside it by the filter (`EmuSen_CRT.md` §11.1). There is no second correction: the filter is given the tube's rectangle and nothing has stretched the frame before it;
+1. a filter that states a shape (§3.9; the CRT's tube) is drawn in it, whatever the setting, since a tube has no square-pixel form; the frame fills the tube, whatever its size or region (`EmuSen_CRT.md` §14, which retired §11.1's placement by line timing). There is no second correction: the filter is given the tube's rectangle and nothing has stretched the frame before it;
 2. otherwise the frame's reported shape, unless `GameFrameControl.SquarePixels` is set;
 3. otherwise, and for a core that reports none, the frame's pixel count, as §2.1.
 

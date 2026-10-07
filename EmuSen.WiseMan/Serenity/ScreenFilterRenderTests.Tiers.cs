@@ -79,7 +79,7 @@ namespace EmuSen.WiseMan.Serenity
             if (Draw("Genesis", 320, 224, 1440, 1080, Twice(columns), With(set, Balanced)) is not { } balanced) return;
             if (Draw("Genesis", 320, 224, 1440, 1080, Twice(columns), With(set, Performance)) is not { } performance) return;
             if (Draw("Genesis", 320, 224, 1440, 1080, Twice(columns), With(set, ("signal", 0f))) is not { } rgb) return;
-            var (left, top, width, height) = PictureIn("Genesis", 224, 1440, 1080);
+            var (left, top, width, height) = PictureIn(1440, 1080);
             int x0 = (int)(left + width * 0.2), x1 = (int)(left + width * 0.8);
             double Swing(Crt picture, int channel) { double[] row = picture.Across(channel, top + height / 2 - 20, 40, x0, x1); return (row.Max() - row.Min()) / row.Average(); }
 

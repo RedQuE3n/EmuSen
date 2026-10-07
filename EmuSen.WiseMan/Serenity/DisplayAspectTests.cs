@@ -121,6 +121,19 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Equal(ntsc, low);
         }, default);
 
+        // The requirement of EmuSen_CRT.md §14: within a core, a frame of any size or region lights the same rectangle, here with no filter.
+        [Theory]
+        [InlineData("NES", 4.0 / 3.0, 0, 400)]
+        [InlineData("SNES", 4.0 / 3.0, 0, 400)]
+        [InlineData("Genesis", 4.0 / 3.0, 0, 400)]
+        [InlineData("N64", 4.0 / 3.0, 0, 400)]
+        [InlineData("GB", 10.0 / 9.0, 33, 366)]
+        public Task With_no_filter_every_frame_a_console_hands_over_lights_the_same_rectangle(string console, double shape, int left, int right) => Session.Dispatch(() =>
+        {
+            foreach (var (width, rows, repeat) in ScreenFilterRenderTests.FramesOf[console])
+                Assert.Equal((left, 0, right, 300), Drawn(width, rows, repeat, shape, false).Lit);
+        }, default);
+
         [Fact]
         public Task Square_pixels_draw_as_before_whatever_shape_is_reported() => Session.Dispatch(() =>
         {

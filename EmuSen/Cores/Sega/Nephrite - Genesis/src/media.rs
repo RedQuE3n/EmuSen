@@ -68,6 +68,20 @@ impl SaveRam {
     }
 }
 
+/// Cartridges that keep their saves in a RAM their header does not declare, by serial (Nephrite_Native.md §46.2). Each
+/// was seen writing its saves' odd bytes above its ROM without asking whether anything is there, or losing its way
+/// where a board without the RAM has the ROM's mirror: Madden NFL 98 and HardBall III do not start. In the table's
+/// order: Madden NFL 98, College Football USA 96, FIFA Soccer 97, the same program under a pirate's serial, NHL 96,
+/// NHL 98, PGA Tour Golf, Starflight, Buck Rogers and HardBall III. The header's word is taken first where it has one.
+pub const UNDECLARED_SAVE: [&str; 10] = ["T-172196", "T-172046", "T-172156", "T-183457", "T-172036", "T-172176", "T-50086", "T-50216", "T-50286", "ACLD012"];
+
+/// The board such a cartridge is given: the one plutiedev's "Saving progress with SRAM" describes, 32 KiB on the odd
+/// bytes of `$200001`-`$20FFFF` with a battery. A board with a smaller chip would repeat within the range.
+pub fn undeclared_save(serial: &str) -> Option<SaveRam> {
+    let s = serial.get(2..).unwrap_or("").trim_start_matches([' ', '_']);
+    UNDECLARED_SAVE.iter().any(|known| s.starts_with(known)).then_some(SaveRam { battery: true, lanes: 3, start: 0x20_0001, end: 0x20_FFFF })
+}
+
 /// The fields of the 256-byte header at $100 that the stub reads.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Header {
@@ -100,11 +114,13 @@ impl Header {
             start: long(b, 0xB4),
             end: long(b, 0xB8),
         });
+        let serial = text(&b[0x80..0x8E]);
+        let save = save.or_else(|| undeclared_save(&serial));
         Some(Header {
             system_type: text(&b[0x00..0x10]),
             domestic_title: text(&b[0x20..0x50]),
             overseas_title: text(&b[0x50..0x80]),
-            serial: text(&b[0x80..0x8E]),
+            serial,
             checksum: u16::from_be_bytes([b[0x8E], b[0x8F]]),
             devices: text(&b[0x90..0xA0]),
             markets: Markets::parse(&b[0xF0..0xF3]),
@@ -267,6 +283,28 @@ mod tests {
         assert_eq!(&*cartridge_bytes(&rom), &rom[..]);
         let unknown = [header, vec![0x5Au8; rom.len()]].concat();
         assert_eq!(&*cartridge_bytes(&unknown), &unknown[..]);
+    }
+
+    // Madden NFL 98's, PGA Tour Golf's and HardBall III's serials with nothing declared, then a header's own word and a serial not listed.
+    #[test]
+    fn a_cartridge_known_to_omit_its_save_ram_is_given_the_standard_board() {
+        let with = |serial: &str, save: Option<[u8; 12]>| {
+            let mut rom = cartridge("SEGA GENESIS", "U", save);
+            rom[0x180..0x18E].copy_from_slice(format!("{serial:<14}").as_bytes());
+            Media::read(&rom)
+        };
+        for serial in ["GM T-172196-00", "GM T-50086 -01", "GM ACLD012 -00"] {
+            let m = with(serial, None);
+            assert_eq!(m.header.as_ref().unwrap().save, Some(SaveRam { battery: true, lanes: 3, start: 0x20_0001, end: 0x20_FFFF }), "{serial}");
+            assert_eq!(m.battery_bytes(), 0x8000, "{serial}");
+        }
+        let mut declared = [0u8; 12];
+        declared[..4].copy_from_slice(&[b'R', b'A', 0xF8, 0x20]);
+        declared[4..8].copy_from_slice(&0x20_0001u32.to_be_bytes());
+        declared[8..12].copy_from_slice(&0x20_3FFFu32.to_be_bytes());
+        assert_eq!(with("GM T-172196-00", Some(declared)).battery_bytes(), 0x2000, "the header's word first");
+        assert_eq!(with("GM T-50706 -00", None).header.unwrap().save, None, "a serial not listed");
+        assert_eq!(with("GM 00000000-00", None).battery_bytes(), 0);
     }
 
     #[test]

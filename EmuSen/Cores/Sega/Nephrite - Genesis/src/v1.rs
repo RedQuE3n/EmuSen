@@ -685,6 +685,26 @@ mod tests {
         assert_eq!(again.battery(0).unwrap().0, &file[..]);
     }
 
+    /// Madden NFL 98's serial on a header that declares no save RAM: the machine has the battery and its file, the odd
+    /// bytes from `$200001` hold what is written with no register set, and the even bytes are the ROM's (§46.2).
+    #[test]
+    fn a_cartridge_whose_header_omits_its_save_ram_has_it_by_its_serial() {
+        let mut image = cartridge("SEGA GENESIS", "U", None);
+        assert!(create(&image, vec![]).unwrap().machine_info().battery.is_empty(), "a serial not listed has none");
+        image[0x180..0x18E].copy_from_slice(b"GM T-172196-00");
+        let mut m = create(&image, vec![]).unwrap();
+        assert_eq!(m.machine_info().battery[0].suffix, ".srm");
+        let under = m.genesis.hw.cart.read8(0x20_0000);
+        assert_eq!(m.genesis.hw.cart.read8(0x20_46B5), 0xFF, "empty, where the game finds no table");
+        m.genesis.hw.cart.write8(0x20_0001, 0x44);
+        m.genesis.hw.cart.write8(0x20_FFFF, 0x4A);
+        m.genesis.hw.cart.write8(0x20_0000, 0x99);
+        assert_eq!((m.genesis.hw.cart.read8(0x20_0001), m.genesis.hw.cart.read8(0x20_FFFF), m.genesis.hw.cart.read8(0x20_0000)), (0x44, 0x4A, under));
+        m.refresh_battery_file();
+        let file = m.battery(0).unwrap().0;
+        assert_eq!((file.len(), file[1], file[0xFFFF]), (0x1_0000, 0x44, 0x4A));
+    }
+
     /// The model setting chooses the sound chip and the output circuit at create: model 1 unless model 2 is asked for.
     #[test]
     fn the_model_setting_chooses_the_sound_chip_and_circuit() {

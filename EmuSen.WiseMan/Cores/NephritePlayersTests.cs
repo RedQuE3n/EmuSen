@@ -138,6 +138,45 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((0x0, 0xF, 0xE), (core.ReadSpace("WRAM", 5) & 0xF, core.ReadSpace("WRAM", 12) & 0xF, core.ReadSpace("WRAM", 13) & 0xF));
         }
 
+        // padprotocol.py's 4 Way Play cartridge: each write to a port register, then a read of port 1 stored from $FF0000, and $A5 at $FF0FFE when done.
+        private static byte[] FourWayProgram(out int steps)
+        {
+            const ushort A = 0x03, B = 0x05, ControlA = 0x09, ControlB = 0x0B;
+            var list = new List<(ushort Register, ushort Value, ushort Read)> { (ControlA, 0x40, A), (ControlB, 0x7F, A), (A, 0x40, A) };
+            foreach (ushort choice in new ushort[] { 0x0C, 0x1C, 0x2C, 0x3C, 0x4C, 0x5C, 0x6C, 0x7C }) list.AddRange(new[] { (B, choice, A), (A, (ushort)0x40, A), (A, (ushort)0x00, A), (A, (ushort)0x40, A) });
+            list.AddRange(new (ushort, ushort, ushort)[] { (B, 0x7C, B), (B, 0x0C, B), (B, 0x00, A), (B, 0x70, A), (B, 0x7F, A), (ControlB, 0x00, A), (ControlB, 0x7F, A), (B, 0x0C, A) });
+            list.AddRange(new (ushort, ushort, ushort)[] { (ControlB, 0x40, A), (B, 0x00, A), (B, 0x10, A), (B, 0x20, A), (B, 0x30, A), (B, 0x40, A) });
+            var r = SyntheticMdRom.Cartridge();
+            Put(r, 0, new ushort[] { 0x00FF, 0xFE00, 0x0000, 0x0200 });
+            var code = new List<ushort> { 0x46FC, 0x2700 };
+            for (int n = 0; n < list.Count; n++) code.AddRange(new ushort[] { 0x13FC, list[n].Value, 0x00A1, list[n].Register, 0x4E71, 0x4E71, 0x4E71, 0x4E71, 0x13F9, 0x00A1, list[n].Read, 0x00FF, (ushort)n });
+            code.AddRange(new ushort[] { 0x13FC, 0x00A5, 0x00FF, 0x0FFE, 0x60FE });
+            Put(r, 0x200, code);
+            steps = list.Count;
+            return r;
+        }
+
+        // The 4 Way Play step by step as Genesis Plus GX answers padprotocol.py's cartridge, but for the four steps Nephrite_Native.md §46.1 names; the last six are a game that leaves port 2's choosing lines inputs.
+        [Fact]
+        public void A_4_way_play_answers_the_protocol_cartridge_and_gives_player_1_when_its_choosing_lines_are_not_driven()
+        {
+            string rom = Path.Combine(_root, "fourway.md");
+            File.WriteAllBytes(rom, FourWayProgram(out int steps));
+            using var core = Load(rom, "md.4way3");
+            core.SetButton(0, PadButton.Up, true);
+            core.SetButton(1, PadButton.B, true);
+            core.SetButton(2, PadButton.Left, true);
+            core.SetButton(2, PadButton.Y, true);
+            core.SetButton(3, PadButton.Start, true);
+            for (int f = 0; f < 4; f++) core.RunFrame();
+            Assert.Equal(0xA5, core.ReadSpace("WRAM", 0xFFE));
+            string reference = "32 32 7E 7E 7E 32 7E 6F 6F 33 6F 7B 7B 23 7B 7F 7F 13 7F 7C 7C 3C 7C 7C 7C 3C 7C 7C 7C 3C 7C 7C 7C 3C 7C 7C 0C 7E 7C 7C 7C 7C 7E 7E 7E 7E 7E 7E 7E";
+            string[] expected = reference.Split(' ');
+            // The data latch at power-on is $7F here and 0 there (steps 0 to 2), and a choice does not outlast its lines being driven (step 40).
+            (expected[0], expected[1], expected[2], expected[40]) = ("7E", "7C", "7C", "7E");
+            Assert.Equal(expected, Enumerable.Range(0, steps).Select(n => core.ReadSpace("WRAM", n).ToString("X2")));
+        }
+
         public const string GamesVariable = "EMUSEN_NEPHRITE_GAMES";
 
         // Two games of the tester's library with four players, each reading its four pads where Genesis Plus GX, run as a black box, has it read them - see Nephrite_Native.md §45.3.
@@ -162,6 +201,35 @@ namespace EmuSen.WiseMan.Cores
                 core.RunFrame();
             }
             Assert.Equal(new[] { 1, 2, 4, 8 }, Enumerable.Range(0, 4).Select(p => (int)core.ReadSpace("WRAM", first + 2 * p)));
+        }
+
+        // Three of the 63 games not made for the 4 Way Play that read player 1 through it, where Genesis Plus GX has them keep Up held - see Nephrite_Native.md §46.1.
+        [Theory]
+        [InlineData("Urban Strike (UEJ) [!].bin", 0x46E5)]
+        [InlineData("James Pond 2 - Codename RoboCod (U) [!].bin", 0xB4CD)]
+        [InlineData("John Madden Football 93 - Championship Edition (U) [!].bin", 0xD2CB)]
+        public void A_game_not_made_for_the_4_way_play_reads_player_1_through_it(string game, int address)
+        {
+            string? folder = Environment.GetEnvironmentVariable(GamesVariable);
+            if (folder is null || !File.Exists(Path.Combine(folder, game)))
+            {
+                _output.WriteLine($"{GamesVariable} names no folder with {game}: not run");
+                return;
+            }
+            string rom = Path.Combine(_root, "game.bin");
+            File.Copy(Path.Combine(folder, game), rom);
+            var read = new List<int>();
+            foreach (bool held in new[] { false, true })
+            {
+                using var core = Load(rom, "md.4way3");
+                for (int f = 0; f < 900; f++)
+                {
+                    if (f == 200) core.SetButton(0, PadButton.Up, held);
+                    core.RunFrame();
+                }
+                read.Add(core.ReadSpace("WRAM", address));
+            }
+            Assert.Equal(new[] { 0, 1 }, read);
         }
     }
 }

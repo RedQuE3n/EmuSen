@@ -555,7 +555,9 @@ the press sent and no release after it (measured 2026-10-07).
 
 **Hotaru** resets its router when a game is loaded or swapped and not otherwise, so it plays the ports a game starts
 with. Following a change there wants a test that drives Hotaru's game window with pads, which the harness does not
-yet have; it is left until then rather than added unexercised.
+yet have; it is left until then rather than added unexercised. *Decided 2026-10-07: left, and on the Genesis's
+follow-up list (`Nephrite_Native.md` §40.2) with the test named,
+`HotaruMultiplayerTests.Four_pads_play_a_genesis_team_player_set_while_the_game_runs`.*
 
 **Coverage**: `PortRouterTests.Ports_added_while_the_game_runs_hear_their_players_and_the_rest_keep_what_they_were_sent`
 and `A_port_taken_away_while_the_game_runs_lets_go_of_its_buttons`;

@@ -231,16 +231,19 @@ impl Io {
     }
 
     /// The six lines below TH as what `port` holds gives them. A 4 Way Play gives on port A the pad that port B's
-    /// lines 5 and 4 choose, or with line 6 high its mark, D1 and D0 low; port B itself gives nothing.
+    /// lines 5 and 4 choose, or with line 6 high its mark, D1 and D0 low; port B itself gives nothing. The three lines
+    /// choose only while the console drives them all: left inputs, as by a game not made for the adapter, port A
+    /// reads the first pad (a choice, not a measurement: Nephrite_Native.md §46.1).
     fn device(&self, port: usize, clock: u64) -> u8 {
         let first = self.first_pad(port);
         match self.plug(port) {
             Plug::Pad => self.pads[first].lines(clock),
             Plug::TeamPlayer => self.taps[port].lines(&self.pads[first..first + 4]) | (self.driven(port, 0x20) as u8) << 5,
             Plug::FourWay if port == 0 => {
-                match self.driven(1, 0x40) {
-                    false => self.pads[(self.driven(1, 0x20) as usize) << 1 | self.driven(1, 0x10) as usize].lines(clock),
-                    true => 0x3C,
+                match (self.ctrl[1] & 0x70 == 0x70, self.driven(1, 0x40)) {
+                    (false, _) => self.pads[0].lines(clock),
+                    (true, false) => self.pads[(self.driven(1, 0x20) as usize) << 1 | self.driven(1, 0x10) as usize].lines(clock),
+                    (true, true) => 0x3C,
                 }
             }
             Plug::FourWay => 0x3F,
@@ -426,6 +429,28 @@ mod tests {
         io.write(0xA1_0005, 0x7C, 0);
         io.write(0xA1_0003, 0x40, 0);
         assert_eq!(io.read(0xA1_0003, 0) & 3, 2, "without the adapter port A is its own pad, here with Up held");
+    }
+
+    // A game not made for the adapter leaves port B's choosing lines inputs: port A reads the first pad, whatever port
+    // B's TH does, as the reference has it (a choice, pending a console: Nephrite_Native.md §46.1).
+    #[test]
+    fn a_4_way_play_with_its_choosing_lines_undriven_gives_the_first_pad() {
+        let mut io = Io::new(true, false, 0);
+        io.plugs[0] = Plug::FourWay;
+        (io.pads[0].buttons, io.pads[3].buttons) = (UP, B);
+        io.write(0xA1_0009, 0x40, 0);
+        io.write(0xA1_0003, 0x40, 0);
+        assert_eq!(io.read(0xA1_0003, 0) & 0x3F, 0x3E, "port B never written");
+        io.write(0xA1_000B, 0x40, 0);
+        for b in [0x00, 0x10, 0x20, 0x30, 0x40] {
+            io.write(0xA1_0005, b, 0);
+            assert_eq!(io.read(0xA1_0003, 0) & 0x3F, 0x3E, "TH alone an output on port B, ${b:02X} written");
+        }
+        io.write(0xA1_0003, 0x00, 0);
+        assert_eq!(io.read(0xA1_0003, 0) & 0x3F, 0x32, "and the pad's other half with TH low");
+        io.write(0xA1_000B, 0x7F, 0);
+        io.write(0xA1_0005, 0x7C, 0);
+        assert_eq!(io.read(0xA1_0003, 0) & 0x3F, 0x3C, "all three driven, the lines choose again");
     }
 
     // The four pads of a 4 Way Play share TH, so a six-button pad counts the falls made while another is chosen.

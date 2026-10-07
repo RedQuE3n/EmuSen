@@ -2,6 +2,7 @@ using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
+using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -11,9 +12,11 @@ namespace EmuSen.WiseMan.Cores
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenGenesisBattery_" + Guid.NewGuid().ToString("N"));
         private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
+        private readonly ITestOutputHelper _output;
 
-        public GenesisBatteryTests()
+        public GenesisBatteryTests(ITestOutputHelper output)
         {
+            _output = output;
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             CoreDiscovery.UseDevelopment(false);
@@ -99,6 +102,48 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(saved, Space(core, 512));
             Assert.Equal(saved, File.ReadAllBytes(SaveLibrary.SramPathFor(rom, BatterySave.Genesis)));
             Assert.Equal(saved, File.ReadAllBytes(old));
+        }
+
+        // Madden NFL 98's serial on a header that declares no save RAM: the standard board by the serial, filed as any save RAM is - see Nephrite_Native.md §46.2.
+        [Fact]
+        public void A_cartridge_whose_header_omits_its_save_ram_keeps_a_battery_file_by_its_serial()
+        {
+            byte[] image = SyntheticMdRom.Cartridge();
+            System.Text.Encoding.ASCII.GetBytes("GM T-172196-00").CopyTo(image, 0x180);
+            string rom = Rom("omits.md", image);
+            using (var core = Load(rom))
+            {
+                core.WriteSpace("SRAM", 0, 0x44);
+                core.WriteSpace("SRAM", 0x7FFF, 0x4A);
+                core.SaveSram();
+            }
+            byte[] file = File.ReadAllBytes(SaveLibrary.SramPathFor(rom, BatterySave.Genesis));
+            Assert.Equal((0x10000, 0x44, 0x4A), (file.Length, (int)file[1], (int)file[0xFFFF]));
+            using var again = Load(rom);
+            Assert.Equal((0x44, 0x4A), ((int)again.ReadSpace("SRAM", 0), (int)again.ReadSpace("SRAM", 0x7FFF)));
+        }
+
+        // Two games of the tester's library that did not start, their save RAM not in their headers: each reaches a picture that moves between frames 600 and 900 - see Nephrite_Native.md §46.2.
+        [Theory]
+        [InlineData("Madden NFL 98 (U).bin")]
+        [InlineData("HardBall 3 (JUE).bin")]
+        public void A_game_whose_header_omits_its_save_ram_starts(string game)
+        {
+            string? folder = Environment.GetEnvironmentVariable(NephritePlayersTests.GamesVariable);
+            if (folder is null || !File.Exists(Path.Combine(folder, game)))
+            {
+                _output.WriteLine($"{NephritePlayersTests.GamesVariable} names no folder with {game}: not run");
+                return;
+            }
+            using var core = Load(Rom("game.bin", File.ReadAllBytes(Path.Combine(folder, game))));
+            var pictures = new List<byte[]>();
+            for (int f = 1; f <= 900; f++)
+            {
+                core.RunFrame();
+                if (f >= 600 && f % 50 == 0) pictures.Add(core.GetFrameBufferRgba().ToArray());
+            }
+            Assert.True(pictures.Select(Convert.ToHexString).Distinct().Count() > 1, "the picture is the same at every sample");
+            Assert.True(pictures[^1].Chunk(4).Select(p => BitConverter.ToUInt32(p)).Distinct().Count() > 1, "the picture is one colour");
         }
 
         [Fact]

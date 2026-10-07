@@ -34,10 +34,16 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // Every control reachable by a pad from where the focus is now; left and right are not pressed where the control itself takes them.
-        public static HashSet<InputElement> Reachable(Control root, PadDriver pad, int limit = 400) => Reachable(root, pad.Press, limit);
+        public static HashSet<InputElement> Reachable(Control root, PadDriver pad, int limit = 400) => Search(root, pad.Press, limit);
 
-        // The same walk with the presses sent some other way, such as straight to the router for a window the headless platform will not make active.
+        // The same walk with the presses sent straight to the router; the dispatcher is run after each as a pad's poll runs it - see EmuSen_Settings_Reference.md §4.98.
         public static HashSet<InputElement> Reachable(Control root, System.Action<EmuSen.Mistress.Input.UiButton> press, int limit = 400)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            return Search(root, button => { press(button); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }, limit);
+        }
+
+        private static HashSet<InputElement> Search(Control root, System.Action<EmuSen.Mistress.Input.UiButton> press, int limit)
         {
             System.Action[] presses =
             {

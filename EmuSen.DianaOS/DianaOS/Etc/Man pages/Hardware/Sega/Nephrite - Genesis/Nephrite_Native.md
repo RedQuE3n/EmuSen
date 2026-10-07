@@ -2948,7 +2948,9 @@ the generic debugger in DianaOS shown working on a Genesis game, which is what G
   in front of the 68000's next instruction; coverage is each processor's, and the profile charges the routine three
   instructions a call.
 - **WiseMan**, `NephriteDebugTests`, eight tests through DianaOS's generic debugger (`CoreDebugTarget`, the debug
-  bridge and the shell) on a synthetic cartridge whose 68000 loads and starts the Z80: the processors, spaces and
+  bridge and the shell) on a synthetic cartridge whose 68000 loads the Z80's program (INC A, LD ($0100),A, JP 0) and
+  starts it, turns the vertical interrupt on, then calls $300 in a loop from $28C, the routine counting in D2 and storing
+  it at $FF0020, the interrupt's handler at $400 returning. The tests cover the processors, spaces and
   registers (`cpus`, `regs z80`); a 68000 breakpoint halts and resumes; each processor steps one instruction at a time
   (`step z80 3`); the call stack holds the JSR (`bt`) and a step over runs the routine whole; write watches on `WRAM`
   and `Z80RAM`; coverage per processor; disassembly from each bus (`disasm z80`); every registry armed with nothing to

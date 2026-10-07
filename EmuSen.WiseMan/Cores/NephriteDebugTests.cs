@@ -47,8 +47,7 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // The 68000 loads the Z80's program (INC A, LD ($0100),A, JP 0) and starts it, turns the vertical interrupt on, then calls
-        // $300 in a loop from $28C; the routine counts in D2 and stores it at $FF0020; the interrupt's handler at $400 returns.
+        // A 68000 that starts a Z80 loop and calls a counting routine with the vertical interrupt on - see Nephrite_Native.md §43.
         private static byte[] CallsRom()
         {
             var r = SyntheticMdRom.Cartridge();

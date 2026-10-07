@@ -729,7 +729,6 @@ namespace EmuSen.WiseMan.Mistress
             for (int page = 0; page < (tabs?.ItemCount ?? 1); page++)
             {
                 if (page > 0) Press(UiButton.PageDown);
-                other.UpdateLayout();
                 HashSet<InputElement> reached = PadAudit.Reachable(other, Press);
                 missing.AddRange(PadAudit.Operable(other).Where(c => !reached.Contains(c)).Select(c => $"[{(tabs?.SelectedItem as TabItem)?.Header}] {PadAudit.Describe(c)}"));
             }
@@ -738,6 +737,27 @@ namespace EmuSen.WiseMan.Mistress
 
             Press(UiButton.Back);
             Assert.False(other.IsVisible);
+            window.Close();
+        }, default);
+
+        // A window that sizes to its tab grows through the dispatcher, so the search runs it before its first press too - see EmuSen_Settings_Reference.md §4.98.
+        [Fact]
+        public Task The_desktop_search_presses_only_in_a_window_grown_to_its_tab() => Session.Dispatch(() =>
+        {
+            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            var window = new MainWindow { Width = 1280, Height = 800 };
+            window.Show();
+            typeof(MainWindow).GetMethod("ShowPreferences", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+            Window other = Assert.Single(window.OwnedWindows);
+
+            PadWindowRouter.Send(other, UiButton.Down);
+            PadWindowRouter.Send(other, UiButton.PageDown);
+            Assert.Equal(531, other.Bounds.Height);
+
+            var heights = new List<double>();
+            PadAudit.Reachable(other, b => { heights.Add(other.Bounds.Height); PadWindowRouter.Send(other, b); }, limit: 4);
+            Assert.NotEmpty(heights);
+            Assert.All(heights, h => Assert.Equal(720, h));
             window.Close();
         }, default);
     }

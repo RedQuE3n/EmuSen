@@ -11,7 +11,7 @@ using EmuSen.Serenity.Shaders;
 namespace EmuSen.WiseMan.Serenity
 {
     // The accurate filters drawn through GameFrameControl's real render pass, and their pixels checked against the measured constants - see EmuSen_Serenity.md §3.4 and §3.5.
-    public class ScreenFilterRenderTests
+    public partial class ScreenFilterRenderTests
     {
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(ScreenFilterRenderTests).GetTypeInfo().Assembly);

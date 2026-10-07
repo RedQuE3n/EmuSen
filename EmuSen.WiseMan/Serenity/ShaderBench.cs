@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.Serenity
     // What one shaded frame costs on the render thread, stage by stage, on a real GL context and the slang device - see EmuSen_Serenity.md §8.1.
     public static unsafe class ShaderBench
     {
-        public sealed record Case(string Kind, string Shader, int SourceWidth, int SourceHeight, int RowRepeat, int WindowWidth, int WindowHeight, int Frames, int Warmup, double Pace, string Cache = "", int Builders = 0);
+        public sealed record Case(string Kind, string Shader, int SourceWidth, int SourceHeight, int RowRepeat, int WindowWidth, int WindowHeight, int Frames, int Warmup, double Pace, string Cache = "", int Builders = 0, string Console = "", string Set = "");
 
         // A new frame every this many draws; the draws between redraw the same frame, as a paused or repeating game gives.
         public static int Every = Math.Max(1, int.Parse(Environment.GetEnvironmentVariable("EMUSEN_BENCH_EVERY") ?? "1"));
@@ -32,7 +32,7 @@ namespace EmuSen.WiseMan.Serenity
             return new Case(d.GetValueOrDefault("kind", "none"), d.GetValueOrDefault("shader", ""), sw, sh, int.Parse(d.GetValueOrDefault("repeat", "1")),
                 ww, wh, int.Parse(d.GetValueOrDefault("frames", "600")), int.Parse(d.GetValueOrDefault("warmup", "60")),
                 double.Parse(d.GetValueOrDefault("pace", "60"), CultureInfo.InvariantCulture),
-                d.GetValueOrDefault("cache", ""), int.Parse(d.GetValueOrDefault("builders", "0")));
+                d.GetValueOrDefault("cache", ""), int.Parse(d.GetValueOrDefault("builders", "0")), d.GetValueOrDefault("console", ""), d.GetValueOrDefault("set", ""));
         }
 
         // A preset's build, whole and in parts, after a small preset has warmed the compiler and the device.
@@ -96,12 +96,18 @@ namespace EmuSen.WiseMan.Serenity
             switch (c.Kind)
             {
                 case "slang": control.ActiveSlangPreset = c.Shader; break;
-                case "filter": control.ActiveFilter = ScreenFilters.Find(c.Shader.Replace('_', ' ')).Filter ?? throw new ArgumentException($"no filter {c.Shader}"); break;
+                case "filter":
+                    // console= the console whose defaults apply; set= id:value pairs joined by commas, the player's values.
+                    if (c.Console != "") control.FilterConsole = c.Console;
+                    if (c.Set != "") control.ShaderParameters = c.Set.Split(',').Select(p => p.Split(':')).ToDictionary(p => p[0], p => float.Parse(p[1], CultureInfo.InvariantCulture));
+                    control.ActiveFilter = c.Shader == CrtFilter.Name ? CrtFilter.Filter : ScreenFilters.Find(c.Shader.Replace('_', ' ')).Filter ?? throw new ArgumentException($"no filter {c.Shader}");
+                    break;
                 case "effect": control.ActiveEffect = ScreenFilters.Find(c.Shader.Replace('_', ' ')).Effect; break;
                 case "none": break;
                 default: throw new ArgumentException(c.Kind);
             }
 
+            double? shape = control.ActiveFilter?.Aspect;
             var frames = Enumerable.Range(0, 8).Select(k => Pattern(c.SourceWidth, c.SourceHeight, k)).ToArray();
             var probe = new Probe();
             var size = new Size(c.WindowWidth, c.WindowHeight);
@@ -174,7 +180,7 @@ namespace EmuSen.WiseMan.Serenity
 
             var stats = GameFrameControlStatistics(control);
             var keys = rows.SelectMany(r => r.Keys).Distinct().ToList();
-            var line = new StringBuilder($"pace={c.Pace} kind={c.Kind} shader={Path.GetFileNameWithoutExtension(c.Shader).Replace(' ', '_')} src={c.SourceWidth}x{c.SourceHeight}x{c.RowRepeat} window={c.WindowWidth}x{c.WindowHeight} out={Letterbox(c)} shown={stats}");
+            var line = new StringBuilder($"pace={c.Pace} kind={c.Kind} shader={Path.GetFileNameWithoutExtension(c.Shader).Replace(' ', '_')} console={(c.Console == "" ? "-" : c.Console)} set={(c.Set == "" ? "-" : c.Set)} src={c.SourceWidth}x{c.SourceHeight}x{c.RowRepeat} window={c.WindowWidth}x{c.WindowHeight} out={Letterbox(c, shape)} shown={stats}");
             log($"{"stage",-22} {"median",8} {"mean",8} {"p95",8}   (ms, {rows.Count} frames)");
             foreach (string key in keys)
             {
@@ -189,15 +195,40 @@ namespace EmuSen.WiseMan.Serenity
             return line.ToString();
         }
 
+        // What a control draws on a GL device after each frame is shown once, as RGBA rows; a null frame is a redraw - see EmuSen_Serenity.md §3.9.
+        public static byte[] Picture(GameFrameControl control, IReadOnlyList<byte[]?> frames, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, string? device)
+        {
+            using var gl = GlContext.Create(device);
+            using GRGlInterface glInterface = GRGlInterface.CreateOpenGl(name => GlContext.GetProc(name)) ?? throw new InvalidOperationException("no GL interface");
+            using GRContext context = GRContext.CreateGl(glInterface) ?? throw new InvalidOperationException("no GRContext");
+            using SKSurface target = SKSurface.Create(context, true, new SKImageInfo(windowWidth, windowHeight, SKColorType.Rgba8888, SKAlphaType.Premul))
+                ?? throw new InvalidOperationException("no GPU surface");
+            var pixels = new byte[windowWidth * windowHeight * 4];
+            foreach (byte[]? frame in frames)
+            {
+                if (frame is not null) control.UpdateFrame(frame, sourceWidth, sourceHeight, rowRepeat);
+                target.Canvas.Clear(SKColors.Black);
+                using (var op = control.CaptureDrawOp(new Size(windowWidth, windowHeight)) ?? throw new InvalidOperationException("no draw operation")) op.RenderTo(target.Canvas, context);
+                context.Flush();
+                gl.Finish();
+            }
+            fixed (byte* p = pixels) target.ReadPixels(new SKImageInfo(windowWidth, windowHeight, SKColorType.Rgba8888, SKAlphaType.Premul), (nint)p, windowWidth * 4, 0, 0);
+            control.ActiveFilter = null;
+            return pixels;
+        }
+
         private static string GameFrameControlStatistics(GameFrameControl control)
         {
             var s = control.TakeStatistics();
             return $"{s.Width}x{s.Height}";
         }
 
-        private static string Letterbox(Case c)
+        // The rectangle the picture is drawn in: the frame's own shape, or the shape a filter states (EmuSen_Serenity.md §3.9).
+        private static string Letterbox(Case c, double? aspect)
         {
-            var (_, _, w, h) = GameFrameControl.ComputeLetterboxRect(c.SourceWidth, c.SourceHeight * c.RowRepeat, c.WindowWidth, c.WindowHeight);
+            double shapeWidth = c.SourceWidth, shapeHeight = c.SourceHeight * c.RowRepeat;
+            if (aspect is { } shape) shapeWidth = shapeHeight * shape;
+            var (_, _, w, h) = GameFrameControl.ComputeLetterboxRect(shapeWidth, shapeHeight, c.WindowWidth, c.WindowHeight);
             return $"{Math.Round(w)}x{Math.Round(h)}";
         }
 

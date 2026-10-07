@@ -100,13 +100,14 @@ namespace EmuSen.WiseMan.Serenity
                     // console= the console whose defaults apply; set= id:value pairs joined by commas, the player's values.
                     if (c.Console != "") control.FilterConsole = c.Console;
                     if (c.Set != "") control.ShaderParameters = c.Set.Split(',').Select(p => p.Split(':')).ToDictionary(p => p[0], p => float.Parse(p[1], CultureInfo.InvariantCulture));
-                    control.ActiveFilter = ScreenFilters.Find(c.Shader.Replace('_', ' ')).Filter ?? throw new ArgumentException($"no filter {c.Shader}");
+                    control.ActiveFilter = c.Shader == CrtFilter.Name ? CrtFilter.Filter : ScreenFilters.Find(c.Shader.Replace('_', ' ')).Filter ?? throw new ArgumentException($"no filter {c.Shader}");
                     break;
                 case "effect": control.ActiveEffect = ScreenFilters.Find(c.Shader.Replace('_', ' ')).Effect; break;
                 case "none": break;
                 default: throw new ArgumentException(c.Kind);
             }
 
+            double? shape = control.ActiveFilter?.Aspect;
             var frames = Enumerable.Range(0, 8).Select(k => Pattern(c.SourceWidth, c.SourceHeight, k)).ToArray();
             var probe = new Probe();
             var size = new Size(c.WindowWidth, c.WindowHeight);
@@ -179,7 +180,7 @@ namespace EmuSen.WiseMan.Serenity
 
             var stats = GameFrameControlStatistics(control);
             var keys = rows.SelectMany(r => r.Keys).Distinct().ToList();
-            var line = new StringBuilder($"pace={c.Pace} kind={c.Kind} shader={Path.GetFileNameWithoutExtension(c.Shader).Replace(' ', '_')} src={c.SourceWidth}x{c.SourceHeight}x{c.RowRepeat} window={c.WindowWidth}x{c.WindowHeight} out={Letterbox(c)} shown={stats}");
+            var line = new StringBuilder($"pace={c.Pace} kind={c.Kind} shader={Path.GetFileNameWithoutExtension(c.Shader).Replace(' ', '_')} console={(c.Console == "" ? "-" : c.Console)} set={(c.Set == "" ? "-" : c.Set)} src={c.SourceWidth}x{c.SourceHeight}x{c.RowRepeat} window={c.WindowWidth}x{c.WindowHeight} out={Letterbox(c, shape)} shown={stats}");
             log($"{"stage",-22} {"median",8} {"mean",8} {"p95",8}   (ms, {rows.Count} frames)");
             foreach (string key in keys)
             {
@@ -222,9 +223,12 @@ namespace EmuSen.WiseMan.Serenity
             return $"{s.Width}x{s.Height}";
         }
 
-        private static string Letterbox(Case c)
+        // The rectangle the picture is drawn in: the frame's own shape, or the shape a filter states (EmuSen_Serenity.md §3.9).
+        private static string Letterbox(Case c, double? aspect)
         {
-            var (_, _, w, h) = GameFrameControl.ComputeLetterboxRect(c.SourceWidth, c.SourceHeight * c.RowRepeat, c.WindowWidth, c.WindowHeight);
+            double shapeWidth = c.SourceWidth, shapeHeight = c.SourceHeight * c.RowRepeat;
+            if (aspect is { } shape) shapeWidth = shapeHeight * shape;
+            var (_, _, w, h) = GameFrameControl.ComputeLetterboxRect(shapeWidth, shapeHeight, c.WindowWidth, c.WindowHeight);
             return $"{Math.Round(w)}x{Math.Round(h)}";
         }
 

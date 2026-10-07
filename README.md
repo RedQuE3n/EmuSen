@@ -164,6 +164,10 @@ None is included in this repository; the tests read them from a local copy when 
 The built-in filters are EmuSen's own shaders; the values they use came from these:
 
 - CRT: Timothy Lottes' crt-lottes, public domain, via libretro's slang-shaders
+- CRT (the modelled one): no shader's code; its constants are from SMPTE 170M, ITU-R BT.470 and BT.1886, the consoles'
+  clocks as the nesdev, SNESdev and n64brew wikis document them, Markus Kuhn's measured P22 decay, DisplayMate's
+  measurements of a Sony PVM-20L5, Sony's PVM brochure, and macro photographs by Selçuk Oral and Planemad on
+  Wikimedia Commons, which its mask and scanline proportions were fitted to. `EmuSen_CRT.md` cites each.
 - Game Boy: palettes measured by [SameBoy](https://github.com/LIJI32/SameBoy) (Lior Halphon, MIT), the panel response of
   Harlequin's dot-matrix shader (Harlequin and Matt Akins, GPL-3.0), and SameBoy's MonoLCD shadow
 - Game Boy Color and Advance: colour matrices measured by Pokefan531 (public domain), stripes after fishku's

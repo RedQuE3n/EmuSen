@@ -33,7 +33,8 @@ namespace EmuSen.Serenity.Shaders
 
         public int PassCount { get { EnsureBuilt(); return _passes.Count; } }
 
-        public FilterChain(ScreenFilter filter) : this(filter, null) { }
+        // Compiled at once, for a caller that wants a filter's errors now.
+        public FilterChain(ScreenFilter filter) : this(filter, null) => EnsureBuilt();
 
         public FilterChain(ScreenFilter filter, string? console)
         {
@@ -55,6 +56,9 @@ namespace EmuSen.Serenity.Shaders
                 if (structural && _built && (!_values.TryGetValue(parameter.Id, out float held) || held != value)) Unbuild();
                 _values[parameter.Id] = value;
             }
+
+            // A console's values for ids that are not parameters are its constants: no player sets them, and passes read them as any other value.
+            if (Filter.DefaultsFor(Console) is { } constants) foreach (var (id, value) in constants) _values.TryAdd(id, value);
         }
 
         public float ValueOf(string id) => _values.TryGetValue(id, out float value) ? value : float.NaN;
@@ -126,6 +130,7 @@ namespace EmuSen.Serenity.Shaders
                 _newFrame = false;
             }
 
+            if (Filter.RowsOnce) rowRepeat = 1;
             int originalWidth = original.Width, originalHeight = original.Height * rowRepeat;
             int viewWidth = Math.Max(1, (int)Math.Round(destination.Width)), viewHeight = Math.Max(1, (int)Math.Round(destination.Height));
             SKMatrix total = canvas.TotalMatrix;

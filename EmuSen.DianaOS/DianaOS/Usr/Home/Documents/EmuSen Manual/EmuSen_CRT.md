@@ -1,13 +1,13 @@
 # EmuSen_CRT — a physically modelled CRT filter
 
-A design (2026-10-07), not yet built. The request was for a very accurate CRT filter, offered in tiers if it turns
+A design (2026-10-07), with its Accurate tier built the same day (§11). The request was for a very accurate CRT filter, offered in tiers if it turns
 out to be a performance hog: the lowest tier for performance, the highest for accuracy. This document is step 1 of
 four: the survey of existing shaders, the physical literature with a source for every number, the choice of
 delivery path, the model, the tiers with their predicted costs, the player's settings, and the questions that needed
-a decision before any shader was written, with their answers. Steps 2 to 4 (the Accurate tier, the two reductions, the settings window)
-will add their sections here as they are built.
+a decision before any shader was written, with their answers. Step 2, the Accurate tier, is §11; steps 3 and 4 (the two reductions, the settings window) will add their
+sections as they are built.
 
-**Reading order.** §1 for what is modelled. §4 for where it runs and what `FilterChain` must learn first. §6 for
+**Reading order.** §11 for what exists and what it measured. §1 for what is modelled. §4 for where it runs and what `FilterChain` must learn first. §6 for
 the tiers. §9 for the decisions. §2 and §3 are reference: who already does what, and what the hardware
 measured.
 
@@ -24,12 +24,12 @@ located and no number is used.
 | Step | What | State |
 |---|---|---|
 | 1 | Research and design (this document) | written 2026-10-07 |
-| 2 | The Accurate tier, its render tests, its cost on the RX 6800 at 1080p and 4K | `FilterChain`'s six extensions built 2026-10-07 (`EmuSen_Serenity.md` §3.9); the tier itself not started |
+| 2 | The Accurate tier, its render tests, its cost on the RX 6800 at 1080p and 4K | built 2026-10-07: §11, with `FilterChain`'s extensions in `EmuSen_Serenity.md` §3.9 |
 | 3 | Balanced and Performance as reductions, each measured against Accurate | not started |
 | 4 | Graphics settings per console, the settings reference, the fit audit | not started |
 
-The existing **CRT (Lottes)** (`EmuSen_Serenity.md` §3.4) and **Simple
-CRT** stay as they are.
+The filter exists as `CrtFilter.Filter` and is drawn by the tests and the bench; **it is not yet in a console's list**
+(§11.11). The existing **CRT (Lottes)** (`EmuSen_Serenity.md` §3.4) and **Simple CRT** stay as they are.
 
 ---
 
@@ -307,6 +307,8 @@ a dozen lines of closed-form integrals):
 
 Share of the first frame's light emitted in its first millisecond: red 91%, green 74%, blue 77%.
 
+*(2026-10-07, after building it: the next-frame figures above are an extrapolation eight times past Kuhn's last recorded point, and a sustained picture shows them to be unphysical. §11.4 retires them as the default and gives what replaced them. The first bullet below stands only in its direction, cyan-green and slow; the second is unaffected.)*
+
 **What follows.**
 
 - **Between frames, a P22 screen's trail is cyan-green and a few percent**, falling as roughly `1/k` with the
@@ -338,6 +340,7 @@ and Monitor CRT (Picture Tube) Information* [S]).
 **Unfound:** any curve of spot size against beam current for a television tube, and the spot's size relative to
 the line pitch for a consumer set against a PVM. These are the constants that decide how visible scanlines are,
 and they are **choices** in step 2, to be fitted against photographs (§8.3) and recorded as fitted, not measured.
+*(Fitted 2026-10-07 to one photograph of a Trinitron: σ about 0.26 mm at white, §11.5.)*
 The form is fixed by the physics: a Gaussian whose area is the line's light, so that widening it lowers its peak
 and conserves its energy, with `σ = σ₀ · (1 + k · I^p)`, `p` near ½.
 
@@ -401,10 +404,13 @@ fraction, which is geometry (§5.6), and the tube's white luminance, which is §
 | PVM-14M4 | 1.0 | 1.4 | 1.5 | 2.7 |
 | PVM-20M4 | 0.9 | 1.2 | 1.3 | 2.3 |
 
-Three stripes need at least three samples per triad to be told apart at all and six to be drawn without beating.
+~~Three stripes need at least three samples per triad to be told apart at all and six to be drawn without beating.
 Whole pixels give that only for consumer sets at 4K. **Display subpixels** give three times as many samples, so a
 consumer slot mask is drawable at 1080p (8.4 subpixels per triad) and a PVM's grille at 4K, and nothing draws a
-PVM's grille at 1080p. §5.6 is built on this.
+PVM's grille at 1080p. §5.6 is built on this.~~ *(Retired 2026-10-07. Each colour is sampled once per pixel
+wherever its subpixel sits, so subpixels do not multiply the samples of a coloured stripe. §11.7 has the
+correction and the arithmetic that replaces this paragraph: a mask needs two pixels per triad to be drawn at
+all, and is gone below one and a half.)*
 
 ---
 
@@ -502,7 +508,7 @@ a sample is computed, `φ = 2π (x · cyclesAcross / 2048 + line · perLine + fr
 Gaussian low-pass of a box has a closed form (a difference of two error functions), so the encoder's band limit
 is applied exactly to the staircase rather than to point samples of it; this is what removes the aliasing a
 4×-oversampled point-sampled encoder has. Luma and the two colour-difference signals are filtered at their own
-bandwidths (§3.1, §3.2), set-up is added for a US signal, and the output is `Y` and `C = U sin φ + V cos φ`. RGB
+bandwidths (§3.1, §3.2), ~~set-up is added for a US signal~~ *(no console adds one: §11.3)*, and the output is `Y` and `C = U sin φ + V cos φ`. RGB
 skips the modulation and keeps three band-limited channels. Every filter is given as a −3 dB frequency in MHz,
 converted to samples through the console's active-line time.
 
@@ -571,6 +577,8 @@ mask is dots on a hexagonal lattice. Each is described by the fraction of the ph
 occupies, the lit fraction, and the measured stripe and guard widths are to come from macro photographs (§8.3),
 marked as fitted.
 
+*(As built, §11.7: the footprint is the whole pixel centred on the subpixel, not the subpixel's own third; the paragraph below is the first design.)*
+
 **Each display subpixel shows only its own phosphor.** A display's red subpixel cannot emit green. So the red
 output of a pixel is the red gun's light times the share of the *red subpixel's own footprint* that red phosphor
 covers, and likewise green and blue, each at its own position a third of a pixel apart. This is three times the
@@ -593,7 +601,7 @@ beam in raster coordinates, so curvature and overscan move the picture across th
 ### 5.7 The glass (one small pass pair, and terms in the final pass)
 
 - **Veiling glare and halation**: the linear-light picture, reduced to the frame's own size, blurred separably
-  by a kernel that is a wide Gaussian plus the ring of §3.7, and added to the direct light with the direct
+  by a kernel that is a wide Gaussian plus the ring of §3.7 *(as built, one Gaussian and no ring: §11.6)*, and added to the direct light with the direct
   light reduced by the same share, so the total is conserved. The two weights are fitted so that a rendered
   4×4 and 9×9 checkerboard give §3.7's 0.46% and 1.3%.
 - **Convergence**: each gun's raster position offset by a static error plus a term growing toward the corners,
@@ -660,7 +668,7 @@ against (step 3): for each, the difference from Accurate on rendered frames, in 
 | Glass | none | glare from one small blur | glare and ring, fitted to the checkerboards; convergence per gun |
 | Geometry | flat, overscan only | curvature | curvature, with the footprint carried into the mask |
 | Display | luminance-aware mask depth | the same | the same, with dither |
-| Passes | 2 | 5 | 6 |
+| Passes | 2 | 5 | 6 *(as built: 10 by composite, 8 by RGB, §11.1)* |
 | Surfaces | 8-bit | half-float | half-float |
 
 The per-subpixel, closed-form mask is in every tier: it is arithmetic, not texture reads, and it is the part
@@ -690,7 +698,7 @@ signal's size do not scale with the window; they are converted at 1080p.
 | **C2** Balanced | 0.3 to 0.45 ms | 0.6 to 0.95 ms | 0.8 to 1.1 ms | 3.5 to 8.5 ms |
 | **C3** Accurate | 1.8 to 2.2 ms | 3.2 to 4.2 ms | 5 to 6 ms | 20 to 40 ms |
 
-Further predictions, to be given verdicts in steps 2 and 3:
+Further predictions, to be given verdicts in steps 2 and 3 *(C3, C4, C5 and C7 have theirs in §11.10)*:
 
 - **C4.** Accurate's fixed passes are 40 to 50% of its frame at 1080p and under 30% at 4K.
 - **C5.** The render thread's own time stays under 0.3 ms for every tier, as §8.3's built-ins do; the cost is
@@ -862,5 +870,475 @@ crtdatabase.com (Sony KV-27S42, JVC AV-27D302). ChthonVII, gamutthingy, `src/con
 chromaticities and decoder tables. NAB, *Safe Action and Safe Title Areas*. Nichia's phosphor list, hosted by FH
 Münster. Wikipedia, *Dot pitch*, *Shadow mask*, *Trinitron*, *NTSC-J*.
 
+**Added with §11.** M. A. García-Pérez and E. Peli, *Luminance artifacts of cathode-ray tube displays for vision
+research*, Spatial Vision 14(2), 2001, for the persistence figure and for Sherr's P22 times. J. Jimenez, *Next
+Generation Post Processing in Call of Duty: Advanced Warfare*, SIGGRAPH 2014, for the dither. Photographs on
+Wikimedia Commons, measured and not copied: Selçuk Oral, *Aperture grille closeup* and *Aperture grille closeup
+teletext* (CC BY-SA 3.0); Planemad, *CRT pixel array* (CC BY-SA 2.5).
+
 **Shaders read**, all from libretro's `slang-shaders`: §2.1's and §2.2's lists, each with its author and
 licence.
+
+---
+
+## 11. The Accurate tier, as built (2026-10-07)
+
+`EmuSen.Serenity/Shaders/CrtFilter.cs` is the filter, for the NES, SNES, Genesis and N64; `FilterChain`'s additions
+for it are `EmuSen_Serenity.md` §3.9. Only the Accurate tier exists, there is no Quality setting yet, and no
+frontend lists it yet (§11.11). This section is the record of what was
+built, where it departs from §5 and §6, what each constant rests on, and what was measured. Three findings change
+things said earlier, and are marked in place above as well:
+
+- **Display subpixels do not triple what a display can show of a mask** (§11.7). §3.8's claim is retired.
+- **The 5% next-frame persistence of §3.5 is an extrapolation that a sustained picture shows to be unphysical**
+  (§11.4). The default is now tied to a figure from the vision literature, a fifth of it.
+- **The signal's passes, not the screen's, are most of the cost at 1080p** (§11.10). Prediction C4 is refuted.
+
+### 11.1 The passes, and where the picture sits
+
+| Pass | Size | What it does | Section |
+|---|---|---|---|
+| `signal` | 2048 × rows, half-float | the console's encoder: band limits, and for composite and S-Video the subcarrier | §11.3 |
+| `parts` | the same | the receiver's separation and demodulation: luma, and chroma on two axes | §11.3 |
+| `gun` | the same | the receiver's video bandwidth, the matrix to three gun voltages, the tube's transfer | §11.3 |
+| `state` | the same, feedback | green's and blue's slow light, two sums each | §11.4 |
+| `beam` | the same | each sample's light scattered along the line by its own spot | §11.5 |
+| `spot` | the same | the energy-weighted variance of the spots that put light at each sample | §11.5 |
+| `small`, `wide`, `haze` | 128 × 96, half-float | the picture's light gathered over the tube's face and spread by the glass | §11.6 |
+| the face | the shown rectangle, 8-bit, drawn straight into the canvas | geometry, convergence, five scanlines per gun integrated across the pixel, the mask, the glare, colour, the display's limits | §11.5 to §11.8 |
+
+Ten passes by composite or S-Video, eight by RGB, where `signal` applies the transfer itself and is `gun`. §6
+said six; the receiver became two passes so that its video bandwidth acts on the separated luma, the spot became
+two so that each gun keeps its own width, and the glass became three.
+
+**A filter that counts scanlines takes the frame's rows once.** The N64's cores hand over 240 rows to be shown
+twice each (`EmuSen_Serenity.md` §2.7); a tube draws 240 scanlines. `ScreenFilter.RowsOnce` is the slang
+runtime's rule of §10.6 there, for a built-in.
+
+**Where the picture sits.** The filter draws a 4:3 tube (decision 2). Inside it is the standard raster: an
+active line of 52.66 µs and 241.5 active lines to a field (§3.1; 483 active lines to a frame is SMPTE 170M's). A
+console's picture occupies its own share of that: `activeUs / 52.66` across, and its rows over 241.5 down, a
+picture of more than 300 rows being two fields. With **Overscan** at 0 the raster is zoomed until the picture
+touches the glass on its nearer pair of edges, so the whole picture is shown and nothing else: a 256 × 224 SNES
+picture fills the height and leaves 1.2% of the width blank on each side, which is its true shape on a tube
+(pixels 8:7). With overscan above 0 the standard raster is zoomed by that percentage, as a set's was.
+
+**Each console's constants** are `CrtFilter.ConsoleTiming`, from §3.2's table: the active picture's duration,
+the subcarrier cycles across it, the fraction of a cycle left over per line and per frame, and the encoder's
+luma and chroma limits (5.0 and 1.3 MHz for all four, §3.2's stated fallback). They are not parameters; the
+chain hands them to the passes as it does a parameter's value (`EmuSen_Serenity.md` §3.9). A console the table
+does not name gets a standard line, 227.5 cycles.
+
+### 11.2 The screens
+
+Each is a row of `CrtFilter.Screens`. **[P]**, **[S]**, **[D]**, **[C]** and **[F]** mark a value read, quoted,
+derived, chosen, or fitted here to a photograph (§11.5, §11.7).
+
+| Screen | Width, mm | Mask, triads across | Spot σ, lines, dim to bright | Separation | Chroma, MHz | Video, MHz | Glass | Convergence, centre and edge, mm |
+|---|---|---|---|---|---|---|---|---|
+| Consumer TV, 14-inch | 264 [C] | slot, 440 [S] | 0.158 to 0.316 [F] | notch [P] | 0.5 [P] | 4.2 [C] | sphere, R/w 1.9 [C] | 0.6, 1.0 [C] |
+| Consumer TV, 20-inch | 386 [C] | slot, 515 [S] | 0.108 to 0.217 [F] | notch [P] | 0.5 [P] | 4.2 [C] | sphere, 1.9 [C] | 0.6, 1.0 [C] |
+| Consumer Trinitron, 27-inch | 549 [C] | grille, 732 [S] | 0.076 to 0.153 [F] | comb [C] | 0.5 [P] | 4.2 [C] | cylinder, 2.5 [C] | 0.6, 1.0 [C] |
+| Professional monitor, 14-inch | 266 [P] | grille, 1064 [P] | 0.126 to 0.252 [C] | comb [C] | 1.3 [P] | 10 [C] | cylinder, 2.5 [C] | 0.4, 0.5 [P] |
+| Professional monitor, 20-inch | 386 [P] | grille, 1245 [P] | 0.087 to 0.173 [C] | comb [C] | 1.3 [P] | 10 [C] | cylinder, 2.5 [C] | 0.5, 0.7 [P] |
+| PC monitor, 15-inch | 280 [C] | dots, 1167 [S] | 0.09 to 0.18 [C] | comb [C] | 1.3 [C] | 30 [C] | sphere, 3.3 [C] | 0.3, 0.4 [C] |
+
+The pitches, widths and convergence figures are §3.7's and §3.8's. The consumer chroma channel is §3.1's RCA
+figure and the professional one the standard's own 1.3 MHz. The video bandwidth is a choice with a reason: 4.2
+MHz is the bandwidth the system transmits (§3.1), which a consumer set's luma channel was built to; 10 MHz is
+what 800 television lines need. The radii follow §3.7 (a 35 to 40 inch radius on an early 25-inch tube is 1.5
+to 1.9 picture widths; a flat-square one 3.3). The viewing distance is three picture widths **[C]**.
+
+**The advanced settings are relative to the screen**, each a multiplier at 1: mask pitch, spot size, spot
+growth, chroma bandwidth, glare, persistence, convergence, curvature. A player changes the screen and the
+multipliers stay meaningful, where absolute sliders would each have to be reset. Mask and separation can be
+forced; the rest (tube white, gamma, contrast, brightness, mask depth) are absolute.
+
+### 11.3 The signal
+
+**Encode.** As §5.1: each of the 2048 samples is the console's row through a Gaussian of the encoder's limit,
+integrated over each pixel's box by the difference of two error functions (Abramowitz and Stegun 7.1.26), nine
+pixels wide. For composite and S-Video the chroma is `U sin φ + V cos φ` on the standard's U and V. For RGB the
+receiver's video bandwidth is added to the encoder's in quadrature here, two Gaussians in cascade being one.
+
+**No set-up is added.** §5.1 said it would be for a North American signal. The consoles do not add one: the
+NES's black is 0 IRE by measurement (§3.2), and the encoders' datasheets describe none. A North American set
+expects 7.5 IRE and so shows a console's blacks slightly crushed until its brightness control is turned up,
+which is what the Brightness setting is. Retired, not built.
+
+**Separation, by a notch.** The receiver multiplies the signal by the subcarrier's two axes and low-passes the
+products. **Both low-passes are Hann windows a whole number of subcarrier cycles long**, which is the one part
+of this stage not in §5.1. The reason is exact cancellation: a Hann window's response is zero at every multiple
+of the reciprocal of its length from the second on, so a window of `m ≥ 2` cycles has zeros at the subcarrier
+and at twice it. The first removes flat luma from the chroma channel entirely; the second removes the
+demodulation's own double-frequency product. A Gaussian of the same width does neither: one with −3 dB at 1.3
+MHz leaves 7% of the luma's level as a ripple at the subcarrier.
+
+- **Chroma** uses `round(0.72 · fsc / bandwidth)` cycles, a Hann window's −3 dB point being 0.72 over its
+  length: five cycles for 0.5 MHz (−3 dB at 0.515 MHz), two for 1.3 MHz (1.29 MHz).
+- **The notch** is the same demodulation through a two-cycle window, remodulated and subtracted from the signal.
+  Its −3 dB half-width is 1.29 MHz, so it removes 2.3 to 4.9 MHz, which is Faroudja's "little useful information
+  above 2.3 MHz" for a notch receiver (§3.1).
+
+cathode-retro (MIT) uses a box one cycle long for the same cancellation; the Hann form here was derived
+independently and has the lower sidelobes.
+
+**Separation, by a two-line comb.** Luma keeps its detail: only the difference between the line and the one
+above, band-passed, is taken as chroma and subtracted. **The comb is referred to its own burst.** On a
+standard line the subcarrier inverts from line to line and the difference is the chroma. On a NES or SNES it
+advances a third of a cycle, and the difference is the chroma multiplied by `(1 − e^(−iθ))/2`: 0.87 of its
+size, turned by 30°. A real set's burst passes through the same comb and is turned with it, and its automatic
+chroma control restores the size, so colours are right; the filter divides by the same complex factor.
+**[D]**, and the test below confirms the bars come back. On a Genesis the phase does not move from line to
+line, the factor is zero, and a comb has nothing to subtract: the screen's separation falls back to the notch
+when the factor's squared size is under ¼ **[C]**. What real comb sets did with a Genesis was not found.
+
+**Video bandwidth and drive.** The separated luma passes a Gaussian of the screen's video bandwidth; chroma is
+matrixed on the standard's axes (decision 11: the ideal decoder only); and the three voltages go through
+BT.1886's form with white at 1 and black at 0.01/176, the PVM-20L5's measured ratio (§3.3).
+
+**What the measurements say** (§11.9's tests, on the RX 6800):
+
+- Colour bars come back from S-Video, from composite by notch and from composite by comb within 0.004 of their
+  RGB value in linear light, on SNES, Genesis and N64 timings.
+- A chroma step rises in 0.70 µs through the 0.5 MHz channel; `0.35 / bandwidth` is 0.70.
+- The NES's and SNES's artifacts repeat every three lines and every two frames, the Genesis's on every line and
+  frame, the N64's every two lines and two frames.
+- **The Genesis's alternate columns at 320 wide blend to their mean luma and turn into a rainbow 30 source
+  pixels long**, as §3.2 derived. At 256 wide the rainbow is 6 pixels long and a third as strong (the chroma
+  window's response at 0.895 MHz against 0.224 MHz is 0.34). At full contrast, white and black columns, the
+  rainbow is fully saturated: this is the physics of a pattern 0.22 MHz from the subcarrier, and games dithered
+  between nearer colours.
+- **The SNES's 512-wide alternate columns do not vanish on a consumer set.** Their fundamental is 5.37 MHz,
+  above the notch. The encoder's 5 MHz limit leaves 0.67 of it, the receiver's 4.2 MHz leaves 0.57 of that, and
+  the spot 0.33 to 0.76 of that again, more removed the brighter the picture. What is left is a swing of under
+  35% of the mean between columns, against more than three times that by RGB on the professional monitor. Two
+  of those three numbers are choices or fallbacks (§11.2, §3.2), and this is the picture they are most visible
+  in: the SNES's own luma bandwidth is the first constant a measurement should replace.
+
+### 11.4 Persistence: the extrapolation retired
+
+**What §3.5 predicted.** Kuhn's fitted impulse responses, integrated over frame intervals, put 5.4% of a
+frame's green light and 4.7% of its blue into the next frame, 3.0% and 2.6% into the one after, falling as
+roughly `1/k`.
+
+**What the model showed when built.** A `1/k` tail is not summable in any way a tube shows. Two exponentials
+per channel were fitted to the first thirty frames of those integrals (per-frame ratios 0.590 and 0.945 for
+both channels; weights 0.0679 and 0.0094 for green, 0.0601 and 0.0081 for blue; worst relative error 8.6%).
+Their sum over all later frames is 26% of the first frame's light for green. So a white picture held for two
+seconds and then removed left **20% of its green in the first dark frame**, 16% in the second and 7.6% in the
+tenth, in linear light: half of full scale in display code values. No CRT does that.
+
+**Why.** The integral was taken correctly; the form was used outside its evidence. Kuhn recorded 2 ms of a
+line's decay, and says his measurement was not designed to fix the power law's exponent. An exponent of 1.1,
+continued from 2 ms to seconds, carries nearly as much energy in each decade of time as in the one before. The
+frame-to-frame ratios quoted in §3.5 are all at 16 ms and beyond, eight or more times past the last recorded
+point.
+
+**What is used instead.** García-Pérez and Peli (*Luminance artifacts of cathode-ray tube displays for vision
+research*, Spatial Vision 14(2), 2001 **[P]**) describe "phosphors that leave a luminance residue as large as
+4% after 20 ms", citing Wolf and Deubel's measurement of a P31 (1997, their figure 4), and report from their
+own P22 monitor that the artifact of persistence "is quite large on a P22-phosphor display". They also give
+Sherr's P22 times to 10%: 1.5, 6 and 4.8 ms for red, green and blue, longer than Kuhn's monitor. P31 is a
+zinc sulphide like P22's green and blue. The filter keeps the fitted shape, which is the only shape there is a
+measurement for, and scales its strength so that **a sustained white leaves 4% of its green in the first dark
+frame** (`TailScale` 0.1606), 3.5% of its blue and none of its red. A single frame's flash then leaves 0.8% in
+the next frame. The Persistence setting is a multiplier on that, to 6, where 6.2 would be §3.5's extrapolation.
+
+**Confidence.** Low, and stated: the 4% is a figure quoted in a review for a different zinc-sulphide phosphor,
+"as large as"; the shape is one monitor's, extrapolated. Decision 7 was for the measured strength by default,
+and what was called measured in step 1 is this section's first paragraph. The default here is the smaller and
+directly quoted figure, and it is §11.12's first question.
+
+**As built.** §5.3's recurrence: `state` holds `S ← E + r·S` for the two rates of green and of blue, four
+numbers in one half-float surface, and the light shown is `kept · (E + Σ c·(S − E))`, with `kept` chosen so
+that a steady picture's light is unchanged. It runs at the signal's resolution, before the spot.
+
+### 11.5 The beam
+
+**Along the line**, each sample's light is scattered by its own spot (`beam`): a Gaussian whose width is the
+spot's at that sample's drive, integrated over each destination sample, so a bright sample spreads further
+than its dim neighbour and the line's total light is exactly kept. A second pass (`spot`) records, at each
+sample, the energy-weighted mean of the variances of the spots that put light there. **Across lines**, the
+face pass draws each of five lines as a Gaussian of that recorded variance, integrated over the output pixel's
+height by the error function, with its area the line's light.
+
+This is §5.4 with one approximation named: the light at a sample is a mixture of spots of different widths,
+and it is drawn down the screen as one Gaussian of the mixture's variance. The alternative considered, the
+width taken from the scattered light itself, pinches the halo of a bright sample where it spills onto a dark
+one, since the halo's light is the bright spot's and is as wide as it.
+
+**The width's law** is §3.6's quadrature form: `σ² = σmin² + (σmax² − σmin²)·L`, with `L` the gun's light, so
+a spot grows as the square root of its current above a floor.
+
+**The widths are fitted to one photograph.** No curve of spot size against current was found (§3.6). Selçuk
+Oral's macro photograph of a white teletext letter on a Sony KV-25FX20D, a 25-inch Trinitron (Wikimedia
+Commons, *Aperture grille closeup teletext*, CC BY-SA 3.0; not copied into the repository), shows six
+scanlines down a stripe. Its lines are clipped: a third to more than half of each line reads 255. What it still
+gives is two numbers per stripe, the share of the line pitch that is clipped (0.33 to 0.35 for blue) and the
+trough between lines relative to the clip level (0.09 to 0.15). A Gaussian that satisfies both has σ of 0.19
+to 0.20 of the line pitch and a peak 1.4 times the clip level. The tube shows about 288 lines over a height
+scanned 7% larger than its 360 mm, 1.34 mm a line, so **σ at white is about 0.26 mm** **[F]**. The photograph's
+ratio of line pitch to triad pitch, 1.98, puts the triad at 0.68 mm, consistent with the 0.75 mm of the 27-inch
+tube in §3.8, which is the check that the scale is right. The dim end is half the bright end **[C]**, the
+ratio of the unverified range in §3.6. Consumer screens take 0.13 to 0.26 mm over their own line pitch;
+professional ones 0.8 of that and the PC monitor 0.6 **[C]**.
+
+**Measured on the build**: a single lit line, magnified ten times, has σ of 0.117, 0.139 and 0.218 lines at
+drives of 0.25, 0.5 and 1.0 against the law's 0.114, 0.137 and 0.217, and carries the line's light to within
+3% at each.
+
+### 11.6 The glass
+
+**One Gaussian, solved from two measurements.** DisplayMate's PVM-20L5 has a contrast of 219:1 on a 4×4
+checkerboard and 75:1 on a 9×9 (§3.7). Taking each as the mean of the white squares' centres over the mean of
+the black ones', on a finite 4:3 face from which light scattered past the edge is lost, a share `w` of the
+light spread by a Gaussian of width `σ` reproduces both when **σ is 6.68% of the picture's width and `w` is
+2.99%** (`glare_fit.py` beside the bench; two unknowns from two numbers, so the fit cannot test the Gaussian's
+shape, only use it). Step 1's first solution, on an unbounded checkerboard read at one square's centre, was
+6.26% and 2.72%.
+
+**The ring is not drawn.** §3.7 derived a halation ring 18 mm in radius on a 20-inch tube from the critical
+angle. The fitted σ is 26 mm on the same tube: the measured scatter is the size the ring predicts, and one
+Gaussian of that size is what two checkerboards can support. A separate ring would need a measurement that
+resolves it, a point source on black.
+
+**As built.** The picture's light is gathered into a 128 × 96 map of the face, blurred along each axis with
+light past the edge lost, and added in the face pass as `w` of the light with the direct light reduced by `w`.
+It is applied after the mask, since the glass is in front of it. **Measured on the build**: 209:1 and 76:1,
+against 219 and 75. The black squares are read from a second render three times as bright, since at the
+default headroom a black square is under four code values.
+
+### 11.7 The mask
+
+**Proportions, measured from photographs** (`maskphoto.py`; both from Wikimedia Commons and neither copied into
+the repository). Widths are at half the stripe's height in linear light.
+
+| Mask | Photograph | Measured | Used |
+|---|---|---|---|
+| Aperture grille | Selçuk Oral, *Aperture grille closeup*, Sony KV-25FX20D, CC BY-SA 3.0 | each stripe lit for 0.199 of the triad, the three evenly spaced, in the order red, green, blue | 0.199 |
+| Slot mask | Planemad, *CRT pixel array*, a 21-inch television, CC BY-SA 2.5 | stripes lit for 0.18 to 0.20 of the triad, spaced 0.30, 0.30 and 0.40 of it; slots 0.81 of a triad apart, lit for 0.75 to 0.79 of that; the next triad's slots half a pitch down, the three colours of one triad level | 0.19; 0.30, 0.30, 0.40; 0.81; 0.76 |
+| Dots | the same, its 17-inch monitor | each colour lit over 0.09 to 0.12 of the area | a square of the same area on the hexagonal lattice, 0.106 |
+
+So a colour's phosphor covers a fifth of an aperture grille's face and a seventh of a slot mask's, not the
+quarter first assumed. The dot mask's circles are drawn as squares of equal area, which keeps the closed form;
+no console here was shown on one.
+
+**The footprint is a whole pixel, and the claim about subpixels is retired.** §3.8 and §5.6 said that reading
+the mask per display subpixel gives three times the samples of a triad. It does not, for coloured stripes. Each
+channel is sampled once per pixel whatever its subpixel's position, so a stripe pattern of one colour needs two
+pixels per triad to be resolved at all, as it would without subpixels. The first build integrated each channel
+over its own third of a pixel, and a professional monitor's grille at 0.86 pixels per triad then drew a beat
+with a ripple of 79% of the mean where it should have faded out: the test below found it. And at exactly one
+pixel per triad a third-pixel footprint is wrong in the limit: slide the mask a third of a pixel and the red
+subpixel sees only green phosphor and goes dark. A display's red subpixel is the only place red light can come
+from for a whole pixel's width, so **its footprint is the pixel**: a tent two pixels wide, centred on the
+subpixel. What the subpixel's position still gives is the right place to take each colour's sample, for the
+mask and for the beam, which removes the colour fringe the display's own layout would add.
+
+Which displays can draw which mask is then the tent's response at the triad's frequency: 0.91 of the stripes'
+modulation at 6 pixels per triad, 0.65 at 2.8 (a consumer 20-inch set at 1080p), 0.41 at 2, 0.17 at 1.5, 0.03
+at 1.16. So a consumer slot mask is drawn at 1080p, softened; a 27-inch Trinitron's at 1080p is faint; a
+professional monitor's needs 4K and is soft there; and below 1.5 pixels per triad the mask is gone, smoothly.
+
+**The integral** is closed-form as §5.6 said: the share of a tent that a periodic lit run covers is the second
+difference of the run's twice-integrated indicator, a quadratic in the number of whole periods plus a piece.
+It is evaluated from the nearest period's start so that single precision holds at a thousand triads across. A
+slot or dot mask is the sum of two such products, the even triads' columns with their rows and the odd ones'
+with theirs half a pitch down, each exact for a separable footprint. crt-beans (MIT) anti-aliases a grille in
+closed form with a one-pixel Hann window; the idea of doing it in closed form is shared, the derivation here
+is its own.
+
+**Measured on the build**: the triads counted along a line are the screen's own number at three window sizes
+and pitches, within 2%; the stripes run red, green, blue a third of a triad apart; a grille at 0.86 pixels per
+triad has a ripple under 6% of the mean and no tint; and the slot mask drawn at three times its size has the
+photographed pitch, lit share and stagger.
+
+### 11.8 Colour, and the display's limits
+
+**Colour.** The three guns' light is converted by one 3×3 matrix, from the phosphors' chromaticities and white
+to the display's (§5.5), computed in `CrtFilter.GunsToDisplay` and written into the face pass. North America is
+SMPTE C at D65; Europe is EBU at D65; Japan is ARIB TR-B9's phosphors at 9300 K + 27 MPCD (§3.4), with no
+adaptation, so its white is drawn bluer than the display's (decision 6): red 0.60, green 0.86 and blue 1.00 of the
+display's range, the whole scaled down until blue fits. A colour outside the display's gamut is moved toward its own
+luminance until it is inside. The display is sRGB or Display P3.
+
+**The matrix is applied before the mask**, to the light each gun would give averaged over a triad, and each
+display channel is then patterned by its own phosphor's mask. Strictly the 2% of a red subpixel's light that
+the matrix takes from the green gun should carry green's stripe pattern. A display with three kinds of
+subpixel cannot show that, and this is the nearest it can.
+
+**Headroom**, as §5.8, with the numbers the measured masks give. A colour that covers a seventh of the face
+must be seven times the mean where it is lit, and a narrow beam's peak is up to 1.8 times its line's mean on
+the default screen. The face pass works in the tube's white as 1 and the display's peak as `displayNits /
+tubeNits`. Each channel's mask is drawn at full depth where the light, times one over the lit fraction, fits
+under the peak, and is flattened toward its mean by exactly the shortfall where it does not. At the defaults,
+a tube of 100 cd/m² on a display of 300, a slot mask is at full depth for light up to 43% of white and at a
+third of its depth at white; scanlines are untouched. **Measured**: with no headroom at all, a 75% grey keeps
+its light within 2%, nothing clips, and the mask is under a third as deep as with ten times the headroom.
+
+**The default picture is a third as bright as the display can go**, by this arithmetic and on purpose: it is a
+100 cd/m² tube on a 300 cd/m² display. A player whose display is dimmer than 300 sets Display brightness to
+what it is, and the picture brightens while the mask flattens. Whether that is the right default for a first
+impression is §11.12's second question.
+
+**Dither** is interleaved gradient noise (Jimenez, *Next Generation Post Processing in Call of Duty: Advanced
+Warfare*, SIGGRAPH 2014), half a code value, on the display's own pixel grid.
+
+### 11.9 Tests and mutants
+
+`ScreenFilterRenderTests.Crt.cs` holds 23 cases, 26 results with a theory's four rows counted, beside the existing
+11 and 14. Three always run, through the headless
+raster path: every variant compiles for every console (signal × mask × separation, and each screen); the filter
+names its four consoles, its 4:3 shape and its rows taken once; and a white field on a 32 × 12 frame keeps its light within
+3% and its colour within 1%. The rest draw on a GL device through `ShaderBench.Picture`, on the RX 6800 unless
+`EMUSEN_BENCH_GL_DEVICE` names another, and return without drawing where there is none, as the slang tests do.
+**The raster path takes 12.8 seconds a frame at 640 × 480** for this filter against a tenth of a second on the
+device, which is why the measurements are on the device; one case draws the same small picture both ways and
+finds no value more than 2 apart.
+
+| Case | What it asserts |
+|---|---|
+| a flat field's light and colour | white and a 50% grey are the tube's light over the display's peak within 2%, and neutral within 1.5%, at 1067, 1440, 1600 and 2880 wide on five screens |
+| a scanline's width | §11.5's three widths within 5% and their light within 3%; the bright line more than 1.7 times the dim one |
+| the mask's pitch | §11.7's count at three sizes; the stripes' order; a stripe lit for 0.199 of a triad within 15% |
+| the slot mask's proportions | pitch within 6%, lit share within 10%, the next triad's slots half a pitch down |
+| a mask too fine | ripple under 6%, five times less than at three times the pitch; no tint |
+| headroom | §11.8's four statements |
+| colour bars | §11.3's 0.004, three signals and two separations on three consoles |
+| chroma's rise | 0.70 µs within 20%; the professional channel under 0.6 of it |
+| each console's artifacts | the lines and frames after which they repeat, four consoles |
+| the Genesis's columns | the rainbow's length within 4%; the columns' own swing under 10% and an eighth of RGB's; 320 wide 2.2 to 3.8 times 256 |
+| pseudo-hi-res | §11.3's two swings |
+| the checkerboards | §11.6's two contrasts within 8% |
+| persistence | 4% of green within 15%, blue in proportion, no red, and a tenth frame still over a quarter of the first |
+| convergence | red to blue by the screen's error at the centre within 15%, more than 1.25 times it near the edge, green between |
+| curvature | corners dark when curved and lit when flat, the centre within 2%, each edge's middle still picture |
+| Japan's white | blue over red as the matrix gives (1.67), within 3% |
+| interlace | woven rows alike; a field's rows alternate; the next frame's are the others |
+| overscan | the whole picture starts inside the glass; overscanned it reaches the edge |
+| rows sent to be repeated | the same picture, value for value |
+| device against software | no value more than 2 apart |
+
+**Mutants.** 36 were made, 34 in `CrtFilter.cs` and two in `FilterChain`, each a physical statement turned false,
+and each is caught by the case that names it:
+
+- the beam: a peak that does not fall as the spot widens; a spot of constant width
+- the mask: no gain for its lit fraction; sampled at a point; its pitch counted in output pixels; blue first;
+  stripes half again as wide; slots not staggered, too long, too close; no rule for headroom
+- the signal: the Genesis given the NES's phase; the NES given the standard's; no alternation between frames; a
+  comb not referred to its burst; no notch; S-Video's chroma read from the wrong channel; the chroma channel
+  always the wide one; no video bandwidth; the transfer a straight line
+- the glass: no glare; glare twice as wide; no convergence error; the error the same across the screen; no
+  curvature
+- the phosphors: no tail; the tail at §3.5's extrapolated strength; a tail that halves each frame; a tail on
+  red; colour not converted
+- the picture: fields ignored; the same field every frame; overscan ignored; no stated shape; rows repeated;
+  the console's constants dropped
+
+**Two survived at first, and both for one reason**: the slot's lit share and the grille's stripe width were
+asserted against the filter's own constants, so a mutant that changed the constant changed the expectation with
+it. Those two cases now assert the photographs' numbers as written, 0.76 and 0.199, and the stripe width gained
+an assertion it did not have. §11.7's footprint error was found the way a mutant is, but in the filter as first
+written: the case for a mask too fine failed on it.
+
+### 11.10 What it costs, and the predictions' verdicts
+
+`EmuSen_Serenity.md` §8.1's bench and protocol: the RX 6800, frames paced at 60 Hz, 60 of warm-up and 300
+measured, each case its own process, the cases interleaved in rotated order over three rounds under the bench
+lock, a figure the median over rounds of each run's median. `gl.gpu` is the GL timer's time for the whole
+frame; the render thread's own time is beside it. Cases and raw results: `~/.cache/emusen/probe/crt/`
+(`cases-accurate.txt`, `results-accurate.txt`).
+
+| Case | Drawn at | GPU, ms | Render thread, ms | The three rounds' GPU |
+|---|---|---|---|---|
+| SNES, no filter | 1234×1080 | 0.03 | 0.07 | 0.06, 0.03, 0.03 |
+| SNES, built-in CRT (Lottes) | 1234×1080 | 0.67 | 0.08 | 0.67, 0.71, 0.42 |
+| **SNES, CRT, composite** (the default) | 1440×1080 | **1.70** | 0.19 | 1.81, 1.70, 1.47 |
+| SNES, CRT, S-Video | 1440×1080 | 1.71 | 0.19 | 1.71, 1.74, 1.41 |
+| SNES, CRT, RGB | 1440×1080 | 1.38 | 0.17 | 1.38, 1.38, 1.14 |
+| SNES, CRT, composite, professional 20-inch | 1440×1080 | 1.38 | 0.19 | 1.48, 1.38, 1.23 |
+| SNES, CRT, composite, no mask, glass, tail, convergence or curve | 1440×1080 | 1.48 | 0.18 | 1.57, 1.48, 1.34 |
+| Genesis 320×224, CRT, composite | 1440×1080 | 1.47 | 0.19 | 1.66, 1.47, 1.47 |
+| N64 640×240, CRT, composite | 1440×1080 | 1.65 | 0.21 | 1.78, 1.65, 1.53 |
+| SNES 512×448 (interlaced), CRT, composite | 1440×1080 | 2.35 | 0.23 | 2.59, 2.35, 2.35 |
+| SNES, CRT, composite, a 320×240 window | 320×240 | 1.06 | 0.18 | 1.30, 1.06, 1.06 |
+| SNES, CRT, composite, a 1280×800 window | 1067×800 | 1.25 | 0.19 | 1.57, 1.25, 1.25 |
+| SNES, built-in CRT (Lottes), 4K | 2469×2160 | 1.61 | 0.09 | 1.92, 1.61, 1.61 |
+| **SNES, CRT, composite, 4K** | 2880×2160 | **2.86** | 0.19 | 3.09, 2.86, 2.86 |
+| SNES, CRT, RGB, 4K | 2880×2160 | 2.53 | 0.17 | 2.85, 2.53, 2.53 |
+
+(Lottes keeps the frame's own shape, so its rectangle is narrower than the CRT's 4:3 one in the same window.)
+
+**What the table says.**
+
+- **The Accurate tier is 1.7 ms of GPU time at 1080p and 2.9 ms at 4K by composite**, 2.5 and 1.8 times the
+  built-in Lottes in the same window. RGB saves the receiver's two passes, 0.33 ms.
+- **The signal's passes are most of it at 1080p.** At a 320 × 240 window, where the face pass is nearly free,
+  the frame is 1.06 ms: the passes at the signal's size cost that whatever the window, 62% of the 1080p frame
+  and 37% of the 4K one. The face pass, with the mask, the glass, convergence and curvature all on, is about
+  0.6 ms at 1080p; turning those off saves 0.2 ms.
+- **The frame's own size matters more than the window's.** An interlaced 512 × 448 picture doubles the
+  signal's rows and costs 2.35 ms. A professional screen's two-cycle chroma window is a shorter loop than a
+  consumer's five and saves 0.33 ms.
+- **The render thread spends 0.17 to 0.23 ms**, twice a simple filter's 0.08, on binding ten passes; nothing is
+  allocated on the device per frame, and 10 KiB of managed memory is (lists and child shaders), with no
+  collections in 300 frames.
+- **The round-to-round spread is the GPU's clock**, as §8.4 there found on the handheld: Lottes read 0.67, 0.71
+  and 0.42 ms in three rounds, the CRT 1.81, 1.70 and 1.47. A paced frame this light leaves the card in a low
+  clock state that it leaves and re-enters; the medians are comparable, single runs are not.
+
+**A build.** Changing a structural setting compiles the passes on the render thread (`EmuSen_Serenity.md`
+§3.9). Measured on the RX 6800 at 1440 × 1080: SkSL's own compile of ten passes 22 ms the first time in a
+process and 2 ms after; the first draw, where the driver compiles, 32 ms the first time in a process with the
+driver's cache warm, 4 to 10 ms for a later variant, and 98 ms and 52 ms with the driver's cache disabled. So
+the first use of the filter ever on a machine misses about six frames once, and a settings change after that
+misses one. It was not moved off the thread.
+
+| | Prediction | Verdict |
+|---|---|---|
+| C1 | Performance: 0.10 to 0.13 ms at 1080p | step 3 |
+| C2 | Balanced: 0.3 to 0.45 ms at 1080p | step 3; the 683-sample signal's share is now expected to dominate it, by C4's verdict |
+| C3 | Accurate: 1.8 to 2.2 ms at 1080p, 3.2 to 4.2 ms at 4K | **Refuted, low**: 1.70 and 2.86 ms. The total was over-predicted by 5 to 10% and its composition was wrong (C4). The handheld and laptop columns are untested |
+| C4 | Accurate's fixed passes are 40 to 50% of its frame at 1080p, under 30% at 4K | **Refuted**: 62% and 37%. The estimate counted 59 M texel reads against the face pass's and took a read to cost what a face-pass read does; a tap in the receiver's loop also evaluates a sine, a cosine and two window weights |
+| C5 | The render thread stays under 0.3 ms | **Held**: 0.17 to 0.23 ms |
+| C6 | On the laptop Lottes takes 10 to 17 ms and only Performance holds 60 fps | untested; needs the laptop |
+| C7 | Half-float surfaces cost under 10% over 8-bit ones | **Held**: 1.47 against 1.43 ms at 1080p and 2.87 against 2.83 ms at 4K, 3% and 1%, with every surface forced to 8 bits in a second build of the bench, interleaved over three rounds. That build's pictures are wrong; only its cost is compared |
+
+### 11.11 What is not done
+
+- **The Balanced and Performance tiers, and the Quality setting** (step 3).
+- **A player cannot choose it yet** (step 4). `CrtFilter.Filter` is not among `ScreenFilters.All`, so no console's
+  list shows it. It was put there and taken out again the same day, for three reasons a settings window has to
+  answer first: Mistress does not yet tell the frame control which console is running, without which the filter
+  draws a standard line's timing for every console; its seven settings that are choices would be drawn as
+  sliders over numbers (`SlangParameter.Choices` carries their names and nothing reads it); and **the headless
+  tests of the Shaders window draw whatever filter the pad lands on through Skia's raster code**, where this
+  one takes seconds a frame (§11.9): with it listed, the seven rows of
+  `The_shaders_window_from_the_pad_menu_adjusts_a_built_in_filter_and_resets_it_all` each ran 15 to 53 seconds
+  and failed. Step 4 has to make those tests not draw a real CRT frame in software.
+- **The NES's raw signal** (decision 5): owed. The NES is encoded from its RGB picture.
+- **The decoder's axes** (decision 11): the ideal matrix only.
+- **A game's region from the frontend** (decision 6): the Colour setting is the player's.
+- **PAL, RF, raster bloom, the sub-frame flash, HDR** (decision 10).
+- **Referees** (§8.4): no other shader was run on the same frame for comparison. The consoles' phases agree
+  with patchy-ntsc's and Scanline Classic's tables by reading (§2.3), not by rendering.
+- **Photographs of a slot-mask set's scanlines, and of any professional monitor**: the spot's widths for those
+  screens are the Trinitron's, scaled.
+- **Any measurement on the handheld, the laptop or a Mac.** The filter has been drawn on one GPU and one
+  driver, and through Skia's raster code.
+
+### 11.12 Questions this step raises
+
+1. **Persistence's default** (§11.4). The strength called measured in step 1 was an extrapolation that the
+   built model shows to be unphysical. The default is now 4% of a sustained white in the first dark frame, from
+   the vision literature, with the slider reaching the old figure. To be confirmed, or set to zero until a
+   television's phosphor is measured.
+2. **The default brightness** (§11.8). A 100 cd/m² tube on a 300 cd/m² display is a picture a third as bright
+   as the display's peak, with the full mask in the darker two fifths of the range. A brighter default (a tube
+   of 150 or 200 cd/m², or a display assumed at 200) trades mask depth in bright areas for it.
+3. **The default screen** is the 20-inch consumer slot-mask set, whose mask at 1080p is 2.8 pixels a triad:
+   drawn, softened. On a 1280 × 800 handheld it is 2.1, faint.
+4. **The comb on a Genesis** (§11.3) falls back to the notch, a choice.
+5. **Moving the build off the render thread** (§11.10): six missed frames once per machine, one per settings
+   change. Left as it is unless that is judged too much.

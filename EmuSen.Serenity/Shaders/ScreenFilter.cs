@@ -58,6 +58,9 @@ namespace EmuSen.Serenity.Shaders
         // Width over height of the rectangle the picture is shown in; null is the frame's own pixel count.
         public double? Aspect { get; init; }
 
+        // The frame's rows drawn once each, where a core hands them over to be repeated; a filter that models the screen counts scanlines - see EmuSen_Serenity.md §3.9.
+        public bool RowsOnce { get; init; }
+
         // How many earlier frames any variant of the filter may read.
         public int HistoryDepth { get; init; }
 
@@ -71,9 +74,17 @@ namespace EmuSen.Serenity.Shaders
             }
         }
 
+        // The entry of ConsoleDefaults that any console without its own takes.
+        public const string AnyConsole = "";
+
+        // A console's values: its own entry, or the one for any console, or none.
+        public IReadOnlyDictionary<string, float>? DefaultsFor(string? console) =>
+            ConsoleDefaults is null ? null
+            : console is not null && ConsoleDefaults.TryGetValue(console, out var own) ? own
+            : ConsoleDefaults.TryGetValue(AnyConsole, out var any) ? any : null;
+
         // What a parameter starts at on a console: the console's value where it has one, the parameter's own otherwise.
         public float DefaultFor(SlangParameter parameter, string? console) =>
-            console is not null && ConsoleDefaults is not null && ConsoleDefaults.TryGetValue(console, out var values) && values.TryGetValue(parameter.Id, out float value)
-                ? value : parameter.Initial;
+            DefaultsFor(console) is { } values && values.TryGetValue(parameter.Id, out float value) ? value : parameter.Initial;
     }
 }

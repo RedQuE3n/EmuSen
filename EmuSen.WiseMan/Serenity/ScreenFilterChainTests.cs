@@ -165,6 +165,45 @@ namespace EmuSen.WiseMan.Serenity
         }, default);
 
         [Fact]
+        public Task A_console_s_values_that_are_not_parameters_reach_the_passes_and_any_console_takes_the_general_ones() => Session.Dispatch(() =>
+        {
+            var pass = new FilterPass("uniform float clock; uniform float tint; half4 main(float2 coord) { return half4(clock, tint, 0.0, 1.0); }", PassScale.Viewport);
+            var filter = new ScreenFilter("constants", new[] { pass }, null, "", new[] { Tint })
+            {
+                ConsoleDefaults = new Dictionary<string, IReadOnlyDictionary<string, float>>
+                {
+                    ["SNES"] = new Dictionary<string, float> { ["clock"] = 0.4f },
+                    [ScreenFilter.AnyConsole] = new Dictionary<string, float> { ["clock"] = 0.8f, ["tint"] = 0.6f },
+                },
+            };
+            byte[] frame = Solid(8, 8, 0, 0, 0);
+            using (Shown snes = Show(filter, console: "SNES")) Near((102, 51, 0), snes.Frame(frame, 4, 4), 1, "the console's own constant, and the parameter's own default beside it");
+            using (Shown other = Show(filter, console: "N64")) Near((204, 153, 0), other.Frame(frame, 4, 4), 1, "a console without an entry takes the general one");
+            using Shown none = Show(filter);
+            Near((204, 153, 0), none.Frame(frame, 4, 4), 1, "and so does no console at all");
+            none.Control.ShaderParameters = new Dictionary<string, float> { ["clock"] = 0.1f, ["tint"] = 0.2f };
+            Near((204, 51, 0), none.Frame(null, 4, 4), 1, "a player's value reaches a parameter and never a constant");
+        }, default);
+
+        [Fact]
+        public Task A_filter_that_counts_scanlines_is_given_the_frame_s_rows_once() => Session.Dispatch(() =>
+        {
+            var pass = new FilterPass("uniform float2 originalSize; half4 main(float2 coord) { return half4(originalSize.y / 255.0, 0.0, 0.0, 1.0); }", PassScale.Viewport);
+            byte[] frame = Solid(8, 8, 0, 0, 0);
+            foreach (var (filter, rows) in new[] { (Of(pass), 16), (Of(pass) with { RowsOnce = true }, 8) })
+            {
+                var control = new GameFrameControl { ActiveFilter = filter };
+                var window = new Window { Width = 16, Height = 16, Content = control };
+                window.Show();
+                control.UpdateFrame(frame, 8, 8, rowRepeat: 2);
+                using WriteableBitmap captured = window.CaptureRenderedFrame()!;
+                var capture = EmuSen.WiseMan.Fixtures.UiTest.Capture(captured);
+                window.Close();
+                Assert.Equal(rows, capture.Rgba[(8 * capture.Width + 8) * 4]);
+            }
+        }, default);
+
+        [Fact]
         public void A_child_or_a_uniform_no_pass_provides_is_refused_by_name()
         {
             var chain = (IDisposable)Activator.CreateInstance(typeof(GameFrameControl).Assembly.GetType("EmuSen.Serenity.Shaders.FilterChain")!, Of(new FilterPass("uniform shader feedback; half4 main(float2 coord) { return feedback.eval(coord); }", PassScale.Viewport)))!;

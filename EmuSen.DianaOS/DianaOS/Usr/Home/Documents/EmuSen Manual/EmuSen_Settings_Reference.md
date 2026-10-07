@@ -7922,10 +7922,12 @@ Pictures from the headless renderer (`EMUSEN_WINDOW_FIT_PNG=firmware-page`) are 
 
 ### 4.90 The Genesis's settings: Region, Console model and the two pads (2026-10-06)
 
-**What the player sees.** Graphics Settings has a **Genesis** tab after the four catalog consoles, and a **Sega CD** and
-a **32X** tab after it, each the settings of the engine that runs the console, Nephrite. The tabs appear only when
-that engine is found beside the program; while it is in development (`EmuSen_CoreAPI.md` §27) that is only in a build
-run with development cores shown, so a player sees none of them yet.
+**What the player sees.** Graphics Settings has a **Genesis** tab after the four catalog consoles, the settings of the
+engine that runs the console, Nephrite. The tab appears only when that engine is found beside the program; while it is
+in development (`EmuSen_CoreAPI.md` §27) that is only in a build run with development cores shown, so a player sees
+none yet. *Amended 2026-10-06: the first build of this entry gave the Sega CD and the 32X tabs too. Nephrite's info now
+marks both systems in development (§27.4 there), and a console gets its tab only once its engine says its games run, so
+their tabs come with their own stages and no frontend change.*
 
 | Row | Key | Choices, the default first | When it acts |
 |---|---|---|---|
@@ -7950,7 +7952,8 @@ run with development cores shown, so a player sees none of them yet.
 **How it is wired.**
 
 - **The console's name.** A console no catalog core runs takes its name from its system pack (`SystemEntry.Console`)
-  when a discovered engine, not registered by hand, serves the pack's system (`CoreCatalog.DiscoveredConsoles`).
+  when a discovered engine, not registered by hand, serves the pack's system and does not mark it in development
+  (`CoreCatalog.DiscoveredConsoles`).
   `CoreCatalog.SettingsFor` answers for such a console with the engine's schema, each setting the info's `settings`
   entry not marked hidden. When a game runs on that engine, Mistress's running console is the pack's console of the
   game's system, so the tab, `graphics.json` and the settings applied to the session use one name.
@@ -7966,3 +7969,23 @@ run with development cores shown, so a player sees none of them yet.
 **Coverage**: `EmuSen.WiseMan/Mistress/GenesisSettingsTests.cs` (the consoles named, the rows in words, a choice
 stored by its value, a stored region and pad reaching the machine at create), the Genesis tab in the window fit audit
 at both sizes (`GraphicsSettingsGenesis`), and the crate's `the_region_setting_chooses_the_market_and_the_rate`.
+
+### 4.91 The Genesis's battery saves: the Genesis folder (2026-10-06)
+
+A game's battery save is `Saves/<console>/<game>.srm` (§4.85.11). A system only a discovered engine runs takes its
+system pack's console as the folder's name (`CoreEngine.LoadRom`, by `CoreCatalog.DiscoveredConsoleForSystem`), so
+the Genesis's saves are in `Saves/Genesis`, the Sega CD's will be in `Saves/Sega CD` and the 32X's in `Saves/32X`, the
+names its Graphics Settings tab has (§4.90). The catalog's consoles keep their system ids (`NES`, `SNES`, `N64`, `GB`,
+`GBC`), which are their names too.
+
+- **What moved.** Before this, a v1 engine's saves went under its system's id in capitals, so a development build of
+  Nephrite filed a Genesis save in `Saves/MD` and a Sega CD one in `Saves/MCD`. `BatterySave.PreviousHome` names those
+  as the saves' previous homes: at a game's first load with no save in the new folder, the old file is copied in and
+  left as it was, as §4.85.11's copy from the flat folder is. No release has written either folder; the copy is for
+  the builds that ran with development cores shown. The 32X's folder name is unchanged.
+- **`--nobattery`** behaves as for every console: nothing is read or written.
+- **The file's form** is `Nephrite_Native.md` §32's: the RAM's bytes as the game sees them, one lane's alone for a
+  one-lane RAM, an EEPROM's bytes; a file in the two-lane form Genesis Plus GX, PicoDrive and ClownMDEmu write is read
+  by its lane.
+
+**Coverage**: `EmuSen.WiseMan/Cores/GenesisBatteryTests.cs`.

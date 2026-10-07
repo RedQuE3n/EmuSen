@@ -88,6 +88,27 @@ impl Cart {
         }
     }
 
+    /// The battery from a battery file: as Nephrite writes it, the RAM's bytes in order, or as Genesis Plus GX, PicoDrive
+    /// and ClownMDEmu write a one-lane RAM, both lanes of its range from its even start, which is twice as long; either
+    /// clipped to the RAM (Nephrite_Native.md §32).
+    pub fn load_battery(&mut self, file: &[u8]) {
+        if let Some(l) = self.lockon.as_mut() {
+            return l.load_battery(file);
+        }
+        let lane = match self.save {
+            Some(s) if self.eeprom.is_none() && s.lanes != 0 && file.len() >= 2 * self.sram.len() => Some((s.lanes == 3) as usize),
+            _ => None,
+        };
+        let bytes = self.battery_mut();
+        match lane {
+            Some(odd) => bytes.iter_mut().enumerate().for_each(|(i, b)| *b = file[2 * i + odd]),
+            None => {
+                let n = bytes.len().min(file.len());
+                bytes[..n].copy_from_slice(&file[..n]);
+            }
+        }
+    }
+
     fn sram_index(&self, a: u32) -> Option<usize> {
         let s = self.save?;
         if self.sram.is_empty() || !(self.sram_always || self.sram_reg & 1 != 0) || a < s.start & !1 || a > s.end {

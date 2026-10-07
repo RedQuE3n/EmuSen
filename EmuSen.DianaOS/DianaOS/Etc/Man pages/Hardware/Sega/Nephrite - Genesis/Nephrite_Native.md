@@ -2406,3 +2406,57 @@ The row's second item: the region, the model and the pads (`EmuSen_Settings_Refe
 | Gate | So far |
 |---|---|
 | G4, the frontend | The cheats decode (§30). The fit audit passes with the Genesis tab of Graphics Settings at both sizes. |
+
+## 32. Stage 6, the systems that run, battery files and the EEPROM boards (2026-10-06)
+
+The row's third item, with the second's tabs limited to the systems that run.
+
+### 32.1 Only the systems that run are offered
+
+Nephrite's info marks its Sega CD and 32X in development, a system entry's `development` field (`EmuSen_CoreAPI.md`
+§27.4), and the host offers such a system nowhere a player chooses: its extensions are claimed only where development
+cores are asked for, and its console has no Graphics Settings tab or firmware page row even then. The Genesis has its
+tab; the Sega CD's and the 32X's come when stages 10 and 12 remove the mark, with no frontend change. The kit's C2
+lists such a system and fails one that shares an extension with a system the core offers.
+
+### 32.2 Battery files
+
+- **The form.** The battery file is the RAM's bytes as the game sees them: a one-lane RAM's lane alone (Sonic 3's 512
+  bytes on the odd addresses of `$200001`-`$2003FF`), a two-lane RAM whole, an EEPROM's memory. The plan's §4.4 left
+  the references' form to be checked; measured on 2026-10-06 by the four references' save RAM after 600 frames:
+
+  | Game | Nephrite | Genesis Plus GX | PicoDrive | BlastEm | ClownMDEmu |
+  |---|---|---|---|---|---|
+  | Sonic the Hedgehog 3, odd-lane RAM | 512 bytes | 65,536, both lanes from `$200000`, the other lane `$FF`; its odd bytes are Nephrite's 512 to the byte | 1,024, both lanes, the other `$00` | 512, one lane | 65,536, both lanes, the other `$00` |
+  | Mega Man: The Wily Wars, EEPROM | 128 bytes | 65,536, its first 128 Nephrite's | 8,192, its first 128 Nephrite's | 128, Nephrite's | 65,536 |
+
+  Three references write a one-lane RAM in both lanes and one, BlastEm, as Nephrite does; their contents differ from
+  one another where the games' timing does. Nephrite keeps its form, which is BlastEm's, and **reads** the two-lane
+  form too (`Cart::load_battery`): a file at least twice the lane's length is taken a byte in two from the RAM's even
+  start, on the RAM's lane. So a save brought from Genesis Plus GX, PicoDrive or ClownMDEmu loads; one taken from
+  Nephrite to those three does not, which is the cost of the choice, argued: it keeps the file the game's own bytes
+  and every Nephrite save as it was. An EEPROM's file is its bytes in every reference.
+- **The folder** is `Saves/Genesis` (`EmuSen_Settings_Reference.md` §4.91), a development build's `Saves/MD` copied in.
+- **Round trips**: a save RAM's and an EEPROM's bytes written through the space, saved, and read back at the next
+  load; a two-lane file read by its lane and written back in Nephrite's form; `--nobattery` reading and writing
+  nothing (`GenesisBatteryTests`, and the crate's `a_battery_file_round_trips_and_the_references_two_lane_form_is_read`).
+
+### 32.3 The EEPROM boards
+
+The database (`eeprom.rs`, §10.1 and §11.4) is keyed by the header's serial, and by its checksum where two boards share
+one (Codemasters' `00000000`, two boards by checksum, and Micro Machines' first game, with none). Checked against the
+corpus's headers on 2026-10-06: the 21 boards are found for 26 images, and of the 20 headers that mark an EEPROM in
+`RA`'s fourth byte, the seven not found are §12's (Putter Golf and Accolade's six, `T-119016` to `T-119186`), whose
+wiring no document gives; they stay carried forward.
+
+### 32.4 Measured (2026-10-06)
+
+- **The crate's tests**: 105 pass. **The kit**: C1-C15 on §24's 17 images, and its own tests (10), the systems in
+  development among them. **WiseMan**: the battery, save library, migration and Nephrite tests (68); the settings,
+  discovery, firmware, registration, adapter, graphics window and the three Rust engines' tests (588).
+
+### 32.5 The gate's evidence
+
+| Gate | So far |
+|---|---|
+| G4, the frontend | The cheats decode (§30). The fit audit passes with the Genesis tab (§31). `.srm` files round-trip, for save RAM and an EEPROM, and the references' two-lane saves load (§32.2). The kit on games is the stage's next step. |

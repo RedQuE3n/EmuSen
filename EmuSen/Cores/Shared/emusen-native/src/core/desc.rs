@@ -95,6 +95,8 @@ pub struct System {
     pub regions: Vec<Region>,
     pub controllers: Vec<Controller>,
     pub firmware: Vec<Firmware>,
+    /// The core builds the system but does not run its games yet; a host shows it nowhere a player chooses (EmuSen_CoreAPI.md §27.4).
+    pub development: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -411,7 +413,11 @@ pub fn info_json(info: &Info, capabilities: u64) -> String {
         for f in &s.firmware {
             write_firmware(&mut j, f);
         }
-        j.end_array().end_object();
+        j.end_array();
+        if s.development {
+            j.field_bool("development", true);
+        }
+        j.end_object();
     }
     j.end_array();
     j.field_strs("capabilities", &capability_names(capabilities));

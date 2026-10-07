@@ -656,6 +656,7 @@ Each **system** entry:
 | **`extensions`** | `[".sfc", ".smc"]` |
 | `regions` | `["ntsc", "pal"]` |
 | `controllers` | the devices a port can hold, below |
+| `development` | true when the core does not run the system's games yet; absent is false (§27.4, added 2026-10-06) |
 | `firmware` | every firmware file the system can use, for the firmware window, even before a game. One entry for each image a game can name, with that image's own label, size, parts and replacement, as `firmware_for` gives them; entries for images that are alternatives in one file slot share its `which` (amended 2026-10-05, `VenusRT_Native.md` §67) |
 
 A **controller** names its controls in the canonical vocabulary, so that the bindings screen is built from data and
@@ -2544,6 +2545,27 @@ supported, claimed by the catalogue or listed by Mistress's library, and `Create
 Release publish of `EmuSen.csproj` holds the other four libraries and their sidecars and no `libnephrite.so`; the
 registration golden of §25 is byte-identical to its state before Nephrite existed, since a player's discovery no
 longer sees the core.
+
+### 27.4 A system in development, 2026-10-06
+
+A core may run one of its systems before the others: Nephrite runs the Genesis at stage 6, and its Sega CD and 32X
+are stubs until stages 10 and 12. The core-level mark of §27.2 cannot say that, so a system entry of core info (§6.3)
+may carry `"development": true`.
+
+- **It is additive** under §4.2: an optional field of the info's system entry, in `info.schema.json`. Absent means
+  false, and a core writes it only when it is true, so every other core's info is byte-identical. A host that does not
+  know the field behaves as before and offers every system the core lists.
+- **What a host does with it**: `CoreDiscovery.Offered` keeps such a system's extensions unclaimed, so
+  `CoreFactory.IsSupported` and `Create` do not reach it, unless development cores are asked for (§27.2), where a
+  developer can still open its files. Its console gets no Graphics Settings tab or firmware page row even then
+  (`CoreCatalog.DiscoveredConsoles`, `FirmwareOverview`), because those say what a player can run. Removing the mark
+  from the core's info is the whole of offering the system.
+- **The kit** (C2) lists each system in development, and fails a core whose system in development shares an extension
+  with a system it offers, since a host routing by extension would offer it through that one
+  (`systems_in_development`, `a_system_in_development_shares_no_extension_with_an_offered_one`).
+- **Tested**: `NephriteTests.A_shipped_core_offers_only_the_systems_its_info_says_run`, on Nephrite's library with its
+  sidecar written as shipped: `.md` supported, `.iso` and `.32x` not; with development cores asked for, both
+  supported and still no Sega CD or 32X tab.
 
 ---
 

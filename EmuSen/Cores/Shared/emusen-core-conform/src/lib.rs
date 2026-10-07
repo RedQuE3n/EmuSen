@@ -398,6 +398,23 @@ fn c1(lib: &Lib) -> Case {
     c.done("C1", "loading")
 }
 
+/// The systems an info marks in development, and why one could still be offered: an extension it shares with a system
+/// the core offers, which a host routing by extension would offer it by (EmuSen_CoreAPI.md §27.4).
+pub fn systems_in_development(info: &str) -> (Vec<String>, Vec<String>) {
+    let systems = parse(info).as_ref().and_then(|d| d.get("systems")).and_then(Value::as_array).map(|a| a.to_vec()).unwrap_or_default();
+    let developing = |s: &Value| matches!(s.get("development"), Some(Value::Bool(true)));
+    let offered: BTreeSet<String> = systems.iter().filter(|s| !developing(s)).flat_map(|s| strs(s.get("extensions"))).map(|e| e.to_lowercase()).collect();
+    let (mut problems, mut ids) = (Vec::new(), Vec::new());
+    for s in systems.iter().filter(|s| developing(s)) {
+        let id = s.get("id").and_then(Value::as_str).unwrap_or("").to_owned();
+        for e in strs(s.get("extensions")).into_iter().filter(|e| offered.contains(&e.to_lowercase())) {
+            problems.push(format!("system {id} is in development but {e} is also an offered system's, so a host would offer it"));
+        }
+        ids.push(id);
+    }
+    (problems, ids)
+}
+
 fn c2(lib: &Lib, info: &str) -> Case {
     let mut c = Check::new();
     for e in schema::validate(schema::INFO, info) {
@@ -413,6 +430,13 @@ fn c2(lib: &Lib, info: &str) -> Case {
     for &(name, bit) in EXPORTS.iter().filter(|e| e.1 != 0) {
         let present = lib.has(name);
         c.that(present == lib.claims(bit), || format!("{name} is {} but its bit is {}", if present { "exported" } else { "missing" }, if lib.claims(bit) { "claimed" } else { "not claimed" }));
+    }
+    let (problems, developing) = systems_in_development(info);
+    for p in problems {
+        c.that(false, || p.clone());
+    }
+    for id in developing {
+        c.note(format!("system {id} in development, offered to no player"));
     }
     c.note(format!("capabilities {:#x}", lib.capabilities()));
     c.done("C2", "info")

@@ -826,7 +826,8 @@ Each was put as a question on 2026-10-07 with a recommendation; the answers are 
    `FilterChain`. **Decided 2026-10-07: approved.**
 2. **The picture's shape** (§4.2, extension 6). **Decided 2026-10-07 by the tester: under the CRT filter the
    picture is a 4:3 tube with the console's own pixel aspect, and the whole active picture is shown by default.
-   The overscan crop is a setting. With the filter off, nothing changes.**
+   The overscan crop is a setting. With the filter off, nothing changes.** *("The console's own pixel aspect" was
+   retired 2026-10-07 by the requirement of §14: the picture fills the tube, as it fills the screen with no filter.)*
 3. **One entry or three** in the filter list. **Decided 2026-10-07: one CRT entry with a Quality setting.**
 4. **Defaults.** **Decided 2026-10-07 by the tester: Composite is the default signal for the NES, SNES, Genesis
    and N64, with S-Video and RGB as choices. The default filter stays None for now, to be decided again once the
@@ -922,6 +923,8 @@ picture of more than 300 rows being two fields. With **Overscan** at 0 the raste
 touches the glass on its nearer pair of edges, so the whole picture is shown and nothing else: a 256 × 224 SNES
 picture fills the height and leaves 1.2% of the width blank on each side, which is its true shape on a tube
 (pixels 8:7). With overscan above 0 the standard raster is zoomed by that percentage, as a set's was.
+*(Retired 2026-10-07: this placement drew a PAL Nintendo 64 picture 84% as wide as an NTSC one, and a console's
+modes in different areas. The frame now fills the face, whatever its lines, width or region: §14.)*
 
 **Each console's constants** are `CrtFilter.ConsoleTiming`, from §3.2's table: the active picture's duration,
 the subcarrier cycles across it, the fraction of a cycle left over per line and per frame, and the encoder's
@@ -1624,3 +1627,128 @@ not told; the choices not shown; the CRT not listed; and §3.10's five in `EmuSe
 **What is not done.** The tester's bench runs on the handheld and the laptop (§12.7, §12.9), and what they decide for
 Performance; the NES's raw signal (§9, decision 5); the decoders' axes (decision 11); and moving one program's compile
 off the render thread, which Skia's GL backend gives no way to do (`EmuSen_Serenity.md` §3.10).
+
+## 14. Every game of a console in the same area of the tube (2026-10-07)
+
+**The requirement, from the tester, 2026-10-07: games display the same per core, unless there is an explicit reason
+why one cannot.** Within one core every game's picture occupies the same area of the screen, with the same shape,
+size and placement, across region (PAL or NTSC), resolution mode, interlace and engine, and with or without a
+filter. An exception is a named, documented reason; it is never an accident of a frame's pixel count or of a
+timing constant.
+
+### 14.1 The defect, measured
+
+The report: on the handheld, with the N64 on MarsRT, its GPU drawing on, and this filter at Accurate, *Kirby 64*
+(Europe) was drawn smaller than *Mario Kart 64*, after `EmuSen_Serenity.md` §2.9 had made the two fill the same
+rectangle with no filter. Each game was run 600 frames headlessly on Mars and on MarsRT with `Gpu` on, and its frame,
+and a white frame of the same size, drawn through `GameFrameControl` on the RX 6800 (2026-10-07; the ROMs copied to
+scratch). The picture's area is where the white frame is lit at 32 of 255 or more:
+
+| Game | Frame, both engines | No filter, 1280 × 800 | CRT Accurate, 1280 × 800 | No filter, 1920 × 1080 | CRT Accurate, 1920 × 1080 |
+|---|---|---|---|---|---|
+| Kirby 64 (Europe) | 640 × 288, rows shown twice, 50.02 Hz | 1067 × 800 at (107, 0) | **902 × 800 at (189, 0)** | 1440 × 1080 at (240, 0) | **1218 × 1080 at (351, 0)** |
+| Mario Kart 64 (Europe) | 640 × 288, rows shown twice, 50.02 Hz | 1067 × 800 at (107, 0) | **902 × 800 at (189, 0)** | 1440 × 1080 at (240, 0) | **1218 × 1080 at (351, 0)** |
+| Mario Kart 64 (USA) | 640 × 240, rows shown twice, 59.96 Hz | 1067 × 800 at (107, 0) | 1067 × 800 at (107, 0) | 1440 × 1080 at (240, 0) | 1440 × 1078 at (240, 1) |
+
+A PAL picture was 84.5% as wide as an NTSC one under the filter, on both engines alike, and right with no filter.
+
+**Three suspects, and what the rendering says of each.**
+
+1. *The picture's placement by line timing.* **The cause.** §11.1 placed a console's picture inside the 525-line
+   standard's raster, 241.5 lines to a field, and zoomed the raster until the picture touched the glass on its
+   nearer pair of edges. A PAL field's 288 lines are 1.193 of that raster's height, so the zoom that fitted them was
+   0.838 and the picture's width with it: 0.838 of 1067 is 894, and 902 was measured, the difference being light
+   spread past the picture's edge, which a threshold of 32 counts. A PAL console drove a 625-line set and filled it; the filter had no such raster.
+2. *Row repeat, and MarsRT's GPU path.* **Ruled out.** Both engines hand over the same frame, 640 × 288 or 640 × 240
+   with each row to be shown twice, and the same areas were measured from both.
+3. *Interlace.* **Ruled out.** None of the three frames is interlaced: the rule that a picture of more than 300
+   rows is two fields is not reached by 288 or by 240.
+
+**The same rule misplaced every other console too, by less.** Its fit depended on the frame's lines and on the
+console's line timing, so on the filter as it was, in a 1280 × 800 window whose tube is 1067 wide: a NES picture was
+lit 976 wide, a SNES or Genesis picture of 224 lines 1042, and by the same arithmetic one of 239 or 240 lines
+narrower again (computed, not drawn).
+A console's modes were therefore drawn in different areas, which the requirement forbids, and all of them narrower
+than the same frame with no filter.
+
+### 14.2 The rule now
+
+**The frame fills the tube's face.** `pictureOf` maps the face to the picture with nothing but the overscan: no
+line count, no timing constant, no region. The tube is the 4:3 rectangle the unfiltered picture is drawn in
+(`DisplayShape.Television`, which the core reports), so with or without the filter a console's picture has one
+area, and its shape has one source, the core. The filter no longer holds a second opinion of a console's pixel
+aspect; if a console's screen should be another shape, its core says so and both paths follow.
+
+What follows from it, measured in the 1280 × 800 window: an N64 picture is 1067 × 800 at (107, 0) under the filter
+in either region, on either engine, at every quality; a NES picture is 9% wider under the filter than it was, a
+SNES or Genesis one 2%, each now as wide as it is with no filter. **Overscan** enlarges the picture past the glass
+by its percentage, about the centre; at 0, the default, the whole frame is shown and reaches the glass's edges.
+
+**The frames the tests draw**, each console's every size (`ScreenFilterRenderTests.FramesOf`):
+
+| Console | Frames (width × rows; "× 2" where each row is shown twice) |
+|---|---|
+| NES | 256 × 240 |
+| SNES | 256 × 224, 512 × 224, 256 × 239, 512 × 448, 512 × 478 |
+| Genesis | 320 × 224, 256 × 224, 320 × 240, 256 × 240, 320 × 448, 320 × 480 |
+| N64 | 640 × 240 × 2, 640 × 288 × 2, 640 × 480, 640 × 576, 1280 × 480 × 2, 1280 × 576 × 2 |
+| Game Boy | 160 × 144, with no filter only: this filter is not offered for it |
+
+A region changes nothing here that a mode does not: a PAL NES, SNES or Genesis hands over the same sizes as an NTSC
+one, the Genesis's 240-line mode among them, and the N64's PAL field is the 288-row entry. The sizes are those the
+cores declare or were measured handing over; the SNES's 239-line sizes are in the table though neither SNES core
+produces them yet.
+
+### 14.3 The spot, kept round
+
+The beam's width across lines is in the picture's own lines (§11.5), so along a line it has to be the same length
+on the glass. `beam` converted lines to samples through the standard raster and the console's active time; it now
+uses the frame's own field: 0.75 of the line's samples over the field's rows, a frame of more than 300 rows being
+two fields. A PAL field's lines lie closer, so its spot is narrower along the line too: a lit column of a 288-line
+field is 0.935 as wide at half height as one of a 240-line field (12.12 and 12.96 pixels, magnified ten times), and
+a 480-row frame's is the 240-line field's. **A choice, not a measurement:** the spot keeps its size relative to the
+picture's lines whatever their number, as it did before; a tube's spot is a size on the glass, and a 625-line set's
+was not measured for §11.2.
+
+The reach of `beam`'s scatter, eight samples either way, is sized for a real field. A frame of a dozen rows, which
+only a test would draw, has a spot too wide for it and loses light; the software-path test now draws 224 rows.
+
+### 14.4 What remains different between games, and why
+
+- **A game's own margins.** The area above is the frame's. What a game lights inside its frame is the game's:
+
+  | Game | Lit inside its frame | Under CRT Accurate at 1280 × 800, after the fix |
+  |---|---|---|
+  | Kirby 64 (Europe) | 609 × 268 of 640 × 288, at (15, 10) | 1023 × 744 at (128, 28) |
+  | Mario Kart 64 (Europe) | 625 × 237 of 640 × 288, at (8, 25) | 1060 × 661 at (111, 68) |
+  | Mario Kart 64 (USA) | 625 × 237 of 640 × 240, at (8, 1) | 1061 × 792 at (111, 2) |
+
+  *Mario Kart 64* (Europe) draws its NTSC picture's 237 lines inside a PAL field, so 51 of its 288 lines are black,
+  25 above and 26 below, as they were on a PAL television; *Kirby 64* (Europe) leaves 15 or 16 pixels at each side
+  and 10 lines above and below. These are the reason the three still differ on screen, and they are in the ROMs.
+  Removing them would be a crop the player sets; none exists.
+- **Square pixels** (`EmuSen_Settings_Reference.md` §4.97) is the player's explicit choice of the frame's own pixel
+  count, and under it frames of different sizes have different shapes by definition. This filter draws its tube
+  under either choice.
+- **Curvature** bows the picture's edges and rounds its corners, for every game of the console alike.
+- **Hotaru** offers frames without a shape and so draws square pixels (`EmuSen_Serenity.md` §2.9).
+
+**Not done.** A PAL game's composite or S-Video signal is still encoded with the console's NTSC timing and the
+3.58 MHz subcarrier (§3.2): the picture's area no longer depends on any of it, but its colour artefacts are an NTSC
+console's. A PAL encoder and decoder would be a model of their own. The frame's region is therefore not yet asked of
+the engine; nothing in the picture's placement needs it.
+
+### 14.5 Tests and mutants
+
+`ScreenFilterRenderTests` (on the RX 6800): for each of the four consoles at each of the three qualities, every frame
+of §14.2's table, white, is lit within 2 pixels of (107, 0) to (1173, 800) in a 1280 × 800 window (12 cases); an
+NTSC and a PAL N64 field occupy the same tube at each quality (3); the spot along a line (§14.3). The 2 pixels are
+a scanline's own edge, which falls differently for 240 lines and for 288. `DisplayAspectTests`: with no filter, every
+frame of the table, the Game Boy's included, lights exactly the same rectangle (5). On the filter as it was before
+this section, all sixteen of the filter's new cases fail: the N64's PAL field lit from 190 to 1090, the SNES and the
+Genesis from 119 to 1161, the NES from 152 to 1128. The existing cases that placed their measurements by the old
+rule now place them by this one; *The whole picture is shown until overscan is asked for* now lights the frame's
+first and last eight columns and finds them at the glass's edges, and off the glass at 12%.
+
+**Mutants** (4, each caught): the picture 2.4% narrower than the tube; the overscan ignored; the spot sized for 240
+lines whatever the field; the spot sized by both fields of a frame.

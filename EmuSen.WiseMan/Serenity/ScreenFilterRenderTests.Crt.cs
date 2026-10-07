@@ -98,14 +98,12 @@ namespace EmuSen.WiseMan.Serenity
             return Math.Pow((v + b) / (1 + b), 2.4);
         }
 
-        // Where a console's picture lies in a window with the glass flat: the standard raster zoomed to show the whole picture, as the filter places it.
-        private static (double Left, double Top, double Width, double Height) PictureIn(string console, int rows, int windowWidth, int windowHeight, double overscan = 0)
+        // Where the picture lies in a window with the glass flat: the whole of the 4:3 tube, whatever the frame, enlarged past it by the overscan - see EmuSen_CRT.md §14.
+        private static (double Left, double Top, double Width, double Height) PictureIn(int windowWidth, int windowHeight, double overscan = 0)
         {
-            double fillX = CrtFilter.ConsoleTiming[console]["activeUs"] / CrtFilter.StandardActiveMicroseconds;
-            double fillY = (rows > 300 ? rows / 2.0 : rows) / CrtFilter.StandardFieldLines;
-            double zoom = overscan > 0 ? 1 + overscan / 100 : Math.Min(1 / fillX, 1 / fillY);
+            double zoom = 1 + overscan / 100;
             var (x, y, w, h) = GameFrameControl.ComputeLetterboxRect(4, 3, windowWidth, windowHeight);
-            return (x + w * (0.5 - 0.5 * fillX * zoom), y + h * (0.5 - 0.5 * fillY * zoom), w * fillX * zoom, h * fillY * zoom);
+            return (x + w * (0.5 - 0.5 * zoom), y + h * (0.5 - 0.5 * zoom), w * zoom, h * zoom);
         }
 
         private static void Within(double expected, double actual, double share, string what) =>
@@ -149,16 +147,16 @@ namespace EmuSen.WiseMan.Serenity
             window.Show();
             try
             {
-                byte[] frame = Grey(32, 12, 1);
-                control.UpdateFrame(frame, 32, 12);
+                byte[] frame = Grey(32, 224, 1);
+                control.UpdateFrame(frame, 32, 224);
                 using (window.CaptureRenderedFrame()) { }
-                control.UpdateFrame(frame, 32, 12);
+                control.UpdateFrame(frame, 32, 224);
                 using var captured = window.CaptureRenderedFrame()!;
                 var capture = EmuSen.WiseMan.Fixtures.UiTest.Capture(captured);
                 var picture = new Crt(capture.Rgba, capture.Width, capture.Height);
 
-                // 241.5 lines over ten times the window's height: a whole number of scanlines is 74.5 pixels for ten of them.
-                double[] mean = picture.Mean(60, 53, 120, 74.5);
+                // 224 rows over ten times the window's height: nine scanlines are 72.3 pixels. The rows are a real field's, since the spot's reach along a line is sized for one (§14.3).
+                double[] mean = picture.Mean(60, 54, 120, 72.3);
                 foreach (double channel in mean) Within(1.0 / 3.0, channel, 0.03, "a white field's light in software");
                 Assert.True(mean.Max() - mean.Min() < 0.01, $"neutral: {string.Join(", ", mean)}");
             }
@@ -189,7 +187,7 @@ namespace EmuSen.WiseMan.Serenity
         public Task A_scanline_is_as_wide_as_its_drive_makes_the_spot_and_carries_the_same_light_at_any_width() => Session.Dispatch(() =>
         {
             CrtFilter.Screen screen = CrtFilter.Screens[CrtFilter.DefaultScreen];
-            double pixelsPerLine = 480 * 10 / CrtFilter.StandardFieldLines;
+            double pixelsPerLine = 480 * 10 / 224.0;
             var widths = new List<double>();
             foreach (double level in new[] { 0.25, 0.5, 1.0 })
             {
@@ -295,7 +293,7 @@ namespace EmuSen.WiseMan.Serenity
 
         private static double[][] BarColours(Crt picture, string console)
         {
-            var (left, top, width, height) = PictureIn(console, 224, picture.Width, picture.Height);
+            var (left, top, width, height) = PictureIn(picture.Width, picture.Height);
             double line = height / 224;
             return Enumerable.Range(0, 8).Select(bar => picture.Mean(left + width * (bar + 0.5) / 8 - 20, top + height / 2 - 20 * line, 40, 40 * line)).ToArray();
         }
@@ -328,7 +326,7 @@ namespace EmuSen.WiseMan.Serenity
             byte[] step = Paint(256, 224, (x, _) => x < 128 ? (0.2, 0.5, 0.2) : (0.714, 0.2, 0.714));
             double Rise(Crt picture)
             {
-                var (left, top, width, height) = PictureIn("SNES", 224, 1440, 1080);
+                var (left, top, width, height) = PictureIn(1440, 1080);
                 double[] red = picture.Across(0, top + height / 2 - 20, 40, (int)(left + width * 0.3), (int)(left + width * 0.7));
                 double low = red.Take(40).Average(), high = red.Skip(red.Length - 40).Average();
                 double At(double share) { double level = low + (high - low) * share; int i = Array.FindIndex(red, v => v >= level); return i - 1 + (level - red[i - 1]) / (red[i] - red[i - 1]); }
@@ -356,7 +354,7 @@ namespace EmuSen.WiseMan.Serenity
             double[][] Lines(int shown)
             {
                 Crt picture = Draw(console, width, rows, 1600, tall, Enumerable.Repeat(columns, shown).ToArray(), set)!;
-                var (left, top, w, h) = PictureIn(console, rows, 1600, tall);
+                var (left, top, w, h) = PictureIn(1600, tall);
                 return Enumerable.Range(100, 6).Select(row => picture.Mean(left + w * 0.5 - 2, Math.Round(top + h * row / rows), 4, 5)).ToArray();
             }
             static double Apart(double[] a, double[] b) => Enumerable.Range(0, 3).Max(c => Math.Abs(a[c] - b[c]));
@@ -385,7 +383,7 @@ namespace EmuSen.WiseMan.Serenity
             byte[] Columns(int width) => Paint(width, 224, (x, _) => x % 2 == 0 ? (0.6, 0.6, 0.6) : (0.2, 0.2, 0.2));
             if (Draw("Genesis", 320, 224, 1440, 1080, Twice(Columns(320)), set) is not { } wide) return;
             if (Draw("Genesis", 320, 224, 1440, 1080, Twice(Columns(320)), With(set, ("signal", 0f))) is not { } rgb) return;
-            var (left, top, width, height) = PictureIn("Genesis", 224, 1440, 1080);
+            var (left, top, width, height) = PictureIn(1440, 1080);
             int x0 = (int)(left + width * 0.2), x1 = (int)(left + width * 0.8);
             static double Luma(double[] m) => 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2];
 
@@ -420,14 +418,14 @@ namespace EmuSen.WiseMan.Serenity
             (string, float)[] flat = With(Plain, ("mask", 1f));
             if (Draw("SNES", 512, 224, 2880, 2160, Twice(columns), With(flat, ("signal", 2f), ("screen", 1f))) is not { } composite) return;
             if (Draw("SNES", 512, 224, 2880, 2160, Twice(columns), With(flat, ("signal", 0f), ("screen", 4f))) is not { } rgb) return;
-            var (left, top, width, height) = PictureIn("SNES", 224, 2880, 2160);
+            var (left, top, width, height) = PictureIn(2880, 2160);
             double Swing(Crt picture) { double[] row = picture.Across(1, top + height / 2 - 40, 80, (int)(left + width * 0.3), (int)(left + width * 0.7)); return (row.Max() - row.Min()) / row.Average(); }
             Assert.True(Swing(composite) < 0.35 && Swing(rgb) > 3 * Swing(composite), $"swing between columns: {Swing(composite):F2} by composite on the consumer set, {Swing(rgb):F2} by RGB on the monitor");
         }, default);
 
         private static double Contrast(Crt lit, Crt dark, string console, int squares, int rows)
         {
-            var (left, top, width, height) = PictureIn(console, rows, lit.Width, lit.Height);
+            var (left, top, width, height) = PictureIn(lit.Width, lit.Height);
             double line = height / rows, white = 0, black = 0;
             for (int j = 0; j < squares; j++) for (int i = 0; i < squares; i++)
             {
@@ -464,7 +462,7 @@ namespace EmuSen.WiseMan.Serenity
             double[] After(int dark)
             {
                 Crt picture = Draw("SNES", 256, 224, 640, 480, Enumerable.Repeat(white, 150).Concat(Enumerable.Repeat(black, dark)).ToArray(), set)!;
-                var (left, top, width, height) = PictureIn("SNES", 224, 640, 480);
+                var (left, top, width, height) = PictureIn(640, 480);
                 return picture.Mean(left + width / 2 - 20, Math.Round(top + height * 0.4), 40, Math.Round(height / 224 * 20));
             }
             if (CrtDevice.Value is null) return;
@@ -482,7 +480,7 @@ namespace EmuSen.WiseMan.Serenity
             byte[] lines = Paint(256, 224, (x, _) => x is 128 or 240 ? (1.0, 1.0, 1.0) : (0.0, 0.0, 0.0));
             (string, float)[] set = With(Plain.Where(p => p.Item1 != "convergence").ToArray(), ("mask", 1f), ("signal", 0f), ("subpixels", 0f), ("screen", 1f));
             if (Draw("SNES", 256, 224, 2880, 2160, Twice(lines), set) is not { } picture) return;
-            var (left, top, width, height) = PictureIn("SNES", 224, 2880, 2160);
+            var (left, top, width, height) = PictureIn(2880, 2160);
             double Centre(int channel, int column)
             {
                 int x0 = (int)(left + width * (column + 0.5) / 256) - 40;
@@ -531,7 +529,7 @@ namespace EmuSen.WiseMan.Serenity
         {
             byte[] white = Grey(256, 448, 1);
             (string, float)[] set = With(Plain, ("mask", 1f), ("signal", 0f), ("overscan", 900f), ("spotSize", 0.5f), ("displayNits", 1000f));
-            double[] Rows(Crt picture) => Enumerable.Range(0, 6).Select(k => picture.Mean(300, 240 + (k - 2.5) * 480 * 10 / (2 * CrtFilter.StandardFieldLines) - 2, 40, 4)[1]).ToArray();
+            double[] Rows(Crt picture) => Enumerable.Range(0, 6).Select(k => picture.Mean(300, 240 + (k - 2.5) * 480 * 10 / (2 * 224.0) - 2, 40, 4)[1]).ToArray();
             if (Draw("SNES", 256, 448, 640, 480, new[] { white, white }, With(set, ("interlace", 0f))) is not { } woven) return;
             if (Draw("SNES", 256, 448, 640, 480, new[] { white, white }, With(set, ("interlace", 1f))) is not { } even) return;
             if (Draw("SNES", 256, 448, 640, 480, new[] { white, white, white }, With(set, ("interlace", 1f))) is not { } odd) return;
@@ -541,17 +539,17 @@ namespace EmuSen.WiseMan.Serenity
             for (int k = 0; k < 6; k++) Assert.True((a[k] > b[k]) != (a[(k + 1) % 6] > b[(k + 1) % 6]), "and the next frame lights the others");
         }, default);
 
-        // The whole picture by default, with the blank either side of it; with a television's overscan the picture's edge is off the glass.
+        // The whole picture by default, its edge columns at the glass's edges; with a television's overscan they are off the glass.
         [Fact]
         public Task The_whole_picture_is_shown_until_overscan_is_asked_for() => Session.Dispatch(() =>
         {
-            byte[][] white = Twice(Grey(256, 224, 1));
+            byte[][] edged = Twice(Paint(256, 224, (x, _) => x < 8 || x >= 248 ? (1.0, 1.0, 1.0) : (0.0, 0.0, 0.0)));
             (string, float)[] set = With(Plain, ("mask", 1f), ("signal", 0f));
-            if (Draw("SNES", 256, 224, 1440, 1080, white, set) is not { } whole) return;
-            if (Draw("SNES", 256, 224, 1440, 1080, white, With(set, ("overscan", 12f))) is not { } cropped) return;
-            var (left, _, _, _) = PictureIn("SNES", 224, 1440, 1080);
-            Assert.True(left > 10 && whole.Luminance(2, 500, 6, 80) < 0.01 && whole.Luminance(left + 6, 500, 20, 80) > 0.2, $"the whole picture starts {left:F0} pixels in");
-            Assert.True(cropped.Luminance(2, 500, 6, 80) > 0.2, "overscanned, it reaches the edge");
+            if (Draw("SNES", 256, 224, 1440, 1080, edged, set) is not { } whole) return;
+            if (Draw("SNES", 256, 224, 1440, 1080, edged, With(set, ("overscan", 12f))) is not { } cropped) return;
+            Assert.True(whole.Luminance(8, 500, 24, 80) > 0.2 && whole.Luminance(1408, 500, 24, 80) > 0.2, "the whole picture's first and last eight columns are lit at the glass's edges");
+            Assert.True(whole.Luminance(120, 500, 40, 80) < 0.02, "and the picture between them is dark");
+            Assert.True(cropped.Luminance(2, 500, 40, 80) < 0.02 && cropped.Luminance(1398, 500, 40, 80) < 0.02, "overscanned by 12%, those columns are off the glass");
         }, default);
 
         // The N64's cores send 240 rows to be shown twice each; a tube draws them as 240 scanlines, so the repeat changes nothing.

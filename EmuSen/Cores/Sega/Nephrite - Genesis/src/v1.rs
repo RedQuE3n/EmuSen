@@ -232,7 +232,7 @@ pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::DEBUG | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -426,6 +426,28 @@ impl Core for Machine {
         Ok(())
     }
 
+    fn debug_hooks(&mut self) -> Option<&mut emusen_native::debug::Hooks> {
+        Some(&mut self.hooks)
+    }
+
+    /// The 68000's breakpoints are the shared hooks'; the Z80's the core's own.
+    fn debug_breakpoints(&mut self, processor: u32, pairs: &[i32]) -> Result<(), i32> {
+        match processor {
+            crate::debugger::M68K => self.hooks.set_breakpoints(pairs),
+            crate::debugger::Z80 => self.z80_breakpoints = pairs.chunks_exact(2).map(|p| (p[0], p[1])).collect(),
+            _ => return Err(status::NOT_SUPPORTED),
+        }
+        Ok(())
+    }
+
+    fn debug_run_frame(&mut self, flags: u32, _detail: &mut u64) -> Result<u32, i32> {
+        Ok(self.run_frame_debug(flags))
+    }
+
+    fn debug_stopped(&self) -> u32 {
+        self.debug_stopped
+    }
+
     fn debug_pc(&self, processor: u32) -> Option<u64> {
         Machine::debug_pc(self, processor)
     }
@@ -450,7 +472,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; rom_patches, settings, debug_registers, debug_disassemble);
+emusen_native::core_exports!(Machine; rom_patches, settings, debug, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {

@@ -2868,3 +2868,52 @@ Step 2: `DEBUG`, the observed frame. Each processor's step asked before it runs,
 the shared hooks, the Z80's the core's own), stepping by `EACH`, and the stop reporting which processor stopped, with
 the kit's C15 (every table armed gives the plain run's digests).
 
+## 42. Stage 7, step 2: the observed frame, breakpoints and stepping on both processors (2026-10-07)
+
+This step claims `DEBUG`. A debugger can now stop either processor in front of an instruction, step the 68000, and
+read the logs and coverage the shared hooks keep.
+
+### 42.1 What it built
+
+- **One frame loop, two ways.** `Genesis::run_frame` and the observed `run_frame_observed` share the 68000's turn and
+  the Z80's catch-up, each generic over an `Observer`: the plain frame passes `Unobserved`, which compiles to the loop
+  as it was. The observed loop asks before each instruction and reports what it ran.
+- **The order of a turn**, kept from the plain loop: the Z80 is caught up to the 68000, the frame's end is taken if it
+  came, and only then is the 68000 asked about and stepped. The 68000 is asked only before a turn that runs an
+  instruction: not during a transfer's hold, a halt or a STOP.
+- **The 68000** (processor 0) is asked through the shared hooks: its breakpoints, `EACH`, the depth, a data
+  breakpoint's store and a full log. Its steps, stores and calls go to the hooks as it runs (`MainWatch`): coverage over
+  24 bits, the profile, the writes log and the call stack.
+- **The Z80** (processor 1) is asked against its own breakpoints, which the host sets with processor 1 and the core
+  keeps, as the ABI's §6.14 has it for a second processor. Its steps go to its coverage (16 bits) and its stores to the
+  writes log, in `Z80BUS`; its calls do not enter the call stack, which is the 68000's (`Z80Watch`). `EACH` and the
+  depth are the 68000's: a step is the 68000's step.
+- **A stop leaves the frame open**, `run_frame_debug`'s next call going on from it; the stop names its processor, and
+  the ABI reports that processor's PC. A stop on the Z80 leaves it behind the 68000, part-way through its catch-up, and
+  the resumed frame finishes the catch-up before the 68000's next instruction, as the plain frame would have.
+  `run::UNCHECKED` runs the stopped processor's next instruction unasked.
+- **A store's data breakpoint** stops in front of the 68000's next instruction, whichever processor stored.
+- **A state loaded while a frame is open** closes it: the next frame begins as a new one.
+
+### 42.2 Measured (2026-10-07)
+
+- **The crate's tests**, all 120, the frame loop being in every test's path. Five are new in `debugger.rs`: every table
+  armed with nothing to hit gives the plain frames' state and picture, with both processors' coverage and the 68000's
+  calls recorded; a 68000 breakpoint stops in front of its instruction and an unchecked resume runs one pass to it
+  again; a Z80 breakpoint likewise, on processor 1, with the Z80 behind the 68000; a frame stopped more than a hundred
+  times on both processors and resumed is the plain frame, state and picture (it fails with the 68000 stepped before
+  the stopped Z80 is caught up); `EACH` stops in front of each 68000 instruction in order.
+- **The plain frame's cost**, best of five runs of 600 frames beside the build before this step: Sonic the Hedgehog
+  1.287 ms (1.288), its sequel 1.177 (1.172), Thunder Force IV 1.273 (1.275), Streets of Rage 2 1.070 (1.072),
+  Phantasy Star IV 1.348 (1.348). Unchanged, and within P1.
+- **The kit**: the corpus form on the sample, the core's cases with C15 passing and 64 of 64 images; and the
+  single-image form, all fifteen, on Sonic the Hedgehog, Streets of Rage 2, Thunder Force IV, Phantasy Star IV,
+  Frank Thomas Big Hurt Baseball, Sonic & Knuckles with Sonic 3, Super Street Fighter II and Mickey Mania, C15's armed
+  run equal to the plain one on each.
+- **WiseMan**: `NephriteTests` (the library's capabilities now with `DEBUG`) and the registration golden, 14 pass.
+
+### 42.3 Next
+
+Step 3: the call stack (`DEBUG_STACK`), watches and data breakpoints, coverage and the profile, each claim a test, and
+the generic debugger in DianaOS shown working on a Genesis game, which is what G7 asks.
+

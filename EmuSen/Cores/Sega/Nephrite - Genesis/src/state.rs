@@ -93,6 +93,7 @@ impl StateMachine for Machine {
             self.bytes_mut(id).expect("a listed space").copy_from_slice(&bytes);
         }
         self.genesis.apply_state(registers);
+        self.debug_open = false;
         self.refresh_battery_file();
         Ok(())
     }

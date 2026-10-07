@@ -515,6 +515,8 @@ namespace EmuSen.WiseMan.Mistress
             ShaderPanel snes = shaders.PanelFor("SNES");
             var frame = window.GetControl<EmuSen.Serenity.GameFrameControl>("GameFrame");
 
+            Assert.False(frame.SquarePixels);
+            ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("SNES", GraphicsSettingsWindow.PictureShapeKey, GraphicsSettingsWindow.SquarePixels);
             Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "CRT (Lottes)");
             Assert.Equal("CRT (Lottes)", snes.Shown?.Stored);
             Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Mask dark" });
@@ -543,6 +545,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("CRT (Lottes)", Stored("SNES", GraphicsSettingsWindow.ScreenFilterKey));
             Assert.Equal("CRT (Lottes)", frame.ActiveFilter?.Name);
             Assert.Equal("SNES", frame.FilterConsole);
+            Assert.True(frame.SquarePixels, "the console's stored picture shape reaches the frame with its filter");
             Assert.Equal(0.4f, frame.ShaderParameters!["maskDark"], 4);
 
             pad.B();

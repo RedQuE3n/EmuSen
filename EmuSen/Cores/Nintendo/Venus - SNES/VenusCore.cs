@@ -104,6 +104,9 @@ namespace EmuSen.Cores.Nintendo.Venus
         public int ScreenHeight => 224;
 
         // NTSC 21477272/(262*1364) ~= 60.098, PAL 21281370/(312*1364) ~= 50.007 - see Venus_CPU.md §8.5b.
+        // The screen's shape: a television's 4:3 in every mode, hi-res and interlaced included - see EmuSen_Serenity.md §2.9.
+        public double DisplayAspect => EmuSen.Serenity.DisplayShape.Television;
+
         public double FrameRateHz => _masterClockHz / (_totalScanlines * (double)CyclesPerScanline);
 
         // What a coprocessor's own per-frame clock total must match - see Venus_SA1.md §2.3.

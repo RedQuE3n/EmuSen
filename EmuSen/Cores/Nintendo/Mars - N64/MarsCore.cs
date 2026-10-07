@@ -223,6 +223,9 @@ namespace EmuSen.Cores.Nintendo.Mars
         public int ScreenHeight => _screenHeight;
 
         // The rate of the frames RunFrame actually produced, whichever boundary ended them - see Mars_Core.md §3.
+        // The screen's shape: a television's 4:3 at every VI width and in PAL - see EmuSen_Serenity.md §2.9.
+        public double DisplayAspect => EmuSen.Serenity.DisplayShape.Television;
+
         public double FrameRateHz => ProcessorClockHz / (double)_lastFrameCycles;
 
         public bool IsRomLoaded => Bus != null;

@@ -15,9 +15,10 @@ namespace EmuSen.Serenity
     public sealed class GameFrameControl : Control
     {
         // One offered picture, its rows' repeat (§2.7) and who can still read its array - see EmuSen_Serenity.md §2.8.
-        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0)
+        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0)
         {
             public readonly byte[] Rgba = rgba;
+            public readonly double Aspect = aspect;
             public readonly long Sequence = sequence;
             public readonly int Width = width, Height = height, RowRepeat = rowRepeat;
             public readonly long Version = version;
@@ -247,13 +248,14 @@ namespace EmuSen.Serenity
         }
 
         // Stores the frame and asks for a repaint; release, if given, is called once with the array when nothing here can read it again - see EmuSen_Serenity.md §2.8.
-        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0)
+        // aspect is the screen's width over height as the core reports it, 0 for none - see EmuSen_Serenity.md §2.9.
+        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0)
         {
             if (RenderFps > 0 && GraphicsSettings.SyncToDisplay) HoldRenderRate();
             lock (_offerLock)
             {
                 Offer? previous = _current;
-                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence);
+                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence, aspect);
                 if (previous is not null)
                 {
                     previous.Superseded = true;
@@ -318,6 +320,20 @@ namespace EmuSen.Serenity
                 if (offer.Superseded) ReleaseHeld();
             }
         }
+
+        private bool _squarePixels;
+
+        // The frame drawn at its own pixel count's shape, not the screen's the core reports; a filter that states a shape keeps it - see EmuSen_Serenity.md §2.9.
+        public bool SquarePixels
+        {
+            get => _squarePixels;
+            set { _squarePixels = value; InvalidateVisual(); }
+        }
+
+        // Fits a picture of a given shape inside the bounds, or the frame's own shape when the aspect is 0 - see EmuSen_Serenity.md §2.9.
+        public static (double X, double Y, double Width, double Height) ComputeLetterboxRect(
+            double sourceWidth, double sourceHeight, double aspect, double actualWidth, double actualHeight) =>
+            aspect > 0 ? ComputeLetterboxRect(aspect, 1, actualWidth, actualHeight) : ComputeLetterboxRect(sourceWidth, sourceHeight, actualWidth, actualHeight);
 
         // Fits the frame, centered, inside the control's real bounds - see EmuSen_Serenity.md §2.1.
         public static (double X, double Y, double Width, double Height) ComputeLetterboxRect(
@@ -530,12 +546,11 @@ namespace EmuSen.Serenity
                 else previous?.Dispose();
             }
 
-            private SKRect Destination(Offer source, double? aspect = null)
+            // A filter that states a shape gets it; otherwise the screen's the core reports, unless square pixels are asked for - see EmuSen_Serenity.md §2.9 and §3.9.
+            private SKRect Destination(Offer source, double? filterAspect = null)
             {
-                // A filter that states the picture's shape is given a rectangle of that shape - see EmuSen_Serenity.md §3.9.
-                double shapeWidth = source.Width, shapeHeight = source.Height * source.RowRepeat;
-                if (aspect is { } shape) shapeWidth = shapeHeight * shape;
-                var (x, y, w, h) = ComputeLetterboxRect(shapeWidth, shapeHeight, Bounds.Width, Bounds.Height);
+                double aspect = filterAspect ?? (_owner._squarePixels ? 0 : source.Aspect);
+                var (x, y, w, h) = ComputeLetterboxRect(source.Width, source.Height * source.RowRepeat, aspect, Bounds.Width, Bounds.Height);
                 return new SKRect((float)x, (float)y, (float)x + Math.Max(1, (int)Math.Round(w)), (float)y + Math.Max(1, (int)Math.Round(h)));
             }
 
@@ -552,7 +567,8 @@ namespace EmuSen.Serenity
                     ? new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None)
                     : new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None);
 
-                SKRect destRect = Destination(source);
+                // While a chosen filter is built the plain picture takes its shape, so nothing moves when it takes over.
+                SKRect destRect = Destination(source, _owner._activeFilter?.Aspect);
                 float x = destRect.Left, y = destRect.Top;
                 int upscaledW = (int)Math.Round(destRect.Width), upscaledH = (int)Math.Round(destRect.Height);
 

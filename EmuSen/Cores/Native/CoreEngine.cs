@@ -67,6 +67,11 @@ namespace EmuSen.Cores.Native
         public virtual int ScreenWidth => _shape.Width;
         public virtual int ScreenHeight => _shape.Height * (RepeatRows ? Math.Max(1, _shape.RowRepeat) : 1);
 
+        // The frame's own shape when the core gives one, else its machine's; 0 when it gives neither - see EmuSen_Serenity.md §2.9.
+        public virtual double DisplayAspect =>
+            _shape.AspectNum > 0 && _shape.AspectDen > 0 ? _shape.AspectNum / (double)_shape.AspectDen
+            : _machine?.Info is { AspectNum: > 0, AspectDen: > 0 } info ? info.AspectNum / (double)info.AspectDen : 0;
+
         public EngineFeatures Features => EngineFeatures.All;
 
         // What the last load's console logged, newest last, kept to the last few hundred lines.

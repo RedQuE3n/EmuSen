@@ -16,6 +16,7 @@ namespace EmuSen.Mistress
             public required int Width, Height, RowRepeat;
             public required Action<byte[]>? Release;
             public long Sequence;
+            public double Aspect;
             public int State;
         }
 
@@ -31,7 +32,7 @@ namespace EmuSen.Mistress
             public void Cut() => Volatile.Write(ref _pool, null);
         }
 
-        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence);
+        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect);
 
         private readonly Latest<Frame> _latest;
         private readonly PresentFrame _present;
@@ -55,9 +56,9 @@ namespace EmuSen.Mistress
         }
 
         // Any one thread at a time: the frame this replaces goes back now if the UI thread never took it.
-        public void Offer(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0)
+        public void Offer(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0)
         {
-            var frame = new Frame { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat, Release = release, Sequence = sequence };
+            var frame = new Frame { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat, Release = release, Sequence = sequence, Aspect = aspect };
             Drop(Interlocked.Exchange(ref _newest, frame));
             _latest.Offer(frame);
         }
@@ -81,7 +82,7 @@ namespace EmuSen.Mistress
         private void Present(Frame frame)
         {
             if (Interlocked.CompareExchange(ref frame.State, Presented, Waiting) != Waiting) return;
-            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Release, frame.Sequence);
+            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Release, frame.Sequence, frame.Aspect);
         }
     }
 }

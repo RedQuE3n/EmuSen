@@ -76,6 +76,13 @@ namespace EmuSen.Mistress.Views
         // The key the frontend's own row is stored under, beside the core's; no core declares it, so no core is handed it - see EmuSen_Settings_Reference.md §4.40.
         public const string ScreenFilterKey = "ScreenFilter";
 
+        // The frontend's other row: the screen's shape as the core reports it, or the frame's square pixels - see EmuSen_Settings_Reference.md §4.97.
+        public const string PictureShapeKey = "PictureShape", TvShape = "tv", SquarePixels = "square";
+
+        public static readonly CoreSetting PictureShape = new(PictureShapeKey, "Picture shape",
+            "The screen the console was made for, or each of the frame's pixels square.",
+            CoreSettingKind.Choice, TvShape, Choices: new[] { TvShape, SquarePixels }, ChoiceLabels: new[] { "TV shape", "Square pixels" });
+
         // A stored value naming a preset in the downloaded pack, by its path inside it - see EmuSen_Settings_Reference.md §4.41.
         public const string SlangPrefix = "slang:";
 
@@ -92,12 +99,18 @@ namespace EmuSen.Mistress.Views
             void ShowShader() => shaderName.Text = ShaderSettingsWindow.Describe(_config.Value(console, ScreenFilterKey));
             ShowShader();
             refreshers.Add(ShowShader);
+            // The picture's shape beside its shader, in the one row, so no tab grows by a row - see EmuSen_Settings_Reference.md §4.97.
+            (Control shapeControl, Action shapeRefresh) = BuildControl(console, PictureShape);
+            refreshers.Add(shapeRefresh);
             var shaderRow = new DockPanel { LastChildFill = true };
             shaders.Margin = new Avalonia.Thickness(0, 0, 12, 0);
+            shapeControl.Margin = new Avalonia.Thickness(12, 0, 0, 0);
             DockPanel.SetDock(shaders, Dock.Left);
+            DockPanel.SetDock(shapeControl, Dock.Right);
             shaderRow.Children.Add(shaders);
+            shaderRow.Children.Add(shapeControl);
             shaderRow.Children.Add(shaderName);
-            panel.Children.Add(new FieldRow { Label = "Shader", Hint = "Drawn over the picture as it is shown, never in the game's own frame. Chosen, searched and adjusted in the Shaders window.", Content = shaderRow });
+            panel.Children.Add(new FieldRow { Label = "Shader and shape", Hint = "The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square.", Content = shaderRow });
 
             // Before the core's own rows, since it decides which core reads them - see EmuSen_Settings_Reference.md §4.44.
             if (CoreCatalog.EngineFor(console) is { } engine)

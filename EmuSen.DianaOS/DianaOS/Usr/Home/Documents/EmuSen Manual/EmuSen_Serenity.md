@@ -41,6 +41,8 @@ Which real GPU API sits under Skia's `GRContext` is decided by Avalonia's platfo
 
 ### 2.1 Letterboxing, and the reference canvas that was deliberately not ported
 
+*Since 2026-10-07 the shape fitted is the console's screen's by default, not the frame's pixel count: §2.9.*
+
 `ComputeLetterboxRect(sourceWidth, sourceHeight, actualWidth, actualHeight)` scales the source as large as it fits inside the destination, centered. It is a `static` method taking four doubles and returning a tuple — no Avalonia or Skia types — specifically so `EmuSen.WiseMan` can test the arithmetic without a render pass.
 
 **It fits the frame into the control's real bounds, not into a fixed configured-resolution canvas.** The predecessor Raylib pipeline letterboxed into a `GraphicsSettings.WindowWidth`/`Height` reference canvas, and that was not an oversight to be faithfully ported — that canvas existed to give the old on-window debug overlay (VRAM sheet, CGRAM swatch, register text, all drawn at fixed pixel offsets around a small 2x-scaled game view) a fixed layout to share with the game screen. That overlay is gone, removed with the Raylib→Avalonia migration; `EmuSen_Settings_Reference.md` §3 records what replaced it and why it wasn't load-bearing.
@@ -215,6 +217,44 @@ Six mutants, each caught, are listed in `Mars_Native.md` §6.13.3.
 same lend twice across a re-lend (§16 of `EmuSen_Multicore.md` says why the lending cannot tell); an Avalonia that
 rendered an operation after disposing it, which the operation checks and answers by drawing nothing. That check is made in the same hold of the lock that takes the draw's read: made in a hold of its own, as first written, a `Dispose` on another thread between the two could have given the array back just before the copy. That window was closed on reading the code, and no test reaches it. The live
 compositor's order of rendering and disposing was not instrumented; the rules do not depend on it.
+
+### 2.9 The picture's shape is the screen's, not the frame's pixel count (2026-10-07)
+
+**What was wrong.** §2.1 fits the frame's own pixel count into the window, which draws every pixel square. A console's pixels were not square: its picture filled a 4:3 television whatever the frame's width and height. A PAL Nintendo 64 frame is 640 × 576, which square pixels draw 10:9, tall and narrow, where an NTSC frame of 640 × 480 is 4:3; so *Kirby 64* (Europe) did not fill the screen that *Mario Kart 64* (USA) did. A SNES frame of 256 × 224 was drawn 8:7, and its 512-wide hi-res frames twice as wide as its ordinary ones.
+
+**Decided 2026-10-07 by the tester: the picture is drawn in the television's shape by default, as the core reports it, so that PAL and NTSC games fill the same screen; square pixels stay as a setting per console, for pixel-exact scaling.**
+
+**Where the shape comes from.** One source, the core:
+
+- `ICore.DisplayAspect` is the width over height of the screen the console was made for, 0 when a core does not say. A core says it per frame, since a v1 core may.
+- **v1 engines** (`CoreEngine`): the frame's own `AspectNum`/`AspectDen` when the core fills them, else its machine information's, else 0. VenusRT and MoonRT fill the frame's with 4:3 and MercuryRT with 10:9; Nephrite gives 4:3 in its machine information only, which is what the fall-back is for.
+- **The C# cores and the MarsRT shim** return a constant: `DisplayShape.Television` (4:3) for Venus, Moon, Mars and MarsRT, `DisplayShape.GameBoy` (10:9, the LCD's 160 × 144 square pixels) for Mercury.
+- The constant is right in every mode because the mode changes the frame and not the screen: the SNES's 512-wide and interlaced frames, the Genesis's 256 and 320 widths, and the N64's VI widths and its PAL field all scan the same tube.
+- `DisplayShape` (Serenity) holds the two constants, and **the CRT filter's tube is the same one** (`CrtFilter.Filter.Aspect` is `DisplayShape.Television`), so the filter and the unfiltered picture cannot disagree about a television's shape.
+
+**How it reaches the screen.** `GameFrameControl.UpdateFrame` takes the shape with the frame (`aspect`, 0 for none), and each offered frame keeps its own. The rectangle is decided in one place, `DrawOp.Destination`:
+
+1. a filter that states a shape (§3.9; the CRT's tube) is drawn in it, whatever the setting, since a tube has no square-pixel form and its picture is placed inside it by the filter (`EmuSen_CRT.md` §11.1). There is no second correction: the filter is given the tube's rectangle and nothing has stretched the frame before it;
+2. otherwise the frame's reported shape, unless `GameFrameControl.SquarePixels` is set;
+3. otherwise, and for a core that reports none, the frame's pixel count, as §2.1.
+
+Simple effects (§3), RetroArch presets (§7.5) and the plain picture all take the same rectangle. While a chosen filter is still being built (§3.10) the plain picture is drawn in the filter's shape, so nothing moves when it takes over. `ComputeLetterboxRect` has a second form that takes the shape; with 0 it is the first.
+
+**Integer scaling** does not exist anywhere in the frontends: the picture is always fitted to the window, and `BilinearFiltering` (§5) decides how it is sampled. Square pixels gives the frame's own shape, not a whole-number scale.
+
+**Hotaru** still offers frames without a shape and so draws square pixels, as before.
+
+**Measured on real games** (2026-10-07, each run 600 frames headlessly on Mars and drawn through the control in a 1920 × 1080 window; the ROMs copied to scratch):
+
+| Game | Frame | TV shape | Square pixels |
+|---|---|---|---|
+| Kirby 64 - The Crystal Shards (Europe) | 640 × 576, 50.02 Hz | 1440 × 1080 at (240, 0) | 1200 × 1080 at (360, 0) |
+| Mario Kart 64 (Europe) | 640 × 576, 50.02 Hz | 1440 × 1080 at (240, 0) | 1200 × 1080 at (360, 0) |
+| Mario Kart 64 (USA) | 640 × 480, 59.96 Hz | 1440 × 1080 at (240, 0) | 1440 × 1080 at (240, 0) |
+
+All three now fill the same rectangle. **What a game draws inside it is the game's own**: the lit part of Kirby's frame is 1372 × 1006 of the 1440 × 1080, a margin a television's overscan hid, and Mario Kart 64 (Europe) lights 1408 × 890, with black above and below, because it draws its NTSC picture's lines inside a PAL field, as it did on a PAL television. Cropping such margins would be an overscan setting, which this is not.
+
+**Tests** (`DisplayAspectTests`, 8): the letterbox with a shape, for PAL, NTSC and SNES frame sizes, and with none; each C# core's shape and the CRT tube's; Nephrite's shape from its machine information, in both regions and after frames have run; 640 × 576, 640 × 480, 640 × 240 with its rows shown twice, and 320 × 240 all lighting exactly the 400 × 300 window; square pixels hashing identically to a frame offered with no shape, which is the picture of before; a filter's stated shape holding under either setting; and the Graphics Settings row (`EmuSen_Settings_Reference.md` §4.97). `FrameHandOffTests`: a frame's shape is presented with it. **Mutants** (8, each caught): the shape ignored; square pixels ignored; square pixels overriding a filter's shape; the shape not kept with the frame; no fall-back to the machine's; the hand-off dropping it; the setting not applied; the Game Boy given a television.
 
 ---
 

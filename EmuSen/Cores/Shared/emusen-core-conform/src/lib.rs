@@ -1,8 +1,9 @@
 //! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C15 on a library loaded through the core
 //! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
-//! checks and how.
+//! checks and how, and §28 the corpus form, which runs the checks that do not depend on the image once.
 
 pub mod api;
+pub mod corpus;
 pub mod digest;
 pub mod sidecar;
 
@@ -16,6 +17,7 @@ use emusen_native::core::{jsonw::Json, schema};
 use emusen_native::json::{self, Value};
 
 /// What the author supplies: the image, how many frames, settings text, files and the input.
+#[derive(Clone)]
 pub struct Options {
     /// The system pack declares the image format self-delimiting: it records its own length or a checksum the core
     /// must verify, so a malformed image must be refused (§12.1, C4).
@@ -117,6 +119,8 @@ pub struct ImageOutcome {
 
 pub struct Report {
     pub library: String,
+    /// The image's name, in a corpus run's report for one image; a single-image report carries none.
+    pub image: Option<String>,
     pub abi: String,
     pub id: String,
     pub version: String,
@@ -132,29 +136,39 @@ impl Report {
     pub fn json(&self) -> String {
         let mut j = Json::new();
         j.begin_object().field_str("kit", concat!("emusen-core-conform ", env!("CARGO_PKG_VERSION"))).field_str("library", &self.library);
-        j.field_str("abi", &self.abi).field_str("id", &self.id).field_str("version", &self.version).field_uint("frames", self.frames);
-        j.field_bool("passed", self.passed()).key("cases").begin_array();
-        for c in &self.cases {
-            j.begin_object().field_str("id", c.id).field_str("name", c.name).field_bool("passed", c.passed).field_strs("evidence", &c.evidence);
-            if !c.images.is_empty() {
-                j.key("images").begin_array();
-                for i in &c.images {
-                    j.begin_object().field_str("image", i.image).field_str("outcome", i.outcome.name());
-                    match &i.outcome {
-                        Outcome::Refused { status, text } => j.field_int("status", *status as i64).field_str("text", text),
-                        Outcome::AcceptedAndRan { frames } => j.field_uint("frames", *frames),
-                        Outcome::AcceptedAndStopped { frame, status } => j.field_uint("frame", *frame).field_int("status", *status as i64),
-                        Outcome::Hung { seconds } => j.field_uint("seconds", *seconds),
-                    };
-                    j.end_object();
-                }
-                j.end_array();
-            }
-            j.end_object();
+        if let Some(image) = &self.image {
+            j.field_str("image", image);
         }
-        j.end_array().end_object();
+        j.field_str("abi", &self.abi).field_str("id", &self.id).field_str("version", &self.version).field_uint("frames", self.frames);
+        j.field_bool("passed", self.passed()).key("cases");
+        cases_json(&mut j, &self.cases);
+        j.end_object();
         j.finish()
     }
+}
+
+/// The cases as a report lists them: each with its verdict and evidence, and C4's images with their outcomes.
+pub(crate) fn cases_json(j: &mut Json, cases: &[Case]) {
+    j.begin_array();
+    for c in cases {
+        j.begin_object().field_str("id", c.id).field_str("name", c.name).field_bool("passed", c.passed).field_strs("evidence", &c.evidence);
+        if !c.images.is_empty() {
+            j.key("images").begin_array();
+            for i in &c.images {
+                j.begin_object().field_str("image", i.image).field_str("outcome", i.outcome.name());
+                match &i.outcome {
+                    Outcome::Refused { status, text } => j.field_int("status", *status as i64).field_str("text", text),
+                    Outcome::AcceptedAndRan { frames } => j.field_uint("frames", *frames),
+                    Outcome::AcceptedAndStopped { frame, status } => j.field_uint("frame", *frame).field_int("status", *status as i64),
+                    Outcome::Hung { seconds } => j.field_uint("seconds", *seconds),
+                };
+                j.end_object();
+            }
+            j.end_array();
+        }
+        j.end_object();
+    }
+    j.end_array();
 }
 
 /// A case's findings: a failure is a line, a note is a line that does not fail it.
@@ -192,6 +206,19 @@ struct Trace {
     digests: Digests,
     problems: Vec<String>,
     state_size_events: Vec<u64>,
+    /// At the marked frame: the digests up to it and the state saved there; `since` is the digests from it on.
+    mark: Option<(Digests, Result<Vec<u8>, i64>)>,
+    since: Digests,
+}
+
+/// C6's run as C8's first: both halves' digests, the state between them, the end state and machine info.
+struct FirstRun {
+    frames: u64,
+    first: Digests,
+    second: Digests,
+    middle: Vec<u8>,
+    end: u64,
+    info: Option<String>,
 }
 
 struct Session<'a> {
@@ -201,6 +228,8 @@ struct Session<'a> {
     statuses: BTreeSet<i32>,
     /// Frames advance through `debug_run_frame` with the tables `arm` set, for C15.
     observed: bool,
+    /// C6's run, kept for the C8 that follows it.
+    first: Option<FirstRun>,
 }
 
 impl<'a> Session<'a> {
@@ -216,6 +245,11 @@ impl<'a> Session<'a> {
 
     /// Frames `from` to `from + count` of the script on `m`; rendering skipped on odd frames when `skip_odd`.
     fn play(&mut self, m: &Machine<'_>, from: u64, count: u64, skip_odd: bool) -> Result<Trace, String> {
+        self.play_marked(m, from, count, skip_odd, None)
+    }
+
+    /// `play`, and before frame `mark` the state saved and the buttons stated again, as a run split there would do.
+    fn play_marked(&mut self, m: &Machine<'_>, from: u64, count: u64, skip_odd: bool, mark: Option<u64>) -> Result<Trace, String> {
         let mut t = Trace::default();
         let mut masks = [0u32; 8];
         for &(f, port, set, clear) in &self.script.steps {
@@ -232,6 +266,13 @@ impl<'a> Session<'a> {
         let mut rate_events: Vec<(u64, i32)> = Vec::new();
         let mut skipping = false;
         for f in from..from + count {
+            if mark == Some(f) {
+                t.mark = Some((t.digests, m.save(0)));
+                t.since = Digests::default();
+                for (port, &mask) in masks.iter().enumerate() {
+                    m.set_buttons(port as u32, mask, u32::MAX);
+                }
+            }
             for &(sf, port, set, clear) in self.script.steps.iter().filter(|s| s.0 == f) {
                 if (port as usize) < masks.len() {
                     let before = masks[port as usize];
@@ -267,7 +308,9 @@ impl<'a> Session<'a> {
                     Err(code) => t.problems.push(format!("frame {f}: frame_info refused with {code}")),
                     Ok(fi) => {
                         let picture = m.frame();
-                        t.digests.frame(&picture);
+                        let hash = digest::frame_hash(&picture);
+                        t.digests.frame_hashed(hash);
+                        t.since.frame_hashed(hash);
                         frame_checks(f, &fi, picture.len(), &mut t.problems);
                         let now = (fi.width, fi.height);
                         if shape.is_some_and(|s| s != now) && !events.iter().any(|e| e.kind == event::GEOMETRY && (e.a, e.b) == (now.0 as i64, now.1 as i64)) {
@@ -279,6 +322,7 @@ impl<'a> Session<'a> {
             }
             for (samples, r) in m.drain_audio() {
                 t.digests.sound(&samples);
+                t.since.sound(&samples);
                 if rate.is_some_and(|old| old != r) {
                     pending.push((f, r));
                 }
@@ -321,22 +365,19 @@ fn strs(v: Option<&Value>) -> Vec<String> {
     v.and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(|x| x.as_str().map(str::to_owned)).collect()
 }
 
-/// Runs every case on the library at `path`.
-pub fn run(path: &Path, opts: &Options) -> Report {
-    let mut report = Report { library: path.display().to_string(), abi: String::new(), id: String::new(), version: String::new(), frames: opts.frames, cases: Vec::new() };
-    let lib = match Lib::open(path) {
-        Ok(lib) => lib,
-        Err(why) => {
-            report.cases.push(Case { id: "C1", name: "loading", passed: false, evidence: vec![why], images: Vec::new() });
-            return report;
-        }
-    };
-    let info_text = lib.info().unwrap_or_default();
-    let info = parse(&info_text);
-    report.abi = info.as_ref().and_then(|i| i.get("abi")).and_then(Value::as_str).unwrap_or("").to_owned();
-    report.id = info.as_ref().and_then(|i| i.get("id")).and_then(Value::as_str).unwrap_or("").to_owned();
-    report.version = info.as_ref().and_then(|i| i.get("version")).and_then(Value::as_str).unwrap_or("").to_owned();
-    let bits: Vec<u32> = info
+/// A report's heading for the library at `path`, its cases still to come.
+pub(crate) fn heading(path: &Path, lib: Option<&Lib>, frames: u64) -> Report {
+    let info = lib.and_then(|l| l.info().ok()).and_then(|t| parse(&t));
+    let field = |k: &str| info.as_ref().and_then(|i| i.get(k)).and_then(Value::as_str).unwrap_or("").to_owned();
+    Report { library: path.display().to_string(), image: None, abi: field("abi"), id: field("id"), version: field("version"), frames, cases: Vec::new() }
+}
+
+/// A session on `lib` with the author's input, or port 0's buttons of the info's first controller in turn.
+fn session<'a>(lib: &'a Lib, opts: &'a Options) -> Session<'a> {
+    let bits: Vec<u32> = lib
+        .info()
+        .ok()
+        .and_then(|t| parse(&t))
         .as_ref()
         .and_then(|i| i.get("systems")?.as_array()?.first()?.get("controllers")?.as_array()?.first()?.get("buttons")?.as_array().map(|b| b.to_vec()))
         .unwrap_or_default()
@@ -344,11 +385,26 @@ pub fn run(path: &Path, opts: &Options) -> Report {
         .filter_map(|b| b.get("bit").and_then(Value::as_i64).map(|v| v as u32))
         .collect();
     let script = opts.script.clone().unwrap_or_else(|| Script::default_for(&bits));
-    let mut s = Session { lib: &lib, opts, script, statuses: BTreeSet::new(), observed: false };
+    Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None }
+}
+
+/// Runs every case on the library at `path`.
+pub fn run(path: &Path, opts: &Options) -> Report {
+    let lib = match Lib::open(path) {
+        Ok(lib) => lib,
+        Err(why) => {
+            let mut report = heading(path, None, opts.frames);
+            report.cases.push(Case { id: "C1", name: "loading", passed: false, evidence: vec![why], images: Vec::new() });
+            return report;
+        }
+    };
+    let mut report = heading(path, Some(&lib), opts.frames);
+    let info_text = lib.info().unwrap_or_default();
+    let mut s = session(&lib, opts);
     report.cases.push(c1(&lib));
     report.cases.push(c2(&lib, &info_text));
     report.cases.push(c3(&lib));
-    report.cases.push(c4(&mut s, path));
+    report.cases.push(c4(&mut s, path, C4::ALL));
     report.cases.push(c5(&mut s));
     report.cases.push(c6(&mut s));
     report.cases.push(c7(&mut s));
@@ -361,6 +417,53 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c14(&mut s));
     report.cases.push(c15(&mut s));
     report
+}
+
+/// The cases whose answer does not depend on the image, run on one image of the author's: C1-C3, C4's empty and
+/// garbage images and its defaults, C5, C9, C10, C12, C13 and C15. C11 follows the images, since it needs every
+/// status the run returned (`core_c11`). With the library's own report heading, and the statuses returned so far.
+pub(crate) fn core_cases(path: &Path, opts: &Options) -> (Report, BTreeSet<i32>) {
+    let lib = match Lib::open(path) {
+        Ok(lib) => lib,
+        Err(why) => {
+            let mut report = heading(path, None, opts.frames);
+            report.cases.push(Case { id: "C1", name: "loading", passed: false, evidence: vec![why], images: Vec::new() });
+            return (report, BTreeSet::new());
+        }
+    };
+    let mut report = heading(path, Some(&lib), opts.frames);
+    let info_text = lib.info().unwrap_or_default();
+    let mut s = session(&lib, opts);
+    report.cases.push(c1(&lib));
+    report.cases.push(c2(&lib, &info_text));
+    report.cases.push(c3(&lib));
+    report.cases.push(c4(&mut s, path, C4::CORE));
+    report.cases.push(c5(&mut s));
+    report.cases.push(c9(&mut s));
+    report.cases.push(c10(&mut s));
+    report.cases.push(c12(&mut s));
+    report.cases.push(c13(&mut s));
+    report.cases.push(c15(&mut s));
+    (report, s.statuses)
+}
+
+/// C11 on the reference image, with every status the per-core and per-image cases returned.
+pub(crate) fn core_c11(path: &Path, opts: &Options, statuses: BTreeSet<i32>) -> Case {
+    match Lib::open(path) {
+        Ok(lib) => {
+            let mut s = session(&lib, opts);
+            s.statuses = statuses;
+            c11(&mut s)
+        }
+        Err(why) => Case { id: "C11", name: "error paths", passed: false, evidence: vec![why], images: Vec::new() },
+    }
+}
+
+/// The cases that depend on the image: C4's half image and firmware rule, C6, C7, C8 (its first run C6's) and C14.
+pub(crate) fn image_cases(lib: &Lib, path: &Path, opts: &Options) -> (Vec<Case>, BTreeSet<i32>) {
+    let mut s = session(lib, opts);
+    let cases = vec![c4(&mut s, path, C4::IMAGE), c6(&mut s), c7(&mut s), c8(&mut s), c14(&mut s)];
+    (cases, s.statuses)
 }
 
 /// The `emusen_core_` symbols the library defines, where `nm` can list them.
@@ -543,9 +646,25 @@ fn firmware_optional(s: &mut Session<'_>, c: &mut Check) {
     }
 }
 
+/// Which of C4's parts run: the empty and garbage images and the defaults do not depend on the author's image, the
+/// half image and the firmware rule do.
+#[derive(Clone, Copy)]
+struct C4 {
+    empty_and_garbage: bool,
+    half: bool,
+    firmware: bool,
+    defaults: bool,
+}
+
+impl C4 {
+    const ALL: C4 = C4 { empty_and_garbage: true, half: true, firmware: true, defaults: true };
+    const CORE: C4 = C4 { empty_and_garbage: true, half: false, firmware: false, defaults: true };
+    const IMAGE: C4 = C4 { empty_and_garbage: false, half: true, firmware: true, defaults: false };
+}
+
 /// C4 as decided 2026-10-03: a malformed image never harms the core; it is refused with words, or, unless the system's
 /// format is self-delimiting, it loads and runs the kit's frames without hanging.
-fn c4(s: &mut Session<'_>, path: &Path) -> Case {
+fn c4(s: &mut Session<'_>, path: &Path, parts: C4) -> Case {
     let mut c = Check::new();
     let mut images = Vec::new();
     let mut garbage = vec![0u8; 4096];
@@ -558,7 +677,8 @@ fn c4(s: &mut Session<'_>, path: &Path) -> Case {
     }
     let half = s.opts.image[..s.opts.image.len() / 2].to_vec();
     let frames = s.opts.frames.min(300);
-    for (what, image) in [("an empty image", Vec::new()), ("a garbage image", garbage), ("the image truncated to half", half)] {
+    let malformed = [(parts.empty_and_garbage, "an empty image", Vec::new()), (parts.empty_and_garbage, "a garbage image", garbage), (parts.half, "the image truncated to half", half)];
+    for (_, what, image) in malformed.into_iter().filter(|m| m.0) {
         let outcome = match s.lib.create(&image, "", &s.opts.files, 1) {
             Err((status, text)) => Outcome::Refused { status, text },
             Ok(m) => {
@@ -594,17 +714,21 @@ fn c4(s: &mut Session<'_>, path: &Path) -> Case {
         }
         images.push(ImageOutcome { image: what, outcome });
     }
-    firmware_optional(s, &mut c);
-    let stated = defaults(s.lib);
-    let frames = s.opts.frames.min(300);
-    let run = |s: &mut Session<'_>, settings: &str| -> Result<(Digests, u64), String> {
-        let m = s.machine(settings)?;
-        let t = s.play(&m, 0, frames, false)?;
-        Ok((t.digests, s.state_digest(&m)?))
-    };
-    match (run(s, ""), run(s, &stated)) {
-        (Ok(a), Ok(b)) => c.that(a == b, || format!("no settings and every default stated differ over {frames} frames: {a:?} against {b:?}")),
-        (Err(e), _) | (_, Err(e)) => c.that(false, || e),
+    if parts.firmware {
+        firmware_optional(s, &mut c);
+    }
+    if parts.defaults {
+        let stated = defaults(s.lib);
+        let frames = s.opts.frames.min(300);
+        let run = |s: &mut Session<'_>, settings: &str| -> Result<(Digests, u64), String> {
+            let m = s.machine(settings)?;
+            let t = s.play(&m, 0, frames, false)?;
+            Ok((t.digests, s.state_digest(&m)?))
+        };
+        match (run(s, ""), run(s, &stated)) {
+            (Ok(a), Ok(b)) => c.that(a == b, || format!("no settings and every default stated differ over {frames} frames: {a:?} against {b:?}")),
+            (Err(e), _) | (_, Err(e)) => c.that(false, || e),
+        }
     }
     Case { images, ..c.done("C4", "create and refusal") }
 }
@@ -677,7 +801,17 @@ fn c5(s: &mut Session<'_>) -> Case {
 fn c6(s: &mut Session<'_>) -> Case {
     let mut c = Check::new();
     let frames = s.opts.frames;
-    match s.machine(&s.opts.settings.clone()).and_then(|m| s.play(&m, 0, frames, false)) {
+    // The run is also C8's first, so it saves its state at C8's middle; a run of one frame has none.
+    let mark = (frames >= 2).then_some(frames / 2);
+    s.first = None;
+    let run = s.machine(&s.opts.settings.clone()).and_then(|m| {
+        let t = s.play_marked(&m, 0, frames, false, mark)?;
+        if let (Some((first, Ok(middle))), Ok(end)) = (t.mark.clone(), m.save(0)) {
+            s.first = Some(FirstRun { frames, first, second: t.since, middle, end: digest::frame_hash(&end), info: m.machine_info().ok() });
+        }
+        Ok(t)
+    });
+    match run {
         Ok(t) => {
             for p in t.problems {
                 c.that(false, || p);
@@ -746,11 +880,17 @@ fn c8(s: &mut Session<'_>) -> Case {
     let half = n / 2;
     let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
         let settings = s.opts.settings.clone();
-        let a = s.machine(&settings)?;
-        let a1 = s.play(&a, 0, half, false)?.digests;
-        let mid = a.save(0).map_err(|e| format!("state_save failed with {e}"))?;
-        let a2 = s.play(&a, half, n - half, false)?.digests;
-        let end = s.state_digest(&a)?;
+        // The first machine's run is C6's where C6 has just made it over the same frames (§28).
+        let (a1, mid, a2, end, info) = match s.first.take().filter(|f| f.frames == n) {
+            Some(f) => (f.first, f.middle, f.second, f.end, f.info),
+            None => {
+                let a = s.machine(&settings)?;
+                let a1 = s.play(&a, 0, half, false)?.digests;
+                let mid = a.save(0).map_err(|e| format!("state_save failed with {e}"))?;
+                let a2 = s.play(&a, half, n - half, false)?.digests;
+                (a1, mid, a2, s.state_digest(&a)?, a.machine_info().ok())
+            }
+        };
         let b = s.machine(&settings)?;
         let b1 = s.play(&b, 0, half, false)?.digests;
         let b2 = s.play(&b, half, n - half, false)?.digests;
@@ -759,7 +899,7 @@ fn c8(s: &mut Session<'_>) -> Case {
         c.that(d.load(&mid) == 0, || "the state at the middle does not load".to_owned());
         let d2 = s.play(&d, half, n - half, false)?.digests;
         c.that(d2 == a2 && s.state_digest(&d)? == end, || format!("across a save and load at frame {half} the run differs: {d2:?} against {a2:?}"));
-        let neutral = a.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("skip_rendering_state_neutral").cloned()) == Some(Value::Bool(true));
+        let neutral = info.and_then(|t| parse(&t)).and_then(|v| v.get("skip_rendering_state_neutral").cloned()) == Some(Value::Bool(true));
         if neutral {
             let e = s.machine(&settings)?;
             s.play(&e, 0, n, true)?;
@@ -796,7 +936,7 @@ fn c10(s: &mut Session<'_>) -> Case {
             .map(|i| {
                 let (settings, script) = (settings.clone(), script.clone());
                 scope.spawn(move || -> Result<(Digests, u64), String> {
-                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new(), observed: false };
+                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None };
                     let m = own.machine(&settings)?;
                     let t = own.play(&m, 0, n, false)?;
                     let d = own.state_digest(&m)?;
@@ -1217,4 +1357,57 @@ fn c15(s: &mut Session<'_>) -> Case {
     }
     s.observed = false;
     c.done("C15", "debug")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The examples cargo built beside this test.
+    fn library(name: &str) -> std::path::PathBuf {
+        let profile = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().to_path_buf();
+        let file = if cfg!(windows) { format!("{name}.dll") } else if cfg!(target_os = "macos") { format!("lib{name}.dylib") } else { format!("lib{name}.so") };
+        profile.join("examples").join(file)
+    }
+
+    fn options(frames: u64) -> Options {
+        let mut image = b"V1TC".to_vec();
+        image.extend_from_slice(&5u16.to_le_bytes());
+        image.extend_from_slice(&[1, 2, 3, 0x20, 0x41]);
+        Options { self_delimiting: true, image, frames, settings: String::new(), files: Vec::new(), script: None }
+    }
+
+    // C8 with C6's run for its first machine says what C8 says with a machine of its own, to the digest on a core that passes and by its findings on one that fails; EmuSen_CoreAPI.md §28.3.
+    #[test]
+    fn c8_says_the_same_with_c6s_run_as_with_its_own() {
+        for (name, frames) in [("kit_test_core", 120), ("kit_test_core", 121), ("kit_test_core", 2), ("kit_plain_core", 120), ("kit_faulty_core", 120)] {
+            let lib = Lib::open(&library(name)).unwrap();
+            let opts = options(frames);
+            let mut s = session(&lib, &opts);
+            let six = c6(&mut s);
+            assert!(s.first.is_some(), "{name}: C6 left no run for C8");
+            let reused = c8(&mut s);
+            assert!(s.first.is_none());
+            let own = c8(&mut s);
+            // The faulty core's machines each differ from the last, so its state's digest is no two runs' alike; its verdict and findings are.
+            match name {
+                "kit_faulty_core" => assert_eq!((reused.passed, reused.evidence.len()), (own.passed, own.evidence.len()), "{name}: {:?} against {:?}", reused.evidence, own.evidence),
+                _ => assert_eq!((reused.passed, &reused.evidence), (own.passed, &own.evidence), "{name} over {frames} frames"),
+            }
+            // C6's own words are those of a run with no state saved in the middle.
+            let whole = s.machine("").and_then(|m| s.play(&m, 0, frames, false)).unwrap().digests;
+            assert!(six.evidence.iter().any(|e| e.contains(&format!("frames digest {:016X}, audio digest {:016X}", whole.frames, whole.audio))), "{name}: {:?}", six.evidence);
+        }
+    }
+
+    // A run of one frame has no middle for C8, so C6 leaves nothing and C8 runs its own two frames as before.
+    #[test]
+    fn c6_of_one_frame_leaves_c8_its_own_run() {
+        let lib = Lib::open(&library("kit_test_core")).unwrap();
+        let opts = options(1);
+        let mut s = session(&lib, &opts);
+        assert!(c6(&mut s).passed);
+        assert!(s.first.is_none());
+        assert!(c8(&mut s).passed);
+    }
 }

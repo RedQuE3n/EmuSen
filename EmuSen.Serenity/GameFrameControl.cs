@@ -73,6 +73,25 @@ namespace EmuSen.Serenity
             }
         }
 
+        private string? _filterConsole;
+
+        // The console whose defaults a filter's parameters start from; null is the parameters' own - see EmuSen_Serenity.md §3.9.
+        public string? FilterConsole
+        {
+            get { lock (_cacheLock) return _filterConsole; }
+            set
+            {
+                lock (_cacheLock)
+                {
+                    if (string.Equals(_filterConsole, value, StringComparison.Ordinal)) return;
+                    _filterConsole = value;
+                    _chain?.Dispose();
+                    _chain = null;
+                }
+                InvalidateVisual();
+            }
+        }
+
         // A RetroArch preset, drawn instead of both when it is built; until then, or if it cannot be, the picture is drawn plain - see EmuSen_Serenity.md §7.5.
         private Slang.SlangRunner? _slang;
 
@@ -423,7 +442,7 @@ namespace EmuSen.Serenity
                     }
                     try
                     {
-                        if (_owner._activeFilter is { } filter && _owner._chain is null) { _owner._chain = new FilterChain(filter); _owner._chain.SetParameters(_owner._shaderParameters); }
+                        if (_owner._activeFilter is { } filter && _owner._chain is null) { _owner._chain = new FilterChain(filter, _owner._filterConsole); _owner._chain.SetParameters(_owner._shaderParameters); }
 
                         // A preset that will draw reads the array itself, so no image of the source is made, and one made earlier is now stale - see EmuSen_Serenity.md §9.3.
                         bool presetOnly = _owner._slang is { Ready: true } && _owner._chain is null;
@@ -466,9 +485,12 @@ namespace EmuSen.Serenity
                 else previous?.Dispose();
             }
 
-            private SKRect Destination(Offer source)
+            private SKRect Destination(Offer source, double? aspect = null)
             {
-                var (x, y, w, h) = ComputeLetterboxRect(source.Width, source.Height * source.RowRepeat, Bounds.Width, Bounds.Height);
+                // A filter that states the picture's shape is given a rectangle of that shape - see EmuSen_Serenity.md §3.9.
+                double shapeWidth = source.Width, shapeHeight = source.Height * source.RowRepeat;
+                if (aspect is { } shape) (shapeWidth, shapeHeight) = (shapeHeight * shape, shapeHeight);
+                var (x, y, w, h) = ComputeLetterboxRect(shapeWidth, shapeHeight, Bounds.Width, Bounds.Height);
                 return new SKRect((float)x, (float)y, (float)x + Math.Max(1, (int)Math.Round(w)), (float)y + Math.Max(1, (int)Math.Round(h)));
             }
 
@@ -476,7 +498,7 @@ namespace EmuSen.Serenity
                 slang.Draw(canvas, source.Rgba, source.Width, source.Height, newFrame, Destination(source));
 
             private void DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage, Offer source) =>
-                chain.Draw(canvas, context, sourceImage, source.RowRepeat, Destination(source));
+                chain.Draw(canvas, context, sourceImage, source.RowRepeat, Destination(source, chain.Filter.Aspect));
 
             private void Draw(SKCanvas canvas, SKImage sourceImage, Offer source)
             {

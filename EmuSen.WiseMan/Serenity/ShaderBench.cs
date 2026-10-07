@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.Serenity
     // What one shaded frame costs on the render thread, stage by stage, on a real GL context and the slang device - see EmuSen_Serenity.md §8.1.
     public static unsafe class ShaderBench
     {
-        public sealed record Case(string Kind, string Shader, int SourceWidth, int SourceHeight, int RowRepeat, int WindowWidth, int WindowHeight, int Frames, int Warmup, double Pace, string Cache = "", int Builders = 0);
+        public sealed record Case(string Kind, string Shader, int SourceWidth, int SourceHeight, int RowRepeat, int WindowWidth, int WindowHeight, int Frames, int Warmup, double Pace, string Cache = "", int Builders = 0, string Console = "", string Set = "");
 
         // A new frame every this many draws; the draws between redraw the same frame, as a paused or repeating game gives.
         public static int Every = Math.Max(1, int.Parse(Environment.GetEnvironmentVariable("EMUSEN_BENCH_EVERY") ?? "1"));
@@ -32,7 +32,7 @@ namespace EmuSen.WiseMan.Serenity
             return new Case(d.GetValueOrDefault("kind", "none"), d.GetValueOrDefault("shader", ""), sw, sh, int.Parse(d.GetValueOrDefault("repeat", "1")),
                 ww, wh, int.Parse(d.GetValueOrDefault("frames", "600")), int.Parse(d.GetValueOrDefault("warmup", "60")),
                 double.Parse(d.GetValueOrDefault("pace", "60"), CultureInfo.InvariantCulture),
-                d.GetValueOrDefault("cache", ""), int.Parse(d.GetValueOrDefault("builders", "0")));
+                d.GetValueOrDefault("cache", ""), int.Parse(d.GetValueOrDefault("builders", "0")), d.GetValueOrDefault("console", ""), d.GetValueOrDefault("set", ""));
         }
 
         // A preset's build, whole and in parts, after a small preset has warmed the compiler and the device.
@@ -96,7 +96,12 @@ namespace EmuSen.WiseMan.Serenity
             switch (c.Kind)
             {
                 case "slang": control.ActiveSlangPreset = c.Shader; break;
-                case "filter": control.ActiveFilter = ScreenFilters.Find(c.Shader.Replace('_', ' ')).Filter ?? throw new ArgumentException($"no filter {c.Shader}"); break;
+                case "filter":
+                    // console= the console whose defaults apply; set= id:value pairs joined by commas, the player's values.
+                    if (c.Console != "") control.FilterConsole = c.Console;
+                    if (c.Set != "") control.ShaderParameters = c.Set.Split(',').Select(p => p.Split(':')).ToDictionary(p => p[0], p => float.Parse(p[1], CultureInfo.InvariantCulture));
+                    control.ActiveFilter = ScreenFilters.Find(c.Shader.Replace('_', ' ')).Filter ?? throw new ArgumentException($"no filter {c.Shader}");
+                    break;
                 case "effect": control.ActiveEffect = ScreenFilters.Find(c.Shader.Replace('_', ' ')).Effect; break;
                 case "none": break;
                 default: throw new ArgumentException(c.Kind);
@@ -187,6 +192,28 @@ namespace EmuSen.WiseMan.Serenity
             line.Append(CultureInfo.InvariantCulture, $" alloc.per.frame={bytes / (double)rows.Count:F0} gc={g0}/{g1}/{g2} gc.pause.ms={pauseMs:F1} pictures={string.Join(',', pictures)}");
             log($"allocated {bytes / (double)rows.Count / 1024:F1} KiB a frame; collections gen0/1/2 {g0}/{g1}/{g2}; pauses {pauseMs:F1} ms over {rows.Count} frames");
             return line.ToString();
+        }
+
+        // What a control draws on a GL device after each frame is shown once, as RGBA rows; a null frame is a redraw - see EmuSen_Serenity.md §3.9.
+        public static byte[] Picture(GameFrameControl control, IReadOnlyList<byte[]?> frames, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, string? device)
+        {
+            using var gl = GlContext.Create(device);
+            using GRGlInterface glInterface = GRGlInterface.CreateOpenGl(name => GlContext.GetProc(name)) ?? throw new InvalidOperationException("no GL interface");
+            using GRContext context = GRContext.CreateGl(glInterface) ?? throw new InvalidOperationException("no GRContext");
+            using SKSurface target = SKSurface.Create(context, true, new SKImageInfo(windowWidth, windowHeight, SKColorType.Rgba8888, SKAlphaType.Premul))
+                ?? throw new InvalidOperationException("no GPU surface");
+            var pixels = new byte[windowWidth * windowHeight * 4];
+            foreach (byte[]? frame in frames)
+            {
+                if (frame is not null) control.UpdateFrame(frame, sourceWidth, sourceHeight, rowRepeat);
+                target.Canvas.Clear(SKColors.Black);
+                using (var op = control.CaptureDrawOp(new Size(windowWidth, windowHeight)) ?? throw new InvalidOperationException("no draw operation")) op.RenderTo(target.Canvas, context);
+                context.Flush();
+                gl.Finish();
+            }
+            fixed (byte* p = pixels) target.ReadPixels(new SKImageInfo(windowWidth, windowHeight, SKColorType.Rgba8888, SKAlphaType.Premul), (nint)p, windowWidth * 4, 0, 0);
+            control.ActiveFilter = null;
+            return pixels;
         }
 
         private static string GameFrameControlStatistics(GameFrameControl control)

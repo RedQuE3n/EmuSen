@@ -8,7 +8,11 @@ using System.Text.RegularExpressions;
 namespace EmuSen.Serenity.Slang
 {
     // One #pragma parameter: its id, what it is called, its default and its range - see EmuSen_Serenity.md §7.2.
-    public sealed record SlangParameter(string Id, string Description, float Initial, float Minimum, float Maximum, float Step);
+    public sealed record SlangParameter(string Id, string Description, float Initial, float Minimum, float Maximum, float Step)
+    {
+        // Names for the values Minimum, Minimum + Step and so on, when the parameter is one of a few choices - see EmuSen_Serenity.md §3.9.
+        public IReadOnlyList<string>? Choices { get; init; }
+    }
 
     // A .slang file with its includes in place, split into its two stages, and what its pragmas declared - see EmuSen_Serenity.md §7.2.
     public sealed class SlangSource

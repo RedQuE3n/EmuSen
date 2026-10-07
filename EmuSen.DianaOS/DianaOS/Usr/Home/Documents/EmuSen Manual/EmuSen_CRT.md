@@ -3,12 +3,12 @@
 A design (2026-10-07), not yet built. The request was for a very accurate CRT filter, offered in tiers if it turns
 out to be a performance hog: the lowest tier for performance, the highest for accuracy. This document is step 1 of
 four: the survey of existing shaders, the physical literature with a source for every number, the choice of
-delivery path, the model, the tiers with their predicted costs, the player's settings, and the questions that need
-a decision before any shader is written. Steps 2 to 4 (the Accurate tier, the two reductions, the settings window)
+delivery path, the model, the tiers with their predicted costs, the player's settings, and the questions that needed
+a decision before any shader was written, with their answers. Steps 2 to 4 (the Accurate tier, the two reductions, the settings window)
 will add their sections here as they are built.
 
 **Reading order.** §1 for what is modelled. §4 for where it runs and what `FilterChain` must learn first. §6 for
-the tiers. §9 for the decisions wanted. §2 and §3 are reference: who already does what, and what the hardware
+the tiers. §9 for the decisions. §2 and §3 are reference: who already does what, and what the hardware
 measured.
 
 **Provenance marks**, used throughout §3: **[P]** the figure was read in the primary document (a standard, a
@@ -24,11 +24,11 @@ located and no number is used.
 | Step | What | State |
 |---|---|---|
 | 1 | Research and design (this document) | written 2026-10-07 |
-| 2 | The Accurate tier, its render tests, its cost on the RX 6800 at 1080p and 4K | not started |
+| 2 | The Accurate tier, its render tests, its cost on the RX 6800 at 1080p and 4K | `FilterChain`'s six extensions built 2026-10-07 (`EmuSen_Serenity.md` §3.9); the tier itself not started |
 | 3 | Balanced and Performance as reductions, each measured against Accurate | not started |
 | 4 | Graphics settings per console, the settings reference, the fit audit | not started |
 
-Nothing in `EmuSen.Serenity` has changed. The existing **CRT (Lottes)** (`EmuSen_Serenity.md` §3.4) and **Simple
+The existing **CRT (Lottes)** (`EmuSen_Serenity.md` §3.4) and **Simple
 CRT** stay as they are.
 
 ---
@@ -451,6 +451,8 @@ differ for reasons that are not the reduction.
 
 ### 4.2 What `FilterChain` must learn first
 
+*Built 2026-10-07; `EmuSen_Serenity.md` §3.9 is the record, with its tests, its mutants and the evidence that no existing filter draws differently. Two things came out otherwise than written below: there is no fall back to 8 bits (a refused float surface is made in memory instead), and a rebuilt filter is compiled on the render thread at its next draw, its cost to be measured with the first real filter.*
+
 Six extensions, all to `EmuSen.Serenity/Shaders/`, none to SkSL. Each is small; they are listed because step 2
 begins with them and their tests.
 
@@ -479,7 +481,7 @@ begins with them and their tests.
    timing, so a filter may state the aspect it wants the rectangle to have. Every other filter, and no filter,
    keep today's behaviour.
 
-Extension 6 changes what the picture looks like, not only how it is filtered, and is §9's question 2.
+Extension 6 changes what the picture looks like, not only how it is filtered, and was §9's question 2.
 
 ---
 
@@ -808,35 +810,33 @@ cores. The unlicensed ones may be run and never read into the code.
 
 ---
 
-## 9. Decisions wanted
+## 9. Decisions
+
+Each was put as a question on 2026-10-07 with a recommendation; the answers are recorded in place.
 
 1. **The delivery path** (§4.1): the built-in SkSL chain for every tier, with §4.2's six extensions to
-   `FilterChain`. Recommended.
-2. **The picture's shape** (§4.2, extension 6): under the CRT filter the picture becomes a 4:3 tube with the
-   console's own pixel aspect, where today every picture is shown with square pixels. And overscan: show the
-   whole active picture (recommended as the default, since nothing is hidden) or crop as a television did
-   (about 7% in a PVM's normal scan; consumer sets unmeasured).
-3. **One entry or three** in the filter list: one **CRT** with a Quality setting (recommended, so a player's
-   other settings carry across tiers), or **CRT (Performance)**, **CRT (Balanced)** and **CRT (Accurate)**.
-4. **Defaults**: Composite for the NES, SNES, Genesis and N64, as §7. And whether **CRT** becomes any console's
-   default filter, or the default stays None.
-5. **The NES's signal.** An accurate NES composite needs the PPU's colour index and emphasis bits per pixel
-   from Moon and MoonRT, a small addition to what a core hands the presenter. Recommended: build steps 2 and 3
-   from RGB, and take the raw path as its own step afterwards with its own design note.
-6. **Region.** The default colour standard (North America recommended: SMPTE C, D65, set-up, US decoder axes),
-   whether a Japanese white is shown as it was or adapted to the display's, and whether the frontend should
-   pass a game's region so the default follows it.
-7. **Persistence at its measured strength** (§3.5), given that it is one monitor's measurement with a
-   low-confidence tail. Recommended: yes, with the slider.
-8. **Interlace.** A 480i picture drawn field by field, flickering as it did, or woven. Recommended: woven by
-   default, fields as a setting, decided properly when step 2 reaches it.
-9. **Measurements on other machines.** Step 3's costs on the handheld and the weak laptop need a bench run on
-   each; C1 to C3's right-hand columns have nothing else under them. To be asked for when the tiers exist.
-10. **Later stages**, recorded and not proposed for now: the sub-frame flash (§5.9), an HDR presentation path
-    (§4.1), PAL, RF, raster bloom.
-11. **The datasheet tables** (§3.1's decoder axes): the Sony PDFs could not be fetched and the figures are a
-    compilation's transcription. Recommended: build only the ideal decoder until the datasheets are read, then
-    add the others with the page cited.
+   `FilterChain`. **Decided 2026-10-07: approved.**
+2. **The picture's shape** (§4.2, extension 6). **Decided 2026-10-07 by the tester: under the CRT filter the
+   picture is a 4:3 tube with the console's own pixel aspect, and the whole active picture is shown by default.
+   The overscan crop is a setting. With the filter off, nothing changes.**
+3. **One entry or three** in the filter list. **Decided 2026-10-07: one CRT entry with a Quality setting.**
+4. **Defaults.** **Decided 2026-10-07 by the tester: Composite is the default signal for the NES, SNES, Genesis
+   and N64, with S-Video and RGB as choices. The default filter stays None for now, to be decided again once the
+   tiers are built and measured.**
+5. **The NES's signal.** An accurate NES composite needs the PPU's colour index and emphasis bits per pixel from
+   Moon and MoonRT. **Decided 2026-10-07: built from RGB now; the raw PPU path is its own later step, and is
+   owed.**
+6. **Region.** **Decided 2026-10-07: North America by default (SMPTE C, D65, set-up); a 9300 K white is shown as
+   it was only when Japan is chosen. The game's region is taken from the frontend where it already knows it, and
+   no plumbing is added for it in this effort.**
+7. **Persistence** (§3.5). **Decided 2026-10-07: at its measured strength by default, with a slider.**
+8. **Interlace.** **Decided 2026-10-07: woven by default; fields is a setting.**
+9. **Measurements on other machines.** C1 to C3's handheld and laptop columns have nothing under them.
+   **Decided 2026-10-07: to be asked for when the tiers exist; the tester runs the handheld's.**
+10. **Later stages**: the sub-frame flash (§5.9), an HDR presentation path (§4.1), PAL, RF, raster bloom.
+    **Decided 2026-10-07: recorded, not built now.**
+11. **The decoder's axes** (§3.1's table is a compilation's transcription of datasheets that could not be
+    fetched). **Decided 2026-10-07: the ideal decoder only, until the datasheets are read.**
 
 ---
 

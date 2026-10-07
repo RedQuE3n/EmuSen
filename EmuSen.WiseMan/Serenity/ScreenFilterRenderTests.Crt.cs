@@ -58,12 +58,19 @@ namespace EmuSen.WiseMan.Serenity
         private static Crt? Draw(string console, int sourceWidth, int sourceHeight, int windowWidth, int windowHeight, IReadOnlyList<byte[]?> frames, params (string Id, float Value)[] set) =>
             Draw(console, sourceWidth, sourceHeight, 1, windowWidth, windowHeight, frames, set);
 
-        private static Crt? Draw(string console, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, IReadOnlyList<byte[]?> frames, params (string Id, float Value)[] set)
+        private static Crt? Draw(string console, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, IReadOnlyList<byte[]?> frames, params (string Id, float Value)[] set) =>
+            Cropped(Overscanned(set), console, sourceWidth, sourceHeight, rowRepeat, windowWidth, windowHeight, frames, set);
+
+        private static Crt? Cropped(PictureCrop crop, string console, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, IReadOnlyList<byte[]?> frames, params (string Id, float Value)[] set)
         {
             if (CrtDevice.Value is not { } device) return null;
-            var control = new GameFrameControl { FilterConsole = console, ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter };
+            var control = new GameFrameControl { FilterConsole = console, ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter, Crop = crop };
             return new Crt(ShaderBench.Picture(control, frames, sourceWidth, sourceHeight, rowRepeat, windowWidth, windowHeight, device), windowWidth, windowHeight);
         }
+
+        // A case's "overscan", a percentage the raster reaches past the glass, as the crop the control is given; it is no parameter of the filter's - see EmuSen_CRT.md §15.
+        private static PictureCrop Overscanned(IEnumerable<(string Id, float Value)> set) =>
+            PictureCrop.Enlarged(1 + set.Where(v => v.Id == "overscan").Select(v => v.Value).LastOrDefault() / 100.0);
 
         private static (string, float)[] With((string, float)[] set, params (string, float)[] more) => set.Concat(more).ToArray();
 
@@ -140,8 +147,8 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task Drawn_in_software_a_white_field_keeps_its_light_and_its_colour() => Session.Dispatch(() =>
         {
-            var control = new GameFrameControl { FilterConsole = "SNES", ActiveFilter = CrtFilter.Filter, DrawDeviceFiltersInSoftware = true };
-            control.ShaderParameters = Values(Reference.Concat(With(Plain, ("signal", 0f), ("overscan", 900f))));
+            var control = new GameFrameControl { FilterConsole = "SNES", ActiveFilter = CrtFilter.Filter, DrawDeviceFiltersInSoftware = true, Crop = PictureCrop.Enlarged(10) };
+            control.ShaderParameters = Values(Reference.Concat(With(Plain, ("signal", 0f))));
             control.WaitForFilter();
             var window = new Avalonia.Controls.Window { Width = 240, Height = 180, Content = control };
             window.Show();
@@ -572,7 +579,7 @@ namespace EmuSen.WiseMan.Serenity
             byte[] frame = Paint(48, 16, (x, y) => (x / 47.0, y / 15.0, (x * 7 + y * 3) % 16 / 15.0));
             (string, float)[] set = { ("overscan", 300f) };
             if (Draw("Genesis", 48, 16, 240, 180, Twice(frame), set) is not { } device) return;
-            var control = new GameFrameControl { FilterConsole = "Genesis", ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter, DrawDeviceFiltersInSoftware = true };
+            var control = new GameFrameControl { FilterConsole = "Genesis", ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter, DrawDeviceFiltersInSoftware = true, Crop = Overscanned(set) };
             control.WaitForFilter();
             var window = new Avalonia.Controls.Window { Width = 240, Height = 180, Content = control };
             window.Show();

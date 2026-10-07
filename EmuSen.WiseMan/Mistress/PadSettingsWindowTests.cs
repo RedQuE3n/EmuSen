@@ -516,6 +516,8 @@ namespace EmuSen.WiseMan.Mistress
             var frame = window.GetControl<EmuSen.Serenity.GameFrameControl>("GameFrame");
 
             Assert.False(frame.SquarePixels);
+            Assert.Equal(EmuSen.Serenity.PictureCrop.None, frame.Crop);
+            ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("SNES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.TvOverscan);
             ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("SNES", GraphicsSettingsWindow.PictureShapeKey, GraphicsSettingsWindow.SquarePixels);
             Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "CRT (Lottes)");
             Assert.Equal("CRT (Lottes)", snes.Shown?.Stored);
@@ -546,6 +548,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("CRT (Lottes)", frame.ActiveFilter?.Name);
             Assert.Equal("SNES", frame.FilterConsole);
             Assert.True(frame.SquarePixels, "the console's stored picture shape reaches the frame with its filter");
+            Assert.Equal(EmuSen.Serenity.PictureCrop.Television, frame.Crop);
             Assert.Equal(0.4f, frame.ShaderParameters!["maskDark"], 4);
 
             pad.B();
@@ -758,6 +761,27 @@ namespace EmuSen.WiseMan.Mistress
             PadAudit.Reachable(other, b => { heights.Add(other.Bounds.Height); PadWindowRouter.Send(other, b); }, limit: 4);
             Assert.NotEmpty(heights);
             Assert.All(heights, h => Assert.Equal(720, h));
+            window.Close();
+        }, default);
+
+        // The four numbers of a custom crop are a row a pad must reach like any other - see EmuSen_Settings_Reference.md §4.99.
+        [Fact]
+        public Task With_a_custom_crop_chosen_its_four_numbers_are_reached_by_the_pad() => Session.Dispatch(() =>
+        {
+            File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
+            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            var window = new MainWindow { Width = 1280, Height = 800 };
+            window.Show();
+            ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("NES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.CustomCrop);
+            typeof(MainWindow).GetMethod("ShowGraphicsSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+            Window other = Assert.Single(window.OwnedWindows);
+            void Press(UiButton b) => PadWindowRouter.Send(other, b);
+
+            Press(UiButton.Down);
+            HashSet<InputElement> reached = PadAudit.Reachable(other, Press);
+            List<InputElement> operable = PadAudit.Operable(other);
+            Assert.Equal(new[] { "NES.CropBottom", "NES.CropLeft", "NES.CropRight", "NES.CropTop" }, operable.OfType<TextBox>().Select(b => b.Name).Order());
+            Assert.Empty(operable.Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
             window.Close();
         }, default);
     }

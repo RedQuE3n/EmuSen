@@ -58,6 +58,9 @@ namespace EmuSen.Serenity.Shaders
         // Width over height of the rectangle the picture is shown in; null is the frame's own pixel count.
         public double? Aspect { get; init; }
 
+        // Places the part of the picture kept itself, from the uniform "crop" (left, top, width and height as shares of the frame) - see EmuSen_Serenity.md §2.10.
+        public bool CropsItself { get; init; }
+
         // Drawn plain where there is no GPU, whose software path would take seconds a frame - see EmuSen_Serenity.md §3.10.
         public bool RequiresDevice { get; init; }
 

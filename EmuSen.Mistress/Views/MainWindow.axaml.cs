@@ -443,6 +443,7 @@ namespace EmuSen.Mistress.Views
             // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
             GameFrame.FilterConsole = console;
             GameFrame.SquarePixels = _graphics.Value(console, GraphicsSettingsWindow.PictureShapeKey) == GraphicsSettingsWindow.SquarePixels;
+            GameFrame.Crop = GraphicsSettingsWindow.CropFor(_graphics, console);
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();

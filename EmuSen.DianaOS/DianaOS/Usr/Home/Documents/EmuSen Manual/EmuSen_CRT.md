@@ -727,7 +727,7 @@ One filter, **CRT**, in each console's list beside the existing ones, with these
 | **Signal** | RGB, S-Video, Composite | per console, below | what cable the console is plugged in with |
 | **Screen** | Consumer TV, 14-inch; Consumer TV, 20-inch; Consumer Trinitron, 27-inch; Professional monitor, 14-inch; Professional monitor, 20-inch; PC monitor | Consumer TV, 20-inch | each carries mask type, pitch, size, spot, decoder, phosphors, curvature, convergence and overscan from §3 |
 | **Curvature** | Off, the screen's own, or an amount | the screen's own | Off keeps the mask and scanlines |
-| **Overscan** | Whole picture, Television | Whole picture | question 2 |
+| **Overscan** | Whole picture, Television | Whole picture | question 2; *since §15 the console's setting in Graphics Settings, not the filter's* |
 | **Colour** | North America, Japan, Europe | North America | phosphors, white, set-up and the decoder's axes together |
 | **Display brightness** | cd/m², 100 to 1000 | 300 | §5.8; the player's own screen |
 | **Display subpixels** | RGB, BGR, None | RGB | §5.6 |
@@ -1683,6 +1683,7 @@ What follows from it, measured in the 1280 × 800 window: an N64 picture is 1067
 in either region, on either engine, at every quality; a NES picture is 9% wider under the filter than it was, a
 SNES or Genesis one 2%, each now as wide as it is with no filter. **Overscan** enlarges the picture past the glass
 by its percentage, about the centre; at 0, the default, the whole frame is shown and reaches the glass's edges.
+*(Since §15 the overscan is the console's setting and no parameter of the filter.)*
 
 **The frames the tests draw**, each console's every size (`ScreenFilterRenderTests.FramesOf`):
 
@@ -1752,3 +1753,50 @@ first and last eight columns and finds them at the glass's edges, and off the gl
 
 **Mutants** (4, each caught): the picture 2.4% narrower than the tube; the overscan ignored; the spot sized for 240
 lines whatever the field; the spot sized by both fields of a frame.
+
+## 15. Overscan is the console's, not the filter's (2026-10-07)
+
+**Decided 2026-10-07 by the tester: one overscan setting, per console, applied with or without a filter** (`EmuSen_Serenity.md` §2.10, `EmuSen_Settings_Reference.md` §4.99). The filter's own **Overscan** parameter is retired with it: two settings that each enlarged the picture would have had to be multiplied or one of them ignored, and a player would not have known which. A value stored for the old parameter is no longer read; its default was 0 and it was offered for less than a day.
+
+**What the filter is given.** `ScreenFilter.CropsItself` says a filter places the part of the picture kept itself, and the chain then hands its passes the uniform `crop`: the left and top hidden and the width and height kept, as shares of the frame. `pictureOf` is now `crop.xy + (face across the tube) × crop.zw`: the part kept fills the face. With nothing hidden that is §14.2's rule exactly, and the pictures are the same.
+
+**Why the filter does not take the enlarged rectangle the other paths take.** A tube's glass does not grow when its raster does. The mask, the curvature and the rounded corners belong to the glass and stay where they are; the picture moves under them, as it did (§5.6). Enlarging the filter's rectangle and clipping it would have enlarged the tube and cut its corners off. The passes before the face still process the whole frame, so the signal's filters and the beam's spread see real neighbours at the cut, as they did at a set's edge.
+
+**Measured** (the table of `EmuSen_Serenity.md` §2.10): with *Kirby 64* (Europe)'s crop the picture is 1067 × 800 at (107, 0) under the filter at Accurate where it is 1066 × 799 with none, and with *Mario Kart 64* (Europe)'s both are 1067 × 800. The two paths show the same part of the frame in the same rectangle.
+
+**Not done.** Under a crop of unequal shares the picture is stretched one way more than the other, as it is with no filter, and the spot along a line, sized by §14.3 for the whole frame, is then not exactly round on the glass: by 19% for *Mario Kart 64* (Europe)'s crop, and not at all for a television's overscan.
+
+### 15.1 Internal resolution above one, examined
+
+§14 had not looked at the N64's `RenderScale`. Run 400 frames on each engine at each scale (2026-10-07) and drawn under the filter at Accurate in a 1280 × 800 window; the scanlines are the peaks counted down the middle quarter of the tube, enlarged four times with the glass flat and the mask off:
+
+| Game | RenderScale | Frame, Mars and MarsRT with its GPU alike | Area | Scanlines in a quarter of the tube | Light across them, of 255 |
+|---|---|---|---|---|---|
+| Mario Kart 64 (USA) | 1 | 640 × 240, rows shown twice | 1067 × 800 at (107, 0) | 60 | 84 to 205 |
+| | 2 | 1280 × 480, rows shown twice | the same | 120 | 153 to 159 |
+| | 3 | 1920 × 720, rows shown twice | the same | 180 | 152 to 159 |
+| | 4 | 2560 × 960, rows shown twice | the same | 240 | 148 to 155 |
+| Kirby 64 (Europe) | 1 | 640 × 288, rows shown twice | the same | 72 | 84 to 205 |
+| | 2 | 1280 × 576, rows shown twice | the same | 144 | 153 to 159 |
+| | 3 | 1920 × 864, rows shown twice | the same | 216 | 152 to 159 |
+| | 4 | 2560 × 1152, rows shown twice | the same | 288 | 148 to 155 |
+
+**The area meets §14's rule at every scale. The scanlines do not.** The filter counts the frame's rows as the tube's lines, so at a scale of two it draws 480 beams where the console sent 240, and since a frame of more than 300 rows is taken for two woven fields (§11.1) the lines all but vanish: the light across them varies by 6 of 255 where at a scale of one it varies by 121. A game at an internal resolution above one therefore does not look as the same game does at one under this filter, in the scanlines, though it is the same size. **This is a defect against the rule, found and not yet fixed.** The reason it is not fixed here is that the frame does not say how many of its rows are one of the console's lines: the filter would need the core to report the console's own line count beside the frame, as it reports the screen's shape, so that it draws 240 or 288 beams and samples each from the rows drawn for it. That is a change to what a core reports and a decision on what an internal resolution should mean under a tube (more detail along and within each line, the same number of lines), and is put to the tester rather than assumed.
+
+### 15.2 PAL games of the other consoles, examined
+
+§14.2 put the PAL sizes of the SNES and the Genesis in its table without running a PAL game. From the tester's library, copied to scratch and run 1500 frames (2026-10-07): the SNES images whose header carries a PAL destination are four of 826, of which *Terranigma* and *Donkey Kong Country 2* were run, on Venus and on VenusRT; the Genesis's *Sonic the Hedgehog 3* (E) and *Aladdin* (E) on Nephrite.
+
+| Game | Engine | Frames handed over | Rate | Area at 1280 × 800: no filter, and the filter at each quality |
+|---|---|---|---|---|
+| Terranigma (PAL) | Venus, VenusRT | 256 × 224 | 50.01 Hz | 1067 × 800 at (107, 0), all four |
+| Donkey Kong Country 2 (PAL) | Venus | 256 × 224 | 50.01 Hz | the same |
+| Donkey Kong Country 2 (PAL) | VenusRT | 256 × 224 and 512 × 224 | 50.01 Hz | the same |
+| Sonic the Hedgehog 3 (E) | Nephrite | 320 × 224 | 49.70 Hz | the same |
+| Aladdin (E) | Nephrite | 320 × 224 | 49.70 Hz | the same |
+
+Every one fills the tube as its NTSC counterpart does. None of the four handed over a frame of 239 or 240 lines in the frames run, so those sizes are still drawn only by §14.5's tests. One difference between engines was seen and is not this section's: VenusRT handed over 512-wide frames for *Donkey Kong Country 2* in the frames sampled and Venus did not; both are drawn in the same area.
+
+### 15.3 Tests and mutants
+
+`ScreenFilterRenderTests.Under_the_crt_filter_a_crop_shows_the_part_the_plain_picture_shows` (three qualities): for an uneven crop and for the television's, on a 240-line and a 288-line N64 field, a frame white over the part kept lights the tube within 2 pixels of (107, 0) to (1173, 800), a frame white over the part to be hidden leaves the tube's inside below 0.4% of white, and the same frame with nothing hidden is lit to the glass's edges. `Under_the_crt_filter_a_crop_moves_the_picture_and_not_the_glass`: enlarged by half, the tube's rounded corner is as dark as it was and the picture beside it lit. The cases that asked the filter for an overscan now give the control the equal crop. The mutants are listed with the rest in `EmuSen_Settings_Reference.md` §4.99.

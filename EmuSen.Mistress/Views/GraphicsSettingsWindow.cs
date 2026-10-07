@@ -83,6 +83,37 @@ namespace EmuSen.Mistress.Views
             "The screen the console was made for, or each of the frame's pixels square.",
             CoreSettingKind.Choice, TvShape, Choices: new[] { TvShape, SquarePixels }, ChoiceLabels: new[] { "TV shape", "Square pixels" });
 
+        // The frontend's third row: what is hidden at the picture's edges, on a console that had a television - see EmuSen_Settings_Reference.md §4.99.
+        public const string OverscanKey = "Overscan", NoOverscan = "off", TvOverscan = "tv", CustomCrop = "custom";
+
+        // The four edges of a custom crop, each a percentage of the picture's width or height, in the order they are shown.
+        public static readonly (string Key, string Label)[] CropEdges = { ("CropLeft", "Left"), ("CropRight", "Right"), ("CropTop", "Top"), ("CropBottom", "Bottom") };
+
+        public static readonly CoreSetting Overscan = new(OverscanKey, "Overscan",
+            "The whole picture, the part a television showed, or a crop of your own.",
+            CoreSettingKind.Choice, NoOverscan, Choices: new[] { NoOverscan, TvOverscan, CustomCrop }, ChoiceLabels: new[] { "Whole picture", "TV overscan", "Custom crop" });
+
+        // The consoles that drove a television, which are the ones the tube's filter is offered for; an LCD showed every pixel.
+        public static bool HasOverscan(string console) => EmuSen.Serenity.Shaders.CrtFilter.Filter.Consoles!.Contains(console);
+
+        // What a console's stored choice hides at each edge of the picture - see EmuSen_Settings_Reference.md §4.99.
+        public static EmuSen.Serenity.PictureCrop CropFor(GraphicsConfig config, string console)
+        {
+            if (!HasOverscan(console)) return EmuSen.Serenity.PictureCrop.None;
+            double Edge(int i) => ParsePercent(config.Value(console, CropEdges[i].Key)) ?? 0;
+            return config.Value(console, OverscanKey) switch
+            {
+                TvOverscan => EmuSen.Serenity.PictureCrop.Television,
+                CustomCrop => EmuSen.Serenity.PictureCrop.Percent(Edge(0), Edge(2), Edge(1), Edge(3)),
+                _ => EmuSen.Serenity.PictureCrop.None,
+            };
+        }
+
+        // A percentage as typed, with a point or a comma, held to what one edge may hide; null when it is no number.
+        public static double? ParsePercent(string? text) =>
+            double.TryParse(text?.Trim().Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double value) && double.IsFinite(value)
+                ? Math.Clamp(Math.Round(value, 1), 0, EmuSen.Serenity.PictureCrop.MostAtAnEdge * 100) : null;
+
         // A stored value naming a preset in the downloaded pack, by its path inside it - see EmuSen_Settings_Reference.md §4.41.
         public const string SlangPrefix = "slang:";
 
@@ -111,6 +142,18 @@ namespace EmuSen.Mistress.Views
             shaderRow.Children.Add(shapeControl);
             shaderRow.Children.Add(shaderName);
             panel.Children.Add(new FieldRow { Label = "Shader and shape", Hint = "The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square.", Content = shaderRow });
+
+            // A row of its own: a dropdown takes left and right itself, so a second one beside the shape's could not be reached with a pad - see EmuSen_Settings_Reference.md §4.99.
+            if (HasOverscan(console))
+            {
+                (Control overscanControl, Action overscanRefresh) = BuildControl(console, Overscan);
+                (FieldRow cropRow, Action cropRefresh, Action cropShown) = BuildCropRow(console);
+                refreshers.Add(overscanRefresh);
+                refreshers.Add(cropRefresh);
+                _notes.Add((console, cropShown));
+                panel.Children.Add(new FieldRow { Label = Overscan.Label, Hint = Overscan.Hint, Content = overscanControl });
+                panel.Children.Add(cropRow);
+            }
 
             // Before the core's own rows, since it decides which core reads them - see EmuSen_Settings_Reference.md §4.44.
             if (CoreCatalog.EngineFor(console) is { } engine)
@@ -142,6 +185,41 @@ namespace EmuSen.Mistress.Views
 
             _panels.Add((console, () => { foreach (Action refresh in refreshers) refresh(); }));
             return panel;
+        }
+
+        // Four numbers, shown while a custom crop is chosen; one that reads as a number is stored as it is typed, and shown as stored when the box is left.
+        private (FieldRow, Action Refresh, Action Shown) BuildCropRow(string console)
+        {
+            var boxes = new List<TextBox>();
+            var row = new WrapPanel { Orientation = Orientation.Horizontal };
+            foreach ((string key, string label) in CropEdges)
+            {
+                var box = new TextBox { Name = $"{console}.{key}", Width = 64, VerticalAlignment = VerticalAlignment.Center };
+                Avalonia.Automation.AutomationProperties.SetName(box, $"{label}, percent");
+                // The event comes after the text is set, so a box filled from the stored value is told from a typed one by its value, not by a flag.
+                box.TextChanged += (_, _) => { if (ParsePercent(box.Text) is { } percent && percent != (ParsePercent(_config.Value(console, key)) ?? 0)) Changed(console, key, Stored(percent)); };
+                box.LostFocus += (_, _) => Show(box, key);
+                boxes.Add(box);
+                row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Avalonia.Thickness(0, 0, 6, 0) });
+                box.Margin = new Avalonia.Thickness(0, 0, 14, 0);
+                row.Children.Add(box);
+            }
+            var field = new FieldRow
+            {
+                Name = $"{console}.Crop", Label = "Crop, % of the picture", Content = row,
+                Hint = "How much of the picture's width or height to hide at each edge, up to 25. The rest fills the screen, the same for every game of this console in every mode.",
+            };
+            string Stored(double percent) => percent.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+            void Show(TextBox box, string key) => box.Text = Stored(ParsePercent(_config.Value(console, key)) ?? 0);
+            // The boxes are filled only when the console's values are read afresh; a change elsewhere must not rewrite one being typed in.
+            void Shown() => field.IsVisible = _config.Value(console, OverscanKey) == CustomCrop;
+            void Refresh()
+            {
+                Shown();
+                for (int i = 0; i < boxes.Count; i++) Show(boxes[i], CropEdges[i].Key);
+            }
+            Refresh();
+            return (field, Refresh, Shown);
         }
 
         // A switch for on or off, a dropdown of the counts a range allows, or one of the names; each named so a test can find it.

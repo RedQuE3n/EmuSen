@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
             ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
@@ -217,6 +217,16 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == $"{console}.{EmuSen.Cores.CoreCatalog.EngineKey}" && c.IsEffectivelyVisible);
         }
 
+        // The NES tab with a custom crop chosen, where the row of its four numbers is shown (EmuSen_Settings_Reference.md §4.99).
+        internal static void ShowCustomCrop(MainWindow window)
+        {
+            var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", Hidden)!.GetValue(window)!;
+            graphics.SetValue("NES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.CustomCrop);
+            foreach ((string key, _) in GraphicsSettingsWindow.CropEdges) graphics.SetValue("NES", key, "12.5");
+            ShowEngineTab(window, "NES");
+            Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == "NES.CropBottom" && c.IsEffectivelyVisible);
+        }
+
         // The open sheet's tab headed by the console, which the window has only while its engine in development is shown.
         internal static void SelectTab(MainWindow window, string console)
         {
@@ -274,6 +284,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "GraphicsSettingsGenesis":
                     ShowDiscoveredTab(window, "Genesis");
+                    break;
+                case "GraphicsSettingsCustomCrop":
+                    ShowCustomCrop(window);
                     break;
                 case "ShaderSettingsGenesis":
                     Call(window, "ShowShaderSettings");

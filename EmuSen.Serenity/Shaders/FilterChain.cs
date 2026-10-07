@@ -252,9 +252,10 @@ namespace EmuSen.Serenity.Shaders
         }
 
         // Draws the filtered picture and says so; false, nothing was drawn, and the caller draws the picture plain - see EmuSen_Serenity.md §3.10.
-        public bool Draw(SKCanvas canvas, GRContext? context, SKImage original, int rowRepeat, SKRect destination)
+        public bool Draw(SKCanvas canvas, GRContext? context, SKImage original, int rowRepeat, SKRect destination, PictureCrop crop = default)
         {
             if (context is null && Filter.RequiresDevice && !DrawInSoftware) return false;
+            _crop = crop.IsNone ? PictureCrop.None : crop;
             TakeFinished();
             Warm(context);
             EnsureBuilt();
@@ -332,6 +333,9 @@ namespace EmuSen.Serenity.Shaders
             return true;
         }
 
+        // The part of the picture kept, for a filter that places it itself.
+        private PictureCrop _crop;
+
         // The rectangle shown, in the canvas's units and in the device's pixels.
         private readonly record struct View(int Width, int Height, float PixelScale, float OriginX, float OriginY);
 
@@ -375,6 +379,7 @@ namespace EmuSen.Serenity.Shaders
                     case "pixelScale": builder.Uniforms[name] = view.PixelScale; break;
                     case "pixelOrigin": builder.Uniforms[name] = new[] { view.OriginX, view.OriginY }; break;
                     case "frameCount": builder.Uniforms[name] = (float)(_frames % 65536); break;
+                    case "crop": builder.Uniforms[name] = new[] { (float)_crop.Left, (float)_crop.Top, (float)_crop.Width, (float)_crop.Height }; break;
                     case var id when _values.TryGetValue(id, out float value): builder.Uniforms[name] = value; break;
                     case var size when size.EndsWith("Size", StringComparison.Ordinal) && named.TryGetValue(size[..^4], out Output earlier):
                         builder.Uniforms[name] = new[] { (float)earlier.Width, earlier.Height };

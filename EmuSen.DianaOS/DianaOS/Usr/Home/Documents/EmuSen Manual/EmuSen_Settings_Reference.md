@@ -8182,3 +8182,44 @@ This is a finding about the audit and not about Preferences. No player presses i
 **Tests.** `In_desktop_mode_a_real_window_is_driven_and_every_control_reached` passes for all five windows. `The_desktop_search_presses_only_in_a_window_grown_to_its_tab` changes Preferences to its Scraping tab with nothing run, confirms the window is still 531 high, and requires every press of the search to be sent into a window 720 high. Two mutants, each killed: without the run after a press the Genesis case fails again; without the run before the first press one of eighteen presses is sent at 531.
 
 **What is not shown.** The count of unarranged presses was taken over the pad-settings class only; the other users of the `PadDriver` form were not counted, and are unchanged. The three other callers of the function form (`ShaderBrowseTests`, `PlayerBindingsWindowTests`, `ControllerBindingsDiagramTests`) pass with the change and were not counted before it.
+
+### 4.99 Overscan and crop, per console (2026-10-07)
+
+**Decided 2026-10-07 by the tester: each television console has an Overscan setting, off by default, that hides the edges of its picture; one setting, which the CRT filter shares; applied only where the picture is drawn.** What a crop is, its unit, what it does to the picture's shape and the measurements on real games are `EmuSen_Serenity.md` §2.10; the filter's side is `EmuSen_CRT.md` §15.
+
+**The setting.** Graphics Settings, on the NES, SNES, N64 and Genesis tabs, the row after **Shader and shape**: **Overscan**, one of
+
+| Choice | Stored | What is hidden |
+|---|---|---|
+| **Whole picture** (the default) | `off`, or nothing | nothing |
+| **TV overscan** | `tv` | 3.27% at each edge, a raster 7% larger than the glass; a choice among sourced figures (`EmuSen_Serenity.md` §2.10) |
+| **Custom crop** | `custom` | the four numbers of the row below |
+
+and, shown only while Custom crop is chosen, **Crop, % of the picture**: Left, Right, Top and Bottom, each a percentage of the picture's width or height from 0 to 25, to one decimal place, stored as `CropLeft`, `CropRight`, `CropTop` and `CropBottom`. A box takes a point or a comma; what reads as a number is stored as it is typed and held to the range, and what does not leaves the stored value alone; a box left is shown as stored. The four are kept while another choice is made, so going to TV overscan and back loses nothing. **Reset This Console** clears them with the rest. All five are frontend keys that no core declares (§4.40), stored under the console in `graphics.json` beside `PictureShape`. The Game Boy's tab has no such row: an LCD showed every pixel.
+
+**Why a percentage.** A count of the console's pixels or lines would be the natural thing to type, and does not survive a game changing its frame: the N64 between 320 and 640 wide, the same game 240 lines or 288 by region, any of them times the internal resolution. A percentage of the picture hides the same part in every mode. One decimal place is finer than a pixel of 640 or a line of 288; `EmuSen_Serenity.md` §2.10 gives each console's television overscan in its own pixels and lines for comparison.
+
+**A row of its own, where the picture shape shares one.** §4.97 put Picture shape in the Shader row so that no tab grew. Overscan was first put beside it, and the pad audit then reported Picture shape unreached on the N64 and Genesis tabs, in the sheet and in the desktop window alike; the NES and SNES tabs passed. A dropdown takes left and right for itself (§4.45.3), so two in one row can be told apart only by which one up or down happens to land on; why the two tabs that scroll landed differently was not examined, the layout being changed instead. With its own row the NES and SNES tabs still fit their view (387 of 395 pixels) with the four numbers hidden, and scroll when Custom crop shows them; the Game Boy's tab is unchanged.
+
+**What it changes.** `ApplyScreenFilter` sets `GameFrameControl.Crop` from `GraphicsSettingsWindow.CropFor` with the console's filter and shape, when a game starts and when a row changes, so a running game follows a number as it is typed. Nothing else reads it: the core, screenshots, states' pictures, the rewind reel and the debugger's views are the whole frame.
+
+**The same for every game of the console**, which is the rule of `EmuSen_CRT.md` §14 kept: no game of a console is cropped differently from another unless the player says so. The values that remove two games' own margins, measured:
+
+| Game | Left | Right | Top | Bottom | In its own frame |
+|---|---|---|---|---|---|
+| Kirby 64 - The Crystal Shards (Europe) | 2.4 | 2.5 | 3.5 | 3.5 | 15 and 16 of 640 pixels, 10 and 10 of 288 lines |
+| Mario Kart 64 (Europe) | 1.3 | 1.1 | 8.7 | 9 | 8 and 7 of 640 pixels, 25 and 26 of 288 lines |
+
+Each fills the picture's rectangle for its own game and harms the other (`EmuSen_Serenity.md` §2.10's table): *Mario Kart 64* (Europe)'s cuts 15 lines from the top and from the bottom of Kirby's picture and 21 and 22 from the American *Mario Kart 64*'s.
+
+**Proposed, not built: a crop kept with a game.** One game's bars are that game's, and the console's setting cannot remove them without cutting every other game. The proposal, for a decision:
+
+- *Stored* in the player's library, `GameRecords` (§4.32), by a migration adding four nullable columns to `game`, `crop_left` to `crop_bottom`, percentages as here. It is the player's own record of a game, kept through a rescan and found again by the file's MD5 as the rest of a record is; `graphics.json` holds consoles and would grow by an entry for every game touched.
+- *Applied* in `ApplyScreenFilter`: the running game's crop where it has one, the console's otherwise. A game's crop replaces the console's and is not added to it, so that the four numbers shown are the four in force.
+- *Shown* as **Crop This Game...** in the game's options (§4.59, §4.63) and in the pad's in-game menu: the same four boxes, **Use the Console's Setting** to clear them, and the picture behind following each number. Graphics Settings' Overscan row gains a line when the running game has its own ("*Mario Kart 64 (Europe)* has a crop of its own"), so that the console's row never seems to be ignored without saying why.
+- *Against the rule,* a game's crop is the explicit exception the rule allows: set by the player, for a named game, stored and shown. Its risk is the one of any per-game setting, that a picture differs from its neighbours for a reason not visible on the screen, which the line in Graphics Settings is for.
+- *Not proposed:* finding the numbers automatically during play (`EmuSen_Serenity.md` §2.10). A button in that window that proposes them from the frames of the session so far, for the player to accept, would be the safe form.
+
+**Tests.** `PictureCropTests.Graphics_settings_offer_overscan_on_every_console_that_had_a_television_and_store_it_per_console`: the row on four tabs and not the Game Boy's; its three choices, Whole picture first; the numbers' row shown only for Custom crop; values typed with a point, a comma, too many places and out of range; what is no number; another console's choice its own, and both in the saved file; values kept across choices, and cleared by Reset This Console. `PadSettingsWindowTests.With_a_custom_crop_chosen_its_four_numbers_are_reached_by_the_pad`, and the two cases that walk every tab of Graphics Settings. The fit audit: every Graphics Settings case at 1280 × 800 and 1920 × 1200, with a new one, `GraphicsSettingsCustomCrop`, the NES tab with the numbers shown.
+
+**Mutants** (18, each caught): the crop ignored by the plain picture, and by a filter of passes; not clipped to the picture; the tube enlarged with its picture; the CRT not given the crop, and given it without its origin; Square pixels shaped by the whole frame; left taken for right, and top for bottom; an edge not held to a quarter; the television at 5%; a crop no picture could have, drawn; the setting not applied; offered for the Game Boy; Custom read as the television's; right stored as top; the numbers shown whatever the choice; a comma not read.

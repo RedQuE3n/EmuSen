@@ -256,6 +256,55 @@ All three now fill the same rectangle. **What a game draws inside it is the game
 
 **Tests** (`DisplayAspectTests`, 8): the letterbox with a shape, for PAL, NTSC and SNES frame sizes, and with none; each C# core's shape and the CRT tube's; Nephrite's shape from its machine information, in both regions and after frames have run; 640 × 576, 640 × 480, 640 × 240 with its rows shown twice, and 320 × 240 all lighting exactly the 400 × 300 window; square pixels hashing identically to a frame offered with no shape, which is the picture of before; a filter's stated shape holding under either setting; and the Graphics Settings row (`EmuSen_Settings_Reference.md` §4.97). `FrameHandOffTests`: a frame's shape is presented with it. **Mutants** (8, each caught): the shape ignored; square pixels ignored; square pixels overriding a filter's shape; the shape not kept with the frame; no fall-back to the machine's; the hand-off dropping it; the setting not applied; the Game Boy given a television.
 
+### 2.10 What is hidden at the picture's edges: overscan and a crop (2026-10-07)
+
+**Why.** A game draws to the edge of its frame only where it expected to be seen. A television's raster was larger than its glass, so the outermost part of every picture was never shown, and games left it black, or left scrolling artefacts in it, or drew a border. §2.9 put every frame of a console in one rectangle; this hides the edges of what is in it. **Decided 2026-10-07 by the tester: a setting per console, off by default, with a television's amount and a crop by edge; shared with the CRT filter; applied only where the picture is drawn.**
+
+**One value, `PictureCrop`.** Four shares of the picture, left, top, right and bottom; a setting holds each to a quarter, so that half the picture is always left. `GameFrameControl.Crop` holds it, and `PictureCrop.None`, the default, is the picture exactly as before (the plain 640 × 576 frame hashes identically with none, and with a crop no picture could have, which is taken as none).
+
+**The unit is a share of the picture, not a count of pixels or lines.** A console changes its frame under a running game: the N64 between 320 and 640 wide, the SNES between 256 and 512 and into interlace, the same N64 game 240 lines in one region and 288 in the other, and any of them times the internal resolution. A count of pixels would hide a different part after each change; a share hides the same part. The frontends store it as a percentage to one decimal place, which is 0.64 of a pixel of 640 and 0.29 of a line of 288.
+
+**What a crop does to the shape. Decided: the part kept fills the rectangle the whole picture had.** A television's overscan was not a mask laid over a smaller picture; the raster was enlarged until its edges were past the glass, and what remained filled the glass. So:
+
+- under the screen's shape (§2.9) the rectangle is unchanged, 4:3 for a television console, and the part kept is stretched to it. A crop of equal shares across and down, which is what a television's was, leaves every pixel its shape. A crop of unequal shares changes it, and that is the point of one: *Mario Kart 64* (Europe) draws its 237 NTSC lines inside a PAL field's 288, squashed on a PAL set; with its 51 black lines hidden the picture fills the screen in the proportions of the American game;
+- under **Square pixels** there is no screen shape to fill, so the part kept decides it: a 640 × 480 frame with a quarter hidden at each side is drawn 2:3. A crop of unequal shares therefore changes the rectangle's shape under Square pixels and the pixels' shape otherwise; both follow from the setting chosen;
+- **a filter that states a shape** (the CRT's tube) keeps its rectangle and its glass, and places the part kept inside it itself (`ScreenFilter.CropsItself`, the uniform `crop`; `EmuSen_CRT.md` §15).
+
+**How it is drawn.** In one place, as the shape is: `DrawOp.Destination` gives the rectangle, `DrawOp.BeginCrop` clips drawing to it and replaces it by the rectangle the whole frame must be drawn in for the part kept to cover it (`PictureCrop.Whole`, in whole pixels). The plain picture, a simple effect, a filter of passes and a RetroArch preset are then drawn as they always were, into the larger rectangle. Nothing is copied or resampled before the filter: a filter still sees the whole frame, so one that reads neighbours or earlier frames is unaffected at the cut. The clip is what keeps the hidden part out of the bars beside a picture narrower than its window.
+
+**Presentation only.** The crop exists in `GameFrameControl` and nowhere else. The core's frame, a screenshot (written on the emulation thread from the machine's frame, `EmuSen_Settings_Reference.md` §4.34), a save state's picture, a rewind thumbnail and everything a debugger window shows are the whole frame, as before. No reason was found to do otherwise: each of them is a record of the machine, and a crop is a property of the screen it is watched on.
+
+**Television.** `PictureCrop.Television` is a raster 7% larger than the glass, 3.27% hidden at each edge. The figure is Sony's for its PVM monitors in normal scan (5% in underscan; `EmuSen_CRT.md` §3.7). **It is a choice among sourced figures, not a measurement of consumer sets**, for which no distribution was found: the broadcast safe-action area of 90% (SMPTE RP 27.3) implies sets that hid up to 5% an edge, and EBU R95 gives 3.5%. In each console's own pixels and lines:
+
+| Console | Frame | Hidden at each side | Hidden above and below |
+|---|---|---|---|
+| NES | 256 × 240 | 8.4 pixels | 7.9 lines |
+| SNES | 256 × 224 | 8.4 (16.7 of 512) | 7.3 lines (7.8 of 239) |
+| Genesis | 320 × 224 | 10.5 (8.4 of 256) | 7.3 lines (7.9 of 240) |
+| N64, NTSC | 640 × 240 | 20.9 | 7.9 lines |
+| N64, PAL | 640 × 288 | 20.9 | 9.4 lines |
+
+The share is the same in both regions; a PAL set's overscan was not found stated separately. The Game Boy's LCD showed every pixel, and has no such setting.
+
+**The same for every game of a console.** The setting is per console (`EmuSen_Settings_Reference.md` §4.99), so §2.9's rule holds with it: every game of the console has the same part of its frame hidden and the rest in the same rectangle. One game's own margins are not a console's, which the measurements show:
+
+| Custom crop: left, right, top, bottom, % | Game | Lit, no filter, 1280 × 800 | Lit, CRT Accurate, 1280 × 800 | Lit, no filter, 1920 × 1080 | Lit, CRT Accurate, 1920 × 1080 |
+|---|---|---|---|---|---|
+| none | Kirby 64 (Europe) | 1015 × 743 at (132, 28) | 1023 × 744 at (128, 28) | 1370 × 1003 at (274, 38) | 1381 × 1005 at (269, 37) |
+| none | Mario Kart 64 (Europe) | 1044 × 661 at (119, 68) | 1060 × 661 at (111, 68) | 1408 × 892 at (257, 92) | 1431 × 894 at (245, 91) |
+| none | Mario Kart 64 (USA) | 1044 × 793 at (119, 2) | 1061 × 792 at (111, 2) | 1408 × 1070 at (257, 3) | 1435 × 1070 at (245, 3) |
+| **2.4, 2.5, 3.5, 3.5** | **Kirby 64 (Europe)** | 1066 × 799 at (107, 0) | 1067 × 800 at (107, 0) | 1440 × 1079 at (240, 0) | 1440 × 1079 at (240, 0) |
+| **1.3, 1.1, 8.7, 9** | **Mario Kart 64 (Europe)** | 1067 × 800 at (107, 0) | 1067 × 800 at (107, 0) | 1440 × 1080 at (240, 0) | 1440 × 1080 at (240, 0) |
+| 1.3, 1.1, 8.7, 9 | Kirby 64 (Europe) | 1040 × 800 at (118, 0) | 1046 × 800 at (116, 0) | 1403 × 1080 at (256, 0) | 1413 × 1080 at (251, 0) |
+| 1.3, 1.1, 8.7, 9 | Mario Kart 64 (USA) | 1067 × 800 at (107, 0) | 1067 × 800 at (107, 0) | 1440 × 1080 at (240, 0) | 1440 × 1080 at (240, 0) |
+| 2.3, 2.5, 3.5, 3.5 | Mario Kart 64 (Europe) | 1067 × 710 at (107, 43) | 1067 × 711 at (107, 43) | 1440 × 959 at (240, 58) | 1440 × 959 at (240, 58) |
+
+(Each game run 600 frames on MarsRT with its GPU drawing, 2026-10-07, the ROMs copied to scratch; the picture's rectangle is 1067 × 800 at (107, 0) and 1440 × 1080 at (240, 0). The margins were also taken as the union of what each game lit over frames 300 to 1500, on both engines: Kirby columns 15 to 623 and rows 10 to 277 of 640 × 288, Mario Kart (Europe) columns 8 to 632 and rows 25 to 261.) The crop that removes *Mario Kart 64* (Europe)'s bars fills the screen for the American game too, by cutting 21 and 22 lines of its picture, and cuts 15 lines of Kirby's above and below while leaving its side borders; Kirby's leaves Mario Kart (Europe) 89% of the height. **A console's crop cannot remove one game's bars without cutting another game's picture.** A crop kept with a game is the remedy, and is proposed and not built: `EmuSen_Settings_Reference.md` §4.99.
+
+**No border is detected.** The frame is never examined to find a margin. A game's margins are black, and so is a night scene, a fade and a loading screen: a detector that follows the frame would enlarge the picture during a fade and let it go at the next scene, which is the one thing a crop must not do. If it is ever wanted, it should be a tool that proposes four numbers from many frames of a game, the union used for the table above, for the player to accept once, and never a setting that acts during play.
+
+**Tests** (`PictureCropTests`, 10): the television's share and what it is in each console's pixels and lines; a percentage held to a quarter and the enlargement about the centre; none, and a crop no picture could have; where the whole frame is placed; an NTSC and a PAL N64 field, shown twice and as two fields, each showing the same marked part filling the same 400 × 300 and less than 1.2% of what was to be hidden (the edge pixels shared with it); the hidden part kept out of the bars of a wider window; Square pixels shaped by the part kept; a simple effect and a filter of passes cropped as the plain picture; nothing hidden hashing as before; and the Graphics Settings rows. `ScreenFilterRenderTests`: the CRT filter agreeing, and its glass staying (`EmuSen_CRT.md` §15). The pad test of `EmuSen_Settings_Reference.md` §4.96 finds a console's stored television overscan on the frame control. **Not drawn by a test:** a RetroArch preset under a crop, which takes the same rectangle and clip as the others.
+
 ---
 
 ## 3. The built-in shaders

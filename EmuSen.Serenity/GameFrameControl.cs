@@ -330,6 +330,15 @@ namespace EmuSen.Serenity
             set { _squarePixels = value; InvalidateVisual(); }
         }
 
+        private PictureCrop _crop;
+
+        // What is hidden at the picture's edges, the rest filling the rectangle the whole picture had; nothing by default - see EmuSen_Serenity.md §2.10.
+        public PictureCrop Crop
+        {
+            get => _crop;
+            set { _crop = value.IsNone ? PictureCrop.None : value; InvalidateVisual(); }
+        }
+
         // Fits a picture of a given shape inside the bounds, or the frame's own shape when the aspect is 0 - see EmuSen_Serenity.md §2.9.
         public static (double X, double Y, double Width, double Height) ComputeLetterboxRect(
             double sourceWidth, double sourceHeight, double aspect, double actualWidth, double actualHeight) =>
@@ -550,15 +559,43 @@ namespace EmuSen.Serenity
             private SKRect Destination(Offer source, double? filterAspect = null)
             {
                 double aspect = filterAspect ?? (_owner._squarePixels ? 0 : source.Aspect);
-                var (x, y, w, h) = ComputeLetterboxRect(source.Width, source.Height * source.RowRepeat, aspect, Bounds.Width, Bounds.Height);
+                // With no shape given the part kept decides it, its pixels square - see EmuSen_Serenity.md §2.10.
+                PictureCrop crop = _owner._crop;
+                var (x, y, w, h) = ComputeLetterboxRect(source.Width * crop.Width, source.Height * source.RowRepeat * crop.Height, aspect, Bounds.Width, Bounds.Height);
                 return new SKRect((float)x, (float)y, (float)x + Math.Max(1, (int)Math.Round(w)), (float)y + Math.Max(1, (int)Math.Round(h)));
             }
 
-            private bool DrawSlang(SKCanvas canvas, Slang.SlangRunner slang, bool newFrame, Offer source) =>
-                slang.Draw(canvas, source.Rgba, source.Width, source.Height, newFrame, Destination(source));
+            // The whole frame's rectangle for the part kept to fill the one shown, drawing clipped to that one; false when nothing is hidden - see EmuSen_Serenity.md §2.10.
+            private bool BeginCrop(SKCanvas canvas, ref SKRect destination)
+            {
+                PictureCrop crop = _owner._crop;
+                if (crop.IsNone) return false;
+                canvas.Save();
+                canvas.ClipRect(destination);
+                var (x, y, w, h) = crop.Whole(destination.Left, destination.Top, destination.Width, destination.Height);
+                destination = new SKRect((float)x, (float)y, (float)(x + w), (float)(y + h));
+                return true;
+            }
 
-            private bool DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage, Offer source) =>
-                chain.Draw(canvas, context, sourceImage, source.RowRepeat, Destination(source, chain.Filter.Aspect));
+            private bool DrawSlang(SKCanvas canvas, Slang.SlangRunner slang, bool newFrame, Offer source)
+            {
+                SKRect destination = Destination(source);
+                bool cropped = BeginCrop(canvas, ref destination);
+                bool drawn = slang.Draw(canvas, source.Rgba, source.Width, source.Height, newFrame, destination);
+                if (cropped) canvas.Restore();
+                return drawn;
+            }
+
+            private bool DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage, Offer source)
+            {
+                SKRect destination = Destination(source, chain.Filter.Aspect);
+                // A filter that models the screen keeps its glass where it is and moves the picture under it.
+                if (chain.Filter.CropsItself) return chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, _owner._crop);
+                bool cropped = BeginCrop(canvas, ref destination);
+                bool drawn = chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination);
+                if (cropped) canvas.Restore();
+                return drawn;
+            }
 
             private void Draw(SKCanvas canvas, SKImage sourceImage, Offer source)
             {
@@ -569,6 +606,7 @@ namespace EmuSen.Serenity
 
                 // While a chosen filter is built the plain picture takes its shape, so nothing moves when it takes over.
                 SKRect destRect = Destination(source, _owner._activeFilter?.Aspect);
+                bool cropped = BeginCrop(canvas, ref destRect);
                 float x = destRect.Left, y = destRect.Top;
                 int upscaledW = (int)Math.Round(destRect.Width), upscaledH = (int)Math.Round(destRect.Height);
 
@@ -576,6 +614,7 @@ namespace EmuSen.Serenity
                 if (_effect == ShaderEffect.None)
                 {
                     canvas.DrawImage(sourceImage, destRect, sampling);
+                    if (cropped) canvas.Restore();
                     return;
                 }
 
@@ -594,6 +633,7 @@ namespace EmuSen.Serenity
                 canvas.Translate(x, y);
                 canvas.DrawRect(new SKRect(0, 0, upscaledW, upscaledH), paint);
                 canvas.Restore();
+                if (cropped) canvas.Restore();
             }
         }
     }

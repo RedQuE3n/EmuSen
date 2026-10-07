@@ -289,7 +289,7 @@ namespace EmuSen.WiseMan.Serenity
             using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(8, 8));
             using var image = SkiaSharp.SKImage.FromPixelCopy(new SkiaSharp.SKImageInfo(8, 8, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Unpremul), Solid(8, 8, 0, 0, 0));
             MethodInfo draw = chain.GetType().GetMethod("Draw")!;
-            var thrown = Assert.Throws<TargetInvocationException>(() => draw.Invoke(chain, new object?[] { surface.Canvas, null, image, 1, new SkiaSharp.SKRect(0, 0, 8, 8) }));
+            var thrown = Assert.Throws<TargetInvocationException>(() => draw.Invoke(chain, new object?[] { surface.Canvas, null, image, 1, new SkiaSharp.SKRect(0, 0, 8, 8), default(PictureCrop) }));
             Assert.Contains("'feedback'", thrown.InnerException!.Message);
             chain.Dispose();
         }

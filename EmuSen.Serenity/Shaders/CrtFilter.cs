@@ -83,7 +83,6 @@ namespace EmuSen.Serenity.Shaders
             Choice("screen", "Screen", DefaultScreen, Screens.Select(s => s.Label).ToArray()),
             Choice("colour", "Colour", 0, Colours.Select(c => c.Label).ToArray()),
             new("curvature", "Curvature", 1f, 0f, 2f, 0.05f),
-            new("overscan", "Overscan (0 shows the whole picture)", 0f, 0f, 10f, 0.5f),
             Choice("level", "Picture brightness", 0, "Bright", "The tube's own"),
             new("displayNits", "Display brightness, cd/m²", 300f, 100f, 1000f, 10f),
             Choice("subpixels", "Display subpixels", 1, "None", "RGB", "BGR"),
@@ -132,6 +131,7 @@ namespace EmuSen.Serenity.Shaders
             ConsoleDefaults = ConsoleTiming,
             Aspect = DisplayShape.Television,
             RowsOnce = true,
+            CropsItself = true,
             RequiresDevice = true,
         };
 
@@ -456,11 +456,11 @@ half4 main(float2 coord) {
     }
 " + (spot ? "    return half4(weighted / max(sum, float3(0.000001)) + step(sum, float3(0.000001)) * variance(float3(0.0)), 1.0);\n}" : "    return half4(sum, 1.0);\n}");
 
-        // Where a point of the tube's face falls in the picture: the frame fills the face whatever its rows, width or region, enlarged past it by the overscan - see EmuSen_CRT.md §14.
+        // Where a point of the tube's face falls in the picture: the part of the frame kept fills the face, whatever its rows, width or region - see EmuSen_CRT.md §14 and §15.
         private static string Raster => @"
-uniform float overscan;
+uniform float4 crop;
 float2 pictureOf(float2 face) {
-    return face / ((1.0 + overscan * 0.01) * float2(1.0, 0.75)) * 0.5 + 0.5;
+    return crop.xy + (face / float2(1.0, 0.75) * 0.5 + 0.5) * crop.zw;
 }
 ";
 

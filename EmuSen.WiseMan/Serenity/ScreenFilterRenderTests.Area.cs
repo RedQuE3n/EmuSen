@@ -88,5 +88,42 @@ namespace EmuSen.WiseMan.Serenity
             Assert.InRange(pal / ntsc, 0.91, 0.96);
             Within(ntsc, woven, 0.02, "two fields of 240 lines have one field's spot");
         }, default);
+
+        // One setting, two paths: under the filter the part kept fills the tube as it fills the screen with none, for a PAL field and an NTSC one - see EmuSen_CRT.md §15.
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(2)]
+        public Task Under_the_crt_filter_a_crop_shows_the_part_the_plain_picture_shows(int quality) => Session.Dispatch(() =>
+        {
+            (string, float)[] set = { ("quality", quality), ("level", 0f) };
+            var uneven = new PictureCrop(0.1, 0.125, 0.05, 0.25);
+            foreach (PictureCrop crop in new[] { uneven, PictureCrop.Television })
+                foreach (int rows in new[] { 240, 288 })
+                {
+                    string what = $"{rows} lines, quality {quality}, crop {crop}";
+                    if (Cropped(crop, "N64", 640, rows, 2, 1280, 800, Twice(PictureCropTests.Marked(640, rows, crop, whiteInside: true)), set) is not { } kept) return;
+                    SameArea((107, 0, 1173, 800), LitOf(kept), 2, what);
+                    if (Cropped(crop, "N64", 640, rows, 2, 1280, 800, Twice(PictureCropTests.Marked(640, rows, crop, whiteInside: false)), set) is not { } hidden) return;
+                    Assert.True(hidden.Luminance(160, 60, 960, 680) < 0.004, $"{what}: what was to be hidden lights the tube, {hidden.Luminance(160, 60, 960, 680):F4}");
+                    if (Cropped(PictureCrop.None, "N64", 640, rows, 2, 1280, 800, Twice(PictureCropTests.Marked(640, rows, crop, whiteInside: false)), set) is not { } whole) return;
+                    Assert.True(LitOf(whole) is (<= 109, <= 2, >= 1171, >= 798), $"{what}: uncropped, the same frame's margin is lit to the glass's edges, {LitOf(whole)}");
+                }
+        }, default);
+
+        // The glass does not move: cropped, the tube's rounded corner is where it was and as dark, with the picture lit beside it.
+        [Fact]
+        public Task Under_the_crt_filter_a_crop_moves_the_picture_and_not_the_glass() => Session.Dispatch(() =>
+        {
+            (string, float)[] set = With(Plain, ("signal", 0f), ("mask", 1f));
+            byte[][] white = Twice(Grey(640, 240, 1));
+            if (Cropped(PictureCrop.None, "N64", 640, 240, 2, 1280, 800, white, set) is not { } whole) return;
+            if (Cropped(PictureCrop.Enlarged(1.5), "N64", 640, 240, 2, 1280, 800, white, set) is not { } cropped) return;
+            foreach (Crt picture in new[] { whole, cropped })
+            {
+                Assert.True(picture.Luminance(108, 1, 4, 4) < 0.01, $"the tube's corner is dark: {picture.Luminance(108, 1, 4, 4):F4}");
+                Assert.True(picture.Luminance(150, 40, 8, 40) > 0.2, $"and the picture inside it lit: {picture.Luminance(150, 40, 8, 40):F4}");
+            }
+        }, default);
     }
 }

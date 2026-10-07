@@ -150,7 +150,7 @@ namespace EmuSen.WiseMan.Mistress
             ShaderEntry bezel = snes.List.Models.Single(e => e.IsPreset && e.Relative!.StartsWith("bezel/"));
             Assert.Equal("MBZ 0 SMOOTH-ADV GDV", bezel.Name);
             Assert.Equal("bezel / Mega Bezel / Presets / Base CRT Presets", bezel.Group);
-            Assert.Equal(new[] { "None", "CRT (Lottes)", "Scanlines", "Simple CRT" }, snes.List.Models.Where(e => !e.IsPreset).Select(e => e.Stored));
+            Assert.Equal(new[] { "None", "CRT", "CRT (Lottes)", "Scanlines", "Simple CRT" }, snes.List.Models.Where(e => !e.IsPreset).Select(e => e.Stored));
             var groups = snes.List.Models.Select(e => e.Group).ToList();
             Assert.Equal(groups.Distinct().Count(), groups.Where((g, i) => i == 0 || groups[i - 1] != g).Count());
 
@@ -277,6 +277,29 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Empty(GraphicsConfig.Load().ShaderParameters);
             Assert.All(snes.Sliders, s => Assert.True(s.IsDefault));
             Assert.All(snes.Parameters, s => Assert.True(s.IsDefault));
+            window.Close();
+        }, default);
+
+        // The CRT's settings that are choices read as names, step from one to the next, and are stored as their numbers - see EmuSen_Settings_Reference.md §4.40.
+        [Fact]
+        public Task The_crt_s_choices_are_shown_by_name_and_stored_by_number() => Session.Dispatch(() =>
+        {
+            var window = new ShaderSettingsWindow(new GraphicsConfig(), null, "SNES");
+            window.Show();
+            ShaderPanel snes = window.PanelFor("SNES");
+            ChooseRow(snes, e => e.Stored == CrtFilter.Name);
+
+            Assert.Equal(CrtFilter.Parameters.Select(p => p.Description), snes.Parameters.Select(s => s.Label));
+            string[] Texts(SliderRow row) => row.GetLogicalDescendants().OfType<TextBlock>().Where(t => t.IsVisible).Select(t => t.Text ?? "").ToArray();
+            Assert.Contains("Balanced", Texts(Row(snes, "Quality")));
+            Assert.Contains("Composite", Texts(Row(snes, "Signal")));
+            Assert.Contains("Consumer TV, 20-inch", Texts(Row(snes, "Screen")));
+            Assert.Contains("Bright", Texts(Row(snes, "Picture brightness")));
+
+            Press(Row(snes, "Quality"), Key.Right);
+            Assert.Equal("2", GraphicsConfig.Load().ParametersFor("SNES", CrtFilter.Name)["quality"]);
+            Assert.Contains("Accurate", Texts(Row(snes, "Quality")));
+            Assert.Contains("default Balanced", Texts(Row(snes, "Quality")));
             window.Close();
         }, default);
 

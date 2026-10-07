@@ -1,6 +1,6 @@
 # EmuSen_CRT — a physically modelled CRT filter
 
-A design (2026-10-07), with its Accurate tier (§11) and its two lower tiers (§12) built the same day. The request was for a very accurate CRT filter, offered in tiers if it turns
+A design (2026-10-07), built the same day: the Accurate tier (§11), the two lower tiers (§12), and the filter offered to players (§13). The request was for a very accurate CRT filter, offered in tiers if it turns
 out to be a performance hog: the lowest tier for performance, the highest for accuracy. This document is step 1 of
 four: the survey of existing shaders, the physical literature with a source for every number, the choice of
 delivery path, the model, the tiers with their predicted costs, the player's settings, and the questions that needed
@@ -26,7 +26,7 @@ located and no number is used.
 | 1 | Research and design (this document) | written 2026-10-07 |
 | 2 | The Accurate tier, its render tests, its cost on the RX 6800 at 1080p and 4K | built 2026-10-07: §11, with `FilterChain`'s extensions in `EmuSen_Serenity.md` §3.9 |
 | 3 | Balanced and Performance as reductions, each measured against Accurate | built 2026-10-07: §12 |
-| 4 | Graphics settings per console, the settings reference, the fit audit | not started |
+| 4 | Graphics settings per console, the settings reference, the fit audit | built 2026-10-07: §13 |
 
 The filter exists as `CrtFilter.Filter` and is drawn by the tests and the bench; **it is not yet in a console's list**
 (§11.11). The existing **CRT (Lottes)** (`EmuSen_Serenity.md` §3.4) and **Simple CRT** stay as they are.
@@ -1408,7 +1408,7 @@ Balanced to **1.0 ΔE for 0.04 ms** at 1080p flat out. It is in.
 ### 12.3 The bright picture, and the conflict in the request
 
 **As built.** A new setting, **Picture brightness**: *Bright* (the default) or *The tube's own*. Bright puts the
-tube's white at **three quarters of the display's peak** (`BrightWhite`, 0.75), whatever the display; the
+tube's white at **three fifths of the display's peak** (`BrightWhite`, 0.6, as decided in §12.9; three quarters when first built), whatever the display; the
 tube's own is §11.8's absolute arithmetic, the Display brightness and Tube white settings. Both then use the
 same headroom rules, now two of them:
 
@@ -1425,7 +1425,7 @@ uses most of the display's brightness and a mask at full depth through the mid t
 Accurate tier at 1440 × 1080 (`depth.py`: the green channel's swing along a line across the mask, over its
 mean; full depth is 2.43):
 
-| Grey (drive) | White at 0.75 of peak (the default) | at 0.6 | at 0.5 | the tube's own at 100 of 300 cd/m² |
+| Grey (drive) | White at 0.75 of peak (as first built) | at 0.6 (the default, decided) | at 0.5 | the tube's own at 100 of 300 cd/m² |
 |---|---|---|---|---|
 | 0.25 | 2.43 (full) | 2.43 | 2.43 | 2.44 |
 | 0.5 | 1.18 | 1.47 | 1.71 | 2.43 |
@@ -1434,9 +1434,9 @@ mean; full depth is 2.43):
 
 A slot mask lights a seventh of the face, and a mid-grey line's centre is about three times its mean, so full
 depth at a drive of 0.5 needs white at a quarter of the display's peak or less. No setting gives a bright
-picture and a deep mid-tone mask together on an SDR display; HDR would (§4.1). The default is the request's first
-half, three quarters, with the mask full in the darks and half deep at mid grey; **a lower share is §12.9's
-first question**, with the table as its evidence.
+picture and a deep mid-tone mask together on an SDR display; HDR would (§4.1). The default was built as the request's first
+half, three quarters, with the mask full in the darks and half deep at mid grey, and the table put to a decision:
+**0.6 was decided (§12.9)**, its column above.
 
 ### 12.4 How far each tier is from Accurate
 
@@ -1564,7 +1564,61 @@ The laptop needs the same, with permission asked first.
 ### 12.9 Questions this step raises
 
 1. **The bright default's share** (§12.3): three quarters of the display's peak, with the mask half deep at mid
-   grey, or a lower share for a deeper mask. The table there is the trade.
+   grey, or a lower share for a deeper mask. **Decided 2026-10-07 by the tester: white at 0.6 of the display's
+   peak**, with §12.3's depth table as the evidence (at 0.6 the mask is 1.47 of its full 2.43 at mid grey, 0.70 at
+   a drive of 0.75 and 0.29 at white). The tube's own brightness stays the other choice.
 2. **Performance's cost** (§12.5): half a Lottes on the RX 6800. If the laptop shows that is too much, the next
    reductions are the curvature (0.01 ms here), the mask's slot rows, and a single beam read; each would be
-   measured against §12.4's distance first.
+   measured against §12.4's distance first. **Decided 2026-10-07: the tester runs the handheld and laptop benches
+   with §12.7's package; the reductions wait for their results.**
+
+---
+
+## 13. Offered to players (2026-10-07)
+
+**Listed per console.** **CRT** is one of `ScreenFilters.All`'s choices, after None and before CRT (Lottes), and
+`NamesFor` offers it to the NES, SNES, Genesis and N64 and to no handheld. The default filter stays None
+(§9, decision 4).
+
+**The running console is told.** Mistress's `ApplyScreenFilter` sets `GameFrameControl.FilterConsole` before the
+filter, so the chain starts from that console's constants (§11.1's `ConsoleTiming`) and defaults. Before this, the
+filter in Mistress would have drawn every console with a standard line's timing: the Genesis's static artifacts as
+the N64's crawling ones.
+
+**Its choices read as choices.** The Shaders window draws each parameter that names its values
+(`SlangParameter.Choices`) as a row of named choices: LunaP's `SliderRow.Choices` (`LunaP.md` §199), a slider stepped
+from one choice to the next, showing *Balanced*, *Composite*, *Consumer TV, 20-inch* and "default ..." where it showed
+2, 2 and 1. Left and right still step, so the pad's grammar is unchanged; why not a dropdown is `LunaP.md` §199. A
+built-in filter's row defaults are now `ScreenFilter.DefaultFor` the console the tab is for, not the parameter's own,
+which is how a console's own default would show; the CRT's are the same for all four consoles. Stored values are the
+choices' numbers, as every other parameter's are (`EmuSen_Settings_Reference.md` §4.48.3).
+
+**Built off the render thread**, with the picture before it kept until the new filter is ready, and its passes warmed
+a draw at a time (`EmuSen_Serenity.md` §3.10, decision 6 of §11.12): a Quality change now costs at most 5.9 ms of
+one draw with the driver's cache warm and 29 ms with it cold, against 4 to 10 and 52 when it was built in the draw.
+
+**No real CRT frame on Skia's software path in a window or pad test.** The filter `RequiresDevice`, so every
+headless window and pad test draws the plain picture in its place: that is the stand-in, for the Shaders window's,
+the pad menu's and the fit audit's tests, which test the window. Where a real picture is wanted, the tests draw on
+the device (`ScreenFilterRenderTests` and `ScreenFilterDeviceTests`, through `ShaderBench.Picture`), and the two
+cases that test the software path itself say so with `DrawDeviceFiltersInSoftware`.
+
+**A pad test's route, changed.** With one more built-in in the list, `The_shaders_window_from_the_pad_menu_adjusts_a_
+built_in_filter_and_resets_it_all` failed in all seven of its rows: its search for a pad path from a slider to Reset All
+went left onto the list, where the row it landed on (Simple CRT now, a heading before) changed the shader shown and
+with it the controls the search was walking, and no path was found. The route a player takes exists and is short (up
+the column of sliders to the row of Reset All and Use), and the test now presses it rather than searching for it; the
+same for its later step to Use. The search's fragility, a walk that changes what it walks, is the harness's and
+is recorded in `EmuSen_Settings_Reference.md` §4.96. The window itself was not changed.
+
+**Tests run for this step** (all on the RX 6800 where they draw): `ScreenFilterRenderTests`, `ScreenFilterChainTests`,
+`ScreenFilterDeviceTests`, `GameFrameControl`'s, `SlangFrameControlTests`, `ShaderSettingsWindowTests` (a new case:
+the CRT's choices shown by name, stepped, and stored by number), the pad menu's and pad settings' shader cases, the fit
+audit's Shaders and Graphics cases at 1280 × 800 and 1920 × 1200 (a new case, `ShaderSettingsCrt`, with the CRT shown
+and its longest choices against their defaults), and LunaP's `SliderRowTests` and `SliderListTests`. Every existing
+filter still hashes identically, through the raster path and on the device. **Mutants** (8, each caught): the console
+not told; the choices not shown; the CRT not listed; and §3.10's five in `EmuSen_Serenity.md`.
+
+**What is not done.** The tester's bench runs on the handheld and the laptop (§12.7, §12.9), and what they decide for
+Performance; the NES's raw signal (§9, decision 5); the decoders' axes (decision 11); and moving one program's compile
+off the render thread, which Skia's GL backend gives no way to do (`EmuSen_Serenity.md` §3.10).

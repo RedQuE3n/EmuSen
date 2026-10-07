@@ -57,6 +57,38 @@ namespace EmuSen.Serenity
         private ScreenFilter? _activeFilter;
         private FilterChain? _chain;
 
+        // The chain being built for a newly chosen filter or console; the one before it is drawn until it is ready - see EmuSen_Serenity.md §3.10.
+        private FilterChain? _nextChain;
+
+        // Starts the chain for the filter now chosen, on a pool thread; called under the lock.
+        private void Rechain()
+        {
+            _nextChain?.Dispose();
+            _nextChain = _activeFilter is { } filter ? new FilterChain(filter, _filterConsole, _shaderParameters, background: true) { DrawInSoftware = _drawInSoftware } : null;
+            if (_nextChain is null)
+            {
+                _chain?.Dispose();
+                _chain = null;
+            }
+        }
+
+        private bool _drawInSoftware;
+
+        // A filter that needs a device drawn through Skia's software path anyway, for the tests of that path - see EmuSen_Serenity.md §3.10.
+        internal bool DrawDeviceFiltersInSoftware
+        {
+            get { lock (_cacheLock) return _drawInSoftware; }
+            set { lock (_cacheLock) { _drawInSoftware = value; if (_chain is { } c) c.DrawInSoftware = value; if (_nextChain is { } n) n.DrawInSoftware = value; } }
+        }
+
+        // Blocks until the chosen filter's passes are built, for a test or a bench that must not see the plain picture first.
+        internal void WaitForFilter()
+        {
+            FilterChain? next;
+            lock (_cacheLock) next = _nextChain ?? _chain;
+            next?.Wait();
+        }
+
         public ScreenFilter? ActiveFilter
         {
             get => _activeFilter;
@@ -66,8 +98,7 @@ namespace EmuSen.Serenity
                 {
                     if (ReferenceEquals(_activeFilter, value)) return;
                     _activeFilter = value;
-                    _chain?.Dispose();
-                    _chain = null;
+                    Rechain();
                 }
                 InvalidateVisual();
             }
@@ -85,8 +116,7 @@ namespace EmuSen.Serenity
                 {
                     if (string.Equals(_filterConsole, value, StringComparison.Ordinal)) return;
                     _filterConsole = value;
-                    _chain?.Dispose();
-                    _chain = null;
+                    Rechain();
                 }
                 InvalidateVisual();
             }
@@ -127,6 +157,7 @@ namespace EmuSen.Serenity
                 {
                     _shaderParameters = value is null ? null : new Dictionary<string, float>(value, StringComparer.Ordinal);
                     _chain?.SetParameters(_shaderParameters);
+                    _nextChain?.SetParameters(_shaderParameters);
                     _slang?.SetParameters(_shaderParameters);
                 }
                 InvalidateVisual();
@@ -134,7 +165,7 @@ namespace EmuSen.Serenity
         }
 
         // What the running filter's chain holds for a parameter, NaN when there is no chain yet, for a test.
-        internal float FilterParameter(string id) { lock (_cacheLock) return _chain?.ValueOf(id) ?? float.NaN; }
+        internal float FilterParameter(string id) { lock (_cacheLock) return (_nextChain ?? _chain)?.ValueOf(id) ?? float.NaN; }
 
         // Whether the preset has finished building, for a test that waits on it.
         internal bool SlangBuilt { get { lock (_cacheLock) return _slang?.Built ?? true; } }
@@ -345,7 +376,16 @@ namespace EmuSen.Serenity
                 _cachedImage = null;
                 _chain?.Dispose();
                 _chain = null;
+                _nextChain?.Dispose();
+                _nextChain = null;
             }
+        }
+
+        // Shown again, the chosen filter is built again, its chains having been let go on leaving.
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            lock (_cacheLock) if (_activeFilter is not null && _chain is null && _nextChain is null) Rechain();
         }
 
         public override void Render(DrawingContext context)
@@ -442,7 +482,13 @@ namespace EmuSen.Serenity
                     }
                     try
                     {
-                        if (_owner._activeFilter is { } filter && _owner._chain is null) { _owner._chain = new FilterChain(filter, _owner._filterConsole); _owner._chain.SetParameters(_owner._shaderParameters); }
+                        // The chain built for a new choice takes over once its passes are ready; until then the one before it, or the plain picture, is drawn.
+                        _owner._nextChain?.Prepare(grContext);
+                        if (_owner._nextChain is { Settled: true } next)
+                        {
+                            _owner._chain?.Dispose();
+                            (_owner._chain, _owner._nextChain) = (next, null);
+                        }
 
                         // A preset that will draw reads the array itself, so no image of the source is made, and one made earlier is now stale - see EmuSen_Serenity.md §9.3.
                         bool presetOnly = _owner._slang is { Ready: true } && _owner._chain is null;
@@ -456,8 +502,7 @@ namespace EmuSen.Serenity
                         else
                         {
                             if (_owner._cachedImage is null) { CopySource(source); copy = true; }
-                            if (_owner._chain is { } chain) DrawFiltered(canvas, chain, grContext, _owner._cachedImage!, source);
-                            else Draw(canvas, _owner._cachedImage!, source);
+                            if (!(_owner._chain is { } chain && DrawFiltered(canvas, chain, grContext, _owner._cachedImage!, source))) Draw(canvas, _owner._cachedImage!, source);
                         }
 
                         // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
@@ -497,7 +542,7 @@ namespace EmuSen.Serenity
             private bool DrawSlang(SKCanvas canvas, Slang.SlangRunner slang, bool newFrame, Offer source) =>
                 slang.Draw(canvas, source.Rgba, source.Width, source.Height, newFrame, Destination(source));
 
-            private void DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage, Offer source) =>
+            private bool DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage, Offer source) =>
                 chain.Draw(canvas, context, sourceImage, source.RowRepeat, Destination(source, chain.Filter.Aspect));
 
             private void Draw(SKCanvas canvas, SKImage sourceImage, Offer source)

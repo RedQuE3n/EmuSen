@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using SkiaSharp;
 
 namespace EmuSen.Serenity.Shaders
@@ -21,6 +23,21 @@ namespace EmuSen.Serenity.Shaders
         private GRContext? _context;
         private long _frames;
 
+        // Passes compiled together, ready to be drawn with or thrown away whole.
+        private sealed record Compiled(IReadOnlyList<FilterPass> Passes, SKRuntimeEffect[] Effects, SKRuntimeShaderBuilder[] Builders) : IDisposable
+        {
+            public void Dispose()
+            {
+                foreach (SKRuntimeShaderBuilder builder in Builders) builder.Dispose();
+                foreach (SKRuntimeEffect effect in Effects) effect.Dispose();
+            }
+        }
+
+        // A build under way on a pool thread, and which request it answers, so a later request discards an earlier result - see EmuSen_Serenity.md §3.10.
+        private Task<Compiled>? _pending;
+        private int _requested;
+        private readonly bool _background;
+
         public ScreenFilter Filter { get; }
 
         // The console whose defaults the filter's parameters start from, or null for the parameters' own.
@@ -29,19 +46,33 @@ namespace EmuSen.Serenity.Shaders
         public int HistoryHeld => _history.Count;
 
         // How many times the passes were compiled, for a test that asks when a filter is rebuilt.
-        public int Builds { get; private set; }
+        public int Builds => _builds;
+        private int _builds;
 
-        public int PassCount { get { EnsureBuilt(); return _passes.Count; } }
+        public int PassCount { get { Wait(); EnsureBuilt(); return _passes.Count; } }
+
+        // Whether there are passes to draw with: the ones in use, or a build that has finished.
+        public bool Ready => _built;
+
+        // Whether its build has ended either way, so a failure can be thrown where the passes would have been drawn.
+        public bool Settled => _built || _pending is { IsFaulted: true };
+
+        // A filter that needs a device, given none, is drawn plain unless this is set, for a test of the software path - see EmuSen_Serenity.md §3.10.
+        public bool DrawInSoftware { get; set; }
 
         // Compiled at once, for a caller that wants a filter's errors now.
         public FilterChain(ScreenFilter filter) : this(filter, null) => EnsureBuilt();
 
-        public FilterChain(ScreenFilter filter, string? console)
+        public FilterChain(ScreenFilter filter, string? console) : this(filter, console, null, background: false) { }
+
+        // Background, its builds run on a pool thread and the passes in use are drawn until one finishes - see EmuSen_Serenity.md §3.10.
+        public FilterChain(ScreenFilter filter, string? console, IReadOnlyDictionary<string, float>? values, bool background)
         {
             Filter = filter;
             Console = console;
-            SetParameters(null);
-            if (filter.Build is null) EnsureBuilt();
+            _background = background;
+            SetParameters(values);
+            if (!_built && _pending is null) Request();
         }
 
         private readonly Dictionary<string, float> _values = new(StringComparer.Ordinal);
@@ -49,25 +80,51 @@ namespace EmuSen.Serenity.Shaders
         // Values by id over the filter's defaults; an id it does not declare is ignored, one left out is its default - see EmuSen_Serenity.md §3.7.
         public void SetParameters(IReadOnlyDictionary<string, float>? values)
         {
+            bool rebuild = false;
             foreach (Slang.SlangParameter parameter in Filter.Parameters ?? Array.Empty<Slang.SlangParameter>())
             {
                 float value = values is not null && values.TryGetValue(parameter.Id, out float given) ? given : Filter.DefaultFor(parameter, Console);
                 bool structural = Filter.Structural is { } ids && ids.Contains(parameter.Id);
-                if (structural && _built && (!_values.TryGetValue(parameter.Id, out float held) || held != value)) Unbuild();
+                if (structural && (!_values.TryGetValue(parameter.Id, out float held) || held != value)) rebuild = true;
                 _values[parameter.Id] = value;
             }
 
             // A console's values for ids that are not parameters are its constants: no player sets them, and passes read them as any other value.
             if (Filter.DefaultsFor(Console) is { } constants) foreach (var (id, value) in constants) _values.TryAdd(id, value);
+            if (rebuild && (_built || _pending is not null)) Request();
         }
 
         public float ValueOf(string id) => _values.TryGetValue(id, out float value) ? value : float.NaN;
 
-        // The passes compiled, from the filter's own list or from its values; a built filter is compiled at its first draw - see EmuSen_Serenity.md §3.9.
-        private void EnsureBuilt()
+        // A build of the current values: now, or on a pool thread while the passes in use go on being drawn.
+        private void Request()
         {
-            if (_built) return;
-            IReadOnlyList<FilterPass> passes = Filter.Build?.Invoke(_values) ?? Filter.Passes;
+            int request = ++_requested;
+            if (!_background)
+            {
+                Unbuild();
+                Use(Compile(new Dictionary<string, float>(_values, StringComparer.Ordinal)));
+                return;
+            }
+            var values = new Dictionary<string, float>(_values, StringComparer.Ordinal);
+            Task<Compiled> build = Task.Run(() => Compile(values));
+            _pending = build;
+            _pendingRequest = request;
+        }
+
+        private int _pendingRequest;
+
+        // Blocks until any build under way has finished, for a test or a caller that cannot draw without it.
+        public void Wait()
+        {
+            try { _pending?.Wait(); } catch (AggregateException) { }
+            TakeFinished();
+            if (_staged is { } staged) { _staged = null; Unbuild(); Use(staged); }
+        }
+
+        private Compiled Compile(IReadOnlyDictionary<string, float> values)
+        {
+            IReadOnlyList<FilterPass> passes = Filter.Build?.Invoke(values) ?? Filter.Passes;
             var effects = new SKRuntimeEffect[passes.Count];
             for (int i = 0; i < passes.Count; i++)
             {
@@ -76,20 +133,93 @@ namespace EmuSen.Serenity.Shaders
                 for (int k = 0; k < i; k++) effects[k].Dispose();
                 throw new InvalidOperationException($"Pass {i} of the '{Filter.Name}' filter did not compile: {errors}");
             }
-            _passes = passes;
-            _effects = effects;
-            _builders = effects.Select(effect => new SKRuntimeShaderBuilder(effect)).ToArray();
-            _surfaces = new SKSurface?[passes.Count];
-            _earlier = new SKSurface?[passes.Count];
-            _built = true;
-            Builds++;
+            Interlocked.Increment(ref _builds);
+            return new Compiled(passes, effects, effects.Select(effect => new SKRuntimeShaderBuilder(effect)).ToArray());
         }
+
+        // The finished build of the latest request takes the place of the passes in use; a failed one is thrown here, where a draw would have.
+        private void TakeFinished()
+        {
+            if (_pending is not { IsCompleted: true } done) return;
+            _pending = null;
+            if (done.IsFaulted) throw done.Exception!.GetBaseException();
+            if (_pendingRequest != _requested) { done.Result.Dispose(); return; }
+            _staged?.Dispose();
+            (_staged, _warmed) = (done.Result, 0);
+        }
+
+        // A finished build waiting to be warmed: its passes are drawn once each at one pixel, a pass a draw, so the driver compiles one program a frame.
+        private Compiled? _staged;
+        private int _warmed;
+        private readonly Dictionary<SKColorType, SKImage> _blanks = new();
+
+        private SKImage Blank(SKColorType type)
+        {
+            if (_blanks.TryGetValue(type, out SKImage? image)) return image;
+            using SKSurface surface = SKSurface.Create(new SKImageInfo(1, 1, type, SKAlphaType.Premul));
+            surface.Canvas.Clear(SKColors.Black);
+            return _blanks[type] = surface.Snapshot();
+        }
+
+        // Warms the staged build's next pass on the device, and puts the build in use once every pass has been drawn - see EmuSen_Serenity.md §3.10.
+        private void Warm(GRContext? context)
+        {
+            if (_staged is not { } staged) return;
+            if (context is not null && _warmed < staged.Passes.Count)
+            {
+                int i = _warmed++;
+                FilterPass pass = staged.Passes[i];
+                SKColorType Of(FilterPass p) => p.Float ? SKColorType.RgbaF16 : SKColorType.Rgba8888;
+                var named = new Dictionary<string, Output>(StringComparer.Ordinal);
+                for (int k = 0; k < i; k++) if (staged.Passes[k].Name is { } name) named[name] = new Output(Blank(Of(staged.Passes[k])), 1, 1);
+                SKImage original = Blank(SKColorType.Rgba8888);
+                SKImage source = i == 0 ? original : Blank(Of(staged.Passes[i - 1]));
+                var made = new List<IDisposable>();
+                try
+                {
+                    using SKShader shader = Bind(staged.Effects[i], staged.Builders[i], pass, source, i == 0, original, 1, made, named, pass.Feedback ? Blank(Of(pass)) : null,
+                        1, 1, 1, 1, 1, 1, new View(1, 1, 1, 0, 0));
+                    using var paint = new SKPaint { Shader = shader, BlendMode = pass.Float ? SKBlendMode.Src : SKBlendMode.SrcOver };
+                    using SKSurface? surface = SKSurface.Create(context, false, new SKImageInfo(1, 1, Of(pass), SKAlphaType.Premul));
+                    surface?.Canvas.DrawRect(new SKRect(0, 0, 1, 1), paint);
+                    surface?.Flush();
+                }
+                finally
+                {
+                    foreach (IDisposable item in made) item.Dispose();
+                }
+                if (_warmed < staged.Passes.Count) return;
+            }
+            _staged = null;
+            Unbuild();
+            Use(staged);
+        }
+
+        private void EnsureBuilt()
+        {
+            if (_built) return;
+            TakeFinished();
+            if (!_built && !_background) Use(Compile(new Dictionary<string, float>(_values, StringComparer.Ordinal)));
+        }
+
+        private void Use(Compiled compiled)
+        {
+            _compiled = compiled;
+            _passes = compiled.Passes;
+            _effects = compiled.Effects;
+            _builders = compiled.Builders;
+            _surfaces = new SKSurface?[_passes.Count];
+            _earlier = new SKSurface?[_passes.Count];
+            _built = true;
+        }
+
+        private Compiled? _compiled;
 
         private void Unbuild()
         {
             DisposeSurfaces();
-            foreach (SKRuntimeShaderBuilder builder in _builders) builder.Dispose();
-            foreach (SKRuntimeEffect effect in _effects) effect.Dispose();
+            _compiled?.Dispose();
+            _compiled = null;
             (_passes, _effects, _builders, _built) = (Array.Empty<FilterPass>(), Array.Empty<SKRuntimeEffect>(), Array.Empty<SKRuntimeShaderBuilder>(), false);
         }
 
@@ -114,9 +244,21 @@ namespace EmuSen.Serenity.Shaders
 
         private readonly record struct Output(SKImage Image, int Width, int Height);
 
-        public void Draw(SKCanvas canvas, GRContext? context, SKImage original, int rowRepeat, SKRect destination)
+        // A step of a chain not yet drawn with: its finished build taken, and one pass warmed on the device, so that it is ready when it takes over.
+        public void Prepare(GRContext? context)
         {
+            TakeFinished();
+            Warm(context is null && Filter.RequiresDevice && !DrawInSoftware ? null : context);
+        }
+
+        // Draws the filtered picture and says so; false, nothing was drawn, and the caller draws the picture plain - see EmuSen_Serenity.md §3.10.
+        public bool Draw(SKCanvas canvas, GRContext? context, SKImage original, int rowRepeat, SKRect destination)
+        {
+            if (context is null && Filter.RequiresDevice && !DrawInSoftware) return false;
+            TakeFinished();
+            Warm(context);
             EnsureBuilt();
+            if (!_built) return false;
             if (!ReferenceEquals(context, _context))
             {
                 DisposeSurfaces();
@@ -159,7 +301,7 @@ namespace EmuSen.Serenity.Shaders
                         made.Add(feedback);
                     }
 
-                    using SKShader shader = Bind(i, pass, source, sourceIsOriginal, original, rowRepeat, made, named, feedback,
+                    using SKShader shader = Bind(_effects[i], _builders[i], pass, source, sourceIsOriginal, original, rowRepeat, made, named, feedback,
                         sourceWidth, sourceHeight, originalWidth, originalHeight, width, height, view);
                     using var paint = new SKPaint { Shader = shader };
 
@@ -187,17 +329,16 @@ namespace EmuSen.Serenity.Shaders
             {
                 foreach (IDisposable item in made) item.Dispose();
             }
+            return true;
         }
 
         // The rectangle shown, in the canvas's units and in the device's pixels.
         private readonly record struct View(int Width, int Height, float PixelScale, float OriginX, float OriginY);
 
         // Every child and uniform a pass declares, and only those; a missing history frame is the frame itself.
-        private SKShader Bind(int index, FilterPass pass, SKImage source, bool sourceIsOriginal, SKImage original, int rowRepeat, List<IDisposable> made,
+        private SKShader Bind(SKRuntimeEffect effect, SKRuntimeShaderBuilder builder, FilterPass pass, SKImage source, bool sourceIsOriginal, SKImage original, int rowRepeat, List<IDisposable> made,
             Dictionary<string, Output> named, SKImage? feedback, int sourceWidth, int sourceHeight, int originalWidth, int originalHeight, int width, int height, View view)
         {
-            SKRuntimeEffect effect = _effects[index];
-            SKRuntimeShaderBuilder builder = _builders[index];
             SKMatrix stretch = SKMatrix.CreateScale(1, rowRepeat);
 
             SKShader Child(SKImage image, bool linear, bool stretched)
@@ -279,6 +420,13 @@ namespace EmuSen.Serenity.Shaders
 
         public void Dispose()
         {
+            _requested++;
+            _pending?.ContinueWith(build => { if (build.IsCompletedSuccessfully) build.Result.Dispose(); }, TaskScheduler.Default);
+            _pending = null;
+            _staged?.Dispose();
+            _staged = null;
+            foreach (SKImage image in _blanks.Values) image.Dispose();
+            _blanks.Clear();
             Unbuild();
             foreach (SKImage image in _history) image.Dispose();
             _history.Clear();

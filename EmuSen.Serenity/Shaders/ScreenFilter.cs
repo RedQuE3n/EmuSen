@@ -58,6 +58,9 @@ namespace EmuSen.Serenity.Shaders
         // Width over height of the rectangle the picture is shown in; null is the frame's own pixel count.
         public double? Aspect { get; init; }
 
+        // Drawn plain where there is no GPU, whose software path would take seconds a frame - see EmuSen_Serenity.md §3.10.
+        public bool RequiresDevice { get; init; }
+
         // The frame's rows drawn once each, where a core hands them over to be repeated; a filter that models the screen counts scanlines - see EmuSen_Serenity.md §3.9.
         public bool RowsOnce { get; init; }
 

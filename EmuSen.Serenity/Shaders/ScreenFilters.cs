@@ -18,6 +18,7 @@ namespace EmuSen.Serenity.Shaders
         public static IReadOnlyList<ScreenFilterChoice> All { get; } = new[]
         {
             new ScreenFilterChoice(None, ShaderEffect.None, null),
+            new ScreenFilterChoice(CrtFilter.Name, ShaderEffect.None, CrtFilter.Filter),
             new ScreenFilterChoice(CrtFilters.Lottes.Name, ShaderEffect.None, CrtFilters.Lottes),
             new ScreenFilterChoice(HandheldFilters.DmgLcd.Name, ShaderEffect.None, HandheldFilters.DmgLcd),
             new ScreenFilterChoice(HandheldFilters.PocketLcd.Name, ShaderEffect.None, HandheldFilters.PocketLcd),

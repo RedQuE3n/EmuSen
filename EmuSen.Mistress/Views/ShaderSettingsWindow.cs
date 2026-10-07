@@ -571,6 +571,7 @@ namespace EmuSen.Mistress.Views
         {
             IReadOnlyDictionary<string, string> stored = Config.ParametersFor(Console, entry.Stored);
             int count = parameters.Count(p => !SlangParameters.IsHeading(p));
+            ScreenFilter? builtIn = entry.IsPreset ? null : ScreenFilters.Find(entry.Stored).Filter;
 
             var items = new List<object>(parameters.Count);
             foreach (SlangParameter parameter in parameters)
@@ -582,17 +583,20 @@ namespace EmuSen.Mistress.Views
                     continue;
                 }
 
+                // A built-in filter's default may be this console's own - see EmuSen_Serenity.md §3.9.
+                float initial = builtIn?.DefaultFor(parameter, Console) ?? parameter.Initial;
                 items.Add(new SliderItem(
                     string.IsNullOrWhiteSpace(parameter.Description) ? parameter.Id : parameter.Description.Trim(),
                     Exact(parameter.Minimum),
                     Exact(parameter.Maximum),
                     Exact(parameter.Step),
-                    Exact(parameter.Initial),
-                    Exact(stored.TryGetValue(parameter.Id, out string? text) && float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) ? value : parameter.Initial))
+                    Exact(initial),
+                    Exact(stored.TryGetValue(parameter.Id, out string? text) && float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) ? value : initial))
                 {
                     Name = $"{Console}.Parameter.{parameter.Id}",
                     Tag = parameter.Id,
                     Keywords = parameter.Id,
+                    Choices = parameter.Choices,
                 });
             }
             _builtFor = entry;

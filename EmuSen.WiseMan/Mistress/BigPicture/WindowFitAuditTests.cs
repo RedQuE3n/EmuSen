@@ -37,7 +37,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         // The windows a player reaches in a game, and those reached from the themed library.
         public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
-            "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
+            "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
 
@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
             ["ThemeBrowser"] = typeof(ThemeBrowserWindow), ["ThemeDetail"] = typeof(ThemeDetailWindow), ["ThemeAbout"] = typeof(ThemeAboutWindow),
             // The long names, where a cut would first appear (Q190).
-            ["ActiveCheatsLongCheat"] = typeof(ActiveCheatsWindow), ["ShaderSettingsLongParameter"] = typeof(ShaderSettingsWindow), ["ScreenshotLongTitle"] = typeof(ScreenshotWindow),
+            ["ActiveCheatsLongCheat"] = typeof(ActiveCheatsWindow), ["ShaderSettingsLongParameter"] = typeof(ShaderSettingsWindow), ["ShaderSettingsCrt"] = typeof(ShaderSettingsWindow), ["ScreenshotLongTitle"] = typeof(ScreenshotWindow),
             ["ResumeLongTitle"] = typeof(ResumeWindow), ["ControllerBindingsLongNames"] = typeof(InputSettingsWindow),
             ["FindByNameLongTitle"] = typeof(FindByNameWindow), ["CoverPickerLongTitle"] = typeof(CoverPickerWindow), ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
             ["ThemeDetailLongName"] = typeof(ThemeDetailWindow), ["ThemeAboutLongName"] = typeof(ThemeAboutWindow),
@@ -351,6 +351,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     for (int i = 0; i < 2000 && !panel.Reading.IsCompleted; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
                     Settle(window);
                     Assert.NotEmpty(panel.Sliders);
+                    break;
+                case "ShaderSettingsCrt":
+                    // The modelled CRT shown, its longest choice chosen against a default as long, so a row carries both names (§4.96).
+                    var graphicsCrt = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", Hidden)!.GetValue(window)!;
+                    graphicsCrt.SetParameter("SNES", EmuSen.Serenity.Shaders.CrtFilter.Name, "screen", "4");
+                    graphicsCrt.SetParameter("SNES", EmuSen.Serenity.Shaders.CrtFilter.Name, "level", "1");
+                    Call(window, "ShowShaderSettings");
+                    Settle(window);
+                    ShaderPanel crt = ((ShaderSettingsWindow)Sheets(window).Current!).PanelFor("SNES");
+                    crt.List.SelectedIndex = crt.List.Models.ToList().FindIndex(e => e.Stored == EmuSen.Serenity.Shaders.CrtFilter.Name);
+                    for (int i = 0; i < 2000 && !crt.Reading.IsCompleted; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
+                    Settle(window);
+                    Assert.NotEmpty(crt.Sliders);
                     break;
                 case "ScreenshotLongTitle":
                     string longShot = Path.Combine(_root, "shot.png");

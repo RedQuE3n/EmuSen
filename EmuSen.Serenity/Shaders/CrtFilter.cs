@@ -74,7 +74,7 @@ namespace EmuSen.Serenity.Shaders
             new(id, label, initial, 0, choices.Length - 1, 1) { Choices = choices };
 
         // Where white sits on the display when the picture is drawn bright, as a share of its peak - see EmuSen_CRT.md §12.3.
-        public const double BrightWhite = 0.75;
+        public const double BrightWhite = 0.6;
 
         public static IReadOnlyList<SlangParameter> Parameters { get; } = new SlangParameter[]
         {
@@ -124,7 +124,6 @@ namespace EmuSen.Serenity.Shaders
             [ScreenFilter.AnyConsole] = Timing(StandardActiveMicroseconds, StandardActiveMicroseconds * SubcarrierMegahertz, 0.5, 0.5),
         };
 
-        // Not yet one of ScreenFilters' choices: a frontend offers it when its settings window can draw its choices - see EmuSen_CRT.md §11.11.
         public static ScreenFilter Filter { get; } = new(Name, Array.Empty<FilterPass>(), new[] { "NES", "SNES", "Genesis", "N64" },
             "EmuSen's own, from the physics and measurements cited in EmuSen_CRT.md", Parameters)
         {
@@ -133,6 +132,7 @@ namespace EmuSen.Serenity.Shaders
             ConsoleDefaults = ConsoleTiming,
             Aspect = 4.0 / 3.0,
             RowsOnce = true,
+            RequiresDevice = true,
         };
 
         private static string N(double value) => value.ToString("0.0#######", CultureInfo.InvariantCulture);

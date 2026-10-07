@@ -2823,3 +2823,47 @@ Not gates, carried from the stages and still open:
   Battle Saga's protection device; the Z80 window's alignment.
 - **A CRAM dot on line 0 when a state is taken** (§39.2), argued and not shown to matter.
 
+## 41. Stage 7, step 1: the processors, their registers, their buses and their code (2026-10-07)
+
+Stage 7 is the debugger (`Nephrite_Plan.md` §6, row 7; G7). It is taken in three steps: this one, which shows the two
+processors without running anything; the observed frame, with breakpoints and stepping on both; and the call stack,
+watches, coverage and the profile, each a test. This step claims `DEBUG_REGISTERS` and `DEBUG_DISASSEMBLE`; `DEBUG`
+comes with the next.
+
+### 41.1 What it built
+
+- **Two processors in machine info** (`src/debugger.rs`), named as the plan's §4.3 named them: `M68K`, processor 0,
+  24 bits of address, and `Z80`, processor 1, 16 bits, each with its bus as `code_space`.
+- **Their registers** (`DEBUG_REGISTERS`), in their lists' order. The 68000's: D0-D7, A0-A7 (A7 the stack pointer of
+  the mode in use), PC, SR, USP and SSP, so both stack pointers show whichever mode the processor is in. The Z80's: AF,
+  BC, DE, HL and their alternates, IX, IY, SP, PC, I, R, WZ, the interrupt mode and the two flip-flops.
+- **The two buses as spaces**, at the ids the plan reserved for them so that no id moves: `M68KBUS` (0, 16 MiB) and
+  `Z80BUS` (1, 64 KiB), both read-only. A debugger reads them without disturbing the machine: the cartridge as the
+  port gives it (its mapper, its save RAM or EEPROM, its patches), the 68000's RAM in its mirrors, the Z80's RAM in
+  its mirror and, through the Z80's bank window, the 68000's space. What a read would change is not read: the VDP's
+  ports, the I/O ports, the YM2612, the bank register, the PSG and the bus arbiter read as `$FF` here, as do unmapped
+  addresses. The buses hold nothing of their own, so they are not in the state; the memories they show are.
+- **Disassembly** (`DEBUG_DISASSEMBLE`) by Beryl's two disassemblers: the instruction set is the space's where the
+  space is one processor's (`M68KBUS` the 68000's, `Z80BUS` and `Z80RAM` the Z80's), else the processor's asked. A
+  68000 instruction starts at an even address.
+- **Each processor's number and the space its stores are reported in** are set on both (0 and `M68KBUS`, 1 and
+  `Z80BUS`), for the next step's hooks.
+- **Machine info's `state.loads_from`** now lists 16 and 17, as §39.4's load does; it listed 17 alone.
+
+### 41.2 Measured (2026-10-07)
+
+- **The crate's tests** in the step's reach: `debugger.rs`'s three (each processor's registers against the processor,
+  the buses read as each processor sees them with the VDP's latches unchanged by a read, and each processor's code in
+  its own set from its bus, its RAM and the ROM), `v1.rs`'s, among them
+  `the_processors_and_their_buses_reach_the_host`, and `state.rs`'s: 20 and 12 pass.
+- **The kit**, corpus form on the sample: the core's cases pass (C2 lists the two new capabilities, C5 finds both
+  answering) and 64 of 64 images pass, C14 finding nine spaces and two processors where it found seven and none.
+- **WiseMan**: `NephriteTests`, the registration golden and the Genesis battery tests, 19 pass. Two of `NephriteTests`
+  were updated: the library's capabilities and the generic runner's spaces now include the two buses.
+
+### 41.3 Next
+
+Step 2: `DEBUG`, the observed frame. Each processor's step asked before it runs, breakpoints on both (the 68000's in
+the shared hooks, the Z80's the core's own), stepping by `EACH`, and the stop reporting which processor stopped, with
+the kit's C15 (every table armed gives the plain run's digests).
+

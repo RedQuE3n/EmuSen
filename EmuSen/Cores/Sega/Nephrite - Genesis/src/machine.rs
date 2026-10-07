@@ -86,11 +86,14 @@ impl Machine {
         Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], six_button: [false; 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new() }
     }
 
-    /// The spaces in id order: the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
+    /// The spaces in id order: the two buses, the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
     pub fn spaces(&self) -> Vec<SpaceRef> {
-        let mut v = [(WRAM_ID, "WRAM"), (Z80RAM_ID, "Z80RAM"), (VRAM_ID, "VRAM"), (CRAM_ID, "CRAM"), (VSRAM_ID, "VSRAM")]
-            .map(|(id, name)| SpaceRef { id, name, read_only: false })
-            .to_vec();
+        let mut v = vec![
+            SpaceRef { id: crate::debugger::M68KBUS_ID, name: "M68KBUS", read_only: true },
+            SpaceRef { id: crate::debugger::Z80BUS_ID, name: "Z80BUS", read_only: true },
+        ];
+        v.extend([(WRAM_ID, "WRAM"), (Z80RAM_ID, "Z80RAM"), (VRAM_ID, "VRAM"), (CRAM_ID, "CRAM"), (VSRAM_ID, "VSRAM")]
+            .map(|(id, name)| SpaceRef { id, name, read_only: false }));
         if self.genesis.hw.cart.has_battery() {
             v.push(SpaceRef { id: SRAM_ID, name: "SRAM", read_only: false });
         }

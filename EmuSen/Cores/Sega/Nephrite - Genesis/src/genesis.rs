@@ -173,6 +173,9 @@ impl Genesis {
             sound: if model.pal { Sound::new(53_203_425, 1, !model.model2) } else { Sound::new(4_725_000_000, 88, !model.model2) },
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
+        // The debugger's numbers: each processor's, and the bus its stores are reported in (crate::debugger).
+        (g.cpu.processor, g.cpu.space) = (0, crate::debugger::M68KBUS_ID);
+        (g.z80.processor, g.z80.space) = (1, crate::debugger::Z80BUS_ID);
         // The VDP is part-way through its frame: the line the 68000 starts on, begun at 0, as a line's start makes it.
         g.hw.vdp.line_start(START_LINE);
         (g.hw.vdp.cur_line, g.hw.vdp.cur_line_start) = (START_LINE, 0);

@@ -9,6 +9,9 @@ use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
 pub const STATE_VERSION: i32 = 17;
+/// The oldest version a state may have and still load: 16, the first the Genesis was offered to players with, lacks
+/// only what 17 added, which a load supplies as Nephrite_Native.md §39.4 says.
+pub const OLDEST_STATE_VERSION: i32 = 16;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -70,7 +73,7 @@ impl StateMachine for Machine {
             return Err(StateError::Foreign(magic));
         }
         let version = r.i32()?;
-        if version != STATE_VERSION {
+        if !(OLDEST_STATE_VERSION..=STATE_VERSION).contains(&version) {
             return Err(StateError::Version(version));
         }
         let system = r.u8()?;
@@ -84,7 +87,7 @@ impl StateMachine for Machine {
             r.bytes(&mut bytes)?;
             loaded.push((m.id, bytes));
         }
-        let registers = self.genesis.read_state(&mut r)?;
+        let registers = self.genesis.read_state(&mut r, version)?;
         self.frames = frames;
         for (id, bytes) in loaded {
             self.bytes_mut(id).expect("a listed space").copy_from_slice(&bytes);
@@ -217,6 +220,74 @@ mod tests {
         let mut b = eeprom_cart();
         b.load_state(&s).unwrap();
         assert_eq!(b.genesis.hw.cart.eeprom.as_ref().unwrap().protocol(), taken);
+    }
+
+    /// A state as version 16 wrote it: this version's bytes without the fields 17 added, and its version number.
+    fn as_version_16(m: &Machine) -> Vec<u8> {
+        let mut s = vec![0; m.state_size()];
+        m.save_state(&mut s).unwrap();
+        let mut out = Vec::new();
+        for line in m.layout().lines() {
+            let w: Vec<&str> = line.split_whitespace().collect();
+            let (at, len): (usize, usize) = (w[0].parse().unwrap(), w[1].parse().unwrap());
+            if !matches!(w[3], "FrameSize" | "EepromTransfer") {
+                out.extend_from_slice(&s[at..at + len]);
+            }
+        }
+        out[4..8].copy_from_slice(&16i32.to_le_bytes());
+        out
+    }
+
+    // A version 16 state, the players' before 17, loads: the picture's size from its registers and an EEPROM board at rest, which 16 did not hold (Nephrite_Native.md §39.4).
+    #[test]
+    fn a_version_16_state_loads_and_runs() {
+        let mut a = machine("SEGA GENESIS");
+        (a.genesis.hw.vdp.regs[1], a.genesis.hw.vdp.regs[12]) = (0x44, 0x81);
+        for _ in 0..3 {
+            a.advance();
+        }
+        a.genesis.hw.vdp.before_change(None);
+        let old = as_version_16(&a);
+        assert_eq!(old.len(), a.state_size() - 4);
+        let mut b = machine("SEGA GENESIS");
+        b.load_state(&old).unwrap();
+        assert_eq!((b.genesis.hw.vdp.frame.width, b.genesis.hw.vdp.frame.height), (320, 224));
+        a.advance();
+        b.advance();
+        assert_eq!(b.picture, a.picture);
+
+        let eeprom_cart = || {
+            let mut rom = cartridge("SEGA GENESIS", "U", None);
+            rom[0x180..0x18E].copy_from_slice(b"GM T-081586-00");
+            Machine::new(&rom, Media::read(&rom))
+        };
+        let mut c = eeprom_cart();
+        c.genesis.hw.cart.eeprom.as_mut().unwrap().write(&[(0x20_0001, 0), (0x20_0000, 1)]);
+        c.genesis.hw.cart.eeprom.as_mut().unwrap().memory[5] = 0x42;
+        let old = as_version_16(&c);
+        assert_eq!(old.len(), c.state_size() - 4 - 22);
+        let mut d = eeprom_cart();
+        d.load_state(&old).unwrap();
+        let e = d.genesis.hw.cart.eeprom.as_ref().unwrap();
+        assert_eq!((e.protocol(), e.memory[5]), (crate::eeprom::Eeprom::IDLE, 0x42));
+        assert_eq!(crate::eeprom::Eeprom::IDLE, crate::eeprom::Eeprom::new(e.board).protocol());
+        d.advance();
+    }
+
+    // Any other version is refused with the ABI's words for it, and the machine is left as it was.
+    #[test]
+    fn a_state_of_another_version_is_refused() {
+        let a = machine("SEGA GENESIS");
+        let mut b = machine("SEGA GENESIS");
+        b.frames = 9;
+        for version in [15, 2, 18] {
+            let mut s = as_version_16(&a);
+            s[4..8].copy_from_slice(&i32::to_le_bytes(version));
+            let e = b.load_state(&s).unwrap_err();
+            assert_eq!((e.clone(), e.status()), (StateError::Version(version), status::VERSION), "{version}");
+            assert_eq!(emusen_native::core::exports::shared_words(e.status()).as_deref(), Some("a state version this core does not read"));
+            assert_eq!(b.frames, 9);
+        }
     }
 
     #[test]

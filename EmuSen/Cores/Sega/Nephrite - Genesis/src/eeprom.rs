@@ -152,6 +152,9 @@ impl Eeprom {
         [state, self.scl as u16, self.sda_in as u16, self.sda_out as u16, self.shift as u16, self.bits as u16, self.taken as u16, self.address, self.upper, self.read as u16, self.ack as u16]
     }
 
+    /// A board at rest, its lines released: where a power-on leaves it.
+    pub const IDLE: [u16; 11] = [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
+
     pub fn set_protocol(&mut self, p: [u16; 11]) {
         self.state = match p[0] {
             1 => State::Receive,

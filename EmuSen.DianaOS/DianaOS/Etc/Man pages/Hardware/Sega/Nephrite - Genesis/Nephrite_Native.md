@@ -2727,7 +2727,8 @@ and C8 and Frank Thomas passes; without the EEPROM's transfer, Frank Thomas alon
   at a frame's end with a CRAM write in line 0's first pixels would show it, for one row of one frame.
 - **`EepromTransfer`**, eleven words after `MapperPages`, written only for a cartridge with an EEPROM board, since the
   layout is the machine's.
-- **The state is version 17.** A version 16 state is refused with words, as every older one is.
+- **The state is version 17.** ~~A version 16 state is refused with words, as every older one is.~~ A version 16
+  state loads, §39.4.
 
 **Pinned by** `state.rs`'s `a_loaded_state_keeps_the_size_line_0_gave_the_frame` (line 0 opened in H40, the width then
 set to H32; it fails without the size applied) and `a_loaded_state_keeps_an_eeprom_transfer_where_it_stood` (a start
@@ -2740,6 +2741,37 @@ and three bits of a command; it fails without the transfer applied), and `eeprom
 - **The kit's corpus form**, 600 frames: the six games, 6 of 6 pass; the sample, the core's cases and 64 of 64
   images pass, where Frank Thomas Big Hurt Baseball and John Madden Football 93 failed before.
 - **The crate's tests** in the state's blast radius: `state.rs`, `eeprom.rs` and `v1.rs`'s, 23 pass.
+
+### 39.4 Version 16 states still load
+
+The handheld's build, the one the Genesis was first offered with (§36), writes version 16, and the tester's resume
+and save states there are version 16. Refusing them would lose a player's place in every game. A version 16 state is
+read in its own layout, which is version 17's without `FrameSize` and `EepromTransfer`, and the two are supplied:
+
+- **The picture's size** is taken from the state's VDP registers, as line 0 would have read them (`size_frame`).
+- **An EEPROM board** is left at rest, its lines released, as at power-on (`Eeprom::IDLE`).
+
+**The known cost of reading an older state**, accepted rather than refusing the state: where the state was taken with
+line 0 opened under other registers than those it holds (a width or a height changed in that step's remaining
+clocks), the first frame after the load is drawn at the registers' size and not the frame's, one frame, the cause of
+five of §39.1's six; and where it was taken in the middle of an EEPROM transfer, that transfer is lost and the game
+reads what an EEPROM that was not spoken to answers, once, until it starts the next. Nothing else differs from a
+version 17 load: the two fields are all 17 added.
+
+**Which versions a player can have.** The Genesis reached players at version 16 (f6ad8ba0, 2026-10-07); every
+version before it was in builds that marked the core in development and offered it to no player (§36). So 16 is the
+only older version a player's state can carry, and `OLDEST_STATE_VERSION` is 16. Versions 15 and older, and any newer
+than 17, are refused with "a state version this core does not read", the machine unchanged.
+
+**Measured (2026-10-07)**: version 16 states written by the version 16 build itself (Worms, Frank Thomas Big Hurt
+Baseball, Sonic the Hedgehog and Phantasy Star IV, each at frame 300 under the kit's input) load in this build, and
+its next three frames are the version 16 build's, to the pixel, in all four. Frank Thomas's state was taken in the
+middle of an EEPROM transfer by §39.1's account; its pictures over those three frames are unchanged, and its RAM was
+not compared.
+
+**Pinned by** `state.rs`'s `a_version_16_state_loads_and_runs` (a state with the two fields taken out and the version
+set to 16: the size from the registers, the picture the saving machine's, an EEPROM board at rest with its bytes kept)
+and `a_state_of_another_version_is_refused` (15, 2 and 18, with the ABI's words, the machine unchanged).
 
 ## 40. Stage 6's gates, as the follow-up list (2026-10-07)
 
@@ -2762,14 +2794,17 @@ anything; what is not met is the follow-up list, §40.2.
 
 ### 40.2 The follow-up list
 
-From the gates, in the order they would be taken:
+From the gates and the tester's requests, in the order they would be taken:
 
 1. **G7, the debugger**: stage 7, next in the plan's order.
-2. **G5, the goldens**: a third anchor, and the differing games examined one by one.
-3. **G6**: the bench at a 33% quota, and a battery run on the handheld.
-4. **G9**: the TMSS boot program run from the player's image.
-5. **G8**: the clone check, if it is ever wanted, and the constants not yet read by a second reader.
-6. **D-9**, for a 68000 test program (G1); **D-10**, **D-7**, **D-11**'s display-off residual and **D-9**'s VRAM lead
+2. **The multitaps (Team Player, EA 4-Way Play) and the J-Cart's two ports**, at high priority (*added 2026-10-07*).
+   The tester has asked for players two to four across the platform, and four-player Genesis games run with two pads
+   today (§12). Not a gate; it ranks with the first.
+3. **G5, the goldens**: a third anchor, and the differing games examined one by one.
+4. **G6**: the bench at a 33% quota, and a battery run on the handheld.
+5. **G9**: the TMSS boot program run from the player's image.
+6. **G8**: the clone check, if it is ever wanted, and the constants not yet read by a second reader.
+7. **D-9**, for a 68000 test program (G1); **D-10**, **D-7**, **D-11**'s display-off residual and **D-9**'s VRAM lead
    (G3).
 
 Not gates, carried from the stages and still open:
@@ -2785,7 +2820,6 @@ Not gates, carried from the stages and still open:
   0.09% fast; D-19's short reset pulses; D-2's long RAM waits; the test register's five voices, the `lfo` sweep and
   its other bits; an operator's output a level apart from the board's at some levels.
 - **From stage 3** (§12, §17.3): the seven EEPROM boards no document wires (Putter Golf and Accolade's six); Barver
-  Battle Saga's protection device; the Z80 window's alignment; the multitaps (Team Player, EA 4-Way Play) and the
-  J-Cart's ports, not built, so four-player games run with two pads.
+  Battle Saga's protection device; the Z80 window's alignment.
 - **A CRAM dot on line 0 when a state is taken** (§39.2), argued and not shown to matter.
 

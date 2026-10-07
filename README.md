@@ -159,6 +159,141 @@ None is included in this repository; the tests read them from a local copy when 
   generated from the formulas its test file documents, which it ported from ares.
 - PeterLemon's SNES test ROMs
 
+### References for the Genesis core
+
+Nephrite is the Sega Genesis / Mega Drive core, and Beryl-HW holds the chips the Sega cores share: the 68000, the
+Z80 and the SN76489. Both were written from hardware documents and from measurements. No emulator's source code was
+used, in whole or in part, and no firmware was read or disassembled. Where the documents were silent or disagreed,
+the question went to a test program and then to a model of the chips run as a black box, whose outputs were compared
+and whose logic was not read.
+
+Every such question is an entry in a disputes log, with the documents read, the measurement taken and every file
+opened: [`Nephrite_Disputes.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Disputes.md) for the console and
+[`Beryl_M68k.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_M68k.md) §6 for the 68000. The logs also record the few times excluded material was
+displayed, and what was done about each. The rules themselves are in
+[`Nephrite_Plan.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Plan.md) §1.3, the full source list with where each document is thin in its §2,
+and the build record in [`Nephrite_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Native.md).
+
+**Sega's manuals**
+
+- Sega, *Genesis Technical Overview* (version 1.00) and *Genesis Technical Bulletins*, as hosted by
+  [Sega Retro](https://segaretro.org/Mega_Drive_official_documentation). Used for the hardware as Sega stated it,
+  the Z80's control and the precautions for its bus among them, each use cited by manual and section. These are developer documents that circulated without Sega's release.
+
+**Processor manuals and timing**
+
+- Motorola, [*M68000 Family Programmer's Reference Manual*](https://cache.nxp.com/docs/en/reference-manual/M68000PRM.pdf)
+  (M68000PM/AD) and [*M68000 8-/16-/32-Bit Microprocessors User's Manual*](https://cache.nxp.com/docs/en/reference-manual/MC68000UM.pdf)
+  (M68000UM/AD): the 68000's instructions, exceptions and bus cycles.
+- *Yacht.txt* ("Yet Another Cycle Hunting Table"), from Nemesis's documentation folder,
+  [archived](https://web.archive.org/web/20250216033108id_/http://nemesis.hacking-cult.org/MegaDrive/Documentation/Yacht.txt):
+  the order of each instruction's bus cycles.
+- Zilog, *Z80 CPU User Manual* (UM0080), and Sean Young,
+  [*The Undocumented Z80 Documented*](http://www.z80.info/zip/z80-documented.pdf), version 0.91 (2005): the Z80's
+  instructions, timing and undocumented opcodes and flags, with boo_boo and Vladimir Kladov's published notes on
+  MEMPTR.
+
+**The sound chips**
+
+- Yamaha, *YM2608 (OPNA) Application Manual*, the *YM2608 data sheet* and the *YM3438 (OPN2C) data sheet*, in the
+  scans of [archive.org's `yamaha-chip-jpn`](https://archive.org/details/yamaha-chip-jpn), with an English
+  translation of the application manual. No YM2612 manual is public; the YM2608's is the nearest, and gave the FM
+  registers' meanings, the LFO's speeds and depths, SSG-EG, the timers and CSM.
+- Matthew Gambrell and Olli Niemitalo,
+  [*OPLx decapsulated*](https://docs.google.com/document/d/18IGx18NQY_Q1PJVZ-bHywao9bhsDoAqoIn1rIm42nwo) (2008):
+  its two printed tables, the YM3812's log-sine and exponent ROMs, are the operator tables Nephrite computes with.
+  [`Nephrite_OperatorTables.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_OperatorTables.md) gives the formulas and how the tables were later
+  checked entry by entry.
+- Maxim and contributors, [*SN76489*](https://www.smspower.org/Development/SN76489), SMS Power!: the PSG's latch,
+  counters, noise and volume steps, which `beryl-sn76489` was written from
+  ([`Beryl_SN76489.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_SN76489.md)).
+- Nemesis and others, ["New Documentation: An authoritative reference on the YM2612"](https://gendev.spritesmind.net/forum/viewtopic.php?t=386),
+  SpritesMind forum topic 386 (2008 to 2017). Used as prose: its authors' findings and their own tables on the
+  envelope, the phase generator, SSG-EG, CSM, the status register, the test register and the DAC. Program code
+  quoted in its posts was excluded.
+- Kabuto (TiTAN), [*SEGA Mega Drive / Genesis hardware notes*](https://docs.google.com/document/d/e/2PACX-1vQ6CEUtCM3U6KKFD3i4lbMaF8muGQ5dez27OcpZOWRP2GgJviklr9rLIQut-LdoGfU4InazlIcbCvlG/pub),
+  version 1.5 (2017): measurements of the DAC's levels and of the two models' output circuits, which the ladder
+  effect and the output stage were held to.
+
+**The console**
+
+- Charles MacDonald, *Sega Genesis hardware notes* (`gen-hw.txt`, version 0.8, 2001), *Sega Genesis VDP documentation*
+  (`genvdp.txt`, version 1.5f, 2000), his H and V counter tables (`m5hvc.txt`) and his EEPROM notes, from a
+  [mirror of his site](http://dreamjam.co.uk/emuviews/txt/): the memory map, the I/O ports, the Z80's bus, the VDP's
+  registers and the EEPROM boards.
+- Rick McTeague, *Sega Genesis Hardware Internals* (`genhw.txt`, revised 1993), hosted on the same site: how a Game
+  Genie sits on the cartridge's bus.
+- [Plutiedev](https://plutiedev.com/): registers, DMA, controllers and multitaps, the SSF2 mapper, lock-on, TMSS, the
+  cartridge header and save RAM.
+- Eke-Eke, *Serial EEPROMs in Sega Genesis / Mega Drive cartridges*, version 2 (2010), and d0nut and Felipe XnaK,
+  [*The complete documentation about Genesis ROM format*](https://www.zophar.net/documents/genesis/genesis-rom-format.html),
+  version 1.1 (1998): the EEPROM boards' wiring and the copier formats.
+- Nemesis's research on the VDP's FIFO, DMA and sprite masking, in SpritesMind topics and the pages archived from his
+  site, and the [MegaDrive Wiki](https://md.railgun.works/): access slots and the bus's refresh.
+
+**Recordings of consoles**
+
+- Artemio Urbina and contributors, [MDFourier](https://junkerhq.net/MDFourier/), "MegaDrive/Sega Genesis and Sega CD
+  recordings 2020-06-14": 21 consoles playing the 240p Test Suite's MDFourier sequence. Nephrite plays the same
+  sequence, and its output circuit, ladder effect and PSG level were fitted to and graded against them.
+- Nemesis's recording of his CSM test on a PAL model 1, the one FM test of his with a recording.
+
+**Test programs**
+
+None is included in this repository.
+
+- Artemio Urbina, [240p Test Suite](https://artemiourbina.itch.io/240p-test-suite) for the Mega Drive, version 1.32
+  (GPL-2.0): pictures that stand still, compared between Nephrite and the references, and the MDFourier sequence.
+- Nemesis's test programs: VDPFIFOTesting (the VDP port access test, whose 122 tests Nephrite passes), the sprite
+  masking and overflow test, the CRAM flicker test, the status-register and HV counter programs and six YM2612
+  tests, from [Exodus's technical documentation](https://techdocs.exodusemulator.com/Console/SegaMegaDrive/Software.html)
+  and the archive of his site. Their sources say what a console does.
+- flamewing's BCD verifier (GPL-3.0), r57shell's opcode sizes test (MIT), Charles MacDonald's illegal-instruction,
+  memory, V counter and window tests, TiTAN's Overdrive demos and the programs gathered in Genesis Plus GX's
+  `md_test` archive (MacDonald, TmEE, Paul Lee).
+- [SingleStepTests](https://github.com/SingleStepTests): the [`m68000`](https://github.com/SingleStepTests/m68000)
+  and [`z80`](https://github.com/SingleStepTests/z80) suites (MIT) and Tom Harte's
+  [`680x0`](https://github.com/SingleStepTests/680x0). Their data grade `beryl-m68k` and `beryl-z80` case by case,
+  registers, memory and bus cycles; the programs that generated them were not read. Where the two 68000 suites
+  disagree, [`Beryl_M68k.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_M68k.md) §6 settles each class.
+- Frank Cringle's ZEXDOC and ZEXALL, for the Z80.
+
+**Cheat codes**
+
+- [*Sega Genesis Game Genie Conversion Method*](https://www.segakore.fr/media/segakore/outils/md_gg_codec/md_gg_conv_method.txt),
+  a text after Merlyn LeRoy's postings, and Sega Retro's pages
+  [Game Genie (Mega Drive)](https://segaretro.org/Game_Genie_(Mega_Drive)) and
+  [Action Replay (Mega Drive)](https://segaretro.org/Action_Replay_(Mega_Drive)): the two code forms. No decoder
+  program was read.
+
+**Referees, run and not read**
+
+- [Nuked-MD](https://github.com/nukeykt/Nuked-MD) by nukeykt, in its FPGA form in
+  [MegaDrive_MiSTer](https://github.com/MiSTer-devel/MegaDrive_MiSTer) (GPL-2.0): a Genesis board transcribed from
+  the chips' die images. It was compiled with Verilator and run as a whole board, with programs written for the
+  purpose, and its pins, bus and picture were compared with Nephrite's.
+- [fx68k](https://github.com/ijor/fx68k) by Jorge Cwik, from
+  [MegaCD_MiSTer](https://github.com/MiSTer-devel/MegaCD_MiSTer) (GPL-3.0): a 68000 derived from the processor's
+  microcode, run the same way beside Nuked-MD's 68000 to referee the two single-step suites.
+
+Their logic was not read and nothing was transcribed from them. The lines that were opened to wire the benches
+(port lists and instance names) are listed in the logs. A model is not a console: where a rule rests on the board
+alone, its entry says so.
+
+**Reference emulators, run and never read**
+
+- [Genesis Plus GX](https://github.com/ekeeke/Genesis-Plus-GX) by Eke-Eke,
+  [PicoDrive](https://github.com/notaz/picodrive) by notaz and contributors,
+  [BlastEm](https://www.retrodev.com/blastem/) by Michael Pavone and
+  [ClownMDEmu](https://github.com/Clownacy/clownmdemu) by Clownacy, as libretro cores from the buildbot. EmuSen's
+  probe runs them headlessly and dumps their memory, picture and sound for comparison with Nephrite's. Their source
+  was not opened.
+
+**The other cores' sources** are listed with their own pages:
+[`VenusRT_Plan.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Plan.md) §2 for the SNES port,
+[`Mars_References.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_References.md) for the Nintendo 64, and
+[`EmuSen_CRT.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_CRT.md) §10 for the modelled CRT filter.
+
 ### Screen filters
 
 The built-in filters are EmuSen's own shaders; the values they use came from these:
@@ -195,7 +330,7 @@ Each keeps its own licence and terms; see section 2 of [`THIRD_PARTY_NOTICES.md`
 ### Trademarks
 
 Nintendo, Super Nintendo Entertainment System, Nintendo Entertainment System, Game Boy, Game Boy Color and
-Nintendo 64 are trademarks of Nintendo. Sailor Moon and its characters are the creation of Naoko Takeuchi. Steam and
+Nintendo 64 are trademarks of Nintendo. Sega, Genesis and Mega Drive are trademarks of Sega. Sailor Moon and its characters are the creation of Naoko Takeuchi. Steam and
 SteamOS are trademarks of Valve, and Legion Go is a trademark of Lenovo. EmuSen is not affiliated with or endorsed by
 any of them.
 

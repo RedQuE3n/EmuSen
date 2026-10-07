@@ -1002,7 +1002,8 @@ results. No RTL source was opened; the video pins' names came from the generated
 
 ### 16.2 Argued, and measured in part
 
-- VRAM's fetch lead of 8 pixels is weakly bracketed (4 to 16); the display bit's return fits 0.56 of the board's
+- VRAM's fetch lead of 8 pixels is weakly bracketed (4 to 16) (*24 pixels, bracketed 20 to 32, since §17's commit
+  settled D-11: D-9's correction of 2026-10-07*); the display bit's return fits 0.56 of the board's
   distribution, whose returns fall mostly on 16-pixel boundaries and partly on 8-pixel ones.
 - Writes after a line's V counter step that change VRAM or a register reach that line's last 14 pixels from the state
   at the next change, not at their own pixel, except CRAM and the dot, which are exact.
@@ -1290,8 +1291,9 @@ Read as documents: the YM2608 manual in its translated edition (`docs/yamaha/YM2
 prose and, of its code blocks, only those that are its authors' tables and statements of the hardware's arithmetic:
 Nemesis's attenuation weighting, his Tables 1 and 2 (counter shifts and increments), his statements of the update
 cycle and of the attack and decay steps (page 8, and their 2010 corrections on page 28), his tables of the block
-shift and the key code (page 12). A block quoting MAME's source in a member's post (page 8) was displayed and not
-used. Nemesis's page 11 blocks building the two tables and converting the exponent turned out to be his emulator's
+shift and the key code (page 12). (*The ruling this follows, an author's own table being a document and pasted
+program code not, is stated in D-18 since 2026-10-07.*) A block quoting MAME's source in a member's post (page 8)
+was displayed and not used. Nemesis's page 11 blocks building the two tables and converting the exponent turned out to be his emulator's
 code (one is a method of its YM2612 class) and were displayed before that was seen: the form of the tables is in the
 prose beside them, the two offsets that fix their entries' last bits are not, and Nephrite's offsets are therefore
 recorded as not cleanly sourced (D-16) until a measurement replaces them. Two page 12 blocks carrying an emulator's
@@ -1541,14 +1543,16 @@ only to within its poll's round; it is a matter of the comparison's exactness an
 ### 21.5 The sources
 
 - **Opened, as a logged search**: the bench's `md_board.v` and `fc1004.v`, for how the FM chip is instantiated and
-  configured, the lines listed in D-16. Two lines of the board's mix were printed by the search; they are noted as
+  configured, the lines listed in D-16. *This step was a writer's, and the plan's §1.3 opens the RTL to a dispute
+  step alone: D-16 acknowledges the breach since 2026-10-07.* Two lines of the board's mix were printed by the search; they are noted as
   seen and used for nothing. No other RTL file was opened.
 - **Topic 386, from the copy saved at step 2**: Nemesis's Table 2 on page 8, its rows read with every identifier
   in the block masked (D-18). **The same search printed, masked the same way, the numeric rows of two blocks in C
   array form on pages 32 and 33**, eight values to a row, which look like tables of vibrato depth and sit in blocks
   that carry an emulator's identifiers. They were not sought, are used for nothing, and are recorded here as
   displayed: the step that builds the LFO must not take its vibrato table from memory of them, and has the board to
-  measure it on instead.
+  measure it on instead. *The table was then written by another writer, from the board alone: D-20's note of
+  2026-10-07.*
 - No emulator's source was read otherwise, and the operator tables were not touched.
 
 ### 21.6 Open, and next
@@ -2188,7 +2192,8 @@ and not offered.
 
 SpritesMind topic 386 and Kabuto's hardware notes, as prose, their sections named in D-27; the YM3438's data sheet;
 MDFourier's recordings of 21 consoles. The ladder's constants are as Eke's post in the topic gives them from Nuked's
-reading of the die, held here to Kabuto's measured DAC levels and to the recordings; the circuits' corners and the
+reading of the die (*accepted as prose by the tester, D-27's decision of 2026-10-07*), held here to Kabuto's
+measured DAC levels and to the recordings; the circuits' corners and the
 PSG's level are fitted to the recordings and come from nowhere else. The bench's `MOL_2612`, a model of the discrete
 DAC and not the die, referees none of it. The four references' audio was not used. No RTL file was opened; no
 emulator's source was read.
@@ -2373,8 +2378,9 @@ stage's end; G8's reading of the disputes log is a reader's who did not write it
 
 ### 30.4 The sources
 
-"Sega Genesis Game Genie Conversion Method" (after Merlyn LeRoy's postings) and Charles MacDonald's `genhw.txt`, as
-prose; Sega Retro's "Action Replay (Mega Drive)"; the libretro database's code strings, read for their forms. No
+"Sega Genesis Game Genie Conversion Method" (after Merlyn LeRoy's postings) and ~~Charles MacDonald's~~ `genhw.txt`,
+as prose (*corrected 2026-10-07: `genhw.txt` is Rick McTeague's "Sega Genesis Hardware Internals", revised 1993,
+which MacDonald's site hosts; his own notes are `gen-hw.txt`*); Sega Retro's "Action Replay (Mega Drive)"; the libretro database's code strings, read for their forms. No
 emulator's source and no decoder program was read.
 
 ## 31. Stage 6, the settings (2026-10-06)
@@ -2576,3 +2582,51 @@ right for it, and it needs no board entry. A save made in play was not traced.
   Nephrite, Genesis settings and battery, Genesis shelf, Genesis pad and the sidebar and carousel fit audits, 47 pass;
   the window fit audit's ten Genesis cases pass. A run of the kit across the corpus was begun and stopped unread at the
   tester's request; it is not a result, and the kit on games remains owed under G4.
+
+## 37. Stage 6, the references cited and the record's gaps closed (2026-10-07)
+
+### 37.1 G8, decided
+
+*Decided 2026-10-07: the separate clean-room review is skipped for the Genesis* (the plan's §7, G8): neither the
+reading of the disputes log by someone who did not write it nor `clonecheck.py` over Nephrite's and Beryl's sources
+is run. *In its place the references are cited on the repository's `README.md`*, in the section "References for the
+Genesis core": the documents, recordings, test programs, referees and reference emulators by group, with author,
+title, year and address where there is one and what each was used for, the method in a paragraph, and links to
+`Nephrite_Disputes.md`, `Beryl_M68k.md` §6 and the plan's §1.3 and §2. The other cores' source lists are linked from
+it and not repeated.
+
+### 37.2 What a partial reading found
+
+A reader who had not written the entries began G8's reading that day and stopped part way at the decision. Read in
+full: `Nephrite_Disputes.md` D-1 to D-27; `Beryl_M68k.md` §5.7 to §6.5; `Beryl_Z80.md`; `Beryl_SN76489.md`;
+`Nephrite_OperatorTables.md`; `Nephrite_LfoTables.md`; the plan's §1 to §2.3; `EmuSen_Firmware.md` §0; and this page's
+sources subsections. Constants were checked against their entries in `genesis.rs`, the top of `ym2612.rs` and `vdp.rs`.
+Not done: the rest of the constants (the filter corners, the unhold taps, the ladder in `Ym2612::turn`, D-12's
+blanking, D-6's dot, D-18's increments, the removal of `fm.rs`'s old tables), Beryl's constants, and the clone check,
+which was not started.
+
+It found no rule taken from an excluded source, and nine gaps in the record, each closed here as a dated addition
+that deletes nothing:
+
+| Gap | Closed in |
+|---|---|
+| D-9 and §16.2 gave VRAM's lead as 8 pixels where `PATTERN_LEAD` has been 24 since §17's commit | D-9's correction, with what is measured and what is argued of the reason; §16.2's note |
+| The search of `md_board.v` and `fc1004.v` was made in a writer's step, which the plan's §1.3 forbids | D-16's acknowledgement; §21.5's note |
+| The rows that look like vibrato tables were recorded in §21.5 alone, `Nephrite_LfoTables.md` pointed to D-16 for them, and nothing said who wrote the table | D-20's note; the page's §7 |
+| D-27 took the ladder's two constants from a post relaying an excluded implementation's reading, with no decision recorded and no tag on its conclusion | D-27's decision and its conclusion's tags; §28.4's note |
+| Tables were read from forum code blocks under a ruling no entry stated; the MAME-quoting block of page 8 was in §19.2 alone | D-18's ruling; §19.2's note |
+| D-13's title still read "OPEN." | Its title and a note |
+| D-6 and D-12 spoke of D-2 as not taken and still open | A dated note in each |
+| `Nephrite_OperatorTables.md` §4 said the OPN2's tables waited on a measurement D-16 had since made | Its §4's pointer, with the board's caveat |
+| `Beryl_M68k.md` §6.4's cell stopped at D-14 | The cell |
+
+One more was found while the references were being cited: §30.4 gave `genhw.txt` to Charles MacDonald. It is Rick
+McTeague's "Sega Genesis Hardware Internals", which MacDonald's site hosts; §30.4 is corrected and the `README.md`
+cites each under its author.
+
+### 37.3 What stands open after it
+
+The clone check has not been run, and the unfinished constants above were not checked by a second reader. Neither
+blocks anything since the decision of §37.1; both are on the follow-up list of the gates' table.
+
+No code changed in this step, and no test was run for it.

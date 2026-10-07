@@ -197,6 +197,7 @@ Every file opened for this work. No URL was opened.
 
 The directory `~/.cache/emusen/probe/nephrite/docs/` was listed to find the Yamaha documents; nothing else in it was
 opened. The bench's binary, built at stage 5's bench step, was copied into work directories of its own and run; no
-RTL file and no Verilator-generated file was opened. D-16 records that rows looking like vibrato tables were displayed
-from topic 386 at stage 5's writer's step (`Nephrite_Native.md` §21.5): nothing here is taken from them, from any other table or from any emulator, and
+RTL file and no Verilator-generated file was opened. ~~D-16 records~~ `Nephrite_Native.md` §21.5 records, and since
+2026-10-07 `Nephrite_Disputes.md` D-20 (*corrected then: D-16 never held it*), that rows looking like vibrato tables
+were displayed from topic 386 at stage 5's writer's step, to a writer other than this page's: nothing here is taken from them, from any other table or from any emulator, and
 every value above is the board's.

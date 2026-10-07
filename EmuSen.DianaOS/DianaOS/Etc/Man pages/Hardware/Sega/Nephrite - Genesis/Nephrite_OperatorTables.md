@@ -147,6 +147,14 @@ to be shown), then the MiSTer RTL as referee in a separate dispute
 step, logged in `Nephrite_Disputes.md`. Until then the OPL tables stand, and any disagreement found is to be recorded
 here rather than absorbed into the constants.
 
+**Measured since, 2026-10-05** (`Nephrite_Disputes.md` D-16, "The two ROMs"; pointed to from here 2026-10-07). With
+the FM unit's other rules settled, each of the 512 entries was moved up one and down one, one at a time, in a build
+made for the purpose, and the unit's output compared with the board's over 200,220 samples of 62 voices: every one
+of the 1,015 changes a ROM could hold alters at least one sample. The board's FM unit therefore computes with tables
+equal, entry for entry, to the ones this page gives. Its caveat stands beside it: the board is a model of the
+Genesis's chip, and the result is evidence about a console only so far as the model's ROMs were read from the
+OPN2's die, which its pins cannot say. No clean document yet states that the OPN2 shares the OPL's ROMs.
+
 ## 5. What this page does not cover
 
 The operator's phase generator, the envelope's arithmetic, the feedback path and the accumulator's width. Each is a

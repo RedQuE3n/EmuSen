@@ -2823,9 +2823,17 @@ Not gates, carried from the stages and still open:
 - **From stage 3** (§12, §17.3): the seven EEPROM boards no document wires (Putter Golf and Accolade's six); Barver
   Battle Saga's protection device; the Z80 window's alignment.
 - **A CRAM dot on line 0 when a state is taken** (§39.2), argued and not shown to matter.
-- **From the four-player adapters** (§45.5): Madden NFL 98 does not start; a 4 Way Play left on the ports under a
-  game not made for it; the Team Player's lines where no document speaks; Hotaru and a port count that changes
-  while a game runs.
+- **From the four-player adapters** (§45.5, §46.1): the 4 Way Play's first pad for a game not made for it, a choice
+  pending a console; the Team Player's lines where no document speaks.
+- **Hotaru and a port count that changes while a game runs** (`EmuSen_Input.md` §8.11). It wants a WiseMan test that
+  the harness cannot yet express, Hotaru's `GameWindow` hosted headless with simulated pads as `MultiplayerTests`
+  hosts Mistress's window: `HotaruMultiplayerTests.Four_pads_play_a_genesis_team_player_set_while_the_game_runs`. The
+  change is one call to `PortRouter.Resize` in `GameWindow.PollGamepad` once that test exists to fail first.
+- **Games that do not reach a moving picture where the reference does** (§46.3): Fatal Rewind (and The Killing Game
+  Show, the same program), Time Killers, The Smurfs 2, Superman, and the unlicensed Mahjongg Lover, Pocket Monsters
+  and Whac-A-Critter, beside Barver Battle Saga above. Each is its own defect, not yet looked into.
+- **Three cartridges that look for a save RAM their header omits and run alike without it** (§46.2): Summer Challenge,
+  Winter Challenge and Test Drive II. Not given one; whether their boards carried the chip is not known here.
 
 ## 41. Stage 7, step 1: the processors, their registers, their buses and their code (2026-10-07)
 
@@ -3101,7 +3109,7 @@ measurement of the adapter and no document speaks:
 | Team Player, the first read after power-on, before any write to the port | `$0F` | `$73`, the rest state | The port's data latch at power-on; a game writes before it reads |
 | Team Player, nibbles asked past the packet's end | pad 1's first nibble again | `%1111` | §44.2; Sega's sample stops at the end, and so does every game seen |
 | Team Player, TR made an input | TR reads 0 | TR reads 1, the pull-up's | MacDonald's I/O document has an input line pulled high |
-| 4 Way Play, port B's choosing lines left inputs | a pad on port A | the mark, the lines pulled high | The same pull-ups; see §45.5 |
+| 4 Way Play, port B's choosing lines left inputs | a pad on port A | the mark, the lines pulled high | The same pull-ups; see §45.5. *Changed by §46.1: the first pad* |
 
 ### 45.3 The games read with four pads
 
@@ -3165,7 +3173,7 @@ plan's §9 (Q6) had already decided the order, the Americas, then Japan, then Eu
 CD's BIOS; the cartridge's model had not followed it. `default_model` now does: overseas when the header allows the
 Americas or does not allow Japan.
 
-**Measured.** Three images of the corpus's 948 allow Japan and Europe and not the Americas. The bytes of RAM equal to
+**Measured.** Three images of the corpus's 946 (§46.3) allow Japan and Europe and not the Americas. The bytes of RAM equal to
 Genesis Plus GX's at frames 120 and 600 (§10's anchors), and the pixels off the map between the two pictures, before
 (the last run over the corpus, 2026-10-06) and after:
 
@@ -3183,13 +3191,14 @@ Europe alone likewise. Pinned by `v1.rs`'s region test over eight headers. The R
 
 - **Madden NFL 98 does not start**: a black screen, the 68000 in a loop at `$0462E0` over a table at `$FFEBB0` with
   the interrupt mask at 7, with plain pads as with an adapter. It is not the adapters'; it is on the follow-up list.
+  *Fixed by §46.2: its save RAM is not in its header.*
 - **A 4 Way Play under a game not made for it.** In 64 of the games tried, pad 1 moves the reference's RAM and not
   Nephrite's. `padprotocol.py` shows the one difference that would do it: with port B's choosing lines left inputs,
   which is how a game that does not know the adapter leaves them, Nephrite pulls them high, the adapter's mark, and
   the reference gives pad 1. It was not traced in one of the games. On the argument of the pull-ups a console would do
   as Nephrite does, and the settings' text says to leave the port on a pad for such a game
   (`EmuSen_Settings_Reference.md` §4.101); but nothing here measured an adapter, and giving pad 1 would be the kinder
-  thing for a player who leaves the setting on. Not decided.
+  thing for a player who leaves the setting on. Not decided. *Decided 2026-10-07: the first pad (§46.1).*
 - **The three Team Player rows of §45.2's table**, argued.
 - **Hotaru** does not follow a port count that changes while a game runs; it hears the ports the game started with
   (`EmuSen_Input.md` §8.11).
@@ -3213,3 +3222,165 @@ Europe alone likewise. Pinned by `v1.rs`'s region test over eight headers. The R
   Genesis's, and `PlayerBindingsWindowTests` the consoles' player counts without it; both had failed since §36. The
   fit audit's three Genesis cases of Controller Bindings had been measuring the SNES tab, the window opening on the
   first console with a game; they now choose the Genesis tab and say so.
+
+## 46. A 4 Way Play under a game not made for it; Madden NFL 98 and the save RAM a header omits; which games reach a moving picture (2026-10-07)
+
+Three things §45.5 left open or brought up, taken before the J-Cart.
+
+### 46.1 The 4 Way Play gives the first pad while its choosing lines are not driven
+
+**Decided 2026-10-07: the first pad.** §45.5 had the adapter's mark there, argued from the port's pull-ups: lines the
+console leaves as inputs read high, and three high lines are the choice of the mark. The setting is the console's, so
+a player who leaves port 1 on the adapter would lose player 1 in every game not made for it, 64 of the 101 tried; and
+the one reference that can be watched gives such a game pad 1. So this is a choice, recorded as one: the behaviour
+observed of Genesis Plus GX, against the argument of the pull-ups, pending a console with the adapter on it.
+
+**The rule** (`io.rs`, `Io::device`): port B's lines 6 to 4 choose only while the control register makes all three
+outputs; otherwise port A reads the first pad. Port B itself still gives nothing, so player 2 of such a game needs the
+row put back to a pad (`EmuSen_Settings_Reference.md` §4.101).
+
+**Measured.** `padprotocol.py`'s cartridge now differs from the reference at four of its 49 steps, where it differed
+at nine. Steps 0 to 2 are the data register at power-on, `$7F` here by MacDonald's list of the registers and 0
+there: with the lines made outputs and nothing yet written, they are high here. Step 40 is the lines made inputs
+again after the mark was chosen: the reference keeps the mark, as though the adapter remembered its last choice, and
+Nephrite gives the first pad; no game seen does this. Of the 64 games, all 64 now read pad 1 where the reference has
+them read it, 14 of them exact (Buck Rogers was the 64th, and was §46.2's, not the adapter's). The 22 games that read
+four pads are unchanged, and Madden NFL 98 makes 23 now that it starts (`fourpads-2026-10-07/4way-2.txt`).
+
+**Pinned** by `io.rs`'s `a_4_way_play_with_its_choosing_lines_undriven_gives_the_first_pad`; by
+`NephritePlayersTests.A_4_way_play_answers_the_protocol_cartridge_and_gives_player_1_when_its_choosing_lines_are_not_driven`,
+the protocol cartridge through the frontend's path, every step the reference's but the four named; and by three of
+the 64 games there, Urban Strike, James Pond 2 and John Madden Football '93, each keeping Up held on player 1 where
+the reference keeps it (`$FF46E5`, `$FFB4CD`, `$FFD2CB`: 0 with nothing held, 1 with Up).
+
+### 46.2 Madden NFL 98 did not start: its save RAM is not in its header
+
+**Found.** Nephrite's RAM is the reference's to the byte through frame 23 and leaves it at frame 24, at a table at
+`$FFEBB0`: the reference has `$FFFF` and zeroes there, Nephrite numbers that change places from frame to frame. The
+68000 is then in the loop at `$0462E0` for good. The routine at `$04627C` builds the table from the odd bytes at
+`$204575` to `$2046B5`, read with `MOVEP`, stopping at a byte of `$FF`, and then looks each entry up in the table it
+built, in a loop with no other end than finding it. At power-on the game looks for `DJ04` at `$200005`; not finding
+it, it clears the odd bytes from `$200001` with `MOVEP.L` and writes its saves' opening structure. Its other routines
+walk lists there with `$20FFFF` as their bound. That is a save RAM on the odd bytes of `$200001`-`$20FFFF`, which the
+game takes to be there. The header declares none: where `RA` would be it has spaces, and its ROM's end is given as
+`$07FFFF` on a 2 MiB image. With nothing declared, Nephrite gave the cartridge what a board without the RAM has
+there, the ROM's mirror; the game read program bytes as its saved rosters, and the lookup never ended.
+
+It is the cartridge's board, not a rule of the 68000 or the bus, so the board bench has nothing to say to it.
+
+**What the references do, as black boxes.** A cartridge of the test's own that writes above its ROM and reads back,
+with no save RAM declared, in four of them: Genesis Plus GX and PicoDrive give *every* such cartridge of 2 MiB or less
+a RAM at `$200000`, on both bytes, whatever its serial; BlastEm gives it the ROM's mirror, as Nephrite did, unless
+the serial is one it knows, when it gives a RAM on the odd bytes (it knows Madden NFL 98's, NHL 96's, NHL 98's, Buck
+Rogers' and HardBall III's of those below, and not the rest). So the references divide between a rule for all and a
+list.
+
+**Decided: a list, by serial** (`media.rs`, `UNDECLARED_SAVE`), as `eeprom.rs` knows its boards. A rule for all would
+give a RAM to the cartridges that have none, and a program can tell the two apart by writing there, which is how
+these very games look for theirs. The board each is given is the one plutiedev's "Saving progress with SRAM"
+describes: 32 KiB on the odd bytes of `$200001`-`$20FFFF`, with a battery, mapped without the register since it lies
+above the ROM. A header that declares its save RAM is believed first. No size was measured: a board with a smaller
+chip would repeat within the range, and BlastEm's answers repeat at 8, 16 and 32 KiB for different serials.
+
+**Who is on the list, and why.** The corpus was run with a count of the writes above the ROM that nothing takes (a
+build made for the survey, not kept), 900 frames each. A cartridge is listed when its header declares no save RAM and
+its game either writes its saves' structure there without asking whether anything answers, or loses its way without
+it. The bytes of RAM equal to the reference's at frame 900, of 65,536, before and after:
+
+| Serial | Game | Writes above the ROM, undeclared | RAM equal, before → after | Otherwise |
+|---|---|---|---|---|
+| `T-172196` | Madden NFL 98 | 33,015 odd bytes, `$200001`-`$208003` | 63,656 → 65,524 | one colour → a moving picture |
+| `ACLD012` | HardBall III | 1, at `$20FFFF` | 23,426 → 65,431 | a still picture → a moving one |
+| `T-50286` | Buck Rogers: Countdown to Doomsday | 2, at `$200005` and `$200007` | 51,261 → 65,517 | 2 pictures of 3 colours → 5 of 10, the reference's |
+| `T-172176` | NHL 98 | 47,976 words, `$200000`-`$20FFFE` | 34,509 → 65,493 | |
+| `T-172036` | NHL 96 | 10,430 words, `$200000`-`$203FFE` | 57,927 → 65,465 | |
+| `T-50086` | PGA Tour Golf | 5,468 words and 56 bytes, `$200003`-`$203EFD` | 64,438 → 65,465 | |
+| `T-50216` | Starflight | 4,096 odd bytes, `$201001`-`$203FFF` | 63,465 → 65,490 | |
+| `T-172156` | FIFA Soccer 97 Gold Edition | 210 odd bytes, `$200003`-`$204001` | 65,192 → 65,250 | |
+| `T-183457` | FIFA Soccer 2000 Gold Edition | the same: FIFA 97's program under a pirate's serial | 65,231 → 65,250 | |
+| `T-172046` | College Football USA 96 | 8,193 odd bytes, `$200001`-`$202003` | 65,494 → 65,495 | |
+
+With the RAM, what each leaves in it at frame 900 is what Genesis Plus GX's RAM holds, byte count for byte count,
+where both keep the odd bytes (Madden NFL 98 15,247 bytes not `$FF`, HardBall III 30,990, FIFA 97 5,336, College
+Football USA 96 4,098). No other image's row of §46.3's survey moved.
+
+**Not listed, and open:** Summer Challenge (`ACLD013`), Winter Challenge (`ACLD007`) and Test Drive II (`ACLD008`)
+write one byte at `$200001`, and given a RAM keep 18, 18 and 704 bytes there, Test Drive II's behind a signature.
+They ask first, so their programs allow for a cartridge without the chip, and they run alike to the eye either way
+(RAM equal 64,999 → 65,328, 65,423 → 65,425 and 65,502 → 65,517 with it). Whether their boards carried it is not
+known here; they are left as they were, on the follow-up list.
+
+**Other writes above the ROM the count found**, none of them this cause: `$38FFFE` and `$3FFFFE` in Micro Machines 2,
+96 and Military, Pete Sampras Tennis 96 and Super Skidmarks, which is the J-Cart's (the next step); Barkley Shut Up
+and Jam 2 at `$230001`, one of §12's EEPROM boards not wired; FIFA Soccer 96 and 98 one byte past their declared 8 KiB
+and Jack Nicklaus' Power Challenge Golf past its 1 KiB; the Tecmo Super Bowls on the even bytes of an odd RAM;
+Virtua Racing's processor at `$300000`; and the unlicensed Commandos and Harry Potter at `$208002`.
+
+**Pinned** by `media.rs`'s `a_cartridge_known_to_omit_its_save_ram_is_given_the_standard_board` (three of the
+serials, a header's own word first, a serial not listed);
+`v1.rs`'s `a_cartridge_whose_header_omits_its_save_ram_has_it_by_its_serial` (the bytes on the bus and the battery
+file); `GenesisBatteryTests.A_cartridge_whose_header_omits_its_save_ram_keeps_a_battery_file_by_its_serial` through
+the frontend; and `A_game_whose_header_omits_its_save_ram_starts`, Madden NFL 98 and HardBall III each reaching a
+picture that moves between frames 600 and 900, where `EMUSEN_NEPHRITE_GAMES` names the tester's library.
+
+### 46.3 Which games reach a moving picture
+
+The kit's pass says a core keeps the ABI's rules on an image, not that the game on it starts: Madden NFL 98 passed
+all fifteen cases with a black screen. So a second, cheap measure over the corpus.
+
+**The measure** (`Reference/analysis/moving.py`). Each image from power-on with no input, its picture taken every 50
+frames from 600 to 900, in Nephrite and in Genesis Plus GX. *Moving*: Nephrite's seven pictures differ among
+themselves. *Still, as the reference*: they do not, and the reference's do not either. *Still where the reference
+moves*: a game to look at. It does not show that a moving picture is the right one; the last column of its output,
+the RAM bytes equal to the reference's at frame 900, is a second look at that.
+
+**The corpus is 946 images**: its folder has 948 files, and two of them, `delete.me` and `systeminfo.txt`, are not
+images. The kit's run of §38.2 counted all 948.
+
+| | Before §46.2 | After |
+|---|---|---|
+| Moving | 825 | **827** |
+| Still, as the reference | 108 | 108 |
+| Still where the reference moves | 11 | **9** |
+| The reference does not run the image | 2 | 2 |
+
+**The nine that do not** (eight games), none of them looked into yet:
+
+| Image | Nephrite at frames 600 to 900 | The reference | RAM equal at 900 |
+|---|---|---|---|
+| Fatal Rewind (U), and The Killing Game Show (U), the same program | one colour; the 68000's PC is `$FFFFFFFB` | 3 pictures of 3 colours | 65,358 |
+| Time Killers (U) | one colour, the display off, a loop at `$02E95C` | 4 pictures of 15 colours | 65,284 |
+| The Smurfs 2 (E) | one picture of 14 colours, the 68000 at `$0193F6` | 3 pictures of 30 colours | 35,677 |
+| Superman (E) | one picture of 8 colours, a loop at `$0004FC` | 3 pictures of 21 colours | 48,594 |
+| Mahjongg Lover (unlicensed) | one picture of 24 colours | 7 pictures | 64,934 |
+| Pocket Monsters (unlicensed) | one colour | 7 pictures of 20 colours | 64,860 |
+| Whac-A-Critter (unlicensed) | one picture of 7 colours | 7 pictures | 62,681 |
+| Barver Battle Saga | one colour | 7 pictures | 16,275: §12's protection device, already open |
+
+**The 108 still in both**: 68 show one unchanging picture of more than one colour in each, a game that waits, every
+one within 262 bytes of the reference's RAM. 39 are one colour in both: 16 are 32X images, which neither runs as a
+Genesis; 17 are marked bad dumps or hacks; five (Hyper Dunk: The Playoff Edition (E), James Pond 3, Sesame Street
+Counting Cafe, Theme Park (U) and Thunder Force III (U)) are one colour through frame 1,900 in Genesis Plus GX,
+PicoDrive and BlastEm alike, so it is the corpus's copies of them: the first three have a header checksum `$0100`
+above the sum of their bytes, the other two a sum nothing like their header's; and the Pro Action Replay is a cheat
+cartridge with nothing under it. One, Knuckles Chaotix, is a 32X image the reference draws two colours of.
+
+**The two the reference does not run**: Blackthorne (32X) and the unlicensed Magic Girl, on which Genesis Plus GX
+stops the probe; Nephrite runs both and nothing is compared.
+
+**Moving, and far from the reference's RAM** (under 50,000 bytes equal): Barkley Shut Up and Jam 2 (34,932, the
+EEPROM board above), Super Skidmarks (38,415, a J-Cart), and two marked bad dumps, Triple Play Gold and Wayne's
+World.
+
+The lists are `~/.cache/emusen/probe/nephrite/runs/moving-2026-10-07/before.tsv` and `after.tsv`.
+
+### 46.4 Measured (2026-10-07)
+
+- **The crate's tests**, all 135 with the roms found: the three new ones of §46.1 and §46.2.
+- **The kit**: the corpus form on the sample, 64 of 64, and the single-image form on Madden NFL 98 and HardBall III,
+  compliant on each.
+- **WiseMan**: `NephritePlayersTests` and `GenesisBatteryTests` with the tester's library named, 17 pass (the protocol
+  cartridge, the three games of §46.1, the battery file by serial and the two games of §46.2 among them);
+  `NephriteTests` and the registration golden, 14 pass.
+- **The two four-pad lists run again** on this build: the Team Player's is unchanged, 39 of 46; the 4 Way Play's is
+  23 of 101 with Madden NFL 98, and no game is missing a pad the reference reads.

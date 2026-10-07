@@ -8267,7 +8267,10 @@ Each fills the picture's rectangle for its own game and harms the other (`EmuSen
 - **Which to choose.** A game is made for one adapter or the other, and its box or manual says which: most
   four-player games read Sega's Team Player, and Electronic Arts' games of 1993 and 1994 read the 4 Way Play. A
   cartridge's header says only that some adapter is supported, not which, so Nephrite does not choose for the player.
-  A game not made for an adapter does not see a pad through one: leave the port on a pad for it.
+  A game not made for an adapter does not see a pad through one: leave the port on a pad for it. *(Amended
+  2026-10-07: under a 4 Way Play such a game is given player 1's pad on port 1, so that the row left on the adapter
+  does not take player 1 from the games not made for it; player 2 still needs the row put back to a pad. Decided as a
+  choice, not measured on an adapter: `Nephrite_Native.md` §46.1. Under a Team Player the sentence stands.)*
 - **The players** are counted from port 1's pads on: with a Team Player on port 1, players 1 to 4 are its pads and
   player 5 is port 2's; with a pad on port 1 and a Team Player on port 2, player 1 is the pad and players 2 to 5 the
   adapter's. The 4 Way Play plugs into both ports, so port 2's row is not used while port 1 holds it, and the row

@@ -224,6 +224,11 @@ and the build record in [`Nephrite_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20
   registers and the EEPROM boards.
 - Rick McTeague, *Sega Genesis Hardware Internals* (`genhw.txt`, revised 1993), hosted on the same site: how a Game
   Genie sits on the cartridge's bus.
+- Charles MacDonald, *Sega Genesis I/O Chip and Peripherals* (2007), with Plutiedev's
+  [Sega multitap](https://plutiedev.com/sega-multitap), [EA multitap](https://plutiedev.com/ea-multitap) and
+  [Peripheral ID](https://plutiedev.com/peripheral-id) pages, and Sega's *Genesis Technical Bulletin #16* (1993): the
+  Team Player's packet and the 4 Way Play's selection of its four pads. Sega's own I/O check program for the adapter,
+  run as a test program, reads Nephrite's Team Player as the bulletin lays its results out.
 - [Plutiedev](https://plutiedev.com/): registers, DMA, controllers and multitaps, the SSF2 mapper, lock-on, TMSS, the
   cartridge header and save RAM.
 - Eke-Eke, *Serial EEPROMs in Sega Genesis / Mega Drive cartridges*, version 2 (2010), and d0nut and Felipe XnaK,

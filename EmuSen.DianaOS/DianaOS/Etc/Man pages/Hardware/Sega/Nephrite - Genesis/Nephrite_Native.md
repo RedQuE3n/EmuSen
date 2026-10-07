@@ -2797,7 +2797,8 @@ anything; what is not met is the follow-up list, §40.2.
 From the gates and the tester's requests, in the order they would be taken:
 
 1. ~~**G7, the debugger**: stage 7, next in the plan's order.~~ Done 2026-10-07 (§43), but for the Z80's call stack.
-2. **The multitaps (Team Player, EA 4-Way Play) and the J-Cart's two ports**, at high priority (*added 2026-10-07*).
+2. **The multitaps (Team Player, EA 4-Way Play) and the J-Cart's two ports**, at high priority (*added 2026-10-07;
+   the two adapters are in the core since §44, the frontend's players 3 and 4 and the J-Cart still to come*).
    The tester has asked for players two to four across the platform, and four-player Genesis games run with two pads
    today (§12). Not a gate; it ranks with the first.
 3. **G5, the goldens**: a third anchor, and the differing games examined one by one.
@@ -2964,4 +2965,89 @@ The plan's oracle for stage 7, "each claim a test; every table armed gives the p
 each claim of §41-§43 is a test in the crate or in WiseMan, and C15 passes on the sample's reference image and on the
 eight games of §42.2. G7 is met but for the Z80's call stack, which the ABI does not carry for a second processor
 (§40.1).
+
+## 44. The four-player adapters, step 1: the Team Player and the 4 Way Play in the core (2026-10-07)
+
+The follow-up list's second item (§40.2), taken before stage 8 at the tester's choice. This step puts the two
+adapters in the core, behind the port settings; the frontend's players 3 and 4 and the J-Cart are the next steps.
+
+### 44.1 What it built
+
+- **A port holds a plug** (`io.rs`): a pad, Sega's Team Player in its MULTI setting, or Electronic Arts' 4 Way Play,
+  which is port A's plug and takes port B as well. The Team Player's EXTRA setting is the 4 Way Play's protocol, as
+  MacDonald found it, so the two are one plug.
+- **Eight pads at the most**, a Team Player on each port. The players are port A's pads and then port B's
+  (`Io::first_pad`), and machine info's `ports` lists the pads plugged in, each a three- or six-button pad.
+- **The Team Player.** TH and TR are the console's. With TH high it rests, D3-D0 `%0011`. TH's fall starts a packet
+  and gives `%1111`; with those two reads the peripheral ID is 7. Each change of TR while TH is low asks for the next
+  nibble, and TL follows TR when the nibble is ready. The packet: two zero nibbles; each of the four ports' kind, 0 a
+  three-button pad and 1 a six-button one; then each pad's nibbles, a pressed button 0: Right Left Down Up, Start A
+  C B and, for a six-button pad, Mode X Y Z.
+- **The 4 Way Play.** Port B's lines 6 to 4, as the console drives them, choose what port A reads: 0 to 3 a pad, read
+  as a pad on the port is; 7 the adapter's mark, D1 and D0 low. The four pads share port A's TH, so a six-button pad
+  counts every fall, chosen or not.
+- **The settings** `pad1` and `pad2` gain the adapters' choices (`EmuSen_Settings_Reference.md` §4.100), and
+  `SETTING_NOTES` says port 2's choice is not used while port 1 holds the 4 Way Play. Nothing is chosen from the
+  cartridge: the header's `4` says an adapter is supported and not which (plutiedev).
+- **The state is version 18**: the eight pads' TH and counts where 17 held two, and each tap's place in its packet.
+
+### 44.2 What is argued, not measured
+
+- **Past the packet's end** a Team Player gives `%1111`. No document says what is there; Sega's sample stops at the
+  end.
+- **TL at rest** is high, and **TL after TH's fall, before any nibble is asked**, follows TR. The documents state TL
+  only for a nibble asked.
+- **The 4 Way Play's other lines under its mark** are high (`$7C`), and a choice of 4 to 6 gives nothing (`$7F`).
+  MacDonald measured the two low bits alone, on a Team Player in EXTRA mode and not on Electronic Arts' own adapter.
+- **The Team Player's packet is made when it is read**, from the buttons as they stand. A real adapter reads its
+  pads as the packet goes; the buttons do not change within a frame here, so nothing shows the difference.
+- **The mouse** through a Team Player (kind 2) is not built: Nephrite has no mouse.
+
+### 44.3 Measured (2026-10-07)
+
+- **Sega's I/O check program**, the sample Technical Bulletin 16 gives developers for the adapter, run as it is. Its
+  work area at `$FFFD00` is the bulletin's layout. With a Team Player and four six-button pads on connector 1 and a
+  pad on connector 2, each player holding other buttons: the connectors' IDs `07 0D`; the four kinds `01 01 01 01`;
+  each pad's `ST A C B R L D U` and `MD X Y Z` bytes what was held (`01`/`01`, `12`/`02`, `24`/`04`, `48`/`08`);
+  connector 2's pad `80`. Its screen names a "4P TAP" with four "JOYPAD 6bt" and lights the held buttons. With
+  three-button pads the kinds are `00`; with the adapter on connector 2 the IDs are `0D 07`. It is Sega's program
+  for Sega's device, so it speaks for what a Team Player game expects, the reads it makes; it does not make the
+  reads of §44.2.
+- **The crate's tests**, all 132 with the roms found: five new in `io.rs` (the Team Player's ID and packet by
+  plutiedev's procedure; an adapter on port B after port A's pad; the 4 Way Play's detection and its four pads as
+  MacDonald and plutiedev read them; its shared TH), `segas_io_check_program_reads_the_team_player_and_its_pads`,
+  `the_pad_settings_plug_in_the_adapters_and_number_the_players`, and the state's.
+- **The kit**: the corpus form on the sample, 64 of 64, and the single-image form on Mega Bomberman with
+  `pad1=md.teamplayer6` and with `pad1=md.4way3`, all fifteen each.
+- **WiseMan**: `NephriteTests` (the library now claims `SETTING_NOTES`), `NephriteDebugTests`, the registration
+  golden, `GenesisSettingsTests` (the rows' new choices), the Genesis battery tests, the Genesis pad's hit regions and
+  the window fit audit's ten Genesis cases: 43 pass.
+- **No game was verified with four pads in this step.** The references' four-pad runs need the probe to give input
+  to more than its first port, which is the next step's.
+
+### 44.4 Older states
+
+A version 16 or 17 state holds two pads and no adapter. It loads as before (§39.4), the six other pads and the two
+taps at rest, which is what they were: neither version had an adapter. **Measured**: version 17 states written by the
+version 17 build, with a six-button pad on port 1 (Worms, Frank Thomas Big Hurt Baseball, Sonic the Hedgehog and
+Streets of Rage 2 at frame 300), give that build's next three frames to the pixel; §39.4's version 16 states still
+load. Pinned by `state.rs`'s `a_version_17_state_loads_with_the_other_pads_at_rest`; machine info's `loads_from` is
+16, 17 and 18.
+
+### 44.5 The sources
+
+Plutiedev's "Sega multitap", "EA multitap" and "Peripheral ID", as prose and tables, their 68000 routines being a
+programming guide's examples of the reads. Charles MacDonald's "Sega Genesis I/O Chip and Peripherals" (from the
+tech-docs archive of §10, its `gen_io.pdf`): the 4 Way Play, which he worked out from a game's reading routine and a
+Team Player in EXTRA mode, and the Team Player's switch. Sega's Genesis Technical Bulletin 16 (1993-04-05) for the
+sample program's work area. Sega Retro's pages on the three devices for what they are and which games use them. No
+RTL file was opened and no emulator's source read. The board bench cannot referee an adapter: it models the console,
+and the adapter is outside it.
+
+### 44.6 Also in this step
+
+`NephriteDebugTests.Each_processor_steps_one_instruction_at_a_time` now runs its cartridge with the vertical
+interrupt off (the six words that turn it on are NOPs, the loop where it was): a step that fell on the interrupt would
+land in the handler, and the test is of the steps' order, not of the interrupt, which the crate's call-stack test
+covers.
 

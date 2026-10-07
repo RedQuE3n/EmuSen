@@ -171,3 +171,33 @@ fn md1536_shows_the_boards_picture() {
     }
     assert_eq!((f.width, f.height, h), (320, 224, 0xcf7b6245));
 }
+
+/// Sega's I/O check program, the sample Technical Bulletin 16 sends developers for the 4P tap: its work area at
+/// `$FFFD00` as the bulletin lays it out, each connector's ID, the tap's four kinds, then ten bytes a pad with its
+/// kind first and `ST A C B R L D U` at +2 and, for six buttons, `MD X Y Z` at +4. Nephrite_Native.md §44.3.
+#[test]
+fn segas_io_check_program_reads_the_team_player_and_its_pads() {
+    use crate::io::Plug;
+    let path = "exodus-techdocs/io_sample/Multitap - IO Sample Program (U) (Nov 28 1992).gen";
+    let run = |plugged: [(Plug, bool); 2], pads: &[u32]| -> Option<Vec<u8>> {
+        let mut m = program(path)?;
+        m.plugged = plugged;
+        for _ in 0..120 {
+            m.pads[..pads.len()].copy_from_slice(pads);
+            m.advance();
+        }
+        Some(m.genesis.hw.wram[0xFD00..0xFD00 + 60].to_vec())
+    };
+    let pad_row = |w: &[u8], n: usize| [w[10 * n], w[10 * n + 1], w[10 * n + 2], w[10 * n + 4]];
+    let Some(pads) = run([(Plug::Pad, false), (Plug::Pad, true)], &[0x01, 0x212]) else { return };
+    assert_eq!(pads[..2], [0x0D, 0x0D], "two pads");
+    assert_eq!((pad_row(&pads, 1), pad_row(&pads, 5)), ([0, 0, 0x01, 0], [0, 1, 0x12, 0x02]));
+    let tap = run([(Plug::TeamPlayer, true), (Plug::Pad, false)], &[0x101, 0x212, 0x424, 0x848, 0x80]).unwrap();
+    assert_eq!(tap[..6], [0x07, 0x0D, 1, 1, 1, 1], "the tap on connector 1, four six-button pads");
+    assert_eq!([1, 2, 3, 4].map(|n| pad_row(&tap, n)), [[0, 1, 0x01, 0x01], [0, 1, 0x12, 0x02], [0, 1, 0x24, 0x04], [0, 1, 0x48, 0x08]]);
+    assert_eq!(pad_row(&tap, 5), [0, 0, 0x80, 0], "connector 2's pad");
+    let second = run([(Plug::Pad, false), (Plug::TeamPlayer, false)], &[0x40, 0x01, 0x12, 0x24, 0x48]).unwrap();
+    assert_eq!(second[..2], [0x0D, 0x07], "the tap on connector 2");
+    assert_eq!(pad_row(&second, 1), [0, 0, 0x40, 0]);
+    assert_eq!((6..10).map(|i| second[i]).collect::<Vec<_>>(), [0, 0, 0, 0], "four three-button pads");
+}

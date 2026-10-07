@@ -65,7 +65,9 @@ namespace EmuSen.WiseMan.Mistress
             var region = settings.Single(s => s.Key == "region");
             Assert.Equal(new[] { "auto", "md.us", "md.eu", "md.jp", "md.asia" }, region.Choices);
             Assert.Equal(new[] { "From the cartridge", "Americas (NTSC)", "Europe (PAL)", "Japan (NTSC)", "Asia (PAL)" }, region.ChoiceLabels);
-            Assert.Equal(new[] { "3-Button Control Pad", "6-Button Arcade Pad" }, settings.Single(s => s.Key == "pad1").ChoiceLabels);
+            string[] pads = { "3-Button Control Pad", "6-Button Arcade Pad", "Team Player with 3-Button Control Pads", "Team Player with 6-Button Arcade Pads" };
+            Assert.Equal(pads.Concat(new[] { "4 Way Play with 3-Button Control Pads", "4 Way Play with 6-Button Arcade Pads" }), settings.Single(s => s.Key == "pad1").ChoiceLabels);
+            Assert.Equal(pads, settings.Single(s => s.Key == "pad2").ChoiceLabels);
             Assert.Equal("md.model1", settings.Single(s => s.Key == "model").Default);
         }
 

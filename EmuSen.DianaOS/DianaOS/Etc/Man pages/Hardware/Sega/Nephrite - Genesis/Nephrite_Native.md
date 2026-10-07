@@ -2430,7 +2430,7 @@ lists such a system and fails one that shares an extension with a system the cor
   | Sonic the Hedgehog 3, odd-lane RAM | 512 bytes | 65,536, both lanes from `$200000`, the other lane `$FF`; its odd bytes are Nephrite's 512 to the byte | 1,024, both lanes, the other `$00` | 512, one lane | 65,536, both lanes, the other `$00` |
   | Mega Man: The Wily Wars, EEPROM | 128 bytes | 65,536, its first 128 Nephrite's | 8,192, its first 128 Nephrite's | 128, Nephrite's | 65,536 |
 
-  Three references write a one-lane RAM in both lanes and one, BlastEm, as Nephrite does; their contents differ from
+  *Superseded the same day by §33: the tester chose Genesis Plus GX's form.* Three references write a one-lane RAM in both lanes and one, BlastEm, as Nephrite does; their contents differ from
   one another where the games' timing does. Nephrite keeps its form, which is BlastEm's, and **reads** the two-lane
   form too (`Cart::load_battery`): a file at least twice the lane's length is taken a byte in two from the RAM's even
   start, on the RAM's lane. So a save brought from Genesis Plus GX, PicoDrive or ClownMDEmu loads; one taken from
@@ -2460,3 +2460,62 @@ wiring no document gives; they stay carried forward.
 | Gate | So far |
 |---|---|
 | G4, the frontend | The cheats decode (§30). The fit audit passes with the Genesis tab (§31). `.srm` files round-trip, for save RAM and an EEPROM, and the references' two-lane saves load (§32.2). The kit on games is the stage's next step. |
+
+## 33. Stage 6, the battery file in Genesis Plus GX's form (2026-10-06)
+
+*Decided by the tester 2026-10-06:* a save RAM's battery file is the one Genesis Plus GX writes, so that saves move
+both ways with RetroArch's usual Genesis core; the compact form is still read; an EEPROM's file stays its bytes, on
+which the references agree (§32.2).
+
+### 33.1 What Genesis Plus GX writes, measured
+
+A synthetic cartridge for each layout the corpus's headers declare, its `RA` field set to it, writes a marker byte at
+the RAM's first addresses and its last, and Genesis Plus GX's save RAM is read through the probe at frame 30:
+
+| Layout (headers in the corpus) | Range | Its file | Where the markers are |
+|---|---|---|---|
+| Odd lane (82) | `$200001`-`$203FFF` | 65,536 bytes, the rest `$FF` | offsets 1, 3, 5 and 16,383: the address less `$200000` |
+| Odd lane (2) | `$200001`-`$2003FF` | 65,536 | 1, 3, 5 and 1,023 |
+| Odd lane (31) | `$200001`-`$20FFFF` | 65,536 | 1, 3, 5 and 65,535 |
+| Odd lane from `$300001` (2, to `$303FFF` and `$30FFFF`) | `$300001`-`$303FFF` | 65,536 | 1, 3, 5 and 16,383: the address less `$300000` |
+| Odd lane from an even start (Rent A Hero) | `$200000`-`$203FFF` | 65,536 | 0, 2, 4 and 16,383: its writes to even addresses kept |
+| Both lanes from an odd start (Tecmo Super Bowl) | `$200001`-`$203FFF` | 65,536 | 1, 2, 3, 5, 16,382 and 16,383 |
+| Both lanes from an even start (none in the corpus) | `$200000`-`$203FFF` | 65,536 | 0, 1, 2, 4, 16,382 and 16,383 |
+
+The file is 64 KiB whatever the layout, each byte at its address less the RAM's even start, `$FF` elsewhere. Nephrite
+writes that form now (`Cart::battery_file`), longer only for a range past 64 KiB, which no header in the corpus
+declares. Rent A Hero is the one layout where the two differ in more than form: its header names the odd lane from an
+even start, Genesis Plus GX keeps writes to the even addresses too, and Nephrite, taking the header's lane, keeps the
+odd ones alone; its file has the same bytes on the odd offsets and `$FF` on the even. Not chased: the game's own
+writes decide whether it matters. Mahjongg Lover's header names `$FF0000`-`$FFFFFF`, the main RAM, and Sonic & Knuckles' `$20200001`, past the bus; neither is a save.
+
+### 33.2 What it built
+
+- **The file** is made when the save RAM's bytes change (a write by the game, the host, a load or a state), at the
+  frame's end or at once, and handed to the host as the battery's bytes; the SRAM space stays the RAM's bytes.
+- **Reading**: a file longer than the RAM's bytes is taken by address; a file of their length or less is the compact
+  form and is taken in order. Both a save from BlastEm or a development build and PicoDrive's 1,024-byte range load.
+- **The tests**: the crate's `a_battery_file_is_genesis_plus_gxs_and_the_other_forms_are_read` and
+  `a_two_lane_save_ram_is_filed_by_address`; WiseMan's `GenesisBatteryTests`, the file now in this form and the
+  compact one read and written back in it.
+
+## 34. Stage 6, the Genesis shelf (2026-10-06)
+
+The row's fourth item, a frontend change through the system packs (`EmuSen_Settings_Reference.md` §4.92): a console
+only a discovered engine runs is a row of `CoreCatalog`'s lists, made from its pack, so the library, big picture and
+every window that lists consoles show the Genesis while Nephrite's development mark is shown, and nothing otherwise.
+The plan's §8.3 said the library's shelves were unaffected by discovery by design; this step is the change that note
+waited for. The Sega CD and the 32X stay off every list until their systems drop the mark (§32.1).
+
+### 34.1 Measured (2026-10-06)
+
+- **WiseMan**: the library shelf, the fit audit with the Genesis's tabs in four windows at both sizes, and the console
+  and catalog tests (122); the Mistress, core, DianaOS and Galaxia tests, 8,279 pass and 51 are skipped as before.
+- **The crate's tests**: 106 pass. **The kit**: C1-C15 on §24's 17 images and on three battery games (Phantasy Star
+  IV, Sonic the Hedgehog 3, Wonder Boy in Monster World), the battery file now 64 KiB.
+
+### 34.2 The gate's evidence
+
+| Gate | So far |
+|---|---|
+| G4, the frontend | The cheats decode (§30); the battery files round-trip, now in Genesis Plus GX's form (§32.2, §33); the fit audit passes with the Genesis's tabs and shelf at both sizes (§31, §34). The kit on games is the stage's next step. |

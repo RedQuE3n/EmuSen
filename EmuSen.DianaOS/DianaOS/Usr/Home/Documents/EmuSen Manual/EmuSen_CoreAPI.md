@@ -2531,8 +2531,10 @@ tests and the conformance kit run it as any other core. The mark names no core i
 - **Publish**: the library and its sidecar are copied into the build output, beside the tests, but marked
   `CopyToPublishDirectory="Never"`, and a publish for another platform neither takes nor asks for a prebuilt copy.
 - **CI**: `rust-cores.yml` passes `--development` for a crate whose matrix row says `development: true`.
-- **The library's shelves** are unaffected by design: Mistress lists the extensions of `CoreCatalog`'s console rows,
-  and a system reached only through discovery has no row (`Nephrite_Plan.md` §8.3).
+- ~~**The library's shelves** are unaffected by design: Mistress lists the extensions of `CoreCatalog`'s console rows,
+  and a system reached only through discovery has no row (`Nephrite_Plan.md` §8.3).~~ *Since 2026-10-06 a system only a
+  discovered engine runs has a row made from its system pack (`EmuSen_Settings_Reference.md` §4.92); a development core
+  is still found only when asked for, so its shelf shows only then.*
 
 ### 27.3 What was tested (2026-10-04)
 

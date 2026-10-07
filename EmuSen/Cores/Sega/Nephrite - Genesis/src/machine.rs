@@ -50,6 +50,8 @@ pub struct Machine {
     pub firmware: Vec<u32>,
     /// The samples made and not yet drained, stereo at `sound::RATE`.
     pub audio: SampleQueue,
+    /// A save RAM's battery file as the host is given it, remade when its bytes change; not part of a state.
+    pub battery_file: Vec<u8>,
 }
 
 /// The model a machine starts as: the header's market, overseas first, and no TMSS (Nephrite_Native.md §9).
@@ -81,7 +83,7 @@ impl Machine {
         for &(id, name, size) in list {
             extra.push(Memory { id, name, bytes: vec![0; size] });
         }
-        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], six_button: [false; 2], firmware: Vec::new(), audio: SampleQueue::default() }
+        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; 2], six_button: [false; 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new() }
     }
 
     /// The spaces in id order: the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
@@ -155,6 +157,22 @@ impl Machine {
             }
         }
         self.frames += 1;
+        self.refresh_battery_file();
+    }
+
+    /// The battery file remade where the battery's bytes changed: a save RAM's in Genesis Plus GX's form, empty for an
+    /// EEPROM, whose file is its bytes (Nephrite_Native.md §33).
+    pub fn refresh_battery_file(&mut self) {
+        let cart = &mut self.genesis.hw.cart;
+        if cart.take_dirty() && !cart.battery_file(&mut self.battery_file) {
+            self.battery_file.clear();
+        }
+    }
+
+    /// The battery file's bytes: the save RAM's file form, or the battery's own bytes.
+    pub fn battery_bytes(&self) -> Option<&[u8]> {
+        let id = self.battery_id()?;
+        if id == SRAM_ID && !self.battery_file.is_empty() { Some(&self.battery_file) } else { self.bytes(id) }
     }
 }
 

@@ -25,6 +25,8 @@ pub struct Cart {
     pub patch: Vec<u8>,
     /// Sonic & Knuckles' board, whose upper 2 MiB is the slot on top: nothing there with no cartridge in it.
     slot_on_top: bool,
+    /// The battery's bytes have changed since its file was last made.
+    dirty: bool,
     /// ROM patches as a Game Genie makes them on the cartridge port, (address, value, compare or `NO_COMPARE`): every
     /// read of the cartridge at the address answers the value, the save RAM's included; the host's, not in the state.
     pub patches: Vec<(u32, u8, u32)>,
@@ -44,7 +46,7 @@ impl Cart {
         let sram = save.map_or(Vec::new(), |s| vec![0xFF; s.bytes()]);
         let sram_always = save.is_some_and(|s| s.start as usize >= rom.len());
         let mapper = system_type.starts_with("SEGA SSF") || rom.len() > 0x40_0000;
-        Cart { rom, mask, sram, save, sram_reg: 0, sram_always, banks: mapper.then_some([0, 1, 2, 3, 4, 5, 6, 7]), eeprom, lockon: None, patch: Vec::new(), slot_on_top: serial.starts_with(LOCK_ON_SERIAL), patches: Vec::new() }
+        Cart { rom, mask, sram, save, sram_reg: 0, sram_always, banks: mapper.then_some([0, 1, 2, 3, 4, 5, 6, 7]), eeprom, lockon: None, patch: Vec::new(), slot_on_top: serial.starts_with(LOCK_ON_SERIAL), dirty: true, patches: Vec::new() }
     }
 
     /// A cartridge locked on top of this one, with Sonic & Knuckles' patch ROM when given. The cartridge on top keeps
@@ -82,30 +84,67 @@ impl Cart {
         if let Some(l) = self.lockon.as_mut() {
             return l.battery_mut();
         }
+        self.dirty = true;
         match self.eeprom.as_mut() {
             Some(e) => &mut e.memory,
             None => &mut self.sram,
         }
     }
 
-    /// The battery from a battery file: as Nephrite writes it, the RAM's bytes in order, or as Genesis Plus GX, PicoDrive
-    /// and ClownMDEmu write a one-lane RAM, both lanes of its range from its even start, which is twice as long; either
-    /// clipped to the RAM (Nephrite_Native.md §32).
+    /// Where save RAM byte `i` sits in the battery file: its address less the RAM's even start, as Genesis Plus GX files
+    /// it (Nephrite_Native.md §33).
+    fn file_offset(s: SaveRam, i: usize) -> usize {
+        let address = match s.lanes {
+            0 => s.start as usize + i,
+            3 => (s.start | 1) as usize + 2 * i,
+            _ => (s.start & !1) as usize + 2 * i,
+        };
+        address - (s.start & !1) as usize
+    }
+
+    /// The battery from a battery file: Genesis Plus GX's form, the RAM's range by address from its even start in 64 KiB
+    /// or more, or the RAM's bytes in order, as BlastEm and Nephrite before 2026-10-06 wrote it; an EEPROM's bytes in order.
+    /// A file longer than the RAM is the first, clipped to the RAM.
     pub fn load_battery(&mut self, file: &[u8]) {
         if let Some(l) = self.lockon.as_mut() {
             return l.load_battery(file);
         }
-        let lane = match self.save {
-            Some(s) if self.eeprom.is_none() && s.lanes != 0 && file.len() >= 2 * self.sram.len() => Some((s.lanes == 3) as usize),
-            _ => None,
-        };
+        let by_address = self.save.filter(|_| self.eeprom.is_none() && file.len() > self.sram.len());
         let bytes = self.battery_mut();
-        match lane {
-            Some(odd) => bytes.iter_mut().enumerate().for_each(|(i, b)| *b = file[2 * i + odd]),
+        match by_address {
+            Some(s) => bytes.iter_mut().enumerate().for_each(|(i, b)| {
+                if let Some(&v) = file.get(Self::file_offset(s, i)) {
+                    *b = v;
+                }
+            }),
             None => {
                 let n = bytes.len().min(file.len());
                 bytes[..n].copy_from_slice(&file[..n]);
             }
+        }
+    }
+
+    /// The battery file of a save RAM, in Genesis Plus GX's form: 64 KiB, or its range if that is longer, each byte at its
+    /// offset from the RAM's even start and `$FF` where the RAM has none; false, and `out` left, for an EEPROM or none.
+    pub fn battery_file(&self, out: &mut Vec<u8>) -> bool {
+        if let Some(l) = &self.lockon {
+            return l.battery_file(out);
+        }
+        let Some(s) = self.save.filter(|_| self.eeprom.is_none() && !self.sram.is_empty()) else { return false };
+        let length = (s.end - (s.start & !1)) as usize + 1;
+        out.clear();
+        out.resize(length.max(0x1_0000), 0xFF);
+        for (i, &b) in self.sram.iter().enumerate() {
+            out[Self::file_offset(s, i)] = b;
+        }
+        true
+    }
+
+    /// Whether the battery's bytes have changed since this was last asked.
+    pub fn take_dirty(&mut self) -> bool {
+        match self.lockon.as_mut() {
+            Some(l) => l.take_dirty(),
+            None => std::mem::take(&mut self.dirty),
         }
     }
 
@@ -175,6 +214,7 @@ impl Cart {
         }
         if let Some(i) = self.sram_index(a) {
             self.sram[i] = v;
+            self.dirty = true;
         }
     }
 

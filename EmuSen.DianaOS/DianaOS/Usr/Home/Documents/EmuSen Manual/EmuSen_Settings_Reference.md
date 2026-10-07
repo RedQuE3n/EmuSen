@@ -7984,8 +7984,47 @@ names its Graphics Settings tab has (§4.90). The catalog's consoles keep their 
   left as it was, as §4.85.11's copy from the flat folder is. No release has written either folder; the copy is for
   the builds that ran with development cores shown. The 32X's folder name is unchanged.
 - **`--nobattery`** behaves as for every console: nothing is read or written.
-- **The file's form** is `Nephrite_Native.md` §32's: the RAM's bytes as the game sees them, one lane's alone for a
+- ~~**The file's form** is `Nephrite_Native.md` §32's: the RAM's bytes as the game sees them, one lane's alone for a
   one-lane RAM, an EEPROM's bytes; a file in the two-lane form Genesis Plus GX, PicoDrive and ClownMDEmu write is read
-  by its lane.
+  by its lane.~~ *Decided by the tester 2026-10-06:* a save RAM's file is **Genesis Plus GX's form**, so that a
+  player's saves move both ways with RetroArch's usual Genesis core: 64 KiB, each byte at its address less the RAM's
+  even start, `$FF` where the RAM has no byte, and longer only for a range past 64 KiB, which no game in the corpus
+  has. The RAM's bytes in order, the form BlastEm writes and Nephrite wrote before, are still read, so BlastEm's saves
+  and a development build's load, and are written back in the new form; so is PicoDrive's both-lane range. An
+  EEPROM's file is its bytes, which every reference writes. Measured against Genesis Plus GX for every layout the
+  corpus's headers declare (`Nephrite_Native.md` §33).
 
 **Coverage**: `EmuSen.WiseMan/Cores/GenesisBatteryTests.cs`.
+
+### 4.92 A shelf for a console only a discovered engine runs: the Genesis (2026-10-06)
+
+**What the player sees.** With Nephrite found and its development mark shown (`EmuSen_CoreAPI.md` §27), the library
+has a **Genesis** shelf after the four Nintendo consoles: the sidebar's row with its count, the console filter's
+"Genesis (Nephrite)", its covers and list, and big picture's **genesis** system, under the theme's own art for ES-DE's
+`genesis` and its full name "Sega Genesis". Its games are the files of the extensions its system pack names (`.md`,
+`.gen`, `.bin`, `.smd`). Without the mark shown there is no Genesis shelf, row, tab or extension, as before. The Sega CD
+and the 32X get none yet, being marked in development in the core's own info (§4.90).
+
+**How it is wired.** `CoreCatalog`'s lists (`Cores`, `ConsolesInReleaseOrder`, `ShelvesInReleaseOrder`, `RomExtensions`,
+`FilterChoices`, `SupportedCheatSystems`) are the catalog's C# cores followed by a row for each console of
+`DiscoveredConsoles`, made from its system pack (`FromSystem`, as the SNES's row is) and named "<console> (<engine>)",
+the lists made again whenever discovery scans again. Everything that reads those lists gets the console with no code of
+its own: the sidebar and filter, big picture's systems, the cover and artwork scans, the scraper's shelf choices, the
+collection and interface settings, the cheat windows (with the pack's codecs), Controller Bindings (the pad's buttons and
+two ports from the engine's info), the shader and graphics windows. What a console needs beside a row was added once
+for any such console:
+
+- `CoreCatalog.IsCatalogExtension` decides `CoreFactory`'s branch, so a file of such a console still goes to its
+  discovered engine though the catalog now lists its extensions.
+- `CoreCatalog.ButtonsFor` and `ControllerPorts.ForConsole` read the engine's controllers where the catalog has no
+  core; `CoreFactory.CheatCodecsFor` returns the pack's codecs.
+- The firmware page keeps listing the engine's systems from discovery, not as catalog rows.
+- ScreenScraper's system ids (`genesis` 1, `segacd` 20, `sega32x` 19, from ScreenScraper's system pages) and the
+  systems' first releases (1988, 1991, 1994) for big picture's "Release year" sorting.
+
+Big picture draws the shelf with the same scaling as every other; nothing about its quality changed.
+
+**Coverage**: `LibraryScreenTests.The_genesis_has_a_shelf_only_while_its_engine_in_development_is_shown`; the window fit
+audit's `ActiveCheatsGenesis`, `ShaderSettingsGenesis`, `ControllerBindingsGenesis` and `GraphicsSettingsGenesis` at
+1280×800 and 1920×1200, each with the Genesis's tab; `NephriteTests`, whose `.gen` file now has the Genesis as its
+console.

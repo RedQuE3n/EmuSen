@@ -709,7 +709,8 @@ than when Endou starts: `beryl-sn76489`, in Beryl, where every crate shared betw
 
 - **Multi-file images** for discs (§5.8), and a decision on streaming reads for large media.
 - **A shelf for a console with no C# core.** Mistress's library lists the extensions of `CoreCatalog`'s C# cores only;
-  a console reached only through discovery has no shelf until the catalogue reads the system packs (stage 6).
+  a console reached only through discovery has no shelf until the catalogue reads the system packs (stage 6). *Done
+  2026-10-06 (`Nephrite_Native.md` §34).*
 - **The probe's options and memory maps** (§1.6), needed by every libretro reference, not only Nephrite's.
 - **Device kinds** (multitap, light gun, mouse) in a later minor (`EmuSen_CoreAPI.md` §6.8).
 

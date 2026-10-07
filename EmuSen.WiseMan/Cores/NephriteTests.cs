@@ -95,7 +95,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains(CoreDiscovery.Found, c => c.Info.Id == "nephrite");
             string rom = Write("game.gen", SyntheticMdRom.Cartridge(region: "E"));
             Assert.True(CoreFactory.IsSupported(rom));
-            Assert.Null(CoreCatalog.ConsoleForRom(rom));
+            Assert.Equal("Genesis", CoreCatalog.ConsoleForRom(rom));
             var bundle = CoreFactory.Load(rom);
             var core = Assert.IsType<CoreEngine>(bundle.Core);
             Assert.Equal(("nephrite", "md", "pal"), (core.Info.Id, core.Machine.Info.System, core.Machine.Info.Region));

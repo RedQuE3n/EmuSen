@@ -37,7 +37,7 @@ namespace EmuSen.Mistress.Library
     public static class RomLibrary
     {
         // Whatever cores this build has, not a second copy of the list - see EmuSen_Multicore.md §3.
-        public static readonly string[] Extensions = EmuSen.Cores.CoreCatalog.RomExtensions.ToArray();
+        public static string[] Extensions => EmuSen.Cores.CoreCatalog.RomExtensions.ToArray();
 
         private static readonly IReadOnlyList<RomEntry> None = Array.Empty<RomEntry>();
 

@@ -27,6 +27,7 @@ namespace EmuSen.Cores
             "NES" => Nintendo.Moon.MoonCore.Ports,
             "SNES" => Nintendo.Venus.VenusCore.Ports,
             "N64" => Nintendo.Mars.MarsCore.Ports,
+            _ when console is not null && CoreCatalog.DiscoveredSystem(console) is { } system => Math.Max(1, system.Controllers.SelectMany(c => c.Ports).Select(p => (int)p + 1).DefaultIfEmpty(0).Max()),
             _ => 1,
         };
     }

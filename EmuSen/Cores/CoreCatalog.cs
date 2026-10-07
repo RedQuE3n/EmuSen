@@ -207,6 +207,14 @@ namespace EmuSen.Cores
             : DiscoveredSystem(console) is { } system && system.Controllers.SelectMany(c => c.Buttons).Select(b => b.Control).OfType<Galaxia.Input.PadButton>().Distinct().ToArray() is { Length: > 0 } pad ? pad
             : Enum.GetValues<Galaxia.Input.PadButton>();
 
+        // The controller a port of a console discovery added is set to, by its id: the engine's "pad<n>" setting as stored, else its default; null where the engine has no such setting.
+        public static string? ControllerFor(string console, int port, Func<string, string?> stored)
+        {
+            if (DiscoveredSystem(console) is not { } system || SettingsFor(console).FirstOrDefault(s => s.Key == $"pad{port + 1}") is not { } setting) return null;
+            string value = stored(setting.Key) ?? setting.Default;
+            return system.Controllers.Any(c => c.Id == value) ? value : null;
+        }
+
         // The system entry of a console discovery added, from the engine's info, for its pad and its ports.
         public static Native.CoreSystem? DiscoveredSystem(string console) =>
             DiscoveredFor(console) is { } core && PackOf(console) is { } pack ? core.Info.Systems.FirstOrDefault(s => s.Id == pack.Id) : null;

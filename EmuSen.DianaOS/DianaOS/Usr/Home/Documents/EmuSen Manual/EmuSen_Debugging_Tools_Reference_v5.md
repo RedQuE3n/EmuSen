@@ -159,7 +159,7 @@ Two small helper classes back the memory spaces:
 
 ### 3.2a What `SnesDebugTarget` decides that the interface does not
 
-*2026-08-16, from 271 lines across 46 blocks in `SnesDebugTarget.cs`. The provider mechanism itself is `EmuSen_Cauldron.md` §2 and §5; these are the SNES-side choices.*
+*2026-08-16, from 271 lines across 46 blocks in `SnesDebugTarget.cs`. The provider mechanism itself is §3.66.2 and §3.66.5; these are the SNES-side choices.*
 
 **`HasSideEffects` defaults to true for anything bus-routed, and SRAM is the one deliberate exception.** A `BusDebugMemorySpace` read can land on a live register — `RDNMI` clears the pending-NMI flag, `OPHCT`/`OPVCT` toggle a byte-order latch, the manual joypad port shifts on every read — so the conservative answer is the default and a caller must opt out. SRAM passes `false` because its range at `$70:0000+` only ever reaches inert cartridge SRAM even though it travels the same bus path (§3.1a).
 
@@ -276,7 +276,7 @@ One `lock` serialises every `Submit` this scheduler ever makes, by any path, bec
 
 | Entry point | Called from | What it does |
 | --- | --- | --- |
-| `SubmitFromAnyThread` | any thread | Classifies the line. A read-only fast path (§3.17) runs **immediately, on the calling thread**, because a snapshot read is safe from anywhere (`EmuSen_Cauldron.md`). Anything else is queued. Returns `null` when it queued rather than ran, so a caller can say "you will see this once the game ticks". |
+| `SubmitFromAnyThread` | any thread | Classifies the line. A read-only fast path (§3.17) runs **immediately, on the calling thread**, because a snapshot read is safe from anywhere (§3.66.2). Anything else is queued. Returns `null` when it queued rather than ran, so a caller can say "you will see this once the game ticks". |
 | `DrainPending` | **only** the thread that owns the core | Runs everything queued since the last call, in submission order, one `Submit` per iteration rather than one lock across the batch — so a fast-path line from another thread can still interleave. A caller may `break` out early on a shutdown action; the rest stays queued. |
 | `TakeHaltedLine` | the host's blocking prompt thread | Blocks until a line arrives while `Halted` is set. |
 | `SubmitLocked` | a caller that already decided | Runs the line now, under the same lock, bypassing classification entirely. |
@@ -1901,9 +1901,9 @@ What remains genuinely open is the two-frame lag and the `$4010` write gap. Both
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)
 
-### `EmuSen.Cauldron/` — real-time snapshot providers
+### `DianaOS/Lib/Cauldron/`, namespace `EmuSen.Cauldron` — real-time snapshot providers
 
-The thread-safety seam between a live core and anything reading it. Deliberately knows nothing about DianaOS, cores, or any console.
+The thread-safety seam between a live core and anything reading it. Deliberately names nothing of DianaOS's own, of a core, or of any console. An assembly of its own until 2026-10-07; §3.66 is its full page.
 
 - `IRealtimeProvider<T>` — `Current` (never blocks, safe from any thread) plus `Refresh()` (only ever from the thread that owns the core). Every provider property on `IDebugTarget` is one of these.
 - `PollingProvider<T>` — the default: wraps a "go read the live core" delegate and publishes via a lock-free `Volatile` reference swap. Remembers only the latest snapshot.
@@ -2818,6 +2818,179 @@ backends take the schedule's port and ignore pads past the first, as before; not
 and the runs of §45 there, which are the libretro backend's half.
 
 ---
+
+### 3.66 Telemetry: `ICoreTelemetry` and the providers, the `EmuSen.Cauldron` namespace (folded into DianaOS 2026-10-07)
+
+*This section was the page `EmuSen_Cauldron.md` until 2026-10-07, when the `EmuSen.Cauldron` assembly was folded into
+`EmuSen.DianaOS` (§3.66.1.1). Its text is that page's, renumbered: what was §N there is §3.66.N here, so the split rule
+that was its §3.1 is §3.66.3.1. The code is in `DianaOS/Lib/Cauldron/` and keeps the namespace `EmuSen.Cauldron`, so no
+caller changed. The page's own history: it split `ICoreTelemetry` out of `IDebugTarget` and moved the five snapshot
+value types beside it, so a dashboard depends on the telemetry contracts and not on the debugger; measured the
+per-frame refresh cost and settled it (§3.66.5.1); and gave `DebugLoadInfo` a required `Kind` so emulator cost cannot
+be read as guest load (§3.66.4.5). Before that it held the providers only.*
+
+#### 3.66.1 What Cauldron is
+
+Cauldron answers one question: **what is a running core doing right now**, for anything that wants to watch without touching it. `coretop` is the reference consumer — the htop-shaped dashboard this exists to feed — but the two GUI coretop windows, `regs`, `sprites`, `pal` and the harness all read the same way.
+
+It is a namespace of `EmuSen.DianaOS`, in `DianaOS/Lib/Cauldron/`, and until 2026-10-07 it was a leaf assembly of its own. What the leaf enforced by construction is now a rule, held by a test (`LeafAssemblyTests.The_telemetry_contracts_name_nothing_of_the_debugger`): nothing in the namespace names a type of DianaOS's own, `ICore`, any console, or any specific core. That is the whole point: a consumer that only wants to *observe* a core should not have to take the debugger's types to do it.
+
+Two rules define it:
+
+- **Read-only.** Nothing in this namespace writes to a core. Writes — memory pokes, channel muting, cheat application, breakpoints — live on DianaOS's `IDebugTarget` (§3.66.3.1).
+- **Snapshot-published.** A consumer never reads live core state. It reads an immutable snapshot that the emulation thread published at a moment of its choosing (§3.66.2).
+
+##### 3.66.1.1 Why it was a separate assembly, and why it is not one now
+
+The rule is *agnostic mechanism, core-owned policy*. Cauldron owns the vocabulary (what a register value, a sprite, a load meter looks like) and the publication mechanism. Each core owns the policy — which registers are worth reporting, what "load" means for its hardware, how a native palette format becomes RGB. Cauldron never encodes a per-core answer, and there is no declarative per-core profile.
+
+`EmuSen.Crystal` was built on the same principle and was still deleted (`EmuSen_Multicore.md` §9.1), which is worth knowing before citing this section as precedent. The difference is what the mechanism is worth on its own: Cauldron's snapshot/provider contract has several real consumers today — `coretop`, the dashboards, two cores publishing into it — while Crystal's timeline had one appointment per core at a fixed stride. Agnostic mechanism is a good rule for shaping an abstraction; it is not on its own a reason to have one.
+
+**Decided 2026-10-07: the assembly is folded into DianaOS.** The argument above is for the *contract*, and it stands. The argument for a separate *assembly* was a consumer that could take the contract and not the debugger, and that consumer was `EmuSen.LunaP`: the toolkit's coretop window read `ICoreTelemetry`, and a launcher taking the toolkit was not to take DianaOS with it (`EmuSen_LunaP.md`). LunaP has since left the repository and names nothing of EmuSen's; its coretop window moved to `EmuSen.Serenity/Dashboards/`. The four projects that referenced Cauldron on the day of the fold were DianaOS, `EmuSen`, Serenity and WiseMan, and every program that loads any of them already loads DianaOS. So the boundary bought a separability nothing used, which is the test `EmuSen_Multicore.md` §9.2 applies to a project boundary and the one Crystal failed.
+
+What the fold changed: the six files (327 lines) moved to `DianaOS/Lib/Cauldron/`; Serenity references DianaOS where it referenced Cauldron; the project, its four `ProjectReference`s and its solution entry went. DianaOS references only Galaxia and Serenity is not among its references, so no cycle was closed, and Serenity is still free of any core (`LeafAssemblyTests`, whose `DianaOS_holds_the_telemetry_contracts_and_references_only_Galaxia` pins both halves). The rule test was shown to bite before it was trusted: a member naming `IDebugTarget`, seeded into `PollingProvider`, failed it with the type's name (measured 2026-10-07). What it did not change: the namespace, every type and member, the two rules above, and §3.66.3.1's split between what a dashboard reads and what a debugger does.
+
+**Where this does not generalise.** The fold does not say telemetry and the debugger are one thing; §3.66.3.1 still separates them, by interface. It says that an assembly boundary was no longer the instrument that kept them apart. In the plan to move the runtime to Rust the read surface is the core ABI's debug interface seen through DianaOS (`EmuSen_CoreAPI.md` §6.14, `EmuSen_RustPlatform.md` §4.4), which is a further reason not to keep a C# assembly for it.
+
+#### 3.66.2 The provider contract
+
+`IRealtimeProvider<T>` supplies one kind of information as an immutable snapshot.
+
+- **`Current`** — the last published snapshot. Never blocks, never touches live core state, safe from any thread at any time, including concurrently with a `Refresh()` on another thread.
+- **`Refresh()`** — pulls a fresh snapshot from the live core and publishes it. **Only ever call this from the thread that owns the core.** It is the single member that touches live, mutable core state; calling it from two threads at once, or concurrently with whatever else mutates that state, defeats the entire purpose.
+
+`T` must be an immutable snapshot — a readonly struct, or a reference to a list never mutated after being handed to `Refresh`. `Current` is published without a lock, so a consumer reading a half-mutated `T` would be exactly the race this exists to prevent.
+
+##### 3.66.2.1 PollingProvider
+
+Wraps a plain "go read the live core" `Func<T>`, so a core supplies a delegate instead of writing its own `IRealtimeProvider` boilerplate. Constrained to `T : class` — every current use is an `IReadOnlyList<...>` snapshot — so `Current` can be published with `Volatile.Write` and read with `Volatile.Read`: a plain reference swap, not a lock, which is what makes the "never blocks" contract above true even under concurrent access.
+
+The constructor takes an `initial` value and reads it once, rather than leaving `Current` null until the first `Refresh()`. A provider should never hand back "nothing" just because the thread that owns the core has not got round to refreshing yet.
+
+##### 3.66.2.2 HistoryProvider
+
+Also remembers the last `capacity` snapshots. `PollingProvider` answers "what is the machine doing now", which is what a live dashboard wants; this answers "what was it doing fifty frames ago", which is what an investigation into a transition wants — when did the display go blank, when did the coprocessor stop, what changed either side of it.
+
+Deliberately a separate type rather than a flag on `PollingProvider`: keeping history costs a retained reference per `Refresh`, so a consumer that only reads `Current` should not pay for a ring it never looks at.
+
+- `capacity` is a hard bound. The ring overwrites its oldest entry rather than growing, so a run of any length costs the same fixed memory.
+- `RefreshCount` is how many times `Refresh()` has run — the clock the staleness signal is measured in. A caller wanting real frame numbers pairs it with its own frame counter.
+- `RefreshesSinceChange` is how long `Current` has been sitting still. It answers "when did the coprocessor stop updating" directly, without storing or diffing any history. Always 0 when no comparer was supplied, since nothing can be judged unchanged.
+- `GetHistory()` copies out under a lock rather than handing back the live ring, so a caller iterating it cannot have entries overwritten underneath it by a `Refresh()` on the emulation thread. That makes it the one member here that can block — briefly, on an uncontended lock — which is why it is a method rather than a property that looks as cheap as `Current`.
+
+`SnesDebugTarget` is the only current user, for coprocessor registers; `cophist` is the command on top of it.
+
+##### 3.66.2.3 ListEqualityComparer
+
+Element-wise equality for the `IReadOnlyList<T>` snapshots every provider publishes. Exists so `HistoryProvider`'s staleness signal has something meaningful to compare: snapshots are freshly built each `Refresh`, so reference equality would report "changed" every single time and the signal would always read 0. It compares whatever `TItem`'s own `Equals` says, so register, sprite and load snapshots all work without it knowing what any of them are.
+
+This is why `DebugRegisterValue` implements `IEquatable<>` (§3.66.4.1).
+
+#### 3.66.3 `ICoreTelemetry` — the read surface
+
+Everything a live dashboard can read from a running core, and nothing that writes to one.
+
+| Member | Notes |
+| --- | --- |
+| `CoreName` | Short display name — "SNES", "NES". |
+| `FrameCount` | Monotonic, once per rendered frame. The shared "what moment is this" reference for correlating a screenshot, a log line and a register dump against the same instant, whichever core is running. |
+| `MaxSprites` | Real OAM capacity (128 on the SNES, 64 on the NES), or 0 when a core models no fixed limit. Lets a dashboard draw "N/max" as a real percentage bar instead of a context-free count. |
+| `CpuRegisters` / `VideoRegisters` | Grouped separately because almost every console draws this exact line in its own documentation, which keeps a generic register panel able to show two sections without knowing which registers belong to which half. |
+| `ApuRegisters` | The sound coprocessor's own registers plus the CPU↔APU communication ports, both directions. Added investigating a Super Metroid boot hang where the only way to see SPC700 state at all was raw verbose-trace text. Empty list when a core has no distinct sound coprocessor. |
+| `CoprocessorRegisters` | Whatever cartridge coprocessor is present — SA-1, SuperFX GSU, NEC DSP. **Reads must be side-effect-free:** the real register windows acknowledge interrupts (`$3031` on the GSU) and advance transfer handshakes (the NEC DSP's DR/SR), so implementations read dedicated `Debug*` views rather than routing through the chip's own `ReadRegister`. Same trap `APURAM` avoids by wrapping raw RAM instead of `Spc700.Read8`. Empty for the common no-coprocessor cartridge. |
+| `Sprites` / `Palettes` / `AudioChannels` | See §3.66.4. |
+| `HardwareLoad` | Per-subsystem load bars. An empty list means this core models no timing breakdown; `coretop` skips the section rather than drawing fake bars. |
+| `RefreshProviders()` | Republishes every provider above. Host-driven, emulation thread only — §3.66.5. |
+| `RenderTileSheet()` | Tile/character memory decoded to an RGBA image, for a headless harness to write straight to disk without a window. Deliberately not "VRAM sheet": an NES core's CHR pattern tables are not VRAM in the SNES sense, but "some tile memory decoded to a sheet" is the same shape across consoles. A core with nothing analogous returns a 0x0 buffer. |
+| `RenderPaletteSwatch()` | Same idea for palette memory. SNES CGRAM and an NES core's completely different palette RAM are both just "N colors resolved to RGB" once decoded. 0x0 when a core has no palette memory. |
+| `GetAudioSamples()` | Non-destructive copy of the currently buffered output samples — `Queue<short>.ToArray()` on the SNES side, specifically so it never steals samples from a live playback consumer of the same queue. Interleaved 16-bit PCM plus its sample rate, so a harness can write a `.wav` without knowing anything about the source sound chip. |
+| `GetSummaryText()` | Free-text escape hatch for whatever is not modeled structurally — lets a new target be useful on day one. |
+
+The 0x0 return on the two render methods is a real contract, not a defensive nicety: both GUI coretop windows call them unconditionally and let their `ToBitmap` helper turn an empty buffer into a null image.
+
+##### 3.66.3.1 What stayed in `IDebugTarget`, and why
+
+`IDebugTarget` (DianaOS, `Lib/IDebugTarget.cs`) now extends `ICoreTelemetry` and keeps everything else. A core implements `IDebugTarget` exactly as before and satisfies `ICoreTelemetry` automatically.
+
+The split is not read-versus-write alone. What stayed is everything shaped like a **debugger**:
+
+- **The twelve registries** — `WatchRegistry`, `BreakpointRegistry`, `CoverageRegistry`, `CallStackRegistry`, `LabelRegistry`, `AccessCounterRegistry`, `FreezeRegistry`, `RegisterFlowRegistry`, `DmaLogRegistry`, `CheatRegistry`, `FrameLogRegistry`, plus `IExpressionContext`. These are stateful subsystems that are neither pure-read nor pure-write, they total roughly 2,750 lines, and they are legitimately DianaOS's own. Moving `IDebugTarget` wholesale would have relocated the debugger into Cauldron rather than building an information provider.
+- **Memory spaces** — `GetMemorySpaces()` and `IDebugMemorySpace`, which carries `Write(int, byte)` and `IsWritable`. Splitting that into read and write halves is a larger change than this one, and no dashboard needs it.
+- **Disassembly and decoders** — `Disassemble`, `DecodeTilemapEntry`, `DecodeTilePixels`, `TilemapEntryStride`, `ClassifyStaticReference`. These take `IDebugMemorySpace`, so they cannot move until it does.
+- **The remaining writes** — `SetChannelMuted`, `ApplyCheats`.
+- **Console-shaped descriptors** — `InterruptVector`, `PhysicalAddress`, `BreakCondition`, `DebugDmaChannel`, `DisassembledInstruction`, `DebugCpu`.
+
+The test of whether the split is real: `EmuSen.Hotaru` and `EmuSen.Mistress`'s `CoretopWindow` both take `ICoreTelemetry`, not `IDebugTarget`. `CoretopCommand` still takes `IDebugTarget` because it draws a tilemap section, and it lives in DianaOS anyway.
+
+#### 3.66.4 The snapshot types
+
+All five are immutable readonly structs with no dependency on anything outside the `EmuSen.Cauldron` namespace.
+
+##### 3.66.4.1 `DebugRegisterValue`
+
+One named register or flag. `BitWidth` drives formatting — pad to 2 hex digits for an 8-bit register, 4 for 16-bit — and the type is kept generic rather than typed per-register because different CPUs have wildly different register sets. The 65816 has PB/DB/D and an E flag the 6502 does not; a 6502 target simply reports a different list through the same shape.
+
+`IEquatable<>` is implemented so `EqualityComparer<T>.Default` takes the fast path rather than reflection-based `ValueType.Equals`, which boxes. This is compared per-register per-frame by `HistoryProvider`'s staleness signal (§3.66.2.2), so the boxing would be real.
+
+##### 3.66.4.2 `DebugSpriteInfo`
+
+One sprite/OBJ entry, shaped generically enough to cover the SNES's OAM low+high table split and the NES's flatter 4-byte-per-sprite OAM. A sprite viewer needs a rectangle, a tile and palette reference, and flip/priority flags, regardless of how the hardware stores them.
+
+##### 3.66.4.3 `DebugPaletteInfo`
+
+One palette's colors, already resolved to display-ready RGB, so a palette widget never needs to know a console's native format — SNES BGR555, the NES's 64-color master palette. Each target converts its own format once, here.
+
+##### 3.66.4.4 `DebugAudioChannelInfo`
+
+One channel or voice. The SNES reports its 8 S-DSP voices through this shape and the NES its 5 APU channels (2 pulse, triangle, noise, DMC), even though BRR sample playback and simple waveform generators have nothing in common.
+
+`Level` is a plain 0-100 scale rather than the SNES's native 0-2047 envelope range, so a generic viewer needs no core's internal units. `Info` is a free-text escape hatch for what is too core-specific to model — ADSR stage, sample source, pitch. Same "structured where cheap, free-text where not" split `GetSummaryText()` uses.
+
+Built diagnosing a "part of the music is missing" report, where the toolchain could only inspect the final mixed output or a KeyOn event as it happened — neither answers "is voice N active right now, and what is its envelope doing".
+
+##### 3.66.4.5 `DebugLoadInfo`
+
+One named "how hard is this working" meter. `Percent` is 0-100, already normalized against whatever the core considers full — typically the wall-clock budget of one native frame.
+
+`Kind` says what the number actually is, and there are two very different answers:
+
+- **`EmulatorCost`** — wall-clock time this emulator spent on a subsystem, against one native frame's budget. What both cores publish today.
+- **`GuestUtilization`** — how hard the emulated hardware itself is working, as the guest would see it. Nothing publishes this yet.
+
+The distinction is not cosmetic. A `PPU` bar at 80% means "this emulator is close to missing frames" under the first reading and "the game is close to the console's own limits" under the second — opposite conclusions from the same pixels. Until 2026-08-04 the type had no such field and every consumer drew the bars under a header reading "Hardware load", which invites exactly the wrong one.
+
+`Kind` therefore has **no default**: the constructor requires it, so a new core has to answer the question rather than inherit an assumption. `DebugLoadKindText.Header(kind)` is the single phrasing every dashboard uses ("Emulator cost (% of one frame)" / "Hardware utilization"), so three separate consumers — `CoretopCommand` and both frontends' `CoretopWindow` — cannot drift apart on how they describe it. All three group their bars by `Kind` and emit one header per group, which also means a core mixing both kinds renders correctly without any of them changing.
+
+Normalization is the core's own business: `ReadHardwareLoadLive` converts real millisecond timings to a percentage of the frame budget and clamps to 100, since a frame running behind can otherwise report over 100% and look like a rendering bug in a bar only meant to reach "full".
+
+Both cores publish real bars: `CPU+SPC700`/`PPU`/`HDMA` on the SNES, `CPU+APU`/`PPU` on the NES (`Moon_Debug.md` §3.2). The NES published an empty list until 2026-08-04, which is why `coretop` drew no load section on it at all — the empty list is the real "this core models no breakdown" signal, and a core that genuinely has none should still publish it rather than fake zeroes.
+
+#### 3.66.5 Refresh cadence, and who calls it
+
+**The host calls `RefreshProviders()`. The core never refreshes itself.**
+
+This was not always true, and the history is the argument. Until 2026-08-04 `RefreshProviders()` was a defaulted no-op on `IDebugTarget`; the SNES implemented it and every host loop called it once per frame, while the NES never implemented it and instead pushed from its own scheduler via a `MoonCore.FrameRefresh` hook. Both cores worked, by opposite mechanisms, and nothing checked that a core had chosen one.
+
+The push side cannot express the case that broke it. A core's `EndFrame` only fires when a frame *completes*, so it can say "a frame ran" and nothing else. A rewind, a breakpoint halt, a single step and a `loadstate` all move the machine without finishing a frame — which is exactly why both frontends call `RefreshProviders()` in their rewind branch and `EmuSen.Pharaoh` wires it to `OnHalted`. On the NES all of those landed on the empty default, so a rewinding or halted NES kept serving state the machine had already left.
+
+The host knows about frame boundaries *and* about rewind, halt, step and state loads. The core's scheduler only knows the first. Pull is therefore strictly more expressive, and it is now the only rule: `RefreshProviders()` is a required interface member, so a core that forgets it fails to compile rather than going quietly stale. `Moon_Debug.md` §3 records the NES side.
+
+##### 3.66.5.1 Refreshing unconditionally is measured and settled
+
+Every host calls `RefreshProviders()` once per frame whether or not anything is reading — no dashboard open, DianaOS not running, still eight lists rebuilt on the SNES. That looks like obvious waste, and gating it on a live-reader count was proposed on exactly that reasoning. **It was measured and rejected.** Do not re-propose it without new numbers.
+
+Headless, Release, 600 frames on a synthetic ROM after a 60-frame warm-up:
+
+| Core | `RunFrame` | `RefreshProviders` | Refresh as % of emulation | Refresh as % of the 16.64ms budget |
+|---|---|---|---|---|
+| SNES | 1.1249 ms | 0.0161 ms | 1.4% | **0.10%** |
+| NES | 1.1224 ms | 0.0039 ms | 0.4% | **0.02%** |
+
+A tenth of one percent of a frame. `ReadSpritesLive` walks all 128 OAM entries unconditionally — the parked-sprite `continue` skips the list add, not the iteration — so the dominant cost is already fixed and a real game with a full OAM only changes how much the `List<>` grows. Even tripling the sprite portion leaves this under 0.3% of budget, and the ratio holds on a slower machine because emulation and refresh scale together.
+
+Gating would also have cost more than the plumbing. DianaOS's whole "Diana always live" model rests on read-only lines running immediately **on whatever thread submitted them** (`DianaOSInterpreterScheduler`, `TryGetReadOnlyFastPath`), which is safe precisely because reading `Current` never touches the core. A dormant provider breaks that: a one-shot `regs` or `sprites` has no safe way to refresh from the console thread, and reclassifying those commands as emulation-thread work would make them hang whenever the loop is not ticking — paused, halted at a breakpoint, no ROM loaded. That is exactly when you most want to read registers.
+
+So the unconditional refresh is not a debt. It is the price of the property that makes the read-only fast path safe, and it costs 0.1% of a frame.
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders
 

@@ -55,7 +55,7 @@ Two bars, **`CPU+APU`** and **`PPU`**, each a percentage of one native frame's w
 
 Until 2026-08-04 `HardwareLoad` was hard-wired to `Array.Empty<DebugLoadInfo>()`, so `coretop` skipped the section entirely and the NES had no load bars at all. The empty list is the documented "this core models no timing breakdown" signal, and `coretop` correctly draws nothing rather than fake zeroes — but the NES had no breakdown only because none had been written, not because the concept did not apply.
 
-**What these measure is emulator cost, not guest hardware utilization.** They are wall-clock timings of this emulator's own work, exactly like the SNES's, and both bars carry `DebugLoadKind.EmulatorCost` so no dashboard can present them as the other thing (`EmuSen_Cauldron.md` §4.5). It doubles as the per-subsystem profile the low-end-laptop optimization effort needs on this core.
+**What these measure is emulator cost, not guest hardware utilization.** They are wall-clock timings of this emulator's own work, exactly like the SNES's, and both bars carry `DebugLoadKind.EmulatorCost` so no dashboard can present them as the other thing (`EmuSen_Debugging_Tools_Reference_v5.md` §3.66.4.5). It doubles as the per-subsystem profile the low-end-laptop optimization effort needs on this core.
 
 **Why `CPU+APU` is one bar rather than two.** `Apu.Step(cycles)` is called from inside `RunCpuUntilBudgetSpent`'s instruction loop, clocked from the real CPU cycles each instruction consumed — which is what makes its timers correct (§`Moon_APU.md`). Timing the two separately would mean a `Stopwatch.GetTimestamp()` pair per *instruction* rather than per scanline, which would cost more than the thing being measured. The SNES groups `CPU+SPC700` for the same reason.
 
@@ -63,7 +63,7 @@ The instrumentation sits in `RunFrame`'s scheduler loop: one timestamp before th
 
 `MoonDebugTarget` takes an optional `frameTimings` delegate, defaulting to reading the core. It exists only so a test can assert exact bar percentages against injected values; nothing in the product passes it. `SnesDebugTarget` has the same parameter for a different reason — it is constructed from loose `Cpu`/`MemoryBus`/`Renderer` components and cannot reach `VenusCore` at all.
 
-One deliberate difference from the SNES: this core normalizes against its real `FrameRateHz`, where `SnesDebugTarget` hardcodes a 60fps budget. The real-rate version is what `EmuSen_Cauldron.md` §4.5 documents the contract as; the SNES's hardcode is a ~0.15% error nobody will see on a bar 30 characters wide, and was left alone rather than changed as a side effect of this work.
+One deliberate difference from the SNES: this core normalizes against its real `FrameRateHz`, where `SnesDebugTarget` hardcodes a 60fps budget. The real-rate version is what `EmuSen_Debugging_Tools_Reference_v5.md` §3.66.4.5 documents the contract as; the SNES's hardcode is a ~0.15% error nobody will see on a bar 30 characters wide, and was left alone rather than changed as a side effect of this work.
 
 ---
 

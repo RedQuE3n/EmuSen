@@ -446,7 +446,8 @@ out under the bound. The schema and `user_version` 1 do not change, so either im
 Its six files move into `EmuSen.DianaOS`, keeping the `EmuSen.Cauldron` namespace so no caller changes; Serenity
 references DianaOS in its place; the project and its four `ProjectReference`s go. `EmuSen_Cauldron.md` becomes a
 section of the DianaOS documentation, keeping its §3.1 rule on what belongs to telemetry and what to the debugger.
-That is step 1b. In the Rust plan the read surface it defines is the core ABI's debug interface
+That is step 1b. *Done 2026-10-07: the files are in `DianaOS/Lib/Cauldron/` and the page is
+`EmuSen_Debugging_Tools_Reference_v5.md` §3.66, with the split rule at §3.66.3.1 and the fold's own record at §3.66.1.1.* In the Rust plan the read surface it defines is the core ABI's debug interface
 (`EmuSen_CoreAPI.md` §6.14) seen through DianaOS, so a separate Rust crate for it would be a boundary nothing uses
 (`EmuSen_Multicore.md` §9.2).
 

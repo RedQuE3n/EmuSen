@@ -59,7 +59,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // Optional: a caller with no per-frame loop omits it and load reports "not modeled" - see §3.2a.
         private readonly Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? _frameTimings;
 
-        // Refreshed once per frame, then read from any thread - see EmuSen_Cauldron.md §2.
+        // Refreshed once per frame, then read from any thread - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.2.
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegistersProvider;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _videoRegistersProvider;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _apuRegistersProvider;
@@ -385,7 +385,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels => _audioChannelsProvider;
         public IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad => _hardwareLoadProvider;
 
-        // One call per frame, on the thread that owns the core - see EmuSen_Cauldron.md §5.
+        // One call per frame, on the thread that owns the core - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.5.
         public void RefreshProviders()
         {
             _cpuRegistersProvider.Refresh();

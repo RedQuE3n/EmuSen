@@ -419,7 +419,7 @@ namespace EmuSen.Hotaru.Views
                     long frameStart = Stopwatch.GetTimestamp();
                     _core.RunFrame();
 
-                    // Publishes this frame's snapshots, on the thread that produced them - see EmuSen_Cauldron.md.
+                    // Publishes this frame's snapshots, on the thread that produced them - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.
                     _debugTarget.RefreshProviders();
 
                     // A breakpoint or armed step stopped RunFrame mid-frame; go straight to the prompt.

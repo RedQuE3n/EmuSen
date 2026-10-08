@@ -47,7 +47,7 @@ For a change you are still iterating on, a local `dotnet pack` into a folder sou
 
 What this bought is worth naming against that cost: a clone of this repository builds with `dotnet build`, and so does a clone of `EmuSen.Pegasus`, and so does a clone of anything else that ever wants the toolkit.
 
-`EmuSen.Cauldron` and `EmuSen.Galaxia` were made packable only because LunaP named them and a consumer outside this repository could not resolve a `ProjectReference`. Nothing outside wants them now, so both are back to `IsPackable=false` with their package metadata kept in place in case that changes.
+`EmuSen.Cauldron` and `EmuSen.Galaxia` were made packable only because LunaP named them and a consumer outside this repository could not resolve a `ProjectReference`. Nothing outside wants them now, so both are back to `IsPackable=false` with their package metadata kept in place in case that changes. *(2026-10-07: Cauldron's project no longer exists; it was folded into DianaOS, `EmuSen_Debugging_Tools_Reference_v5.md` §3.66.1.1.)*
 
 ## 4. What stayed behind
 
@@ -69,7 +69,7 @@ That test has a blind spot found by sabotaging it and watching it pass: `Assembl
 - **`Man pages/Old/EmuSen_LunaP_Gameplan.md`** — the plan the toolkit was built to, and what each of its seven phases taught. Retired there on 2026-08-16, on its own §7.3's instruction, once this document existed to replace it; still the record of work done inside this project and still worth reading for *why*, which is why it is cited by name rather than left to rot.
 - **`EmuSen_LunaP_Adoption_Gameplan.md`** — its successor and the live plan: what the frontends should adopt from LunaP 0.8.0, whose surface postdates the migration the older plan describes.
 - **`EmuSen_Input.md` §4.3** — `DefaultPadKeyMap`, in the project that owns it now.
-- **`EmuSen_Cauldron.md`** — `ICoreTelemetry` and the snapshot/provider contract `CoretopWindow` consumes; §3.1 for the Cauldron-versus-`IDebugTarget` split.
+- **`EmuSen_Debugging_Tools_Reference_v5.md` §3.66** — `ICoreTelemetry` and the snapshot/provider contract `CoretopWindow` consumes; §3.66.3.1 for the telemetry-versus-`IDebugTarget` split. It was `EmuSen_Cauldron.md` until the assembly was folded into DianaOS on 2026-10-07.
 
 ---
 

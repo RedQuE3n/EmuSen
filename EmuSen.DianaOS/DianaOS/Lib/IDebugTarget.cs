@@ -130,7 +130,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
     // Named after the commands each kind backs, not after any one CPU's mnemonics - see §3.1.
     public enum StaticReferenceKind { Call, Write, Read }
 
-    // The contract a core implements; the read surface lives on ICoreTelemetry - see EmuSen_Cauldron.md §3.1.
+    // The contract a core implements; the read surface lives on ICoreTelemetry - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.3.1.
     public interface IDebugTarget : ICoreTelemetry
     {
         IReadOnlyList<IDebugMemorySpace> GetMemorySpaces();

@@ -4,13 +4,13 @@ using System.Threading;
 
 namespace EmuSen.Cauldron
 {
-    // Also remembers the last <capacity> snapshots - "what was it doing fifty frames ago" - see EmuSen_Cauldron.md §2.2.
+    // Also remembers the last <capacity> snapshots - "what was it doing fifty frames ago" - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.2.2.
     public sealed class HistoryProvider<T> : IRealtimeProvider<T> where T : class
     {
         private readonly Func<T> _readLive;
         private readonly IEqualityComparer<T>? _comparer;
 
-        // Guarded by _gate, unlike Current - see §2.2.
+        // Guarded by _gate, unlike Current - see §3.66.2.2.
         private readonly T[] _ring;
         private readonly object _gate = new object();
         private int _next;      // next slot to write
@@ -20,7 +20,7 @@ namespace EmuSen.Cauldron
         private long _refreshCount;
         private long _lastChangedRefresh;
 
-        // <capacity> is a hard bound; <comparer> is optional and only drives staleness - see §2.2.
+        // <capacity> is a hard bound; <comparer> is optional and only drives staleness - see §3.66.2.2.
         public HistoryProvider(Func<T> readLive, T initial, int capacity, IEqualityComparer<T>? comparer = null)
         {
             if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
@@ -37,17 +37,17 @@ namespace EmuSen.Cauldron
 
         public int Capacity => _ring.Length;
 
-        // Same lock-free contract as PollingProvider - see §2.
+        // Same lock-free contract as PollingProvider - see §3.66.2.
         public T Current => Volatile.Read(ref _current);
 
-        // The clock RefreshesSinceChange is measured in - see §2.2.
+        // The clock RefreshesSinceChange is measured in - see §3.66.2.2.
         public long RefreshCount => Volatile.Read(ref _refreshCount);
 
-        // "How long has this been sitting still"; always 0 without a comparer - see §2.2.
+        // "How long has this been sitting still"; always 0 without a comparer - see §3.66.2.2.
         public long RefreshesSinceChange =>
             _comparer == null ? 0 : Volatile.Read(ref _refreshCount) - Volatile.Read(ref _lastChangedRefresh);
 
-        // Emulation thread only, same contract as PollingProvider.Refresh - see §2.
+        // Emulation thread only, same contract as PollingProvider.Refresh - see §3.66.2.
         public void Refresh()
         {
             T value = _readLive();
@@ -69,7 +69,7 @@ namespace EmuSen.Cauldron
             }
         }
 
-        // Oldest first; copies out under the lock, so this is the one member here that can block - see §2.2.
+        // Oldest first; copies out under the lock, so this is the one member here that can block - see §3.66.2.2.
         public IReadOnlyList<T> GetHistory()
         {
             lock (_gate)

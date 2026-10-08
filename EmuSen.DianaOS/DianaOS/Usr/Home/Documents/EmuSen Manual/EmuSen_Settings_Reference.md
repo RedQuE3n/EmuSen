@@ -4700,7 +4700,7 @@ LunaP) were each caught (BigPicture §32.5).
 
 EmuSen's version was set to 0.9.0 on 2026-09-27 (Q84). It is set once, in `Directory.Build.props` at the
 repository root, and every project that does not set its own carries it. EmuSen.Galaxia and EmuSen.Cauldron keep their
-own 0.1.0. Until then no project set one, and the SDK's default of 1.0.0 was what the program reported.
+own 0.1.0 (Cauldron until 2026-10-07, when its project was folded into DianaOS). Until then no project set one, and the SDK's default of 1.0.0 was what the program reported.
 
 The places that read it:
 - the big-screen menus' footer;

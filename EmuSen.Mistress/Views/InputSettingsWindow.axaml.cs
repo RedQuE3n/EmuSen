@@ -84,6 +84,11 @@ namespace EmuSen.Mistress.Views
         private readonly Dictionary<string, (TextBlock Words, TextBlock KeyboardHeader)> _playerRows = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dropdown _playerChoice = new() { Name = "PlayerSelector", Width = 130 };
         private readonly Button _usePlayer1;
+        // The running game's controller per player, which a cartridge's own ports can add to - see EmuSen_Settings_Reference.md §4.103.
+        private readonly (string Console, IReadOnlyList<string?> Controllers)? _running;
+
+        private IReadOnlyList<string?>? RunningControllers(string console) =>
+            _running is { } r && string.Equals(r.Console, console, StringComparison.OrdinalIgnoreCase) ? r.Controllers : null;
 
         public int PlayerOf(string console) => _playerByConsole.GetValueOrDefault(console, 1);
 
@@ -107,9 +112,10 @@ namespace EmuSen.Mistress.Views
         { }
 
         public InputSettingsWindow(ControllerKeyBindings keyBindings, GamepadBindings gamepadBindings, GamepadManager gamepad,
-            AppSettings appSettings, HotkeyBindingMap hotkeyBindings, string? selectedConsole = null)
+            AppSettings appSettings, HotkeyBindingMap hotkeyBindings, string? selectedConsole = null, IReadOnlyList<string?>? runningControllers = null)
         {
             InitializeComponent();
+            if (selectedConsole is not null && runningControllers is not null) _running = (selectedConsole, runningControllers);
             _usePlayer1 = Ui.Button("Use Player 1's", UsePlayer1).HelpText("Give the player shown player 1's gamepad buttons again");
             _consoles = CoreCatalog.ConsolesInReleaseOrder;
             _keyBindings = keyBindings;
@@ -239,7 +245,7 @@ namespace EmuSen.Mistress.Views
             string? console = ShownConsole;
             // The players the console's ports hold as its settings stand: an adapter's four where one is set.
             var config = GraphicsConfig.Load();
-            int ports = EmuSen.Cores.ControllerPorts.ForConsole(console, key => config.Value(console!, key));
+            int ports = console is not null && RunningControllers(console) is { } running ? running.Count : EmuSen.Cores.ControllerPorts.ForConsole(console, key => config.Value(console!, key));
             PlayerBar.IsVisible = console is not null && ports > 1;
             if (!PlayerBar.IsVisible) return;
             _playerChoice.Fill(Enumerable.Range(1, ports).Select(PlayerPreferencesRows.Player).ToArray(), PlayerPreferencesRows.Player(Math.Min(PlayerOf(console!), ports)));

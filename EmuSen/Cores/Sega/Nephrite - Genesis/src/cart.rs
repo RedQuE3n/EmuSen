@@ -19,6 +19,8 @@ pub struct Cart {
     pub banks: Option<[u8; 8]>,
     /// A serial EEPROM board's chip, which takes the place of the save RAM its header declares.
     pub eeprom: Option<Eeprom>,
+    /// A J-Cart board: two pad ports on the cartridge, known by the header (`JCARTS`).
+    pub jcart: bool,
     /// Sonic & Knuckles' lock-on: the cartridge on top, seen at `$200000`, and the 256 KiB patch ROM that `$A130F1`'s
     /// bit 0 maps over `$300000`-`$3FFFFF` (plutiedev's "Sonic & Knuckles Lock-on").
     pub lockon: Option<Box<Cart>>,
@@ -30,6 +32,16 @@ pub struct Cart {
     /// ROM patches as a Game Genie makes them on the cartridge port, (address, value, compare or `NO_COMPARE`): every
     /// read of the cartridge at the address answers the value, the save RAM's included; the host's, not in the state.
     pub patches: Vec<(u32, u8, u32)>,
+}
+
+/// The J-Cart boards, by the serial and, where the serial is shared, the checksum their headers carry: Micro Machines 2,
+/// Micro Machines 96, Micro Machines Military, Pete Sampras Tennis 96 and Super Skidmarks (Nephrite_Native.md §48.1).
+pub const JCARTS: [(&str, Option<u16>); 5] = [("T-120096", None), ("00000000", Some(0x2C41)), ("00000000", Some(0x168B)), ("T-123456", Some(0xAABC)), ("XXXXXXXX", Some(0x71AB))];
+
+/// Whether a header's serial and checksum name a J-Cart board.
+pub fn is_jcart(serial: &str, checksum: u16) -> bool {
+    let s = serial.get(2..).unwrap_or("").trim_start_matches([' ', '_']);
+    JCARTS.iter().any(|&(known, sum)| s.starts_with(known) && sum.is_none_or(|c| c == checksum))
 }
 
 /// Sonic & Knuckles' serial, whose cartridge takes another on top.
@@ -46,7 +58,8 @@ impl Cart {
         let sram = save.map_or(Vec::new(), |s| vec![0xFF; s.bytes()]);
         let sram_always = save.is_some_and(|s| s.start as usize >= rom.len());
         let mapper = system_type.starts_with("SEGA SSF") || rom.len() > 0x40_0000;
-        Cart { rom, mask, sram, save, sram_reg: 0, sram_always, banks: mapper.then_some([0, 1, 2, 3, 4, 5, 6, 7]), eeprom, lockon: None, patch: Vec::new(), slot_on_top: serial.starts_with(LOCK_ON_SERIAL), dirty: true, patches: Vec::new() }
+        let jcart = is_jcart(serial, checksum);
+        Cart { rom, mask, sram, save, sram_reg: 0, sram_always, banks: mapper.then_some([0, 1, 2, 3, 4, 5, 6, 7]), eeprom, jcart, lockon: None, patch: Vec::new(), slot_on_top: serial.starts_with(LOCK_ON_SERIAL), dirty: true, patches: Vec::new() }
     }
 
     /// A cartridge locked on top of this one, with Sonic & Knuckles' patch ROM when given. The cartridge on top keeps
@@ -255,6 +268,17 @@ mod tests {
 
     fn rom(n: usize) -> Vec<u8> {
         (0..n).map(|i| (i >> 8) as u8 ^ i as u8).collect()
+    }
+
+    // The five J-Cart boards by their headers (Nephrite_Native.md §48.1); Psycho Pinball shares Micro Machines Military's checksum, not its serial.
+    #[test]
+    fn a_j_cart_is_known_by_its_header() {
+        for (serial, checksum) in [("GM T-120096-50", 0xEF29), ("GM 00000000-00", 0x2C41), ("GM 00000000-00", 0x168B), ("GM T-123456-00", 0xAABC), ("GM XXXXXXXX-XX", 0x71AB)] {
+            assert!(is_jcart(serial, checksum), "{serial} {checksum:04X}");
+        }
+        assert!(!is_jcart("GM T-120086-50", 0x168B), "Psycho Pinball");
+        assert!(!is_jcart("GM 00000000-00", 0x165E), "Micro Machines, before the J-Cart");
+        assert!(!is_jcart("GM T-123456-00", 0x1234));
     }
 
     #[test]

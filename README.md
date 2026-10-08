@@ -14,7 +14,7 @@ Around the cores there is a frontend, a debugging shell built into the emulator,
 | SNES | **Venus** (C#) | Runs commercial games, including SA-1, SuperFX, NEC DSP and OBC1 cartridges. Several play well; none has a verified playthrough |
 | Game Boy / Color | **Mercury** (C#), the default; **MercuryRT** (Rust) | Everything but the boot ROM, the link cable and the Super Game Boy. Passes 94 of the 173 blargg and mooneye hardware test ROMs |
 | NES | **Moon** (C#) | CPU, PPU, full APU and sixteen mapper boards. Plays Super Mario Bros. 3 and others, but has had far less play-testing than the SNES core |
-| Sega Genesis / Mega Drive | **Nephrite** (Rust) | Offered to players since October 2026. Runs commercial cartridges with battery and EEPROM saves, cheat codes, the three- and six-button pads and Sega's Team Player and Electronic Arts' 4 Way Play for four players; none has a verified playthrough. The Sega CD and the 32X are not offered yet |
+| Sega Genesis / Mega Drive | **Nephrite** (Rust) | Offered to players since October 2026. Runs commercial cartridges with battery and EEPROM saves, cheat codes, the three- and six-button pads Sega's Team Player and Electronic Arts' 4 Way Play for four players, and Codemasters' J-Cart; none has a verified playthrough. The Sega CD and the 32X are not offered yet |
 
 Every other console is an empty, reserved folder. Per-game results are in [the games list](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md).
 
@@ -228,7 +228,9 @@ and the build record in [`Nephrite_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20
   [Sega multitap](https://plutiedev.com/sega-multitap), [EA multitap](https://plutiedev.com/ea-multitap) and
   [Peripheral ID](https://plutiedev.com/peripheral-id) pages, and Sega's *Genesis Technical Bulletin #16* (1993): the
   Team Player's packet and the 4 Way Play's selection of its four pads. Sega's own I/O check program for the adapter,
-  run as a test program, reads Nephrite's Team Player as the bulletin lays its results out.
+  run as a test program, reads Nephrite's Team Player as the bulletin lays its results out. Sega Retro's
+  [J-Cart](https://segaretro.org/J-Cart) page for which cartridges carry Codemasters' two extra ports; how they are
+  read was measured from the games themselves, Micro Machines 2's own J-Cart test among them.
 - [Plutiedev](https://plutiedev.com/): registers, DMA, controllers and multitaps, the SSF2 mapper, lock-on, TMSS, the
   cartridge header and save RAM.
 - Eke-Eke, *Serial EEPROMs in Sega Genesis / Mega Drive cartridges*, version 2 (2010), and d0nut and Felipe XnaK,

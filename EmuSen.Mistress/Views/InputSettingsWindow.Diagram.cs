@@ -182,7 +182,9 @@ namespace EmuSen.Mistress.Views
         private ControllerLayout LayoutOf(string console)
         {
             var config = GraphicsConfig.Load();
-            return ControllerDiagrams.LayoutFor(console, CoreCatalog.ControllerFor(console, PlayerOf(console) - 1, key => config.Value(console, key)));
+            int player = PlayerOf(console);
+            string? running = RunningControllers(console) is { } list && player <= list.Count ? list[player - 1] : null;
+            return ControllerDiagrams.LayoutFor(console, running ?? CoreCatalog.ControllerFor(console, player - 1, key => config.Value(console, key)));
         }
 
         // The drawing of a console whose pad differs by port is drawn again for the player now shown.

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace EmuSen.Cores
@@ -19,6 +20,15 @@ namespace EmuSen.Cores
             if (engine.IsRomLoaded && engine.Machine.Info.Ports.Where(p => p.Controller is not null).Select(p => (int)p.Port + 1).DefaultIfEmpty(0).Max() is > 0 and var named) return named;
             int listed = engine.Info.Systems.SelectMany(s => s.Controllers).SelectMany(c => c.Ports).Select(p => (int)p + 1).DefaultIfEmpty(0).Max();
             return Math.Max(1, listed);
+        }
+
+        // Each player's controller id in the running game, by port; null where the core does not name one.
+        public static IReadOnlyList<string?> ControllersOf(ICore? core)
+        {
+            int ports = Of(core);
+            if (core is not Native.CoreEngine { IsRomLoaded: true } engine) return new string?[ports];
+            var named = engine.Machine.Info.Ports.Where(p => p.Controller is not null).ToDictionary(p => (int)p.Port, p => p.Controller);
+            return Enumerable.Range(0, ports).Select(p => named.GetValueOrDefault(p)).ToArray();
         }
 
         // The players a console's ports hold as its settings stand, where its pack counts them, else the console's most.

@@ -146,7 +146,12 @@ pub struct Io {
     taps: [Tap; 2],
     /// TH as a device drives it, for the external interrupt.
     th_in: [bool; 3],
+    /// A Codemasters J-Cart: two pad ports on the cartridge, its players after the console ports' (§48).
+    pub jcart: bool,
 }
+
+/// The J-Cart's word: TH written as bit 0, read back as bit 6 (Nephrite_Native.md §48).
+pub const JCART_ADDRESSES: [u32; 2] = [0x38_FFFE, 0x3F_FFFE];
 
 /// How many pads `plug` holds.
 pub fn pads_of(plug: Plug) -> usize {
@@ -190,6 +195,32 @@ impl Io {
         }
     }
 
+    /// The J-Cart's first pad, after the console ports' pads, where two more fit among the eight.
+    pub fn jcart_first(&self) -> Option<usize> {
+        let first = self.pad_count();
+        (self.jcart && first + 2 <= PADS).then_some(first)
+    }
+
+    /// Every player: the console ports' pads and the J-Cart's two.
+    pub fn players(&self) -> usize {
+        self.pad_count() + if self.jcart_first().is_some() { 2 } else { 0 }
+    }
+
+    /// A word written to the J-Cart: bit 0 is TH for both its pads.
+    pub fn jcart_write(&mut self, v: u16, clock: u64) {
+        if let Some(first) = self.jcart_first() {
+            self.pads[first..first + 2].iter_mut().for_each(|p| p.set_th(v & 1 != 0, clock));
+        }
+    }
+
+    /// The J-Cart's word: the second pad's six lines in bits 13-8 and bits 15-14 low, which Micro Machines 2's own
+    /// J-Cart test requires; bit 7 high, TH in bit 6 and the first pad's lines in bits 5-0 (Nephrite_Native.md §48.2).
+    pub fn jcart_read(&self, clock: u64) -> u16 {
+        let Some(first) = self.jcart_first() else { return 0 };
+        let (a, b) = (&self.pads[first], &self.pads[first + 1]);
+        (b.lines(clock) as u16) << 8 | 0x80 | (a.th as u16) << 6 | a.lines(clock) as u16
+    }
+
     /// Port B's plug as it is used: the 4 Way Play is port A's, and takes port B.
     fn plug(&self, port: usize) -> Plug {
         match (port, self.plugs[0], self.plugs[1]) {
@@ -211,7 +242,7 @@ impl Io {
         let v = (overseas as u8) << 7 | (pal as u8) << 6 | 1 << 5 | (version & 0xF);
         let pads = [Pad { th: true, ..Pad::default() }; PADS];
         let taps = [Tap { th: true, tr: true, asked: 0 }; 2];
-        Io { version: v, data: [0x7F; 3], ctrl: [0; 3], tx: [0xFF; 3], sctrl: [0; 3], pads, plugs: [Plug::Pad; 2], taps, th_in: [true; 3] }
+        Io { version: v, data: [0x7F; 3], ctrl: [0; 3], tx: [0xFF; 3], sctrl: [0; 3], pads, plugs: [Plug::Pad; 2], taps, th_in: [true; 3], jcart: false }
     }
 
     /// TH and TR as driven reach what the port holds: a pad's TH, a Team Player's two lines, or, on port A of a 4 Way

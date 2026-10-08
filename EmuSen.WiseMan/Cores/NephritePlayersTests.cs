@@ -97,6 +97,17 @@ namespace EmuSen.WiseMan.Cores
             return r;
         }
 
+        // Micro Machines 2's serial and a loop that writes TH to the J-Cart and stores its word, low from $FF0000 and high from $FF0002.
+        internal static byte[] JCartReader()
+        {
+            var r = SyntheticMdRom.Cartridge();
+            System.Text.Encoding.ASCII.GetBytes("GM T-120096-50").CopyTo(r, 0x180);
+            Put(r, 0, new ushort[] { 0x00FF, 0xFE00, 0x0000, 0x0200 });
+            Put(r, 0x200, new ushort[] { 0x46FC, 0x2700, 0x33FC, 0x0000, 0x0038, 0xFFFE, 0x33F9, 0x0038, 0xFFFE, 0x00FF, 0x0000,
+                0x33FC, 0x0001, 0x0038, 0xFFFE, 0x33F9, 0x0038, 0xFFFE, 0x00FF, 0x0002, 0x4EF9, 0x0000, 0x0204 });
+            return r;
+        }
+
         // Four players' buttons reach four pads of a Team Player: each pad's nibbles in the adapter's packet are that player's, by the RetroPad's mapping.
         [Fact]
         public void Four_players_reach_a_team_players_four_pads()
@@ -201,6 +212,35 @@ namespace EmuSen.WiseMan.Cores
                 core.RunFrame();
             }
             Assert.Equal(new[] { 1, 2, 4, 8 }, Enumerable.Range(0, 4).Select(p => (int)core.ReadSpace("WRAM", first + 2 * p)));
+        }
+
+        // J-Cart games of the tester's library: players 3 and 4 holding Up and Right from frame 240 leave at frame 300 the J-Cart words Genesis Plus GX leaves - see Nephrite_Native.md §48.3.
+        [Theory]
+        [InlineData("Micro Machines II (UE).bin", 0xF92E)]
+        [InlineData("Micro Machines Military - It's a Blast! (E) [c].bin", 0xF242)]
+        public void A_j_cart_game_reads_players_3_and_4(string game, int words)
+        {
+            string? folder = Environment.GetEnvironmentVariable(GamesVariable);
+            if (folder is null || !File.Exists(Path.Combine(folder, game)))
+            {
+                _output.WriteLine($"{GamesVariable} names no folder with {game}: not run");
+                return;
+            }
+            string rom = Path.Combine(_root, "game.bin");
+            File.Copy(Path.Combine(folder, game), rom);
+            using var core = Load(rom, "md.pad3");
+            Assert.Equal(4, ControllerPorts.Of(core));
+            for (int f = 0; f < 300; f++)
+            {
+                if (f == 240)
+                {
+                    core.SetButton(2, PadButton.Up, true);
+                    core.SetButton(3, PadButton.Right, true);
+                }
+                core.RunFrame();
+            }
+            int Word(int at) => core.ReadSpace("WRAM", at) << 8 | core.ReadSpace("WRAM", at + 1);
+            Assert.Equal((0x33B2, 0x37FE), (Word(words), Word(words + 2)));
         }
 
         // Three of the 63 games not made for the 4 Way Play that read player 1 through it, where Genesis Plus GX has them keep Up held - see Nephrite_Native.md §46.1.

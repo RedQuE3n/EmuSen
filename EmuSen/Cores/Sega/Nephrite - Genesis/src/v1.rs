@@ -147,6 +147,10 @@ impl Machine {
         if a != Plug::FourWay {
             kinds.extend(vec![six_b; crate::io::pads_of(b)]);
         }
+        // A J-Cart's two three-button pads follow, where they fit (§48).
+        if self.genesis.hw.cart.jcart && kinds.len() + 2 <= crate::io::PADS {
+            kinds.extend([false, false]);
+        }
         kinds
     }
 
@@ -728,6 +732,28 @@ mod tests {
         assert_eq!(ports(&m), ["md.pad6", "md.pad3"]);
         m.advance();
         assert!(m.genesis.hw.io.pads[0].six && !m.genesis.hw.io.pads[1].six);
+    }
+
+    // A J-Cart's two three-button pads follow the console ports' pads in machine info and take those players' buttons, where they fit (Nephrite_Native.md §48).
+    #[test]
+    fn a_j_cart_adds_two_players_after_the_ports() {
+        let mut image = cartridge("SEGA GENESIS", "U", None);
+        image[0x180..0x18E].copy_from_slice(b"GM T-120096-50");
+        let mut m = create(&image, vec![]).unwrap();
+        let ports = |m: &Machine| m.machine_info().ports.iter().map(|p| p.controller.clone().unwrap()).collect::<Vec<_>>();
+        let set = |m: &mut Machine, a: &str, b: &str| m.set_settings(&Settings::from_pairs(vec![("pad1".into(), a.into()), ("pad2".into(), b.into())])).unwrap();
+        assert_eq!(ports(&m), ["md.pad3"; 4]);
+        set(&mut m, "md.pad6", "md.pad6");
+        assert_eq!(ports(&m), ["md.pad6", "md.pad6", "md.pad3", "md.pad3"]);
+        for port in 0..4 {
+            Core::set_buttons(&mut m, port, 1 << port, u32::MAX).unwrap();
+        }
+        m.advance();
+        assert_eq!(m.genesis.hw.io.pads.map(|p| (p.buttons, p.six))[..5], [(1, true), (2, true), (4, false), (8, false), (0, false)]);
+        set(&mut m, "md.teamplayer3", "md.pad3");
+        assert_eq!(ports(&m).len(), 7);
+        set(&mut m, "md.teamplayer3", "md.teamplayer3");
+        assert_eq!(ports(&m).len(), 8, "no room for the J-Cart's two");
     }
 
     // A port may hold an adapter: the players are port 1's pads and then port 2's, each of its port's kind, and every player's buttons reach its pad (Nephrite_Native.md §44).

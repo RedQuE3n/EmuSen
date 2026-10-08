@@ -272,7 +272,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(order, string.Join(",", s.Themed.Stage!.Current.Data.Systems.Select(x => x.System.Name)));
             ThemeSettingsWindow sheet = OpenInterface(s);
             string[] startup = ((System.Collections.IEnumerable)Named<Dropdown>(sheet, "StartupSystem").ItemsSource!).Cast<string>().ToArray();
-            Assert.Equal(6, startup.Length);
+            Assert.Equal(7, startup.Length);
             Assert.StartsWith("Default", startup[0]);
             PutAway(s);
         }, default);

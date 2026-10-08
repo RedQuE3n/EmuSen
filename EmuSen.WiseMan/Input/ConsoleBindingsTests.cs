@@ -182,7 +182,7 @@ namespace EmuSen.WiseMan.Input
         {
             string[] order = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToArray();
 
-            Assert.Equal(new[] { "NES", "GB", "SNES", "N64" }, order);
+            Assert.Equal(new[] { "NES", "GB", "SNES", "N64", "Genesis" }, order);
         }
 
         // The rebind window lists a console's pad with no ROM loaded, so this must

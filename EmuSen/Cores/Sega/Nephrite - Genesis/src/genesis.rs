@@ -402,10 +402,11 @@ impl Hw {
 
     // ---- the 68000's map
 
-    /// An unmapped byte: the next instruction's high byte at an even address, zero at an odd one; an unmapped word is
-    /// the same two bytes (MacDonald's notes §1, note 1).
+    /// An unmapped byte: nothing drives the bus, which keeps the word last fetched, the next instruction's, so its
+    /// high byte at an even address and its low byte at an odd one. Measured on the board (Nephrite_Disputes.md D-29);
+    /// MacDonald's notes §1, note 1, have the low byte zero.
     fn open8(&self, a: u32) -> u8 {
-        if a & 1 == 0 { (self.prefetch >> 8) as u8 } else { 0 }
+        if a & 1 == 0 { (self.prefetch >> 8) as u8 } else { self.prefetch as u8 }
     }
 
     fn read8(&mut self, a: u32) -> u8 {
@@ -439,10 +440,10 @@ impl Hw {
                 let b = self.io.read(a, self.clock) as u16;
                 b << 8 | b
             }
-            0xA1_1100 => (self.prefetch & 0xFE00) | ((!self.has_z80_bus()) as u16) << 8,
+            0xA1_1100 => (self.prefetch & !0x0100) | ((!self.has_z80_bus()) as u16) << 8,
             0xC0_0000..=0xDF_FFFF => self.vdp_read16(a),
             0xE0_0000..=0xFF_FFFF => (self.wram[a as usize & 0xFFFF] as u16) << 8 | self.wram[(a as usize & 0xFFFF) | 1] as u16,
-            _ => self.prefetch & 0xFF00,
+            _ => self.prefetch,
         }
     }
 
@@ -685,11 +686,13 @@ impl MainBusTrait for MainBus<'_> {
     }
 
     fn interrupt_level(&mut self) -> u8 {
+        // Asked within an instruction too, by a MOVE before its store: the VDP as it stands at this clock.
+        self.0.run_vdp(self.0.clock);
         self.0.vdp.level()
     }
 
-    fn acknowledge(&mut self, level: u8) -> Option<u8> {
-        self.0.vdp.acknowledge(level);
+    fn acknowledge(&mut self, _level: u8) -> Option<u8> {
+        self.0.vdp.acknowledge();
         None
     }
 }
@@ -1117,8 +1120,21 @@ mod tests {
         assert_eq!(hw.vdp.level(), 2);
         let latched = hw.vdp.hv(5, 1000);
         assert_eq!(hw.vdp.hv(100, 3000), latched, "the counter holds what TH latched");
-        hw.vdp.acknowledge(2);
+        hw.vdp.acknowledge();
         assert_eq!(hw.vdp.level(), 0);
+    }
+
+    // Nephrite_Disputes.md D-29: a place nothing answers at gives the word last fetched, both bytes; $A11100 its bit 0 too.
+    #[test]
+    fn an_unmapped_read_is_the_word_last_fetched() {
+        let mut g = Genesis::new(Cart::new(vec![0u8; 0x400], None, "SEGA GENESIS", ""), Model { overseas: true, pal: false, version: 0, model2: false });
+        let hw = &mut g.hw;
+        hw.prefetch = 0x0801;
+        assert_eq!((hw.read16(0x40_0000), hw.read8(0xA1_3000), hw.read8(0xA1_3001)), (0x0801, 0x08, 0x01));
+        assert_eq!((hw.read16(0xA1_1100), hw.read8(0xA1_1101)), (0x0901, 0x01), "the Z80 running: bit 0 set");
+        hw.z80_busreq = true;
+        hw.z80_reset = false;
+        assert_eq!(hw.read16(0xA1_1100), 0x0801, "the bus granted: bit 0 clear");
     }
 
     /// `mdboard.py`'s RAM loops, from the 68000's start as on the board: the start of each instruction's last read of

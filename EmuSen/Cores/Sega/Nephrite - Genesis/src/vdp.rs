@@ -885,8 +885,11 @@ impl Vdp {
         }
     }
 
-    pub fn acknowledge(&mut self, level: u8) {
-        match level {
+    /// The 68000's acknowledge. The VDP is not told which level is acknowledged: it clears the request it is making,
+    /// the vertical interrupt's before the line's, so a line interrupt acknowledged after the vertical one has been
+    /// enabled clears the vertical flag and is asked again (measured on the board, Nephrite_Disputes.md D-28).
+    pub fn acknowledge(&mut self) {
+        match self.level() {
             6 => self.vint_pending = false,
             4 => self.hint_pending = false,
             2 => self.ext_pending = false,
@@ -959,6 +962,20 @@ mod tests {
         v.control(0x0020);
         drain(&mut v);
         assert_eq!(v.read_data(), 0x5122);
+    }
+
+    // Nephrite_Disputes.md D-28: the acknowledge clears what the VDP asks for now, not the level the 68000 took.
+    #[test]
+    fn the_acknowledge_clears_the_request_the_vdp_is_making() {
+        let mut v = Vdp::new(false);
+        (v.vint_pending, v.hint_pending) = (true, true);
+        v.regs[0] = 0x14;
+        assert_eq!(v.level(), 4);
+        v.regs[1] = 0x64;
+        v.acknowledge();
+        assert_eq!((v.vint_pending, v.hint_pending, v.level()), (false, true, 4), "a level 4 taken just before the frame interrupt's enable clears the frame flag");
+        v.acknowledge();
+        assert_eq!((v.hint_pending, v.level()), (false, 0));
     }
 
     #[test]

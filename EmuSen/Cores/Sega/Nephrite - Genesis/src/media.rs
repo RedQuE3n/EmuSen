@@ -35,8 +35,13 @@ impl Markets {
     }
 
     /// The old form (`J`, `U`, `E` in any order) or the new single hex digit (bit 0 Japan, bit 2 Americas, bit 3
-    /// Europe).
+    /// Europe). A field that begins `EUR` spells the word and is Europe alone, its `U` no code: Superman's and Another
+    /// World's say `EUROPE` and The Smurfs 2's `Europe`, and the first and last stop on an American console
+    /// (Nephrite_Native.md §47.4).
     pub fn parse(field: &[u8]) -> Markets {
+        if field.len() >= 3 && field[..3].eq_ignore_ascii_case(b"EUR") {
+            return Markets { japan: false, americas: false, europe: true };
+        }
         let text: Vec<u8> = field.iter().copied().filter(|b| !b.is_ascii_whitespace() && *b != 0).collect();
         if text.len() == 1 && text[0].is_ascii_hexdigit() && !b"EJU".contains(&text[0].to_ascii_uppercase()) {
             let v = (text[0] as char).to_digit(16).unwrap_or(0);
@@ -68,12 +73,12 @@ impl SaveRam {
     }
 }
 
-/// Cartridges that keep their saves in a RAM their header does not declare, by serial (Nephrite_Native.md §46.2). Each
-/// was seen writing its saves' odd bytes above its ROM without asking whether anything is there, or losing its way
-/// where a board without the RAM has the ROM's mirror: Madden NFL 98 and HardBall III do not start. In the table's
+/// Cartridges that keep their saves in a RAM their header does not declare, by serial (Nephrite_Native.md §46.2,
+/// §47.5). Each writes its saves' odd bytes above its ROM, and Sega Retro gives each a battery save. In the table's
 /// order: Madden NFL 98, College Football USA 96, FIFA Soccer 97, the same program under a pirate's serial, NHL 96,
-/// NHL 98, PGA Tour Golf, Starflight, Buck Rogers and HardBall III. The header's word is taken first where it has one.
-pub const UNDECLARED_SAVE: [&str; 10] = ["T-172196", "T-172046", "T-172156", "T-183457", "T-172036", "T-172176", "T-50086", "T-50216", "T-50286", "ACLD012"];
+/// NHL 98, PGA Tour Golf, Starflight, Buck Rogers, HardBall III, Summer Challenge, Winter Challenge and Test Drive II.
+/// The header's word is taken first where it has one.
+pub const UNDECLARED_SAVE: [&str; 13] = ["T-172196", "T-172046", "T-172156", "T-183457", "T-172036", "T-172176", "T-50086", "T-50216", "T-50286", "ACLD012", "ACLD013", "ACLD007", "ACLD008"];
 
 /// The board such a cartridge is given: the one plutiedev's "Saving progress with SRAM" describes, 32 KiB on the odd
 /// bytes of `$200001`-`$20FFFF` with a battery. A board with a smaller chip would repeat within the range.
@@ -255,6 +260,10 @@ mod tests {
         assert!(Markets::parse(b"E  ").pal());
         assert!(!Markets::parse(b"JE ").pal());
         assert!(!Markets::parse(b"   ").pal());
+        for word in [&b"EUROPE"[..], b"Europe", b"EUR", b"eur"] {
+            assert_eq!(Markets::parse(word), Markets { japan: false, americas: false, europe: true }, "the word, not E and U");
+        }
+        assert_eq!(Markets::parse(b"EU "), Markets { japan: false, americas: true, europe: true });
     }
 
     #[test]
@@ -293,7 +302,7 @@ mod tests {
             rom[0x180..0x18E].copy_from_slice(format!("{serial:<14}").as_bytes());
             Media::read(&rom)
         };
-        for serial in ["GM T-172196-00", "GM T-50086 -01", "GM ACLD012 -00"] {
+        for serial in ["GM T-172196-00", "GM T-50086 -01", "GM ACLD012 -00", "GM ACLD008 -00"] {
             let m = with(serial, None);
             assert_eq!(m.header.as_ref().unwrap().save, Some(SaveRam { battery: true, lanes: 3, start: 0x20_0001, end: 0x20_FFFF }), "{serial}");
             assert_eq!(m.battery_bytes(), 0x8000, "{serial}");

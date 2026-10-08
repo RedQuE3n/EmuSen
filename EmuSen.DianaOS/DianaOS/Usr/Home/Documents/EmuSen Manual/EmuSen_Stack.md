@@ -43,6 +43,14 @@ paragraph above, "2D consoles' cores are C#", is retired by this one, and "the c
 
 **The one arguable case is `EmuSen.Endymion/AudioPlayer.cs`,** the only `unsafe` in the tree — a thin SDL3 binding on the audio submit path. It stays C#. Moving it to Rust would *add* an FFI boundary rather than remove one: today there is one hop (C# → SDL3), and a Rust sink would make it two with no accuracy or safety gained. Recorded here so the next reader does not have to re-derive it from the `unsafe` keyword alone.
 
+*Retired 2026-10-07, by decision (`EmuSen_RustPlatform.md` §9, Q12): Endymion's device half is to be ported to Rust
+with the rest of the component. The paragraph above counts layers. Counted as transitions, which is what costs time,
+`Submit` makes two SDL calls in steady play (`GetAudioStreamQueued` through `QueuedFrames`, and `PutAudioStreamData`),
+and a Rust sink makes one call into Rust, which makes both natively; so the move adds no transition a frame and
+removes one (`EmuSen_RustPlatform.md` §4.2, argued from the code and to be measured as its P4). What the paragraph got
+right stands: the move buys nothing for the C# programs, and is made for the later Rust client and while the C# is
+alive to be its oracle.*
+
 ### 2.2 Python — offline analysis, not in-process tests
 
 The rule says Python owns testing, and the project's working rule is that tests run headless through `EmuSen.WiseMan`. Both are true, because they are about different things, and the seam is **whether the thing under test has to be alive**.

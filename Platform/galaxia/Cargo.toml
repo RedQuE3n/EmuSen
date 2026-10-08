@@ -1,0 +1,13 @@
+[package]
+name = "emusen-galaxia"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The librarian: where a file lives and how it is read and written safely. See EmuSen_Galaxia.md and EmuSen_RustPlatform.md §4.1.
+[lib]
+name = "emusen_galaxia"
+
+[dependencies]
+md-5 = "0.11"

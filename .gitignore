@@ -54,6 +54,11 @@ EmuSen.WiseMan/Reference/dumps/
 # work dir instead, so this only catches a bare `cargo build` in the crate.
 EmuSen.WiseMan/Reference/probe-rs/target/
 
+# Cargo's build output for the platform workspace. The build directs it under
+# EmuSen.Galaxia/obj/, so this only catches a bare `cargo build` or `cargo test`
+# in Platform/.
+Platform/target/
+
 # The libretro cheat database, downloaded at runtime - ~28k files and
 # 250MB of CC BY-SA data that `cheat db update` fetches on demand. See
 # `man cheat`.

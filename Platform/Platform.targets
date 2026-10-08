@@ -1,0 +1,46 @@
+<Project>
+  <!-- Builds emusen_platform with cargo for this machine and puts it beside the assemblies of every project that references the importing one - see EmuSen_RustPlatform.md §2.5. The conventions are EmuSen.csproj's for the cores: -p:EmuSenNative=false keeps cargo out, a publish builds the dist profile, and a publish for another platform swaps the library in RustCoresPublish.targets. -->
+  <Import Project="Platform.props" Condition="'$(EmuSenPlatformImported)' != 'true'" />
+
+  <PropertyGroup>
+    <EmuSenNativeForHost Condition="'$(EmuSenNativeForHost)' == '' And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkPortableRuntimeIdentifier)')">true</EmuSenNativeForHost>
+    <EmuSenNativeProfile Condition="'$(EmuSenNativeProfile)' == '' And '$(_IsPublishing)' == 'true'">dist</EmuSenNativeProfile>
+    <EmuSenNativeProfile Condition="'$(EmuSenNativeProfile)' == ''">release</EmuSenNativeProfile>
+    <!-- Cargo's output stays under obj/, off the tree; EmuSenCargoTargetRoot moves it as it moves the cores'. -->
+    <EmuSenPlatformTargetDir Condition="'$(EmuSenCargoTargetRoot)' != ''">$(EmuSenCargoTargetRoot)/$(EmuSenPlatformLibraryName)</EmuSenPlatformTargetDir>
+    <EmuSenPlatformTargetDir Condition="'$(EmuSenPlatformTargetDir)' == ''">$(MSBuildProjectDirectory)/obj/$(EmuSenPlatformLibraryName)</EmuSenPlatformTargetDir>
+    <!-- The cargo to run; a name that is not found exercises the path a machine without Rust takes. -->
+    <EmuSenCargo Condition="'$(EmuSenCargo)' == ''">cargo</EmuSenCargo>
+    <_EmuSenPlatformPrefix Condition="!$([MSBuild]::IsOSPlatform('Windows'))">lib</_EmuSenPlatformPrefix>
+    <_EmuSenPlatformSuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.dll</_EmuSenPlatformSuffix>
+    <_EmuSenPlatformSuffix Condition="$([MSBuild]::IsOSPlatform('OSX'))">.dylib</_EmuSenPlatformSuffix>
+    <_EmuSenPlatformSuffix Condition="'$(_EmuSenPlatformSuffix)' == ''">.so</_EmuSenPlatformSuffix>
+    <_EmuSenPlatformFile>$(_EmuSenPlatformPrefix)$(EmuSenPlatformLibraryName)$(_EmuSenPlatformSuffix)</_EmuSenPlatformFile>
+    <_EmuSenPlatformBuilt>$(EmuSenPlatformTargetDir)/$(EmuSenNativeProfile)/$(_EmuSenPlatformFile)</_EmuSenPlatformBuilt>
+    <!-- A library built elsewhere for this machine, for one without Rust: <dir>/<rid>/<file>, the layout a publish for another platform takes. -->
+    <_EmuSenPlatformPrebuilt Condition="'$(EmuSenNativePrebuilt)' != ''">$(EmuSenNativePrebuilt)/$(NETCoreSdkPortableRuntimeIdentifier)/$(_EmuSenPlatformFile)</_EmuSenPlatformPrebuilt>
+  </PropertyGroup>
+
+  <Target Name="FindCargoForPlatform" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <Exec Command="$(EmuSenCargo) --version" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ExitCode" PropertyName="_EmuSenPlatformCargoExitCode" />
+    </Exec>
+    <PropertyGroup>
+      <_EmuSenPlatformCargoFound Condition="'$(_EmuSenPlatformCargoExitCode)' == '0'">true</_EmuSenPlatformCargoFound>
+      <_EmuSenPlatformSource Condition="'$(_EmuSenPlatformCargoFound)' == 'true'">$(_EmuSenPlatformBuilt)</_EmuSenPlatformSource>
+      <_EmuSenPlatformSource Condition="'$(_EmuSenPlatformCargoFound)' != 'true' And '$(_EmuSenPlatformPrebuilt)' != '' And Exists('$(_EmuSenPlatformPrebuilt)')">$(_EmuSenPlatformPrebuilt)</_EmuSenPlatformSource>
+    </PropertyGroup>
+    <Error Condition="'$(_EmuSenPlatformSource)' == '' And '$(EmuSenPlatformRequired)' == 'true'"
+           Text="cargo was not found and no prebuilt $(_EmuSenPlatformFile) was given: the programs cannot start without the platform library. Install Rust, or build the library with the Rust cores workflow and pass -p:EmuSenNativePrebuilt=&lt;dir&gt; holding $(NETCoreSdkPortableRuntimeIdentifier)/$(_EmuSenPlatformFile)." />
+    <Warning Condition="'$(_EmuSenPlatformSource)' == '' And '$(EmuSenPlatformRequired)' != 'true'"
+             Text="cargo was not found: $(_EmuSenPlatformFile) is not built, and the platform components run on their C# implementations." />
+  </Target>
+
+  <Target Name="BuildPlatformLibrary" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargoForPlatform" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <!-- A failed cargo step fails the build, so an old library is never left in place of the one the sources describe. -->
+    <Exec Condition="'$(_EmuSenPlatformCargoFound)' == 'true'" WorkingDirectory="$(MSBuildThisFileDirectory)" Command="$(EmuSenCargo) build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(MSBuildThisFileDirectory)Cargo.toml&quot; -p emusen-platform --target-dir &quot;$(EmuSenPlatformTargetDir)&quot;" StandardOutputImportance="low" />
+    <ItemGroup>
+      <None Include="$(_EmuSenPlatformSource)" Condition="'$(_EmuSenPlatformSource)' != '' And Exists('$(_EmuSenPlatformSource)')" Link="$(_EmuSenPlatformFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -23,7 +23,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Native/ calls the platform library through function pointers, as the cores' loaders do - see EmuSen_RustPlatform.md §3.9. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The parity tests call the C# rules and the library's side by side, whichever the switch has chosen - see EmuSen_RustPlatform.md §10.5. -->
+    <InternalsVisibleTo Include="EmuSen.WiseMan" />
+  </ItemGroup>
 
   <!-- No longer packed, and the reason it was is worth keeping. EmuSen.LunaP
        named this as a dependency and is packed, so a consumer outside this
@@ -42,5 +49,10 @@
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/RedQuE3n/EmuSen-Project</RepositoryUrl>
   </PropertyGroup>
+
+  <!-- emusen_platform, the Rust this assembly forwards to behind EMUSEN_GALAXIA_NATIVE. Built here because every
+       program references this project, so the library reaches each of them from one place. Neither a project nor a
+       package reference, so the leaf rule above stands - see EmuSen_RustPlatform.md §2.5. -->
+  <Import Project="..\Platform\Platform.targets" />
 
 </Project>

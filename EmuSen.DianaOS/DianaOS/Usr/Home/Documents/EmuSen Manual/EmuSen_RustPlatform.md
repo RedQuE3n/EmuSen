@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the fourth, 2026-10-08: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the fifth, 2026-10-08: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -340,6 +340,9 @@ reported step:
 
 So at every point the platform runs: in state 1 nothing a player sees changes; in state 2 the C# is one variable
 away; state 3 comes only after golden outputs are recorded (§6.6) and the tester agrees.
+
+**Where each stands, 2026-10-08:** Galaxia is in state 2 (§13), Endymion's logic half in state 1 (§12), Serenity's
+half not yet built.
 
 ---
 
@@ -740,7 +743,8 @@ rewritten: a comparison of every statement of the seven files at `8645e821` agai
 of them verbatim except where a name gained its `Managed.` qualifier, an override became its backing field, or a
 default argument stayed on the public member. `AtomicFile` and `RomHash` are verbatim whole.
 
-**`Active` is false unless `EMUSEN_GALAXIA_NATIVE` is exactly `1` and the library loads** (state 1 of §3.9). The
+**`Active` is false unless `EMUSEN_GALAXIA_NATIVE` is exactly `1` and the library loads** (state 1 of §3.9; since
+step 2c, state 2, §13). The
 variable is read once, before anything touches the library, so with it unset the library is never opened. That was
 checked on a running program and not only read from the code: the standalone DianaOS shell, run under the dynamic
 loader's own trace (`LD_DEBUG=files`) with `hier` and `ls /Saves`, opens `libemusen_platform.so` no times with the
@@ -1266,3 +1270,74 @@ two of the three crates in.
 |---|---|---|
 | Q20 | `GamepadBindings`, which §4.2 put in the logic half | left in C#: its file is already the library's, and what is left is a map over the C# vocabulary §4.2 keeps (§12.2) |
 | Q21 | A NaN or infinite ratio, for which the C# never returns | refused with words, as the C# refuses a ratio of zero (§12.3) |
+
+---
+
+## 13. Step 2c, 2026-10-08: Galaxia in state 2
+
+The tester gave Galaxia's gate its go on 2026-10-08, after the review of steps 2a and 2b. Galaxia now runs on the
+library by default, and `EMUSEN_GALAXIA_NATIVE=0` selects its C#. No C# was removed, and `EmuSenPlatformRequired`
+stays false, since every rule still has its C# behind it.
+
+### 13.1 The gate's evidence
+
+A full WiseMan run on 2026-10-08 with `EMUSEN_GALAXIA_NATIVE=1` passed 9,826 cases, skipped 53 and failed 5. All five
+failed the same way with the variable unset: expectations written before the Genesis was offered, which still
+listed the four Nintendo consoles, in the three tests that `258e8c18` corrects; this step is built on that commit. So no case outside Galaxia's own classes differed between the two implementations. With §10.5's and
+§11.5's parity classes and their seeded faults, that is what §3.9 asks before state 2.
+
+### 13.2 The switch in state 2
+
+| The variable | The library loads | Galaxia runs on | Said |
+|---|---|---|---|
+| `0` | not asked | the C# | nothing |
+| unset, `1` or any other value | yes | the library | nothing |
+| unset, `1` or any other value | no: absent, refused, or its load throws | the C# | one line, once |
+
+The choice is made once in a process, on the first question any facade asks, and kept; it is a small class,
+`PlatformSwitch` in `GalaxiaNative.cs`, so that a test can make a choice of its own without touching the process's.
+The line goes to the host's `ConfigDiagnostics` sink and to the error log as a warning of area `platform`:
+
+```
+<time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); Galaxia runs on its C# implementation.
+```
+
+The words in the parentheses are `PlatformLibrary.Report`'s, so a library of the wrong interface version or one
+missing an export is named as such. **The choice is recorded before the line is written**, because writing it asks
+the switch again (the error log is a facade too), and that question must find the C# already chosen and not choose
+a second time. A load that throws an exception of any kind is caught and reported the same way, with the
+exception's type and words in the parentheses; Galaxia must never fail to start because of the library.
+
+**Two consequences, recorded rather than changed.** The library is now opened by every program at its first use of
+Galaxia, so §12.4's loader trace, which showed Endymion's tests opening nothing with its own variable unset, would
+now show Galaxia opening it; Endymion's switch still decides only Endymion's half. And a crash in the library is now
+a crash of the default path, which is why the crash log of §3.5 is installed when the library loads, as before.
+
+### 13.3 What was tested
+
+The blast radius only, as §6.7 has it:
+
+| Run | Result |
+|---|---|
+| WiseMan's Galaxia classes with `DianaOSSandboxTests` and `HierTests`, variable unset (the library) | 220 pass |
+| The same, `EMUSEN_GALAXIA_NATIVE=0` (the C#) | 220 pass |
+
+The 220 are 2b's 219 and one new case, which builds a switch over a folder without the library and asks it five times
+for each of the variable unset, `1` and `0`: the C# each time, two loads tried and not three, the line exactly once
+for each of the two that tried, both in the sink and in the error log, and none for `0`; and a load that throws, which
+is the C# and the line with the exception's words. Three faults were seeded in the switch (nothing said, a throwing
+load not caught, the fallback not remembered) and the case caught each.
+
+The standalone DianaOS shell was also run from copies of its build in a sandboxed home, with and without the library
+beside it. With it and the variable unset it opens `libemusen_platform.so` once under the loader's trace; with `0`,
+no times; without it, unset or `1`, the C# runs and the day's error log holds the line once. Its output is the same
+bytes in all four runs.
+
+**Not done:** Windows and macOS, as before; and P2 is still not measured. CI's two Galaxia steps now run the C# with
+`EMUSEN_GALAXIA_NATIVE=0` and the library with the variable unset, and still report rather than gate (Q22).
+
+### 13.4 Questions for the tester
+
+| | Question | As built |
+|---|---|---|
+| Q22 | Whether CI's Galaxia and platform steps now gate | still reporting: §9's Q14 tied gating to Galaxia's gate, but Windows and macOS have never run these tests, and a platform whose library fails still runs on the C# |

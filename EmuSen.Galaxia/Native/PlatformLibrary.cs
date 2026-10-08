@@ -12,9 +12,9 @@ namespace EmuSen.Galaxia.Native
 
         public const string Name = "emusen_platform";
 
-        private static readonly Lazy<(nint Handle, string Report)> Library = new(Load);
+        private static readonly Lazy<(nint Handle, string Report)> Library = new(() => Open(AppContext.BaseDirectory));
 
-        // Asking loads the library; nothing asks while every component's switch is unset.
+        // Asking loads the library; nothing asks while Galaxia's switch is 0 and the others are unset.
         public static bool Available => Library.Value.Handle != 0;
 
         // Why the library is or is not in use, for a log line or a test's message.
@@ -27,9 +27,16 @@ namespace EmuSen.Galaxia.Native
         public static string FileName =>
             OperatingSystem.IsWindows() ? $"{Name}.dll" : OperatingSystem.IsMacOS() ? $"lib{Name}.dylib" : $"lib{Name}.so";
 
-        private static (nint, string) Load()
+        // The library from a folder; a test names one without it to see the fallback.
+        internal static (nint Handle, string Report) Open(string directory)
         {
-            string path = Path.Combine(AppContext.BaseDirectory, FileName);
+            try { return Load(directory); }
+            catch (Exception fault) { return (0, $"{FileName} could not be loaded: {fault.GetType().Name}: {fault.Message}"); }
+        }
+
+        private static (nint, string) Load(string directory)
+        {
+            string path = Path.Combine(directory, FileName);
             if (!NativeLibrary.TryLoad(path, out nint handle)) return (0, $"{FileName} not found beside the assemblies");
 
             if (!NativeLibrary.TryGetExport(handle, "emusen_platform_abi_version", out nint versionExport))

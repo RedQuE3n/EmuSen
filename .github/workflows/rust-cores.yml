@@ -403,18 +403,18 @@ jobs:
         working-directory: EmuSen-Project
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
-      # Galaxia on its C#, which is what runs while its switch is unset. These tests had not run on Windows or macOS before this step, so it reports and does not yet gate.
+      # Galaxia on its C#, which EMUSEN_GALAXIA_NATIVE=0 selects. These tests had not run on Windows or macOS before step 2a, so it reports and does not yet gate.
       - name: Test Galaxia on its C#
         working-directory: EmuSen-Project
         continue-on-error: true
+        env:
+          EMUSEN_GALAXIA_NATIVE: '0'
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaOSSandboxTests|FullyQualifiedName~HierTests)&FullyQualifiedName!~GalaxiaParityTests" --logger "console;verbosity=normal"
 
-      # The same tests through the platform library, and the parity class beside them. Not yet a gate: the library is opt-in until Galaxia's own (EmuSen_RustPlatform.md §3.9), and this step is each platform's evidence towards it.
+      # The same tests through the platform library, which is Galaxia's default since step 2c, and the parity class beside them; still reporting, since a platform without the library falls back to the C# (EmuSen_RustPlatform.md §13).
       - name: Test Galaxia on the platform library
         working-directory: EmuSen-Project
         continue-on-error: true
-        env:
-          EMUSEN_GALAXIA_NATIVE: '1'
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaOSSandboxTests|FullyQualifiedName~HierTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=galaxia-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # Endymion's logic half on its C#, which is what runs while its switch is unset; reported, not yet a gate, as Galaxia's steps above.

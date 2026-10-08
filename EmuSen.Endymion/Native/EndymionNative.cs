@@ -59,7 +59,7 @@ namespace EmuSen.Endymion.Native
         private static readonly Lazy<bool> Chosen = new(Choose);
         private static readonly Lazy<string?> Attached = new(Attach);
 
-        // State 1: the C# unless the variable asks for the library and the library loads; unset, the library is not opened.
+        // State 1: the C# unless the variable asks for the library and the library loads; unset, Endymion asks nothing of the library.
         public static bool Active => Chosen.Value;
 
         private static bool Choose()

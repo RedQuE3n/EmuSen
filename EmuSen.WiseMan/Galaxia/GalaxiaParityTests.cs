@@ -11,10 +11,12 @@ namespace EmuSen.WiseMan.Galaxia
 {
     // Galaxia's C# rules and the platform library's, asked the same things side by side - see EmuSen_RustPlatform.md §6.3 and §10.5.
     [Collection(TestCollections.ProcessGlobals)]
-    public class GalaxiaParityTests : IDisposable
+    public partial class GalaxiaParityTests : IDisposable
     {
         private readonly string _temp = Path.Combine(Path.GetTempPath(), "EmuSenParity_" + Guid.NewGuid().ToString("N"));
         private readonly List<string> _reported = new();
+        private readonly string? _logOverride = ErrorLog.DirectoryOverride;
+        private readonly Func<string, string>? _redactor = ErrorLog.Redactor;
 
         public GalaxiaParityTests()
         {
@@ -31,6 +33,8 @@ namespace EmuSen.WiseMan.Galaxia
             ConfigStore.OverrideDirectory = null;
             ConfigStore.OverrideLegacyDirectory = null;
             DataStore.OverrideDirectory = null;
+            ErrorLog.DirectoryOverride = _logOverride;
+            ErrorLog.Redactor = _redactor;
             if (Directory.Exists(_temp)) Directory.Delete(_temp, recursive: true);
         }
 
@@ -205,7 +209,8 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(DataMigration.Managed.LegacyRoot, GalaxiaNative.Directory(GalaxiaDirectory.LegacyRoot));
             foreach ((GalaxiaDirectory which, string name) in Named)
                 Assert.Equal(Path.Combine(DataStore.Managed.UsrHome, name), GalaxiaNative.Directory(which));
-            Assert.Equal(Enum.GetValues<GalaxiaDirectory>().Length, Named.Length + 10);
+            Assert.Equal(ErrorLog.Managed.DefaultRoot, GalaxiaNative.Directory(GalaxiaDirectory.LogDefault));
+            Assert.Equal(Enum.GetValues<GalaxiaDirectory>().Length, Named.Length + 11);
 
             foreach (string file in new[] { "appsettings.json", "é.json", "a b.json", "" })
             {

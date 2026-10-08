@@ -5,10 +5,18 @@
 //! what the rules are and EmuSen_RustPlatform.md §10 for how this crate was built and checked.
 
 pub mod atomic;
+pub mod cheats;
+pub mod config;
 pub mod dotnet_path;
+pub mod dotnet_text;
+pub mod error_log;
+pub mod json;
 pub mod migration;
+pub mod model;
+pub mod models;
 pub mod rom_hash;
 pub mod saves;
+pub mod suggestion;
 pub mod tree;
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the second, 2026-10-07: step 2a built, the library and Galaxia's tree, names and bytes behind an opt-in switch (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the third, 2026-10-08: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -275,7 +275,9 @@ library memory that crosses, and it is named in the header as the exception.
   `BAD_STRING`, −7 `BUFFER_TOO_SMALL`, −256 `NOT_SUPPORTED`. The platform's own band is −1024 to −1279, clear of every
   core's and of the core interface's, so a log that prints both cannot confuse them: `IO` −1024, `PARSE` −1025,
   `SCHEMA` −1026 (a value of the wrong type, an enumeration name not known), `NEWER_FILE` −1027 (a file of a newer
-  build), `NO_DEVICE` −1028 (no Vulkan device or audio device), `COMPILE` −1029 (a shader). *Added by step 2a (§10.2):*
+  build), `NO_DEVICE` −1028 (no Vulkan device or audio device), `COMPILE` −1029 (a shader). *As built by step 2b
+  (§11.2), `PARSE` covers both a text that is not JSON and one its model does not allow, since the host does one
+  thing with either; −1026 is unassigned.* *Added by step 2a (§10.2):*
   `ABSENT` −1030, which is an answer and not a failure (no such file, no seed directory, a null where .NET returns
   null); `NOT_FOUND` −1031 and `ACCESS` −1032, which the facade turns back into the exception types the C# threw; and
   `BAD_ARGUMENT` −1033.
@@ -698,6 +700,14 @@ recommended and with nothing changed; all three components are to be ported as p
 - **Q12.** Decided 2026-10-07: `EmuSen_Stack.md` §2.1's paragraph on `AudioPlayer.cs` is retired, and §4.2's count of
   calls stands in its place there.
 
+Three more, raised by step 2a (§10.6, §10.7) and decided before step 2b:
+
+- **Q13.** Decided 2026-10-08: Q5's rule holds for .NET's I/O words as for System.Text.Json's. A diagnostic's frame is
+  Galaxia's and is kept exactly; the words inside it are the system's as Rust reports them.
+- **Q14.** Decided 2026-10-08: the platform's CI steps report and do not gate until Galaxia's gate (§10.6).
+- **Q15.** Decided 2026-10-08: §5.5's correction stands as marked: the host passes .NET's own `ApplicationData` to the
+  library, and the claim about macOS is withdrawn until it is run there.
+
 ---
 
 ## 10. What was built, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes
@@ -869,8 +879,229 @@ The 204 are the 173 that existed and the parity class's 31.
 - **P7**: the library is 0.5 MB with this half of Galaxia in it. The prediction is for all three components.
 - **The words of an I/O failure.** A diagnostic's frame is Galaxia's and is kept exactly (`<path>: … Left in
   place.`); the words inside it were .NET's exception message and are now the system's as Rust reports them ("No such
-  file or directory (os error 2)."). §9's Q5 decided this for System.Text.Json's words; it is applied here to
-  .NET's I/O words by the same reasoning, and is named so that the tester can say otherwise.
+  file or directory (os error 2)."). §9's Q5 decided this for System.Text.Json's words; it was applied here to
+  .NET's I/O words by the same reasoning. *Decided so on 2026-10-08 (§9, Q13).*
 - **The order of a migration's diagnostics** follows the walk's, which is breadth-first as .NET's was measured to
   be, and within a directory the system's; the parity class compares them sorted.
 - `ConfigFile<T>`, the models, `ErrorLog` and the suggestion text are step 2b and are C# only.
+
+---
+
+## 11. What was built, 2026-10-08: step 2b, config files, the models, the error log and the suggestion text
+
+Measured on the development desktop, as §10 was (Fedora 44, x86-64, .NET 10, Rust 1.98.1). Nothing has run on Windows
+or macOS. With this step every rule of Galaxia has a Rust form behind the switch; none of its C# has been removed.
+
+### 11.1 The artefacts
+
+| What | Where |
+|---|---|
+| JSON as System.Text.Json reads and writes it: the reader, the escaping, the number layout, and `File.ReadAllText`'s decoding | `Platform/galaxia/src/json.rs` |
+| A model as data, the binder and the writer | `model.rs` |
+| The four models and the five classes they hold, the settings upgrade, the two values a cheat computes | `models.rs` |
+| `ConfigFile<T>`: reading, the copy from before Galaxia, saving, deleting | `config.rs` |
+| The cheat lists as files: which there are, what one may be called | `cheats.rs` |
+| `ErrorLog` | `error_log.rs` |
+| `Suggestion` | `suggestion.rs` |
+| .NET's string rules counted in UTF-16 code units | `dotnet_text.rs` |
+| The C layer for all of these: 23 exports, 45 in the library; the interface's version is 2 | `Platform/platform/src/galaxia_config.rs`, `include/emusen_platform.h` |
+| The facades | `ConfigFile.cs`, `Models/AppSettings.cs`, `AudioConfig.cs`, `GraphicsConfig.cs`, `CheatFile.cs`, `Library/ErrorLog.cs`, `Text/Suggestion.cs`, `Native/GalaxiaNative.cs` |
+| The parity class's second half, 15 cases | `EmuSen.WiseMan/Galaxia/GalaxiaParityTests.Config.cs` |
+
+About 2,140 lines of Rust and 830 of its tests, against §7.2's 1,900 for the step with its tests; Galaxia whole is
+3,620 and 1,560, against 3,000. The estimate priced the rules it knew of. What it did not price is §11.3: each rule of
+.NET's that had to be found, reproduced and held.
+
+### 11.2 How a model crosses, and what was built otherwise than §4.1 planned
+
+**Reading.** The library reads the file (copying it in first from where it sat before Galaxia, when it is only
+there), decodes it as .NET decodes a file, parses it, binds it to the model's schema and, when asked, upgrades it. What
+it returns is the **bound document**: JSON holding every field the model can set, in the model's order, a number as
+the token the file had. The C# binds that to the class with System.Text.Json and the same options as before. A file
+that will not load comes back as a status and words; the C# puts them in Galaxia's frame (`<path>: <words> Falling
+back to defaults.`), sets `LastLoadError` and reports, exactly where it did.
+
+**Writing.** The C# serializes the class, and the library binds that document to the schema and writes it with its
+own writer: the bytes on disk are Rust's, and the parity class holds them to the bytes C# produced a moment before.
+The folder is made first, as in C#, so a class that cannot be serialized still leaves its folder behind.
+
+**The other files.** A `ConfigFile<T>` whose `T` is not one of the four models (the key and pad bindings, keyed by
+Avalonia's `Key` and SDL's buttons) takes the same route for everything but the binding: the library finds, copies,
+decodes and writes the file, and System.Text.Json binds the type, since its vocabulary is a frontend's (§4.1, tier 2).
+
+**Otherwise than planned, each for a reason:**
+
+- **A model is a schema as data and a bound document, not a Rust struct.** §2.3 wrote `galaxia::config::load::<AppSettings>()`.
+  What a file may hold is wider than a struct says: any C# reference may be null, a number may be a token no `f64`
+  writes back (`1e999` loads, as infinity, and then cannot be saved), a map's keys repeat. A document keeps all of it,
+  and a struct with every field optional would keep it badly. A Rust DianaOS reads a field by name through the
+  document; structs can be generated from the same declarations when a consumer wants them. It is a choice that
+  could be made otherwise, and is the first question of §11.8.
+- **`StateRecord`'s sidecar was not ported.** §4.1 listed it. It is read only to import the files builds before
+  2026-09-26 wrote (`EmuSen_Galaxia.md` §5.3a), it is never written, and reading it needs System.Text.Json's `DateTime`
+  (an ISO 8601 profile, converted to local time) and `required` members. Reproducing those for an import that runs
+  once per old state buys nothing; it stays C# and goes when the import does.
+- **The time of a log entry is text the caller supplies.** C# formats it with `{now:yyyy-MM-dd HH:mm:ss.fff}`, in which
+  `:` is the culture's time separator and the year is the culture's calendar's. A library that formatted it itself
+  would write a different line on a machine whose culture differs from the invariant one, so it formats nothing and
+  owns the rest (§11.4).
+- **Text that is not valid UTF-16 cannot cross**, since it has no UTF-8. C# strings may hold half a surrogate pair and
+  Rust's may not. For a suggestion, a cheat list's name and a log folder the facade asks the C# when such text
+  appears; for a log entry it shapes the entry in C#, which then fails at the write exactly as it always has
+  (§11.3's last row). When the C# is retired these become "replaced by U+FFFD first", a small change of behaviour
+  that belongs to that step.
+
+### 11.3 System.Text.Json and .NET, measured for this step
+
+§5.2's table was the start. These were measured before or while the reader, the binder and the writer were written,
+each in a scratch program on .NET 10, and each is a case of the parity class:
+
+| Rule | What .NET does |
+|---|---|
+| A comment | allowed wherever white space is, **except between a name and its colon**; a line or paragraph separator (U+2028, U+2029) inside a `//` comment is an error |
+| Depth | 64 levels are read, the 65th is refused, counted through values that are skipped too |
+| An integer property | takes digits and a sign only: `1e2` and `1.0` are refused; `-0` is 0 |
+| A `double` or `float` property | takes any number token; `1e999` **loads**, as infinity, and the document then cannot be written |
+| `null` | allowed for a string, a class, a list, a map and a nullable; refused for `int`, `long`, `double`, `float`, `bool` |
+| A member written twice | the last wins **whole**: a class given twice is the second one with defaults, not the two merged |
+| A map's key written twice | keeps its first place and takes its last value; keys keep their case, where property names do not |
+| An escape that is not valid UTF-16 (`\ud800`) | refused in a value that is bound, in any name of a bound object and in a map's key; **accepted inside a value that is skipped** |
+| A property with no setter | **written** (every cheat file carries `IsRomPatch` and `EffectiveWrites`), and on reading skipped without a look at its value |
+| A number's shortest digits, when two candidates are equally near | the one whose last digit is even; Rust's own formatting takes the upper |
+| A number's layout | scientific past 17 digits before the point for a `double` and 9 for a `float`, and below 0.0001; the exponent has two digits at least |
+| `File.ReadAllText` | honours UTF-16 and UTF-32 byte-order marks as well as UTF-8's |
+| `StringComparer.OrdinalIgnoreCase.Compare` | orders by upper-cased UTF-16 units (`_` sorts after the letters), a surrogate pair after any single unit |
+| `File.Delete` | says nothing of a file that is not there, and throws for a folder that is not |
+| `File.GetLastWriteTime` on a link | the link's own time, not its target's |
+| `File.AppendAllText` with half a surrogate pair | throws, **having created the file** |
+
+**Two predictions of this step that were wrong,** kept because each was built on:
+
+- *The layout turns scientific at 15 digits for a double and 7 for a float.* It is 17 and 9: the writer uses the
+  round-trip count, not the display precision. Measured before the formatter was written, so no code carried it.
+- *`OrdinalIgnoreCase` past the first character outside ASCII orders by the characters as written.* That was
+  recalled from the runtime's source and built; the parity class showed it orders by their upper case throughout
+  (§11.5).
+
+### 11.4 The error log
+
+The C# formats the time, calls the library to shape the entry, runs its redactor over the result, and hands the
+text back to be appended; the library owns the entry's shape, the day's file name, the pruning and the eight
+megabytes. Two things about the bound are C#'s and are kept: the entry's length is counted in UTF-16 code units
+against a size in bytes, and the entry that fills the day is written whole with one notice after it.
+
+**One difference is not reproduced, and is recorded.** C# prunes a file whose local last-write time is before the
+local time fourteen days ago; the library compares instants. The two differ only for a file written within the hour
+that a change to or from summer time moves, twice a year, on a retention of fourteen days.
+
+### 11.5 The parity class, and what it found
+
+Its second half asks, of the C# and the library side by side:
+
+- 1.8 million numbers formatted: random bits of both widths, what a person types, every power of ten;
+- every character of the first plane escaped in a value and in a key, lone surrogates included;
+- 4,000 files of random bytes under every byte-order mark decoded;
+- each model's schema against its class by reflection, and its new instance against `new T()`;
+- 1,600 seeded instances written by C# and by the library, and read back through each other;
+- about 9,000 documents setting every property of every class, at every place a class is held, to each of 59
+  values, with a map's keys repeated;
+- about 28,000 malformed texts: a hand-written list, every truncation and every one-character loss of two documents
+  for each model, and 4,000 random damages each;
+- 27 file scenarios for each model and for a frontend's type, and a 28th where a class can be made that will not
+  serialize: missing, bad, null, a folder in the file's place, the
+  copy from the old place and its failures, categories, saving over a file, a folder and a blocked folder, what
+  cannot be serialized, deleting, and each side reading what the other wrote;
+- the settings upgrade over eight files; the cheat lists saved to any path, named and ordered; the error log's bytes
+  over 26 sequences, with its pruning and its bound; the log folder's choice; 6,000 suggestions.
+
+**What the first run found.** Six cases failed. Four were defects in the Rust:
+
+1. **Digits, 675 of the 1.8 million numbers.** Half way between two candidates of the shortest length, .NET takes
+   the even one and Rust the upper (1482412.25 as a `float` is `1482412.2` to .NET). The formatter now asks, for the
+   one number in ten that could be such a tie, whether it is exactly one, and takes the even digit.
+2. **The caseless order,** in the cheat lists and in which suggestion comes first (§11.3's second retired
+   prediction).
+3. **A log entry with half a surrogate pair** was written, with U+FFFD in its place, where C# fails and leaves an
+   empty file.
+4. **A log file's age** was read from a link's target; .NET reads the link's own.
+
+The other two were the tests' own. **The readers agreed on every text from the first run**: no malformed text and
+no property document was read differently. That is what measuring §11.3 first bought, and silence from a test is
+evidence only once the test is shown to speak, which is what the seeded faults are for.
+
+**Seeded faults: 77, in every part of the step.** The parity class caught 67 on its first run. The ten it missed
+were all faults of the test, not of luck, and each was closed:
+
+- four were hidden because the test judged the library's reading by binding its answer again in C#, which refused
+  on the library's behalf what the library had wrongly accepted (`null` for an `int`, 2147483648) and tidied what it
+  had wrongly kept (a key twice). The library's refusal is now its own to make;
+- one was hidden by the transport: a list crossed with its items separated, so an empty item vanished. Each item is
+  now followed by its terminator, and an empty name is an item;
+- five were cases the corpus lacked: a category with a file of its name in the old place, a class that cannot be
+  serialized, a save over a folder, an entry between the bound in code units and the bound in bytes, and the dotted
+  capital I against `i`.
+
+All 77 are now caught by the parity class. The crates' own tests caught 70 at first and catch 77 after seven cases
+were added.
+
+### 11.6 What a load costs: P1 measured, failed, and then held
+
+`AppSettings.Load()` on a 3,086-byte file, 3,000 times in a scratch program, release builds:
+
+| | Load | Save | A state's path |
+|---|---|---|---|
+| C# | 0.023 ms | 0.028 ms | 0.16 µs |
+| The library, as first built | 0.116–0.122 ms | 0.130–0.141 ms | 0.69 µs |
+| The library, as committed | 0.045 ms | 0.057 ms | 0.51 µs |
+
+**P1 predicted under 0.1 ms and the first measurement was over it.** The cost was not where it was first looked
+for: building each field's path for an error message that is rarely needed was removed, and changed nothing. It was
+the name lookup, which compared every member's name without case against every field in turn, casing both each
+time: about 1,700 caseless comparisons for one settings file. A name in its own case is now found by plain
+equality, and only a name that is not falls back to the caseless search. The load is then twice the C#'s, which is
+the doubled parse P1 expected, and P1 holds at 0.045 ms.
+
+### 11.7 The default path, and what was tested
+
+**The default is untouched, shown three ways.** The C# of the seven files was moved and not rewritten: every
+statement of each at `f3df2ea0` is still in the file, apart from eight lines that changed by necessity: the three
+`Load` members and `ResetForTests`, which gained their branch; `ErrorLog`'s clock, which became a parameter so that a
+test can give both implementations one instant; its entry, now built by a method of its own that the facade also
+calls; and its settings read and `CheatFile`'s folder, which name the C# rule directly. With the variable
+unset or `0`, the standalone shell and a program that loads and saves settings 6,000 times open
+`libemusen_platform.so` no times under the loader's trace, and with `1` they open it. And the existing tests pass
+unchanged.
+
+| Run | Result |
+|---|---|
+| `cargo test` in `Platform/` | 88 pass (76 in `emusen-galaxia`, 12 in `emusen-platform`) |
+| The header as C99 and as C++17, `-Wall -Wextra -pedantic -Werror` | clean |
+| WiseMan's Galaxia classes with `DianaOSSandboxTests` and `HierTests`, variable unset | 219 pass |
+| The same, `EMUSEN_GALAXIA_NATIVE=1` | 219 pass |
+
+The 219 are the 173 that existed and the parity class's 46. A linux-x64 publish adds and drops no file against step
+2a's; `libemusen_platform.so` grows from 532,888 to 766,456 bytes.
+
+**Not done, and not claimed:**
+
+- **Windows and macOS**, as in §10.7, and now also .NET's line ending in a written file (CRLF on Windows, argued
+  from `Environment.NewLine`) and file-name patterns that ignore case on both.
+- **Tests outside Galaxia's with the switch set.** The shell's `cheat save` and `cheat load` and Mistress's windows
+  reach these facades; their tests were run only as part of nothing wider than the filter above, which is the
+  variable unset for them. They belong to the gate (step 2c).
+- **P2** is still not measured. **P3**, that the first differences would be in §5.2's rows and nowhere else, is
+  retired as false: none was in §5.2's rows, which were built in from the start, and all four were elsewhere.
+- **The order of two cheat lists whose names differ only by case** is the folder's own, in both implementations,
+  and is compared without case.
+
+### 11.8 Questions for the tester
+
+Four things this step did otherwise than the design said, or that the design did not foresee. Each stands as built
+unless decided otherwise:
+
+| | Question | As built |
+|---|---|---|
+| Q16 | A model in Rust: a struct, or a schema and a bound document | a schema and a document, which keeps everything a file may hold; structs can be generated later (§11.2) |
+| Q17 | `StateRecord`'s sidecar | left in C#, as an import that ends with the files it reads (§11.2) |
+| Q18 | Pruning by instants where C# compares local times | accepted: the two differ only within the hour a change of summer time moves (§11.4) |
+| Q19 | Text that is not valid UTF-16, once the C# that answers for it is gone | replaced by U+FFFD before it crosses, decided with the C#'s retirement and not before (§11.2) |

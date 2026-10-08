@@ -30,14 +30,15 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 1u
+#define EMUSEN_PLATFORM_ABI_VERSION 2u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
 #define EMUSEN_PLATFORM_BAD_STRING (-5)      /* text that is not UTF-8 */
 #define EMUSEN_PLATFORM_NOT_SUPPORTED (-256) /* an operation this build does not have */
 #define EMUSEN_PLATFORM_IO (-1024)           /* reading or writing failed */
-/* -1025 to -1029 are kept for parsing, schema, newer-file, device and compile failures of later components. */
+#define EMUSEN_PLATFORM_PARSE (-1025)        /* text that is not JSON as .NET reads it, or not what its model allows */
+/* -1026 to -1029 are kept for newer-file, device and compile failures of later components. */
 #define EMUSEN_PLATFORM_ABSENT (-1030)       /* what was asked for does not exist; an answer, not a failure */
 #define EMUSEN_PLATFORM_NOT_FOUND (-1031)    /* a file or directory that had to exist does not */
 #define EMUSEN_PLATFORM_ACCESS (-1032)       /* the system refused access */
@@ -83,6 +84,7 @@ int64_t emusen_platform_diagnostics(uint8_t *out, size_t len);
 #define EMUSEN_GALAXIA_DIR_CHEATS 16u
 #define EMUSEN_GALAXIA_DIR_GAMES 17u          /* a skeleton directory of the shell's tree, not the ROM library */
 #define EMUSEN_GALAXIA_DIR_LEGACY_ROOT 18u    /* DataMigration.LegacyRoot */
+#define EMUSEN_GALAXIA_DIR_LOG_DEFAULT 19u    /* ErrorLog.DefaultRoot */
 
 /* The redirects a test moves. */
 #define EMUSEN_GALAXIA_OVERRIDE_CONFIG 0u /* ConfigStore.OverrideDirectory */
@@ -173,6 +175,136 @@ int64_t emusen_galaxia_migrate(uint32_t what, const uint8_t *source, size_t sour
 /* The old ROM folders under a legacy root that still hold files, each path followed by a NUL. A null root asks about the process's own. */
 int64_t emusen_galaxia_remaining_library(const uint8_t *legacy_root, size_t legacy_root_len, uint8_t *out, size_t len);
 
+/* ---- Galaxia: config files (EmuSen_Config_Reference.md, section 2) ---- */
+
+/*
+ * A config file is named by its file name and, where a kind of config has many files, a category, which is a
+ * subdirectory of the config directory; a null category is the config directory itself. Its path is
+ * emusen_galaxia_config_path, and whether it exists EMUSEN_GALAXIA_TEST_FILE_EXISTS of that path.
+ */
+
+/* Deletes a config file. 1 when it is gone afterwards, whether or not it was there; 0 when its folder is not there or it would not go. */
+int32_t emusen_galaxia_config_delete(const uint8_t *category, size_t category_len, const uint8_t *file, size_t file_len);
+
+/*
+ * A config file's text, for a host that binds the type itself (a file whose types belong to a frontend). A file
+ * that is not there but sits where config was kept before Galaxia is copied in first, never moved, and read from
+ * the old place when the copy cannot be made; only a file with no category ever sat there. The bytes are decoded
+ * as .NET's File.ReadAllText decodes them (emusen_galaxia_text_decode). ABSENT for no file; IO, with the system's
+ * words in emusen_platform_last_error, for one that will not read.
+ */
+int64_t emusen_galaxia_config_read(const uint8_t *category, size_t category_len, const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
+
+/* Writes text as a config file: its folder made, the text written to <file>.tmp and renamed over the file. 0 or IO. Null text fails after the folder is made. Nothing is queued as a diagnostic. */
+int32_t emusen_galaxia_config_write(const uint8_t *category, size_t category_len, const uint8_t *file, size_t file_len, const uint8_t *text, size_t text_len);
+
+/* ---- Galaxia: the models (EmuSen_Config_Reference.md, section 3) ---- */
+
+/* The config models whose schemas the library owns, each mirroring a C# class of EmuSen.Galaxia.Models. */
+#define EMUSEN_GALAXIA_MODEL_APP_SETTINGS 0u    /* AppSettings, appsettings.json */
+#define EMUSEN_GALAXIA_MODEL_AUDIO_CONFIG 1u    /* AudioConfig, audio.json */
+#define EMUSEN_GALAXIA_MODEL_GRAPHICS_CONFIG 2u /* GraphicsConfig, graphics.json */
+#define EMUSEN_GALAXIA_MODEL_CHEAT_FILE 3u      /* CheatFile, a file of the cheats category */
+
+/* Flags of the calls that read or make a model. */
+#define EMUSEN_GALAXIA_MODEL_UPGRADE 1u /* apply the model's own upgrade, as AppSettings.Load does and ConfigFile<T>.Load does not */
+
+/*
+ * A model crosses as a JSON document. Out of the library it is the bound document: an object holding every field
+ * the model can set, in the model's order, with a number as the token the file had. Into the library it is any
+ * JSON the model binds, by the rules of reading a file. A value the model computes and writes but never reads
+ * (CheatFileEntry.IsRomPatch and EffectiveWrites) is left out on the way out and ignored on the way in.
+ *
+ * Reading follows System.Text.Json under ConfigJson.Options, measured rule by rule (EmuSen_RustPlatform.md,
+ * sections 5.2 and 11.3): comments and a trailing comma are allowed, names match without case, the last of two
+ * members wins whole, an unknown member is ignored, and a field with no member keeps its value in a new instance.
+ */
+
+/*
+ * A model's file as its bound document. The text "null" for a file whose document is null, which is no settings
+ * and no error. ABSENT for no file. PARSE or IO for a file that will not load, with the words for the diagnostic
+ * in emusen_platform_last_error; the host reports "<path>: <words> Falling back to defaults." and uses defaults.
+ */
+int64_t emusen_galaxia_model_load(uint32_t model, const uint8_t *category, size_t category_len, const uint8_t *file, size_t file_len, uint32_t flags, uint8_t *out, size_t len);
+
+/*
+ * Saves a document as a model's file: the folder is made, the document is written as the bytes System.Text.Json
+ * writes for the class, and they are put in place by a rename. A null pointer for the document fails, after the
+ * folder is made, as a class C# could not serialize fails. 0 or IO. Nothing is queued as a diagnostic.
+ */
+int32_t emusen_galaxia_model_save(uint32_t model, const uint8_t *category, size_t category_len, const uint8_t *file, size_t file_len, const uint8_t *document, size_t document_len);
+
+/* A new instance of a model: every field at its initial value. */
+int64_t emusen_galaxia_model_new(uint32_t model, uint32_t flags, uint8_t *out, size_t len);
+
+/* Text bound to a model with no file involved: the bound document, "null" for a document that is null, or PARSE with the words. */
+int64_t emusen_galaxia_model_bind(uint32_t model, const uint8_t *text, size_t text_len, uint32_t flags, uint8_t *out, size_t len);
+
+/* A document as the bytes of the model's file. PARSE, with the words, for one that cannot be written (a number JSON has no token for, a cheat with no list of writes). */
+int64_t emusen_galaxia_model_format(uint32_t model, const uint8_t *document, size_t document_len, uint8_t *out, size_t len);
+
+/* A model's fields, one to a line: Class.Name, a tab, the type, and after another tab "derived" or "skipped when null" where that applies. Each class once, the classes it holds after it. */
+int64_t emusen_galaxia_model_schema(uint32_t model, uint8_t *out, size_t len);
+
+/* A model read from any path, as CheatFile.LoadFrom reads one. ABSENT for a file that is missing, unreadable or will not bind; nothing is said of it. */
+int64_t emusen_galaxia_model_load_from(uint32_t model, const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
+
+/* A document written straight to any path, its folder made first, with no temp file: as CheatFile.SaveTo writes a file the player picked. 0 or IO. */
+int32_t emusen_galaxia_model_save_to(uint32_t model, const uint8_t *file, size_t file_len, const uint8_t *document, size_t document_len);
+
+/* The saved cheat lists by name, in the order of StringComparer.OrdinalIgnoreCase, each followed by a NUL. */
+int64_t emusen_galaxia_cheat_names(uint8_t *out, size_t len);
+
+/* Whether a cheat list may have this name: 1 or 0. It is checked and never rewritten. */
+int32_t emusen_galaxia_cheat_name_valid(const uint8_t *name, size_t name_len);
+
+/* ---- Galaxia: the error log (EmuSen_Settings_Reference.md, section 4.70) ---- */
+
+/*
+ * The log's folder: the directory given, else the LogDirectory setting when that folder can be made, else the
+ * default. Reading the setting reads appsettings.json; if that will not load, the diagnostic is queued.
+ */
+int64_t emusen_galaxia_log_root(const uint8_t *directory, size_t directory_len, uint8_t *out, size_t len);
+
+/* Whether a folder is named and can be made: 1 or 0. It is made by the asking. */
+int32_t emusen_galaxia_log_usable(const uint8_t *directory, size_t directory_len);
+
+/* A day's file in a root: <root>/emusen_<day>.log. The day is text the caller formatted (yyyyMMdd). */
+int64_t emusen_galaxia_log_path(const uint8_t *root, size_t root_len, const uint8_t *day, size_t day_len, uint8_t *out, size_t len);
+
+/*
+ * One entry as text: "<stamp> <level> [<area>] <message>", then "    context: <context>" when the context is not
+ * blank, then a fault's text with each line indented by four. A null area is empty; a null message is NULL. A
+ * line break inside the message or the context is
+ * replaced so that each stays on its line. The stamp is text the caller formatted, so the library holds no clock
+ * and no calendar. The host may redact the text before it appends it.
+ */
+int64_t emusen_galaxia_log_format(const uint8_t *stamp, size_t stamp_len, const uint8_t *level, size_t level_len, const uint8_t *area, size_t area_len, const uint8_t *message, size_t message_len,
+                                  const uint8_t *context, size_t context_len, const uint8_t *fault, size_t fault_len, uint8_t *out, size_t len);
+
+/*
+ * Appends an entry to a day's file (emusen_galaxia_log_path). On the first append of a process the folder's day
+ * files last written more than 14 days before `now_unix_ms` are removed. A file of 8 MB takes nothing more; the
+ * entry that would fill it is written with one last notice after it. 1 when the entry was written, 0 when it was
+ * not, for any reason: a log that cannot be written is never a second fault. A null entry is one the host could
+ * not put into UTF-8; it fails where C# fails with such text, at the write, after the pruning and with the file made.
+ */
+int32_t emusen_galaxia_log_append(const uint8_t *file, size_t file_len, const uint8_t *stamp, size_t stamp_len, int64_t now_unix_ms, const uint8_t *entry, size_t entry_len);
+
+/* Lets the next append prune again; for a test. */
+int32_t emusen_galaxia_log_reset(void);
+
+/* ---- Galaxia: "Did you mean ...?" (EmuSen_Config_Reference.md, section 6) ---- */
+
+#define EMUSEN_GALAXIA_SUGGEST_HINT 0u    /* the end of a sentence: " Did you mean 'x'?", or nothing */
+#define EMUSEN_GALAXIA_SUGGEST_NEAREST 1u /* the nearest names, each followed by a NUL */
+
+/* How far apart two names are: edits counted in UTF-16 code units, a swap of two neighbours counting once, case ignored. */
+int32_t emusen_galaxia_suggest_distance(const uint8_t *a, size_t a_len, const uint8_t *b, size_t b_len);
+
+/* The candidates nearest a name that matched none of them. The candidates are given each followed by a NUL. */
+int64_t emusen_galaxia_suggest(uint32_t what, const uint8_t *typed, size_t typed_len, const uint8_t *candidates, size_t candidates_len, int32_t max, uint8_t *out, size_t len);
+
 /* ---- Galaxia: the .NET rules the tree is built from, exported for the parity tests ---- */
 
 #define EMUSEN_GALAXIA_PATH_COMBINE 0u                     /* Path.Combine(a, b) */
@@ -194,6 +326,15 @@ int64_t emusen_galaxia_dotnet_path(uint32_t op, const uint8_t *a, size_t a_len, 
 
 /* One yes-or-no rule as the library applies it: 1, 0 or a status. */
 int32_t emusen_galaxia_dotnet_test(uint32_t op, const uint8_t *a, size_t a_len, const uint8_t *b, size_t b_len);
+
+#define EMUSEN_GALAXIA_NUMBER_DOUBLE 0u /* bits is a double's 64 */
+#define EMUSEN_GALAXIA_NUMBER_SINGLE 1u /* the low 32 of bits are a float's */
+
+/* A number as System.Text.Json writes it. ABSENT for an infinity or a NaN, which it refuses to write. */
+int64_t emusen_galaxia_number_format(uint32_t kind, uint64_t bits, uint8_t *out, size_t len);
+
+/* A file's bytes as File.ReadAllText decodes them: a byte-order mark chooses UTF-8, UTF-16 or UTF-32 and is dropped; what is not valid becomes U+FFFD. */
+int64_t emusen_galaxia_text_decode(const uint8_t *bytes, size_t bytes_len, uint8_t *out, size_t len);
 
 #ifdef __cplusplus
 }

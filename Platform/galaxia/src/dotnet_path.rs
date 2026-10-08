@@ -307,7 +307,7 @@ pub fn is_blank(text: Option<&str>) -> bool {
 }
 
 /// One character's upper case as .NET's ordinal comparison sees it: Unicode's simple mapping, one character to one, less the two that would turn a letter outside ASCII into one inside it.
-fn simple_upper(c: char) -> char {
+pub(crate) fn simple_upper(c: char) -> char {
     match c {
         // The dotless i and the long s keep themselves, where Unicode sends them to I and S.
         '\u{131}' | '\u{17F}' => c,

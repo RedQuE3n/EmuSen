@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using EmuSen.Galaxia.Models;
+using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Galaxia.Library
 {
@@ -21,33 +22,16 @@ namespace EmuSen.Galaxia.Library
         // Set by a frontend at start, so nothing it writes carries a credential to disk.
         public static Func<string, string>? Redactor { get; set; }
 
-        public static string DefaultRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs");
+        public static string DefaultRoot => GalaxiaNative.Active ? GalaxiaNative.Directory(GalaxiaDirectory.LogDefault)! : Managed.DefaultRoot;
 
         // The folder the per-game logs and crash reports share: the LogDirectory setting when it can be made, else ~/.config/EmuSen/Logs.
-        public static string Root()
-        {
-            if (DirectoryOverride is { } set) return set;
-            string? configured = null;
-            try { configured = AppSettings.Load().LogDirectory; } catch { }
-            return Usable(configured) ? configured! : DefaultRoot;
-        }
+        public static string Root() => GalaxiaNative.Active ? GalaxiaNative.LogRoot(DirectoryOverride) : Managed.Root();
 
         // A settings file copied from another machine can name a folder this one cannot make.
-        public static bool Usable(string? directory)
-        {
-            if (string.IsNullOrWhiteSpace(directory)) return false;
-            try
-            {
-                Directory.CreateDirectory(directory);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        public static bool Usable(string? directory) =>
+            GalaxiaNative.Active && GalaxiaNative.Crosses(directory) ? GalaxiaNative.LogUsable(directory) : Managed.Usable(directory);
 
-        public static string PathFor(DateTime day) => Path.Combine(Root(), $"{Prefix}{day:yyyyMMdd}.log");
+        public static string PathFor(DateTime day) => GalaxiaNative.Active ? GalaxiaNative.LogPath(Root(), $"{day:yyyyMMdd}") : Managed.PathFor(day);
 
         public static string? Error(string area, string message, Exception? fault = null, string? context = null) =>
             Write("ERROR", area, message, fault, context);
@@ -55,29 +39,22 @@ namespace EmuSen.Galaxia.Library
         public static string? Warning(string area, string message, string? context = null) =>
             Write("WARN", area, message, null, context);
 
-        // Best effort: a log that cannot be written must never become a second fault.
-        private static string? Write(string level, string area, string message, Exception? fault, string? context)
+        private static string? Write(string level, string area, string message, Exception? fault, string? context) =>
+            GalaxiaNative.Active ? WriteNative(DateTime.Now, level, area, message, fault, context) : Managed.Write(DateTime.Now, level, area, message, fault, context);
+
+        // The time is formatted here, by this machine's calendar, and the redactor runs here; the library shapes the entry and owns the file - see EmuSen_RustPlatform.md §11.4.
+        internal static string? WriteNative(DateTime now, string level, string area, string message, Exception? fault, string? context)
         {
             try
             {
-                DateTime now = DateTime.Now;
-                var entry = new StringBuilder();
-                entry.Append($"{now:yyyy-MM-dd HH:mm:ss.fff} {level} [{area}] {OneLine(message)}\n");
-                if (!string.IsNullOrWhiteSpace(context)) entry.Append($"    context: {OneLine(context)}\n");
-                if (fault is not null) entry.Append(Indent(fault.ToString()));
-                string text = Redactor is { } redact ? redact(entry.ToString()) : entry.ToString();
-
-                lock (Gate)
-                {
-                    string path = PathFor(now);
-                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                    Prune(Path.GetDirectoryName(path)!, now);
-                    long size = File.Exists(path) ? new FileInfo(path).Length : 0;
-                    if (size >= MaxBytes) return null;
-                    if (size + text.Length >= MaxBytes) text += $"{now:yyyy-MM-dd HH:mm:ss.fff} WARN [log] this file reached {MaxBytes >> 20} MB; nothing more is written to it today\n";
-                    File.AppendAllText(path, text);
-                    return path;
-                }
+                string stamp = $"{now:yyyy-MM-dd HH:mm:ss.fff}";
+                string? trace = fault?.ToString();
+                // Text that is not valid UTF-16 cannot cross; C# shapes that entry, and it fails at the write as it always has.
+                bool crosses = GalaxiaNative.Crosses(area) && GalaxiaNative.Crosses(message) && GalaxiaNative.Crosses(context) && GalaxiaNative.Crosses(trace);
+                string entry = crosses ? GalaxiaNative.LogFormat(stamp, level, area, message, context, trace) : Managed.Entry(now, level, area, message, fault, context);
+                string text = Redactor is { } redact ? redact(entry) : entry;
+                string path = GalaxiaNative.LogPath(GalaxiaNative.LogRoot(DirectoryOverride), $"{now:yyyyMMdd}");
+                return GalaxiaNative.LogAppend(path, stamp, new DateTimeOffset(now).ToUnixTimeMilliseconds(), GalaxiaNative.Crosses(text) ? text : null) ? path : null;
             }
             catch
             {
@@ -85,19 +62,89 @@ namespace EmuSen.Galaxia.Library
             }
         }
 
-        private static void Prune(string root, DateTime now)
+        // Tests only: the next write prunes again, in whichever implementation writes it.
+        public static void ResetForTests()
         {
-            if (_pruned) return;
-            _pruned = true;
-            foreach (string file in Directory.GetFiles(root, Prefix + "*.log").Where(f => File.GetLastWriteTime(f) < now.AddDays(-KeepDays)))
-                try { File.Delete(file); } catch { }
+            _pruned = false;
+            if (GalaxiaNative.Loaded) GalaxiaNative.LogReset();
         }
 
-        private static string OneLine(string text) => text.ReplaceLineEndings(" ⏎ ");
+        // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
+        internal static class Managed
+        {
+            public static string DefaultRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs");
 
-        private static string Indent(string text) => string.Concat(text.ReplaceLineEndings("\n").Split('\n').Select(l => "    " + l + "\n"));
+            public static string Root()
+            {
+                if (DirectoryOverride is { } set) return set;
+                string? configured = null;
+                try { configured = AppSettings.LoadManaged().LogDirectory; } catch { }
+                return Usable(configured) ? configured! : DefaultRoot;
+            }
 
-        // Tests only: the next write prunes again.
-        public static void ResetForTests() => _pruned = false;
+            public static bool Usable(string? directory)
+            {
+                if (string.IsNullOrWhiteSpace(directory)) return false;
+                try
+                {
+                    Directory.CreateDirectory(directory);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            public static string PathFor(DateTime day) => Path.Combine(Root(), $"{Prefix}{day:yyyyMMdd}.log");
+
+            // Best effort: a log that cannot be written must never become a second fault.
+            public static string? Write(DateTime now, string level, string area, string message, Exception? fault, string? context)
+            {
+                try
+                {
+                    string entry = Entry(now, level, area, message, fault, context);
+                    string text = Redactor is { } redact ? redact(entry) : entry;
+
+                    lock (Gate)
+                    {
+                        string path = PathFor(now);
+                        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                        Prune(Path.GetDirectoryName(path)!, now);
+                        long size = File.Exists(path) ? new FileInfo(path).Length : 0;
+                        if (size >= MaxBytes) return null;
+                        if (size + text.Length >= MaxBytes) text += $"{now:yyyy-MM-dd HH:mm:ss.fff} WARN [log] this file reached {MaxBytes >> 20} MB; nothing more is written to it today\n";
+                        File.AppendAllText(path, text);
+                        return path;
+                    }
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            // One entry: its line, its context, and a fault's text indented beneath.
+            public static string Entry(DateTime now, string level, string area, string message, Exception? fault, string? context)
+            {
+                var entry = new StringBuilder();
+                entry.Append($"{now:yyyy-MM-dd HH:mm:ss.fff} {level} [{area}] {OneLine(message)}\n");
+                if (!string.IsNullOrWhiteSpace(context)) entry.Append($"    context: {OneLine(context)}\n");
+                if (fault is not null) entry.Append(Indent(fault.ToString()));
+                return entry.ToString();
+            }
+
+            private static void Prune(string root, DateTime now)
+            {
+                if (_pruned) return;
+                _pruned = true;
+                foreach (string file in Directory.GetFiles(root, Prefix + "*.log").Where(f => File.GetLastWriteTime(f) < now.AddDays(-KeepDays)))
+                    try { File.Delete(file); } catch { }
+            }
+
+            private static string OneLine(string text) => text.ReplaceLineEndings(" ⏎ ");
+
+            private static string Indent(string text) => string.Concat(text.ReplaceLineEndings("\n").Split('\n').Select(l => "    " + l + "\n"));
+        }
     }
 }

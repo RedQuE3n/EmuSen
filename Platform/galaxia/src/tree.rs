@@ -105,10 +105,12 @@ pub enum Directory {
     Cheats = 16,
     Games = 17,
     LegacyRoot = 18,
+    /// `ErrorLog.DefaultRoot`.
+    LogDefault = 19,
 }
 
 impl Directory {
-    pub const ALL: [Directory; 19] = [
+    pub const ALL: [Directory; 20] = [
         Directory::Root,
         Directory::Seed,
         Directory::Config,
@@ -128,6 +130,7 @@ impl Directory {
         Directory::Cheats,
         Directory::Games,
         Directory::LegacyRoot,
+        Directory::LogDefault,
     ];
 
     pub fn from_u32(value: u32) -> Option<Directory> {
@@ -233,6 +236,7 @@ impl Tree {
             Directory::Cheats => self.under(&home(), "Cheats"),
             Directory::Games => self.under(&home(), "Games"),
             Directory::LegacyRoot => legacy_root_for(&self.root),
+            Directory::LogDefault => path::combine_all(Self::STYLE, &[&self.application_data, PROGRAM_DIR_NAME, "Logs"]),
         })
     }
 

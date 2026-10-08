@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace EmuSen.Cauldron
 {
-    // One named register value, generic across wildly different register sets - see EmuSen_Cauldron.md §4.1.
+    // One named register value, generic across wildly different register sets - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.1.
     public readonly struct DebugRegisterValue : IEquatable<DebugRegisterValue>
     {
         public string Name { get; }
@@ -25,7 +25,7 @@ namespace EmuSen.Cauldron
         public override int GetHashCode() => HashCode.Combine(Name, Value, BitWidth);
     }
 
-    // One sprite/OBJ entry, reduced to what any sprite viewer needs - see EmuSen_Cauldron.md §4.2.
+    // One sprite/OBJ entry, reduced to what any sprite viewer needs - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.2.
     public readonly struct DebugSpriteInfo
     {
         public int Index { get; }
@@ -54,7 +54,7 @@ namespace EmuSen.Cauldron
         }
     }
 
-    // One palette's colors, already resolved to display-ready RGB - see EmuSen_Cauldron.md §4.3.
+    // One palette's colors, already resolved to display-ready RGB - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.3.
     public readonly struct DebugPaletteInfo
     {
         public int Index { get; }
@@ -67,7 +67,7 @@ namespace EmuSen.Cauldron
         }
     }
 
-    // One audio channel/voice, on a normalized 0-100 scale - see EmuSen_Cauldron.md §4.4.
+    // One audio channel/voice, on a normalized 0-100 scale - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.4.
     public readonly struct DebugAudioChannelInfo
     {
         public int Index { get; }
@@ -88,7 +88,7 @@ namespace EmuSen.Cauldron
         }
     }
 
-    // What a load meter is measuring; a dashboard must not present the two alike - see EmuSen_Cauldron.md §4.5.
+    // What a load meter is measuring; a dashboard must not present the two alike - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.5.
     public enum DebugLoadKind
     {
         // Wall-clock cost of emulating a subsystem, against one native frame's budget.
@@ -98,7 +98,7 @@ namespace EmuSen.Cauldron
         GuestUtilization = 1,
     }
 
-    // The one phrasing every dashboard uses, so the distinction cannot drift between them - see EmuSen_Cauldron.md §4.5.
+    // The one phrasing every dashboard uses, so the distinction cannot drift between them - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.5.
     public static class DebugLoadKindText
     {
         public static string Header(DebugLoadKind kind) => kind switch
@@ -108,7 +108,7 @@ namespace EmuSen.Cauldron
         };
     }
 
-    // One "how hard is this working" meter, 0-100 - see EmuSen_Cauldron.md §4.5.
+    // One "how hard is this working" meter, 0-100 - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.5.
     public readonly struct DebugLoadInfo
     {
         public string Name { get; }

@@ -40,7 +40,7 @@ namespace EmuSen.WiseMan.Serenity
             // Three hardware-load meters plus two audio channels, plus the sprite bar.
             Assert.Equal(6, window.CountParts<ProgressBar>());
 
-            // Grouped by kind, so emulator cost is never presented as guest load - see EmuSen_Cauldron.md §4.5.
+            // Grouped by kind, so emulator cost is never presented as guest load - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.5.
             Assert.Contains("Emulator cost", text);
             Assert.Contains("Hardware utilization", text);
 

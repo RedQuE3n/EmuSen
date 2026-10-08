@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace EmuSen.Cauldron
 {
-    // Element-wise equality, so HistoryProvider's staleness signal has something real to compare - see EmuSen_Cauldron.md §2.3.
+    // Element-wise equality, so HistoryProvider's staleness signal has something real to compare - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.2.3.
     public sealed class ListEqualityComparer<TItem> : IEqualityComparer<IReadOnlyList<TItem>>
     {
         public static readonly ListEqualityComparer<TItem> Instance = new ListEqualityComparer<TItem>();

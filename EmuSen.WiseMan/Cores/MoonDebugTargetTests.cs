@@ -60,7 +60,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(50.0, Assert.Single(load, l => l.Name == "CPU+APU").Percent, 1);
             Assert.Equal(25.0, Assert.Single(load, l => l.Name == "PPU").Percent, 1);
 
-            // Wall-clock emulator timings, not guest load - see EmuSen_Cauldron.md §4.5.
+            // Wall-clock emulator timings, not guest load - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.5.
             Assert.All(load, l => Assert.Equal(DebugLoadKind.EmulatorCost, l.Kind));
         }
 

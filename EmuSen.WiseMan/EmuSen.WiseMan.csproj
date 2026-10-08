@@ -48,9 +48,6 @@
          its own project as of the standalone-shell packaging work, no
          longer bundled inside EmuSen.csproj. -->
     <ProjectReference Include="..\EmuSen.DianaOS\EmuSen.DianaOS.csproj" />
-    <!-- IRealtimeProvider/PollingProvider - see IDebugTarget.cs's own
-         comment on why these live separately from DianaOS. -->
-    <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
     <!-- InputSettingsWindow and the rest of the Mistress GUI under test -
          see Mistress/*Tests.cs. Pulls in Avalonia transitively, which is
          fine for a test project; nothing here opens an actual window. -->

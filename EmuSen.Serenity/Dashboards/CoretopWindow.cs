@@ -103,11 +103,11 @@ namespace EmuSen.Serenity.Dashboards
 
             _palette.SetFrame(_target.RenderPaletteSwatch());
 
-            // A core with no tile memory returns 0x0, which RgbaImageView clears - see EmuSen_Cauldron.md §3.
+            // A core with no tile memory returns 0x0, which RgbaImageView clears - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.3.
             _tileSheet.SetFrame(_target.RenderTileSheet());
         }
 
-        // Grouped by kind so emulator cost is never presented as guest load - see EmuSen_Cauldron.md §4.5.
+        // Grouped by kind so emulator cost is never presented as guest load - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.5.
         private void DrawLoadBars()
         {
             _load.Children.Clear();

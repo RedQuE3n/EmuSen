@@ -33,13 +33,13 @@ namespace EmuSen.WiseMan.Common
             Assert.Same(audio, input);
         }
 
-        // The core-agnostic Avalonia layer: it took CoretopWindow when the toolkit had to stop naming EmuSen - see EmuSen_LunaP.md §19.3.
+        // The core-agnostic Avalonia layer; its telemetry contracts come from DianaOS since the fold - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.1.1.
         [Fact]
-        public void Serenity_references_only_core_free_leaves()
+        public void Serenity_references_only_core_free_assemblies()
         {
             Assembly serenity = typeof(EmuSen.Serenity.GameFrameControl).Assembly;
 
-            Assert.Equal(new[] { "EmuSen.Cauldron", "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(serenity));
+            Assert.Equal(new[] { "EmuSen.DianaOS", "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(serenity));
         }
 
         // LunaP is a package from another repository now, and this is what would notice the split quietly regressing - see EmuSen_LunaP.md §4.
@@ -51,14 +51,48 @@ namespace EmuSen.WiseMan.Common
             Assert.Empty(EmuSenReferencesOf(lunaP));
         }
 
-        // Cauldron is still a leaf, and Serenity now depends on that the way LunaP used to - see EmuSen_LunaP.md §16.
+        // The telemetry contracts live in DianaOS, which references Galaxia alone, so Serenity inherits no core and closes no cycle through it.
         [Fact]
-        public void Cauldron_is_a_leaf_so_Serenity_inherits_nothing_through_it()
+        public void DianaOS_holds_the_telemetry_contracts_and_references_only_Galaxia()
         {
-            Assembly cauldron = typeof(EmuSen.Cauldron.ICoreTelemetry).Assembly;
+            Assembly dianaOS = typeof(EmuSen.Cauldron.ICoreTelemetry).Assembly;
 
-            Assert.Equal("EmuSen.Cauldron", cauldron.GetName().Name);
-            Assert.Empty(EmuSenReferencesOf(cauldron));
+            Assert.Equal("EmuSen.DianaOS", dianaOS.GetName().Name);
+            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(dianaOS));
+        }
+
+        // What the leaf enforced by construction is now this rule - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.1.
+        [Fact]
+        public void The_telemetry_contracts_name_nothing_of_the_debugger()
+        {
+            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+            Type[] contracts = typeof(EmuSen.Cauldron.ICoreTelemetry).Assembly.GetTypes()
+                .Where(t => t.Namespace == "EmuSen.Cauldron")
+                .ToArray();
+            Assert.Contains(typeof(EmuSen.Cauldron.HistoryProvider<>), contracts);
+
+            foreach (Type contract in contracts)
+            {
+                var named = new[] { contract.BaseType }
+                    .Concat(contract.GetInterfaces())
+                    .Concat(contract.GetFields(all).Select(f => f.FieldType))
+                    .Concat(contract.GetProperties(all).Select(p => p.PropertyType))
+                    .Concat(contract.GetMethods(all).SelectMany(m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType)))
+                    .Concat(contract.GetConstructors(all).SelectMany(c => c.GetParameters().Select(p => p.ParameterType)));
+
+                foreach (Type type in named.Where(t => t is not null).SelectMany(t => Flatten(t!)))
+                    Assert.False(type.Namespace?.StartsWith("EmuSen.DianaOS", StringComparison.Ordinal) ?? false, $"{contract.FullName} names {type.FullName}");
+            }
+        }
+
+        // A type with every type it is built from: an array's or reference's element, and each generic argument.
+        private static System.Collections.Generic.IEnumerable<Type> Flatten(Type type)
+        {
+            yield return type;
+            if (type.HasElementType)
+                foreach (Type inner in Flatten(type.GetElementType()!)) yield return inner;
+            foreach (Type argument in type.GetGenericArguments())
+                foreach (Type inner in Flatten(argument)) yield return inner;
         }
 
         [Fact]

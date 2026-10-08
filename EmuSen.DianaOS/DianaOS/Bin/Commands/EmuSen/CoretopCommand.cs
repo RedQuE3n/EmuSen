@@ -128,7 +128,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 WriteLine($" DianaOS coretop  -  {_target.CoreName}  -  frame {_target.FrameCount}  -  Ctrl+C to exit ");
                 WriteLine(new string('-', Math.Min(width, 70)));
 
-                // Grouped by kind so emulator cost is never presented as guest load - see EmuSen_Cauldron.md §4.5.
+                // Grouped by kind so emulator cost is never presented as guest load - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.5.
                 foreach (var group in _target.HardwareLoad.Current.GroupBy(l => l.Kind))
                 {
                     WriteLine($"{DebugLoadKindText.Header(group.Key)}:");

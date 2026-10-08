@@ -4,7 +4,7 @@
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
-and §8's predictions say how.*
+and §8's predictions say how. Its twelve questions were decided the same day, as recommended (§9).*
 
 Companion docs: `EmuSen_Stack.md` §6 (the plan this begins), `EmuSen_CoreAPI.md` (the conventions of a C interface
 in this project, which §3 reuses), `EmuSen_NativeCores.md` §3–§4 (the pre-stable interface and its C# host),
@@ -446,7 +446,8 @@ out under the bound. The schema and `user_version` 1 do not change, so either im
 Its six files move into `EmuSen.DianaOS`, keeping the `EmuSen.Cauldron` namespace so no caller changes; Serenity
 references DianaOS in its place; the project and its four `ProjectReference`s go. `EmuSen_Cauldron.md` becomes a
 section of the DianaOS documentation, keeping its §3.1 rule on what belongs to telemetry and what to the debugger.
-That is step 1b. In the Rust plan the read surface it defines is the core ABI's debug interface
+That is step 1b. *Done 2026-10-07: the files are in `DianaOS/Lib/Cauldron/` and the page is
+`EmuSen_Debugging_Tools_Reference_v5.md` §3.66, with the split rule at §3.66.3.1 and the fold's own record at §3.66.1.1.* In the Rust plan the read surface it defines is the core ABI's debug interface
 (`EmuSen_CoreAPI.md` §6.14) seen through DianaOS, so a separate Rust crate for it would be a boundary nothing uses
 (`EmuSen_Multicore.md` §9.2).
 
@@ -660,21 +661,28 @@ Stated before anything is built; each step reports which held.
 
 ---
 
-## 9. Questions for the tester
+## 9. Decisions, 2026-10-07
 
-Each has a recommendation; none is assumed decided.
+The twelve questions this page first left open were decided by the tester on the day it was written, each as it
+recommended and with nothing changed; all three components are to be ported as planned, and DianaOS after them.
 
-| | Question | Recommendation |
-|---|---|---|
-| Q1 | Where the crates live | `Platform/` at the top, a workspace (§2.1) |
-| Q2 | One library or one per component | one, `emusen_platform` (§2.2) |
-| Q3 | How the C# leaves | the three states of §3.9: C# kept as oracle and fallback until each gate, deleted only after golden outputs |
-| Q4 | A build without cargo after a gate | fails unless given a prebuilt library, with a message naming `EmuSenNativePrebuilt` (§2.5) |
-| Q5 | System.Text.Json's words inside a diagnostic | replaced by Rust's own words; Galaxia's own messages kept exactly (§5.4) |
-| Q6 | .NET's reading quirks | reproduced exactly, each with a corpus case (§5.3) |
-| Q7 | Third-party crates | `ash`, `libloading`, `rusqlite` (bundled), `sha2`, `md-5`; JSON written by hand (§2.4) |
-| Q8 | Endymion's device half | ported now, in 3b, for the oracle's sake, with no gain claimed for the C# programs (§4.2) |
-| Q9 | Serenity's half at the third place | kept third; if P5 fails it is recorded as buying nothing until a Rust client (§4.3) |
-| Q10 | The lent readback | accepted as the interface's one pointer out (§3.3) |
-| Q11 | The interface's versioning | exact matching, no baseline guard beyond the export test (§3.2) |
-| Q12 | `EmuSen_Stack.md` §2.1's `AudioPlayer` paragraph | retired by 3b if Q8 is "now", with §4.2's count recorded in its place |
+- **Q1.** Decided 2026-10-07: the crates live in a Cargo workspace at `Platform/`, at the top of the repository (§2.1).
+- **Q2.** Decided 2026-10-07: one library, `emusen_platform`, for every ported component (§2.2).
+- **Q3.** Decided 2026-10-07: each component passes through the three states of §3.9; its C# stays as oracle and
+  fallback until its gate, and is deleted only after its golden outputs are recorded (§6.6) and the tester agrees.
+- **Q4.** Decided 2026-10-07: after a component's gate, a build without cargo fails unless it is given a prebuilt
+  library, with a message naming `EmuSenNativePrebuilt` (§2.5).
+- **Q5.** Decided 2026-10-07: System.Text.Json's words inside a diagnostic are replaced by Rust's own; Galaxia's own
+  messages are kept exactly (§5.4).
+- **Q6.** Decided 2026-10-07: .NET's reading quirks are reproduced exactly, each with a corpus case (§5.3).
+- **Q7.** Decided 2026-10-07: the third-party crates are `ash`, `libloading`, `rusqlite` (bundled), `sha2` and
+  `md-5`; the JSON reader and writer are written by hand (§2.4).
+- **Q8.** Decided 2026-10-07: Endymion's device half is ported now, in step 3b, for the oracle's sake, and no gain
+  is claimed for the C# programs (§4.2).
+- **Q9.** Decided 2026-10-07: Serenity's half stays third whatever P5 shows; if P5 fails, the step is recorded as
+  buying nothing until a Rust client exists (§4.3).
+- **Q10.** Decided 2026-10-07: the lent readback is accepted as the interface's one pointer out (§3.3).
+- **Q11.** Decided 2026-10-07: the interface is versioned by exact match, with no baseline guard beyond the export
+  test (§3.2).
+- **Q12.** Decided 2026-10-07: `EmuSen_Stack.md` §2.1's paragraph on `AudioPlayer.cs` is retired, and §4.2's count of
+  calls stands in its place there.

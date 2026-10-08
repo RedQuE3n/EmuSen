@@ -15,7 +15,7 @@ header or its text is reproduced.*
 Companion docs: `EmuSen_NativeCores.md` (the interface this one stabilises, and its record of what was built),
 `EmuSen_RustState.md` (the state codec and the status band −1 to −8), `EmuSen_Multicore.md` (`ICore`, the capability
 interfaces, `CoreFactory`), `EmuSen_Debugging_Tools_Reference_v5.md` §3 (DianaOS, `IDebugTarget` and the registries),
-`EmuSen_Cauldron.md` §3.1 (telemetry versus the debugger), `EmuSen_Stack.md` §6 (the later stack), `EmuSen_Libretro.md`
+`EmuSen_Debugging_Tools_Reference_v5.md` §3.66.3.1 (telemetry versus the debugger; `EmuSen_Cauldron.md` §3.1 until 2026-10-07), `EmuSen_Stack.md` §6 (the later stack), `EmuSen_Libretro.md`
 (the libretro specification), and `VenusRT_Plan.md` (the core that is to be the first built on this).
 
 ---
@@ -1170,7 +1170,8 @@ it is a library that the assembly holding the cores references.
   at all — from needing to know that Avalonia, or any windowing toolkit, exists" (`EmuSen_Debugging_Tools_Reference_v5.md`
   §3.3b).
 - **Telemetry** stays in Cauldron, which DianaOS already references. The 2026-08-04 split (debugger versus dashboard)
-  stands.
+  stands. *Revised 2026-10-07, by decision: the Cauldron assembly was folded into DianaOS, keeping its namespace and
+  the split, which is now between interfaces of one assembly (`EmuSen_Debugging_Tools_Reference_v5.md` §3.66.1.1).*
 - **The library catalogue's driver** (`SqliteCatalogue`, `EmuSen/Common/Catalogue/`) stays out, under the rule that
   "the contract may live in a leaf; the driver may not" (`EmuSen_Stack.md` §2). The runtime needs no package
   reference: loading a library, reading JSON and threading are in the base library.
@@ -1362,7 +1363,7 @@ SNES). Until then:
 | Port routing and button bits | `NativeRtCore.ButtonBit`, each C# core's `SetButton` | the runtime, from descriptors | move |
 | The settings window's rows | `CoreCatalog.SettingsFor` | the runtime, from schemas | replace |
 | The crash record | `EmuSen.Mistress/CrashLog.cs` | split: the runtime records core faults and halts; the frontend keeps its own | split |
-| Telemetry | Cauldron | stays | — |
+| Telemetry | Cauldron (folded into DianaOS 2026-10-07, namespace kept) | stays | — |
 | Physical bindings, presentation, library, scraping, themes | the frontends, Serenity, Endymion | stay | — |
 
 ### 10.2 The order

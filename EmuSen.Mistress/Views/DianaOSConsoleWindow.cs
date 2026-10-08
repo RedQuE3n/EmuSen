@@ -124,7 +124,7 @@ namespace EmuSen.Mistress.Views
             string enteredPrompt = _shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ";
             _console.AppendLine(enteredPrompt + line);
 
-            // A read-only line runs inline against a published snapshot; anything else queues for the emulation thread - see EmuSen_Cauldron.md §2.
+            // A read-only line runs inline against a published snapshot; anything else queues for the emulation thread - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.2.
             var result = _scheduler.SubmitFromAnyThread(_shell, line);
             if (result is { } r) ApplySubmitResult(r.NeedsMoreInput, r.Output, r.Action);
         }

@@ -20,7 +20,7 @@ It has two halves, deliberately the same shape:
 
 **It is a leaf, and that is load-bearing.** `EmuSen.Galaxia.csproj` has no `ProjectReference` and no `PackageReference`, by hard constraint rather than preference: `EmuSen.DianaOS` references Galaxia, and `EmuSen` (the core) references DianaOS, so anything Galaxia depended on upward would close a cycle. `EmuSen_Config_Reference.md` §1.1 has the full argument. That constraint is also what makes it the *only* possible home for this: DianaOS, all three cores, LunaP and both frontends already depend on it, and nothing else in the tree is reachable from all of them.
 
-A consequence worth stating plainly: **the cores do not live here and never will.** A core needs DianaOS for logging and Cauldron for telemetry, and owns its own timing outright. What moved into Galaxia is the *question* a core asks ("what path does this ROM's save go to") and the *mechanism* it uses to write, not the cartridge, the mapper, or a single byte of SRAM.
+A consequence worth stating plainly: **the cores do not live here and never will.** A core needs DianaOS for logging and for telemetry (the `EmuSen.Cauldron` namespace, an assembly of its own until 2026-10-07), and owns its own timing outright. What moved into Galaxia is the *question* a core asks ("what path does this ROM's save go to") and the *mechanism* it uses to write, not the cartridge, the mapper, or a single byte of SRAM.
 
 ---
 

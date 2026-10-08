@@ -62,7 +62,7 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.All(load, l => Assert.Equal(100.0, l.Percent));
         }
 
-        // These are wall-clock emulator timings, not guest load - see EmuSen_Cauldron.md §4.5.
+        // These are wall-clock emulator timings, not guest load - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.5.
         [Fact]
         public void Every_bar_is_labelled_as_emulator_cost()
         {

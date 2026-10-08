@@ -191,5 +191,7 @@ The rest of WiseMan's suite would need a Rust home too. This is a platform rewri
 5. The user interface is ported, and C# and LunaP are retired. Tests move piece by piece, with WiseMan kept until
    each piece reaches parity.
 
+*Begun 2026-10-07, by decision: the tester chose to start with the platform pieces outside DianaOS: Galaxia, then Endymion, then Serenity's Vulkan and shader-cache half, one at a time, each behind a C interface the C# frontends call, with Cauldron folded into DianaOS rather than ported and DianaOS itself after them. The design is `EmuSen_RustPlatform.md`. The work comes before step 3 without waiting for step 1 to finish; steps 3 to 5 keep their order, and the user-interface toolkit is still deferred to step 4. §2.1's paragraph on `AudioPlayer.cs` is re-examined in §4.2 of that page.*
+
 **What does not change now.** Until this plan starts, §1–§5 stand as written: Rust for cores, C# for everything else.
 The work in progress is not to be bent towards it beyond keeping the frontend API's design open to a C interface.

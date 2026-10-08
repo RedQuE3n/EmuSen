@@ -43,7 +43,7 @@ fn entries(directory: &str) -> io::Result<Vec<(String, bool)>> {
 }
 
 /// One file copied with its permissions and its modification time, as `File.Copy` leaves it.
-fn copy_file(source: &str, target: &str) -> io::Result<()> {
+pub(crate) fn copy_file(source: &str, target: &str) -> io::Result<()> {
     if let Some(directory) = path::directory_name(STYLE, target).filter(|d| !d.is_empty()) {
         std::fs::create_dir_all(directory)?;
     }

@@ -1,9 +1,8 @@
+using EmuSen.Galaxia.Native;
+
 namespace EmuSen.Galaxia.Models
 {
-    // On-disk mirror of EmuSen.Audio.AudioSettings - see EmuSen_Config_Reference.md §3.2.
-    // A separate type rather than the hub itself because the hub is a static
-    // class, which System.Text.Json cannot serialize; AudioSettings owns the
-    // mapping in both directions.
+    // On-disk mirror of EmuSen.Audio.AudioSettings, a static hub that cannot be serialized itself - see EmuSen_Config_Reference.md §3.2.
     public class AudioConfig
     {
         public int SampleRate { get; set; } = 32000;
@@ -18,7 +17,8 @@ namespace EmuSen.Galaxia.Models
 
         public bool Save() => File.Save(this);
 
-        public static AudioConfig Load() => File.Load(() => new AudioConfig());
+        public static AudioConfig Load() =>
+            GalaxiaNative.Active ? File.LoadNative(upgrade: false) ?? ConfigFile<AudioConfig>.NewNative(upgrade: false) : File.Load(() => new AudioConfig());
 
         public static bool Exists => File.Exists;
     }

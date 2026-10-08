@@ -1,17 +1,15 @@
+using EmuSen.Galaxia.Native;
+
 namespace EmuSen.Galaxia.Models
 {
-    // General app preferences (log/ROM directories, selected core) - see
-    // EmuSen_Config_Reference.md §3.1.
-    //
-    // SelectedCore is the console context the library and both cheat windows share - see EmuSen_Multicore.md §10.
+    // General app preferences (log/ROM directories, the selected core as the console context) - see EmuSen_Config_Reference.md §3.1 and EmuSen_Multicore.md §10.
     public class AppSettings
     {
         public string? LogDirectory { get; set; }
         public string? RomDirectory { get; set; }
         public string? StateDirectory { get; set; }
 
-        // The player's own .cht tree - point this at an existing RetroArch
-        // cheats folder to use it as-is. See `man cheat`.
+        // The player's own .cht tree; an existing RetroArch cheats folder is used as it is - see `man cheat`.
         public string? CheatDatabaseDirectory { get; set; }
         // The no-filter choice; CoreCatalog re-exports this so a UI has one spelling.
         public const string AllConsoles = "All consoles";
@@ -29,14 +27,7 @@ namespace EmuSen.Galaxia.Models
 
         public string CheatSearch { get; set; } = "";
 
-        // Off by default - forcing this on unconditionally would break any
-        // real two-controller game by feeding Controller 2 the same input
-        // as Controller 1 even when a genuine second pad is plugged in.
-        // Exists for games that read Controller 2 instead of Controller 1
-        // for classic-game-in-a-compilation reasons (Super Mario All-Stars'
-        // SMB1/2/3 being the known example - see EmuSen_Games_Tested.md),
-        // toggled from InputSettingsWindow - the same workaround real
-        // hardware players and other emulators use, not an input redesign.
+        // Off by default, since it would feed a real second pad's port player 1's input; for games that read Controller 2 - see EmuSen_Config_Reference.md §3.1.
         public bool MirrorPlayer1ToPlayer2 { get; set; } = false;
 
         // The player the keyboard plays as, 1-based - see EmuSen_Input.md §8.3.
@@ -146,7 +137,13 @@ namespace EmuSen.Galaxia.Models
 
         public void Save() => File.Save(this);
 
-        public static AppSettings Load() => Upgraded(File.Load(() => new AppSettings()));
+        public static AppSettings Load() => GalaxiaNative.Active ? LoadNative() : Upgraded(File.Load(() => new AppSettings()));
+
+        // The file read, bound and upgraded by the library, or a new instance it made and upgraded - see EmuSen_RustPlatform.md §11.2.
+        internal static AppSettings LoadNative() => File.LoadNative(upgrade: true) ?? ConfigFile<AppSettings>.NewNative(upgrade: true);
+
+        // The C# rule, named so that a test can ask it whichever way the switch is set.
+        internal static AppSettings LoadManaged() => Upgraded(File.LoadManaged() ?? new AppSettings());
 
         // A stored legacy default is not a choice - see EmuSen_Multicore.md §10.3.
         private static AppSettings Upgraded(AppSettings settings)

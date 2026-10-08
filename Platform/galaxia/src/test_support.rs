@@ -32,3 +32,10 @@ impl Drop for TempDir {
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
+
+static ERROR_LOG: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Held by a test that depends on the error log's once-in-a-process pruning.
+pub fn error_log_tests() -> std::sync::MutexGuard<'static, ()> {
+    ERROR_LOG.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}

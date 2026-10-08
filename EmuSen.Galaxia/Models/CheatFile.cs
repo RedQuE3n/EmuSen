@@ -3,17 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Galaxia.Models
 {
-    // One write inside a saved cheat. Addresses and values are hex TEXT, not
-    // numbers, because these files exist to be read and edited by hand from
-    // the shell and no one writes a SNES address in decimal - see
-    // EmuSen_Config_Reference.md §3.4.
-    //
-    // A dumb carrier: EmuSen.Galaxia cannot reference EmuSen.DianaOS (the
-    // dependency runs the other way), so the mapping onto CheatWrite lives
-    // in CheatRegistry and this side only parses text into primitives.
+    // One write inside a saved cheat, its addresses and values hex text; a carrier only, mapped onto CheatWrite by CheatRegistry - see EmuSen_Config_Reference.md §3.4.
     public class CheatFileWrite
     {
         // RamPoke only - which named memory space to write into.
@@ -43,8 +37,7 @@ namespace EmuSen.Galaxia.Models
             if (!TryHex(Address, out address)) return false;
             if (!TryHex(Value, out value)) return false;
 
-            // Absent repeat fields are 0, not an error - hand-written files
-            // routinely omit them entirely.
+            // Absent repeat fields are 0, not an error: files written by hand routinely omit them.
             if (!string.IsNullOrWhiteSpace(RepeatAddAddress) && !TryHex(RepeatAddAddress, out repeatAddAddress)) return false;
             if (!string.IsNullOrWhiteSpace(RepeatAddValue) && !TryHex(RepeatAddValue, out repeatAddValue)) return false;
             return true;
@@ -83,17 +76,14 @@ namespace EmuSen.Galaxia.Models
         public string Description { get; set; } = "";
         public bool Enabled { get; set; } = true;
 
-        // --- Pre-multi-write fields, still read so existing files load ---
-        // Left null when saving, so a re-save quietly migrates the file.
-        // See EmuSen_Config_Reference.md §3.4.
+        // The fields of a file from before writes were a list: still read, and left null when saving - see EmuSen_Config_Reference.md §3.4.
         public string? Space { get; set; }
         public string? Address { get; set; }
         public string? Value { get; set; }
 
         public bool IsRomPatch => string.Equals(Kind, "RomPatch", StringComparison.OrdinalIgnoreCase);
 
-        // Writes as written, or the single write a pre-multi-write file's
-        // flat Space/Address/Value fields describe.
+        // Writes as written, or the single write an older file's flat Space/Address/Value fields describe.
         public IReadOnlyList<CheatFileWrite> EffectiveWrites
         {
             get
@@ -115,8 +105,7 @@ namespace EmuSen.Galaxia.Models
             }
         }
 
-        // True with a null result for "absent", false only for text that was
-        // there but wasn't hex - an unwritable compare byte is a broken entry.
+        // True with a null result for "absent"; false only for text that was there and wasn't hex, which is a broken entry.
         public bool TryParseCompare(out byte? compare)
         {
             compare = null;
@@ -134,24 +123,32 @@ namespace EmuSen.Galaxia.Models
 
         public List<CheatFileEntry> Cheats { get; set; } = new();
 
-        // The name is user-typed, so it is checked rather than sanitized:
-        // silently rewriting it would save to a file they didn't name.
+        // The name is typed by the player, so it is checked rather than sanitized: rewriting it would save to a file they didn't name.
         public static bool IsValidName(string name) =>
-            !string.IsNullOrWhiteSpace(name)
-            && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
-            && name != "." && name != "..";
+            GalaxiaNative.Active && GalaxiaNative.Crosses(name) ? GalaxiaNative.CheatNameValid(name) : Managed.IsValidName(name);
 
         public static ConfigFile<CheatFile> For(string name) =>
             new(CategoryDirName, name + ".json");
 
         // Any path the player picked, outside the auto-loaded set - see EmuSen_Settings_Reference.md §4.15.
-        public static bool SaveTo(string path, CheatFile file)
+        public static bool SaveTo(string path, CheatFile file) => GalaxiaNative.Active ? SaveToNative(path, file) : Managed.SaveTo(path, file);
+
+        // Null for missing, unreadable or corrupt, matching ConfigFile.Load's own contract.
+        public static CheatFile? LoadFrom(string path) => GalaxiaNative.Active ? LoadFromNative(path) : Managed.LoadFrom(path);
+
+        public static string DirectoryPath => Path.Combine(ConfigStore.Directory, CategoryDirName);
+
+        public static IReadOnlyList<string> ListNames() => GalaxiaNative.Active ? ListNamesNative() : Managed.ListNames();
+
+        // The list is serialized here and written there; one that will not serialize still has its folder made, as before.
+        internal static bool SaveToNative(string path, CheatFile file)
         {
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-                File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(file, ConfigJson.Options));
-                return true;
+                string? document;
+                try { document = System.Text.Json.JsonSerializer.Serialize(file, ConfigJson.Options); }
+                catch { document = null; }
+                return GalaxiaNative.ModelSaveTo(GalaxiaModel.CheatFile, path, document);
             }
             catch
             {
@@ -159,12 +156,13 @@ namespace EmuSen.Galaxia.Models
             }
         }
 
-        // Null for missing, unreadable or corrupt, matching ConfigFile.Load's own contract.
-        public static CheatFile? LoadFrom(string path)
+        internal static CheatFile? LoadFromNative(string path)
         {
             try
             {
-                return System.Text.Json.JsonSerializer.Deserialize<CheatFile>(File.ReadAllText(path), ConfigJson.Options);
+                return GalaxiaNative.ModelLoadFrom(GalaxiaModel.CheatFile, path) is { } document
+                    ? System.Text.Json.JsonSerializer.Deserialize<CheatFile>(document, ConfigJson.Options)
+                    : null;
             }
             catch
             {
@@ -172,22 +170,67 @@ namespace EmuSen.Galaxia.Models
             }
         }
 
-        public static string DirectoryPath => Path.Combine(ConfigStore.Directory, CategoryDirName);
-
-        public static IReadOnlyList<string> ListNames()
+        internal static IReadOnlyList<string> ListNamesNative()
         {
             try
             {
-                return Directory.EnumerateFiles(DirectoryPath, "*.json")
-                    .Select(Path.GetFileNameWithoutExtension)
-                    .Where(n => !string.IsNullOrEmpty(n))
-                    .Select(n => n!)
-                    .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                return GalaxiaNative.CheatNames();
             }
             catch
             {
                 return Array.Empty<string>();
+            }
+        }
+
+        // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
+        internal static class Managed
+        {
+            public static bool IsValidName(string name) =>
+                !string.IsNullOrWhiteSpace(name)
+                && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
+                && name != "." && name != "..";
+
+            public static bool SaveTo(string path, CheatFile file)
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+                    File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(file, ConfigJson.Options));
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            public static CheatFile? LoadFrom(string path)
+            {
+                try
+                {
+                    return System.Text.Json.JsonSerializer.Deserialize<CheatFile>(File.ReadAllText(path), ConfigJson.Options);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            public static IReadOnlyList<string> ListNames()
+            {
+                try
+                {
+                    return Directory.EnumerateFiles(Path.Combine(ConfigStore.Managed.Directory, CategoryDirName), "*.json")
+                        .Select(Path.GetFileNameWithoutExtension)
+                        .Where(n => !string.IsNullOrEmpty(n))
+                        .Select(n => n!)
+                        .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
+                catch
+                {
+                    return Array.Empty<string>();
+                }
             }
         }
     }

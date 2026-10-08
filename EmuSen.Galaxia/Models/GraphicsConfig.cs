@@ -1,11 +1,9 @@
 using System.Collections.Generic;
+using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Galaxia.Models
 {
-    // On-disk mirror of EmuSen.Graphics.GraphicsSettings - see
-    // EmuSen_Config_Reference.md §3.3. WindowTitle is deliberately absent:
-    // it is branding, not a preference, and a corrupt config blanking the
-    // title is a worse outcome than not being able to change it.
+    // On-disk mirror of EmuSen.Graphics.GraphicsSettings, with WindowTitle left out on purpose - see EmuSen_Config_Reference.md §3.3.
     public class GraphicsConfig
     {
         public int WindowWidth { get; set; } = 1060;
@@ -70,7 +68,8 @@ namespace EmuSen.Galaxia.Models
 
         public bool Save() => File.Save(this);
 
-        public static GraphicsConfig Load() => File.Load(() => new GraphicsConfig());
+        public static GraphicsConfig Load() =>
+            GalaxiaNative.Active ? File.LoadNative(upgrade: false) ?? ConfigFile<GraphicsConfig>.NewNative(upgrade: false) : File.Load(() => new GraphicsConfig());
 
         public static bool Exists => File.Exists;
     }

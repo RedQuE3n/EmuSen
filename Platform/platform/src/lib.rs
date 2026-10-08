@@ -8,9 +8,10 @@
 use std::cell::RefCell;
 
 pub mod galaxia;
+pub mod galaxia_config;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -22,6 +23,8 @@ pub mod status {
     pub const NOT_SUPPORTED: i32 = -256;
     /// Reading or writing failed, for a reason that is none of the ones below.
     pub const IO: i32 = -1024;
+    /// Text that is not the document it should be: not JSON as .NET reads it, or not what its model allows.
+    pub const PARSE: i32 = -1025;
     /// What was asked for does not exist, where that is an answer and not a failure.
     pub const ABSENT: i32 = -1030;
     /// A file or directory that had to exist does not.
@@ -221,6 +224,7 @@ mod tests {
     fn the_header_declares_exactly_what_the_library_exports() {
         let mut exported = exports_in(include_str!("lib.rs"));
         exported.extend(exports_in(include_str!("galaxia.rs")));
+        exported.extend(exports_in(include_str!("galaxia_config.rs")));
         exported.sort();
         let mut declared = declared_in(include_str!("../../include/emusen_platform.h"));
         declared.sort();
@@ -237,6 +241,7 @@ mod tests {
             ("EMUSEN_PLATFORM_BAD_STRING", status::BAD_STRING),
             ("EMUSEN_PLATFORM_NOT_SUPPORTED", status::NOT_SUPPORTED),
             ("EMUSEN_PLATFORM_IO", status::IO),
+            ("EMUSEN_PLATFORM_PARSE", status::PARSE),
             ("EMUSEN_PLATFORM_ABSENT", status::ABSENT),
             ("EMUSEN_PLATFORM_NOT_FOUND", status::NOT_FOUND),
             ("EMUSEN_PLATFORM_ACCESS", status::ACCESS),

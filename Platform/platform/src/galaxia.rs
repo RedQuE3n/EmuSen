@@ -425,10 +425,11 @@ mod tests {
             ("CHEATS", Directory::Cheats),
             ("GAMES", Directory::Games),
             ("LEGACY_ROOT", Directory::LegacyRoot),
+            ("LOG_DEFAULT", Directory::LogDefault),
         ] {
             defines(&format!("EMUSEN_GALAXIA_DIR_{name}"), which as u32);
         }
-        assert_eq!(Directory::ALL.iter().map(|d| *d as u32).collect::<Vec<_>>(), (0..19).collect::<Vec<_>>());
+        assert_eq!(Directory::ALL.iter().map(|d| *d as u32).collect::<Vec<_>>(), (0..20).collect::<Vec<_>>());
         defines("EMUSEN_GALAXIA_OVERRIDE_CONFIG", Override::Config as u32);
         defines("EMUSEN_GALAXIA_OVERRIDE_DATA", Override::Data as u32);
         defines("EMUSEN_GALAXIA_OVERRIDE_LEGACY", Override::Legacy as u32);

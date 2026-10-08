@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the third, 2026-10-08: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the fifth, 2026-10-08: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -340,6 +340,9 @@ reported step:
 
 So at every point the platform runs: in state 1 nothing a player sees changes; in state 2 the C# is one variable
 away; state 3 comes only after golden outputs are recorded (§6.6) and the tester agrees.
+
+**Where each stands, 2026-10-08:** Galaxia is in state 2 (§13), Endymion's logic half in state 1 (§12), Serenity's
+half not yet built.
 
 ---
 
@@ -740,7 +743,8 @@ rewritten: a comparison of every statement of the seven files at `8645e821` agai
 of them verbatim except where a name gained its `Managed.` qualifier, an override became its backing field, or a
 default argument stayed on the public member. `AtomicFile` and `RomHash` are verbatim whole.
 
-**`Active` is false unless `EMUSEN_GALAXIA_NATIVE` is exactly `1` and the library loads** (state 1 of §3.9). The
+**`Active` is false unless `EMUSEN_GALAXIA_NATIVE` is exactly `1` and the library loads** (state 1 of §3.9; since
+step 2c, state 2, §13). The
 variable is read once, before anything touches the library, so with it unset the library is never opened. That was
 checked on a running program and not only read from the code: the standalone DianaOS shell, run under the dynamic
 loader's own trace (`LD_DEBUG=files`) with `hier` and `ls /Saves`, opens `libemusen_platform.so` no times with the
@@ -1096,8 +1100,8 @@ The 219 are the 173 that existed and the parity class's 46. A linux-x64 publish 
 
 ### 11.8 Questions for the tester
 
-Four things this step did otherwise than the design said, or that the design did not foresee. Each stands as built
-unless decided otherwise:
+Four things this step did otherwise than the design said, or that the design did not foresee. *Decided 2026-10-08:
+Q16, Q17 and Q18 stand as built. Q19 stays open until the C# that answers for such text is retired.*
 
 | | Question | As built |
 |---|---|---|
@@ -1105,3 +1109,235 @@ unless decided otherwise:
 | Q17 | `StateRecord`'s sidecar | left in C#, as an import that ends with the files it reads (§11.2) |
 | Q18 | Pruning by instants where C# compares local times | accepted: the two differ only within the hour a change of summer time moves (§11.4) |
 | Q19 | Text that is not valid UTF-16, once the C# that answers for it is gone | replaced by U+FFFD before it crosses, decided with the C#'s retirement and not before (§11.2) |
+
+---
+
+## 12. What was built, 2026-10-08: step 3a, Endymion's logic half
+
+Measured on the development desktop, as §10 and §11 were. Endymion's resampler, rate control, port router and seat
+rules, and `PadControls`' rules, have a Rust form behind a switch of their own, `EMUSEN_ENDYMION_NATIVE`, in state 1:
+the C# runs unless the variable is `1`, and the library is not opened while it is unset. No C# was removed, and
+nothing of the device half (§4.2) was touched.
+
+### 12.1 The artefacts
+
+| What | Where |
+|---|---|
+| The crate, with no dependencies | `Platform/endymion/` (`emusen-endymion`) |
+| `LinearResampler` | `src/resampler.rs` |
+| `DynamicRateControl` | `src/rate_control.rs` |
+| `PortRouter`'s rules: what changed, the mirror, the keyboard's player, which ports hold a controller | `src/router.rs` |
+| `PlayerSlots`' rules: seating, trading seats, forgetting a reservation | `src/slots.rs` |
+| `PadControls.Resolve`, `Combine` and `For`, and `Math.Clamp` | `src/pad.rs`, `src/lib.rs` |
+| The C layer: 31 exports, 76 in the library; the interface's version is 3 | `Platform/platform/src/endymion.rs`, `include/emusen_platform.h` |
+| The switch and the entry points | `EmuSen.Endymion/Native/EndymionNative.cs` |
+| The facades | `LinearResampler.cs`, `DynamicRateControl.cs`, `Input/PortRouter.cs`, `Input/PlayerSlots.cs` |
+| The parity class, 8 cases | `EmuSen.WiseMan/Endymion/EndymionParityTests.cs` |
+
+About 560 lines of Rust in the crate and 590 in its C layer, with 310 of tests, against §7.2's 900 for the step with
+its tests. The excess is the C layer, which §7.2 priced as if it were Galaxia's: a router answers with a list of
+changes and a seat rule with a list of moves, and each kind of answer needed its own struct, its pending copy (§12.3)
+and its test.
+
+### 12.2 The facade, and what was built otherwise than §4.2 planned
+
+**Chosen per instance.** Each facade's public constructor asks the switch; an internal one takes the choice as an
+argument, so the parity class can hold a C# instance and a library instance side by side in one process (§12.5).
+The C# of each class moved, unrewritten, into a nested `Managed` class (`PlayerSlots`: into `…Managed` methods), and a
+facade built on the C# forwards every call to it. With the variable unset no facade is built any other way.
+
+**`PortRouter` reads the pads in C# and decides in Rust.** The pads are `GamepadManager`'s, which is the device half
+and stays C# until step 3b. So for each poll the facade reads each heard player's buttons as a mask and the game's
+axes as numbers, asks the keyboard each of its 24 controls once, works out which players are seated (with
+`FirstControllerOnly` applied), and hands all of it to the library, which returns the changes to make; the facade
+makes them through the core's delegates, in the library's order. Two consequences, neither visible in what the core
+is told, which the parity class holds: the C# asks the keyboard for a control each time it needs one, several times
+in one send, where the library is given each control once, so the two could differ only for a keyboard that changed
+in the middle of a send; and `Reset` copies the list of axes, where the C# kept the caller's list and would have seen
+a later change to it.
+
+**`PlayerSlots` keeps its seats in C#.** A seat holds a `ConnectedPad`, an SDL handle that the library cannot hold
+while the device half is C#. The facade passes a snapshot of the eight seats (open or reserved, GUID, path) and the
+library returns which seat each pad goes to. The crate's `PlayerSlots<P>` holds its own seats over any type that is a
+pad, which a Rust DianaOS will use; the C layer drives it over a snapshot. A pad whose GUID or path cannot be encoded
+as UTF-8 is seated by the C#, as §11.2 does for such text.
+
+**Otherwise than planned, each for a reason:**
+
+- **`GamepadBindings` stays C#.** §4.2 counted the binding files' format in the logic half. Its file is read and
+  written through Galaxia's tier-2 `ConfigFile`, which since 2b is the library's for everything but the binding; what
+  is left is the binding, keyed by `PadButton` and SDL's `GamepadButton`, which §4.2 itself keeps as the C#
+  vocabulary, and the legacy flat shape's upgrade, a few lines over those types. Porting it would move a type map
+  and no rule. It is Q20 of §12.7.
+- **`PadControls` stays a Galaxia class in C#.** Its rules are reproduced in the crate, which the router needs, and
+  the parity class holds them to the C#'s. The C# class is not made a facade: it is Galaxia's, under Galaxia's
+  switch and not Endymion's, and its other callers (the catalogue's list of a console's controls and the bindings
+  window's stick diagram) ask it outside any poll, where a crossing buys nothing.
+
+### 12.3 The C# rules, reproduced, and one difference
+
+Each of these was read off the C#, built and is a case of the parity class:
+
+| Rule | What the C# does |
+|---|---|
+| A sample between two | `(short)Math.Round(prev + (next - prev) * frac)`: the difference an integer, the product a double, rounded **half to even** |
+| `Math.Clamp` | returns NaN for a NaN value, as a stick's reading can be |
+| A ratio of zero or below | refused, with "Resample ratio must be positive." |
+| The first call ever | takes its first frame as the previous one, and makes no output from it |
+| Shedding | begins above the target times 3 and ends at or below the target times 2, each a comparison of doubles; shed input is counted, the resampler reset at each edge |
+| A null input to `Process` | sets the last ratio and then throws `NullReferenceException`; the library sets it and returns its NULL status, which the facade throws as the same exception |
+| The counters | 32- and 64-bit, wrapping |
+| The changes a poll makes | the connected flags of ports 2 and up, then each port's changed buttons, then **every** axis the game reads, changed or not |
+| A trade of seats with a pad from no seat | the displaced pad goes to the lowest free seat, **asked after the mover sat down**, so a closed pad just seated counts as free |
+| A pad's returning seat | by GUID and path, then GUID alone, then the lowest seat with no pad connected |
+
+**One difference is deliberate.** Given a ratio that is NaN or infinite, the C# loops for ever: no step it makes
+reaches the next input frame. The library refuses it with "Resample ratio must be finite.", which the facade throws
+as the C# throws its own refusal. Neither frontend computes such a ratio (`DynamicRateControl` clamps its own, and a
+NaN nominal ratio would be a defect upstream), so the difference is in what a defect does, not in what a player
+hears. It is Q21.
+
+**The C layer.** A call whose answer is a list (samples, changes, seat moves) writes what fits and keeps the rest in
+the handle, returning the whole length; `…_take` copies what was kept. This is the length-query idiom of §3.3 for a
+call that cannot be made twice, since a second poll would see nothing changed. The rate control's state crosses as
+one struct, which is why the call that reads it is `emusen_endymion_rate_read` and not `…_state`: C forbids the
+type and the function sharing the name. The interface's version is 3, and the C# asks for 3 exactly (§3.2).
+
+### 12.4 The default path, and what was shown
+
+**The default is untouched, shown three ways.** Every statement of the four classes at `d7f4d70e` is still in its
+file, apart from six lines changed by necessity: the two constructors that became `Managed`'s, the rate control's
+resampler, now the C# one by name, and `PlayerSlots`' `Seat` and `Highest`, now its `…Managed` methods. With the
+variable unset, Endymion's resampler, rate control, router and seat tests, 53 cases, open `libemusen_platform.so` no
+times under the loader's trace (`LD_DEBUG=files`), and with `1` they open it once. And the existing tests pass
+unchanged.
+
+| Run | Result |
+|---|---|
+| `cargo test` in `Platform/` | 108 pass (17 in `emusen-endymion`, 76 in `emusen-galaxia`, 15 in `emusen-platform`) |
+| `cargo clippy` over the workspace | clean |
+| The header as C99 and as C++17, `-Wall -Wextra -pedantic -Werror` | clean |
+| WiseMan's Audio, Input and Endymion classes, `AudioProperties` and `LeafAssemblyTests`, variable unset | 186 pass |
+| The same, `EMUSEN_ENDYMION_NATIVE=1` | 186 pass |
+| Mistress's `MultiplayerTests`, `PadInputPathTests`, `ControllersTests` and `PlayerPreferencesTests`, which drive the router and the seats through a running game, both ways | 23 pass each way |
+
+The 186 are 178 that existed and the parity class's 8. Galaxia's parity class had a case that counted every
+function the header declares against Galaxia's exports, which Endymion's 31 broke; it now counts Galaxia's and the
+library's own, as Endymion's case counts Endymion's, and Galaxia's classes pass with it (§13.3). Two of them, the buffer tests of MercuryRT and MoonRT, and two
+of Mistress's, the Genesis's four-pad games, need their cores' libraries beside the tests and were run with them.
+
+**CI** gains two steps beside Galaxia's, Endymion on its C# and on the library, which report and do not gate (§10.6).
+
+**Not done, and not claimed:** Windows and macOS, as before; and P4, which is the device half's (step 3b).
+
+### 12.5 The parity class, and what it found
+
+It asks, of the C# and the library side by side, with seeded random input:
+
+- the resampler over 400 runs of 30 calls: streams of silence, full-scale noise, steps and small values, of odd and
+  even lengths, at a ratio near one or one of a list of awkward ones, with resets between;
+- the refusals: ratios of zero, below zero, NaN and the infinities, and a null or empty input;
+- the rate control over 300 runs of 60 steps, every property set at random between calls, the queue walked and
+  jumped through each shedding edge, and a null input and a negative nominal ratio;
+- the pad rules over every axis reading of a list (NaN and the infinities included) for every control, every
+  combination of held directions, and `For` over random button and axis lists;
+- the seats over 150 runs of 80 steps of pads connecting, going, returning by GUID and path, trading seats, being
+  taken out and forgotten, with GUIDs shared and empty;
+- the router over 120 runs of 70 steps, logging every call it makes to the core, through ports added and removed,
+  the mirror and the keyboard's player changed, `FirstControllerOnly`, and every query between;
+- that every export the C# looks up is in the header, and that the header declares no other of Endymion's.
+
+**The first run found nothing**: no difference in any case. Silence is evidence only once the test is shown to
+speak, so 38 faults were seeded in the Rust, each built into the library and run against the class:
+
+- **35 were caught** by the class's own failure.
+- **One was caught by the test host stopping.** "One sample is enough" lets a lone sample through to the first
+  call's priming, which reads past the array; the library aborts, as its profile requires (§3.5), and the run ends
+  with two cases passed. The crate's own test of a lone sample catches it outright.
+- **Two survived, and both are equivalent**, so neither is a gap: taking the difference of two samples as a double
+  instead of an integer is exact either way, since a difference of two shorts is; and a reset that kept the
+  position and the previous frame changes nothing, because the first call after it primes both afresh.
+
+### 12.6 Publishing
+
+A self-contained linux-x64 publish of Mistress has the same 454 files as one of step 2b's commit (`d7f4d70e`), built
+the same way beside it; `libemusen_platform.so` grows from 766,456 to 799,480 bytes, so P7's 4 MB still holds with
+two of the three crates in.
+
+### 12.7 Questions for the tester
+
+| | Question | As built |
+|---|---|---|
+| Q20 | `GamepadBindings`, which §4.2 put in the logic half | left in C#: its file is already the library's, and what is left is a map over the C# vocabulary §4.2 keeps (§12.2) |
+| Q21 | A NaN or infinite ratio, for which the C# never returns | refused with words, as the C# refuses a ratio of zero (§12.3) |
+
+---
+
+## 13. Step 2c, 2026-10-08: Galaxia in state 2
+
+The tester gave Galaxia's gate its go on 2026-10-08, after the review of steps 2a and 2b. Galaxia now runs on the
+library by default, and `EMUSEN_GALAXIA_NATIVE=0` selects its C#. No C# was removed, and `EmuSenPlatformRequired`
+stays false, since every rule still has its C# behind it.
+
+### 13.1 The gate's evidence
+
+A full WiseMan run on 2026-10-08 with `EMUSEN_GALAXIA_NATIVE=1` passed 9,826 cases, skipped 53 and failed 5. All five
+failed the same way with the variable unset: expectations written before the Genesis was offered, which still
+listed the four Nintendo consoles, in the three tests that `258e8c18` corrects; this step is built on that commit. So no case outside Galaxia's own classes differed between the two implementations. With §10.5's and
+§11.5's parity classes and their seeded faults, that is what §3.9 asks before state 2.
+
+### 13.2 The switch in state 2
+
+| The variable | The library loads | Galaxia runs on | Said |
+|---|---|---|---|
+| `0` | not asked | the C# | nothing |
+| unset, `1` or any other value | yes | the library | nothing |
+| unset, `1` or any other value | no: absent, refused, or its load throws | the C# | one line, once |
+
+The choice is made once in a process, on the first question any facade asks, and kept; it is a small class,
+`PlatformSwitch` in `GalaxiaNative.cs`, so that a test can make a choice of its own without touching the process's.
+The line goes to the host's `ConfigDiagnostics` sink and to the error log as a warning of area `platform`:
+
+```
+<time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); Galaxia runs on its C# implementation.
+```
+
+The words in the parentheses are `PlatformLibrary.Report`'s, so a library of the wrong interface version or one
+missing an export is named as such. **The choice is recorded before the line is written**, because writing it asks
+the switch again (the error log is a facade too), and that question must find the C# already chosen and not choose
+a second time. A load that throws an exception of any kind is caught and reported the same way, with the
+exception's type and words in the parentheses; Galaxia must never fail to start because of the library.
+
+**Two consequences, recorded rather than changed.** The library is now opened by every program at its first use of
+Galaxia, so §12.4's loader trace, which showed Endymion's tests opening nothing with its own variable unset, would
+now show Galaxia opening it; Endymion's switch still decides only Endymion's half. And a crash in the library is now
+a crash of the default path, which is why the crash log of §3.5 is installed when the library loads, as before.
+
+### 13.3 What was tested
+
+The blast radius only, as §6.7 has it:
+
+| Run | Result |
+|---|---|
+| WiseMan's Galaxia classes with `DianaOSSandboxTests` and `HierTests`, variable unset (the library) | 220 pass |
+| The same, `EMUSEN_GALAXIA_NATIVE=0` (the C#) | 220 pass |
+
+The 220 are 2b's 219 and one new case, which builds a switch over a folder without the library and asks it five times
+for each of the variable unset, `1` and `0`: the C# each time, two loads tried and not three, the line exactly once
+for each of the two that tried, both in the sink and in the error log, and none for `0`; and a load that throws, which
+is the C# and the line with the exception's words. Three faults were seeded in the switch (nothing said, a throwing
+load not caught, the fallback not remembered) and the case caught each.
+
+The standalone DianaOS shell was also run from copies of its build in a sandboxed home, with and without the library
+beside it. With it and the variable unset it opens `libemusen_platform.so` once under the loader's trace; with `0`,
+no times; without it, unset or `1`, the C# runs and the day's error log holds the line once. Its output is the same
+bytes in all four runs.
+
+**Not done:** Windows and macOS, as before; and P2 is still not measured. CI's two Galaxia steps now run the C# with
+`EMUSEN_GALAXIA_NATIVE=0` and the library with the variable unset, and still report rather than gate (Q22).
+
+### 13.4 Questions for the tester
+
+| | Question | As built |
+|---|---|---|
+| Q22 | Whether CI's Galaxia and platform steps now gate | still reporting: §9's Q14 tied gating to Galaxia's gate, but Windows and macOS have never run these tests, and a platform whose library fails still runs on the C# |

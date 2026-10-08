@@ -91,6 +91,50 @@ namespace EmuSen.Galaxia.Native
         CheatFile,
     }
 
+    // State 2's choice, made once: the variable 0 is the C#, anything else the library if it loads, else the C# with one message - see EmuSen_RustPlatform.md §13.
+    internal sealed class PlatformSwitch
+    {
+        private readonly Func<string?> _variable;
+        private readonly Func<(bool Available, string Report)> _load;
+        private readonly Action<string> _announce;
+        private readonly object _gate = new();
+        private volatile int _chosen;
+
+        public PlatformSwitch(Func<string?> variable, Func<(bool Available, string Report)> load, Action<string> announce)
+        {
+            _variable = variable;
+            _load = load;
+            _announce = announce;
+        }
+
+        public bool Active => _chosen != 0 ? _chosen == 2 : Choose();
+
+        private bool Choose()
+        {
+            lock (_gate)
+            {
+                if (_chosen != 0) return _chosen == 2;
+                string? message = null;
+                if (_variable() == "0") _chosen = 1;
+                else
+                {
+                    (bool available, string report) = Load();
+                    _chosen = available ? 2 : 1;
+                    if (!available) message = $"{PlatformLibrary.FileName} is not in use ({report}); Galaxia runs on its C# implementation.";
+                }
+                // Decided before it is said, so the log's own question of the switch has its answer.
+                if (message is not null) _announce(message);
+                return _chosen == 2;
+            }
+        }
+
+        private (bool, string) Load()
+        {
+            try { return _load(); }
+            catch (Exception fault) { return (false, $"{fault.GetType().Name}: {fault.Message}"); }
+        }
+    }
+
     // Galaxia's half of emusen_platform, and the switch that chooses it over the C# - see EmuSen_RustPlatform.md §3.9 and §10.2.
     internal static unsafe class GalaxiaNative
     {
@@ -104,18 +148,17 @@ namespace EmuSen.Galaxia.Native
         // Held while an override moves and while the library first takes the overrides, so neither side misses a change.
         internal static readonly object Gate = new();
 
-        private static readonly Lazy<bool> Chosen = new(Choose);
+        private static readonly PlatformSwitch Chosen = new(() => Environment.GetEnvironmentVariable(Variable), () => (PlatformLibrary.Available, PlatformLibrary.Report), Announce);
         private static volatile bool _attached;
 
-        // State 1: the C# unless the variable asks for the library and the library loads.
-        public static bool Active => Chosen.Value;
+        // State 2: the library unless the variable is 0; a library that is absent or refused leaves the C#, said once - see EmuSen_RustPlatform.md §13.
+        public static bool Active => Chosen.Active;
 
-        private static bool Choose()
+        // The one line a fallback writes, to the host's sink and to the error log, which is by then on the C#.
+        internal static void Announce(string message)
         {
-            if (Environment.GetEnvironmentVariable(Variable) != "1") return false;
-            if (PlatformLibrary.Available) return true;
-            ConfigDiagnostics.Report($"{Variable}=1 was asked for and {PlatformLibrary.Report}; Galaxia runs on its C# implementation.");
-            return false;
+            ConfigDiagnostics.Report(message);
+            EmuSen.Galaxia.Library.ErrorLog.Warning("platform", message);
         }
 
         // The library itself, whichever the switch chose: what a parity test calls.

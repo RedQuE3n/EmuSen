@@ -55,12 +55,37 @@ namespace EmuSen.WiseMan.Galaxia
             return taken;
         }
 
-        // A run that says which of the two it used can only prove parity if the facade really took the side the variable names.
+        // A run that says which of the two it used can only prove parity if the facade really took the side the variable names: state 2, the library unless 0.
         [Fact]
         public void The_switch_is_what_the_variable_says()
         {
-            Assert.Equal(Environment.GetEnvironmentVariable(GalaxiaNative.Variable) == "1", GalaxiaNative.Active);
+            Assert.Equal(Environment.GetEnvironmentVariable(GalaxiaNative.Variable) != "0", GalaxiaNative.Active);
             Assert.Contains($"interface {PlatformLibrary.InterfaceVersion}", PlatformLibrary.Report);
+        }
+
+        // A folder without the library: the C#, one line to the sink and the error log however often the switch is asked, and no line for 0 - see EmuSen_RustPlatform.md §13.
+        [Fact]
+        public void A_missing_library_falls_back_to_the_csharp_and_says_so_once_in_the_log()
+        {
+            string logs = At("logs");
+            ErrorLog.DirectoryOverride = logs;
+            string empty = Directory.CreateDirectory(At("no library")).FullName;
+            int loads = 0;
+            foreach (string? variable in new[] { null, "1", "0" })
+            {
+                var chosen = new PlatformSwitch(() => variable, () => { loads++; var opened = PlatformLibrary.Open(empty); return (opened.Handle != 0, opened.Report); }, GalaxiaNative.Announce);
+                Assert.All(Enumerable.Range(0, 5), _ => Assert.False(chosen.Active));
+            }
+            Assert.Equal(2, loads);
+            string expected = $"{PlatformLibrary.FileName} is not in use ({PlatformLibrary.FileName} not found beside the assemblies); Galaxia runs on its C# implementation.";
+            Assert.Equal(new[] { expected, expected }, Reported());
+            string written = string.Concat(Directory.GetFiles(logs).Select(File.ReadAllText));
+            Assert.Equal(2, written.Split(expected).Length - 1);
+            Assert.Contains("platform", written);
+
+            var thrown = new PlatformSwitch(() => null, () => throw new DllNotFoundException("refused"), GalaxiaNative.Announce);
+            Assert.False(thrown.Active);
+            Assert.Equal(new[] { $"{PlatformLibrary.FileName} is not in use (DllNotFoundException: refused); Galaxia runs on its C# implementation." }, Reported());
         }
 
         // Seeded, so a failure names a case that fails again.
@@ -608,7 +633,7 @@ namespace EmuSen.WiseMan.Galaxia
             string header = File.ReadAllText(Path.Combine(ConfigRoot.Managed.Directory, "Platform", "include", "emusen_platform.h"));
             foreach (string export in GalaxiaNative.Exports) Assert.Contains(export + "(", header);
             Assert.Contains("emusen_platform_abi_version(", header);
-            int declared = System.Text.RegularExpressions.Regex.Matches(header, @"^int(32|64)_t emusen_\w+\(|^uint32_t emusen_\w+\(", System.Text.RegularExpressions.RegexOptions.Multiline).Count;
+            int declared = System.Text.RegularExpressions.Regex.Matches(header, @"^\w+ \*?emusen_(galaxia|platform)_\w+\(", System.Text.RegularExpressions.RegexOptions.Multiline).Count;
             Assert.Equal(GalaxiaNative.Exports.Length + 1, declared);
             Assert.Contains($"#define EMUSEN_PLATFORM_ABI_VERSION {PlatformLibrary.InterfaceVersion}u", header);
         }

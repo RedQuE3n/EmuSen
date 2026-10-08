@@ -44,6 +44,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-endymion"
+version = "0.1.0"
+
+[[package]]
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
@@ -58,6 +62,7 @@ version = "0.1.0"
 name = "emusen-platform"
 version = "0.1.0"
 dependencies = [
+ "emusen-endymion",
  "emusen-galaxia",
  "emusen-native",
 ]

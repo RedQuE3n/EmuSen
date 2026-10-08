@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
+using EmuSen.Endymion.Native;
 
 namespace EmuSen.Endymion.Input
 {
@@ -10,6 +12,13 @@ namespace EmuSen.Endymion.Input
 
         // A player's pad; a closed one keeps the seat reserved for its return.
         private readonly ConnectedPad?[] _seats = new ConnectedPad?[MaxPlayers];
+
+        // The seats are held here either way; whether the library or the C# decides who sits where is chosen for the instance - see EmuSen_RustPlatform.md §12.2.
+        private readonly bool _native;
+
+        public PlayerSlots() : this(EndymionNative.Active) { }
+
+        internal PlayerSlots(bool native) => _native = native;
 
         // Raised whenever a seat changes hands, so a window showing them redraws.
         public event Action? Changed;
@@ -29,7 +38,113 @@ namespace EmuSen.Endymion.Input
         }
 
         // The highest player with a pad seated, connected or reserved.
-        public int Highest
+        public int Highest => _native ? HighestNative() : HighestManaged;
+
+        // A pad just connected: its own reserved seat by GUID and path, else by GUID, else the lowest seat with no pad connected.
+        public int Seat(ConnectedPad pad) => _native && Crosses(pad) ? SeatNative(pad) : SeatManaged(pad);
+
+        // The player chose a seat for the pad: they trade seats with whoever held it; 0 takes the pad out of every seat.
+        public void Move(ConnectedPad pad, int player)
+        {
+            if (_native) MoveNative(pad, player);
+            else MoveManaged(pad, player);
+        }
+
+        // Lets go of a reservation, so the seat is anybody's.
+        public void Forget(int player)
+        {
+            if (_native) ForgetNative(player);
+            else ForgetManaged(player);
+        }
+
+        public void Clear()
+        {
+            Array.Clear(_seats);
+            Changed?.Invoke();
+        }
+
+        public IEnumerable<(int Player, ConnectedPad Pad)> Seated()
+        {
+            for (int i = 0; i < MaxPlayers; i++)
+                if (_seats[i] is { } pad) yield return (i + 1, pad);
+        }
+
+        // Every seated pad's GUID and path cross whole, which only text with half a surrogate pair does not; such a pad is seated by the C#.
+        private bool Crosses(ConnectedPad pad)
+        {
+            if (!EndymionNative.Crosses(pad.Guid) || !EndymionNative.Crosses(pad.Path)) return false;
+            foreach (ConnectedPad? seat in _seats)
+                if (seat is not null && (!EndymionNative.Crosses(seat.Guid) || !EndymionNative.Crosses(seat.Path))) return false;
+            return true;
+        }
+
+        // The seats as the library takes them: one buffer for every string, so one pin covers them all.
+        private unsafe T WithSeats<T>(ConnectedPad? extra, Func<IntPtr, IntPtr, T> call)
+        {
+            var text = new List<byte>();
+            var at = new (int Guid, int GuidLength, int Path, int PathLength)[MaxPlayers + 1];
+            for (int i = 0; i <= MaxPlayers; i++)
+            {
+                ConnectedPad? pad = i < MaxPlayers ? _seats[i] : extra;
+                if (pad is null) continue;
+                byte[] guid = Encoding.UTF8.GetBytes(pad.Guid), path = pad.Path is null ? Array.Empty<byte>() : Encoding.UTF8.GetBytes(pad.Path);
+                at[i] = (text.Count, guid.Length, pad.Path is null ? -1 : text.Count + guid.Length, path.Length);
+                text.AddRange(guid);
+                text.AddRange(path);
+            }
+            // A byte past the end, so that an empty string still has a pointer and is not taken for a null one.
+            text.Add(0);
+            byte[] buffer = text.ToArray();
+            SeatIn* seats = stackalloc SeatIn[MaxPlayers + 1];
+            fixed (byte* b = buffer)
+            {
+                for (int i = 0; i <= MaxPlayers; i++)
+                {
+                    ConnectedPad? pad = i < MaxPlayers ? _seats[i] : extra;
+                    seats[i] = pad is null
+                        ? default
+                        : new SeatIn { State = pad.IsOpen ? 1u : 2u, Guid = b + at[i].Guid, GuidLength = (nuint)at[i].GuidLength, Path = at[i].Path < 0 ? null : b + at[i].Path, PathLength = (nuint)at[i].PathLength };
+                }
+                return call((IntPtr)seats, (IntPtr)(seats + MaxPlayers));
+            }
+        }
+
+        private unsafe int HighestNative() => WithSeats<int>(null, (seats, _) => EndymionNative.SlotsHighest((SeatIn*)seats));
+
+        private unsafe int SeatNative(ConnectedPad pad)
+        {
+            int player = WithSeats(pad, (seats, it) =>
+            {
+                SeatIn* own = (SeatIn*)it;
+                return EndymionNative.SlotsSeat((SeatIn*)seats, own->Guid, own->GuidLength, own->Path, own->PathLength);
+            });
+            if (player <= 0) return 0;
+            _seats[player - 1] = pad;
+            Changed?.Invoke();
+            return player;
+        }
+
+        private unsafe void MoveNative(ConnectedPad pad, int player)
+        {
+            int from = PlayerOf(pad);
+            int* arranged = stackalloc int[MaxPlayers];
+            int changed = WithSeats(null, (seats, _) => EndymionNative.SlotsMove((SeatIn*)seats, pad.IsOpen ? 1u : 0u, from, player, arranged));
+            if (changed == EndymionNative.BadArgument) throw new ArgumentOutOfRangeException(nameof(player));
+            if (changed <= 0) return;
+            var before = (ConnectedPad?[])_seats.Clone();
+            for (int i = 0; i < MaxPlayers; i++) _seats[i] = arranged[i] switch { < 0 => null, MaxPlayers => pad, var k => before[k] };
+            Changed?.Invoke();
+        }
+
+        private unsafe void ForgetNative(int player)
+        {
+            if (WithSeats<int>(null, (seats, _) => EndymionNative.SlotsForget((SeatIn*)seats, player)) <= 0) return;
+            _seats[player - 1] = null;
+            Changed?.Invoke();
+        }
+
+        // The C# rules: the default, and what the library's are held to until Endymion's gate - see EmuSen_RustPlatform.md §3.9.
+        internal int HighestManaged
         {
             get
             {
@@ -39,8 +154,7 @@ namespace EmuSen.Endymion.Input
             }
         }
 
-        // A pad just connected: its own reserved seat by GUID and path, else by GUID, else the lowest seat with no pad connected.
-        public int Seat(ConnectedPad pad)
+        internal int SeatManaged(ConnectedPad pad)
         {
             int at = LowestReserved(s => s.Guid == pad.Guid && s.Path == pad.Path);
             if (at < 0) at = LowestReserved(s => s.Guid == pad.Guid);
@@ -67,8 +181,7 @@ namespace EmuSen.Endymion.Input
             return -1;
         }
 
-        // The player chose a seat for the pad: they trade seats with whoever held it; 0 takes the pad out of every seat.
-        public void Move(ConnectedPad pad, int player)
+        internal void MoveManaged(ConnectedPad pad, int player)
         {
             if (player < 0 || player > MaxPlayers) throw new ArgumentOutOfRangeException(nameof(player));
             int from = PlayerOf(pad);
@@ -86,26 +199,13 @@ namespace EmuSen.Endymion.Input
             Changed?.Invoke();
         }
 
-        // Lets go of a reservation, so the seat is anybody's.
-        public void Forget(int player)
+        internal void ForgetManaged(int player)
         {
             if (SeatOf(player) is { IsOpen: false })
             {
                 _seats[player - 1] = null;
                 Changed?.Invoke();
             }
-        }
-
-        public void Clear()
-        {
-            Array.Clear(_seats);
-            Changed?.Invoke();
-        }
-
-        public IEnumerable<(int Player, ConnectedPad Pad)> Seated()
-        {
-            for (int i = 0; i < MaxPlayers; i++)
-                if (_seats[i] is { } pad) yield return (i + 1, pad);
         }
     }
 }

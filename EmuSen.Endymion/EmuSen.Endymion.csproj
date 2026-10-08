@@ -17,6 +17,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The parity tests call the C# rules and the platform library's side by side, whichever the switch has chosen - see EmuSen_RustPlatform.md §12. -->
+    <InternalsVisibleTo Include="EmuSen.WiseMan" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- SDL3 bindings and the SDL3 binary, for both halves. -->
     <PackageReference Include="SDL3-CS" Version="3.4.2" />
     <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />

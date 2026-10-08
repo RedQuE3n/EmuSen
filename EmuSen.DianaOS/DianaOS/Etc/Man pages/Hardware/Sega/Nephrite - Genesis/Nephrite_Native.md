@@ -2829,11 +2829,13 @@ Not gates, carried from the stages and still open:
   the harness cannot yet express, Hotaru's `GameWindow` hosted headless with simulated pads as `MultiplayerTests`
   hosts Mistress's window: `HotaruMultiplayerTests.Four_pads_play_a_genesis_team_player_set_while_the_game_runs`. The
   change is one call to `PortRouter.Resize` in `GameWindow.PollGamepad` once that test exists to fail first.
-- **Games that do not reach a moving picture where the reference does** (§46.3): Fatal Rewind (and The Killing Game
-  Show, the same program), Time Killers, The Smurfs 2, Superman, and the unlicensed Mahjongg Lover, Pocket Monsters
-  and Whac-A-Critter, beside Barver Battle Saga above. Each is its own defect, not yet looked into.
-- **Three cartridges that look for a save RAM their header omits and run alike without it** (§46.2): Summer Challenge,
-  Winter Challenge and Test Drive II. Not given one; whether their boards carried the chip is not known here.
+- **Games that do not reach a moving picture where the reference does** (§46.3): ~~Fatal Rewind (and The Killing
+  Game Show, the same program), Time Killers, The Smurfs 2, Superman,~~ *found and fixed, §47;* the unlicensed Mahjongg
+  Lover and Pocket Monsters, beside Barver Battle Saga above, after the J-Cart. ~~Whac-A-Critter~~ moves since §47.
+- ~~**Three cartridges that look for a save RAM their header omits and run alike without it** (§46.2): Summer
+  Challenge, Winter Challenge and Test Drive II.~~ *Given it on Sega Retro's word, §47.5.*
+- **The HV counter read in an interrupt handler** stands 3 to 5 counts before the board's in `mdboard.py interrupts`
+  (`Nephrite_Disputes.md` D-28); not examined.
 
 ## 41. Stage 7, step 1: the processors, their registers, their buses and their code (2026-10-07)
 
@@ -3384,3 +3386,112 @@ The lists are `~/.cache/emusen/probe/nephrite/runs/moving-2026-10-07/before.tsv`
   `NephriteTests` and the registration golden, 14 pass.
 - **The two four-pad lists run again** on this build: the Team Player's is unchanged, 39 of 46; the 4 Way Play's is
   23 of 101 with Madden NFL 98, and no game is missing a pad the reference reads.
+
+## 47. Four licensed games that stood still: two interrupt rules, the open bus and a region spelled out (2026-10-07)
+
+§46.3's survey left eight games standing still where Genesis Plus GX moves. The licensed four are taken here, before
+the J-Cart. Each was traced to where its RAM leaves the reference's and to what its program waits for; the two whose
+cause was a rule of the 68000 or the bus were refereed on the board bench. They are three causes, not four.
+
+### 47.1 Fatal Rewind and The Killing Game Show: two interrupt rules
+
+The two images are one program under two titles. Its RAM is within a few hundred bytes of the reference's, and equal
+to the byte from frame 297 to 309, until frame 310; at frame 316 the 68000 halts, its PC `$FFFFFFFB`. The frame interrupt's handler at `$028A94` calls through a pointer
+at `$FFE03E`, which the game sets to 0 while it builds a new screen and sets again after it. Nephrite took the frame
+interrupt in that window, called address 0 and ran into a double fault. The window is opened by two instructions:
+
+```
+0224B0  MOVE.W #$8014,$FFC00004.L    ; the line interrupt on
+0224B8  MOVE.W #$8164,$FFC00004.L    ; the frame interrupt on
+```
+
+at mask 0, with both interrupts pending. Nephrite took the line's after the first and, after its handler, the frame's
+after the second. The board does neither (D-28 in the disputes log, `Beryl_M68k.md` §7):
+
+- **The 68000 samples its interrupt lines before a MOVE's store**, so the request the first write raises is taken
+  after the second instruction, not the first; the second's own write is then also behind the sample.
+- **The VDP's acknowledge clears the request it is making then**, not the level taken. The line interrupt is taken,
+  but by its acknowledge the frame interrupt is enabled, so the frame flag is cleared and the line's request is made
+  again: the handler for level 4 runs twice and the frame's not at all. That is the game's way through the window.
+
+**Both are needed**: either alone leaves the game stopping as before (measured, the other reverted). Neither rule
+was argued from the game: each was measured on the bench with programs written for it (`mdboard.py interrupts`, eleven
+programs; D-28 has the board's logs), and Nephrite's runs of the same programs now agree with the board on every
+interrupt's order and level and on the last one's stacked PC and SR. Before, nine of the eleven differed.
+
+### 47.2 The board bench as referee
+
+D-28 and D-29 were run on Nuked-MD's board through `tb_md` as for every earlier entry, about a minute of the board's
+time a program. Three places in the 68000's map lock the board when read (`$A14000`, `$B00000`, `$C00010`); Nephrite
+does not model a lock there, which is not this step's.
+
+### 47.3 Time Killers: the open bus's low byte
+
+Its RAM leaves the reference's at frame 6 and the game never draws. The 68000 is in a loop that asks for the Z80's
+bus and waits:
+
+```
+02E954  MOVE.W #$0100,$00A11100.L
+02E95C  MOVE.W $00A11100.L,D1
+02E962  BTST #0,D1
+02E966  BEQ.S $02E95C
+```
+
+The bus request's state is bit 8 of that word, not bit 0. Bit 0 is the open bus's: the low byte of the next
+instruction, BTST's opcode `$0801`, whose bit 0 is set, so on a console the loop ends at once whatever the Z80 is
+doing. MacDonald's notes say the low byte reads zero, which Nephrite followed, and the loop never ended. The bench
+reads the word last fetched in full, at `$A11100` and at every other place that answers nothing (D-29). Built
+(`Hw::open8`, `read16`), Time Killers starts.
+
+### 47.4 Superman and The Smurfs 2: a region field that spells the word
+
+Superman's header gives its region as `EUROPE`, The Smurfs 2's as `Europe`; `Markets::parse` read the first three
+letters as the old form's codes, E and U, so the two ran as American consoles, and both stopped where they check for
+a European one. Another World's header also says `EUROPE`, and it ran, a little off the reference (65,429 bytes of RAM
+equal at frame 900). The documents (plutiedev's "ROM header", §45's) know the letters and the hex digit, not the word.
+The references, as black boxes, divide: of a test cartridge carrying each spelling, Genesis Plus GX runs `EUROPE`,
+`Europe`, `EUR` and `eur` as European; PicoDrive as American; BlastEm as European for `Europe` and `Eur` only. Decided:
+a field beginning `EUR`, in any case, is Europe alone, which is what the word says and what the games need. `EU`,
+`UE` and the rest are read as before. **Measured**: Superman 48,594 → 65,531 bytes equal at frame 900, The Smurfs 2
+35,677 → 65,499, Another World 65,429 → 65,535, each now moving as the reference does. No other header in the corpus
+begins `EUR`.
+
+### 47.5 The Accolade three: Sega Retro says battery
+
+§46.2 left Summer Challenge (`ACLD013`), Winter Challenge (`ACLD007`) and Test Drive II (`ACLD008`) without the save
+RAM they write a byte to, for want of a source saying their boards carried one. Sega Retro's pages for the three give
+`savetype` *battery* for the Mega Drive (Winter Challenge and Summer Challenge also a password), fetched 2026-10-07 as
+wikitext and kept with the documents (`docs/segaretro/`). The same field says *battery* for all ten games §46.2 listed,
+so the source agrees with the measurement where both speak. A retailer's list of Genesis cartridges taking a CR2032
+names the three too. They are added to `UNDECLARED_SAVE`. RAM equal at frame 900: Summer Challenge 65,002 → 65,326,
+Winter Challenge 65,423 → 65,425, Test Drive II 65,502 → 65,486; all three moved before and move now.
+
+### 47.6 The survey again
+
+`moving.py` over the corpus's 946 images on this build, against §46.3's last run:
+
+| | §46.3 | Now |
+|---|---|---|
+| Moving | 827 | **833** |
+| Still, as the reference | 108 | 108 |
+| Still where the reference moves | 9 | **3** |
+| The reference does not run the image | 2 | 2 |
+
+The six that now move are the four games and The Killing Game Show, and the unlicensed Whac-A-Critter, whose cause
+was not separated. The three left are the unlicensed Mahjongg Lover and Pocket Monsters and Barver Battle Saga, after
+the J-Cart. Bytes of RAM equal to the reference's at frame 900 rose in 96 images and fell in 75: the falls are small
+(median 2 bytes, the largest 176 in Bill Walsh College Football 95, then 119, 95 and 84), games whose course runs a
+frame apart from the reference's; the rises include Streets of Rage (+234) and Mighty Max (+391), and Ninja Gaiden
+(+53,522), a bad dump still one colour in both. The lists are `moving-2026-10-07/after-47b.tsv`.
+
+### 47.7 Measured (2026-10-07)
+
+- **Beryl's 68000**: its 21 tests, the new one failing on the old rule (shown); SingleStepTests' suite 310,649 of
+  317,500 and TomHarte's 794,139 of 1,000,060, both unchanged.
+- **The crate's tests**, all 137 with the roms found: the acknowledge, the open bus and the region's spelling.
+- **The bench**: `mdboard.py interrupts` and `open-bus` on the board, and their images on Nephrite before and after.
+- **The kit**: the corpus form on the sample, 64 of 64, and the single-image form on the four games, compliant on each.
+- **WiseMan**: `NephriteStartTests` (the four games reach a moving picture through the frontend's path), with
+  `GenesisBatteryTests`, `NephritePlayersTests` and `NephriteDebugTests`, 29 pass with the tester's library named;
+  `NephriteTests` and the registration golden, 14 pass. The Accolade serials were added after that run and are
+  covered by the crate's media test and the survey.

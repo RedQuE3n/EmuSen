@@ -121,6 +121,9 @@ pub struct M68000 {
     pub space: u32,
     /// The interrupt level last sampled, so that a rise to level 7 interrupts even at mask 7.
     pub last_level: u8,
+    /// The interrupt lines as a MOVE to memory sampled them before its store, which is the level the boundary after
+    /// it uses: a request the store itself raises is seen an instruction later (Beryl_M68k.md §7).
+    pub move_sample: Option<u8>,
     /// A trace exception owed by the last instruction, and the PC it stacks.
     pub trace_pending: Option<u32>,
 }

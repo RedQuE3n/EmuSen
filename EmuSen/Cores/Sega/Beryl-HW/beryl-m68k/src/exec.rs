@@ -120,12 +120,13 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut M68000, b: &mut B, o: &mut O) 
     }
     if let Some(resume) = cpu.trace_pending.take() {
         cpu.stopped = false;
+        cpu.move_sample = None;
         return run(cpu, b, o, |x| {
             x.idle(4);
             x.exception(9, resume)
         });
     }
-    let level = b.interrupt_level() & 7;
+    let level = cpu.move_sample.take().unwrap_or_else(|| b.interrupt_level()) & 7;
     let edge = level == 7 && cpu.last_level < 7;
     cpu.last_level = level;
     let mask = ((cpu.regs.sr >> 8) & 7) as u8;
@@ -161,6 +162,7 @@ fn run<B: Bus, O: Observer>(cpu: &mut M68000, b: &mut B, o: &mut O, work: impl F
             if let Some((r, a)) = x.undo.take() {
                 x.set_a(r, a);
             }
+            x.cpu.move_sample = None;
             x.address_error(f)
         }
     };
@@ -903,6 +905,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     self.final_store = true;
                 }
                 if let Ea::M(a, _) = ea {
+                    self.sample_before_store();
                     self.write_low_first(a, w, v)?;
                 }
                 self.apply_post();
@@ -911,6 +914,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 let hi = self.ext16()? as u32;
                 let a = hi << 16 | self.irc() as u32;
                 self.store_flags(v, w, dm, dr, src_mem);
+                self.sample_before_store();
                 self.write(a, w, v)?;
                 self.logic(v, w);
                 self.prefetch()?;
@@ -920,6 +924,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 let ea = self.ea(dm, dr, w, Use::MoveDest)?;
                 self.store_flags(v, w, dm, dr, src_mem);
                 if let Ea::M(a, _) = ea {
+                    self.sample_before_store();
                     self.write(a, w, v)?;
                 }
                 self.logic(v, w);
@@ -928,6 +933,12 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             }
         }
         self.ok()
+    }
+
+    /// A MOVE to memory samples the interrupt lines before it stores (measured on the board for the word and long
+    /// forms to `(An)` and the word form to an absolute long address, Beryl_M68k.md §7); the boundary after it uses this.
+    fn sample_before_store(&mut self) {
+        self.cpu.move_sample = Some(self.b.interrupt_level() & 7);
     }
 
     /// The flags MOVE has set when its first store faults: all of them for a byte or word; for a long, by destination

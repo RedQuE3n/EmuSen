@@ -269,7 +269,8 @@ Nuked-MD's `68k.v`, each file logged), and end each with a rule in hardware term
 5. ASR's C and X with a count at or above the operand's width.
 6. LINK A7's stacked value.
 7. The 733 ADD.l, SUB.l and ASL.b cases not yet read, and the rest of §4.2's readings, which rest on one suite.
-8. Interrupt sampling within an instruction's last bus cycle (§5.1), if the Genesis's tests need it.
+8. Interrupt sampling within an instruction's last bus cycle (§5.1), if the Genesis's tests need it. *Measured for
+   MOVE and MOVEM on the Genesis's board, 2026-10-07: §7.*
 
 
 ## 6. Stage 1, the dispute step: the two suites' disagreements (2026-10-05)
@@ -535,4 +536,41 @@ ASL, LINK, RTE, DIVU, DIVS, ROXL, ROXR and TRAPV.
   Nuked-MD agrees likewise on every case outside the address errors except D-9's flags, and on all 20,000 of a sample
   of the address errors.
 - **Open:** D-9, for a test program run on a 68000; and §5.7's item 8, interrupt sampling, for the Genesis's own
-  interrupt tests (§3.2, which also lists what neither suite covers).
+  interrupt tests (§3.2, which also lists what neither suite covers). *Item 8 measured for MOVE and MOVEM since §7.*
+
+## 7. A MOVE samples the interrupt lines before its store (2026-10-07)
+
+*Measured on the Genesis's board; found through a game.* Fatal Rewind enables the VDP's line interrupt and then its
+frame interrupt with two `MOVE.W #imm,abs.l` to the control port, both pending, at mask 0. §5.1's rule, the lines
+sampled once at each boundary, took the frame interrupt at the boundary right after the second write. On the board
+the 68000 goes on to the instruction after it before any interrupt is taken, and then takes the line's
+(`Nephrite_Native.md` §47.1).
+
+**The rule.** A MOVE whose destination is memory samples IPL before its store, and the boundary after it takes what
+that sample saw; a level its own store raises is seen at the boundary after the next instruction. Every other
+instruction is as §5.1 has it. The bench's programs (`mdboard.py interrupts`, `Nephrite_Disputes.md` D-28) raise the
+level with each form of store and show the PC each interrupt stacked:
+
+| Store that enables the interrupt | Next instruction | PC stacked on the board | §5.1 | Now |
+|---|---|---|---|---|
+| `MOVE.W #imm,(A1)` | NOP | after the NOP | before it | after it |
+| `MOVE.W #imm,(A1)` | MULU, and `MOVE.W D0,(A4)` | after it | before it | after it |
+| `MOVE.L #imm,(A1)`, the enable in either word | NOP | after the NOP | before it | after it |
+| `MOVE.W #imm,abs.l` | `MOVE.W #imm,abs.l` | after the second | before it | after it |
+| `MOVEM.W D0-D1,(A1)` | NOP | before the NOP | before it | before it |
+
+The second `MOVE.W D0,(A4)` row shows that a MOVE that follows one samples again before its own store and sees the
+raised level, so the interrupt waits one instruction and not two. Why a MOVE samples early is the microcode's, which
+was not read: the rule is stated as the board shows it, and only for the forms in the table. Other instructions that
+end in a store (CLR, the read-modify-write forms, MOVEM to memory with more registers) are not measured, and keep
+§5.1's rule; MOVEM's two-register form above agrees with it.
+
+**Built** in `exec.rs` (`Run::sample_before_store`, called by each MOVE to memory before its first write; the step
+takes `M68000::move_sample` in place of a fresh sample), so the bus is asked within the instruction: a bus that
+models a device's timing must answer `interrupt_level` at the clock it is asked, as Nephrite's does. An address error
+in the MOVE drops the sample. **The state**: the sample is kept in `LastLevel`'s free bits, 7 and 6-4, so the block's
+layout is unchanged and an older state reads as no sample owed.
+
+**Pinned by** `boundary.rs`'s `a_move_samples_the_level_before_its_store_and_a_movem_after` (the word, long and
+absolute-long MOVEs and the MOVEM; it fails on §5.1's rule, shown). **The suites are unchanged**, as they must be, having
+no interrupt: SingleStepTests' 310,649 of 317,500 and TomHarte's 794,139 of 1,000,060 (§6.5), measured 2026-10-07.

@@ -1421,3 +1421,42 @@ CPUs' disputes in their own record pages.
   `the_circuits_follow_their_analogue_responses`, `the_unhold_taps_undo_a_held_samples_droop` and
   `the_dac_and_the_psg_add`; `v1.rs`'s `the_model_setting_chooses_the_sound_chip_and_circuit`.
 - Implemented in: the commit "Nephrite, stage 5: the output stage".
+
+### D-28. The interrupt acknowledge clears the request the VDP is making when it comes, not the level the 68000 took
+- Opened: 2026-10-07, by Fatal Rewind, which stopped at power-on plus 316 frames (`Nephrite_Native.md` §47.1).
+- Documents read: MacDonald's "Sega Genesis VDP documentation" (the status register's F flag and the interrupt
+  levels) and `vdppin.txt` (`/INTAK`, "asserted to acknowledge a VDP-generated interrupt on IPL2-1"); neither says what
+  an acknowledge clears when both interrupts are pending.
+- Test program: `mdboard.py interrupts`, eleven programs written for the purpose: mode 5, both interrupts held
+  pending for two frames with both off, then each program's way of enabling them at mask 0; the handlers log a mark,
+  the status and the HV counter, and the bench's log shows each exception's stacked words. Run on the board and on
+  Nephrite, 2026-10-07.
+- Referee: the board as in D-1; no RTL file was opened. With the line interrupt enabled and the frame interrupt
+  enabled by the next instruction, the 68000 takes level 4 (its sample is before the enable, Beryl_M68k.md §7); the
+  handler finds F, the frame flag, clear; on its RTE the 68000 takes **level 4 again**, and the frame handler never
+  runs (`pair` and `pair-long`: `4444 ... 4444`). Enabling the frame interrupt first, or both before lowering the mask,
+  takes level 6 and then level 4, as before (`frame-first`, `both-then-sr`). So the VDP does not take the level from
+  the acknowledge: it clears the request it is making at that moment, the frame interrupt's ahead of the line's, and
+  the line's request, still pending, is made again.
+- Conclusion: **measured**: `Vdp::acknowledge` clears the higher request then enabled (6 before 4 before 2). Nephrite
+  before this cleared the level taken, and took the frame interrupt after the line's (`pair`: `4444 ... 6666`).
+- Pinned by: `vdp.rs`'s `the_acknowledge_clears_the_request_the_vdp_is_making`; the game by
+  `NephriteStartTests.A_game_that_stood_still_reaches_a_moving_picture`.
+- Remaining: the HV counter read in the handlers stands 3 to 5 counts before the board's in most programs, before and
+  after this change; not examined.
+- Implemented in: the commit "Nephrite: four games that stood still".
+
+### D-29. A read of a place nothing drives returns the word last fetched, both bytes
+- Opened: 2026-10-07, by Time Killers, which polled `$A11100` for good (`Nephrite_Native.md` §47.3).
+- Documents read: MacDonald's "Sega Genesis hardware notes" §1, note 4: such reads "return the MSB of the next
+  instruction to be fetched with the LSB set to zero", `$A11100` with bit 0 the bus request's state.
+- Test program: `mdboard.py open-bus`: ten places read as a word, as the even byte and as the odd byte, a NOP
+  (`$4E71`) the instruction after each; then `$A11100` read as a word before `MOVE.W D1,(A3)+` and before `BTST`.
+- Referee: the board as in D-1. Every word read is `$4E71` (`$4F71` at `$A11100` with the Z80 in reset), the even byte
+  `$4E`, the odd byte **`$71`**; before the store `$37C1`, before BTST `$0901`, and `$0801` once the bus is granted. The
+  low byte is the next instruction's too, not zero. The board stops at a read of `$A14000`, `$B00000` and the PSG's
+  `$C00010`, which the program leaves out.
+- Conclusion: **measured**, against the note's LSB: the open bus is the whole word last fetched; `$A11100` replaces its
+  bit 8 with the bus request's state. Nephrite's reads of the ten places agree with the board to the byte.
+- Pinned by: `genesis.rs`'s `an_unmapped_read_is_the_word_last_fetched`; the game by `NephriteStartTests`.
+- Implemented in: the commit "Nephrite: four games that stood still".

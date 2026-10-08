@@ -12,6 +12,8 @@ struct Rig {
     vector: Option<u8>,
     log: Vec<String>,
     clocks: u32,
+    /// A store to this address raises the interrupt level to this, as a VDP's enable does.
+    raises: Option<(u32, u8)>,
 }
 
 impl Rig {
@@ -44,6 +46,9 @@ impl Bus for Rig {
         self.clocks += 4;
         self.log.push(format!("w {:X}={v:X}", a.address));
         self.put(a.address, v);
+        if let Some((at, level)) = self.raises.filter(|r| r.0 == a.address) {
+            self.level = level;
+        }
     }
 
     fn idle(&mut self, clocks: u32) {
@@ -124,6 +129,33 @@ fn level_seven_is_taken_on_its_rise_and_by_comparison_once_the_mask_is_lowered()
     assert_eq!(cpu.step(&mut rig2), Step::Instruction);
     rig2.level = 7;
     assert_eq!(cpu.step(&mut rig2), Step::Exception(31), "a rise to 7 at mask 7");
+}
+
+// Measured on the Genesis's board (Beryl_M68k.md §7): a MOVE's own store that raises the level is seen a boundary late, a MOVEM's at once.
+#[test]
+fn a_move_samples_the_level_before_its_store_and_a_movem_after() {
+    for (op, ext, late) in [(0x3080u16, None, true), (0x2080, None, true), (0x33C0, Some([0x0000u16, 0x4000]), true), (0x4890, Some([0x0001, 0]), false)] {
+        let (mut cpu, mut rig) = at_nop(3);
+        rig.put(0x1000, op);
+        let next = if let Some(e) = ext {
+            rig.put(0x1002, e[0]);
+            if op == 0x33C0 { rig.put(0x1004, e[1]); 0x1006 } else { 0x1004 }
+        } else {
+            0x1002
+        };
+        rig.put(next, 0x4E71);
+        rig.put(next + 2, 0x4E71);
+        cpu.regs.prefetch = [op, rig.word(0x1002)];
+        cpu.regs.a[0] = 0x4000;
+        rig.long(0x70, 0x2000);
+        rig.raises = Some((0x4000, 4));
+        assert_eq!(cpu.step(&mut rig), Step::Instruction, "{op:04X}");
+        if late {
+            assert_eq!(cpu.step(&mut rig), Step::Instruction, "{op:04X}: the level its store raised is taken an instruction later");
+        }
+        assert_eq!(cpu.step(&mut rig), Step::Exception(28), "{op:04X}");
+        assert_eq!(rig.word(0x7FFE), if late { next as u16 + 2 } else { next as u16 }, "{op:04X}: the PC stacked");
+    }
 }
 
 #[test]

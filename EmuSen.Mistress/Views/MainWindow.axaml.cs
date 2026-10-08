@@ -409,7 +409,7 @@ namespace EmuSen.Mistress.Views
         private void ShowControllerBindings()
         {
             var window = new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings,
-                _session is null ? null : _activeConsole);
+                _session is null ? null : _activeConsole, _session is null ? null : EmuSen.Cores.ControllerPorts.ControllersOf(_session.Core));
             // A rebind has to reach the menu, or it advertises the old key - see §4.19.
             window.Closed += (_, _) => SyncMenuState();
             _ = SheetLayer.Show(window, this);

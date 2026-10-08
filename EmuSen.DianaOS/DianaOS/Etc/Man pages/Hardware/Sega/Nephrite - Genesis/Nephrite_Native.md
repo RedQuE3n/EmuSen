@@ -2799,8 +2799,8 @@ From the gates and the tester's requests, in the order they would be taken:
 1. ~~**G7, the debugger**: stage 7, next in the plan's order.~~ Done 2026-10-07 (§43), but for the Z80's call stack.
 2. **The multitaps (Team Player, EA 4-Way Play) and the J-Cart's two ports**, at high priority (*added 2026-10-07;
    the two adapters are in the core since §44 and their players in the frontend since §45, where the games read with
-   four pads are named; the J-Cart is still to come*). The tester has asked for players two to four across the
-   platform. Not a gate; it ranks with the first.
+   four pads are named; the J-Cart since §48*). The tester has asked for players two to four across the platform. Not
+   a gate; it ranks with the first.
 3. **G5, the goldens**: a third anchor, and the differing games examined one by one.
 4. **G6**: the bench at a 33% quota, and a battery run on the handheld.
 5. **G9**: the TMSS boot program run from the player's image.
@@ -2836,6 +2836,11 @@ Not gates, carried from the stages and still open:
   Challenge, Winter Challenge and Test Drive II.~~ *Given it on Sega Retro's word, §47.5.*
 - **The HV counter read in an interrupt handler** stands 3 to 5 counts before the board's in `mdboard.py interrupts`
   (`Nephrite_Disputes.md` D-28); not examined.
+- **The board locks up on a read of `$A14000`, `$B00000` and the PSG's `$C00010`** (§47.2, D-29); Nephrite gives the
+  open bus there. Not examined against a console.
+- **From the J-Cart** (§48.5): Pete Sampras Tennis, the first J-Cart, is not in the corpus and not known by its header;
+  Micro Machines 96 and Super Skidmarks are J-Carts by their programs and Sega Retro but no reference runs their images
+  as such, so they were checked in Nephrite alone; the J-Cart word's bit 7 is the reference's, argued.
 
 ## 41. Stage 7, step 1: the processors, their registers, their buses and their code (2026-10-07)
 
@@ -3495,3 +3500,110 @@ frame apart from the reference's; the rises include Streets of Rage (+234) and M
   `GenesisBatteryTests`, `NephritePlayersTests` and `NephriteDebugTests`, 29 pass with the tester's library named;
   `NephriteTests` and the registration golden, 14 pass. The Accolade serials were added after that run and are
   covered by the crate's media test and the survey.
+
+## 48. The J-Cart: Codemasters' two extra ports, measured from the games (2026-10-07)
+
+The follow-up list's second item, its last part (§40.2). A J-Cart is a Codemasters cartridge with two pad ports on
+it (Sega Retro's "J-Cart": six were released). No prose document says how they are read, so it was measured from the
+games, starting from the addresses §46.2's survey of writes above the ROM found: `$38FFFE` in the Micro Machines games
+and Super Skidmarks, `$3FFFFE` in Pete Sampras Tennis 96.
+
+### 48.1 Which cartridges
+
+Six images of the corpus touch those addresses, and each program holds the same two routines there: a detection and a
+read. The detection writes 0 to the word, reads it and wants bit 6 clear, writes 1 (Pete Sampras Tennis 96 writes
+`$FFFF`), reads and wants bit 6 set; it keeps the answer in RAM (Micro Machines 2 at `$FFF92A`, Micro Machines 96 at
+`$FFEE94`, Military at `$FFF23E`). The read writes TH low and high and stores the two words. With no J-Cart, Nephrite
+answered from the ROM's mirror and every game found none.
+
+The boards are known by their headers (`cart.rs`, `JCARTS`), the serial and, where the serial is shared, the checksum:
+
+| Game | Serial | Checksum | A J-Cart in Genesis Plus GX / PicoDrive / BlastEm |
+|---|---|---|---|
+| Micro Machines 2 (both images) | `T-120096` | any | yes / yes / yes |
+| Micro Machines 96 | `00000000` | `$2C41` | no / no / no |
+| Micro Machines Military | `00000000` | `$168B` | yes / yes / no |
+| Pete Sampras Tennis 96 | `T-123456` | `$AABC` | yes / yes / no |
+| Super Skidmarks | `XXXXXXXX` | `$71AB` | no / no / no |
+
+For the three Micro Machines, the game's own detection flag in each reference's RAM at frame 100; for the other two, a
+test program under the image's header reading the word. The references evidently know the boards by lists of their
+own, which do not agree.
+
+Micro Machines 96 and Super Skidmarks are kept although no reference agrees: each program has the J-Cart's routines,
+and Sega Retro lists both. Psycho Pinball shares Military's checksum and not its serial, and has no J-Cart. Pete Sampras
+Tennis (1994), the first J-Cart, is not in the corpus, and its header is not known here.
+
+### 48.2 The word
+
+**Measured from the games.** TH is bit 0 of a word written to the address and drives both pads. The word read holds
+the first port's pad in bits 5-0 and TH in bit 6, and the second's in bits 13-8, each pad's six lines as a pad gives
+them on a console port (Super Skidmarks takes the low byte for player 3 and the high byte for player 4, `CMPI #3`).
+**Bits 15-14 are low**: Micro Machines 2 carries Codemasters' own J-Cart test (`$006186`, reached from a hidden menu;
+its strings are "LEGAL LINE", "TESTING JCART", "JCART 1 PASS"), which writes TH high, reads, masks `$C000` and shows
+"HIGH POSSIBLE FAILURE!" if either bit is set, "LOW NORMAL" if not.
+
+**The references, as black boxes**, a test program reading the word with each TH under each game's header:
+
+| | TH low, players 3 and 4 holding Up and Left | TH high | Bit 7 | Bit 14 |
+|---|---|---|---|---|
+| Genesis Plus GX | `$33B2` | `$3BFE` | high | low |
+| PicoDrive, BlastEm | `$3333` (no press seen) | `$7F7F` | low | TH |
+| Nephrite | `$33B2` | `$3BFE` | high | low |
+
+Genesis Plus GX agrees with the game's test where the test speaks, and PicoDrive and BlastEm do not (their bit 14 is
+TH, which the test calls a fault), nor do they hear players 3 and 4 through the probe. **Bit 7** is high as Genesis
+Plus GX has it, which no game reads: argued, on the reference that agrees with the program elsewhere. A first build
+had it low, and every game's RAM then differed from the reference's at the bytes holding the word.
+
+**Where it answers.** At `$38FFFE` and `$3FFFFE` and their two bytes, the addresses the games use, on every J-Cart
+board. Genesis Plus GX and PicoDrive answer across `$380000`-`$3FFFFF`, BlastEm at `$38xxxx` alone; the games' EEPROM
+reads at `$380001` (§10) are left the EEPROM's. A byte write reaches TH on the odd address only (argued; the games
+write words).
+
+**The players** (`io.rs`, `Io::jcart_first`): the J-Cart's two pads are the two after the console ports' pads, players
+3 and 4 with a pad on each port, and three-button pads; with eight already plugged in they are not heard. Machine info
+lists them, so a host gives them their players. No state is added: TH is the two pads' own, which the state holds.
+
+### 48.3 The games read with four pads
+
+**The method** is §45.3's, a direction held on each pad of the four, the two console ports with a pad each, Genesis
+Plus GX as the reference; and the raw J-Cart words the games keep compared directly.
+
+- **Micro Machines 2** (`Micro Machines II (UE)`, and the `Turbo Tournament` bad dump): **exact on all four pads** at
+  frame 300, the direction held from 240; at frame 900 players 3 and 4 exact and 1 and 2 read. Its J-Cart words at
+  `$FFF92E` with players 3 and 4 holding Up and Right: `$33B2 $37FE`, the reference's.
+- **Micro Machines Military**: all four read at frames 300 and 900, the J-Cart words at `$FFF242` the reference's,
+  `$33B2 $37FE`; the one byte that differs for pad 4 is a counter of the game's course.
+- **Pete Sampras Tennis 96**: all four read; each pad's own bytes (`$FF7799` for player 3, `$FF77A1` for 4) are the
+  reference's, the rest of what differs being the stack's.
+- **Micro Machines 96** and **Super Skidmarks**: no reference runs these images as J-Carts, so nothing to compare; in
+  Nephrite each finds the J-Cart and keeps players 3's and 4's presses in its J-Cart words (`$FFEE98`, `$FF001C`).
+
+**Through the frontend's path** (`NephritePlayersTests.A_j_cart_game_reads_players_3_and_4`): Micro Machines 2 and
+Military loaded by `CoreFactory`, players 3 and 4 given Up and Right by port, the words at frame 300 the reference's.
+**In Mistress** (`MultiplayerTests`): four pads in a big-screen session on a cartridge of the test's own with Micro
+Machines 2's serial, players 3 and 4 found in its J-Cart words; and the Controller Bindings window, opened then, offers
+four players and draws players 3 and 4 as the three-button pad (`EmuSen_Settings_Reference.md` §4.103).
+
+### 48.4 The survey
+
+`moving.py` on the six images: all six move, as before. RAM equal at frame 900 changes by at most 35 bytes; Micro
+Machines 96 falls by 35, the reference finding no J-Cart where Nephrite finds one.
+
+### 48.5 What stands open
+
+- Pete Sampras Tennis (1994), and any J-Cart image whose header differs from the corpus's.
+- Pete Sampras Tennis 96's second routine (`$001786`), which writes TH in pairs and checks single bits of the word in
+  turn; it did not run in these runs, and what it asks of the cartridge is not known.
+- The decode beyond the two addresses, and bit 7.
+
+### 48.6 Measured (2026-10-07)
+
+- **The crate's tests**, all 140 with the roms found: the detection by header, the word at both addresses through the
+  bus, and machine info's players with and without adapters.
+- **The kit**: the sample, 64 of 64, and the single-image form on the five J-Cart titles, compliant on each.
+- **WiseMan**: `NephritePlayersTests` (with the two J-Cart games), `MultiplayerTests`, `ControllerBindingsDiagramTests`,
+  `PlayerBindingsWindowTests`, `ControllerPortTests`, `InputSettingsWindowTests` and `NephriteStartTests`, 79 pass with
+  the tester's library named; the fit audit's Controller Bindings cases, 10; `NephriteTests`, the registration golden,
+  `GenesisBatteryTests`, `NephriteDebugTests` and `GenesisSettingsTests`, 34.

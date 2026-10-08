@@ -10,7 +10,9 @@ Nephrite; `read`, some of them do and the rest are the game's course, which the 
 the press moves nothing in the reference; `MISSING`, the press moves the reference and nothing of it is in Nephrite.
 
   fourpads.py --probe PROBE --core REFERENCE.so --dump NEPHRITE_DUMP --adapter teamplayer|4way [--six] [--pads 4]
-              [--frame 600] [--from 300] GAME...
+              [--frame 600] [--from 300] [--start-at FRAME...] GAME...
+
+--start-at presses Start on pad 1 for four frames at each frame given, in both, to get past a title.
 
 The reference is never read, only run.
 """
@@ -31,6 +33,8 @@ def reference_ram(a, game, out, pad):
     cmd += ["--device", "2=" + REFERENCE[(a.adapter if a.adapter == "4way" else "none", a.six)]]
     if pad is not None:
         cmd += ["--presson", f"{pad + 1}:{a.start}:{BUTTONS[pad % 4][0]}:{a.frame}"]
+    for f in a.starts:
+        cmd += ["--presson", f"1:{f}:Start:4"]
     subprocess.run(cmd, check=True, capture_output=True)
     name = [f for f in os.listdir(out) if "_ram_f" in f][0]
     words = open(os.path.join(out, name), "rb").read()
@@ -40,8 +44,11 @@ def reference_ram(a, game, out, pad):
 
 def nephrite_ram(a, game, out, pad):
     env = dict(os.environ, NEPHRITE_PLUGS=NEPHRITE[(a.adapter, a.six)] + "," + NEPHRITE[("none", a.six)])
+    presses = [f"{f}:128:4:1" for f in a.starts]
     if pad is not None:
-        env["NEPHRITE_PRESS"] = f"{a.start}:{1 << BUTTONS[pad % 4][1]}:{a.frame}:{pad + 1}"
+        presses.append(f"{a.start}:{1 << BUTTONS[pad % 4][1]}:{a.frame}:{pad + 1}")
+    if presses:
+        env["NEPHRITE_PRESS"] = ",".join(presses)
     subprocess.run([a.dump, game, out, str(a.frame)], check=True, capture_output=True, env=env)
     return open(os.path.join(out, f"nephrite_wram_f{a.frame:05d}.bin"), "rb").read()
 
@@ -51,7 +58,7 @@ def main():
     p.add_argument("--probe", required=True); p.add_argument("--core", required=True); p.add_argument("--dump", required=True)
     p.add_argument("--adapter", choices=["teamplayer", "4way", "none"], required=True); p.add_argument("--six", action="store_true")
     p.add_argument("--pads", type=int, default=4); p.add_argument("--frame", type=int, default=600)
-    p.add_argument("--from", dest="start", type=int, default=300); p.add_argument("--verbose", action="store_true"); p.add_argument("games", nargs="+")
+    p.add_argument("--from", dest="start", type=int, default=300); p.add_argument("--verbose", action="store_true"); p.add_argument("--start-at", dest="starts", type=int, action="append", default=[]); p.add_argument("games", nargs="+")
     a = p.parse_args()
     verified = 0
     counts = {}
@@ -67,8 +74,8 @@ def main():
                 kind = "unread" if not moved else "exact" if len(same) == len(moved) else "read" if same else "MISSING"
                 classes.append(kind)
                 line.append(f"pad {pad + 1} {kind}: {len(moved)} bytes move in the reference, {len(same)} of them the same in Nephrite")
-                if len(moved) <= 4:
-                    line.append("       " + ", ".join(f"${0xFF0000 + i:06X} {ref0[i]:02X} to {ref1[i]:02X}" for i in moved))
+                if len(moved) <= 12:
+                    line.append("       " + ", ".join(f"${0xFF0000 + i:06X} {ref0[i]:02X} to {ref1[i]:02X}" + ("" if i in same else f" (Nephrite {own0[i]:02X} to {own1[i]:02X})") for i in moved))
             good = all(c in ("exact", "read") for c in classes)
             verdict = "all" if good else "MISSING" if "MISSING" in classes else "unread" if all(c == "unread" for c in classes) else "some"
             counts[verdict] = counts.get(verdict, 0) + 1

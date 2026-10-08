@@ -142,6 +142,7 @@ pub struct Genesis {
 
 impl Genesis {
     pub fn new(cart: Cart, model: Model) -> Genesis {
+        let jcart = cart.jcart;
         let hw = Hw {
             clock: START,
             cart,
@@ -173,6 +174,7 @@ impl Genesis {
             sound: if model.pal { Sound::new(53_203_425, 1, !model.model2) } else { Sound::new(4_725_000_000, 88, !model.model2) },
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
+        g.hw.io.jcart = jcart;
         // The debugger's numbers: each processor's, and the bus its stores are reported in (crate::debugger).
         (g.cpu.processor, g.cpu.space) = (0, crate::debugger::M68KBUS_ID);
         (g.z80.processor, g.z80.space) = (1, crate::debugger::Z80BUS_ID);
@@ -412,6 +414,10 @@ impl Hw {
     fn read8(&mut self, a: u32) -> u8 {
         let a = a & 0xFF_FFFF;
         match a {
+            _ if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&(a & !1)) => {
+                let w = self.io.jcart_read(self.clock);
+                if a & 1 == 0 { (w >> 8) as u8 } else { w as u8 }
+            }
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read8(a),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
@@ -431,6 +437,7 @@ impl Hw {
     fn read16(&mut self, a: u32) -> u16 {
         let a = a & 0xFF_FFFE;
         match a {
+            _ if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&a) => self.io.jcart_read(self.clock),
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read16(a),
             0xA0_0000..=0xA0_FFFF if self.has_z80_bus() => {
                 let b = self.read8(a) as u16;
@@ -450,6 +457,12 @@ impl Hw {
     fn write8(&mut self, a: u32, v: u8) {
         let a = a & 0xFF_FFFF;
         match a {
+            // A byte reaches TH on the odd address's lane only (argued: the games write words).
+            _ if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&(a & !1)) => {
+                if a & 1 == 1 {
+                    self.io.jcart_write(v as u16, self.clock);
+                }
+            }
             0x00_0000..=0x3F_FFFF => self.cart.write8(a, v),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
@@ -470,6 +483,7 @@ impl Hw {
     fn write16(&mut self, a: u32, v: u16) {
         let a = a & 0xFF_FFFE;
         match a {
+            _ if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&a) => self.io.jcart_write(v, self.clock),
             0xA0_0000..=0xA0_FFFF => self.write8(a, (v >> 8) as u8),
             0xA1_1100 | 0xA1_1200 => self.write8(a, (v >> 8) as u8),
             0xC0_0000..=0xDF_FFFF => self.vdp_write(a, v, self.clock),
@@ -1122,6 +1136,28 @@ mod tests {
         assert_eq!(hw.vdp.hv(100, 3000), latched, "the counter holds what TH latched");
         hw.vdp.acknowledge();
         assert_eq!(hw.vdp.level(), 0);
+    }
+
+    // The J-Cart's word at both its addresses, as Micro Machines 2 and Genesis Plus GX read it with players 3 and 4 holding Up and Right (Nephrite_Native.md §48.2).
+    #[test]
+    fn a_j_cart_gives_players_3_and_4_and_reads_back_th() {
+        let model = Model { overseas: true, pal: false, version: 0, model2: false };
+        let mut g = Genesis::new(Cart::new(vec![0u8; 0x10_0000], None, "SEGA GENESIS", "GM T-120096-50"), model);
+        let hw = &mut g.hw;
+        assert_eq!((hw.io.jcart, hw.io.players()), (true, 4));
+        (hw.io.pads[2].buttons, hw.io.pads[3].buttons) = (1, 8);
+        for at in crate::io::JCART_ADDRESSES {
+            hw.write16(at, 0);
+            assert_eq!((hw.read16(at), hw.read8(at), hw.read8(at + 1)), (0x33B2, 0x33, 0xB2), "{at:06X}, TH low");
+            hw.write16(at, 0xFFFF);
+            assert_eq!(hw.read16(at), 0x37FE, "{at:06X}, TH high");
+        }
+        hw.write8(0x38_FFFE, 0);
+        assert_eq!(hw.read16(0x38_FFFE) & 0x40, 0x40, "a byte to the even address leaves TH");
+        hw.write8(0x38_FFFF, 0);
+        assert_eq!(hw.read16(0x38_FFFE), 0x33B2);
+        let other = Genesis::new(Cart::new(vec![0x5Au8; 0x10_0000], None, "SEGA GENESIS", "GM T-120086-50"), model);
+        assert_eq!((other.hw.io.players(), other.hw.cart.read16(0x38_FFFE)), (2, 0x5A5A), "a cartridge without one reads its ROM there");
     }
 
     // Nephrite_Disputes.md D-29: a place nothing answers at gives the word last fetched, both bytes; $A11100 its bit 0 too.

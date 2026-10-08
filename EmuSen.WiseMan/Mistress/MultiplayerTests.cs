@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
@@ -15,6 +16,7 @@ using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Cores;
 using EmuSen.WiseMan.Fixtures;
@@ -180,6 +182,49 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new sbyte[] { 0, 0, 0, 127 }, ports.Select(p => p.StickX));
             Assert.Equal(5, first.Gamepad.Players.PlayerOf(first.Gamepad.Pads[4]));
             window.Close();
+        }, default);
+
+        // A J-Cart game in a big-screen session: four pads play, players 3 and 4 on the cartridge's ports, and the bindings window offers four players with three-button pads for 3 and 4 - see EmuSen_Settings_Reference.md §4.103.
+        [Fact]
+        public Task Four_pads_play_a_genesis_j_cart_game_and_the_bindings_window_offers_its_players() => Session.Dispatch(() =>
+        {
+            CoreDiscovery.UseDirectories(null);
+            CoreDiscovery.UseDevelopment(false);
+            try
+            {
+                GraphicsConfig graphics = GraphicsConfig.Load();
+                graphics.SetValue("Genesis", "pad1", "md.pad6");
+                graphics.Save();
+                (MainWindow window, PadDriver first) = Playing("JCart.md", NephritePlayersTests.JCartReader(), bigScreen: true);
+                var core = Assert.IsType<CoreEngine>(SessionOf(window).Core);
+                Assert.Equal(4, SessionOf(window).ControllerPorts);
+                PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
+                others[1].Pad.Press(SDL.GamepadButton.DPadUp);
+                others[2].Pad.Press(SDL.GamepadButton.DPadRight);
+                Poll(window);
+                for (int f = 0; f < 3; f++) core.RunFrame();
+                int Word(int at) => core.ReadSpace("WRAM", at) << 8 | core.ReadSpace("WRAM", at + 1);
+                Assert.Equal((0x33B2, 0x37FE), (Word(0), Word(2)));
+
+                typeof(MainWindow).GetMethod("ShowControllerBindings", Hidden)!.Invoke(window, null);
+                EmuSen.WiseMan.Mistress.BigPicture.WindowFitAuditTests.Settle(window);
+                var sheets = window.GetControl<SheetLayer>("Sheets");
+                var bindings = Assert.IsType<InputSettingsWindow>(sheets.Current);
+                Assert.Equal("Genesis", bindings.ShownConsole);
+                Dropdown player = sheets.SheetOf(bindings)!.GetVisualDescendants().OfType<Dropdown>().Single(d => d.Name == "PlayerSelector");
+                Assert.Equal(new[] { "Player 1", "Player 2", "Player 3", "Player 4" }, player.Items.Cast<string>());
+                foreach (var (name, layout) in new[] { ("Player 1", ControllerLayout.GenesisSixButton), ("Player 3", ControllerLayout.Genesis), ("Player 4", ControllerLayout.Genesis) })
+                {
+                    player.SelectedItem = name;
+                    EmuSen.WiseMan.Mistress.BigPicture.WindowFitAuditTests.Settle(window);
+                    Assert.Equal(layout, bindings.DiagramFor("Genesis")!.Layout);
+                }
+                window.Close();
+            }
+            finally
+            {
+                CoreDiscovery.UseDevelopment(null);
+            }
         }, default);
 
         // A Team Player set on the Genesis's first port while the game runs: players 3 and 4 are heard from the next poll, and player 1's held button is kept - see EmuSen_Input.md §8.11.

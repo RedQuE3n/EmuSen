@@ -182,10 +182,11 @@ impl Machine {
     fn begin_frame(&mut self) {
         let io = &mut self.genesis.hw.io;
         io.plugs = [self.plugged[0].0, self.plugged[1].0];
-        let (second, count) = (io.first_pad(1), io.pad_count());
+        let (second, ports, count) = (io.first_pad(1), io.pad_count(), io.players());
         for (i, pad) in io.pads.iter_mut().enumerate() {
             pad.buttons = if i < count { self.pads[i] } else { 0 };
-            pad.six = self.plugged[(i >= second && self.plugged[0].0 != crate::io::Plug::FourWay) as usize].1;
+            // The J-Cart's ports take three-button pads (§48).
+            pad.six = i < ports && self.plugged[(i >= second && self.plugged[0].0 != crate::io::Plug::FourWay) as usize].1;
         }
         self.genesis.hw.draw = !self.skip;
     }

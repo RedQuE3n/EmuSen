@@ -8316,3 +8316,26 @@ the window fit audit's `ControllerBindingsGenesisTeamPlayer` at 1280×800 and 19
 fourth's six-button pad drawn. The audit's two older Genesis cases of this window had been measuring the SNES tab,
 the window opening on the first console that has a game; all three now choose the Genesis tab and assert it is
 shown.
+
+### 4.103 The Genesis's J-Cart: players 3 and 4 on the cartridge (2026-10-07)
+
+**What the player sees.** Six Codemasters cartridges carry two pad ports of their own (`Nephrite_Native.md` §48):
+Micro Machines 2, Micro Machines 96, Micro Machines Military, Pete Sampras Tennis 96 and Super Skidmarks of those in
+the tester's library, and Pete Sampras Tennis, not there. Nothing is set for them. With such a game loaded the Genesis
+has four players, the console's two ports' and the cartridge's two, and the pads plugged into the computer play as
+those four in the seating order (`EmuSen_Input.md` §8.2), players 3 and 4 on the cartridge's ports with the RetroPad
+mapping of §4.90. The cartridge's ports take three-button pads, whatever the two port rows are set to.
+
+- **With an adapter set as well**, the cartridge's two players follow the adapter's: a Team Player on port 1 makes
+  players 1 to 4 the adapter's, 5 the second port's and 6 and 7 the cartridge's. With a Team Player on each port there
+  are already eight and the cartridge's ports are not heard.
+- **In Controller Bindings**, opened while such a game runs, the Genesis tab's *Player* selector lists the running
+  game's players, four, and draws players 3 and 4 as the three-button pad. With no game running the tab counts the
+  players its two rows hold, as §4.102 has it: a J-Cart is the cartridge's, not a setting. The other consoles' tabs
+  are counted as before. `ControllerPorts.ControllersOf` gives the running game's controller by player, and the window
+  takes it with the console it opens on.
+
+**Coverage**: `MultiplayerTests.Four_pads_play_a_genesis_j_cart_game_and_the_bindings_window_offers_its_players`
+(four pads in a big-screen session on a cartridge of the test's own with Micro Machines 2's serial, then the bindings
+window's four players and their pads); `NephritePlayersTests.A_j_cart_game_reads_players_3_and_4` (two games of the
+tester's library); the window fit audit's Controller Bindings cases at both sizes.

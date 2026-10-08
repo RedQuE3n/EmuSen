@@ -289,7 +289,7 @@ the count with no game loaded, for the bindings window.
 | SNES | VenusRT (Rust, ABI v1) | 2 | machine info's `ports` (`EmuSen_CoreAPI.md` §6.4) | player 2 |
 | Game Boy | Mercury (C#), MercuryRT (Rust) | 1 | the console | none, by the hardware |
 | N64 | Mars (C#), MarsRT (Rust) | 4 | `MarsCore.Ports` | players 2, 3 and 4 |
-| Genesis | Nephrite (Rust, ABI v1) | 2 to 8, by its two port settings | machine info's `ports`; with no game loaded, the console's pack (§8.11) | players 2 to 8 *(added 2026-10-07)* |
+| Genesis | Nephrite (Rust, ABI v1) | 2 to 8, by its two port settings, and two more on a J-Cart | machine info's `ports`; with no game loaded, the console's pack (§8.11) | players 2 to 8 *(added 2026-10-07)* |
 
 **A v1 engine is read from its descriptors, not from a table.** `CoreEngine` lives with the ABI host and does not
 override the member; `ControllerPorts.Of` reads the highest port that machine info names a controller for, and, where

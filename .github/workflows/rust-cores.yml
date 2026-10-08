@@ -16,6 +16,8 @@ on:
       - 'Platform/**'
       - 'EmuSen.Galaxia/**'
       - 'EmuSen.WiseMan/Galaxia/**'
+      - 'EmuSen.Endymion/**'
+      - 'EmuSen.WiseMan/Endymion/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
@@ -43,6 +45,8 @@ on:
       - 'Platform/**'
       - 'EmuSen.Galaxia/**'
       - 'EmuSen.WiseMan/Galaxia/**'
+      - 'EmuSen.Endymion/**'
+      - 'EmuSen.WiseMan/Endymion/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
@@ -412,6 +416,20 @@ jobs:
         env:
           EMUSEN_GALAXIA_NATIVE: '1'
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaOSSandboxTests|FullyQualifiedName~HierTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=galaxia-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+
+      # Endymion's logic half on its C#, which is what runs while its switch is unset; reported, not yet a gate, as Galaxia's steps above.
+      - name: Test Endymion on its C#
+        working-directory: EmuSen-Project
+        continue-on-error: true
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Audio.|FullyQualifiedName~EmuSen.WiseMan.Input.|FullyQualifiedName~EmuSen.WiseMan.Endymion.|FullyQualifiedName~AudioProperties)&FullyQualifiedName!~EndymionParityTests" --logger "console;verbosity=normal"
+
+      # The same through the platform library, with the parity class that holds the two to the bit (EmuSen_RustPlatform.md §12.5).
+      - name: Test Endymion on the platform library
+        working-directory: EmuSen-Project
+        continue-on-error: true
+        env:
+          EMUSEN_ENDYMION_NATIVE: '1'
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Audio.|FullyQualifiedName~EmuSen.WiseMan.Input.|FullyQualifiedName~EmuSen.WiseMan.Endymion.|FullyQualifiedName~AudioProperties" --logger "console;verbosity=normal" --logger "trx;LogFileName=endymion-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

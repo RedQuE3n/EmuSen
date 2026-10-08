@@ -11,5 +11,6 @@ name = "emusen_platform"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+emusen-endymion = { path = "../endymion" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }

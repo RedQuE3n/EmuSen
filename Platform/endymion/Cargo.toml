@@ -1,0 +1,12 @@
+[package]
+name = "emusen-endymion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Endymion's logic half: the resampler, the rate control, the pad's vocabulary, the seats and the route to the ports. No device code. See EmuSen_RustPlatform.md §4.2 and §12.
+[lib]
+name = "emusen_endymion"
+
+[dependencies]

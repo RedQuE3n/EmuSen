@@ -8,7 +8,7 @@ namespace EmuSen.Galaxia.Native
     public static unsafe class PlatformLibrary
     {
         // Matched exactly against emusen_platform_abi_version - see EmuSen_RustPlatform.md §3.2.
-        public const uint InterfaceVersion = 2;
+        public const uint InterfaceVersion = 3;
 
         public const string Name = "emusen_platform";
 
@@ -19,6 +19,10 @@ namespace EmuSen.Galaxia.Native
 
         // Why the library is or is not in use, for a log line or a test's message.
         public static string Report => Library.Value.Report;
+
+        // An export by name for another component's half, Endymion's and later Serenity's; zero when the library is not in use or lacks it.
+        public static nint Export(string name) =>
+            Available && NativeLibrary.TryGetExport(Library.Value.Handle, name, out nint export) ? export : 0;
 
         public static string FileName =>
             OperatingSystem.IsWindows() ? $"{Name}.dll" : OperatingSystem.IsMacOS() ? $"lib{Name}.dylib" : $"lib{Name}.so";

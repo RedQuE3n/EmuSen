@@ -608,7 +608,7 @@ namespace EmuSen.WiseMan.Galaxia
             string header = File.ReadAllText(Path.Combine(ConfigRoot.Managed.Directory, "Platform", "include", "emusen_platform.h"));
             foreach (string export in GalaxiaNative.Exports) Assert.Contains(export + "(", header);
             Assert.Contains("emusen_platform_abi_version(", header);
-            int declared = System.Text.RegularExpressions.Regex.Matches(header, @"^int(32|64)_t emusen_\w+\(|^uint32_t emusen_\w+\(", System.Text.RegularExpressions.RegexOptions.Multiline).Count;
+            int declared = System.Text.RegularExpressions.Regex.Matches(header, @"^\w+ \*?emusen_(galaxia|platform)_\w+\(", System.Text.RegularExpressions.RegexOptions.Multiline).Count;
             Assert.Equal(GalaxiaNative.Exports.Length + 1, declared);
             Assert.Contains($"#define EMUSEN_PLATFORM_ABI_VERSION {PlatformLibrary.InterfaceVersion}u", header);
         }

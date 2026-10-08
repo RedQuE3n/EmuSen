@@ -14,7 +14,8 @@
  *    kept after the call, and the library returns no pointer.
  *  - A return below zero is a status. EMUSEN_PLATFORM_ABSENT is an answer, not a failure: the thing asked for does
  *    not exist. The words for a failure are read with emusen_platform_last_error on the same thread.
- *  - Every call here is safe from any thread, concurrently with any other.
+ *  - Every call of Galaxia's is safe from any thread, concurrently with any other. A handle of Endymion's (a
+ *    resampler, a rate control, a router) is used by one thread at a time; its other calls are safe from any thread.
  *  - Nothing unwinds. The library is built to abort on a panic, after writing the crash log the host named.
  *
  * This interface is not stable. Its one version number is matched exactly by the host built from the same commit,
@@ -30,7 +31,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 2u
+#define EMUSEN_PLATFORM_ABI_VERSION 3u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -335,6 +336,161 @@ int64_t emusen_galaxia_number_format(uint32_t kind, uint64_t bits, uint8_t *out,
 
 /* A file's bytes as File.ReadAllText decodes them: a byte-order mark chooses UTF-8, UTF-16 or UTF-32 and is dropped; what is not valid becomes U+FFFD. */
 int64_t emusen_galaxia_text_decode(const uint8_t *bytes, size_t bytes_len, uint8_t *out, size_t len);
+
+/* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
+
+/*
+ * A call that changes a handle and makes output (samples, or changes for the core) takes the caller's buffer and
+ * returns the whole count. When the buffer holds it all it is filled; otherwise the output waits in the handle and
+ * the matching *_take copies it, so that a call that changes state is never made twice to learn its length. Output
+ * not taken is dropped by the next call that makes some.
+ */
+
+typedef struct emusen_endymion_resampler emusen_endymion_resampler;
+typedef struct emusen_endymion_rate emusen_endymion_rate;
+typedef struct emusen_endymion_router emusen_endymion_router;
+
+/* A phase-continuous linear resampler for interleaved stereo: LinearResampler. */
+emusen_endymion_resampler *emusen_endymion_resampler_new(void);
+int32_t emusen_endymion_resampler_free(emusen_endymion_resampler *resampler);
+int32_t emusen_endymion_resampler_reset(emusen_endymion_resampler *resampler);
+
+/*
+ * Resamples `len` samples by `ratio` output frames per input frame: the count of samples made. A ratio of zero or
+ * below is BAD_ARGUMENT, with the words "Resample ratio must be positive."; a ratio that is NaN or infinite is
+ * BAD_ARGUMENT too, with "Resample ratio must be finite.", where the C# takes it and never returns.
+ */
+int64_t emusen_endymion_resampler_run(emusen_endymion_resampler *resampler, const int16_t *input, size_t len, double ratio, int16_t *out, size_t cap);
+int64_t emusen_endymion_resampler_take(emusen_endymion_resampler *resampler, int16_t *out, size_t cap);
+
+/* Absorbs clock drift by resampling, never by discarding: DynamicRateControl. */
+emusen_endymion_rate *emusen_endymion_rate_new(int32_t target_queued_frames);
+int32_t emusen_endymion_rate_free(emusen_endymion_rate *rate);
+int32_t emusen_endymion_rate_reset(emusen_endymion_rate *rate);
+
+#define EMUSEN_ENDYMION_RATE_TARGET_QUEUED_FRAMES 0u /* a whole number of frames, given as a double */
+#define EMUSEN_ENDYMION_RATE_MAX_DEVIATION 1u
+#define EMUSEN_ENDYMION_RATE_SHEDDING_ENTRY_FACTOR 2u
+#define EMUSEN_ENDYMION_RATE_SHEDDING_EXIT_FACTOR 3u
+#define EMUSEN_ENDYMION_RATE_NOMINAL_RATIO 4u
+
+int32_t emusen_endymion_rate_set(emusen_endymion_rate *rate, uint32_t which, double value);
+
+/* A rate control's whole state. The caller sets `size`; one smaller than this struct is refused. */
+typedef struct emusen_endymion_rate_state {
+    uint32_t size;
+    int32_t target_queued_frames;
+    int32_t shedding_events;
+    uint32_t is_shedding;
+    int64_t total_input_frames;
+    int64_t total_output_frames;
+    double max_deviation;
+    double shedding_entry_factor;
+    double shedding_exit_factor;
+    double nominal_ratio;
+    double last_ratio;
+} emusen_endymion_rate_state;
+
+int32_t emusen_endymion_rate_read(emusen_endymion_rate *rate, emusen_endymion_rate_state *out);
+
+/* The ratio a queue of `queued_frames` calls for. */
+int32_t emusen_endymion_rate_compute(emusen_endymion_rate *rate, int32_t queued_frames, double *out);
+
+/* One batch of samples against the queue's fill: the count of samples to hand the device; none while shedding. A null input sets the last ratio and is NULL. */
+int64_t emusen_endymion_rate_process(emusen_endymion_rate *rate, const int16_t *input, size_t len, int32_t queued_frames, int16_t *out, size_t cap);
+int64_t emusen_endymion_rate_take(emusen_endymion_rate *rate, int16_t *out, size_t cap);
+
+/*
+ * Every player's pad and the keyboard routed to the game's controller ports: PortRouter. The router reads no
+ * device: the host reads each pad and hands the reading in, and the router answers with the changes to make to the
+ * core, in the order the C# makes them: each port past the first's controller, then for each port the buttons that
+ * changed in PadButton's order and every read axis in the order the reset gave them.
+ */
+emusen_endymion_router *emusen_endymion_router_new(void);
+int32_t emusen_endymion_router_free(emusen_endymion_router *router);
+
+#define EMUSEN_ENDYMION_ROUTER_KEYBOARD_PLAYER 0u          /* 1-based; settable */
+#define EMUSEN_ENDYMION_ROUTER_MIRROR_PLAYER1_TO_PLAYER2 1u /* 0 or 1; settable */
+#define EMUSEN_ENDYMION_ROUTER_PORTS 2u
+#define EMUSEN_ENDYMION_ROUTER_PLAYERS_READ 3u             /* the players a poll reads: the ports, at most eight */
+#define EMUSEN_ENDYMION_ROUTER_AXES 4u                     /* how many axes the reset gave */
+
+int32_t emusen_endymion_router_get(emusen_endymion_router *router, uint32_t which);
+int32_t emusen_endymion_router_set(emusen_endymion_router *router, uint32_t which, int32_t value);
+
+#define EMUSEN_ENDYMION_CHANGE_CONNECTED 0u /* a port past the first holds a controller (on) or not */
+#define EMUSEN_ENDYMION_CHANGE_BUTTON 1u    /* which is a PadButton, held (on) or let go */
+#define EMUSEN_ENDYMION_CHANGE_AXIS 2u      /* which is a PadAxis, its value in value */
+
+typedef struct emusen_endymion_change {
+    uint32_t kind;
+    int32_t port;
+    uint32_t which;
+    uint32_t on;
+    double value;
+} emusen_endymion_change;
+
+/* A game just started: its ports and the axes it reads, by PadAxis, with nothing held and nothing sent. */
+int32_t emusen_endymion_router_reset(emusen_endymion_router *router, int32_t ports, const uint32_t *axes, size_t count);
+
+/* The game's ports changed in number: a port taken away lets go of its buttons. */
+int64_t emusen_endymion_router_resize(emusen_endymion_router *router, int32_t ports, emusen_endymion_change *out, size_t cap);
+
+/*
+ * The pads as read, then every change. `held` has a mask by PadButton for each of `players` players from player 1;
+ * `axes` has, for each player in turn, the value of each axis the reset gave. `keyboard` is a mask by PadControl of
+ * the keys held; `seated` a mask of the players, from bit 0 for player 1, whose pad the game may hear: seated,
+ * connected or kept, and not cut off by the interface's first-controller-only setting.
+ */
+int64_t emusen_endymion_router_poll(emusen_endymion_router *router, const uint16_t *held, size_t players, const double *axes, size_t axes_len, uint32_t keyboard, uint32_t seated,
+                                    emusen_endymion_change *out, size_t cap);
+
+/* Every change with the pads as last read, as after a key went down or up. */
+int64_t emusen_endymion_router_send(emusen_endymion_router *router, uint32_t keyboard, uint32_t seated, emusen_endymion_change *out, size_t cap);
+int64_t emusen_endymion_router_take(emusen_endymion_router *router, emusen_endymion_change *out, size_t cap);
+
+/* Whether a player's pad held a button at the last poll: 1 or 0. */
+int32_t emusen_endymion_router_pad_held(emusen_endymion_router *router, int32_t player, uint32_t button);
+
+/* Whether a port holds a controller, given the seated mask as for a poll: 1 or 0. */
+int32_t emusen_endymion_router_connected(emusen_endymion_router *router, int32_t port, uint32_t seated);
+
+/*
+ * Which pad is which player: PlayerSlots's rules over the eight seats as the host holds them. A seat is empty, or
+ * a pad connected or gone with SDL's GUID and the device path; a null path is no path, which is not an empty one.
+ */
+#define EMUSEN_ENDYMION_SEAT_EMPTY 0u
+#define EMUSEN_ENDYMION_SEAT_OPEN 1u
+#define EMUSEN_ENDYMION_SEAT_CLOSED 2u
+
+typedef struct emusen_endymion_seat {
+    uint32_t state;
+    const uint8_t *guid;
+    size_t guid_len;
+    const uint8_t *path;
+    size_t path_len;
+} emusen_endymion_seat;
+
+/* The seat a pad just connected takes: its own reserved one by GUID and path, else by GUID, else the lowest with no pad connected. The player it becomes, or 0. */
+int32_t emusen_endymion_slots_seat(const emusen_endymion_seat *seats, const uint8_t *guid, size_t guid_len, const uint8_t *path, size_t path_len);
+
+/*
+ * A pad seated as `from` (0 for none) moved to `player` (0 for none): trading seats with whoever held it, or out of
+ * every seat. 1 when the seats changed, with `out` holding them: -1 for an empty seat, 0 to 7 for the pad that was
+ * in that seat, 8 for the pad moved. 0 when nothing changed. A player outside 0 to 8 is BAD_ARGUMENT.
+ */
+int32_t emusen_endymion_slots_move(const emusen_endymion_seat *seats, uint32_t mover_open, int32_t from, int32_t player, int32_t *out);
+
+/* Lets go of a reservation: 1 when there was one, 0 otherwise. */
+int32_t emusen_endymion_slots_forget(const emusen_endymion_seat *seats, int32_t player);
+
+/* The highest player with a pad seated, connected or reserved; 0 for none. */
+int32_t emusen_endymion_slots_highest(const emusen_endymion_seat *seats);
+
+/* The pad's rules, PadControls, for the parity tests: an axis from its reading and the controls held as a mask by PadControl; two directions combined; a console's bindable controls. */
+int32_t emusen_endymion_pad_resolve(uint32_t axis, double analog, uint32_t held, double *out);
+int32_t emusen_endymion_pad_combine(double analog, uint32_t negative, uint32_t positive, double *out);
+int64_t emusen_endymion_pad_controls_for(const uint32_t *buttons, size_t buttons_len, const uint32_t *axes, size_t axes_len, uint32_t *out, size_t cap);
 
 #ifdef __cplusplus
 }

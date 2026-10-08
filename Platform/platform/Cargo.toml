@@ -1,0 +1,15 @@
+[package]
+name = "emusen-platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The one library the C# programs load: the C layer over each platform crate, and nothing else. See EmuSen_RustPlatform.md §2.2 and §3.
+[lib]
+name = "emusen_platform"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+emusen-galaxia = { path = "../galaxia" }
+emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }

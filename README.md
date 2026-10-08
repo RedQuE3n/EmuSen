@@ -86,7 +86,7 @@ dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r linux-x64 \
     -p:ErrorOnDuplicatePublishOutputFiles=false -o out/linux-x64
 ```
 
-Ship the whole output folder. For another platform (`win-x64`, `osx-x64`, `osx-arm64`) the build doesn't cross-compile the Rust libraries, so take them from the [Rust cores workflow](.github/workflows/rust-cores.yml)'s artifacts and point the publish at them with `-p:EmuSenNativePrebuilt=/path/to/native`, where `/path/to/native/<rid>/` holds `marsrt` and `mercuryrt`. If a library is missing, the publish warns and that console falls back to its C# core. More in the [settings reference](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md).
+Ship the whole output folder. For another platform (`win-x64`, `osx-x64`, `osx-arm64`) the build doesn't cross-compile the Rust libraries, so take them from the [Rust cores workflow](.github/workflows/rust-cores.yml)'s artifacts and point the publish at them with `-p:EmuSenNativePrebuilt=/path/to/native`, where `/path/to/native/<rid>/` holds `marsrt` and `mercuryrt`. If a library is missing, the publish warns and that console falls back to its C# core. The same folder takes `emusen_platform`, the library the platform's own components are moving into; while they are still behind their C# it is optional too, and the publish says when it is absent. More in the [settings reference](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md).
 
 macOS builds are unsigned. On Apple Silicon, sign one yourself before it will run:
 

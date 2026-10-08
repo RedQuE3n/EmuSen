@@ -1,4 +1,5 @@
 # The Rust cores (EmuSen/Cores/RustCores.props), built and tested where they run, one library a crate a platform - see Mars_Native.md §6.3, Mercury_Native.md §8.6.
+# The platform library (Platform/, emusen_platform) is built and tested beside them, since the WiseMan job needs both - see EmuSen_RustPlatform.md §2.7.
 name: Rust cores
 
 on:
@@ -12,6 +13,9 @@ on:
       - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
       - 'EmuSen/Cores/Sega/Beryl-HW/**'
       - 'EmuSen/Cores/Shared/**'
+      - 'Platform/**'
+      - 'EmuSen.Galaxia/**'
+      - 'EmuSen.WiseMan/Galaxia/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
@@ -36,6 +40,9 @@ on:
       - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
       - 'EmuSen/Cores/Sega/Beryl-HW/**'
       - 'EmuSen/Cores/Shared/**'
+      - 'Platform/**'
+      - 'EmuSen.Galaxia/**'
+      - 'EmuSen.WiseMan/Galaxia/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
@@ -71,6 +78,20 @@ jobs:
             case "$crate" in *emusen-core-abi-check/) continue ;; esac
             (cd "$crate" && cargo test --release)
           done
+
+      # The platform's crates: their own rules with no .NET present, the header against the exports, and the header as C99 and C++17. Not yet a gate, as nothing of the platform's is until Galaxia's own (EmuSen_RustPlatform.md §3.9, §10.6): a failure here is reported and does not stop the cores.
+      - name: Test the platform workspace
+        continue-on-error: true
+        shell: bash
+        run: |
+          (cd Platform && cargo test --release)
+          case "$RUNNER_OS" in
+            Windows) ;;
+            *)
+              cc -std=c99 -Wall -Wextra -pedantic -Werror -fsyntax-only -x c Platform/include/emusen_platform.h
+              c++ -std=c++17 -Wall -Wextra -pedantic -Werror -fsyntax-only -x c++ Platform/include/emusen_platform.h
+              ;;
+          esac
 
       # The test core claims every capability, so all of version 1's exports are checked on each platform's linker.
       - name: The v1 test core's exports
@@ -128,6 +149,8 @@ jobs:
   library:
     name: ${{ matrix.crate.name }} ${{ matrix.platform.rid }}
     runs-on: ${{ matrix.platform.os }}
+    # The platform library is optional while every component in it has its C# behind it, so its failure does not stop the cores' jobs (EmuSen_RustPlatform.md §10.6).
+    continue-on-error: ${{ matrix.crate.name == 'emusen_platform' }}
     defaults:
       run:
         working-directory: ${{ matrix.crate.dir }}
@@ -153,6 +176,10 @@ jobs:
           - name: nephrite
             dir: 'EmuSen/Cores/Sega/Nephrite - Genesis'
             symbol: emusen_core_
+          # Not a core: the platform library, built from its workspace and shipped the same way.
+          - name: emusen_platform
+            dir: 'Platform'
+            symbol: emusen_galaxia_
         platform:
           # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it.
           - rid: linux-x64
@@ -337,6 +364,13 @@ jobs:
           name: nephrite-${{ matrix.rid }}
           path: native
 
+      # Absent when its job failed; the tests that need it then say so, and the rest run.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: emusen_platform-${{ matrix.rid }}
+          path: native
+
       - uses: actions/download-artifact@v4
         with:
           name: v1-test-cores-${{ runner.os }}
@@ -354,6 +388,7 @@ jobs:
           cp native/* "$out/"
           chmod +x "$out"/emusen-core-conform* || true
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*v1_test_core* "$out"/*v1_plain_core*
+          ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"
 
       # Printed in full, so each platform's digests can be read off the log.
       - name: Test the platform digests
@@ -363,6 +398,20 @@ jobs:
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+
+      # Galaxia on its C#, which is what runs while its switch is unset. These tests had not run on Windows or macOS before this step, so it reports and does not yet gate.
+      - name: Test Galaxia on its C#
+        working-directory: EmuSen-Project
+        continue-on-error: true
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaOSSandboxTests|FullyQualifiedName~HierTests)&FullyQualifiedName!~GalaxiaParityTests" --logger "console;verbosity=normal"
+
+      # The same tests through the platform library, and the parity class beside them. Not yet a gate: the library is opt-in until Galaxia's own (EmuSen_RustPlatform.md §3.9), and this step is each platform's evidence towards it.
+      - name: Test Galaxia on the platform library
+        working-directory: EmuSen-Project
+        continue-on-error: true
+        env:
+          EMUSEN_GALAXIA_NATIVE: '1'
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaOSSandboxTests|FullyQualifiedName~HierTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=galaxia-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

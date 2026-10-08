@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the first, 2026-10-07. A design, not an implementation: nothing described here is built. It plans the
+*This revision: the second, 2026-10-07: step 2a built, the library and Galaxia's tree, names and bytes behind an opt-in switch (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -264,7 +264,8 @@ library memory that crosses, and it is named in the header as the exception.
 - **In:** UTF-8 as `(const uint8_t *, size_t)`, never NUL-terminated by assumption. A C# `string` holding a lone
   surrogate cannot be encoded and is refused with `EMUSEN_BAD_STRING` (−5) before the call.
 - **Out:** the length-query idiom: the export returns the whole length in bytes, writes only when the buffer holds
-  it all, and a null `out` asks the length. The facade tries a stack buffer of 1 KiB first, so a path costs one call.
+  it all, and a null `out` asks the length. The facade tries a stack buffer first (512 bytes, as built), so a path
+  costs one call.
 - **Paths** are UTF-8 on every platform; `std::path` converts on Windows. Paths are composed in Rust with the same
   separators .NET's `Path.Combine` uses on the platform, which the parity tests check on all three (§6.3).
 
@@ -274,13 +275,19 @@ library memory that crosses, and it is named in the header as the exception.
   `BAD_STRING`, −7 `BUFFER_TOO_SMALL`, −256 `NOT_SUPPORTED`. The platform's own band is −1024 to −1279, clear of every
   core's and of the core interface's, so a log that prints both cannot confuse them: `IO` −1024, `PARSE` −1025,
   `SCHEMA` −1026 (a value of the wrong type, an enumeration name not known), `NEWER_FILE` −1027 (a file of a newer
-  build), `NO_DEVICE` −1028 (no Vulkan device or audio device), `COMPILE` −1029 (a shader).
+  build), `NO_DEVICE` −1028 (no Vulkan device or audio device), `COMPILE` −1029 (a shader). *Added by step 2a (§10.2):*
+  `ABSENT` −1030, which is an answer and not a failure (no such file, no seed directory, a null where .NET returns
+  null); `NOT_FOUND` −1031 and `ACCESS` −1032, which the facade turns back into the exception types the C# threw; and
+  `BAD_ARGUMENT` −1033.
 - **Words** for the last failing call **on the calling thread**: `emusen_platform_last_error(out, len)`. Per thread
   rather than per handle, because most of Galaxia's calls have no handle; a P/Invoke runs on the caller's thread, so
   the facade reads it straight after the failing call.
 - **Diagnostics are returned, not pushed.** Where C# reports through `ConfigDiagnostics.Report` today (a file that
   would not load, an unwritable save), the Rust returns the message with the status and the facade reports it; the
-  sink, its `LastMessage` and every test that reads them stay as they are.
+  sink, its `LastMessage` and every test that reads them stay as they are. *As built (§10.2):* one call can report
+  several times (a migration, once for each file it leaves in place), so the messages wait in a queue of the calling
+  thread, which the facade drains after the call with `emusen_platform_diagnostics` and reports in their order. It
+  is still a pull.
 - **No unwinding.** The library is built with `panic = "abort"` and installs the crash log the host names
   (`emusen_platform_set_crash_log`), with `emusen-native`'s hook. A malformed file never panics; a panic is a defect,
   recorded, as for the cores.
@@ -301,7 +308,7 @@ The library never calls managed code. Each place where the C# passes a delegate 
 
 | Today | After |
 |---|---|
-| `ConfigDiagnostics.Sink`, an `Action<string>` | the message returned with the status (§3.5); the sink stays C# |
+| `ConfigDiagnostics.Sink`, an `Action<string>` | the messages drained by the facade after the call (§3.5); the sink stays C# |
 | `ErrorLog.Redactor`, a `Func<string, string>` | the C# facade formats and redacts the entry, then hands the line to Rust, which owns the file's name, the pruning and the size bound |
 | `PortRouter`'s `setButton`, `setAxis` and `setConnected` | a poll returns the changes as an array of `(port, kind, control, value)`; the C# applies them to the core |
 | the Vulkan debug messenger's sink (`EmuSen_Serenity.md` §10.4) | the library queues messages; the tests drain them |
@@ -526,7 +533,11 @@ reading a log (§9, Q5).
 - **.NET's special folders, not the platform's conventions.** `ConfigStore.LegacyDirectory` and
   `ErrorLog.DefaultRoot` use `SpecialFolder.ApplicationData`, which .NET maps to `$XDG_CONFIG_HOME` or `~/.config` on
   Linux and on macOS, and `%APPDATA%` on Windows. Rust reproduces that mapping; a convention crate would give
-  `~/Library/Application Support` on macOS, which is a different directory.
+  `~/Library/Application Support` on macOS, which is a different directory. *Corrected by step 2a (§10.3): only the
+  Linux half of that sentence was measured (`/home/<user>/.config`). The macOS half was written from memory and may
+  be wrong for .NET 8 and later, which is believed to answer `~/Library/Application Support`; it has not been run on a
+  Mac. The design no longer depends on the answer: the host passes .NET's own value to the library at start, as it
+  passes the program's directory, so the library never has to guess what .NET would say.*
 - **The program's directory is passed, not found.** `ConfigRoot` starts from `AppContext.BaseDirectory`. Rust's
   `current_exe()` is `dotnet` itself under `dotnet test`, so the facade passes the base directory once at start, and
   a Rust program that passes none starts from its own executable's directory.
@@ -686,3 +697,180 @@ recommended and with nothing changed; all three components are to be ported as p
   test (§3.2).
 - **Q12.** Decided 2026-10-07: `EmuSen_Stack.md` §2.1's paragraph on `AudioPlayer.cs` is retired, and §4.2's count of
   calls stands in its place there.
+
+---
+
+## 10. What was built, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes
+
+Everything here was measured on the development desktop (Fedora 44, x86-64, .NET 10, Rust 1.98.1). Nothing has run
+on Windows or macOS; §10.7 says what that leaves open.
+
+### 10.1 The artefacts
+
+| What | Where |
+|---|---|
+| The workspace, with the cores' `release` and `dist` profiles | `Platform/Cargo.toml`, `Cargo.lock` |
+| `emusen-galaxia`: `tree` (`ConfigRoot`, `ConfigStore`, `DataStore`), `saves` (`SaveLibrary`), `atomic` (`AtomicFile`), `migration` (`DataMigration`), `rom_hash` (`RomHash`), and `dotnet_path`, .NET's path and string rules | `Platform/galaxia/src/` |
+| `emusen-platform`: the cdylib, its library-level calls and Galaxia's C layer; 22 exports | `Platform/platform/src/` |
+| The interface's specification | `Platform/include/emusen_platform.h` |
+| The build, and whether the library is required | `Platform/Platform.targets`, `Platform.props`, imported by `EmuSen.Galaxia.csproj` |
+| The loader and the facade's native half | `EmuSen.Galaxia/Native/PlatformLibrary.cs`, `GalaxiaNative.cs` |
+| The seven classes, each split into a forwarding surface and its kept C# | `ConfigRoot.cs`, `ConfigStore.cs`, `Library/DataStore.cs`, `SaveLibrary.cs`, `AtomicFile.cs`, `DataMigration.cs`, `RomHash.cs` |
+| The parity class | `EmuSen.WiseMan/Galaxia/GalaxiaParityTests.cs` |
+
+About 1,470 lines of Rust without their tests and 730 of tests, against §7.2's 1,100 for the step; `dotnet_path`,
+which §7.2 did not foresee as a module of its own, is the difference (§10.3). The one third-party crate is `md-5`
+0.11 with its seven dependencies, listed in `THIRD_PARTY_NOTICES.md` §1.4.
+
+### 10.2 The facade, and how the default was kept untouched
+
+Each of the seven classes keeps its public members. Each member is one line: the library when
+`GalaxiaNative.Active`, else `Managed`, a nested class holding the C# that was there before. The C# was moved, not
+rewritten: a comparison of every statement of the seven files at `8645e821` against the `Managed` classes finds all
+of them verbatim except where a name gained its `Managed.` qualifier, an override became its backing field, or a
+default argument stayed on the public member. `AtomicFile` and `RomHash` are verbatim whole.
+
+**`Active` is false unless `EMUSEN_GALAXIA_NATIVE` is exactly `1` and the library loads** (state 1 of §3.9). The
+variable is read once, before anything touches the library, so with it unset the library is never opened. That was
+checked on a running program and not only read from the code: the standalone DianaOS shell, run under the dynamic
+loader's own trace (`LD_DEBUG=files`) with `hier` and `ls /Saves`, opens `libemusen_platform.so` no times with the
+variable unset or `0`, and opens it with `1`; its output is the same bytes in all three runs.
+
+**Three things the design left open, as built:**
+
+- **Diagnostics are a queue** (§3.5): one migration reports once for each file it leaves, so the messages of a call
+  wait on the calling thread and the facade drains and reports them, in order, before it returns.
+- **Statuses that are answers.** `ABSENT` (−1030) stands for .NET's `null`: no file, no seed directory, no directory
+  name. It is not a failure and leaves no words. `NOT_FOUND` and `ACCESS` exist so that the facade can throw what the
+  C# threw: `RomHash.Md5` on a missing file is a `FileNotFoundException`, on a missing folder a
+  `DirectoryNotFoundException`, on a directory an `UnauthorizedAccessException`, and a migration over a directory it
+  may not list an `UnauthorizedAccessException`, each as before and each held by a parity case.
+- **The overrides live on both sides.** The C# keeps its three fields, which is what `Managed` reads; when the
+  library is in the process each setter also tells it, under one lock that the loader takes when it first hands the
+  library the values already set. So the library can be loaded late (by a test that only compares) and still agree.
+
+### 10.3 .NET's rules, reproduced and measured
+
+The tree is built from strings, and a path one character different names a different file. So `dotnet_path` does not
+use `std::path`, whose rules are Rust's: it reproduces `Path.Combine`, `GetFileName`,
+`GetFileNameWithoutExtension`, `ChangeExtension`, `GetDirectoryName`, `TrimEndingDirectorySeparator` and
+`GetFullPath` as text functions, with the platform's style a parameter so the Windows rules are unit-tested on Linux.
+What was measured against .NET 10 while writing it, each now a test:
+
+| Rule | .NET | What an ordinary Rust port would do |
+|---|---|---|
+| `Path.GetFullPath("/a/b/")` | keeps the final separator; never follows a link | `canonicalize` drops it and resolves links |
+| `Path.GetDirectoryName("a")`, `("/")` | `""`, `null` | `Path::parent` gives `""`, `None`; but `"/a//b//c"` gives `/a/b` in .NET, runs collapsed |
+| `Path.GetFileNameWithoutExtension(".hidden")` | `""` | `file_stem` gives `.hidden` |
+| `Path.ChangeExtension("/s/", ".png")` | `/s/.png` | `with_extension` gives `/s.png` |
+| `File.Exists` on a dangling link | `true` | `Path::is_file` gives `false` |
+| `Directory.EnumerateFiles(…, AllDirectories)` | walks into a linked directory; lists a dangling link as a file | a walk that does not follow links misses both |
+| `File.Copy` | keeps the permissions and the modification time, to the nanosecond | `fs::copy` keeps the permissions and not the time |
+| `string.IsNullOrWhiteSpace` | Unicode's White_Space, 25 characters in the first plane; **not** U+001C–U+001F, U+180E or U+200B | the same, as it turned out |
+| `string.Equals(…, OrdinalIgnoreCase)` | one character to one, by Unicode's simple upper-case mapping, with the dotless i (U+0131) and the long s (U+017F) equal only to themselves | `to_uppercase` is the full mapping, and sends `ſ` to `S` |
+| `SpecialFolder.ApplicationData` on Linux | `/home/<user>/.config` | — |
+
+**A prediction of this step that was wrong,** kept because it was acted on: the first `is_white_space` added
+U+001C–U+001F to Rust's set, from the belief that .NET counts them. It does not; the measurement printed .NET's set
+and the addition was removed before any test ran against it.
+
+**What is argued and not measured:** every Windows rule (`C:` roots, UNC, `\\?\`), written from the .NET runtime's
+published source and unit-tested for self-consistency only; and `Path.GetFullPath` on Windows, where .NET asks the
+system and this asks `std::path::absolute`, which asks the same system call.
+
+### 10.4 `AtomicFile`: the same guarantee, no more and no less
+
+Read from `AtomicFile.cs` and stated in `EmuSen_Galaxia.md` §4.2, which this step added: the directory is made, the
+bytes are written whole to `<path>.tmp`, and the temp file is renamed over the live one. **Rename over, and no
+`fsync`**, of the file or of its directory. That is atomic against an interrupted write, a crash or a kill, and is
+not a promise against power loss.
+
+The Rust does exactly that: `create_dir_all`, `fs::write` to the temp name, `fs::rename`. No flush was added. An
+`fsync` would be a real improvement to argue for, and it would also be a change of behaviour on a path the cores take
+every 300 frames, on a handheld's storage; it is left as a decision not taken, to be made in both implementations
+at once and with a measurement, rather than slipped in under a port. Held by the parity class: the same bytes, the
+same permissions on the file and on the directory made for it, no temp file left after a success, and after a write
+over a path that is a directory the same stranded temp file on both sides.
+
+### 10.5 The parity class, and what it found
+
+`GalaxiaParityTests` calls `Managed` and the library side by side, whichever the switch chose, so it means the same
+thing in both runs. Its cases:
+
+- every path rule over 3,000 seeded strings built from awkward parts; the caseless and blank rules over every
+  character of the first plane and the second;
+- `File.Exists` and `Directory.Exists` over files, directories, links of three kinds and trailing separators;
+- the root from about 300 seeded places and 17 built ones, for both platforms, with each branch asserted to be among them;
+- every directory under all 125 combinations of the three overrides;
+- every save name over 416 ROM names, 8 directory overrides, 8 slots and 7 consoles, with and without a data
+  override;
+- files of seven lengths written by each side and read by the other; what will not read, and whether it is said;
+- a migration of one built tree by each side, compared file by file with bytes, permissions and times, with the ROM
+  folders listed before and after; the declined migrations; a directory that will not list; the program's own three
+  migrations with both destinations redirected into the test's folder;
+- the hash over nine lengths around the block and buffer sizes, and the exceptions for what cannot be hashed;
+- the header against the facade's export table.
+
+No test here writes outside its own temporary folder, and none names the ROM library: the migration cases build
+their own `Games` and `Roms` and assert they are untouched.
+
+**Its first run failed four cases, and two of the four were defects in the Rust:**
+
+1. **Caseless equality differed for 110 characters.** The first version upper-cased with `char::to_uppercase` and
+   took the result when it was one character. That equated `ſ` with `S`, which .NET does not, and failed to equate
+   the Greek letters with a subscript iota (U+1F80–U+1FF3) with their capitals, because Rust's mapping for them is
+   two letters and .NET's is one. It decides whether a migration's two roots are one tree and whether a directory is
+   a `.app`. Fixed, and now compared for every character of two planes.
+2. **A dangling link was absent without a word.** `AtomicFile.TryRead` on one reports why it could not be read; the
+   library answered `ABSENT` at the length query, before trying. Fixed: what `File.Exists` says is there is given a
+   length, so the read is tried.
+3. Two were the tests' own: an assertion that .NET's words end in a full stop (they do not always), and two trees
+   built a millisecond apart compared by their times.
+
+**Seeded faults.** Twenty-one were made in the Rust: twenty judged by the parity class and fifteen by the crates'
+own tests, fourteen of them the same. The parity class catches eighteen of its twenty. The two it does not are equivalent on this host and are held
+by a unit test or by nothing: an unwound `..` with no part before it arises only for a Windows drive-relative path
+(caught by `dotnet_path`'s Windows cases), and the rule that a path ending in a separator is never a file is already
+what Linux answers, so removing it changes nothing here (it survives both suites, and is kept for Windows, where it
+is unverified). The crates' own suite first let four of its fifteen through; three were cases it lacked and now has.
+
+### 10.6 Building, publishing and CI
+
+- **Building.** `dotnet build` of any project builds the library once, through Galaxia, into
+  `EmuSen.Galaxia/obj/emusen_platform/`, and MSBuild carries it beside every program's assemblies. With no `cargo`
+  the build warns and goes on, and with `-p:EmuSenPlatformRequired=true` it fails with the message of §2.5 unless a
+  prebuilt library is given; both were run, with a cargo that does not exist.
+- **Publishing.** A linux-x64 publish of Mistress gains exactly one file, `lib/EmuSen/libemusen_platform.so` (about
+  0.5 MB; it needs glibc 2.34, as the cores' libraries do, and links nothing but libc). A publish for another
+  platform says when the library is absent, takes it from `EmuSenNativePrebuilt/<rid>/` when given, and fails when
+  it is required and missing; the three were run for win-x64.
+- **CI.** `rust-cores.yml` tests the workspace on the three systems, compiles the header as C99 and C++17, builds the
+  library for the four triples, and runs Galaxia's tests both ways. **None of it gates yet**: every platform step is
+  marked to report and not to stop the cores' jobs, because none has run on a Windows or macOS runner and the
+  library is optional in state 1. They become gates with Galaxia's own.
+
+### 10.7 What was tested, and what was not
+
+| Run | Result |
+|---|---|
+| `cargo test` in `Platform/` | 41 pass (32 in `emusen-galaxia`, 9 in `emusen-platform`) |
+| The header as C99 and as C++17, `-Wall -Wextra -pedantic -Werror` | clean |
+| WiseMan's Galaxia classes with `DianaOSSandboxTests` and `HierTests`, variable unset | 204 pass |
+| The same, `EMUSEN_GALAXIA_NATIVE=1` | 204 pass |
+
+The 204 are the 173 that existed and the parity class's 31.
+
+**Not done, and not claimed:**
+
+- **Windows and macOS.** Nothing here ran on either. The Windows path rules are argued (§10.3); a case-insensitive
+  filesystem, the macOS bundle on a Mac, and .NET's `ApplicationData` on macOS (§5.5's correction) are untested.
+- **P2**, whether any frontend asks Galaxia for a path once a frame, is not measured. It matters only once the
+  switch defaults to Rust, and belongs to the gate.
+- **P7**: the library is 0.5 MB with this half of Galaxia in it. The prediction is for all three components.
+- **The words of an I/O failure.** A diagnostic's frame is Galaxia's and is kept exactly (`<path>: … Left in
+  place.`); the words inside it were .NET's exception message and are now the system's as Rust reports them ("No such
+  file or directory (os error 2)."). §9's Q5 decided this for System.Text.Json's words; it is applied here to
+  .NET's I/O words by the same reasoning, and is named so that the tester can say otherwise.
+- **The order of a migration's diagnostics** follows the walk's, which is breadth-first as .NET's was measured to
+  be, and within a directory the system's; the parity class compares them sorted.
+- `ConfigFile<T>`, the models, `ErrorLog` and the suggestion text are step 2b and are C# only.

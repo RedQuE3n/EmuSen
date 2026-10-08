@@ -1,0 +1,9 @@
+<Project>
+  <!-- The platform library, emusen_platform: its name, and whether a program can run without it - see EmuSen_RustPlatform.md §2.5, §3.9. -->
+  <PropertyGroup>
+    <EmuSenPlatformImported>true</EmuSenPlatformImported>
+    <EmuSenPlatformLibraryName>emusen_platform</EmuSenPlatformLibraryName>
+    <!-- False while every component in the library still has its C# behind it; true from the first component's retirement, when a build or a publish without the library fails. -->
+    <EmuSenPlatformRequired Condition="'$(EmuSenPlatformRequired)' == ''">false</EmuSenPlatformRequired>
+  </PropertyGroup>
+</Project>

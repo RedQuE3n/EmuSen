@@ -1,6 +1,7 @@
 <Project>
-  <!-- The Rust cores' libraries in a publish for another platform: the host's dropped, each crate's prebuilt one taken from $(EmuSenNativePrebuilt)/<rid>/, or a warning - see Mars_Native.md §6.3, Mercury_Native.md §8.6. -->
+  <!-- The Rust cores' libraries in a publish for another platform: the host's dropped, each crate's prebuilt one taken from $(EmuSenNativePrebuilt)/<rid>/, or a warning - see Mars_Native.md §6.3, Mercury_Native.md §8.6. The platform library goes the same way, and is an error once a program cannot start without it - see EmuSen_RustPlatform.md §2.6. -->
   <Import Project="RustCores.props" Condition="'$(EmuSenRustCoresImported)' != 'true'" />
+  <Import Project="..\..\Platform\Platform.props" Condition="'$(EmuSenPlatformImported)' != 'true'" />
 
   <PropertyGroup>
     <!-- A distribution's SDK names its host by distribution (fedora.44-x64); the portable name is what a publish asks for. -->
@@ -15,7 +16,10 @@
           AfterTargets="ComputeResolvedFilesToPublishList"
           Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForeign)' == 'true'">
     <PropertyGroup>
-      <_EmuSenHostLibraryNames>;@(EmuSenRustCrate->'lib%(Identity).so;%(Identity).dll;lib%(Identity).dylib');</_EmuSenHostLibraryNames>
+      <_EmuSenHostLibraryNames>;@(EmuSenRustCrate->'lib%(Identity).so;%(Identity).dll;lib%(Identity).dylib');lib$(EmuSenPlatformLibraryName).so;$(EmuSenPlatformLibraryName).dll;lib$(EmuSenPlatformLibraryName).dylib;</_EmuSenHostLibraryNames>
+      <_EmuSenPlatformPublishFile>$(EmuSenPublishLibraryPrefix)$(EmuSenPlatformLibraryName)$(EmuSenPublishLibrarySuffix)</_EmuSenPlatformPublishFile>
+      <_EmuSenPlatformForeign Condition="'$(EmuSenNativePrebuilt)' != ''">$(EmuSenNativePrebuilt)/$(RuntimeIdentifier)/$(_EmuSenPlatformPublishFile)</_EmuSenPlatformForeign>
+      <_EmuSenPlatformForeignFound Condition="'$(_EmuSenPlatformForeign)' != '' And Exists('$(_EmuSenPlatformForeign)')">true</_EmuSenPlatformForeignFound>
     </PropertyGroup>
     <ItemGroup>
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
@@ -31,6 +35,13 @@
              Text="No %(_EmuSenForeignLibrary.Core) library for $(RuntimeIdentifier): this publish runs %(_EmuSenForeignLibrary.Console) on %(_EmuSenForeignLibrary.Fallback) alone. Build %(_EmuSenForeignLibrary.PublishFile) with the Rust cores workflow and pass -p:EmuSenNativePrebuilt=&lt;dir&gt; holding $(RuntimeIdentifier)/%(_EmuSenForeignLibrary.PublishFile)." />
     <Warning Condition="('%(_EmuSenForeignLibrary.Prebuilt)' == '' Or !Exists('%(_EmuSenForeignLibrary.Prebuilt)')) And '%(_EmuSenForeignLibrary.Fallback)' == ''"
              Text="No %(_EmuSenForeignLibrary.Core) library for $(RuntimeIdentifier): this publish has no engine for %(_EmuSenForeignLibrary.Console). Build %(_EmuSenForeignLibrary.PublishFile) with the Rust cores workflow and pass -p:EmuSenNativePrebuilt=&lt;dir&gt; holding $(RuntimeIdentifier)/%(_EmuSenForeignLibrary.PublishFile)." />
+    <Error Condition="'$(_EmuSenPlatformForeignFound)' != 'true' And '$(EmuSenPlatformRequired)' == 'true'"
+           Text="No $(_EmuSenPlatformPublishFile) for $(RuntimeIdentifier): the programs cannot start without the platform library. Build it with the Rust cores workflow and pass -p:EmuSenNativePrebuilt=&lt;dir&gt; holding $(RuntimeIdentifier)/$(_EmuSenPlatformPublishFile)." />
+    <Message Condition="'$(_EmuSenPlatformForeignFound)' != 'true' And '$(EmuSenPlatformRequired)' != 'true'" Importance="high"
+             Text="No $(_EmuSenPlatformPublishFile) for $(RuntimeIdentifier): this publish runs the platform components on their C# implementations. Build it with the Rust cores workflow and pass -p:EmuSenNativePrebuilt=&lt;dir&gt; holding $(RuntimeIdentifier)/$(_EmuSenPlatformPublishFile)." />
+    <ItemGroup Condition="'$(_EmuSenPlatformForeignFound)' == 'true'">
+      <ResolvedFileToPublish Include="$(_EmuSenPlatformForeign)" RelativePath="$(_EmuSenPlatformPublishFile)" CopyToPublishDirectory="PreserveNewest" AssetType="native" />
+    </ItemGroup>
     <ItemGroup>
       <_EmuSenForeignPrebuilt Include="@(_EmuSenForeignLibrary->'%(Prebuilt)')" Condition="'%(_EmuSenForeignLibrary.Prebuilt)' != '' And Exists('%(_EmuSenForeignLibrary.Prebuilt)')" />
       <ResolvedFileToPublish Include="@(_EmuSenForeignPrebuilt)" RelativePath="%(_EmuSenForeignPrebuilt.PublishFile)" CopyToPublishDirectory="PreserveNewest" AssetType="native" />

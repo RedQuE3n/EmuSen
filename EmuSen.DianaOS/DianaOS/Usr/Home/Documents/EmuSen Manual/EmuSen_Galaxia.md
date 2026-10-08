@@ -139,6 +139,17 @@ bool    Write(string path, byte[] b)  // creates the directory, .tmp, rename
 
 Failure stays best-effort, exactly as it is for config: a save that cannot reach the disk reports through `ConfigDiagnostics` and returns false. It does not throw, because the call sites are a cartridge mid-frame and a UI button handler, and neither should take the program down over a full disk.
 
+### 4.2 What the guarantee is, and what it is not (stated 2026-10-07)
+
+Read from `AtomicFile.cs` when its rules were reproduced in Rust (`EmuSen_RustPlatform.md` §10.4), so that the copy would promise the same and no more:
+
+- The directory is created; the bytes are written whole to `<path>.tmp` with `File.WriteAllBytes`; the temp file is renamed over the live one with `File.Move(temp, path, overwrite: true)`, which is `rename(2)` on Linux and macOS.
+- **So it is atomic against an interrupted write.** A reader, or the next start after a crash or a kill, sees the whole old file or the whole new one. That is the window §4 describes, and it is closed.
+- **It is not a promise against power loss.** Nothing is flushed: neither the temp file nor its directory is `fsync`ed. After a power cut a filesystem may hold the rename and not the data, and what it does then is the filesystem's choice (ext4's `auto_da_alloc`, on by default, writes out a file that is renamed over another, as its documentation describes; nothing here relies on that, and no filesystem was tested). §4's phrase "a crash, a kill, or a power loss" named the three ways a write is interrupted; the mechanism answers the first two.
+- A write that fails after the temp file was written leaves the temp file behind (a path that is a directory is the case the tests hold). Nothing reads a temp file, and the next successful write of that name replaces it.
+
+Adding an `fsync` would be a behaviour change with a cost on the path that runs every five seconds of play, on a handheld's storage, and is recorded as a decision not taken rather than an oversight. It would be made in the C# and the Rust together, with a measurement of what the autosave then costs.
+
 ---
 
 ## 5. `SaveLibrary` — what the files are called

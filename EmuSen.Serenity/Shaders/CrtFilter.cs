@@ -791,8 +791,8 @@ half4 main(float2 coord) {
     float3 shown = (direct * (1.0 + depth * (cover / litFraction - 1.0)) + veil) / headroom;
 " + (performance ? @"    return half4(encode(clamp(shown * inside, 0.0, 1.0)), 1.0);
 }" : @"
-    float2 device = coord * pixelScale + pixelOrigin;
-    float noise = fract(52.9829189 * fract(dot(floor(device), float2(0.06711056, 0.00583715)))) - 0.5;
+    float2 onDisplay = coord * pixelScale + pixelOrigin;
+    float noise = fract(52.9829189 * fract(dot(floor(onDisplay), float2(0.06711056, 0.00583715)))) - 0.5;
     return half4(clamp(encode(clamp(shown * inside, 0.0, 1.0)) + noise / 255.0, 0.0, 1.0), 1.0);
 }");
         }

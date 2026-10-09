@@ -21,7 +21,7 @@ namespace EmuSen.Serenity.Shaders
         private bool _built, _newFrame;
 
         // A frame drawn at a whole multiple of the console's picture, brought back to it: each pixel the mean of the square drawn for it - see EmuSen_CRT.md §16.
-        private const string ReduceSksl = @"
+        internal const string ReduceSksl = @"
 uniform shader source;
 uniform float by;
 half4 main(float2 coord) {

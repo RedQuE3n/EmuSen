@@ -108,8 +108,8 @@ namespace EmuSen.Endymion.Native
         internal static delegate* unmanaged[Cdecl]<uint*, nuint, uint*, nuint, uint*, nuint, long> PadControlsFor;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, long> LastError;
 
-        // Every export this half calls; a name the library lacks refuses it - see EmuSen_RustPlatform.md §3.1.
-        internal static readonly string[] Exports =
+        // The logic half's exports, in the order Attach takes them.
+        private static readonly string[] Logic =
         {
             "emusen_endymion_resampler_new", "emusen_endymion_resampler_free", "emusen_endymion_resampler_reset", "emusen_endymion_resampler_run", "emusen_endymion_resampler_take",
             "emusen_endymion_rate_new", "emusen_endymion_rate_free", "emusen_endymion_rate_reset", "emusen_endymion_rate_set", "emusen_endymion_rate_read", "emusen_endymion_rate_compute",
@@ -119,6 +119,9 @@ namespace EmuSen.Endymion.Native
             "emusen_endymion_slots_forget", "emusen_endymion_slots_highest", "emusen_endymion_pad_resolve", "emusen_endymion_pad_combine", "emusen_endymion_pad_controls_for",
             "emusen_platform_last_error",
         };
+
+        // Every export Endymion calls, both halves; a name the library lacks refuses it - see EmuSen_RustPlatform.md §3.1.
+        internal static readonly string[] Exports = [.. Logic, .. DeviceNative.Exports];
 
         // Null when every export resolved; otherwise why the library is not in use.
         private static string? Attach()
@@ -161,6 +164,7 @@ namespace EmuSen.Endymion.Native
             PadCombine = (delegate* unmanaged[Cdecl]<double, uint, uint, double*, int>)found[next++];
             PadControlsFor = (delegate* unmanaged[Cdecl]<uint*, nuint, uint*, nuint, uint*, nuint, long>)found[next++];
             LastError = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
+            DeviceNative.Assign(found.AsSpan(next));
             return null;
         }
 

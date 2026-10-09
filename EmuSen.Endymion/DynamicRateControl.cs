@@ -18,6 +18,9 @@ namespace EmuSen.Endymion
             else _managed = new Managed(targetQueuedFrames);
         }
 
+        // The library's rate control, which its audio player is lent for each submit; null on the C#.
+        internal NativeHandle? NativeValue => _native;
+
         // Where the output queue is steered to sit, in frames.
         public int TargetQueuedFrames
         {

@@ -10,8 +10,7 @@ namespace EmuSen.WiseMan.Input
         private static bool RescanDue(TimeSpan now, TimeSpan last) =>
             (bool)typeof(GamepadManager).GetMethod("RescanDue", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [now, last])!;
 
-        private static TimeSpan FirstLast() =>
-            (TimeSpan)typeof(GamepadManager).GetField("_lastRescan", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(new GamepadManager(new GamepadBindingMap(), start: false))!;
+        private static TimeSpan FirstLast() => new GamepadManager(new GamepadBindingMap(), start: false).LastRescan;
 
         [Theory]
         [InlineData(0)]

@@ -8,11 +8,12 @@
 use std::cell::RefCell;
 
 pub mod endymion;
+pub mod endymion_devices;
 pub mod galaxia;
 pub mod galaxia_config;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 3;
+pub const ABI_VERSION: u32 = 4;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -227,6 +228,7 @@ mod tests {
         exported.extend(exports_in(include_str!("galaxia.rs")));
         exported.extend(exports_in(include_str!("galaxia_config.rs")));
         exported.extend(exports_in(include_str!("endymion.rs")));
+        exported.extend(exports_in(include_str!("endymion_devices.rs")));
         exported.sort();
         let mut declared = declared_in(include_str!("../../include/emusen_platform.h"));
         declared.sort();

@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the fifth, 2026-10-08: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -196,7 +196,9 @@ much as the cores':
   change, so behaviour that depends on them cannot: Shaderc's SPIR-V is the same bytes (§8, P6), and SDL's pad
   mappings are the same database. The C# facade passes the directory; the dynamic loader returns the same instance
   for the same file, so a C# fallback and the Rust side in one process share one SDL (argued from `dlopen`'s
-  reference counting; checked in step 3b).
+  reference counting; checked in step 3b). *As built in step 3b, the C# lends the library the handle of the SDL it
+  has loaded, which is one instance by construction and was checked; loading by path is kept for a Rust program
+  with no C# beside it (§14.2).*
 - **Vulkan's loader** (`libvulkan.so.1`) is the system's, as it is for Silk.NET; one loader, separate instances.
 - **SQLite is the exception: `rusqlite` brings its own copy**, and `EmuSen` already ships `e_sqlite3` through
   `SQLitePCLRaw`. Two SQLite libraries in one process may each open *different* files safely; opening the *same*
@@ -341,8 +343,8 @@ reported step:
 So at every point the platform runs: in state 1 nothing a player sees changes; in state 2 the C# is one variable
 away; state 3 comes only after golden outputs are recorded (§6.6) and the tester agrees.
 
-**Where each stands, 2026-10-08:** Galaxia is in state 2 (§13), Endymion's logic half in state 1 (§12), Serenity's
-half not yet built.
+**Where each stands, 2026-10-08:** Galaxia is in state 2 (§13), Endymion in state 1, both its halves under the one
+variable (§12, §14), Serenity's half not yet built.
 
 ---
 
@@ -669,7 +671,7 @@ Stated before anything is built; each step reports which held.
   one exists, the facade caches its answer against an override generation counter.
 - **P3.** The first parity differences of 2b appear in §5.2's rows and nowhere else.
 - **P4.** Endymion's submit makes one P/Invoke instead of two, and its cost per frame is below measurement either
-  way.
+  way. *Held, 2026-10-08 (§14.6).*
 - **P5.** The Rust chain's render path allocates nothing managed per frame, against 15–118 KB in `Bind` today, and
   the gen-2 collection in N64 4× royale goes; GPU time does not change.
 - **P6.** Shaderc loaded from the same file yields byte-identical SPIR-V for all 1,350 of the pack's passes.
@@ -710,6 +712,19 @@ Three more, raised by step 2a (§10.6, §10.7) and decided before step 2b:
 - **Q14.** Decided 2026-10-08: the platform's CI steps report and do not gate until Galaxia's gate (§10.6).
 - **Q15.** Decided 2026-10-08: §5.5's correction stands as marked: the host passes .NET's own `ApplicationData` to the
   library, and the claim about macOS is withdrawn until it is run there.
+
+Seven more, raised by steps 2b (§11.8), 3a (§12.7) and 2c (§13.4):
+
+- **Q16.** Decided 2026-10-08: a model in Rust is a schema and a bound document, as built; structs can be generated
+  later (§11.2).
+- **Q17.** Decided 2026-10-08: `StateRecord`'s sidecar stays in C#, as an import that ends with the files it reads.
+- **Q18.** Decided 2026-10-08: the error log prunes by instants where the C# compares local times (§11.4).
+- **Q19.** Open: what text that is not valid UTF-16 becomes once the C# that answers for it is gone. It is decided
+  with that C#'s retirement and not before (§11.2, §15).
+- **Q20.** Decided 2026-10-08: `GamepadBindings` stays in C#, as built (§12.2).
+- **Q21.** Decided 2026-10-08: the Rust refuses a NaN or infinite resample ratio, for which the C# never returns
+  (§12.3).
+- **Q22.** Decided 2026-10-08: CI's Galaxia and platform steps keep reporting and do not gate yet (§13.3).
 
 ---
 
@@ -1266,6 +1281,8 @@ two of the three crates in.
 
 ### 12.7 Questions for the tester
 
+*Decided 2026-10-08: both stand as built (§9).*
+
 | | Question | As built |
 |---|---|---|
 | Q20 | `GamepadBindings`, which §4.2 put in the logic half | left in C#: its file is already the library's, and what is left is a map over the C# vocabulary §4.2 keeps (§12.2) |
@@ -1338,6 +1355,220 @@ bytes in all four runs.
 
 ### 13.4 Questions for the tester
 
+*Decided 2026-10-08: CI keeps reporting and does not gate yet (§9).*
+
 | | Question | As built |
 |---|---|---|
 | Q22 | Whether CI's Galaxia and platform steps now gate | still reporting: §9's Q14 tied gating to Galaxia's gate, but Windows and macOS have never run these tests, and a platform whose library fails still runs on the C# |
+
+---
+
+## 14. What was built, 2026-10-08: step 3b, Endymion's device half
+
+Measured on the development desktop, as the steps before it. The game's audio player, the interface's sound player,
+the pad manager's device bookkeeping and reading rules, SDL's pads and the simulated ones have a Rust form behind the
+same switch as step 3a, `EMUSEN_ENDYMION_NATIVE`, still in state 1: the C# runs unless the variable is `1`. No C# was
+removed. No test opens a real audio device or a real pad: audio is SDL's dummy driver, and pads are simulated or SDL's
+own virtual joysticks.
+
+### 14.1 The artefacts
+
+| What | Where |
+|---|---|
+| SDL3 by the 30 functions Endymion calls, loaded from a file or lent by the host | `Platform/endymion/src/sdl.rs` |
+| The device layer (`IPadDevices`), SDL's pads, simulated pads and their sets | `src/devices.rs` |
+| `GamepadManager`'s bookkeeping and reading rules, and `ConnectedPad` | `src/pads.rs` |
+| `AudioPlayer` and `UiSoundPlayer` | `src/audio.rs` |
+| The C layer: 55 exports, 86 of Endymion's and 131 in the library; the interface's version is 4 | `Platform/platform/src/endymion_devices.rs`, `include/emusen_platform.h` |
+| The entry points and the lending of SDL | `EmuSen.Endymion/Native/DeviceNative.cs` |
+| The facades | `AudioPlayer.cs`, `UiSoundPlayer.cs`, `Input/GamepadManager.cs`, `Input/ConnectedPad.cs`, `Input/SimulatedPad.cs`, `Input/SimulatedPads.cs` |
+| The parity class, 11 cases | `EmuSen.WiseMan/Endymion/EndymionDeviceParityTests.cs` |
+
+About 1,200 lines of Rust in the crate and 950 in its C layer, with 180 of tests, against §7.2's 1,100 for the step
+with its tests. As in §12.1 the excess is the C layer, and for the same reason with more of it: five kinds of handle,
+each with its queries, where §7.2 priced the rules.
+
+### 14.2 The facades, and what was built otherwise than §4.2 planned
+
+**One SDL, lent by its handle.** §2.8 planned to load SDL by path and argued that the loader would return the same
+instance. It is not left to argument: the C# asks .NET for the handle its own SDL calls resolve to
+(`NativeLibrary.TryLoad("SDL3", …)` for SDL3-CS's assembly) and lends it to the library, which looks its 30 functions
+up in that handle and never closes it. So a C# player and a library player in one process share SDL's subsystem
+counts, hints and devices, wherever .NET found the file. **Checked:** a hint the C# sets is read back through the library's SDL, and gone when the C# resets it.
+The crate also opens SDL from a path, for a Rust program with no C# beside it. The lending happens once, the first
+time the device half is asked for; with the variable unset nothing asks.
+
+**The manager is split where step 3a split the router.** The library opens, closes and reads the pads; who sits
+where stays in the C# `PlayerSlots` (whose rules are the library's since 3a), and the bindings stay the C#
+`GamepadBindingMap` (Q20). A start, a poll or a change of devices returns the pads opened and closed, in order, and the
+facade does for each what the C# did in the same place: seats it, lights the players, raises `PadChanged`; then it has
+the library update the devices and raises `Polled`. A pad is a key in the library, and the `ConnectedPad` the
+programs hold reads through it. `IsPressed` is one crossing when the bindings are a map; for a player with bindings
+of its own, which are a delegate, the stick and the trigger are asked first and the delegate only when neither
+answers, as the C# asks it.
+
+**Devices the library does not know run the C#.** `IPadDevices` is an interface a test may implement, and the library
+never calls back (§3.7). A manager given SDL's devices or a simulated set of the library's is the library's; given
+anything else it is the C# manager for that instance, and one handed such devices later (`UseDevices`) becomes the C#
+manager from there with the settings it had. `SdlVirtualPadsTests`, which wraps the SDL layer to hide the pads on the
+desk, therefore runs the C# either way; the library's SDL layer is held by a parity case of its own (§14.5), told
+which ids it may see.
+
+**The audio player is lent its rate control.** `AudioPlayer.RateControl` is an object the programs read, and it must
+outlive the player. So the rate control is its own handle, as in 3a, lent to the player's constructor and to each
+submit; a submit is one crossing, which makes the library's two SDL calls.
+
+**A device is let go by `Dispose` and never by the collector.** The C# classes have no finalizer: a player or a
+manager that is never disposed keeps its device until the process ends. The handles keep that: disposing closes the
+device and leaves the object usable, as the C# object is after `Dispose`; the collector frees the library's memory
+and touches no device.
+
+**Otherwise than planned, each for a reason:**
+
+- **`ConnectedPad` has no `Managed` class.** It is a dozen one-line members over a device layer; each gained a
+  branch for the library's key and kept its C# beside it.
+- **A simulated pad and its set are either the C#'s or the library's**, chosen when they are made, and a set takes
+  pads of its own kind; mixing them is refused with an `ArgumentException`. The library's set is also a device layer
+  to the C# manager, so the wrapper above works over either.
+- **What two threads use locks itself.** The C# manager is read on the emulation thread while the window polls it,
+  the volume is set from the window while the emulation thread submits, and the window resets the rate control the
+  submit is steering by; the C# does all three with no lock and gets away with it. The same in Rust is a data race,
+  on a map in the first case. So the pads handle, the audio player and the rate control each hold a mutex, as a
+  simulated pad and a set do, and a submit takes the player's and then the rate control's, the one order in which
+  two are held. The rate control's is a change to step 3a's handle, which the header had as used by one thread at a time.
+
+### 14.3 The C# rules, reproduced, and the differences
+
+| Rule | What the C# does |
+|---|---|
+| A poll | lets go of each pad no longer attached, announcing it with the seat it keeps; then asks the devices for changes **and** whether a rescan is due, both always; then opens what is new; then updates the devices; and does none of it, nor raises `Polled`, before the devices have started |
+| A rescan | due one second after the last, and at once on the first poll |
+| A closed pad | keeps the name and type it had when it closed; reads as nothing held |
+| A pad with no name | "Unknown controller" |
+| The stick as the d-pad | when the setting is on and the console does not read the stick; past a threshold of the deadzone clamped to 0.05 to 0.95, times 32,767, truncated |
+| L2 and R2 | pressed at half the trigger's travel, read through the analog deadzone |
+| An axis | SDL's sixteen bits over 32,767, clamped to −1 to 1, zero strictly below the deadzone |
+| The rebind capture | updates the devices, then the first SDL button held on a pad the interface reads, the first pad first, in SDL's order |
+| A simulated axis | clamped, times 32,767, rounded half to even |
+| A simulated GUID | the pad's own, an empty one included, else the MD5 of its name |
+| The latency target | `targetLatencyMs * sampleRate / 1000` in unchecked 32-bit arithmetic, set again when the device reopens |
+| A submit at another rate | closes the device, opens it at the new rate and resets the rate control, even with nothing to play; a rate of zero or below changes nothing |
+| `Dispose` of a player | closes the device and lets go of SDL's audio, **each time it is called** |
+| An interface sound | decoded once to 48 kHz stereo floats; one that is missing, unreadable or empty opens nothing; a new one clears the stream first; a player once tried or disposed does not open again |
+
+**Differences, each recorded and none reachable in play:**
+
+- **The order of device calls inside one poll.** The C# opens a pad, seats it, lights the players and announces it
+  before it opens the next; the library opens all that are new and the facade then seats, lights and announces each.
+  What the programs are told and in what order is the same; a `PadChanged` handler that counted the device layer's
+  open handles in the middle of a poll would see the later pads already open.
+- **A rescan across an overflow.** For two times further apart than a tick count holds the C# throws; the library
+  says a rescan is due. The clock is a stopwatch, which does not get there.
+- **`Remember` copies the samples.** The C# keeps the caller's array, so a change made to it afterwards would be
+  heard; the library keeps its own copy.
+- **Text that is not valid UTF-16** (a name, a path, a sound's key) crosses with U+FFFD in place of half a surrogate
+  pair, which for a path is what SDL's own binding sends. Two keys that differ only there become one. It is Q19's
+  subject.
+- **A null name for a simulated pad** is an `ArgumentNullException`; the C# stores it.
+
+**Reproduced but not exercised:** a second `Dispose` lets go of SDL's audio a second time, in both. SDL counts its
+subsystems for the whole process, so a test of it would close the audio under any other test's player; it is read
+from the two sources and not run.
+
+### 14.4 The default path, and what was tested
+
+**The default is untouched.** Every statement of `AudioPlayer`, `UiSoundPlayer`, `SimulatedPad` and `SimulatedPads` at
+`2f42d959` is still in its file but two (a simulated pad's path, now given by the facade from the one counter, and
+`With`, which makes a set of its pads' kind). `GamepadManager`'s 129 statements are there but for 20 changed by
+necessity: the seats, the bindings and the two events are the facade's, so the moved code names its owner for them,
+and members the facade forwards to became public on `Managed`. `ConnectedPad` is the one class edited in place
+(§14.2). With the variable unset the device half is not asked for, SDL is not lent, and every device object is the
+C#'s. One existing test changed: `GamepadRescanTests` read the private `_lastRescan` by reflection and now asks the
+manager for it, since the field moved.
+
+| Run | Variable unset | `EMUSEN_ENDYMION_NATIVE=1` |
+|---|---|---|
+| `cargo test` in `Platform/` (25 in `emusen-endymion`, 76 in `emusen-galaxia`, 17 in `emusen-platform`) | 118 pass | |
+| `cargo clippy` over the workspace; the header as C99 and as C++17 | clean | |
+| WiseMan's Audio, Input and Endymion classes, `AudioProperties` and `LeafAssemblyTests` | 197 pass | 197 pass |
+| Fourteen of Mistress's classes that play through a pad or the interface's sounds (`MultiplayerTests`, `PadInputPathTests`, `PadNavigationTests`, `PadMenuTests`, `PadCheatsTests`, `PadRewindReelTests`, `PadSettingsWindowTests`, `ControllersTests`, `ControllerBindingsDiagramTests`, `PlayerBindingsWindowTests`, `PlayerPreferencesTests`, `ThemedControllersTests`, `ThemedLibraryHostTests`, `ThemedLibraryReferenceTests`) | 196 pass, 1 skipped | 196 pass, 1 skipped |
+
+The 197 are 3a's 186 and this step's 11; the one skipped is a picture tool. These are the gate §7.1 names for the
+step: the pad and audio tests on the simulated and dummy devices, both ways.
+
+**Not done, and not claimed:** Windows and macOS, as before; a real pad and a real audio device, which no test may
+open; and Mistress's other classes, which reach the pad only to move through a menu.
+
+### 14.5 The parity class, and what it found
+
+It drives the C# and the library alike and compares:
+
+- a simulated pad over 200 runs of 40 things done to it, and a set as a device layer over 120 runs of 50;
+- a manager over 150 runs of up to 70 steps: pads plugged, pulled and plugged back, pressed and pushed, polled,
+  seated, forgotten, every setting changed, the bindings replaced for all players and for one, the devices changed
+  for another set, started, disposed and made again; after each step everything a program can read of it, the
+  seats, the lights, the set's counts and the log of what was announced;
+- readings at the edges: an axis exactly at each deadzone and a stick one step either side of each threshold, with
+  deadzones outside their range and NaN;
+- a rescan's timing over 20,000 pairs of times;
+- devices the library does not know, and a manager moved onto them;
+- SDL's virtual joysticks under each manager in turn: three attached, read, one pulled and replaced;
+- the game's player on the dummy driver at five rates and latencies: opening, the volume, null and empty samples, a
+  reopening, the rate control's target and reset, disposing and use after it;
+- the interface's sounds: ten files decoded to the same bytes (five sounds, one of them empty and one long enough to
+  be taken in two calls, a file that is no sound, a missing one, a folder, an empty path and a path with a NUL in
+  it), and one sound replacing another.
+
+**What the dummy driver allows.** Its queue drains in real time, so two players never see the same queue. What is
+compared exactly is what does not depend on it (the device's rate, the target, the volume, the input counted,
+shedding with a target no queue reaches or one below zero), and what does is held to a range: the output within the
+deviation of the input, the interface's queue between half a sound and all of it.
+
+**The first run found nothing.** Of 59 faults seeded in the Rust, the class as first written caught 52, and a 53rd
+by the test host stopping (a player whose `dispose` left its device open, once SDL's audio had gone). Four it missed
+were gaps and are closed: the readings at the edges (two faults: the deadzone's `<` and the threshold's floor),
+which a random walk had not landed on; the devices' word left unconsumed when a rescan was also due, now asked of
+the set after a poll; and the bound button, which the facade never passed because it asked the bindings in a
+second crossing, and now passes when the bindings are a map. The last two survive and are not gaps: a trigger at
+exactly half its travel does not exist in sixteen bits over 32,767, and SDL's virtual pads never report an empty
+path, which is the only way to tell a kept one from a dropped one.
+
+### 14.6 P4, and publishing
+
+**P4 holds.** The C# submit makes two SDL calls, `GetAudioStreamQueued` and `PutAudioStreamData` (counted from the
+code); the library's is one crossing. One frame of a 32 kHz console (534 frames) submitted 8,000 times to the dummy
+driver, the median of nine rounds, three runs each way in turn: 5.4, 5.3 and 5.1 µs a submit on the C#, 5.0, 4.9 and
+4.9 µs on the library, its two locks included. A set of runs an hour earlier had the C# at 5.4 to 5.9 µs, so the
+difference is inside the spread between sessions, and either is three ten-thousandths of a 60 Hz frame.
+
+**Publishing.** A self-contained linux-x64 publish of Mistress has the same 454 files as one of `2f42d959` built the
+same way beside it; `libemusen_platform.so` grows from 799,480 to 953,664 bytes, so P7's 4 MB holds with two of the
+three crates whole. In a publish `libSDL3.so` sits beside the assemblies and not under `runtimes/`, and the lending
+finds it there: a small program published self-contained and run with the variable set reported the device half on
+the library and opened the dummy device through it.
+
+### 14.7 Questions for the tester
+
+| | Question | As built |
+|---|---|---|
+| Q23 | A manager over devices the library does not know | runs the C# manager for that instance (§14.2). At state 3 it has no C# to run: either `IPadDevices` stops being something a test may implement, or the library learns to call back, against §3.7 |
+| Q24 | SDL lent by its handle, where §2.8 said loaded by path | lent, which is the same instance by construction and was checked; a Rust program with no C# opens it by path |
+
+---
+
+## 15. Open items
+
+Kept here so that none is lost between steps; each names where it was found.
+
+- **The log folder in a home with no `.config`.** The C# takes its default log folder from .NET's `ApplicationData`,
+  which is the empty string when the folder it names does not exist, so the default becomes `EmuSen/Logs` relative to
+  the folder the program was started from. Found 2026-10-08 while running the shell in a sandboxed home (§13.3). It
+  predates this work and is the C#'s and the library's alike, since the host hands the library the same answer (Q15);
+  the code is left alone. A fix would ask for the folder without requiring it to exist, with a test of its own.
+- **Q19:** text that is not valid UTF-16, once the C# that answers for it is gone (§11.2, §14.3).
+- **Q23:** device layers the library does not know, at state 3 (§14.7).
+- **P2** is not measured: whether any frontend asks Galaxia for a path once a frame (§8).
+- **Windows and macOS:** nothing of the platform has run on either (§10.7, §11.7, §12.4, §14.4); CI's steps there
+  report and do not gate (Q14, Q22).
+- **A second `Dispose` of a player** lets go of SDL's audio twice; reproduced, not run (§14.3).
+- **Endymion to state 2** is a later step, at the tester's word, as Galaxia's was (§13).

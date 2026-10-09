@@ -1,6 +1,7 @@
 //! Endymion's C layer: the resampler, the rate control, the router, the seats' rules and the pad's rules.
 //!
-//! A resampler, a rate control and a router are handles, used by one thread at a time. A call that changes one and
+//! A resampler and a router are handles, used by one thread at a time; a rate control locks itself, since a window
+//! resets and reads the one the emulation thread is submitting through. A call that changes one and
 //! makes output takes the caller's buffer; output that does not fit waits in the handle for `*_take`, so that a
 //! stateful call is never made twice to learn its length.
 
@@ -13,15 +14,15 @@ use emusen_endymion::slots::{self, MAX_PLAYERS, PlayerSlots};
 
 /// A value and the output its last call made that the caller has not taken.
 pub struct Held<T, O> {
-    value: T,
-    pending: Vec<O>,
+    pub(crate) value: T,
+    pub(crate) pending: Vec<O>,
 }
 
 /// The output handed over: into the caller's buffer when it holds all of it, else kept for `take`. Its whole count.
 ///
 /// # Safety
 /// `out` must be valid for `cap` elements, or null.
-unsafe fn hand_over<O: Copy>(pending: &mut Vec<O>, made: Vec<O>, out: *mut O, cap: usize) -> i64 {
+pub(crate) unsafe fn hand_over<O: Copy>(pending: &mut Vec<O>, made: Vec<O>, out: *mut O, cap: usize) -> i64 {
     let count = made.len() as i64;
     if !out.is_null() && made.len() <= cap {
         unsafe { std::ptr::copy_nonoverlapping(made.as_ptr(), out, made.len()) };
@@ -36,7 +37,7 @@ unsafe fn hand_over<O: Copy>(pending: &mut Vec<O>, made: Vec<O>, out: *mut O, ca
 ///
 /// # Safety
 /// `out` must be valid for `cap` elements, or null.
-unsafe fn take<O: Copy>(pending: &mut Vec<O>, out: *mut O, cap: usize) -> i64 {
+pub(crate) unsafe fn take<O: Copy>(pending: &mut Vec<O>, out: *mut O, cap: usize) -> i64 {
     let count = pending.len() as i64;
     if !out.is_null() && pending.len() <= cap {
         unsafe { std::ptr::copy_nonoverlapping(pending.as_ptr(), out, pending.len()) };
@@ -115,7 +116,25 @@ pub unsafe extern "C" fn emusen_endymion_resampler_take(h: *mut Resampler, out: 
     unsafe { take(&mut held.pending, out, cap) }
 }
 
-pub type Rate = Held<DynamicRateControl, i16>;
+/// A rate control behind its own lock: a window resets it and reads it while the emulation thread submits through it.
+pub struct Rate {
+    inner: std::sync::Mutex<Held<DynamicRateControl, i16>>,
+}
+
+impl Rate {
+    pub(crate) fn lock(&self) -> std::sync::MutexGuard<'_, Held<DynamicRateControl, i16>> {
+        self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+macro_rules! rate {
+    ($h:expr) => {
+        match unsafe { $h.as_ref() } {
+            Some(rate) => rate.lock(),
+            None => return fail(status::NULL, "no handle").into(),
+        }
+    };
+}
 
 /// A rate control's whole state, as one struct a host reads its properties from.
 #[repr(C)]
@@ -145,7 +164,7 @@ pub mod rate_setting {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn emusen_endymion_rate_new(target_queued_frames: i32) -> *mut Rate {
-    Box::into_raw(Box::new(Held { value: DynamicRateControl::new(target_queued_frames), pending: Vec::new() }))
+    Box::into_raw(Box::new(Rate { inner: std::sync::Mutex::new(Held { value: DynamicRateControl::new(target_queued_frames), pending: Vec::new() }) }))
 }
 
 /// # Safety
@@ -164,7 +183,8 @@ pub unsafe extern "C" fn emusen_endymion_rate_free(h: *mut Rate) -> i32 {
 /// As `emusen_endymion_rate_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_endymion_rate_set(h: *mut Rate, which: u32, value: f64) -> i32 {
-    let control = &mut handle!(h).value;
+    let mut held = rate!(h);
+    let control = &mut held.value;
     match which {
         rate_setting::TARGET_QUEUED_FRAMES if value.fract() == 0.0 && value >= i32::MIN as f64 && value <= i32::MAX as f64 => control.target_queued_frames = value as i32,
         rate_setting::MAX_DEVIATION => control.max_deviation = value,
@@ -182,7 +202,8 @@ pub unsafe extern "C" fn emusen_endymion_rate_set(h: *mut Rate, which: u32, valu
 /// As `emusen_endymion_rate_free`; `out` valid for its `size` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_endymion_rate_read(h: *mut Rate, out: *mut RateState) -> i32 {
-    let control = &handle!(h).value;
+    let held = rate!(h);
+    let control = &held.value;
     let Some(out) = (unsafe { out.as_mut() }) else {
         return fail(status::NULL, "no state to fill");
     };
@@ -211,7 +232,8 @@ pub unsafe extern "C" fn emusen_endymion_rate_read(h: *mut Rate, out: *mut RateS
 /// As `emusen_endymion_rate_free`; `out` valid, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_endymion_rate_compute(h: *mut Rate, queued_frames: i32, out: *mut f64) -> i32 {
-    let control = &handle!(h).value;
+    let held = rate!(h);
+    let control = &held.value;
     match unsafe { out.as_mut() } {
         Some(out) => {
             *out = control.compute_ratio(queued_frames);
@@ -227,7 +249,8 @@ pub unsafe extern "C" fn emusen_endymion_rate_compute(h: *mut Rate, queued_frame
 /// `h` as above; `input` valid for `len` samples and `out` for `cap`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_endymion_rate_process(h: *mut Rate, input: *const i16, len: usize, queued_frames: i32, out: *mut i16, cap: usize) -> i64 {
-    let held = handle!(h);
+    let mut guard = rate!(h);
+    let held = &mut *guard;
     if input.is_null() {
         // C# works out the ratio and then fails on the missing array.
         held.value.last_ratio = held.value.compute_ratio(queued_frames);
@@ -244,7 +267,7 @@ pub unsafe extern "C" fn emusen_endymion_rate_process(h: *mut Rate, input: *cons
 /// As `emusen_endymion_rate_free`; `out` valid for `cap` samples, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_endymion_rate_take(h: *mut Rate, out: *mut i16, cap: usize) -> i64 {
-    let held = handle!(h);
+    let mut held = rate!(h);
     unsafe { take(&mut held.pending, out, cap) }
 }
 
@@ -252,7 +275,7 @@ pub unsafe extern "C" fn emusen_endymion_rate_take(h: *mut Rate, out: *mut i16, 
 /// As `emusen_endymion_rate_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_endymion_rate_reset(h: *mut Rate) -> i32 {
-    let held = handle!(h);
+    let mut held = rate!(h);
     held.value.reset();
     held.pending.clear();
     0

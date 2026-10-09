@@ -124,8 +124,9 @@ uses no other crate. MarsRT uses these, for its Cranelift recompiler and its Vul
 | [windows_x86_64_msvc](https://github.com/microsoft/windows-rs) | 0.52.6 | MIT OR Apache-2.0 | Microsoft |
 
 The platform library (`libemusen_platform`), which holds the parts of the platform above the cores that have moved to
-Rust, links the Rust standard library too and uses these, all for the MD5 by which a ROM file is recognised after a
-rename (versions pinned on 2026-10-07):
+Rust, links the Rust standard library too and uses these: the MD5 crates for the hash by which a ROM file is recognised
+after a rename (versions pinned on 2026-10-07), and `libloading`, with `windows-link` on Windows, to call the SDL3 the
+program ships (pinned on 2026-10-08):
 
 | Crate | Version | Licence | Copyright or authors |
 |---|---|---|---|
@@ -135,8 +136,10 @@ rename (versions pinned on 2026-10-07):
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.2.2 | MIT OR Apache-2.0 | Copyright (c) 2021-2026 RustCrypto Developers |
 | [digest](https://github.com/RustCrypto/traits) | 0.11.3 | MIT OR Apache-2.0 | Copyright (c) 2017-2025 RustCrypto Developers; Copyright (c) 2017 Artyom Pavlov |
 | [hybrid-array](https://github.com/RustCrypto/hybrid-array) | 0.4.15 | MIT OR Apache-2.0 | Copyright (c) 2022-2026 The RustCrypto Project Developers |
+| [libloading](https://github.com/nagisa/rust_libloading/) | 0.9.0 | ISC | Copyright © 2015, Simonas Kazlauskas |
 | [md-5](https://github.com/RustCrypto/hashes) | 0.11.0 | MIT OR Apache-2.0 | Copyright (c) 2016-2026 The RustCrypto Project Developers; Copyright (c) 2016 Artyom Pavlov; Copyright (c) 2009-2013 Mozilla Foundation; Copyright (c) 2006-2009 Graydon Hoare |
 | [typenum](https://github.com/paholg/typenum) | 1.20.1 | MIT OR Apache-2.0 | Copyright (c) 2014 Paho Lurie-Gregg |
+| [windows-link](https://github.com/microsoft/windows-rs) | 0.2.1 | MIT OR Apache-2.0 | Copyright (c) Microsoft Corporation |
 
 Where a crate offers a choice of licences ("MIT OR Apache-2.0"), EmuSen uses it under the MIT licence.
 

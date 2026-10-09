@@ -5,6 +5,10 @@ use crate::clamp;
 
 /// `PadButton`, in libretro's RetroPad order; its number is its value.
 pub const BUTTONS: usize = 16;
+pub const UP: u32 = 4;
+pub const DOWN: u32 = 5;
+pub const LEFT: u32 = 6;
+pub const RIGHT: u32 = 7;
 pub const L2: u32 = 12;
 pub const R2: u32 = 13;
 /// `PadButton.R3`, the last button; a control above it is a stick direction.

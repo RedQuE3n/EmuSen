@@ -417,13 +417,13 @@ jobs:
         continue-on-error: true
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaOSSandboxTests|FullyQualifiedName~HierTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=galaxia-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
-      # Endymion's logic half on its C#, which is what runs while its switch is unset; reported, not yet a gate, as Galaxia's steps above.
+      # Endymion on its C#, which is what runs while its switch is unset: the pad and audio tests on simulated pads and SDL's dummy driver; reported, not yet a gate, as Galaxia's steps above.
       - name: Test Endymion on its C#
         working-directory: EmuSen-Project
         continue-on-error: true
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Audio.|FullyQualifiedName~EmuSen.WiseMan.Input.|FullyQualifiedName~EmuSen.WiseMan.Endymion.|FullyQualifiedName~AudioProperties)&FullyQualifiedName!~EndymionParityTests" --logger "console;verbosity=normal"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Audio.|FullyQualifiedName~EmuSen.WiseMan.Input.|FullyQualifiedName~EmuSen.WiseMan.Endymion.|FullyQualifiedName~AudioProperties)&FullyQualifiedName!~EndymionParityTests&FullyQualifiedName!~EndymionDeviceParityTests" --logger "console;verbosity=normal"
 
-      # The same through the platform library, with the parity class that holds the two to the bit (EmuSen_RustPlatform.md §12.5).
+      # The same through the platform library, with the two parity classes that hold the library to the C# (EmuSen_RustPlatform.md §12.5, §14.5).
       - name: Test Endymion on the platform library
         working-directory: EmuSen-Project
         continue-on-error: true

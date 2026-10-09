@@ -11,11 +11,14 @@
  *    a null string and is told apart from an empty one.
  *  - A result is copied into the caller's buffer by the length-query idiom: the call returns the whole length in
  *    bytes and writes only when the buffer holds all of it; a null buffer asks the length. Nothing passed in is
- *    kept after the call, and the library returns no pointer.
+ *    kept after the call, except SDL's handle and a simulated pad or set plugged into another, which are said so
+ *    where they are passed; the only pointers returned are handles the library made.
  *  - A return below zero is a status. EMUSEN_PLATFORM_ABSENT is an answer, not a failure: the thing asked for does
  *    not exist. The words for a failure are read with emusen_platform_last_error on the same thread.
- *  - Every call of Galaxia's is safe from any thread, concurrently with any other. A handle of Endymion's (a
- *    resampler, a rate control, a router) is used by one thread at a time; its other calls are safe from any thread.
+ *  - Every call of Galaxia's is safe from any thread, concurrently with any other. A resampler, a router and an
+ *    interface player of Endymion's are used by one thread at a time; a rate control, an audio player, a simulated
+ *    pad, a set of them and a pads handle lock themselves and may be used from any thread, as the programs use
+ *    them; Endymion's other calls are safe from any thread.
  *  - Nothing unwinds. The library is built to abort on a panic, after writing the crash log the host named.
  *
  * This interface is not stable. Its one version number is matched exactly by the host built from the same commit,
@@ -31,7 +34,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 3u
+#define EMUSEN_PLATFORM_ABI_VERSION 4u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -491,6 +494,214 @@ int32_t emusen_endymion_slots_highest(const emusen_endymion_seat *seats);
 int32_t emusen_endymion_pad_resolve(uint32_t axis, double analog, uint32_t held, double *out);
 int32_t emusen_endymion_pad_combine(double analog, uint32_t negative, uint32_t positive, double *out);
 int64_t emusen_endymion_pad_controls_for(const uint32_t *buttons, size_t buttons_len, const uint32_t *axes, size_t axes_len, uint32_t *out, size_t cap);
+
+/* ---- Endymion: the device half (EmuSen_Audio_Sync.md, section 7; EmuSen_Input.md, sections 4 and 8) ---- */
+
+/*
+ * SDL3 is the host's: it lends the handle its loader returned, once, and the library calls the same SDL through it,
+ * so both share its subsystems, hints and devices. Nothing that needs SDL is made before it is lent; such a call
+ * returns null, or NOT_SUPPORTED. The library never closes it.
+ */
+int32_t emusen_endymion_sdl_lend(void *handle);
+
+/* A hint as the lent SDL has it; ABSENT when unset. */
+int64_t emusen_endymion_sdl_hint(const uint8_t *name, size_t name_len, uint8_t *out, size_t cap);
+
+/*
+ * Simulated pads, which a test presses and plugs into a set in a real pad's place: SimulatedPad and SimulatedPads.
+ * A set holds its own reference to each pad plugged in, and a pads handle its own to its set, so either may be
+ * freed while the other is in use.
+ */
+typedef struct emusen_endymion_sim_pad emusen_endymion_sim_pad;
+typedef struct emusen_endymion_sim_set emusen_endymion_sim_set;
+
+/* A pad named "Simulated pad", with no GUID of its own, at `path` (null for none). */
+emusen_endymion_sim_pad *emusen_endymion_sim_pad_new(const uint8_t *path, size_t path_len);
+int32_t emusen_endymion_sim_pad_free(emusen_endymion_sim_pad *pad);
+
+#define EMUSEN_ENDYMION_SIM_PAD_NAME 0u /* never null */
+#define EMUSEN_ENDYMION_SIM_PAD_GUID 1u /* null: the MD5 of the name, as the model's */
+#define EMUSEN_ENDYMION_SIM_PAD_PATH 2u
+
+int32_t emusen_endymion_sim_pad_set_text(const emusen_endymion_sim_pad *pad, uint32_t which, const uint8_t *value, size_t len);
+int64_t emusen_endymion_sim_pad_text(const emusen_endymion_sim_pad *pad, uint32_t which, uint8_t *out, size_t cap);
+
+#define EMUSEN_ENDYMION_SIM_PAD_PLAYER_INDEX 0u /* the player number SDL was last asked to light, or -1 */
+#define EMUSEN_ENDYMION_SIM_PAD_KIND 1u         /* SDL_GamepadType */
+
+int32_t emusen_endymion_sim_pad_set(const emusen_endymion_sim_pad *pad, uint32_t which, int32_t value);
+int32_t emusen_endymion_sim_pad_get(const emusen_endymion_sim_pad *pad, uint32_t which, int32_t *out);
+
+/* Presses (`down` 1) or releases (0) an SDL_GamepadButton; any other `down` lets go of every button and axis. */
+int32_t emusen_endymion_sim_pad_press(const emusen_endymion_sim_pad *pad, int32_t button, uint32_t down);
+/* -1 to 1 for a stick, 0 to 1 for a trigger, kept as SDL's sixteen bits: clamped, scaled by 32767 and rounded half to even. */
+int32_t emusen_endymion_sim_pad_set_axis(const emusen_endymion_sim_pad *pad, int32_t axis, double value);
+int32_t emusen_endymion_sim_pad_held(const emusen_endymion_sim_pad *pad, int32_t button);
+int32_t emusen_endymion_sim_pad_axis(const emusen_endymion_sim_pad *pad, int32_t axis);
+
+emusen_endymion_sim_set *emusen_endymion_sim_set_new(void);
+int32_t emusen_endymion_sim_set_free(emusen_endymion_sim_set *set);
+
+/* Plugs a pad in: its id, from 1. Pulling one out removes it from under every id it was plugged in as. */
+int64_t emusen_endymion_sim_set_connect(const emusen_endymion_sim_set *set, const emusen_endymion_sim_pad *pad);
+int32_t emusen_endymion_sim_set_disconnect(const emusen_endymion_sim_set *set, const emusen_endymion_sim_pad *pad);
+
+#define EMUSEN_ENDYMION_SIM_SET_FIRST 0u        /* the first attached pad's id, 0 for none */
+#define EMUSEN_ENDYMION_SIM_SET_OPEN_HANDLES 1u
+#define EMUSEN_ENDYMION_SIM_SET_OPENS 2u
+#define EMUSEN_ENDYMION_SIM_SET_CLOSES 3u
+#define EMUSEN_ENDYMION_SIM_SET_INITIALIZED 4u
+
+int64_t emusen_endymion_sim_set_get(const emusen_endymion_sim_set *set, uint32_t which);
+int64_t emusen_endymion_sim_set_attached(const emusen_endymion_sim_set *set, uint32_t *out, size_t cap);
+
+/* The set as a device layer, IPadDevices, for a host's own manager: `handle` an opened pad's, `arg` an id, a button, an axis or an index. */
+#define EMUSEN_ENDYMION_DEVICE_INIT 0u
+#define EMUSEN_ENDYMION_DEVICE_QUIT 1u
+#define EMUSEN_ENDYMION_DEVICE_OPEN 2u /* the handle, 0 for none */
+#define EMUSEN_ENDYMION_DEVICE_CLOSE 3u
+#define EMUSEN_ENDYMION_DEVICE_IS_ATTACHED 4u
+#define EMUSEN_ENDYMION_DEVICE_CHANGED 5u /* 1 once for each batch of pads plugged or pulled */
+#define EMUSEN_ENDYMION_DEVICE_UPDATE 6u
+#define EMUSEN_ENDYMION_DEVICE_BUTTON 7u
+#define EMUSEN_ENDYMION_DEVICE_AXIS 8u
+#define EMUSEN_ENDYMION_DEVICE_KIND 9u
+#define EMUSEN_ENDYMION_DEVICE_LABEL 10u
+#define EMUSEN_ENDYMION_DEVICE_SET_PLAYER_INDEX 11u
+
+int64_t emusen_endymion_sim_set_call(const emusen_endymion_sim_set *set, uint32_t op, uint64_t handle, int32_t arg);
+
+#define EMUSEN_ENDYMION_DEVICE_NAME 0u
+#define EMUSEN_ENDYMION_DEVICE_GUID 1u
+#define EMUSEN_ENDYMION_DEVICE_PATH 2u
+
+int64_t emusen_endymion_sim_set_text(const emusen_endymion_sim_set *set, uint32_t op, uint64_t handle, uint8_t *out, size_t cap);
+
+/*
+ * Every connected pad, opened, hot-plugged and let go, and read through the stick and trigger rules: GamepadManager's
+ * device bookkeeping and ConnectedPad. Seating is the host's: a start, a poll or a change of devices returns the
+ * pads opened and closed, in order, and the host seats each opened one and lights the players. A pad is known by a
+ * key from 1, kept after it closes so that it is still known by name.
+ */
+typedef struct emusen_endymion_pads emusen_endymion_pads;
+
+typedef struct emusen_endymion_pad_event {
+    uint32_t kind;     /* 0 opened, 1 closed */
+    uint32_t announce; /* for an opened pad: 0 for one present at start, which the host does not announce */
+    uint64_t key;
+} emusen_endymion_pad_event;
+
+#define EMUSEN_ENDYMION_DEVICES_SDL 0u       /* SDL's pads; `only`, when not null, the ids it shows */
+#define EMUSEN_ENDYMION_DEVICES_SIMULATED 1u /* `set`'s pads */
+
+/* The pads on a device layer, not yet started; null when SDL is not lent or the devices are not given. */
+emusen_endymion_pads *emusen_endymion_pads_new(uint32_t kind, const emusen_endymion_sim_set *set, const uint32_t *only, size_t only_len);
+
+/* Frees the handle. One not closed first leaves its pads and devices open to the process's end, as a C# manager never disposed did. */
+int32_t emusen_endymion_pads_free(emusen_endymion_pads *pads);
+
+int64_t emusen_endymion_pads_start(const emusen_endymion_pads *pads, emusen_endymion_pad_event *out, size_t cap);
+/* A poll is ABSENT while the devices have not started, when the C# poll does nothing and raises nothing. */
+int64_t emusen_endymion_pads_poll(const emusen_endymion_pads *pads, emusen_endymion_pad_event *out, size_t cap);
+
+/* Shows SDL's pads of these ids alone from the next start or poll, or all for a null `only`: a test's, so that it opens SDL's virtual pads and none on the desk. */
+int32_t emusen_endymion_pads_show_only(const emusen_endymion_pads *pads, const uint32_t *only, size_t only_len);
+
+/* The devices brought up to date; the host calls it after seating what a poll opened, as the C# poll ends. */
+int32_t emusen_endymion_pads_update(const emusen_endymion_pads *pads);
+int64_t emusen_endymion_pads_use(const emusen_endymion_pads *pads, uint32_t kind, const emusen_endymion_sim_set *set, const uint32_t *only, size_t only_len, emusen_endymion_pad_event *out, size_t cap);
+int64_t emusen_endymion_pads_take(const emusen_endymion_pads *pads, emusen_endymion_pad_event *out, size_t cap);
+int32_t emusen_endymion_pads_close_all(const emusen_endymion_pads *pads);
+
+/* The open pads' keys, first controller first. */
+int64_t emusen_endymion_pads_open(const emusen_endymion_pads *pads, uint64_t *out, size_t cap);
+
+#define EMUSEN_ENDYMION_PADS_ID 0u
+#define EMUSEN_ENDYMION_PADS_IS_OPEN 1u
+#define EMUSEN_ENDYMION_PADS_KIND 2u
+#define EMUSEN_ENDYMION_PADS_RAW_PRESSED 3u  /* arg: an SDL_GamepadButton */
+#define EMUSEN_ENDYMION_PADS_AXIS_VALUE 4u   /* arg: an SDL_GamepadAxis; SDL's sixteen bits */
+#define EMUSEN_ENDYMION_PADS_LABEL 5u        /* arg: an SDL_GamepadButton; 0 for none */
+#define EMUSEN_ENDYMION_PADS_FRONTEND_COUNT 6u
+#define EMUSEN_ENDYMION_PADS_STARTED 7u
+#define EMUSEN_ENDYMION_PADS_ANY_PRESSED 8u  /* the first SDL button held on a pad the interface reads, -1 for none */
+#define EMUSEN_ENDYMION_PADS_LAST_RESCAN 9u  /* .NET ticks since the handle was made */
+
+int64_t emusen_endymion_pads_get(const emusen_endymion_pads *pads, uint64_t key, uint32_t which, int32_t arg);
+
+#define EMUSEN_ENDYMION_PADS_GUID 0u
+#define EMUSEN_ENDYMION_PADS_PATH 1u /* ABSENT for none */
+#define EMUSEN_ENDYMION_PADS_NAME 2u
+
+int64_t emusen_endymion_pads_text(const emusen_endymion_pads *pads, uint64_t key, uint32_t which, uint8_t *out, size_t cap);
+
+#define EMUSEN_ENDYMION_AXIS_RAW 0u /* by SDL_GamepadAxis, -1 to 1 */
+#define EMUSEN_ENDYMION_AXIS_PAD 1u /* by PadAxis, zero below the analog deadzone */
+
+int32_t emusen_endymion_pads_axis(const emusen_endymion_pads *pads, uint64_t key, uint32_t which, uint32_t axis, double *out);
+
+/* A PadButton as the game hears it on the pad: the stick for the d-pad, a trigger past half for L2 and R2, else `bound`, the player's SDL button, or -1 for none. */
+int32_t emusen_endymion_pads_pressed(const emusen_endymion_pads *pads, uint64_t key, uint32_t button, int32_t bound);
+int32_t emusen_endymion_pads_set_player_index(const emusen_endymion_pads *pads, uint64_t key, int32_t index);
+
+#define EMUSEN_ENDYMION_SETTING_FIRST_CONTROLLER_ONLY 0u /* flags: nonzero is true */
+#define EMUSEN_ENDYMION_SETTING_STICK_AS_DPAD 1u
+#define EMUSEN_ENDYMION_SETTING_STICK_DEADZONE 2u
+#define EMUSEN_ENDYMION_SETTING_LEFT_STICK_IS_ANALOG 3u
+#define EMUSEN_ENDYMION_SETTING_ANALOG_DEADZONE 4u
+
+int32_t emusen_endymion_pads_set_setting(const emusen_endymion_pads *pads, uint32_t which, double value);
+int32_t emusen_endymion_pads_setting(const emusen_endymion_pads *pads, uint32_t which, double *out);
+
+/* Whether a rescan is due at `now` after one at `last`, in .NET ticks: a second apart. */
+int32_t emusen_endymion_pads_rescan_due(int64_t now, int64_t last);
+
+/*
+ * The game's sound to SDL's default playback device: AudioPlayer. The rate control is the host's, made by
+ * emusen_endymion_rate_new and lent to each call; the player sets its target when the device opens. Disposing closes
+ * the device and lets go of SDL's audio, and may be done more than once, as the C#'s Dispose may; freeing one never
+ * disposed leaves its device open to the process's end.
+ */
+typedef struct emusen_endymion_audio emusen_endymion_audio;
+
+emusen_endymion_audio *emusen_endymion_audio_new(emusen_endymion_rate *rate, int32_t sample_rate, int32_t target_latency_ms, int32_t buffer_frames);
+int32_t emusen_endymion_audio_free(emusen_endymion_audio *audio);
+int32_t emusen_endymion_audio_dispose(emusen_endymion_audio *audio);
+
+/* Interleaved stereo at `sample_rate`; a new rate reopens the device. A null `samples` does nothing. BAD_ARGUMENT for a ratio the rate control refuses. */
+int32_t emusen_endymion_audio_submit(emusen_endymion_audio *audio, emusen_endymion_rate *rate, const int16_t *samples, size_t len, int32_t sample_rate);
+
+#define EMUSEN_ENDYMION_AUDIO_QUEUED_FRAMES 0u
+#define EMUSEN_ENDYMION_AUDIO_AVAILABLE 1u
+#define EMUSEN_ENDYMION_AUDIO_SAMPLE_RATE 2u
+
+int64_t emusen_endymion_audio_get(const emusen_endymion_audio *audio, uint32_t which);
+int32_t emusen_endymion_audio_set_volume(emusen_endymion_audio *audio, float volume);
+float emusen_endymion_audio_volume(const emusen_endymion_audio *audio);
+
+/* The interface's short sounds on a stream of their own, opened by the first: UiSoundPlayer. */
+typedef struct emusen_endymion_ui emusen_endymion_ui;
+
+emusen_endymion_ui *emusen_endymion_ui_new(void);
+int32_t emusen_endymion_ui_free(emusen_endymion_ui *ui);
+int32_t emusen_endymion_ui_dispose(emusen_endymion_ui *ui);
+
+#define EMUSEN_ENDYMION_UI_PLAY 0u    /* replaces the sound still playing */
+#define EMUSEN_ENDYMION_UI_PRELOAD 1u /* decodes and keeps it */
+
+int32_t emusen_endymion_ui_sound(emusen_endymion_ui *ui, uint32_t which, const uint8_t *key, size_t key_len);
+int32_t emusen_endymion_ui_remember(emusen_endymion_ui *ui, const uint8_t *key, size_t key_len, const uint8_t *samples, size_t samples_len);
+
+#define EMUSEN_ENDYMION_UI_IS_OPEN 0u
+#define EMUSEN_ENDYMION_UI_QUEUED 1u /* bytes */
+
+int64_t emusen_endymion_ui_get(const emusen_endymion_ui *ui, uint32_t which);
+int32_t emusen_endymion_ui_set_volume(emusen_endymion_ui *ui, float volume);
+float emusen_endymion_ui_volume(const emusen_endymion_ui *ui);
+
+/* A WAV file as 48 kHz stereo 32-bit float: ABSENT when SDL cannot read it. Bytes that do not fit wait on this thread for emusen_endymion_ui_decode_take. */
+int64_t emusen_endymion_ui_decode(const uint8_t *path, size_t path_len, uint8_t *out, size_t cap);
+int64_t emusen_endymion_ui_decode_take(uint8_t *out, size_t cap);
 
 #ifdef __cplusplus
 }

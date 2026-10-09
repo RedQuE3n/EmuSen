@@ -460,6 +460,78 @@ draw after it is chosen, the filter before it shown at the first two. **Mutants*
 build on the render thread; the chain before dropped at once; the software path drawing a device filter; the next
 chain never prepared.
 
+### 3.11 Names a pass may not use (2026-10-08)
+
+**The defect.** On macOS the CRT filter of `EmuSen_CRT.md` drew a black picture at its Balanced and Accurate tiers,
+and a correct one at Performance. Reported by the tester on 2026-10-08 on a Mac mini (M1, macOS 27.0, a 1920 × 1080
+display), from a session of Mario Kart 64 (Europe) at Accurate. That session's log held the symptom in numbers: the
+machine ran at 50 frames a second, each draw took 24 to 29 ms, and 26 frames a second were shown.
+
+**Reproduced without a window.** A probe run on the Mac drew the filter through `GameFrameControl` on a Skia context
+made over Metal (`GRContext.CreateMetal`, from `MTLCreateSystemDefaultDevice` and a command queue), which is the
+backend Avalonia draws with on macOS. Performance gave a picture in 1.9 ms; Balanced and Accurate gave a surface of
+zeros, 27 and 34 ms a draw, at 1060 × 580 and at 1920 × 1080 alike. Drawing the passes one more at a time, each
+shown through a pass that only copies, placed the fault: every pass but the last drew, at either tier, and the last
+alone drew nothing.
+
+**The mechanism.** Skia turns a pass's SkSL into the Metal Shading Language and gives it to Metal's compiler, and it
+writes the names of a pass's variables and parameters through unchanged. The last pass of those two tiers held
+`float2 device = coord * pixelScale + pixelOrigin;`, for its dither. `device` is an address space in that language,
+as `const` is a qualifier in C, and the compiler's answer, read from the process's standard error, was
+`error: expected unqualified-id` at that line. Skia does not report the failure to its caller: `SKRuntimeEffect`
+had accepted the text, since the word means nothing to SkSL, and a draw whose program does not compile draws nothing
+and returns. Nor does it remember the failure, so the program was compiled again at every draw, which is the 25 ms.
+GLSL and SPIR-V keep no such word, so GL and Vulkan, on which every earlier measurement of the filter was made,
+accepted it. Performance's last pass has no dither and so no such variable.
+
+**Which names, measured.** The same probe gave Metal's compiler 166 candidate words, each as a parameter of a
+function in a pass. It refused 48, all of them keywords of C++14 or of Metal: among them `device`, `constant`,
+`threadgroup`, `kernel`, `new`, `delete`, `auto`, `signed`, `register`, `and`, `or`, `xor`, `try`, `catch`. SkSL
+itself refuses a further 34 (`class`, `double`, `static`, `sampler`, `in`, `out` and the like) before Metal sees
+them. A function's own name is never refused, because Skia adds a suffix to every function it writes. A measurement
+that misled first: the same words as *local variables* of a small `main` all compiled. Skia inlines a small
+function into its caller and renames the locals it moves (`_0_device`), so the word never reaches Metal; the CRT
+filter's last pass is too long to be inlined, and its local arrived as written. Whether a kept word fails therefore
+depends on the length of the function around it, and a rule that turns on the optimiser is not one to rely on.
+
+**The rule.** No pass names anything, variable, parameter or function, by a keyword of C++14, one of its
+alternative tokens, or one of Metal's address spaces and function qualifiers (`device`, `constant`, `thread`,
+`threadgroup`, `threadgroup_imageblock`, `ray_data`, `object_data`, `kernel`, `vertex`, `fragment`). The list is
+wider than the 48 measured: it includes words this compiler accepted (`not`, `thread`, `vertex`, `fragment`), since
+one compiler's leniency on one version of macOS is a lower bound on what a later one refuses, and avoiding a word
+costs nothing.
+
+**The fix.** The variable is `onDisplay`. Measured on the same Mac after it, 180 draws of a moving pattern, the last
+120 timed, the GPU's work waited for:
+
+| Filter, in 1920 × 1080 | A draw, median | 95th percentile |
+|---|---|---|
+| None (N64, 640 × 288) | 0.51 ms | 0.53 |
+| CRT at Performance, N64 | 2.00 | 2.24 |
+| CRT at Balanced, N64 | 2.71 | 2.83 |
+| CRT at Accurate, N64 | 11.61 | 11.87 |
+| CRT at Accurate, NES / SNES / Genesis | 9.51 / 9.09 / 9.43 | 9.90 / 9.33 / 9.60 |
+| CRT (Lottes) | 2.58 | 2.88 |
+| The six handheld LCDs | 0.57 to 0.67 | 0.63 to 0.78 |
+
+Every one of the 28 cases drew a picture, and Metal's compiler reported no error in the run. In a 1060 × 580 window
+the three tiers cost 1.77, 2.55 and 7.46 ms. Accurate at 1080p takes 11.6 of a 60 Hz frame's 16.7 ms on this
+machine, which the tester's own play will judge; `EmuSen_CRT.md` §17 sets the figures beside the RX 6800's.
+
+**The test.** `ShaderNamesTests` reads every text the project hands SkSL: the two simple effects, the reducing pass
+of `EmuSen_CRT.md` §16, each filter's fixed passes, and for a filter whose passes are built from its settings, the
+passes on each console it suits at each value of each structural setting and at every pair of tier and signal. It
+strips comments, takes the names, and fails on any in the rule's list. It needs no Mac and no device. It failed on
+`device`, in the last pass of every Balanced and Accurate variant, on the commit before the rename, and a second
+case holds the reading itself: a kept word is found as a name, and not in a comment or inside a longer name.
+
+**Not done.** The device tests of §3.9 and §3.10 run on GL through EGL, which macOS does not have; the Metal context
+above lives in a probe and not in the harness, so no test draws on Metal, and a defect that is not a name would be
+found again only by a player. The rule is likewise unmeasured on Windows, where Skia draws through ANGLE onto
+Direct3D and HLSL keeps words of its own; ANGLE renames what it translates, which is an argument and not a
+measurement. Nothing tells a caller that a pass failed to compile on the device: Skia offers no such report through
+SkiaSharp, and a filter that draws nothing still says it drew.
+
 ---
 
 ## 4. `FramePresenter` — the bundle nothing consumes yet

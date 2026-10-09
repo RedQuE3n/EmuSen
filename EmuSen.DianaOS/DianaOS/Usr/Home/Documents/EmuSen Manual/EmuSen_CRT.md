@@ -1855,3 +1855,30 @@ All sixteen runs, eight to an engine, gave their row of the table exactly. Befor
 **Mutants** (11, each caught): the lines ignored by the chain; not kept with the frame; not given to the tube; dropped by the hand-off; one pixel of each square taken for its mean; the rows reduced and the columns not; the mean of the wrong square; Mars reporting the frame's rows, and nothing; MarsRT reporting nothing; a filter that draws no screen reduced. The mutant that reduced the rows alone was caught by the white field too, whose light changed: a frame left at 2560 wide does go through the encoder's filter cut short, as §16.2 says.
 
 **Not done.** A RetroArch preset that counts lines is given the frame at its internal resolution, as RetroArch gives it, and so draws that many times the lines; presets are other people's models of a screen, and each has its own idea of its input. A filter that looks back at earlier frames is not reduced either (none that draws a screen does). The reducing pass is compiled when first used, on the render thread, a program of one loop.
+
+## 17. On macOS: a black picture at two tiers, and what the tiers cost on an M1 (2026-10-08)
+
+**The defect** was not in the model. The last pass of the Balanced and Accurate tiers named a variable `device`,
+which Metal's shading language keeps for itself; Skia passed the name through, Metal's compiler refused the pass, and
+the filter drew black at about 25 ms a draw. `EmuSen_Serenity.md` §3.11 has the reproduction, the mechanism, the
+names measured and the test that now reads every pass for them. Performance was unaffected, and so was every machine
+that draws through GL or Vulkan, which is why none of §11 to §16's measurements showed it.
+
+**What the tiers cost on the Mac mini** (M1, macOS 27.0, Metal), measured after the fix by the method of that
+section, at 1920 × 1080, beside §12.5's paced figures for the RX 6800 on the same console:
+
+| Tier | RX 6800, SNES | M1, SNES | M1, NES | M1, Genesis | M1, N64 (640 × 288) | M1, N64 in a 1060 × 580 window |
+|---|---|---|---|---|---|---|
+| Performance | 0.49 ms | 1.92 | 1.97 | 2.76 | 2.00 | 1.77 |
+| Balanced | 0.71 | 3.48 | 3.74 | 4.94 | 2.71 | 2.55 |
+| Accurate | 1.77 | 9.09 | 9.51 | 9.43 | 11.61 | 7.46 |
+
+The first two columns are not one protocol: the RX 6800's are §8.1's bench on GL, paced at 60 Hz and timed by the
+driver's own counter; the M1's are a draw and a wait for the device, unpaced, timed by the clock. With that said, the
+M1 takes four to five times what the RX 6800 does at each tier (3.9, 4.9 and 5.1), and the tiers keep their
+proportions: Accurate is 2.6 times Balanced on the M1 and 2.5 on the RX 6800. Accurate at 1080p takes 9 to 12 ms
+of a 60 Hz frame's 16.7 on the M1, which fits and leaves little; Balanced, the default quality, takes 2.7 to 4.9.
+
+**What this says for §12.7's question**, which waits on the handheld's and the laptop's runs: the M1 is the first
+weak device measured, and Balanced fits on it with room. The reductions §12.9 holds back for Performance would be
+argued from a machine on which Performance itself is too much, and this is not one.

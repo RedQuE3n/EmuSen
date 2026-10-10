@@ -131,5 +131,17 @@ namespace EmuSen.WiseMan.Serenity
             }
             AssertSilent(findings);
         }
+
+        // Defect 3: a picture asked for before any frame is refused with the same words every time.
+        [Fact]
+        public void A_picture_asked_for_twice_before_any_frame_is_refused_alike_both_times()
+        {
+            var (gpu, _) = Validated();
+            if (gpu is null) return;
+            using (gpu)
+            using (var chain = new SlangChain(gpu, SlangPreset.Load(Identity())))
+                for (int i = 0; i < 3; i++)
+                    Assert.Equal("No frame has been given to the chain yet.", Assert.Throws<InvalidOperationException>(() => chain.RenderImage(8, 8)).Message);
+        }
     }
 }

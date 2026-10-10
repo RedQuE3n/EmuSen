@@ -668,7 +668,8 @@ namespace EmuSen.Serenity.Slang
                 {
                     ReadbackSlot slot = _readbacks[i];
                     if (slot.Held) continue;
-                    if (slot.Buffer!.Size >= bytes) { found ??= slot; continue; }
+                    // One a failed render left with no buffer is let go of like one too small - see EmuSen_RustPlatform.md §18.3.
+                    if (slot.Buffer is { } buffer && buffer.Size >= bytes) { found ??= slot; continue; }
                     slot.Retire();
                     _readbacks.RemoveAt(i);
                 }

@@ -45,7 +45,8 @@ One page per piece of hardware being abstracted, rather than the long inline `//
 
 ## Sony
 
-`Diamond - PlayStation/`, `Sapphire - PlayStation 2/`, `Rubeus - PlayStation 3/`, `Esmeraude - PSP/`, `Wiseman - PS Vita/` — stubs, not started yet.
+- [`Diamond - PlayStation/`](Sony/Diamond%20-%20PlayStation/) — the PlayStation. **Planned, stage 0 (the plan) written 2026-10-10**: [`Diamond_Plan.md`](Sony/Diamond%20-%20PlayStation/Diamond_Plan.md) is the plan (clean-room protocol, sources, oracles, the open BIOS, the speed budget, the enhancements, stages and gates), and its [`README.md`](Sony/Diamond%20-%20PlayStation/README.md) the index.
+- `Sapphire - PlayStation 2/`, `Rubeus - PlayStation 3/`, `Esmeraude - PSP/`, `Wiseman - PS Vita/` — stubs, not started yet.
 
 ## Atari
 

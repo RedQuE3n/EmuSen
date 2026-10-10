@@ -104,7 +104,7 @@ Folder: `Cores/Sony/`
 
 | Console | Codename | Folder | Status |
 |---|---|---|---|
-| PlayStation | **Diamond** | `Cores/Sony/Diamond - PlayStation/` | Not started — reserved |
+| PlayStation | **Diamond** | `Cores/Sony/Diamond - PlayStation/` | Started; stage 0, the plan, written 2026-10-10 — the crate `diamond`, see `Man pages/Hardware/Sony/Diamond - PlayStation/Diamond_Plan.md` |
 | PlayStation 2 | **Sapphire** | `Cores/Sony/Sapphire - PlayStation 2/` | Not started — reserved |
 | PlayStation 3 | **Rubeus** | `Cores/Sony/Rubeus - PlayStation 3/` | Not started — reserved |
 | PSP | **Esmeraude** | `Cores/Sony/Esmeraude - PSP/` | Not started — reserved |

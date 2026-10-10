@@ -143,5 +143,30 @@ namespace EmuSen.WiseMan.Serenity
                 for (int i = 0; i < 3; i++)
                     Assert.Equal("No frame has been given to the chain yet.", Assert.Throws<InvalidOperationException>(() => chain.RenderImage(8, 8)).Message);
         }
+
+        // Defect 4: a device let go of while a picture holds a readback lives until the picture lets go; the layer, at the device's end, is the proof, and the pixels are read only once it is silent.
+        [Fact]
+        public void A_device_let_go_of_under_a_held_picture_lives_until_the_picture_lets_go()
+        {
+            var (gpu, findings) = Validated();
+            if (gpu is null) return;
+            SKImage picture;
+            byte[] copy;
+            using (var chain = new SlangChain(gpu, SlangPreset.Load(Identity())))
+            {
+                chain.Advance(ShaderBench.Pattern(16, 12, 3), 16, 12, 1);
+                copy = chain.Render(32, 24);
+                picture = chain.RenderImage(32, 24);
+            }
+            gpu.Dispose();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            // Before the picture lets go, the device must not have ended: had it, the layer would have said what it still held.
+            Assert.True(findings.IsEmpty, $"the device ended under a held picture: {findings.FirstOrDefault()?.Split('\n')[0]}");
+            using (SKPixmap pixmap = picture.PeekPixels()) Assert.True(copy.AsSpan().SequenceEqual(pixmap.GetPixelSpan()));
+            picture.Dispose();
+            if (!gpu.IsNative) Assert.Equal(0, gpu.ManagedValue.Live);
+            AssertSilent(findings);
+        }
     }
 }

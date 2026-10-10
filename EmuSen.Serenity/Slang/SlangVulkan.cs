@@ -200,8 +200,10 @@ namespace EmuSen.Serenity.Slang
             private PfnDebugUtilsMessengerCallbackEXT? _validation;
             private DebugUtilsMessengerEXT _listener;
 
-            // Buffers and images made on the device and not yet given back to it, for a test.
+            // Buffers and images made on the device and not yet given back to it; a device let go of ends when the last is given back - see EmuSen_RustPlatform.md §18.4.
             private int _live;
+            private bool _closing;
+            private readonly object _life = new();
             internal int Live => Volatile.Read(ref _live);
 
             public string Name { get; }
@@ -362,11 +364,14 @@ namespace EmuSen.Serenity.Slang
 
             internal void Destroy(SlangBuffer buffer)
             {
-                if (_disposed) return;
-                Vk.UnmapMemory(Device, buffer.Memory);
-                Vk.DestroyBuffer(Device, buffer.Handle, null);
-                Vk.FreeMemory(Device, buffer.Memory, null);
-                Interlocked.Decrement(ref _live);
+                lock (_life)
+                {
+                    if (_disposed) return;
+                    Vk.UnmapMemory(Device, buffer.Memory);
+                    Vk.DestroyBuffer(Device, buffer.Handle, null);
+                    Vk.FreeMemory(Device, buffer.Memory, null);
+                    if (Interlocked.Decrement(ref _live) == 0 && _closing) End();
+                }
             }
 
             internal static uint LevelsFor(uint width, uint height) => (uint)Math.Floor(Math.Log2(Math.Max(width, height))) + 1;
@@ -408,12 +413,15 @@ namespace EmuSen.Serenity.Slang
 
             internal void Destroy(SlangImage image)
             {
-                if (_disposed) return;
-                if (image.Target.Handle != image.View.Handle) Vk.DestroyImageView(Device, image.Target, null);
-                Vk.DestroyImageView(Device, image.View, null);
-                Vk.DestroyImage(Device, image.Handle, null);
-                Vk.FreeMemory(Device, image.Memory, null);
-                Interlocked.Decrement(ref _live);
+                lock (_life)
+                {
+                    if (_disposed) return;
+                    if (image.Target.Handle != image.View.Handle) Vk.DestroyImageView(Device, image.Target, null);
+                    Vk.DestroyImageView(Device, image.View, null);
+                    Vk.DestroyImage(Device, image.Handle, null);
+                    Vk.FreeMemory(Device, image.Memory, null);
+                    if (Interlocked.Decrement(ref _live) == 0 && _closing) End();
+                }
             }
 
             internal Sampler SamplerFor(bool linear, SlangWrap wrap, bool mipmap)
@@ -574,9 +582,19 @@ namespace EmuSen.Serenity.Slang
                 Vk.CmdPipelineBarrier(commands, PipelineStageFlags.TransferBit, PipelineStageFlags.HostBit, 0, 0, null, 1, &barrier, 0, null);
             }
 
+            // Let go of: the device ends now, or when a picture still holding a readback made on it lets go.
             public void Dispose()
             {
-                if (_disposed) return;
+                lock (_life)
+                {
+                    if (_closing) return;
+                    _closing = true;
+                    if (Live == 0) End();
+                }
+            }
+
+            private void End()
+            {
                 WaitIdle();
                 foreach (Sampler sampler in _samplers.Values) Vk.DestroySampler(Device, sampler, null);
                 _disposed = true;

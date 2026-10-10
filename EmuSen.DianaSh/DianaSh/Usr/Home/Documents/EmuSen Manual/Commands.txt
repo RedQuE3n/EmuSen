@@ -11,19 +11,19 @@ git reset --hard origin/WiseMan
 git clean -fdx
 
 
-dotnet run --project EmuSen.Hotaru -- /home/red/Documents/Roms/SMW.smc
+dotnet run --project EmuSen.Shell -- /home/red/Documents/Roms/SMW.smc
 
-dotnet run --project EmuSen.Hotaru -- /home/red/Documents/Roms/LttP.smc
+dotnet run --project EmuSen.Shell -- /home/red/Documents/Roms/LttP.smc
 
-dotnet run --project EmuSen.Hotaru -- /home/red/Documents/Roms/MSQSMM.smc
+dotnet run --project EmuSen.Shell -- /home/red/Documents/Roms/MSQSMM.smc
 
-dotnet run --project EmuSen.Hotaru -- /home/red/Documents/Roms/MMX.smc
+dotnet run --project EmuSen.Shell -- /home/red/Documents/Roms/MMX.smc
 
-dotnet run --project EmuSen.Hotaru -- /home/red/Documents/Roms/CT.smc
+dotnet run --project EmuSen.Shell -- /home/red/Documents/Roms/CT.smc
 
-dotnet run --project EmuSen.Hotaru -- /home/red/Documents/Roms/DC.smc
+dotnet run --project EmuSen.Shell -- /home/red/Documents/Roms/DC.smc
 
-dotnet run --project EmuSen.Hotaru -- /home/red/Documents/Roms/RR.smc
+dotnet run --project EmuSen.Shell -- /home/red/Documents/Roms/RR.smc
 
 dotnet run --project EmuSen.Mistress
 

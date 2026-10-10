@@ -50,8 +50,9 @@ Each part of the aim becomes a test this specification is judged by:
    sessions, the debugger, cheats, states, settings and input routing; frontends, scripts and the shell are its
    clients. *Revised 2026-10-10, by decision (`EmuSen_DianaSh.md` §16 Q1, §17.2): the runtime this item describes is kept whole, but it is no longer DianaSh. DianaSh is a
    standalone shell with no emulator in it, and a client of the runtime through its session service, as the frontends
-   are. The runtime is a component of its own, beneath the shell and beside the cores; its name is not yet given, and is
-   needed by `EmuSen_DianaSh.md` §13.2's step S2.*
+   are. The runtime is a component of its own, beneath the shell and beside the cores, named Crystal (decided
+   2026-10-10). The name is reused: the `EmuSen.Crystal` that pages before 2026-08-05 describe was a shared timing
+   assembly, deleted that day, and is not this component.*
 3. **The platform is Unix-like where that fits**, and the specification says where it does not.
 4. **DianaSh stays C# for this version** (`EmuSen_Stack.md` §6 defers its Rust port), and its frontend API is shaped so
    that it can later be offered as a C interface without changing shape (§9).
@@ -1188,8 +1189,8 @@ without a runtime is what DianaSh's own `Program.cs` runs and keeps. So the runt
 a new top-level folder, `Sys/` (§15 Q13), and no assembly is added. The C# cores stay in `EmuSen`, which already
 references DianaSh, and register with the runtime as managed engines (§9.5). The reference graph does not change
 direction. *Revised 2026-10-10, by decision (`EmuSen_DianaSh.md` §16 Q1, §17.2): the premise no longer holds, because the shell without a runtime is now a client of its
-own: a standalone shell on Linux, macOS and Windows. So the runtime is an assembly of its own, beneath the shell and
-beside the cores, and not a folder of DianaSh's; the debugger's registries, the cheat engine, `IDebugTarget`, the
+own: a standalone shell on Linux, macOS and Windows. So the runtime is an assembly of its own, Crystal, beneath the
+shell and beside the cores, and not a folder of DianaSh's; the debugger's registries, the cheat engine, `IDebugTarget`, the
 telemetry contracts and the system packs move into it at `EmuSen_DianaSh.md` §13.2's step S2, and the cores and
 Serenity reference it in place of the shell.*
 
@@ -1733,7 +1734,7 @@ nothing was changed.
     `latency` setting's default is its author's choice, shown with its cost; MarsRT's default is reviewed at its step 5.
 13. **Q13, the runtime's folder.** `DianaSh/Sys/`, beside `Bin`, `Lib`, `Var`, `Etc` and `Dev`? Decided: yes. `/sys` is
     where Unix exposes devices and drivers to the system, which is the runtime's subject. *Revised 2026-10-10, by decision (`EmuSen_DianaSh.md` §16 Q1, §17.2): the runtime is
-    not in the shell's tree but in an assembly of its own, whose name and folder are given with Q1 of that page; the
+    not in the shell's tree but in an assembly of its own, Crystal's; the
     system packs now in `DianaSh/Sys/Systems/` move there at its step S2.*
 14. **Q14, where the SNES's new codecs live.** `VenusRT_Plan.md` §9 Q5 put the rewrite in VenusRT's shim. Decided: in
     the SNES's system pack instead, written fresh as decided there, so that any SNES engine has them and the shim is not

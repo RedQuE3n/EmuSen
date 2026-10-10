@@ -1,7 +1,8 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the second, 2026-10-10: the seventeen questions of §16 decided, each as recommended, and the runtime
-named Crystal (Q1). The first, the same day: a design, with nothing built: the three decisions of §0.1, what the shell is
+*This revision: the third, 2026-10-10: S0 built, the golden corpus, its harness and what it recorded (§13.4). The
+second, the same day: the seventeen questions of §16 decided, each as recommended, and the runtime named Crystal (Q1).
+The first, the same day: a design, with nothing built: the three decisions of §0.1, what the shell is
 today, measured from the code (§1), and the five surfaces that are to replace what the code does now: the shell core
 (§4), the command module ABI (§5, §6), commands run as programs (§7), the session service that modules call (§9) and
 the host API by which a frontend embeds the shell (§10). Their stability policy (§11), the platforms (§12), the
@@ -1169,6 +1170,157 @@ having happened, because the provider is behind the table.
 - **The scheduler stays for the C# side** until S6, and with the Rust side the facade answers its four entry points
   from the host API (§10.2: `dianash_is_read_only` for `SubmitFromAnyThread`; `DrainPending` with nothing left to
   drain, since Crystal's boundary does the waiting).
+
+### 13.4 S0 as built: the corpus, its harness, and what it recorded
+
+*Built 2026-10-10; the counts below are of that commit.*
+
+**What is in it.** Ninety files in `EmuSen.WiseMan/DianaSh/Golden/`: one for each of the 83 commands (`[` is
+`bracket.golden`, since the bracket cannot begin a portable file name), one for each of the six builtins (`help`,
+`man`, `summary`, `export`, `unset`, `source`), and `shell.golden` for the two lines of `help` that describe the
+language rather than a command (control flow, pipes, quoting, redirection, history expansion, substitution). An alias
+is recorded in its command's file (`c` in `resume.golden`, `quit` in `shutdown.golden`, `s` in `step.golden`, `jobs` in
+`ps.golden`, `hexdump` in `xxd.golden`) and once more, typed in capitals, in `shell.golden`. There are 524 cases and
+1,944 recorded lines, about 540 KB; `man.golden` holds one case per page, 98 of them, so a change to one page fails one
+case and not the file.
+
+**The format.** Line-oriented text in which every recorded block is preceded by its length in bytes, so that an output
+may hold any byte, a newline included or a final newline absent, without an escaping rule for a second shell to
+reimplement. A file is a header, then its cases:
+
+| Line | Meaning |
+|---|---|
+| `command <name>` | the command the file is for |
+| `usage <n> <text>` | the command's usage lines, numbered, as the live shell gives them; written by the recorder |
+| `uncovered <n> -- <reason>` | a usage line no case can run, and why |
+| `unreachable "<text>" -- <reason>` | a failure the code words that no input reaches, and why |
+| `case <title>` … `end` | one case, run on its own shell |
+| `target <name>` | what the shell is attached to (below) |
+| `frames <n>` | frames run on a core before the first line (default 2) |
+| `covers <n>[-<m>],…` | the usage lines the case exercises |
+| `sessions none` | the shell is built with no session manager, as a host without `tmux` builds it |
+| `vary numbers` | the case's outputs are recorded as patterns in which every number may differ |
+| `file <path> <bytes>` | a file written into the case's home before the first line, its bytes following |
+| `$ <line>` | a line given to `Submit` |
+| `out <bytes>` / `match <bytes>` | what it printed, or a regular expression the whole of it must match |
+| `status <code> [more]` | `$?` after the line, and `more` where the shell asked for another line |
+| `action <record>` | the host action it returned, as the record prints, or `none` |
+
+The recorder rewrites every file from its `$` lines, so a case is written by its inputs alone; a pattern already in a
+file is kept as long as the output still matches it, which is how a hand-written pattern survives a re-recording.
+
+**How a case runs** (`GoldenRunner`). Each case gets a new home, a new target and a new shell. The home is a temporary
+folder that `DataStore` and `ConfigStore` are pointed at, the legacy configuration folder too, so no file of the machine
+the test runs on is read; it is given the skeleton the shell itself creates, then the case's files, and the working
+directory is its root. Accounts other than `root` are removed, since the account registry is process-wide, and the
+logging switch is set to its default, off. The shell is `CreateDefault` with what a host adds to it: `core` over
+`CoreCatalog.Registry`; `state` over a save and a load that write and read a file, defaulting to a fixed path in the
+home's save-state folder; the bundle's two cheat codecs and trace switch; a session manager unless the case says
+otherwise; and the build's supported cheat systems.
+
+**How the status is read.** `$?` lives in the interpreter's variables, and the only member that reads them,
+`GetVariable`, is not public. The harness reads it by reflection, as it reads `_orderedCommands` for the list of
+commands and their usage lines. Neither the shell's code nor its project file was changed for the corpus: an
+`InternalsVisibleTo` would have done the same job with a check at compile time, and was rejected because the step's
+condition was that recording change nothing in the shell. The price is that renaming either member breaks the harness
+when it runs, not when it builds, and does so on its first case.
+
+**The targets.**
+
+- `fake`: `GoldenDebugTarget`, whose every member answers fixed data: four plain spaces, an `IO` space with read side
+  effects, an unsized one, and a 64 KB `CpuBus` mapping RAM at `$0000`, a twelve-instruction program at `$8000` and two
+  vectors; a made-up instruction set of four mnemonics, so that `disasm`, `callers`, `readers` and `writers` have
+  something to find; two processors, the second unable to halt; and every registry.
+- `bare`: the same with every optional member absent, for each command's "this core does not report" branch; `nobus`:
+  the same without `CpuBus`, for the one failure of `vectors` that needs it.
+- `none`: no target, for every command's "No ROM loaded".
+- The cores: `venus`, `venus-sa1`, `venus-gsu` and `venusrt` on `SyntheticRom`'s images, `moon` and `moonrt` on
+  `SyntheticNesRom`'s, `mercury` and `mercuryrt` on `SyntheticGbRom`'s, `mars` and `marsrt` on `SyntheticN64Rom`'s, and
+  `nephrite`, the v1 core, on `SyntheticMdRom`'s; each built through `CoreFactory`, run for its frames and attached
+  through `CoreFactory.Bundle`, as a frontend attaches one.
+
+The N64 image carries a branch-to-self at its entry point. Without it the image is zeros past its header, and the C#
+Mars core, running them, throws `IndexOutOfRangeException` in `Cpu.StepBlock` within the first frame. That is a defect
+of the core, not of the shell, and is recorded here rather than worked on.
+
+**What is matched by pattern.** The home's real path, the temporary folder's and the install's are written as `<ROOT>`,
+`<TEMP>` and `<INSTALL>` before anything is compared. One case is a pattern, `ls -l`'s, because it prints modification
+times. Nothing else in the corpus printed a time, a process id or a path of the machine; the commands that would,
+`vstop` and `coretop`, refuse in a test host because its standard streams are redirected, and their refusal is what is
+recorded.
+
+**The gate**, `GoldenCorpusTests`:
+
+1. Each file's cases reproduce their recording; a difference names the file, the case, the line, the first differing
+   byte and the text around it.
+2. There is one file for every command and builtin, and no other.
+3. Every usage line is covered by a case, and every file's recorded usage lines equal the live ones, so a usage line
+   added to a command fails the gate until a case covers it. One line is listed as uncovered: `cheat db update`, which
+   downloads the libretro database over the network.
+4. Every literal a `Fail(…)` call words, cut at its interpolations and kept where eight characters or longer, appears
+   in an output of its command's file, or of any file for the shared helpers and the interpreter, or is listed as
+   unreachable. Ten are listed: those of `mv` and `rm`, which are suspended and refuse before they read an argument, and
+   `userdel`'s refusal to remove the shell's own account, which no input reaches, because only `root` may remove an
+   account and `root` is refused by name first.
+5. Every page in `ManPages.cs` has a case.
+6. Two recordings of the whole corpus in one process are byte-identical. The comparison of item 1 always runs in a
+   process other than the one that recorded, so it is the second half of "two recordings on two runs".
+
+On 2026-10-10 all six held: 95 tests passed.
+
+**What the corpus records that looks wrong.** These are recorded and not fixed. The corpus holds them as today's
+behaviour, so that at S3 to S5 the Rust shell must reproduce each of them, case for case, until it is decided; a fix
+made to the C# before then is a re-recording of the cases it changes, and should be its own commit for that reason.
+
+The language:
+
+1. A failure reported with status 0: a redirection that fails (`cat < nosuch.txt`, `echo x > /../escape.txt`,
+   `echo x > Logs`), a syntax error (`|`, `&& echo x`), and `!99` for a history entry that does not exist (`shell`).
+2. A line that ends in `|`, `||` or `>` asks for another line, and then rejects whatever line comes as a syntax error,
+   so the continuation it asked for cannot be given (`shell`, "stray operators").
+3. `source` returns 0 whatever the script did: its last command failing, the nesting limit, an unterminated block
+   (`shell`, "a script's failures and its status").
+4. `continue` at the prompt resumes emulation and prints nothing, while `break` does nothing (`shell`).
+5. `A=1 echo x` leaves `A` set in the shell, where bash scopes it to the command.
+
+The commands:
+
+6. Identifiers are read as hexadecimal while they are printed in decimal: `bp remove 10` reports "#10 removed" and
+   removes #16, and `bp off 99` reports "No breakpoint #153"; `cheat`, `framelog` and `watch` read their identifiers the
+   same way (`bp`, "ids are read as hexadecimal").
+7. Counts differ in base between commands: `step` and `trace` read hexadecimal (`step 10` steps 16), `runto scanline`,
+   `runto frame`, `cophist` and `mute` decimal (`step`, `trace`).
+8. A refusal's status depends on the command: `bp on 99` fails with 1 and `bp remove 99` with 0, and most
+   "Usage:" and "not found" answers are 0.
+9. `su` asks for no password, even for an account that `passwd` has given one, and `su TESTER` switches to an account
+   spelled differently from the one that exists (`su`).
+10. `dump`, `load` and `cov save|load` join their file name to `Logs/<core>/` without the sandbox's resolution, so
+    `../../../x` reads and writes outside the root (shown inside the corpus's temporary folder), and an absolute name
+    would reach any path; `core` and `state` pass their paths to the host unresolved too (`dump`, `cov`, `core`).
+11. `write` keeps the low byte of a wider value and reports success for an address past the end of its space; `load`
+    reports every byte loaded when some fall past the end; `dump … 0` prints its range as `0x0-0xFFFFFFFF` (`write`,
+    `load`, `dump`).
+12. `memfind` takes a final word of decimal digits as the limit, so `memfind RAM 03 0A 11` searches for two bytes, not
+    three; and the form its own message offers, `'00 ?? 11'`, is refused, because spaces inside one word are not
+    removed (`memfind`).
+13. `mute` reports success for a channel that does not exist, and any word but `on` unmutes; on Venus, `channels` still
+    shows a channel unmuted on the line after `mute 0 on` (`mute`).
+14. `wc` counts one line more for a file than for the same text piped (`wc -l a.txt` gives 3 for two lines, `cat a.txt
+    | wc` gives 2); the file's count is the wrong one (`wc`).
+15. `cp a.txt a.txt` fails with the platform's message about a file in use by another process (`cp`).
+16. `regs` and `setreg` do not accept the `cop` word that every other scoped command accepts (`regs`, `setreg`).
+17. `pal 9`, for a palette that does not exist, prints nothing with status 0 (`pal`).
+18. A malformed number reaches the player as the platform's own message, "Could not find any recognizable digits."
+    (throughout).
+
+The cores, outside the shell, shown by it:
+
+19. The Rust cores' debug targets publish less than their C# counterparts: VenusRT no hardware break conditions, DMA
+    channels, vectors, CPU registers, audio channels, sprites, palettes or coprocessor history; MoonRT and MercuryRT no
+    call stack, and both report frame 0 after two frames, MoonRT naming itself Moon.
+20. Nephrite names its main processor `m68k`, not the `cpu` every command takes as the main one, so `regs cpu` and
+    `disasm cpu` refuse there; and its `tile` throws `IndexOutOfRangeException`.
+21. `core`'s registry has no entry for the Genesis, so a v1 core cannot be loaded with it.
 
 ---
 

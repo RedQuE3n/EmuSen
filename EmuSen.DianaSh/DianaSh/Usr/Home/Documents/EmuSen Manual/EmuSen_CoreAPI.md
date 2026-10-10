@@ -17,6 +17,7 @@ Companion docs: `EmuSen_NativeCores.md` (the interface this one stabilises, and 
 interfaces, `CoreFactory`), `EmuSen_Debugging_Tools_Reference_v5.md` §3 (DianaSh, `IDebugTarget` and the registries),
 `EmuSen_Debugging_Tools_Reference_v5.md` §3.66.3.1 (telemetry versus the debugger; `EmuSen_Cauldron.md` §3.1 until 2026-10-07), `EmuSen_Stack.md` §6 (the later stack), `EmuSen_Libretro.md`
 (the libretro specification), and `VenusRT_Plan.md` (the core that is to be the first built on this).
+Proposed additions for disc consoles and their controllers (disc change, pad outputs, extras, memory kinds, image sets, routing by content), awaiting the tester: `EmuSen_CoreAPI_Extensions.md` (2026-10-10).
 
 ---
 

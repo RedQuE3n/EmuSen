@@ -21,18 +21,13 @@ namespace EmuSen.Serenity.Native
         internal const uint ClassSpace = 0, ClassWord = 1, NumberFloat = 0, NumberInteger = 1;
 
         private static readonly Lazy<string?> Attached = new(Attach);
-        private static readonly Lazy<bool> Chosen = new(Choose);
+        private static readonly PlatformSwitch Chosen = SwitchFor(() => Environment.GetEnvironmentVariable(Variable), () => (Attached.Value is null, Attached.Value ?? ""));
 
-        // State 1: the C# unless the variable asks for the library, the library loads, and it is lent the two libraries it calls.
-        public static bool Active => Chosen.Value;
+        // State 2: the library unless the variable is 0; one that is absent, refused or not lent Shaderc and SQLite leaves the C#, said once - see EmuSen_RustPlatform.md §19.
+        public static bool Active => Chosen.Active;
 
-        private static bool Choose()
-        {
-            if (Environment.GetEnvironmentVariable(Variable) != "1") return false;
-            if (Attached.Value is null) return true;
-            ConfigDiagnostics.Report($"{Variable}=1 was asked for and {Attached.Value}; Serenity's slang half runs on its C# implementation.");
-            return false;
-        }
+        // Serenity's switch as the process makes it, for a test that makes one of its own over another load.
+        internal static PlatformSwitch SwitchFor(Func<string?> variable, Func<(bool Available, string Report)> load) => new(variable, load, PlatformSwitch.Announce, "Serenity's slang half");
 
         // The library itself, whichever way the switch stands: what a parity test calls.
         public static bool Ready => Attached.Value is null;

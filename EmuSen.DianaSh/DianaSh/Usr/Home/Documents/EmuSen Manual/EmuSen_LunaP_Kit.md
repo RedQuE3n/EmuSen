@@ -29,6 +29,9 @@ tester. §12 lists the sources.
 5. **The long road** is a retro gaming operating system: a Linux kernel and the libraries it needs, with EmuSen as
    its session.
 6. **Accurate HDR is a requirement of the kit's presenter from the start**, not a later addition (§5.4).
+7. **Its paradigm is declarative views over a retained widget tree, with fine-grained reactive state**, and
+   one-way data flow for an application's own state (§4.2). Existing paradigms are used where they make the work
+   easier; this one was chosen among them.
 
 ### 0.2 The plan in one paragraph
 
@@ -242,10 +245,47 @@ The same as `EmuSen_DianaSh.md` §2 and `EmuSen_Surfaces.md` §6, one level up:
   Linux, applications and the shell talk Wayland and D-Bus, not a private protocol. A LunaP application in a future
   desktop is an ordinary Wayland client.
 - **Platform code sits in backends behind one trait**, never in widgets.
-- **The model is retained**, a widget tree with reactive state, not immediate mode: ES-DE's scenes, animation and
-  accessibility all need an object that persists between frames.
+- **The paradigm is chosen, not invented** (§4.2).
 
-### 4.2 The layers
+### 4.2 The paradigm: declarative views over a retained tree
+
+Decided 2026-10-10 among the paradigms existing toolkits use. The four, and what each would cost this kit:
+
+| Paradigm | Who uses it | For this kit |
+|---|---|---|
+| **An object tree with inheritance** | GTK, Qt Widgets, WPF, Avalonia (LunaP today) | Rust has no inheritance, and a tree of objects that point at their parents and change each other is what its ownership rules make hardest |
+| **The Elm architecture** (one model, messages, a view rebuilt from the model on every message) | iced, libcosmic | sound in Rust, but rebuilding the view costs on long lists and during animation, and a control's identity (which focus, accessibility and an animation in progress all hang on) must be recovered after every rebuild |
+| **Immediate mode** (the interface redrawn from code each frame, with no widgets that persist) | egui, Dear ImGui | the simplest, and the weakest at exactly what EmuSen needs: accessibility, input methods, animation, themed scenes |
+| **Declarative views over a retained tree, with reactive state** | SwiftUI, Jetpack Compose, QML, Flutter, Slint, Xilem over Masonry | **chosen** |
+
+**What the chosen one is.** An application describes its screens declaratively, in Rust: what is shown, bound to
+state. The kit turns the description into a **retained tree** of widgets that persist between frames and carry a
+stable identity, which focus, the accessibility tree and animation hang on. State is **fine-grained and reactive**:
+a value that changes updates the widgets bound to it and nothing else, so a clock or a frame counter does not rebuild
+a screen. An application's own state flows **one way**, as in the Elm architecture, from messages to state to view;
+for EmuSen the messages are Crystal's events and the player's input.
+
+**Why it fits.**
+- **Rust**: the tree is owned by the kit and the state by the application, with no shared mutable parents.
+- **Controller focus and accessibility**: both need persistent widget identity, which the retained tree gives.
+- **ES-DE**: a theme is already a declarative description of a scene, so the renderer maps one declarative form
+  onto another.
+- **Efficiency**: fine-grained updates do work in proportion to what changed, so a steady 60 frames a second beside
+  the emulation thread does not depend on how large a screen is.
+- **Mobile**: Android's and Apple's own toolkits (Jetpack Compose, SwiftUI) are this paradigm, so the kit's model maps
+  onto theirs rather than fighting them.
+- **Tests**: a retained tree can be asked for its controls, their rectangles and the focus graph, which is what the
+  fit audit and the pad walk need (§7.4).
+
+**What stays a file.** Themes (tokens, the CSS dialect) and ES-DE scenes are text files, read at run time, as the
+Unix principle has it. Screens are Rust code, not a markup language: a markup language and its compiler are a large
+project of their own, Slint's and QML's, and one can be added later as a module that produces the same declarative
+description.
+
+**How it is tested before it is committed to**: K2's prototype of LunaP's core (§9) is built in this paradigm, and
+Slint, which uses it too, is the comparison, so the gate measures the paradigm's implementation and not the paradigm.
+
+### 4.3 The layers
 
 ```
   applications ── EmuSen's frontend · a future desktop's panels and apps · third parties
@@ -273,7 +313,7 @@ The same as `EmuSen_DianaSh.md` §2 and `EmuSen_Surfaces.md` §6, one level up:
   lunap-comp ──── later: the compositor, on Smithay (§6)
 ```
 
-### 4.3 Each crate's job, and what it is held to
+### 4.4 Each crate's job, and what it is held to
 
 | Crate | Job | Built on | Held by |
 |---|---|---|---|
@@ -295,7 +335,7 @@ The same as `EmuSen_DianaSh.md` §2 and `EmuSen_Surfaces.md` §6, one level up:
 | `lunap-esde` | the ES-DE engine: Big Picture's 4,961 portable lines ported, and a renderer on the kit | widgets, media | ES-DE 3.4.1 captures, as today |
 | `lunap-test` | the harness: headless rendering, input injection, rectangles, text overflow, cap heights, the focus graph | core | its own self-tests, as `FitAuditTests` has |
 
-### 4.4 Stability: three kinds of surface
+### 4.5 Stability: three kinds of surface
 
 | Surface | Rule |
 |---|---|
@@ -308,7 +348,7 @@ languages talk to it through Wayland and D-Bus, which are already stable and lan
 Rust. The two C surfaces that cross a language are EmuSen's, not the kit's: Crystal's frontend API (`EmuSen_CoreAPI.md`
 §8.3) and DianaSh's host API (`EmuSen_DianaSh.md` §10). §11 Q8 asks whether the tester wants one anyway.
 
-### 4.5 Where it lives, and its licence
+### 4.6 Where it lives, and its licence
 
 In LunaP's own repository, as a Cargo workspace beside the C# until the C# is retired, keeping **MIT**: a permissive
 licence lets the kit serve a desktop environment and third-party applications, and does not stop an App Store build
@@ -555,11 +595,11 @@ Each with a recommendation.
 | **Q1** | LunaP's own core on shared lower layers, or a LunaP layer on Slint? | Decided by K2's table. The plan's argument (§1) favours LunaP's own core; Slint is the fallback if the prototype cannot reach the numbers |
 | **Q2** | The renderer: wgpu with only its Vulkan backend, or a renderer on ash? | wgpu, Vulkan only (§5.1), with ash as the fallback if K1 (a) fails |
 | **Q3** | Text: cosmic-text or Parley? | Decided by K1 (f): the one that meets ES-DE's 1 to 2 px and has a path to mobile fallback |
-| **Q4** | LunaP stays MIT, in its own repository, published at 1.0? | Yes (§4.5) |
+| **Q4** | LunaP stays MIT, in its own repository, published at 1.0? | Yes (§4.6) |
 | **Q5** | iOS distribution: the App Store, which needs every copyright holder's consent and interpreters only, or sideloading? | Plan for the App Store and keep the option open: record now who holds copyright in every part of EmuSen, and keep every core able to run without its recompiler |
 | **Q6** | macOS: KosmicKrisp only (macOS 26, Apple Silicon), or MoltenVK bundled too for older Macs? | Both bundled, chosen at run time, as LunarG advises |
 | **Q7** | Android's floor: Vulkan 1.1 with the 2022 profile, devices without Vulkan unsupported (7% of devices)? | Yes |
-| **Q8** | A C ABI for the kit, so applications in other languages can use it? | No: Wayland and D-Bus are the language-neutral surface for a desktop's applications (§4.4); revisit if a non-Rust application is ever wanted |
+| **Q8** | A C ABI for the kit, so applications in other languages can use it? | No: Wayland and D-Bus are the language-neutral surface for a desktop's applications (§4.5); revisit if a non-Rust application is ever wanted |
 | **Q9** | Where Qt may supplement: anything specific? | Nowhere planned. Keep it as the answer of last resort for one part (an input method, a web view) rather than a dependency of the kit |
 | **Q10** | The OS image: Fedora bootc, or SteamOS-style A/B partitions? | Fedora bootc (§6.2) |
 | **Q11** | The hardware for K1 and K2: an Android phone, an iPhone or iPad, an ARM board? | The tester's to say; K1 needs one low-end Android phone and one iOS device, and K2 an ARM board |

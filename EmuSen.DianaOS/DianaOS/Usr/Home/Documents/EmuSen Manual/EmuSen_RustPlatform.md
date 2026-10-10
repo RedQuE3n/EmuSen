@@ -754,6 +754,8 @@ Two more, raised by step 4a (§16.7):
   exists (§15).
 - **Q26.** Decided 2026-10-09: the compiler's identities stay separate for now, as §4.3 planned, so neither
   implementation serves the other's rows. It is looked at again when Serenity moves to state 2 (§15).
+  *Decided again 2026-10-10, after §19.4's measurement: they stay separate until the C# is retired, which ends the
+  question. A machine compiles each preset once more after an update, 60 to 130 ms a Mega Bezel preset on the desktop.*
 
 Four more, raised by step 4b (§17.7):
 
@@ -1614,8 +1616,8 @@ Kept here so that none is lost between steps; each names where it was found.
 - **A second `Dispose` of a player** lets go of SDL's audio twice; reproduced, not run (§14.3).
 - **A Rust program with no C# beside it** will need a SQLite of its own (Q25); what decodes lookup images then is
   decided at Serenity's retirement (Q27).
-- **Q26, the compiler's identities,** was to be looked at again when Serenity moved to state 2: it has moved, the
-  cost of the identities staying separate is measured, and the question is put again (§19.4).
+- *Closed 2026-10-10:* **Q26, the compiler's identities,** looked at again at Serenity's state 2 as planned: the cost
+  of their staying separate is measured (§19.4), and they stay separate until the C# is retired (§9).
 - *Closed 2026-10-10:* Q27 to Q30 are decided (§9); the four defects of the C# chain and device are fixed, and
   `SlangSyncTests` now shows synchronisation validation is on (§18).
 - *Closed 2026-10-10:* Endymion and Serenity are in state 2 (§19).
@@ -2295,6 +2297,8 @@ built. P6 held over the whole pack, so one identity would be safe; but the cost 
 preset on each machine, and keeping the identities apart keeps a cache the C# filled from ever serving the
 library's compile, and the other way about, while the two can still be chosen between. When the C# is retired the
 question disappears. The identity was not changed.
+
+*Decided 2026-10-10 by the tester: separate, as recommended (§9).*
 
 ### 19.5 What is lent from the C#, and a missing library
 

@@ -608,7 +608,7 @@ namespace EmuSen.Serenity.Slang
                 uint w = (uint)width, rows = (uint)height, h = rows * repeat;
                 if (w != _originalWidth || h != _originalHeight || rows != _uploadRows || repeat != _uploadRepeat)
                 {
-                    _vk.DeviceWaitIdle(_gpu.Device);
+                    _gpu.WaitIdle();
                     for (int i = 0; i < _history.Length; i++)
                     {
                         _history[i]?.Dispose();
@@ -893,7 +893,7 @@ namespace EmuSen.Serenity.Slang
             {
                 if (_disposed) return;
                 _disposed = true;
-                _vk.DeviceWaitIdle(_gpu.Device);
+                _gpu.WaitIdle();
                 foreach (Pass pass in _passes) FreePass(pass);
                 foreach (SlangImage? image in _history ?? []) image?.Dispose();
                 foreach (SlangImage lut in _luts.Values) lut.Dispose();

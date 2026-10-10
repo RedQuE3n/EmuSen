@@ -444,6 +444,12 @@ namespace EmuSen.Serenity.Slang
                 return sampler;
             }
 
+            // Waits for all the device was given, holding the queue as Vulkan asks, so no other thread submits meanwhile - see EmuSen_RustPlatform.md §18.2.
+            internal void WaitIdle()
+            {
+                lock (_submit) Vk.DeviceWaitIdle(Device);
+            }
+
             // Records, submits and waits; nothing recorded here is still running when it returns.
             internal void Run(Action<CommandBuffer> record)
             {
@@ -571,7 +577,7 @@ namespace EmuSen.Serenity.Slang
             public void Dispose()
             {
                 if (_disposed) return;
-                Vk.DeviceWaitIdle(Device);
+                WaitIdle();
                 foreach (Sampler sampler in _samplers.Values) Vk.DestroySampler(Device, sampler, null);
                 _disposed = true;
                 Vk.DestroyFence(Device, _fence, null);

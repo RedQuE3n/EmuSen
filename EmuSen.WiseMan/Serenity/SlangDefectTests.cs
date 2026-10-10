@@ -92,5 +92,44 @@ namespace EmuSen.WiseMan.Serenity
             Assert.True(live == 0 && left == 0, $"{live} buffers and images were never given back, and the layer found {left} objects left at the device's end");
             AssertSilent(findings);
         }
+
+        // Defect 2: the device is waited for under the lock its queue is used under, so two chains on two threads never use the queue at once.
+        [Fact]
+        public void Two_chains_on_two_threads_never_use_the_device_s_queue_at_once()
+        {
+            var (gpu, findings) = Validated();
+            if (gpu is null) return;
+            Write("blur.slang", Plain + "layout(set = 0, binding = 1) uniform sampler2D Source;\nvoid main() { vec4 c = vec4(0.0); for (int i = 0; i < 64; i++) c += texture(Source, vTexCoord + vec2(float(i) * 0.001)); FragColor = c / 64.0; }\n");
+            string busy = Write("busy.slangp", "shaders = 3\nshader0 = blur.slang\nscale_type0 = viewport\nshader1 = blur.slang\nscale_type1 = viewport\nshader2 = blur.slang\n");
+            string preset = Identity();
+            using (gpu)
+            {
+                // One chain keeps the queue busy with long submissions; the other takes a new size each frame, and with it the device's wait.
+                var start = new Barrier(2);
+                var other = new Thread(() =>
+                {
+                    using var chain = new SlangChain(gpu, SlangPreset.Load(busy));
+                    start.SignalAndWait();
+                    for (int k = 0; k < 120; k++)
+                    {
+                        chain.Advance(ShaderBench.Pattern(64, 48, k), 64, 48, 1);
+                        chain.Render(640, 480);
+                    }
+                });
+                other.Start();
+                using (var chain = new SlangChain(gpu, SlangPreset.Load(preset)))
+                {
+                    start.SignalAndWait();
+                    for (int k = 0; k < 400; k++)
+                    {
+                        int w = 8 + k % 5, h = 6 + k % 4;
+                        chain.Advance(ShaderBench.Pattern(w, h, k), w, h, 1);
+                    }
+                }
+                other.Join();
+                gpu.Heard();
+            }
+            AssertSilent(findings);
+        }
     }
 }

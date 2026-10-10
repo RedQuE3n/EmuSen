@@ -1,0 +1,71 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command find
+usage 1   find [path] [-name pattern]   recursively list files/directories, optionally filtered by a glob
+
+case the tree and a pattern
+target none
+covers 1
+file a.txt 1
+x
+file sub/b.txt 1
+y
+file sub/c.dat 1
+z
+$ find
+out 101
+.
+Cheats
+Firmware
+Games
+Logs
+Saves
+Saves/Save States
+a.txt
+etc
+etc/EmuSen
+sub
+sub/b.txt
+sub/c.dat
+tmp
+status 0
+action none
+$ find Saves
+out 23
+Saves
+Saves/Save States
+status 0
+action none
+$ find -name *.txt
+out 15
+a.txt
+sub/b.txt
+status 0
+action none
+$ find . -name a*
+out 5
+a.txt
+status 0
+action none
+$ find nosuch
+out 39
+find: no such file or directory: nosuch
+status 1
+action none
+$ find /..
+out 51
+find: '/..' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ find a.txt
+out 5
+a.txt
+status 0
+action none
+$ find -name
+out 38
+find: no such file or directory: -name
+status 1
+action none
+end

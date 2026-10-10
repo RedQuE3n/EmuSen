@@ -1,0 +1,152 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command userdel
+usage 1   userdel <name>                remove an account (root only) - refuses root itself or one currently in use
+unreachable "' is the account this shell is currently running as - `su` to another account first." -- only root may remove an account, and root is refused by name before this check, so the shell's own account never reaches it
+
+case accounts
+target none
+covers 1
+$ userdel
+out 30
+userdel: usage: userdel <name>
+status 1
+action none
+$ userdel nosuch
+out 31
+userdel: no such user 'nosuch'.
+status 1
+action none
+$ userdel root
+out 35
+userdel: refusing to remove 'root'.
+status 1
+action none
+$ useradd tester
+out 20
+Added user 'tester'.
+status 0
+action none
+$ userdel tester
+out 22
+Removed user 'tester'.
+status 0
+action none
+$ useradd tester
+out 20
+Added user 'tester'.
+status 0
+action none
+$ su tester
+out 21
+Switched to 'tester'.
+status 0
+action none
+$ userdel tester
+out 36
+userdel: only root can remove users.
+status 1
+action none
+$ su
+out 19
+Switched to 'root'.
+status 0
+action none
+$ tmux new other
+out 47
+[tmux] Created and switched to session 'other'.
+status 0
+action SwitchSession { Name = other }
+$ su tester
+out 21
+Switched to 'tester'.
+status 0
+action none
+$ tmux switch main
+out 34
+[tmux] Switched to session 'main'.
+status 0
+action SwitchSession { Name = main }
+$ userdel tester
+out 102
+userdel: 'tester' is currently in use by session 'other' - `su` that session to another account first.
+status 1
+action none
+$ useradd third
+out 19
+Added user 'third'.
+status 0
+action none
+$ su third
+out 20
+Switched to 'third'.
+status 0
+action none
+$ userdel third
+out 36
+userdel: only root can remove users.
+status 1
+action none
+$ su
+out 19
+Switched to 'root'.
+status 0
+action none
+$ userdel third
+out 21
+Removed user 'third'.
+status 0
+action none
+end
+
+case a host with no session manager
+target none
+covers 1
+sessions none
+$ useradd tester
+out 20
+Added user 'tester'.
+status 0
+action none
+$ su tester
+out 21
+Switched to 'tester'.
+status 0
+action none
+$ su root
+out 19
+Switched to 'root'.
+status 0
+action none
+$ useradd third
+out 19
+Added user 'third'.
+status 0
+action none
+$ su third
+out 20
+Switched to 'third'.
+status 0
+action none
+$ userdel third
+out 36
+userdel: only root can remove users.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ su
+out 19
+Switched to 'root'.
+status 0
+action none
+$ userdel third
+out 21
+Removed user 'third'.
+status 0
+action none
+end

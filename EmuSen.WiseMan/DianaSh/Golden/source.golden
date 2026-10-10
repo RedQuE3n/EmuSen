@@ -1,0 +1,99 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command source
+usage 1   source <path> (alias: .)      run a script file's lines in this same shell (variables/history scope)
+
+case a script, its variables and its failures
+target none
+covers 1
+file script.sh 65
+# a comment
+
+export X=from-script
+echo in script
+false
+echo last
+
+file loop.sh 15
+source loop.sh
+
+file open.sh 31
+if true
+then
+echo never closed
+
+file exits.sh 38
+echo before
+shutdown
+echo not reached
+
+$ source
+out 28
+source: usage: source <path>
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ . 
+out 18
+.: usage: . <path>
+status 1
+action none
+$ source nosuch.sh
+out 31
+source: no such file: nosuch.sh
+status 1
+action none
+$ source /../escape.sh
+out 63
+source: '/../escape.sh' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ source script.sh
+out 14
+in script
+last
+status 0
+action none
+$ echo $X
+out 11
+from-script
+status 0
+action none
+$ . script.sh
+out 14
+in script
+last
+status 0
+action none
+$ source loop.sh
+out 80
+source: too many nested source calls (>20) - probably a self-referential script.
+status 0
+action none
+$ source open.sh
+out 62
+source: unexpected end of file - unterminated block in open.sh
+status 0
+action none
+$ echo after
+out 5
+after
+status 0
+action none
+$ source exits.sh
+out 21
+before
+Shutting down.
+status 0
+action Shutdown { }
+$ echo $?
+out 1
+0
+status 0
+action none
+end

@@ -1,0 +1,417 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command disasm
+usage 1   disasm <space> <addr> [<n>]   disassemble <n> instructions (default 10)
+usage 2   disasm <cpu> [<addr>] [<n>]   same, in that processor's own code space and ISA -
+usage 3                                 with no <addr>, starts at where it is executing now
+usage 4   ... [m8|m16] [x8|x16]         65816 only: force the starting operand widths
+
+case spaces and processors
+target fake
+covers 1-4
+$ disasm
+out 44
+Usage: disasm <space>|<cpu> <addr> [<count>]
+status 0
+action none
+$ disasm CpuBus
+out 38
+Usage: disasm <space> <addr> [<count>]
+status 0
+action none
+$ disasm CpuBus 8000
+out 269
+  008000: 20 10 80  JSR $8010
+  008003: AD 42 00  LDA $0042
+  008006: 8D 43 00  STA $0043
+  008009: 4C 00 80  JMP $8000
+  00800C: EA        NOP
+  00800D: EA        NOP
+  00800E: EA        NOP
+  00800F: EA        NOP
+  008010: AD 43 00  LDA $0043
+  008013: 60        NOP
+status 0
+action none
+$ disasm CpuBus 8000 4
+out 119
+  008000: 20 10 80  JSR $8010
+  008003: AD 42 00  LDA $0042
+  008006: 8D 43 00  STA $0043
+  008009: 4C 00 80  JMP $8000
+status 0
+action none
+$ disasm cpu
+out 263
+  008003: AD 42 00  LDA $0042
+  008006: 8D 43 00  STA $0043
+  008009: 4C 00 80  JMP $8000
+  00800C: EA        NOP
+  00800D: EA        NOP
+  00800E: EA        NOP
+  00800F: EA        NOP
+  008010: AD 43 00  LDA $0043
+  008013: 60        NOP
+  008014: EA        NOP
+status 0
+action none
+$ disasm cpu 8009 2
+out 53
+  008009: 4C 00 80  JMP $8000
+  00800C: EA        NOP
+status 0
+action none
+$ disasm gsu
+out 245
+  000020: A0        NOP
+  000021: AD BA C7  LDA $C7BA
+  000024: D4        NOP
+  000025: E1        NOP
+  000026: EE        NOP
+  000027: FB        NOP
+  000028: 08        NOP
+  000029: 15        NOP
+  00002A: 22        NOP
+  00002B: 2F        NOP
+status 0
+action none
+$ disasm gsu 0 3
+out 71
+  000000: 00        NOP
+  000001: 0D        NOP
+  000002: 1A        NOP
+status 0
+action none
+$ disasm ROM 0 6
+out 167
+  000000: 20 10 80  JSR $8010
+  000003: AD 42 00  LDA $0042
+  000006: 8D 43 00  STA $0043
+  000009: 4C 00 80  JMP $8000
+  00000C: EA        NOP
+  00000D: EA        NOP
+status 0
+action none
+$ disasm NOPE 0
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ disasm CpuBus 8000 4 m8
+out 140
+  ; decoding with m8
+  008000: 20 10 80  JSR $8010
+  008003: AD 42 00  LDA $0042
+  008006: 8D 43 00  STA $0043
+  008009: 4C 00 80  JMP $8000
+status 0
+action none
+$ disasm CpuBus 8000 2 m16 x8
+out 84
+  ; decoding with m16 x8
+  008000: 20 10 80  JSR $8010
+  008003: AD 42 00  LDA $0042
+status 0
+action none
+$ label add 8010 sub fixed comment
+out 21
+$008010 is now 'sub'.
+status 0
+action none
+$ disasm CpuBus 8000 6
+out 176
+  008000: 20 10 80  JSR $8010  ; <sub>
+  008003: AD 42 00  LDA $0042
+  008006: 8D 43 00  STA $0043
+  008009: 4C 00 80  JMP $8000
+  00800C: EA        NOP
+  00800D: EA        NOP
+status 0
+action none
+$ disasm UNSIZED 0
+out 59
+GOLDEN target has no disassembler, or nothing was returned.
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ disasm RAM 0 2
+out 47
+  000000: 03        NOP
+  000001: 0A        NOP
+status 0
+action none
+$ disasm cpu
+out 38
+Usage: disasm <space> <addr> [<count>]
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ disasm RAM 0
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 2-3
+$ disasm cpu
+out 239
+  00ED3E: EA        NOP
+  00ED3F: EA        NOP
+  00ED40: EA        NOP
+  00ED41: EA        NOP
+  00ED42: EA        NOP
+  00ED43: EA        NOP
+  00ED44: EA        NOP
+  00ED45: EA        NOP
+  00ED46: EA        NOP
+  00ED47: EA        NOP
+status 0
+action none
+$ disasm cpu 0 4
+out 115
+  000000: 00 00     BRK #$00
+  000002: 00 00     BRK #$00
+  000004: 00 00     BRK #$00
+  000006: 00 00     BRK #$00
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 2-3
+$ disasm cpu
+out 239
+  00ED30: EA        NOP
+  00ED31: EA        NOP
+  00ED32: EA        NOP
+  00ED33: EA        NOP
+  00ED34: EA        NOP
+  00ED35: EA        NOP
+  00ED36: EA        NOP
+  00ED37: EA        NOP
+  00ED38: EA        NOP
+  00ED39: EA        NOP
+status 0
+action none
+$ disasm cpu 0 4
+out 115
+  000000: 00 00     BRK #$00
+  000002: 00 00     BRK #$00
+  000004: 00 00     BRK #$00
+  000006: 00 00     BRK #$00
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 2-3
+$ disasm cpu
+out 239
+  00B454: EA        NOP
+  00B455: EA        NOP
+  00B456: EA        NOP
+  00B457: EA        NOP
+  00B458: EA        NOP
+  00B459: EA        NOP
+  00B45A: EA        NOP
+  00B45B: EA        NOP
+  00B45C: EA        NOP
+  00B45D: EA        NOP
+status 0
+action none
+$ disasm cpu 0 4
+out 95
+  000000: 00        BRK
+  000001: 00        BRK
+  000002: 00        BRK
+  000003: 00        BRK
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 2-3
+$ disasm cpu
+out 239
+  00B454: EA        NOP
+  00B455: EA        NOP
+  00B456: EA        NOP
+  00B457: EA        NOP
+  00B458: EA        NOP
+  00B459: EA        NOP
+  00B45A: EA        NOP
+  00B45B: EA        NOP
+  00B45C: EA        NOP
+  00B45D: EA        NOP
+status 0
+action none
+$ disasm cpu 0 4
+out 95
+  000000: 00        BRK
+  000001: 00        BRK
+  000002: 00        BRK
+  000003: 00        BRK
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 2-3
+$ disasm cpu
+out 239
+  000AF2: 00        NOP
+  000AF3: 00        NOP
+  000AF4: 00        NOP
+  000AF5: 00        NOP
+  000AF6: 00        NOP
+  000AF7: 00        NOP
+  000AF8: 00        NOP
+  000AF9: 00        NOP
+  000AFA: 00        NOP
+  000AFB: 00        NOP
+status 0
+action none
+$ disasm cpu 0 4
+out 95
+  000000: 00        NOP
+  000001: 00        NOP
+  000002: 00        NOP
+  000003: 00        NOP
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 2-3
+$ disasm cpu
+out 239
+  000AF2: 00        NOP
+  000AF3: 00        NOP
+  000AF4: 00        NOP
+  000AF5: 00        NOP
+  000AF6: 00        NOP
+  000AF7: 00        NOP
+  000AF8: 00        NOP
+  000AF9: 00        NOP
+  000AFA: 00        NOP
+  000AFB: 00        NOP
+status 0
+action none
+$ disasm cpu 0 4
+out 95
+  000000: 00        NOP
+  000001: 00        NOP
+  000002: 00        NOP
+  000003: 00        NOP
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 2-3
+$ disasm cpu
+out 288
+  A4000040: 10 00 FF FF b 0xA4000040
+  A4000044: 00 00 00 00 nop
+  A4000048: 00 00 00 00 nop
+  A400004C: 00 00 00 00 nop
+  A4000050: 00 00 00 00 nop
+  A4000054: 00 00 00 00 nop
+  A4000058: 00 00 00 00 nop
+  A400005C: 00 00 00 00 nop
+  A4000060: 00 00 00 00 nop
+  A4000064: 00 00 00 00 nop
+status 0
+action none
+$ disasm cpu 0 4
+out 103
+  000000: 00 00 00 00 nop
+  000004: 00 00 00 00 nop
+  000008: 00 00 00 00 nop
+  00000C: 00 00 00 00 nop
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 2-3
+$ disasm cpu
+out 288
+  A4000040: 10 00 FF FF b 0xA4000040
+  A4000044: 00 00 00 00 nop
+  A4000048: 00 00 00 00 nop
+  A400004C: 00 00 00 00 nop
+  A4000050: 00 00 00 00 nop
+  A4000054: 00 00 00 00 nop
+  A4000058: 00 00 00 00 nop
+  A400005C: 00 00 00 00 nop
+  A4000060: 00 00 00 00 nop
+  A4000064: 00 00 00 00 nop
+status 0
+action none
+$ disasm cpu 0 4
+out 103
+  000000: 00 00 00 00 nop
+  000004: 00 00 00 00 nop
+  000008: 00 00 00 00 nop
+  00000C: 00 00 00 00 nop
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 2-3
+$ disasm cpu
+out 38
+Usage: disasm <space> <addr> [<count>]
+status 0
+action none
+$ disasm cpu 0 4
+out 100
+Error: No memory space named 'cpu'. Available: M68KBUS, Z80BUS, WRAM, Z80RAM, VRAM, CRAM, VSRAM, ROM
+status 1
+action none
+end
+
+case on venus with width hints
+target venus
+covers 2,4
+$ disasm cpu 8000 4 m16 x16
+out 133
+  ; decoding with m16 x16
+  008000: A9 01 8D  LDA #$8D01
+  008003: 00 42     BRK #$42
+  008005: EA        NOP
+  008006: EA        NOP
+status 0
+action none
+$ disasm cpu 8000 4 m8 x8
+out 130
+  ; decoding with m8 x8
+  008000: A9 01     LDA #$01
+  008002: 8D 00 42  STA $4200
+  008005: EA        NOP
+  008006: EA        NOP
+status 0
+action none
+end

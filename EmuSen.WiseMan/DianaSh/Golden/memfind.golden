@@ -1,0 +1,147 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command memfind
+usage 1   memfind <space> <bytes> [<max>]  find every offset where <bytes> occurs (hex pairs, '??' matches
+usage 2                                 any byte, separators optional) - default at most 20 hits
+
+case byte patterns
+target fake
+covers 1-2
+$ memfind
+out 38
+Usage: memfind <space> <bytes> [<max>]
+status 0
+action none
+$ memfind RAM
+out 38
+Usage: memfind <space> <bytes> [<max>]
+status 0
+action none
+$ memfind RAM 03
+out 48
+1 match(es) for the 1-byte pattern in RAM:
+  0x0
+status 0
+action none
+$ memfind RAM 030A
+out 48
+1 match(es) for the 2-byte pattern in RAM:
+  0x0
+status 0
+action none
+$ memfind RAM '03 ?? 11'
+out 92
+Pattern must be whole hex byte pairs, using '??' for a wildcard - e.g. 00FF11 or '00 ?? 11'.
+status 0
+action none
+$ memfind RAM 03-0A-11
+out 48
+1 match(es) for the 3-byte pattern in RAM:
+  0x0
+status 0
+action none
+$ memfind RAM 0 
+out 92
+Pattern must be whole hex byte pairs, using '??' for a wildcard - e.g. 00FF11 or '00 ?? 11'.
+status 0
+action none
+$ memfind RAM 0
+out 92
+Pattern must be whole hex byte pairs, using '??' for a wildcard - e.g. 00FF11 or '00 ?? 11'.
+status 0
+action none
+$ memfind RAM zz
+out 92
+Pattern must be whole hex byte pairs, using '??' for a wildcard - e.g. 00FF11 or '00 ?? 11'.
+status 0
+action none
+$ memfind RAM ??
+out 177
+More than 20 match(es) in RAM - showing the first 20:
+  0x0
+  0x1
+  0x2
+  0x3
+  0x4
+  0x5
+  0x6
+  0x7
+  0x8
+  0x9
+  0xA
+  0xB
+  0xC
+  0xD
+  0xE
+  0xF
+  0x10
+  0x11
+  0x12
+  0x13
+status 0
+action none
+$ memfind IO F0
+out 143
+IO can have real side effects on read (live hardware registers) - refusing a bulk scan there. Try WRAM (or another plain-memory space) instead.
+status 0
+action none
+$ memfind ROM EA 3
+out 69
+More than 3 match(es) in ROM - showing the first 3:
+  0xC
+  0xD
+  0xE
+status 0
+action none
+$ memfind ROM EA EA 2
+out 63
+More than 2 match(es) in ROM - showing the first 2:
+  0xC
+  0xD
+status 0
+action none
+$ memfind NOPE 00
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ memfind RAM FFFF
+out 35
+No match for 2-byte pattern in RAM.
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ memfind RAM 00
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case a trailing pair of decimal digits is read as the limit
+target fake
+covers 1-2
+$ memfind RAM 03 0A 11
+out 48
+1 match(es) for the 2-byte pattern in RAM:
+  0x0
+status 0
+action none
+$ memfind RAM 030A11
+out 48
+1 match(es) for the 3-byte pattern in RAM:
+  0x0
+status 0
+action none
+$ memfind RAM 03 0A 11 5
+out 48
+1 match(es) for the 3-byte pattern in RAM:
+  0x0
+status 0
+action none
+end

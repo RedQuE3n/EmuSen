@@ -1,0 +1,593 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command help
+usage 1   help                          this text - every command, one line each, with a brief explanation
+
+case the listing, with a target and without
+target none
+covers 1
+$ help
+out 22613
+Available commands:
+  help                          this text - every command, one line each, with a brief explanation
+  man [command]                 with no argument, same as 'help'; with a command name, its full manual page
+  spaces                        list available memory spaces
+  mem <space> <addr> [<len>]    hexdump <len> bytes (default 16) from <space> at <addr>
+  write <space> <addr> <value>  write one byte (only if <space> is writable)
+  regs                          CPU + video (+ APU/coprocessor) registers
+  regs <cpu>                    just one processor's registers - `cpus` lists them
+  (to WRITE a register, see `setreg` - kept separate so `regs` stays read-only)
+  cophist [<reg>] [<count>]     Coprocessor register history (default: all regs, last 16)
+  sprites                       active sprite/OBJ table
+  pal [<index>]                 one palette, or all of them if omitted
+  channels                      list audio channels/voices - index, active, envelope level (0-100), muted, core-specific detail (see `mute` to isolate one)
+  mute <index> <on|off>         mute/unmute one audio channel - channel's own playback state still advances, it's just excluded from the mix
+  watch add <space> <addr> <len> [write|read|both]
+                                register a watch, prints matching accesses live + stores them
+                                (default write, matching this command's original behavior)
+  watch list                    list active watches with their IDs and access kind
+  watch log <id> [<count>]      show a watch's recorded events (default 20)
+  watch summary <id>            group a watch's recorded events by access site (Context),
+                                showing each unique site once with a hit count instead of
+                                every individual event - the dynamic, addressing-mode-agnostic
+                                equivalent of `readers`/`writers`, which only find statically-
+                                visible absolute/absolute-long instructions and miss indexed/
+                                indirect access entirely. Only covers whatever's still in the
+                                watch's own bounded event buffer, same as `watch log`.
+  watch clear <id>              clear a watch's stored events (doesn't remove the watch)
+  watch remove <id>             remove a watch entirely
+  bp add <addr>[-<end>] [if <expr>] [log <expr>]
+                                halt just before <addr> runs (24-bit CPU address, or a range);
+                                with 'log' it records <expr> and carries on instead of halting
+  bp write <space> <addr>[-<end>] [<v>] [changed] [if <expr>]
+                                halt just after anything writes that address
+  bp read <space> <addr>[-<end>] [<v>] [if <expr>]
+                                halt just after anything reads it
+  bp uninit <space>             halt the first time never-written memory is read back
+  bp when <condition> [log|off] halt (or just record) when the hardware does something
+                                it should not - `bp when` alone lists what this core detects
+  bp depth <n>                  halt if the call stack ever gets deeper than <n>
+  bp forbid <addr>-<end>        never halt while the PC is in this range
+  bp log [<count>] | bp log clear
+                                show (or forget) what the logpoints have recorded
+  bp list                       list active breakpoints with their IDs and hit counts
+  bp on|off <id>                enable/disable one breakpoint without removing it
+  bp remove <id>                remove a breakpoint entirely
+  bp <cpu> add|list|remove ...  same, on another processor - `cpus` lists them, and each
+                                one's addresses are its own address space
+  (see also: `cpus`, `step`, `runto`, and the F4 prompt's own 'continue'/'c')
+  runto nmi | irq | brk | cop   resume until the next interrupt of that kind is taken
+  runto scanline <n>            resume until scanline <n> starts
+  runto frame [<n>]             resume until frame <n> (default: the next one)
+  runto <addr>                  resume until <addr> executes (a one-shot breakpoint)
+  bt [<count>]                  backtrace: the live call chain, innermost frame first
+  bt reset                      forget the current chain (after a stack-manipulating routine)
+  bt <cpu> [<count>|reset]      same, on another processor - `cpus` lists them
+  eval <expr>                   evaluate an expression against live state (decimal, hex, binary)
+  eval symbols [<filter>]       list every symbol an expression can name
+  eval <cpu> <expr>             evaluate against another processor's registers - `cpus` lists them
+  label add <addr> <name> [<comment...>]   name an address
+  label list [<filter>]                    list labels, address order
+  label at <addr>                          what is named at (or nearest below) <addr>
+  label remove <name|addr>                 drop one label
+  label clear                              drop every label
+  label load <path>                        merge a label file in
+  label save <path>                        write every label out
+  counters on <space>           start tallying reads/writes/executes for <space>
+  counters off                  stop tallying (kept counts stay readable)
+  counters clear                zero every count, stay armed
+  counters <addr> [<len>]       totals over a range, default length 1
+  counters top [r|w|x|u] [<n>]  hottest addresses, default reads, default 20
+  counters cold <addr> <len>    addresses in the range nothing ever touched
+  freeze add <space> <addr> [<value>]  pin <addr>; without <value>, at whatever it holds now
+  freeze list                          list frozen addresses and how many writes each blocked
+  freeze remove <id>                   unfreeze one address
+  freeze clear                         unfreeze everything
+  profile on                    start charging instructions to the innermost routine
+  profile off                   stop (collected counts stay readable)
+  profile clear                 zero the counts, stay armed
+  profile top [<n>]             hottest routines, default 20
+  profile <cpu> on|off|top ...  same, on another processor - `cpus` lists them
+  cpus                          list the processors a debug command can be scoped to
+  copflow on [<size>]           start logging coprocessor register-window traffic
+  copflow off                   stop logging
+  copflow clear                 forget everything logged so far
+  copflow tail [<n>]            the last <n> accesses in order (default 20)
+  copflow stats                 per-register read/write tallies, busiest first
+  copflow poll                  the longest run of unchanging reads - a stuck handshake
+  cov on|off                    start/stop recording executed addresses
+  cov clear                     forget everything recorded so far
+  cov <addr> [<len>]            report which of <len> bytes from <addr> ever executed
+                                (default 16); 0 executed means the code never ran
+  cov mark                      remember what has run so far, so `cov new` can subtract it
+  cov new <addr> [<len>]        only what has run SINCE the mark - do the thing, then ask
+  cov funcs [<count>]           routines discovered by watching calls land, busiest first
+  cov save|load <file>          persist the map to Logs/<CoreName>/<file> and merge it back
+  cov <cpu> on|off|clear|<addr> same, on another processor's own instruction stream -
+                                `cpus` lists them, and each has its own address space
+  setreg <reg> <value>          write one of the main CPU's registers
+  setreg <cpu> <reg> <value>    same, on another processor - `cpus` lists them
+  vectors                       where each interrupt vector points, resolved through labels
+  addr <addr>                   what a CPU-bus address decodes to (ROM offset, RAM, a register)
+  dma                           every channel's current configuration
+  dma log on [<n>] | dma log off
+                                start/stop recording transfers (<n> retained, default 4096)
+  dma log [<n>] | dma log clear
+                                the last <n> transfers in order (default 20), or forget them
+  dma stats                     per-channel and per-destination totals, biggest first
+  framelog add <space> <addr> [<width>]
+                                register a per-frame value sample (width 1/2/4 bytes, default 1)
+  framelog list                 list active frame logs with their IDs
+  framelog show <id> [<count>]  show a frame log's recorded (frame, value) samples (default 20)
+  framelog clear <id>           clear a frame log's stored samples (doesn't remove it)
+  framelog remove <id>          remove a frame log entirely
+  cheat add <code> [description]    decode a code, guessing whether it's Pro
+                                     Action Replay/Game Wizard or Game Genie from
+                                     its formatting (see `gg` if it guesses wrong -
+                                     both formats use the same 8 hex-digit
+                                     characters, so this is a best-effort guess,
+                                     not a guarantee)
+  cheat poke <space> <addr> <value> [description]
+                                     add a raw RAM-poke cheat directly, bypassing
+                                     code decoding (e.g. an address you already
+                                     found with `search`)
+  cheat gg <code> [description]     decode a real SNES Game Genie code (8
+                                     characters) and add it as a ROM patch, enabled
+                                     - use this instead of `add` when its guess is
+                                     wrong for a code formatted unconventionally
+  cheat rompatch <addr> <value> [<compare>|-] [description]
+                                     add a Game Genie-style ROM-read intercept
+                                     directly, bypassing code decoding: substitute
+                                     <value> for reads of cartridge address <addr>.
+                                     <compare> gates the patch to only apply while
+                                     the real byte there equals it (pass - to skip,
+                                     an unconditional patch - what every real SNES
+                                     Game Genie code decodes to; unlike NES/Genesis,
+                                     SNES Game Genie codes never carry a compare)
+  cheat list                         list every cheat with its ID, kind, and state
+  cheat master [on|off]              one switch over every cheat at once, without
+                                     touching any cheat's own enabled state (no
+                                     argument reports which way it is set)
+  cheat enable <id>                  turn a cheat back on
+  cheat disable <id>                 turn a cheat off without removing it
+  cheat remove <id>                  remove a cheat entirely
+  cheat clear                        remove every cheat
+  cheat save <name>                  write every cheat to
+                                     /etc/EmuSen/cheats/<name>.json
+  cheat load <name>                  add every cheat from that file to whatever
+                                     is already loaded (`cheat clear` first to
+                                     replace rather than merge)
+  cheat files                        list the saved cheat files
+  cheat import <path.cht>            import RetroArch/libretro .cht cheats, added
+                                     disabled so nothing turns on by surprise
+  cheat export <path.cht>            write RAM-poke cheats out as a .cht file
+  cheat db [status]                  where the cheat database is, and what is in it
+  cheat db find <game>               search the database for a game
+  cheat db load <game>               import that game's cheats, disabled
+  cheat db update                    download the libretro cheat database (CC BY-SA 4.0)
+  cheat db prune [--apply]           delete the systems no core in this build can use
+  search <space> <val> [<w>]    start a new search: find every address currently equal to <val>
+                                (width <w> in bytes: 1, 2, or 4 - default 1, little-endian)
+  search refine <val>           narrow the current search to addresses now equal to <val>
+  search changed|unchanged      narrow to addresses whose value did/didn't change since last search/refine
+  search increased|decreased    narrow to addresses whose value went up/down since last search/refine
+  search list [<count>]         list current candidate addresses + values (default 20)
+  search reset                  clear the current search
+  memfind <space> <bytes> [<max>]  find every offset where <bytes> occurs (hex pairs, '??' matches
+                                any byte, separators optional) - default at most 20 hits
+  snapshot <space> <name>       capture <space>'s full current contents under <name>
+  snapshot list                 list saved snapshots (name, space, size)
+  snapshot remove <name>        delete a saved snapshot
+  diff <name> [<count>]         compare snapshot <name> against that space's CURRENT contents,
+                                print addresses that changed (default 20 shown)
+  dump <space> <addr> <len> <file> write raw bytes to home/Logs/<CoreName>/<file>
+  load <space> <addr> <file>    write home/Logs/<CoreName>/<file>'s raw bytes into <space> starting at <addr>
+  tile <space> <addr> <bpp>     ASCII-decode one 8x8 tile (bpp meaning is core-specific - 2/4/8 on SNES)
+  tilemap <space> <addr> <cols> <rows>
+                                decode <cols>x<rows> tilemap entries starting at <addr>
+                                as a text grid, one already-formatted label per cell -
+                                see IDebugTarget.DecodeTilemapEntry for what a label
+                                means on the current core. Caller supplies the exact base
+                                address (see BG1SC/etc via `regs`) - this doesn't resolve
+                                BG-layer-to-tilemap-address mapping itself.
+  disasm <space> <addr> [<n>]   disassemble <n> instructions (default 10)
+  disasm <cpu> [<addr>] [<n>]   same, in that processor's own code space and ISA -
+                                with no <addr>, starts at where it is executing now
+  ... [m8|m16] [x8|x16]         65816 only: force the starting operand widths
+  trace <count>                 arm a live CPU instruction trace for the next <count> instructions
+  trace off                     cancel an in-progress trace early
+  callers <addr> [<scanstart> <scanlen>]
+                                find instructions statically calling/jumping to <addr>,
+                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)
+  writers <addr> [<scanstart> <scanlen>]
+                                find instructions statically writing to <addr>,
+                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)
+  readers <addr> [<scanstart> <scanlen>]
+                                find instructions statically reading <addr>,
+                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)
+  log off                       silence every logging flag at once, without changing them
+  log on                        restore whatever each logging flag was individually set to
+  log status                    show whether the master switch is currently on or off
+  echo <text...>                print <text> back, joined by spaces
+  sed s/pat/repl/[gi]           substitute (first match per line, or every match with 'g';
+                                'i' = case-insensitive). Standalone: sed <expr> <text...>.
+                                Real use is as a pipeline stage: <command> | sed s/pat/repl/
+  grep [-i] [-v] [-n] [-c] [-q] <pattern> [text...]
+                                filter lines matching <pattern> (regex) - -i case-insensitive,
+                                -v invert (non-matching), -n prefix line numbers, -c print only
+                                the match count, -q no output (exit code only, for if/while).
+                                Reads piped stdin if given, else operates on trailing literal text.
+  wc [-l] [-w] [-c] [path]     count lines/words/bytes (all three if no flag given);
+                                reads piped stdin, or a real file if <path> is given
+  sort [-n] [-r]                sort input lines (numeric with -n, reversed with -r) -
+                                reads piped stdin, or trailing literal text
+  uniq [-c]                     collapse adjacent duplicate lines (-c prefixes each with its
+                                repeat count) - sort first for global dedup, not just adjacent
+  awk [-F sep] 'prog' [path]   run a small AWK subset over stdin or <path>, line by line
+                                patterns: /regex/, NR==N (also !=,<,<=,>,>=), BEGIN, END
+                                actions: {print $0|$N|$NF|NR|NF|"lit"[, ...][; print ...]}
+  ls [-a] [-l] [path]           list directory entries (default: current directory);
+                                -a include dotfiles, -l show type/size/modified-time
+  cd [dir]                      change directory, walled to the project root (no arg: your home directory)
+  mv <src> <dst>                SUSPENDED - move/rename a file or directory (dst may be an existing directory)
+  cp [-r] <src> <dst>           copy a file (-r: copy a directory and everything in it; dst may be an existing directory)
+  rm [-r] <path>                SUSPENDED - delete a file (-r: delete a directory and everything in it)
+  pwd                           print the current working directory
+  cat <path>...                 print one or more files' contents
+  head [-n N] [path]            first N lines (default 10) of stdin or a file
+  tail [-n N] [path]            last N lines (default 10) of stdin or a file
+  touch <path>                  create an empty file, or update an existing one's modified time
+  find [path] [-name pattern]   recursively list files/directories, optionally filtered by a glob
+  xxd | hexdump <path>          hexdump a real file's raw bytes, or piped stdin (UTF8-encoded first)
+  nano <path>                   simple full-screen text editor (Ctrl+O save, Ctrl+X exit - interactive terminal only)
+  tmux new [name]               create a session (auto-named if omitted) and switch to it
+  tmux list                     list every session, * marks the current one
+  tmux switch <name>            switch to an existing session
+  tmux kill <name>              destroy a session (can't kill the last one)
+  ps | jobs                     list active breakpoints/watches/sessions as one table - see `kill`
+  kill <id>                     remove a breakpoint/watch/session by its `ps` id (bp<N>, watch<N>, or a session name)
+  whoami                        print the account this shell is currently running as
+  who                           list every session and which account it's running as
+  su [name]                     switch this shell to <name> (default: root) - see `useradd`
+  useradd <name>                add a new account (root only) - see `su`
+  userdel <name>                remove an account (root only) - refuses root itself or one currently in use
+  passwd <newpassword>          change your own password
+  passwd <name> <newpassword>   change <name>'s password (root only)
+  coretop [-w]                  live htop-style dashboard of the loaded core's hardware (Ctrl+C to exit - interactive terminal only;
+                                -w opens it in a separate window instead, if this frontend supports one)
+  vstop [-w]                    live htop-style dashboard of the .NET runtime this process runs on (Ctrl+C to exit - interactive terminal only;
+                                -w opens it in a separate window instead, if this frontend supports one)
+  clear                         clear the terminal screen
+  true                          do nothing, succeed (exit code 0) - for while/if conditions
+  false                         do nothing, fail (exit code 1) - for while/if conditions
+  test EXPR / [ EXPR ]         VALUE (true if non-empty) | -z/-n VALUE | -f/-d PATH | !
+                                VALUE = / != / -eq / -ne / -lt / -le / -gt / -ge VALUE
+                                exit code only (0 = true) - meant for if/while, not for its own output
+  [ EXPR ]                      alias for 'test EXPR' - the ']' is required
+  history                       list previously executed commands, numbered
+  history clear                 forget all recorded history
+  !N / !!                       re-run history entry N / the last command (typed at the prompt)
+  resume | continue | c         resume emulation after an interactive halt (F4/breakpoint/single-step)
+  shutdown | quit               terminate the process
+  step | s [<count>]            single-step one CPU instruction (or <count> of them)
+  step over                     run the call at the current instruction to completion, then halt
+  step out                      run until the current routine returns to its caller
+  step <cpu> [<count>|over|out] same, stepping another processor - `cpus` lists them
+  core <corename> <path>        load or swap the running ROM (validated against the known core registry)
+  state save|load [path]        save/load emulator state (defaults to this frontend's own save-state path if omitted)
+  summary                       free-text state dump (whatever isn't structured above yet)
+  export NAME[=value]           set a shell variable (no real subprocess env to export TO -
+                                kept for script compatibility with real bash habits)
+  unset NAME                    remove a shell variable
+  source <path> (alias: .)      run a script file's lines in this same shell (variables/history scope)
+  if/then/elif/else/fi, for/in/do/done, while|until/do/done, break, continue
+                                control flow - see the reference doc for the full grammar
+
+Addresses/values are hex; an optional 0x or $ prefix is fine either way.
+Shell features: quoting ('...'/"..."), $VAR/${VAR}/$? , $(command substitution),
+pipes (|), redirection (> >> <), sequencing (; && ||), if/for/while - see
+EmuSen_Debugging_Tools_Reference_v5.md for the full writeup and what's NOT supported.
+status 0
+action none
+$ help extra words are ignored
+out 22613
+Available commands:
+  help                          this text - every command, one line each, with a brief explanation
+  man [command]                 with no argument, same as 'help'; with a command name, its full manual page
+  spaces                        list available memory spaces
+  mem <space> <addr> [<len>]    hexdump <len> bytes (default 16) from <space> at <addr>
+  write <space> <addr> <value>  write one byte (only if <space> is writable)
+  regs                          CPU + video (+ APU/coprocessor) registers
+  regs <cpu>                    just one processor's registers - `cpus` lists them
+  (to WRITE a register, see `setreg` - kept separate so `regs` stays read-only)
+  cophist [<reg>] [<count>]     Coprocessor register history (default: all regs, last 16)
+  sprites                       active sprite/OBJ table
+  pal [<index>]                 one palette, or all of them if omitted
+  channels                      list audio channels/voices - index, active, envelope level (0-100), muted, core-specific detail (see `mute` to isolate one)
+  mute <index> <on|off>         mute/unmute one audio channel - channel's own playback state still advances, it's just excluded from the mix
+  watch add <space> <addr> <len> [write|read|both]
+                                register a watch, prints matching accesses live + stores them
+                                (default write, matching this command's original behavior)
+  watch list                    list active watches with their IDs and access kind
+  watch log <id> [<count>]      show a watch's recorded events (default 20)
+  watch summary <id>            group a watch's recorded events by access site (Context),
+                                showing each unique site once with a hit count instead of
+                                every individual event - the dynamic, addressing-mode-agnostic
+                                equivalent of `readers`/`writers`, which only find statically-
+                                visible absolute/absolute-long instructions and miss indexed/
+                                indirect access entirely. Only covers whatever's still in the
+                                watch's own bounded event buffer, same as `watch log`.
+  watch clear <id>              clear a watch's stored events (doesn't remove the watch)
+  watch remove <id>             remove a watch entirely
+  bp add <addr>[-<end>] [if <expr>] [log <expr>]
+                                halt just before <addr> runs (24-bit CPU address, or a range);
+                                with 'log' it records <expr> and carries on instead of halting
+  bp write <space> <addr>[-<end>] [<v>] [changed] [if <expr>]
+                                halt just after anything writes that address
+  bp read <space> <addr>[-<end>] [<v>] [if <expr>]
+                                halt just after anything reads it
+  bp uninit <space>             halt the first time never-written memory is read back
+  bp when <condition> [log|off] halt (or just record) when the hardware does something
+                                it should not - `bp when` alone lists what this core detects
+  bp depth <n>                  halt if the call stack ever gets deeper than <n>
+  bp forbid <addr>-<end>        never halt while the PC is in this range
+  bp log [<count>] | bp log clear
+                                show (or forget) what the logpoints have recorded
+  bp list                       list active breakpoints with their IDs and hit counts
+  bp on|off <id>                enable/disable one breakpoint without removing it
+  bp remove <id>                remove a breakpoint entirely
+  bp <cpu> add|list|remove ...  same, on another processor - `cpus` lists them, and each
+                                one's addresses are its own address space
+  (see also: `cpus`, `step`, `runto`, and the F4 prompt's own 'continue'/'c')
+  runto nmi | irq | brk | cop   resume until the next interrupt of that kind is taken
+  runto scanline <n>            resume until scanline <n> starts
+  runto frame [<n>]             resume until frame <n> (default: the next one)
+  runto <addr>                  resume until <addr> executes (a one-shot breakpoint)
+  bt [<count>]                  backtrace: the live call chain, innermost frame first
+  bt reset                      forget the current chain (after a stack-manipulating routine)
+  bt <cpu> [<count>|reset]      same, on another processor - `cpus` lists them
+  eval <expr>                   evaluate an expression against live state (decimal, hex, binary)
+  eval symbols [<filter>]       list every symbol an expression can name
+  eval <cpu> <expr>             evaluate against another processor's registers - `cpus` lists them
+  label add <addr> <name> [<comment...>]   name an address
+  label list [<filter>]                    list labels, address order
+  label at <addr>                          what is named at (or nearest below) <addr>
+  label remove <name|addr>                 drop one label
+  label clear                              drop every label
+  label load <path>                        merge a label file in
+  label save <path>                        write every label out
+  counters on <space>           start tallying reads/writes/executes for <space>
+  counters off                  stop tallying (kept counts stay readable)
+  counters clear                zero every count, stay armed
+  counters <addr> [<len>]       totals over a range, default length 1
+  counters top [r|w|x|u] [<n>]  hottest addresses, default reads, default 20
+  counters cold <addr> <len>    addresses in the range nothing ever touched
+  freeze add <space> <addr> [<value>]  pin <addr>; without <value>, at whatever it holds now
+  freeze list                          list frozen addresses and how many writes each blocked
+  freeze remove <id>                   unfreeze one address
+  freeze clear                         unfreeze everything
+  profile on                    start charging instructions to the innermost routine
+  profile off                   stop (collected counts stay readable)
+  profile clear                 zero the counts, stay armed
+  profile top [<n>]             hottest routines, default 20
+  profile <cpu> on|off|top ...  same, on another processor - `cpus` lists them
+  cpus                          list the processors a debug command can be scoped to
+  copflow on [<size>]           start logging coprocessor register-window traffic
+  copflow off                   stop logging
+  copflow clear                 forget everything logged so far
+  copflow tail [<n>]            the last <n> accesses in order (default 20)
+  copflow stats                 per-register read/write tallies, busiest first
+  copflow poll                  the longest run of unchanging reads - a stuck handshake
+  cov on|off                    start/stop recording executed addresses
+  cov clear                     forget everything recorded so far
+  cov <addr> [<len>]            report which of <len> bytes from <addr> ever executed
+                                (default 16); 0 executed means the code never ran
+  cov mark                      remember what has run so far, so `cov new` can subtract it
+  cov new <addr> [<len>]        only what has run SINCE the mark - do the thing, then ask
+  cov funcs [<count>]           routines discovered by watching calls land, busiest first
+  cov save|load <file>          persist the map to Logs/<CoreName>/<file> and merge it back
+  cov <cpu> on|off|clear|<addr> same, on another processor's own instruction stream -
+                                `cpus` lists them, and each has its own address space
+  setreg <reg> <value>          write one of the main CPU's registers
+  setreg <cpu> <reg> <value>    same, on another processor - `cpus` lists them
+  vectors                       where each interrupt vector points, resolved through labels
+  addr <addr>                   what a CPU-bus address decodes to (ROM offset, RAM, a register)
+  dma                           every channel's current configuration
+  dma log on [<n>] | dma log off
+                                start/stop recording transfers (<n> retained, default 4096)
+  dma log [<n>] | dma log clear
+                                the last <n> transfers in order (default 20), or forget them
+  dma stats                     per-channel and per-destination totals, biggest first
+  framelog add <space> <addr> [<width>]
+                                register a per-frame value sample (width 1/2/4 bytes, default 1)
+  framelog list                 list active frame logs with their IDs
+  framelog show <id> [<count>]  show a frame log's recorded (frame, value) samples (default 20)
+  framelog clear <id>           clear a frame log's stored samples (doesn't remove it)
+  framelog remove <id>          remove a frame log entirely
+  cheat add <code> [description]    decode a code, guessing whether it's Pro
+                                     Action Replay/Game Wizard or Game Genie from
+                                     its formatting (see `gg` if it guesses wrong -
+                                     both formats use the same 8 hex-digit
+                                     characters, so this is a best-effort guess,
+                                     not a guarantee)
+  cheat poke <space> <addr> <value> [description]
+                                     add a raw RAM-poke cheat directly, bypassing
+                                     code decoding (e.g. an address you already
+                                     found with `search`)
+  cheat gg <code> [description]     decode a real SNES Game Genie code (8
+                                     characters) and add it as a ROM patch, enabled
+                                     - use this instead of `add` when its guess is
+                                     wrong for a code formatted unconventionally
+  cheat rompatch <addr> <value> [<compare>|-] [description]
+                                     add a Game Genie-style ROM-read intercept
+                                     directly, bypassing code decoding: substitute
+                                     <value> for reads of cartridge address <addr>.
+                                     <compare> gates the patch to only apply while
+                                     the real byte there equals it (pass - to skip,
+                                     an unconditional patch - what every real SNES
+                                     Game Genie code decodes to; unlike NES/Genesis,
+                                     SNES Game Genie codes never carry a compare)
+  cheat list                         list every cheat with its ID, kind, and state
+  cheat master [on|off]              one switch over every cheat at once, without
+                                     touching any cheat's own enabled state (no
+                                     argument reports which way it is set)
+  cheat enable <id>                  turn a cheat back on
+  cheat disable <id>                 turn a cheat off without removing it
+  cheat remove <id>                  remove a cheat entirely
+  cheat clear                        remove every cheat
+  cheat save <name>                  write every cheat to
+                                     /etc/EmuSen/cheats/<name>.json
+  cheat load <name>                  add every cheat from that file to whatever
+                                     is already loaded (`cheat clear` first to
+                                     replace rather than merge)
+  cheat files                        list the saved cheat files
+  cheat import <path.cht>            import RetroArch/libretro .cht cheats, added
+                                     disabled so nothing turns on by surprise
+  cheat export <path.cht>            write RAM-poke cheats out as a .cht file
+  cheat db [status]                  where the cheat database is, and what is in it
+  cheat db find <game>               search the database for a game
+  cheat db load <game>               import that game's cheats, disabled
+  cheat db update                    download the libretro cheat database (CC BY-SA 4.0)
+  cheat db prune [--apply]           delete the systems no core in this build can use
+  search <space> <val> [<w>]    start a new search: find every address currently equal to <val>
+                                (width <w> in bytes: 1, 2, or 4 - default 1, little-endian)
+  search refine <val>           narrow the current search to addresses now equal to <val>
+  search changed|unchanged      narrow to addresses whose value did/didn't change since last search/refine
+  search increased|decreased    narrow to addresses whose value went up/down since last search/refine
+  search list [<count>]         list current candidate addresses + values (default 20)
+  search reset                  clear the current search
+  memfind <space> <bytes> [<max>]  find every offset where <bytes> occurs (hex pairs, '??' matches
+                                any byte, separators optional) - default at most 20 hits
+  snapshot <space> <name>       capture <space>'s full current contents under <name>
+  snapshot list                 list saved snapshots (name, space, size)
+  snapshot remove <name>        delete a saved snapshot
+  diff <name> [<count>]         compare snapshot <name> against that space's CURRENT contents,
+                                print addresses that changed (default 20 shown)
+  dump <space> <addr> <len> <file> write raw bytes to home/Logs/<CoreName>/<file>
+  load <space> <addr> <file>    write home/Logs/<CoreName>/<file>'s raw bytes into <space> starting at <addr>
+  tile <space> <addr> <bpp>     ASCII-decode one 8x8 tile (bpp meaning is core-specific - 2/4/8 on SNES)
+  tilemap <space> <addr> <cols> <rows>
+                                decode <cols>x<rows> tilemap entries starting at <addr>
+                                as a text grid, one already-formatted label per cell -
+                                see IDebugTarget.DecodeTilemapEntry for what a label
+                                means on the current core. Caller supplies the exact base
+                                address (see BG1SC/etc via `regs`) - this doesn't resolve
+                                BG-layer-to-tilemap-address mapping itself.
+  disasm <space> <addr> [<n>]   disassemble <n> instructions (default 10)
+  disasm <cpu> [<addr>] [<n>]   same, in that processor's own code space and ISA -
+                                with no <addr>, starts at where it is executing now
+  ... [m8|m16] [x8|x16]         65816 only: force the starting operand widths
+  trace <count>                 arm a live CPU instruction trace for the next <count> instructions
+  trace off                     cancel an in-progress trace early
+  callers <addr> [<scanstart> <scanlen>]
+                                find instructions statically calling/jumping to <addr>,
+                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)
+  writers <addr> [<scanstart> <scanlen>]
+                                find instructions statically writing to <addr>,
+                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)
+  readers <addr> [<scanstart> <scanlen>]
+                                find instructions statically reading <addr>,
+                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)
+  log off                       silence every logging flag at once, without changing them
+  log on                        restore whatever each logging flag was individually set to
+  log status                    show whether the master switch is currently on or off
+  echo <text...>                print <text> back, joined by spaces
+  sed s/pat/repl/[gi]           substitute (first match per line, or every match with 'g';
+                                'i' = case-insensitive). Standalone: sed <expr> <text...>.
+                                Real use is as a pipeline stage: <command> | sed s/pat/repl/
+  grep [-i] [-v] [-n] [-c] [-q] <pattern> [text...]
+                                filter lines matching <pattern> (regex) - -i case-insensitive,
+                                -v invert (non-matching), -n prefix line numbers, -c print only
+                                the match count, -q no output (exit code only, for if/while).
+                                Reads piped stdin if given, else operates on trailing literal text.
+  wc [-l] [-w] [-c] [path]     count lines/words/bytes (all three if no flag given);
+                                reads piped stdin, or a real file if <path> is given
+  sort [-n] [-r]                sort input lines (numeric with -n, reversed with -r) -
+                                reads piped stdin, or trailing literal text
+  uniq [-c]                     collapse adjacent duplicate lines (-c prefixes each with its
+                                repeat count) - sort first for global dedup, not just adjacent
+  awk [-F sep] 'prog' [path]   run a small AWK subset over stdin or <path>, line by line
+                                patterns: /regex/, NR==N (also !=,<,<=,>,>=), BEGIN, END
+                                actions: {print $0|$N|$NF|NR|NF|"lit"[, ...][; print ...]}
+  ls [-a] [-l] [path]           list directory entries (default: current directory);
+                                -a include dotfiles, -l show type/size/modified-time
+  cd [dir]                      change directory, walled to the project root (no arg: your home directory)
+  mv <src> <dst>                SUSPENDED - move/rename a file or directory (dst may be an existing directory)
+  cp [-r] <src> <dst>           copy a file (-r: copy a directory and everything in it; dst may be an existing directory)
+  rm [-r] <path>                SUSPENDED - delete a file (-r: delete a directory and everything in it)
+  pwd                           print the current working directory
+  cat <path>...                 print one or more files' contents
+  head [-n N] [path]            first N lines (default 10) of stdin or a file
+  tail [-n N] [path]            last N lines (default 10) of stdin or a file
+  touch <path>                  create an empty file, or update an existing one's modified time
+  find [path] [-name pattern]   recursively list files/directories, optionally filtered by a glob
+  xxd | hexdump <path>          hexdump a real file's raw bytes, or piped stdin (UTF8-encoded first)
+  nano <path>                   simple full-screen text editor (Ctrl+O save, Ctrl+X exit - interactive terminal only)
+  tmux new [name]               create a session (auto-named if omitted) and switch to it
+  tmux list                     list every session, * marks the current one
+  tmux switch <name>            switch to an existing session
+  tmux kill <name>              destroy a session (can't kill the last one)
+  ps | jobs                     list active breakpoints/watches/sessions as one table - see `kill`
+  kill <id>                     remove a breakpoint/watch/session by its `ps` id (bp<N>, watch<N>, or a session name)
+  whoami                        print the account this shell is currently running as
+  who                           list every session and which account it's running as
+  su [name]                     switch this shell to <name> (default: root) - see `useradd`
+  useradd <name>                add a new account (root only) - see `su`
+  userdel <name>                remove an account (root only) - refuses root itself or one currently in use
+  passwd <newpassword>          change your own password
+  passwd <name> <newpassword>   change <name>'s password (root only)
+  coretop [-w]                  live htop-style dashboard of the loaded core's hardware (Ctrl+C to exit - interactive terminal only;
+                                -w opens it in a separate window instead, if this frontend supports one)
+  vstop [-w]                    live htop-style dashboard of the .NET runtime this process runs on (Ctrl+C to exit - interactive terminal only;
+                                -w opens it in a separate window instead, if this frontend supports one)
+  clear                         clear the terminal screen
+  true                          do nothing, succeed (exit code 0) - for while/if conditions
+  false                         do nothing, fail (exit code 1) - for while/if conditions
+  test EXPR / [ EXPR ]         VALUE (true if non-empty) | -z/-n VALUE | -f/-d PATH | !
+                                VALUE = / != / -eq / -ne / -lt / -le / -gt / -ge VALUE
+                                exit code only (0 = true) - meant for if/while, not for its own output
+  [ EXPR ]                      alias for 'test EXPR' - the ']' is required
+  history                       list previously executed commands, numbered
+  history clear                 forget all recorded history
+  !N / !!                       re-run history entry N / the last command (typed at the prompt)
+  resume | continue | c         resume emulation after an interactive halt (F4/breakpoint/single-step)
+  shutdown | quit               terminate the process
+  step | s [<count>]            single-step one CPU instruction (or <count> of them)
+  step over                     run the call at the current instruction to completion, then halt
+  step out                      run until the current routine returns to its caller
+  step <cpu> [<count>|over|out] same, stepping another processor - `cpus` lists them
+  core <corename> <path>        load or swap the running ROM (validated against the known core registry)
+  state save|load [path]        save/load emulator state (defaults to this frontend's own save-state path if omitted)
+  summary                       free-text state dump (whatever isn't structured above yet)
+  export NAME[=value]           set a shell variable (no real subprocess env to export TO -
+                                kept for script compatibility with real bash habits)
+  unset NAME                    remove a shell variable
+  source <path> (alias: .)      run a script file's lines in this same shell (variables/history scope)
+  if/then/elif/else/fi, for/in/do/done, while|until/do/done, break, continue
+                                control flow - see the reference doc for the full grammar
+
+Addresses/values are hex; an optional 0x or $ prefix is fine either way.
+Shell features: quoting ('...'/"..."), $VAR/${VAR}/$? , $(command substitution),
+pipes (|), redirection (> >> <), sequencing (; && ||), if/for/while - see
+EmuSen_Debugging_Tools_Reference_v5.md for the full writeup and what's NOT supported.
+status 0
+action none
+end
+
+case the listing on a core's shell
+target fake
+covers 1
+$ help | head -n 3
+out 226
+Available commands:
+  help                          this text - every command, one line each, with a brief explanation
+  man [command]                 with no argument, same as 'help'; with a command name, its full manual page
+status 0
+action none
+$ help | wc -l
+out 3
+279
+status 0
+action none
+end

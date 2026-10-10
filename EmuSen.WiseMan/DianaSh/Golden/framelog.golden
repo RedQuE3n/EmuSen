@@ -1,0 +1,191 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command framelog
+usage 1   framelog add <space> <addr> [<width>]
+usage 2                                 register a per-frame value sample (width 1/2/4 bytes, default 1)
+usage 3   framelog list                 list active frame logs with their IDs
+usage 4   framelog show <id> [<count>]  show a frame log's recorded (frame, value) samples (default 20)
+usage 5   framelog clear <id>           clear a frame log's stored samples (doesn't remove it)
+usage 6   framelog remove <id>          remove a frame log entirely
+
+case per-frame samples
+target fake
+covers 1-6
+$ framelog
+out 46
+Usage: framelog add|list|show|clear|remove ...
+status 0
+action none
+$ framelog list
+out 21
+No active frame logs.
+status 0
+action none
+$ framelog add
+out 44
+Usage: framelog add <space> <addr> [<width>]
+status 0
+action none
+$ framelog add RAM 10
+out 38
+Frame log #1 added: RAM 0x10 (width 1)
+status 0
+action none
+$ framelog add RAM 10 2
+out 38
+Frame log #2 added: RAM 0x10 (width 2)
+status 0
+action none
+$ framelog add RAM 10 3
+out 24
+width must be 1, 2, or 4
+status 0
+action none
+$ framelog add NOPE 0
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ framelog list
+out 49
+  #1: RAM 0x10 (width 1)
+  #2: RAM 0x10 (width 2)
+status 0
+action none
+$ framelog show
+out 35
+Usage: framelog show <id> [<count>]
+status 0
+action none
+$ framelog show 1
+out 59
+No samples recorded for frame log #1 (or it doesn't exist).
+status 0
+action none
+$ framelog show 1 4
+out 59
+No samples recorded for frame log #1 (or it doesn't exist).
+status 0
+action none
+$ framelog clear
+out 26
+Usage: framelog clear <id>
+status 0
+action none
+$ framelog clear 1
+out 33
+Cleared samples for frame log #1.
+status 0
+action none
+$ framelog remove
+out 27
+Usage: framelog remove <id>
+status 0
+action none
+$ framelog remove 1
+out 21
+Frame log #1 removed.
+status 0
+action none
+$ framelog remove 1
+out 22
+No frame log #1 found.
+status 0
+action none
+$ framelog frob
+out 69
+Unknown 'framelog' subcommand 'frob'. Try add/list/show/clear/remove.
+status 0
+action none
+$ framelog add RAM zz
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ framelog list
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case recording on venus
+target venus
+covers 1-2,4
+$ framelog add WRAM 0
+out 38
+Frame log #1 added: WRAM 0x0 (width 1)
+status 0
+action none
+$ framelog show 1
+out 59
+No samples recorded for frame log #1 (or it doesn't exist).
+status 0
+action none
+end
+
+case recording on moon
+target moon
+covers 1-2,4
+$ framelog add RAM 0
+out 37
+Frame log #1 added: RAM 0x0 (width 1)
+status 0
+action none
+$ framelog show 1
+out 59
+No samples recorded for frame log #1 (or it doesn't exist).
+status 0
+action none
+end
+
+case recording on mercury
+target mercury
+covers 1-2,4
+$ framelog add WRAM 0
+out 38
+Frame log #1 added: WRAM 0x0 (width 1)
+status 0
+action none
+$ framelog show 1
+out 59
+No samples recorded for frame log #1 (or it doesn't exist).
+status 0
+action none
+end
+
+case recording on mars
+target mars
+covers 1-2,4
+$ framelog add RDRAM 0
+out 39
+Frame log #1 added: RDRAM 0x0 (width 1)
+status 0
+action none
+$ framelog show 1
+out 59
+No samples recorded for frame log #1 (or it doesn't exist).
+status 0
+action none
+end
+
+case recording on nephrite
+target nephrite
+covers 1-2,4
+$ framelog add RAM 0
+out 100
+Error: No memory space named 'RAM'. Available: M68KBUS, Z80BUS, WRAM, Z80RAM, VRAM, CRAM, VSRAM, ROM
+status 1
+action none
+$ framelog show 1
+out 59
+No samples recorded for frame log #1 (or it doesn't exist).
+status 0
+action none
+end

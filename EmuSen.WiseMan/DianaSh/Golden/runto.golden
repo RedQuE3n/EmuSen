@@ -1,0 +1,98 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command runto
+usage 1   runto nmi | irq | brk | cop   resume until the next interrupt of that kind is taken
+usage 2   runto scanline <n>            resume until scanline <n> starts
+usage 3   runto frame [<n>]             resume until frame <n> (default: the next one)
+usage 4   runto <addr>                  resume until <addr> executes (a one-shot breakpoint)
+
+case every kind
+target fake
+covers 1-4
+$ runto
+out 60
+Usage: runto nmi|irq|brk|cop|scanline <n>|frame [<n>]|<addr>
+status 0
+action none
+$ runto nmi
+out 26
+Running to the next NMI...
+status 0
+action Step { }
+$ runto irq
+out 26
+Running to the next IRQ...
+status 0
+action Step { }
+$ runto brk
+out 26
+Running to the next BRK...
+status 0
+action Step { }
+$ runto cop
+out 26
+Running to the next COP...
+status 0
+action Step { }
+$ runto scanline
+out 25
+Usage: runto scanline <n>
+status 0
+action none
+$ runto scanline 100
+out 26
+Running to scanline 100...
+status 0
+action Step { }
+$ runto scanline x
+out 56
+Error: The input string 'x' was not in a correct format.
+status 1
+action none
+$ runto frame
+out 22
+Running to frame 43...
+status 0
+action Step { }
+$ runto frame 50
+out 22
+Running to frame 50...
+status 0
+action Step { }
+$ runto 8010
+out 63
+Running to $008010 (breakpoint #1 - `bp remove 1` when done)...
+status 0
+action Step { }
+$ bp list
+out 31
+  #1: $008010 (enabled, hit 0x)
+status 0
+action none
+$ runto zz
+out 78
+Unknown 'runto' target 'zz'. Try nmi/irq/brk/cop/scanline/frame or an address.
+status 0
+action none
+$ runto frame x
+out 56
+Error: The input string 'x' was not in a correct format.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ runto nmi
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end

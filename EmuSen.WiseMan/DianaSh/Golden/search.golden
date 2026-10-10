@@ -1,0 +1,153 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command search
+usage 1   search <space> <val> [<w>]    start a new search: find every address currently equal to <val>
+usage 2                                 (width <w> in bytes: 1, 2, or 4 - default 1, little-endian)
+usage 3   search refine <val>           narrow the current search to addresses now equal to <val>
+usage 4   search changed|unchanged      narrow to addresses whose value did/didn't change since last search/refine
+usage 5   search increased|decreased    narrow to addresses whose value went up/down since last search/refine
+usage 6   search list [<count>]         list current candidate addresses + values (default 20)
+usage 7   search reset                  clear the current search
+
+case a value hunt
+target fake
+covers 1-7
+$ search
+out 149
+Usage: search <space> <value> [<width>] | search refine <value> | search changed|unchanged|increased|decreased | search list [<count>] | search reset
+status 0
+action none
+$ search list
+out 54
+No active search - run 'search <space> <value>' first.
+status 0
+action none
+$ search refine 1
+out 54
+No active search - run 'search <space> <value>' first.
+status 0
+action none
+$ search changed
+out 54
+No active search - run 'search <space> <value>' first.
+status 0
+action none
+$ search RAM
+out 39
+Usage: search <space> <value> [<width>]
+status 0
+action none
+$ search RAM 3
+out 51
+1 candidate(s) found in RAM matching 0x3 (width 1).
+status 0
+action none
+$ search RAM 3 3
+out 24
+width must be 1, 2, or 4
+status 0
+action none
+$ search IO 0
+out 145
+IO can have real side effects on read (live hardware registers) - refusing a bulk search there. Try WRAM (or another plain-memory space) instead.
+status 0
+action none
+$ search RAM 0A03 2
+out 53
+1 candidate(s) found in RAM matching 0xA03 (width 2).
+status 0
+action none
+$ search RAM 3
+out 51
+1 candidate(s) found in RAM matching 0x3 (width 1).
+status 0
+action none
+$ search list
+out 62
+1 candidate(s) in RAM (width 1), showing up to 20:
+  0x0 = 0x3
+status 0
+action none
+$ write RAM 0 4
+out 15
+RAM[0x0] = 0x04
+status 0
+action none
+$ search changed
+out 22
+1 candidate(s) remain.
+status 0
+action none
+$ search list 4
+out 61
+1 candidate(s) in RAM (width 1), showing up to 4:
+  0x0 = 0x4
+status 0
+action none
+$ search RAM 0A
+out 51
+1 candidate(s) found in RAM matching 0xA (width 1).
+status 0
+action none
+$ search refine
+out 28
+Usage: search refine <value>
+status 0
+action none
+$ search refine 0A
+out 22
+1 candidate(s) remain.
+status 0
+action none
+$ search unchanged
+out 22
+1 candidate(s) remain.
+status 0
+action none
+$ search increased
+out 22
+0 candidate(s) remain.
+status 0
+action none
+$ search decreased
+out 22
+0 candidate(s) remain.
+status 0
+action none
+$ search reset
+out 15
+Search cleared.
+status 0
+action none
+$ search list
+out 54
+No active search - run 'search <space> <value>' first.
+status 0
+action none
+$ search NOPE 0
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ search RAM 3 4
+out 51
+0 candidate(s) found in RAM matching 0x3 (width 4).
+status 0
+action none
+$ search RAM zz
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ search RAM 0
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end

@@ -1,6 +1,8 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the first, 2026-10-10. A design, with nothing built: the three decisions of §0.1, what the shell is
+*This revision: the third, 2026-10-10: S0 built, the golden corpus, its harness and what it recorded (§13.4). The
+second, the same day: the seventeen questions of §16 decided, each as recommended, and the runtime named Crystal (Q1).
+The first, the same day: a design, with nothing built: the three decisions of §0.1, what the shell is
 today, measured from the code (§1), and the five surfaces that are to replace what the code does now: the shell core
 (§4), the command module ABI (§5, §6), commands run as programs (§7), the session service that modules call (§9) and
 the host API by which a frontend embeds the shell (§10). Their stability policy (§11), the platforms (§12), the
@@ -44,7 +46,7 @@ state (`cd`, `export`, `source`, `history`, `su`); a **module**, a shared librar
 `dianash_module_*` and is described by a manifest the shell reads without loading it (§5, §6); or a **program**, an
 ordinary executable run as a process (§7). A module that must reach a running core asks the shell for a **service**
 by name and version, and the shell hands it the table its host provided, without reading it. EmuSen's one service is
-the session service, `emusen.session@1`, a C function table owned by the runtime and not by the shell: memory
+the session service, `emusen.session@1`, a C function table owned by Crystal and not by the shell: memory
 spaces, processors and registers, disassembly, breakpoints and the rest of the debugger, cheats, telemetry, states,
 and requests to the frontend (§9). A frontend embeds the shell through the host API `dianash_*` (§10), and provides
 the services. All three surfaces, the host API, the module ABI and the session service, are versioned as the core ABI
@@ -59,19 +61,22 @@ anything moves, and the two are chosen between by `EMUSEN_DIANASH_NATIVE`, as th
   whole. What changes is where it lives: it is no longer the shell. The shell is a client of the runtime, as Mistress
   is, and reaches it only through the session service (§3, §9). §8.2's "One assembly, not two", which put the runtime
   and the shell in one assembly because "the runtime and the shell are used together by every client that exists",
-  no longer holds: decision 1 makes a client that is the shell without the runtime. Whether the runtime keeps a name of
-  its own and where it lives is §16, Q1. Until it is answered this page calls it **the runtime**.
+  no longer holds: decision 1 makes a client that is the shell without the runtime. The runtime is a component of its
+  own, named **Crystal** (decided 2026-10-10, §16 Q1), and this page calls it Crystal from here on. The name is
+  reused: an earlier `EmuSen.Crystal`, a shared timing assembly, was deleted on 2026-08-05, and the pages that mention
+  it (`Man pages/Old/EmuSen_Crystal_Scheduler.md`, `EmuSen_Stack.md`) describe that deleted assembly, not this
+  component.
 - **`EmuSen_CoreAPI.md` §15 Q13, the runtime's folder `DianaSh/Sys/`.** A folder inside the shell's tree for a
-  component the shell must not contain is the tangle decision 3 forbids. `Sys/Systems/` (the system packs) is the
-  runtime's, and moves with it (§13). The same holds of `EmuSen_Surfaces.md` §7's S5 and its Q2, which place the engine
+  component the shell must not contain is the tangle decision 3 forbids. `Sys/Systems/` (the system packs) is
+  Crystal's, and moves with it (§13). The same holds of `EmuSen_Surfaces.md` §7's S5 and its Q2, which place the engine
   SPI, the native host, the systems table and the display shapes in DianaSh; §17.2 gives the recommendation.
-- **`EmuSen_CoreAPI.md` §9.2, a `diana.h` for the frontend API.** The frontend API stays the runtime's; its session
+- **`EmuSen_CoreAPI.md` §9.2, a `diana.h` for the frontend API.** The frontend API stays Crystal's; its session
   operations are what §9 offers to modules, so the two share one definition (§9.1). The shell's own C interface is a
   different header, `dianash.h` (§10).
 - **`EmuSen_Debugging_Tools_Reference_v5.md` §3.3 and §3.3b: one `IDianaShCommand` with an ambient `IDebugTarget`, and
   `HostAction` for control flow.** Both are retired by the module ABI (§6.2, §6.6).
 - **`EmuSen_Stack.md` §6, "DianaSh would become a Rust program, the platform's runtime and shell".** It becomes two
-  Rust components, the shell and the runtime, with a written interface between them.
+  Rust components, the shell and Crystal, with a written interface between them.
 
 ---
 
@@ -250,7 +255,7 @@ Every surface of this page follows these, and §11 says how each is kept.
           │ services, by name and version: emusen.session@1 (§9),  │
           │ emusen.frontend@1 (§9.9)                               │
   ┌───────▼────────────────────────────────────────────────────────▼───────────────────────┐
-  │ The runtime (EmuSen_CoreAPI.md §8): sessions, the loop, the debugger's registries,     │
+  │ Crystal (EmuSen_CoreAPI.md §8): sessions, the loop, the debugger's registries,         │
   │ cheats, states, settings, telemetry; until it is built, an adapter over IDebugTarget   │
   └───────────────────────────────────────┬────────────────────────────────────────────────┘
                                           │ the core ABI v1, emusen_core.h
@@ -267,7 +272,7 @@ Every surface of this page follows these, and §11 says how each is kept.
 | **Program** | one command, as a process | reach a running core (§7.4) |
 | **Services** | what a host offers commands: EmuSen's session service and frontend service | know that a shell exists: a service is called by a module, and the same table serves a frontend's own windows (§9.1) |
 | **Host API** | how a frontend runs a shell, feeds it lines, takes its output and provides its services | expose the shell's internals |
-| **The runtime** | everything `EmuSen_CoreAPI.md` §8.2 gives it | depend on the shell |
+| **Crystal** | everything `EmuSen_CoreAPI.md` §8.2 gives it | depend on the shell |
 
 Three surfaces are stable and guarded (§11): the host API, the module ABI and the session service. The frontend
 service (§9.9) is stable too, and small.
@@ -523,9 +528,9 @@ loop (`HostAction`). The module ABI has no such field. Each of today's five acti
 |---|---|
 | `Shutdown` (`shutdown`, `quit`) | a builtin; the host learns it from `dianash_submit`'s status (§10.2) |
 | `SwitchSession` (`tmux`) | a builtin; the host reads the current session from the shell |
-| `Resume` (`resume`, `c`, a bare `continue`) | a session service call, `run_control(RESUME)`; the host learns of it from the runtime's event stream, as Mistress's windows will |
+| `Resume` (`resume`, `c`, a bare `continue`) | a session service call, `run_control(RESUME)`; the host learns of it from Crystal's event stream, as Mistress's windows will |
 | `Step` (`step`, `s`) | `run_control(STEP, …)`, likewise |
-| `LoadCore` (`core <name> <path>`) | a frontend service call, `open_game` (§9.9), since the frontend opens games until the runtime does |
+| `LoadCore` (`core <name> <path>`) | a frontend service call, `open_game` (§9.9), since the frontend opens games until Crystal does |
 
 So a command never changes the control flow of the loop that called it, and the rule of
 `EmuSen_Debugging_Tools_Reference_v5.md` §3.3b ("whose control flow changes") is answered once, by the layers: the
@@ -576,7 +581,7 @@ command answers as today's debugger commands answer a null target. Today's words
   Calls for one shell are never concurrent.
 - **A call runs on the shell's thread.** There is no longer a split of lines by thread in the shell
   (`DianaShInterpreterScheduler`, §1.5): reads that are safe from any thread are the session service's to answer from
-  snapshots, and changes are the runtime's to apply at the frame boundary (§9.2). A mutating call therefore waits, at
+  snapshots, and changes are Crystal's to apply at the frame boundary (§9.2). A mutating call therefore waits, at
   most until the next frame boundary, or not at all when the session is paused or halted. That keeps today's
   guarantee, that no mutation races `RunFrame`, without the shell knowing frames exist (§16 Q6).
 - **No re-entrancy.** A module may not call `dianash_*` host functions, and a service table may not call back into the
@@ -633,7 +638,7 @@ same id space says so in its manifest (`"jobs": ["bp", "watch"]`):
   shell session's name, as now;
 - a module not yet loaded has nothing to list, because nothing of it can have been made.
 
-When the runtime lists its sessions as processes (`EmuSen_CoreAPI.md` §8.5), the session module claims their prefix and
+When Crystal lists its sessions as processes (`EmuSen_CoreAPI.md` §8.5), the session module claims their prefix and
 `ps` shows them the same way.
 
 ### 6.9 Status codes
@@ -748,7 +753,7 @@ filter is one, belongs in a module or the shell; a program is for what is natura
 | **`emusen.session`**, `emusen.session` and `emusen.frontend` optional (4) | `core` `state` `summary` `coretop` | the session as a whole, its telemetry, and what only a frontend can do (open a game, a window) |
 | **A program, shipped** (1) | `nano` | it owns the terminal for as long as it runs, which a process does naturally on all three systems; it needs no session; and a full-screen editor run in a loop is not a case |
 | **The host's commands** (§10.3) | Mistress's `pause`, `resume`, `coretop`/`vstop` openers, `feed`, `clear`; Hotaru's `clear` | they act on the frontend's own window, as today; under §9.9 most become calls of `emusen.frontend` from the shipped modules, and the host's own shrink to `clear` |
-| **Decided by Q14** | `vstop` | today it reports the .NET runtime underneath; a Rust shell in a terminal has no .NET runtime, and in a C# frontend the runtime is the host's |
+| **Decided by Q14** | `vstop` | today it reports the .NET runtime underneath; a Rust shell in a terminal has no .NET runtime, and in a C# frontend the .NET runtime is the host's |
 
 So a release ships one program and five modules besides the shell, and every one of today's names answers as it does
 now. **The grouping is a recommendation, not a requirement of the ABI**: a module may be split later without a script
@@ -766,16 +771,16 @@ present with no host to provide `emusen.session`, each of their commands answers
 
 ### 9.1 What it is, and who owns it
 
-`emusen.session@1` is a C function table, `emusen_session_v1`, defined by a header the runtime owns,
-`emusen_session.h`. It is the session part of the runtime's frontend API (`EmuSen_CoreAPI.md` §9.1: run, pause,
+`emusen.session@1` is a C function table, `emusen_session_v1`, defined by a header Crystal owns,
+`emusen_session.h`. It is the session part of Crystal's frontend API (`EmuSen_CoreAPI.md` §9.1: run, pause,
 resume, step; memory; breakpoints and watches; registers; disassembly; the call stack and coverage; cheats; states;
 settings; events), written once as C and offered to two kinds of client: a frontend's windows call it directly, and a
 module calls the same table handed to it through the shell. So the parity rule of `EmuSen_CoreAPI.md` §8.6 (every
 shell verb that acts on a session is an operation of the frontend API, and the reverse) holds by construction: there
 is one definition.
 
-**Who provides it.** The runtime, once built (`EmuSen_CoreAPI.md` §10.2, D1 to D3). Until then, a C# adapter over
-today's `IDebugTarget` and its registries (§13.2, S2), so that modules can be written and graded before the runtime
+**Who provides it.** Crystal, once built (`EmuSen_CoreAPI.md` §10.2, D1 to D3). Until then, a C# adapter over
+today's `IDebugTarget` and its registries (§13.2, S2), so that modules can be written and graded before Crystal
 exists. The table is the same either way; only its provider changes.
 
 **Its shape.** Every function takes the table's `ctx` first, then a session id where it names one (0 for the session
@@ -809,7 +814,7 @@ a frame) or **changes** (applied at the next frame boundary, the call waiting fo
 
 **One rule fixes the boundary of each group: the service exposes what a command asks, never what a core reports.**
 Today's registries mix both faces (§1.3). The service carries the first (`AddBreakpoint`, `RemoveWatch`, `Tail`) and
-none of the second (`NoteWrite`, `ShouldBreak`, `RecordRead`), which stays between the runtime and its engines: the C#
+none of the second (`NoteWrite`, `ShouldBreak`, `RecordRead`), which stays between Crystal and its engines: the C#
 cores feed the registries in-process as now, and a v1 core receives them as tables through its debug exports, as
 `CoreDebugBridge` does today (`EmuSen/Cores/Native/CoreDebugBridge.cs`).
 
@@ -838,13 +843,13 @@ a third layer and keeps its meaning: the core decodes, the service carries, the 
 | `ResolvePhysical` | `resolve_physical` |
 | `BreakConditions` | `bp_conditions` |
 | `DmaChannels`, `DmaLog`, `NameDmaDestination` | `dma_channels` (each with its destination's name), `dma_log_op` |
-| `Cheats`, `ApplyCheats` | `cheat_op`; applying is the runtime's, at the frame boundary (`EmuSen_CoreAPI.md` §6.12) |
+| `Cheats`, `ApplyCheats` | `cheat_op`; applying is Crystal's, at the frame boundary (`EmuSen_CoreAPI.md` §6.12) |
 | `Disassemble` (both), `ClassifyStaticReference` | `disassemble`, whose records carry the static reference |
 | `TilemapEntryStride`, `DecodeTilemapEntry`, `DecodeTilePixels` | `tilemap_entry` (with the stride), `tile_pixels` |
 | `SetChannelMuted` | `set_channel_muted` |
 | `CoreName`, `FrameCount` | `info` |
 | `MaxSprites`, `CpuRegisters`, `VideoRegisters`, `ApuRegisters`, `CoprocessorRegisters`, `Sprites`, `Palettes`, `AudioChannels`, `HardwareLoad` | `telemetry(kind)`, `sprites`, `palettes`, `audio_channels` |
-| `RefreshProviders` | none: refreshing is the runtime's, each frame (`EmuSen_Debugging_Tools_Reference_v5.md` §3.66.5) |
+| `RefreshProviders` | none: refreshing is Crystal's, each frame (`EmuSen_Debugging_Tools_Reference_v5.md` §3.66.5) |
 | `RenderTileSheet`, `RenderPaletteSwatch`, `GetAudioSamples` | `tile_sheet`, `palette_swatch`, `audio_peek` |
 | `GetSummaryText` | `summary` |
 
@@ -854,7 +859,7 @@ All 44 member names have a home, and one, `RefreshProviders`, leaves the surface
 
 | Today | Session service, or elsewhere |
 |---|---|
-| `ICheatCodeCodec` (two, passed to `CreateDefault`), `supportedCheatSystems` | `cheat_codecs` and `cheat_op`: the codecs are the system packs', owned by the runtime (`EmuSen_CoreAPI.md` §8.2) |
+| `ICheatCodeCodec` (two, passed to `CreateDefault`), `supportedCheatSystems` | `cheat_codecs` and `cheat_op`: the codecs are the system packs', owned by Crystal (`EmuSen_CoreAPI.md` §8.2) |
 | `ICpuTraceSwitch` (passed to `CreateDefault`) | `trace`, `trace_off` |
 | `StateCommand`'s two delegates and its default path | `state_save`, `state_load`, `state_default_path` |
 | `CoreCommand`'s core registry | the frontend service's `games` and `open_game` (§9.9) |
@@ -866,9 +871,10 @@ All 44 member names have a home, and one, `RefreshProviders`, leaves the surface
 
 ### 9.5 The registries' new owner
 
-The ten registries, the cheat engine and `DebugCpu` leave the shell's `Var/` for the runtime, where `EmuSen_CoreAPI.md`
-§8.2 already placed "one set of registries per session". Until the runtime is built they move to an assembly of their
-own between the cores and the shell (§13.2, S2; §16 Q1), so that neither the shell nor a module references them.
+The ten registries, the cheat engine and `DebugCpu` leave the shell's `Var/` for Crystal, where `EmuSen_CoreAPI.md`
+§8.2 already placed "one set of registries per session". Before Crystal's sessions and loop are built, they move into
+Crystal's assembly, beneath the shell and beside the cores (§13.2, S2; §16 Q1), so that neither the shell nor a module
+references them.
 
 ### 9.6 The service's own rules
 
@@ -904,10 +910,10 @@ Pharaoh or the terminal program:
 |---|---|
 | `open_window(kind)`: `coretop`, `vstop`, a debugger view | `CoretopCommand`'s and `VstopCommand`'s delegates; Mistress's `CoretopWindowCommand`, `VstopWindowCommand` |
 | `activate_game_window` | Mistress's `feed` |
-| `games` (JSON: the cores and systems a frontend can open) and `open_game(core, path)` | `CoreCommand` and `HostAction.LoadCore`; retired when the runtime opens sessions itself |
-| `pause`, `resume`, `is_paused` | Mistress's `pause` and `resume`; retired into run control when the runtime owns the loop |
+| `games` (JSON: the cores and systems a frontend can open) and `open_game(core, path)` | `CoreCommand` and `HostAction.LoadCore`; retired when Crystal opens sessions itself |
+| `pause`, `resume`, `is_paused` | Mistress's `pause` and `resume`; retired into run control when Crystal owns the loop |
 
-It is a service like any other: owned by the runtime's header family, never read by the shell, and refused politely
+It is a service like any other: owned by Crystal's header family, never read by the shell, and refused politely
 where absent (`coretop -w: this program has no windows`).
 
 ---
@@ -1133,7 +1139,7 @@ No step leaves a broken shell; each has its gate, and each is its own commit or 
 |---|---|---|
 | **S0** | The golden corpus of §13.1, recorded from the C# shell | it covers every usage line (a test enumerates them); two recordings on two runs are identical |
 | **S1** | The C# shell reorganised without changing what it prints: the 98 manual pages out of `ManPages.cs` into files read by the C# `man`; the five aliases and the read-only fast path made one table; `summary` and `log` turned into ordinary command classes; `Var/`'s shell state (`CommandHistory`, the sessions) separated from the debugger's registries | the golden corpus; `ManPageTests` |
-| **S2** | The service API's header, `emusen_session.h`, and a C# provider over today's `IDebugTarget` and registries, exposing the table through `[UnmanagedCallersOnly]` functions; the registries, the cheat engine, `IDebugTarget`, the telemetry contracts and the system packs moved out of `EmuSen.DianaSh` into an assembly beneath the shell and beside the cores (§16 Q1), which `EmuSen.DianaSh` and the cores reference | a parity class calling every service function and the C# member it maps (§9.3) on the fake target and each core, equal; the golden corpus |
+| **S2** | The service API's header, `emusen_session.h`, and a C# provider over today's `IDebugTarget` and registries, exposing the table through `[UnmanagedCallersOnly]` functions; the registries, the cheat engine, `IDebugTarget`, the telemetry contracts and the system packs moved out of `EmuSen.DianaSh` into Crystal's assembly, `EmuSen.Crystal`, beneath the shell and beside the cores (§16 Q1), which `EmuSen.DianaSh` and the cores reference | a parity class calling every service function and the C# member it maps (§9.3) on the fake target and each core, equal; the golden corpus |
 | **S3** | The Rust shell core, `Platform/dianash/`, with its builtins, lookup, manifests, the host API in the platform library and the `dianash` program; every C# command still runs, registered with the Rust shell as host commands through `dianash_add_commands` by a C# bridge that calls each `IDianaShCommand.Execute`; the C# frontends choose the C# interpreter or the Rust one by `EMUSEN_DIANASH_NATIVE` (§13.3) | the golden corpus, with the variable unset (the C# interpreter) and `1` (the Rust shell with C# commands); the language's 645 cases both ways |
 | **S4** | `dianash.text` in Rust, command by command, each replacing its C# bridge entry when its golden file passes | that command's golden file and its WiseMan cases both ways; the same corpus run on Windows and macOS CI runners for the text module, since it must behave identically there |
 | **S5** | The four EmuSen modules in Rust over the session service, module by module, each command replacing its bridge entry when its golden file passes; `nano` as a program | that command's golden file both ways, on the fake provider and on each core; seeded faults in the module, as each platform step had (`EmuSen_RustPlatform.md` §6.5) |
@@ -1145,8 +1151,8 @@ every command in Rust; the corpus has been run on all three systems; the shell h
 release played; and the tester agrees. Until then every C# command class stays, reachable with `EMUSEN_DIANASH_NATIVE=0`.
 A C# command is not deleted when its Rust module passes, only marked as superseded.
 
-**The runtime's steps run beside these and do not wait for them.** `EmuSen_CoreAPI.md` §10.2's D1 to D5 build the
-runtime; when the runtime provides `emusen.session`, S2's C# provider retires. Nothing in S0 to S7 depends on that
+**Crystal's steps run beside these and do not wait for them.** `EmuSen_CoreAPI.md` §10.2's D1 to D5 build the
+runtime; when Crystal provides `emusen.session`, S2's C# provider retires. Nothing in S0 to S7 depends on that
 having happened, because the provider is behind the table.
 
 ### 13.3 How the C# frontends call the Rust shell meanwhile
@@ -1163,7 +1169,159 @@ having happened, because the provider is behind the table.
   are what the C# provider of S2 reads from the bundle, and its sessions are the Rust shell's own.
 - **The scheduler stays for the C# side** until S6, and with the Rust side the facade answers its four entry points
   from the host API (§10.2: `dianash_is_read_only` for `SubmitFromAnyThread`; `DrainPending` with nothing left to
-  drain, since the runtime's boundary does the waiting).
+  drain, since Crystal's boundary does the waiting).
+
+### 13.4 S0 as built: the corpus, its harness, and what it recorded
+
+*Built 2026-10-10; the counts below are of that commit.*
+
+**What is in it.** Ninety files in `EmuSen.WiseMan/DianaSh/Golden/`: one for each of the 83 commands (`[` is
+`bracket.golden`, since the bracket cannot begin a portable file name), one for each of the six builtins (`help`,
+`man`, `summary`, `export`, `unset`, `source`), and `shell.golden` for the two lines of `help` that describe the
+language rather than a command (control flow, pipes, quoting, redirection, history expansion, substitution). An alias
+is recorded in its command's file (`c` in `resume.golden`, `quit` in `shutdown.golden`, `s` in `step.golden`, `jobs` in
+`ps.golden`, `hexdump` in `xxd.golden`) and once more, typed in capitals, in `shell.golden`. There are 524 cases and
+1,944 recorded lines, about 540 KB; `man.golden` holds one case per page, 98 of them, so a change to one page fails one
+case and not the file.
+
+**The format.** Line-oriented text in which every recorded block is preceded by its length in bytes, so that an output
+may hold any byte, a newline included or a final newline absent, without an escaping rule for a second shell to
+reimplement. A file is a header, then its cases:
+
+| Line | Meaning |
+|---|---|
+| `command <name>` | the command the file is for |
+| `usage <n> <text>` | the command's usage lines, numbered, as the live shell gives them; written by the recorder |
+| `uncovered <n> -- <reason>` | a usage line no case can run, and why |
+| `unreachable "<text>" -- <reason>` | a failure the code words that no input reaches, and why |
+| `case <title>` … `end` | one case, run on its own shell |
+| `target <name>` | what the shell is attached to (below) |
+| `frames <n>` | frames run on a core before the first line (default 2) |
+| `covers <n>[-<m>],…` | the usage lines the case exercises |
+| `sessions none` | the shell is built with no session manager, as a host without `tmux` builds it |
+| `vary numbers` | the case's outputs are recorded as patterns in which every number may differ |
+| `file <path> <bytes>` | a file written into the case's home before the first line, its bytes following |
+| `$ <line>` | a line given to `Submit` |
+| `out <bytes>` / `match <bytes>` | what it printed, or a regular expression the whole of it must match |
+| `status <code> [more]` | `$?` after the line, and `more` where the shell asked for another line |
+| `action <record>` | the host action it returned, as the record prints, or `none` |
+
+The recorder rewrites every file from its `$` lines, so a case is written by its inputs alone; a pattern already in a
+file is kept as long as the output still matches it, which is how a hand-written pattern survives a re-recording.
+
+**How a case runs** (`GoldenRunner`). Each case gets a new home, a new target and a new shell. The home is a temporary
+folder that `DataStore` and `ConfigStore` are pointed at, the legacy configuration folder too, so no file of the machine
+the test runs on is read; it is given the skeleton the shell itself creates, then the case's files, and the working
+directory is its root. Accounts other than `root` are removed, since the account registry is process-wide, and the
+logging switch is set to its default, off. The shell is `CreateDefault` with what a host adds to it: `core` over
+`CoreCatalog.Registry`; `state` over a save and a load that write and read a file, defaulting to a fixed path in the
+home's save-state folder; the bundle's two cheat codecs and trace switch; a session manager unless the case says
+otherwise; and the build's supported cheat systems.
+
+**How the status is read.** `$?` lives in the interpreter's variables, which nothing public reads. `EmuSen.DianaSh`
+grants WiseMan friend access (`InternalsVisibleTo`), and the interpreter answers the harness through two `internal`
+members named for what they answer: `LastExitStatus`, the last line's `$?`, and `RegisteredCommands`, every command in
+the order `help` lists them, which the usage gate reads. Neither prints anything, so the recordings are the same with
+them as without. The corpus was first recorded with the two read by reflection on the private members; that was
+replaced the same day, since the project's rule of 2026-10-10 is that nothing reaches past a surface by reflection.
+Friend access keeps the check at compile time: renaming either member breaks WiseMan's build, not its first case.
+
+**The targets.**
+
+- `fake`: `GoldenDebugTarget`, whose every member answers fixed data: four plain spaces, an `IO` space with read side
+  effects, an unsized one, and a 64 KB `CpuBus` mapping RAM at `$0000`, a twelve-instruction program at `$8000` and two
+  vectors; a made-up instruction set of four mnemonics, so that `disasm`, `callers`, `readers` and `writers` have
+  something to find; two processors, the second unable to halt; and every registry.
+- `bare`: the same with every optional member absent, for each command's "this core does not report" branch; `nobus`:
+  the same without `CpuBus`, for the one failure of `vectors` that needs it.
+- `none`: no target, for every command's "No ROM loaded".
+- The cores: `venus`, `venus-sa1`, `venus-gsu` and `venusrt` on `SyntheticRom`'s images, `moon` and `moonrt` on
+  `SyntheticNesRom`'s, `mercury` and `mercuryrt` on `SyntheticGbRom`'s, `mars` and `marsrt` on `SyntheticN64Rom`'s, and
+  `nephrite`, the v1 core, on `SyntheticMdRom`'s; each built through `CoreFactory`, run for its frames and attached
+  through `CoreFactory.Bundle`, as a frontend attaches one.
+
+The N64 image carries a branch-to-self at its entry point. Without it the image is zeros past its header, and the C#
+Mars core, running them, throws `IndexOutOfRangeException` in `Cpu.StepBlock` within the first frame. That is a defect
+of the core, not of the shell, and is recorded here rather than worked on.
+
+**What is matched by pattern.** The home's real path, the temporary folder's and the install's are written as `<ROOT>`,
+`<TEMP>` and `<INSTALL>` before anything is compared. One case is a pattern, `ls -l`'s, because it prints modification
+times. Nothing else in the corpus printed a time, a process id or a path of the machine; the commands that would,
+`vstop` and `coretop`, refuse in a test host because its standard streams are redirected, and their refusal is what is
+recorded.
+
+**The gate**, `GoldenCorpusTests`:
+
+1. Each file's cases reproduce their recording; a difference names the file, the case, the line, the first differing
+   byte and the text around it.
+2. There is one file for every command and builtin, and no other.
+3. Every usage line is covered by a case, and every file's recorded usage lines equal the live ones, so a usage line
+   added to a command fails the gate until a case covers it. One line is listed as uncovered: `cheat db update`, which
+   downloads the libretro database over the network.
+4. Every literal a `Fail(…)` call words, cut at its interpolations and kept where eight characters or longer, appears
+   in an output of its command's file, or of any file for the shared helpers and the interpreter, or is listed as
+   unreachable. Ten are listed: those of `mv` and `rm`, which are suspended and refuse before they read an argument, and
+   `userdel`'s refusal to remove the shell's own account, which no input reaches, because only `root` may remove an
+   account and `root` is refused by name first.
+5. Every page in `ManPages.cs` has a case.
+6. Two recordings of the whole corpus in one process are byte-identical. The comparison of item 1 always runs in a
+   process other than the one that recorded, so it is the second half of "two recordings on two runs".
+
+On 2026-10-10 all six held: 95 tests passed.
+
+**What the corpus records that looks wrong.** These are recorded and not fixed. The corpus holds them as today's
+behaviour, so that at S3 to S5 the Rust shell must reproduce each of them, case for case, until it is decided; a fix
+made to the C# before then is a re-recording of the cases it changes, and should be its own commit for that reason.
+
+The language:
+
+1. A failure reported with status 0: a redirection that fails (`cat < nosuch.txt`, `echo x > /../escape.txt`,
+   `echo x > Logs`), a syntax error (`|`, `&& echo x`), and `!99` for a history entry that does not exist (`shell`).
+2. A line that ends in `|`, `||` or `>` asks for another line, and then rejects whatever line comes as a syntax error,
+   so the continuation it asked for cannot be given (`shell`, "stray operators").
+3. `source` returns 0 whatever the script did: its last command failing, the nesting limit, an unterminated block
+   (`shell`, "a script's failures and its status").
+4. `continue` at the prompt resumes emulation and prints nothing, while `break` does nothing (`shell`).
+5. `A=1 echo x` leaves `A` set in the shell, where bash scopes it to the command.
+
+The commands:
+
+6. Identifiers are read as hexadecimal while they are printed in decimal: `bp remove 10` reports "#10 removed" and
+   removes #16, and `bp off 99` reports "No breakpoint #153"; `cheat`, `framelog` and `watch` read their identifiers the
+   same way (`bp`, "ids are read as hexadecimal").
+7. Counts differ in base between commands: `step` and `trace` read hexadecimal (`step 10` steps 16), `runto scanline`,
+   `runto frame`, `cophist` and `mute` decimal (`step`, `trace`).
+8. A refusal's status depends on the command: `bp on 99` fails with 1 and `bp remove 99` with 0, and most
+   "Usage:" and "not found" answers are 0.
+9. `su` asks for no password, even for an account that `passwd` has given one, and `su TESTER` switches to an account
+   spelled differently from the one that exists (`su`).
+10. `dump`, `load` and `cov save|load` join their file name to `Logs/<core>/` without the sandbox's resolution, so
+    `../../../x` reads and writes outside the root (shown inside the corpus's temporary folder), and an absolute name
+    would reach any path; `core` and `state` pass their paths to the host unresolved too (`dump`, `cov`, `core`).
+11. `write` keeps the low byte of a wider value and reports success for an address past the end of its space; `load`
+    reports every byte loaded when some fall past the end; `dump … 0` prints its range as `0x0-0xFFFFFFFF` (`write`,
+    `load`, `dump`).
+12. `memfind` takes a final word of decimal digits as the limit, so `memfind RAM 03 0A 11` searches for two bytes, not
+    three; and the form its own message offers, `'00 ?? 11'`, is refused, because spaces inside one word are not
+    removed (`memfind`).
+13. `mute` reports success for a channel that does not exist, and any word but `on` unmutes; on Venus, `channels` still
+    shows a channel unmuted on the line after `mute 0 on` (`mute`).
+14. `wc` counts one line more for a file than for the same text piped (`wc -l a.txt` gives 3 for two lines, `cat a.txt
+    | wc` gives 2); the file's count is the wrong one (`wc`).
+15. `cp a.txt a.txt` fails with the platform's message about a file in use by another process (`cp`).
+16. `regs` and `setreg` do not accept the `cop` word that every other scoped command accepts (`regs`, `setreg`).
+17. `pal 9`, for a palette that does not exist, prints nothing with status 0 (`pal`).
+18. A malformed number reaches the player as the platform's own message, "Could not find any recognizable digits."
+    (throughout).
+
+The cores, outside the shell, shown by it:
+
+19. The Rust cores' debug targets publish less than their C# counterparts: VenusRT no hardware break conditions, DMA
+    channels, vectors, CPU registers, audio channels, sprites, palettes or coprocessor history; MoonRT and MercuryRT no
+    call stack, and both report frame 0 after two frames, MoonRT naming itself Moon.
+20. Nephrite names its main processor `m68k`, not the `cpu` every command takes as the main one, so `regs cpu` and
+    `disasm cpu` refuse there; and its `tile` throws `IndexOutOfRangeException`.
+21. `core`'s registry has no entry for the Genesis, so a v1 core cannot be loaded with it.
 
 ---
 
@@ -1202,25 +1360,30 @@ having happened, because the provider is behind the table.
 
 ## 16. Questions for the tester
 
-| | Question | Recommendation |
+**Decided 2026-10-10:** all seventeen, each as recommended, with nothing changed. Q1's name for the runtime is Crystal,
+decided the same day; its assembly and folder take the name at step S2 (§13.2). Q15 is decided as recommended: the
+sandbox's case-insensitive comparison is kept through S3 so that the golden corpus holds, and is then corrected in the
+C# and the Rust together, with a test that shows the escape first.
+
+| | Question | Recommendation, and the decision |
 |---|---|---|
-| **Q1** | The runtime of `EmuSen_CoreAPI.md` §8 is no longer the shell (§0.3). Does it become a component of its own, with a name and a folder outside the shell's, and do the registries, the cheat engine, `IDebugTarget`, the telemetry contracts and the system packs move into it now (S2), before the runtime itself is built? | Yes. A new assembly beneath the shell and beside the cores, for now holding exactly what S2 moves, named for the runtime it will become; the name is the tester's to give. `EmuSen_CoreAPI.md` §0.2 item 2, §8.2's "one assembly" and Q13, and `EmuSen_Surfaces.md` §7's S5 and its Q2, are then revised there, with a note pointing here (§17.2) |
-| **Q2** | Five shipped modules by subject (§8.1), or one module per command? | Five. The ABI does not care, a later split changes no script, and 83 libraries would mean 83 loads and 83 signatures in a macOS bundle for no gain |
-| **Q3** | The text tools as an in-process module, not as programs, on the measured cost of a process (§7.5)? And no session service across a process boundary in version 1 (§7.4)? | Yes to both. The program kind stays for `nano`, a player's own programs and any command that may run long and needs no session |
-| **Q4** | A fault in a module: caught at the boundary and reported (§6.7), unlike a core, which aborts? | Caught. It keeps today's rule that a malformed command never takes the console down; a module faulting three times is not called again |
-| **Q5** | `HostAction` retired: shell control by builtins, the emulator's by the session service and its events, opening a game by the frontend service (§6.2)? | Yes; the C# facade synthesises today's actions until Hotaru moves to events (§13.3) |
-| **Q6** | Every command runs on the shell's thread, and a change to a session waits for the frame boundary in the runtime, so the shell's scheduler retires (§6.4)? | Yes. The waiting is the runtime's business, and its boundary is where `EmuSen_CoreAPI.md` §8.3 already puts every command |
-| **Q7** | The read-only flag enforced by the service table rather than trusted (§6.5)? | Yes |
-| **Q8** | Manual pages as one file per command beside its module, in today's format (§5.5)? | Yes, moved in S1 while the C# still reads them |
-| **Q9** | The service API handed to modules as a function table they call during their call: the one stated exception to "the library never calls the host" (§2, §6.0)? | Yes. A command is a program, and its service calls are its system calls; tables are versioned by size and need no symbol to resolve, and a C# provider can fill one |
-| **Q10** | Standard error as a stream of its own, printed in order so the player sees today's bytes, and taken by no `>` (§4.3)? | Yes. Today `cmd > f` writes an error into `f`; with the change it prints it, as every Unix shell does. It is the one intended difference from the golden corpus, recorded as such in its file |
-| **Q11** | The shell core as a crate in the platform workspace, exported through the platform library for the C# frontends and linked statically into the standalone `dianash`; modules never link Galaxia (§4.1, §6.3)? | Yes. One copy of Galaxia's tree and overrides per process is what the platform library's lending already taught (`EmuSen_RustPlatform.md` §16.2) |
-| **Q12** | The line editor written to today's `ConsoleLineReader`'s behaviour for three systems, rather than a line-editing crate (§12.3)? And `exit` as a third name for `shutdown` (§4.2)? | Yes to both. A crate can follow once the golden corpus no longer depends on the editor's exact keys |
-| **Q13** | Modules a player adds: allowed, after a one-time approval by hash, as foreign cores are (§5.4)? | Yes, with approval only through `trust` at the prompt |
-| **Q14** | What `vstop` reports in a Rust shell, which has no .NET runtime: the hosting process's own figures (the .NET runtime's in a C# frontend, the shell process's in the terminal), or only in the C# frontends, as a host command? | A host command in the C# frontends while they exist, and in the terminal the shell process's own memory and threads, under the same name |
-| **Q15** | The sandbox's case-insensitive comparison on Linux, which can accept a path outside the root as inside it (§12.1): kept as today, or made case-sensitive where the file system is? | Kept through S3 so the golden corpus holds, then corrected in the C# and the Rust together, with a test that shows the defect first |
-| **Q16** | The golden corpus committed as files in WiseMan (§13.1)? | Yes. It holds no ROM data, and it is the record that lets C# be deleted at S7 |
-| **Q17** | The host API's versioning: stable from S3, though its only hosts until then are the project's own frontends built from the same commit? | Stable from S3. The baseline costs one CI step, and an outside frontend or the kit can then embed the shell the day it wants to |
+| **Q1** | The runtime of `EmuSen_CoreAPI.md` §8 is no longer the shell (§0.3). Does it become a component of its own, with a name and a folder outside the shell's, and do the registries, the cheat engine, `IDebugTarget`, the telemetry contracts and the system packs move into it now (S2), before the runtime itself is built? | Yes. A new assembly beneath the shell and beside the cores, for now holding exactly what S2 moves, named for the runtime it will become; the name is the tester's to give. `EmuSen_CoreAPI.md` §0.2 item 2, §8.2's "one assembly" and Q13, and `EmuSen_Surfaces.md` §7's S5 and its Q2, are then revised there, with a note pointing here (§17.2) *Decided 2026-10-10 as recommended; the component is named Crystal, also decided 2026-10-10.* |
+| **Q2** | Five shipped modules by subject (§8.1), or one module per command? | Five. The ABI does not care, a later split changes no script, and 83 libraries would mean 83 loads and 83 signatures in a macOS bundle for no gain *Decided 2026-10-10 as recommended.* |
+| **Q3** | The text tools as an in-process module, not as programs, on the measured cost of a process (§7.5)? And no session service across a process boundary in version 1 (§7.4)? | Yes to both. The program kind stays for `nano`, a player's own programs and any command that may run long and needs no session *Decided 2026-10-10 as recommended.* |
+| **Q4** | A fault in a module: caught at the boundary and reported (§6.7), unlike a core, which aborts? | Caught. It keeps today's rule that a malformed command never takes the console down; a module faulting three times is not called again *Decided 2026-10-10 as recommended.* |
+| **Q5** | `HostAction` retired: shell control by builtins, the emulator's by the session service and its events, opening a game by the frontend service (§6.2)? | Yes; the C# facade synthesises today's actions until Hotaru moves to events (§13.3) *Decided 2026-10-10 as recommended.* |
+| **Q6** | Every command runs on the shell's thread, and a change to a session waits for the frame boundary in Crystal, so the shell's scheduler retires (§6.4)? | Yes. The waiting is Crystal's business, and its boundary is where `EmuSen_CoreAPI.md` §8.3 already puts every command *Decided 2026-10-10 as recommended.* |
+| **Q7** | The read-only flag enforced by the service table rather than trusted (§6.5)? | Yes *Decided 2026-10-10 as recommended.* |
+| **Q8** | Manual pages as one file per command beside its module, in today's format (§5.5)? | Yes, moved in S1 while the C# still reads them *Decided 2026-10-10 as recommended.* |
+| **Q9** | The service API handed to modules as a function table they call during their call: the one stated exception to "the library never calls the host" (§2, §6.0)? | Yes. A command is a program, and its service calls are its system calls; tables are versioned by size and need no symbol to resolve, and a C# provider can fill one *Decided 2026-10-10 as recommended.* |
+| **Q10** | Standard error as a stream of its own, printed in order so the player sees today's bytes, and taken by no `>` (§4.3)? | Yes. Today `cmd > f` writes an error into `f`; with the change it prints it, as every Unix shell does. It is the one intended difference from the golden corpus, recorded as such in its file *Decided 2026-10-10 as recommended.* |
+| **Q11** | The shell core as a crate in the platform workspace, exported through the platform library for the C# frontends and linked statically into the standalone `dianash`; modules never link Galaxia (§4.1, §6.3)? | Yes. One copy of Galaxia's tree and overrides per process is what the platform library's lending already taught (`EmuSen_RustPlatform.md` §16.2) *Decided 2026-10-10 as recommended.* |
+| **Q12** | The line editor written to today's `ConsoleLineReader`'s behaviour for three systems, rather than a line-editing crate (§12.3)? And `exit` as a third name for `shutdown` (§4.2)? | Yes to both. A crate can follow once the golden corpus no longer depends on the editor's exact keys *Decided 2026-10-10 as recommended.* |
+| **Q13** | Modules a player adds: allowed, after a one-time approval by hash, as foreign cores are (§5.4)? | Yes, with approval only through `trust` at the prompt *Decided 2026-10-10 as recommended.* |
+| **Q14** | What `vstop` reports in a Rust shell, which has no .NET runtime: the hosting process's own figures (the .NET runtime's in a C# frontend, the shell process's in the terminal), or only in the C# frontends, as a host command? | A host command in the C# frontends while they exist, and in the terminal the shell process's own memory and threads, under the same name *Decided 2026-10-10 as recommended.* |
+| **Q15** | The sandbox's case-insensitive comparison on Linux, which can accept a path outside the root as inside it (§12.1): kept as today, or made case-sensitive where the file system is? | Kept through S3 so the golden corpus holds, then corrected in the C# and the Rust together, with a test that shows the defect first *Decided 2026-10-10 as recommended.* |
+| **Q16** | The golden corpus committed as files in WiseMan (§13.1)? | Yes. It holds no ROM data, and it is the record that lets C# be deleted at S7 *Decided 2026-10-10 as recommended.* |
+| **Q17** | The host API's versioning: stable from S3, though its only hosts until then are the project's own frontends built from the same commit? | Stable from S3. The baseline costs one CI step, and an outside frontend or the kit can then embed the shell the day it wants to *Decided 2026-10-10 as recommended.* |
 
 ---
 
@@ -1230,20 +1393,20 @@ having happened, because the provider is behind the table.
 
 | | The point | The answer here |
 |---|---|---|
-| 1 | **Narrow consumers take the whole assembly**: Serenity names 6 of the shell's 217 public types, all telemetry, and `EmuSen` 48, mostly the debugger's registries and `IDebugTarget`, and each takes the interpreter, the commands and the sandbox with them | **By assembly, not by namespace.** At S2 (§13.2) the contracts a non-shell component consumes leave the shell: `IDebugTarget` and its value types, the registries, the cheat engine, the telemetry contracts and the system packs move to the runtime's assembly (§9.5, §16 Q1). `EmuSen` and Serenity then reference it and not the shell, and the shell's consumers are its hosts alone. `EmuSen_Multicore.md` §9.2's pruning test asks whether a boundary buys a separability someone uses; decision 1 is that someone, since a shell with no emulator in it cannot carry the debugger's registries. The fold of Cauldron into DianaSh on 2026-10-07 is not reopened: the telemetry contracts are not revived as an assembly of their own, they move with the debugger they were folded beside, to the component that owns both |
-| 2 | **The systems table is filed as a command** (`CoreDescriptor`, `Bin/Commands/EmuSen/CoreCommand.cs:13`), and its rows are filled in the core assembly | `CoreDescriptor` and the table's rows go to the runtime's assembly as data, beside the system packs, which is where `EmuSen_CoreAPI.md` §8.2 puts the table; the `core` command moves to the session module (§8.1) and asks the frontend service for the cores it can open (`games`, §9.9). No command file declares a console fact |
+| 1 | **Narrow consumers take the whole assembly**: Serenity names 6 of the shell's 217 public types, all telemetry, and `EmuSen` 48, mostly the debugger's registries and `IDebugTarget`, and each takes the interpreter, the commands and the sandbox with them | **By assembly, not by namespace.** At S2 (§13.2) the contracts a non-shell component consumes leave the shell: `IDebugTarget` and its value types, the registries, the cheat engine, the telemetry contracts and the system packs move to Crystal's assembly (§9.5, §16 Q1). `EmuSen` and Serenity then reference it and not the shell, and the shell's consumers are its hosts alone. `EmuSen_Multicore.md` §9.2's pruning test asks whether a boundary buys a separability someone uses; decision 1 is that someone, since a shell with no emulator in it cannot carry the debugger's registries. The fold of Cauldron into DianaSh on 2026-10-07 is not reopened: the telemetry contracts are not revived as an assembly of their own, they move with the debugger they were folded beside, to the component that owns both |
+| 2 | **The systems table is filed as a command** (`CoreDescriptor`, `Bin/Commands/EmuSen/CoreCommand.cs:13`), and its rows are filled in the core assembly | `CoreDescriptor` and the table's rows go to Crystal's assembly as data, beside the system packs, which is where `EmuSen_CoreAPI.md` §8.2 puts the table; the `core` command moves to the session module (§8.1) and asks the frontend service for the cores it can open (`games`, §9.9). No command file declares a console fact |
 | 3 | **`IDebugTarget` is one interface every engine implements whole**, where the core ABI offers the debugger in capability-flagged parts | Commands never see it again: they call the session service, whose `info` lists capabilities and whose functions answer `NOT_SUPPORTED` where a session lacks one (§9.6). `IDebugTarget` itself is frozen and moved unchanged (§17.2), and the S2 provider adapts it to the table, as `CoreDebugTarget` adapts the core ABI's debug exports to it |
 | 4 | **`HostAction` is handled by each host its own way** | Retired (§6.2): shell control by builtins whose effect a host reads from `dianash_submit`'s status, the emulator's by run control and its events, opening a game by the frontend service. Every host then gets one answer for each, Pharaoh included, and the identical `SyncSchedulersToSessions` copies disappear because shell sessions live inside the shell (§10.2) |
-| 5 | **A global in the shell carries a core's setting**: `DebugSettings.MasterLoggingEnabled` forwards to `DianaShLogging.MasterEnabled` | The switch is the emulator's log writer's, and leaves the shell at S1 for the runtime's assembly; `log on`, `log off` and `log status` call `log_switch` and `log_status` of the session service (§9.4). The shell holds no static that another component reads |
+| 5 | **A global in the shell carries a core's setting**: `DebugSettings.MasterLoggingEnabled` forwards to `DianaShLogging.MasterEnabled` | The switch is the emulator's log writer's, and leaves the shell at S1 for Crystal's assembly; `log on`, `log off` and `log status` call `log_switch` and `log_status` of the session service (§9.4). The shell holds no static that another component reads |
 
 ### 17.2 Where the two pages disagree, and the recommendation
 
-- **Where the runtime's pieces go.** `EmuSen_Surfaces.md` §7's S5, following `EmuSen_CoreAPI.md` §10.2's D1, moves the
+- **Where Crystal's pieces go.** `EmuSen_Surfaces.md` §7's S5, following `EmuSen_CoreAPI.md` §10.2's D1, moves the
   engine SPI, the native host and the systems table into `DianaSh/Sys/`, and its Q2 recommends the display shapes for
   "the systems table in DianaSh". Under decision 1 the shell contains no emulator, so neither can be in it.
-  **Recommended: this page's**, the runtime's own assembly beneath the shell (§16 Q1), which the cores and Serenity
+  **Recommended: this page's**, Crystal's own assembly beneath the shell (§16 Q1), which the cores and Serenity
   reference in place of today's references to the shell. The audit's reasoning for its Q2 carries over unchanged once
-  "DianaSh" there is read as the runtime: console facts belong to the systems table, and the table to the runtime.
+  "DianaSh" there is read as Crystal: console facts belong to the systems table, and the table to Crystal.
 - **What the shell's surface rule is.** The audit leaves it to this page (its §6.2, the row "DianaSh"). This page gives
   the three C surfaces that page's rule **A**, stable with a baseline (§11), and the C# facade the frontends call during
   the migration (§13.3) its rule **D**, a recorded public surface with no promise across commits, until the facade is
@@ -1252,7 +1415,7 @@ having happened, because the provider is behind the table.
   implementers retire with the C# cores. **The two pages agree**: S2 moves it unchanged, the session service is where a
   new debugger capability is offered to commands, and the core ABI's debug interface is where a core offers one.
 - **Serenity's reference for `coretop`.** The audit's Q5 keeps it until this page decides where the telemetry contracts
-  live. **Decided here, subject to Q1:** with the runtime's assembly; Serenity's reference moves there at S2, and Serenity
+  live. **Decided here, with Q1:** with Crystal's assembly; Serenity's reference moves there at S2, and Serenity
   then references the shell no longer.
 
 ---
@@ -1356,7 +1519,7 @@ int32_t  dianash_module_kill(const dianash_call *call, const uint8_t *id, size_t
 ## Appendix B. `emusen_session.h`, its first entries sketched
 
 ```c
-/* emusen_session.h - the session service, emusen.session@1. Owned by the runtime. See EmuSen_DianaSh.md §9. */
+/* emusen_session.h - the session service, emusen.session@1. Owned by Crystal. See EmuSen_DianaSh.md §9. */
 #define EMUSEN_SESSION_MAJOR 1u
 #define EMUSEN_SESSION_MINOR 0u
 

@@ -1,0 +1,45 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command useradd
+usage 1   useradd <name>                add a new account (root only) - see `su`
+
+case accounts
+target none
+covers 1
+$ useradd tester
+out 20
+Added user 'tester'.
+status 0
+action none
+$ useradd tester
+out 33
+useradd: 'tester' already exists.
+status 1
+action none
+$ useradd
+out 30
+useradd: usage: useradd <name>
+status 1
+action none
+$ useradd root
+out 31
+useradd: 'root' already exists.
+status 1
+action none
+$ su tester
+out 21
+Switched to 'tester'.
+status 0
+action none
+$ useradd other
+out 33
+useradd: only root can add users.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end

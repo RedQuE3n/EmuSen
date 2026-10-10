@@ -1,0 +1,244 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command spaces
+usage 1   spaces                        list available memory spaces
+
+case the fake target's spaces
+target fake
+covers 1
+$ spaces
+out 219
+GOLDEN memory spaces:
+  RAM             256 bytes  R/W
+  ROM             512 bytes  R/O
+  VRAM           1024 bytes  R/W
+  IO               16 bytes  R/W
+  UNSIZED           0 bytes  R/O
+  CpuBus        65536 bytes  R/W
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ spaces
+out 219
+GOLDEN memory spaces:
+  RAM             256 bytes  R/W
+  ROM             512 bytes  R/O
+  VRAM           1024 bytes  R/W
+  IO               16 bytes  R/W
+  UNSIZED           0 bytes  R/O
+  CpuBus        65536 bytes  R/W
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ spaces
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ spaces
+out 283
+SNES memory spaces:
+  CpuBus     16777216 bytes  R/W
+  IO            65536 bytes  R/W
+  WRAM         131072 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CGRAM           512 bytes  R/W
+  OAM             544 bytes  R/W
+  SRAM         131072 bytes  R/W
+  APURAM        65536 bytes  R/W
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1
+$ spaces
+out 286
+VenusRT memory spaces:
+  CpuBus     16777216 bytes  R/W
+  IO             1024 bytes  R/O
+  WRAM         131072 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CGRAM           512 bytes  R/W
+  OAM             544 bytes  R/W
+  SRAM              0 bytes  R/W
+  APURAM        65536 bytes  R/W
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ spaces
+out 282
+NES memory spaces:
+  RAM            2048 bytes  R/W
+  PRGROM        16384 bytes  R/O
+  PRGRAM         8192 bytes  R/W
+  CHR            8192 bytes  R/W
+  CIRAM          4096 bytes  R/W
+  OAM             256 bytes  R/W
+  PALETTE          32 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1
+$ spaces
+out 282
+NES memory spaces:
+  RAM            2048 bytes  R/W
+  PRGROM        16384 bytes  R/O
+  PRGRAM         8192 bytes  R/W
+  CHR            8192 bytes  R/W
+  CIRAM          4096 bytes  R/W
+  OAM             256 bytes  R/W
+  PALETTE          32 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ spaces
+out 248
+GB memory spaces:
+  ROM           32768 bytes  R/O
+  VRAM           8192 bytes  R/W
+  CARTRAM           0 bytes  R/W
+  WRAM           8192 bytes  R/W
+  OAM             160 bytes  R/W
+  HRAM            127 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1
+$ spaces
+out 248
+GB memory spaces:
+  ROM           32768 bytes  R/O
+  VRAM           8192 bytes  R/W
+  CARTRAM           0 bytes  R/W
+  WRAM           8192 bytes  R/W
+  OAM             160 bytes  R/W
+  HRAM            127 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1
+$ spaces
+out 218
+N64 memory spaces:
+  RDRAM       8388608 bytes  R/W
+  DMEM           4096 bytes  R/W
+  IMEM           4096 bytes  R/W
+  PIFRAM           64 bytes  R/W
+  ROM            4096 bytes  R/O
+  CPU        2147483647 bytes  R/W
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1
+$ spaces
+out 218
+N64 memory spaces:
+  RDRAM       8388608 bytes  R/W
+  DMEM           4096 bytes  R/W
+  IMEM           4096 bytes  R/W
+  PIFRAM           64 bytes  R/W
+  ROM            4096 bytes  R/O
+  CPU        2147483647 bytes  R/W
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ spaces
+out 287
+Nephrite memory spaces:
+  M68KBUS    16777216 bytes  R/O
+  Z80BUS        65536 bytes  R/O
+  WRAM          65536 bytes  R/W
+  Z80RAM         8192 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CRAM            128 bytes  R/W
+  VSRAM            80 bytes  R/W
+  ROM          131072 bytes  R/O
+status 0
+action none
+end
+
+case on venus-sa1
+target venus-sa1
+covers 1
+$ spaces
+out 382
+SNES memory spaces:
+  CpuBus     16777216 bytes  R/W
+  IO            65536 bytes  R/W
+  WRAM         131072 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CGRAM           512 bytes  R/W
+  OAM             544 bytes  R/W
+  SRAM          32768 bytes  R/W
+  APURAM        65536 bytes  R/W
+  SA1IRAM        2048 bytes  R/W
+  BWRAM         32768 bytes  R/W
+  SA1BUS     16777216 bytes  R/W
+status 0
+action none
+end
+
+case on venus-gsu
+target venus-gsu
+covers 1
+$ spaces
+out 349
+SNES memory spaces:
+  CpuBus     16777216 bytes  R/W
+  IO            65536 bytes  R/W
+  WRAM         131072 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CGRAM           512 bytes  R/W
+  OAM             544 bytes  R/W
+  SRAM         131072 bytes  R/W
+  APURAM        65536 bytes  R/W
+  GSURAM       131072 bytes  R/W
+  GSUBUS     16777216 bytes  R/W
+status 0
+action none
+end

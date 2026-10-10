@@ -1,0 +1,51 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command coretop
+usage 1   coretop [-w]                  live htop-style dashboard of the loaded core's hardware (Ctrl+C to exit - interactive terminal only;
+usage 2                                 -w opens it in a separate window instead, if this frontend supports one)
+
+case needs a terminal, and -w needs a window
+target fake
+covers 1-2
+$ coretop
+out 97
+coretop: needs a real interactive terminal (stdin/stdout is redirected, or this console has none)
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ coretop -w
+out 46
+coretop: -w is not supported by this frontend.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ coretop extra
+out 97
+coretop: needs a real interactive terminal (stdin/stdout is redirected, or this console has none)
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ coretop
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end

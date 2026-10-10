@@ -1,0 +1,131 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command kill
+usage 1   kill <id>                     remove a breakpoint/watch/session by its `ps` id (bp<N>, watch<N>, or a session name)
+
+case breakpoints, watches and sessions
+target fake
+covers 1
+$ kill
+out 22
+kill: usage: kill <id>
+status 1
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ watch add RAM 10 4
+out 37
+Watch #1 added: RAM 0x10-0x13 (write)
+status 0
+action none
+$ kill bp1
+out 22
+Breakpoint #1 removed.
+status 0
+action none
+$ kill bp1
+out 29
+kill: no breakpoint #1 found.
+status 1
+action none
+$ kill watch1
+out 17
+Watch #1 removed.
+status 0
+action none
+$ kill watch1
+out 24
+kill: no watch #1 found.
+status 1
+action none
+$ kill bpx
+out 26
+kill: no such session: bpx
+status 1
+action none
+$ kill watchx
+out 29
+kill: no such session: watchx
+status 1
+action none
+$ tmux new second
+out 48
+[tmux] Created and switched to session 'second'.
+status 0
+action SwitchSession { Name = second }
+$ kill main
+out 23
+Session 'main' removed.
+status 0
+action none
+$ kill second
+out 43
+kill: can't kill the only remaining session
+status 1
+action none
+$ kill nosuch
+out 29
+kill: no such session: nosuch
+status 1
+action none
+$ kill second
+out 43
+kill: can't kill the only remaining session
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ kill bp1
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ kill watch1
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ kill main
+out 43
+kill: can't kill the only remaining session
+status 1
+action none
+end
+
+case a host with no session manager
+target fake
+covers 1
+sessions none
+$ kill main
+out 91
+kill: no session manager is registered for this host, and 'main' isn't a bp<N>/watch<N> id.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ kill bp1
+out 22
+Breakpoint #1 removed.
+status 0
+action none
+end

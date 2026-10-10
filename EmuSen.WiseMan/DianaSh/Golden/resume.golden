@@ -1,0 +1,45 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command resume
+usage 1   resume | continue | c         resume emulation after an interactive halt (F4/breakpoint/single-step)
+
+case the host action
+target fake
+covers 1
+$ resume
+out 9
+Resuming.
+status 0
+action Resume { }
+$ echo $?
+out 1
+0
+status 0
+action none
+$ c
+out 9
+Resuming.
+status 0
+action Resume { }
+$ resume extra
+out 9
+Resuming.
+status 0
+action Resume { }
+end
+
+case with no target
+target none
+covers 1
+$ resume
+out 9
+Resuming.
+status 0
+action Resume { }
+$ c
+out 9
+Resuming.
+status 0
+action Resume { }
+end

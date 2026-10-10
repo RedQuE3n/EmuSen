@@ -1,0 +1,72 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command [
+usage 1   [ EXPR ]                      alias for 'test EXPR' - the ']' is required
+
+case the bracket form
+target none
+covers 1
+file a.txt 1
+x
+$ [ x ]
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ [ ]
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ [ x
+out 40
+Error: '[' must end with a matching ']'.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ [
+out 40
+Error: '[' must end with a matching ']'.
+status 1
+action none
+$ [ 1 -lt 2 ]
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ [ ! a = a ]
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ [ -f a.txt ] && echo found
+out 5
+found
+status 0
+action none
+end

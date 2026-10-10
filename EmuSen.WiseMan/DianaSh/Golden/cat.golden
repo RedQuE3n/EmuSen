@@ -1,0 +1,64 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command cat
+usage 1   cat <path>...                 print one or more files' contents
+
+case files, many files and failures
+target none
+covers 1
+file a.txt 11
+alpha
+beta
+
+file b.txt 5
+gamma
+$ cat a.txt
+out 10
+alpha
+beta
+status 0
+action none
+$ cat a.txt b.txt
+out 16
+alpha
+beta
+gamma
+status 0
+action none
+$ cat
+out 25
+cat: usage: cat <path>...
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ cat nosuch
+out 25
+cat: no such file: nosuch
+status 1
+action none
+$ cat /../x
+out 52
+cat: '/../x' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ cat Logs
+out 23
+cat: no such file: Logs
+status 1
+action none
+$ echo piped | cat
+out 5
+piped
+status 0
+action none
+$ cat a.txt nosuch
+out 25
+cat: no such file: nosuch
+status 1
+action none
+end

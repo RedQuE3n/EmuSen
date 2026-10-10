@@ -778,6 +778,12 @@ namespace EmuSen.DianaSh.DianaSh.Bin
 
         internal string GetVariable(string name) => _variables.TryGetValue(name, out string? v) ? v : "";
 
+        // The last line's exit status, as `$?` reads it - for the golden corpus, see EmuSen_DianaSh.md §13.4.
+        internal string LastExitStatus => GetVariable("?");
+
+        // Every command, in the order `help` lists them - for the golden corpus, see EmuSen_DianaSh.md §13.4.
+        internal IReadOnlyList<IDianaShCommand> RegisteredCommands => _orderedCommands;
+
         internal void SetVariable(string name, string value) => _variables[name] = value;
 
         internal bool UnsetVariable(string name) => _variables.Remove(name);

@@ -1,0 +1,162 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command channels
+usage 1   channels                      list audio channels/voices - index, active, envelope level (0-100), muted, core-specific detail (see `mute` to isolate one)
+
+case the fake target's voices
+target fake
+covers 1
+$ channels
+out 200
+[0] VOICE0   active=True  level=  0 muted=False 
+[1] VOICE1   active=False level= 25 muted=False 
+[2] VOICE2   active=True  level= 50 muted=False 
+[3] VOICE3   active=False level= 75 muted=False noise
+status 0
+action none
+$ mute 1 on
+out 16
+Channel 1 muted.
+status 0
+action none
+$ channels
+out 200
+[0] VOICE0   active=True  level=  0 muted=False 
+[1] VOICE1   active=False level= 25 muted=True  
+[2] VOICE2   active=True  level= 50 muted=False 
+[3] VOICE3   active=False level= 75 muted=False noise
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ channels
+out 37
+(this core reports no audio channels)
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ channels
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ channels
+out 1311
+[0] Voice0   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
+[1] Voice1   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
+[2] Voice2   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
+[3] Voice3   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
+[4] Voice4   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
+[5] Voice5   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
+[6] Voice6   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
+[7] Voice7   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1
+$ channels
+out 37
+(this core reports no audio channels)
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ channels
+out 425
+[0] Pulse 1  active=False level=  0 muted=False Duty=0 Period=0 Vol=0 Len=0 Sweep=False
+[1] Pulse 2  active=False level=  0 muted=False Duty=0 Period=0 Vol=0 Len=0 Sweep=False
+[2] Triangle active=False level=  0 muted=False Period=0 Len=0 Halt=False
+[3] Noise    active=False level=  0 muted=False PeriodIndex=0 Vol=0 Len=0 Short=False
+[4] DMC      active=False level=  0 muted=False Rate=0 Out=0 Addr=0xC000 Len=0 Loop=False
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1
+$ channels
+out 425
+[0] Pulse 1  active=False level=  0 muted=False Duty=0 Period=0 Vol=0 Len=0 Sweep=False
+[1] Pulse 2  active=False level=  0 muted=False Duty=0 Period=0 Vol=0 Len=0 Sweep=False
+[2] Triangle active=False level=  0 muted=False Period=0 Len=0 Halt=False
+[3] Noise    active=False level=  0 muted=False PeriodIndex=0 Vol=0 Len=0 Short=False
+[4] DMC      active=False level=  0 muted=False Rate=0 Out=0 Addr=0xC000 Len=0 Loop=False
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ channels
+out 321
+[0] Pulse 1  active=False level=  0 muted=False Duty=0 Freq=0 Vol=0 Len=0 Sweep=0/0+
+[1] Pulse 2  active=False level=  0 muted=False Duty=0 Freq=0 Vol=0 Len=0
+[2] Wave     active=False level=  0 muted=False Freq=0 Vol=0 Len=0 Dac=False
+[3] Noise    active=False level=  0 muted=False Shift=0 Div=0 Short=False Vol=0 Len=0
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1
+$ channels
+out 321
+[0] Pulse 1  active=False level=  0 muted=False Duty=0 Freq=0 Vol=0 Len=0 Sweep=0/0+
+[1] Pulse 2  active=False level=  0 muted=False Duty=0 Freq=0 Vol=0 Len=0
+[2] Wave     active=False level=  0 muted=False Freq=0 Vol=0 Len=0 Dac=False
+[3] Noise    active=False level=  0 muted=False Shift=0 Div=0 Short=False Vol=0 Len=0
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1
+$ channels
+out 37
+(this core reports no audio channels)
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1
+$ channels
+out 37
+(this core reports no audio channels)
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ channels
+out 37
+(this core reports no audio channels)
+status 0
+action none
+end

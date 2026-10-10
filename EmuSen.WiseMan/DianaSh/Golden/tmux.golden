@@ -1,0 +1,178 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command tmux
+usage 1   tmux new [name]               create a session (auto-named if omitted) and switch to it
+usage 2   tmux list                     list every session, * marks the current one
+usage 3   tmux switch <name>            switch to an existing session
+usage 4   tmux kill <name>              destroy a session (can't kill the last one)
+
+case sessions
+target none
+covers 1-4
+$ tmux
+out 303
+  tmux new [name]               create a session (auto-named if omitted) and switch to it
+  tmux list                     list every session, * marks the current one
+  tmux switch <name>            switch to an existing session
+  tmux kill <name>              destroy a session (can't kill the last one)
+status 0
+action none
+$ tmux list
+out 8
+  * main
+status 0
+action none
+$ tmux new
+out 51
+[tmux] Created and switched to session 'session-1'.
+status 0
+action SwitchSession { Name = session-1 }
+$ tmux new
+out 51
+[tmux] Created and switched to session 'session-2'.
+status 0
+action SwitchSession { Name = session-2 }
+$ tmux new named
+out 47
+[tmux] Created and switched to session 'named'.
+status 0
+action SwitchSession { Name = named }
+$ tmux new named
+out 44
+tmux: a session named 'named' already exists
+status 1
+action none
+$ tmux list
+out 46
+    main
+    session-1
+    session-2
+  * named
+status 0
+action none
+$ tmux switch
+out 25
+Usage: tmux switch <name>
+status 0
+action none
+$ tmux switch main
+out 34
+[tmux] Switched to session 'main'.
+status 0
+action SwitchSession { Name = main }
+$ tmux switch nosuch
+out 29
+tmux: no such session: nosuch
+status 1
+action none
+$ tmux kill
+out 23
+Usage: tmux kill <name>
+status 0
+action none
+$ tmux kill nosuch
+out 29
+tmux: no such session: nosuch
+status 1
+action none
+$ tmux kill named
+out 22
+[tmux] Killed 'named'.
+status 0
+action none
+$ tmux list
+out 36
+  * main
+    session-1
+    session-2
+status 0
+action none
+$ tmux frob
+out 59
+Unknown 'tmux' subcommand 'frob'. Try new/list/switch/kill.
+status 0
+action none
+$ tmux kill main
+out 46
+[tmux] Killed 'main'; switched to 'session-1'.
+status 0
+action SwitchSession { Name = session-1 }
+$ tmux kill 1
+out 24
+tmux: no such session: 1
+status 1
+action none
+$ tmux kill 2
+out 24
+tmux: no such session: 2
+status 1
+action none
+$ tmux kill main
+out 27
+tmux: no such session: main
+status 1
+action none
+$ tmux list
+out 27
+  * session-1
+    session-2
+status 0
+action none
+end
+
+case a session keeps its own variables
+target none
+covers 1-4
+$ export A=main
+out 0
+
+status 0
+action none
+$ tmux new b
+out 43
+[tmux] Created and switched to session 'b'.
+status 0
+action SwitchSession { Name = b }
+$ echo [$A]
+out 2
+[]
+status 0
+action none
+$ export A=b
+out 0
+
+status 0
+action none
+$ tmux switch main
+out 34
+[tmux] Switched to session 'main'.
+status 0
+action SwitchSession { Name = main }
+$ echo [$A]
+out 6
+[main]
+status 0
+action none
+end
+
+case a host with no session manager
+target none
+covers 1-4
+sessions none
+$ tmux list
+out 53
+tmux: no session manager is registered for this host.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ tmux new x
+out 53
+tmux: no session manager is registered for this host.
+status 1
+action none
+end

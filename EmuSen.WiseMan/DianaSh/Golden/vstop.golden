@@ -1,0 +1,31 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command vstop
+usage 1   vstop [-w]                    live htop-style dashboard of the .NET runtime this process runs on (Ctrl+C to exit - interactive terminal only;
+usage 2                                 -w opens it in a separate window instead, if this frontend supports one)
+
+case needs a terminal, and -w needs a window
+target none
+covers 1-2
+$ vstop
+out 95
+vstop: needs a real interactive terminal (stdin/stdout is redirected, or this console has none)
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ vstop -w
+out 44
+vstop: -w is not supported by this frontend.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end

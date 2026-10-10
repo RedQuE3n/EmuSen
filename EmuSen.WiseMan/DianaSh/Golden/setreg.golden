@@ -1,0 +1,364 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command setreg
+usage 1   setreg <reg> <value>          write one of the main CPU's registers
+usage 2   setreg <cpu> <reg> <value>    same, on another processor - `cpus` lists them
+
+case writable and read-only registers
+target fake
+covers 1-2
+$ setreg
+out 40
+Usage: setreg [<cpu>] <register> <value>
+status 0
+action none
+$ setreg A
+out 40
+Usage: setreg [<cpu>] <register> <value>
+status 0
+action none
+$ setreg A 34
+out 24
+cpu A = 0x34 (was 0x12).
+status 0
+action none
+$ regs cpu
+out 109
+the main processor registers:
+  PC        = 0x8003
+  A         = 0x34
+  X         = 0x0340
+  P         = 0x34
+status 0
+action none
+$ setreg a 1FF
+out 45
+A is 8-bit, so 0x1FF does not fit (max 0xFF).
+status 1
+action none
+$ setreg X FFFF
+out 28
+cpu X = 0xFFFF (was 0x0340).
+status 0
+action none
+$ setreg X 10000
+out 50
+X is 16-bit, so 0x10000 does not fit (max 0xFFFF).
+status 1
+action none
+$ setreg PC 8000
+out 35
+cpu's PC is read-only on this core.
+status 1
+action none
+$ setreg Q 1
+out 54
+cpu has no register named 'Q'. Available: PC, A, X, P.
+status 1
+action none
+$ setreg A zz
+out 20
+'zz' is not a value.
+status 1
+action none
+$ setreg cpu A 7
+out 24
+cpu A = 0x07 (was 0x34).
+status 0
+action none
+$ setreg gsu R15 1
+out 75
+gsu reports its registers but this core cannot write them - see `man cpus`.
+status 1
+action none
+$ setreg gsu
+out 40
+Usage: setreg [<cpu>] <register> <value>
+status 0
+action none
+$ setreg cop R15 1
+out 21
+'R15' is not a value.
+status 1
+action none
+$ setreg nope A 1
+out 57
+cpu has no register named 'nope'. Available: PC, A, X, P.
+status 1
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ setreg A 1
+out 64
+GOLDEN publishes no debug CPUs, so it has no writable registers.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ setreg A 1
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ regs cpu
+out 239
+Ricoh 5A22 (65816) main CPU registers:
+  A         = 0x0001
+  X         = 0x0000
+  Y         = 0x0000
+  S         = 0x01F3
+  D         = 0x0000
+  PB        = 0x00
+  PC        = 0xED3E
+  DB        = 0x00
+  P         = 0x34
+  E         = 0x1
+status 0
+action none
+$ setreg NOPE 0
+out 77
+cpu has no register named 'NOPE'. Available: A, X, Y, S, D, PB, PC, DB, P, E.
+status 1
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1
+$ regs cpu
+out 14
+CPU registers:
+status 0
+action none
+$ setreg NOPE 0
+out 52
+cpu has no register named 'NOPE'. Available: (none).
+status 1
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ regs cpu
+out 38
+cpu reports no registers on this core.
+status 0
+action none
+$ setreg NOPE 0
+out 52
+cpu has no register named 'NOPE'. Available: (none).
+status 1
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1
+$ regs cpu
+out 38
+cpu reports no registers on this core.
+status 0
+action none
+$ setreg NOPE 0
+out 52
+cpu has no register named 'NOPE'. Available: (none).
+status 1
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ regs cpu
+out 337
+SM83 registers:
+  A         = 0x01
+  F         = 0xB0
+  BC        = 0x0013
+  DE        = 0x00D8
+  HL        = 0x014D
+  SP        = 0xFFFC
+  PC        = 0x0AF2
+  Z         = 0x1
+  N         = 0x0
+  H         = 0x1
+  C         = 0x1
+  IME       = 0x0
+  HALT      = 0x0
+  IE        = 0x00
+  IF        = 0x01
+  Cycles    = 0x00000000000224A0
+status 0
+action none
+$ setreg NOPE 0
+out 109
+cpu has no register named 'NOPE'. Available: A, F, BC, DE, HL, SP, PC, Z, N, H, C, IME, HALT, IE, IF, Cycles.
+status 1
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1
+$ regs cpu
+out 337
+SM83 registers:
+  A         = 0x01
+  F         = 0xB0
+  BC        = 0x0013
+  DE        = 0x00D8
+  HL        = 0x014D
+  SP        = 0xFFFE
+  PC        = 0x0100
+  Z         = 0x1
+  N         = 0x0
+  H         = 0x1
+  C         = 0x1
+  IME       = 0x0
+  HALT      = 0x0
+  IE        = 0x00
+  IF        = 0x00
+  Cycles    = 0x0000000000000000
+status 0
+action none
+$ setreg NOPE 0
+out 109
+cpu has no register named 'NOPE'. Available: A, F, BC, DE, HL, SP, PC, Z, N, H, C, IME, HALT, IE, IF, Cycles.
+status 1
+action none
+end
+
+case on mars
+target mars
+covers 1
+$ regs cpu
+out 1205
+VR4300 registers:
+  PC        = 0xFFFFFFFFA4000040
+  zero      = 0x0000000000000000
+  at        = 0x0000000000000000
+  v0        = 0x0000000000000000
+  v1        = 0x0000000000000000
+  a0        = 0x0000000000000000
+  a1        = 0x0000000000000000
+  a2        = 0x0000000000000000
+  a3        = 0x0000000000000000
+  t0        = 0x0000000000000000
+  t1        = 0x0000000000000000
+  t2        = 0x0000000000000000
+  t3        = 0xFFFFFFFFA4000040
+  t4        = 0x0000000000000000
+  t5        = 0x0000000000000000
+  t6        = 0x0000000000000000
+  t7        = 0x0000000000000000
+  s0        = 0x0000000000000000
+  s1        = 0x0000000000000000
+  s2        = 0x0000000000000000
+  s3        = 0x0000000000000000
+  s4        = 0x0000000000000001
+  s5        = 0x0000000000000000
+  s6        = 0x000000000000003F
+  s7        = 0x0000000000000000
+  t8        = 0x0000000000000000
+  t9        = 0x0000000000000000
+  k0        = 0x0000000000000000
+  k1        = 0x0000000000000000
+  gp        = 0x0000000000000000
+  sp        = 0xFFFFFFFFA4001FF0
+  s8        = 0x0000000000000000
+  ra        = 0xFFFFFFFFA4001550
+  HI        = 0x0000000000000000
+  LO        = 0x0000000000000000
+  Cycles    = 0x00000000007D1F40
+status 0
+action none
+$ setreg NOPE 0
+out 194
+cpu has no register named 'NOPE'. Available: PC, zero, at, v0, v1, a0, a1, a2, a3, t0, t1, t2, t3, t4, t5, t6, t7, s0, s1, s2, s3, s4, s5, s6, s7, t8, t9, k0, k1, gp, sp, s8, ra, HI, LO, Cycles.
+status 1
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1
+$ regs cpu
+out 1214
+VR4300 (MarsRT) registers:
+  PC        = 0xFFFFFFFFA4000040
+  zero      = 0x0000000000000000
+  at        = 0x0000000000000000
+  v0        = 0x0000000000000000
+  v1        = 0x0000000000000000
+  a0        = 0x0000000000000000
+  a1        = 0x0000000000000000
+  a2        = 0x0000000000000000
+  a3        = 0x0000000000000000
+  t0        = 0x0000000000000000
+  t1        = 0x0000000000000000
+  t2        = 0x0000000000000000
+  t3        = 0xFFFFFFFFA4000040
+  t4        = 0x0000000000000000
+  t5        = 0x0000000000000000
+  t6        = 0x0000000000000000
+  t7        = 0x0000000000000000
+  s0        = 0x0000000000000000
+  s1        = 0x0000000000000000
+  s2        = 0x0000000000000000
+  s3        = 0x0000000000000000
+  s4        = 0x0000000000000001
+  s5        = 0x0000000000000000
+  s6        = 0x000000000000003F
+  s7        = 0x0000000000000000
+  t8        = 0x0000000000000000
+  t9        = 0x0000000000000000
+  k0        = 0x0000000000000000
+  k1        = 0x0000000000000000
+  gp        = 0x0000000000000000
+  sp        = 0xFFFFFFFFA4001FF0
+  s8        = 0x0000000000000000
+  ra        = 0xFFFFFFFFA4001550
+  HI        = 0x0000000000000000
+  LO        = 0x0000000000000000
+  Cycles    = 0x00000000007D1F40
+status 0
+action none
+$ setreg NOPE 0
+out 194
+cpu has no register named 'NOPE'. Available: PC, zero, at, v0, v1, a0, a1, a2, a3, t0, t1, t2, t3, t4, t5, t6, t7, s0, s1, s2, s3, s4, s5, s6, s7, t8, t9, k0, k1, gp, sp, s8, ra, HI, LO, Cycles.
+status 1
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ regs cpu
+out 64
+No debug CPU named 'cpu' on this Nephrite. Available: m68k, z80.
+status 0
+action none
+$ setreg NOPE 0
+out 53
+m68k has no register named 'NOPE'. Available: (none).
+status 1
+action none
+end

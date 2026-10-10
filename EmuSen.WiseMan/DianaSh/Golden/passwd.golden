@@ -1,0 +1,56 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command passwd
+usage 1   passwd <newpassword>          change your own password
+usage 2   passwd <name> <newpassword>   change <name>'s password (root only)
+
+case passwords
+target none
+covers 1-2
+$ passwd
+out 65
+passwd: usage: passwd <newpassword> | passwd <name> <newpassword>
+status 1
+action none
+$ passwd newpass
+out 28
+Password updated for 'root'.
+status 0
+action none
+$ useradd tester
+out 20
+Added user 'tester'.
+status 0
+action none
+$ passwd tester secret
+out 30
+Password updated for 'tester'.
+status 0
+action none
+$ passwd nosuch secret
+out 30
+passwd: no such user 'nosuch'.
+status 1
+action none
+$ su tester
+out 21
+Switched to 'tester'.
+status 0
+action none
+$ passwd root x
+out 53
+passwd: only root can change another user's password.
+status 1
+action none
+$ passwd mine
+out 30
+Password updated for 'tester'.
+status 0
+action none
+$ passwd a b c
+out 65
+passwd: usage: passwd <newpassword> | passwd <name> <newpassword>
+status 1
+action none
+end

@@ -1,0 +1,60 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command state
+usage 1   state save|load [path]        save/load emulator state (defaults to this frontend's own save-state path if omitted)
+
+case saving and loading
+target none
+covers 1
+$ state
+out 70
+Usage: state save|load [path]  (defaults to the F5/F9 path if omitted)
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ state save
+out 52
+[STATE] Saved: <ROOT>/Saves/Save States/golden.state
+status 0
+action none
+$ state load
+out 53
+[STATE] Loaded: <ROOT>/Saves/Save States/golden.state
+status 0
+action none
+$ state save mine.state
+out 25
+[STATE] Saved: mine.state
+status 0
+action none
+$ state load mine.state
+out 26
+[STATE] Loaded: mine.state
+status 0
+action none
+$ state load nosuch.state
+out 63
+[STATE] Load failed: Could not find file '<ROOT>/nosuch.state'.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ state frob
+out 70
+Usage: state save|load [path]  (defaults to the F5/F9 path if omitted)
+status 1
+action none
+$ state save /nonexistent-dir/x.state
+out 82
+[STATE] Save failed: Could not find a part of the path '/nonexistent-dir/x.state'.
+status 1
+action none
+end

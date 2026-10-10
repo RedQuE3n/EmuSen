@@ -1,0 +1,798 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command bp
+usage 1   bp add <addr>[-<end>] [if <expr>] [log <expr>]
+usage 2                                 halt just before <addr> runs (24-bit CPU address, or a range);
+usage 3                                 with 'log' it records <expr> and carries on instead of halting
+usage 4   bp write <space> <addr>[-<end>] [<v>] [changed] [if <expr>]
+usage 5                                 halt just after anything writes that address
+usage 6   bp read <space> <addr>[-<end>] [<v>] [if <expr>]
+usage 7                                 halt just after anything reads it
+usage 8   bp uninit <space>             halt the first time never-written memory is read back
+usage 9   bp when <condition> [log|off] halt (or just record) when the hardware does something
+usage 10                                 it should not - `bp when` alone lists what this core detects
+usage 11   bp depth <n>                  halt if the call stack ever gets deeper than <n>
+usage 12   bp forbid <addr>-<end>        never halt while the PC is in this range
+usage 13   bp log [<count>] | bp log clear
+usage 14                                 show (or forget) what the logpoints have recorded
+usage 15   bp list                       list active breakpoints with their IDs and hit counts
+usage 16   bp on|off <id>                enable/disable one breakpoint without removing it
+usage 17   bp remove <id>                remove a breakpoint entirely
+usage 18   bp <cpu> add|list|remove ...  same, on another processor - `cpus` lists them, and each
+usage 19                                 one's addresses are its own address space
+usage 20   (see also: `cpus`, `step`, `runto`, and the F4 prompt's own 'continue'/'c')
+
+case pc breakpoints
+target fake
+covers 1-3,15-17,20
+$ bp
+out 37
+Usage: bp [<cpu>] add|list|remove ...
+status 0
+action none
+$ bp add
+out 40
+Usage: bp add <addr>[-<end>] [if <expr>]
+status 0
+action none
+$ bp add 8003
+out 31
+Breakpoint #1 added at $008003.
+status 0
+action none
+$ bp add 8000-8010 if A==0x12
+out 50
+Breakpoint #2 added at $008000-$008010 if A==0x12.
+status 0
+action none
+$ bp add 8010-8000
+out 39
+Breakpoint #3 added at $008000-$008010.
+status 0
+action none
+$ bp add 8009 log A
+out 39
+Breakpoint #4 logging at $008009 log A.
+status 0
+action none
+$ bp add 800C if A==1 log X
+out 47
+Breakpoint #5 logging at $00800C if A==1 log X.
+status 0
+action none
+$ bp add zz
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ bp list
+out 212
+  #1: $008003 (enabled, hit 0x)
+  #2: $008000-$008010 if A==0x12 (enabled, hit 0x)
+  #3: $008000-$008010 (enabled, hit 0x)
+  #4: $008009 log A (enabled, logged 0x)
+  #5: $00800C if A==1 log X (enabled, logged 0x)
+status 0
+action none
+$ bp off 1
+out 23
+Breakpoint #1 disabled.
+status 0
+action none
+$ bp on 1
+out 22
+Breakpoint #1 enabled.
+status 0
+action none
+$ bp on
+out 17
+Usage: bp on <id>
+status 0
+action none
+$ bp on 99
+out 25
+No breakpoint #153 found.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ bp remove 2
+out 22
+Breakpoint #2 removed.
+status 0
+action none
+$ bp remove 99
+out 24
+No breakpoint #99 found.
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ bp remove
+out 21
+Usage: bp remove <id>
+status 0
+action none
+$ bp list
+out 161
+  #1: $008003 (enabled, hit 0x)
+  #3: $008000-$008010 (enabled, hit 0x)
+  #4: $008009 log A (enabled, logged 0x)
+  #5: $00800C if A==1 log X (enabled, logged 0x)
+status 0
+action none
+$ bp frob
+out 99
+Unknown 'bp' subcommand 'frob'. Try add/read/write/uninit/when/depth/forbid/log/list/on/off/remove.
+status 0
+action none
+end
+
+case data breakpoints
+target fake
+covers 4-7,15
+$ bp write RAM 42 7
+out 49
+Breakpoint #1 added on writes of RAM 0x42 = 0x07.
+status 0
+action none
+$ bp write RAM 40-4F changed if X>1
+out 0
+
+status 0
+action none
+$ bp write ram 1
+out 41
+Breakpoint #3 added on writes of RAM 0x1.
+status 0
+action none
+$ bp read RAM 42
+out 41
+Breakpoint #4 added on reads of RAM 0x42.
+status 0
+action none
+$ bp read RAM 42 changed
+out 66
+'changed' only applies to writes - a read never changes the value.
+status 0
+action none
+$ bp read RAM
+out 69
+Usage: bp read <space> <addr>[-<end>] [<value>] [changed] [if <expr>]
+status 0
+action none
+$ bp write NOPE 1
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ bp read VRAM 10 log A
+out 50
+Breakpoint #5 logging on reads of VRAM 0x10 log A.
+status 0
+action none
+$ bp list
+out 226
+  #1: write RAM 0x42 = 0x07 (enabled, hit 0x)
+  #2: write RAM 0x40-0x4F changed if X (enabled, hit 0x)
+  #3: write RAM 0x1 (enabled, hit 0x)
+  #4: read RAM 0x42 (enabled, hit 0x)
+  #5: read VRAM 0x10 log A (enabled, logged 0x)
+status 0
+action none
+end
+
+case uninitialised reads
+target fake
+covers 8,15
+$ bp uninit
+out 24
+Usage: bp uninit <space>
+status 0
+action none
+$ bp uninit RAM
+out 59
+Halting on the first read of any never-written byte of RAM.
+status 0
+action none
+$ bp list
+out 64
+No active breakpoints.
+  (halting on uninitialized reads of RAM)
+status 0
+action none
+$ bp uninit UNSIZED
+out 57
+UNSIZED reports no size, so its writes cannot be tracked.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ bp uninit NOPE
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+end
+
+case hardware conditions
+target fake
+covers 9-10,13-15
+$ bp when
+out 126
+Conditions this core detects:
+  brk          a BRK instruction  [off]
+  ppuaccess    a video register written mid-frame  [off]
+status 0
+action none
+$ bp when brk
+out 35
+Halting on brk (a BRK instruction).
+status 0
+action none
+$ bp when ppuaccess log
+out 108
+Recording every ppuaccess (a video register written mid-frame) without halting - read it back with `bp log`.
+status 0
+action none
+$ bp when
+out 142
+Conditions this core detects:
+  brk          a BRK instruction  [halting, 0x]
+  ppuaccess    a video register written mid-frame  [logging, 0x]
+status 0
+action none
+$ bp list
+out 73
+  when brk: halting (enabled, 0x)
+  when ppuaccess: logging (enabled, 0x)
+status 0
+action none
+$ bp log
+out 53
+Nothing logged yet - the logpoints have not been hit.
+status 0
+action none
+$ bp when brk off
+out 27
+No longer watching for brk.
+status 0
+action none
+$ bp when brk off
+out 18
+brk was not armed.
+status 0
+action none
+$ bp when brk sideways
+out 28
+Usage: bp when brk [log|off]
+status 0
+action none
+$ bp when nope
+out 63
+'nope' is not a condition this core detects. Try brk/ppuaccess.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ bp when BRK
+out 35
+Halting on brk (a BRK instruction).
+status 0
+action none
+end
+
+case depth, forbid and the log
+target fake
+covers 11-15
+$ bp depth
+out 19
+Usage: bp depth <n>
+status 0
+action none
+$ bp depth 8
+out 70
+This core does not report a call stack, so there is no depth to guard.
+status 1
+action none
+$ bp list
+out 22
+No active breakpoints.
+status 0
+action none
+$ bp depth off
+out 25
+Call-depth guard removed.
+status 0
+action none
+$ bp forbid
+out 29
+Usage: bp forbid <addr>-<end>
+status 0
+action none
+$ bp forbid 8000-8100
+out 72
+Forbid range #1 added: nothing halts while the PC is in $008000-$008100.
+status 0
+action none
+$ bp forbid 8100-8000
+out 72
+Forbid range #2 added: nothing halts while the PC is in $008000-$008100.
+status 0
+action none
+$ bp list
+out 77
+  #1: forbid $008000-$008100 (enabled)
+  #2: forbid $008000-$008100 (enabled)
+status 0
+action none
+$ bp log
+out 59
+No logpoints set - add one with `bp add <addr> log <expr>`.
+status 0
+action none
+$ bp add 8000 log A
+out 39
+Breakpoint #3 logging at $008000 log A.
+status 0
+action none
+$ bp log
+out 53
+Nothing logged yet - the logpoints have not been hit.
+status 0
+action none
+$ bp log 4
+out 53
+Nothing logged yet - the logpoints have not been hit.
+status 0
+action none
+$ bp log clear
+out 21
+Logpoint log cleared.
+status 0
+action none
+$ bp log
+out 53
+Nothing logged yet - the logpoints have not been hit.
+status 0
+action none
+end
+
+case other processors
+target fake
+covers 18-19
+$ bp cpu list
+out 22
+No active breakpoints.
+status 0
+action none
+$ bp cpu add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ bp cpu list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+$ bp gsu add 20
+out 62
+gsu cannot be halted by this core, so it takes no breakpoints.
+status 0
+action none
+$ bp cop list
+out 62
+gsu cannot be halted by this core, so it takes no breakpoints.
+status 0
+action none
+$ bp gsu
+out 35
+Usage: bp <cpu> add|list|remove ...
+status 0
+action none
+$ bp cpu
+out 35
+Usage: bp <cpu> add|list|remove ...
+status 0
+action none
+$ bp main list
+out 99
+Unknown 'bp' subcommand 'main'. Try add/read/write/uninit/when/depth/forbid/log/list/on/off/remove.
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 8-11,15,18-19
+$ bp list
+out 22
+No active breakpoints.
+status 0
+action none
+$ bp when
+out 53
+This core reports no hardware conditions to break on.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ bp depth 4
+out 70
+This core does not report a call stack, so there is no depth to guard.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ bp gsu add 1
+out 98
+Unknown 'bp' subcommand 'gsu'. Try add/read/write/uninit/when/depth/forbid/log/list/on/off/remove.
+status 0
+action none
+$ bp cop add 1
+out 50
+This cartridge has no coprocessor CPU to break on.
+status 0
+action none
+$ bp add 10
+out 31
+Breakpoint #1 added at $000010.
+status 0
+action none
+$ bp list
+out 31
+  #1: $000010 (enabled, hit 0x)
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ bp list
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on a GSU cartridge
+target venus-gsu
+covers 18-19
+$ bp gsu add 0
+out 35
+GSU breakpoint #1 added at $000000.
+status 0
+action none
+$ bp gsu list
+out 31
+  #1: $000000 (enabled, hit 0x)
+status 0
+action none
+$ bp list
+out 22
+No active breakpoints.
+status 0
+action none
+end
+
+case on an SA-1 cartridge
+target venus-sa1
+covers 18-19
+$ cpus
+out 465
+SNES debug processors:
+  cpu   PC=$00ED3E  Ricoh 5A22 (65816) main CPU
+        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
+  spc   PC=$00FFCF  Sony SPC700 sound CPU
+        supports: bp, cov, regs, setreg, disasm   code space: APURAM
+  sa1   PC=$000000  SA-1 (65816) cartridge coprocessor
+        supports: bp, cov, bt, regs, setreg, disasm   code space: SA1BUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+$ bp sa1 add 8000
+out 35
+SA1 breakpoint #1 added at $008000.
+status 0
+action none
+$ bp sa1 list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+$ bp cop list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 9-10,15
+$ bp when
+out 394
+Conditions this core detects:
+  stp          the 65816 executed STP and is stopped until reset  [off]
+  wdm          the 65816 executed WDM, a reserved opcode  [off]
+  brk          a BRK was taken  [off]
+  cop          a COP was taken  [off]
+  ppuaccess    VRAM/CGRAM/OAM written while the display is rendering  [off]
+  autojoy      $4218-$421F read while the auto-joypad read is running  [off]
+status 0
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ bp list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 9-10,15
+$ bp when
+out 53
+This core reports no hardware conditions to break on.
+status 1
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ bp list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 9-10,15
+$ bp when
+out 53
+This core reports no hardware conditions to break on.
+status 1
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ bp list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 9-10,15
+$ bp when
+out 53
+This core reports no hardware conditions to break on.
+status 1
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ bp list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 9-10,15
+$ bp when
+out 53
+This core reports no hardware conditions to break on.
+status 1
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ bp list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 9-10,15
+$ bp when
+out 53
+This core reports no hardware conditions to break on.
+status 1
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ bp list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 9-10,15
+$ bp when
+out 53
+This core reports no hardware conditions to break on.
+status 1
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ bp list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 9-10,15
+$ bp when
+out 53
+This core reports no hardware conditions to break on.
+status 1
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ bp list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 9-10,15
+$ bp when
+out 53
+This core reports no hardware conditions to break on.
+status 1
+action none
+$ bp add 8000
+out 36
+M68K breakpoint #1 added at $008000.
+status 0
+action none
+$ bp list
+out 31
+  #1: $008000 (enabled, hit 0x)
+status 0
+action none
+end
+
+case ids are read as hexadecimal
+target fake
+covers 15-17
+$ for i in 1 2 3 4 5 6 7 8 9 a b c d e f g; do bp add 8000; done
+out 518
+Breakpoint #1 added at $008000.
+Breakpoint #2 added at $008000.
+Breakpoint #3 added at $008000.
+Breakpoint #4 added at $008000.
+Breakpoint #5 added at $008000.
+Breakpoint #6 added at $008000.
+Breakpoint #7 added at $008000.
+Breakpoint #8 added at $008000.
+Breakpoint #9 added at $008000.
+Breakpoint #10 added at $008000.
+Breakpoint #11 added at $008000.
+Breakpoint #12 added at $008000.
+Breakpoint #13 added at $008000.
+Breakpoint #14 added at $008000.
+Breakpoint #15 added at $008000.
+Breakpoint #16 added at $008000.
+status 0
+action none
+$ bp remove 10
+out 23
+Breakpoint #10 removed.
+status 0
+action none
+$ bp list
+out 485
+  #1: $008000 (enabled, hit 0x)
+  #2: $008000 (enabled, hit 0x)
+  #3: $008000 (enabled, hit 0x)
+  #4: $008000 (enabled, hit 0x)
+  #5: $008000 (enabled, hit 0x)
+  #6: $008000 (enabled, hit 0x)
+  #7: $008000 (enabled, hit 0x)
+  #8: $008000 (enabled, hit 0x)
+  #9: $008000 (enabled, hit 0x)
+  #10: $008000 (enabled, hit 0x)
+  #11: $008000 (enabled, hit 0x)
+  #12: $008000 (enabled, hit 0x)
+  #13: $008000 (enabled, hit 0x)
+  #14: $008000 (enabled, hit 0x)
+  #15: $008000 (enabled, hit 0x)
+status 0
+action none
+$ bp off 10
+out 24
+No breakpoint #16 found.
+status 1
+action none
+$ bp list
+out 485
+  #1: $008000 (enabled, hit 0x)
+  #2: $008000 (enabled, hit 0x)
+  #3: $008000 (enabled, hit 0x)
+  #4: $008000 (enabled, hit 0x)
+  #5: $008000 (enabled, hit 0x)
+  #6: $008000 (enabled, hit 0x)
+  #7: $008000 (enabled, hit 0x)
+  #8: $008000 (enabled, hit 0x)
+  #9: $008000 (enabled, hit 0x)
+  #10: $008000 (enabled, hit 0x)
+  #11: $008000 (enabled, hit 0x)
+  #12: $008000 (enabled, hit 0x)
+  #13: $008000 (enabled, hit 0x)
+  #14: $008000 (enabled, hit 0x)
+  #15: $008000 (enabled, hit 0x)
+status 0
+action none
+end

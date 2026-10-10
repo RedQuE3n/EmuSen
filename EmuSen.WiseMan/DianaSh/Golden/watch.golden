@@ -1,0 +1,206 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command watch
+usage 1   watch add <space> <addr> <len> [write|read|both]
+usage 2                                 register a watch, prints matching accesses live + stores them
+usage 3                                 (default write, matching this command's original behavior)
+usage 4   watch list                    list active watches with their IDs and access kind
+usage 5   watch log <id> [<count>]      show a watch's recorded events (default 20)
+usage 6   watch summary <id>            group a watch's recorded events by access site (Context),
+usage 7                                 showing each unique site once with a hit count instead of
+usage 8                                 every individual event - the dynamic, addressing-mode-agnostic
+usage 9                                 equivalent of `readers`/`writers`, which only find statically-
+usage 10                                 visible absolute/absolute-long instructions and miss indexed/
+usage 11                                 indirect access entirely. Only covers whatever's still in the
+usage 12                                 watch's own bounded event buffer, same as `watch log`.
+usage 13   watch clear <id>              clear a watch's stored events (doesn't remove the watch)
+usage 14   watch remove <id>             remove a watch entirely
+
+case access watches
+target fake
+covers 1-14
+$ watch
+out 42
+Usage: watch add|list|log|clear|remove ...
+status 0
+action none
+$ watch list
+out 18
+No active watches.
+status 0
+action none
+$ watch add
+out 55
+Usage: watch add <space> <addr> <len> [write|read|both]
+status 0
+action none
+$ watch add RAM 10 4
+out 37
+Watch #1 added: RAM 0x10-0x13 (write)
+status 0
+action none
+$ watch add RAM 20 2 read
+out 36
+Watch #2 added: RAM 0x20-0x21 (read)
+status 0
+action none
+$ watch add VRAM 0 10 both
+out 35
+Watch #3 added: VRAM 0x0-0xF (both)
+status 0
+action none
+$ watch add RAM 0 1 sideways
+out 63
+Error: Unknown watch kind 'sideways'. Use write, read, or both.
+status 1
+action none
+$ watch add NOPE 0 1
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ watch list
+out 80
+  #1: RAM 0x10-0x13 (write)
+  #2: RAM 0x20-0x21 (read)
+  #3: VRAM 0x0-0xF (both)
+status 0
+action none
+$ watch log
+out 31
+Usage: watch log <id> [<count>]
+status 0
+action none
+$ watch log 1
+out 54
+No events recorded for watch #1 (or it doesn't exist).
+status 0
+action none
+$ watch log 1 4
+out 54
+No events recorded for watch #1 (or it doesn't exist).
+status 0
+action none
+$ watch summary
+out 25
+Usage: watch summary <id>
+status 0
+action none
+$ watch summary 1
+out 54
+No events recorded for watch #1 (or it doesn't exist).
+status 0
+action none
+$ watch clear
+out 23
+Usage: watch clear <id>
+status 0
+action none
+$ watch clear 1
+out 28
+Cleared events for watch #1.
+status 0
+action none
+$ watch remove
+out 24
+Usage: watch remove <id>
+status 0
+action none
+$ watch remove 2
+out 17
+Watch #2 removed.
+status 0
+action none
+$ watch remove 2
+out 18
+No watch #2 found.
+status 0
+action none
+$ watch list
+out 53
+  #1: RAM 0x10-0x13 (write)
+  #3: VRAM 0x0-0xF (both)
+status 0
+action none
+$ watch frob
+out 73
+Unknown 'watch' subcommand 'frob'. Try add/list/log/summary/clear/remove.
+status 0
+action none
+$ watch add RAM zz 1
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ watch list
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 1-4
+$ watch add WRAM 0 100 both
+out 36
+Watch #1 added: WRAM 0x0-0xFF (both)
+status 0
+action none
+$ watch list
+out 26
+  #1: WRAM 0x0-0xFF (both)
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1-4
+$ watch add RAM 0 100 both
+out 35
+Watch #1 added: RAM 0x0-0xFF (both)
+status 0
+action none
+$ watch list
+out 25
+  #1: RAM 0x0-0xFF (both)
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1-4
+$ watch add WRAM 0 100 both
+out 36
+Watch #1 added: WRAM 0x0-0xFF (both)
+status 0
+action none
+$ watch list
+out 26
+  #1: WRAM 0x0-0xFF (both)
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1-4
+$ watch add RAM 0 100 both
+out 100
+Error: No memory space named 'RAM'. Available: M68KBUS, Z80BUS, WRAM, Z80RAM, VRAM, CRAM, VSRAM, ROM
+status 1
+action none
+$ watch list
+out 18
+No active watches.
+status 0
+action none
+end

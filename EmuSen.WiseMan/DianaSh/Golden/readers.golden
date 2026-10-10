@@ -1,0 +1,107 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command readers
+usage 1   readers <addr> [<scanstart> <scanlen>]
+usage 2                                 find instructions statically reading <addr>,
+usage 3                                 scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)
+
+case static reads on the fake target
+target fake
+covers 1-3
+$ readers
+out 45
+Usage: readers <addr> [<scanstart> <scanlen>]
+status 0
+action none
+$ readers 42
+out 20
+  $008003: LDA $0042
+status 0
+action none
+$ readers 43
+out 20
+  $008010: LDA $0043
+status 0
+action none
+$ readers 42 8000 4
+out 20
+  $008003: LDA $0042
+status 0
+action none
+$ readers 9999
+out 67
+No statically-resolvable reads of $009999 found in $008000-$00FFFF.
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ readers 42
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 1-3
+$ readers 2100
+out 67
+No statically-resolvable reads of $002100 found in $008000-$00FFFF.
+status 0
+action none
+$ readers 0 0 100
+out 67
+No statically-resolvable reads of $000000 found in $000000-$0000FF.
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1-3
+$ readers 2100
+out 67
+No statically-resolvable reads of $002100 found in $008000-$00FFFF.
+status 0
+action none
+$ readers 0 0 100
+out 67
+No statically-resolvable reads of $000000 found in $000000-$0000FF.
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1-3
+$ readers 2100
+out 67
+No statically-resolvable reads of $002100 found in $008000-$00FFFF.
+status 0
+action none
+$ readers 0 0 100
+out 67
+No statically-resolvable reads of $000000 found in $000000-$0000FF.
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1-3
+$ readers 2100
+out 67
+No statically-resolvable reads of $002100 found in $008000-$00FFFF.
+status 0
+action none
+$ readers 0 0 100
+out 67
+No statically-resolvable reads of $000000 found in $000000-$0000FF.
+status 0
+action none
+end

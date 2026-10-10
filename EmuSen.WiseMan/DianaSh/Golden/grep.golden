@@ -1,0 +1,126 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command grep
+usage 1   grep [-i] [-v] [-n] [-c] [-q] <pattern> [text...]
+usage 2                                 filter lines matching <pattern> (regex) - -i case-insensitive,
+usage 3                                 -v invert (non-matching), -n prefix line numbers, -c print only
+usage 4                                 the match count, -q no output (exit code only, for if/while).
+usage 5                                 Reads piped stdin if given, else operates on trailing literal text.
+
+case every flag
+target none
+covers 1-5
+file a.txt 22
+alpha
+Beta
+gamma
+beta
+
+$ echo -e x | grep x
+out 4
+-e x
+status 0
+action none
+$ grep
+out 436
+  grep [-i] [-v] [-n] [-c] [-q] <pattern> [text...]
+                                filter lines matching <pattern> (regex) - -i case-insensitive,
+                                -v invert (non-matching), -n prefix line numbers, -c print only
+                                the match count, -q no output (exit code only, for if/while).
+                                Reads piped stdin if given, else operates on trailing literal text.
+status 0
+action none
+$ grep foo
+out 94
+Nothing to search - pipe a command's output in, or pass literal text: grep <pattern> <text...>
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ grep b alpha beta
+out 10
+alpha beta
+status 0
+action none
+$ cat a.txt | grep -i B
+out 9
+Beta
+beta
+status 0
+action none
+$ cat a.txt | grep -v b
+out 16
+alpha
+Beta
+gamma
+status 0
+action none
+$ cat a.txt | grep -n a
+out 29
+1:alpha
+2:Beta
+3:gamma
+4:beta
+status 0
+action none
+$ cat a.txt | grep -c a
+out 1
+4
+status 0
+action none
+$ cat a.txt | grep -q gamma
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ cat a.txt | grep -q zzz
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ cat a.txt | grep zzz
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ cat a.txt | grep -i -n -v BETA
+out 15
+1:alpha
+3:gamma
+status 0
+action none
+$ cat a.txt | grep '['
+out 60
+Error: Invalid pattern '[' at offset 1. Unterminated [] set.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ grep -x a
+out 0
+
+status 1
+action none
+end

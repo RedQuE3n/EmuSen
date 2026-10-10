@@ -1,0 +1,197 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command addr
+usage 1   addr <addr>                   what a CPU-bus address decodes to (ROM offset, RAM, a register)
+
+case decodes on the fake target
+target fake
+covers 1
+$ addr
+out 18
+Usage: addr <addr>
+status 0
+action none
+$ addr 8003
+out 33
+$008003 -> ROM 0x3
+  mem ROM 3 10
+status 0
+action none
+$ addr 42
+out 35
+$000042 -> RAM 0x42
+  mem RAM 42 10
+status 0
+action none
+$ addr 9000
+out 19
+$009000 -> open bus
+status 0
+action none
+$ addr zz
+out 23
+'zz' is not an address.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ label add 8000 start
+out 23
+$008000 is now 'start'.
+status 0
+action none
+$ addr 8000
+out 41
+$008000 <start> -> ROM 0x0
+  mem ROM 0 10
+status 0
+action none
+$ addr $8001
+out 33
+$008001 -> ROM 0x1
+  mem ROM 1 10
+status 0
+action none
+$ addr 0x10
+out 35
+$000010 -> RAM 0x10
+  mem RAM 10 10
+status 0
+action none
+end
+
+case with no decode and no target
+target bare
+covers 1
+$ addr 10
+out 65
+GOLDEN does not report an address decode, or $000010 is unmapped.
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ addr 10
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ addr 0
+out 35
+$000000 -> WRAM 0x0
+  mem WRAM 0 10
+status 0
+action none
+$ addr 8000
+out 33
+$008000 -> ROM 0x0
+  mem ROM 0 10
+status 0
+action none
+$ addr FFFC
+out 39
+$00FFFC -> ROM 0x7FFC
+  mem ROM 7FFC 10
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ addr 0
+out 33
+$000000 -> RAM 0x0
+  mem RAM 0 10
+status 0
+action none
+$ addr 8000
+out 62
+NES does not report an address decode, or $008000 is unmapped.
+status 0
+action none
+$ addr FFFC
+out 62
+NES does not report an address decode, or $00FFFC is unmapped.
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ addr 0
+out 33
+$000000 -> ROM 0x0
+  mem ROM 0 10
+status 0
+action none
+$ addr 8000
+out 35
+$008000 -> VRAM 0x0
+  mem VRAM 0 10
+status 0
+action none
+$ addr FFFC
+out 37
+$00FFFC -> HRAM 0x7C
+  mem HRAM 7C 10
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1
+$ addr 0
+out 62
+N64 does not report an address decode, or $000000 is unmapped.
+status 0
+action none
+$ addr 8000
+out 62
+N64 does not report an address decode, or $008000 is unmapped.
+status 0
+action none
+$ addr FFFC
+out 62
+N64 does not report an address decode, or $00FFFC is unmapped.
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ addr 0
+out 67
+Nephrite does not report an address decode, or $000000 is unmapped.
+status 0
+action none
+$ addr 8000
+out 67
+Nephrite does not report an address decode, or $008000 is unmapped.
+status 0
+action none
+$ addr FFFC
+out 67
+Nephrite does not report an address decode, or $00FFFC is unmapped.
+status 0
+action none
+end

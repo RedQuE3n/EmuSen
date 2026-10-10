@@ -1,0 +1,196 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command tile
+usage 1   tile <space> <addr> <bpp>     ASCII-decode one 8x8 tile (bpp meaning is core-specific - 2/4/8 on SNES)
+
+case an 8x8 tile
+target fake
+covers 1
+$ tile
+out 32
+Usage: tile <space> <addr> <bpp>
+status 0
+action none
+$ tile VRAM
+out 32
+Usage: tile <space> <addr> <bpp>
+status 0
+action none
+$ tile VRAM 0 2
+out 173
+VRAM @ 0x0, 2bpp tile:
+  . 1 2 3 . 1 2 3 
+  . 1 2 3 . 1 2 3 
+  . 1 2 3 . 1 2 3 
+  . 1 2 3 . 1 2 3 
+  . 1 2 3 . 1 2 3 
+  . 1 2 3 . 1 2 3 
+  . 1 2 3 . 1 2 3 
+  . 1 2 3 . 1 2 3
+status 0
+action none
+$ tile VRAM 0 4
+out 173
+VRAM @ 0x0, 4bpp tile:
+  . D A 7 4 1 E B 
+  8 5 2 F C 9 6 3 
+  . D A 7 4 1 E B 
+  8 5 2 F C 9 6 3 
+  . D A 7 4 1 E B 
+  8 5 2 F C 9 6 3 
+  . D A 7 4 1 E B 
+  8 5 2 F C 9 6 3
+status 0
+action none
+$ tile VRAM 40 8
+out 238
+VRAM @ 0x40, 8bpp tile:
+  40 4D 5A 67 74 81 8E 9B 
+  A8 B5 C2 CF DC E9 F6 03 
+  10 1D 2A 37 44 51 5E 6B 
+  78 85 92 9F AC B9 C6 D3 
+  E0 ED FA 07 14 21 2E 3B 
+  48 55 62 6F 7C 89 96 A3 
+  B0 BD CA D7 E4 F1 FE 0B 
+  18 25 32 3F 4C 59 66 73
+status 0
+action none
+$ tile VRAM 0 3
+out 53
+Error: 3bpp is not a tile format this target decodes.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ tile NOPE 0 2
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ tile VRAM zz 2
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ tile VRAM 0 2
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ tile VRAM 0 2
+out 173
+VRAM @ 0x0, 2bpp tile:
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . .
+status 0
+action none
+$ spaces
+out 283
+SNES memory spaces:
+  CpuBus     16777216 bytes  R/W
+  IO            65536 bytes  R/W
+  WRAM         131072 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CGRAM           512 bytes  R/W
+  OAM             544 bytes  R/W
+  SRAM         131072 bytes  R/W
+  APURAM        65536 bytes  R/W
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ tile PPU 0 2
+out 100
+Error: No memory space named 'PPU'. Available: RAM, PRGROM, PRGRAM, CHR, CIRAM, OAM, PALETTE, CPUBUS
+status 1
+action none
+$ spaces
+out 282
+NES memory spaces:
+  RAM            2048 bytes  R/W
+  PRGROM        16384 bytes  R/O
+  PRGRAM         8192 bytes  R/W
+  CHR            8192 bytes  R/W
+  CIRAM          4096 bytes  R/W
+  OAM             256 bytes  R/W
+  PALETTE          32 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ tile VRAM 0 2
+out 173
+VRAM @ 0x0, 2bpp tile:
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . .
+status 0
+action none
+$ spaces
+out 248
+GB memory spaces:
+  ROM           32768 bytes  R/O
+  VRAM           8192 bytes  R/W
+  CARTRAM           0 bytes  R/W
+  WRAM           8192 bytes  R/W
+  OAM             160 bytes  R/W
+  HRAM            127 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ tile VRAM 0 2
+out 49
+Error: Index was outside the bounds of the array.
+status 1
+action none
+$ spaces
+out 287
+Nephrite memory spaces:
+  M68KBUS    16777216 bytes  R/O
+  Z80BUS        65536 bytes  R/O
+  WRAM          65536 bytes  R/W
+  Z80RAM         8192 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CRAM            128 bytes  R/W
+  VSRAM            80 bytes  R/W
+  ROM          131072 bytes  R/O
+status 0
+action none
+end

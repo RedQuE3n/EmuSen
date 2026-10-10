@@ -1,0 +1,148 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command sprites
+usage 1   sprites                       active sprite/OBJ table
+
+case the sprite table
+target fake
+covers 1
+$ sprites
+out 155
+2 active sprite(s):
+  #0: x=16 y=32 8x8 tile=0x003 pal=1 pri=2 flipX=False flipY=True
+  #1: x=200 y=100 16x16 tile=0x040 pal=7 pri=0 flipX=True flipY=False
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ sprites
+out 19
+0 active sprite(s):
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ sprites
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ sprites | head -n 8
+out 476
+128 active sprite(s):
+  #0: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
+  #1: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
+  #2: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
+  #3: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
+  #4: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
+  #5: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
+  #6: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1
+$ sprites | head -n 8
+out 19
+0 active sprite(s):
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ sprites | head -n 8
+out 475
+64 active sprite(s):
+  #0: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #1: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #2: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #3: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #4: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #5: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #6: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1
+$ sprites | head -n 8
+out 475
+64 active sprite(s):
+  #0: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #1: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #2: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #3: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #4: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #5: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+  #6: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ sprites | head -n 8
+out 19
+0 active sprite(s):
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1
+$ sprites | head -n 8
+out 19
+0 active sprite(s):
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1
+$ sprites | head -n 8
+out 19
+0 active sprite(s):
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1
+$ sprites | head -n 8
+out 19
+0 active sprite(s):
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ sprites | head -n 8
+out 19
+0 active sprite(s):
+status 0
+action none
+end

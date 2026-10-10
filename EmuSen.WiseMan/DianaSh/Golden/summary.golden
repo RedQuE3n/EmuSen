@@ -1,0 +1,161 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command summary
+usage 1   summary                       free-text state dump (whatever isn't structured above yet)
+
+case with no target
+target none
+covers 1
+$ summary
+out 19
+No target attached.
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+end
+
+case on the fake target
+target fake
+covers 1
+$ summary
+out 34
+GOLDEN summary: frame 42, PC $8003
+status 0
+action none
+end
+
+case on a bare target
+target bare
+covers 1
+$ summary
+out 34
+GOLDEN summary: frame 42, PC $8003
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ summary
+out 431
+[STATE] CPU  PC=00:ED3E  A=0001 X=0000 Y=0000 S=01F3 D=0000 DB=00  P=34 [nv-BdIzc]  E=1
+[STATE] PPU  BGMODE=00  INIDISP=00  TM=00  TS=00
+[STATE] PPU  CGWSEL=00  CGADSUB=00  MOSAIC=00 (anchor=0)  SETINI=00
+[STATE] PPU  BG1 SC=00 X=0 Y=0   BG2 SC=00 X=0 Y=0
+[STATE] PPU  BG3 SC=00 X=0 Y=0   BG4 SC=00 X=0 Y=0
+[STATE] PPU  BG12NBA=00  BG34NBA=00  OBSEL=00
+[STATE] PPU  M7SEL=00  M7A=0 M7B=0 M7C=0 M7D=0  M7X=0 M7Y=0  M7HOFS=0 M7VOFS=0
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1
+$ summary
+out 35
+VenusRT (Rust) 0.1.0, snes, frame 2
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ summary
+out 282
+NES (Moon) - frame 2, scanline 0
+Mapper 0 (NROM), 1x16K PRG, 1x8K CHR ROM, mirroring Horizontal
+CPU  A=00 X=00 Y=00 S=FA PC=B454 P=24
+PPU  CTRL=00 MASK=00 STATUS=00 v=0000 t=0000 x=0
+     rendering=off vblank=0 sprite0=0
+APU  no synthesis modelled - registers and the frame IRQ only
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1
+$ summary
+out 282
+NES (Moon) - frame 0, scanline 0
+Mapper 0 (NROM), 1x16K PRG, 1x8K CHR ROM, mirroring Horizontal
+CPU  A=00 X=00 Y=00 S=FD PC=8000 P=24
+PPU  CTRL=00 MASK=00 STATUS=00 v=0000 t=0000 x=0
+     rendering=off vblank=0 sprite0=0
+APU  no synthesis modelled - registers and the frame IRQ only
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ summary
+out 241
+GB (Mercury) - frame 2, LY 0, mode 2
+ROM, 2x16K ROM, no RAM
+CPU  A=01 F=B0 BC=0013 DE=00D8 HL=014D SP=FFFC PC=0AF2
+     IME=0 HALT=0 IE=00 IF=01
+PPU  LCDC=91 STAT=86 SCY=00 SCX=00 WY=00 WX=00
+APU  power=on vol=7/7 pan=F3 buffered=1476 frames
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1
+$ summary
+out 240
+GB (MercuryRT) - frame 0, LY 0, mode 2
+ROM, 2x16K ROM, no RAM
+CPU  A=01 F=B0 BC=0013 DE=00D8 HL=014D SP=FFFE PC=0100
+     IME=0 HALT=0 IE=00 IF=00
+PPU  LCDC=91 STAT=86 SCY=00 SCX=00 WY=00 WX=00
+APU  power=on vol=7/7 pan=F3 buffered=0 frames
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1
+$ summary
+out 210
+N64 (Mars) - frame 2, VI field 0, 0.09s of console time
+"WISEMAN" NWME v0, 0MB BigEndian, 8MB RDRAM
+CPU  PC=FFFFFFFFA4000040 SP=FFFFFFFFA4001FF0 RA=FFFFFFFFA4001550
+VI   ORIGIN=00000000 WIDTH=0 V_SYNC=0 640x480
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1
+$ summary
+out 167
+N64 (MarsRT) - frame 2, 0.09s of console time, 8MB RDRAM
+CPU  PC=FFFFFFFFA4000040 SP=FFFFFFFFA4001FF0 RA=FFFFFFFFA4001550
+VI   ORIGIN=00000000 WIDTH=0 V_SYNC=0 640x480
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ summary
+out 27
+Nephrite 0.1.0, md, frame 2
+status 0
+action none
+end

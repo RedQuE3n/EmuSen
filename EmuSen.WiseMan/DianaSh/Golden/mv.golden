@@ -1,0 +1,44 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command mv
+usage 1   mv <src> <dst>                SUSPENDED - move/rename a file or directory (dst may be an existing directory)
+unreachable "mv: usage: mv <src> <dst>" -- mv is suspended, and refuses before it reads its arguments
+unreachable "' is outside the project sandbox (" -- mv is suspended, and refuses before it reads its arguments
+unreachable "mv: destination already exists:" -- mv is suspended, and refuses before it reads its arguments
+unreachable "mv: no such file or directory:" -- mv is suspended, and refuses before it reads its arguments
+
+case suspended
+target none
+covers 1
+file a.txt 6
+alpha
+
+$ mv a.txt b.txt
+out 170
+mv: suspended - a published build's own binaries live inside this root now (/lib/EmuSen), and nothing here distinguishes them from your data. See 'man mv' and 'man hier'.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ mv
+out 170
+mv: suspended - a published build's own binaries live inside this root now (/lib/EmuSen), and nothing here distinguishes them from your data. See 'man mv' and 'man hier'.
+status 1
+action none
+$ ls
+out 53
+Cheats/
+Firmware/
+Games/
+Logs/
+Saves/
+a.txt
+etc/
+tmp/
+status 0
+action none
+end

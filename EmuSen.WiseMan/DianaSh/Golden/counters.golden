@@ -1,0 +1,269 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command counters
+usage 1   counters on <space>           start tallying reads/writes/executes for <space>
+usage 2   counters off                  stop tallying (kept counts stay readable)
+usage 3   counters clear                zero every count, stay armed
+usage 4   counters <addr> [<len>]       totals over a range, default length 1
+usage 5   counters top [r|w|x|u] [<n>]  hottest addresses, default reads, default 20
+usage 6   counters cold <addr> <len>    addresses in the range nothing ever touched
+
+case on the fake target
+target fake
+covers 1-6
+$ counters
+out 48
+Usage: counters on|off|clear|top|cold|<addr> ...
+status 0
+action none
+$ counters top
+out 47
+Not counting - run `counters on <space>` first.
+status 0
+action none
+$ counters on
+out 26
+Usage: counters on <space>
+status 0
+action none
+$ counters on RAM
+out 51
+Counting reads/writes/executes for RAM (256 bytes).
+status 0
+action none
+$ counters 10
+out 95
+RAM:
+  RAM 0x10-0x10
+  reads 0, writes 0, executes 0
+  uninitialized reads 0, bytes touched 0/1
+status 0
+action none
+$ counters 10 4
+out 95
+RAM:
+  RAM 0x10-0x13
+  reads 0, writes 0, executes 0
+  uninitialized reads 0, bytes touched 0/4
+status 0
+action none
+$ counters top
+out 30
+Nothing has been accessed yet.
+status 0
+action none
+$ counters top w
+out 30
+Nothing has been accessed yet.
+status 0
+action none
+$ counters top x 2
+out 30
+Nothing has been accessed yet.
+status 0
+action none
+$ counters top u
+out 30
+Nothing has been accessed yet.
+status 0
+action none
+$ counters top q
+out 30
+Unknown sort 'q'. Try r/w/x/u.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ counters cold
+out 33
+Usage: counters cold <addr> <len>
+status 0
+action none
+$ counters cold 0 8
+out 87
+8 untouched address(es) in RAM 0x0-0x7:
+  0x0
+  0x1
+  0x2
+  0x3
+  0x4
+  0x5
+  0x6
+  0x7
+status 0
+action none
+$ counters off
+out 24
+Access counting stopped.
+status 0
+action none
+$ counters 10
+out 114
+RAM (counting stopped):
+  RAM 0x10-0x10
+  reads 0, writes 0, executes 0
+  uninitialized reads 0, bytes touched 0/1
+status 0
+action none
+$ counters clear
+out 22
+Access counts cleared.
+status 0
+action none
+$ counters frob
+out 78
+Unknown 'counters' subcommand 'frob'. Try on/off/clear/top/cold or an address.
+status 0
+action none
+$ counters on NOPE
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ counters on RAM
+out 42
+This core does not report access counters.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ counters
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case counting on venus
+target venus
+covers 1-6
+$ counters on WRAM
+out 55
+Counting reads/writes/executes for WRAM (131072 bytes).
+status 0
+action none
+$ spaces
+out 283
+SNES memory spaces:
+  CpuBus     16777216 bytes  R/W
+  IO            65536 bytes  R/W
+  WRAM         131072 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CGRAM           512 bytes  R/W
+  OAM             544 bytes  R/W
+  SRAM         131072 bytes  R/W
+  APURAM        65536 bytes  R/W
+status 0
+action none
+end
+
+case counting on moon
+target moon
+covers 1-6
+$ counters on RAM
+out 42
+This core does not report access counters.
+status 1
+action none
+$ spaces
+out 282
+NES memory spaces:
+  RAM            2048 bytes  R/W
+  PRGROM        16384 bytes  R/O
+  PRGRAM         8192 bytes  R/W
+  CHR            8192 bytes  R/W
+  CIRAM          4096 bytes  R/W
+  OAM             256 bytes  R/W
+  PALETTE          32 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+end
+
+case counting on mercury
+target mercury
+covers 1-6
+$ counters on WRAM
+out 42
+This core does not report access counters.
+status 1
+action none
+$ spaces
+out 248
+GB memory spaces:
+  ROM           32768 bytes  R/O
+  VRAM           8192 bytes  R/W
+  CARTRAM           0 bytes  R/W
+  WRAM           8192 bytes  R/W
+  OAM             160 bytes  R/W
+  HRAM            127 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+end
+
+case counting on mars
+target mars
+covers 1-6
+$ counters on RDRAM
+out 42
+This core does not report access counters.
+status 1
+action none
+$ spaces
+out 218
+N64 memory spaces:
+  RDRAM       8388608 bytes  R/W
+  DMEM           4096 bytes  R/W
+  IMEM           4096 bytes  R/W
+  PIFRAM           64 bytes  R/W
+  ROM            4096 bytes  R/O
+  CPU        2147483647 bytes  R/W
+status 0
+action none
+end
+
+case counting on nephrite
+target nephrite
+covers 1-6
+$ counters on RAM
+out 42
+This core does not report access counters.
+status 1
+action none
+$ spaces
+out 287
+Nephrite memory spaces:
+  M68KBUS    16777216 bytes  R/O
+  Z80BUS        65536 bytes  R/O
+  WRAM          65536 bytes  R/W
+  Z80RAM         8192 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CRAM            128 bytes  R/W
+  VSRAM            80 bytes  R/W
+  ROM          131072 bytes  R/O
+status 0
+action none
+end

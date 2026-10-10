@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -343,8 +343,9 @@ reported step:
 So at every point the platform runs: in state 1 nothing a player sees changes; in state 2 the C# is one variable
 away; state 3 comes only after golden outputs are recorded (§6.6) and the tester agrees.
 
-**Where each stands, 2026-10-08:** Galaxia is in state 2 (§13), Endymion in state 1, both its halves under the one
-variable (§12, §14), Serenity's half not yet built.
+**Where each stands, 2026-10-09:** Galaxia is in state 2 (§13), Endymion in state 1, both its halves under the one
+variable (§12, §14), and Serenity's slang half in state 1 as far as it needs no device (§16); its device and chain
+are step 4b.
 
 ---
 
@@ -674,7 +675,8 @@ Stated before anything is built; each step reports which held.
   way. *Held, 2026-10-08 (§14.6).*
 - **P5.** The Rust chain's render path allocates nothing managed per frame, against 15–118 KB in `Bind` today, and
   the gen-2 collection in N64 4× royale goes; GPU time does not change.
-- **P6.** Shaderc loaded from the same file yields byte-identical SPIR-V for all 1,350 of the pack's passes.
+- **P6.** Shaderc loaded from the same file yields byte-identical SPIR-V for all 1,350 of the pack's passes. *Held,
+  2026-10-09 (§16.6).*
 - **P7.** The platform library is under 4 MB in the `dist` profile on linux-x64 with all three crates in it.
 
 ---
@@ -725,6 +727,13 @@ Seven more, raised by steps 2b (§11.8), 3a (§12.7) and 2c (§13.4):
 - **Q21.** Decided 2026-10-08: the Rust refuses a NaN or infinite resample ratio, for which the C# never returns
   (§12.3).
 - **Q22.** Decided 2026-10-08: CI's Galaxia and platform steps keep reporting and do not gate yet (§13.3).
+
+Two more, raised by step 3b (§14.7):
+
+- **Q23.** Open: a device layer the library does not know, once Endymion has no C# to run it. It belongs to
+  Endymion's state 3 and is decided then (§15).
+- **Q24.** Decided 2026-10-08: SDL lent by its handle stands as built, with loading by path kept in the crate for a
+  Rust program with no C# beside it (§14.2).
 
 ---
 
@@ -1549,6 +1558,8 @@ the library and opened the dummy device through it.
 
 ### 14.7 Questions for the tester
 
+*Decided 2026-10-08: Q24 stands as built. Q23 stays open until Endymion's state 3 (§9, §15).*
+
 | | Question | As built |
 |---|---|---|
 | Q23 | A manager over devices the library does not know | runs the C# manager for that instance (§14.2). At state 3 it has no C# to run: either `IPadDevices` stops being something a test may implement, or the library learns to call back, against §3.7 |
@@ -1572,3 +1583,214 @@ Kept here so that none is lost between steps; each names where it was found.
   report and do not gate (Q14, Q22).
 - **A second `Dispose` of a player** lets go of SDL's audio twice; reproduced, not run (§14.3).
 - **Endymion to state 2** is a later step, at the tester's word, as Galaxia's was (§13).
+- **Q25 and Q26:** which SQLite the cache calls, and whether the library's compiler identity should be the C#'s
+  (§16.7).
+- **§2.4's `rusqlite`** is not taken while Q25 stands as built; §2.8's paragraph on two SQLite copies then describes
+  a hazard the platform does not have.
+
+---
+
+## 16. What was built, 2026-10-09: step 4a, Serenity's slang half without a device
+
+Measured on the development desktop, as the steps before it. A preset and its sources are read, each stage compiled,
+its SPIR-V reflected and the compiled stages cached by a Rust form of the six classes that need no Vulkan device,
+behind a switch of their own, `EMUSEN_SERENITY_NATIVE`, in state 1: the C# runs unless the variable is `1`. No C# was
+removed. The device and the chain (`SlangVulkan`, `SlangChain`) and their glue (`SlangRunner`) are step 4b's and were
+not touched; they call the six classes as they did. The SkSL filters are no part of this work.
+
+### 16.1 The artefacts
+
+| What | Where |
+|---|---|
+| The crate | `Platform/serenity/` (`emusen-serenity`) |
+| `SlangPreset`, `SlangSource`, `SlangParameters` | `src/preset.rs`, `src/source.rs`, `src/parameters.rs` |
+| .NET's text rules the readers lean on: the two character classes, number parsing, a file's lines | `src/text.rs`, `src/word.rs` |
+| `SlangCompiler`, over the Shaderc the program ships | `src/compiler.rs` |
+| `SpirvReflection` | `src/reflection.rs` |
+| `SpirvCache`, over the SQLite the program ships | `src/cache.rs`, `src/sqlite.rs` |
+| The C layer: 21 exports, 152 in the library; the interface's version is 5 | `Platform/platform/src/serenity.rs`, `include/emusen_platform.h` |
+| The switch, the entry points and the lending of the two libraries | `EmuSen.Serenity/Native/SerenityNative.cs` |
+| The facades | `EmuSen.Serenity/Slang/SlangPreset.cs`, `SlangSource.cs`, `SlangParameters.cs`, `SlangCompiler.cs`, `SpirvReflection.cs`, `SpirvCache.cs` |
+| The parity class, 13 cases | `EmuSen.WiseMan/Serenity/SerenityParityTests.cs` |
+
+About 1,860 lines of Rust in the crate and 620 in its C layer, with 390 of tests, against §7.2's 1,300 for the step
+with its tests. Two things were not priced: SQLite's C interface written out by hand (§16.2), and .NET's rules for a
+number and a line, which the readers take from the framework in one call each and the crate has to hold itself.
+
+### 16.2 The two libraries, the facades, and what was built otherwise than planned
+
+**Shaderc is the one the C# loaded, lent by its handle.** The C# asks its binding for the handle it holds
+(`Silk.NET`'s native context) and lends it, with the path of the file it came from; the library looks its 14
+functions up in that handle and never closes it. So a stage is compiled by the same code whichever side asks, and the
+library's identity for the compiler carries the same file's SHA-256 as the C#'s. The crate also opens Shaderc from a
+path, for a Rust program with no C# beside it. A publish carries the same `libshaderc_shared` it carried before, from
+`Silk.NET.Shaderc.Native`, and nothing new.
+
+**SQLite is the one the C# loaded too, and not a second copy.** §2.4 and §2.8 planned `rusqlite` with its own SQLite
+bundled, and gave the rule that goes with two copies: one database file, one copy, per process. The cache's own
+tests cannot keep that rule: they open the cache's file through Microsoft.Data.Sqlite while a cache has it open, to
+hold a lock on it, to count its rows and to damage one (`SpirvCacheTests`), all in one process. With two copies the
+locks are POSIX locks of the one process, which neither copy sees of the other, so a cache "locked" by the test
+would not be locked to the library, and SQLite's own documentation gives this as a way to corrupt a file. So the
+library calls the `e_sqlite3` the C# has loaded, lent by its handle as Shaderc is, through 16 of its functions
+written out as SDL's are. One SQLite in the process keeps §2.8's rule by construction; the tests pass unchanged
+both ways; a publish gains no library, and the platform library no megabyte of C. What it costs is the waits and
+words Microsoft.Data.Sqlite puts round SQLite, which are now the crate's to reproduce (§16.3). A Rust program with
+no C# opens SQLite from a path. It is Q25.
+
+**What a reader makes crosses as JSON**, as §3.8 has it: a preset, a source, a reflection, each a document the
+facade turns into the C# objects the chain already takes. A float is its 32 bits, so that a NaN and an infinity,
+which a preset may hold, cross whole. A reader that fails answers with a document too, since what the C# throws
+carries more than words: a `FileNotFoundException` names its file, an `ArgumentException` its parameter. A stage's
+SPIR-V and a pruned module cross as bytes. A result too long for the facade's buffer waits on the calling thread
+and is taken, so that no file is read and no stage compiled twice to learn a length.
+
+**The cache is a handle that locks itself**, since a preset's passes are compiled side by side through one, and it
+compiles outside its lock, as the C# does. Its clock is a C# delegate a test may set; the facade asks it once for
+each compile and passes the time in, where the C# asks only when it is about to write, which only a clock that
+counts its own calls could tell.
+
+**The compiler's identity names its own binding**, as §4.3 planned, so by default the library does not serve a row
+the C# kept, nor the C# one of the library's: a machine that changes the switch compiles its presets once more, and
+the other's rows age out under the bound. The file itself is one: the schema is the single `spirv-cache-schema.sql`,
+embedded by the C# and included by the crate, and `user_version` 1. Given one identity, each reads the rows the
+other wrote as hits (§16.5). Whether the two should share an identity now that their SPIR-V is shown to be the same
+is Q26.
+
+**Otherwise than planned, each for a reason:**
+
+- **The two merges take C# objects**, so they cross as JSON and back: `SlangParameters.Merge` and
+  `SpirvReflection.Merge`. A merged parameter is the C# object first declared under its id, so that what else it
+  carries (a built-in filter's `Choices`) stays with it.
+- **`SlangParameters.Read` and `IsHeading` are not exports.** The first is the reader and the merge composed, which
+  the facade composes from the two; the second is one comparison, which the crate has for a Rust caller.
+- **What the C# is left to answer:** a null argument, text that is not valid UTF-16 (Q19), and a cache path that
+  begins `file:`, which Microsoft.Data.Sqlite reads as a URI and no caller passes.
+- **A module whose types hold themselves is refused.** The C# recurses until the stack ends, which no `catch`
+  survives; the library stops at 256 levels and the facade throws an `ArgumentException`. No compiler emits such a
+  module.
+
+### 16.3 .NET's rules, measured for this step
+
+Each was measured in a scratch program on .NET 10 before the code that depends on it was written, and each is a case
+of the parity class:
+
+| Rule | What .NET does |
+|---|---|
+| `\s` in a regular expression, and `char.IsWhiteSpace` | the same 25 characters, Unicode's White_Space, which is Rust's own; U+001C to U+001F are not among them |
+| `\w` | 487 ranges of the first plane; half of a surrogate pair is not one, so no character past U+FFFF is |
+| `^\s*#reference\s+"?([^"]+)"?` on a line that ends in two or more spaces, or in spaces and a quote | matches, by giving the last space back to the name, which then trims to nothing: the reference is to the preset's own folder, and fails as a file that does not exist |
+| An unclosed quoted value | ends at the first `#`, one straight after the quote included |
+| An unquoted value | ends at `#`, a space or a tab, and at no other white space |
+| `float.TryParse` with `NumberStyles.Float` | white space U+0009 to U+000D and the space, a sign, digits with one point and at least one digit, an exponent only when digits follow its `e`, white space, then any number of NULs; failing that, `Infinity`, `-Infinity`, `NaN`, `+Infinity`, `+NaN` or `-NaN` in any case with any Unicode white space around them, and no NUL; `float.NaN` is the quiet NaN with its sign set |
+| `int.TryParse` with `NumberStyles.Integer` | the same without the point and the exponent; past 32 bits is not a number |
+| `(int)` of a float | saturates, and a NaN is 0 |
+| `File.ReadLines` | decodes as `File.ReadAllText` does, breaks at `\r\n`, `\r` and `\n` and nowhere else, and gives no empty line for a final break |
+| `ToLowerInvariant` | the only character outside ASCII it brings inside is the Kelvin sign, to `k`; the dotted capital I stays |
+| `Path.GetFullPath` | refuses an empty path with "The value cannot be an empty string." and a NUL with "Null character in path.", both naming `path` |
+| Shaderc's binding | hands a file name over as UTF-8 up to its first NUL |
+| Microsoft.Data.Sqlite, a busy statement | tried again every 150 ms until the connection's timeout, which the cache sets to one second, each try waiting SQLite's own 250 ms |
+| Microsoft.Data.Sqlite, a transaction | `BEGIN IMMEDIATE`, after `PRAGMA read_uncommitted = 0` |
+| Microsoft.Data.Sqlite, a failure | "SQLite Error *n*: '*SQLite's words*'." with the primary code |
+
+**One prediction of this step that was wrong:** that an empty path's words were "The path is empty.", recalled from
+an older .NET. The parity class found it on its first run.
+
+### 16.4 The default path, and what was tested
+
+**The default is untouched.** Every statement of the six classes at `aa38950c` is still in its file but six, changed
+by necessity: `SlangParameters.Merge` gained a form over the lists themselves, three lines; the compiler's `Api`
+became internal, since the lending reads its handle; and the C# cache names the C# compiler for its identity and
+its compiles. With the variable unset no facade asks the library anything, and Shaderc and SQLite are not lent.
+
+That was checked on a running program and not only read from the code: a small program that reads a preset, merges
+its parameters, compiles both stages through a cache, hits the cache and reflects the SPIR-V was run three ways.
+With the variable unset or `0` it never asked for Serenity's half of the library, and the process held Shaderc and
+SQLite and not `libemusen_platform`; with `1` it asked, and held all three. What it printed of the preset, the
+bytes compiled and the cache's hit was the same in the three runs.
+
+| Run | Variable unset | `EMUSEN_SERENITY_NATIVE=1` |
+|---|---|---|
+| `cargo test` in `Platform/` (21 in `emusen-serenity`, 25 in `emusen-endymion`, 76 in `emusen-galaxia`, 19 in `emusen-platform`) | 141 pass | |
+| `cargo clippy` over the workspace; the header as C99 and as C++17 | clean | |
+| WiseMan's `Slang*` and `Spirv*` classes of Serenity, the parity class, and Mistress's `ShaderSettingsWindowTests` and `ScreenFilterSettingTests` | 101 pass | 101 pass |
+| The parity classes of Galaxia and Endymion, whose header and version this step changed | 66 pass | |
+
+The 101 are 88 that existed and the parity class's 13. The tests that draw ran on the RX 6800 and on no other
+device. With the variable set, `SpirvCacheTests`' locked database is waited on and given up as Microsoft.Data.Sqlite
+waits and gives up: 1.1 s for each of the two statements skipped, and SQLite's own words for why the cache is off.
+
+**CI** gains two steps, Serenity's slang half on its C# and on the library, which report and do not gate.
+
+**Not done, and not claimed:** Windows and macOS, as before, and in particular whether .NET hands over the two
+handles there as it does here; and anything of the device or the chain, which is step 4b.
+
+### 16.5 The parity class, and what it found
+
+It gives the C# and the library the same input and compares what each makes, or the exception each throws with its
+type, its words and the file or parameter it names:
+
+- the two character classes against .NET's own answer for each of the 65,536 code units;
+- 200,000 numbers: every awkward piece of one, and strings of up to five of them, parsed as a float and as an
+  integer;
+- 2,500 presets written at random, up to three files deep in references: every spacing (seven characters of white
+  space and one that only looks it), quoting, comment, line ending and byte-order mark, keys of every kind with and without their pass's
+  number, values right, wrong and absurd, references that loop, miss, name a folder or hold a NUL; and for each
+  that reads, its passes' parameters merged;
+- 2,500 sources likewise, three files deep in includes: every pragma well and badly formed, includes present,
+  absent, optional, empty, circular;
+- a preset and a source that are there and may not be read;
+- 3,000 merges of parameters, with every float that is not a number among them;
+- 24 stages compiled, of which some do not compile, with names and text outside ASCII and a NUL in a name: the same
+  bytes, or the same words;
+- every module those make, and 21 written by hand to be wrong in one way each, and 150 damaged copies of each good
+  one: reflected, pruned and merged;
+- a cache of each kind on its own file through 12 runs of 40 steps: stages compiled, hit, bounded and evicted
+  under a clock, a stage that does not compile, and the files closed, one row damaged in each alike, and opened
+  again; after each step the counts, and at each close every row of both files;
+- a file the C# wrote read by the library, added to, and read back by the C#, and the other way about;
+- a file that is no database, one of another schema version, a row that is not a blob, a path that cannot hold a
+  file, an empty path, and a database another connection is writing, where both give SQLite's own words;
+- a key over 2,000 sets of parts;
+- and, when a run names where libretro's pack is, every preset, source and stage of it (§16.6).
+
+**What the first run found:** one difference, the words for an empty path (§16.3), in the preset reader and the
+cache alike. Nothing else differed in any reader, in a single compiled byte, in a reflection or in a row.
+
+**Seeded faults: 83, in every part of the step.** The class as first written caught 72. Nine it missed were gaps
+in what it asked, and are closed:
+
+- five in the preset reader, all the same gap: a random key was seldom given a value of its own kind in an unusual
+  form, so a wrap mode or `true` in capitals, a scale that is no number beside a pass's scale that is, a count with
+  a fraction, and a value with a no-break space in it were not met. A key is now given a value of its kind three
+  times in five, and one preset asks all of them at once and is held to what the C# makes of it;
+- the depth at which includes are taken for a loop, which no random file reached: chains of 32 and 33 includes and
+  of 16 and 17 references are now read by both;
+- two in the merge of two stages' blocks, since every stage in the corpus declared the same block at the same
+  binding: two stages now declare another;
+- one in the cache's waiting: a statement not tried again fails sooner and counts the same, so the time a blocked
+  statement takes is now held to the connection's second.
+
+The last two survive and are not gaps: Shaderc ignores the entry point's name for GLSL, so another name compiles to
+the same bytes; and the cache never binds an empty blob, since no stage compiles to nothing.
+
+### 16.6 P6, and publishing
+
+**P6 holds.** Over libretro's slang pack, read where a run names it and never written: 2,658 presets and the 1,350
+sources they name were read by both readers to the same result, nine of the sources refused by both alike; the
+other 1,341 gave 2,682 stages, every one of which compiled through both to the same SPIR-V, byte for byte, with the
+same reflection and the same pruned module. The run took 3 minutes 22 seconds on the desktop, and is the last case
+of the parity class, which passes by when no pack is named.
+
+**Publishing.** A self-contained linux-x64 publish of Mistress has the same 454 files as one of `aa38950c` built
+the same way beside it; `libemusen_platform.so` grows from 953,664 to 1,147,432 bytes, so P7's 4 MB holds with all
+three crates in, the Vulkan half still to come. `libshaderc_shared.so` and `libe_sqlite3.so` are the files the
+publish carried before, beside the assemblies, and the lending finds both there: a small program published
+self-contained and run with the variable set compiled a stage and hit its cache through the library.
+
+### 16.7 Questions for the tester
+
+| | Question | As built |
+|---|---|---|
+| Q25 | The cache's SQLite: `rusqlite` with its own copy bundled, as Q7 and §2.8 had it, or the one the program ships | the one the program ships, lent by its handle: two copies in one process cannot share a file's locks, which the cache's own tests rely on (§16.2). `rusqlite` is not taken |
+| Q26 | Whether the library's compiler identity should be the C#'s, so that each serves the other's rows | separate, as §4.3 planned; P6 held over the whole pack, so one identity would be safe and would spare a machine one rebuild of its presets when the switch changes |

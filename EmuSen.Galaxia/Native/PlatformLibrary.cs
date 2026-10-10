@@ -8,7 +8,7 @@ namespace EmuSen.Galaxia.Native
     public static unsafe class PlatformLibrary
     {
         // Matched exactly against emusen_platform_abi_version - see EmuSen_RustPlatform.md §3.2.
-        public const uint InterfaceVersion = 4;
+        public const uint InterfaceVersion = 5;
 
         public const string Name = "emusen_platform";
 

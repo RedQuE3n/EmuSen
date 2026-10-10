@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 4u
+#define EMUSEN_PLATFORM_ABI_VERSION 5u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -702,6 +702,109 @@ float emusen_endymion_ui_volume(const emusen_endymion_ui *ui);
 /* A WAV file as 48 kHz stereo 32-bit float: ABSENT when SDL cannot read it. Bytes that do not fit wait on this thread for emusen_endymion_ui_decode_take. */
 int64_t emusen_endymion_ui_decode(const uint8_t *path, size_t path_len, uint8_t *out, size_t cap);
 int64_t emusen_endymion_ui_decode_take(uint8_t *out, size_t cap);
+
+/* ---- Serenity: the slang half without a device (EmuSen_Serenity.md, sections 7 to 9) ---- */
+
+/*
+ * Shaderc and SQLite are the host's: it lends the handles its own bindings loaded, once each, and the library calls
+ * the same two libraries through them, so that the SPIR-V is the same compiler's and the process holds one SQLite.
+ * `path` names the file Shaderc came from when the host can (null when it cannot); the compiler's identity carries
+ * that file's SHA-256. Nothing is compiled or cached before its library is lent; such a call is NOT_SUPPORTED or
+ * returns null. The library never closes either.
+ */
+int32_t emusen_serenity_shaderc_lend(void *handle, const uint8_t *path, size_t path_len);
+int32_t emusen_serenity_sqlite_lend(void *handle);
+
+/*
+ * A call of Serenity's that makes a document or bytes returns the whole length and fills the buffer when it holds
+ * all of it; otherwise the result waits on the calling thread and this copies it, so that no file is read and no
+ * stage compiled twice to learn a length. A result not taken is dropped by the next such call on the thread.
+ */
+int64_t emusen_serenity_take(uint8_t *out, size_t cap);
+
+/* The compiler's identity, which a cache's keys carry: the library's digest, its SPIR-V version, this binding and the options. */
+int64_t emusen_serenity_compiler_identity(uint8_t *out, size_t cap);
+
+/*
+ * A .slangp preset read through its #reference chain, and a .slang source with its includes in place: each a JSON
+ * document. A float is its 32 bits as a number, so that a NaN or an infinity crosses whole. A reader that fails
+ * answers with a document too: {"fail": "not_found" | "invalid_data" | "argument" | "denied" | "io", "message",
+ * and "file" or "parameter" where the C# exception carries one}.
+ *
+ * Preset: {"path", "passes": [{"shader", "alias", "linear", "wrap" (0 clamp to border, 1 clamp to edge, 2 repeat,
+ * 3 mirrored repeat), "type_x" and "type_y" (0 source, 1 viewport, 2 absolute), "scale_x", "scale_y", "float",
+ * "srgb", "mipmap", "mod"}], "textures": [{"name", "path", "linear", "wrap", "mipmap"}], "parameters": [[key, bits]]}.
+ * Source: {"path", "vertex", "fragment", "name", "format", "parameters": [{"id", "description", "initial",
+ * "minimum", "maximum", "step"}]}.
+ */
+int64_t emusen_serenity_preset_load(const uint8_t *path, size_t path_len, uint8_t *out, size_t cap);
+int64_t emusen_serenity_source_load(const uint8_t *path, size_t path_len, uint8_t *out, size_t cap);
+
+/* In: {"sources": [[parameter, ...], ...], "overrides": [[id, bits], ...]}. Out: the parameters merged, first declaration winning. PARSE for any other input. */
+int64_t emusen_serenity_parameters_merge(const uint8_t *input, size_t input_len, uint8_t *out, size_t cap);
+
+#define EMUSEN_SERENITY_STAGE_VERTEX 0u
+#define EMUSEN_SERENITY_STAGE_FRAGMENT 1u
+
+/* A stage's Vulkan GLSL to SPIR-V, unoptimised, for Vulkan 1.1: its length in bytes. PARSE for a stage that does not compile, with "<name> (<Stage>) does not compile:" and Shaderc's own words after it. */
+int64_t emusen_serenity_compile(const uint8_t *source, size_t source_len, uint32_t stage, const uint8_t *name, size_t name_len, uint8_t *out, size_t cap);
+
+/*
+ * What a stage's SPIR-V binds: {"uniforms" and "push": null or {"binding", "size", "members": [{"name", "offset",
+ * "size"}]}, "samplers": [{"name", "binding"}]}, or {"fail": "not_spirv" | "index" | "range" | "endless",
+ * "message"} for a module that is not well formed. The merge takes {"vertex": reflection, "fragment": reflection}.
+ */
+int64_t emusen_serenity_reflect(const uint8_t *spirv, size_t spirv_len, uint8_t *out, size_t cap);
+int64_t emusen_serenity_reflect_merge(const uint8_t *input, size_t input_len, uint8_t *out, size_t cap);
+
+/* The module with the inputs no function reads left out of its entry points; ABSENT when there is nothing to leave out. BAD_ARGUMENT for an entry point whose name runs to its end. */
+int64_t emusen_serenity_without_unread_inputs(const uint8_t *spirv, size_t spirv_len, uint8_t *out, size_t cap);
+
+/*
+ * Compiled SPIR-V kept in SQLite: SpirvCache. The file, its schema and its user_version are the C#'s, so either
+ * opens what the other wrote. A handle is always made: a file that cannot be used leaves the cache off, with why,
+ * and everything is compiled. It locks itself, and compiles outside its lock. `identity` null is the lent Shaderc's.
+ */
+typedef struct emusen_serenity_cache emusen_serenity_cache;
+
+emusen_serenity_cache *emusen_serenity_cache_new(const uint8_t *path, size_t path_len, int64_t limit, const uint8_t *identity, size_t identity_len);
+int32_t emusen_serenity_cache_free(emusen_serenity_cache *cache);
+
+/* Lets go of the database; the cache still compiles, and its counts stay to be read. */
+int32_t emusen_serenity_cache_close(const emusen_serenity_cache *cache);
+
+/* A stage's SPIR-V from the cache, or compiled and kept; `now` is Unix seconds, for the row's last use. PARSE as emusen_serenity_compile. */
+int64_t emusen_serenity_cache_compile(const emusen_serenity_cache *cache, const uint8_t *source, size_t source_len, uint32_t stage, const uint8_t *name, size_t name_len, int64_t now, uint8_t *out, size_t cap);
+
+#define EMUSEN_SERENITY_CACHE_WORKING 0u
+#define EMUSEN_SERENITY_CACHE_HITS 1u
+#define EMUSEN_SERENITY_CACHE_MISSES 2u
+#define EMUSEN_SERENITY_CACHE_STORED 3u
+#define EMUSEN_SERENITY_CACHE_DAMAGED 4u
+#define EMUSEN_SERENITY_CACHE_SKIPPED 5u
+#define EMUSEN_SERENITY_CACHE_EVICTED 6u
+#define EMUSEN_SERENITY_CACHE_TOUCH_AFTER 7u /* seconds a row's use must be old before a hit writes it again */
+
+int64_t emusen_serenity_cache_get(const emusen_serenity_cache *cache, uint32_t which);
+int32_t emusen_serenity_cache_set_touch_after(const emusen_serenity_cache *cache, int64_t seconds);
+
+/* Why the cache is off; ABSENT while it works. */
+int64_t emusen_serenity_cache_problem(const emusen_serenity_cache *cache, uint8_t *out, size_t cap);
+
+/* The key a compile is kept under, 32 bytes: SHA-256 over the format's name, the identity, the stage, the file name and the text, each with its length before it. */
+int32_t emusen_serenity_cache_key(const uint8_t *identity, size_t identity_len, const uint8_t *source, size_t source_len, uint32_t stage, const uint8_t *name, size_t name_len, uint8_t *out);
+
+#define EMUSEN_SERENITY_CLASS_SPACE 0u /* \s and char.IsWhiteSpace */
+#define EMUSEN_SERENITY_CLASS_WORD 1u  /* \w */
+
+/* Whether a UTF-16 code unit is in a class the readers use, for a test that holds each to .NET's own answer. */
+int32_t emusen_serenity_text_class(uint32_t which, uint32_t unit);
+
+#define EMUSEN_SERENITY_NUMBER_FLOAT 0u   /* float.TryParse, NumberStyles.Float, invariant */
+#define EMUSEN_SERENITY_NUMBER_INTEGER 1u /* int.TryParse, NumberStyles.Integer, invariant */
+
+/* A number as the readers parse one: 1 with its 32 bits in `out`, 0 for text that is not one. */
+int32_t emusen_serenity_parse_number(uint32_t which, const uint8_t *text, size_t text_len, uint32_t *out);
 
 #ifdef __cplusplus
 }

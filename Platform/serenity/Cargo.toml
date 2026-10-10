@@ -1,0 +1,18 @@
+[package]
+name = "emusen-serenity"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Serenity's slang half without a device: presets, sources, parameters, Shaderc, reflection and the SPIR-V cache. See EmuSen_Serenity.md §7 to §9 and EmuSen_RustPlatform.md §4.3 and §16.
+[lib]
+name = "emusen_serenity"
+
+[dependencies]
+# .NET's path and text rules, and the JSON the results cross in.
+emusen-galaxia = { path = "../galaxia" }
+# Shaderc and SQLite, called in the libraries the program ships (§2.8).
+libloading = "0.9"
+# The cache's keys and each row's digest.
+sha2 = "0.11"

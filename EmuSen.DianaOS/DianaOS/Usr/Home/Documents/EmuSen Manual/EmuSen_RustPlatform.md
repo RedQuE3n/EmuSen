@@ -2298,7 +2298,7 @@ preset on each machine, and keeping the identities apart keeps a cache the C# fi
 library's compile, and the other way about, while the two can still be chosen between. When the C# is retired the
 question disappears. The identity was not changed.
 
-*Decided 2026-10-10 by the tester: separate, as recommended (§9).*
+*Decided 2026-10-10: separate, as recommended (§9).*
 
 ### 19.5 What is lent from the C#, and a missing library
 

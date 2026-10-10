@@ -985,6 +985,8 @@ int32_t  dianash_add_commands(dianash_shell *sh, const uint8_t *manifest, size_t
 terminal while it runs (§7.1). It provides no service. On a system with EmuSen installed it is still emulator-free; a
 frontend's console is the place to reach a running game.
 
+*Planned 2026-10-10: a panes mode of this program, a terminal interface for the host, is §18.*
+
 ### 10.5 Each of today's hosts, on the host API
 
 | Host | Today (§1.5) | On the host API |
@@ -1417,6 +1419,63 @@ C# and the Rust together, with a test that shows the escape first.
 - **Serenity's reference for `coretop`.** The audit's Q5 keeps it until this page decides where the telemetry contracts
   live. **Decided here, with Q1:** with Crystal's assembly; Serenity's reference moves there at S2, and Serenity
   then references the shell no longer.
+
+
+---
+
+## 18. A terminal interface, as a host's extension (planned 2026-10-10)
+
+Decided 2026-10-10 by the tester: the shell gets a full terminal interface, and `hotaru` can show its game in the
+terminal, as a planned extension built on the Rust shell after S3. Nothing here is built.
+
+### 18.1 What it is
+
+A **panes mode** of the terminal host (§10.4; `emusen-shell` in C# meanwhile, the Rust `dianash` program after S3):
+the prompt, with the line editor of §12.3, beside panes that each show a command's output live, refreshed at a rate
+the pane names. The panes are the debugger's views as a terminal debugger lays them out: registers, disassembly at
+the program counter, memory, breakpoints, `coretop`, `vstop`, the feed. It is what `gdb`'s TUI and `htop` are to their
+programs, and it works over SSH, so a game running on one machine can be debugged from another's terminal with no
+window forwarded.
+
+### 18.2 Where it sits, and why there
+
+The form, by the project's rule for a feature that must not give a component a second job:
+
+- **The shell core is unchanged.** It still produces text through the host API (§10) and knows nothing of a terminal's
+  layout; a pane is the host's.
+- **Commands are unchanged.** A pane re-runs a command and shows its text, as `watch` and `coretop`'s refresh do today;
+  no command learns to draw a pane, so the Unix rule that a command is text in and text out holds.
+- **A host extension.** The panes mode is the terminal host's own, an option of the program (`--panes`) and a layout
+  file in the player's configuration, read as text. The host API gains nothing for it, except where a pane needs a
+  command's output without its echo, which the host already has (§10.2).
+- **Built on `ratatui` and `crossterm`**, which are pure Rust and work on Linux, macOS and Windows, and not on ncurses,
+  which is C and Unix-only.
+
+### 18.3 The game's picture in a terminal
+
+An option of `hotaru` (`hotaru --in-terminal`), never its default: the graphical window stays the accurate picture,
+with the CRT filter and the RetroArch presets, and the terminal's picture is a convenience for SSH and for a glance.
+
+| Protocol | Picture | Terminals |
+|---|---|---|
+| **kitty's graphics protocol**, through shared memory on the same machine and as data over SSH | the console's pixels, scaled by the terminal; no filter | kitty, WezTerm, Ghostty, Konsole in part |
+| **Sixel** | colour quantised to the terminal's palette | foot, WezTerm, xterm, VTE |
+| **Unicode half-blocks** (two pixels to a character cell, each a colour) | low resolution; any colour terminal | everywhere |
+
+The capability is discovered from the terminal when `hotaru` starts and falls back in that order. Bandwidth is the
+constraint over SSH: a 256 × 224 frame is 229 KB in RGBA, about 14 MB/s at 60 frames a second before encoding, so over a
+network the picture is sent at a reduced rate or at half-blocks, chosen by the measurement the host makes and stated
+in the pane's title **[A]**.
+
+### 18.4 What it needs from the rest of the design
+
+- **`hotaru`** (the command the C# frontend Hotaru was folded into, 2026-10-10) takes an output choice from the
+  start, so the terminal picture is an addition and not a change to its surface.
+- **The session service** (§9) already gives a pane what it shows: registers, memory and the rest are commands over
+  it. A picture in a pane needs the frame, which `hotaru` holds, not the shell.
+- **Its gate**: the golden corpus (§13.1) holds every command a pane runs, so a pane cannot change what a command
+  prints; the panes mode itself is tested by rendering its layout to a buffer (`ratatui`'s test backend) and comparing
+  the buffer.
 
 ---
 

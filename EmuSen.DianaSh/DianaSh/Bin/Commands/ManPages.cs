@@ -2040,8 +2040,10 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    The main way an if/while condition does anything besides check another\n" +
                 "    command's own exit code. A deliberately small subset of real test(1):\n" +
                 "    a single VALUE (true if non-empty); -z/-n VALUE (string emptiness); -f/-d\n" +
-                "    PATH (real file/directory existence - meaningful here since redirection\n" +
-                "    already touches real host files); VALUE = / != VALUE (string comparison);\n" +
+                "    PATH (file/directory existence, with PATH read as every path in this\n" +
+                "    shell is - '/' is this shell's root, and a path above the root is\n" +
+                "    false, never a question about the machine's own files; before\n" +
+                "    2026-10-10 PATH was the machine's); VALUE = / != VALUE (string comparison);\n" +
                 "    VALUE -eq/-ne/-lt/-le/-gt/-ge VALUE (numeric comparison); a leading '!'\n" +
                 "    negates any of the above. No -a/-o/parenthesized compound expressions -\n" +
                 "    combine conditions with the shell's own && / || instead ('[ -f a ] && [\n" +

@@ -129,5 +129,16 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.True(File.Exists(Path.Combine(runner.Home, "Saves", "mine.state")), Text(steps[1]));
             Assert.Equal("[STATE] Saved: <ROOT>/Saves/Save States/golden.state", Text(steps[2]));
         }
+
+        [Fact]
+        public void Test_answers_for_the_sandbox_and_not_for_the_machine()
+        {
+            using var runner = new GoldenRunner();
+            var steps = Run(runner, "none", [("../outside.txt", "x")], "test -f ../outside.txt", $"test -f {Outside(runner, "outside.txt")}", "cd Logs", "test -d /etc/EmuSen", "[ -f ../../outside.txt ]");
+            Assert.Equal(1, steps[0].Status);
+            Assert.Equal(1, steps[1].Status);
+            Assert.Equal(0, steps[3].Status);
+            Assert.Equal(1, steps[4].Status);
+        }
     }
 }

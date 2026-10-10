@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- A library since the fold: the `hotaru` command and the game window it opens, started by EmuSen.Shell - see EmuSen_Frontend_Driver.md §0. -->
+    <OutputType>Library</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -11,9 +12,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Hotaru's entire UI/audio/input stack now - see App.axaml.cs and
+    <!-- Hotaru's entire UI/audio/input stack now - see
          Views/GameWindow.axaml.cs. Avalonia is the primary application
-         (StartWithClassicDesktopLifetime in Program.cs), not a secondary
+         (StartWithClassicDesktopLifetime in EmuSen.Shell's Program.cs), not a secondary
          dependency bootstrapped alongside a separate Raylib main loop the
          way it used to be for `coretop -w` alone - see git history for
          the Raylib/AvaloniaHost predecessor. Package versions match
@@ -23,8 +24,8 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
-    <!-- Native X11 backend - opted into explicitly in Program.cs
-         (Linux only), matching EmuSen.Mistress's own Program.cs. -->
+    <!-- Native X11 backend - opted into explicitly by LunaApp, which
+         EmuSen.Shell's Program.cs starts (Linux only), matching EmuSen.Mistress. -->
     <PackageReference Include="Avalonia.X11" Version="12.1.0" />
     <!-- Imaging/FrameImageWriter.cs encodes screenshots/frame-recording
          PNGs directly via SKImage.Encode, not Avalonia's
@@ -34,11 +35,6 @@
          imports SkiaSharp types directly, matching Serenity's own
          "don't rely on an implicit transitive version" convention. -->
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
-  </ItemGroup>
-
-  <!-- WiseMan checks the launch prompt's `core` through it - see `man core`. -->
-  <ItemGroup>
-    <InternalsVisibleTo Include="EmuSen.WiseMan" />
   </ItemGroup>
 
   <ItemGroup>
@@ -54,7 +50,7 @@
          config root - one copy for both frontends, see
          EmuSen_Settings_Reference.md §4.10. -->
     <ProjectReference Include="..\EmuSen.Endymion\EmuSen.Endymion.csproj" />
-    <!-- The shared theme (App.axaml's one StyleInclude), the Avalonia
+    <!-- The shared theme (EmuSen.Shell's App.axaml's one StyleInclude), the Avalonia
          bootstrap sequence Program.cs used to spell out, and the controls/
          window scaffolding Views/ is migrating onto - see EmuSen_LunaP.md.
          Same reference EmuSen.Mistress carries; the two frontends share
@@ -62,11 +58,6 @@
     <!-- Now through LunaP.props, which names where it comes from. -->
   </ItemGroup>
 
-
-  <!-- A published build's output directory is DianaSh's own root: the .NET
-       app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
-  <Import Project="..\EmuSen.DianaSh\Publish\DianaShPublishLayout.targets" />
-  <Import Project="..\EmuSen\Cores\RustCoresPublish.targets" />
 
   <Import Project="..\LunaP.props" />
 

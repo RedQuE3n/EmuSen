@@ -1,6 +1,6 @@
-using EmuSen.Hotaru;
+using EmuSen.Shell;
 
-namespace EmuSen.WiseMan.Hotaru
+namespace EmuSen.WiseMan.Shell
 {
     // Which shell a launch gets - see EmuSen_Frontend_Driver.md §3c.
     public class LaunchModeTests

@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.DianaSh
             foreach (GoldenCase c in file.Cases)
             {
                 List<GoldenStep> run = runner.Run(c);
-                var copy = new GoldenCase { Title = c.Title, Target = c.Target, Frames = c.Frames, Covers = c.Covers, Files = c.Files, VaryNumbers = c.VaryNumbers, NoSessions = c.NoSessions };
+                var copy = new GoldenCase { Title = c.Title, Target = c.Target, Frames = c.Frames, Covers = c.Covers, Files = c.Files, VaryNumbers = c.VaryNumbers, NoSessions = c.NoSessions, NoWindow = c.NoWindow };
                 for (int i = 0; i < run.Count; i++) copy.Steps.Add(GoldenRunner.Recorded(run[i], c.Steps[i], c.VaryNumbers));
                 recorded.Cases.Add(copy);
             }

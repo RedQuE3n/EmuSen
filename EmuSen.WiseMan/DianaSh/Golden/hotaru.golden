@@ -1,0 +1,132 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command hotaru
+usage 1   hotaru [--output window] <rom>  play <rom> in Hotaru's game window, with its hotkeys, feed and
+usage 2                                 debug windows; the shell keeps its prompt
+
+case opening a ROM in the window
+target none
+covers 1-2
+file Games/game.sfc 1
+x
+$ hotaru Games/game.sfc
+out 29
+[ROM] Loading: Games/game.sfc
+status 0
+action none
+$ hotaru --output window Games/game.sfc
+out 29
+[ROM] Loading: Games/game.sfc
+status 0
+action none
+$ hotaru --OUTPUT Window /Games/game.sfc
+out 30
+[ROM] Loading: /Games/game.sfc
+status 0
+action none
+$ cd Games
+out 0
+
+status 0
+action none
+$ hotaru game.sfc
+out 23
+[ROM] Loading: game.sfc
+status 0
+action none
+end
+
+case refusals
+target none
+covers 1-2
+file Games/broken.sfc 1
+x
+file ../outside.sfc 1
+x
+$ hotaru
+out 37
+Usage: hotaru [--output window] <rom>
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ hotaru --output
+out 37
+Usage: hotaru [--output window] <rom>
+status 1
+action none
+$ hotaru --output terminal Games/broken.sfc
+out 62
+hotaru: no output named 'terminal' - the only one is 'window'.
+status 1
+action none
+$ hotaru --output 0 Games/broken.sfc
+out 55
+hotaru: no output named '0' - the only one is 'window'.
+status 1
+action none
+$ hotaru a.sfc b.sfc
+out 37
+Usage: hotaru [--output window] <rom>
+status 1
+action none
+$ hotaru Games/nosuch.sfc
+out 39
+[ERROR] ROM not found: Games/nosuch.sfc
+status 1
+action none
+$ hotaru ../outside.sfc
+out 64
+hotaru: '../outside.sfc' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ hotaru Games/broken.sfc
+out 29
+[CPU HALT] unsupported mapper
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case a host with no game window
+target none
+covers 1
+window none
+file Games/game.sfc 1
+x
+$ hotaru Games/game.sfc
+out 80
+hotaru: this shell's host does not open Hotaru's game window - see `man hotaru`.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case in the listing and the manual
+target fake
+covers 1
+$ help | grep hotaru
+out 96
+  hotaru [--output window] <rom>  play <rom> in Hotaru's game window, with its hotkeys, feed and
+status 0
+action none
+$ man hotaru | head -n 3
+out 53
+NAME
+    hotaru - play a ROM in Hotaru's game window
+
+status 0
+action none
+end

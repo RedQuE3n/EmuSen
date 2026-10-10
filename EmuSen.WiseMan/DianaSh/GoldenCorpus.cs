@@ -36,6 +36,7 @@ namespace EmuSen.WiseMan.DianaSh
         public List<(string Path, byte[] Bytes)> Files = new();
         public bool VaryNumbers;
         public bool NoSessions;
+        public bool NoWindow;
         public List<GoldenStep> Steps = new();
     }
 
@@ -99,6 +100,7 @@ namespace EmuSen.WiseMan.DianaSh
                     case "covers": current!.Covers.AddRange(rest.Split(',').SelectMany(Range)); break;
                     case "vary": current!.VaryNumbers = rest == "numbers"; break;
                     case "sessions": current!.NoSessions = rest == "none"; break;
+                    case "window": current!.NoWindow = rest == "none"; break;
                     case "file":
                         int cut = rest.LastIndexOf(' ');
                         current!.Files.Add((rest[..cut], Block(int.Parse(rest[(cut + 1)..]))));
@@ -162,6 +164,7 @@ namespace EmuSen.WiseMan.DianaSh
                 if (c.Frames != 2) Text($"frames {c.Frames}\n");
                 if (c.Covers.Count > 0) Text($"covers {Ranges(c.Covers)}\n");
                 if (c.NoSessions) Text("sessions none\n");
+                if (c.NoWindow) Text("window none\n");
                 if (c.VaryNumbers) Text("vary numbers\n");
                 foreach (var (path, bytes) in c.Files) Block($"file {path}", bytes);
                 foreach (GoldenStep s in c.Steps)
@@ -284,14 +287,21 @@ namespace EmuSen.WiseMan.DianaSh
         // Every command a host's shell has, in its own order, with the two the hosts build themselves.
         public static IReadOnlyList<IDianaShCommand> Commands()
         {
-            return DianaShInterpreter.CreateDefault(new GoldenDebugTarget(), HostCommands(() => "")).RegisteredCommands;
+            return DianaShInterpreter.CreateDefault(new GoldenDebugTarget(), HostCommands(() => "", window: true)).RegisteredCommands;
         }
 
-        private static IDianaShCommand[] HostCommands(Func<string> statePath) => new IDianaShCommand[]
+        // The commands the shell program adds; `hotaru`'s window is a stand-in that opens nothing, and a ROM named broken* will not load.
+        private static IDianaShCommand[] HostCommands(Func<string> statePath, bool window) => new IDianaShCommand[]
         {
             new CoreCommand(CoreCatalog.Registry),
             new StateCommand(p => File.WriteAllText(p, "state"), p => _ = File.ReadAllText(p), statePath),
+            new EmuSen.Hotaru.HotaruCommand(window ? OpenNothing : null),
         };
+
+        private static void OpenNothing(string rom, EmuSen.Hotaru.HotaruOutput output)
+        {
+            if (Path.GetFileName(rom).StartsWith("broken", StringComparison.Ordinal)) throw new InvalidOperationException("unsupported mapper");
+        }
 
         public List<GoldenStep> Run(GoldenCase c)
         {
@@ -307,7 +317,7 @@ namespace EmuSen.WiseMan.DianaSh
 
             using Built built = Target(c);
             string statePath = Path.Combine(DataStore.SaveStates, "golden.state");
-            IDianaShCommand[] extras = HostCommands(() => statePath);
+            IDianaShCommand[] extras = HostCommands(() => statePath, window: !c.NoWindow);
             DianaShSessionManager? sessions = c.NoSessions ? null : new DianaShSessionManager();
             CoreBundle? b = built.Bundle;
             DianaShInterpreter Build() => DianaShInterpreter.CreateDefault(built.Target, extras, b?.CheatAutoDetectCodec, b?.CheatExplicitCodec, b?.CpuTraceSwitch, sessions,

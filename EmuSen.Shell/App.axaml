@@ -1,6 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="EmuSen.Hotaru.App"
+             x:Class="EmuSen.Shell.App"
              RequestedThemeVariant="Dark">
 
     <!-- FluentTheme plus the shared palette - see EmuSen_LunaP.md §3.1. -->

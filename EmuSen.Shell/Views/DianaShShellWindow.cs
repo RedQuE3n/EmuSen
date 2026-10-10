@@ -8,12 +8,14 @@ using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.DianaSh.DianaSh.Dev;
+using EmuSen.Hotaru;
+using EmuSen.Hotaru.Views;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
 
-namespace EmuSen.Hotaru.Views
+namespace EmuSen.Shell.Views
 {
     // The shell a windowed launch gets in place of the terminal - see EmuSen_Frontend_Driver.md §3c.
     public class DianaShShellWindow : ToolWindow
@@ -51,15 +53,18 @@ namespace EmuSen.Hotaru.Views
             _console.Submitted += Submit;
 
             _console.AppendLine(_shell.GetWelcomeBanner(supportedCores ?? Array.Empty<string>()));
-            _console.AppendLine("--- DianaSh (type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
+            _console.AppendLine("--- DianaSh (type 'help', 'hotaru <rom>' or 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
 
             Opened += (_, _) => _console.FocusInput();
         }
 
         private DianaShInterpreter BuildInterpreter() =>
             DianaShInterpreter.CreateDefault(null,
-                new IDianaShCommand[] { new ClearShellWindowCommand(() => _console.Clear()) },
+                new IDianaShCommand[] { new ClearShellWindowCommand(() => _console.Clear()), new HotaruCommand(_launchRom is null ? null : OpenGame) },
                 supportedCheatSystems: () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
+
+        // `hotaru`'s window, from this window's own prompt; a ROM that will not load comes back as the command's failure.
+        private void OpenGame(string romPath, HotaruOutput output) => _launchRom!(romPath).Show();
 
         // Reports a ROM that could not be loaded back into the window that asked for it.
         public void ReportLaunchFailure(string message)
@@ -142,15 +147,6 @@ namespace EmuSen.Hotaru.Views
         private void SyncPrompt() => _console.Prompt = CurrentPrompt();
 
         public void AppendLine(string text) => _console.AppendLine(text);
-    }
-
-    // The live interpreter a running GameWindow lends to the shell window - see EmuSen_Frontend_Driver.md §3c.
-    public interface ILiveShell
-    {
-        bool IsAwaitingMoreInput { get; }
-        string[] SnapshotHistory();
-        void Submit(string line);
-        event Action<string> Output;
     }
 
     // Replaces ClearCommand's Console.Clear(), which does nothing to a widget.

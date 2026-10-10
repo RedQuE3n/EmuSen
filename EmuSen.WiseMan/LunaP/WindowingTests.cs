@@ -16,6 +16,7 @@ namespace EmuSen.WiseMan.LunaP
         {
             typeof(EmuSen.Mistress.Views.MainWindow).Assembly,
             typeof(EmuSen.Hotaru.Views.GameWindow).Assembly,
+            typeof(EmuSen.Shell.Views.DianaShShellWindow).Assembly,
             typeof(EmuSen.Serenity.GameFrameControl).Assembly,
         };
 

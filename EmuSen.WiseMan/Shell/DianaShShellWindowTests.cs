@@ -7,8 +7,9 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using EmuSen.Hotaru.Views;
+using EmuSen.Shell.Views;
 
-namespace EmuSen.WiseMan.Hotaru
+namespace EmuSen.WiseMan.Shell
 {
     // The windowed shell a desktop launch gets - see EmuSen_Frontend_Driver.md §3c.
     public class DianaShShellWindowTests
@@ -99,6 +100,44 @@ namespace EmuSen.WiseMan.Hotaru
             Assert.Contains("unsupported mapper", Output(window).Text!);
             Assert.False(closed);
         }, default);
+
+        // `hotaru` opens the game from this window's own interpreter, through the same launcher `core` uses.
+        [Fact]
+        public Task Hotaru_launches_the_rom_it_names() => Session.Dispatch(() =>
+        {
+            string rom = ScratchRom();
+            string? launched = null;
+            var window = new DianaShShellWindow(romPath => { launched = romPath; return new Window(); }, _ => null, null);
+            window.Show();
+
+            Type(window, $"hotaru --output window \"{rom}\"");
+
+            Assert.Equal(rom, launched);
+            Assert.Contains("[ROM] Loading:", Output(window).Text!);
+        }, default);
+
+        [Fact]
+        public Task Hotaru_reports_a_rom_that_will_not_load_and_refuses_with_no_launcher() => Session.Dispatch(() =>
+        {
+            string rom = ScratchRom();
+            var failing = new DianaShShellWindow(_ => throw new InvalidOperationException("unsupported mapper"), _ => null, null);
+            failing.Show();
+            Type(failing, $"hotaru \"{rom}\"");
+            Assert.Contains("[CPU HALT] unsupported mapper", Output(failing).Text!);
+
+            var bare = new DianaShShellWindow(null, null, null);
+            bare.Show();
+            Type(bare, $"hotaru \"{rom}\"");
+            Assert.Contains("does not open Hotaru's game window", Output(bare).Text!);
+        }, default);
+
+        private static string ScratchRom()
+        {
+            System.IO.Directory.CreateDirectory(EmuSen.DianaSh.DianaSh.Etc.DianaShSandbox.ScratchDirectory);
+            string rom = System.IO.Path.Combine(EmuSen.DianaSh.DianaSh.Etc.DianaShSandbox.ScratchDirectory, $"hotaru_{Guid.NewGuid():N}.sfc");
+            System.IO.File.WriteAllBytes(rom, new byte[16]);
+            return rom;
+        }
 
         [Fact]
         public Task Up_arrow_recalls_the_previous_line() => Session.Dispatch(() =>

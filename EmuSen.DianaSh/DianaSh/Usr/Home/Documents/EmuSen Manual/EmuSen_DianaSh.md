@@ -1,6 +1,7 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the third, 2026-10-10: S0 built, the golden corpus, its harness and what it recorded (§13.4). The
+*This revision: the fourth, 2026-10-10: §13.4's sandbox escapes, finding 10, fixed. The third, the same day: S0
+built, the golden corpus, its harness and what it recorded (§13.4). The
 second, the same day: the seventeen questions of §16 decided, each as recommended, and the runtime named Crystal (Q1).
 The first, the same day: a design, with nothing built: the three decisions of §0.1, what the shell is
 today, measured from the code (§1), and the five surfaces that are to replace what the code does now: the shell core
@@ -1295,9 +1296,16 @@ The commands:
    "Usage:" and "not found" answers are 0.
 9. `su` asks for no password, even for an account that `passwd` has given one, and `su TESTER` switches to an account
    spelled differently from the one that exists (`su`).
-10. `dump`, `load` and `cov save|load` join their file name to `Logs/<core>/` without the sandbox's resolution, so
-    `../../../x` reads and writes outside the root (shown inside the corpus's temporary folder), and an absolute name
-    would reach any path; `core` and `state` pass their paths to the host unresolved too (`dump`, `cov`, `core`).
+10. *Fixed 2026-10-10, on the tester's decision.* `dump`, `load` and `cov save|load` joined their file name to
+    `Logs/<core>/` without the sandbox's resolution, so `../../../x` read and wrote outside the root (shown inside the
+    corpus's temporary folder), and an absolute name would reach any path; `core` and `state` passed their paths to the
+    host unresolved too, and `test -f`/`-d`, found in the sweep that followed, asked the machine about the path as
+    typed. Each now resolves through the sandbox and refuses above the root, with two stated rules where a path
+    legitimately lies outside it: `core` takes an absolute path inside the configured ROM library
+    (`AppSettings.RomDirectory`), and `state` with no path uses the frontend's own default as it gives it. The cases
+    were re-recorded in the commits that changed them; `SandboxEscapeTests` shows each escape. The sweep found every
+    other command already resolving its paths through `TryResolve`; it also found that the check is on a path's text
+    and does not follow a symbolic link, which is left as it is (`man hier`).
 11. `write` keeps the low byte of a wider value and reports success for an address past the end of its space; `load`
     reports every byte loaded when some fall past the end; `dump … 0` prints its range as `0x0-0xFFFFFFFF` (`write`,
     `load`, `dump`).

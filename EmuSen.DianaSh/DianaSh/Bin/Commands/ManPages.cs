@@ -1462,10 +1462,19 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    '/home/Games' when convenient, or just point RomDirectory at them in\n" +
                 "    Preferences, which is where the library is configured anyway.\n\n" +
                 "    A leading '/' means THIS root - your home - not the real OS filesystem\n" +
-                "    root, and not the install directory. Every real-file command ('cat',\n" +
-                "    'ls', 'find', 'awk', 'nano', redirection, 'source') resolves through the\n" +
-                "    same check and refuses anything above it, so no amount of '../..' walks\n" +
-                "    out. This shell used to be rooted at the project directory, which meant\n" +
+                "    root, and not the install directory. Every command that names a file\n" +
+                "    ('cat', 'ls', 'find', 'awk', 'nano', redirection, 'source', 'dump',\n" +
+                "    'load', 'cov save|load', 'label', 'cheat import|export', 'core',\n" +
+                "    'state', 'test -f|-d') resolves through the same check and refuses\n" +
+                "    anything above it, so no amount of '../..' walks out. Two paths are\n" +
+                "    allowed outside the root on purpose: 'core' reads a ROM by an absolute\n" +
+                "    path inside the library configured as RomDirectory, and 'state' with\n" +
+                "    no path uses the frontend's own save-state path. The check is on the\n" +
+                "    path's text and does not follow a symbolic link: a link inside the\n" +
+                "    root that points out of it is followed by whatever opens it. Before\n" +
+                "    2026-10-10, 'dump', 'load', 'cov', 'core', 'state' and 'test' did\n" +
+                "    not go through the check at all.\n\n" +
+                "    This shell used to be rooted at the project directory, which meant\n" +
                 "    'ls /' listed '.git', 'EmuSen.sln' and every C# project beside your\n" +
                 "    saves; rooting at home is what stopped that. It is a guardrail against\n" +
                 "    accidents, not a security boundary.\n\n" +

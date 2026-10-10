@@ -2803,7 +2803,7 @@ case the page for hier
 target none
 covers 1
 $ man hier
-out 8190
+out 8788
 NAME
     hier - this shell's own filesystem layout
 
@@ -2877,10 +2877,20 @@ DESCRIPTION
     Preferences, which is where the library is configured anyway.
 
     A leading '/' means THIS root - your home - not the real OS filesystem
-    root, and not the install directory. Every real-file command ('cat',
-    'ls', 'find', 'awk', 'nano', redirection, 'source') resolves through the
-    same check and refuses anything above it, so no amount of '../..' walks
-    out. This shell used to be rooted at the project directory, which meant
+    root, and not the install directory. Every command that names a file
+    ('cat', 'ls', 'find', 'awk', 'nano', redirection, 'source', 'dump',
+    'load', 'cov save|load', 'label', 'cheat import|export', 'core',
+    'state', 'test -f|-d') resolves through the same check and refuses
+    anything above it, so no amount of '../..' walks out. Two paths are
+    allowed outside the root on purpose: 'core' reads a ROM by an absolute
+    path inside the library configured as RomDirectory, and 'state' with
+    no path uses the frontend's own save-state path. The check is on the
+    path's text and does not follow a symbolic link: a link inside the
+    root that points out of it is followed by whatever opens it. Before
+    2026-10-10, 'dump', 'load', 'cov', 'core', 'state' and 'test' did
+    not go through the check at all.
+
+    This shell used to be rooted at the project directory, which meant
     'ls /' listed '.git', 'EmuSen.sln' and every C# project beside your
     saves; rooting at home is what stopped that. It is a guardrail against
     accidents, not a security boundary.

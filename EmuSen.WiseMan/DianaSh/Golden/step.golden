@@ -1,0 +1,207 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command step
+usage 1   step | s [<count>]            single-step one CPU instruction (or <count> of them)
+usage 2   step over                     run the call at the current instruction to completion, then halt
+usage 3   step out                      run until the current routine returns to its caller
+usage 4   step <cpu> [<count>|over|out] same, stepping another processor - `cpus` lists them
+
+case instructions, over and out
+target fake
+covers 1-4
+$ step
+out 27
+Stepping one instruction...
+status 0
+action Step { }
+$ s
+out 27
+Stepping one instruction...
+status 0
+action Step { }
+$ step 4
+out 26
+Stepping 4 instructions...
+status 0
+action Step { }
+$ s 2
+out 26
+Stepping 2 instructions...
+status 0
+action Step { }
+$ step 0
+out 30
+Step count must be at least 1.
+status 1
+action none
+$ step x
+out 37
+'x' is not 'over', 'out', or a count.
+status 1
+action none
+$ step over
+out 16
+Stepping over...
+status 0
+action Step { }
+$ step out
+out 56
+Already at the outermost frame - nothing to step out of.
+status 1
+action none
+$ step gsu
+out 59
+gsu cannot be halted by this core, so it cannot be stepped.
+status 1
+action none
+$ step cop 1
+out 59
+gsu cannot be halted by this core, so it cannot be stepped.
+status 1
+action none
+$ step cpu 2
+out 26
+Stepping 2 instructions...
+status 0
+action Step { }
+$ step cpu over
+out 16
+Stepping over...
+status 0
+action Step { }
+end
+
+case a bare target
+target bare
+covers 1-4
+$ step over
+out 87
+This core does not report a call stack, so `step over` has no depth to measure against.
+status 1
+action none
+$ step out
+out 86
+This core does not report a call stack, so `step out` has no depth to measure against.
+status 1
+action none
+$ step gsu
+out 39
+'gsu' is not 'over', 'out', or a count.
+status 1
+action none
+$ step cop
+out 42
+This cartridge has no coprocessor to step.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ step
+out 27
+Stepping one instruction...
+status 0
+action Step { }
+end
+
+case with no target
+target none
+covers 1
+$ step
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case other processors on venus-sa1
+target venus-sa1
+covers 4
+$ cpus
+out 465
+SNES debug processors:
+  cpu   PC=$00ED3E  Ricoh 5A22 (65816) main CPU
+        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
+  spc   PC=$00FFCF  Sony SPC700 sound CPU
+        supports: bp, cov, regs, setreg, disasm   code space: APURAM
+  sa1   PC=$000000  SA-1 (65816) cartridge coprocessor
+        supports: bp, cov, bt, regs, setreg, disasm   code space: SA1BUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+$ step sa1
+out 27
+Stepping one instruction...
+status 0
+action Step { }
+$ step gsu
+out 39
+'gsu' is not 'over', 'out', or a count.
+status 1
+action none
+$ step cop
+out 27
+Stepping one instruction...
+status 0
+action Step { }
+end
+
+case other processors on venus-gsu
+target venus-gsu
+covers 4
+$ cpus
+out 452
+SNES debug processors:
+  cpu   PC=$00EA88  Ricoh 5A22 (65816) main CPU
+        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
+  spc   PC=$00FFCF  Sony SPC700 sound CPU
+        supports: bp, cov, regs, setreg, disasm   code space: APURAM
+  gsu   PC=$000000  SuperFX GSU cartridge coprocessor
+        supports: bp, cov, regs, disasm   code space: GSUBUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+$ step sa1
+out 39
+'sa1' is not 'over', 'out', or a count.
+status 1
+action none
+$ step gsu
+out 27
+Stepping one instruction...
+status 0
+action Step { }
+$ step cop
+out 27
+Stepping one instruction...
+status 0
+action Step { }
+end
+
+case the count is hexadecimal
+target fake
+covers 1
+$ step 10
+out 27
+Stepping 16 instructions...
+status 0
+action Step { }
+$ step 0x10
+out 27
+Stepping 16 instructions...
+status 0
+action Step { }
+$ step A
+out 27
+Stepping 10 instructions...
+status 0
+action Step { }
+end

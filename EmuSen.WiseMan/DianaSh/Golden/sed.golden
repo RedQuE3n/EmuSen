@@ -1,0 +1,89 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command sed
+usage 1   sed s/pat/repl/[gi]           substitute (first match per line, or every match with 'g';
+usage 2                                 'i' = case-insensitive). Standalone: sed <expr> <text...>.
+usage 3                                 Real use is as a pipeline stage: <command> | sed s/pat/repl/
+
+case substitutions
+target none
+covers 1-3
+$ echo hello world | sed s/o/0/
+out 11
+hell0 world
+status 0
+action none
+$ echo hello world | sed s/o/0/g
+out 11
+hell0 w0rld
+status 0
+action none
+$ echo Hello | sed s/h/J/i
+out 5
+Jello
+status 0
+action none
+$ sed s/a/b/ banana
+out 6
+bbnana
+status 0
+action none
+$ sed s/a/b/
+out 94
+Nothing to operate on - pipe a command's output in, or pass literal text: sed <expr> <text...>
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ sed
+out 274
+  sed s/pat/repl/[gi]           substitute (first match per line, or every match with 'g';
+                                'i' = case-insensitive). Standalone: sed <expr> <text...>.
+                                Real use is as a pipeline stage: <command> | sed s/pat/repl/
+status 0
+action none
+$ echo abc | sed s|b|X|
+out 0
+
+status 0 more
+action none
+$ echo abc | sed s#b#[&]#
+out 108
+Error: Background jobs ('&') aren't supported - this shell runs everything synchronously. Did you mean '&&'?
+status 0
+action none
+$ echo abc | sed 's/\(b\)/<\1>/'
+out 3
+abc
+status 0
+action none
+$ echo abc | sed y/a/b/
+out 91
+Error: Unrecognized sed expression 'y/a/b/' - only s/pattern/replacement/[gi] is supported.
+status 1
+action none
+$ echo abc | sed s/a
+out 65
+Error: Malformed s/pattern/replacement/[flags] expression: 's/a'.
+status 1
+action none
+$ echo a/b | sed s/\//-/
+out 68
+Error: Malformed s/pattern/replacement/[flags] expression: 's///-/'.
+status 1
+action none
+$ echo price | sed s/price/$5/
+out 2
+$5
+status 0
+action none
+$ echo abc | sed 's/(b)/[$1]/'
+out 6
+a[$1]c
+status 0
+action none
+end

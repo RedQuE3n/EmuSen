@@ -1,0 +1,50 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command rm
+usage 1   rm [-r] <path>                SUSPENDED - delete a file (-r: delete a directory and everything in it)
+unreachable "rm: usage: rm [-r] <path>" -- rm is suspended, and refuses before it reads its arguments
+unreachable "' is outside the project sandbox (" -- rm is suspended, and refuses before it reads its arguments
+unreachable "rm: refusing to remove the project's own root directory" -- rm is suspended, and refuses before it reads its arguments
+unreachable "' is a directory (use -r to remove directories)" -- rm is suspended, and refuses before it reads its arguments
+unreachable "rm: no such file or directory:" -- rm is suspended, and refuses before it reads its arguments
+
+case suspended
+target none
+covers 1
+file a.txt 6
+alpha
+
+$ rm a.txt
+out 170
+rm: suspended - a published build's own binaries live inside this root now (/lib/EmuSen), and nothing here distinguishes them from your data. See 'man rm' and 'man hier'.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ rm -r Logs
+out 170
+rm: suspended - a published build's own binaries live inside this root now (/lib/EmuSen), and nothing here distinguishes them from your data. See 'man rm' and 'man hier'.
+status 1
+action none
+$ rm
+out 170
+rm: suspended - a published build's own binaries live inside this root now (/lib/EmuSen), and nothing here distinguishes them from your data. See 'man rm' and 'man hier'.
+status 1
+action none
+$ ls
+out 53
+Cheats/
+Firmware/
+Games/
+Logs/
+Saves/
+a.txt
+etc/
+tmp/
+status 0
+action none
+end

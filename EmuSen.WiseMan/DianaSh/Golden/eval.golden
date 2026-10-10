@@ -1,0 +1,660 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command eval
+usage 1   eval <expr>                   evaluate an expression against live state (decimal, hex, binary)
+usage 2   eval symbols [<filter>]       list every symbol an expression can name
+usage 3   eval <cpu> <expr>             evaluate against another processor's registers - `cpus` lists them
+
+case expressions
+target fake
+covers 1-3
+$ eval [300]
+out 18
+Cannot read 0x12C.
+status 1
+action none
+$ eval [FFFFF]
+out 61
+Unknown symbol 'FFFFF'. Try `eval symbols` for the full list.
+status 1
+action none
+$ eval [-1]
+out 31
+Cannot read 0xFFFFFFFFFFFFFFFF.
+status 1
+action none
+$ eval [IO:20]
+out 20
+Cannot read IO 0x14.
+status 1
+action none
+$ eval [UNSIZED:0]
+out 24
+Cannot read UNSIZED 0x0.
+status 1
+action none
+$ eval {CpuBus:FFFF}
+out 60
+Unknown symbol 'FFFF'. Try `eval symbols` for the full list.
+status 1
+action none
+$ eval (-9223372036854775807-1)/-1
+out 92
+Cannot evaluate '(-9223372036854775807-1)/-1': Arithmetic operation resulted in an overflow.
+status 1
+action none
+$ eval (-9223372036854775807-1)%-1
+out 92
+Cannot evaluate '(-9223372036854775807-1)%-1': Arithmetic operation resulted in an overflow.
+status 1
+action none
+$ eval 9223372036854775808
+out 52
+'9223372036854775808' is not a valid base-10 number.
+status 1
+action none
+$ eval
+out 44
+Usage: eval <expr> | eval symbols [<filter>]
+status 0
+action none
+$ eval 1+2
+out 17
+3  $3  %0000 0011
+status 0
+action none
+$ eval A
+out 19
+18  $12  %0001 0010
+status 0
+action none
+$ eval X*2
+out 32
+1664  $680  %0000 0110 1000 0000
+status 0
+action none
+$ eval $10
+out 19
+16  $10  %0001 0000
+status 0
+action none
+$ eval 0x10 + %101
+out 19
+21  $15  %0001 0101
+status 0
+action none
+$ eval 1/0
+out 17
+Division by zero.
+status 1
+action none
+$ eval (
+out 33
+Unexpected '<end>' in expression.
+status 1
+action none
+$ eval nosuch
+out 62
+Unknown symbol 'nosuch'. Try `eval symbols` for the full list.
+status 1
+action none
+$ eval A == 0x12
+out 17
+1  $1  %0000 0001
+status 0
+action none
+$ eval symbols
+out 61
+  A
+  APU0
+  frame
+  MODE
+  P
+  PC
+  R15
+  SCANLINE
+  SFR
+  X
+status 0
+action none
+$ eval symbols P
+out 15
+  APU0
+  P
+  PC
+status 0
+action none
+$ eval symbols zzz
+out 24
+No symbol matches 'zzz'.
+status 0
+action none
+$ eval gsu R15
+out 19
+32  $20  %0010 0000
+status 0
+action none
+$ eval gsu symbols
+out 19
+  frame
+  R15
+  SFR
+status 0
+action none
+$ eval cpu PC
+out 34
+32771  $8003  %1000 0000 0000 0011
+status 0
+action none
+$ eval [10]
+out 19
+73  $49  %0100 1001
+status 0
+action none
+$ eval byte(10)
+out 60
+Unknown symbol 'byte'. Try `eval symbols` for the full list.
+status 1
+action none
+$ eval -1
+out 19
+-1  -$1  %0000 0001
+status 0
+action none
+$ eval 7FFFFFFF+1
+out 35
+Unexpected 'FFFFFFF' in expression.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ eval 1
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1-2
+$ eval symbols
+out 185
+  a
+  x
+  y
+  s
+  sp
+  d
+  dp
+  pc
+  pb
+  pbr
+  db
+  dbr
+  p
+  e
+  flag.c
+  flag.z
+  flag.i
+  flag.d
+  flag.x
+  flag.m
+  flag.v
+  flag.n
+  frame
+  scanline
+  cycle
+  opaddr
+  stackdepth
+status 0
+action none
+$ eval 1+1
+out 17
+2  $2  %0000 0010
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1-2
+$ eval symbols
+out 7
+  frame
+status 0
+action none
+$ eval 1+1
+out 17
+2  $2  %0000 0010
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1-2
+$ eval symbols
+out 364
+  $4000
+  $4001
+  $4002
+  $4003
+  $4004
+  $4005
+  $4006
+  $4007
+  $4008
+  $4009
+  $400A
+  $400B
+  $400C
+  $400D
+  $400E
+  $400F
+  $4010
+  $4011
+  $4012
+  $4013
+  A
+  Board:NROM
+  C
+  Cycles
+  D
+  frame
+  FrameCounter
+  FrameIRQ
+  I
+  N
+  OAMADDR
+  P
+  PC
+  PPUCTRL
+  PPUMASK
+  PPUSTATUS
+  S
+  Scanline
+  Sprite0Hit
+  SpriteOverflow
+  t
+  V
+  VBlank
+  w
+  X
+  Y
+  Z
+status 0
+action none
+$ eval 1+1
+out 17
+2  $2  %0000 0010
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1-2
+$ eval symbols
+out 364
+  $4000
+  $4001
+  $4002
+  $4003
+  $4004
+  $4005
+  $4006
+  $4007
+  $4008
+  $4009
+  $400A
+  $400B
+  $400C
+  $400D
+  $400E
+  $400F
+  $4010
+  $4011
+  $4012
+  $4013
+  A
+  Board:NROM
+  C
+  Cycles
+  D
+  frame
+  FrameCounter
+  FrameIRQ
+  I
+  N
+  OAMADDR
+  P
+  PC
+  PPUCTRL
+  PPUMASK
+  PPUSTATUS
+  S
+  Scanline
+  Sprite0Hit
+  SpriteOverflow
+  t
+  V
+  VBlank
+  w
+  X
+  Y
+  Z
+status 0
+action none
+$ eval 1+1
+out 17
+2  $2  %0000 0010
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1-2
+$ eval symbols
+out 420
+  $FF10
+  $FF11
+  $FF12
+  $FF13
+  $FF14
+  $FF15
+  $FF16
+  $FF17
+  $FF18
+  $FF19
+  $FF1A
+  $FF1B
+  $FF1C
+  $FF1D
+  $FF1E
+  $FF1F
+  $FF20
+  $FF21
+  $FF22
+  $FF23
+  $FF24
+  $FF25
+  $FF26
+  A
+  BC
+  BGP
+  Board:ROM
+  C
+  Cycles
+  DE
+  DIV
+  Dot
+  F
+  frame
+  H
+  HALT
+  HL
+  IE
+  IF
+  IME
+  LCDC
+  LY
+  LYC
+  Mode
+  N
+  OBP0
+  OBP1
+  PC
+  Power
+  SCX
+  SCY
+  SeqStep
+  SP
+  STAT
+  TAC
+  TIMA
+  TMA
+  WindowLine
+  WX
+  WY
+  Z
+status 0
+action none
+$ eval 1+1
+out 17
+2  $2  %0000 0010
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1-2
+$ eval symbols
+out 420
+  $FF10
+  $FF11
+  $FF12
+  $FF13
+  $FF14
+  $FF15
+  $FF16
+  $FF17
+  $FF18
+  $FF19
+  $FF1A
+  $FF1B
+  $FF1C
+  $FF1D
+  $FF1E
+  $FF1F
+  $FF20
+  $FF21
+  $FF22
+  $FF23
+  $FF24
+  $FF25
+  $FF26
+  A
+  BC
+  BGP
+  Board:ROM
+  C
+  Cycles
+  DE
+  DIV
+  Dot
+  F
+  frame
+  H
+  HALT
+  HL
+  IE
+  IF
+  IME
+  LCDC
+  LY
+  LYC
+  Mode
+  N
+  OBP0
+  OBP1
+  PC
+  Power
+  SCX
+  SCY
+  SeqStep
+  SP
+  STAT
+  TAC
+  TIMA
+  TMA
+  WindowLine
+  WX
+  WY
+  Z
+status 0
+action none
+$ eval 1+1
+out 17
+2  $2  %0000 0010
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1-2
+$ eval symbols
+out 333
+  a0
+  a1
+  a2
+  a3
+  at
+  BURST
+  CONTROL
+  Cycles
+  frame
+  gp
+  Halted
+  HI
+  H_START
+  H_SYNC
+  k0
+  k1
+  LEAP
+  LO
+  ORIGIN
+  PC
+  ra
+  s0
+  s1
+  s2
+  s3
+  s4
+  s5
+  s6
+  s7
+  s8
+  sp
+  t0
+  t1
+  t2
+  t3
+  t4
+  t5
+  t6
+  t7
+  t8
+  t9
+  v0
+  v1
+  V_BURST
+  V_CURRENT
+  V_INTR
+  V_START
+  V_SYNC
+  WIDTH
+  X_SCALE
+  Y_SCALE
+  zero
+status 0
+action none
+$ eval 1+1
+out 17
+2  $2  %0000 0010
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1-2
+$ eval symbols
+out 333
+  a0
+  a1
+  a2
+  a3
+  at
+  BURST
+  CONTROL
+  Cycles
+  frame
+  gp
+  Halted
+  HI
+  H_START
+  H_SYNC
+  k0
+  k1
+  LEAP
+  LO
+  ORIGIN
+  PC
+  ra
+  s0
+  s1
+  s2
+  s3
+  s4
+  s5
+  s6
+  s7
+  s8
+  sp
+  t0
+  t1
+  t2
+  t3
+  t4
+  t5
+  t6
+  t7
+  t8
+  t9
+  v0
+  v1
+  V_BURST
+  V_CURRENT
+  V_INTR
+  V_START
+  V_SYNC
+  WIDTH
+  X_SCALE
+  Y_SCALE
+  zero
+status 0
+action none
+$ eval 1+1
+out 17
+2  $2  %0000 0010
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1-2
+$ eval symbols
+out 7
+  frame
+status 0
+action none
+$ eval 1+1
+out 17
+2  $2  %0000 0010
+status 0
+action none
+end

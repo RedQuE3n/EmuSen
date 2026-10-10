@@ -1,0 +1,85 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command sort
+usage 1   sort [-n] [-r]                sort input lines (numeric with -n, reversed with -r) -
+usage 2                                 reads piped stdin, or trailing literal text
+
+case orders
+target none
+covers 1-2
+file a.txt 24
+pear
+Apple
+banana
+apple
+
+file n.txt 14
+10
+9
+-1
+x
+100
+
+$ cat a.txt | sort
+out 23
+Apple
+apple
+banana
+pear
+status 0
+action none
+$ cat a.txt | sort -r
+out 23
+pear
+banana
+apple
+Apple
+status 0
+action none
+$ cat n.txt | sort -n
+out 13
+-1
+x
+9
+10
+100
+status 0
+action none
+$ cat n.txt | sort
+out 13
+-1
+10
+100
+9
+x
+status 0
+action none
+$ cat n.txt | sort -n -r
+out 13
+100
+10
+9
+x
+-1
+status 0
+action none
+$ sort c b a
+out 5
+c b a
+status 0
+action none
+$ sort
+out 0
+
+status 0
+action none
+$ cat a.txt | sort -x
+out 23
+Apple
+apple
+banana
+pear
+status 0
+action none
+end

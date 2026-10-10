@@ -1,0 +1,81 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command diff
+usage 1   diff <name> [<count>]         compare snapshot <name> against that space's CURRENT contents,
+usage 2                                 print addresses that changed (default 20 shown)
+
+case against a snapshot
+target fake
+covers 1-2
+$ diff
+out 28
+Usage: diff <name> [<count>]
+status 0
+action none
+$ diff nosuch
+out 48
+No snapshot named 'nosuch'. Try 'snapshot list'.
+status 0
+action none
+$ snapshot RAM before
+out 40
+Snapshot 'before' saved: RAM, 256 bytes.
+status 0
+action none
+$ diff before
+out 38
+No differences from snapshot 'before'.
+status 0
+action none
+$ write RAM 10 0
+out 16
+RAM[0x10] = 0x00
+status 0
+action none
+$ write RAM 20 1
+out 16
+RAM[0x20] = 0x01
+status 0
+action none
+$ write RAM 30 2
+out 16
+RAM[0x30] = 0x02
+status 0
+action none
+$ diff before
+out 127
+3 byte(s) differ from snapshot 'before' (RAM), showing up to 20:
+  0x10: 0x73 -> 0x00
+  0x20: 0xE3 -> 0x01
+  0x30: 0x53 -> 0x02
+status 0
+action none
+$ diff before 2
+out 105
+3 byte(s) differ from snapshot 'before' (RAM), showing up to 2:
+  0x10: 0x73 -> 0x00
+  0x20: 0xE3 -> 0x01
+status 0
+action none
+$ diff before zz
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ diff x
+out 43
+No snapshot named 'x'. Try 'snapshot list'.
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+end

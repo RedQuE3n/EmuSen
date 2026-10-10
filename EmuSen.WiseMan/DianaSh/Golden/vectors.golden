@@ -1,0 +1,194 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command vectors
+usage 1   vectors                       where each interrupt vector points, resolved through labels
+
+case the fake target's table
+target fake
+covers 1
+$ vectors
+out 75
+  RESET        $00FFFC -> $008000
+native:
+  NMI          $00FFEA -> $008009
+status 0
+action none
+$ label add 8000 reset_handler
+out 31
+$008000 is now 'reset_handler'.
+status 0
+action none
+$ vectors
+out 91
+  RESET        $00FFFC -> $008000 <reset_handler>
+native:
+  NMI          $00FFEA -> $008009
+status 0
+action none
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ vectors
+out 91
+  RESET        $00FFFC -> $008000 <reset_handler>
+native:
+  NMI          $00FFEA -> $008009
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ vectors
+out 49
+GOLDEN does not report an interrupt vector table.
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ vectors
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ vectors
+out 370
+Native (E=0):
+  COP          $00FFE4 -> $00EAEA
+  BRK          $00FFE6 -> $00EAEA
+  ABORT        $00FFE8 -> $00EAEA
+  NMI          $00FFEA -> $00EAEA
+  IRQ          $00FFEE -> $00EAEA
+Emulation (E=1):
+  COP          $00FFF4 -> $00EAEA
+  ABORT        $00FFF8 -> $00EAEA
+  NMI          $00FFFA -> $00EAEA
+  RESET        $00FFFC -> $008000
+  IRQ/BRK      $00FFFE -> $00EAEA
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1
+$ vectors
+out 50
+VenusRT does not report an interrupt vector table.
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ vectors
+out 101
+  NMI          $00FFFA -> $008000
+  RESET        $00FFFC -> $008000
+  IRQ/BRK      $00FFFE -> $008000
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1
+$ vectors
+out 101
+  NMI          $00FFFA -> $008000
+  RESET        $00FFFC -> $008000
+  IRQ/BRK      $00FFFE -> $008000
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ vectors
+out 169
+  VBlank       $000040 -> $000000
+  LCD STAT     $000048 -> $000000
+  Timer        $000050 -> $000000
+  Serial       $000058 -> $000000
+  Joypad       $000060 -> $000000
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1
+$ vectors
+out 169
+  VBlank       $000040 -> $000000
+  LCD STAT     $000048 -> $000000
+  Timer        $000050 -> $000000
+  Serial       $000058 -> $000000
+  Joypad       $000060 -> $000000
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1
+$ vectors
+out 46
+N64 does not report an interrupt vector table.
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1
+$ vectors
+out 46
+N64 does not report an interrupt vector table.
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ vectors
+out 51
+Nephrite does not report an interrupt vector table.
+status 0
+action none
+end
+
+case a target with vectors but no bus
+target nobus
+covers 1
+$ vectors
+out 61
+This core publishes no CpuBus space to read the vectors from.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end

@@ -1,0 +1,52 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command touch
+usage 1   touch <path>                  create an empty file, or update an existing one's modified time
+
+case a new file, an old one and failures
+target none
+covers 1
+$ touch new.txt
+out 0
+
+status 0
+action none
+$ ls
+out 55
+Cheats/
+Firmware/
+Games/
+Logs/
+Saves/
+etc/
+new.txt
+tmp/
+status 0
+action none
+$ touch new.txt
+out 0
+
+status 0
+action none
+$ touch
+out 26
+touch: usage: touch <path>
+status 1
+action none
+$ touch /../x
+out 54
+touch: '/../x' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ touch Logs
+out 28
+touch: 'Logs' is a directory
+status 1
+action none
+$ touch sub/dir/file.txt
+out 67
+touch: Could not find a part of the path '<ROOT>/sub/dir/file.txt'.
+status 1
+action none
+end

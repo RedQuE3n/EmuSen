@@ -1,0 +1,35 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command pwd
+usage 1   pwd                           print the current working directory
+
+case where the shell starts and where cd takes it
+target none
+covers 1
+$ pwd
+out 6
+<ROOT>
+status 0
+action none
+$ cd Logs
+out 0
+
+status 0
+action none
+$ pwd
+out 11
+<ROOT>/Logs
+status 0
+action none
+$ cd /
+out 0
+
+status 0
+action none
+$ pwd
+out 6
+<ROOT>
+status 0
+action none
+end

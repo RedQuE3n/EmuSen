@@ -1,0 +1,826 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command cheat
+usage 1   cheat add <code> [description]    decode a code, guessing whether it's Pro
+usage 2                                      Action Replay/Game Wizard or Game Genie from
+usage 3                                      its formatting (see `gg` if it guesses wrong -
+usage 4                                      both formats use the same 8 hex-digit
+usage 5                                      characters, so this is a best-effort guess,
+usage 6                                      not a guarantee)
+usage 7   cheat poke <space> <addr> <value> [description]
+usage 8                                      add a raw RAM-poke cheat directly, bypassing
+usage 9                                      code decoding (e.g. an address you already
+usage 10                                      found with `search`)
+usage 11   cheat gg <code> [description]     decode a real SNES Game Genie code (8
+usage 12                                      characters) and add it as a ROM patch, enabled
+usage 13                                      - use this instead of `add` when its guess is
+usage 14                                      wrong for a code formatted unconventionally
+usage 15   cheat rompatch <addr> <value> [<compare>|-] [description]
+usage 16                                      add a Game Genie-style ROM-read intercept
+usage 17                                      directly, bypassing code decoding: substitute
+usage 18                                      <value> for reads of cartridge address <addr>.
+usage 19                                      <compare> gates the patch to only apply while
+usage 20                                      the real byte there equals it (pass - to skip,
+usage 21                                      an unconditional patch - what every real SNES
+usage 22                                      Game Genie code decodes to; unlike NES/Genesis,
+usage 23                                      SNES Game Genie codes never carry a compare)
+usage 24   cheat list                         list every cheat with its ID, kind, and state
+usage 25   cheat master [on|off]              one switch over every cheat at once, without
+usage 26                                      touching any cheat's own enabled state (no
+usage 27                                      argument reports which way it is set)
+usage 28   cheat enable <id>                  turn a cheat back on
+usage 29   cheat disable <id>                 turn a cheat off without removing it
+usage 30   cheat remove <id>                  remove a cheat entirely
+usage 31   cheat clear                        remove every cheat
+usage 32   cheat save <name>                  write every cheat to
+usage 33                                      /etc/EmuSen/cheats/<name>.json
+usage 34   cheat load <name>                  add every cheat from that file to whatever
+usage 35                                      is already loaded (`cheat clear` first to
+usage 36                                      replace rather than merge)
+usage 37   cheat files                        list the saved cheat files
+usage 38   cheat import <path.cht>            import RetroArch/libretro .cht cheats, added
+usage 39                                      disabled so nothing turns on by surprise
+usage 40   cheat export <path.cht>            write RAM-poke cheats out as a .cht file
+usage 41   cheat db [status]                  where the cheat database is, and what is in it
+usage 42   cheat db find <game>               search the database for a game
+usage 43   cheat db load <game>               import that game's cheats, disabled
+usage 44   cheat db update                    download the libretro cheat database (CC BY-SA 4.0)
+usage 45   cheat db prune [--apply]           delete the systems no core in this build can use
+uncovered 44 -- it downloads the libretro database over the network, which the corpus does not reach
+
+case with no codec
+target fake
+covers 1-24
+$ cheat
+out 107
+Usage: cheat add|poke|gg|rompatch|list|master|enable|disable|remove|clear|save|load|files|import|export ...
+status 0
+action none
+$ cheat add
+out 37
+Usage: cheat add <code> [description]
+status 0
+action none
+$ cheat add 7E0019:01
+out 45
+No cheat codec is registered for this target.
+status 0
+action none
+$ cheat add DD62-6DAD
+out 45
+No cheat codec is registered for this target.
+status 0
+action none
+$ cheat gg
+out 36
+Usage: cheat gg <code> [description]
+status 0
+action none
+$ cheat gg DD62-6DAD
+out 62
+No Game Genie-style cheat codec is registered for this target.
+status 0
+action none
+$ cheat list
+out 16
+No cheats added.
+status 0
+action none
+$ cheat poke
+out 54
+Usage: cheat poke <space> <addr> <value> [description]
+status 0
+action none
+$ cheat poke RAM 10 FF
+out 42
+Cheat #1 added: RAM 0x10 = 0xFF (RAM 0x10)
+status 0
+action none
+$ cheat poke RAM 11 1 extra lives
+out 45
+Cheat #2 added: RAM 0x11 = 0x01 (extra lives)
+status 0
+action none
+$ cheat poke NOPE 1 1
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ cheat poke RAM zz 1
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+$ cheat rompatch
+out 64
+Usage: cheat rompatch <addr> <value> [<compare>|-] [description]
+status 0
+action none
+$ cheat rompatch 8000
+out 64
+Usage: cheat rompatch <addr> <value> [<compare>|-] [description]
+status 0
+action none
+$ cheat rompatch 8000 EA
+out 50
+Cheat #3 added: ROM 0x008000 = 0xEA (ROM 0x008000)
+status 0
+action none
+$ cheat rompatch 8001 EA 20
+out 59
+Cheat #4 added: ROM 0x008001 = 0xEA if==0x20 (ROM 0x008001)
+status 0
+action none
+$ cheat rompatch 8002 EA - patched
+out 45
+Cheat #5 added: ROM 0x008002 = 0xEA (patched)
+status 0
+action none
+$ cheat rompatch 8003 EA 20 with a compare
+out 61
+Cheat #6 added: ROM 0x008003 = 0xEA if==0x20 (with a compare)
+status 0
+action none
+$ cheat list
+out 291
+  #1: [on ] RAM  RAM 0x10 = 0xFF  RAM 0x10
+  #2: [on ] RAM  RAM 0x11 = 0x01  extra lives
+  #3: [on ] ROM  0x008000 = 0xEA  ROM 0x008000
+  #4: [on ] ROM  0x008001 = 0xEA if==0x20  ROM 0x008001
+  #5: [on ] ROM  0x008002 = 0xEA  patched
+  #6: [on ] ROM  0x008003 = 0xEA if==0x20  with a compare
+status 0
+action none
+$ cheat frob
+out 133
+Unknown 'cheat' subcommand 'frob'. Try add/poke/gg/rompatch/list/master/enable/disable/remove/clear/save/load/files/import/export/db.
+status 0
+action none
+end
+
+case the switches and the ids
+target fake
+covers 24-31
+$ cheat poke RAM 10 FF
+out 42
+Cheat #1 added: RAM 0x10 = 0xFF (RAM 0x10)
+status 0
+action none
+$ cheat poke RAM 11 1
+out 42
+Cheat #2 added: RAM 0x11 = 0x01 (RAM 0x11)
+status 0
+action none
+$ cheat master
+out 35
+Cheats are ON at the master switch.
+status 0
+action none
+$ cheat master off
+out 40
+Cheats are now OFF at the master switch.
+status 0
+action none
+$ cheat list
+out 142
+Cheats are OFF at the master switch (`cheat master on`).
+  #1: [on ] RAM  RAM 0x10 = 0xFF  RAM 0x10
+  #2: [on ] RAM  RAM 0x11 = 0x01  RAM 0x11
+status 0
+action none
+$ cheat master sideways
+out 28
+Usage: cheat master [on|off]
+status 0
+action none
+$ cheat master on
+out 39
+Cheats are now ON at the master switch.
+status 0
+action none
+$ cheat disable
+out 25
+Usage: cheat disable <id>
+status 0
+action none
+$ cheat disable 1
+out 18
+Cheat #1 disabled.
+status 0
+action none
+$ cheat disable 9
+out 18
+No cheat #9 found.
+status 0
+action none
+$ cheat enable
+out 24
+Usage: cheat enable <id>
+status 0
+action none
+$ cheat enable 1
+out 17
+Cheat #1 enabled.
+status 0
+action none
+$ cheat enable 9
+out 18
+No cheat #9 found.
+status 0
+action none
+$ cheat list
+out 85
+  #1: [on ] RAM  RAM 0x10 = 0xFF  RAM 0x10
+  #2: [on ] RAM  RAM 0x11 = 0x01  RAM 0x11
+status 0
+action none
+$ cheat remove
+out 24
+Usage: cheat remove <id>
+status 0
+action none
+$ cheat remove 2
+out 17
+Cheat #2 removed.
+status 0
+action none
+$ cheat remove 2
+out 18
+No cheat #2 found.
+status 0
+action none
+$ cheat clear
+out 19
+All cheats removed.
+status 0
+action none
+$ cheat list
+out 16
+No cheats added.
+status 0
+action none
+$ cheat enable zz
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case saved cheat files
+target fake
+covers 31-37
+file etc/EmuSen/cheats/broken.json 10
+{ not json
+$ cheat files
+out 33
+<ROOT>/etc/EmuSen/cheats
+  broken
+status 0
+action none
+$ cheat save
+out 24
+Usage: cheat save <name>
+status 0
+action none
+$ cheat save ../bad
+out 47
+cheat save: '../bad' is not a usable file name.
+status 0
+action none
+$ cheat poke RAM 10 FF
+out 42
+Cheat #1 added: RAM 0x10 = 0xFF (RAM 0x10)
+status 0
+action none
+$ cheat save mine
+out 54
+Saved 1 cheat(s) to <ROOT>/etc/EmuSen/cheats/mine.json
+status 0
+action none
+$ cheat files
+out 40
+<ROOT>/etc/EmuSen/cheats
+  broken
+  mine
+status 0
+action none
+$ cheat clear
+out 19
+All cheats removed.
+status 0
+action none
+$ cheat load
+out 24
+Usage: cheat load <name>
+status 0
+action none
+$ cheat load ../bad
+out 47
+cheat load: '../bad' is not a usable file name.
+status 0
+action none
+$ cheat load nosuch
+out 74
+cheat load: no readable cheat file at <ROOT>/etc/EmuSen/cheats/nosuch.json
+status 0
+action none
+$ cheat load mine
+out 57
+Loaded 1 cheat(s) from <ROOT>/etc/EmuSen/cheats/mine.json
+status 0
+action none
+$ cheat list
+out 42
+  #2: [on ] RAM  RAM 0x10 = 0xFF  RAM 0x10
+status 0
+action none
+$ cheat load broken
+out 74
+cheat load: no readable cheat file at <ROOT>/etc/EmuSen/cheats/broken.json
+status 0
+action none
+end
+
+case the .cht format
+target fake
+covers 38-40
+file a.cht 220
+cheats = 2
+
+cheat0_desc = "Lives"
+cheat0_code = "7E0019:01"
+cheat0_enable = false
+
+cheat1_desc = "Raw"
+cheat1_address = "16"
+cheat1_value = "255"
+cheat1_enable = true
+cheat1_handler = "1"
+cheat1_memory_search_size = "3"
+
+file bad.cht 11
+cheats = x
+
+$ cheat import
+out 30
+Usage: cheat import <path.cht>
+status 0
+action none
+$ cheat import /../x.cht
+out 49
+cheat import: '/../x.cht' is outside the sandbox.
+status 0
+action none
+$ cheat import nosuch.cht
+out 42
+cheat import: no file at <ROOT>/nosuch.cht
+status 0
+action none
+$ cheat import a.cht
+out 93
+Imported 1 cheat(s) from a.cht, 1 skipped - all disabled, `cheat enable <id>` to turn one on.
+status 0
+action none
+$ cheat list
+out 40
+  #1: [off] RAM  CpuBus 0x10 = 0xFF  Raw
+status 0
+action none
+$ cheat export
+out 30
+Usage: cheat export <path.cht>
+status 0
+action none
+$ cheat export /../x.cht
+out 49
+cheat export: '/../x.cht' is outside the sandbox.
+status 0
+action none
+$ cheat rompatch 8000 EA
+out 50
+Cheat #2 added: ROM 0x008000 = 0xEA (ROM 0x008000)
+status 0
+action none
+$ cheat export out.cht
+out 88
+Exported 1 cheat(s) to <ROOT>/out.cht (1 ROM patch(es) skipped - .cht has no equivalent)
+status 0
+action none
+$ cat out.cht
+out 309
+cheats = 1
+
+cheat0_desc = "Raw"
+cheat0_handler = 1
+cheat0_enable = false
+cheat0_cheat_type = 1
+cheat0_memory_search_size = 3
+cheat0_address = 16
+cheat0_value = 255
+cheat0_address_bit_position = 0
+cheat0_big_endian = false
+cheat0_repeat_count = 1
+cheat0_repeat_add_to_address = 0
+cheat0_repeat_add_to_value = 0
+status 0
+action none
+$ cheat import bad.cht
+out 84
+Imported 0 cheat(s) from bad.cht - all disabled, `cheat enable <id>` to turn one on.
+status 0
+action none
+end
+
+case the cheat database
+target fake
+covers 41-43,45
+$ cheat db
+out 41
+Cheat database at <ROOT>/Cheats is empty.
+status 0
+action none
+$ cheat db status
+out 41
+Cheat database at <ROOT>/Cheats is empty.
+status 0
+action none
+$ cheat db find
+out 27
+Usage: cheat db find <game>
+status 0
+action none
+$ cheat db find mario
+out 23
+No matching cheat file.
+status 0
+action none
+$ cheat db load
+out 27
+Usage: cheat db load <game>
+status 0
+action none
+$ cheat db load mario
+out 51
+No matching cheat file - try `cheat db find` first.
+status 0
+action none
+$ cheat db prune
+out 51
+Nothing to prune - no cheat files in <ROOT>/Cheats.
+status 0
+action none
+$ cheat db frob
+out 72
+Unknown 'cheat db' subcommand 'frob'. Try status/find/load/update/prune.
+status 0
+action none
+end
+
+case a cheat database on disk
+target fake
+covers 41-43,45
+file Cheats/Nintendo - Super Nintendo Entertainment System/Golden Test (USA).cht 82
+cheats = 1
+
+cheat0_desc = "Lives"
+cheat0_code = "7E0019:01"
+cheat0_enable = false
+
+file Cheats/Atari - Lynx/Other Game.cht 76
+cheats = 1
+
+cheat0_desc = "x"
+cheat0_code = "0000:00"
+cheat0_enable = false
+
+file Cheats/Empty System/.keep 0
+
+$ cheat db status
+out 106
+2 cheat file(s) in <ROOT>/Cheats
+  Atari - Lynx  (1)
+  Nintendo - Super Nintendo Entertainment System  (1)
+status 0
+action none
+$ cheat db find golden
+out 70
+  Golden Test (USA)   [Nintendo - Super Nintendo Entertainment System]
+status 0
+action none
+$ cheat db find nothing-like-it
+out 23
+No matching cheat file.
+status 0
+action none
+$ cheat db load golden
+out 102
+Loaded 0 cheat(s) for Golden Test (USA), 1 skipped - all disabled, `cheat enable <id>` to turn one on.
+status 0
+action none
+$ cheat list
+out 16
+No cheats added.
+status 0
+action none
+$ cheat db load zzzz
+out 51
+No matching cheat file - try `cheat db find` first.
+status 0
+action none
+$ cheat db prune
+out 182
+Would delete 1 system(s), 1 file(s), 76B:
+  Atari - Lynx  (1 file(s), 76B)
+Keeping: Nintendo - Super Nintendo Entertainment System
+
+Re-run as `cheat db prune --apply` to delete them.
+status 0
+action none
+$ cheat db prune --apply
+out 92
+Deleted 1 system(s), 1 file(s), 76B.
+Keeping: Nintendo - Super Nintendo Entertainment System
+status 0
+action none
+$ cheat db status
+out 86
+1 cheat file(s) in <ROOT>/Cheats
+  Nintendo - Super Nintendo Entertainment System  (1)
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ cheat list
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus, with its codecs
+target venus
+covers 1-14,24
+$ cheat add 7E0019:01
+out 98
+Cheat #1 added (detected Pro Action Replay/Game Wizard format): CpuBus 0x7E0019 = 0x01 (7E0019:01)
+status 0
+action none
+$ cheat add 7E0019:01 lives
+out 94
+Cheat #2 added (detected Pro Action Replay/Game Wizard format): CpuBus 0x7E0019 = 0x01 (lives)
+status 0
+action none
+$ cheat add DD62-6DAD
+out 76
+Cheat #3 added (detected Game Genie format): ROM 0x0082D3 = 0x00 (DD62-6DAD)
+status 0
+action none
+$ cheat add DD626DAD
+out 97
+Cheat #4 added (detected Pro Action Replay/Game Wizard format): CpuBus 0xDD626D = 0xAD (DD626DAD)
+status 0
+action none
+$ cheat add zzz
+out 120
+Error: 'zzz' isn't a valid Pro Action Replay/Game Wizard code - expected 8 hex digits (6-digit address + 2-digit value).
+status 1
+action none
+$ cheat gg DD62-6DAD
+out 47
+Cheat #5 added: ROM 0x0082D3 = 0x00 (DD62-6DAD)
+status 0
+action none
+$ cheat gg DD62-6DAD named
+out 43
+Cheat #6 added: ROM 0x0082D3 = 0x00 (named)
+status 0
+action none
+$ cheat gg 7E0019
+out 107
+Error: '7E0019' isn't a valid SNES Game Genie code - expected 8 letters from the alphabet DF4709156BC8A23E.
+status 1
+action none
+$ cheat list
+out 275
+  #1: [on ] RAM  CpuBus 0x7E0019 = 0x01  7E0019:01
+  #2: [on ] RAM  CpuBus 0x7E0019 = 0x01  lives
+  #3: [on ] ROM  0x0082D3 = 0x00  DD62-6DAD
+  #4: [on ] RAM  CpuBus 0xDD626D = 0xAD  DD626DAD
+  #5: [on ] ROM  0x0082D3 = 0x00  DD62-6DAD
+  #6: [on ] ROM  0x0082D3 = 0x00  named
+status 0
+action none
+$ cheat export out.cht
+out 88
+Exported 3 cheat(s) to <ROOT>/out.cht (3 ROM patch(es) skipped - .cht has no equivalent)
+status 0
+action none
+$ cat out.cht
+out 929
+cheats = 3
+
+cheat0_desc = "7E0019:01"
+cheat0_handler = 1
+cheat0_enable = true
+cheat0_cheat_type = 1
+cheat0_memory_search_size = 3
+cheat0_address = 8257561
+cheat0_value = 1
+cheat0_address_bit_position = 0
+cheat0_big_endian = false
+cheat0_repeat_count = 1
+cheat0_repeat_add_to_address = 0
+cheat0_repeat_add_to_value = 0
+
+cheat1_desc = "lives"
+cheat1_handler = 1
+cheat1_enable = true
+cheat1_cheat_type = 1
+cheat1_memory_search_size = 3
+cheat1_address = 8257561
+cheat1_value = 1
+cheat1_address_bit_position = 0
+cheat1_big_endian = false
+cheat1_repeat_count = 1
+cheat1_repeat_add_to_address = 0
+cheat1_repeat_add_to_value = 0
+
+cheat2_desc = "DD626DAD"
+cheat2_handler = 1
+cheat2_enable = true
+cheat2_cheat_type = 1
+cheat2_memory_search_size = 3
+cheat2_address = 14508653
+cheat2_value = 173
+cheat2_address_bit_position = 0
+cheat2_big_endian = false
+cheat2_repeat_count = 1
+cheat2_repeat_add_to_address = 0
+cheat2_repeat_add_to_value = 0
+status 0
+action none
+end
+
+case on moon, with its codecs
+target moon
+covers 1-14,24
+$ cheat add SXIOPO
+out 73
+Cheat #1 added (detected Game Genie format): ROM 0x0091D9 = 0xAD (SXIOPO)
+status 0
+action none
+$ cheat add 01FF19D0
+out 113
+Error: '01FF19D0' isn't a valid NES address:value code - expected 6 hex digits (4-digit address + 2-digit value).
+status 1
+action none
+$ cheat add 8001A9F0 4
+out 113
+Error: '8001A9F0' isn't a valid NES address:value code - expected 6 hex digits (4-digit address + 2-digit value).
+status 1
+action none
+$ cheat gg AAAA-AAAA
+out 56
+Cheat #2 added: ROM 0x008000 = 0x00 if==0x00 (AAAA-AAAA)
+status 0
+action none
+$ cheat list
+out 93
+  #1: [on ] ROM  0x0091D9 = 0xAD  SXIOPO
+  #2: [on ] ROM  0x008000 = 0x00 if==0x00  AAAA-AAAA
+status 0
+action none
+end
+
+case on mercury, with its codecs
+target mercury
+covers 1-14,24
+$ cheat add SXIOPO
+out 89
+Error: 'SXIOPO' isn't a valid Game Boy GameShark code - expected 8 hex digits (TTVVAAAA).
+status 1
+action none
+$ cheat add 01FF19D0
+out 77
+Cheat #1 added (detected GameShark format): CPUBUS 0x00D019 = 0xFF (01FF19D0)
+status 0
+action none
+$ cheat add 8001A9F0 4
+out 70
+Cheat #2 added (detected GameShark format): CPUBUS 0x00F0A9 = 0x01 (4)
+status 0
+action none
+$ cheat gg AAAA-AAAA
+out 101
+Error: 'AAAA-AAAA' isn't a valid Game Boy Game Genie code - expected 6 or 9 hex digits (AAA-AAA-AAA).
+status 1
+action none
+$ cheat list
+out 88
+  #1: [on ] RAM  CPUBUS 0xD019 = 0xFF  01FF19D0
+  #2: [on ] RAM  CPUBUS 0xF0A9 = 0x01  4
+status 0
+action none
+end
+
+case on mars, with its codecs
+target mars
+covers 1-14,24
+$ cheat add SXIOPO
+out 124
+Error: 'SXIOPO' isn't an N64 GameShark code - expected lines of 8 and 4 hex digits (TTAAAAAA VVVV), joined by '+' or spaces.
+status 1
+action none
+$ cheat add 01FF19D0
+out 126
+Error: '01FF19D0' isn't an N64 GameShark code - expected lines of 8 and 4 hex digits (TTAAAAAA VVVV), joined by '+' or spaces.
+status 1
+action none
+$ cheat add 8001A9F0 4
+out 126
+Error: '8001A9F0' isn't an N64 GameShark code - expected lines of 8 and 4 hex digits (TTAAAAAA VVVV), joined by '+' or spaces.
+status 1
+action none
+$ cheat gg AAAA-AAAA
+out 62
+No Game Genie-style cheat codec is registered for this target.
+status 0
+action none
+$ cheat list
+out 16
+No cheats added.
+status 0
+action none
+end
+
+case on nephrite, with its codecs
+target nephrite
+covers 1-14,24
+$ cheat add SXIOPO
+out 95
+Error: 'SXIOPO' is not an Action Replay code for the main RAM (AAAAAA:VVVV at $E00000-$FFFFFF).
+status 1
+action none
+$ cheat add 01FF19D0
+out 75
+Cheat #1 added (detected Game Genie format): ROM 0x01FF19 = 0xD0 (01FF19D0)
+status 0
+action none
+$ cheat add 8001A9F0 4
+out 97
+Error: '8001A9F0' is not an Action Replay code for the main RAM (AAAAAA:VVVV at $E00000-$FFFFFF).
+status 1
+action none
+$ cheat gg AAAA-AAAA
+out 99
+Cheat #2 added (detected Game Genie format): ROM 0x000000 = 0x0000 (2-byte, big-endian) (AAAA-AAAA)
+status 0
+action none
+$ cheat list
+out 109
+  #1: [on ] ROM  0x01FF19 = 0xD0  01FF19D0
+  #2: [on ] ROM  0x000000 = 0x0000 (2-byte, big-endian)  AAAA-AAAA
+status 0
+action none
+end
+
+case on venusrt, with its codecs
+target venusrt
+covers 1-14,24
+$ cheat add SXIOPO
+out 79
+Error: 'SXIOPO' is not eight hex digits (a Pro Action Replay code is AAAAAADD).
+status 1
+action none
+$ cheat add 01FF19D0
+out 84
+Cheat #1 added (detected Pro Action Replay format): CpuBus 0x1FF19 = 0xD0 (01FF19D0)
+status 0
+action none
+$ cheat add 8001A9F0 4
+out 78
+Cheat #2 added (detected Pro Action Replay format): CpuBus 0x8001A9 = 0xF0 (4)
+status 0
+action none
+$ cheat gg AAAA-AAAA
+out 47
+Cheat #3 added: ROM 0x33C3C3 = 0xCC (AAAA-AAAA)
+status 0
+action none
+$ cheat list
+out 135
+  #1: [on ] RAM  CpuBus 0x1FF19 = 0xD0  01FF19D0
+  #2: [on ] RAM  CpuBus 0x8001A9 = 0xF0  4
+  #3: [on ] ROM  0x33C3C3 = 0xCC  AAAA-AAAA
+status 0
+action none
+end

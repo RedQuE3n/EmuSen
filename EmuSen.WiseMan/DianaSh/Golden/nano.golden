@@ -1,0 +1,30 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command nano
+usage 1   nano <path>                   simple full-screen text editor (Ctrl+O save, Ctrl+X exit - interactive terminal only)
+
+case needs a terminal
+target none
+covers 1
+$ nano a.txt
+out 94
+nano: needs a real interactive terminal (stdin/stdout is redirected, or this console has none)
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ nano
+out 24
+nano: usage: nano <path>
+status 1
+action none
+$ nano /../x
+out 53
+nano: '/../x' is outside the project sandbox (<ROOT>)
+status 1
+action none
+end

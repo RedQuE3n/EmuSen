@@ -1,0 +1,62 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command who
+usage 1   who                           list every session and which account it's running as
+
+case the sessions and their accounts
+target none
+covers 1
+$ who
+out 28
+  root       main  (current)
+status 0
+action none
+$ useradd tester
+out 20
+Added user 'tester'.
+status 0
+action none
+$ tmux new second
+out 48
+[tmux] Created and switched to session 'second'.
+status 0
+action SwitchSession { Name = second }
+$ su tester
+out 21
+Switched to 'tester'.
+status 0
+action none
+$ who
+out 48
+  root       main
+  tester     second  (current)
+status 0
+action none
+end
+
+case a host with no session manager
+target none
+covers 1
+sessions none
+$ who
+out 25
+  root       (this shell)
+status 0
+action none
+$ useradd tester
+out 20
+Added user 'tester'.
+status 0
+action none
+$ su tester
+out 21
+Switched to 'tester'.
+status 0
+action none
+$ who
+out 25
+  tester     (this shell)
+status 0
+action none
+end

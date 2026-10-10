@@ -1,0 +1,51 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command log
+usage 1   log off                       silence every logging flag at once, without changing them
+usage 2   log on                        restore whatever each logging flag was individually set to
+usage 3   log status                    show whether the master switch is currently on or off
+
+case the master switch
+target none
+covers 1-3
+$ log
+out 266
+  log off                       silence every logging flag at once, without changing them
+  log on                        restore whatever each logging flag was individually set to
+  log status                    show whether the master switch is currently on or off
+status 0
+action none
+$ log status
+out 15
+Logging is off.
+status 0
+action none
+$ log off
+out 46
+Logging disabled (individual flags unchanged).
+status 0
+action none
+$ log status
+out 15
+Logging is off.
+status 0
+action none
+$ log on
+out 16
+Logging enabled.
+status 0
+action none
+$ log status
+out 14
+Logging is on.
+status 0
+action none
+$ log frob
+out 266
+  log off                       silence every logging flag at once, without changing them
+  log on                        restore whatever each logging flag was individually set to
+  log status                    show whether the master switch is currently on or off
+status 0
+action none
+end

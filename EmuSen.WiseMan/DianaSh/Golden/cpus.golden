@@ -1,0 +1,216 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command cpus
+usage 1   cpus                          list the processors a debug command can be scoped to
+
+case the fake target's processors
+target fake
+covers 1
+$ cpus
+out 317
+GOLDEN debug processors:
+  cpu   PC=$008003  the main processor
+        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
+  gsu   PC=$000020  a graphics coprocessor
+        supports: cov, regs, disasm   code space: VRAM
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+$ cpus extra
+out 317
+GOLDEN debug processors:
+  cpu   PC=$008003  the main processor
+        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
+  gsu   PC=$000020  a graphics coprocessor
+        supports: cov, regs, disasm   code space: VRAM
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ cpus
+out 75
+GOLDEN publishes no per-CPU debug list; every command targets its main CPU.
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ cpus
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ cpus
+out 337
+SNES debug processors:
+  cpu   PC=$00ED3E  Ricoh 5A22 (65816) main CPU
+        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
+  spc   PC=$00FFCF  Sony SPC700 sound CPU
+        supports: bp, cov, regs, setreg, disasm   code space: APURAM
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1
+$ cpus
+out 282
+VenusRT debug processors:
+  cpu   PC=$00ED30  CPU
+        supports: bp, cov, bt, regs, disasm   code space: CpuBus
+  spc   PC=$00FFD2  SPC
+        supports: bp, cov, regs, disasm   code space: APURAM
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ cpus
+out 188
+NES debug processors:
+  cpu   PC=$00B454  2A03
+        supports: bp, cov, bt, disasm   code space: CPUBUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1
+$ cpus
+out 188
+NES debug processors:
+  cpu   PC=$00B454  2A03
+        supports: bp, cov, bt, disasm   code space: CPUBUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ cpus
+out 193
+GB debug processors:
+  cpu   PC=$000AF2  SM83
+        supports: bp, cov, bt, regs, disasm   code space: CPUBUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1
+$ cpus
+out 193
+GB debug processors:
+  cpu   PC=$000AF2  SM83
+        supports: bp, cov, bt, regs, disasm   code space: CPUBUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1
+$ cpus
+out 273
+N64 debug processors:
+  cpu   PC=$A4000040 VR4300
+        supports: bp, cov, bt, regs, disasm   code space: CPU
+  rsp   PC=$000000  RSP
+        supports: cov, regs, disasm   code space: IMEM
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1
+$ cpus
+out 291
+N64 debug processors:
+  cpu   PC=$A4000040 VR4300 (MarsRT)
+        supports: bp, cov, bt, regs, disasm   code space: CPU
+  rsp   PC=$000000  RSP (MarsRT)
+        supports: cov, regs, disasm   code space: IMEM
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ cpus
+out 285
+Nephrite debug processors:
+  m68k  PC=$0000CC  M68K
+        supports: bp, cov, bt, regs, disasm   code space: M68KBUS
+  z80   PC=$000000  Z80
+        supports: bp, cov, regs, disasm   code space: Z80BUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on venus-sa1
+target venus-sa1
+covers 1
+$ cpus
+out 465
+SNES debug processors:
+  cpu   PC=$00ED3E  Ricoh 5A22 (65816) main CPU
+        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
+  spc   PC=$00FFCF  Sony SPC700 sound CPU
+        supports: bp, cov, regs, setreg, disasm   code space: APURAM
+  sa1   PC=$000000  SA-1 (65816) cartridge coprocessor
+        supports: bp, cov, bt, regs, setreg, disasm   code space: SA1BUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end
+
+case on venus-gsu
+target venus-gsu
+covers 1
+$ cpus
+out 452
+SNES debug processors:
+  cpu   PC=$00EA88  Ricoh 5A22 (65816) main CPU
+        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
+  spc   PC=$00FFCF  Sony SPC700 sound CPU
+        supports: bp, cov, regs, setreg, disasm   code space: APURAM
+  gsu   PC=$000000  SuperFX GSU cartridge coprocessor
+        supports: bp, cov, regs, disasm   code space: GSUBUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+end

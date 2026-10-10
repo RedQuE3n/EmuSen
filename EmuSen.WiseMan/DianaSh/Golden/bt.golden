@@ -1,0 +1,267 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command bt
+usage 1   bt [<count>]                  backtrace: the live call chain, innermost frame first
+usage 2   bt reset                      forget the current chain (after a stack-manipulating routine)
+usage 3   bt <cpu> [<count>|reset]      same, on another processor - `cpus` lists them
+
+case an empty stack
+target fake
+covers 1-3
+$ bt
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt 4
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt reset
+out 19
+Call stack cleared.
+status 0
+action none
+$ bt gsu
+out 50
+gsu does not report a call stack - see `man cpus`.
+status 1
+action none
+$ bt cop
+out 50
+gsu does not report a call stack - see `man cpus`.
+status 1
+action none
+$ bt cpu
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt zz
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ bt
+out 39
+This core does not report a call stack.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ bt gsu
+out 39
+This core does not report a call stack.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ bt
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1,3
+$ bt
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt 2
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt cop
+out 61
+This cartridge has no coprocessor to report a call stack for.
+status 1
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1,3
+$ bt
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt 2
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt cop
+out 61
+This cartridge has no coprocessor to report a call stack for.
+status 1
+action none
+end
+
+case on moon
+target moon
+covers 1,3
+$ bt
+out 46
+  #0   $008000  <- BRK from $00BFFA  (frame 1)
+status 0
+action none
+$ bt 2
+out 46
+  #0   $008000  <- BRK from $00BFFA  (frame 1)
+status 0
+action none
+$ bt cop
+out 61
+This cartridge has no coprocessor to report a call stack for.
+status 1
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1,3
+$ bt
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt 2
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt cop
+out 61
+This cartridge has no coprocessor to report a call stack for.
+status 1
+action none
+end
+
+case on mercury
+target mercury
+covers 1,3
+$ bt
+out 47
+  #0   $000038  <- call from $008000  (frame 1)
+status 0
+action none
+$ bt 2
+out 47
+  #0   $000038  <- call from $008000  (frame 1)
+status 0
+action none
+$ bt cop
+out 61
+This cartridge has no coprocessor to report a call stack for.
+status 1
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1,3
+$ bt
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt 2
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt cop
+out 61
+This cartridge has no coprocessor to report a call stack for.
+status 1
+action none
+end
+
+case on mars
+target mars
+covers 1,3
+$ bt
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt 2
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt cop
+out 50
+rsp does not report a call stack - see `man cpus`.
+status 1
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1,3
+$ bt
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt 2
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt cop
+out 50
+rsp does not report a call stack - see `man cpus`.
+status 1
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1,3
+$ bt
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt 2
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+$ bt cop
+out 64
+Call stack empty - nothing has been called since the last reset.
+status 0
+action none
+end

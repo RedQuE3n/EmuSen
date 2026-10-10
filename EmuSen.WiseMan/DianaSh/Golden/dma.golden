@@ -1,0 +1,197 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command dma
+usage 1   dma                           every channel's current configuration
+usage 2   dma log on [<n>] | dma log off
+usage 3                                 start/stop recording transfers (<n> retained, default 4096)
+usage 4   dma log [<n>] | dma log clear
+usage 5                                 the last <n> transfers in order (default 20), or forget them
+usage 6   dma stats                     per-channel and per-destination totals, biggest first
+
+case channels and the log
+target fake
+covers 1-6
+$ dma
+out 293
+  ch  hdma  dir   mode  destination       source     length  hdma table
+  0   -     A->B     1  VMDATAL           $7E2000     2048  -
+  1   on    A->B     2  BG1HOFS           $00C000        0  $00C100 line 03 -> $7E3000
+  (mode is the B-bus write pattern; dir B->A reads the register instead)
+status 0
+action none
+$ dma log
+out 58
+DMA transfer logging is off. Turn it on with `dma log on`.
+status 0
+action none
+$ dma log on
+out 40
+DMA transfer logging on (4096 retained).
+status 0
+action none
+$ dma log on 8
+out 38
+DMA transfer logging on (16 retained).
+status 0
+action none
+$ dma log
+out 60
+Nothing logged yet - no transfer has run since `dma log on`.
+status 0
+action none
+$ dma log 4
+out 60
+Nothing logged yet - no transfer has run since `dma log on`.
+status 0
+action none
+$ dma stats
+out 60
+Nothing logged yet - no transfer has run since `dma log on`.
+status 0
+action none
+$ dma log clear
+out 25
+DMA transfer log cleared.
+status 0
+action none
+$ dma log off
+out 25
+DMA transfer logging off.
+status 0
+action none
+$ dma frob
+out 83
+Unknown dma subcommand 'frob'. Try log|stats, or `dma` alone for the channel table.
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1-6
+$ dma
+out 33
+GOLDEN publishes no DMA channels.
+status 1
+action none
+$ dma log on
+out 30
+GOLDEN records no DMA history.
+status 1
+action none
+$ dma log
+out 30
+GOLDEN records no DMA history.
+status 1
+action none
+$ dma stats
+out 30
+GOLDEN records no DMA history.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ dma
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1-3,6
+$ dma
+out 640
+  ch  hdma  dir   mode  destination       source     length  hdma table
+  0   -     A->B     0  INIDISP $2100     $000000    65536  -
+  1   -     A->B     0  INIDISP $2100     $000000    65536  -
+  2   -     A->B     0  INIDISP $2100     $000000    65536  -
+  3   -     A->B     0  INIDISP $2100     $000000    65536  -
+  4   -     A->B     0  INIDISP $2100     $000000    65536  -
+  5   -     A->B     0  INIDISP $2100     $000000    65536  -
+  6   -     A->B     0  INIDISP $2100     $000000    65536  -
+  7   -     A->B     0  INIDISP $2100     $000000    65536  -
+  (mode is the B-bus write pattern; dir B->A reads the register instead)
+status 0
+action none
+$ dma log on
+out 40
+DMA transfer logging on (4096 retained).
+status 0
+action none
+$ dma stats
+out 60
+Nothing logged yet - no transfer has run since `dma log on`.
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1-3,6
+$ dma
+out 34
+VenusRT publishes no DMA channels.
+status 1
+action none
+$ dma log on
+out 31
+VenusRT records no DMA history.
+status 1
+action none
+$ dma stats
+out 31
+VenusRT records no DMA history.
+status 1
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1-3,6
+$ dma
+out 35
+Nephrite publishes no DMA channels.
+status 1
+action none
+$ dma log on
+out 32
+Nephrite records no DMA history.
+status 1
+action none
+$ dma stats
+out 32
+Nephrite records no DMA history.
+status 1
+action none
+end
+
+case on mercury
+target mercury
+covers 1-3,6
+$ dma
+out 29
+GB publishes no DMA channels.
+status 1
+action none
+$ dma log on
+out 26
+GB records no DMA history.
+status 1
+action none
+$ dma stats
+out 26
+GB records no DMA history.
+status 1
+action none
+end

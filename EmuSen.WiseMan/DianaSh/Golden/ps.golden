@@ -1,0 +1,87 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command ps
+usage 1   ps | jobs                     list active breakpoints/watches/sessions as one table - see `kill`
+
+case the table
+target none
+covers 1
+$ ps
+out 34
+  main       session     (current)
+status 0
+action none
+$ jobs
+out 34
+  main       session     (current)
+status 0
+action none
+end
+
+case breakpoints, watches and sessions
+target fake
+covers 1
+$ ps
+out 34
+  main       session     (current)
+status 0
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ watch add RAM 10 4 read
+out 36
+Watch #1 added: RAM 0x10-0x13 (read)
+status 0
+action none
+$ tmux new second
+out 48
+[tmux] Created and switched to session 'second'.
+status 0
+action SwitchSession { Name = second }
+$ ps
+out 157
+  bp1        breakpoint  $008000 (enabled, hit 0x)
+  watch1     watch       RAM 0x10-0x13 (read)
+  main       session     
+  second     session     (current)
+status 0
+action none
+$ bp off 1
+out 23
+Breakpoint #1 disabled.
+status 0
+action none
+$ jobs
+out 158
+  bp1        breakpoint  $008000 (disabled, hit 0x)
+  watch1     watch       RAM 0x10-0x13 (read)
+  main       session     
+  second     session     (current)
+status 0
+action none
+end
+
+case a host with no session manager
+target fake
+covers 1
+sessions none
+$ ps
+out 44
+No active breakpoints, watches, or sessions.
+status 0
+action none
+$ bp add 8000
+out 31
+Breakpoint #1 added at $008000.
+status 0
+action none
+$ ps
+out 50
+  bp1        breakpoint  $008000 (enabled, hit 0x)
+status 0
+action none
+end

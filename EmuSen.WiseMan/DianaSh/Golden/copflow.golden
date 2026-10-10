@@ -1,0 +1,180 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command copflow
+usage 1   copflow on [<size>]           start logging coprocessor register-window traffic
+usage 2   copflow off                   stop logging
+usage 3   copflow clear                 forget everything logged so far
+usage 4   copflow tail [<n>]            the last <n> accesses in order (default 20)
+usage 5   copflow stats                 per-register read/write tallies, busiest first
+usage 6   copflow poll                  the longest run of unchanging reads - a stuck handshake
+
+case the fake target's register window
+target fake
+covers 1-6
+$ copflow
+out 43
+Usage: copflow on|off|clear|tail|stats|poll
+status 0
+action none
+$ copflow on
+out 69
+Coprocessor register flow logging on (4096 registers, 4096 retained).
+status 0
+action none
+$ copflow tail
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow stats
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow poll
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow on 10
+out 67
+Coprocessor register flow logging on (16 registers, 4096 retained).
+status 0
+action none
+$ copflow tail 5
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow clear
+out 38
+Coprocessor register flow log cleared.
+status 0
+action none
+$ copflow off
+out 38
+Coprocessor register flow logging off.
+status 0
+action none
+$ copflow frob
+out 68
+Unknown copflow subcommand 'frob'. Try on|off|clear|tail|stats|poll.
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ copflow on
+out 55
+GOLDEN exposes no coprocessor register window to watch.
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ copflow on
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus-sa1
+target venus-sa1
+covers 1-2,4-6
+$ copflow on
+out 69
+Coprocessor register flow logging on (4096 registers, 4096 retained).
+status 0
+action none
+$ copflow tail
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow stats
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow poll
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow off
+out 38
+Coprocessor register flow logging off.
+status 0
+action none
+end
+
+case on venus-gsu
+target venus-gsu
+covers 1-2,4-6
+$ copflow on
+out 69
+Coprocessor register flow logging on (4096 registers, 4096 retained).
+status 0
+action none
+$ copflow tail
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow stats
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow poll
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow off
+out 38
+Coprocessor register flow logging off.
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1-2,4-6
+$ copflow on
+out 69
+Coprocessor register flow logging on (4096 registers, 4096 retained).
+status 0
+action none
+$ copflow tail
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow stats
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow poll
+out 96
+Nothing logged yet - the cartridge has not touched its coprocessor registers since `copflow on`.
+status 0
+action none
+$ copflow off
+out 38
+Coprocessor register flow logging off.
+status 0
+action none
+end

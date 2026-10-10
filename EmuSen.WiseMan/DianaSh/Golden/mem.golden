@@ -1,0 +1,306 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command mem
+usage 1   mem <space> <addr> [<len>]    hexdump <len> bytes (default 16) from <space> at <addr>
+
+case hexdumps
+target fake
+covers 1
+$ mem
+out 33
+Usage: mem <space> <addr> [<len>]
+status 0
+action none
+$ mem RAM
+out 33
+Usage: mem <space> <addr> [<len>]
+status 0
+action none
+$ mem RAM 0
+out 97
+RAM @ 0x0 (16 bytes):
+  000000: 03 0A 11 18 1F 26 2D 34 3B 42 49 50 57 5E 65 6C  .....&-4;BIPW^el
+status 0
+action none
+$ mem RAM 0 20
+out 173
+RAM @ 0x0 (32 bytes):
+  000000: 03 0A 11 18 1F 26 2D 34 3B 42 49 50 57 5E 65 6C  .....&-4;BIPW^el
+  000010: 73 7A 81 88 8F 96 9D A4 AB B2 B9 C0 C7 CE D5 DC  sz..............
+status 0
+action none
+$ mem ram 10 3
+out 84
+RAM @ 0x10 (3 bytes):
+  000010: 73 7A 81                                         sz.
+status 0
+action none
+$ mem ROM 0 10
+out 97
+ROM @ 0x0 (16 bytes):
+  000000: 20 10 80 AD 42 00 8D 43 00 4C 00 80 EA EA EA EA   ...B..C.L......
+status 0
+action none
+$ mem IO 0 4
+out 83
+IO @ 0x0 (4 bytes):
+  000000: F0 F1 F2 F3                                      ....
+status 0
+action none
+$ mem VRAM 3F8 10
+out 100
+VRAM @ 0x3F8 (16 bytes):
+  0003F8: 98 A5 B2 BF CC D9 E6 F3 00 0D 1A 27 34 41 4E 5B  ...........'4AN[
+status 0
+action none
+$ mem RAM F8 10
+out 98
+RAM @ 0xF8 (16 bytes):
+  0000F8: CB D2 D9 E0 E7 EE F5 FC 03 0A 11 18 1F 26 2D 34  .............&-4
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ mem NOPE 0
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ mem RAM 0 0
+out 20
+RAM @ 0x0 (0 bytes):
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ mem RAM 0
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ spaces
+out 283
+SNES memory spaces:
+  CpuBus     16777216 bytes  R/W
+  IO            65536 bytes  R/W
+  WRAM         131072 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CGRAM           512 bytes  R/W
+  OAM             544 bytes  R/W
+  SRAM         131072 bytes  R/W
+  APURAM        65536 bytes  R/W
+status 0
+action none
+$ mem CpuBus 0 20
+out 176
+CpuBus @ 0x0 (32 bytes):
+  000000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+  000010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1
+$ spaces
+out 286
+VenusRT memory spaces:
+  CpuBus     16777216 bytes  R/W
+  IO             1024 bytes  R/O
+  WRAM         131072 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CGRAM           512 bytes  R/W
+  OAM             544 bytes  R/W
+  SRAM              0 bytes  R/W
+  APURAM        65536 bytes  R/W
+status 0
+action none
+$ mem CpuBus 0 20
+out 176
+CpuBus @ 0x0 (32 bytes):
+  000000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+  000010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ spaces
+out 282
+NES memory spaces:
+  RAM            2048 bytes  R/W
+  PRGROM        16384 bytes  R/O
+  PRGRAM         8192 bytes  R/W
+  CHR            8192 bytes  R/W
+  CIRAM          4096 bytes  R/W
+  OAM             256 bytes  R/W
+  PALETTE          32 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+$ mem CpuBus 0 20
+out 176
+CPUBUS @ 0x0 (32 bytes):
+  000000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+  000010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1
+$ spaces
+out 282
+NES memory spaces:
+  RAM            2048 bytes  R/W
+  PRGROM        16384 bytes  R/O
+  PRGRAM         8192 bytes  R/W
+  CHR            8192 bytes  R/W
+  CIRAM          4096 bytes  R/W
+  OAM             256 bytes  R/W
+  PALETTE          32 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+$ mem CpuBus 0 20
+out 176
+CPUBUS @ 0x0 (32 bytes):
+  000000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+  000010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ spaces
+out 248
+GB memory spaces:
+  ROM           32768 bytes  R/O
+  VRAM           8192 bytes  R/W
+  CARTRAM           0 bytes  R/W
+  WRAM           8192 bytes  R/W
+  OAM             160 bytes  R/W
+  HRAM            127 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+$ mem CpuBus 0 20
+out 176
+CPUBUS @ 0x0 (32 bytes):
+  000000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+  000010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1
+$ spaces
+out 248
+GB memory spaces:
+  ROM           32768 bytes  R/O
+  VRAM           8192 bytes  R/W
+  CARTRAM           0 bytes  R/W
+  WRAM           8192 bytes  R/W
+  OAM             160 bytes  R/W
+  HRAM            127 bytes  R/W
+  CPUBUS        65536 bytes  R/W
+status 0
+action none
+$ mem CpuBus 0 20
+out 176
+CPUBUS @ 0x0 (32 bytes):
+  000000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+  000010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1
+$ spaces
+out 218
+N64 memory spaces:
+  RDRAM       8388608 bytes  R/W
+  DMEM           4096 bytes  R/W
+  IMEM           4096 bytes  R/W
+  PIFRAM           64 bytes  R/W
+  ROM            4096 bytes  R/O
+  CPU        2147483647 bytes  R/W
+status 0
+action none
+$ mem CpuBus 0 20
+out 85
+Error: No memory space named 'CpuBus'. Available: RDRAM, DMEM, IMEM, PIFRAM, ROM, CPU
+status 1
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1
+$ spaces
+out 218
+N64 memory spaces:
+  RDRAM       8388608 bytes  R/W
+  DMEM           4096 bytes  R/W
+  IMEM           4096 bytes  R/W
+  PIFRAM           64 bytes  R/W
+  ROM            4096 bytes  R/O
+  CPU        2147483647 bytes  R/W
+status 0
+action none
+$ mem CpuBus 0 20
+out 85
+Error: No memory space named 'CpuBus'. Available: RDRAM, DMEM, IMEM, PIFRAM, ROM, CPU
+status 1
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ spaces
+out 287
+Nephrite memory spaces:
+  M68KBUS    16777216 bytes  R/O
+  Z80BUS        65536 bytes  R/O
+  WRAM          65536 bytes  R/W
+  Z80RAM         8192 bytes  R/W
+  VRAM          65536 bytes  R/W
+  CRAM            128 bytes  R/W
+  VSRAM            80 bytes  R/W
+  ROM          131072 bytes  R/O
+status 0
+action none
+$ mem CpuBus 0 20
+out 103
+Error: No memory space named 'CpuBus'. Available: M68KBUS, Z80BUS, WRAM, Z80RAM, VRAM, CRAM, VSRAM, ROM
+status 1
+action none
+end

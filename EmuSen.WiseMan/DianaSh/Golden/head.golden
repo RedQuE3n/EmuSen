@@ -1,0 +1,96 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command head
+usage 1   head [-n N] [path]            first N lines (default 10) of stdin or a file
+
+case lines from stdin and files
+target none
+covers 1
+file a.txt 87
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+line 11
+line 12
+
+$ head a.txt
+out 70
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+status 0
+action none
+$ head -n 2 a.txt
+out 13
+line 1
+line 2
+status 0
+action none
+$ cat a.txt | head -n 3
+out 20
+line 1
+line 2
+line 3
+status 0
+action none
+$ head -n 0 a.txt
+out 0
+
+status 0
+action none
+$ head -n x a.txt
+out 39
+head: -n expects a non-negative integer
+status 1
+action none
+$ head -n -1 a.txt
+out 39
+head: -n expects a non-negative integer
+status 1
+action none
+$ head -n
+out 22
+head: no such file: -n
+status 1
+action none
+$ head nosuch
+out 26
+head: no such file: nosuch
+status 1
+action none
+$ head /../x
+out 53
+head: '/../x' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ head
+out 31
+head: usage: head [-n N] [path]
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ head a.txt b.txt
+out 25
+head: no such file: b.txt
+status 1
+action none
+end

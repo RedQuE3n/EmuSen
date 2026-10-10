@@ -1,0 +1,51 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command uniq
+usage 1   uniq [-c]                     collapse adjacent duplicate lines (-c prefixes each with its
+usage 2                                 repeat count) - sort first for global dedup, not just adjacent
+
+case adjacent duplicates
+target none
+covers 1-2
+file a.txt 12
+a
+a
+b
+a
+b
+b
+
+$ cat a.txt | uniq
+out 7
+a
+b
+a
+b
+status 0
+action none
+$ cat a.txt | uniq -c
+out 15
+2 a
+1 b
+1 a
+2 b
+status 0
+action none
+$ cat a.txt | sort | uniq -c
+out 7
+3 a
+3 b
+status 0
+action none
+$ uniq a a b
+out 5
+a a b
+status 0
+action none
+$ uniq
+out 0
+
+status 0
+action none
+end

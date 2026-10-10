@@ -1,0 +1,693 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command shell
+usage 1   if/then/elif/else/fi, for/in/do/done, while|until/do/done, break, continue
+usage 2                                 control flow - see the reference doc for the full grammar
+
+case control flow
+target none
+covers 1-2
+$ if true; then echo yes; else echo no; fi
+out 3
+yes
+status 0
+action none
+$ if false; then echo yes; elif true; then echo elif; fi
+out 4
+elif
+status 0
+action none
+$ for i in a b c; do echo $i; done
+out 5
+a
+b
+c
+status 0
+action none
+$ for i in 1 2 3; do if [ $i = 2 ]; then continue; fi; echo $i; done
+out 3
+1
+3
+status 0
+action none
+$ for i in 1 2 3; do if [ $i = 2 ]; then break; fi; echo $i; done
+out 1
+1
+status 0
+action none
+$ export N=0
+out 0
+
+status 0
+action none
+$ while [ $N -lt 3 ]; do echo n$N; export N=$(echo $N | sed s/0/1/); if [ $N = 1 ]; then break; fi; done
+out 2
+n0
+status 0
+action none
+$ until true; do echo never; done
+out 0
+
+status 0
+action none
+$ break
+out 0
+
+status 0
+action none
+$ continue
+out 0
+
+status 0
+action Resume { }
+end
+
+case a block typed over several lines
+target none
+covers 1-2
+$ if true
+out 0
+
+status 0 more
+action none
+$ then
+out 0
+
+status 0 more
+action none
+$ echo inside
+out 0
+
+status 0 more
+action none
+$ fi
+out 6
+inside
+status 0
+action none
+$ for x in 1 2
+out 0
+
+status 0 more
+action none
+$ do echo $x
+out 0
+
+status 0 more
+action none
+$ done
+out 3
+1
+2
+status 0
+action none
+end
+
+case pipes, sequencing and substitution
+target none
+covers 1-2
+$ echo a b c | wc -w
+out 1
+3
+status 0
+action none
+$ true && echo and
+out 3
+and
+status 0
+action none
+$ false && echo never
+out 0
+
+status 1
+action none
+$ false || echo or
+out 2
+or
+status 0
+action none
+$ true; echo seq
+out 3
+seq
+status 0
+action none
+$ echo $(echo nested $(echo deeper))
+out 13
+nested deeper
+status 0
+action none
+$ echo ${HOME}x
+out 1
+x
+status 0
+action none
+$ export V=val
+out 0
+
+status 0
+action none
+$ echo ${V}x $V
+out 8
+valx val
+status 0
+action none
+$ echo '$V'
+out 2
+$V
+status 0
+action none
+$ echo "$V"
+out 3
+val
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ false
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ nosuchcommand
+out 56
+Unknown command 'nosuchcommand'. Type 'help' for a list.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ Echo case
+out 4
+case
+status 0
+action none
+$ ECHO upper
+out 5
+upper
+status 0
+action none
+end
+
+case redirection
+target none
+covers 1-2
+$ echo one > out.txt
+out 0
+
+status 0
+action none
+$ echo two >> out.txt
+out 0
+
+status 0
+action none
+$ cat out.txt
+out 7
+one
+two
+status 0
+action none
+$ wc -l < out.txt
+out 1
+3
+status 0
+action none
+$ cat < nosuch.txt
+out 47
+Error: Could not find file '<ROOT>/nosuch.txt'.
+status 0
+action none
+$ echo x > /../escape.txt
+out 63
+Error: '/../escape.txt' is outside the project sandbox (<ROOT>)
+status 0
+action none
+$ echo x > Logs
+out 50
+Error: Access to the path '<ROOT>/Logs' is denied.
+status 0
+action none
+$ cat out.txt | grep two
+out 3
+two
+status 0
+action none
+end
+
+case an unterminated double quote waits for more
+target none
+covers 1-2
+$ echo "unterminated
+out 0
+
+status 0 more
+action none
+$ still"
+out 18
+unterminated
+still
+status 0
+action none
+$ echo after
+out 5
+after
+status 0
+action none
+end
+
+case an unterminated single quote waits for more
+target none
+covers 1-2
+$ echo 'single
+out 0
+
+status 0 more
+action none
+$ quote'
+out 12
+single
+quote
+status 0
+action none
+$ echo after
+out 5
+after
+status 0
+action none
+end
+
+case an unterminated substitution
+target none
+covers 1-2
+$ echo $(
+out 0
+
+status 0 more
+action none
+$ echo after
+out 0
+
+status 0 more
+action none
+end
+
+case blank lines, comments and escapes
+target none
+covers 1-2
+$ 
+out 0
+
+status 0
+action none
+$    
+out 0
+
+status 0
+action none
+$ # a comment
+out 0
+
+status 0
+action none
+$ echo a#b
+out 3
+a#b
+status 0
+action none
+$ echo a #b
+out 1
+a
+status 0
+action none
+$ echo "a\"b"
+out 3
+a"b
+status 0
+action none
+$ echo a\ b
+out 3
+a b
+status 0
+action none
+$ echo 'a\b'
+out 3
+a\b
+status 0
+action none
+$ echo `date`
+out 6
+`date`
+status 0
+action none
+$ echo $
+out 1
+$
+status 0
+action none
+$ echo $1
+out 2
+$1
+status 0
+action none
+$ echo ${
+out 0
+
+status 0 more
+action none
+$ echo ${}
+out 0
+
+status 0
+action none
+end
+
+case stray operators
+target none
+covers 1-2
+$ ;
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ |
+out 48
+Syntax error: Expected a command but found Pipe.
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ echo |
+out 0
+
+status 0 more
+action none
+$ echo $?
+out 51
+Syntax error: Expected a command but found Newline.
+status 0
+action none
+$ && echo x
+out 50
+Syntax error: Expected a command but found AndAnd.
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ echo a ||
+out 0
+
+status 0 more
+action none
+$ echo $?
+out 51
+Syntax error: Expected a command but found Newline.
+status 0
+action none
+$ echo a >
+out 0
+
+status 0 more
+action none
+$ echo $?
+out 63
+Syntax error: Expected a filename after a redirection operator.
+status 0
+action none
+$ echo a; ; echo b
+out 3
+a
+b
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+end
+
+case status of failed redirections
+target none
+covers 1-2
+$ cat < nosuch.txt
+out 47
+Error: Could not find file '<ROOT>/nosuch.txt'.
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ echo x > /../escape.txt
+out 63
+Error: '/../escape.txt' is outside the project sandbox (<ROOT>)
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ echo x > Logs
+out 50
+Error: Access to the path '<ROOT>/Logs' is denied.
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ false > out.txt
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ cat out.txt
+out 0
+
+status 0
+action none
+end
+
+case a script's failures and its status
+target none
+covers 1-2
+file fails.sh 6
+false
+
+file loop.sh 15
+source loop.sh
+
+file open.sh 13
+if true
+then
+
+$ source fails.sh
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ source loop.sh
+out 80
+source: too many nested source calls (>20) - probably a self-referential script.
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ source open.sh
+out 62
+source: unexpected end of file - unterminated block in open.sh
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+end
+
+case assignments without export
+target none
+covers 1-2
+$ A=1
+out 0
+
+status 0
+action none
+$ echo [$A]
+out 3
+[1]
+status 0
+action none
+$ A=1 echo x
+out 1
+x
+status 0
+action none
+$ echo [$A]
+out 3
+[1]
+status 0
+action none
+end
+
+case control flow keywords out of place
+target none
+covers 1-2
+$ fi
+out 45
+Unknown command 'fi'. Type 'help' for a list.
+status 1
+action none
+$ done
+out 68
+Unknown command 'done'. Did you mean 'core'? Type 'help' for a list.
+status 1
+action none
+$ then
+out 47
+Unknown command 'then'. Type 'help' for a list.
+status 1
+action none
+$ else
+out 77
+Unknown command 'else'. Did you mean 'false' or 'ls'? Type 'help' for a list.
+status 1
+action none
+$ do
+out 45
+Unknown command 'do'. Type 'help' for a list.
+status 1
+action none
+$ if
+out 0
+
+status 1 more
+action none
+$ echo after
+out 0
+
+status 1 more
+action none
+end
+
+case history expansion
+target none
+covers 1-2
+$ echo first
+out 5
+first
+status 0
+action none
+$ !!
+out 5
+first
+status 0
+action none
+$ !1
+out 5
+first
+status 0
+action none
+$ !99
+out 27
+Error: No history entry 99.
+status 0
+action none
+$ !x
+out 45
+Unknown command '!x'. Type 'help' for a list.
+status 1
+action none
+$ history
+out 58
+1  echo first
+2  echo first
+3  echo first
+4  !x
+5  history
+status 0
+action none
+end
+
+case the aliases resolve case-insensitively
+target fake
+covers 1-2
+$ C
+out 9
+Resuming.
+status 0
+action Resume { }
+$ QUIT
+out 14
+Shutting down.
+status 0
+action Shutdown { }
+$ S
+out 27
+Stepping one instruction...
+status 0
+action Step { }
+$ JOBS
+out 34
+  main       session     (current)
+status 0
+action none
+$ HEXDUMP
+out 22
+xxd: usage: xxd <path>
+status 1
+action none
+end
+
+case a command that throws
+target fake
+covers 1-2
+$ mem RAM zz
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end

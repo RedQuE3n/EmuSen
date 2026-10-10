@@ -1,0 +1,249 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command profile
+usage 1   profile on                    start charging instructions to the innermost routine
+usage 2   profile off                   stop (collected counts stay readable)
+usage 3   profile clear                 zero the counts, stay armed
+usage 4   profile top [<n>]             hottest routines, default 20
+usage 5   profile <cpu> on|off|top ...  same, on another processor - `cpus` lists them
+
+case routines
+target fake
+covers 1-5
+$ profile
+out 35
+Usage: profile on|off|clear|top ...
+status 0
+action none
+$ profile top
+out 39
+Not profiling - run `profile on` first.
+status 0
+action none
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+$ profile top 4
+out 21
+Nothing profiled yet.
+status 0
+action none
+$ profile off
+out 41
+Profiling stopped after 0 instruction(s).
+status 0
+action none
+$ profile clear
+out 16
+Profile cleared.
+status 0
+action none
+$ profile gsu on
+out 76
+gsu does not report a call stack, so it cannot be profiled - see `man cpus`.
+status 1
+action none
+$ profile cop top
+out 76
+gsu does not report a call stack, so it cannot be profiled - see `man cpus`.
+status 1
+action none
+$ profile cpu on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile frob
+out 58
+Unknown 'profile' subcommand 'frob'. Try on/off/clear/top.
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1,5
+$ profile on
+out 65
+This core does not report a call stack, so it cannot be profiled.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ profile gsu on
+out 65
+This core does not report a call stack, so it cannot be profiled.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ profile cop on
+out 45
+This cartridge has no coprocessor to profile.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ profile on
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 1,4
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1,4
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1,4
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1,4
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1,4
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1,4
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1,4
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1,4
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1,4
+$ profile on
+out 35
+Profiling instructions per routine.
+status 0
+action none
+$ profile top
+out 21
+Nothing profiled yet.
+status 0
+action none
+end

@@ -1,0 +1,107 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command writers
+usage 1   writers <addr> [<scanstart> <scanlen>]
+usage 2                                 find instructions statically writing to <addr>,
+usage 3                                 scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)
+
+case static writes on the fake target
+target fake
+covers 1-3
+$ writers
+out 45
+Usage: writers <addr> [<scanstart> <scanlen>]
+status 0
+action none
+$ writers 43
+out 20
+  $008006: STA $0043
+status 0
+action none
+$ writers 42
+out 68
+No statically-resolvable writes to $000042 found in $008000-$00FFFF.
+status 0
+action none
+$ writers 43 8000 3
+out 68
+No statically-resolvable writes to $000043 found in $008000-$008002.
+status 0
+action none
+$ writers 43 8000 9
+out 20
+  $008006: STA $0043
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ writers 43
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 1-3
+$ writers 2100
+out 68
+No statically-resolvable writes to $002100 found in $008000-$00FFFF.
+status 0
+action none
+$ writers 0 0 100
+out 68
+No statically-resolvable writes to $000000 found in $000000-$0000FF.
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1-3
+$ writers 2100
+out 68
+No statically-resolvable writes to $002100 found in $008000-$00FFFF.
+status 0
+action none
+$ writers 0 0 100
+out 68
+No statically-resolvable writes to $000000 found in $000000-$0000FF.
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1-3
+$ writers 2100
+out 68
+No statically-resolvable writes to $002100 found in $008000-$00FFFF.
+status 0
+action none
+$ writers 0 0 100
+out 68
+No statically-resolvable writes to $000000 found in $000000-$0000FF.
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1-3
+$ writers 2100
+out 68
+No statically-resolvable writes to $002100 found in $008000-$00FFFF.
+status 0
+action none
+$ writers 0 0 100
+out 68
+No statically-resolvable writes to $000000 found in $000000-$0000FF.
+status 0
+action none
+end

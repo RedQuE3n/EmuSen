@@ -1,0 +1,139 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command freeze
+usage 1   freeze add <space> <addr> [<value>]  pin <addr>; without <value>, at whatever it holds now
+usage 2   freeze list                          list frozen addresses and how many writes each blocked
+usage 3   freeze remove <id>                   unfreeze one address
+usage 4   freeze clear                         unfreeze everything
+
+case pinned addresses
+target fake
+covers 1-4
+$ freeze
+out 39
+Usage: freeze add|list|remove|clear ...
+status 0
+action none
+$ freeze list
+out 20
+No frozen addresses.
+status 0
+action none
+$ freeze add
+out 42
+Usage: freeze add <space> <addr> [<value>]
+status 0
+action none
+$ freeze add RAM 10
+out 27
+Frozen #1: RAM 0x10 = 0x73.
+status 0
+action none
+$ freeze add RAM 11 7
+out 27
+Frozen #2: RAM 0x11 = 0x07.
+status 0
+action none
+$ freeze add ROM 0
+out 61
+ROM is not writable, so nothing can write to it to be undone.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ freeze add RAM 100
+out 32
+0x100 is outside RAM (0x0-0xFF).
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ freeze add RAM -1 1
+out 64
+Error: String cannot contain a minus sign if the base is not 10.
+status 1
+action none
+$ freeze add NOPE 0
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ freeze list
+out 83
+  #1: RAM 0x10 = 0x73 (0 write(s) undone)
+  #2: RAM 0x11 = 0x07 (0 write(s) undone)
+status 0
+action none
+$ freeze remove
+out 25
+Usage: freeze remove <id>
+status 0
+action none
+$ freeze remove 1
+out 27
+Frozen address #1 released.
+status 0
+action none
+$ freeze remove 1
+out 21
+No frozen address #1.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ freeze clear
+out 30
+1 frozen address(es) released.
+status 0
+action none
+$ freeze list
+out 20
+No frozen addresses.
+status 0
+action none
+$ freeze frob
+out 62
+Unknown 'freeze' subcommand 'frob'. Try add/list/remove/clear.
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ freeze list
+out 44
+This core does not support frozen addresses.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ freeze list
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end

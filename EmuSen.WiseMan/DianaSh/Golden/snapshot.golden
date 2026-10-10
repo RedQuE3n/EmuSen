@@ -1,0 +1,93 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command snapshot
+usage 1   snapshot <space> <name>       capture <space>'s full current contents under <name>
+usage 2   snapshot list                 list saved snapshots (name, space, size)
+usage 3   snapshot remove <name>        delete a saved snapshot
+
+case snapshots of the fake target
+target fake
+covers 1-3
+$ snapshot
+out 71
+Usage: snapshot <space> <name> | snapshot list | snapshot remove <name>
+status 0
+action none
+$ snapshot list
+out 19
+No saved snapshots.
+status 0
+action none
+$ snapshot RAM
+out 30
+Usage: snapshot <space> <name>
+status 0
+action none
+$ snapshot RAM before
+out 40
+Snapshot 'before' saved: RAM, 256 bytes.
+status 0
+action none
+$ snapshot IO io
+out 147
+IO can have real side effects on read (live hardware registers) - refusing a bulk snapshot there. Try WRAM (or another plain-memory space) instead.
+status 0
+action none
+$ snapshot NOPE x
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ snapshot ROM rom
+out 37
+Snapshot 'rom' saved: ROM, 512 bytes.
+status 0
+action none
+$ snapshot list
+out 48
+  before: RAM (256 bytes)
+  rom: ROM (512 bytes)
+status 0
+action none
+$ snapshot remove
+out 29
+Usage: snapshot remove <name>
+status 0
+action none
+$ snapshot remove rom
+out 23
+Snapshot 'rom' removed.
+status 0
+action none
+$ snapshot remove rom
+out 24
+No snapshot named 'rom'.
+status 0
+action none
+$ snapshot RAM before
+out 40
+Snapshot 'before' saved: RAM, 256 bytes.
+status 0
+action none
+$ snapshot list
+out 25
+  before: RAM (256 bytes)
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ snapshot RAM x
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ snapshot list
+out 19
+No saved snapshots.
+status 0
+action none
+end

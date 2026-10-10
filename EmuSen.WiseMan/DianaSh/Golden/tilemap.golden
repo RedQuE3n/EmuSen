@@ -1,0 +1,125 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command tilemap
+usage 1   tilemap <space> <addr> <cols> <rows>
+usage 2                                 decode <cols>x<rows> tilemap entries starting at <addr>
+usage 3                                 as a text grid, one already-formatted label per cell -
+usage 4                                 see IDebugTarget.DecodeTilemapEntry for what a label
+usage 5                                 means on the current core. Caller supplies the exact base
+usage 6                                 address (see BG1SC/etc via `regs`) - this doesn't resolve
+usage 7                                 BG-layer-to-tilemap-address mapping itself.
+
+case a grid of entries
+target fake
+covers 1-7
+$ tilemap
+out 554
+  tilemap <space> <addr> <cols> <rows>
+                                decode <cols>x<rows> tilemap entries starting at <addr>
+                                as a text grid, one already-formatted label per cell -
+                                see IDebugTarget.DecodeTilemapEntry for what a label
+                                means on the current core. Caller supplies the exact base
+                                address (see BG1SC/etc via `regs`) - this doesn't resolve
+                                BG-layer-to-tilemap-address mapping itself.
+status 0
+action none
+$ tilemap VRAM 0
+out 554
+  tilemap <space> <addr> <cols> <rows>
+                                decode <cols>x<rows> tilemap entries starting at <addr>
+                                as a text grid, one already-formatted label per cell -
+                                see IDebugTarget.DecodeTilemapEntry for what a label
+                                means on the current core. Caller supplies the exact base
+                                address (see BG1SC/etc via `regs`) - this doesn't resolve
+                                BG-layer-to-tilemap-address mapping itself.
+status 0
+action none
+$ tilemap VRAM 0 4 2
+out 31
+005 1A7 341 4E3
+685 827 9C1 B63
+status 0
+action none
+$ tilemap VRAM 10 8 3
+out 95
+D05 EA7 041 1E3 385 527 6C1 863
+A05 BA7 D41 EE3 085 227 3C1 563
+705 8A7 A41 BE3 D85 F27 0C1 263
+status 0
+action none
+$ tilemap VRAM 3FC 4 2
+out 31
+CC1 E63 005 1A7
+341 4E3 685 827
+status 0
+action none
+$ tilemap NOPE 0 1 1
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ tilemap VRAM 0 0 0
+out 0
+
+status 0
+action none
+$ tilemap VRAM 0 x 1
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ tilemap VRAM 0 1 1
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case on venus
+target venus
+covers 1
+$ tilemap VRAM 0 4 2
+out 63
+0000... 0000... 0000... 0000...
+0000... 0000... 0000... 0000...
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1
+$ tilemap PPU 0 4 2
+out 100
+Error: No memory space named 'PPU'. Available: RAM, PRGROM, PRGRAM, CHR, CIRAM, OAM, PALETTE, CPUBUS
+status 1
+action none
+end
+
+case on mercury
+target mercury
+covers 1
+$ tilemap VRAM 0 4 2
+out 31
+$00 $00 $00 $00
+$00 $00 $00 $00
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1
+$ tilemap VRAM 0 4 2
+out 7
+   
+   
+status 0
+action none
+end

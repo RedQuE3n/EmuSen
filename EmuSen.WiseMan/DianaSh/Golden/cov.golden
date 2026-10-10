@@ -1,0 +1,460 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command cov
+usage 1   cov on|off                    start/stop recording executed addresses
+usage 2   cov clear                     forget everything recorded so far
+usage 3   cov <addr> [<len>]            report which of <len> bytes from <addr> ever executed
+usage 4                                 (default 16); 0 executed means the code never ran
+usage 5   cov mark                      remember what has run so far, so `cov new` can subtract it
+usage 6   cov new <addr> [<len>]        only what has run SINCE the mark - do the thing, then ask
+usage 7   cov funcs [<count>]           routines discovered by watching calls land, busiest first
+usage 8   cov save|load <file>          persist the map to Logs/<CoreName>/<file> and merge it back
+usage 9   cov <cpu> on|off|clear|<addr> same, on another processor's own instruction stream -
+usage 10                                 `cpus` lists them, and each has its own address space
+
+case on the fake target
+target fake
+covers 1-10
+file Logs/GOLDEN/bad.cov 9
+not a map
+$ cov
+out 71
+Usage: cov [<cpu>] on|off|clear|mark|new|funcs|save|load|<addr> [<len>]
+status 0
+action none
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ cov 8000
+out 62
+Coverage $008000-$00800F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov 8000 4
+out 61
+Coverage $008000-$008003: 0/4 bytes executed
+  Never reached.
+status 0
+action none
+$ cov 8000 0
+out 24
+Length must be positive.
+status 0
+action none
+$ cov mark
+out 90
+Coverage marked at 0 instructions - `cov new <addr>` now reports only what runs from here.
+status 0
+action none
+$ cov new 8000
+out 95
+Coverage $008000-$00800F: 0/16 bytes executed since the mark
+  Nothing new here since the mark.
+status 0
+action none
+$ cov new
+out 29
+Usage: cov new <addr> [<len>]
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov funcs 4
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov off
+out 48
+Coverage recording off, 0 instructions recorded.
+status 0
+action none
+$ cov funcs
+out 59
+No routines discovered (recording is OFF - `cov on` first).
+status 0
+action none
+$ cov save
+out 22
+Usage: cov save <file>
+status 0
+action none
+$ cov save map.cov
+out 64
+Coverage map saved to <ROOT>/Logs/GOLDEN/map.cov (0 routine(s)).
+status 0
+action none
+$ ls Logs/GOLDEN
+out 15
+bad.cov
+map.cov
+status 0
+action none
+$ cov load map.cov
+out 77
+Coverage map merged from <ROOT>/Logs/GOLDEN/map.cov (0 routine(s) known now).
+status 0
+action none
+$ cov load nosuch.cov
+out 49
+No coverage map at <ROOT>/Logs/GOLDEN/nosuch.cov.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ cov load bad.cov
+out 69
+<ROOT>/Logs/GOLDEN/bad.cov is not a coverage map this build can read.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ cov clear
+out 17
+Coverage cleared.
+status 0
+action none
+$ cov gsu on
+out 26
+GSU coverage recording on.
+status 0
+action none
+$ cov gsu 20
+out 66
+GSU coverage $000020-$00002F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov cop off
+out 52
+GSU coverage recording off, 0 instructions recorded.
+status 0
+action none
+$ cov cpu clear
+out 17
+Coverage cleared.
+status 0
+action none
+$ cov gsu
+out 44
+Usage: cov <cpu> on|off|clear|<addr> [<len>]
+status 0
+action none
+$ cov zz
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case new before a mark
+target fake
+covers 6
+$ cov new 8000
+out 66
+Nothing marked yet - run `cov mark`, do the thing, then ask again.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case a bare target
+target bare
+covers 1,9
+$ cov on
+out 44
+GOLDEN target records no execution coverage.
+status 0
+action none
+$ cov gsu on
+out 44
+GOLDEN target records no execution coverage.
+status 0
+action none
+$ cov cop on
+out 57
+This cartridge has no coprocessor to record coverage for.
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ cov on
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case on venus
+target venus
+covers 1,3-4,7
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov 0 10
+out 62
+Coverage $000000-$00000F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov off
+out 48
+Coverage recording off, 0 instructions recorded.
+status 0
+action none
+end
+
+case on venusrt
+target venusrt
+covers 1,3-4,7
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov 0 10
+out 62
+Coverage $000000-$00000F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov off
+out 48
+Coverage recording off, 0 instructions recorded.
+status 0
+action none
+end
+
+case on moon
+target moon
+covers 1,3-4,7
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov 0 10
+out 62
+Coverage $000000-$00000F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov off
+out 48
+Coverage recording off, 0 instructions recorded.
+status 0
+action none
+end
+
+case on moonrt
+target moonrt
+covers 1,3-4,7
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov 0 10
+out 62
+Coverage $000000-$00000F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov off
+out 48
+Coverage recording off, 0 instructions recorded.
+status 0
+action none
+end
+
+case on mercury
+target mercury
+covers 1,3-4,7
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov 0 10
+out 62
+Coverage $000000-$00000F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov off
+out 48
+Coverage recording off, 0 instructions recorded.
+status 0
+action none
+end
+
+case on mercuryrt
+target mercuryrt
+covers 1,3-4,7
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov 0 10
+out 62
+Coverage $000000-$00000F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov off
+out 48
+Coverage recording off, 0 instructions recorded.
+status 0
+action none
+end
+
+case on mars
+target mars
+covers 1,3-4,7
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov 0 10
+out 62
+Coverage $000000-$00000F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov off
+out 48
+Coverage recording off, 0 instructions recorded.
+status 0
+action none
+end
+
+case on marsrt
+target marsrt
+covers 1,3-4,7
+$ cov on
+out 22
+Coverage recording on.
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov 0 10
+out 62
+Coverage $000000-$00000F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov off
+out 48
+Coverage recording off, 0 instructions recorded.
+status 0
+action none
+end
+
+case on nephrite
+target nephrite
+covers 1,3-4,7
+$ cov on
+out 27
+M68K coverage recording on.
+status 0
+action none
+$ cov funcs
+out 77
+No routines discovered yet - nothing has been called since recording started.
+status 0
+action none
+$ cov 0 10
+out 67
+M68K coverage $000000-$00000F: 0/16 bytes executed
+  Never reached.
+status 0
+action none
+$ cov off
+out 53
+M68K coverage recording off, 0 instructions recorded.
+status 0
+action none
+end
+
+case a file name that climbs out of the root
+target fake
+covers 8
+$ cov save ../../../escaped.cov
+out 77
+Coverage map saved to <ROOT>/Logs/GOLDEN/../../../escaped.cov (0 routine(s)).
+status 0
+action none
+$ cov load ../../../escaped.cov
+out 90
+Coverage map merged from <ROOT>/Logs/GOLDEN/../../../escaped.cov (0 routine(s) known now).
+status 0
+action none
+end

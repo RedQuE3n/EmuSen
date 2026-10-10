@@ -1,0 +1,207 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command label
+usage 1   label add <addr> <name> [<comment...>]   name an address
+usage 2   label list [<filter>]                    list labels, address order
+usage 3   label at <addr>                          what is named at (or nearest below) <addr>
+usage 4   label remove <name|addr>                 drop one label
+usage 5   label clear                              drop every label
+usage 6   label load <path>                        merge a label file in
+usage 7   label save <path>                        write every label out
+
+case names for addresses
+target fake
+covers 1-7
+file bad.txt 33
+this is not a label line
+8000 ok
+
+$ label
+out 51
+Usage: label add|list|at|remove|clear|load|save ...
+status 0
+action none
+$ label list
+out 18
+No labels defined.
+status 0
+action none
+$ label add
+out 45
+Usage: label add <addr> <name> [<comment...>]
+status 0
+action none
+$ label add 8000 start
+out 23
+$008000 is now 'start'.
+status 0
+action none
+$ label add 8010 sub the subroutine
+out 21
+$008010 is now 'sub'.
+status 0
+action none
+$ label add 8000 again
+out 23
+$008000 is now 'again'.
+status 0
+action none
+$ label list
+out 49
+  $008000  again
+  $008010  sub  ; the subroutine
+status 0
+action none
+$ label list su
+out 32
+  $008010  sub  ; the subroutine
+status 0
+action none
+$ label list zzz
+out 23
+No label matches 'zzz'.
+status 0
+action none
+$ label at
+out 22
+Usage: label at <addr>
+status 0
+action none
+$ label at 8000
+out 16
+  $008000  again
+status 0
+action none
+$ label at 8012
+out 16
+  $008010  sub+2
+status 0
+action none
+$ label at 10
+out 37
+Nothing labelled at or below $000010.
+status 0
+action none
+$ label remove
+out 31
+Usage: label remove <name|addr>
+status 0
+action none
+$ label remove sub
+out 20
+Label 'sub' removed.
+status 0
+action none
+$ label remove 8000
+out 25
+Label at $008000 removed.
+status 0
+action none
+$ label remove nosuch
+out 24
+No label named 'nosuch'.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ label add 8000 start
+out 23
+$008000 is now 'start'.
+status 0
+action none
+$ label save
+out 24
+Usage: label save <path>
+status 0
+action none
+$ label save labels.txt
+out 33
+1 label(s) written to labels.txt.
+status 0
+action none
+$ cat labels.txt
+out 12
+008000 start
+status 0
+action none
+$ label save /../x
+out 32
+Path outside this sandbox: /../x
+status 1
+action none
+$ label clear
+out 19
+1 label(s) cleared.
+status 0
+action none
+$ label load
+out 24
+Usage: label load <path>
+status 0
+action none
+$ label load labels.txt
+out 34
+1 label(s) loaded from labels.txt.
+status 0
+action none
+$ label load nosuch
+out 20
+No such file: nosuch
+status 1
+action none
+$ label load /../x
+out 32
+Path outside this sandbox: /../x
+status 1
+action none
+$ label load bad.txt
+out 69
+1 label(s) loaded from bad.txt.
+  line 1: 'this' is not a hex address
+status 0
+action none
+$ label frob
+out 74
+Unknown 'label' subcommand 'frob'. Try add/list/at/remove/clear/load/save.
+status 0
+action none
+$ label add zz name
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case a bare target
+target bare
+covers 1
+$ label list
+out 34
+This core does not support labels.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end
+
+case with no target
+target none
+covers 1
+$ label list
+out 58
+No ROM loaded - this command needs an active debug target.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end

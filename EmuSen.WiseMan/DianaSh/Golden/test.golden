@@ -1,0 +1,244 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command test
+usage 1   test EXPR / [ EXPR ]         VALUE (true if non-empty) | -z/-n VALUE | -f/-d PATH | !
+usage 2                                 VALUE = / != / -eq / -ne / -lt / -le / -gt / -ge VALUE
+usage 3                                 exit code only (0 = true) - meant for if/while, not for its own output
+
+case every operator
+target none
+covers 1-3
+file a.txt 1
+x
+$ test
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test x
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ test ''
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test -z ''
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ test -n ''
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test -f a.txt
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ test -d a.txt
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test -d Logs
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ test -f nosuch
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test ! -f nosuch
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ test a = a
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ test a != a
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test 1 -eq 1
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ test 1 -ne 1
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test 1 -lt 2
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ test 2 -le 1
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test 3 -gt 2
+out 0
+
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ test 2 -ge 3
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test x -eq 1
+out 76
+Error: 'x' isn't a number (needed for a -eq/-ne/-lt/-le/-gt/-ge comparison).
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test a b
+out 39
+Error: Unknown unary test operator 'a'.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test a -x b
+out 41
+Error: Unknown binary test operator '-x'.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test a b c d
+out 131
+Error: test/[ only supports: VALUE, OP VALUE, or VALUE OP VALUE - combine multiple conditions with the shell's own && / || instead.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ test -f /../x
+out 0
+
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+end

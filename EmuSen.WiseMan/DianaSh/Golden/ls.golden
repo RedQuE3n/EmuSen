@@ -1,0 +1,113 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command ls
+usage 1   ls [-a] [-l] [path]           list directory entries (default: current directory);
+usage 2                                 -a include dotfiles, -l show type/size/modified-time
+
+case the home and its flags
+target none
+covers 1-2
+file note.txt 6
+hello
+
+file .hidden 2
+h
+
+$ ls
+out 56
+Cheats/
+Firmware/
+Games/
+Logs/
+Saves/
+etc/
+note.txt
+tmp/
+status 0
+action none
+$ ls -a
+out 64
+.hidden
+Cheats/
+Firmware/
+Games/
+Logs/
+Saves/
+etc/
+note.txt
+tmp/
+status 0
+action none
+$ ls /
+out 56
+Cheats/
+Firmware/
+Games/
+Logs/
+Saves/
+etc/
+note.txt
+tmp/
+status 0
+action none
+$ ls Logs
+out 0
+
+status 0
+action none
+$ ls nosuch
+out 37
+ls: no such file or directory: nosuch
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ ls /..
+out 49
+ls: '/..' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ ls note.txt
+out 8
+note.txt
+status 0
+action none
+$ ls -x
+out 33
+ls: no such file or directory: -x
+status 1
+action none
+$ ls /etc
+out 7
+EmuSen/
+status 0
+action none
+end
+
+case the long form prints times
+target none
+covers 1-2
+vary numbers
+file note.txt 6
+hello
+
+$ ls -l
+match 923
+^d\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Cheats\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Firmware\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Games\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Logs\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Saves\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ etc\n-\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ note\.txt\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ tmp$
+status 0
+action none
+$ ls -la
+match 923
+^d\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Cheats\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Firmware\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Games\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Logs\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ Saves\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ etc\n-\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ note\.txt\nd\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ tmp$
+status 0
+action none
+$ ls -al note.txt
+match 119
+^-\ \ \ \ \ \ \ \ \ \ \d+(\.\d+)?\ \d+(\.\d+)?-\d+(\.\d+)?-\d+(\.\d+)?\ \d+(\.\d+)?:\d+(\.\d+)?:\d+(\.\d+)?\ note\.txt$
+status 0
+action none
+end

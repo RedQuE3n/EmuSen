@@ -1,0 +1,114 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command write
+usage 1   write <space> <addr> <value>  write one byte (only if <space> is writable)
+
+case single bytes
+target fake
+covers 1
+$ write
+out 35
+Usage: write <space> <addr> <value>
+status 0
+action none
+$ write RAM 10
+out 35
+Usage: write <space> <addr> <value>
+status 0
+action none
+$ write RAM 10 AB
+out 16
+RAM[0x10] = 0xAB
+status 0
+action none
+$ mem RAM 10 1
+out 82
+RAM @ 0x10 (1 bytes):
+  000010: AB                                               .
+status 0
+action none
+$ write ROM 0 1
+out 17
+ROM is read-only.
+status 0
+action none
+$ write IO 0 1
+out 14
+IO[0x0] = 0x01
+status 0
+action none
+$ write RAM 100 1
+out 17
+RAM[0x100] = 0x01
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ write RAM 10 1FF
+out 16
+RAM[0x10] = 0xFF
+status 0
+action none
+$ mem RAM 10 1
+out 82
+RAM @ 0x10 (1 bytes):
+  000010: FF                                               .
+status 0
+action none
+$ write NOPE 0 0
+out 83
+Error: No memory space named 'NOPE'. Available: RAM, ROM, VRAM, IO, UNSIZED, CpuBus
+status 1
+action none
+$ write RAM zz 0
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+$ write RAM 0 zz
+out 46
+Error: Could not find any recognizable digits.
+status 1
+action none
+end
+
+case with no target
+target none
+covers 1
+$ write RAM 0 0
+out 65
+Error: No ROM loaded - this command needs an active debug target.
+status 1
+action none
+end
+
+case a value wider than a byte, and an address past the end
+target fake
+covers 1
+$ write RAM 10 1234
+out 16
+RAM[0x10] = 0x34
+status 0
+action none
+$ mem RAM 10 1
+out 82
+RAM @ 0x10 (1 bytes):
+  000010: 34                                               4
+status 0
+action none
+$ write RAM FFFF 1
+out 18
+RAM[0xFFFF] = 0x01
+status 0
+action none
+$ mem RAM F0 10
+out 98
+RAM @ 0xF0 (16 bytes):
+  0000F0: 93 9A A1 A8 AF B6 BD C4 CB D2 D9 E0 E7 EE F5 01  ................
+status 0
+action none
+end

@@ -1,0 +1,78 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command core
+usage 1   core <corename> <path>        load or swap the running ROM (validated against the known core registry)
+
+case the registry and its refusals
+target none
+covers 1
+file Games/a.sfc 1
+x
+file Games/a.txt 1
+x
+file Games/noext 1
+x
+$ core
+out 36
+Usage: core <corename> <path-to-rom>
+status 1
+action none
+$ core snes
+out 36
+Usage: core <corename> <path-to-rom>
+status 1
+action none
+$ core a b c
+out 36
+Usage: core <corename> <path-to-rom>
+status 1
+action none
+$ core nosuch x.sfc
+out 91
+core: unknown core 'nosuch'. Supported: gb, gbc, mars, mercury, moon, n64, nes, snes, venus
+status 1
+action none
+$ core SNES Games/a.sfc
+out 40
+[CORE] Loading SNES (Venus): Games/a.sfc
+status 0
+action LoadCore { CoreName = SNES, RomPath = Games/a.sfc }
+$ core SNES Games/x.sfc
+out 32
+core: ROM not found: Games/x.sfc
+status 1
+action none
+$ core SNES Games/a.txt
+out 80
+core: '.txt' is not a supported ROM type for SNES (Venus) - expected: .smc, .sfc
+status 1
+action none
+$ core SNES Games/noext
+out 90
+core: '(no extension)' is not a supported ROM type for SNES (Venus) - expected: .smc, .sfc
+status 1
+action none
+end
+
+case an absolute path outside the home
+target none
+covers 1
+$ core SNES /etc/hostname
+out 90
+core: '(no extension)' is not a supported ROM type for SNES (Venus) - expected: .smc, .sfc
+status 1
+action none
+end
+
+case a relative path that climbs out of the root
+target none
+covers 1
+file ../outside.sfc 1
+x
+$ core SNES ../outside.sfc
+out 43
+[CORE] Loading SNES (Venus): ../outside.sfc
+status 0
+action LoadCore { CoreName = SNES, RomPath = ../outside.sfc }
+end

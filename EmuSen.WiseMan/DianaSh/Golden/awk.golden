@@ -1,0 +1,144 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command awk
+usage 1   awk [-F sep] 'prog' [path]   run a small AWK subset over stdin or <path>, line by line
+usage 2                                 patterns: /regex/, NR==N (also !=,<,<=,>,>=), BEGIN, END
+usage 3                                 actions: {print $0|$N|$NF|NR|NF|"lit"[, ...][; print ...]}
+
+case programs over stdin and files
+target none
+covers 1-3
+file a.txt 18
+a b c
+d e
+b f g h
+
+file c.csv 12
+x,y,z
+1,2,3
+
+$ cat a.txt | awk '{print $1}'
+out 5
+a
+d
+b
+status 0
+action none
+$ cat a.txt | awk '{print $NF}'
+out 5
+c
+e
+h
+status 0
+action none
+$ cat a.txt | awk '{print NR, NF}'
+out 11
+1 3
+2 2
+3 4
+status 0
+action none
+$ awk '/b/' a.txt
+out 13
+a b c
+b f g h
+status 0
+action none
+$ awk 'NR==2' a.txt
+out 3
+d e
+status 0
+action none
+$ awk 'NR>=2 {print $2}' a.txt
+out 3
+e
+f
+status 0
+action none
+$ awk 'BEGIN {print "start"} END {print "end"}' a.txt
+out 9
+start
+end
+status 0
+action none
+$ cat c.csv | awk -F , '{print $2}'
+out 3
+y
+2
+status 0
+action none
+$ cat c.csv | awk -F: '{print $1}'
+out 11
+x,y,z
+1,2,3
+status 0
+action none
+$ awk
+out 41
+awk: usage: awk [-F sep] 'program' [path]
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ awk '{' a.txt
+out 27
+awk: unterminated '{' in: {
+status 1
+action none
+$ awk '' a.txt
+out 18
+awk: empty program
+status 1
+action none
+$ awk '{printf $1}' a.txt
+out 71
+awk: unsupported awk statement: 'printf $1' (only 'print' is supported)
+status 1
+action none
+$ awk '{print $1}' /../x
+out 52
+awk: '/../x' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ awk '{print $1}' nosuch
+out 43
+Error: Could not find file '<ROOT>/nosuch'.
+status 1
+action none
+$ cat a.txt | awk '{print "lit", $0; print $3}'
+out 34
+lit a b c
+c
+lit d e
+
+lit b f g h
+g
+status 0
+action none
+$ awk 'NR!=1' a.txt
+out 11
+d e
+b f g h
+status 0
+action none
+$ awk 'NR<2' a.txt
+out 5
+a b c
+status 0
+action none
+$ awk 'NR<=1' a.txt
+out 5
+a b c
+status 0
+action none
+$ awk 'NR>1' a.txt
+out 11
+d e
+b f g h
+status 0
+action none
+end

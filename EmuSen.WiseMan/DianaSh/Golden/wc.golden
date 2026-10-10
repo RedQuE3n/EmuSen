@@ -1,0 +1,70 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command wc
+usage 1   wc [-l] [-w] [-c] [path]     count lines/words/bytes (all three if no flag given);
+usage 2                                 reads piped stdin, or a real file if <path> is given
+
+case counts
+target none
+covers 1-2
+file a.txt 14
+one two
+three
+
+$ wc a.txt
+out 12
+3 3 14 a.txt
+status 0
+action none
+$ wc -l a.txt
+out 7
+3 a.txt
+status 0
+action none
+$ wc -w a.txt
+out 7
+3 a.txt
+status 0
+action none
+$ wc -c a.txt
+out 8
+14 a.txt
+status 0
+action none
+$ cat a.txt | wc
+out 6
+2 3 13
+status 0
+action none
+$ echo one two | wc -w -l
+out 3
+1 2
+status 0
+action none
+$ wc
+out 5
+0 0 0
+status 0
+action none
+$ wc nosuch
+out 43
+Error: Could not find file '<ROOT>/nosuch'.
+status 1
+action none
+$ wc /../x
+out 51
+wc: '/../x' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ wc -z a.txt
+out 12
+3 3 14 a.txt
+status 0
+action none
+$ echo héllo | wc -c
+out 1
+6
+status 0
+action none
+end

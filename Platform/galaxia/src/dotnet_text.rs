@@ -43,6 +43,16 @@ fn is_low(unit: u16) -> bool {
 /// `StringComparer.OrdinalIgnoreCase.Compare`: UTF-16 code units by their upper case, a surrogate pair as one character by its own, and a pair after any single unit.
 pub fn compare_ignore_case(a: &str, b: &str) -> Ordering {
     let (a, b): (Vec<u16>, Vec<u16>) = (a.encode_utf16().collect(), b.encode_utf16().collect());
+    compare_units(&a, &b)
+}
+
+/// `text.Contains(value, StringComparison.OrdinalIgnoreCase)`: some run of the text's code units equal to the value's by the same rule; an empty value is in every text.
+pub fn contains_ignore_case(text: &str, value: &str) -> bool {
+    let (text, value): (Vec<u16>, Vec<u16>) = (text.encode_utf16().collect(), value.encode_utf16().collect());
+    value.is_empty() || text.windows(value.len()).any(|run| compare_units(run, &value) == Ordering::Equal)
+}
+
+fn compare_units(a: &[u16], b: &[u16]) -> Ordering {
     let length = a.len().min(b.len());
     let mut i = 0;
     while i < length {
@@ -93,6 +103,20 @@ pub fn replace_line_endings(text: &str, with: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_text_holds_another_whatever_its_case() {
+        assert!(contains_ignore_case("AMD Radeon RX 6800 (RADV NAVI21)", "radv"));
+        assert!(contains_ignore_case("AMD Radeon RX 6800 (RADV NAVI21)", "6800"));
+        assert!(contains_ignore_case("llvmpipe (LLVM 20.1, 256 bits)", "LLVMPIPE"));
+        assert!(contains_ignore_case("anything", ""));
+        assert!(contains_ignore_case("", ""));
+        assert!(!contains_ignore_case("", "a"));
+        assert!(!contains_ignore_case("Radeon", "Radeons"));
+        assert!(contains_ignore_case("caf\u{C9}", "\u{E9}"));
+        // The long s is not an s to an ordinal comparison, as it is not to .NET's.
+        assert!(!contains_ignore_case("\u{17F}", "s"));
+    }
 
     #[test]
     fn lower_case_is_one_to_one() {

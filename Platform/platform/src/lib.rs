@@ -12,9 +12,10 @@ pub mod endymion_devices;
 pub mod galaxia;
 pub mod galaxia_config;
 pub mod serenity;
+pub mod serenity_device;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 5;
+pub const ABI_VERSION: u32 = 6;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -28,6 +29,8 @@ pub mod status {
     pub const IO: i32 = -1024;
     /// Text that is not the document it should be: not JSON as .NET reads it, or not what its model allows.
     pub const PARSE: i32 = -1025;
+    /// There is no Vulkan device, or one refused a call.
+    pub const DEVICE: i32 = -1028;
     /// What was asked for does not exist, where that is an answer and not a failure.
     pub const ABSENT: i32 = -1030;
     /// A file or directory that had to exist does not.
@@ -231,6 +234,7 @@ mod tests {
         exported.extend(exports_in(include_str!("endymion.rs")));
         exported.extend(exports_in(include_str!("endymion_devices.rs")));
         exported.extend(exports_in(include_str!("serenity.rs")));
+        exported.extend(exports_in(include_str!("serenity_device.rs")));
         exported.sort();
         let mut declared = declared_in(include_str!("../../include/emusen_platform.h"));
         declared.sort();
@@ -248,6 +252,7 @@ mod tests {
             ("EMUSEN_PLATFORM_NOT_SUPPORTED", status::NOT_SUPPORTED),
             ("EMUSEN_PLATFORM_IO", status::IO),
             ("EMUSEN_PLATFORM_PARSE", status::PARSE),
+            ("EMUSEN_PLATFORM_DEVICE", status::DEVICE),
             ("EMUSEN_PLATFORM_ABSENT", status::ABSENT),
             ("EMUSEN_PLATFORM_NOT_FOUND", status::NOT_FOUND),
             ("EMUSEN_PLATFORM_ACCESS", status::ACCESS),

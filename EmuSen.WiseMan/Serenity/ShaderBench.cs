@@ -275,9 +275,17 @@ namespace EmuSen.WiseMan.Serenity
             private readonly List<(int Submission, long Submitted, long Waited)> _waits = new();
             private readonly Dictionary<(int, int), double> _gpu = new();
             private long _pendingSubmitted;
+            private SlangVulkan? _library;
 
+            // The library's device times itself and its marks are handed on; the C#'s is marked from here.
             public void Attach(SlangVulkan gpu)
             {
+                if (gpu.IsNative)
+                {
+                    _library = gpu;
+                    gpu.SetProbe(true);
+                    return;
+                }
                 _vk = gpu.Vk;
                 _device = gpu.Device;
                 var info = new QueryPoolCreateInfo { SType = StructureType.QueryPoolCreateInfo, QueryType = QueryType.Timestamp, QueryCount = PerSubmission * Submissions };
@@ -287,7 +295,7 @@ namespace EmuSen.WiseMan.Serenity
 
             private static double TimestampPeriod(SlangVulkan gpu)
             {
-                var instance = (Instance)typeof(SlangVulkan).GetField("_instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(gpu)!;
+                Instance instance = gpu.Instance;
                 uint count = 0;
                 gpu.Vk.EnumeratePhysicalDevices(instance, &count, null);
                 var devices = new PhysicalDevice[count];
@@ -326,9 +334,15 @@ namespace EmuSen.WiseMan.Serenity
                 _written.Add((_submission, slot, point));
             }
 
-            public void Phase(int point)
+            public void Phase(int point) => Phase(point, Stopwatch.GetTimestamp());
+
+            public void Gpu(int point, double milliseconds)
             {
-                long now = Stopwatch.GetTimestamp();
+                if (_submission < Submissions) _gpu[(_submission, point)] = milliseconds;
+            }
+
+            public void Phase(int point, long now)
+            {
                 if (point == SlangProbe.Submitted) { _pendingSubmitted = now; return; }
                 if (point == SlangProbe.Waited)
                 {
@@ -404,6 +418,8 @@ namespace EmuSen.WiseMan.Serenity
             {
                 if (_vk is not null && _pool.Handle != 0) _vk.DestroyQueryPool(_device, _pool, null);
                 _vk = null;
+                _library?.SetProbe(false);
+                _library = null;
             }
         }
 

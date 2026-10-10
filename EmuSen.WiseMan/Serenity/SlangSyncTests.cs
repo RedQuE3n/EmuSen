@@ -115,6 +115,7 @@ namespace EmuSen.WiseMan.Serenity
         {
             var info = new BufferCreateInfo { SType = StructureType.BufferCreateInfo, Size = 0, Usage = BufferUsageFlags.TransferSrcBit, SharingMode = SharingMode.Exclusive };
             if (gpu.Vk.CreateBuffer(gpu.Device, &info, null, out Silk.NET.Vulkan.Buffer buffer) == Result.Success) gpu.Vk.DestroyBuffer(gpu.Device, buffer, null);
+            gpu.Heard();
             Assert.Contains(findings, f => f.Contains("VUID-VkBufferCreateInfo-size-00912", StringComparison.Ordinal));
         }
 

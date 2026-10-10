@@ -5,14 +5,16 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# Serenity's slang half without a device: presets, sources, parameters, Shaderc, reflection and the SPIR-V cache. See EmuSen_Serenity.md §7 to §9 and EmuSen_RustPlatform.md §4.3 and §16.
+# Serenity's slang half: presets, sources, parameters, Shaderc, reflection, the SPIR-V cache, the Vulkan device and the chain. See EmuSen_Serenity.md §7 to §10 and EmuSen_RustPlatform.md §4.3, §16 and §17.
 [lib]
 name = "emusen_serenity"
 
 [dependencies]
+# Vulkan's declarations, for the device and the chain; the system's loader is opened through libloading below, so ash brings no loader of its own.
+ash = { version = "0.38", default-features = false, features = ["std", "debug"] }
 # .NET's path and text rules, and the JSON the results cross in.
 emusen-galaxia = { path = "../galaxia" }
-# Shaderc and SQLite, called in the libraries the program ships (§2.8).
+# Shaderc and SQLite, called in the libraries the program ships (§2.8), and Vulkan's loader, which is the system's.
 libloading = "0.9"
 # The cache's keys and each row's digest.
 sha2 = "0.11"

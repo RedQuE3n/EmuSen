@@ -127,10 +127,12 @@ The platform library (`libemusen_platform`), which holds the parts of the platfo
 Rust, links the Rust standard library too and uses these: the MD5 crates for the hash by which a ROM file is recognised
 after a rename (versions pinned on 2026-10-07), `libloading`, with `windows-link` on Windows, to call the SDL3, the
 Shaderc and the SQLite the program ships (pinned on 2026-10-08), and `sha2`, with `cpufeatures` and on some processors
-`libc`, for the keys of the compiled-shader cache (pinned on 2026-10-09):
+`libc`, for the keys of the compiled-shader cache, and `ash`, without its own loader, for Vulkan's declarations (both
+pinned on 2026-10-09):
 
 | Crate | Version | Licence | Copyright or authors |
 |---|---|---|---|
+| [ash](https://github.com/ash-rs/ash) | 0.38.0+1.3.281 | MIT OR Apache-2.0 | Copyright 2016 Maik Klein |
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.12.1 | MIT OR Apache-2.0 | Copyright (c) 2018-2025 The RustCrypto Project Developers |
 | [cfg-if](https://github.com/rust-lang/cfg-if) | 1.0.5 | MIT OR Apache-2.0 | Copyright (c) 2014 Alex Crichton |
 | [const-oid](https://github.com/RustCrypto/formats) | 0.10.2 | Apache-2.0 OR MIT | Copyright (c) 2020-2026 The RustCrypto Project Developers |

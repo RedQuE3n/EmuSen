@@ -24,6 +24,7 @@ namespace EmuSen.Serenity.Slang
         // The library's cache and the clock a test may give it, which the library is told the time by - see EmuSen_RustPlatform.md §16.2.
         private readonly SerenityHandle? _native;
         private Func<long> _clock = () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        internal SerenityHandle? NativeValue => _native;
 
         public string Path { get; }
 

@@ -7,6 +7,10 @@ namespace EmuSen.Serenity.Slang
     {
         void Mark(CommandBuffer commands, int point);
         void Phase(int point);
+
+        // What the library's device timed itself: a phase at a moment on the stopwatch's clock, and a mark in milliseconds from its submission's beginning.
+        void Phase(int point, long at);
+        void Gpu(int point, double milliseconds);
     }
 
     // The one listener, set by a bench and read with a null check at each point - see EmuSen_Serenity.md §8.1.

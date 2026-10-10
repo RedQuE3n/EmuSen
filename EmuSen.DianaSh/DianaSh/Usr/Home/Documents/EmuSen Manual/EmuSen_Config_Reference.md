@@ -37,6 +37,7 @@ Config lives inside DianaSh's own sandbox tree, at `<root>/etc/EmuSen` — reach
   graphics.json           §3.3
   cheats/
     <name>.json           one saved cheat set per file   §3.4
+    <console>/<game>.json a game's own list, kept by a frontend   §3.4b
 ```
 
 `ConfigStore.For(fileName)` resolves the flat files. `ConfigStore.For(category, fileName)` resolves the one-subdirectory-per-category kind, which today means cheats — config there can be many of, named by the player, rather than one well-known file.
@@ -219,6 +220,18 @@ Three behaviours worth stating:
 This is deliberately a *directory setting* rather than a bundled asset. **EmuSen ships no cheat data and redistributes none.** The libretro cheat database is licensed CC BY-SA 4.0, but its own README states the codes were "collected from any available source on the web" — so the grant is only as good as libretro's rights in an aggregated corpus, and the EU sui generis database right applies independently of copyright either way. Indexing a folder the player already has, or downloading one to their machine at their explicit request (`cheat db update`, `Settings > Cheat Database...`), keeps that question off this project entirely. Attribution is shown at the point of download, since it is a licence condition rather than a footnote.
 
 `CheatDatabase` and `CheatDatabaseInstaller` both live in `EmuSen.DianaSh` and are core-agnostic; the installer extracts only `.cht` entries and refuses any archive entry that resolves outside the target directory.
+
+### 3.4b `cheats/<console>/<game>.json` — `GameCheats`
+
+*Added 2026-10-10.* The list a frontend restores when a game starts and keeps when it is left (`EmuSen_Settings_Reference.md` §4.15, §4.15b). `GameCheats.For(console, romPath)` names it: the console as the catalogue gives it (`CoreCatalog.ConsoleForRom`, the same name the library and `Saves/<console>/` use), and the ROM's file name without its extension, both sanitised rather than refused because neither was typed. A console the catalogue does not know falls back to the flat `cheats/<game>.json`.
+
+**Why a folder per console.** Until this date the list was the flat `cheats/<game>.json`, named by the file name alone, so two consoles' games of one name shared a file: a list saved for `Gamma.smc` was restored into `Gamma.nes`, writing SNES addresses into NES memory every frame. This was shown by a test on the code before the change (*measured on 2026-10-10*, an SNES list saved, the NES game started, the list not empty) and is the case `GameCheatListTests.Two_consoles_games_of_one_name_keep_separate_lists` keeps closed. The battery saves made the same move on 2026-09-28 for the same reason (`EmuSen_Galaxia.md` §5).
+
+**Earlier lists are read, never moved.** `Load` takes the console's file when it exists and otherwise the flat file of an earlier build; `Save` always writes the console's file, and the flat file is left exactly as it was. The old ambiguity therefore survives for a flat file until one of the two games saves, and no further: a flat file cannot be assigned to one console by anything in it.
+
+**`SaveIfChanged`**, the write on leaving a game, compares the list with what `Load` returns, both serialised by `ConfigJson.Options`, and writes only on a difference. An empty list where nothing is saved writes nothing, so starting and leaving a game leaves no file behind; an empty list over a saved one is written, because removing every cheat is a change the player meant. It returns null for "nothing to write", which keeps a failed write distinguishable from an unchanged list.
+
+**Scope.** The shell's typed names (`cheat save <name>`, `cheat files`) are unchanged and stay flat; `ListNames` lists only files directly in `cheats/`, so the console folders do not appear among them. `GameCheats` composes `ConfigFile` and `CheatFile`, which already reach the platform library, and its only rule of its own is the naming above; the Rust half of Galaxia has no counterpart yet and is owed one at Galaxia's next step (`EmuSen_RustPlatform.md` §3.9).
 
 ### 3.5 What is deliberately not persisted
 

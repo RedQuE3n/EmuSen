@@ -211,6 +211,7 @@ namespace EmuSen.Mistress.Views
                 _session?.SaveSram();
                 WriteResumeState();
                 RecordPlayTime();
+                KeepCheatList();
                 StopScraping();
                 StopOnlineCovers();
                 CloseRecords();
@@ -547,7 +548,7 @@ namespace EmuSen.Mistress.Views
                 codecs.AutoDetect,
                 codecs.Explicit,
                 RequestCheatApply,
-                () => CheatListName(_cheatsRomPath),
+                () => CheatsFor(_cheatsRomPath),
                 CheatConsole,
                 ShowCheatDatabase),
                 refresh: w => w.Refresh());
@@ -565,22 +566,14 @@ namespace EmuSen.Mistress.Views
             return true;
         }
 
-        // Sanitized rather than validated, because this name is derived and not typed - see §4.15.
-        private static string? CheatListName(string? romPath)
-        {
-            if (string.IsNullOrEmpty(romPath)) return null;
-
-            var name = new string(System.IO.Path.GetFileNameWithoutExtension(romPath)
-                .Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
-            return CheatFile.IsValidName(name) ? name : null;
-        }
+        // In the console's folder, so two consoles' games of one name keep separate lists - see EmuSen_Config_Reference.md §3.4b.
+        private static GameCheats? CheatsFor(string? romPath) =>
+            GameCheats.For(romPath is null ? null : EmuSen.Cores.CoreCatalog.ConsoleForRom(romPath), romPath);
 
         // Whatever was saved for this ROM, brought back; returns how many - see §4.15.
         private int LoadSavedCheatsFor(string path)
         {
-            if (CheatListName(path) is not string name) return 0;
-
-            CheatFile? saved = CheatFile.For(name).Load();
+            CheatFile? saved = CheatsFor(path)?.Load();
             if (saved is null) return 0;
 
             (int loaded, _) = _cheats.LoadFrom(saved);
@@ -869,6 +862,15 @@ namespace EmuSen.Mistress.Views
             SyncMenuState();
         }
 
+        // A list changed since it was saved is written when its game is left, so a change survives without Save - see §4.15b.
+        private void KeepCheatList()
+        {
+            if (CheatsFor(_cheatsRomPath) is not { } target) return;
+            bool? kept = target.SaveIfChanged(_cheats.ToCheatFile());
+            if (kept == true) Console.WriteLine($"[cheats] Kept {_cheats.GetCheats().Count} cheat(s) for {target.Name} in {target.File.Path}");
+            else if (kept == false) ErrorLog.Error("cheats", $"Could not keep the cheat list for {target.Name}", new IOException(target.File.Path));
+        }
+
         // Another game's addresses would quietly poke this one's RAM; a Reset keeps them.
         private int DropCheatsFromAnotherGame(string path)
         {
@@ -908,6 +910,7 @@ namespace EmuSen.Mistress.Views
             {
                 WriteResumeState();
                 RecordPlayTime();
+                KeepCheatList();
             }
             // On the OLD session: StartLogging's own StopLogging would take the new one - see §4.22.
             _session?.FlushVerboseLogs();

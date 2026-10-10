@@ -31,7 +31,7 @@ namespace EmuSen.Mistress.Views
 
         // What this list would be saved as, or null when no game is running
         // to name it after - see §4.15.
-        private readonly Func<string?>? _saveName;
+        private readonly Func<GameCheats?>? _saveTarget;
 
         // Set while Refresh() writes MasterSwitch, so its own change handler
         // does not write the value straight back into the registry.
@@ -159,7 +159,7 @@ namespace EmuSen.Mistress.Views
         private readonly Action? _openDatabase;
 
         public ActiveCheatsWindow(CheatRegistry registry, ICheatCodeCodec? pokeCodec = null, ICheatCodeCodec? patchCodec = null,
-            Func<bool>? applyNow = null, Func<string?>? saveName = null, string? console = null, Action? openDatabase = null)
+            Func<bool>? applyNow = null, Func<GameCheats?>? saveTarget = null, string? console = null, Action? openDatabase = null)
         {
             InitializeComponent();
             if (Content is DockPanel body) EmuSen.LunaP.Controls.MenuLook.WhenApplied(body, () => InLook(body));
@@ -170,7 +170,7 @@ namespace EmuSen.Mistress.Views
             _pokeCodec = pokeCodec;
             _patchCodec = patchCodec;
             _applyNow = applyNow;
-            _saveName = saveName;
+            _saveTarget = saveTarget;
             _console = console;
             BuildConsoleTabs();
             ApplyLiveCodecsToTab();
@@ -320,16 +320,16 @@ namespace EmuSen.Mistress.Views
                 tab.AddButton.IsEnabled = tab.Poke is not null || tab.Patch is not null;
             }
 
-            string? saveName = _saveName?.Invoke();
-            SaveTargetText.Text = saveName is null
+            GameCheats? target = _saveTarget?.Invoke();
+            SaveTargetText.Text = target is null
                 ? "Save names the list after the running game, so start one first. Save As writes anywhere and is never loaded automatically."
-                : $"Save writes '{saveName}', which comes back automatically next time you start it. Save As writes anywhere and is never loaded automatically.";
+                : $"Save writes '{target.Name}', which comes back automatically next time you start it, and is kept up to date when you leave the game. Save As writes anywhere and is never loaded automatically.";
 
             ClearButton.IsEnabled = cheats.Count > 0;
             ApplyButton.IsEnabled = cheats.Count > 0;
-            SaveButton.IsEnabled = cheats.Count > 0 && saveName is not null;
+            SaveButton.IsEnabled = cheats.Count > 0 && target is not null;
             SaveAsButton.IsEnabled = cheats.Count > 0;
-            LoadButton.IsEnabled = saveName is not null && CheatFile.For(saveName).Exists;
+            LoadButton.IsEnabled = target is not null && target.Exists;
             UpdateRemoveButton();
         }
 
@@ -364,46 +364,44 @@ namespace EmuSen.Mistress.Views
         // being told - see §4.15.
         private void OnSaveClick(object? sender, RoutedEventArgs e)
         {
-            if (_saveName?.Invoke() is not string name)
+            if (_saveTarget?.Invoke() is not GameCheats target)
             {
                 StatusText.Text = "Start a game first - a saved cheat list is named after the game it belongs to.";
                 return;
             }
 
-            ConfigFile<CheatFile> file = CheatFile.For(name);
-            if (!file.Save(_registry.ToCheatFile()))
+            if (!target.Save(_registry.ToCheatFile()))
             {
-                StatusText.Text = $"Couldn't write {file.Path}";
+                StatusText.Text = $"Couldn't write {target.File.Path}";
                 return;
             }
 
-            StatusText.Text = $"Saved {_registry.GetCheats().Count} cheat(s) as '{name}' - they come back automatically next time you start it.";
+            StatusText.Text = $"Saved {_registry.GetCheats().Count} cheat(s) as '{target.Name}' - they come back automatically next time you start it.";
             Refresh();
         }
 
         // The counterpart to Save: pulls the running game's saved list back, discarding what is live.
         private void OnLoadClick(object? sender, RoutedEventArgs e)
         {
-            if (_saveName?.Invoke() is not string name)
+            if (_saveTarget?.Invoke() is not GameCheats target)
             {
                 StatusText.Text = "Start a game first - a saved cheat list is named after the game it belongs to.";
                 return;
             }
 
-            ConfigFile<CheatFile> file = CheatFile.For(name);
-            if (file.Load() is not CheatFile loaded)
+            if (target.Load() is not CheatFile loaded)
             {
-                StatusText.Text = file.Exists ? $"Couldn't read {file.Path}" : $"No saved cheat list named '{name}' yet.";
+                StatusText.Text = target.Exists ? $"Couldn't read {target.File.Path}" : $"No saved cheat list named '{target.Name}' yet.";
                 return;
             }
 
-            ReplaceWith(loaded, $"'{name}'");
+            ReplaceWith(loaded, $"'{target.Name}'");
         }
 
         private async void OnSaveAsClick(object? sender, RoutedEventArgs e)
         {
             string? path = await Dialogs.SaveFileAsync(this, "Save cheat list as",
-                (_saveName?.Invoke() ?? "cheats") + ".json", new[] { CheatFileType }, defaultExtension: "json");
+                (_saveTarget?.Invoke()?.Name ?? "cheats") + ".json", new[] { CheatFileType }, defaultExtension: "json");
 
             if (path is null) return;
 

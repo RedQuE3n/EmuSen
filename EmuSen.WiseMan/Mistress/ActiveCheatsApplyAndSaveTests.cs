@@ -43,9 +43,9 @@ namespace EmuSen.WiseMan.Mistress
             return registry;
         }
 
-        private static ActiveCheatsWindow Open(CheatRegistry registry, Func<bool>? applyNow = null, Func<string?>? saveName = null)
+        private static ActiveCheatsWindow Open(CheatRegistry registry, Func<bool>? applyNow = null, Func<GameCheats?>? saveTarget = null)
         {
-            var window = new ActiveCheatsWindow(registry, null, null, applyNow, saveName);
+            var window = new ActiveCheatsWindow(registry, null, null, applyNow, saveTarget);
             window.Show();
             return window;
         }
@@ -65,7 +65,7 @@ namespace EmuSen.WiseMan.Mistress
 
             var live = new CheatRegistry();
             live.AddRamPoke("CpuBus", 0x7E0001, 0x01, "something else");
-            var window = Open(live, saveName: () => "Alpha");
+            var window = Open(live, saveTarget: () => GameCheats.For(null, "Alpha.smc"));
 
             Click(window, "LoadButton");
 
@@ -78,7 +78,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Load_is_off_until_there_is_a_file_to_load() => Session.Dispatch(() =>
         {
-            var window = Open(WithOneCheat(), saveName: () => "NeverSaved");
+            var window = Open(WithOneCheat(), saveTarget: () => GameCheats.For(null, "NeverSaved.smc"));
             Assert.False(window.GetControl<Button>("LoadButton").IsEnabled);
 
             Click(window, "SaveButton");
@@ -201,7 +201,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Save_writes_a_cheat_file_named_after_the_game() => Session.Dispatch(() =>
         {
-            var window = Open(WithOneCheat(), saveName: () => "Alpha");
+            var window = Open(WithOneCheat(), saveTarget: () => GameCheats.For(null, "Alpha.smc"));
 
             Click(window, "SaveButton");
 
@@ -221,7 +221,7 @@ namespace EmuSen.WiseMan.Mistress
             var registry = new CheatRegistry();
             registry.AddRamPoke("CpuBus", 0x7E005E, 0x10, "on one", enabled: true);
             registry.AddRamPoke("CpuBus", 0x7E005F, 0x11, "off one", enabled: false);
-            var window = Open(registry, saveName: () => "Alpha");
+            var window = Open(registry, saveTarget: () => GameCheats.For(null, "Alpha.smc"));
 
             Click(window, "SaveButton");
 
@@ -236,7 +236,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Save_with_no_game_running_says_what_it_needs() => Session.Dispatch(() =>
         {
-            var window = Open(WithOneCheat(), saveName: () => null);
+            var window = Open(WithOneCheat(), saveTarget: () => null);
 
             Click(window, "SaveButton");
 

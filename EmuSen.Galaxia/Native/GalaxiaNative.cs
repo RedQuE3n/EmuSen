@@ -91,20 +91,29 @@ namespace EmuSen.Galaxia.Native
         CheatFile,
     }
 
-    // State 2's choice, made once: the variable 0 is the C#, anything else the library if it loads, else the C# with one message - see EmuSen_RustPlatform.md §13.
-    internal sealed class PlatformSwitch
+    // State 2's choice for one component, made once: the variable 0 is the C#, anything else the library if it loads, else the C# with one message - see EmuSen_RustPlatform.md §13 and §19.
+    public sealed class PlatformSwitch
     {
         private readonly Func<string?> _variable;
         private readonly Func<(bool Available, string Report)> _load;
         private readonly Action<string> _announce;
+        private readonly string _component;
         private readonly object _gate = new();
         private volatile int _chosen;
 
-        public PlatformSwitch(Func<string?> variable, Func<(bool Available, string Report)> load, Action<string> announce)
+        public PlatformSwitch(Func<string?> variable, Func<(bool Available, string Report)> load, Action<string> announce, string component = "Galaxia")
         {
             _variable = variable;
             _load = load;
             _announce = announce;
+            _component = component;
+        }
+
+        // The one line a fallback writes, to the host's sink and to the error log, which is by then on the C#.
+        public static void Announce(string message)
+        {
+            ConfigDiagnostics.Report(message);
+            EmuSen.Galaxia.Library.ErrorLog.Warning("platform", message);
         }
 
         public bool Active => _chosen != 0 ? _chosen == 2 : Choose();
@@ -120,7 +129,7 @@ namespace EmuSen.Galaxia.Native
                 {
                     (bool available, string report) = Load();
                     _chosen = available ? 2 : 1;
-                    if (!available) message = $"{PlatformLibrary.FileName} is not in use ({report}); Galaxia runs on its C# implementation.";
+                    if (!available) message = $"{PlatformLibrary.FileName} is not in use ({report}); {_component} runs on its C# implementation.";
                 }
                 // Decided before it is said, so the log's own question of the switch has its answer.
                 if (message is not null) _announce(message);
@@ -154,12 +163,8 @@ namespace EmuSen.Galaxia.Native
         // State 2: the library unless the variable is 0; a library that is absent or refused leaves the C#, said once - see EmuSen_RustPlatform.md §13.
         public static bool Active => Chosen.Active;
 
-        // The one line a fallback writes, to the host's sink and to the error log, which is by then on the C#.
-        internal static void Announce(string message)
-        {
-            ConfigDiagnostics.Report(message);
-            EmuSen.Galaxia.Library.ErrorLog.Warning("platform", message);
-        }
+        // The one line a fallback writes, as every component's switch writes it.
+        internal static void Announce(string message) => PlatformSwitch.Announce(message);
 
         // The library itself, whichever the switch chose: what a parity test calls.
         public static bool Ready => PlatformLibrary.Available;

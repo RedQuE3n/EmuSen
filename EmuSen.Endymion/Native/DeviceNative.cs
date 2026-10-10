@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 using EmuSen.Galaxia;
+using EmuSen.Galaxia.Native;
 using SDL3;
 
 namespace EmuSen.Endymion.Native
@@ -171,14 +172,14 @@ namespace EmuSen.Endymion.Native
 
         public static string Report => Lent.Value ?? EndymionNative.Report;
 
-        // State 1 for the device half: the switch, and SDL lent; without either the C# runs, and says why when the switch asked.
+        // The device half follows Endymion's switch, and needs SDL lent too; a library that cannot take it leaves the devices on the C#, said once - see EmuSen_RustPlatform.md §19.
         public static bool Active => Chosen.Value;
 
         private static bool Choose()
         {
             if (!EndymionNative.Active) return false;
             if (Ready) return true;
-            ConfigDiagnostics.Report($"{EndymionNative.Variable}=1 was asked for and {Lent.Value}; Endymion's devices run on their C# implementation.");
+            PlatformSwitch.Announce($"{PlatformLibrary.FileName} is not in use for Endymion's devices ({Lent.Value}); they run on their C# implementation.");
             return false;
         }
 

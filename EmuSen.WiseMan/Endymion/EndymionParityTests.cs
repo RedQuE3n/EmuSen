@@ -26,10 +26,11 @@ namespace EmuSen.WiseMan.Endymion
             catch (Exception e) { return $"{e.GetType().Name}: {e.Message}"; }
         }
 
+        // State 2: the library unless the variable is 0, which a run that says which it used must have taken.
         [Fact]
         public void The_switch_is_what_the_variable_says()
         {
-            Assert.Equal(Environment.GetEnvironmentVariable(EndymionNative.Variable) == "1", EndymionNative.Active);
+            Assert.Equal(Environment.GetEnvironmentVariable(EndymionNative.Variable) != "0", EndymionNative.Active);
         }
 
         // A stream of samples as a core makes them: a tone, noise, silence, the extremes and steps between them.

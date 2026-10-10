@@ -5,7 +5,7 @@ and §13.2's items 1 and 2 built: the header, the `core` module with `core_expor
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
 conformance kit's core suite (§21); and MoonRT's and MercuryRT's exports onto v1 beside their pre-stable ones (§22,
 §23). Since then, 2026-10-04: the registration-equivalence test, D1's oracle (§25), and MoonRT's and MercuryRT's
-shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28) and the `view` flag of a space (§29). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28) and the `view` flag of a space (§29). 2026-10-10: §0.2 item 2, §8.1, §8.2 and §15 Q13 revised by `EmuSen_DianaSh.md` §16 Q1: the runtime is a component of its own, and DianaSh a shell that is its client (§17.2 there). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -48,7 +48,10 @@ Each part of the aim becomes a test this specification is judged by:
    a core against it. This replaces exact version matching (`EmuSen_NativeCores.md` §9 Q3).
 2. **DianaSh is the framework's runtime.** Cores sit under the core ABI; DianaSh sits above them and owns discovery,
    sessions, the debugger, cheats, states, settings and input routing; frontends, scripts and the shell are its
-   clients.
+   clients. *Revised 2026-10-10, by decision (`EmuSen_DianaSh.md` §16 Q1, §17.2): the runtime this item describes is kept whole, but it is no longer DianaSh. DianaSh is a
+   standalone shell with no emulator in it, and a client of the runtime through its session service, as the frontends
+   are. The runtime is a component of its own, beneath the shell and beside the cores; its name is not yet given, and is
+   needed by `EmuSen_DianaSh.md` §13.2's step S2.*
 3. **The platform is Unix-like where that fits**, and the specification says where it does not.
 4. **DianaSh stays C# for this version** (`EmuSen_Stack.md` §6 defers its Rust port), and its frontend API is shaped so
    that it can later be offered as a C interface without changing shape (§9).
@@ -1133,6 +1136,9 @@ broker is deferred.
 
 ### 8.1 The role
 
+*Revised 2026-10-10 (`EmuSen_DianaSh.md` §16 Q1, §17.2): what this section says of "DianaSh" holds of the runtime,
+which is no longer the shell; the shell is one of the runtime's clients.*
+
 **Decided 2026-10-01:** DianaSh is the runtime under every client and over every core. A frontend asks DianaSh for a
 session; it never creates a core, holds an `ICore`, or names an engine type. The debugger and the cheats are DianaSh
 services offered the same way for every core that has the capability, and they are reached the same way from the
@@ -1181,7 +1187,11 @@ it is a library that the assembly holding the cores references.
 without a runtime is what DianaSh's own `Program.cs` runs and keeps. So the runtime goes into the DianaSh assembly, in
 a new top-level folder, `Sys/` (§15 Q13), and no assembly is added. The C# cores stay in `EmuSen`, which already
 references DianaSh, and register with the runtime as managed engines (§9.5). The reference graph does not change
-direction.
+direction. *Revised 2026-10-10, by decision (`EmuSen_DianaSh.md` §16 Q1, §17.2): the premise no longer holds, because the shell without a runtime is now a client of its
+own: a standalone shell on Linux, macOS and Windows. So the runtime is an assembly of its own, beneath the shell and
+beside the cores, and not a folder of DianaSh's; the debugger's registries, the cheat engine, `IDebugTarget`, the
+telemetry contracts and the system packs move into it at `EmuSen_DianaSh.md` §13.2's step S2, and the cores and
+Serenity reference it in place of the shell.*
 
 ### 8.3 The "bus": a call surface, an event stream and two hand-offs
 
@@ -1722,7 +1732,9 @@ nothing was changed.
     `DeferredPresentation` defaults to on, a frame late. Decided: the rule covers `accuracy` and `enhancement` only; a
     `latency` setting's default is its author's choice, shown with its cost; MarsRT's default is reviewed at its step 5.
 13. **Q13, the runtime's folder.** `DianaSh/Sys/`, beside `Bin`, `Lib`, `Var`, `Etc` and `Dev`? Decided: yes. `/sys` is
-    where Unix exposes devices and drivers to the system, which is the runtime's subject.
+    where Unix exposes devices and drivers to the system, which is the runtime's subject. *Revised 2026-10-10, by decision (`EmuSen_DianaSh.md` §16 Q1, §17.2): the runtime is
+    not in the shell's tree but in an assembly of its own, whose name and folder are given with Q1 of that page; the
+    system packs now in `DianaSh/Sys/Systems/` move there at its step S2.*
 14. **Q14, where the SNES's new codecs live.** `VenusRT_Plan.md` §9 Q5 put the rewrite in VenusRT's shim. Decided: in
     the SNES's system pack instead, written fresh as decided there, so that any SNES engine has them and the shim is not
     needed at all. `VenusRT_Plan.md` §9 Q5 records the change.

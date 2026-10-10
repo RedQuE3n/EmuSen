@@ -76,6 +76,9 @@ namespace EmuSen.Serenity.Shaders
         // Where white sits on the display when the picture is drawn bright, as a share of its peak - see EmuSen_CRT.md §12.3.
         public const double BrightWhite = 0.6;
 
+        // The most display pixels a triad is drawn across when the mask is kept fine on a large display - see EmuSen_CRT.md §18.
+        public const double FinestTriadPixels = 3;
+
         public static IReadOnlyList<SlangParameter> Parameters { get; } = new SlangParameter[]
         {
             Choice("quality", "Quality", (int)Quality.Balanced, "Performance", "Balanced", "Accurate"),
@@ -89,6 +92,7 @@ namespace EmuSen.Serenity.Shaders
             Choice("gamut", "Display colours", 0, Displays.Select(d => d.Label).ToArray()),
             Choice("mask", "Mask", 0, "The screen's own", "None", "Aperture grille", "Slot mask", "Dot mask"),
             new("maskPitch", "Mask pitch, relative to the screen's", 1f, 0.5f, 3f, 0.05f),
+            Choice("maskLimit", "Mask on a large display", 1, "Enlarged with the picture", "Kept fine"),
             new("maskDepth", "Mask depth", 1f, 0f, 1f, 0.05f),
             new("spotSize", "Beam spot size, relative to the screen's", 1f, 0.5f, 2f, 0.05f),
             new("spotGrowth", "Beam spot growth with brightness", 1f, 0f, 2f, 0.05f),
@@ -729,6 +733,7 @@ uniform float tubeNits;
 uniform float level;
 uniform float subpixels;
 uniform float maskPitch;
+uniform float maskLimit;
 uniform float maskDepth;
 uniform float interlace;
 " + (performance ? "uniform float curvature;\n" : @"uniform shader haze;
@@ -769,6 +774,7 @@ half4 main(float2 coord) {
 
     float3 shift = subpixels < 0.5 ? float3(0.0) : subpixels < 1.5 ? float3(-1.0, 0.0, 1.0) / 3.0 : float3(1.0, 0.0, -1.0) / 3.0;
     float across = " + N(r.Screen.TriadsAcross) + @" * 0.5 / maskPitch;
+    if (maskLimit > 0.5) across = max(across, 0.5 * outputSize.x * pixelScale / max(floor(" + N(FinestTriadPixels) + @" * maskPitch + 0.5), 2.0));
     float2 triad = face * across;
     float2 footprint = grain * across" + (accurate ? "" : " * 0.5") + @";
     float3 cover;

@@ -49,8 +49,8 @@ namespace EmuSen.WiseMan.Serenity
             catch (Exception) { return null; }
         });
 
-        // The Accurate tier at the tube's own brightness, which every case below measures unless it says otherwise.
-        private static readonly (string, float)[] Reference = { ("quality", 2f), ("level", 1f) };
+        // The Accurate tier at the tube's own brightness with the screen's own mask at any size, which every case below measures unless it says otherwise.
+        private static readonly (string, float)[] Reference = { ("quality", 2f), ("level", 1f), ("maskLimit", 0f) };
 
         // Glass, persistence, convergence and curvature off, so a case measures the one thing it turns back on.
         private static readonly (string, float)[] Plain = { ("persistence", 0f), ("glare", 0f), ("convergence", 0f), ("curvature", 0f) };
@@ -247,6 +247,40 @@ namespace EmuSen.WiseMan.Serenity
             double[] stripes = coarse.Across(1, 1060, 40, 1000, 1000 + (int)(period * 20));
             double half = (stripes.Max() + stripes.Min()) / 2;
             Within(0.199, stripes.Count(v => v > half) / (double)stripes.Length, 0.15, "the share of a triad that one colour's stripe is lit for");
+        }, default);
+
+        // Kept fine, a mask the display would draw across more than three pixels a triad is drawn across three, whole, and a finer one is left as it is - see EmuSen_CRT.md §18.
+        [Fact]
+        public Task Kept_fine_a_mask_is_drawn_across_three_whole_pixels_a_triad_on_a_large_display_and_is_the_screen_s_on_a_small_one() => Session.Dispatch(() =>
+        {
+            (string, float)[] set = With(Plain, ("signal", 0f), ("displayNits", 1000f));
+            foreach (var (screen, pitch, pixels) in new[] { (1f, 1f, 3), (2f, 1f, 3), (1f, 1.35f, 4), (1f, 2f, 6) })
+            {
+                if (Draw("SNES", 256, 224, 2880, 2160, Twice(Grey(256, 224, 0.6)), With(set, ("screen", screen), ("maskPitch", pitch), ("maskLimit", 1f))) is not { } picture) return;
+                double[] green = picture.Across(1, 1060, 40, 720, 2160);
+                double mean = green.Average();
+                int crossings = Enumerable.Range(1, green.Length - 1).Count(i => green[i - 1] < mean && green[i] >= mean);
+                Assert.True(Math.Abs(crossings - 1440 / pixels) <= 1, $"screen {screen} at pitch {pitch}: {crossings} triads across 1440 pixels, {1440 / pixels} expected");
+                Assert.Equal(pixels, Period(green, 2, pixels + 2));
+            }
+
+            // The 20-inch set's mask is 2.8 pixels a triad at 1440 across and 1.5 at 773: neither picture changes.
+            foreach (var (width, height) in new[] { (1440, 1080), (773, 580) })
+            {
+                if (Draw("SNES", 256, 224, width, height, Twice(Grey(256, 224, 0.6)), With(set, ("screen", 1f))) is not { } own) return;
+                Crt kept = Draw("SNES", 256, 224, width, height, Twice(Grey(256, 224, 0.6)), With(set, ("screen", 1f), ("maskLimit", 1f)))!;
+                int differing = 0;
+                for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) for (int c = 0; c < 3; c++) if (own.Code(x, y, c) != kept.Code(x, y, c)) differing++;
+                Assert.Equal(0, differing);
+            }
+
+            // Left to enlarge, the same set at 2880 across is 5.6 pixels a triad.
+            if (Draw("SNES", 256, 224, 2880, 2160, Twice(Grey(256, 224, 0.6)), With(set, ("screen", 1f))) is not { } enlarged) return;
+            double[] row = enlarged.Across(1, 1060, 40, 720, 2160);
+            double level = row.Average();
+            Within(CrtFilter.Screens[1].TriadsAcross / 2, Enumerable.Range(1, row.Length - 1).Count(i => row[i - 1] < level && row[i] >= level), 0.02, "the 20-inch set's own triads across half of 2880 pixels");
+
+            Assert.Equal(1f, CrtFilter.Parameters.Single(p => p.Id == "maskLimit").Initial);
         }, default);
 
         // Drawn three times its size so the display resolves it, the slot mask has the photographed one's proportions: slots 0.81 of a triad apart, lit for 0.76 of that, the next triad's half a pitch down.

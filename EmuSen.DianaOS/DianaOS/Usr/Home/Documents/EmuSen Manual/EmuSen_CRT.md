@@ -569,7 +569,7 @@ and the default is §9's question 6.
 ### 5.6 The mask (in the final pass)
 
 **Pitch is physical.** A screen class (§3.8) gives triads across the picture; the picture's width in output
-pixels gives pixels per triad. The same setting is the same television at any window size.
+pixels gives pixels per triad. The same setting is the same television at any window size. *Since 2026-10-10 that holds up to three display pixels a triad and no further, unless the player asks: §18.*
 
 **The pattern is geometry.** An aperture grille is three stripes per triad with a dark guard between them. A
 slot mask is the same, broken by bridges at a vertical pitch, alternate columns offset by half of it. A shadow
@@ -1882,3 +1882,63 @@ of a 60 Hz frame's 16.7 on the M1, which fits and leaves little; Balanced, the d
 **What this says for §12.7's question**, which waits on the handheld's and the laptop's runs: the M1 is the first
 weak device measured, and Balanced fits on it with room. The reductions §12.9 holds back for Performance would be
 argued from a machine on which Performance itself is too much, and this is not one.
+
+## 18. A mask kept fine on a large display (2026-10-10)
+
+**The report.** The tester, playing on a television of 3840 × 2160 (940 mm across by its own account), saw the slot
+mask as a pattern: "blown up on the screen, you can see the slot mask", and asked for it to scale as Mega Bezel's
+does, optimised for 4K.
+
+**Why it was so.** §5 made the pitch physical in one sense only: a screen class has a count of triads across its
+picture, and the picture is that set at whatever size it is drawn. The default set, the 20-inch consumer one, has
+515. Its mask is 2.8 pixels a triad in a 1440-pixel picture (1080p), 3.1 on the handheld's panel, and **5.6 in the
+2880-pixel picture of a 4K display**. On that television the picture is 707 mm across, so a triad is 1.37 mm, where
+the set's own was 0.75. What was drawn was a 20-inch set under a magnifying glass, mask and all, and the count had
+been chosen with 1080p in view (§11.12, decision 3).
+
+**What others do.** The masks of guest's shader, which Mega Bezel uses, are patterns of display pixels, three or four
+to a triad, so a display with more pixels gets a finer mask and none is ever drawn larger than its pattern. That
+has no physical statement behind it, and it gives the result a physical statement would: three pixels a triad is
+0.74 mm on this television, 0.95 on a 55-inch one and 0.83 on a 24-inch monitor at 1080p, which is the range of real
+consumer tubes' pitches (§3.8, 0.6 to 0.9 mm).
+
+**The rule.** A new setting, *Mask on a large display*, with two choices. *Enlarged with the picture* is §5's rule
+alone. **Kept fine**, the default, adds a limit: a triad is never drawn across more than three display pixels
+(`CrtFilter.FinestTriadPixels`). Where the screen's own count already gives three or fewer, on a 1080p display or
+in a window, nothing changes, and a mask too fine for the display still fades as §11.7 has it. Where it would give
+more, the count rises until a triad is three pixels: 960 across a 4K picture in place of 515. Read physically, the
+picture is the chosen set up to the size at which the display can still draw its mask finely, and past that a larger
+set of the same class, its pitch no longer growing with it. *Mask pitch* scales both: the limit is three times the
+pitch, rounded to whole pixels and never under two, so a pitch of 2 gives six.
+
+**Whole pixels.** The limit is a whole number of pixels so that the mask's period is the display's own. Measured on
+a grey field at 3840 × 2160 with the tester's SNES settings (Accurate, slot mask, no curvature), over 72 blocks of
+30 × 135 pixels: the blocks' means vary by 0.40% with the mask enlarged, which is the beat of a 5.59-pixel period
+against the pixels, and by 0.13% kept fine, where the autocorrelation of a row is 1.00 at every third pixel and
+−0.50 between. The field's light is 0.7% higher kept fine and its colour as neutral (red, green and blue within 0.6%
+of each other in both). The slot mask's rows are 0.81 of a triad apart, 2.43 pixels, which is not whole; the figure
+above includes them, and their proportion is the photographed tube's, so it was left.
+
+**Three, and not two or four.** §11.7 measured the modulation a mask keeps against its pixels a triad: 0.91 at 6,
+0.65 at 2.8, 0.41 at 2. Three is the finest at which two thirds survive and the three colours' stripes fall one
+to a pixel column; four would be coarser than a real set's pitch on a 43-inch display. It is a choice within those
+bounds, and *Mask pitch* moves it.
+
+**Why the default.** Up to 1080p the two choices draw the same picture, so the default decides only what a large
+display shows, and there the enlarged mask's pitch is one no tube of that size had. A player who wants the 20-inch
+set as it is, enlarged, chooses so.
+
+**Tests.** `ScreenFilterRenderTests`, on the RX 6800: *Kept fine, a mask is drawn across three whole pixels a triad
+on a large display and is the screen's on a small one*. At 2880 pixels across, the 20-inch slot mask and the 27-inch
+grille are both 480 triads across 1440 pixels with a period of exactly 3; a pitch of 1.35 gives 4 and a pitch of 2
+gives 6; at 1440 and at 773 pixels across the picture is the same, byte for byte, with the limit and without; left
+to enlarge, the 20-inch set at 2880 has its own 515. Every other case of that class draws with the mask enlarged,
+as before, since each measures the screen's own. **Mutants** (3, each caught): the limit never applied; its pixels
+not made whole; the limit applied on a small display too.
+
+**Not done.** The limit counts display pixels and does not know the display's size in millimetres, so on an 85-inch
+4K display the mask is 1.5 mm and on an 8K display it is finer than a consumer tube's; a pitch in millimetres would
+need the display's physical size, which a television reports unreliably. Curvature stretches the face unevenly, so
+with it the period is three pixels at the centre and a little under at the edges; the tester's setting is flat. The
+tester's television has not been looked at with it yet.
+

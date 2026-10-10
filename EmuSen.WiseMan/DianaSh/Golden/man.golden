@@ -3883,7 +3883,7 @@ case the page for core
 target none
 covers 1
 $ man core
-out 1007
+out 1961
 NAME
     core - load or swap the running ROM
 
@@ -3904,9 +3904,25 @@ DESCRIPTION
     FIRST ROM (see EmuSen_Frontend_Driver.md §3), since there's nothing to
     reload yet at that point.
 
+WHERE THE ROM MAY BE
+    <path> is read as every path in this shell is: relative to the
+    current directory, or with a leading '/' from this shell's root, and
+    refused if it lands above the root (see 'man hier'). There is one
+    exception, because a ROM library usually lives outside the root: an
+    absolute path inside the library configured as RomDirectory in
+    Preferences (appsettings.json) is taken as it is. The library is only
+    ever read, and only by 'core'; no other command reaches it. The host
+    is handed the resolved path, so it does not depend on the shell's
+    current directory. Hotaru's launch prompt makes the same checks, and
+    a ROM named on its command line is the launcher's choice, not a path
+    typed here, so it is not checked. Before 2026-10-10 <path> was
+    checked only for existence, so any file of the machine could be
+    named.
+
 EXAMPLES
     core venus game2.smc
-    core snes /path/to/other-game.sfc
+    core snes /Games/other-game.sfc
+    core snes /home/player/Roms/SNES/other-game.sfc   (inside RomDirectory)
 status 0
 action none
 end

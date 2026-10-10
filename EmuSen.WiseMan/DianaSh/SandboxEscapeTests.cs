@@ -59,5 +59,52 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("is outside the project sandbox", Text(steps[0]));
             Assert.DoesNotContain("53 45 43 52", Text(steps[1]));
         }
+
+        [Fact]
+        public void A_rom_outside_the_root_and_the_library_is_refused()
+        {
+            using var runner = new GoldenRunner();
+            var steps = Run(runner, "none", [("../outside.sfc", "x")], "core SNES ../outside.sfc", $"core SNES {Outside(runner, "outside.sfc")}");
+            foreach (GoldenStep step in steps)
+            {
+                Assert.Equal(1, step.Status);
+                Assert.Equal("none", step.Action);
+            }
+        }
+
+        [Fact]
+        public void A_rom_in_the_root_reaches_the_host_as_its_resolved_path()
+        {
+            using var runner = new GoldenRunner();
+            var steps = Run(runner, "none", [("Games/a.sfc", "x")], "cd Logs", "core SNES ../Games/a.sfc", "core SNES /Games/a.sfc");
+            Assert.Equal("LoadCore { CoreName = SNES, RomPath = <ROOT>/Games/a.sfc }", steps[1].Action);
+            Assert.Equal("LoadCore { CoreName = SNES, RomPath = <ROOT>/Games/a.sfc }", steps[2].Action);
+        }
+
+        [Fact]
+        public void A_rom_in_the_configured_library_is_loaded_from_there()
+        {
+            using var runner = new GoldenRunner();
+            string library = Outside(runner, "library");
+            string settings = $"{{\"RomDirectory\": \"{library}\"}}";
+            var steps = Run(runner, "none", [("etc/EmuSen/appsettings.json", settings), ("../library/game.sfc", "x")],
+                $"core SNES {library}/game.sfc", $"core SNES {library}/../outside.sfc");
+            Assert.Equal(0, steps[0].Status);
+            Assert.Equal($"LoadCore {{ CoreName = SNES, RomPath = {library.Replace(Path.GetFullPath(Path.Combine(runner.Home, "..")), "<TEMP>")}/game.sfc }}", steps[0].Action);
+            Assert.Equal(1, steps[1].Status);
+        }
+
+        [Fact]
+        public void Hotarus_launch_prompt_refuses_a_rom_outside_the_root_and_resolves_one_inside()
+        {
+            using var runner = new GoldenRunner();
+            Run(runner, "none", [("../outside.sfc", "x"), ("Games/a.sfc", "x")]);
+            var said = new List<string>();
+            Assert.Null(EmuSen.Hotaru.Program.TryResolveCoreCommand("core snes ../outside.sfc", said.Add));
+            Assert.Null(EmuSen.Hotaru.Program.TryResolveCoreCommand($"core snes {Outside(runner, "outside.sfc")}", said.Add));
+            Assert.Contains("is outside the project sandbox", said[0]);
+            Assert.Contains("ROM not found", said[1]);
+            Assert.Equal(Path.Combine(runner.Home, "Games", "a.sfc"), EmuSen.Hotaru.Program.TryResolveCoreCommand("core snes Games/a.sfc", said.Add));
+        }
     }
 }

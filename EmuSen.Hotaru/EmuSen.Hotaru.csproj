@@ -36,6 +36,11 @@
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 
+  <!-- WiseMan checks the launch prompt's `core` through it - see `man core`. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="EmuSen.WiseMan" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- The emulation core (Cores/Nintendo/Venus - SNES/*, Common/, Debug/,
          Settings/) - EmuSen.csproj is a pure library, no Main/window

@@ -326,26 +326,13 @@ namespace EmuSen.Hotaru
             string coreName = parts[1];
             string romPath = parts[2];
 
-            if (!_coreRegistry.TryGetValue(coreName, out EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.CoreDescriptor? descriptor))
+            if (EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.CoreCommand.Refusal(_coreRegistry, coreName, romPath, out string resolved) is { } refused)
             {
-                report($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(_coreRegistry.Keys, StringComparer.OrdinalIgnoreCase))}");
+                report(refused.Output);
                 return null;
             }
 
-            if (!File.Exists(romPath))
-            {
-                report($"core: ROM not found: {romPath}");
-                return null;
-            }
-
-            string extension = Path.GetExtension(romPath);
-            if (!descriptor.SupportsExtension(extension))
-            {
-                report($"core: '{(extension.Length > 0 ? extension : "(no extension)")}' is not a supported ROM type for {descriptor.DisplayName} - expected: {string.Join(", ", descriptor.Extensions)}");
-                return null;
-            }
-
-            return romPath;
+            return resolved;
         }
     }
 }

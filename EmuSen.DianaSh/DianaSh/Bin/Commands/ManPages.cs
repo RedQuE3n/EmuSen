@@ -2185,9 +2185,24 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    has a separate, simpler 'core' handler of its own for resolving the\n" +
                 "    FIRST ROM (see EmuSen_Frontend_Driver.md §3), since there's nothing to\n" +
                 "    reload yet at that point.\n\n" +
+                "WHERE THE ROM MAY BE\n" +
+                "    <path> is read as every path in this shell is: relative to the\n" +
+                "    current directory, or with a leading '/' from this shell's root, and\n" +
+                "    refused if it lands above the root (see 'man hier'). There is one\n" +
+                "    exception, because a ROM library usually lives outside the root: an\n" +
+                "    absolute path inside the library configured as RomDirectory in\n" +
+                "    Preferences (appsettings.json) is taken as it is. The library is only\n" +
+                "    ever read, and only by 'core'; no other command reaches it. The host\n" +
+                "    is handed the resolved path, so it does not depend on the shell's\n" +
+                "    current directory. Hotaru's launch prompt makes the same checks, and\n" +
+                "    a ROM named on its command line is the launcher's choice, not a path\n" +
+                "    typed here, so it is not checked. Before 2026-10-10 <path> was\n" +
+                "    checked only for existence, so any file of the machine could be\n" +
+                "    named.\n\n" +
                 "EXAMPLES\n" +
                 "    core venus game2.smc\n" +
-                "    core snes /path/to/other-game.sfc",
+                "    core snes /Games/other-game.sfc\n" +
+                "    core snes /home/player/Roms/SNES/other-game.sfc   (inside RomDirectory)",
 
             ["tmux"] =
                 "NAME\n" +

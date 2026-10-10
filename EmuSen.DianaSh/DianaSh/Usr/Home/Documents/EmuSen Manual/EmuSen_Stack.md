@@ -169,14 +169,13 @@ interface. C# would then leave the tree.
   ARM machines, which matters for a single-board-computer appliance.
 - A user interface in another toolkit can bind to it directly, instead of through a bridge into a managed runtime.
 
-**The user interface,** to be chosen by prototype and not argued in advance. Two candidates:
-- **Qt with QML through cxx-qt,** a maintained Rust–Qt bridge. Its strengths are native Wayland, a mature kiosk
-  backend (EGLFS), and the platform look and accessibility.
-- **Slint,** a Rust-native toolkit built for embedded and kiosk use, which draws through DRM/KMS with no desktop.
-
-The test of the choice is one Big Picture screen built in each, measured on the desktop and on a small ARM board. Qt
-through C# was considered and set aside: its .NET bindings (Qml.Net, QtSharp) are unmaintained, so a Qt interface
-implies a non-C# frontend in any case.
+**The user interface** *(revised 2026-10-10)*: LunaP becomes a toolkit of its own in Rust, multi-platform (Linux,
+Windows, macOS, then Android and iOS), modular and Unix-like, drawing through Vulkan alone with KosmicKrisp on macOS,
+and later the base of a compositor, an operating system and a desktop. **`EmuSen_LunaP_Kit.md` is the plan**: its
+crates, its gates (K1 proves each platform and driver assumption; K2 builds one Big Picture screen on LunaP's prototype
+core and on Slint and decides by measurement), the frontends' move against a recorded specification, and the OS. The
+two candidates this paragraph named on 2026-10-01, Qt through cxx-qt and Slint, are weighed there with iced, libcosmic,
+Xilem and Makepad (§1, §3.1): Slint remains K2's measured fallback, and Qt a supplement of last resort.
 
 **What it costs, measured 2026-10-01.**
 
@@ -195,8 +194,8 @@ The rest of WiseMan's suite would need a Rust home too. This is a platform rewri
 2. The stable core API lands.
 3. DianaSh is ported to Rust as the headless runtime. Its first client is the conformance kit, and Mistress keeps
    working by calling it through its C interface.
-4. The interface toolkit is chosen by prototype.
-5. The user interface is ported, and C# and LunaP are retired. Tests move piece by piece, with WiseMan kept until
+4. The interface toolkit is built and gated as `EmuSen_LunaP_Kit.md` §9 orders it (K0 to K5 may start before step 3).
+5. The user interface is moved onto it, screen by screen against a recorded specification, and C#, LunaP's C# and Avalonia are retired (`EmuSen_LunaP_Kit.md` §7, K6 to K9). Tests move piece by piece, with WiseMan kept until
    each piece reaches parity.
 
 *Begun 2026-10-07, by decision: the tester chose to start with the platform pieces outside DianaSh: Galaxia, then Endymion, then Serenity's Vulkan and shader-cache half, one at a time, each behind a C interface the C# frontends call, with Cauldron folded into DianaSh rather than ported and DianaSh itself after them. The design is `EmuSen_RustPlatform.md`. The work comes before step 3 without waiting for step 1 to finish; steps 3 to 5 keep their order, and the user-interface toolkit is still deferred to step 4. §2.1's paragraph on `AudioPlayer.cs` is re-examined in §4.2 of that page.*

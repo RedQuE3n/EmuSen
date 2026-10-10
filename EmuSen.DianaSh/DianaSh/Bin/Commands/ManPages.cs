@@ -712,6 +712,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    The file is a fixed header, the routine table, then the raw bitmap.\n" +
                 "    It is keyed to nothing - loading a map taken from a different ROM will\n" +
                 "    quietly merge nonsense, so keep the filename tied to the game.\n\n" +
+                "    The name is resolved as 'dump' and 'load' resolve theirs: from\n" +
+                "    Logs/<CoreName>/, or from the root with a leading '/', and refused if\n" +
+                "    it lands above the root - see 'man dump'.\n\n" +
                 "OTHER PROCESSORS\n" +
                 "    A scope word records another chip's instruction stream instead - see\n" +
                 "    'man cpus' for the names. Each chip gets its own bitmap, because each\n" +
@@ -1042,8 +1045,16 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    metadata, so a hex editor can open the result directly. The write-side\n" +
                 "    counterpart is 'load'. Same live-hardware-space refusal as\n" +
                 "    'search'/'snapshot'.\n\n" +
+                "    The file name is taken from home/Logs/<CoreName>/: a bare name or one\n" +
+                "    with '../' in it is resolved from there, one with a leading '/' from\n" +
+                "    this shell's root, as every other command reads a path (see 'man\n" +
+                "    hier'). A name that lands above the root is refused, so '../../../x'\n" +
+                "    and an absolute path of the machine cannot write or read outside it.\n" +
+                "    Before 2026-10-10 the name was joined to the folder unchecked, and\n" +
+                "    both did.\n\n" +
                 "EXAMPLES\n" +
-                "    dump WRAM 0 2000 wram.bin",
+                "    dump WRAM 0 2000 wram.bin\n" +
+                "    dump WRAM 0 2000 /tmp/wram.bin",
 
             ["load"] =
                 "NAME\n" +
@@ -1055,8 +1066,16 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    one 'dump' produced, or hand-edited afterward) and pokes its raw bytes\n" +
                 "    into <space> starting at\n" +
                 "    <addr>. Refuses if <space> isn't writable.\n\n" +
+                "    The file name is taken from home/Logs/<CoreName>/: a bare name or one\n" +
+                "    with '../' in it is resolved from there, one with a leading '/' from\n" +
+                "    this shell's root, as every other command reads a path (see 'man\n" +
+                "    hier'). A name that lands above the root is refused, so '../../../x'\n" +
+                "    and an absolute path of the machine cannot write or read outside it.\n" +
+                "    Before 2026-10-10 the name was joined to the folder unchecked, and\n" +
+                "    both did.\n\n" +
                 "EXAMPLES\n" +
-                "    load WRAM 0 wram.bin",
+                "    load WRAM 0 wram.bin\n" +
+                "    load WRAM 0 /tmp/wram.bin",
 
             ["tile"] =
                 "NAME\n" +

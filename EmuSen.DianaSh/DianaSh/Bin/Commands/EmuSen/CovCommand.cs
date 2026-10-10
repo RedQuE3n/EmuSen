@@ -86,9 +86,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
                 case "load":
                 {
                     if (parts.Length <= at + 1) return $"Usage: cov {sub} <file>";
-                    string dir = Path.Combine(DianaShSandbox.LogsDirectory, target.CoreName);
-                    Directory.CreateDirectory(dir);
-                    string path = Path.Combine(dir, parts[at + 1]);
+                    if (!DianaShSandbox.TryResolveFrom(Path.Combine(DianaShSandbox.LogsDirectory, target.CoreName), parts[at + 1], out string path))
+                        return DianaShResult.Fail($"cov: '{parts[at + 1]}' is outside the project sandbox ({DianaShSandbox.RootDirectory})");
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
                     if (sub == "save")
                     {

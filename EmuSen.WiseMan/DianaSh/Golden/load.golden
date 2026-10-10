@@ -59,8 +59,8 @@ RAM @ 0xF0 (16 bytes):
 status 0
 action none
 $ load RAM 0 ../../top.bin
-out 78
-Loaded 4 bytes from <ROOT>/Logs/GOLDEN/../../top.bin into RAM starting at 0x0.
+out 60
+Loaded 4 bytes from <ROOT>/top.bin into RAM starting at 0x0.
 status 0
 action none
 $ mem RAM 0 4
@@ -78,5 +78,28 @@ $ load RAM 0 x.bin
 out 65
 Error: No ROM loaded - this command needs an active debug target.
 status 1
+action none
+end
+
+case a file name that climbs out of the root
+target fake
+covers 1
+file ../outside.bin 4
+OUT!
+$ load RAM 0 ../../../outside.bin
+out 68
+load: '../../../outside.bin' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ load RAM 0 /Logs/GOLDEN/../../../outside.bin
+out 81
+load: '/Logs/GOLDEN/../../../outside.bin' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ mem RAM 0 4
+out 84
+RAM @ 0x0 (4 bytes):
+  000000: 03 0A 11 18                                      ....
+status 0
 action none
 end

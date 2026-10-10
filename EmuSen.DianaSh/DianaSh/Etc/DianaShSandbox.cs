@@ -97,6 +97,14 @@ namespace EmuSen.DianaSh.DianaSh.Etc
             return IsInsideRoot(candidate, root);
         }
 
+        // A bare name is taken from baseDirectory, a rooted one as TryResolve takes it - see `man hier`.
+        public static bool TryResolveFrom(string baseDirectory, string requestedPath, out string resolvedPath)
+        {
+            if (requestedPath.Length > 0 && (requestedPath[0] == '/' || requestedPath[0] == '\\')) return TryResolve(requestedPath, out resolvedPath);
+            resolvedPath = Path.GetFullPath(requestedPath, baseDirectory);
+            return IsInsideRoot(resolvedPath, RootDirectory);
+        }
+
         private static bool IsInsideRoot(string candidate, string root) =>
             candidate.Equals(root, StringComparison.OrdinalIgnoreCase)
                 || candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);

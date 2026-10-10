@@ -28,6 +28,7 @@ tester. §12 lists the sources.
 4. **Vulkan is the one render target**, with KosmicKrisp as the solution on macOS.
 5. **The long road** is a retro gaming operating system: a Linux kernel and the libraries it needs, with EmuSen as
    its session.
+6. **Accurate HDR is a requirement of the kit's presenter from the start**, not a later addition (§5.4).
 
 ### 0.2 The plan in one paragraph
 
@@ -281,8 +282,8 @@ The same as `EmuSen_DianaSh.md` §2 and `EmuSen_Surfaces.md` §6, one level up:
 | `lunap-platform-kms` | one surface on a connector, mode setting, libinput, VT switching, hot-plug | wgpu's DRM surface; libinput; seatd | the suite, on the handheld and a board outside any compositor |
 | `lunap-platform-wayland` | layer-shell surfaces (panels, docks, lock screens) | smithay-client-toolkit | the suite, under cosmic-comp and niri |
 | `lunap-input` | one event model; the gamepad as a first-class device with EmuSen's canonical buttons | SDL3 | golden event logs |
-| `lunap-gpu` | one Vulkan device; importing a device another component made, or lending its own (§5.2); present and pacing | wgpu (Vulkan only), wgpu-hal, ash | device tests on each driver (§5.3) |
-| `lunap-paint` | the vector scene, images, clips, effects (tint, saturation, gradient, corner radius) | vello_gpu; vello_cpu | golden pictures per driver, with tolerances stated per test |
+| `lunap-gpu` | one Vulkan device; importing a device another component made, or lending its own (§5.2); present and pacing; the output's colour space, HDR metadata and the final encoding (§5.4) | wgpu (Vulkan only), wgpu-hal, ash | device tests on each driver (§5.3); PQ codes read back (§5.4) |
+| `lunap-paint` | the vector scene, images, clips, effects (tint, saturation, gradient, corner radius), composited in half-float linear light | vello_gpu; vello_cpu | golden pictures per driver, with tolerances stated per test |
 | `lunap-text` | shaping, layout, bidi, fallback per platform, editing, composition | chosen in K1 between cosmic-text and Parley | ES-DE's text captures, to 1 to 2 px |
 | `lunap-layout` | flex and grid for application screens; fractional placement for ES-DE scenes | Taffy | layout dumps against today's (§7.3) |
 | `lunap-media` | decoding and caching; static SVG; Lottie; video into a GPU image | image, usvg, velato, ffmpeg-next | decode tests; ES-DE comparisons |
@@ -354,6 +355,53 @@ queue submissions are synchronised by the application **[S]**.
 - **Pacing is the kit's job, not the frontend's**: one clock per surface, from the present timings the driver reports
   (present wait), so EmuSen's "sync to display" (`EmuSen/Common/FrameScheduler.cs`) reads it instead of inferring it.
 - **No GPU**: lavapipe, Mesa's Vulkan on the CPU, so a machine without one still runs the same code path.
+
+### 5.4 HDR, accurately
+
+**What accurate means for a console that output SDR.** No retro console made an HDR signal, so the kit does not
+invent highlights. Accuracy is two things: an SDR picture shown on an HDR display exactly as it is meant to look, its
+white at a stated reference level and nothing crushed or clipped; and, for EmuSen's CRT filter, the headroom a real
+tube had. A tube's phosphors were bright where the beam struck and dark between the mask's stripes; on an SDR display
+the filter must trade the mask's depth against the picture's brightness (`EmuSen_CRT.md` §12.3), and an HDR display
+removes the trade. The filter already computes in absolute light, from its tube's white and the display's brightness
+in cd/m², so its arithmetic needs no change, only its output's encoding.
+
+**The presenter's part.** `lunap-gpu` owns the output's colour:
+
+- **A swapchain in the display's colour space**: HDR10 (`VK_COLOR_SPACE_HDR10_ST2084_EXT`, a 10-bit or half-float image,
+  PQ-encoded, BT.2020 primaries) or extended linear sRGB (scRGB, half-float) where a platform prefers it, through
+  `VK_EXT_swapchain_colorspace`; the content's mastering levels through `VK_EXT_hdr_metadata`; plain sRGB otherwise.
+  A surface's colour space is chosen per output and can change when a window moves between displays.
+- **Composition in linear light, in absolute units**: `lunap-paint` composites in half-float linear light; SDR content,
+  the interface included, is placed at a reference white (§11 Q13), and the CRT filter's output at the luminance it
+  computed. The encoding to PQ, scRGB or sRGB happens once, at the end, in `lunap-gpu`.
+- **The display's capability**: its peak and its frame-average limit, read from what the platform reports (the EDID's
+  HDR static metadata on Linux, the operating system's figures elsewhere) and overridable by a calibration screen
+  of the kit's own, since televisions often misreport. Tone mapping above the peak is the kit's, stated and tested, not
+  left to the display.
+- **Gamut**: BT.2020 output lets a picture show colours sRGB cannot hold. The CRT filter's phosphor primaries are then
+  shown as measured, rather than clipped to sRGB as now (`EmuSen_CRT.md` §11.8).
+
+**Its clients.** The CRT filter encodes absolute light, its "Display brightness" setting becoming the measured or
+calibrated peak; the RetroArch runtime's HDR presets and options (peak, paper white, gamut expansion) are passed
+through; the game's picture under no filter is SDR at the reference white.
+
+**Platforms** **[A]**, each to be confirmed by K1 (g):
+
+| Platform | Route | Open |
+|---|---|---|
+| Linux, Wayland | the Wayland colour-management protocol, through Mesa's Vulkan WSI, on a compositor that implements it (KDE Plasma, GNOME, recent versions) | which compositors and drivers expose HDR10 to a Vulkan client |
+| Linux, gamescope | gamescope's HDR, which needs its WSI layer in the client | whether the handheld's gamescope outputs HDR to the television |
+| Linux, KMS and `lunap-comp` | the kit sets the connector's HDR metadata and colour space itself | the kernel's per-driver properties |
+| Linux, X11 | none | — |
+| Windows | HDR10 or scRGB swapchains | none expected |
+| macOS | EDR through Metal | whether KosmicKrisp exposes an HDR colour space at all |
+| Android, iOS | device-dependent | per device |
+
+**How it is held.** Tests read the swapchain's image back and compare its codes with the PQ encoding of what the model
+computed, to the code value; the tone mapping and the reference white have tests of their own. Whether a display
+then shows those codes faithfully cannot be tested from inside the program: it needs a colorimeter on the display
+(§11 Q14).
 
 ---
 
@@ -465,9 +513,9 @@ No step leaves EmuSen without a working frontend: the C# one runs until K9.
 | Step | What | Gate |
 |---|---|---|
 | **K0** | Record the interface's specification of §7.3 from today's Mistress, in WiseMan | it covers the 43 states at both sizes and every Big Picture view; two recordings identical |
-| **K1** | Prove the assumptions, each a small throwaway program, measured: (a) wgpu on KosmicKrisp on the Mac mini, and on MoltenVK; (b) one Vulkan device shared between wgpu and an ash program; (c) a window, text and a gamepad on an Android phone; (d) the same on an iPhone or iPad through MoltenVK; (e) `lunap-platform-kms` on the handheld outside gamescope; (f) cosmic-text against Parley on ES-DE's text captures | each answered yes or no with its numbers; a no reshapes §5 or §11 before anything is built |
+| **K1** | Prove the assumptions, each a small throwaway program, measured: (a) wgpu on KosmicKrisp on the Mac mini, and on MoltenVK; (b) one Vulkan device shared between wgpu and an ash program; (c) a window, text and a gamepad on an Android phone; (d) the same on an iPhone or iPad through MoltenVK; (e) `lunap-platform-kms` on the handheld outside gamescope; (f) cosmic-text against Parley on ES-DE's text captures; (g) which HDR colour spaces each platform offers a Vulkan client (§5.4), on the television the handheld is docked to, under KDE or GNOME on the desktop, and on the Mac | each answered yes or no with its numbers; a no reshapes §5 or §11 before anything is built |
 | **K2** | The toolkit gate: one Big Picture screen (the system carousel and a gamelist) built twice, on a prototype of LunaP's core and on Slint, and measured on the desktop, the handheld, the laptop and an ARM board | frame time, memory, binary size, agreement with ES-DE's captures, the pad walk, effort per screen; the tester decides between them on the table (§11 Q1) |
-| **K3** | The foundation crates and `lunap-test` | each crate's own tests; the backend conformance suite on Linux, Windows and macOS |
+| **K3** | The foundation crates and `lunap-test`, with HDR output in `lunap-gpu` from the first swapchain | each crate's own tests; the backend conformance suite on Linux, Windows and macOS; PQ codes read back to the code value |
 | **K4** | `lunap-core`, `lunap-focus`, `lunap-a11y`, `lunap-theme`, and the widgets in order of use (the fluent builders, field rows, actions, pad glyph buttons, menu rows, sheets, dropdowns, switches, tabs, then the table and tiles) | each widget's ported assertions; the fit rules and the pad walk over the kit's own gallery |
 | **K5** | `lunap-esde`: the loader and catalogue ported, the renderer on the kit, then video and Lottie | today's ES-DE comparisons, to today's tolerances |
 | **K6** | The Rust frontend's Big Picture, on Crystal's frontend API (needs P1) | its recorded states pass; the tester plays it on the handheld |
@@ -494,6 +542,7 @@ K0 to K5 can start now and run beside the rest of EmuSen's plan; K6 waits for Cr
 | **R7** | Churn: wgpu quarterly, winit 0.31 in beta for eleven months, Smithay unreleased since 2025-06, ash unreleased since 2024 | each named by one crate only (`lunap-gpu`, the winit backend, `lunap-comp`), so a break touches one crate |
 | **R8** | ES-DE fidelity, already the hardest part of Big Picture, must be reached again on a new rasteriser | K5 against the same captures; the tolerance is today's, not a looser one |
 | **R9** | Size: this is the largest effort in EmuSen's plan | the gates; K0 to K2 decide before the large spending begins |
+| **R10** | HDR depends on what each compositor and driver offers a Vulkan client, and displays misreport their peak | K1 (g); the calibration screen; tone mapping that is the kit's own |
 
 ---
 
@@ -515,6 +564,8 @@ Each with a recommendation.
 | **Q10** | The OS image: Fedora bootc, or SteamOS-style A/B partitions? | Fedora bootc (§6.2) |
 | **Q11** | The hardware for K1 and K2: an Android phone, an iPhone or iPad, an ARM board? | The tester's to say; K1 needs one low-end Android phone and one iOS device, and K2 an ARM board |
 | **Q12** | The Vulkan SDK on the Mac mini, for K1 (a)? | Yes; it is already on the to-do list as KosmicKrisp's test |
+| **Q13** | The reference white for SDR content on an HDR display? | 203 cd/m², BT.2408's, as the default; a setting, since rooms differ |
+| **Q14** | A colorimeter, to verify what a display actually shows? | Worth it once HDR output exists; without one, accuracy stops at the codes the program writes |
 
 ---
 

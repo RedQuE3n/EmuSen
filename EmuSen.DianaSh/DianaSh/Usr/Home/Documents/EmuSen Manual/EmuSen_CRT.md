@@ -1942,3 +1942,11 @@ need the display's physical size, which a television reports unreliably. Curvatu
 with it the period is three pixels at the centre and a little under at the edges; the tester's setting is flat. The
 tester's television has not been looked at with it yet.
 
+## 19. HDR (planned 2026-10-10)
+
+Decided 2026-10-10: accurate HDR is a requirement of LunaP's Vulkan presenter (`EmuSen_LunaP_Kit.md` §5.4). For this
+filter it means encoding the absolute light the model already computes, as PQ in cd/m² or as linear scRGB, in place of
+the SDR encoding with headroom of §12.3; the mask then keeps its depth at full brightness up to the display's peak, and
+in BT.2020 the phosphor primaries are shown as measured instead of being clipped to sRGB (§11.8). "Display brightness"
+becomes the measured or calibrated peak. Nothing here is built: Avalonia offers no HDR output, so it waits for the kit.
+

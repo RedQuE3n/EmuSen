@@ -1,7 +1,7 @@
 # The platform above the cores: Galaxia, Endymion and Serenity's Vulkan half, linked into one library, emusen_platform. See EmuSen_RustPlatform.md §2.
 [workspace]
 resolver = "3"
-members = ["endymion", "galaxia", "platform"]
+members = ["endymion", "galaxia", "platform", "serenity"]
 
 [workspace.package]
 version = "0.1.0"

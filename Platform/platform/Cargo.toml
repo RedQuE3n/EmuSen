@@ -14,3 +14,4 @@ crate-type = ["cdylib", "rlib"]
 emusen-endymion = { path = "../endymion" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }
+emusen-serenity = { path = "../serenity" }

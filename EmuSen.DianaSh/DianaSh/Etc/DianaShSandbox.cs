@@ -97,6 +97,29 @@ namespace EmuSen.DianaSh.DianaSh.Etc
             return IsInsideRoot(candidate, root);
         }
 
+        // A bare name is taken from baseDirectory, a rooted one as TryResolve takes it - see `man hier`.
+        public static bool TryResolveFrom(string baseDirectory, string requestedPath, out string resolvedPath)
+        {
+            if (requestedPath.Length > 0 && (requestedPath[0] == '/' || requestedPath[0] == '\\')) return TryResolve(requestedPath, out resolvedPath);
+            resolvedPath = Path.GetFullPath(requestedPath, baseDirectory);
+            return IsInsideRoot(resolvedPath, RootDirectory);
+        }
+
+        // The configured ROM library, the one place outside the root a path may name, and only for `core` - see `man hier`.
+        public static string? RomLibraryDirectory =>
+            EmuSen.Galaxia.Models.AppSettings.Load().RomDirectory is { Length: > 0 } configured ? Path.GetFullPath(configured) : null;
+
+        // A ROM path: an absolute one inside the library as it is, anything else as TryResolve takes it - see `man core`.
+        public static bool TryResolveRom(string requestedPath, out string resolvedPath)
+        {
+            if (Path.IsPathFullyQualified(requestedPath) && RomLibraryDirectory is { } library && IsInsideRoot(Path.GetFullPath(requestedPath), library))
+            {
+                resolvedPath = Path.GetFullPath(requestedPath);
+                return true;
+            }
+            return TryResolve(requestedPath, out resolvedPath);
+        }
+
         private static bool IsInsideRoot(string candidate, string root) =>
             candidate.Equals(root, StringComparison.OrdinalIgnoreCase)
                 || candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);

@@ -712,6 +712,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    The file is a fixed header, the routine table, then the raw bitmap.\n" +
                 "    It is keyed to nothing - loading a map taken from a different ROM will\n" +
                 "    quietly merge nonsense, so keep the filename tied to the game.\n\n" +
+                "    The name is resolved as 'dump' and 'load' resolve theirs: from\n" +
+                "    Logs/<CoreName>/, or from the root with a leading '/', and refused if\n" +
+                "    it lands above the root - see 'man dump'.\n\n" +
                 "OTHER PROCESSORS\n" +
                 "    A scope word records another chip's instruction stream instead - see\n" +
                 "    'man cpus' for the names. Each chip gets its own bitmap, because each\n" +
@@ -1042,8 +1045,16 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    metadata, so a hex editor can open the result directly. The write-side\n" +
                 "    counterpart is 'load'. Same live-hardware-space refusal as\n" +
                 "    'search'/'snapshot'.\n\n" +
+                "    The file name is taken from home/Logs/<CoreName>/: a bare name or one\n" +
+                "    with '../' in it is resolved from there, one with a leading '/' from\n" +
+                "    this shell's root, as every other command reads a path (see 'man\n" +
+                "    hier'). A name that lands above the root is refused, so '../../../x'\n" +
+                "    and an absolute path of the machine cannot write or read outside it.\n" +
+                "    Before 2026-10-10 the name was joined to the folder unchecked, and\n" +
+                "    both did.\n\n" +
                 "EXAMPLES\n" +
-                "    dump WRAM 0 2000 wram.bin",
+                "    dump WRAM 0 2000 wram.bin\n" +
+                "    dump WRAM 0 2000 /tmp/wram.bin",
 
             ["load"] =
                 "NAME\n" +
@@ -1055,8 +1066,16 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    one 'dump' produced, or hand-edited afterward) and pokes its raw bytes\n" +
                 "    into <space> starting at\n" +
                 "    <addr>. Refuses if <space> isn't writable.\n\n" +
+                "    The file name is taken from home/Logs/<CoreName>/: a bare name or one\n" +
+                "    with '../' in it is resolved from there, one with a leading '/' from\n" +
+                "    this shell's root, as every other command reads a path (see 'man\n" +
+                "    hier'). A name that lands above the root is refused, so '../../../x'\n" +
+                "    and an absolute path of the machine cannot write or read outside it.\n" +
+                "    Before 2026-10-10 the name was joined to the folder unchecked, and\n" +
+                "    both did.\n\n" +
                 "EXAMPLES\n" +
-                "    load WRAM 0 wram.bin",
+                "    load WRAM 0 wram.bin\n" +
+                "    load WRAM 0 /tmp/wram.bin",
 
             ["tile"] =
                 "NAME\n" +
@@ -1443,10 +1462,19 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    '/home/Games' when convenient, or just point RomDirectory at them in\n" +
                 "    Preferences, which is where the library is configured anyway.\n\n" +
                 "    A leading '/' means THIS root - your home - not the real OS filesystem\n" +
-                "    root, and not the install directory. Every real-file command ('cat',\n" +
-                "    'ls', 'find', 'awk', 'nano', redirection, 'source') resolves through the\n" +
-                "    same check and refuses anything above it, so no amount of '../..' walks\n" +
-                "    out. This shell used to be rooted at the project directory, which meant\n" +
+                "    root, and not the install directory. Every command that names a file\n" +
+                "    ('cat', 'ls', 'find', 'awk', 'nano', redirection, 'source', 'dump',\n" +
+                "    'load', 'cov save|load', 'label', 'cheat import|export', 'core',\n" +
+                "    'state', 'test -f|-d') resolves through the same check and refuses\n" +
+                "    anything above it, so no amount of '../..' walks out. Two paths are\n" +
+                "    allowed outside the root on purpose: 'core' reads a ROM by an absolute\n" +
+                "    path inside the library configured as RomDirectory, and 'state' with\n" +
+                "    no path uses the frontend's own save-state path. The check is on the\n" +
+                "    path's text and does not follow a symbolic link: a link inside the\n" +
+                "    root that points out of it is followed by whatever opens it. Before\n" +
+                "    2026-10-10, 'dump', 'load', 'cov', 'core', 'state' and 'test' did\n" +
+                "    not go through the check at all.\n\n" +
+                "    This shell used to be rooted at the project directory, which meant\n" +
                 "    'ls /' listed '.git', 'EmuSen.sln' and every C# project beside your\n" +
                 "    saves; rooting at home is what stopped that. It is a guardrail against\n" +
                 "    accidents, not a security boundary.\n\n" +
@@ -2021,8 +2049,10 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    The main way an if/while condition does anything besides check another\n" +
                 "    command's own exit code. A deliberately small subset of real test(1):\n" +
                 "    a single VALUE (true if non-empty); -z/-n VALUE (string emptiness); -f/-d\n" +
-                "    PATH (real file/directory existence - meaningful here since redirection\n" +
-                "    already touches real host files); VALUE = / != VALUE (string comparison);\n" +
+                "    PATH (file/directory existence, with PATH read as every path in this\n" +
+                "    shell is - '/' is this shell's root, and a path above the root is\n" +
+                "    false, never a question about the machine's own files; before\n" +
+                "    2026-10-10 PATH was the machine's); VALUE = / != VALUE (string comparison);\n" +
                 "    VALUE -eq/-ne/-lt/-le/-gt/-ge VALUE (numeric comparison); a leading '!'\n" +
                 "    negates any of the above. No -a/-o/parenthesized compound expressions -\n" +
                 "    combine conditions with the shell's own && / || instead ('[ -f a ] && [\n" +
@@ -2075,10 +2105,17 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    frontend's own Save State/Load State hotkey or menu item performs.\n" +
                 "    'path' defaults to this frontend's own save-state path (one slot per\n" +
                 "    ROM) if omitted.\n\n" +
+                "    A path that is given is read as every path in this shell is: relative\n" +
+                "    to the current directory, or with a leading '/' from this shell's\n" +
+                "    root, and refused if it lands above the root (see 'man hier'); the\n" +
+                "    frontend is handed the resolved path. The default is the frontend's\n" +
+                "    own and is used as the frontend gives it, since Preferences may put\n" +
+                "    save states outside the root. Before 2026-10-10 a given path was\n" +
+                "    passed on unchecked, so a state could be written anywhere.\n\n" +
                 "EXAMPLES\n" +
                 "    state save\n" +
                 "    state load\n" +
-                "    state save home/Saves/Save States/before-boss.state",
+                "    state save \"/Saves/Save States/before-boss.state\"",
 
             ["pause"] =
                 "NAME\n" +
@@ -2166,9 +2203,24 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    has a separate, simpler 'core' handler of its own for resolving the\n" +
                 "    FIRST ROM (see EmuSen_Frontend_Driver.md §3), since there's nothing to\n" +
                 "    reload yet at that point.\n\n" +
+                "WHERE THE ROM MAY BE\n" +
+                "    <path> is read as every path in this shell is: relative to the\n" +
+                "    current directory, or with a leading '/' from this shell's root, and\n" +
+                "    refused if it lands above the root (see 'man hier'). There is one\n" +
+                "    exception, because a ROM library usually lives outside the root: an\n" +
+                "    absolute path inside the library configured as RomDirectory in\n" +
+                "    Preferences (appsettings.json) is taken as it is. The library is only\n" +
+                "    ever read, and only by 'core'; no other command reaches it. The host\n" +
+                "    is handed the resolved path, so it does not depend on the shell's\n" +
+                "    current directory. Hotaru's launch prompt makes the same checks, and\n" +
+                "    a ROM named on its command line is the launcher's choice, not a path\n" +
+                "    typed here, so it is not checked. Before 2026-10-10 <path> was\n" +
+                "    checked only for existence, so any file of the machine could be\n" +
+                "    named.\n\n" +
                 "EXAMPLES\n" +
                 "    core venus game2.smc\n" +
-                "    core snes /path/to/other-game.sfc",
+                "    core snes /Games/other-game.sfc\n" +
+                "    core snes /home/player/Roms/SNES/other-game.sfc   (inside RomDirectory)",
 
             ["tmux"] =
                 "NAME\n" +

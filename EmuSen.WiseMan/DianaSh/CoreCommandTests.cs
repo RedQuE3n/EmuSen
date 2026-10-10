@@ -25,7 +25,8 @@ namespace EmuSen.WiseMan.DianaSh
 
         private static string TempRomPath(string extension)
         {
-            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"wiseman_core_{System.Guid.NewGuid():N}{extension}");
+            System.IO.Directory.CreateDirectory(DianaShSandbox.ScratchDirectory);
+            string path = System.IO.Path.Combine(DianaShSandbox.ScratchDirectory, $"wiseman_core_{System.Guid.NewGuid():N}{extension}");
             System.IO.File.WriteAllBytes(path, new byte[16]);
             return path;
         }
@@ -118,9 +119,9 @@ namespace EmuSen.WiseMan.DianaSh
             {
                 var shell = DianaShInterpreter.CreateDefault(null, new IDianaShCommand[] { new CoreCommand(Registry()) });
 
-                var result = shell.Submit($"core snes {path}");
+                var result = shell.Submit($"core snes \"{path}\"");
 
-                Assert.IsType<HostAction.LoadCore>(result.Action);
+                Assert.True(result.Action is HostAction.LoadCore, result.Output);
             }
             finally
             {

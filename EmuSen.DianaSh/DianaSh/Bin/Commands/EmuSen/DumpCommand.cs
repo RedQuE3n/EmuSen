@@ -37,8 +37,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
             for (int i = 0; i < len; i++) data[i] = space.Read(addr + i);
 
             string coreLogDir = Path.Combine(DianaShSandbox.LogsDirectory, target.CoreName);
-            Directory.CreateDirectory(coreLogDir);
-            string path = Path.Combine(coreLogDir, file);
+            if (!DianaShSandbox.TryResolveFrom(coreLogDir, file, out string path))
+                return DianaShResult.Fail($"dump: '{file}' is outside the project sandbox ({DianaShSandbox.RootDirectory})");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllBytes(path, data);
             return $"Dumped {space.Name} 0x{addr:X}-0x{addr + len - 1:X} ({len} bytes) to {path}";
         }

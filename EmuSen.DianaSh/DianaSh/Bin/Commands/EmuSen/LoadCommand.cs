@@ -31,7 +31,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
                 return $"{space.Name} is read-only - refusing to load into it.";
             }
 
-            string path = Path.Combine(DianaShSandbox.LogsDirectory, target.CoreName, file);
+            if (!DianaShSandbox.TryResolveFrom(Path.Combine(DianaShSandbox.LogsDirectory, target.CoreName), file, out string path))
+                return DianaShResult.Fail($"load: '{file}' is outside the project sandbox ({DianaShSandbox.RootDirectory})");
             if (!File.Exists(path))
             {
                 return $"No file at {path}.";

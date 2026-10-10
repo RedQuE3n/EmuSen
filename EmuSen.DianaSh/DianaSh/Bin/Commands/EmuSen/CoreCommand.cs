@@ -63,24 +63,38 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 
             string coreName = args[1];
             string romPath = args[2];
+            if (Refusal(_registry, coreName, romPath, out string resolved) is { } refused) return refused;
+            CoreDescriptor descriptor = _registry[coreName];
+            return DianaShResult.Ok($"[CORE] Loading {descriptor.DisplayName}: {romPath}", new HostAction.LoadCore(coreName, resolved));
+        }
 
-            if (!_registry.TryGetValue(coreName, out CoreDescriptor? descriptor))
+        // What `core` refuses, shared with Hotaru's launch prompt; null when the ROM may load from resolved - see `man core`.
+        public static DianaShResult? Refusal(IReadOnlyDictionary<string, CoreDescriptor> registry, string coreName, string romPath, out string resolved)
+        {
+            resolved = romPath;
+            if (!registry.TryGetValue(coreName, out CoreDescriptor? descriptor))
             {
-                return DianaShResult.Fail($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(_registry.Keys, StringComparer.OrdinalIgnoreCase))}");
+                return DianaShResult.Fail($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(registry.Keys, StringComparer.OrdinalIgnoreCase))}");
             }
 
-            if (!File.Exists(romPath))
+            if (!DianaShSandbox.TryResolveRom(romPath, out resolved))
+            {
+                string library = DianaShSandbox.RomLibraryDirectory is { } lib ? $" or the ROM library ({lib})" : "";
+                return DianaShResult.Fail($"core: '{romPath}' is outside the project sandbox ({DianaShSandbox.RootDirectory}){library}");
+            }
+
+            if (!File.Exists(resolved))
             {
                 return DianaShResult.Fail($"core: ROM not found: {romPath}");
             }
 
-            string extension = Path.GetExtension(romPath);
+            string extension = Path.GetExtension(resolved);
             if (!descriptor.SupportsExtension(extension))
             {
                 return DianaShResult.Fail($"core: '{(extension.Length > 0 ? extension : "(no extension)")}' is not a supported ROM type for {descriptor.DisplayName} - expected: {string.Join(", ", descriptor.Extensions)}");
             }
 
-            return DianaShResult.Ok($"[CORE] Loading {descriptor.DisplayName}: {romPath}", new HostAction.LoadCore(coreName, romPath));
+            return null;
         }
     }
 }

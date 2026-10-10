@@ -448,13 +448,13 @@ case a file name that climbs out of the root
 target fake
 covers 8
 $ cov save ../../../escaped.cov
-out 77
-Coverage map saved to <ROOT>/Logs/GOLDEN/../../../escaped.cov (0 routine(s)).
-status 0
+out 67
+cov: '../../../escaped.cov' is outside the project sandbox (<ROOT>)
+status 1
 action none
 $ cov load ../../../escaped.cov
-out 90
-Coverage map merged from <ROOT>/Logs/GOLDEN/../../../escaped.cov (0 routine(s) known now).
-status 0
+out 67
+cov: '../../../escaped.cov' is outside the project sandbox (<ROOT>)
+status 1
 action none
 end

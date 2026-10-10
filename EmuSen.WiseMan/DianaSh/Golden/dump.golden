@@ -43,8 +43,8 @@ out 1
 status 0
 action none
 $ dump RAM 0 4 ../../up.bin
-out 63
-Dumped RAM 0x0-0x3 (4 bytes) to <ROOT>/Logs/GOLDEN/../../up.bin
+out 45
+Dumped RAM 0x0-0x3 (4 bytes) to <ROOT>/up.bin
 status 0
 action none
 $ ls
@@ -80,9 +80,9 @@ case a file name that climbs out of the root
 target fake
 covers 1
 $ dump RAM 0 4 ../../../escaped.bin
-out 71
-Dumped RAM 0x0-0x3 (4 bytes) to <ROOT>/Logs/GOLDEN/../../../escaped.bin
-status 0
+out 68
+dump: '../../../escaped.bin' is outside the project sandbox (<ROOT>)
+status 1
 action none
 $ ls /..
 out 49
@@ -90,8 +90,8 @@ ls: '/..' is outside the project sandbox (<ROOT>)
 status 1
 action none
 $ load RAM 0 ../../../escaped.bin
-out 85
-Loaded 4 bytes from <ROOT>/Logs/GOLDEN/../../../escaped.bin into RAM starting at 0x0.
-status 0
+out 68
+load: '../../../escaped.bin' is outside the project sandbox (<ROOT>)
+status 1
 action none
 end

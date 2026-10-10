@@ -242,3 +242,35 @@ out 1
 status 0
 action none
 end
+
+case paths are the sandbox's, not the machine's
+target none
+covers 1
+file ../outside.txt 1
+x
+$ test -f ../outside.txt
+out 0
+
+status 1
+action none
+$ cd Logs
+out 0
+
+status 0
+action none
+$ test -d /etc/EmuSen
+out 0
+
+status 0
+action none
+$ [ -f ../../outside.txt ]
+out 0
+
+status 1
+action none
+$ test -d /..
+out 0
+
+status 1
+action none
+end

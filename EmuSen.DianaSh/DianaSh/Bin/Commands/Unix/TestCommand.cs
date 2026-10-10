@@ -27,8 +27,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.Unix
                     {
                         "-z" => expr[1].Length == 0,
                         "-n" => expr[1].Length > 0,
-                        "-f" => File.Exists(expr[1]),
-                        "-d" => Directory.Exists(expr[1]),
+                        "-f" => DianaShSandbox.TryResolve(expr[1], out string file) && File.Exists(file),
+                        "-d" => DianaShSandbox.TryResolve(expr[1], out string dir) && Directory.Exists(dir),
                         _ => throw new ArgumentException($"Unknown unary test operator '{expr[0]}'."),
                     };
                 case 3:

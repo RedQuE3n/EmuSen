@@ -37,7 +37,7 @@ $ core SNES Games/a.sfc
 out 40
 [CORE] Loading SNES (Venus): Games/a.sfc
 status 0
-action LoadCore { CoreName = SNES, RomPath = Games/a.sfc }
+action LoadCore { CoreName = SNES, RomPath = <ROOT>/Games/a.sfc }
 $ core SNES Games/x.sfc
 out 32
 core: ROM not found: Games/x.sfc
@@ -59,8 +59,8 @@ case an absolute path outside the home
 target none
 covers 1
 $ core SNES /etc/hostname
-out 90
-core: '(no extension)' is not a supported ROM type for SNES (Venus) - expected: .smc, .sfc
+out 34
+core: ROM not found: /etc/hostname
 status 1
 action none
 end
@@ -71,8 +71,8 @@ covers 1
 file ../outside.sfc 1
 x
 $ core SNES ../outside.sfc
-out 43
-[CORE] Loading SNES (Venus): ../outside.sfc
-status 0
-action LoadCore { CoreName = SNES, RomPath = ../outside.sfc }
+out 62
+core: '../outside.sfc' is outside the project sandbox (<ROOT>)
+status 1
+action none
 end

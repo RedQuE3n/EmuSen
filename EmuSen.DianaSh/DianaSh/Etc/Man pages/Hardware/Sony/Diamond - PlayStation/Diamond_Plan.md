@@ -786,6 +786,8 @@ searched 2026-10-10], and MarsRT is not on the core ABI v1 (`EmuSen_CoreAPI.md` 
 
 ## 10. What the framework should gain, found by planning this core
 
+*Each item is evaluated for its form, with the surface change it would make, in `EmuSen_CoreAPI_Extensions.md` (2026-10-10), which awaits the tester's decisions.*
+
 - **Content-based routing** of extensions that several systems claim (`.cue`, `.chd`, `.iso`, `.bin`): a system pack
   sniffs the image (a disc's system area, a cartridge's header) and the host routes to the engine whose system matches.
   Needed before Diamond and Nephrite's Sega CD both claim `.cue` (stage 7).

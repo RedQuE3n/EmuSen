@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the eighth, 2026-10-10: step 4b built, Serenity's Vulkan device and chain in Rust behind the same switch, still off, with the lent readback, the bench's pictures the same from both and the validation layer silent on the library's device (§17); Q25 and Q26 decided (§9). The seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -144,7 +144,7 @@ the C# side already binds, and two hashes:
 |---|---|---|
 | `ash` | Vulkan, loaded at run time | MIT or Apache-2.0 |
 | `libloading` | SDL3 and Shaderc, loaded at run time from the shipped files (§2.8) | ISC |
-| `rusqlite` with `bundled` | the SPIR-V cache (§4.3) | MIT (SQLite itself public domain) |
+| `rusqlite` with `bundled` | the SPIR-V cache (§4.3). *Not taken: Q25, decided 2026-10-09, has the cache call the SQLite the program ships (§16.2).* | MIT (SQLite itself public domain) |
 | `sha2`, `md-5` | the cache's keys; `RomHash.Md5` | MIT or Apache-2.0 |
 
 **No `serde`.** The JSON must reproduce `System.Text.Json`'s reading and writing exactly (§5.2), which no serde
@@ -206,7 +206,12 @@ much as the cores':
   (SQLite's own documentation lists linking two copies into one application as a way to corrupt a database). The
   rule is therefore: **one database file, one SQLite copy, per process.** Only Serenity's cache moves, and it moves
   whole (§4.3); `games.db`, `records.db`, `media.db` and the catalogue stay with `e_sqlite3`. The parity tests of
-  step 4a open the C# and the Rust cache on separate files.
+  step 4a open the C# and the Rust cache on separate files. *As built in step 4a and decided on 2026-10-09 (Q25),
+  the library brings no SQLite: it calls the `e_sqlite3` the C# has loaded, lent by its handle, so the process
+  holds one copy and this paragraph's hazard does not arise (§16.2). A Rust program with no C# beside it will need
+  a SQLite of its own.*
+- *Added by step 4b:* **Vulkan's loader is opened through `libloading`**, by the name each system knows it by, and
+  `ash` is taken without its own loader, so the library carries one version of `libloading` and no second (§17.2).
 
 ---
 
@@ -674,10 +679,13 @@ Stated before anything is built; each step reports which held.
 - **P4.** Endymion's submit makes one P/Invoke instead of two, and its cost per frame is below measurement either
   way. *Held, 2026-10-08 (§14.6).*
 - **P5.** The Rust chain's render path allocates nothing managed per frame, against 15–118 KB in `Bind` today, and
-  the gen-2 collection in N64 4× royale goes; GPU time does not change.
+  the gen-2 collection in N64 4× royale goes; GPU time does not change. *Held, 2026-10-10, as to what it can be held
+  to (§17.6): the chain allocates nothing managed, and a frame's 312 bytes are the picture handed to Skia; no
+  collection of the second generation came in any run of either chain, so its going was not seen; GPU time agreed.*
 - **P6.** Shaderc loaded from the same file yields byte-identical SPIR-V for all 1,350 of the pack's passes. *Held,
   2026-10-09 (§16.6).*
-- **P7.** The platform library is under 4 MB in the `dist` profile on linux-x64 with all three crates in it.
+- **P7.** The platform library is under 4 MB in the `dist` profile on linux-x64 with all three crates in it. *Held,
+  2026-10-10: 1,445,832 bytes in a publish (§17.6).*
 
 ---
 
@@ -734,6 +742,17 @@ Two more, raised by step 3b (§14.7):
   Endymion's state 3 and is decided then (§15).
 - **Q24.** Decided 2026-10-08: SDL lent by its handle stands as built, with loading by path kept in the crate for a
   Rust program with no C# beside it (§14.2).
+
+Two more, raised by step 4a (§16.7):
+
+- **Q25.** Decided 2026-10-09: the cache calls the `e_sqlite3` the program ships, lent by its handle, as built. This
+  changes Q7, which named `rusqlite` with SQLite bundled, and the reason is §2.8's own: two copies of SQLite in one
+  process cannot see each other's locks on a file, and the cache's file is opened by both the C# and the library in
+  one process (§16.2). What follows is recorded with it: a Rust program with no C# beside it has no `e_sqlite3`
+  lent to it and will need a SQLite of its own, opened by path or built in, which is decided when such a program
+  exists (§15).
+- **Q26.** Decided 2026-10-09: the compiler's identities stay separate for now, as §4.3 planned, so neither
+  implementation serves the other's rows. It is looked at again when Serenity moves to state 2 (§15).
 
 ---
 
@@ -1583,10 +1602,14 @@ Kept here so that none is lost between steps; each names where it was found.
   report and do not gate (Q14, Q22).
 - **A second `Dispose` of a player** lets go of SDL's audio twice; reproduced, not run (§14.3).
 - **Endymion to state 2** is a later step, at the tester's word, as Galaxia's was (§13).
-- **Q25 and Q26:** which SQLite the cache calls, and whether the library's compiler identity should be the C#'s
-  (§16.7).
-- **§2.4's `rusqlite`** is not taken while Q25 stands as built; §2.8's paragraph on two SQLite copies then describes
-  a hazard the platform does not have.
+- **A Rust program with no C# beside it** will need a SQLite of its own (Q25) and a decoder for lookup images held
+  to Skia's pixels (Q27).
+- **The compiler's identities** are looked at again when Serenity moves to state 2 (Q26).
+- **Q27 to Q30**, raised by step 4b (§17.7).
+- **`SlangSyncTests` shows the layer listening by a fault it reports whatever its settings**, so a device made
+  without synchronisation validation would pass it; the chain parity class closes the gap for both devices with a
+  hazard only that validation reports (§17.5), and the C# test is left as it is.
+- **Serenity to state 2** is a later step, at the tester's word, as Galaxia's was (§13).
 
 ---
 
@@ -1794,3 +1817,344 @@ self-contained and run with the variable set compiled a stage and hit its cache 
 |---|---|---|
 | Q25 | The cache's SQLite: `rusqlite` with its own copy bundled, as Q7 and §2.8 had it, or the one the program ships | the one the program ships, lent by its handle: two copies in one process cannot share a file's locks, which the cache's own tests rely on (§16.2). `rusqlite` is not taken |
 | Q26 | Whether the library's compiler identity should be the C#'s, so that each serves the other's rows | separate, as §4.3 planned; P6 held over the whole pack, so one identity would be safe and would spare a machine one rebuild of its presets when the switch changes |
+
+*Both decided 2026-10-09, as built (§9).*
+
+---
+
+## 17. What was built, 2026-10-09: step 4b, Serenity's Vulkan device and chain
+
+Measured on the development desktop, on its Radeon RX 6800 and on no other device. A preset is built into a chain on
+a Vulkan device, fed frames and drawn by a Rust form of `SlangVulkan` and `SlangChain`, behind the switch step 4a
+made, `EMUSEN_SERENITY_NATIVE`, still in state 1: the C# runs unless the variable is `1`. No C# was removed, and the
+C# device and chain were moved into `Managed` classes and not rewritten (§17.4). `SlangRunner` is C#, as §4.3 kept
+it, and calls whichever chain the switch gives it; the SkSL filters are no part of this work. With this step all of
+§4.3 is built; Serenity stays in state 1, and its move to state 2 is a later step at the tester's word.
+
+### 17.1 The artefacts
+
+| What | Where |
+|---|---|
+| `SlangVulkan`: the device, its buffers, images and samplers, its one command buffer, the layer's findings, a bench's probe | `Platform/serenity/src/vulkan.rs` |
+| `SlangChain`: passes, pipelines, history, feedback, parameters, what a name means and what a block is filled with, the readbacks and their lending | `src/chain.rs` |
+| A pass's `#pragma format`, as the C# binding's enumeration reads it | `src/format.rs` |
+| The C layer: 20 exports, 172 in the library; the interface's version is 6; a new status, `DEVICE` −1028 | `Platform/platform/src/serenity_device.rs`, `include/emusen_platform.h` |
+| The entry points, and the two structs that cross | `EmuSen.Serenity/Native/SerenityNative.cs` |
+| The facades, each over its `Managed` class | `EmuSen.Serenity/Slang/SlangVulkan.cs`, `SlangChain.cs` |
+| The probe's two new points | `EmuSen.Serenity/Slang/SlangProbe.cs` |
+| The parity class, 24 cases | `EmuSen.WiseMan/Serenity/SerenityChainParityTests.cs` |
+
+About 1,910 lines of Rust in the crate and 490 in its C layer, with 265 of tests, against §7.2's 2,200 for the step
+with its tests. `ash` is the one crate added, for Vulkan's declarations (§17.2).
+
+### 17.2 The device, the chain, the lent readback, and what was built otherwise than planned
+
+**The device lives until the last thing made on it is gone.** A buffer and an image each hold the device they were
+made on, so closing a device lets go of one hold among several, and Vulkan's device is destroyed when the last goes.
+This is what §3.3 asked for in one sentence ("a chain freed under a held slot leaves the slot to the release") taken
+to its end: a picture Skia still holds keeps its readback, the readback keeps the device, and the pixels stay where
+they are until the picture lets go, on whatever thread. The C# destroys its device when asked, held pictures or
+not, which by its code leaves a held picture over memory Vulkan has taken back; that is argued and was not run,
+since it would read freed memory. The parity class does it to the library (§17.5).
+
+**It locks itself, and waits under its lock.** One command buffer is recorded, submitted and waited for behind one
+lock, as in the C#, so a chain is built on one thread while another draws. Waiting for the device to fall idle, which
+a chain does when a frame changes size and when it ends, is done under the same lock, because Vulkan asks that
+nothing else use the queue meanwhile. The C# waits outside its lock, and the layer says so when two chains on two
+threads share a device (§17.4).
+
+**What the layer says waits to be taken**, as §3.7 had it. With validation asked for, the device is made with the
+Khronos layer, the same three settings the C# gives it, and a listener that queues each finding; the facade takes
+them after every call into the device or a chain on it and hands each to the sink the test gave. So a finding
+reaches the sink after the call that caused it returns and not during it, and on the thread that made the call. A
+test that makes a Vulkan call of its own has to ask for the findings (`Heard`), which `SlangSyncTests`' check that
+the layer is listening now does. Closing is in two steps so that what the layer says of the device's end is heard:
+the device is let go of, the findings are taken, and then the handle is freed.
+
+**The device's and the instance's own handles are exported**, for that check: it creates a buffer of no size
+through the C# binding on the library's device, which the binding can do with nothing more than the handle. They are
+Vulkan's handles and not pointers into the library, and the header says what may not be done with them (the queue is
+the library's). A Rust client that presents the chain's picture itself would need them in any case. It is Q29.
+
+**A chain is built by the library from the preset alone.** The C# preset crosses as the document the library's own
+reader answers with (§16.2); the library reads each pass's source, compiles its stages through the cache it is given
+or through Shaderc, reads the SPIR-V back, prunes the fragment stage and makes the pipeline, as many passes at a time
+as it is told. Built in order it stops at the first pass that fails; built side by side it builds every pass and
+gives the lowest-numbered failure, as the C# does, which the cache's counts show (§17.5). A failure crosses as a
+document, as a reader's does, because the exception the C# throws for it has a type: a file not found with its name,
+`SlangCompileException` with Shaderc's words, `InvalidOperationException` with the Vulkan call and its result,
+`OverflowException` for a history too deep to count.
+
+**A lookup image is decoded by the host.** The C# decodes it with Skia and draws it into an RGBA bitmap; a picture
+is byte for byte the same only if those pixels are, and no other decoder is held to Skia's. So the facade decodes,
+in the C# chain's own four lines, and hands the pixels over, one call for each image, after the passes are built: the
+order the C# fails in is kept, a pass that does not compile before an image that does not decode. A Rust program
+with no C# beside it will need a decoder, and it is Q27.
+
+**The lent readback is §3.3's**, with its struct as declared there. A readback's number comes from a counter and
+names it only while it is lent, in a table of the lent ones, so that a second release of a number is `ABSENT` and
+does nothing, where a pointer for a number would have been freed twice. When every readback a chain may lend is
+held, the picture is in the chain's own readback and the number is zero: the facade copies it, as the C# does. The
+facade keeps the object Skia's release is given for each number from one frame to the next, so a frame allocates
+only what Skia's picture is (§17.6).
+
+**A bench's probe is the device's own.** The C# is listened to through `SlangProbe`, which is handed each command
+buffer to write timestamps into; the library records the same points itself when its probe is on, the phases against
+a clock started when it was turned on and each submission's timestamps read as soon as it has been waited for, and
+the facade hands them to the same listener after each call. `ISlangProbe` gained the two points this takes, and the
+bench reports the same stages either way (§17.6).
+
+**Vulkan's loader is opened through `libloading`**, by the name each system knows it by, and `ash` is taken without
+its default loader, which would have brought a second, older `libloading` into the library. `ash` is then
+declarations and function tables alone.
+
+**One status is new: `DEVICE`, −1028**, for no Vulkan device and for a Vulkan call that failed, at the number §3.5
+kept for the first of the two. The facade throws `InvalidOperationException` for it with the library's words, which
+are the C#'s: the call's name and the result as the C# binding prints it.
+
+**Otherwise than planned, each for a reason:**
+
+- **The chain is the device's kind.** A chain on the library's device is the library's and one on the C#'s is the
+  C#'s; the switch is asked once, when a device is made. A test makes one of each and compares them.
+- **Parameter values cross as floats in the parameters' order**, not by name: the facade looks each id up in the
+  dictionary it was given, so that a dictionary that compares its keys its own way is still asked its own way.
+- **A cache that is the C#'s cannot be compiled through by the library.** A chain on the library's device given
+  one compiles each stage itself, as a chain given no cache does, and its pictures are the same. The two are made
+  by one switch, so this arises only for a cache whose path the library does not take (§16.2), which no caller
+  passes.
+- **`SlangChain.ParseFormat` is an export of its own**, since it is public and its answer is the C# binding's: a
+  pragma's word is a format when the binding's enumeration has a name for it once spelled the binding's way. The
+  crate holds the enumeration's 322 names (§17.3).
+- **What the C# is left to answer:** a device asked for by a name that is not valid UTF-16, which is then the C#
+  device, and a format's word that is not, or is null.
+
+### 17.3 .NET's and the binding's rules, measured for this step
+
+Each was measured in a scratch program on .NET 10 with Silk.NET.Vulkan 2.23.0 before the code that depends on it
+was written, and each is a case of the parity class or of the crate's own tests:
+
+| Rule | What .NET does |
+|---|---|
+| `Enum.TryParse` of a pragma's word | white space before the word is dropped; a word that then begins with a digit or a sign is a number, and any 32-bit number is a format whether the enumeration defines it or not; white space of the six ASCII kinds may follow a number, then any number of NULs, and nothing else; a number past 32 bits is no format |
+| the same, for a word that is not a number | names between commas, each with the white space round it dropped, every one of which must be a name with its case exact; the answer is their values or-ed together, for an enumeration that is not one of flags too |
+| the spelling before it | the text before the first underscore as it is, each later part with its first letter raised and the rest lowered: so `ASTC_4x4_UNORM_BLOCK` is no format, since the binding spells it `Astc4x4UnormBlock`, and `1_000` is format 1000 |
+| `char.ToUpperInvariant` and `string.ToLowerInvariant` | the only character outside ASCII that the first brings inside is the long s, to `S`; the only one the second does is the Kelvin sign, to `k`. The dotless i is not raised to `I` |
+| the binding's `Format` | 322 names for 265 values |
+| the binding's `Result`, printed | 52 names; a value it does not name prints as its number |
+| `MemoryPropertyFlags`, printed | the names joined by a comma and a space |
+| `(uint)Math.Round` of a float product | the product in single precision, rounded as a double with a half going to the even number, then held at the ends of 32 bits; what is no number is 0 |
+| `(uint)Math.Floor(Math.Log2(n)) + 1` | the number of bits in `n`, and 1 for 0 |
+| `new T[n + 1]` for `n` of `int.MaxValue` | `OverflowException` |
+| `Contains` with `OrdinalIgnoreCase` | by Galaxia's rule for an ordinal comparison (§11.3): the long s is no `s` |
+
+### 17.4 The default path, and what was tested
+
+**The C# device and chain are the classes they were**, each now a `Managed` class inside its facade. Compared with
+`f5ef19f7` line for line, indentation aside, `SlangVulkan.Managed` differs from the old `SlangVulkan` in ten lines
+and `SlangChain.Managed` from the old `SlangChain` in eight: each constructor's name and the type of the device it
+takes, the public pieces that moved up into the facade (the variable's name, the bound on lent readbacks, the count
+of builders, the public constructors), and one line added, which lets the bench read the instance without
+reflection. `SlangBuffer` and `SlangImage` name `SlangVulkan.Managed` as their owner. Nothing else in either moved.
+
+That was checked on a running program too: §8.1's bench host (§17.6), built once from this branch and once from
+`475fe4c3`, drew `crt-royale` four ways and reported at its end whether Serenity's half of the library had been asked
+for and which kind of device the runner drew on. From the base, and from this branch with the variable unset or `0`,
+it was never asked for and the device was the C#'s; with `1` it was asked for and the device was the library's. The
+three hashed pictures were the same in all four runs.
+
+| Run | Variable unset | `EMUSEN_SERENITY_NATIVE=1` |
+|---|---|---|
+| `cargo test` in `Platform/` (30 in `emusen-serenity`, 25 in `emusen-endymion`, 77 in `emusen-galaxia`, 22 in `emusen-platform`) | 154 pass | |
+| `cargo clippy` over the workspace; the header as C99 and as C++17 | clean | |
+| WiseMan's `Slang*` and `Spirv*` classes of Serenity, its two parity classes, `ShaderBenchTests`, and Mistress's `ShaderSettingsWindowTests` and `ScreenFilterSettingTests`, with libretro's pack named | 125 pass | 125 pass |
+| The classes that draw (`SlangChainTests`, `SlangReadbackTests`, `SlangSyncTests`, `SlangRowsOnceTests`, `SlangFrameControlTests`, `SpirvCacheTests`), with the layer forced onto every device they make (below) | 56 pass | 56 pass |
+| The chain parity class with the layer forced onto both devices | 24 pass | |
+| `ShaderBenchTests` with a GL device asked for (`EMUSEN_SHADER_BENCH=1`), which the row above passes by | 1 pass | 1 pass |
+| The parity classes of Galaxia and Endymion, whose header and version this step changed | 66 pass | |
+
+The 125 are 88 that existed, step 4a's parity class less its case over the whole pack (12, run in step 4a and not
+in the blast radius of this one), the bench's test, and the new class's 24. The bench's own pictures in the gated
+`ShaderBenchTests` were the same three hashes both ways, and it allocated 3.7 KB a frame on the C# and 2.1 KB on the
+library.
+
+**The layer, and what it said.** The tests that ask for the layer (`SlangSyncTests`, and three cases of the parity
+class) pass both ways with their sinks empty but for the fault each provokes to show the layer is listening. Beyond
+them, the classes that make a device and draw were run with the layer forced onto every device they make, by
+`VK_INSTANCE_LAYERS`, with synchronisation validation and `VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1`, and its
+words gathered in a file. Two things about that file are recorded because both cost a run to learn: the layer writes
+nothing to it, though it opens it, unless `VK_LAYER_DEBUG_ACTION=VK_DBG_LAYER_ACTION_LOG_MSG` is given when the
+program has a listener of its own; and every instance opens the file anew and writes from its beginning, over what
+the last instance wrote, so the file was made a named pipe with one reader gathering what every instance says.
+
+- **On the library's device, the layer said nothing** but the faults the tests provoke: in the run of the drawing
+  classes with it forced on, the four buffers of no size `SlangSyncTests` makes to show it is listening, and
+  nothing else.
+- **On the C#'s, the same four**, and in one run of three, once, `UNASSIGNED-Threading-MultipleThreads-Write` on
+  the queue, from `SpirvCacheTests`' two chains built at once on one device. Four runs of that class alone on each
+  device placed it: three of four on the C# drew it, at `vkQueueSubmit` once and `vkDeviceWaitIdle` twice; none of
+  four on the library did (§17.5).
+- **In the chain parity class with the layer forced onto both devices**, the provoked faults of each, two
+  `WARNING-Shader-OutputNotConsumed` of the deliberately unread vertex output of the preset of §17.5, and 74
+  objects left at the end of the C# devices by builds that fail part way. None of them was the library's.
+
+The gate's other half, that the layer be silent, is held by the test as well as by these runs: three cases of the
+parity class and `SlangSyncTests` give the library's device a sink and assert it empty after real work, and the
+parity class then provokes, on both devices, a fault the layer always reports and a write-after-write hazard that
+only synchronisation validation reports, and asserts both are heard. The second was added by this step's seeded
+faults (§17.5): without it a device made with synchronisation validation off would have been silent too, and the
+silence counted.
+
+**CI** runs the new parity class in the step that tests Serenity on the library; a runner has no Vulkan device, so
+there its cases that draw pass by, and those that need none (the format's reading, the exports, the structs' sizes)
+run. Both steps still report and do not gate.
+
+**Not done, and not claimed:** Windows and macOS, as before; any device but the RX 6800 (the desktop's integrated
+Radeon and llvmpipe were not run, and the handheld and the laptop were not touched); and a real window, since
+everything here is the chain's own pictures and the bench's, as in `EmuSen_Serenity.md` §9.8.
+
+### 17.5 The parity class, and what it found
+
+It makes two devices on the one card, the C#'s and the library's, builds the same preset on each, feeds both the
+same frames and compares every picture byte for byte; or the exception each throws, with its type and its words:
+
+- that both choose the same device, whatever the case of the name asked for and for no name at all, and give the
+  same report for a name no device has;
+- 61,000 words read as a pragma's format by both: every name the binding has, as it has it and as a pragma would
+  spell it, pairs of them with a comma between, and strings of up to five pieces of names, numbers, signs, white
+  space of nine kinds, NULs and the four characters whose case matters;
+- a pass that gives the picture back, at several sizes and with its parameter set; three passes that are given a
+  float target by the preset's word, an 8-bit one, and a last pass that asks for sRGB and for float and is given
+  neither; a pass over frames with a mip chain;
+- a preset of three passes written to read every name a pass may: the source through each wrap and each filter and
+  past its edges, a mip chain at a level, between two and past its last, the newest frame and older ones, feedback
+  by number and by alias, an earlier pass by number, by the preset's alias and by the source's own name, a later
+  pass by number and by alias (which is nothing), a name that is nothing, two lookup images, every size the C#
+  knows and one it does not, every count, and two parameters, one of them declared twice. Its sizes fall on halves,
+  so that the rounding shows; it is drawn through seven frames, with rows repeated, with its parameters set, and
+  built side by side;
+- the same preset through frames that change size, repeat and viewport, with a redraw after each pair;
+- parameters declared, valued and set alike, through dictionaries that hold no such id, a value that is no number,
+  and keys compared without their case;
+- a chain that cannot be built: a shader that is not there, one that does not compile, a history too deep to count,
+  a lookup image that does not decode and one that is not there, two failing passes built in order and side by
+  side; a render before any frame; a frame with a byte too few, and one with bytes to spare;
+- a cache of each kind through three builds, in order and side by side: the same counts after each, the same
+  pictures from a chain built through a cache and one built without, the same counts after a build that fails part
+  way; and a cache the C# filled read by the library's chain as six hits and no miss;
+- readbacks lent, held, copied and given back through one scripted run of both chains: the same count of readbacks
+  and of copies after every picture, no held picture written over, one given back on another thread, a larger
+  picture, and both chains ended while pictures are held;
+- on the library alone, a picture held past its chain and its device, which keeps its pixels;
+- the layer, with a sink: the library's chain through the preset above, built side by side, with pictures lent
+  and held, and nothing said; then a buffer of no size, and the rule it breaks said; the same on both devices side
+  by side; and what each device is left holding by builds that fail (below);
+- the probe: each phase and each pass's timestamp, in order, on the stopwatch's clock;
+- what a frame allocates through each chain (§17.6);
+- and, when a run names where libretro's pack is, eight runs of seven of its presets, among them `crt-royale`,
+  `crt-guest-advanced` and Mega Bezel's `POTATO` (ten passes, seven lookup images, 436 parameters): four frames
+  each, then every parameter set half way to its largest and two more at another size.
+
+**What the first run found: no picture differed.** Twenty of the class's first twenty-two cases passed as written,
+and the two that failed were mistakes in the cases (a pass numbered 2 taken for the point numbered 2; a rule's name
+looked for at the start of the layer's words, where it is not). Every picture of every preset, the pack's among
+them, was the same from both on the first run.
+
+**What it found in the C#**, which is left as it is, since no C# is rewritten in this step. Each is a case where the
+two differ and the library's answer is the one kept:
+
+- **A chain that fails after its passes are built leaves them on the device.** When a lookup image does not decode,
+  or the history is too deep, the C# constructor throws with its passes made and nothing frees them. Under the
+  layer, six such builds left 64 objects on the C# device at its end and none on the library's, whose chain is
+  dropped whole. The exception is the same from both.
+- **The device is waited for outside its lock.** `Advance` and `Dispose` call `vkDeviceWaitIdle` without the lock
+  that guards the queue, so two chains on two threads on one device can have the queue in use twice at once. With
+  the layer forced on, `SpirvCacheTests`' two chains built at once on the C# device drew
+  `UNASSIGNED-Threading-MultipleThreads-Write` on the queue; the same run on the library drew nothing.
+- **A second `RenderImage` before any frame** throws `NullReferenceException` in the C#: the first leaves a readback
+  with no buffer behind, which the second asks the size of. The library says again that no frame has been given.
+  Run in a scratch program both ways; `SlangRunner` always gives a frame first.
+- **A device disposed under a held picture** is destroyed by the C# with the picture's memory, by its code and not
+  run; the library's lives until the picture lets go (§17.2).
+
+They are Q28.
+
+**Seeded faults: 99, in every part of the step**: the format's reading, the device's choosing, sampling, mip chains,
+transitions, uploads, the host barrier, the layer and the probe; the chain's building, its formats, its history,
+its sizes, what every name means and what every member is filled with; parameters, readbacks and their lending; and
+the C layer. Each was built into the library, the class run against it, and the file put back; the files seeded
+were compared with copies taken before the first, and were the same after the last. The class as first written
+caught 90, one of them by bringing its test host down (a chain's end freeing a readback a picture held). Of the
+other nine:
+
+- one was written wrong, its text not found in the file; written right, it is caught;
+- three were gaps in what the class asked, and are closed. No pass declared a parameter with a size's name, so
+  the order of the two rules was not met: the preset of three passes now declares `MidSize`. No case made sure
+  synchronisation validation was on, so a device made without it was silent and passed: the class now provokes a
+  hazard only it reports (above). And no case looked at where a picture's pixels are, so a readback made anew each
+  frame, rather than lent again, gave the same pictures and counts: the class now asserts one readback's memory
+  serves every frame a picture is let go;
+- one is caught by the crate's own test and not by the class, since no Vulkan call fails in a test: the result's
+  name in a failure's words;
+- four survive and are not gaps. Two are equivalent: a transition of some levels from the first taken for all
+  of them, which every path follows with a transition of all; and the history kept when only its height changes,
+  which cannot change unless the rows or their repeat do, and both are compared. Two cannot be reached on this
+  card: the barrier that makes a readback visible to the host, since the memory is coherent and the layer does not
+  follow the host's reads (`EmuSen_Serenity.md` §9.7 says the same of the C#'s); and a block's bytes not cleared
+  before they are filled, since RADV gives new memory cleared and nothing else writes those bytes.
+
+**One more thing it found, in a test of the C#'s:** `SlangSyncTests` shows the layer is listening by a buffer of no
+size, which is reported whether synchronisation validation is on or not. It has the gap the parity class had and is
+left as it is; it is an open item (§15).
+
+### 17.6 P5, P7, the bench, and publishing
+
+**The bench's pictures are the same.** §8.1's bench of `EmuSen_Serenity.md` (the real `GameFrameControl` draw path
+on a GL context, the preset on the shared device, 60 frames of warm-up and 300 measured at 60 Hz, three more hashed
+off the surface) was run for six cases in a 1080p window on the C# and on the library, twice each, interleaved,
+each run its own process: Lottes, `crt-guest-advanced`, `crt-royale`, Mega Bezel's `POTATO` and `SMOOTH-ADV` at
+256×224, and `crt-royale` at 2560×960 with its rows twice. The three hashes of every case were the same in all four
+runs. The base commit's bench, built from `475fe4c3` with the C# chain, drew `crt-royale` with the same three hashes as
+this branch's both ways.
+
+**P5 holds, with its first clause said more exactly.** What the C# chain allocates a frame was its passes' lists
+in `Bind`; the library's chain allocates nothing managed, and what is left of a frame's allocation is the picture
+Skia is handed, which the facade makes in C#:
+
+| A frame taken and a picture made and let go, bytes allocated on the drawing thread | C# chain | Library's |
+|---|---|---|
+| one pass | 1,072 | 312 |
+| three passes | 4,848 | 312 |
+| `crt-royale`, 12 passes | 14,608 | 312 |
+| Mega Bezel `POTATO`, 10 passes | 12,512 | 312 |
+
+The 312 bytes are the same whatever the preset, which the parity class holds. In the bench, where the control and
+the bench's own probe allocate too, a frame fell from 3.7 to 2.1 KB for Lottes, from 15.1–18.6 to 3.7–3.8 KB for
+`crt-guest-advanced`, `crt-royale` and `POTATO`, and from 120.6 to 8.1 KB for `SMOOTH-ADV`. The C# runs made a
+generation-0 collection in four of twelve runs and a generation-1 in one; the library's twelve made none. No run
+of either made a generation-2 collection, so the one `EmuSen_Serenity.md` §9.8 saw in N64 4× royale was not seen
+here to be removed.
+
+**GPU time does not change.** The passes' time agreed within 2% in five of the six cases (0.54 against 0.53 ms for
+`crt-royale`, 2.24 against 2.22 for `SMOOTH-ADV`), which is less than one implementation differs from itself between
+rounds. Lottes did not at first: 0.66 ms on the C# and 0.73 on the library in both rounds. Three more runs of each in a
+changed order gave 0.64 to 0.72 for the C# and 0.64 to 0.74 for the library, the same range, and whichever ran
+first after a pause was the faster: this one pass's time follows the card's clock, as §8.1 there records. Run flat
+out, where the clock is steady, it is 0.474 ms in three runs of each, the same to the last digit. On the processor
+the sizing and binding of a frame fell from 0.004 to 0.001 ms for one pass and the render thread's whole frame by
+about 1%, which is not a reason to do anything.
+
+**P7 holds.** The platform library a publish carries is 1,445,832 bytes with all three crates in it, against 4 MB;
+it was 1,147,432 before this step, measured the same way in step 4a.
+
+**Publishing.** A self-contained linux-x64 publish of Mistress has the same 454 files as one of `475fe4c3` built
+the same way beside it. Vulkan's loader is the system's, as it is for Silk.NET, and nothing else is loaded that the
+publish did not carry before.
+
+### 17.7 Questions for the tester
+
+| | Question | As built |
+|---|---|---|
+| Q27 | What decodes a lookup image when there is no C# | the host decodes with Skia and hands the pixels over, since the pictures are the same only if the decoder is (§17.2). A Rust program will need a decoder held to Skia's pixels, or the pictures re-recorded |
+| Q28 | The four differences found in the C# chain and device (§17.5): mend the C# now, or leave it to its retirement | left as they are: no C# is rewritten in this step, none is reached by a frontend today, and the library does not have them. Mending the wait outside the lock is one line and a test with the layer forced on |
+| Q29 | Vulkan's own handles for the instance and the device crossing the interface | exported, for the test that shows the layer is listening, and for a client that will present the picture itself (§17.2) |
+| Q30 | −1028 as `DEVICE`, for no device and for a call a device refused, where §3.5 named it `NO_DEVICE` | one status for both, since the host does one thing with either |

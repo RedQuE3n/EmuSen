@@ -27,22 +27,31 @@ thread_local! {
     static PENDING: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
-fn shaderc() -> Result<Arc<Shaderc>, i32> {
+/// Leaves a document waiting on the calling thread for `emusen_serenity_take`, or nothing when there is none.
+pub(crate) fn leave(document: Option<&Value>) {
+    let mut text = String::new();
+    if let Some(document) = document {
+        json::write_compact(&mut text, document);
+    }
+    PENDING.with_borrow_mut(|pending| *pending = text.into_bytes());
+}
+
+pub(crate) fn shaderc() -> Result<Arc<Shaderc>, i32> {
     SHADERC.get().cloned().ok_or_else(|| fail(status::NOT_SUPPORTED, "Shaderc has not been lent to the library"))
 }
 
 /// Bytes out by the pending idiom: their length, copied when they fit and kept for `emusen_serenity_take` when not.
-unsafe fn out_bytes(bytes: Vec<u8>, out: *mut u8, cap: usize) -> i64 {
+pub(crate) unsafe fn out_bytes(bytes: Vec<u8>, out: *mut u8, cap: usize) -> i64 {
     PENDING.with_borrow_mut(|pending| unsafe { hand_over(pending, bytes, out, cap) })
 }
 
-unsafe fn out_json(value: &Value, out: *mut u8, cap: usize) -> i64 {
+pub(crate) unsafe fn out_json(value: &Value, out: *mut u8, cap: usize) -> i64 {
     let mut text = String::new();
     json::write_compact(&mut text, value);
     unsafe { out_bytes(text.into_bytes(), out, cap) }
 }
 
-fn object(members: Vec<(&str, Value)>) -> Value {
+pub(crate) fn object(members: Vec<(&str, Value)>) -> Value {
     Value::Object(members.into_iter().map(|(name, value)| (json::Text::new(name), value)).collect())
 }
 
@@ -55,7 +64,7 @@ fn bits(value: f32) -> Value {
 }
 
 /// A reader's failure, as the exception the C# throws for it.
-fn failure(error: &Error) -> Value {
+pub(crate) fn failure(error: &Error) -> Value {
     match error {
         Error::NotFound { message, file } => object(vec![("fail", Value::string("not_found")), ("message", Value::string(message)), ("file", Value::string(file))]),
         Error::InvalidData(message) => object(vec![("fail", Value::string("invalid_data")), ("message", Value::string(message))]),
@@ -210,7 +219,7 @@ pub unsafe extern "C" fn emusen_serenity_preset_load(path: *const u8, len: usize
     unsafe { out_json(&document, out, cap) }
 }
 
-fn parameter_json(parameter: &Parameter) -> Value {
+pub(crate) fn parameter_json(parameter: &Parameter) -> Value {
     object(vec![
         ("id", Value::string(&parameter.id)),
         ("description", Value::string(&parameter.description)),
@@ -249,7 +258,7 @@ pub unsafe extern "C" fn emusen_serenity_source_load(path: *const u8, len: usize
     unsafe { out_json(&document, out, cap) }
 }
 
-fn number(value: Option<&Value>) -> Option<u32> {
+pub(crate) fn number(value: Option<&Value>) -> Option<u32> {
     match value? {
         Value::Number(token) => token.parse().ok(),
         _ => None,
@@ -270,11 +279,11 @@ fn parameter_of(value: &Value) -> Option<Parameter> {
 
 /// # Safety
 /// `data` valid for `len` bytes.
-unsafe fn document(data: *const u8, len: usize) -> Result<Value, i32> {
+pub(crate) unsafe fn document(data: *const u8, len: usize) -> Result<Value, i32> {
     json::parse(unsafe { required(data, len) }?).map_err(|error| fail(status::PARSE, error.to_string()))
 }
 
-fn list(value: Option<&Value>) -> Option<&Vec<Value>> {
+pub(crate) fn list(value: Option<&Value>) -> Option<&Vec<Value>> {
     match value? {
         Value::Array(items) => Some(items),
         _ => None,
@@ -311,7 +320,7 @@ pub unsafe extern "C" fn emusen_serenity_parameters_merge(input: *const u8, len:
 /// What a merge is given: each source's parameters, and the preset's values.
 type Merge = (Vec<Vec<Parameter>>, Vec<(String, f32)>);
 
-fn stage(stage: u32) -> Result<Stage, i32> {
+pub(crate) fn stage(stage: u32) -> Result<Stage, i32> {
     match stage {
         0 => Ok(Stage::Vertex),
         1 => Ok(Stage::Fragment),
@@ -354,7 +363,7 @@ fn reflection_json(reflection: &Reflection) -> Value {
     ])
 }
 
-fn fault_json(fault: &Fault) -> Value {
+pub(crate) fn fault_json(fault: &Fault) -> Value {
     let (kind, message) = match fault {
         Fault::NotSpirv(message) => ("not_spirv", message.as_str()),
         Fault::IndexOutOfRange => ("index", "an instruction is shorter than its kind"),
@@ -366,7 +375,7 @@ fn fault_json(fault: &Fault) -> Value {
 
 /// # Safety
 /// `data` valid for `len` bytes, or null with `len` 0.
-unsafe fn bytes<'a>(data: *const u8, len: usize) -> &'a [u8] {
+pub(crate) unsafe fn bytes<'a>(data: *const u8, len: usize) -> &'a [u8] {
     if data.is_null() || len == 0 { &[] } else { unsafe { std::slice::from_raw_parts(data, len) } }
 }
 
@@ -437,7 +446,7 @@ pub unsafe extern "C" fn emusen_serenity_without_unread_inputs(spirv: *const u8,
 // The cache.
 
 pub struct CacheHandle {
-    cache: Mutex<Cache>,
+    pub(crate) cache: Mutex<Cache>,
 }
 
 fn locked(handle: &CacheHandle) -> std::sync::MutexGuard<'_, Cache> {

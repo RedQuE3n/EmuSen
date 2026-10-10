@@ -6,13 +6,16 @@
 //! libraries the program already ships, lent by the host or opened by path, never a second copy.
 
 pub mod cache;
+pub mod chain;
 pub mod compiler;
+pub mod format;
 pub mod parameters;
 pub mod preset;
 pub mod reflection;
 pub mod source;
 pub mod sqlite;
 pub mod text;
+pub mod vulkan;
 pub mod word;
 
 use emusen_galaxia::dotnet_path::{Style, combine, full_path};

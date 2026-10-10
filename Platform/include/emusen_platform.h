@@ -12,13 +12,15 @@
  *  - A result is copied into the caller's buffer by the length-query idiom: the call returns the whole length in
  *    bytes and writes only when the buffer holds all of it; a null buffer asks the length. Nothing passed in is
  *    kept after the call, except SDL's handle and a simulated pad or set plugged into another, which are said so
- *    where they are passed; the only pointers returned are handles the library made.
+ *    where they are passed; the only pointers returned are handles the library made, with one exception, named
+ *    where it is declared: the pixels of a readback Serenity's chain lends to a picture.
  *  - A return below zero is a status. EMUSEN_PLATFORM_ABSENT is an answer, not a failure: the thing asked for does
  *    not exist. The words for a failure are read with emusen_platform_last_error on the same thread.
  *  - Every call of Galaxia's is safe from any thread, concurrently with any other. A resampler, a router and an
  *    interface player of Endymion's are used by one thread at a time; a rate control, an audio player, a simulated
  *    pad, a set of them and a pads handle lock themselves and may be used from any thread, as the programs use
- *    them; Endymion's other calls are safe from any thread.
+ *    them; Endymion's other calls are safe from any thread. Serenity's cache and device lock themselves; a chain
+ *    is one thread's at a time; a lent readback is given back from any thread.
  *  - Nothing unwinds. The library is built to abort on a panic, after writing the crash log the host named.
  *
  * This interface is not stable. Its one version number is matched exactly by the host built from the same commit,
@@ -34,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 5u
+#define EMUSEN_PLATFORM_ABI_VERSION 6u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -42,7 +44,8 @@ extern "C" {
 #define EMUSEN_PLATFORM_NOT_SUPPORTED (-256) /* an operation this build does not have */
 #define EMUSEN_PLATFORM_IO (-1024)           /* reading or writing failed */
 #define EMUSEN_PLATFORM_PARSE (-1025)        /* text that is not JSON as .NET reads it, or not what its model allows */
-/* -1026 to -1029 are kept for newer-file, device and compile failures of later components. */
+/* -1026, -1027 and -1029 are kept for newer-file and compile failures of later components. */
+#define EMUSEN_PLATFORM_DEVICE (-1028)       /* there is no Vulkan device, or one refused a call */
 #define EMUSEN_PLATFORM_ABSENT (-1030)       /* what was asked for does not exist; an answer, not a failure */
 #define EMUSEN_PLATFORM_NOT_FOUND (-1031)    /* a file or directory that had to exist does not */
 #define EMUSEN_PLATFORM_ACCESS (-1032)       /* the system refused access */
@@ -703,7 +706,7 @@ float emusen_endymion_ui_volume(const emusen_endymion_ui *ui);
 int64_t emusen_endymion_ui_decode(const uint8_t *path, size_t path_len, uint8_t *out, size_t cap);
 int64_t emusen_endymion_ui_decode_take(uint8_t *out, size_t cap);
 
-/* ---- Serenity: the slang half without a device (EmuSen_Serenity.md, sections 7 to 9) ---- */
+/* ---- Serenity: presets, sources, the compiler, reflection and the cache (EmuSen_Serenity.md, sections 7 to 9) ---- */
 
 /*
  * Shaderc and SQLite are the host's: it lends the handles its own bindings loaded, once each, and the library calls
@@ -805,6 +808,120 @@ int32_t emusen_serenity_text_class(uint32_t which, uint32_t unit);
 
 /* A number as the readers parse one: 1 with its 32 bits in `out`, 0 for text that is not one. */
 int32_t emusen_serenity_parse_number(uint32_t which, const uint8_t *text, size_t text_len, uint32_t *out);
+
+/* ---- Serenity: the Vulkan device and the chain (EmuSen_Serenity.md, sections 7.4, 9 and 10) ---- */
+
+/*
+ * One Vulkan device with a graphics queue: SlangVulkan. `name` picks the device whose name holds it, whatever its
+ * case (null or empty for any), a discrete one before an integrated one before a virtual one. With `validate`, the
+ * Khronos layer is loaded with synchronisation validation, for a test. Null when there is none, and the words are
+ * the C#'s report of why. The handle locks itself: a chain may be built on one thread while another draws.
+ *
+ * Closing lets go of the device, which is destroyed once no chain and no lent readback made on it is left; the
+ * handle stays, to be asked what the layer said to the end, until it is freed.
+ */
+typedef struct emusen_serenity_device emusen_serenity_device;
+
+emusen_serenity_device *emusen_serenity_device_new(const uint8_t *name, size_t name_len, int32_t validate);
+int32_t emusen_serenity_device_close(const emusen_serenity_device *device);
+int32_t emusen_serenity_device_free(emusen_serenity_device *device);
+int64_t emusen_serenity_device_name(const emusen_serenity_device *device, uint8_t *out, size_t cap);
+
+/* What the validation layer has said of the device's calls, on whatever thread: each finding followed by a NUL, removed once a buffer has taken them all. */
+int64_t emusen_serenity_device_findings(const emusen_serenity_device *device, uint8_t *out, size_t cap);
+
+#define EMUSEN_SERENITY_RAW_INSTANCE 0u /* the VkInstance */
+#define EMUSEN_SERENITY_RAW_DEVICE 1u   /* the VkDevice */
+
+/* Vulkan's own handle, for a caller that makes a call of its own on it; zero for a closed device. The device's queue is the library's: nothing else submits to it. */
+uint64_t emusen_serenity_device_raw(const emusen_serenity_device *device, uint32_t which);
+
+/*
+ * A bench's probe (EmuSen_Serenity.md, section 8.1). While it is on, each phase of a chain's calls and each
+ * submission's timestamps wait to be taken, in order, a submission's device marks before its WAITED. A phase's
+ * value is nanoseconds since the call that turned the probe on returned; a device mark's is nanoseconds since its
+ * submission began. Points: -1 and -2 a submission's two ends and 0 upward the end of each pass, on the device;
+ * 1 submitted, 2 waited, 10 and 11 a frame's taking, 20 a render's beginning, 21 bound, 22 run, 23 copied.
+ */
+#define EMUSEN_SERENITY_MARK_PHASE 0u
+#define EMUSEN_SERENITY_MARK_GPU 1u
+
+typedef struct {
+    uint32_t kind;
+    int32_t point;
+    double value;
+} emusen_serenity_mark;
+
+int32_t emusen_serenity_device_probe(const emusen_serenity_device *device, int32_t on);
+
+/* The marks' count, copied and removed when `out` holds them all. */
+int64_t emusen_serenity_device_marks(const emusen_serenity_device *device, emusen_serenity_mark *out, size_t cap);
+
+/*
+ * A preset built on a device: SlangChain. `preset` is the document emusen_serenity_preset_load answers with; each
+ * stage is compiled through `cache` (null for none), with `now` in Unix seconds for a row's last use; `builders`
+ * passes are built at a time, and one or fewer builds them in order and stops at the first that fails. Null when
+ * it cannot be built: a document of why then waits for emusen_serenity_take, a reader's or a reflection's as above,
+ * or {"fail": "compile" | "device" | "overflow", "message"} for a stage that does not compile, a Vulkan call that
+ * failed, or a history too deep to count. Nothing waits when the failure is the call's own.
+ *
+ * A chain is used by one thread at a time. Its lookup images are not read by the library: the host decodes each
+ * and hands its pixels over, by its place in the preset's textures, before the first render.
+ */
+typedef struct emusen_serenity_chain emusen_serenity_chain;
+
+emusen_serenity_chain *emusen_serenity_chain_new(const emusen_serenity_device *device, const uint8_t *preset, size_t preset_len, const emusen_serenity_cache *cache, int64_t now, int32_t builders);
+int32_t emusen_serenity_chain_free(emusen_serenity_chain *chain);
+
+/* Every parameter the passes declare, with the preset's value as its default where it gives one: the array emusen_serenity_parameters_merge answers with. */
+int64_t emusen_serenity_chain_parameters(const emusen_serenity_chain *chain, uint8_t *out, size_t cap);
+
+/* A lookup image's pixels, RGBA8, a row after a row. BAD_ARGUMENT for fewer bytes than its size says. */
+int32_t emusen_serenity_chain_lut(const emusen_serenity_chain *chain, uint32_t index, int32_t width, int32_t height, const uint8_t *rgba, size_t rgba_len);
+
+/* A value for each parameter, in the order emusen_serenity_chain_parameters gives them, read by the next render. BAD_ARGUMENT unless there is one for each. */
+int32_t emusen_serenity_chain_set_parameters(const emusen_serenity_chain *chain, const float *values, size_t count);
+
+/* A parameter's value by its id: 1 with it in `out`, 0 for an id no pass declares. */
+int32_t emusen_serenity_chain_value(const emusen_serenity_chain *chain, const uint8_t *id, size_t id_len, float *out);
+
+/* A new frame, RGBA8, each row shown `row_repeat` times. BAD_ARGUMENT for fewer bytes than its size says; DEVICE for a Vulkan call that failed. */
+int32_t emusen_serenity_chain_advance(const emusen_serenity_chain *chain, const uint8_t *rgba, size_t rgba_len, int32_t width, int32_t height, int32_t row_repeat);
+
+/*
+ * Runs every pass for a viewport and copies the last one's pixels out, RGBA8: four bytes for each pixel of a
+ * viewport at least one by one. BAD_ARGUMENT, with nothing run, unless `out` holds them all; DEVICE when no frame
+ * has been given yet or a Vulkan call failed.
+ */
+int64_t emusen_serenity_chain_render(const emusen_serenity_chain *chain, int32_t width, int32_t height, uint8_t *out, size_t cap);
+
+/*
+ * The interface's one pointer into the library's memory (EmuSen_RustPlatform.md, section 3.3). The same render,
+ * with no copy: `pixels` is the readback itself, valid and not written again until emusen_serenity_lent_release is
+ * given `slot`, from any thread, once. A chain lends up to three readbacks at a time; when all are held, `slot` is
+ * zero and `pixels` is the chain's own readback, valid only until the chain's next call, for the caller to copy. A
+ * chain freed under a lent readback leaves it to its release, and the device with it. `size` is set by the caller
+ * to its size of the struct. Releasing a number that names no lent readback is ABSENT.
+ */
+typedef struct {
+    uint32_t size;
+    const uint8_t *pixels;
+    size_t bytes;
+    int32_t width, height, row_bytes;
+    uint64_t slot;
+} emusen_serenity_lent;
+
+int32_t emusen_serenity_chain_render_lent(const emusen_serenity_chain *chain, int32_t width, int32_t height, emusen_serenity_lent *out);
+int32_t emusen_serenity_lent_release(uint64_t slot);
+
+#define EMUSEN_SERENITY_CHAIN_COPIED_IMAGES 0u /* pictures that were copies because every lendable readback was held */
+#define EMUSEN_SERENITY_CHAIN_READBACKS 1u     /* readbacks the chain has to lend */
+#define EMUSEN_SERENITY_CHAIN_MAX_LENT 2u      /* how many it may have; needs no chain */
+
+int64_t emusen_serenity_chain_get(const emusen_serenity_chain *chain, uint32_t which);
+
+/* The Vulkan format a pass's `#pragma format` names, as the C# resolves the word through its binding's enumeration: `out` is its value, or `fallback` for a word that names none. */
+int32_t emusen_serenity_parse_format(const uint8_t *name, size_t name_len, int32_t fallback, int32_t *out);
 
 #ifdef __cplusplus
 }

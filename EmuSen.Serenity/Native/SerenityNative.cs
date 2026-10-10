@@ -10,12 +10,13 @@ using Silk.NET.Core.Contexts;
 
 namespace EmuSen.Serenity.Native
 {
-    // Serenity's half of emusen_platform, the switch that chooses it over the C#, and the lending of Shaderc and SQLite - see EmuSen_RustPlatform.md §3.9 and §16.
+    // Serenity's half of emusen_platform, the switch that chooses it over the C#, and the lending of Shaderc and SQLite - see EmuSen_RustPlatform.md §3.9, §16 and §17.
     internal static unsafe class SerenityNative
     {
         public const string Variable = "EMUSEN_SERENITY_NATIVE";
 
         internal const int Absent = -1030, Parse = -1025, BadArgument = -1033;
+        internal const uint RawInstance = 0, RawDevice = 1, MarkPhase = 0, MarkGpu = 1, ChainCopiedImages = 0, ChainReadbacks = 1, ChainMaxLent = 2;
         internal const uint CacheWorking = 0, CacheHits = 1, CacheMisses = 2, CacheStored = 3, CacheDamaged = 4, CacheSkipped = 5, CacheEvicted = 6, CacheTouchAfter = 7;
         internal const uint ClassSpace = 0, ClassWord = 1, NumberFloat = 0, NumberInteger = 1;
 
@@ -59,7 +60,47 @@ namespace EmuSen.Serenity.Native
         internal static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, uint, byte*, nuint, byte*, int> CacheKey;
         internal static delegate* unmanaged[Cdecl]<uint, uint, int> TextClass;
         internal static delegate* unmanaged[Cdecl]<uint, byte*, nuint, uint*, int> ParseNumber;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, int, nint> DeviceNew;
+        internal static delegate* unmanaged[Cdecl]<nint, int> DeviceClose;
+        internal static delegate* unmanaged[Cdecl]<nint, int> DeviceFree;
+        internal static delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> DeviceName;
+        internal static delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> DeviceFindings;
+        internal static delegate* unmanaged[Cdecl]<nint, uint, ulong> DeviceRaw;
+        internal static delegate* unmanaged[Cdecl]<nint, int, int> DeviceProbe;
+        internal static delegate* unmanaged[Cdecl]<nint, Mark*, nuint, long> DeviceMarks;
+        internal static delegate* unmanaged[Cdecl]<nint, byte*, nuint, nint, long, int, nint> ChainNew;
+        internal static delegate* unmanaged[Cdecl]<nint, int> ChainFree;
+        internal static delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> ChainParameters;
+        internal static delegate* unmanaged[Cdecl]<nint, uint, int, int, byte*, nuint, int> ChainLut;
+        internal static delegate* unmanaged[Cdecl]<nint, float*, nuint, int> ChainSetParameters;
+        internal static delegate* unmanaged[Cdecl]<nint, byte*, nuint, float*, int> ChainValue;
+        internal static delegate* unmanaged[Cdecl]<nint, byte*, nuint, int, int, int, int> ChainAdvance;
+        internal static delegate* unmanaged[Cdecl]<nint, int, int, byte*, nuint, long> ChainRender;
+        internal static delegate* unmanaged[Cdecl]<nint, int, int, Lent*, int> ChainRenderLent;
+        internal static delegate* unmanaged[Cdecl]<ulong, int> LentRelease;
+        internal static delegate* unmanaged[Cdecl]<nint, uint, long> ChainGet;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, int, int*, int> ParseFormat;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, long> LastError;
+
+        // emusen_serenity_mark: one thing a device's probe saw.
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct Mark
+        {
+            public uint Kind;
+            public int Point;
+            public double Value;
+        }
+
+        // emusen_serenity_lent: a picture over a readback, and the number that gives the readback back.
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct Lent
+        {
+            public uint Size;
+            public byte* Pixels;
+            public nuint Bytes;
+            public int Width, Height, RowBytes;
+            public ulong Slot;
+        }
 
         // Every export this half calls, in the order Attach takes them; a name the library lacks refuses it.
         internal static readonly string[] Exports =
@@ -68,7 +109,11 @@ namespace EmuSen.Serenity.Native
             "emusen_serenity_source_load", "emusen_serenity_parameters_merge", "emusen_serenity_compile", "emusen_serenity_reflect", "emusen_serenity_reflect_merge",
             "emusen_serenity_without_unread_inputs", "emusen_serenity_cache_new", "emusen_serenity_cache_free", "emusen_serenity_cache_close", "emusen_serenity_cache_compile",
             "emusen_serenity_cache_get", "emusen_serenity_cache_set_touch_after", "emusen_serenity_cache_problem", "emusen_serenity_cache_key", "emusen_serenity_text_class",
-            "emusen_serenity_parse_number", "emusen_platform_last_error",
+            "emusen_serenity_parse_number", "emusen_serenity_device_new", "emusen_serenity_device_close", "emusen_serenity_device_free", "emusen_serenity_device_name",
+            "emusen_serenity_device_findings", "emusen_serenity_device_raw", "emusen_serenity_device_probe", "emusen_serenity_device_marks", "emusen_serenity_chain_new",
+            "emusen_serenity_chain_free", "emusen_serenity_chain_parameters", "emusen_serenity_chain_lut", "emusen_serenity_chain_set_parameters", "emusen_serenity_chain_value",
+            "emusen_serenity_chain_advance", "emusen_serenity_chain_render", "emusen_serenity_chain_render_lent", "emusen_serenity_lent_release", "emusen_serenity_chain_get",
+            "emusen_serenity_parse_format", "emusen_platform_last_error",
         };
 
         // Null when every export resolved and both libraries were lent; otherwise why the library is not in use.
@@ -101,6 +146,26 @@ namespace EmuSen.Serenity.Native
             CacheKey = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, uint, byte*, nuint, byte*, int>)found[next++];
             TextClass = (delegate* unmanaged[Cdecl]<uint, uint, int>)found[next++];
             ParseNumber = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, uint*, int>)found[next++];
+            DeviceNew = (delegate* unmanaged[Cdecl]<byte*, nuint, int, nint>)found[next++];
+            DeviceClose = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
+            DeviceFree = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
+            DeviceName = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)found[next++];
+            DeviceFindings = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)found[next++];
+            DeviceRaw = (delegate* unmanaged[Cdecl]<nint, uint, ulong>)found[next++];
+            DeviceProbe = (delegate* unmanaged[Cdecl]<nint, int, int>)found[next++];
+            DeviceMarks = (delegate* unmanaged[Cdecl]<nint, Mark*, nuint, long>)found[next++];
+            ChainNew = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, nint, long, int, nint>)found[next++];
+            ChainFree = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
+            ChainParameters = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)found[next++];
+            ChainLut = (delegate* unmanaged[Cdecl]<nint, uint, int, int, byte*, nuint, int>)found[next++];
+            ChainSetParameters = (delegate* unmanaged[Cdecl]<nint, float*, nuint, int>)found[next++];
+            ChainValue = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, float*, int>)found[next++];
+            ChainAdvance = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, int, int, int, int>)found[next++];
+            ChainRender = (delegate* unmanaged[Cdecl]<nint, int, int, byte*, nuint, long>)found[next++];
+            ChainRenderLent = (delegate* unmanaged[Cdecl]<nint, int, int, Lent*, int>)found[next++];
+            LentRelease = (delegate* unmanaged[Cdecl]<ulong, int>)found[next++];
+            ChainGet = (delegate* unmanaged[Cdecl]<nint, uint, long>)found[next++];
+            ParseFormat = (delegate* unmanaged[Cdecl]<byte*, nuint, int, int*, int>)found[next++];
             LastError = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
             return Lend();
         }
@@ -207,6 +272,9 @@ namespace EmuSen.Serenity.Native
                 "index" => new IndexOutOfRangeException(),
                 "range" => new ArgumentOutOfRangeException(),
                 "endless" => new ArgumentException("Not SPIR-V: a type holds itself."),
+                "compile" => new Slang.SlangCompileException(message),
+                "device" => new InvalidOperationException(message),
+                "overflow" => new OverflowException(),
                 _ => new IOException(message),
             };
         }

@@ -36,9 +36,9 @@ namespace EmuSen.WiseMan.DianaSh
             string? savedPath = null;
             var command = new StateCommand(p => savedPath = p, _ => { }, () => "default.state");
 
-            command.Execute(null, Args("state", "save", "custom.state"), null);
+            command.Execute(null, Args("state", "save", "/Saves/custom.state"), null);
 
-            Assert.Equal("custom.state", savedPath);
+            Assert.Equal(System.IO.Path.Combine(DianaShSandbox.RootDirectory, "Saves", "custom.state"), savedPath);
         }
 
         [Fact]

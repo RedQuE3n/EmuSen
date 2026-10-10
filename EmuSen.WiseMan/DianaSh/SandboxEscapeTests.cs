@@ -106,5 +106,28 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("ROM not found", said[1]);
             Assert.Equal(Path.Combine(runner.Home, "Games", "a.sfc"), EmuSen.Hotaru.Program.TryResolveCoreCommand("core snes Games/a.sfc", said.Add));
         }
+
+        [Fact]
+        public void A_state_path_outside_the_root_is_refused()
+        {
+            using var runner = new GoldenRunner();
+            var steps = Run(runner, "none", [("../theirs.state", "state")], "state save ../escaped.state", "state load ../theirs.state");
+            Assert.False(File.Exists(Outside(runner, "escaped.state")), Text(steps[0]));
+            foreach (GoldenStep step in steps)
+            {
+                Assert.Equal(1, step.Status);
+                Assert.Contains("is outside the project sandbox", Text(step));
+            }
+        }
+
+        [Fact]
+        public void A_state_path_is_read_inside_the_root_and_the_default_is_the_hosts()
+        {
+            using var runner = new GoldenRunner();
+            var steps = Run(runner, "none", [], "cd Logs", "state save /Saves/mine.state", "state save");
+            Assert.Equal(0, steps[1].Status);
+            Assert.True(File.Exists(Path.Combine(runner.Home, "Saves", "mine.state")), Text(steps[1]));
+            Assert.Equal("[STATE] Saved: <ROOT>/Saves/Save States/golden.state", Text(steps[2]));
+        }
     }
 }

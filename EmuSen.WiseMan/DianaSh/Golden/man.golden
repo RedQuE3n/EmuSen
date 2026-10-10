@@ -3754,7 +3754,7 @@ case the page for state
 target none
 covers 1
 $ man state
-out 518
+out 1008
 NAME
     state - save or load emulator state
 
@@ -3769,10 +3769,18 @@ DESCRIPTION
     'path' defaults to this frontend's own save-state path (one slot per
     ROM) if omitted.
 
+    A path that is given is read as every path in this shell is: relative
+    to the current directory, or with a leading '/' from this shell's
+    root, and refused if it lands above the root (see 'man hier'); the
+    frontend is handed the resolved path. The default is the frontend's
+    own and is used as the frontend gives it, since Preferences may put
+    save states outside the root. Before 2026-10-10 a given path was
+    passed on unchecked, so a state could be written anywhere.
+
 EXAMPLES
     state save
     state load
-    state save home/Saves/Save States/before-boss.state
+    state save "/Saves/Save States/before-boss.state"
 status 0
 action none
 end

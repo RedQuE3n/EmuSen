@@ -53,8 +53,34 @@ Usage: state save|load [path]  (defaults to the F5/F9 path if omitted)
 status 1
 action none
 $ state save /nonexistent-dir/x.state
-out 82
-[STATE] Save failed: Could not find a part of the path '/nonexistent-dir/x.state'.
+out 88
+[STATE] Save failed: Could not find a part of the path '<ROOT>/nonexistent-dir/x.state'.
 status 1
+action none
+end
+
+case a path that climbs out of the root
+target none
+covers 1
+$ state save ../escaped.state
+out 65
+state: '../escaped.state' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ state load ../escaped.state
+out 65
+state: '../escaped.state' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ state save /Saves/mine.state
+out 32
+[STATE] Saved: /Saves/mine.state
+status 0
+action none
+$ ls Saves
+out 23
+Save States/
+mine.state
+status 0
 action none
 end

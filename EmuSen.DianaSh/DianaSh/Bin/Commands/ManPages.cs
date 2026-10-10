@@ -2094,10 +2094,17 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    frontend's own Save State/Load State hotkey or menu item performs.\n" +
                 "    'path' defaults to this frontend's own save-state path (one slot per\n" +
                 "    ROM) if omitted.\n\n" +
+                "    A path that is given is read as every path in this shell is: relative\n" +
+                "    to the current directory, or with a leading '/' from this shell's\n" +
+                "    root, and refused if it lands above the root (see 'man hier'); the\n" +
+                "    frontend is handed the resolved path. The default is the frontend's\n" +
+                "    own and is used as the frontend gives it, since Preferences may put\n" +
+                "    save states outside the root. Before 2026-10-10 a given path was\n" +
+                "    passed on unchecked, so a state could be written anywhere.\n\n" +
                 "EXAMPLES\n" +
                 "    state save\n" +
                 "    state load\n" +
-                "    state save home/Saves/Save States/before-boss.state",
+                "    state save \"/Saves/Save States/before-boss.state\"",
 
             ["pause"] =
                 "NAME\n" +

@@ -10,7 +10,7 @@ Around the cores there is a frontend, a debugging shell built into the emulator,
 
 | Console | Core | Where it stands |
 |---|---|---|
-| Nintendo 64 | **MarsRT** (Rust), the default; **Mars** (C#) | Super Mario 64, Ocarina of Time, GoldenEye 007 and Donkey Kong 64 run. Up to 4× internal resolution, antialiasing, an optional Vulkan path and a recompiler |
+| Nintendo 64 | **MarsRT** (Rust), the default; **Mars** (C#) | Super Mario 64, Ocarina of Time, GoldenEye 007 and Donkey Kong 64 run. Many others do as well, but haven't gotten to full testing. Most problematic roms work. Up to 4× internal resolution, antialiasing, an optional Vulkan path and a recompiler |
 | SNES | **Venus** (C#) | Runs commercial games, including SA-1, SuperFX, NEC DSP and OBC1 cartridges. Several play well; none has a verified playthrough |
 | Game Boy / Color | **Mercury** (C#), the default; **MercuryRT** (Rust) | Everything but the boot ROM, the link cable and the Super Game Boy. Passes 94 of the 173 blargg and mooneye hardware test ROMs |
 | NES | **Moon** (C#) | CPU, PPU, full APU and sixteen mapper boards. Plays Super Mario Bros. 3 and others, but has had far less play-testing than the SNES core |
@@ -19,6 +19,8 @@ Around the cores there is a frontend, a debugging shell built into the emulator,
 Every other console is an empty, reserved folder. Per-game results are in [the games list](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md).
 
 ### The Rust ports
+
+The Rust ports came about after reaching a performance wall with C# and cycle-accuracy with the N64. While the original Mars (N64) core ran fine on a desktop setup, it struggled on the Legion Go S, which is one of the development targets. This resulted in MarsRT coming to be. It produces the same machine state, picture and sound as the C# core after every frame, and it has everything the C# core has: the threaded display processor, the resolution multiple, antialiasing, the GPU path, debugger hooks and rewind, plus a Cranelift recompiler.
 
 MarsRT was the first port and is the most finished. It produces the same machine state, picture and sound as the C# core after every frame, and it has everything the C# core has: the threaded display processor, the resolution multiple, antialiasing, the GPU path, debugger hooks and rewind, plus a Cranelift recompiler. It became the default N64 engine after it was played on a Lenovo Legion Go S running SteamOS, where Donkey Kong 64 plays at full speed at 3× internal resolution. The C# core still runs wherever the Rust library is missing. The full story is in [`Mars_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_Native.md).
 
@@ -97,7 +99,7 @@ codesign --force --deep --sign - Mistress.app
 
 ### Platforms
 
-Linux is where EmuSen is developed and played, on a desktop and on a Legion Go S. Whenever the Rust cores change, GitHub Actions builds the Rust libraries for Linux, Windows and macOS (Intel and Apple Silicon), and runs the tests that compare the Rust cores with the C# ones on Linux, Windows and Apple Silicon. Nobody has played on a Windows or macOS build yet.
+EmuSen is primarly developed and tested on Linux. Builds exist for Windows and MacOS, but the testing is limited. Eventually, I will get around to installing Windows on a separate partition for testing, as well as breaking out my Mac M1 Mini for MacOS testing.
 
 ## Documentation
 

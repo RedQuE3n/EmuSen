@@ -301,35 +301,44 @@ namespace EmuSen.Serenity.Slang
 
                 _passes = new Pass[preset.Passes.Count];
                 BuildPasses(preset, cache, builders);
-                Parameters = SlangParameters.Merge(_passes.Select(p => p.Source), preset.Parameters);
-                SetParameters(null);
-
-                // History is as deep as the deepest OriginalHistory# any pass samples, plus the frame itself.
-                int depth = 0;
-                foreach (Pass pass in _passes)
-                    foreach (SlangSampler sampler in pass.Reflection.Samplers)
-                        if (sampler.Name.StartsWith("OriginalHistory", StringComparison.Ordinal) && int.TryParse(sampler.Name["OriginalHistory".Length..], out int n)) depth = Math.Max(depth, n);
-                _history = new SlangImage[depth + 1];
-
-                for (int i = 0; i < _passes.Length; i++)
+                // A failure once the passes are built gives back everything made so far, as the library's chain does - see EmuSen_RustPlatform.md §18.1.
+                try
                 {
-                    string? alias = _passes[i].Spec.Alias ?? _passes[i].Source.PassName;
-                    _passes[i].WantsFeedback = _passes.Any(p => p.Reflection.Samplers.Any(s => s.Name == $"PassFeedback{i}" || (alias is not null && s.Name == alias + "Feedback")));
-                    _passes[i].WantsMipmaps = i + 1 < _passes.Length && _passes[i + 1].Spec.MipmapInput;
-                }
+                    Parameters = SlangParameters.Merge(_passes.Select(p => p.Source), preset.Parameters);
+                    SetParameters(null);
 
-                foreach (SlangTextureSpec lut in preset.Textures)
+                    // History is as deep as the deepest OriginalHistory# any pass samples, plus the frame itself.
+                    int depth = 0;
+                    foreach (Pass pass in _passes)
+                        foreach (SlangSampler sampler in pass.Reflection.Samplers)
+                            if (sampler.Name.StartsWith("OriginalHistory", StringComparison.Ordinal) && int.TryParse(sampler.Name["OriginalHistory".Length..], out int n)) depth = Math.Max(depth, n);
+                    _history = new SlangImage[depth + 1];
+
+                    for (int i = 0; i < _passes.Length; i++)
+                    {
+                        string? alias = _passes[i].Spec.Alias ?? _passes[i].Source.PassName;
+                        _passes[i].WantsFeedback = _passes.Any(p => p.Reflection.Samplers.Any(s => s.Name == $"PassFeedback{i}" || (alias is not null && s.Name == alias + "Feedback")));
+                        _passes[i].WantsMipmaps = i + 1 < _passes.Length && _passes[i + 1].Spec.MipmapInput;
+                    }
+
+                    foreach (SlangTextureSpec lut in preset.Textures)
+                    {
+                        _lutSpecs[lut.Name] = lut;
+                        _luts[lut.Name] = LoadLut(lut);
+                    }
+
+                    _blank = gpu.CreateImage(1, 1, Format.R8G8B8A8Unorm, false);
+                    using (SlangBuffer zero = gpu.CreateBuffer(16, BufferUsageFlags.TransferSrcBit)) gpu.Upload(_blank, new byte[4], zero);
+
+                    _vertices = gpu.CreateBuffer(64, BufferUsageFlags.VertexBufferBit);
+                    float[] quad = { 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1 };
+                    fixed (float* q = quad) System.Buffer.MemoryCopy(q, _vertices.Mapped, 64, 64);
+                }
+                catch
                 {
-                    _lutSpecs[lut.Name] = lut;
-                    _luts[lut.Name] = LoadLut(lut);
+                    Dispose();
+                    throw;
                 }
-
-                _blank = gpu.CreateImage(1, 1, Format.R8G8B8A8Unorm, false);
-                using (SlangBuffer zero = gpu.CreateBuffer(16, BufferUsageFlags.TransferSrcBit)) gpu.Upload(_blank, new byte[4], zero);
-
-                _vertices = gpu.CreateBuffer(64, BufferUsageFlags.VertexBufferBit);
-                float[] quad = { 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1 };
-                fixed (float* q = quad) System.Buffer.MemoryCopy(q, _vertices.Mapped, 64, 64);
             }
 
             // Values by id over the defaults, read by the next Render; an id no pass declares is ignored, one left out is its default - see EmuSen_Serenity.md §7.6.
@@ -886,10 +895,10 @@ namespace EmuSen.Serenity.Slang
                 _disposed = true;
                 _vk.DeviceWaitIdle(_gpu.Device);
                 foreach (Pass pass in _passes) FreePass(pass);
-                foreach (SlangImage? image in _history) image?.Dispose();
+                foreach (SlangImage? image in _history ?? []) image?.Dispose();
                 foreach (SlangImage lut in _luts.Values) lut.Dispose();
-                _blank.Dispose();
-                _vertices.Dispose();
+                _blank?.Dispose();
+                _vertices?.Dispose();
                 _staging?.Dispose();
                 _rows?.Dispose();
                 foreach (ReadbackSlot slot in _readbacks) slot.Retire();

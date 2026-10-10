@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using EmuSen.Serenity.Native;
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
@@ -199,6 +200,10 @@ namespace EmuSen.Serenity.Slang
             private PfnDebugUtilsMessengerCallbackEXT? _validation;
             private DebugUtilsMessengerEXT _listener;
 
+            // Buffers and images made on the device and not yet given back to it, for a test.
+            private int _live;
+            internal int Live => Volatile.Read(ref _live);
+
             public string Name { get; }
 
             private Managed(Vk vk, Instance instance, PhysicalDevice physical, uint family, string name)
@@ -351,6 +356,7 @@ namespace EmuSen.Serenity.Slang
                 Check(Vk.BindBufferMemory(Device, buffer, memory, 0), "vkBindBufferMemory");
                 void* mapped = null;
                 Check(Vk.MapMemory(Device, memory, 0, Vk.WholeSize, 0, &mapped), "vkMapMemory");
+                Interlocked.Increment(ref _live);
                 return new SlangBuffer(this, buffer, memory, info.Size, (byte*)mapped);
             }
 
@@ -360,6 +366,7 @@ namespace EmuSen.Serenity.Slang
                 Vk.UnmapMemory(Device, buffer.Memory);
                 Vk.DestroyBuffer(Device, buffer.Handle, null);
                 Vk.FreeMemory(Device, buffer.Memory, null);
+                Interlocked.Decrement(ref _live);
             }
 
             internal static uint LevelsFor(uint width, uint height) => (uint)Math.Floor(Math.Log2(Math.Max(width, height))) + 1;
@@ -395,6 +402,7 @@ namespace EmuSen.Serenity.Slang
                     viewInfo.SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1);
                     Check(Vk.CreateImageView(Device, &viewInfo, null, out target), "vkCreateImageView");
                 }
+                Interlocked.Increment(ref _live);
                 return new SlangImage(this, image, memory, view, target, format, width, height, levels);
             }
 
@@ -405,6 +413,7 @@ namespace EmuSen.Serenity.Slang
                 Vk.DestroyImageView(Device, image.View, null);
                 Vk.DestroyImage(Device, image.Handle, null);
                 Vk.FreeMemory(Device, image.Memory, null);
+                Interlocked.Decrement(ref _live);
             }
 
             internal Sampler SamplerFor(bool linear, SlangWrap wrap, bool mipmap)

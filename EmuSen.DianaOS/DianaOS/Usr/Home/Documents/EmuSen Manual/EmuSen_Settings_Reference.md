@@ -8339,3 +8339,28 @@ mapping of §4.90. The cartridge's ports take three-button pads, whatever the tw
 (four pads in a big-screen session on a cartridge of the test's own with Micro Machines 2's serial, then the bindings
 window's four players and their pads); `NephritePlayersTests.A_j_cart_game_reads_players_3_and_4` (two games of the
 tester's library); the window fit audit's Controller Bindings cases at both sizes.
+
+### 4.104 The platform library's three switches (2026-10-10)
+
+Three components of the platform run on `libemusen_platform`, a library in Rust that ships beside the assemblies, by
+default, each with its C# kept behind a variable of its own (`EmuSen_RustPlatform.md` §3.9, §13 and §19):
+
+| Variable | Component | What it covers |
+|---|---|---|
+| `EMUSEN_GALAXIA_NATIVE` | Galaxia | the tree of folders, config files and their migrations, the error log, save paths, ROM hashes |
+| `EMUSEN_ENDYMION_NATIVE` | Endymion | audio output and its rate control, the pads and their routing to the console's ports, the interface sounds |
+| `EMUSEN_SERENITY_NATIVE` | Serenity's slang half | RetroArch presets: reading them, compiling their shaders, the compiled-shader cache, the Vulkan device and the chain that draws them |
+
+Each is read once, the first time its component is used. `0` runs the component's C#. Any other value, or none,
+runs the library when it loads, and otherwise runs the C# and writes one line to the error log saying why, for
+example:
+
+```
+<time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); Endymion runs on its C# implementation.
+```
+
+No component fails to start because of the library. SDL3, Shaderc and SQLite are the libraries the program already
+ships; the platform library is lent the copies the C# loaded, so a fallback changes nothing about them, and audio,
+pads and shaders work on the C# as before. The compiled-shader cache keeps the two implementations' shaders apart,
+so a preset is compiled once more the first time it is drawn after the switch changes (a tenth to a fifth of a second
+for Mega Bezel's presets on the development desktop, `EmuSen_RustPlatform.md` §19).

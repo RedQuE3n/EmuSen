@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void The_switch_is_what_the_variable_says()
         {
-            Assert.Equal(Environment.GetEnvironmentVariable(SerenityNative.Variable) == "1", SerenityNative.Active);
+            Assert.Equal(Environment.GetEnvironmentVariable(SerenityNative.Variable) != "0", SerenityNative.Active);
         }
 
         [Fact]

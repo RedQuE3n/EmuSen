@@ -24,6 +24,7 @@ on:
       - 'EmuSen.WiseMan/Serenity/Spirv*'
       - 'EmuSen.WiseMan/Serenity/SerenityParity*'
       - 'EmuSen.WiseMan/Serenity/SerenityChainParity*'
+      - 'EmuSen.WiseMan/Serenity/SerenitySwitch*'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
@@ -59,6 +60,7 @@ on:
       - 'EmuSen.WiseMan/Serenity/Spirv*'
       - 'EmuSen.WiseMan/Serenity/SerenityParity*'
       - 'EmuSen.WiseMan/Serenity/SerenityChainParity*'
+      - 'EmuSen.WiseMan/Serenity/SerenitySwitch*'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
@@ -429,33 +431,33 @@ jobs:
         continue-on-error: true
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaOSSandboxTests|FullyQualifiedName~HierTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=galaxia-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
-      # Endymion on its C#, which is what runs while its switch is unset: the pad and audio tests on simulated pads and SDL's dummy driver; reported, not yet a gate, as Galaxia's steps above.
+      # Endymion on its C#, which EMUSEN_ENDYMION_NATIVE=0 selects since its state 2: the pad and audio tests on simulated pads and SDL's dummy driver; reported, not yet a gate, as Galaxia's steps above.
       - name: Test Endymion on its C#
         working-directory: EmuSen-Project
         continue-on-error: true
+        env:
+          EMUSEN_ENDYMION_NATIVE: '0'
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Audio.|FullyQualifiedName~EmuSen.WiseMan.Input.|FullyQualifiedName~EmuSen.WiseMan.Endymion.|FullyQualifiedName~AudioProperties)&FullyQualifiedName!~EndymionParityTests&FullyQualifiedName!~EndymionDeviceParityTests" --logger "console;verbosity=normal"
 
-      # The same through the platform library, with the two parity classes that hold the library to the C# (EmuSen_RustPlatform.md §12.5, §14.5).
+      # The same through the platform library, Endymion's default since its state 2, with the parity classes that hold the library to the C# (EmuSen_RustPlatform.md §12.5, §14.5, §19).
       - name: Test Endymion on the platform library
         working-directory: EmuSen-Project
         continue-on-error: true
-        env:
-          EMUSEN_ENDYMION_NATIVE: '1'
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Audio.|FullyQualifiedName~EmuSen.WiseMan.Input.|FullyQualifiedName~EmuSen.WiseMan.Endymion.|FullyQualifiedName~AudioProperties" --logger "console;verbosity=normal" --logger "trx;LogFileName=endymion-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
-      # Serenity's slang half on its C#, which is what runs while its switch is unset: presets, sources, the compiler, reflection, the cache, the device and the chain; the tests that need a Vulkan device pass by without one. Reported, not yet a gate.
+      # Serenity's slang half on its C#, which EMUSEN_SERENITY_NATIVE=0 selects since its state 2: presets, sources, the compiler, reflection, the cache, the device and the chain; the tests that need a Vulkan device pass by without one. Reported, not yet a gate.
       - name: Test Serenity's slang half on its C#
         working-directory: EmuSen-Project
         continue-on-error: true
+        env:
+          EMUSEN_SERENITY_NATIVE: '0'
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Serenity.Slang|FullyQualifiedName~EmuSen.WiseMan.Serenity.Spirv)&FullyQualifiedName!~SerenityParityTests" --logger "console;verbosity=normal"
 
-      # The same through the platform library, with the parity classes that hold the library to the C# (EmuSen_RustPlatform.md §16.5 and §17.5).
+      # The same through the platform library, Serenity's default since its state 2, with the parity classes that hold the library to the C# (EmuSen_RustPlatform.md §16.5, §17.5, §19).
       - name: Test Serenity's slang half on the platform library
         working-directory: EmuSen-Project
         continue-on-error: true
-        env:
-          EMUSEN_SERENITY_NATIVE: '1'
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Serenity.Slang|FullyQualifiedName~EmuSen.WiseMan.Serenity.Spirv|FullyQualifiedName~SerenityParityTests|FullyQualifiedName~SerenityChainParityTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=serenity-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Serenity.Slang|FullyQualifiedName~EmuSen.WiseMan.Serenity.Spirv|FullyQualifiedName~SerenityParityTests|FullyQualifiedName~SerenityChainParityTests|FullyQualifiedName~SerenitySwitchTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=serenity-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

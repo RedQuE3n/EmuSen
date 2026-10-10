@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.Endymion
         [Fact]
         public void The_device_half_is_what_the_variable_says_and_calls_the_sdl_the_csharp_calls()
         {
-            Assert.Equal(Environment.GetEnvironmentVariable(EndymionNative.Variable) == "1", DeviceNative.Active);
+            Assert.Equal(Environment.GetEnvironmentVariable(EndymionNative.Variable) != "0", DeviceNative.Active);
             string value = Guid.NewGuid().ToString("N");
             Assert.Null(DeviceNative.Hint("EMUSEN_PARITY_PROBE"));
             Assert.True(SDL.SetHint("EMUSEN_PARITY_PROBE", value));

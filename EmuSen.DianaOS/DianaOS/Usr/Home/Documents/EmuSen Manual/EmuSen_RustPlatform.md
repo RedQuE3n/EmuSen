@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the ninth, 2026-10-10: the four defects step 4b's parity class found in the C# slang runtime shown and fixed in the C#, each by a test that failed first (§18); Q27 to Q30 decided (§9). The eighth, the same day: step 4b built, Serenity's Vulkan device and chain in Rust behind the same switch, still off, with the lent readback, the bench's pictures the same from both and the validation layer silent on the library's device (§17); Q25 and Q26 decided (§9). The seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the tenth, 2026-10-10: Endymion and Serenity's slang half moved to state 2, the library their default and their C# one variable away, through Galaxia's switch (§19). The ninth, the same day: the four defects step 4b's parity class found in the C# slang runtime shown and fixed in the C#, each by a test that failed first (§18); Q27 to Q30 decided (§9). The eighth, the same day: step 4b built, Serenity's Vulkan device and chain in Rust behind the same switch, still off, with the lent readback, the bench's pictures the same from both and the validation layer silent on the library's device (§17); Q25 and Q26 decided (§9). The seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -350,9 +350,8 @@ reported step:
 So at every point the platform runs: in state 1 nothing a player sees changes; in state 2 the C# is one variable
 away; state 3 comes only after golden outputs are recorded (§6.6) and the tester agrees.
 
-**Where each stands, 2026-10-09:** Galaxia is in state 2 (§13), Endymion in state 1, both its halves under the one
-variable (§12, §14), and Serenity's slang half in state 1 as far as it needs no device (§16); its device and chain
-are step 4b.
+**Where each stands, 2026-10-10:** all three are in state 2: Galaxia since step 2c (§13), Endymion, both its halves
+under the one variable, and Serenity's slang half, the device and the chain with it, since §19. None is in state 3.
 
 ---
 
@@ -1613,13 +1612,15 @@ Kept here so that none is lost between steps; each names where it was found.
 - **Windows and macOS:** nothing of the platform has run on either (§10.7, §11.7, §12.4, §14.4); CI's steps there
   report and do not gate (Q14, Q22).
 - **A second `Dispose` of a player** lets go of SDL's audio twice; reproduced, not run (§14.3).
-- **Endymion to state 2** is a later step, at the tester's word, as Galaxia's was (§13).
 - **A Rust program with no C# beside it** will need a SQLite of its own (Q25); what decodes lookup images then is
   decided at Serenity's retirement (Q27).
-- **The compiler's identities** are looked at again when Serenity moves to state 2 (Q26).
+- **Q26, the compiler's identities,** was to be looked at again when Serenity moved to state 2: it has moved, the
+  cost of the identities staying separate is measured, and the question is put again (§19.4).
 - *Closed 2026-10-10:* Q27 to Q30 are decided (§9); the four defects of the C# chain and device are fixed, and
   `SlangSyncTests` now shows synchronisation validation is on (§18).
-- **Serenity to state 2** is a later step, at the tester's word, as Galaxia's was (§13).
+- *Closed 2026-10-10:* Endymion and Serenity are in state 2 (§19).
+- **State 3** for each component is a later step of its own, after golden outputs (§6.6), at the tester's word; Q19
+  and Q23 are decided with it.
 
 ---
 
@@ -2214,3 +2215,120 @@ put back before the next build, and the file is the committed text.
 In the last row the layer said only what the tests provoke: the threading finding of §17.4 is gone. The threading
 case as first written passed on the C#, since two light chains seldom met at the queue; it was made to keep the queue
 busy with long submissions before any fix, after which it failed every run on the C#.
+
+---
+
+## 19. Endymion and Serenity in state 2, 2026-10-10
+
+The tester gave the two components' gates their go on 2026-10-10, after the four C# defects of §18 were fixed.
+Endymion and Serenity's slang half now run on the library by default, as Galaxia has since step 2c, and
+`EMUSEN_ENDYMION_NATIVE=0` and `EMUSEN_SERENITY_NATIVE=0` select their C#. No C# was removed, and
+`EmuSenPlatformRequired` stays false, since every rule still has its C# behind it. Each component is its own commit.
+
+### 19.1 The gate's evidence
+
+A full WiseMan run on 2026-10-10 with `EMUSEN_ENDYMION_NATIVE=1` and `EMUSEN_SERENITY_NATIVE=1`, Galaxia on its
+default, the library, passed 9,895 cases, failed none and skipped 53, in 18 minutes 39 seconds. It is the gate of
+each component: with §12.5's, §14.5's, §16.5's and §17.5's parity classes and their seeded faults, it is what §3.9
+asks before state 2. No case outside the components' own classes differed from a run on the C#.
+
+### 19.2 The switches in state 2
+
+Both are the same class as Galaxia's, `PlatformSwitch`, which became public and names its component in its line; no
+second switch was written. The table of §13.2 holds for each, with its own variable:
+
+| The variable | The library loads, and is lent what it calls | The component runs on | Said |
+|---|---|---|---|
+| `0` | not asked | the C# | nothing |
+| unset, `1` or any other value | yes | the library | nothing |
+| unset, `1` or any other value | no: absent, refused, its load throws, or a lending fails | the C# | one line, once |
+
+The choice is made once in a process, on the first question any of the component's facades asks. What "loads"
+means is each component's own: Endymion's every export resolved; Serenity's every export resolved and the Shaderc
+and SQLite the C# loaded lent to it (§16.2). Endymion's device half follows Endymion's switch and needs SDL lent as
+well; a library that cannot take it leaves the devices alone on the C#, with a line of their own, once. The lines
+go where Galaxia's goes, the host's `ConfigDiagnostics` sink and the error log as a warning of area `platform`:
+
+```
+<time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); Endymion runs on its C# implementation.
+<time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); Serenity's slang half runs on its C# implementation.
+<time> WARN [platform] libemusen_platform.so is not in use for Endymion's devices (<why SDL was not lent>); they run on their C# implementation.
+```
+
+**Writing a component's line asks Galaxia's switch**, since the error log is Galaxia's, so with the library missing
+the first component asked writes its line after Galaxia has chosen and written its own; each switch is asked once
+and says one line, whatever the order. This was seen in a running program (§19.5).
+
+**The consequence §13.2 recorded for Galaxia holds now for all three:** a crash in the library is a crash of the
+default path, for audio, pads and shaders as for config, which is why the crash log of §3.5 is installed when the
+library loads.
+
+### 19.3 Endymion's split (Q23)
+
+A pad manager over a device layer the library does not know runs the C#, chosen for the instance (§14.2): the
+library knows SDL's pads and its own simulated ones. State 2 changes nothing there. The two layers the programs use,
+`SdlPadDevices` and `SimulatedPads`, are both known, so every manager a program makes runs on the library by
+default; the only other layers in the repository are two tests' wrappers, which run the C# as they did. That choice
+is the manager's and not a fallback, so it writes no line. Q23, what such a layer becomes once there is no C#, stays
+with Endymion's state 3.
+
+### 19.4 Serenity's compiler identity (Q26), measured
+
+The library's compiler names its own binding, so the rows a machine's cache holds from the C# are not the
+library's: after the update every preset's stages are compiled once more, and the old rows age out under the
+cache's bound. What that costs, on the bench of `EmuSen_Serenity.md` §8.1 (its `load` case, a preset built with
+the program's builders, 15 on the desktop), through one cache file:
+
+| Mega Bezel preset | C#, cold | C#, warm | library, first after the C# | library, warm | C# again |
+|---|---|---|---|---|---|
+| `SMOOTH-ADV`, 48 passes, 96 stages | 674 ms, 92 misses | 471 ms | **554 ms, 92 misses** | 425 ms | 471 ms, 96 hits |
+| `POTATO`, 10 passes, 20 stages | 471 ms, 20 misses | 412 ms | **473 ms, 20 misses** | 404 ms | 410 ms, 20 hits |
+
+So the update costs a desktop 60 to 130 ms once for each Mega Bezel preset, the first time it is drawn; the four
+stages of `SMOOTH-ADV` that hit even on a cold cache are ones the preset uses more than once, found under the key
+their first compile stored, on either side. The cost grows with the stages compiled and falls with the builders: compiled one after another, a
+`SMOOTH-ADV` load spends 3.7 s in Shaderc, so a machine of four cores would pay about a second once. Both sets of
+rows are kept and each is served to its own side, so turning the switch back and forth compiles nothing more.
+
+**Whether Q26 should now be decided:** it can be, and the recommendation is to keep the identities separate, as
+built. P6 held over the whole pack, so one identity would be safe; but the cost it would spare is paid once per
+preset on each machine, and keeping the identities apart keeps a cache the C# filled from ever serving the
+library's compile, and the other way about, while the two can still be chosen between. When the C# is retired the
+question disappears. The identity was not changed.
+
+### 19.5 What is lent from the C#, and a missing library
+
+SDL3, Shaderc and SQLite are loaded by the C#'s bindings and lent to the library; a fallback leaves them where they
+were. Shown in two ways, with the library removed from a copy of the build:
+
+- **WiseMan's audio, pad and shader classes**, run from a copy of its build with no `libemusen_platform.so` beside
+  it and every variable unset: `Audio.`, `Input.`, `AudioProperties`, Serenity's `Slang*` and `Spirv*`, the two
+  switch classes, `ShaderSettingsWindowTests` and `ScreenFilterSettingTests`, without the parity classes, which
+  need the library: 279 pass.
+- **A small program** that plays thirty frames of audio through `AudioPlayer` on SDL's dummy driver, presses a
+  simulated pad through a `GamepadManager`, and draws a preset through a cache on the RX 6800, run three ways: from
+  its own build on the defaults, every switch then on the library; with both variables `0`, on the C#; and from a
+  copy with no library, on the C#. All three played, saw the pad held and drew the same picture. The first two wrote
+  nothing to the log; the third wrote Galaxia's line, Endymion's and Serenity's, one each, and no device line,
+  since Endymion's devices follow Endymion to the C#.
+
+### 19.6 What was tested
+
+The blast radius, as §6.7 has it, with each component's variable unset (its default) and `0`:
+
+| Run | Default | `0` |
+|---|---|---|
+| Endymion: `Audio.`, `Input.` and `Endymion.` classes (its parity and switch classes among them), `AudioProperties`, `LeafAssemblyTests`, and `GalaxiaParityTests`, whose switch class this step changed | 246 pass | 246 pass |
+| Mistress's callers of Endymion, as in §14.4 | 196 pass, 1 skipped | 196 pass, 1 skipped |
+| Serenity: `Slang*` and `Spirv*`, its two parity classes and its switch class, `ShaderBenchTests`, `ShaderSettingsWindowTests`, `ScreenFilterSettingTests`, with the pack named, on the RX 6800 | 131 pass | 131 pass |
+
+Each switch class makes the switch as the process does, through the component's own `SwitchFor`, over a folder with
+no library: for unset, `1` and another value the C# and one line each, written once however often it is asked, to
+the sink and to the error log; for `0` neither a load nor a line; and a load that throws is a fallback with the
+exception's type and words. A second case gives a load that succeeds and holds each value to its side.
+
+**CI:** the C# steps of Endymion and Serenity set their variable to `0`, and the library steps run on the defaults,
+as Galaxia's do. They still report and do not gate.
+
+**Not done, and not claimed:** Windows and macOS, as before; and a published program run without its library, which
+the build copies above stand in for.

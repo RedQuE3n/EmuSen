@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
+using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 
 namespace EmuSen.Mistress.Library
 {

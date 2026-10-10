@@ -15,9 +15,9 @@ EmuSen.Pharaoh game.smc 3000 --commands script.txt   # headless, scripted
 
 ```sh
 $ EmuSen.Hotaru zelda.smc          # game opens in its own window
-DianaOS $ watch add VRAM 3B8 4 write
-DianaOS $ regs | grep -i vram
-DianaOS $ mem WRAM 0D80 20 | xxd
+DianaSh $ watch add VRAM 3B8 4 write
+DianaSh $ regs | grep -i vram
+DianaSh $ mem WRAM 0D80 20 | xxd
 ```
 
 ---
@@ -29,7 +29,7 @@ hardware documentation rather than ported from an existing project. It differs f
 conventional emulators in one structural way: **the emulator is not a window with a debug
 menu attached — it is a machine you log into.**
 
-That machine is **DianaOS**, a genuine Unix-like shell embedded in the emulator, and it is
+That machine is **DianaSh**, a genuine Unix-like shell embedded in the emulator, and it is
 the primary interface to every piece of emulated hardware. Registers, memory spaces, the
 tilemap, the sprite table, the palette, the DSP's voice mixers — all of it is reachable as
 text, from a prompt, with pipes and redirection and control flow, the same way you would
@@ -70,9 +70,9 @@ unchanged otherwise.
 
 ---
 
-## DIANAOS
+## DIANASH
 
-DianaOS is a bash-alike, not a command prompt with a fixed verb list. It has:
+DianaSh is a bash-alike, not a command prompt with a fixed verb list. It has:
 
 - quoting, `$VAR` and `$(...)` expansion
 - pipes, and `>` / `>>` / `<` redirection to real files
@@ -109,7 +109,7 @@ declares rather than by anything hardcoded. Everything reachable as `cheat add` 
 registry — the two interfaces are views, not copies.
 
 The same interpreter is reachable three ways: on the terminal that launched **Hotaru**,
-through **Mistress**'s `Settings → DianaOS Console…` window, and — critically — as a
+through **Mistress**'s `Settings → DianaSh Console…` window, and — critically — as a
 *script* fed to **Pharaoh**, the headless harness.
 
 Pharaoh runs the real core with no window, no audio device and no human, driven by the same
@@ -129,7 +129,7 @@ core. Frontends sit on top of both and are interchangeable.
 | Project | Role |
 |---|---|
 | `EmuSen` | The emulation core — CPU, PPU, APU, memory, save states, resampling. A pure library: no `Main`, no window, no frontend knowledge |
-| `EmuSen.DianaOS` | The shell, `IDebugTarget`, and every debug command, with the core-agnostic telemetry the dashboards read (`ICoreTelemetry` and its providers, namespace `EmuSen.Cauldron`). **Core-agnostic** |
+| `EmuSen.DianaSh` | The shell, `IDebugTarget`, and every debug command, with the core-agnostic telemetry the dashboards read (`ICoreTelemetry` and its providers, namespace `EmuSen.Cauldron`). **Core-agnostic** |
 | `EmuSen.Galaxia` | Config *and* saved-data persistence — the single answer to "where does a file go". Depends on nothing |
 | `EmuSen.Serenity` | Shared presentation — the Avalonia/Skia frame control, shader pipeline, graphics settings |
 | `EmuSen.Endymion` | Shared SDL3 device layer — audio output and gamepad input, one copy for both frontends |
@@ -278,11 +278,11 @@ but have not been executed; macOS builds are unsigned.
 
 `README.md` — building, running, publishing, and the full status tables.
 
-Inside the emulator, `man <command>` documents every DianaOS verb. The project's own
+Inside the emulator, `man <command>` documents every DianaSh verb. The project's own
 documentation set lives under
-`EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/` (overview, debugging tools
+`EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen Manual/` (overview, debugging tools
 reference, save states, audio sync, settings, games tested, roadmap) and
-`EmuSen.DianaOS/DianaOS/Etc/Man pages/Hardware/` (per-console hardware notes, including
+`EmuSen.DianaSh/DianaSh/Etc/Man pages/Hardware/` (per-console hardware notes, including
 full root-cause writeups for real bugs found and fixed).
 
 ## LICENSE

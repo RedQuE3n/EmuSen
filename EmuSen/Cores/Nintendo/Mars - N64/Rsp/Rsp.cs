@@ -38,7 +38,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         }
 
         // Fed only while `cov` is armed on the RSP - see Mars_Debug.md §5.
-        [EmuSen.Common.SkipInState] public EmuSen.DianaOS.DianaOS.Var.CoverageRegistry? Coverage;
+        [EmuSen.Common.SkipInState] public EmuSen.DianaSh.DianaSh.Var.CoverageRegistry? Coverage;
 
         public void Step()
         {

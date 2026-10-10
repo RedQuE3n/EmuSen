@@ -14,7 +14,7 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;

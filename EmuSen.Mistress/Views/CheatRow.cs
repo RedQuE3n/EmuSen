@@ -1,4 +1,4 @@
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 
 namespace EmuSen.Mistress.Views
 {

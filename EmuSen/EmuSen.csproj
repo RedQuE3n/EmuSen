@@ -39,12 +39,12 @@
     <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
     <!-- SnesDebugTarget implements IDebugTarget and its
          ICheatCodeCodec/ICpuTraceSwitch adapter classes plug into
-         DianaOS's own extension points - see IDebugTarget.cs's own
-         header comment on why DianaOS itself has zero reference back to
+         DianaSh's own extension points - see IDebugTarget.cs's own
+         header comment on why DianaSh itself has zero reference back to
          this project. The telemetry contracts SnesDebugTarget publishes
          through (PollingProvider<T>, namespace EmuSen.Cauldron) are in
          this assembly too since 2026-10-07. -->
-    <ProjectReference Include="..\EmuSen.DianaOS\EmuSen.DianaOS.csproj" />
+    <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
     <!-- AudioConfig, which AudioSettings maps to and from - see
          EmuSen_Config_Reference.md §3.2. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />

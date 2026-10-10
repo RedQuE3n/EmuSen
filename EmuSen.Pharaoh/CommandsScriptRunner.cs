@@ -1,12 +1,12 @@
 using EmuSen.Cores;
 using EmuSen.Common.Imaging;
 using EmuSen.Cores.Nintendo.Venus.Debug;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Pharaoh
@@ -14,20 +14,20 @@ namespace EmuSen.Pharaoh
     // --commands mode's script interpreter: an ordered list of verbs
     // executed one line at a time against a shared FrameRunner, so
     // frame-stepping, input, screenshots, and debug commands can interleave
-    // freely in one script. Full verb syntax: EmuSen.DianaOS/DianaOS/Usr/Home/Documents/
+    // freely in one script. Full verb syntax: EmuSen.DianaSh/DianaSh/Usr/Home/Documents/
     // EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md §3.15. Anything not recognized
-    // as one of those verbs falls through to the real DianaOSInterpreter.
+    // as one of those verbs falls through to the real DianaShInterpreter.
     public sealed class CommandsScriptRunner
     {
         private readonly FrameRunner runner;
         private readonly IDebugTarget debugTarget;
-        private readonly DianaOSInterpreter debugCmd;
+        private readonly DianaShInterpreter debugCmd;
         private readonly Action<string> emit;
 
         // Null until the `record` verb starts one - see §3.15b.
         private FrameRecorder? recorder;
 
-        public CommandsScriptRunner(FrameRunner runner, IDebugTarget debugTarget, DianaOSInterpreter debugCmd, Action<string> emit)
+        public CommandsScriptRunner(FrameRunner runner, IDebugTarget debugTarget, DianaShInterpreter debugCmd, Action<string> emit)
         {
             this.runner = runner;
             this.debugTarget = debugTarget;
@@ -257,7 +257,7 @@ namespace EmuSen.Pharaoh
                         int stride = parts.Length >= 3 ? int.Parse(parts[2]) : 1;
                         string baseDir = parts.Length >= 4
                             ? parts[3]
-                            : Path.Combine(DianaOSSandbox.LogsDirectory, debugTarget.CoreName, "Recordings");
+                            : Path.Combine(DianaShSandbox.LogsDirectory, debugTarget.CoreName, "Recordings");
 
                         recorder = new FrameRecorder(debugTarget);
                         string dir = recorder.Start(baseDir, stride);

@@ -11,7 +11,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Serenity.Dashboards
 {
-    // The GUI counterpart to DianaOS's own `coretop` - see `man coretop`, and EmuSen_LunaP.md §16 for why it is here rather than in the toolkit.
+    // The GUI counterpart to DianaSh's own `coretop` - see `man coretop`, and EmuSen_LunaP.md §16 for why it is here rather than in the toolkit.
     public class CoretopWindow : PollingWindow
     {
         private ICoreTelemetry? _target;
@@ -47,7 +47,7 @@ namespace EmuSen.Serenity.Dashboards
         {
             _target = target;
 
-            Title = "DianaOS coretop";
+            Title = "DianaSh coretop";
             Width = 480;
             Height = 720;
             this.MinSize(360, 360);
@@ -81,7 +81,7 @@ namespace EmuSen.Serenity.Dashboards
         {
             if (_target is null)
             {
-                _header.Text = "DianaOS coretop";
+                _header.Text = "DianaSh coretop";
                 _noTarget.IsVisible = true;
                 _load.Children.Clear();
                 _cpuRegs.Text = "";

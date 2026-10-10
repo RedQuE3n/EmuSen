@@ -4,14 +4,18 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Galaxia
 {
-    // Where this program's own on-disk tree starts; DianaOSSandbox delegates here - see `man hier` and EmuSen_Config_Reference.md §1.
+    // Where this program's own on-disk tree starts; DianaShSandbox delegates here - see `man hier` and EmuSen_Config_Reference.md §1.
     public static class ConfigRoot
     {
         // Fallback root beside the binary, when neither marker turns up.
-        public const string PublishedRootDirName = "DianaOSRoot";
+        public const string PublishedRootDirName = "DianaShRoot";
 
-        // Written to a published tree's root by DianaOSPublishLayout.targets.
-        public const string RootMarkerFileName = ".dianaosroot";
+        // The names a tree published before the shell was renamed carries, still honoured - see EmuSen_Galaxia.md §3.5.
+        public const string LegacyPublishedRootDirName = "DianaOSRoot";
+        public const string LegacyRootMarkerFileName = ".dianaosroot";
+
+        // Written to a published tree's root by DianaShPublishLayout.targets.
+        public const string RootMarkerFileName = ".dianashroot";
 
         // The folder under ~/Library/Application Support that holds a Mac's whole tree - see EmuSen_Galaxia.md §3.4.
         public const string MacDataDirName = "EmuSen";
@@ -25,7 +29,7 @@ namespace EmuSen.Galaxia
         public static string ComputeFor(string baseDirectory) =>
             ComputeFor(baseDirectory, OperatingSystem.IsMacOS(), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
-        // The platform and home are parameters so every branch is testable on any host - see DianaOSSandboxTests.
+        // The platform and home are parameters so every branch is testable on any host - see DianaShSandboxTests.
         public static string ComputeFor(string baseDirectory, bool macOS, string userHome) =>
             GalaxiaNative.Active ? GalaxiaNative.RootFor(baseDirectory, macOS, userHome) : Managed.ComputeFor(baseDirectory, macOS, userHome);
 
@@ -59,12 +63,15 @@ namespace EmuSen.Galaxia
                 for (int i = 0; i < 10; i++)
                 {
                     if (File.Exists(Path.Combine(dir, "EmuSen.sln"))) return dir;
-                    if (File.Exists(Path.Combine(dir, RootMarkerFileName))) return dir;
+                    if (File.Exists(Path.Combine(dir, RootMarkerFileName)) || File.Exists(Path.Combine(dir, LegacyRootMarkerFileName))) return dir;
                     string? parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(dir));
                     if (parent is null || parent == dir) break;
                     dir = parent;
                 }
-                return macOS ? MacDataDirectoryFor(userHome) : Path.GetFullPath(Path.Combine(baseDirectory, PublishedRootDirName));
+                if (macOS) return MacDataDirectoryFor(userHome);
+                string legacy = Path.GetFullPath(Path.Combine(baseDirectory, LegacyPublishedRootDirName));
+                string fallback = Path.GetFullPath(Path.Combine(baseDirectory, PublishedRootDirName));
+                return !System.IO.Directory.Exists(fallback) && System.IO.Directory.Exists(legacy) ? legacy : fallback;
             }
 
             public static string MacDataDirectoryFor(string userHome) =>

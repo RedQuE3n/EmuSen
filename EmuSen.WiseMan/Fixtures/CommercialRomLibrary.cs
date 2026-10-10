@@ -1,4 +1,4 @@
-using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaSh.DianaSh.Etc;
 
 namespace EmuSen.WiseMan.Fixtures
 {
@@ -7,7 +7,7 @@ namespace EmuSen.WiseMan.Fixtures
     // Mercury_RealCartridges.md §1.
     public static class CommercialRomLibrary
     {
-        public static string Root => Path.Combine(DianaOSSandbox.InstallDirectory, "TestRoms");
+        public static string Root => Path.Combine(DianaShSandbox.InstallDirectory, "TestRoms");
 
         public static IReadOnlyList<string> Find(params string[] extensions)
         {

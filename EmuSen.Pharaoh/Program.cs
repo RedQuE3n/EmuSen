@@ -6,12 +6,12 @@ using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh;
 using EmuSen.Pharaoh.Cli;
 using EmuSen.Pharaoh.Reference;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.DianaSh.DianaSh.Dev;
 
 // Headless script-driven debugging harness - loads a ROM, runs the
 // real VenusCore for a fixed number of frames with no window/audio/human
@@ -19,7 +19,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 // prompt accepts and writes the results to a plain log file. Full
 // reference for every flag, both frame-loop modes (classic and
 // --commands), --diffshot, and the design reasoning behind each:
-// EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md §3.15.
+// EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md §3.15.
 //
 // Usage:
 //   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--tap2 frame:button[:duration]]... [--loadstate path] [--savestate path] [--screenshot frame:path]...
@@ -234,7 +234,7 @@ class Program
         // reason for it to report less than the other two frontends do).
         var bundle = CoreFactory.Bundle(core);
         var debugTarget = bundle.DebugTarget;
-        var debugCmd = DianaOSInterpreter.CreateDefault(debugTarget, null,
+        var debugCmd = DianaShInterpreter.CreateDefault(debugTarget, null,
             bundle.CheatAutoDetectCodec, bundle.CheatExplicitCodec, bundle.CpuTraceSwitch);
 
         // Same two ranges registered from power-on in Hotaru's

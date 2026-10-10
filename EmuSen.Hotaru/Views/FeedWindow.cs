@@ -28,7 +28,7 @@ namespace EmuSen.Hotaru.Views
         {
             _frameProvider = frameProvider;
 
-            Title = "DianaOS feed";
+            Title = "DianaSh feed";
             Width = 512;
             Height = 480;
             this[!BackgroundProperty] = new DynamicResourceExtension("LunaVoid");

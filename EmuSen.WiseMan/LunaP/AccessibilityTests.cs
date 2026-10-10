@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.LunaP
         public static TheoryData<string> Windows => new()
         {
             "InputSettings", "ActiveCheats", "CheatDatabase", "Preferences",
-            "DebugSettings", "Vstop", "Main", "RomBrowser", "DianaOSConsole",
+            "DebugSettings", "Vstop", "Main", "RomBrowser", "DianaShConsole",
         };
 
         private static Window Build(string name) => name switch
@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.LunaP
             "Vstop" => new VstopWindow(),
             "Main" => new MainWindow(),
             "RomBrowser" => new RomBrowserWindow(),
-            "DianaOSConsole" => new DianaOSConsoleWindow(),
+            "DianaShConsole" => new DianaShConsoleWindow(),
             _ => throw new ArgumentOutOfRangeException(nameof(name), name, "No builder for this window."),
         };
 

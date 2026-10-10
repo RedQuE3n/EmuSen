@@ -9,7 +9,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>marsrt-pgo</AssemblyName>
     <RootNamespace>EmuSen.MarsRtPgo</RootNamespace>
-    <!-- EmuSen.DianaOS, an executable, reaches a publish twice; as Mistress's publish - see EmuSen_Settings_Reference.md §4.9. -->
+    <!-- EmuSen.DianaSh, an executable, reaches a publish twice; as Mistress's publish - see EmuSen_Settings_Reference.md §4.9. -->
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
 

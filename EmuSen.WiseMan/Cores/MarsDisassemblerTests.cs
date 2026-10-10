@@ -1,7 +1,7 @@
 using System;
 using EmuSen.Cores.Nintendo.Mars.Cpu.Disassembler;
 using EmuSen.Cores.Nintendo.Mars.Rsp;
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.WiseMan.Cores
 {

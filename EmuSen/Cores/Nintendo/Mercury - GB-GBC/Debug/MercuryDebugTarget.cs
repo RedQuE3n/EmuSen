@@ -6,8 +6,8 @@ using EmuSen.Cores.Nintendo.Mercury.Audio;
 using EmuSen.Cores.Nintendo.Mercury.Cpu.Disassembler;
 using EmuSen.Cores.Nintendo.Mercury.Memory;
 using EmuSen.Cores.Nintendo.Mercury.Video;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 
 namespace EmuSen.Cores.Nintendo.Mercury.Debug
 {

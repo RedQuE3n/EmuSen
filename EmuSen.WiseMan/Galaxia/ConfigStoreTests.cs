@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Galaxia;
 using EmuSen.WiseMan.Fixtures;
 
@@ -14,23 +14,23 @@ namespace EmuSen.WiseMan.Galaxia
         public void Dispose() => ConfigStore.OverrideDirectory = null;
 
         [Fact]
-        public void Config_lives_under_the_sandbox_root_that_DianaOS_walks_to()
+        public void Config_lives_under_the_sandbox_root_that_DianaSh_walks_to()
         {
             Assert.Equal(
-                Path.Combine(DianaOSSandbox.RootDirectory, "etc", "EmuSen"),
+                Path.Combine(DianaShSandbox.RootDirectory, "etc", "EmuSen"),
                 ConfigStore.Directory);
         }
 
         [Fact]
         public void The_shell_and_Galaxia_agree_on_the_root()
         {
-            Assert.Equal(ConfigRoot.Directory, DianaOSSandbox.InstallDirectory);
-            Assert.Equal(ConfigRoot.PublishedRootDirName, DianaOSSandbox.PublishedRootDirName);
-            Assert.Equal(ConfigRoot.RootMarkerFileName, DianaOSSandbox.RootMarkerFileName);
+            Assert.Equal(ConfigRoot.Directory, DianaShSandbox.InstallDirectory);
+            Assert.Equal(ConfigRoot.PublishedRootDirName, DianaShSandbox.PublishedRootDirName);
+            Assert.Equal(ConfigRoot.RootMarkerFileName, DianaShSandbox.RootMarkerFileName);
         }
 
-        // DianaOSSandbox forwards to ConfigRoot now; both markers still win
-        // over the fallback, which is what DianaOSSandboxTests pins in detail.
+        // DianaShSandbox forwards to ConfigRoot now; both markers still win
+        // over the fallback, which is what DianaShSandboxTests pins in detail.
         [Fact]
         public void Both_root_markers_are_honored_after_the_move()
         {
@@ -41,7 +41,7 @@ namespace EmuSen.WiseMan.Galaxia
             {
                 File.WriteAllText(Path.Combine(temp, ConfigRoot.RootMarkerFileName), "");
                 Assert.Equal(temp, ConfigRoot.ComputeFor(nested));
-                Assert.Equal(temp, DianaOSSandbox.ComputeRootFor(nested));
+                Assert.Equal(temp, DianaShSandbox.ComputeRootFor(nested));
             }
             finally
             {
@@ -61,16 +61,16 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         // The override moves config only. If it moved the sandbox root too,
-        // every DianaOS path (saves, logs, firmware) would shift under any
+        // every DianaSh path (saves, logs, firmware) would shift under any
         // test that touched config.
         [Fact]
         public void Override_does_not_move_the_sandbox_root()
         {
-            string root = DianaOSSandbox.RootDirectory;
+            string root = DianaShSandbox.RootDirectory;
 
             ConfigStore.OverrideDirectory = Path.Combine(Path.GetTempPath(), "EmuSenCfg_" + Guid.NewGuid().ToString("N"));
 
-            Assert.Equal(root, DianaOSSandbox.RootDirectory);
+            Assert.Equal(root, DianaShSandbox.RootDirectory);
         }
     }
 }

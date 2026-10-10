@@ -4,8 +4,8 @@ using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 
 namespace EmuSen.WiseMan.Fixtures

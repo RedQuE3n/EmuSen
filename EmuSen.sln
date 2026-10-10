@@ -15,7 +15,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Pharaoh", "EmuSen.Ph
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.WiseMan", "EmuSen.WiseMan\EmuSen.WiseMan.csproj", "{8A373964-284F-40E7-A19D-2C922DD602F1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.DianaOS", "EmuSen.DianaOS\EmuSen.DianaOS.csproj", "{A462A496-51EC-4E73-8E02-3C57A88AC352}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.DianaSh", "EmuSen.DianaSh\EmuSen.DianaSh.csproj", "{A462A496-51EC-4E73-8E02-3C57A88AC352}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Galaxia", "EmuSen.Galaxia\EmuSen.Galaxia.csproj", "{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}"
 EndProject

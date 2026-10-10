@@ -1,22 +1,22 @@
 using System;
 using System.IO;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // Shared DianaOS shell test setup - see EmuSen_Debugging_Tools_Reference_v5.md §3.18.
+    // Shared DianaSh shell test setup - see EmuSen_Debugging_Tools_Reference_v5.md §3.18.
     public static class DianaShellFixtures
     {
-        public static (DianaOSInterpreter Shell, DianaOSSessionManager Sessions) NewShellWithSessions(IDebugTarget? target = null)
+        public static (DianaShInterpreter Shell, DianaShSessionManager Sessions) NewShellWithSessions(IDebugTarget? target = null)
         {
-            var sessions = new DianaOSSessionManager();
-            var shell = DianaOSInterpreter.CreateDefault(target, sessions: sessions);
-            sessions.RegisterInitial(new DianaOSSession("main", shell));
+            var sessions = new DianaShSessionManager();
+            var shell = DianaShInterpreter.CreateDefault(target, sessions: sessions);
+            sessions.RegisterInitial(new DianaShSession("main", shell));
             return (shell, sessions);
         }
 
@@ -26,7 +26,7 @@ namespace EmuSen.WiseMan.Fixtures
 
             public ScratchDir(string subfolder)
             {
-                Path = System.IO.Path.Combine(DianaOSSandbox.ScratchDirectory, subfolder, $"run_{Guid.NewGuid():N}");
+                Path = System.IO.Path.Combine(DianaShSandbox.ScratchDirectory, subfolder, $"run_{Guid.NewGuid():N}");
                 Directory.CreateDirectory(Path);
             }
 

@@ -5,8 +5,8 @@ using EmuSen.Cauldron;
 using EmuSen.Cores.Nintendo.Moon.Memory;
 using EmuSen.Cores.Nintendo.Moon.Processor;
 using EmuSen.Cores.Nintendo.Moon.Video;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 
 namespace EmuSen.Cores.Nintendo.Moon.Debug
 {

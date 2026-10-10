@@ -1,11 +1,11 @@
 using System;
 using EmuSen.Debug;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
@@ -132,14 +132,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         }
 
         // Holds delegates internally - not serializable.
-        [EmuSen.Common.SkipInState] private readonly EmuSen.DianaOS.DianaOS.Lib.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
+        [EmuSen.Common.SkipInState] private readonly EmuSen.DianaSh.DianaSh.Lib.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
         private bool _wasVerboseLogging;
 
         public Spc700()
         {
             BuildOpcodeTable();
             Dsp.AttachMemory(Ram);
-            _verboseTrace = new EmuSen.DianaOS.DianaOS.Lib.DebugTools.RepeatCollapsingTrace<StepKey>(
+            _verboseTrace = new EmuSen.DianaSh.DianaSh.Lib.DebugTools.RepeatCollapsingTrace<StepKey>(
                 Console.WriteLine,
                 key => $"[SPC700] 0x{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X4}",
                 (cycleLength, repeats) => cycleLength == 1

@@ -5,9 +5,12 @@ use crate::dotnet_path::{self as path, Style};
 use std::sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// The fallback root beside the binary, when neither marker turns up.
-pub const PUBLISHED_ROOT_DIR_NAME: &str = "DianaOSRoot";
+pub const PUBLISHED_ROOT_DIR_NAME: &str = "DianaShRoot";
 /// Written to a published tree's root by the publish.
-pub const ROOT_MARKER_FILE_NAME: &str = ".dianaosroot";
+pub const ROOT_MARKER_FILE_NAME: &str = ".dianashroot";
+/// The fallback root and the marker a tree published before the shell was renamed carries, still honoured.
+pub const LEGACY_PUBLISHED_ROOT_DIR_NAME: &str = "DianaOSRoot";
+pub const LEGACY_ROOT_MARKER_FILE_NAME: &str = ".dianaosroot";
 /// The checkout's marker.
 pub const SOLUTION_FILE_NAME: &str = "EmuSen.sln";
 /// The folder under `~/Library/Application Support` that holds a Mac's whole tree.
@@ -66,7 +69,10 @@ pub fn root_for(base_directory: &str, mac_os: bool, user_home: &str) -> String {
     }
     let mut dir = path::full_path(base_directory);
     for _ in 0..10 {
-        if file_exists(&path::combine(style, &dir, SOLUTION_FILE_NAME)) || file_exists(&path::combine(style, &dir, ROOT_MARKER_FILE_NAME)) {
+        if file_exists(&path::combine(style, &dir, SOLUTION_FILE_NAME))
+            || file_exists(&path::combine(style, &dir, ROOT_MARKER_FILE_NAME))
+            || file_exists(&path::combine(style, &dir, LEGACY_ROOT_MARKER_FILE_NAME))
+        {
             return dir;
         }
         match path::directory_name(style, path::trim_ending_separator(style, &dir)) {
@@ -74,12 +80,17 @@ pub fn root_for(base_directory: &str, mac_os: bool, user_home: &str) -> String {
             _ => break,
         }
     }
-    if mac_os { mac_data_directory_for(style, user_home) } else { path::full_path(&path::combine(style, base_directory, PUBLISHED_ROOT_DIR_NAME)) }
+    if mac_os {
+        return mac_data_directory_for(style, user_home);
+    }
+    let legacy = path::full_path(&path::combine(style, base_directory, LEGACY_PUBLISHED_ROOT_DIR_NAME));
+    let fallback = path::full_path(&path::combine(style, base_directory, PUBLISHED_ROOT_DIR_NAME));
+    if !directory_exists(&fallback) && directory_exists(&legacy) { legacy } else { fallback }
 }
 
 /// `DataMigration.LegacyRootFor`: where the tree lived before it collapsed to `<root>/home`.
 pub fn legacy_root_for(config_root: &str) -> String {
-    path::combine_all(Style::HOST, &[config_root, "EmuSen.DianaOS", "DianaOS", "Usr", "Home"])
+    path::combine_all(Style::HOST, &[config_root, "EmuSen.DianaSh", "DianaSh", "Usr", "Home"])
 }
 
 /// A directory of the tree, by name.
@@ -337,7 +348,7 @@ mod tests {
         assert_eq!(at(Directory::Home).as_deref(), Some("/r/home"));
         assert_eq!(at(Directory::SaveStates).as_deref(), Some("/r/home/Saves/Save States"));
         assert_eq!(at(Directory::Shaders).as_deref(), Some("/r/home/Shaders"));
-        assert_eq!(at(Directory::LegacyRoot).as_deref(), Some("/r/EmuSen.DianaOS/DianaOS/Usr/Home"));
+        assert_eq!(at(Directory::LegacyRoot).as_deref(), Some("/r/EmuSen.DianaSh/DianaSh/Usr/Home"));
         assert_eq!(tree.config_path(None, "audio.json"), "/r/home/etc/EmuSen/audio.json");
         assert_eq!(tree.config_path(Some("cheats"), "x.json"), "/r/home/etc/EmuSen/cheats/x.json");
     }
@@ -380,6 +391,22 @@ mod tests {
         // A directory named as a marker is not one: File.Exists is false for it.
         std::fs::create_dir_all(temp.join(&format!("a/b/{ROOT_MARKER_FILE_NAME}"))).unwrap();
         assert_eq!(root_for(&nested, false, "unused"), temp.join("a"));
+    }
+
+    #[test]
+    fn a_tree_published_under_the_old_names_is_still_found() {
+        let temp = TempDir::new("legacy");
+        let nested = temp.join("lib/EmuSen");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(temp.join(LEGACY_ROOT_MARKER_FILE_NAME), "").unwrap();
+        assert_eq!(root_for(&nested, false, "unused"), temp.path());
+
+        let unmarked = TempDir::new("legacy-bare");
+        let bare = unmarked.join("bare");
+        std::fs::create_dir_all(bare.clone() + "/" + LEGACY_PUBLISHED_ROOT_DIR_NAME).unwrap();
+        assert_eq!(root_for(&bare, false, "unused"), path::combine(Style::HOST, &bare, LEGACY_PUBLISHED_ROOT_DIR_NAME));
+        std::fs::create_dir_all(bare.clone() + "/" + PUBLISHED_ROOT_DIR_NAME).unwrap();
+        assert_eq!(root_for(&bare, false, "unused"), path::combine(Style::HOST, &bare, PUBLISHED_ROOT_DIR_NAME));
     }
 
     #[test]

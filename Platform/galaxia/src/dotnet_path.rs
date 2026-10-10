@@ -348,7 +348,7 @@ mod tests {
         assert_eq!(combine(Unix, "", "b"), "b");
         assert_eq!(combine(Unix, "/a", ""), "/a");
         assert_eq!(combine(Unix, "/a", "/b"), "/b");
-        assert_eq!(combine_all(Unix, &["/r", "EmuSen.DianaOS", "DianaOS", "Usr", "Home"]), "/r/EmuSen.DianaOS/DianaOS/Usr/Home");
+        assert_eq!(combine_all(Unix, &["/r", "EmuSen.DianaSh", "DianaSh", "Usr", "Home"]), "/r/EmuSen.DianaSh/DianaSh/Usr/Home");
         assert_eq!(combine(Windows, r"C:\a", "b"), r"C:\a\b");
         assert_eq!(combine(Windows, "C:", "b"), r"C:\b");
         assert_eq!(combine(Windows, r"C:\a", r"D:\b"), r"D:\b");

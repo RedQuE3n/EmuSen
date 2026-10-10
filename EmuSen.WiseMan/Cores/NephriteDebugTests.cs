@@ -4,16 +4,16 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The Genesis through DianaOS's generic debugger: G7's breakpoints, stepping, watches, coverage and the call stack on each processor - see Nephrite_Native.md §43.
+    // The Genesis through DianaSh's generic debugger: G7's breakpoints, stepping, watches, coverage and the call stack on each processor - see Nephrite_Native.md §43.
     [Collection(TestCollections.ProcessGlobals)]
     public class NephriteDebugTests : IDisposable
     {
@@ -96,7 +96,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.Equal(new[] { "M68KBUS", "Z80BUS" }, t.DebugCpus.Select(c => c.CodeSpace));
                 Assert.Equal(new[] { "M68KBUS", "Z80BUS", "WRAM", "Z80RAM", "VRAM", "CRAM", "VSRAM", "ROM" }, t.GetMemorySpaces().Select(s => s.Name));
                 Assert.Equal(new[] { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "PC", "SR", "USP", "SSP" }, t.CpuRegisters.Current.Select(r => r.Name));
-                var shell = DianaOSInterpreter.CreateDefault(t);
+                var shell = DianaShInterpreter.CreateDefault(t);
                 Assert.Contains("z80", shell.Submit("cpus").Output);
                 string regs = shell.Submit("regs z80").Output;
                 Assert.Contains("IFF1", regs);
@@ -160,7 +160,7 @@ namespace EmuSen.WiseMan.Cores
                 }
                 int first = at.IndexOf(0);
                 Assert.Equal(new[] { 0, 1, 4 }, at.Skip(first).Take(3));
-                Assert.Contains("Stepping 3", DianaOSInterpreter.CreateDefault(t).Submit("step z80 3").Output);
+                Assert.Contains("Stepping 3", DianaShInterpreter.CreateDefault(t).Submit("step z80 3").Output);
             }
         }
 
@@ -176,7 +176,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(engine.IsHaltedAtBreakpoint);
                 var top = t.CallStack!.Frames[^1];
                 Assert.Equal((0x28C, 0x300, CallFrameKind.Call), (top.Source, top.Target, top.Kind));
-                Assert.Contains("000300", DianaOSInterpreter.CreateDefault(t).Submit("bt").Output);
+                Assert.Contains("000300", DianaShInterpreter.CreateDefault(t).Submit("bt").Output);
                 ClearBreakpoints(t.Breakpoints);
                 t.Breakpoints.AddBreakpoint(0x28C);
                 engine.RunFrame();
@@ -240,7 +240,7 @@ namespace EmuSen.WiseMan.Cores
             var (engine, t) = Load();
             using (engine)
             {
-                var shell = DianaOSInterpreter.CreateDefault(t);
+                var shell = DianaShInterpreter.CreateDefault(t);
                 Assert.Equal(shell.Submit("disasm Z80BUS 0 3").Output, shell.Submit("disasm z80 0 3").Output);
                 var jsr = t.Disassemble("M68KBUS", 0x28C, 1).Single();
                 Assert.Equal("JSR", jsr.Mnemonic);

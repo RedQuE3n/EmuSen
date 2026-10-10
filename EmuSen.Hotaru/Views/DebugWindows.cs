@@ -1,6 +1,6 @@
 using System;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh;
 using EmuSen.Serenity.Dashboards;
 using EmuSen.LunaP.Windowing;
 

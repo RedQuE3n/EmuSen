@@ -5,8 +5,8 @@
        (EmuSen_Config_Reference.md) and saved data alike (EmuSen_Galaxia.md).
 
        Deliberately a leaf: no ProjectReference, no PackageReference. It has
-       to be, because EmuSen.DianaOS references it (CheatRegistry's save/load)
-       and EmuSen references EmuSen.DianaOS - anything Galaxia depended on
+       to be, because EmuSen.DianaSh references it (CheatRegistry's save/load)
+       and EmuSen references EmuSen.DianaSh - anything Galaxia depended on
        upward would close a cycle. That constraint is what makes it agnostic
        rather than just shared: nothing here can name Avalonia's Key, SDL's
        GamepadButton or SnesButton, so the config models are plain data and

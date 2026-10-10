@@ -1,0 +1,215 @@
+<Project>
+
+  <!-- Makes a published frontend's output directory BE DianaSh's own root,
+       instead of a flat .NET app dir with a DianaShRoot/ subfolder inside
+       it. The whole .NET app directory - apphost, every .dll, deps.json,
+       runtimeconfig.json, runtimes/ - moves intact into /lib/EmuSen, and
+       /bin gets a launcher shim. Nothing about how the app loads changes:
+       the app dir is relocated, not taken apart, so no assembly resolver
+       or deps.json surgery is involved. See `man hier` for the resulting
+       layout and for why the root moved out from under the binaries.
+
+       Imported explicitly by each publishable frontend rather than dropped
+       in a Directory.Build.targets, matching this repo's "be explicit about
+       what's actually used" convention (see EmuSen.csproj). Set
+       DianaShPublishLayout=false to publish a plain flat .NET app dir. -->
+
+  <!-- SkiaSharp and HarfBuzzSharp ship a native .pdb beside the .dll in
+       their win32 runtime packs; the Linux and macOS packs ship none. That
+       is 100MB per Windows app (80MB libSkiaSharp.pdb, 20MB
+       libHarfBuzzSharp.pdb) of symbols for third-party native libraries -
+       never loaded at runtime, and useless without matching Skia sources.
+       It is what made a Windows publish roughly twice the size of the same
+       app for any other RID.
+
+       DebugType=none does not cover these: that governs this repo's own
+       MANAGED pdbs, while these arrive as native package content. Matched
+       on AssetType rather than by file name so a future native dependency
+       is covered without an edit here. Set DianaShPublishNativePdbs=true
+       to keep them for a session that genuinely needs to debug into Skia. -->
+  <PropertyGroup>
+    <DianaShPublishNativePdbs Condition="'$(DianaShPublishNativePdbs)' == ''">false</DianaShPublishNativePdbs>
+  </PropertyGroup>
+
+  <Target Name="DianaShDropNativePdbs"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(DianaShPublishNativePdbs)' != 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish
+        Remove="@(ResolvedFileToPublish)"
+        Condition="'%(Extension)' == '.pdb' AND '%(ResolvedFileToPublish.AssetType)' == 'native'" />
+    </ItemGroup>
+  </Target>
+
+  <!-- EmuSen ships NO cheat data, ever. The libretro database is CC BY-SA
+       content a player downloads themselves and then prunes to whatever
+       cores they have (see `man cheat`), and a developer's own downloaded
+       copy lives in the same sandbox tree the publish reads its docs out
+       of - one over-broad glob away from being redistributed by accident.
+
+       So this is a build failure rather than a code review item: nothing
+       matching *.cht, and nothing under Usr/Home/Cheats, may enter a
+       publish. Today no include even selects them (EmuSen.DianaSh.csproj
+       takes Documents and Man pages only); this exists so that stays
+       true. -->
+  <Target Name="DianaShRefuseToPublishCheats"
+          AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_DianaShLeakedCheat
+        Include="@(ResolvedFileToPublish)"
+        Condition="'%(Extension)' == '.cht' OR $([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\','/').Contains('home/Cheats')) OR $([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\','/').Contains('Usr/Home/Cheats'))" />
+    </ItemGroup>
+    <Error Condition="'@(_DianaShLeakedCheat)' != ''"
+           Text="Refusing to publish cheat data - EmuSen ships none. @(_DianaShLeakedCheat->'%(RelativePath)', ', ')" />
+  </Target>
+
+  <PropertyGroup>
+    <DianaShPublishLayout Condition="'$(DianaShPublishLayout)' == ''">true</DianaShPublishLayout>
+    <!-- Private libraries of a single application, the /usr/lib/<app> shape. -->
+    <DianaShAppDirName Condition="'$(DianaShAppDirName)' == ''">lib/EmuSen</DianaShAppDirName>
+    <!-- Where EmuSen.DianaSh.csproj's doc-tree Link= metadata stages the read-only
+         trees. Must match DianaShSandbox.PublishedRootDirName, which is still the
+         fallback root for a publish that does NOT import this file. -->
+    <DianaShStagedRootDirName Condition="'$(DianaShStagedRootDirName)' == ''">DianaShRoot</DianaShStagedRootDirName>
+    <_DianaShStagedPrefixLength>$([MSBuild]::Add($(DianaShStagedRootDirName.Length), 1))</_DianaShStagedPrefixLength>
+    <!-- Must match DianaShSandbox.RootMarkerFileName. -->
+    <DianaShRootMarkerFileName Condition="'$(DianaShRootMarkerFileName)' == ''">.dianashroot</DianaShRootMarkerFileName>
+    <_DianaShLauncherDir>$(MSBuildThisFileDirectory)</_DianaShLauncherDir>
+  </PropertyGroup>
+
+  <!-- A Mac app bundle instead of the tree above, for a project that names one
+       (DianaShMacAppName) and a publish for osx-*. Decided 2026-09-27: macOS
+       installs EmuSen as EmuSen.app in /Applications, the platform's own
+       standard, where Linux has none and gets the self-contained tree. The
+       bundle stays read-only: the program's data lives in
+       ~/Library/Application Support/EmuSen (ConfigRoot), so there is no
+       .dianashroot and no bin/ launcher. The .NET app directory moves whole
+       into Contents/MacOS, the staged doc trees into Contents/Resources/home
+       (copied into the data home on start), and the notices and icon into
+       Contents/Resources. See EmuSen_Settings_Reference.md §4.82 and
+       EmuSen_Galaxia.md §3.4. -p:DianaShMacAppBundle=false publishes the Linux
+       tree for osx-* instead. -->
+  <PropertyGroup>
+    <DianaShMacAppBundle Condition="'$(DianaShMacAppBundle)' == '' And '$(DianaShPublishLayout)' == 'true' And '$(DianaShMacAppName)' != '' And $(RuntimeIdentifier.StartsWith('osx'))">true</DianaShMacAppBundle>
+    <_DianaShMacContents>$(DianaShMacAppName).app/Contents</_DianaShMacContents>
+    <!-- The highest LC_BUILD_VERSION minos among the shipped Mach-O files: the .NET 10 runtime, its apphost and SDL3 all say 12.0; Avalonia, Skia and HarfBuzz say 11.0. -->
+    <DianaShMacMinimumSystemVersion Condition="'$(DianaShMacMinimumSystemVersion)' == ''">12.0</DianaShMacMinimumSystemVersion>
+    <DianaShMacCodesign Condition="'$(DianaShMacCodesign)' == ''">true</DianaShMacCodesign>
+    <_DianaShAppDest>$(DianaShAppDirName)</_DianaShAppDest>
+    <_DianaShAppDest Condition="'$(DianaShMacAppBundle)' == 'true'">$(_DianaShMacContents)/MacOS</_DianaShAppDest>
+    <_DianaShStagedDest></_DianaShStagedDest>
+    <_DianaShStagedDest Condition="'$(DianaShMacAppBundle)' == 'true'">$(_DianaShMacContents)/Resources/</_DianaShStagedDest>
+  </PropertyGroup>
+
+  <!-- Rewrites each publish item's destination before anything is copied, so
+       files land in their final home directly - no post-publish move, and no
+       empty runtimes/*/native husks left behind by one. The staged doc trees
+       lose their DianaShRoot/ prefix (they are already at their root-relative
+       path); everything else gains the app dir prefix. Matched on the bare
+       directory name so it works whichever slash MSBuild normalized Link= to.
+
+       Hooked on ComputeFilesToPublish, not ComputeResolvedFilesToPublishList:
+       the latter does not contribute the app's own deps.json, which
+       GeneratePublishDependencyFile adds afterwards and which would otherwise
+       be the one file left stranded at the root, away from the assemblies it
+       describes. ComputeFilesToPublish is the join point for both, and still
+       runs before anything is copied. -->
+  <Target Name="DianaShRelocatePublishFiles"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(DianaShPublishLayout)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish>
+        <_DianaShPath Condition="$([System.String]::Copy('%(RelativePath)').StartsWith('$(DianaShStagedRootDirName)'))">$(_DianaShStagedDest)$([System.String]::Copy('%(RelativePath)').Substring($(_DianaShStagedPrefixLength)))</_DianaShPath>
+        <_DianaShPath Condition="!$([System.String]::Copy('%(RelativePath)').StartsWith('$(DianaShStagedRootDirName)'))">$(_DianaShAppDest)/%(RelativePath)</_DianaShPath>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish>
+        <RelativePath>%(_DianaShPath)</RelativePath>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <!-- The two things the root needs that aren't build output: the marker
+       DianaShSandbox.ComputeRootFor walks up to find, and the launcher. Both
+       shims dispatch on their own filename, so the same file serves every
+       frontend - see launcher.sh. -->
+  <Target Name="DianaShWritePublishRoot"
+          AfterTargets="Publish"
+          Condition="'$(DianaShPublishLayout)' == 'true' And '$(DianaShMacAppBundle)' != 'true'">
+    <PropertyGroup>
+      <_DianaShRoot>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))</_DianaShRoot>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_DianaShRoot)$(DianaShRootMarkerFileName)"
+                      Lines="DianaSh sandbox root. Created at publish time - see 'man hier'."
+                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Copy SourceFiles="$(_DianaShLauncherDir)launcher.sh"
+          DestinationFiles="$(_DianaShRoot)bin/$(AssemblyName)" />
+    <Copy SourceFiles="$(_DianaShLauncherDir)launcher.cmd"
+          DestinationFiles="$(_DianaShRoot)bin/$(AssemblyName).cmd" />
+    <!-- Copy does not carry the source's mode bits across. -->
+    <Exec Command="chmod +x &quot;$(_DianaShRoot)bin/$(AssemblyName)&quot;"
+          Condition="'$(OS)' != 'Windows_NT'" />
+  </Target>
+
+  <!-- Every published build carries the GPL, the third-party notices and the licence texts at its root, or in a Mac bundle's Contents/Resources - see THIRD_PARTY_NOTICES.md. -->
+  <Target Name="DianaShPublishNotices" AfterTargets="Publish">
+    <PropertyGroup>
+      <_DianaShRepoRoot>$(MSBuildThisFileDirectory)../../</_DianaShRepoRoot>
+      <_DianaShNoticeDir>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))</_DianaShNoticeDir>
+      <_DianaShNoticeDir Condition="'$(DianaShMacAppBundle)' == 'true'">$(_DianaShNoticeDir)$(_DianaShMacContents)/Resources/</_DianaShNoticeDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_DianaShNotice Include="$(_DianaShRepoRoot)LICENSE;$(_DianaShRepoRoot)THIRD_PARTY_NOTICES.md" />
+      <_DianaShLicenceText Include="$(_DianaShRepoRoot)licenses/*" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(_DianaShRepoRoot)THIRD_PARTY_NOTICES.md')" Text="THIRD_PARTY_NOTICES.md is missing; a build may not ship without it." />
+    <Copy SourceFiles="@(_DianaShNotice)" DestinationFolder="$(_DianaShNoticeDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_DianaShLicenceText)" DestinationFolder="$(_DianaShNoticeDir)licenses" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- The bundle's Info.plist, from Info.plist.in beside this file, and its
+       icon. CFBundleExecutable is the apphost, which already sits in
+       Contents/MacOS; CFBundleIconFile names the .icns without its extension,
+       as macOS looks it up in Contents/Resources. -->
+  <Target Name="DianaShWriteMacAppBundle"
+          AfterTargets="Publish"
+          Condition="'$(DianaShMacAppBundle)' == 'true'">
+    <PropertyGroup>
+      <_DianaShMacBundleDir>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))$(_DianaShMacContents)/</_DianaShMacBundleDir>
+      <_DianaShMacIconName>$([System.IO.Path]::GetFileNameWithoutExtension('$(DianaShMacAppIcon)'))</_DianaShMacIconName>
+      <_DianaShMacDisplayName Condition="'$(DianaShMacDisplayName)' == ''">$(DianaShMacAppName)</_DianaShMacDisplayName>
+      <_DianaShMacDisplayName Condition="'$(DianaShMacDisplayName)' != ''">$(DianaShMacDisplayName)</_DianaShMacDisplayName>
+      <_DianaShMacInfoPlist>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)Info.plist.in'))</_DianaShMacInfoPlist>
+      <_DianaShMacInfoPlist>$(_DianaShMacInfoPlist.Replace('@NAME@', '$(DianaShMacAppName)').Replace('@DISPLAYNAME@', '$(_DianaShMacDisplayName)'))</_DianaShMacInfoPlist>
+      <_DianaShMacInfoPlist>$(_DianaShMacInfoPlist.Replace('@IDENTIFIER@', '$(DianaShMacBundleIdentifier)').Replace('@EXECUTABLE@', '$(AssemblyName)'))</_DianaShMacInfoPlist>
+      <_DianaShMacInfoPlist>$(_DianaShMacInfoPlist.Replace('@ICON@', '$(_DianaShMacIconName)').Replace('@VERSION@', '$(Version)'))</_DianaShMacInfoPlist>
+      <_DianaShMacInfoPlist>$(_DianaShMacInfoPlist.Replace('@MINIMUMSYSTEMVERSION@', '$(DianaShMacMinimumSystemVersion)').Replace('@CATEGORY@', '$(DianaShMacCategory)'))</_DianaShMacInfoPlist>
+    </PropertyGroup>
+    <Error Condition="'$(DianaShMacBundleIdentifier)' == ''" Text="A Mac app bundle needs DianaShMacBundleIdentifier, its reverse-DNS id." />
+    <Error Condition="'$(DianaShMacAppIcon)' == '' Or !Exists('$(DianaShMacAppIcon)')" Text="A Mac app bundle needs DianaShMacAppIcon, an existing .icns file; '$(DianaShMacAppIcon)' is not one." />
+    <WriteLinesToFile File="$(_DianaShMacBundleDir)Info.plist" Lines="$(_DianaShMacInfoPlist)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Copy SourceFiles="$(DianaShMacAppIcon)" DestinationFiles="$(_DianaShMacBundleDir)Resources/$(_DianaShMacIconName).icns" SkipUnchangedFiles="true" />
+    <!-- Copy does not carry the source's mode bits across, and a bundle zipped on Linux keeps what it has here. -->
+    <Exec Command="chmod +x &quot;$(_DianaShMacBundleDir)MacOS/$(AssemblyName)&quot;"
+          Condition="'$(OS)' != 'Windows_NT'" />
+  </Target>
+
+  <!-- Ad hoc signing, last, so the seal covers the notices and Info.plist
+       too; arm64 macOS will not start unsigned code at all. Only a Mac has
+       codesign. A bundle published elsewhere is left unsigned and says so.
+       Signing with a Developer ID, the hardened runtime and notarization are
+       not done yet - see EmuSen_Settings_Reference.md §4.82. -->
+  <Target Name="DianaShSignMacAppBundle"
+          AfterTargets="Publish"
+          DependsOnTargets="DianaShPublishNotices;DianaShWriteMacAppBundle"
+          Condition="'$(DianaShMacAppBundle)' == 'true'">
+    <PropertyGroup>
+      <_DianaShMacAppDir>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))$(DianaShMacAppName).app</_DianaShMacAppDir>
+    </PropertyGroup>
+    <Exec Command="codesign --force --deep -s - &quot;$(_DianaShMacAppDir)&quot;"
+          Condition="'$(DianaShMacCodesign)' == 'true' And $([MSBuild]::IsOSPlatform('OSX'))" />
+    <Message Importance="high"
+             Condition="'$(DianaShMacCodesign)' != 'true' Or !$([MSBuild]::IsOSPlatform('OSX'))"
+             Text="$(DianaShMacAppName).app is not signed. On a Mac, run: codesign --force --deep -s - &quot;$(DianaShMacAppName).app&quot;" />
+  </Target>
+
+</Project>

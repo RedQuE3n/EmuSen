@@ -41,6 +41,6 @@ dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj --filter "FullyQualifiedName~Mo
 
 ## Wired up
 
-`CoreFactory` builds a `MoonCore` and a `MoonDebugTarget` for any `.nes`, and `CoreCatalog` lists the console, so every frontend loads NES ROMs through the same path it loads SNES ones and the DianaOS shell talks to this core through the same `IDebugTarget`. See `Moon_Debug.md` §6.
+`CoreFactory` builds a `MoonCore` and a `MoonDebugTarget` for any `.nes`, and `CoreCatalog` lists the console, so every frontend loads NES ROMs through the same path it loads SNES ones and the DianaSh shell talks to this core through the same `IDebugTarget`. See `Moon_Debug.md` §6.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the naming scheme and `Man pages/EmuSen_Core_Gameplan.md` §7 for how this core is sequenced against Venus.

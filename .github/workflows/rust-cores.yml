@@ -423,13 +423,13 @@ jobs:
         continue-on-error: true
         env:
           EMUSEN_GALAXIA_NATIVE: '0'
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaOSSandboxTests|FullyQualifiedName~HierTests)&FullyQualifiedName!~GalaxiaParityTests" --logger "console;verbosity=normal"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaShSandboxTests|FullyQualifiedName~HierTests)&FullyQualifiedName!~GalaxiaParityTests" --logger "console;verbosity=normal"
 
       # The same tests through the platform library, which is Galaxia's default since step 2c, and the parity class beside them; still reporting, since a platform without the library falls back to the C# (EmuSen_RustPlatform.md §13).
       - name: Test Galaxia on the platform library
         working-directory: EmuSen-Project
         continue-on-error: true
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaOSSandboxTests|FullyQualifiedName~HierTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=galaxia-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaShSandboxTests|FullyQualifiedName~HierTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=galaxia-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # Endymion on its C#, which EMUSEN_ENDYMION_NATIVE=0 selects since its state 2: the pad and audio tests on simulated pads and SDL's dummy driver; reported, not yet a gate, as Galaxia's steps above.
       - name: Test Endymion on its C#

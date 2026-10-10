@@ -1,5 +1,5 @@
 using EmuSen.Cores.Nintendo.Venus.Processor;
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.WiseMan.Cores
 {

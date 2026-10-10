@@ -1,0 +1,82 @@
+using System.Linq;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.DianaSh.DianaSh.Dev;
+using static EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.DebugCommandHelpers;
+using EmuSen.Galaxia.Text;
+
+namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
+{
+    // Sampled once per frame regardless of access, unlike `watch` - see §3.13.
+    public class FrameLogCommand : global::EmuSen.DianaSh.DianaSh.Lib.IDianaShCommand
+    {
+        public string Name => "framelog";
+        public bool IsReadOnly => false;
+        public string Usage => string.Join('\n', new[]
+        {
+            "  framelog add <space> <addr> [<width>]",
+            "                                register a per-frame value sample (width 1/2/4 bytes, default 1)",
+            "  framelog list                 list active frame logs with their IDs",
+            "  framelog show <id> [<count>]  show a frame log's recorded (frame, value) samples (default 20)",
+            "  framelog clear <id>           clear a frame log's stored samples (doesn't remove it)",
+            "  framelog remove <id>          remove a frame log entirely",
+        });
+
+        public global::EmuSen.DianaSh.DianaSh.Lib.DianaShResult Execute(IDebugTarget? target, string[] parts, string? stdin)
+        {
+            target = global::EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.DebugCommandHelpers.RequireTarget(target);
+            if (parts.Length < 2) return "Usage: framelog add|list|show|clear|remove ...";
+            string sub = parts[1].ToLowerInvariant();
+            var frameLog = target.FrameLog;
+
+            switch (sub)
+            {
+                case "add":
+                {
+                    if (parts.Length < 4) return "Usage: framelog add <space> <addr> [<width>]";
+                    FindSpace(target, parts[2]); // validates the space name exists, or throws a helpful error
+                    int addr = ParseHex(parts[3]);
+                    int width = parts.Length >= 5 ? ParseHex(parts[4]) : 1;
+                    if (width != 1 && width != 2 && width != 4) return "width must be 1, 2, or 4";
+                    int id = frameLog.AddEntry(parts[2], addr, width);
+                    return $"Frame log #{id} added: {parts[2]} 0x{addr:X} (width {width})";
+                }
+                case "list":
+                {
+                    var list = frameLog.GetEntries();
+                    if (list.Count == 0) return "No active frame logs.";
+                    return string.Join('\n', list.Select(e => $"  #{e.Id}: {e.SpaceName} 0x{e.Address:X} (width {e.Width})"));
+                }
+                case "show":
+                {
+                    if (parts.Length < 3) return "Usage: framelog show <id> [<count>]";
+                    int id = ParseHex(parts[2]);
+                    int count = parts.Length >= 4 ? ParseHex(parts[3]) : 20;
+                    var samples = frameLog.GetSamples(id, count);
+                    if (samples.Count == 0) return $"No samples recorded for frame log #{id} (or it doesn't exist).";
+                    return string.Join('\n', samples.Select(s => $"  frame {s.FrameCount}: 0x{s.Value:X}"));
+                }
+                case "clear":
+                {
+                    if (parts.Length < 3) return "Usage: framelog clear <id>";
+                    frameLog.ClearSamples(ParseHex(parts[2]));
+                    return $"Cleared samples for frame log #{parts[2]}.";
+                }
+                case "remove":
+                {
+                    if (parts.Length < 3) return "Usage: framelog remove <id>";
+                    bool removed = frameLog.RemoveEntry(ParseHex(parts[2]));
+                    return removed ? $"Frame log #{parts[2]} removed." : $"No frame log #{parts[2]} found.";
+                }
+                default:
+                {
+                    // Named once so the suggestion and the "Try" list cannot drift.
+                    string[] subcommands = { "add", "list", "show", "clear", "remove" };
+                    return $"Unknown 'framelog' subcommand '{sub}'.{Suggestion.Hint(sub, subcommands)} Try {string.Join('/', subcommands)}.";
+                }
+            }
+        }
+    }
+}

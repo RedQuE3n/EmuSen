@@ -12,7 +12,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using SDL3;
 using EmuSen.Cores;
-using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
+using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Mistress.Input;
 using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Models;

@@ -5,7 +5,7 @@ using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Moon.Debug;
 using EmuSen.Cores.Nintendo.Moon.Memory;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Nintendo.MoonRT

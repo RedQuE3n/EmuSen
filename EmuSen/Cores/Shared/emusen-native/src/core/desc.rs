@@ -324,7 +324,7 @@ impl Setting {
     }
 }
 
-/// One instruction as `debug_disassemble` reports it; the core decodes, DianaOS formats.
+/// One instruction as `debug_disassemble` reports it; the core decodes, DianaSh formats.
 #[derive(Clone, Debug)]
 pub struct Instruction {
     pub address: u32,

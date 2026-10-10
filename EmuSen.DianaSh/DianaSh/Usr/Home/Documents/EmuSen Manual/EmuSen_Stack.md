@@ -1,0 +1,205 @@
+# EmuSen — the language and storage stack
+
+*This revision: the first. The stack was settled in discussion on 2026-08-08 and had never been written down, which is the whole reason §4 exists — every entry there is drift that accumulated silently because there was no document to drift from.*
+
+---
+
+## 1. The four rules
+
+| | Owns |
+|---|---|
+| **Rust** | The lower level: the reference probe, and anything C# cannot express accurately, safely and with performance at once. |
+| **C#** | Everything else that should be written in C#. |
+| **Python** | Testing, and accurate mathematical functions. |
+| **SQLite** | Everything stored as config or as a table. |
+
+These are stated as ownership, not as preference. A new subsystem does not get to argue its way into a language; it gets to argue that it is a different *kind* of thing than the rule assumes, and that argument goes in §4.
+
+## 2. Where each boundary actually falls
+
+### 2.1 Rust — the probe, and the reason it is not more than the probe
+
+`EmuSen.WiseMan/Reference/probe-rs/` is the whole of it: three backends over one policy layer, driving Mesen through the `probe-c-api.patch` ABI and any libretro core through `dlopen`. Which emulators exist is known only to `src/backends/`, and a test holds the layers above it to that — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.53, including the twenty places the separation had quietly leaked. See `EmuSen_Debugging_Tools_Reference_v5.md` §3.50 for why Mesen's own C ABI could not close the gap and §3.52 for the shape that replaced it.
+
+**Since 2026-09-17 the crate also builds a second binary, `rdp-reference`**, which is not a backend: it replays a display processor command stream through the angrylion rasterizer rather than stepping a machine, and the N64 core's differential tests run it (`Mars_RdpDifferential.md`). It belongs here for the same reason the probe does — it links foreign C into its own address space and hands it raw pointers into memory it also reads — and it is behind its own feature, so the probe is built without it.
+
+The rule's phrasing matters: *accurately, safely, and with performance*, all three. The probe qualifies because it loads foreign C++ into its own address space and reads emulator-internal memory out of it — C# can do that, but not without either a marshalling layer that changes the timing being measured or an `unsafe` surface large enough to stop being reviewable.
+
+**The cores are C#, permanently, and that is not an exception to the rule.** An emulator core in C# *is* the project's research claim; a Rust core would answer a question nobody asked here. `project_perf_investigation_settled` and §13.1 of `Venus_PPU.md` record four measured-and-rejected optimizations, none of which pointed at the language.
+
+*Revised 2026-09-22, by decision:* **2D consoles' cores are C#, 3D consoles' cores are Rust, and everything that is not a core stays C#.** Moon, Venus and Mercury, and any later 2D core, stay C#. Mars is ported to Rust (`Mars_Native.md` §5), and any later 3D core is written in Rust. The frontends, LunaP, Serenity, DianaSh, Galaxia, WiseMan and each Rust core's C# shim stay C#. The sentence above, "the cores are C#, permanently", is retired for 3D cores and kept for the rest. Its research claim now holds for the 2D cores, where it was measured (§13.1 of `Venus_PPU.md`), and does not extend to a core whose remaining costs `Mars_Native.md` §3.4 traced to what a managed boundary and a managed JIT cannot remove. While the port runs, the C# Mars stays as its oracle and fallback.
+
+*Revised again 2026-09-23, by decision:* **every core is to be ported to Rust once Mars is finished**,
+2D as well as 3D; everything that is not a core stays C#, as before. The reasons given were the speed Mars's port
+measured and the room to optimise that a managed runtime does not give. The evidence behind that is Mars's own and
+should be read as such: like for like, the Rust interpreter measured 1.5 to 1.75 times the C# one, the rasteriser
+2.1 to 2.4 times, the scan-out 1.6 to 1.9 times (`Mars_Native.md` §5.2 to §5.4), and the finished core 35 to 40 per
+cent under the C# one on the desktop and 1.6 times as fast on the handheld (§6.1, §6.12). *What does not transfer
+without measuring:* the 2D cores' remaining costs were never traced to the language — `Venus_PPU.md` §13.1's four
+rejected optimisations pointed elsewhere — so each 2D port states its own prediction before it begins and is priced
+against it, as §5 of `Mars_Native.md` was. The method carries over unchanged: the C# core is the oracle, its save
+state the format, a shim implements its interfaces, and the port is proven frame for frame before it is offered. The
+paragraph above, "2D consoles' cores are C#", is retired by this one, and "the cores are C#, permanently" with it.
+
+**The one arguable case is `EmuSen.Endymion/AudioPlayer.cs`,** the only `unsafe` in the tree — a thin SDL3 binding on the audio submit path. It stays C#. Moving it to Rust would *add* an FFI boundary rather than remove one: today there is one hop (C# → SDL3), and a Rust sink would make it two with no accuracy or safety gained. Recorded here so the next reader does not have to re-derive it from the `unsafe` keyword alone.
+
+*Retired 2026-10-07, by decision (`EmuSen_RustPlatform.md` §9, Q12): Endymion's device half is to be ported to Rust
+with the rest of the component. The paragraph above counts layers. Counted as transitions, which is what costs time,
+`Submit` makes two SDL calls in steady play (`GetAudioStreamQueued` through `QueuedFrames`, and `PutAudioStreamData`),
+and a Rust sink makes one call into Rust, which makes both natively; so the move adds no transition a frame and
+removes one (`EmuSen_RustPlatform.md` §4.2, argued from the code and to be measured as its P4). What the paragraph got
+right stands: the move buys nothing for the C# programs, and is made for the later Rust client and while the C# is
+alive to be its oracle.*
+
+### 2.2 Python — offline analysis, not in-process tests
+
+The rule says Python owns testing, and the project's working rule is that tests run headless through `EmuSen.WiseMan`. Both are true, because they are about different things, and the seam is **whether the thing under test has to be alive**.
+
+- **In-process verification stays C#/WiseMan.** A test that steps a CPU, drives `IDebugTarget`, renders an Avalonia control headlessly or drains `ICore`'s audio needs the live object graph. Nothing is gained by reaching it from another process, and the harness rule (`extend the harness, do not spawn a window`) is unaffected.
+- **Offline analysis over artifacts is Python.** Once a run has produced files — dump sets, signatures, traces — the analysis is arithmetic over data and has no reason to be in the emulator's language. `gsudiff.py` was the first instance; §3 is the second and much larger one. It sat at `Reference/` until 2026-08-09 and now lives in `Reference/analysis/` with the rest, which is what let it acquire the `unittest` this section already required of a new tool — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.53 for the format drift that went unnoticed while it had none.
+
+That seam is not arbitrary: it is exactly where the emulator dependency ends. `--compare` and `--verify-dictionary` never load a ROM, while `--probe` cannot avoid it.
+
+**Dependency policy: standard library only.** No venv, no `requirements.txt`, no install step — `python3 <tool>` from a clean clone. This follows `gsudiff.py`, which is stdlib-only by instinct rather than by policy; the policy is now stated. `sqlite3`, `csv` and `json` are stdlib, and per-pixel screen work through `memoryview.cast('I')` runs in single-digit milliseconds per frame, so numpy would buy convenience rather than capability. Tests are `unittest`, run with `python3 -m unittest`.
+
+**Where this does not generalise:** the rule is about *analysis* being mathematical, not about Python being the more accurate language. Nothing here claims a numeric result Python gets right and C# gets wrong. Both use IEEE 754 doubles and the port in §3 was required to be bit-identical in its verdicts before the C# was removed.
+
+**A note on comments.** The one-line-maximum comment rule is about `.cs` files and is not widened by this document. The established pattern for this project's Python is `gsudiff.py`'s: a module docstring that *is* the manual page — synopsis, the exact command that produces the input, preconditions, a paragraph on why the analysis is shaped the way it is, and cross-references into these docs. A Python tool carries its own man page; a C# file points at one.
+
+### 2.3 SQLite — the two databases that were already right
+
+Both predate this document and both are the model:
+
+- **The ROM catalogue** (`EmuSen.Galaxia/Library/Catalogue/catalogue-schema.sql`, driven by `EmuSen/Common/Catalogue/SqliteCatalogue.cs`) — see `EmuSen_Galaxia.md` §7.
+- **The known-differences dictionary** (`Dictionary/schema.sql`) — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.49. Its three triggers make `status = 'proven'` unreachable without a passing verification row, which is the project's evidence discipline expressed as something an author cannot talk past rather than as a convention they might forget.
+- **The SPIR-V cache** (`EmuSen.Serenity/Slang/spirv-cache-schema.sql`, driven by `SpirvCache.cs` beside it; `home/Shaders/spirv-cache.db`), added 2026-09-24 — see `EmuSen_Serenity.md` §9.4. A deletable cache keyed by content, bounded at 64 MB. It differs from the rule below in two stated ways: the driver sits in `EmuSen.Serenity`, which is not a leaf (it already takes seven packages and three projects, and every program that references it already ships `Microsoft.Data.Sqlite` through `EmuSen`), and its schema is embedded rather than copied beside the binary, so the cache has no file of its own to be missing. A file of another `user_version` is emptied rather than migrated, which a cache may do and §4.3's two databases may not.
+
+Mistress's own databases came later and are the player's data rather than caches, so each carries an append-only migration list, a `PRAGMA user_version` and a refusal of any newer file: `games.db` (`EmuSen_Settings_Reference.md` §4.32), `media.db` (`EmuSen_BigPicture.md` §5.6) and `records.db`, each save state's record and the shader pack's build, which replaced a JSON sidecar beside every state and a stamp file in the pack on 2026-09-26 (§4.64 of the same reference). Their migrations are C# lists, not committed `.sql` files; rule 1 below describes a schema that is run whole, and does not fit a schema that is the sum of its steps.
+
+Two structural rules they establish, and which anything new must follow:
+
+1. **The schema is committed as `.sql`; the `.db` is a build artifact and gitignored.** A binary cannot be reviewed and a schema is the part worth reviewing. Note the `.gitignore` entries are individual filenames, not a glob — a new database needs a new line.
+2. **The contract may live in a leaf; the driver may not.** `EmuSen.Galaxia` has no `PackageReference` at all, so `ICatalogue` and the schema live there while `Microsoft.Data.Sqlite` lives one layer up. The same applies to `EmuSen.DianaSh`, which is referenced *by* `EmuSen` rather than the other way round: the shell takes an `ICatalogue` it is handed and cannot construct one.
+
+## 3. The signature store and the comparator
+
+The largest instance of both rules landing on the same code.
+
+`EmuSen.Pharaoh`'s comparator was 499 lines of C# statistics over a `frame → column → CRC32` mapping stored as one CSV plus one JSON manifest per frame, the latter parsed by regular expression rather than by a JSON parser. The mapping is a table by any reading, and the central operation — `AgreementRate`, the share of frames on which one column's CRC matches the other side's at a given stream offset — is a self-join with an offset applied to the join key. It was written as nested dictionary lookups because the data had no table to live in.
+
+The migration is therefore one change, not two: the signature becomes a SQLite table, and the analysis over it becomes Python.
+
+**The probes were not changed.** Both the C# `PeerProbe` and the Rust `dump.rs` still write `sig.csv` and per-frame manifests, byte-for-byte identically, and their parity tests were untouched. The database is an *ingest* of what is on disk — a deletable cache, exactly the argument `catalogue-schema.sql` already makes for itself. A probe writes a stream while it runs, and appending a row to a CSV is the right shape for that; wiring `rusqlite` into the probe to avoid a later ingest step would have bought nothing and cost the probe its dependency-free build.
+
+**What SQLite did and did not buy here.** It removed regex-parsing of JSON, made the ingest/analysis seam explicit, and gave the join an honest expression. It did **not** make anything measurably faster: on a 75-frame set the in-memory dictionaries were already fast, and no speed improvement was measured or claimed. The performance argument only begins to apply at run lengths this project has not yet taken — thousands of frames across many columns — and is recorded here as a prediction, not a result.
+
+### 3.1 The differential, and what it caught
+
+Nothing was deleted on the strength of the port looking right. `PythonPortDifferentialTests` ran both implementations over the same argv and asserted byte-identical stdout and exit code across seventeen cases: each identity gate, both warnings, the column ratings, a located divergence, input blame, the stream-offset search, both screen formats, the vacuity gate, a vertical shift, a static reference, a missing screen, an empty signature, and the committed Mesen dump set. It passed, and it was then deleted along with the C# it verified — which is why the result is recorded here instead.
+
+Beyond the fixtures, one real pair: `--probe --sig` over SMB3 frames 120–194 against `EmuSen.WiseMan/Reference/dumps/SMB3`. Both implementations produced the same output down to the byte, including the one-sided board warning, the real `PaletteIndex16` decode through the NES palette (5 colours, dominant 92.7%), 1536 differing pixels at 2.50%, and phase +2 — the two-frame boot offset §3.48 predicts.
+
+**The differential earned its cost on one case.** The port was written believing that percentages needed special handling: .NET's `F` format was assumed to round half away from zero while Python rounds half to even, and the values are reachable — 384 differing pixels out of 256×240 is exactly 0.625%. `_fixed()` was accordingly implemented with a decimal round-half-away-from-zero. The test failed on precisely that case, **in the opposite direction to the prediction**. Measured against .NET 10 across eighteen values chosen to cover every dyadic midpoint at zero, one and two decimals: `F` rounds half to **even**, exactly as Python's `format()` does. The deliberate correction disagreed with .NET on seven of eighteen; doing nothing disagreed on none.
+
+The prediction is retained in `compare.py`'s header rather than deleted. "Two languages must round differently" is a plausible claim that would otherwise be re-derived, believed and re-implemented by the next person to look at the file — and the belief was not idle, it was acted upon and shipped a bug that only a differential caught.
+
+**Where this does not generalise:** a byte-identical differential was affordable because the tool's entire output is a text report and an exit code. A port whose output is a data structure, a rendered image, or a timing would need a different and weaker notion of "the same", and should not cite this as precedent for deleting the original.
+
+## 4. Reasoned exceptions
+
+Everything below violates a rule in §1 and stays that way on purpose.
+
+### 4.1 Config stays JSON
+
+The strongest-looking case for SQLite in the tree, and it does not survive contact with the dependency graph.
+
+- **The leaf constraint forbids it.** `EmuSen.Galaxia` has no `PackageReference` at all; `EmuSen.DianaSh → Galaxia` and `EmuSen → DianaSh`. Neither Galaxia nor DianaSh can take `Microsoft.Data.Sqlite` without closing a cycle, so a settings database would need an interface in Galaxia, a driver in `EmuSen`, and injection through every frontend — for values that are read once at startup.
+- **The path is late-bound and the tests pin it.** Every model holds a `static readonly ConfigFile<T>` created at type-initialization, while `ConfigFile.Path` is recomputed on every access so that `ConfigStore.OverrideDirectory` can move underneath it. Around thirty test fixtures swap that override between tests in one process, and `ConfigFileTests.Path_follows_the_override_when_it_moves` pins the behaviour directly. A connection opened at type-init breaks all of them.
+- **Hand-editability is a stated design goal**, in `ConfigJson.cs`, `CheatFile.cs` and `AudioSettings.cs` independently — which is why the JSON reader accepts comments, trailing commas, case-insensitive names, and enums written as either names or numbers, and why the settings hubs clamp every value on the way in rather than trusting the file. SQLite removes the editing surface that machinery exists to serve.
+- Roughly a dozen tests assert on the *bytes* of a config file, not on round-trip behaviour.
+
+**Where this does not generalise:** none of the above is an argument that config is unsuited to a database in general. It is an argument that *this* config, behind *this* leaf assembly, with *this* hand-editing contract, is not worth the cycle-breaking. A frontend built without the Galaxia constraint would be free to decide differently.
+
+### 4.2 Coverage maps, blobs, and the schemas themselves
+
+- **`.covmap`** (`EMCV`) is a dense bitset of executed addresses. A bitmap is not a table, and storing one row per address would be strictly worse on every axis.
+- **Raw dumps, firmware images and `.srm` saves** are opaque byte blobs whose structure belongs to the hardware, not to a schema.
+- **The `.sql` schema files** are text on purpose, per §2.3.
+
+### 4.3 Deferred, not rejected
+
+Recorded so they are not re-derived from scratch:
+
+- **The `.cht` cheat database** — 2,779 files and 16 MB in the author's tree today, re-walked by every `CheatDatabase` instance, whose own comment notes a real libretro tree is tens of thousands of files. This is catalogue-shaped and is the strongest remaining candidate. It needs the interface/driver split of §2.3 threaded through DianaSh.
+- **Per-game cheat lists** (`cheats/<game>.json`) are genuinely tabular but small, and migrating them costs the same architectural split to make 253 rows queryable while losing the hand-editing of §4.1. Poor trade at present size.
+  *Re-examined 2026-09-26 (`EmuSen_Settings_Reference.md` §4.64), when the rest of Mistress's program-written files moved into SQLite, and left for a stronger reason than size.* The lists are one store shared by Mistress's Active Cheats window and the DianaSh commands `cheat save`, `cheat load` and `cheat files`, and `man cheat` documents them as hand-editable from the shell. Moving Mistress's side alone would split the store; moving both would end a documented workflow. They move only if that workflow is retired, which is a decision about the shell, not about storage.
+- **`FrameRecorder`'s `frames.log`** is a four-column TSV that nothing in the repo reads back. The documented cross-reference against `ffmpeg -f framemd5` (`EmuSen_Debugging_Tools_Reference_v5.md` §3.15b) is a real join performed by hand — a good future Python tool, at which point the table becomes worth having.
+- **Schema versioning.** No database here has `PRAGMA user_version` or any migration path. The catalogue re-runs its `IF NOT EXISTS` schema on every open, so a new column silently does nothing to an existing file — tolerable only because the catalogue is declared a deletable cache. The dictionary runs its schema *only when the file is absent*, so editing `schema.sql` has no effect on an existing `known-differences.db`, and that database accumulates `verification` rows that are the only thing making `proven` reachable. Deleting it to pick up a schema change would destroy the proof history. This is the sharpest known gap in the storage design.
+
+### 4.4 GLSL, for the one thing that runs on a GPU
+
+*2026-09-21.* Mars's compute shaders are GLSL (`Rdp/Gpu/Shaders/*.comp`), compiled to SPIR-V by a test-time
+dependency of WiseMan and embedded in the core (`Mars_Gpu.md` §2). It is a fifth language in the tree and is
+recorded here as an exception rather than an addition to the four, because it is not a choice among languages for
+host code: a GPU runs shader code or nothing, and the host side of the same work is C# like the rest of the core.
+It does not generalise. Nothing that runs on the CPU has a reason to be written in it, and a second shading
+language (`Mars_Gpu.md` §4 on Metal) was declined for the reason the stack is four languages at all.
+
+## 5. Adding to the stack
+
+- A new **database**: schema as committed `.sql` next to its owner, `IF NOT EXISTS` throughout, `PRAGMA foreign_keys = ON`, a header comment carrying the argument for the table's existence, a `<None … CopyToOutputDirectory="PreserveNewest">` item in the owning `.csproj` (it propagates transitively through `ProjectReference`; no consumer needs its own), and a new `.gitignore` line for the `.db`.
+- A new **Python tool**: `EmuSen.WiseMan/Reference/analysis/`, stdlib only, `#!/usr/bin/env python3`, module docstring as the manual, exit code as the verdict, `unittest` beside it.
+- A new **exception**: a section in §4, with the evidence, and a sentence on where it does not generalise.
+
+## 6. A later stack: DianaSh in Rust, and C# retired (deferred, 2026-10-01)
+
+*Decided 2026-10-01: recorded as a plan, and scheduled after more cores have been added, not before.* It would revise §1's
+division of the stack, so it is written down here rather than re-derived when its time comes.
+
+**The direction.** Every emulator core is moving to Rust behind one native interface (`EmuSen_NativeCores.md`, and the
+stable API in `EmuSen_CoreAPI.md`). The plan is to bring the runtime above the cores with them. DianaSh would become a
+Rust program, the platform's runtime and shell: core discovery and loading, sessions, the debugger and cheat services,
+states and rewind, settings, input routing, and the Unix-like shell. Its frontend API would be a language-neutral C
+interface. C# would then leave the tree.
+
+**Why it is coherent.**
+- Below the user interface the platform becomes one language, with the stable API native end to end: the reference
+  implementation of the interface is written in the language its cores are written in.
+- No .NET runtime is shipped. That means a smaller install, no JIT warm-up at start, and a native binary on small
+  ARM machines, which matters for a single-board-computer appliance.
+- A user interface in another toolkit can bind to it directly, instead of through a bridge into a managed runtime.
+
+**The user interface,** to be chosen by prototype and not argued in advance. Two candidates:
+- **Qt with QML through cxx-qt,** a maintained Rust–Qt bridge. Its strengths are native Wayland, a mature kiosk
+  backend (EGLFS), and the platform look and accessibility.
+- **Slint,** a Rust-native toolkit built for embedded and kiosk use, which draws through DRM/KMS with no desktop.
+
+The test of the choice is one Big Picture screen built in each, measured on the desktop and on a small ARM board. Qt
+through C# was considered and set aside: its .NET bindings (Qml.Net, QtSharp) are unmaintained, so a Qt interface
+implies a non-C# frontend in any case.
+
+**What it costs, measured 2026-10-01.**
+
+| Part | Lines |
+|---|---|
+| DianaSh | about 16,100 |
+| Mistress, of which Big Picture is about 7,500 | about 28,300 |
+| LunaP | about 29,800 |
+| Hotaru, Galaxia and Endymion | about 4,300 |
+| WiseMan's user-interface tests | about 37,200 |
+
+The rest of WiseMan's suite would need a Rust home too. This is a platform rewrite, not the port of one assembly.
+
+**The order, in which no step leaves a broken platform.**
+1. Every core is ported to Rust, which retires each C# core.
+2. The stable core API lands.
+3. DianaSh is ported to Rust as the headless runtime. Its first client is the conformance kit, and Mistress keeps
+   working by calling it through its C interface.
+4. The interface toolkit is chosen by prototype.
+5. The user interface is ported, and C# and LunaP are retired. Tests move piece by piece, with WiseMan kept until
+   each piece reaches parity.
+
+*Begun 2026-10-07, by decision: the tester chose to start with the platform pieces outside DianaSh: Galaxia, then Endymion, then Serenity's Vulkan and shader-cache half, one at a time, each behind a C interface the C# frontends call, with Cauldron folded into DianaSh rather than ported and DianaSh itself after them. The design is `EmuSen_RustPlatform.md`. The work comes before step 3 without waiting for step 1 to finish; steps 3 to 5 keep their order, and the user-interface toolkit is still deferred to step 4. §2.1's paragraph on `AudioPlayer.cs` is re-examined in §4.2 of that page.*
+
+**What does not change now.** Until this plan starts, §1–§5 stand as written: Rust for cores, C# for everything else.
+The work in progress is not to be bent towards it beyond keeping the frontend API's design open to a C interface.

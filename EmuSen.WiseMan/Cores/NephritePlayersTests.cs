@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.DianaOS.DianaOS.Sys.Systems.Genesis;
+using EmuSen.DianaSh.DianaSh.Sys.Systems.Genesis;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;

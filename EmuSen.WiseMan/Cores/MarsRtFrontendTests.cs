@@ -6,9 +6,9 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 

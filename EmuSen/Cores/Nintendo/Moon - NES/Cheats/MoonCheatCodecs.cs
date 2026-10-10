@@ -1,8 +1,8 @@
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.Cores.Nintendo.Moon.Cheats
 {
-    // The plugs letting CheatCommand use both decoders without DianaOS referencing this project.
+    // The plugs letting CheatCommand use both decoders without DianaSh referencing this project.
     public static class MoonCheatCodecs
     {
         // "Game Genie", not "NES Game Genie", so the detected-format message reads as it always has.

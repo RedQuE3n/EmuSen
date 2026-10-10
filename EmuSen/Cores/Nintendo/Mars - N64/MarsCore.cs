@@ -5,7 +5,7 @@ using System.Threading;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Cores.Nintendo.Mars.Rom;
 using EmuSen.Cores.Nintendo.Mars.Vi;
 using EmuSen.Galaxia.Input;

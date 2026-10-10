@@ -10,7 +10,7 @@ out/
 .vs/
 .vscode/
 
-# DianaOS's runtime tree - see `man hier` - real, uncommitted data, not
+# DianaSh's runtime tree - see `man hier` - real, uncommitted data, not
 # source. home/ IS the shell's root and holds all of it: Games, Saves,
 # Firmware, Cheats, Logs, etc/EmuSen and tmp. The bare etc/, tmp/ and
 # SourceLogs/ entries cover trees left by builds from before the move.
@@ -32,10 +32,10 @@ SourceLogs/
 # never belongs in version control (redistribution), regardless of who
 # added it or why.
 TestRoms/
-EmuSen.DianaOS/DianaOS/Usr/Home/Games/*
-EmuSen.DianaOS/DianaOS/Usr/Home/Roms/*
-!EmuSen.DianaOS/DianaOS/Usr/Home/Games/.gitkeep
-!EmuSen.DianaOS/DianaOS/Usr/Home/Roms/.gitkeep
+EmuSen.DianaSh/DianaSh/Usr/Home/Games/*
+EmuSen.DianaSh/DianaSh/Usr/Home/Roms/*
+!EmuSen.DianaSh/DianaSh/Usr/Home/Games/.gitkeep
+!EmuSen.DianaSh/DianaSh/Usr/Home/Roms/.gitkeep
 *.smc
 *.sfc
 *.nes
@@ -62,14 +62,14 @@ Platform/target/
 # The libretro cheat database, downloaded at runtime - ~28k files and
 # 250MB of CC BY-SA data that `cheat db update` fetches on demand. See
 # `man cheat`.
-EmuSen.DianaOS/DianaOS/Usr/Home/Cheats/
+EmuSen.DianaSh/DianaSh/Usr/Home/Cheats/
 
 # Coprocessor firmware dumps (dsp1.rom, st010.program.rom, ...). Same rule
 # as the ROMs above and for the same reason: the mask ROM inside a DSP-1 is
 # Nintendo's, and a BIOS pack's own MIT/GPL license covers that pack's
 # tooling, not the dumps it redistributes. See Venus_NecDSP.md §2.
-EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/*
-!EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/.gitkeep
+EmuSen.DianaSh/DianaSh/Usr/Home/Firmware/*
+!EmuSen.DianaSh/DianaSh/Usr/Home/Firmware/.gitkeep
 
 # Databases. The schema is committed and the .db is a build artifact - a binary
 # cannot be reviewed and a schema is the part worth reviewing. Named one by one

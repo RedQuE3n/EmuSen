@@ -6,7 +6,7 @@ using System.Text;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mars.Native;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 

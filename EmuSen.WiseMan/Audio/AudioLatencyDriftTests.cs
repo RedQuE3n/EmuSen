@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using EmuSen.Audio;
 using EmuSen.Common;
-using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Endymion;
 using SDL3;
 using EmuSen.WiseMan.Fixtures;

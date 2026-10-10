@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The core-agnostic debug/scripting shell - see this project's own
+       README/header comments (DianaShInterpreter.cs, IDebugTarget.cs) for
+       the full design. OutputType=Exe so `dotnet run` here launches a
+       standalone shell with no core loaded at all (see Program.cs) -
+       every other project just references this like any other library;
+       its Main only runs when this project is the one actually launched. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- OutputType=Exe above means a RID-specific publish of a frontend that
+         references this project also builds it for the HOST rid, so restore
+         has to produce assets for every publish target plus the build
+         machine's own - see `man hier`. -->
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The telemetry contracts (namespace EmuSen.Cauldron) are in DianaSh/Lib/Cauldron/ since 2026-10-07;
+         the EmuSen.Cauldron project was folded in - see EmuSen_Debugging_Tools_Reference_v5.md §3.66. -->
+    <!-- ConfigRoot (this shell's own root discovery lives there now) and
+         CheatFile, behind `cheat save`/`load` - see
+         EmuSen_Config_Reference.md §1.1 for why the dependency runs this
+         way round rather than Galaxia calling DianaShSandbox. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+  </ItemGroup>
+
+  <!-- Ships the two read-only doc trees into a published build's own sandbox
+       root, so `man`/`cat`/`find` have the same reference material there that
+       they do running from source. Link= stages them under DianaShRoot/, which
+       DianaShPublishLayout.targets then hoists to the publish root - and which
+       is also where a publish that does NOT import those targets leaves them,
+       matching DianaShSandbox's fallback root. See `man hier`.
+       CopyToPublishDirectory only (not CopyToOutputDirectory): running from
+       source already reads these straight out of the repo, so copying them
+       into every bin/ would be ~770KB of duplication nothing ever reads. -->
+  <ItemGroup>
+    <None Include="DianaSh\Etc\Man pages\**\*" Link="DianaShRoot\home\Documents\Man pages\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="DianaSh\Usr\Home\Documents\**\*" Link="DianaShRoot\home\Documents\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+
+  <!-- A published build's output directory is DianaSh's own root: the .NET
+       app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
+  <Import Project="Publish\DianaShPublishLayout.targets" />
+
+</Project>

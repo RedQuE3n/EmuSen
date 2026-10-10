@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.Coprocessors
             return (core, target);
         }
 
-        private static string Text(EmuSen.DianaOS.DianaOS.Lib.DisassembledInstruction i)
+        private static string Text(EmuSen.DianaSh.DianaSh.Lib.DisassembledInstruction i)
             => i.OperandText.Length == 0 ? i.Mnemonic : $"{i.Mnemonic} {i.OperandText}";
 
         private static string[] Disassemble(int count, params byte[] program)

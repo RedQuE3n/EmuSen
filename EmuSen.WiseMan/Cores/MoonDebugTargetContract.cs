@@ -1,7 +1,7 @@
 using EmuSen.Cauldron;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores

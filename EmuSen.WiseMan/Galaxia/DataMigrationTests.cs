@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.Galaxia
 
         public DataMigrationTests()
         {
-            _legacy = Path.Combine(_root, "EmuSen.DianaOS", "DianaOS", "Usr", "Home");
+            _legacy = Path.Combine(_root, "EmuSen.DianaSh", "DianaSh", "Usr", "Home");
             _destination = Path.Combine(_root, "home");
         }
 

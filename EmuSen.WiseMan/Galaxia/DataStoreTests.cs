@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -56,12 +56,12 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void The_shell_forwards_every_directory_here()
         {
-            Assert.Equal(DataStore.UsrHome, DianaOSSandbox.UsrHomeDirectory);
-            Assert.Equal(DataStore.Logs, DianaOSSandbox.LogsDirectory);
-            Assert.Equal(DataStore.Saves, DianaOSSandbox.SavesDirectory);
-            Assert.Equal(DataStore.SaveStates, DianaOSSandbox.SaveStatesDirectory);
-            Assert.Equal(DataStore.Firmware, DianaOSSandbox.FirmwareDirectory);
-            Assert.Equal(DataStore.Cheats, DianaOSSandbox.CheatDatabaseDirectory);
+            Assert.Equal(DataStore.UsrHome, DianaShSandbox.UsrHomeDirectory);
+            Assert.Equal(DataStore.Logs, DianaShSandbox.LogsDirectory);
+            Assert.Equal(DataStore.Saves, DianaShSandbox.SavesDirectory);
+            Assert.Equal(DataStore.SaveStates, DianaShSandbox.SaveStatesDirectory);
+            Assert.Equal(DataStore.Firmware, DianaShSandbox.FirmwareDirectory);
+            Assert.Equal(DataStore.Cheats, DianaShSandbox.CheatDatabaseDirectory);
         }
 
         [Fact]
@@ -73,7 +73,7 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(dir, DataStore.UsrHome);
             Assert.Equal(Path.Combine(dir, "Saves"), DataStore.Saves);
             Assert.Equal(Path.Combine(dir, "Saves", "Save States"), DataStore.SaveStates);
-            Assert.Equal(Path.Combine(dir, "Saves"), DianaOSSandbox.SavesDirectory);
+            Assert.Equal(Path.Combine(dir, "Saves"), DianaShSandbox.SavesDirectory);
         }
 
         // Separate overrides, so one test's redirect cannot move the other's paths - see §3.1.
@@ -92,11 +92,11 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void Override_does_not_move_the_sandbox_root()
         {
-            string install = DianaOSSandbox.InstallDirectory;
+            string install = DianaShSandbox.InstallDirectory;
 
             DataStore.OverrideDirectory = Path.Combine(Path.GetTempPath(), "EmuSenData_" + Guid.NewGuid().ToString("N"));
 
-            Assert.Equal(install, DianaOSSandbox.InstallDirectory);
+            Assert.Equal(install, DianaShSandbox.InstallDirectory);
             Assert.Equal(install, ConfigRoot.Directory);
         }
     }

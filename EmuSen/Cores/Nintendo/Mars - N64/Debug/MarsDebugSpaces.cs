@@ -1,6 +1,6 @@
 using EmuSen.Cores.Nintendo.Mars.Cpu.Core;
 using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.Cores.Nintendo.Mars.Debug
 {

@@ -27,12 +27,12 @@ using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Galaxia.Input;
 using EmuSen.Audio;
 
@@ -108,7 +108,7 @@ namespace EmuSen.Mistress.Views
         private IDebugTarget? _debugTarget;
 
         // At most one, reused and brought forward rather than duplicated; cleared on Closed.
-        private readonly WindowSlot<DianaOSConsoleWindow> _consoleWindow = new();
+        private readonly WindowSlot<DianaShConsoleWindow> _consoleWindow = new();
 
         // Same rule, opened by typing `coretop` rather than from a menu item.
         private readonly WindowSlot<CoretopWindow> _coretopWindow = new();
@@ -590,19 +590,19 @@ namespace EmuSen.Mistress.Views
 
         private void ShowShellConsole()
         {
-            _consoleWindow.Show(this, () => new DianaOSConsoleWindow(_debugTarget, MakeEmulationControlCommands(),
+            _consoleWindow.Show(this, () => new DianaShConsoleWindow(_debugTarget, MakeEmulationControlCommands(),
                 _session?.CheatAutoDetectCodec, _session?.CheatExplicitCodec, _session?.CpuTraceSwitch));
         }
 
         // Built fresh per console window, so the delegates never outlive a MainWindow.
-        private IEnumerable<IDianaOSCommand> MakeEmulationControlCommands() => new IDianaOSCommand[]
+        private IEnumerable<IDianaShCommand> MakeEmulationControlCommands() => new IDianaShCommand[]
         {
             new PauseCommand(PauseEmulation, () => IsPaused),
             new ResumeCommand(ResumeEmulation, () => IsPaused),
             new CoretopWindowCommand(OpenCoretopWindow),
             new VstopWindowCommand(OpenVstopWindow),
             new FeedCommand(() => Activate()),
-            new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
+            new EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
         };
 
         // Not method groups: _session can still be null at construction time - see `man state`.
@@ -769,7 +769,7 @@ namespace EmuSen.Mistress.Views
                     _hardwareDashboard,
                     // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.
                     new LunaAction("_Runtime Dashboard...", OpenVstopWindow),
-                    new LunaAction("_DianaOS Console...", ShowShellConsole)));
+                    new LunaAction("_DianaSh Console...", ShowShellConsole)));
 
             SyncMenuState();
         }

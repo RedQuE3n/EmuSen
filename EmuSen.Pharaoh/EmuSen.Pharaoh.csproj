@@ -22,8 +22,8 @@
   </ItemGroup>
 
 
-  <!-- A published build's output directory is DianaOS's own root: the .NET
+  <!-- A published build's output directory is DianaSh's own root: the .NET
        app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
-  <Import Project="..\EmuSen.DianaOS\Publish\DianaOSPublishLayout.targets" />
+  <Import Project="..\EmuSen.DianaSh\Publish\DianaShPublishLayout.targets" />
 
 </Project>

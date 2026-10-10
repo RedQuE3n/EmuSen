@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;

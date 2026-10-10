@@ -6,9 +6,9 @@ using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Cheats;
 using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
@@ -525,17 +525,17 @@ namespace EmuSen.WiseMan.Cores
 
         // --- Through the shell ---
 
-        private DianaOSInterpreter Shell(out MarsCore core)
+        private DianaShInterpreter Shell(out MarsCore core)
         {
             core = Load();
             var target = new MarsDebugTarget(core);
-            return DianaOSInterpreter.CreateDefault(target, null, MarsCheatCodecs.GameShark(), null);
+            return DianaShInterpreter.CreateDefault(target, null, MarsCheatCodecs.GameShark(), null);
         }
 
         [Fact]
         public void Cheat_add_takes_a_multi_line_code_whole()
         {
-            DianaOSInterpreter shell = Shell(out MarsCore core);
+            DianaShInterpreter shell = Shell(out MarsCore core);
             core.Bus!.Rdram[0x200] = 0x05;
 
             string output = shell.Submit("cheat add D00002000005+800001000001 lives").Output;
@@ -550,7 +550,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Cheat_add_says_why_it_refuses_a_code()
         {
-            DianaOSInterpreter shell = Shell(out MarsCore core);
+            DianaShInterpreter shell = Shell(out MarsCore core);
 
             string output = shell.Submit("cheat add 880001000001").Output;
 
@@ -561,7 +561,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Cheat_list_shows_a_test_as_a_test()
         {
-            DianaOSInterpreter shell = Shell(out _);
+            DianaShInterpreter shell = Shell(out _);
             shell.Submit("cheat add D10002001234+810001005678 guarded");
 
             string output = shell.Submit("cheat list").Output;
@@ -574,11 +574,11 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Export_skips_a_conditional_cheat_and_says_so()
         {
-            DianaOSInterpreter shell = Shell(out _);
+            DianaShInterpreter shell = Shell(out _);
             shell.Submit("cheat add 8000010000FF plain");
             shell.Submit("cheat add D00002000005+800001000001 guarded");
 
-            string path = Path.Combine(DianaOSSandbox.RootDirectory, "tmp", "mars_export.cht");
+            string path = Path.Combine(DianaShSandbox.RootDirectory, "tmp", "mars_export.cht");
             string output = shell.Submit($"cheat export {path}").Output;
 
             Assert.Contains("Exported 1 cheat(s)", output);

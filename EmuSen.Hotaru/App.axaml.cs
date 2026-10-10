@@ -5,12 +5,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using EmuSen.Cores;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Hotaru.Views;
 
 namespace EmuSen.Hotaru
@@ -28,7 +28,7 @@ namespace EmuSen.Hotaru
         // of it here - Main hands it to
         // AppBuilder.Configure<App>(() => new App(...)) instead of the
         // usual parameterless Configure<App>(). Takes extraCommands, not
-        // a pre-built DianaOSInterpreter, since GameWindow itself now
+        // a pre-built DianaShInterpreter, since GameWindow itself now
         // owns building (and REbuilding, after a `core <name> <path>`
         // swap) the actual interpreter - see that class's own
         // RebuildDebugTargetAndCommands().

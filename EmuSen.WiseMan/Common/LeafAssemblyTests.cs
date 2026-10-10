@@ -33,13 +33,13 @@ namespace EmuSen.WiseMan.Common
             Assert.Same(audio, input);
         }
 
-        // The core-agnostic Avalonia layer; its telemetry contracts come from DianaOS since the fold - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.1.1.
+        // The core-agnostic Avalonia layer; its telemetry contracts come from DianaSh since the fold - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.1.1.
         [Fact]
         public void Serenity_references_only_core_free_assemblies()
         {
             Assembly serenity = typeof(EmuSen.Serenity.GameFrameControl).Assembly;
 
-            Assert.Equal(new[] { "EmuSen.DianaOS", "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(serenity));
+            Assert.Equal(new[] { "EmuSen.DianaSh", "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(serenity));
         }
 
         // LunaP is a package from another repository now, and this is what would notice the split quietly regressing - see EmuSen_LunaP.md §4.
@@ -51,14 +51,14 @@ namespace EmuSen.WiseMan.Common
             Assert.Empty(EmuSenReferencesOf(lunaP));
         }
 
-        // The telemetry contracts live in DianaOS, which references Galaxia alone, so Serenity inherits no core and closes no cycle through it.
+        // The telemetry contracts live in DianaSh, which references Galaxia alone, so Serenity inherits no core and closes no cycle through it.
         [Fact]
-        public void DianaOS_holds_the_telemetry_contracts_and_references_only_Galaxia()
+        public void DianaSh_holds_the_telemetry_contracts_and_references_only_Galaxia()
         {
-            Assembly dianaOS = typeof(EmuSen.Cauldron.ICoreTelemetry).Assembly;
+            Assembly dianaSh = typeof(EmuSen.Cauldron.ICoreTelemetry).Assembly;
 
-            Assert.Equal("EmuSen.DianaOS", dianaOS.GetName().Name);
-            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(dianaOS));
+            Assert.Equal("EmuSen.DianaSh", dianaSh.GetName().Name);
+            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(dianaSh));
         }
 
         // What the leaf enforced by construction is now this rule - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.1.
@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.Common
                     .Concat(contract.GetConstructors(all).SelectMany(c => c.GetParameters().Select(p => p.ParameterType)));
 
                 foreach (Type type in named.Where(t => t is not null).SelectMany(t => Flatten(t!)))
-                    Assert.False(type.Namespace?.StartsWith("EmuSen.DianaOS", StringComparison.Ordinal) ?? false, $"{contract.FullName} names {type.FullName}");
+                    Assert.False(type.Namespace?.StartsWith("EmuSen.DianaSh", StringComparison.Ordinal) ?? false, $"{contract.FullName} names {type.FullName}");
             }
         }
 

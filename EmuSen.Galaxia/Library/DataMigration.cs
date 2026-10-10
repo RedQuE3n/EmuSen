@@ -49,7 +49,7 @@ namespace EmuSen.Galaxia.Library
         internal static class Managed
         {
             public static string LegacyRootFor(string configRoot) =>
-                Path.Combine(configRoot, "EmuSen.DianaOS", "DianaOS", "Usr", "Home");
+                Path.Combine(configRoot, "EmuSen.DianaSh", "DianaSh", "Usr", "Home");
 
             public static string LegacyRoot => LegacyRootFor(ConfigRoot.Managed.Directory);
 

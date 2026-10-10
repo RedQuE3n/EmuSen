@@ -3,7 +3,7 @@ using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Avalonia.Threading;
-using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
+using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;

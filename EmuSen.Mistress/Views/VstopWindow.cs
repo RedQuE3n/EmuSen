@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
@@ -9,7 +9,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    // The GUI counterpart to DianaOS's `vstop` - see `man vstop`. Needs no
+    // The GUI counterpart to DianaSh's `vstop` - see `man vstop`. Needs no
     // IDebugTarget at all, so unlike CoretopWindow it has no no-ROM state.
     public class VstopWindow : PollingWindow
     {
@@ -25,7 +25,7 @@ namespace EmuSen.Mistress.Views
 
         public VstopWindow()
         {
-            Title = "DianaOS vstop";
+            Title = "DianaSh vstop";
             Width = 480;
             Height = 620;
             this.MinSize(360, 360);

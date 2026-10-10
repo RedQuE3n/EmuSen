@@ -5,8 +5,8 @@ using EmuSen.Cauldron;
 using EmuSen.Cores.Nintendo.Mars.Cpu.Disassembler;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Nintendo.Mars.Rsp;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 
 namespace EmuSen.Cores.Nintendo.Mars.Debug
@@ -83,7 +83,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
 
         public IReadOnlyList<DebugCpu> DebugCpus => new[]
         {
-            new DebugCpu(global::EmuSen.DianaOS.DianaOS.Var.DebugCpus.MainName, "VR4300", _core.Breakpoints)
+            new DebugCpu(global::EmuSen.DianaSh.DianaSh.Var.DebugCpus.MainName, "VR4300", _core.Breakpoints)
             {
                 Coverage = _core.Coverage,
                 CallStack = _core.CallStack,

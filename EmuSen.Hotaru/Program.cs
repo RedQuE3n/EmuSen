@@ -10,12 +10,12 @@ using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Debug;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Galaxia.Library;
 using EmuSen.Hotaru.Views;
 using EmuSen.LunaP;
@@ -25,7 +25,7 @@ namespace EmuSen.Hotaru
     class Program
     {
         // Backs both `core <name> <path>` paths off one shared registry - see EmuSen_Multicore.md §3.
-        private static IReadOnlyDictionary<string, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor> _coreRegistry
+        private static IReadOnlyDictionary<string, EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.CoreDescriptor> _coreRegistry
             => EmuSen.Cores.CoreCatalog.Registry;
 
         static void Main(string[] args)
@@ -124,7 +124,7 @@ namespace EmuSen.Hotaru
             }
 
             // ROM path resolution - see EmuSen_Frontend_Driver.md §1.
-            // DianaOS is the ONLY thing shown at launch, whether or not a
+            // DianaSh is the ONLY thing shown at launch, whether or not a
             // ROM path was given on the command line - RunStandaloneShell
             // runs as plain console I/O, entirely before Avalonia (or any
             // window at all) ever starts. Returns null only if shutdown
@@ -159,7 +159,7 @@ namespace EmuSen.Hotaru
         }
 
         // Everything a GameWindow needs, built the same way whichever shell resolved the ROM - see §3c.
-        private sealed record Session(ICore Core, IDianaOSCommand[] ExtraCommands, string StatePath, CategorizedLogWriter LogWriter);
+        private sealed record Session(ICore Core, IDianaShCommand[] ExtraCommands, string StatePath, CategorizedLogWriter LogWriter);
 
         private static Session BuildSession(string romPath, TextWriter originalOut)
         {
@@ -170,7 +170,7 @@ namespace EmuSen.Hotaru
             ICore core = CoreFactory.Create(romPath, headless: false, engine);
 
             // Needs core.CoreName, so it cannot be built any earlier - see §1 step 3.
-            string logDir = Path.Combine(DianaOSSandbox.LogsDirectory, core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
+            string logDir = Path.Combine(DianaShSandbox.LogsDirectory, core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
             Directory.CreateDirectory(logDir);
             var logWriter = new CategorizedLogWriter(originalOut, logDir);
             Console.SetOut(logWriter);
@@ -181,11 +181,11 @@ namespace EmuSen.Hotaru
             DebugSettings.Spc700VerboseLogging = true;
 
             // Built once here; GameWindow rebuilds the interpreter around them after a `core` swap - see §1.
-            IDianaOSCommand[] extraCommands =
+            IDianaShCommand[] extraCommands =
             {
-                new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoretopCommand(DebugWindows.ShowCoretopWindow),
-                new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.StateCommand(core.SaveState, core.LoadState, () => statePath),
-                new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreCommand(_coreRegistry),
+                new EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.CoretopCommand(DebugWindows.ShowCoretopWindow),
+                new EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.StateCommand(core.SaveState, core.LoadState, () => statePath),
+                new EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.CoreCommand(_coreRegistry),
             };
 
             return new Session(core, extraCommands, statePath, logWriter);
@@ -196,7 +196,7 @@ namespace EmuSen.Hotaru
             string[] args, string? initialRomPath, TextWriter originalOut,
             Action<ICore> onCore, Action<CategorizedLogWriter> onLogWriter)
         {
-            DianaOSShellWindow? shell = null;
+            DianaShShellWindow? shell = null;
 
             Window LaunchGame(string romPath)
             {
@@ -213,7 +213,7 @@ namespace EmuSen.Hotaru
 
             Window BuildShell()
             {
-                shell = new DianaOSShellWindow(
+                shell = new DianaShShellWindow(
                     LaunchGame,
                     line => TryResolveCoreCommand(line, m => shell!.AppendLine(m)),
                     _coreRegistry.Values.Select(d => d.DisplayName).Distinct());
@@ -226,7 +226,7 @@ namespace EmuSen.Hotaru
         }
 
         // A CLI ROM path is a shortcut for typing `core`, in this shell as much as the console one - see §3.
-        private static void StartInitialRom(DianaOSShellWindow shell, string initialRomPath, Func<string, Window> launchGame)
+        private static void StartInitialRom(DianaShShellWindow shell, string initialRomPath, Func<string, Window> launchGame)
         {
             if (!File.Exists(initialRomPath))
             {
@@ -247,7 +247,7 @@ namespace EmuSen.Hotaru
             LunaApp.Configure(() => new App(mainWindow));
 
         // Hotaru's entire launch experience: no core, no window, no audio
-        // device yet, just DianaOS against a null IDebugTarget - the shell
+        // device yet, just DianaSh against a null IDebugTarget - the shell
         // is the first and only thing shown, whether Hotaru was launched
         // bare or with a ROM path on the command line. Deliberately its
         // own small loop rather than reusing GameWindow's own debug
@@ -265,10 +265,10 @@ namespace EmuSen.Hotaru
         // was asked for instead (or EOF was hit).
         private static string? RunStandaloneShell(string? initialRomPath)
         {
-            DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null,
+            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null,
                 supportedCheatSystems: () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
             Console.WriteLine(shell.GetWelcomeBanner(_coreRegistry.Values.Select(d => d.DisplayName).Distinct()));
-            Console.WriteLine("--- DianaOS (type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
+            Console.WriteLine("--- DianaSh (type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
 
             if (initialRomPath != null)
             {
@@ -282,7 +282,7 @@ namespace EmuSen.Hotaru
 
             while (true)
             {
-                Console.Write(shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
+                Console.Write(shell.IsAwaitingMoreInput ? "> " : "DianaSh #: ");
                 string? line = ConsoleLineReader.ReadLine(shell.History.Entries);
                 if (line is null) return null;
                 string trimmed = line.Trim();
@@ -294,8 +294,8 @@ namespace EmuSen.Hotaru
                     continue; // TryResolveCoreCommand already printed why it failed
                 }
 
-                // 'shutdown'/'quit' is a real DianaOS command now
-                // (EmuSen.DianaOS.DianaOS.Bin.Commands.Unix.ShutdownCommand, already in the
+                // 'shutdown'/'quit' is a real DianaSh command now
+                // (EmuSen.DianaSh.DianaSh.Bin.Commands.Unix.ShutdownCommand, already in the
                 // standard registry CreateDefault built above) - no
                 // separate bypass needed here anymore, just react to the
                 // same HostAction.Shutdown GameWindow's own RunDebugPrompt
@@ -306,7 +306,7 @@ namespace EmuSen.Hotaru
             }
         }
 
-        // `core <corename> <path>` - not a DianaOSInterpreter command (see
+        // `core <corename> <path>` - not a DianaShInterpreter command (see
         // RunStandaloneShell's own comment); handled as plain string
         // parsing here instead. Prints its own error and returns null for
         // anything wrong so the caller can just loop back to the prompt -
@@ -326,7 +326,7 @@ namespace EmuSen.Hotaru
             string coreName = parts[1];
             string romPath = parts[2];
 
-            if (!_coreRegistry.TryGetValue(coreName, out EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor? descriptor))
+            if (!_coreRegistry.TryGetValue(coreName, out EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.CoreDescriptor? descriptor))
             {
                 report($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(_coreRegistry.Keys, StringComparer.OrdinalIgnoreCase))}");
                 return null;

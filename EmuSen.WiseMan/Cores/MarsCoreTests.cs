@@ -9,7 +9,7 @@ using EmuSen.Cores.Nintendo.Mars.Cheats;
 using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Nintendo.Mars.Rom;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
 using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;

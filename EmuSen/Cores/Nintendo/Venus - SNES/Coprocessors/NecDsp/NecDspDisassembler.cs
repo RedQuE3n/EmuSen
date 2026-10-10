@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 {

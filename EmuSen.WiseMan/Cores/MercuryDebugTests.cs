@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores

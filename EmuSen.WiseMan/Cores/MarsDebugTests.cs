@@ -5,9 +5,9 @@ using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores

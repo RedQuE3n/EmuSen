@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using EmuSen.Cauldron;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 
 namespace EmuSen.Cores.Native
 {
@@ -82,8 +82,8 @@ namespace EmuSen.Cores.Native
         // With DEBUG the bridge's registries, processor 0's at the target's level and the cartridge's as the coprocessor's.
         public CoverageRegistry? Coverage => Halts ? _engine.Debug.Coverage.FirstOrDefault() : null;
         public CallStackRegistry? CallStack => Halts ? _engine.Debug.CallStack : null;
-        public BreakpointRegistry? CoprocessorBreakpoints => EmuSen.DianaOS.DianaOS.Var.DebugCpus.Coprocessor(DebugCpus)?.Breakpoints;
-        public CoverageRegistry? CoprocessorCoverage => EmuSen.DianaOS.DianaOS.Var.DebugCpus.Coprocessor(DebugCpus)?.Coverage;
+        public BreakpointRegistry? CoprocessorBreakpoints => EmuSen.DianaSh.DianaSh.Var.DebugCpus.Coprocessor(DebugCpus)?.Breakpoints;
+        public CoverageRegistry? CoprocessorCoverage => EmuSen.DianaSh.DianaSh.Var.DebugCpus.Coprocessor(DebugCpus)?.Coverage;
         public LabelRegistry? Labels { get; } = new();
         public IExpressionContext? Expressions => DebugCpus.Count > 0 ? DebugCpuExpressionContext.For(this, DebugCpus[0]) : null;
 

@@ -9,7 +9,7 @@ using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Moon.Cheats;
 using EmuSen.Cores.Nintendo.Moon.Memory;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;

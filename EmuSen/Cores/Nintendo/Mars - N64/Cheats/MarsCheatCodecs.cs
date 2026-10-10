@@ -1,8 +1,8 @@
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.Cores.Nintendo.Mars.Cheats
 {
-    // The plug letting CheatCommand and Mistress use the decoder without DianaOS referencing this project.
+    // The plug letting CheatCommand and Mistress use the decoder without DianaSh referencing this project.
     public static class MarsCheatCodecs
     {
         public static ICheatCodeCodec GameShark() =>

@@ -5,10 +5,10 @@ using System.Linq;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -149,7 +149,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 engine.RunFrame();
                 t.RefreshProviders();
-                var shell = DianaOSInterpreter.CreateDefault(t);
+                var shell = DianaShInterpreter.CreateDefault(t);
                 string cpus = shell.Submit("cpus").Output;
                 Assert.Contains("cpu", cpus);
                 Assert.Contains("spc", cpus);
@@ -165,7 +165,7 @@ namespace EmuSen.WiseMan.Cores
             if (Load(SyntheticRom.BuildBlank()) is not var (engine, t)) return;
             using (engine)
             {
-                var shell = DianaOSInterpreter.CreateDefault(t);
+                var shell = DianaShInterpreter.CreateDefault(t);
                 shell.Submit("bp spc add FFD2");
                 Assert.Empty(t.Breakpoints.GetBreakpoints());
                 Assert.Single(Cpu(t, "spc").Breakpoints.GetBreakpoints());
@@ -250,7 +250,7 @@ namespace EmuSen.WiseMan.Cores
                 }
                 Assert.All(at, a => Assert.InRange(a, 0xFFC0, 0xFFFF));
                 Assert.Equal(3, at.Count);
-                Assert.Contains("Stepping 3", DianaOSInterpreter.CreateDefault(t).Submit("step spc 3").Output);
+                Assert.Contains("Stepping 3", DianaShInterpreter.CreateDefault(t).Submit("step spc 3").Output);
             }
         }
 
@@ -266,7 +266,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(engine.IsHaltedAtBreakpoint);
                 var top = t.CallStack!.Frames[^1];
                 Assert.Equal((0x008005, 0x008010, CallFrameKind.Call), (top.Source, top.Target, top.Kind));
-                Assert.Contains("008010", DianaOSInterpreter.CreateDefault(t).Submit("bt").Output);
+                Assert.Contains("008010", DianaShInterpreter.CreateDefault(t).Submit("bt").Output);
             }
         }
 
@@ -347,7 +347,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 engine.RunFrame();
                 t.RefreshProviders();
-                var shell = DianaOSInterpreter.CreateDefault(t);
+                var shell = DianaShInterpreter.CreateDefault(t);
                 long a = (long)t.CpuRegisters.Current.Single(r => r.Name == "A").Value;
                 Assert.Contains(a.ToString(), shell.Submit("eval a").Output);
                 var spc = Cpu(t, "spc").Registers!;
@@ -364,7 +364,7 @@ namespace EmuSen.WiseMan.Cores
             if (Load(CallLoopRom()) is not var (engine, t)) return;
             using (engine)
             {
-                var shell = DianaOSInterpreter.CreateDefault(t);
+                var shell = DianaShInterpreter.CreateDefault(t);
                 Assert.Equal(shell.Submit("disasm APURAM FFC0 4").Output, shell.Submit("disasm spc FFC0 4").Output);
                 var jsr = t.Disassemble("CpuBus", 0x008005, 1).Single();
                 Assert.Equal("JSR", jsr.Mnemonic);

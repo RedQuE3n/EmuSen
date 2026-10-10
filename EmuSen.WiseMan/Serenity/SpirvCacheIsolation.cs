@@ -1,6 +1,6 @@
 using System.IO;
 using System.Runtime.CompilerServices;
-using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Serenity.Slang;
 
 namespace EmuSen.WiseMan.Serenity
@@ -9,6 +9,6 @@ namespace EmuSen.WiseMan.Serenity
     internal static class SpirvCacheIsolation
     {
         [ModuleInitializer]
-        internal static void Isolate() => SlangRunner.CachePath = Path.Combine(DianaOSSandbox.ScratchDirectory, "spirv-cache.db");
+        internal static void Isolate() => SlangRunner.CachePath = Path.Combine(DianaShSandbox.ScratchDirectory, "spirv-cache.db");
     }
 }

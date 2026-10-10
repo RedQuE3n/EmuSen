@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Common

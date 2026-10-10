@@ -14,12 +14,12 @@ using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Graphics;
 using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
@@ -54,17 +54,17 @@ namespace EmuSen.Hotaru.Views
         private CoreBundle? _bundle;
 
         // See `man tmux`.
-        private readonly DianaOSSessionManager _sessions = new();
+        private readonly DianaShSessionManager _sessions = new();
 
         // One scheduler per session - see `man tmux`.
-        private readonly ConcurrentDictionary<DianaOSSession, DianaOSInterpreterScheduler> _schedulers = new();
-        private DianaOSInterpreter _debugCmd => _sessions.Current!.Interpreter;
-        private DianaOSInterpreterScheduler _scheduler => _schedulers[_sessions.Current!];
+        private readonly ConcurrentDictionary<DianaShSession, DianaShInterpreterScheduler> _schedulers = new();
+        private DianaShInterpreter _debugCmd => _sessions.Current!.Interpreter;
+        private DianaShInterpreterScheduler _scheduler => _schedulers[_sessions.Current!];
 
         private FrameRecorder _frameRecorder = null!;
 
         // Reused unchanged across every rebuild - see EmuSen_Frontend_Driver.md §3f.
-        private readonly IEnumerable<IDianaOSCommand> _extraCommands;
+        private readonly IEnumerable<IDianaShCommand> _extraCommands;
 
         private readonly string _statePath;
 
@@ -123,7 +123,7 @@ namespace EmuSen.Hotaru.Views
         // Was written out here, in Mistress and in Serenity, all three with one defect - LunaP.md §22.1.
         private readonly Latest<FrameData> _frames;
 
-        public GameWindow(ICore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
+        public GameWindow(ICore core, IEnumerable<IDianaShCommand> extraCommands, string statePath)
         {
             _frames = new Latest<FrameData>(PresentPendingFrame);
             InitializeComponent();
@@ -186,9 +186,9 @@ namespace EmuSen.Hotaru.Views
             while (_running)
             {
                 // Once per line, never re-read mid-line - see EmuSen_Frontend_Driver.md §3f.
-                DianaOSInterpreter shell = _debugCmd;
+                DianaShInterpreter shell = _debugCmd;
 
-                if (!_scheduler.Halted) Console.Write("DianaOS $ ");
+                if (!_scheduler.Halted) Console.Write("DianaSh $ ");
 
                 string[] historySnapshot = _scheduler.SnapshotHistory(shell);
 
@@ -327,9 +327,9 @@ namespace EmuSen.Hotaru.Views
 
             if (_sessions.Sessions.Count == 0)
             {
-                var initial = new DianaOSSession("main", BuildInterpreter());
+                var initial = new DianaShSession("main", BuildInterpreter());
                 _sessions.RegisterInitial(initial);
-                _schedulers[initial] = new DianaOSInterpreterScheduler();
+                _schedulers[initial] = new DianaShInterpreterScheduler();
                 return;
             }
 
@@ -337,8 +337,8 @@ namespace EmuSen.Hotaru.Views
             SyncSchedulersToSessions();
         }
 
-        private DianaOSInterpreter BuildInterpreter() =>
-            DianaOSInterpreter.CreateDefault(_debugTarget, _extraCommands,
+        private DianaShInterpreter BuildInterpreter() =>
+            DianaShInterpreter.CreateDefault(_debugTarget, _extraCommands,
                 _bundle?.CheatAutoDetectCodec, _bundle?.CheatExplicitCodec, _bundle?.CpuTraceSwitch,
                 _sessions,
                 () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
@@ -346,14 +346,14 @@ namespace EmuSen.Hotaru.Views
         // Syncs _schedulers to whatever sessions currently exist - see `man tmux`.
         private void SyncSchedulersToSessions()
         {
-            var live = new HashSet<DianaOSSession>(_sessions.Sessions);
-            foreach (DianaOSSession stale in _schedulers.Keys.Where(s => !live.Contains(s)).ToList())
+            var live = new HashSet<DianaShSession>(_sessions.Sessions);
+            foreach (DianaShSession stale in _schedulers.Keys.Where(s => !live.Contains(s)).ToList())
             {
                 _schedulers.TryRemove(stale, out _);
             }
-            foreach (DianaOSSession session in _sessions.Sessions)
+            foreach (DianaShSession session in _sessions.Sessions)
             {
-                if (!_schedulers.ContainsKey(session)) _schedulers[session] = new DianaOSInterpreterScheduler();
+                if (!_schedulers.ContainsKey(session)) _schedulers[session] = new DianaShInterpreterScheduler();
             }
         }
 
@@ -535,7 +535,7 @@ namespace EmuSen.Hotaru.Views
 
         private void TakeScreenshot()
         {
-            string coreLogDir = Path.Combine(DianaOSSandbox.LogsDirectory, _debugTarget.CoreName);
+            string coreLogDir = Path.Combine(DianaShSandbox.LogsDirectory, _debugTarget.CoreName);
             Directory.CreateDirectory(coreLogDir);
             string baseName = $"screenshot_frame{_debugTarget.FrameCount}";
             string shotPath = Path.Combine(coreLogDir, baseName + ".png");
@@ -587,7 +587,7 @@ namespace EmuSen.Hotaru.Views
             }
             else
             {
-                string dir = _frameRecorder.Start(Path.Combine(DianaOSSandbox.LogsDirectory, _debugTarget.CoreName, "Recordings"));
+                string dir = _frameRecorder.Start(Path.Combine(DianaShSandbox.LogsDirectory, _debugTarget.CoreName, "Recordings"));
                 Console.WriteLine($"[RECORD] Started -> {dir}");
             }
         }
@@ -612,10 +612,10 @@ namespace EmuSen.Hotaru.Views
             _scheduler.Halted = true;
             try
             {
-                Console.WriteLine("--- DianaOS (type 'help', 'resume' to resume, 'feed'/'feed -w' to resume and watch gameplay, 'shutdown' to quit, 'step'/'s' to single-step, 'core <name> <path>' to swap ROMs) ---");
+                Console.WriteLine("--- DianaSh (type 'help', 'resume' to resume, 'feed'/'feed -w' to resume and watch gameplay, 'shutdown' to quit, 'step'/'s' to single-step, 'core <name> <path>' to swap ROMs) ---");
                 while (true)
                 {
-                    Console.Write(_debugCmd.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
+                    Console.Write(_debugCmd.IsAwaitingMoreInput ? "> " : "DianaSh #: ");
                     string line = _scheduler.TakeHaltedLine();
                     string trimmed = line.Trim();
 
@@ -641,7 +641,7 @@ namespace EmuSen.Hotaru.Views
                         }
                     }
                     // Pinned before the call: a `tmux switch` inside this Submit moves _scheduler - see `man tmux`.
-                    DianaOSInterpreterScheduler haltedScheduler = _scheduler;
+                    DianaShInterpreterScheduler haltedScheduler = _scheduler;
                     (_, string output, HostAction? action) = haltedScheduler.SubmitLocked(_debugCmd, trimmed);
                     Console.WriteLine(output);
                     if (action is HostAction.Shutdown) return true;

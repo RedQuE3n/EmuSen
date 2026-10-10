@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using EmuSen.LunaP.Windowing;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Models;
 using EmuSen.Galaxia.Library;
 
@@ -171,7 +171,7 @@ namespace EmuSen.Mistress.Views
         // the same resolution `cheat db` uses.
         private string Directory =>
             string.IsNullOrWhiteSpace(_settings.CheatDatabaseDirectory)
-                ? DianaOSSandbox.CheatDatabaseDirectory
+                ? DianaShSandbox.CheatDatabaseDirectory
                 : _settings.CheatDatabaseDirectory;
 
         // Every system on disk, or only the selected console's when one is chosen.

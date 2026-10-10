@@ -4,7 +4,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Coprocessors
 {
-    // The whole DianaOS toolchain used to be blind to cartridge
+    // The whole DianaSh toolchain used to be blind to cartridge
     // coprocessors - see IDebugTarget.CoprocessorRegisters. These pin that
     // the chips are visible, that a plain cartridge stays quiet, and above
     // all that reading them is side-effect-free, which is the property that

@@ -2,7 +2,7 @@
 //!
 //! The logic half (`pad`, `rate_control`, `resampler`, `router`, `slots`) has no device in it; the device half
 //! (`sdl`, `devices`, `pads`, `audio`) reaches SDL3 or a simulated set of pads. The C# `EmuSen.Endymion` forwards here
-//! behind `EMUSEN_ENDYMION_NATIVE`, and a Rust DianaOS calls it directly. Every rule reproduces the C#'s, which is its
+//! behind `EMUSEN_ENDYMION_NATIVE`, and a Rust DianaSh calls it directly. Every rule reproduces the C#'s, which is its
 //! oracle until its gate; EmuSen_RustPlatform.md §12 and §14 say how that was held.
 
 pub mod audio;

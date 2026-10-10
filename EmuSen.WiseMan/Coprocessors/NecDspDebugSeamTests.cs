@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 using static EmuSen.WiseMan.Fixtures.NecDspFirmwareBuilder;
 
 namespace EmuSen.WiseMan.Coprocessors

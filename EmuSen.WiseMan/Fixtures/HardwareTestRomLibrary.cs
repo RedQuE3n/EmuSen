@@ -1,4 +1,4 @@
-using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaSh.DianaSh.Etc;
 
 namespace EmuSen.WiseMan.Fixtures
 {
@@ -21,7 +21,7 @@ namespace EmuSen.WiseMan.Fixtures
         // ...and failure as six copies of $42, which is why "all B" is not a text verdict.
         public const byte MooneyeFailureByte = 0x42;
 
-        public static string Root => Path.Combine(DianaOSSandbox.InstallDirectory, "TestRoms", SubdirectoryName);
+        public static string Root => Path.Combine(DianaShSandbox.InstallDirectory, "TestRoms", SubdirectoryName);
 
         public static IReadOnlyList<string> Find()
         {

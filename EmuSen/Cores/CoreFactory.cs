@@ -19,8 +19,8 @@ using EmuSen.Galaxia.Models;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Cheats;
 using EmuSen.Cores.Nintendo.Venus.Debug;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 
 namespace EmuSen.Cores
 {
@@ -180,7 +180,7 @@ namespace EmuSen.Cores
 
         // A v1 engine's codecs come from its system's pack, never from the engine; none for a system without one.
         private static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) SystemCodecs(Native.CoreEngine engine) =>
-            DianaOS.DianaOS.Sys.Systems.SystemPacks.For(engine.IsRomLoaded ? engine.Machine.Info.System : engine.Info.Systems.FirstOrDefault()?.Id) is { } pack
+            DianaSh.DianaSh.Sys.Systems.SystemPacks.For(engine.IsRomLoaded ? engine.Machine.Info.System : engine.Info.Systems.FirstOrDefault()?.Id) is { } pack
                 ? (pack.AutoDetectCodec?.Invoke(), pack.ExplicitCodec?.Invoke())
                 : (null, null);
 
@@ -204,7 +204,7 @@ namespace EmuSen.Cores
             if (core.SupportsExtension(".gb")) return MercuryCheatCodecs.Pair();
             if (core.SupportsExtension(".z64")) return MarsCheatCodecs.Pair();
             // A console discovery added has its system pack's codecs, as a game of it running does.
-            if (CoreCatalog.IsDiscovered(core) && DianaOS.DianaOS.Sys.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console) is { } pack)
+            if (CoreCatalog.IsDiscovered(core) && DianaSh.DianaSh.Sys.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console) is { } pack)
                 return (pack.AutoDetectCodec?.Invoke(), pack.ExplicitCodec?.Invoke());
 
             return (null, null);

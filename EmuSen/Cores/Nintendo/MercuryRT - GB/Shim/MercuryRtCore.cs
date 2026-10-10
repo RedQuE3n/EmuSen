@@ -4,7 +4,7 @@ using System.IO;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Memory;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Nintendo.MercuryRT

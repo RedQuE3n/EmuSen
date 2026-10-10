@@ -16,19 +16,19 @@ Around the cores there is a frontend, a debugging shell built into the emulator,
 | NES | **Moon** (C#) | CPU, PPU, full APU and sixteen mapper boards. Plays Super Mario Bros. 3 and others, but has had far less play-testing than the SNES core |
 | Sega Genesis / Mega Drive | **Nephrite** (Rust) | Offered to players since October 2026. Runs commercial cartridges with battery and EEPROM saves, cheat codes, the three- and six-button pads Sega's Team Player and Electronic Arts' 4 Way Play for four players, and Codemasters' J-Cart; none has a verified playthrough. The Sega CD and the 32X are not offered yet |
 
-Every other console is an empty, reserved folder. Per-game results are in [the games list](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md).
+Every other console is an empty, reserved folder. Per-game results are in [the games list](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md).
 
 ### The Rust ports
 
-MarsRT was the first port and is the most finished. It produces the same machine state, picture and sound as the C# core after every frame, and it has everything the C# core has: the threaded display processor, the resolution multiple, antialiasing, the GPU path, debugger hooks and rewind, plus a Cranelift recompiler. It became the default N64 engine after it was played on a Lenovo Legion Go S running SteamOS, where Donkey Kong 64 plays at full speed at 3× internal resolution. The C# core still runs wherever the Rust library is missing. The full story is in [`Mars_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_Native.md).
+MarsRT was the first port and is the most finished. It produces the same machine state, picture and sound as the C# core after every frame, and it has everything the C# core has: the threaded display processor, the resolution multiple, antialiasing, the GPU path, debugger hooks and rewind, plus a Cranelift recompiler. It became the default N64 engine after it was played on a Lenovo Legion Go S running SteamOS, where Donkey Kong 64 plays at full speed at 3× internal resolution. The C# core still runs wherever the Rust library is missing. The full story is in [`Mars_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_Native.md).
 
-MercuryRT, the Game Boy port, has the whole machine, the debugger and builds for every platform, and CI checks that its sound, picture and save states come out bit for bit the same on Linux, Windows and macOS. It can be selected in the Game Boy's graphics settings and becomes the default after a session of play on the handheld. Porting it turned up three bugs in the C# Mercury, which are now fixed in both engines. Unlike MarsRT it isn't much faster than the C# core, because the cost is in the cycle-by-cycle design rather than the language. Still ahead: running the rest of the Game Boy tests through both engines, recording reference traces, and moving the C# core to a legacy branch. See [`Mercury_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mercury%20-%20GB-GBC/Mercury_Native.md).
+MercuryRT, the Game Boy port, has the whole machine, the debugger and builds for every platform, and CI checks that its sound, picture and save states come out bit for bit the same on Linux, Windows and macOS. It can be selected in the Game Boy's graphics settings and becomes the default after a session of play on the handheld. Porting it turned up three bugs in the C# Mercury, which are now fixed in both engines. Unlike MarsRT it isn't much faster than the C# core, because the cost is in the cycle-by-cycle design rather than the language. Still ahead: running the rest of the Game Boy tests through both engines, recording reference traces, and moving the C# core to a legacy branch. See [`Mercury_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mercury%20-%20GB-GBC/Mercury_Native.md).
 
-MoonRT, the NES port, is planned and paused ([`Moon_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Moon%20-%20NES/Moon_Native.md)), and Venus will follow. The reasoning for moving the cores to Rust, and for keeping everything else in C#, is in [`EmuSen_Stack.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Stack.md).
+MoonRT, the NES port, is planned and paused ([`Moon_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Moon%20-%20NES/Moon_Native.md)), and Venus will follow. The reasoning for moving the cores to Rust, and for keeping everything else in C#, is in [`EmuSen_Stack.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Stack.md).
 
 ### Checking the cores against other emulators and hardware
 
-Two kinds of reference sit outside the project. A probe written in Rust dumps the state of a running reference emulator, such as Mesen or any libretro core, so EmuSen's output can be diffed against it. MiSTer FPGA cores act as a referee where the emulators disagree; the SNES and Game Boy passes are written up in [`Venus_Referee.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/Venus_Referee.md) and [`Mercury_Referee.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mercury%20-%20GB-GBC/Mercury_Referee.md). The N64's display processor is compared with angrylion's renderer, and the Game Boy runs the blargg and mooneye hardware test ROMs.
+Two kinds of reference sit outside the project. A probe written in Rust dumps the state of a running reference emulator, such as Mesen or any libretro core, so EmuSen's output can be diffed against it. MiSTer FPGA cores act as a referee where the emulators disagree; the SNES and Game Boy passes are written up in [`Venus_Referee.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/Venus_Referee.md) and [`Mercury_Referee.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mercury%20-%20GB-GBC/Mercury_Referee.md). The N64's display processor is compared with angrylion's renderer, and the Game Boy runs the blargg and mooneye hardware test ROMs.
 
 ## Mistress, the frontend
 
@@ -45,9 +45,9 @@ Other things it does:
 
 Both frontends are built on **LunaP**, a small Avalonia toolkit that lives in its own repository, [RedQuE3n/EmuSen.LunaP](https://github.com/RedQuE3n/EmuSen.LunaP).
 
-## Debugging: DianaOS and Pharaoh
+## Debugging: DianaSh and Pharaoh
 
-DianaOS is a Unix-style shell inside the emulator. It has pipes, variables, redirection, loops and a small set of coreutils, and commands for the hardware (`mem`, `regs`, `watch`, `disasm`, `bp`, `cov`, `coretop`). They work the same way on every core, coprocessors included.
+DianaSh is a Unix-style shell inside the emulator. It has pipes, variables, redirection, loops and a small set of coreutils, and commands for the hardware (`mem`, `regs`, `watch`, `disasm`, `bp`, `cov`, `coretop`). They work the same way on every core, coprocessors included.
 
 ```sh
 watch add VRAM 3B8 4 write
@@ -86,7 +86,7 @@ dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r linux-x64 \
     -p:ErrorOnDuplicatePublishOutputFiles=false -o out/linux-x64
 ```
 
-Ship the whole output folder. For another platform (`win-x64`, `osx-x64`, `osx-arm64`) the build doesn't cross-compile the Rust libraries, so take them from the [Rust cores workflow](.github/workflows/rust-cores.yml)'s artifacts and point the publish at them with `-p:EmuSenNativePrebuilt=/path/to/native`, where `/path/to/native/<rid>/` holds `marsrt` and `mercuryrt`. If a library is missing, the publish warns and that console falls back to its C# core. The same folder takes `emusen_platform`, the library the platform's own components are moving into; while they are still behind their C# it is optional too, and the publish says when it is absent. More in the [settings reference](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md).
+Ship the whole output folder. For another platform (`win-x64`, `osx-x64`, `osx-arm64`) the build doesn't cross-compile the Rust libraries, so take them from the [Rust cores workflow](.github/workflows/rust-cores.yml)'s artifacts and point the publish at them with `-p:EmuSenNativePrebuilt=/path/to/native`, where `/path/to/native/<rid>/` holds `marsrt` and `mercuryrt`. If a library is missing, the publish warns and that console falls back to its C# core. The same folder takes `emusen_platform`, the library the platform's own components are moving into; while they are still behind their C# it is optional too, and the publish says when it is absent. More in the [settings reference](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md).
 
 macOS builds are unsigned. On Apple Silicon, sign one yourself before it will run:
 
@@ -103,13 +103,13 @@ Linux is where EmuSen is developed and played, on a desktop and on a Legion Go S
 
 The code keeps its comments to a line; the explanations live in the docs, which are readable on GitHub or from inside the emulator with `man` and `cat`.
 
-- [The docs index](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/README.md) is the place to start.
-- [`EmuSen Manual/`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/) has the project-level docs: the architecture overview, the debugging tools reference, the settings reference, the stack, the games list.
-- [`Man pages/Hardware/`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/) has notes for each console, including write-ups of the bugs found and fixed.
+- [The docs index](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/README.md) is the place to start.
+- [`EmuSen Manual/`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/) has the project-level docs: the architecture overview, the debugging tools reference, the settings reference, the stack, the games list.
+- [`Man pages/Hardware/`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/) has notes for each console, including write-ups of the bugs found and fixed.
 
 ## The names
 
-EmuSen is **Emu**lator **Sen**shi, after *Sailor Moon*. Each core is named for a character: Nintendo's consoles get the Sailor Guardians (Venus for the SNES, Moon for the NES, Mercury for the Game Boy, Mars for the N64) and other manufacturers get the villains. A Rust port adds `RT` to the name. The full list is in [`EmuSen_Core_Naming_Scheme.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Core_Naming_Scheme.md).
+EmuSen is **Emu**lator **Sen**shi, after *Sailor Moon*. Each core is named for a character: Nintendo's consoles get the Sailor Guardians (Venus for the SNES, Moon for the NES, Mercury for the Game Boy, Mars for the N64) and other manufacturers get the villains. A Rust port adds `RT` to the name. The full list is in [`EmuSen_Core_Naming_Scheme.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Core_Naming_Scheme.md).
 
 ## ROMs
 
@@ -169,11 +169,11 @@ the question went to a test program and then to a model of the chips run as a bl
 and whose logic was not read.
 
 Every such question is an entry in a disputes log, with the documents read, the measurement taken and every file
-opened: [`Nephrite_Disputes.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Disputes.md) for the console and
-[`Beryl_M68k.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_M68k.md) §6 for the 68000. The logs also record the few times excluded material was
+opened: [`Nephrite_Disputes.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Disputes.md) for the console and
+[`Beryl_M68k.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_M68k.md) §6 for the 68000. The logs also record the few times excluded material was
 displayed, and what was done about each. The rules themselves are in
-[`Nephrite_Plan.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Plan.md) §1.3, the full source list with where each document is thin in its §2,
-and the build record in [`Nephrite_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Native.md).
+[`Nephrite_Plan.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Plan.md) §1.3, the full source list with where each document is thin in its §2,
+and the build record in [`Nephrite_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Native.md).
 
 **Sega's manuals**
 
@@ -203,11 +203,11 @@ and the build record in [`Nephrite_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20
 - Matthew Gambrell and Olli Niemitalo,
   [*OPLx decapsulated*](https://docs.google.com/document/d/18IGx18NQY_Q1PJVZ-bHywao9bhsDoAqoIn1rIm42nwo) (2008):
   its two printed tables, the YM3812's log-sine and exponent ROMs, are the operator tables Nephrite computes with.
-  [`Nephrite_OperatorTables.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_OperatorTables.md) gives the formulas and how the tables were later
+  [`Nephrite_OperatorTables.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_OperatorTables.md) gives the formulas and how the tables were later
   checked entry by entry.
 - Maxim and contributors, [*SN76489*](https://www.smspower.org/Development/SN76489), SMS Power!: the PSG's latch,
   counters, noise and volume steps, which `beryl-sn76489` was written from
-  ([`Beryl_SN76489.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_SN76489.md)).
+  ([`Beryl_SN76489.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_SN76489.md)).
 - Nemesis and others, ["New Documentation: An authoritative reference on the YM2612"](https://gendev.spritesmind.net/forum/viewtopic.php?t=386),
   SpritesMind forum topic 386 (2008 to 2017). Used as prose: its authors' findings and their own tables on the
   envelope, the phase generator, SSG-EG, CSM, the status register, the test register and the DAC. Program code
@@ -263,7 +263,7 @@ None is included in this repository.
   and [`z80`](https://github.com/SingleStepTests/z80) suites (MIT) and Tom Harte's
   [`680x0`](https://github.com/SingleStepTests/680x0). Their data grade `beryl-m68k` and `beryl-z80` case by case,
   registers, memory and bus cycles; the programs that generated them were not read. Where the two 68000 suites
-  disagree, [`Beryl_M68k.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_M68k.md) §6 settles each class.
+  disagree, [`Beryl_M68k.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_M68k.md) §6 settles each class.
 - Frank Cringle's ZEXDOC and ZEXALL, for the Z80.
 
 **Cheat codes**
@@ -298,9 +298,9 @@ alone, its entry says so.
   was not opened.
 
 **The other cores' sources** are listed with their own pages:
-[`VenusRT_Plan.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Plan.md) §2 for the SNES port,
-[`Mars_References.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_References.md) for the Nintendo 64, and
-[`EmuSen_CRT.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_CRT.md) §10 for the modelled CRT filter.
+[`VenusRT_Plan.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Plan.md) §2 for the SNES port,
+[`Mars_References.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_References.md) for the Nintendo 64, and
+[`EmuSen_CRT.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_CRT.md) §10 for the modelled CRT filter.
 
 ### Screen filters
 

@@ -7,8 +7,8 @@ using EmuSen.Cores.Nintendo.Moon.Input;
 using EmuSen.Cores.Nintendo.Moon.Memory;
 using EmuSen.Cores.Nintendo.Moon.Processor;
 using EmuSen.Cores.Nintendo.Moon.Video;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Nintendo.Moon

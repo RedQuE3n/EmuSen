@@ -1,5 +1,5 @@
 using EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp;
-using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaSh.DianaSh.Etc;
 
 namespace EmuSen.WiseMan.Coprocessors
 {
@@ -108,7 +108,7 @@ namespace EmuSen.WiseMan.Coprocessors
         [Fact]
         public void The_firmware_directory_is_where_the_man_page_says_it_is()
         {
-            Assert.EndsWith(Path.Combine("home", "Firmware"), DianaOSSandbox.FirmwareDirectory);
+            Assert.EndsWith(Path.Combine("home", "Firmware"), DianaShSandbox.FirmwareDirectory);
         }
     }
 }

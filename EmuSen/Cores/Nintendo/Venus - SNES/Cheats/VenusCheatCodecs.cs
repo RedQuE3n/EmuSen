@@ -1,8 +1,8 @@
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.Cores.Nintendo.Venus.Cheats
 {
-    // The plugs letting CheatCommand use both decoders without DianaOS referencing this project.
+    // The plugs letting CheatCommand use both decoders without DianaSh referencing this project.
     public static class VenusCheatCodecs
     {
         // Decoded codes target the CPU bus, not a raw WRAM offset, so mirroring resolves as on hardware.

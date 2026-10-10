@@ -180,6 +180,13 @@ namespace EmuSen.WiseMan.Galaxia
             Put(Path.Combine(checkout, "EmuSen.sln"), "");
             Directory.CreateDirectory(Path.Combine(checkout, "deep", ConfigRoot.RootMarkerFileName));
             string bundle = At("checkout", "out", "EmuSen.app", "Contents", "MacOS");
+            string old = At("old");
+            Put(Path.Combine(old, ConfigRoot.LegacyRootMarkerFileName), "");
+            string oldBare = At("oldbare", "bin");
+            Directory.CreateDirectory(Path.Combine(oldBare, ConfigRoot.LegacyPublishedRootDirName));
+            string bothBare = At("bothbare", "bin");
+            Directory.CreateDirectory(Path.Combine(bothBare, ConfigRoot.LegacyPublishedRootDirName));
+            Directory.CreateDirectory(Path.Combine(bothBare, ConfigRoot.PublishedRootDirName));
             string ten = Path.Combine(new[] { marked }.Concat(Enumerable.Range(1, 10).Select(i => i.ToString())).ToArray());
             string nine = Path.Combine(new[] { marked }.Concat(Enumerable.Range(1, 9).Select(i => i.ToString())).ToArray());
             foreach (string directory in new[] { bundle, ten, nine, At("bare", "bin"), Path.Combine(checkout, "deep", "er"), At("Other.bundle", "Contents", "MacOS"), At("x.APP", "contents", "macos") })
@@ -190,6 +197,7 @@ namespace EmuSen.WiseMan.Galaxia
                 marked, marked + Path.DirectorySeparatorChar, checkout, bundle, bundle + Path.DirectorySeparatorChar, ten, nine, At("bare", "bin"), At("absent", "bin"),
                 Path.Combine(checkout, "deep", "er"), Path.Combine(checkout, "deep", "er", "..", "..", "out"), At("Other.bundle", "Contents", "MacOS"),
                 At("x.APP", "contents", "macos"), At("checkout", "out", "EmuSen.app", "Contents"), Path.GetPathRoot(_temp)!, "relative", ".",
+                old, At("old", "lib", "EmuSen"), oldBare, bothBare,
             };
             bases.AddRange(Paths(300, seed: 7).Where(p => p.Length > 0));
 
@@ -211,6 +219,12 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(checkout, GalaxiaNative.RootFor(bundle, false, home));
             Assert.Equal(Path.Combine(home, "Library", "Application Support", "EmuSen"), GalaxiaNative.RootFor(bundle, true, home));
             Assert.Equal(checkout, GalaxiaNative.RootFor(Path.Combine(checkout, "deep", "er"), false, home));
+
+            // A tree published before the shell was renamed: its marker and its fallback folder are still found, and the new folder wins where both are there.
+            Assert.Equal(old, GalaxiaNative.RootFor(At("old", "lib", "EmuSen"), false, home));
+            Assert.Equal(Path.Combine(oldBare, ConfigRoot.LegacyPublishedRootDirName), GalaxiaNative.RootFor(oldBare, false, home));
+            Assert.Equal(Path.Combine(bothBare, ConfigRoot.PublishedRootDirName), GalaxiaNative.RootFor(bothBare, false, home));
+            Assert.Equal(Path.Combine(At("bare", "bin"), ConfigRoot.PublishedRootDirName), GalaxiaNative.RootFor(At("bare", "bin"), false, home));
         }
 
         private static readonly (GalaxiaDirectory Which, string Name)[] Named =

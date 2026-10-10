@@ -7,8 +7,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Bin.Commands;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Bin.Commands;
 using EmuSen.LunaP.Theme;
 using EmuSen.WiseMan.Fixtures;
 
@@ -98,7 +98,7 @@ namespace EmuSen.WiseMan.LunaP
         [Fact]
         public void The_shell_prints_the_theme_page()
         {
-            var shell = DianaOSInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateDefault(null);
 
             var result = shell.Submit("man theme");
 

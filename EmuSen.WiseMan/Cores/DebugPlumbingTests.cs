@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.WiseMan.Cores
 {

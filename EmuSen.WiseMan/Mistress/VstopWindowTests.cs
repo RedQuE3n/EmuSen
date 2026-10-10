@@ -10,9 +10,9 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
@@ -110,14 +110,14 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The DianaOS default is the terminal dashboard, which cannot draw in
+        // The DianaSh default is the terminal dashboard, which cannot draw in
         // a TextBox console - Mistress must replace it, not add alongside.
         [Fact]
         public void The_console_vstop_is_replaced_by_the_windowed_one()
         {
             int opened = 0;
-            var shell = DianaOSInterpreter.CreateDefault(null,
-                new IDianaOSCommand[] { new VstopWindowCommand(() => opened++) });
+            var shell = DianaShInterpreter.CreateDefault(null,
+                new IDianaShCommand[] { new VstopWindowCommand(() => opened++) });
 
             var result = shell.Submit("vstop");
 
@@ -130,8 +130,8 @@ namespace EmuSen.WiseMan.Mistress
         public void The_windowed_vstop_needs_no_rom_loaded()
         {
             int opened = 0;
-            var shell = DianaOSInterpreter.CreateDefault(null,
-                new IDianaOSCommand[] { new VstopWindowCommand(() => opened++) });
+            var shell = DianaShInterpreter.CreateDefault(null,
+                new IDianaShCommand[] { new VstopWindowCommand(() => opened++) });
 
             shell.Submit("vstop");
 

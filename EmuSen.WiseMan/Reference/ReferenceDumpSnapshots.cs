@@ -5,8 +5,8 @@ using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Moon.Debug;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaSh.DianaSh.Etc;
+using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Reference
@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.Reference
     public static class ReferenceDumpSnapshots
     {
         public static string DumpRoot =>
-            Path.Combine(DianaOSSandbox.InstallDirectory, "EmuSen.WiseMan", "Reference", "dumps");
+            Path.Combine(DianaShSandbox.InstallDirectory, "EmuSen.WiseMan", "Reference", "dumps");
 
         // <backend>_<space>_f<frame>.bin - the backend names itself, so a dump set
         // is never tied to one emulator having produced it.

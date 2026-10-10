@@ -51,11 +51,11 @@
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
     <!-- Dashboards/CoretopWindow.cs is a LunaP PollingWindow reading the
          read-only telemetry contracts (namespace EmuSen.Cauldron), which are
-         in EmuSen.DianaOS since 2026-10-07 - see
-         EmuSen_Debugging_Tools_Reference_v5.md §3.66. DianaOS references only
+         in EmuSen.DianaSh since 2026-10-07 - see
+         EmuSen_Debugging_Tools_Reference_v5.md §3.66. DianaSh references only
          Galaxia and no core, so this stays the core-agnostic layer it was. -->
     <!-- LunaP comes through LunaP.props, which names where it comes from. -->
-    <ProjectReference Include="..\EmuSen.DianaOS\EmuSen.DianaOS.csproj" />
+    <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
   </ItemGroup>
 
   <Import Project="..\LunaP.props" />

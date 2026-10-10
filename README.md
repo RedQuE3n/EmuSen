@@ -105,6 +105,7 @@ EmuSen is primarly developed and tested on Linux. Builds exist for Windows and M
 
 The code keeps its comments to a line; the explanations live in the docs, which are readable on GitHub or from inside the emulator with `man` and `cat`.
 
+- [CONTRIBUTING.md](CONTRIBUTING.md) is for anyone joining: the repositories and branches, a reading order through the manual, and the conventions every change is held to.
 - [The docs index](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/README.md) is the place to start.
 - [`EmuSen Manual/`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/) has the project-level docs: the architecture overview, the debugging tools reference, the settings reference, the stack, the games list.
 - [`Man pages/Hardware/`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/) has notes for each console, including write-ups of the bugs found and fixed.

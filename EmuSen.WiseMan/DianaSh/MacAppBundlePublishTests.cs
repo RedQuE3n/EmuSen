@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             string output = Path.Combine(_root, rid);
             var start = new ProcessStartInfo("dotnet") { WorkingDirectory = _project, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-            foreach (string a in new[] { "publish", "-c", "Release", "-r", rid, "--self-contained", "false", "-o", output, "-nologo", "-nodeReuse:false", "-m:1" }.Concat(extra)) start.ArgumentList.Add(a);
+            foreach (string a in new[] { "publish", "-c", "Release", "-r", rid, "--self-contained", "false", "-o", output, "-nologo", "-nodeReuse:false", "-m:1", "-p:UseSharedCompilation=false" }.Concat(extra)) start.ArgumentList.Add(a);
             start.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
             start.Environment["MSBUILDDISABLENODEREUSE"] = "1";
             using Process child = Process.Start(start)!;

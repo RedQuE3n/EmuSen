@@ -281,18 +281,10 @@ namespace EmuSen.WiseMan.DianaSh
             return new Built(bundle.DebugTarget, bundle, core as IDisposable);
         }
 
-        private static readonly System.Reflection.MethodInfo GetVariable =
-            typeof(DianaShInterpreter).GetMethod("GetVariable", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-
-        // $? read the way the parser reads it, without a line of the shell's own - see EmuSen_DianaSh.md §13.4.
-        private static string Status(DianaShInterpreter shell) => (string)GetVariable.Invoke(shell, new object[] { "?" })!;
-
         // Every command a host's shell has, in its own order, with the two the hosts build themselves.
         public static IReadOnlyList<IDianaShCommand> Commands()
         {
-            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(new GoldenDebugTarget(), HostCommands(() => ""));
-            var field = typeof(DianaShInterpreter).GetField("_orderedCommands", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-            return ((IEnumerable<IDianaShCommand>)field.GetValue(shell)!).ToList();
+            return DianaShInterpreter.CreateDefault(new GoldenDebugTarget(), HostCommands(() => "")).RegisteredCommands;
         }
 
         private static IDianaShCommand[] HostCommands(Func<string> statePath) => new IDianaShCommand[]
@@ -332,7 +324,7 @@ namespace EmuSen.WiseMan.DianaSh
                 {
                     Input = s.Input,
                     Output = Encoding.UTF8.GetBytes(Normalise(output)),
-                    Status = int.Parse(Status(shell)),
+                    Status = int.Parse(shell.LastExitStatus),
                     NeedsMore = needsMore,
                     Action = action is null ? "none" : Normalise(action.ToString()!),
                 });

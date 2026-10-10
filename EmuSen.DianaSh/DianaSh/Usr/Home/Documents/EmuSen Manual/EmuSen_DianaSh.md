@@ -1218,12 +1218,13 @@ logging switch is set to its default, off. The shell is `CreateDefault` with wha
 home's save-state folder; the bundle's two cheat codecs and trace switch; a session manager unless the case says
 otherwise; and the build's supported cheat systems.
 
-**How the status is read.** `$?` lives in the interpreter's variables, and the only member that reads them,
-`GetVariable`, is not public. The harness reads it by reflection, as it reads `_orderedCommands` for the list of
-commands and their usage lines. Neither the shell's code nor its project file was changed for the corpus: an
-`InternalsVisibleTo` would have done the same job with a check at compile time, and was rejected because the step's
-condition was that recording change nothing in the shell. The price is that renaming either member breaks the harness
-when it runs, not when it builds, and does so on its first case.
+**How the status is read.** `$?` lives in the interpreter's variables, which nothing public reads. `EmuSen.DianaSh`
+grants WiseMan friend access (`InternalsVisibleTo`), and the interpreter answers the harness through two `internal`
+members named for what they answer: `LastExitStatus`, the last line's `$?`, and `RegisteredCommands`, every command in
+the order `help` lists them, which the usage gate reads. Neither prints anything, so the recordings are the same with
+them as without. The corpus was first recorded with the two read by reflection on the private members; that was
+replaced the same day, since the project's rule of 2026-10-10 is that nothing reaches past a surface by reflection.
+Friend access keeps the check at compile time: renaming either member breaks WiseMan's build, not its first case.
 
 **The targets.**
 

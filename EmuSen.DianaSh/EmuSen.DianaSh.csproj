@@ -28,6 +28,11 @@
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
+  <!-- The golden corpus reads $? and the command list through two internal members - see EmuSen_DianaSh.md §13.4. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="EmuSen.WiseMan" />
+  </ItemGroup>
+
   <!-- Ships the two read-only doc trees into a published build's own sandbox
        root, so `man`/`cat`/`find` have the same reference material there that
        they do running from source. Link= stages them under DianaShRoot/, which

@@ -684,7 +684,7 @@ The history mutant **survived the first history test**: with two history slots, 
 
 `GameFrameControl.ActiveSlangPreset` takes a preset's path and draws it instead of `ActiveFilter` and `ActiveEffect`. Setting it creates a `SlangRunner`, which builds the chain on a pool thread; `crt-royale` takes 1.7 s to compile, and a render thread that waited for it would freeze the window for that long. **Until the chain is built, the picture is drawn plain**, as it is when the chain cannot be built. In that case `SlangFailed` is raised once, off the UI thread, with the preset's name and the compiler's or device's first line, and Mistress puts it in the status bar. When the build finishes, the control is asked to redraw, so the filtered picture appears without waiting for the next frame.
 
-**The device is one per process**, created on first use and never closed. Every preset the player tries would otherwise open, and after a switch close, another Vulkan device. Its command buffer is now guarded by a lock, because a chain can be building (uploading its lookup images) on one thread while another chain draws on the render thread.
+**The device is one per process**, created on first use and never closed. Every preset the player tries would otherwise open, and after a switch close, another Vulkan device. Its command buffer is now guarded by a lock, because a chain can be building (uploading its lookup images) on one thread while another chain draws on the render thread. *Since 2026-10-10 the chain's waits for the whole device (when a frame changes size, and at its end) are taken under the same lock, since Vulkan forbids another thread the queue meanwhile; before, the Khronos layer's thread checks found the queue used by two threads at once (`EmuSen_RustPlatform.md` §18.2).*
 
 **Per draw**, under the control's lock:
 - A new frame is advanced into the chain.
@@ -1179,7 +1179,12 @@ written: a render takes a slot that is not held and is large enough, makes a new
 (`MaxLent`), and past that renders into the scratch readback and returns a copy. `CopiedImages` counts those copies;
 a test asserts that steady drawing makes none, and the bench does not report the count. A slot grown for a larger view is retired, not resized,
 if an image holds it; a chain disposed under a held slot leaves the slot to be freed by the release. `SlangRunner`
-lets its last image go *before* rendering the next, so in steady state one readback serves every frame.
+lets its last image go *before* rendering the next, so in steady state one readback serves every frame. *Since
+2026-10-10 the device keeps to the same rule: one disposed while an image holds a readback made on it ends when the
+last of its buffers and images is given back, not before, so the image's memory is never Vulkan's again while it is
+read; before, the device ended at once, and the Khronos layer said the readback had not been destroyed
+(`EmuSen_RustPlatform.md` §18.4). A readback a failed render left with no buffer, as a render before any frame does,
+is now let go of like one too small; before, the second such render threw `NullReferenceException` (§18.3 there).*
 
 **What Skia does with the memory, measured rather than assumed.** On a direct GL context (the bench's, as §8.1's) a
 raster image drawn onto a GPU surface is uploaded **at the draw**, not at the flush, and its pixels are released at
@@ -1274,7 +1279,9 @@ emulation thread. What a pass's build touches is its own: its source file, a Sha
 Vulkan objects whose creation needs no external synchronisation on the device. A pass is recorded in the chain before
 its objects are made, so a failure part way frees what was made; **on any failure every pass built is freed** (the
 serial build leaked them before) and the error thrown is the lowest-numbered broken pass's, the one a serial build
-would have met first (`A_parallel_build_that_fails_says_what_a_serial_build_would`). §8.6 noted that the pictures of a
+would have met first (`A_parallel_build_that_fails_says_what_a_serial_build_would`). *Since 2026-10-10 a failure
+after the passes are built, a lookup image that does not decode or a history too deep to count, frees the chain
+too; before, its passes stayed on the device (`EmuSen_RustPlatform.md` §18.1).* §8.6 noted that the pictures of a
 preset built this way had not been compared; they now are, for royale, guest-advanced and Mega Bezel SMOOTH-ADV
 (`A_preset_built_in_parallel_draws_what_one_built_pass_by_pass_draws`).
 

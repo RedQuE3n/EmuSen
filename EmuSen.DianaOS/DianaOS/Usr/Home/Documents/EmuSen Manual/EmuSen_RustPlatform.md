@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the eighth, 2026-10-10: step 4b built, Serenity's Vulkan device and chain in Rust behind the same switch, still off, with the lent readback, the bench's pictures the same from both and the validation layer silent on the library's device (§17); Q25 and Q26 decided (§9). The seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the ninth, 2026-10-10: the four defects step 4b's parity class found in the C# slang runtime shown and fixed in the C#, each by a test that failed first (§18); Q27 to Q30 decided (§9). The eighth, the same day: step 4b built, Serenity's Vulkan device and chain in Rust behind the same switch, still off, with the lent readback, the bench's pictures the same from both and the validation layer silent on the library's device (§17); Q25 and Q26 decided (§9). The seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -282,7 +282,9 @@ library memory that crosses, and it is named in the header as the exception.
   `BAD_STRING`, −7 `BUFFER_TOO_SMALL`, −256 `NOT_SUPPORTED`. The platform's own band is −1024 to −1279, clear of every
   core's and of the core interface's, so a log that prints both cannot confuse them: `IO` −1024, `PARSE` −1025,
   `SCHEMA` −1026 (a value of the wrong type, an enumeration name not known), `NEWER_FILE` −1027 (a file of a newer
-  build), `NO_DEVICE` −1028 (no Vulkan device or audio device), `COMPILE` −1029 (a shader). *As built by step 2b
+  build), `NO_DEVICE` −1028 (no Vulkan device or audio device), `COMPILE` −1029 (a shader). *As built by step 4b
+and decided on 2026-10-10 (Q30), −1028 is `DEVICE`, for no Vulkan device and for a call a device refused alike,
+since the host does one thing with either.* *As built by step 2b
   (§11.2), `PARSE` covers both a text that is not JSON and one its model does not allow, since the host does one
   thing with either; −1026 is unassigned.* *Added by step 2a (§10.2):*
   `ABSENT` −1030, which is an answer and not a failure (no such file, no seed directory, a null where .NET returns
@@ -753,6 +755,16 @@ Two more, raised by step 4a (§16.7):
   exists (§15).
 - **Q26.** Decided 2026-10-09: the compiler's identities stay separate for now, as §4.3 planned, so neither
   implementation serves the other's rows. It is looked at again when Serenity moves to state 2 (§15).
+
+Four more, raised by step 4b (§17.7):
+
+- **Q27.** Decided 2026-10-10: the host decodes lookup images with Skia and hands the pixels over, as built. What
+  decodes them with no C# beside the library is decided at Serenity's retirement.
+- **Q28.** Decided 2026-10-10: the four differences found in the C# chain and device are fixed now, in the C#, each
+  shown by a test before it is fixed (§18). They are the one exception to the C# being moved and not rewritten.
+- **Q29.** Decided 2026-10-10: Vulkan's own handles for the instance and the device stay exported, as built.
+- **Q30.** Decided 2026-10-10: one status, `DEVICE` −1028, for no device and for a call a device refused, as built;
+  §3.5 is corrected to match.
 
 ---
 
@@ -1602,13 +1614,11 @@ Kept here so that none is lost between steps; each names where it was found.
   report and do not gate (Q14, Q22).
 - **A second `Dispose` of a player** lets go of SDL's audio twice; reproduced, not run (§14.3).
 - **Endymion to state 2** is a later step, at the tester's word, as Galaxia's was (§13).
-- **A Rust program with no C# beside it** will need a SQLite of its own (Q25) and a decoder for lookup images held
-  to Skia's pixels (Q27).
+- **A Rust program with no C# beside it** will need a SQLite of its own (Q25); what decodes lookup images then is
+  decided at Serenity's retirement (Q27).
 - **The compiler's identities** are looked at again when Serenity moves to state 2 (Q26).
-- **Q27 to Q30**, raised by step 4b (§17.7).
-- **`SlangSyncTests` shows the layer listening by a fault it reports whatever its settings**, so a device made
-  without synchronisation validation would pass it; the chain parity class closes the gap for both devices with a
-  hazard only that validation reports (§17.5), and the C# test is left as it is.
+- *Closed 2026-10-10:* Q27 to Q30 are decided (§9); the four defects of the C# chain and device are fixed, and
+  `SlangSyncTests` now shows synchronisation validation is on (§18).
 - **Serenity to state 2** is a later step, at the tester's word, as Galaxia's was (§13).
 
 ---
@@ -2076,7 +2086,7 @@ two differ and the library's answer is the one kept:
 - **A device disposed under a held picture** is destroyed by the C# with the picture's memory, by its code and not
   run; the library's lives until the picture lets go (§17.2).
 
-They are Q28.
+They are Q28. *All four were fixed in the C# on 2026-10-10, each shown first by a test that failed (§18).*
 
 **Seeded faults: 99, in every part of the step**: the format's reading, the device's choosing, sampling, mip chains,
 transitions, uploads, the host barrier, the layer and the probe; the chain's building, its formats, its history,
@@ -2158,3 +2168,49 @@ publish did not carry before.
 | Q28 | The four differences found in the C# chain and device (§17.5): mend the C# now, or leave it to its retirement | left as they are: no C# is rewritten in this step, none is reached by a frontend today, and the library does not have them. Mending the wait outside the lock is one line and a test with the layer forced on |
 | Q29 | Vulkan's own handles for the instance and the device crossing the interface | exported, for the test that shows the layer is listening, and for a client that will present the picture itself (§17.2) |
 | Q30 | −1028 as `DEVICE`, for no device and for a call a device refused, where §3.5 named it `NO_DEVICE` | one status for both, since the host does one thing with either |
+
+---
+
+## 18. The C# slang runtime's four defects, shown and fixed, 2026-10-10
+
+Step 4b's parity class found four places where the C# chain and device do what the library's do not (§17.5), and
+the tester decided they be fixed now (Q28), since the C# is what players run. Each was first shown by a case of a new
+class, `EmuSen.WiseMan/Serenity/SlangDefectTests.cs`, failing on the C#; then fixed with the smallest change that
+makes the C# do what the library does, in its own commit; then the case run again on the C# and, with
+`EMUSEN_SERENITY_NATIVE=1`, on the library. The cases run on whichever device the switch gives, under the Khronos
+layer with a sink, on the RX 6800. These fixes are in the `Managed` classes, the one exception to their being moved
+and not rewritten.
+
+| | Defect | How it was shown, on the C# | The fix |
+|---|---|---|---|
+| 18.1 | A chain that fails after its passes are built leaves them on the device | building one preset whose lookup image does not decode and one whose history is too deep to count, then ending the device: **4 buffers and images never given back, and the layer found 32 objects left** at `vkDestroyDevice`. The library: none | the rest of the constructor, after the passes, disposes the chain on any failure and rethrows; `Dispose` minds what was not yet made |
+| 18.2 | The device is waited for outside the lock its queue is used under | a chain kept the queue busy on one thread while another changed size every frame, taking the device's wait: **`vkDeviceWaitIdle(): THREADING ERROR : object of type VkQueue is simultaneously used`** in three runs of three. The library: silent | the device waits for itself under its submit lock (`WaitIdle`), and the chain asks it to; three runs after, silent |
+| 18.3 | A second picture asked for before any frame throws `NullReferenceException` | asking three times: the first said "No frame has been given to the chain yet.", **the second threw `NullReferenceException`**. The library: the same words three times | a readback with no buffer, which the first failed render leaves, is let go of like one too small |
+| 18.4 | A device disposed under a held picture frees the picture's memory | without reading that memory: the chain and the device were disposed while a picture was held, and the layer's findings were read before the pixels. **The layer had already said `vkDestroyDevice(): Object Tracking - ... VkBuffer ... has not been destroyed`** of the readback. The library: silent, and the pixels intact | a device let go of ends when the last buffer or image made on it is given back, under a lock of its own, so a release on Skia's thread may end it |
+
+**The device counts its buffers and images.** To show 18.1 by count and not only by the layer's words, the C#
+device counts what it has made and not yet been given back (`Live`, for a test); 18.4's fix is built on the same
+count. After the fixes the count is zero at the end of every case.
+
+**After the fixes**, the four cases pass on the C# and on the library, and the chain parity class's case of failing
+builds now holds the C# device to ending with nothing too: under the layer it held 64 objects there before, and now
+none.
+
+**`SlangSyncTests`' check that the layer is listening** made only a buffer of no size, which the layer reports
+whatever its settings (§17.5). With synchronisation validation seeded off in the C# device, its six cases all
+passed. It now also records the parity class's write-after-write hazard, which only synchronisation validation
+reports: with the same fault four of the six fail, and with the C# restored all six pass both ways. The fault was
+put back before the next build, and the file is the committed text.
+
+**What was tested,** both ways, with the pack named and the heuristic on:
+
+| Run | Variable unset | `EMUSEN_SERENITY_NATIVE=1` |
+|---|---|---|
+| `SlangDefectTests` before the fixes | 4 fail | 4 pass |
+| `SlangDefectTests` after | 4 pass | 4 pass |
+| Serenity's `Slang*` and `Spirv*` classes, both parity classes, `ShaderBenchTests`, `ShaderSettingsWindowTests`, `ScreenFilterSettingTests` | 129 pass | 129 pass |
+| The drawing classes with the layer forced onto every C# device | 56 pass | |
+
+In the last row the layer said only what the tests provoke: the threading finding of §17.4 is gone. The threading
+case as first written passed on the C#, since two light chains seldom met at the queue; it was made to keep the queue
+busy with long submissions before any fix, after which it failed every run on the C#.

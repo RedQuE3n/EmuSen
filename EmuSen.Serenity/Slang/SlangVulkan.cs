@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using EmuSen.Serenity.Native;
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
@@ -199,6 +200,12 @@ namespace EmuSen.Serenity.Slang
             private PfnDebugUtilsMessengerCallbackEXT? _validation;
             private DebugUtilsMessengerEXT _listener;
 
+            // Buffers and images made on the device and not yet given back to it; a device let go of ends when the last is given back - see EmuSen_RustPlatform.md §18.4.
+            private int _live;
+            private bool _closing;
+            private readonly object _life = new();
+            internal int Live => Volatile.Read(ref _live);
+
             public string Name { get; }
 
             private Managed(Vk vk, Instance instance, PhysicalDevice physical, uint family, string name)
@@ -351,15 +358,20 @@ namespace EmuSen.Serenity.Slang
                 Check(Vk.BindBufferMemory(Device, buffer, memory, 0), "vkBindBufferMemory");
                 void* mapped = null;
                 Check(Vk.MapMemory(Device, memory, 0, Vk.WholeSize, 0, &mapped), "vkMapMemory");
+                Interlocked.Increment(ref _live);
                 return new SlangBuffer(this, buffer, memory, info.Size, (byte*)mapped);
             }
 
             internal void Destroy(SlangBuffer buffer)
             {
-                if (_disposed) return;
-                Vk.UnmapMemory(Device, buffer.Memory);
-                Vk.DestroyBuffer(Device, buffer.Handle, null);
-                Vk.FreeMemory(Device, buffer.Memory, null);
+                lock (_life)
+                {
+                    if (_disposed) return;
+                    Vk.UnmapMemory(Device, buffer.Memory);
+                    Vk.DestroyBuffer(Device, buffer.Handle, null);
+                    Vk.FreeMemory(Device, buffer.Memory, null);
+                    if (Interlocked.Decrement(ref _live) == 0 && _closing) End();
+                }
             }
 
             internal static uint LevelsFor(uint width, uint height) => (uint)Math.Floor(Math.Log2(Math.Max(width, height))) + 1;
@@ -395,16 +407,21 @@ namespace EmuSen.Serenity.Slang
                     viewInfo.SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1);
                     Check(Vk.CreateImageView(Device, &viewInfo, null, out target), "vkCreateImageView");
                 }
+                Interlocked.Increment(ref _live);
                 return new SlangImage(this, image, memory, view, target, format, width, height, levels);
             }
 
             internal void Destroy(SlangImage image)
             {
-                if (_disposed) return;
-                if (image.Target.Handle != image.View.Handle) Vk.DestroyImageView(Device, image.Target, null);
-                Vk.DestroyImageView(Device, image.View, null);
-                Vk.DestroyImage(Device, image.Handle, null);
-                Vk.FreeMemory(Device, image.Memory, null);
+                lock (_life)
+                {
+                    if (_disposed) return;
+                    if (image.Target.Handle != image.View.Handle) Vk.DestroyImageView(Device, image.Target, null);
+                    Vk.DestroyImageView(Device, image.View, null);
+                    Vk.DestroyImage(Device, image.Handle, null);
+                    Vk.FreeMemory(Device, image.Memory, null);
+                    if (Interlocked.Decrement(ref _live) == 0 && _closing) End();
+                }
             }
 
             internal Sampler SamplerFor(bool linear, SlangWrap wrap, bool mipmap)
@@ -433,6 +450,12 @@ namespace EmuSen.Serenity.Slang
                 Check(Vk.CreateSampler(Device, &info, null, out Sampler sampler), "vkCreateSampler");
                 _samplers[(linear, wrap, mipmap)] = sampler;
                 return sampler;
+            }
+
+            // Waits for all the device was given, holding the queue as Vulkan asks, so no other thread submits meanwhile - see EmuSen_RustPlatform.md §18.2.
+            internal void WaitIdle()
+            {
+                lock (_submit) Vk.DeviceWaitIdle(Device);
             }
 
             // Records, submits and waits; nothing recorded here is still running when it returns.
@@ -559,10 +582,20 @@ namespace EmuSen.Serenity.Slang
                 Vk.CmdPipelineBarrier(commands, PipelineStageFlags.TransferBit, PipelineStageFlags.HostBit, 0, 0, null, 1, &barrier, 0, null);
             }
 
+            // Let go of: the device ends now, or when a picture still holding a readback made on it lets go.
             public void Dispose()
             {
-                if (_disposed) return;
-                Vk.DeviceWaitIdle(Device);
+                lock (_life)
+                {
+                    if (_closing) return;
+                    _closing = true;
+                    if (Live == 0) End();
+                }
+            }
+
+            private void End()
+            {
+                WaitIdle();
                 foreach (Sampler sampler in _samplers.Values) Vk.DestroySampler(Device, sampler, null);
                 _disposed = true;
                 Vk.DestroyFence(Device, _fence, null);

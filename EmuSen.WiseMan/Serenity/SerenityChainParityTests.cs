@@ -716,7 +716,7 @@ namespace EmuSen.WiseMan.Serenity
         }
 
         // Two fills of one buffer with no barrier between them, recorded and never submitted: a hazard synchronisation validation reports as it is recorded.
-        private static void ProvokeAHazard(SlangVulkan gpu)
+        internal static void ProvokeAHazard(SlangVulkan gpu)
         {
             Vk vk = gpu.Vk;
             Device device = gpu.Device;
@@ -777,7 +777,7 @@ namespace EmuSen.WiseMan.Serenity
                             Assert.NotEqual("nothing", Outcome(() => { using var chain = new SlangChain(gpu, SlangPreset.Load(preset), null, builders); }));
                 // The device is gone, and what the layer said of its going has been handed on.
                 _output.WriteLine($"{(native ? "the library's" : "the C#'s")} device: {findings.Count} findings at its end");
-                if (native) Assert.Empty(findings);
+                Assert.Empty(findings);
             }
         }
 

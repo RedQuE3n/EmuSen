@@ -110,13 +110,15 @@ namespace EmuSen.WiseMan.Serenity
             return (gpu, findings);
         }
 
-        // The layer's silence proves something only if it speaks: a zero-sized buffer is a finding it must report.
+        // The layer's silence proves something only if it speaks: a zero-sized buffer it must report, and a hazard only synchronisation validation reports - see EmuSen_RustPlatform.md §18.5.
         private static unsafe void AssertTheLayerIsListening(SlangVulkan gpu, ConcurrentQueue<string> findings)
         {
             var info = new BufferCreateInfo { SType = StructureType.BufferCreateInfo, Size = 0, Usage = BufferUsageFlags.TransferSrcBit, SharingMode = SharingMode.Exclusive };
             if (gpu.Vk.CreateBuffer(gpu.Device, &info, null, out Silk.NET.Vulkan.Buffer buffer) == Result.Success) gpu.Vk.DestroyBuffer(gpu.Device, buffer, null);
+            SerenityChainParityTests.ProvokeAHazard(gpu);
             gpu.Heard();
             Assert.Contains(findings, f => f.Contains("VUID-VkBufferCreateInfo-size-00912", StringComparison.Ordinal));
+            Assert.Contains(findings, f => f.Contains("WRITE_AFTER_WRITE hazard", StringComparison.Ordinal));
         }
 
         private void Run(SlangVulkan gpu, string preset, int width, int height, int repeat, int frames)

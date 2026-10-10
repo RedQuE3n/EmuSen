@@ -43,7 +43,7 @@ Other things it does:
 - a Shaders window with the built-in screen filters (a CRT shader and the handheld LCDs) next to RetroArch's slang presets, which are downloaded only on request
 - per-console controller bindings, hotkeys and cheats
 
-**Hotaru** is a lighter frontend that takes a ROM on the command line and puts the debug shell in the terminal it was started from.
+**Hotaru** is a lighter frontend: the `hotaru` command of the EmuSen shell program, `emusen-shell`, which opens a ROM's game window while the debug shell keeps its prompt in the terminal it was started from, or in a window of its own when there is no terminal. `emusen-shell game.sfc` starts it on a ROM.
 
 Both frontends are built on **LunaP**, a small Avalonia toolkit that lives in its own repository, [RedQuE3n/EmuSen.LunaP](https://github.com/RedQuE3n/EmuSen.LunaP).
 
@@ -76,7 +76,7 @@ cd EmuSen
 dotnet build
 
 dotnet run --project EmuSen.Mistress                      # the main frontend
-dotnet run --project EmuSen.Hotaru -- /path/to/game.sfc   # the console-first one
+dotnet run --project EmuSen.Shell -- /path/to/game.sfc    # the shell program, running `hotaru` on the ROM
 dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj          # the test suite, all headless
 ```
 
@@ -88,7 +88,7 @@ dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r linux-x64 \
     -p:ErrorOnDuplicatePublishOutputFiles=false -o out/linux-x64
 ```
 
-Ship the whole output folder. For another platform (`win-x64`, `osx-x64`, `osx-arm64`) the build doesn't cross-compile the Rust libraries, so take them from the [Rust cores workflow](.github/workflows/rust-cores.yml)'s artifacts and point the publish at them with `-p:EmuSenNativePrebuilt=/path/to/native`, where `/path/to/native/<rid>/` holds `marsrt` and `mercuryrt`. If a library is missing, the publish warns and that console falls back to its C# core. The same folder takes `emusen_platform`, the library the platform's own components are moving into; while they are still behind their C# it is optional too, and the publish says when it is absent. More in the [settings reference](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md).
+The shell program publishes the same way, from `EmuSen.Shell/EmuSen.Shell.csproj` into `out/<rid>/Shell`, with its launcher at `bin/emusen-shell`. Ship the whole output folder. For another platform (`win-x64`, `osx-x64`, `osx-arm64`) the build doesn't cross-compile the Rust libraries, so take them from the [Rust cores workflow](.github/workflows/rust-cores.yml)'s artifacts and point the publish at them with `-p:EmuSenNativePrebuilt=/path/to/native`, where `/path/to/native/<rid>/` holds `marsrt` and `mercuryrt`. If a library is missing, the publish warns and that console falls back to its C# core. The same folder takes `emusen_platform`, the library the platform's own components are moving into; while they are still behind their C# it is optional too, and the publish says when it is absent. More in the [settings reference](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md).
 
 macOS builds are unsigned. On Apple Silicon, sign one yourself before it will run:
 

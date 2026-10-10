@@ -2117,6 +2117,44 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    state load\n" +
                 "    state save \"/Saves/Save States/before-boss.state\"",
 
+            ["hotaru"] =
+                "NAME\n" +
+                "    hotaru - play a ROM in Hotaru's game window\n\n" +
+                "SYNOPSIS\n" +
+                "    hotaru [--output window] <rom>\n\n" +
+                "DESCRIPTION\n" +
+                "    Opens Hotaru's game window on <rom>, the core chosen by its file\n" +
+                "    extension, with everything that window has always brought: the F-key\n" +
+                "    hotkeys (F12 lists them), 'feed', 'coretop -w' and the other debug\n" +
+                "    windows, rewind and fast-forward. The shell keeps its prompt: from the\n" +
+                "    terminal, the prompt that follows is the running game's own, where\n" +
+                "    'core' swaps the ROM; in the shell's own window, that window is handed\n" +
+                "    to the game's interpreter. Closing the game ends the program, as\n" +
+                "    closing Hotaru always did.\n\n" +
+                "    --output says where the game's picture goes. 'window' is the default\n" +
+                "    and, for now, the only value; a picture drawn in the terminal is\n" +
+                "    planned as a second (EmuSen_DianaSh.md section 18), and will be added\n" +
+                "    as a new value without changing the command.\n\n" +
+                "    <rom> is read as every path in this shell is, relative to the current\n" +
+                "    directory or with a leading '/' from this shell's root, and refused if\n" +
+                "    it lands above the root, except that an absolute path inside the ROM\n" +
+                "    library configured as RomDirectory is taken as it is - the rule\n" +
+                "    'core' follows (see 'man core'). A ROM that will not load is reported\n" +
+                "    as '[CPU HALT]' with the reason, and the prompt stays.\n\n" +
+                "WHERE IT IS OFFERED\n" +
+                "    'hotaru' is one of EmuSen's commands, not the shell's: DianaSh itself\n" +
+                "    knows no emulator. The EmuSen shell program, emusen-shell, offers it,\n" +
+                "    and 'emusen-shell game.sfc' is shorthand for starting the program and\n" +
+                "    typing 'hotaru game.sfc' - with the difference that a path given on the\n" +
+                "    program's command line is the launcher's choice and is checked only\n" +
+                "    for existence. Inside a running game the command refuses, since that\n" +
+                "    shell already has its game, and Mistress's console does not offer it\n" +
+                "    at all, since Mistress runs its own.\n\n" +
+                "EXAMPLES\n" +
+                "    hotaru /Games/smw.sfc\n" +
+                "    hotaru --output window /home/player/Roms/SNES/smw.sfc   (inside RomDirectory)\n" +
+                "    emusen-shell /home/player/Roms/SNES/smw.sfc",
+
             ["pause"] =
                 "NAME\n" +
                 "    pause - stop the emulation thread so its state can be read safely\n\n" +

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace EmuSen.Hotaru
+namespace EmuSen.Shell
 {
     // Which shell a launch gets - see EmuSen_Frontend_Driver.md §3c.
     public enum ShellMode

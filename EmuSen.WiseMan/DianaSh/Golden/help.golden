@@ -8,7 +8,7 @@ case the listing, with a target and without
 target none
 covers 1
 $ help
-out 22613
+out 22784
 Available commands:
   help                          this text - every command, one line each, with a brief explanation
   man [command]                 with no argument, same as 'help'; with a command name, its full manual page
@@ -276,6 +276,8 @@ Available commands:
   step <cpu> [<count>|over|out] same, stepping another processor - `cpus` lists them
   core <corename> <path>        load or swap the running ROM (validated against the known core registry)
   state save|load [path]        save/load emulator state (defaults to this frontend's own save-state path if omitted)
+  hotaru [--output window] <rom>  play <rom> in Hotaru's game window, with its hotkeys, feed and
+                                debug windows; the shell keeps its prompt
   summary                       free-text state dump (whatever isn't structured above yet)
   export NAME[=value]           set a shell variable (no real subprocess env to export TO -
                                 kept for script compatibility with real bash habits)
@@ -291,7 +293,7 @@ EmuSen_Debugging_Tools_Reference_v5.md for the full writeup and what's NOT suppo
 status 0
 action none
 $ help extra words are ignored
-out 22613
+out 22784
 Available commands:
   help                          this text - every command, one line each, with a brief explanation
   man [command]                 with no argument, same as 'help'; with a command name, its full manual page
@@ -559,6 +561,8 @@ Available commands:
   step <cpu> [<count>|over|out] same, stepping another processor - `cpus` lists them
   core <corename> <path>        load or swap the running ROM (validated against the known core registry)
   state save|load [path]        save/load emulator state (defaults to this frontend's own save-state path if omitted)
+  hotaru [--output window] <rom>  play <rom> in Hotaru's game window, with its hotkeys, feed and
+                                debug windows; the shell keeps its prompt
   summary                       free-text state dump (whatever isn't structured above yet)
   export NAME[=value]           set a shell variable (no real subprocess env to export TO -
                                 kept for script compatibility with real bash habits)
@@ -587,7 +591,7 @@ status 0
 action none
 $ help | wc -l
 out 3
-279
+281
 status 0
 action none
 end

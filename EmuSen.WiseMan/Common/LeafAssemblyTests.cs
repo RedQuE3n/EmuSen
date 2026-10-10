@@ -95,6 +95,23 @@ namespace EmuSen.WiseMan.Common
                 foreach (Type inner in Flatten(argument)) yield return inner;
         }
 
+        // `hotaru` is EmuSen's command, never the shell core's: the library sits above DianaSh, and only the shell program takes it - see EmuSen_Frontend_Driver.md §0.
+        [Fact]
+        public void Hotaru_is_a_library_the_shell_program_takes_and_Mistress_does_not()
+        {
+            Assembly hotaru = typeof(EmuSen.Hotaru.HotaruCommand).Assembly;
+            Assembly shell = typeof(EmuSen.Shell.Views.DianaShShellWindow).Assembly;
+            Assembly mistress = typeof(EmuSen.Mistress.Views.MainWindow).Assembly;
+
+            Assert.Null(hotaru.EntryPoint);
+            Assert.Contains("EmuSen.DianaSh", EmuSenReferencesOf(hotaru));
+            Assert.DoesNotContain("EmuSen.Shell", EmuSenReferencesOf(hotaru));
+            Assert.Equal("emusen-shell", shell.GetName().Name);
+            Assert.NotNull(shell.EntryPoint);
+            Assert.Contains("EmuSen.Hotaru", EmuSenReferencesOf(shell));
+            Assert.DoesNotContain("EmuSen.Hotaru", EmuSenReferencesOf(mistress));
+        }
+
         [Fact]
         public void Galaxia_is_the_root_leaf()
         {

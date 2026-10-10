@@ -988,6 +988,8 @@ frontend's console is the place to reach a running game.
 
 *Planned 2026-10-10: a panes mode of this program, a terminal interface for the host, is §18.*
 
+*Built 2026-10-10, in C#: the EmuSen shell program, `emusen-shell` (`EmuSen.Shell`), is this program with EmuSen's commands loaded, `hotaru` among them, until the Rust `dianash` exists; Hotaru folded into it, its game window now a class library that provides the command, and the command's `--output` leaves room for §18's terminal picture as a second value - see `EmuSen_Frontend_Driver.md` §0.*
+
 ### 10.5 Each of today's hosts, on the host API
 
 | Host | Today (§1.5) | On the host API |

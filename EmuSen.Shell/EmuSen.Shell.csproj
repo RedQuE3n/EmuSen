@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The EmuSen shell program: DianaSh with EmuSen's commands, `hotaru` among them, in the terminal or in its own window - see EmuSen_Frontend_Driver.md §0. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>emusen-shell</AssemblyName>
+    <RootNamespace>EmuSen.Shell</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- App is constructed by hand - see EmuSen_Settings_Reference.md §4.8. -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
+  </PropertyGroup>
+
+  <!-- The application and its desktop backends, at EmuSen.Hotaru's versions. -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <PackageReference Include="Avalonia.X11" Version="12.1.0" />
+  </ItemGroup>
+
+  <!-- WiseMan checks the launch prompt's `core` through it - see `man core`. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="EmuSen.WiseMan" />
+  </ItemGroup>
+
+  <!-- `hotaru` and the game window; the shell core never references it - see EmuSen_DianaSh.md §2. -->
+  <ItemGroup>
+    <ProjectReference Include="..\EmuSen.Hotaru\EmuSen.Hotaru.csproj" />
+  </ItemGroup>
+
+  <!-- A published build's output directory is DianaSh's own root: the .NET
+       app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
+  <Import Project="..\EmuSen.DianaSh\Publish\DianaShPublishLayout.targets" />
+  <Import Project="..\EmuSen\Cores\RustCoresPublish.targets" />
+
+  <Import Project="..\LunaP.props" />
+
+</Project>

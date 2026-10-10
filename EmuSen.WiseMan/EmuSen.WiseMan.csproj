@@ -67,6 +67,8 @@
          Imaging/FrameImageWriterTests.cs. Nothing here constructs a
          GameWindow or opens an actual Avalonia window. -->
     <ProjectReference Include="..\EmuSen.Hotaru\EmuSen.Hotaru.csproj" />
+    <!-- The shell program's launch decision, its window and its prompt's `core` - see Shell/. -->
+    <ProjectReference Include="..\EmuSen.Shell\EmuSen.Shell.csproj" />
     <!-- ConfigStore/ConfigFile and the config models - see
          Galaxia/*Tests.cs. ConfigStore.OverrideDirectory is what keeps
          those tests off the real config tree. -->

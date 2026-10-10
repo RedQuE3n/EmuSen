@@ -42,6 +42,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Theory]
         [InlineData("pause")]
         [InlineData("feed")]
+        [InlineData("hotaru")]
         [InlineData("coretop")]
         [InlineData("vstop")]
         [InlineData("resume")]

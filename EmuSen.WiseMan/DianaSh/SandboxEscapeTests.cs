@@ -100,11 +100,11 @@ namespace EmuSen.WiseMan.DianaSh
             using var runner = new GoldenRunner();
             Run(runner, "none", [("../outside.sfc", "x"), ("Games/a.sfc", "x")]);
             var said = new List<string>();
-            Assert.Null(EmuSen.Hotaru.Program.TryResolveCoreCommand("core snes ../outside.sfc", said.Add));
-            Assert.Null(EmuSen.Hotaru.Program.TryResolveCoreCommand($"core snes {Outside(runner, "outside.sfc")}", said.Add));
+            Assert.Null(EmuSen.Shell.Program.TryResolveCoreCommand("core snes ../outside.sfc", said.Add));
+            Assert.Null(EmuSen.Shell.Program.TryResolveCoreCommand($"core snes {Outside(runner, "outside.sfc")}", said.Add));
             Assert.Contains("is outside the project sandbox", said[0]);
             Assert.Contains("ROM not found", said[1]);
-            Assert.Equal(Path.Combine(runner.Home, "Games", "a.sfc"), EmuSen.Hotaru.Program.TryResolveCoreCommand("core snes Games/a.sfc", said.Add));
+            Assert.Equal(Path.Combine(runner.Home, "Games", "a.sfc"), EmuSen.Shell.Program.TryResolveCoreCommand("core snes Games/a.sfc", said.Add));
         }
 
         [Fact]

@@ -76,3 +76,54 @@ fn dma1_writes_a_colour_macroblocks_words_row_by_row() {
     assert_eq!(reorder(Depth::TwentyFour, 2, 6), 9 * 12 - (96 + 6));
     assert_eq!(reorder(Depth::Eight, 4, 9), 0);
 }
+
+#[test]
+fn a_state_mid_macroblock_continues_the_same() {
+    let mut a = Mdec::new();
+    tables(&mut a);
+    a.write(0x3800_0000 | 96, 0);
+    let words: Vec<u32> = (0..96u32).map(|i| if i % 3 == 0 { 0x0001_0400 | i } else { 0xFE00_0000 | (i & 0x3FF) | 0x0400 }).collect();
+    for (i, &w) in words.iter().take(40).enumerate() {
+        a.write(w, i as u64 * 100);
+    }
+    a.run(3_000);
+    let mut w = emusen_native::StateWriter::counter();
+    a.write_state(&mut w);
+    let mut buf = vec![0u8; w.len()];
+    a.write_state(&mut emusen_native::StateWriter::new(&mut buf));
+    let mut b = Mdec::new();
+    b.read_state(&mut emusen_native::StateReader::new(&buf)).unwrap();
+    let mut out = [Vec::new(), Vec::new()];
+    for (m, o) in [&mut a, &mut b].into_iter().zip(out.iter_mut()) {
+        let mut now = 3_000;
+        let mut i = 40;
+        while i < 96 || m.can_give() || m.status() & 1 << 29 != 0 {
+            if i < 96 && m.can_take() {
+                m.write(words[i], now);
+                i += 1;
+            }
+            if m.can_give() {
+                o.push((m.read(now), m.status()));
+            }
+            now += 37;
+            m.run(now);
+            if now > 10_000_000 {
+                break;
+            }
+        }
+    }
+    assert!(out[0].len() >= 128, "{}", out[0].len());
+    assert_eq!(out[0], out[1]);
+}
+
+#[test]
+fn a_read_while_the_idct_runs_waits_for_its_block() {
+    let mut m = Mdec::new();
+    tables(&mut m);
+    m.write(0x2800_0001, 1_000);
+    m.write(0xFE00_0400, 1_000);
+    let (w, t) = m.read(1_010);
+    assert_eq!((w, t), (0x8080_8080, 1_000 + timing::BLOCK), "a flat block of 0 at 8 bits, given once the IDCT is done");
+    assert_eq!(read(&mut m, 15, t), [0x8080_8080; 15]);
+    assert_eq!(m.read(t + 10), (0x8080_8080, t + 10), "nothing more coming: the last word again at once");
+}

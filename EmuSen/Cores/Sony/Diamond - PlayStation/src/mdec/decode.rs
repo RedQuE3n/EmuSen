@@ -91,28 +91,37 @@ pub const FRACTION: u32 = 4;
 /// columns; each pass's sum truncated toward zero, keeping three fraction bits after pass 1 and `FRACTION` after pass 2
 /// (Diamond_MDEC.md §3.3, D-30).
 pub fn idct(block: &[i16; 64], scale: &[i16; 64], out: &mut [i32; 64]) {
-    let mut mid = [0i64; 64];
+    let mut c = [0i32; 64];
+    for (c, &v) in c.iter_mut().zip(scale) {
+        *c = (v >> 3) as i32;
+    }
+    let mut mid = [0i32; 64];
     for y in 0..8 {
+        if (0..8).all(|z| block[y + z * 8] == 0) {
+            continue;
+        }
         for x in 0..8 {
-            let mut s: i64 = 0;
+            let mut s = 0i32;
             for z in 0..8 {
-                s += block[y + z * 8] as i64 * (scale[x + z * 8] >> 3) as i64;
+                s += block[y + z * 8] as i32 * c[x + z * 8];
             }
             mid[x + y * 8] = toward_zero(s, 10);
         }
     }
     for y in 0..8 {
         for x in 0..8 {
-            let mut s: i64 = 0;
+            let mut s = 0i32;
             for z in 0..8 {
-                s += mid[y + z * 8] * (scale[x + z * 8] >> 3) as i64;
+                s += mid[y + z * 8] * c[x + z * 8];
             }
-            out[x + y * 8] = toward_zero(s, 26 - 10 - FRACTION).clamp(i32::MIN as i64 >> 8, i32::MAX as i64 >> 8) as i32;
+            out[x + y * 8] = toward_zero(s, 26 - 10 - FRACTION);
         }
     }
 }
 
-fn toward_zero(s: i64, bits: u32) -> i64 {
+/// Each pass's sums fit 32 bits for any table: eight products of an 11-bit coefficient and a 13-bit factor, then
+/// of a 16-bit value and the same factor.
+fn toward_zero(s: i32, bits: u32) -> i32 {
     if s < 0 { -((-s) >> bits) } else { s >> bits }
 }
 

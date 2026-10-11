@@ -81,4 +81,20 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             new("gpu/vram-to-vram-overlap/vram-to-vram-overlap.exe", 300),
         };
     }
+
+    // ps1-tests' MDEC programs with a VRAM picture, the frame each is read at, and the pixels D-30 leaves differing - see Diamond_MDEC.md §7.
+    public static class Ps1MdecTests
+    {
+        public static readonly (VramProgram Program, int Differing)[] Programs =
+        {
+            (new("mdec/4bit/4bit.exe", 300), 0),
+            (new("mdec/8bit/8bit.exe", 300, Excluded: new[] { new VramExclusion(35, 35, 1, 1, 0, "D-30: the IDCT's rounding gives 240 where the console's block has 239") }), 0),
+            // The CPU builds of mdec/frame wait after their last word as the step-by-step log's console would, so only the DMA builds are graded.
+            (new("mdec/frame/frame-15bit-dma.exe", 300, Picture: "vram-15bit.png"), 11035),
+            (new("mdec/frame/frame-24bit-dma.exe", 300, Picture: "vram-24bit.png"), 63378),
+            // The pictures hold the movie's frames 64 and 62, each in VRAM for one frame of the run.
+            (new("mdec/movie/movie-15bit.exe", 315, Picture: "vram-15bit.png"), 319),
+            (new("mdec/movie/movie-24bit.exe", 309, Picture: "vram-24bit.png"), 752),
+        };
+    }
 }

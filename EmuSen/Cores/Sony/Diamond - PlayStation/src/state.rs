@@ -559,16 +559,16 @@ mod tests {
         assert_eq!(
             tail,
             [
-                "3724243 65536 u8[65536] TTY",
-                "3199955 524288 u8[524288] SPURAM",
-                "2151379 1048576 u8[1048576] VRAM",
-                "2150355 1024 u8[1024] SCRATCH",
-                "53203 2097152 u8[2097152] RAM",
-                "53202 1 bool ExePending"
+                "3724292 65536 u8[65536] TTY",
+                "3200004 524288 u8[524288] SPURAM",
+                "2151428 1048576 u8[1048576] VRAM",
+                "2150404 1024 u8[1024] SCRATCH",
+                "53252 2097152 u8[2097152] RAM",
+                "53251 1 bool ExePending"
             ]
         );
         assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Bus.Sio0.Port1.Controller.Modes") && layout.contains("Cpu.InterruptView.Held") && layout.contains("u16[8192] Bus.Cdrom.OutLeft") && layout.contains("u8[2352] Bus.Cdrom.Waiting") && layout.contains("u32[32] Bus.Mdec.Fifo") && layout.contains("u32[17] Bus.Mdec.Queue") && layout.contains("u32[2] Bus.MdecLeft"), "{layout}");
-        assert_eq!(machine().state_size(), 3_789_779);
+        assert_eq!(machine().state_size(), 3_789_828);
     }
 
     #[test]

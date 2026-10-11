@@ -223,8 +223,7 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine("skipped: EMUSEN_DIAMOND_PS1TESTS names ps1-tests' release");
                 return;
             }
-            // Waiting on the kernel: its printf prints access-time's "%2-d" as "-d", so the table's hundredths are lost.
-            Assert.Equal(new[] { "cpu/access-time/access-time.exe" }, RunPs1Tests(corpus, Array.Empty<(uint, byte[])>()));
+            Assert.Empty(RunPs1Tests(corpus, Array.Empty<(uint, byte[])>()));
         }
 
         // The same on a player's BIOS, the development path of Diamond_Plan.md §5.9's option D; opt-in by the corpus and a firmware folder.

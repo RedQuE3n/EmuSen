@@ -92,6 +92,7 @@ fn format(fmt: u32, args: &mut Args) -> u32 {
             count += 1;
             continue;
         }
+        // The prefixes in any order, as psx-spx lists them and a console prints "%2-d" (Diamond_OpenKernel.md §4.10).
         let mut spec = Spec::default();
         loop {
             match rd8(i) as u8 {
@@ -100,39 +101,36 @@ fn format(fmt: u32, args: &mut Args) -> u32 {
                 b' ' => spec.space = true,
                 b'#' => spec.alternate = true,
                 b'0' => spec.zero = true,
-                _ => break,
-            }
-            i += 1;
-        }
-        if rd8(i) == b'*' as u32 {
-            let w = args.next() as i32;
-            if w < 0 {
-                spec.left = true;
-            }
-            spec.width = w.unsigned_abs();
-            i += 1;
-        } else {
-            while (b'0'..=b'9').contains(&(rd8(i) as u8)) {
-                spec.width = spec.width * 10 + rd8(i) - b'0' as u32;
-                i += 1;
-            }
-        }
-        if rd8(i) == b'.' as u32 {
-            i += 1;
-            let mut p = 0;
-            if rd8(i) == b'*' as u32 {
-                p = args.next();
-                i += 1;
-            } else {
-                while (b'0'..=b'9').contains(&(rd8(i) as u8)) {
-                    p = p * 10 + rd8(i) - b'0' as u32;
-                    i += 1;
+                b'1'..=b'9' => {
+                    spec.width = 0;
+                    while (b'0'..=b'9').contains(&(rd8(i) as u8)) {
+                        spec.width = spec.width * 10 + rd8(i) - b'0' as u32;
+                        i += 1;
+                    }
+                    continue;
                 }
-            }
-            spec.precision = Some(p);
-        }
-        loop {
-            match rd8(i) as u8 {
+                b'*' => {
+                    let w = args.next() as i32;
+                    if w < 0 {
+                        spec.left = true;
+                    }
+                    spec.width = w.unsigned_abs();
+                }
+                b'.' => {
+                    i += 1;
+                    let mut p = 0;
+                    if rd8(i) == b'*' as u32 {
+                        p = args.next();
+                        i += 1;
+                    } else {
+                        while (b'0'..=b'9').contains(&(rd8(i) as u8)) {
+                            p = p * 10 + rd8(i) - b'0' as u32;
+                            i += 1;
+                        }
+                    }
+                    spec.precision = Some(p);
+                    continue;
+                }
                 b'h' => spec.half = true,
                 b'l' => spec.half = false,
                 b'L' => {}

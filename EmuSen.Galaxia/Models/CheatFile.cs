@@ -125,16 +125,16 @@ namespace EmuSen.Galaxia.Models
 
         // The name is typed by the player, so it is checked rather than sanitized: rewriting it would save to a file they didn't name.
         public static bool IsValidName(string name) =>
-            GalaxiaNative.Active && GalaxiaNative.Crosses(name) ? GalaxiaNative.CheatNameValid(name) : Managed.IsValidName(name);
+            GalaxiaNative.Takes(name) ? GalaxiaNative.CheatNameValid(name) : Managed.IsValidName(name);
 
         public static ConfigFile<CheatFile> For(string name) =>
             new(CategoryDirName, name + ".json");
 
         // Any path the player picked, outside the auto-loaded set - see EmuSen_Settings_Reference.md §4.15.
-        public static bool SaveTo(string path, CheatFile file) => GalaxiaNative.Active ? SaveToNative(path, file) : Managed.SaveTo(path, file);
+        public static bool SaveTo(string path, CheatFile file) => GalaxiaNative.Takes(path) ? SaveToNative(path, file) : Managed.SaveTo(path, file);
 
         // Null for missing, unreadable or corrupt, matching ConfigFile.Load's own contract.
-        public static CheatFile? LoadFrom(string path) => GalaxiaNative.Active ? LoadFromNative(path) : Managed.LoadFrom(path);
+        public static CheatFile? LoadFrom(string path) => GalaxiaNative.Takes(path) ? LoadFromNative(path) : Managed.LoadFrom(path);
 
         public static string DirectoryPath => Path.Combine(ConfigStore.Directory, CategoryDirName);
 

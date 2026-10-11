@@ -14,23 +14,23 @@ namespace EmuSen.Galaxia.Library
 
         // One folder per console, named as the ROM library names them (NES, SNES, N64, GB, GBC) - see EmuSen_Settings_Reference.md §4.85.11.
         public static string SramPathFor(string romPath, string console) =>
-            GalaxiaNative.Active ? GalaxiaNative.SavePath(GalaxiaSave.Sram, romPath, console) : Managed.SramPathFor(romPath, console);
+            GalaxiaNative.Takes(romPath, console) ? GalaxiaNative.SavePath(GalaxiaSave.Sram, romPath, console) : Managed.SramPathFor(romPath, console);
 
         // Where SNES and N64 saves went before 2026-09-28, read once to copy them into their console's folder, never written.
         public static string FlatSramPathFor(string romPath) =>
-            GalaxiaNative.Active ? GalaxiaNative.SavePath(GalaxiaSave.FlatSram, romPath) : Managed.FlatSramPathFor(romPath);
+            GalaxiaNative.Takes(romPath) ? GalaxiaNative.SavePath(GalaxiaSave.FlatSram, romPath) : Managed.FlatSramPathFor(romPath);
 
         // directoryOverride is a parameter, not an AppSettings read - see EmuSen_Galaxia.md §5.1.
         public static string StatePathFor(string romPath, int slot = DefaultStateSlot, string? directoryOverride = null) =>
-            GalaxiaNative.Active ? GalaxiaNative.SavePath(GalaxiaSave.State, romPath, directoryOverride, slot) : Managed.StatePathFor(romPath, slot, directoryOverride);
+            GalaxiaNative.Takes(romPath, directoryOverride) ? GalaxiaNative.SavePath(GalaxiaSave.State, romPath, directoryOverride, slot) : Managed.StatePathFor(romPath, slot, directoryOverride);
 
         // Written when a game is closed and offered at its next start - see EmuSen_Galaxia.md §5.2.
         public static string ResumeStatePathFor(string romPath, string? directoryOverride = null) =>
-            GalaxiaNative.Active ? GalaxiaNative.SavePath(GalaxiaSave.ResumeState, romPath, directoryOverride) : Managed.ResumeStatePathFor(romPath, directoryOverride);
+            GalaxiaNative.Takes(romPath, directoryOverride) ? GalaxiaNative.SavePath(GalaxiaSave.ResumeState, romPath, directoryOverride) : Managed.ResumeStatePathFor(romPath, directoryOverride);
 
         // The picture on screen when a state was written, beside it - see EmuSen_Galaxia.md §5.2.
         public static string PicturePathFor(string statePath) =>
-            GalaxiaNative.Active ? GalaxiaNative.SavePath(GalaxiaSave.Picture, statePath) : Managed.PicturePathFor(statePath);
+            GalaxiaNative.Takes(statePath) ? GalaxiaNative.SavePath(GalaxiaSave.Picture, statePath) : Managed.PicturePathFor(statePath);
 
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed

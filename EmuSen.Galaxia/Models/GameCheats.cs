@@ -29,7 +29,7 @@ namespace EmuSen.Galaxia.Models
 
         // Null when the path gives no usable name; derived names are sanitized, not refused, because nobody typed them.
         public static GameCheats? For(string? console, string? romPath) =>
-            GalaxiaNative.Active && GalaxiaNative.Crosses(console) && GalaxiaNative.Crosses(romPath) ? ForNative(console, romPath) : Managed.For(console, romPath);
+            GalaxiaNative.Takes(console, romPath) ? ForNative(console, romPath) : Managed.For(console, romPath);
 
         internal static GameCheats? ForNative(string? console, string? romPath) =>
             GalaxiaNative.CheatGameList(console, romPath) is { } list ? new GameCheats(list.Category, list.Name) : null;

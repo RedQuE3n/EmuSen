@@ -358,6 +358,9 @@ namespace EmuSen.Galaxia.Native
             return true;
         }
 
+        // Whether a facade hands these texts to the library: chosen, and each crosses; listed for text the library may quote back in a list - see EmuSen_RustPlatform.md §21.
+        public static bool Takes(string? a, string? b = null, bool listed = false) => Active && Crosses(a, listed) && Crosses(b, listed);
+
         private delegate long Query(byte* output, nuint length);
 
         // The length-query idiom, once: a small buffer first, so a path costs one call. Null for ABSENT.

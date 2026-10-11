@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the eleventh, 2026-10-10: `GameCheats`' naming of a game's own cheat list given its Rust half, a new export and interface 7, with its parity case and seeded faults (§20). The tenth, the same day: Endymion and Serenity's slang half moved to state 2, the library their default and their C# one variable away, through Galaxia's switch (§19). The ninth, the same day: the four defects step 4b's parity class found in the C# slang runtime shown and fixed in the C#, each by a test that failed first (§18); Q27 to Q30 decided (§9). The eighth, the same day: step 4b built, Serenity's Vulkan device and chain in Rust behind the same switch, still off, with the lent readback, the bench's pictures the same from both and the validation layer silent on the library's device (§17); Q25 and Q26 decided (§9). The seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the twelfth, 2026-10-10: half a surrogate pair and a NUL in a list asked of every Galaxia facade, 28 found handing such text to a binding that refuses it and now answering it with their C# through one rule, `GalaxiaNative.Takes`, with the reachability measured on Linux (§21). The eleventh, the same day: `GameCheats`' naming of a game's own cheat list given its Rust half, a new export and interface 7, with its parity case and seeded faults (§20). The tenth, the same day: Endymion and Serenity's slang half moved to state 2, the library their default and their C# one variable away, through Galaxia's switch (§19). The ninth, the same day: the four defects step 4b's parity class found in the C# slang runtime shown and fixed in the C#, each by a test that failed first (§18); Q27 to Q30 decided (§9). The eighth, the same day: step 4b built, Serenity's Vulkan device and chain in Rust behind the same switch, still off, with the lent readback, the bench's pictures the same from both and the validation layer silent on the library's device (§17); Q25 and Q26 decided (§9). The seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -269,7 +269,9 @@ library memory that crosses, and it is named in the header as the exception.
 ### 3.4 Strings
 
 - **In:** UTF-8 as `(const uint8_t *, size_t)`, never NUL-terminated by assumption. A C# `string` holding a lone
-  surrogate cannot be encoded and is refused with `EMUSEN_BAD_STRING` (−5) before the call.
+  surrogate cannot be encoded and is refused with `EMUSEN_BAD_STRING` (−5) before the call. *As built, the refusal is
+  the binding's `EncoderFallbackException` and no export is called; each facade must choose the C# for such text,
+  through `GalaxiaNative.Takes` (§21).*
 - **Out:** the length-query idiom: the export returns the whole length in bytes, writes only when the buffer holds
   it all, and a null `out` asks the length. The facade tries a stack buffer first (512 bytes, as built), so a path
   costs one call.
@@ -1010,7 +1012,7 @@ decodes and writes the file, and System.Text.Json binds the type, since its voca
   Rust's may not. For a suggestion, a cheat list's name and a log folder the facade asks the C# when such text
   appears; for a log entry it shapes the entry in C#, which then fails at the write exactly as it always has
   (§11.3's last row). When the C# is retired these become "replaced by U+FFFD first", a small change of behaviour
-  that belongs to that step.
+  that belongs to that step. *Found 2026-10-10: the other facades did not ask, and threw; all now do (§21).*
 
 ### 11.3 System.Text.Json and .NET, measured for this step
 
@@ -1610,7 +1612,10 @@ Kept here so that none is lost between steps; each names where it was found.
   predates this work and is the C#'s and the library's alike, since the host hands the library the same answer (Q15).
   Fixed as proposed, the folder asked for without requiring it to exist, with a test of its own: `EmuSen_Galaxia.md`
   §3.6.
-- **Q19:** text that is not valid UTF-16, once the C# that answers for it is gone (§11.2, §14.3).
+- **Q19:** text that is not valid UTF-16, once the C# that answers for it is gone (§11.2, §14.3). Until then every
+  Galaxia facade answers it with its C# (§21).
+- **Three differences left in Galaxia (§21.4):** an override that does not cross, set after the library loads; a ROM's
+  hash for a path holding a NUL; a migration to a destination holding a NUL. None is reachable by a player.
 - **Q23:** device layers the library does not know, at state 3 (§14.7).
 - **P2** is not measured: whether any frontend asks Galaxia for a path once a frame (§8).
 - **Windows and macOS:** nothing of the platform has run on either (§10.7, §11.7, §12.4, §14.4); CI's steps there
@@ -2430,3 +2435,119 @@ own test holds the header's word.
 `cargo test` in `Platform/` passes 105 for `emusen-galaxia` and `emusen-platform` (82 and 23), the five new cases among them,
 and the header compiles clean as C99 and as C++17 under `-Wall -Wextra -pedantic -Werror`. **Not done:** Windows and
 macOS, as before; the Windows rows above are argued from the crate's tests in that style, not run.
+
+---
+
+## 21. Text the library cannot take, at every facade, 2026-10-10
+
+§3.4 says that a C# string holding half a surrogate pair "cannot be encoded and is refused before the call", and §11.2
+says which facades answer such text with their C# rule: a suggestion, a cheat list's name, a log folder, and since §20
+a game's own list. Neither says what happens at the others. A reading of the code predicted the answer: every other
+facade that hands the library a caller's text throws in state 2 where its C# answers, and the defect is reachable
+through a ROM's path from the library scan or a typed shell argument. The first half of the prediction is confirmed;
+the second is confirmed for Windows only, by argument, and retired for Linux by measurement. Measured on the
+development desktop, as the steps before it.
+
+### 21.1 The contract, and where it was not kept
+
+**The refusal is the binding's.** `GalaxiaNative.Utf8` encodes with a strict `UTF8Encoding`, so text with half a pair
+throws `EncoderFallbackException` (an `ArgumentException`) in the C#, before any export is called; the library never
+sees it and never answers `BAD_STRING` for it. *As built, then, §3.4's "refused with `EMUSEN_BAD_STRING`" is an
+exception in the binding and not a status.* Nothing in the binding falls back: the choice of side is the facade's, and
+a facade that chose the library on `GalaxiaNative.Active` alone passes the exception to its caller. §3.9's state 2
+promises the C#'s behaviour on the library, so each such facade broke it. Endymion is not affected: its binding
+replaces half a pair with U+FFFD before the call, a difference of its own recorded in §14.3 and left to Q19.
+
+**The call sites.** Every facade in `EmuSen.Galaxia` that reaches `GalaxiaNative` was read and classified by whether
+it hands over text a caller supplies:
+
+| Class | Count | Which |
+|---|---|---|
+| Guarded before this section | 8 | `CheatFile.IsValidName`; `GameCheats.For`; `ErrorLog.Usable`; `ErrorLog`'s shaping of an entry and its line; `Suggestion.Distance`, `Nearest` and `Hint` |
+| Unguarded, caller text, now guarded | 28 | `SaveLibrary`'s five names; `ConfigStore.For` twice and `LegacyPathFor`; `ConfigFile<T>.Load`, `Save` and `Delete`; `AtomicFile.TryRead` and `Write`; `RomHash.Md5`; `CheatFile.SaveTo` and `LoadFrom`; `ConfigRoot.ComputeFor`, `MacDataDirectoryFor`, `BundleContentsFor` and `SeedDirectoryFor`; `DataMigration.LegacyRootFor`, `SeedFromBundle` with its folders, `Run` with its roots, `CopyTree` and `RemainingLibraryDirectories` with a root; `ErrorLog.Root`, `PathFor` and its writes |
+| Unguarded, caller text, left as it is | 3 | the overrides of `ConfigStore` (two) and `DataStore` (one), §21.4 |
+| No caller text, or none that can hold such text | the rest | every directory property; the program's own migrations; `CheatFile.ListNames`; the three models' own `Load`, whose names are constants; the documents the C# serializes, since System.Text.Json writes half a pair as `�` (measured); the program's folder and .NET's application-data folder handed over at load, whose refusal refuses the library through the switch (§13.2) |
+
+### 21.2 What was measured
+
+**The defect.** A case of the parity class asks each of the 28 with four texts (a high half alone, a low half alone, a
+high half at the end, a pair in the wrong order), once through the facade and once through its C#, each in a folder
+of its own, and compares the answers, the files left and the words said. Before the fix, on the library's side, the
+first assertion threw. A throwaway sweep of the same calls, run beside it to see past the first failure, recorded
+every one: 23 threw `EncoderFallbackException` out of the facade, among them `ConfigFile<T>.Load`, whose own `catch`
+asked for the file's path again to frame its message and threw from inside its handler, against its contract of null
+for anything unreadable; the other five answered otherwise without throwing: `CheatFile.SaveTo`, `ConfigFile<T>.Save`
+and `Delete` false where the C# wrote and deleted, `CheatFile.LoadFrom` null where the C# read the list, and an error
+log entry not written where the C# wrote it. With `EMUSEN_GALAXIA_NATIVE=0` every one answered, because .NET's own
+file calls take such a path and write it to disk with U+FFFD in place of the half (measured: `a\uD800b.srm` lands as
+the bytes `a EF BF BD b .srm`).
+
+**A guard that did not reach downstream.** `GameCheats.For` was guarded and named the list by the C#, with the half
+pair in its name; saving that list then went through `ConfigFile<T>`, which was not, and failed. A guard at one facade
+holds only while every facade its answer flows into is guarded too, which is the argument for one rule applied at
+all of them rather than case by case.
+
+**A NUL, where a list comes back.** A failed write's words return as a list each item of which ends in a NUL (§3.5).
+`AtomicFile.Write` to a path holding a NUL was said as two messages on the library's side, `<folder>/a` and
+`b.srm: file name contained an unexpected NUL byte. The previous file is unchanged.`, where the C# says one. A read
+of such a path is quiet on both sides and agrees. No other call was found to quote caller text back in a list:
+`ErrorLog.Root` with a NUL in its folder, or a settings file naming one through `\u0000`, says nothing on either
+side (measured), and a migration's messages quote the files it finds, which cannot hold a NUL.
+
+**Reachability.** Measured with .NET 10 on Linux: a file whose name holds the encoded half of a pair (`ED A0 80`) or a
+byte that is no UTF-8 (`FF`) is listed by `Directory.EnumerateFiles` with U+FFFD for each bad byte; an argument and an
+environment variable holding them come back the same way; and System.Text.Json refuses to read `"\ud800"` into a
+string. So on Linux no text from the file system, the command line, the environment or a config file reaches a facade
+with half a pair: the prediction's route through the library scan does not exist there, and a typed shell argument
+arrives already decoded. On Windows a file name is a sequence of UTF-16 units the file system does not validate, and
+.NET lists it unchanged, so the scan does reach `SaveLibrary`, `RomHash`, `AtomicFile` and `GameCheats` with such a
+name; this is argued, not run. On any platform, a string cut between the halves of a pair reaches any facade.
+
+### 21.3 The fix, and why at this layer
+
+One rule, in one place: `GalaxiaNative.Takes(a, b, listed)` is true when the switch has chosen the library and every
+text crosses (`Crosses`, unchanged); `listed` adds that no text holds a NUL, for a call that may quote it back in a
+list. Each of the 28 facades now chooses its side with `Takes` over the texts it hands over, where it used `Active`,
+and the eight guarded before use it too, so the rule has one owner. `AtomicFile` passes `listed`; no other call
+needed it.
+
+Three other layers were weighed. **The binding** cannot fall back by itself: it does not know the C# rule a facade
+holds, and teaching it would make each binding method a second facade. **Replacing half a pair with U+FFFD before
+the call**, as Endymion's binding does, gives the same file on Linux but a different string back (a save's path, a
+config path), and Q19 decided that change belongs to the C#'s retirement and not before. **Mending in the library**
+would move the decision to Rust, which cannot see what the C# was given. The facade is where each side's rule is
+chosen today, so the guard is a condition on that choice, and stays plain. The rule is cheap: one pass over each
+text, on calls that are not on any frame's path (P2).
+
+### 21.4 What was found and left
+
+- **The three overrides.** Setting `ConfigStore.OverrideDirectory`, `OverrideLegacyDirectory` or
+  `DataStore.OverrideDirectory` to such text after the library has loaded throws from the setter, having already set
+  the C#'s field, so the library holds the previous value; set before it loads, the same text makes the load throw,
+  which the switch catches and so runs all of Galaxia on the C# with its one line. They are set only by tests and by
+  MarsRT's training driver, from `Path.Combine` over a scratch folder. A fix would have the switch remember that an
+  override did not cross and send every question that depends on it to the C# while it holds; that is state the
+  facades do not carry today, for a case no player reaches, and it is not built.
+- **A ROM's hash for a path holding a NUL** throws `IOException` from the library, which maps Rust's `InvalidInput`
+  to `IO`, and `ArgumentException` from the C#. Its one caller, Mistress's identity, reaches it only after a
+  `FileInfo` of the same path, which throws `ArgumentException` on both sides (measured), and no path a file system
+  lists holds a NUL. This is not a crossing defect: the text crosses intact, and the two sides differ in what they do
+  with a path the system refuses.
+- **A migration to a destination holding a NUL** throws `ArgumentException` in the C# and, in the library, copies
+  nothing and reports each file as left in place. Its roots are the computed tree's and never text a player supplies.
+
+### 21.5 What was tested
+
+| Run | Default (the library) | `EMUSEN_GALAXIA_NATIVE=0` (the C#) |
+|---|---|---|
+| The two new cases, before the fix | both fail | the NUL case passes; the other fails only on its comparison of two log lines a moment apart, mended in the case before the fix was run |
+| WiseMan's Galaxia classes with `GameCheatListTests`, `DianaShSandboxTests` and `HierTests` | 230 pass | 230 pass |
+| `BatterySaveTests`, `ActiveCheatsApplyAndSaveTests` and `MainWindowCheatListTests` | 51 pass | 51 pass |
+
+The cases are `Text_with_no_utf8_is_answered_by_every_facade_as_the_csharp_answers_it` and
+`A_path_holding_a_nul_is_said_as_one_message_by_whichever_side_writes_it`, in
+`EmuSen.WiseMan/Galaxia/GalaxiaParityTests.Crossing.cs`. Six faults were seeded and each was caught: `Takes`
+ignoring `listed` (the NUL case), `Takes` judging only its first text, `Takes` as `Active` alone (both cases), and
+the guard taken back out of `ErrorLog`'s writes, `DataMigration.CopyTree` and `ConfigFile<T>.Delete`, the last three
+chosen from late in the case's order so that an earlier failure could not hide them. No Rust changed and the
+interface stays 7. **Not done:** Windows, where §21.2's route through the scan is argued and not run.

@@ -88,6 +88,8 @@ pub struct Board {
     pub duart: Duart,
     pub tty: Tty,
     pub gte: Gte,
+    /// The cycle at which the GTE's command in flight is done; a read of its registers or a command waits for it.
+    pub gte_ready: u64,
     /// The POST register at 1F802041h.
     pub post: u8,
     /// When each of the write queue's four entries is drained, oldest first.
@@ -131,6 +133,7 @@ impl Board {
             duart: Duart::default(),
             tty: Tty::new(),
             gte: Gte::new(),
+            gte_ready: 0,
             post: 0,
             queue: [0; 4],
             fault: false,
@@ -835,6 +838,14 @@ impl Board {
     }
 }
 
+impl Board {
+    /// The interlock: every access to coprocessor 2 holds the processor until the command in flight is done, reads and
+    /// commands by psx-spx's "GTE Load Delay Slots", writes by choice (BlackMoon_GTE.md D-13).
+    fn wait_for_gte(&mut self) {
+        self.now = self.now.max(self.gte_ready);
+    }
+}
+
 impl Bus for Board {
     fn fetch(&mut self, address: u32) -> u32 {
         let target = self.decode(address);
@@ -927,22 +938,29 @@ impl Bus for Board {
     }
 
     fn cop2_data(&mut self, register: u8) -> u32 {
-        self.gte.regs.data[register as usize & 31]
+        self.wait_for_gte();
+        self.gte.data(register)
     }
 
     fn set_cop2_data(&mut self, register: u8, value: u32) {
-        self.gte.regs.data[register as usize & 31] = value;
+        self.wait_for_gte();
+        self.gte.set_data(register, value);
     }
 
     fn cop2_control(&mut self, register: u8) -> u32 {
-        self.gte.regs.control[register as usize & 31]
+        self.wait_for_gte();
+        self.gte.control(register)
     }
 
     fn set_cop2_control(&mut self, register: u8, value: u32) {
-        self.gte.regs.control[register as usize & 31] = value;
+        self.wait_for_gte();
+        self.gte.set_control(register, value);
     }
 
-    fn cop2_command(&mut self, _command: u32) {}
+    fn cop2_command(&mut self, command: u32) {
+        self.wait_for_gte();
+        self.gte_ready = self.now + self.gte.command(command) as u64;
+    }
 
     fn bus_error(&mut self) -> bool {
         std::mem::take(&mut self.fault)

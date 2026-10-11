@@ -12,7 +12,10 @@ own record is beside this page.
   Diamond's stage 2 (2026-10-11): 55,000 of 55,000 cases**, 1,022 of them in the form of its dispute D-1; its design,
   timing model, coprocessor 0, its own cases and its disputes log are on that page.
 - [`BlackMoon_GTE.md`](BlackMoon_GTE.md) — `blackmoon-gte`, the GTE, graded by ps1-tests' `test-all` and amidog's GTE
-  test, bit for bit.
+  test, bit for bit. **Built at Diamond's stage 5 (2026-10-11): `test-all`'s 1,150 of 1,150 cases**, in the crate and
+  through Diamond; the registers, the commands and the readings `test-all` forced where psx-spx is silent, the division,
+  the cycles and the interlock, the fuzz against the witnesses, the observer seam, its disputes (D-13 to D-16) and the
+  reading log are on that page; amidog's test waits on the pad.
 
 ## The interface every processor keeps
 
@@ -45,10 +48,13 @@ two. Its contract, first kept by `blackmoon-gte`:
 
 - **The caller owns the clock.** A command returns the cycles until its results can be read; the core holds the
   processor's next access to coprocessor 2 until then, which is the interlock `Diamond_Plan.md` §5.2 times. Nothing in
-  the crate keeps time.
+  the crate keeps time. *Since stage 5*: the engine writes every result when the command is issued, so it holds no
+  command in flight; Diamond's bus keeps the deadline and holds all five calls on it (`BlackMoon_GTE.md` §6, D-13).
 - **The two crates do not depend on each other.** The R3000A's bus names coprocessor 2's operations in the
   processor's terms (`cop2_data`, `set_cop2_data`, `cop2_control`, `set_cop2_control`, `cop2_command`) and the core
   answers them with the GTE's; a core with another coprocessor 2, or none, uses the processor unchanged.
 - **Registers and state** as the processors': the 64 registers' names from psx-spx, a fixed state block.
 - **The enhancement layer's observer** (`Diamond_Plan.md` §6.2, the precision side-channel) is stage E1's, not the
-  debugger's `Observer`: it is added then as a second generic parameter, compiled out when unobserved.
+  debugger's `Observer`: it is added then as a second generic parameter, compiled out when unobserved. *Since stage 5*
+  the GTE's half exists: `blackmoon_gte::Observer`, one method with an empty default, given to `command_observed`;
+  `command` runs with `Unobserved` (`BlackMoon_GTE.md` §9). The R3000A's half is E1's.

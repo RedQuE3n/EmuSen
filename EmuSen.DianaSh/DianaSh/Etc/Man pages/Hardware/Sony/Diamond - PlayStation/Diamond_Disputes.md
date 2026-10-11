@@ -5,7 +5,9 @@
 records a rule the documents and the test programs leave open or in disagreement, the evidence taken, and the rule as
 implemented. It is the record of which sources a dispute step read, so that the clean-room protocol of
 `Diamond_Plan.md` §1.3 can be audited from outside. Disputes about the R3000A itself are kept in the R3000A crate's own
-record (the plan's §9.1), since they belong to every core that uses the crate.
+record (the plan's §9.1), since they belong to every core that uses the crate: D-1 to D-3 in `BlackMoon_R3000.md` §8.
+*Since stage 5 (2026-10-11)* the GTE's are kept the same way, D-13 to D-16 in `BlackMoon_GTE.md` §12: the interlock
+(D-13), the accumulators `test-all` settled (D-14), the write hazards (D-15) and the unlisted command numbers (D-16).
 
 ## The rules this log keeps
 

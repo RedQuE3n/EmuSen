@@ -52,6 +52,8 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             new("gpu/bandwidth/bandwidth.exe", "gpu/bandwidth", TtyRule.BandwidthAgainstLog, 0.02, Frame: 1500),
             // The default console has the 208-pin chip, version 2 by psx-spx's detection.
             new("gpu/version-detect/version-detect.exe", "gpu/version-detect", TtyRule.Expect, Expected: new[] { "* GPU version 2 [New 208pin GPU (LATE-PU-8 and up)]" }),
+            // Every case of its table bit for bit, as the console's log reads - see BlackMoon_GTE.md §7.
+            new("gte/test-all/test-all.exe", "gte/test-all", TtyRule.Expect, Frame: 300, Expected: new[] { "Passed tests: 1150", "Failed tests: 0" }),
         };
 
         public static RomProtocol Protocol(TtyProgram p, Func<string, string?> consoleLog) =>

@@ -42,6 +42,10 @@ EmuSen.DianaSh/DianaSh/Usr/Home/Roms/*
 *.gen
 *.smd
 *.32x
+*.psexe
+*.cue
+*.chd
+*.sbi
 
 # Reference-emulator dumps written by the probe (see EmuSen.WiseMan/Reference),
 # whichever backend produced them - the profile directories it sites beside them

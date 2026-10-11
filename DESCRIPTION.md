@@ -210,7 +210,8 @@ Beryl Hardware, the shared library the Sega cores are built on (the 68000, the Z
 more than one of them uses).
 
 **Sony — Black Moon Clan** (`Cores/Sony/`) — PlayStation **Diamond**, PlayStation 2
-**Sapphire**, PlayStation 3 **Rubeus**, PSP **Esmeraude**, PS Vita **Wiseman**.
+**Sapphire**, PlayStation 3 **Rubeus**, PSP **Esmeraude**, PS Vita **Wiseman**; **BlackMoon** Hardware is the
+shared library the Sony cores are built on (the R3000A and the GTE first).
 
 **Atari — Death Busters** (`Cores/Atari/`) — 2600 **Eudial**, 5200 **Mimete**, 7800
 **Tellu**, Lynx **Viluy**, Jaguar **Cyprine & Ptilol** (canonically inseparable, hence one

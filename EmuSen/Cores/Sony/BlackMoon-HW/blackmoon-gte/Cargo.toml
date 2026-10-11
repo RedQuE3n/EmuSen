@@ -1,0 +1,12 @@
+[package]
+name = "blackmoon-gte"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# BlackMoon's GTE, the PlayStation's geometry coprocessor (COP2), written from psx-spx and graded by ps1-tests' and amidog's GTE tests. See Diamond_Plan.md §5.3, §9.1 and BlackMoon_GTE.md.
+[lib]
+name = "blackmoon_gte"
+
+[dependencies]
+emusen-native = { path = "../../../Shared/emusen-native" }

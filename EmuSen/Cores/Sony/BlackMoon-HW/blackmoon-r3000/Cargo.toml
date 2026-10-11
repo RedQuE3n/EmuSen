@@ -1,0 +1,12 @@
+[package]
+name = "blackmoon-r3000"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# BlackMoon's R3000A: the PlayStation's CPU, and later the PlayStation 2's I/O processor, written from the MIPS manuals and psx-spx and graded by SingleStepTests' r3000 suite. See Diamond_Plan.md §9.1 and BlackMoon_R3000.md.
+[lib]
+name = "blackmoon_r3000"
+
+[dependencies]
+emusen-native = { path = "../../../Shared/emusen-native" }

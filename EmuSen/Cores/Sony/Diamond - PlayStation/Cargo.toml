@@ -1,0 +1,28 @@
+[package]
+name = "diamond"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Diamond, the Sony PlayStation core in Rust, on the core ABI v1. See Diamond_Plan.md and Diamond_Native.md.
+[lib]
+name = "diamond"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+emusen-native = { path = "../../Shared/emusen-native" }
+blackmoon-r3000 = { path = "../BlackMoon-HW/blackmoon-r3000" }
+blackmoon-gte = { path = "../BlackMoon-HW/blackmoon-gte" }
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"
+
+# What ships: release without the line tables a sampler reads - see Mars_Native.md §6.3.
+[profile.dist]
+inherits = "release"
+debug = false
+strip = "debuginfo"

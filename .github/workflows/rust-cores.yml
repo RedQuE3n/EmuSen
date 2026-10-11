@@ -142,6 +142,26 @@ jobs:
             EmuSen/Cores/Shared/emusen-core-conform/target/release/emusen-core-conform.exe
           if-no-files-found: error
 
+  # Diamond's open kernel (Diamond_OpenKernel.md §6, §7): its harness on blackmoon-r3000, and its image rebuilt by the pinned nightly to the committed bytes.
+  diamond-kernel:
+    name: Diamond's open kernel
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # The channel of kernel/rust-toolchain.toml, with the source build-std needs.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-01
+          components: rust-src
+      - name: Test, the rebuild required
+        shell: bash
+        env:
+          DIAMOND_KERNEL_REBUILD: require
+        run: |
+          cd "EmuSen/Cores/Sony/Diamond - PlayStation/kernel-harness"
+          cargo +stable test --release
+
   # The header against emusen-native's Rust and against the baseline on all four triples, and the base branch's baseline against this one: a removed or changed line fails (EmuSen_CoreAPI.md §5.2, §5.4).
   abi-guard:
     name: Core ABI guard

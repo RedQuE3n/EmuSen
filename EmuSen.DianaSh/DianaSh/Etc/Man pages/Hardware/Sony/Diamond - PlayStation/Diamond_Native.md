@@ -157,7 +157,8 @@ read-only `BIOS` space and is not run. The names are the ones players' own dumps
 **The replacement is named but marked not yet available** [C]: `effect: none` is v1's word for "the game runs without
 the chip", and no word says "a replacement that does not exist yet"; `none` with a cost whose first sentence says no
 program runs is the honest reading, as Nephrite's stage 0 declared its Sega CD BIOS. It becomes `accuracy` with the
-plan's §5.9 cost when the kernel runs (stage 3).
+plan's §5.9 cost when the kernel runs (stage 3). The kernel's first phase is built and recorded in `Diamond_OpenKernel.md` (2026-10-11); the declaration
+changes with its integration into the machine (that page's §1 and §10).
 
 ### 2.6 Settings
 

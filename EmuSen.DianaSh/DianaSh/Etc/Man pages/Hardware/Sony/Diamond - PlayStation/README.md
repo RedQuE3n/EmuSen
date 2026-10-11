@@ -20,6 +20,13 @@ stage 3. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
   the gate: the kit's C1–C15 on a synthetic program and disc, and the r3000 replay controls; and stage 2 (§10): the
   R3000A and the shared `emusen-mips`, 55,000 of 55,000 single-step cases with one dispute naming cases, and P1
   retired.
+- [`Diamond_OpenKernel.md`](Diamond_OpenKernel.md) — the open BIOS kernel's first phase, written 2026-10-11 at stage
+  3 under the replacement writers' rules: the image and the RAM it uses, the reset path and the hand-over at 80030000h
+  with what a machine must provide (the TTY at the DUART's 1F802023h), the exception entry, the priority chains and the
+  hook, the syscalls, the control blocks, heaps, events, threads, the memory, string and file calls with the rule for
+  documented bugs, the call table of 576 entries with each one's status, the pinned toolchain and the reproducible
+  image, the harness on blackmoon-r3000 and what it proved, the accuracy cost, the choices, the questions and the
+  reading log.
 - [`Diamond_References.md`](Diamond_References.md) — the oracles, documents and reference cores pinned at stage 1
   (2026-10-11): the test programs with their console logs and pictures, the documents and their exclusions, the probe on
   the three libretro cores (only PCSX-ReARMed may run without a BIOS; Beetle PSX and SwanStation boot OpenBIOS and are

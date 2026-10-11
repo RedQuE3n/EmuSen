@@ -1,0 +1,21 @@
+[package]
+name = "diamond-kernel-harness"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The open kernel's host side: its image from the ELF and the rebuild check, a minimal bus to run it on
+# blackmoon-r3000, and the call table printed from its source. See Diamond_OpenKernel.md §6 and §7.
+[lib]
+name = "diamond_kernel_harness"
+
+[[bin]]
+name = "diamond-kernel"
+path = "src/tool.rs"
+
+[dependencies]
+blackmoon-r3000 = { path = "../../BlackMoon-HW/blackmoon-r3000" }
+emusen-mips = { path = "../../../Shared/emusen-mips" }
+
+# Its own root, beside the kernel's.
+[workspace]

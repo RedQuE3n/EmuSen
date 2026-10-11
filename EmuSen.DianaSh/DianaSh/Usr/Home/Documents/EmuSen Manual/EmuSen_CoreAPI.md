@@ -3070,6 +3070,27 @@ On Donkey Kong Country after 300 frames (2026-10-10): VenusRT's tile sheet takes
 65,536 bytes one `space_read` at a time through `IDebugMemorySpace`; a refresh of every provider takes about 0.1 ms;
 the DMA table 0.01 ms.
 
+### 31.6 One owner: C# Venus reads the same decoders
+
+Once the parity tests had passed against C# Venus's own decoders, C# Venus's target was switched onto the pack's for
+every view whose output was shown identical, so that each SNES fact has one owner and the two engines cannot drift:
+`SnesDebugTarget`'s palettes, tile pixels, tilemap entries, tile sheet and palette swatch call `SnesDebugViews` over
+its PPU's arrays, its vectors are the pack's table, its DMA destinations are named by the pack, and `StateDump`'s CPU
+line is the pack's `CpuStateLine`. `Renderer`'s tile-sheet and swatch methods and their buffer, which nothing else
+used, were removed. The coupling is one way and already present: C# Venus's debugger depended on DianaSh before; the
+pack depends on neither engine.
+
+Two views stay C# Venus's own. Its DMA channels are read from its channel objects, which hold the running state
+directly and keep the indirect address apart (§31.2), and its `IO` space is not the layout the pack reads. Its
+expression symbols come from `SnesExpressionContext`, which reads its CPU directly and adds scanline, cycle and the
+operand address that v1 does not carry.
+
+The switch changed one output: DMA destinations C# Venus's PPU table left unnamed or named otherwise now carry
+fullsnes's names (`COLDATA $2132` where it printed `$2132`, `APUI00` for `APUIO0`, `RDVRAML` for `VMDATALREAD`). No
+golden case prints one of them, and the corpus did not move. After the switch the parity tests compare the two engines'
+memory through one decoder, which still shows their CGRAM, VRAM, registers and vectors agree; the comparison of the
+decoders themselves is the run recorded in §31.3.
+
 ---
 
 ## Appendix A. The draft header

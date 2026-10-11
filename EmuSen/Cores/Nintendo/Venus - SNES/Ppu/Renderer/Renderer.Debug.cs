@@ -13,31 +13,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 {
     public partial class Renderer
     {
-        private void RenderVramSheet(Ppu ppu)
-        {
-            for (int tile = 0; tile < 2048; tile++)
-            {
-                int baseX = (tile % 32) * 8;
-                int baseY = (tile / 32) * 8;
-                int tileAddr = tile * 32;
-
-                for (int r = 0; r < 8; r++)
-                {
-                    byte p0 = ppu.Vram[(tileAddr + r * 2) & 0xFFFF];
-                    byte p1 = ppu.Vram[(tileAddr + r * 2 + 1) & 0xFFFF];
-                    byte p2 = ppu.Vram[(tileAddr + 16 + r * 2) & 0xFFFF];
-                    byte p3 = ppu.Vram[(tileAddr + 16 + r * 2 + 1) & 0xFFFF];
-
-                    for (int cbit = 7; cbit >= 0; cbit--)
-                    {
-                        int pixel = ((p0 >> cbit) & 1) | (((p1 >> cbit) & 1) << 1) | (((p2 >> cbit) & 1) << 2) | (((p3 >> cbit) & 1) << 3);
-                        byte v = (byte)(pixel * 17);
-                        _sheetPixels[(baseY + r) * SheetW + baseX + (7 - cbit)] = new Rgba32(v, v, v, (byte)255);
-                    }
-                }
-            }
-        }
-
         public System.Collections.Generic.List<(string label, int x, int y, int w, int h)> DumpActiveOam(Ppu ppu)
         {
             int sizeSelect = (ppu.Obsel >> 5) & 0x07;

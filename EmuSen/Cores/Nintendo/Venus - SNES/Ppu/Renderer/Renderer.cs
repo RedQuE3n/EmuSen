@@ -7,8 +7,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
     {
         private const int ScreenW = 256;
         private const int ScreenH = 224;
-        private const int SheetW = 256;  
-        private const int SheetH = 512;  
 
         // Pseudo-hi-res column interleave (Phase A) vs - see Venus_PPU.md §8.
         private const int MaxOutputW = 512;
@@ -27,7 +25,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         // Allocated at max width so a hi-res toggle never needs reallocation - see Venus_PPU.md §8.
         private Rgba32[] _screenPixels = new Rgba32[MaxOutputW * ScreenH];
-        private Rgba32[] _sheetPixels = new Rgba32[SheetW * SheetH];
 
         // Per-scanline working buffers for the main and sub screens.
         private Rgba32[] _mainLineBuf = new Rgba32[ScreenW];
@@ -62,54 +59,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 }
             }
             return buffer;
-        }
-
-        // 4bpp grayscale tile sheet as plain RGBA; makes no GPU calls - see Venus_PPU.md §15.
-        public (byte[] Rgba, int Width, int Height) GetVramTileSheetRgba(Ppu ppu)
-        {
-            RenderVramSheet(ppu);
-            byte[] buffer = new byte[SheetW * SheetH * 4];
-            int o = 0;
-            for (int i = 0; i < _sheetPixels.Length; i++)
-            {
-                Rgba32 c = _sheetPixels[i];
-                buffer[o] = c.R;
-                buffer[o + 1] = c.G;
-                buffer[o + 2] = c.B;
-                buffer[o + 3] = c.A;
-                o += 4;
-            }
-            return (buffer, SheetW, SheetH);
-        }
-
-        // 256-colour CGRAM swatch grid as plain RGBA, no render target needed - see Venus_PPU.md §15.
-        public (byte[] Rgba, int Width, int Height) GetPaletteSwatchRgba(Ppu ppu, int swatchSize = 12)
-        {
-            const int cols = 16;
-            const int rows = 16;
-            int width = cols * swatchSize;
-            int height = rows * swatchSize;
-            byte[] buffer = new byte[width * height * 4];
-
-            for (int i = 0; i < 256; i++)
-            {
-                Rgba32 c = SnesColor(ppu.Cgram[i * 2], ppu.Cgram[i * 2 + 1], 1f);
-                int originX = (i % cols) * swatchSize;
-                int originY = (i / cols) * swatchSize;
-                for (int y = 0; y < swatchSize; y++)
-                {
-                    int rowStart = ((originY + y) * width + originX) * 4;
-                    for (int x = 0; x < swatchSize; x++)
-                    {
-                        int o = rowStart + x * 4;
-                        buffer[o] = c.R;
-                        buffer[o + 1] = c.G;
-                        buffer[o + 2] = c.B;
-                        buffer[o + 3] = c.A;
-                    }
-                }
-            }
-            return (buffer, width, height);
         }
 
         private readonly Rgba32[] _paletteColor = new Rgba32[256];

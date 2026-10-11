@@ -203,7 +203,7 @@ impl Gpu {
     fn write_state(&self, w: &mut StateWriter) {
         w.u32s("Env", &self.env);
         let t = &self.tail;
-        w.bools("Flags", &[self.allow_disable, self.irq, self.irq_rose, self.display.blanked, t.colour_next, t.polyline.is_some(), t.polyline == Some(true)]);
+        w.bools("Flags", &[self.second_megabyte, self.irq, self.irq_rose, self.display.blanked, t.colour_next, t.polyline.is_some(), t.polyline == Some(true)]);
         w.u32s("Registers", &[self.dma_direction, self.latch, self.display.start, self.head as u32, self.len as u32, self.have as u32, self.need as u32]);
         w.u32s("FifoWords", &self.fifo.map(|f| f.0));
         w.u64s("FifoTimes", &self.fifo.map(|f| f.1));
@@ -230,7 +230,7 @@ impl Gpu {
         r.u32s(&mut self.env)?;
         let mut f = [false; 7];
         r.bools(&mut f)?;
-        [self.allow_disable, self.irq, self.irq_rose, self.display.blanked] = [f[0], f[1], f[2], f[3]];
+        [self.second_megabyte, self.irq, self.irq_rose, self.display.blanked] = [f[0], f[1], f[2], f[3]];
         let (colour_next, polyline) = (f[4], f[5].then_some(f[6]));
         let mut g = [0u32; 7];
         r.u32s(&mut g)?;

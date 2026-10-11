@@ -21,12 +21,13 @@ pub struct Texture {
 }
 
 impl Texture {
-    /// From the page bits of GP0(E1h) or a polygon's page attribute, a CLUT attribute and GP0(E2h).
-    pub fn new(page: u32, clut: u32, window: u32) -> Texture {
+    /// From the page bits of GP0(E1h) or a polygon's page attribute, a CLUT attribute and GP0(E2h); bit 11 is the
+    /// page's second megabyte only while GP1(09h) lets the 208-pin chip address one (psx-spx "GP1(09h)").
+    pub fn new(page: u32, clut: u32, window: u32, two_megabytes: bool) -> Texture {
         let depth = (page >> 7 & 3).min(2);
         Texture {
             page_x: (page & 0xF) * 64,
-            page_y: (page >> 4 & 1) * 256,
+            page_y: (page >> 4 & 1) * 256 + if two_megabytes { (page >> 11 & 1) * 512 } else { 0 },
             depth,
             clut_x: (clut & 0x3F) * 16,
             clut_y: clut >> 6 & 0x1FF,
@@ -123,12 +124,16 @@ impl ClutCache {
     }
 }
 
-/// The texel at (u, v) with the cache's misses counted: 0000h is transparent, bit 15 the semi-transparency flag.
+/// The texel at (u, v) with the cache's misses counted: 0000h is transparent, bit 15 the semi-transparency flag; a
+/// page in the second megabyte, which no retail console fits, reads as 0000h ("textures disappearing").
 #[inline]
 pub fn texel(vram: &Vram, cache: &mut TextureCache, clut: &ClutCache, t: &Texture, u: u8, v: u8, misses: &mut u32) -> u16 {
     let (u, v) = t.window(u, v);
     let (u, v) = (u as u32, v as u32);
     let y = t.page_y + v;
+    if y >= 512 {
+        return 0;
+    }
     let (half, miss) = match t.depth {
         0 => cache.read(vram, t.page_x + (u >> 2), y, 0),
         1 => cache.read(vram, t.page_x + (u >> 1), y, 1),
@@ -148,7 +153,7 @@ mod tests {
 
     #[test]
     fn the_window_replaces_the_masked_bits() {
-        let t = Texture::new(0, 0, 0b00010_00001_00011_00011);
+        let t = Texture::new(0, 0, 0b00010_00001_00011_00011, false);
         assert_eq!((t.mask_u, t.mask_v, t.off_u, t.off_v), (24, 24, 8, 16));
         assert_eq!(t.window(0xFF, 0x00), (0xEF, 0x10));
     }
@@ -160,7 +165,7 @@ mod tests {
         vram.set(0, 7, 0x7C00);
         let mut cache = TextureCache::default();
         let mut clut = ClutCache::default();
-        let t = Texture::new(1, 7 << 6, 0);
+        let t = Texture::new(1, 7 << 6, 0, false);
         assert_eq!(clut.prepare(&vram, &t), 16);
         assert_eq!(clut.prepare(&vram, &t), 0, "the same palette stays");
         let mut misses = 0;
@@ -168,10 +173,13 @@ mod tests {
         assert_eq!(texel(&vram, &mut cache, &clut, &t, 3, 0, &mut misses), 0x0000);
         assert_eq!(misses, 1, "one entry holds four halfwords");
         vram.set(64, 0, 0);
-        let t15 = Texture::new(1 | 2 << 7, 0, 0);
+        let t15 = Texture::new(1 | 2 << 7, 0, 0, false);
         assert_eq!(texel(&vram, &mut cache, &clut, &t15, 0, 0, &mut misses), 0x4321, "stale until cleared");
         cache.clear();
         assert_eq!(texel(&vram, &mut cache, &clut, &t15, 0, 0, &mut misses), 0);
         assert_eq!(clut.colours[0], 0x7C00);
+        let high = Texture::new(1 | 2 << 7 | 1 << 11, 0, 0, true);
+        assert_eq!(texel(&vram, &mut cache, &clut, &high, 0, 0, &mut misses), 0, "the absent second megabyte");
+        assert_eq!(Texture::new(1 << 11, 0, 0, false).page_y, 0, "wrapped while GP1(09h) forbids it");
     }
 }

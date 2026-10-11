@@ -150,8 +150,8 @@ pub struct Gpu {
     pub clut: ClutCache,
     /// GP0(E1h)..(E6h) as last written, E1h with its bits 11 to 13 as the version keeps them.
     pub env: [u32; 6],
-    /// GP1(09h): whether E1h's bit 11 disables texturing (208-pin only).
-    pub allow_disable: bool,
+    /// GP1(09h): whether E1h's bit 11 takes the texture page into a second megabyte of VRAM (208-pin only).
+    pub second_megabyte: bool,
     pub irq: bool,
     pub dma_direction: u32,
     /// GPUREAD's latch.
@@ -196,7 +196,7 @@ impl Gpu {
             cache: TextureCache::default(),
             clut: ClutCache::default(),
             env: [0; 6],
-            allow_disable: false,
+            second_megabyte: false,
             irq: false,
             dma_direction: 0,
             latch: 0,
@@ -386,8 +386,9 @@ impl Gpu {
         }
     }
 
-    fn texture_disabled(&self) -> bool {
-        self.v2() && self.allow_disable && self.env[0] & 1 << 11 != 0
+    /// Whether the texture page may be in VRAM's second megabyte (GP1(09h), 208-pin only).
+    fn two_megabytes(&self) -> bool {
+        self.v2() && self.second_megabyte
     }
 
     /// Draws with `paint`, returning the work done and the CLUT entries loaded.
@@ -460,7 +461,7 @@ impl Gpu {
 
     /// GP0(E1h): bits 0-10; bit 11 only while GP1(09h) allows it, and the flips, on the 208-pin chip.
     fn set_e1(&mut self, w: u32) {
-        let keep = if self.v2() { 0x37FF | if self.allow_disable { 0x800 } else { 0 } } else { 0x7FF };
+        let keep = if self.v2() { 0x37FF | if self.second_megabyte { 0x800 } else { 0 } } else { 0x7FF };
         self.env[0] = w & keep;
     }
 
@@ -495,11 +496,9 @@ impl Gpu {
         }
         let mut texture = None;
         if textured {
-            let disable = if self.v2() && self.allow_disable { 0x800 } else { 0 };
-            self.env[0] = self.env[0] & !(0x1FF | disable) | page & (0x1FF | disable);
-            if !self.texture_disabled() {
-                texture = Some(Texture::new(self.env[0], clut, self.env[1]));
-            }
+            let bits = 0x1FF | if self.two_megabytes() { 0x800 } else { 0 };
+            self.env[0] = self.env[0] & !bits | page & bits;
+            texture = Some(Texture::new(self.env[0], clut, self.env[1], self.two_megabytes()));
         }
         let modulated = texture.is_some() && !raw;
         let paint = self.paint(blended, texture, raw && texture.is_some(), modulated || (shaded && texture.is_none()), video);
@@ -530,7 +529,7 @@ impl Gpu {
             _ => (16, 16),
         };
         let v = self.vertex(w[1], w[0], uv);
-        let texture = (textured && !self.texture_disabled()).then(|| Texture::new(self.env[0], uv >> 16, self.env[1]));
+        let texture = textured.then(|| Texture::new(self.env[0], uv >> 16, self.env[1], self.two_megabytes()));
         let flip = if self.v2() { (self.env[0] & 1 << 12 != 0, self.env[0] & 1 << 13 != 0) } else { (false, false) };
         let paint = self.paint(blended, texture, raw, false, video);
         let sprite = raster::Sprite { x: v.x, y: v.y, w: sw, h: sh, rgb: v.rgb, uv: (v.u, v.v), flip };
@@ -621,7 +620,7 @@ impl Gpu {
                 v.y2 = p >> 10 & 0x3FF;
             }),
             0x08 => video.retime(now, |v| v.mode = p & 0xFF),
-            0x09 if self.v2() => self.allow_disable = p & 1 != 0,
+            0x09 if self.v2() => self.second_megabyte = p & 1 != 0,
             0x10..=0x1F => {
                 let index = p & if self.v2() { 0xF } else { 0x7 };
                 match index {

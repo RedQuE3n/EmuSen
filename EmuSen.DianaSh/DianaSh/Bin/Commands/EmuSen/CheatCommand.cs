@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EmuSen.Galaxia;
+using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -93,14 +94,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
         });
 
         // AppSettings when set, the sandbox's Cheats folder otherwise - see `man cheat`.
-        private static string CheatDatabaseDirectory
-        {
-            get
-            {
-                string? configured = AppSettings.Load().CheatDatabaseDirectory;
-                return string.IsNullOrWhiteSpace(configured) ? DianaShSandbox.CheatDatabaseDirectory : configured;
-            }
-        }
+        private static string CheatDatabaseDirectory => SettingFolders.Cheats(AppSettings.Load());
 
         // Both SNES formats share one character set, so the guess is punctuation - see EmuSen_Cheats.md.
         public static bool LooksLikeGameGenieFormat(string code)

@@ -167,12 +167,8 @@ namespace EmuSen.Mistress.Views
 
         private bool _inLook;
 
-        // AppSettings when set, the sandbox's own Cheats folder otherwise -
-        // the same resolution `cheat db` uses.
-        private string Directory =>
-            string.IsNullOrWhiteSpace(_settings.CheatDatabaseDirectory)
-                ? DianaShSandbox.CheatDatabaseDirectory
-                : _settings.CheatDatabaseDirectory;
+        // The same resolution `cheat db` uses - see EmuSen_Config_Reference.md §7.
+        private string Directory => SettingFolders.Cheats(_settings);
 
         // Every system on disk, or only the selected console's when one is chosen.
         private IReadOnlyList<(string System, int Count)> VisibleSystems()

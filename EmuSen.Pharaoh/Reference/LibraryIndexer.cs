@@ -101,6 +101,6 @@ namespace EmuSen.Pharaoh.Reference
 
         // AppSettings.RomDirectory is the only authoritative answer to where the
         // library is; nothing here resolves a game through a hardcoded path.
-        private static string RomDirectory() => AppSettings.Load().RomDirectory ?? "";
+        private static string RomDirectory() => SettingFolders.Roms(AppSettings.Load()) ?? "";
     }
 }

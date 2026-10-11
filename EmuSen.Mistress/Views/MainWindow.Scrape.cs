@@ -100,7 +100,7 @@ namespace EmuSen.Mistress.Views
         // The store's one layout step (§30), taken when the ROM folder that names each game's folder is known.
         private void PutStoreInFolders(MediaStore store)
         {
-            if (_appSettings.RomDirectory is not { Length: > 0 } roms) return;
+            if (SettingFolders.Roms(_appSettings) is not { } roms) return;
             int carried = store.PutInFolders(p => GameFolders.Of(roms, p), DateTimeOffset.Now);
             if (carried > 0) StatusText.Text = $"Moved {carried} scraped picture(s) into their games' folders";
         }

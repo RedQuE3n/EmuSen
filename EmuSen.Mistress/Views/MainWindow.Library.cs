@@ -36,8 +36,7 @@ namespace EmuSen.Mistress.Views
         private readonly ActionGroup _views = new();
         private LunaAction? _asGrid, _asList;
 
-        private string ArtworkDirectory =>
-            string.IsNullOrWhiteSpace(_appSettings.ArtworkDirectory) ? DataStore.Artwork : _appSettings.ArtworkDirectory;
+        private string ArtworkDirectory => SettingFolders.Artwork(_appSettings);
 
         private bool GridShown => _appSettings.LibraryView != AppSettings.LibraryList;
 
@@ -318,9 +317,7 @@ namespace EmuSen.Mistress.Views
             try
             {
                 if (OwnCoverPath(entry) is string old) { File.Delete(old); _covers.Forget(old); }
-                string target = ArtworkIndex.PathFor(ArtworkDirectory, console, entry.Title, Path.GetExtension(picture));
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                File.Copy(picture, target, overwrite: true);
+                string target = ArtworkIndex.Place(ArtworkDirectory, console, entry.Title, picture);
                 _covers.Forget(target);
                 _artwork.Add(console, entry.Title, target);
                 StatusText.Text = $"Cover art added for {entry.Title}";

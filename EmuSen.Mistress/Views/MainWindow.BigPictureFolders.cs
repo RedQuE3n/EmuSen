@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.Library;
@@ -51,7 +52,7 @@ namespace EmuSen.Mistress.Views
         {
             if (_folderEditor is not null || _metadataEditor is not null) return;
             string? stored = _records.Edits(folder.File).GetValueOrDefault(GameMetadata.FolderLink);
-            string where = _appSettings.RomDirectory is { Length: > 0 } roms ? Path.GetRelativePath(roms, folder.File) : folder.File;
+            string where = SettingFolders.Roms(_appSettings) is { } roms ? Path.GetRelativePath(roms, folder.File) : folder.File;
             var window = _folderEditor = new FolderEditorWindow(folder.Name, where, FilesBelow(folder.File), stored, link => SaveFolderLink(folder.File, link));
             window.Closed += (_, _) => { if (ReferenceEquals(_folderEditor, window)) _folderEditor = null; };
             _ = SheetLayer.Show(window, this);

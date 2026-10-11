@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
@@ -31,7 +32,7 @@ namespace EmuSen.Mistress.Views
 
         // A theme supports a collection when it has a folder of that name with a theme.xml, as ES-DE's per-system folders are (THEMES.md, "How it works").
         private bool ThemeHasFolderFor(string name) =>
-            _appSettings.BigPictureTheme is { Length: > 0 } dir && name.Length > 0 && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && File.Exists(Path.Combine(dir, name, "theme.xml"));
+            SettingFolders.Named(_appSettings.BigPictureTheme) is { } dir && name.Length > 0 && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && File.Exists(Path.Combine(dir, name, "theme.xml"));
 
         // The settings the themed view reads before each showing.
         private void ApplyCollectionSettings()

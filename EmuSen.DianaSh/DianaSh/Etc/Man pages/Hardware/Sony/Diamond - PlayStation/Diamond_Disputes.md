@@ -248,5 +248,100 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
     at 3,405 for PAL. `EmuSen_CRT.md` §20.6's row waited on the clock; whether it is written now with the provisional
     line or after the console's measurement is the tester's decision;
   - the audio is not affected: the SPU runs on the CPU's clock (768 × 44,100 Hz).
-- **Pinned by:** —
-- **Implemented in:** —
+- **Pinned by:** `the_rates_are_d0s_provisional_ones` (`video` and `machine`, to four places), DiamondTests'
+  `A_machine_shows_the_packs_screen_and_runs_as_its_market`, and ps1-tests' `timers` graded against its log on a
+  PAL-clocked Diamond (`Diamond_Native.md` §11.12).
+- **Implemented in:** `diamond: the bus and the machine of stage 3` (2026-10-11): the crystals' ratios, the lines of
+  3,412.5 and 3,405 video clocks, 263 and 314 lines a field, interlaced fields of 263 and 262 (314 and 313) alternately
+  [C]. *Stage 3's measurement, 2026-10-11* [M, `Diamond_Native.md` §11.5]: with the PAL clock and NTSC mode, Diamond
+  runs the log's program to 263 hblanks a frame, 982–983 dots in 5,000 cycles and 571,303 cycles a frame unwrapped,
+  against the log's 263, 982–983 and 571,285 ± 6; the program's own overhead differs by tens of cycles. This checks the
+  implementation against the second step's arithmetic, not the hardware: the line remains provisional until the
+  console's run of the closing program.
+
+### D-4. Memory control's access times: a first bus cycle of the read delay plus 4 and each further one of the delay plus 2, recovery and floating, not psx-spx's formula
+
+- **Opened:** 2026-10-11, at stage 3, by the console's `cpu/access-time` log disagreeing with psx-spx's "COM_DELAY"
+  formula for five regions of six.
+- **Documents read:** psx-spx `6d7d1bc`, "Memory Control" (the delay/size registers' bits, COM_DELAY, the formula given
+  "somewhat like so", and "the total access time is fairly complex overall, and difficult to properly describe"); "I/O
+  Map" for the kernel's usual register values.
+- **Test program:** ps1-tests' `cpu/access-time` (its source read for what it measures: an 8-, 16- and 32-bit load in a
+  cached loop, its cycles over a loop without it, by timer 2, as cycles a load in hundredths) and its `psx.log` from a
+  console. With the usual values (DEV2 and DEV0 `0013243Fh`, DEV1 `00003022h`, DEV4 `200931E1h`, DEV5 `00020843h`,
+  DEV8 `00070777h`, COM `00031125h`), the console's whole cycles a load, the load's own cycle included, and the
+  formula's totals:
+
+  | Region | Console: first, further | Formula: first, further |
+  |---|---|---|
+  | BIOS, DEV0 (read delay 3, floating) | 7, 6 | 8, 7 |
+  | DEV8 (7, recovery, hold, floating) | 11, 15 | 16, 15 |
+  | DEV1 (2, 16-bit, auto-increment) | 6, 4 | 6, 5 |
+  | CD-ROM (4, pre-strobe) | 8, 6 | 9, 7 |
+  | SPU (14, recovery, 16-bit) | 18, 21 | 22, 21 |
+
+- **The argument** [A]: one rule in the register's terms fits every row: the first bus cycle takes the read delay plus
+  4, and each further one the read delay plus 2 plus COM0 when the recovery bit is set plus COM2 when the floating bit
+  is. Recovery, "between two operations", does not lengthen the first cycle; the pre-strobe's MIN does not reach it at
+  COM3 = 3; the floating period's contribution to the first cycle cannot be told from a constant at COM2 = 1, the only
+  value the log holds, and the simpler reading is taken. Write timings follow the same rule with the write delay [C,
+  unmeasured]. The rule's register values are the kernel's; a program that changes them gets the rule's figures, which
+  no console log checks.
+- **A named disagreement**: SPUCNT's 32-bit row, 38.94 cycles on the console and 36.07 on Diamond, reads a word at
+  `1F801DAAh`, which is not word-aligned: the load raises an address error, so the row times an exception's entry and
+  return through the kernel's handler. Which part of that path costs the 2.87 cycles is open; a program of the
+  project's own timing an exception round trip with its own handler, on a console, would say.
+- **Referee:** not consulted. **Witnesses:** not run for this table (their TTY cannot be read, `Diamond_Native.md`
+  §11.15).
+- **Conclusion:** the rule above, with RAM at a 4-cycle stall, the internal registers at 2, the scratchpad and BCC at
+  none (the same log). Measured: 50 of 51 cells within 0.20 cycles of the console's; the SPUCNT cell named. Open for
+  the SPUCNT cell and for any register value other than the kernel's.
+- **Depends on it:** every load's and uncached fetch's cost, so the BIOS's own speed and every timing measurement.
+- **Pinned by:** `the_kernel_values_give_the_consoles_access_times`, `a_load_costs_its_regions_time`, and ps1-tests'
+  `cpu/access-time` graded against its log (`Diamond_Native.md` §11.12).
+- **Implemented in:** `diamond: the bus and the machine of stage 3`.
+
+### D-5. The DMA's pieces and the CPU's stores on the bus: the gaps between blocks, nodes and chopped windows, and a RAM store's drain
+
+- **Opened:** 2026-10-11, at stage 3: psx-spx gives the DMA's words per cycle but neither the time between blocks,
+  list nodes and chopped windows nor the write queue's drain, and the plan predicted a dispute here (P4).
+- **Documents read:** psx-spx `6d7d1bc`, "DMA Channels" (the transfer rates; "CPU Operation during DMA"; chopping's
+  windows) and "Memory Map" ("Write queue").
+- **Test programs:** ps1-tests' `dma/chopping` and `dma/chain-looping` (sources read for what they time; their console
+  logs). `chopping` times 2,048 words to the GPU in mode 1 at block sizes 1 to 64 and 128, in mode 0, and chopped at
+  every pair of window sizes; `chain-looping` times a RAM loop of 1,000 iterations with no DMA, with an empty chain,
+  and with one- and two-node chains that never end.
+- **What the logs say** [A, arithmetic]: mode 1 costs about 10 cycles a block beyond its words at 17/16 a word; a
+  chopped burst about 6 cycles a window beyond its words and its CPU window, the CPU window reaching no further than 32
+  cycles a word of the DMA window (rows with CPU windows of 32, 64 and 128 cycles for one-word DMA windows all take
+  about 40 cycles a word); the RAM loop 16 cycles an iteration, and 1.598 times that under a never-ending chain.
+- **Referee:** not consulted. **Witnesses:** none run (their TTY cannot be read, `Diamond_Native.md` §11.15).
+- **Conclusion** [C, fitted]: 10 cycles between blocks and between nodes, 4 of a node's own, a chopped window's CPU
+  window held to 32 cycles a word of the DMA's window plus 6; a RAM store drains in 8 cycles, and a load waits for the
+  whole queue. Measured: `chopping`'s 130 rows within 10.5% of the console's, 129 within 10%; `chain-looping`'s within
+  6.2%. **Open**: these are fits to two programs, not rules the documents give, and the drain's 8 cycles cannot be
+  divided between the store and the load that follows it from one loop. A program of the project's own that times
+  stores in bursts of one to eight, a load of the stored and of another address after each, and a chain's slowdown
+  of a cached loop against an uncached one, run on a console, separates them.
+- **Depends on it:** every program that loads after storing, and the CPU's pace beside DMA.
+- **Pinned by:** ps1-tests' `dma/chain-looping` graded against its log (10%); `a_gpu_list_runs_node_by_node_and_flags_its_end`.
+- **Implemented in:** `diamond: the bus and the machine of stage 3`.
+
+### D-6. Timer sync mode 2 reads zero outside the blank, where psx-spx says it pauses
+
+- **Opened:** 2026-10-11, at stage 3, by the console's `timers` log.
+- **Documents read:** psx-spx `6d7d1bc`, "Timers": mode 2, "Reset counter to 0000h at Hblank(s) and pause outside of
+  Hblank".
+- **Test program:** ps1-tests' `timers` (its source read in D-0's second step) and its console log: in every
+  resolution, the mode-2 rows with the system clock read 0 between hblanks and count only within them (36, 159, 282,
+  405, 528, then 0 at 320 pixels); a counter that paused outside the blank would hold the count it reached, about 543
+  cycles' worth.
+- **Referee:** not consulted. **Witnesses:** none.
+- **Conclusion:** the counter is reset at the blank's end as well as its start, so it counts within the blank and
+  reads zero outside; measured on the console's log, argued for timer 1's vblank by analogy [A]. A second reading of the
+  same log: **the reset's two-cycle hold is of the system clock only** [A]; applied in ticks of a slower source it
+  swallowed one hblank in each frame's count (262 against the log's 263).
+- **Depends on it:** programs that measure the blank with mode 2.
+- **Pinned by:** ps1-tests' `timers` graded against its log (the hblank row exactly);
+  `system_clock_over_8_and_a_stopped_timer_2`.
+- **Implemented in:** `diamond: the bus and the machine of stage 3`.

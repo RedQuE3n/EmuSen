@@ -20,8 +20,8 @@ The interface of `Beryl-HW/README.md`, which the Sony crates keep unchanged:
 
 - **A bus trait in the processor's own terms**, which the core implements: the R3000A's instruction fetches, its data
   reads and writes by width (byte, halfword, three bytes within a word, word), the loads and stores that an isolated
-  cache takes instead of memory, its internal cycles, its interrupt request, and coprocessor 2's register transfers and
-  commands. The processor may read the bus's clock, never set it: the R3000A does, to time its multiplier.
+  cache takes instead of memory, its internal cycles, its interrupt request, coprocessor 2's register transfers and
+  commands, and since Diamond's stage 3 whether an access met no device, the bus error. The processor may read the bus's clock, never set it: the R3000A does, to time its multiplier.
 - **The bus owns the clock.** The processor reports every access and every internal cycle through the bus, which
   advances its own time and adds its wait states; the processor keeps no clock. One implementation serves a flat test
   bus and the console's bus alike (`Diamond_Plan.md` §5.1, §5.2).

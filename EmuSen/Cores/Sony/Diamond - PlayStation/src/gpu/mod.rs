@@ -67,8 +67,8 @@ pub fn length(command: u32) -> u8 {
 }
 
 impl Parser {
-    /// The next word's meaning, or None for a word that takes no place in the FIFO: a NOP, or one of GP0(E3h)..(E5h),
-    /// which act as they arrive (psx-spx "GP0(E3h..E5h) do not take up space in the FIFO").
+    /// The next word's meaning, or None for a NOP, which takes no place in the FIFO (psx-spx "GP0(00h)"); GP0(E3h) to
+    /// (E5h) go through it in order (Diamond_Disputes.md D-9).
     pub fn classify(&mut self, word: u32) -> Option<Word> {
         if self.parameters > 0 {
             self.parameters -= 1;
@@ -106,7 +106,7 @@ impl Parser {
         }
         let c = word >> 24;
         match c {
-            0x00 | 0x04..=0x1E | 0xE0 | 0xE3..=0xE5 | 0xE7..=0xEF => None,
+            0x00 | 0x04..=0x1E | 0xE0 | 0xE7..=0xEF => None,
             _ => {
                 let n = length(word);
                 self.command = word;
@@ -247,12 +247,7 @@ impl Gpu {
     /// A GP0 word at `now`; returns the cycle it was taken, later than `now` when the FIFO was full.
     pub fn gp0(&mut self, word: u32, now: u64, video: &Video) -> u64 {
         self.run(now, video);
-        let Some(kind) = self.tail.classify(word) else {
-            if (0xE3..=0xE5).contains(&(word >> 24)) {
-                self.env[(word >> 24) as usize - 0xE1] = word & 0x00FF_FFFF;
-            }
-            return now;
-        };
+        let Some(kind) = self.tail.classify(word) else { return now };
         let mut t = now;
         while self.len == FIFO_WORDS {
             let (_, arrived, _) = self.fifo[self.head];
@@ -456,6 +451,7 @@ impl Gpu {
             }
             0xE1 => self.set_e1(w),
             0xE2 => self.env[1] = w & 0x000F_FFFF,
+            0xE3..=0xE5 => self.env[(w >> 24) as usize - 0xE1] = w & 0x00FF_FFFF,
             0xE6 => self.env[5] = w & 3,
             _ => {}
         }

@@ -106,10 +106,13 @@ fn the_fifo_holds_what_arrives_while_a_command_draws() {
         g.gp0(w, 12, &v);
     }
     g.gp0(0xE300_0400, 12, &v);
-    assert_eq!((stat(&mut g, &v, 13), g.len, g.env[2]), (0, 3, 0x400), "a second rectangle waits; GP0(E3h) acts at once");
-    let done = g.busy_until;
-    g.gp1(0x0400_0002, &mut v, done);
-    assert!(g.status(&v, done) & 1 << 25 != 0 && g.len == 0, "the second taken when the first is spent");
+    assert_eq!((stat(&mut g, &v, 13), g.len, g.env[2]), (0, 4, 0), "a second rectangle waits, and GP0(E3h) behind it");
+    let first = g.busy_until;
+    g.gp1(0x0400_0002, &mut v, first);
+    assert_eq!((g.len, g.status(&v, first) >> 25 & 1), (1, 0), "the second rectangle taken as the first is spent, GP0(E3h) not yet");
+    let second = g.busy_until;
+    let dreq = g.status(&v, second) >> 25 & 1;
+    assert_eq!((g.len, dreq, g.env[2]), (0, 1, 0x400), "then GP0(E3h), and the FIFO empty");
 }
 
 #[test]

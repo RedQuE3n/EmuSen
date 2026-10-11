@@ -41,7 +41,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
             }
             if (parts.Length <= at) return "Usage: cov <cpu> on|off|clear|<addr> [<len>]";
 
-            bool coprocessor = cpu != null && cpu.Name != DebugCpus.MainName;
+            bool coprocessor = cpu != null && !DebugCpus.IsMain(target.DebugCpus, cpu);
             var coverage = cpu != null ? cpu.Coverage : target.Coverage;
             if (coverage == null)
             {

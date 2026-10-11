@@ -211,7 +211,7 @@ namespace EmuSen.DianaSh.DianaSh.Lib
         // Every core decides what one entry is; an NES nametable is not this shape - see §3.1a.
         string DecodeTilemapEntry(IDebugMemorySpace space, int address);
 
-        // Planar here, but nothing guarantees a future core's tiles are - see §3.1a.
+        // 64 palette indices, or none when the core decodes no tiles - see §3.1a.
         byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp);
 
         // Playback state keeps advancing; only the mix excludes it - see §3.1a.

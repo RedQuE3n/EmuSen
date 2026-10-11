@@ -938,6 +938,9 @@ register flow). A generic debugger shows memory, registers, disassembly, breakpo
 stack, coverage and the profile for any core that claims `DEBUG`, and a console's views come from its system pack in
 DianaSh (§8.2) or from a core's extension exports. §15 Q10 decided that views do not enter v1.0.
 
+What the Rust cores publish against their C# counterparts, item by item with the route each would take, is §30.6
+(2026-10-10); `cpu` as the first processor machine info lists is §30.1.
+
 ### 6.15 The status-code space
 
 The bands of `EmuSen_NativeCores.md` §3.3 are **In**, fixed for major 1: −1 to −8 the state crate's; −9 to −255 the
@@ -2745,6 +2748,189 @@ The runner (`TestRomEngines.cs`) now leaves views out. Marking it in the descrip
 the document valid against the schema); Nephrite's `the_processors_and_their_buses_reach_the_host` (its two buses, and
 only they, views and read-only); WiseMan's `NephriteTests.The_stub_runs_each_system_through_the_generic_runner` (the
 runner's snapshots without the two buses, on all three systems).
+
+---
+
+## 30. The debug surface as the golden corpus found it, 2026-10-10
+
+DianaSh's golden corpus (`EmuSen_DianaSh.md` §13.4) recorded, besides the shell's own defects, three findings about
+the cores as the shell shows them: the Rust cores publish less than the C# ones (19), Nephrite's main processor is
+not reached by the word every command uses for it and its `tile` faults (20), and `core` cannot load the Genesis (21).
+This section separates what in them was a defect, fixed here and each shown by a test that failed first
+(`CoreDebugViewTests`), from what is missing surface, inventoried in §30.6 and not built.
+
+### 30.1 The main processor, and why no surface was needed
+
+**The finding.** Every scoped command (`bp`, `cov`, `bt`, `step`, `profile`, `regs`, `disasm`, `eval`, `setreg`)
+takes the word `cpu` for the main processor, and decided both what `cpu` named and whether a processor was a
+coprocessor by the name `"cpu"` (`DebugCpus.MainName`). The C# cores name their main processor so; a v1 core names its
+processors as it likes, and Nephrite's 68000 is `m68k`. So `regs cpu` and `disasm cpu` refused on Nephrite, a 68000
+breakpoint was announced as a coprocessor's ("M68K breakpoint #1"), and `cop`, meant for a cartridge's coprocessor,
+named the 68000.
+
+**Where the fact already is.** Which processor is the main one is stated twice already, by position, in both surfaces
+that cross this boundary: machine info lists `processors` "main processor first" (§6.4), and `IDebugTarget.DebugCpus`
+is documented as "every separately-steppable processor, main CPU first". `CoreDebugTarget` keeps machine info's order,
+so on every v1 core the first `DebugCpu` is the main processor. Nothing had to be added to either surface; the shell
+had only to read the fact it was given instead of a name it assumed.
+
+**The options weighed.**
+
+| | Form | Cost | Verdict |
+|---|---|---|---|
+| a | The shell reads position: `cpu` names the first processor when none is called `cpu`, and "is a coprocessor" means "is not the first" | `DebugCpus`, three members; no surface changes | **Built** |
+| b | `CoreDebugTarget` renames processor 0 to `cpu` | the core's own name (`m68k`, which `cpus` lists and a player types) is lost, and every v1 core's processor is renamed by the host | rejected: it hides the core's statement rather than reading it |
+| c | A `main` flag on machine info's processors (an additive minor, §4.2) | a schema field, the crate, the host and every core | rejected: it restates what the order already says, and two statements of one fact can disagree |
+| d | A case for Nephrite in the shell | — | ruled out by the project's rule against per-core code above the ABI (§2.4) |
+
+**The mechanism.** `DebugCpus.Find(cpus, "cpu")` returns the processor named `cpu` if there is one, else the first;
+`DebugCpus.IsMain` compares a processor with the first by name (by name rather than by reference, since `MoonDebugTarget`
+builds its list anew on each read); `DebugCpus.Coprocessor`, what `cop` means, is the first processor after the main
+one that is not the SPC700. `bp`, `bt`, `cov` and `profile` call `IsMain` where they compared the name. On every C#
+core and on VenusRT and MarsRT the first processor is `cpu`, so nothing they print changed. `man cpus` has the rule
+for a reader of the shell.
+
+**Shown by** `CoreDebugViewTests.On_Nephrite_the_word_cpu_names_the_68000`: `regs cpu` prints the 68000's registers
+and equals `regs m68k`, `disasm cpu 200 2` equals `disasm M68KBUS 200 2`, `bp m68k add 302` is a plain breakpoint and
+`bp cop add 10` the Z80's. Before the change the first assertion failed with "No debug CPU named 'cpu' on this
+Nephrite. Available: m68k, z80."
+
+### 30.2 The first snapshot: MoonRT and MercuryRT at frame 0, and a v1 core's empty registers
+
+**The finding.** After two frames, `summary` on MoonRT and MercuryRT reported frame 0 and the registers of the reset
+state (MoonRT `S=FD PC=8000`, MercuryRT `SP=FFFE PC=0100`), where Moon and Mercury reported frame 2 and `PC=B454`,
+`PC=0AF2`; `regs` showed the same stale values. On VenusRT and Nephrite `regs` printed its heading and no registers,
+though `cpus` listed `regs` among what the main processor supports.
+
+**The cause, one in two shapes.** A debug target's views are `PollingProvider`s: a snapshot, republished by
+`RefreshProviders`, which a frontend calls after every frame (§3.66.5 of the debugging reference). Each provider is
+built with an initial value so that it is "never nothing before the first Refresh", and every C# target reads that
+initial value from its live core when it is made. Two targets did not:
+
+- **MoonRT and MercuryRT** show their machine through a C# mirror (`Moon_Native.md` §2.4, `Mercury_Native.md` §8.3),
+  which is loaded from the Rust core's state only when the target refreshes. Made after two frames, the target took
+  its first snapshot from a mirror still holding the state of the load. `summary`, which reads the mirror directly, read
+  the same. Nothing was wrong with the state: one `RefreshProviders` brought every view up to frame 2.
+- **`CoreDebugTarget`**, every v1 core's target, gave each register provider an empty initial value, so until the
+  first refresh a processor had no registers at all.
+
+The corpus builds its target after the frames and never refreshes, as a host attaching a debugger to a running game
+does before its next frame, so it recorded both.
+
+**The change.** `MoonDebugTarget` and `MercuryDebugTarget`, when made over a host (that is, over a mirror), refresh
+the mirror before taking their first snapshots. `CoreDebugTarget` reads each processor's registers once when it makes
+the provider, as the C# targets do. The two summaries print the host's frame count (`FrameCount`, the engine's) rather
+than the mirror's, which after a refresh is the same number.
+
+**Shown by** `MoonRT_shows_the_frame_and_registers_Moon_shows_and_names_itself` and
+`MercuryRT_shows_the_frame_and_registers_Mercury_shows` (the summary, but for the engine's name and MercuryRT's
+buffered-audio count, and the whole of `regs`, equal to the C# core's on the same image after the same two frames),
+and `A_v1_target_made_after_two_frames_shows_their_registers` (Nephrite's 68000 registers present before any refresh
+and unchanged by one). All three failed before the change.
+
+**What this means for finding 19.** "VenusRT publishes no CPU registers" was this defect, not a missing surface: v1
+carried them (`debug_registers`, `DEBUG_REGISTERS`), and `regs` on VenusRT now prints the 65816's ten. It is removed
+from §30.6's inventory.
+
+### 30.3 MoonRT's name
+
+`MoonRT` names itself "Moon" in `summary` because the summary is the C# target's, over the mirror, and its first line
+was written for Moon. MercuryRT's target had corrected the same line by replacing the text of its output. Both hosts
+now pass the engine's name (`MoonDebugHost.Engine`, `MercuryDebugHost.Engine`), the summary prints it, and the text
+replacement is gone. Shown by the MoonRT test of §30.2, whose first line is now `NES (MoonRT) - frame 2`.
+
+### 30.4 `tile` on a core that decodes no tiles
+
+`tile` read 64 pixels from whatever `DecodeTilePixels` returned. `CoreDebugTarget` returns none, since tiles are a
+console-shaped view and v1 carries none (§6.14, §15 Q10), so `tile` failed with the platform's "Index was outside the
+bounds of the array" on every v1 core; the corpus met it on Nephrite. The interface now says that an empty answer
+means the core decodes no tiles, and `tile` refuses with "<core> decodes no tiles, so there is nothing to draw". Shown
+by `Tile_on_a_core_that_decodes_none_says_so`. The fault was the shell's reading of a legitimate answer, not the core's.
+
+### 30.5 The Genesis in `core`'s registry
+
+`core <name> <path>` checks its name and the file's extension against `CoreCatalog.Registry`, which was a literal of
+the nine names of the four C# cores. A console that only a discovered v1 engine runs, the Genesis, has a catalog row
+(`DiscoveredRow`, built from its system pack) and appears in every other list, but not there, so `core genesis x.md`
+answered "unknown core". The registry is now built where the catalog builds its other lists (`CatalogLists`, made
+again whenever discovery scans again): the C# cores' names as before, and for each discovered console its own name and
+its engine's, lowercased, so the Genesis is reached as `genesis` and as `nephrite`, as the N64 is as `n64` and `mars`.
+A name with a space in it (no console has one today) is left out, since `core` takes one word. The list therefore has
+one owner, discovery and the system pack, and a console added to `SystemPacks` with an engine reaches `core` with no
+edit here. Shown by `Core_takes_the_Genesis_by_its_name_and_its_engines`; `CoreRegistrationGolden.txt` gains the two
+rows in both of its sections.
+
+### 30.6 What the C# cores publish that the Rust ones do not: an inventory
+
+*Read from the code and the corpus at 88bb936b. Nothing here is built. A size is a rough count of new code: S under
+about 100 lines, M about 100 to 400, L more.*
+
+The routes an item could travel by are four, in order of preference, since each later one widens a stable surface:
+
+- **host**: `CoreDebugTarget` or the C# shim composes it from what v1 already carries; no surface changes.
+- **pack**: the console's system pack in DianaSh (§8.2) decodes it from v1 memory spaces, a console fact applied to
+  data any engine of the console exposes; no ABI change.
+- **space**: the core exposes state it holds as one more memory space, read-only, a view where it holds nothing of its
+  own (§29); a change to the core and its machine info, none to the ABI.
+- **ext**: an extension export (§4.7), or an additive minor of v1 (§4.2) where every engine would want it.
+
+**VenusRT against Venus.** VenusRT is reached through `CoreDebugTarget`, which publishes spaces, processors, registers,
+disassembly, breakpoints, coverage, the call stack, watches on reported stores and mutes. Venus's `SnesDebugTarget`
+publishes, beyond those:
+
+| # | What Venus publishes | Command | Route | Size |
+|---|---|---|---|---|
+| 1 | Video (PPU) registers, as last written | `regs` | space: a view of the PPU's latched registers; pack names them | M |
+| 2 | Sound registers (SPC700 timers and ports, S-DSP registers) | `regs` | space: an S-DSP register space; the SPC700's ports are in APURAM | M |
+| 3 | A cartridge coprocessor's registers in the combined view | `regs` | host: processors after the second are already published with registers (`regs sa1` works); `CoreDebugTarget.CoprocessorRegisters` would show them | S |
+| 4 | Palettes | `pal` | pack: CGRAM is a v1 space | S |
+| 5 | Tiles, tilemaps, the tile sheet and palette swatch | `tile`, `tilemap` | pack: VRAM and CGRAM are v1 spaces; the bit-plane formats are console facts | M |
+| 6 | Sprites | `sprites` | pack over OAM, with OBSEL from item 1 | S, after 1 |
+| 7 | Audio channels: each voice's state, envelope stage and key-on history | `channels` | space for the registers (item 2); ext for the envelope state the DSP holds internally | M |
+| 8 | DMA channels | `dma` | pack: `$4300`-`$437F` as last written are already in VenusRT's `IO` space | S |
+| 9 | The DMA transfer log | `dma log` | ext: a ring of transfers, drained as `debug_writes` is | M |
+| 10 | Interrupt vectors | `vectors` | pack: the vector addresses are the 65816's, read through `CpuBus` | S |
+| 11 | Physical address of a CPU address | `addr` | ext: the mapping is the cartridge's, which only the core knows in general | S |
+| 12 | Hardware break conditions (STP, WDM, BRK, COP, PPU access while rendering, auto-joypad read) | `bp when` | ext, or an additive minor: a condition list in machine info and a call to arm them; `debug_run_frame` already reports a stop's kind | M |
+| 13 | Register writes | `setreg` | additive minor: `debug_set_register`, beside `debug_registers` | S |
+| 14 | 65816 operand-width hints | `disasm … m16 x8` | additive minor: hints to `debug_disassemble`; or none, if the core decodes with the live M and X flags | S |
+| 15 | Expression symbols beyond the registers: flags, scanline, cycle, operand address, stack depth | `eval` | pack for the flags (bits of P); host for stack depth; ext or a timing view for scanline and cycle | S |
+| 16 | Coprocessor register history | `cophist` | ext: a ring per coprocessor (`IHistoricalCoprocessorTarget`) | M |
+| 17 | Coprocessor register flow | `copflow` | ext: named in §6.14 as an extension | M |
+| 18 | Read and write counters per address | `counters` | ext for reads; stores are already reported for spaces flagged `reports_stores` | M |
+| 19 | Freezes | `freeze` | host: a write after each frame through `space_write`, as cheats are applied | S |
+| 20 | Per-subsystem load bars | `coretop` | host: from `phases`, which VenusRT does not yet claim (`PHASES`) | S |
+| 21 | A summary beyond engine, system and frame | `summary` | host, composed from the items above | S |
+
+Twenty-one items: four need only the host (3, 19, 20, 21), six are system-pack work over spaces v1 already carries
+(4, 5, 6, 8, 10, 15), two are new spaces in the core (1, 2), and nine would widen a surface (7, 9, 11, 12, 13, 14, 16,
+17, 18), three of them most naturally as additive minors of v1 (12, 13, 14) and six as extensions. Counted at the
+sizes above, roughly 3,000 lines: about a fifth in the SNES system pack, which a second SNES engine would reuse, and
+most of the rest in the nine that widen a surface. The CPU registers, listed in finding 19, were a defect and are
+fixed (§30.2).
+
+**MoonRT against Moon, and MercuryRT against Mercury.** Both Rust cores are shown through their C# core's own target
+over a mirror, so every view Moon and Mercury publish is published for them, refreshed from state. One difference
+remains, and it is a policy rather than a missing surface:
+
+| # | What the C# core publishes | Command | Why the Rust core does not | Route | Size |
+|---|---|---|---|---|---|
+| 1 | The call stack from the start of the run | `bt`, `profile` | `NativeDebugBridge` records calls only on an observed frame, one on which something is armed: a breakpoint, coverage, profiling, or a watch once a target listens. A plain frame runs unobserved, at full speed, and its calls are not recorded. Moon and Mercury record every call, observed or not. After two plain frames the C# `bt` shows `#0 $008000 <- BRK from $00BFFA` (Moon) and `#0 $000038 <- call from $008000` (Mercury); the Rust shows an empty stack | host: v1 carries the calls (`debug_calls`, `DEBUG_STACK`); recording them whenever a target is attached would make every frame with a debugger attached an observed one, whose cost has not been measured | S, with a measurement |
+
+The same rule holds for every v1 core, VenusRT and Nephrite among them: `CoreEngine` runs a plain `advance` unless
+its bridge is armed. That is one item for each of MoonRT and MercuryRT. It is a choice between the debugger's completeness and the frame's speed, so it is
+the tester's to make, not a defect to fix.
+
+**MarsRT against Mars.** The same members are published, through `MarsRtDebugTarget`; the corpus differs only in the
+summary's second line (Mars prints the ROM's title and byte order). Nothing is inventoried.
+
+**Nephrite** has no C# counterpart, so nothing is measured against one. It publishes what `CoreDebugTarget` publishes;
+the Genesis's own views (VDP registers, sprites, palettes, the YM2612's channels) would take the routes above.
+
+**Headline.** 23 items in all: 21 for VenusRT, one each for MoonRT and MercuryRT, none for MarsRT. Of the 23, the
+host could carry six, a system pack six, the cores two as new spaces, and nine would widen a surface, three of them as
+additive minors of v1. Before any is built, each takes the evaluation the project asks of a feature that would widen a
+stable surface: whether it is an extension, a module or a component of its own, and why.
 
 ---
 

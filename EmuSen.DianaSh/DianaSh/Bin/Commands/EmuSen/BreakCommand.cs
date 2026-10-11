@@ -57,7 +57,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 
             string sub = parts[at].ToLowerInvariant();
             string addrArg = parts.Length > at + 1 ? parts[at + 1] : string.Empty;
-            bool coprocessor = cpu != null && cpu.Name != DebugCpus.MainName;
+            bool coprocessor = cpu != null && !DebugCpus.IsMain(target.DebugCpus, cpu);
             string scope = coprocessor ? $"{cpu!.Name.ToUpperInvariant()} breakpoint" : "Breakpoint";
 
             switch (sub)

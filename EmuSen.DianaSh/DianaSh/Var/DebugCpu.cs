@@ -47,16 +47,20 @@ namespace EmuSen.DianaSh.DianaSh.Var
     {
         public const string MainName = "cpu";
 
+        // `cpu` is the main processor, the first listed, whatever the core names it - see `man cpus`.
         public static DebugCpu? Find(IReadOnlyList<DebugCpu> cpus, string name)
-            => cpus.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+            => cpus.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))
+            ?? (cpus.Count > 0 && string.Equals(name, MainName, StringComparison.OrdinalIgnoreCase) ? cpus[0] : null);
+
+        public static bool IsMain(IReadOnlyList<DebugCpu> cpus, DebugCpu? cpu)
+            => cpu != null && cpus.Count > 0 && string.Equals(cpu.Name, cpus[0].Name, StringComparison.OrdinalIgnoreCase);
 
         public static bool IsScopeWord(IReadOnlyList<DebugCpu> cpus, string word)
             => Find(cpus, word) != null || string.Equals(word, "cop", StringComparison.OrdinalIgnoreCase);
 
         // What a bare `cop` means now that chips have names - see `man cpus`.
         public static DebugCpu? Coprocessor(IReadOnlyList<DebugCpu> cpus)
-            => cpus.FirstOrDefault(c => !string.Equals(c.Name, MainName, StringComparison.OrdinalIgnoreCase)
-                                     && !string.Equals(c.Name, "spc", StringComparison.OrdinalIgnoreCase));
+            => cpus.Skip(1).FirstOrDefault(c => !string.Equals(c.Name, "spc", StringComparison.OrdinalIgnoreCase));
 
         public static string NameList(IReadOnlyList<DebugCpu> cpus)
             => cpus.Count == 0 ? "(none)" : string.Join(", ", cpus.Select(c => c.Name));

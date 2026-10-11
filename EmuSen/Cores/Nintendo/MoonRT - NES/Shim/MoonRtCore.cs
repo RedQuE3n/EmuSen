@@ -131,7 +131,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         {
             Debug.Listen();
             return new(Mirror, () => (LastFrameMilliseconds, 0.0), new MoonDebugHost(
-                ReadSpace, WriteSpace, SyncMirror, ApplyCheats, () => TotalFrames, (_, _) => SyncMutes(), () => Pc));
+                ReadSpace, WriteSpace, SyncMirror, ApplyCheats, () => TotalFrames, (_, _) => SyncMutes(), () => Pc, "MoonRT"));
         }
 
         protected override uint MuteMask()

@@ -1086,6 +1086,14 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    Decodes and prints one 8x8 tile's pixels as an ASCII grid of hex nibbles\n" +
                 "    (or '.' for a transparent/zero pixel). <bpp> meaning is core-specific -\n" +
                 "    2/4/8 bits-per-pixel on the SNES.\n\n" +
+                "    The decoding is the core's own (IDebugTarget.DecodeTilePixels), since a\n" +
+                "    tile's layout is the console's. A core that decodes no tiles answers\n" +
+                "    with no pixels, and 'tile' then says so and fails. That is every core\n" +
+                "    reached through core ABI v1 today: v1 carries no console views (the\n" +
+                "    tiles, sprites and palettes are extensions, EmuSen_CoreAPI.md §6.14),\n" +
+                "    so Nephrite and VenusRT refuse here. Until 2026-10-10 the command read\n" +
+                "    64 pixels from the empty answer and failed with the platform's\n" +
+                "    'Index was outside the bounds of the array'.\n\n" +
                 "EXAMPLES\n" +
                 "    tile VRAM 0 4",
 
@@ -2633,7 +2641,21 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "        disasm gsu                 disassemble from where the GSU is now\n\n" +
                 "    With no scope word every command means the main CPU, so nothing that\n" +
                 "    worked before needs rewriting. 'cop' is still accepted as an alias for\n" +
-                "    whichever cartridge coprocessor is present, from before chips had names.\n\n" +
+                "    whichever cartridge coprocessor is present, from before chips had names:\n" +
+                "    the first listed after the main processor that is not the SPC700.\n\n" +
+                "THE MAIN PROCESSOR\n" +
+                "    The main processor is the first one 'cpus' lists. The order is the\n" +
+                "    core's statement, not the shell's guess: IDebugTarget.DebugCpus is\n" +
+                "    documented as main CPU first, and a v1 core's machine info lists its\n" +
+                "    processors main processor first (EmuSen_CoreAPI.md §6.4). The word\n" +
+                "    'cpu' always names that processor, whatever the core calls it, so\n" +
+                "    'regs cpu' and 'disasm cpu' mean the same on every core; a core's own\n" +
+                "    name for it ('m68k' on the Genesis) works as well. Whether a scoped\n" +
+                "    command speaks of a coprocessor is decided by position too, not by the\n" +
+                "    name. Until 2026-10-10 both were decided by the name 'cpu', so on\n" +
+                "    Nephrite, whose 68000 is 'm68k', 'regs cpu' and 'disasm cpu' refused,\n" +
+                "    a 68000 breakpoint was reported as a coprocessor's, and 'cop' meant\n" +
+                "    the 68000.\n\n" +
                 "WHAT EACH CHIP SUPPORTS\n" +
                 "    Support is not uniform, because the hardware is not uniform, and 'cpus'\n" +
                 "    prints per chip what is actually wired rather than letting a command\n" +

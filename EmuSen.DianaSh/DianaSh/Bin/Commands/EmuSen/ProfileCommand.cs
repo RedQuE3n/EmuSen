@@ -36,7 +36,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
             var stack = cpu != null ? cpu.CallStack : resolved.CallStack;
             if (stack == null)
             {
-                return DianaShResult.Fail(cpu != null && cpu.Name != DebugCpus.MainName
+                return DianaShResult.Fail(cpu != null && !DebugCpus.IsMain(resolved.DebugCpus, cpu)
                     ? $"{cpu.Name} does not report a call stack, so it cannot be profiled - see `man cpus`."
                     : "This core does not report a call stack, so it cannot be profiled.");
             }

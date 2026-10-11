@@ -27,12 +27,16 @@ namespace EmuSen.Cores.Native
 
         private IReadOnlyList<CoreProcessor> Processors() => _engine.IsRomLoaded ? _engine.Machine.Info.Processors : Array.Empty<CoreProcessor>();
 
-        private IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> RegistersOf(CoreProcessor p) =>
-            new PollingProvider<IReadOnlyList<DebugRegisterValue>>(() =>
+        // Read once at creation, as every C# target's snapshot is, so a target made after N frames shows them - see EmuSen_CoreAPI.md §30.2.
+        private IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> RegistersOf(CoreProcessor p)
+        {
+            IReadOnlyList<DebugRegisterValue> Read()
             {
                 long[] values = _engine.IsRomLoaded ? _engine.Machine.Registers(p.Id) : Array.Empty<long>();
                 return p.Registers.Select((r, i) => new DebugRegisterValue(r.Name, i < values.Length ? (ulong)values[i] : 0, r.Bits)).ToArray();
-            }, Array.Empty<DebugRegisterValue>());
+            }
+            return new PollingProvider<IReadOnlyList<DebugRegisterValue>>(Read, Read());
+        }
 
         public string CoreName => _engine.CoreName;
         public long FrameCount => _engine.TotalFrames;

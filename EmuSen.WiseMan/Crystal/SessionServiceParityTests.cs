@@ -461,7 +461,7 @@ namespace EmuSen.WiseMan.Crystal
                     list.GetProperty("code").EnumerateArray().Select(e => (e.GetProperty("id").GetUInt32(), e.GetProperty("address").GetUInt32(), e.GetProperty("end").GetUInt32(),
                         e.GetProperty("enabled").GetBoolean(), e.GetProperty("hits").GetInt64(), Str(e, "condition"), Str(e, "log"))));
                 Assert.Equal(bp.GetDataBreakpoints().Select(b => (b.Id, b.Space, b.Value, b.OnRead, b.ChangedOnly)),
-                    list.GetProperty("data").EnumerateArray().Select(e => (e.GetProperty("id").GetInt32(), e.GetProperty("space").GetString(), e.GetProperty("value").GetInt32(),
+                    list.GetProperty("data").EnumerateArray().Select(e => (e.GetProperty("id").GetInt32(), e.GetProperty("space").GetString()!, e.GetProperty("value").GetInt32(),
                         e.GetProperty("on_read").GetBoolean(), e.GetProperty("changed_only").GetBoolean())));
                 Assert.Equal(bp.GetForbidRanges().Select(f => (f.Id, A(f.Address), A(f.EndAddress))),
                     list.GetProperty("forbid").EnumerateArray().Select(e => (e.GetProperty("id").GetInt32(), e.GetProperty("address").GetUInt32(), e.GetProperty("end").GetUInt32())));
@@ -590,7 +590,7 @@ namespace EmuSen.WiseMan.Crystal
                 Status(C.Out("watch_summary", (o, n) => T->watch_summary(X, 0, 9999, o, n)).Status, SessionAbi.NoSuchId);
                 Ok(C.Call("watch_remove", () => T->watch_remove(X, 0, (uint)id)));
                 Ok(C.Call("watch_remove", () => T->watch_remove(X, 0, (uint)memberId)));
-                Assert.Empty(_t.Watches.GetWatches().Where(w => w.Id == id || w.Id == memberId));
+                Assert.DoesNotContain(_t.Watches.GetWatches(), w => w.Id == id || w.Id == memberId);
                 Status(C.Call("watch_remove", () => T->watch_remove(X, 0, (uint)id)), SessionAbi.NoSuchId);
             }
 

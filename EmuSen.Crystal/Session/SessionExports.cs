@@ -549,7 +549,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
-                return Copy(B(ctx).Change().LabelLoad(s, Text(text, text_len), o == null ? -1 : (long)Math.Min(n, (nuint)long.MaxValue)), o, n);
+                return Copy(B(ctx).Change().LabelLoad(s, Text(text, text_len), o == null ? -1 : (long)Math.Min((ulong)n, (ulong)long.MaxValue)), o, n);
             }
             catch (Exception e) { return Fail(e); }
         }

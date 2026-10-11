@@ -132,6 +132,8 @@ The two CPUs talk over a symmetric pair of registers: each side has a control re
 
 Power-on value is `$20`: **the SA-1 boots held in reset and does nothing until the game releases it.** The `1 -> 0` edge on bit 5 is the boot handshake — it resets the SA-1 CPU, which then fetches its reset vector from `CRV` (`$2203/4`) and starts running. `RDYB` parks the CPU *without* resetting it, so releasing it resumes where it stopped.
 
+The reset loads no stack pointer: as WDC's datasheet gives it, its three stack cycles take S down by three within page 1, so an SA-1 released from `$01FF` starts at `$01FC`, as a console shows. The processor runs its reset once when it is built, from the power-on SL of `$02`, so the held SA-1 shows `$01FF` and the first release `$01FC` (`VenusRT_Disputes.md` D-49).
+
 ### 4.2 `$2209` SCNT — the SA-1's control over the S-CPU
 
 Bit 7 requests an IRQ to the S-CPU, bits 5/4 enable the NMI/IRQ vector overrides below, bits 3-0 are the message back.

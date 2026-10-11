@@ -3038,9 +3038,13 @@ Two findings came from them.
   frozen at `$AB` left it at `$B6` after two frames. Every other observed store already stored first; the three WRAM
   paths now do too, in a commit of its own with `LabelFreezeCounterTests.A_frozen_address_holds_against_the_game_writing_it`,
   which failed before it.
-- **The two SA-1s start with different stack pointers**: `$01FF` on C# Venus and `$01FD` on VenusRT once the SA-1 is
-  released. That is reset state, not a view, and is recorded here rather than resolved; the SA-1 test compares PB, PC,
-  A, X, Y and P and leaves S out.
+- **The two SA-1s started with different stack pointers**: `$01FF` on C# Venus and `$01FD` on VenusRT once the SA-1
+  was released. That is reset state, not a view, and was settled as a dispute (`VenusRT_Disputes.md` D-49). C# Venus
+  loaded `$01FF` at every reset, where the datasheet's reset makes three stack cycles and loads nothing; a console
+  photographed by absindx's `SA1RamProtectionTest` shows the SA-1 restarting from `$01FF` at `$01FC`, so C# Venus
+  now subtracts three. VenusRT's SA-1 started from SL `$00`, an undefined power-on value; both engines now take
+  `$FF`, the same console's reading at the first release, which changes no golden output and no picture or state of
+  the library's SA-1 games. Both SA-1s now start at `$01FC`, and the SA-1 test compares S again.
 
 **What the tests cannot show.** Agreement between the two engines' views over equal memory shows the pack decodes as
 C# Venus does, not that either decodes as the hardware does; the decodings were checked against fullsnes where it
@@ -3206,6 +3210,29 @@ Without a probe folder the two fast-path conditions are skipped.
 On Donkey Kong Country after 300 frames (2026-10-10): VenusRT's tile sheet takes 8–12 ms, since the pack reads VRAM's
 65,536 bytes one `space_read` at a time through `IDebugMemorySpace`; a refresh of every provider takes about 0.1 ms;
 the DMA table 0.01 ms.
+
+**The tile sheet now costs one `space_read`.** v1 already reads a space as a block (`emusen_core_space_read` takes a
+length), so no surface was needed. What was per byte is the host's: `IDebugMemorySpace` has only a one-byte `Read`,
+and each call through `CoreDebugTarget` cost a size query and a name lookup as well as the call itself. The pack's
+four whole-space views (palettes, swatch, tile sheet and DMA channels) are now given the spaces through
+`CoreDebugTarget.ViewSpaces`. There, a space without side effects is copied whole by one `space_read` the first time
+the view reads it, and a space with side effects stays live. The copy is made fresh for each call, so a view never
+sees an earlier frame. Nothing widened: neither `IDebugMemorySpace` nor `ISystemDebugViews` changed, and the pack
+still reads byte by byte from an array. One cost follows from the design. A view that read a few bytes of a large space
+would pay for copying all of it. Today's views read whole spaces of at most 64 KiB, and a new view that does not
+should be given its own route.
+
+Measured on 2026-10-10 on the same game and frame, 40 calls each after five warm-up sheets, with an identical sheet
+(SHA-256 prefix `5FCF820D7A9FBB99` both times):
+
+| View | Before (min / median / max) | After |
+|---|---|---|
+| Tile sheet | 7.49 / 8.37 / 9.47 ms | 1.35 / 1.36 / 2.09 ms |
+| Palette swatch | 0.18 / 0.22 / 0.51 ms | 0.13 / 0.17 / 0.33 ms |
+| DMA table | 0.009 / 0.010 / 0.54 ms | 0.003 / 0.003 / 0.06 ms |
+| Every provider's refresh | 0.058 / 0.059 / 0.46 ms | 0.012 / 0.013 / 0.13 ms |
+
+What remains of the sheet is the decode of 2,048 tiles into a 512 KiB RGBA buffer, which the C# engine pays as well.
 
 ### 31.6 One owner: C# Venus reads the same decoders
 

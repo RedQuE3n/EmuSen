@@ -2317,7 +2317,8 @@ line travel in the `Coprocessor` group; a 128 KiB-board image skip-checks equal 
 - **absindx's `SA1RamProtectionTest`: passes all 222 tests**, with three rules from it beyond fullsnes (D-34): BW-RAM
   at the S-CPU's banks 40-4F only, nothing of the board in the LoROM SRAM banks, the SA-1 seeing BW-RAM in 40-5F,
   and the SA-1's reset clearing CIWP. Before them it stopped at tests 155 and 221. Its photograph of a console's
-  run shows stack pointers ($01FD, $01FC) that differ from VenusRT's and Mesen's, which are power-on values.
+  run shows stack pointers ($01FD, $01FC) that differ from VenusRT's and Mesen's, which are power-on values. The
+  SA-1's, at its first release and after a reset from $01FF, have matched it since D-49 (2026-10-10).
 - **`SA1VersionCodeTest`**: "FAILED" on VenusRT and on Mesen alike; $230E's value is VenusRT's choice (D-33).
 - **The games** (every tenth frame to 2,400, no input), all five SA-1 titles in the tester's library:
 

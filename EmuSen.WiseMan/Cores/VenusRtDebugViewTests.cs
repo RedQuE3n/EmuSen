@@ -277,13 +277,14 @@ namespace EmuSen.WiseMan.Cores
             string alone = Shell(rust, "regs sa1");
             Assert.Equal(alone[(alone.IndexOf('\n') + 1)..].Trim(), combined);
 
-            // S is left out: the two SA-1s start with S $01FF and $01FD, a difference of reset state, not of the view - see EmuSen_CoreAPI.md §31.3.
-            string[] shared = { "PB", "PC", "A", "X", "Y", "P" };
+            // S is the reset's: $01FF held, less the release's three stack cycles - see VenusRT_Disputes.md D-49.
+            string[] shared = { "PB", "PC", "A", "X", "Y", "S", "P" };
             var csharp = venus.CoprocessorRegisters.Current.Where(r => shared.Contains(r.Name)).ToDictionary(r => r.Name, r => r.Value);
             var native = rust.CoprocessorRegisters.Current.Where(r => shared.Contains(r.Name)).ToDictionary(r => r.Name, r => r.Value);
             Assert.Equal(shared.Length, csharp.Count);
             Assert.Equal(shared.Select(n => (n, csharp[n])), shared.Select(n => (n, native[n])));
             Assert.Equal(0x1234ul, native["A"]);
+            Assert.Equal(0x01FCul, native["S"]);
         }
 
         // A write the game makes each frame is undone by the frame's end on both, though VenusRT undoes it there and Venus at once.

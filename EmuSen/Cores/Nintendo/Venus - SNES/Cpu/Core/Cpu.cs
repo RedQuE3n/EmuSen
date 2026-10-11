@@ -34,7 +34,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         public ushort A;  
         public ushort X;  
         public ushort Y;  
-        public ushort S;  
+        // Power-on SL is $02, so the reset's three stack cycles leave S at $01FF - see VenusRT_Disputes.md D-49.
+        public ushort S = 0x0102;
         public ushort D;  
         
         public ushort PC; 
@@ -129,7 +130,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             X = 0x0000;
             Y = 0x0000;
             D = 0x0000;
-            S = 0x01FF; 
+            S = (ushort)(0x0100 | ((S - 3) & 0xFF));
             
             PB = 0x00;
             DB = 0x00;

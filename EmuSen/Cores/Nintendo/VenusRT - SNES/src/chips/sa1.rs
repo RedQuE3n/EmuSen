@@ -98,7 +98,8 @@ pub struct Sa1 {
 impl Sa1 {
     pub fn new(pal: bool) -> Sa1 {
         Sa1 {
-            cpu: Cpu::default(),
+            // Power-on SL is $FF, so the first release's three stack cycles leave S at $01FC as a console does (D-49).
+            cpu: Cpu { s: 0x01FF, ..Cpu::default() },
             iram: vec![0; 0x800].into(),
             clock: 0,
             holds: std::collections::VecDeque::new(),
@@ -1074,5 +1075,26 @@ mod tests {
             s.io_write(Side::Sa1, 0x2240 + x, [3, 0, 1, 2, 0, 0, 0, 1][x as usize], &rom, &mut bw);
         }
         assert_eq!((s.iram[0x100], s.iram[0x101]), (0b1010_0001, 0b1001_0000));
+    }
+
+    // D-49: a reset's three stack cycles take S down by three in page 1 and load nothing, from the power-on SL of $FF
+    // and from wherever S stood, which a console shows as $01FC both times (absindx's SA1RamProtectionTest).
+    #[test]
+    fn the_sa1_reset_takes_s_down_by_three() {
+        let mut s = Sa1::new(false);
+        let (mut rom, mut bw) = (vec![0xEAu8; 0x8000], vec![0u8; 0x2000]);
+        rom[..2].copy_from_slice(&[0x80, 0xFE]);
+        let release = |s: &mut Sa1, rom: &[u8], bw: &mut [u8]| {
+            for (r, v) in [(0x2203, 0x00), (0x2204, 0x80), (0x2200, 0x20), (0x2200, 0x00)] {
+                s.io_write(Side::Snes, r, v, rom, bw);
+            }
+            let target = s.clock + 1000;
+            s.run_until(target, rom, bw);
+        };
+        release(&mut s, &rom, &mut bw);
+        assert_eq!((s.cpu.pc, s.cpu.s), (0x8000, 0x01FC));
+        s.cpu.s = 0x01FF;
+        release(&mut s, &rom, &mut bw);
+        assert_eq!(s.cpu.s, 0x01FC);
     }
 }

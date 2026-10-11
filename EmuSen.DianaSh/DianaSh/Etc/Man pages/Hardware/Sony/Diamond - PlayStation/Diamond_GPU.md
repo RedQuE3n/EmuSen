@@ -335,7 +335,8 @@ up to the colour map the most pixels agree on; the count is the pixels off it:
   their arrival times and meanings, the tail's parse state, the command half received, an open transfer or polyline,
   the busy time and its carried fraction, the texture cache's tags and data, the CLUT cache, and the display's scan
   position; VRAM is the state's own block as before; the picture is not kept, and a state loaded between frames
-  re-reads it within the next frame [C]. **3,747,681 bytes**, pinned by `the_version_1_layout_is_pinned`.
+  re-reads it within the next frame [C]. **3,747,681 bytes**, pinned by `the_version_1_layout_is_pinned` (*version 2,
+  3,747,689 bytes, since stage 5: `Diamond_Native.md` §13.6*).
 - **Spaces** unchanged; `VRAM` is now the GPU's.
 - **Cost** [M, §15]: the frame time measured in `Diamond_Native.md` §12.
 

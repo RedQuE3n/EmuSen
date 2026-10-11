@@ -206,7 +206,8 @@ stage 2, whose R3000A block is 200 bytes, §10), the plan's
 foreign, of another version as a version, and a truncated one as truncated; a refused load changes nothing, the
 processor blocks being read into copies first. The layout is pinned by `the_version_1_layout_is_pinned`. The disc's
 identity (its hash and its number in a set, the plan's §4.7) is not in it until a disc is read (stage 7); no player
-has a Diamond state, so version 1 is redefined freely until the core is offered.
+has a Diamond state, so version 1 is redefined freely until the core is offered. *Since stage 5 (§13.6), version 2,
+the bus block carrying the GTE's deadline, pinned by `the_version_2_layout_is_pinned`.*
 
 ### 2.8 What was measured (2026-10-11)
 
@@ -750,7 +751,8 @@ for `timers`): all seven pass, `access-time` with 50 of 51 cells within 0.20 cyc
 
 **Bare-metal programs**: Peter Lemon's 72 programs, 120 frames each, Diamond's RAM against PCSX-ReARMed's from 10000h
 up [M]: **64 identical but for the 16 bytes above the initial stack, which PCSX-ReARMed's own kernel writes**; GTEAVSZ,
-GTENCLIP and Cube differ in the GTE's results (stage 5); DCTBlockDecodeCLUT4BPP and 8BPP in the MDEC's (stage 9);
+GTENCLIP and Cube differ in the GTE's results (stage 5; *at stage 5 the first two pass and Cube is found to use
+no GTE and to wait on the pad, §13.5*); DCTBlockDecodeCLUT4BPP and 8BPP in the MDEC's (stage 9);
 VBLANK, hit-green, PSXNICCC and ROOTEXMP in counters and buffers paced by the frame, which the two engines time
 differently (PCSX-ReARMed reports 60 Hz). The project's four programs run as §11.13 records.
 
@@ -885,3 +887,101 @@ gate was not run (no `EMUSEN_DIAMOND_FIRMWARE` named); the probe ran the three r
 - amidog's CPX and GPU tests cannot run without the pad.
 - Beetle PSX's pictures of Peter Lemon's programs are displaced by 150 to 160 lines and were not graded.
 - No program run here observes the texture cache's staleness.
+
+---
+
+## 13. Stage 5, the GTE (2026-10-11)
+
+The plan's §7 row 5: the GTE, exact with its timing. The engine's own record is `../BlackMoon-HW/BlackMoon_GTE.md`;
+this section says what changed for the machine and what the stage measured. Measured on 2026-10-11 on the desktop [M]
+unless marked.
+
+### 13.1 What was built
+
+- **`blackmoon-gte`**, built (`BUILT` true): the registers with their read-back quirks, the 22 commands with sf and lm,
+  MVMVA's every selection with the far colour's fault and the garbage matrix, FLAG with its summary bit, the UNR division
+  with its table, the cycle table, and an observer seam for the enhancement layer (`BlackMoon_GTE.md` §2–§9). The
+  transfers no longer return `NotBuilt`; the registers are behind the transfers (`registers()` for the state).
+- **The interlock in Diamond's bus**: `gte_ready`, the cycle the command in flight is done; every one of the five
+  coprocessor-2 calls waits for it, and a command sets it from the bus's clock after its fetch (`BlackMoon_GTE.md` §6,
+  D-13). **Nothing changed in `blackmoon-r3000`**: its `Bus` named the five calls from stage 1, and MFC2's and CFC2's
+  load delay, the CU2 check and the command of an instruction an interrupt pre-empts were already the processor's.
+- **`programs/gte-timing.s`**, the GTE's timing and hazards in five tables, and **`programs/gte-fuzz.s`**, 904 fuzzed
+  cases in the manner of ps1-tests' `gte-fuzz` (`BlackMoon_GTE.md` §7.3), each pinned by `tests/programs.rs`.
+- **WiseMan**: `Ps1Tests` gains `gte/test-all`, graded by its console log's two lines at frame 300.
+- The machine info's description names the GTE among what runs.
+
+### 13.2 The gate
+
+| Program | Result |
+|---|---|
+| ps1-tests `gte/test-all` | **1,150 of 1,150 bit for bit**, in the crate from its table and through Diamond on the open kernel by its TTY (`Passed tests: 1150`, `Failed tests: 0`) |
+| amidog `psxtest_gte` | **waits on the pad**: its menu is navigated with the D-pad (its readme); the pad is stage 6's, on branch `diamond-pad` |
+| `gte-fuzz` against the references | `gte-fuzz` itself starts on Start and reports by TTY, so the project's own `gte-fuzz.s` in its manner: **the 880 cases of the 22 commands identical with Beetle PSX, SwanStation and PCSX-ReARMed**; the 24 of six N/A numbers identical with Beetle PSX and different from the other two (D-16) |
+
+Four disputes: D-13 (the interlock, open), D-14 (the accumulators, settled by `test-all`), D-15 (the write hazards,
+open) and D-16 (the unlisted numbers, open), all in `BlackMoon_GTE.md` §12.
+
+**P8** (the plan's §13): "The GTE passes `test-all` and amidog's test bit for bit within its stage, with no more than two
+disputes." Not retired: the `test-all` half held within the stage; amidog's half waits on the pad; and the disputes are
+already four, so its count was wrong, though only D-14 concerns a result the gate grades, the other three timing and
+corners the gate does not reach.
+
+### 13.3 How the first build failed
+
+psx-spx's plainest reading missed 358 of `test-all`'s 1,150 cases; four readings found from the misses (IR saturated from
+the 32-bit MAC; the same in the depth cue; the 44-bit check after each addition; the accumulator wrapping at 44 bits)
+brought it to none. The order, the evidence for each and the table of what removing each rule costs are
+`BlackMoon_GTE.md` §5.2 and D-14.
+
+### 13.4 Timing, against the witnesses
+
+`gte-timing.s` [M]: on Diamond, a read at once after a command waits the command's cycles less one, a read N
+instructions later N fewer, and every coprocessor-2 access waits, the three writes included. Beetle PSX agrees on every
+count but AVSZ4's (5 where psx-spx gives 6) and holds the writes too; SwanStation counts one cycle more everywhere and
+holds the writes; PCSX-ReARMed times nothing. The writes' wait is a choice argued in D-13, and the boundary is open as
+D-2's is, until amidog's timing tests or a console.
+
+### 13.5 Peter Lemon's programs
+
+`GTEAVSZ` and `GTENCLIP` pass every row and draw their bundled pictures. `Cube`, counted at stage 4 among the programs
+differing in the GTE's results (§12.2), uses no GTE instruction: it waits for the pad buffer the kernel's pad driver
+fills, so it waits on the pad (`BlackMoon_GTE.md` §7.4).
+
+### 13.6 The state
+
+`DMND` **version 2** (decided 2026-10-11): the bus block gains `GteReady`, after `CpuBusy`, so a state taken while a
+command runs resumes with the processor still held; the `Gte` block is unchanged at 256 bytes (`BlackMoon_GTE.md` §4
+retires stage 1's forecast of it). **3,747,689 bytes**, pinned by `the_version_2_layout_is_pinned`; a version 1 state is
+refused as a version, as §2.7 provides.
+
+### 13.7 The cost
+
+[M, `examples/run`, 600 frames, three runs each, WiseMan at `bf297ca8` against this stage, built side by side]:
+
+| Program | Before (ms a frame) | After |
+|---|---|---|
+| `timers` | 6.33 | 6.23 |
+| `gpu/triangle` | 6.26 | 6.30 |
+| `gpu/rectangles` | 5.48 | 5.46 |
+| `gpu/bandwidth` | 8.01 | 7.90 |
+| Peter Lemon's `GTEAVSZ` (bare) | 6.14 | 6.18 |
+
+Each difference within the runs' own spread (0.4% to 7.2% between the fastest and slowest of three): the five calls' comparison against `gte_ready` costs nothing
+measurable, and the bench programs issue few commands. The commands themselves cost 3 to 114 ns each
+(`BlackMoon_GTE.md` §10); nothing allocates.
+
+### 13.8 Tests run (2026-10-11)
+
+`cargo test --release`: `blackmoon-gte` 9 with `EMUSEN_BLACKMOON_CORPUS` (`test-all`'s 1,150 cases among them);
+`diamond` 53 unit tests and 7 program tests (`gte-timing.s` and `gte-fuzz.s` added). `cargo clippy --release
+--all-targets` clean on both crates (Fedora's 1.98.1). `blackmoon-r3000` was not touched and its tests not rerun.
+WiseMan, under the test lock with `EMUSEN_DIAMOND_PS1TESTS`: `DiamondTests` 15 of 15, `gte/test-all` passing among
+ps1-tests' twelve TTY programs and every earlier program still passing; the player's-BIOS gate was not run (no
+`EMUSEN_DIAMOND_FIRMWARE` named). The rest of the blast radius was not rerun: no C# but `Ps1Tests`' data changed.
+
+### 13.9 What waits
+
+- On the pad (stage 6, `diamond-pad`): amidog's GTE test, with its timing tests, which grade D-13 short of a console;
+  `gte-fuzz` itself; Peter Lemon's `Cube`.
+- On a console (Q16): D-13's writes and boundary, D-15, D-16.

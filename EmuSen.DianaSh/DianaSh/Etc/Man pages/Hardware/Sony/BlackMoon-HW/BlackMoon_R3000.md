@@ -222,6 +222,8 @@ wait states (`README.md`). What the processor reports:
   equally, so the boundary is the reading's and stage 3 measures it (§9).
 - **Coprocessor 2's interlock is the core's**: the GTE returns a command's cycles and the core holds the next
   coprocessor 2 access through the bus's calls (`README.md`, "A coprocessor"). The processor does not count it.
+  *Since Diamond's stage 5 (2026-10-11)*: Diamond holds all five calls, the writes included, and the processor was not
+  changed for it (`BlackMoon_GTE.md` §2, §6, D-13).
 
 Not modelled, each [C, open until a test program shows it]: a second MULT or DIV issued while one is busy restarts the
 unit rather than waiting; MTHI and MTLO while it is busy write at once; psx-spx's note that HI and LO should not be

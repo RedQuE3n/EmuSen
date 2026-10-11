@@ -100,6 +100,24 @@ Diamond and side-loaded on the referees; each writes its results from 80100000h 
 and every referee was checked to have written that word. The GPU programs read VRAM back through GP0(C0h) into RAM, so
 that no referee need expose VRAM. The ps1-tests programs were run for their TTY on DuckStation and PCSX-Redux, and on
 Diamond on its open kernel. Diamond's figures below are its own runs (`examples/run`), pinned by `tests/programs.rs`.
+*Since 2026-10-11* five of ps1-tests' TTY programs (`timers`, `cpu/access-time`, `dma/chopping`, `gpu/bandwidth`,
+`dma/chain-looping`) also exist rewritten to record in RAM, `programs/timers.s` and `programs/records/`, so that every
+referee is graded on them (§4.10; `Diamond_Records.md`).
+
+### 2.5 Each run confined, and DuckStation's runs one at a time
+
+*Fixed 2026-10-11.* A DuckStation run's private message bus activates the portal and secret services
+(`xdg-desktop-portal-kde`, `ksecretd`) as children of its `dbus-daemon`; when the bus ends they are re-parented to
+systemd's per-user manager and stay, one pair a run [M: the driver as it was, run once, left `xdg-desktop-portal-kde`
+and `ksecretd` with that manager as their parent; two dozen such pairs from earlier runs were found running]. The driver now
+starts every referee, the libretro probe and PCSX-Redux included, in a transient user scope of its own
+(`systemd-run --user --scope`, unit `emusen-referee-<pid>-<referee>`) and stops the scope when the run returns, which
+ends whatever the run started wherever it was re-parented; after each of the rewrites' runs no process was left in any
+such scope and none of those services was new [M]. Two other faults of a shared machine were closed with it: DuckStation's
+runs take a lock on the cache's `duckstation.lock`, since they share one `settings.ini`, and each picks a free port for
+its GDB server, since with the fixed 2345 a run could read the RAM of another DuckStation started meanwhile [C, M: other
+runs were seen to start during this step's]. The pairs left by earlier runs were not stopped here; they are the
+tester's to stop.
 
 ## 3. Independence
 
@@ -192,8 +210,9 @@ The console's table against DuckStation's and PCSX-Redux's TTY [M] (cycles a loa
 | SPUCNT | 17.99, 17.99, **38.94** | within 0.20, **36.07** | 21.4, 21.0, 82.4 | 3.0, 3.0, 6.0 |
 
 **What it shows** [A]. Neither referee models memory control as the console times it: of the 51 cells, DuckStation
-meets 11 within 0.2 cycles (25 within 0.5) and PCSX-Redux 11, the internal registers' three cycles, which it charges
-for every access [M]. The open SPUCNT 32-bit
+meets ~~11 within 0.2 cycles (25 within 0.5) and PCSX-Redux 11~~ *(recounted 2026-10-11, the hundredths read as
+printed, §4.10)* 36 within 0.2 cycles and PCSX-Redux 24, mostly the internal registers' three cycles, which PCSX-Redux
+charges for every access [M]. The open SPUCNT 32-bit
 cell (an address error's round trip through the kernel) reads 82.4 and 6.0 on them, 38.94 on the console. **Still
 open** for that cell and for register values other than the kernel's; the rule stays measured on the console log, and
 no referee bears on it.
@@ -313,6 +332,49 @@ seconds, and on PCSX-Redux every row in 58 to 7,257 hblanks against the console'
 **What it shows** [A]. No referee keeps the GPU busy after a transfer, and one (DuckStation) independently arrives at
 Diamond's busy marks, which supports the 117 rows they share and says nothing of the 13. **Still open**.
 
+### 4.10 ps1-tests' TTY programs as RAM records — `timers.s` and `records/`'s `access-time.s`, `chopping.s`, `bandwidth.s`, `chain-looping.s`
+
+*Added 2026-10-11.* The five rewrites of `Diamond_Records.md` hold, on Diamond, what the release programs print (that
+page's §2–§6), and on DuckStation and PCSX-Redux what those print there (its §7.1: `access-time` 51 of 51 cells on both,
+`chopping` 130 of 130 rows on PCSX-Redux and 109 of 130 on DuckStation, the rest ±4 cycles). Run on every referee, they
+grade for the first time Beetle PSX, SwanStation and PCSX-ReARMed on these programs [M; the tables are `Diamond_Records.md`
+§7.2]. Against the console's logs:
+
+| Log | Diamond | DuckStation | SwanStation | Beetle PSX | PCSX-Redux | PCSX-ReARMed |
+|---|---|---|---|---|---|---|
+| `timers`, the gate's 18 rows | 18 | 13 | 13 | 9 | 1 (stops in the target check, as its release does) | 2 |
+| `cpu/access-time`, 51 cells within 0.2 | 49 | 36 | 33 | 27 | 24 | 0 |
+| `dma/chopping`, 130 rows within 10% | 129 | 17 | 11 | 5 | 0 | 0 |
+| `dma/chopping`, busy marks | 117 | 117 | 117 | 117 | 60 | 19 |
+| `gpu/bandwidth`, 14 rows within 2% | 14 | not finished | 0 | 0 | 0 | 0 |
+| `dma/chain-looping`, 4 lines within 10% (words equal) | 4 (4) | 0 (4) | 0 (4) | 0 (4) | 2 (2) | 0 (2) |
+
+**What it shows** [A]. The new data bear on four entries, none of whose rulings change:
+
+- **D-4.** §4.3's counts read the release's `"%2-d"` hundredths as tenths ("7.9" is 7.09 cycles, not 7.9) [M: so read,
+  the same DuckStation TTY gives §4.3's 11 and 25]; read as the program prints them, as the TTY gate reads them,
+  DuckStation meets ~~11~~ **36** of the 51 cells within 0.2 cycles and PCSX-Redux ~~11~~ **24**,
+  the regions they miss being those memory control times (RAM, EXPANSION2 and 3, CD-ROM, SPU). The named SPUCNT 32-bit
+  cell now has referee readings on the same exception handler (the rewrite's own): Beetle PSX 38.09, Diamond 36.07,
+  DuckStation and SwanStation 82.04, against the console's 38.94 with Sony's. Still no referee models memory control as
+  the console times it, and the rule stays on the console's log.
+- **D-5.** Beetle PSX and SwanStation reproduce neither `chopping`'s cycles (5 and 11 rows within 10%) nor
+  `chain-looping`'s (Beetle no slower under a never-ending chain, SwanStation 5.6 times slower, as DuckStation). Still
+  open.
+- **D-6.** Of timer 0's ten sync-mode-2 rows, Diamond's alone read zero outside the blank and count within it, as the
+  console's do; Beetle PSX and PCSX-ReARMed count in every row, SwanStation and PCSX-Redux read zero in every row,
+  DuckStation zero in seven. Confirmed on the log, as before; no referee bears on it.
+- **D-11.** Beetle PSX and SwanStation mark `chopping`'s GPU busy on the same 57 rows as Diamond and DuckStation, those
+  whose blocks leave words unsent, so three lineages now agree on the 117 rows and none shows the 13. The release reads
+  the mark after `measure`'s `ExitCriticalSection`, on Diamond's open kernel 2,141 cycles or more after the channel ends
+  (`Diamond_Records.md` §8.2), so the console's 13 marks say its GPU is busy at least that long after, on a retail
+  BIOS's timing. Still open.
+
+D-0 gains one reading: Beetle PSX's `timers` record on a PAL console counts a frame on the system clock at 112,560
+against the log's 112,531 (Diamond 112,557, DuckStation 112,633), but a frame on the dot clock at 112,184 against
+112,031, as DuckStation's 112,196 does: its dot clock on a PAL console is not the console's. The line's ruling rests on
+the frame's cycles, which it meets; its standing as the strongest witness is for the line, not the dot clock.
+
 ## 5. What changed in Diamond
 
 Each a writer's step citing its entry, after the rulings above:
@@ -336,16 +398,22 @@ The other programs are pinned on Diamond as it reads them: `gpustat_while_each_s
 | Console log or picture | Diamond | DuckStation | PCSX-Redux | Beetle PSX | SwanStation | PCSX-ReARMed |
 |---|---|---|---|---|---|---|
 | `timers`, a PAL-clocked frame (571,324 ± 6) | 571,332 | 571,416 | no region clock | 571,334 | 571,425 | no region clock |
-| `timers`, mode 2 rows | exact | free-running | zero | no TTY | no TTY | no TTY |
-| `cpu/access-time`, 51 cells within 0.2 | 50 | 11 | 11 | no TTY | no TTY | no TTY |
-| `dma/chopping`, 130 rows within 10% | 129 | 17 | 0 | no TTY | no TTY | no TTY |
-| `dma/chopping`, busy marks | 117 | 117 (the same) | 60 | no TTY | no TTY | no TTY |
+| `timers`, mode 2 rows | exact | free-running; zero in 7 of 10 by the record | zero | counting, by the record | zero, by the record | counting, by the record |
+| `timers`, the gate's 18 rows (the records, §4.10) | 18 | 13 | 1, stopped | 9 | 13 | 2 |
+| `timers`, the target check's booleans | as the log | not | not reached | not | not | not |
+| `cpu/access-time`, 51 cells within 0.2 | 50 | ~~11~~ 36 | ~~11~~ 24 | 27, by the record | 33, by the record | 0, by the record |
+| `dma/chopping`, 130 rows within 10% | 129 | 17 | 0 | 5, by the record | 11, by the record | 0, by the record |
+| `dma/chopping`, busy marks | 117 | 117 (the same) | 60 | 117 (the same), by the record | 117 (the same), by the record | 19, by the record |
+| `gpu/bandwidth`, 14 rows within 2% | 14 | not finished | 0 | 0, by the record | 0, by the record | 0, by the record |
+| `dma/chain-looping`, 4 lines within 10% | 4 | 0 | 2 | 0, by the record | 0, by the record | 0, by the record |
 | `gpu/gpustat`, 12 readings | 12 | 9 | 4 | 6 | 9 | 3 |
 | ps1-tests' pictures | exact | not read | not read | not read | not read | not read |
 
 DuckStation and Beetle PSX are the strongest referees, each on its own subsystem: Beetle PSX on video timing,
 DuckStation on GPUSTAT; PCSX-Redux models almost none of the timing the logs measure [A]. Diamond's own fits score
-best on every log, which is expected of rules fitted to them and says nothing more [A].
+best on every log, which is expected of rules fitted to them and says nothing more [A]. *The records of 2026-10-11*
+(§4.10) leave the ranking as it was: Beetle PSX's frame cycles on a PAL console are the nearest the log's but its dot
+clock is not, and on the access times, the DMA's cycles and the drawing times no referee comes near the logs.
 
 ## 7. What was read for this page
 
@@ -366,13 +434,21 @@ environment, printing nothing, before every run removed it. The person who wrote
 `Diamond_References.md` §4's account of Beetle PSX's OpenBIOS run, and should not be a writer of the open BIOS (the
 plan's §1.3) [C, the tester's to confirm].
 
+*The records' step, 2026-10-11* (§2.5, §4.10): the referees' RAM through the driver; for DuckStation and PCSX-Redux the
+release programs' TTY from each program's heading on, which held PCSX-Redux's own report of an address error in
+`timers` and DuckStation's `VSync: timeout` lines from the release's library, and nothing of the BIOS's; the process
+table and the processes' cgroups, to find what runs left. What else was read is `Diamond_Records.md` §9.
+
 ## 8. Negative results
 
 - no$psx was not run: wine is not installed, and installing system packages was out of scope.
 - No referee exposes a console-faithful model of memory control, the write queue, the DMA's gaps, timer sync mode 2,
   or the GPU's busy time after a transfer (§4.3–§4.5, §4.9); those disputes stay on the console logs alone.
 - No referee times the multiplier the same way (§4.2).
-- DuckStation's `gpu/bandwidth` did not finish in 60 seconds; PCSX-Redux models no drawing time.
+- DuckStation's `gpu/bandwidth` did not finish in 60 seconds; PCSX-Redux models no drawing time. *2026-10-11:* neither
+  the release nor its record finished the first row (vramToCpu) on DuckStation in 300 seconds.
+- PCSX-Redux stops in `timers`' target check, the release and its record alike: its timer 2 passes the target, and the
+  test's table index with it, until a halfword store faults.
 - DuckStation cannot run on Qt's `offscreen` platform; it needs a compositor (§2.1).
 - PCSX-Redux stops producing frames partway through ps1-tests' `cpu/cop` (after its reserved-opcode case), so the
   driver also stops it after a wall-clock limit and keeps what it printed.

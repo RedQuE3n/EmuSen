@@ -118,7 +118,9 @@ them. No FPGA output exists yet, so no entry gains a verdict here and `Diamond_D
   printf. A black box shows no TTY, so either the project writes RAM-recording versions of them (as `gpustat.s` is of
   `gpu/gpustat`), or a harness-side program installs a TTY device of its own through the kernel's documented device
   calls before starting the test. The first keeps the BIOS untouched and is preferred [A]; it is a question for the
-  tester which, if either.
+  tester which, if either. *2026-10-11:* the first was done for `timers`, `cpu/access-time`, `dma/chopping`,
+  `gpu/bandwidth` and `dma/chain-looping` (`Diamond_Records.md`); §5's TTY-graded programs can be given to the harness
+  as those records.
 - **Laxer3a's units** need their top-level port declarations read when their harnesses are built (§4); nothing else.
 - **The simulation's cost** is unmeasured; a full system in GHDL is expected to be slow, so the BIOS's own boot before
   the PS-EXE starts may bound what runs.

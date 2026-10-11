@@ -13,11 +13,14 @@ REFEREE is `duckstation`, `pcsx-redux`, or a libretro core pinned in libretro-co
 probe's firmware folder; DuckStation and the libretro cores are given its folder, PCSX-Redux the file. --for is
 frames for PCSX-Redux and the libretro cores (counted from power-on, the BIOS's boot included; PCSX-Redux is stopped
 after 60 + N/20 seconds if a program stops its frames) and wall seconds for DuckStation, which runs unthrottled. --pal makes the referee a PAL console. ADDRESS is hexadecimal, WORDS decimal.
+Every run lives in a user scope of its own, stopped when it returns; DuckStation's runs take a lock and a free GDB port
+(Diamond_Referees.md §2.5).
 
 `fetch` downloads the two standalone releases pinned in psx-referees.sha256 into the cache, refuses any whose
 SHA-256 differs, unpacks them and prepares them to run headless (§2). Exit codes: 0 done, 1 a refused or failed
 run, 2 a usage error.
 """
+import fcntl
 import hashlib
 import os
 import re
@@ -105,7 +108,14 @@ def prepare_duckstation():
     (root / "bin/portable.txt").touch()
 
 
-def duck_settings(sysdir, pal):
+def free_port():
+    """A port no one listens on now, so that a run never reads another DuckStation's RAM (Diamond_Referees.md §2.5)."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def duck_settings(sysdir, pal, port):
     path = CACHE / "duckstation/squashfs-root/usr/bin/settings.ini"
     sections = {}
     order = []
@@ -120,7 +130,8 @@ def duck_settings(sysdir, pal):
             elif current and " = " in line:
                 k, v = line.split(" = ", 1)
                 sections[current][k] = v
-    wanted = {**DUCK_SETTINGS, "BIOS": {**DUCK_SETTINGS["BIOS"], "SearchDirectory": str(sysdir)}, "Console": {"Region": "PAL" if pal else "Auto"}}
+    wanted = {**DUCK_SETTINGS, "BIOS": {**DUCK_SETTINGS["BIOS"], "SearchDirectory": str(sysdir)}, "Console": {"Region": "PAL" if pal else "Auto"},
+              "Debug": {**DUCK_SETTINGS["Debug"], "GDBServerPort": str(port)}}
     for section, values in wanted.items():
         if section not in sections:
             sections[section] = {}
@@ -136,7 +147,17 @@ def duck_settings(sysdir, pal):
     path.write_text("".join(f"[{s}]\n" + "".join(f"{k} = {v}\n" for k, v in sections[s].items()) + "\n" for s in order))
 
 
-def rsp_words(address, words):
+def confined(cmd, name):
+    """The command in a user scope of its own, which `reap` stops with all it started (Diamond_Referees.md §2.5)."""
+    unit = f"emusen-referee-{os.getpid()}-{name}"
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "--"] + cmd, unit
+
+
+def reap(unit):
+    subprocess.run(["systemctl", "--user", "stop", f"{unit}.scope"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def rsp_words(address, words, port=GDB_PORT):
     """RAM words over DuckStation's GDB server: the target halted by a status query, then read."""
     def packet(s, body):
         data = body.encode()
@@ -157,7 +178,7 @@ def rsp_words(address, words):
 
     for _ in range(100):
         try:
-            s = socket.create_connection(("127.0.0.1", GDB_PORT), timeout=10)
+            s = socket.create_connection(("127.0.0.1", port), timeout=10)
             break
         except OSError:
             time.sleep(0.2)
@@ -176,7 +197,16 @@ def rsp_words(address, words):
 
 def run_duckstation(exe, sysdir, seconds, pal, dumps):
     """In a private, virtual KWin with its own message bus: never the person's desktop (Diamond_Referees.md §2.1)."""
-    duck_settings(sysdir, pal)
+    CACHE.mkdir(parents=True, exist_ok=True)
+    with open(CACHE / "duckstation.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return duckstation_locked(exe, sysdir, seconds, pal, dumps)
+
+
+def duckstation_locked(exe, sysdir, seconds, pal, dumps):
+    """One run at a time: its settings file is shared by every run (Diamond_Referees.md §2.5)."""
+    port = free_port()
+    duck_settings(sysdir, pal, port)
     root = CACHE / "duckstation/squashfs-root"
     with tempfile.TemporaryDirectory(dir=CACHE) as tmp:
         log, ram = Path(tmp) / "log", Path(tmp) / "ram"
@@ -190,14 +220,18 @@ with open({str(log)!r}, 'w') as out:
     time.sleep({seconds})
     with open({str(ram)!r}, 'w') as r:
         for a, n in {dumps!r}:
-            r.write('%x %s\\n' % (a, ' '.join('%08X' % w for w in rsp_words(a, n))))
+            r.write('%x %s\\n' % (a, ' '.join('%08X' % w for w in rsp_words(a, n, {port}))))
     p.terminate(); p.wait()
 """)
         env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
         env["XDG_CONFIG_HOME"] = str(CACHE / "kwin-config")
-        subprocess.run(["timeout", str(seconds + 90), "dbus-run-session", "--", "kwin_wayland", "--virtual", "--no-lockscreen",
-                        "--no-global-shortcuts", "--no-kactivities", "--socket", f"emusen-referee-{os.getpid()}",
-                        "--exit-with-session", f"{sys.executable} {inner}"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cmd, unit = confined(["timeout", str(seconds + 90), "dbus-run-session", "--", "kwin_wayland", "--virtual", "--no-lockscreen",
+                              "--no-global-shortcuts", "--no-kactivities", "--socket", f"emusen-referee-{os.getpid()}",
+                              "--exit-with-session", f"{sys.executable} {inner}"], "duckstation")
+        try:
+            subprocess.run(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        finally:
+            reap(unit)
         text = re.sub(r"\x1b\[[0-9;]*m", "", log.read_text(errors="replace")) if log.exists() else ""
         if "Using BIOS:" not in text:
             die("DuckStation started no BIOS from the firmware folder: refused")
@@ -219,13 +253,16 @@ def run_redux(exe, bios, frames, dumps):
         lua += "local s='== RAM %08X'; for i=0,%d do local o=%d+4*i; s=s..string.format(' %%08X', m[o]+m[o+1]*256+m[o+2]*65536+m[o+3]*16777216) end; print(s); " % (a, count - 1, a & 0x1FFFFF)
     lua += "PCSX.quit(0) end end)"
     env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
-    p = subprocess.Popen([str(root / "squashfs-root/usr/bin/pcsx-redux"), "-portable", ".", "-cli", "-run", "-interpreter", "-bios", str(bios),
-                          "-exe", str(exe), "-exec", lua], cwd=root / "portable", env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+    cmd, unit = confined([str(root / "squashfs-root/usr/bin/pcsx-redux"), "-portable", ".", "-cli", "-run", "-interpreter", "-bios", str(bios),
+                          "-exe", str(exe), "-exec", lua], "pcsx-redux")
+    p = subprocess.Popen(cmd, cwd=root / "portable", env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
     try:
         stdout, _ = p.communicate(timeout=60 + frames / 20)
     except subprocess.TimeoutExpired:
-        p.kill()
+        reap(unit)
         stdout, _ = p.communicate()
+    finally:
+        reap(unit)
     if "Loaded BIOS:" not in stdout:
         die("PCSX-Redux loaded no BIOS from the file given: refused")
     words = {}
@@ -251,7 +288,11 @@ def run_libretro(core, exe, sysdir, frames, pal, dumps):
             cmd += ["--option", "swanstation_CPU_ExecutionMode=Interpreter", "--option", "swanstation_GPU_Renderer=Software"]
         if core == "pcsx_rearmed":
             cmd += ["--option", "pcsx_rearmed_drc=disabled"]
-        p = subprocess.run(cmd, capture_output=True)
+        cmd, unit = confined(cmd, core)
+        try:
+            p = subprocess.run(cmd, capture_output=True)
+        finally:
+            reap(unit)
         if p.returncode == 4:
             die(f"{core}: the probe refused the run (no firmware of the player's own)")
         ram = next(Path(tmp).glob("*_ram_f*.bin"), None)

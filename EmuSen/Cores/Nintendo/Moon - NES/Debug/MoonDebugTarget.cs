@@ -11,7 +11,7 @@ using EmuSen.DianaSh.DianaSh.Var;
 namespace EmuSen.Cores.Nintendo.Moon.Debug
 {
     // Where a target over a mirror sends what must reach the running machine - see Moon_Native.md §2.4.
-    public sealed record MoonDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted, Func<int>? ProgramCounter = null);
+    public sealed record MoonDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted, Func<int>? ProgramCounter = null, string? Engine = null);
 
     // The NES's IDebugTarget - the second implementation this interface has ever had. See Moon_Debug.md.
     public sealed class MoonDebugTarget : IDebugTarget, IWriteObserver
@@ -39,6 +39,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             _core = core;
             _host = host;
             _frameTimings = frameTimings ?? (() => (core.LastFrameCpuApuMs, core.LastFramePpuMs));
+
+            // The mirror is brought up to the machine before the first snapshot is taken - see EmuSen_CoreAPI.md §30.2.
+            host?.Refresh();
 
             BuildSpaces();
 
@@ -537,7 +540,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
 
             var text = new StringBuilder();
 
-            text.AppendLine($"NES (Moon) - frame {_core.TotalFrames}, scanline {_core.CurrentScanline}");
+            text.AppendLine($"NES ({_host?.Engine ?? "Moon"}) - frame {FrameCount}, scanline {_core.CurrentScanline}");
             text.AppendLine($"Mapper {cart.MapperNumber} ({cart.Mapper.Name}), {cart.PrgBanks}x16K PRG, " +
                             $"{(cart.ChrIsRam ? "8K CHR RAM" : $"{cart.ChrBanks}x8K CHR ROM")}, " +
                             $"mirroring {cart.Mapper.Mirroring}{(cart.HasBattery ? ", battery" : "")}");

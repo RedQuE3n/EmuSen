@@ -143,13 +143,23 @@ case on venusrt
 target venusrt
 covers 1
 $ regs cpu
-out 14
+out 215
 CPU registers:
+  A         = 0x0001
+  X         = 0x0000
+  Y         = 0x0000
+  S         = 0x01F3
+  D         = 0x0000
+  PB        = 0x00
+  PC        = 0xED30
+  DB        = 0x00
+  P         = 0x34
+  E         = 0x1
 status 0
 action none
 $ setreg NOPE 0
-out 52
-cpu has no register named 'NOPE'. Available: (none).
+out 77
+cpu has no register named 'NOPE'. Available: A, X, Y, S, D, PB, PC, DB, P, E.
 status 1
 action none
 end
@@ -226,8 +236,8 @@ SM83 registers:
   BC        = 0x0013
   DE        = 0x00D8
   HL        = 0x014D
-  SP        = 0xFFFE
-  PC        = 0x0100
+  SP        = 0xFFFC
+  PC        = 0x0AF2
   Z         = 0x1
   N         = 0x0
   H         = 0x1
@@ -235,8 +245,8 @@ SM83 registers:
   IME       = 0x0
   HALT      = 0x0
   IE        = 0x00
-  IF        = 0x00
-  Cycles    = 0x0000000000000000
+  IF        = 0x01
+  Cycles    = 0x00000000000224A0
 status 0
 action none
 $ setreg NOPE 0
@@ -352,13 +362,33 @@ case on nephrite
 target nephrite
 covers 1
 $ regs cpu
-out 64
-No debug CPU named 'cpu' on this Nephrite. Available: m68k, z80.
+out 511
+M68K registers:
+  D0        = 0x00000000
+  D1        = 0x00000000
+  D2        = 0x00000000
+  D3        = 0x00000000
+  D4        = 0x00000000
+  D5        = 0x0000FEC2
+  D6        = 0x00000000
+  D7        = 0x00000000
+  A0        = 0x00000000
+  A1        = 0x00000000
+  A2        = 0x00000000
+  A3        = 0x00000000
+  A4        = 0x00000000
+  A5        = 0x00000000
+  A6        = 0x00000000
+  A7        = 0xFFFFF88C
+  PC        = 0x000000CC
+  SR        = 0x2704
+  USP       = 0x00000000
+  SSP       = 0xFFFFF88C
 status 0
 action none
 $ setreg NOPE 0
-out 53
-m68k has no register named 'NOPE'. Available: (none).
+out 127
+m68k has no register named 'NOPE'. Available: D0, D1, D2, D3, D4, D5, D6, D7, A0, A1, A2, A3, A4, A5, A6, A7, PC, SR, USP, SSP.
 status 1
 action none
 end

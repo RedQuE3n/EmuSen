@@ -149,6 +149,40 @@ over an old one has both markers, which is harmless. The old names are
 `DataMigration`'s legacy root, the tree a checkout kept its data in before the data moved to `<root>/home`, is renamed
 with the folders it names, because it is the checkout's own tree and moved with them. No published tree ever held it.
 
+### 3.6 The application-data folder in a home with no `.config` (2026-10-10)
+
+**What was seen.** On 2026-10-10 a folder `EmuSen/Logs` appeared under the working folder of a test process whose home
+had no `.config` folder. `EmuSen_RustPlatform.md` §15 had recorded the cause as an open item on 2026-10-08.
+
+**The cause.** Three paths start from .NET's application-data folder: the error log's default folder
+(`ErrorLog.DefaultRoot`, `~/.config/EmuSen/Logs` on Linux, `EmuSen_Settings_Reference.md` §4.70), the configuration
+folder from before Galaxia (`ConfigStore.LegacyDirectory`, read once to migrate out of), and the value the host hands
+the platform library at its start, from which the library makes the same two (`EmuSen_RustPlatform.md` §5.5, Q15).
+All three asked `Environment.GetFolderPath(SpecialFolder.ApplicationData)`. On Unix that call, with its default
+option, checks that the folder exists and answers the empty string when it does not, so each path became relative:
+`EmuSen/Logs` and `EmuSen`, resolved against whatever folder the process was started in. Writing an error then made
+the folder there. Under `dotnet test` that folder is the test host's, which in this repository is the checkout's
+`home/`, and the log was written to `home/EmuSen/Logs/`.
+
+**How it was shown.** `LogFolderWithoutConfigTests` starts a second test process with `HOME` pointed at an empty
+temporary folder and `XDG_CONFIG_HOME` unset, since the library takes .NET's answer once per process and only a
+process started that way shows what it is handed. The child moves to a temporary working folder, writes one error
+through the library and one through the C#, and reports the default folder each uses, the files written and the
+legacy folder. Before the change it reported `EmuSen/Logs`, `EmuSen/Logs/emusen_<day>.log` for both and `EmuSen`,
+and the files were made under the working folder. After it, all are under `<home>/.config/EmuSen`, and nothing is made
+under the working folder.
+
+**The change.** One member, `ConfigRoot.ApplicationData`, asks for the folder with
+`SpecialFolderOption.DoNotVerify`, which answers the path whether or not it exists yet; the three call sites read it.
+The error log creates its folder when it first writes, as it already did for any other folder it was given, so a home
+that has no `.config` gains one on the first error. The library
+needed no change: when no host value is given it already computes `~/.config` without checking that it exists
+(`tree.rs`, `application_data`), and the host now gives it the same.
+
+**What was not changed.** The default stays `~/.config/EmuSen/Logs` rather than moving under `DataStore`'s home, since
+§4.70 documents it and the handhelds' logs are read from there. A process with no home at all still gets a relative
+path; .NET has nothing to answer with, and no such process was found.
+
 ### 4.1 Why rename rather than write-in-place
 
 `File.Move(temp, path, overwrite: true)` is atomic at the filesystem level: the destination is either the whole old file or the whole new one, never a partial write. The truncation risk moves onto the `.tmp` file, which nothing ever reads — `AtomicFileTests.An_abandoned_temp_file_never_becomes_the_live_file` pins that a leftover temp from a killed process is ignored.

@@ -18,7 +18,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         {
             _core = core;
             _view = new MercuryDebugTarget(core.Mirror, new MercuryDebugHost(
-                core.ReadSpace, core.WriteSpace, core.SyncMirror, core.ApplyCheats, () => core.TotalFrames, (_, _) => core.SyncMutes()));
+                core.ReadSpace, core.WriteSpace, core.SyncMirror, core.ApplyCheats, () => core.TotalFrames, (_, _) => core.SyncMutes(), "MercuryRT"));
             _cpus = new[]
             {
                 new DebugCpu("cpu", "SM83", core.Breakpoints)
@@ -72,6 +72,6 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public (byte[] Rgba, int Width, int Height) RenderTileSheet() => _view.RenderTileSheet();
         public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => _view.RenderPaletteSwatch();
         public (short[] Samples, int SampleRate) GetAudioSamples() => _view.GetAudioSamples();
-        public string GetSummaryText() => _view.GetSummaryText().Replace("(Mercury)", "(MercuryRT)");
+        public string GetSummaryText() => _view.GetSummaryText();
     }
 }

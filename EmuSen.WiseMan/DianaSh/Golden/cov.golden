@@ -422,8 +422,8 @@ case on nephrite
 target nephrite
 covers 1,3-4,7
 $ cov on
-out 27
-M68K coverage recording on.
+out 22
+Coverage recording on.
 status 0
 action none
 $ cov funcs
@@ -432,14 +432,14 @@ No routines discovered yet - nothing has been called since recording started.
 status 0
 action none
 $ cov 0 10
-out 67
-M68K coverage $000000-$00000F: 0/16 bytes executed
+out 62
+Coverage $000000-$00000F: 0/16 bytes executed
   Never reached.
 status 0
 action none
 $ cov off
-out 53
-M68K coverage recording off, 0 instructions recorded.
+out 48
+Coverage recording off, 0 instructions recorded.
 status 0
 action none
 end

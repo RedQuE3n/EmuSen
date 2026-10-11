@@ -229,8 +229,18 @@ case on venusrt
 target venusrt
 covers 1-2
 $ eval symbols
-out 7
+out 50
+  A
+  D
+  DB
+  E
   frame
+  P
+  PB
+  PC
+  S
+  X
+  Y
 status 0
 action none
 $ eval 1+1
@@ -648,8 +658,28 @@ case on nephrite
 target nephrite
 covers 1-2
 $ eval symbols
-out 7
+out 109
+  A0
+  A1
+  A2
+  A3
+  A4
+  A5
+  A6
+  A7
+  D0
+  D1
+  D2
+  D3
+  D4
+  D5
+  D6
+  D7
   frame
+  PC
+  SR
+  SSP
+  USP
 status 0
 action none
 $ eval 1+1

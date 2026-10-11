@@ -12,7 +12,7 @@ using EmuSen.DianaSh.DianaSh.Var;
 namespace EmuSen.Cores.Nintendo.Mercury.Debug
 {
     // Where a target over a mirror reads, writes and refreshes, when the machine it shows runs elsewhere - see Mercury_Native.md §8.3.
-    public sealed record MercuryDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted);
+    public sealed record MercuryDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted, string? Engine = null);
 
     // The Game Boy's IDebugTarget, and what finally lets CoreFactory hand Mercury out. See Mercury_Debug.md.
     public sealed class MercuryDebugTarget : IDebugTarget, IWriteObserver
@@ -35,6 +35,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
         {
             _core = core;
             _host = host;
+
+            // The mirror is brought up to the machine before the first snapshot is taken - see EmuSen_CoreAPI.md §30.2.
+            host?.Refresh();
 
             BuildSpaces();
 
@@ -627,7 +630,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
             var ppu = bus.Ppu;
             var text = new StringBuilder();
 
-            text.AppendLine($"{_core.CoreName} (Mercury) - frame {_core.TotalFrames}, LY {ppu.Ly}, mode {(int)ppu.Mode}");
+            text.AppendLine($"{_core.CoreName} ({_host?.Engine ?? "Mercury"}) - frame {FrameCount}, LY {ppu.Ly}, mode {(int)ppu.Mode}");
             text.AppendLine($"{cart.Mapper.Name}, {cart.RomBanks}x16K ROM, " +
                             $"{(cart.Ram.Length == 0 ? "no RAM" : $"{cart.Ram.Length / 1024}K RAM")}" +
                             $"{(cart.HasBattery ? ", battery" : "")}{(cart.HasTimer ? ", RTC" : "")}");

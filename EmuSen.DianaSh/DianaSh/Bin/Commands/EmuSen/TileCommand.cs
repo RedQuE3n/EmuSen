@@ -24,6 +24,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
             int bpp = ParseHex(parts[3]);
 
             byte[] pixels = t.DecodeTilePixels(space, addr, bpp);
+            if (pixels.Length < 64) return DianaShResult.Fail($"{t.CoreName} decodes no tiles, so there is nothing to draw - see `man tile`.");
 
             var sb = new StringBuilder();
             sb.AppendLine($"{space.Name} @ 0x{addr:X}, {bpp}bpp tile:");

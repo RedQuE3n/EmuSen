@@ -74,7 +74,7 @@ namespace EmuSen.Galaxia
                 Path.Combine(Directory, category, fileName);
 
             public static string LegacyDirectory => _overrideLegacyDirectory ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ProgramDirName);
+                ConfigRoot.ApplicationData, ProgramDirName);
 
             // A test that redirected the config directory but not the legacy one must not reach the developer's real config - see §1.4.
             public static string? LegacyPathFor(string fileName)

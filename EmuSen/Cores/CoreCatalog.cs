@@ -66,20 +66,24 @@ namespace EmuSen.Cores
             }
         }
 
-        // Keyed by what a user would type - the internal codename and the console name both reach the same core.
-        public static IReadOnlyDictionary<string, CoreDescriptor> Registry { get; } =
-            new Dictionary<string, CoreDescriptor>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["venus"] = Venus,
-                ["snes"] = Venus,
-                ["moon"] = Moon,
-                ["nes"] = Moon,
-                ["mercury"] = Mercury,
-                ["gb"] = Mercury,
-                ["gbc"] = Mercury,
-                ["mars"] = Mars,
-                ["n64"] = Mars,
-            };
+        // Keyed by what a user would type - the internal codename and the console name both reach the same core; a discovered console's are its name and its engine's - see EmuSen_CoreAPI.md §30.5.
+        public static IReadOnlyDictionary<string, CoreDescriptor> Registry => Lists.Registry;
+
+        private static readonly (string Key, CoreDescriptor Core)[] CatalogKeys =
+        {
+            ("venus", Venus), ("snes", Venus), ("moon", Moon), ("nes", Moon),
+            ("mercury", Mercury), ("gb", Mercury), ("gbc", Mercury), ("mars", Mars), ("n64", Mars),
+        };
+
+        private static Dictionary<string, CoreDescriptor> RegistryOf(CoreDescriptor[] discovered)
+        {
+            var registry = new Dictionary<string, CoreDescriptor>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (key, core) in CatalogKeys) registry[key] = core;
+            foreach (var row in discovered)
+                foreach (string? name in new[] { row.Console, DiscoveredFor(row.Console)?.EngineName })
+                    if (name is { Length: > 0 } && !name.Any(char.IsWhiteSpace)) registry.TryAdd(name.ToLowerInvariant(), row);
+            return registry;
+        }
 
         // What `cheat db prune` keeps: the catalog's systems and those of the consoles discovery adds.
         public static IReadOnlyCollection<string> SupportedCheatSystems =>
@@ -102,7 +106,7 @@ namespace EmuSen.Cores
 
         // The catalog's lists with the consoles discovery adds, made again whenever discovery scans again.
         private sealed record CatalogLists(IReadOnlyList<Native.DiscoveredCore>? Found, CoreDescriptor[] Discovered, CoreDescriptor[] Cores, CoreDescriptor[] Consoles,
-            LibraryShelf[] Shelves, string[] Extensions, string[] Filters);
+            LibraryShelf[] Shelves, string[] Extensions, string[] Filters, IReadOnlyDictionary<string, CoreDescriptor> Registry);
 
         private static CatalogLists? _lists;
 
@@ -121,7 +125,7 @@ namespace EmuSen.Cores
                 var shelves = consoles.SelectMany(Shelves).ToArray();
                 var extensions = cores.SelectMany(c => c.Extensions).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                 var filters = new[] { AllConsoles }.Concat(cores.SelectMany(c => ReferenceEquals(c, Mercury) ? new[] { c.DisplayName, GameBoyColorShelf } : new[] { c.DisplayName })).ToArray();
-                return _lists = new CatalogLists(found, discovered, cores, consoles, shelves, extensions, filters);
+                return _lists = new CatalogLists(found, discovered, cores, consoles, shelves, extensions, filters, RegistryOf(discovered));
             }
         }
 

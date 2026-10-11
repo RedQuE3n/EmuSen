@@ -382,14 +382,26 @@ case on nephrite
 target nephrite
 covers 2-3
 $ disasm cpu
-out 38
-Usage: disasm <space> <addr> [<count>]
+out 359
+  0000CC: 00 00 00 00 ORI.B #$00,D0
+  0000D0: 00 00 00 00 ORI.B #$00,D0
+  0000D4: 00 00 00 00 ORI.B #$00,D0
+  0000D8: 00 00 00 00 ORI.B #$00,D0
+  0000DC: 00 00 00 00 ORI.B #$00,D0
+  0000E0: 00 00 00 00 ORI.B #$00,D0
+  0000E4: 00 00 00 00 ORI.B #$00,D0
+  0000E8: 00 00 00 00 ORI.B #$00,D0
+  0000EC: 00 00 00 00 ORI.B #$00,D0
+  0000F0: 00 00 00 00 ORI.B #$00,D0
 status 0
 action none
 $ disasm cpu 0 4
-out 100
-Error: No memory space named 'cpu'. Available: M68KBUS, Z80BUS, WRAM, Z80RAM, VRAM, CRAM, VSRAM, ROM
-status 1
+out 143
+  000000: 00 00 00 00 ORI.B #$00,D0
+  000004: 00 00 00 00 ORI.B #$00,D0
+  000008: 00 00 00 00 ORI.B #$00,D0
+  00000C: 00 00 00 00 ORI.B #$00,D0
+status 0
 action none
 end
 

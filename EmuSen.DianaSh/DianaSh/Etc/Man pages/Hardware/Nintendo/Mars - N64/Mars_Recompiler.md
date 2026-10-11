@@ -1065,3 +1065,37 @@ Every round of the change is below every round of the base in each game. The thr
 **Why the RSP's delegates were left.** `Mars_Rsp.md` §14 measured closure-less delegates there and found under 0.5 per cent. An RSP block's entry is rarer per instruction than a CPU block's, and its root method already calls its chunks directly.
 
 **The same profile's larger finding is not this section's.** When the CPU is busy, the RSP steps one interpreted instruction per CPU cycle from inside the CPU's blocks (`RspRan` into `StepOne`). That was 40 per cent of GoldenEye's thread (7.3 ms a frame), 23 per cent of OoT's and 14 per cent of SM64's. `Mars_Rsp.md` §13 tried two routes out of that lock-step, and rejected both.
+
+## 21. A block at the top of RDRAM, and the mark past its end (2026-10-10)
+
+**What was seen.** DianaSh's golden corpus (`EmuSen_DianaSh.md` §13.4) first ran Mars on `SyntheticN64Rom`'s plain
+image, a header followed by zeros, and the core threw `IndexOutOfRangeException` in `Cpu.StepBlock` within the first
+frames. The corpus worked around it with a branch-to-self at the entry point and recorded the fault as a defect of the
+core.
+
+**What the machine does with zeros, measured on 2026-10-10** by stepping the interpreter over the same image with the
+Expansion Pak: the boot hands control to the signal processor's data memory at `$A4000040`, where a zero word is
+`SLL r0, r0, 0`, a no-operation. Execution runs through the two 4 KB memories of the signal processor; 2,031
+instructions later the first fetch past them raises an exception, which with `BEV` clear vectors to `$80000180`, in
+RDRAM. RDRAM is zeros too, so the CPU runs no-operations upwards through it and, 2,099,023 instructions after the
+start, reaches `$807FFF00`: the last 256 bytes of the 8 MB. That is the behaviour the hardware would show, and nothing in
+it is an error of the emulation; it ends at the top of RDRAM, where the next fetch is outside it.
+
+**Where the fault was.** Before it shapes or runs a block, the dispatcher asks whether the display processor may be
+writing over the words it is about to read (§2.6 of `Mars_Rdp.md`), by testing the write marks of the page the block
+starts in and of the page that holds its last possible word, `physical + 64 × 4 − 1`. The start is checked against
+RDRAM's size; the end was not. A block that starts in the last 256 bytes has its last possible word past the end, and
+the index of that word's page is one past the end of the marks, which hold one entry for each 4 KB page of RDRAM. The
+test showing it, `MarsCoreTests.An_image_of_zeros_runs_to_the_top_of_RDRAM_without_a_fault`, failed with that exception
+at that line before the change and passes after it.
+
+**The change.** The far end is clamped to RDRAM's last byte before its page is looked up, as `DpInterface.WaitRange`
+already clamps the range it then waits on. Nothing a game can observe changes: a block is never shaped past RDRAM
+(`BlockShape.Shape` bounds it by the bytes available), so the clamped page is the last page any of its words can be in.
+
+**MarsRT does not share the fault**, and the same test runs it. Its mark lookup masks the page number with the table's
+size (`memory/dp.rs`), so the same address wraps to the first page rather than leaving the table. That answer is not the
+page the word is in either; it costs at most an unnecessary wait, and is recorded here rather than changed.
+
+**Whether the corpus keeps its branch-to-self.** It does. The image is the corpus's fixture, and a core running
+2 million no-operations a frame is a poorer subject for the debugger's commands than one sitting at its entry point.

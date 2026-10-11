@@ -72,7 +72,7 @@ namespace EmuSen.Galaxia.Library
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed
         {
-            public static string DefaultRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs");
+            public static string DefaultRoot => Path.Combine(ConfigRoot.ApplicationData, ConfigStore.ProgramDirName, "Logs");
 
             public static string Root()
             {

@@ -25,6 +25,9 @@ namespace EmuSen.Galaxia
         // The read-only skeleton an app bundle carries, copied into the tree on start; null outside a bundle - see EmuSen_Galaxia.md §3.4.
         public static string? SeedDirectory => GalaxiaNative.Active ? GalaxiaNative.Directory(GalaxiaDirectory.Seed) : Managed.SeedDirectory;
 
+        // .NET's application-data folder whether or not it exists yet, which plain GetFolderPath answers with "" - see EmuSen_Galaxia.md §3.6.
+        internal static string ApplicationData => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify);
+
         // baseDirectory is AppContext.BaseDirectory, never the current directory, which a launcher chooses - see `man hier`.
         public static string ComputeFor(string baseDirectory) =>
             ComputeFor(baseDirectory, OperatingSystem.IsMacOS(), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));

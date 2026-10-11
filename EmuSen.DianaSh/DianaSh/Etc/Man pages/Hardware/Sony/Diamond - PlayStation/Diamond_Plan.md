@@ -113,6 +113,11 @@ since it belongs to every core that uses the crate.
 die images in public, so PSX_MiSTer is its author's reading of the documents and of hardware tests. Its agreement is
 moderate evidence, and its disagreement starts a dispute rather than settling one. It is a referee, never a grader.
 
+*Checked 2026-10-11, at stage 1* (`Diamond_References.md` §5): not cloned. **No VHDL simulator is installed**, neither
+GHDL nor nvc [M]; the core is mostly VHDL by GitHub's count (1.90 MB, against 0.56 MB of Verilog and SystemVerilog) [R],
+so the Verilator Nephrite unpacked cannot run it. The simulation route needs GHDL or nvc installed at stage 4 with the
+tester's leave, or a device.
+
 ### 1.6 The black-box references
 
 The probe's libretro backend (`EmuSen.WiseMan/Reference/probe-rs`) already passes a path to cores that need one
@@ -130,6 +135,18 @@ The cores are run as local instruments, never distributed, their sources never r
 through the standard calls (RAM, VRAM, SPU RAM, scratchpad) are measured at stage 1, as Nephrite measured its four
 [A]. Every reference is compared, not trusted: they will disagree with each other where the hardware is thinly
 documented, and the disagreement is the evidence that a dispute is needed.
+
+*Measured 2026-10-11, at stage 1* (`Diamond_References.md` §3 and §4): the table's "Without a BIOS" column was wrong for
+two cores of three. **Beetle PSX does not refuse**: it boots OpenBIOS, as its README says, though its `.info` still
+marks the BIOS files required [R, M]; **SwanStation boots OpenBIOS** too, by its README [R]. OpenBIOS is not used at all
+(§5.9), so the probe now refuses both before they are initialised unless `--sysdir` holds the player's own dumps, and
+**PCSX-ReARMed is the only reference that may run without a BIOS** [M]. On its high-level kernel it runs bare-metal
+programs and the PSn00bSDK-built ps1-tests alike, at 0.03–0.11 ms a frame with its recompiler and 1.4–2.0 ms with its
+interpreter on the desktop [M]. All three cores take a path (`need_fullpath`), which the probe already passed; it gained
+`.exe` and `.psexe` as the PlayStation's and the refusal. Spaces: RAM (2 MiB), a 128 KiB save space, and memory maps of
+RAM and the scratchpad (1 KiB); **no core exposes VRAM or SPU RAM** through the standard calls [M]. SwanStation's README
+confirms its lineage: "a hard fork … of DuckStation", GPLv3 [R]. The three-way comparison waits on a BIOS of the
+tester's own (Q6, Q16).
 
 ### 1.7 What was read to write this page
 
@@ -163,6 +180,15 @@ source, date and status in `DOCS.txt`, as Nephrite's were.
 | **Public research**: Joshua Walker's *Everything You Have Always Wanted to Know about the Playstation*, the GPU and GTE write-ups on psxdev.net and the PSXDEV forum, ps1-tests' and amidog's published descriptions | Public | Public write-ups | Supplements | Mixed reliability; each use cited |
 | **Sony's patents** on the GTE, the GPU and the controller | Public patent offices; to be searched at stage 1 | Public | Intended designs | May differ from the shipped silicon |
 
+*Fetched 2026-10-11, at stage 1* (`Diamond_References.md` §2; the files with their SHA-256 and status in the cache's
+`docs/`): psx-spx's `stable` branch at `6d7d1bc` and nocash's single-file edition; IDT's *R30xx Family Software
+Reference Manual* (rev. 1.0) and *MIPS Microprocessor Family Software Reference Manual* (1996), and LSI Logic's
+*CW33000 MIPS Embedded Processor User's Manual* (1992); ECMA-130 and ECMA-119 (2nd and 5th editions); the CXD2510Q,
+CXD1199AQ and CXD2545Q datasheets [M]. Not found or not free: the CXD1815Q's datasheet and Kane and Heinrich's book;
+the write-ups, patents and Sony's documents are fetched by the stage that first cites each [M]. `DOCS.txt` lists the
+replacement writers' exclusions of §2.2 by file and line, and adds the CD controller's microcontroller chapters as to
+be screened before any writer reads them, that controller being firmware (§5.6) [C].
+
 ### 2.2 Sony's confidential documents, and psx-spx's provenance
 
 Sony's developer documents (the run-time library references and overviews, the hardware notes and the file-format
@@ -187,7 +213,10 @@ Each is a prediction of where the disputes log will fill (P6):
   the same counts give 59.817 Hz and 49.747 Hz [A, arithmetic]. The dot clocks it lists (5.32224 MHz for 256 pixels and
   so on) follow the 53.2224 MHz figure [R ibid.]. Which clock an NTSC console's GPU runs on decides the frame rate, the
   dot clock timer 0 sees and the CRT filter's phases (§4.6); a timer test on hardware, or the tester's console, settles
-  it.
+  it. *Entered 2026-10-11 as `Diamond_Disputes.md` D-0*, which records two further facts: the maintained subsections'
+  refresh rates imply 3,412.5 and 3,405 video clocks a line rather than nocash's 3,413 and 3,406 [A], and a console log
+  shipped with ps1-tests' `timers` counts about 571,275 CPU cycles a frame, 59.29 Hz, on an unnamed console in NTSC
+  mode [R, A].
 - **The CPU's bus timing**: the stall of an uncached fetch and of a data access by region, the write buffer's depth and
   drain, the I-cache refill. ps1-tests' `access-time` measures them on a console [R its README].
 - **The GPU's drawing time** per primitive and per pixel, which sets GPUSTAT's busy bits and the pacing of GPU DMA.
@@ -226,6 +255,17 @@ with its source, version and MD5.
 **Nothing like AccuracyCoin is known for the PlayStation** [A, from the survey above; a search at stage 1 records the
 negative result or finds one]. The single-step suite has no GTE cases yet; the GTE's oracles are `gte-fuzz`'s
 `test-all` and amidog's test.
+
+*Fetched 2026-10-11, at stage 1* (`Diamond_References.md` §1; each archive and checkout in the cache's
+`PROVENANCE.txt`, each file's MD5 in `tests/MD5SUMS`): ps1-tests' source at `f727802` with the binaries of its newest
+release, `build-158` (2021-04-22): 49 programs, 17 VRAM pictures and **21 logs taken on a console**, so most of its text
+programs are graded against a console's output as well as by their own verdicts; only `gpu/gpustat`, newer than the
+release, is missing and was not built [M]. amidog's four tests: CPU 1.3 (2014-02-07), CPX 1.1 and GTE 1.4 (2013-12-31),
+GPU 1.7 (2014-12-28); their download pages, the GTE's and GPU's included, state no licence of their own, and the wiki's
+footer licenses its content CC BY-NC-SA 3.0 [R]. Peter Lemon's tree at `6d20c13` with 72 prebuilt programs; PSn00bSDK's
+examples at `5d9aa2d`, source only [M]. **No AccuracyCoin-like suite was found** [M, two web searches, GitHub's search
+and the Emulation General Wiki's "PS1 Tests" page, which tallies emulators on amidog's four tests]; a 240p video suite
+exists and was not fetched.
 
 ### 3.2 By component
 
@@ -352,7 +392,9 @@ phase left over per line and per frame (`EmuSen_CRT.md` §3.2). For the PlayStat
 
 So the PlayStation's pattern crawls, unlike the Genesis's fixed bands. The entry `["PlayStation"] = Timing(2560 /
 53.693175, 2560 / 15.0, 8.0 / 15, 4.0 / 15)` is added at stage 11 and **waits on D-0**: if an NTSC console's GPU runs at
-53.2224 MHz instead, every number in the NTSC column changes. The console's video encoder by model, and its filters, are
+53.2224 MHz instead, every number in the NTSC column changes. *Since 2026-10-11 D-0 also asks the line's length*
+(`Diamond_Disputes.md`): at 3,412.5 video clocks the phases are ½ a line and ½ a frame for NTSC, and ¾ a line at 3,405
+for PAL, instead of the 8⁄15, 4⁄15 and ⅚ above [A]. The console's video encoder by model, and its filters, are
 to be found as `EmuSen_CRT.md` found the others' [A].
 
 ### 4.7 States, settings, the debugger
@@ -482,7 +524,9 @@ forbids any replacement to be, whatever its licence. MIT licenses its authors' c
 clean-room. Its origin can be checked only by its authors' statement, which here is unambiguous, and by
 `firmwarecheck.py` against a retail image, which measures repetition, not derivation. **Not compatible with the policy
 or the clean-room rules** [A]. Running it as a black box (to boot a reference without a Sony BIOS) would make its output
-a derivative of the BIOS's behaviour in a replacement writer's view, so it is not used at all [C].
+a derivative of the BIOS's behaviour in a replacement writer's view, so it is not used at all [C]. *Found 2026-10-11:*
+two of the three reference cores, Beetle PSX and SwanStation, boot it when given no BIOS, so the probe refuses to run
+them without the player's own dumps (§1.6, `Diamond_References.md` §3).
 
 **Option B, Diamond's own** [C, recommended, §11 Q3]. A MIPS program occupying the BIOS's address range, run by the
 emulated CPU, so that games that hook, patch or call into the kernel find code and tables where the documents say they
@@ -876,7 +920,11 @@ Each with a recommendation.
 
 ## 12. Negative results
 
-- No GTE cases in the r3000 single-step suite (its caveats, §3.1); no AccuracyCoin-like suite known.
+- No GTE cases in the r3000 single-step suite (its caveats, §3.1); no AccuracyCoin-like suite, by the search of
+  2026-10-11 (§3.1).
+- Without a BIOS, only PCSX-ReARMed may run: Beetle PSX and SwanStation boot OpenBIOS, which §5.9 excludes; no
+  reference exposes VRAM or SPU RAM through the standard calls (§1.6, measured 2026-10-11).
+- No VHDL simulator on the machine (§1.5); no CXD1815Q datasheet found (§2.1).
 - No DuckStation libretro core on the buildbot (§1.6).
 - No public transcription of any PlayStation chip, so the FPGA referee is no stronger than its author's reading (§1.5).
 - No public document of the CD controller's microcontroller program; its behaviour is known only by its commands'

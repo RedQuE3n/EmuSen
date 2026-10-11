@@ -11,7 +11,12 @@ from its first commit (`EmuSen/Cores/Sony/Diamond - PlayStation/`, crate `diamon
   enhancements decided on 2026-10-10 (precise geometry and the rest) and their separable architecture, the stages with
   their gates, the shared MIPS and disc crates, and the questions for the tester.
 - `Diamond_Native.md` — the build record, from stage 1.
-- `Diamond_Disputes.md` — the disputes log, created with its first entry (D-0, the NTSC frame rate).
+- [`Diamond_References.md`](Diamond_References.md) — the oracles, documents and reference cores pinned at stage 1
+  (2026-10-11): the test programs with their console logs and pictures, the documents and their exclusions, the probe on
+  the three libretro cores (only PCSX-ReARMed may run without a BIOS; Beetle PSX and SwanStation boot OpenBIOS and are
+  refused), their costs and spaces, the referee's simulator, and the search for an AccuracyCoin-like suite.
+- [`Diamond_Disputes.md`](Diamond_Disputes.md) — the disputes log, created 2026-10-11 with its first entry, D-0: the
+  NTSC console's video clock and line length, and so its frame rate.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the naming scheme, and `Man pages/Hardware/README.md` for how this
 documentation set is organized.

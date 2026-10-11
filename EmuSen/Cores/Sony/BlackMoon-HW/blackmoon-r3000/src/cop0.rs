@@ -33,6 +33,8 @@ pub(crate) mod code {
     pub const INT: u32 = 0x00;
     pub const ADEL: u32 = 0x04;
     pub const ADES: u32 = 0x05;
+    pub const IBE: u32 = 0x06;
+    pub const DBE: u32 = 0x07;
     pub const SYS: u32 = 0x08;
     pub const BP: u32 = 0x09;
     pub const RI: u32 = 0x0A;

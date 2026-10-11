@@ -93,7 +93,12 @@ fn map_name(start: usize) -> String {
 
 /// Firmware a system cannot start without on the cores that need it; such a run is skipped, never supplied.
 fn needs_firmware(system: &str) -> bool {
-    system == "segacd"
+    matches!(system, "segacd" | "psx")
+}
+
+/// Cores that, given no firmware, boot OpenBIOS, which is written from a BIOS disassembly and never run (Diamond_Plan.md §5.9).
+fn boots_openbios_without_firmware(core: &str) -> bool {
+    matches!(core, "beetle-psx" | "beetle-psx-hw" | "swanstation")
 }
 
 /// Whether a --sysdir holds any file at all.
@@ -162,6 +167,7 @@ fn system_from_rom(rom_path: &str) -> &'static str {
         "sms" | "gg" => "sms",
         "md" | "gen" | "smd" => "megadrive",
         "32x" => "32x",
+        "exe" | "psexe" => "psx",
         _ => "unknown",
     }
 }
@@ -704,6 +710,13 @@ impl ProbeBackend for LibretroBackend {
         // The dump prefix becomes a filename, so it cannot carry spaces.
         self.name = self.name.chars().map(|c| if c == ' ' { '-' } else { c.to_ascii_lowercase() }).collect();
         println!("[INFO] core {} {}", self.name, cstr_or(info.library_version, ""));
+        if boots_openbios_without_firmware(&self.name) && !has_dumps(&options.system_dir) {
+            self.skip = Some(format!(
+                "{} is not run on {rom_path} without the player's own firmware dumps: it would boot OpenBIOS, which Diamond_Plan.md §5.9 excludes",
+                self.name
+            ));
+            return false;
+        }
 
         // Before retro_init, which is the one ordering rule the ABI actually has.
         unsafe {
@@ -761,6 +774,7 @@ impl ProbeBackend for LibretroBackend {
         let mut av: sys::retro_system_av_info = unsafe { std::mem::zeroed() };
         unsafe { get_av(&raw mut av) };
         self.sample_rate = av.timing.sample_rate.round().max(0.0) as u32;
+        println!("[INFO] timing {:.6} fps, {:.3} Hz audio, base {}x{}", av.timing.fps, av.timing.sample_rate, av.geometry.base_width, av.geometry.base_height);
 
         if !options.wav_path.is_empty() {
             if self.sample_rate == 0 {
@@ -944,6 +958,8 @@ mod tests {
         assert_eq!(system_from_rom("/roms/x.gba"), "gba");
         assert_eq!(system_from_rom("/roms/sonic.md"), "megadrive");
         assert_eq!(system_from_rom("/roms/knuckles.32x"), "32x");
+        assert_eq!(system_from_rom("/tests/timers.exe"), "psx");
+        assert_eq!(system_from_rom("/tests/x.PSEXE"), "psx");
         assert_eq!(system_from_rom("/roms/sonic.bin"), "unknown", "ambiguous: --system says");
         assert_eq!(system_from_rom("/roms/noextension"), "unknown");
         assert_eq!(system_from_rom("/roms/x.zip"), "unknown");
@@ -988,10 +1004,10 @@ mod tests {
         assert_eq!(map_name(0xA00000), "map_a00000");
     }
 
-    // A Sega CD run without dumps is a skip; an empty --sysdir is the same as none.
+    // A Sega CD or PlayStation run refused without dumps is a skip; an empty --sysdir is the same as none.
     #[test]
     fn firmware_is_looked_for_only_in_the_persons_own_folder() {
-        assert!(needs_firmware("segacd") && !needs_firmware("megadrive"));
+        assert!(needs_firmware("segacd") && needs_firmware("psx") && !needs_firmware("megadrive"));
         assert!(!has_dumps(""));
         let dir = std::env::temp_dir().join(format!("probe-sysdir-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -999,6 +1015,15 @@ mod tests {
         std::fs::write(dir.join("dump.bin"), b"x").unwrap();
         assert!(has_dumps(dir.to_str().unwrap()));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // Whatever the image (a .cue names no system), and before the core is initialised, so OpenBIOS never runs.
+    #[test]
+    fn a_core_that_would_boot_openbios_is_not_run_without_dumps() {
+        assert!(boots_openbios_without_firmware("beetle-psx") && boots_openbios_without_firmware("beetle-psx-hw"));
+        assert!(boots_openbios_without_firmware("swanstation"));
+        assert!(!boots_openbios_without_firmware("pcsx-rearmed"), "its kernel is its own high-level one, by its README");
+        assert!(!boots_openbios_without_firmware("genesis-plus-gx"));
     }
 
     #[test]

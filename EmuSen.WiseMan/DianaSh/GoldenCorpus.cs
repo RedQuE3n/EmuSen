@@ -191,12 +191,13 @@ namespace EmuSen.WiseMan.DianaSh
         private readonly string? _legacyOverride = ConfigStore.OverrideLegacyDirectory;
         private readonly string _cwd = Environment.CurrentDirectory;
         private readonly bool _logging = DebugLogging.MasterEnabled;
-        private readonly Dictionary<string, string> _images = new();
+        private readonly GoldenTargets _targets;
 
         public string Home => Path.Combine(_temp, "home");
 
         public GoldenRunner()
         {
+            _targets = new GoldenTargets(_temp);
             DianaShSandbox.EnsureInitialWorkingDirectory();
             Directory.CreateDirectory(_temp);
             DataStore.OverrideDirectory = Home;
@@ -232,58 +233,7 @@ namespace EmuSen.WiseMan.DianaSh
             Environment.CurrentDirectory = Home;
         }
 
-        private string Image(string engine)
-        {
-            if (_images.TryGetValue(engine, out string? path)) return path;
-            (string extension, byte[] bytes) = engine switch
-            {
-                "venus" or "venusrt" => (".sfc", SyntheticRom.BuildBlank()),
-                "venus-sa1" => (".sfc", SyntheticRom.BuildSa1()),
-                "venus-gsu" => (".sfc", SyntheticRom.BuildSuperFx()),
-                "moon" or "moonrt" => (".nes", SyntheticNesRom.Build()),
-                "mercury" or "mercuryrt" => (".gb", SyntheticGbRom.Build()),
-                "mars" or "marsrt" => (".z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 }))),
-                "nephrite" => (".md", SyntheticMdRom.Cartridge()),
-                _ => throw new ArgumentException($"no golden target '{engine}'"),
-            };
-            Directory.CreateDirectory(Path.Combine(_temp, "images"));
-            path = Path.Combine(_temp, "images", engine + extension);
-            File.WriteAllBytes(path, bytes);
-            return _images[engine] = path;
-        }
-
-        private static string? EngineName(string engine) => engine switch
-        {
-            "venusrt" => CoreCatalog.VenusRtEngine,
-            "moonrt" => CoreCatalog.MoonRtEngine,
-            "mercuryrt" => CoreCatalog.MercuryRtEngine,
-            "marsrt" => CoreCatalog.MarsRtEngine,
-            _ => null,
-        };
-
-        private sealed class Built(IDebugTarget? target, CoreBundle? bundle, IDisposable? owner) : IDisposable
-        {
-            public IDebugTarget? Target { get; } = target;
-            public CoreBundle? Bundle { get; } = bundle;
-            public void Dispose() => owner?.Dispose();
-        }
-
-        private Built Target(GoldenCase c)
-        {
-            switch (c.Target)
-            {
-                case "none": return new Built(null, null, null);
-                case "fake": return new Built(new GoldenDebugTarget(), null, null);
-                case "bare": return new Built(new GoldenDebugTarget(bare: true), null, null);
-                case "nobus": return new Built(new GoldenDebugTarget(bus: false), null, null);
-            }
-            string path = Image(c.Target);
-            ICore core = CoreFactory.Create(path, headless: true, EngineName(c.Target));
-            core.LoadRom(path);
-            for (int i = 0; i < c.Frames; i++) core.RunFrame();
-            CoreBundle bundle = CoreFactory.Bundle(core);
-            return new Built(bundle.DebugTarget, bundle, core as IDisposable);
-        }
+        private GoldenTargets.Built Target(GoldenCase c) => _targets.Build(c.Target, c.Frames);
 
         // Every command a host's shell has, in its own order, with the two the hosts build themselves.
         public static IReadOnlyList<IDianaShCommand> Commands()
@@ -316,7 +266,7 @@ namespace EmuSen.WiseMan.DianaSh
             foreach (string user in DianaShUserRegistry.Users.Where(u => !u.Equals("root", StringComparison.OrdinalIgnoreCase)).ToList()) DianaShUserRegistry.TryRemove(user);
             DebugLogging.MasterEnabled = false;
 
-            using Built built = Target(c);
+            using GoldenTargets.Built built = Target(c);
             string statePath = Path.Combine(DataStore.SaveStates, "golden.state");
             IDianaShCommand[] extras = HostCommands(() => statePath, window: !c.NoWindow);
             DianaShSessionManager? sessions = c.NoSessions ? null : new DianaShSessionManager();

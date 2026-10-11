@@ -2161,3 +2161,117 @@ mode is the one whose pixels do not divide the line evenly by the others, and so
 **Mutants** (8, each caught): Accurate reading five lines whatever the pixel; the lower tiers reading theirs whatever
 the pixel; the lower tiers taking the spot at the pixel's centre; the mask on the glass at every size; its rows not
 whole; its columns not whole; never let go; Accurate's tent on whole columns.
+
+## 21. A referee run: patchy-ntsc and crt-beans on the same frames (2026-10-10)
+
+§8.4 planned it: the slang runtime runs other people's models of the signal on the frames this filter draws, and
+where a model with an independent derivation agrees, that is evidence. **Referees, never graders.** Their code was
+not read for this: each was run through the runtime with its own preset, its parameters set by the names and labels
+the runtime lists, and only its output pixels were measured. patchy-ntsc (PlainOldPants, GPL-3.0) models the
+composite and S-Video signal with per-console phase; crt-beans (A. Duffey, MIT) band-limits Y, I and Q in MHz and
+models no subcarrier. Neither is a reference for the other; patchy-ntsc's phase tables and this filter's were
+derived separately from the consoles' clocks (§3.2).
+
+### 21.1 How they were run
+
+Each frame was drawn into a 1440 × 1080 window by three models: this filter at Accurate (composite, S-Video and RGB,
+with the glass, mask, persistence and convergence off so that only the signal and the beam are measured);
+patchy-ntsc's SNES preset for the NES and the SNES and its Genesis Plus GX preset for the Genesis, set to composite
+and to S-Video, with its RF noise and its 2-chip SNES blur off and its width set to the frame's (it has no N64
+preset); and crt-beans' S-Video preset (its YIQ mode at its own 3.6, 0.8 and 0.8 MHz) and its RGB preset, masks and
+glow off. Each output was read along one console line in the middle of the picture, integrated over the line's
+height, and converted to Y, I and Q. A distance across the output was turned into time by the console's own pixel
+clock: the frame's pixels across the picture, at 5.37 MHz for the NES, SNES and Genesis H32, 6.71 for H40 and 12.17
+for the N64's 640.
+
+**One trap on the way**, recorded because it would have reversed a finding: patchy-ntsc's cable setting runs from −1
+(RF) through 0 (composite) and 1 (S-Video) to 2 (no artifacts), and its label lists the four in that order. Set to 1
+and 2 as composite and S-Video, it drew S-Video and no signal at all, and a first table showed it with no
+artifacts and luma at 12.8 MHz. Read from the label's order, 0 and 1, it agrees where the table below says.
+
+### 21.2 The artifacts: where they agree exactly
+
+Alternate columns of 0.6 and 0.2 grey, the pattern that makes a console's composite artifacts:
+
+| Console, frame | Model | Artifact's colour | Its period across, frame pixels | Line to the next | Three lines on | Next frame |
+|---|---|---|---|---|---|---|
+| NES 256 × 240 | this filter | 0.045 | 5.95 | −0.49 | 1.00 | −0.50 |
+| | patchy-ntsc | 0.087 | 5.95 | −0.41 | 1.00 | −0.50 |
+| SNES 256 × 224 | this filter | 0.038 | 6.10 | −0.50 | 1.00 | −0.50 |
+| | patchy-ntsc | 0.087 | 5.95 | −0.50 | 1.00 | −0.50 |
+| Genesis 320 × 224 | this filter | 0.107 | 29.1 | 1.00 | 1.00 | 1.00 |
+| | patchy-ntsc | 0.067 | 29.1 | 1.00 | 1.00 | 1.00 |
+| Genesis 256 × 224 | this filter | 0.039 | 5.95 | 1.00 | 1.00 | 1.00 |
+| | patchy-ntsc | 0.046 | 6.10 | 1.00 | 1.00 | 1.00 |
+
+(The artifact's colour is the mean size of I and Q over the pattern; the last three columns are the correlation of
+its I along one line with the next line, the line three below, and the same line a frame later.) **The geometry of
+every artifact agrees**: the NES's and SNES's repeat every three lines and turn over every frame, the Genesis's
+stand still, its 320-wide rainbow is 29 frame pixels long in both and its 256-wide one six. Two models that reached
+their phases by separate derivations from the same clocks draw the same patterns, and that is the strongest
+evidence §3.2's derivation has had. crt-beans draws none, as it models no subcarrier, and is not a referee here.
+
+**The artifacts' strength does not agree**: patchy-ntsc's NES and SNES artifacts are 1.9 and 2.3 times this filter's, its
+Genesis H40 rainbow 0.6 of it. Strength is set by the shapes of the decoder's filters around the subcarrier, which
+both models chose rather than measured; §21.3 shows where this filter's differ.
+
+### 21.3 Bandwidth, in MHz
+
+Gratings of each frequency, in the console's own time, drawn across the picture; each model's output amplitude at
+that frequency over its amplitude at 0.25 MHz. Luma is a grey cosine; chroma a cosine between magenta and green of
+nearly equal luma, read along their I–Q difference. On the SNES (the Genesis H32 alike within 0.01 for this filter):
+
+| Model | Signal | 0.5 MHz | 0.75 | 1.0 | 1.5 | 2.0 | 2.5 |
+|---|---|---|---|---|---|---|---|
+| this filter | composite, luma | 0.95 | 0.86 | 0.76 | 0.51 | 0.27 | 0.11 |
+| patchy-ntsc | composite, luma | 0.99 | 0.97 | 0.92 | 0.75 | 0.46 | 0.20 |
+| patchy-ntsc, Genesis preset | composite, luma | 0.98 | 0.93 | 0.88 | 0.66 | 0.36 | 0.12 |
+| this filter | composite, chroma | 0.73 | 0.43 | 0.19 | 0.01 | | |
+| patchy-ntsc | composite, chroma | 0.70 | 0.43 | 0.24 | 0.03 | | |
+| patchy-ntsc, Genesis preset | composite, chroma | 0.65 | 0.37 | 0.16 | 0.01 | | |
+| this filter | S-Video and RGB, luma | 0.98 | 0.95 | 0.91 | 0.80 | 0.66 | 0.50 |
+| crt-beans | YIQ and RGB, luma | 0.98 | 0.94 | 0.89 | 0.75 | 0.59 | 0.42 |
+| patchy-ntsc | S-Video, luma | 0.99 | 0.97 | 0.93 | 0.88 | 0.80 | 0.68 |
+| this filter | S-Video, chroma | 0.73 | 0.43 | 0.19 | 0.01 | | |
+| patchy-ntsc | S-Video, chroma | 0.96 | 0.88 | 0.81 | 0.57 | 0.37 | 0.22 |
+| crt-beans | YIQ, chroma | 0.84 | 0.63 | 0.40 | 0.08 | | |
+
+(The SNES frame's own pixels already take some of a grating near its 2.68 MHz limit, the same for every model.)
+
+- **Composite chroma agrees**: both models put a consumer set's chroma at about half a megahertz, this filter by the
+  set's 0.5 MHz channel (§11.2), patchy-ntsc by its own filters; within 0.06 at every frequency.
+- **Composite luma does not.** This filter's falls from 0.76 at 1 MHz to 0.51 at 1.5, where patchy-ntsc keeps 0.88
+  to 0.92 and 0.66 to 0.75. **The referee has found a defect in this filter's notch, and the arithmetic confirms
+  it.** §11.3 sized the notch by its −3 dB half-width, 1.29 MHz, and said it removes 2.3 to 4.9 MHz. It does at
+  those points, but a two-cycle Hann window's skirt is broad: at 1.5 MHz, 2.08 MHz from the subcarrier, the window
+  passes 0.38, so the notch takes 38% of the luma away, and 20% at 1 MHz. An analogue trap of the same −3 dB width,
+  a second-order notch, keeps 0.94 at 1.5 MHz. So §11.3's claim that the notch keeps what lies below 2.3 MHz is
+  retired: it keeps 80% at 1 MHz and 62% at 1.5 before the receiver's own bandwidth. patchy-ntsc lies between the
+  two. **Which to trust**: patchy-ntsc for the shape, not as a grade but because the trap arithmetic sides with it.
+  The fix is a notch whose skirt is a real trap's, from a receiver's datasheet; it belongs with the decoders of the
+  next steps and is put to the tester below rather than made here.
+- **S-Video and RGB luma agree with crt-beans** within 0.08, and both are softer than patchy-ntsc's SNES S-Video,
+  which applies no luma limit at all (its Genesis preset does, and falls with ours). Neither this filter's 5 MHz
+  encoder (a fallback, §3.2) nor the set's 4.2 MHz has been measured; the agreement is of two choices.
+- **S-Video chroma disagrees by choice**: this filter sends S-Video's chroma through the set's same 0.5 MHz channel;
+  patchy-ntsc's S-Video keeps 0.81 at 1 MHz, crt-beans' 0.40 at its 0.8 MHz setting. A consumer set's chroma
+  demodulator is the same circuit whichever input feeds it, which is why this filter does what it does; a monitor
+  with a separate S-Video path would be wider. Unsettled until a datasheet says.
+- **crt-beans' megahertz are referred to a fixed line.** Its edges are 8% softer in microseconds on the N64's
+  640-wide frame than on the SNES's 256, where the two consoles' active lines differ by 10% (52.6 and 47.7 µs): it
+  scales its filters to the frame's width, not to the console's time. This filter's bandwidths are the same in
+  microseconds on every console, as a set's are (0.30 µs for a luma step by composite on all four). Not a defect
+  in either; a convention to know when its MHz are compared with ours.
+
+### 21.4 What it settles and what it leaves
+
+Settled: §3.2's phase per pixel, per line and per frame, for the NES, the SNES and the Genesis in both widths, by
+agreement of two independent derivations; the composite chroma channel's width. Found: the notch's skirt (above).
+Left: the artifacts' strength and every luma bandwidth, which rest on filter shapes neither model measured; the N64,
+which no referee here models with its subcarrier; and the NES's own signal, which patchy-ntsc models from a raw
+palette that this filter does not yet take (the next step).
+
+**Question for the tester.** Replace the notch's Hann skirt by a second-order trap of the same −3 dB width (keeping
+the Hann windows for the chroma channel, whose exact zeros §11.3 needs), and re-run this comparison? *Recommendation:
+yes, with the trap's width taken from a consumer receiver's datasheet in the decoder step, since the present width
+is itself only the Faroudja figure.*

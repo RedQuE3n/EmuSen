@@ -813,7 +813,7 @@ case on nephrite
 target nephrite
 covers 1-2
 $ regs
-out 436
+out 824
 Nephrite CPU registers:
   D0   = 0x00000000
   D1   = 0x00000000
@@ -836,6 +836,25 @@ Nephrite CPU registers:
   USP  = 0x00000000
   SSP  = 0xFFFFF88C
 Video registers:
+Coprocessor registers:
+  AF        = 0xFFFF
+  BC        = 0x0000
+  DE        = 0x0000
+  HL        = 0x0000
+  AF'       = 0x0000
+  BC'       = 0x0000
+  DE'       = 0x0000
+  HL'       = 0x0000
+  IX        = 0x0000
+  IY        = 0x0000
+  SP        = 0xFFFF
+  PC        = 0x0000
+  I         = 0x00
+  R         = 0x00
+  WZ        = 0x0000
+  IM        = 0x0
+  IFF1      = 0x0
+  IFF2      = 0x0
 status 0
 action none
 $ regs cpu

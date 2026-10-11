@@ -90,8 +90,19 @@ case on venusrt
 target venusrt
 covers 1
 $ vectors
-out 50
-VenusRT does not report an interrupt vector table.
+out 370
+Native (E=0):
+  COP          $00FFE4 -> $00EAEA
+  BRK          $00FFE6 -> $00EAEA
+  ABORT        $00FFE8 -> $00EAEA
+  NMI          $00FFEA -> $00EAEA
+  IRQ          $00FFEE -> $00EAEA
+Emulation (E=1):
+  COP          $00FFF4 -> $00EAEA
+  ABORT        $00FFF8 -> $00EAEA
+  NMI          $00FFFA -> $00EAEA
+  RESET        $00FFFC -> $008000
+  IRQ/BRK      $00FFFE -> $00EAEA
 status 0
 action none
 end

@@ -274,6 +274,18 @@ and "l", each through putchar ("A(3Fh) - Printf") [R]. Precision pads numbers wi
 return value is the count of characters before LF's expansion [C]. puts prints without resolving % and adds no
 newline, and prints `<NULL>` for a null pointer ("A(3Eh)") [R].
 
+**The prefixes' order** (corrected 2026-10-11). psx-spx lists the prefixes as a set "inserted between "%" and escape
+code" and gives no order among them [R]; C's printf takes the flags before the width, so a flag after it is not C.
+The first image followed C's order: in `%2-d`, which ps1-tests' `cpu/access-time` prints for its table's hundredths
+(`main.cpp`, line 48), the "-" ended the specification and the text `-d` was printed, so stage 3's gate failed that
+program on Diamond's bus. The program's console log answers what the console's kernel does: its cells read `5.3 `
+followed by the column's spaces where `%2d.%2-d` prints 5 and 3, the 3 left-justified in a width of 2 (`psx.log`) [R].
+The kernel now reads the prefixes in any order until the conversion, every flag applying wherever it stands, which is
+the reading psx-spx's unordered list supports and the one the log shows. Undocumented, and chosen [C]: a second run of
+width digits replaces the first, a "0" opens no width but is the zero flag wherever it stands, and a second precision
+replaces the first. The harness's `printf_takes_a_flag_after_the_width_as_the_console_s_log_shows` fails on the first
+image and passes on the corrected one [M].
+
 ### 4.11 Programs and the cache
 
 **Exec** (A(43h)), in assembly: the caller's RA, SP, FP, GP and S0 into headerbuf[28h..3Bh], the memfill region (the
@@ -625,7 +637,8 @@ the reservation.
 **The image**: `diamond-kernel-harness`'s `flatten` writes each loadable segment's bytes at its physical address less
 1FC00000h into 512 KiB of zeros; `diamond-kernel image` runs the pinned cargo in `kernel/` with its own target
 directory and writes `diamond-kernel.bin` and `diamond-kernel.bin.sha256`. [M] 524,288 bytes, 41,464 of them before the
-last non-zero byte, SHA-256 `2bb2c125fde742e06738e917c3e99c0dd9277d5ac6df84f1cd078a3aecc3d4ff`.
+last non-zero byte, SHA-256 `ef5c8362064bb4cf5bf9ab2fc47af0fffc456ad65eac3808b40734c3c30736b2` since the prefixes' correction
+(§4.10; before it `2bb2c125fde742e06738e917c3e99c0dd9277d5ac6df84f1cd078a3aecc3d4ff`).
 
 **Reproducibility** [M]: the harness's `image` tests check the committed bytes against their digest always, and
 against a rebuild whenever the pinned toolchain is present (the project's cache under `~/.cache/emusen/toolchains`,
@@ -644,14 +657,14 @@ device's timing and is not Diamond's bus. A call is made through the real vector
 arguments in a0-a3 and on the stack, returning to a loop; a test program is MIPS source assembled by emusen-mips into a
 PS-EXE and side-loaded as §3.3 describes.
 
-[M] 48 tests, all passing, `cargo test --release` in `kernel-harness/`, the page's table among them (§5):
+[M] 49 tests, all passing, `cargo test --release` in `kernel-harness/`, the page's table among them (§5):
 
 | File | Tests | What they show |
 |---|---|---|
 | `reset.rs` | 5 | the RAM's size register before any RAM store; the memory control values; BCC; 256 tags cleared; the hand-over at 80030000h with SR 401h and SP 801FFF00h, no exception taken; 60h-68h; the vector at 80h jumping to C(06h)'s handler and its copy at 0, a non-zero halfword there; the three call vectors; C(80h) reading B(00h); the header's date and console type; the table of tables' six entries and sizes, the unused ones zero; TCB 0 used and current; the chains' lengths 1, 4, 0, 1; the TTY's DCB and handles 0 and 1; every one of the 576 entries pointing into the kernel, and the shared stubs shared |
 | `exceptions.rs` | 8 | EnterCriticalSection's result and SR, ExitCriticalSection, syscall 0 changing nothing, the TCB's saved EPC and Cause; syscall 4's event; BREAK and an address error each delivering F0000010h,1000h and reaching a handler installed at A0[40h] that moves the TCB's EPC on, as ps1-tests' does; chains by priority, newest first, with the default handler's event; the second function with the first's result; the hook entered with v0 = 1 after the chains, and ResetEntryInt's structure; a timer IRQ's root-counter event and its acknowledgement; an interrupt on a GTE command running it once |
 | `strings.rs` | 12 | every memory, string and conversion call against its description, the documented bugs and refusals included, psx-spx's two strtok examples, its strstr example; rand's sequence; setjmp and longjmp |
-| `tty.rs` | 7 | printf's conversions and prefixes, %n, * widths; putchar's TAB and LF expansion, puts with `<NULL>`; the C table read on into the B table; the file layer's handles, errors and the unknown devices of phase 2; KernelRedirect; a PS-EXE that calls A(1Bh), B(3Fh), A(3Ch), C(BDh) and A(3Fh) and prints `strlen("printf")=6` and `printf 1997` |
+| `tty.rs` | 8 | printf's conversions and prefixes, %n, * widths, a flag after the width as `cpu/access-time`'s console log shows; putchar's TAB and LF expansion, puts with `<NULL>`; the C table read on into the B table; the file layer's handles, errors and the unknown devices of phase 2; KernelRedirect; a PS-EXE that calls A(1Bh), B(3Fh), A(3Ch), C(BDh) and A(3Fh) and prints `strlen("printf")=6` and `printf 1997` |
 | `kernel.rs` | 11 | events through their statuses and modes, a callback, sixteen EvCBs; WaitEvent returning once a timer IRQ delivers; two threads changing to each other with ChangeTh returning 1; the heap's format and first fit, calloc, realloc, kernel memory; qsort, bsearch, lsearch; Exec with its stack, GP, memfill, parameters and the caller's registers; LoadTest and Load failing; FlushCache's 256 tag stores and restored BCC and SR; SetConf and GetConf; GetSystemInfo; SetMem; the timer, GPU and pad calls' ports and returns; the phase 2 stubs' failures |
 | `registers.rs` | 1 | every implemented entry that returns, called with S0-S7, GP, SP and FP set, returning them unchanged (§6, GP) |
 | `image.rs`, `sha256.rs`, `page.rs` | 4 | the image's size and digest; the rebuild's bytes; SHA-256's standard vectors; §5's table |
@@ -704,7 +717,7 @@ only programs loaded directly run without your BIOS; discs and memory cards need
    DeliverEvent's callback arguments; EnableEvent on a ready or free EvCB; the device functions' convention; Exec's
    order of saved registers; the return values of InitPAD2, AddDrv, LoadTest and printf; lseek's "from the end"
    refused; realloc's failure; the port number read in hexadecimal; gpu_sync's timeout; the allocation order of the
-   control blocks.
+   control blocks; printf's repeated width or precision, and "0" after a width (§4.10).
 7. Not provided in phase 1, though documented: the expansion ROM's pre-boot and post-boot entry points at 1F000080h and
    1F000000h ("DEV0 Expansion ROM Header"), which cheat cartridges use; the POST register writes ("DEV8 Post
    Registers"); the command line at 180h, which SYSTEM.CNF fills.
@@ -760,7 +773,9 @@ bus branch. No reference emulator was run.
 
 **Test programs**, `~/.cache/emusen/probe/diamond/tests/`: ps1-tests' `README.md` (its first 60 lines),
 `common.mk` (its first 40), `common/exception.cpp` (its first 80), `common/exception.hpp`, `common/cop0.hpp` (its
-first 60, §10 Q4), `cpu/cop/main.cpp` (lines 1-200) and `cpu/cop/psx.log`; a count of the kernel calls named across
+first 60, §10 Q4), `cpu/cop/main.cpp` (lines 1-200) and `cpu/cop/psx.log`; for the prefixes' correction,
+`cpu/access-time/main.cpp` (its printf lines, by a search) and `cpu/access-time/psx.log` (its first 30 lines), and
+psx-spx's "A(3Fh) - Printf" (`kernelbios.md` 2391-2428) again; a count of the kernel calls named across
 ps1-tests' sources (a search, no file read whole); the directory listing of PSn00bSDK's examples. No test program
 whose source is a BIOS listing was opened.
 
@@ -769,4 +784,6 @@ whose source is a BIOS listing was opened.
 replacements' declaration); blackmoon-r3000's `lib.rs`, `boundary.rs` and `cop0.rs` (lines 1-80); emusen-mips's
 `lib.rs` (1-60) and `asm.rs` (1-120); Diamond's `Cargo.toml`; `.github/workflows/rust-cores.yml` (lines 1-150, and a
 search); `EmuSen/Cores/RustCores.props` (a search); the man-pages indexes. The toolchain's own outputs: rustc's target
-specification for `mipsel-sony-psx`, printed by the pinned compiler.
+specification for `mipsel-sony-psx`, printed by the pinned compiler. For the prefixes' correction: `Diamond_Native.md` §11.12, §11.14 to
+§11.17 and a search for the corpus's path, and `EmuSen.WiseMan/Cores/DiamondTests.cs` lines 200-260 (the gate's test);
+Diamond's bus sources were not read.

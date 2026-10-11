@@ -31,6 +31,16 @@ fn printf_writes_the_count_for_n_and_takes_widths_from_arguments() {
     assert_eq!(m.rig.tty_text(), "ab|   7|8  |005");
 }
 
+/// ps1-tests' cpu/access-time prints "%2d.%2-d", and its console log shows "5.3 " for 5 and 3: a flag after the width
+/// still applies, as psx-spx lists the prefixes as a set between "%" and the conversion (Diamond_OpenKernel.md §4.10).
+#[test]
+fn printf_takes_a_flag_after_the_width_as_the_console_s_log_shows() {
+    let mut m = booted();
+    m.text(FMT, "%2d.%2-d|%2-d|%-2d|%5+d|%4-x|%3 d");
+    m.a(0x3F, &[FMT, 5, 3, 21, 7, 9, 0xAB, 4]);
+    assert_eq!(m.rig.tty_text(), " 5.3 |21|7 |   +9|ab  |  4");
+}
+
 #[test]
 fn putchar_expands_tab_and_lf_and_puts_adds_nothing_and_prints_null_as_documented() {
     let mut m = booted();

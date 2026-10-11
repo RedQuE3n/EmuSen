@@ -444,7 +444,7 @@ fn the_dpcr_record_completes_only_with_the_channel_enabled() {
 
 /// `cpu/io-access-bitwidth`: 108 reads after 8-, 16- and 32-bit writes, the BIOS row's all the ROM's own word, a
 /// 32-bit store faulting at JOY_CTRL, SIO_CTRL and SPUCNT; 85 cells as the console's log has them, DICR's bit 6 and
-/// GPUSTAT's bit 26 among those that are not.
+/// GPUSTAT's bit 31 among those that are not, its bit 26 set since a reset ends a fill (Diamond_Records.md §16.1).
 #[test]
 fn the_io_bitwidth_record_reads_each_register_after_each_width() {
     let Some(source) = carried("io-access-bitwidth") else { return };
@@ -456,5 +456,53 @@ fn the_io_bitwidth_record_reads_each_register_after_each_width() {
     assert_eq!(marked(1), [3, 4, 5, 56, 57, 91], "the BIOS row");
     assert_eq!(marked(0x8001_56D8), [29, 35, 53], "--CRASH--");
     assert_eq!(cells[21..24].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x34_0078; 3], "DICR, the console's 340038h");
-    assert_eq!(fnv(&c.concat()), 0x6EF4_C758_7679_7C9B, "the calls with their arguments");
+    assert_eq!(cells[45..48].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x9480_2000; 3], "GPUSTAT after GP1(00h), ready as the release reads it");
+    assert_eq!(fnv(&c.concat()), 0x1E15_044A_5E79_7C9B, "the calls with their arguments");
+}
+
+// The GPU's step of amidog's FIFO, INTERLACE and cache groups (Diamond_Disputes.md D-23).
+
+/// GP1(00h) during a long fill ends it: GPUSTAT reads psx-spx's 14802000h at once and at the first poll, as
+/// DuckStation, SwanStation, Beetle PSX and PCSX-Redux read it (bit 13 aside), where the GPU stayed busy 5,855 polls.
+#[test]
+fn a_reset_during_a_fill_leaves_the_gpu_ready() {
+    let m = run(include_str!("../programs/gp1-reset.s"));
+    let r = results(&m, 0x10_0000, 5);
+    assert_eq!(r[0] >> 26 & 1, 0, "drawing before the reset");
+    assert_eq!(r[1..], [0x1480_2000, 0x1480_2000, 1, 0x1480_2000]);
+}
+
+/// D-23: an 8-bit page cached 64 texels by 32 lines, and cleared by a page set at another X or between 4 bits and the
+/// others but not between 8 and 15 bits, as amidog's CACHE BLOCK and CACHE TAG expect (`programs/texture-cache.s`).
+#[test]
+fn the_texture_cache_keeps_a_64_texel_row_and_clears_on_a_page_change() {
+    let m = run_for(include_str!("../programs/texture-cache.s"), 30, Market::Americas);
+    let ends = |line: u32| {
+        let w = |k: u32| m.board.ram_word(0x10_0000 + ((line - 10) * 32 + k) * 4);
+        (w(0) & 0xFF, w(31) >> 16 & 0xFF)
+    };
+    let rows: Vec<(u32, u32)> = (10..17).map(ends).collect();
+    assert_eq!(rows, [(1, 1), (1, 1), (2, 2), (2, 2), (2, 2), (4, 4), (5, 5)]);
+}
+
+/// D-23: in 480-line interlace with drawing to the displayed field prohibited, a fill and a rectangle drawn in vblank
+/// skip the lines of GPUSTAT bit 31's parity counted from the display's first line, as amidog's INTERLACE expects;
+/// PCSX-ReARMed skips the same lines with the display at line 0, Beetle PSX the odd lines in both (`programs/interlace.s`).
+#[test]
+fn interlaced_drawing_in_vblank_skips_the_lines_from_the_display_start() {
+    let m = run_for(include_str!("../programs/interlace.s"), 60, Market::Americas);
+    let px = |line: u32, x: u32| (m.board.ram_word(0x10_0000 + (line * 40 + x / 2) * 4) >> (16 * (x & 1))) & 0xFFFF != 0;
+    let drawn: Vec<[bool; 3]> = (0..12).map(|l| [px(l, 0), px(l, 32), px(l, 64)]).collect();
+    let (t, f) = (true, false);
+    assert_eq!(drawn[..4], [[f, f, t], [t, t, t], [f, f, t], [t, t, t]], "the display from line 0: even lines left");
+    assert_eq!(drawn[8..], [[t, t, f], [f, f, f], [t, t, f], [f, f, f]], "from line 1: odd lines left");
+}
+
+/// D-23: GPUREAD after a transfer's last word repeats the transfer's first, as amidog's FIFO read test expects and
+/// PCSX-ReARMed reads it; after a one-word transfer, the word it repeated before, on amidog's expectations alone
+/// (`programs/gpuread-repeat.s`).
+#[test]
+fn gpuread_repeats_the_first_word_of_the_last_longer_transfer() {
+    let m = run(include_str!("../programs/gpuread-repeat.s"));
+    assert_eq!(results(&m, 0x10_0000, 10), [0x0202_0101, 0x0404_0303, 0x0606_0505, 0x0202_0101, 0x0202_0101, 0x0303_0202, 0x0202_0101, 0x0202_0101, 0x0202_0101, 0x0202_0101]);
 }

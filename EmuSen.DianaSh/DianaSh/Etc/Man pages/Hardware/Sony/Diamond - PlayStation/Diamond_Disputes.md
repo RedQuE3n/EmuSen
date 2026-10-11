@@ -673,7 +673,7 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   `the_status_follows_a_byte_through_the_transmitter_and_the_fifo`.
 - **Implemented in:** `diamond: SIO0 and port 1's digital pad, brought forward from stage 6`.
 
-### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; ~~open~~ the drawing groups settled on its expectations, the FIFO, INTERLACE and cache groups open
+### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; ~~open~~ the drawing groups settled on its expectations, ~~the FIFO, INTERLACE and cache groups open~~ *since the cache step* INTERLACE, CACHE TAG and the FIFO's read and full tests too, the FIFO's overflow test and CACHE BLOCK's polygons open
 
 - **Opened:** 2026-10-11, by `psxtest_gpu` 1.7 run to its end once the pad answered (`Diamond_Pad.md` §5.4).
 - **Documents read:** none for this entry beyond `Diamond_GPU.md`'s own sources. *The GPU's step, 2026-10-11:*
@@ -727,6 +727,45 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   | INTERLACE | 1,705 values, given up | 3,060 values, run to its end |
   | CACHE TAG, CACHE BLOCK | 594,688 and 3,322 values | the same |
 
+  *The cache step, 2026-10-11* [M, R the program's harness]. The four groups that still failed, run alone from local
+  copies as before. What each measures was read from the harness's loops and, where the harness computes them itself
+  (the FIFO's read and overflow tests), from its expected values; INTERLACE and the cache groups compare VRAM with the
+  model's. The VRAM the harness compares and the image it expects were also read from RAM at its compare function's
+  entry (80021334h), by a scratch runner kept in the cache. Group by group:
+
+  | Group | What it measures | What failed | Rule taken, and its evidence |
+  |---|---|---|---|
+  | FIFO read | a line whose pixel x holds 0101h×(x+1); transfers of 1 to 32 pixels from 32 starts, each read for 32 words | every word after a transfer's last: Diamond repeated the last word read | once read, a transfer of two words or more leaves GPUREAD repeating its first word; one of one word leaves it repeating what it repeated before: the harness's own expectation; PCSX-ReARMed for two words or more; DuckStation and SwanStation repeat the last word, Beetle PSX reads 0 |
+  | FIFO full | a 512-pixel read, 0 to 15 of its words read, a fill written, the rest read, then the line read again | the rest: the fill had been drawn under them | the processor takes no word from the FIFO while a VRAM-to-CPU transfer has words to give: the harness's expectation; DuckStation passes the test |
+  | FIFO overflow | a fill of 1024×256, then 15 fills of 16×16 written by the CPU with no wait, with NOPs or GP0(E6h) words between in six patterns; then, in half the cases, GP1(01h) | the harness's images keep the second fill in four patterns and the last four fills in all, and lose the rest; after GP1(01h), none of them, and the large fill stopped after about five lines | open (the conclusion) |
+  | INTERLACE | fills, polygons, lines and rectangles drawn in vblank in 640×480 PAL interlace, GP0(E1h) bit 10 clear and set, the display from line 0 and from line 1 | which lines were left: Diamond left the displayed field's (by its flag), the other parity in vblank, and never in a fill | with bit 10 clear in 480-line interlace, fills and rendering commands leave the lines whose parity, counted from the display's first line, is GPUSTAT bit 31's (0 in vblank): the model's expectation; fills left alone on some lines by Beetle PSX and PCSX-ReARMed, PCSX-ReARMed's lines the same with the display at line 0 |
+  | CACHE TAG | 29 changes between two draws of a texture cached and changed behind the cache: GP0(E1h), rectangles and polygons of no size, each depth, the page's X or Y, the unused bits, the CLUT, GP1(00h) | the second draw's texels: Diamond kept the cache across page changes, and the CLUT cache across GP1(00h) | a page set at another X or Y, or between 4 bits and the other depths, clears the texture cache, between 8 and 15 bits not; GP1(00h) clears the CLUT cache, psx-spx listing GP1(01h) among what it does: the model's expectation; Beetle PSX on every row of `texture-cache.s` |
+  | CACHE BLOCK | a texture fetched by a rectangle, quad or triangle of 72 texels from four offsets, changed by a fill, drawn again as 64×64 | which texels came from the cache: at 8 bits Diamond held 32 texels of a row | an 8-bit page is cached in blocks of 64 texels by 32 lines, as the test labels its cases (`cache_block{64,32}`), against psx-spx's 32 by 64: the model's expectation, Beetle PSX |
+
+  The remaining CACHE BLOCK cases are all of its tests 1 and 4, a quad and a triangle whose last lines or right
+  columns fetch the first draw's entries: the model's image keeps 16 texels of six lines from the cache that Diamond's
+  fetch did not keep or did not load. Their cause was not established; a polygon fetching its texels by pixel pairs, as
+  rectangles do since the GPU's step, would load entries beyond its edges, and was not tried, since it would change
+  polygons' sampled texels where ps1-tests' pictures are exact [A].
+
+  The overflow test's six images, against models of a FIFO of 4 to 32 words that drops the word arriving at a full
+  FIFO, keeps the newest words, or wraps as a ring whose count is taken modulo its size or twice it, with NOPs and
+  GP0(E6h) taking a place or not and one command held aside or not: none gives all six [M, a search kept in the cache].
+  The second fill survives exactly where no GP0(E6h) word follows the large fill, and the last four survive in all six,
+  which suggests a ring overwritten from its write position; a model that fits was not found. With GP1(01h) the large
+  fill stopped about five lines in, which a fill drawn whole as it starts (`Diamond_GPU.md` §2.1) cannot show.
+  DuckStation draws every fill, as Diamond does, and with GP1(01h) none, as it never holds the writer. **Open**; Diamond
+  keeps holding the writer at a full FIFO (§2.1's choice), on Peter Lemon's programs drawn whole.
+
+  Before and after the step, each group alone, failing lines on the TTY [M]:
+
+  | Group | Before | After |
+  |---|---|---|
+  | FIFO | 53,916 (read 48,128; full 3,976; overflow 1,812) | 1,812 (overflow) |
+  | INTERLACE | 3,060 | none |
+  | CACHE TAG | 594,688 | none |
+  | CACHE BLOCK | 3,322 | 1,322 |
+
   On the screen's first page of three, which holds BASIC, COMMON, PRIMITIVE and XYFLIP's first rows, 81 cells read
   ERROR before and none after, every other cell OK or N/A [M, `AmidogScreen`'s colour key applied to the picture]; the program
   turns to its other pages by the pad, which did not answer from a saved state here, so those pages' groups are given
@@ -745,6 +784,13 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   Diamond did; it passes MOVE and the LINE group's values and agrees on bit 26 during a read. PCSX-Redux keeps the last
   GP1(10h) result for an index with no register and differs in GPUSTAT bit 13 throughout. Neither model was read; only
   their outputs.
+  *The cache step* [M, `Diamond_Referees.md` §4.12]: `texture-cache.s`, `interlace.s` and
+  `gpuread-repeat.s` on the five referees. Beetle PSX alone models the texture cache, and equals Diamond's new rule on
+  all seven rows; the others fetch every texel afresh. In vblank of 480-line interlace DuckStation, SwanStation and
+  PCSX-Redux draw every line; Beetle PSX leaves the odd lines in both cases, fills included; PCSX-ReARMed the even lines
+  with the display at line 0, as Diamond and the model, and none from line 1. After a three-word read PCSX-ReARMed
+  repeats the first word, as the model; DuckStation and SwanStation the last, Beetle PSX 0, PCSX-Redux `00000400h`;
+  after a one-word read every referee repeats the word just read or 0, not the earlier word the model expects.
 - **Conclusion:** ~~open, for the GPU's own step. The F column of a test that compares VRAM is likely GPUSTAT or the
   drawing's side effects (D-10, D-11) [A]; the flipped rectangles' values bear on D-8, the lines' on D-7's line rule,
   and the drawing area's on the clipping of untextured primitives, where ps1-tests' pictures agree with Diamond. The
@@ -757,6 +803,13 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   console's expectations as its author's model encodes them, and is marked so in `Diamond_GPU.md`. Open: the texel
   pairs beyond an even start column, an odd read beyond one pixel, and the four groups that still fail
   (`Diamond_GPU.md` §14), which the first run's record did not list though they failed then too.
+  *The cache step:* the rules of its table, implemented; ps1-tests' pictures exact, `gpu/bandwidth` and `dma/chopping`
+  byte for byte as before. Weight: the 8-bit block shape and the page changes that clear the cache stand on the model's
+  expectations and Beetle PSX, the only referee that models the cache, against psx-spx's 32 by 64; the interlace rule
+  on the model's expectations, with two other lineages skipping lines in fills; the read that waits behind a transfer
+  on the harness and DuckStation; GPUREAD's repeat of a longer transfer's first word on the harness and PCSX-ReARMed,
+  of the earlier word after a one-word transfer on the harness alone; GP1(00h)'s CLUT clear on psx-spx and the model.
+  Open: the FIFO's overflow test, and CACHE BLOCK's quad and triangle cases.
 - **Depends on it:** the GPU's line rasteriser, the flip, the area's clipping, GPUSTAT; *since the step* GPUREAD's
   latch, the copy, VRAM reads, sprites' texels, every primitive's placement under the offset.
 - **Pinned by:** ~~nothing yet~~. *Since the step:* `bit_28_clears_while_a_polygons_or_a_lines_vertices_arrive`,
@@ -764,7 +817,14 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   `gp1_10h_keeps_the_latchs_high_bits_and_reads_zero_for_no_register`, `a_copy_over_itself_to_the_right_moves_each_row_as_it_was`,
   `an_odd_read_ends_with_the_next_pixel_and_holds_the_gpu_until_read`, `a_rectangles_pixel_pair_reads_its_texels_from_one_cache_entry`,
   `a_vertex_and_the_offset_add_in_eleven_bits`, `the_offset_moves_a_polygon_whole_and_its_size_is_judged_before`,
-  `rows_past_511_wrap_into_vram_inside_a_tall_area`; and WiseMan's amidog tests, still opt-in and now started from the earlier menus, the GPU test's full run
+  `rows_past_511_wrap_into_vram_inside_a_tall_area`; *since the cache step*
+  `interlaced_drawing_skips_bit_31s_lines_counted_from_the_display_start`,
+  `a_command_behind_an_unread_transfer_waits_until_it_is_read`, `gpuread_repeats_a_transfers_first_word_once_it_is_read`,
+  `an_8_bit_page_is_cached_64_texels_by_32_lines`, `a_page_change_clears_the_texture_cache`,
+  `a_reset_clears_the_clut_cache`, and the programs' `the_texture_cache_keeps_a_64_texel_row_and_clears_on_a_page_change`,
+  `interlaced_drawing_in_vblank_skips_the_lines_from_the_display_start`,
+  `gpuread_repeats_the_first_word_of_the_last_longer_transfer`; and WiseMan's amidog tests, still opt-in and now started from the earlier menus, the GPU test's full run
   (330,743 frames) left out of them.
 - **Implemented in:** ~~nothing yet~~. *Since the step:* `diamond: amidog's GPU test passes its drawing groups (D-23), and
-  small rectangles cost their rows (D-11)`.
+  small rectangles cost their rows (D-11)`; *the cache step:* `diamond: amidog's FIFO read and full tests,
+  INTERLACE and the texture cache's tags and blocks (D-23)`.

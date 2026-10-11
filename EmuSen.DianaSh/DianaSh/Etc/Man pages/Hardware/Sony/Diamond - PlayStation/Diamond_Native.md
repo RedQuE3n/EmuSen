@@ -1038,7 +1038,8 @@ reference's card is a separate step, for which the card a program wrote is kept 
   `135549cd26268e0a50f56649ac4a1cdfdf6287ca2660698023648bc3bf011629`.
 - **Programs**: `card.s`, `multitap.s`, `kernel-pad.s` beside `pad.s`.
 - **The state**: `DMND` version 4, 3,747,794 bytes with a DualShock on port 1 and no card; each card adds its 131,072
-  bytes.
+  bytes. *Version 5 since the GPU's cache step (2026-10-11), 3,747,806 bytes: the GPU's repeated GPUREAD word, a
+  transfer's first word and the texture cache's page (`Diamond_GPU.md` §12).*
 
 ### 14.2 The gate
 

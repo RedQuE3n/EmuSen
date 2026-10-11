@@ -58,7 +58,7 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   drawing time) and D-12 (two pictures the programs cannot meet); from the pad, D-22 (SIO0's timing) and D-23 (amidog's GPU test). The R3000A's
   disputes (D-1 to D-3, and D-17 to D-21 from amidog's `psxtest_cpx`) are in
   `../BlackMoon-HW/BlackMoon_R3000.md` §8 and the GTE's (D-13 to D-16, from stage 5) in `../BlackMoon-HW/BlackMoon_GTE.md`
-  §12.
+  §12. *2026-10-11*: D-20 and D-21 settled; DICR's bit 6 ruled in `Diamond_Records.md` §16.2.
 - [`Diamond_Referees.md`](Diamond_Referees.md) — the disputes refereed by emulators, written 2026-10-11 once no
   console was to be used: DuckStation and PCSX-Redux fetched, pinned and driven headless beside the three libretro
   cores, their lineages weighed, each open dispute's program run on all of them, the rulings (D-0's line witnessed and

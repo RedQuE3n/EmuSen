@@ -107,16 +107,19 @@ cursor (`Amidogs_gpu_and_gte_menus_follow_the_pad`). The tests print each failin
 Started by Start at frame 2,400 (all six tests); finished by frame 12,000. Verdicts read from the screen by
 `AmidogScreen` (X exception, F flag, V value, T timing):
 
-| Test | First run | After the fixes of `BlackMoon_R3000.md` D-17 to D-19 |
-|---|---|---|
-| EXCP | X OK | X OK |
-| INTR | X ERROR: 8 cases, EPC 4 bytes early | X OK |
-| SLOT | X ERROR (8 cases, TAR), V OK | X OK, V OK |
-| SLOT BR | X OK, V OK | X OK, V OK |
-| BREAK | X ERROR, 39,146 cases | X ERROR, 7,680 cases (D-20, D-21) |
-| ILLEGAL | X OK | X OK |
+| Test | First run | After the fixes of `BlackMoon_R3000.md` D-17 to D-19 | After D-20's and D-21's second steps |
+|---|---|---|---|
+| EXCP | X OK | X OK | X OK |
+| INTR | X ERROR: 8 cases, EPC 4 bytes early | X OK | X OK |
+| SLOT | X ERROR (8 cases, TAR), V OK | X OK, V OK | X OK, V OK |
+| SLOT BR | X OK, V OK | X OK, V OK | X OK, V OK |
+| BREAK | X ERROR, 39,146 cases | X ERROR, 7,680 cases (D-20, D-21) | X OK, 0 cases |
+| ILLEGAL | X OK | X OK | X OK |
 
-The F, V and T columns not named are N/A. The three defects found and fixed are in the R3000A's own record. EXCP takes
+The F, V and T columns not named are N/A. The three defects found and fixed are in the R3000A's own record; *since
+2026-10-11* so are the debug unit's rules and SWCz's store, read from the test's own model of each case, which leave
+no case failing. BREAK's 7,680 failing cases print 2.6 MB, which overflows the TTY space's 64 KiB; they were read
+through a runner that empties it every frame [M]. EXCP takes
 only SYSCALL and BREAK, whose opcodes have CE bits of zero.
 
 ### 5.2 Stage 2's items, closed and open
@@ -131,7 +134,8 @@ only SYSCALL and BREAK, whose opcodes have CE bits of zero.
   value column red [M, the negative control, built and discarded]. So the cancelled first load is confirmed by a
   console's expectations, with `loads.s` and two of three witnesses.
 - **COP0 registers 16-31**: still open. Neither `psxtest_cpu` nor `psxtest_cpx` executes an MFC0 of them [M, the same
-  counter: none], so no program run here reads them.
+  counter: none], so no program run here reads them. *2026-10-11*: refereed with `cop0-garbage.s` on all five
+  (`../BlackMoon-HW/BlackMoon_R3000.md` §10): no exception, the value 0 kept as a choice; open on the hardware.
 
 ### 5.3 `psxtest_gte` 1.4
 

@@ -587,7 +587,8 @@ then differs from cell to cell with the moment of the read, as psx-spx says it c
 time no log gives (§2.3's reason).
 
 **Against the console's log**: 85 of the 108 cells as the console's, the same 85 as the release's on the open kernel
-[M, `psxrecords.py console io-access-bitwidth`]. The 23 others: 14 already recorded in `Diamond_Native.md` §11.14, the
+[M, `psxrecords.py console io-access-bitwidth`]. *Since DICR's bit 6 was ruled (§16.2)*: 91; the 17 others are those
+below but DICR's six. The 23 others: 14 already recorded in `Diamond_Native.md` §11.14, the
 registers' upper bits the console returns from its bus (I_MASK's three and T0_TARGET's three in the 32-bit table,
 SIO_CTRL's two) and DEV1 at `1FA00000h`, which reads FFh where the console's window holds what was written (six);
 DICR's six (§16.2); and GPUSTAT's three in the 32-bit table, `14802000h` in the log, bit 31 set on Diamond in the
@@ -665,12 +666,34 @@ already begun, and to the pixels it has not drawn, no log shows; the question is
 
 ### 16.2 DICR's bit 6
 
-Not changed; reported. Diamond keeps bits 0 to 6 of a DICR write (`dma.rs`, `value & 00FF807Fh`), as psx-spx's "DMA
+~~Not changed; reported.~~ *Changed 2026-10-11, by the step below.* Diamond keeps bits 0 to 6 of a DICR write (`dma.rs`, `value & 00FF807Fh`), as psx-spx's "DMA
 Channels" gives them ("0-6 Controls channel 0-6 completion interrupts"). The console's log reads `38h` in all six DICR
 cells after writing `78h`, `5678h` or `12345678h`: bit 6 reads zero, bits 0 to 5 as written. Beetle PSX and SwanStation
 read as the log in all six, PCSX-ReARMed after its halfword and word stores but not its byte stores, DuckStation as
 Diamond in all six [M]. A disagreement between the document and the console's log,
 for a dispute step.
+
+**The dispute step, 2026-10-11.** No number is given: it is a register's width, settled at the first rungs.
+- *Documents read:* psx-spx `6d7d1bc`, "DMA Channels", DICR ("0-6 Controls channel 0-6 completion interrupts in bits
+  24-30. When 0, an interrupt only occurs when the entire transfer completes. When 1, interrupts can occur for every
+  slice and linked-list transfer"), and "Unpredictable Things" (DPCR/DICR take a full 32-bit write from a byte or
+  halfword store).
+- *The console's log:* the six cells above, after a byte, a halfword and a word store of the same register, read as 32,
+  16 and 8 bits: bit 6 reads zero in every one, bits 0-5 as written.
+- *Test program:* `programs/dicr.s`, interrupts off: DICR after a word, a halfword and a byte store of 12345678h; after
+  7Fh, after 40h alone, after 7FFFh (bits 7-14), after 00FF007Fh; a halfword and a byte read after 7Fh; and after 0.
+- *Referee* (`Diamond_Referees.md` §4.12) [M]: Beetle PSX and SwanStation read bit 6 zero in every case, `340038h`,
+  `3Fh`, `0`, `3Fh`, `FF003Fh`, `3Fh`, `3Fh`, `0`; PCSX-ReARMed zero but after the byte store; PCSX-Redux zero after
+  every word store, while after a halfword or byte store it holds the whole register as written, bit 6 with it, and it
+  acknowledges no flag; DuckStation keeps bit 6 in all, as Diamond did. Bits 7-14 read zero on all six.
+- *Conclusion:* **DICR's bit 6 is not stored and reads zero**; bits 0-5 are channels 0 to 5's. Measured by the console's
+  log, and agreed by three lineages (Mednafen, PCSX, and SwanStation's state of the DuckStation lineage), DuckStation
+  alone against. psx-spx's "0-6" is read as describing six bits and a seventh that does not exist, which fits channel 6
+  (OTC) having no slices or list to interrupt between [A].
+- *Pinned by:* `dicr_reads_bit_6_zero_after_any_store` (failing before the change: `340078h`, `7Fh`, `40h`), and
+  `the_io_bitwidth_record_reads_each_register_after_each_width`, whose six DICR cells now read the console's `340038h`.
+- *Implemented in:* `diamond: DICR's bit 6 reads zero; programs for DICR, SWCz's store and the garbage registers`; `dma.rs` keeps `00FF803Fh` of a write. `io-access-bitwidth`'s
+  record now has **91 of its 108 cells** as the console's [M, `psxrecords.py console`].
 
 ## 17. What was read for §11–§16
 

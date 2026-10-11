@@ -13,7 +13,8 @@ and their weighing are `Diamond_Referees.md`, and each entry below carries its r
 `../BlackMoon-HW/BlackMoon_R3000.md` §8.
 *Since the pad (2026-10-11)* the R3000A's D-17 to D-21, from amidog's `psxtest_cpx`, are in `BlackMoon_R3000.md` §8:
 MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), the debug unit (D-20) and SWCz's store
-(D-21); D-22, SIO0's timing, is here.
+(D-21); D-22, SIO0's timing, is here. *2026-10-11*: D-20 and D-21 settled by the test's own model and a referee step; DICR's bit 6,
+which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
 
 ## The rules this log keeps
 

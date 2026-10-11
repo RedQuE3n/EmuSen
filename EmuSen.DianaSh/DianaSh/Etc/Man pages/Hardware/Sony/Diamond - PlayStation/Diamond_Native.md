@@ -1062,3 +1062,57 @@ among them. No reference emulator was run.
 - The multitap's slots B-D's cards (no battery numbers yet), the DualShock's watchdog, the DualShock 2's commands, a
   pad combination for the Analog button, rumble's event (`EmuSen_CoreAPI_Extensions.md` §4).
 - On a console (Q16): D-22, SIO0's timing, and the card's late /ACK.
+
+---
+
+## 15. Stage 7, the CD-ROM and the shared disc crate (2026-10-11)
+
+The plan's §7 row 7, with the tester's go of 2026-10-11. Its record is `Diamond_CDROM.md`; the disc crate's is
+`../../Shared/EmuSen_Disc.md`.
+
+### 15.1 What was built
+
+- **`emusen-disc`** (`EmuSen/Cores/Shared/`): a disc as sectors from a cue sheet, an `.iso`, a lone raw track or a CHD
+  (through the `chd` crate, unread, its CD layout measured from chdman's output); ECMA-130's EDC and RSPC; subchannel
+  Q; the TOC; `.sbi`; the set module's readers.
+- **The controller** (`src/cdrom/`): the decoder's host interface, every command of psx-spx's summary with its first and
+  second responses and their delays (D-24), the drive's spin-up, seeks by distance and held head (D-25), reads at 75 and
+  150 sectors a second with the buffer's oldest and newest, the file and channel filter, XA-ADPCM with its
+  interpolation to 44,100 Hz (D-27), CD-DA with reports and AutoPause, the volume matrix, subchannel Q and LibCrypt by
+  `.sbi`, the lid, SCEx for the console's region, the firmware's date, DMA channel 3. Its audio leaves at 44,100 Hz for
+  the SPU of stage 8.
+- **The create** (`src/medium.rs`): a sheet with its tracks as files from 65,536 (`EMUSEN_FILE_MEDIA`), a CHD, an
+  `.iso` or a lone track; refusals −11 and −12.
+- **The pack**: `.chd` routed; `.cue`, `.iso`, `.bin`, `.m3u`, `.pbp` declared; the recogniser `PsxSystem.IsDisc`.
+- **The state**: `DMND` version 6, 3,788,042 bytes (§10 of the CDROM page).
+- **Programs and tools**: `cd-read.s` (the kernel's read sequence, polled), `cd-kernel.s` (the kernel's CD functions);
+  the run tool's `--disc`, `--boot`, `--trace-game`, `--swap`, `--pictures` and the rest.
+
+### 15.2 The gate
+
+| Item | Result |
+|---|---|
+| ps1-tests' `cdrom/getloc` | **passes** by its own verdict on the player's BIOS with one of the tester's discs, every Getloc succeeding or failing as on the console; the eighth byte of GetlocP prints as zero (D-28) |
+| ps1-tests' `cdrom/disc-swap` | **every line of the console's log** but the last, whose wording is an older build's |
+| Synthetic discs read sector for sector | **met**, at both speeds, user data and whole sectors, by the controller's tests and by DMA in `cd-read.s` |
+| XA and CD-DA streams equal to their sources | **met**: XA's decoded samples exactly, its 44,100 Hz frames equal to the source through psx-spx's interpolation; CD-DA frame for frame |
+| Games boot on the player's BIOS to their title screens | **not met the console's way** (D-29: the intro stays on its first screen); **through the kernel's own LoadExec** Crash Bandicoot and Spyro the Dragon reach their title screens, equal to Beetle PSX's, SwanStation's and PCSX-ReARMed's within the animation's phase; five others reach their opening movies, which wait for the MDEC (stage 9) |
+| Load time and the copy at create | 0.35–0.57 s on the desktop for 432–662 MB, the copy acceptable there; the handheld's measurement left with what it needs |
+
+Beyond the gate, ps1-tests' `cdrom/timing` prints every figure within the console's range.
+
+### 15.3 Defects found and fixed in the stage, each by a test
+
+- BFRD written twice restarted the data FIFO and the DMA reading it (`bfrd_set_again_…`).
+- A Read with no new Setloc began at the last delivered sector rather than where the seek left the head.
+- Clearing the result FIFO on acknowledge, psx-spx read literally, left a PSn00bSDK program one byte of each response.
+
+### 15.4 Tests run (2026-10-11)
+
+`diamond` 101 unit tests, 33 program tests and 37 with the disc inputs; `emusen-disc` 19 with chdman named; WiseMan's
+`DiamondTests`, `SystemPack`, `CoreAbi` and `CoreAdapter`, 83 of 83.
+
+### 15.5 What waits
+
+D-29; the framework's items of `Diamond_CDROM.md` §8.4 (the header constant, the runtime's companions, routing by
+content, archives); `.m3u` and the disc change at stage 11; the handheld's load measurement; a LibCrypt disc.

@@ -4,7 +4,7 @@
 //! `--disasm ADDRESS N` disassembles N words of a game's RAM after the run. `--boot` boots the disc through the kernel's LoadExec from a loader, without the BIOS's intro (Diamond_CDROM.md §9).
 //! `--heading TEXT` prints the TTY from TEXT on, leaving out what a BIOS printed before the program; `--trace` then
 //! traces the controller's commands and responses, as `--trace-game` does from the entry of a game booted by `--boot`, once the BIOS has handed over. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
-//! the image itself when PATH is no PS-EXE), `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
+//! the image itself when PATH is no PS-EXE), `--analog` presses port 1's Analog button at frame 30; `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
 //! `cdrom/disc-swap` does. A development tool for the test programs (Diamond_Native.md §11.11, Diamond_CDROM.md §9):
 //! on the open kernel, a player's own BIOS, or none.
 
@@ -53,6 +53,7 @@ fn main() {
     let heading = args.iter().position(|a| a == "--heading").map(|i| args[i + 1].clone());
     let trace = args.iter().any(|a| a == "--trace");
     let (mut last_ask, mut asked_at) = ((0, 0), 0);
+    let analog = args.iter().any(|a| a == "--analog");
     let trace_game = args.iter().any(|a| a == "--trace-game");
     let lid_at = args.iter().position(|a| a == "--open-at").map(|i| args[i + 1].parse::<i64>().expect("a frame"));
     let every = args.iter().position(|a| a == "--pictures").map(|i| (args[i + 1].clone(), args[i + 2].parse::<i64>().expect("a frame count")));
@@ -69,6 +70,9 @@ fn main() {
             }
             m.frames += 1;
             continue;
+        }
+        if analog && (30..40).contains(&m.frames) {
+            m.board.sio0.set_buttons(0, if m.frames < 35 { 1 << 16 } else { 0 });
         }
         m.advance();
         if let Some((dir, n)) = &every

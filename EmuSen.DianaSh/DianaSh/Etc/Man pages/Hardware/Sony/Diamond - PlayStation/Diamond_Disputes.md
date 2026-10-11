@@ -828,3 +828,137 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
 - **Implemented in:** ~~nothing yet~~. *Since the step:* `diamond: amidog's GPU test passes its drawing groups (D-23), and
   small rectangles cost their rows (D-11)`; *the cache step:* `diamond: amidog's FIFO read and full tests,
   INTERLACE and the texture cache's tags and blocks (D-23)`.
+
+### D-24. The CD-ROM controller's response delays: fixed figures from two console measurements that disagree on Pause, where psx-spx and the test programs give distributions
+
+- **Opened:** 2026-10-11, at stage 7, by writing the controller (`Diamond_CDROM.md` §4): psx-spx gives each delay as an
+  average with a range, measured on a PAL PSone, and says the first response comes "around 1000-6000 cycles" after
+  BUSYSTS clears in one chapter and averages 50,401 cycles in another; ps1-tests' `cdrom/timing` log, from another
+  console, gives its own averages and ranges.
+- **Documents read:** psx-spx `6d7d1bc`, "CDROM - Response Timings", "CDROM - Mainloop/Responses", "BUSYSTS flag".
+- **Test program:** ps1-tests' `cdrom/timing` (release build 158), on the player's BIOS with one of the tester's discs,
+  its console log beside it: Nop's acknowledge 24,024–137,104 cycles (average 45,993), Init's 69,456–93,696 (75,086) and
+  its completion 138,448–600,632 (476,300), a read's sectors 416,216–469,960 single and 186,552–249,744 double, Pause's
+  completion 1,006,472–1,046,336 at either speed.
+- **Referee:** not consulted (`cdrom/timing` needs a disc in the drive beside a side-loaded program, which the referees'
+  drivers do not offer; PCSX-Redux run with `-iso` and `-exe` stopped at the program's CdInit, §9.6 of the CDROM page).
+- **Witnesses:** none.
+- **Conclusion:** one figure per delay, no distribution [C]: the first response 46,000 cycles with the motor on (the
+  timing log's Nop average) and psx-spx's 23,796 with it stopped; Init's and ReadTOC's 75,000; Init's completion 476,000
+  once the head holds; GetID's second response psx-spx's 18,944; Pause's **1,020,000 at either speed**, the timing log's,
+  where psx-spx's PSone gives 2,167,580 single and 1,097,107 double; Stop's psx-spx's three; the next response after an
+  acknowledge 7,424 cycles (psx-spx's shortest command-to-response figure, one pass of the controller's loop).
+  `cdrom/timing` then prints every figure within the console's range (the acknowledges at 46,080–46,136, Init's
+  completion 472,472–474,752, single-speed sectors averaging 448,504, Pause's completion 1,018,680). The disagreement on
+  Pause is between two consoles, PU-model and region unknown for the log's; the log is followed because it is the
+  oracle the gate grades by. Open: a distribution, and which consoles each figure belongs to. *Taken by the stage 7
+  branch; another branch may number its own entries from D-24 too, and the merge renumbers.*
+- **Depends on it:** every program that times the CD, and the frames a game's loading takes.
+- **Pinned by:** `cdrom::tests::getstat_after_power_on_…`, `tests/programs.rs`'s
+  `the_timing_programs_figures_lie_within_the_consoles` (opt-in).
+- **Implemented in:** the stage 7 commits on `diamond-s7`.
+
+### D-25. The drive's mechanics: a seek of a fixed part and one growing with the square root of the distance, a spin-up of three quarters of a second, and the head stepping back over the last sectors while paused
+
+- **Opened:** 2026-10-11, at stage 7: psx-spx says the seek timings "are still unknown, and they are probably quite
+  complicated" and gives none; it gives the paused head's window (N−8…N single speed, N−5…N+2 double) but no spin-up
+  time.
+- **Documents read:** psx-spx `6d7d1bc`, "SeekL", "SeekP", "CDROM - Response Timings", "MotorOn", "Init".
+- **Test program:** `cdrom/timing`'s first sector after a ReadN from 100 sectors back (668,488–1,024,016 cycles
+  single, 553,960–1,024,016 double) and `cdrom/getloc`'s check that a seek from 00:02:16 to 40:00:16 is still seeking
+  after a million-iteration loop.
+- **Referee:** not consulted.
+- **Witnesses:** none.
+- **Conclusion:** a seek ahead by fewer than 32 sectors follows the spiral, a sector period each; any other seek takes
+  400,000 cycles plus 300 ms times the square root of its distance over a 74-minute disc [C, fitted to the two programs:
+  the first sector after the 100-sector seek back then comes at 860,000–1,022,000 cycles single and 796,000–800,000
+  double, inside the log's ranges, and the 40-minute seek takes 0.23 s]; a spin-up and the TOC's reading take 0.75 s
+  [C, no figure found]; a paused or idle head steps through psx-spx's window, which GetlocL and GetlocP read. After a
+  spin-up or Init the head holds at 00:02:00, its window 00:01:67–00:02:00, where the getloc log finds it. Open, the
+  plan's P6: every figure here.
+- **Depends on it:** the frames a game's loading takes; any program that reads the head's position.
+- **Pinned by:** `cdrom::tests::getlocl_fails_until_a_seek_…`, `getloc_passes_on_the_players_bios` (opt-in).
+- **Implemented in:** the stage 7 commits.
+
+### D-26. How far past a disc's program a seek reaches: a fixed outer limit at 74:15:00, or 1:30 past the lead-out's start where the program runs later
+
+- **Opened:** 2026-10-11, by `cdrom/getloc`: on the console of its log a seek to 74:00:00 succeeds (GetlocP reads the
+  lead-out, 3:34:62 into it, so that disc's lead-out began at 70:25:16) and one to 74:30:00 fails with a seek error and
+  the motor stopped. The tester's discs are 41 to 70 minutes long.
+- **Documents read:** psx-spx `6d7d1bc`, "Status code" (the seek error), "SeekL"; ECMA-130 §22.3.3 (the lead-out's Q).
+- **Test program:** `cdrom/getloc` on Ape Escape (a 40:52 program).
+- **Referee:** not consulted.
+- **Witnesses:** none.
+- **Conclusion:** a seek fails if its target lies at or beyond the later of 74:15:00 and 1:30 past the lead-out's start
+  [C]: the one console datum puts its limit between 74:00:00 and 74:30:00, and a limit tied to the lead-out alone would
+  fail `getloc` on every shorter disc of the tester's, as the program's author evidently did not expect. A 74-minute
+  disc's spiral ending near a fixed radius is the physical reading [A]. The failure is INT5 with the seek error and
+  04h, the motor off; GetlocL and GetlocP then fail with 80h and the status 04h, as the log's do. Open.
+- **Depends on it:** `cdrom/getloc`'s verdict; nothing a game does, as far as known.
+- **Pinned by:** `getloc_passes_on_the_players_bios` (opt-in).
+- **Implemented in:** the stage 7 commits.
+
+### D-27. XA-ADPCM's arithmetic where psx-spx's pseudocode leaves it: the prediction rounded by an arithmetic shift, each interpolation term truncated, 18,900 Hz made by repeating each sample
+
+- **Opened:** 2026-10-11, at stage 7: psx-spx's `decode_28_nibbles` divides the prediction by 64 and its zigzag formula
+  divides each term by 8000h, without saying how a negative quotient rounds; it says only that 18,900 Hz output is
+  "spread across about fifty 44100Hz samples" and that its formula "gives nearly correct results"; the emphasis filter
+  is unknown and "isn't used by any known PSX games"; the six-step counter's power-on value is "uninitialized random".
+- **Documents read:** psx-spx `6d7d1bc`, "CDROM XA Audio ADPCM Compression" whole.
+- **Test program:** the controller's tests, an XA stream of filter 0 whose decoded samples are its source exactly
+  (`Diamond_CDROM.md` §6).
+- **Referee:** not consulted (no reference exposes the CD's audio before its SPU mixes it).
+- **Witnesses:** none.
+- **Conclusion:** the prediction `(old·f0 + older·f1 + 32) >> 6`, each zigzag term `sample·k >> 15` summed and
+  saturated, 18,900 Hz samples fed twice to the 37,800 Hz interpolator, emphasis not applied, the six-step counter
+  starting at 6 [C]. psx-spx's seven tables sum to 73E5h–741Dh, a gain of 0.905–0.907 rather than unity, kept as
+  written. Open: all of it, with a console recording (the plan's §11 Q16) the only oracle that would settle it.
+- **Depends on it:** every XA sample a game streams.
+- **Pinned by:** `cdrom::xa::tests`, `cdrom::tests::xa_adpcm_plays_its_channel_…`.
+- **Implemented in:** the stage 7 commits.
+
+### D-28. `cdrom/getloc`'s eight-byte responses: the program reads seven of them on Diamond and prints the eighth as zero, where the console's log prints all eight
+
+- **Opened:** 2026-10-11, by `cdrom/getloc`'s TTY: every GetlocP line prints its last byte, the absolute frame, as 00
+  (the console's log has 68, 11, 16 …), and the controller's trace shows the program reading seven result bytes of
+  eight while RSLRRDY still reads set.
+- **Documents read:** psx-spx `6d7d1bc`, "RESULT", "HSTS", "HCLRCTL".
+- **Test program:** `cdrom/getloc`, its TTY from its heading on; the trace of the controller's registers from the
+  program's start.
+- **Referee:** not consulted (as D-24).
+- **Witnesses:** none.
+- **Conclusion:** open. The program's reading loop checks HSTS twice for each byte and stops after the seventh with
+  HSTS reading 39h throughout, so it stops on a condition other than RSLRRDY; what the console's controller does
+  differently is unknown. Two readings were tried and rejected by the run: clearing the result FIFO on acknowledge
+  (psx-spx's "the result FIFO is drained" read literally) made the program read one byte; the FIFO kept until the next
+  response gives seven. The program's own verdict does not depend on the byte, and passes. PSn00bSDK's library source,
+  which would show the loop, is not read.
+- **Depends on it:** any program built the same way; no game is known to.
+- **Pinned by:** nothing yet.
+- **Implemented in:** —
+
+### D-29. The player's BIOS stops at the end of its first intro screen: the "Sony Computer Entertainment" logo stays up, with a disc in the drive, an empty drive or the lid open
+
+- **Opened:** 2026-10-11, at stage 7, by booting the tester's discs on the player's BIOS (`Diamond_CDROM.md` §9.4):
+  every BIOS revision in the firmware folder draws the logo by frame 330, as SwanStation does, and never leaves it,
+  where SwanStation shows the second screen at frame 630.
+- **Documents read:** psx-spx `6d7d1bc`, "BIOS CDROM Boot", "BIOS CDROM Functions", "A(A0h) _boot()", "BIOS Versions"
+  and "Bootmenu/Intro Versions" (the BIOS's own code was neither read nor traced, §1.3 of the plan).
+- **Test program:** observed by the screen only, with ablations of Diamond's devices: every CD command answered
+  with an error in turn, the controller's delays shortened and lengthened, the second responses' timing, the power-on
+  shell flag, the GPU's version, the cards and pads, the SPU's status bits, the timers', GPU's, SPU's and DMA's
+  interrupts raised each frame; and by modifying single sectors of a disc's copy. Of the commands, Test 20h, Nop,
+  ReadTOC, GetID, Setmode, Setloc, SeekL, ReadN and Pause change the run when refused; of the sectors, only sector 4
+  (the licence) changes it; opening the lid once the logo stands still changes nothing on the screen. The kernel's own
+  CD functions, called by `cd-kernel.s` after the BIOS hands over, all return what the disc holds, and the kernel's
+  LoadExec boots the games.
+- **Referee:** SwanStation, Beetle PSX and PCSX-ReARMed boot the same discs on the same BIOS (the latter on its own
+  kernel), pictures only.
+- **Witnesses:** none.
+- **Conclusion:** open. The intro reads the licence sector and stops before reading the volume descriptor, waiting on
+  something that is neither a CD command nor a CD event; the SPU's and MDEC's stubs (stages 8 and 9) are the remaining
+  candidates. Until then a disc boots through a loader that calls the kernel's `_96_init` and `LoadExec` (the run
+  tool's `--boot`, §9.4 of the CDROM page), which skips the intro and its licence check.
+- **Depends on it:** every disc booted the console's way; the stage 7 gate's "games boot on the player's BIOS".
+- **Pinned by:** nothing yet.
+- **Implemented in:** —

@@ -408,17 +408,6 @@ fn a_state_mid_read_continues_the_same() {
     }
 }
 
-#[test]
-fn debug_machine() {
-    let image = crate::exe::build(&[0x0800_4000, 0]);
-    let media = crate::media::Media::read(&image).unwrap();
-    let mut m = crate::machine::Machine::new(media, crate::machine::Config { market: Market::Americas, gpu: crate::machine::Gpu::Pin208 }, [None, None], &image, None);
-    m.insert_disc(disc());
-    for f in 0..80 {
-        m.advance();
-        if f % 10 == 0 { eprintln!("{f} {:?} {:?} stat {:02X}", m.board.cdrom.activity, m.board.cdrom.then, m.board.cdrom.stat()); }
-    }
-}
 
 /// BFRD written twice, as a game's libcd does after HCHPCTL is cleared: the second write leaves the FIFO where the
 /// first put it, so that a transfer begun between them is not restarted (Diamond_CDROM.md §3).

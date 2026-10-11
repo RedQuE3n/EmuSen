@@ -107,6 +107,11 @@ because §3 and §8 build on it.*
 - **No numbering is reserved for track files**, so "after the firmware's" would collide with a core's own numbers
   the day a disc core also takes a cartridge or an add-on's firmware [A].
 
+*Built 2026-10-11, at Diamond's stage 7 (`Diamond_CDROM.md` §8):* the set module in `emusen-disc` (`set::companions`,
+`set::playlist`, `set::sbi_beside`) and the core's side, Diamond opening a sheet with its companions as files from
+65,536; the header constant and the runtime's reading of the companions are not built, and Diamond defines the number
+locally until they are.
+
 ### 2.2 The questions inside the gap
 
 Three facts are mixed in "multi-file images", and each wants its own owner:
@@ -771,6 +776,18 @@ By the first stage that needs each [C, Q13]:
 | Diamond stage 6 (SIO0) | §4 outputs; §5 extras; §9 `kind` |
 | Diamond stage 7 (discs) | §2 sets and `EMUSEN_FILE_MEDIA`; `emusen-disc` in the platform library; §8's PlayStation recogniser and the `.chd` probe |
 | Diamond stage 11, or Nephrite's Sega CD gate if earlier | §3 `MEDIA` |
+
+### 10.4 Archives (proposed 2026-10-11, at Diamond's stage 7)
+
+The tester's PlayStation folder holds seventeen `.zip`s, each a disc's sheet with its tracks or a "(Track n)" file
+with no sheet (`Diamond_CDROM.md` §8.2). Weighed by §1.1's forms [C]: not the core's (a core receives bytes, never a
+path, and must stand alone under the kit and the probe), not `emusen-disc`'s (an archive is not a disc, and the
+cartridge consoles' zips need the same reading), so **a component of its own**: the frontends' image loader reading an
+archive's entries through Galaxia, which owns paths and would gain the naming of a path inside an archive, choosing
+the entry the system pack's extensions name (a sheet first, then a one-file image), reading its companions from the
+same archive, and handing bytes to create as for loose files; with routing by content (§8) deciding the console from
+the chosen entry. Its cost is the inflation at load, on top of the copy at create (`Diamond_CDROM.md` §9.7). Nothing
+is built.
 
 ---
 

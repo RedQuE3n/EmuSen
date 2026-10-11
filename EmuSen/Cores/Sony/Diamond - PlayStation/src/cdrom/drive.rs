@@ -339,6 +339,7 @@ impl Cdrom {
         b[..2].copy_from_slice(&[stat::ERROR, 0x08]);
         self.queue = [None; 4];
         self.defer(5, Reply::Bytes(b, 2), now);
+        self.refresh();
     }
 
     /// The lid closes on `disc` (the same one or another); the drive spins up and reads the TOC.
@@ -354,6 +355,7 @@ impl Cdrom {
         if self.disc.is_some() {
             self.spin_up(now, Then::Hold { complete: false });
         }
+        self.refresh();
     }
 }
 

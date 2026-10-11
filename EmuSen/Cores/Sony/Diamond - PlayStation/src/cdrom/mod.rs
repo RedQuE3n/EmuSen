@@ -165,6 +165,8 @@ pub struct Cdrom {
     /// The console's market: its region string, its firmware date, the SCEx letter its discs are licensed with.
     pub market: Market,
     pub disc: Option<DiscSlot>,
+    /// The next event's cycle, as `due` computes it.
+    pub next: u64,
     /// A development tool's trace of responses and commands to stderr; never set while a BIOS runs its own code.
     pub trace: bool,
 }
@@ -244,11 +246,13 @@ impl Cdrom {
             xa_frames: Vec::with_capacity(4032),
             market,
             disc: disc.map(DiscSlot::new),
+            next: u64::MAX,
             trace: false,
         };
         if c.disc.is_some() {
             c.spin_up(0, Then::Hold { complete: false });
         }
+        c.refresh();
         c
     }
 
@@ -355,6 +359,11 @@ impl Cdrom {
     }
 
     pub fn write8(&mut self, offset: u32, value: u8, now: u64) {
+        self.write_register(offset, value, now);
+        self.refresh();
+    }
+
+    fn write_register(&mut self, offset: u32, value: u8, now: u64) {
         if self.trace {
             eprintln!("cd write {offset}.{} {value:02X} at {now}", self.index);
         }
@@ -468,8 +477,17 @@ impl Cdrom {
         self.queue[slot] = Some(Pending { int, reply, at });
     }
 
-    /// The earliest cycle anything here is due.
+    /// The earliest cycle anything here is due, kept current by every change so that the bus's scheduling reads one
+    /// field.
     pub fn next_event(&self) -> u64 {
+        self.next
+    }
+
+    pub(crate) fn refresh(&mut self) {
+        self.next = self.due();
+    }
+
+    fn due(&self) -> u64 {
         let mut t = self.drive_at.min(self.motor_stops_at);
         if self.flags & 7 == 0 {
             if self.command.is_some() {
@@ -490,7 +508,7 @@ impl Cdrom {
         let was = self.line();
         let mut rose = false;
         loop {
-            let at = self.next_event();
+            let at = self.due();
             if at > now {
                 break;
             }
@@ -499,6 +517,7 @@ impl Cdrom {
                 rose = true;
             }
         }
+        self.refresh();
         rose || (self.line() && !was)
     }
 

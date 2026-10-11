@@ -193,6 +193,7 @@ impl Cdrom {
         for (d, s) in self.out.right.iter_mut().zip(&ch) {
             *d = *s as i16;
         }
+        self.refresh();
         Ok(())
     }
 }

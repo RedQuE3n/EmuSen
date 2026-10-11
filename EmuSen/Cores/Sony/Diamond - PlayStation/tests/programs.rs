@@ -7,10 +7,16 @@ use diamond::machine::{Config, Gpu, Machine};
 use diamond::media::{Market, Media};
 
 fn run(source: &str) -> Machine {
+    run_pressing(source, 0)
+}
+
+/// The program run with port 1's pad holding `pressed`, the report's bits.
+fn run_pressing(source: &str, pressed: u16) -> Machine {
     let words = emusen_mips::assemble(source, 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
     let image = exe::build(&words);
     let media = Media::read(&image).unwrap();
     let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, None);
+    m.board.sio0.set_buttons(pressed);
     for _ in 0..10 {
         m.advance();
     }
@@ -59,4 +65,15 @@ fn gpustat_reads_as_the_console_passes() {
     let m = run(include_str!("../programs/gpustat.s"));
     let bits: Vec<u32> = results(&m, 0x10_0000, 12).iter().map(|s| s & 0x7E00_0000).collect();
     assert_eq!(bits, [0x1400_0000, 0x1000_0000, 0x1400_0000, 0x5600_0000, 0x4000_0000, 0x5600_0000, 0x3600_0000, 0x2200_0000, 0x3600_0000, 0x5600_0000, 0x4000_0000, 0x5600_0000]);
+}
+
+/// Diamond_Pad.md §4: port 1's pad answers 41h, 5Ah and its switches with Start and Cross pressed, pulling /ACK after
+/// every byte but the last; port 2 and the card slot answer FFh with no /ACK, as empty.
+#[test]
+fn the_pad_answers_on_port_1_and_nothing_answers_elsewhere() {
+    let m = run_pressing(include_str!("../programs/pad.s"), 1 << 3 | 1 << 14);
+    let bytes: Vec<u8> = (0..30).map(|i| m.board.ram[0x10_0000 + i]).collect();
+    let empty = [0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF, 0];
+    assert_eq!(bytes[..10], [0xFF, 1, 0x41, 1, 0x5A, 1, 0xF7, 1, 0xBF, 0], "port 1");
+    assert_eq!((bytes[10..20].to_vec(), bytes[20..].to_vec()), (empty.to_vec(), empty.to_vec()), "port 2, and the card slot");
 }

@@ -129,7 +129,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, memory, timers, interrupts, DMA and the GPU run a program and show its picture; the sound is silent until the SPU is built.".into()),
+            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, memory, timers, interrupts, DMA and the GPU run a program and show its picture, and port 1's controller answers as a digital pad; the sound is silent until the SPU is built.".into()),
             systems: vec![emusen_native::core::System {
                 id: "psx".into(),
                 name: "Sony PlayStation".into(),
@@ -264,9 +264,15 @@ impl Core for Machine {
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
-        let p = self.pads.get_mut(port as usize).ok_or(status::NO_SUCH_PORT)?;
-        *p = (*p & !changed) | (mask & changed);
-        Ok(())
+        match port {
+            0 => {
+                let pad = self.board.sio0.pad.unwrap_or_default();
+                self.board.sio0.set_buttons(((pad.pressed as u32 & !changed) | (mask & changed)) as u16);
+                Ok(())
+            }
+            1 => Ok(()),
+            _ => Err(status::NO_SUCH_PORT),
+        }
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
@@ -383,7 +389,7 @@ mod tests {
         assert_eq!(create(&exe(None, 1), &[], vec![emusen_native::abi::File { which: 1, data: &image[..100] }]).err(), Some(status::BAD_FILE));
         m.set_buttons(0, 0b1010, 0b1111).unwrap();
         m.set_buttons(0, 0b0001, 0b0001).unwrap();
-        assert_eq!(m.pads[0], 0b1011);
+        assert_eq!(m.board.sio0.pad.unwrap().pressed, 0b1011);
         assert_eq!(m.set_buttons(2, 1, 1), Err(status::NO_SUCH_PORT));
     }
 

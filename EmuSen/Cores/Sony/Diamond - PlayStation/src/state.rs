@@ -10,6 +10,7 @@ use crate::gpu::raster::Vertex;
 use crate::gpu::vram::Rect;
 use crate::gpu::{Gpu, Parser, Polyline, ReadOut, Transfer, Word};
 use crate::machine::Machine;
+use crate::sio0::{Phase, Sio0};
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"DMND");
 pub const STATE_VERSION: i32 = 1;
@@ -87,13 +88,13 @@ impl Board {
         w.u32("SpuCursor", self.spu.cursor);
         w.bytes("Cdrom", &[self.cdrom.index, self.cdrom.mask, self.cdrom.flags]);
         w.u32("MdecStatus", self.mdec.status);
-        for (n, s) in self.sio.iter().enumerate() {
-            w.group(["Sio0", "Sio1"][n], |w| {
-                w.u16s("Registers", &[s.mode, s.control, s.baud]);
-                w.bool("RxFull", s.rx.is_some());
-                w.u8("Rx", s.rx.unwrap_or(0));
-            });
-        }
+        w.group("Sio0", |w| self.sio0.write_state(w));
+        let s = &self.sio1;
+        w.group("Sio1", |w| {
+            w.u16s("Registers", &[s.mode, s.control, s.baud]);
+            w.bool("RxFull", s.rx.is_some());
+            w.u8("Rx", s.rx.unwrap_or(0));
+        });
         w.bytes("Duart", &[self.duart.mr[0], self.duart.mr[1], self.duart.pointer]);
         w.u32("TtyLength", self.tty.len as u32);
     }
@@ -155,19 +156,62 @@ impl Board {
         r.bytes(&mut cd)?;
         [self.cdrom.index, self.cdrom.mask, self.cdrom.flags] = cd;
         self.mdec.status = r.u32()?;
-        for s in &mut self.sio {
-            let mut sr = [0u16; 3];
-            r.u16s(&mut sr)?;
-            [s.mode, s.control, s.baud] = sr;
-            let full = r.bool()?;
-            let rx = r.u8()?;
-            s.rx = full.then_some(rx);
-        }
+        self.sio0.read_state(r)?;
+        let s = &mut self.sio1;
+        let mut sr = [0u16; 3];
+        r.u16s(&mut sr)?;
+        [s.mode, s.control, s.baud] = sr;
+        let full = r.bool()?;
+        let rx = r.u8()?;
+        s.rx = full.then_some(rx);
         let mut du = [0u8; 3];
         r.bytes(&mut du)?;
         [self.duart.mr[0], self.duart.mr[1], self.duart.pointer] = du;
         self.tty.len = r.u32()? as usize;
         self.field_done = false;
+        Ok(())
+    }
+}
+
+impl Sio0 {
+    /// The port's registers, FIFO, transfer and /ACK; the pad's switches are the host's input, not state.
+    fn write_state(&self, w: &mut StateWriter) {
+        w.u16s("Registers", &[self.mode, self.control, self.baud]);
+        w.bytes("Fifo", &self.fifo.entries);
+        let (phase, step) = match self.phase {
+            Phase::Idle => (0, 0),
+            Phase::Address => (1, 0),
+            Phase::Controller(n) => (2, n),
+            Phase::Silent => (3, 0),
+        };
+        let f = &self.fifo;
+        w.bytes("Bytes", &[f.read, f.count, self.shifting.unwrap_or(0), self.pending.unwrap_or(0), phase, step]);
+        w.bools("Flags", &[self.shifting.is_some(), self.pending.is_some(), self.latched_txen, self.dsr, self.irq]);
+        w.u64s("Times", &[self.baud_base, self.started, self.sampled_at, self.ends_at, self.ack_at, self.ack_ends]);
+    }
+
+    fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
+        let mut regs = [0u16; 3];
+        r.u16s(&mut regs)?;
+        [self.mode, self.control, self.baud] = regs;
+        r.bytes(&mut self.fifo.entries)?;
+        let mut b = [0u8; 6];
+        r.bytes(&mut b)?;
+        (self.fifo.read, self.fifo.count) = (b[0] & 7, b[1].min(8));
+        let mut f = [false; 5];
+        r.bools(&mut f)?;
+        self.shifting = f[0].then_some(b[2]);
+        self.pending = f[1].then_some(b[3]);
+        [self.latched_txen, self.dsr, self.irq] = [f[2], f[3], f[4]];
+        self.phase = match b[4] {
+            1 => Phase::Address,
+            2 => Phase::Controller(b[5]),
+            3 => Phase::Silent,
+            _ => Phase::Idle,
+        };
+        let mut t = [0u64; 6];
+        r.u64s(&mut t)?;
+        [self.baud_base, self.started, self.sampled_at, self.ends_at, self.ack_at, self.ack_ends] = t;
         Ok(())
     }
 }
@@ -376,16 +420,16 @@ mod tests {
         assert_eq!(
             tail,
             [
-                "3682145 65536 u8[65536] TTY",
-                "3157857 524288 u8[524288] SPURAM",
-                "2109281 1048576 u8[1048576] VRAM",
-                "2108257 1024 u8[1024] SCRATCH",
-                "11105 2097152 u8[2097152] RAM",
-                "11104 1 bool ExePending"
+                "3682219 65536 u8[65536] TTY",
+                "3157931 524288 u8[524288] SPURAM",
+                "2109355 1048576 u8[1048576] VRAM",
+                "2108331 1024 u8[1024] SCRATCH",
+                "11179 2097152 u8[2097152] RAM",
+                "11178 1 bool ExePending"
             ]
         );
-        assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData"), "{layout}");
-        assert_eq!(machine().state_size(), 3_747_681);
+        assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Cpu.InterruptView.Held"), "{layout}");
+        assert_eq!(machine().state_size(), 3_747_755);
     }
 
     #[test]

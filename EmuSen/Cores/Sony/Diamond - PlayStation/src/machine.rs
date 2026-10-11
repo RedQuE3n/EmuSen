@@ -1,6 +1,6 @@
 //! The machine: the R3000A stepping against the bus, a frame ending as a field's vblank begins, a PS-EXE side-loaded
-//! on the kernel it runs or started directly, the TTY, and silence at the SPU's rate until stage 8 (Diamond_Native.md
-//! §11, §12).
+//! on the kernel it runs or started directly, the TTY, port 1's pad, and silence at the SPU's rate until stage 8
+//! (Diamond_Native.md §11, §12; Diamond_Pad.md).
 
 use blackmoon_r3000::{R3000, Step};
 
@@ -12,6 +12,8 @@ use crate::icache::KERNEL_BCC;
 use crate::kernel::{self, Kernel};
 use crate::media::{Kind, Market, Media};
 use crate::memctl;
+use crate::pad::DigitalPad;
+use crate::sio0::Sio0;
 use crate::video::Video;
 use crate::exe;
 
@@ -57,7 +59,6 @@ pub struct Machine {
     pub image: Option<Vec<u8>>,
     pub frames: i64,
     pub skip: bool,
-    pub pads: [u32; 2],
     pub ports: [Option<&'static str>; 2],
     /// Silent stereo frames made and not yet drained, the bound on them in samples, and the cycle the last sample
     /// was counted at.
@@ -85,6 +86,7 @@ impl Machine {
         } else {
             Board::new(pal, version, memctl::KERNEL_VALUES, memctl::KERNEL_RAM_SIZE, KERNEL_BCC)
         };
+        board.sio0 = Sio0::new(ports[0].map(|_| DigitalPad::default()));
         let mut cpu = R3000::new();
         let is_exe = matches!(media.kind, Kind::Exe { .. });
         let mut exe = None;
@@ -111,7 +113,6 @@ impl Machine {
             exe,
             frames: 0,
             skip: false,
-            pads: [0; 2],
             ports,
             silence: 0,
             audio_limit: usize::MAX,

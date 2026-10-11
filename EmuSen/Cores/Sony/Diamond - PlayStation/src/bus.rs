@@ -7,6 +7,7 @@ use blackmoon_gte::Gte;
 use blackmoon_r3000::{Bus, Size};
 
 use crate::devices::{CdromStub, Duart, MdecStub, SioStub, SpuStub, Tty};
+use crate::sio0::Sio0;
 use crate::dma::{self, Dma, chcr};
 use crate::gpu::Gpu;
 use crate::icache::{ICache, Lookup};
@@ -84,7 +85,9 @@ pub struct Board {
     pub spu: SpuStub,
     pub cdrom: CdromStub,
     pub mdec: MdecStub,
-    pub sio: [SioStub; 2],
+    /// The controller and memory card port, and the serial port's stub.
+    pub sio0: Sio0,
+    pub sio1: SioStub,
     pub duart: Duart,
     pub tty: Tty,
     pub gte: Gte,
@@ -127,7 +130,8 @@ impl Board {
             spu: SpuStub::new(),
             cdrom: CdromStub::default(),
             mdec: MdecStub::default(),
-            sio: [SioStub::default(); 2],
+            sio0: Sio0::new(None),
+            sio1: SioStub::default(),
             duart: Duart::default(),
             tty: Tty::new(),
             gte: Gte::new(),
@@ -232,14 +236,10 @@ impl Board {
         let o = offset & !3;
         match o {
             0x000..=0x020 => self.memctl.read((o / 4) as usize),
-            0x040 => self.sio[0].receive() as u32,
-            0x044 => self.sio[0].status(),
-            0x048 => self.sio[0].mode as u32 | (self.sio[0].control as u32) << 16,
-            0x04C => (self.sio[0].baud as u32) << 16,
-            0x050 => self.sio[1].receive() as u32,
-            0x054 => self.sio[1].status(),
-            0x058 => self.sio[1].mode as u32 | (self.sio[1].control as u32) << 16,
-            0x05C => (self.sio[1].baud as u32) << 16,
+            0x050 => self.sio1.receive() as u32,
+            0x054 => self.sio1.status(),
+            0x058 => self.sio1.mode as u32 | (self.sio1.control as u32) << 16,
+            0x05C => (self.sio1.baud as u32) << 16,
             0x060 => self.memctl.ram_size,
             0x070 => self.irq.stat,
             0x074 => self.irq.mask,
@@ -273,12 +273,9 @@ impl Board {
         let o = offset & !3;
         match o {
             0x000..=0x020 => self.memctl.write((o / 4) as usize, value),
-            0x040 => self.sio[0].send(value as u8),
-            0x048 => self.sio[0].mode = value as u16 & 0x13F,
-            0x04C => self.sio[0].baud = (value >> 16) as u16,
-            0x050 => self.sio[1].send(value as u8),
-            0x058 => self.sio[1].mode = value as u16 & 0xFF,
-            0x05C => self.sio[1].baud = (value >> 16) as u16,
+            0x050 => self.sio1.send(value as u8),
+            0x058 => self.sio1.mode = value as u16 & 0xFF,
+            0x05C => self.sio1.baud = (value >> 16) as u16,
             0x060 => self.memctl.ram_size = value,
             0x070 => self.irq.acknowledge(value),
             0x074 => self.irq.set_mask(value),
@@ -332,10 +329,8 @@ impl Board {
     /// A halfword register's write at its own address (the serial ports' halfwords, the timers', the SPU's).
     fn io_write16(&mut self, offset: u32, value: u32) {
         match offset & !1 {
-            0x04A => self.sio[0].set_control(value as u16),
-            0x05A => self.sio[1].set_control(value as u16),
-            0x04E => self.sio[0].baud = value as u16,
-            0x05E => self.sio[1].baud = value as u16,
+            0x05A => self.sio1.set_control(value as u16),
+            0x05E => self.sio1.baud = value as u16,
             o @ 0xC00..=0xFFF => {
                 self.spu.write16(o - 0xC00, value as u16);
                 self.dma_kick();
@@ -346,6 +341,10 @@ impl Board {
 
     fn io_read(&mut self, offset: u32, size: Size) -> u32 {
         match offset {
+            0x040..=0x04F => {
+                self.sync_sio0();
+                self.sio0.read(offset, size.bytes(), self.now)
+            }
             0x800..=0x803 => {
                 let b = self.cdrom.read8(offset) as u32;
                 (0..size.bytes()).fold(0, |v, i| v | b << (8 * i))
@@ -356,14 +355,21 @@ impl Board {
                 let v = if size.bytes() > 2 { lo | (self.spu.read16(at + 2) as u32) << 16 } else { lo };
                 v >> (8 * (offset & 1))
             }
-            0x04A | 0x05A => self.sio[(offset >> 4 & 1) as usize].control as u32,
-            0x04E | 0x05E => self.sio[(offset >> 4 & 1) as usize].baud as u32,
+            0x05A => self.sio1.control as u32,
+            0x05E => self.sio1.baud as u32,
             _ => self.io_read32(offset) >> (8 * (offset & 3)),
         }
     }
 
     fn io_write(&mut self, offset: u32, size: Size, value: u32) {
         match offset {
+            0x040..=0x04F => {
+                self.sync_sio0();
+                if self.sio0.write(offset, size.bytes(), value, self.now) {
+                    self.irq.raise(irq::SIO0);
+                }
+                self.schedule();
+            }
             0x800..=0x803 => {
                 for i in 0..size.bytes() {
                     self.cdrom.write8(offset, (value >> (8 * i)) as u8);
@@ -375,12 +381,19 @@ impl Board {
                     self.io_write16((offset & !1) + 2, value >> 16);
                 }
             }
-            _ if size == Size::Half || matches!(offset & 0xFFE, 0x04A | 0x05A | 0x04E | 0x05E) => self.io_write16(offset, value),
+            _ if size == Size::Half || matches!(offset & 0xFFE, 0x05A | 0x05E) => self.io_write16(offset, value),
             _ => self.io_write32(offset, value),
         }
     }
 
     // --- the clock's events ---
+
+    /// SIO0 brought to the present, its interrupt raised if it rose.
+    fn sync_sio0(&mut self) {
+        if self.sio0.run(self.now) {
+            self.irq.raise(irq::SIO0);
+        }
+    }
 
     /// Every timer brought to the present.
     fn sync_timers(&mut self) {
@@ -397,7 +410,7 @@ impl Board {
 
     /// The next cycle at which anything is due: a video edge, a timer's target or FFFFh, a DMA piece.
     pub fn schedule(&mut self) {
-        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due).min(self.gpu.next_event());
+        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due).min(self.gpu.next_event()).min(self.sio0.next_event());
         for n in 0..3 {
             next = next.min(self.timers.next_hit(n, &self.video));
         }
@@ -414,7 +427,8 @@ impl Board {
                 *d = self.timers.next_hit(n, &self.video);
             }
             let gpu_at = self.gpu.next_event();
-            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]).min(gpu_at);
+            let sio_at = self.sio0.next_event();
+            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]).min(gpu_at).min(sio_at);
             if first > self.now {
                 self.next_event = first;
                 return;
@@ -423,6 +437,9 @@ impl Board {
                 if d == first && self.timers.sync(n, &self.video, d) {
                     self.irq.raise(irq::TIMER0 << n);
                 }
+            }
+            if sio_at == first && self.sio0.run(first) {
+                self.irq.raise(irq::SIO0);
             }
             if gpu_at == first {
                 self.gpu.run(first, &self.video);

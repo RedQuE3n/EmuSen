@@ -420,7 +420,7 @@ namespace EmuSen.WiseMan.Serenity
             return Enumerable.Range(from, to - from).OrderByDescending(lag => Enumerable.Range(0, row.Length - lag).Sum(i => (row[i] - mean) * (row[i + lag] - mean)) / (row.Length - lag)).First();
         }
 
-        // Alternate columns at 320 wide sit 0.22 MHz under the subcarrier: the receiver blends their luma and paints a rainbow thirty pixels long, a third as strong at 256 wide.
+        // Alternate columns at 320 wide sit 0.22 MHz under the subcarrier: the receiver's trap keeps a fifth of their luma and paints a rainbow thirty pixels long, a third as strong at 256 wide.
         [Fact]
         public Task The_genesis_s_dithered_columns_blend_into_a_static_rainbow_thirty_pixels_long() => Session.Dispatch(() =>
         {
@@ -441,13 +441,16 @@ namespace EmuSen.WiseMan.Serenity
             }
 
             Within(30 * width / 320, Period(wide.Across(2, top + height / 2 - 20, 40, x0, x1), 60, 220), 0.04, "the rainbow's length in output pixels");
-            Assert.True(Columns2(wide) < 0.1 && Columns2(rgb) > 8 * Columns2(wide), $"the columns blend through composite: swing {Columns2(wide):F3} against {Columns2(rgb):F3} by RGB");
+            double trap = CrtFilter.TrapGain(53.693175 / 16, CrtFilter.SubcarrierMegahertz);
+            Assert.True(Math.Abs(Columns2(wide) / Columns2(rgb) - trap) < 0.05, $"the columns through composite: swing {Columns2(wide):F3} against {Columns2(rgb):F3} by RGB, where the trap keeps {trap:F3}");
 
-            // The strength is compared on faint columns and a straight-line tube, where chroma stays inside the gamut and adds to blue in proportion.
+            // The strength is compared on faint columns and a straight-line tube, where chroma stays inside the gamut, read as blue over green so that the luma the trap passes cancels.
             byte[] Faint(int across) => Paint(across, 224, (x, _) => x % 2 == 0 ? (0.45, 0.45, 0.45) : (0.35, 0.35, 0.35));
             double Blue(int across)
             {
-                double[] row = Draw("Genesis", across, 224, 1440, 1080, Twice(Faint(across)), With(set, ("gamma", 1f)))!.Across(2, top + height / 2 - 20, 40, x0, x1);
+                Crt faint = Draw("Genesis", across, 224, 1440, 1080, Twice(Faint(across)), With(set, ("gamma", 1f)))!;
+                double[] blue = faint.Across(2, top + height / 2 - 20, 40, x0, x1), green = faint.Across(1, top + height / 2 - 20, 40, x0, x1);
+                double[] row = blue.Select((b, i) => b - green[i]).ToArray();
                 double mean = row.Average();
                 return Math.Sqrt(row.Average(v => (v - mean) * (v - mean)));
             }
@@ -455,7 +458,7 @@ namespace EmuSen.WiseMan.Serenity
             Assert.True(ratio > 2.2 && ratio < 3.8, $"the rainbow at 320 wide is {ratio:F2} times the one at 256; the chroma filter's response at the two beats gives 2.9");
         }, default);
 
-        // The SNES's 512-wide alternate columns, its way of drawing transparency: a consumer set by composite blends most of the way, a professional monitor by RGB does not.
+        // The SNES's 512-wide alternate columns, its way of drawing transparency: a consumer set by composite halves their swing, by its trap and its 4.2 MHz, and a professional monitor by RGB keeps it.
         [Fact]
         public Task Pseudo_hi_res_columns_blend_by_composite_on_a_consumer_set_and_stay_apart_by_rgb_on_a_monitor() => Session.Dispatch(() =>
         {
@@ -465,7 +468,7 @@ namespace EmuSen.WiseMan.Serenity
             if (Draw("SNES", 512, 224, 2880, 2160, Twice(columns), With(flat, ("signal", 0f), ("screen", 4f))) is not { } rgb) return;
             var (left, top, width, height) = PictureIn(2880, 2160);
             double Swing(Crt picture) { double[] row = picture.Across(1, top + height / 2 - 40, 80, (int)(left + width * 0.3), (int)(left + width * 0.7)); return (row.Max() - row.Min()) / row.Average(); }
-            Assert.True(Swing(composite) < 0.35 && Swing(rgb) > 3 * Swing(composite), $"swing between columns: {Swing(composite):F2} by composite on the consumer set, {Swing(rgb):F2} by RGB on the monitor");
+            Assert.True(Swing(composite) < 0.6 && Swing(rgb) > 1.6 * Swing(composite), $"swing between columns: {Swing(composite):F2} by composite on the consumer set, {Swing(rgb):F2} by RGB on the monitor");
         }, default);
 
         private static double Contrast(Crt lit, Crt dark, string console, int squares, int rows)

@@ -176,7 +176,8 @@ V less than 3 dB down at 1.3 MHz. The V component's sign alternates each line.
 - Demodulation was deliberately non-standard. The decoder chips' datasheets give the angles of the R−Y, G−Y and
   B−Y axes and their relative gains, and the US modes rotate and boost red ("red push") to keep skin tones
   pleasing on a 9300 K white. As transcribed by gamutthingy [S], which cites each datasheet; the Sony PDFs
-  themselves could not be fetched and **must be read before any of these is built in**:
+  themselves could not be fetched and **must be read before any of these is built in**. The CXA2025AS's was read on
+  2026-10-10 and matches; it is built in §24:
 
 | Decoder | R−Y, G−Y, B−Y angles | Gains |
 |---|---|---|
@@ -2122,6 +2123,11 @@ its light. What the console needs before it is offered the filter is a row of `C
 microseconds and its subcarrier cycles across it, from its own clocks, as §3.2 derived the others'; its 368-wide
 mode is the one whose pixels do not divide the line evenly by the others, and so the one to test.
 
+**The row waits on one figure.** Diamond's plan (D-0) found that psx-spx gives two NTSC dot clocks that disagree,
+53.2224 MHz and 53.693175 MHz, which put the field rate at 59.29 Hz or 59.82 Hz. The active line in microseconds and
+the subcarrier cycles across it both follow from that clock, so no `ConsoleTiming` row is written until the figure is
+settled against the core or the hardware. Decided 2026-10-10: the PlayStation has no row until then.
+
 ### 20.7 Questions for the tester
 
 1. **Whole rows a line for the scanlines.** The tube could be sized to a whole number of display rows a line: 4 at
@@ -2249,7 +2255,7 @@ nearly equal luma, read along their I–Q difference. On the SNES (the Genesis H
   retired: it keeps 80% at 1 MHz and 62% at 1.5 before the receiver's own bandwidth. patchy-ntsc lies between the
   two. **Which to trust**: patchy-ntsc for the shape, not as a grade but because the trap arithmetic sides with it.
   The fix is a notch whose skirt is a real trap's, from a receiver's datasheet; it belongs with the decoders of the
-  next steps and is put to the tester below rather than made here.
+  next steps and is put to the tester below rather than made here. (Made in §24, with the comparison run again.)
 - **S-Video and RGB luma agree with crt-beans** within 0.08, and both are softer than patchy-ntsc's SNES S-Video,
   which applies no luma limit at all (its Genesis preset does, and falls with ours). Neither this filter's 5 MHz
   encoder (a fallback, §3.2) nor the set's 4.2 MHz has been measured; the agreement is of two choices.
@@ -2275,3 +2281,467 @@ palette that this filter does not yet take (the next step).
 the Hann windows for the chroma channel, whose exact zeros §11.3 needs), and re-run this comparison? *Recommendation:
 yes, with the trap's width taken from a consumer receiver's datasheet in the decoder step, since the present width
 is itself only the Faroudja figure.*
+
+
+## 22. The NES's own signal (2026-10-10)
+
+Until now every console reached the filter as an RGB frame, and the composite passes encoded that frame by the
+standard's matrix (§11.3). For the NES that is a second-hand signal: its PPU never had RGB. It generates the composite
+wave directly, a square wave between two of a few fixed voltages, its phase taken from the colour's hue number, and
+the colours players remember are what a receiver decoded from that wave. Any palette is somebody's decode of it. This
+section models the wave itself, from public hardware documentation only, and lets the receiver of §11.3 decode it.
+The RGB path stays for every other console, and for the NES whenever its frame comes without the raw picture.
+
+### 22.1 The surface, and the form chosen
+
+The filter needs, for each pixel, the PPU's colour number (six bits) and the emphasis bits in force (three bits of
+PPUMASK). An RGB frame has lost both: two colour numbers can share an RGB value in a palette, and emphasis is a
+change of the wave's levels during part of a cycle, which no per-pixel RGB scaling expresses. Three forms were
+weighed, as the code-design rules ask:
+
+- **A palette swap in the RGB path.** Rejected: it keeps the information loss above, and gives the filter a second
+  job of knowing each core's palette.
+- **An extension of an existing surface.** `ICore` already carries optional members with a default for cores that
+  have nothing to say (`DisplayAspect`, `DisplayLines`, §16). A further one, `byte[]? RawPicture => null`, is the
+  frame before the palette in the RGBA frame's layout (red the colour number, green the emphasis bits, alpha 255), so
+  that it shares the RGBA frame's size, rows and crop with no new geometry. Chosen.
+- **A capability on the core ABI v1**, for the Rust cores. Not built: MoonRT is not the default NES engine, and its
+  frames fall back to the RGB path. When it becomes the default, the same surface is an optional capability and a
+  minor version of the ABI, the form `EmuSen_CoreAPI.md` gives extensions.
+
+The picture travels the way `lines` does (§16): `EmulatorSession.RawPicture`, a `raw` argument on Mistress's
+`FrameHandOff` and on `GameFrameControl.UpdateFrame`, and in `FilterChain` a child named `raw` and a uniform named
+`rawSize` that any pass may declare. Where no raw picture came with the frame, `raw` binds to the frame itself and
+`rawSize` to (0, 0), so a pass can tell. `GameFrameControl` copies the raw array to an image once per offered frame,
+and only while the running chain declares `raw` (`FilterChain.ReadsRaw`); otherwise nothing is copied. On Moon the
+array is the PPU's own, filled beside the RGBA frame in the same render loop, and like the RGBA frame it is copied at
+draw (`EmuSen_Serenity.md` §2.8). It is not saved in a state: it is rebuilt by the next frame drawn.
+
+### 22.2 The PPU's wave, from the documentation
+
+Every figure here is from the nesdev wiki's *NTSC video* page **[S]**, which compiles measurements of the 2C02 by
+named measurers. No emulator's code was read.
+
+**Levels.** Each colour is a square wave between a low and a high level, the levels chosen by the colour's row
+(bits 4–5), as measured terminated into 75 Ω:
+
+| Row | Low (V) | High (V) |
+|---|---|---|
+| 0 | 0.228 | 0.616 |
+| 1 | 0.312 | 0.840 |
+| 2 | 0.552 | 1.100 |
+| 3 | 0.880 | 1.100 |
+
+Black is 0.312 V ($1D, row 1's low), and the colour burst swings between 0.148 and 0.524 V. Hue 0 emits only the
+high level (the greys of the first column), hue $D only the low, and hues $E and $F are black.
+
+**Phase.** The PPU divides its master clock into twelve phases of one subcarrier cycle, and a pixel lasts eight of
+them (two thirds of a cycle). Hue *N* from 1 to 12 is high during the six phases *p* where (*N* + *p*) mod 12 < 6, so
+hues sit 30° apart, and the burst takes hue 8's phase. A line starts four phases (a third of a cycle) later than the
+one before, and a frame's start alternates, the three-line, two-frame pattern §3.2 derived and §21.2 confirmed.
+
+**Emphasis.** Each emphasis bit attenuates the wave's absolute voltage to 0.816328 of itself during six of the twelve
+phases: the red bit (PPUMASK bit 5) during hue $C's high phases, the green bit (bit 6) during hue 4's, the blue bit
+(bit 7) during hue 8's. Attenuation applies to the voltage above ground, not above black, so it darkens and also
+shifts the level below black where a low level sits there.
+
+**Differential phase.** A row's hue is turned by about −5° per row on the 2C02G (−2.5° on the 2C02E): a brighter row
+is delayed a little more. The filter uses the 2C02G's −5°, the revision of most front-loading consoles. **[S]**
+
+### 22.3 What the receiver sees
+
+The wave is put in the units the receiver of §11.3 works in, IRE over 100: (*V* − 0.312) / *s*, where 100 IRE is
+*s* = (1.100 − 0.312) / 1.10 V. **The PPU's white is 110 IRE**: $20 and $30 reach 1.100 V, which the documentation
+places at 110 IRE rather than at the standard's 100. A receiver shows what it is given, so the NES's whites come out
+brighter than an RGB palette normalised to 100 IRE puts them (§22.4's games).
+
+**The colour control.** A receiver's automatic chroma control scales the chroma until the burst stands at the
+standard's 40 IRE peak to peak, a fundamental of 20 IRE. **[P]** SMPTE 170M. The PPU's burst is a square wave, whose
+fundamental is 2/π of its swing, so the gain the receiver applies is **[D]**
+
+    0.2 / ((2/π) × (0.524 − 0.148) / s) = 0.5986
+
+and that gain multiplies the decoded chroma whenever a raw frame is present.
+
+**The phase mapping.** The filter's signal passes count phase in cycles from the line's start (`phaseAt`, §11.3). The
+PPU's step at a sample is *q* = 12 × phase + 10, the offset of ten steps being the one that puts hue 8's fundamental,
+the burst's, on −U in the filter's encoding (*U* sin φ + *V* cos φ), as the standard places the burst at 180°. The row's
+differential phase is a delay of the wave by −5/30 of a step per row. The first test (§22.6) checks both on the CPU:
+the burst decodes to −U with no V, and hues 1 to 12 step by 30.00°.
+
+**Two ways to the same colour.** At Balanced and Accurate on composite, the encode pass generates the wave itself:
+each signal sample averages the PPU's level over its own width at twelve looks to a phase step (Accurate's 2048
+samples put one step in a sample, twelve looks; Balanced's 683 put three, thirty-six looks), so the row skew falls on
+a look. Nothing band-limits the wave before the receiver, as the PPU has no output filter but its own output
+impedance (§22.7). The receiver then separates and demodulates it as it does any composite signal. For S-Video and
+for Performance, which carry no subcarrier, a `colours` pass computes each pixel's colour in closed form instead: its
+luma the wave's mean over twelve steps, its U and V the wave's first harmonic by exact integrals over each step,
+turned by the row's skew, times the gain above, and through the standard's matrix. This colour image then takes the
+place of the RGB frame in those paths.
+
+### 22.4 Measured
+
+| Check | Result |
+|---|---|
+| The burst, decoded on the CPU | on −U, V below 10⁻³ of U |
+| Hue to hue, on the CPU | 30.00° within 0.01° for every step |
+| Composite from the generated wave against the closed form, all 64 colours with emphasis 0, 1, 2, 4 and 7, flat fields, display ten times the tube's white so nothing clips | worst 0.0044 of peak, in saturated blues whose red and green sit near zero |
+| Performance against Balanced's S-Video, all 64 colours | within 0.006 |
+| The artifacts from the PPU's own signal | the same line three lines on (correlation > 0.95), the next line and the next frame turned over |
+| The NES without a raw frame, against the SNES (same timing) | at most one code value, in under 1% of values, where the two compile to different shaders |
+
+The 0.0044 is not explained beyond doubt. The composite path clips each sample's light to the display before the
+receiver's matrix sees the next, where the closed form clips once per pixel, and a saturated blue drives red and green
+below zero at some samples; that would make the composite path about 2% low in blue there, which is what it shows. The
+attribution is plausible and was not tested separately; the tolerance is set at 0.006 above it.
+
+**On games**, Moon's frame 900 drawn at Accurate on composite (frames copied to scratch first, the library read
+only):
+
+| Game | Mean R, G, B from Moon's palette | From the PPU's signal |
+|---|---|---|
+| Super Mario Bros. 3 | 97.6, 87.2, 70.1 | 126.5, 115.0, 103.0 |
+| Mega Man 2 | 26.4, 21.6, 36.6 | 36.8, 30.4, 44.5 |
+
+The PPU's pictures are brighter, as §22.3's 110 IRE white and the gain predict, and their hues are where a player
+expects. Which brightness is right for a given television is its contrast control, not this model; the comparison is
+recorded so that the difference is not later mistaken for a defect.
+
+### 22.5 Against patchy-ntsc, as a referee
+
+patchy-ntsc (§21) has a raw-palette mode, the only other model available that starts from the PPU's colour numbers
+rather than RGB. Its code was not read; its preset was run on frames carrying colour numbers in the encoding its
+behaviour implies (red the hue over 15, green the row over 3, blue the emphasis over 7), which drew recognisable NES
+colours and so supports the encoding by behaviour, not by reading. On the same flat fields:
+
+- **The hue order agrees**: each hue lands next to its neighbours in both, 30° apart in this model.
+- **Each emphasis bit dims the same colours in both**: the red bit dims $0C to 0.43 of itself here and 0.56 in
+  patchy-ntsc, and spares $06 (0.88 and 0.91); the blue bit dims $08 (0.40 and 0.53) and spares $02 (0.92 and 0.83).
+- **Saturation does not agree**: patchy-ntsc's colours are 10–20% more saturated against their luma. Its output is
+  in a different colour space from this filter's, with its own decoder matrix and display transform, so the
+  difference is not graded; it is recorded. Run again with its Rec. 601 decoder and its automatic tint and colour
+  off (§24.4), the median is 10% and the hues agree more closely.
+
+Agreement on hue order and on which colours each bit spares is evidence for §22.2's phase and emphasis reading; the
+size of each bit's effect differs by 0.1 between the models and rests on how each decodes, so it is left open.
+
+### 22.6 Tests and mutants
+
+`ScreenFilterRenderTests.Nes.cs` holds the CPU references (`PpuAt`, the wave, and `PpuDecoded`, a receiver locked to
+the burst that demodulates it finely) and six tests: the burst and the hue steps on the CPU; composite against the
+closed form for every entry; the artifacts' three-line, two-frame pattern from the PPU's signal; the NES without a raw
+frame drawn as before; Performance against Balanced; and each hue and emphasis bit decoded on the GPU (red is red,
+$30 neutral, each bit sparing its own hue). `MoonPpuDefectTests` checks that Moon's raw picture carries each pixel's
+colour number and the emphasis bits. Eight mutants, all caught:
+
+| Mutant | Caught by |
+|---|---|
+| no colour control on the wave | composite against the closed form |
+| the wave skewed the other way | composite against the closed form |
+| the closed form skewed the other way | composite against the closed form |
+| the burst a quarter turn off, in both paths | composite against the closed form |
+| red emphasis on the wrong phases | hues and emphasis on the GPU |
+| the raw frame never handed to the chain | the artifacts, hues and emphasis |
+| the colours from the palette, not the PPU | composite against the closed form |
+| Moon loses the emphasis bits | Moon's raw picture |
+
+### 22.7 What is not modelled
+
+- **The PPU's output impedance.** Its output is a resistor ladder, and the wave's edges slew by an RC that depends on
+  the level; the documentation describes it without figures a model could use. The wave's edges are sharp here, up to
+  each signal sample's average.
+- **MoonRT**, which keeps the RGB path until the surface reaches the core ABI (§22.1).
+- **The 2C02E's differential phase**, −2.5° per row; a setting when a player asks for the earlier revision.
+- **PAL's 2C07**, whose wave differs (its phase alternates per line); §23's PAL model is the place for it.
+
+
+## 23. PAL as a model of its own (2026-10-10)
+
+Until now PAL games were drawn through NTSC's signal: the right picture area (§14), but NTSC's subcarrier, NTSC's
+phases and NTSC's decoder. PAL differs in four ways that a player sees: its subcarrier is 4.43 MHz, so each console's
+pixels sit differently against it and its artifacts change shape; the V component's sign is switched every line; a
+receiver undoes the switch and, in most sets, averages each line's colour with the line before through a delay line;
+and the field lasts 20 ms rather than 16.7, which changes what the phosphors carry from one frame to the next. This
+section builds all four.
+
+### 23.1 The standard, and how the filter is told
+
+A new setting, **Television standard** (NTSC or PAL), selects the model; a second, **PAL colour decoding** (Delay line
+or Simple), selects the receiver. Both decide which passes are built and what is written into them, so both are
+structural. The standard is the player's choice for now. Choosing it from the game's region is a question for the
+tester (§23.7), and nothing selects it automatically.
+
+The console's line on each standard lives in the same console constants as before (`ConsoleTiming`), the PAL figures
+under the prefix `pal.`. The filter writes the line of the chosen standard into each pass as SkSL constants where it
+used to bind them as uniforms. Nothing in a pass changes but where the numbers come from, and the NTSC pictures are
+unchanged: every existing render test of the filter passed after the change.
+
+### 23.2 Each console's PAL clocks
+
+| Console | Master clock | Subcarrier | Pixel | Cycles a pixel | Cycles a line | A line | A frame | Lines | Active picture |
+|---|---|---|---|---|---|---|---|---|---|
+| **NES** (2C07) | 26.601712 MHz | ÷6 | ÷5 | 5/6 | 341 × 5/6 = 284⅙ | +⅙ | 0 | 312 | 256 dots, 48.12 µs |
+| **SNES** | 21.28137 MHz | ÷4.8 | ÷4 | 5/6 | 1364 ÷ 4.8 = 284⅙ | +⅙ | 0 | 312 | 256 dots, 48.12 µs |
+| **Genesis** | 53.203424 MHz | ÷12 | H32 ÷10, H40 ÷8 | 5/6; 2/3 | 3420 ÷ 12 = **285** | **0** | **0** | 313 | 256 or 320 dots, 48.12 µs |
+| **N64** | VI 49.65653 MHz | ÷11.2 | ÷4 at 640 | 0.357 | 3178 ÷ 11.2 = 283.75 | +¾ | +¼, crawling | 313 | 640 dots, 51.56 µs |
+| Standard line | — | 4.43361875 MHz | — | — | 283.7516 | +0.7516 | +¼, crawling | 313 | 52 µs |
+
+Sources **[S]**: nesdev's *PAL video* and *Cycle reference chart* (the NES: 26.6017125 MHz, five master clocks a
+pixel, 312 lines, no short line, 284⅙ cycles a line); the SNESdev wiki's *Timing* (21.281370 MHz, "4.8 times
+chroma", 1364 clocks a line, 312 lines with the long line only when interlaced); TmEE in nesdev forum thread 20410
+(the Genesis's 53203424 Hz, 3420 clocks a line) and Kabuto's notes (313 lines); n64brew's *Video Interface* (PAL's
+H_TOTAL of 3177, so 3178 VI clocks a line, "11.2 clocks per chroma period", 313 lines progressive, and the leap
+lines of 3182 and 3183 that add half a cycle a field on average). The right-hand columns are **[D]**:
+
+- **NES and SNES.** 284⅙ cycles a line move the pattern a sixth of a cycle a line, a six-line pattern, as nesdev says.
+  312 lines of it are 88,660 cycles exactly, so it stands still between frames: "dirty stills but OK movement". Their
+  pixels are 5/6 of a cycle where NTSC's are 2/3, so the alternate-column dithering that makes NTSC's artifacts lands
+  at 0.6 of the subcarrier, 1.8 MHz from it, and passes the chroma channel far more weakly.
+- **Genesis.** 285 whole cycles a line, and 313 such lines a whole number: nothing moves, as on NTSC. But 313 is odd,
+  so the V switch is turned over between frames for a given line.
+- **N64.** A standard PAL line, 283.75 cycles, so the phase moves three quarters of a cycle a line. A 313-line frame
+  adds three quarters, and the leap lines half a cycle more on average (6 + 5 + 6 + 5 + 6 VI clocks over five fields,
+  5.6 ÷ 11.2): a quarter of a cycle a frame, so the pattern crawls through four frames. The leap alternates 6 and 5
+  clocks, 0.04 of a cycle apart, which is not modelled; the mean is.
+- **The NES's 2C07 is not modelled.** Its wave is the 2C02's design at PAL's clocks, but its V switch is made by
+  swapping hues between pairs of oscillators on alternate lines (nesdev: 3 and 2, 4 and 1, 5 and C, 6 and B, 7 and A,
+  8 and 9), its burst is at 120° rather than 135°, its red and green emphasis bits are swapped, and the same page
+  describes an "additional temporary −3 clocks every second line" that this reading does not reconcile with the hue
+  pairs. On PAL the NES is drawn from its RGB picture, as every other console is, until that is settled (§23.7).
+
+### 23.3 The encoder and the receiver
+
+**The switch.** The encoder writes chroma as *U* sin φ + *s V* cos φ with *s* = ±1 alternating line by line, and on a
+console whose frame has an odd number of lines *s* also alternates between frames for the same line. The receiver
+knows *s* for each line from the burst's swing (±45° about −U), and is modelled as reading it correctly.
+
+**The delay line.** A PAL set with a delay line, invented at Telefunken, averages the chroma of the received line
+with the chroma of the line before it in the same field, before the matrix. Phase errors that turn the hue one way on
+one line turn it the other way on the next, so the average keeps the hue and loses a little saturation; and colour
+that changes line to line is blurred over two lines. Here the Drive pass averages each line's demodulated U and V with
+the line's above it, and the Performance tier averages each pixel's colour difference with the row above. The simple
+decoder (PAL-S) leaves each line its own colour and relies on the eye; nesdev notes that less expensive sets did
+this. A PAL comb filter, which needs two lines of delay, is not modelled: on PAL a screen with a comb separates luma
+by its notch.
+
+**The receiver's chroma channel** keeps the same width in MHz as on NTSC (§11.2), so it spans more subcarrier cycles at
+4.43 MHz: six cycles where NTSC's spans five. No PAL receiver's channel was found to set its own width; the NTSC
+figure is carried over, a choice **[C]**.
+
+### 23.4 625/50 and the phosphors
+
+What a phosphor carries from one frame into the next depends on how long the frame is. §11.4's fit is two
+exponentials per channel, each a ratio *r* a frame and a weight *c* for the light it puts into the frame after the
+one struck. For an exponential with time constant τ, the ratio over a field of *T* is *r* = e^(−*T*/τ), and the light
+in the *k*-th frame after is proportional to τ *r*^*k* (1 − *r*). So on a field of 20 ms in place of 16.68 **[D]**:
+
+    r_PAL = r_NTSC ^ (20 / 16.68),    c_PAL = c_NTSC × (1 − r_PAL) / (1 − r_NTSC)
+
+which takes the fast ratio from 0.590 to 0.531 and the slow from 0.945 to 0.934. The light left after the struck
+field is then the NTSC fit's, decayed over the 3.3 ms more the PAL field lasts, which the tails test checks. The
+strength (`TailScale`, §11.4) is a property of the phosphor and is kept.
+
+### 23.5 Measured
+
+| Check | Result |
+|---|---|
+| Each console's PAL line against its clocks (table above) | equal for all four |
+| A flat colour, PAL against NTSC, eight colours, all three tiers, S-Video and composite | at most 0.0004 of peak |
+| Colour alternating every line, the share of red swinging from line to line | NTSC 0.743; PAL simple 0.743; PAL delay line 0.005 at Balanced and Accurate, 0.022 at Performance |
+| A thin white line's fringes on the SNES | repeat every six lines, differ three lines on, the same the next frame |
+| The same on the N64 | the same four frames on, moved the next frame |
+| The Genesis's H40 dither, artifact colour along a line | NTSC 0.0020; PAL 0.0002 through the delay line, 0.0004 without |
+| A colour edge in S-Video, 10% to 90%, in microseconds | PAL within 8% of NTSC (the channel rounds to six cycles on PAL and five on NTSC, 0.53 and 0.52 MHz) |
+| The Genesis's fringes without the delay line | alternate between frames, the same two frames on |
+| The NES on PAL, with a raw frame and without | identical |
+
+The Genesis's PAL artifacts are a tenth of its NTSC ones: the dither at H40 lands at three quarters of the
+subcarrier on both standards, which is 1.11 MHz below it on PAL and 0.89 MHz on NTSC, further down the same 0.5 MHz
+chroma channel. The delay line halves what is left, since a static pattern's V changes sign with the switch from line
+to line and cancels in the average.
+
+### 23.6 Tests and mutants
+
+`ScreenFilterRenderTests.Pal.cs`: the clock arithmetic for every console; the tails on a PAL field; the notch and the
+delay line chosen as above; a flat colour on PAL as on NTSC at every tier; the delay line against the simple decoder at
+every tier; a colour edge as long in microseconds on PAL as on NTSC; the fringes' six-line and four-frame patterns and
+the Genesis's alternation between frames; and the NES on PAL drawn from RGB.
+
+Eleven, all caught, three of them only after the tests were extended:
+
+| Mutant | Caught by |
+|---|---|
+| the encoder without the switch | a flat colour; the delay line |
+| the decoder without the switch | a flat colour; the delay line |
+| no delay line at the signal tiers | the delay line |
+| no delay line at Performance | the delay line |
+| PAL drawn with NTSC's line | the fringes |
+| the switch never turned between frames | the fringes, once the Genesis's alternation between frames was added (it survived the first run) |
+| no crawl between frames | the fringes, once the N64's two frames on was added (it survived the first run) |
+| the tails left at NTSC's field | the tails |
+| a comb kept on PAL | the notch and delay-line choice |
+| the NES on PAL drawn from the PPU | the NES on PAL |
+| the chroma channel sized by NTSC's subcarrier | a colour edge as long on PAL as on NTSC, added for it (it survived the first run) |
+
+A flat colour cannot catch the switch's alternation between frames, since the encoder and the decoder use the same
+sign; only a pattern whose colour comes from luma, a fringe, shows it.
+
+### 23.7 Questions for the tester
+
+1. **Should the standard follow the game's region?** A PAL game would then be drawn as PAL without being asked, and
+   the setting would become an override. It needs each core to report the region of the game it loaded to the
+   frontend, a new optional member of the kind §22.1 describes; which cores already know it was not checked. *Recommendation: yes, with the player's choice kept per game when
+   it is set, since a European player's set was PAL whatever the game.*
+2. **Should the 2C07 be modelled?** It needs the hue pairing, the burst's phase and the emphasis bits on PAL read
+   against nesdev's own capture of a PAL PPU's signal (the 53.2 MHz file on the *PAL video* page) before anything is
+   built, and that capture is the only test of the reading. *Recommendation: yes, as the next NES step, since the
+   PAL NES's picture is the case where the PPU's own wave changes most.*
+
+
+## 24. A receiver's own decoder: the CXA2025AS's trap and axes (2026-10-10)
+
+§21 found the notch's skirt too broad, and §3.1 listed decoder chips whose demodulation axes depart from the
+standard's, transcribed second-hand with the note that the datasheets must be read before any was built in. Both rest
+on one document: Sony's datasheet for the **CXA2025AS**, a single-chip NTSC decoder and deflection processor for
+consumer sets **[P]**. It was read for this section (its text and its characteristic curves); this section builds
+its luma trap in place of the Hann notch, and its two demodulator settings as choices beside the standard's matrix.
+Decided 2026-10-10: the trap replaces the notch's Hann skirt, its width taken from this datasheet.
+
+### 24.1 What the datasheet gives
+
+- **The luma trap.** The Y path has a chroma trap switched by the C-TRAP bit, tuned by CTRAP-ADJ (±300 kHz about its
+  centre). Its attenuation at 3.58 MHz is typically −37.5 dB (item 13 of the electrical characteristics). The curve
+  *CTRAP-ADJ* on page 34 plots the Y path's gain against frequency with the trap off and on. Read from that curve at
+  600 dpi against its grid, the trap's own effect (trap on against trap off) is −2.5 dB at 2.62 MHz, −3.3 dB at
+  2.73 MHz, −10 dB at 3.20, −20 at 3.52 and about −33 at its deepest, near 3.7 MHz. **The lower −3 dB edge is 2.70 MHz
+  [D, read from a plotted curve, ±0.05 MHz].** Above the subcarrier the trap-on curve does not return: it settles 5
+  to 6 dB below the trap-off one by 5 MHz, a shelf from the chip's own delay compensation, which is not modelled.
+- **The demodulator's axes.** The AXIS bit chooses between two settings, given as the angle of each axis from B−Y
+  and its gain against B−Y's: **Japan, R−Y 95° × 0.78, G−Y 240° × 0.3; US, R−Y 112° × 0.83, G−Y 252° × 0.3**, B−Y at
+  0° with gain 1. The same page gives the standard's ratio for an external colour-difference input: "R−Y is
+  demodulated by the 90° axis to become a 1.14 times signal, B−Y is demodulated by the 0° axis to become a 2.03 times
+  signal", 1.14 and 2.03 being 1/0.877 and 1/0.492. That fixes the convention: a gain is against B−Y's 2.03.
+
+The transcription in §3.1 matches the datasheet for this chip. The other chips there (CXA2060BS, TA7644BP, the RCA
+measurement) are still second-hand and are not built.
+
+### 24.2 The trap
+
+A second-order notch at the subcarrier, |H| = |f₀² − f²| / √((f₀² − f²)² + (f f₀ / Q)²), whose lower −3 dB edge is
+2.70 MHz, has **Q = f₀ f₁ / (f₀² − f₁²) = 1.75**, an upper edge at f₀²/f₁ = 4.75 MHz and a −3 dB width of
+**2.05 MHz** **[D]**. The Hann notch's was 2.58 MHz (§11.3's half-width of 1.29). A least-squares fit of the same
+second-order form to the curve's lower skirt from 2.45 to 3.5 MHz gives Q 1.64 with the centre held at 3.58 MHz
+(rms 0.85 dB), or Q 1.49 at 3.61 MHz with the centre free (rms 0.68 dB): the plotted skirt is not exactly
+second-order, and the −3 dB point the tester asked for is the one used.
+
+| Frequency, MHz | 0.5 | 0.75 | 1.0 | 1.5 | 2.0 | 2.5 |
+|---|---|---|---|---|---|---|
+| Hann notch, as built before | 0.93 | 0.87 | 0.80 | 0.62 | 0.41 | 0.21 |
+| The trap | 1.00 | 0.99 | 0.99 | 0.96 | 0.91 | 0.79 |
+
+**How each tier draws it.** At Balanced and Accurate the separate pass subtracts the band the trap takes away, as
+taps back along the line: a bilinear notch whose centre and lower edge are prewarped to the analogue trap's, so both
+fall where the datasheet puts them at Balanced's four samples to a cycle as at Accurate's twelve. The taps run until
+the response has fallen below 10⁻⁵: 29 at Balanced and 67 at Accurate on the NTSC consoles. A real trap is causal, and so are the taps: the luma
+rings a little to the right of a sharp edge, not to both sides. At Performance the band-pass's step response has a
+closed form, (1 / √(Q² − ¼)) e^(−αt) sin(ω_d t), and each pixel's weight takes it in place of the Hann window's
+integral. On PAL the trap sits at 4.43 MHz with the same Q, a choice **[C]**: no PAL receiver's trap was read. The
+two-line comb is unchanged; it never used the notch's skirt for its luma.
+
+**What it changes on the picture.** Fine luma detail below 2 MHz now survives composite almost as it does S-Video,
+and detail close to the subcarrier passes in part: the Genesis's H40 dither (3.36 MHz) keeps 0.22 of its column swing
+against RGB's, where the Hann notch removed nearly all of it, and the SNES's 512-wide columns (5.37 MHz) keep half of
+a monitor's. Four existing tests had asserted the old blending; they were rewritten to the trap's own predictions
+(the Genesis's columns at the trap's gain at 3.36 MHz, 0.216; the rainbow and the NES's artifacts read as colour,
+blue over green and red over green, so that the luma the trap now passes does not count as artifact).
+
+### 24.3 The axes
+
+An axis at angle *a* with gain *g* against B−Y reads *g* (B−Y cos *a* + R−Y × (0.877/0.492) sin *a*), with B−Y and
+R−Y as the standard's demodulator gives them **[D]**. The standard's own matrix is this form at 90° × 0.561 and
+235.8° × 0.346, which the first test checks to nine places. A **Colour demodulator** setting offers the standard's,
+the CXA2025AS's US axis and its Japan axis; the choice changes only the matrix in the Drive pass and in the
+Performance pass. The PPU's closed form (§22.3) still produces the standard's colour, and the axes then apply to it as
+to any other. The CXA2025AS decodes NTSC only, so on PAL the standard's matrix is used whatever is chosen.
+
+The US axis pushes red: its R−Y axis is turned 22° from the standard's 90°, toward −(B−Y), and read with 0.83 of
+B−Y's gain where the standard's is 0.561, 1.48 times as strongly; G−Y moves with it. A set built with this axis was set up on a 9300 K white, which this filter does not change with the
+axis; the phosphors' white is the Colour setting's (§3.4).
+
+### 24.4 The referees, before and after
+
+The §21 comparison was run again on the same frames, with the measurement fitted at each grating's own frequency.
+Composite luma, each model's output at a frequency over its output at 0.25 MHz, on the SNES:
+
+| Model | 0.5 MHz | 0.75 | 1.0 | 1.5 | 2.0 | 2.5 |
+|---|---|---|---|---|---|---|
+| this filter, Hann notch (before) | 0.95 | 0.86 | 0.75 | 0.50 | 0.27 | 0.11 |
+| this filter, the trap (after) | 0.98 | 0.94 | 0.89 | 0.76 | 0.59 | 0.40 |
+| this filter, the trap, Balanced | 0.98 | 0.94 | 0.89 | 0.76 | 0.60 | 0.41 |
+| this filter, the trap, Performance | 0.98 | 0.94 | 0.89 | 0.75 | 0.58 | 0.40 |
+| this filter, S-Video | 0.98 | 0.95 | 0.91 | 0.79 | 0.65 | 0.51 |
+| patchy-ntsc, composite | 0.99 | 0.96 | 0.92 | 0.75 | 0.46 | 0.20 |
+| crt-beans, S-Video | 0.98 | 0.94 | 0.89 | 0.75 | 0.58 | 0.43 |
+
+- **To 1.5 MHz the two models now agree** within 0.03, where they differed by 0.17 at 1 MHz and 0.24 at 1.5 before.
+  §21's finding is settled in patchy-ntsc's favour, and by the datasheet rather than by the referee.
+- **Above 2 MHz they part the other way**: patchy-ntsc keeps 0.46 and 0.20 where the trap keeps 0.59 and 0.40. A
+  trap of this width leaves 0.91 and 0.79 at 2 and 2.5 MHz before the receiver's 4.2 MHz, so a model that falls
+  faster has a wider trap or a lower video bandwidth than this chip's. The datasheet's own Y path also has a
+  sharpness stage (its SHARPNESS curve rises about 1.5 dB around 3 MHz at the middle setting and 5 dB at the
+  highest) that neither model includes. Left open.
+- **The artifacts' strength is unchanged** (0.0396 against 0.0395 for the alternate-column pattern): they are chroma,
+  and the trap acts on luma. patchy-ntsc's remain 2.2 times as strong.
+- **crt-beans** is unchanged, and this filter's composite now sits within 0.03 of crt-beans' S-Video to 2.5 MHz.
+
+**The axes against patchy-ntsc.** patchy-ntsc has a custom demodulator setting that takes an R−Y and a G−Y angle and
+gain against B−Y, the datasheet's own form. Given the CXA2025AS's numbers, its change from its Rec. 601 decoder was
+compared with this filter's change from the standard's, on eight flat colours by S-Video (its automatic tint and
+colour off):
+
+| Colour | This filter, US axis | patchy-ntsc, US | This filter, Japan axis | patchy-ntsc, Japan |
+|---|---|---|---|---|
+| red (0.7, 0.3, 0.3) | +0.2°, ×1.42 | −4.3°, ×1.28 | −0.7°, ×1.32 | −0.9°, ×1.15 |
+| green (0.3, 0.6, 0.3) | −1.5°, ×0.95 | −12.6°, ×1.01 | −6.2°, ×1.05 | −8.5°, ×1.05 |
+| blue (0.3, 0.35, 0.7) | +16.6°, ×1.21 | +16.1°, ×1.20 | +7.4°, ×1.07 | +9.9°, ×1.04 |
+| yellow (0.65, 0.55, 0.25) | +17.9°, ×1.48 | +10.0°, ×1.28 | +9.2°, ×1.20 | +7.2°, ×1.08 |
+| magenta (0.6, 0.3, 0.6) | −1.8°, ×0.98 | −11.9°, ×0.95 | −8.6°, ×1.13 | −6.7°, ×1.00 |
+| skin (0.75, 0.55, 0.45) | +6.0°, ×1.46 | +0.6°, ×1.29 | +3.1°, ×1.28 | +1.7°, ×1.13 |
+
+(Hue turned in the output's I–Q plane, and saturation as a ratio, each against the same model's standard decoder.)
+**The Japan axis agrees** within 3° on every colour; **the US axis agrees on blue** and in pushing red and yellow,
+and **disagrees on green and magenta by 10° to 11°**, where this filter barely turns them. The arithmetic of §24.3
+on the drive voltages gives the green colour's G−Y as 0.106 under the US axis against 0.124 under the standard's, a
+turn of about 1°, so this filter does what the datasheet's numbers say; why patchy-ntsc turns green further with the
+same numbers is not known, as its code was not read. Its saturation gains under the US axis are also smaller on red, yellow and skin (1.28 to 1.29 against 1.42 to
+1.48), which a different normalisation of the gains would explain. Left open, and not a grade.
+
+**§22.5 run again.** patchy-ntsc's NES raw palette had been run with its default decoder (a US chip, with its
+automatic tint and colour on). With its Rec. 601 decoder and the automatic adjustment off, the hues of the 48
+saturated entries without emphasis agree with this filter's to a median of 0.7°, half of them within −6.5° to +3.4°
+(against −10.7° to +9.5° before), and patchy-ntsc's saturation against luma is a median 1.10 times this filter's.
+
+### 24.5 Tests and mutants
+
+`ScreenFilterRenderTests.Decoder.cs`: the taps against the analogue trap at both signal tiers' rates and both
+standards' centres (the centre below 0.01, the lower edge at 0.707 within 0.005, 1 and 1.5 MHz within 0.02 of the
+analogue gain); the axes rebuilding the standard's matrix and giving the datasheet's rows; composite luma over
+S-Video at 1, 2 and 2.8 MHz on a 512-wide frame against the trap's gain at every tier and on PAL (within 0.04);
+a colour through each CXA2025AS axis against the colour its rows make drawn through the standard's matrix; and the
+standard's matrix on PAL whatever is chosen. Mutants:
+
+Eight, all caught:
+
+| Mutant | Caught by |
+|---|---|
+| no trap at the signal tiers | composite luma against the trap |
+| the trap at NTSC's centre on PAL | composite luma against the trap, on PAL |
+| the Performance trap twice as strong | composite luma against the trap, at Performance |
+| the Performance trap decaying at half its rate | composite luma against the trap, at Performance |
+| the taps without the lower edge's prewarp | the taps; composite luma at Balanced |
+| the CXA2025AS's axes kept on PAL | the standard's matrix on PAL |
+| Drive and Performance on the standard's axes whatever is chosen | a colour through each axis |
+| the G−Y axis without its gain | the axes' rows; a colour through each axis |
+
+Below 1.5 MHz the trap keeps 0.96 or more, so composite luma at 1 MHz alone could not tell a trap from none; the
+2 and 2.8 MHz gratings on a 512-wide frame are what catch the first mutant.

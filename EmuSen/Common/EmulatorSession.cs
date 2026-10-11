@@ -124,6 +124,8 @@ namespace EmuSen.Common
 
         public int DisplayLines => _core?.DisplayLines ?? 0;
 
+        public byte[]? RawPicture => _core?.RawPicture;
+
         public byte[] GetFrameBufferRgba()
         {
             if (_core is null) throw new InvalidOperationException("GetFrameBufferRgba() called before LoadRom().");

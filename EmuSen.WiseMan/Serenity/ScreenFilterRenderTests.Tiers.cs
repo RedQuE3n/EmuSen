@@ -85,8 +85,8 @@ namespace EmuSen.WiseMan.Serenity
 
             Within(30 * width / 320, Period(balanced.Across(2, top + height / 2 - 20, 40, x0, x1), 60, 220), 0.04, "Balanced's rainbow, in output pixels");
             Assert.True(Swing(balanced, 2) > 1, $"Balanced's blue swings {Swing(balanced, 2):F2}");
-            Assert.True(Swing(performance, 2) < 0.2 && Swing(performance, 1) < 0.2, $"Performance has no rainbow: blue {Swing(performance, 2):F2}, green {Swing(performance, 1):F2}");
-            Assert.True(Swing(rgb, 1) > 5 * Swing(performance, 1), $"and its columns blend: {Swing(performance, 1):F2} against {Swing(rgb, 1):F2} by RGB");
+            Assert.True(Math.Abs(Swing(performance, 2) - Swing(performance, 1)) < 0.05, $"Performance has no rainbow, its blue following its green: blue {Swing(performance, 2):F2}, green {Swing(performance, 1):F2}");
+            Assert.True(Swing(rgb, 1) > 2.5 * Swing(performance, 1), $"and its columns blend: {Swing(performance, 1):F2} against {Swing(rgb, 1):F2} by RGB");
         }, default);
 
         // The default: white at three fifths of the display's peak, nothing clipped, the mask at full depth in the darks and eased at white.

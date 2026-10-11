@@ -178,6 +178,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
                 FrameRgba[pixelOffset + 1] = NesPalette[paletteOffset + 1];
                 FrameRgba[pixelOffset + 2] = NesPalette[paletteOffset + 2];
                 FrameRgba[pixelOffset + 3] = 0xFF;
+                RawFrame[pixelOffset] = (byte)(nesColor & 0x3F);
+                RawFrame[pixelOffset + 1] = (byte)(Mask >> 5);
+                RawFrame[pixelOffset + 3] = 0xFF;
             }
         }
 

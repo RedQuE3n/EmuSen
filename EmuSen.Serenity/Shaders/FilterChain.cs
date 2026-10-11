@@ -235,6 +235,7 @@ half4 main(float2 coord) {
             _surfaces = new SKSurface?[_passes.Count];
             _earlier = new SKSurface?[_passes.Count];
             _built = true;
+            ReadsRaw = compiled.Effects.Any(effect => effect.Children.Contains("raw"));
         }
 
         private Compiled? _compiled;
@@ -276,10 +277,11 @@ half4 main(float2 coord) {
         }
 
         // Draws the filtered picture and says so; false, nothing was drawn, and the caller draws the picture plain - see EmuSen_Serenity.md §3.10.
-        public bool Draw(SKCanvas canvas, GRContext? context, SKImage original, int rowRepeat, SKRect destination, PictureCrop crop = default, int lines = 0)
+        public bool Draw(SKCanvas canvas, GRContext? context, SKImage original, int rowRepeat, SKRect destination, PictureCrop crop = default, int lines = 0, SKImage? raw = null)
         {
             if (context is null && Filter.RequiresDevice && !DrawInSoftware) return false;
             _crop = crop.IsNone ? PictureCrop.None : crop;
+            _raw = raw;
             TakeFinished();
             Warm(context);
             EnsureBuilt();
@@ -382,6 +384,12 @@ half4 main(float2 coord) {
             return image;
         }
 
+        // Whether a pass reads the frame before the console's palette, so the control makes an image of it only then.
+        public bool ReadsRaw { get; private set; }
+
+        // The raw frame of this draw, or null, when a pass reading it is given the frame itself and a size of nothing.
+        private SKImage? _raw;
+
         // The part of the picture kept, for a filter that places it itself.
         private PictureCrop _crop;
 
@@ -409,6 +417,7 @@ half4 main(float2 coord) {
                 {
                     "source" => Child(source, pass.LinearSource, sourceIsOriginal),
                     "original" => Child(original, IsLinear(name), true),
+                    "raw" => Child(_raw ?? original, false, _raw is null),
                     "feedback" when feedback is not null => Child(feedback, IsLinear(name), false),
                     _ when name.StartsWith("history", StringComparison.Ordinal) && int.TryParse(name["history".Length..], out int back) && back >= 1 =>
                         Child(back <= _history.Count ? _history[back - 1] : original, false, true),
@@ -423,6 +432,7 @@ half4 main(float2 coord) {
                 {
                     case "inputSize": builder.Uniforms[name] = new[] { (float)sourceWidth, sourceHeight }; break;
                     case "originalSize": builder.Uniforms[name] = new[] { (float)originalWidth, originalHeight }; break;
+                    case "rawSize": builder.Uniforms[name] = _raw is null ? new[] { 0f, 0f } : new[] { (float)_raw.Width, _raw.Height }; break;
                     case "outputSize": builder.Uniforms[name] = new[] { (float)width, height }; break;
                     case "viewportSize": builder.Uniforms[name] = new[] { (float)view.Width, view.Height }; break;
                     case "pixelScale": builder.Uniforms[name] = view.PixelScale; break;

@@ -64,6 +64,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
 
         [SkipInState] public byte[] FrameRgba = new byte[ScreenWidth * ScreenHeight * 4];
 
+        // The same picture before the palette: each pixel's colour number in red and PPUMASK's emphasis bits in green - see EmuSen_CRT.md §22.
+        [SkipInState] public byte[] RawFrame = new byte[ScreenWidth * ScreenHeight * 4];
+
         // Fast-forward drops the pixel writes only; sprite 0 still has to hit or games poll forever.
         [SkipInState] public bool SkipRendering;
 
@@ -125,6 +128,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             Array.Clear(PaletteRam);
             Array.Clear(Oam);
             Array.Clear(FrameRgba);
+            Array.Clear(RawFrame);
         }
 
         // What the RESET line clears; VRAM, OAM and the palette survive it - see Moon_Core.md §6.

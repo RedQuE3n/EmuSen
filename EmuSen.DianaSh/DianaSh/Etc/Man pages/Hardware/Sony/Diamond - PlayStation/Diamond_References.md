@@ -174,3 +174,12 @@ commits, releases and languages; the search results named in §1. Seen as a run'
   4); the same file named `.exe` runs. The stock probe segfaults on PCSX-ReARMed with ps1-tests' `cpu/access-time` and
   on SwanStation with `cpu/cop` at some frame windows; not investigated. No libretro channel carries a program's TTY,
   and PCSX-ReARMed's log at every level holds none of it, so ps1-tests are not witnessed by their text.
+
+## 9. The referees (2026-10-11)
+
+Decided 2026-10-11: no console is used for any dispute; reference emulators run as black boxes referee what the
+suites' console logs and pictures do not reach. DuckStation `v0.1-11894` and PCSX-Redux `9272f440` were fetched as
+release binaries into the cache, pinned by SHA-256 in `EmuSen.WiseMan/Reference/psx-referees.sha256`, and are driven
+headless with the three libretro cores of §4 by `EmuSen.WiseMan/Reference/analysis/psxreferee.py`; no$psx was not
+run, wine not being installed. Beetle PSX and SwanStation ran on the player's own BIOS, as in §8. What each referee is,
+how it is driven, how their lineages are weighed and what each dispute's program showed on them: `Diamond_Referees.md`.

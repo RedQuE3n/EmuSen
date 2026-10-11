@@ -146,7 +146,8 @@ interpreter on the desktop [M]. All three cores take a path (`need_fullpath`), w
 `.exe` and `.psexe` as the PlayStation's and the refusal. Spaces: RAM (2 MiB), a 128 KiB save space, and memory maps of
 RAM and the scratchpad (1 KiB); **no core exposes VRAM or SPU RAM** through the standard calls [M]. SwanStation's README
 confirms its lineage: "a hard fork … of DuckStation", GPLv3 [R]. The three-way comparison waits on a BIOS of the
-tester's own (Q6, Q16).
+tester's own (Q6, Q16). *Revised 2026-10-11:* the player's own BIOS was supplied, no console is used for any
+dispute, and DuckStation and PCSX-Redux joined the three cores as referees run as black boxes (`Diamond_Referees.md`).
 
 ### 1.7 What was read to write this page
 

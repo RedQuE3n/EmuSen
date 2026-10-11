@@ -340,9 +340,17 @@ In the shape of `Diamond_Disputes.md`. Each entry's evidence and rule; the proce
     themselves; the one that models a latency agrees with psx-spx's dependence on rs and differs from §5.5's boundary
     by two cycles, which is the size of this reading's uncertainty about where the latency is counted from.
 - **Conclusion:** psx-spx's table, with the boundary of §5.5 (the result readable when the bus's clock after MFLO's
-  fetch reaches MULT's fetch plus the latency). **Open**: argued, and witnessed only by emulators that disagree; it stays
-  open until `multiply.s` runs on the tester's console (`Diamond_Plan.md` §11 Q16), whose two tables decide both the
-  latencies and the boundary.
+  fetch reaches MULT's fetch plus the latency). **Open**: argued, and witnessed only by emulators that disagree; ~~it
+  stays open until `multiply.s` runs on the tester's console (`Diamond_Plan.md` §11 Q16), whose two tables decide both
+  the latencies and the boundary~~ (decided 2026-10-11: no console is used for any dispute).
+- **The referee step, 2026-10-11** (`Diamond_Referees.md` §4.2) [M]: `multiply.s` on DuckStation and PCSX-Redux as
+  well. DuckStation reads 5, 8, 12 and 35, MFLO free after four instructions; Beetle PSX 8, 11, 15 and 38, free after
+  six, a stall costing it two cycles more than the wait; PCSX-Redux 8, 11, 15 and 38 in its own clock, where a NOP
+  costs two; SwanStation 1 throughout on its interpreter too; PCSX-ReARMed's interpreter 7 to 16 with no classes by
+  rs. **Confirmed by agreement between three lineages** (DuckStation, Mednafen, PCSX): the table's shape, the class
+  steps of 3 and 4 cycles by rs or its magnitude, rt irrelevant, and division 30 above the smallest class whatever its
+  operands. **Still open**: the offset (where the latency is counted from) and the boundary, on which the referees
+  differ by up to three cycles and no output ranks them; Diamond keeps §5.5's.
 - **Depends on it:** the cycle at which MFHI and MFLO complete, so every timing measurement downstream of a multiply.
 - **Pinned by:** `the_multiplier_holds_mfhi_and_mflo_by_rs`; Diamond's `the_multiplier_takes_psx_spxs_cycles`.
 - **Implemented in:** the same commit as D-1.

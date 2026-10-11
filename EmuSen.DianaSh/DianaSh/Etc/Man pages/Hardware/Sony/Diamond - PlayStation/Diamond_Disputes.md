@@ -5,18 +5,25 @@
 records a rule the documents and the test programs leave open or in disagreement, the evidence taken, and the rule as
 implemented. It is the record of which sources a dispute step read, so that the clean-room protocol of
 `Diamond_Plan.md` §1.3 can be audited from outside. Disputes about the R3000A itself are kept in the R3000A crate's own
-record (the plan's §9.1), since they belong to every core that uses the crate.
+record (the plan's §9.1), since they belong to every core that uses the crate. *The referee step of 2026-10-11*
+ran each open dispute's program on five reference emulators as black boxes; its runs and their weighing are
+`Diamond_Referees.md`, and each entry below carries its ruling, D-2's in `../BlackMoon-HW/BlackMoon_R3000.md` §8.
 
 ## The rules this log keeps
 
 - **A dispute step is separate.** Its only product is an entry. It ends with a rule stated in hardware terms, and a
   writer's step implements it and cites the entry. Nothing read in a dispute step is typed into code in that step.
 - **The order of recourse is fixed:** the documents, then a test program written or run for the purpose, then
-  PSX_MiSTer run as a black box (on a device, or in simulation with only its README, licence, directory names, the
-  simulation folder's scripts and its top level's ports read). **Its RTL is never read**, and no emulator's source is
-  ever read, at any step (the plan's §1.3 and §1.5).
-- **The reference emulators are witnesses, not evidence of the hardware.** What a reference core does is recorded
-  where it helps locate a disagreement; it settles nothing.
+  ~~PSX_MiSTer run as a black box (on a device, or in simulation with only its README, licence, directory names, the
+  simulation folder's scripts and its top level's ports read)~~ *decided 2026-10-11: no console is used for any
+  dispute, now or later; the third rung is reference emulators run as black boxes, outputs only
+  (`Diamond_Referees.md`), with PSX_MiSTer one of them if it is ever simulated*. **Its RTL is never read**, and no
+  emulator's source is ever read, at any step (the plan's §1.3 and §1.5).
+- **The reference emulators are witnesses, not evidence of the hardware.** ~~What a reference core does is recorded
+  where it helps locate a disagreement; it settles nothing.~~ *Revised 2026-10-11:* where the console logs and
+  pictures the suites ship do not reach, the referees rule, weighed by lineage and by how each scores against those
+  logs (`Diamond_Referees.md` §3, §6): a ruling needs agreement between lineages, or names the strongest single
+  witness as such; a majority alone rules nothing.
 - **An entry is never deleted.** A conclusion later overturned is struck through and followed by the new one, with the
   evidence that overturned it.
 
@@ -27,7 +34,7 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
 - Opened: <date>, by <what left it open or showed the disagreement>
 - Documents read: <title, revision, section> for each
 - Test program: <the program written or run, on what, and what it showed>
-- Referee: <how PSX_MiSTer was run, and which of its non-RTL files were opened> | <not consulted>
+- Referee: <which referees ran which program, and what each showed> | <not consulted>
 - Witnesses: <what the reference cores do, as outputs only> | <none>
 - Conclusion: <the rule as implemented, in prose>; argued | measured | open
 - Depends on it: <what in the core or the framework changes with the answer>
@@ -258,6 +265,21 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
   against the log's 263, 982–983 and 571,285 ± 6; the program's own overhead differs by tens of cycles. This checks the
   implementation against the second step's arithmetic, not the hardware: the line remains provisional until the
   console's run of the closing program.
+- **The referee step, 2026-10-11** (`Diamond_Referees.md` §4.1, `programs/video-timing.s`) [M]. The five referees
+  divide as the documents do: Beetle PSX 3,412.5 and 3,405 video clocks a line, DuckStation and SwanStation (one
+  lineage) 3,413 and 3,406, PCSX-Redux and PCSX-ReARMed no line at all (60 Hz flat). The `timers` log decides between
+  them: as PAL consoles in NTSC mode, Beetle PSX times 571,334 cycles a frame and DuckStation 571,416 against the
+  log's 571,324 ± 6, and DuckStation's dot clock there runs at the NTSC rate, 167 dots a frame more than the log's.
+  Beetle PSX, the strongest witness, agrees with Diamond on both lines and on NTSC's interlaced fields of 263 and 262;
+  **it does not on PAL's**, which it alternates 313 and 312 (312.5, psx-spx's figure, 50.0001 Hz) where Diamond
+  alternated 314 and 313 (313.5, 49.84 Hz, against this entry's own 50.0003 Hz). ~~The program that closes it ... on
+  the tester's console~~: no console is used (decided 2026-10-11).
+- **Conclusion, the referee step:** the line is **3,412.5 video clocks in NTSC mode and 3,405 in PAL**, now witnessed
+  by Beetle PSX and consistent with the one console log, not only argued; **changed**: an interlaced PAL field holds
+  313 and 312 lines alternately. Still open: how the half clock is spread over lines, which no referee output shows.
+- **Pinned by, since the referee step:** `interlaced_fields_alternate_about_262_5_and_312_5_lines`,
+  `the_video_timing_is_the_referees_line_on_both_clocks`.
+- **Implemented in, since the referee step:** `diamond: an interlaced PAL field holds 313 and 312 lines (D-0)`.
 
 ### D-4. Memory control's access times: a first bus cycle of the read delay plus 4 and each further one of the delay plus 2, recovery and floating, not psx-spx's formula
 
@@ -292,10 +314,12 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
   return through the kernel's handler. Which part of that path costs the 2.87 cycles is open; a program of the
   project's own timing an exception round trip with its own handler, on a console, would say.
 - **Referee:** not consulted. **Witnesses:** not run for this table (their TTY cannot be read, `Diamond_Native.md`
-  §11.15).
+  §11.15). *Referee step, 2026-10-11* (`Diamond_Referees.md` §4.3) [M]: DuckStation and PCSX-Redux, whose TTY can be
+  read, meet 11 of the 51 cells each within 0.2 cycles; the SPUCNT cell reads 82.4 and 6.0 on them, 38.94 on the
+  console. Neither models memory control as the console times it, so neither bears on the rule.
 - **Conclusion:** the rule above, with RAM at a 4-cycle stall, the internal registers at 2, the scratchpad and BCC at
   none (the same log). Measured: 50 of 51 cells within 0.20 cycles of the console's; the SPUCNT cell named. Open for
-  the SPUCNT cell and for any register value other than the kernel's.
+  the SPUCNT cell and for any register value other than the kernel's; the referees leave both open.
 - **Depends on it:** every load's and uncached fetch's cost, so the BIOS's own speed and every timing measurement.
 - **Pinned by:** `the_kernel_values_give_the_consoles_access_times`, `a_load_costs_its_regions_time`, and ps1-tests'
   `cpu/access-time` graded against its log (`Diamond_Native.md` §11.12).
@@ -315,14 +339,20 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
   chopped burst about 6 cycles a window beyond its words and its CPU window, the CPU window reaching no further than 32
   cycles a word of the DMA window (rows with CPU windows of 32, 64 and 128 cycles for one-word DMA windows all take
   about 40 cycles a word); the RAM loop 16 cycles an iteration, and 1.598 times that under a never-ending chain.
-- **Referee:** not consulted. **Witnesses:** none run (their TTY cannot be read, `Diamond_Native.md` §11.15).
+- **Referee:** *2026-10-11* (`Diamond_Referees.md` §4.4, `programs/stores.s`) [M]: within 10% of the console on
+  `chopping`'s 130 rows, DuckStation 17 and PCSX-Redux 0; on `chain-looping`, DuckStation 13,016 cycles with no DMA
+  and 143,024 under a never-ending chain, PCSX-Redux 16,016 throughout with every chain finished; on `stores.s`, no
+  referee has a write queue a load waits for (DuckStation N cycles for N stores, Beetle PSX N + 1, PCSX-Redux 3N).
+  **Witnesses:** none run before the referee step.
 - **Conclusion** [C, fitted]: 10 cycles between blocks and between nodes, 4 of a node's own, a chopped window's CPU
   window held to 32 cycles a word of the DMA's window plus 6; a RAM store drains in 8 cycles, and a load waits for the
   whole queue. Measured: `chopping`'s 130 rows within 10.5% of the console's, 129 within 10%; `chain-looping`'s within
   6.2%. **Open**: these are fits to two programs, not rules the documents give, and the drain's 8 cycles cannot be
-  divided between the store and the load that follows it from one loop. A program of the project's own that times
+  divided between the store and the load that follows it from one loop. ~~A program of the project's own that times
   stores in bursts of one to eight, a load of the stored and of another address after each, and a chain's slowdown
-  of a cached loop against an uncached one, run on a console, separates them.
+  of a cached loop against an uncached one, run on a console, separates them.~~ *Referee step, 2026-10-11:* that
+  program (`stores.s`, without the cached-loop part) ran on every referee, and none models what it measures; still
+  open, on the two console logs alone.
 - **Depends on it:** every program that loads after storing, and the CPU's pace beside DMA.
 - **Pinned by:** ps1-tests' `dma/chain-looping` graded against its log (10%); `a_gpu_list_runs_node_by_node_and_flags_its_end`.
 - **Implemented in:** `diamond: the bus and the machine of stage 3`.
@@ -336,7 +366,9 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
   resolution, the mode-2 rows with the system clock read 0 between hblanks and count only within them (36, 159, 282,
   405, 528, then 0 at 320 pixels); a counter that paused outside the blank would hold the count it reached, about 543
   cycles' worth.
-- **Referee:** not consulted. **Witnesses:** none.
+- **Referee:** *2026-10-11* (`Diamond_Referees.md` §4.5) [M]: on `timers`, DuckStation counts freely in mode 2 and
+  PCSX-Redux reads zero always, within the blank too; neither models it as the console behaves, and the console log
+  stays the evidence. **Witnesses:** none.
 - **Conclusion:** the counter is reset at the blank's end as well as its start, so it counts within the blank and
   reads zero outside; measured on the console's log, argued for timer 1's vblank by analogy [A]. A second reading of the
   same log: **the reset's two-cycle hold is of the system clock only** [A]; applied in ticks of a slower source it
@@ -371,13 +403,26 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
 - **Conclusion:** `Diamond_GPU.md` §6; measured against the console's pictures, exact on all five programs. Open
   where the pictures do not reach. No picture tells the starting vertex apart: where vertex 0 is not the leftmost (the
   second triangles of `texture-flip`'s quads) the gradients are whole numbers, and no shaded quad's second triangle
-  covers a pixel (`uv-interpolation`'s quads are one line high). No gradient is near 12 bits' range. A program drawing
-  shaded triangles and quads at every vertex order, run on a console, decides the first.
+  covers a pixel (`uv-interpolation`'s quads are one line high). No gradient is near 12 bits' range. ~~A program
+  drawing shaded triangles and quads at every vertex order, run on a console, decides the first.~~
+- **The referee step, 2026-10-11** (`Diamond_Referees.md` §4.6, `programs/raster-order.s`) [M]: that program, a shaded
+  triangle in its six orders, a shaded quad in four, and a triangle with two vertices in its leftmost column in six,
+  ran on every referee. DuckStation, Beetle PSX, SwanStation and PCSX-ReARMed, three renderers of separate authorship
+  by their READMEs, draw all sixteen shapes word for word alike, the first triangle and the quad the same in every
+  order; Diamond, starting from vertex 0, differed by 2 to 4 pixels on seven shapes. Their rule is the **leftmost
+  vertex, and of two in the leftmost column the one that follows the other in the command's order**: of the bases
+  tried on Diamond, it alone gives all sixteen exactly, and ps1-tests' pictures stay exact with it, where the topmost
+  start leaves `triangle` 3,227 pixels off. **Changed**, on agreement between lineages: the attributes start from that
+  vertex. Still open: no gradient near 12 bits' range.
 - **Depends on it:** every pixel of every polygon and line.
 - **Pinned by:** `Ps1_tests_gpu_programs_draw_their_vram_pictures_exactly`; `a_quads_texture_steps_at_the_half_of_a_truncated_12_bit_gradient`,
-  `shading_takes_vertex_0s_value_with_a_half_added`, `a_triangle_owns_its_top_and_left_edges_only`,
-  `a_line_draws_both_ends_and_rounds_a_half_by_its_major_axis`.
-- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
+  `shading_takes_vertex_0s_value_with_a_half_added` (*renamed* `shading_takes_the_base_vertexs_value_with_a_half_added`
+  *at the referee step*), `a_triangle_owns_its_top_and_left_edges_only`,
+  `a_line_draws_both_ends_and_rounds_a_half_by_its_major_axis`; *since the referee step*
+  `the_base_is_the_leftmost_vertex_and_of_two_the_follower`, `a_shaded_triangle_reads_the_same_in_every_vertex_order`,
+  `shaded_triangles_draw_in_every_vertex_order_as_the_referees_do`.
+- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`; *the base vertex:*
+  `diamond: a triangle's attributes start from its leftmost vertex (D-7), an x-flip from U with its low bit set (D-8)`.
 
 ### D-8. An x-flipped rectangle's texture starts at U+1, where psx-spx says only that it decrements
 
@@ -393,10 +438,21 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
 - **Conclusion:** U+1, U, U-1 and on for an x-flip; V, V-1 and on for a y-flip. Measured on one console's picture, with
   every flipped rectangle starting at an even column (260, 714). Open: whether the offset depends on the start column's
   parity or on U's (psx-spx's "the texture UV, as well as the texture width must be even" for rectangles hints at
-  pairs); a program drawing x-flipped rectangles at odd and even columns with odd and even U, run on a console, decides.
+  pairs); ~~a program drawing x-flipped rectangles at odd and even columns with odd and even U, run on a console,
+  decides~~.
+- **The referee step, 2026-10-11** (`Diamond_Referees.md` §4.7, `programs/xflip.s`) [M]: that program ran on every
+  referee. Only Beetle PSX flips at all; DuckStation, SwanStation, PCSX-Redux and PCSX-ReARMed ignore both bits. Beetle
+  PSX matches the console's picture where it reaches (U 0: 1, 0, 255 …), at even and odd columns alike, and with an
+  odd U starts at U (U 1: 1, 0, 255 …; U 11: 11, 10 …) where Diamond started at U+1. **Changed, on the strongest
+  single witness**, the only referee that flips and one that agrees with the console's picture: an x-flip starts from
+  **U with its low bit set**, whatever the column; a y-flip from V, as before. psx-spx's "the texture UV, as well as
+  the texture width must be even" is consistent with a texel pair as the unit [A].
 - **Depends on it:** the 208-pin chip's flipped sprites.
-- **Pinned by:** `texture-flip` exact; `an_x_flipped_rectangle_starts_one_texel_on`.
-- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
+- **Pinned by:** `texture-flip` exact; `an_x_flipped_rectangle_starts_one_texel_on` (*renamed*
+  `an_x_flipped_rectangle_starts_from_u_with_its_low_bit_set` *at the referee step*);
+  `flipped_rectangles_start_where_the_referee_starts_them`.
+- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`; *since the referee
+  step* `diamond: a triangle's attributes start from its leftmost vertex (D-7), an x-flip from U with its low bit set (D-8)`.
 
 ### D-9. GP0(E3h) to (E5h) act in their turn, not as they arrive
 
@@ -427,10 +483,17 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
 - **Test program:** ps1-tests' `gpu/gpustat` (source and console log; the release has no binary): a 128x128 rectangle
   written by the CPU reads bit 26 clear and bit 28 **set** while it draws; with a second rectangle queued behind it by
   DMA, both clear. Rewritten as `programs/gpustat.s`.
-- **Referee:** not consulted. **Witnesses:** none (the bits do not reach a reference's outputs).
+- **Referee:** *2026-10-11* (`Diamond_Referees.md` §4.8, `programs/gpustat-shapes.s`, and `gpustat.s` on every
+  referee) [M]: on the console log's twelve readings DuckStation and SwanStation score 9, Beetle PSX 6, PCSX-Redux 4,
+  PCSX-ReARMed 3. While a polygon's or a line's vertices arrive, DuckStation and SwanStation keep bit 28 set, as
+  Diamond does; Beetle PSX clears it from the command word to the last vertex, psx-spx's sentence for those commands;
+  all three keep it set while a rectangle draws, as the log does. **Witnesses:** none before the referee step.
 - **Conclusion:** bit 28 is set exactly when the FIFO holds no word, and a word goes to the processor at once while it
   is not drawing; bit 26 is set when, besides, nothing is half received or drawing. Measured: the log's twelve
-  readings. Open: polygons and lines, which psx-spx singles out; the log has only rectangles.
+  readings. Open: polygons and lines, which psx-spx singles out; the log has only rectangles. *Referee step,
+  2026-10-11:* kept, on the strongest single witness on GPUSTAT (DuckStation, 9 of 12 on the log against Beetle
+  PSX's 6); still open, since the lineages disagree there and psx-spx sides with the weaker. Pinned since by
+  `gpustat_while_each_shape_arrives_and_draws`.
 - **Depends on it:** DMA's pacing in modes 1 and 2 with direction 2, and every program that polls the two bits.
 - **Pinned by:** `gpustat_reads_as_the_console_passes`; `the_fifo_holds_what_arrives_while_a_command_draws`.
 - **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
@@ -442,14 +505,19 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
 - **Documents read:** psx-spx `6d7d1bc`, "DMA Channels" (its rate table and the sentence above).
 - **Test programs:** ps1-tests' `gpu/bandwidth` (source and console log: fourteen rows of 400 full-screen primitives or
   transfers, timed in hblanks) and `dma/chopping` (its "(GPU busy)" mark, GPUSTAT bit 26 read after each transfer).
-- **Referee:** not consulted. **Witnesses:** none (the time does not reach a reference's outputs).
+- **Referee:** *2026-10-11* (`Diamond_Referees.md` §4.9, `programs/gpu-busy.s`) [M]: after 2,048 words in blocks of 1
+  to 128 or one burst, every referee reads the GPU ready at the first poll (PCSX-ReARMed alone sets bit 26 22,031
+  cycles after its burst, with its blocks untimed); DuckStation's `chopping` busy marks equal Diamond's on all 130
+  rows, the same 117 agreeing with the console and the same 13 not. **Witnesses:** none before the referee step.
 - **Conclusion** [M, fitted]: `Diamond_GPU.md` §8's model, every `bandwidth` row within 0.6% of the console's.
   `chopping`'s busy mark agrees on 117 of 130 rows; the 13 others, after 128-word blocks, the unchopped burst and
   chopped windows of 16 to 128 words, read busy on the console and idle on Diamond. A write rate slower than the DMA's
   makes a full FIFO hold the DMA back, which the console's cycles rule out (at 2.38 cycles a word only 93 rows stay
   within 10%), so the console's GPU goes on working after a long transfer without slowing it: a deeper buffer between
-  the FIFO and VRAM, or a write that ends late, would; neither is in a document. **Open.** A program timing GPUSTAT bit
-  26 against the cycles after a burst of N words, on a console, would measure it.
+  the FIFO and VRAM, or a write that ends late, would; neither is in a document. **Open.** ~~A program timing GPUSTAT
+  bit 26 against the cycles after a burst of N words, on a console, would measure it.~~ *Referee step, 2026-10-11:*
+  that program ran on every referee and none keeps the GPU busy; DuckStation independently supports the 117 rows, and
+  nothing bears on the 13. Still open. Pinned since by `the_gpu_is_ready_at_once_after_each_transfer`.
 - **Depends on it:** GPUSTAT's busy bits and DMA's pacing; the speed at which games draw.
 - **Pinned by:** `bandwidth` graded against its log (2%); `a_gpu_cycle_is_a_video_clock`.
 - **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.

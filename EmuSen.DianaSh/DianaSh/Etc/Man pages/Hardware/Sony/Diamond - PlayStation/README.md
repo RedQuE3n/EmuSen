@@ -48,6 +48,11 @@ Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
   times), D-5 (the DMA's gaps and a store's drain) and D-6 (timer sync mode 2); from stage 4, D-7 (the rasteriser's
   rules), D-8 (the x-flip's offset), D-9 (the drawing area's commands in order), D-10 (GPUSTAT bit 28), D-11 (the
   drawing time) and D-12 (two pictures the programs cannot meet).
+- [`Diamond_Referees.md`](Diamond_Referees.md) — the disputes refereed by emulators, written 2026-10-11 once no
+  console was to be used: DuckStation and PCSX-Redux fetched, pinned and driven headless beside the three libretro
+  cores, their lineages weighed, each open dispute's program run on all of them, the rulings (D-0's line witnessed and
+  its interlaced PAL field changed, D-2's table shape confirmed, D-7's base vertex and D-8's flip start changed, the
+  rest still open), the referees scored against the console logs, and the reading log.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the naming scheme, and `Man pages/Hardware/README.md` for how this
 documentation set is organized.

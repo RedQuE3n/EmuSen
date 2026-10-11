@@ -110,7 +110,7 @@ namespace EmuSen.WiseMan.Serenity
             Assert.True(worst.Difference < 0.006, $"colour {worst.Colour:X2} with emphasis {worst.Emphasis}: composite and closed form differ by {worst.Difference:F4} of the peak");
         }, default);
 
-        // The NES's artifacts from its own signal: a column pattern repeats every three lines and turns over every frame, as the RGB-encoded one did (section 21.2).
+        // The NES's artifacts from its own signal, read as red over green: a column pattern's colour repeats every three lines and turns over every frame, as the RGB-encoded one did (section 21.2).
         [Fact]
         public Task From_its_own_signal_the_nes_s_artifacts_keep_their_three_line_and_two_frame_pattern() => Session.Dispatch(() =>
         {
@@ -118,7 +118,7 @@ namespace EmuSen.WiseMan.Serenity
             byte[] raw = RawField(256, 240, (x, _) => (x % 2 == 0 ? 0x20 : 0x0F, 0));
             (string, float)[] set = With(Plain, ("mask", 1f), ("subpixels", 0f), ("signal", 2f));
             if (CrtDevice.Value is not { } device) return;
-            double[] Line(byte[] picture, int line) => Enumerable.Range(480, 480).Select(x => { double s = 0; for (int yy = (int)(line * 4.5); yy < (int)((line + 1) * 4.5); yy++) s += picture[(yy * 1440 + x) * 4]; return s; }).ToArray();
+            double[] Line(byte[] picture, int line) => Enumerable.Range(480, 480).Select(x => { double s = 0; for (int yy = (int)(line * 4.5); yy < (int)((line + 1) * 4.5); yy++) s += picture[(yy * 1440 + x) * 4] - picture[(yy * 1440 + x) * 4 + 1]; return s; }).ToArray();
             double Corr(double[] p, double[] q) { double pm = p.Average(), qm = q.Average(), n = 0, a = 0, b = 0; for (int i = 0; i < p.Length; i++) { n += (p[i] - pm) * (q[i] - qm); a += (p[i] - pm) * (p[i] - pm); b += (q[i] - qm) * (q[i] - qm); } return n / Math.Sqrt(a * b); }
             var control = new GameFrameControl { FilterConsole = "NES", ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter };
             byte[] first = ShaderBench.Picture(control, Twice(blank), 256, 240, 1, 1440, 1080, device, raw: raw);

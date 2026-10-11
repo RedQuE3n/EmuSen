@@ -94,6 +94,23 @@ namespace EmuSen.Serenity.Shaders
         // The fewest display pixels a mask is drawn across before it is let go, since below two the display's own grid beats against it - see EmuSen_CRT.md §20.
         public const double LeastTriadPixels = 1.5;
 
+        // A demodulator's R-Y and G-Y axes, as angles from B-Y and gains against B-Y's, from the CXA2025AS datasheet's AXIS register; the first is the standard's matrix - see EmuSen_CRT.md §24.
+        public sealed record Demodulator(string Label, double RedDegrees, double RedGain, double GreenDegrees, double GreenGain);
+
+        public static IReadOnlyList<Demodulator> Demodulators { get; } = new Demodulator[]
+        {
+            new("The standard's", 90, 0.492 / 0.877, Math.Atan2(-0.299 / 0.587 * 0.492 / 0.877, -0.114 / 0.587) * 180 / Math.PI, Math.Sqrt(Math.Pow(0.114 / 0.587, 2) + Math.Pow(0.299 / 0.587 * 0.492 / 0.877, 2))),
+            new("Sony CXA2025AS, US axis", 112, 0.83, 252, 0.30),
+            new("Sony CXA2025AS, Japan axis", 95, 0.78, 240, 0.30),
+        };
+
+        // Rows of R-Y, G-Y and B-Y over B-Y and R-Y as the standard's axes give them: an axis at angle a with gain g reads g (B-Y cos a + R-Y sin a x 0.877 / 0.492).
+        public static double[][] AxesMatrix(Demodulator d)
+        {
+            double k = 0.877 / 0.492, r = d.RedDegrees * Math.PI / 180, g = d.GreenDegrees * Math.PI / 180;
+            return new[] { new[] { d.RedGain * Math.Cos(r), d.RedGain * k * Math.Sin(r) }, new[] { d.GreenGain * Math.Cos(g), d.GreenGain * k * Math.Sin(g) }, new[] { 1.0, 0.0 } };
+        }
+
         public static IReadOnlyList<SlangParameter> Parameters { get; } = new SlangParameter[]
         {
             Choice("quality", "Quality", (int)Quality.Balanced, "Performance", "Balanced", "Accurate"),
@@ -114,6 +131,7 @@ namespace EmuSen.Serenity.Shaders
             new("spotSize", "Beam spot size, relative to the screen's", 1f, 0.5f, 2f, 0.05f),
             new("spotGrowth", "Beam spot growth with brightness", 1f, 0f, 2f, 0.05f),
             Choice("decoder", "Luma and chroma separation", 0, "The screen's own", "Notch", "Comb"),
+            Choice("axes", "Colour demodulator", 0, Demodulators.Select(d => d.Label).ToArray()),
             new("chroma", "Chroma bandwidth, relative to the screen's", 1f, 0.5f, 3f, 0.1f),
             new("glare", "Glare in the glass", 1f, 0f, 3f, 0.1f),
             new("persistence", "Phosphor persistence", 1f, 0f, 6f, 0.1f),
@@ -126,7 +144,7 @@ namespace EmuSen.Serenity.Shaders
         };
 
         // The parameters that decide which passes exist or what is written into them as constants.
-        public static IReadOnlyList<string> Structural { get; } = new[] { "quality", "signal", "standard", "palDecoder", "screen", "colour", "gamut", "mask", "decoder", "chroma" };
+        public static IReadOnlyList<string> Structural { get; } = new[] { "quality", "signal", "standard", "palDecoder", "screen", "colour", "gamut", "mask", "decoder", "axes", "chroma" };
 
         // One standard's line on a console: its active picture, cycles across, phase moved a line, alternating and crawling between frames, and whether a frame turns PAL's switch over - see EmuSen_CRT.md §23.
         public sealed record LineTiming(double ActiveMicroseconds, double CyclesAcross, double PhaseLine, double PhaseFrame, double PhaseCrawl = 0, bool SwitchFrame = false);
@@ -154,6 +172,33 @@ namespace EmuSen.Serenity.Shaders
 
         // PAL's subcarrier, its active line, and its line of 283.7516 cycles - see EmuSen_CRT.md §23.
         public const double PalSubcarrierMegahertz = 4.43361875, PalActiveMicroseconds = 52.0, PalCyclesPerLine = 283.7516;
+
+        // The Sony CXA2025AS's luma trap: its lower -3 dB edge read at 2.70 MHz from the datasheet's CTRAP curve, a second-order notch at the subcarrier with that edge - see EmuSen_CRT.md §24.
+        public const double TrapLowerEdgeMegahertz = 2.70;
+        public static readonly double TrapQ = SubcarrierMegahertz * TrapLowerEdgeMegahertz / (SubcarrierMegahertz * SubcarrierMegahertz - TrapLowerEdgeMegahertz * TrapLowerEdgeMegahertz);
+        private static readonly double TrapStepScale = 1 / Math.Sqrt(TrapQ * TrapQ - 0.25);
+
+        // The analogue trap's gain at a frequency, for a centre on either standard with the same Q.
+        public static double TrapGain(double megahertz, double centre) =>
+            Math.Abs(centre * centre - megahertz * megahertz) / Math.Sqrt(Math.Pow(centre * centre - megahertz * megahertz, 2) + Math.Pow(megahertz * centre / TrapQ, 2));
+
+        // The band the trap takes away, as taps back along a line: a bilinear notch with the analogue trap's centre and lower edge - see EmuSen_CRT.md §24.
+        public static double[] TrapTaps(double samplesPerMicrosecond, double centre)
+        {
+            double c0 = Math.Tan(Math.PI * centre / samplesPerMicrosecond), c1 = Math.Tan(Math.PI * centre * TrapLowerEdgeMegahertz / SubcarrierMegahertz / samplesPerMicrosecond);
+            double q = c0 * c1 / (c0 * c0 - c1 * c1), w0 = 2 * Math.PI * centre / samplesPerMicrosecond, alpha = Math.Sin(w0) / (2 * q), a0 = 1 + alpha;
+            double b0 = 1 / a0, b1 = -2 * Math.Cos(w0) / a0, a1 = b1, a2 = (1 - alpha) / a0;
+            var taps = new List<double>();
+            double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+            for (int n = 0; n < 256; n++)
+            {
+                double x = n == 0 ? 1 : 0, y = b0 * x + b1 * x1 + b0 * x2 - a1 * y1 - a2 * y2;
+                (x2, x1, y2, y1) = (x1, x, y1, y);
+                taps.Add(x - y);
+                if (n > 2 && Math.Abs(y) < 1e-5 && Math.Abs(y2) < 1e-5) break;
+            }
+            return taps.ToArray();
+        }
 
         // A field's length in milliseconds on each standard, for the phosphors' decay between frames - see EmuSen_CRT.md §23.
         public const double NtscFieldMilliseconds = 1000 / 59.94, PalFieldMilliseconds = 1000 / 50.0;
@@ -193,6 +238,7 @@ namespace EmuSen.Serenity.Shaders
             public bool Pal { get; init; }
             public bool DelayLine { get; init; }
             public double LumaMegahertz { get; init; } = 5.0;
+            public Demodulator Demodulator { get; init; } = Demodulators[0];
             public double EncoderChromaMegahertz { get; init; } = 1.3;
             public double Subcarrier => Pal ? PalSubcarrierMegahertz : SubcarrierMegahertz;
             public Tails Tail => Tails.For(Pal);
@@ -219,6 +265,7 @@ namespace EmuSen.Serenity.Shaders
                 Pal = pal,
                 DelayLine = pal && !(values.TryGetValue("palDecoder", out float simple) && simple > 0.5),
                 LumaMegahertz = values.TryGetValue("lumaMHz", out float luma) ? luma : 5.0,
+                Demodulator = pal ? Demodulators[0] : Demodulators[values.TryGetValue("axes", out float axes) ? Math.Clamp((int)MathF.Round(axes), 0, Demodulators.Count - 1) : 0],
                 EncoderChromaMegahertz = values.TryGetValue("chromaMHz", out float chroma) ? chroma : 1.3,
             };
         }
@@ -434,12 +481,21 @@ half4 main(float2 coord) {
         private static string Separate(Resolved r, IReadOnlyDictionary<string, float> values, bool ppu)
         {
             double theta = r.Line.PhaseLine * 2 * Math.PI, fr = (1 - Math.Cos(theta)) / 2, fi = Math.Sin(theta) / 2, gain = fr * fr + fi * fi;
-            bool comb = r.Signal == Signal.Composite && r.Decoder == Decoder.Comb;
+            bool comb = r.Signal == Signal.Composite && r.Decoder == Decoder.Comb, trap = r.Signal == Signal.Composite && r.Decoder == Decoder.Notch;
             string read = r.Signal == Signal.SVideo ? "source.eval(float2(x + 0.5, row + 0.5)).g" : "source.eval(float2(x + 0.5, row + 0.5)).r";
             string above = "(row < 1.0 ? 0.0 : source.eval(float2(x + 0.5, row - 0.5)).r)";
 
             // The loop reaches as far as the longer window does on this console, and no further.
             int reach = (int)Math.Ceiling(Math.Max(r.ChromaCycles, 2) * r.Samples / r.Line.CyclesAcross / 2);
+
+            // The receiver's luma trap as taps along the line, each reading a sample at or before this one - see EmuSen_CRT.md §24.
+            var band = new System.Text.StringBuilder();
+            if (trap)
+            {
+                double[] taps = TrapTaps(r.Samples / r.Line.ActiveMicroseconds, r.Subcarrier);
+                for (int j = 0; j < taps.Length; j++)
+                    band.Append(j == 0 ? "    " : $"    if (s >= {j}.0) ").Append($"band += {N(taps[j])} * source.eval(float2(s - {j}.0 + 0.5, row + 0.5)).r;\n");
+            }
             return @"
 uniform shader source;
 uniform float2 inputSize;
@@ -462,12 +518,12 @@ half4 main(float2 coord) {
         float angle = 6.2831853 * phaseAt(x, row, inputSize.x);
         float2 axes = float2(sin(angle), cos(angle));
         float wc = t < chromaHalf ? 0.5 + 0.5 * cos(3.14159265 * t / chromaHalf) : 0.0;
-        float wn = t < notchHalf ? 0.5 + 0.5 * cos(3.14159265 * t / notchHalf) : 0.0;
         chroma += wc * v * axes;
-        notch += wn * v * axes;
         chromaSum += wc;
+" + (comb ? @"        float wn = t < notchHalf ? 0.5 + 0.5 * cos(3.14159265 * t / notchHalf) : 0.0;
+        notch += wn * v * axes;
         notchSum += wn;
-    }
+" : "") + @"    }
     chroma *= 2.0 / max(chromaSum, 0.0001)" + (ppu && r.Signal == Signal.Composite ? " * (rawSize.x > 0.5 ? " + N(PpuChromaGain) + " : 1.0)" : "") + @";
     notch *= 2.0 / max(notchSum, 0.0001);
 " + (r.Pal ? "    chroma.y *= palSwitch(row);\n" : "") + @"" + (comb ? @"
@@ -475,12 +531,21 @@ half4 main(float2 coord) {
     notch = float2(" + N(fr / gain) + " * notch.x + " + N(fi / gain) + " * notch.y, " + N(fr / gain) + " * notch.y - " + N(fi / gain) + @" * notch.x);
 " : "") + @"
     float here = 6.2831853 * phaseAt(s, row, inputSize.x);
-    float y = source.eval(float2(s + 0.5, row + 0.5)).r" + (r.Signal == Signal.SVideo ? "" : " - (notch.x * sin(here) + notch.y * cos(here))") + @";
+    float band = 0.0;
+" + band + @"    float y = source.eval(float2(s + 0.5, row + 0.5)).r" + (comb ? " - (notch.x * sin(here) + notch.y * cos(here))" : trap ? " - band" : "") + @";
     return half4(y, chroma.x, chroma.y, 1.0);
 }";
         }
 
-        // The receiver's second half: its video bandwidth on the luma, the standard's matrix, and the tube's transfer - see EmuSen_CRT.md §11.3.
+        // R-Y, G-Y and B-Y from the colour differences demodulated on the standard's axes, through the demodulator's own - see EmuSen_CRT.md §24.
+        private static string Demodulate(Resolved r, string by, string ry)
+        {
+            double[][] m = AxesMatrix(r.Demodulator);
+            string Row(int i) => $"{N(m[i][0])} * {by} + {N(m[i][1])} * {ry}";
+            return $"float3({Row(0)}, {Row(1)}, {by})";
+        }
+
+        // The receiver's second half: its video bandwidth on the luma, its demodulator's matrix, and the tube's transfer - see EmuSen_CRT.md §11.3 and §24.
         private static string Drive(Resolved r) => @"
 uniform shader source;
 uniform float2 inputSize;
@@ -502,8 +567,7 @@ half4 main(float2 coord) {
     half4 here = source.eval(float2(s + 0.5, row));
 " + (r.DelayLine ? "    // PAL's delay line: each line's colour averaged with the line's before it.\n    if (row > 1.0) here.gb = 0.5 * (here.gb + source.eval(float2(s + 0.5, row - 1.0)).gb);\n" : "") + @"    float ry = here.b / 0.877;
     float by = here.g / 0.492;
-    float gy = -(0.299 * ry + 0.114 * by) / 0.587;
-    return half4(light(float3(y + ry, y + gy, y + by)), 1.0);
+    return half4(light(y + " + Demodulate(r, "by", "ry") + @"), 1.0);
 }";
 
         // The Performance tier's signal: the frame's own pixels, luma and chroma blurred at the bandwidths the cable and the receiver leave them, no subcarrier - see EmuSen_CRT.md §12.1.
@@ -519,11 +583,9 @@ uniform shader original;
 " + (ppu ? "uniform shader colours;\nuniform float2 rawSize;\n" : "") + @"uniform float2 originalSize;
 " + Constants(r) + Functions + Transfer + @"
 
-// The integral of the receiver's notch band, a Hann window two subcarrier cycles long times the subcarrier, from the window's centre.
-float band(float u, float reach, float w) {
-    u = clamp(u, -reach, reach);
-    float a = 3.14159265 / reach;
-    return (2.0 / reach) * (0.5 * sin(w * u) / w + 0.25 * (sin((w + a) * u) / (w + a) + sin((w - a) * u) / (w - a)));
+// The receiver's trap band's response to a step, a second-order band-pass's, from where the pixel starts - see EmuSen_CRT.md §24.
+float band(float u, float a, float wd) {
+    return u <= 0.0 ? 0.0 : " + N(TrapStepScale) + @" * exp(-a * u) * sin(wd * u);
 }
 
 half4 main(float2 coord) {
@@ -531,8 +593,8 @@ half4 main(float2 coord) {
     float x = coord.x * 0.5;
     float row = floor(coord.y) + 0.5;
     float rate = width / activeUs;
-    float reach = width / cyclesAcross;
-    float w = 6.2831853 / reach;
+    float a = " + N(Math.PI * r.Subcarrier / TrapQ) + @" / rate;
+    float wd = " + N(2 * Math.PI * r.Subcarrier * Math.Sqrt(1 - 1 / (4 * TrapQ * TrapQ))) + @" / rate;
     float sy = 0.132532 * rate * sqrt(1.0 / (lumaMHz * lumaMHz) + " + N(1 / (video * video)) + @");
     float sc = 0.132532 * rate * sqrt(1.0 / (chromaMHz * chromaMHz) + " + N(1 / (chroma * chroma)) + @");
     float first = floor(x);
@@ -542,7 +604,7 @@ half4 main(float2 coord) {
         float k = first + float(i);
         if (k < 0.0 || k >= width) continue;
         float3 rgb = " + (ppu ? "(rawSize.x > 0.5 ? colours.eval(float2(k + 0.5, row)) : original.eval(float2(k + 0.5, row))).rgb" : "original.eval(float2(k + 0.5, row)).rgb") + @";
-        float wy = cdf((k + 1.0 - x) / sy) - cdf((k - x) / sy)" + (notch ? " - " + N(through) + " * (band(x - k, reach, w) - band(x - k - 1.0, reach, w))" : "") + @";
+        float wy = cdf((k + 1.0 - x) / sy) - cdf((k - x) / sy)" + (notch ? " - " + N(through) + " * (band(x - k, a, wd) - band(x - k - 1.0, a, wd))" : "") + @";
 " + (rgb ? @"        wide += wy * rgb;
     }
     return half4(light(wide), 1.0);
@@ -553,8 +615,7 @@ half4 main(float2 coord) {
 " + (r.DelayLine ? @"        float3 above = original.eval(float2(k + 0.5, max(row - 1.0, 0.5))).rgb;
         narrow += wc * float2(above.b, above.r) - wc * dot(above, float3(0.299, 0.587, 0.114));
 " : "") + @"    }
-" + (r.DelayLine ? "    narrow *= 0.5;\n" : "") + @"    float gy = -(0.299 * narrow.y + 0.114 * narrow.x) / 0.587;
-    return half4(light(float3(wide.x + narrow.y, wide.x + gy, wide.x + narrow.x)), 1.0);
+" + (r.DelayLine ? "    narrow *= 0.5;\n" : "") + @"    return half4(light(wide.x + " + Demodulate(r, "narrow.x", "narrow.y") + @"), 1.0);
 }");
         }
 

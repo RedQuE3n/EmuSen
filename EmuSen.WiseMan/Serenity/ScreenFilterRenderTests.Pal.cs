@@ -140,12 +140,13 @@ namespace EmuSen.WiseMan.Serenity
                     }
                 return fringes;
             }
+            // Scanlines fall 4 or 5 display rows apart, so a line's centre is read up to half a row off and the same phase on another line reads up to 0.03 apart.
             double Apart((double R, double B) p, (double R, double B) q) => Math.Max(Math.Abs(p.R - q.R), Math.Abs(p.B - q.B));
 
             List<(double R, double B)> snes = Fringes("SNES", 256, 224, 2), snesNext = Fringes("SNES", 256, 224, 3);
             for (int i = 2; i < 8; i++)
             {
-                Assert.True(Apart(snes[i], snes[i + 6]) < 0.01, $"SNES, six lines on from line {i}: {Apart(snes[i], snes[i + 6]):F3} apart");
+                Assert.True(Apart(snes[i], snes[i + 6]) < 0.03, $"SNES, six lines on from line {i}: {Apart(snes[i], snes[i + 6]):F3} apart");
                 Assert.True(Apart(snes[i], snes[i + 3]) > 0.05, $"SNES, three lines on from line {i}: {Apart(snes[i], snes[i + 3]):F3} apart");
                 Assert.True(Apart(snes[i], snesNext[i]) < 0.01, $"SNES, the next frame at line {i}: {Apart(snes[i], snesNext[i]):F3} apart");
             }

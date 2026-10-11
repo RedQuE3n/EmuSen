@@ -176,7 +176,8 @@ V less than 3 dB down at 1.3 MHz. The V component's sign alternates each line.
 - Demodulation was deliberately non-standard. The decoder chips' datasheets give the angles of the R−Y, G−Y and
   B−Y axes and their relative gains, and the US modes rotate and boost red ("red push") to keep skin tones
   pleasing on a 9300 K white. As transcribed by gamutthingy [S], which cites each datasheet; the Sony PDFs
-  themselves could not be fetched and **must be read before any of these is built in**:
+  themselves could not be fetched and **must be read before any of these is built in**. The CXA2025AS's was read on
+  2026-10-10 and matches; it is built in §24:
 
 | Decoder | R−Y, G−Y, B−Y angles | Gains |
 |---|---|---|
@@ -2254,7 +2255,7 @@ nearly equal luma, read along their I–Q difference. On the SNES (the Genesis H
   retired: it keeps 80% at 1 MHz and 62% at 1.5 before the receiver's own bandwidth. patchy-ntsc lies between the
   two. **Which to trust**: patchy-ntsc for the shape, not as a grade but because the trap arithmetic sides with it.
   The fix is a notch whose skirt is a real trap's, from a receiver's datasheet; it belongs with the decoders of the
-  next steps and is put to the tester below rather than made here.
+  next steps and is put to the tester below rather than made here. (Made in §24, with the comparison run again.)
 - **S-Video and RGB luma agree with crt-beans** within 0.08, and both are softer than patchy-ntsc's SNES S-Video,
   which applies no luma limit at all (its Genesis preset does, and falls with ours). Neither this filter's 5 MHz
   encoder (a fallback, §3.2) nor the set's 4.2 MHz has been measured; the agreement is of two choices.
@@ -2418,7 +2419,8 @@ colours and so supports the encoding by behaviour, not by reading. On the same f
   patchy-ntsc, and spares $06 (0.88 and 0.91); the blue bit dims $08 (0.40 and 0.53) and spares $02 (0.92 and 0.83).
 - **Saturation does not agree**: patchy-ntsc's colours are 10–20% more saturated against their luma. Its output is
   in a different colour space from this filter's, with its own decoder matrix and display transform, so the
-  difference is not graded; it is recorded.
+  difference is not graded; it is recorded. Run again with its Rec. 601 decoder and its automatic tint and colour
+  off (§24.4), the median is 10% and the hues agree more closely.
 
 Agreement on hue order and on which colours each bit spares is evidence for §22.2's phase and emphasis reading; the
 size of each bit's effect differs by 0.1 between the models and rests on how each decodes, so it is left open.
@@ -2594,3 +2596,152 @@ sign; only a pattern whose colour comes from luma, a fringe, shows it.
    against nesdev's own capture of a PAL PPU's signal (the 53.2 MHz file on the *PAL video* page) before anything is
    built, and that capture is the only test of the reading. *Recommendation: yes, as the next NES step, since the
    PAL NES's picture is the case where the PPU's own wave changes most.*
+
+
+## 24. A receiver's own decoder: the CXA2025AS's trap and axes (2026-10-10)
+
+§21 found the notch's skirt too broad, and §3.1 listed decoder chips whose demodulation axes depart from the
+standard's, transcribed second-hand with the note that the datasheets must be read before any was built in. Both rest
+on one document: Sony's datasheet for the **CXA2025AS**, a single-chip NTSC decoder and deflection processor for
+consumer sets **[P]**. It was read for this section (its text and its characteristic curves); this section builds
+its luma trap in place of the Hann notch, and its two demodulator settings as choices beside the standard's matrix.
+Decided 2026-10-10: the trap replaces the notch's Hann skirt, its width taken from this datasheet.
+
+### 24.1 What the datasheet gives
+
+- **The luma trap.** The Y path has a chroma trap switched by the C-TRAP bit, tuned by CTRAP-ADJ (±300 kHz about its
+  centre). Its attenuation at 3.58 MHz is typically −37.5 dB (item 13 of the electrical characteristics). The curve
+  *CTRAP-ADJ* on page 34 plots the Y path's gain against frequency with the trap off and on. Read from that curve at
+  600 dpi against its grid, the trap's own effect (trap on against trap off) is −2.5 dB at 2.62 MHz, −3.3 dB at
+  2.73 MHz, −10 dB at 3.20, −20 at 3.52 and about −33 at its deepest, near 3.7 MHz. **The lower −3 dB edge is 2.70 MHz
+  [D, read from a plotted curve, ±0.05 MHz].** Above the subcarrier the trap-on curve does not return: it settles 5
+  to 6 dB below the trap-off one by 5 MHz, a shelf from the chip's own delay compensation, which is not modelled.
+- **The demodulator's axes.** The AXIS bit chooses between two settings, given as the angle of each axis from B−Y
+  and its gain against B−Y's: **Japan, R−Y 95° × 0.78, G−Y 240° × 0.3; US, R−Y 112° × 0.83, G−Y 252° × 0.3**, B−Y at
+  0° with gain 1. The same page gives the standard's ratio for an external colour-difference input: "R−Y is
+  demodulated by the 90° axis to become a 1.14 times signal, B−Y is demodulated by the 0° axis to become a 2.03 times
+  signal", 1.14 and 2.03 being 1/0.877 and 1/0.492. That fixes the convention: a gain is against B−Y's 2.03.
+
+The transcription in §3.1 matches the datasheet for this chip. The other chips there (CXA2060BS, TA7644BP, the RCA
+measurement) are still second-hand and are not built.
+
+### 24.2 The trap
+
+A second-order notch at the subcarrier, |H| = |f₀² − f²| / √((f₀² − f²)² + (f f₀ / Q)²), whose lower −3 dB edge is
+2.70 MHz, has **Q = f₀ f₁ / (f₀² − f₁²) = 1.75**, an upper edge at f₀²/f₁ = 4.75 MHz and a −3 dB width of
+**2.05 MHz** **[D]**. The Hann notch's was 2.58 MHz (§11.3's half-width of 1.29). A least-squares fit of the same
+second-order form to the curve's lower skirt from 2.45 to 3.5 MHz gives Q 1.64 with the centre held at 3.58 MHz
+(rms 0.85 dB), or Q 1.49 at 3.61 MHz with the centre free (rms 0.68 dB): the plotted skirt is not exactly
+second-order, and the −3 dB point the tester asked for is the one used.
+
+| Frequency, MHz | 0.5 | 0.75 | 1.0 | 1.5 | 2.0 | 2.5 |
+|---|---|---|---|---|---|---|
+| Hann notch, as built before | 0.93 | 0.87 | 0.80 | 0.62 | 0.41 | 0.21 |
+| The trap | 1.00 | 0.99 | 0.99 | 0.96 | 0.91 | 0.79 |
+
+**How each tier draws it.** At Balanced and Accurate the separate pass subtracts the band the trap takes away, as
+taps back along the line: a bilinear notch whose centre and lower edge are prewarped to the analogue trap's, so both
+fall where the datasheet puts them at Balanced's four samples to a cycle as at Accurate's twelve. The taps run until
+the response has fallen below 10⁻⁵: 29 at Balanced and 67 at Accurate on the NTSC consoles. A real trap is causal, and so are the taps: the luma
+rings a little to the right of a sharp edge, not to both sides. At Performance the band-pass's step response has a
+closed form, (1 / √(Q² − ¼)) e^(−αt) sin(ω_d t), and each pixel's weight takes it in place of the Hann window's
+integral. On PAL the trap sits at 4.43 MHz with the same Q, a choice **[C]**: no PAL receiver's trap was read. The
+two-line comb is unchanged; it never used the notch's skirt for its luma.
+
+**What it changes on the picture.** Fine luma detail below 2 MHz now survives composite almost as it does S-Video,
+and detail close to the subcarrier passes in part: the Genesis's H40 dither (3.36 MHz) keeps 0.22 of its column swing
+against RGB's, where the Hann notch removed nearly all of it, and the SNES's 512-wide columns (5.37 MHz) keep half of
+a monitor's. Four existing tests had asserted the old blending; they were rewritten to the trap's own predictions
+(the Genesis's columns at the trap's gain at 3.36 MHz, 0.216; the rainbow and the NES's artifacts read as colour,
+blue over green and red over green, so that the luma the trap now passes does not count as artifact).
+
+### 24.3 The axes
+
+An axis at angle *a* with gain *g* against B−Y reads *g* (B−Y cos *a* + R−Y × (0.877/0.492) sin *a*), with B−Y and
+R−Y as the standard's demodulator gives them **[D]**. The standard's own matrix is this form at 90° × 0.561 and
+235.8° × 0.346, which the first test checks to nine places. A **Colour demodulator** setting offers the standard's,
+the CXA2025AS's US axis and its Japan axis; the choice changes only the matrix in the Drive pass and in the
+Performance pass. The PPU's closed form (§22.3) still produces the standard's colour, and the axes then apply to it as
+to any other. The CXA2025AS decodes NTSC only, so on PAL the standard's matrix is used whatever is chosen.
+
+The US axis pushes red: its R−Y axis is turned 22° from the standard's 90°, toward −(B−Y), and read with 0.83 of
+B−Y's gain where the standard's is 0.561, 1.48 times as strongly; G−Y moves with it. A set built with this axis was set up on a 9300 K white, which this filter does not change with the
+axis; the phosphors' white is the Colour setting's (§3.4).
+
+### 24.4 The referees, before and after
+
+The §21 comparison was run again on the same frames, with the measurement fitted at each grating's own frequency.
+Composite luma, each model's output at a frequency over its output at 0.25 MHz, on the SNES:
+
+| Model | 0.5 MHz | 0.75 | 1.0 | 1.5 | 2.0 | 2.5 |
+|---|---|---|---|---|---|---|
+| this filter, Hann notch (before) | 0.95 | 0.86 | 0.75 | 0.50 | 0.27 | 0.11 |
+| this filter, the trap (after) | 0.98 | 0.94 | 0.89 | 0.76 | 0.59 | 0.40 |
+| this filter, the trap, Balanced | 0.98 | 0.94 | 0.89 | 0.76 | 0.60 | 0.41 |
+| this filter, the trap, Performance | 0.98 | 0.94 | 0.89 | 0.75 | 0.58 | 0.40 |
+| this filter, S-Video | 0.98 | 0.95 | 0.91 | 0.79 | 0.65 | 0.51 |
+| patchy-ntsc, composite | 0.99 | 0.96 | 0.92 | 0.75 | 0.46 | 0.20 |
+| crt-beans, S-Video | 0.98 | 0.94 | 0.89 | 0.75 | 0.58 | 0.43 |
+
+- **To 1.5 MHz the two models now agree** within 0.03, where they differed by 0.17 at 1 MHz and 0.24 at 1.5 before.
+  §21's finding is settled in patchy-ntsc's favour, and by the datasheet rather than by the referee.
+- **Above 2 MHz they part the other way**: patchy-ntsc keeps 0.46 and 0.20 where the trap keeps 0.59 and 0.40. A
+  trap of this width leaves 0.91 and 0.79 at 2 and 2.5 MHz before the receiver's 4.2 MHz, so a model that falls
+  faster has a wider trap or a lower video bandwidth than this chip's. The datasheet's own Y path also has a
+  sharpness stage (its SHARPNESS curve rises about 1.5 dB around 3 MHz at the middle setting and 5 dB at the
+  highest) that neither model includes. Left open.
+- **The artifacts' strength is unchanged** (0.0396 against 0.0395 for the alternate-column pattern): they are chroma,
+  and the trap acts on luma. patchy-ntsc's remain 2.2 times as strong.
+- **crt-beans** is unchanged, and this filter's composite now sits within 0.03 of crt-beans' S-Video to 2.5 MHz.
+
+**The axes against patchy-ntsc.** patchy-ntsc has a custom demodulator setting that takes an R−Y and a G−Y angle and
+gain against B−Y, the datasheet's own form. Given the CXA2025AS's numbers, its change from its Rec. 601 decoder was
+compared with this filter's change from the standard's, on eight flat colours by S-Video (its automatic tint and
+colour off):
+
+| Colour | This filter, US axis | patchy-ntsc, US | This filter, Japan axis | patchy-ntsc, Japan |
+|---|---|---|---|---|
+| red (0.7, 0.3, 0.3) | +0.2°, ×1.42 | −4.3°, ×1.28 | −0.7°, ×1.32 | −0.9°, ×1.15 |
+| green (0.3, 0.6, 0.3) | −1.5°, ×0.95 | −12.6°, ×1.01 | −6.2°, ×1.05 | −8.5°, ×1.05 |
+| blue (0.3, 0.35, 0.7) | +16.6°, ×1.21 | +16.1°, ×1.20 | +7.4°, ×1.07 | +9.9°, ×1.04 |
+| yellow (0.65, 0.55, 0.25) | +17.9°, ×1.48 | +10.0°, ×1.28 | +9.2°, ×1.20 | +7.2°, ×1.08 |
+| magenta (0.6, 0.3, 0.6) | −1.8°, ×0.98 | −11.9°, ×0.95 | −8.6°, ×1.13 | −6.7°, ×1.00 |
+| skin (0.75, 0.55, 0.45) | +6.0°, ×1.46 | +0.6°, ×1.29 | +3.1°, ×1.28 | +1.7°, ×1.13 |
+
+(Hue turned in the output's I–Q plane, and saturation as a ratio, each against the same model's standard decoder.)
+**The Japan axis agrees** within 3° on every colour; **the US axis agrees on blue** and in pushing red and yellow,
+and **disagrees on green and magenta by 10° to 11°**, where this filter barely turns them. The arithmetic of §24.3
+on the drive voltages gives the green colour's G−Y as 0.106 under the US axis against 0.124 under the standard's, a
+turn of about 1°, so this filter does what the datasheet's numbers say; why patchy-ntsc turns green further with the
+same numbers is not known, as its code was not read. Its saturation gains under the US axis are also smaller on red, yellow and skin (1.28 to 1.29 against 1.42 to
+1.48), which a different normalisation of the gains would explain. Left open, and not a grade.
+
+**§22.5 run again.** patchy-ntsc's NES raw palette had been run with its default decoder (a US chip, with its
+automatic tint and colour on). With its Rec. 601 decoder and the automatic adjustment off, the hues of the 48
+saturated entries without emphasis agree with this filter's to a median of 0.7°, half of them within −6.5° to +3.4°
+(against −10.7° to +9.5° before), and patchy-ntsc's saturation against luma is a median 1.10 times this filter's.
+
+### 24.5 Tests and mutants
+
+`ScreenFilterRenderTests.Decoder.cs`: the taps against the analogue trap at both signal tiers' rates and both
+standards' centres (the centre below 0.01, the lower edge at 0.707 within 0.005, 1 and 1.5 MHz within 0.02 of the
+analogue gain); the axes rebuilding the standard's matrix and giving the datasheet's rows; composite luma over
+S-Video at 1, 2 and 2.8 MHz on a 512-wide frame against the trap's gain at every tier and on PAL (within 0.04);
+a colour through each CXA2025AS axis against the colour its rows make drawn through the standard's matrix; and the
+standard's matrix on PAL whatever is chosen. Mutants:
+
+Eight, all caught:
+
+| Mutant | Caught by |
+|---|---|
+| no trap at the signal tiers | composite luma against the trap |
+| the trap at NTSC's centre on PAL | composite luma against the trap, on PAL |
+| the Performance trap twice as strong | composite luma against the trap, at Performance |
+| the Performance trap decaying at half its rate | composite luma against the trap, at Performance |
+| the taps without the lower edge's prewarp | the taps; composite luma at Balanced |
+| the CXA2025AS's axes kept on PAL | the standard's matrix on PAL |
+| Drive and Performance on the standard's axes whatever is chosen | a colour through each axis |
+| the G−Y axis without its gain | the axes' rows; a colour through each axis |
+
+Below 1.5 MHz the trap keeps 0.96 or more, so composite luma at 1 MHz alone could not tell a trap from none; the
+2 and 2.8 MHz gratings on a 512-wide frame are what catch the first mutant.

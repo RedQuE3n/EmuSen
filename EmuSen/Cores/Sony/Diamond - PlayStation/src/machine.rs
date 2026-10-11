@@ -1,32 +1,27 @@
-//! The stage 1 machine: the image recognised, the memories allocated and zeroed, the two processors' registers, a frame
-//! counter, a black picture and silence at the SPU's rate. Nothing is emulated (Diamond_Native.md §2).
+//! The machine: the R3000A stepping against the bus, a frame being one video field, a PS-EXE side-loaded on the kernel
+//! it runs or started directly, the TTY, and silence at the SPU's rate until stage 8 (Diamond_Native.md §11).
 
-use blackmoon_gte::Gte;
-use blackmoon_r3000::R3000;
+use blackmoon_r3000::{R3000, Step};
 
-use crate::media::{Market, Media};
+use crate::bus::{BIOS_BYTES, Board, RAM_BYTES, SCRATCH_BYTES, power_on_memctl};
+use crate::devices::{SPU_RAM_BYTES, TTY_BYTES, VRAM_BYTES};
+use crate::icache::KERNEL_BCC;
+use crate::kernel::{self, Kernel};
+use crate::media::{Kind, Market, Media};
+use crate::memctl;
+use crate::video::Video;
+use crate::exe;
 
-/// A memory the machine holds, by its space name and id (Diamond_Plan.md §4.3).
-pub struct Memory {
-    pub id: u32,
-    pub name: &'static str,
-    pub bytes: Vec<u8>,
-    pub read_only: bool,
-}
-
-/// The memories as (id, name, size): main RAM, the scratchpad, VRAM, SPU RAM, and the BIOS ROM, read-only.
-pub const MEMORIES: [(u32, &str, usize); 5] = [(1, "RAM", 0x20_0000), (2, "SCRATCH", 0x400), (3, "VRAM", 0x10_0000), (4, "SPURAM", 0x8_0000), (5, "BIOS", 0x8_0000)];
+/// The spaces as (id, name, size, read-only) (Diamond_Plan.md §4.3), the TTY's text last.
+pub const SPACES: [(u32, &str, usize, bool); 6] =
+    [(1, "RAM", RAM_BYTES, false), (2, "SCRATCH", SCRATCH_BYTES, false), (3, "VRAM", VRAM_BYTES, false), (4, "SPURAM", SPU_RAM_BYTES, false), (5, "BIOS", BIOS_BYTES, true), (6, "TTY", TTY_BYTES, true)];
 pub const RAM_ID: u32 = 1;
 pub const BIOS_ID: u32 = 5;
-pub const BIOS_BYTES: usize = 0x8_0000;
+pub const TTY_ID: u32 = 6;
 
 /// The SPU's rate, 33.8688 MHz over 768 (psx-spx "SPU"), at which the silence is made.
 pub const AUDIO_RATE: i32 = 44_100;
-
-/// The video clocks psx-spx states for each standard over a progressive frame's lines and clocks (263 of 3,413 NTSC,
-/// 314 of 3,406 PAL); provisional until D-0 settles which clock an NTSC console runs (Diamond_Native.md §2.3).
-pub const NTSC_FRAME: (u64, u64) = (53_693_175, 263 * 3413);
-pub const PAL_FRAME: (u64, u64) = (53_203_425, 314 * 3406);
+pub const CYCLES_PER_SAMPLE: u64 = 768;
 
 /// The picture before the GPU exists: 320 wide, 240 lines NTSC and 256 PAL; at most 640 by 512.
 pub const WIDTH: u32 = 320;
@@ -50,33 +45,70 @@ pub struct Config {
 pub struct Machine {
     pub media: Media,
     pub config: Config,
-    pub memories: Vec<Memory>,
     pub cpu: R3000,
-    pub gte: Gte,
+    pub board: Board,
+    pub kernel: Kernel,
+    /// The PS-EXE the kernel's shell entry is to receive, while it waits, and the program kept for a state that loads
+    /// from before the side-load.
+    pub exe: Option<Vec<u8>>,
+    pub image: Option<Vec<u8>>,
     pub frames: i64,
     pub picture: Vec<u8>,
     pub skip: bool,
     pub pads: [u32; 2],
     pub ports: [Option<&'static str>; 2],
-    /// Silent stereo frames made and not yet drained, and the bound on them in samples.
+    /// Silent stereo frames made and not yet drained, the bound on them in samples, and the cycle the last sample
+    /// was counted at.
     pub silence: usize,
     pub audio_limit: usize,
     /// The firmware files given at create, by number.
     pub firmware: Vec<u32>,
 }
 
+/// The console's standard field rate, by its market: NTSC on an NTSC clock, PAL on a PAL one (D-0, provisional).
+pub fn standard_rate(pal: bool) -> (u64, u64) {
+    let mut v = Video::new(pal);
+    v.mode = (pal as u32) << 3;
+    v.field_rate()
+}
+
 impl Machine {
-    pub fn new(media: Media, config: Config, ports: [Option<&'static str>; 2]) -> Machine {
-        let memories = MEMORIES.iter().map(|&(id, name, size)| Memory { id, name, bytes: vec![0; size], read_only: id == BIOS_ID }).collect();
-        let picture = black(WIDTH, height(config.market));
+    /// A machine on `bios`, the kernel image to run (a player's or the open kernel's), or on no kernel.
+    pub fn new(media: Media, config: Config, ports: [Option<&'static str>; 2], image: &[u8], bios: Option<(&[u8], Kernel)>) -> Machine {
+        let pal = config.market == Market::Europe;
+        let version = if config.gpu == Gpu::Pin208 { 2 } else { 0 };
+        let kernel = bios.map_or(Kernel::None, |b| b.1);
+        let mut board = if kernel.boots() {
+            Board::new(pal, version, power_on_memctl(), memctl::KERNEL_RAM_SIZE, 0)
+        } else {
+            Board::new(pal, version, memctl::KERNEL_VALUES, memctl::KERNEL_RAM_SIZE, KERNEL_BCC)
+        };
+        let mut cpu = R3000::new();
+        let is_exe = matches!(media.kind, Kind::Exe { .. });
+        let mut exe = None;
+        if let Some((rom, _)) = bios {
+            board.bios.copy_from_slice(rom);
+            cpu.regs.pc = 0xBFC0_0000;
+            cpu.regs.sr = 1 << 22;
+            if is_exe {
+                exe = Some(image.to_vec());
+            }
+        } else if is_exe {
+            exe::load(image, &mut board.ram, &mut cpu);
+        } else {
+            cpu.regs.pc = 0xBFC0_0000;
+            cpu.regs.sr = 1 << 22;
+        }
         Machine {
             media,
             config,
-            memories,
-            cpu: R3000::new(),
-            gte: Gte::new(),
+            cpu,
+            board,
+            kernel,
+            image: exe.clone(),
+            exe,
             frames: 0,
-            picture,
+            picture: black(WIDTH, height(config.market)),
             skip: false,
             pads: [0; 2],
             ports,
@@ -91,31 +123,64 @@ impl Machine {
     }
 
     pub fn frame_rate(&self) -> (u64, u64) {
-        if self.pal() { PAL_FRAME } else { NTSC_FRAME }
+        standard_rate(self.pal())
     }
 
     pub fn height(&self) -> u32 {
         height(self.config.market)
     }
 
-    pub fn memory(&self, id: u32) -> Option<&Memory> {
-        self.memories.iter().find(|m| m.id == id)
+    pub fn space(&self, id: u32) -> Option<&[u8]> {
+        let b = &self.board;
+        Some(match id {
+            1 => &b.ram,
+            2 => &b.scratch,
+            3 => &b.gpu.vram,
+            4 => &b.spu.ram,
+            5 => &b.bios,
+            6 => &b.tty.text,
+            _ => return None,
+        })
     }
 
-    pub fn memory_mut(&mut self, id: u32) -> Option<&mut Memory> {
-        self.memories.iter_mut().find(|m| m.id == id)
+    pub fn space_mut(&mut self, id: u32) -> Option<&mut [u8]> {
+        let b = &mut self.board;
+        Some(match id {
+            1 => &mut b.ram,
+            2 => &mut b.scratch,
+            3 => &mut b.gpu.vram,
+            4 => &mut b.spu.ram,
+            _ => return None,
+        })
     }
 
-    /// The stereo frames of silence frame `n` makes, so that every frame's count sums to the rate exactly.
-    pub fn samples_in(&self, n: i64) -> usize {
-        let (num, den) = self.frame_rate();
-        let upto = |k: i64| (AUDIO_RATE as u128 * k as u128 * den as u128 / num as u128) as usize;
-        upto(n + 1) - upto(n)
+    /// One step at the boundary, with the kernel's seams: the side-load at the shell's entry and the putchar tap.
+    pub fn step(&mut self) {
+        let pc = self.cpu.regs.pc;
+        if self.exe.is_some() && pc & 0x1FFF_FFFF == kernel::SHELL_ENTRY && !self.cpu.regs.branch.slot {
+            let image = self.exe.take().unwrap_or_default();
+            exe::load(&image, &mut self.board.ram, &mut self.cpu);
+            self.board.cache.tags = [0; 256];
+        }
+        let tapped = if self.kernel.taps_putchar() { kernel::putchar(self.cpu.regs.pc, self.cpu.regs.r[9], self.cpu.regs.r[4]) } else { None };
+        let step = self.cpu.step(&mut self.board);
+        if let (Some(c), Step::Instruction) = (tapped, step) {
+            self.board.tty.put(c);
+        }
+        if self.board.now >= self.board.next_event {
+            self.board.events();
+        }
     }
 
-    /// One frame: the count moves and the frame's silence is queued; nothing else does.
+    /// One frame: the machine runs to the start of the next video field; its silence is counted from the clock.
     pub fn advance(&mut self) {
-        self.silence = (self.silence + self.samples_in(self.frames)).min(self.audio_limit / 2);
+        let start = self.board.now;
+        self.board.field_done = false;
+        while !self.board.field_done {
+            self.step();
+        }
+        let made = self.board.now / CYCLES_PER_SAMPLE - start / CYCLES_PER_SAMPLE;
+        self.silence = (self.silence + made as usize).min(self.audio_limit / 2);
         self.frames += 1;
     }
 }
@@ -130,44 +195,78 @@ pub fn black(width: u32, height: u32) -> Vec<u8> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::media::Kind;
+    use crate::media::sample::exe;
+    use emusen_mips::assemble;
 
-    fn machine(market: Market) -> Machine {
-        Machine::new(Media { kind: Kind::Disc { raw: false }, market: Some(market) }, Config { market, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None])
-    }
-
-    #[test]
-    fn the_rates_are_the_documented_clocks_over_a_frame() {
-        let hz = |(n, d): (u64, u64)| n as f64 / d as f64;
-        assert!((hz(NTSC_FRAME) - 59.8173).abs() < 1e-4, "{}", hz(NTSC_FRAME));
-        assert!((hz(PAL_FRAME) - 49.7468).abs() < 1e-4, "{}", hz(PAL_FRAME));
-    }
-
-    #[test]
-    fn a_seconds_frames_make_a_seconds_silence_exactly() {
-        for market in [Market::Americas, Market::Europe] {
-            let mut m = machine(market);
-            let (num, den) = m.frame_rate();
-            let frames = (num * 10 / den) as i64;
-            let made: usize = (0..frames).map(|n| m.samples_in(n)).sum();
-            assert_eq!(made as u128, AUDIO_RATE as u128 * frames as u128 * den as u128 / num as u128);
-            assert!((735..=887).contains(&m.samples_in(0)), "{}", m.samples_in(0));
-            m.audio_limit = 1000;
-            m.advance();
-            m.advance();
-            assert_eq!(m.silence, 500, "the bound drops the oldest");
+    pub fn program(source: &str) -> Vec<u8> {
+        let words = assemble(source, 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+        let mut image = exe(None, words.len() * 4);
+        for (i, w) in words.iter().enumerate() {
+            image[0x800 + 4 * i..0x804 + 4 * i].copy_from_slice(&w.to_le_bytes());
         }
+        image
+    }
+
+    pub fn machine_for(image: &[u8], market: Market) -> Machine {
+        let media = Media::read(image).unwrap();
+        Machine::new(media, Config { market, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], image, None)
     }
 
     #[test]
-    fn the_picture_is_black_and_the_bios_read_only() {
-        let m = machine(Market::Europe);
-        assert_eq!((m.picture.len(), m.height()), (320 * 256 * 4, 256));
+    fn the_rates_are_d0s_provisional_ones() {
+        let hz = |(n, d): (u64, u64)| n as f64 / d as f64;
+        assert!((hz(standard_rate(false)) - 59.8261).abs() < 1e-4);
+        assert!((hz(standard_rate(true)) - 49.7614).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_seconds_frames_make_a_seconds_silence_from_the_clock() {
+        let mut m = machine_for(&program("loop: j loop\nnop"), Market::Americas);
+        let (num, den) = m.frame_rate();
+        let frames = (num / den) as i64;
+        for _ in 0..frames {
+            m.advance();
+        }
+        assert_eq!(m.silence as u64, m.board.now / CYCLES_PER_SAMPLE);
+        let seconds = m.board.now as f64 / 33_868_800.0;
+        assert!((seconds - frames as f64 * den as f64 / num as f64).abs() < 1e-5, "{seconds}");
+        m.audio_limit = 1000;
+        m.advance();
+        assert_eq!(m.silence, 500, "the bound drops the oldest");
+    }
+
+    #[test]
+    fn a_program_runs_and_its_stores_land() {
+        let mut m = machine_for(&program("lui t0, 0x8001\nori t0, t0, 0x1000\naddiu t1, zero, 0x55\nsw t1, 0(t0)\nloop: j loop\nnop"), Market::Americas);
+        assert_eq!(m.media.kind, Kind::Exe { pc: 0x8001_0000, load: 0x8001_0000, size: 0x800 });
+        m.advance();
+        assert_eq!(m.board.ram_word(0x11000), 0x55);
         assert!(m.picture.chunks(4).all(|p| p == [0, 0, 0, 255]));
-        assert_eq!(machine(Market::Japan).height(), 240);
-        assert!(m.memory(BIOS_ID).unwrap().read_only && !m.memory(RAM_ID).unwrap().read_only);
-        assert_eq!(m.memories.iter().map(|x| x.bytes.len()).sum::<usize>(), 0x20_0000 + 0x400 + 0x10_0000 + 0x8_0000 + 0x8_0000);
+        assert_eq!(m.space(BIOS_ID).unwrap().len(), 0x8_0000);
+    }
+
+    #[test]
+    fn a_load_from_nothing_is_a_data_bus_error_and_a_fetch_from_the_scratchpad_an_instruction_one() {
+        let mut m = machine_for(&program("lui t0, 0x1F80\nlw t1, 0x400(t0)\nnop"), Market::Americas);
+        for _ in 0..3 {
+            m.step();
+        }
+        assert_eq!((m.cpu.regs.cause >> 2 & 0x1F, m.cpu.regs.epc, m.cpu.regs.pc), (7, 0x8001_0004, 0x8000_0080 + 4));
+        let mut j = machine_for(&program("lui t0, 0x1F80\njr t0\nnop"), Market::Americas);
+        for _ in 0..4 {
+            j.step();
+        }
+        assert_eq!((j.cpu.regs.cause >> 2 & 0x1F, j.cpu.regs.epc), (6, 0x1F80_0000));
+    }
+
+    #[test]
+    fn the_duart_carries_text_to_the_tty() {
+        let src = "lui t0, 0x1F80\nori t0, t0, 0x2023\naddiu t1, zero, 0x48\nsb t1, 0(t0)\naddiu t1, zero, 0x69\nsb t1, 0(t0)\nloop: j loop\nnop";
+        let mut m = machine_for(&program(src), Market::Americas);
+        m.advance();
+        assert_eq!(&m.space(TTY_ID).unwrap()[..3], b"Hi\0");
     }
 }

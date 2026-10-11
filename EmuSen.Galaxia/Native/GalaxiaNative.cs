@@ -214,6 +214,7 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int> _modelSaveTo;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, long> _cheatNames;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, int> _cheatNameValid;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long> _cheatGameList;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _logRoot;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, int> _logUsable;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long> _logPath;
@@ -236,7 +237,7 @@ namespace EmuSen.Galaxia.Native
             "emusen_galaxia_dotnet_path", "emusen_galaxia_dotnet_test",
             "emusen_galaxia_config_delete", "emusen_galaxia_config_read", "emusen_galaxia_config_write", "emusen_galaxia_model_load", "emusen_galaxia_model_save",
             "emusen_galaxia_model_new", "emusen_galaxia_model_bind", "emusen_galaxia_model_format", "emusen_galaxia_model_schema", "emusen_galaxia_model_load_from",
-            "emusen_galaxia_model_save_to", "emusen_galaxia_cheat_names", "emusen_galaxia_cheat_name_valid", "emusen_galaxia_log_root", "emusen_galaxia_log_usable",
+            "emusen_galaxia_model_save_to", "emusen_galaxia_cheat_names", "emusen_galaxia_cheat_name_valid", "emusen_galaxia_cheat_game_list", "emusen_galaxia_log_root", "emusen_galaxia_log_usable",
             "emusen_galaxia_log_path", "emusen_galaxia_log_format", "emusen_galaxia_log_append", "emusen_galaxia_log_reset", "emusen_galaxia_suggest_distance",
             "emusen_galaxia_suggest", "emusen_galaxia_number_format", "emusen_galaxia_text_decode",
         };
@@ -283,6 +284,7 @@ namespace EmuSen.Galaxia.Native
             _modelSaveTo = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int>)found[next++];
             _cheatNames = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
             _cheatNameValid = (delegate* unmanaged[Cdecl]<byte*, nuint, int>)found[next++];
+            _cheatGameList = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
             _logRoot = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
             _logUsable = (delegate* unmanaged[Cdecl]<byte*, nuint, int>)found[next++];
             _logPath = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
@@ -592,6 +594,14 @@ namespace EmuSen.Galaxia.Native
         {
             Utf8 text = new(name);
             fixed (byte* p = text.Bytes) return _cheatNameValid(p, text.Length) > 0;
+        }
+
+        // A game's own list as its name and its category; null for a ROM path that gives no name a list may have.
+        public static (string Name, string Category)? CheatGameList(string? console, string? romPath)
+        {
+            Utf8 c = new(console), r = new(romPath);
+            string[] list = Items(Text((o, n) => { fixed (byte* pc = c.Bytes, pr = r.Bytes) return _cheatGameList(pc, c.Length, pr, r.Length, o, n); }));
+            return list.Length == 2 ? (list[0], list[1]) : null;
         }
 
         public static string LogRoot(string? directoryOverride)

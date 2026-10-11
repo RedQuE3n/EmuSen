@@ -315,19 +315,15 @@ impl Core for Machine {
     }
 
     fn audio_buffered(&self) -> usize {
-        self.silence * 2
+        self.board.spu.out.len()
     }
 
     fn drain_audio(&mut self, out: &mut [i16], max_frames: usize) -> usize {
-        let frames = self.silence.min(max_frames).min(out.len() / 2);
-        out[..frames * 2].fill(0);
-        self.silence -= frames;
-        frames * 2
+        self.board.spu.out.drain(out, max_frames)
     }
 
     fn set_audio_limit(&mut self, samples: usize) {
-        self.audio_limit = samples;
-        self.silence = self.silence.min(samples / 2);
+        self.board.spu.out.set_limit(samples);
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {

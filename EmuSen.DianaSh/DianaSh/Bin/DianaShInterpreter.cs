@@ -164,14 +164,19 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 new StepCommand(),
             };
 
+            // Listed after a host's commands, where `help` has always put it - see EmuSen_DianaSh.md §13.5.
+            var trailing = new List<IDianaShCommand> { new SummaryCommand() };
+
             if (extraCommands is not null)
             {
                 foreach (IDianaShCommand extra in extraCommands)
                 {
                     commands.RemoveAll(c => string.Equals(c.Name, extra.Name, StringComparison.OrdinalIgnoreCase));
+                    trailing.RemoveAll(c => string.Equals(c.Name, extra.Name, StringComparison.OrdinalIgnoreCase));
                     commands.Add(extra);
                 }
             }
+            commands.AddRange(trailing);
 
             var interpreter = new DianaShInterpreter(target, commands, history);
             self = interpreter;
@@ -519,7 +524,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             return (visibleOutput, result.ExitCode);
         }
 
-        // These four need interpreter-internal state that IDianaShCommand does not expose - see §3.17.
+        // These five need interpreter-internal state that IDianaShCommand does not expose - see §3.17.
         private DianaShResult Dispatch(string name, string[] args, string? stdin)
         {
             string cmd = name.ToLowerInvariant();
@@ -527,8 +532,6 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             // Two separate jobs, not one aliased to the other - see §3.17.
             if (cmd == "help") return Help();
             if (cmd == "man") return Man(args);
-
-            if (cmd == "summary") return _target?.GetSummaryText() ?? "No target attached.";
 
             // There are no subprocesses to export to; kept so bash habits still do something sane - see §3.17.
             if (cmd == "export")
@@ -661,7 +664,6 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 "  man [command]                 with no argument, same as 'help'; with a command name, its full manual page",
             };
             lines.AddRange(_orderedCommands.Select(c => c.Usage));
-            lines.Add("  summary                       free-text state dump (whatever isn't structured above yet)");
             lines.Add("  export NAME[=value]           set a shell variable (no real subprocess env to export TO -");
             lines.Add("                                kept for script compatibility with real bash habits)");
             lines.Add("  unset NAME                    remove a shell variable");

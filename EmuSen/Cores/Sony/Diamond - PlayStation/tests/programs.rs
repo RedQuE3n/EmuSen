@@ -541,3 +541,127 @@ fn a_sector_reads_by_the_kernels_sequence() {
     let want: Vec<u8> = (6..2048u32).map(|k| (k * 7 + 16) as u8).collect();
     assert_eq!(&m.board.ram[0x11_0006..0x11_0800], &want[..]);
 }
+
+/// The opt-in disc tests' inputs: ps1-tests' release, a folder of the player's own BIOS and one of the tester's discs
+/// copied to the cache (a cue sheet with its tracks beside it, or one image), or a message naming what is missing.
+fn disc_inputs() -> Option<(std::path::PathBuf, Vec<u8>, emusen_disc::Disc)> {
+    let (Some(corpus), Some(firmware), Some(disc)) = (std::env::var_os("EMUSEN_DIAMOND_PS1TESTS"), std::env::var_os("EMUSEN_DIAMOND_FIRMWARE"), std::env::var_os("EMUSEN_DIAMOND_DISC")) else {
+        eprintln!("skipped: EMUSEN_DIAMOND_PS1TESTS, EMUSEN_DIAMOND_FIRMWARE and EMUSEN_DIAMOND_DISC name ps1-tests' release, the player's BIOS folder and a disc");
+        return None;
+    };
+    let bios = std::fs::read(std::path::Path::new(&firmware).join("scph5501.bin")).expect("the player's scph5501.bin");
+    let path = std::path::PathBuf::from(&disc);
+    let image = std::fs::read(&path).expect("the disc");
+    let mut files = Vec::new();
+    if diamond::medium::is_sheet(&image) {
+        for name in emusen_disc::set::companions(&String::from_utf8_lossy(&image)).expect("a sheet") {
+            files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
+        }
+    }
+    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
+    let Ok(diamond::medium::Opened::Disc(d, _)) = diamond::medium::open(&image, &refs) else { panic!("the disc opens") };
+    Some((std::path::PathBuf::from(corpus), bios, *d))
+}
+
+/// A program run on the player's BIOS with the disc in the drive, the lid worked by `lid` each frame; the TTY from
+/// `heading` on, the BIOS's own messages before the program left out.
+fn run_on_disc(program: &[u8], bios: &[u8], disc: emusen_disc::Disc, frames: usize, heading: &str, mut lid: impl FnMut(&mut Machine, &str)) -> String {
+    let media = Media::read(program).unwrap();
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], program, Some((bios, Kernel::Player)));
+    m.insert_disc(disc);
+    let text = |m: &Machine| {
+        let t = m.space(diamond::machine::TTY_ID).unwrap();
+        let s = String::from_utf8_lossy(&t[..t.iter().position(|&b| b == 0).unwrap_or(t.len())]).into_owned();
+        s.find(heading).map_or(String::new(), |at| s[at..].to_owned())
+    };
+    for _ in 0..frames {
+        m.advance();
+        let t = text(&m);
+        lid(&mut m, &t);
+    }
+    text(&m)
+}
+
+/// ps1-tests' `cdrom/getloc` on a console log's terms: its own verdict, every GetlocL and GetlocP succeeding or failing
+/// where the console's did (Diamond_CDROM.md §9).
+#[test]
+fn getloc_passes_on_the_players_bios() {
+    let Some((corpus, bios, disc)) = disc_inputs() else { return };
+    let exe = std::fs::read(corpus.join("cdrom/getloc/getloc.exe")).unwrap();
+    let tty = run_on_disc(&exe, &bios, disc, 1200, "cdrom/", |_, _| {});
+    let log = std::fs::read_to_string(corpus.join("cdrom/getloc/psx.log")).unwrap();
+    let verdicts = |t: &str| t.lines().filter(|l| l.contains("succeeded") || l.contains("failed") || l.starts_with("> GetStat")).map(|l| l.split(" -").next().unwrap_or(l).split(',').next().unwrap_or(l).to_owned()).collect::<Vec<_>>();
+    assert!(tty.contains("Test passed"), "{tty}");
+    assert_eq!(verdicts(&tty), verdicts(&log), "{tty}");
+}
+
+/// `cdrom/disc-swap`: the lid opened a second after the program asks and closed a second after it asks again, each
+/// line its console log shows reproduced but the last, which the release prints differently from the log's build.
+#[test]
+fn disc_swap_matches_the_consoles_log() {
+    let Some((corpus, bios, disc)) = disc_inputs() else { return };
+    let exe = std::fs::read(corpus.join("cdrom/disc-swap/disc-swap.exe")).unwrap();
+    let (mut asked, mut at) = ((0, 0), 0);
+    let tty = run_on_disc(&exe, &bios, disc, 700, "cdrom/", |m, t| {
+        let now = (t.matches("Open the shell now").count(), t.matches("Close the shell now").count());
+        if now != asked {
+            (asked, at) = (now, m.frames);
+        }
+        if m.frames >= at + 60 && now.0 > now.1 && !m.board.cdrom.lid_open {
+            m.set_lid(true, None);
+        } else if m.frames >= at + 60 && now.0 == now.1 && now.1 > 0 && m.board.cdrom.lid_open {
+            m.set_lid(false, None);
+        }
+    });
+    let log = std::fs::read_to_string(corpus.join("cdrom/disc-swap/psx.log")).unwrap();
+    let want: Vec<&str> = log.lines().take(log.lines().count() - 1).collect();
+    assert_eq!(tty.lines().take(want.len()).collect::<Vec<_>>(), want, "{tty}");
+}
+
+/// `cdrom/timing`: every figure Diamond prints lies within the console log's minimum and maximum for it.
+#[test]
+fn the_timing_programs_figures_lie_within_the_consoles() {
+    let Some((corpus, bios, disc)) = disc_inputs() else { return };
+    let exe = std::fs::read(corpus.join("cdrom/timing/timing.exe")).unwrap();
+    let tty = run_on_disc(&exe, &bios, disc, 6000, "cdrom/timing", |_, _| {});
+    let log = std::fs::read_to_string(corpus.join("cdrom/timing/psx.log")).unwrap();
+    let numbers = |t: &str| -> Vec<Vec<u64>> { t.lines().filter(|l| l.contains(':')).map(|l| l.split(|c: char| !c.is_ascii_digit()).filter_map(|w| w.parse().ok()).collect()).collect() };
+    let (ours, console) = (numbers(&tty), numbers(&log));
+    assert_eq!(ours.iter().map(Vec::len).collect::<Vec<_>>(), console.iter().map(Vec::len).collect::<Vec<_>>(), "{tty}");
+    for (o, c) in ours.iter().zip(&console).filter(|(o, _)| o.len() == 3 || o.len() == 4) {
+        assert!((c[0]..=c[1]).contains(&o[2]), "an average of {} outside the console's {}..{}", o[2], c[0], c[1]);
+    }
+    let reads = |t: &[Vec<u64>]| t.iter().filter(|r| r.len() == 8).cloned().collect::<Vec<_>>();
+    let (ours, console) = (reads(&ours), reads(&console));
+    for speed in 0..2 {
+        let group = &console[5 * speed..5 * speed + 5];
+        for r in &ours[5 * speed..5 * speed + 5] {
+            for i in 0..8 {
+                let (lo, hi) = (group.iter().map(|c| c[i]).min().unwrap(), group.iter().map(|c| c[i]).max().unwrap());
+                assert!(r[i] * 10 >= lo * 9 && r[i] * 10 <= hi * 11, "figure {i} of {r:?} outside {lo}..{hi}");
+            }
+        }
+    }
+}
+
+/// The kernel's own CD functions, called by `cd-kernel.s` once the player's BIOS has handed over: _96_init, the
+/// drive's status, sector 16 read whole, and SYSTEM.CNF found, each as the disc holds it.
+#[test]
+fn the_kernels_cd_functions_read_the_disc() {
+    let Some((_, bios, mut disc)) = disc_inputs() else { return };
+    let words = emusen_mips::assemble(include_str!("../programs/cd-kernel.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).unwrap();
+    let image = exe::build(&words);
+    let mut pvd = [0u8; 2352];
+    disc.read(150 + 16, &mut pvd);
+    let media = Media::read(&image).unwrap();
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, Some((&bios, Kernel::Player)));
+    m.insert_disc(disc);
+    for _ in 0..1200 {
+        m.advance();
+    }
+    let r: Vec<u32> = (0..5).map(|i| m.board.ram_word(0x10_0000 + 4 * i)).collect();
+    assert_eq!((r[0], r[1], r[3]), (5, 1, 1), "every call returned, _96_init and CdReadSector with success: {r:08X?}");
+    assert_eq!(r[2] & 0x02, 0x02, "the motor on");
+    assert!(r[4] > 16 && r[4] < 0x10000, "SYSTEM.CNF's sector: {}", r[4]);
+    assert_eq!(&m.board.ram[0x11_0000..0x11_0800], &pvd[24..2072]);
+}

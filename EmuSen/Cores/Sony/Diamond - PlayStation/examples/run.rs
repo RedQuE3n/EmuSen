@@ -35,7 +35,7 @@ fn main() {
         _ => Media::read(&image).expect("a PS-EXE"),
     };
     let market = if args.iter().any(|a| a == "--pal") { Market::Europe } else { media.market.unwrap_or(market) };
-    let mut m = Machine::new(media, Config { market, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), if args.iter().any(|a| a == "--two-pads") { Some("psx.dualshock") } else { None }], &image, rom(&bios, args.iter().any(|a| a == "--bare")));
+    let mut m = Machine::new(media, Config { market, gpu: if args.iter().any(|a| a == "--gpu160") { Gpu::Pin160 } else { Gpu::Pin208 } }, [Some("psx.dualshock"), if args.iter().any(|a| a == "--two-pads") { Some("psx.dualshock") } else { None }], &image, rom(&bios, args.iter().any(|a| a == "--bare")));
     if let Some((d, _)) = disc
         && !args.iter().any(|a| a == "--empty")
     {

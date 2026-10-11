@@ -312,8 +312,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 // WMDATA/WMADDL/M/H - see Venus_Memory.md §1.3.
                 if (offset == 0x2180)
                 {
-                    WriteObserver?.OnWrite("WRAM", (int)_wmAddr, data);
                     Ram[_wmAddr] = data;
+                    WriteObserver?.OnWrite("WRAM", (int)_wmAddr, data);
                     _wmAddr = (_wmAddr + 1) & 0x1FFFF;
                     return;
                 }
@@ -340,8 +340,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                     {
                         Console.WriteLine($"[CAMRAM] ${offset:X4} was 0x{Ram[offset]:X2} -> now 0x{data:X2}");
                     }
-                    WriteObserver?.OnWrite("WRAM", offset, data);
                     Ram[offset] = data;
+                    WriteObserver?.OnWrite("WRAM", offset, data);
                     return;
                 }
             }
@@ -349,9 +349,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             if (bank == 0x7E || bank == 0x7F)
             {
                 int wramOffset = (int)(address - 0x7E0000);
-                WriteObserver?.OnWrite("WRAM", wramOffset, data);
-
                 Ram[wramOffset] = data;
+                WriteObserver?.OnWrite("WRAM", wramOffset, data);
                 return;
             }
 

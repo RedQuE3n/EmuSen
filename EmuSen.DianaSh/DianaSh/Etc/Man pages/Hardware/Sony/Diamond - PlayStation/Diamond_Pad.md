@@ -264,7 +264,7 @@ but each command's last, the read's late one within the timeout [M, `a_card_is_w
 The card it wrote is kept outside the repository at `~/.cache/emusen/probe/diamond/cards/diamond-card-1.mcr` (131,072
 bytes, MD5 `e048b2fc6569436e819e476472857aee`, a `README.txt` beside it): frame 0100h holds 00h, 03h, ... 7Dh and every
 other byte is 00h, an unformatted card, since the on-card file system is stage 10's. Its round trip against a
-reference's card is a separate step.
+reference's card was a separate step, §11.1.
 
 ## 9. The multitap (SCPH-1070)
 
@@ -310,9 +310,48 @@ The plan's §7 row 6, item by item [M, 2026-10-11]:
 | The open kernel's pad functions read the pad on a test program | **Met**: `kernel-pad.s`, digital and analog reads, an empty port FFh (§10) |
 | Cards read and written through the protocol | **Met** on Diamond: `card.s`, a write, a read back, the ID, a bad checksum (§8) |
 | Their files the raw 128 KiB form | **Met**: battery files 0 and 4 of 131,072 bytes through the core ABI, tracked until saved; WiseMan's `The_memory_cards_are_battery_files_and_a_multitap_adds_ports` |
-| Round-tripped with a reference's card | **Not run here** by decision of 2026-10-11 (no reference emulator in this step): the card `card.s` wrote is kept for it (§8) |
+| Round-tripped with a reference's card | ~~**Not run here** by decision of 2026-10-11 (no reference emulator in this step): the card `card.s` wrote is kept for it (§8)~~ **Met** the same day, both ways, on all five referees of three lineages (§11.1) |
 | The multitap's four ports on a test program | **Met**: `multitap.s`, the long read with an empty slot B, slot C by address, slot A's card (§9) |
 | The DualShock's modes and rumble state | **Met** by the crate's cases: digital and analog reads, configuration commands 43h-4Dh, the LED, the lock, both motor methods, the Analog button's resets (§7) |
+
+### 11.1 The card round trip
+
+Run on 2026-10-11 with the five referees of `Diamond_Referees.md` §2 as black boxes, on the player's BIOS by path,
+each in its own user scope [M]:
+
+- **A reference reads Diamond's card.** Each was given `diamond-card-1.mcr` (§8) as its first card and ran
+  `programs/card-read.s`, which reads sectors 0100h and 0101h and takes the ID through the raw protocol. All five
+  return what Diamond returns from the same file, byte for byte after the address byte: FLAG 08h (bit 3, a card just
+  inserted), 5Ah 5Dh, the sector's echo and confirmation, the 128 bytes 3n, the checksum 81h and 47h for 0100h, zeros,
+  checksum 00h and 47h for 0101h.
+- **Diamond reads a reference's card.** Each was given an unformatted card of zeros and ran `card.s` (its RXRDY wait
+  replaced by `card-read.s`'s delay, below), and each card file it left has MD5 `e048b2fc6569436e819e476472857aee`,
+  Diamond's own: the five references wrote exactly the 128 bytes Diamond wrote, and nothing else. Diamond, given each
+  file, reads it back as above (`a_card_reads_back_through_the_protocol_as_written` with `DIAMOND_CARD_IN` naming it,
+  five passes). On all five the write ends 47h and the read after it carries FLAG 00h, as on Diamond.
+- **Two lineages and more**: DuckStation and SwanStation, PCSX-Redux and PCSX-ReARMed, and Beetle PSX.
+
+What the protocol showed beyond the contents [M]:
+
+| | Diamond | DuckStation | SwanStation | Beetle PSX | PCSX-Redux | PCSX-ReARMed |
+|---|---|---|---|---|---|---|
+| Reply to the address 81h | FFh | FFh | FFh | 00h | FFh | FFh |
+| Get ID (53h) | 04h 00h 00h 80h | the same | not answered, and its FLAG a byte late | not answered | not answered | not answered |
+| Echo under a write's checksum byte | the last data byte | the same | the checksum | the last data byte | the same | the same |
+| IRQ7 after a read's last byte | no | no | yes | no | no | yes |
+| RXRDY seen by a polling read | yes | yes | yes | **no**: `card.s` and `pad.s` never finish | yes | yes |
+
+Beetle PSX's RXRDY is why `card-read.s` reads each reply after IRQ7, or its timeout, and a further delay rather than on
+RXRDY; Diamond reads the same either way. None of these bears on what a card holds; each is a point a later SIO0 step
+may take up with D-22.
+
+**The card files** [M]: Diamond's battery file is the raw card, 131,072 bytes (§6). DuckStation keeps a shared card as
+`memcards/shared_card_1.mcd`, a raw image of the same size despite the suffix, and makes a card of its own when the
+file is missing (one run read FFh throughout sector 0100h of it); PCSX-Redux keeps `memcard1.mcd` beside its portable
+configuration, raw, creating one when it is missing and logging "Saving memory card" after a program writes; the three libretro cores expose the first card as their save RAM, 131,072
+raw bytes, which the reference probe now loads with `--sram FILE` (added for this step) and dumps as its `sram` space.
+The cards kept are in `~/.cache/emusen/probe/diamond/cards/roundtrip/`, outside the repository: each reference's
+written card and the zero card they started from.
 
 ## 12. Reading log
 

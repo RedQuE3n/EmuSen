@@ -946,6 +946,11 @@ count but AVSZ4's (5 where psx-spx gives 6) and holds the writes too; SwanStatio
 holds the writes; PCSX-ReARMed times nothing. The writes' wait is a choice argued in D-13, and the boundary is open as
 D-2's is, until amidog's timing tests or a console.
 
+*Revised 2026-10-11, after amidog's timing tests* (`BlackMoon_GTE.md` §6, §7.2, D-13, D-16): an access that waits now
+resumes one cycle after the command ends, so a read at once costs the command's whole count and a read N instructions
+later N fewer, until at N = cycles − 1 it costs nothing; the numbers psx-spx lists as N/A take the cycles amidog's table
+gives them. Every row of the test's OFFICIAL TIMING passes, and 40 of 42 of UNOFFICIAL TIMING.
+
 ### 13.5 Peter Lemon's programs
 
 `GTEAVSZ` and `GTENCLIP` pass every row and draw their bundled pictures. `Cube`, counted at stage 4 among the programs

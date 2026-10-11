@@ -1,9 +1,9 @@
 # A card in port 1's slot read through its protocol and nothing written (Diamond_Pad.md §8, §11), for the round trip
 # with a reference's card: Read sector 0100h, Read sector 0101h and Get ID, each byte sent as programs/card.s sends
 # it but read once IRQ7 has risen or timed out and 400 more polls have passed, since Beetle PSX never shows RXRDY to
-# a polling read. Replies from 80100000h (0100h), 80100100h (0101h) and 80100200h (the ID), and for each byte 1 at the same
-# offset plus 400h when IRQ7 rose before the timeout; 800FFFF0h holds D1A0D00Eh when done. The packets are built at
-# 80110000h.
+# a polling read. Replies from 80100000h (0100h), 80100100h (0101h) and 80100200h (the ID), and for each byte 1 at
+# the same offset plus 400h when IRQ7 rose before the timeout; 800FFFF0h holds D1A0D00Eh when done. The packets are
+# built at 80110000h.
         j start
         nop
 start:  mtc0 zero, SR

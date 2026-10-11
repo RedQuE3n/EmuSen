@@ -989,3 +989,38 @@ ps1-tests' twelve TTY programs and every earlier program still passing; the play
 - On the pad (stage 6, `diamond-pad`): amidog's GTE test, with its timing tests, which grade D-13 short of a console;
   `gte-fuzz` itself; Peter Lemon's `Cube`.
 - On a console (Q16): D-13's writes and boundary, D-15, D-16.
+
+---
+
+## 14. Stage 6, SIO0's devices (2026-10-11)
+
+The plan's §7 row 6, built on the digital pad brought forward the same day; its record is `Diamond_Pad.md`. Stage 6 had
+its go on 2026-10-11, with one change to the gate: no reference emulator was run, and the card's round trip against a
+reference's card is a separate step, for which the card a program wrote is kept (`Diamond_Pad.md` §8).
+
+### 14.1 What was built
+
+- **`src/pad.rs`**: the digital pad and the DualShock (modes, configuration commands, LED and lock, both motor methods,
+  the Analog button); **`src/card.rs`**: the memory card's Read, Write and Get ID with the flag, the checksum and the
+  read's late /ACK; **`src/multitap.rs`**: four slots each of controllers and cards, the long read's toggle;
+  **`src/sio0.rs`** routes each port's address byte to its controller, card or multitap slot.
+- **The core ABI**: ports 0-7, the settings `tap1`, `tap2`, `card1`, `card2`, the Analog button as bit 16 with no
+  canonical control, `set_axis` (`AXES`), the cards as battery files 0 and 4 (`BATTERY_DIRTY`).
+- **The open kernel** reads both ports over SIO0 on each vblank (`Diamond_OpenKernel.md` §4.13); its image's SHA-256 is
+  `135549cd26268e0a50f56649ac4a1cdfdf6287ca2660698023648bc3bf011629`.
+- **Programs**: `card.s`, `multitap.s`, `kernel-pad.s` beside `pad.s`.
+- **The state**: `DMND` version 4, 3,747,794 bytes with a DualShock on port 1 and no card; each card adds its 131,072
+  bytes.
+
+### 14.2 The gate
+
+`Diamond_Pad.md` §11's table: the kernel's pad functions, the cards through the protocol and as raw 128 KiB battery
+files, the multitap's four ports and the DualShock's modes met; the round trip against a reference's card not run here. Peter
+Lemon's `Cube`, which waited on the pad at stage 5 (§13.9), now answers it on the open kernel.
+
+### 14.3 What waits
+
+- The card's round trip against a reference's card, with `~/.cache/emusen/probe/diamond/cards/diamond-card-1.mcr`.
+- The multitap's slots B-D's cards (no battery numbers yet), the DualShock's watchdog, the DualShock 2's commands, a
+  pad combination for the Analog button, rumble's event (`EmuSen_CoreAPI_Extensions.md` §4).
+- On a console (Q16): D-22, SIO0's timing, and the card's late /ACK.

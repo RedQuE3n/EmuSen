@@ -29,8 +29,8 @@ threads, the file layer with the TTY, printf, the program calls, the timers, the
 
 **Phase 1 does not provide**: the CD-ROM device and the boot from a disc, files on the CD, the memory cards and their
 on-card format, the ROM's character sets, and a screen with no disc. Their calls exist and return the failure psx-spx
-documents (§5). The pads' entry points exist, but reading a pad over SIO0 is stage 6's; until then every vblank marks
-both buffers "no pad answered" (§4.13).
+documents (§5). The pads' entry points exist, and since Diamond's stage 6 (2026-10-11) each vblank reads both ports over
+SIO0 into their buffers (§4.13).
 
 **What is not this page's**: the kernel's integration with Diamond's bus (being built on another branch, which this
 work neither read nor used), the switch of the crate's firmware declaration from `effect: none` to `accuracy`
@@ -331,8 +331,15 @@ otherwise, and stores the result at button_dest even when it is 0 ("BIOS Joypad 
 OR with 07C7h is applied but not the clearing of bits 6 and 7 by the analogue inputs, whose inputs psx-spx does not
 name [C]. InitCARD2's pad flag is honoured; its card half is phase 2's.
 
-On each vblank the pads' element, until stage 6 reads SIO0, writes FFh to both buffers' status bytes, psx-spx's value
-for a pad that did not answer [R], calls PAD_dr when button_dest is set, and, while ChangeClearPAD's flag is set,
+~~On each vblank the pads' element, until stage 6 reads SIO0, writes FFh to both buffers' status bytes.~~ *Since
+stage 6 (2026-10-11):* on each vblank the pads' element reads each port with a buffer over SIO0, as the driver of
+psx-spx's "Emulation Note" and "Signals" does (each byte sent, about 100 cycles waited, IRQ7 acknowledged in I_STAT
+and then SIO0's CR, the next IRQ7 awaited for about 100 µs, the reply taken on RXRDY): 01h, 42h, 00h, then the
+halfwords the ID's low nibble counts, writing status 00h, the ID and the data, up to 22h bytes, or status FFh, psx-spx's
+value for a pad that did not answer or whose second byte was not 5Ah [R]; InitPAD2 resets SIO0 and sets MR 0Dh and BR
+0088h, the kernel's rate by "Signals" [C on which call does it]; no multitap request is sent [C]; StartPAD2 also sets
+I_MASK's vblank bit, which Peter Lemon's `Cube` needs, calling only PAD_init2 [A]
+(`Diamond_Pad.md` §10). It then calls PAD_dr when button_dest is set, and, while ChangeClearPAD's flag is set,
 acknowledges IRQ0 and returns from the exception [C on the flag's meaning and default, §9 item 4].
 
 ## 5. The call table
@@ -638,7 +645,10 @@ the reservation.
 1FC00000h into 512 KiB of zeros; `diamond-kernel image` runs the pinned cargo in `kernel/` with its own target
 directory and writes `diamond-kernel.bin` and `diamond-kernel.bin.sha256`. [M] 524,288 bytes, 41,464 of them before the
 last non-zero byte, SHA-256 `ef5c8362064bb4cf5bf9ab2fc47af0fffc456ad65eac3808b40734c3c30736b2` since the prefixes' correction
-(§4.10; before it `2bb2c125fde742e06738e917c3e99c0dd9277d5ac6df84f1cd078a3aecc3d4ff`).
+(§4.10; before it `2bb2c125fde742e06738e917c3e99c0dd9277d5ac6df84f1cd078a3aecc3d4ff`). *Since the pads' SIO0 read
+(stage 6, 2026-10-11):* 42232 bytes before the last non-zero byte, SHA-256
+`135549cd26268e0a50f56649ac4a1cdfdf6287ca2660698023648bc3bf011629`, rebuilt byte for byte with
+`DIAMOND_KERNEL_REBUILD=require`.
 
 **Reproducibility** [M]: the harness's `image` tests check the committed bytes against their digest always, and
 against a rebuild whenever the pinned toolchain is present (the project's cache under `~/.cache/emusen/toolchains`,

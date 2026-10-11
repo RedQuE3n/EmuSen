@@ -1,9 +1,8 @@
 using EmuSen.Cores.Native;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Sys.Systems;
-using EmuSen.DianaSh.DianaSh.Sys.Systems.Genesis;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Systems;
+using EmuSen.Crystal.Systems.Genesis;
 
 namespace EmuSen.WiseMan.DianaSh
 {

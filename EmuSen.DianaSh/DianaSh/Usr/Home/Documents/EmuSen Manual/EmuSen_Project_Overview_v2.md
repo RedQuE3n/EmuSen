@@ -12,14 +12,15 @@ EmuSen is a SNES emulator written in C# / .NET 10, structured as four sibling pr
 - **`EmuSen.Hotaru/`** — the console-first frontend's actual driver (`Program.cs`'s `Main`, `App.axaml.cs`, `Views/GameWindow.axaml.cs`). Used to live inside `EmuSen.csproj` as its own `Exe`, which meant `EmuSen.Mistress/` (Avalonia) inherited this project's `Main`/window-ownership just by referencing `EmuSen.csproj` to reach the emulation core - backwards, since the two frontends have nothing to do with each other. Split out specifically to fix that: both frontends are now true siblings, each independently referencing `EmuSen.csproj` for the core and `EmuSen.Serenity` for presentation. Moved off Raylib entirely onto Avalonia (window, rendering, shaders, audio, input) - see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note. (Named `Hotaru`, not `Console` - naming it `EmuSen.Console` would make every bare `Console.WriteLine` in the file ambiguous with the namespace itself, a real C# gotcha, not just a style choice.)
 - **`EmuSen.Serenity/`** — shared presentation-layer code, split out so both frontends depend on the same implementation instead of a hand-copied duplicate: `GameFrameControl` (an Avalonia `Control` presenting any core via `ICore.GetFrameBufferRgba()` straight through Skia, with real shader support), `FramePresenter` (a plain `Window` + `GameFrameControl` bundle for a consumer that needs nothing else from its window), `Shaders/BuiltInShaders.cs` (Skia SkSL for the shader pass - see `EmuSen_Frontend_Driver.md` §2's F8 entry), and `GraphicsSettings.cs` (moved out of `EmuSen/Settings/` for the same reason). Both `EmuSen.Hotaru/` and `EmuSen.Mistress/` are real consumers now - Hotaru uses `GameFrameControl` directly rather than `FramePresenter` (see that project's own `GameWindow.axaml.cs` header comment for why); Mistress adopted the same `GameFrameControl` directly too, replacing its old CPU-side `WriteableBitmap` presentation (`MainWindow.axaml`/`.cs`) - the long-standing "no GPU/shader hook of its own" TODO this project existed to answer is closed on both frontends now. See §2a for which actual GPU API `GrContext` resolves to underneath that shared control, per platform.
 - **`EmuSen.Endymion/`** — the shared SDL3 device layer, and the audio/input counterpart to `EmuSen.Serenity`: `AudioPlayer` (SDL3 audio streams), `DynamicRateControl`, `LinearResampler`, and under `Input/`, `GamepadManager` and `GamepadBindingMap`. Both frontends carried near-identical copies until the SDL3 migration merged them into `EmuSen.Nehellania`; audio then moved out to Endymion, and on 2026-08-05 the gamepad half followed and Nehellania was deleted — see `EmuSen_Multicore.md` §9.2. Depends on `EmuSen.Galaxia` and SDL3 only; deliberately no Avalonia, since nothing in it owns a window.
-- **`EmuSen.Galaxia/`** — every config file the program keeps on disk, and the one answer to where they live: `ConfigRoot` (root discovery, which `DianaShSandbox` delegates to), `ConfigStore` (paths), `ConfigFile<T>` (atomic, best-effort JSON persistence) and the agnostic models — `AppSettings`, `AudioConfig`, `GraphicsConfig`, `CheatFile`. Config lives inside the sandbox at `/etc/EmuSen`, so `cat`/`nano` reach it. A **leaf** by necessity: `EmuSen.DianaSh` references it and `EmuSen` references `EmuSen.DianaSh`, so it can have no project references of its own — which is exactly what keeps it agnostic. See `EmuSen_Config_Reference.md`.
+- **`EmuSen.Galaxia/`** — every config file the program keeps on disk, and the one answer to where they live: `ConfigRoot` (root discovery, which `DianaShSandbox` delegates to), `ConfigStore` (paths), `ConfigFile<T>` (atomic, best-effort JSON persistence) and the agnostic models — `AppSettings`, `AudioConfig`, `GraphicsConfig`, `CheatFile`. Config lives inside the sandbox at `/etc/EmuSen`, so `cat`/`nano` reach it. A **leaf** by necessity: `EmuSen.Crystal` and `EmuSen.DianaSh` reference it, and everything else references one of them, so it can have no project references of its own — which is exactly what keeps it agnostic. See `EmuSen_Config_Reference.md`.
+- **`EmuSen.Crystal/`** — Crystal, the runtime beneath the shell and beside the cores (2026-10-11, `EmuSen_DianaSh.md` §13.6): `IDebugTarget`, the debugger's registries, the cheat engine, the telemetry contracts, the system packs and `FrameRecorder`, and the session service's header `emusen_session.h` with its C# provider. It references Galaxia alone, so the shell, the cores and Serenity can all stand on it; the cores reference it and not the shell.
 - **`EmuSen.Mistress/`** — an Avalonia GUI, renamed from `EmuSen.Frontend` and deliberately scoped as bug-testing tooling: ROM picker (plus a ROM browser and a configurable default ROM directory), rebindable keyboard+gamepad input, Save/Load State menu items, and (Settings > Preferences...) a configurable log directory that reuses `EmuSen.Common.CategorizedLogWriter` for real per-session file logging, plus a scaffolding-only core picker. Referencing `EmuSen` and `EmuSen.Serenity` via project reference (as a sibling of `EmuSen.Hotaru`, not through it). Deliberately **not** where the eventual EmulationStation-style launcher gets built — see `EmuSen_Launcher_Multicore_Gameplan.md` for that separate, not-yet-created project's plan.
 
 **License:** GNU GPL-3.0 (see `LICENSE` at the repo root) — chosen deliberately over a permissive license (MIT) specifically so anything built on EmuSen's code stays open forever, matching how this project itself was built entirely from openly-provided documentation. Not chosen for commercial reasons; the point is guaranteeing downstream openness, not restricting use.
 
 **Licensing stance on other emulators' source:** the SNESdev wiki (mirrored at both `snes.nesdev.org` and `snesdev.mesen.ca` — maintained by the Mesen/MesenCE team) is the primary hardware-reference source. Historically, Mesen/MesenCE's own *documentation* got read to understand hardware behavior while their source code did not, specifically to keep every implementation here original and avoid any GPL-compatibility question. Now that EmuSen itself is GPL-3.0 - the same license `SourMesen/Mesen2` uses - that compatibility concern no longer applies, and Mesen2's source can be consulted directly as an architecture/implementation reference (see `EmuSen_Games_Tested.md`-adjacent investigation notes for anything drawn from it). `SourMesen/Mesen2` is archived; `nesdev-org/MesenCE` is the actively maintained continuation - forked for this project's own reference use at [`RedQuE3n/MesenCE-refernece`](https://github.com/RedQuE3n/MesenCE-refernece) (note the upstream typo preserved in the fork's own name), with its SNES core under `Core/SNES`. Still worth writing original code rather than transcribing verbatim where reasonable - referencing for correctness/design, not copy-pasting - but the hard legal barrier that used to rule out even looking is gone.
 
-**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus - SNES/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with reserved sibling folders (placeholder `README.md` only, no code) for every other planned core across five manufacturers: `Cores/Nintendo/` (the rest of the Sailor Guardians), `Cores/Sega/` (Dark Kingdom), `Cores/Sony/` (Black Moon Clan), `Cores/Atari/` (Death Busters), `Cores/Microsoft/` and `Cores/NEC/` (Dead Moon Circus's two subordinate groups). Full mapping in `EmuSen_Core_Naming_Scheme.md`. The debug toolchain (`DianaSh/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
+**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus - SNES/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with reserved sibling folders (placeholder `README.md` only, no code) for every other planned core across five manufacturers: `Cores/Nintendo/` (the rest of the Sailor Guardians), `Cores/Sega/` (Dark Kingdom), `Cores/Sony/` (Black Moon Clan), `Cores/Atari/` (Death Busters), `Cores/Microsoft/` and `Cores/NEC/` (Dead Moon Circus's two subordinate groups). Full mapping in `EmuSen_Core_Naming_Scheme.md`. The debug toolchain (`IDebugTarget`, in `EmuSen.Crystal/Debugger/` since 2026-10-11, and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
 
 **Naming scheme:** every core is named after an *EmuSen* = **Emu**lator **Sen**shi (Sailor Moon) character, grouped by manufacturer — Nintendo gets the heroes (Sailor Guardians), every other manufacturer gets a villain faction (Sega = Dark Kingdom, Sony = Black Moon Clan, Atari = Death Busters, Microsoft/NEC = Dead Moon Circus's two subgroups). Full mapping and rationale in `EmuSen_Core_Naming_Scheme.md`. The SNES core is `Venus`; still called "SNES" in prose/comments/log output/class names (`SnesDebugTarget`, `Snes65816Disassembler`, etc.) since that's the accurate hardware name — the codename governs the folder/namespace only, not every mention of the actual console.
 
@@ -48,7 +49,7 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 - **Hardware simulation** (`Cores/Nintendo/Venus - SNES/Cpu`, `Cores/Nintendo/Venus - SNES/Apu`, `Cores/Nintendo/Venus - SNES/Ppu`, `Cores/Nintendo/Venus - SNES/Memory`) — the actual 65816/SPC700/S-DSP/PPU/memory-map implementations. This layer knows nothing about debugging, rendering presentation, or frontends; it just simulates hardware, one register/opcode/pixel at a time.
 - **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by `EmuSen.Mistress`), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (used by both `EmuSen.Hotaru`'s `Program.cs` and `EmuSen.Mistress`'s `MainWindow` — routes console output into per-category files under a `<CoreName>/<console|gui>_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's; file writes run on a background thread now, not the caller's. Hotaru's own root for this is `var/log/` inside DianaSh's sandboxed project tree - see `EmuSen_Debugging_Tools_Reference_v5.md` §3.3/`man hier` - while Mistress's is `ApplicationData/EmuSen/Logs/`, never inside that sandbox to begin with).
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
-- **The debug toolchain** (`DianaSh/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `DianaSh/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `DianaSh/DianaShInterpreter.cs` is a genuine bash-alike shell, user-facing name **DianaSh** (quoting, variables, `$(...)`, pipes, redirection, if/for/while, plus a coreutils subset - `ls`/`cd`/`grep`/`awk`/`nano`/`coretop`/...) built on top of that, with the SNES-facing commands themselves (`mem`/`regs`/`watch`/...) living in `DianaSh/Commands/` alongside the shell's own builtins - split into `Commands/Unix/` (`EmuSen.DianaSh.Commands.Unix`, core-agnostic) and `Commands/EmuSen/` (`EmuSen.DianaSh.Commands.EmuSen`, needs a real `IDebugTarget`) so a future standalone "Diana" build has a clean, compiler-enforced line to register only the former. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
+- **The debug toolchain** (`DianaSh/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `IDebugTarget` (`EmuSen.Crystal/Debugger/IDebugTarget.cs`, beneath the shell since 2026-10-11) defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `DianaSh/DianaShInterpreter.cs` is a genuine bash-alike shell, user-facing name **DianaSh** (quoting, variables, `$(...)`, pipes, redirection, if/for/while, plus a coreutils subset - `ls`/`cd`/`grep`/`awk`/`nano`/`coretop`/...) built on top of that, with the SNES-facing commands themselves (`mem`/`regs`/`watch`/...) living in `DianaSh/Commands/` alongside the shell's own builtins - split into `Commands/Unix/` (`EmuSen.DianaSh.Commands.Unix`, core-agnostic) and `Commands/EmuSen/` (`EmuSen.DianaSh.Commands.EmuSen`, needs a real `IDebugTarget`) so a future standalone "Diana" build has a clean, compiler-enforced line to register only the former. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Presentation** (`EmuSen.Serenity/`) — window/GPU-surface ownership and the shader pipeline (Avalonia + Skia, not Raylib), shared between frontends via `ICore.GetFrameBufferRgba()` rather than duplicated per frontend. Split out from the console frontend once it stopped being small - see `EmuSen_Frontend_Driver.md` §1.
 - **Device I/O** (`EmuSen.Endymion/`) — real audio output and gamepad polling through SDL3, shared between frontends for the same reason presentation is: one implementation, not a hand-copied duplicate per GUI. See `EmuSen_Settings_Reference.md` §4.10.
 - **Frontends** (`EmuSen.Hotaru/`, `EmuSen.Mistress/`) — presentation *driving*, not the presentation code itself anymore. Both are now Avalonia frontends into the same core (Hotaru moved off Raylib entirely - see `EmuSen_Frontend_Driver.md`'s own revision note); neither owns emulation logic itself, and neither depends on the other.
@@ -284,35 +285,11 @@ EmuSen Project/
 │   │   ├── DianaShInterpreter.cs               # dispatcher + variable/history state + statement execution
 │   │   ├── Lexer.cs / Parser.cs / Ast.cs       # hand-written tokenizer/recursive-descent parser/AST
 │   │   ├── ConsoleLineReader.cs                # up/down-arrow history recall at the F4 prompt
-│   │   ├── IDebugTarget.cs                     # core-agnostic debug-target contract (see companion doc)
 │   │   ├── DianaShSandbox.cs                   # walls cd/ls/mv/redirection/source to the project's own tree
 │   │   ├── ManPages.cs                         # reads the manual pages, one file each, from Lib/dianash/<module>/man/ (2026-10-11)
-│   │   ├── WatchRegistry.cs / BreakpointRegistry.cs / CheatRegistry.cs / FrameLogRegistry.cs
-│   │   ├── FrameRecorder.cs
-│   │   ├── DebugTools.cs                     # BoundedTrace ("run N more frames/steps then stop") plus
-│   │   │                                      #   RepeatCollapsingTrace<TKey> - collapses a repeating
-│   │   │                                      #   1-8 instruction cycle (polling/delay loops - VBlank
-│   │   │                                      #   wait, DMA busy-wait, the APU handshake) into one
-│   │   │                                      #   summary line instead of writing every repeat, since
-│   │   │                                      #   a real session produced a 1GB cpu.log almost
-│   │   │                                      #   entirely from exactly that. Used by Cpu.cs/Spc700.cs
-│   │   │                                      #   for CpuVerboseLogging/Spc700VerboseLogging - compares
-│   │   │                                      #   a small struct key, not the rendered string, so a
-│   │   │                                      #   locked-in loop costs one comparison, no string
-│   │   │                                      #   allocation, per instruction. Both cores auto-flush a
-│   │   │                                      #   still-open cycle the moment their verbose flag turns
-│   │   │                                      #   off (Cpu.Step()/Spc700.Step()'s _wasVerboseLogging
-│   │   │                                      #   check); EmulatorSession.FlushVerboseLogs() and
-│   │   │                                      #   Program.cs's shutdown path cover process exit, the
-│   │   │                                      #   one case Step() can't see coming on its own. The
-│   │   │                                      #   collapsed-loop marker line is built via a
-│   │   │                                      #   caller-supplied renderMarker(cycleLength, repeats)
-│   │   │                                      #   delegate, not hardcoded - it MUST carry the same
-│   │   │                                      #   [TAG] prefix render() uses, or CategorizedLogWriter's
-│   │   │                                      #   prefix table can't route it to the cpu/apu category
-│   │   │                                      #   and it falls through to "general", which isn't in
-│   │   │                                      #   the console-echo suppression list - a real session
-│   │   │                                      #   hit exactly this and got the console blasted again.
+│   │                                       # IDebugTarget, the registries, the cheat engine, FrameRecorder,
+│   │                                       #   DebugTools and the system packs moved to EmuSen.Crystal/
+│   │                                       #   on 2026-10-11 - see EmuSen_DianaSh.md §13.6.
 │   │   └── Commands/                           # Every shell command, one class each, split into two
 │   │       ├── Unix/                           #   namespaces/folders along the same "core-agnostic
 │   │       │                                    #   builtin vs. needs a real IDebugTarget" line the old
@@ -439,10 +416,49 @@ EmuSen Project/
 │   │   └── GamepadBindingMap.cs         # One /etc/EmuSen/gamepadbindings.json for both
 │   │                                     #   frontends - SDL2-era files still load (§4.10).
 │
+├── EmuSen.Crystal/                  # Crystal, the runtime beneath the shell and beside the cores
+│   │                                     #   (EmuSen_DianaSh.md §3, §9, §13.6). References Galaxia
+│   │                                     #   alone; the shell, the cores, Serenity and the frontends
+│   │                                     #   reference it.
+│   ├── include/emusen_session.h         # the session service, emusen.session@1 - EmuSen_DianaSh.md §9
+│   ├── Session/                          # its C# provider over IDebugTarget: SessionService, the
+│   │                                     #   [UnmanagedCallersOnly] entry points, the managed mirror
+│   ├── Telemetry/                        # ICoreTelemetry and its providers (was namespace EmuSen.Cauldron)
+│   ├── Cheats/                           # CheatRegistry, ChtFile, the cheat database, ICheatCodeCodec
+│   ├── Systems/                          # the system packs and CoreDescriptor - the systems table's rows
+│   ├── Recording/FrameRecorder.cs        # Hotaru's F6 and Pharaoh's record verb
+│   └── Debugger/                         # IDebugTarget and its value types, the ten registries
+│       │                                 #   (Watch/Breakpoint/Coverage/CallStack/Label/...), DebugCpu,
+│       │                                 #   the expression evaluator, the logging switch, and:
+│       └── DebugTools.cs                # BoundedTrace ("run N more frames/steps then stop") plus
+│                                         #   RepeatCollapsingTrace<TKey> - collapses a repeating
+│                                         #   1-8 instruction cycle (polling/delay loops - VBlank
+│                                         #   wait, DMA busy-wait, the APU handshake) into one
+│                                         #   summary line instead of writing every repeat, since
+│                                         #   a real session produced a 1GB cpu.log almost
+│                                         #   entirely from exactly that. Used by Cpu.cs/Spc700.cs
+│                                         #   for CpuVerboseLogging/Spc700VerboseLogging - compares
+│                                         #   a small struct key, not the rendered string, so a
+│                                         #   locked-in loop costs one comparison, no string
+│                                         #   allocation, per instruction. Both cores auto-flush a
+│                                         #   still-open cycle the moment their verbose flag turns
+│                                         #   off (Cpu.Step()/Spc700.Step()'s _wasVerboseLogging
+│                                         #   check); EmulatorSession.FlushVerboseLogs() and
+│                                         #   Program.cs's shutdown path cover process exit, the
+│                                         #   one case Step() can't see coming on its own. The
+│                                         #   collapsed-loop marker line is built via a
+│                                         #   caller-supplied renderMarker(cycleLength, repeats)
+│                                         #   delegate, not hardcoded - it MUST carry the same
+│                                         #   [TAG] prefix render() uses, or CategorizedLogWriter's
+│                                         #   prefix table can't route it to the cpu/apu category
+│                                         #   and it falls through to "general", which isn't in
+│                                         #   the console-echo suppression list - a real session
+│                                         #   hit exactly this and got the console blasted again.
+│
 ├── EmuSen.Galaxia/                  # The agnostic config handler - EmuSen_Config_Reference.md.
 │   │                                     #   A leaf: no ProjectReference, no PackageReference,
-│   │                                     #   because EmuSen.DianaSh references THIS and
-│   │                                     #   EmuSen references EmuSen.DianaSh.
+│   │                                     #   because EmuSen.Crystal and EmuSen.DianaSh reference
+│   │                                     #   THIS, and everything else references one of them.
 │   ├── ConfigRoot.cs                    # Root discovery - DianaShSandbox forwards to it now.
 │   ├── ConfigStore.cs                   # /etc/EmuSen, plus the test-only overrides.
 │   ├── ConfigFile.cs                    # Load/Save for every config file: atomic write,

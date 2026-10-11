@@ -6,7 +6,7 @@ using EmuSen.Cores.Nintendo.Moon.Debug;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Reference

@@ -1,7 +1,7 @@
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.DianaSh.DianaSh.Sys.Systems;
-using EmuSen.DianaSh.DianaSh.Sys.Systems.Genesis;
+using EmuSen.Crystal.Systems;
+using EmuSen.Crystal.Systems.Genesis;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;

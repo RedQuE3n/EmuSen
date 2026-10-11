@@ -7,7 +7,8 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
@@ -78,7 +79,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             Launch(window, 0);
 
-            var target = (EmuSen.DianaSh.DianaSh.Lib.IDebugTarget?)Field(window, "_debugTarget");
+            var target = (EmuSen.Crystal.Debugger.IDebugTarget?)Field(window, "_debugTarget");
             Assert.NotNull(target);
             Assert.Same(Cheats(window), target!.Cheats);
 

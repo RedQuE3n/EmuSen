@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The core-agnostic debug/scripting shell - see this project's own
-       README/header comments (DianaShInterpreter.cs, IDebugTarget.cs) for
+  <!-- The core-agnostic debug/scripting shell - see EmuSen_DianaSh.md for
        the full design. OutputType=Exe so `dotnet run` here launches a
        standalone shell with no core loaded at all (see Program.cs) -
        every other project just references this like any other library;
@@ -19,8 +18,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The telemetry contracts (namespace EmuSen.Cauldron) are in DianaSh/Lib/Cauldron/ since 2026-10-07;
-         the EmuSen.Cauldron project was folded in - see EmuSen_Debugging_Tools_Reference_v5.md §3.66. -->
+    <!-- Crystal, beneath the shell: IDebugTarget, the registries, the cheat engine, the telemetry contracts and the
+         system packs, which the debugger's commands read - see EmuSen_DianaSh.md §13.6. -->
+    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
     <!-- ConfigRoot (this shell's own root discovery lives there now) and
          CheatFile, behind `cheat save`/`load` - see
          EmuSen_Config_Reference.md §1.1 for why the dependency runs this

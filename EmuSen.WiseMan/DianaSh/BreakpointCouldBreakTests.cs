@@ -1,5 +1,5 @@
 using System;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.WiseMan.DianaSh
 {

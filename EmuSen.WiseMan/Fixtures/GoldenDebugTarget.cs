@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using EmuSen.Cauldron;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Telemetry;
 
 namespace EmuSen.WiseMan.Fixtures
 {
@@ -68,7 +68,7 @@ namespace EmuSen.WiseMan.Fixtures
             CoprocessorBreakpoints = new BreakpointRegistry();
             CoprocessorCoverage = new CoverageRegistry();
             Expressions = new DebugTargetExpressionContext(this);
-            _cpus.Add(new DebugCpu(EmuSen.DianaSh.DianaSh.Var.DebugCpus.MainName, "the main processor", Breakpoints)
+            _cpus.Add(new DebugCpu(EmuSen.Crystal.Debugger.DebugCpus.MainName, "the main processor", Breakpoints)
             {
                 Coverage = Coverage, CallStack = CallStack, CodeSpace = "CpuBus", Registers = CpuRegisters, ProgramCounter = () => 0x8003,
                 RegisterWriter = (name, value) => name.ToUpperInvariant() switch { "A" => Set(ref _a, value), "X" => Set(ref _x, value), _ => false },

@@ -1,6 +1,6 @@
 using System;
 using EmuSen.Common;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Cores.Nintendo.Moon.Processor
 {

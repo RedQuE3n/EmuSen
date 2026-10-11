@@ -172,6 +172,15 @@ Five edges carry traffic that no `.csproj` declares: every frontend reaches Dian
 Galaxia, through EmuSen's references. That is legal MSBuild, and it means a frontend's dependency list says less than
 the frontend does.
 
+*Revised 2026-10-11, by `EmuSen_DianaSh.md` §13.6 (that page's S2).* The graph and the table above are as measured at
+`96c3f563`, and the IL counts were not taken again. Since that step a new assembly, `EmuSen.Crystal`, referencing
+Galaxia alone, sits beneath the shell and beside the cores, holding `IDebugTarget`, the registries, the cheat engine,
+the telemetry contracts and the system packs. The sets are now: DianaSh ──► Crystal, Galaxia; EmuSen ──► Crystal,
+Galaxia, Serenity, its edge to DianaSh gone; Serenity ──► Crystal, Galaxia, LunaP, its edge to DianaSh gone; Mistress,
+Hotaru and Pharaoh declare DianaSh and Crystal, which closes three of the five undeclared edges (Hotaru's and Pharaoh's
+to Galaxia remain); WiseMan declares Crystal. S0's recorded file does not exist yet, so `LeafAssemblyTests` alone pins
+the sets of Crystal, DianaSh, EmuSen and Serenity.
+
 **Packages.** Galaxia and DianaSh take none. Endymion takes three (SDL3-CS, SDL3-CS.Native, Avalonia's base);
 Serenity nine (four Avalonia packages, SkiaSharp, Silk.NET.Shaderc, Silk.NET.Vulkan, Microsoft.Data.Sqlite,
 SQLitePCLRaw); EmuSen four (Microsoft.Data.Sqlite, SkiaSharp, SQLitePCLRaw, Silk.NET.Vulkan); Mistress seven; Hotaru
@@ -652,8 +661,8 @@ where its pages put it (S5, S6), and the visibility work after the code it would
 
 | Step | What | Gate | Ranked problem |
 |---|---|---|---|
-| **S0** | **Record the surfaces.** The reader of §1 becomes a WiseMan tool test that writes, per assembly, the public types, the non-test outside callers and the edges of §2.1 to a file in the repository, and fails when a reference set changes without that file changing. `LeafAssemblyTests` gains EmuSen's own reference set as it stands today, `{ DianaSh, Galaxia, Serenity }` | the test passes on `96c3f563`'s numbers; a later step that changes them updates the file in the same commit | all; it turns §3's table into something a diff shows |
-| **S1** | **Cut EmuSen → Serenity.** `FrameScheduler` and `PacingDecision` move into Serenity beside `DisplayClock` (`EmuSen_CoreAPI.md` §8.4 already places pacing there); `DisplayShape`'s two constants move to the systems table in DianaSh (§8 Q2); Venus's six dead `using EmuSen.Graphics` go; the `ProjectReference` goes | S0's pin becomes `{ DianaSh, Galaxia }`; `ls EmuSen.Pharaoh/bin/Debug/net10.0 \| grep -ci avalonia` goes from 24 to 0; the pacing and display-aspect tests pass unchanged. Predicted, **argued**: Pharaoh's Debug output loses about 186 MB | §4.2 |
+| **S0** | **Record the surfaces.** The reader of §1 becomes a WiseMan tool test that writes, per assembly, the public types, the non-test outside callers and the edges of §2.1 to a file in the repository, and fails when a reference set changes without that file changing. `LeafAssemblyTests` gains EmuSen's own reference set as it stands today, `{ DianaSh, Galaxia, Serenity }`. *Revised 2026-10-11: that pin was added by `EmuSen_DianaSh.md`'s S2 as `{ Crystal, Galaxia, Serenity }` (§2.1's note)* | the test passes on `96c3f563`'s numbers; a later step that changes them updates the file in the same commit | all; it turns §3's table into something a diff shows |
+| **S1** | **Cut EmuSen → Serenity.** `FrameScheduler` and `PacingDecision` move into Serenity beside `DisplayClock` (`EmuSen_CoreAPI.md` §8.4 already places pacing there); `DisplayShape`'s two constants move to the systems table in DianaSh (§8 Q2); Venus's six dead `using EmuSen.Graphics` go; the `ProjectReference` goes | S0's pin becomes `{ DianaSh, Galaxia }` (*since 2026-10-11, `{ Crystal, Galaxia }`, §2.1's note*); `ls EmuSen.Pharaoh/bin/Debug/net10.0 \| grep -ci avalonia` goes from 24 to 0; the pacing and display-aspect tests pass unchanged. Predicted, **argued**: Pharaoh's Debug output loses about 186 MB | §4.2 |
 | **S2** | **Declare what is used.** The five transitive edges of §2.1 become `ProjectReference`s | builds; S0's file unchanged except for the declared column | §4.9 |
 | **S3** | **Settings are parameters, not globals.** `GameFrameControl` and `FramePresenter` take the window size, title, resizing, filtering and display sync as properties the frontend sets from `GraphicsConfig`; `GraphicsSettings` is deleted, and with it the hand synchronisation of `PreferencesWindow.cs:276` and the two knobs nothing reads (§8 Q6). The frontends read `AudioConfig` for `AudioPlayer`'s arguments, and Venus's audio rate stops being the device's (`VenusCore.cs:384`). `CoreOptions.BatteryRamDisabled` becomes a create option. `DebugSettings` waits for `EmuSen_DianaSh.md` (§6.3 item 5) | `grep` for `GraphicsSettings\.` in shipped code: 0 (today 17 lines outside its own file, comments excluded), and for `AudioSettings\.` outside the EmuSen assembly: 0 (today 4 lines); the settings, preferences and battery-latch tests pass; one of the suite's serial collections can be removed (`EmuSen_Debugging_Tools_Reference_v5.md` §3.56) | §4.3, §4.8 |
 | **S4** | **A client names no console's internals, by test.** A WiseMan metadata test fails when Mistress, Hotaru or Pharaoh names a type under `EmuSen.Cores.Nintendo.*` or `EmuSen.Cores.Sega.*`, with an allow-list holding today's 4 (Hotaru) and 18 (Pharaoh) that may only shrink. Hotaru's three Venus debug dumps become shell commands over `IDebugTarget` | the test; the allow-list's length recorded | §4.5 |
@@ -701,7 +710,9 @@ they reach are a surface that exists only at run time, so a rename breaks a test
 builds. The alternative, a deliberate test surface on `MainWindow`, is worth having where a test drives the window as a
 player would, and is not this question.
 
-**Q5. Should Serenity keep its reference to DianaSh for the `coretop` window?** *Recommended: yes, until
+**Q5. Should Serenity keep its reference to DianaSh for the `coretop` window?** *Overtaken 2026-10-11: the telemetry
+contracts moved to Crystal's assembly with `EmuSen_DianaSh.md`'s S2, and Serenity's reference moved with them (§2.1's
+note).* *Recommended: yes, until
 `EmuSen_DianaSh.md` decides where the telemetry contracts a non-shell consumer takes should live.* The edge reaches no
 toolkit and closes no cycle (§4.9). This page does not propose reviving a telemetry assembly; the 2026-10-07 fold stands.
 

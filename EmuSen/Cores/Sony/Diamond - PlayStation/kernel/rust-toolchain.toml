@@ -1,0 +1,5 @@
+# The kernel's image is committed and rebuilt to the same bytes, so its toolchain is pinned (Diamond_OpenKernel.md §6).
+[toolchain]
+channel = "nightly-2026-10-01"
+components = ["rust-src"]
+profile = "minimal"

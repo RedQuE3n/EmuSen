@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using EmuSen.Cauldron;
+using EmuSen.Crystal.Telemetry;
 
 namespace EmuSen.WiseMan.Common
 {

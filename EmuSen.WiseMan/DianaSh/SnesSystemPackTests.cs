@@ -2,9 +2,10 @@ using System;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Sys.Systems;
-using EmuSen.DianaSh.DianaSh.Sys.Systems.Snes;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Systems;
+using EmuSen.Crystal.Systems.Snes;
 
 namespace EmuSen.WiseMan.DianaSh
 {

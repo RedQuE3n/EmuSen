@@ -9,6 +9,8 @@ using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.WiseMan.Cores
 {

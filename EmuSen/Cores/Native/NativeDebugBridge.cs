@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Cores.Native
 {

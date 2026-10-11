@@ -1,4 +1,4 @@
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.Cores
 {

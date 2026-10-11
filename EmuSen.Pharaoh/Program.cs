@@ -9,8 +9,6 @@ using EmuSen.Pharaoh.Reference;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 // Headless script-driven debugging harness - loads a ROM, runs the

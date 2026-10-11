@@ -13,8 +13,6 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;

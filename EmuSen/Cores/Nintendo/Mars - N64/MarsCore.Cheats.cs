@@ -1,6 +1,6 @@
 using System;
 using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.Cores.Nintendo.Mars
 {

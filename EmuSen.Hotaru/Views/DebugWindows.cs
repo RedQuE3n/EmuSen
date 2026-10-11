@@ -1,5 +1,5 @@
 using System;
-using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh;
 using EmuSen.Serenity.Dashboards;
 using EmuSen.LunaP.Windowing;

@@ -7,19 +7,16 @@ using EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp;
 using EmuSen.Cores.Nintendo.Venus.Apu;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Video;
-using EmuSen.DianaSh;
-using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
-using EmuSen.DianaSh.DianaSh.Dev;
-using EmuSen.DianaSh.DianaSh.Sys.Systems.Snes;
-using EmuSen.Cauldron;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Systems;
+using EmuSen.Crystal.Telemetry;
+using EmuSen.Crystal.Systems.Snes;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {
     // Reshapes already-verified state; also owns the WatchRegistry - see §3.2.
-    public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver, IFrameObserver, IRomReadPatcher, EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.IHistoricalCoprocessorTarget
+    public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver, IFrameObserver, IRomReadPatcher, IHistoricalCoprocessorTarget
     {
         private readonly Cpu _cpu;
         private readonly MemoryBus _bus;

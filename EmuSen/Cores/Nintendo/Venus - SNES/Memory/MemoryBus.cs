@@ -3,12 +3,7 @@ using EmuSen.Cores.Nintendo.Venus.Apu;
 using EmuSen.Cores.Nintendo.Venus.Video;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Debug;
-using EmuSen.DianaSh;
-using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
-using EmuSen.DianaSh.DianaSh.Dev;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {
@@ -58,7 +53,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         [EmuSen.Common.SkipInState] public Action<int>? ScanlineObserver;
 
         // The S-CPU's registry, for the bus-level `bp when` conditions - see `man bp`.
-        [EmuSen.Common.SkipInState] public EmuSen.DianaSh.DianaSh.Var.BreakpointRegistry? Breakpoints;
+        [EmuSen.Common.SkipInState] public EmuSen.Crystal.Debugger.BreakpointRegistry? Breakpoints;
 
         // True while the PPU is drawing, so a VRAM/CGRAM/OAM write would be dropped by hardware.
         private bool IsRendering => !Interrupts.InVBlank && (Ppu.Inidisp & 0x80) == 0;

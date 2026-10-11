@@ -1,6 +1,6 @@
 using System;
 using System.Threading;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.WiseMan.DianaSh
 {

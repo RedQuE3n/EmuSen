@@ -6,8 +6,8 @@ namespace EmuSen.Debug
         // Single kill switch for every *Logging flag below, without touching any of their individually-set.
         public static bool MasterLoggingEnabled
         {
-            get => EmuSen.DianaSh.DianaSh.Var.DebugLogging.MasterEnabled;
-            set => EmuSen.DianaSh.DianaSh.Var.DebugLogging.MasterEnabled = value;
+            get => EmuSen.Crystal.Debugger.DebugLogging.MasterEnabled;
+            set => EmuSen.Crystal.Debugger.DebugLogging.MasterEnabled = value;
         }
 
         // --- Cpu.cs ---

@@ -1,7 +1,7 @@
 using System.Linq;
 using System.Text;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 {

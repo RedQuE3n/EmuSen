@@ -10,10 +10,13 @@ use crate::gpu::raster::Vertex;
 use crate::gpu::vram::Rect;
 use crate::gpu::{Gpu, Parser, Polyline, ReadOut, Transfer, Word};
 use crate::machine::Machine;
-use crate::sio0::{Phase, Sio0};
+use crate::card::Card;
+use crate::multitap::Answer;
+use crate::pad::Controller;
+use crate::sio0::{Phase, Sio0, Target};
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"DMND");
-pub const STATE_VERSION: i32 = 3;
+pub const STATE_VERSION: i32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -176,20 +179,48 @@ impl Board {
 }
 
 impl Sio0 {
-    /// The port's registers, FIFO, transfer and /ACK; the pad's switches are the host's input, not state.
+    /// The port's registers, FIFO, transfer and /ACK, and each device's state; the switches and sticks are the
+    /// host's input, not state. A card's contents are kept, as its battery file would be.
     fn write_state(&self, w: &mut StateWriter) {
         w.u16s("Registers", &[self.mode, self.control, self.baud]);
         w.bytes("Fifo", &self.fifo.entries);
-        let (phase, step) = match self.phase {
-            Phase::Idle => (0, 0),
-            Phase::Address => (1, 0),
-            Phase::Controller(n) => (2, n),
-            Phase::Silent => (3, 0),
+        let (phase, target, step) = match self.phase {
+            Phase::Idle => (0, 0, 0),
+            Phase::Address => (1, 0, 0),
+            Phase::Device(t, n) => (2, target_code(t), n),
+            Phase::Silent => (3, 0, 0),
         };
         let f = &self.fifo;
-        w.bytes("Bytes", &[f.read, f.count, self.shifting.unwrap_or(0), self.pending.unwrap_or(0), phase, step]);
+        w.bytes("Bytes", &[f.read, f.count, self.shifting.unwrap_or(0), self.pending.unwrap_or(0), phase, target, step]);
         w.bools("Flags", &[self.shifting.is_some(), self.pending.is_some(), self.latched_txen, self.dsr, self.irq]);
         w.u64s("Times", &[self.baud_base, self.started, self.sampled_at, self.ends_at, self.ack_at, self.ack_ends]);
+        for (n, p) in self.ports.iter().enumerate() {
+            w.group(["Port1", "Port2"][n], |w| {
+                if let Some(c) = &p.controller {
+                    w.group("Controller", |w| write_controller(w, c));
+                }
+                if let Some(c) = &p.card {
+                    w.group("Card", |w| write_card(w, c));
+                }
+                if let Some(t) = &p.tap {
+                    w.group("Multitap", |w| {
+                        w.bools("Request", &[t.request]);
+                        w.bytes("Answers", &[answer_code(t.last), answer_code(t.now)]);
+                        w.bytes("Long", &t.long);
+                        for (i, c) in t.pads.iter().enumerate() {
+                            if let Some(c) = c {
+                                w.group(["PadA", "PadB", "PadC", "PadD"][i], |w| write_controller(w, c));
+                            }
+                        }
+                        for (i, c) in t.cards.iter().enumerate() {
+                            if let Some(c) = c {
+                                w.group(["CardA", "CardB", "CardC", "CardD"][i], |w| write_card(w, c));
+                            }
+                        }
+                    });
+                }
+            });
+        }
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
@@ -197,7 +228,7 @@ impl Sio0 {
         r.u16s(&mut regs)?;
         [self.mode, self.control, self.baud] = regs;
         r.bytes(&mut self.fifo.entries)?;
-        let mut b = [0u8; 6];
+        let mut b = [0u8; 7];
         r.bytes(&mut b)?;
         (self.fifo.read, self.fifo.count) = (b[0] & 7, b[1].min(8));
         let mut f = [false; 5];
@@ -207,15 +238,117 @@ impl Sio0 {
         [self.latched_txen, self.dsr, self.irq] = [f[2], f[3], f[4]];
         self.phase = match b[4] {
             1 => Phase::Address,
-            2 => Phase::Controller(b[5]),
+            2 => Phase::Device(target_of(b[5]), b[6]),
             3 => Phase::Silent,
             _ => Phase::Idle,
         };
         let mut t = [0u64; 6];
         r.u64s(&mut t)?;
         [self.baud_base, self.started, self.sampled_at, self.ends_at, self.ack_at, self.ack_ends] = t;
+        for p in &mut self.ports {
+            if let Some(c) = &mut p.controller {
+                read_controller(r, c)?;
+            }
+            if let Some(c) = &mut p.card {
+                read_card(r, c)?;
+            }
+            if let Some(t) = &mut p.tap {
+                let mut q = [false; 1];
+                r.bools(&mut q)?;
+                t.request = q[0];
+                let mut a = [0u8; 2];
+                r.bytes(&mut a)?;
+                (t.last, t.now) = (answer_of(a[0]), answer_of(a[1]));
+                r.bytes(&mut t.long)?;
+                for c in t.pads.iter_mut().flatten() {
+                    read_controller(r, c)?;
+                }
+                for c in t.cards.iter_mut().flatten() {
+                    read_card(r, c)?;
+                }
+            }
+        }
         Ok(())
     }
+}
+
+fn target_code(t: Target) -> u8 {
+    match t {
+        Target::Controller => 0,
+        Target::Card => 1,
+        Target::TapController(n) => 2 + n,
+        Target::TapCard(n) => 6 + n,
+    }
+}
+
+fn target_of(code: u8) -> Target {
+    match code {
+        0 => Target::Controller,
+        1 => Target::Card,
+        2..=5 => Target::TapController(code - 2),
+        _ => Target::TapCard((code - 6) & 3),
+    }
+}
+
+fn answer_code(a: Answer) -> u8 {
+    match a {
+        Answer::SlotA => 0,
+        Answer::Long => 1,
+        Answer::Garbage => 2,
+    }
+}
+
+fn answer_of(code: u8) -> Answer {
+    match code {
+        1 => Answer::Long,
+        2 => Answer::Garbage,
+        _ => Answer::SlotA,
+    }
+}
+
+/// A DualShock's modes, its motors and its transfer; a digital pad has no state of its own beyond its input.
+fn write_controller(w: &mut StateWriter, c: &Controller) {
+    if let Controller::DualShock(p) = c {
+        w.bools("Modes", &[p.analog, p.config, p.locked, p.configured, p.zero_5a, p.small, p.analog_held]);
+        w.bytes("Motors", &[p.large, p.command, p.length]);
+        w.bytes("RumbleMap", &p.rumble_map);
+        w.bytes("Out", &p.out);
+        w.bytes("Collect", &p.collect);
+    }
+}
+
+fn read_controller(r: &mut StateReader, c: &mut Controller) -> Result<(), Truncated> {
+    if let Controller::DualShock(p) = c {
+        let mut m = [false; 7];
+        r.bools(&mut m)?;
+        [p.analog, p.config, p.locked, p.configured, p.zero_5a, p.small, p.analog_held] = m;
+        let mut b = [0u8; 3];
+        r.bytes(&mut b)?;
+        [p.large, p.command, p.length] = [b[0], b[1], b[2].min(8)];
+        r.bytes(&mut p.rumble_map)?;
+        r.bytes(&mut p.out)?;
+        r.bytes(&mut p.collect)?;
+    }
+    Ok(())
+}
+
+fn write_card(w: &mut StateWriter, c: &Card) {
+    w.bytes("Registers", &[c.flag, c.command, c.checksum, c.previous]);
+    w.u32("Sector", c.sector);
+    w.bytes("Buffer", &c.buffer);
+    w.bytes("Data", &c.data);
+}
+
+/// A card loaded from a state is marked changed, so that the host writes the contents the state holds.
+fn read_card(r: &mut StateReader, c: &mut Card) -> Result<(), Truncated> {
+    let mut b = [0u8; 4];
+    r.bytes(&mut b)?;
+    [c.flag, c.command, c.checksum, c.previous] = b;
+    c.sector = r.u32()?;
+    r.bytes(&mut c.buffer)?;
+    r.bytes(&mut c.data)?;
+    c.changed = true;
+    Ok(())
 }
 
 fn word_code(k: Word) -> u8 {
@@ -371,6 +504,7 @@ impl StateMachine for Machine {
         self.frames = frames;
         self.cpu = cpu;
         self.board = board;
+        self.card_reported = [false; 2];
         if !pending {
             self.exe = None;
         } else if self.exe.is_none() {
@@ -414,7 +548,7 @@ mod tests {
     }
 
     #[test]
-    fn the_version_3_layout_is_pinned() {
+    fn the_version_4_layout_is_pinned() {
         let layout = machine().layout();
         let head: Vec<&str> = layout.lines().take(5).collect();
         assert_eq!(head, ["0 4 u32 Magic", "4 4 i32 Version", "8 8 i64 Frames", "16 128 u32[32] Cpu.R", "144 4 u32 Cpu.Hi"]);
@@ -422,16 +556,16 @@ mod tests {
         assert_eq!(
             tail,
             [
-                "3682227 65536 u8[65536] TTY",
-                "3157939 524288 u8[524288] SPURAM",
-                "2109363 1048576 u8[1048576] VRAM",
-                "2108339 1024 u8[1024] SCRATCH",
-                "11187 2097152 u8[2097152] RAM",
-                "11186 1 bool ExePending"
+                "3682258 65536 u8[65536] TTY",
+                "3157970 524288 u8[524288] SPURAM",
+                "2109394 1048576 u8[1048576] VRAM",
+                "2108370 1024 u8[1024] SCRATCH",
+                "11218 2097152 u8[2097152] RAM",
+                "11217 1 bool ExePending"
             ]
         );
-        assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Cpu.InterruptView.Held"), "{layout}");
-        assert_eq!(machine().state_size(), 3_747_763);
+        assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Bus.Sio0.Port1.Controller.Modes") && layout.contains("Cpu.InterruptView.Held"), "{layout}");
+        assert_eq!(machine().state_size(), 3_747_794);
     }
 
     #[test]

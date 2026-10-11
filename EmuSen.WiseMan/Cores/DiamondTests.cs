@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("diamond", "Diamond", 0ul), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(("diamond", "Diamond", CoreInterface.CapAxes | CoreInterface.CapBatteryDirty), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             var system = Assert.Single(library.Info.Systems);
             Assert.Equal((PsxSystem.Id, true), (system.Id, system.Development));
             Assert.Same(PsxSystem.Entry, SystemPacks.For(system.Id)!.Entry);
@@ -58,8 +58,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(PsxSystem.Bios.Select(b => (b.Name, b.Size)), system.Firmware.Select(f => (f.Name, f.Size)));
             Assert.All(system.Firmware, f => Assert.False(f.Required));
             Assert.All(system.Firmware, f => Assert.Equal("accuracy", f.Replacement?.Effect));
-            Assert.Equal(new[] { (PsxSystem.DigitalPad, 14, 0), (PsxSystem.DualShock, 16, 4) }, system.Controllers.Select(c => (c.Id, c.Buttons.Count, c.Axes.Count)));
-            Assert.Equal(new[] { "region", "gpu", "pad1", "pad2" }, library.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { (PsxSystem.DigitalPad, 14, 0), (PsxSystem.DualShock, 17, 4) }, system.Controllers.Select(c => (c.Id, c.Buttons.Count, c.Axes.Count)));
+            Assert.Null(system.Controllers[1].Buttons.Single(b => b.Bit == 16).Control);
+            Assert.Equal(new[] { "region", "gpu", "pad1", "pad2", "tap1", "tap2", "card1", "card2" }, library.Settings.Select(s => s.Key));
 
             Assert.Equal("scph5501.bin", library.FirmwareFor(SyntheticPsExe.Build()).Single().Name);
             Assert.Equal("scph5500.bin", library.FirmwareFor(SyntheticPsxDisc.Build("Japan").DataTrack).Single().Name);
@@ -333,6 +334,28 @@ namespace EmuSen.WiseMan.Cores
                 Assert.Equal(new byte[] { 0xFF, 0x41, 0x5A, 0xFF, 0xFF }, Replies(20));
                 Assert.NotEqual(0, run.At(20)!.Spaces["ram"][0x10_0008] & 0x80);
             }
+        }
+
+        // Each memory card a battery file in the raw 128 KiB form, slot 1's file 0 and slot 2's file 4, read at create and tracked until saved; a multitap adds its three ports - see Diamond_Pad.md §8.
+        [Fact]
+        public void The_memory_cards_are_battery_files_and_a_multitap_adds_ports()
+        {
+            var library = CoreLibrary.Open(LibraryPath);
+            var card = Enumerable.Range(0, 0x2_0000).Select(i => (byte)(i * 7)).ToArray();
+            using (var m = new CoreMachine(library, SyntheticPsExe.Build(), "card2=card\ntap2=multitap", new[] { (0u, card) }))
+            {
+                Assert.Equal(new[] { (0u, ".mcr", 0x2_0000L), (4u, ".2.mcr", 0x2_0000L) }, m.Info.Battery.Select(b => (b.Which, b.Suffix, b.Length)));
+                Assert.Equal(new uint[] { 0, 1, 5, 6, 7 }, m.Info.Ports.Select(p => p.Port));
+                var (data, flags) = m.Battery(0);
+                Assert.Equal(card, data);
+                Assert.Equal(2u, flags);
+                Assert.All(m.Battery(4).Data, b => Assert.Equal(0, b));
+                m.SetAxis(0, 0, 0.5);
+                m.Advance();
+            }
+            using (var none = new CoreMachine(library, SyntheticPsExe.Build(), "card1=none", Array.Empty<(uint, byte[])>()))
+                Assert.Empty(none.Info.Battery);
+            Assert.Throws<CoreRefusedException>(() => new CoreMachine(library, SyntheticPsExe.Build(), "", new[] { (0u, new byte[100]) }));
         }
 
         private static string? Amidog => Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_AMIDOG") is { } a && Directory.Exists(a) ? a

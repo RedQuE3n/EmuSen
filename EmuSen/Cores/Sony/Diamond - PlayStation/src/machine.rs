@@ -12,8 +12,10 @@ use crate::icache::KERNEL_BCC;
 use crate::kernel::{self, Kernel};
 use crate::media::{Kind, Market, Media};
 use crate::memctl;
-use crate::pad::DigitalPad;
-use crate::sio0::Sio0;
+use crate::card::Card;
+use crate::multitap::Multitap;
+use crate::pad;
+use crate::sio0::{Port, Sio0};
 use crate::video::Video;
 use crate::exe;
 
@@ -59,6 +61,8 @@ pub struct Machine {
     pub image: Option<Vec<u8>>,
     pub frames: i64,
     pub skip: bool,
+    /// Whether each card's change was reported to the host since it last saved the card.
+    pub card_reported: [bool; 2],
     pub ports: [Option<&'static str>; 2],
     /// Silent stereo frames made and not yet drained, the bound on them in samples, and the cycle the last sample
     /// was counted at.
@@ -86,7 +90,7 @@ impl Machine {
         } else {
             Board::new(pal, version, memctl::KERNEL_VALUES, memctl::KERNEL_RAM_SIZE, KERNEL_BCC)
         };
-        board.sio0 = Sio0::new(ports[0].map(|_| DigitalPad::default()));
+        board.sio0 = Sio0::new(ports.map(|k| Port { controller: k.and_then(pad::controller), ..Port::default() }));
         let mut cpu = R3000::new();
         let is_exe = matches!(media.kind, Kind::Exe { .. });
         let mut exe = None;
@@ -113,6 +117,7 @@ impl Machine {
             exe,
             frames: 0,
             skip: false,
+            card_reported: [false; 2],
             ports,
             silence: 0,
             audio_limit: usize::MAX,
@@ -185,6 +190,44 @@ impl Machine {
         let made = self.board.now / CYCLES_PER_SAMPLE - start / CYCLES_PER_SAMPLE;
         self.silence = (self.silence + made as usize).min(self.audio_limit / 2);
         self.frames += 1;
+    }
+}
+
+impl Machine {
+    /// A card in port `n`'s slot (or its multitap's slot A), holding `data` or unformatted.
+    pub fn insert_card(&mut self, n: usize, data: Option<&[u8]>) {
+        let p = &mut self.board.sio0.ports[n];
+        match &mut p.tap {
+            Some(t) => t.cards[0] = Some(Card::new(data)),
+            None => p.card = Some(Card::new(data)),
+        }
+    }
+
+    /// The card in port `n`'s slot, or in its multitap's slot A.
+    pub fn card_in(&self, n: usize) -> Option<&Card> {
+        let p = &self.board.sio0.ports[n];
+        p.tap.as_ref().map_or(p.card.as_ref(), |t| t.cards[0].as_ref())
+    }
+
+    /// The host's ports and what each holds: 0 and 1 the two ports, then 2-4 and 5-7 their multitaps' slots B-D.
+    pub fn host_ports(&self) -> Vec<(u32, Option<&'static str>)> {
+        let mut v = vec![(0, self.ports[0]), (1, self.ports[1])];
+        for n in 0..2 {
+            if self.board.sio0.ports[n].tap.is_some() {
+                v.extend((0..3).map(|i| (2 + 3 * n as u32 + i, self.ports[n])));
+            }
+        }
+        v
+    }
+
+    /// A multitap on port `n`, its four slots holding controllers of the port's kind and the port's card in slot A.
+    pub fn plug_multitap(&mut self, n: usize) {
+        let kind = self.ports[n];
+        let p = &mut self.board.sio0.ports[n];
+        let mut tap = Multitap::new(std::array::from_fn(|_| kind.and_then(pad::controller)));
+        tap.cards[0] = p.card.take();
+        p.controller = None;
+        p.tap = Some(tap);
     }
 }
 

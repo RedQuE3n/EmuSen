@@ -3,6 +3,7 @@
 //! Diamond_Referees.md were seen to answer, or as a console's log shows.
 
 use diamond::exe;
+use diamond::kernel::{self, Kernel};
 use diamond::machine::{Config, Gpu, Machine};
 use diamond::media::{Market, Media};
 
@@ -20,11 +21,16 @@ fn run_pressing(source: &str, pressed: u16) -> Machine {
 }
 
 fn run_with(source: &str, frames: usize, market: Market, pressed: u16) -> Machine {
+    run_set_up(source, frames, market, |m| m.board.sio0.set_buttons(0, pressed as u32))
+}
+
+/// The program run on a machine `set_up` plugs or presses things into first.
+fn run_set_up(source: &str, frames: usize, market: Market, set_up: impl FnOnce(&mut Machine)) -> Machine {
     let words = emusen_mips::assemble(source, 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
     let image = exe::build(&words);
     let media = Media::read(&image).unwrap();
     let mut m = Machine::new(media, Config { market, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, None);
-    m.board.sio0.set_buttons(pressed);
+    set_up(&mut m);
     for _ in 0..frames {
         m.advance();
     }
@@ -194,4 +200,75 @@ fn stores_drain_as_the_fit_has_them() {
     assert_eq!(results(&m, 0x10_0000, 8), [8, 16, 24, 32, 40, 48, 56, 64]);
     assert_eq!(results(&m, 0x10_0020, 8), [13, 21, 29, 37, 45, 53, 61, 69]);
     assert_eq!(results(&m, 0x10_0040, 8), [9, 16, 24, 32, 40, 48, 56, 64]);
+}
+
+fn bytes(m: &Machine, at: usize, n: usize) -> Vec<u8> {
+    m.board.ram[at..at + n].to_vec()
+}
+
+/// Diamond_Pad.md §8: a sector written and read back through the protocol, the IDs, the flag's bit 3 cleared by the
+/// write, a bad checksum refused, and /ACK after every byte but each command's last. With `DIAMOND_CARD_OUT` set, the
+/// card the program wrote is kept there as its raw 128 KiB.
+#[test]
+fn a_card_is_written_and_read_through_the_protocol() {
+    let m = run_set_up(include_str!("../programs/card.s"), 30, Market::Americas, |m| m.insert_card(0, None));
+    let data: Vec<u8> = (0..128u32).map(|i| (3 * i) as u8).collect();
+    let checksum = data.iter().fold(1u8, |c, &d| c ^ d);
+    let write = bytes(&m, 0x10_0000, 138);
+    assert_eq!((write[..6].to_vec(), write[134..].to_vec()), (vec![0xFF, 0x08, 0x5A, 0x5D, 0x00, 0x01], vec![data[127], 0x5C, 0x5D, 0x47]));
+    let read = bytes(&m, 0x10_0100, 140);
+    assert_eq!(read[..10], [0xFF, 0x00, 0x5A, 0x5D, 0x00, 0x01, 0x5C, 0x5D, 0x01, 0x00], "the flag cleared by the write");
+    assert_eq!((read[10..138].to_vec(), read[138], read[139]), (data.clone(), checksum, 0x47));
+    assert_eq!(bytes(&m, 0x10_0200, 10), [0xFF, 0x00, 0x5A, 0x5D, 0x5C, 0x5D, 0x04, 0x00, 0x00, 0x80]);
+    assert_eq!(bytes(&m, 0x10_0300 + 137, 1), [0x4E], "a bad checksum");
+    let acks = |at: usize, n: usize| bytes(&m, at + 0x400, n);
+    assert!(acks(0x10_0000, 137).iter().all(|&a| a == 1) && acks(0x10_0000 + 137, 1) == [0]);
+    assert!(acks(0x10_0100, 139).iter().all(|&a| a == 1), "the read's late /ACK within the timeout");
+    let card = m.card_in(0).unwrap();
+    assert_eq!((&card.data[0x100 * 128..0x101 * 128], card.changed), (&data[..], true));
+    assert!(card.data[0x101 * 128..0x102 * 128].iter().all(|&b| b == 0), "the refused write stored nothing");
+    if let Ok(path) = std::env::var("DIAMOND_CARD_OUT") {
+        std::fs::write(path, &card.data).unwrap();
+    }
+}
+
+/// Diamond_Pad.md §9: the multitap's long read after a request, slot C by its address, and slot A's card.
+#[test]
+fn the_multitap_answers_all_four_slots() {
+    let m = run_set_up(include_str!("../programs/multitap.s"), 10, Market::Americas, |m| {
+        m.insert_card(0, None);
+        m.plug_multitap(0);
+        m.board.sio0.set_buttons(3, 1 << 3);
+    });
+    assert_eq!(bytes(&m, 0x10_0000, 5), [0xFF, 0x41, 0x5A, 0xFF, 0xFF], "slot A, the request for next time");
+    let long = bytes(&m, 0x10_0040, 35);
+    assert_eq!(long[..3], [0xFF, 0x80, 0x5A]);
+    let slot = |n: usize| long[3 + 8 * n..11 + 8 * n].to_vec();
+    assert_eq!(slot(0), [0x41, 0x5A, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+    assert_eq!(slot(2), [0x41, 0x5A, 0xF7, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF], "port 1's slot C, host port 3, holds Start");
+    assert_eq!(bytes(&m, 0x10_0080, 5), [0xFF, 0x41, 0x5A, 0xF7, 0xFF]);
+    assert_eq!(bytes(&m, 0x10_00C0, 10), [0xFF, 0x08, 0x5A, 0x5D, 0x5C, 0x5D, 0x04, 0x00, 0x00, 0x80]);
+}
+
+/// The plan's stage 6 gate: the open kernel's pad functions read the pads over SIO0 on a program, a digital read on
+/// port 1 and, once switched, the DualShock's analog read; port 2, empty, reads FFh.
+#[test]
+fn the_open_kernels_pad_functions_read_the_pads() {
+    let words = emusen_mips::assemble(include_str!("../programs/kernel-pad.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    let image = exe::build(&words);
+    let media = Media::read(&image).unwrap();
+    let rom = kernel::open_kernel().map(|k| (k, Kernel::Open));
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, rom);
+    m.board.sio0.set_buttons(0, 1 << 3 | 1 << 14);
+    for _ in 0..20 {
+        m.advance();
+    }
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program started the pads");
+    assert_eq!((bytes(&m, 0x10_0000, 4), bytes(&m, 0x10_0040, 1)), (vec![0x00, 0x41, 0xF7, 0xBF], vec![0xFF]));
+    m.board.sio0.set_buttons(0, 1 << 16);
+    m.board.sio0.controller(0).unwrap().set_axis(0, 1.0);
+    for _ in 0..3 {
+        m.advance();
+    }
+    assert_eq!(bytes(&m, 0x10_0000, 8), [0x00, 0x73, 0xFF, 0xFF, 0x80, 0x80, 0xFF, 0x80], "the analog read, the left stick right");
 }

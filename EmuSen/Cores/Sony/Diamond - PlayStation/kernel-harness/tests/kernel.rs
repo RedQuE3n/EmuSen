@@ -244,7 +244,7 @@ fn timers_gpu_and_pads_through_their_documented_ports() {
     assert_eq!(m.a(0x49, &[0xE100_0000]), 0);
     assert_eq!(m.rig.writes.last().map(|w| (w.0, w.2)), Some((0x1F80_1810, 0xE100_0000)));
     assert_eq!(m.a(0x4C, &[]), 0x1F80_1814);
-    // Pads: zero-filled buffers, then each vblank marks them FFh until stage 6 reads SIO0.
+    // Pads: zero-filled buffers, then each vblank reads SIO0, where this bus answers no /ACK, so both read FFh.
     m.rig.put_bytes(0x8010_0000, &[0x55; 0x44]);
     m.b(0x12, &[0x8010_0000, 0x22, 0x8010_0022, 0x22]);
     assert_eq!(m.rig.bytes(0x8010_0000, 0x44), [0; 0x44]);
@@ -254,7 +254,7 @@ fn timers_gpu_and_pads_through_their_documented_ports() {
     let exe = Exe::program("loop: j loop\nnop", 0x8001_0000);
     exe.sideload(&mut m);
     m.rig.raise(0);
-    for _ in 0..3000 {
+    for _ in 0..100_000 {
         m.step();
     }
     assert_eq!((m.rig.bytes(0x8010_0000, 1), m.rig.bytes(0x8010_0022, 1)), (vec![0xFF], vec![0xFF]));

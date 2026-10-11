@@ -6,6 +6,7 @@ use emusen_native::core::*;
 
 use crate::bus::BIOS_BYTES;
 use crate::kernel::{self, Kernel};
+use crate::card::CARD_BYTES;
 use crate::machine::{AUDIO_RATE, Config, Gpu, MAX_HEIGHT, MAX_WIDTH, Machine, RAM_ID, SPACES, WIDTH};
 use crate::media::{Market, Media, Refusal};
 use crate::state::STATE_VERSION;
@@ -36,8 +37,7 @@ const BUTTONS: [(u32, Control, &str); 16] = [
     (2, Control::R3, "R3"),
 ];
 
-pub const PAD: &str = "psx.pad";
-pub const DUALSHOCK: &str = "psx.dualshock";
+pub use crate::pad::{DUALSHOCK, PAD};
 
 fn controllers() -> Vec<Controller> {
     let buttons = |n: usize| BUTTONS[..n].iter().map(|&(bit, c, l)| Button { bit, control: Some(c), label: l.into() }).collect();
@@ -48,7 +48,7 @@ fn controllers() -> Vec<Controller> {
             id: DUALSHOCK.into(),
             label: "DualShock".into(),
             ports: vec![0, 1],
-            buttons: buttons(16),
+            buttons: { let mut b: Vec<Button> = buttons(16); b.push(Button { bit: 16, control: None, label: "Analog".into() }); b },
             axes: vec![stick(0, Axis::LeftX, "Left Stick"), stick(1, Axis::LeftY, "Left Stick"), stick(2, Axis::RightX, "Right Stick"), stick(3, Axis::RightY, "Right Stick")],
         },
     ]
@@ -70,6 +70,10 @@ pub fn bios(market: Market) -> Firmware {
     Firmware { which, name: name.into(), label: label.into(), size: BIOS_BYTES as u64, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::Accuracy { cost: BIOS_COST.into() }) }
 }
 
+/// Battery files: the card in port 1's slot (or its multitap's slot A), and port 2's; the BIOS takes 1-3.
+pub const CARD_FILES: [u32; 2] = [0, 4];
+pub const CARD_SUFFIXES: [&str; 2] = [".mcr", ".2.mcr"];
+
 /// The extensions the core opens at stage 1, the system pack's checked subset (Diamond_Native.md §2.4).
 pub const EXTENSIONS: [&str; 2] = [".psexe", ".psx"];
 
@@ -77,6 +81,10 @@ pub const EXTENSIONS: [&str; 2] = [".psexe", ".psx"];
 pub const REGION_KEY: &str = "region";
 pub const GPU_KEY: &str = "gpu";
 pub const PAD_KEYS: [&str; 2] = ["pad1", "pad2"];
+pub const TAP_KEYS: [&str; 2] = ["tap1", "tap2"];
+pub const CARD_KEYS: [&str; 2] = ["card1", "card2"];
+pub const MULTITAP: &str = "multitap";
+pub const CARD: &str = "card";
 
 pub const REGIONS: [(&str, &str, Market); 3] = [("psx.jp", "Japan (NTSC)", Market::Japan), ("psx.us", "Americas (NTSC)", Market::Americas), ("psx.eu", "Europe (PAL)", Market::Europe)];
 pub const GPUS: [(&str, &str, Gpu); 2] = [("psx.gpu208", "208-pin GPU (later consoles)", Gpu::Pin208), ("psx.gpu160", "160-pin GPU (early consoles)", Gpu::Pin160)];
@@ -111,6 +119,10 @@ fn schema() -> Vec<Setting> {
         setting(GPU_KEY, "Graphics chip", "Which of the two GPU families the console has: the 208-pin chip of the later consoles, or the 160-pin chip of the first ones, which differ in a few drawing details that some programs can tell apart. Takes effect when a game is next loaded.", GPUS.iter().map(|&(v, l, _)| choice(v, l)).collect(), GPUS[0].0, "Console"),
         setting(PAD_KEYS[0], "Port 1 controller", "What is plugged into the port: a DualShock, which starts in digital mode and answers as the digital pad until it is switched, so every game accepts it; or Sony's first, digital controller. Takes effect when a game is next loaded.", pads(0), DUALSHOCK, "Controllers"),
         setting(PAD_KEYS[1], "Port 2 controller", "What is plugged into the port: a DualShock, Sony's digital controller, or nothing. Takes effect when a game is next loaded.", pads(1), DUALSHOCK, "Controllers"),
+        setting(TAP_KEYS[0], "Port 1 multitap", "A multitap on port 1, so that four controllers of the port's kind are plugged in; only games made for it look for the others. Takes effect when a game is next loaded.", vec![choice("none", "None"), choice(MULTITAP, "Multitap")], "none", "Controllers"),
+        setting(TAP_KEYS[1], "Port 2 multitap", "A multitap on port 2, which a few games need instead of port 1's. Takes effect when a game is next loaded.", vec![choice("none", "None"), choice(MULTITAP, "Multitap")], "none", "Controllers"),
+        setting(CARD_KEYS[0], "Memory card in slot 1", "A memory card in slot 1, kept for this game beside its file; with none, the game finds no card and saves nothing. Takes effect when a game is next loaded.", vec![choice(CARD, "Memory card"), choice("none", "None")], CARD, "Memory cards"),
+        setting(CARD_KEYS[1], "Memory card in slot 2", "A second memory card in slot 2, kept for this game beside the first. Takes effect when a game is next loaded.", vec![choice("none", "None"), choice(CARD, "Memory card")], "none", "Memory cards"),
     ]
 }
 
@@ -119,7 +131,7 @@ fn market_of(media: &Media, setting: Option<&str>) -> Market {
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = 0;
+    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY;
 
     fn info() -> Info {
         Info {
@@ -172,12 +184,16 @@ impl Core for Machine {
                 return Err(STATUS_EXE_TRUNCATED);
             }
         };
-        if let Some(f) = request.files.iter().find(|f| f.which > BIOS_EUROPE) {
+        if let Some(f) = request.files.iter().find(|f| f.which > BIOS_EUROPE && !CARD_FILES.contains(&f.which)) {
             detail(&format!("file {} is not one Diamond names", f.which));
             return Err(status::BAD_FILE);
         }
-        if let Some(f) = request.files.iter().find(|f| f.which != 0 && f.data.len() != BIOS_BYTES) {
+        if let Some(f) = request.files.iter().find(|f| !CARD_FILES.contains(&f.which) && f.data.len() != BIOS_BYTES) {
             detail(&format!("file {} is {} bytes; a BIOS is {BIOS_BYTES}", f.which, f.data.len()));
+            return Err(status::BAD_FILE);
+        }
+        if let Some(f) = request.files.iter().find(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != CARD_BYTES) {
+            detail(&format!("file {} is {} bytes; a memory card is {CARD_BYTES}", f.which, f.data.len()));
             return Err(status::BAD_FILE);
         }
         let s = &request.settings;
@@ -186,7 +202,16 @@ impl Core for Machine {
         let players = request.files.iter().find(|f| f.which == bios(config.market).which).map(|f| (f.data, Kernel::Player));
         let rom = players.or_else(|| kernel::open_kernel().map(|k| (k, Kernel::Open)));
         let mut m = Machine::new(media, config, [port(PAD_KEYS[0]), port(PAD_KEYS[1])], request.image, rom);
-        m.firmware = request.files.iter().filter(|f| f.which != 0).map(|f| f.which).collect();
+        m.firmware = request.files.iter().filter(|f| !CARD_FILES.contains(&f.which)).map(|f| f.which).collect();
+        for n in 0..2 {
+            if s.get(CARD_KEYS[n]).unwrap_or(if n == 0 { CARD } else { "none" }) == CARD {
+                let data = request.files.iter().find(|f| f.which == CARD_FILES[n] && !f.data.is_empty()).map(|f| f.data);
+                m.insert_card(n, data);
+            }
+            if s.get(TAP_KEYS[n]) == Some(MULTITAP) {
+                m.plug_multitap(n);
+            }
+        }
         Ok(m)
     }
 
@@ -199,13 +224,13 @@ impl Core for Machine {
             frame_rate: self.frame_rate(),
             video: Video { base_width: WIDTH, base_height: self.height(), max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
-            ports: (0..2).map(|p| Port { port: p as u32, controller: self.ports[p].map(Into::into) }).collect(),
+            ports: self.host_ports().into_iter().map(|(p, kind)| Port { port: p, controller: kind.map(Into::into) }).collect(),
             spaces: SPACES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, ..Space::new(id, name) }).collect(),
             processors: vec![
                 Processor { id: 0, name: "R3000".into(), pc_bits: 32, registers: registers(&blackmoon_r3000::DEBUG_REGISTERS), code_space: None },
                 Processor { id: 1, name: "GTE".into(), pc_bits: 0, registers: registers(&[blackmoon_gte::DATA_REGISTERS, blackmoon_gte::CONTROL_REGISTERS].concat()), code_space: None },
             ],
-            battery: Vec::new(),
+            battery: (0..2).filter(|&n| self.card_in(n).is_some()).map(|n| Battery { which: CARD_FILES[n], suffix: CARD_SUFFIXES[n].into() }).collect(),
             state: StateFormat { format: "DMND".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: None,
@@ -223,6 +248,12 @@ impl Core for Machine {
 
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
         Machine::advance(self);
+        for (n, &which) in CARD_FILES.iter().enumerate() {
+            if self.card_in(n).is_some_and(|c| c.changed) && !self.card_reported[n] {
+                self.card_reported[n] = true;
+                emit(event::BATTERY, which as i64, 0);
+            }
+        }
         Ok(())
     }
 
@@ -264,15 +295,24 @@ impl Core for Machine {
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
-        match port {
-            0 => {
-                let pad = self.board.sio0.pad.unwrap_or_default();
-                self.board.sio0.set_buttons(((pad.pressed as u32 & !changed) | (mask & changed)) as u16);
-                Ok(())
-            }
-            1 => Ok(()),
-            _ => Err(status::NO_SUCH_PORT),
+        if port >= 8 {
+            return Err(status::NO_SUCH_PORT);
         }
+        if let Some(c) = self.board.sio0.controller(port as usize) {
+            let held = c.buttons();
+            c.set_buttons((held & !changed) | (mask & changed));
+        }
+        Ok(())
+    }
+
+    fn set_axis(&mut self, port: u32, axis: u32, value: f64) -> Result<(), i32> {
+        if port >= 8 {
+            return Err(status::NO_SUCH_PORT);
+        }
+        if let Some(c) = self.board.sio0.controller(port as usize) {
+            c.set_axis(axis, value);
+        }
+        Ok(())
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
@@ -300,7 +340,20 @@ impl Core for Machine {
         Ok(())
     }
 
+    fn battery_saved(&mut self, which: u32) -> Result<(), i32> {
+        let n = CARD_FILES.iter().position(|&w| w == which).ok_or(status::BAD_FILE)?;
+        let c = self.board.sio0.card(n).ok_or(status::BAD_FILE)?;
+        c.changed = false;
+        self.card_reported[n] = false;
+        Ok(())
+    }
+
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
+        if let Some(n) = CARD_FILES.iter().position(|&w| w == which)
+            && let Some(c) = self.card_in(n)
+        {
+            return Ok((&c.data, flags::BATTERY_TRACKED | if c.changed { flags::BATTERY_CHANGED } else { 0 }));
+        }
         match which {
             0 => Ok((&[], 0)),
             _ => Err(status::BAD_FILE),
@@ -308,7 +361,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine;);
+emusen_native::core_exports!(Machine; axes);
 
 #[cfg(test)]
 mod tests {
@@ -389,8 +442,8 @@ mod tests {
         assert_eq!(create(&exe(None, 1), &[], vec![emusen_native::abi::File { which: 1, data: &image[..100] }]).err(), Some(status::BAD_FILE));
         m.set_buttons(0, 0b1010, 0b1111).unwrap();
         m.set_buttons(0, 0b0001, 0b0001).unwrap();
-        assert_eq!(m.board.sio0.pad.unwrap().pressed, 0b1011);
-        assert_eq!(m.set_buttons(2, 1, 1), Err(status::NO_SUCH_PORT));
+        assert_eq!(m.board.sio0.controller(0).unwrap().buttons(), 0b1011);
+        assert_eq!(m.set_buttons(8, 1, 1), Err(status::NO_SUCH_PORT));
     }
 
     #[test]
@@ -398,10 +451,44 @@ mod tests {
         let info = Machine::info();
         let psx = &info.systems[0];
         assert_eq!((psx.id.as_str(), psx.extensions.len(), psx.development), ("psx", 2, true));
-        assert_eq!(psx.controllers.iter().map(|c| (c.buttons.len(), c.axes.len())).collect::<Vec<_>>(), [(14, 0), (16, 4)]);
+        assert_eq!(psx.controllers.iter().map(|c| (c.buttons.len(), c.axes.len())).collect::<Vec<_>>(), [(14, 0), (17, 4)]);
         assert!(psx.firmware.iter().all(|f| !f.required && f.size == 524_288));
         let mut bits: Vec<u32> = psx.controllers[1].buttons.iter().map(|b| b.bit).collect();
         bits.sort();
-        assert_eq!(bits, (0..16).collect::<Vec<_>>(), "the report's sixteen bits, each once");
+        assert_eq!(bits, (0..17).collect::<Vec<_>>(), "the report's sixteen bits and the Analog button, each once");
+    }
+
+    /// Diamond_Plan.md §4.4: each card a battery file in the raw 128 KiB form, slot 1's file 0 and slot 2's file 4;
+    /// slot 1 holds a card by default and slot 2 none.
+    #[test]
+    fn the_cards_are_battery_files_tracked_until_saved() {
+        let m = create(&exe(None, 1), &[], vec![]).unwrap();
+        assert_eq!(m.machine_info().battery.iter().map(|b| (b.which, b.suffix.as_str())).collect::<Vec<_>>(), [(0, ".mcr")]);
+        let card = vec![0x5Au8; CARD_BYTES];
+        let files = vec![emusen_native::abi::File { which: 0, data: &card }, emusen_native::abi::File { which: 4, data: &card }];
+        let mut m = create(&exe(None, 1), &[(CARD_KEYS[1], CARD), (TAP_KEYS[0], MULTITAP)], files).unwrap();
+        assert_eq!(m.machine_info().battery.iter().map(|b| b.which).collect::<Vec<_>>(), [0, 4]);
+        assert_eq!(m.machine_info().ports.iter().map(|p| p.port).collect::<Vec<_>>(), [0, 1, 2, 3, 4], "port 1's multitap adds three");
+        assert_eq!(m.battery(4).unwrap(), (&card[..], flags::BATTERY_TRACKED));
+        m.board.sio0.card(0).unwrap().changed = true;
+        assert_eq!(m.battery(0).unwrap().1, flags::BATTERY_TRACKED | flags::BATTERY_CHANGED);
+        m.battery_saved(0).unwrap();
+        assert_eq!(m.battery(0).unwrap().1, flags::BATTERY_TRACKED);
+        assert_eq!(m.battery_saved(1), Err(status::BAD_FILE));
+        let short = vec![0u8; 100];
+        assert_eq!(create(&exe(None, 1), &[], vec![emusen_native::abi::File { which: 0, data: &short }]).err(), Some(status::BAD_FILE));
+        let none = create(&exe(None, 1), &[(CARD_KEYS[0], "none")], vec![]).unwrap();
+        assert!(none.machine_info().battery.is_empty());
+    }
+
+    /// The DualShock's sticks through `set_axis` and its Analog button through bit 16 of `set_buttons`.
+    #[test]
+    fn the_sticks_and_the_analog_button_reach_the_dualshock() {
+        let mut m = create(&exe(None, 1), &[], vec![]).unwrap();
+        m.set_buttons(0, 1 << 16, 1 << 16).unwrap();
+        m.set_axis(0, 0, 1.0).unwrap();
+        m.set_axis(0, 1, -1.0).unwrap();
+        assert_eq!(m.board.sio0.controller(0).unwrap().report(), [0x73, 0x5A, 0xFF, 0xFF, 0x80, 0x80, 0xFF, 0x00]);
+        assert_eq!(m.set_axis(8, 0, 0.0), Err(status::NO_SUCH_PORT));
     }
 }

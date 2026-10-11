@@ -215,7 +215,7 @@ Three behaviours worth stating:
 
 ### 3.4a `CheatDatabaseDirectory` — using a cheat tree you already have
 
-`AppSettings.CheatDatabaseDirectory` points at a directory tree of `.cht` files, one per game in per-system folders — the exact shape RetroArch stores its cheats in. Point it at an existing RetroArch cheats folder and it is indexed in place: no copying, no conversion, no import step. Unset, it falls back to `DianaShSandbox.CheatDatabaseDirectory` (`home/Cheats`).
+`AppSettings.CheatDatabaseDirectory` points at a directory tree of `.cht` files, one per game in per-system folders — the exact shape RetroArch stores its cheats in. Point it at an existing RetroArch cheats folder and it is indexed in place: no copying, no conversion, no import step. Unset, it falls back to `DianaShSandbox.CheatDatabaseDirectory` (`home/Cheats`); since 2026-10-10 both `cheat db` and the Cheat Database window ask `SettingFolders.Cheats` for that answer, and §7 records what a relative or `~` value does (it was the handheld's `genesis`).
 
 This is deliberately a *directory setting* rather than a bundled asset. **EmuSen ships no cheat data and redistributes none.** The libretro cheat database is licensed CC BY-SA 4.0, but its own README states the codes were "collected from any available source on the web" — so the grant is only as good as libretro's rights in an aggregated corpus, and the EU sui generis database right applies independently of copyright either way. Indexing a folder the player already has, or downloading one to their machine at their explicit request (`cheat db update`, `Settings > Cheat Database...`), keeps that question off this project entirely. Attribution is shown at the point of download, since it is a licence condition rather than a footnote.
 
@@ -284,6 +284,7 @@ No GUI or shell command edits `audio.json`/`graphics.json` yet — they are read
 - `ConfigEnumFormatTests` — §2.1's enum-name format: a numeric file from an older build mapping to the same physical buttons, saves writing names, the numeric-to-name upgrade in one pass, half-edited mixed files, case-insensitive names, and the misspelled-name-resets-the-file cost.
 
 - `SuggestionTests` — §6.1's engine: transposition scoring, the length-scaled tolerance, joint-best-only results, prefix tie-breaking, and the empty/absurd inputs.
+- `SettingFoldersTests` and `SettingPathsOpenTests` — §7: a blank folder setting is unset at every reader, and the measured relative, `~` and file cases, the open ones skipped until the tester answers §7.5.
 - `ConfigDiagnosticsTests` — §6.2: a misspelled enum value and a misspelled dictionary *key* both being named and corrected, the report carrying the file path, malformed JSON reported too, and a missing file reporting nothing.
 - `SuggestionMessageTests` (`EmuSen.WiseMan/DianaSh/`) — the shell's unknown-command path and four of the five subcommand sites, plus the "Try a/b/c" list still naming everything.
 
@@ -334,3 +335,147 @@ GamepadButton. Did you mean 'DPadUp'? Falling back to defaults.
 `ConfigDiagnostics.Sink` is set once by each GUI frontend's `Main`; unset, reporting is a no-op, which is what tests and any caller with nowhere to print want. `ConfigFile<T>.LastLoadError` holds the same text for a caller that would rather ask than subscribe. A **missing** file reports nothing — that is the ordinary first-run case, not a failure.
 
 This applies to every config file, not just bindings: malformed JSON in `audio.json` is reported the same way.
+
+---
+
+## 7. Folder settings: a blank, relative, `~` or file value (2026-10-10)
+
+### 7.1 What started it
+
+On 2026-10-10 the handheld's `appsettings.json` held the bare word `genesis` as `CheatDatabaseDirectory`. Nothing read
+that value as anything but a path, so the cheat database was downloaded and indexed relative to the process's working
+folder, and 74 MB of `.cht` files landed inside the install, at `~/Apps/Mistress/lib/EmuSen/genesis`. The same day a
+second defect of the same class was found and fixed: three paths built from an empty application-data folder became
+relative and wrote `EmuSen/Logs` under the working folder (`EmuSen_Galaxia.md` §3.6). Both are one question asked of
+different values: what a path setting means when it is not an absolute path to a folder. This section audits every
+folder setting the player can set against four kinds of value, records what each does, fixes what an existing rule
+already decides, and puts the rest to the tester. The `genesis` folder on the handheld is left where it is; whether
+and when to remove it is the tester's decision and is not part of this work.
+
+### 7.2 The settings and their readers
+
+Eight settings name a folder: seven in `AppSettings` and one in `BigPictureInterface`. No setting in `audio.json`,
+`graphics.json` or the binding files names a folder; `graphics.json`'s `slang:` filter is a path inside the shader
+pack, relative to the pack by design (`EmuSen_Settings_Reference.md` §4.41), and the shader pack's own folder is
+`DataStore.Shaders`, not a setting. Two settings cross into the platform library: `LogDirectory`, which the library's
+`error_log.rs` reads from the settings file itself, and `StateDirectory`, which Mistress passes to `SaveLibrary` as a
+parameter (`EmuSen_Galaxia.md` §5.1) and which the library's `saves.rs` receives. The other six are read only by C#.
+
+The values reach the file three ways: Preferences' path rows and the cheat database's folder row, the same rows drawn
+as text rows in Game Mode's menus (`BigMenuForm.PathRow`), and a hand edit (`nano /etc/EmuSen/appsettings.json` in the
+shell, or any editor). Every row is a LunaP `PathPickerRow` with `IsEditable` set (`EmuSen_Settings_Reference.md`
+§4.45.6), which commits whatever was typed, trimmed, as a pick, and refuses only a blank or unchanged box. In Game Mode
+Browse… is hidden, so a typed value is the only kind there; `genesis` was typed on such a row. No DianaSh command
+writes any of these settings.
+
+### 7.3 What each value does today
+
+*Measured on 2026-10-10*, on both halves of Galaxia (`EMUSEN_GALAXIA_NATIVE=0` and the default), by
+`SettingPathsOpenTests`: a child test process with its own temporary home and working folder runs each reader with the
+value `genesis`, the value `~/EmuSenTilde`, and the path of an existing file, and reports what was made under the
+working folder, the home and the data home. The two halves' reports were identical, row for row, in all fourteen
+cases. Rows marked *read* were established from the code and not measured, because the reader writes nothing.
+
+| Setting | Readers | Blank (null, empty, whitespace) | Relative (`genesis`) | `~/x` | An existing file |
+|---|---|---|---|---|---|
+| `LogDirectory` | `ErrorLog` (C# and library), `CrashLog`, per-game logs | `~/.config/EmuSen/Logs` | the folder is made under the working folder and every error is written there | a folder literally named `~` is made under the working folder and written into | cannot be made, so the default is used (`EmuSen_Settings_Reference.md` §4.70's rule) |
+| `StateDirectory` | `SaveLibrary` (C# and library) for Mistress's slots and resume state; the state list | `home/Saves/Save States` | slot states, and the resume state Mistress writes on leaving **every** game, are written under the working folder | a literal `~` folder under the working folder | the save fails with a message and an error-log entry; nothing is written |
+| `CheatDatabaseDirectory` | `cheat db` (DianaSh), the Cheat Database window | `home/Cheats` | indexed and **downloaded** under the working folder: the handheld's case | a literal `~` folder under the working folder | `cheat db update` reports that the file exists; nothing is written |
+| `ArtworkDirectory` | the library's cover index; Add and Remove Cover Art | `home/Artwork` | scanned there, and Add Cover Art copies into it, under the working folder | a literal `~` folder under the working folder | the scan finds nothing; Add Cover Art fails with a message, logged |
+| `RomDirectory` | the library scan, the shell's `core` boundary, the Pharaoh indexer, scraping's folders and orphans, `%ROMPATH%` | "No ROM directory set"; the shell read whitespace as a folder until this date (§7.4) | read against the working folder; the shell's boundary becomes `<working folder>/genesis`; nothing is written. *Read:* the scan's entries then carry relative paths | "ROM directory not found" | "ROM directory not found" |
+| `EsdeMediaDirectory` | the media sources' ES-DE folder | none | *read:* looked up against the working folder; nothing is written | *read:* a literal `~`; nothing found | *read:* nothing found |
+| `BigPictureTheme` | the themed view, the theme list, Theme Settings | Mistress's own look | *read:* loaded from the working folder, and listed under its full path; nothing is written | *read:* a literal `~`; the theme does not load | *read:* the theme does not load |
+| `ScreensaverSlideshowCustomDir` | the slideshow screensaver | no pictures | *read:* against the working folder; read only | expanded to the home, as ES-DE does (`EmuSen_Settings_Reference.md` §4.75) | *read:* no pictures |
+
+So the harmful cases are the relative and `~` values of the four settings something writes into: `LogDirectory`,
+`StateDirectory`, `CheatDatabaseDirectory` and `ArtworkDirectory`. Each is proven by one of `SettingPathsOpenTests`'s
+eight cases, which assert that nothing is made under the working folder and fail today. They are skipped unless
+`EMUSEN_SETTING_PATHS_OPEN=1` is set, because they test behaviour the tester has not yet chosen (§7.5); any option
+there except leaving things as they are makes all eight pass, so they are the acceptance test for whichever is chosen.
+A file value is harmless everywhere: the log falls back, and every other writer fails with a message and writes
+nothing. A blank value already meant "unset" at every reader but one.
+
+**Which folder "the working folder" is.** It is not one folder, which matters to §7.5. *Read:* Mistress starts in
+whatever folder its launcher gives it, which on the handheld is the install, `~/Apps/Mistress/lib/EmuSen`; that is
+where `genesis` was made. The first DianaSh interpreter a process builds moves it to the data home
+(`DianaShSandbox.EnsureInitialWorkingDirectory`, called by `DianaShInterpreter.CreateDefault`), which in Mistress
+happens when the console is first opened; and `cd` in the console moves it again, wherever the player goes. A relative
+value therefore names a different folder before and after the console is opened, and after each `cd`. A related
+consequence, also read and not measured: `cheat db update` writes to the setting's folder without passing it through
+the shell's walled garden (`man hier`), so a relative value with `..` in it writes outside the shell's root.
+
+### 7.4 What an existing rule already decided, and was fixed
+
+**The rule.** A folder setting that is blank — null, empty, or only whitespace by .NET's `IsNullOrWhiteSpace` — is
+unset: the reader uses its default folder, or none. That rule was already applied by `ErrorLog.Usable` and `saves.rs`
+on both halves (their blank test is the one `GalaxiaParityTests.Blank_text_and_caseless_equality_follow_dotnet_for_every_character`
+holds), and by each C# reader separately, in four copies with two spellings.
+
+**The one reader that broke it.** `DianaShSandbox.RomLibraryDirectory`, the folder outside the shell's root that
+`core` may read a ROM from, tested `{ Length: > 0 }`, so a whitespace `RomDirectory` became a library at
+`<working folder>/<spaces>` while Mistress's scan said "No ROM directory set". `SettingFoldersTests.The_shell_reads_a_blank_rom_folder_as_no_library`
+failed on the code before the change (*measured on 2026-10-10*, both cases) and passes after it. The harm was small;
+the disagreement was the point.
+
+**The change.** `SettingFolders`, in `EmuSen.Galaxia.Library`, is now the one owner of the rule: `Named(value)` is
+null for a blank value and the value as written otherwise, and `States`, `Cheats`, `Artwork` and `Roms` give each
+setting's folder with its default. Every C# reader that decided the rule for itself asks it instead: `cheat db`, the
+Cheat Database window, the library's cover folder and state list, the shell's ROM boundary, the Pharaoh indexer,
+scraping's folder layout and orphan list, the folders' status line, and the theme-collection check. `ErrorLog` keeps
+its own test, because it also falls back from a folder that cannot be made and its library half reads the settings
+file itself; `SaveLibrary` keeps its own, because its directory is a parameter on both halves.
+`SettingFoldersTests.The_states_folder_is_the_one_save_library_writes_into` holds `SettingFolders.States` to the folder
+`SaveLibrary.StatePathFor` names, for blank, absolute, relative, `~` and padded values, so the state list and the
+writer cannot drift; it passes on both halves.
+
+No Rust change was needed: the two settings that cross into the library already had the rule there, and the
+resolver's other four settings never reach it. `SettingFolders` passes relative, `~` and padded values through exactly
+as written, by design, until §7.5 is answered; that is the one place the answer will go.
+
+**A refactor that the proof needed.** Add Cover Art's copy moved from `MainWindow` into `ArtworkIndex.Place`, beside
+`ArtworkIndex.PathFor`, which already owned where the copy goes, so that a test could run the writer itself rather
+than a copy of it.
+
+### 7.5 Put to the tester
+
+No rule exists for a relative value, a `~`, or a file value in a folder setting. The two places that expand `~` do so
+because ES-DE does, for values ES-DE defines: the screensaver's custom folder (`EmuSen_Settings_Reference.md` §4.75)
+and paths inside a theme (§4.73). The theme rule that leaves a bare relative path to the working folder was adopted
+for the same reason (`EmuSen_BigPicture.md` Q111). Neither is a decision about EmuSen's own settings, and nothing
+below is built.
+
+1. **A relative value.** Options: (a) refuse it at the point of entry, with a message saying a full path is needed,
+   and read a stored relative value (a hand edit, or a file from an older build) as `EmuSen_Settings_Reference.md`
+   §4.70 reads a log folder that cannot be made: use the default, say so once through `ConfigDiagnostics` and the
+   error log, and leave the setting as written; (b) resolve it against the data home, the shell's `/`; (c) resolve it against the player's home;
+   (d) leave it as it is. **Recommended: (a).** §7.3 shows a relative value has no stable base, so (d) is the defect
+   itself. (b) and (c) each choose a base the player cannot see when typing, and the handheld's case is exactly a
+   value whose effect the player could not see: the data would land somewhere sensible but still unannounced. (b)
+   agrees with the shell, where `/` is the data home, but not with a desktop folder picker, which only ever gives an
+   absolute path. Refusing at entry is the only option that tells the player at the moment the value is typed, and the
+   fallback for stored values extends a rule the project already has rather than inventing one.
+2. **A `~`.** Options: (a) expand `~` and `~/…` to the player's home in `SettingFolders`, and on the library's side for
+   `LogDirectory` and `StateDirectory`, which would need the home from the library's tree (`tree.rs` already computes
+   it); (b) treat it as relative under question 1. **Recommended: (a)**, with `~user` forms not expanded and so
+   refused under question 1. `~/Roms` is what a player types on a handheld's keyboard, and the screensaver's folder already
+   reads `~` this way in the same settings file, so a second meaning for the same character there would be the worse
+   inconsistency.
+3. **A file value.** Today harmless (§7.3). Options: refuse at entry when the typed path names an existing file, or
+   change nothing. **Recommended: refuse at entry**, since the message costs one check and a row that accepts a file
+   for a folder invites the question of what it did with it; no change at read.
+4. **Clearing a setting.** A typed blank is not committed (`PathPickerRow.CommitTyped`), so in Game Mode a folder
+   setting, once set, cannot be returned to its default except by typing another path or editing the file; the
+   handheld's `genesis` could not have been undone from where it was typed. Options: (a) an opt-in extension of
+   `PathPickerRow` in LunaP, a minor version, under which a committed blank box raises `PathPicked` with an empty
+   string, used by the rows that have a default; (b) a separate "Use Default" action beside each such row; (c) nothing.
+   **Recommended: (a)**: it is a capability of the existing surface rather than a new control, and the empty string is
+   already what "unset" means to every reader (§7.4).
+
+### 7.6 Tests
+
+- `SettingFoldersTests` (`EmuSen.WiseMan/Galaxia/`): blank values (null, empty, spaces, a tab, a no-break space) take
+  each setting's default; a named value is passed on as written; the state list's folder is `SaveLibrary`'s for every
+  kind of value; the shell reads a whitespace `RomDirectory` as no library. Run on both halves.
+- `SettingPathsOpenTests`: §7.3's measurement in a child process whose home and working folder belong to the test, and
+  the eight open cases of §7.5's questions 1 and 2, skipped unless `EMUSEN_SETTING_PATHS_OPEN=1`. The child runs on
+  the half its parent runs on, and the report it writes names the half.

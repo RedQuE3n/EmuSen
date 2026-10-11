@@ -107,7 +107,7 @@ namespace EmuSen.DianaSh.DianaSh.Etc
 
         // The configured ROM library, the one place outside the root a path may name, and only for `core` - see `man hier`.
         public static string? RomLibraryDirectory =>
-            EmuSen.Galaxia.Models.AppSettings.Load().RomDirectory is { Length: > 0 } configured ? Path.GetFullPath(configured) : null;
+            SettingFolders.Roms(EmuSen.Galaxia.Models.AppSettings.Load()) is { } configured ? Path.GetFullPath(configured) : null;
 
         // A ROM path: an absolute one inside the library as it is, anything else as TryResolve takes it - see `man core`.
         public static bool TryResolveRom(string requestedPath, out string resolvedPath)

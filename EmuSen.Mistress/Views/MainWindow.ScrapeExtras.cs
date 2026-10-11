@@ -102,7 +102,7 @@ namespace EmuSen.Mistress.Views
         // The files a cleanup would move; nothing when the ROM folder is missing, so an unplugged drive never reads as every game deleted.
         public IReadOnlyList<string> OrphanedMedia()
         {
-            if (_appSettings.RomDirectory is not { Length: > 0 } roms || !Directory.Exists(roms) || !OpenMediaStore()) return [];
+            if (SettingFolders.Roms(_appSettings) is not { } roms || !Directory.Exists(roms) || !OpenMediaStore()) return [];
             return _mediaStore!.Orphans(StoreNames());
         }
 

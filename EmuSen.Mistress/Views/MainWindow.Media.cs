@@ -24,7 +24,7 @@ namespace EmuSen.Mistress.Views
         private IReadOnlyList<MediaItem> _shownMedia = Array.Empty<MediaItem>();
         private LunaAction _playMedia = null!, _deleteMedia = null!, _mediaProvenance = null!;
 
-        private string StateDirectory => string.IsNullOrWhiteSpace(_appSettings.StateDirectory) ? DataStore.SaveStates : _appSettings.StateDirectory;
+        private string StateDirectory => SettingFolders.States(_appSettings);
 
         private void SetUpMediaViews()
         {

@@ -90,5 +90,14 @@ namespace EmuSen.Mistress.Library
         // What the file for a game's art is called when Mistress writes one: libretro's spelling, in the console's folder.
         public static string PathFor(string directory, string console, string romStem, string extension) =>
             Path.Combine(directory, console, Unsafe.Replace(romStem, "_") + extension.ToLowerInvariant());
+
+        // Add Cover Art's copy: the picture is only read, and the copy lands where PathFor names.
+        public static string Place(string directory, string console, string romStem, string picture)
+        {
+            string target = PathFor(directory, console, romStem, Path.GetExtension(picture));
+            System.IO.Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(picture, target, overwrite: true);
+            return target;
+        }
     }
 }

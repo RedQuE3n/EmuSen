@@ -118,6 +118,10 @@ GHDL nor nvc [M]; the core is mostly VHDL by GitHub's count (1.90 MB, against 0.
 so the Verilator Nephrite unpacked cannot run it. The simulation route needs GHDL or nvc installed at stage 4 with the
 tester's leave, or a device.
 
+*Decided 2026-10-11:* of each FPGA core only its README, licence, file names, top-level port declarations and
+simulation folder's scripts and testbench loading may be read; under that rule PSX_MiSTer (`cd17b5a`) and Laxer3a's
+PS-GPU and PS-GTE are cloned, GHDL 6.0.0 is unpacked user-local, and `Diamond_FPGA_Referees.md` records the rest.
+
 ### 1.6 The black-box references
 
 The probe's libretro backend (`EmuSen.WiseMan/Reference/probe-rs`) already passes a path to cores that need one

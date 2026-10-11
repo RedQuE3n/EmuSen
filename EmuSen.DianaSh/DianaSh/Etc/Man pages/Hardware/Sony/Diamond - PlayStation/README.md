@@ -62,6 +62,9 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   cores, their lineages weighed, each open dispute's program run on all of them, the rulings (D-0's line witnessed and
   its interlaced PAL field changed, D-2's table shape confirmed, D-7's base vertex and D-8's flip start changed, the
   rest still open), the referees scored against the console logs, and the reading log.
+- [`Diamond_FPGA_Referees.md`](Diamond_FPGA_Referees.md) — the FPGA cores as black-box referees, written 2026-10-11:
+  the access rule decided that day, PSX_MiSTer and Laxer3a's PS-GPU and PS-GTE pinned, GHDL installed user-local, how
+  each is driven, the calibration and the disputes each is to referee (not yet run), and the reading log.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the naming scheme, and `Man pages/Hardware/README.md` for how this
 documentation set is organized.

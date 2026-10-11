@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 6u
+#define EMUSEN_PLATFORM_ABI_VERSION 7u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -264,6 +264,15 @@ int64_t emusen_galaxia_cheat_names(uint8_t *out, size_t len);
 
 /* Whether a cheat list may have this name: 1 or 0. It is checked and never rewritten. */
 int32_t emusen_galaxia_cheat_name_valid(const uint8_t *name, size_t name_len);
+
+/*
+ * A game's own cheat list, as a frontend keeps it (EmuSen_Config_Reference.md, section 3.4b): its name, then its
+ * category, each followed by a NUL; the file is <name>.json in that category. The name is the ROM path's file name
+ * without its extension and the category cheats/<console>, each character a file name cannot hold made '_', since
+ * neither was typed. A null, blank or unusable console gives the flat category cheats. ABSENT for a null or empty
+ * path, or one whose name is blank, "." or "..".
+ */
+int64_t emusen_galaxia_cheat_game_list(const uint8_t *console, size_t console_len, const uint8_t *rom_path, size_t rom_path_len, uint8_t *out, size_t len);
 
 /* ---- Galaxia: the error log (EmuSen_Settings_Reference.md, section 4.70) ---- */
 

@@ -226,6 +226,23 @@ pub unsafe extern "C" fn emusen_galaxia_cheat_name_valid(name: *const u8, len: u
     flag(unsafe { text(name, len) }.map(|name| cheats::is_valid_name(Style::HOST, name)))
 }
 
+/// A game's own cheat list as a frontend keeps it: its name, then its category, each followed by a NUL. `ABSENT` for a ROM path that gives no name a list may have.
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_cheat_game_list(console: *const u8, console_len: usize, rom_path: *const u8, rom_path_len: usize, out: *mut u8, len: usize) -> i64 {
+    let result = || -> Result<Vec<u8>, i32> {
+        let (console, rom_path) = (unsafe { text(console, console_len) }?, unsafe { text(rom_path, rom_path_len) }?);
+        let list = cheats::game_list(Style::HOST, console, rom_path).ok_or(status::ABSENT)?;
+        Ok(join_nul(&[list.name, list.category]))
+    };
+    match result() {
+        Ok(joined) => unsafe { put(&joined, out, len) },
+        Err(status) => status as i64,
+    }
+}
+
 /// The error log's folder: the one given, else the `LogDirectory` setting when it can be made, else the default. A settings file that will not load is reported.
 ///
 /// # Safety
@@ -388,6 +405,22 @@ mod tests {
         assert_eq!(suggest(suggest::NEAREST, "DPadUpp"), Ok("DPadUp\0".to_string()));
         assert_eq!(suggest(suggest::HINT, "qwertyuiop"), Ok(String::new()));
         assert_eq!(unsafe { emusen_galaxia_suggest_distance(b"chaet".as_ptr(), 5, b"cheat".as_ptr(), 5) }, 1);
+    }
+
+    #[test]
+    fn a_games_list_crosses_as_its_name_and_its_category() {
+        let list = |console: Option<&str>, rom_path: Option<&str>| {
+            let (console, console_len) = console.map_or((std::ptr::null(), 0), |c| (c.as_ptr(), c.len()));
+            let (rom_path, rom_path_len) = rom_path.map_or((std::ptr::null(), 0), |r| (r.as_ptr(), r.len()));
+            ask(|out, len| unsafe { emusen_galaxia_cheat_game_list(console, console_len, rom_path, rom_path_len, out, len) })
+        };
+        let separator = Style::HOST.separator();
+        assert_eq!(list(Some("SNES"), Some("/roms/Gamma.smc")), Ok(format!("Gamma\0cheats{separator}SNES\0")));
+        assert_eq!(list(None, Some("Gamma.smc")), Ok("Gamma\0cheats\0".to_string()));
+        assert_eq!(list(Some(" "), Some("Gamma")), Ok("Gamma\0cheats\0".to_string()));
+        assert_eq!(list(Some("SNES"), None), Err(status::ABSENT as i64));
+        assert_eq!(list(Some("SNES"), Some("")), Err(status::ABSENT as i64));
+        assert_eq!(unsafe { emusen_galaxia_cheat_game_list(b"\xFF".as_ptr(), 1, b"a".as_ptr(), 1, std::ptr::null_mut(), 0) }, status::BAD_STRING as i64);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # EmuSen — the platform in Rust: Galaxia, Endymion and Serenity's Vulkan half
 
-*This revision: the tenth, 2026-10-10: Endymion and Serenity's slang half moved to state 2, the library their default and their C# one variable away, through Galaxia's switch (§19). The ninth, the same day: the four defects step 4b's parity class found in the C# slang runtime shown and fixed in the C#, each by a test that failed first (§18); Q27 to Q30 decided (§9). The eighth, the same day: step 4b built, Serenity's Vulkan device and chain in Rust behind the same switch, still off, with the lent readback, the bench's pictures the same from both and the validation layer silent on the library's device (§17); Q25 and Q26 decided (§9). The seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
+*This revision: the eleventh, 2026-10-10: `GameCheats`' naming of a game's own cheat list given its Rust half, a new export and interface 7, with its parity case and seeded faults (§20). The tenth, the same day: Endymion and Serenity's slang half moved to state 2, the library their default and their C# one variable away, through Galaxia's switch (§19). The ninth, the same day: the four defects step 4b's parity class found in the C# slang runtime shown and fixed in the C#, each by a test that failed first (§18); Q27 to Q30 decided (§9). The eighth, the same day: step 4b built, Serenity's Vulkan device and chain in Rust behind the same switch, still off, with the lent readback, the bench's pictures the same from both and the validation layer silent on the library's device (§17); Q25 and Q26 decided (§9). The seventh, 2026-10-09: step 4a built, Serenity's presets, sources, parameters, compiler, reflection and SPIR-V cache in Rust behind a switch of their own that is off, over the Shaderc and the SQLite the program already ships (§16). The sixth, 2026-10-08: step 3b built, Endymion's device half (the audio players, the pad manager's devices and the simulated pads) in Rust behind Endymion's switch, still off (§14), with the open items gathered in §15. The fifth, the same day: step 2c, Galaxia moved to state 2, the library its default and its C# one variable away (§13). The fourth, the same day: step 3a built, Endymion's resampler, rate control, port router and seat rules in Rust behind a switch of their own that is off (§12). The third, the same day: step 2b built, config files, the models, the error log and the suggestion text behind the same switch (§11), which completes Galaxia's code; its gate is step 2c. The second, 2026-10-07: step 2a, the library and Galaxia's tree, names and bytes (§10). The first, the same day, was a design with nothing built. It plans the
 first part of `EmuSen_Stack.md` §6, the runtime above the cores moving to Rust, for the three platform components the
 tester chose to begin with. Every claim about the code is cited to a file, read on `WiseMan` at `eec4ee5d`. Claims
 marked **measured** were measured on 2026-10-07; claims marked **argued** are reasoning that a later step must prove,
@@ -363,7 +363,8 @@ under the one variable, and Serenity's slang half, the device and the chain with
 
 - **The tree:** `ConfigRoot` (the walk to `EmuSen.sln` or `.dianashroot`, the macOS bundle rule, the seed directory;
   `EmuSen_Galaxia.md` §3.4), `ConfigStore`, `DataStore`, both overrides and the legacy directory.
-- **The names:** `SaveLibrary`, all five rules (`EmuSen_Galaxia.md` §5).
+- **The names:** `SaveLibrary`, all five rules (`EmuSen_Galaxia.md` §5); and, *added 2026-10-10*, `GameCheats`' name
+  for a game's own cheat list (`EmuSen_Config_Reference.md` §3.4b, here §20).
 - **The bytes:** `AtomicFile`, `DataMigration` (copy, never move, never overwrite), `RomHash.Md5`, and `ErrorLog`'s
   file: its daily name, its fourteen-day pruning and its 8 MB bound.
 - **Config files, in two tiers**, because of §1's three foreign vocabularies:
@@ -2336,3 +2337,95 @@ as Galaxia's do. They still report and do not gate.
 
 **Not done, and not claimed:** Windows and macOS, as before; and a published program run without its library, which
 the build copies above stand in for.
+
+---
+
+## 20. `GameCheats`' naming in Rust, 2026-10-10: the debt §3.4b recorded
+
+`GameCheats` (`EmuSen_Config_Reference.md` §3.4b) was added to Galaxia's C# after Galaxia reached state 2, with
+one rule of its own and no counterpart in the crate. It now has one, built as every other rule of Galaxia was:
+reproduced in `Platform/galaxia`, exported through the C layer, called by the facade while the switch has chosen
+the library, the C# kept beside it as `GameCheats.Managed`, and the two held together by the parity class. Measured
+on the development desktop, as the steps before it; nothing has run on Windows or macOS.
+
+### 20.1 What is the rule, and what is composition
+
+The rule is the name: from a console and a ROM path, the list's name (the ROM's file name without its extension)
+and its category (`cheats/<console>`), each character a file name cannot hold made `_`, a console that is null,
+blank or no usable folder name falling back to the flat `cheats`, and no list at all for a path that gives a blank
+name, `.` or `..`. That is what moved. Two things stayed C#, and the reason is the same for both: neither is a rule
+of its own. `Load`'s preference for the console's file over the flat file of an earlier build is two `ConfigFile`
+calls and a conditional; `SaveIfChanged` is a `Load`, a comparison of two documents as System.Text.Json writes
+them, and a `Save`. `ConfigFile` already reaches the library for every read and write, so each of these runs on the
+library's bytes whenever the switch has chosen it. Porting them would put a second owner on the comparison of two
+cheat lists, which today has one, the C# serializer the facade already uses to hand a list to the library (§11.2).
+A Rust DianaSh that keeps a game's list composes `game_list` with `config::load` and `config::save` the same way.
+
+| What | Where |
+|---|---|
+| `game_list`, `GameList` and `sanitized`, with four unit tests on both platforms' characters | `Platform/galaxia/src/cheats.rs` |
+| `emusen_galaxia_cheat_game_list`: the name, then the category, each followed by a NUL; `ABSENT` for no list | `Platform/platform/src/galaxia_config.rs`, `include/emusen_platform.h` |
+| The C layer: 24 exports of Galaxia's second half, 46 of Galaxia's with the library's own, 173 in the library; the interface's version is 7 | the same |
+| The binding and the facade | `EmuSen.Galaxia/Native/GalaxiaNative.cs` (`CheatGameList`), `Models/GameCheats.cs` |
+| The parity case | `EmuSen.WiseMan/Galaxia/GalaxiaParityTests.Config.cs`, `A_games_list_is_named_as_the_csharp_names_it` |
+
+**The facade.** `GameCheats` now holds the category the rule gave rather than the console, so `File` is one
+expression on either side and the flat case is the category `cheats`, not a second branch. `GameCheats.For` asks
+the library when `GalaxiaNative.Active` and both texts cross (§11.2: text that is not valid UTF-16 has no UTF-8, and
+is answered by the C#, as `CheatFile.IsValidName` does). The C# rule moved into `Managed` with one change of
+necessity: it judges names with `CheatFile.Managed.IsValidName`, where it called the facade before, so that the C#
+side is C# throughout. No answer can hold a NUL, which would split the list that crosses: a NUL is a character no
+file name holds on either platform, so it has been mended to `_` before the answer is built.
+
+**The version.** §3.2 gives the interface one number, matched exactly, and no minor part, so there is no such thing
+as a minor bump here: any change to the export set moves the number, as each step from 1 to 6 did. An addition alone
+would be harmless to an older host, which never asks for the new export, but the facade resolves every export it
+declares when the library loads and refuses one that lacks any (§3.1), so the number is what names that set. The
+interface is 7, in `lib.rs`, the header and `PlatformLibrary.InterfaceVersion`.
+
+### 20.2 The parity case, and its seeded faults
+
+The case asks both sides for 55,812 lists: 22 consoles (null, empty, white space of three kinds, `.`, `..`, `...`, a
+control character, separators of both platforms, a colon, a NUL, letters outside ASCII and outside the first plane)
+against 30 paths (no extension, several periods, a final period, a name that is only an extension, `..` and `....`,
+a NUL, the characters Windows refuses, Windows's drive, device and UNC spellings, which on Linux are plain names);
+6,000 pairs built from §10.5's seeded path parts, which on Windows add drives and shares; and every character below
+U+3000 alone and inside a word, as a console and in a ROM's name and extension. Each answer is compared as its
+category and its name, or as no list. The first run found no difference.
+
+**Fourteen faults were seeded,** each built into the library, the case and the crates' tests run against it, and the
+file put back:
+
+| Fault | Parity case | Crates' tests |
+|---|---|---|
+| the console not mended | caught | caught |
+| the ROM's name not mended | caught | caught |
+| Windows's characters on every platform | caught | caught |
+| mended with `-` | caught | caught |
+| the extension kept | caught | caught |
+| the name cut at its first period | caught | caught |
+| a name of `.` or `..` accepted | caught | caught |
+| the console's folder not judged after mending | caught | caught |
+| the flat category for every console | caught | caught |
+| the name and the category crossed in the other order | caught | caught |
+| the blank console not refused before the folder is judged | missed | missed |
+| an empty path not refused before its name is taken | missed | missed |
+| the category joined with `/` and not `Path.Combine` | missed | caught |
+| no list answered as an empty text and not `ABSENT` | missed | caught |
+
+The four the parity case misses change nothing it can see on Linux, each for a reason that can be stated. The first
+two are equivalent in both halves: a blank console mends to a blank folder and an empty path to an empty name, and
+each is then refused by the name check that follows, so the early refusals, kept because the C# has them, decide
+nothing. The third differs only where the separator is not `/`, which the crate's test holds in Windows's style.
+The fourth is the same answer to the facade, which reads an empty list and `ABSENT` alike as no list; the C layer's
+own test holds the header's word.
+
+### 20.3 What was tested
+
+| Run | Default (the library) | `EMUSEN_GALAXIA_NATIVE=0` (the C#) |
+|---|---|---|
+| `GalaxiaParityTests` with `GameCheatListTests`, `ActiveCheatsApplyAndSaveTests` and `MainWindowCheatListTests` | 77 pass | 77 pass |
+
+`cargo test` in `Platform/` passes 105 for `emusen-galaxia` and `emusen-platform` (82 and 23), the five new cases among them,
+and the header compiles clean as C99 and as C++17 under `-Wall -Wextra -pedantic -Werror`. **Not done:** Windows and
+macOS, as before; the Windows rows above are argued from the crate's tests in that style, not run.

@@ -16,6 +16,8 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
 (D-21); D-22, SIO0's timing, is here.
 *Since amidog's GTE test was read (2026-10-11)*, D-13, D-14 and D-16 in `BlackMoon_GTE.md` §12 carry its evidence and
 the changes it led to; no new number was taken for it.
+*2026-10-11*: D-20 and D-21 settled by the test's own model and a referee step; DICR's bit 6,
+which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
 
 ## The rules this log keeps
 

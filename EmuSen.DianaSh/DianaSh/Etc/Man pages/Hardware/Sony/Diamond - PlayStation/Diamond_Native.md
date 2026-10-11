@@ -756,7 +756,7 @@ PCSX-ReARMed); their logs were not read.
 |---|---|---|---|---|
 | `exceptions.s`, CAUSE after twelve exceptions | CE the opcode's low two bits on every one; 12 taken | the same on all eleven it took; **no CpU for LWC2 with CU2 clear** | the first three, then no address error on misaligned LW, LH, SH, SW and no CpU for SWC3, MFC2, LWC2: 5 taken | RI for ADD's overflow, then stops |
 | `loads.s`, the load delay's corners | a second load cancels the first (55h); the instruction's own write wins; LWL/LWR merge with the pending value; MFC0 through the delay cancels a pending load | the same, all eight | the same, all eight | the first load lands (11111111h); MFC0's case reads 0 |
-| `cop0-garbage.s`, MFC0 of 16–31 | 0 | values with a period of eight registers (10800h, 0, 304h, C1h, 304h, 1F800000h, 8, 4), and 10800h after a delay or after EPC | 0 | 0 |
+| `cop0-garbage.s`, MFC0 of 16–31 | 0 | values with a period of eight registers (10800h, 0, 304h, C1h, 304h, 1F800000h, 8, 4), and 10800h after a delay or after EPC; *read again 2026-10-11 (`Diamond_Referees.md` §4.12): the registers left unchanged, those being the program's own earlier values* | 0 | 0 |
 | `multiply.s` (D-2) | §11.14 | +2 cycles on every case | 1 on every case: no latency | 0: no timing |
 
 `BlackMoon_R3000.md` §8 and §10 record what each means for the processor.

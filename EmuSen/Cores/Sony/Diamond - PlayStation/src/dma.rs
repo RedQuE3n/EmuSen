@@ -90,7 +90,8 @@ impl Dma {
             0x70 => self.dpcr = value,
             0x74 => {
                 let flags = self.dicr & 0x7F00_0000 & !(value & 0x7F00_0000);
-                self.dicr = flags | value & 0x00FF_807F;
+                // Bits 0-5, 15 and 16-23 are kept; bit 6 reads zero (Diamond_Records.md §16.2).
+                self.dicr = flags | value & 0x00FF_803F;
                 return self.recompute();
             }
             o if o < 0x70 => {

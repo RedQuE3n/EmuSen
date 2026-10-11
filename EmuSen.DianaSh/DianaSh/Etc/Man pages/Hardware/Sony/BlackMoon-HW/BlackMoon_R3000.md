@@ -238,7 +238,9 @@ touched "in the next 2 cycles or so" after an access, which it calls not underst
 
 MFC0 reads BPC, BDA, TAR, DCIC, BadVaddr, BDAM, BPCM, SR, CAUSE, EPC and PRId; registers 0–2, 4 and 10 raise RI
 (psx-spx "cop0r0..r2, cop0r4, cop0r10"); 16–31 read 0 [C: psx-spx calls them "garbage" whose value follows the last
-valid read and then drifts, which it does not explain; open]. MTC0 writes BPC, BDA, BDAM, BPCM; DCIC's R/W bits
+valid read and then drifts, which it does not explain; open]. *Revised 2026-10-11 by the referee step of §10*: still
+0 and no exception, now a choice the referees leave standing rather than one they confirm: none of five follows
+psx-spx's description, and they answer in three ways. MTC0 writes BPC, BDA, BDAM, BPCM; DCIC's R/W bits
 (`FF80F03Fh`, psx-spx's table); SR's mode stack, IM, IsC, SwC, PZ, BEV, RE and the four CU bits (`F247FF3Fh`), its
 status and zero bits left; CAUSE's two software bits only; and ignores TAR, BadVaddr, EPC, PRId and the absent
 registers. CFC0 and CTC0 raise RI (psx-spx: the control registers "aren't used in any MIPS processors"). RFE pops the
@@ -256,9 +258,10 @@ mode stack, KUo and IEo left as they were. SwC is held and has no effect, as psx
   the GTE's flag reading false (psx-spx "GTE Operation": "jump never ... jump always"); BC0x, BC1x and BC3x the same
   with their CU bit set [A].
 - Coprocessors 1 and 3, absent on the PlayStation, run with their CU bit set and do nothing: MFC and CFC load 0 [C],
-  LWC reads its word and discards it [A: the processor addresses memory for a coprocessor load], SWC writes nothing
-  [C: no coprocessor drives the data]; ps1-tests' `cpu/cop` shows that COP1 and COP3 raise nothing with CU1 or CU3 set
-  and CpU without [R].
+  LWC reads its word and discards it [A: the processor addresses memory for a coprocessor load], ~~SWC writes nothing
+  [C: no coprocessor drives the data]~~ *since 2026-10-11* SWC0, SWC1 and SWC3 store a word of zero on the bus (D-21:
+  the store is a console's, by amidog's expectations; its value is one referee's); ps1-tests' `cpu/cop` shows that COP1
+  and COP3 raise nothing with CU1 or CU3 set and CpU without [R].
 
 ### 6.3 Cache isolation and the debug unit
 
@@ -269,7 +272,10 @@ mode stack, KUo and IEo left as they were. SwC is held and has no effect, as psx
   a PC matching BPC under BPCM sets DB and PC; with DE, DAE and DR or DW, a load or store address matching BDA under
   BDAM sets DB, DA and R or W. With TR set either becomes an exception, ExcCode 9, at `80000040h` (or `BFC00140h`),
   taken before the fetch or before the access [A: psx-spx says where it jumps, not when in the instruction].
-  Without TR only the status bits are set. Trace (TE) and the jump redirection bits 12–13 are not modelled; psx-spx
+  Without TR only the status bits are set. *Revised 2026-10-11 by D-20*: KD or UD is chosen by the address compared,
+  KD when its bit 31 is set and UD when it is clear, not by the mode; the data address compared is the one the access
+  puts on the bus, LWL's and SWL's aligned word; the comparison comes first and sets the status bits even where an
+  address error then follows, the address error takes precedence over the break, and the break over a bus error. Trace (TE) and the jump redirection bits 12–13 are not modelled; psx-spx
   describes the first in one line and calls the second "more or less unusable".
 
 ## 7. The project's own cases
@@ -284,7 +290,9 @@ interlock by rs and DIV's; cache isolation; the debug unit's PC and data breakpo
 sequence; and the observer (its stop, each stored byte with its space and the storing instruction's address, a call,
 a return, an exception's entry as `kind::BRK` and an interrupt's as `kind::IRQ`). They grade the readings of §5 and
 §6 against themselves, not against the hardware: the hardware's word on them is stage 3's, through amidog's and
-ps1-tests' programs.
+ps1-tests' programs. *Since D-20's and D-21's second steps (2026-10-11)* the file holds 24 cases, among them the
+debug unit's mode by the address, its bus address for LWL and SWL, its comparison before the address error, and
+SWC0's, SWC1's and SWC3's store.
 
 ## 8. The disputes log
 
@@ -430,7 +438,7 @@ In the shape of `Diamond_Disputes.md`. Each entry's evidence and rule; the proce
 - **Pinned by:** `a_bus_error_and_a_debug_break_leave_ce_zero`.
 - **Implemented in:** the same commit as D-17.
 
-### D-20. The debug unit's breaks: which accesses match, in which mode, and what a match on an access that bus-errors does; open
+### D-20. The debug unit's breaks: KD or UD by the compared address's bit 31, the address the access puts on the bus, the comparison before the address error; ~~open~~ settled by the test's own model
 
 - **Opened:** 2026-10-11, by the 7,680 cases of `psxtest_cpx` BREAK that remain after D-17 to D-19 (`Diamond_Pad.md`
   §5.1), every load and store form, every LWL/LWR/SWL/SWR byte offset, and the PC break.
@@ -452,8 +460,50 @@ In the shape of `Diamond_Disputes.md`. Each entry's evidence and rule; the proce
   and records what is taken, run against the console's expectations through this test.
 - **Depends on it:** debuggers on the console, cheat devices; no game is known to use the unit.
 - **Pinned by:** nothing yet. **Implemented in:** nothing yet.
+- **The second step, 2026-10-11: the test's own model read.** The cases' parameters are not printed, but the program
+  computes each case's wanted record in its own code, which was disassembled from RAM while it ran (the program is
+  packed; its code was read only as Diamond's memory held it). The routine that runs one case is given DCIC's value
+  with the status bits it expects on a match, the instruction (one of 33 forms: LB, LBU, LH, LHU, LW, LWL and LWR at
+  each byte offset, LWC0 to LWC3; SB, SH, SW, SWL and SWR at each offset, SWC0 to SWC3; and the PC), its kind (load, store or PC), its width, the address,
+  BDA and BDAM, BPC and BPCM; a hook on its entry in a copy of the probe's runner, never in the tree, listed all
+  112,320 calls [M]. Its rules, in the order the code applies them:
+  1. *Match.* PC: PCE, and `((pc XOR BPC) AND BPCM) = 0`. Load: DAE and DR; store: DAE and DW; and `((a XOR BDA) AND
+     BDAM) = 0` with `a` the effective address for every form but LWL and SWL, whose `a` is the effective address with
+     its low two bits cleared (the table the code jumps through for the sixteen LWL/LWR/SWL/SWR forms adds the byte
+     offset to the base and clears the low bits only for LWL and SWL).
+  2. *Mode.* A match counts when DE and **KD are set for an address whose bit 31 is set, or DE and UD for one whose bit
+     31 is clear**: the code tests the address's top bit, not SR; every case runs in kernel mode (SR F0000000h), so a
+     kernel-mode store to 001F0000h or 401F0000h answers to UD. A counted match sets the status bits.
+  3. *Address error.* A word access with either low bit set, a halfword access with bit 0 set, or a misaligned PC,
+     takes AdEL or AdES with BadVaddr and the opcode's CE (D-19), and not the break; the status bits set by 2 stay set.
+  4. *Break.* A counted match with TR set takes ExcCode 9 at 80000040h, CE 0, whatever the address meets.
+  5. *Bus error.* An address whose top three bits are not 000, 100 or 101 (so 2xxxxxxxh to 7xxxxxxxh and KSEG2) takes
+     DBE (IBE for the PC) at 80000080h, CE 0, with the status bits of 2.
+  SWC0, SWC1 and SWC3 are stores in all five steps (D-21), LWC0 to LWC3 loads.
+- **Evidence weighed** [A]. The model is the test author's, and the TTY's wanted values are its output; they are taken
+  as a console's expectations as D-17 to D-19 took the other groups' (`Diamond_Pad.md` §5), the same rung.
+  It stays open where the cases do not reach: user mode (where every kernel address faults first, so only rule 2's UD
+  half can show), the trace bit, and LWL's and SWL's own address with a mask that keeps the low bits; the mode rule is
+  stated by the code but measured only in kernel mode. psx-spx's "Break in kernel mode" and "Break in user mode" read
+  naturally as SR's mode, which the test contradicts for kernel-mode accesses to user addresses. **Referee:** not
+  consulted: the test waits for Start, which the driver does not press, and the rules are the test's own.
+- **Test program:** `psxtest_cpx` 1.1 BREAK, run with Start at frame 400 for 12,000 frames on the open kernel, its
+  TTY drained frame by frame (the TTY space holds 64 KiB, which BREAK's 7,680 failing cases overflow). Before: 7,680
+  cases failing. With all four rules (this entry's three and D-21's store): **0**, and BREAK's verdict OK. Reverting
+  one rule at a time [M]: the mode by SR, 5,052 cases fail; SWCz making no access, 2,436; the address error before the
+  comparison, 1,264; LWL and SWL compared at the effective address, 100. The rest of the program's groups, and
+  `psxtest_cpu` 1.3 (ALL DONE, every column OK or N/A, `Result: 00000101`), unchanged.
+- **Conclusion, the second step:** the five rules above, measured by a console's expectations; open for user mode and
+  the trace bit.
+- **Pinned by, since the second step:** `the_debug_unit_answers_to_kd_or_ud_by_the_address_segment`,
+  `lwl_and_swl_match_their_aligned_word_and_lwr_and_swr_their_address`,
+  `a_misaligned_access_that_matches_sets_the_status_bits_and_takes_the_address_error` (each failing before the
+  change), the two earlier cases rewritten for UD on a user address, and WiseMan's
+  `Amidogs_cpx_test_runs_from_its_menu_and_passes_every_group`.
+- **Implemented in, since the second step:** `blackmoon-r3000: the debug unit answers to KD or UD by the address, on
+  the bus address, before the address error (D-20); SWC0, SWC1 and SWC3 store (D-21)`.
 
-### D-21. SWC0, SWC1 and SWC3 with their CU bit set make a store on the bus, which can bus-error; what they store is not known
+### D-21. SWC0, SWC1 and SWC3 with their CU bit set make a store on the bus, which can bus-error; what they store is not known, and Diamond stores zero
 
 - **Opened:** 2026-10-11, by `psxtest_cpx` BREAK: 2,376 cases of SWC0, SWC1 and SWC3 to an address that meets no
   device, CU set, want DBE where Diamond's SWCz with z ≠ 2 makes no access (D-3 settled only when CpU is raised).
@@ -464,6 +514,36 @@ In the shape of `Diamond_Disputes.md`. Each entry's evidence and rule; the proce
   it would write an unknown value to RAM on any other address. A case storing to RAM would settle it.
 - **Depends on it:** nothing known.
 - **Pinned by:** nothing yet. **Implemented in:** nothing yet.
+- **The second step, 2026-10-11.** *What the console's expectations say* (D-20's model): SWC0, SWC1 and SWC3 are
+  stores to the debug unit (DW, the effective address) and to the bus (DBE where no device answers, at 401F0000h,
+  601F0000h and C01F0000h alike). They do not say what is stored: no BREAK case reads memory after a store.
+  *Test program:* `programs/swcz.s`, with CU0 to CU3 set: SWC0 of PRId (amidog's form), of SR and of an absent
+  register, SWC1 and SWC3 of two registers, each to its own word filled with 5A5A5A5Ah, with the GPR of the same number
+  holding a known value and the data bus last carrying a known word (a load before, or a store before, or two NOPs);
+  SWC2 of the GTE's VXY0 as the control; and SWC3, SW and SWC0 to C0000000h, where no device answers, recording the
+  CAUSE taken.
+  *Referee* (`Diamond_Referees.md` §4.12) [M]:
+
+  | | SWCz to RAM (10 cases) | SWC2 | SWC3, SW, SWC0 to C0000000h |
+  |---|---|---|---|
+  | DuckStation | 0 in all ten | 12345678h | DBE, DBE, DBE |
+  | Beetle PSX | unchanged | 12345678h | none, none, none |
+  | SwanStation | unchanged | 12345678h | DBE with CE 3, none, none |
+  | PCSX-ReARMed | unchanged | 12345678h | DBE, none, DBE |
+  | PCSX-Redux | stops before writing its done word, as it stops at an address error (§4.11 of that page) | — | — |
+  | Diamond before | unchanged | 12345678h | none, DBE, none |
+  | Diamond after | 0 in all ten | 12345678h | DBE, DBE, DBE |
+
+  *Weighed* [A]. Only DuckStation makes the store a console makes by amidog's expectations, and only it takes DBE on
+  the plain SW to KSEG2 that every case of the test expects; the three that leave RAM unchanged make no store at all
+  (Beetle PSX takes no bus error even for SW), so they model no store rather than a store of the old contents. None
+  stores the GPR, PRId or the bus's last word.
+- **Conclusion, the second step:** the store is made, with the CU bit's check of D-3 and the debug unit's comparison of
+  D-20, and can bus-error: measured by a console's expectations. **Its value is DuckStation's, zero: the strongest
+  single witness, since it alone models the store; open.** A store to RAM on a console would settle it; none is used.
+- **Pinned by, since the second step:** `swc0_swc1_and_swc3_store_on_the_bus` (failing before the change) and
+  Diamond's `swcz_stores_zero_on_the_bus`.
+- **Implemented in, since the second step:** the same commit as D-20's second step.
 
 ## 9. The gate (G1's first half)
 
@@ -520,6 +600,19 @@ pending register is among them is not shown; the load delay's corners stand conf
 as its verdicts reach. **`psxtest_cpx` 1.1** draws its menu and runs only when Start is pressed, so CE on every
 exception and the garbage registers wait on the pad (stage 6).
 
+*The referee step on the garbage registers, 2026-10-11* (`Diamond_Referees.md` §4.12). `cop0-garbage.s` was given
+its own exception vector, which counts what it takes, and ten more cases: a garbage read straight after a register
+of a known value (BPC 11111111h, BDA 22222222h, BPCM 33333333h, BDAM 44444444h, SR, DCIC), after one NOP and eight,
+after a loop of 1,000, and after an MTC0. psx-spx predicts the known values there. The referees [M]: **DuckStation**
+raises a reserved-instruction exception on every one of the 28 reads (CAUSE 28h), so the registers keep what they held;
+**Beetle PSX** takes none and leaves the register unchanged (its pattern of stage 3 was the program's own earlier
+register values: here 08004088h, the vector's word, in t1 throughout); **SwanStation, PCSX-ReARMed and PCSX-Redux**
+read 0 everywhere and take none; none reads a known value after its register. SingleStepTests' r3000 suite has no
+coprocessor-0 file. Ruled [A]: **no exception**, as psx-spx says and three lineages agree (PCSX, Mednafen, and
+SwanStation's state of the DuckStation lineage), DuckStation alone against; **the value stays 0** [C], the reading two
+lineages share, while psx-spx's own account, which names no rule and no referee reproduces, is not modelled. Open on
+the hardware. Pinned by `the_garbage_registers_read_zero` (30 words: 28 reads, no exception).
+
 *Answers with the pad, 2026-10-11* (`Diamond_Pad.md` §5). **CE**: answered by `psxtest_cpx`, the opcode's bits on an
 address error, zero on DBE and on the debug unit's breaks (D-19). **A second load cancelling the first**: answered by
 `psxtest_cpu`, which reads the register in the second load's delay slot at 441 places and passes; a build in which the
@@ -530,7 +623,8 @@ The items below stand as written at stage 2.
 
 - Where the I-cache and scratchpad live (§2); the isolated calls' answers.
 - D-2's measurement, and §5.5's unmodelled points.
-- The garbage registers' values; SWC0's and LWC0's bus behaviour; the trace break.
+- The garbage registers' values; SWC0's and LWC0's bus behaviour; the trace break. *2026-10-11*: SWC0's is D-21's
+  second step; LWC0 to LWC3 load their word, as amidog's DBE cases have it; the garbage registers below.
 - The load-after-load corner of §5.3 against amidog's "delayed and advanced load" tests, which its README names.
 - The timing of a fetch on an interrupt (§5.1) against ps1-tests' `access-time` once the bus counts it.
 

@@ -24,6 +24,7 @@ impl State for R3000 {
             w.u8("Register", r.load.register.unwrap_or(0));
             w.u32("Value", r.load.value);
         });
+        w.u64("HiLoReady", self.hilo_ready);
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
@@ -39,7 +40,9 @@ impl State for R3000 {
         let pending = r.bool()?;
         let register = r.u8()?;
         g.load = LoadDelay { register: pending.then_some(register), value: r.u32()? };
+        let hilo_ready = r.u64()?;
         self.regs = g;
+        self.hilo_ready = hilo_ready;
         Ok(())
     }
 }
@@ -54,7 +57,7 @@ mod tests {
         R3000::new().write_state(&mut w);
         assert_eq!(
             w.into_layout(),
-            "0 128 u32[32] R\n128 4 u32 Hi\n132 4 u32 Lo\n136 4 u32 Pc\n140 40 u32[10] Cop0\n180 1 bool Branch.Slot\n181 1 bool Branch.Taken\n182 4 u32 Branch.Target\n186 1 bool Load.Pending\n187 1 u8 Load.Register\n188 4 u32 Load.Value\n"
+            "0 128 u32[32] R\n128 4 u32 Hi\n132 4 u32 Lo\n136 4 u32 Pc\n140 40 u32[10] Cop0\n180 1 bool Branch.Slot\n181 1 bool Branch.Taken\n182 4 u32 Branch.Target\n186 1 bool Load.Pending\n187 1 u8 Load.Register\n188 4 u32 Load.Value\n192 8 u64 HiLoReady\n"
         );
         let mut cpu = R3000::new();
         cpu.regs.r[31] = 0x8001_0000;
@@ -62,15 +65,16 @@ mod tests {
         cpu.regs.bdam = 0xFFFF_FFFF;
         cpu.regs.branch = BranchDelay { slot: true, taken: true, target: 0x8003_0000 };
         cpu.regs.load = LoadDelay { register: Some(0), value: 0x1234_5678 };
-        let mut buf = vec![0u8; 192];
+        cpu.hilo_ready = 0x1_0000_0024;
+        let mut buf = vec![0u8; 200];
         let mut w = StateWriter::new(&mut buf);
         cpu.write_state(&mut w);
-        assert_eq!(w.len(), 192);
+        assert_eq!(w.len(), 200);
         let mut back = R3000::new();
         back.read_state(&mut StateReader::new(&buf)).unwrap();
-        assert_eq!(back.regs, cpu.regs);
+        assert_eq!((back.regs, back.hilo_ready), (cpu.regs, cpu.hilo_ready));
         let before = back.regs;
-        assert!(back.read_state(&mut StateReader::new(&buf[..191])).is_err());
+        assert!(back.read_state(&mut StateReader::new(&buf[..199])).is_err());
         assert_eq!(back.regs, before, "a short block changes nothing");
     }
 }

@@ -1,30 +1,43 @@
 //! BlackMoon's R3000A, the MIPS I processor of the PlayStation's CPU, written from the MIPS manuals (IDT's R30xx
 //! Family Software Reference Manual) and psx-spx, and graded by SingleStepTests' r3000 suite. Later the PlayStation 2's
-//! I/O processor. The interface is BlackMoon_R3000.md §2; the oracle §3.
-//!
-//! Stage 1: the bus, the registers with both delay slots, the state block and the step's signature. No instruction
-//! executes until Diamond's stage 2 (`BUILT`).
+//! I/O processor. The interface is BlackMoon_R3000.md §2; the oracle §3; the build §5-§8.
 
 pub use emusen_native::debug::{Observer, Unobserved};
 
+#[cfg(test)]
+mod boundary;
+mod cop0;
+mod exec;
 mod state;
 #[cfg(test)]
 mod singlestep;
 
-/// Whether the processor executes; the single-step suite's processor test skips while it is false.
-pub const BUILT: bool = false;
+pub use cop0::{COP0, PRID_PLAYSTATION};
 
-/// The width of a data access.
+/// Whether the processor executes; the single-step suite's processor test skips while it is false.
+pub const BUILT: bool = true;
+
+/// The width of a data access. `Tribyte` is LWL's, LWR's, SWL's or SWR's three bytes, one access within a word.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Size {
     Byte = 1,
     Half = 2,
+    Tribyte = 3,
     Word = 4,
 }
 
 impl Size {
     pub fn bytes(self) -> u32 {
         self as u32
+    }
+
+    pub(crate) fn of(bytes: u32) -> Size {
+        match bytes {
+            1 => Size::Byte,
+            2 => Size::Half,
+            3 => Size::Tribyte,
+            _ => Size::Word,
+        }
     }
 }
 
@@ -34,11 +47,18 @@ impl Size {
 pub trait Bus {
     /// An instruction fetch of one word.
     fn fetch(&mut self, address: u32) -> u32;
-    /// A data read; the value in the low bits.
+    /// A data read of `size` bytes from `address`; the value in the low bits, anything above them ignored.
     fn read(&mut self, address: u32, size: Size) -> u32;
+    /// A data write of the low `size` bytes of `value` to `address`. `value` is the register as the processor drives
+    /// it, so a byte or halfword store carries the rest of the register above the datum (psx-spx, "CPU Load/Store").
     fn write(&mut self, address: u32, size: Size, value: u32);
-    /// Cycles spent inside the processor with no access: interlocks on HI/LO and on coprocessor 2.
+    /// A load or store while SR's IsC isolates the cache: it reaches the cache, never memory.
+    fn isolated_read(&mut self, address: u32, size: Size) -> u32;
+    fn isolated_write(&mut self, address: u32, size: Size, value: u32);
+    /// Cycles spent inside the processor with no access: the HI/LO interlock.
     fn idle(&mut self, cycles: u32);
+    /// The bus's clock in processor cycles, which the processor only reads, to time its multiplier.
+    fn cycles(&mut self) -> u64;
     /// The external interrupt request, as Cause's IP2 sees it.
     fn interrupt(&mut self) -> bool;
     /// Coprocessor 2's data registers (MFC2, MTC2, LWC2, SWC2), its control registers (CFC2, CTC2) and its commands;
@@ -100,15 +120,26 @@ pub enum Step {
     Instruction,
     /// An exception or interrupt was taken: its Cause code.
     Exception(u8),
+    /// The observer stopped the step before the instruction ran: its reasons.
+    Observed(u32),
 }
 
-/// The processor cannot step yet.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NotBuilt;
-
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct R3000 {
     pub regs: Registers,
+    /// The bus cycle at which the multiplier's result can be read; MFHI and MFLO wait for it.
+    pub hilo_ready: u64,
+    /// PRId, a constant of the chip.
+    pub prid: u32,
+    /// The processor number the observer is told, and the space its stores are reported in.
+    pub processor: usize,
+    pub space: u32,
+}
+
+impl Default for R3000 {
+    fn default() -> R3000 {
+        R3000 { regs: Registers::default(), hilo_ready: 0, prid: PRID_PLAYSTATION, processor: 0, space: 0 }
+    }
 }
 
 impl R3000 {
@@ -116,12 +147,19 @@ impl R3000 {
         R3000::default()
     }
 
-    pub fn step<B: Bus>(&mut self, bus: &mut B) -> Result<Step, NotBuilt> {
+    /// One instruction through `bus`, or the exception or interrupt taken in its place.
+    pub fn step<B: Bus>(&mut self, bus: &mut B) -> Step {
         self.step_observed(bus, &mut Unobserved)
     }
 
     /// The step a debugger watches: `observer.before` at the instruction boundary, stores and calls as they happen.
-    pub fn step_observed<B: Bus, O: Observer>(&mut self, _bus: &mut B, _observer: &mut O) -> Result<Step, NotBuilt> {
-        Err(NotBuilt)
+    pub fn step_observed<B: Bus, O: Observer>(&mut self, bus: &mut B, observer: &mut O) -> Step {
+        exec::step(self, bus, observer)
     }
+}
+
+/// The R3000A's instructions as `emusen-mips` writes and reads them: coprocessor 0 by this processor's names, and
+/// coprocessor 2 by the table its core gives (the GTE's on the PlayStation).
+pub fn dialect(cop2: Option<&'static emusen_mips::Coprocessor>) -> emusen_mips::Dialect {
+    emusen_mips::Dialect { cop: [Some(&COP0), None, cop2, None] }
 }

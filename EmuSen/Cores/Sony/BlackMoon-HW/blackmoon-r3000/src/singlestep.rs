@@ -1,6 +1,7 @@
 //! The single-step harness over SingleStepTests' r3000 suite (`r3000/v1`, as its own `transcode_json.py` writes it):
 //! the registers it records, both delay slots, and the bus cycle by cycle. The corpus is found through
-//! `EMUSEN_BLACKMOON_CORPUS`; without it the corpus tests pass unrun. BlackMoon_R3000.md §3 is the protocol.
+//! `EMUSEN_BLACKMOON_CORPUS`; without it the corpus tests pass unrun. BlackMoon_R3000.md §3 is the protocol, and §8
+//! the disputes whose cases are graded in their own way here.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -121,14 +122,18 @@ pub struct FlatBus {
     pub recorded: Vec<Cycle>,
     served: Vec<bool>,
     pub log: Vec<Cycle>,
+    /// The interrupt line, held where the case's Cause has IP2.
+    pub line: bool,
+    clock: u64,
 }
 
 impl FlatBus {
     pub fn new(recorded: Vec<Cycle>) -> FlatBus {
-        FlatBus { served: vec![false; recorded.len()], recorded, log: Vec::new() }
+        FlatBus { served: vec![false; recorded.len()], recorded, log: Vec::new(), line: false, clock: 0 }
     }
 
     fn answer(&mut self, actions: u32, address: u32, size: u32) -> u32 {
+        self.clock += 1;
         let found = (0..self.recorded.len()).find(|&i| !self.served[i] && self.recorded[i].actions == actions && self.recorded[i].address == address && self.recorded[i].size == size);
         let value = found.map_or(0, |i| {
             self.served[i] = true;
@@ -149,13 +154,28 @@ impl Bus for FlatBus {
     }
 
     fn write(&mut self, address: u32, size: Size, value: u32) {
+        self.clock += 1;
         self.log.push(Cycle { actions: WRITE, size: size.bytes(), address, value });
     }
 
-    fn idle(&mut self, _cycles: u32) {}
+    fn isolated_read(&mut self, address: u32, size: Size) -> u32 {
+        self.read(address, size)
+    }
+
+    fn isolated_write(&mut self, address: u32, size: Size, value: u32) {
+        self.write(address, size, value);
+    }
+
+    fn idle(&mut self, cycles: u32) {
+        self.clock += cycles as u64;
+    }
+
+    fn cycles(&mut self) -> u64 {
+        self.clock
+    }
 
     fn interrupt(&mut self) -> bool {
-        false
+        self.line
     }
 
     fn cop2_data(&mut self, _register: u8) -> u32 {
@@ -186,8 +206,42 @@ impl Outcome {
     }
 }
 
+/// The dispute a case is graded under, if any (BlackMoon_R3000.md §8).
+pub fn dispute(case: &Value) -> Option<&'static str> {
+    let c = cycles(case);
+    (c.len() == 3 && c[1].actions != FETCH && c[1].actions == c[2].actions).then_some("D-1")
+}
+
+/// D-1: the suite records a three-byte LWL, LWR, SWL or SWR as a halfword and a byte; the manuals make it one access
+/// of three byte lanes. The two recorded cycles become that one, its datum the two values joined.
+fn merged(mut c: Vec<Cycle>) -> Vec<Cycle> {
+    let (a, b) = (c[1], c[2]);
+    assert_eq!(b.address, a.address.wrapping_add(a.size), "two adjacent pieces");
+    let value = if a.size == 2 { a.value & 0xFFFF | (b.value & 0xFF) << 16 } else { a.value & 0xFF | (b.value & 0xFFFF) << 8 };
+    c.truncate(1);
+    c.push(Cycle { actions: a.actions, size: 3, address: a.address, value });
+    c
+}
+
+/// Cycles equal as the suite records them; a three-byte access by its three bytes.
+fn same(want: &Cycle, got: &Cycle) -> bool {
+    if want.size == 3 {
+        Cycle { value: want.value & 0xFF_FFFF, ..*want } == Cycle { value: got.value & 0xFF_FFFF, ..*got }
+    } else {
+        want == got
+    }
+}
+
 pub fn grade(case: &Value, processor: &mut dyn FnMut(&Value, &mut FlatBus) -> Recorded) -> Outcome {
-    let expected = cycles(case);
+    grade_as(case, processor, true)
+}
+
+/// A case graded on its recorded state and cycles, its dispute's form applied or not.
+pub fn grade_as(case: &Value, processor: &mut dyn FnMut(&Value, &mut FlatBus) -> Recorded, ruled: bool) -> Outcome {
+    let mut expected = cycles(case);
+    if ruled && dispute(case) == Some("D-1") {
+        expected = merged(expected);
+    }
     let mut bus = FlatBus::new(expected.clone());
     let got = processor(case, &mut bus);
     let want = recorded(case.get("final").expect("final"));
@@ -195,34 +249,26 @@ pub fn grade(case: &Value, processor: &mut dyn FnMut(&Value, &mut FlatBus) -> Re
     if !o.registers {
         o.first_difference = Some(format!("registers: got {got:X?} want {want:X?}"));
     }
-    o.cycles = bus.log == expected;
+    o.cycles = bus.log.len() == expected.len() && expected.iter().zip(&bus.log).all(|(w, g)| same(w, g));
     if !o.cycles && o.first_difference.is_none() {
-        let at = expected.iter().zip(&bus.log).position(|(w, g)| w != g).unwrap_or(expected.len().min(bus.log.len()));
+        let at = expected.iter().zip(&bus.log).position(|(w, g)| !same(w, g)).unwrap_or(expected.len().min(bus.log.len()));
         o.first_difference = Some(format!("cycle {at}: got {:X?} want {:X?}", bus.log.get(at), expected.get(at)));
     }
     o
 }
 
-fn size(bytes: u32) -> Size {
-    match bytes {
-        1 => Size::Byte,
-        2 => Size::Half,
-        _ => Size::Word,
-    }
-}
-
 /// The positive control: a fake processor that performs the case's own cycles through the bus, in order, and ends in
 /// the case's own final state.
 pub fn replay(case: &Value, bus: &mut FlatBus) -> Recorded {
-    for c in cycles(case) {
+    for c in bus.recorded.clone() {
         match c.actions {
             FETCH => {
                 bus.fetch(c.address);
             }
             READ => {
-                bus.read(c.address, size(c.size));
+                bus.read(c.address, Size::of(c.size));
             }
-            _ => bus.write(c.address, size(c.size), c.value),
+            _ => bus.write(c.address, Size::of(c.size), c.value),
         }
     }
     recorded(case.get("final").expect("final"))
@@ -230,8 +276,9 @@ pub fn replay(case: &Value, bus: &mut FlatBus) -> Recorded {
 
 /// The processor from the case's initial state, one step.
 pub fn processor(case: &Value, bus: &mut FlatBus) -> Recorded {
-    let mut cpu = R3000 { regs: recorded(case.get("initial").expect("initial")).registers() };
-    let _ = cpu.step(bus);
+    let mut cpu = R3000 { regs: recorded(case.get("initial").expect("initial")).registers(), ..R3000::new() };
+    bus.line = cpu.regs.cause & 1 << 10 != 0;
+    cpu.step(bus);
     Recorded::of(&cpu.regs)
 }
 
@@ -328,7 +375,6 @@ mod tests {
         let dropped = grade(&c, &mut spoiled_cycle);
         assert!(dropped.registers && !dropped.cycles);
         assert_eq!(recorded(c.get("initial").unwrap()).load, LoadDelay { register: Some(6), value: 4076945535 });
-        assert!(!grade(&c, &mut processor).passed(), "the unbuilt processor passes the inline case");
     }
 
     fn corpus() -> Option<Vec<PathBuf>> {
@@ -374,9 +420,85 @@ mod tests {
         let reports = run_suite(&files, None, processor);
         let t = total(&reports);
         eprintln!("{SUITE}: {} of {} (registers {}, cycles {})", t.passed, t.cases, t.registers, t.cycles);
-        for (f, r) in reports.iter().filter(|(_, r)| r.passed != r.cases).take(40) {
+        for (f, r) in &reports {
             eprintln!("  {f}: {} of {}; {}", r.passed, r.cases, r.first_failure.as_deref().unwrap_or(""));
         }
         assert_eq!(t.passed, t.cases, "a case fails");
+    }
+
+    /// D-1's cases: as the suite records them the cycles differ in every one (a read's value then has no recorded
+    /// cycle to come from), and in D-1's form each passes.
+    #[test]
+    fn d1_cases_differ_from_the_suite_only_in_the_split_access() {
+        let Some(files) = corpus() else { return };
+        let (mut n, mut by_file) = (0, std::collections::BTreeMap::new());
+        for path in &files {
+            for case in read_cases(path).iter().filter(|c| dispute(c) == Some("D-1")) {
+                let o = grade_as(case, &mut processor, false);
+                assert!(!o.cycles, "{:?}", case.get("name"));
+                assert!(grade(case, &mut processor).passed());
+                *by_file.entry(path.file_name().unwrap().to_string_lossy().into_owned()).or_insert(0) += 1;
+                n += 1;
+            }
+        }
+        eprintln!("{SUITE}: D-1 names {n} cases: {by_file:?}");
+        assert!(n > 0);
+    }
+
+    /// The suite's file each operation's cases are in.
+    fn file_of(op: emusen_mips::Op) -> &'static str {
+        use emusen_mips::Op::*;
+        match op {
+            Bltz | Bgez | Bltzal | Bgezal => "BCondZ",
+            Sh => "SHL",
+            other => {
+                let m = other.mnemonic();
+                Box::leak(m.to_ascii_uppercase().into_boxed_str())
+            }
+        }
+    }
+
+    /// `emusen-mips` over every opcode the suite holds: each decodes to its file's instruction, and its disassembly
+    /// assembles to a word that agrees on every field the instruction uses and is zero elsewhere.
+    #[test]
+    fn every_suite_opcode_decodes_to_its_file_and_round_trips_through_the_assembler() {
+        let Some(files) = corpus() else { return };
+        let dialect = crate::dialect(None);
+        let mut n = 0;
+        for path in &files {
+            let file = path.file_stem().unwrap().to_string_lossy().into_owned();
+            for case in read_cases(path) {
+                let word = int(&case, "opcode") as u32;
+                let pc = int(&case, "opcode_addr") as u32;
+                let op = emusen_mips::decode(word);
+                assert_eq!(file_of(op), file, "{word:08X}");
+                let text = emusen_mips::disassemble(word, pc, &dialect).to_string();
+                let back = emusen_mips::assemble_line(&text, pc, &dialect).unwrap_or_else(|e| panic!("{word:08X} \"{text}\": {e}"));
+                assert_eq!(emusen_mips::decode(back), op);
+                assert_eq!(emusen_mips::disassemble(back, pc, &dialect).to_string(), text);
+                let used = used_bits(op);
+                assert_eq!((back & used, back & !used), (word & used, op.canonical() & !used), "{word:08X} \"{text}\"");
+                n += 1;
+            }
+        }
+        eprintln!("{SUITE}: {n} opcodes round-tripped");
+        assert_eq!(n, files.len() * 1000);
+    }
+
+    fn used_bits(op: emusen_mips::Op) -> u32 {
+        use emusen_mips::Operand::*;
+        op.operands().iter().fold(0xFC00_0000, |m, o| {
+            m | match o {
+                Rd | CopData | CopControl => 31 << 11,
+                Rs => 31 << 21,
+                Rt | CopRt => 31 << 16,
+                Sa => 31 << 6,
+                Simm | Uimm | Branch => 0xFFFF,
+                Mem => 31 << 21 | 0xFFFF,
+                Jump => 0x03FF_FFFF,
+                Code => 0xF_FFFF << 6,
+                Cofun => 0x01FF_FFFF,
+            }
+        })
     }
 }

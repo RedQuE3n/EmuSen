@@ -1,0 +1,11 @@
+[package]
+name = "emusen-mips"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The MIPS instruction set as data: fields, decode, disassembly with a table per coprocessor, and an assembler for test programs. No execution. See EmuSen_Mips.md.
+[lib]
+name = "emusen_mips"
+
+[dependencies]

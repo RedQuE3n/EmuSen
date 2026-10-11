@@ -34,6 +34,8 @@ namespace EmuSen.WiseMan.Galaxia
                 start.ArgumentList.Add(argument);
             start.Environment["HOME"] = home;
             start.Environment.Remove("XDG_CONFIG_HOME");
+            // The child measures both halves itself, so a parent run on the C# half must not switch the library off there too.
+            start.Environment.Remove("EMUSEN_GALAXIA_NATIVE");
             start.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
             start.Environment["DOTNET_NOLOGO"] = "1";
             start.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";

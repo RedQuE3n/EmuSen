@@ -1122,3 +1122,50 @@ and `CoreRegistration`, 94 of 94.
 
 D-29; the framework's items of `Diamond_CDROM.md` §8.4 (the header constant, the runtime's companions, routing by
 content, archives); `.m3u` and the disc change at stage 11; the handheld's load measurement; a LibCrypt disc.
+
+---
+
+## 16. Stage 9, the MDEC (2026-10-11)
+
+The plan's §7 row 9, with the tester's go of 2026-10-11. Its record is `Diamond_MDEC.md`.
+
+### 16.1 What was built
+
+- **The MDEC** (`src/mdec/`), replacing stage 3's stub: MDEC0's commands and parameters, MDEC1's status and reset,
+  the input FIFO held from full until emptied, the run-length decoder, one block in the IDCT, the block buffer and a
+  17-word output FIFO (D-32), a read that waits for the block being computed (D-33), 512 cycles a block (D-31); the
+  arithmetic of psx-spx's decode with each pass of the IDCT truncated toward zero and the 15-bit pixel rounded from the
+  channel's fraction (D-30); 4-, 8-, 15- and 24-bit output, signed or not, bit 15.
+- **DMA channels 0 and 1** (`bus.rs`'s `mdec_piece`): word by word while the MDEC can take or give, a waiting block
+  letting go of the bus, DMA1 writing colour blocks in their macroblock's order. The other channels are unchanged.
+- **The state**: `DMND` version 7, 3,789,828 bytes (`Diamond_MDEC.md` §6).
+- **A program**: `programs/mdec-timing.s`, the decode time by DMA on five streams.
+
+### 16.2 The gate
+
+| Item | Result |
+|---|---|
+| ps1-tests' `mdec/4bit` | **VRAM exact** |
+| `mdec/8bit` | one pixel differs at five bits (D-30) |
+| `mdec/frame` | the DMA builds differ by D-30's colour (11,035 pixels at 15 bits, 63,378 halfwords at 24); the CPU builds wait after their last word by their own logic, as a console would |
+| `mdec/movie` | 319 and 752 differ (D-30), each picture met at one frame of the run |
+| `mdec/step-by-step-log` | 414 of 422 status lines as the console's log (D-32) |
+| Peter Lemon's DCT decode | `CLUT8BPP` 3 pixels off SwanStation's picture; `CLUT4BPP`'s three blocks behind the texture cache (D-23) |
+
+**Not met exactly**: the IDCT's and the colour's rounding is open (D-30), with a search of its fixed point recorded.
+
+### 16.3 What the tester's games now do
+
+Rayman's opening movie plays at the referee's pace; Tekken 3 reaches its title screen and attract mode, its movie
+skipped; Castlevania: SotN, Silent Hill and Ape Escape stop where they did, the first two before any decode the MDEC
+could act on (`Diamond_MDEC.md` §9). D-29 is unchanged.
+
+### 16.4 Tests run (2026-10-11)
+
+`diamond` 109 unit tests and 45 program tests, with and without `EMUSEN_DIAMOND_PS1TESTS`, all passing; WiseMan's
+`DiamondTests`, `SystemPack`, `CoreAbi`, `CoreAdapter`, `CoreDiscovery` and `CoreRegistration`, 95 of 95 with the corpus.
+
+### 16.5 What waits
+
+D-30 to D-33; the streams behind three games' movies; the SPU's stage 8, built beside this one, with which the state's
+version and the DMA's channels are merged.

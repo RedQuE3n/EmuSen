@@ -309,7 +309,7 @@ fn the_timers_record_reads_as_the_release_prints() {
     }
     assert_eq!(results(&m, 0x10_0D00, 17), [1666, 833, 833, 833, 834, 835, 834, 833, 833, 833, 833, 0, 0xC08, 1, 0, 1, 1]);
     assert_eq!(results(&m, 0x10_0D80, 6), [0x400, 0x7FF, 0x1C08, 0x408, 0x408, 0x408]);
-    assert_eq!(fnv(&results(&m, 0x10_0000, 870)), 0x1763_FD9A_68AD_363D, "the whole record");
+    assert_eq!(fnv(&results(&m, 0x10_0000, 870)), 0x6024_1295_3685_3C8B, "the whole record");
 }
 
 /// `cpu/access-time`: the 51 cells, whole cycles and hundredths, equal to what the release prints on Diamond (§3);
@@ -361,4 +361,36 @@ fn the_chain_looping_record_times_the_loop_beside_each_chain() {
     let Some(source) = carried("chain-looping") else { return };
     let m = run_for(&source, 40, Market::Americas);
     assert_eq!(results(&m, 0x10_0000, 12), [16_024, !0, !0, 16_008, 1, 1, 24_016, 0, 0, 24_016, 0, 0]);
+}
+
+/// A mode write that turns a timer's sync on resets the count (psx-spx "Timers"): each read a few cycles after it is
+/// those cycles, or zero where the mode pauses or waits for its blank, as every referee reads it (Diamond_Disputes.md
+/// D-6). Timer 0 had read up to 36,658, credited with the time since the last video edge processed (Diamond_Records.md §8.1).
+#[test]
+fn a_mode_write_with_sync_resets_the_count() {
+    let m = run_for(include_str!("../programs/timer-sync.s"), 60, Market::Americas);
+    let free = [3, 6, 3, 6, 3, 6, 3, 6];
+    assert_eq!(results(&m, 0x10_0000, 32), [[0, 0, 3, 6, 3, 6, 3, 6], free, [3, 6, 0, 0, 0, 0, 0, 0], [0; 8]].concat(), "timer 0, hblank");
+    assert_eq!(results(&m, 0x10_0080, 32), [[0, 0, 0, 0, 3, 6, 3, 6], free, [3, 6, 3, 6, 0, 0, 0, 0], [0; 8]].concat(), "timer 1, vblank");
+}
+
+/// The console log's largest first sample and largest rise in each of `timers`' fourteen sync tables, in its order.
+const SYNC_LOG: [(i32, i32); 14] =
+    [(260, 123), (245, 123), (242, 123), (242, 123), (242, 123), (38, 20), (48, 25), (54, 28), (76, 39), (95, 49), (248, 123), (0, 1), (248, 123), (247, 123)];
+
+/// `timers`' sync tables in the console log's shape, the rule of WiseMan's TTY gate (Diamond_Native.md §11.12): each row
+/// starts within 1.2 times the log's largest first sample and 2, rises within 1.1 times its largest rise and 2, and
+/// modes 0 and 3 never fall. Before the fix 8 of the 14 tables failed it, mode 0 at 512 pixels starting at 1,629.
+#[test]
+fn the_timers_records_sync_tables_have_the_logs_shape() {
+    let m = run_for(include_str!("../programs/timers.s"), 120, Market::Europe);
+    for (t, &(first, rise)) in SYNC_LOG.iter().enumerate() {
+        let at = if t < 10 { 0x10_0300 + 160 * t as u32 } else { 0x10_0A00 + 160 * (t as u32 - 10) };
+        for s in 0..4 {
+            let row: Vec<i32> = results(&m, at + 40 * s, 10).into_iter().map(|w| w as i32).collect();
+            assert!(row[0] as f64 <= 1.2 * first as f64 + 2.0, "table {t}, mode {s} starts at {}: {row:?}", row[0]);
+            assert!(row.windows(2).all(|w| (w[1] - w[0]) as f64 <= 1.1 * rise as f64 + 2.0), "table {t}, mode {s} rises too fast: {row:?}");
+            assert!(s % 3 != 0 || row.windows(2).all(|w| w[1] >= w[0]), "table {t}, mode {s} falls: {row:?}");
+        }
+    }
 }

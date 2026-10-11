@@ -177,6 +177,47 @@ def sync_rows(lines):
     return [numbers(m.group(2)) for m in map(SYNC_ROW.match, lines) if m]
 
 
+def sync_tables(lines):
+    """Each "Testing Timer..." heading with the sync rows under it, in order."""
+    tables = []
+    for line in lines:
+        if line.startswith("Testing Timer"):
+            tables.append((line, []))
+        elif tables and (m := SYNC_ROW.match(line)):
+            tables[-1][1].append(numbers(m.group(2)))
+    return tables
+
+
+def sync_shape(rec, log):
+    """The sync tables against the log's, table by table in order, as WiseMan's gate grades them (Diamond_Native.md §11.12): each row's first
+    sample at most 1.2 times the log's largest first sample in the same table and 2 more, each rise at most 1.1 times
+    its largest rise and 2 more, and the rows of sync modes 0 and 3, which neither reset nor wrap here, never falling."""
+    report, graded, off = [], 0, 0
+    ours = sync_tables(rec)
+    for i, (heading, rows) in enumerate(sync_tables(log)):
+        mine = ours[i][1] if i < len(ours) and ours[i][0] == heading else None
+        graded += 1
+        if mine is None or len(mine) != len(rows):
+            off += 1
+            report.append(f"{heading}: missing")
+            continue
+        first = max(r[0] for r in rows)
+        rise = max([b - a for r in rows for a, b in zip(r, r[1:])] + [0])
+        bad = []
+        for s, vs in enumerate(mine):
+            if vs[0] > 1.2 * first + 2:
+                bad.append(f"mode {s} starts at {vs[0]}, the log's largest {first}")
+            if any(b - a > 1.1 * rise + 2 for a, b in zip(vs, vs[1:])):
+                bad.append(f"mode {s} rises faster than the log's {rise}")
+            if s in (0, 3) and any(b < a for a, b in zip(vs, vs[1:])):
+                bad.append(f"mode {s} falls")
+        if bad:
+            off += 1
+            report.append(f"{heading[8:60]}...: " + "; ".join(bad))
+    report.append(f"{graded - off} of {graded} sync tables in the log's shape")
+    return report
+
+
 def step(vs):
     """The commonest rise between successive samples: the loop's cycles in the counter's ticks."""
     rises = [b - a for a, b in zip(vs, vs[1:]) if b > a]
@@ -281,6 +322,7 @@ def console(program, rec, log):
                 off += 1
                 report.append(f"{row}: {bad[:1] or 'missing'} against {mean:.1f} (tolerance {tol})")
         report.append(f"{graded - off} of {graded} rows within their tolerances")
+        report += sync_shape(rec, log)
     elif program == "access-time":
         ours, theirs = table(rec), table(log)
         cells = [(r, i, ours[r][i], v) for r, vs in theirs.items() for i, v in enumerate(vs) if r in ours]

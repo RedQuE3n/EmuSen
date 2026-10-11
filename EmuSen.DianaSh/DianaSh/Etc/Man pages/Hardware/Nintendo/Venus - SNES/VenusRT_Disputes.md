@@ -1714,3 +1714,52 @@ their data.
   during a product, nor reads a result during one (`VenusRT_Native.md` §63).
 - Pinned by: the corpus runner's VRAM and picture columns for `wrmpyb-in-flight`.
 
+
+### D-49. SA-1: a reset takes S down by three within page 1 and loads nothing; the SA-1's SL at power-on is taken as $FF
+- Opened: 2026-10-10, by `VenusRtDebugViewTests`' SA-1 case (`EmuSen_CoreAPI.md` §31.3): once the S-CPU releases the
+  SA-1 on a synthetic image, C# Venus's SA-1 has S = $01FF and VenusRT's $01FD.
+- The two engines, read from their code: C# Venus's processor loads S = $01FF at every reset, which for the SA-1 is
+  once when the chip is built (the hold) and again at each 1→0 edge of CCNT bit 5. VenusRT's makes the datasheet's
+  three stack cycles, each a read that takes SL down by one within page 1, and loads nothing. Its S-CPU starts from SL
+  $02 (`VenusRT_Native.md` §14.1, decided 2026-09-30), but its SA-1's processor started from zero, so the first
+  release left $01FD. The difference is therefore two things at once: a reset rule in one engine and a power-on value
+  in the other.
+- Documents read: WDC's W65C816S datasheet (March 13, 2024), §2.25: SH = $01 and SL "not initialized", "the stack
+  pointer must be initialized by the user's software", and on RESB high "an interrupt sequence is initiated" with RWB
+  high "during the stack address cycles". fullsnes, "SNES Cart SA-1", CCNT (`$2200`): bit 5 is "Reset from SNES to
+  SA-1", and "Unknown if Reset resets any I/O Ports ... or if it does only reset the CPU"; CRV (`$2203`-`$2204`) is
+  the reset vector; its Reset table sets `$2200` to $20 and names no processor register. anomie's documents do not
+  mention S. No document gives S after either processor's reset, so the datasheet's stack cycles are the only rule
+  on offer: S moves by three and nothing loads it.
+- Test ROM: absindx's `SA1RamProtectionTest` (its `README.md`; `Main.asm` at `EmulationRESET` and `SA1RESET`;
+  `TestRoutines.asm` at `SA1RESET_Reboot` and the patterns of tests 217-218; `MessageID.asm`, `!StopSP_SA1`). Each
+  processor reads S with TSC or TSX before any instruction that changes it. For the reboot, the SA-1 last set S to
+  $01FF before it stopped with STP; the S-CPU then holds it in reset and releases it. The ROM's photograph of a Super
+  Famicom (board SNSRGB01; cartridge SHVC-1L5B-20 with an RF5A123) reads SNES SP $01FD, SA-1 SP $01FC, reboot $01FC.
+  VenusRT before this entry (WRAM `$0022`-`$0029` at frame 3,600): $01FF, $01FD, $01FC. Mesen's screen (the corpus
+  baseline's text): $01FF, $01FF, $01FF. C# Venus's screen shows the S-CPU's $01FF and no SA-1 value, because its run
+  fails earlier.
+- Referee: not run, and its RTL not read. No VHDL simulator is installed, and the checkout's only testbench is the
+  SMP's (`smpsim/`). Its documentation (`README.md`, `SNES_Turbo.md`, `smpsim/readme.txt`) says nothing about the
+  stack pointer.
+- Mesen's source: none.
+- Conclusion, 2026-10-10, two rules of different standing:
+  1. *Measured:* a reset takes SL down by three within page 1 and loads nothing. From $01FF the SA-1 restarts at
+     $01FC, as the datasheet's three stack cycles predict and the console shows. VenusRT already does this. C# Venus's
+     load of $01FF contradicts both, and is a defect.
+  2. *A choice:* the datasheet leaves SL at power-on undefined. One console, at one power-on, read $01FC at the SA-1's
+     first release, which is SL $FF before it. Both engines take $FF for the SA-1. VenusRT's SA-1 processor starts at
+     $01FF. C# Venus's processor runs its reset once when it is built; started from the S-CPU's SL $02, its held SA-1
+     shows $01FF too. Three things favour $FF over $02 or $00: it is the console's reading; it changes no golden output
+     (C# Venus's `cophist` case shows the held SA-1 at $01FF, which either other value would have changed); and it
+     leaves the pictures of the five SA-1 games in the library over 2,400 frames, and their whole machine state at every
+     600th frame, as they were (measured 2026-10-10: each game sets the SA-1's S itself before frame 600). The only
+     recorded value it moves is in a column the corpus baseline reports and does not assert: VenusRT's picture
+     difference from Mesen on `SA1RamProtectionTest`, where one glyph now reads C instead of D.
+  The S-CPU's SL $02 stays as decided on 2026-09-30, although the same photograph reads $01FD there (SL $00). One
+  reading of an undefined value is not a rule for either processor. The S-CPU's value was chosen so that its
+  instruction traces compare with Mesen's from the first instruction, and that reason still holds.
+- Pinned by: `chips::sa1::tests::the_sa1_reset_takes_s_down_by_three` (VenusRT, both releases);
+  `Sa1ControlTests.The_sa1_reset_takes_s_down_by_three` (C# Venus, the held value and both releases);
+  `VenusRtDebugViewTests.Regs_shows_the_SA1_as_the_coprocessor`, which compares S again.
+- Implemented in: the commit after this entry.

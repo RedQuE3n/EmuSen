@@ -24,8 +24,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         private static readonly TimeSpan MaxExecutionTime = TimeSpan.FromSeconds(10);
 
         private readonly IDebugTarget? _target;
-        private readonly IReadOnlyList<IDianaShCommand> _orderedCommands;
-        private readonly Dictionary<string, IDianaShCommand> _commands;
+        private readonly CommandTable _table;
         private readonly Dictionary<string, string> _variables;
         private readonly bool _isRoot;
 
@@ -45,7 +44,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         public CommandHistory History { get; }
 
         // Every registered command's own Name - see EmuSen_Debugging_Tools_Reference_v5.md §3.18 on why this exists.
-        public IReadOnlyList<string> CommandNames => _orderedCommands.Select(c => c.Name).ToList();
+        public IReadOnlyList<string> CommandNames => _table.Ordered.Select(c => c.Name).ToList();
 
         // Unix-flavour identity, not access control - see `man whoami` and `man su`.
         public string CurrentUser { get; set; } = "root";
@@ -55,7 +54,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
 
         // Both sides share one CommandHistory rather than each getting its own.
         public DianaShInterpreter(IDebugTarget? target, IEnumerable<IDianaShCommand> commands, CommandHistory? history = null)
-            : this(target, new List<IDianaShCommand>(commands), null, new Dictionary<string, string>(), history ?? new CommandHistory(), isRoot: true)
+            : this(target, new CommandTable(new List<IDianaShCommand>(commands)), new Dictionary<string, string>(), history ?? new CommandHistory(), isRoot: true)
         {
         }
 
@@ -185,15 +184,13 @@ namespace EmuSen.DianaSh.DianaSh.Bin
 
         private DianaShInterpreter(
             IDebugTarget? target,
-            IReadOnlyList<IDianaShCommand> orderedCommands,
-            Dictionary<string, IDianaShCommand>? commandsDict,
+            CommandTable table,
             Dictionary<string, string> variables,
             CommandHistory history,
             bool isRoot)
         {
             _target = target;
-            _orderedCommands = orderedCommands;
-            _commands = commandsDict ?? orderedCommands.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+            _table = table;
             _variables = variables;
             History = history;
             _isRoot = isRoot;
@@ -203,7 +200,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         // A $(...) substitution runs in a real subshell, so assignments do not leak out - see §3.17.
         private DianaShInterpreter CreateSubshell()
         {
-            var sub = new DianaShInterpreter(_target, _orderedCommands, _commands, new Dictionary<string, string>(_variables), new CommandHistory(), isRoot: false);
+            var sub = new DianaShInterpreter(_target, _table, new Dictionary<string, string>(_variables), new CommandHistory(), isRoot: false);
             sub._stopwatch = _stopwatch;
             sub.CurrentUser = CurrentUser;
             return sub;
@@ -250,15 +247,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             Word nameWord = simple.Words[0];
             if (nameWord.Parts.Count != 1 || nameWord.Parts[0].Kind != PartKind.Literal) return false;
 
-            // The same alias normalisation Dispatch applies before its own lookup - see §3.17a.
-            string cmd = nameWord.Parts[0].Text.ToLowerInvariant();
-            if (cmd == "c") cmd = "resume";
-            else if (cmd == "quit") cmd = "shutdown";
-            else if (cmd == "s") cmd = "step";
-            else if (cmd == "jobs") cmd = "ps";
-            else if (cmd == "hexdump") cmd = "xxd";
-
-            return _commands.TryGetValue(cmd, out IDianaShCommand? command) && command.IsReadOnly;
+            return _table.IsReadOnly(nameWord.Parts[0].Text);
         }
 
         // A sourced script shares this scope but not history or `!` expansion - see §3.17.
@@ -555,16 +544,12 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             if (cmd == "source" || cmd == ".") return RunScript(args);
 
             // Mapped then dropped through to the ordinary lookup; deliberately not `continue` - see §3.17a.
-            if (cmd == "c") cmd = "resume";
-            else if (cmd == "quit") cmd = "shutdown";
-            else if (cmd == "s") cmd = "step";
-            else if (cmd == "jobs") cmd = "ps";
-            else if (cmd == "hexdump") cmd = "xxd";
+            cmd = CommandTable.Canonical(cmd);
 
-            if (!_commands.TryGetValue(cmd, out IDianaShCommand? command))
+            if (!_table.TryFind(cmd, out IDianaShCommand? command))
             {
                 return DianaShResult.Fail(
-                    $"Unknown command '{cmd}'.{Suggestion.Hint(cmd, _commands.Keys)} Type 'help' for a list.");
+                    $"Unknown command '{cmd}'.{Suggestion.Hint(cmd, _table.Names)} Type 'help' for a list.");
             }
 
             try
@@ -646,7 +631,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             string? page = ManPages.Lookup(target);
             if (page != null) return page;
 
-            if (_commands.TryGetValue(target, out IDianaShCommand? command))
+            if (_table.TryFind(target, out IDianaShCommand? command))
             {
                 return $"{target}\n\n{command.Usage}\n\n(No detailed manual page yet for this command - showing its one-line usage above.)";
             }
@@ -663,7 +648,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 "  help                          this text - every command, one line each, with a brief explanation",
                 "  man [command]                 with no argument, same as 'help'; with a command name, its full manual page",
             };
-            lines.AddRange(_orderedCommands.Select(c => c.Usage));
+            lines.AddRange(_table.Ordered.Select(c => c.Usage));
             lines.Add("  export NAME[=value]           set a shell variable (no real subprocess env to export TO -");
             lines.Add("                                kept for script compatibility with real bash habits)");
             lines.Add("  unset NAME                    remove a shell variable");
@@ -785,7 +770,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         internal string LastExitStatus => GetVariable("?");
 
         // Every command, in the order `help` lists them - for the golden corpus, see EmuSen_DianaSh.md §13.4.
-        internal IReadOnlyList<IDianaShCommand> RegisteredCommands => _orderedCommands;
+        internal IReadOnlyList<IDianaShCommand> RegisteredCommands => _table.Ordered;
 
         internal void SetVariable(string name, string value) => _variables[name] = value;
 

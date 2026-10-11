@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+"""Reads the RAM records of Diamond's rewrites of ps1-tests' TTY programs, as the original would have printed them.
+
+See Diamond_Records.md for each program's record layout, why it is laid out so, and how the checks below are read.
+
+    psxrecords.py render PROGRAM WORDS
+    psxrecords.py equal PROGRAM WORDS TTY
+    psxrecords.py console PROGRAM WORDS LOG
+    psxrecords.py console PROGRAM --tty TTY LOG
+
+PROGRAM is `timers`, `access-time`, `chopping`, `bandwidth` or `chain-looping`. WORDS is a file of the record's words
+from 80100000h: psxreferee.py's `ram` output, or plain hexadecimal words (Diamond's `run --bare --dump`). `render` prints
+the text the release would print; `equal` compares the record with a TTY of the release program, by the program's checks; `console`
+grades the record, or with --tty a release's TTY, against ps1-tests' console log by the rules of WiseMan's TTY gate
+and Diamond_Referees.md §6.
+Exit codes: 0 done, 2 a usage error.
+"""
+import re
+import statistics
+import sys
+from pathlib import Path
+
+BASE = 0x80100000
+SIZE = {"timers": 870, "access-time": 102, "chopping": 780, "bandwidth": 56, "chain-looping": 12}
+
+MODES = [["System clock", "Dot clock", "System clock", "Dot clock"],
+         ["System clock", "Hblank", "System clock", "Hblank"],
+         ["System clock", "System clock", "System clock/8", "System clock/8"]]
+SYNCS = [["0 = Pause counter during Hblanks", "1 = Reset counter to 0 at Hblanks",
+          "2 = Reset counter to 0 at Hblanks and pause outside of Hblank", "3 = Pause until Hblank occurs once, then switch to Free Run"],
+         ["0 = Pause counter during Vblanks", "1 = Reset counter to 0 at Vblanks",
+          "2 = Reset counter to 0 at Vblanks and pause outside of Vblank", "3 = Pause until Vblank occurs once, then switch to Free Run"],
+         ["0 = Stop counter at current value", "1 = Free Run", "2 = Free Run", "3 = Stop counter at current value"]]
+WIDTHS = [256, 320, 368, 512, 640]
+DOTCLOCKS = ["5.32224 MHz", "6.65280 MHz", "7.60320 MHz", "10.64448 MHz", "13.30560 MHz"]
+REGIONS = [("RAM", 0x80000000), ("BIOS", 0xBFC00000), ("SCRATCHPAD", 0x1F800000), ("EXPANSION1", 0x1F000000),
+           ("EXPANSION2", 0x1F802000), ("EXPANSION3", 0x1FA00000), ("DMAC_CTRL", 0x1F8010F0), ("JOY_STAT", 0x1F801044),
+           ("SIO_STAT", 0x1F801054), ("RAM_SIZE", 0x1F801060), ("I_STAT", 0x1F801070), ("TIMER0_VAL", 0x1F801100),
+           ("CDROM_STAT", 0x1F801800), ("GPUSTAT", 0x1F801814), ("MDECSTAT", 0x1F801824), ("SPUCNT", 0x1F801DAA),
+           ("CACHECTRL", 0xFFFE0130)]
+BANDWIDTH = ["vramToCpu", "cpuToVram", "vramToVram", "FillScreen GP0(2)", "Rectangle", "Rectangle (semitransparent)",
+             "Rectangle textured", "Rectangle textured (semi)", "Polygon quad", "Polygon quad (semi)", "Polygon quad textured",
+             "Polygon quad textured (semi)", "Polygon quad (1/4 off screen)", "Polygon quad (1/2 off screen)"]
+
+
+def die(message, code=2):
+    print(message, file=sys.stderr)
+    sys.exit(code)
+
+
+def words(path):
+    """The record's words from 80100000h: psxreferee.py's block for that address, or a plain list of words."""
+    blocks, at = {}, BASE
+    for line in Path(path).read_text().splitlines():
+        if line.startswith("== RAM "):
+            at = int(line.split()[2], 16)
+            continue
+        blocks.setdefault(at, []).extend(int(w, 16) for w in line.split() if re.fullmatch(r"[0-9A-Fa-f]{8}", w))
+    if BASE not in blocks:
+        die(f"no words from {BASE:08X}h")
+    return blocks[BASE]
+
+
+def signed(w):
+    return w - (1 << 32) if w & 0x80000000 else w
+
+
+def timers_parts(ws):
+    """Rows as (label, values): the delay and frame rows, the sync rows, then the target and flag checks."""
+    row = lambda at: [signed(w) for w in ws[at // 4:at // 4 + 10]]
+    rows, k = [], 0
+    for timer in range(3):
+        for mode in range(2):
+            m = mode * 2 if timer == 2 else mode
+            for kind in ("1000", "5000", "frame"):
+                rows.append((("delay", timer, MODES[timer][m], kind), row(40 * k)))
+                k += 1
+    sync = []
+    for mode in range(2):
+        for res in range(5):
+            for s in range(4):
+                sync.append(((0, mode, res, s), row(0x300 + 40 * (20 * mode + 4 * res + s))))
+    for i, (timer, mode) in enumerate((t, m) for t in (1, 2) for m in range(2)):
+        for s in range(4):
+            sync.append(((timer, mode, None, s), row(0xA00 + 40 * (4 * i + s))))
+    target = ws[0xD00 // 4:0xD00 // 4 + 17]
+    flags = ws[0xD80 // 4:0xD80 // 4 + 6]
+    return rows, sync, target, flags
+
+
+def render_timers(ws):
+    rows, sync, target, flags = timers_parts(ws)
+    out = ["timers test", "", "Forced NTSC system."]
+    for (_, timer, clock, kind), vs in rows:
+        what = f"{int(kind):4d} cycles delay" if kind != "frame" else "      frame delay"
+        out.append(f"Timer{timer}, clock: {clock:>14s}, {what}: " + "".join(f"{v:6d}, " for v in vs))
+    for (timer, mode, res, s), vs in sync:
+        if s == 0:
+            out.append("")
+            if timer == 0:
+                out.append(f"Testing Timer0 sync modes (clock source = {MODES[0][mode]}, 100 delay cycles, resolution = {WIDTHS[res]}x240, dotclock @ {DOTCLOCKS[res]}, not resetted between runs)")
+            else:
+                out.append(f"Testing Timer{timer} sync modes (clock source = {MODES[timer][mode]}, 100 delay cycles, not resetted between runs)")
+        out.append(f"{SYNCS[timer][s]:<61s}" + "".join(f"{v:6d}, " for v in vs))
+    out += ["", "Check when Timer2 counter (System clock) is reset when reaching target (= 10)."]
+    for i in range(12):
+        out.append(f"counter == {i:2d}, {target[i]:5d} ticks  " + ("<<<< This value should be non-zero" if i == 10 else ""))
+    names = ["Reached target:                      ", "Reached 0xFFFF:                      ",
+             "Counter reset AFTER reaching target: ", "Target + 1 not reached:              "]
+    for i, (name, good) in enumerate(zip(names, (1, 0, 1, 1))):
+        v = target[13 + i]
+        out.append(f"{name}{v} ({'ok' if v == good else 'fail'})")
+    out += ["", "", "Check if write to mode register acknowledges the targetReached flag",
+            f"Write 0x0000 to Timer0.mode, read 0x{flags[0]:04x}", f"Write 0xffff to Timer0.mode, read 0x{flags[1]:04x}", "",
+            f"Read mode after waiting for targetReached: 0x{flags[2]:04x}", f"Read again: 0x{flags[3]:04x}", "",
+            f"Write mode after waiting for targetReached and then read: 0x{flags[4]:04x}", f"Read again: 0x{flags[5]:04x}", "", "", "Done."]
+    return out
+
+
+def render_access(ws):
+    out = ["cpu/access-time", "", "SEGMENT    (   ADDRESS)    8bit    16bit    32bit    (cpu cycles per bitsize)"]
+    for r, (name, at) in enumerate(REGIONS):
+        cells = "".join(f"{ws[6 * r + 2 * k]:2d}.{ws[6 * r + 2 * k + 1]:<2d}    " for k in range(3))
+        out.append(f"{name:<10s} (0x{at:08x})   " + cells)
+    return out + ["Done."]
+
+
+def render_chopping(ws):
+    out = ["dma/chopping (DMA Channel 2 CPU->VRAM, chopping test)"]
+    for i in range(130):
+        mode, size, a, b, cycles, busy = ws[6 * i:6 * i + 6]
+        if i < 65:
+            head = f"DMA2, SyncMode: {mode}, {size:4d} bytes, blockSize: {a:3d}                            ... "
+        elif i == 65:
+            head = f"DMA2, SyncMode: {mode}, {size:4d} bytes, no chopping                               ... "
+        else:
+            head = f"DMA2, SyncMode: {mode}, {size:4d} bytes, dmaWindow: {a:3d} words, cpuWindow: {b:3d} clks ... "
+        out.append(head + f"took {cycles:5d} CPU cycles. " + ("(GPU busy)" if busy else ""))
+    return out + ["Done."]
+
+
+def render_bandwidth(ws):
+    out = ["gpu/bandwidth"]
+    for i, name in enumerate(BANDWIDTH):
+        q, r, h, mbs = ws[4 * i:4 * i + 4]
+        out.append(f"{name:<30s} dT: {q:5d}.{r:<5d} ms (hblanks: {h:5d}), speed: {mbs} MB/s")
+    return out + ["Done"]
+
+
+def render_chain(ws):
+    out = ["dma/chain-looping", "Tests CPU behavior with various invalid GPU linked list chains.", ""]
+    names = ["Testing with no DMA active...", "Testing with empty but complete chain...", "Testing single self-referencing chain...",
+             "Testing double self-referencing chain..."]
+    text = lambda v: "true" if v == 1 else "false"
+    for i, name in enumerate(names):
+        ticks, finished, irq = ws[3 * i:3 * i + 3]
+        out += [name, f"  Work took {ticks} ticks" + (f", finished = {text(finished)}, irq = {text(irq)}" if i else "")]
+    return out
+
+
+RENDER = {"timers": render_timers, "access-time": render_access, "chopping": render_chopping, "bandwidth": render_bandwidth,
+          "chain-looping": render_chain}
+
+TIMER_ROW = re.compile(r"^Timer(\d), clock:\s*(.+?),\s*(.+?):\s*(.*)$")
+SYNC_ROW = re.compile(r"^(\d = .+?)\s{2,}(-?\d+,.*)$")
+
+
+def numbers(text):
+    return [int(v) for v in re.findall(r"-?\d+", text)]
+
+
+def timer_rows(lines):
+    return [(m.group(1, 2, 3), numbers(m.group(4))) for m in map(TIMER_ROW.match, lines) if m]
+
+
+def sync_rows(lines):
+    return [numbers(m.group(2)) for m in map(SYNC_ROW.match, lines) if m]
+
+
+def step(vs):
+    """The commonest rise between successive samples: the loop's cycles in the counter's ticks."""
+    rises = [b - a for a, b in zip(vs, vs[1:]) if b > a]
+    return statistics.mode(rises) if len(rises) >= 2 else None
+
+
+def equal_timers(rec, tty):
+    """The checks of Diamond_Records.md §2.3, row class by row class."""
+    report, ok = [], True
+    for (key, mine), (_, theirs) in zip(timer_rows(rec), timer_rows(tty)):
+        label = "Timer%s/%s/%s" % key
+        if key[2].endswith("frame delay"):
+            a, b = statistics.median(mine[2:]), statistics.median(theirs[2:])
+            report.append(f"{label}: settled median {a} against {b}, {a - b:+} (reported, not graded: Diamond_Records.md §2.3)")
+        elif key[1] == "System clock":
+            same = mine == theirs
+            ok &= same
+            report.append(f"{label}: {'equal' if same else f'{mine} against {theirs}'}")
+        else:
+            both = mine + theirs
+            same = max(both) - min(both) <= 1
+            ok &= same
+            report.append(f"{label}: {'within one tick, as the release' if same else f'{sorted(set(mine))} against {sorted(set(theirs))}'}")
+    pairs = [(step(x), step(y)) for x, y in zip(sync_rows(rec), sync_rows(tty))]
+    counted = [(x, y) for x, y in pairs if x is not None and y is not None]
+    report += [f"sync row {i}: rises by {x} against {y}" for i, (x, y) in enumerate(pairs) if x is not None and y is not None and x != y]
+    report.append(f"sync rows: {sum(x == y for x, y in counted)} of the {len(counted)} that count in both rise by the same step")
+    checks = lambda lines: [l for l in lines if l.startswith(("Reached", "Counter reset", "Target"))]
+    same = checks(rec) == checks(tty)
+    ok &= same
+    report.append(f"the target check's four booleans: {'equal' if same else 'differ'}")
+    counts = lambda lines: [numbers(l)[1] for l in lines if l.startswith("counter ==")]
+    report.append(f"the target check's counts: {counts(rec)} against {counts(tty)}, not graded (Diamond_Records.md §2.3)")
+    reads = lambda lines: [l for l in lines if l.startswith(("Write", "Read"))]
+    off = [f"'{a}' against '{b}'" for a, b in zip(reads(rec), reads(tty)) if a != b]
+    ok &= not off
+    report.append("the mode reads: " + ("equal" if not off else "; ".join(off)))
+    return ok, report
+
+
+def equal_lines(rec, tty, pattern):
+    """Every row the pattern finds, in order, by its numbers."""
+    a = [numbers(l) for l in rec if re.match(pattern, l)]
+    b = [numbers(l) for l in tty if re.match(pattern, l)]
+    off = [(i, x, y) for i, (x, y) in enumerate(zip(a, b)) if x != y]
+    report = [f"row {i}: {x} against {y}" for i, x, y in off[:8]] + ([f"and {len(off) - 8} rows more"] if len(off) > 8 else [])
+    if off:
+        gaps = [next(p - q for p, q in zip(x, y) if p != q) for _, x, y in off if len(x) == len(y)]
+        report.append("the first differing number, record less TTY: " + ", ".join(f"{g:+} in {gaps.count(g)}" for g in sorted(set(gaps))))
+    if len(a) != len(b):
+        report.append(f"{len(a)} rows against {len(b)}")
+    report.append(f"{len(b) - len(off)} of {len(b)} rows equal")
+    return not off and len(a) == len(b), report
+
+
+def equal(program, rec, tty):
+    if program == "timers":
+        return equal_timers(rec, tty)
+    if program == "access-time":
+        return equal_lines(rec, tty, r"^\S+\s+\(\s*0x")
+    if program == "chain-looping":
+        return equal_lines(rec, tty, r"^  Work took")
+    if program == "chopping":
+        busy = lambda ls: [("GPU busy" in l) for l in ls if "took" in l]
+        ok, report = equal_lines(rec, tty, r"^DMA2")
+        marks = sum(x == y for x, y in zip(busy(rec), busy(tty)))
+        return ok, report + [f"{marks} of {len(busy(tty))} busy marks equal"]
+    hblanks = lambda ls: [int(m.group(1)) for m in (re.search(r"\(hblanks:\s*(\d+)\)", l) for l in ls) if m]
+    a, b = hblanks(rec), hblanks(tty)
+    report = [f"{BANDWIDTH[i]}: {x} hblanks against {y}, {x - y:+}" for i, (x, y) in enumerate(zip(a, b)) if x != y]
+    return a == b, report + [f"{sum(x == y for x, y in zip(a, b))} of {len(b)} rows' hblanks equal"]
+
+
+def hundredths(cell):
+    whole, _, cents = cell.partition(".")
+    return int(whole) + (int(cents) / 100 if cents else 0)
+
+
+def table(lines):
+    rows = {}
+    for line in lines:
+        m = re.match(r"^(\S+)\s+\(\s*0x[0-9a-fA-F]+\)\s+(.*)$", line)
+        if m:
+            rows[m.group(1)] = [hundredths(c) for c in m.group(2).split()[:3]]
+    return rows
+
+
+def console(program, rec, log):
+    """WiseMan's TTY gate (TtyReader.cs) for timers, access-time and bandwidth; Diamond_Referees.md §6 for chopping."""
+    report = []
+    if program == "timers":
+        ours = {key: vs[2:] for key, vs in timer_rows(rec)}
+        graded = off = 0
+        for key, vs in timer_rows(log):
+            row = "Timer%s/%s/%s" % key
+            tol = (0 if "Hblank" in key[1] else 10 if "Dot clock" in key[1] else 60) if key[2].endswith("frame delay") else \
+                (2 if "/8" in key[1] or "Dot clock" in key[1] or "Hblank" in key[1] else 3)
+            mean = statistics.mean(vs[2:])
+            graded += 1
+            bad = [v for v in ours.get(key, []) if abs(v - mean) > tol]
+            if bad or key not in ours:
+                off += 1
+                report.append(f"{row}: {bad[:1] or 'missing'} against {mean:.1f} (tolerance {tol})")
+        report.append(f"{graded - off} of {graded} rows within their tolerances")
+    elif program == "access-time":
+        ours, theirs = table(rec), table(log)
+        cells = [(r, i, ours[r][i], v) for r, vs in theirs.items() for i, v in enumerate(vs) if r in ours]
+        near = lambda d: sum(abs(a - b) <= d for _, _, a, b in cells)
+        report += [f"{r}/{(8, 16, 32)[i]}: {a:.2f} against {b:.2f}" for r, i, a, b in cells if abs(a - b) > 0.2]
+        report.append(f"{near(0.2)} of {len(cells)} cells within 0.2 cycles, {near(0.5)} within 0.5")
+    elif program == "chain-looping":
+        want = [l for l in log if l.startswith("  Work took")]
+        have = [l for l in rec if l.startswith("  Work took")]
+        words_alike = sum(re.sub(r"\d+", "#", a) == re.sub(r"\d+", "#", b) for a, b in zip(have, want))
+        within = sum(abs(numbers(a)[0] - numbers(b)[0]) <= 0.10 * numbers(b)[0] for a, b in zip(have, want))
+        report += [f"{a.strip()} against {b.strip()}" for a, b in zip(have, want)]
+        report.append(f"{words_alike} of {len(want)} lines' words equal, {within} within 10%")
+    elif program == "chopping":
+        a = [(numbers(l.split("took")[1])[0], "GPU busy" in l) for l in rec if "took" in l]
+        b = [(numbers(l.split("took")[1])[0], "GPU busy" in l) for l in log if "took" in l]
+        within = sum(abs(x[0] - y[0]) <= 0.10 * y[0] for x, y in zip(a, b))
+        marks = sum(x[1] == y[1] for x, y in zip(a, b))
+        report.append(f"{within} of {len(b)} rows within 10%, {marks} of {len(b)} busy marks as the console's")
+    else:
+        h = lambda ls: {m.group(1).strip(): int(m.group(2)) for m in (re.match(r"^(.+?)\s+dT:.*\(hblanks:\s*(\d+)\)", l) for l in ls) if m}
+        ours, theirs = h(rec), h(log)
+        report += [f"{k}: {ours.get(k)} against {v}" for k, v in theirs.items() if abs(ours.get(k, 0) - v) > 0.02 * v]
+        report.append(f"{sum(abs(ours.get(k, 0) - v) <= 0.02 * v for k, v in theirs.items())} of {len(theirs)} rows within 2%")
+    return report
+
+
+def main(argv):
+    if len(argv) < 3 or argv[0] not in ("render", "equal", "console") or argv[1] not in RENDER:
+        die(__doc__)
+    mode, program = argv[0], argv[1]
+    if argv[2] == "--tty":
+        rec = [l.rstrip() for l in Path(argv[3]).read_text(errors="replace").replace("\r", "").splitlines()]
+        argv = argv[:2] + argv[3:]
+    else:
+        ws = words(argv[2])
+        if len(ws) < SIZE[program]:
+            die(f"{program}: {len(ws)} words, the record needs more")
+        rec = RENDER[program](ws)
+    if mode == "render":
+        print("\n".join(rec))
+        return
+    other = [l.rstrip() for l in Path(argv[3]).read_text(errors="replace").replace("\r", "").splitlines()]
+    if mode == "equal":
+        ok, report = equal(program, rec, other)
+        print("\n".join(report))
+        print("equal" if ok else "differs")
+    else:
+        print("\n".join(console(program, rec, other)))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

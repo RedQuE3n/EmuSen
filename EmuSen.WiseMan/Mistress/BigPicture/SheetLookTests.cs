@@ -179,7 +179,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             AssertFramed(window, "Active Cheats", "Select", "Back", "Tab", "Choose");
             Assert.False(InScope<Button>(Sheets(window).Current!, "SaveAsButton").IsVisible);
             Assert.False(InScope<Button>(Sheets(window).Current!, "LoadFromButton").IsVisible);
-            Assert.True(InScope<Button>(Sheets(window).Current!, "SaveButton").IsVisible);
+            // On screen while the sheet shows the game's console tab, not only on General - see EmuSen_Settings_Reference.md §4.15a.
+            var save = InScope<Button>(Sheets(window).Current!, "SaveButton");
+            Assert.Contains(save, Sheet(window).GetVisualDescendants());
+            Assert.True(save.IsEffectivelyVisible);
             AssertTargets(window, Sheet(window));
             PadAudit.Reach(Sheet(window), pad, e => e is Button { Name: "ApplyButton" });
             AssertFilledWhenFocused(window, Named<Button>(window, "ApplyButton"));

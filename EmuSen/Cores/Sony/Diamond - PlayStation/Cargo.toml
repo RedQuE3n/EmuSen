@@ -16,6 +16,8 @@ blackmoon-gte = { path = "../BlackMoon-HW/blackmoon-gte" }
 
 [dev-dependencies]
 emusen-mips = { path = "../../Shared/emusen-mips" }
+# Its SHA-256, which pins the release code the record programs carry (tests/support/records.rs).
+emusen-core-conform = { path = "../../Shared/emusen-core-conform" }
 
 [profile.release]
 panic = "abort"

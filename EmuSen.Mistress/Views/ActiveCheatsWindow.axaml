@@ -29,7 +29,6 @@
                         <TextBlock Text="Saved cheat list" FontWeight="Bold" />
                         <lunac:HintText x:Name="SaveTargetText" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button x:Name="SaveButton" Content="Save" Click="OnSaveClick" />
                             <Button x:Name="LoadButton" Content="Load" Click="OnLoadClick" />
                             <Button x:Name="SaveAsButton" Content="Save As..." Click="OnSaveAsClick" />
                             <Button x:Name="LoadFromButton" Content="Load From..." Click="OnLoadFromClick" />
@@ -52,9 +51,11 @@
                 <lunac:ButtonBar Grid.Column="1">
                     <Button x:Name="DatabaseButton" Content="Cheat Database..." Click="OnDatabaseClick" />
                     <Button x:Name="ApplyButton" Content="Apply Cheats" Click="OnApplyClick" />
+                    <!-- In the bar so every tab has it, not only General - see §4.15a. -->
+                    <Button x:Name="SaveButton" Content="Save" Click="OnSaveClick" />
                     <Button x:Name="RemoveButton" Content="Remove" IsEnabled="False" Click="OnRemoveClick" />
                     <Button x:Name="ClearButton" Content="Remove All" Click="OnClearClick" />
-                    <Button Content="Close" Click="OnCloseClick" />
+                    <Button x:Name="CloseButton" Content="Close" Click="OnCloseClick" />
                 </lunac:ButtonBar>
             </Grid>
         </Border>

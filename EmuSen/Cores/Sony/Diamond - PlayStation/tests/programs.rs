@@ -273,6 +273,97 @@ fn the_open_kernels_pad_functions_read_the_pads() {
     assert_eq!(bytes(&m, 0x10_0000, 8), [0x00, 0x73, 0xFF, 0xFF, 0x80, 0x80, 0xFF, 0x80], "the analog read, the left stick right");
 }
 
+// The RAM-recording rewrites of ps1-tests' TTY programs (Diamond_Records.md), each record as Diamond answers it. Four
+// carry the release's code from the corpus and pass unrun without it.
+
+#[path = "support/records.rs"]
+mod records;
+
+/// A rewrite with the release's code carried in, or none without the corpus.
+fn carried(name: &str) -> Option<String> {
+    let Some(corpus) = records::corpus() else {
+        eprintln!("{name}: not run, {} names no ps1-tests build 158", records::CORPUS_VARIABLE);
+        return None;
+    };
+    Some(records::source(records::named(name), &corpus).expect("the release's code"))
+}
+
+fn fnv(words: &[u32]) -> u64 {
+    words.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &w| (h ^ w as u64).wrapping_mul(0x0000_0100_0000_01B3))
+}
+
+/// `timers` on a PAL console, as its log's: the system clock's delay rows sample for sample as the release prints them
+/// on Diamond's open kernel, a frame of 263 hblanks, and the target and flag checks (Diamond_Records.md §2).
+#[test]
+fn the_timers_record_reads_as_the_release_prints() {
+    let m = run_for(include_str!("../programs/timers.s"), 120, Market::Europe);
+    let row = |k: u32| results(&m, 0x10_0000 + 40 * k, 10);
+    for k in [0, 6, 12] {
+        assert_eq!((row(k), row(k + 1)), (vec![1013; 10], vec![5013; 10]), "timer {}", k / 6);
+    }
+    assert_eq!(row(3), [198, 199, 198, 199, 198, 199, 198, 199, 199, 198], "the dot clock, 1000 cycles");
+    assert_eq!(row(11), [263; 10], "a frame's hblanks");
+    assert_eq!(row(16), [627, 626, 627, 627, 627, 626, 627, 627, 627, 626], "the system clock over 8, 5000 cycles");
+    for k in [2, 8, 14] {
+        assert!(row(k)[3..].iter().all(|&v| v.abs_diff(112_557) <= 1), "a frame on the system clock, settled: {:?}", row(k));
+    }
+    assert_eq!(results(&m, 0x10_0D00, 17), [1666, 833, 833, 833, 834, 835, 834, 833, 833, 833, 833, 0, 0xC08, 1, 0, 1, 1]);
+    assert_eq!(results(&m, 0x10_0D80, 6), [0x400, 0x7FF, 0x1C08, 0x408, 0x408, 0x408]);
+    assert_eq!(fnv(&results(&m, 0x10_0000, 870)), 0x1763_FD9A_68AD_363D, "the whole record");
+}
+
+/// `cpu/access-time`: the 51 cells, whole cycles and hundredths, equal to what the release prints on Diamond (§3);
+/// D-4's rule meets the console's log within 0.2 cycles on 49 of them.
+#[test]
+fn the_access_time_record_reads_as_the_release_prints() {
+    let Some(source) = carried("access-time") else { return };
+    let m = run_for(&source, 40, Market::Americas);
+    let cells: Vec<(u32, u32)> = results(&m, 0x10_0000, 102).chunks(2).map(|c| (c[0], c[1])).collect();
+    assert_eq!(cells[..3], [(5, 1), (5, 1), (5, 8)], "RAM");
+    assert_eq!(cells[12..15], [(11, 7), (26, 0), (56, 0)], "EXPANSION2");
+    assert_eq!(cells[45..48], [(18, 7), (18, 0), (36, 7)], "SPUCNT, its 32-bit load an address error's round trip");
+    assert_eq!(fnv(&results(&m, 0x10_0000, 102)), 0xE027_8218_730C_657E, "every cell");
+}
+
+/// `dma/chopping`: 130 transfers of 2,048 words to VRAM, their CPU cycles, and the GPU busy exactly where a block size
+/// leaves words unsent (§4); each 14 cycles short of the release's where its kernel's call leaves the window cold.
+#[test]
+fn the_chopping_record_times_each_transfer() {
+    let Some(source) = carried("chopping") else { return };
+    let m = run_for(&source, 200, Market::Americas);
+    let rows: Vec<Vec<u32>> = results(&m, 0x10_0000, 780).chunks(6).map(|r| r.to_vec()).collect();
+    assert_eq!(rows[0], [1, 8192, 1, 0, 24_607, 0], "blocks of one word");
+    assert_eq!(rows[65], [0, 8192, 0, 0, 2201, 0], "the burst");
+    assert_eq!(rows[129], [0, 8192, 128, 128, 4209, 0], "128-word windows, 128 cycles between");
+    for (i, r) in rows[..65].iter().enumerate() {
+        assert_eq!(r[5] == 1, 2048 % r[2] != 0, "block size {}", r[2]);
+        assert!(i == 64 || r[2] == i as u32 + 1);
+    }
+    assert!(rows[65..].iter().all(|r| r[5] == 0));
+    assert_eq!(fnv(&results(&m, 0x10_0000, 780)), 0xF809_2905_A397_7592, "every row");
+}
+
+/// `gpu/bandwidth`: the hblanks of 400 full-screen transfers or primitives a row, nine of the fourteen equal to the
+/// release's on Diamond and the rest within two (§5), every row within 0.6% of the console's; since D-11's refit, each
+/// row within one hblank of what it read before.
+#[test]
+fn the_bandwidth_record_counts_each_rows_hblanks() {
+    let Some(source) = carried("bandwidth") else { return };
+    let m = run_for(&source, 860, Market::Americas);
+    let hblanks: Vec<u32> = results(&m, 0x10_0000, 56).chunks(4).map(|r| r[2]).collect();
+    assert_eq!(hblanks, [15_773, 12_123, 19_127, 1216, 7603, 11_461, 15_134, 15_134, 7721, 11_580, 39_976, 39_975, 5844, 3968]);
+    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0xC54B_955B_DA4F_277C, "the milliseconds and MB/s as well");
+}
+
+/// `dma/chain-looping`: the RAM loop's ticks with no DMA, an empty chain and two never-ending ones, and their
+/// booleans (§6); one ÷8 tick short of the release's on Diamond where the prescaler's phase differs, D-5's 6.3% under a chain.
+#[test]
+fn the_chain_looping_record_times_the_loop_beside_each_chain() {
+    let Some(source) = carried("chain-looping") else { return };
+    let m = run_for(&source, 40, Market::Americas);
+    assert_eq!(results(&m, 0x10_0000, 12), [16_024, !0, !0, 16_008, 1, 1, 24_016, 0, 0, 24_016, 0, 0]);
+}
+
 /// D-11: the cycles from a primitive's last word to GPUSTAT bit 26, with a rectangle's and a fill's time charged by
 /// the rows they draw; the referees read a 1x1 rectangle ready 10 to 16 cycles after its word (Diamond_GPU.md §8).
 #[test]

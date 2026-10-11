@@ -59,8 +59,9 @@ case on venusrt
 target venusrt
 covers 1
 $ summary
-out 35
+out 123
 VenusRT (Rust) 0.1.0, snes, frame 2
+[STATE] CPU  PC=00:ED30  A=0001 X=0000 Y=0000 S=01F3 D=0000 DB=00  P=34 [nv-BdIzc]  E=1
 status 0
 action none
 end

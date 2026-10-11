@@ -229,16 +229,29 @@ case on venusrt
 target venusrt
 covers 1-2
 $ eval symbols
-out 50
+out 157
   A
   D
   DB
+  dbr
+  dp
   E
+  flag.c
+  flag.d
+  flag.i
+  flag.m
+  flag.n
+  flag.v
+  flag.x
+  flag.z
   frame
   P
   PB
+  pbr
   PC
   S
+  sp
+  stackdepth
   X
   Y
 status 0
@@ -658,7 +671,7 @@ case on nephrite
 target nephrite
 covers 1-2
 $ eval symbols
-out 109
+out 122
   A0
   A1
   A2
@@ -679,6 +692,7 @@ out 109
   PC
   SR
   SSP
+  stackdepth
   USP
 status 0
 action none

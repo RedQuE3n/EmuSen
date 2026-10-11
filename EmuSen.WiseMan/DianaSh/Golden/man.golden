@@ -870,7 +870,7 @@ case the page for summary
 target none
 covers 1
 $ man summary
-out 292
+out 722
 NAME
     summary - free-text state dump
 
@@ -881,6 +881,13 @@ DESCRIPTION
     Prints whatever the current IDebugTarget's GetSummaryText() has to say -
     a catch-all, unstructured dump for state that doesn't have its own
     dedicated command yet. 'No target attached.' if no ROM is loaded.
+
+    On a core of the stable ABI the first line names the engine, the system
+    and the frame, and the console's system pack adds what it reads from the
+    main processor's live registers. On the SNES that is the 65816's state on
+    one line, P's letters upper case where set, the same line C# Venus prints
+    first; the PPU lines Venus adds need the video registers, which no SNES
+    engine of the stable ABI publishes yet.
 status 0
 action none
 end
@@ -1157,7 +1164,7 @@ case the page for regs
 target none
 covers 1
 $ man regs
-out 906
+out 1129
 NAME
     regs - dump CPU/video/APU registers
 
@@ -1175,6 +1182,10 @@ OTHER PROCESSORS
     'regs' keeps printing every section at once, which stays the right
     default when the question is 'what is the machine doing' rather than
     'what is this one chip doing'.
+
+    The coprocessor section shows the processor 'cop' names (the first after
+    the main one that is not the SPC700), so on a core of the stable ABI it
+    is that processor's own registers, as 'regs <name>' prints them.
 
     Every value here is read through a side-effect-free view, never the
     chip's own register window - reading a real coprocessor status register
@@ -3331,7 +3342,7 @@ case the page for coretop
 target none
 covers 1
 $ man coretop
-out 2862
+out 3129
 NAME
     coretop - live htop-style dashboard of the loaded core's hardware
 
@@ -3348,6 +3359,11 @@ DESCRIPTION
     nothing to report for a given section (no hardware-load breakdown wired
     up, no fixed sprite capacity, no palettes) just makes that section
     shrink or disappear rather than showing something fake.
+
+    On a core of the stable ABI the load bars are the phases the core times
+    and names in its machine info; a core that times none shows one bar,
+    'frame', the engine's own timing of the whole frame. Each is a share of
+    one frame at the machine's own rate.
 
     Load bars are colored green/yellow/red under 60% / 60-85% / over 85%,
     the same rough 'getting busy' convention real htop's CPU bars use.
@@ -4301,7 +4317,7 @@ case the page for eval
 target none
 covers 1
 $ man eval
-out 3691
+out 4271
 NAME
     eval - evaluate an expression against live core state
 
@@ -4335,6 +4351,15 @@ SYMBOLS
     generic fallback names every register the core already reports through
     'regs', plus 'frame' and any labels. Nothing has to be written per-core
     for 'eval' to work on a new console.
+
+    A core of the stable ABI adds two sources to that fallback. Its console's
+    system pack names symbols derived from the main processor's registers -
+    on the SNES the eight flags and the four aliases above, read from P, S,
+    D, PB and DB - and 'stackdepth' is the depth of the call stack the host
+    keeps where the core reports calls. That stack is kept only on frames
+    run with something armed, so it is empty after frames that ran plain.
+    'scanline', 'cycle' and 'opaddr' are not among them: the ABI carries no
+    timing view and no last-instruction address.
 
 NUMBERS AND MEMORY
     Numbers     123 decimal, $1F or 0x1F hex, %1010 binary
@@ -4630,7 +4655,7 @@ case the page for dma
 target none
 covers 1
 $ man dma
-out 2535
+out 3144
 NAME
     dma - what the block-transfer engine is set up to do, and what it did
 
@@ -4656,6 +4681,16 @@ DESCRIPTION
     is, and for HDMA the table pointer and line counter it has reached. An
     idle channel still shows its last configuration, which is usually the
     thing you wanted to see.
+
+    On a SNES engine of the stable ABI the table is the system pack's
+    reading of the registers as last written, $4300-$437F with MDMAEN and
+    HDMAEN, from the engine's IO space. An enabled HDMA channel is shown
+    'on' while its line counter is not zero and 'arm' once it is, since a
+    header byte of 0 ends a channel until the next frame (fullsnes); a
+    counter the program itself wrote to 0 reads as ended too. The indirect
+    address is $43x5-$43x7, the byte count's own register, as on the
+    hardware. 'dma log' needs a transfer record the stable ABI does not
+    carry, and refuses there.
 
 TRANSFER LOG
     'dma log on' records every transfer as it happens - channel, kind,
@@ -4893,7 +4928,7 @@ case the page for freeze
 target none
 covers 1
 $ man freeze
-out 1815
+out 2266
 NAME
     freeze - pin an address by undoing every write to it
 
@@ -4928,6 +4963,14 @@ DESCRIPTION
     address in a read-only space is refused rather than silently ignored.
     Freezing an address whose writes the core does not observe will also
     show a blocked count of zero - see 'man watch' for which paths report.
+
+ON A CORE OF THE STABLE ABI
+    Such a core reports a store only after its frame, so the host cannot
+    undo a write as it happens. It reads each frozen byte at the end of
+    every frame and writes the value back where it has changed, as it
+    applies cheats. The game can therefore read its own value within the
+    frame, as with a per-frame poke, and the count in 'freeze list' is of
+    frames whose end found the byte changed, not of writes.
 
 EXAMPLES
     freeze add WRAM 13c6

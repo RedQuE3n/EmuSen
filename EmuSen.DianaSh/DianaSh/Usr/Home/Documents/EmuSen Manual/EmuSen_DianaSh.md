@@ -1336,7 +1336,12 @@ The cores, outside the shell, shown by it:
     (`EmuSen_CoreAPI.md` §30.2, §30.3): frame 0 and the stale registers were the targets' first snapshot, taken from a
     mirror not yet loaded from the Rust core's state, and VenusRT's missing CPU registers the same defect in the v1
     target; MoonRT now names itself. The rest is missing surface, inventoried item by item with the route each would
-    take in `EmuSen_CoreAPI.md` §30.6 and not built.
+    take in `EmuSen_CoreAPI.md` §30.6. *Built 2026-10-10* (`EmuSen_CoreAPI.md` §31): what needs no surface, through the
+    host and the SNES's system pack, so VenusRT now publishes palettes, tiles and the tile sheet, DMA channels,
+    vectors, the flag symbols and the stack depth, freezes, its coprocessor in `regs`, the summary's CPU line and the
+    engine's load bar. Sprites need the video registers and remain with them; the hardware break conditions, audio
+    channels, coprocessor history and MoonRT's and MercuryRT's call stack from the start of a run remain as §30.6 and
+    §31.4 leave them.
 20. Nephrite names its main processor `m68k`, not the `cpu` every command takes as the main one, so `regs cpu` and
     `disasm cpu` refuse there; and its `tile` throws `IndexOutOfRangeException`. *Fixed 2026-10-10*
     (`EmuSen_CoreAPI.md` §30.1, §30.4): `cpu` names the first processor, which both surfaces already state is the

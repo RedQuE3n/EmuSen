@@ -3,7 +3,7 @@ using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.DianaSh.DianaSh.Sys.Systems.Snes
 {
-    // The SNES's system pack: its systems-table entry and its two cheat formats - see EmuSen_CoreAPI.md §20.
+    // The SNES's system pack: its systems-table entry, its two cheat formats and its debugger views - see EmuSen_CoreAPI.md §20, §31.
     public static class SnesSystem
     {
         public const string Id = "snes";
@@ -35,6 +35,6 @@ namespace EmuSen.DianaSh.DianaSh.Sys.Systems.Snes
         public static ICheatCodeCodec GameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
             SnesCheatFormats.IsGameGenie, SnesCheatFormats.DecodeGameGenie);
 
-        public static readonly SystemPack Pack = new(Entry, ProActionReplay, GameGenie);
+        public static readonly SystemPack Pack = new(Entry, ProActionReplay, GameGenie, DebugViews: SnesDebugViews.Instance);
     }
 }

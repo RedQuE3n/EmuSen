@@ -2863,8 +2863,10 @@ rows in both of its sections.
 
 ### 30.6 What the C# cores publish that the Rust ones do not: an inventory
 
-*Read from the code and the corpus at 88bb936b. Nothing here is built. A size is a rough count of new code: S under
-about 100 lines, M about 100 to 400, L more.*
+*Read from the code and the corpus at 88bb936b. A size is a rough count of new code: S under about 100 lines, M about
+100 to 400, L more. Built 2026-10-10, as §31 records: of VenusRT's items, 3, 4, 5, 8, 10, 19 and 21, the part of 15
+that needs no surface, and the host's half of 20, each marked **built** in the table; 6 was found to need item 1 and
+was not built. Nothing that widens a surface or adds a space was built.*
 
 The routes an item could travel by are four, in order of preference, since each later one widens a stable surface:
 
@@ -2883,25 +2885,25 @@ publishes, beyond those:
 |---|---|---|---|---|
 | 1 | Video (PPU) registers, as last written | `regs` | space: a view of the PPU's latched registers; pack names them | M |
 | 2 | Sound registers (SPC700 timers and ports, S-DSP registers) | `regs` | space: an S-DSP register space; the SPC700's ports are in APURAM | M |
-| 3 | A cartridge coprocessor's registers in the combined view | `regs` | host: processors after the second are already published with registers (`regs sa1` works); `CoreDebugTarget.CoprocessorRegisters` would show them | S |
-| 4 | Palettes | `pal` | pack: CGRAM is a v1 space | S |
-| 5 | Tiles, tilemaps, the tile sheet and palette swatch | `tile`, `tilemap` | pack: VRAM and CGRAM are v1 spaces; the bit-plane formats are console facts | M |
-| 6 | Sprites | `sprites` | pack over OAM, with OBSEL from item 1 | S, after 1 |
+| 3 | A cartridge coprocessor's registers in the combined view | `regs` | host: processors after the second are already published with registers (`regs sa1` works); `CoreDebugTarget.CoprocessorRegisters` would show them. **Built 2026-10-10** (§31.1) | S |
+| 4 | Palettes | `pal` | pack: CGRAM is a v1 space. **Built 2026-10-10** | S |
+| 5 | Tiles, tilemaps, the tile sheet and palette swatch | `tile`, `tilemap` | pack: VRAM and CGRAM are v1 spaces; the bit-plane formats are console facts. **Built 2026-10-10** | M |
+| 6 | Sprites | `sprites` | pack over OAM, with OBSEL from item 1. **Not built 2026-10-10**: no route without item 1 (§31.1) | S, after 1 |
 | 7 | Audio channels: each voice's state, envelope stage and key-on history | `channels` | space for the registers (item 2); ext for the envelope state the DSP holds internally | M |
-| 8 | DMA channels | `dma` | pack: `$4300`-`$437F` as last written are already in VenusRT's `IO` space | S |
+| 8 | DMA channels | `dma` | pack: `$4300`-`$437F` as last written are already in VenusRT's `IO` space. **Built 2026-10-10** | S |
 | 9 | The DMA transfer log | `dma log` | ext: a ring of transfers, drained as `debug_writes` is | M |
-| 10 | Interrupt vectors | `vectors` | pack: the vector addresses are the 65816's, read through `CpuBus` | S |
+| 10 | Interrupt vectors | `vectors` | pack: the vector addresses are the 65816's, read through `CpuBus`. **Built 2026-10-10** | S |
 | 11 | Physical address of a CPU address | `addr` | ext: the mapping is the cartridge's, which only the core knows in general | S |
 | 12 | Hardware break conditions (STP, WDM, BRK, COP, PPU access while rendering, auto-joypad read) | `bp when` | ext, or an additive minor: a condition list in machine info and a call to arm them; `debug_run_frame` already reports a stop's kind | M |
 | 13 | Register writes | `setreg` | additive minor: `debug_set_register`, beside `debug_registers` | S |
 | 14 | 65816 operand-width hints | `disasm … m16 x8` | additive minor: hints to `debug_disassemble`; or none, if the core decodes with the live M and X flags | S |
-| 15 | Expression symbols beyond the registers: flags, scanline, cycle, operand address, stack depth | `eval` | pack for the flags (bits of P); host for stack depth; ext or a timing view for scanline and cycle | S |
+| 15 | Expression symbols beyond the registers: flags, scanline, cycle, operand address, stack depth | `eval` | pack for the flags (bits of P); host for stack depth; ext or a timing view for scanline and cycle. **Flags, the register aliases and stack depth built 2026-10-10**; scanline, cycle and the operand address remain | S |
 | 16 | Coprocessor register history | `cophist` | ext: a ring per coprocessor (`IHistoricalCoprocessorTarget`) | M |
 | 17 | Coprocessor register flow | `copflow` | ext: named in §6.14 as an extension | M |
 | 18 | Read and write counters per address | `counters` | ext for reads; stores are already reported for spaces flagged `reports_stores` | M |
-| 19 | Freezes | `freeze` | host: a write after each frame through `space_write`, as cheats are applied | S |
-| 20 | Per-subsystem load bars | `coretop` | host: from `phases`, which VenusRT does not yet claim (`PHASES`) | S |
-| 21 | A summary beyond engine, system and frame | `summary` | host, composed from the items above | S |
+| 19 | Freezes | `freeze` | host: a write after each frame through `space_write`, as cheats are applied. **Built 2026-10-10** | S |
+| 20 | Per-subsystem load bars | `coretop` | host: from `phases`, which VenusRT does not yet claim (`PHASES`). **The host's half built 2026-10-10**; VenusRT's phases remain a change to the core (§31.1) | S |
+| 21 | A summary beyond engine, system and frame | `summary` | host, composed from the items above. **Built 2026-10-10**, the CPU line; the PPU lines wait on item 1 | S |
 
 Twenty-one items: four need only the host (3, 19, 20, 21), six are system-pack work over spaces v1 already carries
 (4, 5, 6, 8, 10, 15), two are new spaces in the core (1, 2), and nine would widen a surface (7, 9, 11, 12, 13, 14, 16,
@@ -2920,7 +2922,7 @@ remains, and it is a policy rather than a missing surface:
 
 The same rule holds for every v1 core, VenusRT and Nephrite among them: `CoreEngine` runs a plain `advance` unless
 its bridge is armed. That is one item for each of MoonRT and MercuryRT. It is a choice between the debugger's completeness and the frame's speed, so it is
-the tester's to make, not a defect to fix.
+the tester's to make, not a defect to fix. *Measured 2026-10-10 and not built*: §31.4.
 
 **MarsRT against Mars.** The same members are published, through `MarsRtDebugTarget`; the corpus differs only in the
 summary's second line (Mars prints the ROM's title and byte order). Nothing is inventoried.
@@ -2932,6 +2934,162 @@ the Genesis's own views (VDP registers, sprites, palettes, the YM2612's channels
 host could carry six, a system pack six, the cores two as new spaces, and nine would widen a surface, three of them as
 additive minors of v1. Before any is built, each takes the evaluation the project asks of a feature that would widen a
 stable surface: whether it is an extension, a module or a component of its own, and why.
+
+## 31. §30.6's items that need no surface, built 2026-10-10
+
+§30.6 sorted what VenusRT's debugger lacks by the route each item would travel. This section records the twelve the
+host or the SNES's system pack can carry with no surface changed: what was built, where its decoding lives, how each
+was compared with C# Venus, and the three that turned out not to be buildable on those routes.
+
+### 31.1 The items
+
+| # | Item | Route | Where | Shown by (`VenusRtDebugViewTests`) |
+|---|---|---|---|---|
+| 3 | The coprocessor in `regs` | host | `CoreDebugTarget.CoprocessorRegisters` is the registers of the processor `cop` names (`DebugCpus.Coprocessor`, §30.1) | `Regs_shows_the_SA1_as_the_coprocessor` |
+| 4 | Palettes, and the palette swatch | pack | `SnesDebugViews.Palettes`, `PaletteSwatch`, over `CGRAM` | `Palettes_match_Venus` |
+| 5 | Tiles, tilemap entries and the tile sheet | pack | `SnesDebugViews.DecodeTilePixels`, `DecodeTilemapEntry`, `TileSheet`, over `VRAM` | `Tiles_tilemaps_and_the_tile_sheet_match_Venus` |
+| 6 | Sprites | — | not built | — |
+| 8 | DMA channels and their destinations' names | pack | `SnesDebugViews.DmaChannels` over `IO`, `NameDmaDestination` | `Dma_channels_match_Venus`; `SnesSystemPackTests` |
+| 10 | Interrupt vectors | pack | `SnesDebugViews.Vectors`, read through `CpuBus` by `vectors` | `Vectors_match_Venus` |
+| 15 | Flags and aliases; stack depth | pack; host | `SnesDebugViews.Symbol`; `CoreDebugTarget`'s expression context, from the call stack's depth | `Flag_and_alias_symbols_match_Venus`, `Stack_depth_matches_Venus` |
+| 19 | Freezes | host | `CoreEngine.Freezes`, enforced at the frame's end by `FreezeRegistry.Enforce` | `A_freeze_holds_as_Venus_holds_it` |
+| 20 | Load bars | host | `CoreDebugTarget.HardwareLoad`, from the engine's `LastFramePhases` | `Hardware_load_shows_the_frame` |
+| 21 | The summary | host and pack | `CoreDebugTarget.GetSummaryText` with `SnesDebugViews.Summary` | `The_summary_carries_Venus_CPU_line` |
+| — | MoonRT's and MercuryRT's call stack from the start of a run | host | not built: a policy, measured in §31.4 | — |
+
+**Item 6 needs item 1.** A sprite's size is two sizes chosen by OBSEL (`$2101`, bits 5–7), and OBSEL is write-only on
+the hardware: a read of `$2101` is open bus (fullsnes), so `CpuBus` cannot give it, and VenusRT holds the PPU's
+registers in no space it publishes. The decoder over OAM is small and console-shaped, but without OBSEL every sprite's
+width and height would be a guess, so it was not built. It becomes a pack item, at the size §30.6 gave it, once
+item 1's view of the PPU's latched registers exists.
+
+**Item 20's per-subsystem split needs VenusRT to time its phases.** The host now turns whatever phases an engine
+reports into load bars, as a share of one frame at the machine's own rate; VenusRT claims no `PHASES`, so it shows one
+bar, `frame`, the engine's own timing. The split C# Venus shows (CPU and SPC700, PPU, HDMA) would need VenusRT to claim
+`PHASES` and time those parts of a frame that interleave by the scanline. That widens no surface, since `phases` is
+in v1, but it is a change to the core and its machine info that puts clock reads on the frame path, and its cost
+would have to be measured first. It was left for that decision.
+
+**Item 21's PPU lines need item 1** for the same reason as item 6: C# Venus's summary prints the PPU's registers.
+
+**Item 15's scanline, cycle and operand address** remain where §30.6 put them: v1 carries no timing view and no
+address of the last instruction.
+
+### 31.2 The mechanism
+
+**One interface, one optional member.** `ISystemDebugViews` (`Sys/Systems/SystemDebugViews.cs`) is what a console's
+pack decodes for a debugger from the spaces and registers any engine of the console publishes; every member defaults
+to "none". `SystemPack` gains it as an optional member, `DebugViews`, beside its cheat codecs, and the SNES's pack sets
+`SnesDebugViews.Instance`. `CoreDebugTarget` asks for the pack of its machine's system (`SystemPacks.For`) and passes
+it its own spaces and the main processor's registers. Nothing names VenusRT: a second SNES engine that publishes the
+same spaces gets the same views, and a console whose pack has none (the Genesis's three) is shown as before, but for
+the two host items, which apply to every v1 core (Nephrite's `regs` now shows the Z80 as its coprocessor, the processor
+`cop` already named there, and `stackdepth` joins its symbols).
+
+**The spaces the pack reads, by name.** `CGRAM` (512 bytes, the 256 colours as little-endian BGR555 words), `VRAM`
+(64 KiB) and `CpuBus` mean the same on both SNES engines. `IO` does not: VenusRT's is the S-CPU's registers
+`$4000`–`$43FF` as last written, 1 KiB, while C# Venus's `IO` is bank 0 of its bus, 64 KiB, read live. The pack states
+the first layout and reads DMA channels only from an `IO` of 1 KiB; the second is not misread, it yields no channels,
+and C# Venus keeps its own channel view.
+
+**DMA channels from the registers.** Each channel's fields are its twelve registers `$43x0`–`$43xB` as fullsnes lays
+them out, with MDMAEN (`$420B`) and HDMAEN (`$420C`). Two fields are not stored as such by the hardware and are
+derived:
+
+- *Running* ("on" against "arm"): a header byte of 0 terminates an HDMA channel until it is initialised in the next
+  frame (fullsnes, the HDMA table format), and that byte is what NTRL (`$43xA`) then holds, while every other header
+  is reloaded the moment the counter's low seven bits reach 0. So an enabled channel whose NTRL is not 0 is running.
+  The rule misreads one case only: a program that writes 0 to NTRL itself, which the hardware also takes as nothing
+  left to do on that channel until the next initialisation.
+- *The indirect address* is `$43x5`–`$43x7`, which are also the byte count. C# Venus keeps the two in separate fields,
+  so on an indirect HDMA channel its byte count shows the value last written while VenusRT's shows the address the
+  hardware holds there. The parity test compares every other field and drives no indirect channel.
+
+The destinations are named from fullsnes's table of the B bus, `$2100`–`$213F` (with its read-only names, `RDOAM`,
+`RDVRAML` and so on, and `COLDATA`), the APU's four ports by their mirrors through `$217F`, and `WMDATA`, `WMADDL`,
+`WMADDM`, `WMADDH`.
+
+**The host's items.** `CoreEngine.Freezes` is enforced after cheats at each frame's end: a v1 core reports stores only
+after the frame (`debug_writes`), so the host cannot undo a write as it happens, as C# Venus's write observer does, and
+instead writes back each frozen byte it finds changed, counting frames rather than writes (`man freeze`). The stack
+depth is the host's `CallStackRegistry.Depth`, which follows `debug_calls` on observed frames only (§30.6).
+
+**Nothing on the frame path when no debugger is attached.** The views are read when a command or a dashboard asks; the
+palettes and load bars are `PollingProvider`s refreshed by `RefreshProviders`, which a frontend calls only with a
+debugger attached. The freeze costs one count test per frame when nothing is frozen.
+
+### 31.3 The parity tests
+
+`VenusRtDebugViewTests` builds one synthetic image (`SyntheticRom`): from `$8005` the program forces blank, fills VRAM
+and CGRAM by two general DMAs from the ROM, points two HDMA channels at WH0 (one whose table outlasts the frame, one
+that ends after a line), fills a third channel's registers with distinct values and leaves it idle, sets A, X, Y and P
+to known values, and calls a one-instruction loop, so that every view has non-zero content and the registers are the
+same on both engines at any frame. Each test runs C# Venus and VenusRT on it for three frames, makes the debug target
+afterwards as the corpus does, and compares the commands' whole output (`pal`, `tile` at 2, 4 and 8 bpp, `tilemap`,
+`dma`, `vectors`, `eval` of each flag and alias) or the views' values (the tile sheet's and the swatch's bytes, the
+DMA channels' fields). The SA-1's test uses its own image, in which the S-CPU starts the SA-1 at a routine that sets
+its registers. All ten pass, against C# Venus's own decoders (measured 2026-10-10, before any C# code used the
+pack).
+
+Two findings came from them.
+
+- **C# Venus's freeze did not hold against the game.** `MemoryBus.Write8` called the write observer before storing a
+  WRAM byte, so the freeze's restore, made inside the observer, was overwritten at once: `INC $10` in a loop with `$10`
+  frozen at `$AB` left it at `$B6` after two frames. Every other observed store already stored first; the three WRAM
+  paths now do too, in a commit of its own with `LabelFreezeCounterTests.A_frozen_address_holds_against_the_game_writing_it`,
+  which failed before it.
+- **The two SA-1s start with different stack pointers**: `$01FF` on C# Venus and `$01FD` on VenusRT once the SA-1 is
+  released. That is reset state, not a view, and is recorded here rather than resolved; the SA-1 test compares PB, PC,
+  A, X, Y and P and leaves S out.
+
+**What the tests cannot show.** Agreement between the two engines' views over equal memory shows the pack decodes as
+C# Venus does, not that either decodes as the hardware does; the decodings were checked against fullsnes where it
+states them (the bit planes, the register layout, the names), and against no hardware.
+
+### 31.4 The call stack from the start of a run: measured, not built
+
+§30.6 left MoonRT's and MercuryRT's call stack to the tester, as a choice between completeness and speed. What it costs
+was measured on 2026-10-10 (Super Mario Bros. 3, Tetris and Donkey Kong Country, copied from the library; 600 frames,
+five rounds each, the frame through `advance` against the same frame through `debug_run_frame` with only calls and
+interrupts recorded and the calls drained; the machine was shared with other work, so the spread is wide):
+
+| Engine | Plain frame | Observed frame | Ratio, five rounds |
+|---|---|---|---|
+| MoonRT | 0.99–1.21 ms | 1.03–1.17 ms | 0.92–1.10 |
+| MercuryRT | 0.44 ms | 0.46 ms | 1.03–1.05 |
+| VenusRT | 1.32–1.70 ms | 1.71–2.03 ms | 1.04–1.48 |
+
+Two forms are possible and neither is chosen here. Recording calls on every frame of a core that claims
+`DEBUG_STACK` reproduces the C# cores' `bt` exactly, the corpus's case included, at the cost above on every frame of
+every player. Recording them only once a debug target is attached costs nothing without a debugger, but does not
+reproduce the corpus's case, whose target is made after the frames that made the calls.
+
+### 31.5 Measured
+
+On Donkey Kong Country after 300 frames (2026-10-10): VenusRT's tile sheet takes 8–12 ms, since the pack reads VRAM's
+65,536 bytes one `space_read` at a time through `IDebugMemorySpace`; a refresh of every provider takes about 0.1 ms;
+the DMA table 0.01 ms.
+
+### 31.6 One owner: C# Venus reads the same decoders
+
+Once the parity tests had passed against C# Venus's own decoders, C# Venus's target was switched onto the pack's for
+every view whose output was shown identical, so that each SNES fact has one owner and the two engines cannot drift:
+`SnesDebugTarget`'s palettes, tile pixels, tilemap entries, tile sheet and palette swatch call `SnesDebugViews` over
+its PPU's arrays, its vectors are the pack's table, its DMA destinations are named by the pack, and `StateDump`'s CPU
+line is the pack's `CpuStateLine`. `Renderer`'s tile-sheet and swatch methods and their buffer, which nothing else
+used, were removed. The coupling is one way and already present: C# Venus's debugger depended on DianaSh before; the
+pack depends on neither engine.
+
+Two views stay C# Venus's own. Its DMA channels are read from its channel objects, which hold the running state
+directly and keep the indirect address apart (§31.2), and its `IO` space is not the layout the pack reads. Its
+expression symbols come from `SnesExpressionContext`, which reads its CPU directly and adds scanline, cycle and the
+operand address that v1 does not carry.
+
+The switch changed one output: DMA destinations C# Venus's PPU table left unnamed or named otherwise now carry
+fullsnes's names (`COLDATA $2132` where it printed `$2132`, `APUI00` for `APUIO0`, `RDVRAML` for `VMDATALREAD`). No
+golden case prints one of them, and the corpus did not move. After the switch the parity tests compare the two engines'
+memory through one decoder, which still shows their CGRAM, VRAM, registers and vectors agree; the comparison of the
+decoders themselves is the run recorded in §31.3.
 
 ---
 

@@ -13,6 +13,7 @@ using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.DianaSh.DianaSh.Dev;
+using EmuSen.DianaSh.DianaSh.Sys.Systems.Snes;
 using EmuSen.Cauldron;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
@@ -214,34 +215,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         public DmaLogRegistry? DmaLog => _dmaLog;
 
-        // $2140-$217F is the APU/WRAM half of the B bus, which the PPU table does not cover.
-        public string? NameDmaDestination(byte register)
-        {
-            string? name = register switch
-            {
-                >= 0x40 and <= 0x43 => $"APUIO{register - 0x40}",
-                0x80 => "WMDATA",
-                _ => _bus.Ppu.DebugRegisterName(register),
-            };
-            return name == null ? $"${0x2100 + register:X4}" : $"{name} ${0x2100 + register:X4}";
-        }
+        // The B bus's names, from the SNES's system pack - see `man dma`.
+        public string? NameDmaDestination(byte register) => SnesDebugViews.NameDmaDestination(register);
 
-        // One entry per chip the cartridge carries, both banks' vectors - see `man cpus` and `man vectors`.
-        private static readonly InterruptVector[] Vectors =
-        {
-            new("COP", 0x00FFE4, 2, "Native (E=0)"),
-            new("BRK", 0x00FFE6, 2, "Native (E=0)"),
-            new("ABORT", 0x00FFE8, 2, "Native (E=0)"),
-            new("NMI", 0x00FFEA, 2, "Native (E=0)"),
-            new("IRQ", 0x00FFEE, 2, "Native (E=0)"),
-            new("COP", 0x00FFF4, 2, "Emulation (E=1)"),
-            new("ABORT", 0x00FFF8, 2, "Emulation (E=1)"),
-            new("NMI", 0x00FFFA, 2, "Emulation (E=1)"),
-            new("RESET", 0x00FFFC, 2, "Emulation (E=1)"),
-            new("IRQ/BRK", 0x00FFFE, 2, "Emulation (E=1)"),
-        };
-
-        public IReadOnlyList<InterruptVector> InterruptVectors => Vectors;
+        // The 65816's vectors, from the SNES's system pack - see `man vectors`.
+        public IReadOnlyList<InterruptVector> InterruptVectors => SnesDebugViews.Vectors;
 
         // The cartridge's own decode where it maps, else the bus regions - see `man addr`.
         public PhysicalAddress? ResolvePhysical(int cpuAddress)
@@ -895,93 +873,23 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return result;
         }
 
-        // All 256 entries: the BG/OBJ split is an SNES convention, not an interface one.
-        private IReadOnlyList<DebugPaletteInfo> ReadPalettesLive()
-        {
-            var result = new List<DebugPaletteInfo>();
-            for (int p = 0; p < 16; p++)
-            {
-                var colors = new List<(byte r, byte g, byte b)>();
-                for (int c = 0; c < 16; c++)
-                {
-                    int off = (p * 16 + c) * 2;
-                    byte lo = _ppu.Cgram[off & 0x1FF];
-                    byte hi = _ppu.Cgram[(off + 1) & 0x1FF];
-                    int raw = lo | (hi << 8);
-                    byte r = (byte)((raw & 0x1F) * 255 / 31);
-                    byte g = (byte)(((raw >> 5) & 0x1F) * 255 / 31);
-                    byte b = (byte)(((raw >> 10) & 0x1F) * 255 / 31);
-                    colors.Add((r, g, b));
-                }
-                result.Add(new DebugPaletteInfo(p, colors));
-            }
-            return result;
-        }
+        // All 256 entries, decoded by the SNES's system pack: the BG/OBJ split is an SNES convention, not an interface one.
+        private IReadOnlyList<DebugPaletteInfo> ReadPalettesLive() => SnesDebugViews.Palettes(DelegateDebugMemorySpace.Over(SnesDebugViews.Cgram, _ppu.Cgram));
 
         // The free-text escape hatch, delegated to StateDump rather than re-derived - see §3.1.
         public string GetSummaryText() => StateDump.DumpAll(_cpu, _bus);
 
-        // Two bytes: tile 0-9, palette 10-12, priority 13, flips 14-15 - see Venus_PPU.md.
-        public int TilemapEntryStride => 2;
+        // The tile formats, from the SNES's system pack - see EmuSen_CoreAPI.md §31.
+        public int TilemapEntryStride => SnesDebugViews.Instance.TilemapEntryStride;
 
-        public string DecodeTilemapEntry(IDebugMemorySpace space, int address)
-        {
-            byte lo = space.Read(address);
-            byte hi = space.Read(address + 1);
-            int entry = lo | (hi << 8);
+        public string DecodeTilemapEntry(IDebugMemorySpace space, int address) => SnesDebugViews.DecodeTilemapEntry(space, address);
 
-            int tileIndex = entry & 0x3FF;
-            int palette = (entry >> 10) & 0x7;
-            bool priority = (entry & 0x2000) != 0;
-            bool hFlip = (entry & 0x4000) != 0;
-            bool vFlip = (entry & 0x8000) != 0;
+        public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp) => SnesDebugViews.DecodeTilePixels(space, address, bpp);
 
-            return $"{tileIndex:X3}{palette}{(priority ? 'P' : '.')}{(hFlip ? 'H' : '.')}{(vFlip ? 'V' : '.')}";
-        }
+        // The SNES's system pack's pictures, over the PPU's plain arrays.
+        public (byte[] Rgba, int Width, int Height) RenderTileSheet() => SnesDebugViews.TileSheet(DelegateDebugMemorySpace.Over(SnesDebugViews.Vram, _ppu.Vram));
 
-        // Planar, bpp/2 row-interleaved pairs, as SampleBgPixel reads for real rendering.
-        public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp)
-        {
-            if (bpp != 2 && bpp != 4 && bpp != 8)
-            {
-                throw new ArgumentException($"bpp must be 2, 4, or 8 (got {bpp}) - the SNES has no other planar tile depth.");
-            }
-
-            var pixels = new byte[64];
-            for (int row = 0; row < 8; row++)
-            {
-                byte p0 = space.Read(address + row * 2);
-                byte p1 = space.Read(address + row * 2 + 1);
-                byte p2 = 0, p3 = 0, p4 = 0, p5 = 0, p6 = 0, p7 = 0;
-                if (bpp >= 4)
-                {
-                    p2 = space.Read(address + 16 + row * 2);
-                    p3 = space.Read(address + 16 + row * 2 + 1);
-                }
-                if (bpp == 8)
-                {
-                    p4 = space.Read(address + 32 + row * 2);
-                    p5 = space.Read(address + 32 + row * 2 + 1);
-                    p6 = space.Read(address + 48 + row * 2);
-                    p7 = space.Read(address + 48 + row * 2 + 1);
-                }
-
-                for (int col = 0; col < 8; col++)
-                {
-                    int bit = 7 - col;
-                    int val = ((p0 >> bit) & 1) | (((p1 >> bit) & 1) << 1);
-                    if (bpp >= 4) val |= (((p2 >> bit) & 1) << 2) | (((p3 >> bit) & 1) << 3);
-                    if (bpp == 8) val |= (((p4 >> bit) & 1) << 4) | (((p5 >> bit) & 1) << 5) | (((p6 >> bit) & 1) << 6) | (((p7 >> bit) & 1) << 7);
-                    pixels[row * 8 + col] = (byte)val;
-                }
-            }
-            return pixels;
-        }
-
-        // Renderer's headless-safe export, which only touches plain arrays.
-        public (byte[] Rgba, int Width, int Height) RenderTileSheet() => _renderer.GetVramTileSheetRgba(_ppu);
-
-        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => _renderer.GetPaletteSwatchRgba(_ppu);
+        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => SnesDebugViews.PaletteSwatch(DelegateDebugMemorySpace.Over(SnesDebugViews.Cgram, _ppu.Cgram));
 
         // ToArray, never dequeue: it must not steal from a live audio consumer - see §3.1.
         public (short[] Samples, int SampleRate) GetAudioSamples()

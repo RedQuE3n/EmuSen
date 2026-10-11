@@ -130,6 +130,21 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal(0x63, wram.Read(0x40));
         }
 
+        // The game's own store, through the bus: INC $10 in a loop, which must read the frozen value back every time.
+        [Fact]
+        public void A_frozen_address_holds_against_the_game_writing_it()
+        {
+            var core = SyntheticRom.LoadCore(SyntheticRom.Build((5, new byte[] { 0xE6, 0x10, 0x80, 0xFC })));
+            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var shell = DianaShInterpreter.CreateDefault(target);
+            shell.Submit("freeze add WRAM 10 AB");
+
+            for (int i = 0; i < 2; i++) core.RunFrame();
+
+            Assert.Equal(0xAB, core.Bus!.Ram[0x10]);
+            Assert.DoesNotContain("(0 write(s) undone)", shell.Submit("freeze list").Output);
+        }
+
         [Fact]
         public void Freeze_list_counts_the_writes_it_undid()
         {

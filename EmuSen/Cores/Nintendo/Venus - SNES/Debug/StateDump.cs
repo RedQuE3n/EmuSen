@@ -2,45 +2,16 @@ using System.Text;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Video;
+using EmuSen.DianaSh.DianaSh.Sys.Systems.Snes;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {
     // On-demand snapshot of CPU + PPU state, formatted to be directly comparable to MesenCE's own Status.
     public static class StateDump
     {
-        public static string DumpCpuState(Cpu cpu)
-        {
-            var sb = new StringBuilder();
-            sb.Append("[STATE] CPU  ");
-            sb.Append($"PC={cpu.PB:X2}:{cpu.PC:X4}  ");
-            sb.Append($"A={cpu.A:X4} X={cpu.X:X4} Y={cpu.Y:X4} S={cpu.S:X4} D={cpu.D:X4} DB={cpu.DB:X2}  ");
-            sb.Append($"P={cpu.P:X2} [{DescribeFlags(cpu.P, cpu.E)}]  ");
-            sb.Append($"E={(cpu.E ? 1 : 0)}");
-            return sb.ToString();
-        }
-
-        // P's bit meanings differ slightly between native (E=0) and emulation (E=1) mode - bit 4 is X (index.
-        private static string DescribeFlags(byte p, bool emulation)
-        {
-            var sb = new StringBuilder();
-            sb.Append((p & 0x80) != 0 ? 'N' : 'n');
-            sb.Append((p & 0x40) != 0 ? 'V' : 'v');
-            if (emulation)
-            {
-                sb.Append('-');
-                sb.Append((p & 0x10) != 0 ? 'B' : 'b');
-            }
-            else
-            {
-                sb.Append((p & 0x20) != 0 ? 'M' : 'm');
-                sb.Append((p & 0x10) != 0 ? 'X' : 'x');
-            }
-            sb.Append((p & 0x08) != 0 ? 'D' : 'd');
-            sb.Append((p & 0x04) != 0 ? 'I' : 'i');
-            sb.Append((p & 0x02) != 0 ? 'Z' : 'z');
-            sb.Append((p & 0x01) != 0 ? 'C' : 'c');
-            return sb.ToString();
-        }
+        // The 65816's line, written by the SNES's system pack so VenusRT's summary prints the same one.
+        public static string DumpCpuState(Cpu cpu) =>
+            SnesDebugViews.CpuStateLine(cpu.PB, cpu.PC, cpu.A, cpu.X, cpu.Y, cpu.S, cpu.D, cpu.DB, cpu.P, cpu.E);
 
         public static string DumpPpuState(Ppu ppu)
         {

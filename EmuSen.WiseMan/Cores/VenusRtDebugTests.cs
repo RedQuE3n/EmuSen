@@ -384,17 +384,18 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // §4.7's console views are extensions, not v1 (EmuSen_CoreAPI.md §6.14): the generic target answers them empty.
+        // Sprites and voices need state no v1 space holds, so they stay empty; the palettes the SNES's pack decodes from CGRAM (EmuSen_CoreAPI.md §31.1).
         [Fact]
-        public void The_console_views_are_empty_on_the_generic_target()
+        public void Only_the_views_no_space_carries_are_empty_on_the_generic_target()
         {
             if (Load(SyntheticRom.BuildBlank()) is not var (engine, t)) return;
             using (engine)
             {
                 engine.RunFrame();
+                t.RefreshProviders();
                 Assert.Empty(t.Sprites.Current);
-                Assert.Empty(t.Palettes.Current);
                 Assert.Empty(t.AudioChannels.Current);
+                Assert.Equal(16, t.Palettes.Current.Count);
             }
         }
 

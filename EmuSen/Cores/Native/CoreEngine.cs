@@ -41,6 +41,9 @@ namespace EmuSen.Cores.Native
         public virtual FrameLogRegistry FrameLog { get; } = new();
         public virtual BreakpointRegistry Breakpoints { get; } = new();
 
+        // Pinned bytes, written back at each frame's end, since a v1 core reports stores only after the fact - see `man freeze`.
+        public FreezeRegistry Freezes { get; } = new();
+
         // The debugger's tables and logs over DEBUG, every processor's registries in it.
         public CoreDebugBridge Debug { get; }
 
@@ -261,6 +264,7 @@ namespace EmuSen.Cores.Native
         {
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             if (_machine is not null) _hostCheats.ApplyAll(ReadSpace, WriteSpace);
+            if (Freezes.Count > 0) Freezes.Enforce(ReadSpace, WriteSpace);
             Breakpoints.NoteFrame(TotalFrames);
             if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
         }

@@ -1,15 +1,20 @@
 using System;
-using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
-using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 {
-    // Live control for the master switch, without touching individual flags - see §2.
-    public class LogCommand : global::EmuSen.DianaSh.DianaSh.Lib.IDianaShCommand
+    // Live control for the emulator's master logging switch, handed in rather than reached - see `man log`.
+    public class LogCommand : IDianaShCommand
     {
+        private readonly Func<bool> _isEnabled;
+        private readonly Action<bool> _setEnabled;
+
+        public LogCommand(Func<bool> isEnabled, Action<bool> setEnabled)
+        {
+            _isEnabled = isEnabled;
+            _setEnabled = setEnabled;
+        }
+
         public string Name => "log";
         public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
@@ -19,25 +24,25 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
             "  log status                    show whether the master switch is currently on or off",
         });
 
-        public global::EmuSen.DianaSh.DianaSh.Lib.DianaShResult Execute(IDebugTarget? target, string[] parts, string? stdin)
+        public DianaShResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             if (parts.Length < 2) return Usage;
 
             if (parts[1].Equals("off", StringComparison.OrdinalIgnoreCase))
             {
-                DianaShLogging.MasterEnabled = false;
+                _setEnabled(false);
                 return "Logging disabled (individual flags unchanged).";
             }
 
             if (parts[1].Equals("on", StringComparison.OrdinalIgnoreCase))
             {
-                DianaShLogging.MasterEnabled = true;
+                _setEnabled(true);
                 return "Logging enabled.";
             }
 
             if (parts[1].Equals("status", StringComparison.OrdinalIgnoreCase))
             {
-                return $"Logging is {(DianaShLogging.MasterEnabled ? "on" : "off")}.";
+                return $"Logging is {(_isEnabled() ? "on" : "off")}.";
             }
 
             return Usage;

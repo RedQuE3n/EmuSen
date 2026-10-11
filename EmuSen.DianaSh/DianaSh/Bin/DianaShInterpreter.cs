@@ -121,7 +121,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 new CallersCommand(),
                 new WritersCommand(),
                 new ReadersCommand(),
-                new LogCommand(),
+                new LogCommand(() => DebugLogging.MasterEnabled, on => DebugLogging.MasterEnabled = on),
                 new EchoCommand(),
                 new SedCommand(),
                 new GrepCommand(),

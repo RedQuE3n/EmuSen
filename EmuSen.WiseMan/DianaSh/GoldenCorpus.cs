@@ -190,7 +190,7 @@ namespace EmuSen.WiseMan.DianaSh
         private readonly string? _configOverride = ConfigStore.OverrideDirectory;
         private readonly string? _legacyOverride = ConfigStore.OverrideLegacyDirectory;
         private readonly string _cwd = Environment.CurrentDirectory;
-        private readonly bool _logging = DianaShLogging.MasterEnabled;
+        private readonly bool _logging = DebugLogging.MasterEnabled;
         private readonly Dictionary<string, string> _images = new();
 
         public string Home => Path.Combine(_temp, "home");
@@ -210,7 +210,7 @@ namespace EmuSen.WiseMan.DianaSh
             DataStore.OverrideDirectory = _dataOverride;
             ConfigStore.OverrideDirectory = _configOverride;
             ConfigStore.OverrideLegacyDirectory = _legacyOverride;
-            DianaShLogging.MasterEnabled = _logging;
+            DebugLogging.MasterEnabled = _logging;
             try { Directory.Delete(_temp, recursive: true); } catch (IOException) { }
         }
 
@@ -314,7 +314,7 @@ namespace EmuSen.WiseMan.DianaSh
                 File.WriteAllBytes(full, bytes);
             }
             foreach (string user in DianaShUserRegistry.Users.Where(u => !u.Equals("root", StringComparison.OrdinalIgnoreCase)).ToList()) DianaShUserRegistry.TryRemove(user);
-            DianaShLogging.MasterEnabled = false;
+            DebugLogging.MasterEnabled = false;
 
             using Built built = Target(c);
             string statePath = Path.Combine(DataStore.SaveStates, "golden.state");

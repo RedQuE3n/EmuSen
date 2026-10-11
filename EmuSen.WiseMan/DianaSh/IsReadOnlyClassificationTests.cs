@@ -74,7 +74,7 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.False(new BreakCommand().IsReadOnly);
             Assert.False(new FrameLogCommand().IsReadOnly);
             Assert.False(new CheatCommand().IsReadOnly);
-            Assert.False(new LogCommand().IsReadOnly);
+            Assert.False(new LogCommand(() => false, _ => { }).IsReadOnly);
             Assert.False(new TraceCommand().IsReadOnly);
             Assert.False(new SearchCommand().IsReadOnly);
             Assert.False(new HistoryCommand(new CommandHistory()).IsReadOnly);

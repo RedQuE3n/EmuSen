@@ -3062,7 +3062,144 @@ interrupts recorded and the calls drained; the machine was shared with other wor
 Two forms are possible and neither is chosen here. Recording calls on every frame of a core that claims
 `DEBUG_STACK` reproduces the C# cores' `bt` exactly, the corpus's case included, at the cost above on every frame of
 every player. Recording them only once a debug target is attached costs nothing without a debugger, but does not
-reproduce the corpus's case, whose target is made after the frames that made the calls.
+reproduce the corpus's case, whose target is made after the frames that made the calls. §31.4.1 measures the
+parts separately.
+
+#### 31.4.1 What it costs, measured again with the conditions separated, 2026-10-10
+
+The figures above compare a plain frame with an observed one on a shared machine and do not say which part of the
+observed frame is the price of the calls. This subsection separates the parts, adds Nephrite, prices the three forms
+the choice can take, and measures a fourth arrangement that records calls alone.
+
+**What an observed frame switches on, read from the code.** On the host, `CoreDebugBridge.Armed` (`NativeDebugBridge`
+for MoonRT and MercuryRT) is true when a breakpoint is not quiet, the profiler is armed, coverage is armed on any
+processor, or a watch or data breakpoint is listening. When it is, `AdvanceFrame` replaces `advance` with the bridge's
+loop: `PushTables` sends `debug_set` with `CALLS | INTERRUPTS` always (and `WRITES`, `EACH`, `PROFILING` and the
+coverage bits as armed), the registry's whole stack through `debug_set_stack`, every processor's breakpoints and both
+store-range tables, each built into a fresh array; then `debug_run_frame`; then `Drain`, which reads stores, calls,
+the profile and coverage. Since `INTERRUPTS` is always set, every interrupt the machine takes ends the core's call with
+a stop, and the host judges it, pushes every table again and continues. Call recording is therefore not armed by
+anything of its own: `CALLS` rides on every observed frame and on no plain one, which is why `bt` is empty after plain
+frames. In the core, `debug_run_frame` is a second loop beside `advance`'s. Before every instruction of processor 0
+it asks `Hooks::stop_before` (the step flag, the depth target and guard, a pending data stop, a taken interrupt, the
+logs' room, and a scan of the breakpoint list) and `Hooks::record` (a coverage bit and the profile's count), runs the
+step monomorphised over an observing bus or `Observer`, which tests the store flag on each store and calls
+`note_call`/`note_return` at each call, interrupt and return, and stamps the stores' pc after it. MoonRT, MercuryRT and
+Nephrite's 68000 report calls through that seam in the CPU itself. VenusRT's 65816 has none, so its loop reads each
+instruction's opcode before the step and classifies it afterwards (`note_flow`), and it also catches the SPC700 and a
+NEC DSP up to the S-CPU after every S-CPU instruction so that their probes see each step (`observe_others`);
+Nephrite asks a Z80 observer before every Z80 instruction. The observed frame is thus both a per-instruction observer
+path and a hook per call, and of the two only the hook per call is needed to record calls.
+
+**The minimum that recording calls alone requires.** In the core: the plain loop with the CPU's call and return
+seam bound to `note_call` and `note_return`, and nothing before or after each instruction. On the host: `debug_set`
+with `CALLS` alone, once; a call to `debug_run_frame` in place of `advance` each frame, with no tables pushed; and the
+calls drained into the `CallStackRegistry` after it. Neither needs a surface: v1 already carries `CALLS`,
+`debug_run_frame` and `debug_calls`, and a core may take any internal path through `debug_run_frame` that gives the
+same machine and the same log. For VenusRT the minimum also keeps the opcode read before each instruction, since its
+CPU reports no calls.
+
+**How it was measured.** `CallRecordingCostBench` in WiseMan, run only with `EMUSEN_CALLCOST_BENCH` set, takes the
+generic `CoreEngine` over each core's v1 library through a bench subclass that changes only how a frame is advanced,
+so every condition shares one engine and one frame-end path (for MoonRT and MercuryRT the two bridges send the same
+tables, §26.5, and differ only in whose registries they feed). Each run loads its image fresh, boots 600 frames with
+Start and A pressed in turn as `moonbench` does, arms its condition, and times 2,000 frames, each a `RunFrame`, the
+picture taken and the audio drained. The six conditions:
+
+| Condition | What runs each frame |
+|---|---|
+| plain | `advance`, nothing armed (today with or without a debugger attached) |
+| calls, today's loop | `debug_set(CALLS)` once, then `debug_run_frame` and the drain: the observed loop with only calls armed |
+| attached | the bridge's `RunFrame` with empty tables: what "record whenever a target is attached" would run if built on today's bridge |
+| breakpoint | one breakpoint on an address no processor reaches, through the engine as today |
+| fast path, plain | a probe build's `advance`, to show what its rebuild did to the plain frame |
+| fast path, calls | the probe build's `debug_run_frame` with only `CALLS` set, which takes the minimum loop above |
+
+The probe build, kept out of the tree, adds to each core a branch at the top of `debug_run_frame` taken when only
+`CALLS` is armed: MoonRT and MercuryRT run the plain loop over a bus whose only seam is the call hook, Nephrite runs
+`run_frame` with an `Observer` that has only `called` and `returned`, and VenusRT runs `run_frame`'s loop with the
+opcode read and `note_flow` around each step and no probes fitted. All four were built by cargo's release profile from
+the crates' directories. Two images a core: a synthetic one that calls in a loop (two nested calls and an eight-step
+count, 576 to 1,404 calls a frame), and a commercial game copied from the library to scratch (Super Mario Bros. 3 (U)
+(PRG 0), The Legend of Zelda: Link's Awakening (USA, Europe), The Legend of Zelda: A Link to the Past (U) and Sonic the
+Hedgehog (JUE), 36 to 97 calls a frame). Ten rounds, each its own test process under the test lock so that no other
+test ran beside it, the conditions of an image back to back and rotated a step each round. The machine was shared
+with other work, which the lock kept from running tests beside a round but not from building; the one-minute load
+was 0.93–3.82. The state hash after the run was the same in all
+six conditions and all ten rounds for each image, so neither recording nor the fast path moves the machine.
+
+**The results.** Each cell is the median over the ten rounds of the ratio of the condition's median frame to the
+plain frame's in the same round, with the least and greatest of the ten; the plain column is the median frame in ms,
+with its range. Means give the same ratios within 0.015.
+
+| Engine, game | Plain ms | Calls, today's loop | Attached | Breakpoint | Fast path, calls | Fast path, plain |
+|---|---|---|---|---|---|---|
+| MoonRT, Super Mario Bros. 3 | 1.397 (1.386–1.414) | 1.020 (1.013–1.028) | 1.040 (1.033–1.046) | 1.041 (1.029–1.047) | 0.989 (0.977–0.996) | 1.009 (0.996–1.030) |
+| MercuryRT, Link's Awakening | 0.410 (0.409–0.411) | 1.078 (1.065–1.086) | 1.102 (1.092–1.106) | 1.115 (1.103–1.116) | 1.005 (1.003–1.009) | 1.001 (1.000–1.003) |
+| VenusRT, A Link to the Past | 1.728 (1.712–1.732) | 1.199 (1.190–1.222) | 1.201 (1.196–1.218) | 1.206 (1.200–1.227) | 1.056 (1.053–1.071) | 0.994 (0.977–1.002) |
+| Nephrite, Sonic the Hedgehog | 1.606 (1.601–1.614) | 1.033 (1.023–1.040) | 1.040 (1.035–1.084) | 1.043 (1.036–1.076) | 1.007 (1.001–1.013) | 1.004 (0.994–1.009) |
+| MoonRT, synthetic | 0.697 (0.692–0.700) | 1.086 (1.076–1.095) | 1.086 (1.078–1.097) | 1.090 (1.085–1.110) | 1.008 (1.004–1.018) | 1.018 (1.010–1.030) |
+| MercuryRT, synthetic | 0.438 (0.437–0.440) | 1.085 (1.079–1.091) | 1.086 (1.082–1.089) | 1.092 (1.089–1.097) | 1.031 (1.025–1.037) | 0.996 (0.994–1.000) |
+| VenusRT, synthetic | 0.769 (0.766–0.774) | 1.462 (1.451–1.485) | 1.461 (1.452–1.472) | 1.468 (1.458–1.488) | 1.213 (1.201–1.236) | 0.985 (0.954–0.997) |
+| Nephrite, synthetic | 0.372 (0.369–0.376) | 1.221 (1.213–1.232) | 1.220 (1.213–1.235) | 1.230 (1.221–1.243) | 1.141 (1.124–1.146) | 1.019 (1.005–1.035) |
+
+**What the figures separate.**
+
+- *Recording calls on today's loop costs what a breakpoint costs.* Calls alone and a breakpoint differ by 0.4 to 3.7
+  points, so the price is the observed loop's work before and after every instruction, not anything the breakpoint
+  adds. On the commercial games it is 2 to 8 points on MoonRT, MercuryRT and Nephrite and 20 on VenusRT, whose loop
+  also catches its other processors up after every instruction. The careful figures sit inside §31.4's ranges and
+  narrow them: MoonRT's 0.92–1.10 is 1.02, VenusRT's 1.04–1.48 is 1.20 on a game and 1.46 on call-dense code.
+- *Today's bridge adds the interrupts' round trips.* Attached exceeds calls alone by 2.0 and 2.4 points on the NES and
+  Game Boy games, which take an interrupt or more each frame and so a stop, a table push and a re-entry each, and by
+  nothing on the synthetic images, which take none.
+- *The fast path removes almost all of it.* Measured against the probe build's own plain frame, which the rebuild moved
+  by up to 2 points either way with no change to its code, recording calls on the fast path costs within that layout
+  noise on MoonRT and Nephrite's game and half a point on MercuryRT's. On call-dense code it is about 13 to 16 ns a
+  logged call or return (MercuryRT 3.5 points at 1,151 events a frame, Nephrite 12 points at 2,807), the hook, the log
+  and the host's drain together; at the 70 to 200 events a frame of the four games that is 1 to 3 µs, under 0.3% of
+  any of their frames. VenusRT keeps 6 points on its game and 23 on the synthetic image, which is the opcode read and
+  the classification around every instruction that its CPU's missing seam forces.
+- *Estimated, not measured:* a call seam in VenusRT's 65816 like the ones in MoonRT's, MercuryRT's and the Beryl
+  CPUs, monomorphised so that the plain step does not see it, would leave it the same per-event cost, about 0.2% on
+  A Link to the Past. That is a change to the core's CPU and is not built.
+
+**The three forms, priced.** "No debugger" is a player's frame; "debugger" is a frame with a debug target attached and
+nothing armed. Percentages are the commercial games' range across the four cores.
+
+| Form | No debugger | Debugger | Whose `bt` it gives |
+|---|---|---|---|
+| (a) Unobserved, as today | 0 | 0 | the calls of observed frames only; empty after plain frames |
+| (b) Record once a target is attached, today's bridge | 0 | +4.0% to +20% (MoonRT 4.0, MercuryRT 10.2, VenusRT 20.1, Nephrite 4.0) | calls from the attach on; not the corpus's case (§31.4) |
+| (b) on the fast path | 0 | within noise to +0.5%; VenusRT +6% | the same |
+| (c) Record always, today's loop | +2.0% to +20% (MoonRT 2.0, MercuryRT 7.8, VenusRT 19.9, Nephrite 3.3) | the same | the C# cores', the corpus's case included |
+| (c) on the fast path | within noise to +0.5%; VenusRT +6% | the same | the same |
+
+Form (c) on today's loop charges every player for a debugger that most never open, on VenusRT a fifth of the frame.
+On the fast path it costs the three cores with a call seam nothing measurable.
+
+**One observation that bears on (c).** After 2,000 recorded frames the registry's depth was 507 to 512 on all four
+commercial games, against its cap of 512: these games leave calls unreturned (a routine that pops its own return
+address, as a jump table does), the drift `man bt` describes. The C# cores record into the same registry with the
+same cap and would drift the same way; that was inferred from the code, not measured. Past the cap a push is logged but not stacked while its return still pops, so on a long session
+the stack from the start of the run is mostly frames that will never return, and its innermost entries are not
+reliable. A stack recorded from the moment a target is attached starts empty and is exact for every call made after
+it. What (c) buys over (b) is therefore the corpus's case and the first seconds of a run, not a better stack an hour
+in.
+
+**Recommendation.** Do not record calls on today's observed loop outside an observed frame, in either form: it is the
+price of a breakpoint on every frame. If calls are to be recorded at all, first give each core the calls-only path
+of `debug_run_frame` (a change inside each core, and on the host `CALLS` sent without `INTERRUPTS` when nothing else is
+armed; no surface changes), and give VenusRT's 65816 a call seam. With those, (b) costs nothing without a debugger
+and well under a percent with one. Form (c) then costs every player well under a percent too, and the choice between
+them is the one §31.4 states, the corpus's case against a stack that drifts over a long run; with the observation
+above, (b) with the corpus making its target before the frames it inspects gives the more useful stack. The tester
+decides; nothing here changes a default.
+
+*Reproducing it.* `EMUSEN_CALLCOST_BENCH=1`, optionally `EMUSEN_CALLCOST_GAMES` (`core=path` pairs separated by `;`),
+`EMUSEN_CALLCOST_PROBE` (a folder holding a probe build's four libraries), `EMUSEN_CALLCOST_ROUND` (the rotation),
+`EMUSEN_CALLCOST_BOOT`, `EMUSEN_CALLCOST_FRAMES` and `EMUSEN_CALLCOST_OUT` (a file each run's row is appended to).
+Without a probe folder the two fast-path conditions are skipped.
 
 ### 31.5 Measured
 

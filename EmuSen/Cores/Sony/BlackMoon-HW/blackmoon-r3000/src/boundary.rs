@@ -18,6 +18,9 @@ struct Rig {
     cop2: [u32; 32],
     isolated: Vec<(bool, u32, Size, u32)>,
     writes: Vec<(u32, Size, u32)>,
+    /// Addresses from here up meet no device, and the access that just met none.
+    absent: u32,
+    faulted: bool,
 }
 
 fn at(address: u32) -> usize {
@@ -26,7 +29,7 @@ fn at(address: u32) -> usize {
 
 impl Rig {
     fn new() -> Rig {
-        Rig { ram: vec![0; RAM], clock: 0, idled: 0, line: false, commands: Vec::new(), cop2: [0; 32], isolated: Vec::new(), writes: Vec::new() }
+        Rig { ram: vec![0; RAM], clock: 0, idled: 0, line: false, commands: Vec::new(), cop2: [0; 32], isolated: Vec::new(), writes: Vec::new(), absent: u32::MAX, faulted: false }
     }
 
     fn word(&self, address: u32) -> u32 {
@@ -54,10 +57,12 @@ impl Bus for Rig {
     }
     fn read(&mut self, address: u32, size: Size) -> u32 {
         self.clock += 1;
+        self.faulted = address >= self.absent;
         (0..size.bytes()).fold(0, |v, i| v | (self.ram[at(address + i)] as u32) << (8 * i))
     }
     fn write(&mut self, address: u32, size: Size, value: u32) {
         self.clock += 1;
+        self.faulted = address >= self.absent;
         self.writes.push((address, size, value));
         for i in 0..size.bytes() {
             self.ram[at(address + i)] = (value >> (8 * i)) as u8;
@@ -94,6 +99,9 @@ impl Bus for Rig {
     fn set_cop2_control(&mut self, _register: u8, _value: u32) {}
     fn cop2_command(&mut self, command: u32) {
         self.commands.push(command);
+    }
+    fn bus_error(&mut self) -> bool {
+        std::mem::take(&mut self.faulted)
     }
 }
 
@@ -167,6 +175,56 @@ fn a_gte_command_meeting_an_interrupt_runs_and_epc_still_points_at_it() {
     assert_eq!(cpu.step(&mut rig), Step::Exception(0));
     assert_eq!((rig.commands.as_slice(), cpu.regs.epc), (&[0x0180001][..], ORIGIN));
     assert_eq!(cpu.regs.cause >> 28 & 3, 2, "CE from the interrupted instruction");
+}
+
+/// amidog's `psxtest_cpx` INTR on a console: after an MTC0 that enables an interrupt in SR, one more instruction runs
+/// before it is taken (BlackMoon_R3000.md D-4).
+#[test]
+fn an_interrupt_enabled_by_mtc0_sr_waits_one_instruction() {
+    let (mut cpu, mut rig) = machine("addiu t0, zero, 0x101\nmtc0 t0, SR\nmflo t1\nnop");
+    cpu.regs.cause = 0x100;
+    cpu.regs.lo = 0x55;
+    assert_eq!(run(&mut cpu, &mut rig, 3), [Step::Instruction; 3], "the MFLO after the MTC0 runs");
+    assert_eq!(cpu.step(&mut rig), Step::Exception(code::INT as u8));
+    assert_eq!((cpu.regs.epc, cpu.regs.r[9]), (ORIGIN + 12, 0x55));
+
+    let (mut cpu, mut rig) = machine("mtc0 zero, SR\nnop\nnop");
+    cpu.regs.sr = sr::IEC | 0x400;
+    assert_eq!(cpu.step(&mut rig), Step::Instruction);
+    rig.line = true;
+    assert_eq!(cpu.step(&mut rig), Step::Exception(code::INT as u8), "the boundary after the MTC0 still sees SR as it was");
+    assert_eq!(cpu.regs.epc, ORIGIN + 4);
+}
+
+/// `psxtest_cpx` SLOT on a console: an exception in the delay slot of a branch not taken leaves TAR at the
+/// instruction after the slot (D-5).
+#[test]
+fn an_exception_in_a_not_taken_branchs_slot_sets_tar_to_the_fall_through() {
+    let (mut cpu, mut rig) = machine("bne zero, zero, 0x80001100\nlw t0, 1(zero)");
+    cpu.step(&mut rig);
+    assert_eq!(cpu.step(&mut rig), Step::Exception(code::ADEL as u8));
+    let r = &cpu.regs;
+    assert_eq!((r.epc, r.cause >> 28, r.tar), (ORIGIN, 0b1011, ORIGIN + 8), "BD, BT clear, CE from the LW's bits");
+}
+
+/// `psxtest_cpx` BREAK on a console: a load or store that meets no device, and a break of the debug unit, leave CE
+/// zero where an address error leaves the opcode's bits (D-6).
+#[test]
+fn a_bus_error_and_a_debug_break_leave_ce_zero() {
+    let (mut cpu, mut rig) = machine("lw t0, 0x200(zero)\nnop\nsh t0, 0x200(zero)\nnop\nlw t0, 0x100(zero)");
+    rig.absent = 0x200;
+    assert_eq!(cpu.step(&mut rig), Step::Exception(code::DBE as u8));
+    assert_eq!(cpu.regs.cause >> 28, 0, "LW's bits are 3");
+    cpu.regs.pc = ORIGIN + 8;
+    assert_eq!(cpu.step(&mut rig), Step::Exception(code::DBE as u8));
+    assert_eq!(cpu.regs.cause >> 28, 0, "SH's bits are 1");
+    cpu.regs.pc = ORIGIN + 16;
+    let r = &mut cpu.regs;
+    r.bda = 0x100;
+    r.bdam = u32::MAX;
+    r.dcic = dcic::DE | dcic::DAE | dcic::DR | dcic::KD | dcic::TR;
+    assert_eq!(cpu.step(&mut rig), Step::Exception(code::BP as u8));
+    assert_eq!((cpu.regs.pc, cpu.regs.cause >> 28), (0x8000_0040, 0));
 }
 
 #[test]

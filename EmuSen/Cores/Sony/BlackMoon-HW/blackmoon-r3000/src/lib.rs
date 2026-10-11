@@ -110,6 +110,9 @@ pub struct Registers {
     pub bdam: u32,
     pub branch: BranchDelay,
     pub load: LoadDelay,
+    /// SR and Cause's software bits as the next boundary's interrupt check sees them, when the instruction before it
+    /// was an MTC0 to SR (BlackMoon_R3000.md D-4).
+    pub interrupt_view: Option<(u32, u32)>,
 }
 
 /// The registers a debugger lists, in `debug_registers`' order, each 32 bits: the general registers by their

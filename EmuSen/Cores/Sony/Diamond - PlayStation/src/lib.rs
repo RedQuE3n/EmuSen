@@ -7,6 +7,7 @@
 //! stage 8. The processors come from the BlackMoon crates.
 
 pub mod bus;
+pub mod card;
 pub mod devices;
 pub mod dma;
 pub mod exe;
@@ -17,6 +18,7 @@ pub mod kernel;
 pub mod machine;
 pub mod media;
 pub mod memctl;
+pub mod multitap;
 pub mod pad;
 pub mod sio0;
 pub mod state;

@@ -1,9 +1,11 @@
 //! SIO0, the controller and memory card port (psx-spx "Serial Interfaces (SIO)", "Controller and Memory Card
 //! Overview", "Signals"): its five registers, a byte shifted out and in at the baud rate, the receive FIFO, the
-//! address byte that selects a slot's device, /ACK and the DSR interrupt on IRQ7. Port 1's controller is a digital
-//! pad; port 2 and both card slots answer as empty. Every rule and its source is Diamond_Pad.md.
+//! address byte that selects a slot's device, /ACK and the DSR interrupt on IRQ7. Each port holds a controller and a
+//! card, or a multitap with four of each. Every rule and its source is Diamond_Pad.md.
 
-use crate::pad::{DigitalPad, HIGH_Z, Reply};
+use crate::card::Card;
+use crate::multitap::Multitap;
+use crate::pad::{Controller, HIGH_Z, Reply};
 
 /// The control register's bits (psx-spx "CR").
 pub mod cr {
@@ -72,6 +74,15 @@ impl RxFifo {
     }
 }
 
+/// Which device of the selected port answers: its controller or card, or a multitap's slot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Target {
+    Controller,
+    Card,
+    TapController(u8),
+    TapCard(u8),
+}
+
 /// Where the selected slot's transfer stands.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Phase {
@@ -80,13 +91,48 @@ pub enum Phase {
     Idle,
     /// Selected, waiting for the address byte.
     Address,
-    /// The controller answering, at the byte after the address numbered here.
-    Controller(u8),
+    /// A device answering, at the byte after the address numbered here.
+    Device(Target, u8),
     /// Nobody answering until the slot is deselected.
     Silent,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// What one port's connectors hold.
+#[derive(Clone, Debug, Default)]
+pub struct Port {
+    pub controller: Option<Controller>,
+    pub card: Option<Card>,
+    pub tap: Option<Multitap>,
+}
+
+impl Port {
+    /// The device the address byte names, if it is present and answers.
+    fn address(&mut self, byte: u8) -> Option<Target> {
+        match (&mut self.tap, byte) {
+            (Some(t), 0x01) => t.select_a().then_some(Target::TapController(0)),
+            (Some(t), 0x02..=0x04) => t.pads[byte as usize - 1].is_some().then_some(Target::TapController(byte - 1)),
+            (Some(t), 0x81..=0x84) => t.cards[byte as usize - 0x81].is_some().then_some(Target::TapCard(byte - 0x81)),
+            (Some(_), _) => None,
+            (None, CONTROLLER) => self.controller.is_some().then_some(Target::Controller),
+            (None, MEMORY_CARD) => self.card.is_some().then_some(Target::Card),
+            (None, _) => None,
+        }
+    }
+
+    fn exchange(&mut self, target: Target, step: u8, byte: u8) -> (Reply, bool) {
+        let none = (HIGH_Z, false);
+        match (target, &mut self.tap) {
+            (Target::Controller, _) => self.controller.as_mut().map_or(none, |c| c.exchange(step, byte)),
+            (Target::Card, _) => self.card.as_mut().map_or(none, |c| c.exchange(step, byte)),
+            (Target::TapController(0), Some(t)) => t.exchange_a(step, byte),
+            (Target::TapController(n), Some(t)) => t.pads[n as usize].as_mut().map_or(none, |c| c.exchange(step, byte)),
+            (Target::TapCard(n), Some(t)) => t.cards[n as usize].as_mut().map_or(none, |c| c.exchange(step, byte)),
+            _ => none,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Sio0 {
     pub mode: u16,
     pub control: u16,
@@ -108,13 +154,12 @@ pub struct Sio0 {
     pub dsr: bool,
     pub irq: bool,
     pub phase: Phase,
-    /// Port 1's controller; port 2's and the cards are stage 6's.
-    pub pad: Option<DigitalPad>,
+    pub ports: [Port; 2],
 }
 
 impl Sio0 {
-    pub fn new(pad: Option<DigitalPad>) -> Sio0 {
-        Sio0 { sampled_at: NEVER, ends_at: NEVER, ack_at: NEVER, ack_ends: NEVER, pad, ..Sio0::default() }
+    pub fn new(ports: [Port; 2]) -> Sio0 {
+        Sio0 { sampled_at: NEVER, ends_at: NEVER, ack_at: NEVER, ack_ends: NEVER, ports, ..Sio0::default() }
     }
 
     /// One bit's time in CPU cycles (psx-spx "BR": the reload times the mode's factor, made even).
@@ -177,8 +222,8 @@ impl Sio0 {
             self.fifo.push(reply.byte);
             self.control &= !cr::RXEN;
         }
-        if reply.ack {
-            self.ack_at = self.ends_at + ACK_AFTER;
+        if let Some(extra) = reply.ack {
+            self.ack_at = self.ends_at + ACK_AFTER + extra as u64;
         }
     }
 
@@ -186,20 +231,21 @@ impl Sio0 {
         if !self.selected() {
             return HIGH_Z;
         }
+        let p = self.port();
         match self.phase {
-            Phase::Address => {
-                let pad = if self.port() == 0 { self.pad } else { None };
-                if byte == CONTROLLER && pad.is_some() {
-                    self.phase = Phase::Controller(1);
-                    Reply { byte: HIGH_Z.byte, ack: true }
-                } else {
+            Phase::Address => match self.ports[p].address(byte) {
+                Some(t) => {
+                    self.phase = Phase::Device(t, 1);
+                    Reply::more(HIGH_Z.byte)
+                }
+                None => {
                     self.phase = Phase::Silent;
                     HIGH_Z
                 }
-            }
-            Phase::Controller(step) => {
-                let (reply, more) = self.pad.map_or((HIGH_Z, false), |p| p.exchange(step, byte));
-                self.phase = if more { Phase::Controller(step + 1) } else { Phase::Silent };
+            },
+            Phase::Device(t, step) => {
+                let (reply, more) = self.ports[p].exchange(t, step, byte);
+                self.phase = if more { Phase::Device(t, step.saturating_add(1)) } else { Phase::Silent };
                 reply
             }
             Phase::Idle | Phase::Silent => HIGH_Z,
@@ -272,7 +318,8 @@ let bit = |on: bool, b: u32| if on { b } else { 0 };
 
     fn set_control(&mut self, value: u16, now: u64) -> bool {
         if value & cr::RESET != 0 {
-            *self = Sio0 { baud: self.baud, baud_base: self.baud_base, pad: self.pad, ..Sio0::new(None) };
+            let ports = std::mem::take(&mut self.ports);
+            *self = Sio0 { baud: self.baud, baud_base: self.baud_base, ..Sio0::new(ports) };
             return false;
         }
         let was = (self.selected(), self.port());
@@ -287,9 +334,42 @@ let bit = |on: bool, b: u32| if on { b } else { 0 };
         self.raise()
     }
 
-    pub fn set_buttons(&mut self, pressed: u16) {
-        if let Some(p) = &mut self.pad {
-            p.pressed = pressed;
+    /// The controller the host's port `n` names: 0 and 1 the two ports' (or their multitaps' slot A), 2-4 port 1's
+    /// multitap slots B-D, 5-7 port 2's.
+    pub fn controller(&mut self, n: usize) -> Option<&mut Controller> {
+        let (port, slot) = match n {
+            0 | 1 => (n, 0),
+            2..=4 => (0, n - 1),
+            5..=7 => (1, n - 4),
+            _ => return None,
+        };
+        let p = &mut self.ports[port];
+        match &mut p.tap {
+            Some(t) => t.pads[slot].as_mut(),
+            None if slot == 0 => p.controller.as_mut(),
+            None => None,
+        }
+    }
+
+    /// The card in slot `n`: 0 and 1 the two ports' (or their multitaps' slot A), then the multitaps' as above.
+    pub fn card(&mut self, n: usize) -> Option<&mut Card> {
+        let (port, slot) = match n {
+            0 | 1 => (n, 0),
+            2..=4 => (0, n - 1),
+            5..=7 => (1, n - 4),
+            _ => return None,
+        };
+        let p = &mut self.ports[port];
+        match &mut p.tap {
+            Some(t) => t.cards[slot].as_mut(),
+            None if slot == 0 => p.card.as_mut(),
+            None => None,
+        }
+    }
+
+    pub fn set_buttons(&mut self, n: usize, mask: u32) {
+        if let Some(c) = self.controller(n) {
+            c.set_buttons(mask);
         }
     }
 }
@@ -297,11 +377,13 @@ let bit = |on: bool, b: u32| if on { b } else { 0 };
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pad::DigitalPad;
 
     const BIT: u64 = 0x88;
 
     fn port() -> Sio0 {
-        let mut s = Sio0::new(Some(DigitalPad { pressed: 1 << 3 }));
+        let pad = Port { controller: Some(Controller::Digital(DigitalPad { pressed: 1 << 3 })), ..Port::default() };
+        let mut s = Sio0::new([pad, Port::default()]);
         s.write(0xE, 2, 0x88, 0);
         s.write(0x8, 2, 0x0D, 0);
         s

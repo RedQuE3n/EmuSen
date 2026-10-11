@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Galaxia.Library;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Mistress.Library
 {

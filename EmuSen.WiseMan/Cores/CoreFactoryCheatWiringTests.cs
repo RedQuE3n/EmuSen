@@ -7,7 +7,7 @@ using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores

@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.WiseMan.DianaSh
 {

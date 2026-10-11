@@ -9,7 +9,7 @@ using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;

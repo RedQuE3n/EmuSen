@@ -3,7 +3,8 @@ using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Cheats;
 using EmuSen.Cores.Nintendo.Mercury.Cpu.Disassembler;
 using EmuSen.Cores.Nintendo.Mercury.Debug;
-using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores

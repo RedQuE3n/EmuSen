@@ -7,8 +7,8 @@ using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 

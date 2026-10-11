@@ -4,8 +4,8 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Debug;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.WiseMan.Fixtures
 {

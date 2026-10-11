@@ -13,6 +13,7 @@ using EmuSen.Cores;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Mistress.Library;
 using Microsoft.Data.Sqlite;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.WiseMan.Mistress
 {

@@ -3,7 +3,8 @@ using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Telemetry;
 using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.WiseMan.Fixtures;
 
@@ -69,7 +70,7 @@ namespace EmuSen.WiseMan.DianaSh
             var target = BuildTarget(() => (8.33, 4.0, 0.5));
 
             Assert.All(target.HardwareLoad.Current,
-                l => Assert.Equal(EmuSen.Cauldron.DebugLoadKind.EmulatorCost, l.Kind));
+                l => Assert.Equal(EmuSen.Crystal.Telemetry.DebugLoadKind.EmulatorCost, l.Kind));
         }
 
         [Fact]

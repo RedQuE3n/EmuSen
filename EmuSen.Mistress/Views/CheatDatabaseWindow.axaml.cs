@@ -7,8 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using EmuSen.LunaP.Windowing;
 using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia.Models;
 using EmuSen.Galaxia.Library;
 

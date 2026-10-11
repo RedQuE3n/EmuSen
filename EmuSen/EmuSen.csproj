@@ -37,14 +37,10 @@
          in this project - see EmuSen.Serenity.csproj's own note on why
          presentation-layer code moved out to its own shared project. -->
     <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
-    <!-- SnesDebugTarget implements IDebugTarget and its
-         ICheatCodeCodec/ICpuTraceSwitch adapter classes plug into
-         DianaSh's own extension points - see IDebugTarget.cs's own
-         header comment on why DianaSh itself has zero reference back to
-         this project. The telemetry contracts SnesDebugTarget publishes
-         through (PollingProvider<T>, namespace EmuSen.Cauldron) are in
-         this assembly too since 2026-10-07. -->
-    <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
+    <!-- Crystal: the debug targets implement its IDebugTarget and feed its registries, the bundles hand out its cheat
+         codecs and trace switch, and the catalog reads its system packs. The cores reference the runtime beneath the
+         shell, not the shell - see EmuSen_DianaSh.md §13.6. -->
+    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
     <!-- AudioConfig, which AudioSettings maps to and from - see
          EmuSen_Config_Reference.md §3.2. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />

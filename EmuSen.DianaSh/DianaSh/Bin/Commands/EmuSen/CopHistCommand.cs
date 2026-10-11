@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using EmuSen.Cauldron;
+using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
@@ -66,11 +66,5 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 
             return sb.ToString().TrimEnd();
         }
-    }
-
-    // Separate from IDebugTarget so a core without history carries no ring buffer - see §3.1a.
-    public interface IHistoricalCoprocessorTarget
-    {
-        HistoryProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorHistory { get; }
     }
 }

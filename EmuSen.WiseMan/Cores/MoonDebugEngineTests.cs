@@ -6,8 +6,8 @@ using System.Security.Cryptography;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 

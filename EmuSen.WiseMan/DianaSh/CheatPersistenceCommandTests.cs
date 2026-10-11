@@ -4,7 +4,7 @@ using System.Linq;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.WiseMan.Fixtures;
 

@@ -5,6 +5,7 @@ using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Galaxia.Text;
 using static EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.DebugCommandHelpers;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 {

@@ -4,7 +4,8 @@ using System.IO;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Mercury.Cpu.Core;
 using EmuSen.Cores.Nintendo.Mercury.Memory;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Nintendo.Mercury

@@ -1,7 +1,6 @@
-using EmuSen.Cauldron;
+using EmuSen.Crystal.Debugger;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores

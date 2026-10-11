@@ -10,7 +10,6 @@ using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;

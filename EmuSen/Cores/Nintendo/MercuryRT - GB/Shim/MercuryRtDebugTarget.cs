@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using EmuSen.Cauldron;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Telemetry;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Debug;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
 
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {

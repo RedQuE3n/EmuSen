@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Processor;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {

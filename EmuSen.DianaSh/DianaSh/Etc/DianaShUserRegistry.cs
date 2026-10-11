@@ -3,9 +3,6 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.DianaSh.DianaSh.Etc

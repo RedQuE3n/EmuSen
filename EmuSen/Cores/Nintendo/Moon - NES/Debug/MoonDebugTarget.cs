@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using EmuSen.Cauldron;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Telemetry;
 using EmuSen.Cores.Nintendo.Moon.Memory;
 using EmuSen.Cores.Nintendo.Moon.Processor;
 using EmuSen.Cores.Nintendo.Moon.Video;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
 
 namespace EmuSen.Cores.Nintendo.Moon.Debug
 {

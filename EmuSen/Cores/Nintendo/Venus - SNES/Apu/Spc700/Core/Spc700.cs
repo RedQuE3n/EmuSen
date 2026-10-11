@@ -1,11 +1,6 @@
 using System;
 using EmuSen.Debug;
-using EmuSen.DianaSh;
-using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
-using EmuSen.DianaSh.DianaSh.Dev;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
@@ -132,14 +127,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         }
 
         // Holds delegates internally - not serializable.
-        [EmuSen.Common.SkipInState] private readonly EmuSen.DianaSh.DianaSh.Lib.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
+        [EmuSen.Common.SkipInState] private readonly EmuSen.Crystal.Debugger.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
         private bool _wasVerboseLogging;
 
         public Spc700()
         {
             BuildOpcodeTable();
             Dsp.AttachMemory(Ram);
-            _verboseTrace = new EmuSen.DianaSh.DianaSh.Lib.DebugTools.RepeatCollapsingTrace<StepKey>(
+            _verboseTrace = new EmuSen.Crystal.Debugger.DebugTools.RepeatCollapsingTrace<StepKey>(
                 Console.WriteLine,
                 key => $"[SPC700] 0x{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X4}",
                 (cycleLength, repeats) => cycleLength == 1

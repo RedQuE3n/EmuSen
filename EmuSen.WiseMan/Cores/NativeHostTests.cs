@@ -5,7 +5,7 @@ using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon.Cheats;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.WiseMan.Cores
 {

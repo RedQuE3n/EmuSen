@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.WiseMan.DianaSh
 {
@@ -46,7 +46,7 @@ namespace EmuSen.WiseMan.DianaSh
 
         private CheatDatabase Db() => new(_dbDir);
 
-        private static EmuSen.DianaSh.DianaSh.Lib.ICheatCodeCodec Codec() =>
+        private static EmuSen.Crystal.Cheats.ICheatCodeCodec Codec() =>
             EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay();
 
         [Fact]

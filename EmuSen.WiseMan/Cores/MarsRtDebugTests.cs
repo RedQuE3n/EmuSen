@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 

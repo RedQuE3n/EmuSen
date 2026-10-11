@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Mistress.Library
 {

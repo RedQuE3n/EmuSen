@@ -3,6 +3,7 @@ using System.Linq;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.WiseMan.Cores
 {

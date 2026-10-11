@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using EmuSen.Cauldron;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Sys.Systems;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Telemetry;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Cores.Native
 {
@@ -64,7 +64,7 @@ namespace EmuSen.Cores.Native
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters { get; } = Empty<DebugRegisterValue>();
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters { get; } = Empty<DebugRegisterValue>();
         // What `cop` names, the same processor `regs <name>` shows - see `man cpus`.
-        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters => EmuSen.DianaSh.DianaSh.Var.DebugCpus.Coprocessor(DebugCpus)?.Registers ?? NoRegisters;
+        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters => EmuSen.Crystal.Debugger.DebugCpus.Coprocessor(DebugCpus)?.Registers ?? NoRegisters;
         public IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites { get; } = Empty<DebugSpriteInfo>();
         public IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes { get; }
         public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels { get; } = Empty<DebugAudioChannelInfo>();
@@ -135,8 +135,8 @@ namespace EmuSen.Cores.Native
         // With DEBUG the bridge's registries, processor 0's at the target's level and the cartridge's as the coprocessor's.
         public CoverageRegistry? Coverage => Halts ? _engine.Debug.Coverage.FirstOrDefault() : null;
         public CallStackRegistry? CallStack => Halts ? _engine.Debug.CallStack : null;
-        public BreakpointRegistry? CoprocessorBreakpoints => EmuSen.DianaSh.DianaSh.Var.DebugCpus.Coprocessor(DebugCpus)?.Breakpoints;
-        public CoverageRegistry? CoprocessorCoverage => EmuSen.DianaSh.DianaSh.Var.DebugCpus.Coprocessor(DebugCpus)?.Coverage;
+        public BreakpointRegistry? CoprocessorBreakpoints => EmuSen.Crystal.Debugger.DebugCpus.Coprocessor(DebugCpus)?.Breakpoints;
+        public CoverageRegistry? CoprocessorCoverage => EmuSen.Crystal.Debugger.DebugCpus.Coprocessor(DebugCpus)?.Coverage;
         public LabelRegistry? Labels { get; } = new();
         public IExpressionContext? Expressions => DebugCpus.Count > 0 ? ExpressionsOf(DebugCpus[0]) : null;
 

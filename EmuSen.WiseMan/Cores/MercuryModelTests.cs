@@ -375,7 +375,7 @@ namespace EmuSen.WiseMan.Cores
             csTarget.RefreshProviders();
             rtTarget.RefreshProviders();
 
-            static string Show(IReadOnlyList<EmuSen.Cauldron.DebugPaletteInfo> palettes) =>
+            static string Show(IReadOnlyList<EmuSen.Crystal.Telemetry.DebugPaletteInfo> palettes) =>
                 string.Join("|", palettes.Select(p => string.Join(" ", p.Colors.Select(c => $"{c.r:X2}{c.g:X2}{c.b:X2}"))));
             string shown = Show(csTarget.Palettes.Current);
             _output.WriteLine($"${cgb:X2} on {model}: {shown}");

@@ -9,10 +9,10 @@ using EmuSen.DianaSh.Ast;
 using EmuSen.DianaSh.DianaSh.Bin.Commands;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.Unix;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
-using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.DianaSh.DianaSh.Dev;
 

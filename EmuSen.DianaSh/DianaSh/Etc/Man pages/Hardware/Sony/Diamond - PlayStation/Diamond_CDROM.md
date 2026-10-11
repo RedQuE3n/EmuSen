@@ -372,10 +372,11 @@ per frame: the sectors, the data FIFO and XA's frames use buffers made at create
 
 ## 14. Tests run (2026-10-11)
 
-`cargo test --release`: `diamond` 101 unit tests (11 of them the controller's, 3 XA's, 1 the matrix's), 33 program
-tests without the disc inputs and 37 with them (`cd-read.s`, getloc, disc-swap, timing and `cd-kernel.s` among them);
-`emusen-disc` 19 with `EMUSEN_DISC_CHDMAN`. WiseMan under the test lock with `EMUSEN_DIAMOND_PS1TESTS`: `DiamondTests`,
-`SystemPack`, `CoreAbi` and `CoreAdapter`, 83 of 83, the sheet with its companions and the pack's recogniser among them.
+`cargo test --release`, after merging WiseMan at `e9ebe218`: `diamond` 101 unit tests (11 of them the controller's, 3
+XA's, 1 the matrix's) and 41 program tests, `cd-read.s` among them and four that run only with the disc inputs (getloc,
+disc-swap, timing and `cd-kernel.s`), all 41 passing with them; `emusen-disc` 19 with `EMUSEN_DISC_CHDMAN`. WiseMan
+under the test lock with `EMUSEN_DIAMOND_PS1TESTS`: `DiamondTests`, `SystemPack`, `CoreAbi`, `CoreAdapter`,
+`CoreDiscovery` and `CoreRegistration`, 94 of 94, the sheet with its companions and the pack's recogniser among them.
 
 ## 15. Reading log, and exposures
 

@@ -1114,8 +1114,9 @@ Beyond the gate, ps1-tests' `cdrom/timing` prints every figure within the consol
 
 ### 15.4 Tests run (2026-10-11)
 
-`diamond` 101 unit tests, 33 program tests and 37 with the disc inputs; `emusen-disc` 19 with chdman named; WiseMan's
-`DiamondTests`, `SystemPack`, `CoreAbi` and `CoreAdapter`, 83 of 83.
+After merging WiseMan at `e9ebe218`: `diamond` 101 unit tests and 41 program tests, all passing with the disc inputs;
+`emusen-disc` 19 with chdman named; WiseMan's `DiamondTests`, `SystemPack`, `CoreAbi`, `CoreAdapter`, `CoreDiscovery`
+and `CoreRegistration`, 94 of 94.
 
 ### 15.5 What waits
 

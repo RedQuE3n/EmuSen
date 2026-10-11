@@ -223,17 +223,17 @@ namespace EmuSen.WiseMan.Serenity
             Assert.True(widths[2] > 1.7 * widths[0], $"a bright line is fatter than a dim one: {widths[0]:F2} and {widths[2]:F2} pixels");
         }, default);
 
-        // Counted along a scanline's centre, the mask's triads are the screen's own number across the picture, whatever the window; the stripes run red, green, blue.
+        // Counted along a scanline's centre, the mask's triads are the screen's own number across the picture where the display draws it on the glass, and a whole number of pixels each below the limit - see EmuSen_CRT.md §20.3; the stripes run red, green, blue.
         [Fact]
-        public Task The_mask_s_pitch_is_the_screen_s_at_any_window_size_and_its_stripes_run_red_green_blue() => Session.Dispatch(() =>
+        public Task The_mask_s_pitch_is_the_screen_s_on_the_glass_and_whole_below_its_limit_and_its_stripes_run_red_green_blue() => Session.Dispatch(() =>
         {
-            foreach (var (width, height, pitch) in new[] { (2880, 2160, 1f), (1440, 1080, 2f), (2000, 1500, 1.5f) })
+            foreach (var (width, height, pitch, triads) in new[] { (2880, 2160, 1f, 732 / 2.0), (2880, 2160, 1.2f, 610 / 2.0), (1440, 1080, 2f, 1440 / 4 / 2.0), (2000, 1500, 1.5f, 2000 / 4 / 2.0) })
             {
                 if (Draw("SNES", 256, 224, width, height, Twice(Grey(256, 224, 0.6)), With(Plain, ("signal", 0f), ("screen", 2f), ("maskPitch", pitch), ("displayNits", 1000f))) is not { } picture) return;
                 double[] green = picture.Across(1, height / 2.0 - 20, 40, width / 4, 3 * width / 4);
                 double mean = green.Average();
                 int crossings = Enumerable.Range(1, green.Length - 1).Count(i => green[i - 1] < mean && green[i] >= mean);
-                Within(CrtFilter.Screens[2].TriadsAcross / pitch / 2, crossings, 0.02, $"triads across half of {width} pixels at pitch {pitch}");
+                Within(triads, crossings, 0.02, $"triads across half of {width} pixels at pitch {pitch}");
             }
 
             if (Draw("SNES", 256, 224, 2880, 2160, Twice(Grey(256, 224, 0.6)), With(Plain, ("signal", 0f), ("screen", 2f), ("maskPitch", 3f), ("subpixels", 0f), ("displayNits", 1000f))) is not { } coarse) return;

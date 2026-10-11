@@ -97,7 +97,8 @@ Run on the open kernel through `examples/run`'s machine with the buttons held at
 draws its menu only after clearing VRAM pixel by pixel with 1×1 rectangles, two clears of about 470 frames each on
 Diamond, so the menus appear at frame 2,325 (CPX), 1,600 (GPU) and 2,800 (GTE). That cost is the rectangle's fitted
 setup of 742 GPU cycles (`Diamond_GPU.md` §8), fitted on 320×240 rectangles; whether a console spends it on a 1×1
-rectangle is D-11's question, and these clears are a measurement for it. The menus answer the pad: Down moves the
+rectangle is D-11's question, and these clears are a measurement for it. *Since D-11's refit (2026-10-11)* a
+rectangle is charged by its rows, and the menus' titles appear at frames 205, 100 and 229 [M]. The menus answer the pad: Down moves the
 cursor (`Amidogs_gpu_and_gte_menus_follow_the_pad`). The tests print each failing case on the TTY as "got" and
 "wanted" lines, the wanted values their author's, taken on a console.
 

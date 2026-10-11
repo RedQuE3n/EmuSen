@@ -371,8 +371,8 @@ namespace EmuSen.WiseMan.Cores
                 return;
             }
             var engine = new CoreAbiTestRomEngine(LibraryPath);
-            var run = engine.Run(Path.Combine(root, "psxtest_cpx", "psxtest_cpx.exe"), new[] { 12000 }, new[] { new RomPress(2400, PadButton.Start) });
-            var verdicts = AmidogScreen.Verdicts(run.At(12000)!.Picture!, AmidogScreen.Cpx);
+            var run = engine.Run(Path.Combine(root, "psxtest_cpx", "psxtest_cpx.exe"), new[] { 10000 }, new[] { new RomPress(400, PadButton.Start) });
+            var verdicts = AmidogScreen.Verdicts(run.At(10000)!.Picture!, AmidogScreen.Cpx);
             foreach (var (row, marks) in verdicts) _output.WriteLine($"{row}: {string.Join(" ", marks)}");
             var na = AmidogMark.NotApplicable;
             Assert.Equal(new[] { AmidogMark.Ok, na, na, na }, verdicts["EXCP"]);
@@ -393,7 +393,7 @@ namespace EmuSen.WiseMan.Cores
                 return;
             }
             var engine = new CoreAbiTestRomEngine(LibraryPath);
-            foreach (var (name, menu, next) in new[] { ("psxtest_gpu", 1700, 3), ("psxtest_gte", 2800, 4) })
+            foreach (var (name, menu, next) in new[] { ("psxtest_gpu", 300, 3), ("psxtest_gte", 400, 4) })
             {
                 var run = engine.Run(Path.Combine(root, name, name + ".exe"), new[] { menu, menu + 40 }, new[] { new RomPress(menu + 10, PadButton.Down) });
                 Assert.Equal((2, next), (AmidogScreen.Cursor(run.At(menu)!.Picture!, 25), AmidogScreen.Cursor(run.At(menu + 40)!.Picture!, 25)));

@@ -111,7 +111,7 @@ pub struct Registers {
     pub branch: BranchDelay,
     pub load: LoadDelay,
     /// SR and Cause's software bits as the next boundary's interrupt check sees them, when the instruction before it
-    /// was an MTC0 to SR (BlackMoon_R3000.md D-4).
+    /// was an MTC0 to SR (BlackMoon_R3000.md D-17).
     pub interrupt_view: Option<(u32, u32)>,
 }
 

@@ -8,6 +8,9 @@ implemented. It is the record of which sources a dispute step read, so that the 
 record (the plan's §9.1), since they belong to every core that uses the crate: D-1 to D-3 in `BlackMoon_R3000.md` §8.
 *Since stage 5 (2026-10-11)* the GTE's are kept the same way, D-13 to D-16 in `BlackMoon_GTE.md` §12: the interlock
 (D-13), the accumulators `test-all` settled (D-14), the write hazards (D-15) and the unlisted command numbers (D-16).
+*Since the pad (2026-10-11)* the R3000A's D-17 to D-21, from amidog's `psxtest_cpx`, are in `BlackMoon_R3000.md` §8:
+MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), the debug unit (D-20) and SWCz's store
+(D-21); D-22, SIO0's timing, is here.
 
 ## The rules this log keeps
 
@@ -472,3 +475,28 @@ record (the plan's §9.1), since they belong to every core that uses the crate: 
 - **Depends on it:** the gate only.
 - **Pinned by:** `Ps1GpuTests.Programs`' exclusions.
 - **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
+
+### D-22. SIO0's timing: a byte received when its eighth bit is sampled, /ACK 412 cycles after its last clock for 100 cycles, from figures psx-spx gives for other devices
+
+- **Opened:** 2026-10-11, when the digital pad was brought forward from stage 6 (`Diamond_Pad.md` §2-§3): no document
+  gives a pad's /ACK delay, and psx-spx gives the moment a received byte becomes readable only through the clock's
+  edges.
+- **Documents read:** psx-spx `6d7d1bc`, "Serial Interfaces (SIO)" (DR, SR, MR, CR, BR and the notes);
+  "Controller and Memory Card Signals" (the edges, the kernel's 100-cycle and 100 µs window, /ACK of at least 2 µs);
+  "Sony Mouse Hardware Bug on Power-On" ("around 100 clk cycles" low); "Memory Card Read/Write Commands", "Timings"
+  (IRQ7 "circa 1500 cycles after sending a byte (counted from the begin of the first bit)").
+- **Test program:** `programs/pad.s` on Diamond only (no console run): IRQ7 1,500 cycles after each acknowledged
+  byte's first clock, as chosen. amidog's tests read the pad by polling, with no IRQ, sending a byte and reading DR
+  after a delay loop of about 1,030 cycles without waiting for RXRDY; on Diamond the reply is there 1,020 cycles after
+  the write, ten cycles before the read [M]; had it arrived at the byte's end, 1,088, the tests would have read every
+  reply one byte late. That the console's tests work is weak evidence that the reply is readable before the last
+  half bit ends.
+- **Referee:** not consulted. **Witnesses:** none run (no reference emulator was run for this step).
+- **Conclusion:** the reply readable 7½ bits after the first clock; /ACK from the card's figure for every device; the
+  transfer starting at once rather than on the baud timer's next reload. Argued; open until a program of the project's
+  own times IRQ7 and RXRDY with root counter 2 on a console.
+- **Depends on it:** the kernel's pad and card functions' timeouts; games that read the pad by polling with fixed
+  delays, as amidog's library does.
+- **Pinned by:** `sio0::tests::a_pad_read_answers_with_an_ack_after_every_byte_but_the_last`,
+  `the_status_follows_a_byte_through_the_transmitter_and_the_fifo`.
+- **Implemented in:** `diamond: SIO0 and port 1's digital pad, brought forward from stage 6`.

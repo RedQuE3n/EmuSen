@@ -297,6 +297,86 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(failed);
         }
 
+        private static uint I(uint op, int rs, int rt, int imm) => op << 26 | (uint)rs << 21 | (uint)rt << 16 | (ushort)imm;
+
+        // A program that reads port 1's pad over SIO0 without end, each byte sent once RXRDY showed the last, its five replies and I_STAT at 80100000h - see Diamond_Pad.md §4.
+        private static byte[] PadReading()
+        {
+            const int t0 = 8, t1 = 9, t2 = 10, t3 = 11, s0 = 16, s1 = 17;
+            var w = new List<uint> { I(0x0F, 0, s0, 0x1F80), I(0x0F, 0, s1, 0x8010), I(0x0D, 0, t0, 0x88), I(0x29, s0, t0, 0x104E), I(0x0D, 0, t0, 0x0D), I(0x29, s0, t0, 0x1048) };
+            int loop = w.Count;
+            w.AddRange(new[] { I(0x0D, 0, t0, 0x1003), I(0x29, s0, t0, 0x104A) });
+            foreach (var (b, i) in new[] { 0x01, 0x42, 0, 0, 0 }.Select((b, i) => (b, i)))
+            {
+                w.AddRange(new[] { I(0x0D, 0, t1, b), I(0x28, s0, t1, 0x1040) });
+                int wait = w.Count;
+                w.AddRange(new[] { I(0x23, s0, t2, 0x1044), 0u, I(0x0C, t2, t2, 2) });
+                w.Add(I(0x04, t2, 0, wait - (w.Count + 1)));
+                w.AddRange(new[] { 0u, I(0x24, s0, t2, 0x1040), 0u, I(0x28, s1, t2, i) });
+            }
+            w.AddRange(new[] { I(0x29, s0, 0, 0x104A), I(0x23, s0, t3, 0x1070), 0u, I(0x2B, s1, t3, 8) });
+            w.AddRange(new[] { 0x0800_0000u | ((SyntheticPsExe.Origin + 4 * (uint)loop) >> 2 & 0x03FF_FFFF), 0u });
+            return SyntheticPsExe.Build(SyntheticPsExe.Words(w.ToArray()));
+        }
+
+        // Presses at given frames reach the program through the core ABI's buttons and the controller descriptor, on either pad a port can hold.
+        [Fact]
+        public void A_program_reads_the_pressed_buttons_from_port_1_through_sio0()
+        {
+            foreach (string pad in new[] { PsxSystem.DualShock, PsxSystem.DigitalPad })
+            {
+                var engine = new CoreAbiTestRomEngine(LibraryPath, settings: _ => $"pad1={pad}");
+                var run = engine.Run(Write("pad.exe", PadReading()), new[] { 3, 8, 20 }, new[] { new RomPress(4, PadButton.Start), new RomPress(5, PadButton.B), new RomPress(5, PadButton.Up) });
+                byte[] Replies(int frame) => run.At(frame)!.Spaces["ram"][0x10_0000..0x10_0005];
+                Assert.Equal(new byte[] { 0xFF, 0x41, 0x5A, 0xFF, 0xFF }, Replies(3));
+                Assert.Equal(new byte[] { 0xFF, 0x41, 0x5A, 0xE7, 0xBF }, Replies(8));
+                Assert.Equal(new byte[] { 0xFF, 0x41, 0x5A, 0xFF, 0xFF }, Replies(20));
+                Assert.NotEqual(0, run.At(20)!.Spaces["ram"][0x10_0008] & 0x80);
+            }
+        }
+
+        private static string? Amidog => Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_AMIDOG") is { } a && Directory.Exists(a) ? a
+            : Corpus is { } c && Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(c))!, "amidog") is var s && Directory.Exists(s) ? s : null;
+
+        // amidog's CPX test run through its menu by Start, its verdicts read from the screen; BREAK's errors are the debug unit's, open - see Diamond_Pad.md §5.
+        [Fact]
+        public void Amidogs_cpx_test_runs_from_its_menu_and_passes_but_the_debug_unit()
+        {
+            if (Amidog is not { } root)
+            {
+                _output.WriteLine("skipped: EMUSEN_DIAMOND_AMIDOG, or an amidog folder beside EMUSEN_DIAMOND_PS1TESTS, holds amidog's tests");
+                return;
+            }
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            var run = engine.Run(Path.Combine(root, "psxtest_cpx", "psxtest_cpx.exe"), new[] { 12000 }, new[] { new RomPress(2400, PadButton.Start) });
+            var verdicts = AmidogScreen.Verdicts(run.At(12000)!.Picture!, AmidogScreen.Cpx);
+            foreach (var (row, marks) in verdicts) _output.WriteLine($"{row}: {string.Join(" ", marks)}");
+            var na = AmidogMark.NotApplicable;
+            Assert.Equal(new[] { AmidogMark.Ok, na, na, na }, verdicts["EXCP"]);
+            Assert.Equal(new[] { AmidogMark.Ok, na, na, na }, verdicts["INTR"]);
+            Assert.Equal(new[] { AmidogMark.Ok, na, AmidogMark.Ok, na }, verdicts["SLOT"]);
+            Assert.Equal(new[] { AmidogMark.Ok, na, AmidogMark.Ok, na }, verdicts["SLOT BR"]);
+            Assert.Equal(new[] { AmidogMark.Error, na, na, na }, verdicts["BREAK"]);
+            Assert.Equal(new[] { AmidogMark.Ok, na, na, na }, verdicts["ILLEGAL"]);
+        }
+
+        // The GPU and GTE tests' menus answer the pad: Down moves the cursor from the first test to the next, past the GTE menu's heading.
+        [Fact]
+        public void Amidogs_gpu_and_gte_menus_follow_the_pad()
+        {
+            if (Amidog is not { } root)
+            {
+                _output.WriteLine("skipped: EMUSEN_DIAMOND_AMIDOG, or an amidog folder beside EMUSEN_DIAMOND_PS1TESTS, holds amidog's tests");
+                return;
+            }
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            foreach (var (name, menu, next) in new[] { ("psxtest_gpu", 1700, 3), ("psxtest_gte", 2800, 4) })
+            {
+                var run = engine.Run(Path.Combine(root, name, name + ".exe"), new[] { menu, menu + 40 }, new[] { new RomPress(menu + 10, PadButton.Down) });
+                Assert.Equal((2, next), (AmidogScreen.Cursor(run.At(menu)!.Picture!, 25), AmidogScreen.Cursor(run.At(menu + 40)!.Picture!, 25)));
+            }
+        }
+
         [Fact]
         public void The_ps_exe_builder_writes_the_documented_header()
         {

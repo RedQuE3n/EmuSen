@@ -178,7 +178,7 @@ fn a_gte_command_meeting_an_interrupt_runs_and_epc_still_points_at_it() {
 }
 
 /// amidog's `psxtest_cpx` INTR on a console: after an MTC0 that enables an interrupt in SR, one more instruction runs
-/// before it is taken (BlackMoon_R3000.md D-4).
+/// before it is taken (BlackMoon_R3000.md D-17).
 #[test]
 fn an_interrupt_enabled_by_mtc0_sr_waits_one_instruction() {
     let (mut cpu, mut rig) = machine("addiu t0, zero, 0x101\nmtc0 t0, SR\nmflo t1\nnop");
@@ -197,7 +197,7 @@ fn an_interrupt_enabled_by_mtc0_sr_waits_one_instruction() {
 }
 
 /// `psxtest_cpx` SLOT on a console: an exception in the delay slot of a branch not taken leaves TAR at the
-/// instruction after the slot (D-5).
+/// instruction after the slot (D-18).
 #[test]
 fn an_exception_in_a_not_taken_branchs_slot_sets_tar_to_the_fall_through() {
     let (mut cpu, mut rig) = machine("bne zero, zero, 0x80001100\nlw t0, 1(zero)");
@@ -208,7 +208,7 @@ fn an_exception_in_a_not_taken_branchs_slot_sets_tar_to_the_fall_through() {
 }
 
 /// `psxtest_cpx` BREAK on a console: a load or store that meets no device, and a break of the debug unit, leave CE
-/// zero where an address error leaves the opcode's bits (D-6).
+/// zero where an address error leaves the opcode's bits (D-19).
 #[test]
 fn a_bus_error_and_a_debug_break_leave_ce_zero() {
     let (mut cpu, mut rig) = machine("lw t0, 0x200(zero)\nnop\nsh t0, 0x200(zero)\nnop\nlw t0, 0x100(zero)");

@@ -41,6 +41,10 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   documented bugs, the call table of 576 entries with each one's status, the pinned toolchain and the reproducible
   image, the harness on blackmoon-r3000 and what it proved, the accuracy cost, the choices, the questions and the
   reading log.
+- [`Diamond_Pad.md`](Diamond_Pad.md) — SIO0 and the controllers, from 2026-10-11, when a digital pad on port 1 was
+  brought forward from stage 6: the registers, a byte on the wire, /ACK and IRQ7, the pad and the slots, amidog's CPX,
+  GPU and GTE tests run from their menus and what they showed (three R3000A defects fixed, the CE and second-load items
+  of stage 2 closed), and the reading log.
 - [`Diamond_References.md`](Diamond_References.md) — the oracles, documents and reference cores pinned at stage 1
   (2026-10-11): the test programs with their console logs and pictures, the documents and their exclusions, the probe on
   the three libretro cores (only PCSX-ReARMed may run without a BIOS; Beetle PSX and SwanStation boot OpenBIOS and are
@@ -49,7 +53,8 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   NTSC console's video clock and line length, and so its frame rate; from stage 3, D-4 (memory control's access
   times), D-5 (the DMA's gaps and a store's drain) and D-6 (timer sync mode 2); from stage 4, D-7 (the rasteriser's
   rules), D-8 (the x-flip's offset), D-9 (the drawing area's commands in order), D-10 (GPUSTAT bit 28), D-11 (the
-  drawing time) and D-12 (two pictures the programs cannot meet). The R3000A's disputes (D-1 to D-3) are in
+  drawing time) and D-12 (two pictures the programs cannot meet); from the pad, D-22 (SIO0's timing). The R3000A's
+  disputes (D-1 to D-3, and D-17 to D-21 from amidog's `psxtest_cpx`) are in
   `../BlackMoon-HW/BlackMoon_R3000.md` §8 and the GTE's (D-13 to D-16, from stage 5) in `../BlackMoon-HW/BlackMoon_GTE.md`
   §12.
 

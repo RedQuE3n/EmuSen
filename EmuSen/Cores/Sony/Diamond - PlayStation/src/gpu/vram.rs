@@ -86,37 +86,33 @@ impl Vram {
         self.set(x, y, v | mask.set);
     }
 
-    /// GP0(02h): the colour's top five bits of each channel with bit 15 clear, no clipping and no mask.
-    pub fn fill(&mut self, r: Rect, colour: u32) {
+    /// GP0(02h): the colour's top five bits of each channel with bit 15 clear, no clipping and no mask; the lines of
+    /// parity `skip` left alone, as interlaced drawing leaves them (Diamond_Disputes.md D-23).
+    pub fn fill(&mut self, r: Rect, colour: u32, skip: Option<i32>) {
         let c = ((colour >> 3 & 0x1F) | (colour >> 11 & 0x1F) << 5 | (colour >> 19 & 0x1F) << 10) as u16;
         for j in 0..r.h {
+            if skip == Some(((r.y + j) & 1) as i32) {
+                continue;
+            }
             for i in 0..r.w {
                 self.set(r.x + i, r.y + j, c);
             }
         }
     }
 
-    /// GP0(80h): row by row, each row read in 16-pixel pieces before they are written (Diamond_GPU.md §3).
+    /// GP0(80h): row by row, each row read whole before it is written (Diamond_GPU.md §3, Diamond_Disputes.md D-23).
     pub fn copy(&mut self, src: Rect, dst: Rect, mask: Mask) {
-        let mut piece = [0u16; COPY_PIECE as usize];
+        let mut row = [0u16; WIDTH as usize];
         for j in 0..src.h {
-            let mut i = 0;
-            while i < src.w {
-                let n = (src.w - i).min(COPY_PIECE);
-                for k in 0..n {
-                    piece[k as usize] = self.get(src.x + i + k, src.y + j);
-                }
-                for k in 0..n {
-                    self.put(dst.x + i + k, dst.y + j, piece[k as usize], mask);
-                }
-                i += n;
+            for i in 0..src.w {
+                row[i as usize] = self.get(src.x + i, src.y + j);
+            }
+            for i in 0..src.w {
+                self.put(dst.x + i, dst.y + j, row[i as usize], mask);
             }
         }
     }
 }
-
-/// The halfwords a VRAM-to-VRAM copy holds between its read and its write.
-pub const COPY_PIECE: u32 = 16;
 
 #[cfg(test)]
 mod tests {
@@ -128,8 +124,23 @@ mod tests {
         assert_eq!(Rect::fill_params(0x0001_000F, 0x0001_03F1), Rect { x: 0, y: 1, w: 1024, h: 1 });
         assert_eq!(Rect::fill_params(0, 0x0001_0400).w, 0, "400h is handled as 0");
         let mut v = Vram::default();
-        v.fill(Rect { x: 1016, y: 511, w: 16, h: 2 }, 0x00FF_FFFF);
+        v.fill(Rect { x: 1016, y: 511, w: 16, h: 2 }, 0x00FF_FFFF, None);
         assert_eq!((v.get(1023, 511), v.get(7, 511), v.get(7, 0), v.get(8, 0), v.get(1015, 0)), (0x7FFF, 0x7FFF, 0x7FFF, 0, 0), "wrapped, no carry between axes");
+    }
+
+    /// amidog's MOVE, a row of 17 to 47 pixels copied 1 to 4 to the right over itself: every pixel moves as it was.
+    #[test]
+    fn a_copy_over_itself_to_the_right_moves_each_row_as_it_was() {
+        for (w, dx) in [(17, 1), (32, 2), (47, 4)] {
+            let mut v = Vram::default();
+            for x in 0..64 {
+                v.set(16 + x, 16, 0x1000 | (16 + x) as u16);
+            }
+            v.copy(Rect { x: 16, y: 16, w, h: 1 }, Rect { x: 16 + dx, y: 16, w, h: 1 }, Mask::default());
+            for x in 0..w {
+                assert_eq!(v.get(16 + dx + x, 16), 0x1000 | (16 + x) as u16, "w {w}, dx {dx}, x {x}");
+            }
+        }
     }
 
     #[test]

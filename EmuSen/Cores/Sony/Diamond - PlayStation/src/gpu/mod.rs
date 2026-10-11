@@ -124,12 +124,13 @@ pub struct Transfer {
     pub done: u32,
 }
 
-/// A VRAM-to-CPU transfer: its words made ready from `start` at the read rate.
+/// A VRAM-to-CPU transfer: its words made ready from `start` at the read rate, and the first of them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReadOut {
     pub rect: Rect,
     pub words: u32,
     pub start: u64,
+    pub first: u32,
 }
 
 /// A polyline being drawn: its flags, the last vertex, and a colour received for the next.
@@ -154,8 +155,10 @@ pub struct Gpu {
     pub second_megabyte: bool,
     pub irq: bool,
     pub dma_direction: u32,
-    /// GPUREAD's latch.
+    /// GP1(10h)'s latch, which each word read also enters; and what GPUREAD gives with no transfer open
+    /// (Diamond_Disputes.md D-23).
     pub latch: u32,
+    pub idle_read: u32,
     /// The FIFO: words that arrived while the processor was busy, with their arrival and meaning.
     pub fifo: [(u32, u64, Word); FIFO_WORDS],
     pub head: usize,
@@ -200,6 +203,7 @@ impl Gpu {
             irq: false,
             dma_direction: 0,
             latch: 0,
+            idle_read: 0,
             fifo: [(0, 0, Word::Parameter); FIFO_WORDS],
             head: 0,
             len: 0,
@@ -224,9 +228,10 @@ impl Gpu {
         cpu_cycles(gpu, self.clock)
     }
 
-    /// The commands whose words are in and whose turn came by `now`, drawn in order.
+    /// The commands whose words are in and whose turn came by `now`, drawn in order; none while a VRAM-to-CPU transfer
+    /// has words left to give (Diamond_Disputes.md D-23).
     pub fn run(&mut self, now: u64, video: &Video) {
-        while self.len > 0 {
+        while self.len > 0 && self.read.is_none() {
             let (w, arrived, kind) = self.fifo[self.head];
             let t = arrived.max(self.busy_until);
             if t > now {
@@ -244,9 +249,13 @@ impl Gpu {
         self.display.scan(&self.vram, video, now);
     }
 
-    /// A GP0 word at `now`; returns the cycle it was taken, later than `now` when the FIFO was full.
+    /// A GP0 word at `now`; returns the cycle it was taken, later than `now` when the FIFO was full. A word that finds
+    /// the FIFO full behind an unread VRAM-to-CPU transfer is lost, as nothing frees a place until the CPU reads.
     pub fn gp0(&mut self, word: u32, now: u64, video: &Video) -> u64 {
         self.run(now, video);
+        if self.len == FIFO_WORDS && self.read.is_some() {
+            return now;
+        }
         let Some(kind) = self.tail.classify(word) else { return now };
         let mut t = now;
         while self.len == FIFO_WORDS {
@@ -254,7 +263,7 @@ impl Gpu {
             t = t.max(arrived.max(self.busy_until));
             self.run(t, video);
         }
-        if self.len == 0 && self.busy_until <= t {
+        if self.len == 0 && self.busy_until <= t && self.read.is_none() {
             self.feed(word, kind, t, video);
         } else {
             self.fifo[(self.head + self.len) % FIFO_WORDS] = (word, t, kind);
@@ -263,9 +272,14 @@ impl Gpu {
         t
     }
 
-    /// The next cycle the FIFO moves, if it holds anything.
+    /// The next cycle the FIFO moves, if it holds anything and no transfer waits to be read.
     pub fn next_event(&self) -> u64 {
-        if self.len == 0 { u64::MAX } else { self.fifo[self.head].1.max(self.busy_until) }
+        if self.len == 0 || self.read.is_some() { u64::MAX } else { self.fifo[self.head].1.max(self.busy_until) }
+    }
+
+    /// GPUSTAT bit 28: the FIFO empty, and no polygon's or line's vertices awaited (Diamond_Disputes.md D-10).
+    fn write_fifo_empty(&self) -> bool {
+        self.len == 0 && self.polyline.is_none() && !(self.have > 0 && matches!(self.words[0] >> 29, 1 | 2))
     }
 
     /// Whether the GPU requests DMA at `now` (GPUSTAT bit 25), and when that may next change.
@@ -273,7 +287,7 @@ impl Gpu {
         match self.dma_direction {
             0 => false,
             1 => self.len < FIFO_WORDS,
-            2 => self.len == 0,
+            2 => self.write_fifo_empty(),
             _ => self.read_ready(now),
         }
     }
@@ -296,8 +310,8 @@ impl Gpu {
             s |= (e1 >> 11 & 1) << 15 | (video.mode >> 7 & 1) << 14;
         }
         s |= (self.display.blanked as u32) << 23 | (self.irq as u32) << 24 | self.dma_direction << 29;
-        let idle = self.len == 0 && self.have == 0 && self.write.is_none() && self.polyline.is_none() && self.busy_until <= now;
-        s |= (idle as u32) << 26 | (self.read_ready(now) as u32) << 27 | ((self.len == 0) as u32) << 28 | (self.dreq(now) as u32) << 25;
+        let idle = self.len == 0 && self.have == 0 && self.write.is_none() && self.read.is_none() && self.polyline.is_none() && self.busy_until <= now;
+        s |= (idle as u32) << 26 | (self.read_ready(now) as u32) << 27 | (self.write_fifo_empty() as u32) << 28 | (self.dreq(now) as u32) << 25;
         let mut bits = video.status_bits(now);
         if !self.v2() && !video.interlaced() {
             bits &= !(1 << 13);
@@ -305,23 +319,34 @@ impl Gpu {
         s | bits
     }
 
-    /// GPUREAD at `now`: the next word of a VRAM-to-CPU transfer, ready at the read rate, or the latch; and the cycle
-    /// it was read, later than `now` when the word was not yet ready.
+    /// GPUREAD at `now`: the next word of a VRAM-to-CPU transfer, ready at the read rate, or with none open the idle
+    /// word; and the cycle it was read, later than `now` when the word was not yet ready. A transfer of two words or
+    /// more leaves its first as the idle word, one of one word leaves it as it was (Diamond_Disputes.md D-23).
     pub fn gpuread(&mut self, video: &Video, now: u64) -> (u32, u64) {
         self.run(now, video);
-        let Some(mut r) = self.read else { return (self.latch, now) };
+        let Some(mut r) = self.read else { return (self.idle_read, now) };
         let k = (r.words as u64).min(r.rect.pixels() as u64 / 2);
         let t = now.max(r.start + self.cycles(timing::READ_SETUP + timing::READ_WORD * k));
         let mut value = 0;
         for half in 0..2 {
             let i = r.words * 2 + half;
-            if i < r.rect.pixels() {
-                let (x, y) = r.rect.at(i);
-                value |= (self.vram.get(x, y) as u32) << (16 * half);
-            }
+            let (x, y) = r.rect.at(i.min(r.rect.pixels() - 1));
+            let x = if i < r.rect.pixels() { x } else { x + 1 };
+            value |= (self.vram.get(x, y) as u32) << (16 * half);
+        }
+        if r.words == 0 {
+            r.first = value;
         }
         r.words += 1;
         self.read = (r.words * 2 < r.rect.pixels()).then_some(r);
+        if self.read.is_none() {
+            if r.words > 1 {
+                self.idle_read = r.first;
+            }
+            if self.busy_until < t {
+                (self.busy_until, self.carry) = (t, 0);
+            }
+        }
         self.latch = value;
         (value, t)
     }
@@ -344,6 +369,8 @@ impl Gpu {
                 self.have += 1;
                 if self.have == self.need {
                     self.execute(t, video);
+                } else {
+                    self.quad_page();
                 }
             }
             Word::Data => self.data(w, t, video),
@@ -362,18 +389,28 @@ impl Gpu {
     }
 
     fn area(&self) -> Area {
-        let y = |v: u32| (v >> 10 & if self.v2() { 0x3FF } else { 0x1FF }).min(511) as i32;
-        Area { x1: (self.env[2] & 0x3FF) as i32, y1: y(self.env[2]), x2: (self.env[3] & 0x3FF) as i32, y2: y(self.env[3]) }
+        let y = |v: u32| (v >> 10 & if self.v2() { 0x3FF } else { 0x1FF }) as i32;
+        let y2 = if self.two_megabytes() { y(self.env[3]).min(511) } else { y(self.env[3]) };
+        Area { x1: (self.env[2] & 0x3FF) as i32, y1: y(self.env[2]), x2: (self.env[3] & 0x3FF) as i32, y2 }
     }
 
+    /// A vertex with the drawing offset added in 11 bits, wrapping (Diamond_Disputes.md D-23).
     fn vertex(&self, xy: u32, colour: u32, uv: u32) -> Vertex {
         let off = self.env[4];
-        Vertex { x: sext11(xy) + sext11(off), y: sext11(xy >> 16) + sext11(off >> 11), rgb: rgb(colour), u: uv as u8, v: (uv >> 8) as u8 }
+        let x = sext11((sext11(xy) + sext11(off)) as u32);
+        let y = sext11((sext11(xy >> 16) + sext11(off >> 11)) as u32);
+        Vertex { x, y, rgb: rgb(colour), u: uv as u8, v: (uv >> 8) as u8 }
     }
 
-    fn paint(&self, blended: bool, texture: Option<Texture>, raw: bool, dither: bool, video: &Video) -> Paint {
+    /// `v` placed from `first` by their distance as the command gave them, the offset moving the primitive whole (D-23).
+    fn place(&self, first: Vertex, v: Vertex) -> Vertex {
+        let (ox, oy) = (sext11(self.env[4]), sext11(self.env[4] >> 11));
+        let raw = |p: i32, o: i32| sext11((p - o) as u32);
+        Vertex { x: first.x + raw(v.x, ox) - raw(first.x, ox), y: first.y + raw(v.y, oy) - raw(first.y, oy), ..v }
+    }
+
+    fn paint(&self, blended: bool, texture: Option<Texture>, raw: bool, dither: bool, video: &Video, t: u64) -> Paint {
         let e1 = self.env[0];
-        let hires = video.interlaced() && video.mode & 1 << 2 != 0;
         Paint {
             blend: blended.then_some(e1 >> 5 & 3),
             texture,
@@ -381,9 +418,16 @@ impl Gpu {
             dither: dither && e1 & 1 << 9 != 0,
             mask: self.mask(),
             area: self.area(),
-            skip_parity: (hires && e1 & 1 << 10 == 0).then_some(video.odd as i32),
+            skip_parity: self.interlace_skip(video, t),
             crop_modulation: !self.v2(),
         }
+    }
+
+    /// In 480-line interlace with drawing to the displayed field prohibited, the parity of the VRAM lines left alone:
+    /// GPUSTAT bit 31's, counted from the display's first line (Diamond_Disputes.md D-23).
+    fn interlace_skip(&self, video: &Video, t: u64) -> Option<i32> {
+        let hires = video.interlaced() && video.mode & 1 << 2 != 0;
+        (hires && self.env[0] & 1 << 10 == 0).then(|| ((video.status_bits(t) >> 31) ^ (self.display.start >> 10 & 1)) as i32)
     }
 
     /// Whether the texture page may be in VRAM's second megabyte (GP1(09h), 208-pin only).
@@ -406,9 +450,9 @@ impl Gpu {
         self.have = 0;
         let c = w[0] >> 24;
         let cost = match c >> 5 {
-            1 => self.polygon(&w, video),
-            2 => self.line_start(&w, video),
-            3 => self.rectangle(&w, video),
+            1 => self.polygon(&w, video, t),
+            2 => self.line_start(&w, video, t),
+            3 => self.rectangle(&w, video, t),
             4 => {
                 let src = Rect::copy_params(w[1], w[3]);
                 let dst = Rect::copy_params(w[2], w[3]);
@@ -421,10 +465,10 @@ impl Gpu {
                 timing::COMMAND
             }
             6 => {
-                self.read = Some(ReadOut { rect: Rect::copy_params(w[1], w[2]), words: 0, start: t });
+                self.read = Some(ReadOut { rect: Rect::copy_params(w[1], w[2]), words: 0, start: t, first: 0 });
                 timing::COMMAND
             }
-            _ => self.environment(w[0]),
+            _ => self.environment(w[0], video, t),
         };
         self.charge(t, cost);
     }
@@ -435,7 +479,7 @@ impl Gpu {
         (self.busy_until, self.carry) = timing::advance(t, carry, cost, self.clock);
     }
 
-    fn environment(&mut self, w: u32) -> u64 {
+    fn environment(&mut self, w: u32, video: &Video, t: u64) -> u64 {
         match w >> 24 {
             0x01 => {
                 self.cache.clear();
@@ -443,8 +487,8 @@ impl Gpu {
             }
             0x02 => {
                 let r = Rect::fill_params(self.words[1], self.words[2]);
-                self.vram.fill(r, w);
-                return timing::COMMAND + timing::FILL + r.h as u64 * (timing::FILL_ROW + (r.w as u64).div_ceil(16) * timing::FILL_16);
+                self.vram.fill(r, w, self.interlace_skip(video, t));
+                return timing::COMMAND + if r.w == 0 { 0 } else { r.h as u64 * (timing::FILL_ROW + (r.w as u64).div_ceil(16) * timing::FILL_16) };
             }
             0x1F => {
                 self.irq_rose |= !self.irq;
@@ -463,9 +507,28 @@ impl Gpu {
     fn set_e1(&mut self, w: u32) {
         let keep = if self.v2() { 0x37FF | if self.second_megabyte { 0x800 } else { 0 } } else { 0x7FF };
         self.env[0] = w & keep;
+        self.cache.set_page(self.env[0]);
     }
 
-    fn polygon(&mut self, w: &[u32; 16], video: &Video) -> u64 {
+    /// A polygon's page attribute into GP0(E1h): bits 0-8, and bit 11 while GP1(09h) allows it.
+    fn set_page(&mut self, page: u32) {
+        let bits = 0x1FF | if self.two_megabytes() { 0x800 } else { 0 };
+        self.env[0] = self.env[0] & !bits | page & bits;
+        self.cache.set_page(self.env[0]);
+    }
+
+    /// A textured quad's page, applied once its first triangle's words are in (Diamond_Disputes.md D-23).
+    fn quad_page(&mut self) {
+        let c = self.words[0] >> 24;
+        if c >> 5 == 1 && c & 0xC == 0xC {
+            let shaded = c & 0x10 != 0;
+            if self.have == if shaded { 9 } else { 7 } {
+                self.set_page(self.words[if shaded { 5 } else { 4 }] >> 16);
+            }
+        }
+    }
+
+    fn polygon(&mut self, w: &[u32; 16], video: &Video, t: u64) -> u64 {
         let c = w[0] >> 24;
         let (quad, shaded, textured, blended, raw) = (c & 8 != 0, c & 0x10 != 0, c & 4 != 0, c & 2 != 0, c & 1 != 0);
         let n = if quad { 4 } else { 3 };
@@ -494,14 +557,16 @@ impl Gpu {
             }
             *vx = self.vertex(xy, colour, uv);
         }
+        for i in 1..n {
+            v[i] = self.place(v[0], v[i]);
+        }
         let mut texture = None;
         if textured {
-            let bits = 0x1FF | if self.two_megabytes() { 0x800 } else { 0 };
-            self.env[0] = self.env[0] & !bits | page & bits;
+            self.set_page(page);
             texture = Some(Texture::new(self.env[0], clut, self.env[1], self.two_megabytes()));
         }
         let modulated = texture.is_some() && !raw;
-        let paint = self.paint(blended, texture, raw && texture.is_some(), modulated || (shaded && texture.is_none()), video);
+        let paint = self.paint(blended, texture, raw && texture.is_some(), modulated || (shaded && texture.is_none()), video, t);
         let tex = texture.is_some();
         let (work, loaded) = self.draw(paint, |p| {
             raster::triangle(p, [v[0], v[1], v[2]], shaded, tex);
@@ -512,7 +577,7 @@ impl Gpu {
         timing::drawing(timing::TRIANGLE * (n as u64 - 2) + loaded as u64 * timing::CLUT_ENTRY, work)
     }
 
-    fn rectangle(&mut self, w: &[u32; 16], video: &Video) -> u64 {
+    fn rectangle(&mut self, w: &[u32; 16], video: &Video, t: u64) -> u64 {
         let c = w[0] >> 24;
         let (textured, blended, raw) = (c & 4 != 0, c & 2 != 0, c & 1 != 0);
         let mut at = 2;
@@ -531,27 +596,27 @@ impl Gpu {
         let v = self.vertex(w[1], w[0], uv);
         let texture = textured.then(|| Texture::new(self.env[0], uv >> 16, self.env[1], self.two_megabytes()));
         let flip = if self.v2() { (self.env[0] & 1 << 12 != 0, self.env[0] & 1 << 13 != 0) } else { (false, false) };
-        let paint = self.paint(blended, texture, raw, false, video);
+        let paint = self.paint(blended, texture, raw, false, video, t);
         let sprite = raster::Sprite { x: v.x, y: v.y, w: sw, h: sh, rgb: v.rgb, uv: (v.u, v.v), flip };
         let (work, loaded) = self.draw(paint, |p| raster::rectangle(p, sprite));
-        timing::drawing(timing::RECTANGLE + loaded as u64 * timing::CLUT_ENTRY, work)
+        timing::drawing(work.rows as u64 * timing::RECTANGLE_ROW + loaded as u64 * timing::CLUT_ENTRY, work)
     }
 
-    fn line_start(&mut self, w: &[u32; 16], video: &Video) -> u64 {
+    fn line_start(&mut self, w: &[u32; 16], video: &Video, t: u64) -> u64 {
         let c = w[0] >> 24;
         let shaded = c & 0x10 != 0;
         let a = self.vertex(w[1], w[0], 0);
-        let b = if shaded { self.vertex(w[3], w[2], 0) } else { self.vertex(w[2], w[0], 0) };
+        let b = self.place(a, if shaded { self.vertex(w[3], w[2], 0) } else { self.vertex(w[2], w[0], 0) });
         if c & 8 != 0 {
             self.polyline = Some(Polyline { command: w[0], last: b, colour: w[0] });
         }
-        self.segment(w[0], a, b, video)
+        self.segment(w[0], a, b, video, t)
     }
 
-    fn segment(&mut self, command: u32, a: Vertex, b: Vertex, video: &Video) -> u64 {
+    fn segment(&mut self, command: u32, a: Vertex, b: Vertex, video: &Video, t: u64) -> u64 {
         let c = command >> 24;
         let (shaded, blended) = (c & 0x10 != 0, c & 2 != 0);
-        let paint = self.paint(blended, None, false, true, video);
+        let paint = self.paint(blended, None, false, true, video, t);
         let (work, _) = self.draw(paint, |p| raster::line(p, a, b, shaded));
         timing::drawing(timing::LINE, work)
     }
@@ -560,8 +625,8 @@ impl Gpu {
         let Some(p) = self.polyline else { return };
         self.display.scan(&self.vram, video, t);
         let shaded = p.command & 1 << 28 != 0;
-        let b = self.vertex(xy, if shaded { p.colour } else { p.command }, 0);
-        let cost = self.segment(p.command, p.last, b, video);
+        let b = self.place(p.last, self.vertex(xy, if shaded { p.colour } else { p.command }, 0));
+        let cost = self.segment(p.command, p.last, b, video, t);
         if let Some(q) = self.polyline.as_mut() {
             q.last = b;
         }
@@ -589,12 +654,14 @@ impl Gpu {
         let p = word & 0x00FF_FFFF;
         match word >> 24 & 0x3F {
             0x00 => {
-                self.reset_fifo();
+                self.reset_fifo(now);
+                self.clut.clear();
                 self.irq = false;
                 self.display.blanked = true;
                 self.dma_direction = 0;
                 self.display.start = 0;
                 self.env = [0; 6];
+                self.cache.set_page(0);
                 video.retime(now, |v| {
                     v.mode = 0;
                     v.x1 = 0x200;
@@ -604,7 +671,7 @@ impl Gpu {
                 });
             }
             0x01 => {
-                self.reset_fifo();
+                self.reset_fifo(now);
                 self.clut.clear();
             }
             0x02 => self.irq = false,
@@ -623,20 +690,27 @@ impl Gpu {
             0x09 if self.v2() => self.second_megabyte = p & 1 != 0,
             0x10..=0x1F => {
                 let index = p & if self.v2() { 0xF } else { 0x7 };
-                match index {
-                    2 => self.latch = self.env[1],
-                    3 | 4 => self.latch = self.env[index as usize - 1] & if self.v2() { 0xFFFFF } else { 0x7FFFF },
-                    5 => self.latch = self.env[4] & 0x3F_FFFF,
-                    7 if self.v2() => self.latch = self.version,
-                    8 if self.v2() => self.latch = 0,
-                    _ => {}
-                }
+                let area = if self.v2() { 0xFFFFF } else { 0x7FFFF };
+                let keep = |latch: u32, bits: u32, value: u32| latch & !bits | value & bits;
+                self.latch = match index {
+                    2 => keep(self.latch, 0xFFFFF, self.env[1]),
+                    3 | 4 => keep(self.latch, area, self.env[index as usize - 1]),
+                    5 => keep(self.latch, 0x3F_FFFF, self.env[4]),
+                    7 if self.v2() => self.version,
+                    _ => 0,
+                };
+                self.idle_read = self.latch;
             }
             _ => {}
         }
     }
 
-    fn reset_fifo(&mut self) {
+    /// GP1(00h) and (01h): the FIFO and whatever was half received or open dropped, and the command drawing ended
+    /// (Diamond_GPU.md §2.5).
+    fn reset_fifo(&mut self, now: u64) {
+        if self.busy_until > now {
+            (self.busy_until, self.carry) = (now, 0);
+        }
         self.len = 0;
         self.head = 0;
         self.tail = Parser::default();

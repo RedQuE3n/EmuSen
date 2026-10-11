@@ -142,7 +142,8 @@ pub struct Sprite {
 }
 
 /// A rectangle; its texture coordinate steps by one a pixel, backwards along a flipped axis, an x-flipped one from
-/// u with its low bit set (ps1-tests' `texture-flip` on a console and the referee, Diamond_Disputes.md D-8).
+/// u with its low bit set (ps1-tests' `texture-flip` on a console and the referee, Diamond_Disputes.md D-8); unflipped,
+/// a pixel pair's texels come from one texture cache entry, the left one's (amidog's expectations, D-23).
 pub fn rectangle(p: &mut Painter, s: Sprite) {
     let Sprite { x, y, w, h, rgb, uv, flip } = s;
     let area = p.paint.area;
@@ -154,6 +155,7 @@ pub fn rectangle(p: &mut Painter, s: Sprite) {
     let step = |f: bool| if f { -1i32 } else { 1 };
     let (su, sv) = (step(flip.0), step(flip.1));
     let u0 = (if flip.0 { uv.0 | 1 } else { uv.0 }) as i32;
+    let pairs = p.paint.texture.filter(|_| !flip.0);
     for yy in y1..=y2 {
         p.work.rows += 1;
         if !p.visible_row(yy) {
@@ -161,14 +163,22 @@ pub fn rectangle(p: &mut Painter, s: Sprite) {
         }
         let v = (uv.1 as i32 + sv * (yy - y)) as u8;
         for xx in x1..=x2 {
-            let u = (u0 + su * (xx - x)) as u8;
+            let mut u = (u0 + su * (xx - x)) as u8;
+            if let Some(t) = pairs.filter(|_| xx & 1 == 1 && xx > x1) {
+                let left = u.wrapping_sub(1);
+                let entry = |u: u8| t.window(u, 0).0 >> (4 - t.depth);
+                if entry(u) != entry(left) {
+                    u = left;
+                }
+            }
             p.pixel(xx, yy, rgb, (u, v));
         }
     }
 }
 
 /// A line from `a` to `b`, both ends drawn: the minor coordinate is the nearest to the exact line, a half rounding
-/// toward the end on an x-major line and toward the start on a y-major one; the colour by its 12-bit gradient.
+/// toward the right end on an x-major line and toward less x on a y-major one (Diamond_Disputes.md D-7, D-23); the
+/// colour by its 12-bit gradient.
 pub fn line(p: &mut Painter, a: Vertex, b: Vertex, shaded: bool) {
     let (dx, dy) = (b.x - a.x, b.y - a.y);
     if dx.abs() > MAX_DX || dy.abs() > MAX_DY {
@@ -183,7 +193,7 @@ pub fn line(p: &mut Painter, a: Vertex, b: Vertex, shaded: bool) {
         let (x, y) = if n == 0 {
             (a.x, a.y)
         } else if x_major {
-            (a.x + (dx.signum() as i64 * k) as i32, a.y + floor_div(2 * k * dy as i64 + n, 2 * n) as i32)
+            (a.x + (dx.signum() as i64 * k) as i32, a.y + dy.signum() * floor_div(2 * k * dy.abs() as i64 + if dx < 0 { n - 1 } else { n }, 2 * n) as i32)
         } else {
             (a.x + floor_div(2 * k * dx as i64 + n - 1, 2 * n) as i32, a.y + (dy.signum() as i64 * k) as i32)
         };

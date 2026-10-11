@@ -16,7 +16,7 @@ use crate::pad::Controller;
 use crate::sio0::{Phase, Sio0, Target};
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"DMND");
-pub const STATE_VERSION: i32 = 4;
+pub const STATE_VERSION: i32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -383,7 +383,7 @@ impl Gpu {
         w.u32s("Env", &self.env);
         let t = &self.tail;
         w.bools("Flags", &[self.second_megabyte, self.irq, self.irq_rose, self.display.blanked, t.colour_next, t.polyline.is_some(), t.polyline == Some(true)]);
-        w.u32s("Registers", &[self.dma_direction, self.latch, self.display.start, self.head as u32, self.len as u32, self.have as u32, self.need as u32]);
+        w.u32s("Registers", &[self.dma_direction, self.latch, self.display.start, self.head as u32, self.len as u32, self.have as u32, self.need as u32, self.idle_read]);
         w.u32s("FifoWords", &self.fifo.map(|f| f.0));
         w.u64s("FifoTimes", &self.fifo.map(|f| f.1));
         w.bytes("FifoKinds", &self.fifo.map(|f| word_code(f.2)));
@@ -392,13 +392,14 @@ impl Gpu {
         let x = self.write.unwrap_or_default();
         w.u32s("Write", &[self.write.is_some() as u32, x.rect.x, x.rect.y, x.rect.w, x.rect.h, x.done]);
         let r = self.read.unwrap_or_default();
-        w.u32s("Read", &[self.read.is_some() as u32, r.rect.x, r.rect.y, r.rect.w, r.rect.h, r.words]);
+        w.u32s("Read", &[self.read.is_some() as u32, r.rect.x, r.rect.y, r.rect.w, r.rect.h, r.words, r.first]);
         w.u64("ReadStart", r.start);
         let p = self.polyline.unwrap_or_default();
         w.i32s("Polyline", &[self.polyline.is_some() as i32, p.command as i32, p.colour as i32, p.last.x, p.last.y, p.last.rgb[0], p.last.rgb[1], p.last.rgb[2]]);
         w.u64s("BusyUntil", &[self.busy_until, self.carry]);
         w.u32s("CacheTags", &self.cache.tags);
         w.u16s("CacheData", self.cache.data.as_flattened());
+        w.u32("CachePage", self.cache.page);
         w.u16s("Clut", &self.clut.colours);
         w.u32s("ClutAt", &[self.clut.x, self.clut.y, self.clut.loaded]);
         w.u64("ScanField", self.display.field_line);
@@ -411,9 +412,9 @@ impl Gpu {
         r.bools(&mut f)?;
         [self.second_megabyte, self.irq, self.irq_rose, self.display.blanked] = [f[0], f[1], f[2], f[3]];
         let (colour_next, polyline) = (f[4], f[5].then_some(f[6]));
-        let mut g = [0u32; 7];
+        let mut g = [0u32; 8];
         r.u32s(&mut g)?;
-        (self.dma_direction, self.latch, self.display.start) = (g[0], g[1], g[2]);
+        (self.dma_direction, self.latch, self.display.start, self.idle_read) = (g[0], g[1], g[2], g[7]);
         (self.head, self.len, self.have, self.need) = (g[3] as usize % 16, (g[4] as usize).min(16), (g[5] as usize).min(16), (g[6] as usize).min(16));
         let mut words = [0u32; 16];
         let mut times = [0u64; 16];
@@ -431,10 +432,10 @@ impl Gpu {
         let mut t = [0u32; 6];
         r.u32s(&mut t)?;
         self.write = (t[0] != 0).then(|| Transfer { rect: rect_of(&t[1..5]), done: t[5] });
-        let mut rd = [0u32; 6];
+        let mut rd = [0u32; 7];
         r.u32s(&mut rd)?;
         let start = r.u64()?;
-        self.read = (rd[0] != 0).then(|| ReadOut { rect: rect_of(&rd[1..5]), words: rd[5], start });
+        self.read = (rd[0] != 0).then(|| ReadOut { rect: rect_of(&rd[1..5]), words: rd[5], start, first: rd[6] });
         let mut pl = [0i32; 8];
         r.i32s(&mut pl)?;
         self.polyline = (pl[0] != 0).then(|| Polyline { command: pl[1] as u32, colour: pl[2] as u32, last: Vertex { x: pl[3], y: pl[4], rgb: [pl[5], pl[6], pl[7]], u: 0, v: 0 } });
@@ -443,6 +444,7 @@ impl Gpu {
         [self.busy_until, self.carry] = busy;
         r.u32s(&mut self.cache.tags)?;
         r.u16s(self.cache.data.as_flattened_mut())?;
+        self.cache.page = r.u32()?;
         r.u16s(&mut self.clut.colours)?;
         let mut c = [0u32; 3];
         r.u32s(&mut c)?;
@@ -548,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn the_version_4_layout_is_pinned() {
+    fn the_version_5_layout_is_pinned() {
         let layout = machine().layout();
         let head: Vec<&str> = layout.lines().take(5).collect();
         assert_eq!(head, ["0 4 u32 Magic", "4 4 i32 Version", "8 8 i64 Frames", "16 128 u32[32] Cpu.R", "144 4 u32 Cpu.Hi"]);
@@ -556,16 +558,16 @@ mod tests {
         assert_eq!(
             tail,
             [
-                "3682258 65536 u8[65536] TTY",
-                "3157970 524288 u8[524288] SPURAM",
-                "2109394 1048576 u8[1048576] VRAM",
-                "2108370 1024 u8[1024] SCRATCH",
-                "11218 2097152 u8[2097152] RAM",
-                "11217 1 bool ExePending"
+                "3682270 65536 u8[65536] TTY",
+                "3157982 524288 u8[524288] SPURAM",
+                "2109406 1048576 u8[1048576] VRAM",
+                "2108382 1024 u8[1024] SCRATCH",
+                "11230 2097152 u8[2097152] RAM",
+                "11229 1 bool ExePending"
             ]
         );
         assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Bus.Sio0.Port1.Controller.Modes") && layout.contains("Cpu.InterruptView.Held"), "{layout}");
-        assert_eq!(machine().state_size(), 3_747_794);
+        assert_eq!(machine().state_size(), 3_747_806);
     }
 
     #[test]

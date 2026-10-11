@@ -618,8 +618,36 @@ repeated, pulsed or toggled (an I_STAT edge when INTF falls). A write to the mod
   and count only inside them, 36, 159, 282, 405, 528, then 0], where psx-spx says "reset at hblank and pause outside";
   the counter is reset at the blank's end as well as its start (D-6). Mode 3's "pause until hblank once" and modes 0
   and 1 follow psx-spx.
-- **Not graded**: the sync-mode tables' values depend on where the program begins against hblank, so they are
-  compared by pattern, not number (§11.12).
+- ~~**Not graded**: the sync-mode tables' values depend on where the program begins against hblank, so they are
+  compared by pattern, not number (§11.12).~~ *Graded since 2026-10-11 by their shape* (§11.12): the values still
+  depend on where in the line each test begins, but no row can start above what a free-running count reaches in the
+  same time, nor rise faster, nor fall where its mode neither resets nor wraps.
+- **A mode write with the sync on** (*2026-10-11*, D-6's second part, `Diamond_Records.md` §8.1): the write resets the
+  count, sets its running from the blank's level at the write, and no blank edge before it acts on the timer. Hblank's
+  edges are offered to the event loop only while timer 0 syncs, an economy of about 526 events a field otherwise; so
+  when a write turns them on, `Video::skip_hblanks` first moves the edges' processed mark to the present, stopping just
+  short of any vblank-side edge still due, which the loop then takes in its turn. Without it the loop took every hblank
+  edge since the last one processed at its own past time, set the timer's tick base back to it and applied it to the
+  new mode, crediting up to 48,340 cycles a write [M]. One case is left [A]: an hblank edge falling in the same
+  instruction as a still-due vblank-side edge would be taken after the write; with the display ranges `timers` sets an
+  hblank edge lies at least 160 cycles from a line's start, where the vblank-side edges fall, and of the 98 writes
+  that turn the sync on in `timers`' release and rewrite and in `timer-sync.s`, none found such an edge still due [M].
+  *Measured on 2026-10-11*: `timer-sync.s` reads 3 and 6, or 0 where the mode pauses or waits, in all 32 cases, where
+  timer 0 had read up to 46,876; `timers`' rewrite and release meet all 14 sync tables' shape (6 and 4 before) and their
+  other rows are unchanged; the cost is below. Pinned by `a_mode_write_with_sync_resets_the_count`,
+  `the_timers_records_sync_tables_have_the_logs_shape` and the TTY gate.
+
+  *Read for this step* [R]: psx-spx `6d7d1bc`, "Timers" (the counter "gets forcefully reset to 0000h on any write to the
+  Counter Mode register"; "Reset and Wrap"); ps1-tests' `timers` console log; Diamond's own `timers.rs`, `bus.rs`'s timer,
+  event and I/O paths, `video.rs`'s edges, `state.rs`'s video fields (to keep the state format unchanged: the fix adds no
+  state), `machine.rs`'s step; the project's pages `Diamond_Records.md`, `Diamond_Disputes.md` (the rules, D-6),
+  `Diamond_Referees.md` and this page's §11.5–§11.6, §11.12, §11.14; DOCS.txt's exclusions; the referees' RAM for
+  `timer-sync.s` and the records' earlier RAM and TTY of `timers` (`Diamond_Referees.md` §2). Not read: any emulator's
+  source, any BIOS or listing (the player's BIOS was handed to the referees by path only). **Cost** [M, `examples/run`,
+  600 frames, three runs each, before and after side by side]: the release `timers` on the open kernel as a PAL
+  console 6.20–6.29 ms a frame before and 6.11–6.28 after, `gpu/triangle` 6.39–6.41 and 6.37–6.46. The edges passed
+  over are never processed, so the fix removes work rather than adds it, one edge search a write; the differences are
+  within the runs' spread.
 
 ### 11.7 DMA
 
@@ -712,7 +740,7 @@ rule, tolerance, named disagreements and create settings.
 | `cpu/cop`, `cpu/code-in-io`, `dma/otc-test`, `dma/dpcr` | pass and fail lines: no `fail`, at least one `pass`, and `Done.` |
 | `cpu/access-time` | the table against the console's `psx.log`, each cell within 0.5 cycles, SPUCNT's 32-bit cell named (D-4) |
 | `dma/chain-looping` | line by line against the log: the words equal, each number within 10% (D-5) |
-| `timers` | each delay and frame row's settled values (the first two dropped) against the log's mean: a frame's hblanks exactly, its dots ±10, its cycles ±60 of the 16-bit count, a delay ±3 cycles or ±2 slower ticks; run as a PAL console (`region=psx.eu`), the log's console being PAL-clocked (D-0); the sync-mode tables not graded |
+| `timers` | each delay and frame row's settled values (the first two dropped) against the log's mean: a frame's hblanks exactly, its dots ±10, its cycles ±60 of the 16-bit count, a delay ±3 cycles or ±2 slower ticks; run as a PAL console (`region=psx.eu`), the log's console being PAL-clocked (D-0); ~~the sync-mode tables not graded~~ *since 2026-10-11* each of the 14 sync tables in the log's shape: every row's first sample at most 1.2 times the log's largest first sample in that table and 2 more, every rise at most 1.1 times its largest rise and 2 more, the rows of modes 0 and 3 never falling (§11.6) |
 
 A run with no `tty` space, the references' through the probe among them, is `NoDump` (§11.15).
 
@@ -744,7 +772,7 @@ PCSX-ReARMed); their logs were not read.
 | `dma/otc-test` | pass, 15 of 15 (the console's log lists 13; the release adds two) |
 | `dma/dpcr` | pass, 2 of 2 and both time-outs |
 | `dma/chain-looping` | pass: 16,024 / 16,016 / 24,032 / 24,024 cycles against 16,040 / 16,032 / 25,632 / 25,640, the booleans equal |
-| `timers` (as a PAL console) | pass, 18 of 18 rows |
+| `timers` (as a PAL console) | pass, 18 of 18 rows; *since 2026-10-11* and 14 of 14 sync tables in the log's shape (4 before D-6's second part) |
 | `cpu/access-time` | pass, 17 of 17 rows within 0.5 cycles, since the kernel's printf takes a flag after the width (`Diamond_OpenKernel.md` §4.10, 2026-10-11); before that its `%2-d` printed `-d` and every cell's hundredths were lost |
 | `cpu/io-access-bitwidth` | not graded: a table to compare by eye; it differs from the console's log in the registers' upper "garbage" bits (16–31 of I_MASK, the timers' and SIO's), which Diamond reads as zero, and in DEV1, which reads FFh where the console's DTL-era window holds what was written |
 
@@ -1015,7 +1043,8 @@ reference's card is a separate step, for which the card a program wrote is kept 
   `135549cd26268e0a50f56649ac4a1cdfdf6287ca2660698023648bc3bf011629`.
 - **Programs**: `card.s`, `multitap.s`, `kernel-pad.s` beside `pad.s`.
 - **The state**: `DMND` version 4, 3,747,794 bytes with a DualShock on port 1 and no card; each card adds its 131,072
-  bytes.
+  bytes. *Version 5 since the GPU's cache step (2026-10-11), 3,747,806 bytes: the GPU's repeated GPUREAD word, a
+  transfer's first word and the texture cache's page (`Diamond_GPU.md` §12).*
 
 ### 14.2 The gate
 

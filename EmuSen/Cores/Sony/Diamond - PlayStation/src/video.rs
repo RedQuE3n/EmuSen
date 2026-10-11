@@ -261,6 +261,13 @@ impl Video {
         best
     }
 
+    /// Hblank's edges up to cycle `t` are passed over, as nothing wanted them: the processed mark moves to `t`, or to just
+    /// before an edge of another kind still due by then (Diamond_Native.md §11.6).
+    pub fn skip_hblanks(&mut self, t: u64) {
+        let other = self.next_edge_h(false);
+        self.done_h = self.done_h.max(self.h_at(t).min(other - 1));
+    }
+
     /// Processes the edge at CPU cycle `t` (the one `next_edge` gave) and says what it was.
     pub fn edge(&mut self, t: u64, hblank: bool) -> u32 {
         let h = self.next_edge_h(hblank);

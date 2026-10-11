@@ -7,21 +7,31 @@ See Diamond_Records.md for each program's record layout, why it is laid out so, 
     psxrecords.py equal PROGRAM WORDS TTY
     psxrecords.py console PROGRAM WORDS LOG
     psxrecords.py console PROGRAM --tty TTY LOG
+    psxrecords.py mask < TTY
 
-PROGRAM is `timers`, `access-time`, `chopping`, `bandwidth` or `chain-looping`. WORDS is a file of the record's words
-from 80100000h: psxreferee.py's `ram` output, or plain hexadecimal words (Diamond's `run --bare --dump`). `render` prints
-the text the release would print; `equal` compares the record with a TTY of the release program, by the program's checks; `console`
-grades the record, or with --tty a release's TTY, against ps1-tests' console log by the rules of WiseMan's TTY gate
-and Diamond_Referees.md §6.
+PROGRAM is `timers`, `access-time`, `chopping`, `bandwidth`, `chain-looping`, `otc-test`, `dpcr` or
+`io-access-bitwidth`. WORDS is a file of the record's words from 80100000h: psxreferee.py's `ram` output, or plain
+hexadecimal words (Diamond's `run --bare --dump`). `render` prints the text the release would print; `equal` compares
+the record with a TTY of the release program, by the program's checks; `console` grades the record, or with --tty a
+release's TTY, against ps1-tests' console log by the rules of WiseMan's TTY gate and Diamond_Referees.md §6. The last
+three programs' records are printf calls, rendered with the release's own formats, read from the build 158 corpus that
+EMUSEN_DIAMOND_PS1TESTS names (Diamond_Records.md §10). `mask` copies a TTY with io-access-bitwidth's BIOS row reduced
+to whether each value is the ROM's own word, so that a referee's TTY of the release is never kept with BIOS words in it.
 Exit codes: 0 done, 2 a usage error.
 """
+import os
 import re
 import statistics
+import struct
 import sys
 from pathlib import Path
 
 BASE = 0x80100000
-SIZE = {"timers": 870, "access-time": 102, "chopping": 780, "bandwidth": 56, "chain-looping": 12}
+SIZE = {"timers": 870, "access-time": 102, "chopping": 780, "bandwidth": 56, "chain-looping": 12,
+        "otc-test": 3072, "dpcr": 3072, "io-access-bitwidth": 3072}
+CALLS = {"otc-test": ("dma/otc-test/otc-test.exe", "dma/otc-test"), "dpcr": ("dma/dpcr/dpcr.exe", "dma/dpcr"),
+         "io-access-bitwidth": ("cpu/io-access-bitwidth/io-access-bitwidth.exe", "cpu/io-access-bitwidth")}
+ROM_CELL = {1: "(ROM)", 2: "(written)"}
 
 MODES = [["System clock", "Dot clock", "System clock", "Dot clock"],
          ["System clock", "Hblank", "System clock", "Hblank"],
@@ -158,6 +168,153 @@ def render_chain(ws):
     return out
 
 
+def release(program):
+    """The release's PS-EXE from the corpus, and its load address."""
+    root = os.environ.get("EMUSEN_DIAMOND_PS1TESTS") or die("EMUSEN_DIAMOND_PS1TESTS names no ps1-tests build 158")
+    image = Path(root, CALLS[program][0]).read_bytes()
+    return image, struct.unpack("<I", image[0x18:0x1C])[0]
+
+
+def cstring(exe, address):
+    image, load = exe
+    at = 0x800 + address - load
+    if not 0x800 <= at < len(image):
+        return "<%08x>" % address
+    return image[at:image.index(b"\0", at)].decode("latin-1")
+
+
+def cformat(fmt, args, exe):
+    """C's printf for the conversions the three programs use: d i u x X c s %, with flags, width and precision."""
+    out, args = [], list(args)
+    for m in re.finditer(r"%([-+ #0]*)(\d*)(?:\.(\d+))?(?:hh|h|ll|l)?([diuxXcs%])|[^%]+|%", fmt):
+        if not m.group(4):
+            out.append(m.group(0))
+            continue
+        flags, width, precision, conv = m.group(1), int(m.group(2) or 0), m.group(3), m.group(4)
+        if conv == "%":
+            out.append("%")
+            continue
+        v = args.pop(0) if args else 0
+        if conv == "s":
+            text, zero = cstring(exe, v), False
+            if precision is not None:
+                text = text[:int(precision)]
+        elif conv == "c":
+            text, zero = chr(v & 0xFF), False
+        else:
+            if conv in "di":
+                n = v - (1 << 32) if v & 0x80000000 else v
+                sign, digits = ("-" if n < 0 else "+" if "+" in flags else " " if " " in flags else ""), str(abs(n))
+            else:
+                sign, digits = "", ("%x" % v if conv == "x" else "%X" % v if conv == "X" else str(v))
+            if precision is not None:
+                digits = digits.zfill(int(precision))
+            prefix = ("0x" if conv == "x" else "0X") if "#" in flags and conv in "xX" and v else ""
+            zero = "0" in flags and "-" not in flags and precision is None
+            text = sign + prefix + (digits.zfill(width - len(sign) - len(prefix)) if zero else digits)
+        out.append(text.ljust(width) if "-" in flags else text.rjust(width))
+    return "".join(out)
+
+
+def render_calls(program, ws):
+    """The record's printf calls, six words each, rendered with the release's formats; io-access-bitwidth's BIOS cells by ROM_CELL."""
+    exe = release(program)
+    text = []
+    for i in range(0, len(ws) - 5, 6):
+        fmt, *args = ws[i:i + 6]
+        if fmt == 0:
+            break
+        text.append("%10s    " % ROM_CELL[fmt] if fmt in ROM_CELL else cformat(cstring(exe, fmt), args, exe))
+    return "".join(text).split("\n")
+
+
+def mask_bios(lines):
+    """io-access-bitwidth's BIOS row in a TTY, each value as ROM_CELL says: the ROM's word is taken as the 32-bit table's first cell."""
+    out, width, word = [], 32, None
+    for line in lines:
+        m = re.match(r"^Reading as (\d+)bit", line)
+        if m:
+            width = int(m.group(1))
+        m = re.match(r"^(BIOS\s+\(0xbfc00000\) {3})(.*)$", line)
+        if m:
+            cells = m.group(2).split()
+            if word is None and cells and cells[0].startswith("0x"):
+                word = int(cells[0], 16)
+            mask = (1 << width) - 1
+            shown = [c if not c.startswith(("0x", "0")) or word is None else
+                     ROM_CELL[1] if int(c, 16) == word & mask else ROM_CELL[2] for c in cells]
+            line = m.group(1) + "".join("%10s    " % c if c in ROM_CELL.values() else "%-10s    " % c for c in shown)
+        out.append(line.rstrip())
+    return out
+
+
+def from_heading(program, lines):
+    heading = CALLS[program][1]
+    at = next((i for i, line in enumerate(lines) if line.startswith(heading)), len(lines))
+    return [line.rstrip() for line in lines[at:]]
+
+
+def equal_calls(program, rec, tty):
+    """The record's text against the release's, line by line from the heading on, empty lines left out as DuckStation's log leaves them."""
+    a = [l for l in from_heading(program, mask_bios(rec)) if l]
+    b = [l for l in from_heading(program, mask_bios(tty)) if l]
+    off = [(i, x, y) for i, (x, y) in enumerate(zip(a, b)) if x != y]
+    report = [f"line {i}: '{x}' against '{y}'" for i, x, y in off[:12]] + ([f"and {len(off) - 12} lines more"] if len(off) > 12 else [])
+    if len(a) != len(b):
+        report.append(f"{len(a)} lines against {len(b)}")
+    report.append(f"{len(b) - len(off)} of {len(b)} lines equal")
+    return not off and len(a) == len(b), report
+
+
+def bitwidth_cells(lines):
+    """Each table's cells by (width, row): the reads after each write width."""
+    cells, width = {}, None
+    for line in mask_bios(lines):
+        m = re.match(r"^Reading as (\d+)bit", line)
+        if m:
+            width = int(m.group(1))
+            continue
+        m = re.match(r"^(\S+)\s+\(0x[0-9a-f]+\)\s+(.*)$", line)
+        if m and width and m.group(1) != "SEGMENT":
+            cells[(width, m.group(1))] = re.findall(r"\(\w+\)|--CRASH--|\S+", m.group(2))
+    return cells
+
+
+def console_calls(program, rec, log):
+    """otc-test and dpcr by the TTY gate's rule and line by line against the log; io-access-bitwidth cell by cell."""
+    if program == "io-access-bitwidth":
+        ours, theirs = bitwidth_cells(rec), bitwidth_cells(log)
+        report, same, total = [], 0, 0
+        for key, vs in theirs.items():
+            mine = ours.get(key, [])
+            for k, v in enumerate(vs):
+                total += 1
+                got = mine[k] if k < len(mine) else "missing"
+                if got == v:
+                    same += 1
+                else:
+                    report.append(f"read as {key[0]} bits, {key[1]}, written as {(8, 16, 32)[k]}: {got} against {v}")
+        return report + [f"{same} of {total} cells as the console's"]
+    a, b = from_heading(program, rec), from_heading(program, log)
+    fails = [l for l in a if l.startswith("fail")]
+    passed = sum(l.startswith("pass") for l in a)
+    gate = not fails and passed > 0 and "Done." in a
+    found, at = 0, 0
+    for line in (l for l in b if l):
+        k = next((i for i in range(at, len(a)) if a[i] == line), None)
+        if k is not None:
+            found, at = found + 1, k + 1
+    extra = [l for l in a if l and l not in b and not l.startswith("fail")]
+    failed = {}
+    for l in fails:
+        failed.setdefault(l[7:].split(":")[0], []).append(l)
+    report = [f"not in the log: '{l}'" for l in extra]
+    report += [f"fail in {name}, {len(ls)} assertions; the first: {ls[0][7:]}" for name, ls in failed.items()]
+    report.append(f"the gate: {'pass' if gate else 'fail'} ({passed} pass lines, {len(fails)} fail lines)")
+    report.append(f"{found} of {sum(1 for l in b if l)} log lines found in order")
+    return report
+
+
 RENDER = {"timers": render_timers, "access-time": render_access, "chopping": render_chopping, "bandwidth": render_bandwidth,
           "chain-looping": render_chain}
 
@@ -175,6 +332,47 @@ def timer_rows(lines):
 
 def sync_rows(lines):
     return [numbers(m.group(2)) for m in map(SYNC_ROW.match, lines) if m]
+
+
+def sync_tables(lines):
+    """Each "Testing Timer..." heading with the sync rows under it, in order."""
+    tables = []
+    for line in lines:
+        if line.startswith("Testing Timer"):
+            tables.append((line, []))
+        elif tables and (m := SYNC_ROW.match(line)):
+            tables[-1][1].append(numbers(m.group(2)))
+    return tables
+
+
+def sync_shape(rec, log):
+    """The sync tables against the log's, table by table in order, as WiseMan's gate grades them (Diamond_Native.md §11.12): each row's first
+    sample at most 1.2 times the log's largest first sample in the same table and 2 more, each rise at most 1.1 times
+    its largest rise and 2 more, and the rows of sync modes 0 and 3, which neither reset nor wrap here, never falling."""
+    report, graded, off = [], 0, 0
+    ours = sync_tables(rec)
+    for i, (heading, rows) in enumerate(sync_tables(log)):
+        mine = ours[i][1] if i < len(ours) and ours[i][0] == heading else None
+        graded += 1
+        if mine is None or len(mine) != len(rows):
+            off += 1
+            report.append(f"{heading}: missing")
+            continue
+        first = max(r[0] for r in rows)
+        rise = max([b - a for r in rows for a, b in zip(r, r[1:])] + [0])
+        bad = []
+        for s, vs in enumerate(mine):
+            if vs[0] > 1.2 * first + 2:
+                bad.append(f"mode {s} starts at {vs[0]}, the log's largest {first}")
+            if any(b - a > 1.1 * rise + 2 for a, b in zip(vs, vs[1:])):
+                bad.append(f"mode {s} rises faster than the log's {rise}")
+            if s in (0, 3) and any(b < a for a, b in zip(vs, vs[1:])):
+                bad.append(f"mode {s} falls")
+        if bad:
+            off += 1
+            report.append(f"{heading[8:60]}...: " + "; ".join(bad))
+    report.append(f"{graded - off} of {graded} sync tables in the log's shape")
+    return report
 
 
 def step(vs):
@@ -233,6 +431,8 @@ def equal_lines(rec, tty, pattern):
 
 
 def equal(program, rec, tty):
+    if program in CALLS:
+        return equal_calls(program, rec, tty)
     if program == "timers":
         return equal_timers(rec, tty)
     if program == "access-time":
@@ -267,6 +467,8 @@ def table(lines):
 def console(program, rec, log):
     """WiseMan's TTY gate (TtyReader.cs) for timers, access-time and bandwidth; Diamond_Referees.md §6 for chopping."""
     report = []
+    if program in CALLS:
+        return console_calls(program, rec, log)
     if program == "timers":
         ours = {key: vs[2:] for key, vs in timer_rows(rec)}
         graded = off = 0
@@ -281,6 +483,7 @@ def console(program, rec, log):
                 off += 1
                 report.append(f"{row}: {bad[:1] or 'missing'} against {mean:.1f} (tolerance {tol})")
         report.append(f"{graded - off} of {graded} rows within their tolerances")
+        report += sync_shape(rec, log)
     elif program == "access-time":
         ours, theirs = table(rec), table(log)
         cells = [(r, i, ours[r][i], v) for r, vs in theirs.items() for i, v in enumerate(vs) if r in ours]
@@ -309,7 +512,10 @@ def console(program, rec, log):
 
 
 def main(argv):
-    if len(argv) < 3 or argv[0] not in ("render", "equal", "console") or argv[1] not in RENDER:
+    if argv[:1] == ["mask"]:
+        print("\n".join(mask_bios(sys.stdin.read().replace("\r", "").splitlines())))
+        return
+    if len(argv) < 3 or argv[0] not in ("render", "equal", "console") or (argv[1] not in RENDER and argv[1] not in CALLS):
         die(__doc__)
     mode, program = argv[0], argv[1]
     if argv[2] == "--tty":
@@ -319,7 +525,7 @@ def main(argv):
         ws = words(argv[2])
         if len(ws) < SIZE[program]:
             die(f"{program}: {len(ws)} words, the record needs more")
-        rec = RENDER[program](ws)
+        rec = render_calls(program, ws) if program in CALLS else RENDER[program](ws)
     if mode == "render":
         print("\n".join(rec))
         return

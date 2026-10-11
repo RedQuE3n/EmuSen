@@ -172,14 +172,14 @@ fn flipped_rectangles_start_where_the_referee_starts_them() {
     assert_eq!(first(128), [0x8100, 0x8101, 0x8000], "y-flipped from V 1");
 }
 
-/// D-10: GPUSTAT's bits 26 and 28 while a polygon, a line and a rectangle arrive and draw, as Diamond reads them and
-/// DuckStation and SwanStation answer; Beetle PSX clears bit 28 between a polygon's or a line's command word and its
-/// last vertex (Diamond_Referees.md §4.8).
+/// D-10: GPUSTAT's bits 26 and 28 while a polygon, a line and a rectangle arrive and draw: bit 28 clear from a
+/// polygon's or a line's command word to its last vertex, as Beetle PSX answers and amidog's expectations have it;
+/// DuckStation and SwanStation keep it set (Diamond_Referees.md §4.8, Diamond_Disputes.md D-23).
 #[test]
 fn gpustat_while_each_shape_arrives_and_draws() {
     let m = run(include_str!("../programs/gpustat-shapes.s"));
     let bits: Vec<u32> = results(&m, 0x10_0000, 20).iter().map(|s| s >> 26 & 5).collect();
-    assert_eq!(bits, [5, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 5, 4, 4, 4, 4, 5, 0, 0, 5]);
+    assert_eq!(bits, [5, 0, 0, 0, 4, 4, 5, 0, 0, 4, 4, 5, 4, 4, 4, 4, 5, 0, 0, 5]);
 }
 
 /// D-11: after 2,048 words to VRAM in blocks of 1 to 128 and in a burst, the GPU reads ready at the first poll, on
@@ -275,7 +275,7 @@ fn the_open_kernels_pad_functions_read_the_pads() {
     assert_eq!(bytes(&m, 0x10_0000, 8), [0x00, 0x73, 0xFF, 0xFF, 0x80, 0x80, 0xFF, 0x80], "the analog read, the left stick right");
 }
 
-// The RAM-recording rewrites of ps1-tests' TTY programs (Diamond_Records.md), each record as Diamond answers it. Four
+// The RAM-recording rewrites of ps1-tests' TTY programs (Diamond_Records.md), each record as Diamond answers it. Seven
 // carry the release's code from the corpus and pass unrun without it.
 
 #[path = "support/records.rs"]
@@ -311,7 +311,7 @@ fn the_timers_record_reads_as_the_release_prints() {
     }
     assert_eq!(results(&m, 0x10_0D00, 17), [1666, 833, 833, 833, 834, 835, 834, 833, 833, 833, 833, 0, 0xC08, 1, 0, 1, 1]);
     assert_eq!(results(&m, 0x10_0D80, 6), [0x400, 0x7FF, 0x1C08, 0x408, 0x408, 0x408]);
-    assert_eq!(fnv(&results(&m, 0x10_0000, 870)), 0x1763_FD9A_68AD_363D, "the whole record");
+    assert_eq!(fnv(&results(&m, 0x10_0000, 870)), 0x6024_1295_3685_3C8B, "the whole record");
 }
 
 /// `cpu/access-time`: the 51 cells, whole cycles and hundredths, equal to what the release prints on Diamond (§3);
@@ -346,14 +346,15 @@ fn the_chopping_record_times_each_transfer() {
 }
 
 /// `gpu/bandwidth`: the hblanks of 400 full-screen transfers or primitives a row, nine of the fourteen equal to the
-/// release's on Diamond and the rest within two (§5), every row within 0.6% of the console's.
+/// release's on Diamond and the rest within two (§5), every row within 0.6% of the console's; since D-11's refit, each
+/// row within one hblank of what it read before.
 #[test]
 fn the_bandwidth_record_counts_each_rows_hblanks() {
     let Some(source) = carried("bandwidth") else { return };
     let m = run_for(&source, 860, Market::Americas);
     let hblanks: Vec<u32> = results(&m, 0x10_0000, 56).chunks(4).map(|r| r[2]).collect();
-    assert_eq!(hblanks, [15_772, 12_123, 19_127, 1216, 7603, 11_462, 15_134, 15_133, 7722, 11_580, 39_975, 39_975, 5845, 3968]);
-    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0x5E3A_F971_9BF7_7425, "the milliseconds and MB/s as well");
+    assert_eq!(hblanks, [15_773, 12_123, 19_127, 1216, 7603, 11_461, 15_134, 15_134, 7721, 11_580, 39_976, 39_975, 5844, 3968]);
+    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0xC54B_955B_DA4F_277C, "the milliseconds and MB/s as well");
 }
 
 /// `dma/chain-looping`: the RAM loop's ticks with no DMA, an empty chain and two never-ending ones, and their
@@ -363,6 +364,149 @@ fn the_chain_looping_record_times_the_loop_beside_each_chain() {
     let Some(source) = carried("chain-looping") else { return };
     let m = run_for(&source, 40, Market::Americas);
     assert_eq!(results(&m, 0x10_0000, 12), [16_024, !0, !0, 16_008, 1, 1, 24_016, 0, 0, 24_016, 0, 0]);
+}
+
+/// A mode write that turns a timer's sync on resets the count (psx-spx "Timers"): each read a few cycles after it is
+/// those cycles, or zero where the mode pauses or waits for its blank, as every referee reads it (Diamond_Disputes.md
+/// D-6). Timer 0 had read up to 36,658, credited with the time since the last video edge processed (Diamond_Records.md §8.1).
+#[test]
+fn a_mode_write_with_sync_resets_the_count() {
+    let m = run_for(include_str!("../programs/timer-sync.s"), 60, Market::Americas);
+    let free = [3, 6, 3, 6, 3, 6, 3, 6];
+    assert_eq!(results(&m, 0x10_0000, 32), [[0, 0, 3, 6, 3, 6, 3, 6], free, [3, 6, 0, 0, 0, 0, 0, 0], [0; 8]].concat(), "timer 0, hblank");
+    assert_eq!(results(&m, 0x10_0080, 32), [[0, 0, 0, 0, 3, 6, 3, 6], free, [3, 6, 3, 6, 0, 0, 0, 0], [0; 8]].concat(), "timer 1, vblank");
+}
+
+/// The console log's largest first sample and largest rise in each of `timers`' fourteen sync tables, in its order.
+const SYNC_LOG: [(i32, i32); 14] =
+    [(260, 123), (245, 123), (242, 123), (242, 123), (242, 123), (38, 20), (48, 25), (54, 28), (76, 39), (95, 49), (248, 123), (0, 1), (248, 123), (247, 123)];
+
+/// `timers`' sync tables in the console log's shape, the rule of WiseMan's TTY gate (Diamond_Native.md §11.12): each row
+/// starts within 1.2 times the log's largest first sample and 2, rises within 1.1 times its largest rise and 2, and
+/// modes 0 and 3 never fall. Before the fix 8 of the 14 tables failed it, mode 0 at 512 pixels starting at 1,629.
+#[test]
+fn the_timers_records_sync_tables_have_the_logs_shape() {
+    let m = run_for(include_str!("../programs/timers.s"), 120, Market::Europe);
+    for (t, &(first, rise)) in SYNC_LOG.iter().enumerate() {
+        let at = if t < 10 { 0x10_0300 + 160 * t as u32 } else { 0x10_0A00 + 160 * (t as u32 - 10) };
+        for s in 0..4 {
+            let row: Vec<i32> = results(&m, at + 40 * s, 10).into_iter().map(|w| w as i32).collect();
+            assert!(row[0] as f64 <= 1.2 * first as f64 + 2.0, "table {t}, mode {s} starts at {}: {row:?}", row[0]);
+            assert!(row.windows(2).all(|w| (w[1] - w[0]) as f64 <= 1.1 * rise as f64 + 2.0), "table {t}, mode {s} rises too fast: {row:?}");
+            assert!(s % 3 != 0 || row.windows(2).all(|w| w[1] >= w[0]), "table {t}, mode {s} falls: {row:?}");
+        }
+    }
+}
+
+/// D-11: the cycles from a primitive's last word to GPUSTAT bit 26, with a rectangle's and a fill's time charged by
+/// the rows they draw; the referees read a 1x1 rectangle ready 10 to 16 cycles after its word (Diamond_GPU.md §8).
+#[test]
+fn small_rectangles_and_fills_cost_their_rows() {
+    let m = run(include_str!("../programs/draw-time.s"));
+    let busy: Vec<u32> = results(&m, 0x10_0000, 38).iter().map(|w| (w >> 16) - (w & 0xFFFF)).collect();
+    assert_eq!(busy[..4], [7, 7, 7, 7], "the four settings");
+    assert_eq!(busy[4..18], [7, 7, 7, 25, 70, 7, 25, 79, 322, 52, 610, 2284, 4444, 7], "flat rectangles 1x1 to 128x64, then GP0(68h)");
+    assert_eq!(busy[18..26], [7, 7, 25, 106, 403, 7, 25, 448], "fills");
+    assert_eq!(busy[26..30], [556, 574, 835, 4912], "triangles keep their setup");
+}
+
+// The printf records of ps1-tests' value programs (Diamond_Records.md §11–§14): each call's format address and arguments.
+
+/// A printf record's calls, six words each, up to the first with no format.
+fn printf_calls(m: &Machine) -> Vec<Vec<u32>> {
+    results(m, 0x10_0000, 3072).chunks(6).take_while(|c| c[0] != 0).map(|c| c.to_vec()).collect()
+}
+
+/// `dma/otc-test`: its heading, "pass - %s" for each of the fifteen tests, and "Done.", as the release prints them on
+/// Diamond's open kernel.
+#[test]
+fn the_otc_record_passes_every_test() {
+    let Some(source) = carried("otc-test") else { return };
+    let m = run_for(&source, 60, Market::Americas);
+    let c = printf_calls(&m);
+    let formats: Vec<u32> = c.iter().map(|c| c[0]).collect();
+    assert_eq!(formats, [&[0x8001_39B0][..], &[0x8001_33E8; 15], &[0x8001_39A8]].concat());
+    assert_eq!(fnv(&c.concat()), 0x45D2_B6B9_5431_9863, "the calls with their arguments");
+}
+
+/// `dma/dpcr`: the SPU's channel completes with DPCR's enable set and times out without it, whatever the priority;
+/// DPCR read as ResetGraph and SpuInit leave it.
+#[test]
+fn the_dpcr_record_completes_only_with_the_channel_enabled() {
+    let Some(source) = carried("dpcr") else { return };
+    let m = run_for(&source, 60, Market::Americas);
+    let c = printf_calls(&m);
+    let dpcr: Vec<[u32; 2]> = c.iter().filter(|c| c[0] == 0x8001_1E0C).map(|c| [c[1], c[2]]).collect();
+    assert_eq!(dpcr, [[0x3B3B_3B33, 0x3B3D_3B33], [0x3B3B_3B33, 0x3B35_3B33], [0x3B3B_3B33, 0x3B30_3B33]]);
+    let ends: Vec<u32> = c.iter().map(|c| c[0]).filter(|&f| f == 0x8001_1EAC || f == 0x8001_1E90).collect();
+    assert_eq!(ends, [0x8001_1EAC, 0x8001_1E90, 0x8001_1E90], "complete, then timed out twice");
+    assert_eq!(c.iter().filter(|c| c[0] == 0x8001_1D64).count(), 2, "both tests pass");
+    assert_eq!(fnv(&c.concat()), 0xCEB9_CCA0_7DCD_4D84, "the calls with their arguments");
+}
+
+/// `cpu/io-access-bitwidth`: 108 reads after 8-, 16- and 32-bit writes, the BIOS row's all the ROM's own word, a
+/// 32-bit store faulting at JOY_CTRL, SIO_CTRL and SPUCNT; 85 cells as the console's log has them, DICR's bit 6 and
+/// GPUSTAT's bit 31 among those that are not, its bit 26 set since a reset ends a fill (Diamond_Records.md §16.1).
+#[test]
+fn the_io_bitwidth_record_reads_each_register_after_each_width() {
+    let Some(source) = carried("io-access-bitwidth") else { return };
+    let m = run_for(&source, 60, Market::Americas);
+    let c = printf_calls(&m);
+    let cells: Vec<&Vec<u32>> = c.iter().filter(|c| matches!(c[0], 1 | 2 | 0x8001_56D8 | 0x8001_56E4)).collect();
+    let marked = |f: u32| cells.iter().enumerate().filter(|(_, c)| c[0] == f).map(|(i, _)| i).collect::<Vec<_>>();
+    assert_eq!(cells.len(), 108);
+    assert_eq!(marked(1), [3, 4, 5, 56, 57, 91], "the BIOS row");
+    assert_eq!(marked(0x8001_56D8), [29, 35, 53], "--CRASH--");
+    assert_eq!(cells[21..24].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x34_0078; 3], "DICR, the console's 340038h");
+    assert_eq!(cells[45..48].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x9480_2000; 3], "GPUSTAT after GP1(00h), ready as the release reads it");
+    assert_eq!(fnv(&c.concat()), 0x1E15_044A_5E79_7C9B, "the calls with their arguments");
+}
+
+// The GPU's step of amidog's FIFO, INTERLACE and cache groups (Diamond_Disputes.md D-23).
+
+/// GP1(00h) during a long fill ends it: GPUSTAT reads psx-spx's 14802000h at once and at the first poll, as
+/// DuckStation, SwanStation, Beetle PSX and PCSX-Redux read it (bit 13 aside), where the GPU stayed busy 5,855 polls.
+#[test]
+fn a_reset_during_a_fill_leaves_the_gpu_ready() {
+    let m = run(include_str!("../programs/gp1-reset.s"));
+    let r = results(&m, 0x10_0000, 5);
+    assert_eq!(r[0] >> 26 & 1, 0, "drawing before the reset");
+    assert_eq!(r[1..], [0x1480_2000, 0x1480_2000, 1, 0x1480_2000]);
+}
+
+/// D-23: an 8-bit page cached 64 texels by 32 lines, and cleared by a page set at another X or between 4 bits and the
+/// others but not between 8 and 15 bits, as amidog's CACHE BLOCK and CACHE TAG expect (`programs/texture-cache.s`).
+#[test]
+fn the_texture_cache_keeps_a_64_texel_row_and_clears_on_a_page_change() {
+    let m = run_for(include_str!("../programs/texture-cache.s"), 30, Market::Americas);
+    let ends = |line: u32| {
+        let w = |k: u32| m.board.ram_word(0x10_0000 + ((line - 10) * 32 + k) * 4);
+        (w(0) & 0xFF, w(31) >> 16 & 0xFF)
+    };
+    let rows: Vec<(u32, u32)> = (10..17).map(ends).collect();
+    assert_eq!(rows, [(1, 1), (1, 1), (2, 2), (2, 2), (2, 2), (4, 4), (5, 5)]);
+}
+
+/// D-23: in 480-line interlace with drawing to the displayed field prohibited, a fill and a rectangle drawn in vblank
+/// skip the lines of GPUSTAT bit 31's parity counted from the display's first line, as amidog's INTERLACE expects;
+/// PCSX-ReARMed skips the same lines with the display at line 0, Beetle PSX the odd lines in both (`programs/interlace.s`).
+#[test]
+fn interlaced_drawing_in_vblank_skips_the_lines_from_the_display_start() {
+    let m = run_for(include_str!("../programs/interlace.s"), 60, Market::Americas);
+    let px = |line: u32, x: u32| (m.board.ram_word(0x10_0000 + (line * 40 + x / 2) * 4) >> (16 * (x & 1))) & 0xFFFF != 0;
+    let drawn: Vec<[bool; 3]> = (0..12).map(|l| [px(l, 0), px(l, 32), px(l, 64)]).collect();
+    let (t, f) = (true, false);
+    assert_eq!(drawn[..4], [[f, f, t], [t, t, t], [f, f, t], [t, t, t]], "the display from line 0: even lines left");
+    assert_eq!(drawn[8..], [[t, t, f], [f, f, f], [t, t, f], [f, f, f]], "from line 1: odd lines left");
+}
+
+/// D-23: GPUREAD after a transfer's last word repeats the transfer's first, as amidog's FIFO read test expects and
+/// PCSX-ReARMed reads it; after a one-word transfer, the word it repeated before, on amidog's expectations alone
+/// (`programs/gpuread-repeat.s`).
+#[test]
+fn gpuread_repeats_the_first_word_of_the_last_longer_transfer() {
+    let m = run(include_str!("../programs/gpuread-repeat.s"));
+    assert_eq!(results(&m, 0x10_0000, 10), [0x0202_0101, 0x0404_0303, 0x0606_0505, 0x0202_0101, 0x0202_0101, 0x0303_0202, 0x0202_0101, 0x0202_0101, 0x0202_0101, 0x0202_0101]);
 }
 
 /// The cycles of a pass of each of amidog's psxtest_gte 1.4 timing loops by its own rule, as read from its RAM: the

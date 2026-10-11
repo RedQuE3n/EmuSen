@@ -102,7 +102,8 @@ that no referee need expose VRAM. The ps1-tests programs were run for their TTY 
 Diamond on its open kernel. Diamond's figures below are its own runs (`examples/run`), pinned by `tests/programs.rs`.
 *Since 2026-10-11* five of ps1-tests' TTY programs (`timers`, `cpu/access-time`, `dma/chopping`, `gpu/bandwidth`,
 `dma/chain-looping`) also exist rewritten to record in RAM, `programs/timers.s` and `programs/records/`, so that every
-referee is graded on them (§4.10; `Diamond_Records.md`).
+referee is graded on them (§4.10; `Diamond_Records.md`); *and since a second step of the same day* three more,
+`dma/otc-test`, `dma/dpcr` and `cpu/io-access-bitwidth`, as records of their printf calls (§4.11).
 
 ### 2.5 Each run confined, and DuckStation's runs one at a time
 
@@ -245,6 +246,13 @@ zero); PCSX-Redux reads zero always, within the blank too [M]. Its frame rows al
 frame where the console reads 263 [M]. **Confirmed on the console log**, which stays the evidence: neither referee
 models mode 2 as the console behaves, so neither bears on the rule.
 
+*2026-10-11, `timer-sync.s`* (`Diamond_Disputes.md` D-6's second part): a mode write with the sync on, read a few
+cycles later, k × 8,192 loops after a vblank, for timers 0 and 1 in each sync mode [M]. Every referee's two reads are
+at most 15 in all 32 cases, the first DuckStation's 0 or 1, SwanStation's 0, 1 or 5, PCSX-ReARMed's 2, PCSX-Redux's 0
+or 3 and Beetle PSX's 0 or 4, where Diamond's timer 0 had read up to 46,876; after the fix Diamond's first reads are 0
+or 3. The lineages
+agree that nothing before the write reaches the count after it; they differ, as above, on which modes pause or wait.
+
 ### 4.6 D-7: where the interpolation starts — `raster-order.s`
 
 One shaded triangle, A (2,1), B (40,9), C (13,30), in its six vertex orders; a shaded quad in the four orders that
@@ -375,6 +383,51 @@ against the log's 112,531 (Diamond 112,557, DuckStation 112,633), but a frame on
 112,031, as DuckStation's 112,196 does: its dot clock on a PAL console is not the console's. The line's ruling rests on
 the frame's cycles, which it meets; its standing as the strongest witness is for the line, not the dot clock.
 
+### 4.11 ps1-tests' value programs as printf records — `records/`'s `otc-test.s`, `dpcr.s`, `io-access-bitwidth.s`
+
+*Added 2026-10-11.* The three record every printf call, its format's address and arguments, and are rendered with the
+release's own formats (`Diamond_Records.md` §11). On Diamond each renders as the release prints on the open kernel but
+for one line, `io-access-bitwidth`'s GPUSTAT row, whose cause is Diamond's (that page's §14, §16.1); on DuckStation as
+the release prints there but for two rows read at other moments, and on PCSX-Redux but for the stack's address in 15
+fail lines (its §15). Against the console's logs [M]:
+
+| Log | Diamond | DuckStation | SwanStation | Beetle PSX | PCSX-Redux | PCSX-ReARMed |
+|---|---|---|---|---|---|---|
+| `dma/otc-test`, the log's 13 tests passed (of the release's 15) | 13 (15) | 13 (15) | 8 (9) | 12 (14) | 4 (4) | 12 (12) |
+| `dma/dpcr`, the log's 14 lines | 14 | 14 | 14 | 12 | 14 | 14 |
+| `cpu/io-access-bitwidth`, 108 cells as the console's | 85 | 58 | 64 | 70 | stops at the first misaligned store, as its release | 45 |
+
+**What it shows** [A]. Two questions with no entry yet, reported for a dispute step rather than ruled here: GPUSTAT
+after GP1(00h) during a fill, which psx-spx gives as `14802000h` and DuckStation, SwanStation and Beetle PSX read ready at
+once, where Diamond stays busy until the fill's end (`Diamond_Records.md` §16.1); and DICR's bit 6, writable by psx-spx
+and on Diamond and DuckStation, zero in the console's log and on Beetle PSX and SwanStation, and on PCSX-ReARMed after
+a halfword or word store (§16.2). Beetle
+PSX runs a DMA channel whose DPCR enable is clear, in `otc-test` and `dpcr` alike, where the logs and every other
+referee do not: on the DMA's enable bits it is not a witness. None of D-0 to D-23 is moved by these data.
+
+### 4.12 D-23: the texture cache, interlaced drawing and GPUREAD after a transfer — `texture-cache.s`, `interlace.s`, `gpuread-repeat.s`
+
+*Added 2026-10-11, at the cache step* (`Diamond_Disputes.md` D-23). Each program side-loaded on the five referees by
+`psxreferee.py ram`, the player's BIOS given by path, NTSC, and read from RAM [M]:
+
+| | Diamond | DuckStation | SwanStation | Beetle PSX | PCSX-ReARMed | PCSX-Redux |
+|---|---|---|---|---|---|---|
+| `texture-cache.s`: lines 10 to 16, the texel each row reads (fresh: 1, 2, 2, 2, 3, 4, 5) | 1, 1, 2, 2, 2, 4, 5 | fresh | fresh | 1, 1, 2, 2, 2, 4, 5 | fresh | fresh |
+| `interlace.s`, display from line 0: lines 0 to 3 left (fill, rectangle) | 0, 2 | none | none | 1, 3 | 0, 2 | none |
+| `interlace.s`, display from line 1: lines 8 to 11 left | 9, 11 | none | none | 9, 11 | none | none |
+| `interlace.s`, bit 10 set | none left | none | none | none | none | none |
+| `gpuread-repeat.s`: after three words | the first, `02020101h` | the last | the last | 0 | the first | `00000400h` |
+| `gpuread-repeat.s`: the one-word read, then after it | `03030202h`, then `02020101h` | `00000202h`, then the same | the same as DuckStation | `03030202h`, then 0 | `03030202h`, then the same | `00000202h`, then `00000400h` |
+
+**What it shows** [A]. Beetle PSX alone keeps texels in a cache at all, and keeps exactly Diamond's new rule's: a row of
+64 8-bit texels whole, line 32 taking line 0's entries, the cache kept through a 15-bit page and cleared by a 4-bit one
+and by another X; the others read VRAM afresh for every texel. Two lineages leave lines undrawn in vblank of 480-line
+interlace, fills included (Beetle PSX, PCSX-ReARMed); PCSX-ReARMed the same lines as amidog's model with the display at
+line 0, Beetle PSX the odd lines whatever the start, so the start's part in the parity stands on the model alone.
+PCSX-ReARMed repeats a longer transfer's first word, as the model; nothing repeats an earlier word after a one-word
+transfer but the model. Beetle PSX and PCSX-ReARMed read a one-pixel transfer's second halfword as the pixel after,
+as D-23's odd read has it, where DuckStation, SwanStation and PCSX-Redux pad it with zero.
+
 ## 5. What changed in Diamond
 
 Each a writer's step citing its entry, after the rulings above:
@@ -390,6 +443,12 @@ Each a writer's step citing its entry, after the rulings above:
   `an_x_flipped_rectangle_starts_from_u_with_its_low_bit_set`, `flipped_rectangles_start_where_the_referee_starts_them`,
   and `texture-flip`, exact.
 
+- *The cache step (D-23)*: the 8-bit cache block of 64 by 32 texels and the page changes that clear the cache, on
+  amidog's model and Beetle PSX; the interlace rule; GPUREAD's repeat (`texture.rs`, `draw.rs`, `mod.rs`). Pinned by
+  `the_texture_cache_keeps_a_64_texel_row_and_clears_on_a_page_change`,
+  `interlaced_drawing_in_vblank_skips_the_lines_from_the_display_start`,
+  `gpuread_repeats_the_first_word_of_the_last_longer_transfer`.
+
 The other programs are pinned on Diamond as it reads them: `gpustat_while_each_shape_arrives_and_draws`,
 `the_gpu_is_ready_at_once_after_each_transfer`, `stores_drain_as_the_fit_has_them`.
 
@@ -401,12 +460,16 @@ The other programs are pinned on Diamond as it reads them: `gpustat_while_each_s
 | `timers`, mode 2 rows | exact | free-running; zero in 7 of 10 by the record | zero | counting, by the record | zero, by the record | counting, by the record |
 | `timers`, the gate's 18 rows (the records, §4.10) | 18 | 13 | 1, stopped | 9 | 13 | 2 |
 | `timers`, the target check's booleans | as the log | not | not reached | not | not | not |
+| `timers`, sync tables in the log's shape (of 14, *2026-10-11*, `Diamond_Native.md` §11.12) | 14 (6 before D-6's second part) | 10, by the record | 3, by the record | 13, by the record | 9, by the record | 1, by the record |
 | `cpu/access-time`, 51 cells within 0.2 | 50 | ~~11~~ 36 | ~~11~~ 24 | 27, by the record | 33, by the record | 0, by the record |
 | `dma/chopping`, 130 rows within 10% | 129 | 17 | 0 | 5, by the record | 11, by the record | 0, by the record |
 | `dma/chopping`, busy marks | 117 | 117 (the same) | 60 | 117 (the same), by the record | 117 (the same), by the record | 19, by the record |
 | `gpu/bandwidth`, 14 rows within 2% | 14 | not finished | 0 | 0, by the record | 0, by the record | 0, by the record |
 | `dma/chain-looping`, 4 lines within 10% | 4 | 0 | 2 | 0, by the record | 0, by the record | 0, by the record |
 | `gpu/gpustat`, 12 readings | 12 | 9 | 4 | 6 | 9 | 3 |
+| `dma/otc-test`, the log's 13 tests (§4.11) | 13 | 13 | 4, by the record | 12, by the record | 8, by the record | 12, by the record |
+| `dma/dpcr`, the log's 14 lines (§4.11) | 14 | 14 | 14, by the record | 12, by the record | 14, by the record | 14, by the record |
+| `cpu/io-access-bitwidth`, 108 cells (§4.11) | 85 | 58, by the record | stops, the release too | 70, by the record | 64, by the record | 45, by the record |
 | ps1-tests' pictures | exact | not read | not read | not read | not read | not read |
 
 DuckStation and Beetle PSX are the strongest referees, each on its own subsystem: Beetle PSX on video timing,
@@ -439,6 +502,11 @@ release programs' TTY from each program's heading on, which held PCSX-Redux's ow
 `timers` and DuckStation's `VSync: timeout` lines from the release's library, and nothing of the BIOS's; the process
 table and the processes' cgroups, to find what runs left. What else was read is `Diamond_Records.md` §9.
 
+*The value programs' step, 2026-10-11* (§4.11): the referees' RAM through the driver, and for DuckStation and
+PCSX-Redux the three releases' TTY from each heading on, `io-access-bitwidth`'s through `psxrecords.py mask` so that no
+BIOS word of the BIOS row was stored or read; it held PCSX-Redux's own reports of unmapped writes and of the address
+error. What else was read is `Diamond_Records.md` §17.
+
 ## 8. Negative results
 
 - no$psx was not run: wine is not installed, and installing system packages was out of scope.
@@ -450,5 +518,7 @@ table and the processes' cgroups, to find what runs left. What else was read is 
 - PCSX-Redux stops in `timers`' target check, the release and its record alike: its timer 2 passes the target, and the
   test's table index with it, until a halfword store faults.
 - DuckStation cannot run on Qt's `offscreen` platform; it needs a compositor (§2.1).
+- PCSX-Redux stops at `cpu/io-access-bitwidth`'s first misaligned store, the release and its record alike: its debugger
+  takes the address error as a "first chance exception" and the frames stop, so the record's RAM is never read (§4.11).
 - PCSX-Redux stops producing frames partway through ps1-tests' `cpu/cop` (after its reserved-opcode case), so the
   driver also stops it after a wall-clock limit and keeps what it printed.

@@ -199,6 +199,23 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(RomOutcome.Visual, grader.Grade("other.exe", engine.Run(Write("other.exe", Printing("x")), new[] { 1 })).Outcome);
         }
 
+        // The timers rule grades the sync tables by the log's shape, so a count credited from before its mode write fails - see Diamond_Native.md §11.12.
+        [Fact]
+        public void The_timers_rule_fails_a_sync_table_that_starts_too_high()
+        {
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            var timers = Ps1Tests.Programs.Single(p => p.Path == "timers/timers.exe");
+            string Text(int first) => "timers test\nTimer0, clock:   System clock, 1000 cycles delay:   1011,   1011,   1011,\n\nTesting Timer0 sync modes (clock source = System clock)\n"
+                + $"0 = Pause counter during Hblanks      {first},    {first + 123},\n3 = Pause until Hblank occurs once      0,    87,\nDone.\n";
+            foreach (var (first, outcome) in new[] { (260, RomOutcome.Passed), (35_314, RomOutcome.Failed) })
+            {
+                var run = engine.Run(Write($"timers_{first}.exe", Printing(Text(first))), new[] { 4 });
+                var verdict = Ps1Tests.Grade(timers, run, _ => Text(260));
+                _output.WriteLine($"{first}: {verdict.Outcome} {verdict.Detail}");
+                Assert.Equal(outcome, verdict.Outcome);
+            }
+        }
+
         private static string? Corpus => Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_PS1TESTS") is { } c && Directory.Exists(c) ? c : null;
 
         // Each of ps1-tests' graded programs run to its frame on `files`, and those that did not pass.
@@ -371,8 +388,8 @@ namespace EmuSen.WiseMan.Cores
                 return;
             }
             var engine = new CoreAbiTestRomEngine(LibraryPath);
-            var run = engine.Run(Path.Combine(root, "psxtest_cpx", "psxtest_cpx.exe"), new[] { 12000 }, new[] { new RomPress(2400, PadButton.Start) });
-            var verdicts = AmidogScreen.Verdicts(run.At(12000)!.Picture!, AmidogScreen.Cpx);
+            var run = engine.Run(Path.Combine(root, "psxtest_cpx", "psxtest_cpx.exe"), new[] { 10000 }, new[] { new RomPress(400, PadButton.Start) });
+            var verdicts = AmidogScreen.Verdicts(run.At(10000)!.Picture!, AmidogScreen.Cpx);
             foreach (var (row, marks) in verdicts) _output.WriteLine($"{row}: {string.Join(" ", marks)}");
             var na = AmidogMark.NotApplicable;
             Assert.Equal(new[] { AmidogMark.Ok, na, na, na }, verdicts["EXCP"]);
@@ -393,7 +410,7 @@ namespace EmuSen.WiseMan.Cores
                 return;
             }
             var engine = new CoreAbiTestRomEngine(LibraryPath);
-            foreach (var (name, menu, next) in new[] { ("psxtest_gpu", 1700, 3), ("psxtest_gte", 2800, 4) })
+            foreach (var (name, menu, next) in new[] { ("psxtest_gpu", 300, 3), ("psxtest_gte", 400, 4) })
             {
                 var run = engine.Run(Path.Combine(root, name, name + ".exe"), new[] { menu, menu + 40 }, new[] { new RomPress(menu + 10, PadButton.Down) });
                 Assert.Equal((2, next), (AmidogScreen.Cursor(run.At(menu)!.Picture!, 25), AmidogScreen.Cursor(run.At(menu + 40)!.Picture!, 25)));

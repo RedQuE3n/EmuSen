@@ -1143,6 +1143,8 @@ Which displays can draw which mask is then the tent's response at the triad's fr
 modulation at 6 pixels per triad, 0.65 at 2.8 (a consumer 20-inch set at 1080p), 0.41 at 2, 0.17 at 1.5, 0.03
 at 1.16. So a consumer slot mask is drawn at 1080p, softened; a 27-inch Trinitron's at 1080p is faint; a
 professional monitor's needs 4K and is soft there; and below 1.5 pixels per triad the mask is gone, smoothly.
+*(Retired 2026-10-10: a response is not what is seen; periods that are not whole beat against the display's
+pixels, in colour, and up to its limit the mask is now drawn in whole display pixels: §20.3.)*
 
 **The integral** is closed-form as §5.6 said: the share of a tent that a periodic lit run covers is the second
 difference of the run's twice-integrated indicator, a quadratic in the number of whole periods plus a piece.
@@ -1939,7 +1941,8 @@ not made whole; the limit applied on a small display too.
 **Not done.** The limit counts display pixels and does not know the display's size in millimetres, so on an 85-inch
 4K display the mask is 1.5 mm and on an 8K display it is finer than a consumer tube's; a pitch in millimetres would
 need the display's physical size, which a television reports unreliably. Curvature stretches the face unevenly, so
-with it the period is three pixels at the centre and a little under at the edges; the tester's setting is flat. The
+with it the period is three pixels at the centre and a little under at the edges; the tester's setting is flat. *(Since §20.3
+the kept-fine mask is drawn in the display's pixels, so it is three whole pixels everywhere, curved or flat.)* The
 tester's television has not been looked at with it yet.
 
 ## 19. HDR (planned 2026-10-10)
@@ -1950,3 +1953,325 @@ the SDR encoding with headroom of §12.3; the mask then keeps its depth at full 
 in BT.2020 the phosphor primaries are shown as measured instead of being clipped to sRGB (§11.8). "Display brightness"
 becomes the measured or calibrated peak. Nothing here is built: Avalonia offers no HDR output, so it waits for the kit.
 
+
+## 20. Every display shape and size, audited (2026-10-10)
+
+**The request** (the tester, 2026-10-10): the filter's accuracy across aspect ratios and resolutions. §14 had settled
+that every frame of a console fills one 4:3 tube; nothing had measured what that tube looks like on the displays
+players actually have, nor in the windows they actually draw. This section is that audit, the two defects it found,
+their fixes, and what is left for the tester to choose.
+
+### 20.1 What was measured
+
+Each case was drawn on the RX 6800 through `GameFrameControl` and its pixels read (2026-10-10), at all three
+qualities unless a table says otherwise.
+
+- **Displays**, 27 of them: 4:3 (640 × 480, 1024 × 768, 1600 × 1200); 16:10, among them the handheld's panel
+  (1280 × 800, 1920 × 1200, 2560 × 1600); 16:9 (1280 × 720 to 3840 × 2160); 21:9 (2560 × 1080, 3440 × 1440);
+  32:9 (3840 × 1080, 5120 × 1440); portrait, a phone held upright (1080 × 2340, 828 × 1792, 390 × 844); odd sizes
+  (1281 × 721, 999 × 777); very small windows (333 × 250 down to 17 × 13); and windowing scaled by 150% and 200%,
+  where a logical pixel is more than one of the display's.
+- **Consoles' frames**: every size of §14.2's table, the NES's 256, the SNES's 256 and 512 with 224, 239, 448
+  and 478 rows, the Genesis's H32 and H40 with 224, 240 and both interlaced heights, the N64's 320- and 640-wide
+  pictures and its PAL 288 and 576, at internal resolutions one and two; and a planned row for the PlayStation,
+  256, 320, 368, 512 and 640 wide at 240 and 480 rows and its PAL 256 and 512 (§20.6). Each at 1920 × 1080,
+  1280 × 800, 3840 × 2160 and 1080 × 2340.
+- **For each**: the lit rectangle of a white frame against the 4:3 rectangle the frame control computes; the light
+  of a white and a half-grey field over the middle of the tube against the transfer's own value, and its three
+  channels against each other; with the glass curved, the share of the tube left lit, and where its edges fall
+  as shares of the tube; each scanline's light integrated over its height, and its peak, line by line; and the
+  mask's period and the moiré it leaves (below).
+
+**A measure of moiré.** A mask is a pattern of a few pixels; what a viewer sees as moiré is light or colour that
+varies over tens of pixels where the picture is even. The picture of an even grey field is blurred by a Gaussian of
+ten pixels, which leaves under 10⁻²⁰ of any pattern of six pixels or less and of the scanlines, and the spread of
+the blurred picture's red and blue over its green, and of its light, across the middle 80% of the tube is the
+moiré. A first measure, means over blocks of 24 pixels, was abandoned: a block that does not hold a whole number of
+triads reads the mask's phase as a change of colour, so it reported moiré of 2% where none is visible; the Gaussian
+has no such edge. Its floor, with no mask at all, is 0.01% in colour and 0.10% in light, the light being the
+display's dither.
+
+### 20.2 First defect: a pixel taller than a scanline lost light, and the lower tiers banded
+
+**What was wrong.** Each tier reads a fixed number of lines around a pixel: Accurate five, Balanced three,
+Performance two. A pixel taller than those lines together lost the light of the rest: at 33 × 25, where a pixel is
+nine of the SNES's lines, Accurate drew 56% of a white field's light, Balanced and Performance 72%. And the two
+lower tiers took the spot's height at the pixel's centre instead of integrating it over the pixel, which is exact
+only while the pixel is much shorter than the spot. Below about two pixels a line the spot, a fifth of a line wide,
+falls between pixel centres or on one: in a 333 × 250 window, a line's light varied from line to line by 154% of the
+mean at those tiers, against 17% at Accurate (most of which is the measurement's own, at 1.1 pixels a line). That is
+banding across the picture, in a window a player can make.
+
+**The fix.** The lower tiers integrate the spot over the pixel's height as Accurate does (§11.5). And where a pixel
+is taller than the lines a tier reads, each read stands for a group of lines: the groups tile the lines the pixel
+covers, and each contributes its line's light times the share of the pixel it overlaps. Accurate switches to groups
+past four lines to a pixel, Balanced past two, Performance past one; below that nothing changes.
+
+| Window | Quality | White's light, before | after | Line-to-line spread, before | after |
+|---|---|---|---|---|---|
+| 333 × 250 | Performance | 0.988 | 0.997 | 154% | 17% |
+| 333 × 250 | Balanced | 0.988 | 0.997 | 154% | 17% |
+| 160 × 120 | Performance | 1.026 | 0.997 | | |
+| 33 × 25 | Accurate | 0.557 | 0.999 | | |
+| 33 × 25 | Balanced | 0.716 | 0.999 | | |
+| 390 × 844, portrait | Balanced | 0.999 | 0.999 | 123% | 33% |
+| 1920 × 1080 | every tier | 0.999 | 0.999 | 0.8% | 0.8% |
+
+(Light as a share of the transfer's own value; the spread is not given where a line is smaller than a pixel.) At
+1080p and above the lower tiers' change is below a code value in the mean, and their peaks fall by the amount that
+integrating a narrow spot over a pixel takes off: the scanlines' peak over their mean at 1080p went from 1.77 to 1.71
+at Balanced, Accurate's own figure.
+
+### 20.3 Second defect: the mask beat against the display's pixels
+
+**What was wrong.** §11.7 put the mask on the glass at the screen's own pitch, and said which displays could draw
+which mask by the response of the footprint at the triad's frequency: a tent two pixels wide at Accurate, keeping
+0.41 of the stripes' modulation at two pixels a triad and 0.03 at 1.16. **That prediction is retired.** A response
+is not what is seen. A pattern of any period that is not a whole number of pixels is drawn with its phase drifting
+across the display's grid, and near two pixels a period that drift is a slow beat; each colour's stripes beat at
+their own phase, so the beat is in colour. And at Balanced and Performance, the footprint is the pixel's box, which
+keeps 0.64 at two pixels. Measured on an even grey field with the defaults (the 20-inch set's slot mask, the glass
+curved):
+
+| Display | Triad, the set's own | Quality | Colour moiré, before | after | Light moiré, before | after |
+|---|---|---|---|---|---|---|
+| 1280 × 800, the handheld | 2.07 px | Balanced | 0.34% | 0.03% | 0.24% | 0.10% |
+| 1280 × 720 | 1.86 px | Balanced | 0.05% | 0.03% | 1.30% | 0.10% |
+| 1060 × 580, Mistress's window | 1.50 px | Balanced | 0.14% | 0.03% | 0.71% | 0.11% |
+| 1920 × 1080 | 2.80 px | Balanced | 0.04% | 0.05% | 0.13% | 0.11% |
+| 1920 × 1200 | 3.11 → 3 px | Balanced | 0.65% | 0.05% | 1.49% | 0.11% |
+| 2560 × 1440 | 3.73 → 3 px | Balanced | 0.65% | 0.05% | 0.79% | 0.12% |
+| 3840 × 2160, the tester's TV | 5.59 → 3 px | Balanced | 0.65% | 0.05% | 0.20% | 0.11% |
+| 1920 × 1080, Trinitron | 1.97 px | Balanced | 0.60% | 0.03% | 0.25% | 0.12% |
+| 3840 × 2160 | 5.59 → 3 px | Accurate | 0.03% | 0.05% | 0.11% | 0.11% |
+
+The handheld's panel drew rings of colour, curved by the glass, across every even area, which a native-size crop
+of a grey field shows plainly; the 1920 × 1200 and 1440p cases, and the tester's 4K television, drew the same rings
+with the mask kept fine at three pixels a triad, because the curve makes three pixels at the centre a little less
+toward the edges. Accurate's tent kept the colour away in most cases, and less of the light (0.28% at 1280 × 720).
+
+**The fix: up to the limit, the mask is drawn in the display's own pixels, a whole number of them a triad.**
+
+- Where the mask would be drawn finer than the limit of §18 (three pixels a triad, or three times *Mask pitch*,
+  and never less than three), its period is rounded to a whole number of pixels, never fewer than two, and it is
+  laid on the display's pixel grid rather than on the glass. A whole period drawn on the grid repeats exactly, so it
+  cannot beat. The rows of a slot or dot mask are rounded the same way, to no fewer than two pixels.
+- Where the screen's mask would be coarser than the limit (only with *Mask on a large display* left to enlarge, or a
+  coarse *Mask pitch*), it stays on the glass at its own pitch, as before: such periods beat too little to see
+  (0.07% in colour at 5.6 pixels a triad on the 4K display).
+- Below one and a half pixels a triad the display cannot draw the mask at all, and it is let go: its depth falls to
+  nothing between 1.5 and 1.25 pixels, so a window being resized does not switch it abruptly. At 640 × 480 the
+  20-inch set's mask, 1.24 pixels a triad, is gone, where it drew an alias five pixels long.
+- Columns a whole number of pixels wide are weighed over the pixel's box at Accurate too: the tent was there to
+  soften a beat that can no longer occur, and on whole columns it only took modulation away (0.38 of the box's at two
+  pixels).
+
+**What this costs, stated.** The mask no longer follows the glass's curve where it is drawn on the grid: at the
+default curvature the glass's own triads are drawn 6% narrower at the 20-inch set's edges than at its centre, and
+5% at the Trinitron's, and the grid's are not. The pitch is the set's to within a rounding: two pixels for the
+handheld's 2.07 (3% finer), three for 1080p's 2.80 (7% coarser), two for 1280 × 720's 1.86 (7% coarser), and at most
+33% coarser at one and a half. A slot mask's rows, 0.81 of a triad apart in the photographed tube, are two pixels
+apart at both two and three pixels a triad: 1.0 and 0.67 of a triad. Each of these is a departure from the tube that
+the display could not have drawn without the moiré, and none is a departure that a viewer at a normal distance can
+see; the moiré was.
+
+### 20.4 What held
+
+- **The tube is 4:3 and centred on every display**, to the rounding of a pixel the frame control already does:
+  1440 × 1080 at (240, 0) at 1080p, 1920 × 1440 at (760, 0) on a 21:9 3440 × 1440 display, 1920 × 1440 at
+  (1600, 0) on a 32:9 5120 × 1440 one, 1080 × 810 at (0, 765) on an upright phone, 81 × 61 at (8, 0) in a 97 × 61
+  window, and 2160 × 1620 display pixels at (360, 0) when windowing scales 1920 × 1080 by 150%.
+- **Every console's every frame fills the same tube** on each of the four displays, and the PlayStation's planned
+  widths do too: §14's rule holds across shapes.
+- **Light and colour**: a white field is 0.997 to 0.999 of the transfer's value at every display of 300 pixels or
+  more and every tier, and its three channels agree within 0.02%; the masked half-grey field within 0.2%.
+- **Curvature and corners scale**: the share of the tube left lit is 0.9883 to 0.9890 from 640 × 480 to
+  3840 × 2160 and on the upright phone, and the curve's edges fall at the same shares of the tube; only in windows
+  under about 300 pixels does the corner's single pixel of softening make the share larger (0.990 at 333 × 250).
+- **The subpixel layout** holds at every size: the RGB order shifts each colour's sample a third of a display pixel,
+  in display pixels, under windowing scale as well.
+
+### 20.5 Scanlines at heights that are not whole
+
+A display draws 224 lines in 1080 rows at 4.82 rows a line. The filter integrates each line's light over each pixel
+exactly (§11.5, §20.2), so every line carries the same light: line to line within 0.8% at 1080p, within 3% on the
+handheld and the phone. What a pixel grid cannot keep is the shape: a line centred on a pixel has one bright row, a
+line centred between two has two dimmer ones, and with 4.82 rows a line the phase drifts over five or six lines.
+
+| Lines | Display | Rows a line | Peak's spread from line to line, white | at half-grey |
+|---|---|---|---|---|
+| 224 (SNES, Genesis) | 1080 | 4.82 | 9.7% | 21 to 26% |
+| 240 (NES, N64) | 1080 | 4.50 | 0.0% | 0.0% |
+| 288 (PAL N64) | 1080 | 3.75 | 8.3% | |
+| 224 | 800 (handheld) | 3.57 | 13% | 27 to 38% |
+| 224 | 2160 | 9.64 | 2.4% | 6 to 7% |
+| 224 | 810 (phone, upright) | 3.62 | 17% | 34 to 46% |
+
+(The ranges at half-grey run from Accurate to Balanced.)
+
+The light seen from a normal distance is the integral, which is even; the peak's drift is visible close up, more on
+dim lines, whose spot is narrower. The only remedy that removes it is to make the tube a whole number of rows a line,
+which is the question below.
+
+### 20.6 The PlayStation's row, planned
+
+Diamond will hand over 256, 320, 368, 512 and 640 pixels across and 240 or 480 rows (256 or 512 in PAL), the
+widths from one dot clock divided by 10, 8, 7, 5 and 4 (the published psx-spx notes; to be confirmed against the
+core when it exists). Drawn now under the standard line's constants, every one of them fills the same tube and keeps
+its light. What the console needs before it is offered the filter is a row of `ConsoleTiming`: its active line in
+microseconds and its subcarrier cycles across it, from its own clocks, as §3.2 derived the others'; its 368-wide
+mode is the one whose pixels do not divide the line evenly by the others, and so the one to test.
+
+### 20.7 Questions for the tester
+
+1. **Whole rows a line for the scanlines.** The tube could be sized to a whole number of display rows a line: 4 at
+   1080p for 224 lines (896 rows tall, not 1080), 3 on the handheld (672 of 800). That removes §20.5's drift and
+   breaks §14's rule within a console: the SNES's 224 and 239 lines, and the N64's 240 and 288, would draw at
+   different sizes. *Recommendation: do not build it as a default. If wanted, an explicit setting per console, off,
+   recorded as an exception to §14 that the player chooses, sized from the console's most common line count.*
+2. **How the tube fills an ultrawide display.** It is drawn 4:3 and centred, with black either side, at 21:9 and
+   32:9 as everywhere. *Recommendation: keep it; a bezel or a glow of the picture in the bars is a separate,
+   optional feature, never a stretched tube.*
+3. **The mask on a small display.** Between 1.5 and 2.5 pixels a triad the mask is now drawn at two whole pixels
+   (up to 33% coarser than the set's at 1.5), and below 1.5 it is let go. The alternative is to let it go below 2.5
+   instead, which keeps no mask the set did not have and leaves the handheld with none. *Recommendation: as built;
+   the handheld's mask is 3% from the set's own.*
+4. **The mask drawn flat under curved glass.** Up to the limit it no longer follows the glass's curve (6% at the
+   edge, §20.3). *Recommendation: as built; a mask that follows the curve at three pixels a triad cannot be drawn
+   without the rings it drew.*
+
+### 20.8 Tests and mutants
+
+`ScreenFilterRenderTests`, on the RX 6800:
+
+- *On any display the tube is four by three, centred, and its light and colour hold at every quality*: nine displays
+  from §20.1 (1080p, the handheld's, 21:9, 32:9, the upright phone, an odd size, a 97 × 61 window, and windowing at
+  150% and 200%), each at three qualities: the lit rectangle within a pixel of the frame control's, a white field
+  within 1% of the transfer's value, its channels within 0.3% of each other.
+- *Curvature and corners scale with the tube*: the share lit within 0.2% from 640 × 480 to 3840 × 2160 and upright.
+- *In a small window every line's light is kept at every quality*: 333 × 250, 160 × 120 and 33 × 25.
+- *Up to its limit the mask is drawn in whole display pixels and leaves no moiré*: the handheld's panel and
+  1920 × 1200 at every quality, and 3840 × 2160, with the slot mask and the grille, curved; colour under 0.12% and
+  light under 0.18%; and on flat glass the mask repeats every two triads exactly, at two pixels a triad on the
+  handheld's panel and three at 1080p.
+- *A mask the display cannot draw is let go*: none at 640 × 480, drawn at 1060 × 580, the light kept.
+- *The mask's pitch is the screen's on the glass and whole below its limit* replaces §11.9's case of the screen's
+  pitch at any window size.
+
+**Mutants** (8, each caught): Accurate reading five lines whatever the pixel; the lower tiers reading theirs whatever
+the pixel; the lower tiers taking the spot at the pixel's centre; the mask on the glass at every size; its rows not
+whole; its columns not whole; never let go; Accurate's tent on whole columns.
+
+## 21. A referee run: patchy-ntsc and crt-beans on the same frames (2026-10-10)
+
+§8.4 planned it: the slang runtime runs other people's models of the signal on the frames this filter draws, and
+where a model with an independent derivation agrees, that is evidence. **Referees, never graders.** Their code was
+not read for this: each was run through the runtime with its own preset, its parameters set by the names and labels
+the runtime lists, and only its output pixels were measured. patchy-ntsc (PlainOldPants, GPL-3.0) models the
+composite and S-Video signal with per-console phase; crt-beans (A. Duffey, MIT) band-limits Y, I and Q in MHz and
+models no subcarrier. Neither is a reference for the other; patchy-ntsc's phase tables and this filter's were
+derived separately from the consoles' clocks (§3.2).
+
+### 21.1 How they were run
+
+Each frame was drawn into a 1440 × 1080 window by three models: this filter at Accurate (composite, S-Video and RGB,
+with the glass, mask, persistence and convergence off so that only the signal and the beam are measured);
+patchy-ntsc's SNES preset for the NES and the SNES and its Genesis Plus GX preset for the Genesis, set to composite
+and to S-Video, with its RF noise and its 2-chip SNES blur off and its width set to the frame's (it has no N64
+preset); and crt-beans' S-Video preset (its YIQ mode at its own 3.6, 0.8 and 0.8 MHz) and its RGB preset, masks and
+glow off. Each output was read along one console line in the middle of the picture, integrated over the line's
+height, and converted to Y, I and Q. A distance across the output was turned into time by the console's own pixel
+clock: the frame's pixels across the picture, at 5.37 MHz for the NES, SNES and Genesis H32, 6.71 for H40 and 12.17
+for the N64's 640.
+
+**One trap on the way**, recorded because it would have reversed a finding: patchy-ntsc's cable setting runs from −1
+(RF) through 0 (composite) and 1 (S-Video) to 2 (no artifacts), and its label lists the four in that order. Set to 1
+and 2 as composite and S-Video, it drew S-Video and no signal at all, and a first table showed it with no
+artifacts and luma at 12.8 MHz. Read from the label's order, 0 and 1, it agrees where the table below says.
+
+### 21.2 The artifacts: where they agree exactly
+
+Alternate columns of 0.6 and 0.2 grey, the pattern that makes a console's composite artifacts:
+
+| Console, frame | Model | Artifact's colour | Its period across, frame pixels | Line to the next | Three lines on | Next frame |
+|---|---|---|---|---|---|---|
+| NES 256 × 240 | this filter | 0.045 | 5.95 | −0.49 | 1.00 | −0.50 |
+| | patchy-ntsc | 0.087 | 5.95 | −0.41 | 1.00 | −0.50 |
+| SNES 256 × 224 | this filter | 0.038 | 6.10 | −0.50 | 1.00 | −0.50 |
+| | patchy-ntsc | 0.087 | 5.95 | −0.50 | 1.00 | −0.50 |
+| Genesis 320 × 224 | this filter | 0.107 | 29.1 | 1.00 | 1.00 | 1.00 |
+| | patchy-ntsc | 0.067 | 29.1 | 1.00 | 1.00 | 1.00 |
+| Genesis 256 × 224 | this filter | 0.039 | 5.95 | 1.00 | 1.00 | 1.00 |
+| | patchy-ntsc | 0.046 | 6.10 | 1.00 | 1.00 | 1.00 |
+
+(The artifact's colour is the mean size of I and Q over the pattern; the last three columns are the correlation of
+its I along one line with the next line, the line three below, and the same line a frame later.) **The geometry of
+every artifact agrees**: the NES's and SNES's repeat every three lines and turn over every frame, the Genesis's
+stand still, its 320-wide rainbow is 29 frame pixels long in both and its 256-wide one six. Two models that reached
+their phases by separate derivations from the same clocks draw the same patterns, and that is the strongest
+evidence §3.2's derivation has had. crt-beans draws none, as it models no subcarrier, and is not a referee here.
+
+**The artifacts' strength does not agree**: patchy-ntsc's NES and SNES artifacts are 1.9 and 2.3 times this filter's, its
+Genesis H40 rainbow 0.6 of it. Strength is set by the shapes of the decoder's filters around the subcarrier, which
+both models chose rather than measured; §21.3 shows where this filter's differ.
+
+### 21.3 Bandwidth, in MHz
+
+Gratings of each frequency, in the console's own time, drawn across the picture; each model's output amplitude at
+that frequency over its amplitude at 0.25 MHz. Luma is a grey cosine; chroma a cosine between magenta and green of
+nearly equal luma, read along their I–Q difference. On the SNES (the Genesis H32 alike within 0.01 for this filter):
+
+| Model | Signal | 0.5 MHz | 0.75 | 1.0 | 1.5 | 2.0 | 2.5 |
+|---|---|---|---|---|---|---|---|
+| this filter | composite, luma | 0.95 | 0.86 | 0.76 | 0.51 | 0.27 | 0.11 |
+| patchy-ntsc | composite, luma | 0.99 | 0.97 | 0.92 | 0.75 | 0.46 | 0.20 |
+| patchy-ntsc, Genesis preset | composite, luma | 0.98 | 0.93 | 0.88 | 0.66 | 0.36 | 0.12 |
+| this filter | composite, chroma | 0.73 | 0.43 | 0.19 | 0.01 | | |
+| patchy-ntsc | composite, chroma | 0.70 | 0.43 | 0.24 | 0.03 | | |
+| patchy-ntsc, Genesis preset | composite, chroma | 0.65 | 0.37 | 0.16 | 0.01 | | |
+| this filter | S-Video and RGB, luma | 0.98 | 0.95 | 0.91 | 0.80 | 0.66 | 0.50 |
+| crt-beans | YIQ and RGB, luma | 0.98 | 0.94 | 0.89 | 0.75 | 0.59 | 0.42 |
+| patchy-ntsc | S-Video, luma | 0.99 | 0.97 | 0.93 | 0.88 | 0.80 | 0.68 |
+| this filter | S-Video, chroma | 0.73 | 0.43 | 0.19 | 0.01 | | |
+| patchy-ntsc | S-Video, chroma | 0.96 | 0.88 | 0.81 | 0.57 | 0.37 | 0.22 |
+| crt-beans | YIQ, chroma | 0.84 | 0.63 | 0.40 | 0.08 | | |
+
+(The SNES frame's own pixels already take some of a grating near its 2.68 MHz limit, the same for every model.)
+
+- **Composite chroma agrees**: both models put a consumer set's chroma at about half a megahertz, this filter by the
+  set's 0.5 MHz channel (§11.2), patchy-ntsc by its own filters; within 0.06 at every frequency.
+- **Composite luma does not.** This filter's falls from 0.76 at 1 MHz to 0.51 at 1.5, where patchy-ntsc keeps 0.88
+  to 0.92 and 0.66 to 0.75. **The referee has found a defect in this filter's notch, and the arithmetic confirms
+  it.** §11.3 sized the notch by its −3 dB half-width, 1.29 MHz, and said it removes 2.3 to 4.9 MHz. It does at
+  those points, but a two-cycle Hann window's skirt is broad: at 1.5 MHz, 2.08 MHz from the subcarrier, the window
+  passes 0.38, so the notch takes 38% of the luma away, and 20% at 1 MHz. An analogue trap of the same −3 dB width,
+  a second-order notch, keeps 0.94 at 1.5 MHz. So §11.3's claim that the notch keeps what lies below 2.3 MHz is
+  retired: it keeps 80% at 1 MHz and 62% at 1.5 before the receiver's own bandwidth. patchy-ntsc lies between the
+  two. **Which to trust**: patchy-ntsc for the shape, not as a grade but because the trap arithmetic sides with it.
+  The fix is a notch whose skirt is a real trap's, from a receiver's datasheet; it belongs with the decoders of the
+  next steps and is put to the tester below rather than made here.
+- **S-Video and RGB luma agree with crt-beans** within 0.08, and both are softer than patchy-ntsc's SNES S-Video,
+  which applies no luma limit at all (its Genesis preset does, and falls with ours). Neither this filter's 5 MHz
+  encoder (a fallback, §3.2) nor the set's 4.2 MHz has been measured; the agreement is of two choices.
+- **S-Video chroma disagrees by choice**: this filter sends S-Video's chroma through the set's same 0.5 MHz channel;
+  patchy-ntsc's S-Video keeps 0.81 at 1 MHz, crt-beans' 0.40 at its 0.8 MHz setting. A consumer set's chroma
+  demodulator is the same circuit whichever input feeds it, which is why this filter does what it does; a monitor
+  with a separate S-Video path would be wider. Unsettled until a datasheet says.
+- **crt-beans' megahertz are referred to a fixed line.** Its edges are 8% softer in microseconds on the N64's
+  640-wide frame than on the SNES's 256, where the two consoles' active lines differ by 10% (52.6 and 47.7 µs): it
+  scales its filters to the frame's width, not to the console's time. This filter's bandwidths are the same in
+  microseconds on every console, as a set's are (0.30 µs for a luma step by composite on all four). Not a defect
+  in either; a convention to know when its MHz are compared with ours.
+
+### 21.4 What it settles and what it leaves
+
+Settled: §3.2's phase per pixel, per line and per frame, for the NES, the SNES and the Genesis in both widths, by
+agreement of two independent derivations; the composite chroma channel's width. Found: the notch's skirt (above).
+Left: the artifacts' strength and every luma bandwidth, which rest on filter shapes neither model measured; the N64,
+which no referee here models with its subcarrier; and the NES's own signal, which patchy-ntsc models from a raw
+palette that this filter does not yet take (the next step).
+
+**Question for the tester.** Replace the notch's Hann skirt by a second-order trap of the same −3 dB width (keeping
+the Hann windows for the chroma channel, whose exact zeros §11.3 needs), and re-run this comparison? *Recommendation:
+yes, with the trap's width taken from a consumer receiver's datasheet in the decoder step, since the present width
+is itself only the Faroudja figure.*

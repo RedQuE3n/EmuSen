@@ -79,6 +79,9 @@ namespace EmuSen.Serenity.Shaders
         // The most display pixels a triad is drawn across when the mask is kept fine on a large display - see EmuSen_CRT.md §18.
         public const double FinestTriadPixels = 3;
 
+        // The fewest display pixels a mask is drawn across before it is let go, since below two the display's own grid beats against it - see EmuSen_CRT.md §20.
+        public const double LeastTriadPixels = 1.5;
+
         public static IReadOnlyList<SlangParameter> Parameters { get; } = new SlangParameter[]
         {
             Choice("quality", "Quality", (int)Quality.Balanced, "Performance", "Balanced", "Accurate"),
@@ -600,21 +603,24 @@ float covered(float x, float reach, float start, float lit, float period) {
             double halfWidth = r.Screen.WidthMillimetres / 2;
             bool accurate = r.Quality == Quality.Accurate, performance = r.Quality == Quality.Performance;
 
-            // Accurate weighs the mask over a tent two pixels wide, the others over the pixel's box.
+            // Accurate weighs the mask over a tent two pixels wide, the others over the pixel's box; columns a whole number of pixels wide need no tent, so take the box - see EmuSen_CRT.md §20.
             string cover = accurate ? "covered" : "boxed";
             // The rows of a slot or dot mask are the same two for every colour, level and half a pitch down, so they are weighed once.
             string rowsOf = layout.VerticalPitch <= 0 ? "" :
                 $"    float rowLevel = {cover}(triad.y, footprint.y, 0.0, {N(layout.VerticalPitch * layout.VerticalLit)}, {N(layout.VerticalPitch)});\n"
                 + $"    float rowDown = {cover}(triad.y, footprint.y, {N(layout.VerticalPitch * 0.5)}, {N(layout.VerticalPitch * layout.VerticalLit)}, {N(layout.VerticalPitch)});\n";
-            string mask = r.Mask == Mask.None ? "    cover = float3(1.0);\n" : rowsOf + string.Concat(Enumerable.Range(0, 3).Select(c =>
+            string Columns(string by, string reach) => string.Concat(Enumerable.Range(0, 3).Select(c =>
             {
                 string channel = "rgb"[c].ToString();
-                string phase = $"(triad.x + shift.{channel} * grain.x * across)";
-                if (layout.VerticalPitch <= 0) return $"    cover.{channel} = {cover}({phase}, footprint.x, {N(layout.Start[c])}, {N(layout.Width)}, 1.0);\n";
-                string even = $"{cover}({phase}, footprint.x, {N(layout.Start[c])}, {N(layout.Width)}, 2.0)";
-                string odd = $"{cover}({phase}, footprint.x, {N(layout.Start[c] + 1)}, {N(layout.Width)}, 2.0)";
-                return layout.Shifted[c] ? $"    cover.{channel} = {even} * rowDown + {odd} * rowLevel;\n" : $"    cover.{channel} = {even} * rowLevel + {odd} * rowDown;\n";
+                string phase = $"(triad.x + shift.{channel} * stepX)";
+                if (layout.VerticalPitch <= 0) return $"        cover.{channel} = {by}({phase}, {reach}, {N(layout.Start[c])}, {N(layout.Width)}, 1.0);\n";
+                string even = $"{by}({phase}, {reach}, {N(layout.Start[c])}, {N(layout.Width)}, 2.0)";
+                string odd = $"{by}({phase}, {reach}, {N(layout.Start[c] + 1)}, {N(layout.Width)}, 2.0)";
+                return layout.Shifted[c] ? $"        cover.{channel} = {even} * rowDown + {odd} * rowLevel;\n" : $"        cover.{channel} = {even} * rowLevel + {odd} * rowDown;\n";
             }));
+            string mask = r.Mask == Mask.None ? "    cover = float3(1.0);\n" : rowsOf + (accurate
+                ? "    if (flatMask) {\n" + Columns("boxed", "footprint.x * 0.5") + "    } else {\n" + Columns("covered", "footprint.x") + "    }\n"
+                : Columns("boxed", "footprint.x"));
 
             string beams = accurate ? @"
 uniform shader beam;
@@ -624,8 +630,26 @@ float beamOf(float2 picture, float tall, float channel, float field, inout float
     float2 p = picture * beamSize;
     if (picture.x < 0.0 || picture.x > 1.0) return 0.0;
     float scale = beamSize.y > 300.0 ? 2.0 : 1.0;
-    float first = floor(p.y);
     float sum = 0.0;
+    // A pixel taller than the five lines read is the mean of the lines it covers, five groups of them each read once.
+    float stride = ceil(tall / 4.0);
+    if (stride > 1.5) {
+        float top = p.y - 0.5 * tall;
+        float g0 = floor(top / stride);
+        for (int j = 0; j <= 4; j++) {
+            float lo = max((g0 + float(j)) * stride, 0.0);
+            float hi = min((g0 + float(j) + 1.0) * stride, beamSize.y);
+            float overlap = min(hi, p.y + 0.5 * tall) - max(lo, top);
+            if (overlap <= 0.0) continue;
+            half4 l = beam.eval(float2(p.x, floor(0.5 * (lo + hi)) + 0.5));
+            float light = channel < 0.5 ? l.r : channel < 1.5 ? l.g : l.b;
+            sum += light * overlap / tall;
+            linePeak = max(linePeak, light);
+        }
+        lineMean += sum;
+        return sum;
+    }
+    float first = floor(p.y);
     for (int j = -2; j <= 2; j++) {
         float row = first + float(j);
         if (row < 0.0 || row >= beamSize.y) continue;
@@ -664,12 +688,30 @@ float3 lightAt(float2 p) {
     return float3(e.r, lit.x, lit.y);
 }
 ") + @"
-float3 beamsOf(float2 picture, float3 across, float field, inout float3 lineMean, inout float3 linePeak) {
+float3 beamsOf(float2 picture, float tall, float3 across, float field, inout float3 lineMean, inout float3 linePeak) {
     float2 p = picture * gunSize;
     if (picture.x < 0.0 || picture.x > 1.0) return float3(0.0);
     float scale = gunSize.y > 300.0 ? 2.0 : 1.0;
-    float first = floor(p.y - 0.5);
     float3 sum = float3(0.0);
+    // A pixel taller than a line is the mean of the lines it covers, in as many groups as lines are read.
+    float stride = ceil(tall / " + (performance ? "1.0" : "2.0") + @");
+    if (stride > 1.5) {
+        float top = p.y - 0.5 * tall;
+        float g0 = floor(top / stride);
+        for (int j = 0; j <= " + (performance ? "1" : "2") + @"; j++) {
+            float lo = max((g0 + float(j)) * stride, 0.0);
+            float hi = min((g0 + float(j) + 1.0) * stride, gunSize.y);
+            float overlap = min(hi, p.y + 0.5 * tall) - max(lo, top);
+            if (overlap <= 0.0) continue;
+            float row = floor(0.5 * (lo + hi)) + 0.5;
+            float3 l = " + (performance ? "lightAt(float2(p.x, row))" : "float3(lightAt(float2(across.r * gunSize.x, row)).r, lightAt(float2(across.g * gunSize.x, row)).g, lightAt(float2(across.b * gunSize.x, row)).b)") + @";
+            sum += l * overlap / tall;
+            linePeak = max(linePeak, l);
+        }
+        lineMean += sum;
+        return sum;
+    }
+    float first = floor(p.y - 0.5);
     for (int j = " + (performance ? "0" : "-1") + @"; j <= " + (performance ? "1" : "1") + @"; j++) {
         float row = first + float(j)" + (performance ? "" : " + 0.0") + @";
         if (row < 0.0 || row >= gunSize.y) continue;
@@ -678,7 +720,7 @@ float3 beamsOf(float2 picture, float3 across, float field, inout float3 lineMean
         " + (performance ? "float" : "float3") + @" sigma = scale * sqrt(v);
         float d = p.y - (row + 0.5);
         float lit = scale > 1.5 && interlace > 0.5 ? (mod(row + field, 2.0) < 0.5 ? 2.0 : 0.0) : 1.0;
-        sum += lit * l * exp(-0.5 * d * d / (sigma * sigma)) / (sigma * 2.5066283);
+        sum += lit * l * (" + (performance ? "cdf((d + 0.5 * tall) / sigma) - cdf((d - 0.5 * tall) / sigma)" : "cdf3((d + 0.5 * tall) / sigma) - cdf3((d - 0.5 * tall) / sigma)") + @") / tall;
         float near = max(1.0 - abs(d) / scale, 0.0);
         lineMean += lit * l * near / scale;
         if (near > 0.0) linePeak = max(linePeak, lit * l / (sigma * 2.5066283));
@@ -700,13 +742,13 @@ float3 beamsOf(float2 picture, float3 across, float field, inout float3 lineMean
 " : performance ? @"
     float3 lineMean = float3(0.0);
     float3 linePeak = float3(0.0);
-    float3 guns = beamsOf(before, float3(before.x), frameCount, lineMean, linePeak);
+    float3 guns = beamsOf(before, tall, float3(before.x), frameCount, lineMean, linePeak);
 " : @"
     float spread = convergence * (" + N(r.Screen.ConvergenceCentre / halfWidth / 2) + " + " + N((r.Screen.ConvergenceEdge - r.Screen.ConvergenceCentre) / halfWidth / 2) + @" * dot(face, face) / 1.5625);
     float miss = pictureOf(face + float2(spread, 0.0)).x - before.x;
     float3 lineMean = float3(0.0);
     float3 linePeak = float3(0.0);
-    float3 guns = beamsOf(before, before.x + shift * perPixel.x + float3(-miss, 0.0, miss), frameCount, lineMean, linePeak);
+    float3 guns = beamsOf(before, tall, before.x + shift * perPixel.x + float3(-miss, 0.0, miss), frameCount, lineMean, linePeak);
 ";
             string rows = accurate ? "beamSize.y" : "gunSize.y";
             string glass = performance ? @"
@@ -773,10 +815,28 @@ half4 main(float2 coord) {
     if (inside <= 0.0) return half4(0.0, 0.0, 0.0, 1.0);
 
     float3 shift = subpixels < 0.5 ? float3(0.0) : subpixels < 1.5 ? float3(-1.0, 0.0, 1.0) / 3.0 : float3(1.0, 0.0, -1.0) / 3.0;
-    float across = " + N(r.Screen.TriadsAcross) + @" * 0.5 / maskPitch;
-    if (maskLimit > 0.5) across = max(across, 0.5 * outputSize.x * pixelScale / max(floor(" + N(FinestTriadPixels) + @" * maskPitch + 0.5), 2.0));
-    float2 triad = face * across;
-    float2 footprint = grain * across" + (accurate ? "" : " * 0.5") + @";
+    // A triad's width in display pixels: the screen's own, kept fine on a large display; up to that limit a whole number of the display's own pixels, and let go below one and a half - see EmuSen_CRT.md §18 and §20.
+    float wide = outputSize.x * pixelScale;
+    float triadPixels = wide * maskPitch / " + N(r.Screen.TriadsAcross) + @";
+    float finest = max(floor(" + N(FinestTriadPixels) + @" * maskPitch + 0.5), 2.0);
+    if (maskLimit > 0.5) triadPixels = min(triadPixels, finest);
+    float drawn = clamp((triadPixels - " + N(LeastTriadPixels - 0.25) + @") / 0.25, 0.0, 1.0);
+    bool flatMask = triadPixels < max(finest, " + N(FinestTriadPixels) + @") + 0.001;
+    float2 triad;
+    float2 footprint;
+    float stepX;
+    if (flatMask) {
+        triadPixels = max(floor(triadPixels + 0.5), 2.0);
+        float rowsDown = " + (layout.VerticalPitch > 0 ? "max(floor(" + N(layout.VerticalPitch) + " * triadPixels + 0.5), 2.0) / (" + N(layout.VerticalPitch) + " * triadPixels)" : "1.0") + @";
+        triad = (coord * pixelScale + pixelOrigin) / triadPixels * float2(1.0, 1.0 / rowsDown);
+        footprint = float2(1.0, 1.0 / rowsDown) / triadPixels" + (accurate ? "" : " * 0.5") + @";
+        stepX = 1.0 / triadPixels;
+    } else {
+        float across = 0.5 * wide / triadPixels;
+        triad = face * across;
+        footprint = grain * across" + (accurate ? "" : " * 0.5") + @";
+        stepX = grain.x * across;
+    }
     float3 cover;
 " + mask + @"
     float litFraction = " + N(layout.LitFraction) + @";
@@ -793,7 +853,7 @@ half4 main(float2 coord) {
 
     // A scanline brighter at its centre than the display can go is drawn flatter, toward its line's even light, by just enough for its peak.
     direct = even + (direct - even) * clamp((headroom - even) / max(peak - even, float3(0.000001)), 0.0, 1.0);
-    float3 depth = maskDepth * clamp((headroom / max(direct, float3(0.000001)) - 1.0) / (1.0 / litFraction - 1.0 + 0.000001), 0.0, 1.0);
+    float3 depth = drawn * maskDepth * clamp((headroom / max(direct, float3(0.000001)) - 1.0) / (1.0 / litFraction - 1.0 + 0.000001), 0.0, 1.0);
     float3 shown = (direct * (1.0 + depth * (cover / litFraction - 1.0)) + veil) / headroom;
 " + (performance ? @"    return half4(encode(clamp(shown * inside, 0.0, 1.0)), 1.0);
 }" : @"

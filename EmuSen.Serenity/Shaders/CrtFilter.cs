@@ -58,6 +58,18 @@ namespace EmuSen.Serenity.Shaders
         // Two exponentials fitted to Kuhn's measured P22 tails, per frame ratio and weight relative to the frame struck - see EmuSen_CRT.md §11.4.
         public const double TailFast = 0.590, TailSlow = 0.945, GreenFast = 0.0679, GreenSlow = 0.0094, BlueFast = 0.0601, BlueSlow = 0.0081;
 
+        // The two decays' ratios a frame and their weights, on a standard's field: fitted at NTSC's and carried to PAL's longer one by the exponentials' own form - see EmuSen_CRT.md §23.
+        public sealed record Tails(double Fast, double Slow, double GreenFast, double GreenSlow, double BlueFast, double BlueSlow)
+        {
+            public static Tails For(bool pal)
+            {
+                if (!pal) return new(TailFast, TailSlow, CrtFilter.GreenFast, CrtFilter.GreenSlow, CrtFilter.BlueFast, CrtFilter.BlueSlow);
+                double t = PalFieldMilliseconds / NtscFieldMilliseconds, fast = Math.Pow(TailFast, t), slow = Math.Pow(TailSlow, t);
+                double kf = (1 - fast) / (1 - TailFast), ks = (1 - slow) / (1 - TailSlow);
+                return new(fast, slow, CrtFilter.GreenFast * kf, CrtFilter.GreenSlow * ks, CrtFilter.BlueFast * kf, CrtFilter.BlueSlow * ks);
+            }
+        }
+
         // The tails' strength at the setting's 1: a sustained white leaves 4% of its green in the first dark frame, the figure the vision literature gives - see EmuSen_CRT.md §11.4.
         public const double TailScale = 0.1606;
 
@@ -86,6 +98,8 @@ namespace EmuSen.Serenity.Shaders
         {
             Choice("quality", "Quality", (int)Quality.Balanced, "Performance", "Balanced", "Accurate"),
             Choice("signal", "Signal", (int)Signal.Composite, "RGB", "S-Video", "Composite"),
+            Choice("standard", "Television standard", 0, "NTSC", "PAL"),
+            Choice("palDecoder", "PAL colour decoding", 0, "Delay line", "Simple"),
             Choice("screen", "Screen", DefaultScreen, Screens.Select(s => s.Label).ToArray()),
             Choice("colour", "Colour", 0, Colours.Select(c => c.Label).ToArray()),
             new("curvature", "Curvature", 1f, 0f, 2f, 0.05f),
@@ -112,22 +126,47 @@ namespace EmuSen.Serenity.Shaders
         };
 
         // The parameters that decide which passes exist or what is written into them as constants.
-        public static IReadOnlyList<string> Structural { get; } = new[] { "quality", "signal", "screen", "colour", "gamut", "mask", "decoder", "chroma" };
+        public static IReadOnlyList<string> Structural { get; } = new[] { "quality", "signal", "standard", "palDecoder", "screen", "colour", "gamut", "mask", "decoder", "chroma" };
 
-        private static Dictionary<string, float> Timing(double activeMicroseconds, double cyclesAcross, double phaseLine, double phaseFrame) => new()
+        // One standard's line on a console: its active picture, cycles across, phase moved a line, alternating and crawling between frames, and whether a frame turns PAL's switch over - see EmuSen_CRT.md §23.
+        public sealed record LineTiming(double ActiveMicroseconds, double CyclesAcross, double PhaseLine, double PhaseFrame, double PhaseCrawl = 0, bool SwitchFrame = false);
+
+        private static readonly string[] LineKeys = { "activeUs", "cyclesAcross", "phaseLine", "phaseFrame", "phaseCrawl", "switchFrame" };
+
+        private static Dictionary<string, float> Timing(LineTiming ntsc, LineTiming pal)
         {
-            ["activeUs"] = (float)activeMicroseconds, ["cyclesAcross"] = (float)cyclesAcross, ["phaseLine"] = (float)phaseLine, ["phaseFrame"] = (float)phaseFrame,
-            ["lumaMHz"] = 5.0f, ["chromaMHz"] = 1.3f,
-        };
+            var values = new Dictionary<string, float> { ["lumaMHz"] = 5.0f, ["chromaMHz"] = 1.3f };
+            foreach (var (prefix, line) in new[] { ("", ntsc), ("pal.", pal) })
+            {
+                double[] numbers = { line.ActiveMicroseconds, line.CyclesAcross, line.PhaseLine, line.PhaseFrame, line.PhaseCrawl, line.SwitchFrame ? 1 : 0 };
+                for (int i = 0; i < LineKeys.Length; i++) values[prefix + LineKeys[i]] = (float)numbers[i];
+            }
+            return values;
+        }
 
-        // Each console's subcarrier against its pixels, derived from its clocks; the last entry is a standard line - see EmuSen_CRT.md §3.2.
+        // A console's line in the standard chosen, from its constants.
+        public static LineTiming LineOf(IReadOnlyDictionary<string, float> values, bool pal)
+        {
+            string prefix = pal ? "pal." : "";
+            float Of(string key) => values.TryGetValue(prefix + key, out float v) ? v : 0;
+            return new LineTiming(Of("activeUs"), Of("cyclesAcross"), Of("phaseLine"), Of("phaseFrame"), Of("phaseCrawl"), Of("switchFrame") > 0.5);
+        }
+
+        // PAL's subcarrier, its active line, and its line of 283.7516 cycles - see EmuSen_CRT.md §23.
+        public const double PalSubcarrierMegahertz = 4.43361875, PalActiveMicroseconds = 52.0, PalCyclesPerLine = 283.7516;
+
+        // A field's length in milliseconds on each standard, for the phosphors' decay between frames - see EmuSen_CRT.md §23.
+        public const double NtscFieldMilliseconds = 1000 / 59.94, PalFieldMilliseconds = 1000 / 50.0;
+
+        // Each console's subcarrier against its pixels on both standards, derived from its clocks; the last entry is a standard line - see EmuSen_CRT.md §3.2 and §23.
         public static IReadOnlyDictionary<string, IReadOnlyDictionary<string, float>> ConsoleTiming { get; } = new Dictionary<string, IReadOnlyDictionary<string, float>>
         {
-            ["NES"] = new Dictionary<string, float>(Timing(256 / 5.3693175, 256 * 2.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0)) { ["ppuSignal"] = 1 },
-            ["SNES"] = Timing(256 / 5.3693175, 256 * 2.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0),
-            ["Genesis"] = Timing(256 / 5.3693175, 256 * 2.0 / 3.0, 0, 0),
-            ["N64"] = Timing(640 / 12.1704545, 640 * 4 / 13.6, 0.5, 0.5),
-            [ScreenFilter.AnyConsole] = Timing(StandardActiveMicroseconds, StandardActiveMicroseconds * SubcarrierMegahertz, 0.5, 0.5),
+            ["NES"] = new Dictionary<string, float>(Timing(new(256 / 5.3693175, 256 * 2.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0), new(256 / 5.3203424, 256 * 5.0 / 6.0, 1.0 / 6.0, 0))) { ["ppuSignal"] = 1 },
+            ["SNES"] = Timing(new(256 / 5.3693175, 256 * 2.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0), new(256 / 5.3203425, 256 * 5.0 / 6.0, 1.0 / 6.0, 0)),
+            ["Genesis"] = Timing(new(256 / 5.3693175, 256 * 2.0 / 3.0, 0, 0), new(256 / 5.3203424, 256 * 5.0 / 6.0, 0, 0, 0, true)),
+            ["N64"] = Timing(new(640 / 12.1704545, 640 * 4 / 13.6, 0.5, 0.5), new(640 / 12.41413250, 640 * 4 / 11.2, 0.75, 0, 0.25, true)),
+            [ScreenFilter.AnyConsole] = Timing(new(StandardActiveMicroseconds, StandardActiveMicroseconds * SubcarrierMegahertz, 0.5, 0.5),
+                new(PalActiveMicroseconds, PalActiveMicroseconds * PalSubcarrierMegahertz, PalCyclesPerLine % 1, 0, 0.25, true)),
         };
 
         public static ScreenFilter Filter { get; } = new(Name, Array.Empty<FilterPass>(), new[] { "NES", "SNES", "Genesis", "N64" },
@@ -147,7 +186,17 @@ namespace EmuSen.Serenity.Shaders
         private static int At(IReadOnlyDictionary<string, float> values, string id, int count) => Math.Clamp((int)MathF.Round(values[id]), 0, count - 1);
 
         // What the screen and the player's overrides come to: the mask drawn, the decoder used and the chroma channel's width in subcarrier cycles.
-        public sealed record Resolved(Screen Screen, Signal Signal, Mask Mask, Decoder Decoder, int ChromaCycles, Colour Colour, Colour Display, Quality Quality, int Samples);
+        public sealed record Resolved(Screen Screen, Signal Signal, Mask Mask, Decoder Decoder, int ChromaCycles, Colour Colour, Colour Display, Quality Quality, int Samples)
+        {
+            // The standard's line on this console, and on PAL whether the receiver averages each line's colour with the line before - see EmuSen_CRT.md §23.
+            public LineTiming Line { get; init; } = new(StandardActiveMicroseconds, StandardActiveMicroseconds * SubcarrierMegahertz, 0.5, 0.5);
+            public bool Pal { get; init; }
+            public bool DelayLine { get; init; }
+            public double LumaMegahertz { get; init; } = 5.0;
+            public double EncoderChromaMegahertz { get; init; } = 1.3;
+            public double Subcarrier => Pal ? PalSubcarrierMegahertz : SubcarrierMegahertz;
+            public Tails Tail => Tails.For(Pal);
+        }
 
         public static Resolved Resolve(IReadOnlyDictionary<string, float> values)
         {
@@ -155,20 +204,29 @@ namespace EmuSen.Serenity.Shaders
             var quality = (Quality)At(values, "quality", 3);
             int mask = At(values, "mask", 5), decoder = At(values, "decoder", 3);
             double megahertz = screen.ChromaMegahertz * values["chroma"];
+            bool pal = values.TryGetValue("standard", out float standard) && standard > 0.5;
+            LineTiming line = LineOf(values, pal);
 
-            // A two-line comb has nothing to subtract when a console repeats its phase every line, and a set with one falls back to its notch - see EmuSen_CRT.md §11.3.
-            double phase = values["phaseLine"] * 2 * Math.PI, combGain = (1 - Math.Cos(phase)) / 2;
+            // A two-line comb has nothing to subtract when a console repeats its phase every line, and a set with one falls back to its notch; PAL's comb is not modelled - see EmuSen_CRT.md §11.3 and §23.
+            double phase = line.PhaseLine * 2 * Math.PI, combGain = (1 - Math.Cos(phase)) / 2;
             Decoder wanted = decoder == 0 ? screen.Decoder : (Decoder)(decoder - 1);
             return new Resolved(screen, (Signal)At(values, "signal", 3), mask == 0 ? screen.Mask : (Mask)(mask - 1),
-                wanted == Decoder.Comb && combGain < 0.25 ? Decoder.Notch : wanted,
-                Math.Clamp((int)Math.Round(0.72 * SubcarrierMegahertz / megahertz), 1, 6), Colours[At(values, "colour", Colours.Count)], Displays[At(values, "gamut", Displays.Count)],
-                quality, quality == Quality.Accurate ? SignalSamples : (int)Math.Round(4 * values["cyclesAcross"]));
+                wanted == Decoder.Comb && (combGain < 0.25 || pal) ? Decoder.Notch : wanted,
+                Math.Clamp((int)Math.Round(0.72 * (pal ? PalSubcarrierMegahertz : SubcarrierMegahertz) / megahertz), 1, 6), Colours[At(values, "colour", Colours.Count)], Displays[At(values, "gamut", Displays.Count)],
+                quality, quality == Quality.Accurate ? SignalSamples : (int)Math.Round(4 * line.CyclesAcross))
+            {
+                Line = line,
+                Pal = pal,
+                DelayLine = pal && !(values.TryGetValue("palDecoder", out float simple) && simple > 0.5),
+                LumaMegahertz = values.TryGetValue("lumaMHz", out float luma) ? luma : 5.0,
+                EncoderChromaMegahertz = values.TryGetValue("chromaMHz", out float chroma) ? chroma : 1.3,
+            };
         }
 
         public static IReadOnlyList<FilterPass> Passes(IReadOnlyDictionary<string, float> values)
         {
             Resolved r = Resolve(values);
-            bool ppu = values.TryGetValue("ppuSignal", out float signalled) && signalled > 0.5;
+            bool ppu = values.TryGetValue("ppuSignal", out float signalled) && signalled > 0.5 && !r.Pal;
             // On a console whose core can hand over its picture before the palette, its colours come from the video chip's own levels - see EmuSen_CRT.md §22.
             FilterPass? colours = ppu ? new FilterPass(PpuColours, PassScale.Source) { Name = "colours", Float = true } : null;
             if (r.Quality == Quality.Performance)
@@ -193,7 +251,7 @@ namespace EmuSen.Serenity.Shaders
                 passes.Add(Line(Separate(r, values, ppu), "parts"));
                 passes.Add(Line(Drive(r), "gun"));
             }
-            passes.Add(Line(State, "state", feedback: true));
+            passes.Add(Line(State(r), "state", feedback: true));
             bool accurate = r.Quality == Quality.Accurate;
             if (accurate)
             {
@@ -232,14 +290,26 @@ float3 light(float3 v) {
 }
 ";
 
-        // The subcarrier's phase, in cycles, at a sample of a line of a frame.
+        // The console's line on the standard chosen, written into a pass as constants - see EmuSen_CRT.md §23.
+        private static string Constants(Resolved r) => @"
+const float activeUs = " + N(r.Line.ActiveMicroseconds) + @";
+const float cyclesAcross = " + N(r.Line.CyclesAcross) + @";
+const float phaseLine = " + N(r.Line.PhaseLine) + @";
+const float phaseFrame = " + N(r.Line.PhaseFrame) + @";
+const float phaseCrawl = " + N(r.Line.PhaseCrawl) + @";
+const float switchFrame = " + (r.Line.SwitchFrame ? "1.0" : "0.0") + @";
+const float lumaMHz = " + N(r.LumaMegahertz) + @";
+const float chromaMHz = " + N(r.EncoderChromaMegahertz) + @";
+";
+
+        // The subcarrier's phase, in cycles, at a sample of a line of a frame, and the sign PAL's switch gives V on a line - see EmuSen_CRT.md §11.3 and §23.
         private const string Phase = @"
 uniform float frameCount;
-uniform float cyclesAcross;
-uniform float phaseLine;
-uniform float phaseFrame;
 float phaseAt(float index, float row, float samples) {
-    return fract((index + 0.5) / samples * cyclesAcross + fract(row * phaseLine) + mod(frameCount, 2.0) * phaseFrame);
+    return fract((index + 0.5) / samples * cyclesAcross + fract(row * phaseLine) + mod(frameCount, 2.0) * phaseFrame + fract(mod(frameCount, 1024.0) * phaseCrawl));
+}
+float palSwitch(float row) {
+    return mod(row + mod(frameCount, 2.0) * switchFrame, 2.0) < 0.5 ? 1.0 : -1.0;
 }
 ";
 
@@ -316,10 +386,7 @@ uniform shader original;
 " + (ppu ? "uniform shader colours;\n" + (r.Signal == Signal.Composite ? Ppu : "uniform float2 rawSize;\n") : "") + @"
 uniform float2 originalSize;
 uniform float2 outputSize;
-uniform float activeUs;
-uniform float lumaMHz;
-uniform float chromaMHz;
-" + Functions + (r.Signal == Signal.Rgb ? Transfer : Phase) + @"
+" + Constants(r) + Functions + (r.Signal == Signal.Rgb ? Transfer : Phase) + @"
 half4 main(float2 coord) {
     float width = originalSize.x;
     float x = coord.x / outputSize.x * width;
@@ -360,23 +427,23 @@ half4 main(float2 coord) {
         narrow += wc * float3(0.0, 0.492 * (rgb.b - y), 0.877 * (rgb.r - y));
     }
     float angle = 6.2831853 * phaseAt(floor(coord.x), floor(coord.y), outputSize.x);
-    float c = narrow.y * sin(angle) + narrow.z * cos(angle);
+    float c = narrow.y * sin(angle) + " + (r.Pal ? "palSwitch(floor(coord.y)) * " : "") + @"narrow.z * cos(angle);
 " + (r.Signal == Signal.Composite ? "    return half4(wide.x + c, 0.0, 0.0, 1.0);\n}" : "    return half4(wide.x, c, 0.0, 1.0);\n}")));
 
         // The receiver's first half: luma and chroma separated by a notch or a two-line comb, and chroma demodulated - see EmuSen_CRT.md §11.3.
         private static string Separate(Resolved r, IReadOnlyDictionary<string, float> values, bool ppu)
         {
-            double theta = values["phaseLine"] * 2 * Math.PI, fr = (1 - Math.Cos(theta)) / 2, fi = Math.Sin(theta) / 2, gain = fr * fr + fi * fi;
+            double theta = r.Line.PhaseLine * 2 * Math.PI, fr = (1 - Math.Cos(theta)) / 2, fi = Math.Sin(theta) / 2, gain = fr * fr + fi * fi;
             bool comb = r.Signal == Signal.Composite && r.Decoder == Decoder.Comb;
             string read = r.Signal == Signal.SVideo ? "source.eval(float2(x + 0.5, row + 0.5)).g" : "source.eval(float2(x + 0.5, row + 0.5)).r";
             string above = "(row < 1.0 ? 0.0 : source.eval(float2(x + 0.5, row - 0.5)).r)";
 
             // The loop reaches as far as the longer window does on this console, and no further.
-            int reach = (int)Math.Ceiling(Math.Max(r.ChromaCycles, 2) * r.Samples / values["cyclesAcross"] / 2);
+            int reach = (int)Math.Ceiling(Math.Max(r.ChromaCycles, 2) * r.Samples / r.Line.CyclesAcross / 2);
             return @"
 uniform shader source;
 uniform float2 inputSize;
-" + (ppu && r.Signal == Signal.Composite ? "uniform float2 rawSize;\n" : "") + Phase + @"
+" + (ppu && r.Signal == Signal.Composite ? "uniform float2 rawSize;\n" : "") + Constants(r) + Phase + @"
 half4 main(float2 coord) {
     float s = floor(coord.x);
     float row = floor(coord.y);
@@ -403,7 +470,7 @@ half4 main(float2 coord) {
     }
     chroma *= 2.0 / max(chromaSum, 0.0001)" + (ppu && r.Signal == Signal.Composite ? " * (rawSize.x > 0.5 ? " + N(PpuChromaGain) + " : 1.0)" : "") + @";
     notch *= 2.0 / max(notchSum, 0.0001);
-" + (comb ? @"
+" + (r.Pal ? "    chroma.y *= palSwitch(row);\n" : "") + @"" + (comb ? @"
     chroma = float2(" + N(fr / gain) + " * chroma.x + " + N(fi / gain) + " * chroma.y, " + N(fr / gain) + " * chroma.y - " + N(fi / gain) + @" * chroma.x);
     notch = float2(" + N(fr / gain) + " * notch.x + " + N(fi / gain) + " * notch.y, " + N(fr / gain) + " * notch.y - " + N(fi / gain) + @" * notch.x);
 " : "") + @"
@@ -417,8 +484,7 @@ half4 main(float2 coord) {
         private static string Drive(Resolved r) => @"
 uniform shader source;
 uniform float2 inputSize;
-uniform float activeUs;
-" + Transfer + @"
+" + Constants(r) + Transfer + @"
 half4 main(float2 coord) {
     float s = floor(coord.x);
     float row = floor(coord.y) + 0.5;
@@ -434,7 +500,7 @@ half4 main(float2 coord) {
     }
     y /= sum;
     half4 here = source.eval(float2(s + 0.5, row));
-    float ry = here.b / 0.877;
+" + (r.DelayLine ? "    // PAL's delay line: each line's colour averaged with the line's before it.\n    if (row > 1.0) here.gb = 0.5 * (here.gb + source.eval(float2(s + 0.5, row - 1.0)).gb);\n" : "") + @"    float ry = here.b / 0.877;
     float by = here.g / 0.492;
     float gy = -(0.299 * ry + 0.114 * by) / 0.587;
     return half4(light(float3(y + ry, y + gy, y + by)), 1.0);
@@ -443,19 +509,15 @@ half4 main(float2 coord) {
         // The Performance tier's signal: the frame's own pixels, luma and chroma blurred at the bandwidths the cable and the receiver leave them, no subcarrier - see EmuSen_CRT.md §12.1.
         private static string Blend(Resolved r, IReadOnlyDictionary<string, float> values, bool ppu)
         {
-            double video = r.Screen.VideoMegahertz, chroma = 0.72 * SubcarrierMegahertz / r.ChromaCycles;
+            double video = r.Screen.VideoMegahertz, chroma = 0.72 * r.Subcarrier / r.ChromaCycles;
             bool rgb = r.Signal == Signal.Rgb, notch = r.Signal == Signal.Composite && r.Decoder == Decoder.Notch;
 
             // The notch acts on the encoder's output and the video stage after it, whose gains at the subcarrier scale the band it takes away.
-            double encoder = values["lumaMHz"], through = Math.Exp(-0.5 * Math.Log(2) * SubcarrierMegahertz * SubcarrierMegahertz * (1 / (encoder * encoder) + 1 / (video * video)));
+            double encoder = r.LumaMegahertz, through = Math.Exp(-0.5 * Math.Log(2) * r.Subcarrier * r.Subcarrier * (1 / (encoder * encoder) + 1 / (video * video)));
             return @"
 uniform shader original;
 " + (ppu ? "uniform shader colours;\nuniform float2 rawSize;\n" : "") + @"uniform float2 originalSize;
-uniform float activeUs;
-uniform float lumaMHz;
-uniform float chromaMHz;
-uniform float cyclesAcross;
-" + Functions + Transfer + @"
+" + Constants(r) + Functions + Transfer + @"
 
 // The integral of the receiver's notch band, a Hann window two subcarrier cycles long times the subcarrier, from the window's centre.
 float band(float u, float reach, float w) {
@@ -488,20 +550,22 @@ half4 main(float2 coord) {
         float y = dot(rgb, float3(0.299, 0.587, 0.114));
         wide.x += wy * y;
         narrow += wc * float2(rgb.b - y, rgb.r - y);
-    }
-    float gy = -(0.299 * narrow.y + 0.114 * narrow.x) / 0.587;
+" + (r.DelayLine ? @"        float3 above = original.eval(float2(k + 0.5, max(row - 1.0, 0.5))).rgb;
+        narrow += wc * float2(above.b, above.r) - wc * dot(above, float3(0.299, 0.587, 0.114));
+" : "") + @"    }
+" + (r.DelayLine ? "    narrow *= 0.5;\n" : "") + @"    float gy = -(0.299 * narrow.y + 0.114 * narrow.x) / 0.587;
     return half4(light(float3(wide.x + narrow.y, wide.x + gy, wide.x + narrow.x)), 1.0);
 }");
         }
 
         // Green's and blue's slow light, two sums each over the frames before; red's is gone inside the frame - see EmuSen_CRT.md §11.4.
-        private static string State => @"
+        private static string State(Resolved r) => @"
 uniform shader source;
 uniform shader feedback;
 half4 main(float2 coord) {
     float3 e = source.eval(coord).rgb;
     half4 f = feedback.eval(coord);
-    return half4(e.g + " + N(TailFast) + " * f.r, e.g + " + N(TailSlow) + " * f.g, e.b + " + N(TailFast) + " * f.b, e.b + " + N(TailSlow) + @" * f.a);
+    return half4(e.g + " + N(r.Tail.Fast) + " * f.r, e.g + " + N(r.Tail.Slow) + " * f.g, e.b + " + N(r.Tail.Fast) + " * f.b, e.b + " + N(r.Tail.Slow) + @" * f.a);
 }";
 
         // Each sample's light with its tail, and the spot it is drawn with: wider as the gun is driven harder - see EmuSen_CRT.md §11.5.
@@ -514,9 +578,9 @@ uniform float spotGrowth;
 float3 lightAt(float2 p) {
     float3 e = gun.eval(p).rgb;
     half4 st = state.eval(p);
-    float2 fast = persistence * float2(" + N(TailScale * GreenFast) + ", " + N(TailScale * BlueFast) + @");
-    float2 slow = persistence * float2(" + N(TailScale * GreenSlow) + ", " + N(TailScale * BlueSlow) + @");
-    float2 kept = 1.0 / (1.0 + fast * " + N(TailFast / (1 - TailFast)) + " + slow * " + N(TailSlow / (1 - TailSlow)) + @");
+    float2 fast = persistence * float2(" + N(TailScale * r.Tail.GreenFast) + ", " + N(TailScale * r.Tail.BlueFast) + @");
+    float2 slow = persistence * float2(" + N(TailScale * r.Tail.GreenSlow) + ", " + N(TailScale * r.Tail.BlueSlow) + @");
+    float2 kept = 1.0 / (1.0 + fast * " + N(r.Tail.Fast / (1 - r.Tail.Fast)) + " + slow * " + N(r.Tail.Slow / (1 - r.Tail.Slow)) + @");
     float2 now = float2(e.g, e.b);
     float2 lit = kept * (now + fast * (float2(st.r, st.b) - now) + slow * (float2(st.g, st.a) - now));
     return float3(e.r, lit.x, lit.y);
@@ -767,9 +831,9 @@ uniform float persistence;
 float3 lightAt(float2 p) {
     float3 e = gun.eval(p).rgb;
     half4 st = state.eval(p);
-    float2 fast = persistence * float2(" + N(TailScale * GreenFast) + ", " + N(TailScale * BlueFast) + @");
-    float2 slow = persistence * float2(" + N(TailScale * GreenSlow) + ", " + N(TailScale * BlueSlow) + @");
-    float2 kept = 1.0 / (1.0 + fast * " + N(TailFast / (1 - TailFast)) + " + slow * " + N(TailSlow / (1 - TailSlow)) + @");
+    float2 fast = persistence * float2(" + N(TailScale * r.Tail.GreenFast) + ", " + N(TailScale * r.Tail.BlueFast) + @");
+    float2 slow = persistence * float2(" + N(TailScale * r.Tail.GreenSlow) + ", " + N(TailScale * r.Tail.BlueSlow) + @");
+    float2 kept = 1.0 / (1.0 + fast * " + N(r.Tail.Fast / (1 - r.Tail.Fast)) + " + slow * " + N(r.Tail.Slow / (1 - r.Tail.Slow)) + @");
     float2 now = float2(e.g, e.b);
     float2 lit = kept * (now + fast * (float2(st.r, st.b) - now) + slow * (float2(st.g, st.a) - now));
     return float3(e.r, lit.x, lit.y);

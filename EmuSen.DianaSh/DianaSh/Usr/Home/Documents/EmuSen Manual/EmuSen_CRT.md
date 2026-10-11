@@ -2451,3 +2451,146 @@ colour number and the emphasis bits. Eight mutants, all caught:
 - **MoonRT**, which keeps the RGB path until the surface reaches the core ABI (§22.1).
 - **The 2C02E's differential phase**, −2.5° per row; a setting when a player asks for the earlier revision.
 - **PAL's 2C07**, whose wave differs (its phase alternates per line); §23's PAL model is the place for it.
+
+
+## 23. PAL as a model of its own (2026-10-10)
+
+Until now PAL games were drawn through NTSC's signal: the right picture area (§14), but NTSC's subcarrier, NTSC's
+phases and NTSC's decoder. PAL differs in four ways that a player sees: its subcarrier is 4.43 MHz, so each console's
+pixels sit differently against it and its artifacts change shape; the V component's sign is switched every line; a
+receiver undoes the switch and, in most sets, averages each line's colour with the line before through a delay line;
+and the field lasts 20 ms rather than 16.7, which changes what the phosphors carry from one frame to the next. This
+section builds all four.
+
+### 23.1 The standard, and how the filter is told
+
+A new setting, **Television standard** (NTSC or PAL), selects the model; a second, **PAL colour decoding** (Delay line
+or Simple), selects the receiver. Both decide which passes are built and what is written into them, so both are
+structural. The standard is the player's choice for now. Choosing it from the game's region is a question for the
+tester (§23.7), and nothing selects it automatically.
+
+The console's line on each standard lives in the same console constants as before (`ConsoleTiming`), the PAL figures
+under the prefix `pal.`. The filter writes the line of the chosen standard into each pass as SkSL constants where it
+used to bind them as uniforms. Nothing in a pass changes but where the numbers come from, and the NTSC pictures are
+unchanged: every existing render test of the filter passed after the change.
+
+### 23.2 Each console's PAL clocks
+
+| Console | Master clock | Subcarrier | Pixel | Cycles a pixel | Cycles a line | A line | A frame | Lines | Active picture |
+|---|---|---|---|---|---|---|---|---|---|
+| **NES** (2C07) | 26.601712 MHz | ÷6 | ÷5 | 5/6 | 341 × 5/6 = 284⅙ | +⅙ | 0 | 312 | 256 dots, 48.12 µs |
+| **SNES** | 21.28137 MHz | ÷4.8 | ÷4 | 5/6 | 1364 ÷ 4.8 = 284⅙ | +⅙ | 0 | 312 | 256 dots, 48.12 µs |
+| **Genesis** | 53.203424 MHz | ÷12 | H32 ÷10, H40 ÷8 | 5/6; 2/3 | 3420 ÷ 12 = **285** | **0** | **0** | 313 | 256 or 320 dots, 48.12 µs |
+| **N64** | VI 49.65653 MHz | ÷11.2 | ÷4 at 640 | 0.357 | 3178 ÷ 11.2 = 283.75 | +¾ | +¼, crawling | 313 | 640 dots, 51.56 µs |
+| Standard line | — | 4.43361875 MHz | — | — | 283.7516 | +0.7516 | +¼, crawling | 313 | 52 µs |
+
+Sources **[S]**: nesdev's *PAL video* and *Cycle reference chart* (the NES: 26.6017125 MHz, five master clocks a
+pixel, 312 lines, no short line, 284⅙ cycles a line); the SNESdev wiki's *Timing* (21.281370 MHz, "4.8 times
+chroma", 1364 clocks a line, 312 lines with the long line only when interlaced); TmEE in nesdev forum thread 20410
+(the Genesis's 53203424 Hz, 3420 clocks a line) and Kabuto's notes (313 lines); n64brew's *Video Interface* (PAL's
+H_TOTAL of 3177, so 3178 VI clocks a line, "11.2 clocks per chroma period", 313 lines progressive, and the leap
+lines of 3182 and 3183 that add half a cycle a field on average). The right-hand columns are **[D]**:
+
+- **NES and SNES.** 284⅙ cycles a line move the pattern a sixth of a cycle a line, a six-line pattern, as nesdev says.
+  312 lines of it are 88,660 cycles exactly, so it stands still between frames: "dirty stills but OK movement". Their
+  pixels are 5/6 of a cycle where NTSC's are 2/3, so the alternate-column dithering that makes NTSC's artifacts lands
+  at 0.6 of the subcarrier, 1.8 MHz from it, and passes the chroma channel far more weakly.
+- **Genesis.** 285 whole cycles a line, and 313 such lines a whole number: nothing moves, as on NTSC. But 313 is odd,
+  so the V switch is turned over between frames for a given line.
+- **N64.** A standard PAL line, 283.75 cycles, so the phase moves three quarters of a cycle a line. A 313-line frame
+  adds three quarters, and the leap lines half a cycle more on average (6 + 5 + 6 + 5 + 6 VI clocks over five fields,
+  5.6 ÷ 11.2): a quarter of a cycle a frame, so the pattern crawls through four frames. The leap alternates 6 and 5
+  clocks, 0.04 of a cycle apart, which is not modelled; the mean is.
+- **The NES's 2C07 is not modelled.** Its wave is the 2C02's design at PAL's clocks, but its V switch is made by
+  swapping hues between pairs of oscillators on alternate lines (nesdev: 3 and 2, 4 and 1, 5 and C, 6 and B, 7 and A,
+  8 and 9), its burst is at 120° rather than 135°, its red and green emphasis bits are swapped, and the same page
+  describes an "additional temporary −3 clocks every second line" that this reading does not reconcile with the hue
+  pairs. On PAL the NES is drawn from its RGB picture, as every other console is, until that is settled (§23.7).
+
+### 23.3 The encoder and the receiver
+
+**The switch.** The encoder writes chroma as *U* sin φ + *s V* cos φ with *s* = ±1 alternating line by line, and on a
+console whose frame has an odd number of lines *s* also alternates between frames for the same line. The receiver
+knows *s* for each line from the burst's swing (±45° about −U), and is modelled as reading it correctly.
+
+**The delay line.** A PAL set with a delay line, invented at Telefunken, averages the chroma of the received line
+with the chroma of the line before it in the same field, before the matrix. Phase errors that turn the hue one way on
+one line turn it the other way on the next, so the average keeps the hue and loses a little saturation; and colour
+that changes line to line is blurred over two lines. Here the Drive pass averages each line's demodulated U and V with
+the line's above it, and the Performance tier averages each pixel's colour difference with the row above. The simple
+decoder (PAL-S) leaves each line its own colour and relies on the eye; nesdev notes that less expensive sets did
+this. A PAL comb filter, which needs two lines of delay, is not modelled: on PAL a screen with a comb separates luma
+by its notch.
+
+**The receiver's chroma channel** keeps the same width in MHz as on NTSC (§11.2), so it spans more subcarrier cycles at
+4.43 MHz: six cycles where NTSC's spans five. No PAL receiver's channel was found to set its own width; the NTSC
+figure is carried over, a choice **[C]**.
+
+### 23.4 625/50 and the phosphors
+
+What a phosphor carries from one frame into the next depends on how long the frame is. §11.4's fit is two
+exponentials per channel, each a ratio *r* a frame and a weight *c* for the light it puts into the frame after the
+one struck. For an exponential with time constant τ, the ratio over a field of *T* is *r* = e^(−*T*/τ), and the light
+in the *k*-th frame after is proportional to τ *r*^*k* (1 − *r*). So on a field of 20 ms in place of 16.68 **[D]**:
+
+    r_PAL = r_NTSC ^ (20 / 16.68),    c_PAL = c_NTSC × (1 − r_PAL) / (1 − r_NTSC)
+
+which takes the fast ratio from 0.590 to 0.531 and the slow from 0.945 to 0.934. The light left after the struck
+field is then the NTSC fit's, decayed over the 3.3 ms more the PAL field lasts, which the tails test checks. The
+strength (`TailScale`, §11.4) is a property of the phosphor and is kept.
+
+### 23.5 Measured
+
+| Check | Result |
+|---|---|
+| Each console's PAL line against its clocks (table above) | equal for all four |
+| A flat colour, PAL against NTSC, eight colours, all three tiers, S-Video and composite | at most 0.0004 of peak |
+| Colour alternating every line, the share of red swinging from line to line | NTSC 0.743; PAL simple 0.743; PAL delay line 0.005 at Balanced and Accurate, 0.022 at Performance |
+| A thin white line's fringes on the SNES | repeat every six lines, differ three lines on, the same the next frame |
+| The same on the N64 | the same four frames on, moved the next frame |
+| The Genesis's H40 dither, artifact colour along a line | NTSC 0.0020; PAL 0.0002 through the delay line, 0.0004 without |
+| A colour edge in S-Video, 10% to 90%, in microseconds | PAL within 8% of NTSC (the channel rounds to six cycles on PAL and five on NTSC, 0.53 and 0.52 MHz) |
+| The Genesis's fringes without the delay line | alternate between frames, the same two frames on |
+| The NES on PAL, with a raw frame and without | identical |
+
+The Genesis's PAL artifacts are a tenth of its NTSC ones: the dither at H40 lands at three quarters of the
+subcarrier on both standards, which is 1.11 MHz below it on PAL and 0.89 MHz on NTSC, further down the same 0.5 MHz
+chroma channel. The delay line halves what is left, since a static pattern's V changes sign with the switch from line
+to line and cancels in the average.
+
+### 23.6 Tests and mutants
+
+`ScreenFilterRenderTests.Pal.cs`: the clock arithmetic for every console; the tails on a PAL field; the notch and the
+delay line chosen as above; a flat colour on PAL as on NTSC at every tier; the delay line against the simple decoder at
+every tier; a colour edge as long in microseconds on PAL as on NTSC; the fringes' six-line and four-frame patterns and
+the Genesis's alternation between frames; and the NES on PAL drawn from RGB.
+
+Eleven, all caught, three of them only after the tests were extended:
+
+| Mutant | Caught by |
+|---|---|
+| the encoder without the switch | a flat colour; the delay line |
+| the decoder without the switch | a flat colour; the delay line |
+| no delay line at the signal tiers | the delay line |
+| no delay line at Performance | the delay line |
+| PAL drawn with NTSC's line | the fringes |
+| the switch never turned between frames | the fringes, once the Genesis's alternation between frames was added (it survived the first run) |
+| no crawl between frames | the fringes, once the N64's two frames on was added (it survived the first run) |
+| the tails left at NTSC's field | the tails |
+| a comb kept on PAL | the notch and delay-line choice |
+| the NES on PAL drawn from the PPU | the NES on PAL |
+| the chroma channel sized by NTSC's subcarrier | a colour edge as long on PAL as on NTSC, added for it (it survived the first run) |
+
+A flat colour cannot catch the switch's alternation between frames, since the encoder and the decoder use the same
+sign; only a pattern whose colour comes from luma, a fringe, shows it.
+
+### 23.7 Questions for the tester
+
+1. **Should the standard follow the game's region?** A PAL game would then be drawn as PAL without being asked, and
+   the setting would become an override. It needs each core to report the region of the game it loaded to the
+   frontend, a new optional member of the kind §22.1 describes; which cores already know it was not checked. *Recommendation: yes, with the player's choice kept per game when
+   it is set, since a European player's set was PAL whatever the game.*
+2. **Should the 2C07 be modelled?** It needs the hue pairing, the burst's phase and the emphasis bits on PAL read
+   against nesdev's own capture of a PAL PPU's signal (the 53.2 MHz file on the *PAL video* page) before anything is
+   built, and that capture is the only test of the reading. *Recommendation: yes, as the next NES step, since the
+   PAL NES's picture is the case where the PPU's own wave changes most.*

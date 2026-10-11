@@ -283,6 +283,12 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
 - **Conclusion, the referee step:** the line is **3,412.5 video clocks in NTSC mode and 3,405 in PAL**, now witnessed
   by Beetle PSX and consistent with the one console log, not only argued; **changed**: an interlaced PAL field holds
   313 and 312 lines alternately. Still open: how the half clock is spread over lines, which no referee output shows.
+- **The records, 2026-10-11** (`Diamond_Referees.md` §4.10, `programs/timers.s`) [M]: `timers` rewritten to record in
+  RAM grades Beetle PSX on the log for the first time. As a PAL console in NTSC mode it counts a frame on the system
+  clock at 112,560 (the 16-bit count the program prints) against the log's 112,531, Diamond's record 112,557 and
+  DuckStation's 112,633, but a frame on the dot clock at 112,184 against the log's 112,031 and Diamond's 112,033: like
+  DuckStation's (112,196), Beetle PSX's dot clock on a PAL console is not the console's. The ruling rests on the frame's
+  cycles and stands; Beetle PSX's standing as the strongest witness is for the line, not for the dot clock.
 - **Pinned by, since the referee step:** `interlaced_fields_alternate_about_262_5_and_312_5_lines`,
   `the_video_timing_is_the_referees_line_on_both_clocks`.
 - **Implemented in, since the referee step:** `diamond: an interlaced PAL field holds 313 and 312 lines (D-0)`.
@@ -321,8 +327,14 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   project's own timing an exception round trip with its own handler, on a console, would say.
 - **Referee:** not consulted. **Witnesses:** not run for this table (their TTY cannot be read, `Diamond_Native.md`
   §11.15). *Referee step, 2026-10-11* (`Diamond_Referees.md` §4.3) [M]: DuckStation and PCSX-Redux, whose TTY can be
-  read, meet 11 of the 51 cells each within 0.2 cycles; the SPUCNT cell reads 82.4 and 6.0 on them, 38.94 on the
-  console. Neither models memory control as the console times it, so neither bears on the rule.
+  read, meet ~~11 of the 51 cells each~~ *(recounted with the hundredths read as printed, §4.10)* 36 and 24 of the 51
+  cells within 0.2 cycles; the SPUCNT cell reads 82.4 and 6.0 on them, 38.94 on the console. Neither models memory
+  control as the console times it, so neither bears on the rule. *The records, 2026-10-11* (`Diamond_Referees.md` §4.10,
+  `programs/records/access-time.s`) [M]: SwanStation meets 33, Beetle PSX 27, PCSX-ReARMed 0; through the rewrite the SPUCNT cell
+  is timed on every machine with the same handler, the program's own, and reads 38.09 on Beetle PSX, 36.07 on Diamond
+  and 82.04 on DuckStation and SwanStation, against the console's 38.94 with Sony's. The cell now has a referee reading
+  2.02 cycles above Diamond's on the same code, which locates the open 2.87 cycles in the exception's entry and return
+  rather than in the kernel's handler only if Beetle PSX's exception timing is the console's, which nothing shows [A].
 - **Conclusion:** the rule above, with RAM at a 4-cycle stall, the internal registers at 2, the scratchpad and BCC at
   none (the same log). Measured: 50 of 51 cells within 0.20 cycles of the console's; the SPUCNT cell named. Open for
   the SPUCNT cell and for any register value other than the kernel's; the referees leave both open.
@@ -349,6 +361,9 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   `chopping`'s 130 rows, DuckStation 17 and PCSX-Redux 0; on `chain-looping`, DuckStation 13,016 cycles with no DMA
   and 143,024 under a never-ending chain, PCSX-Redux 16,016 throughout with every chain finished; on `stores.s`, no
   referee has a write queue a load waits for (DuckStation N cycles for N stores, Beetle PSX N + 1, PCSX-Redux 3N).
+  *The records, 2026-10-11* (`Diamond_Referees.md` §4.10, `programs/records/chopping.s`, `programs/records/chain-looping.s`) [M]: Beetle
+  PSX meets 5 of `chopping`'s 130 rows within 10% and SwanStation 11; under a never-ending chain Beetle PSX's loop is no
+  slower (13,008 to 13,032 ticks throughout) and SwanStation's, as DuckStation's, 143,008; none reproduces either log.
   **Witnesses:** none run before the referee step.
 - **Conclusion** [C, fitted]: 10 cycles between blocks and between nodes, 4 of a node's own, a chopped window's CPU
   window held to 32 cycles a word of the DMA's window plus 6; a RAM store drains in 8 cycles, and a load waits for the
@@ -374,7 +389,11 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   cycles' worth.
 - **Referee:** *2026-10-11* (`Diamond_Referees.md` §4.5) [M]: on `timers`, DuckStation counts freely in mode 2 and
   PCSX-Redux reads zero always, within the blank too; neither models it as the console behaves, and the console log
-  stays the evidence. **Witnesses:** none.
+  stays the evidence. *The records, 2026-10-11* (`Diamond_Referees.md` §4.10, `programs/timers.s`) [M]: of timer 0's ten
+  mode-2 rows, Beetle PSX and PCSX-ReARMed count in every one, SwanStation reads zero in every one and DuckStation in
+  seven; Diamond's alone are zero outside the blank and counting within. A finding of the same step, not a dispute
+  (`Diamond_Records.md` §8.1): Diamond credits timer 0 with time from before a mode write that enables its sync, which
+  mode 2's resets at both edges hide. **Witnesses:** none.
 - **Conclusion:** the counter is reset at the blank's end as well as its start, so it counts within the blank and
   reads zero outside; measured on the console's log, argued for timer 1's vblank by analogy [A]. A second reading of the
   same log: **the reset's two-cycle hold is of the system clock only** [A]; applied in ticks of a slower source it
@@ -514,7 +533,13 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
 - **Referee:** *2026-10-11* (`Diamond_Referees.md` §4.9, `programs/gpu-busy.s`) [M]: after 2,048 words in blocks of 1
   to 128 or one burst, every referee reads the GPU ready at the first poll (PCSX-ReARMed alone sets bit 26 22,031
   cycles after its burst, with its blocks untimed); DuckStation's `chopping` busy marks equal Diamond's on all 130
-  rows, the same 117 agreeing with the console and the same 13 not. **Witnesses:** none before the referee step.
+  rows, the same 117 agreeing with the console and the same 13 not. *The records, 2026-10-11* (`Diamond_Referees.md`
+  §4.10, `programs/records/chopping.s`, `programs/records/bandwidth.s`) [M]: Beetle PSX's and SwanStation's busy marks are Diamond's
+  too, so three lineages agree on the 117 and none shows the 13; no referee meets `bandwidth` within 2% (Beetle PSX and
+  SwanStation draw the plain shapes 6 to 10% fast and the textured quad 50% or more). The release reads the mark after
+  `measure`'s `ExitCriticalSection`, 2,141 cycles or more after the channel ends on Diamond's open kernel
+  (`Diamond_Records.md` §8.2): the console's 13 marks are of its GPU busy at least a retail BIOS's call after the
+  transfer, not at once. **Witnesses:** none before the referee step.
 - **Conclusion** [M, fitted]: `Diamond_GPU.md` §8's model, every `bandwidth` row within 0.6% of the console's.
   `chopping`'s busy mark agrees on 117 of 130 rows; the 13 others, after 128-word blocks, the unchopped burst and
   chopped windows of 16 to 128 words, read busy on the console and idle on Diamond. A write rate slower than the DMA's

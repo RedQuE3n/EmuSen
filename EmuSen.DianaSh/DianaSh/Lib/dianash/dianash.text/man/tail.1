@@ -1,0 +1,15 @@
+NAME
+    tail - print the last lines of a file or stdin
+
+SYNOPSIS
+    tail [-n N] [path]
+
+DESCRIPTION
+    Prints the last N lines (default 10) of piped stdin, or a real file if
+    <path> is given (walled to the project's own directory tree - see 'cd').
+    No '-f' follow mode - this shell has nothing that appends to a file
+    live while 'tail' is running to follow.
+
+EXAMPLES
+    history | tail -n 5
+    tail notes.txt

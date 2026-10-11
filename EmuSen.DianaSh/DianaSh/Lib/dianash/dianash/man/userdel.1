@@ -1,0 +1,15 @@
+NAME
+    userdel - remove an account
+
+SYNOPSIS
+    userdel <name>
+
+DESCRIPTION
+    Removes <name> from the account directory - root only. Refuses to
+    remove 'root' itself (the one account that always exists), and refuses
+    to remove an account that's currently active in any live session (or
+    this shell itself, with no session manager registered) - 'su' that
+    session to another account first.
+
+EXAMPLES
+    userdel kid

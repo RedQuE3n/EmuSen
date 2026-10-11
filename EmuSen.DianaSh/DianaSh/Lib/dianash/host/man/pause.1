@@ -1,0 +1,41 @@
+NAME
+    pause - stop the emulation thread so its state can be read safely
+
+SYNOPSIS
+    pause
+
+DESCRIPTION
+    EmuSen.Mistress only, and it exists because of that frontend's
+    threading model rather than because pausing is a feature. Its console
+    window runs on the UI thread while RunFrame runs concurrently on a
+    separate emulation thread, with no synchronization between them - so a
+    command that reads or writes CPU/bus/renderer state races the core
+    unless that thread is actually stopped. 'pause' stops it; 'resume'
+    starts it again. Already-paused and not-paused are both reported and
+    are not errors.
+
+    EmuSen.Hotaru registers neither command and needs neither: its debug
+    prompt runs ON the emulation thread, so the prompt and RunFrame can
+    never overlap by construction.
+
+    Why a command, rather than pausing automatically whenever the console
+    window is open: opening a window does not make anything safe, only
+    actually pausing does, and leaving the game running while the console
+    merely sits open is a reasonable thing to want - typing up a command
+    while watching gameplay, then pausing immediately before running the
+    one that touches live state.
+
+    Both commands reach the window through plain constructor-injected
+    delegates rather than a reference to it, so neither knows anything
+    about that type beyond 'something I can pause and resume'. This is
+    also why they cannot live in the core-agnostic command registry: they
+    do not act on an IDebugTarget at all, they act on a frontend's own
+    emulation thread, which IDebugTarget deliberately has no concept of.
+
+    'Apply Cheats' in the Active Cheats window relies on this: while
+    paused the emulation thread is parked outside the core, so the poke
+    happens immediately instead of being queued for the next frame.
+
+EXAMPLES
+    pause
+    resume

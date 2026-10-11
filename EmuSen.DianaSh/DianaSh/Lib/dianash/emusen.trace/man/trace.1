@@ -1,0 +1,18 @@
+NAME
+    trace - arm a live CPU instruction trace
+
+SYNOPSIS
+    trace <count>
+    trace off
+
+DESCRIPTION
+    Arms this core's own live CPU instruction trace for the next <count>
+    instructions, counted from whenever this command runs (not from
+    power-on) - so a trace can be aimed at a specific moment in a play
+    session instead of burning its whole budget during boot. 'trace off'
+    cancels an in-progress trace early. Not available for a core with no
+    equivalent trace mechanism, or a standalone launch with no core loaded.
+
+EXAMPLES
+    trace 500
+    trace off

@@ -1,0 +1,18 @@
+NAME
+    export - set a shell variable
+
+SYNOPSIS
+    export NAME[=value]
+
+DESCRIPTION
+    Real bash exports a variable into child processes' environment; there is
+    no such thing here (this shell never spawns a subprocess), so 'export' is
+    just a plain variable assignment - or a no-op declaration if no '=value'
+    is given and the name is already set. Kept purely so a script written
+    with real bash habits ('export FOO=bar') still does something sane
+    instead of erroring as an unknown command. Plain 'NAME=value' (no
+    'export' keyword) works exactly the same way.
+
+EXAMPLES
+    export FOO=bar
+    echo $FOO

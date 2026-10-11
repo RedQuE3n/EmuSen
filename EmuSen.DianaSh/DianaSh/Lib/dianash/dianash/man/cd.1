@@ -1,0 +1,27 @@
+NAME
+    cd - change the current directory
+
+SYNOPSIS
+    cd [dir]
+
+DESCRIPTION
+    Changes the process-wide current directory - the same one 'pwd' reads
+    and every relative path elsewhere in this shell (redirection, 'ls', 'mv',
+    'rm', 'source', 'wc <path>', ...) resolves against. No argument goes to
+    the current account's own home directory (see 'whoami'/'hier') - real
+    $HOME semantics, scoped to this shell's own tree. A path starting with
+    '/' means THIS shell's own root, not the real OS filesystem root -
+    'cd /SourceLogs' works from anywhere, the same way a real chroot makes '/'
+    mean the chroot directory (see 'hier'). Walled to the project root no
+    matter how it's spelled - no amount of 'cd ..', a leading '/', or a long
+    '../../..' chain can leave it; this is a deliberate walled garden against
+    accidents, not a security boundary. A directory name with spaces doesn't
+    need quoting ('cd My Folder' works) - cd only ever takes one path, so
+    everything after it is treated as that path literally; quoting
+    ('cd "My Folder"') also works if you prefer it.
+
+EXAMPLES
+    cd EmuSen.DianaSh
+    cd /SourceLogs
+    cd My Folder
+    cd

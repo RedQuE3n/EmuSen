@@ -1,0 +1,36 @@
+NAME
+    vectors - where each interrupt vector points
+
+SYNOPSIS
+    vectors
+
+DESCRIPTION
+    Reads the interrupt vector table out of the running machine and shows
+    what each entry points at, resolved through the label registry. 'Which
+    routine handles NMI' is a question that comes up in almost every
+    investigation, and the alternative is remembering that the SNES keeps
+    its native NMI vector at $00FFEA and hand-reading two bytes.
+
+    Vectors are grouped by CPU mode, because a 65816 has two full sets and
+    which one the hardware uses depends on the E flag at the moment the
+    interrupt is taken. 'regs' shows E. A game that sets up only the native
+    table and then takes an interrupt in emulation mode jumps somewhere it
+    never intended, and seeing both tables side by side is what makes that
+    visible.
+
+    When coverage recording is on ('man cov'), a vector whose target has
+    actually executed is marked '(ran)'. A vector that points at plausible
+    code which never ran is a much stronger signal than one that merely
+    looks wrong - it says the interrupt is not firing at all, rather than
+    firing and doing the wrong thing.
+
+    The pointers are read live through the CpuBus, so a game that rewrites
+    its own vector table (or maps different ROM in) reports what is mapped
+    right now, not what was there at reset.
+
+EXAMPLES
+    vectors
+    cov on; vectors
+
+SEE ALSO
+    runto, bt, cov, label, addr

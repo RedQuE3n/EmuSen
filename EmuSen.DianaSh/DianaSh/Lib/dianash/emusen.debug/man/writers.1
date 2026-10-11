@@ -1,0 +1,17 @@
+NAME
+    writers - find static write references to an address
+
+SYNOPSIS
+    writers <addr> [<scanstart> <scanlen>]
+
+DESCRIPTION
+    Scans CpuBus (default: <addr>'s own bank, $8000-$FFFF) for instructions
+    statically storing to <addr> - answers 'what code exists that's capable
+    of writing here', regardless of whether that write path was ever
+    actually reached during a traced run (which is all a live 'watch' can
+    tell you). Only finds statically-known addressing modes (absolute/
+    absolute-long); indexed/indirect writes aren't visible to static
+    analysis and won't show up here - use 'watch' for those.
+
+EXAMPLES
+    writers 13c6

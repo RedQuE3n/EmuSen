@@ -1,0 +1,14 @@
+NAME
+    uniq - collapse adjacent duplicate lines
+
+SYNOPSIS
+    uniq [-c]
+
+DESCRIPTION
+    Collapses ADJACENT duplicate lines only, matching real uniq's own
+    semantics - it is NOT a global dedup, so pipe through 'sort' first if
+    that's what's actually wanted ('regs | sort | uniq'). -c prefixes each
+    remaining line with its consecutive repeat count.
+
+EXAMPLES
+    watch log 1 | sort | uniq -c

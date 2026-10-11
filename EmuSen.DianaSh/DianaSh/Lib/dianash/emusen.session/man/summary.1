@@ -1,0 +1,17 @@
+NAME
+    summary - free-text state dump
+
+SYNOPSIS
+    summary
+
+DESCRIPTION
+    Prints whatever the current IDebugTarget's GetSummaryText() has to say -
+    a catch-all, unstructured dump for state that doesn't have its own
+    dedicated command yet. 'No target attached.' if no ROM is loaded.
+
+    On a core of the stable ABI the first line names the engine, the system
+    and the frame, and the console's system pack adds what it reads from the
+    main processor's live registers. On the SNES that is the 65816's state on
+    one line, P's letters upper case where set, the same line C# Venus prints
+    first; the PPU lines Venus adds need the video registers, which no SNES
+    engine of the stable ABI publishes yet.

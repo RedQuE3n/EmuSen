@@ -1,0 +1,14 @@
+NAME
+    useradd - add a new account
+
+SYNOPSIS
+    useradd <name>
+
+DESCRIPTION
+    Adds <name> to the process-wide account directory shared by every tmux
+    session (like a real /etc/passwd) - root only. In-memory only, like
+    every other piece of DianaSh state; accounts don't survive a process
+    restart yet. See 'su' to switch to the new account.
+
+EXAMPLES
+    useradd kid

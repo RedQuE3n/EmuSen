@@ -22,6 +22,12 @@ namespace EmuSen.Galaxia
 
         public static string Directory => GalaxiaNative.Active ? GalaxiaNative.Directory(GalaxiaDirectory.Root)! : Managed.Directory;
 
+        // The folder beside the program that holds the shell's shipped command modules and their manuals - see EmuSen_DianaSh.md §12.4.
+        public const string ShellModulesDirName = "dianash";
+
+        // Read-only and outside the shell's sandbox, as the program's own files are - see EmuSen_DianaSh.md §13.5.
+        public static string ShellModulesDirectory => Path.Combine(AppContext.BaseDirectory, ShellModulesDirName);
+
         // The read-only skeleton an app bundle carries, copied into the tree on start; null outside a bundle - see EmuSen_Galaxia.md §3.4.
         public static string? SeedDirectory => GalaxiaNative.Active ? GalaxiaNative.Directory(GalaxiaDirectory.Seed) : Managed.SeedDirectory;
 

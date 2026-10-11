@@ -1,0 +1,16 @@
+NAME
+    mute - mute or unmute one audio channel
+
+SYNOPSIS
+    mute <index> <on|off>
+
+DESCRIPTION
+    Excludes (or restores) one channel from the final audio mix. The
+    channel's own playback/envelope state keeps advancing regardless -
+    muting only affects the mix, not the underlying voice. Useful with
+    'channels' to find a suspect voice, mute every other one, then listen
+    to (or dump) just that voice in isolation.
+
+EXAMPLES
+    mute 2 on
+    mute 2 off

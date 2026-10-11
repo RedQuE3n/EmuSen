@@ -1,0 +1,14 @@
+NAME
+    break - exit the nearest enclosing loop
+
+SYNOPSIS
+    break
+
+DESCRIPTION
+    A hardcoded, zero-argument parser keyword (not an ordinary dispatched
+    command), same as real bash's own break/continue builtins. Ends the
+    nearest enclosing 'for'/'while'/'until' loop immediately. Outside any
+    loop it's a silent no-op, matching bash. Note: the breakpoint command is
+    named 'bp', not 'break' - a command literally named 'break' would be
+    unreachable, since this keyword is recognized before any command lookup
+    happens at all.

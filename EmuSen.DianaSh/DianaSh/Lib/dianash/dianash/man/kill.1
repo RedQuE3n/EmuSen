@@ -1,0 +1,24 @@
+NAME
+    kill - remove a breakpoint, watch, or session by its 'ps' id
+
+SYNOPSIS
+    kill <id>
+
+DESCRIPTION
+    One verb for tearing down whatever 'ps' just showed, instead of needing
+    to know which of 'bp remove'/'watch remove'/'tmux kill' owns a given id -
+    all three of those still work exactly as before, this just routes to
+    whichever one already owns <id>'s kind of thing, based on its shape:
+    'bp<N>' removes breakpoint N, 'watch<N>' removes watch N, and anything
+    else is looked up as a session name (same rules as 'tmux kill' - can't
+    kill the only remaining session; killing the CURRENT session switches you
+    to whichever one is left, the same hand-off 'tmux kill' already does).
+    A session literally NAMED like 'bp3' or 'watch1' is only reachable this
+    way by accident of that ambiguity - 'kill' always tries the breakpoint/
+    watch reading of an id shaped like one first; use 'tmux kill <name>'
+    directly for a session whose name collides with that shape.
+
+EXAMPLES
+    kill bp1
+    kill watch3
+    kill investigation

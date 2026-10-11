@@ -1,0 +1,42 @@
+NAME
+    hotaru - play a ROM in Hotaru's game window
+
+SYNOPSIS
+    hotaru [--output window] <rom>
+
+DESCRIPTION
+    Opens Hotaru's game window on <rom>, the core chosen by its file
+    extension, with everything that window has always brought: the F-key
+    hotkeys (F12 lists them), 'feed', 'coretop -w' and the other debug
+    windows, rewind and fast-forward. The shell keeps its prompt: from the
+    terminal, the prompt that follows is the running game's own, where
+    'core' swaps the ROM; in the shell's own window, that window is handed
+    to the game's interpreter. Closing the game ends the program, as
+    closing Hotaru always did.
+
+    --output says where the game's picture goes. 'window' is the default
+    and, for now, the only value; a picture drawn in the terminal is
+    planned as a second (EmuSen_DianaSh.md section 18), and will be added
+    as a new value without changing the command.
+
+    <rom> is read as every path in this shell is, relative to the current
+    directory or with a leading '/' from this shell's root, and refused if
+    it lands above the root, except that an absolute path inside the ROM
+    library configured as RomDirectory is taken as it is - the rule
+    'core' follows (see 'man core'). A ROM that will not load is reported
+    as '[CPU HALT]' with the reason, and the prompt stays.
+
+WHERE IT IS OFFERED
+    'hotaru' is one of EmuSen's commands, not the shell's: DianaSh itself
+    knows no emulator. The EmuSen shell program, emusen-shell, offers it,
+    and 'emusen-shell game.sfc' is shorthand for starting the program and
+    typing 'hotaru game.sfc' - with the difference that a path given on the
+    program's command line is the launcher's choice and is checked only
+    for existence. Inside a running game the command refuses, since that
+    shell already has its game, and Mistress's console does not offer it
+    at all, since Mistress runs its own.
+
+EXAMPLES
+    hotaru /Games/smw.sfc
+    hotaru --output window /home/player/Roms/SNES/smw.sfc   (inside RomDirectory)
+    emusen-shell /home/player/Roms/SNES/smw.sfc

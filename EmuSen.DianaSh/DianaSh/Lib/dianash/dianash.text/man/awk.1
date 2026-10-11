@@ -1,0 +1,24 @@
+NAME
+    awk - a small AWK subset for reshaping text by field
+
+SYNOPSIS
+    awk [-F sep] 'program' [path]
+
+DESCRIPTION
+    Real AWK is a whole language; this is deliberately a small subset -
+    enough to cover 'filter/reshape another command's output by field',
+    without embedding a second full expression language. Supported
+    patterns: empty (matches every line), /regex/, NR==N (also !=, <, <=, >,
+    >=), BEGIN, END. Supported actions: {print expr[, expr...][; print
+    ...]}, where expr is $0, $N, $NF, NR, NF, a "quoted string", or a bare
+    number - no concatenation, no arithmetic, no user variables. A bare
+    pattern with no {...} defaults to {print $0} (real awk's own default
+    action); an explicit empty {} does nothing. Field splitting is
+    whitespace-runs by default, or a literal separator string via -F (not a
+    regex the way real awk's multi-character -F is). Reads piped stdin, or a
+    trailing file path (walled to the project's own directory tree).
+
+EXAMPLES
+    regs | awk '{print $1}'
+    watch log 1 | awk -F, 'NR>1{print $2}'
+    echo -e "a\nb\nc" | awk 'NR==2'

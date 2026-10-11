@@ -33,6 +33,14 @@
     <InternalsVisibleTo Include="EmuSen.WiseMan" />
   </ItemGroup>
 
+  <!-- The manual pages, one file each and grouped in the source by the command module that will own them, flattened
+       into dianash/man/ beside the program (ConfigRoot.ShellModulesDirName), which a published tree puts in
+       /lib/EmuSen/dianash/man. Copied to the output too, since `man` reads them there from source as well.
+       See EmuSen_DianaSh.md §12.4 and §13.5. -->
+  <ItemGroup>
+    <None Update="DianaSh\Lib\dianash\*\man\*" Link="dianash\man\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- Ships the two read-only doc trees into a published build's own sandbox
        root, so `man`/`cat`/`find` have the same reference material there that
        they do running from source. Link= stages them under DianaShRoot/, which

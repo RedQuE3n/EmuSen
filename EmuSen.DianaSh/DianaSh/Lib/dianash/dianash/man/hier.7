@@ -1,0 +1,155 @@
+NAME
+    hier - this shell's own filesystem layout
+
+SYNOPSIS
+    man hier
+
+DESCRIPTION
+    A real Unix precedent for this exact page: 'man hier' documents a
+    filesystem's layout without 'hier' being a runnable command - same here.
+
+    /                 your home, and the whole of what this shell can see.
+                      'cd' with no argument comes back here. The install
+                      itself - the binaries, the repo when running from
+                      source - sits ABOVE this root and is unreachable.
+
+    /Games            your ROM library
+    /Saves            battery-backed cartridge SRAM ('.srm'), a folder per
+                      console: NES, SNES, N64, GB, GBC
+    /Saves/Save States   'state save'/'state load' snapshots
+    /Library          Mistress's own databases, written and read by the
+                      program, not by hand: games.db (favourites, play
+                      time, collections, edits) and records.db (who wrote
+                      each save state, and the shader pack's build date).
+                      Save states no longer get a .json file beside them;
+                      old ones are read into records.db and left in place
+    /Shaders          shader packs downloaded on request
+    /Firmware         coprocessor dumps you supply
+    /Cheats           your own .cht tree - see 'man cheat'
+    /Logs             'dump'/'load'/screenshot/recording output
+    /etc/EmuSen       every config file the emulator keeps: appsettings.json,
+                      keybindings.json, gamepadbindings.json,
+                      hotkeybindings.json, audio.json, graphics.json, and
+                      cheats/<name>.json, and themes/<name>.axaml or
+                      themes/<name>.css (either a ResourceDictionary or a
+                      restricted CSS, both overriding EmuSen.LunaP's Luna*
+                      keys - see EmuSen_LunaP.md). Plain JSON, meant to be read and
+                      edited from this shell - comments and trailing commas
+                      are tolerated. Written by EmuSen.Galaxia; these used to
+                      live outside the sandbox under the OS's own per-user
+                      config directory, and are copied in the first time each
+                      file is read (the originals are left where they were)
+    /bin              published builds only: one launcher per frontend, each
+                      a two-line shim onto the real binary in /lib/EmuSen
+    /lib/EmuSen       published builds only: the whole .NET application
+                      directory - every shipped .dll, the apphosts,
+                      deps.json/runtimeconfig.json, runtimes/. The Unix
+                      '/usr/lib/<app>' shape: private libraries of one app,
+                      not a shared library dir. Absent from source
+    /tmp              scratch space, nothing here is ever auto-deleted.
+                      '/tmp/WiseMan' is the test suite's own scratch
+
+    /Documents        published builds only: the EmuSen Manual and the
+                      per-console hardware notes under 'Man pages/', staged
+                      in at publish time, or on a Mac copied in from
+                      EmuSen.app. Running from source they stay in
+                      the repo where they are edited, which is above this
+                      root - use 'man' rather than 'cat' from source
+
+    Every directory above is located by EmuSen.Galaxia, not by this shell -
+    the sandbox forwards to it, so a core never asks a debugger where a save
+    goes. See EmuSen_Galaxia.md.
+
+    '/home' used to be five levels down, at 'EmuSen.DianaSh/DianaSh/Usr/
+    Home' - a published user's save folder named after a C# project. If you
+    have an install from before the move, everything the emulator wrote
+    (saves, states, firmware, cheats, logs) was COPIED to '/home' on first
+    run and the originals left untouched. Your ROMs were NOT copied - a
+    library is too big to duplicate behind your back. They are still in
+    'EmuSen.DianaSh/DianaSh/Usr/Home/{Games,Roms}'; move them into
+    '/home/Games' when convenient, or just point RomDirectory at them in
+    Preferences, which is where the library is configured anyway.
+
+    A leading '/' means THIS root - your home - not the real OS filesystem
+    root, and not the install directory. Every command that names a file
+    ('cat', 'ls', 'find', 'awk', 'nano', redirection, 'source', 'dump',
+    'load', 'cov save|load', 'label', 'cheat import|export', 'core',
+    'state', 'test -f|-d') resolves through the same check and refuses
+    anything above it, so no amount of '../..' walks out. Two paths are
+    allowed outside the root on purpose: 'core' reads a ROM by an absolute
+    path inside the library configured as RomDirectory, and 'state' with
+    no path uses the frontend's own save-state path. The check is on the
+    path's text and does not follow a symbolic link: a link inside the
+    root that points out of it is followed by whatever opens it. Before
+    2026-10-10, 'dump', 'load', 'cov', 'core', 'state' and 'test' did
+    not go through the check at all.
+
+    This shell used to be rooted at the project directory, which meant
+    'ls /' listed '.git', 'EmuSen.sln' and every C# project beside your
+    saves; rooting at home is what stopped that. It is a guardrail against
+    accidents, not a security boundary.
+
+WHERE THE ROOT ACTUALLY IS
+    Decided once at startup by walking up from the running assembly's own
+    folder (not the current directory, which a launcher or shortcut gets
+    to choose and so can't be trusted), stopping at the first parent that
+    holds either marker:
+
+    'EmuSen.sln'          running from source: the project root, as
+                          described above. A build output dir
+                          ('bin/Release/net10.0') is three levels down, so
+                          Debug and Release both land on the same root and
+                          share one set of saves and logs.
+
+    '.dianashroot'        a published build: the publish directory itself,
+                          written there at publish time. No 'EmuSen.sln'
+                          ships with a published app, so this is what the
+                          walk finds instead - two levels up from
+                          '/lib/EmuSen', where the binaries live.
+
+    A tree published before the shell was renamed carries '.dianaosroot',
+    which is found the same way.
+
+    If neither turns up, the fallback is 'DianaShRoot/' beside the binary
+    (or an existing 'DianaOSRoot/' there, when no 'DianaShRoot/' is).
+    That is what a publish looks like WITHOUT the layout below - the doc
+    trees stage into 'DianaShRoot/' either way, so an app dir copied out by
+    hand still finds its own manual instead of coming up rootless.
+
+    On macOS, EmuSen installs as 'EmuSen.app', which is read-only, so the
+    root is '~/Library/Application Support/EmuSen' instead. It is taken
+    BEFORE the walk when the program runs from inside a bundle
+    ('EmuSen.app/Contents/MacOS'), and as the fallback when the walk finds
+    neither marker. From source, or from a marked tree, a Mac roots where
+    Linux does. '/Documents' is copied out of the bundle on every start,
+    never over a file already there. See EmuSen_Galaxia.md §3.4.
+
+    A published tree puts the binaries in 'lib/EmuSen', the launchers in
+    'bin', and the shell's root at 'home' BESIDE them - so every shipped
+    .dll and the running executable are now ABOVE this shell's root and
+    cannot be reached from it at all.
+
+    That was not always true. When the shell was rooted at the install
+    directory, real '/' contained real '/lib', and 'rm' and 'mv' were
+    suspended precisely because nothing here distinguished '/lib/EmuSen'
+    from your own files. Rooting at home removed the exposure those two
+    suspensions existed for; they are still suspended, which is now a
+    stricter setting than the layout requires rather than a necessity.
+
+    A published root is NOT empty. Both read-only doc trees stage into
+    '/Documents' at publish time, so 'man', 'cat', 'find' and 'grep' have
+    the same reference material there as they do from source. Everything
+    else - the six directories under '/home' - is created empty on first
+    run.
+
+    The layout is MSBuild's doing, not this shell's: see
+    EmuSen.DianaSh/Publish/DianaShPublishLayout.targets, imported by each
+    publishable frontend. It only rewrites where files are copied - the
+    .NET application directory is relocated whole, never taken apart, so
+    nothing about how the app resolves its assemblies changes. Publish
+    with -p:DianaShPublishLayout=false for a plain flat app dir.
+
+EXAMPLES
+    man hier
+    ls /
+    cd /home/Logs && ls

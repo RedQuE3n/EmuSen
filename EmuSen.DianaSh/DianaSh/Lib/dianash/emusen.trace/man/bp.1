@@ -1,0 +1,249 @@
+NAME
+    bp - manage execution breakpoints
+
+SYNOPSIS
+    bp add <addr>[-<end>] [if <expr>] [log <expr>]
+    bp write <space> <addr>[-<end>] [<value>] [changed] [if <expr>]
+    bp read <space> <addr>[-<end>] [<value>] [if <expr>]
+    bp uninit <space>
+    bp when [<condition>] [log|off]
+    bp depth <n>|off
+    bp forbid <addr>-<end>
+    bp log [<count>] | bp log clear
+    bp list
+    bp on|off <id>
+    bp remove <id>
+    bp <cpu> add|list|remove ...
+
+CONDITIONS
+    An 'if <expr>' suffix turns a breakpoint into a conditional one: the
+    address (or the write) still has to match, and then <expr> has to
+    evaluate nonzero before execution actually halts. This is what makes a
+    breakpoint usable on a routine that runs thousands of times a frame -
+    'bp add 80A31C if x == 7' stops on the one iteration that matters
+    instead of the first. See 'man eval' for the expression language; every
+    symbol and memory form it documents works here unchanged.
+
+    Conditions are evaluated on the emulation thread, once per matching
+    hit, so an expensive one costs real frame time. Reading an I/O register
+    in a condition reads it for real, with whatever side effect that has on
+    hardware - 'man eval' covers which reads are and aren't safe.
+
+    A condition that fails to evaluate (a typo, an unknown symbol, an
+    unreadable address) is DROPPED rather than left to fire on every
+    instruction forever: the breakpoint halts once, keeps its address, and
+    loses its condition. The error text is reported once at that halt.
+    Re-add the breakpoint once the expression is fixed.
+
+    Quote a condition containing '&&', '||', '<', '>' or '|' - those are
+    the shell's own operators and get consumed before this command ever
+    sees them. Everything after the 'if' word is rejoined with single
+    spaces, so an unquoted 'if a == 5' works fine.
+
+DESCRIPTION
+    Registers/lists/removes a breakpoint at a 24-bit CPU address. This
+    command only edits the breakpoint list - it doesn't halt or resume
+    execution itself, since that requires re-entering a core's own frame
+    loop, which only the frontend's own main loop can do. See the F4
+    prompt's own 'step'/'s' and 'continue'/'c' shortcuts (EmuSen.Hotaru) for
+    the actual halt/resume side. Named 'bp', not 'break' - a command
+    literally named 'break' would be unreachable, shadowed by the shell's
+    own hardcoded break/continue loop-control keywords.
+
+    'bp write' breaks on data instead of on control flow: it halts when
+    anything writes <addr> in <space>, optionally only when the value
+    written equals <value>. Where 'watch' records a write and carries on,
+    this stops the machine there, so 'regs'/'mem' can read the state that
+    produced it - the way to answer 'what was the source pointer' rather
+    than just 'which PC stored it'. A write happens part-way through an
+    instruction, so the halt lands on the instruction AFTER the store,
+    exactly as a real debugger reports a data breakpoint.
+
+    An optional 'sa1' (or 'cop') scope word in front of the subcommand
+    targets a cartridge coprocessor's own CPU instead. The two live in
+    separate lists because they are separate address spaces: an SA-1
+    game's $00:82D7 is not the S-CPU's $00:82D7. Errors with 'no
+    coprocessor CPU to break on' when the cartridge has none. Pair it
+    with 'disasm SA1BUS <addr>', which decodes using the SA-1's own
+    M/X/E flags rather than the S-CPU's.
+
+    'bp read' is the mirror image, halting just after anything reads the
+    address. Where 'readers' scans the ROM for instructions that COULD read
+    something, this catches the read that actually happened, including ones
+    through a computed pointer that no static scan can resolve - the way to
+    find out who consumes a flag rather than who sets it.
+
+    'bp on'/'bp off' toggle one breakpoint without losing its address,
+    condition or hit count - the difference between silencing a breakpoint
+    for one experiment and having to retype it afterwards.
+
+    'bp list' resolves each address through the label registry, so a
+    breakpoint on a named address reads '$00A3B2 <NmiHandler>'. See
+    'man label'. A range prints as a range, since a label names one address.
+
+RANGES
+    Any address argument accepts '<start>-<end>' instead of one address, and
+    the breakpoint then matches anywhere inside it. This is the difference
+    between needing to already know the answer and being able to ask the
+    question: 'bp write WRAM 0100-01FF' catches whoever is clobbering a
+    struct when you do not yet know which byte of it moves first, and
+    'bp add 818000-818FFF' catches whatever in a bank runs at all.
+
+    The halt message names the exact address that matched as well as the
+    range, so a range breakpoint tells you where it landed, not just that
+    it landed.
+
+CHANGED-ONLY WRITES
+    'changed' on a write breakpoint suppresses the halt unless the byte
+    written differs from the last one seen at that address. Games rewrite
+    the same value constantly - a per-frame state byte re-stored every frame
+    will trip a plain write breakpoint sixty times a second while telling
+    you nothing. 'bp write WRAM 0DB3 changed' fires on the transition
+    instead, which is almost always the moment being looked for.
+
+    The first write to an address always counts as a change: there is no
+    previous value to compare against, and a value written exactly once
+    would otherwise never be reported at all. The comparison is against
+    what this breakpoint last SAW, not against memory, so it costs no read
+    and cannot disturb a side-effecting address.
+
+UNINITIALIZED READS
+    'bp uninit <space>' halts the first time the machine reads back a byte
+    of <space> that nothing has written since the breakpoint was armed. That
+    is a real defect nearly every time it happens: the game is consuming
+    whatever the previous contents were, so its behavior depends on power-on
+    garbage. It is also the single most useful check for the emulator
+    itself, because it catches this core failing to initialize something
+    that real hardware would have.
+
+    Each address reports once and is then treated as initialized, or a boot
+    loop over uninitialized memory would halt on the same byte forever.
+    Arming allocates one bool per byte of the space and replaces any
+    previous arming - one space is watched at a time. Note that a space
+    written before arming counts as initialized; arm it early to catch
+    reset-time reads. 'counters' reports the same thing as a whole-run
+    tally when a halt is too blunt.
+
+HARDWARE CONDITIONS
+    'bp when <condition>' halts when the machine does something it should
+    not, rather than when it reaches an address. 'bp when' with no argument
+    lists what this core can detect, with each one's current state. On the
+    SNES that is:
+
+        stp         the 65816 executed STP and is stopped until reset
+        wdm         the 65816 executed WDM, a reserved opcode
+        brk         a BRK was taken
+        cop         a COP was taken
+        ppuaccess   VRAM/CGRAM/OAM written while the display is rendering
+        autojoy     $4218-$421F read while the auto-joypad read is running
+
+    These matter because none of them are visible in the output. STP is the
+    clearest case: a game that executes it has usually jumped somewhere it
+    never meant to, and the symptom is simply that the picture stops - with
+    no indication of where. 'bp when stp' halts on the instruction itself,
+    while the call stack that got there is still readable with 'bt'.
+
+    'ppuaccess' and 'autojoy' are the two where the emulator and the game
+    disagree most quietly. Real hardware drops a VRAM write made during
+    active display, and returns a half-updated byte from a joypad register
+    read mid-refresh; a core that is more permissive than the hardware runs
+    such a game correctly and hides a real bug, and a core that is less
+    permissive breaks one that worked. Either way the first thing you want
+    is to know it happened at all.
+
+    A condition can be armed 'log' instead, which records every occurrence
+    and carries on. That is the right mode for anything the game does often
+    - a title screen may read the joypad early on every single frame, and
+    halting on it tells you far less than seeing the pattern across frames.
+    Logged conditions land in the same ring as logpoints and are read back
+    with 'bp log', where they interleave with everything else in the order
+    it really happened. 'bp when <condition> off' disarms one.
+
+    Conditions cost nothing until one is armed: each detection site tests a
+    single bool before computing anything.
+
+DEPTH GUARD
+    'bp depth <n>' halts as soon as the call stack gets deeper than <n>.
+    Runaway recursion and a stack that never unwinds both present as a game
+    that slows down and then behaves bizarrely, long after the actual defect
+    - by the time anything visible goes wrong the evidence is gone. This
+    stops the machine while the chain that caused it is still on the stack
+    and readable with 'bt'. Fires once and disarms, so it will not retrigger
+    on every instruction that stays deep. 'bp depth off' cancels it.
+
+FORBID RANGES
+    'bp forbid <start>-<end>' is a suppression rule, not a breakpoint:
+    while the PC is anywhere inside the range, nothing halts - no address
+    breakpoint, no data breakpoint, no uninitialized read. It exists for
+    the case where the interesting breakpoint is drowned by one noisy
+    caller: forbid the NMI handler's range and a watch on a shadow register
+    reports only the game logic that writes it, not the per-frame flush.
+
+    Steps are deliberately exempt. 'step' and 'step over' still work inside
+    a forbidden range, or stepping into one would run away with no way to
+    stop. Forbid ranges are listed by 'bp list' and removed by 'bp remove'
+    like anything else, and 'bp off <id>' suspends one without losing it.
+
+LOGPOINTS
+    A 'log <expr>' clause turns a breakpoint into a logpoint: when it matches,
+    <expr> is evaluated and recorded, and execution CARRIES ON. Read the
+    recording back with 'bp log'.
+
+    This is for the case a halting breakpoint cannot answer. A routine that
+    runs four hundred times a frame cannot be stepped through four hundred
+    times, and halting even once changes the timing of everything after it.
+    'bp add 80A31C log "a, x, [$7E0DB3]"' records all four hundred and leaves
+    the machine running at full speed, so the pattern across calls is visible
+    rather than one arbitrary call being inspected in isolation.
+
+    <expr> is a comma-separated list, and each part is rendered as 'expr=value'
+    so a line names what it is showing. 'uote it - commas are fine unquoted
+    but the shell eats the brackets and operators that make it worth logging.
+    Every symbol 'man eval' documents works, evaluated against the chip the
+    breakpoint belongs to.
+
+    A logpoint still honors 'if ', so the two compose: match the address,
+    check the condition, then record instead of halting. A logpoint that
+    fails to evaluate records the error text in place of the value rather
+    than being dropped the way a bad condition is - a logpoint cannot fire
+    forever on every instruction, so there is nothing to protect against.
+
+    The log keeps the most recent 4096 entries and is shared by every
+    logpoint on that processor, so entries interleave in the order they
+    actually happened. 'bp log' shows the last 32 by default, 'bp log 100'
+    more, and 'bp log clear' empties it. Data logpoints record at the moment
+    of the access rather than one instruction later, so a logged write shows
+    the value that was written.
+
+EXAMPLES
+    bp add 8000
+    bp add 80A31C if x == 7
+    bp add 80A31C log "a, x"
+    bp write WRAM 0DB3 log "a, [$7E0100]" if a > 4
+    bp log 100
+    bp add 818000-818FFF
+    bp add 808000 if "[$7E0020] != 0 && a > 16"
+    bp write VRAM 2760
+    bp write WRAM 0100-01FF
+    bp write WRAM 0DB3 changed
+    bp read WRAM 13c6
+    bp uninit WRAM
+    bp depth 40
+    bp forbid 0080C4-0080FF
+    bp off 1
+    bp list
+    bp sa1 add 0082D7
+    bp gsu add 0A80E9 if r14 > $100
+
+OTHER PROCESSORS
+    A scope word puts the breakpoint on another chip - see 'cpus' for the
+    names. Each chip keeps its own breakpoint list, because each runs
+    different code at the same addresses, and a condition attached to one
+    is evaluated against THAT chip's registers: 'bp gsu add X if r14 > 0'
+    reads the GSU's R14, not anything on the main CPU.
+
+    A chip the core cannot halt takes no breakpoints and says so rather
+    than accepting one that would never fire.
+
+SEE ALSO
+    cpus, eval, step, runto, bt, watch, cov, counters, readers, writers

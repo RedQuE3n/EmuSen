@@ -1,0 +1,55 @@
+NAME
+    bt - backtrace the live call chain
+
+SYNOPSIS
+    bt [<count>]
+    bt reset
+    bt <cpu> [<count>|reset]
+
+DESCRIPTION
+    Prints the calls currently on the stack, innermost frame first: what was
+    called, where it was called from, and which frame number the call
+    happened on. This is the dynamic counterpart to 'callers' (see 'man
+    callers'), and the two answer genuinely different questions. 'callers'
+    scans code and reports every instruction that COULD reach an address;
+    'bt' reports the one path that actually did, this time. When a routine
+    has six static callers, 'callers' gives you six suspects and 'bt' gives
+    you the answer.
+
+    Frames are recorded from the CPU's own call and return opcodes plus its
+    interrupt entry points, so an NMI or IRQ frame is labelled as such
+    rather than looking like an ordinary call. Addresses are resolved
+    through the label registry - see 'man label'.
+
+ACCURACY
+    A call stack tracked this way is an inference, not machine state, and
+    it can drift on code that manipulates its own stack directly: a routine
+    that pushes a return address and jumps, that pulls a return address it
+    never intends to return through, or that unwinds several frames with a
+    stack-pointer write rather than matched returns. Two symptoms give this
+    away - a depth that only ever grows, and a rising 'unmatched returns'
+    count, which 'bt' reports whenever it is nonzero.
+
+    'bt reset' forgets the current chain and starts counting again from the
+    current instruction. Do that after stepping through a routine known to
+    play with its own stack, and before trusting 'step out' or a 'profile'
+    run that has to survive it. Depth is also capped, so a runaway chain
+    stops recording rather than growing without bound.
+
+    Frames opened before the debug target attached are not on the stack -
+    code already running at that moment shows up in 'profile' under
+    '(outside any recorded call)' rather than under its real caller.
+
+EXAMPLES
+    bt
+    bt 8
+    bt reset
+
+OTHER PROCESSORS
+    'bt <cpu>' backtraces another chip - see 'man cpus'. Only a chip with a
+    real call/return seam has a stack to report: on an SNES that is the
+    main CPU and the SA-1, both 65816s. The GSU and the SPC700 report none,
+    and say so rather than inventing frames.
+
+SEE ALSO
+    cpus, callers, step, profile, bp, label

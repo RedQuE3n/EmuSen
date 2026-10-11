@@ -1,0 +1,14 @@
+NAME
+    readers - find static read references to an address
+
+SYNOPSIS
+    readers <addr> [<scanstart> <scanlen>]
+
+DESCRIPTION
+    The read-side complement to 'writers': finds every instruction
+    statically reading <addr>, e.g. every branch of game logic that checks
+    a flag's value - not just the one spot noticed while manually tracing
+    execution. Same addressing-mode limitation as 'writers'.
+
+EXAMPLES
+    readers 13c6

@@ -951,6 +951,8 @@ Each with a recommendation.
 - **P7.** The open BIOS's documented surface takes about 6 steps after the kernel's core, and at least one bench game
   needs a kernel behaviour no document describes.
 - **P8.** The GTE passes `test-all` and amidog's test bit for bit within its stage, with no more than two disputes.
+  *Reached in part 2026-10-11, at stage 5 (`Diamond_Native.md` §13.2): `test-all` held, 1,150 of 1,150; amidog's test
+  waits on the pad; the disputes are four, so the count was wrong.*
 - **P9.** With every enhancement off, the build reproduces every accurate golden from E1 on, with no exception.
 - **P10.** The precision path resolves most projected vertices on 3D bench games and fewer than half on games that
   build geometry on the CPU.

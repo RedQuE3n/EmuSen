@@ -77,3 +77,37 @@ fn the_pad_answers_on_port_1_and_nothing_answers_elsewhere() {
     assert_eq!(bytes[..10], [0xFF, 1, 0x41, 1, 0x5A, 1, 0xF7, 1, 0xBF, 0], "port 1");
     assert_eq!((bytes[10..20].to_vec(), bytes[20..].to_vec()), (empty.to_vec(), empty.to_vec()), "port 2, and the card slot");
 }
+
+/// The GTE's interlock as BlackMoon_GTE.md D-13 reads psx-spx: a command's cycles from its fetch, so an access at once
+/// waits one fewer; every access to coprocessor 2 waits, writes included; 00h as RTPS, the other unlisted numbers free.
+#[test]
+fn the_gte_holds_every_access_until_its_command_is_done() {
+    let m = run(include_str!("../programs/gte-timing.s"));
+    let commands = [0x01, 0x06, 0x0C, 0x10, 0x11, 0x12, 0x13, 0x14, 0x16, 0x1B, 0x1C, 0x1E, 0x20, 0x28, 0x29, 0x2A, 0x2D, 0x2E, 0x30, 0x3D, 0x3E, 0x3F];
+    assert_eq!(results(&m, 0x10_0000, 22), commands.map(|c| blackmoon_gte::CYCLES[c] as u32 - 1));
+    assert_eq!(results(&m, 0x10_0100, 21), (0..21).map(|n| 14u32.saturating_sub(n)).collect::<Vec<_>>());
+    assert_eq!(results(&m, 0x10_0200, 7), [14; 7]);
+    assert_eq!(results(&m, 0x10_0280, 6), [14, 0, 0, 0, 0, 0]);
+    assert_eq!(results(&m, 0x10_0300, 8), [0xF80; 8], "IRGB reaches IR3 and IR1 at once (D-15)");
+    assert_eq!(results(&m, 0x10_0320, 4), [15; 4], "and LZCS LZCR");
+    assert_eq!(results(&m, 0x10_0330, 6), [0x100; 6], "and MTC2 and LWC2 the next command");
+}
+
+/// The fuzz program's 904 cases, written and read back through the processor, are what the engine computes alone: the
+/// boundary of BlackMoon_GTE.md §2 moves every register by its number, through both delay slots.
+#[test]
+fn the_fuzz_program_reads_back_what_the_engine_computes() {
+    let m = run(include_str!("../programs/gte-fuzz.s"));
+    let n = m.board.ram_word(0xFFFF4);
+    assert_eq!(n, 22 * 40 + 6 * 4);
+    for i in 0..n {
+        let at = 0x10_0000 + 516 * i;
+        let case = results(&m, at, 129);
+        let mut g = blackmoon_gte::Gte::new();
+        for (r, &v) in case[1..65].iter().enumerate() {
+            if r < 32 { g.set_data(r as u8, v) } else { g.set_control(r as u8 - 32, v) }
+        }
+        g.command(case[0]);
+        assert_eq!(&case[65..], &(0..64).map(|r| g.register(r)).collect::<Vec<_>>()[..], "case {i}, command {:07X}", case[0]);
+    }
+}

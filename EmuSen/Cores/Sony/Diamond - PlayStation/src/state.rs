@@ -13,7 +13,7 @@ use crate::machine::Machine;
 use crate::sio0::{Phase, Sio0};
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"DMND");
-pub const STATE_VERSION: i32 = 1;
+pub const STATE_VERSION: i32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -46,6 +46,7 @@ impl Board {
         w.u64s("Queue", &self.queue);
         w.u64("BusFree", self.bus_free);
         w.u64("CpuBusy", self.cpu_busy);
+        w.u64("GteReady", self.gte_ready);
         w.u8("Post", self.post);
         w.u32s("MemControl", &self.memctl.regs);
         w.u32("RamSize", self.memctl.ram_size);
@@ -104,6 +105,7 @@ impl Board {
         r.u64s(&mut self.queue)?;
         self.bus_free = r.u64()?;
         self.cpu_busy = r.u64()?;
+        self.gte_ready = r.u64()?;
         self.post = r.u8()?;
         r.u32s(&mut self.memctl.regs)?;
         self.memctl.ram_size = r.u32()?;
@@ -412,7 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn the_version_1_layout_is_pinned() {
+    fn the_version_3_layout_is_pinned() {
         let layout = machine().layout();
         let head: Vec<&str> = layout.lines().take(5).collect();
         assert_eq!(head, ["0 4 u32 Magic", "4 4 i32 Version", "8 8 i64 Frames", "16 128 u32[32] Cpu.R", "144 4 u32 Cpu.Hi"]);
@@ -420,16 +422,16 @@ mod tests {
         assert_eq!(
             tail,
             [
-                "3682219 65536 u8[65536] TTY",
-                "3157931 524288 u8[524288] SPURAM",
-                "2109355 1048576 u8[1048576] VRAM",
-                "2108331 1024 u8[1024] SCRATCH",
-                "11179 2097152 u8[2097152] RAM",
-                "11178 1 bool ExePending"
+                "3682227 65536 u8[65536] TTY",
+                "3157939 524288 u8[524288] SPURAM",
+                "2109363 1048576 u8[1048576] VRAM",
+                "2108339 1024 u8[1024] SCRATCH",
+                "11187 2097152 u8[2097152] RAM",
+                "11186 1 bool ExePending"
             ]
         );
         assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Cpu.InterruptView.Held"), "{layout}");
-        assert_eq!(machine().state_size(), 3_747_755);
+        assert_eq!(machine().state_size(), 3_747_763);
     }
 
     #[test]
@@ -452,9 +454,9 @@ mod tests {
         assert_eq!(b.load_state(&s[..300]).unwrap_err().status(), status::TRUNCATED);
         assert_eq!(b.load_state(b"NPHR0000").unwrap_err().status(), status::FOREIGN);
         assert_eq!(b.load_state(&[]).unwrap_err().status(), status::FOREIGN);
-        let mut v2 = s.clone();
-        v2[4] = 2;
-        assert_eq!(b.load_state(&v2).unwrap_err().status(), status::VERSION);
+        let mut v1 = s.clone();
+        v1[4] = 1;
+        assert_eq!(b.load_state(&v1).unwrap_err().status(), status::VERSION, "a version 1 state, from before the GTE's interlock");
         assert_eq!((b.frames, b.space(RAM_ID).unwrap()), (2, &before[..]));
     }
 }

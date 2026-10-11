@@ -129,7 +129,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, memory, timers, interrupts, DMA and the GPU run a program and show its picture, and port 1's controller answers as a digital pad; the sound is silent until the SPU is built.".into()),
+            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, the GTE, memory, timers, interrupts, DMA and the GPU run a program and show its picture, and port 1's controller answers as a digital pad; the sound is silent until the SPU is built.".into()),
             systems: vec![emusen_native::core::System {
                 id: "psx".into(),
                 name: "Sony PlayStation".into(),

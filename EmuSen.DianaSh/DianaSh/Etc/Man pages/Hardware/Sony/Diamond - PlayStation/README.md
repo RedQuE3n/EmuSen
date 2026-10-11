@@ -5,8 +5,9 @@ its first commit (`EmuSen/Cores/Sony/Diamond - PlayStation/`, crate `diamond`), 
 gate. At stage 1 (2026-10-11) it recognises a PS-EXE or a disc and shows a black picture; at stage 2 (the same day)
 its R3000A was built and passes the r3000 single-step suite; at stage 3 the bus, its timing and the devices beside
 the CPU run it, on the open kernel or a player's own BIOS, and ps1-tests' CPU, DMA and timer programs pass by their
-TTY; at stage 4 the GPU draws, ps1-tests' GPU programs' VRAM equals their pictures, and the display is the picture.
-Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
+TTY; at stage 4 the GPU draws, ps1-tests' GPU programs' VRAM equals their pictures, and the display is the picture;
+at stage 5 the GTE computes, ps1-tests' `test-all` passes every case bit for bit, and coprocessor 2's accesses wait for
+its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
 
 - [`Diamond_Plan.md`](Diamond_Plan.md) — the plan, written 2026-10-10 before any emulation: the machine in scope and
   how accurate each part must be (the R3000A with its cache and scratchpad, the GTE exact, DMA, timers, interrupts, a
@@ -25,7 +26,8 @@ Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
   I-cache, the interrupts, the root counters, the seven DMA channels, the video timing on D-0's clocks, the stubs,
   PS-EXE loading, the kernel's seam, the TTY reader, the project's own programs with the references as witnesses, and
   the gate's results; and stage 4 (§12): the GPU in the machine, the frame ending at vblank, the gate, amidog's tests
-  and stage 2's items, the cost.
+  and stage 2's items, the cost; and stage 5 (§13): the GTE in the machine and its interlock, the gate program by
+  program, how the first build failed `test-all`, the timing against the witnesses, the state's version 2, the cost.
 - [`Diamond_GPU.md`](Diamond_GPU.md) — the GPU, written 2026-10-11 at stage 4: the FIFO and the command processor,
   GPUSTAT's ready bits against `gpustat`'s console log, DMA channel 2, GP1, VRAM's transfers, texturing with the
   texture and CLUT caches, the pixel pipeline, the rasteriser's rules fitted to ps1-tests' console pictures, the
@@ -47,7 +49,9 @@ Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
   NTSC console's video clock and line length, and so its frame rate; from stage 3, D-4 (memory control's access
   times), D-5 (the DMA's gaps and a store's drain) and D-6 (timer sync mode 2); from stage 4, D-7 (the rasteriser's
   rules), D-8 (the x-flip's offset), D-9 (the drawing area's commands in order), D-10 (GPUSTAT bit 28), D-11 (the
-  drawing time) and D-12 (two pictures the programs cannot meet).
+  drawing time) and D-12 (two pictures the programs cannot meet). The R3000A's disputes (D-1 to D-3) are in
+  `../BlackMoon-HW/BlackMoon_R3000.md` §8 and the GTE's (D-13 to D-16, from stage 5) in `../BlackMoon-HW/BlackMoon_GTE.md`
+  §12.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the naming scheme, and `Man pages/Hardware/README.md` for how this
 documentation set is organized.

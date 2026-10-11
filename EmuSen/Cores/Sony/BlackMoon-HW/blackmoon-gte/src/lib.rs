@@ -187,7 +187,9 @@ mod tests {
             assert_eq!(emusen_mips::assemble_line(c.name, 0, &d), Ok(word));
             assert_ne!(CYCLES[c.select as usize], 0, "{} has its cycles", c.name);
         }
-        assert_eq!(CYCLES.iter().filter(|&&n| n != 0).count(), 23, "and 00h, as RTPS");
+        let psx_spx = [15, 8, 6, 8, 8, 8, 19, 13, 44, 17, 11, 14, 30, 5, 8, 17, 5, 6, 23, 5, 5, 39];
+        assert_eq!(COPROCESSOR.commands.iter().map(|c| CYCLES[c.select as usize]).collect::<Vec<_>>(), psx_spx, "psx-spx's 22");
+        assert_eq!((CYCLES[0x00], CYCLES[0x02], CYCLES[0x17], CYCLES[0x3C]), (16, 13, 31, 18), "and amidog's N/A numbers");
         assert_eq!(emusen_mips::disassemble(0x4A14_0006, 0, &d).to_string(), "nclip 0x0140006", "the fake number differs");
         assert_eq!(emusen_mips::disassemble(0x4808_F800, 0, &d).to_string(), "mfc2 t0, LZCR");
         assert_eq!(emusen_mips::disassemble(0x4848_F800, 0, &d).to_string(), "cfc2 t0, FLAG");
@@ -220,7 +222,8 @@ mod tests {
         }
     }
 
-    /// BlackMoon_GTE.md D-16: a number psx-spx lists as N/A clears FLAG and changes nothing else; 00h runs as RTPS.
+    /// BlackMoon_GTE.md D-16: a number psx-spx lists as N/A clears FLAG and changes nothing else; 00h runs as RTPS, each
+    /// in the cycles amidog's test expects.
     #[test]
     fn an_unlisted_number_clears_flag_and_00h_is_rtps() {
         let mut g = Gte::new();
@@ -229,13 +232,35 @@ mod tests {
             g.set_control(r, 0x9ABC_DEF0u32.rotate_left(r as u32));
         }
         let before = *g.registers();
-        assert_eq!(g.command(0x0000_0002), 0);
+        assert_eq!(g.command(0x0000_0002), 13);
         let mut after = before;
         after.control[31] = 0;
         assert_eq!(*g.registers(), after);
         let (mut a, mut b) = (g.clone(), g.clone());
-        assert_eq!((a.command(0x0008_0000), b.command(0x0008_0001)), (15, 15));
+        assert_eq!((a.command(0x0008_0000), b.command(0x0008_0001)), (16, 15));
         assert_eq!(a.registers(), b.registers());
+    }
+
+    /// BlackMoon_GTE.md D-14, §5.3: MVMVA's far colour flags its dropped part's IR saturation as if lm were 0. A case
+    /// of the far-colour fuzz with lm set, whose dropped MAC2 is a small negative: the referees, of three lineages, raise
+    /// IR1's and IR3's flags and not IR2's, which saturating with lm would add.
+    #[test]
+    fn mvmva_far_colour_flags_its_dropped_part_as_if_lm_were_0() {
+        let written: [u32; 64] = [
+            0x1000, 0x80008000, 0x5D02EB81, 0x8CA6, 0x86500000, 0x07B4A829, 0xD515CFE0, 0xB68E, 0xCE7F0000, 0x696D115B,
+            0xC225, 0x80000000, 0x1511794B, 0x40C0, 0x2E01C34F, 0x8E410000, 0xFFFF, 0x80000000, 0x2633FFF7, 0x43E3F6F7,
+            0xFFFF, 0x7E00, 0xA43907AA, 0xD26A5CEE, 0xFF18, 0x72827EBF, 0x1CEC, 0x1000, 0x7FFFFFFF, 0x7FFFFFFF, 0x5A4C,
+            0x6CEF6630, 0x7FFF7FFF, 0x80000000, 0xDFA5F114, 0x4253, 0x2D6EE741, 0x7FFFFFFF, 0, 0x1043, 0xE855, 0xD698EA04,
+            0x1000, 0x3C4DC5DA, 0xFFFFFFFF, 0, 0x7FFF7FFF, 0x80000000, 0xFFFF, 0x8F4E789C, 0xD5203A2E, 0x784C0000,
+            0x556B0058, 0x1000, 0x4E8, 0xC04C733B, 0x937D8596, 0xCC9ED626, 0xB8018D01, 0xDBBEE000, 0xCFC0182D, 0x47FC21AA,
+            0xE0C80822, 0x7FFF7FFF,
+        ];
+        let mut g = Gte::new();
+        for (r, &v) in written.iter().enumerate() {
+            if r < 32 { g.set_data(r as u8, v) } else { g.set_control(r as u8 - 32, v) }
+        }
+        g.command(0x00A_4412);
+        assert_eq!(g.control(31), 0x8140_0000);
     }
 
     #[test]

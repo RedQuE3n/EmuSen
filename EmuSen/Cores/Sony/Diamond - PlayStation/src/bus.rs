@@ -863,9 +863,12 @@ impl Board {
 
 impl Board {
     /// The interlock: every access to coprocessor 2 holds the processor until the command in flight is done, reads and
-    /// commands by psx-spx's "GTE Load Delay Slots", writes by choice (BlackMoon_GTE.md D-13).
+    /// commands by psx-spx's "GTE Load Delay Slots", writes by choice; an access that waits resumes one cycle after the
+    /// command ends, as amidog's timing tests expect (BlackMoon_GTE.md D-13).
     fn wait_for_gte(&mut self) {
-        self.now = self.now.max(self.gte_ready);
+        if self.now < self.gte_ready {
+            self.now = self.gte_ready + 1;
+        }
     }
 }
 

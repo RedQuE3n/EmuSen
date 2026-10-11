@@ -174,6 +174,8 @@ pub struct ProbeOptions {
     pub devices: Vec<(u32, String)>,
     // --list-devices: print what the core declares each port may hold.
     pub list_devices: bool,
+    // --sram FILE: libretro only, the battery save copied into the core's save RAM after the load.
+    pub save_ram: String,
 }
 
 impl Default for ProbeOptions {
@@ -189,6 +191,7 @@ impl Default for ProbeOptions {
             memory_ids: Vec::new(),
             devices: Vec::new(),
             list_devices: false,
+            save_ram: String::new(),
         }
     }
 }

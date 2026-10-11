@@ -46,6 +46,8 @@ pub fn usage_lines() -> Vec<&'static str> {
     lines.push("  --list-options   libretro only: print the core's options and their values, then stop");
     #[cfg(feature = "libretro")]
     lines.push("  --memory-id N=ID libretro only: dump memory id ID as space N (an id the ABI does not name)");
+    #[cfg(feature = "libretro")]
+    lines.push("  --sram FILE      libretro only: the battery save loaded into the core's save RAM after the load (a PlayStation core's first memory card)");
     lines
 }
 

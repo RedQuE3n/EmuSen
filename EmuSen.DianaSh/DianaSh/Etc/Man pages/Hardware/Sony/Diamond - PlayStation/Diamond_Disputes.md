@@ -14,6 +14,8 @@ and their weighing are `Diamond_Referees.md`, and each entry below carries its r
 *Since the pad (2026-10-11)* the R3000A's D-17 to D-21, from amidog's `psxtest_cpx`, are in `BlackMoon_R3000.md` §8:
 MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), the debug unit (D-20) and SWCz's store
 (D-21); D-22, SIO0's timing, is here.
+*Since amidog's GTE test was read (2026-10-11)*, D-13, D-14 and D-16 in `BlackMoon_GTE.md` §12 carry its evidence and
+the changes it led to; no new number was taken for it.
 
 ## The rules this log keeps
 

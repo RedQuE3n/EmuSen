@@ -92,16 +92,18 @@ fn the_pad_answers_on_port_1_and_nothing_answers_elsewhere() {
     assert_eq!((bytes[10..20].to_vec(), bytes[20..].to_vec()), (empty.to_vec(), empty.to_vec()), "port 2, and the card slot");
 }
 
-/// The GTE's interlock as BlackMoon_GTE.md D-13 reads psx-spx: a command's cycles from its fetch, so an access at once
-/// waits one fewer; every access to coprocessor 2 waits, writes included; 00h as RTPS, the other unlisted numbers free.
+/// The GTE's interlock as BlackMoon_GTE.md D-13 has it since amidog's timing tests: a command's cycles from its fetch,
+/// and an access that must wait resumes one cycle after the command ends, so an access at once costs the command's
+/// cycles, RTPS's MFC2 after N NOPs 15 - N up to 13 NOPs and nothing from 14; every access waits, writes included; the
+/// unlisted numbers in the cycles amidog's table gives them (D-16).
 #[test]
 fn the_gte_holds_every_access_until_its_command_is_done() {
     let m = run(include_str!("../programs/gte-timing.s"));
     let commands = [0x01, 0x06, 0x0C, 0x10, 0x11, 0x12, 0x13, 0x14, 0x16, 0x1B, 0x1C, 0x1E, 0x20, 0x28, 0x29, 0x2A, 0x2D, 0x2E, 0x30, 0x3D, 0x3E, 0x3F];
-    assert_eq!(results(&m, 0x10_0000, 22), commands.map(|c| blackmoon_gte::CYCLES[c] as u32 - 1));
-    assert_eq!(results(&m, 0x10_0100, 21), (0..21).map(|n| 14u32.saturating_sub(n)).collect::<Vec<_>>());
-    assert_eq!(results(&m, 0x10_0200, 7), [14; 7]);
-    assert_eq!(results(&m, 0x10_0280, 6), [14, 0, 0, 0, 0, 0]);
+    assert_eq!(results(&m, 0x10_0000, 22), commands.map(|c| blackmoon_gte::CYCLES[c] as u32));
+    assert_eq!(results(&m, 0x10_0100, 21), (0..21).map(|n| if n < 14 { 15 - n } else { 0 }).collect::<Vec<_>>());
+    assert_eq!(results(&m, 0x10_0200, 7), [15; 7]);
+    assert_eq!(results(&m, 0x10_0280, 6), [16, 13, 8, 8, 18, 18]);
     assert_eq!(results(&m, 0x10_0300, 8), [0xF80; 8], "IRGB reaches IR3 and IR1 at once (D-15)");
     assert_eq!(results(&m, 0x10_0320, 4), [15; 4], "and LZCS LZCR");
     assert_eq!(results(&m, 0x10_0330, 6), [0x100; 6], "and MTC2 and LWC2 the next command");
@@ -505,4 +507,64 @@ fn interlaced_drawing_in_vblank_skips_the_lines_from_the_display_start() {
 fn gpuread_repeats_the_first_word_of_the_last_longer_transfer() {
     let m = run(include_str!("../programs/gpuread-repeat.s"));
     assert_eq!(results(&m, 0x10_0000, 10), [0x0202_0101, 0x0404_0303, 0x0606_0505, 0x0202_0101, 0x0202_0101, 0x0303_0202, 0x0202_0101, 0x0202_0101, 0x0202_0101, 0x0202_0101]);
+}
+
+/// The cycles of a pass of each of amidog's psxtest_gte 1.4 timing loops by its own rule, as read from its RAM: the
+/// loop's instructions and the command's cycles c, with c taken as the NOPs' count when it is one more or fewer.
+fn amidog_pass(c: u32, variant: usize, number: usize) -> u32 {
+    let at_least = |nops: u32| if c == nops + 1 || c < nops { nops } else { c };
+    match variant {
+        0 => (if c == 1 { 0 } else { c }) + 6 + (number == 0x0A || number == 0x0E) as u32,
+        1 => (if c == 0 || c == 2 { 1 } else { c }) + 6,
+        2 => at_least(4) + 6,
+        3 => at_least(7) + 6,
+        4 => (if c == 1 { 0 } else { c }) + 8,
+        5 => (if c == 0 || c == 2 { 1 } else { c }) + 8,
+        6 => at_least(4) + 8,
+        7 => at_least(7) + 8,
+        8 => 2 * at_least(4) + 7,
+        _ => 2 * at_least(7) + 9,
+    }
+}
+
+/// D-13 and D-16 against amidog's psxtest_gte 1.4 (Diamond_Pad.md §5.3): its ten timing loops for every number, each
+/// count of 501 passes within 50 cycles of its rule's, the cycles c those its table gives (the 22 commands psx-spx's).
+/// Its rule adds a cycle to the at-once CFC2 after 0Ah and 0Eh that no wait accounts for; those two stay 501 short.
+#[test]
+fn amidogs_gte_timing_loops_take_the_cycles_its_test_expects() {
+    let m = run_for(include_str!("../programs/gte-loops.s"), 40, Market::Americas);
+    for number in 0..64 {
+        let counts = results(&m, 0x10_0000 + 0x40 * number as u32, 10);
+        for (variant, &count) in counts.iter().enumerate() {
+            let wanted = amidog_pass(blackmoon_gte::CYCLES[number] as u32, variant, number) * 501 - 1;
+            let short = if variant == 0 && (number == 0x0A || number == 0x0E) { 501 } else { 0 };
+            assert!(count.abs_diff(wanted - short) <= 50, "number {number:02X}h, loop {variant}: {count} against {wanted}");
+        }
+    }
+}
+
+/// Diamond_Pad.md §11, the round trip: card-read.s reads a card through the protocol, the card card.s writes here or the
+/// one `DIAMOND_CARD_IN` names (a reference's, which the five referees wrote byte for byte alike): FLAG 08h on insertion,
+/// sector 0100h the bytes 3n with their checksum, 0101h zeros, the ID, and IRQ7 after every byte but each command's last.
+#[test]
+fn a_card_reads_back_through_the_protocol_as_written() {
+    let written = run_set_up(include_str!("../programs/card.s"), 30, Market::Americas, |m| m.insert_card(0, None));
+    let card = match std::env::var("DIAMOND_CARD_IN") {
+        Ok(path) => std::fs::read(path).unwrap(),
+        Err(_) => written.card_in(0).unwrap().data.clone(),
+    };
+    let m = run_set_up(include_str!("../programs/card-read.s"), 30, Market::Americas, |m| m.insert_card(0, Some(&card)));
+    let data: Vec<u8> = (0..128u32).map(|i| (3 * i) as u8).collect();
+    let checksum = data.iter().fold(1u8, |c, &d| c ^ d);
+    let read = bytes(&m, 0x10_0000, 140);
+    assert_eq!(read[..10], [0xFF, 0x08, 0x5A, 0x5D, 0x00, 0x01, 0x5C, 0x5D, 0x01, 0x00], "FLAG's bit 3 on insertion");
+    assert_eq!((read[10..138].to_vec(), read[138], read[139]), (data, checksum, 0x47));
+    let next = bytes(&m, 0x10_0100, 140);
+    assert_eq!((next[..10].to_vec(), next[138..].to_vec()), (vec![0xFF, 0x08, 0x5A, 0x5D, 0x00, 0x01, 0x5C, 0x5D, 0x01, 0x01], vec![0x00, 0x47]));
+    assert!(next[10..138].iter().all(|&b| b == 0));
+    assert_eq!(bytes(&m, 0x10_0200, 10), [0xFF, 0x08, 0x5A, 0x5D, 0x5C, 0x5D, 0x04, 0x00, 0x00, 0x80]);
+    let acks = |at: usize, n: usize| bytes(&m, at + 0x400, n);
+    for (at, n) in [(0x10_0000, 140), (0x10_0100, 140), (0x10_0200, 10)] {
+        assert!(acks(at, n - 1).iter().all(|&a| a == 1) && acks(at + n - 1, 1) == [0], "IRQ7 at {at:X}");
+    }
 }

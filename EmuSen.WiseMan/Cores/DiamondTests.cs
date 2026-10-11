@@ -417,6 +417,29 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // amidog's GTE timing tests, each run alone from its menu row by Cross: every official row OK, every unlisted number but 0Ah and 0Eh - see BlackMoon_GTE.md D-13, D-16.
+        [Fact]
+        public void Amidogs_gte_timing_tests_pass_but_two_unlisted_numbers()
+        {
+            if (Amidog is not { } root)
+            {
+                _output.WriteLine("skipped: EMUSEN_DIAMOND_AMIDOG, or an amidog folder beside EMUSEN_DIAMOND_PS1TESTS, holds amidog's tests");
+                return;
+            }
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            var exe = Path.Combine(root, "psxtest_gte", "psxtest_gte.exe");
+            var na = AmidogMark.NotApplicable;
+            foreach (var (downs, rows, end) in new[] { (2, AmidogScreen.GteOfficialTiming, 5200), (4, AmidogScreen.GteUnofficialTiming, 8200) })
+            {
+                var presses = Enumerable.Range(0, downs).Select(i => new RomPress(2900 + 50 * i, PadButton.Down)).Append(new RomPress(2900 + 50 * downs, PadButton.B));
+                var verdicts = AmidogScreen.Verdicts(engine.Run(exe, new[] { end }, presses.ToArray()).At(end)!.Picture!, rows, AmidogScreen.GteCell);
+                foreach (var (row, marks) in verdicts) _output.WriteLine($"{row}: {string.Join(" ", marks)}");
+                var open = rows == AmidogScreen.GteUnofficialTiming ? new[] { "0Ah", "0Eh", "TOTAL" } : Array.Empty<string>();
+                foreach (var (row, marks) in verdicts)
+                    Assert.Equal(new[] { na, na, na, open.Contains(row) ? AmidogMark.Error : AmidogMark.Ok }, marks);
+            }
+        }
+
         [Fact]
         public void The_ps_exe_builder_writes_the_documented_header()
         {

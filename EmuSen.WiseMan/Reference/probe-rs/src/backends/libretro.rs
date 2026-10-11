@@ -574,6 +574,29 @@ impl LibretroBackend {
         }
     }
 
+    // --sram: the file into SAVE_RAM, as a frontend loads a battery save; refused when the sizes differ.
+    fn load_save_ram(&mut self, path: &str) -> bool {
+        let Some(space) = self.spaces.iter().find(|s| s.name == "sram") else {
+            println!("[ERROR] --sram: the core exposes no save RAM");
+            return false;
+        };
+        match std::fs::read(path) {
+            Ok(bytes) if bytes.len() == space.size => {
+                unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), space.data.cast_mut(), space.size) };
+                println!("[INFO] save RAM loaded from {path}, {} bytes", space.size);
+                true
+            }
+            Ok(bytes) => {
+                println!("[ERROR] --sram: {path} holds {} bytes, the core's save RAM {}", bytes.len(), space.size);
+                false
+            }
+            Err(e) => {
+                println!("[ERROR] --sram: cannot read {path}: {e}");
+                false
+            }
+        }
+    }
+
     fn cache_spaces(&mut self) {
         self.spaces.clear();
         // SYSTEM_RAM is the console's main work RAM, which the native backends
@@ -770,6 +793,9 @@ impl ProbeBackend for LibretroBackend {
         // mislabel everything - see EmuSen_Debugging_Tools_Reference_v5.md §3.51.
         let get_av = api.get_system_av_info;
         self.cache_spaces();
+        if !options.save_ram.is_empty() && !self.load_save_ram(&options.save_ram) {
+            return false;
+        }
 
         let mut av: sys::retro_system_av_info = unsafe { std::mem::zeroed() };
         unsafe { get_av(&raw mut av) };

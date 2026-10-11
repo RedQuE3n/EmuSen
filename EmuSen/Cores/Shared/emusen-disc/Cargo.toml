@@ -1,0 +1,17 @@
+[package]
+name = "emusen-disc"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# A disc as sectors: geometry, ECMA-130 sector synthesis, subchannel Q, the TOC, CD-DA samples, cue sheets, .m3u lists,
+# .sbi patches and CHD v5. No console's controller, timing or filesystem. See Hardware/Shared/EmuSen_Disc.md.
+[lib]
+name = "emusen_disc"
+
+[dependencies]
+# Read as an unread dependency, as Cranelift is (Diamond_Plan.md §9.2, §11 Q9).
+chd = "0.3.4"
+
+[profile.release]
+opt-level = 3

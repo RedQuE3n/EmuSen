@@ -285,7 +285,7 @@ EmuSen Project/
 │   │   ├── ConsoleLineReader.cs                # up/down-arrow history recall at the F4 prompt
 │   │   ├── IDebugTarget.cs                     # core-agnostic debug-target contract (see companion doc)
 │   │   ├── DianaShSandbox.cs                   # walls cd/ls/mv/redirection/source to the project's own tree
-│   │   ├── ManPages.cs                         # per-command manual pages backing `man <command>`
+│   │   ├── ManPages.cs                         # reads the manual pages, one file each, from Lib/dianash/<module>/man/ (2026-10-11)
 │   │   ├── WatchRegistry.cs / BreakpointRegistry.cs / CheatRegistry.cs / FrameLogRegistry.cs
 │   │   ├── FrameRecorder.cs
 │   │   ├── DebugTools.cs                     # BoundedTrace ("run N more frames/steps then stop") plus

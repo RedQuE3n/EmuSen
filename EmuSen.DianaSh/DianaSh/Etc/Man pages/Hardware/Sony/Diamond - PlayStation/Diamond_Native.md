@@ -1018,7 +1018,16 @@ reference's card is a separate step, for which the card a program wrote is kept 
 files, the multitap's four ports and the DualShock's modes met; the round trip against a reference's card not run here. Peter
 Lemon's `Cube`, which waited on the pad at stage 5 (§13.9), now answers it on the open kernel.
 
-### 14.3 What waits
+### 14.3 Tests run (2026-10-11)
+
+`cargo test --release`: `diamond` 70 unit tests and 17 program tests (`card.s`, `multitap.s`, `kernel-pad.s` and
+`pad.s` among them); `diamond-kernel-harness` 49 with `DIAMOND_KERNEL_REBUILD=require`; `blackmoon-r3000` 28 with
+`EMUSEN_BLACKMOON_CORPUS` (the 55,000 single-step cases among them). `cargo clippy --release --all-targets` clean on
+`diamond` (Fedora's 1.98). WiseMan, under the test lock with `EMUSEN_DIAMOND_PS1TESTS`: `DiamondTests`, `CoreAbi`,
+`CoreAdapter`, `CoreDiscovery`, `CoreRegistration`, `SystemPack` and `WiseMan.Input`, 185 of 185, amidog's opt-in tests
+among them. No reference emulator was run.
+
+### 14.4 What waits
 
 - The card's round trip against a reference's card, with `~/.cache/emusen/probe/diamond/cards/diamond-card-1.mcr`.
 - The multitap's slots B-D's cards (no battery numbers yet), the DualShock's watchdog, the DualShock 2's commands, a

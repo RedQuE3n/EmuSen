@@ -52,6 +52,11 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   drawing time) and D-12 (two pictures the programs cannot meet). The R3000A's disputes (D-1 to D-3) are in
   `../BlackMoon-HW/BlackMoon_R3000.md` §8 and the GTE's (D-13 to D-16, from stage 5) in `../BlackMoon-HW/BlackMoon_GTE.md`
   §12.
+- [`Diamond_Referees.md`](Diamond_Referees.md) — the disputes refereed by emulators, written 2026-10-11 once no
+  console was to be used: DuckStation and PCSX-Redux fetched, pinned and driven headless beside the three libretro
+  cores, their lineages weighed, each open dispute's program run on all of them, the rulings (D-0's line witnessed and
+  its interlaced PAL field changed, D-2's table shape confirmed, D-7's base vertex and D-8's flip start changed, the
+  rest still open), the referees scored against the console logs, and the reading log.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the naming scheme, and `Man pages/Hardware/README.md` for how this
 documentation set is organized.

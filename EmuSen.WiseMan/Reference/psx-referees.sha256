@@ -1,0 +1,8 @@
+# The standalone PlayStation referees, release binaries fetched by `analysis/psxreferee.py fetch` into
+# ~/.cache/emusen/probe/diamond/referees and used only if the file's SHA-256 is the one pinned here. Black boxes:
+# only the release is unpacked, its source never read, and no firmware is ever fetched. Re-pinning is a deliberate
+# edit of this file. Diamond_Referees.md §2.
+#
+# file                                   sha256                                                            url
+DuckStation-v0.1-11894-x64.AppImage      c2fd26257ac5cfefe4f77b61b04b8fe299f9c4e0cf6b851fc5259c815979466a  https://github.com/stenzek/duckstation/releases/download/v0.1-11894/DuckStation-x64.AppImage
+PCSX-Redux-9272f440-linux-x86_64.zip     18c1b39e9bce5d64db8c8a7f32c350e5cda33789a7ebe52176648f82128053ee  https://distrib.app/storage/assets/bb4/5d7/dda/ae2f7a1c5e2f15077b427bcba7e093a96bc4b415aa1dc063ad404f4/PCSX-Redux-9272f440-linux-x86_64.zip

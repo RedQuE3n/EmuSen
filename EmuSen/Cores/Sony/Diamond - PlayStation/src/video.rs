@@ -88,9 +88,9 @@ impl Video {
         if self.pal_mode() { PAL_LINE } else { NTSC_LINE }
     }
 
-    /// 263 or 314 lines; interlaced, the odd field has one line fewer, so two fields average 262.5 or 312.5.
+    /// 263 or 314 lines; interlaced, 263 and 262 or 313 and 312 by field, averaging 262.5 or 312.5 (D-0).
     fn lines_of_field(&self) -> u32 {
-        let full = if self.pal_mode() { PAL_LINES } else { NTSC_LINES };
+        let full = if !self.pal_mode() { NTSC_LINES } else if self.interlaced() { PAL_LINES - 1 } else { PAL_LINES };
         full - (self.interlaced() && self.odd) as u32
     }
 
@@ -349,6 +349,19 @@ mod tests {
         let mut pal = Video::new(true);
         pal.mode = 1 << 3;
         assert!((hz(pal.field_rate()) - 49.7614).abs() < 1e-4, "{}", hz(pal.field_rate()));
+    }
+
+    /// Interlaced, two fields hold 525 or 625 lines, as psx-spx's 262.5 and 312.5 and the referees have it (D-0).
+    #[test]
+    fn interlaced_fields_alternate_about_262_5_and_312_5_lines() {
+        for (pal, lines) in [(false, [263, 262]), (true, [313, 312])] {
+            let mut v = Video::new(pal);
+            v.mode = 1 << 5 | (pal as u32) << 3;
+            let edges = run(&mut v, 3_000_000, true);
+            let fields: Vec<u64> = edges.iter().filter(|e| e.1 & edge::FIELD != 0).map(|e| e.0).collect();
+            let counts: Vec<u64> = fields.windows(2).map(|w| edges.iter().filter(|e| e.0 >= w[0] && e.0 < w[1] && e.1 & edge::HBLANK_START != 0).count() as u64).collect();
+            assert!(counts.len() >= 2 && counts.iter().all(|&c| lines.contains(&(c as u32))) && counts[0] != counts[1], "{pal}: {counts:?}");
+        }
     }
 
     #[test]

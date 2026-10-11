@@ -188,3 +188,12 @@ commits, releases and languages; the search results named in §1. Seen as a run'
   `gte-timing.s` with its table E faults in the probe at frames 120 to 900, as the probe has faulted with it before.
 - **DuckStation and PCSX-Redux** release binaries are present under `~/.cache/emusen/probe/diamond/referees/` from a
   parallel referee pass; they were not run at this stage, the libretro three answering every question the GTE raised.
+
+## 10. The referees (2026-10-11)
+
+Decided 2026-10-11: no console is used for any dispute; reference emulators run as black boxes referee what the
+suites' console logs and pictures do not reach. DuckStation `v0.1-11894` and PCSX-Redux `9272f440` were fetched as
+release binaries into the cache, pinned by SHA-256 in `EmuSen.WiseMan/Reference/psx-referees.sha256`, and are driven
+headless with the three libretro cores of §4 by `EmuSen.WiseMan/Reference/analysis/psxreferee.py`; no$psx was not
+run, wine not being installed. Beetle PSX and SwanStation ran on the player's own BIOS, as in §8. What each referee is,
+how it is driven, how their lineages are weighed and what each dispute's program showed on them: `Diamond_Referees.md`.

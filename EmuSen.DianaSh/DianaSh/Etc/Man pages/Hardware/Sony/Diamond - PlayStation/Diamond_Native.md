@@ -574,8 +574,9 @@ Plan §5.1's two domains, settled by D-0's second step: the CPU's 33.8688 MHz an
 in NTSC mode and 3,405 in PAL mode**, is whole; the console's clock follows its market, the line its GP1(08h) mode, as
 psx-spx's maintained text says ("Consoles will always use the video clock for its region") [R].
 
-- **A field** is 263 lines (314 PAL), interlaced 263 and 262 alternately (314 and 313) [C: the average is the 262.5
-  psx-spx gives; how a console splits the half line is D-0's open part].
+- **A field** is 263 lines (314 PAL), interlaced 263 and 262 alternately ~~(314 and 313)~~ (313 and 312, since D-0's
+  referee step: 314 and 313 averaged 313.5, not psx-spx's 312.5) [C: the average is the 262.5 psx-spx gives; how a
+  console splits the half line is D-0's open part].
 - **Vblank** is the field lines outside GP1(07h)'s range, beginning at Y2's line; IRQ0 at its start; none when the
   range leaves no edge (psx-spx: a Y2 too large stops the interrupt). **Hblank** is the part of each line outside
   GP1(06h)'s X1..X2, beginning at X2; none with a range of no width (psx-spx's "endless hblank").
@@ -771,7 +772,9 @@ the TTY, on either kernel.
 - on the open kernel's writer: `cpu/access-time`'s hundredths (the printf prefix above);
 - on stage 4's GPU: amidog's CPU and CPX tests, so the CE bits, the load-after-load corner and the garbage registers
   on an independent program;
-- on a console (Q16): D-0's line, D-2, D-4's SPUCNT cell, D-5's gaps and the store's drain, D-6's mode 2;
+- ~~on a console (Q16): D-0's line, D-2, D-4's SPUCNT cell, D-5's gaps and the store's drain, D-6's mode 2;~~
+  decided 2026-10-11: no console is used; these went to the referees of `Diamond_Referees.md` §4, which ruled on D-0's
+  line and D-2's shape and left the rest open;
 - on stage 7's CD-ROM: the 240p test suite, a disc (`Diamond_References.md` §8).
 
 **The kit**: C1–C15 pass on the synthetic PS-EXE and the synthetic disc at 120 frames, now on the open kernel

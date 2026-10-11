@@ -61,6 +61,7 @@ namespace EmuSen.WiseMan.Common
             Assert.Same(crystal, typeof(EmuSen.Crystal.Telemetry.ICoreTelemetry).Assembly);
             Assert.Same(crystal, typeof(EmuSen.Crystal.Cheats.CheatRegistry).Assembly);
             Assert.Same(crystal, typeof(EmuSen.Crystal.Systems.SystemPacks).Assembly);
+            Assert.Same(crystal, typeof(EmuSen.Crystal.Session.SessionService).Assembly);
             Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(crystal));
         }
 

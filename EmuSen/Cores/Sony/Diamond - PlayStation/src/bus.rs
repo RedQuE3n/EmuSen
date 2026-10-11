@@ -262,6 +262,7 @@ impl Board {
             0x810 => {
                 let (v, t) = self.gpu.gpuread(&self.video, self.now);
                 self.now = t;
+                self.next_event = self.next_event.min(self.gpu.next_event());
                 self.wake_gpu_dma();
                 v
             }
@@ -569,6 +570,7 @@ impl Board {
                 let at = self.dma_clock.div_ceil(16);
                 let (w, t) = self.gpu.gpuread(&self.video, at);
                 self.dma_clock = if t > at { t * 16 } else { self.dma_clock } + dma::sixteenths_per_word(dma::GPU, 0);
+                self.next_event = self.next_event.min(self.gpu.next_event());
                 w
             }
             dma::SPU => self.spu.load() as u32 | (self.spu.load() as u32) << 16,

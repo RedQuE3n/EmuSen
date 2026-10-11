@@ -86,10 +86,14 @@ impl Vram {
         self.set(x, y, v | mask.set);
     }
 
-    /// GP0(02h): the colour's top five bits of each channel with bit 15 clear, no clipping and no mask.
-    pub fn fill(&mut self, r: Rect, colour: u32) {
+    /// GP0(02h): the colour's top five bits of each channel with bit 15 clear, no clipping and no mask; the lines of
+    /// parity `skip` left alone, as interlaced drawing leaves them (Diamond_Disputes.md D-23).
+    pub fn fill(&mut self, r: Rect, colour: u32, skip: Option<i32>) {
         let c = ((colour >> 3 & 0x1F) | (colour >> 11 & 0x1F) << 5 | (colour >> 19 & 0x1F) << 10) as u16;
         for j in 0..r.h {
+            if skip == Some(((r.y + j) & 1) as i32) {
+                continue;
+            }
             for i in 0..r.w {
                 self.set(r.x + i, r.y + j, c);
             }
@@ -120,7 +124,7 @@ mod tests {
         assert_eq!(Rect::fill_params(0x0001_000F, 0x0001_03F1), Rect { x: 0, y: 1, w: 1024, h: 1 });
         assert_eq!(Rect::fill_params(0, 0x0001_0400).w, 0, "400h is handled as 0");
         let mut v = Vram::default();
-        v.fill(Rect { x: 1016, y: 511, w: 16, h: 2 }, 0x00FF_FFFF);
+        v.fill(Rect { x: 1016, y: 511, w: 16, h: 2 }, 0x00FF_FFFF, None);
         assert_eq!((v.get(1023, 511), v.get(7, 511), v.get(7, 0), v.get(8, 0), v.get(1015, 0)), (0x7FFF, 0x7FFF, 0x7FFF, 0, 0), "wrapped, no carry between axes");
     }
 

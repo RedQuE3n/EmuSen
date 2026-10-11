@@ -102,7 +102,8 @@ that no referee need expose VRAM. The ps1-tests programs were run for their TTY 
 Diamond on its open kernel. Diamond's figures below are its own runs (`examples/run`), pinned by `tests/programs.rs`.
 *Since 2026-10-11* five of ps1-tests' TTY programs (`timers`, `cpu/access-time`, `dma/chopping`, `gpu/bandwidth`,
 `dma/chain-looping`) also exist rewritten to record in RAM, `programs/timers.s` and `programs/records/`, so that every
-referee is graded on them (§4.10; `Diamond_Records.md`).
+referee is graded on them (§4.10; `Diamond_Records.md`); *and since a second step of the same day* three more,
+`dma/otc-test`, `dma/dpcr` and `cpu/io-access-bitwidth`, as records of their printf calls (§4.11).
 
 ### 2.5 Each run confined, and DuckStation's runs one at a time
 
@@ -382,6 +383,28 @@ against the log's 112,531 (Diamond 112,557, DuckStation 112,633), but a frame on
 112,031, as DuckStation's 112,196 does: its dot clock on a PAL console is not the console's. The line's ruling rests on
 the frame's cycles, which it meets; its standing as the strongest witness is for the line, not the dot clock.
 
+### 4.11 ps1-tests' value programs as printf records — `records/`'s `otc-test.s`, `dpcr.s`, `io-access-bitwidth.s`
+
+*Added 2026-10-11.* The three record every printf call, its format's address and arguments, and are rendered with the
+release's own formats (`Diamond_Records.md` §11). On Diamond each renders as the release prints on the open kernel but
+for one line, `io-access-bitwidth`'s GPUSTAT row, whose cause is Diamond's (that page's §14, §16.1); on DuckStation as
+the release prints there but for two rows read at other moments, and on PCSX-Redux but for the stack's address in 15
+fail lines (its §15). Against the console's logs [M]:
+
+| Log | Diamond | DuckStation | SwanStation | Beetle PSX | PCSX-Redux | PCSX-ReARMed |
+|---|---|---|---|---|---|---|
+| `dma/otc-test`, the log's 13 tests passed (of the release's 15) | 13 (15) | 13 (15) | 8 (9) | 12 (14) | 4 (4) | 12 (12) |
+| `dma/dpcr`, the log's 14 lines | 14 | 14 | 14 | 12 | 14 | 14 |
+| `cpu/io-access-bitwidth`, 108 cells as the console's | 85 | 58 | 64 | 70 | stops at the first misaligned store, as its release | 45 |
+
+**What it shows** [A]. Two questions with no entry yet, reported for a dispute step rather than ruled here: GPUSTAT
+after GP1(00h) during a fill, which psx-spx gives as `14802000h` and DuckStation, SwanStation and Beetle PSX read ready at
+once, where Diamond stays busy until the fill's end (`Diamond_Records.md` §16.1); and DICR's bit 6, writable by psx-spx
+and on Diamond and DuckStation, zero in the console's log and on Beetle PSX and SwanStation, and on PCSX-ReARMed after
+a halfword or word store (§16.2). Beetle
+PSX runs a DMA channel whose DPCR enable is clear, in `otc-test` and `dpcr` alike, where the logs and every other
+referee do not: on the DMA's enable bits it is not a witness. None of D-0 to D-23 is moved by these data.
+
 ## 5. What changed in Diamond
 
 Each a writer's step citing its entry, after the rulings above:
@@ -415,6 +438,9 @@ The other programs are pinned on Diamond as it reads them: `gpustat_while_each_s
 | `gpu/bandwidth`, 14 rows within 2% | 14 | not finished | 0 | 0, by the record | 0, by the record | 0, by the record |
 | `dma/chain-looping`, 4 lines within 10% | 4 | 0 | 2 | 0, by the record | 0, by the record | 0, by the record |
 | `gpu/gpustat`, 12 readings | 12 | 9 | 4 | 6 | 9 | 3 |
+| `dma/otc-test`, the log's 13 tests (§4.11) | 13 | 13 | 4, by the record | 12, by the record | 8, by the record | 12, by the record |
+| `dma/dpcr`, the log's 14 lines (§4.11) | 14 | 14 | 14, by the record | 12, by the record | 14, by the record | 14, by the record |
+| `cpu/io-access-bitwidth`, 108 cells (§4.11) | 85 | 58, by the record | stops, the release too | 70, by the record | 64, by the record | 45, by the record |
 | ps1-tests' pictures | exact | not read | not read | not read | not read | not read |
 
 DuckStation and Beetle PSX are the strongest referees, each on its own subsystem: Beetle PSX on video timing,
@@ -447,6 +473,11 @@ release programs' TTY from each program's heading on, which held PCSX-Redux's ow
 `timers` and DuckStation's `VSync: timeout` lines from the release's library, and nothing of the BIOS's; the process
 table and the processes' cgroups, to find what runs left. What else was read is `Diamond_Records.md` §9.
 
+*The value programs' step, 2026-10-11* (§4.11): the referees' RAM through the driver, and for DuckStation and
+PCSX-Redux the three releases' TTY from each heading on, `io-access-bitwidth`'s through `psxrecords.py mask` so that no
+BIOS word of the BIOS row was stored or read; it held PCSX-Redux's own reports of unmapped writes and of the address
+error. What else was read is `Diamond_Records.md` §17.
+
 ## 8. Negative results
 
 - no$psx was not run: wine is not installed, and installing system packages was out of scope.
@@ -458,5 +489,7 @@ table and the processes' cgroups, to find what runs left. What else was read is 
 - PCSX-Redux stops in `timers`' target check, the release and its record alike: its timer 2 passes the target, and the
   test's table index with it, until a halfword store faults.
 - DuckStation cannot run on Qt's `offscreen` platform; it needs a compositor (§2.1).
+- PCSX-Redux stops at `cpu/io-access-bitwidth`'s first misaligned store, the release and its record alike: its debugger
+  takes the address error as a "first chance exception" and the frames stop, so the record's RAM is never read (§4.11).
 - PCSX-Redux stops producing frames partway through ps1-tests' `cpu/cop` (after its reserved-opcode case), so the
   driver also stops it after a wall-clock limit and keeps what it printed.

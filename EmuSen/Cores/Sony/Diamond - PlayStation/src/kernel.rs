@@ -24,10 +24,13 @@ pub enum Kernel {
     None,
 }
 
-/// The open kernel's committed image, when it exists; the BIOS region is filled from it when no player's BIOS is
-/// given. None yet: it is written apart, under the rules of the plan's §1.3 for replacement writers.
+/// The open kernel's committed image (Diamond_OpenKernel.md §2.1, its hash beside it), which fills the BIOS region
+/// when no player's BIOS is given. It is written apart, under the plan's §1.3 rules for replacement writers, and used
+/// here through its §3.3 interface only.
+static OPEN_KERNEL: &[u8] = include_bytes!("../kernel/diamond-kernel.bin");
+
 pub fn open_kernel() -> Option<&'static [u8]> {
-    None
+    Some(OPEN_KERNEL)
 }
 
 impl Kernel {

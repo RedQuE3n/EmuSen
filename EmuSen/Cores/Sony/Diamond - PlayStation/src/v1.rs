@@ -59,7 +59,7 @@ pub const BIOS_JAPAN: u32 = 1;
 pub const BIOS_AMERICAS: u32 = 2;
 pub const BIOS_EUROPE: u32 = 3;
 
-const BIOS_COST: &str = "Without this file a test program that needs no kernel runs, started directly; programs that call the kernel and discs wait for Diamond's own open BIOS, written from the documents, which takes its place when it exists (its kernel's first part at stage 3, the disc boot, files and memory cards at stage 10; Diamond_Plan.md §5.9). A player's own BIOS stays the exact path.";
+const BIOS_COST: &str = "Most games start and save as on a console. A game that relies on an undocumented kernel call, reads the kernel's code, or depends on its exact timing may behave differently, and the start-up screen is EmuSen's own. Until the rest of the kernel exists, only programs loaded directly run without your BIOS; discs and memory cards need your own.";
 
 pub fn bios(market: Market) -> Firmware {
     let (which, name, label) = match market {
@@ -67,7 +67,7 @@ pub fn bios(market: Market) -> Firmware {
         Market::Americas => (BIOS_AMERICAS, "scph5501.bin", "The American PlayStation's BIOS"),
         Market::Europe => (BIOS_EUROPE, "scph5502.bin", "The European PlayStation's BIOS"),
     };
-    Firmware { which, name: name.into(), label: label.into(), size: BIOS_BYTES as u64, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: BIOS_COST.into() }) }
+    Firmware { which, name: name.into(), label: label.into(), size: BIOS_BYTES as u64, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::Accuracy { cost: BIOS_COST.into() }) }
 }
 
 /// The extensions the core opens at stage 1, the system pack's checked subset (Diamond_Native.md §2.4).
@@ -210,7 +210,14 @@ impl Core for Machine {
             phases: Vec::new(),
             patches: None,
             skip_rendering_state_neutral: false,
-            firmware: vec![(which, if self.firmware.contains(&which) { FirmwareSource::File } else { FirmwareSource::Absent })],
+            firmware: vec![(
+                which,
+                match self.kernel {
+                    Kernel::Player => FirmwareSource::File,
+                    Kernel::Open => FirmwareSource::Replacement,
+                    Kernel::None => FirmwareSource::Absent,
+                },
+            )],
         }
     }
 
@@ -316,7 +323,7 @@ mod tests {
         assert_eq!(info.processors.iter().map(|p| (p.name.as_str(), p.registers.len())).collect::<Vec<_>>(), [("R3000", 45), ("GTE", 64)]);
         assert_eq!((info.video.base_width, info.video.base_height, info.video.aspect), (320, 240, (4, 3)));
         assert_eq!(info.ports.iter().map(|p| p.controller.as_deref()).collect::<Vec<_>>(), [Some(DUALSHOCK), Some(DUALSHOCK)]);
-        assert_eq!(info.firmware, vec![(BIOS_AMERICAS, FirmwareSource::Absent)]);
+        assert_eq!(info.firmware, vec![(BIOS_AMERICAS, FirmwareSource::Replacement)]);
         assert!(us.frame().chunks(4).all(|p| p == [0, 0, 0, 255]) && us.frame().len() == 320 * 240 * 4);
 
         let eu = create(&disc(Market::Europe, Some(2)), &[], vec![]).unwrap();
@@ -331,7 +338,7 @@ mod tests {
         let m = create(&disc(Market::Japan, None), &[(REGION_KEY, "psx.eu"), (GPU_KEY, "psx.gpu160"), (PAD_KEYS[0], PAD), (PAD_KEYS[1], "none")], vec![]).unwrap();
         assert_eq!(m.config, Config { market: Market::Europe, gpu: Gpu::Pin160 });
         assert_eq!(m.machine_info().ports.iter().map(|p| p.controller.as_deref()).collect::<Vec<_>>(), [Some(PAD), None]);
-        assert_eq!(m.machine_info().firmware, vec![(BIOS_EUROPE, FirmwareSource::Absent)]);
+        assert_eq!(m.machine_info().firmware, vec![(BIOS_EUROPE, FirmwareSource::Replacement)]);
         assert_eq!(create(&disc(Market::Japan, None), &[(REGION_KEY, "auto")], vec![]).unwrap().config.market, Market::Japan);
         for s in schema() {
             assert!(s.check().is_ok(), "{}", s.key);

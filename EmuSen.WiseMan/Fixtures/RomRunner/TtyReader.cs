@@ -84,10 +84,13 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             lines.Select(l => Row.Match(l)).Where(m => m.Success)
                 .ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(Hundredths).ToArray());
 
+        // NaN when the text is not a number, so that the cell fails rather than the reading.
         private static double Hundredths(string v)
         {
             var parts = v.Split('.');
-            return int.Parse(parts[0], CultureInfo.InvariantCulture) + (parts.Length > 1 ? int.Parse(parts[1], CultureInfo.InvariantCulture) / 100.0 : 0);
+            if (!int.TryParse(parts[0], CultureInfo.InvariantCulture, out int whole)) return double.NaN;
+            if (parts.Length < 2) return whole;
+            return int.TryParse(parts[1], CultureInfo.InvariantCulture, out int cents) ? whole + cents / 100.0 : double.NaN;
         }
 
         private static RomVerdict Table(string name, IReadOnlyList<string> lines, IReadOnlyList<string> console, double tolerance, string[] disputed)
@@ -102,7 +105,7 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
                 for (int i = 0; i < Math.Min(values.Length, mine.Length); i++)
                 {
                     string cell = $"{segment}/{widths[i]}";
-                    if (Math.Abs(values[i] - mine[i]) > tolerance && !disputed.Contains(cell)) off.Add($"{cell} {mine[i]:0.00} against {values[i]:0.00}");
+                    if (!(Math.Abs(values[i] - mine[i]) <= tolerance) && !disputed.Contains(cell)) off.Add($"{cell} {mine[i]:0.00} against {values[i]:0.00}");
                 }
             }
             return new RomVerdict(off.Count == 0 ? RomOutcome.Passed : RomOutcome.Failed, name, off.Count == 0 ? $"{theirs.Count} rows within {tolerance}" : string.Join("; ", off));

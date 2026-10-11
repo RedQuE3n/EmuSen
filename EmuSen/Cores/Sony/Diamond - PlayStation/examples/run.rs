@@ -1,8 +1,9 @@
-//! Runs a PS-EXE on Diamond for a number of frames and prints its TTY: `run <exe> [frames] [--bios FILE] [--pal]
+//! Runs a PS-EXE on Diamond for a number of frames and prints its TTY: `run <exe> [frames] [--bios FILE | --bare] [--pal]
 //! [--dump ADDRESS WORDS] [--ram FILE]`: RAM's words from a hex address, or the whole of RAM to a file.
-//! A development tool for the test programs (Diamond_Native.md §11.11); the BIOS, when given, is a player's own.
+//! A development tool for the test programs (Diamond_Native.md §11.11): on the open kernel, a player's own BIOS, or
+//! none.
 
-use diamond::kernel::Kernel;
+use diamond::kernel::{self, Kernel};
 use diamond::machine::{Config, Gpu, Machine, TTY_ID};
 use diamond::media::{Market, Media};
 
@@ -13,7 +14,7 @@ fn main() {
     let bios = args.iter().position(|a| a == "--bios").map(|i| std::fs::read(&args[i + 1]).expect("the BIOS"));
     let market = if args.iter().any(|a| a == "--pal") { Market::Europe } else { Market::Americas };
     let media = Media::read(&image).expect("a PS-EXE");
-    let mut m = Machine::new(media, Config { market, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, bios.as_deref().map(|b| (b, Kernel::Player)));
+    let mut m = Machine::new(media, Config { market, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, rom(&bios, args.iter().any(|a| a == "--bare")));
     let start = std::time::Instant::now();
     for _ in 0..frames {
         m.advance();
@@ -33,4 +34,12 @@ fn main() {
         std::fs::write(&args[i + 1], &m.board.ram).expect("written");
     }
     eprintln!("\n[{} frames, {} cycles, pc {:08X}, {:.1} ms]", m.frames, m.board.now, m.cpu.regs.pc, start.elapsed().as_secs_f64() * 1e3);
+}
+
+fn rom(bios: &Option<Vec<u8>>, bare: bool) -> Option<(&[u8], Kernel)> {
+    match bios {
+        Some(b) => Some((b, Kernel::Player)),
+        None if bare => None,
+        None => kernel::open_kernel().map(|k| (k, Kernel::Open)),
+    }
 }

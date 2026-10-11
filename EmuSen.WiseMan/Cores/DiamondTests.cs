@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(system.Extensions.Intersect(PsxSystem.DiscExtensions));
             Assert.Equal(PsxSystem.Bios.Select(b => (b.Name, b.Size)), system.Firmware.Select(f => (f.Name, f.Size)));
             Assert.All(system.Firmware, f => Assert.False(f.Required));
-            Assert.All(system.Firmware, f => Assert.Equal("none", f.Replacement?.Effect));
+            Assert.All(system.Firmware, f => Assert.Equal("accuracy", f.Replacement?.Effect));
             Assert.Equal(new[] { (PsxSystem.DigitalPad, 14, 0), (PsxSystem.DualShock, 16, 4) }, system.Controllers.Select(c => (c.Id, c.Buttons.Count, c.Axes.Count)));
             Assert.Equal(new[] { "region", "gpu", "pad1", "pad2" }, library.Settings.Select(s => s.Key));
 
@@ -197,31 +197,49 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(RomOutcome.Visual, grader.Grade("other.exe", engine.Run(Write("other.exe", Printing("x")), new[] { 1 })).Outcome);
         }
 
-        // ps1-tests by their TTY on a player's BIOS, the development path of Diamond_Plan.md §5.9's option D; opt-in, skipped without the corpus or the firmware folder - see Diamond_Native.md §11.14.
+        private static string? Corpus => Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_PS1TESTS") is { } c && Directory.Exists(c) ? c : null;
+
+        // Each of ps1-tests' graded programs run to frame 900 on `files`, and those that did not pass.
+        private List<string> RunPs1Tests(string corpus, IReadOnlyList<(uint, byte[])> files)
+        {
+            var engine = new CoreAbiTestRomEngine(LibraryPath, _ => files, rom => Ps1Tests.Programs.FirstOrDefault(p => rom.Replace('\\', '/').EndsWith(p.Path))?.Settings ?? "");
+            string? Log(string program) => Path.Combine(corpus, Path.GetDirectoryName(program)!, "psx.log") is var l && File.Exists(l) ? File.ReadAllText(l) : null;
+            var failed = new List<string>();
+            foreach (var program in Ps1Tests.Programs)
+            {
+                var verdict = Ps1Tests.Grade(program, engine.Run(Path.Combine(corpus, program.Path), new[] { 900 }), Log);
+                _output.WriteLine($"{program.Path}: {verdict.Outcome} {verdict.Detail}");
+                if (verdict.Outcome != RomOutcome.Passed) failed.Add(program.Path);
+            }
+            return failed;
+        }
+
+        // The gate of Diamond_Plan.md §7's stage 3: ps1-tests by their TTY on the open kernel with no firmware folder; opt-in by the corpus - see Diamond_Native.md §11.14.
+        [Fact]
+        public void Ps1_tests_pass_by_their_tty_on_the_open_kernel()
+        {
+            if (Corpus is not { } corpus)
+            {
+                _output.WriteLine("skipped: EMUSEN_DIAMOND_PS1TESTS names ps1-tests' release");
+                return;
+            }
+            // Waiting on the kernel: its printf prints access-time's "%2-d" as "-d", so the table's hundredths are lost.
+            Assert.Equal(new[] { "cpu/access-time/access-time.exe" }, RunPs1Tests(corpus, Array.Empty<(uint, byte[])>()));
+        }
+
+        // The same on a player's BIOS, the development path of Diamond_Plan.md §5.9's option D; opt-in by the corpus and a firmware folder.
         [Fact]
         public void Ps1_tests_pass_by_their_tty_on_a_players_bios()
         {
-            string? corpus = Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_PS1TESTS");
             string? firmware = Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_FIRMWARE");
-            if (corpus is null || firmware is null || !Directory.Exists(corpus) || !Directory.Exists(firmware))
+            if (Corpus is not { } corpus || firmware is null || !Directory.Exists(firmware))
             {
                 _output.WriteLine("skipped: EMUSEN_DIAMOND_PS1TESTS and EMUSEN_DIAMOND_FIRMWARE name ps1-tests' release and a folder of the player's own BIOS");
                 return;
             }
-            var library = CoreLibrary.Open(LibraryPath);
-            var declared = library.Info.Systems.Single().Firmware;
+            var declared = CoreLibrary.Open(LibraryPath).Info.Systems.Single().Firmware;
             var bios = declared.Where(f => File.Exists(Path.Combine(firmware, f.Name))).Select(f => (f.Which, File.ReadAllBytes(Path.Combine(firmware, f.Name)))).ToArray();
-            var engine = new CoreAbiTestRomEngine(LibraryPath, _ => bios, rom => Ps1Tests.Programs.FirstOrDefault(p => rom.Replace('\\', '/').EndsWith(p.Path))?.Settings ?? "");
-            string? Log(string program) => Path.Combine(corpus!, Path.GetDirectoryName(program)!, "psx.log") is var l && File.Exists(l) ? File.ReadAllText(l) : null;
-            var failed = new List<string>();
-            foreach (var program in Ps1Tests.Programs)
-            {
-                var run = engine.Run(Path.Combine(corpus!, program.Path), new[] { 900 });
-                var verdict = Ps1Tests.Grade(program, run, Log);
-                _output.WriteLine($"{program.Path}: {verdict.Outcome} {verdict.Detail}");
-                if (verdict.Outcome != RomOutcome.Passed) failed.Add(program.Path);
-            }
-            Assert.Empty(failed);
+            Assert.Empty(RunPs1Tests(corpus, bios));
         }
 
         [Fact]

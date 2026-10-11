@@ -57,6 +57,11 @@ the CD controller's HC05 microcontroller and its "Summary of Used CX(xx) Command
 them for design: the controller is firmware, modelled at its register interface (the plan's §5.6), and Diamond needs
 none of its internals [A]. The lists were made from headings only.
 
+**Added for D-0** (2026-10-11): Sony's service manuals for the SCPH-5500, SCPH-7500 and SCPH-9000 series and the
+SCPH-100 (PU-18, PU-22, PU-23, PM-41), under `docs/sony-service-manuals/` with their hashes (`DOCS.txt` §C); what was read
+in them, and the psx-spx `master` commit `cafc0eb` read beside the pinned `stable`, are recorded in `Diamond_Disputes.md`
+D-0's second step.
+
 ## 3. The probe
 
 The libretro backend already passed a path to cores that ask for one; all three set `need_fullpath` [R their system

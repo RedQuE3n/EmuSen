@@ -8,7 +8,9 @@ core may share, are `emusen-mips` in `Cores/Shared/`, built at Diamond's stage 2
 own record is beside this page.
 
 - [`BlackMoon_R3000.md`](BlackMoon_R3000.md) — `blackmoon-r3000`, the R3000A, graded by SingleStepTests' r3000 suite
-  (registers, both delay slots, every cycle), with amidog's CPU tests and ps1-tests as independent checks.
+  (registers, both delay slots, every cycle), with amidog's CPU tests and ps1-tests as independent checks. **Built at
+  Diamond's stage 2 (2026-10-11): 55,000 of 55,000 cases**, 1,022 of them in the form of its dispute D-1; its design,
+  timing model, coprocessor 0, its own cases and its disputes log are on that page.
 - [`BlackMoon_GTE.md`](BlackMoon_GTE.md) — `blackmoon-gte`, the GTE, graded by ps1-tests' `test-all` and amidog's GTE
   test, bit for bit.
 
@@ -17,8 +19,9 @@ own record is beside this page.
 The interface of `Beryl-HW/README.md`, which the Sony crates keep unchanged:
 
 - **A bus trait in the processor's own terms**, which the core implements: the R3000A's instruction fetches, its data
-  reads and writes by width (byte, halfword, word), its internal cycles, its interrupt request, and coprocessor 2's
-  register transfers and commands.
+  reads and writes by width (byte, halfword, three bytes within a word, word), the loads and stores that an isolated
+  cache takes instead of memory, its internal cycles, its interrupt request, and coprocessor 2's register transfers and
+  commands. The processor may read the bus's clock, never set it: the R3000A does, to time its multiplier.
 - **The bus owns the clock.** The processor reports every access and every internal cycle through the bus, which
   advances its own time and adds its wait states; the processor keeps no clock. One implementation serves a flat test
   bus and the console's bus alike (`Diamond_Plan.md` §5.1, §5.2).
@@ -28,6 +31,9 @@ The interface of `Beryl-HW/README.md`, which the Sony crates keep unchanged:
 - **State through `emusen-native`'s `State`**: each processor's registers are a fixed block of its core's state,
   written with `StateWriter` and read with `StateReader`, a short block changing nothing; the layout is pinned by a
   test in the crate.
+- **Disassembly and assembly through `emusen-mips`** (`../../Shared/EmuSen_Mips.md`): the shared crate holds the
+  instruction set as data and no execution; each processor crate gives its coprocessor 0's table and its dialect, and
+  `blackmoon-gte` gives the GTE's table as coprocessor 2's, which the core joins to the R3000A's.
 - **The single-step oracle lives in the crate**, as unit tests that find the corpus through `EMUSEN_BLACKMOON_CORPUS`
   (`~/.cache/emusen/probe/diamond` on the desktop) and pass unrun without it; the processor's own run is skipped while
   the crate's `BUILT` is false, its replay controls are not.

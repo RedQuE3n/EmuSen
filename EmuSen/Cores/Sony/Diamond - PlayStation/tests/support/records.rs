@@ -1,4 +1,4 @@
-//! Four of ps1-tests' TTY programs rewritten to record in RAM, assembled from the project's own part in
+//! Seven of ps1-tests' TTY programs rewritten to record in RAM, assembled from the project's own part in
 //! `programs/records/` and the release build 158's compiled code, carried from the local corpus named by
 //! `EMUSEN_DIAMOND_PS1TESTS` at each file's `@release` line and pinned by SHA-256 (Diamond_Records.md §1.1). Without
 //! the corpus nothing is built; the release's code is never kept in the tree.
@@ -18,7 +18,7 @@ pub struct Record {
     pub calls: &'static [(u32, &'static str)],
 }
 
-pub const RECORDS: [Record; 4] = [
+pub const RECORDS: [Record; 7] = [
     Record {
         name: "access-time",
         release: "cpu/access-time/access-time.exe",
@@ -59,6 +59,41 @@ pub const RECORDS: [Record; 4] = [
             (0x8001_0D4C, "resetgraph"), (0x8001_0888, "none"), (0x8001_08BC, "none"), (0x8001_09F0, "putdisp"),
             (0x8001_0BC8, "putdraw"), (0x8001_10AC, "dispmask"), (0x8001_08F4, "drawprim"), (0x8001_0EBC, "finish"),
             (0x8001_128C, "record"), (0x8001_12C8, "none"), (0x8001_12D8, "none"),
+        ],
+    },
+    Record {
+        name: "otc-test",
+        release: "dma/otc-test/otc-test.exe",
+        own: include_str!("../../programs/records/otc-test.s"),
+        sha256: "7e240fc2ddc13f1a874bb1f5372616e18dc00296439d44b6d82cf5bf0098f050",
+        calls: &[
+            (0x8001_222C, "none"), (0x8001_2260, "none"), (0x8001_2298, "drawprim"), (0x8001_2394, "putdisp"),
+            (0x8001_256C, "putdraw"), (0x8001_26F0, "resetgraph"), (0x8001_2860, "finish"), (0x8001_2A50, "dispmask"),
+            (0x8001_2C30, "record"), (0x8001_2C6C, "none"), (0x8001_2C7C, "none"), (0x8001_31A4, "malloc"),
+            (0x8001_32F0, "none"),
+        ],
+    },
+    Record {
+        name: "dpcr",
+        release: "dma/dpcr/dpcr.exe",
+        own: include_str!("../../programs/records/dpcr.s"),
+        sha256: "26e878ab89e3e6380e6907023077e01b3323b39690a887663e018acd401bac7f",
+        calls: &[
+            (0x8001_09B0, "none"), (0x8001_09E4, "none"), (0x8001_0A1C, "drawprim"), (0x8001_0B18, "putdisp"),
+            (0x8001_0CF0, "putdraw"), (0x8001_0E74, "resetgraph"), (0x8001_0FE4, "finish"), (0x8001_11D4, "dispmask"),
+            (0x8001_13B4, "record"), (0x8001_13F0, "none"), (0x8001_1400, "none"), (0x8001_165C, "strlen"),
+            (0x8001_1B3C, "spuinit"),
+        ],
+    },
+    Record {
+        name: "io-access-bitwidth",
+        release: "cpu/io-access-bitwidth/io-access-bitwidth.exe",
+        own: include_str!("../../programs/records/io-access-bitwidth.s"),
+        sha256: "6f92faa800ee6def9893112b18fc5327a79a902869094649173bcb55566b011d",
+        calls: &[
+            (0x8001_4518, "none"), (0x8001_454C, "none"), (0x8001_4584, "drawprim"), (0x8001_4680, "putdisp"),
+            (0x8001_4858, "putdraw"), (0x8001_49DC, "resetgraph"), (0x8001_4B4C, "finish"), (0x8001_4D3C, "dispmask"),
+            (0x8001_4F1C, "record"), (0x8001_4F58, "none"), (0x8001_4F68, "none"),
         ],
     },
 ];

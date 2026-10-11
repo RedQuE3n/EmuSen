@@ -1,4 +1,4 @@
-//! Builds the four record programs that carry the release build 158's code (tests/support/records.rs) from the corpus
+//! Builds the seven record programs that carry the release build 158's code (tests/support/records.rs) from the corpus
 //! `EMUSEN_DIAMOND_PS1TESTS` names: `records [OUT]` writes each one's source and PS-EXE into OUT, by default
 //! `~/.cache/emusen/probe/diamond/records/`, for the referees (Diamond_Records.md §1.1). Never into the tree.
 

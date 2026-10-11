@@ -7,7 +7,8 @@ print in a fixed layout from `80100000h`, as `gpustat.s` is of `gpu/gpustat`: `t
 `dma/chopping`, `gpu/bandwidth` and `dma/chain-looping`, in `programs/` beside Diamond's own. For each it gives the
 record's layout (§2–§6), the check that the record holds what the release program prints on the same machine, the
 record against the console's log, and what the referees answered (§7). §1 is the method, §8 the findings for Diamond,
-§9 what was read.
+§9 what was read. *Since 2026-10-11 (§11–§17)* three more, `dma/otc-test`, `dma/dpcr` and `cpu/io-access-bitwidth`,
+which print values and verdicts rather than times, record their printf calls themselves (§11).
 
 Marks as in the plan: **[M]** measured on 2026-10-11 on the desktop (Ryzen 7 7700X, Fedora 44) with the tool named;
 **[R]** read from the source named; **[A]** argued; **[C]** a choice.
@@ -461,10 +462,238 @@ cell by 0.2 without any change to Diamond's hardware model. The rewrites do not 
 
 ## 10. Not done
 
-- `dma/otc-test`, `dma/dpcr` and `cpu/io-access-bitwidth`, which report values and pass or fail lines rather than
+- ~~`dma/otc-test`, `dma/dpcr` and `cpu/io-access-bitwidth`, which report values and pass or fail lines rather than
   times: the same method applies, with `printf`'s stand-in keeping each call's format address and arguments and the
   renderer reading the formats from the release, but they were not rewritten in this step. Diamond passes the first two
-  by its TTY (`Diamond_Native.md` §11.14).
+  by its TTY (`Diamond_Native.md` §11.14).~~ *Done 2026-10-11, by that method: §11–§17.*
 - `cpu/cop` and `cpu/code-in-io`: their tests take exceptions through the kernel, hooking its handler and reading its
   thread structures (`common/exception.hpp`), which a bare-metal rewrite would have to stand in for; not attempted.
-- PSX_MiSTer was not run on the records (`Diamond_FPGA_Referees.md`, its status).
+- PSX_MiSTer was not run on the records, the three of §11 included (`Diamond_FPGA_Referees.md`, its status).
+
+## 11. The value programs: a record of the printf calls
+
+*Added 2026-10-11.* `dma/otc-test`, `dma/dpcr` and `cpu/io-access-bitwidth` print verdicts and register values, not
+times, so their rewrites record the calls that print them rather than a table of numbers [C]. The carrying of the
+release's code (§1.1) and the stand-ins' rule (§1.2) are unchanged.
+
+### 11.1 The record
+
+From `80100000h`, six words a call to `printf`, in the order made: the format's address, `a1` to `a3`, and the fifth
+and sixth arguments, read from the caller's frame at `16(sp)` and `20(sp)`; up to 512 calls, the words after the last
+zero (the start-up clears `80100000h`–`80102FFFh`). The words a format does not consume are whatever the caller's
+frame or registers held: they are the same from run to run on one machine and are not compared. The formats stay in
+the release, as its code does: `psxrecords.py render` reads each format, and each `%s` argument, from the build 158
+PS-EXE in the corpus `EMUSEN_DIAMOND_PS1TESTS` names, and prints what the release's printf would. It implements the
+conversions the three programs use (`d`, `i`, `u`, `x`, `X`, `c`, `s`, with flags, width and precision) as C defines
+them, `%#x` of zero printing `0` as the console's log shows; PSn00bSDK's printf was not read, and on these formats its
+output on Diamond is the rendering's (§12–§14) [M].
+
+`cpu/io-access-bitwidth` reads the BIOS at `BFC00000h` in one row of each table, and a record of that row would hold a
+word of the firmware of whichever machine ran it. Its printf stand-in therefore keeps the table's width (from the
+`"Reading as %dbit"` heading), the row's address (from the row's heading) and, for the BIOS row, the ROM's word read
+before the row's writes; each value printed in that row is compared with that word at the table's width and recorded
+only as format 1, the ROM's own word, or format 2, another value, with no argument. The renderer prints them as
+`(ROM)` and `(written)`, and reduces any TTY's BIOS row the same way before comparing (`psxrecords.py mask`, through
+which the referees' TTY of the release was passed before it was stored, §15) [C].
+
+### 11.2 The carried code and the stand-ins
+
+| Program | Carried (the release's own code) | Words | Of them, calls repointed |
+|---|---|---|---|
+| `dma/otc-test` | `80010008h`–`8001222Bh`: `main.cpp`, `otc.cpp`, and `io.c` and `gpu.cpp`'s `initVideo` and `clearScreen` | 2,185 | 107 |
+| `dma/dpcr` | `80010008h`–`800109AFh`: `main.cpp`, `io.c`, `dma.cpp`'s `masterEnable`, `gpu.cpp`'s `initVideo`, `clearScreen` and `writeGP0` | 618 | 32 |
+| `cpu/io-access-bitwidth` | `80010010h`–`80014517h`: `main.cpp` (the 54 `writeTo<>` and three `runTests<>`), `asm.s`, `io.c`'s `write32`, `exception.cpp`, `gpu.cpp`'s two | 4,418 | 388 |
+
+Each range is pinned by its SHA-256 in `tests/support/records.rs`. The library's first function is, in all three, the
+one `initVideo` calls first after its own (`SetDefDispEnv`), found as in §1.1. `cpu/io-access-bitwidth`'s range starts
+at `80010010h` so that the two words of its exception vector have a place at `80010008h`. The start-up sets sp and gp
+as the release's left them at `main` on Diamond's open kernel (sp `801FFEE0h` in all three; gp `8001CB30h`,
+`8001A150h`, `8001E9D0h`) and zeroes the release's data and bss (`80013000h`–`80015C93h`, `80011F00h`–`80012FFFh`,
+`80015000h`–`80017FFFh`) [M].
+
+The GPU's stand-ins are §1.2's, those of `chain-looping.s`, word for word; the new ones, each from Diamond's trace of
+the release's I/O accesses on the open kernel [M]:
+
+| Library call | Its stand-in |
+|---|---|
+| `malloc` (`otc-test`) | `80015C94h`, what each of the release's three calls returned |
+| `free` (`otc-test`) | nothing |
+| `strlen` (`dpcr`) | the string's length, counted by its bytes: a C library function defined by its result, with no bus access |
+| `SpuInit` (`dpcr`) | the release's 198 accesses in its order: SPUCNT (`1DAAh`) 0 and SPUSTAT (`1DAEh`); `1D80h`–`1D86h`, `1DB0h`–`1DB6h` and `1D90h`–`1D9Ah` 0, `1DA2h` FFFEh; the 24 voices' registers at +0, +2, +4, +6, +E, +8 and +A 0, from voice 23 down; `1D8Ch` and `1D8Eh` FFFFh; `1DACh` 4; DPCR read and written with channel 4's enable set (`3B333B33h` read, `3B3B3B33h` written); SPUCNT C001h and SPUSTAT; `1D80h`, `1D82h`, `1DB0h`, `1DB2h`, `1DB0h`, `1DB2h` 3FFFh. Each SPUSTAT read on Diamond already showed the mode just written; the stand-in reads it until it does, at most 10,000 times [C] |
+
+`dpcr` reads its `TEST_STRING`, `"Hello there   :)"`, through a pointer in its initialised data at `gp - 7FF0h`; the
+start-up writes the string, the test's own literal, at the release's `80011F18h` and the pointer at `80012160h`.
+
+**The exception path** (`io-access-bitwidth`). The test's handler, `exceptionHandler` of `common/exception.cpp`, is
+reached in the release through the kernel: `hookUnresolvedExceptionHandler` stores it at `300h` (the A0h table's
+entry 40h), and the handler finds the current thread's saved registers through `108h`, sets its flag there and moves
+the saved return address past the fault, or to ra for a bus error on a fetch [R `exception.cpp`, `exception.hpp`]. The
+stand-in is that path and nothing of a kernel beyond it [C]: the vector at `80000080h` jumps to code that saves every
+register but k0 and k1, HI, LO, EPC as the return address, SR and CAUSE in a thread laid out as `exception.hpp`'s
+`Thread` at `800FFE10h` (`108h` holds `800FFE00h`, whose first word is the thread), calls the word at `300h`, restores
+the registers and returns to the thread's return address with RFE. `asm_write_32`'s store lies in its JR's delay slot,
+where the assembler moved it, so a misaligned one faults twice: the first EPC is the JR, the handler's return past it
+re-runs the store alone, which faults again, and the second return falls through into `asm_write_16`, whose SH, in its
+own JR's delay slot, writes the halfword. Diamond's trace shows the same accesses to JOY_CTRL in that order in the
+release on the open kernel and in the record with no kernel [M].
+
+### 11.3 The checks
+
+As §1.3, with `psxrecords.py equal`, which renders the record and compares it with the release's TTY line by line from
+the program's heading on, leaving out empty lines, which DuckStation's TTY log does not carry; and `psxrecords.py
+console`, which applies WiseMan's gate to `otc-test` and `dpcr` (no `fail`, a `pass`, `Done.`) and finds the log's
+lines in order, and grades `io-access-bitwidth` cell by cell against the log, which the gate does not
+(`Diamond_Native.md` §11.14) [M].
+
+## 12. `dma/otc-test` — `programs/records/otc-test.s`
+
+**The record**: 17 calls, the heading, `"pass - %s"` with each of the 15 tests' names, and `"Done."`.
+
+**Against the release on Diamond**: 17 of 17 lines equal [M, `psxrecords.py equal otc-test`].
+
+**Against the console's log**: the gate passes; the log's 13 tests all pass, in its order. The release build 158 has
+two tests the log's build does not, `testOtcBigTransfer` (a block count of 0 as 65,536 words) and
+`testOtcControlBitsAfterTransferWithChopping`; Diamond passes both, as the release on the open kernel does
+(`Diamond_Native.md` §11.14) [M].
+
+## 13. `dma/dpcr` — `programs/records/dpcr.s`
+
+**The record**: 14 calls: the two heading lines; `writeToSPURAM`'s pass; for each of the three DPCR settings its
+heading, DPCR before and as set, and complete or timed out; `testSPUDMARead`'s pass after the one that completes;
+`"Done."`.
+
+**Against the release on Diamond**: 14 of 14 lines equal: DPCR `3B3B3B33h` before each setting, as `ResetGraph`'s and
+`SpuInit`'s stand-ins leave it; the transfer complete with channel 4 enabled at priority 5, timed out with it disabled
+at priorities 5 and 0 [M].
+
+**Against the console's log**: the gate passes, and all 14 of the log's lines are found in order, DPCR's values
+included [M].
+
+## 14. `cpu/io-access-bitwidth` — `programs/records/io-access-bitwidth.s`
+
+**The record**: 235 calls: the headings, and for each of the three tables (read as 32, 16 and 8 bits) and each of 18
+regions the row's heading, a value or `--CRASH--` for each write width up to the read's, and the row's end; 108 values
+in all, the BIOS row's six as formats 1 or 2 (§11.1).
+
+**Against the release on Diamond**: 63 of the 64 lines equal; the BIOS row is the ROM's own word in every cell in both.
+The one line that differs is GPUSTAT's in the 32-bit table: the record reads `90802000h` after each write width, the
+release `94802000h`. The difference is bit 26, ready for a command, and its cause is outside the test's instructions
+[M]: the row writes GP1(00h) and reads GPUSTAT; in the record the last of `clearScreen`'s four fills is still drawing
+when the row is reached, and a reset on Diamond leaves the GPU busy until it ends (§16.1); in the release each printf
+goes through the open kernel's TTY, which takes long enough for the fill to end first. With a delay loop of 200 to
+5,000 iterations added to the record's printf stand-in, bit 26 reads set in all three cells, as the release's; bit 31
+then differs from cell to cell with the moment of the read, as psx-spx says it changes per scanline in 240-line mode
+("GPU Status Register"). The committed stand-in has no delay [C], since a console's printf is the retail BIOS's, whose
+time no log gives (§2.3's reason).
+
+**Against the console's log**: 85 of the 108 cells as the console's, the same 85 as the release's on the open kernel
+[M, `psxrecords.py console io-access-bitwidth`]. The 23 others: 14 already recorded in `Diamond_Native.md` §11.14, the
+registers' upper bits the console returns from its bus (I_MASK's three and T0_TARGET's three in the 32-bit table,
+SIO_CTRL's two) and DEV1 at `1FA00000h`, which reads FFh where the console's window holds what was written (six);
+DICR's six (§16.2); and GPUSTAT's three in the 32-bit table, `14802000h` in the log, bit 31 set on Diamond in the
+release's and bits 31 and 26 in the record's.
+
+## 15. The referees on the three
+
+Each record was side-loaded on the five referees of `Diamond_Referees.md` §2 by `psxreferee.py ram`, the player's BIOS
+given by path, NTSC, and read from RAM; the release's TTY was read on DuckStation and PCSX-Redux by `psxreferee.py
+tty`, through `psxrecords.py mask`. After each run no process was left in a referee's scope [M].
+
+**On the two that show a TTY**, the record against the release on the same referee [M, `psxrecords.py equal`]:
+
+| Program | DuckStation | PCSX-Redux |
+|---|---|---|
+| `otc-test` | 17 of 17 lines equal | 20 of 35 equal; the other 15 are fail lines that differ only in the stack address of the test's buffer in "expected", the record's stack being the open kernel's on every machine |
+| `dpcr` | 14 of 14 equal | 14 of 14 equal |
+| `io-access-bitwidth` | 62 of 64 equal: CDROM_STAT's and GPUSTAT's rows, read at another moment of the drive's and the display's state | both stop at JOY_CTRL's misaligned 32-bit store, its debugger's "First chance exception: StoreAddressError"; the record's frames stop with it and its RAM was not read |
+
+**`dma/otc-test`** (the tests that pass, of 15; of the 13 the log lists and passes) [M]:
+
+| | Diamond | DuckStation | SwanStation | Beetle PSX | PCSX-ReARMed | PCSX-Redux |
+|---|---|---|---|---|---|---|
+| tests passed, of 15 | 15 | 15 | 9 | 14 | 12 | 4 |
+| of the log's 13 | 13 | 13 | 8 | 12 | 12 | 4 |
+| a block count of 0 (`BigTransfer`) | 65,536 words | 65,536 | 65,536 | 65,536 | none moved | none moved |
+| CHCR's fixed bits (the three register tests) | as the test expects | the same | another channel's: `70770703h` kept, the rest dropped, bit 1 not forced | the same as Diamond | the same as Diamond | every bit written kept |
+| CHCR after a transfer | `00000002h` | the same | the same; `00110102h` after the chopped one | the same | `11000002h`, the start bits left set | `11000002h`, `10110102h` |
+| the channel with DPCR's enable clear | does not run | does not run | does not run | **runs** | does not run | does not run |
+| `FromRam`, `Forward`, the sync modes | as the test expects | the same | `FromRam` and the reserved sync mode move nothing | the same as Diamond | the same as Diamond | all five move nothing |
+
+**`dma/dpcr`**: Diamond, DuckStation, SwanStation, PCSX-ReARMed and PCSX-Redux find all 14 of the log's lines, the
+transfer complete with channel 4 enabled and timed out with it disabled. Beetle PSX completes it in all three, 12 of
+14, as it runs `otc-test`'s channel with the enable clear: it does not gate a channel by DPCR's enable bit [M].
+
+**`cpu/io-access-bitwidth`** (108 cells) [M]:
+
+| | Diamond | Beetle PSX | SwanStation | DuckStation | PCSX-ReARMed | PCSX-Redux |
+|---|---|---|---|---|---|---|
+| cells as the console's | 85 | 70 | 64 | 58 | 45 | stops (above) |
+| DICR after writing `12345678h` (console `340038h`) | `340078h` | `340038h` | `340038h` | `340078h` | `C340038h`; `C000078h` after a byte | — |
+| GPUSTAT after the GP1 writes (console `14802000h`) | `90802000h` | `14802000h` | `14800000h` | `14800000h` | `94802000h`, `94800000h` | — |
+| a misaligned 32-bit store (console: an exception) | exception | exception | exception | exception | stored | — |
+| DEV1 after writes (console as written) | FFFFFFFFh | 0 | FFFFFFFFh | FFFFFFFFh | FFFFFFFFh | — |
+
+What each referee misses besides: DuckStation and SwanStation the joypad's and SIO's mode and control registers
+(JOY_MODE and SIO_MODE read back `5678h` where the console keeps `38h` and `78h`, the control registers `FFFF0000h`), the
+CD-ROM's status (`FF000090h` where the console's bus repeats the status byte) and the MDEC's (`8004FFFFh`); Beetle PSX
+DEV8 and DEV1 (0 where the console reads FFh and what was written), SIO's registers (`5678h`), the CD-ROM's status once
+(`18h`) and I_MASK's upper bits (`1F80h` where the console's are `1234h`); PCSX-ReARMed nearly every register's width,
+a byte store writing the byte alone where the console's processor drives the whole word.
+
+## 16. Findings for Diamond
+
+### 16.1 A reset leaves the GPU busy with the command it was drawing
+
+Not fixed; reported. `cpu/io-access-bitwidth`'s GPUSTAT row reads bit 26 clear in the record (§14). A program of the
+project's own, kept with the step's outputs in the probe's cache (`records/r2/exp/gp1-reset.s`) and not committed,
+proves the cause: with interrupts off it sends GP0(02h) for a fill of 1,008 by 511 pixels, reads GPUSTAT, writes
+GP1(00h), reads it at once and 100 cycles later, then counts the reads until bit 26 is set [M]:
+
+| | Before the reset | At once after | 100 cycles after | Reads until ready |
+|---|---|---|---|---|
+| Diamond | `10802000h` | `10802000h` | `10802000h` | 5,855 |
+| DuckStation, SwanStation | `10800000h` | `14800000h` | `14800000h` | 1 |
+| Beetle PSX | `10802000h` | `14802000h` | `14802000h` | 1 |
+| PCSX-ReARMed | `10802000h` | `10802000h` | `10802000h` | 37 |
+| PCSX-Redux | `14802000h` (drawn at once) | `14802000h` | `14802000h` | 1 |
+
+psx-spx says of GP1(00h) that "GP1.read becomes 14802000h" ("GPU Display Control Commands (GP1)"); DuckStation and
+Beetle PSX, two lineages, read the GPU ready at once after it. On Diamond GP1(00h) and GP1(01h) empty the FIFO and the
+command parser (`reset_fifo` in `gpu/mod.rs`) but leave `busy_until`, the end of the command in progress as the drawing
+model times it, and the status reads idle only past it [R Diamond's source]. What a console's reset does to a fill
+already begun, and to the pixels it has not drawn, no log shows; the question is for a dispute step.
+
+### 16.2 DICR's bit 6
+
+Not changed; reported. Diamond keeps bits 0 to 6 of a DICR write (`dma.rs`, `value & 00FF807Fh`), as psx-spx's "DMA
+Channels" gives them ("0-6 Controls channel 0-6 completion interrupts"). The console's log reads `38h` in all six DICR
+cells after writing `78h`, `5678h` or `12345678h`: bit 6 reads zero, bits 0 to 5 as written. Beetle PSX and SwanStation
+read as the log in all six, PCSX-ReARMed after its halfword and word stores but not its byte stores, DuckStation as
+Diamond in all six [M]. A disagreement between the document and the console's log,
+for a dispute step.
+
+## 17. What was read for §11–§16
+
+- **ps1-tests** (MIT): `dma/otc-test`'s `main.cpp`, `otc.cpp`, `otc.h` and `Makefile`; `dma/dpcr`'s `main.cpp` and
+  `Makefile`; `cpu/io-access-bitwidth`'s `main.cpp`, `asm.s`, `asm.h` and `Makefile`; their `psx.log`; `common/`'s
+  `test.h`, `test.c`, `io.c`, `io.h`, `gpu.h`, `gpu.cpp`, `dma.cpp`, `common.h`, `exception.hpp` and `exception.cpp`. The
+  first five lines of every file in `common/` were shown together to check their headers; for `cop0.hpp` and `dma.hpp`
+  those are their includes and their "From Avocado" and "Copied from Avocado" lines, and neither was opened further
+  (`exception.hpp` includes `cop0.hpp`; its types were read only as the offsets `exception.cpp`'s compiled code uses).
+  The three releases' own compiled code, disassembled; their strings and initialised data where the code uses them
+  (formats, names, `TEST_STRING` and its pointer). **An exposure to declare**: while finding `otc-test`'s last function,
+  the listing shown ran 93 words past it, `8001222Ch`–`800123A0h`, PSn00bSDK's `SetDefDispEnv`, `SetDefDrawEnv`,
+  `DrawPrim` and the start of `DrawSync` as compiled, and one word past `io-access-bitwidth`'s; nothing was taken from
+  them, every stand-in being §1.2's or written from Diamond's trace of the bus.
+- **The releases' behaviour on Diamond**: I/O loads and stores with their cycles, PCs and values from `main` on (the
+  kernel's own accesses left out by their PCs), the registers at `main`'s entry, and v0 after the calls to `malloc`,
+  through a copy of Diamond's crate in the probe's cache with a trace added, never in the tree.
+- **Diamond's own source**: `gpu/mod.rs`'s GP1 commands and status, `dma.rs`'s register writes, `bus.rs`'s load and
+  store paths, `machine.rs`.
+- **psx-spx** `6d7d1bc`: "DMA Channels" (DICR), "GPU Display Control Commands (GP1)" (GP1(00h), GP1(01h)) and "GPU
+  Status Register" (bit 31).
+- **The referees' outputs**: their RAM; for DuckStation and PCSX-Redux the releases' TTY from each heading on, with
+  `io-access-bitwidth`'s BIOS row reduced by `psxrecords.py mask` before it was stored, so that no BIOS word was kept or
+  read; PCSX-Redux's own messages (its unmapped-write reports and the address error).
+- **Not read**: any emulator's source; PSn00bSDK's sources; any BIOS, firmware or listing; the BIOS's words, which the
+  record compares inside the machine and never stores.

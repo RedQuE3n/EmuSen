@@ -273,7 +273,7 @@ fn the_open_kernels_pad_functions_read_the_pads() {
     assert_eq!(bytes(&m, 0x10_0000, 8), [0x00, 0x73, 0xFF, 0xFF, 0x80, 0x80, 0xFF, 0x80], "the analog read, the left stick right");
 }
 
-// The RAM-recording rewrites of ps1-tests' TTY programs (Diamond_Records.md), each record as Diamond answers it. Four
+// The RAM-recording rewrites of ps1-tests' TTY programs (Diamond_Records.md), each record as Diamond answers it. Seven
 // carry the release's code from the corpus and pass unrun without it.
 
 #[path = "support/records.rs"]
@@ -406,4 +406,55 @@ fn small_rectangles_and_fills_cost_their_rows() {
     assert_eq!(busy[4..18], [7, 7, 7, 25, 70, 7, 25, 79, 322, 52, 610, 2284, 4444, 7], "flat rectangles 1x1 to 128x64, then GP0(68h)");
     assert_eq!(busy[18..26], [7, 7, 25, 106, 403, 7, 25, 448], "fills");
     assert_eq!(busy[26..30], [556, 574, 835, 4912], "triangles keep their setup");
+}
+
+// The printf records of ps1-tests' value programs (Diamond_Records.md §11–§14): each call's format address and arguments.
+
+/// A printf record's calls, six words each, up to the first with no format.
+fn printf_calls(m: &Machine) -> Vec<Vec<u32>> {
+    results(m, 0x10_0000, 3072).chunks(6).take_while(|c| c[0] != 0).map(|c| c.to_vec()).collect()
+}
+
+/// `dma/otc-test`: its heading, "pass - %s" for each of the fifteen tests, and "Done.", as the release prints them on
+/// Diamond's open kernel.
+#[test]
+fn the_otc_record_passes_every_test() {
+    let Some(source) = carried("otc-test") else { return };
+    let m = run_for(&source, 60, Market::Americas);
+    let c = printf_calls(&m);
+    let formats: Vec<u32> = c.iter().map(|c| c[0]).collect();
+    assert_eq!(formats, [&[0x8001_39B0][..], &[0x8001_33E8; 15], &[0x8001_39A8]].concat());
+    assert_eq!(fnv(&c.concat()), 0x45D2_B6B9_5431_9863, "the calls with their arguments");
+}
+
+/// `dma/dpcr`: the SPU's channel completes with DPCR's enable set and times out without it, whatever the priority;
+/// DPCR read as ResetGraph and SpuInit leave it.
+#[test]
+fn the_dpcr_record_completes_only_with_the_channel_enabled() {
+    let Some(source) = carried("dpcr") else { return };
+    let m = run_for(&source, 60, Market::Americas);
+    let c = printf_calls(&m);
+    let dpcr: Vec<[u32; 2]> = c.iter().filter(|c| c[0] == 0x8001_1E0C).map(|c| [c[1], c[2]]).collect();
+    assert_eq!(dpcr, [[0x3B3B_3B33, 0x3B3D_3B33], [0x3B3B_3B33, 0x3B35_3B33], [0x3B3B_3B33, 0x3B30_3B33]]);
+    let ends: Vec<u32> = c.iter().map(|c| c[0]).filter(|&f| f == 0x8001_1EAC || f == 0x8001_1E90).collect();
+    assert_eq!(ends, [0x8001_1EAC, 0x8001_1E90, 0x8001_1E90], "complete, then timed out twice");
+    assert_eq!(c.iter().filter(|c| c[0] == 0x8001_1D64).count(), 2, "both tests pass");
+    assert_eq!(fnv(&c.concat()), 0xCEB9_CCA0_7DCD_4D84, "the calls with their arguments");
+}
+
+/// `cpu/io-access-bitwidth`: 108 reads after 8-, 16- and 32-bit writes, the BIOS row's all the ROM's own word, a
+/// 32-bit store faulting at JOY_CTRL, SIO_CTRL and SPUCNT; 85 cells as the console's log has them, DICR's bit 6 and
+/// GPUSTAT's bit 26 among those that are not.
+#[test]
+fn the_io_bitwidth_record_reads_each_register_after_each_width() {
+    let Some(source) = carried("io-access-bitwidth") else { return };
+    let m = run_for(&source, 60, Market::Americas);
+    let c = printf_calls(&m);
+    let cells: Vec<&Vec<u32>> = c.iter().filter(|c| matches!(c[0], 1 | 2 | 0x8001_56D8 | 0x8001_56E4)).collect();
+    let marked = |f: u32| cells.iter().enumerate().filter(|(_, c)| c[0] == f).map(|(i, _)| i).collect::<Vec<_>>();
+    assert_eq!(cells.len(), 108);
+    assert_eq!(marked(1), [3, 4, 5, 56, 57, 91], "the BIOS row");
+    assert_eq!(marked(0x8001_56D8), [29, 35, 53], "--CRASH--");
+    assert_eq!(cells[21..24].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x34_0078; 3], "DICR, the console's 340038h");
+    assert_eq!(fnv(&c.concat()), 0x6EF4_C758_7679_7C9B, "the calls with their arguments");
 }

@@ -63,6 +63,12 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   cores, their lineages weighed, each open dispute's program run on all of them, the rulings (D-0's line witnessed and
   its interlaced PAL field changed, D-2's table shape confirmed, D-7's base vertex and D-8's flip start changed, the
   rest still open), the referees scored against the console logs, and the reading log.
+- [`Diamond_Records.md`](Diamond_Records.md) — ps1-tests' TTY timing programs rewritten to record in RAM, written
+  2026-10-11 so that referees without a TTY can be graded: `timers`, `cpu/access-time`, `dma/chopping`, `gpu/bandwidth`
+  and `dma/chain-looping`, the release's own code carried in from the local corpus at build time (never kept in the
+  tree) and PSn00bSDK replaced by stand-ins of its observed bus accesses; each record's layout, its equality with the release's TTY on Diamond (and on DuckStation and PCSX-Redux)
+  with every difference traced to the kernel's cache footprint or a clock's phase, the records against the console's
+  logs and on the five referees, a Diamond defect in timer 0's sync, and the reading log.
 - [`Diamond_FPGA_Referees.md`](Diamond_FPGA_Referees.md) — the FPGA cores as black-box referees, written 2026-10-11:
   the access rule decided that day, PSX_MiSTer and Laxer3a's PS-GPU and PS-GTE pinned, GHDL installed user-local, how
   each is driven, the calibration and the disputes each is to referee (not yet run), and the reading log.

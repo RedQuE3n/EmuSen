@@ -13,6 +13,7 @@ crate-type = ["cdylib", "rlib"]
 emusen-native = { path = "../../Shared/emusen-native" }
 blackmoon-r3000 = { path = "../BlackMoon-HW/blackmoon-r3000" }
 blackmoon-gte = { path = "../BlackMoon-HW/blackmoon-gte" }
+emusen-disc = { path = "../../Shared/emusen-disc" }
 
 [dev-dependencies]
 emusen-mips = { path = "../../Shared/emusen-mips" }

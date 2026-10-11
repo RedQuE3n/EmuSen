@@ -89,6 +89,11 @@ fn licence_sector(image: &[u8]) -> Option<(&[u8], bool)> {
     (image.get(data..data + LICENCE.len()) == Some(LICENCE)).then(|| (&image[data..], true))
 }
 
+/// A disc's market from its sector 4's user data, if it holds the licence text.
+pub fn licensed(user: &[u8]) -> Option<Option<Market>> {
+    (user.get(..LICENCE.len()) == Some(LICENCE)).then(|| user.get(0x20..0x46).and_then(licence_market))
+}
+
 impl Media {
     pub fn read(image: &[u8]) -> Result<Media, Refusal> {
         if image.starts_with(EXE_MAGIC) {

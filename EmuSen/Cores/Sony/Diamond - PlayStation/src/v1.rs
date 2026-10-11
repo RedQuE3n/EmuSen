@@ -15,6 +15,14 @@ use crate::state::STATE_VERSION;
 pub const STATUS_NOT_PLAYSTATION: i32 = -9;
 /// A PS-EXE shorter than its header says.
 pub const STATUS_EXE_TRUNCATED: i32 = -10;
+/// A cue sheet whose track files were not all passed beside it.
+pub const STATUS_TRACKS_MISSING: i32 = -11;
+/// A sheet or a disc image that emusen-disc cannot read.
+pub const STATUS_BAD_DISC: i32 = -12;
+
+/// The first companion file of an image set, `EMUSEN_FILE_MEDIA` of EmuSen_CoreAPI_Extensions.md §2.4: file
+/// `MEDIA_FILE + n` is the sheet's nth file, then an `.sbi` found beside the image.
+pub const MEDIA_FILE: u32 = 65_536;
 
 /// The pad report's bits (psx-spx "Standard Controllers"), pressed as 1, in the order a bindings screen lists them,
 /// each with its canonical control (Diamond_Plan.md §4.2); L3 and R3 are the DualShock's alone.
@@ -161,38 +169,62 @@ impl Core for Machine {
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
-        Media::read(image).map(|m| vec![bios(market_of(&m, None))]).unwrap_or_default()
+        if crate::medium::is_sheet(image) {
+            return vec![bios(Market::Japan), bios(Market::Americas), bios(Market::Europe)];
+        }
+        match Media::read(image) {
+            Ok(m) => vec![bios(market_of(&m, None))],
+            Err(_) => match crate::medium::open(image, &[]) {
+                Ok(crate::medium::Opened::Disc(_, m)) => vec![bios(market_of(&m, None))],
+                _ => Vec::new(),
+            },
+        }
     }
 
     fn status_text(code: i32) -> Option<String> {
         match code {
             STATUS_NOT_PLAYSTATION => Some("the image is neither a PS-EXE (\"PS-X EXE\" at its start) nor a PlayStation disc (the licence text in sector 4 of its system area)".into()),
             STATUS_EXE_TRUNCATED => Some("the PS-EXE is shorter than its header and the size it states".into()),
+            STATUS_TRACKS_MISSING => Some("the cue sheet names track files that were not given beside it".into()),
+            STATUS_BAD_DISC => Some("the cue sheet or the disc image could not be read as a compact disc".into()),
             _ => None,
         }
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        let media = match Media::read(request.image) {
-            Ok(m) => m,
-            Err(Refusal::NotPlayStation) => {
-                detail(&format!("the {}-byte image is neither a PS-EXE nor a PlayStation disc", request.image.len()));
-                return Err(STATUS_NOT_PLAYSTATION);
-            }
-            Err(Refusal::Truncated { needs, has }) => {
+        let mut companions: Vec<(u32, &[u8])> = request.files.iter().filter(|f| f.which >= MEDIA_FILE).map(|f| (f.which, f.data)).collect();
+        companions.sort_by_key(|c| c.0);
+        let companions: Vec<&[u8]> = companions.into_iter().map(|c| c.1).collect();
+        let (media, disc) = match crate::medium::open(request.image, &companions) {
+            Ok(crate::medium::Opened::Program) => (Media::read(request.image).map_err(|_| STATUS_NOT_PLAYSTATION)?, None),
+            Ok(crate::medium::Opened::Disc(d, m)) => (m, Some(d)),
+            Err(crate::medium::DiscRefusal::Media(Refusal::Truncated { needs, has })) => {
                 detail(&format!("the PS-EXE is {has} bytes; its header and the size it states take {needs}"));
                 return Err(STATUS_EXE_TRUNCATED);
             }
+            Err(crate::medium::DiscRefusal::Media(Refusal::NotPlayStation)) => {
+                detail(&format!("the {}-byte image is neither a PS-EXE nor a PlayStation disc", request.image.len()));
+                return Err(STATUS_NOT_PLAYSTATION);
+            }
+            Err(crate::medium::DiscRefusal::Missing { needs, has }) => {
+                detail(&format!("the cue sheet names {needs} track files and {has} were given"));
+                return Err(STATUS_TRACKS_MISSING);
+            }
+            Err(crate::medium::DiscRefusal::Bad(words)) => {
+                detail(&words);
+                return Err(STATUS_BAD_DISC);
+            }
         };
-        if let Some(f) = request.files.iter().find(|f| f.which > BIOS_EUROPE && !CARD_FILES.contains(&f.which)) {
+        let request_files: Vec<_> = request.files.iter().filter(|f| f.which < MEDIA_FILE).collect();
+        if let Some(f) = request_files.iter().find(|f| f.which > BIOS_EUROPE && !CARD_FILES.contains(&f.which)) {
             detail(&format!("file {} is not one Diamond names", f.which));
             return Err(status::BAD_FILE);
         }
-        if let Some(f) = request.files.iter().find(|f| !CARD_FILES.contains(&f.which) && f.data.len() != BIOS_BYTES) {
+        if let Some(f) = request_files.iter().find(|f| !CARD_FILES.contains(&f.which) && f.data.len() != BIOS_BYTES) {
             detail(&format!("file {} is {} bytes; a BIOS is {BIOS_BYTES}", f.which, f.data.len()));
             return Err(status::BAD_FILE);
         }
-        if let Some(f) = request.files.iter().find(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != CARD_BYTES) {
+        if let Some(f) = request_files.iter().find(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != CARD_BYTES) {
             detail(&format!("file {} is {} bytes; a memory card is {CARD_BYTES}", f.which, f.data.len()));
             return Err(status::BAD_FILE);
         }
@@ -202,7 +234,10 @@ impl Core for Machine {
         let players = request.files.iter().find(|f| f.which == bios(config.market).which).map(|f| (f.data, Kernel::Player));
         let rom = players.or_else(|| kernel::open_kernel().map(|k| (k, Kernel::Open)));
         let mut m = Machine::new(media, config, [port(PAD_KEYS[0]), port(PAD_KEYS[1])], request.image, rom);
-        m.firmware = request.files.iter().filter(|f| !CARD_FILES.contains(&f.which)).map(|f| f.which).collect();
+        m.firmware = request_files.iter().filter(|f| !CARD_FILES.contains(&f.which)).map(|f| f.which).collect();
+        if let Some(d) = disc {
+            m.insert_disc(*d);
+        }
         for n in 0..2 {
             if s.get(CARD_KEYS[n]).unwrap_or(if n == 0 { CARD } else { "none" }) == CARD {
                 let data = request.files.iter().find(|f| f.which == CARD_FILES[n] && !f.data.is_empty()).map(|f| f.data);

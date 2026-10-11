@@ -6,7 +6,8 @@
 use blackmoon_gte::Gte;
 use blackmoon_r3000::{Bus, Size};
 
-use crate::devices::{CdromStub, Duart, MdecStub, SioStub, SpuStub, Tty};
+use crate::cdrom::Cdrom;
+use crate::devices::{Duart, MdecStub, SioStub, SpuStub, Tty};
 use crate::sio0::Sio0;
 use crate::dma::{self, Dma, chcr};
 use crate::gpu::Gpu;
@@ -83,7 +84,9 @@ pub struct Board {
     pub video: Video,
     pub gpu: Gpu,
     pub spu: SpuStub,
-    pub cdrom: CdromStub,
+    pub cdrom: Cdrom,
+    /// The controller's IRQ2 line as last seen, so that I_STAT takes its rising edge.
+    pub(crate) cd_line: bool,
     pub mdec: MdecStub,
     /// The controller and memory card port, and the serial port's stub.
     pub sio0: Sio0,
@@ -130,7 +133,8 @@ impl Board {
             gpu: Gpu::new(gpu_version, video.clock),
             video,
             spu: SpuStub::new(),
-            cdrom: CdromStub::default(),
+            cdrom: Cdrom::new(None, crate::media::Market::Americas),
+            cd_line: false,
             mdec: MdecStub::default(),
             sio0: Sio0::new(Default::default()),
             sio1: SioStub::default(),
@@ -354,8 +358,15 @@ impl Board {
                 self.sio0.read(offset, size.bytes(), self.now)
             }
             0x800..=0x803 => {
-                let b = self.cdrom.read8(offset) as u32;
-                (0..size.bytes()).fold(0, |v, i| v | b << (8 * i))
+                self.sync_cdrom();
+                let v = if offset & 3 == 2 && size.bytes() > 1 {
+                    (0..size.bytes()).fold(0, |v, i| v | (self.cdrom.data_byte() as u32) << (8 * i))
+                } else {
+                    let b = self.cdrom.read8(offset) as u32;
+                    (0..size.bytes()).fold(0, |v, i| v | b << (8 * i))
+                };
+                self.cd_irq();
+                v
             }
             0xC00..=0xFFF => {
                 let at = (offset - 0xC00) & !1;
@@ -379,9 +390,12 @@ impl Board {
                 self.schedule();
             }
             0x800..=0x803 => {
+                self.sync_cdrom();
                 for i in 0..size.bytes() {
-                    self.cdrom.write8(offset, (value >> (8 * i)) as u8);
+                    self.cdrom.write8(offset, (value >> (8 * i)) as u8, self.now);
                 }
+                self.cd_irq();
+                self.schedule();
             }
             0xC00..=0xFFF => {
                 self.io_write16(offset & !1, value & 0xFFFF);
@@ -403,6 +417,20 @@ impl Board {
         }
     }
 
+    /// The CD-ROM controller brought to the present, its IRQ2 edge raised.
+    pub(crate) fn sync_cdrom(&mut self) {
+        self.cdrom.run(self.now);
+        self.cd_irq();
+    }
+
+    pub(crate) fn cd_irq(&mut self) {
+        let line = self.cdrom.line();
+        if line && !self.cd_line {
+            self.irq.raise(irq::CDROM);
+        }
+        self.cd_line = line;
+    }
+
     /// Every timer brought to the present.
     fn sync_timers(&mut self) {
         for n in 0..3 {
@@ -418,7 +446,7 @@ impl Board {
 
     /// The next cycle at which anything is due: a video edge, a timer's target or FFFFh, a DMA piece.
     pub fn schedule(&mut self) {
-        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due).min(self.gpu.next_event()).min(self.sio0.next_event());
+        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due).min(self.gpu.next_event()).min(self.sio0.next_event()).min(self.cdrom.next_event());
         for n in 0..3 {
             next = next.min(self.timers.next_hit(n, &self.video));
         }
@@ -436,7 +464,8 @@ impl Board {
             }
             let gpu_at = self.gpu.next_event();
             let sio_at = self.sio0.next_event();
-            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]).min(gpu_at).min(sio_at);
+            let cd_at = self.cdrom.next_event();
+            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]).min(gpu_at).min(sio_at).min(cd_at);
             if first > self.now {
                 self.next_event = first;
                 return;
@@ -448,6 +477,10 @@ impl Board {
             }
             if sio_at == first && self.sio0.run(first) {
                 self.irq.raise(irq::SIO0);
+            }
+            if cd_at == first {
+                self.cdrom.run(first);
+                self.cd_irq();
             }
             if gpu_at == first {
                 self.gpu.run(first, &self.video);
@@ -574,6 +607,7 @@ impl Board {
                 w
             }
             dma::SPU => self.spu.load() as u32 | (self.spu.load() as u32) << 16,
+            dma::CDROM => self.cdrom.data_word(),
             _ => 0,
         }
     }

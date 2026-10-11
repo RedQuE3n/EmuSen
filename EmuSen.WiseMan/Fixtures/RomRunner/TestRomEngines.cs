@@ -73,11 +73,14 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
     {
         private readonly CoreLibrary _library;
         private readonly Func<string, IReadOnlyList<(uint Which, byte[] Data)>> _files;
+        private readonly Func<string, string> _settings;
 
-        public CoreAbiTestRomEngine(string libraryPath, Func<string, IReadOnlyList<(uint Which, byte[] Data)>>? files = null)
+        // Files and settings by the ROM's path; the settings as create's "key=value" lines.
+        public CoreAbiTestRomEngine(string libraryPath, Func<string, IReadOnlyList<(uint Which, byte[] Data)>>? files = null, Func<string, string>? settings = null)
         {
             _library = CoreLibrary.Open(libraryPath);
             _files = files ?? (_ => Array.Empty<(uint, byte[])>());
+            _settings = settings ?? (_ => "");
         }
 
         public bool Available => _library.Available;
@@ -86,7 +89,7 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
 
         public RomRun Run(string rom, IReadOnlyList<int> frames, IReadOnlyList<RomPress>? presses = null, bool audio = false)
         {
-            using var m = new CoreMachine(_library, File.ReadAllBytes(rom), "", _files(rom));
+            using var m = new CoreMachine(_library, File.ReadAllBytes(rom), _settings(rom), _files(rom));
             var port0 = m.Info.Ports.FirstOrDefault(p => p.Port == 0)?.Controller;
             var buttons = _library.Info.Systems.SelectMany(s => s.Controllers).FirstOrDefault(c => c.Id == port0)?.Buttons ?? Array.Empty<CoreButton>();
             var shots = new List<RomSnapshot>();

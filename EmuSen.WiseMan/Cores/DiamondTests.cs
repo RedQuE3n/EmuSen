@@ -12,7 +12,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Diamond's stage 1 through the v1 adapter, discovery, the generic test-ROM runner and the conformance kit, and the synthetic images it runs on - see Diamond_Native.md §2-§5.
+    // Diamond through the v1 adapter, discovery, the generic test-ROM runner with its TTY reader and the conformance kit, and the synthetic images it runs on - see Diamond_Native.md §2-§5 and §11.
     [Collection(TestCollections.ProcessGlobals)]
     public class DiamondTests : IDisposable
     {
@@ -72,9 +72,9 @@ namespace EmuSen.WiseMan.Cores
             var library = CoreLibrary.Open(LibraryPath);
             foreach (var (image, region, height, hz) in new (byte[], string, int, double)[]
             {
-                (SyntheticPsExe.Build(), "ntsc", 240, 59.8173),
-                (SyntheticPsxDisc.Build("Europe").DataTrack, "pal", 256, 49.7468),
-                (SyntheticPsxDisc.Build("Japan", mode: 1).DataTrack, "ntsc", 240, 59.8173),
+                (SyntheticPsExe.Build(), "ntsc", 240, 59.8261),
+                (SyntheticPsxDisc.Build("Europe").DataTrack, "pal", 256, 49.7614),
+                (SyntheticPsxDisc.Build("Japan", mode: 1).DataTrack, "ntsc", 240, 59.8261),
             })
             {
                 using var machine = new CoreMachine(library, image, "", Array.Empty<(uint, byte[])>());
@@ -105,8 +105,8 @@ namespace EmuSen.WiseMan.Cores
             {
                 var run = engine.Run(Write(name, image), new[] { 1, 60 }, new[] { new RomPress(10, PadButton.Start) });
                 var last = run.At(60)!;
-                Assert.Equal(new[] { "bios", "ram", "scratch", "spuram", "vram" }, last.Spaces.Keys.Order());
-                Assert.Equal((0x20_0000, 0x400, 0x10_0000, 0x8_0000), (last.Spaces["ram"].Length, last.Spaces["scratch"].Length, last.Spaces["vram"].Length, last.Spaces["spuram"].Length));
+                Assert.Equal(new[] { "bios", "ram", "scratch", "spuram", "tty", "vram" }, last.Spaces.Keys.Order());
+                Assert.Equal((0x20_0000, 0x400, 0x10_0000, 0x8_0000, 0x1_0000), (last.Spaces["ram"].Length, last.Spaces["scratch"].Length, last.Spaces["vram"].Length, last.Spaces["spuram"].Length, last.Spaces["tty"].Length));
                 Assert.Equal((320, 240), (last.Picture!.Width, last.Picture.Height));
                 Assert.All(last.Picture.Rgb, b => Assert.Equal(0, b));
                 Assert.Equal(44100, run.AudioRate);
@@ -129,7 +129,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(("diamond", "psx", "pal"), (core.Info.Id, core.Machine.Info.System, core.Machine.Info.Region));
             core.RunFrame();
             Assert.Equal((320, 256), (core.ScreenWidth, core.ScreenHeight));
-            Assert.InRange(core.FrameRateHz, 49.74, 49.75);
+            Assert.InRange(core.FrameRateHz, 49.76, 49.77);
             Assert.Null(bundle.CheatAutoDetectCodec);
             Assert.Null(bundle.Notice);
             (core as IDisposable)?.Dispose();
@@ -166,6 +166,62 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(process.ExitCode == 0, output + stderr.Result);
                 Assert.Equal(15, output.Split('\n').Count(l => l.StartsWith("pass C")));
             }
+        }
+
+        // A program that prints through the DEV8 DUART, as the open kernel's TTY will.
+        private static byte[] Printing(string text)
+        {
+            var words = new List<uint> { 0x3C08_1F80, 0x3508_2023 };
+            foreach (char c in text) words.AddRange(new[] { 0x2409_0000u | c, 0xA109_0000u });
+            uint loop = SyntheticPsExe.Origin + 4 * (uint)words.Count;
+            words.AddRange(new[] { 0x0800_0000u | ((loop >> 2) & 0x03FF_FFFF), 0u });
+            return SyntheticPsExe.Build(SyntheticPsExe.Words(words.ToArray()));
+        }
+
+        // The TTY reader of Diamond_Plan.md §3.3: the text in the tty space, graded by a ps1-tests protocol as data.
+        [Fact]
+        public void The_tty_reader_grades_pass_and_fail_lines_a_program_prints()
+        {
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            var cop = Ps1Tests.Programs.Single(p => p.Path == "cpu/cop/cop.exe");
+            var grader = new TestRomGrader(new[] { Ps1Tests.Protocol(cop, _ => null) });
+            foreach (var (text, outcome) in new[] { ("boot\ncpu/cop\npass - a\npass - b\nDone.\n", RomOutcome.Passed), ("cpu/cop\npass - a\nfail - b:1\nDone.\n", RomOutcome.Failed), ("cpu/cop\npass - a\n", RomOutcome.Incomplete) })
+            {
+                string path = Write(Path.Combine("cpu", "cop", "cop.exe").Replace(Path.DirectorySeparatorChar, '_'), Printing(text));
+                var run = engine.Run(path, new[] { 2 });
+                Assert.Equal(text, TtyReader.Text(run.At(2)!));
+                var verdict = Ps1Tests.Grade(cop, run, _ => null);
+                Assert.Equal(outcome, verdict.Outcome);
+                _output.WriteLine($"{outcome}: {verdict.Detail}");
+            }
+            Assert.Equal(RomOutcome.Visual, grader.Grade("other.exe", engine.Run(Write("other.exe", Printing("x")), new[] { 1 })).Outcome);
+        }
+
+        // ps1-tests by their TTY on a player's BIOS, the development path of Diamond_Plan.md §5.9's option D; opt-in, skipped without the corpus or the firmware folder - see Diamond_Native.md §11.14.
+        [Fact]
+        public void Ps1_tests_pass_by_their_tty_on_a_players_bios()
+        {
+            string? corpus = Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_PS1TESTS");
+            string? firmware = Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_FIRMWARE");
+            if (corpus is null || firmware is null || !Directory.Exists(corpus) || !Directory.Exists(firmware))
+            {
+                _output.WriteLine("skipped: EMUSEN_DIAMOND_PS1TESTS and EMUSEN_DIAMOND_FIRMWARE name ps1-tests' release and a folder of the player's own BIOS");
+                return;
+            }
+            var library = CoreLibrary.Open(LibraryPath);
+            var declared = library.Info.Systems.Single().Firmware;
+            var bios = declared.Where(f => File.Exists(Path.Combine(firmware, f.Name))).Select(f => (f.Which, File.ReadAllBytes(Path.Combine(firmware, f.Name)))).ToArray();
+            var engine = new CoreAbiTestRomEngine(LibraryPath, _ => bios, rom => Ps1Tests.Programs.FirstOrDefault(p => rom.Replace('\\', '/').EndsWith(p.Path))?.Settings ?? "");
+            string? Log(string program) => Path.Combine(corpus!, Path.GetDirectoryName(program)!, "psx.log") is var l && File.Exists(l) ? File.ReadAllText(l) : null;
+            var failed = new List<string>();
+            foreach (var program in Ps1Tests.Programs)
+            {
+                var run = engine.Run(Path.Combine(corpus!, program.Path), new[] { 900 });
+                var verdict = Ps1Tests.Grade(program, run, Log);
+                _output.WriteLine($"{program.Path}: {verdict.Outcome} {verdict.Detail}");
+                if (verdict.Outcome != RomOutcome.Passed) failed.Add(program.Path);
+            }
+            Assert.Empty(failed);
         }
 
         [Fact]

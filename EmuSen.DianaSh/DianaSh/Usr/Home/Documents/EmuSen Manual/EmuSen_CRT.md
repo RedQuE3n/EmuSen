@@ -2128,6 +2128,13 @@ mode is the one whose pixels do not divide the line evenly by the others, and so
 the subcarrier cycles across it both follow from that clock, so no `ConsoleTiming` row is written until the figure is
 settled against the core or the hardware. Decided 2026-10-10: the PlayStation has no row until then.
 
+*Noted 2026-10-11, at Diamond's stage 4*: the PlayStation's display timing now exists in the core
+(`Diamond_Native.md` §12.5). The picture is GP1(06h)'s range over the dot clock of GP1(08h)'s mode, 256, 320, 368, 512
+or 640 pixels across at the standard ranges, and the vertical range's lines, doubled in 480-line interlace; the clock
+is D-0's settled one (53.693175 MHz NTSC, 53.203425 MHz PAL), and only the line's length (3,412.5 or 3,413 video
+clocks) remains provisional, which sets the subcarrier's phase per line and per frame, not the active line or the
+cycles across it. The row itself is still to be written.
+
 ### 20.7 Questions for the tester
 
 **Decided 2026-10-11:** all four, each as recommended: no whole-rows sizing by default (a per-console setting, off by default, only if it is later wanted); the tube 4:3 and centred with bars on wide displays, a bezel or glow being a separate optional feature; the mask at whole pixels from 1.5 px with the fade below it, as built; the mask drawn flat under curved glass, as built.

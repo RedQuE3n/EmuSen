@@ -345,3 +345,128 @@ record (the plan's §9.1), since they belong to every core that uses the crate.
 - **Pinned by:** ps1-tests' `timers` graded against its log (the hblank row exactly);
   `system_clock_over_8_and_a_stopped_timer_2`.
 - **Implemented in:** `diamond: the bus and the machine of stage 3`.
+
+### D-7. The rasteriser where psx-spx is silent: whole-pixel samples with the top-left rule, 12-bit gradients from vertex 0 truncated toward zero with a half added, and lines' ties by their major axis
+
+- **Opened:** 2026-10-11, at stage 4: psx-spx gives the vertices' range, the size limit, polygons "up to <excluding>
+  their lower-right coordinates" and lines "up to <including>", the quad's split, and that interpolation is affine; it
+  gives no fill rule, no precision for the interpolators, no starting point and no line stepping.
+- **Documents read:** psx-spx `6d7d1bc`, "GPU Render Polygon Commands", "GPU Render Line Commands", "GPU Rendering
+  Attributes", "Perspective (in-)correct Rendering", "24bit RGB to 15bit RGB Dithering".
+- **Test programs:** ps1-tests' `triangle`, `uv-interpolation`, `lines`, `quad` and `clipping`, their sources read for
+  their vertices and colours, and their pictures, a console's VRAM. `uv-interpolation` draws 256 quads one line high and
+  0 to 255 pixels wide, U stepping from 0 to 1 over a red and a green texel, and 256 Gouraud quads red to green, plain
+  and dithered; `triangle` three Gouraud triangles; `lines` lines at every slope of a set, flat and shaded.
+- **The argument** [M, by search]: of every pairing of 8 to 23 fractional bits with a bias in 1/4096 steps, one puts each
+  of `uv-interpolation`'s 255 switches from red to green where the console does: 12 bits, the gradient truncated, a half
+  added. Truncation toward zero, not flooring, is what the Gouraud rows need (0 pixels off against 158). Evaluating from
+  vertex 0 gives `triangle` exactly and from the topmost vertex 3,227 pixels off. Sampling at the pixel's integer
+  coordinates gives the apex row empty and one pixel on the next, as the picture shows; at the pixel's centre the next
+  row would hold two. On lines, x-major ties step at the half and y-major ones do not: with the x-major rule for both,
+  25 pixels are off, every one a y-major tie.
+- **Referee:** not consulted. **Witnesses:** PCSX-ReARMed and SwanStation differ from Diamond by one five-bit level
+  on some Gouraud pixels of Peter Lemon's shaded programs (5 to 232 a picture, `Diamond_GPU.md` §11), in his shaded
+  quads and lines; on his shaded triangle, starting from vertex 0, from the leftmost vertex or from the topmost gives
+  the same pixels.
+- **Conclusion:** `Diamond_GPU.md` §6; measured against the console's pictures, exact on all five programs. Open
+  where the pictures do not reach. No picture tells the starting vertex apart: where vertex 0 is not the leftmost (the
+  second triangles of `texture-flip`'s quads) the gradients are whole numbers, and no shaded quad's second triangle
+  covers a pixel (`uv-interpolation`'s quads are one line high). No gradient is near 12 bits' range. A program drawing
+  shaded triangles and quads at every vertex order, run on a console, decides the first.
+- **Depends on it:** every pixel of every polygon and line.
+- **Pinned by:** `Ps1_tests_gpu_programs_draw_their_vram_pictures_exactly`; `a_quads_texture_steps_at_the_half_of_a_truncated_12_bit_gradient`,
+  `shading_takes_vertex_0s_value_with_a_half_added`, `a_triangle_owns_its_top_and_left_edges_only`,
+  `a_line_draws_both_ends_and_rounds_a_half_by_its_major_axis`.
+- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
+
+### D-8. An x-flipped rectangle's texture starts at U+1, where psx-spx says only that it decrements
+
+- **Opened:** 2026-10-11, at stage 4, by `texture-flip`'s picture.
+- **Documents read:** psx-spx `6d7d1bc`, "Texture Origin and X/Y-Flip": the flip bits "cause the texture coordinates
+  to be decremented (instead of incremented)".
+- **Test program:** ps1-tests' `texture-flip` (source and picture): a 256x256 texture of each texel's own index, drawn
+  as rectangles normal, x-flipped, y-flipped and both, at 256x256 and 64x64, and as quads, with U and V of 0. In every
+  x-flipped rectangle the first column holds texel U = 1, the second U = 0, then 255, 254 and on; in every y-flipped
+  one the first row holds V = 0, then 255. Decrementing from U, Diamond's first draw, left 134,144 pixels off.
+- **Referee:** not consulted. **Witnesses:** PCSX-ReARMed and SwanStation do not flip at all (Peter Lemon's flipped
+  rectangles, every differing pixel inside them, `Diamond_GPU.md` §11).
+- **Conclusion:** U+1, U, U-1 and on for an x-flip; V, V-1 and on for a y-flip. Measured on one console's picture, with
+  every flipped rectangle starting at an even column (260, 714). Open: whether the offset depends on the start column's
+  parity or on U's (psx-spx's "the texture UV, as well as the texture width must be even" for rectangles hints at
+  pairs); a program drawing x-flipped rectangles at odd and even columns with odd and even U, run on a console, decides.
+- **Depends on it:** the 208-pin chip's flipped sprites.
+- **Pinned by:** `texture-flip` exact; `an_x_flipped_rectangle_starts_one_texel_on`.
+- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
+
+### D-9. GP0(E3h) to (E5h) act in their turn, not as they arrive
+
+- **Opened:** 2026-10-11, at stage 4, by Peter Lemon's `RenderPolygonClip16BPP`.
+- **Documents read:** psx-spx `6d7d1bc`, "GP0(E3h..E5h)" note: they "do not take up space in the FIFO, so they are
+  probably executed immediately (even if there're still other commands in the FIFO) ... the new Drawing Area settings
+  might accidentally affect older Rendering Commands in the FIFO".
+- **Test program:** Peter Lemon's `RenderPolygonClip16BPP` (source read): it writes six groups of primitives by the CPU
+  with no wait, a new drawing area before each group. Acting on arrival, Diamond drew seven of its primitives with a
+  later group's area, which clipped them away.
+- **Referee:** not consulted. **Witnesses:** PCSX-ReARMed and SwanStation draw each group within its own area, as
+  does the program's bundled picture; its author tests on a console, by his README.
+- **Conclusion:** the three take their turn in the FIFO; argued from the witnesses and the bundled picture, not
+  measured on a console. psx-spx's sentence is a guess ("probably", "might") [R]. Open: whether they take a place in
+  the FIFO (Diamond gives them one); a program filling the FIFO with them behind a slow command and reading GPUSTAT's
+  bit 25 in direction 1 decides.
+- **Depends on it:** every program that changes the area or the offset between primitives without waiting.
+- **Pinned by:** `the_fifo_holds_what_arrives_while_a_command_draws`.
+- **Implemented in:** `diamond: GP0(E3h) to (E5h) wait their turn in the FIFO`.
+
+### D-10. GPUSTAT bit 28 is the FIFO's emptiness, set while a rectangle draws, where psx-spx clears it while a command executes
+
+- **Opened:** 2026-10-11, at stage 4, by `gpu/gpustat`'s console log.
+- **Documents read:** psx-spx `6d7d1bc`, "GPU Status Register" and its "Ready Bits": bit 28 "gets cleared when the
+  command execution is busy (ie. once when the command and all of its parameters are received), however, for Polygon
+  and Line Rendering commands, the bit gets cleared immediately after receiving the command word"; bit 26 "set when the
+  GPU wants to receive a command".
+- **Test program:** ps1-tests' `gpu/gpustat` (source and console log; the release has no binary): a 128x128 rectangle
+  written by the CPU reads bit 26 clear and bit 28 **set** while it draws; with a second rectangle queued behind it by
+  DMA, both clear. Rewritten as `programs/gpustat.s`.
+- **Referee:** not consulted. **Witnesses:** none (the bits do not reach a reference's outputs).
+- **Conclusion:** bit 28 is set exactly when the FIFO holds no word, and a word goes to the processor at once while it
+  is not drawing; bit 26 is set when, besides, nothing is half received or drawing. Measured: the log's twelve
+  readings. Open: polygons and lines, which psx-spx singles out; the log has only rectangles.
+- **Depends on it:** DMA's pacing in modes 1 and 2 with direction 2, and every program that polls the two bits.
+- **Pinned by:** `gpustat_reads_as_the_console_passes`; `the_fifo_holds_what_arrives_while_a_command_draws`.
+- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
+
+### D-11. The drawing time: fitted to `gpu/bandwidth`, with the GPU left busy after some long transfers unexplained
+
+- **Opened:** 2026-10-11, at stage 4: psx-spx says "GPU polygon rendering time is unknown" and gives nothing of the
+  fill's, the copies' or the transfers' rates.
+- **Documents read:** psx-spx `6d7d1bc`, "DMA Channels" (its rate table and the sentence above).
+- **Test programs:** ps1-tests' `gpu/bandwidth` (source and console log: fourteen rows of 400 full-screen primitives or
+  transfers, timed in hblanks) and `dma/chopping` (its "(GPU busy)" mark, GPUSTAT bit 26 read after each transfer).
+- **Referee:** not consulted. **Witnesses:** none (the time does not reach a reference's outputs).
+- **Conclusion** [M, fitted]: `Diamond_GPU.md` §8's model, every `bandwidth` row within 0.6% of the console's.
+  `chopping`'s busy mark agrees on 117 of 130 rows; the 13 others, after 128-word blocks, the unchopped burst and
+  chopped windows of 16 to 128 words, read busy on the console and idle on Diamond. A write rate slower than the DMA's
+  makes a full FIFO hold the DMA back, which the console's cycles rule out (at 2.38 cycles a word only 93 rows stay
+  within 10%), so the console's GPU goes on working after a long transfer without slowing it: a deeper buffer between
+  the FIFO and VRAM, or a write that ends late, would; neither is in a document. **Open.** A program timing GPUSTAT bit
+  26 against the cycles after a burst of N words, on a console, would measure it.
+- **Depends on it:** GPUSTAT's busy bits and DMA's pacing; the speed at which games draw.
+- **Pinned by:** `bandwidth` graded against its log (2%); `a_gpu_cycle_is_a_video_clock`.
+- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
+
+### D-12. Two of ps1-tests' pictures cannot be met in full by the release's programs: `lines` shades to a colour it never sets, and `transparency`'s picture is from an older program
+
+- **Opened:** 2026-10-11, at stage 4, by the VRAM gate.
+- **Documents read:** none (a property of the test programs).
+- **Test programs:** `lines`, whose `gouraudMultiLine` sets its second vertex's colour twice and its fourth never, so
+  the segments from the third vertex shade toward whatever the stack held: the 64 pixels of the two such segments
+  (one opaque, one semi-transparent) differ, every one of them on those segments, and nothing else does.
+  `transparency`, whose picture is white outside its 320x240 screen where the release's program clears VRAM black: its
+  picture was added on 2019-09-24 (`da6b472`) with a clear to white, and the program was changed to `clearScreen()`'s
+  black on 2019-12-02 (`2fe1570`), the picture not regenerated [R, the repository's history].
+- **Referee:** not consulted. **Witnesses:** none.
+- **Conclusion:** `lines` is graded with those 64 pixels excluded, by name; `transparency` over its screen, where it is
+  exact. Settled: the mismatches are the programs', not the GPU's.
+- **Depends on it:** the gate only.
+- **Pinned by:** `Ps1GpuTests.Programs`' exclusions.
+- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.

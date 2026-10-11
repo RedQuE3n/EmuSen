@@ -100,7 +100,8 @@ cited.
   to the rate exactly; they are a count, drained as zeros, with no buffer and no allocation per frame, bounded by
   `set_audio_limit` with the oldest dropped. Measured by the kit [M]: 884,692 samples over 600 NTSC frames, which is
   2 × ⌊44,100 × 600 / 59.8173…⌋.
-- **The picture**: 320 wide, 240 lines NTSC and 256 PAL, black, the size fixed for a machine's life [C: the GPU's
+- *Superseded at stage 4 (§12): the picture is the display area at its own size, 256 by 240 and blank after
+  GP1(00h).* **The picture**: 320 wide, 240 lines NTSC and 256 PAL, black, the size fixed for a machine's life [C: the GPU's
   display registers decide it from stage 4].
 
 ### 2.4 The system pack, and who owns which fact
@@ -582,7 +583,8 @@ psx-spx's maintained text says ("Consoles will always use the video clock for it
 - **GPUSTAT's bit 31** is the line's parity in 240-line mode and the field's interlaced, zero in vblank; bit 13 the
   field, 1 when not interlaced.
 - A change to the mode or the ranges takes effect from the current line, the counts so far kept [C].
-- **The frame** is one field, from its first line to the next field's; machine info's rate the console's own standard
+- *Superseded at stage 4 (§12): a frame ends as a field's vblank begins, the rate unchanged.* **The frame** is one
+  field, from its first line to the next field's; machine info's rate the console's own standard
   non-interlaced, **59.8261 Hz NTSC and 49.7614 Hz PAL**, replacing stage 1's 59.8173 and 49.7468 (§2.3), provisional
   on D-0's closing test; pinned by `the_rates_are_d0s_provisional_ones` in `video` and `machine`, and by DiamondTests
   to four places.
@@ -646,7 +648,7 @@ transfer mode, the MDEC's by its control bits, the CD-ROM and PIO always.
 
 | Device | What a stage 3 program reads | Source |
 |---|---|---|
-| GPU (stage 4) | GPUSTAT `14802000h` after GP1(00h), always ready for a command and a DMA block (bits 26, 28), bit 25 by GP1(04h), bits 31 and 13 from the video timing; GP0's commands counted out by their lengths and dropped, but E1h–E6h into GPUSTAT and GP1(10h)'s answers, and GP0(1Fh)'s IRQ1; GP1's display commands into the video timing; GP1(10h) index 7 the version, 2 for the 208-pin chip | psx-spx's GP0/GP1 and GPUSTAT pages |
+| GPU (stage 4; *replaced at stage 4 by the GPU, §12*) | GPUSTAT `14802000h` after GP1(00h), always ready for a command and a DMA block (bits 26, 28), bit 25 by GP1(04h), bits 31 and 13 from the video timing; GP0's commands counted out by their lengths and dropped, but E1h–E6h into GPUSTAT and GP1(10h)'s answers, and GP0(1Fh)'s IRQ1; GP1's display commands into the video timing; GP1(10h) index 7 the version, 2 for the 208-pin chip | psx-spx's GP0/GP1 and GPUSTAT pages |
 | SPU (stage 8) | its 512 halfword registers, STATX's low six bits ATTR's, the transfer address and the data FIFO into sound RAM, DMA by ATTR's mode, `1F801E80h` on FFh | psx-spx's SPU control pages, "I/O Map" |
 | CD-ROM (stage 7) | the index; HSTS `18h` with the index (both FIFOs empty and ready); HINTMSK and HINTSTS with their top three bits set; no command is answered | psx-spx's CD-ROM ports; `io-access-bitwidth`'s console log |
 | MDEC (stage 9) | status `80040000h`, reset by bit 31 of MDEC1, its requests from bits 30 and 29 | psx-spx "MDEC Status Register" |
@@ -809,3 +811,77 @@ blast radius (`CoreAbi`, `CoreAdapter`, `CoreDiscovery`, `CoreRegistration`, `Sy
 - amidog's tests print nothing gradeable to the TTY (§11.14).
 - No document gives the I-cache's refill timing, the write queue's drain, or the DMA's gaps; each is a choice or a fit
   named in D-4 and D-5.
+
+---
+
+## 12. Stage 4, the GPU (2026-10-11)
+
+The plan's §7 row 4: GP0 and GP1, the FIFO, VRAM's transfers by the CPU and by DMA channel 2 in its three modes, every
+primitive, texturing with its caches, blending, the mask bit, dithering, the drawing area and offset, the display at 15
+and 24 bits with interlace, GPUSTAT and the drawing time, and the picture handed to the host. Its record is
+`Diamond_GPU.md`; this section says what changed for the machine and what the stage measured. Measured on 2026-10-11 on
+the desktop [M] unless marked.
+
+### 12.1 What was built
+
+- **`src/gpu/`**, seven modules of one job each (`Diamond_GPU.md` §1), in place of stage 3's `GpuStub` (§11.8).
+- **The bus** gives the GPU its ports and IRQ1, an event at each moment its FIFO moves, and DMA channel 2's words at
+  the channel's rate, each of which the GPU may hold back; blocks and list nodes wait for the GPU's request without
+  holding the bus (`Diamond_GPU.md` §2.4). A word the GPU holds back lengthens the piece it belongs to.
+- **The frame** ends as a field's vblank begins, or at the field's end with no vblank (§11.5 superseded), so the picture
+  handed over is complete (`Diamond_GPU.md` §7).
+- **The picture** is the display's: the display area at its own size, 15- or 24-bit, interlaced fields woven, a 4:3
+  aspect, at most 640 by 576 (machine info's maximum, raised from 512 lines).
+- **`programs/gpustat.s`**, GPUSTAT's ready bits in ps1-tests' `gpustat`'s four cases (`Diamond_GPU.md` §2.3), and
+  `examples/run` gains `--vram` and `--picture`.
+- **WiseMan**: `VramGrader` and `Ps1GpuTests` (`Fixtures/RomRunner/VramGrader.cs`), the plan's §3.3 VRAM grader with
+  ps1-tests' eleven programs as data and their named disagreements; `Ps1Tests` gains `gp0-e1`, `mask-bit`,
+  `bandwidth` (a rule per row of hblanks) and `version-detect` (an expected line), each with its own frame.
+
+### 12.2 The gate
+
+As `Diamond_GPU.md` §9 tables it [M]: **ps1-tests' eleven GPU programs with a picture, VRAM exact** but for 64 pixels
+of `lines` and `transparency`'s VRAM outside its screen, both named in D-12 as the programs' own; `gp0-e1` 10 of 10,
+`mask-bit` 5 of 5, `version-detect`, and `bandwidth`'s fourteen rows within 0.6% of the console's; GPUSTAT's twelve
+readings as `gpustat`'s log. Stage 3's seven programs still pass. **amidog's GPU test waits on the pad** (stage 6): its
+menu draws and waits for Start (`Diamond_GPU.md` §10). **Peter Lemon's 25 GPU programs**: 16 equal SwanStation's
+picture up to its colour levels, five differ by one level on some shaded pixels, four only inside the rectangles they
+flip, which the references do not flip and a console does (`Diamond_GPU.md` §11).
+
+### 12.3 amidog's CPU and CPX tests, and stage 2's items
+
+`psxtest_cpu` runs to its end with every column OK or N/A, its delayed- and advanced-load groups among them, which
+confirms on an independent program the load delay's corners `BlackMoon_R3000.md` §10 left to it. `psxtest_cpx` waits
+for Start, so the CE bits and the COP0 registers 16-31 wait with it on stage 6 (`Diamond_GPU.md` §10).
+
+### 12.4 What else the stage measured
+
+- **`dma/chopping`** keeps 129 of 130 rows within 10%, and its "(GPU busy)" mark now agrees with the console's on 117
+  rows, against 60 with the stub; the 13 others are D-11.
+- **The disputes** D-7 to D-12: the rasteriser's rules where psx-spx is silent (D-7), the x-flip's offset (D-8),
+  GP0(E3h)-(E5h) in order (D-9), GPUSTAT bit 28 (D-10), the drawing time with the busy state after long transfers open
+  (D-11), and the two pictures the release's programs cannot meet (D-12). None needs the FPGA referee yet: each open
+  point is a console measurement.
+- **Cost** [M, `examples/run`, 600 frames, three runs each]: 6.1 ms a frame on `timers` (stage 3: 6.0), 6.3 on
+  `triangle`, 5.3 on `rectangles`, 7.8 on `bandwidth`, whose 400 full-screen primitives a row leave the GPU no idle
+  frame. Speed is stage 13's.
+- **The state** 3,747,681 bytes (`Diamond_GPU.md` §12).
+
+### 12.5 For `EmuSen_CRT.md` §20.6
+
+The PlayStation's display timing now exists in the core: the picture's width is GP1(06h)'s range over the dot clock of
+GP1(08h)'s mode (256, 320, 368, 512 or 640 at the standard ranges), its height the vertical range's lines, doubled in
+480-line interlace, on D-0's clocks with D-0's line still provisional. The CRT row itself waits as §20.6 decided.
+
+### 12.6 Tests run (2026-10-11)
+
+`cargo test --release`: `diamond` 53 unit tests and 5 program tests; `cargo clippy --all-targets` clean. WiseMan, under
+the test lock with `EMUSEN_DIAMOND_PS1TESTS`: `DiamondTests` 15 of 15, and with the blast radius (`CoreAbi`,
+`CoreAdapter`, `CoreDiscovery`, `CoreRegistration`, `SystemPack`, `Nephrite`, `TestRom`), 141 of 141. The player's-BIOS
+gate was not run (no `EMUSEN_DIAMOND_FIRMWARE` named); the probe ran the three references on Peter Lemon's programs.
+
+### 12.7 Negative results
+
+- amidog's CPX and GPU tests cannot run without the pad.
+- Beetle PSX's pictures of Peter Lemon's programs are displaced by 150 to 160 lines and were not graded.
+- No program run here observes the texture cache's staleness.

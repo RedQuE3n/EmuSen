@@ -96,7 +96,7 @@ impl Vram {
         }
     }
 
-    /// GP0(80h): row by row, each row read in 16-pixel pieces before they are written (Diamond_GPU.md §3.3).
+    /// GP0(80h): row by row, each row read in 16-pixel pieces before they are written (Diamond_GPU.md §3).
     pub fn copy(&mut self, src: Rect, dst: Rect, mask: Mask) {
         let mut piece = [0u16; COPY_PIECE as usize];
         for j in 0..src.h {

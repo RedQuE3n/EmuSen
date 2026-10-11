@@ -413,6 +413,14 @@ independent check, report on screen and wait for the GPU (stage 4), and ps1-test
   delay and after EPC, which matches neither psx-spx's "follows the last valid read" nor zero. Open: no document gives
   values, and the witnesses disagree.
 
+*Stage 4's answers, 2026-10-11* (`Diamond_GPU.md` §10). With a screen, amidog's tests run: **`psxtest_cpu` 1.3**
+reaches "ALL DONE" with every test's exception, flag, value and timing columns OK or N/A, among them its "MEM DLY" and
+"MEM ADV" groups, the "delayed and advanced load" tests its README names, for every load instruction, and its "EXC"
+group (RFE, BREAK, SYSCALL). The screen gives a verdict per instruction, not the cases, so whether a second load of a
+pending register is among them is not shown; the load delay's corners stand confirmed by an independent program as far
+as its verdicts reach. **`psxtest_cpx` 1.1** draws its menu and runs only when Start is pressed, so CE on every
+exception and the garbage registers wait on the pad (stage 6).
+
 The items below stand as written at stage 2.
 
 - Where the I-cache and scratchpad live (§2); the isolated calls' answers.

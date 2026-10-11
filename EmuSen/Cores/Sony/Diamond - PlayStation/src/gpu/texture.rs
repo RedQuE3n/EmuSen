@@ -50,7 +50,7 @@ impl Texture {
 }
 
 /// The texture cache: 256 entries of four halfwords, direct-mapped by VRAM address, each tagged by the address of its
-/// first halfword (psx-spx's cache blocks, in VRAM terms: Diamond_GPU.md §4.2).
+/// first halfword (psx-spx's cache blocks, in VRAM terms: Diamond_GPU.md §4).
 #[derive(Clone)]
 pub struct TextureCache {
     pub tags: [u32; 256],

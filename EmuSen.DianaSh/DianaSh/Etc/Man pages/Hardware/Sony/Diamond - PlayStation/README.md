@@ -5,7 +5,8 @@ its first commit (`EmuSen/Cores/Sony/Diamond - PlayStation/`, crate `diamond`), 
 gate. At stage 1 (2026-10-11) it recognises a PS-EXE or a disc and shows a black picture; at stage 2 (the same day)
 its R3000A was built and passes the r3000 single-step suite; at stage 3 the bus, its timing and the devices beside
 the CPU run it, on the open kernel or a player's own BIOS, and ps1-tests' CPU, DMA and timer programs pass by their
-TTY. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
+TTY; at stage 4 the GPU draws, ps1-tests' GPU programs' VRAM equals their pictures, and the display is the picture.
+Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
 
 - [`Diamond_Plan.md`](Diamond_Plan.md) — the plan, written 2026-10-10 before any emulation: the machine in scope and
   how accurate each part must be (the R3000A with its cache and scratchpad, the GTE exact, DMA, timers, interrupts, a
@@ -23,7 +24,14 @@ TTY. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
   retired; and stage 3's machine (§11): the map, every access timed by memory control and the console's figures, the
   I-cache, the interrupts, the root counters, the seven DMA channels, the video timing on D-0's clocks, the stubs,
   PS-EXE loading, the kernel's seam, the TTY reader, the project's own programs with the references as witnesses, and
-  the gate's results.
+  the gate's results; and stage 4 (§12): the GPU in the machine, the frame ending at vblank, the gate, amidog's tests
+  and stage 2's items, the cost.
+- [`Diamond_GPU.md`](Diamond_GPU.md) — the GPU, written 2026-10-11 at stage 4: the FIFO and the command processor,
+  GPUSTAT's ready bits against `gpustat`'s console log, DMA channel 2, GP1, VRAM's transfers, texturing with the
+  texture and CLUT caches, the pixel pipeline, the rasteriser's rules fitted to ps1-tests' console pictures, the
+  display read line by line, the drawing time fitted to `bandwidth` within 0.6% a row, the gate program by program,
+  amidog's and Peter Lemon's programs against the references, the state, the enhancement layer's seam, and the
+  reading log.
 - [`Diamond_OpenKernel.md`](Diamond_OpenKernel.md) — the open BIOS kernel's first phase, written 2026-10-11 at stage
   3 under the replacement writers' rules: the image and the RAM it uses, the reset path and the hand-over at 80030000h
   with what a machine must provide (the TTY at the DUART's 1F802023h), the exception entry, the priority chains and the
@@ -37,7 +45,9 @@ TTY. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
   refused), their costs and spaces, the referee's simulator, and the search for an AccuracyCoin-like suite.
 - [`Diamond_Disputes.md`](Diamond_Disputes.md) — the disputes log, created 2026-10-11 with its first entry, D-0: the
   NTSC console's video clock and line length, and so its frame rate; from stage 3, D-4 (memory control's access
-  times), D-5 (the DMA's gaps and a store's drain) and D-6 (timer sync mode 2).
+  times), D-5 (the DMA's gaps and a store's drain) and D-6 (timer sync mode 2); from stage 4, D-7 (the rasteriser's
+  rules), D-8 (the x-flip's offset), D-9 (the drawing area's commands in order), D-10 (GPUSTAT bit 28), D-11 (the
+  drawing time) and D-12 (two pictures the programs cannot meet).
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the naming scheme, and `Man pages/Hardware/README.md` for how this
 documentation set is organized.

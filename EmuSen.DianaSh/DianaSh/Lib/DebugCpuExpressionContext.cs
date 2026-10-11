@@ -12,15 +12,22 @@ namespace EmuSen.DianaSh.DianaSh.Lib
         private readonly IDebugTarget _target;
         private readonly Func<IReadOnlyList<DebugRegisterValue>> _registers;
         private readonly string? _defaultSpace;
+        private readonly IReadOnlyList<string> _extraNames;
+        private readonly Func<string, long?>? _extra;
 
+        // <extra> answers symbols beyond the registers, such as a console's flags, named by <extraNames>.
         public DebugCpuExpressionContext(
             IDebugTarget target,
             Func<IReadOnlyList<DebugRegisterValue>> registers,
-            string? defaultSpace = null)
+            string? defaultSpace = null,
+            IReadOnlyList<string>? extraNames = null,
+            Func<string, long?>? extra = null)
         {
             _target = target;
             _registers = registers;
             _defaultSpace = defaultSpace;
+            _extraNames = extraNames ?? Array.Empty<string>();
+            _extra = extra;
         }
 
         public static DebugCpuExpressionContext For(IDebugTarget target, DebugCpu cpu)
@@ -30,6 +37,7 @@ namespace EmuSen.DianaSh.DianaSh.Lib
 
         public IReadOnlyList<string> SymbolNames
             => _registers().Select(r => r.Name)
+                .Concat(_extraNames)
                 .Concat(new[] { "frame" })
                 .Concat(_target.Labels?.All().Select(l => l.Name) ?? Enumerable.Empty<string>())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -48,6 +56,12 @@ namespace EmuSen.DianaSh.DianaSh.Lib
             {
                 if (!string.Equals(register.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
                 value = (long)register.Value;
+                return true;
+            }
+
+            if (_extra?.Invoke(name) is { } extra)
+            {
+                value = extra;
                 return true;
             }
 

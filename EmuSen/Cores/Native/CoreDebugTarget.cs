@@ -4,11 +4,12 @@ using System.Linq;
 using System.Text.Json;
 using EmuSen.Cauldron;
 using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.DianaSh.DianaSh.Sys.Systems;
 using EmuSen.DianaSh.DianaSh.Var;
 
 namespace EmuSen.Cores.Native
 {
-    // The debugger's view of any v1 core from its descriptors: its spaces, processors, registers and disassembly; console-shaped views stay empty - see EmuSen_CoreAPI.md §6.14, §19.
+    // The debugger's view of any v1 core from its descriptors: its spaces, processors, registers and disassembly, and the console-shaped views its system pack decodes from them - see EmuSen_CoreAPI.md §6.14, §19, §31.
     public sealed class CoreDebugTarget : IDebugTarget
     {
         private readonly CoreEngine _engine;
@@ -21,6 +22,21 @@ namespace EmuSen.Cores.Native
         {
             _engine = engine;
             CpuRegisters = Processors().Count > 0 ? RegistersOf(Processors()[0]) : NoRegisters;
+            Palettes = new PollingProvider<IReadOnlyList<DebugPaletteInfo>>(ReadPalettes, ReadPalettes());
+            HardwareLoad = new PollingProvider<IReadOnlyList<DebugLoadInfo>>(ReadLoad, ReadLoad());
+        }
+
+        // The console's pack decodes what the core publishes as spaces; null for a system without one.
+        private ISystemDebugViews? Views => _engine.IsRomLoaded ? SystemPacks.For(_engine.Machine.Info.System)?.DebugViews : null;
+
+        private IReadOnlyList<DebugPaletteInfo> ReadPalettes() => Views?.Palettes(GetMemorySpaces()) ?? Array.Empty<DebugPaletteInfo>();
+
+        // Each phase the engine timed, as a share of one frame at the machine's rate - see `man coretop`.
+        private IReadOnlyList<DebugLoadInfo> ReadLoad()
+        {
+            if (!_engine.IsRomLoaded) return Array.Empty<DebugLoadInfo>();
+            double budget = 1000.0 / _engine.FrameRateHz;
+            return _engine.LastFramePhases.Select(p => new DebugLoadInfo(p.Name, Math.Min(100.0, p.Milliseconds / budget * 100.0), DebugLoadKind.EmulatorCost)).ToArray();
         }
 
         private static IRealtimeProvider<IReadOnlyList<T>> Empty<T>() => new PollingProvider<IReadOnlyList<T>>(() => Array.Empty<T>(), Array.Empty<T>());
@@ -30,12 +46,14 @@ namespace EmuSen.Cores.Native
         // Read once at creation, as every C# target's snapshot is, so a target made after N frames shows them - see EmuSen_CoreAPI.md §30.2.
         private IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> RegistersOf(CoreProcessor p)
         {
-            IReadOnlyList<DebugRegisterValue> Read()
-            {
-                long[] values = _engine.IsRomLoaded ? _engine.Machine.Registers(p.Id) : Array.Empty<long>();
-                return p.Registers.Select((r, i) => new DebugRegisterValue(r.Name, i < values.Length ? (ulong)values[i] : 0, r.Bits)).ToArray();
-            }
+            IReadOnlyList<DebugRegisterValue> Read() => LiveRegisters(p);
             return new PollingProvider<IReadOnlyList<DebugRegisterValue>>(Read, Read());
+        }
+
+        private IReadOnlyList<DebugRegisterValue> LiveRegisters(CoreProcessor p)
+        {
+            long[] values = _engine.IsRomLoaded ? _engine.Machine.Registers(p.Id) : Array.Empty<long>();
+            return p.Registers.Select((r, i) => new DebugRegisterValue(r.Name, i < values.Length ? (ulong)values[i] : 0, r.Bits)).ToArray();
         }
 
         public string CoreName => _engine.CoreName;
@@ -45,26 +63,33 @@ namespace EmuSen.Cores.Native
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CpuRegisters { get; }
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters { get; } = Empty<DebugRegisterValue>();
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters { get; } = Empty<DebugRegisterValue>();
-        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters { get; } = Empty<DebugRegisterValue>();
+        // What `cop` names, the same processor `regs <name>` shows - see `man cpus`.
+        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters => EmuSen.DianaSh.DianaSh.Var.DebugCpus.Coprocessor(DebugCpus)?.Registers ?? NoRegisters;
         public IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites { get; } = Empty<DebugSpriteInfo>();
-        public IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes { get; } = Empty<DebugPaletteInfo>();
+        public IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes { get; }
         public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels { get; } = Empty<DebugAudioChannelInfo>();
-        public IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad { get; } = Empty<DebugLoadInfo>();
+        public IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad { get; }
 
         public void RefreshProviders()
         {
             CpuRegisters.Refresh();
             foreach (var cpu in DebugCpus.Skip(1)) cpu.Registers?.Refresh();
+            Palettes.Refresh();
+            HardwareLoad.Refresh();
         }
 
-        public (byte[] Rgba, int Width, int Height) RenderTileSheet() => (Array.Empty<byte>(), 0, 0);
-        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => (Array.Empty<byte>(), 0, 0);
+        public (byte[] Rgba, int Width, int Height) RenderTileSheet() => Views?.TileSheet(GetMemorySpaces()) ?? (Array.Empty<byte>(), 0, 0);
+        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => Views?.PaletteSwatch(GetMemorySpaces()) ?? (Array.Empty<byte>(), 0, 0);
 
         public (short[] Samples, int SampleRate) GetAudioSamples() => _engine.IsRomLoaded ? (_engine.Machine.PeekAudio(), _engine.AudioSampleRate) : (Array.Empty<short>(), 0);
 
-        public string GetSummaryText() => _engine.IsRomLoaded
-            ? $"{_engine.Info.DisplayName} {_engine.Info.Version}, {_engine.Machine.Info.System}, frame {_engine.TotalFrames}"
-            : $"{_engine.Info.DisplayName} {_engine.Info.Version}, no game";
+        // The engine, system and frame, then what the system pack reads from the main processor's live registers.
+        public string GetSummaryText()
+        {
+            if (!_engine.IsRomLoaded) return $"{_engine.Info.DisplayName} {_engine.Info.Version}, no game";
+            string head = $"{_engine.Info.DisplayName} {_engine.Info.Version}, {_engine.Machine.Info.System}, frame {_engine.TotalFrames}";
+            return Processors().Count > 0 && Views?.Summary(LiveRegisters(Processors()[0])) is { } more ? head + "\n" + more : head;
+        }
 
         // A side-effect space is marked so, which `search` and plain reads already refuse.
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces()
@@ -79,6 +104,7 @@ namespace EmuSen.Cores.Native
         public FrameLogRegistry FrameLog => _engine.FrameLog;
         public BreakpointRegistry Breakpoints => _engine.Breakpoints;
         public CheatRegistry Cheats => _engine.Cheats;
+        public FreezeRegistry? Freezes => _engine.Freezes;
 
         // Mistress's paused Apply, forwarded as every other core's target does - see EmuSen_Cheats.md §6 and VenusRT_Native.md §66.3.
         public void ApplyCheats() => _engine.ApplyCheats();
@@ -89,7 +115,18 @@ namespace EmuSen.Cores.Native
         public BreakpointRegistry? CoprocessorBreakpoints => EmuSen.DianaSh.DianaSh.Var.DebugCpus.Coprocessor(DebugCpus)?.Breakpoints;
         public CoverageRegistry? CoprocessorCoverage => EmuSen.DianaSh.DianaSh.Var.DebugCpus.Coprocessor(DebugCpus)?.Coverage;
         public LabelRegistry? Labels { get; } = new();
-        public IExpressionContext? Expressions => DebugCpus.Count > 0 ? DebugCpuExpressionContext.For(this, DebugCpus[0]) : null;
+        public IExpressionContext? Expressions => DebugCpus.Count > 0 ? ExpressionsOf(DebugCpus[0]) : null;
+
+        // The main processor's registers, the pack's symbols over them, and the call stack's depth where the core keeps one - see `man eval`.
+        private IExpressionContext ExpressionsOf(DebugCpu main)
+        {
+            var views = Views;
+            var names = (views?.SymbolNames ?? Array.Empty<string>()).Concat(main.CallStack is null ? Array.Empty<string>() : new[] { "stackdepth" }).ToArray();
+            long? Extra(string name) =>
+                main.CallStack is { } stack && string.Equals(name, "stackdepth", StringComparison.OrdinalIgnoreCase) ? stack.Depth
+                : views?.Symbol(name, main.Registers?.Current ?? Array.Empty<DebugRegisterValue>());
+            return new DebugCpuExpressionContext(this, () => main.Registers?.Current ?? Array.Empty<DebugRegisterValue>(), main.CodeSpace, names, Extra);
+        }
 
         private bool Halts => _engine.Library.Has(CoreInterface.CapDebug) && _engine.IsRomLoaded;
 
@@ -155,9 +192,13 @@ namespace EmuSen.Cores.Native
         public (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(DisassembledInstruction instr) =>
             _references.TryGetValue(instr.Address, out var r) ? r : null;
 
-        public int TilemapEntryStride => 0;
-        public string DecodeTilemapEntry(IDebugMemorySpace space, int address) => "";
-        public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp) => Array.Empty<byte>();
+        public int TilemapEntryStride => Views?.TilemapEntryStride ?? 0;
+        public string DecodeTilemapEntry(IDebugMemorySpace space, int address) => Views?.DecodeTilemapEntry(space, address) ?? "";
+        public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp) => Views?.DecodeTilePixels(space, address, bpp) ?? Array.Empty<byte>();
+
+        public IReadOnlyList<InterruptVector> InterruptVectors => Views?.InterruptVectors ?? Array.Empty<InterruptVector>();
+        public IReadOnlyList<DebugDmaChannel> DmaChannels => Views?.DmaChannels(GetMemorySpaces()) ?? Array.Empty<DebugDmaChannel>();
+        public string? NameDmaDestination(byte register) => Views?.NameDmaDestination(register);
 
         // Machine info's channel n is set_mutes' bit n.
         public void SetChannelMuted(int index, bool muted)

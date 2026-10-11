@@ -98,5 +98,38 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal(1024, row.OpenVgdbBytes!(headed).Length);
             Assert.Equal(("snes", "Super Nintendo"), (CoreCatalog.ShelfByName(row.DisplayName)!.EsdeSystem, CoreCatalog.ShelfByName(row.DisplayName)!.EsdeFullName));
         }
+
+        // fullsnes's names for the B bus, the APU's four ports by their mirrors, and an address it leaves unnamed - see EmuSen_CoreAPI.md §31.2.
+        [Theory]
+        [InlineData(0x00, "INIDISP $2100")]
+        [InlineData(0x32, "COLDATA $2132")]
+        [InlineData(0x39, "RDVRAML $2139")]
+        [InlineData(0x3F, "STAT78 $213F")]
+        [InlineData(0x41, "APUI01 $2141")]
+        [InlineData(0x7E, "APUI02 $217E")]
+        [InlineData(0x83, "WMADDH $2183")]
+        [InlineData(0x90, "$2190")]
+        public void A_dma_destination_is_named_as_fullsnes_names_it(int register, string name)
+        {
+            Assert.Equal(name, SnesDebugViews.NameDmaDestination((byte)register));
+            Assert.Equal(name, ((ISystemDebugViews)SnesSystem.Pack.DebugViews!).NameDmaDestination((byte)register));
+        }
+
+        // An HDMA channel enabled with the terminating 0 in its line counter has ended; a non-zero counter is still running.
+        [Fact]
+        public void An_hdma_channel_runs_while_its_line_counter_is_not_zero()
+        {
+            byte[] io = new byte[SnesDebugViews.IoSize];
+            io[0x20C] = 0x03;
+            io[0x30A] = 0x05;
+            io[0x317] = 0x7F;
+            io[0x315] = 0x34;
+            io[0x316] = 0x12;
+            var channels = SnesDebugViews.DmaChannels(DelegateDebugMemorySpace.Over("IO", io));
+            Assert.Equal((true, true), (channels[0].HdmaEnabled, channels[0].HdmaActive));
+            Assert.Equal((true, false), (channels[1].HdmaEnabled, channels[1].HdmaActive));
+            Assert.Equal((0x1234, 0x7F1234), (channels[1].TransferSize, channels[1].IndirectAddress));
+            Assert.Empty(SnesDebugViews.Instance.DmaChannels(new IDebugMemorySpace[] { DelegateDebugMemorySpace.Over("IO", new byte[0x10000]) }));
+        }
     }
 }

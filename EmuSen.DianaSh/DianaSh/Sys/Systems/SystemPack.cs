@@ -21,10 +21,10 @@ namespace EmuSen.DianaSh.DianaSh.Sys.Systems
         string EsdeFullName,
         bool SelfDelimitingImages = false);
 
-    // A console's system pack: its entry and its cheat codecs, which any engine of the console uses - see EmuSen_CoreAPI.md §8.2, §20.
+    // A console's system pack: its entry, its cheat codecs and its debugger views, which any engine of the console uses - see EmuSen_CoreAPI.md §8.2, §20, §31.
     // PlayerControllers answers each player's controller id from the console's settings, where its ports can hold adapters - see EmuSen_Settings_Reference.md §4.102.
     public sealed record SystemPack(SystemEntry Entry, Func<ICheatCodeCodec>? AutoDetectCodec, Func<ICheatCodeCodec>? ExplicitCodec,
-        Func<Func<string, string?>, IReadOnlyList<string>>? PlayerControllers = null);
+        Func<Func<string, string?>, IReadOnlyList<string>>? PlayerControllers = null, ISystemDebugViews? DebugViews = null);
 
     // The packs by system id; a system without one is shown by its engine's own name and has no codecs.
     public static class SystemPacks

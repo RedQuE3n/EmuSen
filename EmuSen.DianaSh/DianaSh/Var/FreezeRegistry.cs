@@ -59,6 +59,17 @@ namespace EmuSen.DianaSh.DianaSh.Var
             return null;
         }
 
+        // For a host that sees no store as it happens: each frozen byte found changed is written back, once a frame - see `man freeze`.
+        public void Enforce(Func<string, int, byte> read, Action<string, int, byte> write)
+        {
+            foreach (var entry in _frozen)
+            {
+                if (read(entry.Space, entry.Address) == entry.Value) continue;
+                entry.Blocked++;
+                Restore(() => write(entry.Space, entry.Address, entry.Value));
+            }
+        }
+
         // Wraps the restoring write so the observer's re-entry is ignored.
         public void Restore(Action write)
         {

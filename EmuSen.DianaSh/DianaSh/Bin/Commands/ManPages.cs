@@ -49,7 +49,13 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "DESCRIPTION\n" +
                 "    Prints whatever the current IDebugTarget's GetSummaryText() has to say -\n" +
                 "    a catch-all, unstructured dump for state that doesn't have its own\n" +
-                "    dedicated command yet. 'No target attached.' if no ROM is loaded.",
+                "    dedicated command yet. 'No target attached.' if no ROM is loaded.\n\n" +
+                "    On a core of the stable ABI the first line names the engine, the system\n" +
+                "    and the frame, and the console's system pack adds what it reads from the\n" +
+                "    main processor's live registers. On the SNES that is the 65816's state on\n" +
+                "    one line, P's letters upper case where set, the same line C# Venus prints\n" +
+                "    first; the PPU lines Venus adds need the video registers, which no SNES\n" +
+                "    engine of the stable ABI publishes yet.",
 
             ["export"] =
                 "NAME\n" +
@@ -228,6 +234,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    'regs' keeps printing every section at once, which stays the right\n" +
                 "    default when the question is 'what is the machine doing' rather than\n" +
                 "    'what is this one chip doing'.\n\n" +
+                "    The coprocessor section shows the processor 'cop' names (the first after\n" +
+                "    the main one that is not the SPC700), so on a core of the stable ABI it\n" +
+                "    is that processor's own registers, as 'regs <name>' prints them.\n\n" +
                 "    Every value here is read through a side-effect-free view, never the\n" +
                 "    chip's own register window - reading a real coprocessor status register\n" +
                 "    can acknowledge an interrupt or advance a transfer handshake, and a\n" +
@@ -1797,6 +1806,10 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    nothing to report for a given section (no hardware-load breakdown wired\n" +
                 "    up, no fixed sprite capacity, no palettes) just makes that section\n" +
                 "    shrink or disappear rather than showing something fake.\n\n" +
+                "    On a core of the stable ABI the load bars are the phases the core times\n" +
+                "    and names in its machine info; a core that times none shows one bar,\n" +
+                "    'frame', the engine's own timing of the whole frame. Each is a share of\n" +
+                "    one frame at the machine's own rate.\n\n" +
                 "    Load bars are colored green/yellow/red under 60% / 60-85% / over 85%,\n" +
                 "    the same rough 'getting busy' convention real htop's CPU bars use.\n\n" +
                 "    Press Ctrl+C to exit - unlike everywhere else in this shell, Ctrl+C is\n" +
@@ -2524,6 +2537,14 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    generic fallback names every register the core already reports through\n" +
                 "    'regs', plus 'frame' and any labels. Nothing has to be written per-core\n" +
                 "    for 'eval' to work on a new console.\n\n" +
+                "    A core of the stable ABI adds two sources to that fallback. Its console's\n" +
+                "    system pack names symbols derived from the main processor's registers -\n" +
+                "    on the SNES the eight flags and the four aliases above, read from P, S,\n" +
+                "    D, PB and DB - and 'stackdepth' is the depth of the call stack the host\n" +
+                "    keeps where the core reports calls. That stack is kept only on frames\n" +
+                "    run with something armed, so it is empty after frames that ran plain.\n" +
+                "    'scanline', 'cycle' and 'opaddr' are not among them: the ABI carries no\n" +
+                "    timing view and no last-instruction address.\n\n" +
                 "NUMBERS AND MEMORY\n" +
                 "    Numbers     123 decimal, $1F or 0x1F hex, %1010 binary\n" +
                 "    [addr]      one byte at <addr>\n" +
@@ -2772,6 +2793,15 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    is, and for HDMA the table pointer and line counter it has reached. An\n" +
                 "    idle channel still shows its last configuration, which is usually the\n" +
                 "    thing you wanted to see.\n\n" +
+                "    On a SNES engine of the stable ABI the table is the system pack's\n" +
+                "    reading of the registers as last written, $4300-$437F with MDMAEN and\n" +
+                "    HDMAEN, from the engine's IO space. An enabled HDMA channel is shown\n" +
+                "    'on' while its line counter is not zero and 'arm' once it is, since a\n" +
+                "    header byte of 0 ends a channel until the next frame (fullsnes); a\n" +
+                "    counter the program itself wrote to 0 reads as ended too. The indirect\n" +
+                "    address is $43x5-$43x7, the byte count's own register, as on the\n" +
+                "    hardware. 'dma log' needs a transfer record the stable ABI does not\n" +
+                "    carry, and refuses there.\n\n" +
                 "TRANSFER LOG\n" +
                 "    'dma log on' records every transfer as it happens - channel, kind,\n" +
                 "    destination, source, length, and the frame and scanline it ran on.\n" +
@@ -2977,6 +3007,13 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands
                 "    address in a read-only space is refused rather than silently ignored.\n" +
                 "    Freezing an address whose writes the core does not observe will also\n" +
                 "    show a blocked count of zero - see 'man watch' for which paths report.\n\n" +
+                "ON A CORE OF THE STABLE ABI\n" +
+                "    Such a core reports a store only after its frame, so the host cannot\n" +
+                "    undo a write as it happens. It reads each frozen byte at the end of\n" +
+                "    every frame and writes the value back where it has changed, as it\n" +
+                "    applies cheats. The game can therefore read its own value within the\n" +
+                "    frame, as with a per-frame poke, and the count in 'freeze list' is of\n" +
+                "    frames whose end found the byte changed, not of writes.\n\n" +
                 "EXAMPLES\n" +
                 "    freeze add WRAM 13c6\n" +
                 "    freeze add WRAM 0dbf 63\n" +

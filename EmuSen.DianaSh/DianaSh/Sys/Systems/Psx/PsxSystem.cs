@@ -17,7 +17,7 @@ namespace EmuSen.DianaSh.DianaSh.Sys.Systems.Psx
             "PlayStation",
             "Sony",
             1994,
-            new[] { ".exe", ".psexe", ".psx" },
+            new[] { ".psexe", ".psx" },
             new[] { "Sony - PlayStation" },
             new[] { "PSX" },
             file => file,

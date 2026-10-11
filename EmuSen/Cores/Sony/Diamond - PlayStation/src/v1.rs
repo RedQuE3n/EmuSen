@@ -69,7 +69,7 @@ pub fn bios(market: Market) -> Firmware {
 }
 
 /// The extensions the core opens at stage 1, the system pack's checked subset (Diamond_Native.md §2.4).
-pub const EXTENSIONS: [&str; 3] = [".exe", ".psexe", ".psx"];
+pub const EXTENSIONS: [&str; 2] = [".psexe", ".psx"];
 
 /// The settings, read at create; none changes what the stub computes but the region's rate and the ports.
 pub const REGION_KEY: &str = "region";
@@ -380,7 +380,7 @@ mod tests {
     fn the_descriptors_are_the_consoles() {
         let info = Machine::info();
         let psx = &info.systems[0];
-        assert_eq!((psx.id.as_str(), psx.extensions.len(), psx.development), ("psx", 3, true));
+        assert_eq!((psx.id.as_str(), psx.extensions.len(), psx.development), ("psx", 2, true));
         assert_eq!(psx.controllers.iter().map(|c| (c.buttons.len(), c.axes.len())).collect::<Vec<_>>(), [(14, 0), (16, 4)]);
         assert!(psx.firmware.iter().all(|f| !f.required && f.size == 524_288));
         let mut bits: Vec<u32> = psx.controllers[1].buttons.iter().map(|b| b.bit).collect();

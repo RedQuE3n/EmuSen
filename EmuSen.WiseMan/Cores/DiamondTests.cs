@@ -97,7 +97,7 @@ namespace EmuSen.WiseMan.Cores
             var disc = SyntheticPsxDisc.Build();
             foreach (var (name, image) in new (string, byte[])[]
             {
-                ("program.exe", SyntheticPsExe.Build()),
+                ("program.psexe", SyntheticPsExe.Build()),
                 ("disc (Track 1).bin", disc.DataTrack),
                 ("disc.iso", disc.Iso),
                 ("mode1 (Track 1).bin", SyntheticPsxDisc.Build(mode: 1).DataTrack),
@@ -154,7 +154,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
             Assert.True(File.Exists(runner), $"no kit runner at {runner}");
-            foreach (var (name, image) in new[] { ("program.exe", SyntheticPsExe.Build()), ("disc (Track 1).bin", SyntheticPsxDisc.Build().DataTrack) })
+            foreach (var (name, image) in new[] { ("program.psexe", SyntheticPsExe.Build()), ("disc (Track 1).bin", SyntheticPsxDisc.Build().DataTrack) })
             {
                 var start = new ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };
                 foreach (string a in new[] { "--core", LibraryPath, "--image", Write(name, image), "--frames", "120" }) start.ArgumentList.Add(a);

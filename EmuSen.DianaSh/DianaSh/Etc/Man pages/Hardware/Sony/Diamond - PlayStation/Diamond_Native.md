@@ -113,9 +113,11 @@ cited.
   truncated one anyway). OpenVGDB matches the PlayStation by serial, not by hash [R the plan's §4.1], so its hashing
   rule is the identity until the serial is read (stage 7). No cheat codec until stage 11.
 - **Its extensions, staged as the plan's §11 Q9 decided** [C]:
-  - **Opened at stage 1**: `.exe` and `.psexe`, the plan's PS-EXE names, and `.psx`, a third name PS-EXEs are
-    distributed under, added at stage 1 (§7). The core's info lists the same three, a subset of the
-    pack's as `EmuSen_CoreAPI_Extensions.md` §8.4 asks, and `DiamondTests` holds them equal.
+  - **Opened at stage 1**: `.psexe` and `.psx`, the names PS-EXEs are distributed under. `.exe` was claimed at first
+    and dropped the same week (§7): it waits for routing by content. The core's info lists the same two, a subset of the
+    pack's as `EmuSen_CoreAPI_Extensions.md` §8.4 asks, and `DiamondTests` holds them equal. A test program named
+    `.exe` (ps1-tests' are) still runs on Diamond when it is named directly, as the kit and the test-ROM runner do: the
+    core tells a PS-EXE by its header, never by its name.
   - **Declared and not routed**: `PsxSystem.DiscExtensions`, `.cue`, `.chd`, `.iso`, `.m3u` and `.pbp`. They are kept
     out of the entry's list, which is what the host routes and shelves by, for two reasons. *Collision*: `.iso` is the
     Sega CD's today and `.cue` and `.chd` will be, and a second claimant of an extension is never reached; routing by
@@ -124,9 +126,9 @@ cited.
     image-set extension (§2 there, `EMUSEN_FILE_MEDIA`) and the disc crate, both Diamond's stage 7. `.m3u` follows at
     stage 11 with disc change, `.pbp` later and unencrypted only (the plan's §1.2). `.sbi` is read beside a disc and is
     never opened alone; `.ccd` and `.ecm` are later still.
-  - **A cost while the core is in development** [A]: `.exe` is also every Windows program's extension, so a library
-    folder holding programs would list them on the PlayStation's shelf once the console has one; the core refuses each
-    with words. Routing by content is the fix, the pack's recogniser telling a PS-EXE by its header.
+  - **Why `.exe` waits** [A]: it is also every Windows program's extension, so a library folder holding programs would
+    list them on the PlayStation's shelf once the console has one. Routing by content is the fix, the pack's recogniser
+    telling a PS-EXE by its header; `.exe` returns with it.
 - **The screen**: `PsxSystem.DisplayAspect`, 4:3, which the core reports as machine info's aspect; held equal by
   `DiamondTests`. The pack's entry record has no field for it, and none was added: the frontends read the aspect from
   the engine (`ICore.DisplayAspect`), and the constant states the console's fact beside the entry for the test.
@@ -237,7 +239,7 @@ by its own script to 142 MB of JSON, in `~/.cache/emusen/probe/diamond/r3000/`, 
   `CoreAbi 1`, `InDevelopment` true). The build writes the sidecar with `--development`; the library and the sidecar
   reach the build output for the tests and the kit and never a publish (`EmuSen_CoreAPI.md` §27.2).
 - **The system entry's `development: true`** (§27.4 there): the core does not run the system's games yet, which is
-  that field's meaning. With development cores asked for, a developer's frontend opens `.exe`, `.psexe` and `.psx`
+  that field's meaning. With development cores asked for, a developer's frontend opens `.psexe` and `.psx`
   files on Diamond, and the PlayStation still gets no Graphics Settings tab, no shelf and no firmware row, as the
   Sega CD and the 32X are treated; without them, nothing offers the core. *Found while building* [R, the code]: with only the
   build's mark, asking for development cores would give the PlayStation a tab and a shelf
@@ -346,9 +348,8 @@ and files, and the pack's players.
 
 ## 7. Decisions, questions and what the plan got wrong
 
-- **`.psx`** [question for the tester]: the plan's §1.2 and §4.1 name `.exe` and `.psexe`, and stage 1 was set out
-  with `.exe` and `.psx`. All three are claimed; dropping one is a change to the pack's and the core's lists and the
-  test that holds them equal.
+- **The program extensions**, *decided 2026-10-11 by the tester*: `.psexe` and `.psx` are kept, and `.exe` is dropped
+  until routing by content exists, so that no Windows program reaches the PlayStation's shelf.
 - **The market of a program with no marker** is the Americas [C], and **port 2 holds a DualShock by default** [C, Q11
   speaks of port 1 only]; both are a setting's default and change by one line each.
 - **The system entry is marked in development as well as the build** (§4): the plan's §8 names only §27's mark.

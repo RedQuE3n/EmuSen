@@ -1,10 +1,13 @@
-//! The machine: the R3000A stepping against the bus, a frame being one video field, a PS-EXE side-loaded on the kernel
-//! it runs or started directly, the TTY, and silence at the SPU's rate until stage 8 (Diamond_Native.md §11).
+//! The machine: the R3000A stepping against the bus, a frame ending as a field's vblank begins, a PS-EXE side-loaded
+//! on the kernel it runs or started directly, the TTY, and silence at the SPU's rate until stage 8 (Diamond_Native.md
+//! §11, §12).
 
 use blackmoon_r3000::{R3000, Step};
 
 use crate::bus::{BIOS_BYTES, Board, RAM_BYTES, SCRATCH_BYTES, power_on_memctl};
-use crate::devices::{SPU_RAM_BYTES, TTY_BYTES, VRAM_BYTES};
+use crate::devices::{SPU_RAM_BYTES, TTY_BYTES};
+use crate::gpu::display;
+use crate::gpu::vram::BYTES as VRAM_BYTES;
 use crate::icache::KERNEL_BCC;
 use crate::kernel::{self, Kernel};
 use crate::media::{Kind, Market, Media};
@@ -23,10 +26,10 @@ pub const TTY_ID: u32 = 6;
 pub const AUDIO_RATE: i32 = 44_100;
 pub const CYCLES_PER_SAMPLE: u64 = 768;
 
-/// The picture before the GPU exists: 320 wide, 240 lines NTSC and 256 PAL; at most 640 by 512.
+/// The nominal picture, 320 wide by 240 lines NTSC and 256 PAL, and the largest the display makes (Diamond_GPU.md §7).
 pub const WIDTH: u32 = 320;
-pub const MAX_WIDTH: u32 = 640;
-pub const MAX_HEIGHT: u32 = 512;
+pub const MAX_WIDTH: u32 = display::MAX_WIDTH;
+pub const MAX_HEIGHT: u32 = display::MAX_HEIGHT;
 
 /// The two GPU families (psx-spx "GPU Versions").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,7 +56,6 @@ pub struct Machine {
     pub exe: Option<Vec<u8>>,
     pub image: Option<Vec<u8>>,
     pub frames: i64,
-    pub picture: Vec<u8>,
     pub skip: bool,
     pub pads: [u32; 2],
     pub ports: [Option<&'static str>; 2],
@@ -108,7 +110,6 @@ impl Machine {
             image: exe.clone(),
             exe,
             frames: 0,
-            picture: black(WIDTH, height(config.market)),
             skip: false,
             pads: [0; 2],
             ports,
@@ -135,7 +136,7 @@ impl Machine {
         Some(match id {
             1 => &b.ram,
             2 => &b.scratch,
-            3 => &b.gpu.vram,
+            3 => &b.gpu.vram.bytes,
             4 => &b.spu.ram,
             5 => &b.bios,
             6 => &b.tty.text,
@@ -148,7 +149,7 @@ impl Machine {
         Some(match id {
             1 => &mut b.ram,
             2 => &mut b.scratch,
-            3 => &mut b.gpu.vram,
+            3 => &mut b.gpu.vram.bytes,
             4 => &mut b.spu.ram,
             _ => return None,
         })
@@ -172,7 +173,8 @@ impl Machine {
         }
     }
 
-    /// One frame: the machine runs to the start of the next video field; its silence is counted from the clock.
+    /// One frame: the machine runs until a field's vblank begins, its picture complete, or to the field's end when the
+    /// display range leaves no vblank; its silence is counted from the clock.
     pub fn advance(&mut self) {
         let start = self.board.now;
         self.board.field_done = false;
@@ -189,10 +191,6 @@ pub fn height(market: Market) -> u32 {
     if market == Market::Europe { 256 } else { 240 }
 }
 
-/// An opaque black frame, RGBA.
-pub fn black(width: u32, height: u32) -> Vec<u8> {
-    [0, 0, 0, 255].repeat((width * height) as usize)
-}
 
 #[cfg(test)]
 pub mod tests {
@@ -227,12 +225,15 @@ pub mod tests {
         let mut m = machine_for(&program("loop: j loop\nnop"), Market::Americas);
         let (num, den) = m.frame_rate();
         let frames = (num / den) as i64;
+        m.advance();
+        let first = m.board.now;
         for _ in 0..frames {
             m.advance();
         }
         assert_eq!(m.silence as u64, m.board.now / CYCLES_PER_SAMPLE);
-        let seconds = m.board.now as f64 / 33_868_800.0;
+        let seconds = (m.board.now - first) as f64 / 33_868_800.0;
         assert!((seconds - frames as f64 * den as f64 / num as f64).abs() < 1e-5, "{seconds}");
+        assert_eq!(m.board.video.position(first).0, 256, "a frame ends as vblank begins, at line 256 by GP1(07h)'s reset");
         m.audio_limit = 1000;
         m.advance();
         assert_eq!(m.silence, 500, "the bound drops the oldest");
@@ -244,7 +245,7 @@ pub mod tests {
         assert_eq!(m.media.kind, Kind::Exe { pc: 0x8001_0000, load: 0x8001_0000, size: 0x800 });
         m.advance();
         assert_eq!(m.board.ram_word(0x11000), 0x55);
-        assert!(m.picture.chunks(4).all(|p| p == [0, 0, 0, 255]));
+        assert!(m.board.gpu.display.frame().chunks(4).all(|p| p == [0, 0, 0, 255]));
         assert_eq!(m.space(BIOS_ID).unwrap().len(), 0x8_0000);
     }
 

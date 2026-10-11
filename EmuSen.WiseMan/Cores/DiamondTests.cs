@@ -8,6 +8,7 @@ using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.WiseMan.Fixtures.RomRunner;
+using SkiaSharp;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
@@ -107,7 +108,7 @@ namespace EmuSen.WiseMan.Cores
                 var last = run.At(60)!;
                 Assert.Equal(new[] { "bios", "ram", "scratch", "spuram", "tty", "vram" }, last.Spaces.Keys.Order());
                 Assert.Equal((0x20_0000, 0x400, 0x10_0000, 0x8_0000, 0x1_0000), (last.Spaces["ram"].Length, last.Spaces["scratch"].Length, last.Spaces["vram"].Length, last.Spaces["spuram"].Length, last.Spaces["tty"].Length));
-                Assert.Equal((320, 240), (last.Picture!.Width, last.Picture.Height));
+                Assert.Equal((256, 240), (last.Picture!.Width, last.Picture.Height));
                 Assert.All(last.Picture.Rgb, b => Assert.Equal(0, b));
                 Assert.Equal(44100, run.AudioRate);
                 Assert.True(TestRomDifferential.Steady(run, 1, 60));
@@ -128,7 +129,7 @@ namespace EmuSen.WiseMan.Cores
             var core = Assert.IsType<CoreEngine>(bundle.Core);
             Assert.Equal(("diamond", "psx", "pal"), (core.Info.Id, core.Machine.Info.System, core.Machine.Info.Region));
             core.RunFrame();
-            Assert.Equal((320, 256), (core.ScreenWidth, core.ScreenHeight));
+            Assert.Equal((256, 240), (core.ScreenWidth, core.ScreenHeight));
             Assert.InRange(core.FrameRateHz, 49.76, 49.77);
             Assert.Null(bundle.CheatAutoDetectCodec);
             Assert.Null(bundle.Notice);
@@ -199,7 +200,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static string? Corpus => Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_PS1TESTS") is { } c && Directory.Exists(c) ? c : null;
 
-        // Each of ps1-tests' graded programs run to frame 900 on `files`, and those that did not pass.
+        // Each of ps1-tests' graded programs run to its frame on `files`, and those that did not pass.
         private List<string> RunPs1Tests(string corpus, IReadOnlyList<(uint, byte[])> files)
         {
             var engine = new CoreAbiTestRomEngine(LibraryPath, _ => files, rom => Ps1Tests.Programs.FirstOrDefault(p => rom.Replace('\\', '/').EndsWith(p.Path))?.Settings ?? "");
@@ -207,7 +208,7 @@ namespace EmuSen.WiseMan.Cores
             var failed = new List<string>();
             foreach (var program in Ps1Tests.Programs)
             {
-                var verdict = Ps1Tests.Grade(program, engine.Run(Path.Combine(corpus, program.Path), new[] { 900 }), Log);
+                var verdict = Ps1Tests.Grade(program, engine.Run(Path.Combine(corpus, program.Path), new[] { program.Frame }), Log);
                 _output.WriteLine($"{program.Path}: {verdict.Outcome} {verdict.Detail}");
                 if (verdict.Outcome != RomOutcome.Passed) failed.Add(program.Path);
             }
@@ -239,6 +240,61 @@ namespace EmuSen.WiseMan.Cores
             var declared = CoreLibrary.Open(LibraryPath).Info.Systems.Single().Firmware;
             var bios = declared.Where(f => File.Exists(Path.Combine(firmware, f.Name))).Select(f => (f.Which, File.ReadAllBytes(Path.Combine(firmware, f.Name)))).ToArray();
             Assert.Empty(RunPs1Tests(corpus, bios));
+        }
+
+        // A program that turns the display on and fills a 16x16 square red through GP0, and loops.
+        private static byte[] Filling() => SyntheticPsExe.Build(SyntheticPsExe.Words(
+            0x3C08_1F80, 0x3C09_0300, 0xAD09_1814,
+            0x3C09_0200, 0x3529_00FF, 0xAD09_1810, 0xAD00_1810, 0x3C09_0010, 0x3529_0010, 0xAD09_1810,
+            0x0800_0000u | ((SyntheticPsExe.Origin + 40) >> 2 & 0x03FF_FFFF), 0));
+
+        private string Reference(string name, int redWidth)
+        {
+            using var bitmap = new SKBitmap(VramGrader.Width, VramGrader.Height, SKColorType.Rgba8888, SKAlphaType.Opaque);
+            bitmap.Erase(SKColors.Black);
+            for (int y = 0; y < 16; y++) for (int x = 0; x < redWidth; x++) bitmap.SetPixel(x, y, new SKColor(248, 0, 0));
+            string path = Path.Combine(_root, name);
+            using (var file = File.Create(path)) bitmap.Encode(file, SKEncodedImageFormat.Png, 100);
+            return path;
+        }
+
+        // The VRAM grader of Diamond_Plan.md §3.3 on a program of the test's own: exact against its picture, failed against one a column wider, and the display shows it.
+        [Fact]
+        public void The_vram_grader_compares_a_programs_vram_exactly_and_the_display_shows_it()
+        {
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            var run = engine.Run(Write("fill.exe", Filling()), new[] { 30 });
+            var program = new VramProgram("fill.exe", 30);
+            var exact = VramGrader.Grade(program, run, _ => Reference("exact.png", 16));
+            var wider = VramGrader.Grade(program, run, _ => Reference("wider.png", 17));
+            _output.WriteLine($"{exact.Outcome} {exact.Detail}; {wider.Outcome} {wider.Detail}");
+            Assert.Equal(RomOutcome.Passed, exact.Outcome);
+            Assert.Equal((RomOutcome.Failed, "16 of 524288 pixels differ, first (16,0) (16,1) (16,2) (16,3)"), (wider.Outcome, wider.Detail));
+            var picture = run.At(30)!.Picture!;
+            Assert.Equal((256, 240), (picture.Width, picture.Height));
+            Assert.Equal(((byte)255, (byte)0, (byte)0), picture.At(15, 15));
+            Assert.Equal(((byte)0, (byte)0, (byte)0), picture.At(16, 15));
+        }
+
+        // The gate of Diamond_Plan.md §7's stage 4: ps1-tests' GPU programs' VRAM exactly their pictures on the open kernel, but the disagreements named; opt-in by the corpus - see Diamond_GPU.md §9.
+        [Fact]
+        public void Ps1_tests_gpu_programs_draw_their_vram_pictures_exactly()
+        {
+            if (Corpus is not { } corpus)
+            {
+                _output.WriteLine("skipped: EMUSEN_DIAMOND_PS1TESTS names ps1-tests' release");
+                return;
+            }
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            string? Picture(string program) => Path.Combine(corpus, Path.GetDirectoryName(program)!, "vram.png") is var f && File.Exists(f) ? f : null;
+            var failed = new List<string>();
+            foreach (var program in Ps1GpuTests.Programs)
+            {
+                var verdict = VramGrader.Grade(program, engine.Run(Path.Combine(corpus, program.Path), new[] { program.Frame }), Picture);
+                _output.WriteLine($"{program.Path}: {verdict.Outcome} {verdict.Detail}");
+                if (verdict.Outcome != RomOutcome.Passed) failed.Add(program.Path);
+            }
+            Assert.Empty(failed);
         }
 
         [Fact]

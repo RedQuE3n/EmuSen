@@ -27,9 +27,9 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
     }
 
     // How a test program's TTY is graded, as data: the program's path suffix, its heading line and the rule.
-    public enum TtyRule { PassFail, TableAgainstLog, LinesAgainstLog, TimersAgainstLog }
+    public enum TtyRule { PassFail, TableAgainstLog, LinesAgainstLog, TimersAgainstLog, BandwidthAgainstLog, Expect }
 
-    public sealed record TtyProgram(string Path, string Heading, TtyRule Rule, double Tolerance = 0, string[]? Disputed = null, string Settings = "");
+    public sealed record TtyProgram(string Path, string Heading, TtyRule Rule, double Tolerance = 0, string[]? Disputed = null, string Settings = "", int Frame = 900, string[]? Expected = null);
 
     // ps1-tests' programs the runner grades, and the rules - see Diamond_Native.md §11.12.
     public static class Ps1Tests
@@ -46,6 +46,12 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             new("dma/chain-looping/chain-looping.exe", "dma/chain-looping", TtyRule.LinesAgainstLog, 0.10),
             // The console's log is from a PAL-clocked console forced into NTSC mode, Diamond_Disputes.md D-0; its rows within their tolerances.
             new("timers/timers.exe", "timers test", TtyRule.TimersAgainstLog, Settings: "region=psx.eu"),
+            new("gpu/gp0-e1/gp0-e1.exe", "gpu/gp0-e1", TtyRule.PassFail),
+            new("gpu/mask-bit/mask-bit.exe", "gpu/mask-bit", TtyRule.PassFail),
+            // Each row's hblanks within 2% of the console's - see Diamond_GPU.md §8.
+            new("gpu/bandwidth/bandwidth.exe", "gpu/bandwidth", TtyRule.BandwidthAgainstLog, 0.02, Frame: 1500),
+            // The default console has the 208-pin chip, version 2 by psx-spx's detection.
+            new("gpu/version-detect/version-detect.exe", "gpu/version-detect", TtyRule.Expect, Expected: new[] { "* GPU version 2 [New 208pin GPU (LATE-PU-8 and up)]" }),
         };
 
         public static RomProtocol Protocol(TtyProgram p, Func<string, string?> consoleLog) =>
@@ -58,12 +64,14 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             if (!raw.Contains(p.Heading, StringComparison.Ordinal)) return new RomVerdict(RomOutcome.Incomplete, name, "the program printed nothing");
             var lines = TtyReader.Lines(TtyReader.From(raw, p.Heading));
             if (p.Rule == TtyRule.PassFail) return PassFail(name, lines);
+            if (p.Rule == TtyRule.Expect) return Expect(name, lines, p.Expected ?? Array.Empty<string>());
             if (consoleLog(p.Path) is not { } log) return new RomVerdict(RomOutcome.Incomplete, name, "no console log to compare with");
             var console = TtyReader.Lines(TtyReader.From(log.Replace("\r", ""), p.Heading));
             return p.Rule switch
             {
                 TtyRule.TableAgainstLog => Table(name, lines, console, p.Tolerance, p.Disputed ?? Array.Empty<string>()),
                 TtyRule.LinesAgainstLog => Numbers(name, lines, console, p.Tolerance),
+                TtyRule.BandwidthAgainstLog => Bandwidth(name, lines, console, p.Tolerance),
                 _ => Timers(name, lines, console),
             };
         }
@@ -75,6 +83,29 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             if (fails.Length > 0) return new RomVerdict(RomOutcome.Failed, name, string.Join("; ", fails));
             bool done = lines.Any(l => l == "Done.");
             return new RomVerdict(done && passes > 0 ? RomOutcome.Passed : RomOutcome.Incomplete, name, $"{passes} pass");
+        }
+
+        private static RomVerdict Expect(string name, IReadOnlyList<string> lines, string[] wanted)
+        {
+            var missing = wanted.Where(w => !lines.Contains(w)).ToArray();
+            return new RomVerdict(missing.Length == 0 ? RomOutcome.Passed : RomOutcome.Failed, name, missing.Length == 0 ? $"{wanted.Length} lines" : "missing: " + string.Join("; ", missing));
+        }
+
+        private static readonly Regex BandwidthRow = new(@"^(.+?)\s+dT:.*\(hblanks:\s*(\d+)\)");
+
+        // Each named row's hblanks within the fraction of the console's.
+        private static RomVerdict Bandwidth(string name, IReadOnlyList<string> lines, IReadOnlyList<string> console, double fraction)
+        {
+            Dictionary<string, double> Rows(IEnumerable<string> ls) => ls.Select(l => BandwidthRow.Match(l)).Where(m => m.Success).ToDictionary(m => m.Groups[1].Value.Trim(), m => double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture));
+            var ours = Rows(lines);
+            var off = new List<string>();
+            var theirs = Rows(console);
+            foreach (var (row, want) in theirs)
+            {
+                if (!ours.TryGetValue(row, out double have)) return new RomVerdict(RomOutcome.Incomplete, name, $"no row {row}");
+                if (Math.Abs(have - want) > want * fraction) off.Add($"{row}: {have} against {want}");
+            }
+            return new RomVerdict(off.Count == 0 && theirs.Count > 0 ? RomOutcome.Passed : RomOutcome.Failed, name, off.Count == 0 ? $"{theirs.Count} rows within {fraction:P0}" : string.Join("; ", off));
         }
 
         private static readonly Regex Row = new(@"^(\S+)\s+\(\s*0x[0-9a-fA-F]+\)\s+(.*)$");

@@ -1,5 +1,6 @@
 //! Runs a PS-EXE on Diamond for a number of frames and prints its TTY: `run <exe> [frames] [--bios FILE | --bare] [--pal]
-//! [--dump ADDRESS WORDS] [--ram FILE]`: RAM's words from a hex address, or the whole of RAM to a file.
+//! [--dump ADDRESS WORDS] [--ram FILE] [--vram FILE] [--picture FILE]`: RAM's words from a hex address, or RAM, VRAM or
+//! the RGBA picture (its size printed) to a file.
 //! A development tool for the test programs (Diamond_Native.md §11.11): on the open kernel, a player's own BIOS, or
 //! none.
 
@@ -32,6 +33,14 @@ fn main() {
     }
     if let Some(i) = args.iter().position(|a| a == "--ram") {
         std::fs::write(&args[i + 1], &m.board.ram).expect("written");
+    }
+    if let Some(i) = args.iter().position(|a| a == "--vram") {
+        std::fs::write(&args[i + 1], &m.board.gpu.vram.bytes).expect("written");
+    }
+    if let Some(i) = args.iter().position(|a| a == "--picture") {
+        let d = &m.board.gpu.display;
+        std::fs::write(&args[i + 1], d.frame()).expect("written");
+        eprintln!("picture {}x{}", d.width, d.height);
     }
     eprintln!("\n[{} frames, {} cycles, pc {:08X}, {:.1} ms]", m.frames, m.board.now, m.cpu.regs.pc, start.elapsed().as_secs_f64() * 1e3);
 }

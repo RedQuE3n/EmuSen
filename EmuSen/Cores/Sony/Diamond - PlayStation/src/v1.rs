@@ -129,7 +129,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, memory, timers, interrupts and DMA run a program; the picture stays black and the sound silent until the GPU and the SPU are built.".into()),
+            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, memory, timers, interrupts, DMA and the GPU run a program and show its picture; the sound is silent until the SPU is built.".into()),
             systems: vec![emusen_native::core::System {
                 id: "psx".into(),
                 name: "Sony PlayStation".into(),
@@ -235,11 +235,12 @@ impl Core for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        FrameInfo::rgba(WIDTH as i32, self.height() as i32)
+        let d = &self.board.gpu.display;
+        FrameInfo { aspect_num: 4, aspect_den: 3, ..FrameInfo::rgba(d.width as i32, d.height as i32) }
     }
 
     fn frame(&self) -> &[u8] {
-        &self.picture
+        self.board.gpu.display.frame()
     }
 
     fn audio_rate(&self) -> i32 {
@@ -324,7 +325,7 @@ mod tests {
         assert_eq!((info.video.base_width, info.video.base_height, info.video.aspect), (320, 240, (4, 3)));
         assert_eq!(info.ports.iter().map(|p| p.controller.as_deref()).collect::<Vec<_>>(), [Some(DUALSHOCK), Some(DUALSHOCK)]);
         assert_eq!(info.firmware, vec![(BIOS_AMERICAS, FirmwareSource::Replacement)]);
-        assert!(us.frame().chunks(4).all(|p| p == [0, 0, 0, 255]) && us.frame().len() == 320 * 240 * 4);
+        assert!(us.frame().chunks(4).all(|p| p == [0, 0, 0, 255]) && us.frame().len() == 256 * 240 * 4, "the display after GP1(00h), blanked");
 
         let eu = create(&disc(Market::Europe, Some(2)), &[], vec![]).unwrap();
         assert_eq!((eu.machine_info().region, eu.machine_info().frame_rate, eu.machine_info().video.base_height), (Some(Region::Pal), standard_rate(true), 256));

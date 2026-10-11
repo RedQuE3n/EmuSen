@@ -31,18 +31,18 @@ namespace EmuSen.Galaxia
 
         // The platform and home are parameters so every branch is testable on any host - see DianaShSandboxTests.
         public static string ComputeFor(string baseDirectory, bool macOS, string userHome) =>
-            GalaxiaNative.Active ? GalaxiaNative.RootFor(baseDirectory, macOS, userHome) : Managed.ComputeFor(baseDirectory, macOS, userHome);
+            GalaxiaNative.Takes(baseDirectory, userHome) ? GalaxiaNative.RootFor(baseDirectory, macOS, userHome) : Managed.ComputeFor(baseDirectory, macOS, userHome);
 
         public static string MacDataDirectoryFor(string userHome) =>
-            GalaxiaNative.Active ? GalaxiaNative.MacDataDirectoryFor(userHome) : Managed.MacDataDirectoryFor(userHome);
+            GalaxiaNative.Takes(userHome) ? GalaxiaNative.MacDataDirectoryFor(userHome) : Managed.MacDataDirectoryFor(userHome);
 
         // The bundle's Contents folder when baseDirectory is its Contents/MacOS, else null.
         public static string? BundleContentsFor(string baseDirectory) =>
-            GalaxiaNative.Active ? GalaxiaNative.BundleContentsFor(baseDirectory) : Managed.BundleContentsFor(baseDirectory);
+            GalaxiaNative.Takes(baseDirectory) ? GalaxiaNative.BundleContentsFor(baseDirectory) : Managed.BundleContentsFor(baseDirectory);
 
         // Contents/Resources/home, where the bundle publish puts what a Linux publish ships in home/.
         public static string? SeedDirectoryFor(string baseDirectory, bool macOS) =>
-            GalaxiaNative.Active ? GalaxiaNative.SeedDirectoryFor(baseDirectory, macOS) : Managed.SeedDirectoryFor(baseDirectory, macOS);
+            GalaxiaNative.Takes(baseDirectory) ? GalaxiaNative.SeedDirectoryFor(baseDirectory, macOS) : Managed.SeedDirectoryFor(baseDirectory, macOS);
 
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed

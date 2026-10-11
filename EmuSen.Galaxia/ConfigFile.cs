@@ -31,7 +31,7 @@ namespace EmuSen.Galaxia
         public bool Exists => File.Exists(Path);
 
         // Null for missing, unreadable or corrupt - callers fall back to their own defaults rather than crash, see §2.2.
-        public T? Load() => GalaxiaNative.Active ? LoadNative(upgrade: false) : LoadManaged();
+        public T? Load() => GalaxiaNative.Takes(_category, FileName) ? LoadNative(upgrade: false) : LoadManaged();
 
         // Why the last Load returned null, or null if it didn't or the file simply wasn't there - see EmuSen_Config_Reference.md §6.2.
         public string? LastLoadError { get; private set; }
@@ -39,9 +39,9 @@ namespace EmuSen.Galaxia
         public T Load(Func<T> defaultFactory) => Load() ?? defaultFactory();
 
         // False when the write failed; best-effort by design, a change that can't reach the disk just won't survive a restart - see §2.2.
-        public bool Save(T value) => GalaxiaNative.Active ? SaveNative(value) : SaveManaged(value);
+        public bool Save(T value) => GalaxiaNative.Takes(_category, FileName) ? SaveNative(value) : SaveManaged(value);
 
-        public bool Delete() => GalaxiaNative.Active ? DeleteNative() : DeleteManaged();
+        public bool Delete() => GalaxiaNative.Takes(_category, FileName) ? DeleteNative() : DeleteManaged();
 
         // The library reads the file, and for a model binds and upgrades it; this binds what comes back to the class - see EmuSen_RustPlatform.md §11.2.
         internal T? LoadNative(bool upgrade)

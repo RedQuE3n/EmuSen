@@ -15,7 +15,7 @@ namespace EmuSen.Galaxia.Library
 
         // Where the tree lived before it collapsed to <root>/home.
         public static string LegacyRootFor(string configRoot) =>
-            GalaxiaNative.Active ? GalaxiaNative.LegacyRootFor(configRoot) : Managed.LegacyRootFor(configRoot);
+            GalaxiaNative.Takes(configRoot) ? GalaxiaNative.LegacyRootFor(configRoot) : Managed.LegacyRootFor(configRoot);
 
         public static string LegacyRoot => GalaxiaNative.Active ? GalaxiaNative.Directory(GalaxiaDirectory.LegacyRoot)! : Managed.LegacyRoot;
 
@@ -29,21 +29,21 @@ namespace EmuSen.Galaxia.Library
         public static int SeedFromBundle() => GalaxiaNative.Active ? GalaxiaNative.Migrate(GalaxiaMigrate.OwnSeed) : Managed.SeedFromBundle();
 
         public static int SeedFromBundle(string? seedDirectory, string home) =>
-            GalaxiaNative.Active ? GalaxiaNative.Migrate(GalaxiaMigrate.Seed, seedDirectory, home) : Managed.SeedFromBundle(seedDirectory, home);
+            GalaxiaNative.Takes(seedDirectory, home) ? GalaxiaNative.Migrate(GalaxiaMigrate.Seed, seedDirectory, home) : Managed.SeedFromBundle(seedDirectory, home);
 
         public static int Run(string legacyRoot, string destinationRoot) =>
-            GalaxiaNative.Active ? GalaxiaNative.Migrate(GalaxiaMigrate.Between, legacyRoot, destinationRoot) : Managed.Run(legacyRoot, destinationRoot);
+            GalaxiaNative.Takes(legacyRoot, destinationRoot) ? GalaxiaNative.Migrate(GalaxiaMigrate.Between, legacyRoot, destinationRoot) : Managed.Run(legacyRoot, destinationRoot);
 
         // Copy, never move, and never overwrite - the ConfigFile<T>.MigrateFromLegacy rule.
         internal static int CopyTree(string source, string destination) =>
-            GalaxiaNative.Active ? GalaxiaNative.Migrate(GalaxiaMigrate.Tree, source, destination) : Managed.CopyTree(source, destination);
+            GalaxiaNative.Takes(source, destination) ? GalaxiaNative.Migrate(GalaxiaMigrate.Tree, source, destination) : Managed.CopyTree(source, destination);
 
         // Old ROM folders that still hold files, so a caller can say where they are.
         public static IReadOnlyList<string> RemainingLibraryDirectories() =>
             GalaxiaNative.Active ? GalaxiaNative.RemainingLibrary(null) : Managed.RemainingLibraryDirectories(Managed.LegacyRoot);
 
         public static IReadOnlyList<string> RemainingLibraryDirectories(string legacyRoot) =>
-            GalaxiaNative.Active ? GalaxiaNative.RemainingLibrary(legacyRoot) : Managed.RemainingLibraryDirectories(legacyRoot);
+            GalaxiaNative.Takes(legacyRoot) ? GalaxiaNative.RemainingLibrary(legacyRoot) : Managed.RemainingLibraryDirectories(legacyRoot);
 
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed

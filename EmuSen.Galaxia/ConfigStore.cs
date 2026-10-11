@@ -33,11 +33,11 @@ namespace EmuSen.Galaxia
         // Where config sat before it moved under home - see EmuSen_Galaxia.md §3.2.
         public static string PreviousDirectory => GalaxiaNative.Active ? GalaxiaNative.Directory(GalaxiaDirectory.ConfigPrevious)! : Managed.PreviousDirectory;
 
-        public static string For(string fileName) => GalaxiaNative.Active ? GalaxiaNative.ConfigPath(null, fileName) : Managed.For(fileName);
+        public static string For(string fileName) => GalaxiaNative.Takes(fileName) ? GalaxiaNative.ConfigPath(null, fileName) : Managed.For(fileName);
 
         // One subdirectory per category, for config there can be many of - see §1.2.
         public static string For(string category, string fileName) =>
-            GalaxiaNative.Active ? GalaxiaNative.ConfigPath(category, fileName) : Managed.For(category, fileName);
+            GalaxiaNative.Takes(category, fileName) ? GalaxiaNative.ConfigPath(category, fileName) : Managed.For(category, fileName);
 
         // Tests only, as above.
         public static string? OverrideLegacyDirectory
@@ -57,7 +57,7 @@ namespace EmuSen.Galaxia
         public static string LegacyDirectory => GalaxiaNative.Active ? GalaxiaNative.Directory(GalaxiaDirectory.ConfigLegacy)! : Managed.LegacyDirectory;
 
         internal static string? LegacyPathFor(string fileName) =>
-            GalaxiaNative.Active ? GalaxiaNative.LegacyConfigPath(fileName) : Managed.LegacyPathFor(fileName);
+            GalaxiaNative.Takes(fileName) ? GalaxiaNative.LegacyConfigPath(fileName) : Managed.LegacyPathFor(fileName);
 
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed

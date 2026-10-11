@@ -10,7 +10,7 @@ namespace EmuSen.Galaxia.Text
     {
         // Optimal string alignment - Levenshtein plus adjacent transposition, so 'chaet' for 'cheat' is one slip - see EmuSen_Config_Reference.md §6.
         public static int Distance(string a, string b) =>
-            GalaxiaNative.Active && a is not null && b is not null && GalaxiaNative.Crosses(a) && GalaxiaNative.Crosses(b) ? GalaxiaNative.SuggestDistance(a, b) : Managed.Distance(a!, b!);
+            a is not null && b is not null && GalaxiaNative.Takes(a, b) ? GalaxiaNative.SuggestDistance(a, b) : Managed.Distance(a!, b!);
 
         // Closest first; a candidate the typed text is a prefix of wins ties, since 'cl' for 'clear' is far likelier than any other.
         public static IReadOnlyList<string> Nearest(string typed, IEnumerable<string> candidates, int max = 2) =>
@@ -25,7 +25,7 @@ namespace EmuSen.Galaxia.Text
         // The candidates as a list the library can take, or null when the C# answers: the switch is off, or a text will not cross whole.
         private static IReadOnlyList<string?>? Listed(string typed, IEnumerable<string> candidates)
         {
-            if (!GalaxiaNative.Active || typed is null || candidates is null || !GalaxiaNative.Crosses(typed)) return null;
+            if (typed is null || candidates is null || !GalaxiaNative.Takes(typed)) return null;
             string?[] listed = candidates.ToArray();
             return listed.All(candidate => GalaxiaNative.Crosses(candidate, listed: true)) ? listed : null;
         }

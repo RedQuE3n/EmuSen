@@ -25,13 +25,13 @@ namespace EmuSen.Galaxia.Library
         public static string DefaultRoot => GalaxiaNative.Active ? GalaxiaNative.Directory(GalaxiaDirectory.LogDefault)! : Managed.DefaultRoot;
 
         // The folder the per-game logs and crash reports share: the LogDirectory setting when it can be made, else ~/.config/EmuSen/Logs.
-        public static string Root() => GalaxiaNative.Active ? GalaxiaNative.LogRoot(DirectoryOverride) : Managed.Root();
+        public static string Root() => GalaxiaNative.Takes(DirectoryOverride) ? GalaxiaNative.LogRoot(DirectoryOverride) : Managed.Root();
 
         // A settings file copied from another machine can name a folder this one cannot make.
         public static bool Usable(string? directory) =>
-            GalaxiaNative.Active && GalaxiaNative.Crosses(directory) ? GalaxiaNative.LogUsable(directory) : Managed.Usable(directory);
+            GalaxiaNative.Takes(directory) ? GalaxiaNative.LogUsable(directory) : Managed.Usable(directory);
 
-        public static string PathFor(DateTime day) => GalaxiaNative.Active ? GalaxiaNative.LogPath(Root(), $"{day:yyyyMMdd}") : Managed.PathFor(day);
+        public static string PathFor(DateTime day) => GalaxiaNative.Takes(DirectoryOverride) ? GalaxiaNative.LogPath(Root(), $"{day:yyyyMMdd}") : Managed.PathFor(day);
 
         public static string? Error(string area, string message, Exception? fault = null, string? context = null) =>
             Write("ERROR", area, message, fault, context);
@@ -40,7 +40,7 @@ namespace EmuSen.Galaxia.Library
             Write("WARN", area, message, null, context);
 
         private static string? Write(string level, string area, string message, Exception? fault, string? context) =>
-            GalaxiaNative.Active ? WriteNative(DateTime.Now, level, area, message, fault, context) : Managed.Write(DateTime.Now, level, area, message, fault, context);
+            GalaxiaNative.Takes(DirectoryOverride) ? WriteNative(DateTime.Now, level, area, message, fault, context) : Managed.Write(DateTime.Now, level, area, message, fault, context);
 
         // The time is formatted here, by this machine's calendar, and the redactor runs here; the library shapes the entry and owns the file - see EmuSen_RustPlatform.md §11.4.
         internal static string? WriteNative(DateTime now, string level, string area, string message, Exception? fault, string? context)

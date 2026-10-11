@@ -107,16 +107,19 @@ cursor (`Amidogs_gpu_and_gte_menus_follow_the_pad`). The tests print each failin
 Started by Start at frame 2,400 (all six tests); finished by frame 12,000. Verdicts read from the screen by
 `AmidogScreen` (X exception, F flag, V value, T timing):
 
-| Test | First run | After the fixes of `BlackMoon_R3000.md` D-17 to D-19 |
-|---|---|---|
-| EXCP | X OK | X OK |
-| INTR | X ERROR: 8 cases, EPC 4 bytes early | X OK |
-| SLOT | X ERROR (8 cases, TAR), V OK | X OK, V OK |
-| SLOT BR | X OK, V OK | X OK, V OK |
-| BREAK | X ERROR, 39,146 cases | X ERROR, 7,680 cases (D-20, D-21) |
-| ILLEGAL | X OK | X OK |
+| Test | First run | After the fixes of `BlackMoon_R3000.md` D-17 to D-19 | After D-20's and D-21's second steps |
+|---|---|---|---|
+| EXCP | X OK | X OK | X OK |
+| INTR | X ERROR: 8 cases, EPC 4 bytes early | X OK | X OK |
+| SLOT | X ERROR (8 cases, TAR), V OK | X OK, V OK | X OK, V OK |
+| SLOT BR | X OK, V OK | X OK, V OK | X OK, V OK |
+| BREAK | X ERROR, 39,146 cases | X ERROR, 7,680 cases (D-20, D-21) | X OK, 0 cases |
+| ILLEGAL | X OK | X OK | X OK |
 
-The F, V and T columns not named are N/A. The three defects found and fixed are in the R3000A's own record. EXCP takes
+The F, V and T columns not named are N/A. The three defects found and fixed are in the R3000A's own record; *since
+2026-10-11* so are the debug unit's rules and SWCz's store, read from the test's own model of each case, which leave
+no case failing. BREAK's 7,680 failing cases print 2.6 MB, which overflows the TTY space's 64 KiB; they were read
+through a runner that empties it every frame [M]. EXCP takes
 only SYSCALL and BREAK, whose opcodes have CE bits of zero.
 
 ### 5.2 Stage 2's items, closed and open
@@ -131,7 +134,8 @@ only SYSCALL and BREAK, whose opcodes have CE bits of zero.
   value column red [M, the negative control, built and discarded]. So the cancelled first load is confirmed by a
   console's expectations, with `loads.s` and two of three witnesses.
 - **COP0 registers 16-31**: still open. Neither `psxtest_cpu` nor `psxtest_cpx` executes an MFC0 of them [M, the same
-  counter: none], so no program run here reads them.
+  counter: none], so no program run here reads them. *2026-10-11*: refereed with `cop0-garbage.s` on all five
+  (`../BlackMoon-HW/BlackMoon_R3000.md` §10): no exception, the value 0 kept as a choice; open on the hardware.
 
 ### 5.3 `psxtest_gte` 1.4
 
@@ -145,11 +149,12 @@ and a quarter hours of emulated time [M]. Read from the screen:
 | OFFICIAL TIMING | the 22 commands | **T ERROR on every one** |
 | OFFICIAL OPCODE | SQR to DPCL, 21 commands | X, F and V OK |
 | OFFICIAL OPCODE | MVMVA | X and V OK, **F ERROR** |
-| UNOFFICIAL TIMING | 0x00 to 0x3F, the numbers psx-spx does not list | **V and T ERROR** |
+| UNOFFICIAL TIMING | 0x00 to 0x3F, the numbers psx-spx does not list | ~~**V and T ERROR**~~ **T ERROR**, V N/A (read again, §5.3.1) |
 | UNOFFICIAL OPCODE | (no rows drawn) | — |
 | TOTAL | | X OK, F, V and T ERROR |
 
-The TTY prints nothing for these tests, so their wanted values are not known. MVMVA's flag error and the unlisted
+The TTY prints nothing for these tests, so their wanted values are not known (*but see §5.3.1: its verbose flag prints
+the timing rows' counts*). MVMVA's flag error and the unlisted
 numbers' values bear on `BlackMoon_GTE.md` D-14 and D-16, the timing on D-13.
 
 The timing cases, disassembled from RAM: root counter 2 at the system clock is reset, a loop of 0 or 500 passes runs,
@@ -177,6 +182,26 @@ Each pass is the command's cycles by psx-spx's table plus the pass's other five 
 before the command ends: the interlock of `BlackMoon_GTE.md` D-13, counted from the command's fetch. A console's
 expectations reject every row, so D-13's rule, or the loop's own cost on the bus, is not the console's; which, the
 screen does not say. This is D-13's evidence, recorded there for the step that takes it up.
+
+### 5.3.1 What the test expects, and the results since
+
+*Added 2026-10-11, the dispute step of `BlackMoon_GTE.md` D-13, D-14 and D-16.* The program and its data were read from
+RAM (`BlackMoon_GTE.md` §7.2): each timing row grades 501 passes of its ten loops against `501 × p − 1` within 50
+cycles, p from its own rule and its table of all 64 numbers' cycles; with the word at 8004D474h set to 1 the test prints
+each failing loop's count and the count it wanted, and those match the rule. The results screen is drawn in a 6-pixel
+font, not the menu's 8; read on that grid the UNOFFICIAL TIMING rows' V column is N/A, not ERROR, and the table above
+is corrected for it. UNOFFICIAL OPCODE runs nothing: its four groups list no command.
+
+| Group | At stage 6 | Since D-13, D-14 and D-16 were revised |
+|---|---|---|
+| OFFICIAL TIMING | T ERROR on all 22 | **T OK on all 22**, TOTAL OK (5,200 frames, run alone) |
+| UNOFFICIAL TIMING | T ERROR on all 42 | **T OK on 40**; 0Ah and 0Eh T ERROR, one loop each (8,200 frames, run alone) |
+| OFFICIAL OPCODE, MVMVA | F ERROR, the test giving up after 193 of its 256 variants | **X, F and V OK**, all 256 (520,000 frames, run alone) |
+| The whole test, R1 and Start | as the table above, ALL DONE by frame 480,000 | ALL DONE by frame 580,000 (MVMVA now runs all its variants): every BASIC, COMPLEX and OFFICIAL row OK, UNOFFICIAL TIMING but 0Ah and 0Eh; TOTAL X, F and V OK, T ERROR |
+
+The fixes and their evidence are the GTE's record; WiseMan's `Amidogs_gte_timing_tests_pass_but_two_unlisted_numbers`
+runs both timing groups from the menu in a minute and a half and holds their rows as the table gives them. The whole
+test, about two and three-quarter hours of emulated time and 45 minutes on the desktop, stays a manual run.
 
 ### 5.4 `psxtest_gpu` 1.7
 
@@ -268,7 +293,7 @@ but each command's last, the read's late one within the timeout [M, `a_card_is_w
 The card it wrote is kept outside the repository at `~/.cache/emusen/probe/diamond/cards/diamond-card-1.mcr` (131,072
 bytes, MD5 `e048b2fc6569436e819e476472857aee`, a `README.txt` beside it): frame 0100h holds 00h, 03h, ... 7Dh and every
 other byte is 00h, an unformatted card, since the on-card file system is stage 10's. Its round trip against a
-reference's card is a separate step.
+reference's card was a separate step, §11.1.
 
 ## 9. The multitap (SCPH-1070)
 
@@ -314,9 +339,48 @@ The plan's §7 row 6, item by item [M, 2026-10-11]:
 | The open kernel's pad functions read the pad on a test program | **Met**: `kernel-pad.s`, digital and analog reads, an empty port FFh (§10) |
 | Cards read and written through the protocol | **Met** on Diamond: `card.s`, a write, a read back, the ID, a bad checksum (§8) |
 | Their files the raw 128 KiB form | **Met**: battery files 0 and 4 of 131,072 bytes through the core ABI, tracked until saved; WiseMan's `The_memory_cards_are_battery_files_and_a_multitap_adds_ports` |
-| Round-tripped with a reference's card | **Not run here** by decision of 2026-10-11 (no reference emulator in this step): the card `card.s` wrote is kept for it (§8) |
+| Round-tripped with a reference's card | ~~**Not run here** by decision of 2026-10-11 (no reference emulator in this step): the card `card.s` wrote is kept for it (§8)~~ **Met** the same day, both ways, on all five referees of three lineages (§11.1) |
 | The multitap's four ports on a test program | **Met**: `multitap.s`, the long read with an empty slot B, slot C by address, slot A's card (§9) |
 | The DualShock's modes and rumble state | **Met** by the crate's cases: digital and analog reads, configuration commands 43h-4Dh, the LED, the lock, both motor methods, the Analog button's resets (§7) |
+
+### 11.1 The card round trip
+
+Run on 2026-10-11 with the five referees of `Diamond_Referees.md` §2 as black boxes, on the player's BIOS by path,
+each in its own user scope [M]:
+
+- **A reference reads Diamond's card.** Each was given `diamond-card-1.mcr` (§8) as its first card and ran
+  `programs/card-read.s`, which reads sectors 0100h and 0101h and takes the ID through the raw protocol. All five
+  return what Diamond returns from the same file, byte for byte after the address byte: FLAG 08h (bit 3, a card just
+  inserted), 5Ah 5Dh, the sector's echo and confirmation, the 128 bytes 3n, the checksum 81h and 47h for 0100h, zeros,
+  checksum 00h and 47h for 0101h.
+- **Diamond reads a reference's card.** Each was given an unformatted card of zeros and ran `card.s` (its RXRDY wait
+  replaced by `card-read.s`'s delay, below), and each card file it left has MD5 `e048b2fc6569436e819e476472857aee`,
+  Diamond's own: the five references wrote exactly the 128 bytes Diamond wrote, and nothing else. Diamond, given each
+  file, reads it back as above (`a_card_reads_back_through_the_protocol_as_written` with `DIAMOND_CARD_IN` naming it,
+  five passes). On all five the write ends 47h and the read after it carries FLAG 00h, as on Diamond.
+- **Two lineages and more**: DuckStation and SwanStation, PCSX-Redux and PCSX-ReARMed, and Beetle PSX.
+
+What the protocol showed beyond the contents [M]:
+
+| | Diamond | DuckStation | SwanStation | Beetle PSX | PCSX-Redux | PCSX-ReARMed |
+|---|---|---|---|---|---|---|
+| Reply to the address 81h | FFh | FFh | FFh | 00h | FFh | FFh |
+| Get ID (53h) | 04h 00h 00h 80h | the same | not answered, and its FLAG a byte late | not answered | not answered | not answered |
+| Echo under a write's checksum byte | the last data byte | the same | the checksum | the last data byte | the same | the same |
+| IRQ7 after a read's last byte | no | no | yes | no | no | yes |
+| RXRDY seen by a polling read | yes | yes | yes | **no**: `card.s` and `pad.s` never finish | yes | yes |
+
+Beetle PSX's RXRDY is why `card-read.s` reads each reply after IRQ7, or its timeout, and a further delay rather than on
+RXRDY; Diamond reads the same either way. None of these bears on what a card holds; each is a point a later SIO0 step
+may take up with D-22.
+
+**The card files** [M]: Diamond's battery file is the raw card, 131,072 bytes (§6). DuckStation keeps a shared card as
+`memcards/shared_card_1.mcd`, a raw image of the same size despite the suffix, and makes a card of its own when the
+file is missing (one run read FFh throughout sector 0100h of it); PCSX-Redux keeps `memcard1.mcd` beside its portable
+configuration, raw, creating one when it is missing and logging "Saving memory card" after a program writes; the three libretro cores expose the first card as their save RAM, 131,072
+raw bytes, which the reference probe now loads with `--sram FILE` (added for this step) and dumps as its `sram` space.
+The cards kept are in `~/.cache/emusen/probe/diamond/cards/roundtrip/`, outside the repository: each reference's
+written card and the zero card they started from.
 
 ## 12. Reading log
 
@@ -343,3 +407,7 @@ Every file opened for this part, 2026-10-11:
   `state.rs` and `boundary.rs`; WiseMan's runner and `DiamondTests`.
 - **Not opened**: any emulator's source, any firmware or listing, `sysdir/`, `Diamond_References.md`, PSn00bSDK's
   libraries, ps1-tests' `common/`. No reference emulator was run.
+- **For §5.3.1 and §11.1** (2026-10-11, a later step): `psxtest_gte`'s code and data as `BlackMoon_GTE.md` §13.1 lists
+  them; the five referees as black boxes, their RAM and the card files they left, their logs' card lines (the BIOS's
+  lines not read); DuckStation's and PCSX-Redux's own settings files and folders as they wrote them, for where a card
+  lives; the reference probe's libretro backend, for `--sram`. No emulator's source, no firmware.

@@ -132,25 +132,26 @@ pub(crate) fn rfe(r: &mut Registers) {
     r.sr = r.sr & !0xF | r.sr >> 2 & 0xF;
 }
 
-/// Whether the debug unit breaks in the current mode.
-fn armed(r: &Registers, enable: u32) -> bool {
-    let mode = if kernel(r) { dcic::KD } else { dcic::UD };
+/// Whether the debug unit breaks at `address`: KD for a kernel address, UD for a user one (BlackMoon_R3000.md D-20).
+fn armed(r: &Registers, enable: u32, address: u32) -> bool {
+    let mode = if address >= 0x8000_0000 { dcic::KD } else { dcic::UD };
     r.dcic & (dcic::DE | enable | mode) == dcic::DE | enable | mode
 }
 
 /// The PC breakpoint before the instruction at `pc`: its status bits set, and whether it traps.
 pub(crate) fn pc_break(r: &mut Registers, pc: u32) -> bool {
-    if !armed(r, dcic::PCE) || (pc ^ r.bpc) & r.bpcm != 0 {
+    if !armed(r, dcic::PCE, pc) || (pc ^ r.bpc) & r.bpcm != 0 {
         return false;
     }
     r.dcic |= dcic::DB | dcic::PC;
     r.dcic & dcic::TR != 0
 }
 
-/// The data breakpoint on a load (`write` false) or store at `address`: its status bits set, and whether it traps.
+/// The data breakpoint on a load (`write` false) or store whose bus address is `address`: its status bits set, and
+/// whether it traps.
 pub(crate) fn data_break(r: &mut Registers, address: u32, write: bool) -> bool {
     let kind = if write { dcic::DW } else { dcic::DR };
-    if !armed(r, dcic::DAE | kind) || (address ^ r.bda) & r.bdam != 0 {
+    if !armed(r, dcic::DAE | kind, address) || (address ^ r.bda) & r.bdam != 0 {
         return false;
     }
     r.dcic |= dcic::DB | dcic::DA | if write { dcic::W } else { dcic::R };

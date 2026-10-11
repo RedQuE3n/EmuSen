@@ -756,7 +756,7 @@ PCSX-ReARMed); their logs were not read.
 |---|---|---|---|---|
 | `exceptions.s`, CAUSE after twelve exceptions | CE the opcode's low two bits on every one; 12 taken | the same on all eleven it took; **no CpU for LWC2 with CU2 clear** | the first three, then no address error on misaligned LW, LH, SH, SW and no CpU for SWC3, MFC2, LWC2: 5 taken | RI for ADD's overflow, then stops |
 | `loads.s`, the load delay's corners | a second load cancels the first (55h); the instruction's own write wins; LWL/LWR merge with the pending value; MFC0 through the delay cancels a pending load | the same, all eight | the same, all eight | the first load lands (11111111h); MFC0's case reads 0 |
-| `cop0-garbage.s`, MFC0 of 16–31 | 0 | values with a period of eight registers (10800h, 0, 304h, C1h, 304h, 1F800000h, 8, 4), and 10800h after a delay or after EPC | 0 | 0 |
+| `cop0-garbage.s`, MFC0 of 16–31 | 0 | values with a period of eight registers (10800h, 0, 304h, C1h, 304h, 1F800000h, 8, 4), and 10800h after a delay or after EPC; *read again 2026-10-11 (`Diamond_Referees.md` §4.12): the registers left unchanged, those being the program's own earlier values* | 0 | 0 |
 | `multiply.s` (D-2) | §11.14 | +2 cycles on every case | 1 on every case: no latency | 0: no timing |
 
 `BlackMoon_R3000.md` §8 and §10 record what each means for the processor.
@@ -973,6 +973,11 @@ instructions later N fewer, and every coprocessor-2 access waits, the three writ
 count but AVSZ4's (5 where psx-spx gives 6) and holds the writes too; SwanStation counts one cycle more everywhere and
 holds the writes; PCSX-ReARMed times nothing. The writes' wait is a choice argued in D-13, and the boundary is open as
 D-2's is, until amidog's timing tests or a console.
+
+*Revised 2026-10-11, after amidog's timing tests* (`BlackMoon_GTE.md` §6, §7.2, D-13, D-16): an access that waits now
+resumes one cycle after the command ends, so a read at once costs the command's whole count and a read N instructions
+later N fewer, until at N = cycles − 1 it costs nothing; the numbers psx-spx lists as N/A take the cycles amidog's table
+gives them. Every row of the test's OFFICIAL TIMING passes, and 40 of 42 of UNOFFICIAL TIMING.
 
 ### 13.5 Peter Lemon's programs
 

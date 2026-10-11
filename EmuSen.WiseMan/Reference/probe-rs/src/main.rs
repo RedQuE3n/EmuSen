@@ -256,6 +256,11 @@ fn parse_args(argv: &[String]) -> Result<Args, i32> {
                     }
                 }
             }
+            "--sram" => {
+                if let Some(v) = value() {
+                    args.options.save_ram = v;
+                }
+            }
             "--ramstate" => {
                 if let Some(v) = value() {
                     args.options.ram_state = v;

@@ -105,7 +105,7 @@ them. No FPGA output exists yet, so no entry gains a verdict here and `Diamond_D
 | D-8, x-flip at U+1 | `texture-flip`, then x-flipped rectangles at odd and even columns and U; PSX_MiSTer and Laxer3a's GPU | U+1, U, U−1 [M] | `texture-flip`'s picture | not run |
 | D-10, GPUSTAT bit 28 | `programs/gpustat.s` on PSX_MiSTer; the same word streams on Laxer3a's GPU with GPUSTAT read back | the log's twelve readings [M] | `gpu/gpustat/psx.log` | not run |
 | D-11, busy after a burst | GPUSTAT bit 26 against cycles after bursts of N words; PSX_MiSTer and Laxer3a's GPU | idle where the console reads busy on 13 of 130 rows [M] | `dma/chopping`'s busy marks | not run |
-| D-13, the GTE interlock | `programs/gte-timing.s` tables A, B, C, E on PSX_MiSTer; each command's cycles to done on Laxer3a's GTE | psx-spx's counts less one; every access waits [M] | none | not run; the README's sentence on the transfer delay weakens PSX_MiSTer here |
+| D-13, the GTE interlock | `programs/gte-timing.s` tables A, B, C, E on PSX_MiSTer; each command's cycles to done on Laxer3a's GTE | ~~psx-spx's counts less one~~ the counts themselves since amidog's timing tests (`BlackMoon_GTE.md` D-13); every access waits [M] | none | not run; the README's sentence on the transfer delay weakens PSX_MiSTer here |
 | D-15, GTE write delays | `gte-timing.s` table D on PSX_MiSTer; the same sequences on Laxer3a's GTE | the new value at once [M] | none | not run; as D-13 |
 | D-16, unlisted numbers | `programs/gte-fuzz.s`'s 24 N/A cases and table E; PSX_MiSTer and Laxer3a's GTE | 00h as RTPS, the rest clear FLAG [M] | none | not run |
 

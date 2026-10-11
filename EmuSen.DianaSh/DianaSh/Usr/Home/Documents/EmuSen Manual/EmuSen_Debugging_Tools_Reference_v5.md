@@ -2794,6 +2794,10 @@ Built 2026-10-05 for Nephrite's references; the measurements are `Nephrite_Nativ
 - **Firmware:** `GET_SYSTEM_DIRECTORY` is `--sysdir`, a folder a person filled with their own dumps, or an empty
   folder beside the run's dumps. A run that needs firmware the core refuses without, with no dumps given, prints
   `[SKIP]` and exits 4; the probe never fetches firmware.
+- **A battery save in** (added 2026-10-11 for Diamond's memory card round trip, `Diamond_Pad.md` §11.1): `--sram FILE`
+  copies the file into the core's `SAVE_RAM` after the load, as a frontend loads a battery save, and refuses a file of
+  another size; the `sram` space dumped at the end is the save as the run left it. On the three PlayStation cores that
+  space is the first memory card, raw.
 
 ### 3.65 The probe gives input to every port, and plugs a named device into each
 

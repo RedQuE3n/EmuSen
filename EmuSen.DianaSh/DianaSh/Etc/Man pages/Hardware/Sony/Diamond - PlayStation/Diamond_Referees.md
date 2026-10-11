@@ -404,6 +404,38 @@ and on Diamond and DuckStation, zero in the console's log and on Beetle PSX and 
 a halfword or word store (§16.2). Beetle
 PSX runs a DMA channel whose DPCR enable is clear, in `otc-test` and `dpcr` alike, where the logs and every other
 referee do not: on the DMA's enable bits it is not a witness. None of D-0 to D-23 is moved by these data.
+*DICR's bit 6 was ruled by §4.12.*
+
+### 4.12 DICR's bit 6, SWCz's store and the garbage registers — `dicr.s`, `swcz.s`, `cop0-garbage.s`
+
+*Added 2026-10-11.* Three programs of the project's own, side-loaded on all five as in §2.4, interrupts off; the
+second and third install their own exception vector with the I-cache off, as `exceptions.s` does, and record what it
+takes. Each finished on every referee (D1A0D00Eh written) but `swcz.s` on PCSX-Redux, which stopped producing frames
+before its done word, as it does at an address error (§8) [M].
+
+**`dicr.s`** (`Diamond_Records.md` §16.2), DICR read back after each write:
+
+| Case | Console log | Diamond before | DuckStation | SwanStation | Beetle PSX | PCSX-ReARMed | PCSX-Redux |
+|---|---|---|---|---|---|---|---|
+| word, halfword, byte store of 12345678h | `340038h` ×3 | `340078h` ×3 | `340078h` ×3 | `340038h` ×3 | `340038h` ×3 | `C340038h`, `C340038h`, `C340078h` | `340038h`, `12345678h`, `12345678h` |
+| 7Fh; 40h; 7FFFh | — | 7Fh, 40h, 7Fh | 7Fh, 40h, 7Fh | 3Fh, 0, 3Fh | 3Fh, 0, 3Fh | `C00003Fh`, `C000000h`, `C00003Fh` | `1200003Fh`, `12000000h`, `1200003Fh` |
+| 00FF007Fh | — | `FF007Fh` | `FF007Fh` | `FF003Fh` | `FF003Fh` | `8CFF003Fh` | `92FF003Fh` |
+| halfword, byte read after 7Fh; then 0 | — | 7Fh, 7Fh, 0 | 7Fh, 7Fh, 0 | 3Fh, 3Fh, 0 | 3Fh, 3Fh, 0 | 3Fh, 3Fh, `C000000h` | 3Fh, 3Fh, `12000000h` |
+
+Ruled with the console's log and three lineages against DuckStation: bit 6 reads zero. Diamond after the change reads
+as SwanStation and Beetle PSX in every case. PCSX-ReARMed and PCSX-Redux carry flag bits among 24-30 from the first
+store that the others acknowledge, and PCSX-Redux keeps a narrow store's register whole, so they bear on bit 6 only.
+
+**`swcz.s`** (`../BlackMoon-HW/BlackMoon_R3000.md` D-21): DuckStation stores 0 for SWC0, SWC1 and SWC3 to RAM and takes
+DBE on SWC3, SW and SWC0 to C0000000h; Beetle PSX, SwanStation and PCSX-ReARMed leave RAM unchanged, and Beetle PSX
+takes no bus error even on SW there. SWC2, the control, stores 12345678h on all four. Ruled: the store is made (a
+console's expectations, through amidog's model), its value DuckStation's 0, a single witness.
+
+**`cop0-garbage.s`** (`../BlackMoon-HW/BlackMoon_R3000.md` §10), 28 reads of registers 16-31 and the exceptions taken:
+DuckStation 28 reserved-instruction exceptions; Beetle PSX none, every register left as it was (08004088h, 0, 80000000h,
+C1h, 304h, 1F800000h, 8, 4 are what the program's start left in t1 to t8); SwanStation, PCSX-ReARMed and PCSX-Redux
+0 and none; none reads BPC's, BDA's, BPCM's or BDAM's known value straight after it, as psx-spx describes. Ruled: no
+exception (three lineages), the value 0 a choice left standing.
 
 ### 4.12 D-23: the texture cache, interlaced drawing and GPUREAD after a transfer — `texture-cache.s`, `interlace.s`, `gpuread-repeat.s`
 
@@ -469,7 +501,7 @@ The other programs are pinned on Diamond as it reads them: `gpustat_while_each_s
 | `gpu/gpustat`, 12 readings | 12 | 9 | 4 | 6 | 9 | 3 |
 | `dma/otc-test`, the log's 13 tests (§4.11) | 13 | 13 | 4, by the record | 12, by the record | 8, by the record | 12, by the record |
 | `dma/dpcr`, the log's 14 lines (§4.11) | 14 | 14 | 14, by the record | 12, by the record | 14, by the record | 14, by the record |
-| `cpu/io-access-bitwidth`, 108 cells (§4.11) | 85 | 58, by the record | stops, the release too | 70, by the record | 64, by the record | 45, by the record |
+| `cpu/io-access-bitwidth`, 108 cells (§4.11) | 85 (91 since §4.12) | 58, by the record | stops, the release too | 70, by the record | 64, by the record | 45, by the record |
 | ps1-tests' pictures | exact | not read | not read | not read | not read | not read |
 
 DuckStation and Beetle PSX are the strongest referees, each on its own subsystem: Beetle PSX on video timing,
@@ -507,6 +539,12 @@ PCSX-Redux the three releases' TTY from each heading on, `io-access-bitwidth`'s 
 BIOS word of the BIOS row was stored or read; it held PCSX-Redux's own reports of unmapped writes and of the address
 error. What else was read is `Diamond_Records.md` §17.
 
+*The step of §4.12, 2026-10-11*: the referees' RAM through the driver, and nothing else of theirs; amidog's
+`psxtest_cpx` disassembled from Diamond's RAM while it ran (its BREAK case runner and the cases' code), and its TTY on
+Diamond. psx-spx's "DMA Channels" DICR section and "Unpredictable Things", "COP0 - Debug Registers" and
+"cop0r16-r31"; LSI's *CW33000 User's Manual* for its debug registers (it defers their detail to the LR33000 manual,
+which was searched for and not found). No emulator source, firmware or listing; no BIOS output was read.
+
 ## 8. Negative results
 
 - no$psx was not run: wine is not installed, and installing system packages was out of scope.
@@ -520,5 +558,6 @@ error. What else was read is `Diamond_Records.md` §17.
 - DuckStation cannot run on Qt's `offscreen` platform; it needs a compositor (§2.1).
 - PCSX-Redux stops at `cpu/io-access-bitwidth`'s first misaligned store, the release and its record alike: its debugger
   takes the address error as a "first chance exception" and the frames stop, so the record's RAM is never read (§4.11).
+- PCSX-Redux stops producing frames in `swcz.s`, before its done word, so its RAM was not read (§4.12).
 - PCSX-Redux stops producing frames partway through ps1-tests' `cpu/cop` (after its reserved-opcode case), so the
   driver also stops it after a wall-clock limit and keeps what it printed.

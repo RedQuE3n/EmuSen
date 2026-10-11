@@ -61,7 +61,7 @@ fn a_second_load_cancels_the_first() {
 #[test]
 fn the_garbage_registers_read_zero() {
     let m = run(include_str!("../programs/cop0-garbage.s"));
-    assert_eq!(results(&m, 0x10_0000, 18), [0; 18]);
+    assert_eq!(results(&m, 0x10_0000, 30), [0; 30], "every read zero, and no exception");
 }
 
 /// D-2 as Diamond reads psx-spx's table: 6, 9 and 13 cycles by rs, 36 for a division, MFLO free after five more.
@@ -92,16 +92,18 @@ fn the_pad_answers_on_port_1_and_nothing_answers_elsewhere() {
     assert_eq!((bytes[10..20].to_vec(), bytes[20..].to_vec()), (empty.to_vec(), empty.to_vec()), "port 2, and the card slot");
 }
 
-/// The GTE's interlock as BlackMoon_GTE.md D-13 reads psx-spx: a command's cycles from its fetch, so an access at once
-/// waits one fewer; every access to coprocessor 2 waits, writes included; 00h as RTPS, the other unlisted numbers free.
+/// The GTE's interlock as BlackMoon_GTE.md D-13 has it since amidog's timing tests: a command's cycles from its fetch,
+/// and an access that must wait resumes one cycle after the command ends, so an access at once costs the command's
+/// cycles, RTPS's MFC2 after N NOPs 15 - N up to 13 NOPs and nothing from 14; every access waits, writes included; the
+/// unlisted numbers in the cycles amidog's table gives them (D-16).
 #[test]
 fn the_gte_holds_every_access_until_its_command_is_done() {
     let m = run(include_str!("../programs/gte-timing.s"));
     let commands = [0x01, 0x06, 0x0C, 0x10, 0x11, 0x12, 0x13, 0x14, 0x16, 0x1B, 0x1C, 0x1E, 0x20, 0x28, 0x29, 0x2A, 0x2D, 0x2E, 0x30, 0x3D, 0x3E, 0x3F];
-    assert_eq!(results(&m, 0x10_0000, 22), commands.map(|c| blackmoon_gte::CYCLES[c] as u32 - 1));
-    assert_eq!(results(&m, 0x10_0100, 21), (0..21).map(|n| 14u32.saturating_sub(n)).collect::<Vec<_>>());
-    assert_eq!(results(&m, 0x10_0200, 7), [14; 7]);
-    assert_eq!(results(&m, 0x10_0280, 6), [14, 0, 0, 0, 0, 0]);
+    assert_eq!(results(&m, 0x10_0000, 22), commands.map(|c| blackmoon_gte::CYCLES[c] as u32));
+    assert_eq!(results(&m, 0x10_0100, 21), (0..21).map(|n| if n < 14 { 15 - n } else { 0 }).collect::<Vec<_>>());
+    assert_eq!(results(&m, 0x10_0200, 7), [15; 7]);
+    assert_eq!(results(&m, 0x10_0280, 6), [16, 13, 8, 8, 18, 18]);
     assert_eq!(results(&m, 0x10_0300, 8), [0xF80; 8], "IRGB reaches IR3 and IR1 at once (D-15)");
     assert_eq!(results(&m, 0x10_0320, 4), [15; 4], "and LZCS LZCR");
     assert_eq!(results(&m, 0x10_0330, 6), [0x100; 6], "and MTC2 and LWC2 the next command");
@@ -443,8 +445,9 @@ fn the_dpcr_record_completes_only_with_the_channel_enabled() {
 }
 
 /// `cpu/io-access-bitwidth`: 108 reads after 8-, 16- and 32-bit writes, the BIOS row's all the ROM's own word, a
-/// 32-bit store faulting at JOY_CTRL, SIO_CTRL and SPUCNT; 85 cells as the console's log has them, DICR's bit 6 and
-/// GPUSTAT's bit 31 among those that are not, its bit 26 set since a reset ends a fill (Diamond_Records.md §16.1).
+/// 32-bit store faulting at JOY_CTRL, SIO_CTRL and SPUCNT; 91 cells as the console's log has them, since DICR's bit 6
+/// reads zero (Diamond_Records.md §16.2), GPUSTAT's bit 31 among those that are not, its bit 26 set since a reset ends
+/// a fill (Diamond_Records.md §16.1).
 #[test]
 fn the_io_bitwidth_record_reads_each_register_after_each_width() {
     let Some(source) = carried("io-access-bitwidth") else { return };
@@ -455,9 +458,9 @@ fn the_io_bitwidth_record_reads_each_register_after_each_width() {
     assert_eq!(cells.len(), 108);
     assert_eq!(marked(1), [3, 4, 5, 56, 57, 91], "the BIOS row");
     assert_eq!(marked(0x8001_56D8), [29, 35, 53], "--CRASH--");
-    assert_eq!(cells[21..24].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x34_0078; 3], "DICR, the console's 340038h");
+    assert_eq!(cells[21..24].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x34_0038; 3], "DICR, as the console reads it");
     assert_eq!(cells[45..48].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x9480_2000; 3], "GPUSTAT after GP1(00h), ready as the release reads it");
-    assert_eq!(fnv(&c.concat()), 0x1E15_044A_5E79_7C9B, "the calls with their arguments");
+    assert_eq!(fnv(&c.concat()), 0x1914_461B_7A92_CDDB, "the calls with their arguments");
 }
 
 // The GPU's step of amidog's FIFO, INTERLACE and cache groups (Diamond_Disputes.md D-23).
@@ -505,6 +508,84 @@ fn interlaced_drawing_in_vblank_skips_the_lines_from_the_display_start() {
 fn gpuread_repeats_the_first_word_of_the_last_longer_transfer() {
     let m = run(include_str!("../programs/gpuread-repeat.s"));
     assert_eq!(results(&m, 0x10_0000, 10), [0x0202_0101, 0x0404_0303, 0x0606_0505, 0x0202_0101, 0x0202_0101, 0x0303_0202, 0x0202_0101, 0x0202_0101, 0x0202_0101, 0x0202_0101]);
+}
+
+/// The cycles of a pass of each of amidog's psxtest_gte 1.4 timing loops by its own rule, as read from its RAM: the
+/// loop's instructions and the command's cycles c, with c taken as the NOPs' count when it is one more or fewer.
+fn amidog_pass(c: u32, variant: usize, number: usize) -> u32 {
+    let at_least = |nops: u32| if c == nops + 1 || c < nops { nops } else { c };
+    match variant {
+        0 => (if c == 1 { 0 } else { c }) + 6 + (number == 0x0A || number == 0x0E) as u32,
+        1 => (if c == 0 || c == 2 { 1 } else { c }) + 6,
+        2 => at_least(4) + 6,
+        3 => at_least(7) + 6,
+        4 => (if c == 1 { 0 } else { c }) + 8,
+        5 => (if c == 0 || c == 2 { 1 } else { c }) + 8,
+        6 => at_least(4) + 8,
+        7 => at_least(7) + 8,
+        8 => 2 * at_least(4) + 7,
+        _ => 2 * at_least(7) + 9,
+    }
+}
+
+/// D-13 and D-16 against amidog's psxtest_gte 1.4 (Diamond_Pad.md §5.3): its ten timing loops for every number, each
+/// count of 501 passes within 50 cycles of its rule's, the cycles c those its table gives (the 22 commands psx-spx's).
+/// Its rule adds a cycle to the at-once CFC2 after 0Ah and 0Eh that no wait accounts for; those two stay 501 short.
+#[test]
+fn amidogs_gte_timing_loops_take_the_cycles_its_test_expects() {
+    let m = run_for(include_str!("../programs/gte-loops.s"), 40, Market::Americas);
+    for number in 0..64 {
+        let counts = results(&m, 0x10_0000 + 0x40 * number as u32, 10);
+        for (variant, &count) in counts.iter().enumerate() {
+            let wanted = amidog_pass(blackmoon_gte::CYCLES[number] as u32, variant, number) * 501 - 1;
+            let short = if variant == 0 && (number == 0x0A || number == 0x0E) { 501 } else { 0 };
+            assert!(count.abs_diff(wanted - short) <= 50, "number {number:02X}h, loop {variant}: {count} against {wanted}");
+        }
+    }
+}
+
+/// Diamond_Pad.md §11, the round trip: card-read.s reads a card through the protocol, the card card.s writes here or the
+/// one `DIAMOND_CARD_IN` names (a reference's, which the five referees wrote byte for byte alike): FLAG 08h on insertion,
+/// sector 0100h the bytes 3n with their checksum, 0101h zeros, the ID, and IRQ7 after every byte but each command's last.
+#[test]
+fn a_card_reads_back_through_the_protocol_as_written() {
+    let written = run_set_up(include_str!("../programs/card.s"), 30, Market::Americas, |m| m.insert_card(0, None));
+    let card = match std::env::var("DIAMOND_CARD_IN") {
+        Ok(path) => std::fs::read(path).unwrap(),
+        Err(_) => written.card_in(0).unwrap().data.clone(),
+    };
+    let m = run_set_up(include_str!("../programs/card-read.s"), 30, Market::Americas, |m| m.insert_card(0, Some(&card)));
+    let data: Vec<u8> = (0..128u32).map(|i| (3 * i) as u8).collect();
+    let checksum = data.iter().fold(1u8, |c, &d| c ^ d);
+    let read = bytes(&m, 0x10_0000, 140);
+    assert_eq!(read[..10], [0xFF, 0x08, 0x5A, 0x5D, 0x00, 0x01, 0x5C, 0x5D, 0x01, 0x00], "FLAG's bit 3 on insertion");
+    assert_eq!((read[10..138].to_vec(), read[138], read[139]), (data, checksum, 0x47));
+    let next = bytes(&m, 0x10_0100, 140);
+    assert_eq!((next[..10].to_vec(), next[138..].to_vec()), (vec![0xFF, 0x08, 0x5A, 0x5D, 0x00, 0x01, 0x5C, 0x5D, 0x01, 0x01], vec![0x00, 0x47]));
+    assert!(next[10..138].iter().all(|&b| b == 0));
+    assert_eq!(bytes(&m, 0x10_0200, 10), [0xFF, 0x08, 0x5A, 0x5D, 0x5C, 0x5D, 0x04, 0x00, 0x00, 0x80]);
+    let acks = |at: usize, n: usize| bytes(&m, at + 0x400, n);
+    for (at, n) in [(0x10_0000, 140), (0x10_0100, 140), (0x10_0200, 10)] {
+        assert!(acks(at, n - 1).iter().all(|&a| a == 1) && acks(at + n - 1, 1) == [0], "IRQ7 at {at:X}");
+    }
+}
+
+// DICR's bit 6 (Diamond_Records.md §16.2), SWCz's store (BlackMoon_R3000.md D-21) and the garbage registers (§6.1).
+
+/// DICR keeps bits 0-5 of a write and reads bit 6 zero after a byte, halfword or word store, as ps1-tests' console log
+/// and the referees of three lineages read it; bits 7-14 read zero.
+#[test]
+fn dicr_reads_bit_6_zero_after_any_store() {
+    let m = run(include_str!("../programs/dicr.s"));
+    assert_eq!(results(&m, 0x10_0000, 10), [0x34_0038, 0x34_0038, 0x34_0038, 0x3F, 0, 0x3F, 0xFF_003F, 0x3F, 0x3F, 0]);
+}
+
+/// SWC0, SWC1 and SWC3 store a word of zero, and take DBE where no device answers, as the one referee that models the
+/// store reads them (D-21); SWC2 stores the GTE's register.
+#[test]
+fn swcz_stores_zero_on_the_bus() {
+    let m = run(include_str!("../programs/swcz.s"));
+    assert_eq!(results(&m, 0x10_0000, 14), [0, 0, 0, 0, 0, 0, 0, 0x1234_5678, 0, 0, 0, 0x1C, 0x1C, 0x1C]);
 }
 
 // --- Stage 7: the CD-ROM controller (Diamond_CDROM.md §9) ---

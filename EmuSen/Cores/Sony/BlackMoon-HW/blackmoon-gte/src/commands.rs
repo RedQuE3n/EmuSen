@@ -6,42 +6,15 @@ use crate::divide::divide;
 use crate::registers::{control as c, data as d, flag_word};
 use crate::{Observer, Projection, Registers};
 
-/// Each command's cycles by its number in bits 0-5 (psx-spx "GTE Command Summary"), 00h as RTPS; 0 for the other
-/// numbers it lists as N/A (BlackMoon_GTE.md D-16).
-pub const CYCLES: [u8; 64] = {
-    let mut t = [0u8; 64];
-    let list: [(usize, u8); 23] = [
-        (0x00, 15),
-        (0x01, 15),
-        (0x06, 8),
-        (0x0C, 6),
-        (0x10, 8),
-        (0x11, 8),
-        (0x12, 8),
-        (0x13, 19),
-        (0x14, 13),
-        (0x16, 44),
-        (0x1B, 17),
-        (0x1C, 11),
-        (0x1E, 14),
-        (0x20, 30),
-        (0x28, 5),
-        (0x29, 8),
-        (0x2A, 17),
-        (0x2D, 5),
-        (0x2E, 6),
-        (0x30, 23),
-        (0x3D, 5),
-        (0x3E, 5),
-        (0x3F, 39),
-    ];
-    let mut i = 0;
-    while i < list.len() {
-        t[list[i].0] = list[i].1;
-        i += 1;
-    }
-    t
-};
+/// Each number's cycles by bits 0-5: the 22 commands' are psx-spx's ("GTE Command Summary"), the 42 numbers it lists as
+/// N/A take those amidog's psxtest_gte 1.4 expects of a console (BlackMoon_GTE.md §6, D-16).
+#[rustfmt::skip]
+pub const CYCLES: [u8; 64] = [
+    16, 15, 13, 12,  5, 18,  8,  7,  6,  5, 19, 18,  6,  5, 19, 18,
+     8,  8,  8, 19, 13,  8, 44, 31, 17, 13,  8, 17, 11,  5, 14,  8,
+    30, 17, 15, 14, 12,  8,  6,  5,  5,  8, 17, 13,  8,  5,  6, 18,
+    23, 22, 20, 19, 17, 16, 14, 13, 11,  7,  6,  5, 18,  5,  5, 39,
+];
 
 type V3 = [i64; 3];
 type M3 = [[i64; 3]; 3];
@@ -323,7 +296,7 @@ impl<O: Observer> Run<'_, O> {
                 let mut out = [0; 3];
                 for i in 0..3 {
                     let first = self.check(i + 1, (fc[i] << 12) + m[i][0] * v[0]) >> self.sh;
-                    self.saturate_ir(i + 1, first as i32 as i64, self.lm);
+                    self.saturate_ir(i + 1, first as i32 as i64, false);
                     out[i] = self.mac(i + 1, m[i][1] * v[1] + m[i][2] * v[2]);
                 }
                 self.set_irs(out);

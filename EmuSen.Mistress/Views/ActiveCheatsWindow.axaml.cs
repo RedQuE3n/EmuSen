@@ -119,13 +119,13 @@ namespace EmuSen.Mistress.Views
             return cell;
         }
 
-        // On a big-screen sheet: the cells' words larger, the status in the footer, and no Save As or Load From, whose file dialogs a pad cannot drive (§4.80, §4.83.6).
+        // On a big-screen sheet: the cells' words larger, the status in the footer, no Save As or Load From, whose file dialogs a pad cannot drive, and no Close, which the help bar's Back does (§4.80, §4.83.6, §4.15a).
         private void InLook(DockPanel dock)
         {
             SetValue(CellFontSizeProperty, SheetLook.SmallText);
             dock.Margin = new Avalonia.Thickness(0, 0, 0, 16);
             SheetLook.StatusInFooter(this, StatusText);
-            SaveAsButton.IsVisible = LoadFromButton.IsVisible = false;
+            SaveAsButton.IsVisible = LoadFromButton.IsVisible = CloseButton.IsVisible = false;
 
             // The General page's two parts side by side, so the table under it keeps room for its rows (§4.83).
             if (Tabs.Items.OfType<TabItem>().FirstOrDefault()?.Content is StackPanel { Children.Count: 2 } general)

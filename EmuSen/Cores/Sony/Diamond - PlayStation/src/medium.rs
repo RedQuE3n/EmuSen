@@ -43,7 +43,11 @@ pub fn open(image: &[u8], companions: &[&[u8]]) -> Result<Opened, DiscRefusal> {
         let files = companions[..needs].iter().map(|c| c.to_vec()).collect();
         (Disc::from_sheet(&sheet, files, IsoForm::Mode2Form1).map_err(|e| DiscRefusal::Bad(e.to_string()))?, needs)
     } else {
-        match Disc::from_image(image.to_vec(), IsoForm::Mode2Form1) {
+        let opened = match Media::read(image) {
+            Ok(Media { kind: Kind::Disc { raw: false }, .. }) => Disc::from_user_image(image.to_vec(), IsoForm::Mode2Form1),
+            _ => Disc::from_image(image.to_vec(), IsoForm::Mode2Form1),
+        };
+        match opened {
             Ok(d) => (d, 0),
             Err(_) => return Err(DiscRefusal::Media(Refusal::NotPlayStation)),
         }

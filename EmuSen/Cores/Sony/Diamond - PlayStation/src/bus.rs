@@ -395,6 +395,7 @@ impl Board {
                     self.cdrom.write8(offset, (value >> (8 * i)) as u8, self.now);
                 }
                 self.cd_irq();
+                self.dma_kick();
                 self.schedule();
             }
             0xC00..=0xFFF => {
@@ -503,6 +504,7 @@ impl Board {
                     self.field_done = true;
                     self.vblank_seen = what & edge::FIELD == 0;
                     self.irq.raise(irq::VBLANK);
+
                     self.timers.blank(1, true);
                 }
                 if what & edge::VBLANK_END != 0 {
@@ -530,7 +532,7 @@ impl Board {
             dma::MDEC_IN => self.mdec.status & 1 << 28 != 0,
             dma::MDEC_OUT => self.mdec.status & 1 << 27 != 0,
             dma::GPU => self.gpu.dma_direction != 0,
-            dma::CDROM => true,
+            dma::CDROM => self.cdrom.data_ready(),
             dma::SPU => self.spu.dreq(),
             dma::PIO => true,
             _ => false,

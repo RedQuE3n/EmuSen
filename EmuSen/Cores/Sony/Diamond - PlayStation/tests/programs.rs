@@ -34,7 +34,7 @@ fn run_set_up(source: &str, frames: usize, market: Market, set_up: impl FnOnce(&
     for _ in 0..frames {
         m.advance();
     }
-    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program finished");
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program finished: {:02X?} pc {:08X} {:?}", &m.board.ram[0x10_0000..0x10_0020], m.cpu.regs.pc, m.board.cdrom.activity);
     m
 }
 
@@ -505,4 +505,39 @@ fn interlaced_drawing_in_vblank_skips_the_lines_from_the_display_start() {
 fn gpuread_repeats_the_first_word_of_the_last_longer_transfer() {
     let m = run(include_str!("../programs/gpuread-repeat.s"));
     assert_eq!(results(&m, 0x10_0000, 10), [0x0202_0101, 0x0404_0303, 0x0606_0505, 0x0202_0101, 0x0202_0101, 0x0303_0202, 0x0202_0101, 0x0202_0101, 0x0202_0101, 0x0202_0101]);
+}
+
+// --- Stage 7: the CD-ROM controller (Diamond_CDROM.md §9) ---
+
+/// A disc of 40 mode 2 form 1 sectors from 00:02:00 whose user data names each one, sector 16 holding "CD001".
+fn cd_disc() -> emusen_disc::Disc {
+    let mut bin = Vec::new();
+    for i in 0..40u32 {
+        let mut user: Vec<u8> = (0..2048u32).map(|k| (k * 7 + i) as u8).collect();
+        if i == 16 {
+            user[..6].copy_from_slice(b"\x01CD001");
+        }
+        let mut s = [0u8; 2352];
+        emusen_disc::ecma130::mode2_form1(150 + i, [0, 0, emusen_disc::ecma130::submode::DATA, 0], &user, &mut s);
+        bin.extend_from_slice(&s);
+    }
+    emusen_disc::Disc::from_image(bin, emusen_disc::IsoForm::Mode2Form1).unwrap()
+}
+
+/// The kernel's read sequence of psx-spx's ReadN chapter, polled: each response in order, GetID's licence for the
+/// console's region, IRQ2 in I_STAT, and the sector moved by DMA channel 3 whole.
+#[test]
+fn a_sector_reads_by_the_kernels_sequence() {
+    let m = run_set_up(include_str!("../programs/cd-read.s"), 120, Market::Americas, |m| m.insert_disc(cd_disc()));
+    let r: Vec<u8> = (0..27).map(|i| m.board.ram[0x10_0000 + i]).collect();
+    assert_eq!(&r[..3], &[3, 0x02, 1], "Nop's INT3 and IRQ2");
+    assert_eq!(&r[3..5], &[3, 0x02], "GetID's first");
+    assert_eq!(&r[5..14], &[2, 0x02, 0x00, 0x20, 0x00, b'S', b'C', b'E', b'A'], "GetID's second");
+    assert_eq!(&r[14..20], &[3, 0x02, 3, 0x02, 3, 0x02], "Setloc, Setmode, ReadN");
+    assert_eq!(&r[20..22], &[1, 0x22], "INT1 while reading");
+    assert_eq!(r[22], 0x00, "the DMA finished, start and trigger clear");
+    assert_eq!(&r[23..27], &[3, 0x22, 2, 0x02], "Pause's two");
+    assert_eq!(&m.board.ram[0x11_0000..0x11_0006], b"\x01CD001");
+    let want: Vec<u8> = (6..2048u32).map(|k| (k * 7 + 16) as u8).collect();
+    assert_eq!(&m.board.ram[0x11_0006..0x11_0800], &want[..]);
 }

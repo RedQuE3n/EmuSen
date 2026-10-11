@@ -3,7 +3,7 @@
 //! the RGBA picture (its size printed) to a file.
 //! `--heading TEXT` prints the TTY from TEXT on, leaving out what a BIOS printed before the program; `--trace` then
 //! traces the controller's commands and responses. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
-//! the image itself when PATH is no PS-EXE), `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
+//! the image itself when PATH is no PS-EXE), `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
 //! `cdrom/disc-swap` does. A development tool for the test programs (Diamond_Native.md §11.11, Diamond_CDROM.md §9):
 //! on the open kernel, a player's own BIOS, or none.
 
@@ -26,18 +26,38 @@ fn main() {
         _ => Media::read(&image).expect("a PS-EXE"),
     };
     let market = if args.iter().any(|a| a == "--pal") { Market::Europe } else { media.market.unwrap_or(market) };
-    let mut m = Machine::new(media, Config { market, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, rom(&bios, args.iter().any(|a| a == "--bare")));
-    if let Some((d, _)) = disc {
+    let mut m = Machine::new(media, Config { market, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), if args.iter().any(|a| a == "--two-pads") { Some("psx.dualshock") } else { None }], &image, rom(&bios, args.iter().any(|a| a == "--bare")));
+    if let Some((d, _)) = disc
+        && !args.iter().any(|a| a == "--empty")
+    {
         m.insert_disc(d);
         eprintln!("[disc opened in {:.0} ms]", loaded.as_secs_f64() * 1e3);
+    }
+    if args.iter().any(|a| a == "--cards") {
+        m.insert_card(0, None);
+        m.insert_card(1, None);
+    }
+    if args.iter().any(|a| a == "--lid-open") {
+        m.set_lid(true, None);
     }
     let swap = args.iter().any(|a| a == "--swap");
     let heading = args.iter().position(|a| a == "--heading").map(|i| args[i + 1].clone());
     let trace = args.iter().any(|a| a == "--trace");
     let (mut last_ask, mut asked_at) = ((0, 0), 0);
+    let lid_at = args.iter().position(|a| a == "--open-at").map(|i| args[i + 1].parse::<i64>().expect("a frame"));
+    let every = args.iter().position(|a| a == "--pictures").map(|i| (args[i + 1].clone(), args[i + 2].parse::<i64>().expect("a frame count")));
     let start = std::time::Instant::now();
     for _ in 0..frames {
         m.advance();
+        if let Some((dir, n)) = &every
+            && m.frames % n == 0
+        {
+            let d = &m.board.gpu.display;
+            std::fs::write(format!("{dir}/f{:06}_{}x{}.rgba", m.frames, d.width, d.height), d.frame()).expect("written");
+        }
+        if lid_at.is_some_and(|f| f == m.frames) {
+            m.set_lid(true, None);
+        }
         if trace && !m.board.cdrom.trace && heading.as_ref().is_some_and(|h| String::from_utf8_lossy(m.space(TTY_ID).unwrap()).contains(h.as_str())) {
             m.board.cdrom.trace = true;
         }

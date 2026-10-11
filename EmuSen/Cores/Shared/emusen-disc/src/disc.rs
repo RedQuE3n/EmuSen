@@ -191,9 +191,9 @@ impl Disc {
             return Ok(Disc::new(tracks, lead_out, vec![Source::Chd(Box::new(image))], iso));
         }
         let iso_volume = bytes.get(16 * 2048 + 1..16 * 2048 + 6) == Some(b"CD001");
-        let mode = if bytes.starts_with(&ecma130::SYNC) && bytes.len() % RAW == 0 {
+        let mode = if bytes.starts_with(&ecma130::SYNC) && bytes.len() >= RAW {
             if bytes[15] == 1 { "MODE1/2352" } else { "MODE2/2352" }
-        } else if iso_volume && bytes.len() % 2048 == 0 {
+        } else if iso_volume {
             "MODE1/2048"
         } else if bytes.len() % RAW == 0 && !bytes.is_empty() {
             "AUDIO"
@@ -201,6 +201,13 @@ impl Disc {
             return Err(DiscError::Unknown(format!("{} bytes are neither a CHD, a raw track of 2,352-byte sectors nor an ISO 9660 image of 2,048-byte ones", bytes.len())));
         };
         let sheet = Sheet::parse(&format!("FILE \"image\" BINARY\nTRACK 01 {mode}\nINDEX 01 00:00:00\n"))?;
+        Disc::from_sheet(&sheet, vec![bytes], iso)
+    }
+
+    /// An image of 2,048-byte user sectors read as one data track, for a caller that knows it is one though it holds
+    /// no ISO 9660 volume descriptor; a partial last sector is left out.
+    pub fn from_user_image(bytes: Vec<u8>, iso: IsoForm) -> Result<Disc, DiscError> {
+        let sheet = Sheet::parse("FILE \"image\" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\n")?;
         Disc::from_sheet(&sheet, vec![bytes], iso)
     }
 

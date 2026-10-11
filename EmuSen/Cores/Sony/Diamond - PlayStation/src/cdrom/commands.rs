@@ -116,6 +116,11 @@ impl Cdrom {
         {
             return self.error(BAD_COUNT);
         }
+        if c == 0x1A && !self.lid_open && self.disc.is_none() {
+            self.ack();
+            self.defer(5, bytes(&[0x08, 0x40, 0, 0, 0, 0, 0, 0]), now + GETID_SECOND);
+            return;
+        }
         if needs_disc(c) && (self.lid_open || self.disc.is_none()) {
             return self.error(NOT_READY);
         }
@@ -166,8 +171,7 @@ impl Cdrom {
                     self.setloc_pending = false;
                     self.start_seek(now, self.setloc, Then::Read);
                 } else if self.activity != Activity::Reading {
-                    let at = if self.header_valid { self.delivered.at } else { self.position };
-                    self.start_seek(now, at, Then::Read);
+                    self.start_seek(now, self.resume, Then::Read);
                 }
             }
             0x07 => {
@@ -224,7 +228,6 @@ impl Cdrom {
                 if p[0] & mode::IGNORE == 0 {
                     self.whole = p[0] & mode::WHOLE != 0;
                 }
-                self.id_error = p[0] & mode::IGNORE != 0;
                 self.ack();
             }
             0x0F => {
@@ -308,7 +311,6 @@ impl Cdrom {
                 self.reset_until = now + RESET_QUIET;
                 self.end_activity();
                 self.mode = 0;
-                self.waiting = None;
                 if self.disc.is_some() && !self.lid_open {
                     self.spin_up(now, Then::Hold { complete: false });
                 }

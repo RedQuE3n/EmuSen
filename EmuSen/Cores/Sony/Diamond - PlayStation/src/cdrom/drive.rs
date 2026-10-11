@@ -50,6 +50,8 @@ impl Cdrom {
     /// Starts a seek to `target`, spinning up first if the motor is off.
     pub(super) fn start_seek(&mut self, now: u64, target: u32, then: Then) {
         self.seek_error = false;
+        self.waiting = None;
+        self.int1_at = u64::MAX;
         self.target = target;
         if !self.motor || self.activity == Activity::SpinningUp {
             let wait = self.activity == Activity::SpinningUp;
@@ -66,8 +68,11 @@ impl Cdrom {
         self.drive_at = now + self.seek_time(self.position, target);
     }
 
-    /// Reading or playing ends; the head holds where it is.
+    /// Reading or playing ends; the head holds where it is, and a sector waiting for its INT1 is dropped (psx-spx's
+    /// "Sector Buffer VS Pause" tests: no INT1 follows Pause's first response).
     pub(super) fn end_activity(&mut self) {
+        self.waiting = None;
+        self.int1_at = u64::MAX;
         if matches!(self.activity, Activity::Reading | Activity::Playing | Activity::Seeking) {
             self.hover = self.position;
             self.activity = Activity::Idle;
@@ -147,6 +152,7 @@ impl Cdrom {
         self.seek_data = false;
         self.position = self.target;
         self.hover = self.target;
+        self.resume = self.target;
         match self.then {
             Then::Hold { complete } => {
                 self.activity = Activity::Idle;
@@ -190,6 +196,7 @@ impl Cdrom {
     /// "Data/ADPCM Sector Filtering/Delivery").
     fn read_sector(&mut self, t: u64) {
         let at = self.position;
+        self.resume = at;
         let Some(slot) = self.disc.clone() else { return };
         let mut d = slot.get();
         let q = d.subq(at);
@@ -216,7 +223,7 @@ impl Cdrom {
         if self.flags & 7 == 0 && self.waiting.is_none() {
             self.delivered.raw.copy_from_slice(&self.scratch[..]);
             self.delivered.at = at;
-            let s = self.stat();
+            let s = self.stat() | if self.mode & mode::IGNORE != 0 { stat::ID_ERROR } else { 0 };
             self.respond(1, &[s]);
         } else {
             let w = self.waiting.get_or_insert_with(|| Buffered { raw: Box::new([0; 2352]), at: 0, second_try: true });

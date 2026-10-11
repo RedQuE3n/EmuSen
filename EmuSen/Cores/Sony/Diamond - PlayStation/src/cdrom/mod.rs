@@ -7,6 +7,7 @@
 pub mod audio;
 mod commands;
 mod drive;
+mod state;
 pub mod xa;
 
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -138,6 +139,9 @@ pub struct Cdrom {
     pub position: u32,
     pub target: u32,
     pub hover: u32,
+    /// Where a Read with no new Setloc begins: the sector a seek reached, or the one received last (psx-spx "Setloc,
+    /// Read, Pause").
+    pub resume: u32,
     pub drive_at: u64,
     pub motor_stops_at: u64,
     pub lid_open: bool,
@@ -209,7 +213,7 @@ impl Cdrom {
             filter: (0, 0),
             setloc: 0,
             setloc_pending: false,
-            shell_flag: false,
+            shell_flag: true,
             seek_error: false,
             id_error: false,
             reset_until: 0,
@@ -221,6 +225,7 @@ impl Cdrom {
             position: 0,
             target: 0,
             hover: drive::PARKED,
+            resume: drive::PARKED,
             drive_at: u64::MAX,
             motor_stops_at: u64::MAX,
             lid_open: false,
@@ -339,6 +344,11 @@ impl Cdrom {
         self.data[at]
     }
 
+    /// DRQSTS: the data FIFO holds bytes, which DMA channel 3 waits for.
+    pub fn data_ready(&self) -> bool {
+        self.data_pos < self.data_len
+    }
+
     /// A DMA word: four RDDATA bytes, as the bus splits them.
     pub fn data_word(&mut self) -> u32 {
         u32::from_le_bytes([self.data_byte(), self.data_byte(), self.data_byte(), self.data_byte()])
@@ -376,15 +386,13 @@ impl Cdrom {
         }
     }
 
-    /// HCHPCTL: BFRD loads the data FIFO with the sector the last INT1 handed over, and clearing it empties the FIFO.
+    /// HCHPCTL: BFRD loads the data FIFO with the sector the last INT1 handed over, from its start, and clearing it
+    /// empties the FIFO.
     fn write_hchpctl(&mut self, value: u8) {
         self.hchpctl = value;
         if value & 0x80 == 0 {
             self.data_len = 0;
             self.data_pos = 0;
-            return;
-        }
-        if self.data_pos < self.data_len {
             return;
         }
         let raw = &self.delivered.raw;
@@ -437,8 +445,18 @@ impl Cdrom {
         self.flags = self.flags & !7 | int;
     }
 
-    /// Queues a deferred response; the oldest is dropped if the four places are full.
+    /// Queues a deferred response. A second response (INT2, or INT5 in its place) takes the one place the controller
+    /// keeps for it, replacing one not yet delivered (psx-spx "Responses": one flag for INT2); the oldest of the others
+    /// is dropped if the four places are full.
     fn defer(&mut self, int: u8, reply: Reply, at: u64) {
+        if matches!(int, 2 | 5) {
+            for q in self.queue.iter_mut() {
+                if q.is_some_and(|p| matches!(p.int, 2 | 5)) {
+                    *q = None;
+                }
+            }
+            self.queue.sort_by_key(|q| q.is_none());
+        }
         let slot = self.queue.iter().position(Option::is_none).unwrap_or_else(|| {
             self.queue.rotate_left(1);
             3

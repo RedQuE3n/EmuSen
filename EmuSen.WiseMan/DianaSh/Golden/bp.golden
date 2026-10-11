@@ -713,8 +713,8 @@ This core reports no hardware conditions to break on.
 status 1
 action none
 $ bp add 8000
-out 36
-M68K breakpoint #1 added at $008000.
+out 31
+Breakpoint #1 added at $008000.
 status 0
 action none
 $ bp list

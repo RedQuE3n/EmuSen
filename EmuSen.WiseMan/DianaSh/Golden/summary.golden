@@ -84,10 +84,10 @@ case on moonrt
 target moonrt
 covers 1
 $ summary
-out 282
-NES (Moon) - frame 0, scanline 0
+out 284
+NES (MoonRT) - frame 2, scanline 0
 Mapper 0 (NROM), 1x16K PRG, 1x8K CHR ROM, mirroring Horizontal
-CPU  A=00 X=00 Y=00 S=FD PC=8000 P=24
+CPU  A=00 X=00 Y=00 S=FA PC=B454 P=24
 PPU  CTRL=00 MASK=00 STATUS=00 v=0000 t=0000 x=0
      rendering=off vblank=0 sprite0=0
 APU  no synthesis modelled - registers and the frame IRQ only
@@ -115,10 +115,10 @@ target mercuryrt
 covers 1
 $ summary
 out 240
-GB (MercuryRT) - frame 0, LY 0, mode 2
+GB (MercuryRT) - frame 2, LY 0, mode 2
 ROM, 2x16K ROM, no RAM
-CPU  A=01 F=B0 BC=0013 DE=00D8 HL=014D SP=FFFE PC=0100
-     IME=0 HALT=0 IE=00 IF=00
+CPU  A=01 F=B0 BC=0013 DE=00D8 HL=014D SP=FFFC PC=0AF2
+     IME=0 HALT=0 IE=00 IF=01
 PPU  LCDC=91 STAT=86 SCY=00 SCX=00 WY=00 WX=00
 APU  power=on vol=7/7 pan=F3 buffered=0 frames
 status 0

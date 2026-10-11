@@ -260,8 +260,8 @@ Call stack empty - nothing has been called since the last reset.
 status 0
 action none
 $ bt cop
-out 64
-Call stack empty - nothing has been called since the last reset.
-status 0
+out 50
+z80 does not report a call stack - see `man cpus`.
+status 1
 action none
 end

@@ -176,8 +176,8 @@ case on nephrite
 target nephrite
 covers 1
 $ tile VRAM 0 2
-out 49
-Error: Index was outside the bounds of the array.
+out 72
+Nephrite decodes no tiles, so there is nothing to draw - see `man tile`.
 status 1
 action none
 $ spaces

@@ -1246,8 +1246,10 @@ Friend access keeps the check at compile time: renaming either member breaks Wis
   through `CoreFactory.Bundle`, as a frontend attaches one.
 
 The N64 image carries a branch-to-self at its entry point. Without it the image is zeros past its header, and the C#
-Mars core, running them, throws `IndexOutOfRangeException` in `Cpu.StepBlock` within the first frame. That is a defect
-of the core, not of the shell, and is recorded here rather than worked on.
+Mars core, running them, threw `IndexOutOfRangeException` in `Cpu.StepBlock` within the first frame. That was a defect
+of the core, not of the shell; *fixed 2026-10-10*: the CPU runs the zeros as no-operations up to the last 256 bytes of
+RDRAM, where the dispatcher looked up a write mark past the end of its table (`Mars_Recompiler.md` §21). The corpus
+keeps the branch-to-self, so that the debugger's commands meet a core sitting at its entry point.
 
 **What is matched by pattern.** The home's real path, the temporary folder's and the install's are written as `<ROOT>`,
 `<TEMP>` and `<INSTALL>` before anything is compared. One case is a pattern, `ls -l`'s, because it prints modification
@@ -1330,10 +1332,20 @@ The cores, outside the shell, shown by it:
 
 19. The Rust cores' debug targets publish less than their C# counterparts: VenusRT no hardware break conditions, DMA
     channels, vectors, CPU registers, audio channels, sprites, palettes or coprocessor history; MoonRT and MercuryRT no
-    call stack, and both report frame 0 after two frames, MoonRT naming itself Moon.
+    call stack, and both report frame 0 after two frames, MoonRT naming itself Moon. *The defects fixed 2026-10-10*
+    (`EmuSen_CoreAPI.md` §30.2, §30.3): frame 0 and the stale registers were the targets' first snapshot, taken from a
+    mirror not yet loaded from the Rust core's state, and VenusRT's missing CPU registers the same defect in the v1
+    target; MoonRT now names itself. The rest is missing surface, inventoried item by item with the route each would
+    take in `EmuSen_CoreAPI.md` §30.6 and not built.
 20. Nephrite names its main processor `m68k`, not the `cpu` every command takes as the main one, so `regs cpu` and
-    `disasm cpu` refuse there; and its `tile` throws `IndexOutOfRangeException`.
-21. `core`'s registry has no entry for the Genesis, so a v1 core cannot be loaded with it.
+    `disasm cpu` refuse there; and its `tile` throws `IndexOutOfRangeException`. *Fixed 2026-10-10*
+    (`EmuSen_CoreAPI.md` §30.1, §30.4): `cpu` names the first processor, which both surfaces already state is the
+    main one, and `tile` refuses on a core that decodes no tiles.
+21. `core`'s registry has no entry for the Genesis, so a v1 core cannot be loaded with it. *Fixed 2026-10-10*
+    (`EmuSen_CoreAPI.md` §30.5): the registry is built with the catalog's other lists, discovered consoles included.
+
+The cases findings 19 to 21 changed were re-recorded in a commit of their own, eleven files: `bp`, `bt`, `core`, `cov`,
+`disasm`, `eval`, `man` (the `cpus` and `tile` pages), `regs`, `setreg`, `summary` and `tile`. No other file moved.
 
 ---
 

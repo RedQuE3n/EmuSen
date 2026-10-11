@@ -245,6 +245,13 @@ zero); PCSX-Redux reads zero always, within the blank too [M]. Its frame rows al
 frame where the console reads 263 [M]. **Confirmed on the console log**, which stays the evidence: neither referee
 models mode 2 as the console behaves, so neither bears on the rule.
 
+*2026-10-11, `timer-sync.s`* (`Diamond_Disputes.md` D-6's second part): a mode write with the sync on, read a few
+cycles later, k × 8,192 loops after a vblank, for timers 0 and 1 in each sync mode [M]. Every referee's two reads are
+at most 15 in all 32 cases, the first DuckStation's 0 or 1, SwanStation's 0, 1 or 5, PCSX-ReARMed's 2, PCSX-Redux's 0
+or 3 and Beetle PSX's 0 or 4, where Diamond's timer 0 had read up to 46,876; after the fix Diamond's first reads are 0
+or 3. The lineages
+agree that nothing before the write reaches the count after it; they differ, as above, on which modes pause or wait.
+
 ### 4.6 D-7: where the interpolation starts — `raster-order.s`
 
 One shaded triangle, A (2,1), B (40,9), C (13,30), in its six vertex orders; a shaded quad in the four orders that
@@ -401,6 +408,7 @@ The other programs are pinned on Diamond as it reads them: `gpustat_while_each_s
 | `timers`, mode 2 rows | exact | free-running; zero in 7 of 10 by the record | zero | counting, by the record | zero, by the record | counting, by the record |
 | `timers`, the gate's 18 rows (the records, §4.10) | 18 | 13 | 1, stopped | 9 | 13 | 2 |
 | `timers`, the target check's booleans | as the log | not | not reached | not | not | not |
+| `timers`, sync tables in the log's shape (of 14, *2026-10-11*, `Diamond_Native.md` §11.12) | 14 (6 before D-6's second part) | 10, by the record | 3, by the record | 13, by the record | 9, by the record | 1, by the record |
 | `cpu/access-time`, 51 cells within 0.2 | 50 | ~~11~~ 36 | ~~11~~ 24 | 27, by the record | 33, by the record | 0, by the record |
 | `dma/chopping`, 130 rows within 10% | 129 | 17 | 0 | 5, by the record | 11, by the record | 0, by the record |
 | `dma/chopping`, busy marks | 117 | 117 (the same) | 60 | 117 (the same), by the record | 117 (the same), by the record | 19, by the record |

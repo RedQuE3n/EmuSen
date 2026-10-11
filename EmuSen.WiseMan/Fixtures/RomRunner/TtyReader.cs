@@ -171,7 +171,44 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
 
         private static readonly Regex TimerRow = new(@"^Timer(\d), clock:\s*(.+?),\s*(.+?):\s*(.*)$");
 
-        // Each delay and frame row's settled values within its tolerance of the console's mean; the sync-mode tables are not graded - see Diamond_Native.md §11.12.
+        private static readonly Regex SyncRow = new(@"^\d = .+?\s{2,}(-?\d+,.*)$");
+
+        // Each "Testing Timer" heading with the sync rows under it, in order.
+        private static List<(string Heading, List<int[]> Rows)> SyncTables(IEnumerable<string> lines)
+        {
+            var tables = new List<(string, List<int[]>)>();
+            foreach (var l in lines)
+            {
+                if (l.StartsWith("Testing Timer", StringComparison.Ordinal)) tables.Add((l, new List<int[]>()));
+                else if (tables.Count > 0 && SyncRow.Match(l) is { Success: true } m)
+                    tables[^1].Item2.Add(Number.Matches(m.Groups[1].Value).Select(v => int.Parse(v.Value, CultureInfo.InvariantCulture)).ToArray());
+            }
+            return tables;
+        }
+
+        // Each sync table in the console's shape: first samples within 1.2x the log's largest + 2, rises within 1.1x + 2, modes 0 and 3 never falling - see Diamond_Native.md §11.12.
+        private static void SyncShape(IReadOnlyList<string> lines, IReadOnlyList<string> console, List<string> off)
+        {
+            var ours = SyncTables(lines);
+            var theirs = SyncTables(console);
+            for (int t = 0; t < theirs.Count; t++)
+            {
+                var (heading, rows) = theirs[t];
+                if (t >= ours.Count || ours[t].Heading != heading || ours[t].Rows.Count != rows.Count) { off.Add($"sync table {t}: missing"); continue; }
+                int first = rows.Max(r => r[0]);
+                int rise = rows.SelectMany(r => r.Zip(r.Skip(1), (a, b) => b - a)).DefaultIfEmpty(0).Max();
+                for (int s = 0; s < rows.Count; s++)
+                {
+                    var r = ours[t].Rows[s];
+                    var rises = r.Zip(r.Skip(1), (a, b) => b - a).ToArray();
+                    if (r[0] > 1.2 * first + 2) off.Add($"sync table {t}, mode {s}: starts at {r[0]}, the log's largest {first}");
+                    else if (rises.Any(d => d > 1.1 * rise + 2)) off.Add($"sync table {t}, mode {s}: rises faster than the log's {rise}");
+                    else if (s % 3 == 0 && rises.Any(d => d < 0)) off.Add($"sync table {t}, mode {s}: falls");
+                }
+            }
+        }
+
+        // Each delay and frame row's settled values within its tolerance of the console's mean, and the sync tables in its shape - see Diamond_Native.md §11.12.
         private static RomVerdict Timers(string name, IReadOnlyList<string> lines, IReadOnlyList<string> console)
         {
             var off = new List<string>();
@@ -189,7 +226,8 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
                 foreach (double v in mine)
                     if (Math.Abs(v - mean) > tolerance) { off.Add($"{row}: {v} against {mean:0.0}"); break; }
             }
-            return new RomVerdict(off.Count == 0 && graded > 0 ? RomOutcome.Passed : RomOutcome.Failed, name, off.Count == 0 ? $"{graded} rows" : string.Join("; ", off));
+            SyncShape(lines, console, off);
+            return new RomVerdict(off.Count == 0 && graded > 0 ? RomOutcome.Passed : RomOutcome.Failed, name, off.Count == 0 ? $"{graded} rows and the sync tables" : string.Join("; ", off));
         }
     }
 }

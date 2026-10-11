@@ -301,7 +301,11 @@ impl Board {
                             0 => self.video.in_hblank_at(self.now),
                             _ => self.video.in_vblank_at(self.now),
                         };
+                        let watched = self.wants_hblank();
                         self.timers.write_mode(n, &self.video, self.now, value, blank);
+                        if !watched && self.wants_hblank() {
+                            self.video.skip_hblanks(self.now);
+                        }
                     }
                     8 => self.timers.write_target(n, value),
                     _ => {}

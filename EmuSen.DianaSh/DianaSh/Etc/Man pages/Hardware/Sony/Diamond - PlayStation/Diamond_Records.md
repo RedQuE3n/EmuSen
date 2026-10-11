@@ -157,7 +157,8 @@ interval's refill; the counts are not graded, and their sum and the booleans are
 
 ### 2.4 Against the console's log
 
-18 of 18 rows within the gate's tolerances, as the release's [M, `psxrecords.py console timers`]. The log's console
+18 of 18 rows within the gate's tolerances, as the release's [M, `psxrecords.py console timers`]; *since 2026-10-11*
+also 14 of 14 sync tables in the log's shape (`Diamond_Native.md` §11.12), 6 before §8.1's fix. The log's console
 build is not build 158 (its `ResetGraph` reports `itb=8001207c`, the release's `8001376c` [R the log; M]), and its delay
 rows read 1,011 and its sync steps 123 where build 158 reads 1,013 and 127 on Diamond; the console's code was laid out and
 perhaps compiled differently, so two cycles of a delay row and four of a sync step are not a measurement of Diamond [A].
@@ -309,6 +310,7 @@ a second and a third machine [M, `psxrecords.py equal`]:
 | a frame on the dot clock (console 112,031) | 112,033 | 112,196 | 112,198 | 112,184 | 112,888 | 94,059 |
 | sync mode 2, timer 0's ten rows | zero outside the blank, counting in it (8 rows; 2 missed the blank) | zero in 7, mixed in 3 | zero in all | counting in all | counting in all | zero in all |
 | the target check's booleans (console 1, 0, 1, 1) | 1, 0, 1, 1 | 1, 0, 0, 1 | 1, 0, 0, 1 | 1, 0, 0, 1 | 1, 0, 0, 0 | not reached |
+| *2026-10-11:* sync tables in the log's shape, of 14 (§8.1) | 14 (6 before §8.1's fix) | 10 | 9 | 13 | 1 | 3 |
 
 Only Diamond resets timer 2 at its target and holds it there as the console's log shows (a count at every value 0 to
 10, twice at 0); DuckStation and SwanStation see every other value 2,000 times, Beetle PSX the value 8 9,999 times,
@@ -369,7 +371,7 @@ Diamond does, and no referee reproduces the console's access times, DMA gaps, dr
 
 ### 8.1 Timer 0's sync mode credits time from before its mode was written
 
-Not fixed; reported. Writing timer 0's mode with sync enabled resets its count, yet Diamond's first read after the write
+~~Not fixed; reported.~~ *Fixed 2026-10-11 in `d060fbf0`; the rule is `Diamond_Disputes.md` D-6's second part.* Writing timer 0's mode with sync enabled resets its count, yet Diamond's first read after the write
 returns the cycles since a video edge it last processed: a program of the project's own that waits for a vblank, then
 8,192·k iterations of a 4-cycle loop, then writes mode 0001h and reads the count twice 5 cycles apart, reads 0 and 0,
 7,053 and 7,058, 25,713 and 25,718, 18,003 and 18,008 for k = 0 to 3, where Diamond's own `write_mode` sets the count to
@@ -380,6 +382,37 @@ Diamond's own `bus.rs` and `timers.rs`: hblank edges are only scheduled while ti
 the edges since the last processed one are caught up with times before the write, and `Timers::sync` sets its tick base
 to each such time, rewinding it, so the next read counts that span again [R, A]. The sync-mode tables are not graded by
 the TTY gate, and D-6's mode-2 rows reset at both edges of the blank, which hides it there.
+
+**The cause, confirmed, and the fix** [M, 2026-10-11]. `programs/timer-sync.s` is the program of the paragraph above
+made a fixture: interrupts off, for timers 0 and 1 on the system clock, each sync mode and k = 0 to 3, the mode written
+k × 8,192 four-cycle loops after a vblank and the count read twice. Before the fix, timer 0 read 13,099, 11,960 and
+36,658 in mode 0 at k = 1 to 3, 712, 1,195 and 1,672 in mode 1, and 15,780, 14,111 and 46,876 in mode 3, which should
+read zero until an hblank comes; timer 1, whose vblank edges are processed whether or not it syncs, read 3 and 6 or 0
+in every case. The cause was the one read above, in both its parts: `Video::next_edge` offers hblank's edges only while
+timer 0 syncs, so the processed mark `done_h` stays at the last vblank-side edge; the write turned them on, the event
+loop then processed every hblank edge since that mark at its own past time, `Timers::sync` set the tick base back to
+each, and `Timers::blank` applied each to the timer as written, so mode 3 saw a blank that came before its write. The
+fix is in the bus's mode write: when the write turns hblank's edges on, `Video::skip_hblanks` moves the processed mark
+to the present, or to just before an edge of another kind still due by then, which is the only edge the event loop
+can owe at an instruction's boundary. After it every timer-0 case reads 3 and 6 (0 and 0 where the mode pauses or
+waits), the figures every referee reads within a few counts (D-6). The tick base's return to an earlier time is kept:
+measured with a probe in `Timers::sync`, after the fix it happens once in `timers.s` and once in the release, by 2
+cycles and by 1, where a timer read inside an instruction passes an hblank edge the event loop reaches only at the
+instruction's end, and there it is what lets the edge's reset or start take effect at its own time [M, A].
+
+The sync tables before and after, against the console's log by the shape of `Diamond_Native.md` §11.12 [M,
+`psxrecords.py console timers`]:
+
+| Run | Sync tables in the log's shape (of 14) | Largest first sample, system clock / dot clock |
+|---|---|---|
+| the console's log | 14 | 260 / 95 |
+| the rewrite before the fix | 6 | 1,629 / 512 |
+| the rewrite after | 14 | 268 / 76 |
+| the release on the open kernel before the fix | 4 | 48,340 / 26,412 |
+| the release after | 14 | 274 / 105 |
+
+The delay and frame rows are unchanged, 18 of 18 within the gate's tolerances before and after, and so are the target
+and flag checks; the record's hash changes only in its sync tables [M].
 
 ### 8.2 What the busy marks of `chopping` measure (D-11)
 
@@ -418,6 +451,9 @@ cell by 0.2 without any change to Diamond's hardware model. The rewrites do not 
 - **The referees' outputs**: their RAM, and for DuckStation and PCSX-Redux the release programs' TTY from each
   program's heading on, which for PCSX-Redux carries its own messages (an address error's report in `timers`) and for
   DuckStation the release library's `VSync: timeout`; the process table and the processes' cgroups.
+- *§8.1's fix (2026-10-11)*: psx-spx `6d7d1bc`, "Timers" (this step's one exception to the line below); Diamond's
+  own `video.rs` and `state.rs`'s video fields beside the sources above; the referees' RAM for `timer-sync.s` and their
+  earlier records of `timers`, graded again; the same pages.
 - **Not read**: any emulator's source; PSn00bSDK's sources; any BIOS, firmware or listing (the player's BIOS was handed
   to the referees by path, and no referee's log before a program's heading was read); psx-spx.
 

@@ -393,7 +393,7 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   mode-2 rows, Beetle PSX and PCSX-ReARMed count in every one, SwanStation reads zero in every one and DuckStation in
   seven; Diamond's alone are zero outside the blank and counting within. A finding of the same step, not a dispute
   (`Diamond_Records.md` §8.1): Diamond credits timer 0 with time from before a mode write that enables its sync, which
-  mode 2's resets at both edges hide. **Witnesses:** none.
+  mode 2's resets at both edges hide (*fixed 2026-10-11; the second part below*). **Witnesses:** none.
 - **Conclusion:** the counter is reset at the blank's end as well as its start, so it counts within the blank and
   reads zero outside; measured on the console's log, argued for timer 1's vblank by analogy [A]. A second reading of the
   same log: **the reset's two-cycle hold is of the system clock only** [A]; applied in ticks of a slower source it
@@ -402,6 +402,34 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
 - **Pinned by:** ps1-tests' `timers` graded against its log (the hblank row exactly);
   `system_clock_over_8_and_a_stopped_timer_2`.
 - **Implemented in:** `diamond: the bus and the machine of stage 3`.
+- **Second part, added 2026-10-11: a mode write with the sync on resets the count, and no blank edge before the write
+  acts on the timer after it.** It is kept in this entry rather than given its own, being the same register's sync
+  under the same test program.
+  - *Opened* by `Diamond_Records.md` §8.1: Diamond's timer-0 sync rows of `timers` started at up to 48,340 cycles
+    where the console's start at 260 or less.
+  - *Documents read:* psx-spx `6d7d1bc`, "Timers": the counter "gets forcefully reset to 0000h on any write to the
+    Counter Mode register", and under "Reset and Wrap" "it will stay at 0000h for 2 clock cycles before counting up".
+    No sentence lets a blank before the write act on the count after it.
+  - *Test program:* `programs/timer-sync.s` [M]: interrupts off, timers 0 and 1 on the system clock, each sync mode,
+    the mode written k × 8,192 four-cycle loops after a vblank (k = 0 to 3) and the count read twice. Before the fix,
+    timer 0 read 13,099, 11,960 and 36,658 in mode 0 at k = 1 to 3, 712 to 1,672 in mode 1, and 14,111 to 46,876 in
+    mode 3; timer 1 read 3 and 6, or 0, throughout. The console's `timers` log: no row of its fourteen sync tables
+    starts above 260 cycles or 95 dots.
+  - *Referee* (`Diamond_Referees.md` §4.5) [M]: on `timer-sync.s` all five referees read at most 15 in all 32 cases,
+    the first reads 0 to 5. Every lineage agrees that the count after the write is the time since the write; they
+    differ on which modes pause or wait, the first part's matter. On `timers`' record, the sync tables in the log's
+    shape (`Diamond_Native.md` §11.12) are Beetle PSX's 13 of 14, DuckStation's 10, SwanStation's 9, PCSX-Redux's 3
+    and PCSX-ReARMed's 1. DuckStation's and SwanStation's dot-clock mode-1 rows start at about twice the log's
+    largest, a reading only.
+  - *Conclusion:* the write resets the count and takes the blank's level at the write for its running; the blank's
+    edges before it are not applied to the timer. This is argued from psx-spx, agreed by every lineage, and measured
+    against the console log's sync tables. In Diamond, hblank's edges go to the event loop only while timer 0 syncs,
+    so a write that turns them on first passes over those already past (`Diamond_Native.md` §11.6).
+  - *Depends on it:* any program that times with timer 0's sync, and the TTY gate's sync tables.
+  - *Pinned by:* `a_mode_write_with_sync_resets_the_count`, `the_timers_records_sync_tables_have_the_logs_shape`,
+    WiseMan's `The_timers_rule_fails_a_sync_table_that_starts_too_high`, and ps1-tests' `timers` by its TTY.
+  - *Implemented in:* `d060fbf0` (`diamond: a mode write that turns timer 0's sync on passes over the hblank edges
+    already past`).
 
 ### D-7. The rasteriser where psx-spx is silent: whole-pixel samples with the top-left rule, 12-bit gradients from vertex 0 truncated toward zero with a half added, and lines' ties by their major axis
 

@@ -119,6 +119,21 @@ namespace EmuSen.WiseMan.Coprocessors
             Assert.Equal(0x9234, sa1.Cpu.PC);
         }
 
+        // A reset's three stack cycles take S down by three and load nothing; a console shows $01FC on both releases - see VenusRT_Disputes.md D-49.
+        [Fact]
+        public void The_sa1_reset_takes_s_down_by_three()
+        {
+            var sa1 = Chip();
+            Assert.Equal(0x01FF, sa1.Cpu.S);
+            sa1.WriteRegister(Ccnt, 0x00);
+            Assert.Equal(0x01FC, sa1.Cpu.S);
+
+            sa1.Cpu.S = 0x01FF;
+            sa1.WriteRegister(Ccnt, 0x20);
+            sa1.WriteRegister(Ccnt, 0x00);
+            Assert.Equal(0x01FC, sa1.Cpu.S);
+        }
+
         [Fact]
         public void Rdyb_parks_the_sa1_cpu_without_resetting_it()
         {

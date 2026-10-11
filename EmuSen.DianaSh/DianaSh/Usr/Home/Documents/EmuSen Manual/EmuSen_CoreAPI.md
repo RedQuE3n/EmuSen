@@ -3038,9 +3038,13 @@ Two findings came from them.
   frozen at `$AB` left it at `$B6` after two frames. Every other observed store already stored first; the three WRAM
   paths now do too, in a commit of its own with `LabelFreezeCounterTests.A_frozen_address_holds_against_the_game_writing_it`,
   which failed before it.
-- **The two SA-1s start with different stack pointers**: `$01FF` on C# Venus and `$01FD` on VenusRT once the SA-1 is
-  released. That is reset state, not a view, and is recorded here rather than resolved; the SA-1 test compares PB, PC,
-  A, X, Y and P and leaves S out.
+- **The two SA-1s started with different stack pointers**: `$01FF` on C# Venus and `$01FD` on VenusRT once the SA-1
+  was released. That is reset state, not a view, and was settled as a dispute (`VenusRT_Disputes.md` D-49). C# Venus
+  loaded `$01FF` at every reset, where the datasheet's reset makes three stack cycles and loads nothing; a console
+  photographed by absindx's `SA1RamProtectionTest` shows the SA-1 restarting from `$01FF` at `$01FC`, so C# Venus
+  now subtracts three. VenusRT's SA-1 started from SL `$00`, an undefined power-on value; both engines now take
+  `$FF`, the same console's reading at the first release, which changes no golden output and no picture or state of
+  the library's SA-1 games. Both SA-1s now start at `$01FC`, and the SA-1 test compares S again.
 
 **What the tests cannot show.** Agreement between the two engines' views over equal memory shows the pack decodes as
 C# Venus does, not that either decodes as the hardware does; the decodings were checked against fullsnes where it

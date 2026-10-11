@@ -1,10 +1,23 @@
 //! psx-spx's "BIOS Joypad Functions": the buffers, the PadCardIrq element at priority 2 and PAD_init2's and PAD_dr's
-//! interface. Reading the pads over SIO0 is stage 6's: until then each vblank marks both buffers FFh, no pad
-//! answering. Diamond_OpenKernel.md §4.13.
+//! interface; on each vblank both ports read over SIO0 as "Controller and Memory Card Signals" describes the driver.
+//! Diamond_OpenKernel.md §4.13.
 
 use crate::entry;
 use crate::exception::{self, acknowledge, pending};
-use crate::mem::{rd8, wr, wr8};
+use crate::mem::{rd, rd8, rd16, wr, wr8, wr16};
+
+const SIO_DATA: u32 = 0x1F80_1040;
+const SIO_STAT: u32 = 0x1F80_1044;
+const SIO_MODE: u32 = 0x1F80_1048;
+const SIO_CTRL: u32 = 0x1F80_104A;
+const SIO_BAUD: u32 = 0x1F80_104E;
+const I_STAT: u32 = 0x1F80_1070;
+const I_MASK: u32 = 0x1F80_1074;
+/// CR: TXEN, DTR and DSRIEN; bit 13 the port; bit 4 acknowledges.
+const SELECT: u32 = 0x1003;
+/// About 100 µs of polls, psx-spx's timeout for /ACK, and the 100 cycles waited before acknowledging the last one.
+const TIMEOUT: u32 = 1000;
+const SETTLE: u32 = 50;
 
 static mut BUFFERS: [u32; 2] = [0; 2];
 static mut ENABLED: u32 = 0;
@@ -19,7 +32,8 @@ pub fn forget() {
     unsafe { STARTED = false };
 }
 
-/// B(12h): the buffers zero-filled to their sizes and remembered, the pad enabled, the element not yet queued.
+/// B(12h): the buffers zero-filled to their sizes and remembered, the pad enabled, the element not yet queued; SIO0
+/// reset and set to 8 bits at the kernel's 0088h (psx-spx "Signals": about 250 kHz) [C on where].
 pub extern "C" fn init_pad2(buf1: u32, size1: u32, buf2: u32, size2: u32) -> u32 {
     for (b, n) in [(buf1, size1), (buf2, size2)] {
         for i in 0..n {
@@ -30,11 +44,16 @@ pub extern "C" fn init_pad2(buf1: u32, size1: u32, buf2: u32, size2: u32) -> u32
         BUFFERS = [buf1, buf2];
         ENABLED = 1;
     }
+    wr16(SIO_CTRL, 0x40);
+    wr16(SIO_MODE, 0x0D);
+    wr16(SIO_BAUD, 0x88);
     1
 }
 
-/// B(13h).
+/// B(13h): the element queued and vblank enabled in I_MASK, without which a program that calls only PAD_init2, as
+/// Peter Lemon's `Cube` does on a console, would never see its buttons (Diamond_OpenKernel.md §4.13) [A].
 pub extern "C" fn start_pad2() -> u32 {
+    wr(I_MASK, rd(I_MASK) | 1);
     unsafe {
         if !STARTED {
             let e = &raw mut ELEMENT as u32;
@@ -109,15 +128,69 @@ pub extern "C" fn init_card2(pad_enable: u32) -> u32 {
     0
 }
 
+fn spin(n: u32) {
+    for i in 0..n {
+        unsafe { core::ptr::read_volatile(&i) };
+    }
+}
+
+/// One byte sent and its reply taken, as psx-spx's "Emulation Note" describes the driver: about 100 cycles waited,
+/// IRQ7 acknowledged in I_STAT and then in CR, the new IRQ7 awaited unless `last`; the reply, and whether /ACK came.
+fn exchange(control: u32, byte: u32, last: bool) -> (u32, bool) {
+    wr8(SIO_DATA, byte);
+    spin(SETTLE);
+    wr(I_STAT, !0x80);
+    wr16(SIO_CTRL, control | 0x10);
+    let mut acked = false;
+    if !last {
+        for _ in 0..TIMEOUT {
+            if rd(I_STAT) & 0x80 != 0 {
+                acked = true;
+                break;
+            }
+        }
+    }
+    for _ in 0..TIMEOUT {
+        if rd16(SIO_STAT) & 2 != 0 {
+            break;
+        }
+    }
+    (rd8(SIO_DATA), acked)
+}
+
+/// A controller's read into `buffer` (psx-spx "B(12h)"): status 00h and the ID, then the halfwords its ID counts, up
+/// to 22h bytes in all; status FFh when no /ACK came or the second ID byte was not 5Ah.
+fn read_port(port: u32, buffer: u32) {
+    let control = SELECT | port << 13;
+    wr16(SIO_CTRL, control);
+    let mut status = 0xFF;
+    let (_, present) = exchange(control, 0x01, false);
+    if present {
+        let (id, more) = exchange(control, 0x42, false);
+        let (second, data) = exchange(control, 0x00, false);
+        if more && data && second == 0x5A {
+            let halfwords = if id & 0xF == 0 { 16 } else { id & 0xF };
+            for i in 0..2 * halfwords {
+                let (v, _) = exchange(control, 0x00, i + 1 == 2 * halfwords);
+                wr8(buffer + 2 + i, v);
+            }
+            wr8(buffer + 1, id);
+            status = 0;
+        }
+    }
+    wr8(buffer, status);
+    wr16(SIO_CTRL, 0);
+}
+
 extern "C" fn pad_handler() -> u32 {
     if pending() & 1 == 0 {
         return 0;
     }
     unsafe {
         if ENABLED != 0 {
-            for b in BUFFERS {
+            for (port, b) in BUFFERS.into_iter().enumerate() {
                 if b != 0 {
-                    wr8(b, 0xFF);
+                    read_port(port as u32, b);
                 }
             }
         }

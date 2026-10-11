@@ -132,7 +132,7 @@ impl Board {
             spu: SpuStub::new(),
             cdrom: CdromStub::default(),
             mdec: MdecStub::default(),
-            sio0: Sio0::new(None),
+            sio0: Sio0::new(Default::default()),
             sio1: SioStub::default(),
             duart: Duart::default(),
             tty: Tty::new(),

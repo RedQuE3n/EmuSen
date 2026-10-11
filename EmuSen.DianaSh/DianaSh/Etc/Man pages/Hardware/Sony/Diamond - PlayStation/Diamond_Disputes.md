@@ -549,6 +549,14 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   bit 26 against the cycles after a burst of N words, on a console, would measure it.~~ *Referee step, 2026-10-11:*
   that program ran on every referee and none keeps the GPU busy; DuckStation independently supports the 117 rows, and
   nothing bears on the 13. Still open. Pinned since by `the_gpu_is_ready_at_once_after_each_transfer`.
+  *Observed 2026-10-11, with the pad* (`Diamond_Pad.md` §5): amidog's three tests clear VRAM before their menus with
+  one 1×1 rectangle a pixel, each sent once GPUSTAT bits 26 and 28 are set; on Diamond a clear of 524,288 pixels takes
+  about 470 frames, about 507 cycles a pixel, nearly all the rectangle's fitted setup of 742 GPU cycles, so the menus
+  appear only at frames 1,600 to 2,800. The setup was fitted on 320×240 rectangles, where it cannot be told from a cost
+  that grows with the rectangle; that a test meant to be run by hand spends half a minute of a console's time blank
+  before its menu is weak evidence that the console's setup for a 1×1 rectangle is far smaller. Not acted on: the
+  drawing time is unchanged, and a program timing GPUSTAT bit 26 after rectangles of 1×1 to 320×240 would separate
+  the two costs.
 - **Depends on it:** GPUSTAT's busy bits and DMA's pacing; the speed at which games draw.
 - **Pinned by:** `bandwidth` graded against its log (2%); `a_gpu_cycle_is_a_video_clock`.
 - **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
@@ -588,9 +596,28 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
 - **Referee:** not consulted. **Witnesses:** none run (no reference emulator was run for this step).
 - **Conclusion:** the reply readable 7½ bits after the first clock; /ACK from the card's figure for every device; the
   transfer starting at once rather than on the baud timer's next reload. Argued; open until a program of the project's
-  own times IRQ7 and RXRDY with root counter 2 on a console.
+  own times IRQ7 and RXRDY with root counter 2 on a console. *Stage 6 (2026-10-11):* the memory card's read takes
+  psx-spx's "additional delay of circa 31000 cycles" after its seventh byte, the 5Ch byte the command table marks with
+  "late /ACK after this byte-pair", taken as the 5Ch byte itself [C]; a write adds no delay, as psx-spx says.
 - **Depends on it:** the kernel's pad and card functions' timeouts; games that read the pad by polling with fixed
   delays, as amidog's library does.
 - **Pinned by:** `sio0::tests::a_pad_read_answers_with_an_ack_after_every_byte_but_the_last`,
   `the_status_follows_a_byte_through_the_transmitter_and_the_fifo`.
 - **Implemented in:** `diamond: SIO0 and port 1's digital pad, brought forward from stage 6`.
+
+### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; open
+
+- **Opened:** 2026-10-11, by `psxtest_gpu` 1.7 run to its end once the pad answered (`Diamond_Pad.md` §5.4).
+- **Documents read:** none for this entry beyond `Diamond_GPU.md`'s own sources.
+- **Test program:** `psxtest_gpu` 1.7, every test but DUMP, on the open kernel; its verdicts read from the screen, its
+  TTY silent. F ERROR on all 32 polygons and 32 lines; V ERROR on all 32 lines, on all 16 x- and y-flipped
+  rectangles, on REG and MOVE, on most of the OFFSET group's rectangles, polygons and lines, and in AREA on the
+  untextured rectangles, polygons and lines while their textured forms pass; every plain rectangle, fill, VRAM write,
+  copy and read passes.
+- **Referee:** not consulted. **Witnesses:** none run.
+- **Conclusion:** open, for the GPU's own step. The F column of a test that compares VRAM is likely GPUSTAT or the
+  drawing's side effects (D-10, D-11) [A]; the flipped rectangles' values bear on D-8, the lines' on D-7's line rule,
+  and the drawing area's on the clipping of untextured primitives, where ps1-tests' pictures agree with Diamond. The
+  test prints no case, so the next step is the test's VRAM after one group, compared with its software model's.
+- **Depends on it:** the GPU's line rasteriser, the flip, the area's clipping, GPUSTAT.
+- **Pinned by:** nothing yet. **Implemented in:** nothing yet.

@@ -470,6 +470,8 @@ What *is* per console is the only genuinely console-specific operation: **parsin
 
 Button states say what is possible rather than failing on click: `Save` needs a running game to name the file after, `Load` needs that file to exist, and `Save As` only needs something in the list.
 
+**Save moved to the button bar (2026-10-11).** During a game the window opens on the running console's tab (`SelectConsoleTab`), where codes are typed, so a `Save` kept on General was a tab away from where the list is built; on the handheld's big-screen sheet the tester looked for it and did not find it. `Save` now sits in the bottom bar after Apply Cheats, outside the tabs like the list itself, and is on screen whatever tab is chosen. `Load`, `Save As...` and `Load From...` stay on General: `Load` replaces the live list, and the other two open file dialogs, which a big-screen sheet hides (§4.83.6). Six buttons no longer fit a big-screen sheet's bar, which the fit audit (§4.83.2) caught as Close pushed past it at 1280×800 and 1920×1200; the sheet now hides Close, as the input window's sheet does, since the help bar's Back closes it. Since §4.15b the list is also kept when the game is left, so `Save` is for keeping it now rather than the only way to keep it.
+
 ### 4.15b A game's list in its console's folder, kept when the game is left (Galaxia/Models/GameCheats.cs)
 
 *Decided 2026-10-10 by the tester: both changes below.*

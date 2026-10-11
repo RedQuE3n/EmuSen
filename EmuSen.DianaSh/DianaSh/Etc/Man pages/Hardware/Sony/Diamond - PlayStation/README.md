@@ -27,7 +27,7 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   PS-EXE loading, the kernel's seam, the TTY reader, the project's own programs with the references as witnesses, and
   the gate's results; and stage 4 (§12): the GPU in the machine, the frame ending at vblank, the gate, amidog's tests
   and stage 2's items, the cost; and stage 5 (§13): the GTE in the machine and its interlock, the gate program by
-  program, how the first build failed `test-all`, the timing against the witnesses, the state's version 2, the cost.
+  program, how the first build failed `test-all`, the timing against the witnesses, the state's version 2, the cost; and stage 6 (§14): SIO0's devices, the state's version 4, the gate.
 - [`Diamond_GPU.md`](Diamond_GPU.md) — the GPU, written 2026-10-11 at stage 4: the FIFO and the command processor,
   GPUSTAT's ready bits against `gpustat`'s console log, DMA channel 2, GP1, VRAM's transfers, texturing with the
   texture and CLUT caches, the pixel pipeline, the rasteriser's rules fitted to ps1-tests' console pictures, the
@@ -44,7 +44,8 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
 - [`Diamond_Pad.md`](Diamond_Pad.md) — SIO0 and the controllers, from 2026-10-11, when a digital pad on port 1 was
   brought forward from stage 6: the registers, a byte on the wire, /ACK and IRQ7, the pad and the slots, amidog's CPX,
   GPU and GTE tests run from their menus and what they showed (three R3000A defects fixed, the CE and second-load items
-  of stage 2 closed), and the reading log.
+  of stage 2 closed); then stage 6: the DualShock, the memory cards as battery files, the multitap, the open kernel's
+  pad functions, the gate item by item, and the reading log.
 - [`Diamond_References.md`](Diamond_References.md) — the oracles, documents and reference cores pinned at stage 1
   (2026-10-11): the test programs with their console logs and pictures, the documents and their exclusions, the probe on
   the three libretro cores (only PCSX-ReARMed may run without a BIOS; Beetle PSX and SwanStation boot OpenBIOS and are
@@ -53,7 +54,7 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   NTSC console's video clock and line length, and so its frame rate; from stage 3, D-4 (memory control's access
   times), D-5 (the DMA's gaps and a store's drain) and D-6 (timer sync mode 2); from stage 4, D-7 (the rasteriser's
   rules), D-8 (the x-flip's offset), D-9 (the drawing area's commands in order), D-10 (GPUSTAT bit 28), D-11 (the
-  drawing time) and D-12 (two pictures the programs cannot meet); from the pad, D-22 (SIO0's timing). The R3000A's
+  drawing time) and D-12 (two pictures the programs cannot meet); from the pad, D-22 (SIO0's timing) and D-23 (amidog's GPU test). The R3000A's
   disputes (D-1 to D-3, and D-17 to D-21 from amidog's `psxtest_cpx`) are in
   `../BlackMoon-HW/BlackMoon_R3000.md` §8 and the GTE's (D-13 to D-16, from stage 5) in `../BlackMoon-HW/BlackMoon_GTE.md`
   §12.

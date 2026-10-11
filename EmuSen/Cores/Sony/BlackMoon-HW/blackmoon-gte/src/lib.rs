@@ -187,7 +187,9 @@ mod tests {
             assert_eq!(emusen_mips::assemble_line(c.name, 0, &d), Ok(word));
             assert_ne!(CYCLES[c.select as usize], 0, "{} has its cycles", c.name);
         }
-        assert_eq!(CYCLES.iter().filter(|&&n| n != 0).count(), 23, "and 00h, as RTPS");
+        let psx_spx = [15, 8, 6, 8, 8, 8, 19, 13, 44, 17, 11, 14, 30, 5, 8, 17, 5, 6, 23, 5, 5, 39];
+        assert_eq!(COPROCESSOR.commands.iter().map(|c| CYCLES[c.select as usize]).collect::<Vec<_>>(), psx_spx, "psx-spx's 22");
+        assert_eq!((CYCLES[0x00], CYCLES[0x02], CYCLES[0x17], CYCLES[0x3C]), (16, 13, 31, 18), "and amidog's N/A numbers");
         assert_eq!(emusen_mips::disassemble(0x4A14_0006, 0, &d).to_string(), "nclip 0x0140006", "the fake number differs");
         assert_eq!(emusen_mips::disassemble(0x4808_F800, 0, &d).to_string(), "mfc2 t0, LZCR");
         assert_eq!(emusen_mips::disassemble(0x4848_F800, 0, &d).to_string(), "cfc2 t0, FLAG");
@@ -220,7 +222,8 @@ mod tests {
         }
     }
 
-    /// BlackMoon_GTE.md D-16: a number psx-spx lists as N/A clears FLAG and changes nothing else; 00h runs as RTPS.
+    /// BlackMoon_GTE.md D-16: a number psx-spx lists as N/A clears FLAG and changes nothing else; 00h runs as RTPS, each
+    /// in the cycles amidog's test expects.
     #[test]
     fn an_unlisted_number_clears_flag_and_00h_is_rtps() {
         let mut g = Gte::new();
@@ -229,12 +232,12 @@ mod tests {
             g.set_control(r, 0x9ABC_DEF0u32.rotate_left(r as u32));
         }
         let before = *g.registers();
-        assert_eq!(g.command(0x0000_0002), 0);
+        assert_eq!(g.command(0x0000_0002), 13);
         let mut after = before;
         after.control[31] = 0;
         assert_eq!(*g.registers(), after);
         let (mut a, mut b) = (g.clone(), g.clone());
-        assert_eq!((a.command(0x0008_0000), b.command(0x0008_0001)), (15, 15));
+        assert_eq!((a.command(0x0008_0000), b.command(0x0008_0001)), (16, 15));
         assert_eq!(a.registers(), b.registers());
     }
 

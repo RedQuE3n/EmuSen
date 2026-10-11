@@ -927,22 +927,24 @@ impl Bus for Board {
     }
 
     fn cop2_data(&mut self, register: u8) -> u32 {
-        self.gte.regs.data[register as usize & 31]
+        self.gte.data(register)
     }
 
     fn set_cop2_data(&mut self, register: u8, value: u32) {
-        self.gte.regs.data[register as usize & 31] = value;
+        self.gte.set_data(register, value);
     }
 
     fn cop2_control(&mut self, register: u8) -> u32 {
-        self.gte.regs.control[register as usize & 31]
+        self.gte.control(register)
     }
 
     fn set_cop2_control(&mut self, register: u8, value: u32) {
-        self.gte.regs.control[register as usize & 31] = value;
+        self.gte.set_control(register, value);
     }
 
-    fn cop2_command(&mut self, _command: u32) {}
+    fn cop2_command(&mut self, command: u32) {
+        self.gte.command(command);
+    }
 
     fn bus_error(&mut self) -> bool {
         std::mem::take(&mut self.fault)

@@ -2122,6 +2122,11 @@ its light. What the console needs before it is offered the filter is a row of `C
 microseconds and its subcarrier cycles across it, from its own clocks, as §3.2 derived the others'; its 368-wide
 mode is the one whose pixels do not divide the line evenly by the others, and so the one to test.
 
+**The row waits on one figure.** Diamond's plan (D-0) found that psx-spx gives two NTSC dot clocks that disagree,
+53.2224 MHz and 53.693175 MHz, which put the field rate at 59.29 Hz or 59.82 Hz. The active line in microseconds and
+the subcarrier cycles across it both follow from that clock, so no `ConsoleTiming` row is written until the figure is
+settled against the core or the hardware. Decided 2026-10-10: the PlayStation has no row until then.
+
 ### 20.7 Questions for the tester
 
 1. **Whole rows a line for the scanlines.** The tube could be sized to a whole number of display rows a line: 4 at
@@ -2275,3 +2280,174 @@ palette that this filter does not yet take (the next step).
 the Hann windows for the chroma channel, whose exact zeros §11.3 needs), and re-run this comparison? *Recommendation:
 yes, with the trap's width taken from a consumer receiver's datasheet in the decoder step, since the present width
 is itself only the Faroudja figure.*
+
+
+## 22. The NES's own signal (2026-10-10)
+
+Until now every console reached the filter as an RGB frame, and the composite passes encoded that frame by the
+standard's matrix (§11.3). For the NES that is a second-hand signal: its PPU never had RGB. It generates the composite
+wave directly, a square wave between two of a few fixed voltages, its phase taken from the colour's hue number, and
+the colours players remember are what a receiver decoded from that wave. Any palette is somebody's decode of it. This
+section models the wave itself, from public hardware documentation only, and lets the receiver of §11.3 decode it.
+The RGB path stays for every other console, and for the NES whenever its frame comes without the raw picture.
+
+### 22.1 The surface, and the form chosen
+
+The filter needs, for each pixel, the PPU's colour number (six bits) and the emphasis bits in force (three bits of
+PPUMASK). An RGB frame has lost both: two colour numbers can share an RGB value in a palette, and emphasis is a
+change of the wave's levels during part of a cycle, which no per-pixel RGB scaling expresses. Three forms were
+weighed, as the code-design rules ask:
+
+- **A palette swap in the RGB path.** Rejected: it keeps the information loss above, and gives the filter a second
+  job of knowing each core's palette.
+- **An extension of an existing surface.** `ICore` already carries optional members with a default for cores that
+  have nothing to say (`DisplayAspect`, `DisplayLines`, §16). A further one, `byte[]? RawPicture => null`, is the
+  frame before the palette in the RGBA frame's layout (red the colour number, green the emphasis bits, alpha 255), so
+  that it shares the RGBA frame's size, rows and crop with no new geometry. Chosen.
+- **A capability on the core ABI v1**, for the Rust cores. Not built: MoonRT is not the default NES engine, and its
+  frames fall back to the RGB path. When it becomes the default, the same surface is an optional capability and a
+  minor version of the ABI, the form `EmuSen_CoreAPI.md` gives extensions.
+
+The picture travels the way `lines` does (§16): `EmulatorSession.RawPicture`, a `raw` argument on Mistress's
+`FrameHandOff` and on `GameFrameControl.UpdateFrame`, and in `FilterChain` a child named `raw` and a uniform named
+`rawSize` that any pass may declare. Where no raw picture came with the frame, `raw` binds to the frame itself and
+`rawSize` to (0, 0), so a pass can tell. `GameFrameControl` copies the raw array to an image once per offered frame,
+and only while the running chain declares `raw` (`FilterChain.ReadsRaw`); otherwise nothing is copied. On Moon the
+array is the PPU's own, filled beside the RGBA frame in the same render loop, and like the RGBA frame it is copied at
+draw (`EmuSen_Serenity.md` §2.8). It is not saved in a state: it is rebuilt by the next frame drawn.
+
+### 22.2 The PPU's wave, from the documentation
+
+Every figure here is from the nesdev wiki's *NTSC video* page **[S]**, which compiles measurements of the 2C02 by
+named measurers. No emulator's code was read.
+
+**Levels.** Each colour is a square wave between a low and a high level, the levels chosen by the colour's row
+(bits 4–5), as measured terminated into 75 Ω:
+
+| Row | Low (V) | High (V) |
+|---|---|---|
+| 0 | 0.228 | 0.616 |
+| 1 | 0.312 | 0.840 |
+| 2 | 0.552 | 1.100 |
+| 3 | 0.880 | 1.100 |
+
+Black is 0.312 V ($1D, row 1's low), and the colour burst swings between 0.148 and 0.524 V. Hue 0 emits only the
+high level (the greys of the first column), hue $D only the low, and hues $E and $F are black.
+
+**Phase.** The PPU divides its master clock into twelve phases of one subcarrier cycle, and a pixel lasts eight of
+them (two thirds of a cycle). Hue *N* from 1 to 12 is high during the six phases *p* where (*N* + *p*) mod 12 < 6, so
+hues sit 30° apart, and the burst takes hue 8's phase. A line starts four phases (a third of a cycle) later than the
+one before, and a frame's start alternates, the three-line, two-frame pattern §3.2 derived and §21.2 confirmed.
+
+**Emphasis.** Each emphasis bit attenuates the wave's absolute voltage to 0.816328 of itself during six of the twelve
+phases: the red bit (PPUMASK bit 5) during hue $C's high phases, the green bit (bit 6) during hue 4's, the blue bit
+(bit 7) during hue 8's. Attenuation applies to the voltage above ground, not above black, so it darkens and also
+shifts the level below black where a low level sits there.
+
+**Differential phase.** A row's hue is turned by about −5° per row on the 2C02G (−2.5° on the 2C02E): a brighter row
+is delayed a little more. The filter uses the 2C02G's −5°, the revision of most front-loading consoles. **[S]**
+
+### 22.3 What the receiver sees
+
+The wave is put in the units the receiver of §11.3 works in, IRE over 100: (*V* − 0.312) / *s*, where 100 IRE is
+*s* = (1.100 − 0.312) / 1.10 V. **The PPU's white is 110 IRE**: $20 and $30 reach 1.100 V, which the documentation
+places at 110 IRE rather than at the standard's 100. A receiver shows what it is given, so the NES's whites come out
+brighter than an RGB palette normalised to 100 IRE puts them (§22.4's games).
+
+**The colour control.** A receiver's automatic chroma control scales the chroma until the burst stands at the
+standard's 40 IRE peak to peak, a fundamental of 20 IRE. **[P]** SMPTE 170M. The PPU's burst is a square wave, whose
+fundamental is 2/π of its swing, so the gain the receiver applies is **[D]**
+
+    0.2 / ((2/π) × (0.524 − 0.148) / s) = 0.5986
+
+and that gain multiplies the decoded chroma whenever a raw frame is present.
+
+**The phase mapping.** The filter's signal passes count phase in cycles from the line's start (`phaseAt`, §11.3). The
+PPU's step at a sample is *q* = 12 × phase + 10, the offset of ten steps being the one that puts hue 8's fundamental,
+the burst's, on −U in the filter's encoding (*U* sin φ + *V* cos φ), as the standard places the burst at 180°. The row's
+differential phase is a delay of the wave by −5/30 of a step per row. The first test (§22.6) checks both on the CPU:
+the burst decodes to −U with no V, and hues 1 to 12 step by 30.00°.
+
+**Two ways to the same colour.** At Balanced and Accurate on composite, the encode pass generates the wave itself:
+each signal sample averages the PPU's level over its own width at twelve looks to a phase step (Accurate's 2048
+samples put one step in a sample, twelve looks; Balanced's 683 put three, thirty-six looks), so the row skew falls on
+a look. Nothing band-limits the wave before the receiver, as the PPU has no output filter but its own output
+impedance (§22.7). The receiver then separates and demodulates it as it does any composite signal. For S-Video and
+for Performance, which carry no subcarrier, a `colours` pass computes each pixel's colour in closed form instead: its
+luma the wave's mean over twelve steps, its U and V the wave's first harmonic by exact integrals over each step,
+turned by the row's skew, times the gain above, and through the standard's matrix. This colour image then takes the
+place of the RGB frame in those paths.
+
+### 22.4 Measured
+
+| Check | Result |
+|---|---|
+| The burst, decoded on the CPU | on −U, V below 10⁻³ of U |
+| Hue to hue, on the CPU | 30.00° within 0.01° for every step |
+| Composite from the generated wave against the closed form, all 64 colours with emphasis 0, 1, 2, 4 and 7, flat fields, display ten times the tube's white so nothing clips | worst 0.0044 of peak, in saturated blues whose red and green sit near zero |
+| Performance against Balanced's S-Video, all 64 colours | within 0.006 |
+| The artifacts from the PPU's own signal | the same line three lines on (correlation > 0.95), the next line and the next frame turned over |
+| The NES without a raw frame, against the SNES (same timing) | at most one code value, in under 1% of values, where the two compile to different shaders |
+
+The 0.0044 is not explained beyond doubt. The composite path clips each sample's light to the display before the
+receiver's matrix sees the next, where the closed form clips once per pixel, and a saturated blue drives red and green
+below zero at some samples; that would make the composite path about 2% low in blue there, which is what it shows. The
+attribution is plausible and was not tested separately; the tolerance is set at 0.006 above it.
+
+**On games**, Moon's frame 900 drawn at Accurate on composite (frames copied to scratch first, the library read
+only):
+
+| Game | Mean R, G, B from Moon's palette | From the PPU's signal |
+|---|---|---|
+| Super Mario Bros. 3 | 97.6, 87.2, 70.1 | 126.5, 115.0, 103.0 |
+| Mega Man 2 | 26.4, 21.6, 36.6 | 36.8, 30.4, 44.5 |
+
+The PPU's pictures are brighter, as §22.3's 110 IRE white and the gain predict, and their hues are where a player
+expects. Which brightness is right for a given television is its contrast control, not this model; the comparison is
+recorded so that the difference is not later mistaken for a defect.
+
+### 22.5 Against patchy-ntsc, as a referee
+
+patchy-ntsc (§21) has a raw-palette mode, the only other model available that starts from the PPU's colour numbers
+rather than RGB. Its code was not read; its preset was run on frames carrying colour numbers in the encoding its
+behaviour implies (red the hue over 15, green the row over 3, blue the emphasis over 7), which drew recognisable NES
+colours and so supports the encoding by behaviour, not by reading. On the same flat fields:
+
+- **The hue order agrees**: each hue lands next to its neighbours in both, 30° apart in this model.
+- **Each emphasis bit dims the same colours in both**: the red bit dims $0C to 0.43 of itself here and 0.56 in
+  patchy-ntsc, and spares $06 (0.88 and 0.91); the blue bit dims $08 (0.40 and 0.53) and spares $02 (0.92 and 0.83).
+- **Saturation does not agree**: patchy-ntsc's colours are 10–20% more saturated against their luma. Its output is
+  in a different colour space from this filter's, with its own decoder matrix and display transform, so the
+  difference is not graded; it is recorded.
+
+Agreement on hue order and on which colours each bit spares is evidence for §22.2's phase and emphasis reading; the
+size of each bit's effect differs by 0.1 between the models and rests on how each decodes, so it is left open.
+
+### 22.6 Tests and mutants
+
+`ScreenFilterRenderTests.Nes.cs` holds the CPU references (`PpuAt`, the wave, and `PpuDecoded`, a receiver locked to
+the burst that demodulates it finely) and six tests: the burst and the hue steps on the CPU; composite against the
+closed form for every entry; the artifacts' three-line, two-frame pattern from the PPU's signal; the NES without a raw
+frame drawn as before; Performance against Balanced; and each hue and emphasis bit decoded on the GPU (red is red,
+$30 neutral, each bit sparing its own hue). `MoonPpuDefectTests` checks that Moon's raw picture carries each pixel's
+colour number and the emphasis bits. Eight mutants, all caught:
+
+| Mutant | Caught by |
+|---|---|
+| no colour control on the wave | composite against the closed form |
+| the wave skewed the other way | composite against the closed form |
+| the closed form skewed the other way | composite against the closed form |
+| the burst a quarter turn off, in both paths | composite against the closed form |
+| red emphasis on the wrong phases | hues and emphasis on the GPU |
+| the raw frame never handed to the chain | the artifacts, hues and emphasis |
+| the colours from the palette, not the PPU | composite against the closed form |
+| Moon loses the emphasis bits | Moon's raw picture |
+
+### 22.7 What is not modelled
+
+- **The PPU's output impedance.** Its output is a resistor ladder, and the wave's edges slew by an RC that depends on
+  the level; the documentation describes it without figures a model could use. The wave's edges are sharp here, up to
+  each signal sample's average.
+- **MoonRT**, which keeps the RGB path until the surface reaches the core ABI (§22.1).
+- **The 2C02E's differential phase**, −2.5° per row; a setting when a player asks for the earlier revision.
+- **PAL's 2C07**, whose wave differs (its phase alternates per line); §23's PAL model is the place for it.

@@ -22,6 +22,9 @@ namespace EmuSen.Cores
         // The console's own lines in the frame on show, where a core draws it at a whole multiple of the console's picture; 0 says the frame's rows are its lines - see EmuSen_CRT.md §16.
         int DisplayLines => 0;
 
+        // The frame as the console's video chip drew it before any palette, laid out as the RGBA frame, where a core keeps one; null otherwise - see EmuSen_CRT.md §22.
+        byte[]? RawPicture => null;
+
         // Hardware refresh rate, for frontend frame pacing - see Venus_CPU.md §8.5b.
         double FrameRateHz { get; }
 

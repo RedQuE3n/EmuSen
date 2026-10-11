@@ -82,5 +82,25 @@ namespace EmuSen.WiseMan.Cores
             foreach (var (rom, result) in failed) _output.WriteLine($"{rom}: {result.Outcome} {result.Code}");
             Assert.Empty(failed);
         }
+
+        // The picture before the palette: every pixel's colour number and PPUMASK's emphasis, for a filter that draws the PPU's own signal - see EmuSen_CRT.md §22.
+        [Fact]
+        public void The_raw_picture_carries_each_pixel_s_colour_number_and_the_emphasis_bits()
+        {
+            var core = Load();
+            core.Bus!.Write(0x2001, 0xA8);
+            core.Bus.Write(0x2006, 0x3F);
+            core.Bus.Write(0x2006, 0x00);
+            core.Bus.Write(0x2007, 0x16);
+            core.RunFrame();
+            core.RunFrame();
+            byte[] raw = core.RawPicture!;
+            byte[] rgb = core.GetFrameBufferRgba();
+            Assert.Equal(rgb.Length, raw.Length);
+            int centre = (120 * 256 + 128) * 4;
+            Assert.Equal((0x16, 0xA8 >> 5, 255), (raw[centre], raw[centre + 1], raw[centre + 3]));
+            Assert.Equal((rgb[centre], rgb[centre + 1], rgb[centre + 2]), (EmuSen.Cores.Nintendo.Moon.Video.Ppu.NesPalette[0x16 * 3], EmuSen.Cores.Nintendo.Moon.Video.Ppu.NesPalette[0x16 * 3 + 1], EmuSen.Cores.Nintendo.Moon.Video.Ppu.NesPalette[0x16 * 3 + 2]));
+            Assert.Null(((ICore)new EmuSen.Cores.Nintendo.Venus.VenusCore()).RawPicture);
+        }
     }
 }

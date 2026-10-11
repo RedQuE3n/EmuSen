@@ -223,6 +223,8 @@ namespace EmuSen.Cores.Nintendo.Moon
 
         public byte[] GetFrameBufferRgba() => Ppu?.FrameRgba ?? new byte[ScreenWidth * ScreenHeight * 4];
 
+        public byte[]? RawPicture => Ppu?.RawFrame;
+
         public short[] DequeueAudioSamples(int maxFrames) => Apu?.Drain(maxFrames) ?? Array.Empty<short>();
 
         // The two ports on the console's front; the Four Score is not modelled - see EmuSen_Input.md §8.1.

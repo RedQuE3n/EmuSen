@@ -18,6 +18,7 @@ namespace EmuSen.Mistress
             public long Sequence;
             public double Aspect;
             public int Lines;
+            public byte[]? Raw;
             public int State;
         }
 
@@ -33,7 +34,7 @@ namespace EmuSen.Mistress
             public void Cut() => Volatile.Write(ref _pool, null);
         }
 
-        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect, int lines);
+        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect, int lines, byte[]? raw);
 
         private readonly Latest<Frame> _latest;
         private readonly PresentFrame _present;
@@ -57,9 +58,9 @@ namespace EmuSen.Mistress
         }
 
         // Any one thread at a time: the frame this replaces goes back now if the UI thread never took it.
-        public void Offer(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0)
+        public void Offer(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null)
         {
-            var frame = new Frame { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat, Release = release, Sequence = sequence, Aspect = aspect, Lines = lines };
+            var frame = new Frame { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat, Release = release, Sequence = sequence, Aspect = aspect, Lines = lines, Raw = raw };
             Drop(Interlocked.Exchange(ref _newest, frame));
             _latest.Offer(frame);
         }
@@ -83,7 +84,7 @@ namespace EmuSen.Mistress
         private void Present(Frame frame)
         {
             if (Interlocked.CompareExchange(ref frame.State, Presented, Waiting) != Waiting) return;
-            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Release, frame.Sequence, frame.Aspect, frame.Lines);
+            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Release, frame.Sequence, frame.Aspect, frame.Lines, frame.Raw);
         }
     }
 }

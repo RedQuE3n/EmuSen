@@ -15,11 +15,12 @@ namespace EmuSen.Serenity
     public sealed class GameFrameControl : Control
     {
         // One offered picture, its rows' repeat (§2.7) and who can still read its array - see EmuSen_Serenity.md §2.8.
-        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0)
+        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null)
         {
             public readonly byte[] Rgba = rgba;
             public readonly double Aspect = aspect;
             public readonly int Lines = lines;
+            public readonly byte[]? Raw = raw;
             public readonly long Sequence = sequence;
             public readonly int Width = width, Height = height, RowRepeat = rowRepeat;
             public readonly long Version = version;
@@ -46,6 +47,10 @@ namespace EmuSen.Serenity
         // The image made from the last version drawn, reused when the control is only redrawn; the render thread's, under the lock.
         private readonly object _cacheLock = new();
         private SKImage? _cachedImage;
+
+        // The raw frame of the offer last copied, made only while the running filter reads one.
+        private SKImage? _cachedRaw;
+        private long _rawVersion = -1;
 
         private readonly Dictionary<ShaderEffect, SKRuntimeEffect> _effects = new();
 
@@ -251,13 +256,14 @@ namespace EmuSen.Serenity
         // Stores the frame and asks for a repaint; release, if given, is called once with the array when nothing here can read it again - see EmuSen_Serenity.md §2.8.
         // aspect is the screen's width over height as the core reports it, 0 for none - see EmuSen_Serenity.md §2.9.
         // lines is the console's own count in a frame drawn at a multiple of its picture, 0 for the frame's rows - see EmuSen_CRT.md §16.
-        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0)
+        // raw is the frame before the console's palette, where its core keeps one, for a filter that models the console's own signal - see EmuSen_CRT.md §22.
+        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null)
         {
             if (RenderFps > 0 && GraphicsSettings.SyncToDisplay) HoldRenderRate();
             lock (_offerLock)
             {
                 Offer? previous = _current;
-                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence, aspect, lines);
+                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence, aspect, lines, raw);
                 if (previous is not null)
                 {
                     previous.Superseded = true;
@@ -401,6 +407,9 @@ namespace EmuSen.Serenity
             {
                 _cachedImage?.Dispose();
                 _cachedImage = null;
+                _cachedRaw?.Dispose();
+                _cachedRaw = null;
+                _rawVersion = -1;
                 _chain?.Dispose();
                 _chain = null;
                 _nextChain?.Dispose();
@@ -546,6 +555,19 @@ namespace EmuSen.Serenity
                 }
             }
 
+            // The offer's raw frame as an image, copied once per offer and only for a chain that reads it.
+            private SKImage? RawOf(FilterChain chain, Offer source)
+            {
+                if (!chain.ReadsRaw || source.Raw is not { } raw || raw.Length != source.Width * source.Height * 4) return null;
+                if (_owner._rawVersion != source.Version || _owner._cachedRaw is null)
+                {
+                    _owner._cachedRaw?.Dispose();
+                    _owner._cachedRaw = SKImage.FromPixelCopy(new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul), raw);
+                    _owner._rawVersion = source.Version;
+                }
+                return _owner._cachedRaw;
+            }
+
             private void CopySource(Offer source)
             {
                 var sourceInfo = new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
@@ -592,9 +614,9 @@ namespace EmuSen.Serenity
             {
                 SKRect destination = Destination(source, chain.Filter.Aspect);
                 // A filter that models the screen keeps its glass where it is and moves the picture under it.
-                if (chain.Filter.CropsItself) return chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, _owner._crop, source.Lines);
+                if (chain.Filter.CropsItself) return chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, _owner._crop, source.Lines, RawOf(chain, source));
                 bool cropped = BeginCrop(canvas, ref destination);
-                bool drawn = chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, lines: source.Lines);
+                bool drawn = chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, lines: source.Lines, raw: RawOf(chain, source));
                 if (cropped) canvas.Restore();
                 return drawn;
             }

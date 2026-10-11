@@ -1603,11 +1603,12 @@ the library and opened the dummy device through it.
 
 Kept here so that none is lost between steps; each names where it was found.
 
-- **The log folder in a home with no `.config`.** The C# takes its default log folder from .NET's `ApplicationData`,
+- *Closed 2026-10-10:* **The log folder in a home with no `.config`.** The C# takes its default log folder from .NET's `ApplicationData`,
   which is the empty string when the folder it names does not exist, so the default becomes `EmuSen/Logs` relative to
   the folder the program was started from. Found 2026-10-08 while running the shell in a sandboxed home (§13.3). It
-  predates this work and is the C#'s and the library's alike, since the host hands the library the same answer (Q15);
-  the code is left alone. A fix would ask for the folder without requiring it to exist, with a test of its own.
+  predates this work and is the C#'s and the library's alike, since the host hands the library the same answer (Q15).
+  Fixed as proposed, the folder asked for without requiring it to exist, with a test of its own: `EmuSen_Galaxia.md`
+  §3.6.
 - **Q19:** text that is not valid UTF-16, once the C# that answers for it is gone (§11.2, §14.3).
 - **Q23:** device layers the library does not know, at state 3 (§14.7).
 - **P2** is not measured: whether any frontend asks Galaxia for a path once a frame (§8).

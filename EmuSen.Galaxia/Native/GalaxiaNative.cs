@@ -295,7 +295,7 @@ namespace EmuSen.Galaxia.Native
             _textDecode = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
 
             // The program's directory and .NET's own application-data folder are passed, not found - see EmuSen_RustPlatform.md §5.5.
-            Utf8 home = new(AppContext.BaseDirectory), data = new(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+            Utf8 home = new(AppContext.BaseDirectory), data = new(ConfigRoot.ApplicationData);
             fixed (byte* h = home.Bytes, d = data.Bytes) _init(h, home.Length, d, data.Length);
 
             lock (Gate)

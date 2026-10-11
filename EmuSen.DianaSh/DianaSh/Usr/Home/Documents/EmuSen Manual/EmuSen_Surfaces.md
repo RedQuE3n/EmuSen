@@ -674,6 +674,8 @@ run beside any step.
 
 ## 8. Questions for the tester
 
+**Decided 2026-10-11:** all ten, each as recommended. Q2 reads as revised: the display shapes go to the systems table in Crystal's assembly. The migration of §7 proceeds in its order, S0 first.
+
 Each with a recommendation. None is decided by this page.
 
 **Q1. Should the rule that the core assembly does not depend on the presentation layer be stated, and pinned by a

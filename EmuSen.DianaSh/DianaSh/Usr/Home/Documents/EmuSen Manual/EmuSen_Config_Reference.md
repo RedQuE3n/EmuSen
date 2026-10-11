@@ -438,6 +438,8 @@ than a copy of it.
 
 ### 7.5 Put to the tester
 
+**Decided 2026-10-11:** all four, each as recommended: a relative value is refused at entry and one already stored is read as unset and reported once; `~` and `~/` expand to the home; a file value is refused at entry; LunaP's `PathPickerRow` gains an opt-in blank-means-unset, a minor version, so Game Mode can clear a folder setting.
+
 No rule exists for a relative value, a `~`, or a file value in a folder setting. The two places that expand `~` do so
 because ES-DE does, for values ES-DE defines: the screensaver's custom folder (`EmuSen_Settings_Reference.md` §4.75)
 and paths inside a theme (§4.73). The theme rule that leaves a bare relative path to the working folder was adopted

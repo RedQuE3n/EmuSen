@@ -803,6 +803,8 @@ searched 2026-10-10], and MarsRT is not on the core ABI v1 (`EmuSen_CoreAPI.md` 
 
 ## 11. Questions for the tester
 
+**Decided 2026-10-11:** Q1 to Q15, each as recommended, and the go for stage 1. Q16, the discs, a BIOS dump, recordings and a MiSTer, is the tester's to provide and remains open; stage 1 needs none of them.
+
 Each with a recommendation.
 
 1. **Q1, Sony's confidential documents.** psx-spx already rests on them in part, by its maintainers' statement. May a

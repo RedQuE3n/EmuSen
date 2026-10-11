@@ -2130,6 +2130,8 @@ settled against the core or the hardware. Decided 2026-10-10: the PlayStation ha
 
 ### 20.7 Questions for the tester
 
+**Decided 2026-10-11:** all four, each as recommended: no whole-rows sizing by default (a per-console setting, off by default, only if it is later wanted); the tube 4:3 and centred with bars on wide displays, a bezel or glow being a separate optional feature; the mask at whole pixels from 1.5 px with the fade below it, as built; the mask drawn flat under curved glass, as built.
+
 1. **Whole rows a line for the scanlines.** The tube could be sized to a whole number of display rows a line: 4 at
    1080p for 224 lines (896 rows tall, not 1080), 3 on the handheld (672 of 800). That removes §20.5's drift and
    breaks §14's rule within a console: the SNES's 224 and 239 lines, and the N64's 240 and 288, would draw at
@@ -2588,6 +2590,8 @@ sign; only a pattern whose colour comes from luma, a fringe, shows it.
 
 ### 23.7 Questions for the tester
 
+**Decided 2026-10-11:** both, as recommended: the standard follows the game's region, with the player's choice kept per game when set; the 2C07 is modelled as the next NES step, read against nesdev's PAL capture first.
+
 1. **Should the standard follow the game's region?** A PAL game would then be drawn as PAL without being asked, and
    the setting would become an override. It needs each core to report the region of the game it loaded to the
    frontend, a new optional member of the kind §22.1 describes; which cores already know it was not checked. *Recommendation: yes, with the player's choice kept per game when
@@ -2745,3 +2749,12 @@ Eight, all caught:
 
 Below 1.5 MHz the trap keeps 0.96 or more, so composite luma at 1 MHz alone could not tell a trap from none; the
 2 and 2.8 MHz gratings on a 512-wide frame are what catch the first mutant.
+
+### 24.6 Questions for the tester
+
+1. **Composite blends the Genesis's dithering and the SNES's pseudo-hi-res less than before** (22% and about 50% of
+   RGB's swing remain): the trap's physical result. *Decided 2026-10-11: accepted.*
+2. **The datasheet's shelf above 5 MHz and the chip's sharpness peaking**, either of which may account for the gap to
+   patchy-ntsc above 2 MHz. Open: put without a recommendation.
+3. **The consumer sets' default demodulator**: the standard's matrix, as now, or the CXA2025AS's US axis. Open: put
+   without a recommendation.

@@ -1138,6 +1138,8 @@ standard output, exit status and host action each line gives, over fixed inputs.
 
 ### 13.2 The steps
 
+**Decided 2026-10-11:** the go for S1.
+
 No step leaves a broken shell; each has its gate, and each is its own commit or group of commits.
 
 | Step | What | Gate |

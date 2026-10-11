@@ -3205,6 +3205,8 @@ decides; nothing here changes a default.
 `EMUSEN_CALLCOST_BOOT`, `EMUSEN_CALLCOST_FRAMES` and `EMUSEN_CALLCOST_OUT` (a file each run's row is appended to).
 Without a probe folder the two fast-path conditions are skipped.
 
+**Decided 2026-10-11, as recommended:** calls are not recorded on today's observed loop outside observed frames. The calls-only path is built first inside each v1 core's `debug_run_frame`, the host sends `CALLS` without `INTERRUPTS` when nothing else is armed, and VenusRT's 65816 gains a call hook; then calls are recorded from the moment a debugger is attached (form b), and the golden corpus creates its debug target before the frames it inspects.
+
 ### 31.5 Measured
 
 On Donkey Kong Country after 300 frames (2026-10-10): VenusRT's tile sheet takes 8–12 ms, since the pack reads VRAM's

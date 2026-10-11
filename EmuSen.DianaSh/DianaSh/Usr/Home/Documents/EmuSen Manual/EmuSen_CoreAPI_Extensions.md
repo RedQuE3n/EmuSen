@@ -793,6 +793,8 @@ By the first stage that needs each [C, Q13]:
 
 ## 12. Questions for the tester
 
+**Decided 2026-10-11:** all fourteen, each as recommended. By Q13 each item lands at the first stage that needs it: the conditional cheat comparisons, the kit's memory estimate and routing by content now; outputs, named extras and memory kinds at Diamond's stage 6; image sets and the `.chd` probe at its stage 7; disc change at its stage 11 or the Sega CD's gate. Q5's two rumble items join the to-do list with their triggers.
+
 Each with a recommendation.
 
 1. **Q1, disc change.** *Recommended:* the optional exports `media_lid` and `media_insert` behind `MEDIA` (bit 18),

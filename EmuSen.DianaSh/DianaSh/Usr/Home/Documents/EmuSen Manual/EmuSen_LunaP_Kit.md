@@ -588,6 +588,8 @@ K0 to K5 can start now and run beside the rest of EmuSen's plan; K6 waits for Cr
 
 ## 11. Questions for the tester
 
+**Decided 2026-10-11:** Q1 to Q10, Q12 and Q13, each as recommended (Q1 and Q3 stay decided by the gates they name). Q11, the hardware, and Q14, a colorimeter, are the tester's to provide and remain open; until Q11 is answered, K1 and K2 run their desktop and Mac halves only.
+
 Each with a recommendation.
 
 | | Question | Recommended |

@@ -79,6 +79,22 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(bundle.Core.IsRomLoaded);
         }
 
+        // A console running zeros runs no-operations to the top of RDRAM; neither engine may fault there - see Mars_Recompiler.md §21.
+        [Theory]
+        [InlineData(null)]
+        [InlineData(CoreCatalog.MarsRtEngine)]
+        public void An_image_of_zeros_runs_to_the_top_of_RDRAM_without_a_fault(string? engine)
+        {
+            string path = WriteRom(SyntheticN64Rom.Build());
+            ICore core = CoreFactory.Create(path, headless: true, engine);
+            using (core as IDisposable)
+            {
+                core.LoadRom(path);
+                for (int i = 0; i < 4; i++) core.RunFrame();
+                Assert.Equal(4, core.TotalFrames);
+            }
+        }
+
         // The magic word decides the container, so a dump named for the wrong order still loads - see Mars_Rom.md §1.1.
         [Fact]
         public void The_extension_does_not_decide_the_byte_order()

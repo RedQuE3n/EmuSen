@@ -43,7 +43,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             }
 
             // The display processor may be drawing over code; the block's words are waited for before they are compared or shaped - see Mars_Rdp.md §2.6.
-            if (_dpWriteMarks[physical >> 12] != 0 || _dpWriteMarks[(physical + BlockCache.MaxLength * 4 - 1) >> 12] != 0) _bus.Dp.WaitForReadRange(physical, BlockCache.MaxLength * 4, 5);
+            // The far end is clamped to the top of RDRAM, which a block that starts in its last 256 bytes would pass - see Mars_Recompiler.md §21.
+            uint far = Math.Min(physical + BlockCache.MaxLength * 4, (uint)rdram.Length) - 1;
+            if (_dpWriteMarks[physical >> 12] != 0 || _dpWriteMarks[far >> 12] != 0) _bus.Dp.WaitForReadRange(physical, BlockCache.MaxLength * 4, 5);
 
             Block? block = _blocks.Find(physical);
             if (block is null) _blocks.Place(block = BlockShape.Shape(physical, rdram, withinPage: !direct));

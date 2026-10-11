@@ -12,6 +12,8 @@ on:
       - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
       - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
       - 'EmuSen/Cores/Sega/Beryl-HW/**'
+      - 'EmuSen/Cores/Sony/Diamond - PlayStation/**'
+      - 'EmuSen/Cores/Sony/BlackMoon-HW/**'
       - 'EmuSen/Cores/Shared/**'
       - 'Platform/**'
       - 'EmuSen.Galaxia/**'
@@ -34,6 +36,7 @@ on:
       - 'EmuSen.WiseMan/Cores/MoonRt*'
       - 'EmuSen.WiseMan/Cores/VenusRt*'
       - 'EmuSen.WiseMan/Cores/Nephrite*'
+      - 'EmuSen.WiseMan/Cores/Diamond*'
       - 'EmuSen.WiseMan/Cores/CoreAbi*'
       - 'EmuSen.WiseMan/Cores/CoreAdapter*'
       - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
@@ -48,6 +51,8 @@ on:
       - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
       - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
       - 'EmuSen/Cores/Sega/Beryl-HW/**'
+      - 'EmuSen/Cores/Sony/Diamond - PlayStation/**'
+      - 'EmuSen/Cores/Sony/BlackMoon-HW/**'
       - 'EmuSen/Cores/Shared/**'
       - 'Platform/**'
       - 'EmuSen.Galaxia/**'
@@ -70,6 +75,7 @@ on:
       - 'EmuSen.WiseMan/Cores/MoonRt*'
       - 'EmuSen.WiseMan/Cores/VenusRt*'
       - 'EmuSen.WiseMan/Cores/Nephrite*'
+      - 'EmuSen.WiseMan/Cores/Diamond*'
       - 'EmuSen.WiseMan/Cores/CoreAbi*'
       - 'EmuSen.WiseMan/Cores/CoreAdapter*'
       - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
@@ -77,7 +83,7 @@ on:
       - '.github/workflows/rust-cores.yml'
 
 jobs:
-  # The crates every core builds with (EmuSen/Cores/Shared/) and Beryl's (the Sega cores' shared CPUs and chips), tested on their own; no library of theirs ships.
+  # The crates every core builds with (EmuSen/Cores/Shared/), Beryl's (the Sega cores' shared CPUs and chips) and BlackMoon's (the Sony cores'), tested on their own; no library of theirs ships.
   shared:
     name: Shared crates ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -92,7 +98,7 @@ jobs:
       - name: Test
         shell: bash
         run: |
-          for crate in EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/; do
+          for crate in EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/ "EmuSen/Cores/Sony/BlackMoon-HW"/*/; do
             case "$crate" in *emusen-core-abi-check/) continue ;; esac
             (cd "$crate" && cargo test --release)
           done
@@ -194,6 +200,10 @@ jobs:
           - name: nephrite
             dir: 'EmuSen/Cores/Sega/Nephrite - Genesis'
             symbol: emusen_core_
+          - name: diamond
+            dir: 'EmuSen/Cores/Sony/Diamond - PlayStation'
+            symbol: emusen_core_
+            development: true
           # Not a core: the platform library, built from its workspace and shipped the same way.
           - name: emusen_platform
             dir: 'Platform'
@@ -382,6 +392,11 @@ jobs:
           name: nephrite-${{ matrix.rid }}
           path: native
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: diamond-${{ matrix.rid }}
+          path: native
+
       # Absent when its job failed; the tests that need it then say so, and the rest run.
       - uses: actions/download-artifact@v4
         continue-on-error: true
@@ -405,7 +420,7 @@ jobs:
           out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
           cp native/* "$out/"
           chmod +x "$out"/emusen-core-conform* || true
-          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*v1_test_core* "$out"/*v1_plain_core*
+          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*v1_test_core* "$out"/*v1_plain_core*
           ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"
 
       # Printed in full, so each platform's digests can be read off the log.
@@ -415,7 +430,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~Diamond|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # Galaxia on its C#, which EMUSEN_GALAXIA_NATIVE=0 selects. These tests had not run on Windows or macOS before step 2a, so it reports and does not yet gate.
       - name: Test Galaxia on its C#

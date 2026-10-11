@@ -104,11 +104,19 @@ Folder: `Cores/Sony/`
 
 | Console | Codename | Folder | Status |
 |---|---|---|---|
-| PlayStation | **Diamond** | `Cores/Sony/Diamond - PlayStation/` | Started; stage 0, the plan, written 2026-10-10 — the crate `diamond`, see `Man pages/Hardware/Sony/Diamond - PlayStation/Diamond_Plan.md` |
+| PlayStation | **Diamond** | `Cores/Sony/Diamond - PlayStation/` | In development; stage 0, the plan, written 2026-10-10, stage 1 built 2026-10-11 — the crate `diamond`, see `Man pages/Hardware/Sony/Diamond - PlayStation/Diamond_Plan.md` and `Diamond_Native.md` |
 | PlayStation 2 | **Sapphire** | `Cores/Sony/Sapphire - PlayStation 2/` | Not started — reserved |
 | PlayStation 3 | **Rubeus** | `Cores/Sony/Rubeus - PlayStation 3/` | Not started — reserved |
 | PSP | **Esmeraude** | `Cores/Sony/Esmeraude - PSP/` | Not started — reserved |
 | PS Vita | **Wiseman** | `Cores/Sony/Wiseman - PS Vita/` | Not started — reserved |
+
+Not a console:
+
+| What | Codename | Folder | Status |
+|---|---|---|---|
+| The shared hardware library of the Sony cores (BlackMoon Hardware): every crate more than one Sony core can use, one chip each | **BlackMoon** | `Cores/Sony/BlackMoon-HW/` | Skeletons built 2026-10-11: `blackmoon-r3000`, `blackmoon-gte`, see `Man pages/Hardware/Sony/BlackMoon-HW/README.md` |
+
+**Decided 2026-10-11 (`Diamond_Plan.md` §11 Q10): crates shared between the Sony cores live in BlackMoon Hardware**, named for the faction as Beryl Hardware is for the Sega cores (§3), with the crates prefixed `blackmoon-<chip>`. The first are the PlayStation's R3000A, which the PlayStation 2's I/O processor can also use, and its GTE.
 
 The Black Moon Clan's five core leaders — Prince Diamond (Demande), his younger brother Sapphire (Saphir), Rubeus, Esmeraude, and the manipulative Wiseman pulling strings behind them — map cleanly onto Sony's five major-era systems. PS4/PS5 aren't assigned yet; the Ayakashi/Specter Sisters (Koan, Berthier, Calaveras, Petz) are the natural next pull from this same faction if/when they're needed.
 

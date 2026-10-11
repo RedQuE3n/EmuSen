@@ -246,7 +246,8 @@ EmuSen Project/
 │   │   │   ├── Zoisite - Saturn/README.md    # Reserved - future Saturn core
 │   │   │   └── Kunzite - Dreamcast/README.md # Reserved - future Dreamcast core
 │   │   ├── Sony/                             # Black Moon Clan codenames
-│   │   │   ├── Diamond - PlayStation/README.md
+│   │   │   ├── BlackMoon-HW/                 # BlackMoon Hardware, the shared Sony crates: blackmoon-r3000, blackmoon-gte
+│   │   │   ├── Diamond - PlayStation/        # PlayStation (crate diamond), in development
 │   │   │   ├── Sapphire - PlayStation 2/README.md
 │   │   │   ├── Rubeus - PlayStation 3/README.md
 │   │   │   ├── Esmeraude - PSP/README.md

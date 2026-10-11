@@ -1,6 +1,6 @@
 //! The devices of later stages, as register stubs that answer what a stage 3 program reads (Diamond_Native.md
 //! §11.8): the SPU's registers with its transfer to sound RAM, the CD-ROM controller's index and status, the MDEC's
-//! status, the two serial ports, and the DEV8 debug port's DUART, whose channel A carries the TTY.
+//! status, the serial port SIO1, and the DEV8 debug port's DUART, whose channel A carries the TTY. SIO0 is `sio0.rs`.
 
 /// Sound RAM, held by its stub as the space the host reads.
 pub const SPU_RAM_BYTES: usize = 0x8_0000;

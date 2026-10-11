@@ -410,9 +410,11 @@ Every file opened for this stage, as the protocol of `Diamond_Plan.md` §1.3 ask
 ## 18. Questions for the tester
 
 1. **The frame's end** moved from a field's start to its vblank (§7). Keep it, or keep the field's start and grade
-   looping programs some other way?
+   looping programs some other way? *Decided 2026-10-11: kept at vblank
+   (`Diamond_Native.md` §11.5).*
 2. **amidog's CPX and GPU tests** need Start pressed. Bring a minimal digital pad forward from stage 6 to run them now,
-   or leave them to stage 6 with the CE bits and the COP0 registers?
+   or leave them to stage 6 with the CE bits and the COP0 registers? *Decided
+   2026-10-11: brought forward (`Diamond_Pad.md`).*
 3. **D-8, D-10 and D-11** are settled or open on one console's pictures and logs; a program written for each (the
    x-flip's offset at an odd start column; GPUSTAT bit 28 during a polygon; the busy state after a burst) would settle
    them on the tester's console, if one is available (Q16).

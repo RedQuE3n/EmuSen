@@ -585,7 +585,8 @@ psx-spx's maintained text says ("Consoles will always use the video clock for it
 - **GPUSTAT's bit 31** is the line's parity in 240-line mode and the field's interlaced, zero in vblank; bit 13 the
   field, 1 when not interlaced.
 - A change to the mode or the ranges takes effect from the current line, the counts so far kept [C].
-- *Superseded at stage 4 (§12): a frame ends as a field's vblank begins, the rate unchanged.* **The frame** is one
+- *Superseded at stage 4 (§12): a frame ends as a field's vblank begins, the rate unchanged. Decided 2026-10-11: the
+  frame ends as vblank begins, and stays so.* **The frame** is one
   field, from its first line to the next field's; machine info's rate the console's own standard
   non-interlaced, **59.8261 Hz NTSC and 49.7614 Hz PAL**, replacing stage 1's 59.8173 and 49.7468 (§2.3), provisional
   on D-0's closing test; pinned by `the_rates_are_d0s_provisional_ones` in `video` and `machine`, and by DiamondTests
@@ -834,7 +835,7 @@ the desktop [M] unless marked.
   the channel's rate, each of which the GPU may hold back; blocks and list nodes wait for the GPU's request without
   holding the bus (`Diamond_GPU.md` §2.4). A word the GPU holds back lengthens the piece it belongs to.
 - **The frame** ends as a field's vblank begins, or at the field's end with no vblank (§11.5 superseded), so the picture
-  handed over is complete (`Diamond_GPU.md` §7).
+  handed over is complete (`Diamond_GPU.md` §7). Decided 2026-10-11: kept.
 - **The picture** is the display's: the display area at its own size, 15- or 24-bit, interlaced fields woven, a 4:3
   aspect, at most 640 by 576 (machine info's maximum, raised from 512 lines).
 - **`programs/gpustat.s`**, GPUSTAT's ready bits in ps1-tests' `gpustat`'s four cases (`Diamond_GPU.md` §2.3), and

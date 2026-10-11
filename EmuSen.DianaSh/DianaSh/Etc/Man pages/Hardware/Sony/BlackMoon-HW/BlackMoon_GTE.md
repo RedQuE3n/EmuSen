@@ -309,6 +309,9 @@ In the shape of `Diamond_Disputes.md`. Numbered in Diamond's series: D-13 follow
   5. amidog's timing tests decide what they cover once the pad lands; the console decides all of it (`Diamond_Plan.md`
   §11 Q16).
 - **Depends on it:** the cycle every GTE access completes, so every frame's timing in a 3D game.
+- **Evidence since:** 2026-10-11, amidog's `psxtest_gte` 1.4, run once the pad answered: its OFFICIAL TIMING marks
+  all 22 commands' timing ERROR against a console's expectations, which it does not print; Diamond's cycles a pass of
+  its loops are in `Diamond_Pad.md` §5.3. Open again on that evidence.
 - **Pinned by:** `the_gte_holds_every_access_until_its_command_is_done`.
 - **Implemented in:** `diamond: the GTE in the machine, every coprocessor 2 access held until its command is done`.
 

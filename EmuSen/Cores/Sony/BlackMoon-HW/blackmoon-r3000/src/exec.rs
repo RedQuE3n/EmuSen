@@ -65,7 +65,8 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -
     let slot = cpu.regs.branch;
     let pending = cpu.regs.load.register.map(|r| (r as usize, cpu.regs.load.value));
     let r = &cpu.regs;
-    if r.sr & sr::IEC != 0 && r.sr & r.cause & 0xFF00 != 0 {
+    let (status, software) = r.interrupt_view.unwrap_or((r.sr, r.cause & cause::SW));
+    if status & sr::IEC != 0 && status & (r.cause & !cause::SW | software) & 0xFF00 != 0 {
         // The interrupted instruction is fetched, and a GTE command runs before the exception (psx-spx).
         let mut word = 0;
         if fetchable(cpu, at) {
@@ -91,6 +92,7 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -
         let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None, faulted: false };
         return x.exception(code::BP, DEBUG);
     }
+    cpu.regs.interrupt_view = None;
     let word = b.fetch(at);
     if b.bus_error() {
         let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None, faulted: false };
@@ -144,11 +146,13 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         }
         let bd = self.slot.slot;
         let bt = bd && self.slot.taken;
-        r.cause = r.cause & !cause::EXCEPTION | code << 2 | (self.word >> 26 & 3) << 28 | (bt as u32) << 30 | (bd as u32) << 31;
+        let ce = if code == code::DBE || vectors == DEBUG { 0 } else { self.word >> 26 & 3 };
+        r.cause = r.cause & !cause::EXCEPTION | code << 2 | ce << 28 | (bt as u32) << 30 | (bd as u32) << 31;
         r.epc = if bd { self.at.wrapping_sub(4) } else { self.at };
-        if bt {
-            r.tar = self.slot.target;
+        if bd {
+            r.tar = if bt { self.slot.target } else { self.at.wrapping_add(4) };
         }
+        r.interrupt_view = None;
         r.sr = r.sr & !0x3F | r.sr << 2 & 0x3C;
         let vector = vectors[(r.sr & sr::BEV != 0) as usize];
         r.pc = vector;
@@ -459,7 +463,11 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             },
             (0, Op::Mtc(_)) => {
                 let v = self.r(rt);
-                cop0::write(&mut self.cpu.regs, rd, v)
+                let r = &mut self.cpu.regs;
+                if rd == 12 {
+                    r.interrupt_view = Some((r.sr, r.cause & cause::SW));
+                }
+                cop0::write(r, rd, v)
             }
             (0, Op::Cfc(_) | Op::Ctc(_)) => return self.exception(code::RI, GENERAL),
             (0, _) => match w.cofun() & 0x3F {

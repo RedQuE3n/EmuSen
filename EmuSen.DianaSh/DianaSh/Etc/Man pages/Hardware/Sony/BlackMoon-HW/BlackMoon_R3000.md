@@ -376,6 +376,95 @@ In the shape of `Diamond_Disputes.md`. Each entry's evidence and rule; the proce
 - **Pinned by:** `reserved_and_unusable_instructions`.
 - **Implemented in:** the same commit as D-1.
 
+### D-17. An MTC0 to SR reaches the interrupt check one instruction late: the instruction after it runs before an interrupt it enables, and may still be interrupted after one it disables
+
+- **Opened:** 2026-10-11, by amidog's `psxtest_cpx` INTR on Diamond with the pad (`Diamond_Pad.md` §5.1): eight cases
+  in which `mtc0 cause` sets a software interrupt, a NOP follows and `mtc0 sr` enables it, want EPC at the second
+  instruction after the MTC0 where Diamond gave the first.
+- **Documents read:** the IDT R30xx manual, chapter 13, "Bitfields in CPU control registers": for the R30xx family
+  "the enable won't allow an interrupt to affect ... the following two instructions; it can happen before the third";
+  psx-spx is silent.
+- **Test program:** `psxtest_cpx` 1.1, its cases disassembled from RAM (`mtc0 a1, cause; nop; mtc0 a0, sr; nop`, and
+  the same with `mflo v0` after the MTC0, whose result the case checks): the console's wanted EPC is the MTC0's address
+  plus 8, one instruction later than Diamond's first build and one earlier than the IDT figure.
+- **Referee:** not consulted. **Witnesses:** none.
+- **Conclusion:** the interrupt check at the boundary after an MTC0 to SR sees SR and Cause's software bits as they
+  were before it, so one instruction runs; the PlayStation's CPU differs from the IDT family's two. A disabling MTC0
+  takes effect as late by the same rule, which no case measures [C]. An MTC0 to Cause is seen at once, as before: the
+  cases write Cause two instructions ahead and do not measure it. Measured by a console's expectations, at the second
+  rung.
+- **Depends on it:** the kernel's critical sections; the state block, 209 bytes with the held values.
+- **Pinned by:** `an_interrupt_enabled_by_mtc0_sr_waits_one_instruction`.
+- **Implemented in:** `blackmoon-r3000: an MTC0 to SR reaches the interrupt check an instruction late, TAR on a branch
+  not taken, CE zero on DBE and the debug unit's breaks`.
+
+### D-18. An exception in a delay slot sets TAR on every branch: the target when taken, the instruction after the slot when not
+
+- **Opened:** 2026-10-11, by `psxtest_cpx` SLOT: eight cases of an LW address error in the slot of a branch not taken
+  want TAR at the branch's address plus 8, where Diamond left it.
+- **Documents read:** psx-spx `6d7d1bc`, "cop0r6 - TAR": "When an exception occurs in the delay slot of a jump or
+  branch (cop0r13.31=1), and the branch is to be taken ... this register is updated"; "Cause" bit 30.
+- **Test program:** `psxtest_cpx` 1.1 SLOT: BD set, BT clear, CE 3, and TAR the fall-through on the console.
+- **Referee:** not consulted. **Witnesses:** none.
+- **Conclusion:** with BD set, TAR is written whether or not the branch is taken, with the address execution would
+  have continued at; psx-spx's sentence describes only the taken case. Measured by a console's expectations.
+- **Depends on it:** a handler that resumes through TAR.
+- **Pinned by:** `an_exception_in_a_not_taken_branchs_slot_sets_tar_to_the_fall_through`.
+- **Implemented in:** the same commit as D-17.
+
+### D-19. CE is the faulting instruction's opcode bits 26-27 but on a bus error on a load or store and on a break of the debug unit, where it is zero
+
+- **Opened:** 2026-10-11, by `psxtest_cpx` BREAK (and stage 2's open item, §10): some 35,000 of its first run's
+  39,146 failing cases differ from the console only in CE, on DBE from loads and stores to KSEG2 and on the debug
+  unit's data breaks; SLOT's address errors keep the opcode's bits on the console.
+- **Documents read:** psx-spx "Cause" bits 28-29 ("the coprocessor number if the exception occurred because of a
+  coprocessor instruction"); the IDT manual, Cause, CE "undefined" for other exceptions.
+- **Test program:** `psxtest_cpx` 1.1, BREAK and SLOT; and Diamond's own `exceptions.s` of stage 3, whose twelve
+  exceptions include no DBE.
+- **Referee:** not consulted. **Witnesses:** at stage 3 Beetle PSX wrote the opcode's bits on the eleven exceptions it
+  took, none a DBE (§10).
+- **Conclusion:** DBE and the debug unit's Bp write CE 0; every other exception the opcode's bits. Every faulting
+  access in the cases is followed by a NOP, so "CE from the instruction after" fits them equally; Diamond takes the
+  simpler rule until a case tells them apart. Measured by a console's expectations; the alternative open.
+- **Depends on it:** nothing in the kernel; a handler reading CE.
+- **Pinned by:** `a_bus_error_and_a_debug_break_leave_ce_zero`.
+- **Implemented in:** the same commit as D-17.
+
+### D-20. The debug unit's breaks: which accesses match, in which mode, and what a match on an access that bus-errors does; open
+
+- **Opened:** 2026-10-11, by the 7,680 cases of `psxtest_cpx` BREAK that remain after D-17 to D-19 (`Diamond_Pad.md`
+  §5.1), every load and store form, every LWL/LWR/SWL/SWR byte offset, and the PC break.
+- **Documents read:** psx-spx "COP0 - Debug Registers" (DCIC's bits, KD bit 29 "Break in kernel mode", UD bit 30
+  "Break in user mode", TR bit 31, the vector 80000040h).
+- **Test program:** `psxtest_cpx` 1.1 BREAK, its TTY's got and wanted lines grouped by field. Three groups, in kernel
+  mode throughout (SR F0000000h):
+  1. a data or PC break whose access also meets no device (KSEG2): Diamond breaks to 80000040h, or with TR clear sets
+     DCIC's status bits, where the console takes DBE (IBE for the PC) at 80000080h and sets none (858 and 798 cases);
+  2. matching by mode: Diamond breaks where DCIC has KD and not UD and the console does not (326), and the console
+     breaks where DCIC has UD and not KD and Diamond does not (418), as if the console's kernel-mode accesses answered
+     to UD;
+  3. the console setting status bits, or breaking, where Diamond sets none or takes DBE (2,082 and 822), the `_8_8_1`
+     and `_8_4_4` cases, whose address relation the TTY does not print;
+  and the 2,376 cases of D-21.
+- **Referee:** not consulted. **Witnesses:** none.
+- **Conclusion:** open. The cases' parameters (the address, BDA and BDAM of each) are not printed, so the rules cannot
+  be stated from the TTY alone; the next step is a program of the project's own that sets each register combination
+  and records what is taken, run against the console's expectations through this test.
+- **Depends on it:** debuggers on the console, cheat devices; no game is known to use the unit.
+- **Pinned by:** nothing yet. **Implemented in:** nothing yet.
+
+### D-21. SWC0, SWC1 and SWC3 with their CU bit set make a store on the bus, which can bus-error; what they store is not known
+
+- **Opened:** 2026-10-11, by `psxtest_cpx` BREAK: 2,376 cases of SWC0, SWC1 and SWC3 to an address that meets no
+  device, CU set, want DBE where Diamond's SWCz with z ≠ 2 makes no access (D-3 settled only when CpU is raised).
+- **Documents read:** psx-spx "COP0 - Misc" and D-3's.
+- **Test program:** as opened.
+- **Referee:** not consulted. **Witnesses:** none.
+- **Conclusion:** open. The store happens; its value cannot be observed on an address with no device, and modelling
+  it would write an unknown value to RAM on any other address. A case storing to RAM would settle it.
+- **Depends on it:** nothing known.
+- **Pinned by:** nothing yet. **Implemented in:** nothing yet.
+
 ## 9. The gate (G1's first half)
 
 `Diamond_Plan.md` §7's stage 2 row and §8's G1: SingleStepTests r3000, every case, on registers, HI/LO, the PC, both
@@ -430,6 +519,12 @@ group (RFE, BREAK, SYSCALL). The screen gives a verdict per instruction, not the
 pending register is among them is not shown; the load delay's corners stand confirmed by an independent program as far
 as its verdicts reach. **`psxtest_cpx` 1.1** draws its menu and runs only when Start is pressed, so CE on every
 exception and the garbage registers wait on the pad (stage 6).
+
+*Answers with the pad, 2026-10-11* (`Diamond_Pad.md` §5). **CE**: answered by `psxtest_cpx`, the opcode's bits on an
+address error, zero on DBE and on the debug unit's breaks (D-19). **A second load cancelling the first**: answered by
+`psxtest_cpu`, which reads the register in the second load's delay slot at 441 places and passes; a build in which the
+first load lands fails 265 of its cases. **The garbage registers**: still open, since neither amidog test reads them.
+`psxtest_cpx` also found D-17 (MTC0's interrupt latency) and D-18 (TAR), fixed, and leaves D-20 and D-21 open.
 
 The items below stand as written at stage 2.
 

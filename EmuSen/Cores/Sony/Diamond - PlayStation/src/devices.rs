@@ -1,5 +1,5 @@
 //! The devices of later stages, as register stubs that answer what a stage 3 program reads (Diamond_Native.md
-//! §11.8): the SPU's registers with its transfer to sound RAM, the MDEC's status, the serial port SIO1, and the DEV8 debug port's DUART, whose channel A carries the TTY. SIO0 is `sio0.rs`.
+//! §11.8): the SPU's registers with its transfer to sound RAM, the serial port SIO1, and the DEV8 debug port's DUART, whose channel A carries the TTY. SIO0 is `sio0.rs`, the MDEC `mdec/`.
 
 /// Sound RAM, held by its stub as the space the host reads.
 pub const SPU_RAM_BYTES: usize = 0x8_0000;
@@ -67,27 +67,6 @@ impl SpuStub {
     /// Whether the SPU requests DMA: ATTR's transfer mode is a DMA write or read.
     pub fn dreq(&self) -> bool {
         self.regs[ATTR] >> 4 & 3 >= 2
-    }
-}
-
-/// The MDEC's status after a reset (psx-spx "MDEC Status Register"), and its two requests.
-#[derive(Clone, Copy, Debug)]
-pub struct MdecStub {
-    pub status: u32,
-}
-
-impl Default for MdecStub {
-    fn default() -> MdecStub {
-        MdecStub { status: 0x8004_0000 }
-    }
-}
-
-impl MdecStub {
-    pub fn control(&mut self, value: u32) {
-        if value & 1 << 31 != 0 {
-            self.status = 0x8004_0000;
-        }
-        self.status = self.status & !(3 << 27) | (value >> 30 & 1) << 28 | (value >> 29 & 1) << 27;
     }
 }
 
@@ -184,15 +163,5 @@ impl Duart {
             _ => {}
         }
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_resets_are_the_documented_values() {
-        assert_eq!(MdecStub::default().status, 0x8004_0000);
     }
 }

@@ -7,7 +7,8 @@ use blackmoon_gte::Gte;
 use blackmoon_r3000::{Bus, Size};
 
 use crate::cdrom::Cdrom;
-use crate::devices::{Duart, MdecStub, SioStub, SpuStub, Tty};
+use crate::devices::{Duart, SioStub, SpuStub, Tty};
+use crate::mdec::{self, Mdec};
 use crate::sio0::Sio0;
 use crate::dma::{self, Dma, chcr};
 use crate::gpu::Gpu;
@@ -87,7 +88,9 @@ pub struct Board {
     pub cdrom: Cdrom,
     /// The controller's IRQ2 line as last seen, so that I_STAT takes its rising edge.
     pub(crate) cd_line: bool,
-    pub mdec: MdecStub,
+    pub mdec: Mdec,
+    /// Words left of the block an MDEC channel had begun when the MDEC could not take or give the next (DMA0, DMA1).
+    pub mdec_left: [u32; 2],
     /// The controller and memory card port, and the serial port's stub.
     pub sio0: Sio0,
     pub sio1: SioStub,
@@ -135,7 +138,8 @@ impl Board {
             spu: SpuStub::new(),
             cdrom: Cdrom::new(None, crate::media::Market::Americas),
             cd_line: false,
-            mdec: MdecStub::default(),
+            mdec: Mdec::new(),
+            mdec_left: [0; 2],
             sio0: Sio0::new(Default::default()),
             sio1: SioStub::default(),
             duart: Duart::default(),
@@ -271,8 +275,17 @@ impl Board {
                 v
             }
             0x814 => self.gpu.status(&self.video, self.now),
-            0x820 => 0,
-            0x824 => self.mdec.status,
+            0x820 => {
+                let (v, t) = self.mdec.read(self.now);
+                self.now = t;
+                self.dma_kick();
+                self.schedule();
+                v
+            }
+            0x824 => {
+                self.mdec.run(self.now);
+                self.mdec.status()
+            }
             _ => 0,
         }
     }
@@ -328,9 +341,12 @@ impl Board {
                 self.dma_kick();
                 self.wake_gpu_dma();
             }
-            0x820 => {}
+            0x820 => {
+                self.mdec.write(value, self.now);
+                self.dma_kick();
+            }
             0x824 => {
-                self.mdec.control(value);
+                self.mdec.control(value, self.now);
                 self.dma_kick();
             }
             _ => {}
@@ -447,7 +463,7 @@ impl Board {
 
     /// The next cycle at which anything is due: a video edge, a timer's target or FFFFh, a DMA piece.
     pub fn schedule(&mut self) {
-        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due).min(self.gpu.next_event()).min(self.sio0.next_event()).min(self.cdrom.next_event());
+        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due).min(self.gpu.next_event()).min(self.sio0.next_event()).min(self.cdrom.next_event()).min(self.mdec.next_event());
         for n in 0..3 {
             next = next.min(self.timers.next_hit(n, &self.video));
         }
@@ -466,7 +482,8 @@ impl Board {
             let gpu_at = self.gpu.next_event();
             let sio_at = self.sio0.next_event();
             let cd_at = self.cdrom.next_event();
-            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]).min(gpu_at).min(sio_at).min(cd_at);
+            let mdec_at = self.mdec.next_event();
+            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]).min(gpu_at).min(sio_at).min(cd_at).min(mdec_at);
             if first > self.now {
                 self.next_event = first;
                 return;
@@ -482,6 +499,10 @@ impl Board {
             if cd_at == first {
                 self.cdrom.run(first);
                 self.cd_irq();
+            }
+            if mdec_at == first {
+                self.mdec.run(first);
+                self.dma_kick();
             }
             if gpu_at == first {
                 self.gpu.run(first, &self.video);
@@ -529,8 +550,8 @@ impl Board {
 
     fn dma_request(&self, n: usize) -> bool {
         match n {
-            dma::MDEC_IN => self.mdec.status & 1 << 28 != 0,
-            dma::MDEC_OUT => self.mdec.status & 1 << 27 != 0,
+            dma::MDEC_IN => self.mdec.request_in(),
+            dma::MDEC_OUT => self.mdec.request_out(),
             dma::GPU => self.gpu.dma_direction != 0,
             dma::CDROM => self.cdrom.data_ready(),
             dma::SPU => self.spu.dreq(),
@@ -657,6 +678,10 @@ impl Board {
             self.dma.active = None;
             return;
         }
+        if n <= dma::MDEC_OUT && c.sync() < 2 {
+            self.mdec_piece(n, at);
+            return;
+        }
         if n == dma::GPU && c.sync() != 0 {
             self.gpu.run(at, &self.video);
             if !self.gpu.dreq(at) {
@@ -739,6 +764,71 @@ impl Board {
             }
         }
         let end = self.hold_bus(at, self.piece_cost(n, words, start) + overhead);
+        if finished {
+            self.dma.finishing = true;
+            self.dma.due = end;
+        } else {
+            if self.dma.dicr & 1 << n != 0 && self.dma.flag(n) {
+                self.irq.raise(irq::DMA);
+            }
+            self.dma.due = end + DMA_GAP;
+        }
+    }
+
+    /// An MDEC channel's block (sync mode 1) or burst (mode 0), its words moved one by one at the channel's rate while
+    /// the MDEC can take or give them; one the MDEC cannot finish waits, its channel letting go of the bus until the
+    /// MDEC's request returns. DMA1 writes a colour block's words in their macroblock's order (Diamond_MDEC.md §5).
+    fn mdec_piece(&mut self, n: usize, at: u64) {
+        let c = self.dma.ch[n];
+        let start = at.max(self.bus_free);
+        let size = match c.bcr & 0xFFFF {
+            0 => 0x1_0000,
+            s => s,
+        };
+        let left = if self.mdec_left[n] != 0 { self.mdec_left[n] } else { size };
+        let step: u32 = if c.chcr & chcr::BACKWARD != 0 { 0u32.wrapping_sub(4) } else { 4 };
+        let (mut a, mut moved, mut clock) = (c.madr, 0u32, start * 16);
+        while moved < left {
+            let t = clock.div_ceil(16);
+            self.mdec.run(t);
+            if n == dma::MDEC_IN {
+                if !self.mdec.can_take() {
+                    break;
+                }
+                let w = self.ram_word(a);
+                self.mdec.write(w, t);
+            } else {
+                if !self.mdec.can_give() {
+                    break;
+                }
+                let o = self.mdec.pop(t);
+                let shift = mdec::reorder(self.mdec.format.depth, o.block, o.index as usize) * 4;
+                self.set_ram_word(a.wrapping_add(shift as u32) & 0x00FF_FFFC, o.word);
+            }
+            a = a.wrapping_add(step) & 0x00FF_FFFF;
+            moved += 1;
+            clock += dma::sixteenths_per_word(n, 0);
+        }
+        self.dma.ch[n].madr = a;
+        let end = self.hold_bus(at, self.cost(n, moved as u64));
+        if moved < left {
+            self.mdec_left[n] = left - moved;
+            if c.sync() == 0 {
+                self.dma.ch[n].bcr = c.bcr & !0xFFFF | (left - moved) & 0xFFFF;
+            }
+            self.dma.active = None;
+            self.dma.due = u64::MAX;
+            self.dma_kick();
+            return;
+        }
+        self.mdec_left[n] = 0;
+        let finished = if c.sync() == 1 {
+            let blocks = (c.bcr >> 16).wrapping_sub(1) & 0xFFFF;
+            self.dma.ch[n].bcr = c.bcr & 0xFFFF | blocks << 16;
+            blocks == 0
+        } else {
+            true
+        };
         if finished {
             self.dma.finishing = true;
             self.dma.due = end;

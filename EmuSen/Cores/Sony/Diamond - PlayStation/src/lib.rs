@@ -17,6 +17,7 @@ pub mod icache;
 pub mod irq;
 pub mod kernel;
 pub mod machine;
+pub mod mdec;
 pub mod media;
 pub mod medium;
 pub mod memctl;

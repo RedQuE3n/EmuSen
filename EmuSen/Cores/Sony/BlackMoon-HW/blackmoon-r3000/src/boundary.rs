@@ -222,7 +222,7 @@ fn a_bus_error_and_a_debug_break_leave_ce_zero() {
     let r = &mut cpu.regs;
     r.bda = 0x100;
     r.bdam = u32::MAX;
-    r.dcic = dcic::DE | dcic::DAE | dcic::DR | dcic::KD | dcic::TR;
+    r.dcic = dcic::DE | dcic::DAE | dcic::DR | dcic::UD | dcic::TR;
     assert_eq!(cpu.step(&mut rig), Step::Exception(code::BP as u8));
     assert_eq!((cpu.regs.pc, cpu.regs.cause >> 28), (0x8000_0040, 0));
 }
@@ -384,10 +384,82 @@ fn the_debug_unit_breaks_on_the_pc_and_on_a_store() {
     let r = &mut cpu.regs;
     r.bda = 0x200;
     r.bdam = !3;
-    r.dcic = dcic::DE | dcic::DAE | dcic::DW | dcic::KD | dcic::TR;
+    r.dcic = dcic::DE | dcic::DAE | dcic::DW | dcic::UD | dcic::TR;
     assert_eq!(cpu.step(&mut rig), Step::Exception(code::BP as u8));
     assert_eq!((cpu.regs.pc, cpu.regs.epc, cpu.regs.dcic & 0x1F), (0x8000_0040, ORIGIN + 4, dcic::DB | dcic::DA | dcic::W));
     assert!(rig.writes.is_empty());
+}
+
+/// `psxtest_cpx` BREAK's model (D-20): KD answers for an address with bit 31 set and UD for one without, whatever the
+/// mode; in kernel mode a store to 200h breaks only with UD, and the PC at 80001000h only with KD.
+#[test]
+fn the_debug_unit_answers_to_kd_or_ud_by_the_address_segment() {
+    for (mode, breaks) in [(dcic::KD, false), (dcic::UD, true)] {
+        let (mut cpu, mut rig) = machine("sw t0, 0x200(zero)");
+        let r = &mut cpu.regs;
+        r.bda = 0x200;
+        r.bdam = u32::MAX;
+        r.dcic = dcic::DE | dcic::DAE | dcic::DW | mode | dcic::TR;
+        let want = if breaks { Step::Exception(code::BP as u8) } else { Step::Instruction };
+        assert_eq!((cpu.step(&mut rig), cpu.regs.dcic & 0x1F != 0), (want, breaks), "a user address, {mode:08X}");
+    }
+    for (mode, breaks) in [(dcic::KD, true), (dcic::UD, false)] {
+        let (mut cpu, mut rig) = machine("sw t0, 0x200(zero)\nnop");
+        let r = &mut cpu.regs;
+        r.r[8] = 0x8000_0000;
+        r.bpc = ORIGIN;
+        r.bpcm = u32::MAX;
+        r.dcic = dcic::DE | dcic::PCE | mode;
+        cpu.step(&mut rig);
+        assert_eq!(cpu.regs.dcic & 3 != 0, breaks, "a kernel PC, {mode:08X}");
+    }
+}
+
+/// D-20: the data break compares the address the access puts on the bus, LWL's and SWL's aligned word and LWR's and
+/// SWR's own address, as `psxtest_cpx`'s model has it.
+#[test]
+fn lwl_and_swl_match_their_aligned_word_and_lwr_and_swr_their_address() {
+    for (source, write, bda, matches) in [
+        ("lwl t0, 0x201(zero)", false, 0x200, true),
+        ("lwl t0, 0x201(zero)", false, 0x201, false),
+        ("lwr t0, 0x201(zero)", false, 0x201, true),
+        ("lwr t0, 0x201(zero)", false, 0x200, false),
+        ("swl t0, 0x203(zero)", true, 0x200, true),
+        ("swr t0, 0x203(zero)", true, 0x203, true),
+        ("swr t0, 0x203(zero)", true, 0x200, false),
+    ] {
+        let (mut cpu, mut rig) = machine(source);
+        let r = &mut cpu.regs;
+        r.bda = bda;
+        r.bdam = u32::MAX;
+        r.dcic = dcic::DE | dcic::DAE | if write { dcic::DW } else { dcic::DR } | dcic::UD;
+        cpu.step(&mut rig);
+        assert_eq!(cpu.regs.dcic & dcic::DA != 0, matches, "{source} against {bda:X}");
+    }
+}
+
+/// D-20: a misaligned access that matches sets the status bits and takes the address error, TR or not.
+#[test]
+fn a_misaligned_access_that_matches_sets_the_status_bits_and_takes_the_address_error() {
+    let (mut cpu, mut rig) = machine("lw t0, 0x201(zero)");
+    let r = &mut cpu.regs;
+    r.bda = 0x201;
+    r.bdam = u32::MAX;
+    r.dcic = dcic::DE | dcic::DAE | dcic::DR | dcic::UD | dcic::TR;
+    assert_eq!(cpu.step(&mut rig), Step::Exception(code::ADEL as u8));
+    assert_eq!((cpu.regs.pc, cpu.regs.dcic & 0x1F), (0x8000_0080, dcic::DB | dcic::DA | dcic::R));
+}
+
+/// D-21: SWC0, SWC1 and SWC3 with their CU bit set store a word on the bus, which can meet no device.
+#[test]
+fn swc0_swc1_and_swc3_store_on_the_bus() {
+    for z in [0, 1, 3] {
+        let (mut cpu, mut rig) = machine(&format!(".word {:#X}", 0xE000_0000u32 | z << 26 | 1 << 16 | 0x200));
+        cpu.regs.sr = sr::CU0 << z;
+        rig.absent = 0x200;
+        assert_eq!(cpu.step(&mut rig), Step::Exception(code::DBE as u8), "SWC{z}");
+        assert_eq!(rig.writes.iter().map(|w| (w.0, w.1)).collect::<Vec<_>>(), [(0x200, Size::Word)], "SWC{z}");
+    }
 }
 
 #[test]

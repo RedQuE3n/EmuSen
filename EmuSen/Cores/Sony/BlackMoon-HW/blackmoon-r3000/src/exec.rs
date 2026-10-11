@@ -83,12 +83,13 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -
         return Step::Observed(why);
     }
     let next = if slot.slot && slot.taken { slot.target } else { at.wrapping_add(4) };
+    let trap = cop0::pc_break(&mut cpu.regs, at);
     if !fetchable(cpu, at) {
         cpu.regs.bad_vaddr = at;
         let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None, faulted: false };
         return x.exception(code::ADEL, GENERAL);
     }
-    if cop0::pc_break(&mut cpu.regs, at) {
+    if trap {
         let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None, faulted: false };
         return x.exception(code::BP, DEBUG);
     }
@@ -176,14 +177,15 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         self.o.called(self.at, target, kind::CALL);
     }
 
-    /// The address checks of a data access: alignment and kernel space in user mode (address error), then the debug
-    /// unit's data breakpoint.
-    fn check(&mut self, address: u32, align: u32, write: bool) -> Option<Step> {
+    /// The checks of a data access whose bus address is `bus`: the debug unit's comparison, then alignment and kernel
+    /// space in user mode (address error), then the break (BlackMoon_R3000.md D-20).
+    fn check(&mut self, address: u32, bus: u32, align: u32, write: bool) -> Option<Step> {
+        let trap = cop0::data_break(&mut self.cpu.regs, bus, write);
         if address & align != 0 || (!cop0::kernel(&self.cpu.regs) && address >= 0x8000_0000) {
             self.cpu.regs.bad_vaddr = address;
             return Some(self.exception(if write { code::ADES } else { code::ADEL }, GENERAL));
         }
-        if cop0::data_break(&mut self.cpu.regs, address, write) {
+        if trap {
             return Some(self.exception(code::BP, DEBUG));
         }
         None
@@ -246,7 +248,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
     /// The load from `address` of `size` bytes, sign-extended or not, into rt after the next instruction.
     fn load(&mut self, size: Size, signed: bool) -> Step {
         let address = self.address();
-        if let Some(e) = self.check(address, size.bytes() - 1, false) {
+        if let Some(e) = self.check(address, address, size.bytes() - 1, false) {
             return e;
         }
         let v = self.read(address, size);
@@ -261,7 +263,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
 
     fn store(&mut self, size: Size) -> Step {
         let address = self.address();
-        if let Some(e) = self.check(address, size.bytes() - 1, true) {
+        if let Some(e) = self.check(address, address, size.bytes() - 1, true) {
             return e;
         }
         let v = self.r(Word(self.word).rt());
@@ -382,7 +384,8 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             Op::Lw => return self.load(Size::Word, false),
             Op::Lwl | Op::Lwr => {
                 let address = self.address();
-                if let Some(e) = self.check(address, 0, false) {
+                let bus = if op == Op::Lwl { address & !3 } else { address };
+                if let Some(e) = self.check(address, bus, 0, false) {
                     return e;
                 }
                 let o = address & 3;
@@ -401,7 +404,8 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             Op::Sw => return self.store(Size::Word),
             Op::Swl | Op::Swr => {
                 let address = self.address();
-                if let Some(e) = self.check(address, 0, true) {
+                let bus = if op == Op::Swl { address & !3 } else { address };
+                if let Some(e) = self.check(address, bus, 0, true) {
                     return e;
                 }
                 let o = address & 3;
@@ -425,7 +429,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 }
                 let write = matches!(op, Op::Swc(_));
                 let address = self.address();
-                if let Some(e) = self.check(address, 3, write) {
+                if let Some(e) = self.check(address, address, 3, write) {
                     return e;
                 }
                 match (z, write) {
@@ -440,7 +444,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     (_, false) => {
                         self.read(address, Size::Word);
                     }
-                    (_, true) => {}
+                    (_, true) => self.write(address, Size::Word, 0),
                 }
             }
             Op::Reserved => return self.exception(code::RI, GENERAL),

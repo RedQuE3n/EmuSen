@@ -18,7 +18,7 @@ namespace EmuSen.Crystal.Systems.Psx
             "PlayStation",
             "Sony",
             1994,
-            new[] { ".psexe", ".psx" },
+            new[] { ".psexe", ".psx", ".chd" },
             new[] { "Sony - PlayStation" },
             new[] { "PSX" },
             file => file,
@@ -27,8 +27,22 @@ namespace EmuSen.Crystal.Systems.Psx
             "Sony PlayStation",
             SelfDelimitingImages: false);
 
-        // A disc's formats, declared and not routed until the disc stage and routing by content - see Diamond_Native.md §2.4.
-        public static readonly IReadOnlyList<string> DiscExtensions = new[] { ".cue", ".chd", ".iso", ".m3u", ".pbp" };
+        // A disc's formats the core opens but the host cannot route yet: a sheet's tracks, .iso and a lone .bin's collisions, .m3u, .pbp - see Diamond_CDROM.md §8.
+        public static readonly IReadOnlyList<string> DiscExtensions = new[] { ".cue", ".iso", ".bin", ".m3u", ".pbp" };
+
+        // The licence text's first line, at the start of sector 4's user data (psx-spx "System Area").
+        private static readonly byte[] Licence = System.Text.Encoding.ASCII.GetBytes("          Licensed  by          ");
+
+        // Whether an .iso's user sectors or a raw track's 2,352-byte ones hold a PlayStation disc, the recogniser routing by content asks - see EmuSen_CoreAPI_Extensions.md §8.4, Diamond_CDROM.md §8.
+        public static bool IsDisc(ReadOnlySpan<byte> image)
+        {
+            if (image.Length >= 4 * 2048 + 32 && image.Slice(4 * 2048, 32).SequenceEqual(Licence)) return true;
+            ReadOnlySpan<byte> sync = stackalloc byte[] { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
+            int raw = 4 * 2352;
+            if (image.Length < raw + 24 + 32 || !image[..12].SequenceEqual(sync) || !image.Slice(raw, 12).SequenceEqual(sync)) return false;
+            int data = raw + (image[raw + 15] == 1 ? 16 : 24);
+            return image.Slice(data, 32).SequenceEqual(Licence);
+        }
 
         // The BIOS a console of each market holds, all optional, the core's open replacement in their place - see Diamond_Plan.md §5.9.
         public static readonly IReadOnlyList<(string Market, string Name, long Size)> Bios = new[]

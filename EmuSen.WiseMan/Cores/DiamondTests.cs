@@ -135,7 +135,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Null(bundle.CheatAutoDetectCodec);
             Assert.Null(bundle.Notice);
             (core as IDisposable)?.Dispose();
-            Assert.False(CoreFactory.IsSupported("game.cue") || CoreFactory.IsSupported("game.chd"), "a disc's formats wait for routing by content");
+            Assert.True(CoreFactory.IsSupported("game.chd"), "a CHD is one file and no other console claims it");
+            Assert.False(CoreFactory.IsSupported("game.cue"), "a sheet's tracks wait for the host to pass them, a lone track and an .iso for routing by content");
         }
 
         // The core carries the development mark of EmuSen_CoreAPI.md §27 until the tester offers the PlayStation.
@@ -516,6 +517,53 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { PsxSystem.DualShock, PsxSystem.DualShock }, PsxSystem.PlayerControllers(_ => null));
             Assert.Equal(new[] { PsxSystem.DigitalPad }, PsxSystem.PlayerControllers(k => k == "pad1" ? PsxSystem.DigitalPad : "none"));
             Assert.False(PsxSystem.Entry.SelfDelimitingImages, "a disc does not record its own length, so C4 may not require a truncated one refused");
+        }
+
+        // Stage 7: a cue sheet given as the image with its tracks as files EMUSEN_FILE_MEDIA + n opens a disc, refused with words without them; an .iso and a lone track open as one file - see Diamond_CDROM.md §8.
+        [Fact]
+        public void A_sheet_opens_with_its_tracks_as_companions_and_one_file_images_alone()
+        {
+            const uint media = 65536;
+            var disc = SyntheticPsxDisc.Build();
+            var library = CoreLibrary.Open(LibraryPath);
+            byte[] sheet = Encoding.ASCII.GetBytes(disc.Cue);
+            using (var m = new CoreMachine(library, sheet, "", new[] { (media, disc.DataTrack), (media + 1, disc.AudioTrack) }))
+            {
+                m.Advance();
+                Assert.Equal(("psx", "ntsc"), (m.Info.System, m.Info.Region));
+            }
+            var refused = Assert.Throws<CoreRefusedException>(() => new CoreMachine(library, sheet, "", new[] { (media, disc.DataTrack) }));
+            Assert.Contains("names 2 track files and 1 were given", refused.Message);
+            foreach (byte[] image in new[] { disc.Iso, disc.DataTrack })
+            {
+                using var m = new CoreMachine(library, image, "", Array.Empty<(uint, byte[])>());
+                m.Advance();
+                Assert.Equal("psx", m.Info.System);
+            }
+        }
+
+        // The pack's recogniser for routing by content agrees with the core on what is a PlayStation disc - see EmuSen_CoreAPI_Extensions.md §8.4.
+        [Fact]
+        public void The_packs_recogniser_agrees_with_the_core()
+        {
+            var library = CoreLibrary.Open(LibraryPath);
+            var images = new List<(string, byte[])>();
+            foreach (string market in new[] { "Japan", "Americas", "Europe" })
+                foreach (int mode in new[] { 1, 2 })
+                {
+                    var d = SyntheticPsxDisc.Build(market, mode);
+                    images.Add(($"{market} mode {mode} track", d.DataTrack));
+                    images.Add(($"{market} mode {mode} iso", d.Iso));
+                }
+            images.Add(("audio", SyntheticPsxDisc.Build().AudioTrack));
+            images.Add(("noise", Enumerable.Range(0, 70_000).Select(i => (byte)(i * 31)).ToArray()));
+            foreach (var (name, image) in images)
+            {
+                bool core;
+                try { using var m = new CoreMachine(library, image, "", Array.Empty<(uint, byte[])>()); core = true; }
+                catch (CoreRefusedException) { core = false; }
+                Assert.True(core == PsxSystem.IsDisc(image), $"{name}: the core {(core ? "opens" : "refuses")} it");
+            }
         }
     }
 }

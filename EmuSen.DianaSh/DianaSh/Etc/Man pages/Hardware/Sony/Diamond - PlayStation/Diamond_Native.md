@@ -740,7 +740,7 @@ PCSX-ReARMed); their logs were not read.
 | `dma/dpcr` | pass, 2 of 2 and both time-outs |
 | `dma/chain-looping` | pass: 16,024 / 16,016 / 24,032 / 24,024 cycles against 16,040 / 16,032 / 25,632 / 25,640, the booleans equal |
 | `timers` (as a PAL console) | pass, 18 of 18 rows |
-| `cpu/access-time` | **waits on the kernel**: its printf prints the program's `%2-d` (a width, then psx-spx's "-" prefix) as `-d`, so every cell's hundredths are lost; the whole cycles printed are the player's-BIOS run's |
+| `cpu/access-time` | pass, 17 of 17 rows within 0.5 cycles, since the kernel's printf takes a flag after the width (`Diamond_OpenKernel.md` §4.10, 2026-10-11); before that its `%2-d` printed `-d` and every cell's hundredths were lost |
 | `cpu/io-access-bitwidth` | not graded: a table to compare by eye; it differs from the console's log in the registers' upper "garbage" bits (16–31 of I_MASK, the timers' and SIO's), which Diamond reads as zero, and in DEV1, which reads FFh where the console's DTL-era window holds what was written |
 
 **A player's BIOS** (`Ps1_tests_pass_by_their_tty_on_a_players_bios`, the American BIOS for NTSC and the European one

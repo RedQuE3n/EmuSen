@@ -630,7 +630,8 @@ fn disc_inputs() -> Option<(std::path::PathBuf, Vec<u8>, emusen_disc::Disc)> {
         eprintln!("skipped: EMUSEN_DIAMOND_PS1TESTS, EMUSEN_DIAMOND_FIRMWARE and EMUSEN_DIAMOND_DISC name ps1-tests' release, the player's BIOS folder and a disc");
         return None;
     };
-    let bios = std::fs::read(std::path::Path::new(&firmware).join("scph5501.bin")).expect("the player's scph5501.bin");
+    let name = diamond::v1::bios(Market::Americas).name;
+    let bios = std::fs::read(std::path::Path::new(&firmware).join(&name)).expect("the American BIOS the core declares");
     let path = std::path::PathBuf::from(&disc);
     let image = std::fs::read(&path).expect("the disc");
     let mut files = Vec::new();

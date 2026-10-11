@@ -7,7 +7,7 @@ using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.DianaSh.DianaSh.Dev;
 
-namespace EmuSen.DianaSh.DianaSh.Var
+namespace EmuSen.DianaSh.DianaSh.Var.Shell
 {
     // See `man tmux`.
     public sealed class DianaShSessionManager

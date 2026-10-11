@@ -200,6 +200,9 @@ R2 with Right [M]. The TTY prints nothing for them. Read from the screen:
 
 The pattern is the GPU's to take up (`Diamond_Disputes.md` D-23): every polygon and line fails its flag column, every
 line and every flipped rectangle its values, and in the drawing area's test only the untextured primitives fail.
+*Taken up the same day* (D-23, `Diamond_GPU.md` §10.1): every group above now passes; FIFO, INTERLACE and the two
+cache groups, which fail on the TTY before and after and which this table did not list, are open. The results screen
+now appears at frame 330,743, the tests that had given up running to their ends.
 
 ## 6. What a frontend gets (stage 6)
 

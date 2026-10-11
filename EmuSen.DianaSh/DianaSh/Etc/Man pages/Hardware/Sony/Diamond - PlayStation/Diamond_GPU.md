@@ -363,7 +363,27 @@ Run on the open kernel, read from the picture [M, 2026-10-11]:
   instruction, not its cases, so whether a second load of a pending register is among them is not shown.
 - **`psxtest_cpx` 1.1 and `psxtest_gpu` 1.7** draw their menus correctly and wait there: each runs its tests only when
   Start is pressed, and the pad is stage 6's (SIO0 answers FFh with no /ACK, `Diamond_Native.md` §11.8). So the CE
-  bits, the COP0 registers 16-31 and amidog's GPU test wait on stage 6.
+  bits, the COP0 registers 16-31 and amidog's GPU test wait on stage 6. *Since the pad (2026-10-11)* they run from
+  their menus (`Diamond_Pad.md` §5).
+
+### 10.1 `psxtest_gpu` 1.7 to its end (D-23, 2026-10-11)
+
+The test prints each failing case on the TTY with its wanted and its got value when a word of its own data is set,
+and compares the GPU against its own software model of it; how its columns were read, and what of the program was
+read, is `Diamond_Disputes.md` D-23 and §16. Run from its menu by Start to its results [M]:
+
+| | Before the step | After |
+|---|---|---|
+| ERROR cells on the results' first page (BASIC, COMMON, PRIMITIVE, XYFLIP's first rows) | 81 | 0 |
+| Groups failing by the TTY | REG, POLYLINE, MOVE, VRAM READ, all 64 polygon and line commands, XYFLIP, OFFSET, POSITION, SIZE, AREA, FIFO, INTERLACE, CACHE TAG, CACHE BLOCK | FIFO, INTERLACE, CACHE TAG, CACHE BLOCK |
+| Failing lines on the TTY | 2,650,445 | 654,986 |
+| Frame of the results screen | 295,849 | 330,743 |
+
+The rules changed, each pinned by a unit test of `src/gpu/tests.rs` or `vram.rs` that failed first, are in §2.2,
+§2.3, §2.5, §3, §5 and §6, marked *since D-23's step*; the group-by-group table and the weight of each rule's evidence
+are D-23's. The run grew longer: the menu comes 1,270 frames sooner (§8), but 46 tests that had given up after a
+hundred errors now run every case. WiseMan's amidog tests therefore stay opt-in, and the full GPU run, half an hour
+of host time, is not among them.
 
 ## 11. Peter Lemon's GPU programs
 
@@ -405,7 +425,11 @@ up to the colour map the most pixels agree on; the count is the pixels off it:
   re-reads it within the next frame [C]. **3,747,681 bytes**, pinned by `the_version_1_layout_is_pinned` (*version 2,
   3,747,689 bytes, since stage 5: `Diamond_Native.md` §13.6*).
 - **Spaces** unchanged; `VRAM` is now the GPU's.
-- **Cost** [M, §15]: the frame time measured in `Diamond_Native.md` §12.
+- **Cost** [M, §15]: the frame time measured in `Diamond_Native.md` §12. *D-23's step and D-11's refit* [M,
+  `examples/run`, 600 frames, three runs each, the two builds side by side, ms a frame before and after]: `timers`
+  6.28 and 6.16, `gpu/triangle` 6.44 and 6.37, `gpu/rectangles` 5.51 and 5.36, `gpu/bandwidth` 7.85 and 7.87; each
+  within its runs' spread but `rectangles`, 2.7% faster, a difference not traced. The copy's row is a 2 KiB array on
+  the stack, and nothing added allocates.
 
 ## 13. The enhancement layer
 
@@ -424,6 +448,13 @@ by `vertex` and `Texture::new`, which a renderer would share rather than copy.
 - Drawing at a command's start (§2.1); texture cache staleness, built from the document and observed by no program
   yet; a full FIFO holding its writer.
 - The 13 chopping rows (D-11).
+- *Since D-23's step*, the groups of amidog's GPU test that still fail (§10.1): FIFO (its read test expects GPUREAD to
+  go on returning VRAM's following pixels after a transfer's last word, and its full test a FIFO the model does not
+  keep), INTERLACE (its first case expects a fill to leave the displayed field's lines alone in 240-line interlace,
+  where Diamond skips lines only for rendering commands in 480-line mode, §5), and the texture cache's TAG and BLOCK
+  groups (the cache's tags and its blocks against the model's; the first cases already differ in which entries a
+  page change keeps). None was among the groups this step set out to settle, which were those the first run's record listed (they failed then too); each is left to a step of its own.
+- The texel pairs' rule (§6) beyond rectangles drawn from an even column, and the odd read's halfword beyond one pixel.
 
 ## 15. Tests run (2026-10-11)
 
@@ -431,6 +462,14 @@ by `vertex` and `Texture::new`, which a renderer would share rather than copy.
 `cargo clippy --all-targets` clean. WiseMan, under the test lock with `EMUSEN_DIAMOND_PS1TESTS`: `DiamondTests` 15 of
 15 (the GPU's VRAM gate, the TTY gate with the four GPU programs added, the VRAM grader on a program of the test's own
 with its negative control, the kit's C1-C15); and the blast radius, `Diamond_Native.md` §12.
+
+*D-23's step and D-11's refit (2026-10-11)*: `cargo test --release`: `diamond` 80 unit tests (31 of the GPU's, ten of
+them new, each first seen failing) and 23 program tests (`small_rectangles_and_fills_cost_their_rows` new,
+`gpustat_while_each_shape_arrives_and_draws` and `the_bandwidth_record_counts_each_rows_hblanks` re-pinned), with
+`EMUSEN_DIAMOND_PS1TESTS`; `cargo clippy --all-targets` (clippy 0.1.98) clean. ps1-tests' eleven pictures exact as in
+§9, checked after each change. WiseMan, under the test lock with `EMUSEN_DIAMOND_PS1TESTS` and amidog's tests beside
+the corpus: `DiamondTests` 19 of 19 (the VRAM and TTY gates, the CPX test from frame 400, the GPU and GTE menus from
+frames 300 and 400).
 
 ## 16. Reading log
 
@@ -490,6 +529,9 @@ Every file opened for this stage, as the protocol of `Diamond_Plan.md` §1.3 ask
   picture only, and Beetle PSX's pictures of them are displaced.
 - `gpustat` is not in the release; its console log grades a program of the project's own.
 - One single write rate cannot give both `dma/chopping`'s cycles and its busy marks (D-11).
+- *D-23's step*: no referee reproduces amidog's expectations for REG, the odd read, the texel pairs or the offset's
+  placement, so those rules stand on the test alone; PCSX-Redux stopped with an exception in its Lua event listener
+  in both runs of the test and witnesses only REG; the libretro cores carry no TTY and were not run on it.
 
 ## 18. Questions for the tester
 

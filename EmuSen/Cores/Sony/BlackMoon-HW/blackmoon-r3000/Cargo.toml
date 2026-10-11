@@ -10,3 +10,4 @@ name = "blackmoon_r3000"
 
 [dependencies]
 emusen-native = { path = "../../../Shared/emusen-native" }
+emusen-mips = { path = "../../../Shared/emusen-mips" }

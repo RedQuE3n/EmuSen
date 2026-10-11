@@ -122,15 +122,16 @@ mod tests {
         assert_eq!(
             tail,
             [
-                "208 128 u32[32] Gte.Data",
-                "336 128 u32[32] Gte.Control",
-                "464 2097152 u8[2097152] RAM",
-                "2097616 1024 u8[1024] SCRATCH",
-                "2098640 1048576 u8[1048576] VRAM",
-                "3147216 524288 u8[524288] SPURAM"
+                "208 8 u64 Cpu.HiLoReady",
+                "216 128 u32[32] Gte.Data",
+                "344 128 u32[32] Gte.Control",
+                "472 2097152 u8[2097152] RAM",
+                "2097624 1024 u8[1024] SCRATCH",
+                "2098648 1048576 u8[1048576] VRAM",
+                "3147224 524288 u8[524288] SPURAM"
             ]
         );
-        assert_eq!(machine().state_size(), 3_671_504);
+        assert_eq!(machine().state_size(), 3_671_512);
     }
 
     #[test]

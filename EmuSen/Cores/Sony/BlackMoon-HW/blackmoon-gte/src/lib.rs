@@ -5,6 +5,7 @@
 //! Stage 1: the registers, their names, the state block and the commands' signatures. Nothing executes until Diamond's
 //! stage 5 (`BUILT`).
 
+use emusen_mips::{Command, Coprocessor};
 use emusen_native::{State, StateReader, StateWriter, Truncated};
 
 /// Whether the commands and the register transfers run.
@@ -21,6 +22,41 @@ pub const CONTROL_REGISTERS: [&str; 32] = [
     "RT11RT12", "RT13RT21", "RT22RT23", "RT31RT32", "RT33", "TRX", "TRY", "TRZ", "L11L12", "L13L21", "L22L23", "L31L32", "L33", "RBK", "GBK",
     "BBK", "LR1LR2", "LR3LG1", "LG2LG3", "LB1LB2", "LB3", "RFC", "GFC", "BFC", "OFX", "OFY", "H", "DQA", "DQB", "ZSF3", "ZSF4", "FLAG",
 ];
+
+const fn command(name: &'static str, canonical: u32) -> Command {
+    Command { name, mask: 0x3F, select: canonical & 0x3F, canonical }
+}
+
+/// The GTE as the R3000A's coprocessor 2, for `emusen-mips`: its registers by the names above, and its commands by the
+/// real command number in bits 0-5, each with the 25 bits psx-spx's "GTE Opcode Summary" gives it.
+pub static COPROCESSOR: Coprocessor = Coprocessor {
+    data: DATA_REGISTERS,
+    control: CONTROL_REGISTERS,
+    commands: &[
+        command("rtps", 0x018_0001),
+        command("nclip", 0x140_0006),
+        command("op", 0x170_000C),
+        command("dpcs", 0x078_0010),
+        command("intpl", 0x098_0011),
+        command("mvmva", 0x040_0012),
+        command("ncds", 0x0E8_0413),
+        command("cdp", 0x128_0414),
+        command("ncdt", 0x0F8_0416),
+        command("nccs", 0x108_041B),
+        command("cc", 0x138_041C),
+        command("ncs", 0x0C8_041E),
+        command("nct", 0x0D8_0420),
+        command("sqr", 0x0A0_0428),
+        command("dcpl", 0x068_0029),
+        command("dpct", 0x0F8_002A),
+        command("avsz3", 0x158_002D),
+        command("avsz4", 0x168_002E),
+        command("rtpt", 0x028_0030),
+        command("gpf", 0x190_003D),
+        command("gpl", 0x1A0_003E),
+        command("ncct", 0x118_043F),
+    ],
+};
 
 /// The 64 registers as the hardware holds them; what a read returns is the transfers' business (stage 5).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -91,6 +127,25 @@ impl State for Gte {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each command is written by its name in its canonical form and with its bits otherwise, and reads back.
+    #[test]
+    fn the_commands_disassemble_by_name_and_assemble_back() {
+        let d = emusen_mips::Dialect { cop: [None, None, Some(&COPROCESSOR), None] };
+        let mut numbers: Vec<u32> = COPROCESSOR.commands.iter().map(|c| c.select).collect();
+        numbers.sort();
+        numbers.dedup();
+        assert_eq!(numbers.len(), 22);
+        for c in COPROCESSOR.commands {
+            let word = 0x4A00_0000 | c.canonical;
+            assert_eq!(emusen_mips::disassemble(word, 0, &d).to_string(), c.name);
+            assert_eq!(emusen_mips::assemble_line(c.name, 0, &d), Ok(word));
+        }
+        assert_eq!(emusen_mips::disassemble(0x4A14_0006, 0, &d).to_string(), "nclip 0x0140006", "the fake number differs");
+        assert_eq!(emusen_mips::disassemble(0x4808_F800, 0, &d).to_string(), "mfc2 t0, LZCR");
+        assert_eq!(emusen_mips::disassemble(0x4848_F800, 0, &d).to_string(), "cfc2 t0, FLAG");
+        assert_eq!(emusen_mips::disassemble(0x4A00_0000, 0, &d).to_string(), "cop2 0x0000000");
+    }
 
     #[test]
     fn the_engine_refuses_to_run_until_it_is_built() {

@@ -6,6 +6,7 @@ version = 4
 name = "blackmoon-gte"
 version = "0.1.0"
 dependencies = [
+ "emusen-mips",
  "emusen-native",
 ]
 
@@ -13,6 +14,7 @@ dependencies = [
 name = "blackmoon-r3000"
 version = "0.1.0"
 dependencies = [
+ "emusen-mips",
  "emusen-native",
 ]
 
@@ -24,6 +26,10 @@ dependencies = [
  "blackmoon-r3000",
  "emusen-native",
 ]
+
+[[package]]
+name = "emusen-mips"
+version = "0.1.0"
 
 [[package]]
 name = "emusen-native"

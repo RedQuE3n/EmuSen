@@ -191,7 +191,8 @@ All zero-filled. `R3000BUS`, `CDBUFFER` and the cards of the plan's §4.3 come w
 and the cards (6).
 
 Version 1 of the state: the magic `DMND`, the version, the frame count, the R3000A's block as `Cpu` (192 bytes) and
-the GTE's as `Gte` (256), then every writable memory in id order: **3,671,504 bytes** [M, the kit], the plan's
+the GTE's as `Gte` (256), then every writable memory in id order: **3,671,504 bytes** [M, the kit] (3,671,512 since
+stage 2, whose R3000A block is 200 bytes, §10), the plan's
 "about 3.6 MiB" before the caches and the controllers' state join it. A state of another magic is refused as
 foreign, of another version as a version, and a truncated one as truncated; a refused load changes nothing, the
 processor blocks being read into copies first. The layout is pinned by `the_version_1_layout_is_pinned`. The disc's
@@ -372,3 +373,61 @@ and files, and the pack's players.
 - `kit/psx-sample.txt`, the corpus list of the plan's §3.4, waits for discs and for a kernel that runs the test
   programs; the kit's memory estimate per image (`EmuSen_CoreAPI_Extensions.md` §7) is being built apart from this
   stage.
+
+---
+
+## 10. Stage 2: the R3000A (2026-10-11)
+
+The plan's §7 row 2: the R3000A, with the shared MIPS crate's decode, disassembler and assembler, and its state. The
+processor's own record is `../BlackMoon-HW/BlackMoon_R3000.md`; `emusen-mips`'s is `../../Shared/EmuSen_Mips.md`.
+This section records what changed for Diamond and what the stage measured.
+
+### 10.1 What was built
+
+- **`emusen-mips`** in `EmuSen/Cores/Shared/`: the fields, the decode of MIPS I as the R3000 decodes it with an
+  extension point per coprocessor, the disassembler with a table per coprocessor, and an assembler for test
+  programs; no execution (`EmuSen_Mips.md`).
+- **`blackmoon-r3000`**, built: MIPS I with both delay slots, coprocessor 0 as the PlayStation has it (the mode stack,
+  RFE, cache isolation, the debug unit, PRId, usability), exceptions and interrupts with their Cause codes, the
+  multiplier's interlock through the bus's idle cycles, the observed step, coprocessor 0's table for the disassembler,
+  and the state block grown by the multiplier's deadline (`BlackMoon_R3000.md` §4–§7). Its bus gained the three-byte
+  access, the isolated-cache calls and a clock the processor reads.
+- **`blackmoon-gte`** gained its table for the disassembler, its register names and 22 commands (`BlackMoon_GTE.md`
+  §2); nothing of the GTE executes before stage 5.
+- **Diamond** carries the 200-byte block as `Cpu`: version 1 of `DMND` was redefined (no player has a Diamond state,
+  §2.7), its layout test re-pinned, the state 3,671,512 bytes. The machine does not step the processor yet: the bus
+  it steps against is stage 3's.
+
+### 10.2 The gate
+
+**SingleStepTests r3000: 55,000 of 55,000 cases** on registers, HI/LO, the PC, both delay states and every cycle's
+fetch, read and write [M, `cargo test --release` with `EMUSEN_BLACKMOON_CORPUS`, 0.4 s]. One dispute names cases:
+**D-1**, the 1,022 LWL, LWR, SWL and SWR cases that move three bytes, which the suite records as a halfword and a byte
+and the manuals as one access; they are graded with the two cycles joined, and pass. The result by instruction group
+is `BlackMoon_R3000.md` §9's table. Two more disputes were opened without naming suite cases: **D-2**, the multiplier's
+latencies, where IDT's figures and psx-spx's disagree and psx-spx's PlayStation table is taken, open until a program
+times it; **D-3**, LWC0 and SWC0 raising CpU only with CU0 clear, settled by ps1-tests' `cpu/cop` console log against
+psx-spx's text. Stage 1's controls hold: the replay passes every case and the spoiled replays none.
+
+**P1 retired** (the plan's §13): "The R3000A passes every case of the r3000 suite's registers before any bus exists,
+and its cycle lists on all but a handful of cases that become disputes about fetch ordering." The registers half held,
+before any bus. The cycles half was wrong in both its count and its subject: every cycle list passes but 1,022 cases'
+(1.9%, not a handful), and their dispute is about the width of an access, not the order of fetches; the suite's order
+of fetch, then read or write, matched the processor everywhere.
+
+### 10.3 Tests run (2026-10-11)
+
+`cargo test --release`: `emusen-mips` 10; `blackmoon-r3000` 25 (the suite, its controls, D-1's cases, every suite
+opcode through the assembler, 17 cases of the project's own, the state block, the names held equal); `blackmoon-gte`
+4; `diamond` 15. `cargo clippy --all-targets` clean on the three crates. The kit's C1–C15 pass on a PS-EXE at 120
+frames with the new state size. No C# changed, so WiseMan's tests were not run.
+
+### 10.4 What the stage leaves
+
+- The I-cache, the scratchpad and the cache control register: inside the processor's crate or in Diamond's bus, for
+  stage 3 (`BlackMoon_R3000.md` §2), with the isolated calls ready for either.
+- Every reading the suite cannot reach (interrupts, coprocessor 0 beyond an exception, user mode, the multiplier's
+  timing) is held by the crate's own cases against itself; amidog's CPU and CPX tests and ps1-tests' `cpu/*` grade them
+  once the bus and the open kernel run them (stage 3).
+- D-2's measurement, by a program of the project's own at stage 3.
+

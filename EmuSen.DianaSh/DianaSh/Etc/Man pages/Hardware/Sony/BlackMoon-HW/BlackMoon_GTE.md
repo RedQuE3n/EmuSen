@@ -20,6 +20,13 @@ layout only.
 - **The transfers**: `data` (MFC2, SWC2), `set_data` (MTC2, LWC2), `control` (CFC2), `set_control` (CTC2).
 - **`command`**: the COP2 instruction's low 25 bits; returns the cycles until its results can be read, the core owning
   the clock (README).
+- **`COPROCESSOR`** (added 2026-10-11, at Diamond's stage 2): the GTE as coprocessor 2 for `emusen-mips`'s
+  disassembler and assembler (`../../Shared/EmuSen_Mips.md` §2.3): the register names above, and the 22 commands of
+  psx-spx's "GTE Opcode Summary" selected by the real command number in bits 0–5, each with the 25 bits psx-spx's
+  heading gives it (`rtps` is `0180001h`). A command whose other bits differ is written with them (`nclip 0x0140006`,
+  the encoding psx-spx reports Wipeout 2097 using). The names live here because the GTE's facts are this crate's;
+  the R3000A's crate does not depend on this one, and Diamond joins the two. Tested by
+  `the_commands_disassemble_by_name_and_assemble_back`.
 
 ## 3. The oracle
 

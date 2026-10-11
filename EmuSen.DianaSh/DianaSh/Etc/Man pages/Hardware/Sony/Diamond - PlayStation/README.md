@@ -2,8 +2,9 @@
 
 The PlayStation core, written in Rust from hardware documents under a clean-room protocol, on the core ABI v1 from
 its first commit (`EmuSen/Cores/Sony/Diamond - PlayStation/`, crate `diamond`), and marked in development until its
-gate. At stage 1 (2026-10-11) it recognises a PS-EXE or a disc and shows a black picture; nothing is emulated yet. Its
-processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
+gate. At stage 1 (2026-10-11) it recognises a PS-EXE or a disc and shows a black picture; at stage 2 (the same day)
+its R3000A was built and passes the r3000 single-step suite, though the machine does not run it until the bus of
+stage 3. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
 
 - [`Diamond_Plan.md`](Diamond_Plan.md) — the plan, written 2026-10-10 before any emulation: the machine in scope and
   how accurate each part must be (the R3000A with its cache and scratchpad, the GTE exact, DMA, timers, interrupts, a
@@ -16,7 +17,9 @@ processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
   ABI v1 (what an image is, read from its bytes; the provisional rates; the settings, firmware, spaces and state), the
   system pack `psx` and which facts it owns, the BlackMoon crates, the registration in development, WiseMan's PS-EXE
   and synthetic disc builders (ISO 9660, raw sectors with ECMA-130's EDC and parity, a CD-DA track, a cue sheet), and
-  the gate: the kit's C1–C15 on a synthetic program and disc, and the r3000 replay controls.
+  the gate: the kit's C1–C15 on a synthetic program and disc, and the r3000 replay controls; and stage 2 (§10): the
+  R3000A and the shared `emusen-mips`, 55,000 of 55,000 single-step cases with one dispute naming cases, and P1
+  retired.
 - [`Diamond_References.md`](Diamond_References.md) — the oracles, documents and reference cores pinned at stage 1
   (2026-10-11): the test programs with their console logs and pictures, the documents and their exclusions, the probe on
   the three libretro cores (only PCSX-ReARMed may run without a BIOS; Beetle PSX and SwanStation boot OpenBIOS and are

@@ -935,7 +935,9 @@ Each with a recommendation.
 ## 13. Predictions to be retired
 
 - **P1.** The R3000A passes every case of the r3000 suite's registers before any bus exists, and its cycle lists on
-  all but a handful of cases that become disputes about fetch ordering.
+  all but a handful of cases that become disputes about fetch ordering. *Retired 2026-10-11, at stage 2
+  (`Diamond_Native.md` §10.2): the registers half held; the cycles half was wrong in count and subject, 1,022 cases
+  under one dispute about an access's width, none about fetch ordering.*
 - **P2.** A heavy 3D scene misses §5.12's budget with the interpreter alone and meets it with the threaded rasteriser
   and the decoded-instruction cache, before the recompiler.
 - **P3.** The whole is about 69 steps (52 and 17); the GPU's timing, the CD-ROM controller and the open BIOS are the stages most

@@ -45,9 +45,21 @@ One page per piece of hardware being abstracted, rather than the long inline `//
 
 ## Sony
 
-- [`Diamond - PlayStation/`](Sony/Diamond%20-%20PlayStation/) — the PlayStation. **Stage 1 built 2026-10-11, in development**: [`Diamond_Plan.md`](Sony/Diamond%20-%20PlayStation/Diamond_Plan.md) is the plan (clean-room protocol, sources, oracles, the open BIOS, the speed budget, the enhancements, stages and gates), [`Diamond_Native.md`](Sony/Diamond%20-%20PlayStation/Diamond_Native.md) the build record, [`Diamond_References.md`](Sony/Diamond%20-%20PlayStation/Diamond_References.md) the references pinned at stage 1, [`Diamond_Disputes.md`](Sony/Diamond%20-%20PlayStation/Diamond_Disputes.md) the disputes log, and its [`README.md`](Sony/Diamond%20-%20PlayStation/README.md) the index.
-- [`BlackMoon-HW/`](Sony/BlackMoon-HW/) — not a console: the shared crates the Sony cores are built on (BlackMoon Hardware): `blackmoon-r3000` with its single-step oracle and `blackmoon-gte`. **Skeletons built 2026-10-11**; its [`README.md`](Sony/BlackMoon-HW/README.md) holds the interface every crate keeps, and each crate has its own record: [`BlackMoon_R3000.md`](Sony/BlackMoon-HW/BlackMoon_R3000.md), [`BlackMoon_GTE.md`](Sony/BlackMoon-HW/BlackMoon_GTE.md).
+- [`Diamond - PlayStation/`](Sony/Diamond%20-%20PlayStation/) — the PlayStation. **Stages 1 and 2 built 2026-10-11, in development** (stage 2: the R3000A): [`Diamond_Plan.md`](Sony/Diamond%20-%20PlayStation/Diamond_Plan.md) is the plan (clean-room protocol, sources, oracles, the open BIOS, the speed budget, the enhancements, stages and gates), [`Diamond_Native.md`](Sony/Diamond%20-%20PlayStation/Diamond_Native.md) the build record, [`Diamond_References.md`](Sony/Diamond%20-%20PlayStation/Diamond_References.md) the references pinned at stage 1, [`Diamond_Disputes.md`](Sony/Diamond%20-%20PlayStation/Diamond_Disputes.md) the disputes log, and its [`README.md`](Sony/Diamond%20-%20PlayStation/README.md) the index.
+- [`BlackMoon-HW/`](Sony/BlackMoon-HW/) — not a console: the shared crates the Sony cores are built on (BlackMoon Hardware): `blackmoon-r3000` with its single-step oracle and `blackmoon-gte`. **Skeletons built 2026-10-11, and the R3000A the
+same day at Diamond's stage 2** (55,000 of 55,000 cases of the r3000 suite, its disputes log in its record); its [`README.md`](Sony/BlackMoon-HW/README.md) holds the interface every crate keeps, and each crate has its own record: [`BlackMoon_R3000.md`](Sony/BlackMoon-HW/BlackMoon_R3000.md), [`BlackMoon_GTE.md`](Sony/BlackMoon-HW/BlackMoon_GTE.md).
 - `Sapphire - PlayStation 2/`, `Rubeus - PlayStation 3/`, `Esmeraude - PSP/`, `Wiseman - PS Vita/` — stubs, not started yet.
+
+## Shared
+
+Not a console: the crates every manufacturer's cores may share, in `EmuSen/Cores/Shared/`. `emusen-native` and the
+conformance kit are documented with the core ABI (`EmuSen_RustState.md`, `EmuSen_CoreAPI.md`); the hardware ones are
+here.
+
+- [`Shared/EmuSen_Mips.md`](Shared/EmuSen_Mips.md) — `emusen-mips`, the MIPS instruction set as data: fields, the
+  decode of MIPS I as the R3000 decodes it with an extension point per coprocessor, the disassembler with a table per
+  coprocessor, and an assembler for test programs; no execution. Built 2026-10-11 at Diamond's stage 2, used by
+  `blackmoon-r3000` and `blackmoon-gte`, open to MarsRT's disassembler.
 
 ## Atari
 

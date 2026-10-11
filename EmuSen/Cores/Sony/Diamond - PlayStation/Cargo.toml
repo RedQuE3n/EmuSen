@@ -14,6 +14,9 @@ emusen-native = { path = "../../Shared/emusen-native" }
 blackmoon-r3000 = { path = "../BlackMoon-HW/blackmoon-r3000" }
 blackmoon-gte = { path = "../BlackMoon-HW/blackmoon-gte" }
 
+[dev-dependencies]
+emusen-mips = { path = "../../Shared/emusen-mips" }
+
 [profile.release]
 panic = "abort"
 opt-level = 3

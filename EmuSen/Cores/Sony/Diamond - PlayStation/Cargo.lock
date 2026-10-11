@@ -24,6 +24,7 @@ version = "0.1.0"
 dependencies = [
  "blackmoon-gte",
  "blackmoon-r3000",
+ "emusen-mips",
  "emusen-native",
 ]
 

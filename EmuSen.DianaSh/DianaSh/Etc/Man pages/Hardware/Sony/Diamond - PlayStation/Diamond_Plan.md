@@ -942,7 +942,9 @@ Each with a recommendation.
   and the decoded-instruction cache, before the recompiler.
 - **P3.** The whole is about 69 steps (52 and 17); the GPU's timing, the CD-ROM controller and the open BIOS are the stages most
   likely to overrun.
-- **P4.** DMA's timing needs at least one dispute, about chopping or the GPU channel's pacing.
+- **P4.** DMA's timing needs at least one dispute, about chopping or the GPU channel's pacing. *Retired 2026-10-11, at
+  stage 3 (`Diamond_Native.md` §11.7): it held. D-5 names the gaps between blocks, nodes and chopped windows, fitted to
+  `dma/chopping`'s and `dma/chain-looping`'s console logs, and the write queue's drain beside them.*
 - **P5.** At least one bench game behaves differently when the GPU's drawing time is made instant.
 - **P6.** At least half the disputes entries fall in §2.3's thin areas, and most are the CD-ROM controller's and the
   CPU's bus timing.

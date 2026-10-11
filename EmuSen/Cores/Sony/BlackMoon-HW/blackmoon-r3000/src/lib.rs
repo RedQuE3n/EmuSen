@@ -68,6 +68,11 @@ pub trait Bus {
     fn cop2_control(&mut self, register: u8) -> u32;
     fn set_cop2_control(&mut self, register: u8, value: u32);
     fn cop2_command(&mut self, command: u32);
+    /// Whether the access just made met no device (psx-spx "Memory Exceptions"): the processor takes a bus error, IBE
+    /// after a fetch and DBE after a load or store. A flat bus never faults.
+    fn bus_error(&mut self) -> bool {
+        false
+    }
 }
 
 /// The branch delay: whether the next instruction is a branch's delay slot, whether the branch is taken, and where to.

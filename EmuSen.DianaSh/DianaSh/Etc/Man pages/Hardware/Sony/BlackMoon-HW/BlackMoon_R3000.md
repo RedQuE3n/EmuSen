@@ -22,6 +22,10 @@ names and layout only; no emulator's source and no firmware was read.
   interlock); `cycles`, the bus's clock, which the processor only reads; `interrupt` (the external request as
   Cause's IP2 sees it); and coprocessor 2's `cop2_data`, `set_cop2_data`, `cop2_control`, `set_cop2_control` and
   `cop2_command` (README, "A coprocessor"). Stage 2 added the isolated calls, the clock and the three-byte size.
+  *Stage 3 (2026-10-11)* added **`bus_error`**, a default method answering false: after a fetch the processor asks it
+  and takes IBE (ExcCode 6), after a load or store and takes DBE (7), EPC at the instruction, a faulting load landing
+  nothing and a faulting store's bytes not reported to the observer (psx-spx "Memory Exceptions": "Bus Error ------>
+  Unused Memory Regions"). The suite's flat bus never faults, so its 55,000 cases are unchanged [M].
 - **`Size`**: `Byte`, `Half`, `Tribyte` and `Word`. A read's value is in the low bits and anything above them is
   ignored. A write carries the register as the processor drives it, the datum in the low `size` bytes: a byte or
   halfword store passes the whole register, which psx-spx's "Caution - 8/16-bit writes to certain IO registers" says
@@ -32,7 +36,9 @@ names and layout only; no emulator's source and no firmware was read.
   `FFFE0130h` sit [C, open]: inside the crate, configured by its core, or in Diamond's bus. The isolated calls serve
   either answer: the processor says that an access is isolated, and whoever holds the cache answers it. The
   PlayStation 2's I/O processor is said to differ in its caches [A, unread], so the choice is made at Diamond's stage
-  3 with the timing model of `Diamond_Plan.md` §5.2, when the cost of each is known, and recorded here.
+  3 with the timing model of `Diamond_Plan.md` §5.2, when the cost of each is known, and recorded here. *Decided at
+  stage 3*: **in Diamond's bus** (`Diamond_Native.md` §11.4), the refill's cost being the region's and the scratchpad
+  a region of the map; the crate keeps no cache.
 - **`Registers`**: R0–R31, HI, LO, the PC, coprocessor 0's SR, CAUSE, EPC, BadVaddr, TAR, DCIC, BPC, BDA, BPCM and BDAM
   (psx-spx "COP0 Register Summary"), and the two delays the R3000A makes architectural: **`BranchDelay`** (whether the
   next instruction is a delay slot, whether the branch is taken, its target) and **`LoadDelay`** (the register a load
@@ -319,13 +325,26 @@ In the shape of `Diamond_Disputes.md`. Each entry's evidence and rule; the proce
   one defect of its own: its MULT ranges end at `FFFFF801h` and `FFF00001h`, each overlapping the next range's start;
   the symmetric reading by the magnitude of rs, `FFF00000h..FFFFF7FFh` for 9 cycles and `80000000h..FFEFFFFFh` for 13,
   is taken.
-- **Test program:** none yet. ps1-tests' `access-time` does not time the multiplier; a program of the project's own
-  that times MFLO after each width of operand, read by its TTY at stage 3, is the second rung. With no console at hand
-  (`Diamond_Plan.md` §11 Q16), the references can only witness it.
+- **Test program:** ~~none yet.~~ *Stage 3, 2026-10-11*: `programs/multiply.s` in Diamond's crate, assembled with
+  `emusen-mips`: each case times MULT, MULTU, DIV or DIVU of its operands and MFLO at once, against MFLO alone, by
+  timer 2 on the system clock from the I-cache with interrupts off, keeping a second pass; a second table times MULTU
+  of a small rs, N NOPs and MFLO against the NOPs and MFLO, N = 0..15. Results in RAM (`Diamond_Native.md` §11.13).
+  - *On Diamond* [M]: MULTU 6 cycles for rs 0 and 7FFh, 9 for 800h and FFFFFh, 13 for 100000h and FFFFFFFFh; MULT 6
+    for 7FFh and F800h (−2048), 9 for 800h, FFFFF7FFh, FFFFFh and FFF00000h, 13 for 100000h, FFEFFFFFh and 80000000h;
+    MULTU of 1 by FFFFFFFFh 6 and MULT of 3 by 80000000h 6 (rt does not count); DIV and DIVU 36 for every case, by
+    zero and 80000000h / −1 included. The NOP table: 6, 5, 4, 3, 2, 1, then 1 from N = 5 (the multiply's own cycle).
+    This is the reading of §5.5 reproduced, as it must be; it says nothing of the hardware.
+  - *Beetle PSX on the player's BIOS* [M, RAM only]: every case 2 cycles more (8, 11, 15; 38 for a division); the NOP
+    table 8, 7, 6, 5, 4, 3, then 1 from N = 6. *SwanStation*: 1 for every case and every N, no latency modelled.
+    *PCSX-ReARMed*: 0 everywhere, its timer not advancing within the measurement. The witnesses disagree among
+    themselves; the one that models a latency agrees with psx-spx's dependence on rs and differs from §5.5's boundary
+    by two cycles, which is the size of this reading's uncertainty about where the latency is counted from.
 - **Conclusion:** psx-spx's table, with the boundary of §5.5 (the result readable when the bus's clock after MFLO's
-  fetch reaches MULT's fetch plus the latency). **Open**: argued, not measured.
+  fetch reaches MULT's fetch plus the latency). **Open**: argued, and witnessed only by emulators that disagree; it stays
+  open until `multiply.s` runs on the tester's console (`Diamond_Plan.md` §11 Q16), whose two tables decide both the
+  latencies and the boundary.
 - **Depends on it:** the cycle at which MFHI and MFLO complete, so every timing measurement downstream of a multiply.
-- **Pinned by:** `the_multiplier_holds_mfhi_and_mflo_by_rs`.
+- **Pinned by:** `the_multiplier_holds_mfhi_and_mflo_by_rs`; Diamond's `the_multiplier_takes_psx_spxs_cycles`.
 - **Implemented in:** the same commit as D-1.
 
 ### D-3. LWC0 and SWC0 (and every LWCz, SWCz and BCz) raise CpU only when CUz is clear, in kernel mode too; psx-spx's "always CpU" does not hold
@@ -373,6 +392,28 @@ readings for those against themselves; amidog's CPU and CPX tests and ps1-tests 
 (`Diamond_Plan.md` §13) is retired in `Diamond_Native.md` §10.
 
 ## 10. Open, and owed to stage 3
+
+*Stage 3's answers, 2026-10-11* (`Diamond_Native.md` §11.13 and §11.14). Each item was checked by a program of the
+project's own run on Diamond and on the three reference cores, their RAM read; amidog's CPU and CPX tests, the
+independent check, report on screen and wait for the GPU (stage 4), and ps1-tests' `cpu/*` cover none of the three:
+
+- **CE on every exception**: `exceptions.s` takes twelve exceptions (Sys, Bp, Ov from ADD and ADDI, AdEL from LW and
+  LH, AdES from SH and SW, RI, CpU from SWC3, MFC2 and LWC2). Diamond writes the opcode's low two bits as CE on every
+  one; Beetle PSX does the same on the eleven it takes (it raises no CpU for LWC2 with CU2 clear, against D-3's
+  reading); SwanStation takes five (no address error on the misaligned accesses, no CpU for the three coprocessor
+  forms); PCSX-ReARMed raises RI for ADD's overflow and stops. The one witness that takes the exceptions agrees on CE;
+  still open on the hardware.
+- **A second load cancelling the first**: `loads.s`. Diamond, Beetle PSX and SwanStation agree on all eight results:
+  the first load never lands (the register keeps 55h), the instruction's own write wins, LWL and LWR merge with the
+  pending value, and MFC0 through the delay cancels a pending load of its register the same way; PCSX-ReARMed lets
+  the first load land (11111111h). Two of three witnesses with the suite; the bypass question of §5.3 is answered for
+  the instruction after the second load (it sees the old value) on every witness that cancels.
+- **The garbage registers 16–31**: `cop0-garbage.s`. Diamond reads 0; SwanStation and PCSX-ReARMed 0; Beetle PSX a
+  pattern of period eight (10800h, 0, 304h, C1h, 304h, 1F800000h, 8, 4) repeated from 16 to 31, and 10800h after a
+  delay and after EPC, which matches neither psx-spx's "follows the last valid read" nor zero. Open: no document gives
+  values, and the witnesses disagree.
+
+The items below stand as written at stage 2.
 
 - Where the I-cache and scratchpad live (§2); the isolated calls' answers.
 - D-2's measurement, and §5.5's unmodelled points.

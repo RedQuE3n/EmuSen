@@ -4,7 +4,9 @@
 use emusen_native::abi::Region;
 use emusen_native::core::*;
 
-use crate::machine::{AUDIO_RATE, BIOS_BYTES, BIOS_ID, Config, Gpu, MAX_HEIGHT, MAX_WIDTH, Machine, RAM_ID, WIDTH};
+use crate::bus::BIOS_BYTES;
+use crate::kernel::{self, Kernel};
+use crate::machine::{AUDIO_RATE, Config, Gpu, MAX_HEIGHT, MAX_WIDTH, Machine, RAM_ID, SPACES, WIDTH};
 use crate::media::{Market, Media, Refusal};
 use crate::state::STATE_VERSION;
 
@@ -57,7 +59,7 @@ pub const BIOS_JAPAN: u32 = 1;
 pub const BIOS_AMERICAS: u32 = 2;
 pub const BIOS_EUROPE: u32 = 3;
 
-const BIOS_COST: &str = "No PlayStation program runs yet, with this file or without it. Diamond's own open BIOS, written from the documents, takes its place when it exists: its kernel at stage 3 and the disc boot, files and memory cards at stage 10 (Diamond_Plan.md §5.9). A player's own BIOS stays the exact path.";
+const BIOS_COST: &str = "Most games start and save as on a console. A game that relies on an undocumented kernel call, reads the kernel's code, or depends on its exact timing may behave differently, and the start-up screen is EmuSen's own. Until the rest of the kernel exists, only programs loaded directly run without your BIOS; discs and memory cards need your own.";
 
 pub fn bios(market: Market) -> Firmware {
     let (which, name, label) = match market {
@@ -65,7 +67,7 @@ pub fn bios(market: Market) -> Firmware {
         Market::Americas => (BIOS_AMERICAS, "scph5501.bin", "The American PlayStation's BIOS"),
         Market::Europe => (BIOS_EUROPE, "scph5502.bin", "The European PlayStation's BIOS"),
     };
-    Firmware { which, name: name.into(), label: label.into(), size: BIOS_BYTES as u64, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: BIOS_COST.into() }) }
+    Firmware { which, name: name.into(), label: label.into(), size: BIOS_BYTES as u64, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::Accuracy { cost: BIOS_COST.into() }) }
 }
 
 /// The extensions the core opens at stage 1, the system pack's checked subset (Diamond_Native.md §2.4).
@@ -127,7 +129,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage it recognises a program or a disc and shows a black picture; nothing is emulated yet.".into()),
+            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, memory, timers, interrupts and DMA run a program; the picture stays black and the sound silent until the GPU and the SPU are built.".into()),
             systems: vec![emusen_native::core::System {
                 id: "psx".into(),
                 name: "Sony PlayStation".into(),
@@ -181,11 +183,10 @@ impl Core for Machine {
         let s = &request.settings;
         let config = Config { market: market_of(&media, s.get(REGION_KEY)), gpu: GPUS.iter().find(|g| Some(g.0) == s.get(GPU_KEY)).map_or(Gpu::Pin208, |g| g.2) };
         let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK) && p.0 != "none").map(|p| p.0);
-        let mut m = Machine::new(media, config, [port(PAD_KEYS[0]), port(PAD_KEYS[1])]);
+        let players = request.files.iter().find(|f| f.which == bios(config.market).which).map(|f| (f.data, Kernel::Player));
+        let rom = players.or_else(|| kernel::open_kernel().map(|k| (k, Kernel::Open)));
+        let mut m = Machine::new(media, config, [port(PAD_KEYS[0]), port(PAD_KEYS[1])], request.image, rom);
         m.firmware = request.files.iter().filter(|f| f.which != 0).map(|f| f.which).collect();
-        if let Some(file) = request.files.iter().find(|f| f.which == bios(config.market).which) {
-            m.memory_mut(BIOS_ID).expect("the BIOS").bytes.copy_from_slice(file.data);
-        }
         Ok(m)
     }
 
@@ -199,7 +200,7 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: self.height(), max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: (0..2).map(|p| Port { port: p as u32, controller: self.ports[p].map(Into::into) }).collect(),
-            spaces: self.memories.iter().map(|m| Space { read_only: m.read_only, cheats: m.id == RAM_ID, ..Space::new(m.id, m.name) }).collect(),
+            spaces: SPACES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, ..Space::new(id, name) }).collect(),
             processors: vec![
                 Processor { id: 0, name: "R3000".into(), pc_bits: 32, registers: registers(&blackmoon_r3000::DEBUG_REGISTERS), code_space: None },
                 Processor { id: 1, name: "GTE".into(), pc_bits: 0, registers: registers(&[blackmoon_gte::DATA_REGISTERS, blackmoon_gte::CONTROL_REGISTERS].concat()), code_space: None },
@@ -209,7 +210,14 @@ impl Core for Machine {
             phases: Vec::new(),
             patches: None,
             skip_rendering_state_neutral: false,
-            firmware: vec![(which, if self.firmware.contains(&which) { FirmwareSource::File } else { FirmwareSource::Absent })],
+            firmware: vec![(
+                which,
+                match self.kernel {
+                    Kernel::Player => FirmwareSource::File,
+                    Kernel::Open => FirmwareSource::Replacement,
+                    Kernel::None => FirmwareSource::Absent,
+                },
+            )],
         }
     }
 
@@ -261,24 +269,24 @@ impl Core for Machine {
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
-        self.memory(space).map(|m| m.bytes.len() as i64).ok_or(status::NO_SUCH_SPACE)
+        self.space(space).map(|m| m.len() as i64).ok_or(status::NO_SUCH_SPACE)
     }
 
     fn space_read(&mut self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
-        let m = self.memory(space).ok_or(status::NO_SUCH_SPACE)?;
+        let m = self.space(space).ok_or(status::NO_SUCH_SPACE)?;
         for (i, b) in out.iter_mut().enumerate() {
-            *b = m.bytes.get(address as usize + i).copied().unwrap_or(0);
+            *b = m.get(address as usize + i).copied().unwrap_or(0);
         }
         Ok(())
     }
 
     fn space_write(&mut self, space: u32, address: u32, data: &[u8]) -> Result<(), i32> {
-        let m = self.memory_mut(space).ok_or(status::NO_SUCH_SPACE)?;
-        if m.read_only {
-            return Err(status::READ_ONLY);
+        if self.space(space).is_none() {
+            return Err(status::NO_SUCH_SPACE);
         }
+        let m = self.space_mut(space).ok_or(status::READ_ONLY)?;
         for (i, &b) in data.iter().enumerate() {
-            if let Some(d) = m.bytes.get_mut(address as usize + i) {
+            if let Some(d) = m.get_mut(address as usize + i) {
                 *d = b;
             }
         }
@@ -298,7 +306,7 @@ emusen_native::core_exports!(Machine;);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::machine::{NTSC_FRAME, PAL_FRAME};
+    use crate::machine::{BIOS_ID, CYCLES_PER_SAMPLE, standard_rate};
     use crate::media::sample::{disc, exe};
 
     fn create(image: &[u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
@@ -310,16 +318,16 @@ mod tests {
     fn the_stub_reports_the_image_its_market_and_a_black_picture() {
         let us = create(&exe(Some("North America"), 64), &[], vec![]).unwrap();
         let info = us.machine_info();
-        assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("psx", Some(Region::Ntsc), NTSC_FRAME));
-        assert_eq!(info.spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["RAM", "SCRATCH", "VRAM", "SPURAM", "BIOS"]);
+        assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("psx", Some(Region::Ntsc), standard_rate(false)));
+        assert_eq!(info.spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["RAM", "SCRATCH", "VRAM", "SPURAM", "BIOS", "TTY"]);
         assert_eq!(info.processors.iter().map(|p| (p.name.as_str(), p.registers.len())).collect::<Vec<_>>(), [("R3000", 45), ("GTE", 64)]);
         assert_eq!((info.video.base_width, info.video.base_height, info.video.aspect), (320, 240, (4, 3)));
         assert_eq!(info.ports.iter().map(|p| p.controller.as_deref()).collect::<Vec<_>>(), [Some(DUALSHOCK), Some(DUALSHOCK)]);
-        assert_eq!(info.firmware, vec![(BIOS_AMERICAS, FirmwareSource::Absent)]);
+        assert_eq!(info.firmware, vec![(BIOS_AMERICAS, FirmwareSource::Replacement)]);
         assert!(us.frame().chunks(4).all(|p| p == [0, 0, 0, 255]) && us.frame().len() == 320 * 240 * 4);
 
         let eu = create(&disc(Market::Europe, Some(2)), &[], vec![]).unwrap();
-        assert_eq!((eu.machine_info().region, eu.machine_info().frame_rate, eu.machine_info().video.base_height), (Some(Region::Pal), PAL_FRAME, 256));
+        assert_eq!((eu.machine_info().region, eu.machine_info().frame_rate, eu.machine_info().video.base_height), (Some(Region::Pal), standard_rate(true), 256));
         assert_eq!(Machine::firmware_for(&disc(Market::Japan, None))[0].name, "scph5500.bin");
         assert_eq!(Machine::firmware_for(&exe(None, 1))[0].name, "scph5501.bin");
         assert!(Machine::firmware_for(&[0; 100]).is_empty());
@@ -330,7 +338,7 @@ mod tests {
         let m = create(&disc(Market::Japan, None), &[(REGION_KEY, "psx.eu"), (GPU_KEY, "psx.gpu160"), (PAD_KEYS[0], PAD), (PAD_KEYS[1], "none")], vec![]).unwrap();
         assert_eq!(m.config, Config { market: Market::Europe, gpu: Gpu::Pin160 });
         assert_eq!(m.machine_info().ports.iter().map(|p| p.controller.as_deref()).collect::<Vec<_>>(), [Some(PAD), None]);
-        assert_eq!(m.machine_info().firmware, vec![(BIOS_EUROPE, FirmwareSource::Absent)]);
+        assert_eq!(m.machine_info().firmware, vec![(BIOS_EUROPE, FirmwareSource::Replacement)]);
         assert_eq!(create(&disc(Market::Japan, None), &[(REGION_KEY, "auto")], vec![]).unwrap().config.market, Market::Japan);
         for s in schema() {
             assert!(s.check().is_ok(), "{}", s.key);
@@ -348,7 +356,8 @@ mod tests {
             assert!(out[..n].iter().all(|&s| s == 0));
             total += n / 2;
         }
-        assert_eq!(total as u128, AUDIO_RATE as u128 * 60 * NTSC_FRAME.1 as u128 / NTSC_FRAME.0 as u128);
+        assert_eq!(total as u64, m.board.now / CYCLES_PER_SAMPLE);
+        assert!((44_100..=44_400).contains(&total), "{total}");
         assert_eq!(m.audio_buffered(), 0);
     }
 
@@ -365,7 +374,8 @@ mod tests {
     fn the_players_bios_is_held_read_only_and_other_files_are_refused() {
         let image = vec![0x42u8; BIOS_BYTES];
         let mut m = create(&exe(Some("Japan"), 1), &[], vec![emusen_native::abi::File { which: BIOS_JAPAN, data: &image }]).unwrap();
-        assert_eq!(m.memory(BIOS_ID).unwrap().bytes, image);
+        assert_eq!(m.space(BIOS_ID).unwrap(), &image[..]);
+        assert_eq!(m.cpu.regs.pc, 0xBFC0_0000, "a player's BIOS boots from reset");
         assert_eq!(m.machine_info().firmware, vec![(BIOS_JAPAN, FirmwareSource::File)]);
         assert_eq!(m.space_write(BIOS_ID, 0, &[1]), Err(status::READ_ONLY));
         assert_eq!(create(&exe(None, 1), &[], vec![emusen_native::abi::File { which: 4, data: &image }]).err(), Some(status::BAD_FILE));

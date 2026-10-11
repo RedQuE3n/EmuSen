@@ -46,6 +46,8 @@ struct Run<'a, B: Bus, O: Observer> {
     /// What this instruction writes to a general register at once, and what it loads for the next instruction.
     result: Option<(usize, u32)>,
     load: Option<(usize, u32)>,
+    /// Whether a data access met no device, so the instruction ends in DBE instead of completing.
+    faulted: bool,
 }
 
 fn fetchable(cpu: &R3000, address: u32) -> bool {
@@ -72,7 +74,7 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -
                 b.cop2_command(word & 0x01FF_FFFF);
             }
         }
-        let mut x = Run { cpu, b, o, at, word, next: 0, slot, pending, result: None, load: None };
+        let mut x = Run { cpu, b, o, at, word, next: 0, slot, pending, result: None, load: None, faulted: false };
         return x.exception(code::INT, GENERAL);
     }
     let why = o.before(cpu.processor, at);
@@ -82,17 +84,21 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -
     let next = if slot.slot && slot.taken { slot.target } else { at.wrapping_add(4) };
     if !fetchable(cpu, at) {
         cpu.regs.bad_vaddr = at;
-        let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None };
+        let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None, faulted: false };
         return x.exception(code::ADEL, GENERAL);
     }
     if cop0::pc_break(&mut cpu.regs, at) {
-        let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None };
+        let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None, faulted: false };
         return x.exception(code::BP, DEBUG);
     }
     let word = b.fetch(at);
+    if b.bus_error() {
+        let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None, faulted: false };
+        return x.exception(code::IBE, GENERAL);
+    }
     cpu.regs.branch = BranchDelay::default();
     cpu.regs.load = LoadDelay::default();
-    let mut x = Run { cpu, b, o, at, word, next, slot, pending, result: None, load: None };
+    let mut x = Run { cpu, b, o, at, word, next, slot, pending, result: None, load: None, faulted: false };
     x.execute()
 }
 
@@ -108,6 +114,9 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
     /// The instruction completes: the previous load lands unless this one loads the same register, then this
     /// instruction's own result, and its load waits for the next.
     fn finish(&mut self) -> Step {
+        if self.faulted {
+            return self.exception(code::DBE, GENERAL);
+        }
         let r = &mut self.cpu.regs;
         if let Some((i, v)) = self.pending
             && self.load.map(|l| l.0) != Some(i)
@@ -177,7 +186,11 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
     }
 
     fn read(&mut self, address: u32, size: Size) -> u32 {
-        let v = if self.cpu.regs.sr & sr::ISC != 0 { self.b.isolated_read(address, size) } else { self.b.read(address, size) };
+        if self.cpu.regs.sr & sr::ISC != 0 {
+            return self.b.isolated_read(address, size) & mask(size);
+        }
+        let v = self.b.read(address, size);
+        self.faulted |= self.b.bus_error();
         v & mask(size)
     }
 
@@ -187,6 +200,10 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             return;
         }
         self.b.write(address, size, value);
+        if self.b.bus_error() {
+            self.faulted = true;
+            return;
+        }
         for i in 0..size.bytes() {
             self.o.wrote(self.cpu.space, address.wrapping_add(i), (value >> (8 * i)) as u8, self.at);
         }

@@ -156,3 +156,21 @@ commits, releases and languages; the search results named in §1. Seen as a run'
   OpenBIOS without one (§4).
 - No reference exposes VRAM or SPU RAM through the standard calls (§4).
 - No CXD1815Q datasheet (§2); no prebuilt `gpustat` (§1); no VHDL simulator (§5).
+
+## 8. Stage 3's additions (2026-10-11)
+
+- **The 240p Test Suite's PlayStation port**, fetched into `~/.cache/emusen/probe/diamond/tests/240p-ps1/`, documentation
+  and binaries only, each file's MD5 in `PROVENANCE.txt` [M]: `filipalac/240pTestSuite-PS1`'s release `19122020`
+  (2020-12-19), its two builds (`240pTestSuitePS1-EMU.zip`, which leaves the drive spinning, and `240pTestSuitePS1.zip`
+  for consoles), each a `.cue`/`.bin` disc image, with the repository's `README.md` at `777602d`, and the suite's
+  documentation page on the Classic Console Upscaler Wiki (`junkerhq.net/xrgb/index.php/240p_test_suite`, as served
+  that day). Concept Artemio Urbina, the port's code Filip Aláč; GPL-2.0-or-later by its README and GitHub's API, the
+  repository holding no licence file [R]. No source was fetched. It is a disc, so it waits for the CD-ROM (stage 7) and
+  a kernel that boots discs; its pictures are judged by eye [R its README].
+- **The three references as witnesses** of the project's own programs (`Diamond_Native.md` §11.13): run through the
+  stock probe, Beetle PSX and SwanStation on the player's own BIOS by `--sysdir`, PCSX-ReARMed on its own kernel; only
+  their RAM at one frame was read. The cores' logs of runs on the player's BIOS were not read.
+- **The probe** [M]: PCSX-ReARMed declines a program named `.psexe`, which the probe reports as needing firmware (exit
+  4); the same file named `.exe` runs. The stock probe segfaults on PCSX-ReARMed with ps1-tests' `cpu/access-time` and
+  on SwanStation with `cpu/cop` at some frame windows; not investigated. No libretro channel carries a program's TTY,
+  and PCSX-ReARMed's log at every level holds none of it, so ps1-tests are not witnessed by their text.

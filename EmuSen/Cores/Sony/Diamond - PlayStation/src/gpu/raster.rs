@@ -1,6 +1,6 @@
 //! Which pixels a primitive covers and the colour and texture coordinate at each (Diamond_GPU.md §6): triangles by
-//! their edge functions sampled at whole pixels with the top-left rule, their attributes from vertex 0 by gradients in
-//! 12-bit fixed point; rectangles with their texture stepped, or flipped, pixel by pixel; lines stepped along the
+//! their edge functions sampled at whole pixels with the top-left rule, their attributes from the leftmost vertex by
+//! gradients in 12-bit fixed point; rectangles with their texture stepped, or flipped, pixel by pixel; lines stepped along the
 //! major axis with both ends drawn. Each was fitted to ps1-tests' VRAM pictures.
 
 use super::draw::Painter;
@@ -48,6 +48,14 @@ fn gradient(v: &[Vertex; 3], a: [i64; 3], area: i64) -> Gradient {
     Gradient { dx: trunc_div((da1 * dy2 - da2 * dy1) << FRACTION, area), dy: trunc_div((dx1 * da2 - dx2 * da1) << FRACTION, area) }
 }
 
+/// The vertex the attributes start from: the leftmost; of two in the leftmost column, the one that follows the other
+/// in the command's order, 0 following 2 (the referees, Diamond_Disputes.md D-7).
+fn base_vertex(v: &[Vertex; 3]) -> usize {
+    let left = v.iter().map(|q| q.x).min().unwrap_or(0);
+    let tied = |i: usize| v[i].x == left;
+    (0..3).find(|&i| tied(i) && tied((i + 2) % 3)).or_else(|| (0..3).find(|&i| tied(i))).unwrap_or(0)
+}
+
 /// Whether an edge from `a` to `b` of a triangle wound with positive area owns the pixels exactly on it: a top or a left
 /// edge does.
 fn owns(a: (i64, i64), b: (i64, i64)) -> bool {
@@ -55,7 +63,7 @@ fn owns(a: (i64, i64), b: (i64, i64)) -> bool {
     dy < 0 || (dy == 0 && dx > 0)
 }
 
-/// The triangle `v`, its attributes from v[0]: colour when `shaded`, the texture coordinate when `textured`.
+/// The triangle `v`, its attributes from its base vertex: colour when `shaded`, the texture coordinate when `textured`.
 pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
     let xs = v.map(|q| q.x);
     let ys = v.map(|q| q.y);
@@ -79,7 +87,8 @@ pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
         let a = v.map(|q| if k < 3 { q.rgb[k] as i64 } else if k == 3 { q.u as i64 } else { q.v as i64 });
         gradient(&v, a, area)
     });
-    let base: [i64; 5] = [v[0].rgb[0] as i64, v[0].rgb[1] as i64, v[0].rgb[2] as i64, v[0].u as i64, v[0].v as i64].map(|a| a << FRACTION);
+    let b = base_vertex(&v);
+    let base: [i64; 5] = [v[b].rgb[0] as i64, v[b].rgb[1] as i64, v[b].rgb[2] as i64, v[b].u as i64, v[b].v as i64].map(|a| a << FRACTION);
     let area_rect = p.paint.area;
     let y_from = miny.max(area_rect.y1);
     let y_to = (maxy - 1).min(area_rect.y2);
@@ -107,7 +116,7 @@ pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
         if !p.visible_row(y) {
             continue;
         }
-        let at = |k: usize, x: i64| base[k] + grads[k].dx * (x - v[0].x as i64) + grads[k].dy * (yy - v[0].y as i64);
+        let at = |k: usize, x: i64| base[k] + grads[k].dx * (x - v[b].x as i64) + grads[k].dy * (yy - v[b].y as i64);
         let mut a = [0, 1, 2, 3, 4].map(|k| at(k, lo));
         for x in lo..=hi {
             let rgb = if shaded { [0, 1, 2].map(|k| ((a[k] + HALF) >> FRACTION) as i32) } else { v[0].rgb };
@@ -133,7 +142,7 @@ pub struct Sprite {
 }
 
 /// A rectangle; its texture coordinate steps by one a pixel, backwards along a flipped axis, an x-flipped one from
-/// u + 1 (ps1-tests' `texture-flip` on a console, Diamond_Disputes.md D-8).
+/// u with its low bit set (ps1-tests' `texture-flip` on a console and the referee, Diamond_Disputes.md D-8).
 pub fn rectangle(p: &mut Painter, s: Sprite) {
     let Sprite { x, y, w, h, rgb, uv, flip } = s;
     let area = p.paint.area;
@@ -144,7 +153,7 @@ pub fn rectangle(p: &mut Painter, s: Sprite) {
     }
     let step = |f: bool| if f { -1i32 } else { 1 };
     let (su, sv) = (step(flip.0), step(flip.1));
-    let u0 = uv.0 as i32 + flip.0 as i32;
+    let u0 = (if flip.0 { uv.0 | 1 } else { uv.0 }) as i32;
     for yy in y1..=y2 {
         p.work.rows += 1;
         if !p.visible_row(yy) {
@@ -202,5 +211,12 @@ mod tests {
         assert_eq!((floor_div(-7, 2), floor_div(7, 2), floor_div(7, -2), floor_div(-7, -2)), (-4, 3, -4, 3));
         assert_eq!((ceil_div(-7, 2), ceil_div(7, 2), ceil_div(7, -2)), (-3, 4, -3));
         assert_eq!((trunc_div(-7, 2), trunc_div(7, 2)), (-3, 3));
+    }
+
+    #[test]
+    fn the_base_is_the_leftmost_vertex_and_of_two_the_follower() {
+        let at = |pts: [(i32, i32); 3]| base_vertex(&pts.map(|(x, y)| Vertex { x, y, ..Vertex::default() }));
+        assert_eq!(at([(40, 9), (2, 1), (13, 30)]), 1);
+        assert_eq!((at([(2, 1), (40, 9), (2, 30)]), at([(2, 1), (2, 30), (40, 9)]), at([(40, 9), (2, 1), (2, 30)])), (0, 1, 2));
     }
 }

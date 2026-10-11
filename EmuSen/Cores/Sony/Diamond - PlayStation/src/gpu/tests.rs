@@ -42,7 +42,7 @@ fn a_quads_texture_steps_at_the_half_of_a_truncated_12_bit_gradient() {
 }
 
 #[test]
-fn shading_takes_vertex_0s_value_with_a_half_added() {
+fn shading_takes_the_base_vertexs_value_with_a_half_added() {
     let (mut g, v) = gpu();
     send(&mut g, &v, &[0x3800_00FF, 0x0000_0000, 0x0000_FF00, 0x0000_000A, 0x0000_00FF, 0x0001_0000, 0x0000_FF00, 0x0001_000A]);
     let red: Vec<u16> = (0..10).map(|x| px(&g, x, 0) & 31).collect();
@@ -70,13 +70,31 @@ fn a_line_draws_both_ends_and_rounds_a_half_by_its_major_axis() {
 }
 
 #[test]
-fn an_x_flipped_rectangle_starts_one_texel_on() {
+fn an_x_flipped_rectangle_starts_from_u_with_its_low_bit_set() {
     let (mut g, v) = gpu();
     for u in 0..4 {
         g.vram.set(640 + u, 0, 0x100 + u as u16);
     }
     send(&mut g, &v, &[0xE100_110A, 0x6580_8080, 260, 0, 0x0001_0004]);
     assert_eq!((0..4).map(|x| px(&g, 260 + x, 0)).collect::<Vec<_>>(), [0x101, 0x100, 0, 0], "u + 1, u, then 255 and 254, zero here");
+    send(&mut g, &v, &[0x6580_8080, 1 << 16 | 261, 3, 0x0001_0004]);
+    assert_eq!((0..4).map(|x| px(&g, 261 + x, 1)).collect::<Vec<_>>(), [0x103, 0x102, 0x101, 0x100], "an odd u starts at u");
+}
+
+/// A shaded triangle's pixels do not depend on which vertex is sent first, where one vertex is leftmost (D-7).
+#[test]
+fn a_shaded_triangle_reads_the_same_in_every_vertex_order() {
+    let pts = [(2u32, 1u32, 0x0000_0AFAu32), (40, 9, 0x005A_C803), (13, 30, 0x00FF_854D)];
+    let orders = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    let mut pictures = Vec::new();
+    for (k, o) in orders.iter().enumerate() {
+        let (mut g, v) = gpu();
+        let x0 = 64 * k as u32;
+        let words: Vec<u32> = o.iter().enumerate().flat_map(|(i, &j)| [(if i == 0 { 0x3000_0000 } else { 0 }) | pts[j].2, pts[j].1 << 16 | (pts[j].0 + x0)]).collect();
+        send(&mut g, &v, &words);
+        pictures.push((0..32).flat_map(|y| (0..48).map(move |x| (x, y))).map(|(x, y)| px(&g, x0 + x, y)).collect::<Vec<_>>());
+    }
+    assert!(pictures.iter().all(|p| p == &pictures[0]));
 }
 
 #[test]

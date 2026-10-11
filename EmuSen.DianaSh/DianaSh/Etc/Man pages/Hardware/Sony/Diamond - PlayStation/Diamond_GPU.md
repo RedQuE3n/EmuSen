@@ -167,8 +167,11 @@ to ps1-tests' pictures, which are a console's VRAM (D-7):
   positive, or zero on an edge the triangle owns, a top or a left one. On `triangle` this leaves the apex's row empty,
   one pixel on the next, and the bottom row out [M: exact].
 - **Attributes.** Each of R, G, B, U and V has a gradient in x and in y of 12 fractional bits, the cross-product
-  difference shifted up 12 and divided by twice the area, truncated toward zero; the value at a pixel is vertex 0's,
-  plus the gradients times the distance from vertex 0, plus a half, taken as its integer part. On `uv-interpolation`,
+  difference shifted up 12 and divided by twice the area, truncated toward zero; the value at a pixel is ~~vertex 0's,
+  plus the gradients times the distance from vertex 0~~ the base vertex's, plus the gradients times the distance from
+  it, plus a half, taken as its integer part. *Since D-7's referee step (2026-10-11, `Diamond_Referees.md` §4.6)* the
+  base vertex is the leftmost, and of two in the leftmost column the one that follows the other in the command's
+  order, as four referees of three lineages draw it; ps1-tests' pictures stay exact. On `uv-interpolation`,
   whose quads of widths 0 to 255 step U from 0 to 1, this is the only one of the candidates tried (fractional bits 8 to
   23, every bias in 1/4096 steps) that puts every row's switch where the console does; the same rule gives its 256
   Gouraud rows, plain and dithered, and `triangle`'s three, exact [M]. A quad's second triangle starts from its own
@@ -176,8 +179,10 @@ to ps1-tests' pictures, which are a console's VRAM (D-7):
 - **Size.** A triangle wider than 1,023 or taller than 511 between its vertices is not drawn, each of a quad's two
   judged alone [R; C for the per-triangle reading].
 - **Rectangles** are drawn from their corner, the texture coordinate stepping one a pixel and wrapping at 8 bits;
-  with GP0(E1h)'s flips (208-pin only) it steps backwards, and an x-flipped rectangle starts from U+1 (D-8): on
-  `texture-flip` every flipped rectangle's first column reads U+1, then U, U-1 ..., where a y-flip starts at V [M].
+  with GP0(E1h)'s flips (208-pin only) it steps backwards, and an x-flipped rectangle starts from ~~U+1~~ U with its
+  low bit set (D-8, since its referee step, `Diamond_Referees.md` §4.7): on `texture-flip` every flipped rectangle's
+  first column reads U+1 for its even U, then U, U-1 ..., where a y-flip starts at V [M]; an odd U starts at U, as
+  Beetle PSX, the one referee that flips, draws it [M].
 - **Lines** step along the major axis with both ends drawn; the minor coordinate is the nearest to the exact line, a
   tie rounded toward the end on an x-major line and toward the start on a y-major one; the colour by the polygons'
   12-bit gradient with a half added; an overlapping pair of vertices draws one pixel. On `lines`' 40 sloped lines, its

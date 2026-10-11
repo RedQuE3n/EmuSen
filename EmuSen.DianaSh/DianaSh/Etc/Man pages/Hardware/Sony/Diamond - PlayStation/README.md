@@ -31,9 +31,10 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
 - [`Diamond_GPU.md`](Diamond_GPU.md) — the GPU, written 2026-10-11 at stage 4: the FIFO and the command processor,
   GPUSTAT's ready bits against `gpustat`'s console log, DMA channel 2, GP1, VRAM's transfers, texturing with the
   texture and CLUT caches, the pixel pipeline, the rasteriser's rules fitted to ps1-tests' console pictures, the
-  display read line by line, the drawing time fitted to `bandwidth` within 0.6% a row, the gate program by program,
-  amidog's and Peter Lemon's programs against the references, the state, the enhancement layer's seam, and the
-  reading log.
+  display read line by line, the drawing time fitted to `bandwidth` within 0.6% a row and charged to rectangles and
+  fills by their rows (D-11's refit), the gate program by program, amidog's and Peter Lemon's programs against the
+  references, amidog's GPU test run to its end with its drawing groups passing (D-23), the state, the enhancement
+  layer's seam, and the reading log.
 - [`Diamond_OpenKernel.md`](Diamond_OpenKernel.md) — the open BIOS kernel's first phase, written 2026-10-11 at stage
   3 under the replacement writers' rules: the image and the RAM it uses, the reset path and the hand-over at 80030000h
   with what a machine must provide (the TTY at the DUART's 1F802023h), the exception entry, the priority chains and the

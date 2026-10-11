@@ -467,6 +467,14 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   tried on Diamond, it alone gives all sixteen exactly, and ps1-tests' pictures stay exact with it, where the topmost
   start leaves `triangle` 3,227 pixels off. **Changed**, on agreement between lineages: the attributes start from that
   vertex. Still open: no gradient near 12 bits' range.
+- **D-23's step, 2026-10-11** [M]: amidog's LINE and OFFSET groups expect two ties `lines`' picture does not hold. An
+  x-major line rising from (11,20) to (15,17) puts x 13 on line 18, toward its end, where the formula's half added
+  upward put it on 19; one drawn leftward from (418,2) to (290,34) keeps x 416 on line 2, toward its right end, its
+  start. **Changed**: an x-major line's tie rounds toward its right end; a y-major line's toward less x, as before,
+  which amidog's (18,10) to (11,20) confirms at line 15. DuckStation draws amidog's LINE group as expected (its OFFSET
+  lines fail for other reasons); `lines`' picture stays exact under either rounding for these two kinds of tie, which
+  it does not hold. Pinned by
+  `a_lines_ties_round_toward_its_right_end_across_and_toward_less_x_down`.
 - **Depends on it:** every pixel of every polygon and line.
 - **Pinned by:** `Ps1_tests_gpu_programs_draw_their_vram_pictures_exactly`; `a_quads_texture_steps_at_the_half_of_a_truncated_12_bit_gradient`,
   `shading_takes_vertex_0s_value_with_a_half_added` (*renamed* `shading_takes_the_base_vertexs_value_with_a_half_added`
@@ -500,6 +508,10 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   single witness**, the only referee that flips and one that agrees with the console's picture: an x-flip starts from
   **U with its low bit set**, whatever the column; a y-flip from V, as before. psx-spx's "the texture UV, as well as
   the texture width must be even" is consistent with a texel pair as the unit [A].
+- **D-23's step, 2026-10-11** [M]: amidog's XYFLIP draws textured rectangles with GP0(E1h)'s x-flip, y-flip and both,
+  at 4, 8 and 15 bits, from every start U and V of 10h to 1Fh on two pages, 8,192 cases for each of 16 commands; with
+  D-23's pixel-pair rule for unflipped rectangles, every case equals its expectation, so U with its low bit set is now
+  a console's expectation at odd and even U, beside Beetle PSX.
 - **Depends on it:** the 208-pin chip's flipped sprites.
 - **Pinned by:** `texture-flip` exact; `an_x_flipped_rectangle_starts_one_texel_on` (*renamed*
   `an_x_flipped_rectangle_starts_from_u_with_its_low_bit_set` *at the referee step*);
@@ -541,15 +553,28 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   PCSX-ReARMed 3. While a polygon's or a line's vertices arrive, DuckStation and SwanStation keep bit 28 set, as
   Diamond does; Beetle PSX clears it from the command word to the last vertex, psx-spx's sentence for those commands;
   all three keep it set while a rectangle draws, as the log does. **Witnesses:** none before the referee step.
-- **Conclusion:** bit 28 is set exactly when the FIFO holds no word, and a word goes to the processor at once while it
-  is not drawing; bit 26 is set when, besides, nothing is half received or drawing. Measured: the log's twelve
+- **Conclusion:** ~~bit 28 is set exactly when the FIFO holds no word, and a word goes to the processor at once while it
+  is not drawing~~; bit 26 is set when, besides, nothing is half received or drawing. Measured: the log's twelve
   readings. Open: polygons and lines, which psx-spx singles out; the log has only rectangles. *Referee step,
-  2026-10-11:* kept, on the strongest single witness on GPUSTAT (DuckStation, 9 of 12 on the log against Beetle
-  PSX's 6); still open, since the lineages disagree there and psx-spx sides with the weaker. Pinned since by
-  `gpustat_while_each_shape_arrives_and_draws`.
+  2026-10-11:* ~~kept, on the strongest single witness on GPUSTAT (DuckStation, 9 of 12 on the log against Beetle
+  PSX's 6); still open, since the lineages disagree there and psx-spx sides with the weaker~~. Pinned since by
+  `gpustat_while_each_shape_arrives_and_draws`. *D-23's step, 2026-10-11:* amidog's GPU test reads GPUSTAT after
+  every word it writes and expects bit 28 clear from a polygon's or a line's command word to its last vertex, and
+  for as long as a polyline is open, on all 32 polygon and 32 line commands and the POLYLINE group (the F column of every one: 1,703,936 readings
+  on the polygons, 26,400 on the lines before their value errors stopped each test, 2,387 in POLYLINE; DuckStation
+  fails the same readings, as Diamond did) [M]. That is a console's
+  expectation beside psx-spx's sentence and Beetle PSX's reading, against DuckStation's. **Changed**: bit 28 is set
+  when the FIFO holds no word and neither a polygon's or a line's vertices are awaited nor a polyline is open; a
+  rectangle's words leave it set, as the log's readings require. Bit 25 in direction 2 follows it, as psx-spx gives;
+  bit 26 is also clear, *since the same step*, while a VRAM-to-CPU transfer waits to be read (D-23). The log's twelve
+  readings are unchanged. Still open: whether bit 28 clears on the command word or on the first vertex, which no
+  reading between them separates.
 - **Depends on it:** DMA's pacing in modes 1 and 2 with direction 2, and every program that polls the two bits.
-- **Pinned by:** `gpustat_reads_as_the_console_passes`; `the_fifo_holds_what_arrives_while_a_command_draws`.
-- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
+- **Pinned by:** `gpustat_reads_as_the_console_passes`; `the_fifo_holds_what_arrives_while_a_command_draws`; *since
+  D-23's step* `bit_28_clears_while_a_polygons_or_a_lines_vertices_arrive`, and `gpustat_while_each_shape_arrives_and_draws`
+  re-pinned to Beetle PSX's reading.
+- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`; *since D-23's step*
+  `diamond: amidog's GPU test passes its drawing groups (D-23), and small rectangles cost their rows (D-11)`.
 
 ### D-11. The drawing time: fitted to `gpu/bandwidth`, with the GPU left busy after some long transfers unexplained
 
@@ -585,9 +610,24 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   before its menu is weak evidence that the console's setup for a 1×1 rectangle is far smaller. Not acted on: the
   drawing time is unchanged, and a program timing GPUSTAT bit 26 after rectangles of 1×1 to 320×240 would separate
   the two costs.
+  *Refit, 2026-10-11* (`Diamond_GPU.md` §8, `programs/draw-time.s`) [M]: that program, rectangles of 1×1 to 128×64,
+  fills, triangles, lines and copies each written by the CPU and timed from its last word to GPUSTAT bit 26, ran on
+  Diamond and on Beetle PSX, SwanStation and PCSX-ReARMed. Three lineages read a 1×1 rectangle ready 10 to 16 cycles
+  after its word and a 16×1 fill 10 to 40, where Diamond read 475 and 385; they agree on nothing finer. Every
+  `bandwidth` row is 320×240, so a setup and a cost per row are one figure there, and the argument that the clipped
+  quads ruled out a row cost does not hold (their first triangles lose rows and pixels in the same proportion).
+  **Changed**: a rectangle is charged 3.09 GPU cycles a row it draws and no setup, a fill 2.99 a row and no setup,
+  each figure its old setup spread over 240 rows; `bandwidth` reads row for row as before, within one hblank, and
+  `dma/chopping`'s output is byte for byte as before. Triangles keep their setup [C]. amidog's GPU, CPX and GTE menus
+  appear at frames 100, 205 and 229 (1,370, 2,323 and 2,344 before). Still open: the rate itself where `bandwidth`
+  does not reach, and the 13 chopping rows. The project's own `programs/gpustat.s` had relied on the setup: it drew
+  its rectangle with the reset's one-pixel drawing area, where the C program it rewrites draws it whole; it now sets
+  the area as `PutDrawEnv` does, and reads the console's twelve values on either drawing time.
 - **Depends on it:** GPUSTAT's busy bits and DMA's pacing; the speed at which games draw.
-- **Pinned by:** `bandwidth` graded against its log (2%); `a_gpu_cycle_is_a_video_clock`.
-- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`.
+- **Pinned by:** `bandwidth` graded against its log (2%); `a_gpu_cycle_is_a_video_clock`; *since the refit*
+  `small_rectangles_and_fills_cost_their_rows`.
+- **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`; *the refit*
+  `diamond: amidog's GPU test passes its drawing groups (D-23), and small rectangles cost their rows (D-11)`.
 
 ### D-12. Two of ps1-tests' pictures cannot be met in full by the release's programs: `lines` shades to a colour it never sets, and `transparency`'s picture is from an older program
 
@@ -633,19 +673,98 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
   `the_status_follows_a_byte_through_the_transmitter_and_the_fifo`.
 - **Implemented in:** `diamond: SIO0 and port 1's digital pad, brought forward from stage 6`.
 
-### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; open
+### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; ~~open~~ the drawing groups settled on its expectations, the FIFO, INTERLACE and cache groups open
 
 - **Opened:** 2026-10-11, by `psxtest_gpu` 1.7 run to its end once the pad answered (`Diamond_Pad.md` §5.4).
-- **Documents read:** none for this entry beyond `Diamond_GPU.md`'s own sources.
+- **Documents read:** none for this entry beyond `Diamond_GPU.md`'s own sources. *The GPU's step, 2026-10-11:*
+  psx-spx `6d7d1bc` again at "GP1(10h)", "GP1(09h)", "GP0(E3h)", "GP0(E4h)", "GP0(E5h)", "Vertex", "GPU Status
+  Register" and its "Ready Bits", "VRAM to CPU blitting", "Masking for COPY Commands parameters" and "Memory/Rendering
+  Timings"; amidog's `psxtest_gpu.txt`; the test program, disassembled from its file (below).
 - **Test program:** `psxtest_gpu` 1.7, every test but DUMP, on the open kernel; its verdicts read from the screen, its
   TTY silent. F ERROR on all 32 polygons and 32 lines; V ERROR on all 32 lines, on all 16 x- and y-flipped
   rectangles, on REG and MOVE, on most of the OFFSET group's rectangles, polygons and lines, and in AREA on the
   untextured rectangles, polygons and lines while their textured forms pass; every plain rectangle, fill, VRAM write,
   copy and read passes.
-- **Referee:** not consulted. **Witnesses:** none run.
-- **Conclusion:** open, for the GPU's own step. The F column of a test that compares VRAM is likely GPUSTAT or the
+  *The GPU's step, 2026-10-11* [M, R the program]. The program prints every failing case on the TTY, with the value
+  it wanted and the one it got, while a word of its own data at 8005ED30h is set, a switch its menu does not offer.
+  Its expected values come from its own software model of the GPU, fed the same words beside the GPU; only the
+  harness was read (the loops that build each case, the functions that write GP0 and GP1 and compare), never that
+  model's code, which is the author's emulator (the reading log, `Diamond_GPU.md` §16). What the columns measure:
+  F compares GPUSTAT, read after every GP0 word the harness writes, after GP1 writes and after reads, with the
+  model's; V compares GPUREAD's words, or VRAM read back through GP0(C0h) by DMA, with the model's VRAM; bit 31 is
+  masked out of both. Local copies of the program, kept in the cache and never committed, set the word and start the
+  tests without the pad (the menu's test for Start's release replaced by two instructions), or leave chosen menu items
+  checked; the program as shipped, started by Start, gives the screen's verdicts. Group by group, the cause each
+  case showed, the rule taken and its evidence:
+
+  | Group | What failed | Cause | Rule taken, and its evidence |
+  |---|---|---|---|
+  | POLY 20h-3Fh, LINE 40h-5Fh, POLYLINE (F) | GPUSTAT bit 28 after every polygon or line word but the last, and while a polyline is open | Diamond kept bit 28 set while vertices arrived (D-10) | clear from the command word to the last vertex, and while a polyline is open: these expectations, Beetle PSX, psx-spx's sentence (D-10) |
+  | POLY 2Ch-2Fh, 3Ch-3Fh (F, once bit 28 was right) | GPUSTAT's page bits after a textured quad's fourth vertex | the page applied at the quad's last word | a quad's page attribute takes effect once its first triangle's three vertices are in: these expectations alone |
+  | LINE 40h-5Fh (V) | x 13 of a line rising from (11,20) to (15,17) | the tie rounded upward, against the line's end | x-major ties round toward the right end (D-7): these expectations, DuckStation; `lines`' picture holds under either |
+  | OFFSET polylines 48h, 58h (V) | x 416 of a line drawn leftward from (418,2) to (290,34) | the same formula | the same rule |
+  | REG (V) | GPUREAD after GP1(10h) with each index, after a VRAM word was read | the latch replaced whole, and kept for an index with no register | indices 2 to 5 replace their 20, 19 or 22 bits and keep the latch's higher bits (psx-spx's "MSBs=Nothing"); an index with no register reads zero, against psx-spx's "old value remains" (these expectations alone; DuckStation and PCSX-Redux each differ from both) |
+  | MOVE (V) | rows of 17 to 47 pixels copied 1 to 4 right over themselves | pieces of 16, the next piece read after the last was written | each row read whole before it is written: these expectations, DuckStation; `vram-to-vram-overlap`'s picture holds under both |
+  | VRAM READ (V and F) | a one-pixel read's second halfword; bit 26 after GP0(C0h)'s words | padded with zero; bit 26 set | the pixel after the last in its row, against DuckStation's zero (these expectations alone); bit 26 clear until the data are read, with DuckStation |
+  | XYFLIP 64h-7Fh (V) | the pixel at an odd column whose texel is 20h after an odd start, unflipped | each pixel's own texel | a VRAM word's two pixels read their texels from one cache entry, the left one's: these expectations over all 16 commands' 8,192 cases, the flipped among them; not DuckStation; no console picture against it |
+  | OFFSET, POSITION, SIZE, AREA (V) | primitives moved past ±1,024 by the offset, or below line 511 | the sum unwrapped; each vertex judged by its own position; the area's Y clamped at 511 | a vertex and the offset add in 11 bits; further vertices are placed from the first by the command's distances, which the size limit judges; on the 208-pin chip the area's Y reaches 1023 and lines past 511 wrap into VRAM while GP1(09h) is clear (psx-spx "GP0(E3h)", "GP1(09h)"); these expectations, not DuckStation |
+
+  Before and after, the program started by Start at its menu and run to its results:
+
+  | Group | Before: failing lines on the TTY | After |
+  |---|---|---|
+  | REG | 1,576 values | none |
+  | IRQ, FBRECT, TPAGE, VRAM WRITE, VRAM MOVE | none | none |
+  | POLYLINE | 2,387 flags | none |
+  | MOVE | 4,002 values | none |
+  | VRAM READ | 260 flags, 200 values, given up | none |
+  | PRIMITIVE: POLY MONO, POLY GOURAUD (32 commands) | 688,128 and 1,015,808 flags | none |
+  | PRIMITIVE: LINE MONO, LINE GOURAUD (32) | 26,400 flags, 6,400 values, every command given up | none |
+  | PRIMITIVE: 02h, RECT, MOVE, VRAM (97) | none | none |
+  | XYFLIP (16) | 14,800 values, 12 commands given up | none |
+  | OFFSET, POSITION, SIZE, AREA | 95,906, 119,808, 12,288 and 8,339 values | none |
+  | FIFO | 54,428 values | 53,916 values |
+  | INTERLACE | 1,705 values, given up | 3,060 values, run to its end |
+  | CACHE TAG, CACHE BLOCK | 594,688 and 3,322 values | the same |
+
+  On the screen's first page of three, which holds BASIC, COMMON, PRIMITIVE and XYFLIP's first rows, 81 cells read
+  ERROR before and none after, every other cell OK or N/A [M, `AmidogScreen`'s colour key applied to the picture]; the program
+  turns to its other pages by the pad, which did not answer from a saved state here, so those pages' groups are given
+  by the TTY. The results screen appears at frame 295,849 before and 330,743 after: the menu comes 1,270 frames sooner,
+  and the 46 tests that had given up after a hundred errors (32 line commands, 12 of XYFLIP's, VRAM READ and
+  INTERLACE) now run their cases to the end, so the run is longer, not shorter.
+
+- **Referee:** ~~not consulted~~. *The GPU's step* [M]: DuckStation and PCSX-Redux ran the same local copies for their TTY, each in its own
+  scope with a copy of the referee in the cache. PCSX-Redux stopped twice with an exception in its Lua event listener
+  after about eleven minutes, in POLYLINE and in POLY 22h, so it witnesses REG only; DuckStation ran REG to VRAM READ
+  (twice, the second through the driver's version with a scope and a free GDB port a run, alike), then PRIMITIVE and
+  XYFLIP, then OFFSET to INTERLACE. The libretro cores carry no TTY and were not run on this test.
+  **Witnesses:** ~~none run~~. DuckStation fails REG (all 32 indices, its latch never taking a VRAM word), keeps bit 28 set as
+  Diamond did (POLY and LINE F, 3,332,552 readings), pads an odd read with zero, fails textured polygons and
+  rectangles by its modulation (a five-bit level), fails the A0h VRAM group, fails OFFSET and AREA otherwise than
+  Diamond did; it passes MOVE and the LINE group's values and agrees on bit 26 during a read. PCSX-Redux keeps the last
+  GP1(10h) result for an index with no register and differs in GPUSTAT bit 13 throughout. Neither model was read; only
+  their outputs.
+- **Conclusion:** ~~open, for the GPU's own step. The F column of a test that compares VRAM is likely GPUSTAT or the
   drawing's side effects (D-10, D-11) [A]; the flipped rectangles' values bear on D-8, the lines' on D-7's line rule,
   and the drawing area's on the clipping of untextured primitives, where ps1-tests' pictures agree with Diamond. The
-  test prints no case, so the next step is the test's VRAM after one group, compared with its software model's.
-- **Depends on it:** the GPU's line rasteriser, the flip, the area's clipping, GPUSTAT.
-- **Pinned by:** nothing yet. **Implemented in:** nothing yet.
+  test prints no case, so the next step is the test's VRAM after one group, compared with its software model's.~~
+  *The GPU's step:* the rules of the table, each measured on the test's expectations and implemented; every ps1-tests
+  GPU picture stays exact, the console logs' readings unchanged. The weight differs by row: where psx-spx or a
+  referee of another lineage agrees (bit 28, the MSBs of the latch, the copy, bit 26 during a read, the area's ten
+  bits, the line ties) the rule stands on two sources; where these expectations stand alone (the quad's page, an index
+  with no register reading zero, the odd read's halfword, the texel pairs, the offset's placement) it stands on one
+  console's expectations as its author's model encodes them, and is marked so in `Diamond_GPU.md`. Open: the texel
+  pairs beyond an even start column, an odd read beyond one pixel, and the four groups that still fail
+  (`Diamond_GPU.md` §14), which the first run's record did not list though they failed then too.
+- **Depends on it:** the GPU's line rasteriser, the flip, the area's clipping, GPUSTAT; *since the step* GPUREAD's
+  latch, the copy, VRAM reads, sprites' texels, every primitive's placement under the offset.
+- **Pinned by:** ~~nothing yet~~. *Since the step:* `bit_28_clears_while_a_polygons_or_a_lines_vertices_arrive`,
+  `a_textured_quads_page_takes_effect_with_its_third_vertex`, `a_lines_ties_round_toward_its_right_end_across_and_toward_less_x_down`,
+  `gp1_10h_keeps_the_latchs_high_bits_and_reads_zero_for_no_register`, `a_copy_over_itself_to_the_right_moves_each_row_as_it_was`,
+  `an_odd_read_ends_with_the_next_pixel_and_holds_the_gpu_until_read`, `a_rectangles_pixel_pair_reads_its_texels_from_one_cache_entry`,
+  `a_vertex_and_the_offset_add_in_eleven_bits`, `the_offset_moves_a_polygon_whole_and_its_size_is_judged_before`,
+  `rows_past_511_wrap_into_vram_inside_a_tall_area`; and WiseMan's amidog tests, still opt-in and now started from the earlier menus, the GPU test's full run
+  (330,743 frames) left out of them.
+- **Implemented in:** ~~nothing yet~~. *Since the step:* `diamond: amidog's GPU test passes its drawing groups (D-23), and
+  small rectangles cost their rows (D-11)`.

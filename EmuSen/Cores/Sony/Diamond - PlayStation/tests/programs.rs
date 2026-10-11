@@ -170,14 +170,14 @@ fn flipped_rectangles_start_where_the_referee_starts_them() {
     assert_eq!(first(128), [0x8100, 0x8101, 0x8000], "y-flipped from V 1");
 }
 
-/// D-10: GPUSTAT's bits 26 and 28 while a polygon, a line and a rectangle arrive and draw, as Diamond reads them and
-/// DuckStation and SwanStation answer; Beetle PSX clears bit 28 between a polygon's or a line's command word and its
-/// last vertex (Diamond_Referees.md §4.8).
+/// D-10: GPUSTAT's bits 26 and 28 while a polygon, a line and a rectangle arrive and draw: bit 28 clear from a
+/// polygon's or a line's command word to its last vertex, as Beetle PSX answers and amidog's expectations have it;
+/// DuckStation and SwanStation keep it set (Diamond_Referees.md §4.8, Diamond_Disputes.md D-23).
 #[test]
 fn gpustat_while_each_shape_arrives_and_draws() {
     let m = run(include_str!("../programs/gpustat-shapes.s"));
     let bits: Vec<u32> = results(&m, 0x10_0000, 20).iter().map(|s| s >> 26 & 5).collect();
-    assert_eq!(bits, [5, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 5, 4, 4, 4, 4, 5, 0, 0, 5]);
+    assert_eq!(bits, [5, 0, 0, 0, 4, 4, 5, 0, 0, 4, 4, 5, 4, 4, 4, 4, 5, 0, 0, 5]);
 }
 
 /// D-11: after 2,048 words to VRAM in blocks of 1 to 128 and in a burst, the GPU reads ready at the first poll, on
@@ -344,14 +344,15 @@ fn the_chopping_record_times_each_transfer() {
 }
 
 /// `gpu/bandwidth`: the hblanks of 400 full-screen transfers or primitives a row, nine of the fourteen equal to the
-/// release's on Diamond and the rest within two (§5), every row within 0.6% of the console's.
+/// release's on Diamond and the rest within two (§5), every row within 0.6% of the console's; since D-11's refit, each
+/// row within one hblank of what it read before.
 #[test]
 fn the_bandwidth_record_counts_each_rows_hblanks() {
     let Some(source) = carried("bandwidth") else { return };
     let m = run_for(&source, 860, Market::Americas);
     let hblanks: Vec<u32> = results(&m, 0x10_0000, 56).chunks(4).map(|r| r[2]).collect();
-    assert_eq!(hblanks, [15_772, 12_123, 19_127, 1216, 7603, 11_462, 15_134, 15_133, 7722, 11_580, 39_975, 39_975, 5845, 3968]);
-    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0x5E3A_F971_9BF7_7425, "the milliseconds and MB/s as well");
+    assert_eq!(hblanks, [15_773, 12_123, 19_127, 1216, 7603, 11_461, 15_134, 15_134, 7721, 11_580, 39_976, 39_975, 5844, 3968]);
+    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0xC54B_955B_DA4F_277C, "the milliseconds and MB/s as well");
 }
 
 /// `dma/chain-looping`: the RAM loop's ticks with no DMA, an empty chain and two never-ending ones, and their
@@ -393,4 +394,16 @@ fn the_timers_records_sync_tables_have_the_logs_shape() {
             assert!(s % 3 != 0 || row.windows(2).all(|w| w[1] >= w[0]), "table {t}, mode {s} falls: {row:?}");
         }
     }
+}
+
+/// D-11: the cycles from a primitive's last word to GPUSTAT bit 26, with a rectangle's and a fill's time charged by
+/// the rows they draw; the referees read a 1x1 rectangle ready 10 to 16 cycles after its word (Diamond_GPU.md §8).
+#[test]
+fn small_rectangles_and_fills_cost_their_rows() {
+    let m = run(include_str!("../programs/draw-time.s"));
+    let busy: Vec<u32> = results(&m, 0x10_0000, 38).iter().map(|w| (w >> 16) - (w & 0xFFFF)).collect();
+    assert_eq!(busy[..4], [7, 7, 7, 7], "the four settings");
+    assert_eq!(busy[4..18], [7, 7, 7, 25, 70, 7, 25, 79, 322, 52, 610, 2284, 4444, 7], "flat rectangles 1x1 to 128x64, then GP0(68h)");
+    assert_eq!(busy[18..26], [7, 7, 25, 106, 403, 7, 25, 448], "fills");
+    assert_eq!(busy[26..30], [556, 574, 835, 4912], "triangles keep their setup");
 }

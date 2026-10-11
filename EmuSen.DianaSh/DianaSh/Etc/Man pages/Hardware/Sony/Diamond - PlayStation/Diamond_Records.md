@@ -254,7 +254,9 @@ the last clear fill the row's first primitive waits behind (the release's first 
 record's 125). Matching them needs the library's own code, which is not read [A].
 
 **Against the console's log**: 14 of 14 rows within 2%, the widest 0.6% (cpuToVram, 12,123 against 12,195), as the
-release's [M].
+release's [M]. *Since D-11's refit* (`Diamond_GPU.md` §8), which charges rectangles and fills by their rows and leaves
+every 320×240 row's total as it was, the record reads each row within one hblank of the figures above, six of them
+moved by one [M, `the_bandwidth_record_counts_each_rows_hblanks` re-pinned].
 
 ## 6. `dma/chain-looping` — `programs/records/chain-looping.s`
 

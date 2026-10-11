@@ -268,12 +268,17 @@ impl Gpu {
         if self.len == 0 { u64::MAX } else { self.fifo[self.head].1.max(self.busy_until) }
     }
 
+    /// GPUSTAT bit 28: the FIFO empty, and no polygon's or line's vertices awaited (Diamond_Disputes.md D-10).
+    fn write_fifo_empty(&self) -> bool {
+        self.len == 0 && self.polyline.is_none() && !(self.have > 0 && matches!(self.words[0] >> 29, 1 | 2))
+    }
+
     /// Whether the GPU requests DMA at `now` (GPUSTAT bit 25), and when that may next change.
     pub fn dreq(&self, now: u64) -> bool {
         match self.dma_direction {
             0 => false,
             1 => self.len < FIFO_WORDS,
-            2 => self.len == 0,
+            2 => self.write_fifo_empty(),
             _ => self.read_ready(now),
         }
     }
@@ -296,8 +301,8 @@ impl Gpu {
             s |= (e1 >> 11 & 1) << 15 | (video.mode >> 7 & 1) << 14;
         }
         s |= (self.display.blanked as u32) << 23 | (self.irq as u32) << 24 | self.dma_direction << 29;
-        let idle = self.len == 0 && self.have == 0 && self.write.is_none() && self.polyline.is_none() && self.busy_until <= now;
-        s |= (idle as u32) << 26 | (self.read_ready(now) as u32) << 27 | ((self.len == 0) as u32) << 28 | (self.dreq(now) as u32) << 25;
+        let idle = self.len == 0 && self.have == 0 && self.write.is_none() && self.read.is_none() && self.polyline.is_none() && self.busy_until <= now;
+        s |= (idle as u32) << 26 | (self.read_ready(now) as u32) << 27 | (self.write_fifo_empty() as u32) << 28 | (self.dreq(now) as u32) << 25;
         let mut bits = video.status_bits(now);
         if !self.v2() && !video.interlaced() {
             bits &= !(1 << 13);
@@ -315,10 +320,9 @@ impl Gpu {
         let mut value = 0;
         for half in 0..2 {
             let i = r.words * 2 + half;
-            if i < r.rect.pixels() {
-                let (x, y) = r.rect.at(i);
-                value |= (self.vram.get(x, y) as u32) << (16 * half);
-            }
+            let (x, y) = r.rect.at(i.min(r.rect.pixels() - 1));
+            let x = if i < r.rect.pixels() { x } else { x + 1 };
+            value |= (self.vram.get(x, y) as u32) << (16 * half);
         }
         r.words += 1;
         self.read = (r.words * 2 < r.rect.pixels()).then_some(r);
@@ -344,6 +348,8 @@ impl Gpu {
                 self.have += 1;
                 if self.have == self.need {
                     self.execute(t, video);
+                } else {
+                    self.quad_page();
                 }
             }
             Word::Data => self.data(w, t, video),
@@ -362,13 +368,24 @@ impl Gpu {
     }
 
     fn area(&self) -> Area {
-        let y = |v: u32| (v >> 10 & if self.v2() { 0x3FF } else { 0x1FF }).min(511) as i32;
-        Area { x1: (self.env[2] & 0x3FF) as i32, y1: y(self.env[2]), x2: (self.env[3] & 0x3FF) as i32, y2: y(self.env[3]) }
+        let y = |v: u32| (v >> 10 & if self.v2() { 0x3FF } else { 0x1FF }) as i32;
+        let y2 = if self.two_megabytes() { y(self.env[3]).min(511) } else { y(self.env[3]) };
+        Area { x1: (self.env[2] & 0x3FF) as i32, y1: y(self.env[2]), x2: (self.env[3] & 0x3FF) as i32, y2 }
     }
 
+    /// A vertex with the drawing offset added in 11 bits, wrapping (Diamond_Disputes.md D-23).
     fn vertex(&self, xy: u32, colour: u32, uv: u32) -> Vertex {
         let off = self.env[4];
-        Vertex { x: sext11(xy) + sext11(off), y: sext11(xy >> 16) + sext11(off >> 11), rgb: rgb(colour), u: uv as u8, v: (uv >> 8) as u8 }
+        let x = sext11((sext11(xy) + sext11(off)) as u32);
+        let y = sext11((sext11(xy >> 16) + sext11(off >> 11)) as u32);
+        Vertex { x, y, rgb: rgb(colour), u: uv as u8, v: (uv >> 8) as u8 }
+    }
+
+    /// `v` placed from `first` by their distance as the command gave them, the offset moving the primitive whole (D-23).
+    fn place(&self, first: Vertex, v: Vertex) -> Vertex {
+        let (ox, oy) = (sext11(self.env[4]), sext11(self.env[4] >> 11));
+        let raw = |p: i32, o: i32| sext11((p - o) as u32);
+        Vertex { x: first.x + raw(v.x, ox) - raw(first.x, ox), y: first.y + raw(v.y, oy) - raw(first.y, oy), ..v }
     }
 
     fn paint(&self, blended: bool, texture: Option<Texture>, raw: bool, dither: bool, video: &Video) -> Paint {
@@ -444,7 +461,7 @@ impl Gpu {
             0x02 => {
                 let r = Rect::fill_params(self.words[1], self.words[2]);
                 self.vram.fill(r, w);
-                return timing::COMMAND + timing::FILL + r.h as u64 * (timing::FILL_ROW + (r.w as u64).div_ceil(16) * timing::FILL_16);
+                return timing::COMMAND + if r.w == 0 { 0 } else { r.h as u64 * (timing::FILL_ROW + (r.w as u64).div_ceil(16) * timing::FILL_16) };
             }
             0x1F => {
                 self.irq_rose |= !self.irq;
@@ -463,6 +480,23 @@ impl Gpu {
     fn set_e1(&mut self, w: u32) {
         let keep = if self.v2() { 0x37FF | if self.second_megabyte { 0x800 } else { 0 } } else { 0x7FF };
         self.env[0] = w & keep;
+    }
+
+    /// A polygon's page attribute into GP0(E1h): bits 0-8, and bit 11 while GP1(09h) allows it.
+    fn set_page(&mut self, page: u32) {
+        let bits = 0x1FF | if self.two_megabytes() { 0x800 } else { 0 };
+        self.env[0] = self.env[0] & !bits | page & bits;
+    }
+
+    /// A textured quad's page, applied once its first triangle's words are in (Diamond_Disputes.md D-23).
+    fn quad_page(&mut self) {
+        let c = self.words[0] >> 24;
+        if c >> 5 == 1 && c & 0xC == 0xC {
+            let shaded = c & 0x10 != 0;
+            if self.have == if shaded { 9 } else { 7 } {
+                self.set_page(self.words[if shaded { 5 } else { 4 }] >> 16);
+            }
+        }
     }
 
     fn polygon(&mut self, w: &[u32; 16], video: &Video) -> u64 {
@@ -494,10 +528,12 @@ impl Gpu {
             }
             *vx = self.vertex(xy, colour, uv);
         }
+        for i in 1..n {
+            v[i] = self.place(v[0], v[i]);
+        }
         let mut texture = None;
         if textured {
-            let bits = 0x1FF | if self.two_megabytes() { 0x800 } else { 0 };
-            self.env[0] = self.env[0] & !bits | page & bits;
+            self.set_page(page);
             texture = Some(Texture::new(self.env[0], clut, self.env[1], self.two_megabytes()));
         }
         let modulated = texture.is_some() && !raw;
@@ -534,14 +570,14 @@ impl Gpu {
         let paint = self.paint(blended, texture, raw, false, video);
         let sprite = raster::Sprite { x: v.x, y: v.y, w: sw, h: sh, rgb: v.rgb, uv: (v.u, v.v), flip };
         let (work, loaded) = self.draw(paint, |p| raster::rectangle(p, sprite));
-        timing::drawing(timing::RECTANGLE + loaded as u64 * timing::CLUT_ENTRY, work)
+        timing::drawing(work.rows as u64 * timing::RECTANGLE_ROW + loaded as u64 * timing::CLUT_ENTRY, work)
     }
 
     fn line_start(&mut self, w: &[u32; 16], video: &Video) -> u64 {
         let c = w[0] >> 24;
         let shaded = c & 0x10 != 0;
         let a = self.vertex(w[1], w[0], 0);
-        let b = if shaded { self.vertex(w[3], w[2], 0) } else { self.vertex(w[2], w[0], 0) };
+        let b = self.place(a, if shaded { self.vertex(w[3], w[2], 0) } else { self.vertex(w[2], w[0], 0) });
         if c & 8 != 0 {
             self.polyline = Some(Polyline { command: w[0], last: b, colour: w[0] });
         }
@@ -560,7 +596,7 @@ impl Gpu {
         let Some(p) = self.polyline else { return };
         self.display.scan(&self.vram, video, t);
         let shaded = p.command & 1 << 28 != 0;
-        let b = self.vertex(xy, if shaded { p.colour } else { p.command }, 0);
+        let b = self.place(p.last, self.vertex(xy, if shaded { p.colour } else { p.command }, 0));
         let cost = self.segment(p.command, p.last, b, video);
         if let Some(q) = self.polyline.as_mut() {
             q.last = b;
@@ -623,14 +659,15 @@ impl Gpu {
             0x09 if self.v2() => self.second_megabyte = p & 1 != 0,
             0x10..=0x1F => {
                 let index = p & if self.v2() { 0xF } else { 0x7 };
-                match index {
-                    2 => self.latch = self.env[1],
-                    3 | 4 => self.latch = self.env[index as usize - 1] & if self.v2() { 0xFFFFF } else { 0x7FFFF },
-                    5 => self.latch = self.env[4] & 0x3F_FFFF,
-                    7 if self.v2() => self.latch = self.version,
-                    8 if self.v2() => self.latch = 0,
-                    _ => {}
-                }
+                let area = if self.v2() { 0xFFFFF } else { 0x7FFFF };
+                let keep = |latch: u32, bits: u32, value: u32| latch & !bits | value & bits;
+                self.latch = match index {
+                    2 => keep(self.latch, 0xFFFFF, self.env[1]),
+                    3 | 4 => keep(self.latch, area, self.env[index as usize - 1]),
+                    5 => keep(self.latch, 0x3F_FFFF, self.env[4]),
+                    7 if self.v2() => self.version,
+                    _ => 0,
+                };
             }
             _ => {}
         }

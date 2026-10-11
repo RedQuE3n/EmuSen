@@ -419,3 +419,21 @@ fn debug_machine() {
         if f % 10 == 0 { eprintln!("{f} {:?} {:?} stat {:02X}", m.board.cdrom.activity, m.board.cdrom.then, m.board.cdrom.stat()); }
     }
 }
+
+/// BFRD written twice, as a game's libcd does after HCHPCTL is cleared: the second write leaves the FIFO where the
+/// first put it, so that a transfer begun between them is not restarted (Diamond_CDROM.md §3).
+#[test]
+fn bfrd_set_again_does_not_restart_the_fifo() {
+    let mut h = Host::new(Some(disc()));
+    h.settle();
+    h.command(0x0E, &[mode::WHOLE]);
+    h.command(0x02, &[0x00, 0x02, 0x16]);
+    h.command(0x06, &[]);
+    h.next(10_000_000).expect("an INT1");
+    h.write(3, 0x00);
+    h.write(3, 0x80);
+    let first = [h.c.data_byte(), h.c.data_byte(), h.c.data_byte(), h.c.data_byte()];
+    assert_eq!(first, [0x00, 0x02, 0x16, 0x02], "the header first, in whole-sector mode");
+    h.write(3, 0x80);
+    assert_eq!(h.c.data_byte(), 1, "the subheader's file number, not the header again");
+}

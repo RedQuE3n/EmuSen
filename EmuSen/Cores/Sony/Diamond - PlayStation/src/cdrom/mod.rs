@@ -386,13 +386,17 @@ impl Cdrom {
         }
     }
 
-    /// HCHPCTL: BFRD loads the data FIFO with the sector the last INT1 handed over, from its start, and clearing it
-    /// empties the FIFO.
+    /// HCHPCTL: BFRD set loads the data FIFO with the sector the last INT1 handed over, from its start; set again while
+    /// the FIFO still holds bytes it changes nothing; cleared, it empties the FIFO (Diamond_CDROM.md §3).
     fn write_hchpctl(&mut self, value: u8) {
+        let rising = value & 0x80 != 0 && self.hchpctl & 0x80 == 0;
         self.hchpctl = value;
         if value & 0x80 == 0 {
             self.data_len = 0;
             self.data_pos = 0;
+            return;
+        }
+        if !rising && self.data_pos < self.data_len {
             return;
         }
         let raw = &self.delivered.raw;

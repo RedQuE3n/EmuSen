@@ -1,6 +1,5 @@
 //! The devices of later stages, as register stubs that answer what a stage 3 program reads (Diamond_Native.md
-//! §11.8): the SPU's registers with its transfer to sound RAM, the CD-ROM controller's index and status, the MDEC's
-//! status, the serial port SIO1, and the DEV8 debug port's DUART, whose channel A carries the TTY. SIO0 is `sio0.rs`.
+//! §11.8): the SPU's registers with its transfer to sound RAM, the MDEC's status, the serial port SIO1, and the DEV8 debug port's DUART, whose channel A carries the TTY. SIO0 is `sio0.rs`.
 
 /// Sound RAM, held by its stub as the space the host reads.
 pub const SPU_RAM_BYTES: usize = 0x8_0000;
@@ -68,35 +67,6 @@ impl SpuStub {
     /// Whether the SPU requests DMA: ATTR's transfer mode is a DMA write or read.
     pub fn dreq(&self) -> bool {
         self.regs[ATTR] >> 4 & 3 >= 2
-    }
-}
-
-/// The CD-ROM controller's register bank (psx-spx "CDROM Controller I/O Ports"): its index, empty FIFOs and the
-/// interrupt mask and flags; commands get no response before stage 7.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CdromStub {
-    pub index: u8,
-    pub mask: u8,
-    pub flags: u8,
-}
-
-impl CdromStub {
-    pub fn read8(&self, offset: u32) -> u8 {
-        match (offset & 3, self.index) {
-            (0, _) => 0x18 | self.index,
-            (3, 0 | 2) => 0xE0 | self.mask,
-            (3, _) => 0xE0 | self.flags,
-            _ => 0,
-        }
-    }
-
-    pub fn write8(&mut self, offset: u32, value: u8) {
-        match (offset & 3, self.index) {
-            (0, _) => self.index = value & 3,
-            (2, 1) => self.mask = value & 0x1F,
-            (3, 1) => self.flags &= !(value & 0x1F),
-            _ => {}
-        }
     }
 }
 
@@ -224,6 +194,5 @@ mod tests {
     #[test]
     fn the_resets_are_the_documented_values() {
         assert_eq!(MdecStub::default().status, 0x8004_0000);
-        assert_eq!(CdromStub::default().read8(0), 0x18);
     }
 }

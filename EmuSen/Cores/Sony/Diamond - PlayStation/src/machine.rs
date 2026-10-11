@@ -70,6 +70,8 @@ pub struct Machine {
     pub audio_limit: usize,
     /// The firmware files given at create, by number.
     pub firmware: Vec<u32>,
+    /// The CD-ROM controller's audio as the SPU would take it, kept only when a test asks.
+    pub cd_tap: Option<Vec<[i16; 2]>>,
 }
 
 /// The console's standard field rate, by its market: NTSC on an NTSC clock, PAL on a PAL one (D-0, provisional).
@@ -122,7 +124,26 @@ impl Machine {
             silence: 0,
             audio_limit: usize::MAX,
             firmware: Vec::new(),
+            cd_tap: None,
         }
+    }
+
+    /// Puts `disc` in the drive, its lid closed, as at power-on.
+    pub fn insert_disc(&mut self, disc: emusen_disc::Disc) {
+        self.board.cdrom = crate::cdrom::Cdrom::new(Some(disc), self.config.market);
+        self.board.schedule();
+    }
+
+    /// Opens the lid, or closes it on `disc` (another, or the same one when `None`).
+    pub fn set_lid(&mut self, open: bool, disc: Option<emusen_disc::Disc>) {
+        let now = self.board.now;
+        if open {
+            self.board.cdrom.open_lid(now);
+        } else {
+            self.board.cdrom.close_lid(now, disc);
+        }
+        self.board.sync_cdrom();
+        self.board.schedule();
     }
 
     pub fn pal(&self) -> bool {
@@ -188,6 +209,7 @@ impl Machine {
             self.step();
         }
         let made = self.board.now / CYCLES_PER_SAMPLE - start / CYCLES_PER_SAMPLE;
+        self.board.cdrom.take_audio(made as usize, self.cd_tap.as_mut());
         self.silence = (self.silence + made as usize).min(self.audio_limit / 2);
         self.frames += 1;
     }

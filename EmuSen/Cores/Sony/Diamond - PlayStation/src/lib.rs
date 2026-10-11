@@ -8,6 +8,7 @@
 
 pub mod bus;
 pub mod card;
+pub mod cdrom;
 pub mod devices;
 pub mod dma;
 pub mod exe;
@@ -17,6 +18,7 @@ pub mod irq;
 pub mod kernel;
 pub mod machine;
 pub mod media;
+pub mod medium;
 pub mod memctl;
 pub mod multitap;
 pub mod pad;

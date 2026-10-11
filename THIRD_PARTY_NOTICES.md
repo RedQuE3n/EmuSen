@@ -149,6 +149,31 @@ pinned on 2026-10-09):
 
 Where a crate offers a choice of licences ("MIT OR Apache-2.0"), EmuSen uses it under the MIT licence.
 
+#### Diamond and emusen-disc (not yet in a published build)
+
+Diamond, the PlayStation core, is not yet part of a published build. Its disc crate, `emusen-disc`, reads CHD images
+through the `chd` crate; these are the crates it adds to those listed above (cfg-if, proc-macro2, quote, syn and
+unicode-ident are listed there already). They will be distributed when Diamond is.
+
+| Crate | Version | Licence | Copyright or authors |
+|---|---|---|---|
+| [arrayvec](https://github.com/bluss/arrayvec) | 0.7.8 | MIT OR Apache-2.0 | bluss |
+| [autocfg](https://github.com/cuviper/autocfg) | 1.5.1 | Apache-2.0 OR MIT | Josh Stone |
+| [bitreader](https://github.com/irauta/bitreader) | 0.3.11 | MIT OR Apache-2.0 | Ilkka Rauta |
+| [byteorder](https://github.com/BurntSushi/byteorder) | 1.5.0 | Unlicense OR MIT | Andrew Gallant |
+| [chd](https://github.com/SnowflakePowered/chd-rs) | 0.3.4 | BSD-3-Clause (`licenses/chd-BSD-3-Clause.txt`) | Ronny Chan |
+| [claxon](https://github.com/ruuda/claxon) | 0.4.3 | Apache-2.0 | Ruud van Asseldonk |
+| [crc](https://github.com/mrhooray/crc-rs) | 3.4.0 | MIT OR Apache-2.0 | Rui Hu, Akhil Velagapudi |
+| [crc-catalog](https://github.com/akhilles/crc-catalog) | 2.5.0 | MIT OR Apache-2.0 | Akhil Velagapudi |
+| [flate2](https://github.com/rust-lang/flate2-rs) | 1.1.10 | MIT OR Apache-2.0 | Alex Crichton, Josh Triplett |
+| [lzma-rs-perf-exp](https://github.com/SnowflakePowered/lzma-rs) | 0.2.1 | MIT | Guillaume Endignoux, Ronny Chan |
+| [num-derive](https://github.com/rust-num/num-derive) | 0.4.2 | MIT OR Apache-2.0 | The Rust Project Developers |
+| [num-traits](https://github.com/rust-num/num-traits) | 0.2.19 | MIT OR Apache-2.0 | The Rust Project Developers |
+| [ruzstd](https://github.com/KillingSpark/zstd-rs) | 0.8.3 | MIT | Moritz Borcherding |
+| [text_io](https://github.com/oli-obk/rust-si) | 0.1.13 | MIT OR Apache-2.0 | Oliver Schneider |
+| [twox-hash](https://github.com/shepmaster/twox-hash) | 2.1.5 | MIT | Jake Goulding |
+| [zlib-rs](https://github.com/trifectatechfoundation/zlib-rs) | 0.6.8 | Zlib (`licenses/zlib-rs-Zlib.txt`) | Trifecta Tech Foundation |
+
 ### 1.5 Fonts
 
 | Font | Version | Licence | Copyright |

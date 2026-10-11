@@ -62,6 +62,8 @@ System 11 and 12, ZN-1 and ZN-2), the Net Yaroze's serial cable, and the PS2's P
 | **`.pbp`** | A PSP "EBOOT", the PlayStation's discs compressed for the PSP; the PSN's are encrypted | **Later, unencrypted only**; an encrypted PBP is refused with words, never decrypted |
 
 ES-DE lists every one of these for the system but `.sbi`, which is read beside a disc and never opened alone [R ES-DE `es_systems.xml`, `psx`].
+*Stage 7, 2026-10-11*: `.cue`/`.bin`, `.iso`, `.chd`, a lone `.bin` and `.sbi` open in the core; `.chd` alone is routed
+by the host, the rest waiting for the framework's items of `Diamond_CDROM.md` §8.4.
 
 ### 1.3 Who may read what
 
@@ -588,7 +590,9 @@ is the sheet itself** (`.cue`, `.m3u`), the system pack reads only its `FILE` li
 core's disc crate parses the sheet in full (tracks, modes, indexes, pregaps), so one parser of the format exists, in the
 crate both cores use. A `.chd` is one file and needs none of this. **Size** [A]: a disc of up to about 700 MiB copied at
 create is workable on 8 GiB machines and costs load time; whether a streaming read is needed is measured at stage 7 on
-the handheld.
+the handheld. *Built at stage 7, 2026-10-11 (`Diamond_CDROM.md` §8): the companions numbered from `EMUSEN_FILE_MEDIA` as
+`EmuSen_CoreAPI_Extensions.md` §2 decided, the sheet parsed in the disc crate; measured on the desktop at 0.35–0.57 s
+for 432–662 MB (its §9.7), the handheld's measurement left with what it needs.*
 
 ### 5.12 The speed budget
 

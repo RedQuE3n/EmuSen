@@ -7,7 +7,8 @@ its R3000A was built and passes the r3000 single-step suite; at stage 3 the bus,
 the CPU run it, on the open kernel or a player's own BIOS, and ps1-tests' CPU, DMA and timer programs pass by their
 TTY; at stage 4 the GPU draws, ps1-tests' GPU programs' VRAM equals their pictures, and the display is the picture;
 at stage 5 the GTE computes, ps1-tests' `test-all` passes every case bit for bit, and coprocessor 2's accesses wait for
-its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
+its commands; at stage 7 the CD-ROM controller reads discs (`.cue` with its tracks, `.chd`, `.iso`, a lone `.bin`)
+through the shared crate `emusen-disc`, and games boot to their title screens through the kernel's own loader. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
 
 - [`Diamond_Plan.md`](Diamond_Plan.md) — the plan, written 2026-10-10 before any emulation: the machine in scope and
   how accurate each part must be (the R3000A with its cache and scratchpad, the GTE exact, DMA, timers, interrupts, a
@@ -27,7 +28,8 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   PS-EXE loading, the kernel's seam, the TTY reader, the project's own programs with the references as witnesses, and
   the gate's results; and stage 4 (§12): the GPU in the machine, the frame ending at vblank, the gate, amidog's tests
   and stage 2's items, the cost; and stage 5 (§13): the GTE in the machine and its interlock, the gate program by
-  program, how the first build failed `test-all`, the timing against the witnesses, the state's version 2, the cost; and stage 6 (§14): SIO0's devices, the state's version 4, the gate.
+  program, how the first build failed `test-all`, the timing against the witnesses, the state's version 2, the cost; and stage 6 (§14): SIO0's devices, the state's version 4, the gate; and stage 7 (§15): the CD-ROM, the disc crate, the
+state's version 6, the gate item by item.
 - [`Diamond_GPU.md`](Diamond_GPU.md) — the GPU, written 2026-10-11 at stage 4: the FIFO and the command processor,
   GPUSTAT's ready bits against `gpustat`'s console log, DMA channel 2, GP1, VRAM's transfers, texturing with the
   texture and CLUT caches, the pixel pipeline, the rasteriser's rules fitted to ps1-tests' console pictures, the
@@ -47,6 +49,13 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   GPU and GTE tests run from their menus and what they showed (three R3000A defects fixed, the CE and second-load items
   of stage 2 closed); then stage 6: the DualShock, the memory cards as battery files, the multitap, the open kernel's
   pad functions, the gate item by item, and the reading log.
+- [`Diamond_CDROM.md`](Diamond_CDROM.md) — the CD-ROM controller, written 2026-10-11 at stage 7: the open replacement
+  for the HC05's program at its register interface, the host registers and FIFOs, every command with its responses and
+  delays, the drive's spin-up, seeks and held head, reads and the sector buffer, the filter, XA-ADPCM and CD-DA with
+  the volume matrix, the lid, the discs a create opens and who owns each of the tester's forms (lone `.bin`, `.zip`),
+  the framework's owed items, the gate with ps1-tests' `cdrom/` programs, the games on the player's BIOS against the
+  referees, the load time and the copy at create, the state, SCEx and the firmware's date, the cost, and the reading log
+  with its exposures.
 - [`Diamond_References.md`](Diamond_References.md) — the oracles, documents and reference cores pinned at stage 1
   (2026-10-11): the test programs with their console logs and pictures, the documents and their exclusions, the probe on
   the three libretro cores (only PCSX-ReARMed may run without a BIOS; Beetle PSX and SwanStation boot OpenBIOS and are
@@ -55,7 +64,8 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   NTSC console's video clock and line length, and so its frame rate; from stage 3, D-4 (memory control's access
   times), D-5 (the DMA's gaps and a store's drain) and D-6 (timer sync mode 2); from stage 4, D-7 (the rasteriser's
   rules), D-8 (the x-flip's offset), D-9 (the drawing area's commands in order), D-10 (GPUSTAT bit 28), D-11 (the
-  drawing time) and D-12 (two pictures the programs cannot meet); from the pad, D-22 (SIO0's timing) and D-23 (amidog's GPU test). The R3000A's
+  drawing time) and D-12 (two pictures the programs cannot meet); from the pad, D-22 (SIO0's timing) and D-23 (amidog's GPU test); from stage 7, D-24 to D-29 (the CD-ROM's response delays,
+the drive's mechanics, a seek's reach, XA's arithmetic, getloc's eighth byte, the BIOS's intro). The R3000A's
   disputes (D-1 to D-3, and D-17 to D-21 from amidog's `psxtest_cpx`) are in
   `../BlackMoon-HW/BlackMoon_R3000.md` §8 and the GTE's (D-13 to D-16, from stage 5) in `../BlackMoon-HW/BlackMoon_GTE.md`
   §12. *2026-10-11*: D-20 and D-21 settled; DICR's bit 6 ruled in `Diamond_Records.md` §16.2.

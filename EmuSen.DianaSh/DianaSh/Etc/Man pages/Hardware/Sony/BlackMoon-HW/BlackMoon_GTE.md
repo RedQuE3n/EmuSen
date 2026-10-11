@@ -247,7 +247,9 @@ RAM while it ran; the packed file cannot be read directly].
 - **What it shows of Diamond.** Before D-13's revision every OFFICIAL TIMING row failed, each failing loop one cycle a
   pass short, two for the pairs, and the loops after which nothing waits passing (SQR after 4 NOPs, NCLIP after 7);
   every UNOFFICIAL row failed, the numbers taking no time. After it, OFFICIAL TIMING passes all 22 rows and TOTAL, and
-  UNOFFICIAL TIMING 40 of 42 rows, 0Ah and 0Eh failing by the extra cycle no wait accounts for [M].
+  UNOFFICIAL TIMING 40 of 42 rows, 0Ah and 0Eh failing by the extra cycle no wait accounts for [M]. With D-14's
+  far-colour revision MVMVA's OPCODE row passes too, and the whole test, R1 and Start, ends ALL DONE by frame 580,000
+  with TOTAL X, F and V OK and T ERROR for those two numbers alone (`Diamond_Pad.md` §5.3.1).
 - **The rest of the test.** UNOFFICIAL OPCODE's four groups (MIRROR, WRAPPER, STABLE, UNSTABLE) list no command, so it
   runs nothing; its value column is N/A on the timing rows, so the test checks nothing of what an unlisted number
   computes [M, its menus and screens]. The results screen uses a 6-pixel font, 6 pixels a line, where the menu's is 8;
@@ -393,9 +395,10 @@ In the shape of `Diamond_Disputes.md`. Numbered in Diamond's series: D-13 follow
   - *Changed*: `wait_for_gte` in Diamond's bus resumes an access that waits at `gte_ready + 1`. `gte-timing.s` now
     reads table A as each command's cycles (RTPS 15 ... NCCT 39), table B 15 − N for N up to 13 and 0 from N = 14,
     table C 15 for all seven, and table E as D-16's cycles; the DuckStation lineage reads tables A and C the same.
-    Frame cost unchanged within noise: 6.46 ms a frame before, 6.48 after, the median of three runs of 4,600 frames
-    of `psxtest_gte` through its OFFICIAL TIMING [M]. `test-all` stays 1,150 of 1,150 and the fuzz's 880 cases of the
-    22 commands stay identical, timing not being among what they read.
+    Frame cost unchanged within noise: 6.49 ms a frame before, 6.46 after, the medians of four runs each, interleaved,
+    of 4,600 frames of `psxtest_gte` through its OFFICIAL TIMING, the cycle counts identical [M]. `test-all` stays
+    1,150 of 1,150 and the fuzz's 880 cases of the 22 commands stay identical on all four referees run again, timing
+    not being among what they read.
 - **Pinned by:** `the_gte_holds_every_access_until_its_command_is_done`;
   `amidogs_gte_timing_loops_take_the_cycles_its_test_expects`; WiseMan's
   `Amidogs_gte_timing_tests_pass_but_two_unlisted_numbers` (opt-in, with amidog's tests).

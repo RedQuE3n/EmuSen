@@ -144,11 +144,12 @@ and a quarter hours of emulated time [M]. Read from the screen:
 | OFFICIAL TIMING | the 22 commands | **T ERROR on every one** |
 | OFFICIAL OPCODE | SQR to DPCL, 21 commands | X, F and V OK |
 | OFFICIAL OPCODE | MVMVA | X and V OK, **F ERROR** |
-| UNOFFICIAL TIMING | 0x00 to 0x3F, the numbers psx-spx does not list | **V and T ERROR** |
+| UNOFFICIAL TIMING | 0x00 to 0x3F, the numbers psx-spx does not list | ~~**V and T ERROR**~~ **T ERROR**, V N/A (read again, §5.3.1) |
 | UNOFFICIAL OPCODE | (no rows drawn) | — |
 | TOTAL | | X OK, F, V and T ERROR |
 
-The TTY prints nothing for these tests, so their wanted values are not known. MVMVA's flag error and the unlisted
+The TTY prints nothing for these tests, so their wanted values are not known (*but see §5.3.1: its verbose flag prints
+the timing rows' counts*). MVMVA's flag error and the unlisted
 numbers' values bear on `BlackMoon_GTE.md` D-14 and D-16, the timing on D-13.
 
 The timing cases, disassembled from RAM: root counter 2 at the system clock is reset, a loop of 0 or 500 passes runs,
@@ -176,6 +177,26 @@ Each pass is the command's cycles by psx-spx's table plus the pass's other five 
 before the command ends: the interlock of `BlackMoon_GTE.md` D-13, counted from the command's fetch. A console's
 expectations reject every row, so D-13's rule, or the loop's own cost on the bus, is not the console's; which, the
 screen does not say. This is D-13's evidence, recorded there for the step that takes it up.
+
+### 5.3.1 What the test expects, and the results since
+
+*Added 2026-10-11, the dispute step of `BlackMoon_GTE.md` D-13, D-14 and D-16.* The program and its data were read from
+RAM (`BlackMoon_GTE.md` §7.2): each timing row grades 501 passes of its ten loops against `501 × p − 1` within 50
+cycles, p from its own rule and its table of all 64 numbers' cycles; with the word at 8004D474h set to 1 the test prints
+each failing loop's count and the count it wanted, and those match the rule. The results screen is drawn in a 6-pixel
+font, not the menu's 8; read on that grid the UNOFFICIAL TIMING rows' V column is N/A, not ERROR, and the table above
+is corrected for it. UNOFFICIAL OPCODE runs nothing: its four groups list no command.
+
+| Group | At stage 6 | Since D-13, D-14 and D-16 were revised |
+|---|---|---|
+| OFFICIAL TIMING | T ERROR on all 22 | **T OK on all 22**, TOTAL OK (5,200 frames, run alone) |
+| UNOFFICIAL TIMING | T ERROR on all 42 | **T OK on 40**; 0Ah and 0Eh T ERROR, one loop each (8,200 frames, run alone) |
+| OFFICIAL OPCODE, MVMVA | F ERROR, the test giving up after 193 of its 256 variants | **X, F and V OK**, all 256 (520,000 frames, run alone) |
+| The whole test, R1 and Start | as the table above, ALL DONE by frame 480,000 | ALL DONE by frame 580,000 (MVMVA now runs all its variants): every BASIC, COMPLEX and OFFICIAL row OK, UNOFFICIAL TIMING but 0Ah and 0Eh; TOTAL X, F and V OK, T ERROR |
+
+The fixes and their evidence are the GTE's record; WiseMan's `Amidogs_gte_timing_tests_pass_but_two_unlisted_numbers`
+runs both timing groups from the menu in a minute and a half and holds their rows as the table gives them. The whole
+test, about two and three-quarter hours of emulated time and 45 minutes on the desktop, stays a manual run.
 
 ### 5.4 `psxtest_gpu` 1.7
 
@@ -378,3 +399,7 @@ Every file opened for this part, 2026-10-11:
   `state.rs` and `boundary.rs`; WiseMan's runner and `DiamondTests`.
 - **Not opened**: any emulator's source, any firmware or listing, `sysdir/`, `Diamond_References.md`, PSn00bSDK's
   libraries, ps1-tests' `common/`. No reference emulator was run.
+- **For §5.3.1 and §11.1** (2026-10-11, a later step): `psxtest_gte`'s code and data as `BlackMoon_GTE.md` §13.1 lists
+  them; the five referees as black boxes, their RAM and the card files they left, their logs' card lines (the BIOS's
+  lines not read); DuckStation's and PCSX-Redux's own settings files and folders as they wrote them, for where a card
+  lives; the reference probe's libretro backend, for `--sram`. No emulator's source, no firmware.

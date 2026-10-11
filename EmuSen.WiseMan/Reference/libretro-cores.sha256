@@ -1,10 +1,13 @@
 # The reference emulators' prebuilt libretro cores, fetched from the libretro buildbot's nightlies by
 # `build-probe.sh libretro-core <core>` into ~/.cache/emusen/probe/libretro/cores and used only if the
 # unpacked core's SHA-256 is the one pinned here. Black boxes: only the binary is unpacked, and no
-# firmware is ever fetched. Re-pinning is a deliberate edit of this file. Nephrite_Native.md §8.
+# firmware is ever fetched. Re-pinning is a deliberate edit of this file. Nephrite_Native.md §8, Diamond_References.md §3.
 #
 # buildbot dir   core              sha256 of <core>_libretro.so                                       the core's own version, when pinned
 linux/x86_64     genesis_plus_gx   de23e3c647e0b1a8767c8f91f2dad402a10de3f59016f0b321f963d549b481f5   v1.7.4 58c3414, 2026-10-04
 linux/x86_64     picodrive         fd4010afa91f69d3c61be49c95e14a5c37117c4d0899d3e593ccc4339c1417d5   2.05-1890c29, 2026-10-04
 linux/x86_64     blastem           da3fb9c0c34b7288b874f44d4a26d733511d0a76d50db9d79d926adb460f3041   1.0.1-pre, 2026-10-04
 linux/x86_64     clownmdemu        0d85101878d347a420cf67bf35d9fa339ac8bbe0a636064a5a66af43eb9cec2a   v1.6.12 d43c270, 2026-10-04
+linux/x86_64     mednafen_psx      64d961044b2dda98abbb37474c03c71fad3e039afe7531cdd8856468096ad7e7   Beetle PSX 0.9.44.1 10e4b0c, 2026-10-10
+linux/x86_64     pcsx_rearmed      0ed6829d94051c4f0ab881050adbceab294b4325756f2c83395f6108dc423c84   r26 c881679, 2026-10-10
+linux/x86_64     swanstation       ac62165645184bd666bc610e0054e5ebdf34855bab25fa1e3e85efd24ea22e09   1.0.0 dd48056, 2026-10-10

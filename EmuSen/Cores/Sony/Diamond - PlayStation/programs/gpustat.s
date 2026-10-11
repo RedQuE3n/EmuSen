@@ -13,6 +13,11 @@ start:  mtc0 zero, SR
         sw zero, 0x1814(a0)           # GP1(00h)
         lui t0, 0x0300
         sw t0, 0x1814(a0)             # GP1(03h): display on
+        lui t0, 0xE400
+        lui t1, 0x0007
+        ori t1, t1, 0xFFFF
+        or t0, t0, t1
+        sw t0, 0x1810(a0)             # GP0(E4h): area to 1023,511, as the C program's PutDrawEnv sets it
 # by the CPU, direction 0
         lui t0, 0x0400
         sw t0, 0x1814(a0)

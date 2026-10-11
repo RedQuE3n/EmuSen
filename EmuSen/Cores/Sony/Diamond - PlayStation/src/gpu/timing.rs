@@ -8,9 +8,9 @@ use super::draw::Work;
 pub const CYCLE: u64 = 256;
 /// A command's own time once its words are in.
 pub const COMMAND: u64 = 2 * CYCLE;
-/// A triangle's setup; a rectangle's and a line's [C].
+/// A triangle's setup; a rectangle's row drawn; a line's setup [C].
 pub const TRIANGLE: u64 = 876 * CYCLE;
-pub const RECTANGLE: u64 = 742 * CYCLE;
+pub const RECTANGLE_ROW: u64 = 791;
 pub const LINE: u64 = 16 * CYCLE;
 /// A pixel written; one read and written (semi-transparent, or the mask checked); a texel fetched, written or not.
 pub const WRITE: u64 = 214;
@@ -19,9 +19,8 @@ pub const TEXEL: u64 = 114;
 /// A texture cache entry fetched, and a CLUT entry loaded [C].
 pub const MISS: u64 = 5035;
 pub const CLUT_ENTRY: u64 = CYCLE;
-/// The fill: its setup, a row, and each 16 pixels of it.
-pub const FILL: u64 = 597 * CYCLE;
-pub const FILL_ROW: u64 = CYCLE / 2;
+/// The fill: a row, and each 16 pixels of it.
+pub const FILL_ROW: u64 = 765;
 pub const FILL_16: u64 = 2 * CYCLE;
 /// The copy, per pixel read and written; a CPU-to-VRAM data word, two pixels written; a VRAM-to-CPU word made ready.
 pub const COPY_PIXEL: u64 = 545;

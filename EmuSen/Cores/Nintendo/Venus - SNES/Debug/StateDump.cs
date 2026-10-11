@@ -2,7 +2,8 @@ using System.Text;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Video;
-using EmuSen.DianaSh.DianaSh.Sys.Systems.Snes;
+using EmuSen.Crystal.Systems.Snes;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {

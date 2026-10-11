@@ -1,7 +1,8 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the fifth, 2026-10-11: S1 built, the C# shell reorganised without changing what it prints (§13.5).
-The fourth, 2026-10-10: §13.4's sandbox escapes, finding 10, fixed. The third, the same day: S0
+*This revision: the sixth, 2026-10-11: S2 built, Crystal's assembly beneath the shell, the session service's header
+`emusen_session.h` and its C# provider, held to `IDebugTarget` by a parity class on the fake target and every core (§13.6).
+The fifth, the same day: S1 built, the C# shell reorganised without changing what it prints (§13.5). The fourth, 2026-10-10: §13.4's sandbox escapes, finding 10, fixed. The third, the same day: S0
 built, the golden corpus, its harness and what it recorded (§13.4). The
 second, the same day: the seventeen questions of §16 decided, each as recommended, and the runtime named Crystal (Q1).
 The first, the same day: a design, with nothing built: the three decisions of §0.1, what the shell is
@@ -868,7 +869,7 @@ All 44 member names have a home, and one, `RefreshProviders`, leaves the surface
 | `CoretopCommand`'s and `VstopCommand`'s window openers, Mistress's `pause`, `resume`, `feed` | the frontend service (§9.9) and run control |
 | `DianaShLogging.MasterEnabled` | `log_switch`, `log_status`: the switch is the emulator's log writer's, not the shell's |
 | `SnapshotStore`, `SearchCommand`'s candidates | the module's per-shell slot (§6.3) |
-| `FrameRecorder` | not a command's: Hotaru's F6 recording, which stays the frontend's |
+| `FrameRecorder` | not a command's: Hotaru's F6 recording and Pharaoh's `record`. *Revised at S2 (§13.6): it went to Crystal, not to Hotaru, because it has two frontends and neither may reference the other* |
 | `RuntimeStats` | `vstop`'s, decided with Q14 |
 
 ### 9.5 The registries' new owner
@@ -1139,7 +1140,7 @@ standard output, exit status and host action each line gives, over fixed inputs.
 
 ### 13.2 The steps
 
-**Decided 2026-10-11:** the go for S1. *S1 built the same day* (§13.5).
+**Decided 2026-10-11:** the go for S1. *S1 built the same day* (§13.5), *and S2 after it* (§13.6).
 
 No step leaves a broken shell; each has its gate, and each is its own commit or group of commits.
 
@@ -1147,7 +1148,7 @@ No step leaves a broken shell; each has its gate, and each is its own commit or 
 |---|---|---|
 | **S0** | The golden corpus of §13.1, recorded from the C# shell | it covers every usage line (a test enumerates them); two recordings on two runs are identical |
 | **S1** *(done 2026-10-11, §13.5)* | The C# shell reorganised without changing what it prints: the 98 manual pages out of `ManPages.cs` into files read by the C# `man`; the five aliases and the read-only fast path made one table; `summary` and `log` turned into ordinary command classes; `Var/`'s shell state (`CommandHistory`, the sessions) separated from the debugger's registries | the golden corpus; `ManPageTests` |
-| **S2** | The service API's header, `emusen_session.h`, and a C# provider over today's `IDebugTarget` and registries, exposing the table through `[UnmanagedCallersOnly]` functions; the registries, the cheat engine, `IDebugTarget`, the telemetry contracts and the system packs moved out of `EmuSen.DianaSh` into Crystal's assembly, `EmuSen.Crystal`, beneath the shell and beside the cores (§16 Q1), which `EmuSen.DianaSh` and the cores reference | a parity class calling every service function and the C# member it maps (§9.3) on the fake target and each core, equal; the golden corpus |
+| **S2** *(done 2026-10-11, §13.6)* | The service API's header, `emusen_session.h`, and a C# provider over today's `IDebugTarget` and registries, exposing the table through `[UnmanagedCallersOnly]` functions; the registries, the cheat engine, `IDebugTarget`, the telemetry contracts and the system packs moved out of `EmuSen.DianaSh` into Crystal's assembly, `EmuSen.Crystal`, beneath the shell and beside the cores (§16 Q1), which `EmuSen.DianaSh` and the cores reference | a parity class calling every service function and the C# member it maps (§9.3) on the fake target and each core, equal; the golden corpus |
 | **S3** | The Rust shell core, `Platform/dianash/`, with its builtins, lookup, manifests, the host API in the platform library and the `dianash` program; every C# command still runs, registered with the Rust shell as host commands through `dianash_add_commands` by a C# bridge that calls each `IDianaShCommand.Execute`; the C# frontends choose the C# interpreter or the Rust one by `EMUSEN_DIANASH_NATIVE` (§13.3) | the golden corpus, with the variable unset (the C# interpreter) and `1` (the Rust shell with C# commands); the language's 645 cases both ways |
 | **S4** | `dianash.text` in Rust, command by command, each replacing its C# bridge entry when its golden file passes | that command's golden file and its WiseMan cases both ways; the same corpus run on Windows and macOS CI runners for the text module, since it must behave identically there |
 | **S5** | The four EmuSen modules in Rust over the session service, module by module, each command replacing its bridge entry when its golden file passes; `nano` as a program | that command's golden file both ways, on the fake provider and on each core; seeded faults in the module, as each platform step had (`EmuSen_RustPlatform.md` §6.5) |
@@ -1462,8 +1463,217 @@ lies, and so is not S1's.
 5. `ShellModulesDirectory` exists in Galaxia's C# only. Its one reader until S3 is the C# `man`; the Rust Galaxia gains
    the entry, and the parity test with it, when the Rust shell needs it.
 6. `FrameRecorder` is still in `Var/`, though §9.4 calls it Hotaru's and not a command's. S2's list of what moves does not
-   name it, and S2 should decide whether it goes to Crystal with the rest of `Var/` or to Hotaru.
+   name it, and S2 should decide whether it goes to Crystal with the rest of `Var/` or to Hotaru. *Decided at S2: Crystal
+   (§13.6).*
 7. Two pages run past the 80 columns §5.5 states: `hier` to 83 and `hotaru` to 81.
+
+### 13.6 S2 as built: Crystal's assembly, the session service's header, and its C# provider
+
+*Built 2026-10-11, in three commits of code, each of which built the whole solution and passed the gate below on its
+own: the move (`47e64e42`), the header and the provider (`a651c322`), and the parity class (`befe35df`).*
+
+S2's row asks for three things and sets one gate. They are taken in the order they were built, because each depends
+on the one before it: the provider names Crystal's types, and the parity class calls the provider.
+
+**What moved, and under which names.** Forty-three files left `EmuSen.DianaSh` whole, by `git mv`, for a new assembly
+at the repository's root, `EmuSen.Crystal`; two declarations were taken out of command files; and one helper was
+lifted out of the shell's commands. Nothing in a moved file changed but its namespace and its `using` lines.
+
+| Namespace | Folder | What | Files | Types |
+|---|---|---|---|---|
+| `EmuSen.Crystal.Debugger` | `Debugger/` | `IDebugTarget` and its seven value types; the ten registries; `DebugCpu` and `DebugCpus`; the expression evaluator, its context contract and its two contexts; `DebugTools`; `DelegateDebugMemorySpace`; `ICpuTraceSwitch`; the logging switch, `DebugLogging`; `IHistoricalCoprocessorTarget`, which was declared in `cophist`'s command file; and `DebugExpressions` (below) | 21 | 44 |
+| `EmuSen.Crystal.Cheats` | `Cheats/` | the cheat engine: `CheatRegistry`, `CheatWrite`, `ChtFile`, `CheatImport`, the database with its installer and pruner; `ICheatCodeCodec` and `DelegateCheatCodec` | 9 | 22 |
+| `EmuSen.Crystal.Telemetry` | `Telemetry/` | the six telemetry contracts, until now namespace `EmuSen.Cauldron` | 6 | 12 |
+| `EmuSen.Crystal.Systems` | `Systems/` | the system packs (`SystemPack`, the debug views, the SNES's, the three Sega systems' and the PlayStation's), and `CoreDescriptor`, which was declared in `core`'s command file | 9 | 12 |
+| `EmuSen.Crystal.Recording` | `Recording/` | `FrameRecorder` | 1 | 1 |
+
+That is 46 files and 91 types, 88 of them public, 5,430 lines. The new code of the second commit is a sixth namespace,
+`EmuSen.Crystal.Session`, 9 files, and the header, `EmuSen.Crystal/include/emusen_session.h`.
+
+Three choices of naming are argued here. *Five namespaces, not one*: the assembly holds five subjects that its users
+take separately (Serenity takes only the telemetry, the catalog only the systems), and a namespace per subject lets a
+file's `using` lines say which it takes; it is the same reason the cores' namespaces are per console. *`Debugger`, not
+`Debug`*: `EmuSen.Debug` and `EmuSen.Cores.Debug` already exist, and inside Crystal a namespace `EmuSen.Crystal.Debug`
+would shadow `System.Diagnostics.Debug` for every sibling namespace, a fault that appears only when someone first writes
+`Debug.Assert` there. *`EmuSen.Cauldron` renamed*: the namespace outlived its assembly at the fold of 2026-10-07, which
+§17.1 item 1 did not reopen; the contracts now live with the component that owns them, and their namespace names it.
+`LeafAssemblyTests`' rule that the telemetry contracts name nothing of the debugger is kept, restated as "nothing of
+`EmuSen` outside `EmuSen.Crystal.Telemetry`", which is stricter than the old "nothing of `EmuSen.DianaSh`".
+
+**What stayed.** The language (lexer, parser, AST), the interpreter, `CommandTable`, the scheduler, the sandbox, the
+accounts, the suspensions, the line reader, `Var/Shell/`, `IDianaShCommand`, `DianaShResult`, `HostAction`,
+`ManPages`, every one of the 83 command classes, and `RuntimeStats`, which is `vstop`'s and so a host command's (§16
+Q14). `EmuSen.DianaSh` is now 104 C# files and 9,002 lines (counted 2026-10-11). Two of the moved pieces were the
+reason the cores still needed the shell after the registries left: `CoreCatalog` builds its rows from
+`CoreDescriptor`, and `SnesDebugTarget` implements `IHistoricalCoprocessorTarget`. Both were declarations in command
+files; with them in the shell, the cores would have kept a reference to it for two types. `CoreDescriptor` goes where
+§17.1 item 2 already sends it, beside the system packs. `IHistoricalCoprocessorTarget` moves unchanged, so `IDebugTarget`
+gains no member and `EmuSen_Surfaces.md` §8 Q7's freeze holds. `DebugExpressions` is the one piece of new code in the
+move: which expression context a processor evaluates in was decided by two functions of the shell's
+`DebugCommandHelpers`, and the provider needs the same answer, so the decision moved to Crystal and the helpers now
+call it, rather than the provider carrying a copy.
+
+**`FrameRecorder`'s home, decided: Crystal.** §9.4 called it Hotaru's, which is half right. It is not a command's: no
+command constructs it. But it is not one frontend's either: it has two users, Hotaru's F6 and Pharaoh's `record` verb
+(`CommandsScriptRunner.cs`), and Pharaoh cannot reference Hotaru without taking Avalonia into the headless runner,
+which `EmuSen_Surfaces.md` §4.2 counts as a defect to remove. Putting it in Hotaru would therefore have made a second
+copy in Pharaoh, two owners of one fact. It names nothing of a frontend: of the target it reads only `CoreName` and
+`FrameCount`, and it runs `ffmpeg` as a child process. `EmuSen_CoreAPI.md` §11.1 already places recording with the
+runtime ("Runtime records; Frontend saves"), so Crystal is where that page's design puts it; §9.4's row is revised in
+place. The argument does not generalise to everything two frontends share: what they share as presentation goes to
+Serenity, and what they share as devices to Endymion. `FrameRecorder` is neither; it is a session's record of itself.
+
+**The reference graph after the move**, as `LeafAssemblyTests` now pins it:
+
+| Assembly | References of the project's own | Changed |
+|---|---|---|
+| `EmuSen.Crystal` | Galaxia | new |
+| `EmuSen.DianaSh` | Crystal, Galaxia | Crystal added |
+| `EmuSen` (the cores) | Crystal, Galaxia, Serenity | the shell removed, Crystal added |
+| `EmuSen.Serenity` | Crystal, Galaxia, LunaP | the shell replaced by Crystal |
+| Mistress, Hotaru, Pharaoh | the shell and Crystal, declared | until now reached through the cores |
+| WiseMan | Crystal, declared | added |
+
+The cores and Serenity reference the shell no longer, which is what §17.1 item 1 and §17.2's last point asked; the
+shell's consumers are its hosts alone. Mistress, Hotaru and Pharaoh had reached the shell through `EmuSen` without
+declaring it; the edge is now theirs, as `EmuSen_Surfaces.md` §7's S2 asks of every used edge. `EmuSen`'s reference
+to Serenity remains: removing it is that page's S1, not this step. Three new facts pin the sets (Crystal references
+Galaxia alone, the shell Crystal and Galaxia, the cores Crystal, Galaxia and Serenity), with the changed Serenity set;
+a reference set fixes at build time what an assembly can name, so the first of them is the proof that Crystal names
+nothing of the shell or of a frontend. The surface audit's own pins, its S0 file, are not built yet; §2.1 there
+records the new sets with a note.
+
+**The header.** `emusen_session.h` is version 1.0 of `emusen.session@1`: a table, `emusen_session_v1`, whose first
+three fields are its size, its version and the provider's `ctx`, followed by 79 function pointers in the groups of
+§9.2, in that table's order (648 bytes on a 64-bit system). It follows `emusen_core.h`'s conventions and its rule list
+is that header's one layer up: signed statuses, with the words read by `last_error` on the same thread; UTF-8 by
+pointer and length, a null pointer with a zero length being the absent string; the length-query idiom; JSON for
+records and byte spans for bulk values; open enumerations; nothing unwinds. A caller checks the major and, through
+`EMUSEN_SESSION_HAS`, the table's size before calling a function a later minor appended. Where it departs from §9.2 and
+from Appendix B's sketch, and why:
+
+- **Two functions added, and two statuses.** `label_clear`, because `label clear` exists and §9.2's list missed it.
+  `EMUSEN_SVC_ABSENT` (−1107), an answer rather than a failure, as `EMUSEN_PLATFORM_ABSENT` is (no label at an
+  address; no physical decoding reported). `EMUSEN_SVC_FAULT` (−1108), for a failure inside the session the provider
+  adapts, with the exception's words, so that nothing unwinds into a C caller. The project's shared −1 (`NULL`) and −5
+  (`BAD_STRING`) are kept beside the band, as `emusen_platform.h` keeps them.
+- **A change answers by value.** Appendix B gave `bp_add` an `int64_t` id and the rest of the changes `int32_t`
+  statuses; the built header extends that to every change: an id, a count or 0 is the return value, and nothing is
+  copied out. The rule was forced by the parity class: its client, written as a C caller writes one, asked each record's
+  length before copying it, and a cheat added through `cheat_op` was added three times, once for the query, once for
+  a short buffer and once for the copy. A change has no length to ask. The one change in 1.0 that must answer with a
+  record, `label_load` (its record holds the lines it refused), applies only on the call whose buffer holds all of it;
+  the provider answers a length query by parsing on a scratch registry, which gives the same record because a label
+  file's errors depend on its text alone. `run_control` returns `int64_t` for the same reason, since running to an
+  address adds a breakpoint whose id the caller needs.
+- **Addresses are 32-bit patterns.** `IDebugTarget` passes addresses as `int`, and a MIPS kernel address
+  (`0x80000000` and above) is negative there. The header passes every address as `uint32_t` and writes it unsigned in
+  JSON; the provider reinterprets the bits both ways and never range-checks them. A first draft range-checked them
+  and would have refused every Mars address in kernel space; it was found reading Mars's targets before the parity
+  class ran.
+- **Which processor an index names.** `processors` lists `DebugCpus`, and an index into it picks a processor's
+  registries. A session that names no processors has processor 0, the target's own registries, and, where it reports
+  a coprocessor's breakpoints or coverage, processor 1; this is how `CoprocessorBreakpoints` and `CoprocessorCoverage`
+  become "the processor's", as §9.3 asked.
+- **Prefixes chosen against collision.** `emusen_core.h` already defines `EMUSEN_RUN_*`, `EMUSEN_CALL_*` and
+  `EMUSEN_NOT_SUPPORTED`; the session header's names are `EMUSEN_SESSION_*` and, for statuses, `EMUSEN_SVC_*`, and a
+  test compiles all three project headers into one program.
+- **What `cheat_op` carries.** §9.2 listed "save, load, prune". Save and load name files, and prune deletes them in
+  the database's folder; a module reaches files through the shell (§6.3), not through a session. The service carries
+  the cheat file's JSON instead, `EXPORT` and `IMPORT` (exactly Galaxia's `CheatFile` with its own serializer options),
+  and the database's three queries; pruning stays with the command until the cheat module is written (S5).
+- **The two percentages** (`profile_op`'s hottest routines and the hardware load) are JSON numbers with a fraction;
+  every other number is an integer. A command prints them with a format of its own, so the service carries the
+  double that the member returned rather than a rounding of it.
+
+The header's own half of the gate is `SessionHeaderTests`: the managed mirror, `EmuSenSessionV1`, holds the header's
+fields in order with each function pointer's return and parameter types; `SessionAbi` holds every one of the header's
+94 `#define`s by name and value; every status lies in the band; the provider fills every pointer of both its tables and
+states their size and version; and a C compiler, given the three headers with `-std=c99 -Wall -Wextra -Werror
+-pedantic`, lays the table out at the offsets .NET does. The last test returns early on a machine with no C compiler,
+which on the development desktop was not the case.
+
+**The provider.** `EmuSen.Crystal.Session.SessionService` takes an `IDebugTarget` (or none) and a
+`SessionServiceOptions`, a record of what a host hands the shell today: the two cheat codecs, the trace switch and the
+supported cheat systems of `CreateDefault`, the cheat database's folder, and `state`'s save, load and default path
+(§13.3 said these become what the provider reads). It hands out two tables. Each table's `ctx` is a `GCHandle` to a
+binding of the provider and a flag, and the second table's flag makes every change answer `EMUSEN_SVC_READ_ONLY`,
+which is §16 Q7's enforcement by the table rather than by trust: a host gives a read-only context that table. The 79
+entry points are `[UnmanagedCallersOnly]` statics, one per function, each of which converts its arguments, calls one
+managed method, and catches every exception, a refusal becoming its status and anything else `EMUSEN_SVC_FAULT`; the
+words go to a thread-static `last_error`. The managed methods are grouped as §9.2 groups them, and each reaches the
+member §9.3 maps it to and nothing past it. Three things it cannot do the way Crystal will:
+
+1. **No frame boundary.** It has no loop of its own, so a change is applied at once on the calling thread. Its host
+   must call the table only where a command may touch the target today: on the emulation thread, or through the
+   scheduler (§13.3). The header permits this in its rule for changes, and says so.
+2. **`pause` is refused.** There is no loop to pause; pausing is the frontend's until Crystal owns the loop (§9.9).
+3. **Run requests are events.** `run_control` arms what `step`, `runto` and `resume` arm and raises an event of kind
+   `run` whose `op` is `step` or `resume`, the two host actions those commands return today; `halt_state` reports the
+   last one as `requested`. The facade of §13.3 can synthesise `HostAction.Step` and `HostAction.Resume` from either.
+
+No host hands the tables out yet. The first caller is the shell's host API at S3, and the first module at S5; until
+then the provider is reached by WiseMan alone.
+
+**The gate.** *Measured on 2026-10-11.* `SessionServiceParityTests` is a C caller written in C#: it calls each
+function through the table's pointers, as a module would, asking each record's length before copying it, and
+compares what comes back with the member it maps. A read is compared field by field with the member's answer; a
+change is compared by the state the member reports after it, and the member's own changes are read back through the
+service; where the member is absent the service must answer `NOT_SUPPORTED`, and where the member throws it must
+answer `FAULT` with the exception's words. Each case fails unless all 79 functions were reached. It ran on the golden
+corpus's three fake targets (`fake`, `bare`, `nobus`) and its eleven cores, built and run for two frames as the corpus
+builds them (the builder is now `GoldenTargets`, shared by the two). All fourteen were equal. What each session
+reported of itself, through `info`:
+
+| Target | Processors | Capabilities beyond breakpoints, watches, frame logs and cheats | Codecs |
+|---|---|---|---|
+| `fake`, `nobus` | 2 | coprocessor breakpoints and coverage, coverage, call stack, labels, counters, freezes, expressions, register flow, DMA log and channels, vectors, break conditions | none |
+| `bare` | 0 | none | none |
+| `venus` | 2 | coverage, call stack, labels, counters, freezes, expressions, register flow, DMA log and channels, vectors, break conditions, coprocessor history, trace | Pro Action Replay/Game Wizard, Game Genie |
+| `venus-sa1`, `venus-gsu` | 3 | as `venus`, and the coprocessor's breakpoints and coverage | as `venus` |
+| `venusrt` | 2 | coverage, call stack, labels, freezes, expressions, DMA channels, vectors | Pro Action Replay, Game Genie |
+| `moon`, `moonrt` | 1 | coverage, call stack, labels, vectors | address:value, Game Genie |
+| `mercury`, `mercuryrt` | 1 | coverage, call stack, labels, vectors | GameShark, Game Genie |
+| `mars`, `marsrt` | 2 | coverage, the RSP's coverage, call stack, labels | GameShark |
+| `nephrite` | 2 | coprocessor breakpoints and coverage, coverage, call stack, labels, freezes, expressions | Action Replay, Game Genie |
+
+The table is §13.4 finding 19's inventory seen from the service's side: VenusRT publishes no counters, register flow,
+DMA log, break conditions or coprocessor history, and the parity class confirms that the service says so as
+`NOT_SUPPORTED` exactly where the target's member is null. The PlayStation's system pack moved with the rest, but the
+corpus has no PlayStation target yet, so Diamond is not in the run.
+
+With the parity class, `SessionHeaderTests`, a case with no session (every session function answers
+`EMUSEN_SVC_NO_SESSION` with today's words, "No ROM loaded - this command needs an active debug target.") and a case
+for the read-only table, the gate is 21 tests. The golden corpus, `ManPageTests`, `ThemeVocabularyTests`,
+`CoreRegistrationGolden.txt` and `LeafAssemblyTests` passed after each of the three commits; no file in `Golden/`
+changed, and `CoreRegistrationGolden.txt` did not. The counts, after the last commit: the parity class 16 (its
+fourteen targets and the two cases), `SessionHeaderTests` 5, the golden corpus 96, `ManPageTests` 103,
+`ThemeVocabularyTests` 6, `CoreRegistrationEquivalenceTests` 3 and `LeafAssemblyTests` 17, 246 in all. Since the move
+touches every assembly that names the debugger, the blast radius was run as well: all of WiseMan's `DianaSh/` cases,
+the Crystal tests, the core-registration, leaf-assembly, cheat, debugger, system-pack, core-adapter and ABI tests, the
+console-window, `coretop`, `vstop` and feed-window tests of Mistress and Hotaru, the shell program's tests, the
+telemetry and hardware-load tests and Galaxia's: 2,155 passed and 9 were skipped, the 8 `SettingPathsOpenTests` and
+one Big Picture picture tool, each of which carries a skip of its own. Every project of the solution builds,
+frontends, Pharaoh and the shell program included.
+
+**Found while building it.** None of these is fixed here: the first two change what a command prints, and the third
+is the registries' own behaviour, which S2 moved and was not to change.
+
+1. **`step over` and `step out` can report success and arm nothing.** `BreakpointRegistry.ArmStepToDepth` refuses
+   when the registry was never told its call stack, and `StepCommand` ignores its answer and prints "Stepping
+   over...". Every core wires the two together; the golden corpus's fake target does not, and `step.golden`'s first
+   case records the false success. The service answers `NOT_SUPPORTED` there, so at S5 the step module will differ
+   from that case; whether the command should refuse too is the tester's to decide, and the case is re-recorded if so.
+2. **`copflow clear` after `copflow off` clears nothing.** `RegisterFlowRegistry.Clear` re-arms the window it was
+   armed with and returns at once when disarmed, so the log of a disarmed window survives a clear while the command
+   reports "Coprocessor register flow log cleared." No case of the corpus clears after `off`.
+3. **Importing a coverage map is a merge.** `CoverageRegistry.Import` adds an entry point's counts to those already
+   recorded, so a map imported twice doubles them. That is the method's stated contract ("maps from several runs
+   accumulate"); it is recorded because `cov load` says nothing of it, and a module calling `IMPORT` should know.
+4. **Pages that cite the old paths.** `EmuSen_Debugging_Tools_Reference_v5.md`, `EmuSen_CoreAPI.md` and eleven other
+   pages name `DianaSh/Var/…`, `DianaSh/Sys/…` or `EmuSen.Cauldron`. Most cite a file as it was read at a stated
+   commit, which a move does not make false; the overview's tree, `DESCRIPTION.md`'s table of assemblies and the
+   index, which describe the tree as it is, are updated.
 
 ---
 
@@ -1716,6 +1926,9 @@ int32_t  dianash_module_kill(const dianash_call *call, const uint8_t *id, size_t
 ```
 
 ## Appendix B. `emusen_session.h`, its first entries sketched
+
+*The sketch as the design left it. The header as built is `EmuSen.Crystal/include/emusen_session.h`, and §13.6 says where
+it departs from this.*
 
 ```c
 /* emusen_session.h - the session service, emusen.session@1. Owned by Crystal. See EmuSen_DianaSh.md §9. */

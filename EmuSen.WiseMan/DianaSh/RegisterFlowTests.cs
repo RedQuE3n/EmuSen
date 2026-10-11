@@ -2,7 +2,7 @@ using System.Linq;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaSh

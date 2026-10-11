@@ -8,6 +8,7 @@ using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Scraping;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Mistress.Views
 {

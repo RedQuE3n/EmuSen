@@ -1,4 +1,4 @@
-using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.Cores.Nintendo.Mars.Cheats
 {

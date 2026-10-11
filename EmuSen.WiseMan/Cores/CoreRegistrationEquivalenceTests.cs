@@ -15,11 +15,11 @@ using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Cores.Nintendo.Mars.Rom;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
-using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Systems;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
-using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores

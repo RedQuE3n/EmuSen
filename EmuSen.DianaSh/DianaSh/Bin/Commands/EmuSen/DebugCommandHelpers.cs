@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
@@ -39,14 +38,10 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
             return target;
         }
 
-        // The target's own context when it publishes one - see `man eval`.
-        public static IExpressionContext ExpressionsFor(IDebugTarget target)
-            => target.Expressions ?? new DebugTargetExpressionContext(target);
+        // Crystal decides which context an expression is evaluated in - see `man eval`.
+        public static IExpressionContext ExpressionsFor(IDebugTarget target) => DebugExpressions.For(target);
 
-        // A chip's own context, else one derived from its reported registers - see `man eval`.
-        public static IExpressionContext ExpressionsFor(IDebugTarget target, DebugCpu? cpu)
-            => cpu == null ? ExpressionsFor(target)
-             : cpu.Expressions ?? DebugCpuExpressionContext.For(target, cpu);
+        public static IExpressionContext ExpressionsFor(IDebugTarget target, DebugCpu? cpu) => DebugExpressions.For(target, cpu);
 
         // Which chip a scoped command is aimed at, and where its real args start - see `man cpus`.
         public static (DebugCpu? Cpu, int Next) ResolveCpu(IDebugTarget target, string[] parts, int at)

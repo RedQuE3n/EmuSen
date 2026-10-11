@@ -129,7 +129,8 @@ core. Frontends sit on top of both and are interchangeable.
 | Project | Role |
 |---|---|
 | `EmuSen` | The emulation core — CPU, PPU, APU, memory, save states, resampling. A pure library: no `Main`, no window, no frontend knowledge |
-| `EmuSen.DianaSh` | The shell, `IDebugTarget`, and every debug command, with the core-agnostic telemetry the dashboards read (`ICoreTelemetry` and its providers, namespace `EmuSen.Cauldron`). **Core-agnostic** |
+| `EmuSen.Crystal` | The runtime beneath the shell and beside the cores — `IDebugTarget` and the debugger's registries, the cheat engine, the core-agnostic telemetry the dashboards read (`ICoreTelemetry` and its providers), the system packs, and the session service (`emusen_session.h`) through which commands reach a running core. Depends on Galaxia alone |
+| `EmuSen.DianaSh` | The shell and every command. **Core-agnostic**: it reaches a core only through Crystal |
 | `EmuSen.Galaxia` | Config *and* saved-data persistence — the single answer to "where does a file go". Depends on nothing |
 | `EmuSen.Serenity` | Shared presentation — the Avalonia/Skia frame control, shader pipeline, graphics settings |
 | `EmuSen.Endymion` | Shared SDL3 device layer — audio output and gamepad input, one copy for both frontends |

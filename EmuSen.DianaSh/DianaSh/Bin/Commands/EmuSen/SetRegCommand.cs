@@ -1,10 +1,10 @@
-using EmuSen.Cauldron;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Telemetry;
 using System;
 using System.Linq;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
 using EmuSen.DianaSh.DianaSh.Dev;
 using static EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.DebugCommandHelpers;
 

@@ -16,7 +16,7 @@ using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Galaxia;
 using SDL3;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.Scraping;
 using EmuSen.Mistress.Views;

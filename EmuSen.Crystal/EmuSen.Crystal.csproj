@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Crystal, the runtime beneath the shell and beside the cores: the debugger the cores feed, the cheat engine, the
+       telemetry contracts, the system packs, and the session service that commands and frontends call. It references
+       Galaxia alone, and nothing of the shell or a frontend - see EmuSen_DianaSh.md §3, §9 and §13.6. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- The session service hands C callers a table of function pointers - see EmuSen_DianaSh.md §13.6. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- CheatFile, which the cheat engine saves and loads through. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="include\emusen_session.h" />
+  </ItemGroup>
+
+</Project>

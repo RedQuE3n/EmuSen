@@ -11,7 +11,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.WiseMan.LunaP;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
@@ -208,7 +208,7 @@ namespace EmuSen.WiseMan.Mistress
         private static ListBox Systems(CheatDatabaseWindow w) => w.GetControl<ListBox>("SystemsList");
         private static ListBox Games(CheatDatabaseWindow w) => w.GetControl<ListBox>("GamesList");
 
-        private static EmuSen.DianaSh.DianaSh.Lib.ICheatCodeCodec Codec() =>
+        private static EmuSen.Crystal.Cheats.ICheatCodeCodec Codec() =>
             EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay();
 
         // Selecting a system used to do nothing at all - the games never

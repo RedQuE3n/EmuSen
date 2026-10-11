@@ -81,6 +81,10 @@
          EmuSen.Hotaru project instead, so this reference no longer drags
          in another frontend's Exe/window-ownership baggage, just the core. -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+    <!-- The shell its console windows embed, and Crystal beneath it for the debug target and the cheat engine; the
+         cores no longer bring the shell with them - see EmuSen_DianaSh.md §13.6. -->
+    <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
+    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
     <!-- GameFrameControl (see Views/MainWindow.axaml/.axaml.cs) - the same
          GPU-accelerated (Skia/Ganesh, when Avalonia negotiates a hardware
          context) presentation surface EmuSen.Hotaru's GameWindow uses,

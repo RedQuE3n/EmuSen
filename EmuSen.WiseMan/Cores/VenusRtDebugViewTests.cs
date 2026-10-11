@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Cauldron;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Telemetry;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 

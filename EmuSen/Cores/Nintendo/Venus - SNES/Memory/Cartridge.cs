@@ -1,12 +1,7 @@
 using System;
 using System.IO;
 using EmuSen.Cores.Nintendo.Venus.Memory.Mappers;
-using EmuSen.DianaSh;
-using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.DianaSh.DianaSh.Var;
-using EmuSen.DianaSh.DianaSh.Dev;
+using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
@@ -36,7 +31,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         [EmuSen.Common.SkipInState] public IWriteObserver? WriteObserver;
 
         // Coprocessor register-window traffic, when a debugger is watching - see `man copflow`.
-        [EmuSen.Common.SkipInState] public EmuSen.DianaSh.DianaSh.Var.RegisterFlowRegistry? RegisterFlow;
+        [EmuSen.Common.SkipInState] public EmuSen.Crystal.Debugger.RegisterFlowRegistry? RegisterFlow;
 
         [EmuSen.Common.SkipInState] public Coprocessors.Sa1.Sa1? Sa1;
 
@@ -300,7 +295,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         }
 
         // The same decode Read8 uses, reported rather than followed - see `man addr`.
-        public EmuSen.DianaSh.DianaSh.Lib.PhysicalAddress? TryResolvePhysical(uint address)
+        public EmuSen.Crystal.Debugger.PhysicalAddress? TryResolvePhysical(uint address)
         {
             var mapped = _mapper.Resolve((byte)(address >> 16), (ushort)(address & 0xFFFF));
             return mapped.Region switch

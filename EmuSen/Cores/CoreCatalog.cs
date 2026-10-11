@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Cores
 {
@@ -9,9 +9,9 @@ namespace EmuSen.Cores
     public static class CoreCatalog
     {
         // The SNES's facts are its system pack's, so every SNES engine and this row read one source - see EmuSen_CoreAPI.md §20.
-        private static readonly CoreDescriptor Venus = FromSystem("SNES (Venus)", DianaSh.DianaSh.Sys.Systems.Snes.SnesSystem.Entry);
+        private static readonly CoreDescriptor Venus = FromSystem("SNES (Venus)", Crystal.Systems.Snes.SnesSystem.Entry);
 
-        private static CoreDescriptor FromSystem(string displayName, DianaSh.DianaSh.Sys.Systems.SystemEntry e) =>
+        private static CoreDescriptor FromSystem(string displayName, Crystal.Systems.SystemEntry e) =>
             new(displayName, e.Extensions.ToArray(), e.CheatSystems.ToArray(), e.Console, e.Manufacturer, e.ReleaseYear, CoverAspect: e.CoverAspect,
                 OpenVgdbSystems: e.OpenVgdbSystems.ToArray(), OpenVgdbBytes: e.OpenVgdbBytes);
 
@@ -129,8 +129,8 @@ namespace EmuSen.Cores
             }
         }
 
-        private static DianaSh.DianaSh.Sys.Systems.SystemEntry? PackOf(string console) =>
-            DianaSh.DianaSh.Sys.Systems.SystemPacks.All.Select(p => p.Entry).FirstOrDefault(e => string.Equals(e.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(e.Id) is null);
+        private static Crystal.Systems.SystemEntry? PackOf(string console) =>
+            Crystal.Systems.SystemPacks.All.Select(p => p.Entry).FirstOrDefault(e => string.Equals(e.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(e.Id) is null);
 
         // "Genesis (Nephrite)": the pack's console and the engine that runs it, as "SNES (Venus)" is.
         private static CoreDescriptor DiscoveredRow(string console) => FromSystem($"{console} ({DiscoveredFor(console)?.EngineName ?? console})", PackOf(console)!);
@@ -148,7 +148,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, (string System, string FullName)> EsdeNames = new(StringComparer.OrdinalIgnoreCase)
         {
             ["NES"] = ("nes", "Nintendo Entertainment System"),
-            [Venus.Console] = (DianaSh.DianaSh.Sys.Systems.Snes.SnesSystem.Entry.EsdeSystem, DianaSh.DianaSh.Sys.Systems.Snes.SnesSystem.Entry.EsdeFullName),
+            [Venus.Console] = (Crystal.Systems.Snes.SnesSystem.Entry.EsdeSystem, Crystal.Systems.Snes.SnesSystem.Entry.EsdeFullName),
             ["N64"] = ("n64", "Nintendo 64"),
             ["GB"] = ("gb", "Game Boy"),
         };
@@ -224,7 +224,7 @@ namespace EmuSen.Cores
         // Each player's controller where the console's pack counts them from its settings, a setting not stored read at the engine's default; null where it does not.
         public static IReadOnlyList<string>? PlayerControllersFor(string console, Func<string, string?> stored)
         {
-            if (DiscoveredSystem(console) is null || PackOf(console) is not { } entry || DianaSh.DianaSh.Sys.Systems.SystemPacks.For(entry.Id)?.PlayerControllers is not { } players) return null;
+            if (DiscoveredSystem(console) is null || PackOf(console) is not { } entry || Crystal.Systems.SystemPacks.For(entry.Id)?.PlayerControllers is not { } players) return null;
             var settings = SettingsFor(console);
             return players(key => stored(key) ?? settings.FirstOrDefault(s => s.Key == key)?.Default);
         }
@@ -287,21 +287,21 @@ namespace EmuSen.Cores
 
         // A console no catalog core runs, whose system pack names it and a discovered engine serves it - see EmuSen_Settings_Reference.md §4.90.
         public static IReadOnlyList<string> DiscoveredConsoles =>
-            DianaSh.DianaSh.Sys.Systems.SystemPacks.All.Select(p => p.Entry)
+            Crystal.Systems.SystemPacks.All.Select(p => p.Entry)
                 .Where(e => ConsoleForSystem(e.Id) is null && Native.CoreDiscovery.ForSystem(e.Id).Any(c => !IsRegisteredEngine(c.EngineName) && Runs(c, e.Id)))
                 .OrderBy(e => e.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.ReleaseYear)
                 .Select(e => e.Console).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
         // The pack console of a system only a discovered engine serves, or null for a catalog console's or an unknown system.
         public static string? DiscoveredConsoleForSystem(string? systemId) =>
-            systemId is not null && ConsoleForSystem(systemId) is null && DianaSh.DianaSh.Sys.Systems.SystemPacks.For(systemId) is { } pack ? pack.Entry.Console : null;
+            systemId is not null && ConsoleForSystem(systemId) is null && Crystal.Systems.SystemPacks.For(systemId) is { } pack ? pack.Entry.Console : null;
 
         // The console a discovered engine runs a file as, by the pack of the engine's system that claims the extension.
         public static string? DiscoveredConsoleForFile(string romPath, Native.CoreInfo info) =>
             info.SystemFor(System.IO.Path.GetExtension(romPath)) is { } system ? DiscoveredConsoleForSystem(system.Id) : null;
 
         private static Native.DiscoveredCore? DiscoveredFor(string console) =>
-            DianaSh.DianaSh.Sys.Systems.SystemPacks.All.Where(p => string.Equals(p.Entry.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(p.Entry.Id) is null)
+            Crystal.Systems.SystemPacks.All.Where(p => string.Equals(p.Entry.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(p.Entry.Id) is null)
                 .SelectMany(p => Native.CoreDiscovery.ForSystem(p.Entry.Id).Where(c => Runs(c, p.Entry.Id))).FirstOrDefault(c => !IsRegisteredEngine(c.EngineName));
 
         // A console gets its tab and shelf only once its engine says its games run, even where development cores are shown - see EmuSen_CoreAPI.md §27.4.
@@ -350,7 +350,7 @@ namespace EmuSen.Cores
         // The system ids of EmuSen_CoreAPI.md §6.3 each console answers to, so a v1 core's info is matched to it.
         private static readonly Dictionary<string, string[]> SystemIdsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["SNES"] = new[] { DianaSh.DianaSh.Sys.Systems.Snes.SnesSystem.Id },
+            ["SNES"] = new[] { Crystal.Systems.Snes.SnesSystem.Id },
             ["NES"] = new[] { "nes" },
             ["GB"] = new[] { "gb", "gbc" },
             ["N64"] = new[] { "n64" },

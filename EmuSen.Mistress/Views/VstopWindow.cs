@@ -6,6 +6,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Mistress.Views
 {

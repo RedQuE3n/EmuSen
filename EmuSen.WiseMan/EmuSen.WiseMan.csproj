@@ -44,10 +44,13 @@
   <ItemGroup>
     <!-- The emulation core (VenusCore/ICore, SnesDebugTarget). -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
-    <!-- DianaShInterpreter/IDebugTarget/the whole shell+command surface -
-         its own project as of the standalone-shell packaging work, no
-         longer bundled inside EmuSen.csproj. -->
+    <!-- DianaShInterpreter and the shell's commands - its own project as
+         of the standalone-shell packaging work, no longer bundled inside
+         EmuSen.csproj. -->
     <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
+    <!-- IDebugTarget, the registries, the cheat engine, the system packs and the session service - see
+         EmuSen_DianaSh.md §13.6. -->
+    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
     <!-- InputSettingsWindow and the rest of the Mistress GUI under test -
          see Mistress/*Tests.cs. Pulls in Avalonia transitively, which is
          fine for a test project; nothing here opens an actual window. -->

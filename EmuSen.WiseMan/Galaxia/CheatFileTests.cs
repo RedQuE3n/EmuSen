@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using EmuSen.DianaSh.DianaSh.Var;
+using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.WiseMan.Fixtures;

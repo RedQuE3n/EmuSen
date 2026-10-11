@@ -4,13 +4,14 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.DianaSh.DianaSh.Sys.Systems.Genesis;
+using EmuSen.Crystal.Systems.Genesis;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.WiseMan.Cores
 {

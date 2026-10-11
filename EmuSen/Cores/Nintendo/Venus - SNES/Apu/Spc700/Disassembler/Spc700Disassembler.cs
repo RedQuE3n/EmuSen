@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {

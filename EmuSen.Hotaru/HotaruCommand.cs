@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Hotaru
 {

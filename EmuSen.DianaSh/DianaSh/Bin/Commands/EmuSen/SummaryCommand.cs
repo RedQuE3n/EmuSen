@@ -1,4 +1,5 @@
 using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 {

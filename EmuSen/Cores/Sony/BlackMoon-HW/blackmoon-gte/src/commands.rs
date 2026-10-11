@@ -296,7 +296,7 @@ impl<O: Observer> Run<'_, O> {
                 let mut out = [0; 3];
                 for i in 0..3 {
                     let first = self.check(i + 1, (fc[i] << 12) + m[i][0] * v[0]) >> self.sh;
-                    self.saturate_ir(i + 1, first as i32 as i64, self.lm);
+                    self.saturate_ir(i + 1, first as i32 as i64, false);
                     out[i] = self.mac(i + 1, m[i][1] * v[1] + m[i][2] * v[2]);
                 }
                 self.set_irs(out);

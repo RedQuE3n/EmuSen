@@ -316,6 +316,34 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(failed);
         }
 
+        // The gate of Diamond_Plan.md §7's stage 9: ps1-tests' MDEC programs against their VRAM pictures, the pixels each differs by D-30's count exactly; opt-in by the corpus - see Diamond_MDEC.md §7.
+        [Fact]
+        public void Ps1_tests_mdec_programs_draw_their_vram_pictures_but_d30s_pixels()
+        {
+            if (Corpus is not { } corpus)
+            {
+                _output.WriteLine("skipped: EMUSEN_DIAMOND_PS1TESTS names ps1-tests' release");
+                return;
+            }
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            var failed = new List<string>();
+            foreach (var (program, differing) in Ps1MdecTests.Programs)
+            {
+                string? Picture(string path) => Path.Combine(corpus, Path.GetDirectoryName(path)!, program.Picture) is var f && File.Exists(f) ? f : null;
+                var run = engine.Run(Path.Combine(corpus, program.Path), new[] { program.Frame });
+                var verdict = VramGrader.Grade(program, run, Picture);
+                _output.WriteLine($"{program.Path}: {verdict.Outcome} {verdict.Detail}");
+                int off = -1;
+                if (run.At(program.Frame) is { } shot && Picture(program.Path) is { } file)
+                {
+                    using var reference = SKBitmap.Decode(file);
+                    off = VramGrader.Compare(shot.Spaces[VramGrader.Space], reference, program).Differing.Count;
+                }
+                if (off != differing) failed.Add($"{program.Path}: {off} differ, D-30 records {differing}");
+            }
+            Assert.Empty(failed);
+        }
+
         private static uint I(uint op, int rs, int rt, int imm) => op << 26 | (uint)rs << 21 | (uint)rt << 16 | (ushort)imm;
 
         // A program that reads port 1's pad over SIO0 without end, each byte sent once RXRDY showed the last, its five replies and I_STAT at 80100000h - see Diamond_Pad.md §4.

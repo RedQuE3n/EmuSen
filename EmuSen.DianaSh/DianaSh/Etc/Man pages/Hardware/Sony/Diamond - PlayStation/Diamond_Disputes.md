@@ -18,6 +18,7 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
 the changes it led to; no new number was taken for it.
 *2026-10-11*: D-20 and D-21 settled by the test's own model and a referee step; DICR's bit 6,
 which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
+*Stage 9 (2026-10-11)* took D-30 to D-33, the MDEC's; the SPU's stage 8, built beside it, may take numbers from D-30 too, and the merge renumbers.
 
 ## The rules this log keeps
 
@@ -966,3 +967,88 @@ which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
 - **Depends on it:** every disc booted the console's way; the stage 7 gate's "games boot on the player's BIOS".
 - **Pinned by:** nothing yet.
 - **Implemented in:** —
+
+### D-30. The MDEC's arithmetic where psx-spx says it does not know it: each IDCT pass truncated toward zero with three and then four fraction bits kept, the 15-bit pixel rounded from that fraction, the colour factors at twelve bits
+
+- **Opened:** 2026-10-11, at stage 9: psx-spx's `real_idct_core` divides each pass by 2000h "or so?" and says "the
+  results aren't perfect"; its `yuv_to_rgb` says "the exact fixed point resolution … is unknown"; and the decode
+  written from them misses ps1-tests' console outputs (`Diamond_MDEC.md` §3).
+- **Documents read:** psx-spx `6d7d1bc`, "Macroblock Decoder (MDEC)" whole.
+- **Test program:** ps1-tests' `mdec/4bit` and `mdec/8bit` (their console logs' hexdumps), `mdec/frame`'s two console
+  pictures of `sunset.mdec` and `mdec/movie`'s two of `bad_apple.h`'s frames 62 and 64, each program's own tables and
+  stream taken from the release's image as data; a search of about 300,000 fixed-point variants of the IDCT in a
+  harness outside the tree (the table's width and rounding, each pass's shift and rounding and the fraction kept
+  between them, products truncated before summing, the passes' order, pass 1's saturation, a butterfly's halves
+  rounded apart), then of the colour factors and their fraction.
+- **Referee:** DuckStation and SwanStation print `mdec/8bit`'s block nine and ten bytes away from the console's;
+  neither reproduces it, and no referee exposes VRAM, so they were not run on the pictures.
+- **Witnesses:** none beyond the referee's bytes.
+- **Conclusion:** open. No variant searched matches the console exactly: the exact IDCT lies 0.28 grey levels from it on
+  average, where rounding alone would give 0.25, but up to 1.1 apart at every pixel position, so the console loses
+  precision in a way none of the models does. Implemented, the best of them on the evidence: each pass's sum truncated
+  toward zero, three fraction bits kept after pass 1 and four after pass 2, a half rounded down when the value is made
+  whole; 4-bit output rounded from the 8-bit value (all 64 of `4bit`'s pixels); the 15-bit pixel rounded from the same
+  fraction as the 24-bit byte, which the console's two `frame` pictures show (5,982 of the 14,601 channels whose 8-bit
+  value ends in 100b round down); chroma by nearest sample, made whole, times psx-spx's factors at twelve bits. Left
+  differing: `8bit` one pixel at five bits, `frame` 11,035 pixels at 15 bits and 63,378 halfwords at 24, `movie` 319 and
+  752, `4bit` none.
+- **Depends on it:** every pixel an FMV decodes, by at most a level or two.
+- **Pinned by:** `tests/programs.rs`'s `the_monochrome_programs_copy_the_consoles_block_to_vram` (opt-in); WiseMan's
+  `Ps1_tests_mdec_programs_draw_their_vram_pictures_but_d30s_pixels` with its counts (opt-in).
+- **Implemented in:** the stage 9 commits on `diamond-s9`.
+
+### D-31. The MDEC's decode time: 512 cycles from a block's last halfword to its result, at every depth and whatever the block holds
+
+- **Opened:** 2026-10-11, at stage 9: psx-spx, "MDEC decompression time is still unknown (may vary on RLE and
+  color/mono)", and no console is to be used.
+- **Documents read:** psx-spx `6d7d1bc`, "DMA Transfer Rates", "Macroblock Decoder (MDEC)".
+- **Test program:** `programs/mdec-timing.s`, five streams of 96 blocks (colour at 15 and 24 bits, monochrome at 8 and
+  4, DC-only and with 63 AC values a block) decoded with DMA0 and DMA1 in blocks of 32 words, timer 2 at the system
+  clock / 8 from DMA0's start to each channel's end (`Diamond_MDEC.md` §4.3).
+- **Referee:** Beetle PSX 511 cycles a block for every stream; SwanStation 465 for the DC-only colour stream and more for
+  the others, never ending DMA0 on the 4-bit one; PCSX-Redux and PCSX-ReARMed at once or never; DuckStation's run ended
+  before its RAM was read.
+- **Witnesses:** as the referee.
+- **Conclusion:** 512 cycles, the strongest single witness's figure (Beetle PSX), no two lineages agreeing on a figure
+  [C, `Diamond_Referees.md` §3]. With the pipeline of D-32 every tick of the program lies within 0.3% of Beetle PSX's,
+  DMA0's ends included. Open; a console's measurement is the only oracle.
+- **Depends on it:** how fast an FMV decodes beside its CD reads; the single frame at which `movie`'s pictures are met.
+- **Pinned by:** `tests/programs.rs`'s `the_mdec_decodes_a_block_in_512_cycles_at_every_depth`.
+- **Implemented in:** the stage 9 commits on `diamond-s9`.
+
+### D-32. The MDEC's pipeline as `mdec/step-by-step-log`'s console log shows it: the input FIFO held from full until emptied, one block in the IDCT, a block buffer before a 17-word output FIFO, DREQ1 clearing near a block's end; the next macroblock's Cr later than here
+
+- **Opened:** 2026-10-11, at stage 9: psx-spx gives the status bits but not the FIFOs' depths or when the requests
+  change, and the console's log of `step-by-step-log`, which prints the status before each of its 256 writes and 512
+  reads, contradicts its "current output block" reading.
+- **Documents read:** psx-spx `6d7d1bc`, "MDEC Status Register", "MDEC Control/Reset Register", "DMA".
+- **Test program:** `mdec/step-by-step-log` (release build 158) on the open kernel, its TTY against the console's log
+  (`Diamond_MDEC.md` §4.1, §4.2).
+- **Referee:** not consulted (a TTY of 1,563 lines that the libretro cores do not carry).
+- **Witnesses:** none.
+- **Conclusion:** the decoder takes the input FIFO only once it holds 32 words or the command's last, and has it until
+  empty, a word leaving once both its halfwords are taken (status bit 30 set, DREQ0 clear meanwhile); a block's last
+  halfword waits while the IDCT holds a block; a finished luminance block waits in the IDCT until the block buffer is
+  empty and is converted as it enters it; the buffer feeds an output FIFO of 17 words; the status's block field is the
+  IDCT's block or else the arriving one; DREQ1 clears with eight words left in the buffer and nothing behind it while
+  input is to come, and for a command's last word. On the log as far as Diamond's TTY space holds it, 414 of 422 status
+  lines equal; the eight others are the third macroblock's Cr, which the console shows taking the IDCT eight reads
+  after the last Y of the macroblock before entered the buffer, where Diamond takes it at once. Open: that delay.
+- **Depends on it:** a program polling the MDEC's status; DMA1's and DMA0's interleaving.
+- **Pinned by:** `tests/programs.rs`'s `the_step_by_step_status_follows_the_consoles_log` (opt-in), `mdec::tests`.
+- **Implemented in:** the stage 9 commits on `diamond-s9`.
+
+### D-33. A read of MDEC0 while the IDCT computes a block waits for the block's first word, where psx-spx says an empty output answers garbage
+
+- **Opened:** 2026-10-11, at stage 9, by Peter Lemon's `DCTBlockDecode` programs, which read a block's words straight
+  after the decode command without polling and, by their author's README, are tested on a console.
+- **Documents read:** psx-spx `6d7d1bc`, "MDEC Data/Response Register"; the programs' `.asm` and `LIB/PSX_MDEC.INC`.
+- **Test program:** the two programs on Diamond, their pictures against the referees' screens (`Diamond_MDEC.md` §8).
+- **Referee:** SwanStation draws all seven blocks of `CLUT8BPP` (three pixels off Diamond's); PCSX-ReARMed draws
+  stripes; Beetle PSX a black screen.
+- **Witnesses:** as the referee.
+- **Conclusion:** argued from the program: a read finding the output empty while a block is in the IDCT holds the
+  reader until the block is done; with nothing coming it answers the last word read again [C]. Open.
+- **Depends on it:** any program that reads the MDEC by the CPU without polling.
+- **Pinned by:** `mdec::tests::a_read_while_the_idct_runs_waits_for_its_block`.
+- **Implemented in:** the stage 9 commits on `diamond-s9`.

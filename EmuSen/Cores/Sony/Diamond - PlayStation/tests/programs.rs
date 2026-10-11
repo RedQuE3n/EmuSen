@@ -747,3 +747,84 @@ fn the_kernels_cd_functions_read_the_disc() {
     assert!(r[4] > 16 && r[4] < 0x10000, "SYSTEM.CNF's sector: {}", r[4]);
     assert_eq!(&m.board.ram[0x11_0000..0x11_0800], &pvd[24..2072]);
 }
+
+// --- Stage 9: the MDEC (Diamond_MDEC.md) ---
+
+/// `mdec-timing.s`: five streams decoded by DMA, 96 blocks each, DMA1 done 512 cycles a block after DMA0's start
+/// whatever the depth and the blocks' content, within 0.3% of Beetle PSX's ticks (D-31).
+#[test]
+fn the_mdec_decodes_a_block_in_512_cycles_at_every_depth() {
+    let m = run(include_str!("../programs/mdec-timing.s"));
+    assert_eq!(results(&m, 0x10_0000, 10), [0xFCE, 0x1809, 0x178D, 0x1809, 0xFCE, 0x1808, 0xFCE, 0x180D, 0x178D, 0x1806]);
+}
+
+/// A ps1-tests MDEC program of the release on the open kernel, its machine after `frames`.
+fn mdec_program(corpus: &std::path::Path, path: &str, frames: usize) -> Machine {
+    let image = std::fs::read(corpus.join(path)).expect("the release's program");
+    let media = Media::read(&image).unwrap();
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
+    for _ in 0..frames {
+        m.advance();
+    }
+    m
+}
+
+/// The bytes of a console log's hexdump.
+fn hexdump(log: &str) -> Vec<u8> {
+    log.lines().filter_map(|l| l.trim_start().split_once(": ")).filter(|(at, _)| u32::from_str_radix(at, 16).is_ok()).flat_map(|(_, b)| b.split_whitespace().map(|x| u8::from_str_radix(x, 16).unwrap()).collect::<Vec<_>>()).collect()
+}
+
+/// `mdec/4bit` and `mdec/8bit`: the block the program copies to VRAM at 32,32 against the console log's hexdump as
+/// the program converts it (four bits doubled, eight bits halved twice and thrice, as its `vram.png` shows): 4-bit
+/// exact, 8-bit one pixel off at (3,3), 239 on the console and 240 here (D-30).
+#[test]
+fn the_monochrome_programs_copy_the_consoles_block_to_vram() {
+    let Some(corpus) = records::corpus() else { return };
+    for (name, at4) in [("4bit", true), ("8bit", false)] {
+        let m = mdec_program(&corpus, &format!("mdec/{name}/{name}.exe"), 300);
+        let console = hexdump(&std::fs::read_to_string(corpus.join(format!("mdec/{name}/psx.log"))).unwrap());
+        let mut off = Vec::new();
+        for y in 0..8 {
+            for x in 0..8 {
+                let p = if at4 { (console[y * 4 + x / 2] >> (4 * (x % 2)) & 15) << 1 } else { console[y * 8 + x] >> 3 };
+                let a = ((32 + y) * 1024 + 32 + x) * 2;
+                let v = u16::from_le_bytes([m.board.gpu.vram.bytes[a], m.board.gpu.vram.bytes[a + 1]]);
+                if v != p as u16 * 0x421 {
+                    off.push((x, y));
+                }
+            }
+        }
+        assert_eq!(off, if at4 { vec![] } else { vec![(3, 3)] }, "{name}");
+    }
+}
+
+/// `mdec/frame`'s CPU builds read each word after waiting for the output to be non-empty, the last word's wait
+/// included, so they never return from their twentieth stripe on a console that empties its output as the
+/// step-by-step log shows; the DMA builds finish and reset the MDEC.
+#[test]
+fn the_frame_programs_cpu_builds_wait_after_their_last_word() {
+    let Some(corpus) = records::corpus() else { return };
+    for (path, done, status) in [("mdec/frame/frame-15bit.exe", false, 0x8604_FFFF), ("mdec/frame/frame-15bit-dma.exe", true, 0x8004_0000)] {
+        let m = mdec_program(&corpus, path, 400);
+        let t = m.space(diamond::machine::TTY_ID).unwrap();
+        let tty = String::from_utf8_lossy(&t[..t.iter().position(|&b| b == 0).unwrap_or(t.len())]).into_owned();
+        assert_eq!((tty.matches("mdec_readDecoded").count(), tty.contains("Done")), (20, done), "{path}: {tty}");
+        assert_eq!(m.board.mdec.status(), status, "{path}: every word decoded and read, or the MDEC reset after them");
+    }
+}
+
+/// `mdec/step-by-step-log`'s status after each word the program writes and reads, against the console's log, as far
+/// as the TTY space holds it: 414 of its 422 status lines, the eight others Cr's later turn in its third phase (D-32).
+#[test]
+fn the_step_by_step_status_follows_the_consoles_log() {
+    let Some(corpus) = records::corpus() else { return };
+    let m = mdec_program(&corpus, "mdec/step-by-step-log/step-by-step-log.exe", 9_500);
+    let t = m.space(diamond::machine::TTY_ID).unwrap();
+    let tty = String::from_utf8_lossy(t).into_owned();
+    let log = std::fs::read_to_string(corpus.join("mdec/step-by-step-log/psx.log")).unwrap();
+    let statuses = |s: &str| s.lines().filter(|l| l.starts_with("==== MDEC_STATUS: 0x") && l.len() > 30).map(|l| l[19..29].to_owned()).collect::<Vec<_>>();
+    let (ours, console) = (statuses(&tty), statuses(&log));
+    let compared = ours.len();
+    let same = ours.iter().zip(&console).take(compared).filter(|(a, b)| a == b).count();
+    assert_eq!((compared, same), (422, 414));
+}

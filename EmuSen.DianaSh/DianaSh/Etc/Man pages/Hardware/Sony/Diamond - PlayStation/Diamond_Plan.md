@@ -499,7 +499,9 @@ of the HC05 running a dump would need a firmware listing to verify, which the cl
 
 The documented decode: the run-length codes, the quantisation, the IDCT with the scale table the program uploads, the
 colour conversion, the output depths. Exact output is graded against ps1-tests' VRAM; the timing (how fast it consumes
-input and produces output under DMA) is measured, since FMV playback's smoothness depends on it.
+input and produces output under DMA) is measured, since FMV playback's smoothness depends on it. *Built at stage 9, 2026-10-11
+(`Diamond_MDEC.md`): exact output not reached, the rounding open (D-30); the time from referees, 512 cycles a block
+(D-31); a block 0.3–1.1 µs on the desktop, the §5.12 estimate.*
 
 ### 5.8 SIO0: pads, cards and the multitap
 

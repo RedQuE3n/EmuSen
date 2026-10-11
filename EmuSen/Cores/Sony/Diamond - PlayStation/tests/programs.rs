@@ -61,7 +61,7 @@ fn a_second_load_cancels_the_first() {
 #[test]
 fn the_garbage_registers_read_zero() {
     let m = run(include_str!("../programs/cop0-garbage.s"));
-    assert_eq!(results(&m, 0x10_0000, 18), [0; 18]);
+    assert_eq!(results(&m, 0x10_0000, 30), [0; 30], "every read zero, and no exception");
 }
 
 /// D-2 as Diamond reads psx-spx's table: 6, 9 and 13 cycles by rs, 36 for a division, MFLO free after five more.
@@ -443,8 +443,8 @@ fn the_dpcr_record_completes_only_with_the_channel_enabled() {
 }
 
 /// `cpu/io-access-bitwidth`: 108 reads after 8-, 16- and 32-bit writes, the BIOS row's all the ROM's own word, a
-/// 32-bit store faulting at JOY_CTRL, SIO_CTRL and SPUCNT; 85 cells as the console's log has them, DICR's bit 6 and
-/// GPUSTAT's bit 26 among those that are not.
+/// 32-bit store faulting at JOY_CTRL, SIO_CTRL and SPUCNT; 91 cells as the console's log has them, since DICR's bit 6
+/// reads zero (Diamond_Records.md §16.2), GPUSTAT's bit 26 among those that are not.
 #[test]
 fn the_io_bitwidth_record_reads_each_register_after_each_width() {
     let Some(source) = carried("io-access-bitwidth") else { return };
@@ -455,6 +455,24 @@ fn the_io_bitwidth_record_reads_each_register_after_each_width() {
     assert_eq!(cells.len(), 108);
     assert_eq!(marked(1), [3, 4, 5, 56, 57, 91], "the BIOS row");
     assert_eq!(marked(0x8001_56D8), [29, 35, 53], "--CRASH--");
-    assert_eq!(cells[21..24].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x34_0078; 3], "DICR, the console's 340038h");
-    assert_eq!(fnv(&c.concat()), 0x6EF4_C758_7679_7C9B, "the calls with their arguments");
+    assert_eq!(cells[21..24].iter().map(|c| c[1]).collect::<Vec<_>>(), [0x34_0038; 3], "DICR, as the console reads it");
+    assert_eq!(fnv(&c.concat()), 0xE568_8104_B292_CDDB, "the calls with their arguments");
+}
+
+// DICR's bit 6 (Diamond_Records.md §16.2), SWCz's store (BlackMoon_R3000.md D-21) and the garbage registers (§6.1).
+
+/// DICR keeps bits 0-5 of a write and reads bit 6 zero after a byte, halfword or word store, as ps1-tests' console log
+/// and the referees of three lineages read it; bits 7-14 read zero.
+#[test]
+fn dicr_reads_bit_6_zero_after_any_store() {
+    let m = run(include_str!("../programs/dicr.s"));
+    assert_eq!(results(&m, 0x10_0000, 10), [0x34_0038, 0x34_0038, 0x34_0038, 0x3F, 0, 0x3F, 0xFF_003F, 0x3F, 0x3F, 0]);
+}
+
+/// SWC0, SWC1 and SWC3 store a word of zero, and take DBE where no device answers, as the one referee that models the
+/// store reads them (D-21); SWC2 stores the GTE's register.
+#[test]
+fn swcz_stores_zero_on_the_bus() {
+    let m = run(include_str!("../programs/swcz.s"));
+    assert_eq!(results(&m, 0x10_0000, 14), [0, 0, 0, 0, 0, 0, 0, 0x1234_5678, 0, 0, 0, 0x1C, 0x1C, 0x1C]);
 }

@@ -378,9 +378,9 @@ namespace EmuSen.WiseMan.Cores
         private static string? Amidog => Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_AMIDOG") is { } a && Directory.Exists(a) ? a
             : Corpus is { } c && Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(c))!, "amidog") is var s && Directory.Exists(s) ? s : null;
 
-        // amidog's CPX test run through its menu by Start, its verdicts read from the screen; BREAK's errors are the debug unit's, open - see Diamond_Pad.md §5.
+        // amidog's CPX test run through its menu by Start, its verdicts read from the screen, every group passing - see Diamond_Pad.md §5.
         [Fact]
-        public void Amidogs_cpx_test_runs_from_its_menu_and_passes_but_the_debug_unit()
+        public void Amidogs_cpx_test_runs_from_its_menu_and_passes_every_group()
         {
             if (Amidog is not { } root)
             {
@@ -396,7 +396,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { AmidogMark.Ok, na, na, na }, verdicts["INTR"]);
             Assert.Equal(new[] { AmidogMark.Ok, na, AmidogMark.Ok, na }, verdicts["SLOT"]);
             Assert.Equal(new[] { AmidogMark.Ok, na, AmidogMark.Ok, na }, verdicts["SLOT BR"]);
-            Assert.Equal(new[] { AmidogMark.Error, na, na, na }, verdicts["BREAK"]);
+            Assert.Equal(new[] { AmidogMark.Ok, na, na, na }, verdicts["BREAK"]);
             Assert.Equal(new[] { AmidogMark.Ok, na, na, na }, verdicts["ILLEGAL"]);
         }
 

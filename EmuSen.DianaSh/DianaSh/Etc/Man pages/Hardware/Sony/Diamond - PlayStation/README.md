@@ -52,6 +52,9 @@ its commands. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.m
   drawing time) and D-12 (two pictures the programs cannot meet). The R3000A's disputes (D-1 to D-3) are in
   `../BlackMoon-HW/BlackMoon_R3000.md` §8 and the GTE's (D-13 to D-16, from stage 5) in `../BlackMoon-HW/BlackMoon_GTE.md`
   §12.
+- [`Diamond_FPGA_Referees.md`](Diamond_FPGA_Referees.md) — the FPGA cores as black-box referees, written 2026-10-11:
+  the access rule decided that day, PSX_MiSTer and Laxer3a's PS-GPU and PS-GTE pinned, GHDL installed user-local, how
+  each is driven, the calibration and the disputes each is to referee (not yet run), and the reading log.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the naming scheme, and `Man pages/Hardware/README.md` for how this
 documentation set is organized.

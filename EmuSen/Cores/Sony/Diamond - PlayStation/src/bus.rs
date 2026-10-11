@@ -6,8 +6,9 @@
 use blackmoon_gte::Gte;
 use blackmoon_r3000::{Bus, Size};
 
-use crate::devices::{CdromStub, Duart, GpuStub, MdecStub, SioStub, SpuStub, Tty};
+use crate::devices::{CdromStub, Duart, MdecStub, SioStub, SpuStub, Tty};
 use crate::dma::{self, Dma, chcr};
+use crate::gpu::Gpu;
 use crate::icache::{ICache, Lookup};
 use crate::irq::{self, Irq};
 use crate::memctl::{self, MemControl, Timing};
@@ -79,7 +80,7 @@ pub struct Board {
     pub timers: Timers,
     pub dma: Dma,
     pub video: Video,
-    pub gpu: GpuStub,
+    pub gpu: Gpu,
     pub spu: SpuStub,
     pub cdrom: CdromStub,
     pub mdec: MdecStub,
@@ -101,10 +102,15 @@ pub struct Board {
     pub cpu_busy: u64,
     /// Scratch words for a cache refill, so that a miss allocates nothing.
     refill: [u32; 4],
+    /// A GPU DMA piece's own clock in sixteenths of a cycle, since the GPU may hold each word back.
+    dma_clock: u64,
+    /// Whether this field's vblank began, which ends a frame.
+    pub(crate) vblank_seen: bool,
 }
 
 impl Board {
     pub fn new(pal_clock: bool, gpu_version: u32, regs: [u32; 9], ram_size: u32, bcc: u32) -> Board {
+        let video = Video::new(pal_clock);
         let mut b = Board {
             now: 0,
             next_event: 0,
@@ -116,8 +122,8 @@ impl Board {
             irq: Irq::default(),
             timers: Timers::new(),
             dma: Dma::default(),
-            video: Video::new(pal_clock),
-            gpu: GpuStub::new(gpu_version),
+            gpu: Gpu::new(gpu_version, video.clock),
+            video,
             spu: SpuStub::new(),
             cdrom: CdromStub::default(),
             mdec: MdecStub::default(),
@@ -132,6 +138,8 @@ impl Board {
             bus_free: 0,
             cpu_busy: 0,
             refill: [0; 4],
+            dma_clock: 0,
+            vblank_seen: false,
         };
         b.schedule();
         b
@@ -248,7 +256,12 @@ impl Board {
                     _ => 0,
                 }
             }
-            0x810 => self.gpu.read,
+            0x810 => {
+                let (v, t) = self.gpu.gpuread(&self.video, self.now);
+                self.now = t;
+                self.wake_gpu_dma();
+                v
+            }
             0x814 => self.gpu.status(&self.video, self.now),
             0x820 => 0,
             0x824 => self.mdec.status,
@@ -295,15 +308,16 @@ impl Board {
                 }
             }
             0x810 => {
-                if self.gpu.gp0(value) {
-                    self.irq.raise(irq::GPU);
-                }
+                self.now = self.gpu.gp0(value, self.now, &self.video);
+                self.take_gpu_irq();
+                self.wake_gpu_dma();
             }
             0x814 => {
                 self.sync_timers();
                 self.gpu.gp1(value, &mut self.video, self.now);
                 self.timers.rebase(&self.video, self.now);
                 self.dma_kick();
+                self.wake_gpu_dma();
             }
             0x820 => {}
             0x824 => {
@@ -383,7 +397,7 @@ impl Board {
 
     /// The next cycle at which anything is due: a video edge, a timer's target or FFFFh, a DMA piece.
     pub fn schedule(&mut self) {
-        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due);
+        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due).min(self.gpu.next_event());
         for n in 0..3 {
             next = next.min(self.timers.next_hit(n, &self.video));
         }
@@ -399,7 +413,8 @@ impl Board {
             for (n, d) in due.iter_mut().enumerate() {
                 *d = self.timers.next_hit(n, &self.video);
             }
-            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]);
+            let gpu_at = self.gpu.next_event();
+            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]).min(gpu_at);
             if first > self.now {
                 self.next_event = first;
                 return;
@@ -409,17 +424,26 @@ impl Board {
                     self.irq.raise(irq::TIMER0 << n);
                 }
             }
+            if gpu_at == first {
+                self.gpu.run(first, &self.video);
+                self.take_gpu_irq();
+                self.wake_gpu_dma();
+            }
             if edge_at == first {
+                self.gpu.sync(edge_at, &self.video);
+                self.take_gpu_irq();
                 for n in 0..2 {
                     if self.timers.sync(n, &self.video, edge_at) {
                         self.irq.raise(irq::TIMER0 << n);
                     }
                 }
                 let what = self.video.edge(edge_at, hb);
-                if what & edge::FIELD != 0 {
+                if what & edge::FIELD != 0 && !std::mem::take(&mut self.vblank_seen) {
                     self.field_done = true;
                 }
                 if what & edge::VBLANK_START != 0 {
+                    self.field_done = true;
+                    self.vblank_seen = what & edge::FIELD == 0;
                     self.irq.raise(irq::VBLANK);
                     self.timers.blank(1, true);
                 }
@@ -447,7 +471,7 @@ impl Board {
         match n {
             dma::MDEC_IN => self.mdec.status & 1 << 28 != 0,
             dma::MDEC_OUT => self.mdec.status & 1 << 27 != 0,
-            dma::GPU => self.gpu.dreq(),
+            dma::GPU => self.gpu.dma_direction != 0,
             dma::CDROM => true,
             dma::SPU => self.spu.dreq(),
             dma::PIO => true,
@@ -477,13 +501,35 @@ impl Board {
         (words * dma::sixteenths_per_word(n, self.memctl.regs[memctl::DEV5])).div_ceil(16)
     }
 
+    /// A piece's time: its words at the channel's rate, or longer when the GPU held them back.
+    fn piece_cost(&self, n: usize, words: u64, start: u64) -> u64 {
+        let cost = self.cost(n, words);
+        if n == dma::GPU { cost.max(self.dma_clock.div_ceil(16).saturating_sub(start)) } else { cost }
+    }
+
+    /// GP0(1Fh)'s interrupt, once the GPU reached it.
+    fn take_gpu_irq(&mut self) {
+        if self.gpu.take_irq() {
+            self.irq.raise(irq::GPU);
+        }
+    }
+
+    /// A GPU transfer waiting for the GPU's request looks again once the GPU's state changed.
+    fn wake_gpu_dma(&mut self) {
+        if self.dma.active == Some(dma::GPU) && self.dma.due == u64::MAX {
+            self.dma.due = self.now;
+            self.schedule();
+        }
+    }
+
     /// A word to the device of channel `n`.
     fn send_to_device(&mut self, n: usize, word: u32) {
         match n {
             dma::GPU => {
-                if self.gpu.gp0(word) {
-                    self.irq.raise(irq::GPU);
-                }
+                let at = self.dma_clock.div_ceil(16);
+                let taken = self.gpu.gp0(word, at, &self.video);
+                self.dma_clock = if taken > at { taken * 16 } else { self.dma_clock } + dma::sixteenths_per_word(dma::GPU, 0);
+                self.take_gpu_irq();
             }
             dma::SPU => {
                 self.spu.store(word as u16);
@@ -495,7 +541,12 @@ impl Board {
 
     fn receive_from_device(&mut self, n: usize) -> u32 {
         match n {
-            dma::GPU => self.gpu.read,
+            dma::GPU => {
+                let at = self.dma_clock.div_ceil(16);
+                let (w, t) = self.gpu.gpuread(&self.video, at);
+                self.dma_clock = if t > at { t * 16 } else { self.dma_clock } + dma::sixteenths_per_word(dma::GPU, 0);
+                w
+            }
             dma::SPU => self.spu.load() as u32 | (self.spu.load() as u32) << 16,
             _ => 0,
         }
@@ -544,6 +595,15 @@ impl Board {
             self.dma.active = None;
             return;
         }
+        if n == dma::GPU && c.sync() != 0 {
+            self.gpu.run(at, &self.video);
+            if !self.gpu.dreq(at) {
+                self.dma.due = self.gpu.dreq_change();
+                return;
+            }
+        }
+        let start = at.max(self.bus_free);
+        self.dma_clock = start * 16;
         let step: u32 = if c.chcr & chcr::BACKWARD != 0 { 0u32.wrapping_sub(4) } else { 4 };
         let from_ram = c.chcr & chcr::FROM_RAM != 0 && n != dma::OTC;
         let finished;
@@ -553,6 +613,7 @@ impl Board {
             2 if n != dma::OTC => {
                 let header = self.ram_word(c.madr);
                 let count = header >> 24;
+                self.dma_clock += dma::sixteenths_per_word(n, 0);
                 let mut a = c.madr;
                 for _ in 0..count {
                     a = a.wrapping_add(4) & 0x00FF_FFFC;
@@ -608,14 +669,14 @@ impl Board {
                 }
                 finished = self.dma.left == 0;
                 if !finished {
-                    let end = self.hold_bus(at, self.cost(n, words));
+                    let end = self.hold_bus(at, self.piece_cost(n, words, start));
                     let cpu_window = (1u64 << (c.chcr >> 20 & 7)).min(32 << (c.chcr >> 16 & 7));
                     self.dma.due = end + cpu_window + CHOP_OVERHEAD;
                     return;
                 }
             }
         }
-        let end = self.hold_bus(at, self.cost(n, words) + overhead);
+        let end = self.hold_bus(at, self.piece_cost(n, words, start) + overhead);
         if finished {
             self.dma.finishing = true;
             self.dma.due = end;
@@ -979,7 +1040,7 @@ mod tests {
             b.now = b.next_event;
             b.events();
         }
-        assert_eq!(b.gpu.stat & 0x7FF, 0x123);
+        assert_eq!(b.gpu.env[0] & 0x7FF, 0x123);
         assert_ne!(b.irq.stat & irq::DMA, 0);
         assert_eq!(b.dma.ch[2].madr, 0x00FF_FFFF);
     }

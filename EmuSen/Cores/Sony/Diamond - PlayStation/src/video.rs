@@ -108,7 +108,7 @@ impl Video {
 
     /// The absolute line and the half clock within it at `h`.
     fn line_at(&self, h: u64) -> (u64, u64) {
-        let rel = h - self.base_h;
+        let rel = h.saturating_sub(self.base_h);
         let len = self.line_length();
         (self.base_line + rel / len, rel % len)
     }
@@ -147,6 +147,15 @@ impl Video {
         } else {
             None
         }
+    }
+
+    /// The absolute line at CPU cycle `t`, and the first absolute line of the field being scanned.
+    pub fn position(&self, t: u64) -> (u64, u64) {
+        (self.line_at(self.h_at(t)).0, self.field_line)
+    }
+
+    pub fn field_lines(&self) -> u32 {
+        self.field_lines
     }
 
     pub fn in_vblank_at(&self, t: u64) -> bool {

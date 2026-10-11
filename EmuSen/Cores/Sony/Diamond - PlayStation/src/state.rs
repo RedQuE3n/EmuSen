@@ -6,6 +6,9 @@ use emusen_native::ffi::{StateMachine, Status, status};
 use emusen_native::{State, StateReader, StateWriter, Truncated};
 
 use crate::bus::Board;
+use crate::gpu::raster::Vertex;
+use crate::gpu::vram::Rect;
+use crate::gpu::{Gpu, Parser, Polyline, ReadOut, Transfer, Word};
 use crate::machine::Machine;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"DMND");
@@ -78,12 +81,8 @@ impl Board {
             w.u64s("Bases", &[v.base_h, v.base_line, v.base_dots, v.base_hblanks, v.field_line, v.done_h]);
             w.bool("Odd", v.odd);
         });
-        let g = &self.gpu;
-        w.group("Gpu", |w| {
-            w.u32s("Registers", &[g.stat, g.read, g.command, g.remaining, g.data_words, g.display_start]);
-            w.bool("Polyline", g.polyline);
-            w.u32s("Attributes", &g.attributes);
-        });
+        w.group("Gpu", |w| self.gpu.write_state(w));
+        w.bool("VblankSeen", self.vblank_seen);
         w.u16s("SpuRegisters", &self.spu.regs);
         w.u32("SpuCursor", self.spu.cursor);
         w.bytes("Cdrom", &[self.cdrom.index, self.cdrom.mask, self.cdrom.flags]);
@@ -148,12 +147,8 @@ impl Board {
         r.u64s(&mut bases)?;
         [v.base_h, v.base_line, v.base_dots, v.base_hblanks, v.field_line, v.done_h] = bases;
         v.odd = r.bool()?;
-        let g = &mut self.gpu;
-        let mut gr = [0u32; 6];
-        r.u32s(&mut gr)?;
-        [g.stat, g.read, g.command, g.remaining, g.data_words, g.display_start] = gr;
-        g.polyline = r.bool()?;
-        r.u32s(&mut g.attributes)?;
+        self.gpu.read_state(r)?;
+        self.vblank_seen = r.bool()?;
         r.u16s(&mut self.spu.regs)?;
         self.spu.cursor = r.u32()?;
         let mut cd = [0u8; 3];
@@ -177,6 +172,112 @@ impl Board {
     }
 }
 
+fn word_code(k: Word) -> u8 {
+    match k {
+        Word::Command(n) => n,
+        Word::Parameter => 100,
+        Word::Data => 101,
+        Word::Colour => 102,
+        Word::Position => 103,
+        Word::End => 104,
+    }
+}
+
+fn word_of(code: u8) -> Word {
+    match code {
+        100 => Word::Parameter,
+        101 => Word::Data,
+        102 => Word::Colour,
+        103 => Word::Position,
+        104 => Word::End,
+        n => Word::Command(n),
+    }
+}
+
+fn rect_of(v: &[u32]) -> Rect {
+    Rect { x: v[0], y: v[1], w: v[2].max(1), h: v[3].max(1) }
+}
+
+impl Gpu {
+    /// The GPU's registers, FIFO, command processor and caches; VRAM is the state's own block, the picture not kept.
+    fn write_state(&self, w: &mut StateWriter) {
+        w.u32s("Env", &self.env);
+        let t = &self.tail;
+        w.bools("Flags", &[self.second_megabyte, self.irq, self.irq_rose, self.display.blanked, t.colour_next, t.polyline.is_some(), t.polyline == Some(true)]);
+        w.u32s("Registers", &[self.dma_direction, self.latch, self.display.start, self.head as u32, self.len as u32, self.have as u32, self.need as u32]);
+        w.u32s("FifoWords", &self.fifo.map(|f| f.0));
+        w.u64s("FifoTimes", &self.fifo.map(|f| f.1));
+        w.bytes("FifoKinds", &self.fifo.map(|f| word_code(f.2)));
+        w.u32s("Parser", &[t.command, t.parameters, t.data]);
+        w.u32s("Words", &self.words);
+        let x = self.write.unwrap_or_default();
+        w.u32s("Write", &[self.write.is_some() as u32, x.rect.x, x.rect.y, x.rect.w, x.rect.h, x.done]);
+        let r = self.read.unwrap_or_default();
+        w.u32s("Read", &[self.read.is_some() as u32, r.rect.x, r.rect.y, r.rect.w, r.rect.h, r.words]);
+        w.u64("ReadStart", r.start);
+        let p = self.polyline.unwrap_or_default();
+        w.i32s("Polyline", &[self.polyline.is_some() as i32, p.command as i32, p.colour as i32, p.last.x, p.last.y, p.last.rgb[0], p.last.rgb[1], p.last.rgb[2]]);
+        w.u64s("BusyUntil", &[self.busy_until, self.carry]);
+        w.u32s("CacheTags", &self.cache.tags);
+        w.u16s("CacheData", self.cache.data.as_flattened());
+        w.u16s("Clut", &self.clut.colours);
+        w.u32s("ClutAt", &[self.clut.x, self.clut.y, self.clut.loaded]);
+        w.u64("ScanField", self.display.field_line);
+        w.u32s("Scan", &[self.display.next, self.display.width, self.display.height]);
+    }
+
+    fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
+        r.u32s(&mut self.env)?;
+        let mut f = [false; 7];
+        r.bools(&mut f)?;
+        [self.second_megabyte, self.irq, self.irq_rose, self.display.blanked] = [f[0], f[1], f[2], f[3]];
+        let (colour_next, polyline) = (f[4], f[5].then_some(f[6]));
+        let mut g = [0u32; 7];
+        r.u32s(&mut g)?;
+        (self.dma_direction, self.latch, self.display.start) = (g[0], g[1], g[2]);
+        (self.head, self.len, self.have, self.need) = (g[3] as usize % 16, (g[4] as usize).min(16), (g[5] as usize).min(16), (g[6] as usize).min(16));
+        let mut words = [0u32; 16];
+        let mut times = [0u64; 16];
+        let mut kinds = [0u8; 16];
+        r.u32s(&mut words)?;
+        r.u64s(&mut times)?;
+        r.bytes(&mut kinds)?;
+        for i in 0..16 {
+            self.fifo[i] = (words[i], times[i], word_of(kinds[i]));
+        }
+        let mut p = [0u32; 3];
+        r.u32s(&mut p)?;
+        self.tail = Parser { command: p[0], parameters: p[1], data: p[2], polyline, colour_next };
+        r.u32s(&mut self.words)?;
+        let mut t = [0u32; 6];
+        r.u32s(&mut t)?;
+        self.write = (t[0] != 0).then(|| Transfer { rect: rect_of(&t[1..5]), done: t[5] });
+        let mut rd = [0u32; 6];
+        r.u32s(&mut rd)?;
+        let start = r.u64()?;
+        self.read = (rd[0] != 0).then(|| ReadOut { rect: rect_of(&rd[1..5]), words: rd[5], start });
+        let mut pl = [0i32; 8];
+        r.i32s(&mut pl)?;
+        self.polyline = (pl[0] != 0).then(|| Polyline { command: pl[1] as u32, colour: pl[2] as u32, last: Vertex { x: pl[3], y: pl[4], rgb: [pl[5], pl[6], pl[7]], u: 0, v: 0 } });
+        let mut busy = [0u64; 2];
+        r.u64s(&mut busy)?;
+        [self.busy_until, self.carry] = busy;
+        r.u32s(&mut self.cache.tags)?;
+        r.u16s(self.cache.data.as_flattened_mut())?;
+        r.u16s(&mut self.clut.colours)?;
+        let mut c = [0u32; 3];
+        r.u32s(&mut c)?;
+        [self.clut.x, self.clut.y, self.clut.loaded] = c;
+        self.display.field_line = r.u64()?;
+        let mut d = [0u32; 3];
+        r.u32s(&mut d)?;
+        self.display.next = d[0];
+        self.display.width = d[1].clamp(1, crate::gpu::display::MAX_WIDTH);
+        self.display.height = d[2].clamp(1, crate::gpu::display::MAX_HEIGHT);
+        Ok(())
+    }
+}
+
 impl Machine {
     fn write(&self, w: &mut StateWriter) {
         w.u32("Magic", STATE_MAGIC);
@@ -189,7 +290,7 @@ impl Machine {
         let b = &self.board;
         w.bytes("RAM", &b.ram);
         w.bytes("SCRATCH", &b.scratch);
-        w.bytes("VRAM", &b.gpu.vram);
+        w.bytes("VRAM", &b.gpu.vram.bytes);
         w.bytes("SPURAM", &b.spu.ram);
         w.bytes("TTY", &b.tty.text);
     }
@@ -217,7 +318,7 @@ impl StateMachine for Machine {
         let pending = r.bool()?;
         r.bytes(&mut board.ram)?;
         r.bytes(&mut board.scratch)?;
-        r.bytes(&mut board.gpu.vram)?;
+        r.bytes(&mut board.gpu.vram.bytes)?;
         r.bytes(&mut board.spu.ram)?;
         r.bytes(&mut board.tty.text)?;
         board.schedule();
@@ -275,16 +376,16 @@ mod tests {
         assert_eq!(
             tail,
             [
-                "3678122 65536 u8[65536] TTY",
-                "3153834 524288 u8[524288] SPURAM",
-                "2105258 1048576 u8[1048576] VRAM",
-                "2104234 1024 u8[1024] SCRATCH",
-                "7082 2097152 u8[2097152] RAM",
-                "7081 1 bool ExePending"
+                "3682145 65536 u8[65536] TTY",
+                "3157857 524288 u8[524288] SPURAM",
+                "2109281 1048576 u8[1048576] VRAM",
+                "2108257 1024 u8[1024] SCRATCH",
+                "11105 2097152 u8[2097152] RAM",
+                "11104 1 bool ExePending"
             ]
         );
-        assert!(layout.contains("Bus.Timer2.Flags"), "{layout}");
-        assert_eq!(machine().state_size(), 3_743_658);
+        assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData"), "{layout}");
+        assert_eq!(machine().state_size(), 3_747_681);
     }
 
     #[test]

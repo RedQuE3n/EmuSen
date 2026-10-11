@@ -1,5 +1,6 @@
 //! The project's own test programs in `programs/`, assembled with `emusen-mips` and run with no kernel: each one's
-//! results as Diamond reads the documents, and as the witnesses of Diamond_Native.md §11.13 were seen to answer.
+//! results as Diamond reads the documents, and as the witnesses of Diamond_Native.md §11.13 were seen to answer, or as
+//! a console's log shows.
 
 use diamond::exe;
 use diamond::machine::{Config, Gpu, Machine};
@@ -49,4 +50,13 @@ fn the_multiplier_takes_psx_spxs_cycles() {
     let m = run(include_str!("../programs/multiply.s"));
     assert_eq!(results(&m, 0x10_0000, 22), [6, 6, 9, 9, 13, 13, 6, 9, 6, 9, 9, 13, 9, 13, 13, 6, 6, 36, 36, 36, 36, 36]);
     assert_eq!(results(&m, 0x10_0100, 16), [6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+}
+
+/// GPUSTAT's bits 25-30 as ps1-tests' `gpu/gpustat` console log passes them (Diamond_GPU.md §2.3): ready for a command
+/// and the FIFO empty while a rectangle drawn by the CPU is busy; nothing ready while a DMA's second rectangle waits.
+#[test]
+fn gpustat_reads_as_the_console_passes() {
+    let m = run(include_str!("../programs/gpustat.s"));
+    let bits: Vec<u32> = results(&m, 0x10_0000, 12).iter().map(|s| s & 0x7E00_0000).collect();
+    assert_eq!(bits, [0x1400_0000, 0x1000_0000, 0x1400_0000, 0x5600_0000, 0x4000_0000, 0x5600_0000, 0x3600_0000, 0x2200_0000, 0x3600_0000, 0x5600_0000, 0x4000_0000, 0x5600_0000]);
 }

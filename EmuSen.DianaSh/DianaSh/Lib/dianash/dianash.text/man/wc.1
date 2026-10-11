@@ -1,0 +1,15 @@
+NAME
+    wc - count lines, words, bytes
+
+SYNOPSIS
+    wc [-l] [-w] [-c] [path]
+
+DESCRIPTION
+    Counts lines/words/bytes of piped stdin, or a real file if <path> is
+    given (walled to the project's own directory tree). With no flags,
+    prints all three in that fixed order regardless of what order flags are
+    given in, matching real wc.
+
+EXAMPLES
+    history | wc -l
+    wc -l notes.txt

@@ -1,0 +1,53 @@
+NAME
+    runto - resume until a named event instead of an address
+
+SYNOPSIS
+    runto nmi | irq | brk | cop
+    runto scanline <n>
+    runto frame [<n>]
+    runto <addr>
+
+DESCRIPTION
+    Resumes emulation and halts at the next occurrence of an event, rather
+    than requiring an address to put a breakpoint on. Half of debugging a
+    console is 'get me to the interesting moment', and for a whole class of
+    moments there is no single address to break on - the vblank handler's
+    entry address is not knowable before you've found it, and 'the state at
+    scanline 100' is not an address at all.
+
+    'runto nmi|irq|brk|cop' halts as soon as the CPU takes an interrupt of
+    that kind, with the halt landing inside the handler. Pair it with 'bt',
+    which then shows what the interrupt interrupted, and 'label add opaddr
+    NmiHandler' to keep the address you just found.
+
+    'runto scanline <n>' halts at the start of scanline <n> of whichever
+    frame is in progress, which is how you catch a mid-frame register write
+    (a status-bar split, a mid-screen mode change) in the act. Scanline
+    numbers here are decimal.
+
+    'runto frame [<n>]' halts once frame <n> has completed; with no argument
+    it means the next frame, which is the fastest way to advance exactly one
+    frame from a halt.
+
+    Events are noticed where they happen but the halt lands at the next
+    instruction boundary, because that is the only place a core can safely
+    stop - the same one-instruction lag 'bp write' has, for the same reason.
+
+    'runto <addr>' is a convenience for a plain address: it adds an ordinary
+    breakpoint and resumes. That breakpoint is NOT removed when it fires -
+    the command reports its id so 'bp remove <id>' can clear it. A one-shot
+    breakpoint would need a concept the registry doesn't have, and silently
+    leaving a permanent breakpoint behind would be worse than saying so.
+
+    An armed run-to survives a plain 'continue': it fires whenever the event
+    next happens. Only one run-to of each kind can be armed at a time -
+    arming a second replaces the first.
+
+EXAMPLES
+    runto nmi
+    runto scanline 100
+    runto frame
+    runto 808000
+
+SEE ALSO
+    step, bp, bt, resume

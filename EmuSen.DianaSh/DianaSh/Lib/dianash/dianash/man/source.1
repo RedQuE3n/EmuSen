@@ -1,0 +1,27 @@
+NAME
+    source, . - run a script file in this shell's own scope
+
+SYNOPSIS
+    source <path>
+    . <path>
+
+DESCRIPTION
+    Runs <path>'s lines one at a time, exactly as if each had been typed at
+    the prompt - including multi-line if/for/while blocks spanning several
+    physical lines in the file. Runs in THIS shell's own variable scope, not
+    an isolated subshell: a variable the script sets is still set once
+    'source' returns, matching real bash 'source' (and unlike $(...) command
+    substitution, which does run in an isolated subshell - see 'man' on
+    command substitution... there isn't one; see the shell reference doc).
+    Blank lines and lines starting with '#' are skipped. A script's own
+    lines are NOT recorded into 'history'/!N recall, and '!'/'!!' expansion
+    is disabled for them - only the 'source' invocation itself shows up in
+    history, matching real bash. Walled to the project's own directory tree
+    (the same sandbox 'cd'/'ls'/'mv' use) - a path outside it is rejected.
+    A script ending mid-block, or a self-referential/mutually-recursive
+    'source' chain (capped at 20 nested levels), reports a clean error
+    instead of hanging the console or crashing it.
+
+EXAMPLES
+    source setup.txt
+    . setup.txt

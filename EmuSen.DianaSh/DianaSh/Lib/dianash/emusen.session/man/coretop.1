@@ -1,0 +1,58 @@
+NAME
+    coretop - live htop-style dashboard of the loaded core's hardware
+
+SYNOPSIS
+    coretop [-w]
+
+DESCRIPTION
+    A live, auto-refreshing (4x/second) dashboard, styled after htop: per-
+    subsystem hardware load bars, CPU registers, a sprite-capacity gauge,
+    per-voice audio channel meters, a live color-RAM palette swatch, and (if
+    this core has a tilemap concept) a downsampled live preview of VRAM's
+    tile sheet - all in one screen, refreshing on its own clock rather than
+    waiting for input. Every number comes from IDebugTarget, so a core with
+    nothing to report for a given section (no hardware-load breakdown wired
+    up, no fixed sprite capacity, no palettes) just makes that section
+    shrink or disappear rather than showing something fake.
+
+    On a core of the stable ABI the load bars are the phases the core times
+    and names in its machine info; a core that times none shows one bar,
+    'frame', the engine's own timing of the whole frame. Each is a share of
+    one frame at the machine's own rate.
+
+    Load bars are colored green/yellow/red under 60% / 60-85% / over 85%,
+    the same rough 'getting busy' convention real htop's CPU bars use.
+
+    Press Ctrl+C to exit - unlike everywhere else in this shell, Ctrl+C is
+    read as a key here (via Console.TreatControlCAsInput) rather than
+    raising a process-level interrupt, restored to normal the moment
+    coretop exits. Needs a REAL interactive terminal, same as 'nano' and
+    for the same reason - refuses cleanly rather than trying to draw
+    anywhere when stdin/stdout is redirected or there's no real terminal at
+    all (a piped script, a 'source'd file, a headless test).
+
+    In EmuSen.Mistress's own console window (a TextBox, not a real
+    terminal - the above wouldn't work there at all), 'coretop' is replaced
+    with a windowed equivalent instead: a real, non-blocking Avalonia window
+    showing the same data as actual widgets and live images (the palette and
+    VRAM tile sheet render as real pictures there, not ANSI blocks) that
+    refreshes on its own timer while gameplay keeps running - Ctrl+C doesn't
+    apply there, just close the window.
+
+    -w  Open the same dashboard in a separate window instead of taking over
+        the terminal, so you can dismiss it and keep playing. In
+        EmuSen.Mistress, coretop is already windowed by default, so -w is
+        accepted and simply has no additional effect there. In EmuSen.Hotaru
+        (a Raylib console build with no window of its own to reuse), -w spins
+        up a small dedicated Avalonia UI thread the first time it's used and
+        opens a real second OS window from it, entirely separate from the
+        Raylib game window and its main loop - gameplay keeps running behind
+        it. Closing that window is -w's equivalent of Ctrl+C: it's the whole
+        'stop watching coretop' action, nothing else to press. If the current
+        frontend has no window to open at all, -w fails cleanly with
+        "not supported by this frontend" rather than falling back to the
+        terminal dashboard.
+
+EXAMPLES
+    coretop
+    coretop -w

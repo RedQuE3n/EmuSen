@@ -1,0 +1,16 @@
+NAME
+    cat - print a file's contents
+
+SYNOPSIS
+    cat <path>...
+
+DESCRIPTION
+    Prints one or more real files' contents, concatenated in the order
+    given, walled to the project's own directory tree (see 'cd'). With no
+    <path> at all, passes piped stdin straight through unchanged instead -
+    the classic 'cat' idiom for previewing a pipeline mid-stage - rather
+    than erroring for a missing argument.
+
+EXAMPLES
+    cat notes.txt
+    watch log 1 | cat

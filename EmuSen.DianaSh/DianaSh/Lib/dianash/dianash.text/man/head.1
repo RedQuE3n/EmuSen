@@ -1,0 +1,13 @@
+NAME
+    head - print the first lines of a file or stdin
+
+SYNOPSIS
+    head [-n N] [path]
+
+DESCRIPTION
+    Prints the first N lines (default 10) of piped stdin, or a real file if
+    <path> is given (walled to the project's own directory tree - see 'cd').
+
+EXAMPLES
+    history | head -n 5
+    head notes.txt

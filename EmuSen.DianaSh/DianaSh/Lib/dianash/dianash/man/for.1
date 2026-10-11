@@ -1,0 +1,15 @@
+NAME
+    for - loop over a list of words
+
+SYNOPSIS
+    for NAME in word...; do LIST; done
+
+DESCRIPTION
+    Sets variable NAME to each word in turn (already expanded - quoting,
+    $VAR, and $(...) all apply to the word list) and runs the body once per
+    word. 'break' exits the loop early; 'continue' skips to the next word.
+    Every iteration counts against a shared 10-second wall-clock safety
+    timeout (see 'while') that aborts a runaway loop with a clear error.
+
+EXAMPLES
+    for i in 1 2 3; do echo $i; done

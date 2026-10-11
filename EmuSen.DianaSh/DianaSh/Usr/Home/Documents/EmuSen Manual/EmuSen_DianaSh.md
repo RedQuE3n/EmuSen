@@ -1,6 +1,7 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the fourth, 2026-10-10: §13.4's sandbox escapes, finding 10, fixed. The third, the same day: S0
+*This revision: the fifth, 2026-10-11: S1 built, the C# shell reorganised without changing what it prints (§13.5).
+The fourth, 2026-10-10: §13.4's sandbox escapes, finding 10, fixed. The third, the same day: S0
 built, the golden corpus, its harness and what it recorded (§13.4). The
 second, the same day: the seventeen questions of §16 decided, each as recommended, and the runtime named Crystal (Q1).
 The first, the same day: a design, with nothing built: the three decisions of §0.1, what the shell is
@@ -447,7 +448,7 @@ Each command's page is a file beside its module, `man/<name>.<section>`, in toda
 that are not a command's (`hier`, `dianash` itself, the language's) are the shell's own, in `<install>/lib/dianash/man/`.
 `man` with a name that has no page falls back to the usage line, as now (`DianaShInterpreter.cs:631`). The 98 pages of
 `ManPages.cs` become 98 files in the migration's first steps, still read by the C# `man`, and the move is graded by the
-golden outputs of `man` for every page (§13.2, S1).
+golden outputs of `man` for every page (§13.2, S1). *Done 2026-10-11, 99 files by then* (§13.5).
 
 ### 5.6 Loading
 
@@ -1138,14 +1139,14 @@ standard output, exit status and host action each line gives, over fixed inputs.
 
 ### 13.2 The steps
 
-**Decided 2026-10-11:** the go for S1.
+**Decided 2026-10-11:** the go for S1. *S1 built the same day* (§13.5).
 
 No step leaves a broken shell; each has its gate, and each is its own commit or group of commits.
 
 | Step | What | Gate |
 |---|---|---|
 | **S0** | The golden corpus of §13.1, recorded from the C# shell | it covers every usage line (a test enumerates them); two recordings on two runs are identical |
-| **S1** | The C# shell reorganised without changing what it prints: the 98 manual pages out of `ManPages.cs` into files read by the C# `man`; the five aliases and the read-only fast path made one table; `summary` and `log` turned into ordinary command classes; `Var/`'s shell state (`CommandHistory`, the sessions) separated from the debugger's registries | the golden corpus; `ManPageTests` |
+| **S1** *(done 2026-10-11, §13.5)* | The C# shell reorganised without changing what it prints: the 98 manual pages out of `ManPages.cs` into files read by the C# `man`; the five aliases and the read-only fast path made one table; `summary` and `log` turned into ordinary command classes; `Var/`'s shell state (`CommandHistory`, the sessions) separated from the debugger's registries | the golden corpus; `ManPageTests` |
 | **S2** | The service API's header, `emusen_session.h`, and a C# provider over today's `IDebugTarget` and registries, exposing the table through `[UnmanagedCallersOnly]` functions; the registries, the cheat engine, `IDebugTarget`, the telemetry contracts and the system packs moved out of `EmuSen.DianaSh` into Crystal's assembly, `EmuSen.Crystal`, beneath the shell and beside the cores (§16 Q1), which `EmuSen.DianaSh` and the cores reference | a parity class calling every service function and the C# member it maps (§9.3) on the fake target and each core, equal; the golden corpus |
 | **S3** | The Rust shell core, `Platform/dianash/`, with its builtins, lookup, manifests, the host API in the platform library and the `dianash` program; every C# command still runs, registered with the Rust shell as host commands through `dianash_add_commands` by a C# bridge that calls each `IDianaShCommand.Execute`; the C# frontends choose the C# interpreter or the Rust one by `EMUSEN_DIANASH_NATIVE` (§13.3) | the golden corpus, with the variable unset (the C# interpreter) and `1` (the Rust shell with C# commands); the language's 645 cases both ways |
 | **S4** | `dianash.text` in Rust, command by command, each replacing its C# bridge entry when its golden file passes | that command's golden file and its WiseMan cases both ways; the same corpus run on Windows and macOS CI runners for the text module, since it must behave identically there |
@@ -1353,6 +1354,116 @@ The cores, outside the shell, shown by it:
 
 The cases findings 19 to 21 changed were re-recorded in a commit of their own, eleven files: `bp`, `bt`, `core`, `cov`,
 `disasm`, `eval`, `man` (the `cpus` and `tile` pages), `regs`, `setreg`, `summary` and `tile`. No other file moved.
+
+### 13.5 S1 as built: the C# shell reorganised, and nothing it prints changed
+
+*Built 2026-10-11, in five commits of code, each of which passed the gate below on its own.*
+
+S1's row asks for four changes and forbids one effect. The four are taken in turn, with what moved and why it moved
+there; the effect forbidden, a change to any recorded output, is §13.4's gate, and its result closes the section.
+
+**The manual pages.** The dictionary in `ManPages.cs` held 99 pages, not the 98 counted in §1: `hotaru`'s page was
+added the same day as that count, when Hotaru became a command (`EmuSen_Frontend_Driver.md` §0). Each page is now a
+file of its own, `EmuSen.DianaSh/DianaSh/Lib/dianash/<module>/man/<name>.<section>`, 146,015 bytes in all, and
+`ManPages.cs` went from 3,071 lines to 43, a reader that keeps the old `Lookup(name)` so that `man`, `ManPageTests`
+and `ThemeVocabularyTests` call it unchanged. The layout follows from three things this page has already fixed.
+§5.3's manifest names a command's page by a path relative to the manifest, `man/mem.1`; §12.4 puts every shipped
+module in one folder, `lib/EmuSen/dianash/` in a published tree; and §5.5 puts the shell's own pages in the same
+folder's `man/`. The installed form is therefore one flat folder, `dianash/man/`, holding every page, and the files are
+built into exactly that: a published tree has them at `/lib/EmuSen/dianash/man/`, and a checkout in each frontend's
+output directory, which is §12.4's row for a checkout. When S4 and S5 write the first manifests, each will name pages
+that are already where it looks for them; nothing is moved again. In the source the pages are grouped by the owner
+§8.1 assigns them, one folder per future module, so that the module that will carry a page is visible from its path
+and a module's build can take its folder whole:
+
+| Folder | Pages | Which |
+|---|---|---|
+| `dianash` | 30 | the builtins of §4.2 that have a page, the language's five (`if`, `for`, `while`, `break`, `continue`), and `hier` |
+| `dianash.text` | 16 | §8.1's text module |
+| `emusen.debug` | 26 | §8.1's debug module |
+| `emusen.trace` | 16 | §8.1's trace module, `log` and `resume` included |
+| `emusen.cheat` | 1 | `cheat` |
+| `emusen.session` | 4 | `core`, `state`, `summary`, `coretop` |
+| `nano` | 1 | the one shipped program |
+| `host` | 5 | what a frontend registers or reads itself: `pause`, `feed`, `vstop` (§16 Q14), `hotaru`, `theme` |
+
+The section is the manual's own: 1 for every command, 5 for `theme`, which describes a file format, and 7 for `hier`,
+as `hier(7)` is filed on Linux. `[`'s page is `[.1`, as Debian's coreutils ships it; the corpus called its file
+`bracket.golden` for want of a portable file name, but a page's name is what `man` is asked for, and from S4 the
+manifest's `man` field could name any file. The folder is found the way the shell finds the rest of the install, through
+Galaxia: `ConfigRoot.ShellModulesDirectory`, the program's own directory joined with `ShellModulesDirName`, `dianash`,
+which `EmuSen.DianaSh.csproj`'s copy rule also uses. It is outside the sandbox, as `man hier` says the install is.
+`ManPages` indexes the folder once per process, accepting `<name>.<digit>` and nothing else, and reads a page when it is
+asked for; a file ends in the newline a text file carries, and the page printed does not, which is how the dictionary
+held them. A `.gitattributes` beside the pages fixes their line endings at LF, since `man` prints the bytes and a
+checkout that rewrote them would fail every page's case on Windows.
+
+The move was checked before it was trusted. The pages were extracted from the C# literals by a script, and each
+extracted page was compared with its recorded output in `man.golden` before `ManPages.cs` was cut: 99 of 99 were
+byte-identical. Measured on 2026-10-11 from a `linux-x64` publish of the standalone shell, the 99 files land in
+`lib/EmuSen/dianash/man/`, and `man ls` and `man hier` print from them.
+
+**The aliases and the read-only fast path.** The five aliases were mapped by the same five `if` lines twice, in
+`Dispatch` and in `TryGetReadOnlyFastPath`, and each then looked the command up in its own way. `Bin/CommandTable.cs`
+now owns the three facts the two shared: which name runs which command, which names are aliases of which commands, and
+whether a name is read-only. `Dispatch`, `man` and the fast path all ask it, and a subshell shares its parent's table as
+it shared the two collections before. Whether a command is read-only remains each command's own declaration
+(`IDianaShCommand.IsReadOnly`), as it will be each command's `read_only` in a manifest (§5.3); the table is the one
+place that answers the question for a name, aliases included.
+
+**`summary` and `log` as ordinary command classes.** `summary` was answered inside `Dispatch`; it is now
+`SummaryCommand`, registered like every other command. Two details keep its outputs as they were. It is placed after a
+host's own commands, because `help` has always listed it there and an ordinary registration would have put it before
+`core`, `state` and `hotaru`; and it reports itself not read-only, because the fast path classified it so as a builtin,
+and declaring it read-only would let Mistress and Hotaru run `GetSummaryText` off the emulation thread while a frame
+runs.
+In substance it is read-only; making it so is a change of threading, not of organisation, and is left to be decided.
+`log` was already a class, but it wrote `DianaShLogging.MasterEnabled`, a static in the shell's `Etc/` that the
+emulator's log writer reads through `DebugSettings.MasterLoggingEnabled`, and `WatchRegistry` reads directly. The switch is
+the emulator's (§9.4, §17.1 item 5), so it moved to the debugger's side as `Var/DebugLogging`, where it leaves the shell
+with the registries at S2, and `LogCommand` is handed a getter and a setter, as `StateCommand` is handed its delegates,
+instead of naming a process global. The shell's `Etc/` now holds no static that another component reads.
+
+**`Var/`.** `CommandHistory`, `DianaShSession` and `DianaShSessionManager` moved to `Var/Shell/`, namespace
+`EmuSen.DianaSh.DianaSh.Var.Shell`. What remains in `Var/` is the debugger's: the ten registries, the cheat engine,
+`DebugCpu`, the logging switch and `FrameRecorder`. The shell's three files were moved rather than the debugger's
+nineteen because the cost of a namespace is paid by its users: the three classes are named in 13 files besides their
+own, the 44 public types of the nineteen in 195 (counted on 2026-10-11), and S2 renames the registries' namespace once
+anyway, when it moves them to Crystal's assembly. Nothing in either half referred to the other, so the separation
+needed no code changed beyond the namespace.
+
+**The gate.** Measured on 2026-10-11: the golden corpus, `ManPageTests` and `ThemeVocabularyTests` pass, 96, 103 and 6
+tests; with the rest of the blast radius (all of WiseMan's `DianaSh/` cases, `CoreRegistrationEquivalenceTests` and its
+golden file, the sandbox and history tests, the Mistress and shell console-window tests, the leaf-assembly check and
+Galaxia's tests), 1,259 pass and 8 are skipped, the same 8 `SettingPathsOpenTests` that carry a skip of their own
+(`EmuSen_Config_Reference.md` §7). No file in `Golden/` changed, and none had to. Four test files changed, none of them
+a recording: `GoldenCorpusTests`' item 5 lists the pages through `ManPages` instead of reading `ManPages.cs` with a
+regular expression; the harness names `DebugLogging`, and one test constructs `LogCommand` with its two delegates; and
+three of the four gained the `Var.Shell` using. `ManPageTests` and the corpus's list of builtins still name `summary` as a
+builtin, which is no longer true and does no harm, since each takes a registered command first; they were left as
+they were so that the gate ran unchanged.
+
+**Found while building it.** None of these is fixed here; each is a change to what the shell prints or to where a file
+lies, and so is not S1's.
+
+1. Two outputs not in the corpus did change, as a direct consequence of `summary` becoming a registered command: it is
+   now among `CommandNames`, and among the names an unknown command's hint is drawn from, so `sumary` now answers "Did
+   you mean 'summary'?", which it could not before. A case for it belongs in `summary.golden`, recorded in a commit of
+   its own.
+2. An exception thrown by a core's `GetSummaryText` used to escape `Dispatch` and end the whole line, leaving `$?` as it
+   was; it is now caught there, as every command's is, and gives status 1 with the same "Error:" text. No case reaches
+   it, since no target in the corpus throws there.
+3. `man hier` does not mention `/lib/EmuSen/dianash/man/`. Saying so changes the recorded page, and is a re-recording
+   of `man.golden`'s `hier` case.
+4. On macOS the bundle's program directory is `Contents/MacOS`, so the pages are in `Contents/MacOS/dianash/man/`,
+   not §12.4's `Contents/PlugIns/dianash/`. `PlugIns` is the bundle's place for loadable code, and whether the bundle's
+   signing accepts plain files there has not been tried on the Mac; the pages move there with the first module, at S3,
+   which is one line of Galaxia and one rule of the publish layout, and leaves the `man/<name>.<section>` form as it is.
+5. `ShellModulesDirectory` exists in Galaxia's C# only. Its one reader until S3 is the C# `man`; the Rust Galaxia gains
+   the entry, and the parity test with it, when the Rust shell needs it.
+6. `FrameRecorder` is still in `Var/`, though §9.4 calls it Hotaru's and not a command's. S2's list of what moves does not
+   name it, and S2 should decide whether it goes to Crystal with the rest of `Var/` or to Hotaru.
+7. Two pages run past the 80 columns §5.5 states: `hier` to 83 and `hotaru` to 81.
 
 ---
 

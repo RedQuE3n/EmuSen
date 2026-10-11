@@ -1,0 +1,58 @@
+NAME
+    copflow - watch the CPU and a coprocessor talk
+
+SYNOPSIS
+    copflow on [<size>]
+    copflow off
+    copflow clear
+    copflow tail [<n>]
+    copflow stats
+    copflow poll
+
+DESCRIPTION
+    Every cartridge coprocessor talks to the main CPU through one narrow
+    register window, and that window is where coprocessor bugs actually
+    live. The chip itself is usually fine. What breaks is the conversation:
+    the CPU writes a parameter block and kicks the chip, the chip works and
+    sets a status bit, the CPU polls that bit and moves on. Any one of those
+    four steps can fail silently, and none of them are visible in a register
+    dump - by the time you look, the moment has passed.
+
+    'copflow' logs that window: every read and write, with the value, the
+    frame it happened on, and which side did it. 'copflow tail' replays the
+    recent conversation in order, which is usually enough to see which of
+    the four steps never happened.
+
+POLL RUNS
+    'copflow poll' exists for the most common coprocessor failure by a wide
+    margin: the CPU asks a question the chip never answers. It tracks the
+    longest run of consecutive reads of one register where the value never
+    changed, and reports the run in progress right now.
+
+    A long run is unambiguous. If the game read $3030 ninety thousand times
+    in a row and always got the same byte back, the game is not slow and the
+    plot is not wrong - it is spinning on a status bit that this core never
+    updates. That points at the register model, not the chip's arithmetic,
+    and it is a very different bug from one 'regs' or 'cophist' would find.
+
+    A write by either side always breaks the run, because a write is
+    progress: it means someone learned something and acted. Only unbroken
+    reads of an unchanging value count.
+
+COST
+    Disarmed, this costs one bool test per coprocessor register access -
+    nothing measurable, and nothing at all on a cartridge with no
+    coprocessor, which never reaches the seam. Armed, it keeps whole-run
+    tallies per register plus a ring of the most recent accesses, so a long
+    session cannot grow memory without bound; 'copflow tail' can only show
+    what is still in the ring, while 'copflow stats' and 'copflow poll'
+    cover the entire armed run.
+
+EXAMPLES
+    copflow on
+    copflow tail 40
+    copflow poll
+    copflow stats
+
+SEE ALSO
+    cpus, cophist, regs, watch, bp

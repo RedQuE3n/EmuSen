@@ -1,0 +1,39 @@
+NAME
+    core - load or swap the running ROM
+
+SYNOPSIS
+    core <corename> <path>
+
+DESCRIPTION
+    Validates <corename> against the known core registry and <path> against
+    that core's supported file extensions, then loads it - reloading
+    VenusCore in place if a ROM is already running (a fresh SnesDebugTarget/
+    DianaShInterpreter/FrameRecorder get rebuilt afterward; watches/
+    breakpoints/cheats registered against the OLD ROM don't survive a swap,
+    matching EmuSen.Mistress's own already-accepted 'shell-level state
+    resets on reload' convention). Refuses to swap while a frame recording
+    is in progress - stop it first (F6). Only registered where a session
+    actually exists to reload - EmuSen.Hotaru's own pre-window launch shell
+    has a separate, simpler 'core' handler of its own for resolving the
+    FIRST ROM (see EmuSen_Frontend_Driver.md §3), since there's nothing to
+    reload yet at that point.
+
+WHERE THE ROM MAY BE
+    <path> is read as every path in this shell is: relative to the
+    current directory, or with a leading '/' from this shell's root, and
+    refused if it lands above the root (see 'man hier'). There is one
+    exception, because a ROM library usually lives outside the root: an
+    absolute path inside the library configured as RomDirectory in
+    Preferences (appsettings.json) is taken as it is. The library is only
+    ever read, and only by 'core'; no other command reaches it. The host
+    is handed the resolved path, so it does not depend on the shell's
+    current directory. Hotaru's launch prompt makes the same checks, and
+    a ROM named on its command line is the launcher's choice, not a path
+    typed here, so it is not checked. Before 2026-10-10 <path> was
+    checked only for existence, so any file of the machine could be
+    named.
+
+EXAMPLES
+    core venus game2.smc
+    core snes /Games/other-game.sfc
+    core snes /home/player/Roms/SNES/other-game.sfc   (inside RomDirectory)

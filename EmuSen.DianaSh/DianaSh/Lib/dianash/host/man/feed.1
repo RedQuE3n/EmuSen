@@ -1,0 +1,38 @@
+NAME
+    feed - resume the game and keep watching it
+
+SYNOPSIS
+    feed [-w]
+
+DESCRIPTION
+    Resumes gameplay, like 'resume', but leaves a way back to the prompt
+    that does not depend on the game window having keyboard focus: press
+    Ctrl+C at the TERMINAL and the prompt reopens.
+
+    That watch is a per-frame poll of Console.KeyAvailable, not a blocking
+    read - the same non-blocking technique coretop's dashboard uses, spread
+    across frames because gameplay has to keep running underneath it. While
+    armed, Console.TreatControlCAsInput is set, so Ctrl+C arrives as a
+    readable key rather than the process-terminating signal it is
+    everywhere else. Entering the prompt by ANY path disarms it, so a plain
+    Ctrl+C means 'shut down' again the moment you are back at a prompt.
+
+    -w  Also opens the live picture in a separate window, so gameplay is
+        visible without the game window itself being on screen. Refreshed
+        at ~30Hz into one reused bitmap. Same accepted read-only race as
+        coretop -w: the timer reads core state off the UI thread with no
+        synchronization against the emulation thread's own RunFrame.
+
+    In EmuSen.Mistress the word means the same thing but does much less,
+    and deliberately so. That frontend's game view is already on screen
+    continuously, in the same window, the whole time its console window is
+    open - the two are just independent Avalonia windows - so there is no
+    separate feed to open. 'feed' there brings the game window to the
+    front, for when the console (or something else) is covering it, and
+    ignores '-w' the same way that frontend's own 'coretop' does. The
+    command exists there for consistency: one word means 'let me see the
+    game' everywhere DianaSh runs.
+
+EXAMPLES
+    feed
+    feed -w

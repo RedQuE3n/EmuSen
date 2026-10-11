@@ -1,0 +1,18 @@
+NAME
+    find - recursively list files and directories
+
+SYNOPSIS
+    find [path] [-name pattern]
+
+DESCRIPTION
+    Walks <path> (default: current directory) and everything under it,
+    printing one entry per line, each path shown relative the same way it
+    was given (e.g. 'find EmuSen' prints 'EmuSen/...' paths). -name filters
+    to entries whose own name matches a glob ('*'/'?' wildcards only, no
+    regex) - a directory that doesn't match is still walked into, only
+    excluded from the printed list itself, matching real find's own
+    behavior. Walled to the project's own directory tree (see 'cd').
+
+EXAMPLES
+    find
+    find EmuSen.DianaSh -name '*Command.cs'

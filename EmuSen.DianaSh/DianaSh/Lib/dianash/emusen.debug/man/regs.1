@@ -1,0 +1,29 @@
+NAME
+    regs - dump CPU/video/APU registers
+
+SYNOPSIS
+    regs
+    regs <cpu>
+
+DESCRIPTION
+    Prints the current core's CPU registers, video (PPU) registers, and (if
+    the core reports any) APU registers, each in their own section. Field
+    widths adapt to each register's real bit width.
+
+OTHER PROCESSORS
+    'regs <cpu>' prints just one chip's registers - see 'man cpus'. Bare
+    'regs' keeps printing every section at once, which stays the right
+    default when the question is 'what is the machine doing' rather than
+    'what is this one chip doing'.
+
+    The coprocessor section shows the processor 'cop' names (the first after
+    the main one that is not the SPC700), so on a core of the stable ABI it
+    is that processor's own registers, as 'regs <name>' prints them.
+
+    Every value here is read through a side-effect-free view, never the
+    chip's own register window - reading a real coprocessor status register
+    can acknowledge an interrupt or advance a transfer handshake, and a
+    debugger that did that would change the run it is meant to observe.
+
+SEE ALSO
+    cpus, eval, cophist, copflow, watch

@@ -1,0 +1,16 @@
+NAME
+    echo - print arguments
+
+SYNOPSIS
+    echo <text...>
+
+DESCRIPTION
+    Prints its arguments back, joined by single spaces - real argument
+    quoting applies ('echo 'a b'' is one argument, not two). Ignores stdin
+    entirely, matching real echo. Its real use is scripting: a marker line
+    in a source'd script, or the natural pipeline source for a text filter
+    ('echo <text> | sed s/.../.../ ').
+
+EXAMPLES
+    echo hello world
+    echo $X

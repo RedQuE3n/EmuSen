@@ -1,0 +1,94 @@
+NAME
+    cov - record which code actually ran
+
+SYNOPSIS
+    cov on|off
+    cov clear
+    cov <addr> [<len>]
+    cov mark
+    cov new <addr> [<len>]
+    cov funcs [<count>]
+    cov save|load <file>
+    cov <cpu> on|off|clear|<addr> [<len>]
+
+DESCRIPTION
+    Records every 24-bit address executed between 'cov on' and 'cov off',
+    then answers 'did control flow ever reach here' for any range. A
+    breakpoint can only say whether execution is at an address right now,
+    so a breakpoint that never fires proves nothing on its own; this says
+    outright that a routine never ran, which is the answer that retires a
+    suspect. Pair it with 'callers': walk up from a routine that never ran
+    until you reach a caller that did, and the branch between the two is
+    the one that skipped it.
+
+    Reports executed addresses, not instruction boundaries you guessed at -
+    so it also settles where 'disasm' has mis-sized an immediate, since the
+    recorded addresses are the real opcode boundaries.
+
+    Recording is off by default and costs one bool test while disarmed;
+    armed, it allocates a 2MB bitmap per processor recorded.
+
+DIFFERENTIAL COVERAGE
+    'cov mark' freezes what has run so far; 'cov new <addr>' then reports
+    only what has run SINCE. This is the sharpest tool here, because it
+    converts a question about code into a question about the machine: mark,
+    press the button (open the door, take the damage, trigger the glitch),
+    and every address 'cov new' reports is code that ran because of what
+    you just did. Whole-run coverage cannot separate that from the boot
+    sequence and the per-frame loop, which together dwarf it.
+
+    Marking does not stop or clear recording, so several marks in a session
+    just move the baseline forward. 'cov clear' drops the mark along with
+    everything else. A mark costs a second 2MB bitmap.
+
+DISCOVERED ROUTINES
+    'cov funcs' lists every address a call actually landed on while
+    recording, with how many times each was entered and whether it was
+    reached by a call or by an interrupt vector. These are real entry
+    points, observed rather than inferred - a static scan finds routines
+    reached by a literal JSR, and misses every one reached through a jump
+    table or a computed pointer, which on a SNES game is most of them.
+
+    Output is designed to be pasted into 'label': the addresses are exactly
+    the ones worth naming, and naming them makes every later 'bt', 'bp
+    list' and 'profile' readable. Where 'profile' ranks routines by the
+    time they cost, this enumerates them, including the cheap ones.
+
+PERSISTENCE
+    'cov save <file>' writes the bitmap and the discovered routines to
+    Logs/<CoreName>/<file>; 'cov load' MERGES a saved map back in rather
+    than replacing what is recorded, so maps from several sessions
+    accumulate into one. A map of a whole playthrough is worth far more
+    than a map of one sitting, and no single sitting reaches every
+    routine.
+
+    Name it with a .covmap extension - the repo gitignores that, and a map
+    is a recording of one person's playthrough rather than source.
+
+    The file is a fixed header, the routine table, then the raw bitmap.
+    It is keyed to nothing - loading a map taken from a different ROM will
+    quietly merge nonsense, so keep the filename tied to the game.
+
+    The name is resolved as 'dump' and 'load' resolve theirs: from
+    Logs/<CoreName>/, or from the root with a leading '/', and refused if
+    it lands above the root - see 'man dump'.
+
+OTHER PROCESSORS
+    A scope word records another chip's instruction stream instead - see
+    'man cpus' for the names. Each chip gets its own bitmap, because each
+    runs its own code: an address covered on the SA-1 says nothing about
+    whether the main CPU ever executed the same number. 'cop' still works
+    as an alias for whichever cartridge coprocessor is present.
+
+EXAMPLES
+    cov on
+    cov 10F452 10
+    cov mark
+    cov new 108000 8000
+    cov funcs 20
+    cov save alttp.covmap
+    cov gsu 0A80E9 40
+    cov spc on
+
+SEE ALSO
+    cpus, bp, callers, disasm, label, profile

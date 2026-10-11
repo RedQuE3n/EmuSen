@@ -140,7 +140,7 @@ namespace EmuSen.DianaSh.DianaSh.Var
                 w.TotalEvents++;
 
                 // Storing always happens; only the live echo respects the master switch - see §3.5.
-                if (DianaShLogging.MasterEnabled)
+                if (DebugLogging.MasterEnabled)
                 {
                     string tag = accessKind == WatchKind.Write ? "W" : "R";
                     Console.WriteLine($"[WATCH #{w.Id}] {tag} {spaceName}:0x{address:X} = 0x{value:X2} ({context})");

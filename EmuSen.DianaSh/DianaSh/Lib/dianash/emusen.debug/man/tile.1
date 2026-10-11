@@ -1,0 +1,22 @@
+NAME
+    tile - ASCII-decode one 8x8 tile
+
+SYNOPSIS
+    tile <space> <addr> <bpp>
+
+DESCRIPTION
+    Decodes and prints one 8x8 tile's pixels as an ASCII grid of hex nibbles
+    (or '.' for a transparent/zero pixel). <bpp> meaning is core-specific -
+    2/4/8 bits-per-pixel on the SNES.
+
+    The decoding is the core's own (IDebugTarget.DecodeTilePixels), since a
+    tile's layout is the console's. A core that decodes no tiles answers
+    with no pixels, and 'tile' then says so and fails. That is every core
+    reached through core ABI v1 today: v1 carries no console views (the
+    tiles, sprites and palettes are extensions, EmuSen_CoreAPI.md §6.14),
+    so Nephrite and VenusRT refuse here. Until 2026-10-10 the command read
+    64 pixels from the empty answer and failed with the platform's
+    'Index was outside the bounds of the array'.
+
+EXAMPLES
+    tile VRAM 0 4

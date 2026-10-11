@@ -1,0 +1,20 @@
+NAME
+    passwd - set an account's password
+
+SYNOPSIS
+    passwd <newpassword>
+    passwd <name> <newpassword>
+
+DESCRIPTION
+    Stores a hash of <newpassword> for your OWN account (no other arguments)
+    or, root only, for <name>'s account. NOT checked by 'su' or anything
+    else today - see that command's own man page for why. No masked/
+    interactive prompt either: there's no reliable blocking-input read
+    across every host this shell runs under (a real terminal, a GUI
+    TextBox-driven console, a headless test), so the new password is just a
+    plain trailing argument, the same way 'bp add'/'watch add' take theirs -
+    it will show up in this shell's own 'history' in plain text.
+
+EXAMPLES
+    passwd hunter2
+    passwd kid hunter2

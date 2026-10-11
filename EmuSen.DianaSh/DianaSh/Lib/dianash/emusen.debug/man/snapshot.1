@@ -1,0 +1,17 @@
+NAME
+    snapshot - capture a memory space's full contents
+
+SYNOPSIS
+    snapshot <space> <name>
+    snapshot list
+    snapshot remove <name>
+
+DESCRIPTION
+    Saves <space>'s entire current contents under <name> for later 'diff'
+    against a further-along state - the general-purpose counterpart to
+    'search' when the interesting addresses aren't already narrowed down.
+    Same live-hardware-space refusal as 'search'/'dump'.
+
+EXAMPLES
+    snapshot WRAM before
+    diff before

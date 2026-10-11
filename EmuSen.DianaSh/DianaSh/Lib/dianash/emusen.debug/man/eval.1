@@ -1,0 +1,97 @@
+NAME
+    eval - evaluate an expression against live core state
+
+SYNOPSIS
+    eval <expr>
+    eval symbols [<filter>]
+    eval <cpu> <expr>
+
+DESCRIPTION
+    Evaluates one integer expression against the machine as it is right
+    now and prints the result three ways at once - decimal, hex, binary -
+    so a flag word or a packed register never needs converting by hand.
+
+    The same language backs conditional breakpoints ('bp add <addr> if
+    <expr>'), which is the point of having it: 'eval' is where an expression
+    gets checked before being trusted to gate a halt.
+
+SYMBOLS
+    'eval symbols' lists everything nameable, which is the authoritative
+    answer for whatever core is loaded - the list below is the SNES core's.
+
+    Registers   a x y s (sp) d (dp) pc pb (pbr) db (dbr) p e
+    Flags       flag.c flag.z flag.i flag.d flag.x flag.m flag.v flag.n
+                (each 0 or 1)
+    Position    frame, scanline, cycle
+    Context     opaddr (the 24-bit address of the instruction a halt is
+                sitting in front of), stackdepth
+    Labels      every name defined via 'label add' - see 'man label'
+
+    A core that publishes none of its own still gets symbols for free: the
+    generic fallback names every register the core already reports through
+    'regs', plus 'frame' and any labels. Nothing has to be written per-core
+    for 'eval' to work on a new console.
+
+    A core of the stable ABI adds two sources to that fallback. Its console's
+    system pack names symbols derived from the main processor's registers -
+    on the SNES the eight flags and the four aliases above, read from P, S,
+    D, PB and DB - and 'stackdepth' is the depth of the call stack the host
+    keeps where the core reports calls. That stack is kept only on frames
+    run with something armed, so it is empty after frames that ran plain.
+    'scanline', 'cycle' and 'opaddr' are not among them: the ABI carries no
+    timing view and no last-instruction address.
+
+NUMBERS AND MEMORY
+    Numbers     123 decimal, $1F or 0x1F hex, %1010 binary
+    [addr]      one byte at <addr>
+    {addr}      one little-endian word at <addr>
+    [SPACE:addr]  read from a named space instead, e.g. [VRAM:$2760]
+
+    Without a space name, a read goes to the CPU bus. On the SNES core an
+    address that lands in WRAM is served straight from the RAM array
+    instead, which is both faster and free of side effects - so the common
+    case ('[$7E0020]') is always safe to put in a breakpoint condition.
+    An address that does NOT resolve to WRAM goes through the live bus, and
+    reading a hardware register there has whatever side effect the real
+    register has (RDNMI clears the pending-NMI flag, OPHCT/OPVCT toggle a
+    byte-order latch). Name a plain space explicitly when that matters.
+
+OPERATORS
+    Lowest to highest precedence:
+        ||  &&  |  ^  &  == !=  < > <= >=  << >>  + -  * / %
+    Unary: - ! ~ . Parentheses group. '&&' and '||' short-circuit, so
+    '[$7E0000] != 0 && 100 / [$7E0000] > 2' is safe. Any nonzero value is
+    true; comparisons produce 1 or 0.
+
+QUOTING
+    '&&', '||', '<', '>' and '|' are the shell's own operators and are
+    consumed before this command sees them - quote any expression using
+    them. Everything after 'eval' is rejoined with single spaces, so simple
+    unquoted forms ('eval a + 1') work.
+
+EXAMPLES
+    eval a
+    eval [$7E0020]
+    eval {$7E13C6} + 4
+    eval "flag.m == 0 && a > $100"
+    eval [VRAM:$2760]
+    eval symbols flag
+    eval gsu r14
+    eval spc "a == $F0"
+
+OTHER PROCESSORS
+    'eval <cpu> <expr>' evaluates against another chip's registers - see
+    'man cpus'. Its symbols are that chip's own, so 'eval gsu r14' reads
+    the GSU's R14 while 'eval a' still reads the main CPU's accumulator,
+    and an unnamed memory read like '[$8000]' resolves in that chip's own
+    code space rather than the main CPU bus.
+
+    A chip name alone is an EXPRESSION, not a scope: 'eval a' evaluates the
+    symbol 'a'. The scope reading only applies when something follows it.
+
+    Symbols for a chip come from whatever registers it already reports, so
+    'eval <cpu> symbols' is the reliable way to see what is nameable rather
+    than guessing at a register's spelling.
+
+SEE ALSO
+    cpus, bp, regs, mem, label

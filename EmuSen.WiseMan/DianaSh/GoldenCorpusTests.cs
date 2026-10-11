@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Bin.Commands;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.WiseMan.Fixtures;
 using Xunit;
@@ -113,11 +114,10 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Every_manual_page_is_recorded()
         {
-            string source = File.ReadAllText(Path.Combine(CommandSources, "ManPages.cs"));
-            var pages = Regex.Matches(source, @"^\s*\[""([^""]+)""\] =", RegexOptions.Multiline).Select(m => m.Groups[1].Value).ToList();
+            var pages = ManPages.Names.ToList();
             var asked = Load("man.golden").Cases.SelectMany(c => c.Steps).Select(s => s.Input).ToHashSet();
             Assert.Empty(pages.Where(p => !asked.Contains($"man {p}")));
-            Assert.True(pages.Count >= 98, $"{pages.Count} pages found in ManPages.cs");
+            Assert.True(pages.Count >= 98, $"{pages.Count} pages found in {ManPages.Directory}");
         }
 
         // Each Fail("...") the code words must appear in its command's outputs, or be listed as one no case can reach.

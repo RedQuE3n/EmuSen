@@ -1,0 +1,25 @@
+NAME
+    xxd, hexdump - hexdump a real file's raw bytes
+
+SYNOPSIS
+    xxd <path>
+    hexdump <path>
+
+DESCRIPTION
+    Reads <path>'s REAL bytes off disk (not decoded as text the way
+    'cat'/'head'/'tail' do, which would corrupt anything that isn't valid
+    UTF8) and prints them in the same address/hex/ASCII layout 'mem' uses
+    for a live memory space - the on-disk counterpart to 'mem', purpose-
+    built so a 'dump'd capture can be inspected without leaving the shell
+    for an external hex editor. Walled to the project's own directory tree
+    (see 'cd'). With no <path>, hexdumps piped stdin instead - UTF8-encoded
+    first, since a pipeline stage's own output is always already-decoded
+    text here, never raw bytes (this shell's pipes have no byte-stream
+    concept the way a real Unix pipe does). 'hexdump' is a plain alias, not
+    a separate command - and NOT real hexdump's own multi-format output,
+    just this same one layout under a second, equally-reached-for name.
+
+EXAMPLES
+    dump WRAM 0 256 wram.bin
+    xxd home/Logs/SNES/wram.bin
+    echo hi | xxd

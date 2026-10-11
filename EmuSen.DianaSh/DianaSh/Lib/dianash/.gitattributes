@@ -1,0 +1,2 @@
+# Manual pages are printed byte for byte and graded by the golden corpus, so their line endings never change on checkout.
+* text eol=lf

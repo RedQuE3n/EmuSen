@@ -1,0 +1,48 @@
+NAME
+    tmux - multiple independent shell sessions
+
+SYNOPSIS
+    tmux new [name]
+    tmux list
+    tmux switch <name>
+    tmux kill <name>
+
+DESCRIPTION
+    Each session is a fully independent DianaShInterpreter - its own
+    variables, command history, and $?/pending-multiline-input state -
+    that you can create and switch between. 'new' with no name auto-numbers
+    it (session-1, session-2, ...). All sessions observe the same one live
+    core/ROM, the same way several real tmux windows attached to one real
+    machine each get their own independent shell but see the same one
+    machine - this is NOT multiple games running at once, just multiple
+    independent shells watching the one that is.
+
+    Because a DianaShInterpreter can't be repointed at a new target once
+    built (see 'core'), swapping the ROM rebuilds every session's
+    interpreter from scratch, the same 'shell-level state resets on reload'
+    convention 'core' already documents - it's not just the current session
+    that loses its variables/history on a ROM swap, all of them do.
+
+    Two things deliberately SURVIVE that rebuild: a session's name, and the
+    account it is running as (see 'su'). The account is carried forward
+    explicitly rather than left to reset, because a ROM swap dropping every
+    session back to root would be a silent privilege escalation the moment a
+    permission system actually enforces anything. For the same reason a new
+    session inherits whoever created it rather than starting as root, so
+    'tmux new' can never be a way back to an account you left.
+
+    Not available everywhere: a host needs to opt in by handing
+    DianaShInterpreter.CreateDefault a DianaShSessionManager. Where it IS
+    available, whether switching sessions is itself safe against a
+    concurrently-running emulation thread is that host's own concern, not
+    this command's - EmuSen.Hotaru/EmuSen.Mistress each keep a separate
+    DianaShInterpreterScheduler per session for exactly that reason; the
+    standalone DianaSh shell (no core, no concurrent thread) needs none at
+    all.
+
+EXAMPLES
+    tmux new
+    tmux new investigation
+    tmux list
+    tmux switch investigation
+    tmux kill session-1

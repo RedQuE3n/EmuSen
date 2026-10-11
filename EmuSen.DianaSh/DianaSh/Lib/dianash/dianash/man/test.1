@@ -1,0 +1,24 @@
+NAME
+    test, [ - evaluate a condition
+
+SYNOPSIS
+    test EXPR
+    [ EXPR ]
+
+DESCRIPTION
+    The main way an if/while condition does anything besides check another
+    command's own exit code. A deliberately small subset of real test(1):
+    a single VALUE (true if non-empty); -z/-n VALUE (string emptiness); -f/-d
+    PATH (file/directory existence, with PATH read as every path in this
+    shell is - '/' is this shell's root, and a path above the root is
+    false, never a question about the machine's own files; before
+    2026-10-10 PATH was the machine's); VALUE = / != VALUE (string comparison);
+    VALUE -eq/-ne/-lt/-le/-gt/-ge VALUE (numeric comparison); a leading '!'
+    negates any of the above. No -a/-o/parenthesized compound expressions -
+    combine conditions with the shell's own && / || instead ('[ -f a ] && [
+    -f b ]'). '[' is the same evaluator under a different name - the
+    trailing ']' is required, matching real bash.
+
+EXAMPLES
+    if [ -f save.state ]; then echo found; fi
+    if test $X -eq 5; then echo five; fi

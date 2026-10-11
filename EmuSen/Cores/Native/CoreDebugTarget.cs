@@ -29,7 +29,7 @@ namespace EmuSen.Cores.Native
         // The console's pack decodes what the core publishes as spaces; null for a system without one.
         private ISystemDebugViews? Views => _engine.IsRomLoaded ? SystemPacks.For(_engine.Machine.Info.System)?.DebugViews : null;
 
-        private IReadOnlyList<DebugPaletteInfo> ReadPalettes() => Views?.Palettes(GetMemorySpaces()) ?? Array.Empty<DebugPaletteInfo>();
+        private IReadOnlyList<DebugPaletteInfo> ReadPalettes() => Views?.Palettes(ViewSpaces()) ?? Array.Empty<DebugPaletteInfo>();
 
         // Each phase the engine timed, as a share of one frame at the machine's rate - see `man coretop`.
         private IReadOnlyList<DebugLoadInfo> ReadLoad()
@@ -78,8 +78,8 @@ namespace EmuSen.Cores.Native
             HardwareLoad.Refresh();
         }
 
-        public (byte[] Rgba, int Width, int Height) RenderTileSheet() => Views?.TileSheet(GetMemorySpaces()) ?? (Array.Empty<byte>(), 0, 0);
-        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => Views?.PaletteSwatch(GetMemorySpaces()) ?? (Array.Empty<byte>(), 0, 0);
+        public (byte[] Rgba, int Width, int Height) RenderTileSheet() => Views?.TileSheet(ViewSpaces()) ?? (Array.Empty<byte>(), 0, 0);
+        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => Views?.PaletteSwatch(ViewSpaces()) ?? (Array.Empty<byte>(), 0, 0);
 
         public (short[] Samples, int SampleRate) GetAudioSamples() => _engine.IsRomLoaded ? (_engine.Machine.PeekAudio(), _engine.AudioSampleRate) : (Array.Empty<short>(), 0);
 
@@ -98,6 +98,29 @@ namespace EmuSen.Cores.Native
             var m = _engine.Machine;
             return m.Info.Spaces.Select(s => (IDebugMemorySpace)new DelegateDebugMemorySpace(s.Name, () => (int)Math.Min(int.MaxValue, m.SpaceSize(s.Id)),
                 a => _engine.ReadSpace(s.Name, a), s.ReadOnly ? null : (a, v) => _engine.WriteSpace(s.Name, a, v), s.SideEffects)).ToArray();
+        }
+
+        // What a pack's whole-space views read: a space without side effects is copied by one space_read when first touched - see EmuSen_CoreAPI.md §31.5.
+        private IReadOnlyList<IDebugMemorySpace> ViewSpaces()
+        {
+            var live = GetMemorySpaces();
+            if (live.Count == 0) return live;
+            var m = _engine.Machine;
+            return m.Info.Spaces.Select((s, i) => s.SideEffects || live[i].Size == 0 ? live[i] : Copied(m, s, live[i].Size)).ToArray();
+        }
+
+        private static IDebugMemorySpace Copied(CoreMachine m, CoreSpace s, int size)
+        {
+            byte[]? copy = null;
+            return new DelegateDebugMemorySpace(s.Name, size, a =>
+            {
+                if (copy is null)
+                {
+                    copy = new byte[size];
+                    m.ReadSpace(s.Id, 0, copy);
+                }
+                return copy[a];
+            });
         }
 
         public WatchRegistry Watches => _engine.Watches;
@@ -197,7 +220,7 @@ namespace EmuSen.Cores.Native
         public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp) => Views?.DecodeTilePixels(space, address, bpp) ?? Array.Empty<byte>();
 
         public IReadOnlyList<InterruptVector> InterruptVectors => Views?.InterruptVectors ?? Array.Empty<InterruptVector>();
-        public IReadOnlyList<DebugDmaChannel> DmaChannels => Views?.DmaChannels(GetMemorySpaces()) ?? Array.Empty<DebugDmaChannel>();
+        public IReadOnlyList<DebugDmaChannel> DmaChannels => Views?.DmaChannels(ViewSpaces()) ?? Array.Empty<DebugDmaChannel>();
         public string? NameDmaDestination(byte register) => Views?.NameDmaDestination(register);
 
         // Machine info's channel n is set_mutes' bit n.

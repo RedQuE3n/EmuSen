@@ -3211,6 +3211,29 @@ On Donkey Kong Country after 300 frames (2026-10-10): VenusRT's tile sheet takes
 65,536 bytes one `space_read` at a time through `IDebugMemorySpace`; a refresh of every provider takes about 0.1 ms;
 the DMA table 0.01 ms.
 
+**The tile sheet now costs one `space_read`.** v1 already reads a space as a block (`emusen_core_space_read` takes a
+length), so no surface was needed. What was per byte is the host's: `IDebugMemorySpace` has only a one-byte `Read`,
+and each call through `CoreDebugTarget` cost a size query and a name lookup as well as the call itself. The pack's
+four whole-space views (palettes, swatch, tile sheet and DMA channels) are now given the spaces through
+`CoreDebugTarget.ViewSpaces`. There, a space without side effects is copied whole by one `space_read` the first time
+the view reads it, and a space with side effects stays live. The copy is made fresh for each call, so a view never
+sees an earlier frame. Nothing widened: neither `IDebugMemorySpace` nor `ISystemDebugViews` changed, and the pack
+still reads byte by byte from an array. One cost follows from the design. A view that read a few bytes of a large space
+would pay for copying all of it. Today's views read whole spaces of at most 64 KiB, and a new view that does not
+should be given its own route.
+
+Measured on 2026-10-10 on the same game and frame, 40 calls each after five warm-up sheets, with an identical sheet
+(SHA-256 prefix `5FCF820D7A9FBB99` both times):
+
+| View | Before (min / median / max) | After |
+|---|---|---|
+| Tile sheet | 7.49 / 8.37 / 9.47 ms | 1.35 / 1.36 / 2.09 ms |
+| Palette swatch | 0.18 / 0.22 / 0.51 ms | 0.13 / 0.17 / 0.33 ms |
+| DMA table | 0.009 / 0.010 / 0.54 ms | 0.003 / 0.003 / 0.06 ms |
+| Every provider's refresh | 0.058 / 0.059 / 0.46 ms | 0.012 / 0.013 / 0.13 ms |
+
+What remains of the sheet is the decode of 2,048 tiles into a 512 KiB RGBA buffer, which the C# engine pays as well.
+
 ### 31.6 One owner: C# Venus reads the same decoders
 
 Once the parity tests had passed against C# Venus's own decoders, C# Venus's target was switched onto the pack's for

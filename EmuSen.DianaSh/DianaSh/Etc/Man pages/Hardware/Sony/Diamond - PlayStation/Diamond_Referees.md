@@ -437,6 +437,29 @@ C1h, 304h, 1F800000h, 8, 4 are what the program's start left in t1 to t8); SwanS
 0 and none; none reads BPC's, BDA's, BPCM's or BDAM's known value straight after it, as psx-spx describes. Ruled: no
 exception (three lineages), the value 0 a choice left standing.
 
+### 4.12 D-23: the texture cache, interlaced drawing and GPUREAD after a transfer — `texture-cache.s`, `interlace.s`, `gpuread-repeat.s`
+
+*Added 2026-10-11, at the cache step* (`Diamond_Disputes.md` D-23). Each program side-loaded on the five referees by
+`psxreferee.py ram`, the player's BIOS given by path, NTSC, and read from RAM [M]:
+
+| | Diamond | DuckStation | SwanStation | Beetle PSX | PCSX-ReARMed | PCSX-Redux |
+|---|---|---|---|---|---|---|
+| `texture-cache.s`: lines 10 to 16, the texel each row reads (fresh: 1, 2, 2, 2, 3, 4, 5) | 1, 1, 2, 2, 2, 4, 5 | fresh | fresh | 1, 1, 2, 2, 2, 4, 5 | fresh | fresh |
+| `interlace.s`, display from line 0: lines 0 to 3 left (fill, rectangle) | 0, 2 | none | none | 1, 3 | 0, 2 | none |
+| `interlace.s`, display from line 1: lines 8 to 11 left | 9, 11 | none | none | 9, 11 | none | none |
+| `interlace.s`, bit 10 set | none left | none | none | none | none | none |
+| `gpuread-repeat.s`: after three words | the first, `02020101h` | the last | the last | 0 | the first | `00000400h` |
+| `gpuread-repeat.s`: the one-word read, then after it | `03030202h`, then `02020101h` | `00000202h`, then the same | the same as DuckStation | `03030202h`, then 0 | `03030202h`, then the same | `00000202h`, then `00000400h` |
+
+**What it shows** [A]. Beetle PSX alone keeps texels in a cache at all, and keeps exactly Diamond's new rule's: a row of
+64 8-bit texels whole, line 32 taking line 0's entries, the cache kept through a 15-bit page and cleared by a 4-bit one
+and by another X; the others read VRAM afresh for every texel. Two lineages leave lines undrawn in vblank of 480-line
+interlace, fills included (Beetle PSX, PCSX-ReARMed); PCSX-ReARMed the same lines as amidog's model with the display at
+line 0, Beetle PSX the odd lines whatever the start, so the start's part in the parity stands on the model alone.
+PCSX-ReARMed repeats a longer transfer's first word, as the model; nothing repeats an earlier word after a one-word
+transfer but the model. Beetle PSX and PCSX-ReARMed read a one-pixel transfer's second halfword as the pixel after,
+as D-23's odd read has it, where DuckStation, SwanStation and PCSX-Redux pad it with zero.
+
 ## 5. What changed in Diamond
 
 Each a writer's step citing its entry, after the rulings above:
@@ -451,6 +474,12 @@ Each a writer's step citing its entry, after the rulings above:
 - **D-8, the x-flip's start**: U with its low bit set (`raster.rs`). Pinned by
   `an_x_flipped_rectangle_starts_from_u_with_its_low_bit_set`, `flipped_rectangles_start_where_the_referee_starts_them`,
   and `texture-flip`, exact.
+
+- *The cache step (D-23)*: the 8-bit cache block of 64 by 32 texels and the page changes that clear the cache, on
+  amidog's model and Beetle PSX; the interlace rule; GPUREAD's repeat (`texture.rs`, `draw.rs`, `mod.rs`). Pinned by
+  `the_texture_cache_keeps_a_64_texel_row_and_clears_on_a_page_change`,
+  `interlaced_drawing_in_vblank_skips_the_lines_from_the_display_start`,
+  `gpuread_repeats_the_first_word_of_the_last_longer_transfer`.
 
 The other programs are pinned on Diamond as it reads them: `gpustat_while_each_shape_arrives_and_draws`,
 `the_gpu_is_ready_at_once_after_each_transfer`, `stores_drain_as_the_fit_has_them`.

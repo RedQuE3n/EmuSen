@@ -315,3 +315,127 @@ fn the_display_is_the_ranges_size_read_a_line_at_a_time() {
     assert_eq!((g.display.width, g.display.height), (320, 240));
     assert_eq!(&g.display.frame()[..4], &[255, 0, 0, 255]);
 }
+
+/// amidog's INTERLACE (Diamond_Disputes.md D-23): in 480-line interlace with drawing to the displayed field prohibited, a
+/// fill and a rectangle leave alone the lines whose parity, counted from the display's first line, is GPUSTAT bit 31's,
+/// which reads 0 in vblank whichever field is displayed.
+#[test]
+fn interlaced_drawing_skips_bit_31s_lines_counted_from_the_display_start() {
+    for (start_y, skipped) in [(0u32, 0u32), (1, 1)] {
+        let (mut g, mut v) = gpu();
+        g.gp1(0x0800_0027, &mut v, 0);
+        g.gp1(0x0500_0000 | start_y << 10, &mut v, 0);
+        v.odd = true;
+        assert_eq!(g.status(&v, 0) >> 31, 0, "vblank");
+        send(&mut g, &v, &[0xE100_0000, 0x0200_00FF, 0x0000_0000, 0x0004_0010, 0x6000_FF00, 0x0000_0020, 0x0004_0004]);
+        for y in 0..4 {
+            let drawn = y & 1 != skipped;
+            assert_eq!((px(&g, 0, y) != 0, px(&g, 32, y) != 0), (drawn, drawn), "start {start_y}, line {y}");
+        }
+        send(&mut g, &v, &[0xE100_0400, 0x0200_00FF, 0x0000_0040, 0x0004_0010]);
+        assert!((0..4).all(|y| px(&g, 64, y) != 0), "drawing to the display allowed");
+    }
+}
+
+/// amidog's FIFO full test (Diamond_Disputes.md D-23): a fill written while a VRAM-to-CPU transfer still has words to
+/// give waits in the FIFO, so the transfer's words are VRAM as it was, and the fill is drawn once the last is read.
+#[test]
+fn a_command_behind_an_unread_transfer_waits_until_it_is_read() {
+    let (mut g, v) = gpu();
+    send(&mut g, &v, &[0xA000_0000, 0, 0x0001_0004, 0x0202_0101, 0x0404_0303, 0xC000_0000, 0, 0x0001_0004]);
+    let t = g.busy_until + 1000;
+    g.gp0(0x02FF_FFFF, t, &v);
+    g.gp0(0, t, &v);
+    g.gp0(0x0001_0010, t, &v);
+    g.run(t + 100_000, &v);
+    assert_eq!((px(&g, 0, 0), g.len), (0x0101, 3), "the fill waits");
+    assert_eq!(g.gpuread(&v, t + 100_000).0, 0x0202_0101);
+    assert_eq!(g.gpuread(&v, t + 100_001).0, 0x0404_0303);
+    g.run(t + 200_000, &v);
+    assert_eq!((px(&g, 0, 0), g.len), (0x7FFF, 0), "drawn once the transfer is read");
+}
+
+/// amidog's FIFO read test (Diamond_Disputes.md D-23): once a VRAM-to-CPU transfer of two words or more has given its
+/// last, GPUREAD repeats its first word; after a transfer of one word it repeats what it gave before that transfer; a
+/// GP1(10h) register read takes over until the next transfer ends.
+#[test]
+fn gpuread_repeats_a_transfers_first_word_once_it_is_read() {
+    let (mut g, mut v) = gpu();
+    send(&mut g, &v, &[0xA000_0000, 0, 0x0001_0006, 0x0202_0101, 0x0404_0303, 0x0606_0505]);
+    let mut t = g.busy_until + 1000;
+    let mut read = |g: &mut Gpu, v: &Video, words: &[u32]| {
+        send(g, v, words);
+        t = t.max(g.busy_until) + 1000;
+        (0..5).map(|_| g.gpuread(v, t).0).collect::<Vec<_>>()
+    };
+    assert_eq!(read(&mut g, &v, &[0xC000_0000, 0, 0x0001_0006]), [0x0202_0101, 0x0404_0303, 0x0606_0505, 0x0202_0101, 0x0202_0101]);
+    assert_eq!(read(&mut g, &v, &[0xC000_0000, 1, 0x0001_0001]), [0x0303_0202, 0x0202_0101, 0x0202_0101, 0x0202_0101, 0x0202_0101]);
+    g.gp1(0x1000_0007, &mut v, t);
+    assert_eq!(g.gpuread(&v, t).0, 2);
+}
+
+/// An 8-bit page's palette at (0, 500), entry i reading 8000h | i, and its texels at page 1 all `byte`.
+fn eight_bit_page(g: &mut Gpu, byte: u16) {
+    for i in 0..256 {
+        g.vram.set(i, 500, 0x8000 | i as u16);
+    }
+    for v in 0..64 {
+        for x in 64..128 {
+            g.vram.set(x, v, byte * 0x101);
+        }
+    }
+}
+
+/// An 8-bit rectangle of 64 by 1 from texel (0, v) at line `y`, and its first and last pixels.
+fn eight_bit_row(g: &mut Gpu, v: &Video, line: u32, tv: u32) -> (u16, u16) {
+    send(g, v, &[0x6500_0000, line << 16, 0x7D00_0000 | tv << 8, 0x0001_0040]);
+    (px(g, 0, line), px(g, 63, line))
+}
+
+/// amidog's CACHE BLOCK (Diamond_Disputes.md D-23): an 8-bit page is cached in blocks of 64 texels by 32 lines, as a
+/// 15-bit one is in VRAM's terms, where psx-spx gives 32 by 64; so a row of 64 texels stays whole, and line 32 takes
+/// line 0's entries.
+#[test]
+fn an_8_bit_page_is_cached_64_texels_by_32_lines() {
+    let (mut g, v) = gpu();
+    eight_bit_page(&mut g, 1);
+    send(&mut g, &v, &[0xE100_0081]);
+    assert_eq!(eight_bit_row(&mut g, &v, 10, 0), (0x8001, 0x8001));
+    eight_bit_page(&mut g, 2);
+    assert_eq!(eight_bit_row(&mut g, &v, 11, 0), (0x8001, 0x8001), "the whole row from the cache");
+    assert_eq!(eight_bit_row(&mut g, &v, 12, 32), (0x8002, 0x8002), "line 32 fetched");
+    assert_eq!(eight_bit_row(&mut g, &v, 13, 0), (0x8002, 0x8002), "line 0 fetched again, line 32 having taken its entries");
+}
+
+/// amidog's CACHE TAG (Diamond_Disputes.md D-23): a texture page set at another X or Y, or between 4 bits and the other
+/// depths, clears the texture cache; between 8 and 15 bits it does not.
+#[test]
+fn a_page_change_clears_the_texture_cache() {
+    let (mut g, v) = gpu();
+    eight_bit_page(&mut g, 1);
+    send(&mut g, &v, &[0xE100_0081]);
+    eight_bit_row(&mut g, &v, 10, 0);
+    eight_bit_page(&mut g, 2);
+    send(&mut g, &v, &[0xE100_0101, 0xE100_0081]);
+    assert_eq!(eight_bit_row(&mut g, &v, 11, 0).0, 0x8001, "15 bits and back: kept");
+    send(&mut g, &v, &[0xE100_0001, 0xE100_0081]);
+    assert_eq!(eight_bit_row(&mut g, &v, 12, 0).0, 0x8002, "4 bits and back: cleared");
+    eight_bit_page(&mut g, 3);
+    send(&mut g, &v, &[0xE100_0082, 0xE100_0081]);
+    assert_eq!(eight_bit_row(&mut g, &v, 13, 0).0, 0x8003, "another page and back: cleared");
+}
+
+/// GP1(00h) does what GP1(01h) does (psx-spx "GP1(00h)"), the CLUT cache's clear among it, as amidog's CACHE TAG
+/// expects of its RESET case (Diamond_Disputes.md D-23).
+#[test]
+fn a_reset_clears_the_clut_cache() {
+    let (mut g, mut v) = gpu();
+    g.vram.set(0, 1, 0x0001);
+    g.vram.set(1, 20, 0x1234);
+    let draw = |g: &mut Gpu, v: &Video, y: u32| send(g, v, &[0xE100_0000, 0xE300_0000, 0xE407_FFFF, 0x6580_8080, y << 16, (20 << 6) << 16 | 0x0100, 0x0001_0001]);
+    draw(&mut g, &v, 30);
+    g.vram.set(1, 20, 0x7FFF);
+    g.gp1(0, &mut v, g.busy_until);
+    draw(&mut g, &v, 31);
+    assert_eq!((px(&g, 0, 30), px(&g, 0, 31)), (0x1234, 0x7FFF));
+}

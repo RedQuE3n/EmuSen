@@ -50,18 +50,20 @@ impl Texture {
 }
 
 /// The texture cache: 256 entries of four halfwords, direct-mapped by VRAM address, each tagged by the address of its
-/// first halfword (psx-spx's cache blocks, in VRAM terms: Diamond_GPU.md §4).
+/// first halfword, in blocks of 64 by 64 texels at 4 bits and 32 halfwords by 32 lines at 8 and 15; and the page it
+/// was filled for, whose change clears it (Diamond_GPU.md §4, Diamond_Disputes.md D-23).
 #[derive(Clone)]
 pub struct TextureCache {
     pub tags: [u32; 256],
     pub data: [[u16; 4]; 256],
+    pub page: u32,
 }
 
 pub const NO_TAG: u32 = u32::MAX;
 
 impl Default for TextureCache {
     fn default() -> TextureCache {
-        TextureCache { tags: [NO_TAG; 256], data: [[0; 4]; 256] }
+        TextureCache { tags: [NO_TAG; 256], data: [[0; 4]; 256], page: 0 }
     }
 }
 
@@ -70,12 +72,22 @@ impl TextureCache {
         self.tags = [NO_TAG; 256];
     }
 
-    /// The halfword at (x, y) through the cache, and whether it missed: entries are 8 bytes; a 4- or 8-bit page indexes
-    /// them by x's bits 2-3 and y's bits 0-5, a 15-bit page by x's bits 2-4 and y's bits 0-4.
+    /// GP0(E1h)'s page bits as a page is set: another X or Y, or a change between 4 bits and the other depths, which
+    /// index the entries otherwise, clears the cache.
+    pub fn set_page(&mut self, e1: u32) {
+        let page = e1 & 0x81F | ((e1 >> 7 & 3 != 0) as u32) << 5;
+        if page != self.page {
+            self.page = page;
+            self.clear();
+        }
+    }
+
+    /// The halfword at (x, y) through the cache, and whether it missed: entries are 8 bytes; a 4-bit page indexes them
+    /// by x's bits 2-3 and y's bits 0-5, an 8- or 15-bit page by x's bits 2-4 and y's bits 0-4.
     #[inline]
     pub fn read(&mut self, vram: &Vram, x: u32, y: u32, depth: u32) -> (u16, bool) {
         let (x, y) = (x & 1023, y & 511);
-        let index = if depth == 2 { (y & 31) << 3 | (x >> 2 & 7) } else { (y & 63) << 2 | (x >> 2 & 3) } as usize;
+        let index = if depth != 0 { (y & 31) << 3 | (x >> 2 & 7) } else { (y & 63) << 2 | (x >> 2 & 3) } as usize;
         let base = x & !3;
         let tag = y << 10 | base;
         let miss = self.tags[index] != tag;

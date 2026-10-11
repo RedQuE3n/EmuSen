@@ -584,7 +584,8 @@ goes through the open kernel's TTY, which takes long enough for the fill to end 
 5,000 iterations added to the record's printf stand-in, bit 26 reads set in all three cells, as the release's; bit 31
 then differs from cell to cell with the moment of the read, as psx-spx says it changes per scanline in 240-line mode
 ("GPU Status Register"). The committed stand-in has no delay [C], since a console's printf is the retail BIOS's, whose
-time no log gives (§2.3's reason).
+time no log gives (§2.3's reason). *Since the GPU's cache step (2026-10-11)* a reset ends the fill (§16.1), and the record
+reads `94802000h` in the three cells, the value the release prints [M, `the_io_bitwidth_record_reads_each_register_after_each_width`].
 
 **Against the console's log**: 85 of the 108 cells as the console's, the same 85 as the release's on the open kernel
 [M, `psxrecords.py console io-access-bitwidth`]. *Since DICR's bit 6 was ruled (§16.2)*: 91; the 17 others are those
@@ -630,7 +631,7 @@ transfer complete with channel 4 enabled and timed out with it disabled. Beetle 
 |---|---|---|---|---|---|---|
 | cells as the console's | 85 | 70 | 64 | 58 | 45 | stops (above) |
 | DICR after writing `12345678h` (console `340038h`) | `340078h` | `340038h` | `340038h` | `340078h` | `C340038h`; `C000078h` after a byte | — |
-| GPUSTAT after the GP1 writes (console `14802000h`) | `90802000h` | `14802000h` | `14800000h` | `14800000h` | `94802000h`, `94800000h` | — |
+| GPUSTAT after the GP1 writes (console `14802000h`) | ~~`90802000h`~~ `94802000h` since §16.1's fix | `14802000h` | `14800000h` | `14800000h` | `94802000h`, `94800000h` | — |
 | a misaligned 32-bit store (console: an exception) | exception | exception | exception | exception | stored | — |
 | DEV1 after writes (console as written) | FFFFFFFFh | 0 | FFFFFFFFh | FFFFFFFFh | FFFFFFFFh | — |
 
@@ -645,7 +646,13 @@ a byte store writing the byte alone where the console's processor drives the who
 
 ### 16.1 A reset leaves the GPU busy with the command it was drawing
 
-Not fixed; reported. `cpu/io-access-bitwidth`'s GPUSTAT row reads bit 26 clear in the record (§14). A program of the
+~~Not fixed; reported.~~ *Fixed at the GPU's cache step, 2026-10-11* (`Diamond_GPU.md` §2.5): GP1(00h) and GP1(01h) now
+end the command drawing, the program is `programs/gp1-reset.s`, pinned by `a_reset_during_a_fill_leaves_the_gpu_ready`
+(at once `14802000h`, ready at the first poll, where 5,916 polls were needed before), and the record's GPUSTAT row
+reads `94802000h` in its three cells, as the release does on the open kernel, bit 31 the line's parity as psx-spx
+gives it; the 85 cells as the console's are unchanged. The pixels of a fill a reset interrupts are still all drawn, as
+it started (`Diamond_GPU.md` §2.1); amidog's FIFO overflow test expects GP1(01h) to stop one about five lines in, an
+expectation left open (`Diamond_Disputes.md` D-23). `cpu/io-access-bitwidth`'s GPUSTAT row reads bit 26 clear in the record (§14). A program of the
 project's own, kept with the step's outputs in the probe's cache (`records/r2/exp/gp1-reset.s`) and not committed,
 proves the cause: with interrupts off it sends GP0(02h) for a fill of 1,008 by 511 pixels, reads GPUSTAT, writes
 GP1(00h), reads it at once and 100 cycles later, then counts the reads until bit 26 is set [M]:

@@ -50,7 +50,10 @@ psx-spx gives the FIFO as 16 words and the commands' lengths ("GPU Command Summa
   that arrives then goes straight to it; while a command draws, arriving words wait in the FIFO, and a word arriving at
   a full FIFO holds its writer (the CPU's store or the DMA) until a place frees [C: no document says what a write to a
   full FIFO does; Peter Lemon's programs write whole scenes with no wait and are drawn whole by his console, by his
-  README and pictures, which a dropped word would not allow].
+  README and pictures, which a dropped word would not allow]. *Since the cache step (2026-10-11)*, while a
+  VRAM-to-CPU transfer has words left to give, the processor takes nothing from the FIFO, so a command written behind
+  it waits until the CPU or the DMA has read the last word, as amidog's FIFO full test expects and DuckStation passes
+  it [M, D-23]; a word that then finds the FIFO full is lost, since no place would free before the CPU reads [C].
 - **A command is drawn whole into VRAM as it starts**, and the processor is then busy for its drawing time (§8). The
   plan's §5.4 says "at the time the GPU would finish it" [R]; drawing at the start was chosen [C] because the time
   depends on what was drawn (the pixels inside the area, the texture cache's misses), and the two differ only for a
@@ -102,7 +105,11 @@ display blanked, GP1(09h) untouched; (01h) the FIFO, the command half received a
 the 208-pin; (06h)..(08h) to the video timing (`video.rs`, D-0); (09h) on the 208-pin chip only; (10h)..(1Fh) the
 latch, indices 2-5 on both chips (3 and 4 masked to 19 bits on the 160-pin, 20 on the 208-pin), 7 the version (2) and
 8 zero on the 208-pin only, the 160-pin's index taken modulo 8. ps1-tests' `version-detect` prints "GPU version 2" on
-the default console [M]. *Since D-23's step*, as amidog's REG expects on both chips: indices 2 to 4 replace only
+the default console [M]. *Since the cache step*, GP1(00h) and GP1(01h) end the command drawing, so GPUSTAT reads
+`14802000h` at once after a reset during a long fill, as psx-spx gives and DuckStation, SwanStation, Beetle PSX and
+PCSX-Redux read it [M, `programs/gp1-reset.s`, `Diamond_Records.md` §16.1] (VRAM keeps the whole fill, drawn as it
+started, §2.1); and GP1(00h) clears the CLUT cache, as psx-spx's list for it includes GP1(01h) [R; M, amidog's CACHE
+TAG]. *Since D-23's step*, as amidog's REG expects on both chips: indices 2 to 4 replace only
 their 20 (or 19) bits and index 5 its 22, the latch's higher bits kept from what it held, a VRAM word read before
 among them (psx-spx's "MSBs=Nothing"); and an index with no register reads zero, where psx-spx says the old value
 remains [M, against the document, D-23].
@@ -123,7 +130,11 @@ remains [M, against the document, D-23].
 - **CPU to VRAM and VRAM to CPU** take psx-spx's copy masking, two pixels a word, the extra halfword of an odd count
   ignored ~~or padded~~ on a write; on a read, *since D-23's step*, the pixel after the last in its row, which
   amidog's VRAM READ expects of a one-pixel read [M, D-23; C beyond that case]; the writes under the mask setting, as
-  `mask-bit`'s five cases pass on the console and on Diamond [M].
+  `mask-bit`'s five cases pass on the console and on Diamond [M]. *Since the cache step*, once a transfer of two words
+  or more has given its last, GPUREAD repeats the transfer's first word, and after a transfer of one word it repeats
+  what it repeated before, until GP1(10h) puts a register there [M, amidog's FIFO read test, 48,128 words; PCSX-ReARMed
+  for two words or more, `programs/gpuread-repeat.s`; the one-word case on amidog's expectation alone, D-23]. GP1(10h)'s
+  latch keeps taking each word read, as REG requires; the word GPUREAD repeats is kept beside it.
 
 ## 4. Texturing
 
@@ -134,10 +145,14 @@ remains [M, against the document, D-23].
 - **Bit 11 of the page** puts it 512 lines down while GP1(09h) allows it on the 208-pin chip, where a retail console
   has no chip and "textures disappear" [R "GP0(E1h)", "GP1(09h)"]: a texel there reads 0000h, transparent [A]. With
   GP1(09h) clear the bit is ignored.
-- **The texture cache**, 2 KiB, is psx-spx's 256 entries of 8 bytes in cache blocks of 64x64, 32x64 or 32x32 texels
-  by depth, one entry of each number held [R "GPU Texture Caching"]. Restated in VRAM's terms, which is how Diamond
-  indexes it [A]: an entry is four halfwords; a 4- or 8-bit page indexes by X's bits 2-3 and Y's bits 0-5, a 15-bit page
-  by X's bits 2-4 and Y's bits 0-4; the tag is the entry's VRAM address. An entry is kept until another address takes
+- **The texture cache**, 2 KiB, is psx-spx's 256 entries of 8 bytes in cache blocks of 64x64, ~~32x64~~ *since the cache
+  step* 64x32, or 32x32 texels by depth, one entry of each number held [R "GPU Texture Caching"; M for the 8-bit block,
+  amidog's CACHE BLOCK and Beetle PSX, against the document, D-23]. Restated in VRAM's terms, which is how Diamond
+  indexes it [A]: an entry is four halfwords; a 4-bit page indexes by X's bits 2-3 and Y's bits 0-5, an 8- or 15-bit
+  page by X's bits 2-4 and Y's bits 0-4; the tag is the entry's VRAM address. *Since the cache step*, setting the page
+  at another X or Y, or between 4 bits and the other depths (whose entries are indexed otherwise), by GP0(E1h), a
+  polygon's page attribute or GP1(00h), clears the cache; between 8 and 15 bits it does not [M, amidog's CACHE TAG and
+  `programs/texture-cache.s` on Beetle PSX, D-23]. An entry is kept until another address takes
   its index or GP0(01h) clears the cache, so VRAM written behind it is not seen [R: "it is possible to abuse the texture
   cache by changing pixels in VRAM that the GPU loaded in its cache"]. No program run at this stage observes a stale
   entry; its misses are what make a textured quad five times as slow as a plain one in `bandwidth` (§8).
@@ -168,7 +183,10 @@ At eight bits a channel in, five out (`draw.rs`):
   "GP1(09h)"]; amidog's OFFSET [M]); with GP1(09h) set the area stops at 511, the second megabyte being absent [A].
 - **The interlaced field**: in 480-line interlace with drawing to the display area prohibited (E1h bit 10 clear), the
   lines of the field being displayed are not drawn [A, from "Vertical Interlace flag DOES affect GP0 draw commands"].
-  No program run here clears the bit in 480-line mode.
+  ~~No program run here clears the bit in 480-line mode.~~ *Since the cache step*, the lines left alone are those whose
+  parity, counted from the display's first line (GP1(05h)), is GPUSTAT bit 31's when the command draws, which reads 0
+  in vblank; and fills leave them too [M, amidog's INTERLACE, 3,060 pixels; for fills Beetle PSX and PCSX-ReARMed,
+  the latter on the same lines with the display at line 0, `programs/interlace.s`, D-23].
 
 ## 6. The rasteriser (D-7)
 
@@ -385,6 +403,26 @@ are D-23's. The run grew longer: the menu comes 1,270 frames sooner (§8), but 4
 hundred errors now run every case. WiseMan's amidog tests therefore stay opt-in, and the full GPU run, half an hour
 of host time, is not among them.
 
+### 10.2 The FIFO, INTERLACE and cache groups (D-23, 2026-10-11)
+
+The four groups §10.1 left, each run alone from a local copy with the verbose word set, and read as before; what each
+measures, the rule each failure led to and the weight of its evidence are D-23's table [M]:
+
+| Group | Failing lines before | After |
+|---|---|---|
+| FIFO | 53,916: the read test 48,128, the full test 3,976, the overflow test 1,812 | 1,812, the overflow test |
+| INTERLACE | 3,060 | none |
+| CACHE TAG | 594,688 | none |
+| CACHE BLOCK | 3,322 | 1,322, its quad and triangle cases |
+
+The program run whole, every test but DUMP, from a local copy that starts without the pad: 3,134 failing lines on the
+TTY against §10.1's 654,986, the FIFO's 1,812 and CACHE BLOCK's 1,322, and none in any other group; its last group done
+by frame 331,300 of that copy. The rules changed are in §2.1, §2.5, §3, §4 and §5,
+marked *since the cache step*, each pinned by a unit test of `src/gpu/tests.rs` that failed first and by a program of
+`programs/` run on the referees (`Diamond_Referees.md` §4.12): `texture-cache.s`, `interlace.s`, `gpuread-repeat.s`,
+and `gp1-reset.s` from `Diamond_Records.md` §16.1. ps1-tests' eleven pictures stay exact, `gpu/bandwidth` and
+`dma/chopping` print byte for byte as before, and the console logs' readings are unchanged [M].
+
 ## 11. Peter Lemon's GPU programs
 
 The 25 programs of `GPU/16BPP` and `GPU/24BPP`, at frame 120, Diamond's picture against the references' screens through
@@ -423,13 +461,20 @@ up to the colour map the most pixels agree on; the count is the pixels off it:
   the busy time and its carried fraction, the texture cache's tags and data, the CLUT cache, and the display's scan
   position; VRAM is the state's own block as before; the picture is not kept, and a state loaded between frames
   re-reads it within the next frame [C]. **3,747,681 bytes**, pinned by `the_version_1_layout_is_pinned` (*version 2,
-  3,747,689 bytes, since stage 5: `Diamond_Native.md` §13.6*).
+  3,747,689 bytes, since stage 5: `Diamond_Native.md` §13.6*; *version 5, 3,747,806 bytes, since the cache step: the
+  word GPUREAD repeats, a transfer's first word and the texture cache's page, pinned by
+  `the_version_5_layout_is_pinned`*).
 - **Spaces** unchanged; `VRAM` is now the GPU's.
 - **Cost** [M, §15]: the frame time measured in `Diamond_Native.md` §12. *D-23's step and D-11's refit* [M,
   `examples/run`, 600 frames, three runs each, the two builds side by side, ms a frame before and after]: `timers`
   6.28 and 6.16, `gpu/triangle` 6.44 and 6.37, `gpu/rectangles` 5.51 and 5.36, `gpu/bandwidth` 7.85 and 7.87; each
   within its runs' spread but `rectangles`, 2.7% faster, a difference not traced. The copy's row is a 2 KiB array on
-  the stack, and nothing added allocates.
+  the stack, and nothing added allocates. *The cache step* [M, the same, the base build at `b9b9be79`, ms a frame
+  before and after, while another emulator run used one core]: `timers` 6.97 and 6.60, `gpu/triangle` 6.61 and 6.64,
+  `gpu/rectangles` 5.61 and 5.62, `gpu/bandwidth` 8.12 and 8.20; the last 1.0% slower with the runs' ranges (8.09-8.17,
+  8.16-8.25) touching, the others within their spread. The cache's page is compared once a primitive, the interlace
+  parity computed once a primitive and only in 480-line interlace; nothing is done per pixel that was not, and nothing
+  allocates.
 
 ## 13. The enhancement layer
 
@@ -448,12 +493,14 @@ by `vertex` and `Texture::new`, which a renderer would share rather than copy.
 - Drawing at a command's start (§2.1); texture cache staleness, built from the document and observed by no program
   yet; a full FIFO holding its writer.
 - The 13 chopping rows (D-11).
-- *Since D-23's step*, the groups of amidog's GPU test that still fail (§10.1): FIFO (its read test expects GPUREAD to
+- ~~*Since D-23's step*, the groups of amidog's GPU test that still fail (§10.1): FIFO (its read test expects GPUREAD to
   go on returning VRAM's following pixels after a transfer's last word, and its full test a FIFO the model does not
   keep), INTERLACE (its first case expects a fill to leave the displayed field's lines alone in 240-line interlace,
   where Diamond skips lines only for rendering commands in 480-line mode, §5), and the texture cache's TAG and BLOCK
   groups (the cache's tags and its blocks against the model's; the first cases already differ in which entries a
-  page change keeps). None was among the groups this step set out to settle, which were those the first run's record listed (they failed then too); each is left to a step of its own.
+  page change keeps). None was among the groups this step set out to settle, which were those the first run's record listed (they failed then too); each is left to a step of its own.~~
+  *Since the cache step* (§10.2): the FIFO's overflow test (a FIFO overflowed by the CPU, and GP1(01h) stopping a fill
+  part-drawn, which a fill drawn whole at its start cannot show), and CACHE BLOCK's quad and triangle cases.
 - The texel pairs' rule (§6) beyond rectangles drawn from an even column, and the odd read's halfword beyond one pixel.
 
 ## 15. Tests run (2026-10-11)
@@ -470,6 +517,13 @@ them new, each first seen failing) and 23 program tests (`small_rectangles_and_f
 §9, checked after each change. WiseMan, under the test lock with `EMUSEN_DIAMOND_PS1TESTS` and amidog's tests beside
 the corpus: `DiamondTests` 19 of 19 (the VRAM and TTY gates, the CPX test from frame 400, the GPU and GTE menus from
 frames 300 and 400).
+
+*The cache step (2026-10-11)*: `cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS`: `diamond` 86 unit tests (37 of
+the GPU's, six of them new and each first seen failing; the state's layout re-pinned at version 5) and 32 program tests
+(four new, each failing on the build before; `the_io_bitwidth_record_reads_each_register_after_each_width` re-pinned);
+`cargo clippy --all-targets` (clippy 0.1.98) clean but for one warning in `tests/support/records.rs`, not this step's.
+ps1-tests' eleven pictures exact (§9). WiseMan, under the test lock with the corpus and amidog's tests: `DiamondTests`
+20 of 20.
 
 ## 16. Reading log
 
@@ -521,6 +575,26 @@ Every file opened for this stage, as the protocol of `Diamond_Plan.md` §1.3 ask
     which name the player's BIOS file; the file went to the referees by path only and is named in no committed file;
     no BIOS byte and no BIOS output was read, the referees' TTY being cut at the test's own heading.
 
+- *The cache step, 2026-10-11*:
+  - **psx-spx** `6d7d1bc`, `graphicsprocessingunitgpu.md` again at "GP1(08h)", "GPU Status Register" (bits 13 and 31),
+    "Quick Rectangle Fill", "VRAM to CPU blitting", "GPU I/O Ports", "GP0(00h)", "GP0(03h)", "GP0(04h..1Eh...)", "GP1
+    Display Control Commands" (the GP1 preamble, GP1(00h), GP1(01h)), "Memory/Rendering Timings", "GPU Texture Caching"
+    and "GP0(E1h)".
+  - **amidog**: `psxtest_gpu.exe`'s harness disassembled from the file with `emusen-mips`: the FIFO read, full and
+    overflow tests (their loops, their expected values and the images the overflow test builds), the CACHE TAG table
+    of sub-tests and its sub-test functions, the primitive function they call, the CACHE BLOCK loop, the GP0 and GP1
+    write wrappers up to the indirect call into the model, and the compare function's arguments. The model was not
+    read: the wrappers' indirect calls were not followed. The TTY's expected values and the expected images in RAM were
+    read as outputs.
+  - **The references**, as black boxes: DuckStation's TTY of the FIFO group (a local copy), and the five referees' RAM
+    for `texture-cache.s`, `interlace.s` and `gpuread-repeat.s`; `gp1-reset.s`'s referee words from the records step's
+    cache.
+  - **EmuSen's own**: this page, `Diamond_Disputes.md`, `Diamond_Referees.md`, `Diamond_Records.md` §11-§17,
+    `Diamond_Pad.md` §5, the crate's GPU, bus, state and tests, `psxreferee.py`.
+  - **Exposures, stated as the rules ask**: the player's BIOS went to the referees by path only, chosen by its file
+    name from a listing of the firmware folder, and is named in no committed file; no BIOS byte or BIOS output was
+    read, the TTY cut at the test's heading and the RAM read at the programs' own addresses.
+
 ## 17. Negative results
 
 - No program run here observes the texture cache's staleness; amidog's GPU test, whose menu lists cache tests, waits
@@ -529,6 +603,8 @@ Every file opened for this stage, as the protocol of `Diamond_Plan.md` §1.3 ask
   picture only, and Beetle PSX's pictures of them are displaced.
 - `gpustat` is not in the release; its console log grades a program of the project's own.
 - One single write rate cannot give both `dma/chopping`'s cycles and its busy marks (D-11).
+- *The cache step*: no model of the FIFO tried reproduces amidog's overflow images (D-23); no referee models a FIFO
+  that loses words. The CACHE BLOCK quad and triangle cases were not traced to a rule.
 - *D-23's step*: no referee reproduces amidog's expectations for REG, the odd read, the texel pairs or the offset's
   placement, so those rules stand on the test alone; PCSX-Redux stopped with an exception in its Lua event listener
   in both runs of the test and witnesses only REG; the libretro cores carry no TTY and were not run on it.

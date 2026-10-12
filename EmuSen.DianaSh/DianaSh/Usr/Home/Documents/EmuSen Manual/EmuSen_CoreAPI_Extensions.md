@@ -880,8 +880,8 @@ ownership was decided the same day:
 
 #### 10.2.4 The design (minor 1.3)
 
-*Written 2026-10-12 before the code, and to be amended into the record of what was built and measured.* Marks as
-above.
+*Written 2026-10-12 before the code and committed first; built the same day as written, but where §10.2.5 says
+otherwise. §10.2.5 is the record of what was built and measured.* Marks as above.
 
 **1. The ABI's words.** One capability bit, one appended field and two flag values; no export, no event, no status.
 
@@ -1013,6 +1013,60 @@ without the flag after which the kit overwrites its own buffers, the run's diges
 an 88-byte `emusen_create_params`, and a struct longer than the core's with bytes past it that the core must not read
 as its own. C2 checks the bit's name in core info.
 
+#### 10.2.5 What was built and measured (2026-10-12)
+
+[M] here is measured or run on 2026-10-12, on this branch.
+
+**Built as §10.2.4 gives it**, items 1 to 8 and 10 to 12, with these differences and findings:
+
+- *The loan's check* (item 2) is `emusen_native::core::lend`; `Kept` and `keep` are re-exported from `core`. A test
+  holds that a slice inside a lending call's ranges is lent and one outside them (a battery or firmware file) copied,
+  that nothing is lent outside a call, and that a loan ended while a piece is held panics with the loan named.
+- *The struct's growth* (item 1) needed `emusen-native` to read a host's struct as far as both know it: until 1.3 it
+  read a whole struct of its own size, correct only while no struct had grown. A test creates from 88 bytes whose
+  flag's bytes say `LENT`, and the core copies; one byte fewer is `BAD_STRUCT`.
+- *The guard* keeps `struct emusen_create_params size 88 align 8 @1.0` and records `field emusen_create_params.flags
+  offset 88 @1.3`; it now refuses a struct that shrinks, changes alignment or grows with nothing appended
+  (`a_struct_grows_only_by_appended_fields_and_keeps_its_line`). The new baseline has 423 facts, 9 lines added at 1.3
+  and the revision's two moved; `--check --against` the base branch's baseline passes.
+- *The kit* (item 12) gained C17 as written, and C14 checks core info's battery list against machine info and creates
+  with every listed file empty. **C13 had a race**, shown by the kit's own tests in parallel: its four threads could
+  make no round before a busy machine's run ended, so a seeded drift of the library-level answers passed. The case
+  now starts the run once each thread is calling and ends it once they have called beside it; three parallel runs of
+  three pass.
+- *Galaxia's half* (item 4): the parity test found the library answering a folder with the system's "no such device"
+  where .NET refuses access; it now refuses one as .NET does. .NET's advisory locks are not seen by a mapping the
+  library makes, so `DiamondPlayersTests`' proof that the firmware question reads no image, which held the track under
+  an exclusive .NET lock, now moves the track away instead.
+- *Threads* (item 9) are measured below, and needed the prefetch the item foresaw.
+
+**Exactness** [M]. The kit's C17 on the seven test discs at 1,800 frames, the image and tracks mapped through Galaxia
+and lent, passes on all seven: every frame's picture, every sample and the state after every frame are those of a run
+from copied bytes, across a disc swap of 120 frames more; and a create that lent nothing, its bytes overwritten by the
+kit, runs unchanged. WiseMan's `DiscStreamingTests` hold the same through the C# host: a sheet with its tracks, a lone
+track and an `.iso` on Diamond and the test core's image, 300 to 600 frames, with the prefetch running. The same
+corpus run found C7 and C8 failing on four of the seven at 1,800 frames (a state saved at frame 900 and loaded gives
+another picture, the sound and state the same); the base branch's library and kit fail the same cases with the same
+digests to the bit, so it is a defect of Diamond's states that predates 1.3, recorded here for the branch that owns
+the states (at 600 frames, `Diamond_Players.md` §6, they passed).
+
+**Launch and memory** [M]: `Diamond_Players.md` §12.8.9 has the tables. In brief: a launch of 1.3 from the press of the
+engine's steps to the first frame is 106–126 ms on the desktop, cold or warm and under the 90 MB/s cap alike, and
+95–120 ms on the handheld from its card, where 1.2's took 4.7–7.1 s cold; peak resident 53–71 MiB, where it was
+878–1,382 MiB; a zip's first launch is its unpacking, which 1.3 does not change.
+
+**First touches** [M]. Traced over the first 30 s (1,800 frames) from a cold cache, unpaced, each frame's time and
+major faults: on the desktop under the cap, 2 to 8 major faults in 30 s on six games, at most 7 ms a frame; Crash
+Bandicoot's one fault at frame 282 held its frame 65–80 ms in three runs of three, and 3.9 ms without the cap. On the
+handheld's card, Mega Man X5's frame 355 took 20.6 ms with one fault, where its emulation takes 2.7 ms: **a first
+touch can hold a frame past its period.** The remedy is item 9's, and is built: `DiscFiles.Prefetch`, which the engine
+starts for a lent disc at the load and at an insert, reads each of the disc's files once in order, 256 KiB at a time,
+through a handle of its own on a background thread of the lowest priority, resting after each read twice as long as
+it took, so that it takes at most a third of the medium. At full speed it made the game's one fault in 30 s wait
+160 ms behind it under the cap; rested, paced at 60 frames a second, Crash Bandicoot's faults fell from 8 to 1 and
+Spyro's from 3 to 0, every frame within 6.1 and 7.5 ms. What a read of the mapping returns is the file's, whether
+the prefetch has passed or not.
+
 ### 10.3 The order
 
 By the first stage that needs each [C, Q13]:
@@ -1041,7 +1095,10 @@ itself; Galaxia names the folder and gained no reading of archives.*
 
 ### 10.5 Battery files in core info (proposed and decided 2026-10-12)
 
-*Decided 2026-10-12: built in minor 1.3, with §10.2.* `EmuSen_CoreAPI.md` §19.1 records that a v1.0 host cannot know a core's
+*Decided 2026-10-12: built in minor 1.3, with §10.2, as the design below gives it. Diamond lists files 0 (`.mcr`) and
+4 (`.2.mcr`); the test core file 0 (`.srm`); the other cores write no field and behave as before. The engine passes
+the listed files that exist at the first create, so a PlayStation game with its cards on disc is created once: the
+launch tables of `Diamond_Players.md` §12.8.9 have no second create.* `EmuSen_CoreAPI.md` §19.1 records that a v1.0 host cannot know a core's
 battery files before a game is created, so the engine creates once with file 0 as `.srm`, reads machine info's
 `battery`, and creates again when the files differ and one exists on disk; it names the remedy, core info carrying
 them per system in a later minor, and leaves it undecided. Diamond names two cards, file 0 as `.mcr` and file 4 as
@@ -1091,7 +1148,12 @@ in `info.schema.json`; `length` is left to machine info, since it is a property 
   average loses nothing a player can feel.
 - **P7** (2026-10-12, §10.2). With §10.2's shape B, a cold launch of a 660 MB loose track from a 90 MB/s medium
   reaches its first frame within 0.5 s of the same launch warm, the process's peak memory falls by the image's size,
-  and no frame of the first 30 s of play takes longer than its period on the handheld.
+  and no frame of the first 30 s of play takes longer than its period on the handheld. *Measured 2026-10-12
+  (§10.2.5):* the first two clauses hold, Spyro the Dragon's 662 MB track launching in 115 ms cold under the cap and
+  114 ms warm, and in 99 ms and 95 ms from the handheld's card; peak memory fell by more than the image, 1,317 to
+  54 MiB, since the host's buffer went with the core's copy. The third failed as built, one frame of Mega Man X5
+  taking 20.6 ms on the card for a first touch, and is the prefetch's to keep (§10.2.5, `Diamond_Players.md`
+  §12.8.9).
 
 ---
 

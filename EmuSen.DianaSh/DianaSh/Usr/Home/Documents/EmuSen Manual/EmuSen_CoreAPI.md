@@ -1162,7 +1162,7 @@ the disc, so no record gained a field (`Diamond_Players.md` §3).
 
 **Older and newer peers.** A host that predates 1.1 passes no companions and never calls `MEDIA`; a core that predates
 it claims no sheet and no bit. A newer host with a core without `MEDIA` shows no Change Disc row and plays an `.m3u`'s
-first disc. **The kit** checks it as C16 where `MEDIA` is claimed (§12); C2 checks the bit against both exports.
+first disc. **The kit** checks it as C16 where `MEDIA` is claimed (§12, §28.7); C2 checks the bit against both exports.
 
 ### 6.24 A lent image: `BORROW` (1.3, 2026-10-12)
 
@@ -2898,7 +2898,27 @@ frames, under a 10 GiB `MemoryMax`, no firmware folder: the core's cases pass an
 and C16, in 42.8 s, nine at a time. The largest sum of estimates admitted was 10.36 GB of 10.47 GB allowed; the peak
 resident memory was 8.82 GB, below it, so P2 holds on this run. The kit's own tests pass, 7, 0 and 15, one of them, the
 C13 fault case, failing about one run in three on the base commit and after this change alike, its info drift
-sometimes missed by its four threads; it is not this change's and was not chased.
+sometimes missed by its four threads; it is not this change's and was not chased. *Fixed 2026-10-12 (§28.8):* the
+case's run now starts once each thread is calling and ends once each has called beside it.
+
+### 28.8 C17, the image's life, and C14's battery files (1.3, 2026-10-12)
+
+- **C17** (§6.24), run with the image cases on every core. An image that came from files is mapped through Galaxia's
+  Rust module, as a host lends it; one given as bytes is held in place. Three runs of C6's frames with the script's
+  input, each frame's picture, sound and state digest kept: the core copying from the kit's bytes left alone, the
+  reference; the core copying from bytes the kit overwrites, every byte its complement, as soon as create returns,
+  which must change nothing, so a core that keeps a pointer it was not lent is caught on every core; and, where
+  `BORROW` is claimed, the core borrowing the mapped files with `EMUSEN_CREATE_LENT` from a host of minor 3. Where the
+  machine has a disc in a drive and `MEDIA` is claimed, each run opens the lid, inserts the same disc the same way
+  (lent with `EMUSEN_MEDIA_LENT` in the third), releases the first disc's bytes, closes the lid and runs 120 frames
+  more. The first frame where a run differs is named, with what differs. A seeded fault, 256, a machine reading an
+  image lent to it otherwise than its copy, fails C17 alone.
+- **C14** now reads core info's `systems[].battery` for the machine's system where it is written: each `which` listed
+  once, each suffix an extension, every battery file machine info names listed, and a create with every listed file
+  passed empty accepted.
+- **C12**'s host of minor 0 passes the 88-byte `emusen_create_params` of 1.0, whatever the kit's own size.
+- **Measured** [M]: the kit's tests pass, 7 and 16 (three parallel runs of three); on the seven test discs at 1,800
+  frames C17 passes on every one (`EmuSen_CoreAPI_Extensions.md` §10.2.5).
 
 ## 29. A space that is a view, 2026-10-07
 

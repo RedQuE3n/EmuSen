@@ -243,9 +243,23 @@ construction**: it reads the sectors named and no other, so its cost does not gr
 sector 4 and sectors 16 to 23, as before 1.3, and the result is bit for bit what `medium::fingerprint` gave, so every
 state made earlier loads; a test pins the value on a synthetic disc.
 
-### 9.4 Tests
+### 9.4 Tests (2026-10-12)
 
-To be recorded when run: every existing disc test repeated over a borrowed backing and compared sector for sector, Q
-for Q and TOC for TOC with the owned disc (a sheet whose tracks are several files, an unstored PREGAP, an `.iso` in
-either form, a lone raw track, an audio track, an `.sbi`, and the CHDs where `EMUSEN_DISC_CHDMAN` names chdman);
-`open` on each form and each refusal; the fingerprint's value and the count of bytes it touches.
+`cargo test --release`, 12 unit and 11 disc tests, all passing, with chdman named and without [M]. The three added:
+
+- **`every_form_reads_the_same_from_borrowed_bytes_as_from_owned`**: each form opened over `Vec<u8>`, over `&[u8]` and
+  over `Arc<[u8]>`, the last standing for the kit's lent bytes, and compared track for track, TOC for TOC, lead-in item
+  for lead-in item, and sector for sector in kind, bytes and Q from sector 0 through ten sectors of the lead-out, the
+  fingerprint too: a sheet of two files; one of three with FLAGS, PREGAP, a second index and a POSTGAP; one file with an
+  unstored PREGAP; user sectors with audio, framed both ways; 2,336-byte sectors; a lone raw track, a lone audio track,
+  an `.iso` and headerless user sectors, through `from_image`, `from_user_image` and `open`; and a sheet with its `.sbi`.
+  `a_chd_reads_as_its_sheet` compares each CHD over borrowed bytes and through `open` with the owned CHD likewise.
+- **`an_image_and_its_companions_open_or_are_refused_with_words`**: a sheet's files taken from the first companions, an
+  `.sbi` no stand-in for a track, a file too short for its indexes, a sheet that does not parse, bytes that are no
+  image, the console's word that headerless sectors are a disc, and a torn `.sbi`.
+- **`the_fingerprint_is_the_tracks_the_lead_out_and_the_sectors_named`**: the value computed by hand as `medium.rs` did
+  before 1.3 and pinned; every byte outside the named sectors changed, and the audio track silenced, without moving
+  it; one byte inside, the lead-out or the sectors named moving it; never 0.
+
+The cores' side was not changed by a test: Diamond's 157 unit and 76 program tests pass on the kept disc, with and
+without ps1-tests, and every state made before 1.3 loads, its fingerprint being bit for bit the same.

@@ -70,6 +70,8 @@ pub struct Machine {
     pub firmware: Vec<u32>,
     /// The debugger's hooks and its open frame (Diamond_Debugger.md).
     pub debug: crate::debugger::Debugger,
+    /// The idle skipper, which the plain frame runs and the debugger's never does (Diamond_Speed.md §4).
+    pub idle: crate::idle::Idle,
 }
 
 /// The console's standard field rate, by its market: NTSC on an NTSC clock, PAL on a PAL one (D-0, provisional).
@@ -121,6 +123,7 @@ impl Machine {
             ports,
             firmware: Vec::new(),
             debug: crate::debugger::Debugger::new(),
+            idle: crate::idle::Idle::default(),
         }
     }
 
@@ -187,12 +190,67 @@ impl Machine {
     /// display range leaves no vblank; the SPU's samples are made up to that cycle.
     pub fn advance(&mut self) {
         self.board.field_done = false;
+        self.idle.reset();
+        if !self.idle.on {
+            while !self.board.field_done {
+                self.step();
+            }
+        }
         while !self.board.field_done {
-            self.step();
+            let step = step_on(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
+            if step != Step::Instruction {
+                self.idle.reset();
+            } else if let Some(head) = self.idle.note(&self.cpu) {
+                let seams = crate::idle::Seams { exe_pending: self.exe.is_some(), taps_putchar: self.kernel.taps_putchar() };
+                if let Some(skip) = self.idle.arrive(head, &self.cpu, &self.board, seams) {
+                    if self.idle.verify != 0 && self.idle.skips % self.idle.verify == 0 {
+                        self.verify_skip(&skip);
+                    } else {
+                        skip.apply(&mut self.cpu, &mut self.board);
+                    }
+                }
+            }
         }
         self.board.sync_spu();
         self.frames += 1;
         self.debug.open = false;
+    }
+}
+
+impl Machine {
+    /// A skip checked against the interpreter: a copy runs the skip's turns instruction by instruction, meeting no
+    /// event and no exception, and must reach the state the skip leaves, byte for byte (Diamond_Speed.md §4.4).
+    fn verify_skip(&mut self, skip: &crate::idle::Skip) {
+        use emusen_native::ffi::StateMachine;
+        let (mut cpu, mut board, mut exe) = (self.cpu.clone(), self.board.clone(), self.exe.clone());
+        let events = board.events_run;
+        let mut turns = crate::idle::Idle::default();
+        let mut done = 0;
+        while done < skip.turns {
+            let step = step_on(&mut cpu, &mut board, &mut exe, self.kernel, &mut Unobserved);
+            assert!(step == Step::Instruction && board.events_run == events, "the skip at {:08X} meets {step:?} or an event after {done} of {} turns", skip.head, skip.turns);
+            if turns.note(&cpu) == Some(skip.head) {
+                done += 1;
+            }
+        }
+        skip.apply(&mut self.cpu, &mut self.board);
+        let state = |m: &Machine| {
+            let mut s = vec![0; m.state_size()];
+            let n = m.save_state(&mut s).unwrap();
+            s.truncate(n);
+            s
+        };
+        let skipped = state(self);
+        std::mem::swap(&mut self.cpu, &mut cpu);
+        std::mem::swap(&mut self.board, &mut board);
+        let interpreted = state(self);
+        let (next, events_run) = (self.board.next_event, self.board.events_run);
+        std::mem::swap(&mut self.cpu, &mut cpu);
+        std::mem::swap(&mut self.board, &mut board);
+        if skipped != interpreted || next != self.board.next_event || events_run != self.board.events_run {
+            let at = skipped.iter().zip(&interpreted).position(|(a, b)| a != b);
+            panic!("the skip of {} turns at {:08X} leaves another state: first difference at byte {at:?} of {}; {:?}", skip.turns, skip.head, skipped.len(), self.layout().lines().filter(|l| at.is_some_and(|a| l.split(' ').next().and_then(|o| o.parse::<usize>().ok()).is_some_and(|o| o <= a))).last());
+        }
     }
 }
 

@@ -38,7 +38,7 @@ pub const CHOP_OVERHEAD: u64 = 6;
 
 /// Where an address leads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Target {
+pub(crate) enum Target {
     Ram(usize),
     Scratch(usize),
     Io(u32),
@@ -118,6 +118,8 @@ pub struct Board {
     dma_clock: u64,
     /// Whether this field's vblank began, which ends a frame.
     pub(crate) vblank_seen: bool,
+    /// How many times the events ran, which tells the idle skipper a turn met one (Diamond_Speed.md §4); not state.
+    pub events_run: u64,
 }
 
 impl Board {
@@ -156,6 +158,7 @@ impl Board {
             refill: [0; 4],
             dma_clock: 0,
             vblank_seen: false,
+            events_run: 0,
         };
         b.schedule();
         b
@@ -163,7 +166,7 @@ impl Board {
 
     /// Where `address` leads; KUSEG beyond 512 MiB, KSEG2 but the cache control register, the scratchpad in KSEG1
     /// and every unmapped range lead nowhere.
-    fn decode(&self, address: u32) -> Target {
+    pub(crate) fn decode(&self, address: u32) -> Target {
         if address >= 0xC000_0000 {
             return if address == 0xFFFE_0130 { Target::CacheControl } else { Target::None };
         }
@@ -229,7 +232,7 @@ impl Board {
         self.ram[a..a + 4].copy_from_slice(&value.to_le_bytes());
     }
 
-    fn bytes_read(mem: &[u8], at: usize, size: Size) -> u32 {
+    pub(crate) fn bytes_read(mem: &[u8], at: usize, size: Size) -> u32 {
         let mask = mem.len() - 1;
         (0..size.bytes() as usize).fold(0, |v, i| v | (mem[(at + i) & mask] as u32) << (8 * i))
     }
@@ -507,6 +510,7 @@ impl Board {
 
     /// Runs whatever is due at the present.
     pub fn events(&mut self) {
+        self.events_run += 1;
         while self.now >= self.next_event {
             let hb = self.wants_hblank();
             let edge_at = self.video.next_edge(hb);

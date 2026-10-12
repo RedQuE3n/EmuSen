@@ -525,6 +525,22 @@ SwanStation ran the seven test discs again to frame 6,000 on `scph5501.bin`, pic
 Hill, Castlevania: SotN and Tekken 3 to frame 4,500 every 10 frames, and Tekken 3 to frame 12,000 every 300, through
 `psxreferee.py pictures`; `Diamond_CDROM.md` §9.8 records the discs against them.
 
+### 4.16 D-46: a triangle's drawing time — `draw-time.s`, and the games driven into play
+
+*Added 2026-10-12.* D-11's `programs/draw-time.s`, unchanged, side-loaded on Beetle PSX and SwanStation through the
+probe and on DuckStation and PCSX-Redux through their own drivers, the player's BIOS given as each one's firmware, RAM
+read at its done word [M]; PCSX-ReARMed did not run: the probe built for this step refused it with its no-firmware exit (4), `psxreferee.py`
+passing that core no firmware folder, and the cause was not pursued. The four triangle records, cycles from the last word to
+GPUSTAT bit 26: Beetle PSX 10, 10, 262 and 4,006; DuckStation and SwanStation alike, 25, 43, 286 and 4,129; PCSX-Redux 8
+for every record of the program, as it charges no drawing time. `Diamond_Disputes.md` D-46 has the table and the ruling.
+
+For the games, `psxreferee.py pictures` gained what a player does: `--press` and `--presson` (the probe's existing
+schedule, through the libretro input callback), `--stick` (the probe's new analog schedule, answered through the same
+callback for `RETRO_DEVICE_ANALOG`), `--device`, `--option`, `--card-in` (the probe's `--sram`), `--card-out` (the
+card's save RAM as the last picture leaves it, the one space of the probe's that is kept) and `--wav`. `psxplay.py`
+beside it drives a disc by a press script on Diamond's run tool or on SwanStation; `Diamond_Players.md` §13 records the
+seven games so driven. The probe's input reaches only the referee's own pad; nothing of the BIOS is read.
+
 ## 5. What changed in Diamond
 
 Each a writer's step citing its entry, after the rulings above:

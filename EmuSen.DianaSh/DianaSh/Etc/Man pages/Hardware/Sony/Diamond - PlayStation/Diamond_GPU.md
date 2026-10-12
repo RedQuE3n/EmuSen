@@ -270,7 +270,7 @@ cycle, a GPU cycle being one period of the video clock (53.693175 MHz on an NTSC
 cycles become CPU cycles exactly, the fraction carried while commands run back to back (`timing::advance`): rounding
 each data word up to a whole CPU cycle had made `cpuToVram` 18% slow [M].
 
-**The model** [C]: a command's own 2 cycles; a setup of 876 a triangle ~~and 742 a rectangle~~, *since D-11's refit*
+**The model** [C]: a command's own 2 cycles; ~~a setup of 876 a triangle~~ *since D-46* 3.65 cycles a row a triangle spans, its sides clipped or not, ~~and 742 a rectangle~~, *since D-11's refit*
 3.09 cycles a rectangle's row drawn; 0.836 cycles a pixel
 written, 1.266 a pixel read and written (semi-transparent, or the mask checked), 0.445 a texel fetched, 19.67 a texture
 cache miss; the fill ~~597 plus 0.5 a row plus 2 each 16 pixels~~ *since the refit* 2.99 a row plus 2 each 16
@@ -344,6 +344,15 @@ all the console's busy and Diamond's idle, after the 128-word blocks, the unchop
 grow slower than the console's (at 2.38 cycles a word, 93 of 130 within 10%), and no single rate explains them: open
 (D-11). `benchmark` (an interactive program whose screen shows 10.52 ms for 100 random flat triangles) cannot be graded
 without its triangles.
+
+**The triangle's setup, replaced by its rows (D-46, 2026-10-12)** [M]. Driven into its fights, Tekken 3 drew 729
+triangles a frame, whose setup alone took 0.71 of a frame's GPU time, and its fighters were left half drawn; the
+referees read a one-pixel triangle ready within 10 to 25 cycles where Diamond read 556. A triangle is now charged 3.65
+cycles for each row of its span between the drawing area's top and bottom, counted before the area's sides clip it:
+`bandwidth`'s quads read 7,720, 5,844 and 3,967 hblanks (console 7,727, 5,845 and 3,968), which a row count taken after
+the clip had made 5,818 and 3,916, so the clipped quads' equal residuals were rows that cost though nothing is drawn in
+them, not a setup. `draw-time.s`'s triangles read 7, 43, 358 and 4,651 cycles; `benchmark`'s screen 10.32 ms where it
+read 11.14 (its shipped screenshot 10.52).
 
 ## 9. The gate
 

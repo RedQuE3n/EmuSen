@@ -25,6 +25,8 @@ added its step to D-29.
 BIOS that draws nothing.
 *The stream's step (2026-10-12)* took D-45, a narrow store to a 32-bit register at an address not word-aligned, which
 had kept four of the tester's games from their movies.
+*The play step (2026-10-12)* took D-46, a triangle's drawing time, which had left Tekken 3's fighters half drawn once its
+fights began (`Diamond_Players.md` §13).
 
 ## The rules this log keeps
 
@@ -639,6 +641,9 @@ had kept four of the tester's games from their movies.
   `small_rectangles_and_fills_cost_their_rows`.
 - **Implemented in:** `diamond: the GPU of stage 4, and VRAM graded against ps1-tests' pictures`; *the refit*
   `diamond: amidog's GPU test passes its drawing groups (D-23), and small rectangles cost their rows (D-11)`.
+- *Since D-46 (2026-10-12)* triangles are charged by their rows as well, and the clipped quads are what separates a
+  row's cost from a setup after all: counted before the sides are clipped, the rows of `bandwidth`'s three quads stay
+  480 each, which is the equal residual this entry once read as a setup.
 
 ### D-12. Two of ps1-tests' pictures cannot be met in full by the release's programs: `lines` shades to a colour it never sets, and `transparency`'s picture is from an older program
 
@@ -1449,3 +1454,56 @@ had kept four of the tester's games from their movies.
   among them; their movies (`Diamond_MDEC.md` §9).
 - **Pinned by:** `a_narrow_store_writes_its_register_shifted_to_its_byte`, failing before the change.
 - **Implemented in:** `bus.rs`'s `whole_word` and `io_write`, in the commit citing this entry.
+
+### D-46. A triangle's drawing time: 3.65 GPU cycles a row it spans, those clipped at the sides included, and no setup
+
+- **Opened:** 2026-10-12, by driving the tester's games into play (`Diamond_Players.md` §13): in Tekken 3's first
+  fight on the open kernel the stage was drawn whole and the two fighters only in pieces, an arm and a leg of each,
+  frame after frame, where SwanStation draws both whole.
+- **Documents read:** psx-spx `6d7d1bc`, "DMA Channels" ("GPU polygon rendering time is unknown"), "GPU Timings";
+  `Diamond_GPU.md` §8 and D-11 here.
+- **What the game showed** [M, the GP0 words each command executed and the GTE's inputs and outputs of one frame, frame
+  7,710 of the script of §13, printed by a debugging build outside the repository; the game's own code read from RAM]:
+  the GTE projected every vertex of both fighters (RTPT and RTPS, their SXY outputs covering the fighters' outlines),
+  the game wrote them to its primitives in RAM (`swc2` from its own packet builder), and the GPU executed 479 polygons
+  of which 119 changed no pixel; the fighters' primitives that reached the GPU were a part of those built. The frame's
+  polygons were 729 triangles over 9,362 rows and 96,244 pixels written: at 876 GPU cycles a triangle the setup alone
+  was 638,604 GPU cycles, 0.71 of a frame's 894,886, and with the pixels 0.96, so the GPU was still drawing when the
+  game began the next list. *Ablations* [M, pictures every 30 frames]: every drawing cost zero, the fighters are
+  whole and the fight goes on as on SwanStation; D-43's step-aside removed instead, the fighters come and go in other
+  pieces; the setup removed and 3.65 cycles charged a row instead, or a setup of 134 cycles with 3.09 a row, the
+  fighters are whole. Why a late GPU leaves this game's primitives undrawn rather than late was not traced; the ordering
+  table it clears beside a running list (D-43) is the likely place [A].
+- **Test program:** `programs/draw-time.s`'s four flat triangles (one pixel, and legs of 8, 32 and 128), timed from the
+  last word to GPUSTAT bit 26 (D-11's program, unchanged), and ps1-tests' `gpu/bandwidth` against its console log.
+- **Referee** (`Diamond_Referees.md` §4.16) [M], cycles from the last word to bit 26:
+
+  | Triangle | Diamond before | Diamond after | Beetle PSX | DuckStation, SwanStation | PCSX-Redux |
+  |---|---|---|---|---|---|
+  | one pixel | 556 | 7 | 10 | 25 | 8 |
+  | legs of 8 | 574 | 43 | 10 | 43 | 8 |
+  | legs of 32 | 835 | 358 | 262 | 286 | 8 |
+  | legs of 128 | 4,912 | 4,651 | 4,006 | 4,129 | 8 |
+
+  PCSX-Redux charges no drawing time at all, here as in D-11's rectangles; PCSX-ReARMed was not run.
+- **Witnesses:** as the referee.
+- **The console's log** [M, `gpu/bandwidth`, 400 quads a row]: the full-screen quad 7,727 hblanks, a quarter and a half
+  off the left of the screen 5,845 and 3,968. With the setup removed and the rows counted after the sides are clipped,
+  Diamond read 7,720, 5,818 and 3,916: the clipped quads lose rows that way, and the console does not charge them less
+  for it. Counted before the sides are clipped, Diamond reads 7,720, 5,844 and 3,967, as close as the setup had them.
+- **Conclusion** [measured]: **a triangle costs 3.65 GPU cycles (934/256) for each row of its span inside the drawing
+  area's top and bottom, whether or not the drawing area's sides clip the row away, and no fixed setup**, with the
+  pixel, texel and miss costs of `Diamond_GPU.md` §8 unchanged. The figure is the old setup of two triangles spread
+  over a full-screen quad's 480 rows, so `bandwidth`'s rows stay within 0.6% of the console's; DuckStation's and
+  Mednafen's lineages agree that a small triangle is ready within tens of cycles, and Diamond's legs of 128 are 13%
+  slower than DuckStation's, within the pixel rate's fit. Not measured: whether a row clipped at the top or bottom
+  costs, and how a row's cost grows with a polygon's slope.
+- **Depends on it:** every 3D game's drawing time, and with it how many frames a game drops: Tekken 3's fights; Spyro
+  the Dragon's logos and title now come at the referee's pace from power-on (its title at frame 1,980 where it was
+  2,400); ps1-tests' `gpu/benchmark` reads 10.32 ms for its 100 flat triangles where it read 11.14 (its own screenshot
+  shows 10.52).
+- **Pinned by:** `a_triangle_is_charged_by_its_rows`, failing before the change; `small_rectangles_and_fills_cost_their_rows`'s
+  triangle row, now 7, 43, 358 and 4,651; `the_bandwidth_record_counts_each_rows_hblanks`, its clipped quads 5,844 and
+  3,967.
+- **Implemented in:** `timing.rs`'s `TRIANGLE_ROW` and `raster.rs`'s row count, in the commits citing this entry.
+

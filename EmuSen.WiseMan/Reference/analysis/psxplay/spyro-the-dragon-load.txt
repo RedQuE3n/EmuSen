@@ -1,0 +1,7 @@
+# Spyro the Dragon with a card holding a save: T is PRESS START; the card read, the save chosen
+# T: frame 1980 on Diamond's open kernel, 3480 on SwanStation with scph5501.bin.
++120 Start 6
++420 Cross 6
++720 Cross 6
++1020 Cross 6
++1320 Cross 6

@@ -220,6 +220,12 @@ to ps1-tests' pictures, which are a console's VRAM (D-7):
   also the distance the size limit judges. A triangle from 32 to 1007 under an offset of 258 spans 290 to 1265, though
   its second vertex alone would wrap to -783; one from 288 to -785 is not drawn, though an offset of 2 would bring
   its ends within 1,023 of each other once wrapped. A polyline places each vertex from the one before as drawn.
+  *Since D-47 (2026-10-12)* [M, Crash Bandicoot's right buffer and `programs/offset-fold.s` on three referees of two
+  lineages]: the coordinates are 11 bits, so x and x + 2,048 are one column, and a triangle or line placed so that it
+  reaches left of -1,024 (or above it) is drawn 2,048 further on. A game drawing its right buffer with the offset at
+  768 sends a polygon from SX 286 to 224: its first vertex sums to 1,054 and wraps to -994, the others follow it to
+  -1,056, and moved on they cover 992 to 1,023 as on the referees; before, the polygon fell off the area and the
+  buffer's clear colour showed through.
 - **Rectangles** are drawn from their corner, the texture coordinate stepping one a pixel and wrapping at 8 bits;
   *since D-23's step*, unflipped, two pixels of a VRAM word take their texels from one texture cache entry: a pixel
   at an odd column whose texel lies in another entry than its left neighbour's (16 texels at 4 bits, 8 at 8, 4 at 15)

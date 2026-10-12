@@ -22,6 +22,22 @@ const HALF: i64 = 1 << (FRACTION - 1);
 pub const MAX_DX: i32 = 1023;
 pub const MAX_DY: i32 = 511;
 
+/// The GPU's coordinates are 11 bits: a primitive reaching left of (or above) -1,024 is drawn 2,048 further on (Diamond_Disputes.md D-47).
+const FOLD: i32 = 2048;
+
+/// `v` moved 2,048 on in x or y where it reaches past -1,024 there, else as it is.
+#[inline]
+pub fn fold<const N: usize>(v: [Vertex; N]) -> [Vertex; N] {
+    if v.iter().any(|q| q.x < -1024 || q.y < -1024) { folded(v) } else { v }
+}
+
+#[cold]
+#[inline(never)]
+fn folded<const N: usize>(v: [Vertex; N]) -> [Vertex; N] {
+    let (fx, fy) = (if v.iter().any(|q| q.x < -1024) { FOLD } else { 0 }, if v.iter().any(|q| q.y < -1024) { FOLD } else { 0 });
+    v.map(|q| Vertex { x: q.x + fx, y: q.y + fy, ..q })
+}
+
 fn trunc_div(a: i64, b: i64) -> i64 {
     a / b
 }
@@ -63,7 +79,7 @@ fn owns(a: (i64, i64), b: (i64, i64)) -> bool {
     dy < 0 || (dy == 0 && dx > 0)
 }
 
-/// The triangle `v`, its attributes from its base vertex: colour when `shaded`, the texture coordinate when `textured`;
+/// The triangle `v`, already folded (`fold`), its attributes from its base vertex: colour when `shaded`, the texture coordinate when `textured`;
 /// its rows from the middle vertex's down, then those above it upward, each left to right (Diamond_Disputes.md D-41).
 pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
     let xs = v.map(|q| q.x);

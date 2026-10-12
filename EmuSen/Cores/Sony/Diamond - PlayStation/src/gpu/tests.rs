@@ -264,6 +264,18 @@ fn the_offset_moves_a_polygon_whole_and_its_size_is_judged_before() {
     assert_eq!((px(&g, 1023, 136), px(&g, 290, 160)), (0x4210, 0x4210), "a polyline's next segment from where the last ended");
 }
 
+/// D-47: a primitive placed past -1,024 from its wrapped first vertex is drawn 2,048 further on, as the 11-bit
+/// coordinates have it: a triangle from 290+768 at x, and one from 100+1000 at y, whose rows 1000 to 1023 land on
+/// VRAM's lines 488 to 511.
+#[test]
+fn a_primitive_reaching_past_minus_1024_is_drawn_2048_further_on() {
+    let (mut g, v) = gpu();
+    send(&mut g, &v, &[0xE500_0300, 0x2080_8080, 0x0002_0122, 0x0002_00E0, 0x0022_00E0]);
+    assert_eq!((px(&g, 991, 4), px(&g, 992, 4), px(&g, 1023, 2), px(&g, 0, 4)), (0, 0x4210, 0x4210, 0));
+    send(&mut g, &v, &[0xE40F_FFFF, 0xE51F_4000, 0x2080_8080, 0x0064_000A, 0x0000_000A, 0x0000_0028]);
+    assert_eq!((px(&g, 12, 488), px(&g, 12, 511), px(&g, 41, 488)), (0x4210, 0x4210, 0));
+}
+
 #[test]
 fn rows_past_511_wrap_into_vram_inside_a_tall_area() {
     let (mut g, mut v) = gpu();

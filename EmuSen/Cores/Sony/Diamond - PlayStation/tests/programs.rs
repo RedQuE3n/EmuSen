@@ -275,6 +275,52 @@ fn the_open_kernels_pad_functions_read_the_pads() {
     assert_eq!(bytes(&m, 0x10_0000, 8), [0x00, 0x73, 0xFF, 0xFF, 0x80, 0x80, 0xFF, 0x80], "the analog read, the left stick right");
 }
 
+/// The open kernel's interrupt path, timed (Diamond_OpenKernel_Phase2.md §25.3): with a pad on port 1, port 2 empty and
+/// timer 2 at Crash Bandicoot's period of 32,776 cycles, a vblank returns to the program in under 16,000 cycles and
+/// timer 2's IRQ is acknowledged within 2,000 cycles of its exception; the kernel of §23 took 23,351 and 4,039.
+#[test]
+fn the_open_kernels_interrupt_path_fits_within_timer_2s_period() {
+    let words = emusen_mips::assemble(include_str!("../programs/kernel-irq.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    let image = exe::build(&words);
+    let media = Media::read(&image).unwrap();
+    let rom = kernel::open_kernel().map(|k| (k, Kernel::Open));
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, rom);
+    for _ in 0..10 {
+        m.advance();
+    }
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program reached its loop");
+    let (mut vblank, mut timer, mut entry) = (Vec::new(), Vec::new(), None);
+    while m.frames < 20 {
+        let pc = m.cpu.regs.pc;
+        if pc == 0x8000_0080 {
+            entry = Some((m.board.now, m.board.irq.stat & m.board.irq.mask, None));
+        }
+        m.step();
+        if let Some((start, pending, ack)) = &mut entry {
+            if ack.is_none() && m.board.irq.stat & 0x40 == 0 && *pending & 0x40 != 0 {
+                *ack = Some(m.board.now - *start);
+            }
+            if (0x8001_0000..0x8020_0000).contains(&m.cpu.regs.pc) {
+                match (*pending, *ack) {
+                    (0x01, _) => vblank.push(m.board.now - *start),
+                    (0x40, Some(a)) => timer.push(a),
+                    _ => {}
+                }
+                entry = None;
+            }
+        }
+        if m.board.field_done {
+            m.board.field_done = false;
+            m.frames += 1;
+        }
+    }
+    let (v, t) = (vblank.iter().max().copied().unwrap_or(0), timer.iter().max().copied().unwrap_or(0));
+    assert!(vblank.len() >= 8 && timer.len() >= 100, "{} vblanks and {} timer IRQs seen", vblank.len(), timer.len());
+    assert!(v < 16_000 && t < 2_000, "the longest vblank {v} cycles to the return, timer 2 acknowledged after {t} at most");
+    assert_eq!(bytes(&m, 0x10_0000, 2), [0x00, 0x41], "port 1's pad read");
+    assert_eq!(bytes(&m, 0x10_0040, 1), [0xFF], "port 2 empty");
+}
+
 // The RAM-recording rewrites of ps1-tests' TTY programs (Diamond_Records.md), each record as Diamond answers it. Seven
 // carry the release's code from the corpus and pass unrun without it.
 

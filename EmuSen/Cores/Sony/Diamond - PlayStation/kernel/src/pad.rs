@@ -104,6 +104,7 @@ pub extern "C" fn pad_init2(kind: u32, button_dest: u32, _a: u32, _b: u32) -> u3
     2
 }
 
+#[inline(always)]
 fn buttons(buffer: u32) -> u32 {
     if buffer == 0 || rd8(buffer) != 0 {
         return 0xFFFF;
@@ -116,8 +117,20 @@ fn buttons(buffer: u32) -> u32 {
     }
 }
 
-/// B(16h): pad 1's buttons low, pad 2's high, each with its first byte high; stored at button_dest even when it is 0.
+/// B(16h), the table's entry in the ROM.
 pub extern "C" fn pad_dr() -> u32 {
+    dr()
+}
+
+/// B(16h) for the pads' element, in the kernel's RAM.
+#[unsafe(link_section = ".ramtext")]
+extern "C" fn pad_dr_ram() -> u32 {
+    dr()
+}
+
+/// Pad 1's buttons low, pad 2's high, each with its first byte high; stored at button_dest even when it is 0.
+#[inline(always)]
+fn dr() -> u32 {
     let (b1, b2) = unsafe { (&raw const HIDDEN[0] as u32, &raw const HIDDEN[1] as u32) };
     let v = buttons(b1) | buttons(b2) << 16;
     wr(unsafe { BUTTON_DEST }, v);
@@ -140,6 +153,7 @@ pub fn enable(pad_enable: u32) {
 
 /// A controller's read into `buffer` (psx-spx "B(12h)"): status 00h and the ID, then the halfwords its ID counts, up
 /// to 22h bytes in all; status FFh when no /ACK came or the second ID byte was not 5Ah.
+#[inline(always)]
 fn read_port(port: u32, buffer: u32) {
     let control = sio::select(port);
     let mut status = 0xFF;
@@ -162,25 +176,28 @@ fn read_port(port: u32, buffer: u32) {
     sio::deselect();
 }
 
+/// The shared element's function, in the kernel's RAM with the exception path (Diamond_OpenKernel_Phase2.md §25.3).
+#[unsafe(link_section = ".ramtext")]
 extern "C" fn pad_handler() -> u32 {
     if pending() & 1 == 0 {
         return 0;
     }
     unsafe {
         if ENABLED != 0 {
-            for (port, b) in BUFFERS.into_iter().enumerate() {
+            for port in 0..2 {
+                let b = BUFFERS[port as usize];
                 if b != 0 {
-                    read_port(port as u32, b);
+                    read_port(port, b);
                 }
             }
         }
         card::on_vblank();
         if BUTTON_DEST != 0 {
-            pad_dr();
+            pad_dr_ram();
         }
         if CLEAR != 0 {
             acknowledge(0);
-            entry::return_from_exception()
+            entry::return_from_exception_ram()
         }
     }
     0

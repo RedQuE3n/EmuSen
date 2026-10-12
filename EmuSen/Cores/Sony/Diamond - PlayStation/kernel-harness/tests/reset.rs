@@ -65,7 +65,10 @@ fn the_ram_map_of_the_first_100h_bytes() {
     }
     let mut m = m;
     let c0 = m.b(0x56, &[]);
-    assert_eq!(m.rig.word(c0 + 4 * 6), handler, "C(06h) names the handler the vector jumps to");
+    let named = m.rig.word(c0 + 4 * 6);
+    assert_eq!(named >> 20, 0x9FC, "C(06h) names the handler's copy in the ROM, where a game's patch finds the ROM");
+    assert!((0x8000_0500..0x8000_DF80).contains(&handler), "the vector jumps to its copy in the kernel's RAM");
+    assert_eq!(m.rig.bytes(named, 0xD0), m.rig.bytes(handler, 0xD0), "the same handler (§25.3)");
     let b0 = m.b(0x57, &[]);
     assert_eq!(b0, c0 + 0x200, "C(80h) and up read B(00h) and up");
     assert!(c0 > 0x8000_0500 && c0 < 0x8000_DF80);

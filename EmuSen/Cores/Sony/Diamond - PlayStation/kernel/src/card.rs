@@ -166,7 +166,7 @@ fn busy(kind: Kind) -> u32 {
 }
 
 /// The slot's request, if any, carried out now; called with interrupts off.
-fn perform(slot: usize) {
+extern "C" fn perform(slot: usize) {
     let r = unsafe { REQUESTS[slot] };
     if r.kind == Kind::None {
         return;
@@ -197,12 +197,15 @@ fn perform(slot: usize) {
     }
 }
 
-/// From the shared element on each vblank: the slot whose turn it is.
+/// From the shared element on each vblank, in the kernel's RAM: the slot whose turn it is, its request carried out in
+/// the ROM through a pointer when it has one.
+#[inline(always)]
 pub fn on_vblank() {
     unsafe {
         VBLANKS = VBLANKS.wrapping_add(1);
-        if STARTED {
-            perform((VBLANKS & 1) as usize);
+        let slot = (VBLANKS & 1) as usize;
+        if STARTED && REQUESTS[slot].kind != Kind::None {
+            crate::mem::call_far(perform as *const () as u32, slot as u32, 0, 0, 0);
         }
     }
 }

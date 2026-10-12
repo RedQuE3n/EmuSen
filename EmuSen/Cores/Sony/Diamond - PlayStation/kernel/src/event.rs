@@ -18,6 +18,7 @@ const SPEC: u32 = 0x08;
 const MODE: u32 = 0x0C;
 const FUNC: u32 = 0x10;
 
+#[inline(always)]
 fn evcb(index: u32) -> u32 {
     rd(TABLES + table::EVCB) + index * EVCB_SIZE
 }
@@ -101,8 +102,20 @@ pub extern "C" fn test_event(handle: u32) -> u32 {
     }
 }
 
-/// B(07h): every busy event of that class and spec, by its mode, made ready or its function called.
+/// B(07h) for the exception path, in the kernel's RAM (Diamond_OpenKernel_Phase2.md §25.3).
+#[unsafe(link_section = ".ramtext")]
+pub extern "C" fn deliver_event_ram(class: u32, spec: u32) -> u32 {
+    deliver(class, spec)
+}
+
+/// B(07h), the table's entry, for the kernel's code in the ROM.
 pub extern "C" fn deliver_event(class: u32, spec: u32) -> u32 {
+    deliver(class, spec)
+}
+
+/// Every busy event of that class and spec, by its mode, made ready or its function called.
+#[inline(always)]
+fn deliver(class: u32, spec: u32) -> u32 {
     for i in 0..blocks::events() {
         let e = evcb(i);
         if rd(e + STATUS) != BUSY || rd(e + CLASS) != class || rd(e + SPEC) != spec {

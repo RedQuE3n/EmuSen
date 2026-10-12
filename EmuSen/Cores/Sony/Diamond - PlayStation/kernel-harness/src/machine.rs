@@ -34,6 +34,9 @@ pub struct Rig {
     pub cop2_commands: Vec<u32>,
     pub clock: u64,
     pub sio0: Sio0,
+    /// Fetches and data reads from the BIOS ROM, which the exception path should not make (§25.3).
+    pub rom_fetches: u64,
+    pub rom_reads: u64,
 }
 
 fn physical(address: u32) -> u32 {
@@ -43,6 +46,10 @@ fn physical(address: u32) -> u32 {
         6 | 7 => address,
         _ => address & 0x1FFF_FFFF,
     }
+}
+
+fn in_rom(address: u32) -> bool {
+    (0x1FC0_0000..0x1FC8_0000).contains(&physical(address))
 }
 
 impl Rig {
@@ -62,6 +69,8 @@ impl Rig {
             cop2_commands: Vec::new(),
             clock: 0,
             sio0: Sio0::default(),
+            rom_fetches: 0,
+            rom_reads: 0,
         }
     }
 
@@ -180,10 +189,12 @@ impl Rig {
 impl Bus for Rig {
     fn fetch(&mut self, address: u32) -> u32 {
         self.tick();
+        self.rom_fetches += in_rom(address) as u64;
         self.load(physical(address), Size::Word)
     }
     fn read(&mut self, address: u32, size: Size) -> u32 {
         self.tick();
+        self.rom_reads += in_rom(address) as u64;
         if physical(address) == sio0::DATA {
             return self.sio0.read_data();
         }

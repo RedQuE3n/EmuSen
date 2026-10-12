@@ -684,7 +684,7 @@ had kept four of the tester's games from their movies.
   `the_status_follows_a_byte_through_the_transmitter_and_the_fifo`.
 - **Implemented in:** `diamond: SIO0 and port 1's digital pad, brought forward from stage 6`.
 
-### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; ~~open~~ the drawing groups settled on its expectations, ~~the FIFO, INTERLACE and cache groups open~~ *since the cache step* INTERLACE, CACHE TAG and the FIFO's read and full tests too, the FIFO's overflow test and CACHE BLOCK's polygons open; *since the rows step* both traced to a rule, D-41 and D-42, each left to the tester
+### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; ~~open~~ the drawing groups settled on its expectations, ~~the FIFO, INTERLACE and cache groups open~~ *since the cache step* INTERLACE, CACHE TAG and the FIFO's read and full tests too, the FIFO's overflow test and CACHE BLOCK's polygons open; *since the rows step* both traced to a rule, D-41 and D-42; *decided 2026-10-12:* D-41 taken, D-42 not, the overflow test left failing
 
 - **Opened:** 2026-10-11, by `psxtest_gpu` 1.7 run to its end once the pad answered (`Diamond_Pad.md` §5.4).
 - **Documents read:** none for this entry beyond `Diamond_GPU.md`'s own sources. *The GPU's step, 2026-10-11:*
@@ -834,7 +834,8 @@ had kept four of the tester's games from their movies.
   *The rows step:* both traced, CACHE BLOCK's cases to D-41 and the overflow test to D-42; ~~neither rule is taken into the
   core, the first for its change to `bandwidth`'s output,~~ *on `diamond-gpu4-rows` D-41 is taken*; D-42 is not, for
   ~~the second for~~ its conflict with Peter Lemon's programs and the
-  referees, and both are the tester's decision (`Diamond_GPU.md` §18). With D-41 taken, the program run whole would fail
+  referees, and both are the tester's decision (`Diamond_GPU.md` §18). *Decided 2026-10-12:* D-41 is taken into the
+  core and D-42 is not. With D-41 taken, the program run whole would fail
   only the overflow test's 1,812 lines (`Diamond_GPU.md` §10.3).
 - **Depends on it:** the GPU's line rasteriser, the flip, the area's clipping, GPUSTAT; *since the step* GPUREAD's
   latch, the copy, VRAM reads, sprites' texels, every primitive's placement under the offset.
@@ -1300,8 +1301,8 @@ had kept four of the tester's games from their movies.
 - **Pinned by:** `a_triangle_draws_its_lower_rows_down_and_then_its_upper_rows_up`,
   `a_triangles_rows_go_down_from_its_middle_vertex_then_up_as_the_referee_draws_them`, and
   `the_bandwidth_record_counts_each_rows_hblanks`, re-pinned.
-- **Implemented in:** ~~nothing yet~~ `diamond: a triangle's rows from its middle vertex's down, then up (D-41)`, on
-  `diamond-gpu4-rows`.
+- **Implemented in:** ~~nothing yet~~ `diamond: a triangle's rows from its middle vertex's down, then up (D-41)`, ~~on
+  `diamond-gpu4-rows`~~ *taken into the core, decided 2026-10-12* (`Diamond_GPU.md` §18, question 4).
 
 ### D-42. A CPU write to a full GP0 FIFO, and GP1(01h) during a fill: Diamond holds the writer and draws a fill whole, where amidog's FIFO overflow test expects the newest sixteen words kept, one command held aside, and the fill stopped
 
@@ -1337,7 +1338,9 @@ had kept four of the tester's games from their movies.
   small ones, the large one whole. `programs/fill-reset.s` (`Diamond_Referees.md` §4.13): four white fills of 240x511
   each cut by GP1(01h) after a loop of 0, 100, 400 or 1,600 turns; all five referees draw all 511 lines of every fill,
   as Diamond does [M]. **Witnesses:** none of the five loses a word at a full FIFO.
-- **Conclusion:** open. The model above is the one found to fit amidog's harness; Diamond keeps holding the writer and
+- **Conclusion:** ~~open~~ *decided 2026-10-12: the writer is held* (`Diamond_GPU.md` §18, question 5), on Peter Lemon's
+  programs and the five referees against the harness alone; the overflow test's 1,812 lines stay failing as a known
+  difference. The model above is the one found to fit amidog's harness; Diamond keeps holding the writer and
   drawing a fill whole as it starts, as the five referees read it, and the decision is the tester's (`Diamond_GPU.md`
   §18, question 5). Taking the model would mean a store that loses a word instead of waiting, a command decoded ahead
   while another draws (GPUSTAT bit 28 then clear while it waits, as `gpustat`'s log has it with a second rectangle

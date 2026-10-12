@@ -532,7 +532,7 @@ by `vertex` and `Texture::new`, which a renderer would share rather than copy.
   page change keeps). None was among the groups this step set out to settle, which were those the first run's record listed (they failed then too); each is left to a step of its own.~~
   ~~*Since the cache step* (§10.2): the FIFO's overflow test (a FIFO overflowed by the CPU, and GP1(01h) stopping a fill
   part-drawn, which a fill drawn whole at its start cannot show), and CACHE BLOCK's quad and triangle cases.~~
-  *Since the rows step* (§10.3): both traced and left to the tester. CACHE BLOCK's cases are the order of a triangle's
+  *Since the rows step* (§10.3): both traced; *decided 2026-10-12*, D-41 taken and D-42 not (§18). CACHE BLOCK's cases are the order of a triangle's
   rows (D-41), built ~~on `diamond-gpu4-rows` and not here because it moves~~ *on this branch, moving* `bandwidth`'s
   textured quad rows by 60 hblanks; the overflow test is a FIFO that keeps its newest words and a fill that GP1(01h) stops (D-42), against
   Peter Lemon's programs drawn whole and the five referees.
@@ -698,8 +698,8 @@ Every file opened for this stage, as the protocol of `Diamond_Plan.md` §1.3 ask
 4. **D-41, the order of a triangle's rows** (§10.3), ruled on amidog's expectations and Beetle PSX, passes CACHE BLOCK
    and keeps every picture and log, but `gpu/bandwidth`'s two textured quad rows read 39,915 hblanks where they read
    39,975 and 39,976 (the console's log 39,938, both within 0.2%). Take it (merge `diamond-gpu4-rows`, which re-pins
-   the bandwidth record's two rows), or keep `bandwidth`'s output as it is?
+   the bandwidth record's two rows), or keep `bandwidth`'s output as it is? *Decided 2026-10-12: taken.*
 5. **D-42, a CPU write to a full FIFO** (§10.3): keep holding the writer, as Peter Lemon's programs and the referees
    need, and leave amidog's overflow test failing; or take the model that fits amidog's harness, a store that loses
    the FIFO's oldest word, with one command decoded ahead and fills drawn line by line, at the cost of Peter Lemon's
-   pictures?
+   pictures? *Decided 2026-10-12: the writer is held, and the overflow test stays failing.*

@@ -1264,7 +1264,7 @@ is `Diamond_OpenKernel_Phase2.md`, written under the replacement writers' rules.
 
 `kernel-harness` 49 tests with `DIAMOND_KERNEL_REBUILD=require`, all passing; `diamond` 133 unit tests and 53 program
 tests, with and without `EMUSEN_DIAMOND_PS1TESTS`, all passing; WiseMan under the test lock with the corpus:
-`DiamondTests`, the result in the record of the merge.
+`DiamondTests`, 24 of 24, stage 3's seven programs on the open kernel among them, with no firmware variable set.
 
 ### 18.4 What waits
 

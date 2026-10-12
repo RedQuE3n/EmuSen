@@ -50,8 +50,12 @@ namespace EmuSen.Common
         public ICpuTraceSwitch? CpuTraceSwitch { get; private set; }
 
         // Required firmware <romPath> needs on <engine>, a CoreCatalog.EngineFor name or null for the reference, not in the library yet - see EmuSen_Firmware.md §3.
-        public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath, string? engine = null) =>
-            FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath, engine).GetFirmwareRequirements(romPath).Where(r => r.Required));
+        public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath, string? engine = null)
+        {
+            // A file that opens nowhere asks for nothing; the load after it says why - see Diamond_Players.md §12.
+            try { return FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath, engine).GetFirmwareRequirements(romPath).Where(r => r.Required)); }
+            catch (Exception e) when (e is NotSupportedException or System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException) { return Array.Empty<FirmwareRequest>(); }
+        }
 
         // Set by the frontend before LoadRom so the debug target shares its registry.
         public CheatRegistry? Cheats { get; set; }

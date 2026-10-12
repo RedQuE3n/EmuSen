@@ -17,12 +17,16 @@ CD-XA modes 2 form 1 and form 2; subchannel Q, synthesised for every sector or p
 lead-in's items; CD-DA as samples; the cue sheet parsed in full; the set module's two readers (a sheet's companion
 files, an `.m3u`'s entries); CHD v5.
 
-**Not in it**: any console's drive controller, its seek or read timing, XA-ADPCM decoding, or any filesystem. Diamond's
+*Since 2026-10-12 (§9):* the kinds of backing a disc's bytes may have, owned, borrowed for a call or lent by the host
+for the machine's life; opening a disc from an image and its companions; and the fingerprint a state is held to.
+
+**Not in it**: where a disc's files are, or keeping them available, which are Galaxia's (`EmuSen_Galaxia.md` §3.8); any
+console's drive controller, its seek or read timing, XA-ADPCM decoding, or any filesystem. Diamond's
 controller is `src/cdrom/` (`Diamond_CDROM.md`); a Sega CD's CDC and CDD will be Nephrite's. The development tools that
 look inside an ISO 9660 volume (Diamond's `run --boot`) read the directory records themselves.
 
 **Dependencies**: the `chd` crate 0.3.4 (BSD-3-Clause), used as a dependency whose code is not read, as Q9 decided
-[R]. Nothing else.
+[R]. Nothing else: not `emusen-native`, and never Galaxia, since a core builds and runs with no frontend.
 
 ## 2. The surface
 
@@ -39,6 +43,9 @@ look inside an ISO 9660 volume (Diamond's `run --boot`) read the directory recor
 | `samples(&raw)` | an audio sector's 588 stereo frames, little-endian, left first |
 | `ecma130::{edc, mode1, mode2_form1, mode2_form2, parity, parity_holds, edc_holds, form}` | the sector codec |
 | `cue::Sheet::parse`, `set::{companions, playlist, sbi_beside}`, `sbi::parse` | the readers |
+| `Disc<B>`, for `B: AsRef<[u8]>` (§9.1) | the bytes behind a disc: a `Vec<u8>` (the default), a `&[u8]`, or a type that lends the host's own |
+| `open::open(image, companions, IsoForm, Lone)`, `open::is_sheet`, `open::Refusal` (§9.2) | a disc from an image and the files beside it, as a host passes them |
+| `Disc::fingerprint(sectors)` (§9.3) | FNV-1a of the tracks, the lead-out and the sectors the console names |
 
 **`IsoForm`** is the console's choice of how a 2,048-byte sector is framed when it is read raw: mode 1, or mode 2 form 1
 with a data subheader (`00 00 08 00`), which is what a CD-XA console's discs carry. Diamond passes `Mode2Form1`; a Sega
@@ -175,3 +182,70 @@ Format", "CDROM Subchannels", "CDROM Sector Encoding" (its `encode_sector`'s hea
 "CDROM File Formats" (".CUE/.BIN", "Cue Sheet", "SBI", ".chd"); the `chd` crate's generated API documentation (its
 items and their doc comments, not its source); chdman's own `info` output. Not read: the `chd` crate's source, libchdr,
 MAME, or any emulator's disc code.
+
+## 9. Backings, and opening an image with its companions (2026-10-12)
+
+*Decided 2026-10-12, with the core ABI's minor 1.3 (`EmuSen_CoreAPI_Extensions.md` §10.2.3): this crate owns what a disc
+is and how its bytes are read, the kinds of backing among them, and takes from Diamond's `medium.rs` what was never the
+PlayStation's. Written before the code as its design; the record of what was built and tested follows it.*
+
+### 9.1 The backing
+
+Until 1.3 a disc owned its bytes: `Disc::from_sheet` took `Vec<Vec<u8>>`, and a core copied every track at create. The
+copy was the launch's cost (`Diamond_Players.md` §12.8), so the bytes may now stay where the host has them.
+
+- **`Disc<B>` for any `B: AsRef<[u8]>`**, with `Vec<u8>` the default, so that `Disc` written alone means what it did
+  and every earlier caller compiles unchanged. A CHD is `chd::Chd<Cursor<B>>`, which needs the same bound and nothing
+  more.
+- **Three backings are in use, and the crate knows none of them by name** [C]: `Vec<u8>`, owned; `&[u8]`, borrowed for
+  one call, for a probe or a firmware question that opens a disc to read a few sectors and lets it go; and the core
+  kit's `Kept` (`emusen_native::core`), which is the host's own mapped bytes where the host lends them and a copy
+  otherwise. The kit's type reaches the crate through `AsRef<[u8]>` alone, so the crate depends on neither the kit nor
+  any host.
+- **Why a type parameter and not a boxed trait object** [A]: a `Box<dyn AsRef<[u8]>>` would need `'static`, which a
+  slice borrowed for a call is not, and would put a second pointer behind every sector read; the parameter costs
+  nothing at run time, and a core names its disc type once (`type Disc = emusen_disc::Disc<Kept>`).
+- **One path reads every backing.** `read` takes the track's stored range out of `backing.as_ref()`, whatever the
+  backing, so there is no borrowed reader to diverge from the owned one. The tests of §9.4 hold the equality anyway,
+  format by format, because the claim is the exactness rule's: a game reads the same bytes from a mapping as from a
+  copy.
+- **What a borrowed backing asks of its owner**: that the bytes do not change and do not move while the disc lives.
+  The crate cannot check either; `Kept`'s loan is the kit's to keep (`EmuSen_CoreAPI_Extensions.md` §10.2.4, item 2),
+  and a `&[u8]` is the compiler's.
+- **Reads touch only what is read.** Opening a sheet's disc reads no track byte: the tracks are placed from the
+  sheet's times and the files' lengths. Opening a lone image reads its first sector and sector 16's five bytes;
+  opening a CHD reads its header, map and metadata. Nothing walks an image.
+
+### 9.2 Opening
+
+`open::open(image, companions, iso, lone)` is what Diamond's `medium::open` did before it asked for the licence:
+
+1. bytes that read as a cue sheet (`open::is_sheet`: text whose first command is `FILE`, `REM`, `CATALOG`, `TITLE` or
+   `PERFORMER`) are parsed, and the sheet's files are the first companions, in its order; fewer than it names is
+   `Refusal::Missing { needs, has }`;
+2. anything else is one file: a CHD, a lone raw track or an `.iso` by §4's rules (`Lone::Detect`), or 2,048-byte user
+   sectors with no volume descriptor where the console's own signature has shown them to be that (`Lone::User`);
+3. an `.sbi` among the companions past the sheet's own, told by its magic, is applied (§3.5).
+
+The image itself is taken by reference, since a sheet is parsed and not kept and a lone image is kept through the
+caller's backing of the same bytes; the companions are taken as backings. **What stays with the console** is its
+signature and its rules: Diamond reads the licence in sector 4 for the market and refuses a disc without it; a Sega CD
+core will read `SEGADISCSYSTEM`. `Lone` is a parameter for the same reason `IsoForm` is one: whether headerless
+2,048-byte sectors are a disc is the console's knowledge, not the container's.
+
+### 9.3 The fingerprint
+
+A core's state names the disc it was made on, so that a load over another disc is refused (`EMUSEN_WRONG_MEDIA`,
+`EmuSen_CoreAPI.md` §6.23). `Disc::fingerprint(sectors)` is the arithmetic every disc core would otherwise repeat:
+FNV-1a (64-bit) over each track's index 01 and kind, the lead-out, and the raw 2,352 bytes of each sector the caller
+names, relative to the first track's index 01; never zero, zero meaning an empty drive. **It is bounded by
+construction**: it reads the sectors named and no other, so its cost does not grow with the disc. Diamond names
+sector 4 and sectors 16 to 23, as before 1.3, and the result is bit for bit what `medium::fingerprint` gave, so every
+state made earlier loads; a test pins the value on a synthetic disc.
+
+### 9.4 Tests
+
+To be recorded when run: every existing disc test repeated over a borrowed backing and compared sector for sector, Q
+for Q and TOC for TOC with the owned disc (a sheet whose tracks are several files, an unstored PREGAP, an `.iso` in
+either form, a lone raw track, an audio track, an `.sbi`, and the CHDs where `EMUSEN_DISC_CHDMAN` names chdman);
+`open` on each form and each refusal; the fingerprint's value and the count of bytes it touches.

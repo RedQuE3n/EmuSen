@@ -1,6 +1,6 @@
 //! The file layer of psx-spx's "BIOS File Functions": sixteen FCBs and ten DCBs at fixed places in the kernel's
 //! variables, a name's device found by its DCB, each call passed to the device's function: the TTY, "cdrom" and
-//! "bu". Diamond_OpenKernel.md §4.9 and §12.
+//! "bu". Diamond_OpenKernel.md §4.9, Diamond_OpenKernel_Phase2.md §12.
 
 use crate::layout::{DCB_SIZE, DCBS, FCB_SIZE, FCBS, TABLES, table};
 use crate::mem::{call, rd, rd8, wr};

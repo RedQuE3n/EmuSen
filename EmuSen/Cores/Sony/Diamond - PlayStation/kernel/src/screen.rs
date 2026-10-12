@@ -96,7 +96,8 @@ pub fn text(mut x: u32, y: u32, s: &[u8], max: usize, colour: u32) -> u32 {
         if c == 0 {
             break;
         }
-        let g = if (font::FIRST..0x80).contains(&(c as u32)) { c as u32 - font::FIRST } else { b'?' as u32 - font::FIRST };
+        let g =
+            if (font::FIRST..0x80).contains(&(c as u32)) { c as u32 - font::FIRST } else { b'?' as u32 - font::FIRST };
         gp0(&[0x7400_0000 | colour, y << 16 | x, (g / 32 * 8) << 8 | g % 32 * 8]);
         x += ADVANCE;
     }

@@ -1,7 +1,7 @@
 //! The memory cards' files on "bu00:" and "bu10:" in the on-card format of psx-spx's "Memory Card Data Format": the
 //! header frame, fifteen directory frames with their block chains and checksums, the broken sector list, and the
 //! title frames left to the game; block 0's first 36 frames kept per slot. The device functions A(65h)-A(6Fh), the
-//! asynchronous jobs of "Asynchronous Access" and the formatting of a blank card. Diamond_OpenKernel.md §14.
+//! asynchronous jobs of "Asynchronous Access" and the formatting of a blank card. Diamond_OpenKernel_Phase2.md §14.
 
 use crate::card::{self, Kind, Outcome};
 use crate::file::{self, dcb, error, fcb};
@@ -266,7 +266,16 @@ fn create(port: u32, name: u32, blocks: u32) -> Result<u32, u32> {
             wr8(f + k, 0);
         }
         let last = i + 1 == n as usize;
-        set32(f, if i == 0 { FIRST } else if last { LAST } else { MIDDLE });
+        set32(
+            f,
+            if i == 0 {
+                FIRST
+            } else if last {
+                LAST
+            } else {
+                MIDDLE
+            },
+        );
         let link = if last { NO_BLOCK } else { chosen[i + 1] - 1 };
         wr8(f + 8, link);
         wr8(f + 9, link >> 8);
@@ -339,7 +348,9 @@ fn transfer(f: u32, buffer: u32, length: u32, kind: Kind) -> u32 {
         return n;
     }
     for k in 0..n / FRAME {
-        let Some(s) = sector_of(slot, first, position + k * FRAME) else { return file::device_error(f, error::GENERAL) };
+        let Some(s) = sector_of(slot, first, position + k * FRAME) else {
+            return file::device_error(f, error::GENERAL);
+        };
         let o = card::run(kind, port, s, buffer + k * FRAME, false);
         if o != Outcome::Ok {
             if o == Outcome::New {
@@ -418,7 +429,13 @@ fn restate(port: u32, first: u32, states: [u32; 3]) -> bool {
     let mut b = first;
     loop {
         let n = next(slot, b);
-        let s = if b == first { states[0] } else if n == NO_BLOCK { states[2] } else { states[1] };
+        let s = if b == first {
+            states[0]
+        } else if n == NO_BLOCK {
+            states[2]
+        } else {
+            states[1]
+        };
         set32(frame(slot, b), s);
         if !write_frame(port, b) {
             return false;

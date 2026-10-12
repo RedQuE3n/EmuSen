@@ -1,7 +1,7 @@
 //! The memory cards' sectors (psx-spx "BIOS Memory Card Functions" and "Memory Card Read/Write Commands"): one request
 //! a slot, carried out on vblank by the element the pads share, slot 1 on even frames and slot 2 on odd ones as psx-spx
 //! describes the original's pace, or at once when nothing drives the element; the low-level calls and their events.
-//! Diamond_OpenKernel.md §13.
+//! Diamond_OpenKernel_Phase2.md §13.
 
 use crate::layout::{A_TABLE, io};
 use crate::mem::{call, rd, rd8, wr8};
@@ -58,7 +58,8 @@ struct Request {
     ignore_new: bool,
 }
 
-const NONE: Request = Request { kind: Kind::None, owner: Owner::Call, port: 0, sector: 0, buffer: 0, ignore_new: false };
+const NONE: Request =
+    Request { kind: Kind::None, owner: Owner::Call, port: 0, sector: 0, buffer: 0, ignore_new: false };
 
 static mut REQUESTS: [Request; 2] = [NONE; 2];
 static mut STATUS: [u32; 2] = [READY; 2];

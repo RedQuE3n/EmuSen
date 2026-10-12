@@ -370,8 +370,8 @@ interrupts_off:
     jr      $ra
     nop
 
-    # The code 80030000h jumps to once the boot is done: the shell's own stack in the kernel's RAM, then the shell, given
-    # k1, which a warm boot sets.
+    # The code 80030000h jumps to once the boot is done: the shell's own stack in the kernel's RAM, then the shell,
+    # given k1, which a warm boot sets.
     .globl shell_entry
 shell_entry:
     addu    $a0, $k1, $zero

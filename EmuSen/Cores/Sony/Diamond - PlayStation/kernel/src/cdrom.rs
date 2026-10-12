@@ -1,7 +1,7 @@
 //! The CD-ROM controller driven by the kernel through its host interface (psx-spx "CDROM Controller I/O Ports" and
 //! the command chapters): one operation at a time, a short list of commands each waited for by its responses, sectors
 //! moved by DMA channel 3 on each INT1; serviced from the priority 0 element while the kernel owns the drive, or by the
-//! waiting caller. The BIOS CDROM Functions over it. Diamond_OpenKernel.md §12.
+//! waiting caller. The BIOS CDROM Functions over it. Diamond_OpenKernel_Phase2.md §12.
 
 use crate::exception::{self, acknowledge, pending};
 use crate::layout::io;

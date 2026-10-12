@@ -1,6 +1,7 @@
 //! SIO0's byte exchange as psx-spx's "Controller and Memory Card Signals" and its "Emulation Note" describe the
 //! kernel's driver, shared by the pads and the memory cards: a byte sent, about 100 cycles waited, IRQ7 acknowledged in
-//! I_STAT and then in CR, the next IRQ7 awaited, the reply read on RXRDY. Diamond_OpenKernel.md §4.13 and §13.
+//! I_STAT and then in CR, the next IRQ7 awaited, the reply read on RXRDY. Diamond_OpenKernel.md §4.13,
+//! Diamond_OpenKernel_Phase2.md §13.
 
 use crate::mem::{rd, rd8, rd16, wr, wr8, wr16};
 

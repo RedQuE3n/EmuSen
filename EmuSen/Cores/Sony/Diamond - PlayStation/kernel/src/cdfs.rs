@@ -1,7 +1,8 @@
 //! Files on "cdrom:" from the ISO 9660 filesystem (ECMA-119 2nd edition, §8.4 the primary volume descriptor, §9.1
 //! the directory record): paths resolved from the root or the directory `cd` set, names compared without case and,
-//! when the pattern gives none, without the version; a direntry carries the identifier whole, its version included; the device functions A(5Fh)-A(64h) and CdGetLbn.
-//! Diamond_OpenKernel.md §12.
+//! when the pattern gives none, without the version; a direntry carries the identifier whole, its version included;
+//! the device functions A(5Fh)-A(64h) and CdGetLbn.
+//! Diamond_OpenKernel_Phase2.md §12.
 
 use crate::cdrom;
 use crate::file::{self, dcb, error, fcb};
@@ -225,7 +226,11 @@ pub extern "C" fn dev_cd_read(f: u32, dst: u32, length: u32) -> u32 {
     }
     let n = length.min(size - position);
     let (first, skip) = (rd(f + START) + position / SECTOR, position % SECTOR);
-    if cdrom::read(first, (skip + n).div_ceil(SECTOR), dst, skip, n) { n } else { file::device_error(f, error::GENERAL) }
+    if cdrom::read(first, (skip + n).div_ceil(SECTOR), dst, skip, n) {
+        n
+    } else {
+        file::device_error(f, error::GENERAL)
+    }
 }
 
 /// Writing to the CD returns 0, as psx-spx says.

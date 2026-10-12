@@ -1,7 +1,7 @@
 //! What runs at 80030000h once the kernel is set up: the CD boot of psx-spx's "CDROM File Playstation EXE and
 //! SYSTEM.CNF" (BOOT, TCB, EVENT and STACK, PSX.EXE without the file, the argument at 180h, _96_init, the program
 //! loaded and run by Exec with SYSTEM.CNF's stack), the warm boot of A(A0h), and the screen when no disc boots.
-//! Diamond_OpenKernel.md §15.
+//! Diamond_OpenKernel_Phase2.md §15.
 
 use crate::layout::{self, A_TABLE, SCRATCH};
 use crate::mem::{call, rd, rd8, wr, wr8};

@@ -555,7 +555,7 @@ ps1-tests' eleven pictures exact (§9). WiseMan, under the test lock with the co
 and without: `diamond` 147 unit tests and 59 program tests, two new, both pins of the referees' readings that the
 build before passes too: `a_fill_cut_by_gp1_01h_is_drawn_whole_as_the_referees_draw_it` and
 `the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee`. WiseMan, under the test lock with the corpus:
-the 35 tests named for Diamond, 35 of 35.
+the 35 tests named for Diamond, 35 of 35. With stage 11 merged in, 148 unit tests, the same 59, and WiseMan's 40 of 40.
 
 ## 16. Reading log
 

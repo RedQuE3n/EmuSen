@@ -423,6 +423,28 @@ marked *since the cache step*, each pinned by a unit test of `src/gpu/tests.rs` 
 and `gp1-reset.s` from `Diamond_Records.md` §16.1. ps1-tests' eleven pictures stay exact, `gpu/bandwidth` and
 `dma/chopping` print byte for byte as before, and the console logs' readings are unchanged [M].
 
+### 10.3 The overflow test and CACHE BLOCK's polygons (D-41, D-42, 2026-10-12)
+
+The two groups §10.2 left, run alone as before, reproduce on the open kernel: CACHE BLOCK's 1,322 failing lines, every
+one in its quad's and its bottom-flat triangle's cases, and the FIFO overflow test's 1,812 [M]. Each was traced to a
+rule, and neither rule is taken into the core here; both are §18's questions 4 and 5:
+
+- **CACHE BLOCK** expects a triangle's rows drawn from its middle vertex's row down to its bottom and then from the row
+  above it up to its top, each row left to right, which changes what the texture cache holds after a polygon taller
+  than a cache block (`Diamond_Disputes.md` D-41). Beetle PSX, the only referee with a texture cache, draws the
+  project's `programs/triangle-rows.s` the same way on all seven of its shapes, among them triangles with both parts,
+  which the test does not have. Built so, CACHE BLOCK passes, ps1-tests' eleven pictures stay exact, `dma/chopping`
+  prints byte for byte as before, and `gpu/bandwidth`'s two textured quad rows read 39,915 hblanks where they read
+  39,975 and 39,976 (the console 39,938), their second triangle missing the cache fewer times. Since the step was held
+  to keep `bandwidth`'s output, the change is on the branch `diamond-gpu4-rows`, measured and tested, and not here.
+- **The overflow test** expects a FIFO that keeps its newest 16 words, NOPs and GP0(E6h) words taking places, while the
+  processor holds the first command after the one drawing aside, and GP1(01h) to drop both and stop a fill where it
+  is; that model fits all six of the harness's images, where the cache step's search had found none, missing that the
+  processor discards a NOP before the command it takes aside (D-42). It contradicts §2.1's choice to hold a writer at a
+  full FIFO: 58 of Peter Lemon's programs store to a full FIFO on Diamond's drawing time, and with the oldest word lost
+  the 55 of them in `GPU/` and `CPUTest/` draw 1,280 to 62,881 pixels otherwise at frame 120 (§11's references draw
+  them whole). The five referees draw a fill cut by GP1(01h) whole (`programs/fill-reset.s`). Unchanged.
+
 ## 11. Peter Lemon's GPU programs
 
 The 25 programs of `GPU/16BPP` and `GPU/24BPP`, at frame 120, Diamond's picture against the references' screens through
@@ -499,8 +521,12 @@ by `vertex` and `Texture::new`, which a renderer would share rather than copy.
   where Diamond skips lines only for rendering commands in 480-line mode, §5), and the texture cache's TAG and BLOCK
   groups (the cache's tags and its blocks against the model's; the first cases already differ in which entries a
   page change keeps). None was among the groups this step set out to settle, which were those the first run's record listed (they failed then too); each is left to a step of its own.~~
-  *Since the cache step* (§10.2): the FIFO's overflow test (a FIFO overflowed by the CPU, and GP1(01h) stopping a fill
-  part-drawn, which a fill drawn whole at its start cannot show), and CACHE BLOCK's quad and triangle cases.
+  ~~*Since the cache step* (§10.2): the FIFO's overflow test (a FIFO overflowed by the CPU, and GP1(01h) stopping a fill
+  part-drawn, which a fill drawn whole at its start cannot show), and CACHE BLOCK's quad and triangle cases.~~
+  *Since the rows step* (§10.3): both traced and left to the tester. CACHE BLOCK's cases are the order of a triangle's
+  rows (D-41), built on `diamond-gpu4-rows` and not here because it moves `bandwidth`'s textured quad rows by 60
+  hblanks; the overflow test is a FIFO that keeps its newest words and a fill that GP1(01h) stops (D-42), against
+  Peter Lemon's programs drawn whole and the five referees.
 - The texel pairs' rule (§6) beyond rectangles drawn from an even column, and the odd read's halfword beyond one pixel.
 
 ## 15. Tests run (2026-10-11)
@@ -524,6 +550,12 @@ the GPU's, six of them new and each first seen failing; the state's layout re-pi
 `cargo clippy --all-targets` (clippy 0.1.98) clean but for one warning in `tests/support/records.rs`, not this step's.
 ps1-tests' eleven pictures exact (§9). WiseMan, under the test lock with the corpus and amidog's tests: `DiamondTests`
 20 of 20.
+
+*The rows step (2026-10-12)*: nothing of the core changed here. `cargo test --release`, with `EMUSEN_DIAMOND_PS1TESTS`
+and without: `diamond` 147 unit tests and 59 program tests, two new, both pins of the referees' readings that the
+build before passes too: `a_fill_cut_by_gp1_01h_is_drawn_whole_as_the_referees_draw_it` and
+`the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee`. WiseMan, under the test lock with the corpus:
+the 35 tests named for Diamond, 35 of 35. With stage 11 merged in, 148 unit tests, the same 59, and WiseMan's 40 of 40.
 
 ## 16. Reading log
 
@@ -595,6 +627,29 @@ Every file opened for this stage, as the protocol of `Diamond_Plan.md` §1.3 ask
     name from a listing of the firmware folder, and is named in no committed file; no BIOS byte or BIOS output was
     read, the TTY cut at the test's heading and the RAM read at the programs' own addresses.
 
+- *The rows step, 2026-10-12*:
+  - **psx-spx** `6d7d1bc`, `graphicsprocessingunitgpu.md` again at "GPU I/O Ports", "GP0(00h)", "GP0(03h)",
+    "GP0(04h..1Eh,E0h,E7h..EFh)", the GP1 preamble and "GP1(00h)", "Memory/Rendering Timings" and "GPU Texture
+    Caching"; the whole page searched for words on the order of drawing (none found).
+  - **amidog**: `psxtest_gpu.exe`'s harness, in the cache step's disassembly of the file, at the CACHE BLOCK test
+    (80033100h to 800335A0h: its loops, its six first draws and its compare) and the FIFO overflow test (80031864h
+    to 80031D3Ch: the store loop, the GP1(01h) branch, the image it builds and the next helper); searches of that file
+    for the harness's strings, which print only the lines that load them. The GP0 and GP1 words of both groups as
+    written, logged by a scratch runner, and the harness's images read from RAM at its compare's entry. The model was not read and no
+    indirect call of the wrappers was followed. DuckStation's TTY of the FIFO group from the cache step, again at the
+    overflow test.
+  - **Peter Lemon** `6d20c13`: the release's programs run on Diamond and their VRAM compared between two builds; the GP0
+    words of `CPUADD` as written. No source.
+  - **The references**, as black boxes: the five referees' RAM for `programs/triangle-rows.s` and
+    `programs/fill-reset.s`.
+  - **EmuSen's own**: this page, `Diamond_Plan.md` §1, `Diamond_Disputes.md`, `Diamond_Referees.md`,
+    `Diamond_Records.md` at §14 to §16, the crate's GPU, `bus.rs` at its GP0 store and DMA paths (instrumented in a
+    scratch build to count the stores that wait, then restored), `tests/programs.rs`, `psxreferee.py`, the cache step's
+    scratch runner and search, and the cache's `DOCS.txt`.
+  - **Exposures, stated as the rules ask**: the player's BIOS went to the referees by path only, the file the cache
+    step's script named, and is named in no committed file; no BIOS byte or output was read, the RAM read at the
+    programs' own addresses.
+
 ## 17. Negative results
 
 - No program run here observes the texture cache's staleness; amidog's GPU test, whose menu lists cache tests, waits
@@ -603,8 +658,12 @@ Every file opened for this stage, as the protocol of `Diamond_Plan.md` §1.3 ask
   picture only, and Beetle PSX's pictures of them are displaced.
 - `gpustat` is not in the release; its console log grades a program of the project's own.
 - One single write rate cannot give both `dma/chopping`'s cycles and its busy marks (D-11).
-- *The cache step*: no model of the FIFO tried reproduces amidog's overflow images (D-23); no referee models a FIFO
-  that loses words. The CACHE BLOCK quad and triangle cases were not traced to a rule.
+- *The cache step*: ~~no model of the FIFO tried reproduces amidog's overflow images (D-23)~~ *one does, since the
+  rows step (D-42)*; no referee models a FIFO that loses words. ~~The CACHE BLOCK quad and triangle cases were not
+  traced to a rule.~~ *Traced since the rows step (D-41).*
+- *The rows step*: no referee stops a fill at GP1(01h), and none but Beetle PSX keeps texels in a cache, so no
+  second witness exists for D-41's part order; no program here separates whether a triangle's middle row belongs to
+  its lower part or its upper one.
 - *D-23's step*: no referee reproduces amidog's expectations for REG, the odd read, the texel pairs or the offset's
   placement, so those rules stand on the test alone; PCSX-Redux stopped with an exception in its Lua event listener
   in both runs of the test and witnesses only REG; the libretro cores carry no TTY and were not run on it.
@@ -620,3 +679,11 @@ Every file opened for this stage, as the protocol of `Diamond_Plan.md` §1.3 ask
 3. **D-8, D-10 and D-11** are settled or open on one console's pictures and logs; a program written for each (the
    x-flip's offset at an odd start column; GPUSTAT bit 28 during a polygon; the busy state after a burst) would settle
    them on the tester's console, if one is available (Q16).
+4. **D-41, the order of a triangle's rows** (§10.3), ruled on amidog's expectations and Beetle PSX, passes CACHE BLOCK
+   and keeps every picture and log, but `gpu/bandwidth`'s two textured quad rows read 39,915 hblanks where they read
+   39,975 and 39,976 (the console's log 39,938, both within 0.2%). Take it (merge `diamond-gpu4-rows`, which re-pins
+   the bandwidth record's two rows), or keep `bandwidth`'s output as it is?
+5. **D-42, a CPU write to a full FIFO** (§10.3): keep holding the writer, as Peter Lemon's programs and the referees
+   need, and leave amidog's overflow test failing; or take the model that fits amidog's harness, a store that loses
+   the FIFO's oldest word, with one command decoded ahead and fills drawn line by line, at the cost of Peter Lemon's
+   pictures?

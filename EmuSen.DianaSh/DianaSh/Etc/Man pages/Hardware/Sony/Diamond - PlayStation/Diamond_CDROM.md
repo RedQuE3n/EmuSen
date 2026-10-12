@@ -295,7 +295,7 @@ PSX on `scph5501.bin` through `psxreferee.py pictures`, the referees' own pictur
 | Spyro the Dragon | title by 3,300, held to 6,000; 804 CdRead retries in 3,600 frames | title by 2,400, "Entering demo mode" and the demo by 6,500; no retry | the first logo, held | the intro, title by 3,150, the demo by 7,500 (to frame 8,000) | the intro, title, the demo by 6,000 |
 | Tekken 3 | "NAMCO PRESENTS", title, attract fights; the opening movie skipped | the same | the first logo, held | the intro, then as the open kernel | the opening movie, then title and attract |
 | Rayman | the Ubi Soft logo and its opening movie | the same, every picture identical | the first logo, held | the intro, the logo and the movie | the same |
-| Ape Escape | its DUALSHOCK screen, then white from 1,500 | the same pictures | the first logo, held | the intro, then as the open kernel | Beetle PSX: the DUALSHOCK screen, then its polygon intro; SwanStation: its "not plugged into port 1" screen (§4.13 there) |
+| Ape Escape | its DUALSHOCK screen, then white from 1,500 | the same pictures | the first logo, held | the intro, then as the open kernel | Beetle PSX: the DUALSHOCK screen, then its polygon intro; SwanStation: its "not plugged into port 1" screen (§4.14 there) |
 | Silent Hill | the content warning, Konami and KCET logos, the card warning, then black | the same | the first logo, held | the intro, then as the open kernel | the opening movie from 1,950 |
 | Castlevania: SotN | black throughout | the same, every picture identical | the first logo, held | the intro, then black | the movie, the Konami logo, its title by 1,650 |
 

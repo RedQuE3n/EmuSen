@@ -460,7 +460,37 @@ PCSX-ReARMed repeats a longer transfer's first word, as the model; nothing repea
 transfer but the model. Beetle PSX and PCSX-ReARMed read a one-pixel transfer's second halfword as the pixel after,
 as D-23's odd read has it, where DuckStation, SwanStation and PCSX-Redux pad it with zero.
 
-### 4.13 D-29 and D-43: DICR's edge and a channel beside a list — `dicr-edge.s`, `dicr-storm.s`, `dma-beside.s`, and the discs' pictures
+### 4.13 D-41 and D-42: the order of a triangle's rows, and a fill cut by GP1(01h) — `triangle-rows.s`, `fill-reset.s`
+
+*Added 2026-10-12, at the GPU's rows step* (`Diamond_Disputes.md` D-41, D-42). Each program side-loaded on the five
+referees by `psxreferee.py ram`, the player's BIOS given by path, NTSC, and read from RAM; each finished on every
+referee (D1A0D00Eh written) [M].
+
+**`triangle-rows.s`**: a 4-bit page at 256,0 filled with texels 1 and the cache cleared, a raw textured shape drawn
+with U = 40h + x and V = 40h + y, the page filled with texels 2, and a 64x64 rectangle from 40h,40h read back at its
+columns 0, 16, 32 and 48, one per cache entry; the lines on which the rectangle found the entry kept (texel 1):
+
+| Shape | Beetle PSX, columns 0 / 16 / 32 / 48 | Diamond as built | Diamond, D-41's rule |
+|---|---|---|---|
+| 1, flat at the bottom: (64,0) (0,72) (64,72) | 56-63 / 38-63 / 20-63 / 2-63 | the same but 8-63 in the last | as Beetle PSX |
+| 2, flat at the top: (0,0) (64,0) (0,72) | 8-63 / 0-53 / 0-35 / 0-17 | as Beetle PSX | as Beetle PSX |
+| 3, the middle vertex low on the left: (32,0) (0,72) (64,80) | 39-63 / 3-63 / 1-63 / 41-63 | 12-63 and 14-63 in the middle two | as Beetle PSX |
+| 4, low on the right: (32,0) (64,72) (0,80) | 43-63 / 3-63 / 1-63 / 37-63 | 14-63 and 12-63 in the middle two | as Beetle PSX |
+| 5, high on the left: (32,0) (0,8) (64,80) | 5-24 / 1-42 / 1-60 / 41-63 | as Beetle PSX | as Beetle PSX |
+| 6, shape 3 in another vertex order | as shape 3 | as shape 3 | as Beetle PSX |
+| 7, a quad: (0,0) (64,0) (0,72) (64,72) | 8-63 / 8-63 / 8-63 / 2-63 | the same but 8-63 in the last | as Beetle PSX |
+
+DuckStation, SwanStation, PCSX-ReARMed and PCSX-Redux read texel 2 on every line of every shape: no cache. Beetle PSX
+reads as a triangle drawn from its middle vertex's row down and then from above it upward, the lower part first; the
+upper part first gives shapes 3, 4 and 6 otherwise (lines 8 to 11 or 13 of columns 16 and 32 fresh), and a reversal of only
+the triangles flat at the bottom gives them as built [M, the orders tried on Diamond].
+
+**`fill-reset.s`**: four white fills of 240x511 at x 0, 256, 512 and 768, each written by the CPU and followed after
+a loop of 0, 100, 400 or 1,600 turns by GP1(01h), column 0 of each read back: all 511 lines white in all four on all
+five referees, as on Diamond. None stops a fill at GP1(01h), where amidog's overflow test expects one stopped after
+some five lines.
+
+### 4.14 D-29 and D-43: DICR's edge and a channel beside a list — `dicr-edge.s`, `dicr-storm.s`, `dma-beside.s`, and the discs' pictures
 
 *Added 2026-10-12.* Three programs of the project's own, side-loaded on all five as in §2.4, run with the player's BIOS
 given as each referee's firmware [M]:

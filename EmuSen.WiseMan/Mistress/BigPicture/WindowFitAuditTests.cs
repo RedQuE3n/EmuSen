@@ -289,7 +289,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     ShowCustomCrop(window);
                     break;
                 case "GraphicsSettingsPlayStation":
-                    ShowDiscoveredTab(window, "PlayStation", development: true);
+                    ShowDiscoveredTab(window, "PlayStation");
                     break;
                 case "ShaderSettingsPlayStation":
                     Call(window, "ShowShaderSettings");
@@ -581,9 +581,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             string name = $"{which}-{width}x{height}";
             // A console only a discovered engine runs has its tabs and shelf with no core in development shown, as a player's build has them - see EmuSen_Settings_Reference.md §4.94.
-            if (which.Contains("Genesis", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
-            // The PlayStation's are shown only where development cores are, since Diamond stays marked until its firmware gate - see EmuSen_Settings_Reference.md §4.105.
-            if (which.Contains("PlayStation", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(true);
+            if (which.Contains("Genesis", StringComparison.Ordinal) || which.Contains("PlayStation", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),

@@ -142,17 +142,19 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(CoreFactory.IsSupported("game.cue"), "the host passes a sheet's tracks beside it");
         }
 
-        // The core carries the development mark of EmuSen_CoreAPI.md §27 until the tester offers the PlayStation.
+        // Offered to players since stage 11, once G9's open BIOS held: the sidecar unmarked, the console, its files and settings in a player's build - see Diamond_Players.md §8.
         [Fact]
-        public void A_player_is_not_offered_the_core_in_development()
+        public void A_player_is_offered_the_playstation()
         {
-            Assert.True(CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))?.Development, "the build writes the sidecar marked for development");
+            Assert.False(CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))?.Development, "the build writes the sidecar unmarked");
             CoreDiscovery.UseDevelopment(false);
-            Assert.DoesNotContain(CoreDiscovery.Found, c => c.Info.Id == "diamond");
-            Assert.All(PsxSystem.Entry.Extensions.Where(e => e != ".bin"), e => Assert.False(CoreFactory.IsSupported("program" + e)));
-            Assert.Equal("Genesis", CoreCatalog.ConsoleForRom("program.bin"));
-            Assert.DoesNotContain("PlayStation", CoreCatalog.DiscoveredConsoles);
-            Assert.Empty(CoreCatalog.SettingsFor("PlayStation"));
+            Assert.Contains(CoreDiscovery.Found, c => c.Info.Id == "diamond");
+            Assert.All(PsxSystem.Entry.Extensions, e => Assert.True(CoreFactory.IsSupported("program" + e), e));
+            Assert.Equal("PlayStation", CoreCatalog.ConsoleForRom(Write("program.bin", SyntheticPsxDisc.Build().DataTrack)));
+            Assert.Contains("PlayStation", CoreCatalog.DiscoveredConsoles);
+            Assert.Equal(new[] { "region", "gpu", "pad1", "pad2", "tap1", "tap2", "card1", "card2" }, CoreCatalog.SettingsFor("PlayStation").Select(s => s.Key));
+            var bios = CoreLibrary.Open(LibraryPath).Info.Systems.Single().Firmware;
+            Assert.All(bios, f => Assert.Equal(("accuracy", false), (f.Replacement?.Effect, f.Required)));
         }
 
         // The gate of Diamond_Plan.md §7's stage 1: the kit's cases on a synthetic program and a synthetic disc, single-image form, MEDIA's C16 among them since stage 11.

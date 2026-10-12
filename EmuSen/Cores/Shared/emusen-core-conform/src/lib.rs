@@ -645,10 +645,12 @@ fn firmware_optional(s: &mut Session<'_>, c: &mut Check) {
             c.that(effect == "exact" || !cost.trim().is_empty(), || format!("{name}: a replacement short of exact needs its cost"));
         }
     }
+    // An image set's companions are the image's, not firmware, so they stay (EmuSen_CoreAPI.md §6.23).
+    let companions: Vec<(u32, Vec<u8>)> = s.opts.files.iter().filter(|f| f.0 >= emusen_native::core::flags::FILE_MEDIA).cloned().collect();
     if list.iter().all(|f| matches!(f.get("required"), Some(Value::Bool(false)))) {
-        match s.lib.create(&image, "", &[], 1) {
-            Ok(_) => c.note(format!("every firmware entry optional ({}): created with no files", list.len())),
-            Err((status, text)) => c.that(false, || format!("every firmware entry is optional, yet create with no files refused: {status}, {text:?}")),
+        match s.lib.create(&image, "", &companions, 1) {
+            Ok(_) => c.note(format!("every firmware entry optional ({}): created with no firmware files", list.len())),
+            Err((status, text)) => c.that(false, || format!("every firmware entry is optional, yet create with no firmware files refused: {status}, {text:?}")),
         }
     }
 }

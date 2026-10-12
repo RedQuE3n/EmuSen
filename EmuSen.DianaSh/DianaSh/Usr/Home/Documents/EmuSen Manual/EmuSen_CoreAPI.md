@@ -2763,6 +2763,32 @@ On the development desktop (16 processors), 600 frames, Nephrite's release libra
 
 ---
 
+### 28.7 Discs: image sets, C16 and the memory per image (2026-10-11)
+
+*At Diamond's stage 11.* Three changes to the kit, each in its own place:
+
+- **Image sets** (the `media` module, over `emusen-disc`'s set module): `--image` and every `--images` entry that is a
+  `.cue` bring the files its `FILE` lines name as `EMUSEN_FILE_MEDIA + n` and an `.sbi` beside it; an `.m3u` is its
+  first disc. C4's firmware rule creates "with no firmware files" and keeps those companions, which are the image's;
+  before, it created with no files at all, and every sheet failed C4 on the companions it had not been given.
+- **C16, media** (§6.23), run with the image cases where `MEDIA` is claimed and nowhere else, so that no other core's
+  count of cases moved: an insert with the lid closed refused; the lid opened, the same disc inserted and the lid closed,
+  frames run; a state made then refused over an empty drive with `WRONG_MEDIA` and the machine unchanged, accepted
+  after `RESTORE` puts the disc back; a drive machine info does not list refused. An image with an empty drive, a
+  program, has the lid and an empty insert checked alone.
+- **The memory per image** (`EmuSen_CoreAPI_Extensions.md` §7): `estimate(len) = JOB_MEMORY + 4 × len`, the image's
+  length being its files' together; the images admitted by their estimates within the memory allowed less the core's
+  own job, one larger than all of it run alone; `--image-memory` names another factor; `summary.json` records
+  `memory.allowed`, `memory.largest_admitted` and `memory.peak_resident`.
+
+**Measured** on Diamond's sample (`kit/psx-sample.txt`, nine of the tester's discs from the probe's cache, every form
+the library holds: four sheets, one of 51 tracks, two lone dumps, a "(Track 1)" file, two unpacked from zips), 600
+frames, under a 10 GiB `MemoryMax`, no firmware folder: the core's cases pass and 9 of 9 discs pass C4, C6, C7, C8, C14
+and C16, in 42.8 s, nine at a time. The largest sum of estimates admitted was 10.36 GB of 10.47 GB allowed; the peak
+resident memory was 8.82 GB, below it, so P2 holds on this run. The kit's own tests pass, 7, 0 and 15, one of them, the
+C13 fault case, failing about one run in three on the base commit and after this change alike, its info drift
+sometimes missed by its four threads; it is not this change's and was not chased.
+
 ## 29. A space that is a view, 2026-10-07
 
 ### 29.1 The flag

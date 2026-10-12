@@ -177,7 +177,11 @@ namespace EmuSen.Crystal.Systems.Psx
         // A code whose types are all the Datel device's is a GameShark code, 3 and 8 meaning the same on both; any other the Xploder's.
         public static bool IsEither(string code) => IsGameShark(code) || IsXploder(code);
 
-        public static IReadOnlyList<CheatWrite> EitherWrites(string code) => IsGameShark(code) ? GameSharkWrites(code) : XploderWrites(code);
+        public static IReadOnlyList<CheatWrite> EitherWrites(string code) =>
+            IsGameShark(code) ? GameSharkWrites(code) : IsXploder(code) ? XploderWrites(code)
+            : throw new FormatException(code.Contains('?') || code.Any(c => c is 'x' or 'X' or 'y' or 'Y')
+                ? $"'{code}' holds a placeholder for a value the player picks; put the value itself in its place."
+                : $"'{code}' is neither a PlayStation GameShark nor an Xploder code: lines of eight and four hex digits (TTAAAAAA VVVV).");
 
         // ---- Shared ------------------------------------------------------------------------------------------------
 

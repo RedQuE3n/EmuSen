@@ -15,14 +15,14 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // The library with the PlayStation shelf present, a lone .bin routed to it by its content, at 1280 by 800 and 1920 by 1200, with development cores shown since Diamond stays marked until G9 - see EmuSen_Settings_Reference.md §4.105.
+    // The library with the PlayStation shelf present, a lone .bin routed to it by its content, at 1280 by 800 and 1920 by 1200, as a player's build has it - see EmuSen_Settings_Reference.md §4.105.
     public partial class WindowFitAuditTests
     {
         [Theory]
         [MemberData(nameof(Sizes))]
         public Task The_sidebar_with_the_playstation_shelf_is_whole_and_nothing_on_it_overlaps(int width, int height) => Session.Dispatch(() =>
         {
-            CoreDiscovery.UseDevelopment(true);
+            CoreDiscovery.UseDevelopment(false);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             File.WriteAllBytes(Path.Combine(_romDir, "Cobalt Harbor (Synthetic).sfc"), SyntheticRom.BuildBlank());
@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [MemberData(nameof(Sizes))]
         public Task The_system_carousel_with_the_playstation_shelf_is_whole_on_every_system(int width, int height) => Session.Dispatch(() =>
         {
-            CoreDiscovery.UseDevelopment(true);
+            CoreDiscovery.UseDevelopment(false);
             try
             {
                 using var theme = new SyntheticTheme();

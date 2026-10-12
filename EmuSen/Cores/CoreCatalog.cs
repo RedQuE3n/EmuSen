@@ -199,11 +199,15 @@ namespace EmuSen.Cores
         public static (CoreDescriptor? Core, Crystal.Systems.Routed? Routed) Route(string romPath)
         {
             string extension = ImageExtension(romPath);
-            var candidates = Cores.Where(c => c.SupportsExtension(extension)).ToArray();
-            if (candidates.Length <= 1) return (candidates.FirstOrDefault(), null);
-            var entries = candidates.Select(c => (Core: c, Entry: PackOf(c.Console))).ToArray();
-            var routed = Crystal.Systems.SystemRouting.Decide(romPath, entries.Select(e => e.Entry).OfType<Crystal.Systems.SystemEntry>().ToArray(), () => Crystal.Media.MediaProbe.Of(romPath, IsImageExtension));
-            return (entries.FirstOrDefault(e => e.Entry is not null && ReferenceEquals(e.Entry, routed.System)).Core, routed);
+            var rows = Cores.Where(c => c.SupportsExtension(extension)).Select(c => (Core: (CoreDescriptor?)c, Entry: PackOf(c.Console))).ToList();
+            // A system an engine offers in development has no row, and is a candidate all the same where development cores are shown.
+            foreach (var pack in Native.CoreDiscovery.ForExtension(extension).SelectMany(c => c.Info.Systems.Where(s => Native.CoreDiscovery.Offered(s) && s.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase))))
+                if (Crystal.Systems.SystemPacks.For(pack.Id)?.Entry is { } entry && ConsoleForSystem(entry.Id) is null && !rows.Any(r => ReferenceEquals(r.Entry, entry) || r.Core?.Console == entry.Console)
+                    && entry.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+                    rows.Add((null, entry));
+            if (rows.Count <= 1) return (rows.FirstOrDefault().Core, rows.Count == 1 && rows[0].Core is null ? new Crystal.Systems.Routed(rows[0].Entry, null, null) : null);
+            var routed = Crystal.Systems.SystemRouting.Decide(romPath, rows.Select(e => e.Entry).OfType<Crystal.Systems.SystemEntry>().ToArray(), () => Crystal.Media.MediaProbe.Of(romPath, IsImageExtension));
+            return (rows.FirstOrDefault(e => e.Entry is not null && ReferenceEquals(e.Entry, routed.System)).Core, routed);
         }
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> ColorByPath = new();
@@ -335,7 +339,9 @@ namespace EmuSen.Cores
         // The system of an engine's info a file runs as, routed by content where the engine has several systems of its extension's consoles.
         public static Native.CoreSystem? SystemOfFile(string romPath, Native.CoreInfo info)
         {
-            if (CoreForRom(romPath) is { } core && PackOf(core.Console) is { } pack && info.Systems.FirstOrDefault(s => s.Id == pack.Id) is { } routed) return routed;
+            var (core, decision) = Route(romPath);
+            string? id = decision?.System?.Id ?? (core is not null ? PackOf(core.Console)?.Id : null);
+            if (id is not null && info.Systems.FirstOrDefault(s => s.Id == id) is { } routed) return routed;
             return info.SystemFor(ImageExtension(romPath));
         }
 

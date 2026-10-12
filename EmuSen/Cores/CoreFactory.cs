@@ -37,9 +37,8 @@ namespace EmuSen.Cores
     // The one place a ROM path turns into a running core - see EmuSen_Multicore.md §2.
     public static class CoreFactory
     {
-        // A file some console opens: by its extension, an archive's by its image entry's, and where several consoles take it, by its content - see EmuSen_CoreAPI_Extensions.md §8.4.
-        public static bool IsSupported(string romPath) =>
-            CoreCatalog.CoreForRom(romPath) is not null || (CoreCatalog.Cores.All(c => !c.SupportsExtension(Extension(romPath))) && Native.CoreDiscovery.ForExtension(Extension(romPath)).Any());
+        // A file of an extension some console opens, an archive's by its image entry's; which console is CoreCatalog.Route's, by content - see EmuSen_CoreAPI_Extensions.md §8.4.
+        public static bool IsSupported(string romPath) => CoreCatalog.IsImageExtension(Extension(romPath));
 
         // <headless> only means anything to a core that owns a window-ish resource; <engine> is a CoreCatalog.EngineFor name, and null is the reference core, not the player's default - see EmuSen_Settings_Reference.md §4.44.
         public static ICore Create(string romPath, bool headless = true, string? engine = null) =>
@@ -66,7 +65,10 @@ namespace EmuSen.Cores
         private static Native.CoreLibrary? V1Library(string romPath, string? engine)
         {
             string extension = Extension(romPath);
-            var routed = CoreCatalog.CoreForRom(romPath) is { } core && CoreCatalog.IsDiscovered(core) ? Crystal.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console)?.Entry.Id : null;
+            // A file several consoles take and none recognises opens nowhere, in the decision's words, rather than on whichever engine is first.
+            var (core, decision) = CoreCatalog.Route(romPath);
+            if (engine is null && core is null && decision is { System: null, Reason: { } why }) throw new NotSupportedException(why);
+            var routed = decision?.System?.Id ?? (core is not null && CoreCatalog.IsDiscovered(core) ? Crystal.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console)?.Entry.Id : null);
             var found = engine is not null ? Native.CoreDiscovery.ForExtension(extension).FirstOrDefault(c => c.EngineName == engine)
                 : CoreCatalog.IsCatalogExtension(extension) ? null
                 : routed is not null ? Native.CoreDiscovery.ForSystem(routed).FirstOrDefault(c => !CoreCatalog.IsRegisteredEngine(c.EngineName))

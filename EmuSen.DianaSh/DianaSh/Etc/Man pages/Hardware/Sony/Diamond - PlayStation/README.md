@@ -1,8 +1,8 @@
 # Diamond (Sony PlayStation)
 
 The PlayStation core, written in Rust from hardware documents under a clean-room protocol, on the core ABI v1 from
-its first commit (`EmuSen/Cores/Sony/Diamond - PlayStation/`, crate `diamond`), and marked in development until its
-gate. At stage 1 (2026-10-11) it recognises a PS-EXE or a disc and shows a black picture; at stage 2 (the same day)
+its first commit (`EmuSen/Cores/Sony/Diamond - PlayStation/`, crate `diamond`), marked in development until its
+gate and offered to players since stage 11. At stage 1 (2026-10-11) it recognises a PS-EXE or a disc and shows a black picture; at stage 2 (the same day)
 its R3000A was built and passes the r3000 single-step suite; at stage 3 the bus, its timing and the devices beside
 the CPU run it, on the open kernel or a player's own BIOS, and ps1-tests' CPU, DMA and timer programs pass by their
 TTY; at stage 4 the GPU draws, ps1-tests' GPU programs' VRAM equals their pictures, and the display is the picture;
@@ -12,7 +12,7 @@ through the shared crate `emusen-disc`, and games boot to their title screens th
 stage 9 the MDEC decodes, ps1-tests' MDEC programs' VRAM equals their pictures but for the rounding D-30 leaves open,
 and a game's opening movie plays; at stage 8, built after it, the SPU plays, its voices as its capture buffers record
 them equal to DuckStation's sample for sample, and ps1-tests' SPU programs pass; at stage 10 the open kernel boots
-discs by their SYSTEM.CNF and keeps files on memory cards in their on-card format, with no firmware folder. At stage 12 the generic debugger runs on it: breakpoints, stepping, watches, coverage and the call stack on the R3000A, the GTE's registers, and code listed with the GTE's names. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
+discs by their SYSTEM.CNF and keeps files on memory cards in their on-card format, with no firmware folder. At stage 12 the generic debugger runs on it: breakpoints, stepping, watches, coverage and the call stack on the R3000A, the GTE's registers, and code listed with the GTE's names. At stage 11 it reached players: a disc routed to it by its content, a sheet's tracks and an `.m3u`'s discs passed by the runtime, zipped discs unpacked for play, the disc changed through its lid under the core ABI's minor 1.1, its cheats, settings, cards, pads drawn, shelf and CRT row, and the kit passing on the tester's discs. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
 
 - [`Diamond_Plan.md`](Diamond_Plan.md) — the plan, written 2026-10-10 before any emulation: the machine in scope and
   how accurate each part must be (the R3000A with its cache and scratchpad, the GTE exact, DMA, timers, interrupts, a
@@ -36,6 +36,11 @@ discs by their SYSTEM.CNF and keeps files on memory cards in their on-card forma
 state's version 6, the gate item by item; and stage 9 (§16): the MDEC, DMA channels 0 and 1, the state's version 7,
 the gate; and stage 8 (§17): the SPU, the audio path, DMA4, the state's version 8, the gate; and stage 10 (§18): the
 open kernel's second phase, the gate with the tester's games booting with no firmware folder and a save loaded back. And stage 12 (§19): the debugger, its gate.
+- [`Diamond_Players.md`](Diamond_Players.md) — stage 11, written 2026-10-11: routing by content and the recognisers,
+  image sets with the core ABI's `EMUSEN_FILE_MEDIA` and the platform library's set calls, archives unpacked into
+  Galaxia's `Unpacked` folder, the disc change (`MEDIA`, minor 1.1) with the state's fingerprint (version 9), the
+  cheats, settings and cards, the pads drawn, the shelf and the CRT row, the kit on nine of the tester's discs, the gate
+  item by item, the PlayStation offered to players, and what waits.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

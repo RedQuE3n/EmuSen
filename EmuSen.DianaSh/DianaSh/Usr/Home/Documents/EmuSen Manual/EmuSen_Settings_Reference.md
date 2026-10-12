@@ -8438,3 +8438,13 @@ row is built only where `CoreEngine.CanChangeDisc` holds and the game has more t
   image. Where neither recognises it, a folder named for one of them (`genesis`, `psx`, as ES-DE names them) decides,
   and otherwise the file opens nowhere and says why, naming the folders that would decide it. A chooser asking the
   player is not built (`EmuSen_CoreAPI_Extensions.md` §8.4's last step).
+
+### 4.108 The PlayStation offered to players (2026-10-11)
+
+*Decided 2026-10-11: the PlayStation is offered to players* (`Diamond_Plan.md` §8, `Diamond_Players.md` §8), its
+stage 11 gate and its firmware gate G9 met. Diamond's build no longer marks the core in development, so every build
+has §4.105's shelf, tabs, pads and cheats, §4.106's Change Disc, the firmware page's Sony PlayStation row with its three
+optional BIOS files and the open BIOS in their place, and `.cue`, `.bin`, `.iso`, `.chd`, `.m3u`, `.psexe` and `.psx`
+opened by Diamond, a `.bin` or `.iso` by its content (§4.107). The kit on the tester's discs, the cards' round trip,
+the fit audit and the cheats' decode are its tests.
+

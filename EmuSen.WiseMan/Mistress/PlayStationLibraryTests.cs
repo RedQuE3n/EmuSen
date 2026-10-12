@@ -18,7 +18,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // A zipped disc and a lone track from the library's forms, opened from Mistress's library with the pad as a player opens them, headless; Diamond's development mark shown - see EmuSen_Settings_Reference.md §4.105.
+    // A zipped disc and a lone track from the library's forms, opened from Mistress's library with the pad as a player opens them, headless, in a player's build - see EmuSen_Settings_Reference.md §4.105.
     [Collection(TestCollections.ProcessGlobals)]
     public class PlayStationLibraryTests : IDisposable
     {
@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_romDir);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(true);
+            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()

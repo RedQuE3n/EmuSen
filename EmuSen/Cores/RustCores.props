@@ -18,7 +18,6 @@
       <Console>the PlayStation</Console>
       <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
-      <InDevelopment>true</InDevelopment>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="marsrt">
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MarsRT - N64\</Dir>

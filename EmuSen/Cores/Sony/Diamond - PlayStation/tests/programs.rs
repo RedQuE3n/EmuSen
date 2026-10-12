@@ -1334,3 +1334,13 @@ fn channel_6_runs_beside_a_list_that_waits_or_walks() {
         assert_eq!(r[5..], [2, 0x00FF_FFFF, 0x0000_0401], "{what}: once the list has ended");
     }
 }
+
+// --- A narrow store to a 32-bit register (Diamond_Native.md §11.2) ---
+
+/// A byte or halfword store to a 32-bit register at an address not word-aligned writes the whole register, the store's
+/// word shifted to its byte (psx-spx "(w32)"), so that `sb` to DICR's third byte sets the channels' interrupt enables.
+#[test]
+fn a_narrow_store_writes_its_register_shifted_to_its_byte() {
+    let m = run(include_str!("../programs/narrow-stores.s"));
+    assert_eq!(results(&m, 0x10_0000, 7), [0x0088_0000, 0x0044_0000, 0x0000_0B00, 0, 0x1234, 0x0500, 0x0012_0000]);
+}

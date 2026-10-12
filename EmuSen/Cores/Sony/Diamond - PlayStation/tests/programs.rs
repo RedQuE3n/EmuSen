@@ -1297,6 +1297,7 @@ fn the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee() {
     let rows = kept_rows(&m);
     assert_eq!(rows[1], [(8, 63), (0, 53), (0, 35), (0, 17)]);
     assert_eq!(rows[4], [(5, 24), (1, 42), (1, 60), (41, 63)]);
+}
 
 // ---- Stage 13, speed (Diamond_Speed.md) ---------------------------------------------------------------------------
 

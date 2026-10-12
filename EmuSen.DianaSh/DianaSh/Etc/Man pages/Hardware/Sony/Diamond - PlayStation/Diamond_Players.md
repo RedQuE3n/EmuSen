@@ -1004,7 +1004,7 @@ its corridor and a fight with Reaverbots (§27.6).
 
 *Written 2026-10-12, on WiseMan `6141ad60`.* The tester played on the handheld and reported two faults: in Crash
 Bandicoot "weird graphical artifacts to the right of the screen in game", and in Mega Man Legends, "after Roll said
-some dialogue in game. it wouldnt close the dialogue box", the session closed by hand. The second ran on the player's
+some dialogue in game. it wouldnt close the dialogue box", the game closed by hand. The second ran on the player's
 own BIOS (`scph5501.bin`) with one cheat on, "Infinite Life", the GameShark code `800B521E 00C4`, at a steady 60
 frames a second for ten minutes; its log holds pacing lines only. The marks are §12's; [M] is measured on this date.
 
@@ -1065,7 +1065,7 @@ frames a second for ten minutes; its log holds pacing lines only. The marks are 
   picture as Diamond's. The box closes only with Right, then Cross on No, which is what `mega-man-legends.txt` does.
   This is the game's own prompt, and the course SwanStation follows; it is the fault the tester described as far as
   the description goes ("after Roll said some dialogue in game", a box that will not close, a game running at full
-  pace), but the session itself was not recorded, so that it is the same box is an inference [A].
+  pace), but the tester's play itself was not recorded, so that it is the same box is an inference [A].
 - **The cheat's part**: none: the decoded write is the code's, and the referee loops without it.
 - **Not reached**: the game past the first ruin's corridors (about frame 14,000 of the script, Mega Man in the second
   corridor after the first Reaverbots); any clip of the game's 47 other XA files.

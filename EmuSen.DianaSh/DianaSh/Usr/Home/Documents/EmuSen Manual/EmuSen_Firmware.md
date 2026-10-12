@@ -87,6 +87,13 @@ Because `Install` copies into the library, this is a once-ever prompt per chip, 
 system, each file an engine can use, whether EmuSen's open version or the player's own file is running, what the open
 version changes, and the folder a file goes in. It lists and explains; it installs, fetches and asks for nothing.
 
+*Since 2026-10-12* the question itself reads no image where it cannot find anything to prompt for: for a v1 engine,
+`EmulatorSession.MissingFirmwareFor` asks `CoreEngine.RequiredFirmwareFor`, which answers empty without the image when
+every system of the core's info lists its firmware and none of it is required, since those lists name every file
+`firmware_for` can (`EmuSen_CoreAPI.md` §6.3); any other info reads the image as before. The load still asks
+`firmware_for` of the image and passes what it names. A PlayStation disc of 600 MB had been read whole, and a zip
+unpacked, before every launch only to learn of an optional BIOS (`Diamond_Players.md` §12.8).
+
 **`EmuSen.Hotaru`** (Avalonia, but shell-driven) — no OS picker; ROMs arrive from the DianaSh shell. It gets the log path below.
 
 **`EmuSen.Pharaoh`** (headless CLI, including its no-ROM `--singlestep`/`--diffshot`/`--tracediff` verbs) — must never block on a prompt. It gets the log path too.

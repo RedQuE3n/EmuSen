@@ -601,13 +601,13 @@ impl Board {
     }
 
     /// The channel that is moving, if it is between two pieces of a list or of a transfer in blocks with the bus let
-    /// go, where another channel may begin (Diamond_Disputes.md D-41).
+    /// go, where another channel may begin (Diamond_Disputes.md D-43).
     fn dma_between_pieces(&self) -> Option<usize> {
         self.dma.active.filter(|&n| self.dma.ch[n].sync() != 0 && !self.dma.finishing && self.bus_free <= self.now)
     }
 
     /// Starts the first-ranked ready channel if none is moving. A channel between two of its pieces steps aside for
-    /// another that is ready, and is arbitrated again when that one ends (D-41).
+    /// another that is ready, and is arbitrated again when that one ends (D-43).
     fn dma_kick(&mut self) {
         let aside = self.dma_between_pieces();
         if self.dma.active.is_some() && aside.is_none() {

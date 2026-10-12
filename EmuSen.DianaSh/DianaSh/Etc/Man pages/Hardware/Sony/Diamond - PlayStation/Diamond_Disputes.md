@@ -20,7 +20,7 @@ the changes it led to; no new number was taken for it.
 which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
 *Stage 9 (2026-10-11)* took D-30 to D-33, the MDEC's; the SPU's stage 8, built after it was merged, took D-34 to D-40, and
 added its step to D-29.
-*The intro's step (2026-10-12)* settled D-29 and took D-41, the DMA's arbitration beside a list, and D-42, the European
+*The intro's step (2026-10-12)* settled D-29 and took D-43, the DMA's arbitration beside a list, and D-44, the European
 BIOS that draws nothing.
 
 ## The rules this log keeps
@@ -1011,8 +1011,8 @@ BIOS that draws nothing.
   from power-on), the intro's frames 30–900 within 1.8–1.9 grey levels of SwanStation's nearest frame and 3.6–4.1 of
   Beetle PSX's on 160×120 grey, and each game then goes as far as on the open kernel (`Diamond_CDROM.md` §9.4). Of the
   folder's other revisions on Crash Bandicoot's disc, eight still stopped after this change alone (among them
-  `scph5500.bin`, SCPH-1001, SCPH-1002 and SCPH-5552), on D-41; with both changes every revision but `scph5502.bin`
-  (D-42) leaves the first screen, the Japanese ones for their shell's menu, the disc being American (psx-spx "BIOS
+  `scph5500.bin`, SCPH-1001, SCPH-1002 and SCPH-5552), on D-43; with both changes every revision but `scph5502.bin`
+  (D-44) leaves the first screen, the Japanese ones for their shell's menu, the disc being American (psx-spx "BIOS
   CDROM Boot": the BIOS refuses "games for other regions").
 
 ### D-30. The MDEC's arithmetic where psx-spx says it does not know it: each IDCT pass truncated toward zero with three and then four fraction bits kept, the 15-bit pixel rounded from that fraction, the colour factors at twelve bits
@@ -1227,7 +1227,7 @@ BIOS that draws nothing.
 - **Pinned by:** the capture record's pin (T1, T8).
 - **Implemented in:** stage 8's commits on `diamond-s8`.
 
-### D-41. The DMA's arbitration: a channel between two pieces of a list or of blocks lets another ready channel run, whichever DPCR ranks first
+### D-43. The DMA's arbitration: a channel between two pieces of a list or of blocks lets another ready channel run, whichever DPCR ranks first
 
 - **Opened:** 2026-10-12, by D-29's step: with DICR's edge fixed, eight revisions in the firmware folder still stopped
   at the end of the first screen, `scph5500.bin`'s every frame's registers showing channel 2 started on a list (`01000401h`, MADR fixed
@@ -1262,11 +1262,11 @@ BIOS that draws nothing.
 - **Pinned by:** `channel_6_runs_beside_a_list_that_waits_or_walks`, failing before the change.
 - **Implemented in:** `bus.rs`'s `dma_between_pieces`, in the commit citing this entry.
 
-### D-42. `scph5502.bin` draws nothing: the European BIOS of the declared names stops in its first frames on Diamond
+### D-44. `scph5502.bin` draws nothing: the European BIOS of the declared names stops in its first frames on Diamond
 
 - **Opened:** 2026-10-12, by D-29's step: given `scph5502.bin` (and the folder's other copy under another name, which
   behaves alike), Diamond's screen never changes from power-on to frame 3,000, with Crash Bandicoot's disc or none and
-  the console's market European or American, before and after D-29's and D-41's changes. Beetle PSX boots the same
+  the console's market European or American, before and after D-29's and D-43's changes. Beetle PSX boots the same
   file through its intro to the game [M, pictures]; SwanStation drew no screen in that run. The folder's two other PAL
   revisions (SCPH-7502, SCPH-5552) pass the intro on Diamond.
 - **What the registers show** [M, frame boundaries only]: from frame 5 nothing moves: POST reads 07h, as on

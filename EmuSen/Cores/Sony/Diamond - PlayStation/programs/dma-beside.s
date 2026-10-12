@@ -1,4 +1,4 @@
-# Whether channel 6 runs beside channel 2's list (Diamond_Disputes.md D-41). Channel 2 is given a list and channel
+# Whether channel 6 runs beside channel 2's list (Diamond_Disputes.md D-43). Channel 2 is given a list and channel
 # 6 is then started over sixteen words filled with 5A5A5A5Ah. Cases 0 and 1: four rectangles of 1023x511, which keep
 # the GPU drawing and channel 2 waiting for its request. Cases 2 and 3: 4,096 nodes of no words, which channel 2
 # walks with nothing to wait for. Cases 0 and 2 rank channel 2 above channel 6 in DPCR (3 against 7, as a program

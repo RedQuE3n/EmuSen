@@ -1290,7 +1290,7 @@ fn a_dicr_write_with_a_flag_left_up_does_not_ask_again() {
     assert_eq!(results(&m, 0x10_0000, 3), [1, 0xC0C8_0000, 0], "the handler's runs, DICR and I_STAT's bit 3");
 }
 
-// --- D-41: a channel started beside channel 2's list (Diamond_Disputes.md D-41) ---
+// --- D-43: a channel started beside channel 2's list (Diamond_Disputes.md D-43) ---
 
 /// Channel 6, started while channel 2's list waits for the GPU or is between two of its nodes, runs at once whichever
 /// DPCR ranks first, as the referees of three lineages have it: its table is written and its CHCR idle with the list

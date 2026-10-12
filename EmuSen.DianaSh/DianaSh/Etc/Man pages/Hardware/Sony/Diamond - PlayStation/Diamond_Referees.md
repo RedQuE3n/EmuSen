@@ -460,7 +460,7 @@ PCSX-ReARMed repeats a longer transfer's first word, as the model; nothing repea
 transfer but the model. Beetle PSX and PCSX-ReARMed read a one-pixel transfer's second halfword as the pixel after,
 as D-23's odd read has it, where DuckStation, SwanStation and PCSX-Redux pad it with zero.
 
-### 4.13 D-29 and D-41: DICR's edge and a channel beside a list — `dicr-edge.s`, `dicr-storm.s`, `dma-beside.s`, and the discs' pictures
+### 4.13 D-29 and D-43: DICR's edge and a channel beside a list — `dicr-edge.s`, `dicr-storm.s`, `dma-beside.s`, and the discs' pictures
 
 *Added 2026-10-12.* Three programs of the project's own, side-loaded on all five as in §2.4, run with the player's BIOS
 given as each referee's firmware [M]:
@@ -472,7 +472,7 @@ given as each referee's firmware [M]:
 | `dma-beside.s`, channel 6 done straight after its start (four cases) | no, no, no, no | yes ×4 | yes ×4 | yes ×4 | its table written ×4, CHCR still started | its table written ×4, CHCR still started, the list already ended |
 
 DICR itself reads alike on all six in `dicr-edge.s` but for SwanStation, which never raises bit 31 by a write (cases
-3, 6 and 7). Ruled in `Diamond_Disputes.md` D-29 and D-41; Diamond after both changes reads as DuckStation on
+3, 6 and 7). Ruled in `Diamond_Disputes.md` D-29 and D-43; Diamond after both changes reads as DuckStation on
 `dicr-edge.s` and `dicr-storm.s`, and as DuckStation, SwanStation and Beetle PSX on `dma-beside.s`'s channel 6.
 
 **The discs' pictures.** `psxreferee.py pictures` runs a libretro referee on a disc and keeps its screen every K frames

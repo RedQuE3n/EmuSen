@@ -326,7 +326,7 @@ kernel carries none, and returns -1), 346 no function as documented, 6 undocumen
    counts the same lines; if they are absent there, a dispute is opened from D-41 on the controller's side, the kernel's
    being idle while they occur. *Answered 2026-10-11 (§22.3)*: the game prints the same 402 pairs on the player's BIOS,
    and its CD commands are the same; not the kernel's, so no dispute was opened. *Settled 2026-10-12*
-   (`Diamond_Disputes.md` D-41): the DMA's arbitration, which kept a channel waiting behind a list between its nodes;
+   (`Diamond_Disputes.md` D-43): the DMA's arbitration, which kept a channel waiting behind a list between its nodes;
    with it changed the game prints no retry in 3,600 frames on either kernel and reaches its demo, as the referees do.
 3. **Q3, Ape Escape's DUALSHOCK screen.** On the open kernel the game leaves the screen by itself at frame 1,500; on the
    player's BIOS it was recorded waiting there. The game replaces the kernel's pad and card element with its own, so

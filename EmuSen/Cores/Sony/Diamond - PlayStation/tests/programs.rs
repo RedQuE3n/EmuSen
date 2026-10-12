@@ -1268,3 +1268,33 @@ fn every_table_armed_gives_the_plain_runs_digests_on_a_disc() {
         m
     });
 }
+
+/// D-42: GP1(01h) written while a fill draws leaves the whole fill, after no delay and after 100 to 1,600 loop turns,
+/// as all five referees draw it, where amidog's FIFO overflow test expects one stopped some five lines in
+/// (`programs/fill-reset.s`).
+#[test]
+fn a_fill_cut_by_gp1_01h_is_drawn_whole_as_the_referees_draw_it() {
+    let m = run_for(include_str!("../programs/fill-reset.s"), 30, Market::Americas);
+    let lines = |band: u32| (0..511).filter(|&l| m.board.ram_word(0x10_0000 + (band * 511 + l) * 4) & 0xFFFF == 0x7FFF).count();
+    assert_eq!([0, 1, 2, 3].map(lines), [511; 4]);
+}
+
+/// The lines on which `programs/triangle-rows.s`'s rectangle found its cache entry kept, first to last, by shape and
+/// column.
+fn kept_rows(m: &Machine) -> Vec<[(u32, u32); 4]> {
+    let kept = |s: u32, c: u32| {
+        let lines: Vec<u32> = (0..64).filter(|&l| m.board.ram_word(0x10_0000 + (s * 256 + c * 64 + l) * 4) & 0xFFFF == 0x8001).collect();
+        (lines[0], lines[lines.len() - 1])
+    };
+    (0..7).map(|s| [0, 1, 2, 3].map(|c| kept(s, c))).collect()
+}
+
+/// D-41: the two shapes of `programs/triangle-rows.s` that every order of a triangle's rows reads alike, a triangle
+/// flat at the top and one with its middle vertex high, as Beetle PSX reads them; its other five wait on the rule.
+#[test]
+fn the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee() {
+    let m = run_for(include_str!("../programs/triangle-rows.s"), 30, Market::Americas);
+    let rows = kept_rows(&m);
+    assert_eq!(rows[1], [(8, 63), (0, 53), (0, 35), (0, 17)]);
+    assert_eq!(rows[4], [(5, 24), (1, 42), (1, 60), (41, 63)]);
+}

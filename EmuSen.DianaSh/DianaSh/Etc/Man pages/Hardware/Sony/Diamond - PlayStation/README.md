@@ -47,8 +47,8 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   texture and CLUT caches, the pixel pipeline, the rasteriser's rules fitted to ps1-tests' console pictures, the
   display read line by line, the drawing time fitted to `bandwidth` within 0.6% a row and charged to rectangles and
   fills by their rows (D-11's refit), the gate program by program, amidog's and Peter Lemon's programs against the
-  references, amidog's GPU test run to its end with its drawing groups passing (D-23), the state, the enhancement
-  layer's seam, and the reading log.
+  references, amidog's GPU test run to its end with its drawing groups passing (D-23) and its last two groups traced
+  to rules left to the tester (§10.3, D-41, D-42), the state, the enhancement layer's seam, and the reading log.
 - [`Diamond_OpenKernel.md`](Diamond_OpenKernel.md) — the open BIOS kernel's first phase, written 2026-10-11 at stage
   3 under the replacement writers' rules: the image and the RAM it uses, the reset path and the hand-over at 80030000h
   with what a machine must provide (the TTY at the DUART's 1F802023h), the exception entry, the priority chains and the
@@ -102,7 +102,8 @@ open kernel's second phase, the gate with the tester's games booting with no fir
 the drive's mechanics, a seek's reach, XA's arithmetic, getloc's eighth byte, the BIOS's intro); from stage 9, D-30 to
 D-33 (the MDEC's arithmetic, its time, its pipeline, a read's wait); from stage 8, D-34 to D-40 (SPU-ADPCM's prediction,
 the interpolation's sum, the envelope's step after its sample, the noise's rate change, the transfer's rate, the reverb's
-input instants, the reserved shifts and filters). The R3000A's
+input instants, the reserved shifts and filters); from the GPU's rows step (2026-10-12), D-41 (the order of a
+triangle's rows, through the texture cache) and D-42 (a write to a full FIFO, and a fill cut by GP1(01h)). The R3000A's
   disputes (D-1 to D-3, and D-17 to D-21 from amidog's `psxtest_cpx`) are in
   `../BlackMoon-HW/BlackMoon_R3000.md` §8 and the GTE's (D-13 to D-16, from stage 5) in `../BlackMoon-HW/BlackMoon_GTE.md`
   §12. *2026-10-11*: D-20 and D-21 settled; DICR's bit 6 ruled in `Diamond_Records.md` §16.2.

@@ -109,6 +109,60 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Stop(s.Window);
         }, default);
 
+        // A v1 engine's disc is loaded while the screen shows, a zip unpacked under it, and the game still starts at the screen's end - see Diamond_Players.md §12.8.3.
+        [Fact]
+        public Task A_disc_is_loaded_while_the_screen_shows_and_starts_at_its_end() => Session.Dispatch(() =>
+        {
+            string zip = "";
+            using var s = new ThemedSession(settings: a => a.BigPictureInterface.LaunchScreenDuration = BigPictureInterface.LaunchNormal, roms: r =>
+            {
+                Directory.CreateDirectory(Path.Combine(r, "psx"));
+                zip = Path.Combine(r, "psx", "Opal Reef.zip");
+                using var archive = System.IO.Compression.ZipFile.Open(zip, System.IO.Compression.ZipArchiveMode.Create);
+                using var entry = archive.CreateEntry("Opal Reef/Opal Reef.bin").Open();
+                entry.Write(SyntheticPsxDisc.Build().DataTrack);
+            });
+            string marker = Path.Combine(EmuSen.Crystal.Media.ArchiveImages.FolderFor(zip), ".unpacked");
+            for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
+            s.Pad.A();
+            s.Pad.A();
+            Assert.NotNull(Screen(s));
+            Assert.True(System.Threading.SpinWait.SpinUntil(() => File.Exists(marker), TimeSpan.FromSeconds(30)), "the disc was not loaded while the screen showed");
+            Assert.Null(Running(s.Window));
+            s.Run(3000 - 16);
+            Assert.Null(Running(s.Window));
+            Assert.NotNull(Screen(s));
+            s.Run(16);
+            Assert.Equal(zip, Running(s.Window));
+            Assert.True(GameShown(s));
+            Assert.Null(Screen(s));
+            Stop(s.Window);
+        }, default);
+
+        // A load that fails under the screen is reported at its end as any failed load: no game, the screen down, the core's words on the status line.
+        [Fact]
+        public Task A_disc_the_core_refuses_under_the_screen_is_reported_at_its_end() => Session.Dispatch(() =>
+        {
+            string bin = "";
+            using var s = new ThemedSession(settings: a => a.BigPictureInterface.LaunchScreenDuration = BigPictureInterface.LaunchNormal, roms: r =>
+            {
+                Directory.CreateDirectory(Path.Combine(r, "psx"));
+                bin = Path.Combine(r, "psx", "Opal Fault.bin");
+                File.WriteAllBytes(bin, SyntheticPsxDisc.Build().DataTrack);
+                File.WriteAllBytes(Path.ChangeExtension(bin, ".sbi"), [.. "SBI\0"u8, 0, 0, 0]);
+            });
+            Assert.True(EmuSen.Cores.CoreFactory.RunsOnV1Engine(bin, null));
+            for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
+            s.Pad.A();
+            s.Pad.A();
+            Assert.NotNull(Screen(s));
+            s.Run(3000);
+            Assert.Null(Running(s.Window));
+            Assert.False(GameShown(s));
+            Assert.Null(Screen(s));
+            Assert.StartsWith("Failed to load Opal Fault.bin: Diamond refused the game", s.Window.GetControl<TextBlock>("StatusText").Text);
+        }, default);
+
         [Fact]
         public Task Disabled_starts_the_game_at_once_with_no_screen() => Session.Dispatch(() =>
         {

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using EmuSen.Common;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
+using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.Library;
 
 using EmuSen.LunaP.Windowing;
@@ -24,12 +25,27 @@ namespace EmuSen.Mistress.Views
         {
             await PromptForMissingFirmwareAsync(path);
             if (await ChooseResumeAsync(path) is not { } choice) return;
-            if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture)) return;
-            LoadGame(path, displayName, choice == ResumeChoice.Resume ? ResumeStatePath(path) : null, reset: false);
+            Task<EmuSen.Cores.ICore>? loading = bigPicture is not null ? LoadUnderLaunchScreen(path) : null;
+            if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture))
+            {
+                _ = loading?.ContinueWith(t => (t.Result as IDisposable)?.Dispose(), TaskContinuationOptions.OnlyOnRanToCompletion);
+                return;
+            }
+            // Never throws: a failed load is rethrown inside LoadGame, which reports it as any failed load.
+            if (loading is not null) await Task.WhenAny(loading);
+            LoadGame(path, displayName, choice == ResumeChoice.Resume ? ResumeStatePath(path) : null, reset: false, loading);
             if (bigPicture is null) return;
             bool failed = _currentRomPath != path;
             CloseLaunchScreen();
             if (failed) PadNotice.Show(StatusText.Text ?? $"Failed to load {displayName}");
+        }
+
+        // A v1 engine's load begun on a worker as the launch screen opens, so the screen's time covers the disc's read; null loads it after, as before - see Diamond_Players.md §12.8.3.
+        private Task<EmuSen.Cores.ICore>? LoadUnderLaunchScreen(string path)
+        {
+            if (LaunchScreen.DurationOf(_appSettings.BigPictureInterface.LaunchScreenDuration) <= TimeSpan.Zero || path == _currentRomPath) return null;
+            string? engine = EngineChosenFor(path);
+            return EmuSen.Cores.CoreFactory.RunsOnV1Engine(path, engine) ? Task.Run(() => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine)) : null;
         }
 
         private string ResumeStatePath(string romPath) => SaveLibrary.ResumeStatePathFor(romPath, _appSettings.StateDirectory);

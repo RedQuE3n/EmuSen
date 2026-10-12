@@ -69,9 +69,13 @@ namespace EmuSen.Common
         // The core's word that this game runs on a firmware replacement or without a chip - see ICore.FirmwareNotice.
         public string? FirmwareNotice => _core?.FirmwareNotice;
 
-        public void LoadRom(string path)
+        public void LoadRom(string path) => LoadRom(path, loaded: null);
+
+        // <loaded> is CoreFactory.Loaded's core of <path> on <Engine>, made off this thread; null loads it here.
+        public void LoadRom(string path, ICore? loaded)
         {
-            var bundle = CoreFactory.Load(path, headless: true, Cheats, engine: Engine);
+            var bundle = loaded is null ? CoreFactory.Load(path, headless: true, Cheats, engine: Engine)
+                : CoreFactory.Bundle(loaded, Cheats) with { Notice = CoreFactory.EngineNotice(path, Engine, loaded) };
             _core = bundle.Core;
             EngineNotice = bundle.Notice;
             DebugTarget = bundle.DebugTarget;

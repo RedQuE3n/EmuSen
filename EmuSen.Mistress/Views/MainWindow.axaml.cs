@@ -925,8 +925,8 @@ namespace EmuSen.Mistress.Views
 
         private void LoadRom(string path, string displayName) => LoadGame(path, displayName, resumeFrom: null, reset: false);
 
-        // resumeFrom is a state to load before the first frame runs - see EmuSen_Settings_Reference.md §4.31.
-        private void LoadGame(string path, string displayName, string? resumeFrom, bool reset)
+        // resumeFrom is a state to load before the first frame runs, and loading a finished load of the core off this thread - see EmuSen_Settings_Reference.md §4.31.
+        private void LoadGame(string path, string displayName, string? resumeFrom, bool reset, Task<EmuSen.Cores.ICore>? loading = null)
         {
             ShutDownCurrentSession(leaving: !reset);
             int restoredCheats = DropCheatsFromAnotherGame(path);
@@ -937,7 +937,7 @@ namespace EmuSen.Mistress.Views
                 string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
                 _session = new EmulatorSession { Cheats = _cheats, Engine = EngineChosenFor(path) };
                 StartLogging(console);
-                _session.LoadRom(path);
+                _session.LoadRom(path, loading?.GetAwaiter().GetResult());
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
 
                 // The catalogue's console, not the core's name: a Game Boy core says GBC while it is a Color, and the GB tab is its settings - see §4.47.

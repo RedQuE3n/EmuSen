@@ -460,3 +460,24 @@ fn a_triangle_draws_its_lower_rows_down_and_then_its_upper_rows_up() {
     assert!(kept(&mut g, middle_low, 1, 3), "the upper part drawn upward");
     assert!(kept(&mut g, middle_low, 1, 8), "the upper part drawn after the lower");
 }
+
+/// A semi-transparent textured primitive blends only the texels with bit 15 set and draws the others opaque, and with
+/// the mask checked a pixel whose bit 15 is set is left alone (psx-spx "Semi Transparency", "GP0(E6h)"); each pixel of
+/// a row is judged by itself.
+#[test]
+fn a_rows_texels_blend_by_their_own_bit_15_and_the_mask_keeps_its_pixels() {
+    let (mut g, v) = gpu();
+    g.vram.set(512, 0, 0x8010);
+    g.vram.set(513, 0, 0x0010);
+    g.vram.set(514, 0, 0x8010);
+    for x in 0..3 {
+        g.vram.set(x, 10, 0x0005);
+    }
+    send(&mut g, &v, &[0xE100_0128, 0x6700_0000, 10 << 16, 0, 1 << 16 | 3]);
+    assert_eq!([px(&g, 0, 10), px(&g, 1, 10), px(&g, 2, 10)], [0x8015, 0x0010, 0x8015], "B+F where bit 15 is set, the texel itself where it is not");
+    g.vram.set(0, 12, 0x8001);
+    g.vram.set(1, 12, 0x0001);
+    g.vram.set(2, 12, 0x8001);
+    send(&mut g, &v, &[0xE600_0002, 0x6000_00FF, 12 << 16, 1 << 16 | 3]);
+    assert_eq!([px(&g, 0, 12), px(&g, 1, 12), px(&g, 2, 12)], [0x8001, 0x001F, 0x8001], "masked pixels kept, the other drawn");
+}

@@ -75,6 +75,24 @@ pub struct Machine {
     pub debug: crate::debugger::Debugger,
     /// The idle skipper, which the plain frame runs and the debugger's never does (Diamond_Speed.md §4).
     pub idle: crate::idle::Idle,
+    /// The runs the plain frame steps in, which the debugger's never does (Diamond_Speed.md §13.1).
+    pub runs: Runs,
+}
+
+/// The run lever: whether the plain frame's steps are made in runs between events, every how many runs one is checked
+/// against the same steps made one by one on a copy (0: none), and what was run; none of it is the machine's state.
+#[derive(Clone, Copy, Debug)]
+pub struct Runs {
+    pub on: bool,
+    pub verify: u64,
+    pub made: u64,
+    pub steps: u64,
+}
+
+impl Default for Runs {
+    fn default() -> Runs {
+        Runs { on: true, verify: 0, made: 0, steps: 0 }
+    }
 }
 
 /// The console's standard field rate, by its market: NTSC on an NTSC clock, PAL on a PAL one (D-0, provisional).
@@ -128,6 +146,7 @@ impl Machine {
             disc_print: 0,
             debug: crate::debugger::Debugger::new(),
             idle: crate::idle::Idle::default(),
+            runs: Runs::default(),
         }
     }
 
@@ -208,6 +227,24 @@ impl Machine {
         step_on(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
     }
 
+    /// Up to `limit` steps as `step` makes each, and how many: one run of them where the kernel's two seams have
+    /// nothing to do, ended by the processor after the first step that leaves an event due, whose events then run as
+    /// `step` runs them (Diamond_Speed.md §13.1).
+    #[inline(always)]
+    fn steps(&mut self, limit: u32) -> u32 {
+        if !self.runs.on || self.exe.is_some() || self.kernel.taps_putchar() {
+            self.step();
+            return 1;
+        }
+        self.runs.made += 1;
+        let n = if self.runs.verify != 0 && self.runs.made % self.runs.verify == 0 { self.verified_run(limit) } else { self.cpu.run(&mut self.board, limit).0 };
+        self.runs.steps += n as u64;
+        if self.board.now >= self.board.next_event {
+            self.board.events();
+        }
+        n
+    }
+
     /// One frame: the machine runs until a field's vblank begins, its picture complete, or to the field's end when the
     /// display range leaves no vblank; the SPU's samples are made up to that cycle.
     pub fn advance(&mut self) {
@@ -215,15 +252,14 @@ impl Machine {
         self.idle.reset();
         if !self.idle.on {
             while !self.board.field_done {
-                self.step();
+                self.steps(u32::MAX);
             }
         }
         while !self.board.field_done {
             if self.idle.tracking == 0 {
                 let mut free = crate::idle::FREE;
                 while free > 0 && !self.board.field_done {
-                    self.step();
-                    free -= 1;
+                    free -= self.steps(free);
                 }
                 self.idle.watch();
                 continue;
@@ -250,10 +286,36 @@ impl Machine {
 }
 
 impl Machine {
+    /// The machine's state, and the board's two fields beside it that are not state.
+    fn whole_state(&self) -> (Vec<u8>, u64, u64) {
+        use emusen_native::ffi::StateMachine;
+        let mut s = vec![0; self.state_size()];
+        let n = self.save_state(&mut s).unwrap();
+        s.truncate(n);
+        (s, self.board.next_event, self.board.events_run)
+    }
+
+    /// Whether the machine is as `cpu` and `board` would make it, the whole state byte for byte with the next event and
+    /// the events' count; or the first field of the state that differs.
+    fn differs_from(&mut self, cpu: &mut R3000, board: &mut Board) -> Option<String> {
+        use emusen_native::ffi::StateMachine;
+        let mine = self.whole_state();
+        std::mem::swap(&mut self.cpu, cpu);
+        std::mem::swap(&mut self.board, board);
+        let theirs = self.whole_state();
+        std::mem::swap(&mut self.cpu, cpu);
+        std::mem::swap(&mut self.board, board);
+        if mine == theirs {
+            return None;
+        }
+        let at = mine.0.iter().zip(&theirs.0).position(|(a, b)| a != b);
+        let field = self.layout().lines().filter(|l| at.is_some_and(|a| l.split(' ').next().and_then(|o| o.parse::<usize>().ok()).is_some_and(|o| o <= a))).last().map(str::to_string);
+        Some(format!("first difference at byte {at:?} of {}, next event {} against {}, events {} against {}; {field:?}", mine.0.len(), mine.1, theirs.1, mine.2, theirs.2))
+    }
+
     /// A skip checked against the interpreter: a copy runs the skip's turns instruction by instruction, meeting no
     /// event and no exception, and must reach the state the skip leaves, byte for byte (Diamond_Speed.md §4.4).
     fn verify_skip(&mut self, skip: &crate::idle::Skip) {
-        use emusen_native::ffi::StateMachine;
         let (mut cpu, mut board, mut exe) = (self.cpu.clone(), self.board.clone(), self.exe.clone());
         let events = board.events_run;
         let mut turns = crate::idle::Idle::default();
@@ -266,23 +328,28 @@ impl Machine {
             }
         }
         skip.apply(&mut self.cpu, &mut self.board);
-        let state = |m: &Machine| {
-            let mut s = vec![0; m.state_size()];
-            let n = m.save_state(&mut s).unwrap();
-            s.truncate(n);
-            s
-        };
-        let skipped = state(self);
-        std::mem::swap(&mut self.cpu, &mut cpu);
-        std::mem::swap(&mut self.board, &mut board);
-        let interpreted = state(self);
-        let (next, events_run) = (self.board.next_event, self.board.events_run);
-        std::mem::swap(&mut self.cpu, &mut cpu);
-        std::mem::swap(&mut self.board, &mut board);
-        if skipped != interpreted || next != self.board.next_event || events_run != self.board.events_run {
-            let at = skipped.iter().zip(&interpreted).position(|(a, b)| a != b);
-            panic!("the skip of {} turns at {:08X} leaves another state: first difference at byte {at:?} of {}; {:?}", skip.turns, skip.head, skipped.len(), self.layout().lines().filter(|l| at.is_some_and(|a| l.split(' ').next().and_then(|o| o.parse::<usize>().ok()).is_some_and(|o| o <= a))).last());
+        if let Some(what) = self.differs_from(&mut cpu, &mut board) {
+            panic!("the skip of {} turns at {:08X} leaves another state: {what}", skip.turns, skip.head);
         }
+    }
+
+    /// A run checked against its steps: a copy takes the same number of steps one by one, as `step` makes each, and
+    /// must meet an event or a step that is not an instruction only at the last, and reach the state the run leaves,
+    /// byte for byte, before the last step's events (Diamond_Speed.md §13.3).
+    fn verified_run(&mut self, limit: u32) -> u32 {
+        let (mut cpu, mut board) = (self.cpu.clone(), self.board.clone());
+        let from = cpu.regs.pc;
+        let (n, last) = self.cpu.run(&mut self.board, limit);
+        for i in 1..=n {
+            let step = cpu.step(&mut board);
+            let ended = step != Step::Instruction || board.now >= board.next_event || i == limit;
+            assert!(ended == (i == n), "the run of {n} steps from {from:08X} ends elsewhere than its steps do: step {i} gives {step:?} with the clock at {} and the next event at {}", board.now, board.next_event);
+            assert!(i < n || step == last, "the run of {n} steps from {from:08X} ends in {last:?}, its steps in {step:?}");
+        }
+        if let Some(what) = self.differs_from(&mut cpu, &mut board) {
+            panic!("the run of {n} steps from {from:08X} leaves another state than its steps: {what}");
+        }
+        n
     }
 }
 

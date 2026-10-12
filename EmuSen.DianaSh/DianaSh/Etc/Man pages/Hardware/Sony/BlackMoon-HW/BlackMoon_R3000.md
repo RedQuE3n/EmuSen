@@ -31,6 +31,11 @@ names and layout only; no emulator's source and no firmware was read.
   from them, provided what it answers is the fetch's word, time and fault and the word's decoding: Diamond's bus
   answers an I-cache hit from the word decoded at its refill (`Diamond_Speed.md` §5). It is an addition with a default,
   so a bus that does not give it is unchanged, and the suite's 55,000 cases pass through the default [M].
+  *Diamond's second speed pass (2026-10-12)* added **`running`**, a default method answering false, and with it
+  **`R3000::run(bus, limit)`**: up to `limit` steps, each as `step` makes it, ending after the first that is not an
+  instruction or after which `running` says no; the steps taken and the last one's result. A bus answers true while
+  nothing it must do between two steps is due (Diamond's: while the clock is short of the next event). The default
+  makes a run one step, so a bus that does not give it is unchanged (§13).
 - **`Size`**: `Byte`, `Half`, `Tribyte` and `Word`. A read's value is in the low bits and anything above them is
   ignored. A write carries the register as the processor drives it, the datum in the low `size` bytes: a byte or
   halfword store passes the whole register, which psx-spx's "Caution - 8/16-bit writes to certain IO registers" says
@@ -675,3 +680,45 @@ file, and no MarsRT code.
   reported, the misaligned and the refused loads included (both none); in the 32 to no device the step reported
   nothing, and `load_ahead` had named the 22 of them that were aligned, the one case only the read can tell. The
   suite's 55,000 cases are unchanged.
+
+## 13. Runs, and the common instructions' path (2026-10-12)
+
+*Built for Diamond's second speed pass (`Diamond_Speed.md` §12).* Two changes, the first an addition to the
+interface (§2), the second inside the step; neither changes what a step does.
+
+**`R3000::run`.** Its promise is the loop it replaces: `step` until a step is not an instruction, the limit is
+reached, or `running` answers no. Inside it the boundary's work is done once and then held while it cannot change.
+After a full step, the boundary is *quiet* when the debug unit's DE is clear, no MTC0 view of D-17 is pending, and the
+interrupt check would not be taken with SR and Cause as they stand. The check's inputs are SR, Cause, the view and the
+external line; SR, Cause and DCIC change only by MTC0, RFE and exception entry, the view only by MTC0, and the line
+only on the bus. So the steps that follow a quiet boundary skip the interrupt check, the observer (a run has none) and
+the PC break (DE is clear, and `pc_break` then changes nothing), and keep IP2 as it is, which is what the step would
+write while the line holds. Each of them still asks the line and the fetchable check; a line that moved, a PC that is
+not a word's or is kernel space in user mode, an instruction that ran MTC0 or RFE, or a fetch that met no device sends
+the run back to a full step, which then takes the interrupt, the address error or the exception as the step does.
+D-17 is kept by the order: the MTC0 ends the quiet steps, the full step after it uses the view, and the boundary after
+that is judged quiet or not on the SR the MTC0 wrote.
+
+**The common instructions.** The step's instruction path was one `Run` value carrying the instruction's operands,
+delays and results through every arm; the compiler kept it in memory, and a guest instruction cost about 185 host
+instructions on the desktop [M, a stepped trace of a nine-instruction loop under gdb]. The instructions that only
+compute, the branches and jumps, and LB, LBU, LH, LHU, LW, SB, SH and SW now take a path of their own (`common` in
+`exec.rs`) with their operands as parameters, and complete as `finish` completes one: the previous load lands unless
+the instruction loads the same register, then the result, R0 kept zero, a load left for the next. Their exceptions
+(ADD's, ADDI's and SUB's overflow, address errors, data breaks, a data access that met no device) enter through the
+same `exception`. The checks of a data access, the read and the write are one set of functions that `Run` calls too,
+so each rule has one owner; `Run::execute` keeps the rest (the multiplier, LWL, LWR, SWL, SWR, the coprocessors,
+SYSCALL, BREAK, the reserved encodings). With the run, the loop costs about 119 host instructions an instruction.
+
+**How it is known.** The suite's 55,000 cases pass through the new path [M]. `a_run_is_its_steps_on_random_programs`
+runs 400 random programs of every kind of instruction, with handlers at the four vectors, an interrupt line that rises
+and falls with the clock, SR written with interrupts on and off and in user mode with the cache isolated and BEV set,
+DCIC armed on a PC and on data, loads and stores unaligned or to no device, as runs of random limit against a bus
+whose `running` ends at a random cycle, and holds the processor, the clock, the writes, the isolated accesses and the
+GTE's traffic to those of a copy stepped one step at a time: 19,801 runs, the longest 300 steps, 4,297 interrupts, and
+every exception code but IBE met [M]. `a_runs_boundary_is_the_steps` names five boundaries a run must still see: a line
+rising mid-run, an interrupt MTC0 enables one instruction late, a PC break MTC0 arms, a jump to an address not a
+word's, and kernel space reached in user mode. Twenty-four mutants were applied one at a time: twenty-three were
+caught. The survivor, the quiet check's interrupt test without SR's mask bits, makes the check stricter: a masked
+request then sends a run back to full steps, which costs speed and changes no step, so nothing can catch it.
+

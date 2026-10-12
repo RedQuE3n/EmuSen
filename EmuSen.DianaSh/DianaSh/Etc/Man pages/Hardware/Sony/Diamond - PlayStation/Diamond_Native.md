@@ -1438,3 +1438,42 @@ The current tree's battery run on the handheld; the threaded rasteriser, the dec
 recompiler, not needed for G6 (`Diamond_Speed.md` §7); the inexact speed settings and the shipped link, proposed for
 the tester's decision (§8 there). The handheld's emulation thread is at about a fifth of a frame, so the slowness the
 tester reported there is to be looked for outside it. No dispute was taken.
+
+## 22. Speed, the second pass (2026-10-12)
+
+With the tester's request that the work return to speed after G6. Its record is `Diamond_Speed.md` §11 to §18.
+
+### 22.1 What was built
+
+- **Runs** (`blackmoon-r3000`'s `R3000::run` and `Bus::running`, a method with a default, `BlackMoon_R3000.md` §2 and
+  §13; `Machine::steps`, `Machine::runs`): the plain frame's steps made in runs between events, the boundary's work
+  held while SR, Cause, DCIC and the line cannot change; the common instructions on a path of their own inside the
+  step, shared by `step` and `run`. Diamond's bus runs while its clock is short of the next event; the kernel's seams
+  step one at a time. `Machine::verified_run` checks a run against its steps on a copy, byte for byte.
+- **The rasteriser by rows** (`Painter::row`): the same pixels in the same order, the paint's settings read once a
+  row, VRAM read only where a pixel is blended or the mask is checked, a texture cache miss filled out of line.
+- **The bench** gains `--stepped` (runs off, the skipper on) and `--verify-runs N`, and prints the runs' counts.
+- **WiseMan** gains an opt-in test, `The_frame_loop_reports_its_pace_on_a_named_disc`
+  (`EMUSEN_DIAMOND_PACE_DISC`), which opens a disc from Mistress's library headless and prints the frame loop's line
+  each second, for the frontend's share (§16 there).
+- **No state change**: `DMND` stays version 9.
+
+### 22.2 Results
+
+On WiseMan 414cac36's tree the desktop's aligned medians fell by 23 to 32 per cent (Castlevania 4.31 to 2.93 ms, the
+slowest game before and after); under the 33 per cent quota every game is at 5.8 to 9.9 ms against 13.4, Castlevania
+having been over it before (14.2). Every game's digests every 600 frames equal the base's.
+
+### 22.3 Tests run (2026-10-12)
+
+`blackmoon-r3000` 37 unit tests with `EMUSEN_BLACKMOON_CORPUS`, 55,000 of 55,000, and without it; `diamond` 156 unit
+tests and 76 program tests, with and without `EMUSEN_DIAMOND_PS1TESTS`, and the disc tests with `EMUSEN_DIAMOND_DISC`
+on Crash Bandicoot; WiseMan's Diamond tests under the test lock.
+
+### 22.4 What waits
+
+The handheld's runs of the levers, on the charger and on battery, the handheld having left the network after the
+base's battery run (`Diamond_Speed.md` §14.3), and the removal of the bench's copies from it; the threaded
+rasteriser, a block form of the step and the recompiler (§15 there); the inexact settings and the shipped link (§8
+there); and the tester's answer on the speed row (§16 there). No dispute was taken.
+

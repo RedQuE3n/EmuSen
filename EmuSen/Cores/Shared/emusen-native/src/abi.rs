@@ -5,7 +5,8 @@
 //! and the debug exports are not generated yet. They come with the cores that need them.
 
 use std::ffi::{CStr, c_char};
-use std::sync::OnceLock;
+use std::io::Write;
+use std::sync::{Mutex, OnceLock};
 
 use crate::ffi::StateMachine;
 
@@ -216,7 +217,11 @@ pub trait NativeCore: Sized + StateMachine {
 
 static CRASH_LOG: OnceLock<String> = OnceLock::new();
 
-/// Where a panic is written before the process aborts; the first path given stands.
+/// Held while a report is written, so a second thread's panic waits for the first's report rather than cutting it off.
+static CRASH_WRITE: Mutex<()> = Mutex::new(());
+
+/// Where a panic is written before the process aborts; the first path given stands, and each report is appended to it
+/// whole (`Diamond_Players.md` §12.7.5).
 ///
 /// # Safety
 /// `path` must be a valid NUL-terminated UTF-8 string, or null.
@@ -228,8 +233,9 @@ pub unsafe fn install_crash_log(engine: &'static str, path: *const c_char) -> i3
     if CRASH_LOG.set(path).is_ok() {
         std::panic::set_hook(Box::new(move |info| {
             let text = format!("{engine} panic: {info}\n{}\n", std::backtrace::Backtrace::force_capture());
+            let _one = CRASH_WRITE.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(path) = CRASH_LOG.get() {
-                let _ = std::fs::write(path, &text);
+                let _ = std::fs::OpenOptions::new().create(true).append(true).open(path).and_then(|mut f| f.write_all(text.as_bytes()));
             }
             eprintln!("{text}");
         }));

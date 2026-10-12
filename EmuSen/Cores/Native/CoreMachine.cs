@@ -15,11 +15,15 @@ namespace EmuSen.Cores.Native
         public ulong Detail { get; init; }
     }
 
-    // One machine of a v1 library: its handle and one method per export, every refusal thrown with the core's words - see EmuSen_CoreAPI.md §19.
+    // One machine of a v1 library: its handle and one method per export, every refusal thrown with the core's words, one call at a time - see EmuSen_CoreAPI.md §6.16, §19.
     public sealed unsafe class CoreMachine : IDisposable
     {
         private nint _handle;
         private readonly CoreInterface _api;
+        private readonly object _gate = new();
+
+        // Held by every call on the handle, here and by a caller of Handle, so no two threads are ever in the machine at once - see Diamond_Players.md §12.7.
+        public object Gate => _gate;
 
         public CoreLibrary Library { get; }
         public CoreMachineInfo Info { get; private set; }
@@ -94,7 +98,8 @@ namespace EmuSen.Cores.Native
         // The words for a refusal: the machine's last_error, else status_text.
         public string Words(long status)
         {
-            string detail = TextOf(_api.LastError);
+            string detail;
+            lock (_gate) detail = TextOf(_api.LastError);
             return detail.Length > 0 ? detail : Library.Words(status);
         }
 
@@ -105,123 +110,180 @@ namespace EmuSen.Cores.Native
 
         private string TextOf(delegate* unmanaged<nint, byte*, nuint, long> call)
         {
-            nint h = Handle;
-            long n = call(h, null, 0);
-            if (n <= 0) return "";
-            var bytes = new byte[n];
-            fixed (byte* b = bytes) call(h, b, (nuint)n);
-            return CoreLibrary.Utf8(bytes) ?? "";
+            lock (_gate)
+            {
+                nint h = Handle;
+                long n = call(h, null, 0);
+                if (n <= 0) return "";
+                var bytes = new byte[n];
+                fixed (byte* b = bytes) call(h, b, (nuint)n);
+                return CoreLibrary.Utf8(bytes) ?? "";
+            }
         }
 
         // Re-read after create and after a MACHINE_INFO event.
-        public CoreMachineInfo ReadInfo() => Info = CoreDescriptorReader.MachineInfo(TextOf(_api.MachineInfo), AudioSampleRate);
+        public CoreMachineInfo ReadInfo()
+        {
+            lock (_gate) return Info = CoreDescriptorReader.MachineInfo(TextOf(_api.MachineInfo), AudioSampleRate);
+        }
 
         public void Advance()
         {
-            ulong detail;
-            int status = _api.Advance(Handle, &detail);
-            if (status != 0) throw new CoreRefusedException(status, $"{Name} stopped: {Words(status)} (detail {detail:X}).") { Detail = detail };
+            lock (_gate)
+            {
+                ulong detail;
+                int status = _api.Advance(Handle, &detail);
+                if (status != 0) throw new CoreRefusedException(status, $"{Name} stopped: {Words(status)} (detail {detail:X}).") { Detail = detail };
+            }
         }
 
-        public void Present() => Ok(_api.Present(Handle), "present the picture");
+        public void Present()
+        {
+            lock (_gate) Ok(_api.Present(Handle), "present the picture");
+        }
 
-        public void Reset() => Ok(_api.Reset(Handle), "reset");
+        public void Reset()
+        {
+            lock (_gate) Ok(_api.Reset(Handle), "reset");
+        }
 
-        public void SetOptions(bool skipRendering) => _api.SetOptions(Handle, skipRendering ? 1u : 0u);
+        public void SetOptions(bool skipRendering)
+        {
+            lock (_gate) _api.SetOptions(Handle, skipRendering ? 1u : 0u);
+        }
 
-        public long TotalFrames => _api.FrameCount(Handle);
+        public long TotalFrames
+        {
+            get { lock (_gate) return _api.FrameCount(Handle); }
+        }
 
         public CoreInterface.FrameInfo FrameInfo
         {
             get
             {
                 var info = new CoreInterface.FrameInfo { Size = (uint)sizeof(CoreInterface.FrameInfo) };
-                Ok(_api.FrameInfoOf(Handle, &info), "describe its picture");
+                lock (_gate) Ok(_api.FrameInfoOf(Handle, &info), "describe its picture");
                 return info;
             }
         }
 
         public long CopyFrame(byte[] into)
         {
-            fixed (byte* data = into) return _api.FrameCopy(Handle, data, (nuint)into.Length);
+            lock (_gate)
+                fixed (byte* data = into) return _api.FrameCopy(Handle, data, (nuint)into.Length);
         }
 
-        public int AudioSampleRate => _api.AudioRate(Handle);
+        public int AudioSampleRate
+        {
+            get { lock (_gate) return _api.AudioRate(Handle); }
+        }
 
-        public int BufferedSamples => (int)Math.Max(0, _api.AudioBuffered(Handle));
+        public int BufferedSamples
+        {
+            get { lock (_gate) return (int)Math.Max(0, _api.AudioBuffered(Handle)); }
+        }
 
         // Whole stereo frames, never across a change of rate; the rate they were made at.
         public (short[] Samples, int Rate) DrainAudio(int maxFrames)
         {
-            int rate;
-            int wanted = (int)Math.Min((long)maxFrames * 2, BufferedSamples);
-            wanted -= wanted & 1;
-            if (wanted <= 0) return (Array.Empty<short>(), AudioSampleRate);
-            var samples = new short[wanted];
-            long n;
-            fixed (short* data = samples) n = _api.AudioDrain(Handle, data, (nuint)samples.Length, maxFrames, &rate);
-            if (n < wanted) Array.Resize(ref samples, (int)Math.Max(0, n));
-            return (samples, rate);
+            lock (_gate)
+            {
+                int rate;
+                int wanted = (int)Math.Min((long)maxFrames * 2, BufferedSamples);
+                wanted -= wanted & 1;
+                if (wanted <= 0) return (Array.Empty<short>(), AudioSampleRate);
+                var samples = new short[wanted];
+                long n;
+                fixed (short* data = samples) n = _api.AudioDrain(Handle, data, (nuint)samples.Length, maxFrames, &rate);
+                if (n < wanted) Array.Resize(ref samples, (int)Math.Max(0, n));
+                return (samples, rate);
+            }
         }
 
         public short[] PeekAudio()
         {
             if (!Has(CoreInterface.CapAudioPeek)) return Array.Empty<short>();
-            var samples = new short[BufferedSamples];
-            long n;
-            fixed (short* data = samples) n = _api.AudioPeek(Handle, data, (nuint)samples.Length);
-            return n < samples.Length ? samples[..(int)Math.Max(0, n)] : samples;
+            lock (_gate)
+            {
+                var samples = new short[BufferedSamples];
+                long n;
+                fixed (short* data = samples) n = _api.AudioPeek(Handle, data, (nuint)samples.Length);
+                return n < samples.Length ? samples[..(int)Math.Max(0, n)] : samples;
+            }
         }
 
-        public void SetAudioLimit(int samples) => _api.SetAudioLimit(Handle, (ulong)Math.Max(0, samples));
+        public void SetAudioLimit(int samples)
+        {
+            lock (_gate) _api.SetAudioLimit(Handle, (ulong)Math.Max(0, samples));
+        }
 
         public void SetMutes(uint mask)
         {
-            if (Has(CoreInterface.CapMutes)) _api.SetMutes(Handle, mask);
+            if (!Has(CoreInterface.CapMutes)) return;
+            lock (_gate) _api.SetMutes(Handle, mask);
         }
 
-        public void SetButtons(int port, uint mask, uint changed) => _api.SetButtons(Handle, (uint)port, mask, changed);
+        public void SetButtons(int port, uint mask, uint changed)
+        {
+            lock (_gate) _api.SetButtons(Handle, (uint)port, mask, changed);
+        }
 
         public void SetAxis(int port, uint axis, double value)
         {
-            if (Has(CoreInterface.CapAxes)) _api.SetAxis(Handle, (uint)port, axis, value);
+            if (!Has(CoreInterface.CapAxes)) return;
+            lock (_gate) _api.SetAxis(Handle, (uint)port, axis, value);
         }
 
         public int StateSize(uint kind = 0)
         {
-            long n = _api.StateSize(Handle, kind);
-            Ok(n, "size its state");
-            return (int)n;
+            lock (_gate)
+            {
+                long n = _api.StateSize(Handle, kind);
+                Ok(n, "size its state");
+                return (int)n;
+            }
         }
 
         public void Save(byte[] into, uint kind = 0)
         {
-            long n;
-            fixed (byte* data = into) n = _api.StateSave(Handle, kind, data, (nuint)into.Length);
-            Ok(n, "write its state");
+            lock (_gate)
+            {
+                long n;
+                fixed (byte* data = into) n = _api.StateSave(Handle, kind, data, (nuint)into.Length);
+                Ok(n, "write its state");
+            }
         }
 
         public void Load(ReadOnlySpan<byte> state)
         {
-            int status;
-            fixed (byte* data = state) status = _api.StateLoad(Handle, data, (nuint)state.Length);
-            if (status != 0) throw new InvalidDataException($"{Name} refused the state: {Words(status)}.") { Data = { [StatusKey] = status } };
+            lock (_gate)
+            {
+                int status;
+                fixed (byte* data = state) status = _api.StateLoad(Handle, data, (nuint)state.Length);
+                if (status != 0) throw new InvalidDataException($"{Name} refused the state: {Words(status)}.") { Data = { [StatusKey] = status } };
+            }
         }
 
         public string Layout(uint kind = 0)
         {
-            long n = _api.StateLayout(Handle, kind, null, 0);
-            Ok(n, "list its state");
-            var bytes = new byte[n];
-            fixed (byte* b = bytes) _api.StateLayout(Handle, kind, b, (nuint)n);
-            return Encoding.UTF8.GetString(bytes);
+            lock (_gate)
+            {
+                long n = _api.StateLayout(Handle, kind, null, 0);
+                Ok(n, "list its state");
+                var bytes = new byte[n];
+                fixed (byte* b = bytes) _api.StateLayout(Handle, kind, b, (nuint)n);
+                return Encoding.UTF8.GetString(bytes);
+            }
         }
 
         // MEDIA: a drive's lid opened or closed, as the player would; machine info is read again for the drive's state.
         public void MediaLid(uint drive, bool open)
         {
-            Ok(_api.MediaLid(Handle, drive, open ? 1u : 0u), open ? "open the drive's lid" : "close the drive's lid");
-            ReadInfo();
+            lock (_gate)
+            {
+                Ok(_api.MediaLid(Handle, drive, open ? 1u : 0u), open ? "open the drive's lid" : "close the drive's lid");
+                ReadInfo();
+            }
         }
 
         // MEDIA: the disc in a drive replaced by image with its companions, or emptied by null; restore for a state about to load.
@@ -250,52 +312,68 @@ namespace EmuSen.Cores.Native
                         FileCount = (nuint)entries.Length,
                         FileSize = (nuint)sizeof(CoreInterface.File),
                     };
-                    status = _api.MediaInsert(Handle, drive, &m);
+                    lock (_gate)
+                    {
+                        status = _api.MediaInsert(Handle, drive, &m);
+                        Ok(status, image is null ? "empty the drive" : "take the disc");
+                        ReadInfo();
+                    }
                 }
-                Ok(status, image is null ? "empty the drive" : "take the disc");
             }
             finally
             {
                 foreach (var pin in pins) if (pin.IsAllocated) pin.Free();
             }
-            ReadInfo();
         }
 
-        public long SpaceSize(uint space) => Math.Max(0, _api.SpaceSize(Handle, space));
+        public long SpaceSize(uint space)
+        {
+            lock (_gate) return Math.Max(0, _api.SpaceSize(Handle, space));
+        }
 
         public bool ReadSpace(uint space, int address, Span<byte> into)
         {
-            fixed (byte* data = into) return _api.SpaceRead(Handle, space, (uint)address, data, (nuint)into.Length) >= 0;
+            lock (_gate)
+                fixed (byte* data = into) return _api.SpaceRead(Handle, space, (uint)address, data, (nuint)into.Length) >= 0;
         }
 
         public bool WriteSpace(uint space, int address, ReadOnlySpan<byte> from)
         {
-            fixed (byte* data = from) return _api.SpaceWrite(Handle, space, (uint)address, data, (nuint)from.Length) >= 0;
+            lock (_gate)
+                fixed (byte* data = from) return _api.SpaceWrite(Handle, space, (uint)address, data, (nuint)from.Length) >= 0;
         }
 
         // A battery file's bytes, empty where there is none, with EMUSEN_BATTERY_* flags.
         public (byte[] Data, uint Flags) Battery(uint which)
         {
-            uint flags;
-            long length = _api.Battery(Handle, which, null, 0, &flags);
-            if (length <= 0) return (Array.Empty<byte>(), flags);
-            var data = new byte[length];
-            fixed (byte* d = data) _api.Battery(Handle, which, d, (nuint)data.Length, &flags);
-            return (data, flags);
+            lock (_gate)
+            {
+                uint flags;
+                long length = _api.Battery(Handle, which, null, 0, &flags);
+                if (length <= 0) return (Array.Empty<byte>(), flags);
+                var data = new byte[length];
+                fixed (byte* d = data) _api.Battery(Handle, which, d, (nuint)data.Length, &flags);
+                return (data, flags);
+            }
         }
 
-        public void BatterySaved(uint which) => _api.BatterySaved(Handle, which);
+        public void BatterySaved(uint which)
+        {
+            lock (_gate) _api.BatterySaved(Handle, which);
+        }
 
         public void SetRomPatches(uint[] triples)
         {
             if (!Has(CoreInterface.CapRomPatches)) return;
-            fixed (uint* words = triples) _api.SetRomPatches(Handle, words, (nuint)(triples.Length / 3));
+            lock (_gate)
+                fixed (uint* words = triples) _api.SetRomPatches(Handle, words, (nuint)(triples.Length / 3));
         }
 
         public void SetCheatPokes(uint[] quads)
         {
             if (!Has(CoreInterface.CapCheatPokes)) return;
-            fixed (uint* words = quads) _api.SetCheatPokes(Handle, words, (nuint)(quads.Length / 4));
+            lock (_gate)
+                fixed (uint* words = quads) _api.SetCheatPokes(Handle, words, (nuint)(quads.Length / 4));
         }
 
         // Run-scope "key=value" lines applied together; the core's words on refusal.
@@ -303,9 +381,12 @@ namespace EmuSen.Cores.Native
         {
             if (!Has(CoreInterface.CapSettings)) throw new CoreRefusedException(CoreInterface.StatusNotSupported, $"{Name} takes no settings between frames.");
             byte[] bytes = Encoding.UTF8.GetBytes(text);
-            int status;
-            fixed (byte* b = bytes) status = _api.SetSettings(Handle, b, (nuint)bytes.Length);
-            if (status != 0) throw new CoreRefusedException(status, $"{Name} refused the settings: {Words(status)}.");
+            lock (_gate)
+            {
+                int status;
+                fixed (byte* b = bytes) status = _api.SetSettings(Handle, b, (nuint)bytes.Length);
+                if (status != 0) throw new CoreRefusedException(status, $"{Name} refused the settings: {Words(status)}.");
+            }
         }
 
         public IReadOnlyDictionary<string, string> SettingNotes() =>
@@ -314,45 +395,60 @@ namespace EmuSen.Cores.Native
         public long[] Phases()
         {
             if (!Has(CoreInterface.CapPhases)) return Array.Empty<long>();
-            long n = _api.Phases(Handle, null, 0);
-            if (n <= 0) return Array.Empty<long>();
-            var values = new long[n];
-            fixed (long* v = values) _api.Phases(Handle, v, (nuint)n);
-            return values;
+            lock (_gate)
+            {
+                long n = _api.Phases(Handle, null, 0);
+                if (n <= 0) return Array.Empty<long>();
+                var values = new long[n];
+                fixed (long* v = values) _api.Phases(Handle, v, (nuint)n);
+                return values;
+            }
         }
 
         public long[] Registers(uint processor)
         {
             if (!Has(CoreInterface.CapDebugRegisters)) return Array.Empty<long>();
-            long n = _api.DebugRegisters(Handle, processor, null, 0);
-            if (n <= 0) return Array.Empty<long>();
-            var values = new long[n];
-            fixed (long* v = values) _api.DebugRegisters(Handle, processor, v, (nuint)n);
-            return values;
+            lock (_gate)
+            {
+                long n = _api.DebugRegisters(Handle, processor, null, 0);
+                if (n <= 0) return Array.Empty<long>();
+                var values = new long[n];
+                fixed (long* v = values) _api.DebugRegisters(Handle, processor, v, (nuint)n);
+                return values;
+            }
         }
 
         public string Disassemble(uint processor, uint space, uint address, uint count)
         {
             if (!Has(CoreInterface.CapDebugDisassemble)) return "[]";
-            long n = _api.DebugDisassemble(Handle, processor, space, address, count, null, 0);
-            if (n <= 0) return "[]";
-            var bytes = new byte[n];
-            fixed (byte* b = bytes) _api.DebugDisassemble(Handle, processor, space, address, count, b, (nuint)n);
-            return CoreLibrary.Utf8(bytes) ?? "[]";
+            lock (_gate)
+            {
+                long n = _api.DebugDisassemble(Handle, processor, space, address, count, null, 0);
+                if (n <= 0) return "[]";
+                var bytes = new byte[n];
+                fixed (byte* b = bytes) _api.DebugDisassemble(Handle, processor, space, address, count, b, (nuint)n);
+                return CoreLibrary.Utf8(bytes) ?? "[]";
+            }
         }
 
         // Every event waiting, oldest first.
         public IReadOnlyList<CoreInterface.Event> DrainEvents()
         {
-            long n = _api.Events(Handle, null, 0, 0);
-            if (n <= 0) return Array.Empty<CoreInterface.Event>();
-            var events = new CoreInterface.Event[n];
-            for (int i = 0; i < events.Length; i++) events[i].Size = (uint)sizeof(CoreInterface.Event);
-            fixed (CoreInterface.Event* e = events) n = _api.Events(Handle, e, (nuint)events.Length, (nuint)sizeof(CoreInterface.Event));
-            return n == events.Length ? events : events[..(int)Math.Max(0, n)];
+            lock (_gate)
+            {
+                long n = _api.Events(Handle, null, 0, 0);
+                if (n <= 0) return Array.Empty<CoreInterface.Event>();
+                var events = new CoreInterface.Event[n];
+                for (int i = 0; i < events.Length; i++) events[i].Size = (uint)sizeof(CoreInterface.Event);
+                fixed (CoreInterface.Event* e = events) n = _api.Events(Handle, e, (nuint)events.Length, (nuint)sizeof(CoreInterface.Event));
+                return n == events.Length ? events : events[..(int)Math.Max(0, n)];
+            }
         }
 
-        public IReadOnlyList<string> DrainLog() => DrainLog(_api, Handle);
+        public IReadOnlyList<string> DrainLog()
+        {
+            lock (_gate) return DrainLog(_api, Handle);
+        }
 
         // A queue's records as lines; machine 0 is the library's own queue.
         public static IReadOnlyList<string> DrainLog(CoreInterface api, nint machine)
@@ -372,8 +468,11 @@ namespace EmuSen.Cores.Native
 
         public void Dispose()
         {
-            if (_handle != 0) _api.Free(_handle);
-            _handle = 0;
+            lock (_gate)
+            {
+                if (_handle != 0) _api.Free(_handle);
+                _handle = 0;
+            }
             GC.SuppressFinalize(this);
         }
 

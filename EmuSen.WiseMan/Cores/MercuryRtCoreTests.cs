@@ -188,6 +188,8 @@ namespace EmuSen.WiseMan.Cores
             {
                 core.SetButton(1, PadButton.A, true);
                 core.SetButton(0, PadButton.B, true);
+                // A v1 engine hands a press to its machine as the next frame starts - see Diamond_Players.md §12.7.
+                core.RunFrame();
             }
             cs.WriteSpace(MercuryCore.SpaceCpuBus, 0xFF00, 0x10);
             rt.WriteSpace(MercuryCore.SpaceCpuBus, 0xFF00, 0x10);

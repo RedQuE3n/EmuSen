@@ -112,12 +112,15 @@ pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
                 hi = lo - 1;
             }
         }
+        if lo > hi {
+            continue;
+        }
+        p.work.rows += 1;
         let lo = lo.max(area_rect.x1 as i64);
         let hi = hi.min(area_rect.x2 as i64);
         if lo > hi {
             continue;
         }
-        p.work.rows += 1;
         if !p.visible_row(y) {
             continue;
         }

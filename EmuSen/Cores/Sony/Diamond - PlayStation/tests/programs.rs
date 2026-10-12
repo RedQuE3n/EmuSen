@@ -348,14 +348,15 @@ fn the_chopping_record_times_each_transfer() {
 /// `gpu/bandwidth`: the hblanks of 400 full-screen transfers or primitives a row, nine of the fourteen equal to the
 /// release's on Diamond and the rest within two (§5), every row within 0.6% of the console's; since D-11's refit, each
 /// row within one hblank of what it read before; since D-41, the textured quads 39,916 where they were 39,976 and 39,975;
-/// since D-46, the clipped quads 5,818 and 3,916 (the console 5,845 and 3,968), each triangle charged by its rows.
+/// since D-46, each triangle charged by the rows it spans, those clipped at the sides included: the clipped quads
+/// 5,844 and 3,967 (the console 5,845 and 3,968).
 #[test]
 fn the_bandwidth_record_counts_each_rows_hblanks() {
     let Some(source) = carried("bandwidth") else { return };
     let m = run_for(&source, 860, Market::Americas);
     let hblanks: Vec<u32> = results(&m, 0x10_0000, 56).chunks(4).map(|r| r[2]).collect();
-    assert_eq!(hblanks, [15_773, 12_123, 19_127, 1216, 7603, 11_461, 15_134, 15_134, 7720, 11_579, 39_915, 39_915, 5818, 3916]);
-    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0x894D_5C3E_37BB_74F3, "the milliseconds and MB/s as well");
+    assert_eq!(hblanks, [15_773, 12_123, 19_127, 1216, 7603, 11_461, 15_134, 15_134, 7720, 11_579, 39_915, 39_915, 5844, 3967]);
+    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0x5191_BCBD_B27F_FC42, "the milliseconds and MB/s as well");
 }
 
 /// `dma/chain-looping`: the RAM loop's ticks with no DMA, an empty chain and two never-ending ones, and their

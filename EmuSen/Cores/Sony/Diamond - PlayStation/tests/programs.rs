@@ -1268,3 +1268,24 @@ fn every_table_armed_gives_the_plain_runs_digests_on_a_disc() {
         m
     });
 }
+
+// --- D-29: DICR's master flag and I_STAT's bit 3 (Diamond_Disputes.md D-29, Diamond_Records.md §16.3) ---
+
+/// I_STAT's bit 3 is set by bit 31's 0-to-1 transition alone, a completion's or a write's, as psx-spx has it and the
+/// referees of three lineages read all ten cases: a write that leaves the flag up sets nothing (cases 1 and 7).
+#[test]
+fn dicr_sets_i_stat_only_when_its_master_flag_rises() {
+    let m = run(include_str!("../programs/dicr-edge.s"));
+    assert_eq!(
+        results(&m, 0x10_0000, 20),
+        [8, 0xC0C0_0000, 0, 0xC0C0_0000, 0, 0x4040_0000, 8, 0xC0C0_0000, 0, 0xC0C0_0000, 0, 0x00C0_0000, 8, 0x80C0_8000, 0, 0x80C0_8000, 0, 0x00C0_0000, 8, 0xC0C0_0000]
+    );
+}
+
+/// A handler that leaves a channel's flag up and writes DICR runs once, as on all five referees; before the rule it
+/// ran without end, which is how the player's BIOS stopped at its first screen.
+#[test]
+fn a_dicr_write_with_a_flag_left_up_does_not_ask_again() {
+    let m = run(include_str!("../programs/dicr-storm.s"));
+    assert_eq!(results(&m, 0x10_0000, 3), [1, 0xC0C8_0000, 0], "the handler's runs, DICR and I_STAT's bit 3");
+}

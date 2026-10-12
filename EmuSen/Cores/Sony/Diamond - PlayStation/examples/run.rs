@@ -4,7 +4,7 @@
 //! `--disasm ADDRESS N` disassembles N words of a game's RAM after the run. `--armed` runs each frame through the debugger's loop with the kit's C15 tables armed (Diamond_Debugger.md), and `--armed-reads` the read watch and read data breakpoint of 1.2 beside them, with nothing to hit. `--wav FILE` writes the SPU's output, 16-bit stereo at 44,100 Hz. `--boot` boots the disc through the kernel's LoadExec from a loader, without the BIOS's intro (Diamond_CDROM.md §9).
 //! `--heading TEXT` prints the TTY from TEXT on, leaving out what a BIOS printed before the program; `--trace` then
 //! traces the controller's commands and responses, as `--trace-game` does from the entry of a game booted by `--boot`, once the BIOS has handed over. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
-//! the image itself when PATH is no PS-EXE), `--analog` presses port 1's Analog button at frame 30; `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--press F:MASK[:N]` holds the buttons of a hex mask of the pad report's bits for N frames, `--stick F:AXIS:VALUE[:N]` a stick (0-1 the left x and y, 2-3 the right, -1 to 1); `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
+//! the image itself when PATH is no PS-EXE), `--analog` presses port 1's Analog button at frame 30; `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--press F:MASK[:N]` holds the buttons of a hex mask of the pad report's bits for N frames, `--stick F:AXIS:VALUE[:N]` a stick (0-1 the left x and y, 2-3 the right, -1 to 1); `--poke ADDR:VALUE:WIDTH` writes VALUE (hex) to RAM at ADDR (hex) before every frame, WIDTH bytes little-endian, as a cheat's constant write does (GameShark 800B521E 00C4 is `--poke B521E:C4:2`); `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
 //! `cdrom/disc-swap` does; `--trace-at FRAME` traces the controller from a frame on; `--calls` counts the kernel calls a program makes by table and number, as the program
 //! enters the A0h, B0h and C0h vectors, a BIOS's own calls among them. `--game` observes only the game, from its entry on, on either kernel: the TTY from the entry,
 //! the text it passes to write(1) and putchar, its calls counted, and with `--game-log FILE` each call's arguments and result and its own loads and stores at
@@ -74,6 +74,15 @@ fn main() {
             (p[0].parse().expect("a frame"), u32::from_str_radix(p[1], 16).expect("a hex mask"), p.get(2).map_or(6, |n| n.parse().expect("frames")))
         })
         .collect();
+    let pokes: Vec<(usize, u32, usize)> = args
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| *a == "--poke")
+        .map(|(i, _)| {
+            let p: Vec<&str> = args[i + 1].split(':').collect();
+            (usize::from_str_radix(p[0], 16).expect("a hex address") & 0x1F_FFFF, u32::from_str_radix(p[1], 16).expect("a hex value"), p[2].parse().expect("a width"))
+        })
+        .collect();
     let sticks: Vec<(i64, u32, f64, i64)> = args
         .iter()
         .enumerate()
@@ -130,6 +139,10 @@ fn main() {
         }
         if trace_at == Some(m.frames) {
             m.board.cdrom.trace = true;
+        }
+        for &(at, value, width) in &pokes {
+            let ram = m.space_mut(1).expect("RAM");
+            ram[at..at + width].copy_from_slice(&value.to_le_bytes()[..width]);
         }
         if !presses.is_empty() {
             let mask = presses.iter().filter(|(at, _, n)| (*at..*at + *n).contains(&m.frames)).fold(0, |a, p| a | p.1);

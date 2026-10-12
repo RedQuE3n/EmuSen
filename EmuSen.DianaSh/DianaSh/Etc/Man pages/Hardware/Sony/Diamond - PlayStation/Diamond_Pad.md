@@ -384,6 +384,24 @@ raw bytes, which the reference probe now loads with `--sram FILE` (added for thi
 The cards kept are in `~/.cache/emusen/probe/diamond/cards/roundtrip/`, outside the repository: each reference's
 written card and the zero card they started from.
 
+### 11.2 The cards with the player's BIOS (stage 10's cross-kernel step)
+
+Run on 2026-10-11 with Tekken 3, the player's BIOS used only as Diamond's firmware (`scph5501.bin`, the game started
+through `LoadExec` because of D-29), judged by the game's own messages [M, `Diamond_OpenKernel_Phase2.md` §22.1-§22.2]:
+
+| Card | Written by | Read by | The game |
+|---|---|---|---|
+| Tekken 3's save | the open kernel | the player's BIOS | "LOAD OK!" |
+| Tekken 3's save, on a blank card the game initialised | the player's BIOS | the open kernel | "LOAD OK!" |
+| a blank card formatted by the open kernel's card manager | the open kernel | the player's BIOS | Card Load "NO TEKKEN 3 FILE!"; Card Save "SAVE OK!" without asking to initialise |
+| a blank card of zeros (the control) | — | either | "LOAD ERROR!" |
+
+The two kernels' cards agree in the header, the directory frames and the save's title and icon frames; they differ,
+within psx-spx's description, in bytes 08h-09h of the broken sector list (FFFFh on the player's BIOS, 00h here), in
+frames 36-62 (FFh here, left as they were by the player's BIOS) and in frame 63 (§22.2 of that page, with a defect of the
+open kernel's write test on a new card). The player's BIOS's own card manager was not reached: with no disc it stays on
+its first intro screen (D-29).
+
 ## 12. Reading log
 
 Every file opened for this part, 2026-10-11:

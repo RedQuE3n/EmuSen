@@ -726,7 +726,7 @@ next begins. The order puts a drawn picture at stage 4 and a booting disc at sta
 | **7** | **The CD-ROM** and the shared disc crate (§9.2): the controller's commands, responses and timing, reads, filters, XA-ADPCM, CD-DA, subchannel Q and `.sbi`, the lid; `.cue`/`.bin`, `.iso`, `.chd`; the content-based routing (§10) | ps1-tests' `getloc` and `disc-swap`; synthetic discs read sector for sector; XA and CD-DA streams on synthetic discs equal to their sources; games boot **on the player's BIOS** (if any, §11 Q6) to their title screens, against the references | 5 |
 | **8** | **The SPU**: voices, ADPCM, Gaussian interpolation, ADSR, sweep, noise, pitch modulation, reverb, capture, IRQ, transfers, CD audio in | ps1-tests' `spu/memory-transfer` and `spu/test`; synthetic voice programs against the references' audio, and against the tester's recordings if any (§11 Q16); the reverb against the references | 5 |
 | **9** | **The MDEC** | ps1-tests' `mdec/4bit`, `8bit`, `frame` and `movie`, VRAM exactly; Peter Lemon's DCT decode | 2 |
-| **10** | **The open BIOS, the rest** (§5.9): CD boot, files, the card functions in the real format, the screen without a disc. *Built 2026-10-11 (`Diamond_OpenKernel_Phase2.md`, `Diamond_Native.md` §18); its card exchange with the player's BIOS and `firmwarecheck.py` left to a separate step by the stage's terms* | **Games boot with no firmware folder**; the cards they write are read by the same games on the player's BIOS and the reverse; `firmwarecheck.py` within the policy's limits; G9 | 6 |
+| **10** | **The open BIOS, the rest** (§5.9): CD boot, files, the card functions in the real format, the screen without a disc. *Built 2026-10-11 (`Diamond_OpenKernel_Phase2.md`, `Diamond_Native.md` §18); its card exchange with the player's BIOS and `firmwarecheck.py` left to a separate step by the stage's terms, taken the same day (`Diamond_OpenKernel_Phase2.md` §22): the cards cross both ways; `firmwarecheck.py` FAILs by the default thresholds, its Q5 open* | **Games boot with no firmware folder**; the cards they write are read by the same games on the player's BIOS and the reverse; `firmwarecheck.py` within the policy's limits; G9 | 6 |
 | **11** | The PlayStation to players: the system pack's codecs (GameShark, Xploder), settings (region, model, pads, card mode), battery files, the two pad drawings, the CRT timing, `.m3u` and the disc change, the shelf, the kit on games. *Built 2026-10-11 with the four framework pieces stage 7 proposed (`Diamond_Players.md`).* | The kit's C1–C15 on the tester's discs (corpus form); cards round-trip; the fit audit with the PlayStation's tab, drawings and shelf at both sizes; the cheats decode (G4) | 4 |
 | **12** | The debugger: the R3000A through the observer; registers including the GTE's; disassembly; breakpoints, stepping, coverage, the call stack | Each claim a test; every table armed gives the plain run's digests (C15, G7) | 2 |
 | **13** | Speed (§5.12): the exact levers, in order, measured on the bench, under the 33% quota and on the handheld | §5.12's budget (G6) | 4 |
@@ -765,7 +765,10 @@ decision, as the Genesis was offered (`Nephrite_Plan.md` §7). The core carries 
   someone who did not write it. (For the Genesis this review was skipped by decision, `Nephrite_Plan.md` §7; for
   Diamond it is the tester's again, §11 Q15.)
 - **G9, firmware.** Every game the open BIOS is claimed to run runs with no firmware folder, its machine info naming
-  the replacement; with the player's image, the same game runs on it.
+  the replacement; with the player's image, the same game runs on it. *2026-10-11*: the games and their cards are met
+  (`Diamond_OpenKernel_Phase2.md` §22.1, §22.7); ~~the open-BIOS condition is not met in full while `firmwarecheck.py`
+  fails by the policy's thresholds (§22.6, its Q5).~~ *Later the same day*: `firmwarecheck.py` passes on all 18 images
+  against a control (`EmuSen_Firmware.md` §0), so **G9's open-BIOS condition is met**.
 - **GE, the enhancements.** Each enhancement offered only with its stage's gate met and E1's exactness test passing in
   CI on every change to the core.
 

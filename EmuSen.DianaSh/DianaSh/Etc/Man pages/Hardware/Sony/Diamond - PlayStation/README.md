@@ -67,7 +67,10 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   psx-spx lists, the on-card file system with formatting, the boot by SYSTEM.CNF and its state at the jump, the warm
   boot, the screen with no disc and its card manager, the tests, the tester's games booting with no firmware folder
   against the player's BIOS, a save made and loaded on the kernel, the choices, the questions, the cost, the image, what
-  the cross-kernel step needs, and the reading log with its exposure.
+  the cross-kernel step needs, and the reading log with its exposure; then §22, the cross-kernel step itself, written
+  for the kernel's writer at the interface only: the cards crossing both ways with Tekken 3, the two kernels' formats
+  compared, Spyro's retries and Ape Escape's DUALSHOCK screen the same on both, two documented call results that
+  differ, and `firmwarecheck.py`'s FAIL by its default thresholds with Q5.
 - [`Diamond_Pad.md`](Diamond_Pad.md) — SIO0 and the controllers, from 2026-10-11, when a digital pad on port 1 was
   brought forward from stage 6: the registers, a byte on the wire, /ACK and IRQ7, the pad and the slots, amidog's CPX,
   GPU and GTE tests run from their menus and what they showed (three R3000A defects fixed, the CE and second-load items

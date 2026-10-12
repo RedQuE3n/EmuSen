@@ -1070,6 +1070,64 @@ fn the_screen_with_no_disc_formats_a_card_and_boots_a_disc_put_in() {
     assert_eq!(m.board.ram_word(0x10_0000 + 4 * 8), 0, "and its calls kept the saved registers");
 }
 
+/// `card-write-race.s` on a machine with blank cards in both slots, the port it writes poked first, run to the B0h entry
+/// of its `_card_write` call; the machine and the instructions stepped so far.
+fn card_write_call(port: u32) -> Machine {
+    let words = emusen_mips::assemble(include_str!("../programs/card-write-race.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).unwrap();
+    let image = exe::build(&words);
+    let media = Media::read(&image).unwrap();
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
+    m.insert_card(0, None);
+    m.insert_card(1, None);
+    m.board.ram[0x10_0100..0x10_0104].copy_from_slice(&port.to_le_bytes());
+    while !(m.cpu.regs.pc & 0x1FFF_FFFF == 0xB0 && m.cpu.regs.r[9] == 0x4E) {
+        m.step();
+    }
+    m
+}
+
+/// §23: a vblank taken at any instruction of `_card_write` leaves the request whole, so that frame 3Fh holds the bytes
+/// the call names. The first build stored the request a field at a time with interrupts on, and a vblank between the
+/// stores carried out a write of sector 3Fh from address 0, the kernel's copy of its exception vector, as the
+/// cross-kernel step saw on frame 63 (§22.2). The window swept is where the call stores into the kernel's RAM.
+#[test]
+fn a_vblank_inside_card_write_never_sends_a_half_stored_request() {
+    let pattern: Vec<u8> = (0..128u32).map(|n| (3 * n + 1) as u8).collect();
+    for port in [0x00, 0x10] {
+        let mut m = card_write_call(port);
+        let before = m.board.ram[..0xE000].to_vec();
+        let mut stores = Vec::new();
+        for k in 0..20_000usize {
+            m.step();
+            if m.cpu.regs.pc & 0x1FFF_FFFF < 0x1_0000 || m.cpu.regs.pc >= 0x9FC0_0000 {
+                let now = &m.board.ram[0x500..0xDF80];
+                if now != &before[0x500..0xDF80] && stores.last() != Some(&k) {
+                    stores.push(k);
+                }
+            }
+            if m.cpu.regs.pc & 0x1FFF_0000 == 0x1_0000 {
+                break;
+            }
+        }
+        let (first, last) = (stores.first().copied().unwrap_or(0), stores.last().copied().unwrap_or(0));
+        for k in first.saturating_sub(40)..last + 40 {
+            let mut m = card_write_call(port);
+            for _ in 0..k {
+                m.step();
+            }
+            m.board.irq.raise(diamond::irq::VBLANK);
+            for _ in 0..60 {
+                m.advance();
+                if m.board.ram_word(0xFFFF0) == 0xD1A0_D00E {
+                    break;
+                }
+            }
+            let card = &m.card_in((port >> 4) as usize).unwrap().data;
+            assert_eq!(&card[0x3F * 128..0x40 * 128], &pattern[..], "port {port:02X}: vblank raised {k} instructions into the call");
+        }
+    }
+}
+
 // ---- Stage 12, the debugger (Diamond_Debugger.md) ----------------------------------------------------------------
 
 /// How a table is set on a machine.

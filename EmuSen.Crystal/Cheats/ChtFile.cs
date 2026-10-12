@@ -127,7 +127,7 @@ namespace EmuSen.Crystal.Cheats
 
         // A code is a patch when only the patch codec claims it, the same rule `cheat add` follows - see EmuSen_Cheats.md §8.
         private static bool ClaimsPatch(string? code, ICheatCodeCodec? codeDecoder, ICheatCodeCodec? patchCodec) =>
-            !string.IsNullOrWhiteSpace(code) && patchCodec is not null && codeDecoder?.CanDecode(code) != true &&
+            !string.IsNullOrWhiteSpace(code) && patchCodec is { Kind: CheatCodeKind.RomPatch } && codeDecoder?.CanDecode(code) != true &&
             (patchCodec.CanDecode(code) || code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).All(patchCodec.CanDecode));
 
         // A patch with a compare value has nowhere to keep it here, so it is skipped rather than made wrong - see EmuSen_Cheats.md §3.

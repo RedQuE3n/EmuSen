@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisTeamPlayer"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisTeamPlayer"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsPlayStation"] = typeof(ShaderSettingsWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow), ["ControllerBindingsPlayStation"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStationDigital"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
             ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
@@ -239,9 +239,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         // A console only a discovered engine serves, whose tab the window adds after the catalog's, with no core in development shown - see EmuSen_Settings_Reference.md §4.90 and §4.94.
-        internal static void ShowDiscoveredTab(MainWindow window, string console)
+        internal static void ShowDiscoveredTab(MainWindow window, string console, bool development = false)
         {
-            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
+            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(development);
             Call(window, "ShowGraphicsSettings");
             Settle(window);
             var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
@@ -287,6 +287,29 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "GraphicsSettingsCustomCrop":
                     ShowCustomCrop(window);
+                    break;
+                case "GraphicsSettingsPlayStation":
+                    ShowDiscoveredTab(window, "PlayStation");
+                    break;
+                case "ShaderSettingsPlayStation":
+                    Call(window, "ShowShaderSettings");
+                    SelectTab(window, "PlayStation");
+                    break;
+                case "ActiveCheatsPlayStation":
+                    Call(window, "ShowActiveCheats");
+                    SelectTab(window, "PlayStation");
+                    break;
+                case "ControllerBindingsPlayStation":
+                case "ControllerBindingsPlayStationDigital":
+                    if (which.EndsWith("Digital", StringComparison.Ordinal))
+                    {
+                        var digital = GraphicsConfig.Load();
+                        digital.SetValue("PlayStation", "pad1", "psx.pad");
+                        digital.Save();
+                    }
+                    Call(window, "ShowControllerBindings");
+                    SelectTab(window, "PlayStation");
+                    Assert.Equal("PlayStation", (Sheets(window).Current as InputSettingsWindow)?.ShownConsole);
                     break;
                 case "GraphicsSettingsGameCropNote":
                     ((EmuSen.Mistress.Library.GameRecords)Field(window, "_records")).SetCrop((string)Field(window, "_currentRomPath"), new EmuSen.Mistress.Library.GameCrop(1.3, 1.1, 8.7, 9));
@@ -558,7 +581,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             string name = $"{which}-{width}x{height}";
             // A console only a discovered engine runs has its tabs and shelf with no core in development shown, as a player's build has them - see EmuSen_Settings_Reference.md §4.94.
-            if (which.Contains("Genesis", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
+            if (which.Contains("Genesis", StringComparison.Ordinal) || which.Contains("PlayStation", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),

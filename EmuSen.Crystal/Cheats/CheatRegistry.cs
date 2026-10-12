@@ -318,8 +318,14 @@ namespace EmuSen.Crystal.Cheats
         {
             int width = w.EffectiveWidth;
             uint mask = width == 4 ? uint.MaxValue : (1u << (8 * width)) - 1;
-            bool equal = ReadWide(read, w, w.Address, width) == (w.Value & mask);
-            return w.Type == CheatWriteType.IfEqual ? equal : !equal;
+            uint held = ReadWide(read, w, w.Address, width), value = w.Value & mask;
+            return w.Type switch
+            {
+                CheatWriteType.IfEqual => held == value,
+                CheatWriteType.IfLess => held < value,
+                CheatWriteType.IfGreater => held > value,
+                _ => held != value,
+            };
         }
 
         // Kept so a write-only caller still compiles; those writes read back as 0.

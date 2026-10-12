@@ -46,8 +46,8 @@ namespace EmuSen.WiseMan.Cores
         public void The_rows_are_what_the_engine_in_use_declares_and_every_shipped_system_is_listed()
         {
             var systems = FirmwareOverview.Build(new GraphicsConfig());
-            Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64", "Sega Genesis / Mega Drive"], systems.Select(s => s.Name));
-            Assert.All(systems.Where(s => s.Name is not ("Super Nintendo" or "Sega Genesis / Mega Drive")), s => Assert.Empty(s.Items));
+            Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64", "Sony PlayStation", "Sega Genesis / Mega Drive"], systems.Select(s => s.Name));
+            Assert.All(systems.Where(s => s.Name is not ("Super Nintendo" or "Sega Genesis / Mega Drive" or "Sony PlayStation")), s => Assert.Empty(s.Items));
 
             FirmwareSystem snes = Snes();
             CoreSystem declared = VenusRt.Info.Systems.Single(s => s.Id == "snes");

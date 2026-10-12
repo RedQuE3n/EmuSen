@@ -108,6 +108,72 @@ The same day a ROM patch format first decoded to more than a byte. `cheat add`, 
 
 **What is argued, not measured**: a word at an odd address (2,571 of the database's four-digit pokes are at odd addresses, 2,442 of them with a high byte of 0, which may mean a byte); the value's width from its digits; the Game Genie on the Sega CD, which has no cartridge for it, and whose patches Nephrite's machine info gives no range for, so the frontend sends none.
 
+## 10. The PlayStation's two formats (2026-10-11)
+
+*Built at Diamond's stage 11, in the PlayStation's system pack (`Crystal/Systems/Psx/PsxCheatFormats.cs`).* Read for
+it: psx-spx (the maintained conversion, `stable` at `6d7d1bc`), `cheatdevices.md`, its opening table "Separating
+between Gameshark and Xplorer Codes", "Cheat Devices - Datel Cheat Code Format" and "Cheat Devices - Xplorer Cheat Code
+Format" with the decryption below it; and the libretro database's `Sony - PlayStation` files, read for their codes'
+forms. No emulator's source and no decoder program was read.
+
+**The codes are RAM pokes in `RAM`**, the PlayStation little-endian, an address's low 21 bits the main RAM's offset, an
+8-bit code's value its line's low byte. A line is eight hex digits and four; the database joins lines, and sometimes
+an address's halves, with `+`, so a code is read as its hex digits in twelves. **The auto-detect codec, "GameShark or
+Xploder"**, tells the two apart by psx-spx's first-digit table: a code whose lines' types are all the Datel device's
+(3 and 8 shared, 1, 2, C, D, E, 0 for the dummy line and 5 for the slide) is decoded as a GameShark code, the
+Datel table that Game Buster and Action Replay share, and any other as an Xploder code. **The explicit codec,
+"Xploder"**, takes the Xploder alone, for a code typed in that form.
+
+| GameShark | Becomes |
+|---|---|
+| `30aaaaaa 00dd`, `80aaaaaa dddd` | `Set`, width 1 or 2 |
+| `10`/`11`, `20`/`21` | `Increase`/`Decrease`, 16 and 8 bits |
+| `D0`/`E0`, `D1`/`E1` | `IfEqual`, `IfNotEqual`, 16 and 8 bits |
+| `D2`/`E2` "If dddd<[aaaaaa]", `D3`/`E3` "If dddd>[aaaaaa]" | `IfGreater`, `IfLess`: the memory greater than the value, or less [C] |
+| `5000nnbb dddd` + its line | one write repeated nn times, the address bb apart and the value ee apart, dddd the first value [C] |
+| `00000000 0000` | nothing (the CD version's dummy between slides) |
+| `C0`, `C1`, `C2`, `C3`, `D4`-`D6`, `12`/`22` | refused by name |
+
+| Xploder (after decryption) | Becomes |
+|---|---|
+| `3t`, `8t` | `Set`, width 1 or 2 |
+| `00aaaaaa dddd` | `Set`, width 4, `0000dddd` |
+| `7t`, `9t` | `IfEqual`, `IfNotEqual`, 16 bits |
+| `4t`, `5t`, `6t`, `Bt`, `Ft`, `C0`, `D0` | refused by name |
+
+**The Xploder's decryption** is psx-spx's `decrypt_xplorer_cheat_code`: the key is the type's low three bits, keys 0,
+4, 5, 6 and 7 decrypt the six bytes as the chapter gives them, and keys 1 to 3, for which it gives no rule, are
+refused. Each key is shown to undo an encryption written from the chapter's steps in reverse, on 2,000 random codes
+(`PsxCheatFormatsTests.Each_xploder_key_decrypts_what_it_encrypts_and_keys_1_to_3_are_refused`). The type's bit 3, the
+device's default-off flag, is not a code's meaning; a cheat's own switch stands for it.
+
+**The choices, argued.** The chapter's notes say it is "unclear if greater/less compare dddd by [aaaaaa], or
+vice-versa" and "unknown if signed or unsigned"; the codec takes the table's text literally (`D2` passes when the
+value is less than the memory) and compares unsigned, `IfLess` and `IfGreater` comparing the memory with the value
+within the test's width. The slide's second line is the write it repeats (`80aaaaaa ??ee`), its value step the second
+line's value, as the chapter's `dddd+(i*??ee)` reads. Chained tests keep the registry's AND rule (§7): no source says
+whether the device skips a following test as a line, and the chapter's "exec next code" is what the rule already
+does for a single test. `C0` is refused until a source or a test settles whether it latches (`EmuSen_CoreAPI_Extensions.md`
+Q7). A 16-bit write at an odd address is applied byte by byte, the chapter leaving alignment unknown.
+
+**Measured against the libretro database** (the 1,961 `Sony - PlayStation` files a published build carries; their
+names give the format, 1,168 GameShark, 667 Game Buster, 102 Xploder and 24 neither): 17,869 of 22,116 entries load,
+12,768 of 15,445 GameShark entries, 4,422 of 5,760 Game Buster and 546 of 670 Xploder. Of the 4,247 that do not, 3,592
+hold `?` or a letter for a value the player picks and 204 are words or a code of odd length, which no codec could
+apply; of the 18,320 that are codes, 97.5% load. The rest are refusals by name: 225 types neither table gives, 31 tests
+with nothing after them, 23 `C1`, 20 `C2`, 10 Xploder `5t`, 7 `D4`-`D6`, 6 `C0`, the remainder fewer than five each
+(`PsxCheatFormatsTests.The_databases_playstation_files_decode_and_each_refusal_is_named`, opt-in by
+`EMUSEN_PSX_CHEAT_DB`). `EmuSen_CoreAPI_Extensions.md`'s P4 is retired in part: more than nine in ten codes decode, but
+most of the rest are types neither table gives, not `D4`-`D6` and `C1`.
+
+**A guard added on the way.** `ChtFile` took any explicit codec a caller passed as a ROM-patch codec. With a first
+form of the codecs, the GameShark alone as the auto-detect codec and the Xploder as the explicit one, an Xploder code in
+a `.cht` file would have been imported as a ROM patch, since only the explicit codec claimed it; the combined
+auto-detect codec claims every such code, so no PlayStation code reaches that path now. A patch codec is now one whose
+kind is `RomPatch` (`ChtFile.ClaimsPatch`); every console's patch codec is that kind, so nothing else changes. It was
+argued from the code, not shown by a failing import, since the configuration that would have shown it was never
+committed.
+
 ## The two combinations `AddCheat` refuses
 
 Both throw rather than silently doing something adjacent, because there is no honest implementation of either:

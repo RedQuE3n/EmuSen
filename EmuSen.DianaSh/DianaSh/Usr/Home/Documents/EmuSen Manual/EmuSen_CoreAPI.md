@@ -520,6 +520,13 @@ A pull request that adds to version 1:
 
 No line tagged with a released minor is edited afterwards. A mistake in one is corrected by deprecation and addition.
 
+The check takes a new line when its tag names a minor the base branch's baseline does not hold yet and no later than
+the header's minor. Two minors built side by side may therefore merge in either order, each keeping its number: 1.2
+(read watches) reached WiseMan before 1.1 (the disc change), and 1.1's lines arrived after it, still tagged `@1.1`.
+The one line both added, `json info.systems[].development`, keeps the `@1.2` it was given by the first to merge: a
+line already in a published baseline is not retagged, so the merge that brought 1.1 checks clean against the 1.2
+baseline. Decided 2026-10-12.
+
 ---
 
 ## 6. The v1 surface, call by call
@@ -1102,6 +1109,41 @@ does not close the door:
   is a call into the host or a shared device handle. MarsRT's GPU path (`Mars_Gpu.md`) keeps its device inside the
   core and copies out the picture, which fits v1. A shared-device minor is possible later as an addition; v1.0 leaves
   `pixel_formats` open for a device-image format.
+
+### 6.23 Media: a sheet's companions and the disc in a drive (1.1, 2026-10-11)
+
+*Added at Diamond's stage 11, as `EmuSen_CoreAPI_Extensions.md` §2 and §3 decided on 2026-10-11; the first minor.*
+
+**Image sets.** `EMUSEN_FILE_MEDIA` (65,536) numbers an image set's companions: a core that claims a sheet's extension
+receives the sheet as the image and the files its `FILE` lines name as files `EMUSEN_FILE_MEDIA + n`, in the sheet's
+order, then an `.sbi` found beside the image, which the core tells by its magic. Numbers below 65,536 stay the core's
+own. The host reads the list through `emusen-disc`'s set module (§2.3 there), so a sheet has one parser; an `.m3u`
+never reaches a core, the host passing its first disc and offering the others through `MEDIA`.
+
+**Disc change, `MEDIA` (bit 18).** Two optional exports and a struct:
+
+| Export | What it does | Refusals |
+|---|---|---|
+| `media_lid(machine, drive, open)` | opens (1) or closes (0) the drive's lid or tray, as the player would; the core models what a game sees, the drive stopping, an interrupt, the new disc read at closing | `NO_SUCH_DRIVE`; `NOT_SUPPORTED` for another value of `open` |
+| `media_insert(machine, drive, media)` | replaces the disc in the drive, or empties it for a null image; the core copies what it keeps, as at create | `LID_CLOSED` unless the lid is open or `EMUSEN_MEDIA_RESTORE` is set; `BAD_STRUCT` for a struct shorter than 48 bytes; the core's own refusal of the image, the drive left as it was |
+
+`emusen_media` is `{ size, flags, image, image_len, files, file_count, file_size }`, the files numbered as create's.
+Machine info lists the drives (`drives: [{ drive, label, kind, lid, loaded }]`, absent for a core without `MEDIA`), and
+`emusen-native` writes them from `Core::drives`, so that no core's `MachineInfo` changed shape. **A state holds its
+disc's fingerprint** (the core's choice; Diamond's is FNV-1a of its tracks, its lead-out and its sectors 4 and 16 to
+23), and `state_load` answers `WRONG_MEDIA` over another disc and changes nothing. `RESTORE` lets a host put a state's
+disc back with the lid closed just before it loads the state.
+
+**The host** (`CoreEngine`): `Discs`, `DiscIndex`, `CanChangeDisc` and `LidOpen`; `SetLid`, `InsertDisc` and
+`ChangeDisc`, which opens the lid, inserts the disc and closes the lid `LidOpenSeconds` (1.0) of the game's own time
+later, as ps1-tests' `disc-swap` leaves it; and a state that `WRONG_MEDIA` refuses is loaded again over each other disc
+of the set, put back with `RESTORE`, the drive restored where none is the state's. This is otherwise than
+`EmuSen_CoreAPI_Extensions.md` §3.5 planned, which recorded the disc beside each state: the core's own refusal finds
+the disc, so no record gained a field (`Diamond_Players.md` §3).
+
+**Older and newer peers.** A host that predates 1.1 passes no companions and never calls `MEDIA`; a core that predates
+it claims no sheet and no bit. A newer host with a core without `MEDIA` shows no Change Disc row and plays an `.m3u`'s
+first disc. **The kit** checks it as C16 where `MEDIA` is claimed (§12); C2 checks the bit against both exports.
 
 ---
 
@@ -1802,10 +1844,20 @@ nothing was changed.
 
 **Changelog.** v1.0: this page; the header, the baseline and the reference macro committed 2026-10-03 (§18), with the
 host adapter, discovery, the SNES's system pack and the kit's core suite after them (§19–§21).
-v1.2, 2026-10-11: read watches and read data breakpoints (§6.14.1; `EmuSen_CoreAPI_Extensions.md` §13), for a
+
+**v1.1, 2026-10-11** (§6.23), at Diamond's stage 11: `EMUSEN_FILE_MEDIA` and `EMUSEN_MEDIA_RESTORE`; `MEDIA` (bit 18)
+with `emusen_core_media_lid`, `emusen_core_media_insert` and `emusen_media`; `EMUSEN_LID_CLOSED` (−265),
+`EMUSEN_WRONG_MEDIA` (−266) and `EMUSEN_NO_SUCH_DRIVE` (−267); machine info's `drives`. Its reasons are
+`EmuSen_CoreAPI_Extensions.md` §2 and §3. The regeneration also recorded `info.systems[].development`, in use since
+2026-10-06 (§27.4) and missing from the baseline until then; it is tagged @1.2, the minor whose merge first recorded it. The
+guard now treats `EMUSEN_CORE_ABI_MINOR` and `EMUSEN_CORE_ABI_VERSION` as the header's revision: each minor moves them
+up, `--against` an older baseline accepts a rise and refuses a fall, and every other fact is held as before
+(`emusen-core-abi-check`'s `the_minor_moves_up_and_nothing_else_may`).
+
+**v1.2, 2026-10-11**: read watches and read data breakpoints (§6.14.1; `EmuSen_CoreAPI_Extensions.md` §13), for a
 debugger that could see stores and not loads; Diamond the first core to claim them. The same change refuses an unknown
-range kind, which 1.0's crate took for data breakpoints. Minor 1 is the disc change's (`MEDIA`), built beside it; the
-two are numbered in the order they reach `WiseMan`.
+range kind, which 1.0's crate took for data breakpoints. Minor 1 is the disc change's (`MEDIA`), built beside it and
+merged after it, its number kept.
 
 **Not checked here.**
 - Layouts were checked on x86-64 Linux only, with gcc 16 and clang. The baseline's other three targets are argued from
@@ -2749,6 +2801,32 @@ On the development desktop (16 processors), 600 frames, Nephrite's release libra
   v1 and the kit does not load it. `--sidecar`, with and without `--development`, writes the bytes it wrote.
 
 ---
+
+### 28.7 Discs: image sets, C16 and the memory per image (2026-10-11)
+
+*At Diamond's stage 11.* Three changes to the kit, each in its own place:
+
+- **Image sets** (the `media` module, over `emusen-disc`'s set module): `--image` and every `--images` entry that is a
+  `.cue` bring the files its `FILE` lines name as `EMUSEN_FILE_MEDIA + n` and an `.sbi` beside it; an `.m3u` is its
+  first disc. C4's firmware rule creates "with no firmware files" and keeps those companions, which are the image's;
+  before, it created with no files at all, and every sheet failed C4 on the companions it had not been given.
+- **C16, media** (§6.23), run with the image cases where `MEDIA` is claimed and nowhere else, so that no other core's
+  count of cases moved: an insert with the lid closed refused; the lid opened, the same disc inserted and the lid closed,
+  frames run; a state made then refused over an empty drive with `WRONG_MEDIA` and the machine unchanged, accepted
+  after `RESTORE` puts the disc back; a drive machine info does not list refused. An image with an empty drive, a
+  program, has the lid and an empty insert checked alone.
+- **The memory per image** (`EmuSen_CoreAPI_Extensions.md` §7): `estimate(len) = JOB_MEMORY + 4 × len`, the image's
+  length being its files' together; the images admitted by their estimates within the memory allowed less the core's
+  own job, one larger than all of it run alone; `--image-memory` names another factor; `summary.json` records
+  `memory.allowed`, `memory.largest_admitted` and `memory.peak_resident`.
+
+**Measured** on Diamond's sample (`kit/psx-sample.txt`, nine of the tester's discs from the probe's cache, every form
+the library holds: four sheets, one of 51 tracks, two lone dumps, a "(Track 1)" file, two unpacked from zips), 600
+frames, under a 10 GiB `MemoryMax`, no firmware folder: the core's cases pass and 9 of 9 discs pass C4, C6, C7, C8, C14
+and C16, in 42.8 s, nine at a time. The largest sum of estimates admitted was 10.36 GB of 10.47 GB allowed; the peak
+resident memory was 8.82 GB, below it, so P2 holds on this run. The kit's own tests pass, 7, 0 and 15, one of them, the
+C13 fault case, failing about one run in three on the base commit and after this change alike, its info drift
+sometimes missed by its four threads; it is not this change's and was not chased.
 
 ## 29. A space that is a view, 2026-10-07
 

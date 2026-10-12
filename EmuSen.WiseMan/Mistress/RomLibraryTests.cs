@@ -165,11 +165,11 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { "Alpha", "Beta", "Gamma" }, result.Entries.Select(e => e.Title));
         }
 
-        // The scan list is the catalog's, so a new core needs no edit in RomLibrary.
+        // The scan list is the catalog's and the archives', so a new core needs no edit in RomLibrary.
         [Fact]
         public void Scanned_extensions_come_from_the_core_catalog()
         {
-            Assert.Equal(EmuSen.Cores.CoreCatalog.RomExtensions, RomLibrary.Extensions);
+            Assert.Equal(EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Crystal.Media.ArchiveImages.Extensions), RomLibrary.Extensions);
         }
 
         [Fact]

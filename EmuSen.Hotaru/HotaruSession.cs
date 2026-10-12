@@ -32,7 +32,7 @@ namespace EmuSen.Hotaru
             var logWriter = new CategorizedLogWriter(originalOut, logDir);
             Console.SetOut(logWriter);
 
-            core.LoadRom(romPath);
+            CoreFactory.LoadInto(core, romPath);
             if (CoreFactory.EngineNotice(romPath, engine, core) is { } notice) Console.WriteLine($"[core] {notice}");
             DebugSettings.CpuVerboseLogging = true;
             DebugSettings.Spc700VerboseLogging = true;

@@ -80,6 +80,11 @@ namespace EmuSen.Cores.Native
             Info = ReadInfo();
         }
 
+        // Where a refused state's exception carries the core's status, so that a host can tell EMUSEN_WRONG_MEDIA from the rest - see EmuSen_CoreAPI.md §6.23.
+        public const string StatusKey = "emusen.status";
+
+        public static int? StatusOf(Exception e) => e.Data[StatusKey] as int?;
+
         public nint Handle => _handle != 0 ? _handle : throw new ObjectDisposedException(nameof(CoreMachine));
 
         public bool Has(ulong capability) => Library.Has(capability);
@@ -200,7 +205,7 @@ namespace EmuSen.Cores.Native
         {
             int status;
             fixed (byte* data = state) status = _api.StateLoad(Handle, data, (nuint)state.Length);
-            if (status != 0) throw new InvalidDataException($"{Name} refused the state: {Words(status)}.");
+            if (status != 0) throw new InvalidDataException($"{Name} refused the state: {Words(status)}.") { Data = { [StatusKey] = status } };
         }
 
         public string Layout(uint kind = 0)
@@ -210,6 +215,50 @@ namespace EmuSen.Cores.Native
             var bytes = new byte[n];
             fixed (byte* b = bytes) _api.StateLayout(Handle, kind, b, (nuint)n);
             return Encoding.UTF8.GetString(bytes);
+        }
+
+        // MEDIA: a drive's lid opened or closed, as the player would; machine info is read again for the drive's state.
+        public void MediaLid(uint drive, bool open)
+        {
+            Ok(_api.MediaLid(Handle, drive, open ? 1u : 0u), open ? "open the drive's lid" : "close the drive's lid");
+            ReadInfo();
+        }
+
+        // MEDIA: the disc in a drive replaced by image with its companions, or emptied by null; restore for a state about to load.
+        public void MediaInsert(uint drive, byte[]? image, IReadOnlyList<(uint Which, byte[] Data)> files, bool restore)
+        {
+            var pins = new GCHandle[files.Count];
+            var entries = new CoreInterface.File[files.Count];
+            try
+            {
+                for (int i = 0; i < files.Count; i++)
+                {
+                    pins[i] = GCHandle.Alloc(files[i].Data, GCHandleType.Pinned);
+                    entries[i] = new CoreInterface.File { Size = (uint)sizeof(CoreInterface.File), Which = files[i].Which, Data = (byte*)pins[i].AddrOfPinnedObject(), Len = (nuint)files[i].Data.Length };
+                }
+                int status;
+                fixed (byte* img = image)
+                fixed (CoreInterface.File* f = entries)
+                {
+                    var m = new CoreInterface.Media
+                    {
+                        Size = (uint)sizeof(CoreInterface.Media),
+                        Flags = restore ? CoreInterface.MediaRestore : 0,
+                        Image = image is null ? null : img,
+                        ImageLen = (nuint)(image?.Length ?? 0),
+                        Files = f,
+                        FileCount = (nuint)entries.Length,
+                        FileSize = (nuint)sizeof(CoreInterface.File),
+                    };
+                    status = _api.MediaInsert(Handle, drive, &m);
+                }
+                Ok(status, image is null ? "empty the drive" : "take the disc");
+            }
+            finally
+            {
+                foreach (var pin in pins) if (pin.IsAllocated) pin.Free();
+            }
+            ReadInfo();
         }
 
         public long SpaceSize(uint space) => Math.Max(0, _api.SpaceSize(Handle, space));

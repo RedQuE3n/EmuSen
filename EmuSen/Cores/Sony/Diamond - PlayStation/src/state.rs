@@ -16,7 +16,10 @@ use crate::pad::Controller;
 use crate::sio0::{Phase, Sio0, Target};
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"DMND");
-pub const STATE_VERSION: i32 = 8;
+pub const STATE_VERSION: i32 = 9;
+
+/// The versions a load reads: 9 adds the disc's fingerprint at the end, which an 8 lacks and is not held to.
+pub const LOADS_FROM: [i32; 2] = [8, 9];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -24,6 +27,8 @@ pub enum StateError {
     Foreign(u32),
     Version(i32),
     BufferTooSmall { needed: usize },
+    /// The state was made over another disc than the drive holds (EmuSen_CoreAPI.md §6.23).
+    WrongMedia { state: u64, drive: u64 },
 }
 
 impl Status for StateError {
@@ -33,6 +38,7 @@ impl Status for StateError {
             StateError::Foreign(_) => status::FOREIGN,
             StateError::Version(_) => status::VERSION,
             StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
+            StateError::WrongMedia { .. } => emusen_native::core::status::WRONG_MEDIA,
         }
     }
 }
@@ -473,6 +479,7 @@ impl Machine {
         w.bytes("VRAM", &b.gpu.vram.bytes);
         w.bytes("SPURAM", &b.spu.ram);
         w.bytes("TTY", &b.tty.text);
+        w.u64("Disc", self.disc_print);
     }
 }
 
@@ -486,7 +493,7 @@ impl StateMachine for Machine {
             return Err(StateError::Foreign(magic));
         }
         let version = r.i32()?;
-        if version != STATE_VERSION {
+        if !LOADS_FROM.contains(&version) {
             return Err(StateError::Version(version));
         }
         let frames = r.i64()?;
@@ -501,6 +508,12 @@ impl StateMachine for Machine {
         r.bytes(&mut board.gpu.vram.bytes)?;
         r.bytes(&mut board.spu.ram)?;
         r.bytes(&mut board.tty.text)?;
+        if version >= 9 {
+            let print = r.u64()?;
+            if print != self.disc_print {
+                return Err(StateError::WrongMedia { state: print, drive: self.disc_print });
+            }
+        }
         board.schedule();
         self.frames = frames;
         self.cpu = cpu;
@@ -550,14 +563,15 @@ mod tests {
     }
 
     #[test]
-    fn the_version_8_layout_is_pinned() {
+    fn the_version_9_layout_is_pinned() {
         let layout = machine().layout();
         let head: Vec<&str> = layout.lines().take(5).collect();
         assert_eq!(head, ["0 4 u32 Magic", "4 4 i32 Version", "8 8 i64 Frames", "16 128 u32[32] Cpu.R", "144 4 u32 Cpu.Hi"]);
-        let tail: Vec<&str> = layout.lines().rev().take(6).collect();
+        let tail: Vec<&str> = layout.lines().rev().take(7).collect();
         assert_eq!(
             tail,
             [
+                "3792964 8 u64 Disc",
                 "3727428 65536 u8[65536] TTY",
                 "3203140 524288 u8[524288] SPURAM",
                 "2154564 1048576 u8[1048576] VRAM",
@@ -567,7 +581,7 @@ mod tests {
             ]
         );
         assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Bus.Sio0.Port1.Controller.Modes") && layout.contains("Cpu.InterruptView.Held") && layout.contains("u16[8192] Bus.Cdrom.OutLeft") && layout.contains("u8[2352] Bus.Cdrom.Waiting") && layout.contains("u32[32] Bus.Mdec.Fifo") && layout.contains("u32[17] Bus.Mdec.Queue") && layout.contains("u32[2] Bus.MdecLeft") && layout.contains("u16[744] Bus.Spu.VoiceSamples") && layout.contains("u16[32] Bus.Spu.Fifo"), "{layout}");
-        assert_eq!(machine().state_size(), 3_792_964);
+        assert_eq!(machine().state_size(), 3_792_972);
     }
 
     #[test]
@@ -594,5 +608,13 @@ mod tests {
         v1[4] = 1;
         assert_eq!(b.load_state(&v1).unwrap_err().status(), status::VERSION, "a version 1 state, from before the GTE's interlock");
         assert_eq!((b.frames, b.space(RAM_ID).unwrap()), (2, &before[..]));
+
+        let mut v8 = s[..s.len() - 8].to_vec();
+        v8[4] = 8;
+        b.load_state(&v8).unwrap();
+        assert_eq!(b.frames, 1, "a version 8 state, from before the disc's fingerprint, loads unheld");
+        b.disc_print = 7;
+        assert_eq!(b.load_state(&s).unwrap_err().status(), emusen_native::core::status::WRONG_MEDIA, "a state over another disc than the drive's");
+        assert_eq!(b.frames, 1, "and changes nothing");
     }
 }

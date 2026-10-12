@@ -219,6 +219,10 @@ first line in sector 4 of an `.iso` or a raw track, held to the core's decision 
 
 ### 8.4 What the framework owes, proposed
 
+*All four built 2026-10-11, at stage 11, with the tester's approval of that day (`Diamond_Players.md` §1 and §2): the
+constant in the header as minor 1.1, the runtime's companions and `.m3u` with the disc change, routing by content, and
+archives. The pack now routes `.cue`, `.bin`, `.iso` and `.m3u`; `DiscExtensions` keeps `.pbp` alone.*
+
 Built nothing beyond Diamond, the disc crate and the pack, as the stage's terms required; each item below is decided
 in `EmuSen_CoreAPI_Extensions.md` but for the archive, which is new:
 

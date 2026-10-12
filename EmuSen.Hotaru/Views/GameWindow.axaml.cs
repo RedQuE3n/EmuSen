@@ -368,7 +368,7 @@ namespace EmuSen.Hotaru.Views
                 return;
             }
 
-            _core.LoadRom(romPath);
+            CoreFactory.LoadInto(_core, romPath);
             // The new console's pad, not the outgoing one's - see EmuSen_Input.md §5.1.
             _gamepad.Bindings = _gamepadBindings.For(_core.CoreName);
             _gamepad.LeftStickIsAnalog = _core.SupportedAxes.Contains(PadAxis.LeftX);

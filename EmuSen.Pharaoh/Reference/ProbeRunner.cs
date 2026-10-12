@@ -44,7 +44,7 @@ namespace EmuSen.Pharaoh.Reference
 
             string? engine = CoreFactory.ConfiguredEngine(romPath);
             ICore core = CoreFactory.Create(romPath, headless: true, engine);
-            core.LoadRom(romPath);
+            CoreFactory.LoadInto(core, romPath);
             if (CoreFactory.EngineNotice(romPath, engine, core) is { } notice) Console.WriteLine($"[core] {notice}");
 
             return PeerProbe.Run(core, romPath, dumpDir, startFrame, endFrame, stride, wantSignature, taps,

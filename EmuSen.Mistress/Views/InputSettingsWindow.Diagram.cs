@@ -321,7 +321,7 @@ namespace EmuSen.Mistress.Views
         private static IEnumerable<(string Stick, PadAxis X, PadAxis Y)> StickAxes(ControllerLayout layout) => layout switch
         {
             ControllerLayout.Nintendo64 => new[] { ("Stick", PadAxis.LeftX, PadAxis.LeftY) },
-            ControllerLayout.Gamepad => new[] { ("LeftStick", PadAxis.LeftX, PadAxis.LeftY), ("RightStick", PadAxis.RightX, PadAxis.RightY) },
+            ControllerLayout.Gamepad or ControllerLayout.DualShock => new[] { ("LeftStick", PadAxis.LeftX, PadAxis.LeftY), ("RightStick", PadAxis.RightX, PadAxis.RightY) },
             _ => Array.Empty<(string, PadAxis, PadAxis)>(),
         };
 

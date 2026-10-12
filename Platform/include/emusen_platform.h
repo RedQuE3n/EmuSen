@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 7u
+#define EMUSEN_PLATFORM_ABI_VERSION 8u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -92,6 +92,7 @@ int64_t emusen_platform_diagnostics(uint8_t *out, size_t len);
 #define EMUSEN_GALAXIA_DIR_GAMES 17u          /* a skeleton directory of the shell's tree, not the ROM library */
 #define EMUSEN_GALAXIA_DIR_LEGACY_ROOT 18u    /* DataMigration.LegacyRoot */
 #define EMUSEN_GALAXIA_DIR_LOG_DEFAULT 19u    /* ErrorLog.DefaultRoot */
+#define EMUSEN_GALAXIA_DIR_UNPACKED 20u       /* DataStore.Unpacked: archives unpacked for play */
 
 /* The redirects a test moves. */
 #define EMUSEN_GALAXIA_OVERRIDE_CONFIG 0u /* ConfigStore.OverrideDirectory */
@@ -351,6 +352,20 @@ int64_t emusen_galaxia_number_format(uint32_t kind, uint64_t bits, uint8_t *out,
 
 /* A file's bytes as File.ReadAllText decodes them: a byte-order mark chooses UTF-8, UTF-16 or UTF-32 and is dropped; what is not valid becomes U+FFFD. */
 int64_t emusen_galaxia_text_decode(const uint8_t *bytes, size_t bytes_len, uint8_t *out, size_t len);
+
+/* ---- Disc sets: emusen-disc's set module (EmuSen_CoreAPI_Extensions.md, section 2.3) ---- */
+
+/*
+ * The files a cue sheet's FILE lines name, in the sheet's order, each followed by a NUL: what a host passes beside the
+ * sheet as files EMUSEN_FILE_MEDIA + n. EMUSEN_PLATFORM_PARSE with words for a sheet that is not one.
+ */
+int64_t emusen_disc_companions(const uint8_t *sheet, size_t sheet_len, uint8_t *out, size_t len);
+
+/* The discs an .m3u lists, each followed by a NUL: one path a line, blank lines and # comments skipped. */
+int64_t emusen_disc_playlist(const uint8_t *list, size_t list_len, uint8_t *out, size_t len);
+
+/* The .sbi a disc's LibCrypt patches are looked for in beside an image: the image's stem with .sbi. */
+int64_t emusen_disc_sbi_beside(const uint8_t *image, size_t image_len, uint8_t *out, size_t len);
 
 /* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
 

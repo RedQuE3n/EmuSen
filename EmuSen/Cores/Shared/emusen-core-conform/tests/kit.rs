@@ -36,8 +36,9 @@ const ALL: [&str; 15] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "
 
 #[test]
 fn both_test_cores_pass_every_case() {
-    for name in ["kit_test_core", "kit_plain_core"] {
-        assert_eq!(verdicts(name), ALL.iter().map(|&c| (c, true)).collect::<Vec<_>>(), "{name}");
+    for (name, media) in [("kit_test_core", true), ("kit_plain_core", false)] {
+        let expected: Vec<_> = ALL.iter().chain(media.then_some(&"C16")).map(|&c| (c, true)).collect();
+        assert_eq!(verdicts(name), expected, "{name}: C16 runs where MEDIA is claimed");
     }
 }
 
@@ -107,7 +108,7 @@ fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let v = json::parse(report.json().as_bytes()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
-    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(15));
+    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(16));
     let none = run(&library("no_such_core"), &options());
     assert!(!none.passed());
     assert_eq!(none.cases[0].id, "C1");
@@ -133,7 +134,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
     assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.2"));
-    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0xBFFFF));
+    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0xFFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
     assert!(v.get("development").is_none());
@@ -171,7 +172,7 @@ fn corpus_files(tag: &str) -> (PathBuf, Vec<(String, PathBuf)>) {
 
 fn run_corpus(name: &str, list: &[(String, PathBuf)], jobs: usize) -> corpus::Corpus {
     let first = std::fs::read(&list[0].1).unwrap();
-    corpus::run(&library(name), &Options { image: first, ..options() }, &list[0].0, list, jobs, std::time::Duration::from_secs(120), &mut |_| {})
+    corpus::run(&library(name), &Options { image: first, ..options() }, &list[0].0, list, jobs, u64::MAX, None, std::time::Duration::from_secs(120), &mut |_| {})
 }
 
 // The corpus form runs each case in one place: the core's once, the image's for every image, C4 in both by its parts; and the test cores pass both.
@@ -183,12 +184,13 @@ fn a_corpus_runs_the_cores_cases_once_and_the_images_cases_for_every_image() {
         assert_eq!(c.core.cases.iter().map(|x| (x.id, x.passed)).collect::<Vec<_>>(), corpus::CORE_CASES.iter().map(|&id| (id, true)).collect::<Vec<_>>(), "{name}");
         assert_eq!(c.images.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), list.iter().map(|l| l.0.as_str()).collect::<Vec<_>>());
         for i in &c.images {
-            assert_eq!(i.report.cases.iter().map(|x| (x.id, x.passed)).collect::<Vec<_>>(), corpus::IMAGE_CASES.iter().map(|&id| (id, true)).collect::<Vec<_>>(), "{name} {}", i.name);
+            let expected: Vec<_> = corpus::IMAGE_CASES.iter().filter(|&&id| id != "C16" || name == "kit_test_core").map(|&id| (id, true)).collect();
+            assert_eq!(i.report.cases.iter().map(|x| (x.id, x.passed)).collect::<Vec<_>>(), expected, "{name} {}: C16 where MEDIA is claimed", i.name);
             assert_eq!(i.report.image.as_deref(), Some(i.name.as_str()));
         }
         assert!(c.passed());
         let all: std::collections::BTreeSet<&str> = corpus::CORE_CASES.iter().chain(corpus::IMAGE_CASES.iter()).copied().collect();
-        assert_eq!(all, ALL.iter().copied().collect());
+        assert_eq!(all, ALL.iter().chain(&["C16"]).copied().collect());
     }
 }
 
@@ -270,7 +272,7 @@ fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
             let file = i.get("report").and_then(Value::as_str).unwrap();
             let report = json::parse(&std::fs::read(reports.join(file)).unwrap()).unwrap();
             assert_eq!(report.get("image"), i.get("image"));
-            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(5));
+            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(6), "the five image cases and C16, MEDIA being claimed");
         }
         assert_eq!(text.lines().filter(|l| l.starts_with("pass [") || l.starts_with("FAIL [")).count(), count, "{text}");
     }

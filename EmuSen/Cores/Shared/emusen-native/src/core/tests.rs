@@ -84,7 +84,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
     let v = crate::json::parse(info.as_bytes()).unwrap();
     assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.2"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
-    assert_eq!(names.len(), 19);
+    assert_eq!(names.len(), 20);
     assert_eq!(super::desc::capability_names(unsafe { emusen_core_capabilities() }), names);
     let mi = crate::json::parse(cases[3].1.as_bytes()).unwrap();
     let spaces = mi.get("spaces").unwrap().as_array().unwrap();
@@ -107,7 +107,7 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
     assert!(doc.contains(r#""effect":"none""#) && doc.matches("replacement").count() == 2, "{doc}");
     let m = MachineInfo { firmware: vec![(2, FirmwareSource::Replacement), (3, FirmwareSource::File)], ..MachineInfo::default() };
     let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0 };
-    let mi = super::desc::machine_info_json(&m, &measured);
+    let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#""firmware":[{"which":2,"source":"replacement"},{"which":3,"source":"file"}]"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
 }
@@ -118,7 +118,7 @@ fn a_view_is_a_flag_of_its_space() {
     use super::desc::{MachineInfo, Space};
     let m = MachineInfo { spaces: vec![Space { read_only: true, view: true, ..Space::new(0, "CPUBUS") }, Space::new(1, "WRAM")], ..MachineInfo::default() };
     let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0 };
-    let mi = super::desc::machine_info_json(&m, &measured);
+    let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#"{"id":0,"name":"CPUBUS","size":16777216,"flags":["read_only","view"]}"#), "{mi}");
     assert!(mi.contains(r#"{"id":1,"name":"WRAM","size":65536,"flags":[]}"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
@@ -436,10 +436,11 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 fn the_crates_constants_are_the_headers_own_numbers() {
     assert_eq!(ABI_VERSION, 0x0001_0002);
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));
-    assert_eq!(EXPORTS.len(), 56);
+    assert_eq!((status::LID_CLOSED, status::WRONG_MEDIA, status::NO_SUCH_DRIVE, flags::FILE_MEDIA, flags::MEDIA_RESTORE), (-265, -266, -267, 65_536, 1));
+    assert_eq!(EXPORTS.len(), 58);
     assert_eq!(EXPORTS.iter().filter(|e| e.1 == 0).count(), 32);
-    assert_eq!(CAPABILITY_NAMES.len(), 19);
-    assert_eq!((caps::DEBUG_READS, caps::UNASSIGNED & 1 << 18, caps::UNASSIGNED & caps::DEBUG_READS), (1 << 19, 1 << 18, 0));
+    assert_eq!(CAPABILITY_NAMES.len(), 20);
+    assert_eq!((caps::MEDIA, caps::DEBUG_READS, caps::UNASSIGNED & (caps::MEDIA | caps::DEBUG_READS)), (1 << 18, 1 << 19, 0));
     assert_eq!(super::EXPORTING & !(caps::SNAPSHOT | caps::FRAME_SERIAL | caps::ROW_REPEAT | caps::BATTERY_DIRTY), super::EXPORTING);
 }
 
@@ -453,5 +454,50 @@ fn an_extension_reaches_the_core_behind_a_handle_and_null_is_none() {
     assert!(unsafe { super::exports::core_of_mut::<TestCore>(m) }.is_some());
     assert!(unsafe { super::exports::core_of::<TestCore>(null()) }.is_none());
     assert!(unsafe { super::exports::core_of_mut::<TestCore>(null_mut()) }.is_none());
+    unsafe { emusen_core_free(m) };
+}
+
+fn media(image: Option<&[u8]>, flags: u32) -> Media {
+    Media {
+        size: std::mem::size_of::<Media>() as u32,
+        flags,
+        image: image.map_or(null(), |i| i.as_ptr()),
+        image_len: image.map_or(0, |i| i.len()),
+        files: null(),
+        file_count: 0,
+        file_size: std::mem::size_of::<FileEntry>(),
+    }
+}
+
+// §6.23, since 1.1: a disc goes in only with the lid open or for a state about to load; a state loads only over its disc.
+#[test]
+fn a_disc_is_changed_through_the_lid_and_a_state_keeps_to_its_disc() {
+    let m = make("");
+    let other = image(&[9, 9]);
+    let lid = |m| text(|o, l| unsafe { emusen_core_machine_info(m, o, l) });
+    assert!(lid(m).contains(r#""drives":[{"drive":0,"label":"Test drive","kind":"cd","lid":"closed","loaded":true}]"#), "{}", lid(m));
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(Some(&other), 0)) }, status::LID_CLOSED);
+    assert_eq!(unsafe { emusen_core_media_lid(m, 1, 1) }, status::NO_SUCH_DRIVE);
+    assert_eq!(unsafe { emusen_core_media_lid(m, 0, 2) }, status::NOT_SUPPORTED);
+    let state = |m: *mut Machine| {
+        let mut s = vec![0u8; unsafe { emusen_core_state_size(m, 0) } as usize];
+        assert!(unsafe { emusen_core_state_save(m, 0, s.as_mut_ptr(), s.len()) } > 0);
+        s
+    };
+    let first = state(m);
+    assert_eq!(unsafe { emusen_core_media_lid(m, 0, 1) }, 0);
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(Some(&other), 0)) }, 0);
+    assert_eq!(unsafe { emusen_core_media_lid(m, 0, 0) }, 0);
+    let second = digest(m);
+    assert_eq!(unsafe { emusen_core_state_load(m, first.as_ptr(), first.len()) }, status::WRONG_MEDIA, "the state was made on the first disc");
+    assert_eq!(digest(m), second, "a refused load changes nothing");
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(Some(&image(&[1, 2, 3])), flags::MEDIA_RESTORE)) }, 0, "restore puts a disc in with the lid closed");
+    assert_eq!(unsafe { emusen_core_state_load(m, first.as_ptr(), first.len()) }, 0);
+    assert_eq!(unsafe { emusen_core_media_lid(m, 0, 1) }, 0);
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(None, 0)) }, 0);
+    assert!(lid(m).contains(r#""lid":"open","loaded":false"#), "{}", lid(m));
+    let mut short = media(None, 0);
+    short.size = 8;
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &short) }, status::BAD_STRUCT);
     unsafe { emusen_core_free(m) };
 }

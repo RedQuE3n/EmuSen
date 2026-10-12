@@ -43,8 +43,8 @@ reset:
     # The 16 bytes copied to 80000080h, and the three copied to A0h, B0h and C0h.
     .globl vector_exception
 vector_exception:
-    lui     $k0, %hi(exception_entry)
-    addiu   $k0, $k0, %lo(exception_entry)
+    lui     $k0, %hi(exception_entry_ram)
+    addiu   $k0, $k0, %lo(exception_entry_ram)
     jr      $k0
     nop
     .globl vector_a
@@ -95,9 +95,8 @@ dispatch_c:
     nop
 
     # C(06h): every register but k0 into the current TCB (the PCB at [108h] names it), then the Rust dispatch on
-    # the exception stack. MFC0 has a load delay, hence each NOP.
-    .globl exception_entry
-exception_entry:
+    # the exception stack, reached through a register from either copy. MFC0 has a load delay, hence each NOP.
+    .macro exception_entry_body
     lui     $k0, 0x8000
     lw      $k0, 0x108($k0)
     nop
@@ -148,12 +147,14 @@ exception_entry:
     sw      $2, 0x98($k0)
     lui     $sp, %hi(EXCEPTION_STACK + 0x1000)
     addiu   $sp, $sp, %lo(EXCEPTION_STACK + 0x1000)
-    jal     exception_dispatch
+    lui     $t9, %hi(exception_dispatch)
+    addiu   $t9, $t9, %lo(exception_dispatch)
+    jalr    $t9
     addu    $4, $26, $zero
+    .endm
 
     # B(17h): every register but k0 from the current TCB, SR as saved, then RFE in the jump's delay slot.
-    .globl return_from_exception
-return_from_exception:
+    .macro return_from_exception_body
     lui     $k0, 0x8000
     lw      $k0, 0x108($k0)
     nop
@@ -202,6 +203,24 @@ return_from_exception:
     nop
     jr      $k0
     .word   0x42000010              # rfe, which the assembler does not know
+    .endm
+
+    .macro longjmp_body
+    lw      $ra, 0x00($a0)
+    lw      $sp, 0x04($a0)
+    lw      $fp, 0x08($a0)
+    lw      $s0, 0x0C($a0)
+    lw      $s1, 0x10($a0)
+    lw      $s2, 0x14($a0)
+    lw      $s3, 0x18($a0)
+    lw      $s4, 0x1C($a0)
+    lw      $s5, 0x20($a0)
+    lw      $s6, 0x24($a0)
+    lw      $s7, 0x28($a0)
+    lw      $gp, 0x2C($a0)
+    jr      $ra
+    addu    $v0, $a1, $zero
+    .endm
 
     # A(13h) and A(14h): the 30h-byte buffer psx-spx gives, RA, SP, FP, S0-S7, GP.
     .globl setjmp
@@ -220,22 +239,32 @@ setjmp:
     sw      $gp, 0x2C($a0)
     jr      $ra
     addu    $v0, $zero, $zero
+    # A(14h).
     .globl longjmp
 longjmp:
-    lw      $ra, 0x00($a0)
-    lw      $sp, 0x04($a0)
-    lw      $fp, 0x08($a0)
-    lw      $s0, 0x0C($a0)
-    lw      $s1, 0x10($a0)
-    lw      $s2, 0x14($a0)
-    lw      $s3, 0x18($a0)
-    lw      $s4, 0x1C($a0)
-    lw      $s5, 0x20($a0)
-    lw      $s6, 0x24($a0)
-    lw      $s7, 0x28($a0)
-    lw      $gp, 0x2C($a0)
-    jr      $ra
-    addu    $v0, $a1, $zero
+    longjmp_body
+
+    # The table's entries above stay in the ROM, where a game's patch through C(06h) finds the ROM; the vector at
+    # 80000080h and the kernel's own exits use the copies in the kernel's RAM (Diamond_OpenKernel_Phase2.md §25.3).
+    .globl exception_entry
+exception_entry:
+    exception_entry_body
+    .globl return_from_exception
+return_from_exception:
+    return_from_exception_body
+
+    .section .ramtext.entry, "ax"
+    .globl exception_entry_ram
+exception_entry_ram:
+    exception_entry_body
+    .globl return_from_exception_ram
+return_from_exception_ram:
+    return_from_exception_body
+    .globl longjmp_ram
+longjmp_ram:
+    longjmp_body
+
+    .section .text.entry, "ax"
 
     # A(3Fh): the four argument registers into the caller's home area, so the arguments lie in one row from [SP+4].
     .globl printf
@@ -432,6 +461,9 @@ unsafe extern "C" {
     pub fn vector_c();
     pub fn exception_entry();
     pub fn return_from_exception() -> !;
+    pub fn exception_entry_ram();
+    pub fn return_from_exception_ram() -> !;
+    pub fn longjmp_ram(buffer: u32, value: u32) -> !;
     pub fn setjmp(buffer: u32) -> u32;
     pub fn longjmp(buffer: u32, value: u32) -> !;
     pub fn printf();

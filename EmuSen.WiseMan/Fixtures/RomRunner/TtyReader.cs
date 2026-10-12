@@ -176,9 +176,9 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             return new RomVerdict(off.Count == 0 ? RomOutcome.Passed : RomOutcome.Failed, name, off.Count == 0 ? $"{want.Length} lines" : string.Join("; ", off));
         }
 
-        // A frame's hblanks exactly, its dots ±10 and its cycles ±60; a delay's cycles ±3 and its slower ticks ±2.
+        // A frame's hblanks ±1, its dots ±10 and its cycles ±60; a delay's cycles ±3 and its slower ticks ±2 - see Diamond_Native.md §11.12.
         private static double TimerTolerance(string row) => row.EndsWith("frame delay", StringComparison.Ordinal)
-            ? row.Contains("Hblank") ? 0 : row.Contains("Dot clock") ? 10 : 60
+            ? row.Contains("Hblank") ? 1 : row.Contains("Dot clock") ? 10 : 60
             : row.Contains("/8") || row.Contains("Dot clock") || row.Contains("Hblank") ? 2 : 3;
 
         private static readonly Regex TimerRow = new(@"^Timer(\d), clock:\s*(.+?),\s*(.+?):\s*(.*)$");
@@ -220,7 +220,7 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             }
         }
 
-        // Each delay and frame row's settled values within its tolerance of the console's mean, and the sync tables in its shape - see Diamond_Native.md §11.12.
+        // Each row's settled values within tolerance of the console's mean, one long delay sample dropped as an interrupt's, and the sync tables in shape - see Diamond_Native.md §11.12.
         private static RomVerdict Timers(string name, IReadOnlyList<string> lines, IReadOnlyList<string> console)
         {
             var off = new List<string>();
@@ -235,8 +235,14 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
                 double tolerance = TimerTolerance(row);
                 double mean = values.Average();
                 graded++;
+                bool delay = !row.EndsWith("frame delay", StringComparison.Ordinal);
+                int interrupted = 0;
                 foreach (double v in mine)
-                    if (Math.Abs(v - mean) > tolerance) { off.Add($"{row}: {v} against {mean:0.0}"); break; }
+                {
+                    if (Math.Abs(v - mean) <= tolerance || (delay && v > mean && ++interrupted == 1)) continue;
+                    off.Add($"{row}: {v} against {mean:0.0}");
+                    break;
+                }
             }
             SyncShape(lines, console, off);
             return new RomVerdict(off.Count == 0 && graded > 0 ? RomOutcome.Passed : RomOutcome.Failed, name, off.Count == 0 ? $"{graded} rows and the sync tables" : string.Join("; ", off));

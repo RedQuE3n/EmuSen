@@ -1,13 +1,14 @@
 //! The A0h, B0h and C0h function tables in psx-spx's order ("BIOS Function Summary"), one line a call, and their
 //! installation: the A table at 200h, the C table followed by the B table in the kernel's RAM, as C(80h) and up
-//! read B(00h) and up. Each line's status: D implemented, X absent from an open kernel (the ROM's character sets, the
-//! documented failure value), N no function (psx-spx's return 0, jump to 0 or SystemError), U named but not described
-//! (returns 0). The harness reads these lines to print Diamond_OpenKernel.md's call table. Diamond_OpenKernel.md §5.
+//! read B(00h) and up. Each line's status: D implemented, X absent from an open kernel (the ROM's character sets: a
+//! blank glyph, or the documented failure value), N no function (psx-spx's return 0, jump to 0 or SystemError), U named
+//! but not described (returns 0). The harness reads these lines to print Diamond_OpenKernel.md's call table.
+//! Diamond_OpenKernel.md §5.
 
 use crate::layout::{self, A_ENTRIES, B_ENTRIES, C_ENTRIES};
 use crate::mem::{rd, wr};
 use crate::{
-    blocks, bu, card, cdfs, cdrom, convert, entry, event, exception, exec, file, gpu, heap, memory, misc, pad, phase2,
+    blocks, bu, card, cdfs, cdrom, charset, convert, entry, event, exception, exec, file, gpu, heap, memory, misc, pad,
     shell, string, thread, timer, tty,
 };
 
@@ -293,9 +294,9 @@ const fn build_b() -> [*const (); B_ENTRIES] {
     t[0x4E] = e!(D, "_card_write(port,sector,src)", card::card_write);
     t[0x4F] = e!(D, "_card_read(port,sector,dst)", card::card_read);
     t[0x50] = e!(D, "_new_card()", card::new_card);
-    t[0x51] = e!(X, "Krom2RawAdd(shiftjis_code)", phase2::failed);
+    t[0x51] = e!(X, "Krom2RawAdd(shiftjis_code)", charset::krom2_raw_add);
     t[0x52] = e!(N, "SystemError", entry::system_error);
-    t[0x53] = e!(X, "Krom2Offset(shiftjis_code)", phase2::failed);
+    t[0x53] = e!(X, "Krom2Offset(shiftjis_code)", charset::krom2_offset);
     t[0x54] = e!(D, "_get_errno()", file::get_errno);
     t[0x55] = e!(D, "_get_error(fd)", file::get_error);
     t[0x56] = e!(D, "GetC0Table", get_c0_table);

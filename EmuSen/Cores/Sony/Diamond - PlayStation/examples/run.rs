@@ -115,6 +115,7 @@ fn main() {
     let wav = args.iter().position(|a| a == "--wav").map(|i| args[i + 1].clone());
     let mut audio: Vec<i16> = Vec::new();
     let mut chunk = vec![0i16; 8192];
+    let mut profile = args.iter().position(|a| a == "--kernel-profile").map(|i| Profile::new(&args[i + 1], args.iter().position(|a| a == "--profile-frames").map(|i| args[i + 1].clone())));
     let mut watch = game.then(|| Watch::new(entry, args.iter().position(|a| a == "--game-log").map(|i| args[i + 1].clone()), args.iter().position(|a| a == "--log-frames").map(|i| args[i + 1].clone())));
     let start = std::time::Instant::now();
     for _ in 0..frames {
@@ -176,6 +177,7 @@ fn main() {
             m.board.sio0.set_buttons(0, if m.frames < 35 { 1 << 16 } else { 0 });
         }
         match &mut watch {
+            _ if profile.is_some() => profile.as_mut().unwrap().frame(&mut m),
             Some(w) => w.frame(&mut m),
             None if armed => armed_frame(&mut m),
             None => m.advance(),
@@ -226,6 +228,9 @@ fn main() {
     }
     if let Some(w) = &mut watch {
         w.finish();
+    }
+    if let Some(p) = &profile {
+        p.finish();
     }
     let tty = m.space(TTY_ID).unwrap();
     let end = tty.iter().position(|&b| b == 0).unwrap_or(tty.len());
@@ -507,6 +512,98 @@ impl Watch {
         eprintln!("[the game's text by write(1) and putchar: {} bytes]\n{}[end of the game's text]", self.text.len(), String::from_utf8_lossy(&self.text));
         for (t, n, count, first) in &self.counts {
             eprintln!("[game call {t}({n:02X}h) {count} times, first at frame {first}]");
+        }
+    }
+}
+
+/// `--kernel-profile FILE`: each exception from its entry at 80000080h to the return to the code it interrupted, the
+/// cycles spent at each PC outside user RAM written to FILE, and per pending source the cycles to the first user-RAM
+/// instruction, to the source's acknowledgement in I_STAT and to the return (Diamond_OpenKernel_Phase2.md §25.3).
+struct Profile {
+    path: String,
+    window: (i64, i64),
+    cycles: std::collections::BTreeMap<u32, (u64, u64)>,
+    episode: Option<Episode>,
+    done: Vec<(u32, u64, Option<u64>, Option<u64>, u64)>,
+}
+
+struct Episode {
+    start: u64,
+    pending: u32,
+    epc: u32,
+    user: Option<u64>,
+    ack: Option<u64>,
+}
+
+impl Profile {
+    fn new(path: &str, window: Option<String>) -> Profile {
+        let window = window.map_or((0, i64::MAX), |w| {
+            let (a, b) = w.split_once(':').expect("A:B");
+            (a.parse().expect("a frame"), b.parse().expect("a frame"))
+        });
+        Profile { path: path.to_owned(), window, cycles: Default::default(), episode: None, done: Vec::new() }
+    }
+
+    fn frame(&mut self, m: &mut Machine) {
+        m.board.field_done = false;
+        let on = (self.window.0..self.window.1).contains(&m.frames);
+        while !m.board.field_done {
+            let pc = m.cpu.regs.pc;
+            if !on {
+                m.step();
+                continue;
+            }
+            if pc == 0x8000_0080 {
+                self.close(m.board.now);
+                let irq = m.board.irq;
+                self.episode = Some(Episode { start: m.board.now, pending: irq.stat & irq.mask, epc: m.cpu.regs.epc, user: None, ack: None });
+            }
+            let before = m.board.now;
+            m.step();
+            let Some(e) = &mut self.episode else { continue };
+            let spent = m.board.now - before;
+            if user_ram(pc) {
+                e.user.get_or_insert(before);
+            } else {
+                let c = self.cycles.entry(pc & 0x1FFF_FFFF).or_default();
+                c.0 += spent;
+                c.1 += 1;
+            }
+            if e.ack.is_none() && m.board.irq.stat & e.pending != e.pending {
+                e.ack = Some(m.board.now);
+            }
+            let next = m.cpu.regs.pc;
+            if next == e.epc || next == e.epc.wrapping_add(4) {
+                self.close(m.board.now);
+            }
+        }
+        m.board.sync_spu();
+        m.frames += 1;
+    }
+
+    fn close(&mut self, now: u64) {
+        if let Some(e) = self.episode.take() {
+            self.done.push((e.pending, e.start, e.user.map(|u| u - e.start), e.ack.map(|a| a - e.start), now - e.start));
+        }
+    }
+
+    fn finish(&self) {
+        use std::io::Write;
+        let mut f = std::io::BufWriter::new(std::fs::File::create(&self.path).expect("the profile"));
+        for (pc, (c, n)) in &self.cycles {
+            writeln!(f, "{pc:08X} {c} {n}").unwrap();
+        }
+        let mut kinds: Vec<u32> = self.done.iter().map(|d| d.0).collect();
+        kinds.sort();
+        kinds.dedup();
+        for k in kinds {
+            let of: Vec<_> = self.done.iter().filter(|d| d.0 == k).collect();
+            let stat = |pick: &dyn Fn(&&(u32, u64, Option<u64>, Option<u64>, u64)) -> Option<u64>| {
+                let mut v: Vec<u64> = of.iter().filter_map(pick).collect();
+                v.sort();
+                if v.is_empty() { "-".to_owned() } else { format!("{}/{}/{}", v[0], v[v.len() / 2], v[v.len() - 1]) }
+            };
+            eprintln!("[pending {k:03X}h: {} exceptions; min/median/max cycles to user code {}, to the acknowledgement {}, to the return {}]", of.len(), stat(&|d| d.2), stat(&|d| d.3), stat(&|d| Some(d.4)));
         }
     }
 }

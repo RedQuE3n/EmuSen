@@ -1,5 +1,6 @@
 /* The open kernel's image: 512 KiB at physical 1FC00000h, code run through KSEG0 (9FC00200h on), the reset entry
-   and the header at their KSEG1 addresses, variables in the kernel's RAM from 80000500h. Diamond_OpenKernel.md §2. */
+   and the header at their KSEG1 addresses; the exception path's code (.ramtext) and the variables in the kernel's RAM
+   from 80000500h, copied there at boot. Diamond_OpenKernel.md §2, Diamond_OpenKernel_Phase2.md §25.3. */
 OUTPUT_FORMAT("elf32-tradlittlemips")
 OUTPUT_ARCH(mips)
 ENTRY(reset)
@@ -23,10 +24,14 @@ SECTIONS
   .bev_general 0xBFC00180 : AT(0x1FC00180) { KEEP(*(.bev_general)) } :bev_general
   .text 0x9FC00200 : AT(0x1FC00200) {
     *(.text .text.*)
+    __text_end = .;
     *(.rodata .rodata.*)
     . = ALIGN(8);
   } :text
   .data 0x80000500 : AT(LOADADDR(.text) + SIZEOF(.text)) {
+    __ramtext_start = .;
+    *(.ramtext .ramtext.*)
+    __ramtext_end = .;
     *(.data .data.* .sdata .sdata.* .got .got.*)
     . = ALIGN(8);
   } :data

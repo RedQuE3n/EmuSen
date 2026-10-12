@@ -1,8 +1,10 @@
 //! blackmoon-r3000 on a bus of the harness's own: 2 MiB of RAM mirrored through 8 MiB, the scratchpad, the BIOS
 //! holding the kernel's image, I_STAT and I_MASK with the interrupt line they drive, a GPU status that is always
-//! ready, the DUART's transmit register captured as the TTY, and every other port a plain store that is logged.
-//! It is a test bench for the kernel and models no device's timing (Diamond_OpenKernel.md §7).
+//! ready, the DUART's transmit register captured as the TTY, SIO0 with a memory card's protocol (`sio0.rs`), and every
+//! other port a plain store that is logged. It is a test bench for the kernel and models no device's timing
+//! (Diamond_OpenKernel.md §7).
 
+use crate::sio0::{self, Sio0};
 use blackmoon_r3000::{Bus, R3000, Size, Step};
 
 pub const RAM: usize = 2 << 20;
@@ -31,6 +33,10 @@ pub struct Rig {
     pub isolated_writes: usize,
     pub cop2_commands: Vec<u32>,
     pub clock: u64,
+    pub sio0: Sio0,
+    /// Fetches and data reads from the BIOS ROM, which the exception path should not make (§25.3).
+    pub rom_fetches: u64,
+    pub rom_reads: u64,
 }
 
 fn physical(address: u32) -> u32 {
@@ -40,6 +46,10 @@ fn physical(address: u32) -> u32 {
         6 | 7 => address,
         _ => address & 0x1FFF_FFFF,
     }
+}
+
+fn in_rom(address: u32) -> bool {
+    (0x1FC0_0000..0x1FC8_0000).contains(&physical(address))
 }
 
 impl Rig {
@@ -58,6 +68,9 @@ impl Rig {
             isolated_writes: 0,
             cop2_commands: Vec::new(),
             clock: 0,
+            sio0: Sio0::default(),
+            rom_fetches: 0,
+            rom_reads: 0,
         }
     }
 
@@ -76,10 +89,20 @@ impl Rig {
             I_STAT => return self.i_stat >> (8 * (p & 3)),
             I_MASK => return self.i_mask >> (8 * (p & 3)),
             GP1 => return 0x1C00_0000 >> (8 * (p & 3)),
+            sio0::STAT => return self.sio0.stat(),
             BCC => return self.bcc,
             _ => {}
         }
         (0..size.bytes()).fold(0, |v, i| v | (self.byte(p + i) as u32) << (8 * i))
+    }
+
+    /// IRQ7 raised once a card's /ACK is due.
+    fn tick(&mut self) {
+        self.clock += 1;
+        if self.sio0.ack_at.is_some_and(|t| self.clock >= t) {
+            self.sio0.ack_at = None;
+            self.i_stat |= 0x80;
+        }
     }
 
     fn store(&mut self, p: u32, size: Size, value: u32) {
@@ -104,6 +127,11 @@ impl Rig {
         }
         if p == THRA {
             self.tty.push(value as u8);
+        }
+        match p {
+            sio0::DATA => return self.sio0.write_data(value as u8, self.clock),
+            sio0::CTRL => return self.sio0.write_ctrl(value & 0xFFFF),
+            _ => {}
         }
         for i in 0..size.bytes() {
             let q = p + i;
@@ -160,15 +188,20 @@ impl Rig {
 
 impl Bus for Rig {
     fn fetch(&mut self, address: u32) -> u32 {
-        self.clock += 1;
+        self.tick();
+        self.rom_fetches += in_rom(address) as u64;
         self.load(physical(address), Size::Word)
     }
     fn read(&mut self, address: u32, size: Size) -> u32 {
-        self.clock += 1;
+        self.tick();
+        self.rom_reads += in_rom(address) as u64;
+        if physical(address) == sio0::DATA {
+            return self.sio0.read_data();
+        }
         self.load(physical(address), size)
     }
     fn write(&mut self, address: u32, size: Size, value: u32) {
-        self.clock += 1;
+        self.tick();
         self.store(physical(address), size, value);
     }
     fn isolated_read(&mut self, _address: u32, _size: Size) -> u32 {

@@ -1,6 +1,8 @@
 //! The exception path after the entry has saved the registers: the four priority chains (psx-spx "Priority
 //! Chains"), the exit through the hook structure, unresolved exceptions, and the kernel's own chain elements: the
-//! syscall handler, the timer and vblank handlers, and the default interrupt handler. Diamond_OpenKernel.md §4.
+//! syscall handler, the timer and vblank handlers, and the default interrupt handler. They run from the kernel's RAM
+//! (`.ramtext`), calling nothing in the ROM but through a pointer. Diamond_OpenKernel.md §4,
+//! Diamond_OpenKernel_Phase2.md §25.3.
 
 use crate::layout::{TABLES, io, table};
 use crate::mem::{call, rd, wr};
@@ -32,12 +34,14 @@ static mut SYSCALL_ELEMENT: [u32; 4] = [0; 4];
 static mut TIMER_ELEMENTS: [[u32; 4]; 4] = [[0; 4]; 4];
 static mut DEFINT_ELEMENT: [u32; 4] = [0; 4];
 
+#[inline(always)]
 fn excb(priority: u32) -> u32 {
     rd(TABLES + table::EXCB) + 8 * (priority & 3)
 }
 
 /// Called from the entry with the TCB the registers went to; never returns.
 #[unsafe(no_mangle)]
+#[unsafe(link_section = ".ramtext")]
 extern "C" fn exception_dispatch(tcb: u32) -> ! {
     let code = rd(tcb + tcb::CAUSE) >> 2 & 0x1F;
     if code == 0 {
@@ -62,11 +66,11 @@ extern "C" fn exception_dispatch(tcb: u32) -> ! {
         }
     }
     if code != 0 {
-        event::deliver_event(0xF000_0010, 0x1000);
+        event::deliver_event_ram(0xF000_0010, 0x1000);
         call(rd(crate::layout::A_TABLE + 4 * 0x40), 0, 0, 0, 0);
-        unsafe { entry::return_from_exception() }
+        unsafe { entry::return_from_exception_ram() }
     }
-    unsafe { entry::longjmp(EXIT, 1) }
+    unsafe { entry::longjmp_ram(EXIT, 1) }
 }
 
 /// C(02h): the element becomes the chain's first.
@@ -97,7 +101,7 @@ pub extern "C" fn reset_entry_int() -> u32 {
         for i in 0..12 {
             wr(exit + 4 * i, 0);
         }
-        wr(exit, entry::return_from_exception as *const () as u32);
+        wr(exit, entry::return_from_exception_ram as *const () as u32);
         wr(exit + 4, &raw const EXCEPTION_STACK as u32 + 0x1000 - 4);
         EXIT = exit;
         exit
@@ -159,14 +163,17 @@ pub extern "C" fn change_clear_rcnt(t: u32, flag: u32) -> u32 {
     }
 }
 
+#[inline(always)]
 pub fn pending() -> u32 {
     rd(io::I_STAT) & rd(io::I_MASK)
 }
 
+#[inline(always)]
 pub fn acknowledge(bit: u32) {
     wr(io::I_STAT, !(1 << bit));
 }
 
+#[unsafe(link_section = ".ramtext")]
 extern "C" fn syscall_handler() -> u32 {
     let tcb = blocks::current_tcb();
     if rd(tcb + tcb::CAUSE) >> 2 & 0x1F != 8 {
@@ -186,38 +193,45 @@ extern "C" fn syscall_handler() -> u32 {
             wr(rd(TABLES + table::PCB), rd(tcb + tcb::reg(5)));
         }
         _ => {
-            event::deliver_event(0xF000_0010, 0x4000);
+            event::deliver_event_ram(0xF000_0010, 0x4000);
         }
     }
-    unsafe { entry::return_from_exception() }
+    unsafe { entry::return_from_exception_ram() }
 }
 
-fn counter(t: u32, irq: u32) -> u32 {
+#[inline(always)]
+fn counter(t: usize, irq: u32) -> u32 {
     if pending() & 1 << irq != 0 {
-        event::deliver_event(0xF200_0000 + t, 2);
-        if unsafe { CLEAR_RCNT[t as usize] } != 0 {
+        event::deliver_event_ram(0xF200_0000 + t as u32, 2);
+        if unsafe { CLEAR_RCNT[t] } != 0 {
             acknowledge(irq);
-            unsafe { entry::return_from_exception() }
+            unsafe { entry::return_from_exception_ram() }
         }
     }
     0
 }
 
+#[unsafe(link_section = ".ramtext")]
 extern "C" fn timer0_handler() -> u32 {
     counter(0, 4)
 }
+#[unsafe(link_section = ".ramtext")]
 extern "C" fn timer1_handler() -> u32 {
     counter(1, 5)
 }
+#[unsafe(link_section = ".ramtext")]
 extern "C" fn timer2_handler() -> u32 {
     counter(2, 6)
 }
+#[unsafe(link_section = ".ramtext")]
 extern "C" fn vblank_handler() -> u32 {
     counter(3, 0)
 }
 
-/// The events psx-spx's "Default IRQ Handler Events" lists for IRQ0-IRQ10, IRQ6 with timer 1's class as listed.
-const DEFAULT_CLASSES: [u32; 11] = [
+/// The events psx-spx's "Default IRQ Handler Events" lists for IRQ0-IRQ10, IRQ6 with timer 1's class as listed; kept
+/// in RAM beside the code that reads them, as a read from the ROM takes 25 cycles.
+#[unsafe(link_section = ".data.default_classes")]
+static DEFAULT_CLASSES: [u32; 11] = [
     0xF000_0001,
     0xF000_0002,
     0xF000_0003,
@@ -231,11 +245,12 @@ const DEFAULT_CLASSES: [u32; 11] = [
     0xF000_000A,
 ];
 
+#[unsafe(link_section = ".ramtext")]
 extern "C" fn default_handler() -> u32 {
     let p = pending();
     for (irq, class) in DEFAULT_CLASSES.iter().enumerate() {
         if p & 1 << irq != 0 {
-            event::deliver_event(*class, 0x1000);
+            event::deliver_event_ram(*class, 0x1000);
             if unsafe { AUTO_ACK[irq] } != 0 {
                 acknowledge(irq as u32);
             }

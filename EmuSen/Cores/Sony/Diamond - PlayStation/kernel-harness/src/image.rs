@@ -102,6 +102,11 @@ fn cargo() -> Option<Command> {
 
 /// The kernel built by the pinned toolchain and flattened; None when that toolchain is absent.
 pub fn rebuild() -> Option<Result<Vec<u8>, String>> {
+    Some(rebuild_elf()?.and_then(|elf| flatten(&elf)))
+}
+
+/// The kernel's ELF as the pinned toolchain links it; None when that toolchain is absent.
+pub fn rebuild_elf() -> Option<Result<Vec<u8>, String>> {
     let mut cargo = cargo()?;
     let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/kernel-rebuild");
     let output = cargo
@@ -112,8 +117,30 @@ pub fn rebuild() -> Option<Result<Vec<u8>, String>> {
     Some(match output {
         Err(e) => Err(format!("cargo did not run: {e}")),
         Ok(o) if !o.status.success() => Err(String::from_utf8_lossy(&o.stderr).into_owned()),
-        Ok(_) => std::fs::read(target.join("mipsel-sony-psx/release/diamond-kernel.exe"))
-            .map_err(|e| e.to_string())
-            .and_then(|elf| flatten(&elf)),
+        Ok(_) => std::fs::read(target.join("mipsel-sony-psx/release/diamond-kernel.exe")).map_err(|e| e.to_string()),
     })
+}
+
+fn section_headers(elf: &[u8]) -> impl Iterator<Item = [u32; 10]> + '_ {
+    let (shoff, shentsize, shnum) = (u32_at(elf, 32) as usize, u16_at(elf, 46), u16_at(elf, 48));
+    (0..shnum).map(move |i| core::array::from_fn(|k| u32_at(elf, shoff + i * shentsize + 4 * k)))
+}
+
+/// A symbol's value from the ELF's symbol table.
+pub fn symbol(elf: &[u8], name: &str) -> Option<u32> {
+    let headers: Vec<[u32; 10]> = section_headers(elf).collect();
+    let table = headers.iter().find(|h| h[1] == 2)?;
+    let strings = headers[table[6] as usize][4] as usize;
+    (0..table[5] as usize / 16).map(|k| table[4] as usize + 16 * k).find_map(|e| {
+        let at = strings + u32_at(elf, e) as usize;
+        let end = at + elf[at..].iter().position(|&b| b == 0)?;
+        (&elf[at..end] == name.as_bytes()).then(|| u32_at(elf, e + 4))
+    })
+}
+
+/// The words of the ELF's bytes from `from` to `to` by their run-time addresses, in the section holding them.
+pub fn words(elf: &[u8], from: u32, to: u32) -> Option<Vec<u32>> {
+    let h = section_headers(elf).find(|h| h[1] == 1 && h[3] <= from && to <= h[3] + h[5])?;
+    let start = (h[4] + from - h[3]) as usize;
+    Some((0..(to - from) as usize / 4).map(|i| u32_at(elf, start + 4 * i)).collect())
 }

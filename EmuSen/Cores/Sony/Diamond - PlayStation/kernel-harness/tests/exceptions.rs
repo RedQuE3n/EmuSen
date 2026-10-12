@@ -2,7 +2,7 @@
 //! interrupts with the documented events, and the GTE command an interrupt meets.
 
 use diamond_kernel_harness::image;
-use diamond_kernel_harness::machine::Machine;
+use diamond_kernel_harness::machine::{Machine, SENTINEL};
 
 const LOG: u32 = 0x8018_0000;
 const LOG_POINTER: u32 = 0x8017_0FF0;
@@ -186,7 +186,9 @@ fn the_hook_runs_after_the_chains_with_v0_1_and_reset_entry_int_gives_the_defaul
     assert!(m.cpu.regs.r[16] > 0, "and ReturnFromException resumed the program");
     let exit = m.b(0x18, &[]);
     let b0 = m.b(0x57, &[]);
-    assert_eq!(m.rig.word(exit), m.rig.word(b0 + 4 * 0x17), "RA: ReturnFromException");
+    let (ra, rom) = (m.rig.word(exit), m.rig.word(b0 + 4 * 0x17));
+    assert_eq!(m.rig.bytes(ra, 0xC0), m.rig.bytes(rom, 0xC0), "RA: ReturnFromException, its copy in the kernel's RAM");
+    assert!((0x8000_0500..0x8000_DF80).contains(&ra), "RA in the kernel's RAM (§25.3): {ra:08X}");
     let sp = m.rig.word(exit + 4);
     assert!(
         (0x8000_1500..0x8000_DF80).contains(&sp) && (sp + 4) % 8 == 0,
@@ -231,4 +233,32 @@ fn an_interrupt_on_a_gte_command_does_not_run_it_twice() {
     assert_eq!(m.exceptions, [0]);
     assert_eq!(m.rig.cop2_commands, [0x0180001], "the command ran at the interrupt and was skipped on return");
     assert_eq!(m.cpu.regs.r[16], 1);
+}
+
+/// A vblank with the pads started, both ports empty, taken from a loop in user RAM and returned to it: the exception
+/// path, the chains, the pads' element and the return all run from the kernel's RAM, fetching nothing from the ROM,
+/// where a fetch through the cache costs 25 cycles a word on a miss (Diamond_OpenKernel_Phase2.md §25.3).
+#[test]
+fn a_vblank_runs_the_kernel_from_its_ram_and_fetches_nothing_from_the_rom() {
+    let mut m = booted();
+    m.b(0x12, &[0x8010_0000, 0x22, 0x8010_0100, 0x22]);
+    m.b(0x13, &[]);
+    let r = &mut m.cpu.regs;
+    r.pc = SENTINEL;
+    r.sr = 0x401;
+    r.branch = Default::default();
+    m.rig.raise(0);
+    let (fetches, reads) = (m.rig.rom_fetches, m.rig.rom_reads);
+    let mut entered = false;
+    for _ in 0..200_000 {
+        m.step();
+        entered |= m.cpu.regs.pc == 0x8000_0080;
+        if entered && m.cpu.regs.pc == SENTINEL {
+            break;
+        }
+    }
+    assert!(entered && m.cpu.regs.pc == SENTINEL, "the vblank taken and returned from, pc {:08X}", m.cpu.regs.pc);
+    assert_eq!(m.rig.i_stat & 1, 0, "acknowledged by the pads' element");
+    assert_eq!(m.rig.word(0x8010_0000) & 0xFF, 0xFF, "port 1 empty");
+    assert_eq!((m.rig.rom_fetches - fetches, m.rig.rom_reads - reads), (0, 0), "fetches and reads from the ROM");
 }

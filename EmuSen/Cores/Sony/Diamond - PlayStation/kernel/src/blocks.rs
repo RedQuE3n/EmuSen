@@ -68,6 +68,7 @@ pub extern "C" fn get_conf(events: u32, threads: u32, stacktop: u32) -> u32 {
     0
 }
 
+#[inline(always)]
 pub fn events() -> u32 {
     unsafe { EVENTS }
 }
@@ -80,6 +81,7 @@ pub fn stacktop() -> u32 {
     unsafe { STACKTOP }
 }
 
+#[inline(always)]
 pub fn current_tcb() -> u32 {
     rd(rd(TABLES + table::PCB))
 }

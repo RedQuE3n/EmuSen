@@ -27,3 +27,33 @@ fn the_image_rebuilds_to_the_committed_bytes() {
         }
     }
 }
+
+/// Every J and JAL in the kernel's code lands in the part it lies in, the ROM's code or the exception path's in the
+/// kernel's RAM: the two lie in different 256 MiB regions, which a jump cannot cross and the linker does not check
+/// (Diamond_OpenKernel_Phase2.md §25.3). Skipped like the rebuild.
+#[test]
+fn every_jump_lands_in_the_part_of_the_kernel_it_lies_in() {
+    let required = std::env::var("DIAMOND_KERNEL_REBUILD").is_ok_and(|v| v == "require");
+    let elf = match image::rebuild_elf() {
+        None if required => panic!("the pinned toolchain {} is required and absent", image::channel()),
+        None => return eprintln!("skipped: the pinned toolchain {} is not installed", image::channel()),
+        Some(Err(e)) => panic!("the kernel did not build: {e}"),
+        Some(Ok(elf)) => elf,
+    };
+    let at = |name: &str| image::symbol(&elf, name).unwrap_or_else(|| panic!("{name} in the ELF"));
+    let parts = [("the ROM", 0x9FC0_0200, at("__text_end")), ("the RAM", at("__ramtext_start"), at("__ramtext_end"))];
+    assert!(parts[1].2 > parts[1].1, "the exception path is in the kernel's RAM");
+    let mut jumps = 0;
+    for (part, from, to) in parts {
+        let words = image::words(&elf, from, to).unwrap_or_else(|| panic!("{part}'s code in one section"));
+        for (i, w) in words.iter().enumerate() {
+            if matches!(w >> 26, 2 | 3) {
+                let pc = from + 4 * i as u32;
+                let target = (pc + 4) & 0xF000_0000 | (w & 0x03FF_FFFF) << 2;
+                assert!((from..to).contains(&target), "{pc:08X} in {part} jumps to {target:08X}, outside it");
+                jumps += 1;
+            }
+        }
+    }
+    assert!(jumps > 500, "{jumps} jumps checked");
+}

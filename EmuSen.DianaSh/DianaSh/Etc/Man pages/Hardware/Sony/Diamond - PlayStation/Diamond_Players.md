@@ -623,25 +623,29 @@ figures measured is not known.
 
 ### 13.4 What is still wrong, ranked
 
-1. **Castlevania stops at its file screen on the open kernel** (above): B(51h) Krom2RawAdd answers −1 and the game
+1. *Fixed 2026-10-12 (`Diamond_OpenKernel_Phase2.md` §25.1): the call answers a box, and the game plays its
+   prologue.* ~~**Castlevania stops at its file screen on the open kernel** (above): B(51h) Krom2RawAdd answers −1 and the game
    dereferences it. The kernel's own decision (`Diamond_OpenKernel_Phase2.md` §19, "absent from an open kernel"); the
    game uses the call for its English menus. The kernel is not this step's to change: recorded for its writer
-   (`Diamond_OpenKernel_Phase2.md` §24).
-2. **Spyro's saves and loads hang on the open kernel**: the game opens its file asynchronously (access mode 8001h), then
+   (`Diamond_OpenKernel_Phase2.md` §24).~~
+2. *Fixed 2026-10-12 (§25.2 there): an accepted asynchronous request returns 0; the game creates, writes and reads
+   its file.* ~~**Spyro's saves and loads hang on the open kernel**: the game opens its file asynchronously (access mode 8001h), then
    calls B(34h) read or B(35h) write in a loop that ends only when the call returns 0 (its code at
    80067018h–8006702Ch and 800672D4h–800672E8h). The open kernel returns the length at once, as psx-spx's "Number of
    bytes" reads; the second call then waits for the first job and returns C00h, and every call after it −1. That the
    loop ends on 0 is the game's evidence of what the call returns in asynchronous mode. Kernel territory, recorded for
    its writer (§24 there). The cards themselves are not at fault: SwanStation reads the open kernel's formatted card
-   as formatted and empty, and creates Spyro's file on it.
-3. **Every interrupt costs the open kernel 6,000 to 9,000 cycles before it is acknowledged** [M, frame 6,660 of Crash
+   as formatted and empty, and creates Spyro's file on it.~~
+3. *Fixed 2026-10-12 (§25.3 there): the exception path runs from the kernel's RAM and an empty port is given up 100 µs
+   after its byte; a vblank reaches the game's handler after 15,881 cycles, timer 2 is acknowledged after 1,507, and
+   the game prints no "intr timeout" over its script.* ~~**Every interrupt costs the open kernel 6,000 to 9,000 cycles before it is acknowledged** [M, frame 6,660 of Crash
    Bandicoot's run, the kernel's stores to I_STAT and SIO0 timed]: timer 2, which Crash runs at its target every 32,776
    cycles, is acknowledged 5,800 to 8,800 cycles after its exception, and on a vblank the game's own handler is reached
    36,434 cycles after it (8,052 before the pads, 9,253 for port 1's five bytes, 9,800 for empty port 2, 9,191 after),
    longer than timer 2's period, so timer 2 stands in I_STAT whenever the game's handler looks. That handler counts each
    look that leaves an interrupt standing and at 2,049 prints "intr timeout" and writes 0 to I_STAT, which would drop any
    other interrupt standing then. No harm was seen in Crash's run; the console's own figures are not known, since the
-   player's BIOS is never traced. Recorded for the kernel's writer; Diamond's SIO0 bytes take their documented time.
+   player's BIOS is never traced. Recorded for the kernel's writer; Diamond's SIO0 bytes take their documented time.~~
 4. **The scripts are not yet long walks through each game**: Crash's ends in a hollow, and the Tekken, Spyro, Ape
    Escape and Rayman runs part from the referee's as each game's randomness or a load's length decides, after which
    only the eye compares them.

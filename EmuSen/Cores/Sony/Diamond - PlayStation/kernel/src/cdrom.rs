@@ -389,6 +389,16 @@ pub extern "C" fn cdrom_io_irq_func1() -> u32 {
     0
 }
 
+/// A(90h)'s copy in the kernel's RAM, the one the element names, servicing the controller in the ROM through a
+/// pointer (Diamond_OpenKernel_Phase2.md §25.3).
+#[unsafe(link_section = ".ramtext")]
+extern "C" fn cdrom_io_irq_func1_ram() -> u32 {
+    if unsafe { OWNED } && pending() & 4 != 0 {
+        crate::mem::call_far(cdrom_io_irq_func1 as *const () as u32, 0, 0, 0, 0);
+    }
+    0
+}
+
 /// A(92h): no second function is needed by the first, which handles the response itself.
 pub extern "C" fn cdrom_io_irq_func2() -> u32 {
     0
@@ -405,7 +415,7 @@ pub extern "C" fn enqueue_cd_intr() -> u32 {
         if !QUEUED {
             let e = &raw mut ELEMENT as u32;
             wr(e + 4, cdrom_io_irq_func2 as *const () as u32);
-            wr(e + 8, cdrom_io_irq_func1 as *const () as u32);
+            wr(e + 8, cdrom_io_irq_func1_ram as *const () as u32);
             exception::sys_enq_int_rp(0, e);
             QUEUED = true;
         }

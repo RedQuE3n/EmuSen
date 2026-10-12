@@ -292,7 +292,8 @@ deleted it there; card 2 then held the save's frames with block 1 in state A1h [
 
 `Diamond_OpenKernel.md` §5 holds the whole table, printed from `kernel/src/table.rs`. With phase 2: 576 entries, 222
 implemented, 2 absent from an open kernel (Krom2RawAdd and Krom2Offset, which address the ROM's character sets: the
-kernel carries none, and returns -1), 346 no function as documented, 6 undocumented. No "phase 2 stub" is left.
+kernel carries none, and ~~returns -1~~ *since §25.1* answers the full-width Latin letters, digits and punctuation from
+its own 5x8 font, a blank space and a box for every other documented code), 346 no function as documented, 6 undocumented. No "phase 2 stub" is left.
 
 ## 20. Choices, questions, the cost and the image
 
@@ -349,18 +350,22 @@ kernel carries none, and returns -1), 346 no function as documented, 6 undocumen
 In a player's words (the plan's §5.9, and `v1.rs`'s firmware entry since this stage): "Most games start and save as on a
 console. A game that relies on an undocumented kernel call, reads the kernel's code, or depends on its exact timing may
 behave differently, and the start-up screen is EmuSen's own. Games that use the console's own text characters (mostly
-Japanese ones) show no text where they use them, as EmuSen does not carry Sony's fonts." Phase 1's sentence, that discs
+Japanese ones) show ~~no text~~ *since §25.1* the Latin letters, digits and common punctuation in EmuSen's own font
+and a box for every other character where they use them, as EmuSen does not carry Sony's fonts." Phase 1's sentence, that discs
 and cards needed the player's BIOS, is withdrawn. The risks of `Diamond_OpenKernel.md` §8 stand, and phase 2 adds: card
 I/O inside the vblank handler, about 240,000 cycles a sector; the CD handler that leaves interrupts it does not own to
 the program; games that patch the card functions' code, which psx-spx's excluded section is said to describe and which
-on this kernel find ROM, not RAM, at the tables' entries.
+on this kernel find ROM, not RAM, at the tables' entries (*since §25.3* the exception path runs from the kernel's RAM,
+while the tables and C(06h) still name its ROM copies).
 
 ### 20.4 The image, and what the cross-kernel step needs
 
 [M] 524,288 bytes, 92,440 of them before the last non-zero byte; the kernel's variables end at 8E70h, below DF80h; SHA-256
 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, rebuilt byte for byte with
 `DIAMOND_KERNEL_REBUILD=require`, and from a copy of `kernel/` at another path to the same digest. *Since §23 (2026-10-11):* SHA-256
-`7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`.
+`7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`. *Since §25 (2026-10-12):* SHA-256
+~~`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`~~
+`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`, the variables ending at A310h.
 
 **Left to a separate step**, by the stage's terms, and taken in §22: the cards exchanged with the player's BIOS, and `firmwarecheck.py`.
 The cards it needs are in `~/.cache/emusen/probe/diamond/cards/s10/` with a `README.txt`: `tekken3-saved-on-open-kernel.mcr`
@@ -663,7 +668,7 @@ no firmware folder was used, and no reference emulator was run.
 
 ## 24. Found in play, for the kernel's writer (2026-10-12)
 
-Three of the tester's games, driven into play on this kernel (`Diamond_Players.md` §13), meet the kernel at points
+*Fixed the same day: §25.* Three of the tester's games, driven into play on this kernel (`Diamond_Players.md` §13), meet the kernel at points
 this page's design left open. Nothing in `kernel/` was changed; each is recorded with the game's own evidence (its code
 and its calls, read from RAM; no firmware was read or run on Diamond), for a replacement writer's step.
 
@@ -687,3 +692,240 @@ and its calls, read from RAM; no firmware was read or run on Diamond), for a rep
    timer 2's period, the vblank's path always finds timer 2 standing when the game's handler looks, and the game's
    handler, which counts such looks, prints "intr timeout(0040:004d)" at 2,049 and writes 0 to I_STAT. Nothing was seen
    to go wrong in that run; it is a cost of the kernel's paths, of which the port 2 timeout is the largest single part.
+
+## 25. The three defects of §24, fixed (2026-10-12)
+
+*Written by the kernel's writer under the replacement writers' rules of the plan's §1.3; of §24 and
+`Diamond_Players.md` §13 only their text was read.* Each defect was shown by a test failing on the image before it, then
+fixed, then taken back to the game; the marks are this page's, **[M]** measured on 2026-10-12. §25.6 lists what was read
+and states the exposures.
+
+### 25.1 Krom2RawAdd: a box for every character the kernel does not carry
+
+**What the plan allows.** §5.9 has the open kernel carry nothing of Sony's, and §20.3's words for the player said that
+games using the console's characters "show no text where they use them". What B(51h) answers in their place is not
+decided anywhere [R the plan's §5.9, this page's §19 and §20.3]; it is **Q6** below.
+
+**A blank glyph is not enough** [M]. With every documented code answered by one blank 16x15 glyph, Castlevania passes
+the call but then never leaves its text routine: for each character other than its own space, the game shifts the glyph
+left one column at a time while every row's first column is clear (its code at 801B2248h-801B22B4h), which ends only
+on a set pixel. Its own fallback (80106A50h-80106AB4h) looks a code up in a short table of its own when the call answers
+-1, and otherwise asks again for 819Ah, which is why -1 led to the read at FFFFFFFFh of §24.
+
+**The answer** [C]. For every code of the two documented ranges, 8140h-84BEh (charset 2) and 889Fh-9872h (charset 3)
+[R "BIOS Character Sets"], B(51h) returns a glyph in the kernel's ROM, at its KSEG1 address as the documents give the
+character sets' (BFC6xxxxh): for 8140h, the ideographic space, a blank one; for every other code one box over columns
+2-13 and rows 1-13, the conventional glyph for a missing character. Any other code answers -1, as documented. B(53h)
+answers 0 for the space, 30 for the box (its offset within the kernel's two glyphs) and -1 otherwise. The glyph's form
+(15 rows of two bytes, the left pixel in bit 7 of the first) was taken from Castlevania's own glyph table in its RAM at
+800AC914h, whose first entry reads as a © in that order and in no other [M]. A rectangle is no font of the console's
+and recreates none; `charset.rs` holds both glyphs.
+
+**Shown** [M]. `krom2rawadd_answers_a_box_in_the_rom_for_every_documented_code_but_the_space` fails on §23's image (at
+the first answer, -1) and on the blank-glyph image (at the box), and passes. Castlevania with the open kernel's formatted
+card and its script: PRESS START BUTTON, the file screen with a row of boxes where its scrolling help text is drawn
+through the call, NEW GAME, the name entry, "JOURNEY BACK TO 1792", "Now Loading" and Richter's stage from about frame
+3,300 to the run's end at 9,000. The words for the player are now "show a box for each character where they use them"
+(`v1.rs`'s firmware entry and §20.3).
+
+**The kernel's own letters** (decided 2026-10-12, Q6 as recommended). The full-width Latin letters (8260h-8279h,
+8281h-829Ah), digits (824Fh-8258h) and the punctuation of row 1 that the card manager already reads as ASCII (§16) are
+drawn from the kernel's own 5x8 font of §16: each of its five columns doubled across into columns 3-12, its rows 0-6
+doubled down and row 7 once, into rows 0-14. The shapes are that font's, scaled; nothing is drawn after a console's
+characters. 8140h stays blank, every other code of the two ranges keeps the box, and any other code -1; `charset::ascii`
+is now the one owner of the mapping, which the card manager calls too. The glyphs, 95 of them with the space and the
+box, are built at compile time from the font into 2,850 bytes of the ROM; B(53h) answers each one's offset among them.
+`krom2rawadd_draws_the_full_width_latin_from_the_kernels_font_and_a_box_for_the_rest` gives Ａ, １ and ！ row by row, the
+box for 8141h, 8163h, 819Ah, 84BEh, 889Fh and 9872h, and Ｚ's and ｚ's own offsets; it fails on the box image
+(`593817b8…`) at Ａ, and passes [M]. Castlevania's help line now reads "Select file to be loaded" and "Checking Memory
+Card. Do not remove Memory Card", its kanji still boxes, and its text routine ends on every glyph: the game names its
+file and plays its prologue and Richter's stage to frame 9,000 as before [M, pictures every 60 frames]. The words for
+the player: games "show the Latin letters, digits and common punctuation in EmuSen's own font and a box for every other
+character (mostly Japanese ones)".
+
+### 25.2 Read and write in asynchronous mode
+
+**What the documents say.** "Asynchronous access means that the BIOS function returns immediately after invoking the
+access (which does then continue on interrupt level, and does return an event when finished)"; read's result is the
+"Number of bytes actually read, -1 if failed" [R "Asynchronous Access", "A(02h) or B(34h)"]. Neither says what an
+asynchronous call returns.
+
+**The game's evidence** [M]. Spyro the Dragon's two loops (§24) are `while (read(fd, buf, len) != 0)` and the same
+with write, each after `while (lseek(fd, pos, 0) != pos)`: the game takes any other result as a request not accepted
+and asks again. So an accepted request returns 0, which also reads psx-spx's "actually read" literally: when the call
+returns, nothing has been read yet [A].
+
+**The fix.** An accepted asynchronous read or write returns 0 and moves the FCB's position past the bytes its job will
+carry [C on the position]; a request refused for its length or position fails at once with -1 and its error, as in
+synchronous mode; while a job runs on the slot, a new request waits for it and is then accepted (unchanged, [C]). The
+job, its `DeliverEvent(fd, 4)` and the callbacks' F4000001h events are as §14 gives them, and the synchronous path is
+unchanged.
+
+**The harness's card.** `kernel-harness/src/sio0.rs` gives the harness SIO0's DATA, STAT and CTRL and a memory card in
+slot 1 that answers psx-spx's "Memory Card Read/Write Commands" byte for byte, its FLAG 08h on insertion and cleared by
+a write ("FLAG Byte"), each byte's /ACK raising IRQ7 400 of the rig's accesses later, the last byte none [R]. It models
+the protocol, not the timing. `tests/card.rs`: an asynchronous write accepted with 0, the position past it, a second
+write, close, the fd's event, and the file read back synchronously; a synchronous write read back asynchronously, with
+every directory frame's checksum and the file's first block 51h; and the asynchronous calls refusing a part frame and
+the file's end. The first two fail on the previous image (1024 for 0) and pass. Diamond's
+`the_open_kernels_card_files_keep_the_on_card_format` now expects 0 from its asynchronous read, its event as before.
+
+**Spyro the Dragon** [M], the open kernel's formatted card, its script to frame 18,000: "THE MEMORY CARD IN SLOT 1 DOES
+NOT HAVE A SAVE FILE. CREATE SAVE FILE NOW?", Create File, the slot menu, a new game and the Artisans' world, two
+dragons freed. The game creates `BASCUS-94228SPYRO` (10200h), writes its 1400h bytes asynchronously in one call
+accepted with 0, closes it 80 frames later (40 sectors at two frames each, §13's pace), and reads the 1400h back
+asynchronously, also accepted with 0. The card checks by psx-spx's format: the header, every checksum, block 1 in state
+51h of 2000h bytes, its title frame "ＳＰＹＲＯ　ＴＨＥ　ＤＲＡＧＯＮ". Booted again with that card and the load script,
+"ACCESSING MEMORY CARDS…" passes to the game's three slots, each EMPTY, as the script saved no game. **Not shown**: a
+save of the game's progress, which the script never reaches.
+
+### 25.3 The interrupt path's cost
+
+**Measured first** [M]. The run tool's `--kernel-profile FILE --profile-frames A:B` (`examples/run.rs`) times every
+exception from its entry at 80000080h to the return to the code it interrupted: per set of pending sources, the cycles
+to the first instruction in user RAM, to the source's acknowledgement in I_STAT and to the return, and the cycles spent
+at each PC outside user RAM. Crash Bandicoot by its script, frames 6,600-6,700, on §23's image:
+
+| | to the game's code | to the acknowledgement | to the return |
+|---|---|---|---|
+| vblank (115) | 36,606 (5,647-39,126) | 36,804 | 43,796 |
+| timer 2 (1,667) | 7,069 (3,856-14,513) | 7,644 (4,414-15,084) | 8,691 |
+| syscalls (62) | — | — | 3,422 |
+
+Medians, with the range. The kernel spent 185,658 cycles a frame in exceptions, a third of the frame. By PC, the cost
+was the I-cache: the exception entry's first instruction of each 16-byte line took 128 cycles, its refill four words of
+25 cycles each over the ROM's 8-bit bus (Diamond's DEV2 timing, `memctl.rs`), so the entry alone cost about 2,500
+cycles an exception, the dispatch 21.9 cycles an instruction, and a game's code evicts the lines between interrupts. The
+empty port's wait was 1,000 polls of the IRQ7 loop at 9.5 cycles each; the wait before acknowledging an old IRQ7 was 50
+spins of 13.2 cycles, 660 cycles a byte.
+
+**The exception path in the kernel's RAM.** psx-spx's RAM map places "Kernel Code/Data (relocated from ROM)" at 500h,
+and its "BIOS Memory" says portions of the kernel "are relocated to the first 64K of RAM" for speed [R]. The linker
+script's `.ramtext` now holds, at 80000500h-80001974h (5,236 bytes) and copied there with the variables at boot: the
+exception entry, ReturnFromException and longjmp, the dispatch over the chains, the syscall, timer, vblank and default
+handlers, DeliverEvent, the pads' element with its SIO0 exchange inlined, PAD_dr, and the CD element's first function;
+`mem::call_far` calls the ROM from there through a register. The kernel's variables now end at A310h, below DF80h.
+
+- **Every table entry and C(06h) still names a copy in the ROM** [M, C]. Crash Bandicoot, at its start, reads C(06h)
+  through GetC0Table and writes 13 words into the handler it names (55Ch-590h in the first build, which put the handler
+  in RAM), then calls FlushCache; the game stopped at once in SystemError. psx-spx: "reading C(06h) may be useful for
+  patching the exception handler", and "most commercial games still include patches" for an old BIOS [R "C(06h)"]. On
+  the ROM such writes do nothing, as with every earlier image. So the vector at 80000080h and the kernel's own exits use
+  the copies in RAM, and C(06h), B(17h), A(14h), B(07h), B(16h) and A(90h) name the same code in the ROM;
+  `reset.rs` checks that C(06h)'s copy and the vector's are the same bytes. A game that found the handler through the
+  vector's own instructions would patch the RAM copy; none is known (**Q7**).
+- **A jump cannot cross** [M]. The ROM, run at 9FC0xxxxh, and the RAM at 8000xxxxh lie in different 256 MiB regions,
+  which J and JAL cannot cross, and the linker does not object: the first build's RAM code held `jal 8FC04900h`, the
+  ROM's `card::perform` with its region's bits lost, once LLVM had turned a call through a constant pointer into a direct
+  one. `every_jump_lands_in_the_part_of_the_kernel_it_lies_in` decodes every J and JAL of the ROM's code and of
+  `.ramtext` in the rebuilt ELF and fails on that build at 80000AE4h; `call_far` hides the address from the optimiser.
+- **Shown**: `a_vblank_runs_the_kernel_from_its_ram_and_fetches_nothing_from_the_rom` takes a vblank with the pads
+  started from a loop in user RAM: 15,148 fetches from the ROM on the previous image, none now.
+
+**An empty port given up 100 µs after its byte.** psx-spx: "The kernel's controller driver will time out if /ACK is
+not pulled low by the device within 100 µs from the last SCK pulse", and a card's IRQ7 comes "circa 1500 cycles after
+sending a byte (counted from the begin of the first bit)" [R "Controller and Memory Card Signals", "Timings"]; Diamond
+gives /ACK 412 cycles after the last clock (D-22). `sio.rs`'s wait is now the byte's eight bits at BR 0088h and 3,387
+cycles, at 9 cycles a poll (9.5 measured, taken low so that no wait ends early): 497 polls, about 4,700 cycles, three
+times a device's latest /ACK. The wait before acknowledging an old IRQ7 is psx-spx's "100 cycles or so" ("Emulation
+Note"): 8 spins, about 106 cycles. A card's late /ACK after a read's 5Ch byte keeps its own longer wait.
+
+**After** [M], the same frames of Crash Bandicoot's script:
+
+| | to the game's code | to the acknowledgement | to the return |
+|---|---|---|---|
+| vblank (109) | 15,881 (1,656-20,093) | 16,149 | 24,359 |
+| timer 2 (1,716) | 1,296 (1,061-2,655) | 1,507 (1,261-3,104) | 1,781 |
+| syscalls (100) | — | — | 774 |
+
+The kernel spends 50,422 cycles a frame in exceptions, 9 % of it. Of a vblank, port 1's five bytes take about 7,500
+cycles at the documented 1,500 a byte and the empty port about 4,700; the rest is the chains. `programs/kernel-irq.s`, a
+pad on port 1, port 2 empty and timer 2 at Crash Bandicoot's 32,776 cycles from a loop in user RAM, shows it without a
+game's code: a vblank returns after 23,351 cycles on §23's image and 13,730 now, timer 2 is acknowledged after 4,039 at
+most and 1,107; `the_open_kernels_interrupt_path_fits_within_timer_2s_period` holds the bounds 16,000 and 2,000.
+
+**Crash Bandicoot** by its script to frame 18,000 prints no "intr timeout", where it printed six, and plays the same
+course by its pictures, to the hollow at about frame 6,600 where the camera rests to the run's end, as before.
+
+**The cost to `timers`** [M]. ps1-tests' `timers` fails WiseMan's TTY gate on this image in two rows, and passes on
+§23's. Both rows measure where an interrupt falls against the program's own loops, which the kernel's undocumented
+timing decides:
+
+- *Timer 0, system clock, 5,000 cycles*: the fifth sample reads 9,763, a vblank taken inside it. The program starts at a
+  fixed time after reset, side-loaded at the hand-over: the hand-over now comes at 287,795 cycles, 44,578 later than
+  before, the cost of copying `.ramtext` from the ROM, and the first row and its line take 111,673 cycles, 22,753 more
+  (the ROM's code moved, and with it which lines share the I-cache). The row now runs from 530,715 to about 585,000 and
+  meets the first vblank at 556,127; on §23's image it ended 40,000 cycles before it. Two to 32 spins added to every
+  exception move the vblank to another sample of the same row.
+- *Timer 1, hblank, a frame*: 262 in every sample against the log's 263. The program resets the counter a few dozen
+  cycles after reading it, and the frame it counts is that much short of a frame; when the reset falls within those
+  cycles after an hblank's edge, one edge is lost. Two spins added to every exception, or ReturnFromException's table
+  entry pointed at the RAM copy, give 263.
+
+The console's log is one draw of both phases, on a BIOS whose timing is not known. No change was made for them; it
+is **Q8**. *Decided 2026-10-12, as recommended*: the gate drops one delay sample a row that is longer than its
+tolerance allows, as one an interrupt landed in, and allows a frame's hblanks ±1, for every kernel image; the rule and
+its reason are `Diamond_Native.md` §11.12a. With it `timers` passes on this image and on `7af83c9b…` [M].
+
+### 25.4 The image and the tests
+
+[M] 524,288 bytes, ~~97,288~~ 100,544 of them before the last non-zero byte; SHA-256
+~~`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`~~
+`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b` since the kernel's letters (§25.1, Q6), rebuilt
+byte for byte with `DIAMOND_KERNEL_REBUILD=require`. The images between: `afc27937…` after §25.1's box, `f277cce3…`
+after §25.2 and `593817b8…` after §25.3.
+
+- `cargo test --release` in `kernel-harness/`: 55 tests, all passing, with the rebuild required; new: the glyphs (§25.1),
+  the card's three (§25.2), the jumps and the vblank from RAM (§25.3); changed: `reset.rs`'s vector and C(06h) and
+  `exceptions.rs`'s hook structure, whose RA is now ReturnFromException's RAM copy.
+- `cargo test --release` in Diamond's crate: 155 unit tests and 70 program tests, with and without
+  `EMUSEN_DIAMOND_PS1TESTS`, the card round trips among them.
+- WiseMan's `Diamond` tests under the test lock: ~~42 of 42 without the corpus, and with `EMUSEN_DIAMOND_PS1TESTS` set 41
+  of 42, `timers` failing as §25.3 gives~~ *since Q8's rule* 43 of 43 with `EMUSEN_DIAMOND_PS1TESTS` set, the rule's own
+  test among them, every program passing by its TTY; the gate's test on `7af83c9b…` passes `timers` too.
+- The seven games by their scripts on the open kernel [M, pictures every 300 frames]: Castlevania past its file screen
+  (§25.1), Spyro the Dragon's file created, written and read (§25.2), Crash Bandicoot without "intr timeout" (§25.3);
+  Ape Escape to its first stage and the tutorial's boxes, Rayman to the Dream Forest, its save made on the card (block 2
+  in use, block 1 its own erased first try), Silent Hill to the foggy street and the alley, Tekken 3 to its fights and
+  "GAME OVER", each as `Diamond_Players.md` §13 records them.
+
+### 25.5 Questions for the tester
+
+6. **Q6, the characters.** *Decided 2026-10-12: the option, as recommended (§25.1).* Kept: a box for every documented code but the space. *Option*: the kernel's own 5x8 font of
+   §16 drawn into the 16x15 cell for the full-width Latin letters, digits and common punctuation the card manager
+   already converts (§16), the box for the rest, so that Castlevania's help line reads; it is EmuSen's own drawing,
+   copies no console font, and costs about 2 KiB of ROM. *Recommended*: the option, if a font of EmuSen's own is
+   acceptable in the kernel.
+7. **Q7, the two copies.** *Decided 2026-10-12: kept, as recommended.* The tables and C(06h) name ROM copies so that a game's patch does nothing, while the vector
+   runs the RAM copy. *Recommended*: keep, and treat a game that patches through the vector as a defect to record.
+8. **Q8, `timers` in the gate.** *Decided 2026-10-12: the grading changed, as recommended (§25.3, `Diamond_Native.md`
+   §11.12a).* Two rows depend on the kernel's timing modulo a frame and a line, which no document
+   gives (§25.3), and each later change to the kernel re-draws them. *Recommended*: grade a delay row by its settled
+   samples with any one an interrupt lands in dropped, and a frame's hblanks within 1, decided before the gate is
+   counted; *or* keep the rule and accept that the open kernel's images pass it by phase.
+
+### 25.6 Reading log, and exposures
+
+Opened for this section, 2026-10-12: psx-spx `6d7d1bc` `kernelbios.md` lines 44-136 ("BIOS Memory", the ROM and RAM
+maps, the table of tables), 542-592 (open, lseek, read, write, close), 939-1113 (the memory card functions,
+"Asynchronous Access"), 1114-1140 (interrupt handling), 1235-1275 (C(06h), B(17h), the default elements, "No Nested
+Exceptions") and 2521-2566 ("BIOS Character Sets"); `controllersandmemorycards.md` lines 40-178 (the overview, /ACK,
+the emulation note, the signals) and 2352-2466 (the card's commands, FLAG, timings); `DOCS.txt`'s exclusions. EmuSen's
+own: this page whole, `Diamond_OpenKernel.md` §1-§10, `Diamond_Plan.md` §1 and §5.9, `Diamond_Players.md` §13, the
+disputes log's rules and D-22, `Diamond_Native.md` §11.12; the kernel and its harness, and of Diamond's crate
+`examples/run.rs`, `tests/programs.rs`, `programs/kernel-pad.s` and `kernel-card.s`, `bus.rs`'s fetch path, `irq.rs`,
+`memctl.rs`'s DEV2 figures, `machine.rs`'s stepping and `v1.rs`'s firmware entry; WiseMan's `TtyReader.cs` timers rule and
+`DiamondTests.cs`; `psxplay.py` and the scripts; ps1-tests' `timers/main.c`, its `psx.log`'s first rows, and no file of
+its `common/`. The games' own code and RAM on the open kernel only: Castlevania's text routine and glyph table, Spyro's
+loops and calls, Crash Bandicoot's calls and its writes into the kernel's RAM.
+
+**Never opened**: any firmware, `~/.cache/emusen/probe/diamond/sysdir/` or `~/Documents/BIOS/`, a BIOS listing,
+disassembly or trace, OpenBIOS, any emulator's source, `Diamond_References.md`, psx-spx's "BIOS Patches" and the other
+passages `DOCS.txt` excludes, the referees' outputs and pictures. No reference emulator and no `psxreferee.py` was run,
+and Diamond only on the open kernel.
+
+**Exposures**, stated plainly: Crash Bandicoot's 13 words written into the handler C(06h) named were printed once, as
+hexadecimal, by a comparison of the kernel's RAM before and after the game's first frames; they are a game's patch of
+the kernel, of the kind psx-spx's excluded "BIOS Patches" describes, and so may reflect the original's layout. They were
+not decoded or studied, are not recorded here, and nothing in the kernel depends on them: the fix is to keep their
+target in the ROM.

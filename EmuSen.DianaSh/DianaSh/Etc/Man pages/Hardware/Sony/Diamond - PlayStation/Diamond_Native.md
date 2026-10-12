@@ -502,7 +502,12 @@ From psx-spx's "Memory Map", "I/O Map" and "Memory Control" [R]:
   I/O is a bus error but from the DMA registers and the SPU's, which `cpu/code-in-io` shows a console executing
   [R its source and `psx.log`].
 - **Widths.** A 32-bit register takes the whole register on a byte or halfword store, as the processor drives it
-  (`io-access-bitwidth`'s DMA rows). On the CD-ROM's 8-bit bus without auto-increment every byte of a wider access
+  (`io-access-bitwidth`'s DMA rows). *Since 2026-10-12* (`Diamond_Disputes.md` D-45): at an address not word-aligned
+  the word is shifted to the store's byte first, as psx-spx's "(w32)" has it ("left-shifted if address isn't
+  word-aligned"), for memory control, the RAM size register, I_STAT and I_MASK, every DMA register but the lengths
+  (which psx-spx marks "OK" at every width, and which keep the unshifted write they had), DPCR, DICR and the timers;
+  a game's `sb` to DICR's third byte sets the channels' interrupt enables, which Silent Hill, Castlevania: SotN, Tekken 3
+  and Ape Escape stream their movies by. On the CD-ROM's 8-bit bus without auto-increment every byte of a wider access
   meets one address, so a 32-bit read returns the status byte four times and a 16-bit store writes the index register
   twice (`18181818h`, `1A1A1A1Ah` in the console's log, and DEV5's bit 13 clear) [R, A]; the SPU's 16-bit bus with
   auto-increment takes a word as two halfwords.

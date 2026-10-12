@@ -512,6 +512,19 @@ kernel. The libretro channel carries no pad setting the driver pins, and SwanSta
 Ape Escape shows it its "DUALSHOCK … has not been plugged into port 1" screen, Beetle PSX and Diamond go on to the
 game. `Diamond_CDROM.md` §9.4 records each disc against them.
 
+### 4.15 D-45: a narrow store to a 32-bit register — `narrow-stores.s`, and the discs' pictures
+
+*Added 2026-10-12.* The program side-loaded on all five as in §2.4, the player's BIOS given as each referee's
+firmware, RAM read at its done word [M]: DuckStation and SwanStation read the seven cases alike, and Beetle PSX the
+same; PCSX-Redux keeps DICR's bits 0–5 under a halfword store to its upper half (`0044003Fh`), and PCSX-ReARMed keeps
+those and DICR's flags and DPCR's other bytes (`0C880000h`, `0044003Fh`, `00000B99h`). Every referee shifts the store
+to its byte. `Diamond_Disputes.md` D-45 has the table and the ruling; Diamond after the change reads as DuckStation,
+SwanStation and Beetle PSX in every case.
+
+SwanStation ran the seven test discs again to frame 6,000 on `scph5501.bin`, pictures every 150 frames, and Silent
+Hill, Castlevania: SotN and Tekken 3 to frame 4,500 every 10 frames, and Tekken 3 to frame 12,000 every 300, through
+`psxreferee.py pictures`; `Diamond_CDROM.md` §9.8 records the discs against them.
+
 ## 5. What changed in Diamond
 
 Each a writer's step citing its entry, after the rulings above:
@@ -532,6 +545,10 @@ Each a writer's step citing its entry, after the rulings above:
   `the_texture_cache_keeps_a_64_texel_row_and_clears_on_a_page_change`,
   `interlaced_drawing_in_vblank_skips_the_lines_from_the_display_start`,
   `gpuread_repeats_the_first_word_of_the_last_longer_transfer`.
+
+- *The stream's step (D-45)*: a byte or halfword store to a 32-bit register at an address not word-aligned writes the
+  register whole, the word shifted to the store's byte (`bus.rs`). Pinned by
+  `a_narrow_store_writes_its_register_shifted_to_its_byte`.
 
 The other programs are pinned on Diamond as it reads them: `gpustat_while_each_shape_arrives_and_draws`,
 `the_gpu_is_ready_at_once_after_each_transfer`, `stores_drain_as_the_fit_has_them`.

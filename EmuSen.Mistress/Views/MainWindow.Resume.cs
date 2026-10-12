@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using EmuSen.Common;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
+using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.Library;
 
 using EmuSen.LunaP.Windowing;
@@ -24,13 +25,44 @@ namespace EmuSen.Mistress.Views
         {
             await PromptForMissingFirmwareAsync(path);
             if (await ChooseResumeAsync(path) is not { } choice) return;
-            if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture)) return;
-            LoadGame(path, displayName, choice == ResumeChoice.Resume ? ResumeStatePath(path) : null, reset: false);
+            Task<EmuSen.Cores.ICore>? loading = bigPicture is not null ? LoadUnderLaunchScreen(path) : null;
+            if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture))
+            {
+                LetGo(loading);
+                return;
+            }
+            if (loading is not null)
+            {
+                // Never throws: a failed load is rethrown inside LoadGame, which reports it as any failed load.
+                await Task.WhenAny(loading);
+                // The window closed while the load outlasted the screen: nothing starts in it - see Diamond_Players.md §12.8.3.
+                if (!LaunchScreenOpen)
+                {
+                    LetGo(loading);
+                    return;
+                }
+            }
+            LoadGame(path, displayName, choice == ResumeChoice.Resume ? ResumeStatePath(path) : null, reset: false, loading);
             if (bigPicture is null) return;
             bool failed = _currentRomPath != path;
             CloseLaunchScreen();
             if (failed) PadNotice.Show(StatusText.Text ?? $"Failed to load {displayName}");
         }
+
+        // A core loaded for a launch that will not happen is disposed once its load ends.
+        private static void LetGo(Task<EmuSen.Cores.ICore>? loading) =>
+            _ = loading?.ContinueWith(t => (t.Result as IDisposable)?.Dispose(), TaskContinuationOptions.OnlyOnRanToCompletion);
+
+        // A v1 engine's load begun on a worker as the launch screen opens, so the screen's time covers the disc's read; null loads it after, as before - see Diamond_Players.md §12.8.3.
+        private Task<EmuSen.Cores.ICore>? LoadUnderLaunchScreen(string path)
+        {
+            if (EarlyLoader is not { } load || LaunchScreen.DurationOf(_appSettings.BigPictureInterface.LaunchScreenDuration) <= TimeSpan.Zero || path == _currentRomPath) return null;
+            string? engine = EngineChosenFor(path);
+            return EmuSen.Cores.CoreFactory.RunsOnV1Engine(path, engine) ? Task.Run(() => load(path, engine)) : null;
+        }
+
+        // What loads a game's core under the launch screen; a test gives one it can hold back, or none where its clock is stepped.
+        internal Func<string, string?, EmuSen.Cores.ICore>? EarlyLoader { get; set; } = (path, engine) => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine);
 
         private string ResumeStatePath(string romPath) => SaveLibrary.ResumeStatePathFor(romPath, _appSettings.StateDirectory);
 

@@ -80,9 +80,23 @@ namespace EmuSen.Cores
         public static CoreBundle Load(string romPath, bool headless = true, CheatRegistry? cheats = null,
             Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? venusFrameTimings = null, string? engine = null)
         {
+            ICore core = Loaded(romPath, headless, engine);
+            return Bundle(core, cheats, venusFrameTimings) with { Notice = EngineNotice(romPath, engine, core) };
+        }
+
+        // The core made and the file loaded into it, Load without its wiring, for a caller that loads off its own thread.
+        public static ICore Loaded(string romPath, bool headless = true, string? engine = null)
+        {
             ICore core = Create(romPath, headless, engine);
             LoadInto(core, romPath);
-            return Bundle(core, cheats, venusFrameTimings) with { Notice = EngineNotice(romPath, engine, core) };
+            return core;
+        }
+
+        // Whether the file runs on a v1 engine, whose load writes nothing to the console and may run on any thread; false for a C# core or a file that opens nowhere - see Diamond_Players.md §12.8.3.
+        public static bool RunsOnV1Engine(string romPath, string? engine)
+        {
+            try { return V1Library(romPath, engine) is not null; }
+            catch (NotSupportedException) { return false; }
         }
 
         // A library file into a core: a v1 engine takes the file and its set itself; a C# core takes an archive's image unpacked, named for the archive - see EmuSen_CoreAPI_Extensions.md §10.4.

@@ -53,7 +53,7 @@ namespace EmuSen.Common
         public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath, string? engine = null)
         {
             // A file that opens nowhere asks for nothing; the load after it says why - see Diamond_Players.md §12.
-            try { return FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath, engine).GetFirmwareRequirements(romPath).Where(r => r.Required)); }
+            try { return FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath, engine) is var probe && probe is Cores.Native.CoreEngine v1 ? v1.RequiredFirmwareFor(romPath) : probe.GetFirmwareRequirements(romPath).Where(r => r.Required)); }
             catch (Exception e) when (e is NotSupportedException or System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException) { return Array.Empty<FirmwareRequest>(); }
         }
 
@@ -69,9 +69,13 @@ namespace EmuSen.Common
         // The core's word that this game runs on a firmware replacement or without a chip - see ICore.FirmwareNotice.
         public string? FirmwareNotice => _core?.FirmwareNotice;
 
-        public void LoadRom(string path)
+        public void LoadRom(string path) => LoadRom(path, loaded: null);
+
+        // <loaded> is CoreFactory.Loaded's core of <path> on <Engine>, made off this thread; null loads it here.
+        public void LoadRom(string path, ICore? loaded)
         {
-            var bundle = CoreFactory.Load(path, headless: true, Cheats, engine: Engine);
+            var bundle = loaded is null ? CoreFactory.Load(path, headless: true, Cheats, engine: Engine)
+                : CoreFactory.Bundle(loaded, Cheats) with { Notice = CoreFactory.EngineNotice(path, Engine, loaded) };
             _core = bundle.Core;
             EngineNotice = bundle.Notice;
             DebugTarget = bundle.DebugTarget;

@@ -37,7 +37,7 @@ Of the nine gaps, **five need the core ABI**, each through a kind of addition th
 | 7 | **The kit's memory per image** | Diamond's corpus form; any large medium | **inside the kit** | none at the ABI |
 | 8 | **Routing a file by its content** | Diamond and the Sega CD from Diamond's st. 7; every later disc console | **a runtime service** (one function, one owner of the decision) over recognisers in the system packs | none at the ABI; `SystemEntry` gains `Recognise` |
 | 9 | **Memory cards, packs and a console's own memory** | Diamond st. 6, the Sega CD, the N64's Controller Pak | an **extension**: a descriptor field; the path policy the runtime's | machine info's `battery[].kind` |
-| 10 | **Device kinds; streaming reads** | later | **deferred**, with the shape that would fit recorded | none now |
+| 10 | **Device kinds; streaming reads** | later | **deferred**, with the shape that would fit recorded; streaming measured 2026-10-12 and proposed (§10.2, Q15), battery files in core info proposed (§10.5, Q16) | none now |
 
 Read §1 for the one mechanism the five ABI changes share, §2 before §3 and §8, which both build on it, and §12 for the
 questions. §13, added 2026-10-11, is a tenth item of a different origin, the debugger's: read watches and read data
@@ -809,6 +809,61 @@ Decided 2026-10-04: no streaming minor until a measurement shows the whole copy 
 v1's rule that the core never calls the host is an event asking for a range of sectors and an export supplying them,
 with the core reading ahead; it is recorded here so that §3's `emusen_media` is not mistaken for it [A].
 
+#### 10.2.1 The measurement (2026-10-12)
+
+*Proposed 2026-10-12, after the tester reported a delay launching PlayStation games from big picture; awaiting the
+tester (Q15). Nothing in this subsection is built.* The measurement the 2026-10-04 decision waited for was taken on the
+tester's seven discs, copied, with the opt-in probes of `Diamond_Players.md` §12.8 [M, 2026-10-12]:
+
+- **The whole read is the launch's one remaining cost of size.** A cold read of a 430–660 MB image took 0.16–0.27 s
+  from the desktop's NVMe drive and 4.8–6.9 s under a 90 MB/s read cap, the speed `Diamond_CDROM.md` §9.7 assumed for
+  the handheld's microSD card; a sheet's tracks, or a zip's unpacked tracks, 1.7–6.8 s. The handheld's own figures
+  are in `Diamond_Players.md` §12.8.6.
+- **The copy at create** costs 150–290 ms on the desktop per create, the disc's parse being constant in its size
+  (`emusen-disc`'s `Disc::from_image` places the tracks and reads nothing): it is the copy into freshly faulted pages,
+  as `EmuSen_CoreAPI.md` §6.2 requires ("the core copies what it keeps"). Host and core hold the image twice while
+  create runs.
+- **What the host could do without the ABI is done** (`Diamond_Players.md` §12.8.3): the firmware question reads no
+  image, and big picture loads under its launch screen. After it a cold launch is held only by the read: from the pad's
+  press to the first frame 5.1–9.4 s for the loose tracks and the zips' unpacked tracks under the 90 MB/s cap, against
+  the launch screen's 3.0 s; and with the screen Disabled, or from the desktop's list, the read is waited for with
+  nothing moving on screen.
+- **A game reads little of its disc at launch.** The first frame reads no sector. In their first 30 s (1,800 frames,
+  on the open kernel, through the run tool's drive trace) Crash Bandicoot read 1,258 sectors, Spyro the Dragon 997 and
+  Ape Escape 1,537: 2.3–3.6 MB, under 1% of each image.
+
+So the copy at create matters where the medium is slow, which is where the project's weak-machine target keeps its
+library, and the cure is to read the sectors as the game asks for them [A].
+
+#### 10.2.2 Two shapes
+
+Both keep v1's rule that the core never calls the host, both are a minor's addition by `EmuSen_CoreAPI.md` §4.4, and
+both leave a host that does not offer them, and a core that does not claim them, exactly as now [A].
+
+- **A. The core asks, the host supplies** (the shape recorded above). A capability bit; create receives the image's
+  length and each companion's, without their bytes; the core raises an event naming a file, an offset and a length; the
+  host answers with an export supplying the bytes before the next advance. The core must ask ahead of its emulated
+  drive, by more than the longest the host may take: at the drive's double speed 150 sectors a second, so a second's
+  read-ahead is 350 KB, about 4 ms from the card. It is the more general of the two (a network source, a medium the
+  host decodes), and the larger: a new event, a new export, a read-ahead policy in every disc core, and the
+  emulation's timing made to depend on the host answering in time, which a test must pin.
+- **B. The image borrowed for the machine's life.** A capability bit by which the host promises that the image and the
+  companions passed at create stay readable, unchanged, at the same addresses until `destroy`, and the core may keep
+  pointers into them instead of copying. The host maps the files read-only rather than reading them; the core's sector
+  reads touch the mapping, and the system reads the pages from the card on first touch, ahead by its own read-ahead.
+  No event, no export, no read-ahead in the core; one disc crate's source kind (`emusen-disc`'s `Source::Bytes` gains a
+  borrowed form) serves every disc core. Its costs: a page not yet read is read on the emulation thread, the system's
+  read-ahead (128 KB by default) covering the drive's sequential reads; a file changed or truncated under a running
+  machine is seen by it, which the host prevents only by holding the files open and refusing to unpack over a mapped
+  image; and the promise binds every host, the kit's included.
+
+#### 10.2.3 Recommendation, and what is not done
+
+*Recommended* [C, Q15]: **B**, as the smaller change that removes both the cold read and the doubled memory, with a kit
+case that creates from a mapping, runs, and compares every frame, sample and state with a run from copied bytes; A
+kept as recorded, for a source a mapping cannot serve. **Not built:** this is a stable surface, so the measurement and
+the proposal stop here for the tester's decision. Prediction **P7** (§11) states what B must show if it is built.
+
 ### 10.3 The order
 
 By the first stage that needs each [C, Q13]:
@@ -835,6 +890,24 @@ runtime's media module, for `.zip` only, reading entries through .NET and unpack
 rather than handing bytes from the archive, because a sheet's tracks are read by path and a C# core opens its file
 itself; Galaxia names the folder and gained no reading of archives.*
 
+### 10.5 Battery files in core info (proposed 2026-10-12)
+
+*Awaiting the tester (Q16). Nothing is built.* `EmuSen_CoreAPI.md` §19.1 records that a v1.0 host cannot know a core's
+battery files before a game is created, so the engine creates once with file 0 as `.srm`, reads machine info's
+`battery`, and creates again when the files differ and one exists on disk; it names the remedy, core info carrying
+them per system in a later minor, and leaves it undecided. Diamond names two cards, file 0 as `.mcr` and file 4 as
+`.2.mcr`, so **every launch of a PlayStation game with a memory card on disc creates twice**: a second 150–290 ms on the
+desktop [M, 2026-10-12, `Diamond_Players.md` §12.8.2], the handheld's in §12.8.6 there. Under big picture's launch screen
+it is now hidden whenever the whole load ends within the screen's time; from the desktop's list it is waited for.
+
+Weighed by §1.1's forms [C]: **an extension**, a descriptor field `battery` in each system entry of core info, of the
+shape machine info's already has (`which`, `suffix`, `length`), listing every battery file a machine of the system can
+name, machine info staying the authority for the machine created. A host that reads it passes those files at the first
+create and creates again only where machine info then differs; a host that does not, and a core that does not write
+it, behave as now. Rejected: the host remembering the last machine's files for the same library and settings, which is
+a guess that the first launch after every start of the program still pays for, needs a fallback create where a foreign core refuses a
+file number it does not name, and gives a fact the core owns a second owner in the host.
+
 ---
 
 ## 11. Predictions to be retired
@@ -851,6 +924,9 @@ itself; Galaxia names the folder and gained no reading of archives.*
   measurable time, which fixes §3.5's interval.
 - **P6.** No game on Diamond's bench reads the DualShock's motors as anything but a level per poll, so the per-frame
   average loses nothing a player can feel.
+- **P7** (2026-10-12, §10.2). With §10.2's shape B, a cold launch of a 660 MB loose track from a 90 MB/s medium
+  reaches its first frame within 0.5 s of the same launch warm, the process's peak memory falls by the image's size,
+  and no frame of the first 30 s of play takes longer than its period on the handheld.
 
 ---
 
@@ -902,6 +978,15 @@ Each with a recommendation.
     lands with the core that tests it, and nothing enters the baseline unexercised.
 14. **Q14, device kinds.** *Recommended:* none now; adapters such as Diamond's multitap as port settings, as the
     Genesis's are; pointer devices taken up when a gate needs one (§10.1).
+
+*Raised 2026-10-12, by the launch-time measurement of `Diamond_Players.md` §12.8; awaiting the tester:*
+
+15. **Q15, streaming reads.** *Recommended:* §10.2's shape B, the image borrowed for the machine's life behind a
+    capability bit, mapped by the host, with a kit case comparing a mapped run with a copied one; shape A kept on
+    record. Rejected for now: nothing, which leaves a cold launch from a card at the speed of the whole read.
+16. **Q16, battery files in core info.** *Recommended:* a `battery` field in core info's system entries, of machine
+    info's shape, read by the host for the first create (§10.5). Rejected: a host-side memory of the last machine's
+    files.
 
 ---
 

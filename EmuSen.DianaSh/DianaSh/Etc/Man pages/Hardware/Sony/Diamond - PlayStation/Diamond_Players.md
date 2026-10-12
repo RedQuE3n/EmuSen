@@ -356,6 +356,8 @@ Each was shown by a WiseMan test failing before the change and passing after [M]
 - **The image is read twice before the first frame**, once for `firmware_for` and once for `create`, and Diamond copies
   it once more; on the handheld the three launches the journal times took two to three seconds from the per-game log's
   start to the first frame line, which is written a second after frames begin, so it is recorded and not changed.
+  *Measured and in part changed 2026-10-12, §12.8:* the question no longer reads the image, big picture loads under
+  its launch screen, and the whole read and the copy at create are proposed for the tester's decision.
 
 ### 12.6 Tests run (2026-10-12)
 
@@ -500,6 +502,269 @@ left to the branch that owns the catalog [R]. On the run before the merge,
 `MercuryRtCoreTests.A_second_ports_buttons_are_ignored_on_both_engines` failed: it pressed and read the joypad register
 with no frame between, which a latched press no longer reaches, and it now runs a frame after the presses.
 `emusen-native`'s own tests: `cargo test --release`, 63 passed.
+
+### 12.8 Launch time, measured and shortened (2026-10-12)
+
+*Written 2026-10-12, after the tester reported "an awkward delay when launching psx games" in big picture mode, play
+speed on the handheld being fine by then.* This section is the time from the pad's press on a game in big picture to
+the game's first frame, step by step, before and after the changes it records. The marks are the page's.
+
+#### 12.8.1 How it was measured
+
+- **The engine's steps**, through `DiamondLaunchTimeTests.The_testers_discs_launch_step_by_step` (WiseMan, opt-in by
+  `EMUSEN_DIAMOND_LAUNCHTIME_LIBRARY`, with `EMUSEN_DIAMOND_LAUNCHTIME_HOME` for the unpacked copies): the calls
+  `EmulatorSession.MissingFirmwareFor` and `CoreEngine.LoadRom` make, one at a time through the same public types
+  (routing, the probe's engine, the firmware question, the unpack, the image's and the companions' reads,
+  `firmware_for`, `create`, a second `create` with a memory card among the files, the first frame), then the real
+  `CoreFactory.Load` as a check on their sum. Each game three ways: **first**, an archive not yet unpacked and every
+  file out of the page cache; **cold**, unpacked but out of the cache; **warm**, straight after.
+- **Big picture's launch**, through `PlayStationLaunchTimeTests.The_testers_discs_launch_from_big_picture_timed`
+  (opt-in alike): a headless themed window whose `psx` folder holds a hard link to each copy, the pad's A in the game
+  list, the interface clock stepped every 16 ms in step with the wall clock, and timed: the press until the launch
+  screen is up, the 16 ms step in which the game was loaded, and the press until the first frame. Each game cold and
+  warm, with the screen at Normal (3.0 s, the handheld's setting) and Disabled. Each window has a home of its own, so a
+  zip is unpacked in every one of its launches.
+- **Cold without root:** `posix_fadvise(POSIX_FADV_DONTNEED)` on each file, which drops a file's clean pages from the
+  page cache; `fincore` showed 0 of 154,318 pages resident after it on Crash Bandicoot's track, and `cat` then read it
+  in 0.20 s against 0.03 s warm [M].
+- **The card, simulated:** the same runs under `systemd-run --user -p "IOReadBandwidthMax=/dev/nvme1n1 90M"`, systemd's
+  per-account manager delegating the `io` controller; `cat` of the 632 MB track then took 6.9 s, the speed `Diamond_CDROM.md` §9.7
+  assumed for the handheld's microSD card [M]. The runs keep WiseMan's 8 GiB memory limit, under which the page cache is
+  reclaimed between launches: a few warm rows under the cap are slower than their cold row for that reason, and are
+  noise, not a property of the code [A].
+- **The discs:** the seven copies of §12.1 in the library's forms (two sheets beside their tracks, two lone tracks, three
+  zips, every zip holding a sheet), with no BIOS in the firmware folder, so the open kernel ran. Nothing in the library
+  or on the handheld was written.
+
+#### 12.8.2 Before: where the time went
+
+[M, WiseMan `414cac36`, desktop.] Each row's numbers are milliseconds; the totals are the probe's own, which add the
+check's second load to its steps.
+
+- **The firmware question read the whole image, on the interface thread, before the launch screen opened.**
+  `MissingFirmwareFor` created the probe's engine and asked `GetFirmwareRequirements`, which unpacked an archive
+  (`DiscsOf`) and read the image whole to hand it to `firmware_for`, only to learn that Diamond offers its market's BIOS
+  as an optional file. A sheet is its own small file, so a sheet's question cost nothing; a lone track's cost its whole
+  read, 60–270 ms on the desktop and 4.8–6.9 s under the card's cap; a zip's first launch cost its unpack, 1.0–1.4 s
+  and 3.7–5.6 s. In big picture that was the carousel frozen between the press and the screen.
+- **The launch screen then held the game for its full time, and only then was the game loaded**, on the interface
+  thread, with the screen frozen: 0.30–0.71 s on the desktop, 2.0–6.6 s for a sheet's tracks read cold under the cap.
+- **The load reads the image and its tracks once more** (from the page cache when the question had just read them),
+  then `create`, whose 150–290 ms is the core's copy of the image into fresh pages (the disc's parse reads nothing);
+  `firmware_for` a second time for the notice; and, wherever a memory card is on disc, **a second `create`** of the same
+  cost (`EmuSen_CoreAPI.md` §19.1), since Diamond's cards are file 0 as `.mcr` and file 4, which the first create
+  cannot know. The first frame took 3 ms.
+
+The engine's steps, desktop, and under the card's cap (before → after for the question and the total; the other
+columns after):
+
+| Game | Condition | Firmware question, before → after | Unpack | Image and tracks read | One create | Second create | Total, before → after |
+|---|---|---|---|---|---|---|---|
+| Ape Escape (sheet) | first | 0 → 1 | 0 | 160 | 156 | — | 708 → 691 |
+| Ape Escape (sheet) | cold | 0 → 0 | 0 | 89 | 150 | 148 | 636 → 638 |
+| Ape Escape (sheet) | warm | 0 → 0 | 0 | 42 | 149 | 151 | 589 → 593 |
+| Castlevania (zip) | first | 1296 → 0 | 1307 | 156 | 197 | — | 2078 → 2084 |
+| Castlevania (zip) | cold | 0 → 0 | 0 | 166 | 202 | 208 | 910 → 928 |
+| Castlevania (zip) | warm | 0 → 0 | 0 | 56 | 200 | 202 | 828 → 803 |
+| Crash Bandicoot (track) | first | 251 → 0 | 0 | 226 | 216 | — | 1100 → 894 |
+| Crash Bandicoot (track) | cold | 199 → 0 | 0 | 199 | 215 | 220 | 1232 → 1016 |
+| Crash Bandicoot (track) | warm | 59 → 0 | 0 | 68 | 216 | 217 | 926 → 856 |
+| Rayman (sheet, 51 tracks) | first | 1 → 0 | 0 | 262 | 191 | — | 779 → 750 |
+| Rayman (sheet, 51 tracks) | cold | 1 → 0 | 0 | 278 | 191 | 192 | 999 → 997 |
+| Rayman (sheet, 51 tracks) | warm | 0 → 0 | 0 | 57 | 193 | 204 | 357 → 785 |
+| Silent Hill (zip) | first | 964 → 0 | 965 | 179 | 212 | — | 1588 → 1689 |
+| Silent Hill (zip) | cold | 0 → 0 | 0 | 164 | 209 | 213 | 944 → 934 |
+| Silent Hill (zip) | warm | 0 → 0 | 0 | 65 | 213 | 213 | 844 → 842 |
+| Spyro the Dragon (track) | first | 268 → 0 | 0 | 269 | 225 | — | 1223 → 995 |
+| Spyro the Dragon (track) | cold | 160 → 0 | 0 | 159 | 237 | 243 | 1240 → 1070 |
+| Spyro the Dragon (track) | warm | 64 → 0 | 0 | 65 | 241 | 240 | 978 → 942 |
+| Tekken 3 (zip) | first | 1424 → 0 | 1426 | 82 | 252 | — | 2154 → 2151 |
+| Tekken 3 (zip) | cold | 0 → 0 | 0 | 204 | 256 | 251 | 1093 → 1157 |
+| Tekken 3 (zip) | warm | 0 → 0 | 0 | 72 | 247 | 244 | 931 → 987 |
+
+Under the 90 MB/s cap:
+
+| Game | Condition | Firmware question, before → after | Unpack | Image and tracks read | One create | Second create | Total, before → after |
+|---|---|---|---|---|---|---|---|
+| Ape Escape (sheet) | first | 0 → 1 | 0 | 1745 | 182 | — | 2413 → 2331 |
+| Ape Escape (sheet) | cold | 0 → 0 | 0 | 1823 | 175 | 171 | 2429 → 2446 |
+| Ape Escape (sheet) | warm | 0 → 0 | 0 | 43 | 153 | 155 | 603 → 615 |
+| Castlevania (zip) | first | 4628 → 0 | 4622 | 193 | 215 | — | 5446 → 5470 |
+| Castlevania (zip) | cold | 0 → 0 | 0 | 5334 | 227 | 230 | 6278 → 6179 |
+| Castlevania (zip) | warm | 0 → 0 | 0 | 58 | 207 | 207 | 834 → 837 |
+| Crash Bandicoot (track) | first | 6923 → 0 | 0 | 6927 | 246 | — | 7821 → 7670 |
+| Crash Bandicoot (track) | cold | 6948 → 0 | 0 | 6948 | 245 | 249 | 8012 → 7857 |
+| Crash Bandicoot (track) | warm | 62 → 0 | 0 | 63 | 223 | 229 | 924 → 896 |
+| Rayman (sheet, 51 tracks) | first | 1 → 0 | 0 | 6311 | 218 | — | 6851 → 6871 |
+| Rayman (sheet, 51 tracks) | cold | 1 → 0 | 0 | 6313 | 217 | 217 | 7109 → 7112 |
+| Rayman (sheet, 51 tracks) | warm | 0 → 0 | 0 | 70 | 193 | 195 | 571 → 727 |
+| Silent Hill (zip) | first | 3736 → 0 | 3739 | 203 | 218 | — | 4394 → 4500 |
+| Silent Hill (zip) | cold | 0 → 0 | 0 | 5247 | 239 | 226 | 6092 → 6071 |
+| Silent Hill (zip) | warm | 0 → 0 | 0 | 60 | 213 | 215 | 852 → 845 |
+| Spyro the Dragon (track) | first | 4820 → 0 | 0 | 4821 | 252 | — | 5794 → 5600 |
+| Spyro the Dragon (track) | cold | 4827 → 0 | 0 | 4830 | 265 | 256 | 5941 → 5787 |
+| Spyro the Dragon (track) | warm | 65 → 0 | 0 | 65 | 235 | 237 | 976 → 936 |
+| Tekken 3 (zip) | first | 5565 → 0 | 5568 | 85 | 287 | — | 6275 → 6330 |
+| Tekken 3 (zip) | cold | 0 → 0 | 0 | 6834 | 278 | 275 | 7790 → 7810 |
+| Tekken 3 (zip) | warm | 0 → 0 | 0 | 67 | 248 | 248 | 966 → 977 |
+
+Big picture, from the pad's press (milliseconds, before → after). "Held at its end" is the interface thread's one step
+at the screen's end, in which the game was loaded before and is only wired after:
+
+| Game | Cache | Normal: A to the screen, before → after | Normal: held at its end | Normal: game started | Disabled: game started |
+|---|---|---|---|---|---|
+| Ape Escape (sheet) | cold | 44 → 36 | 414 → 50 | 3486 → 3118 | 340 → 379 |
+| Ape Escape (sheet) | warm | 1 → 1 | 326 → 22 | 3352 → 3047 | 319 → 357 |
+| Castlevania (zip) | cold | 1309 → 0 | 461 → 17 | 4792 → 3036 | 1668 → 1805 |
+| Castlevania (zip) | warm | 1281 → 1 | 302 → 113 | 4607 → 3132 | 1673 → 1812 |
+| Crash Bandicoot (track) | cold | 256 → 0 | 523 → 23 | 3805 → 3064 | 536 → 465 |
+| Crash Bandicoot (track) | warm | 199 → 0 | 360 → 21 | 3600 → 3045 | 357 → 377 |
+| Rayman (sheet, 51 tracks) | cold | 1 → 0 | 587 → 29 | 3612 → 3049 | 502 → 522 |
+| Rayman (sheet, 51 tracks) | warm | 0 → 0 | 298 → 21 | 3325 → 3045 | 151 → 446 |
+| Silent Hill (zip) | cold | 991 → 0 | 335 → 16 | 4350 → 3037 | 1536 → 1532 |
+| Silent Hill (zip) | warm | 959 → 0 | 710 → 22 | 4699 → 3048 | 1316 → 2132 |
+| Spyro the Dragon (track) | cold | 278 → 0 | 547 → 25 | 3856 → 3045 | 592 → 690 |
+| Spyro the Dragon (track) | warm | 224 → 0 | 401 → 24 | 3650 → 3053 | 414 → 318 |
+| Tekken 3 (zip) | cold | 1582 → 0 | 340 → 22 | 4945 → 3046 | 1739 → 1731 |
+| Tekken 3 (zip) | warm | 1400 → 1 | 398 → 17 | 4823 → 3037 | 1712 → 1726 |
+
+Under the 90 MB/s cap:
+
+| Game | Cache | Normal: A to the screen, before → after | Normal: held at its end | Normal: game started | Disabled: game started |
+|---|---|---|---|---|---|
+| Ape Escape (sheet) | cold | 32 → 37 | 2046 → 50 | 5106 → 3119 | 2020 → 2008 |
+| Ape Escape (sheet) | warm | 1 → 1 | 327 → 20 | 3351 → 3040 | 355 → 315 |
+| Castlevania (zip) | cold | 4616 → 1 | 469 → 22 | 8112 → 5082 | 5375 → 10566 |
+| Castlevania (zip) | warm | 4198 → 1 | 5888 → 22 | 13109 → 7109 | 10704 → 2889 |
+| Crash Bandicoot (track) | cold | 10746 → 0 | 487 → 84 | 14261 → 9361 | 7413 → 7209 |
+| Crash Bandicoot (track) | warm | 73 → 1 | 350 → 22 | 3450 → 3048 | 370 → 392 |
+| Rayman (sheet, 51 tracks) | cold | 1 → 0 | 6563 → 26 | 9588 → 6578 | 6563 → 6563 |
+| Rayman (sheet, 51 tracks) | warm | 0 → 0 | 151 → 20 | 3179 → 3047 | 207 → 205 |
+| Silent Hill (zip) | cold | 3723 → 0 | 322 → 25 | 7067 → 4075 | 4429 → 4215 |
+| Silent Hill (zip) | warm | 953 → 0 | 491 → 22 | 4472 → 3045 | 1414 → 1402 |
+| Spyro the Dragon (track) | cold | 4818 → 0 | 4098 → 53 | 11944 → 5066 | 9311 → 5135 |
+| Spyro the Dragon (track) | warm | 5895 → 0 | 1331 → 22 | 10257 → 3048 | 485 → 362 |
+| Tekken 3 (zip) | cold | 5560 → 0 | 499 → 20 | 9084 → 5917 | 6465 → 6510 |
+| Tekken 3 (zip) | warm | 1481 → 0 | 325 → 22 | 4824 → 3042 | 1717 → 1709 |
+
+#### 12.8.3 What was changed
+
+Each change keeps the launch exact: the same firmware passed, the same battery files, the same machine.
+
+1. **The firmware question reads no image where the core's info leaves no firmware required** (`cfd44cf8`).
+   `CoreEngine.RequiredFirmwareFor` answers empty, without the image, when every system of the core's info lists its
+   firmware and no entry is required; any other info, a system listing none included, reads the image as before.
+   *Why it is exact:* core info's `firmware` is "every firmware file the system can use … one entry for each image a
+   game can name … as `firmware_for` gives them" (`EmuSen_CoreAPI.md` §6.3), and the host prompts only for a required
+   entry (§6.2 there), so a library whose lists hold only optional files can name no required one; the condition is the
+   conservative reading, since a foreign core may leave the optional `firmware` field out. Diamond lists its three
+   BIOS images as optional, as the project's firmware policy has every core (`EmuSen_Firmware.md` §0). The load still
+   asks `firmware_for` of the image and passes what it names, so the files given at create are unchanged. *Proof:*
+   `DiamondPlayersTests.The_firmware_question_reads_no_image_where_no_entry_can_be_required` failed before the change
+   ("the zip was unpacked for the question") and passes after it; with the track held under an exclusive lock the full
+   read throws and the question does not; `Only_info_listing_every_system_s_firmware_as_optional_answers_without_the_image`
+   pins the rule, a required entry or an empty list sending the question to the image. **The load's second
+   `firmware_for`,** for the notice, now reuses the first answer, the same call on the same bytes.
+2. **Big picture loads a v1 engine's game while the launch screen shows** (`79af6005`). The load begins on a worker as
+   the screen opens (`CoreFactory.Loaded`, the part of `Load` before its wiring), and the game starts at the screen's
+   end or when the load is done, whichever is later; the wiring, the cheats, the `EmulatorSession` and the emulation thread stay
+   on the interface thread, after the screen, in the order they had. Two conditions keep it exact. *Only a v1
+   engine's load goes there* (`CoreFactory.RunsOnV1Engine`): a v1 engine's load writes nothing to the console, while a
+   C# core's load prints lines that belong in the game's own log, which `LoadGame` opens after the screen. *The game
+   already loaded is loaded after the screen, as before:* the running game's battery files are written by its
+   shutdown, and loading the same game early would read its memory card before that write. A load that fails under the
+   screen is rethrown inside `LoadGame` and reported as any failed load. *Proof:*
+   `LaunchScreenTests.A_disc_is_loaded_while_the_screen_shows_and_starts_at_its_end`, a zipped synthetic disc whose
+   unpacking must finish while the screen is up and the game not started, failed before the change ("the disc was not
+   loaded while the screen showed") and passes after it, the game still starting within one 16 ms poll of the screen's
+   end; `A_disc_the_core_refuses_under_the_screen_is_reported_at_its_end` has Diamond refuse a malformed `.sbi` under
+   the screen, and the status line reads "Failed to load … Diamond refused the game" with no game and the screen gone.
+   The existing launch-screen cases, whose SNES games now load on the worker through VenusRT, passed three runs of
+   three.
+3. **A defect of change 2, found by its own tests' run, proven and fixed** (`edff1ae8`). A wider run of the areas
+   stalled once, 254 cases in, with no failure printed: a dump of the test host showed no interface thread left and
+   xunit waiting on a case dispatched to it. *Cause:* change 2 lets a launch wait for its load past the screen's time,
+   and a window closed in that wait was still given the game when the load ended; `LoadGame` then ran on the closed
+   window and threw out of the pad's handler on the dispatcher, which in a headless run ends the interface thread, and
+   in the program would have been an exception at the moment of quitting. *Proof:*
+   `LaunchScreenTests.A_window_closed_while_the_load_outlasts_the_screen_starts_nothing` holds the load behind a gate
+   past the screen's time, closes the window and lets the load go: before the fix, `InvalidOperationException` from
+   `ShowLibraryEntries` by way of `StartGameAsync`. *Fix:* when the load ends, a launch whose screen has been taken
+   down starts nothing, and the core loaded for it is disposed; after it the case passes, and its companion,
+   `A_load_longer_than_the_screen_keeps_the_card_and_starts_the_game_when_it_is_done`, shows the card kept and the game
+   started when a held load is let go. The same wider run then failed twice in three on two existing cases, the game
+   not yet running at the screen's end: those cases step the interface clock through the screen's seconds in a tenth
+   of a second of the wall's, which a worker's load cannot keep to. *Decided:* `ThemedSession`, whose clock is stepped,
+   loads after the screen as it always did (the window's `EarlyLoader` set to none), and the cases about the load
+   under the screen install the loader and wait on its end; the wider run then passed three times in three.
+
+#### 12.8.4 After
+
+From the tables above [M, desktop]:
+
+- **The screen is up at the press:** 0–37 ms from A to the screen, where a lone track took 0.20–0.28 s and a zip's
+  first launch 0.96–1.58 s.
+- **The interface thread is never held for the disc:** its step at the screen's end is 16–113 ms on the desktop and
+  20–84 ms under the cap, where it was 0.30–0.71 s and up to 6.6 s; the screen moves throughout.
+- **The game starts at the screen's time whenever the load fits inside it:** 3.04–3.13 s on the desktop for all seven,
+  where it was 3.33–4.95 s; under the cap warm, 3.04–3.05 s for six, Castlevania's 7.1 s being its unpack, which
+  every window of the probe does afresh.
+- **A cold launch from the card is now the read itself:** 3.1–9.4 s under the cap, where it was 5.1–14.3 s; Crash
+  Bandicoot, 632 MB as one track, is the longest, 6.9 s of reading, 0.25 s of create and the screen's time under them.
+- **Disabled, and the desktop's list,** still load on the interface thread, as before; a lone track's launch is one
+  read shorter there (the second, from the page cache, 60–70 ms on the desktop), the zips' and the sheets' unchanged.
+
+#### 12.8.5 Not changed, and why
+
+- **The cold read of the whole image.** With the core taking its image whole at create, nothing on the host's side
+  reads less. Diamond's boot reads 2.3–3.6 MB of the disc in its first 30 s, and the first frame none, so a read of the
+  sectors as the game asks for them would end the wait; it changes a stable surface, and is proposed with these figures
+  in `EmuSen_CoreAPI_Extensions.md` §10.2 (Q15) for the tester to decide.
+- **The second create** when a memory card exists, 150–290 ms on the desktop: v1.0 gives the host no way to know the
+  cards before the first create. The remedy recorded in `EmuSen_CoreAPI.md` §19.1, battery files in core info, is a
+  surface change, proposed in `EmuSen_CoreAPI_Extensions.md` §10.5 (Q16).
+- **The core's copy at create** is the ABI's rule ("the core copies what it keeps; no pointer in `params` outlives the
+  call", `EmuSen_CoreAPI.md` §6.2); §10.2's shape B would remove it with the read.
+- **A zip's first launch** inflates and writes the disc once, 1.0–1.4 s on the desktop and 3.7–5.6 s with the card's
+  read; it now runs under the screen. Later launches find it unpacked (`EmuSen_Galaxia.md` §3.7).
+- **Disabled and the desktop's list** keep loading on the interface thread: with no screen there is nothing to cover
+  the load, and a window that took input during it could start a second game; a loading indicator there would be a
+  design of its own.
+
+#### 12.8.6 The handheld
+
+*Not measured.* The handheld (`10.1.1.205`) did not answer on 2026-10-12 at any of the attempts made during this work,
+so nothing ran there and none of its logs was read; the card's figures above are the desktop's under a 90 MB/s cap,
+which `Diamond_CDROM.md` §9.7 predicted for the card and which the handheld must confirm or retire. What it needs, built
+and kept in the probe's cache (`launchtime/tool`, a self-contained console over `EmuSen.dll` and `libdiamond.so` that
+runs §12.8.1's engine steps, the question before the change or after it, with its home, configuration and firmware
+folder under `~/launchtime` so that nothing of the player's is read but the disc): copied to `~/launchtime/`, it is run
+read-only on the card's files, as `LaunchTime before|after <game>…`, with Mistress not running, first on a 600 MB lone
+track not launched that day (its cold row) and then again (its warm row), then on a zip; and the folder removed after.
+The prediction it tests: on the handheld the cold read is about 7 s for a 632 MB track, and a create is slower than the
+desktop's 150–290 ms in proportion to its memory bandwidth, so that a warm launch still fits under the 3.0 s screen.
+
+#### 12.8.7 Tests run (2026-10-12)
+
+WiseMan, by area, on this branch: the firmware question's change with `Firmware`, `EmulatorSession`, `CoreAdapter`,
+`DiamondPlayers`, `VenusRtCoreAbi`, `CoreRegistrationEquivalence` and `PlayStationLibrary`, 115 passing; the load under
+the screen with `LaunchScreen`, `ThemedLibrary`, `Screensaver`, `PlayStationLibrary`, `EmulatorSession`,
+`CoreFactory`, `DiamondPlayers`, `Resume`, `Firmware` and `CoreAdapter`, 269 passing and 4 skipped (opt-in cases without
+their folders); the new cases each failing before their change where §12.8.3 says so. After WiseMan `992546e4` was
+merged in (the processor run in stretches and the rasteriser by rows, none of the launch path), the same areas with
+all of `Diamond` and `CoreEngine`, 317 cases: once before change 3's fixture rule 311 passing and 2 failing as that
+item records, then three runs of 313 passing and 4 skipped; `LaunchScreen` alone, 24 passing and 1 skipped, three
+times. The two probes ran opt-in on the seven copies, plainly and under the cap, before the changes and after them,
+and big picture's again on the merged tree: 3.03–3.22 s from the press to the first frame at Normal, cold and warm.
+
+#### 12.8.8 Read for this section
+
+Mistress's launch path (`MainWindow.Resume.cs`, `MainWindow.LaunchScreen.cs`, `MainWindow.BigPicture.cs`,
+`MainWindow.axaml.cs`), the engine and its factory (`CoreEngine.cs`, `CoreFactory.cs`, `CoreLibrary.cs`,
+`CoreMachine.cs`, `CoreDiscovery.cs`, `EmulatorSession.cs`), the runtime's media module (`ArchiveImages.cs`,
+`ImageSets.cs`), Diamond's `v1.rs`, `media.rs` and `medium.rs`, `emusen-disc`'s `disc.rs` and `sbi.rs`,
+`EmuSen_CoreAPI.md` §4.4, §6.2, §6.3 and §19.1, `EmuSen_CoreAPI_Extensions.md` §10, `EmuSen_Firmware.md` §0–§3 and
+`Diamond_CDROM.md` §9.7. No emulator's source and no BIOS image was read; the firmware folder of every run was empty.
 
 ## 13. Gameplay: the seven games driven into play (2026-10-12)
 

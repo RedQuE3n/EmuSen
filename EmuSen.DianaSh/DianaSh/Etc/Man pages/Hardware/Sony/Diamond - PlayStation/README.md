@@ -12,7 +12,7 @@ through the shared crate `emusen-disc`, and games boot to their title screens th
 stage 9 the MDEC decodes, ps1-tests' MDEC programs' VRAM equals their pictures but for the rounding D-30 leaves open,
 and a game's opening movie plays; at stage 8, built after it, the SPU plays, its voices as its capture buffers record
 them equal to DuckStation's sample for sample, and ps1-tests' SPU programs pass; at stage 10 the open kernel boots
-discs by their SYSTEM.CNF and keeps files on memory cards in their on-card format, with no firmware folder. At stage 12 the generic debugger runs on it: breakpoints, stepping, watches, coverage and the call stack on the R3000A, the GTE's registers, and code listed with the GTE's names. At stage 11 it reached players: a disc routed to it by its content, a sheet's tracks and an `.m3u`'s discs passed by the runtime, zipped discs unpacked for play, the disc changed through its lid under the core ABI's minor 1.1, its cheats, settings, cards, pads drawn, shelf and CRT row, and the kit passing on the tester's discs. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
+discs by their SYSTEM.CNF and keeps files on memory cards in their on-card format, with no firmware folder. At stage 12 the generic debugger runs on it: breakpoints, stepping, watches, coverage and the call stack on the R3000A, the GTE's registers, and code listed with the GTE's names. At stage 11 it reached players: a disc routed to it by its content, a sheet's tracks and an `.m3u`'s discs passed by the runtime, zipped discs unpacked for play, the disc changed through its lid under the core ABI's minor 1.1, its cheats, settings, cards, pads drawn, shelf and CRT row, and the kit passing on the tester's discs. At stage 13 it got faster without leaving the interpreter's results: the waits games spend their frames in are proven, observed and passed to the next event, and the I-cache's words run decoded, so every bench game is at full speed under the laptop's proxy and the handheld leaves three quarters of each frame. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
 
 - [`Diamond_Plan.md`](Diamond_Plan.md) — the plan, written 2026-10-10 before any emulation: the machine in scope and
   how accurate each part must be (the R3000A with its cache and scratchpad, the GTE exact, DMA, timers, interrupts, a
@@ -41,6 +41,11 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   Galaxia's `Unpacked` folder, the disc change (`MEDIA`, minor 1.1) with the state's fingerprint (version 9), the
   cheats, settings and cards, the pads drawn, the shelf and the CRT row, the kit on nine of the tester's discs, the gate
   item by item, the PlayStation offered to players, and what waits.
+- [`Diamond_Speed.md`](Diamond_Speed.md) — the exact levers, written 2026-10-12 at stage 13: the bench of the seven copied
+  discs on the open kernel and the link's placement as a source of error, the profile that put idle skipping before the
+  plan's other levers, the skipper's proof, window, skip and verifier with the loop forms of `programs/idle.s`, the
+  decoded-instruction cache's first tier, the mutants, the desktop, the quota and the handheld on battery before and
+  after, the levers not built and why, the inexact settings and the shipped link proposed, and P2 and P12 retired.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

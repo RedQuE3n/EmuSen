@@ -15,6 +15,7 @@ pub mod dma;
 pub mod exe;
 pub mod gpu;
 pub mod icache;
+pub mod idle;
 pub mod irq;
 pub mod kernel;
 pub mod machine;

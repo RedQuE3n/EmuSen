@@ -81,7 +81,7 @@ namespace EmuSen.Cores.Native
         {
             nint export = port.RomPatchExport;
             if (export == 0) throw new NotSupportedException($"{port.FileName} has no {port.Crate}_core_rom_patch.");
-            return ((delegate* unmanaged<nint, uint, uint, int>)export)(machine.Handle, (uint)address, original);
+            lock (machine.Gate) return ((delegate* unmanaged<nint, uint, uint, int>)export)(machine.Handle, (uint)address, original);
         }
     }
 
@@ -200,8 +200,7 @@ namespace EmuSen.Cores.Native
             _battery = Prepare(path, image);
             try { base.LoadRom(path); }
             catch (CoreRefusedException e) { throw Refusal(e.Status, e.Detail); }
-            CoreMachine m = base.Machine;
-            for (int pad = 0; pad < _pads.Length; pad++) m.SetButtons(pad, _pads[pad], 0xFF);
+            for (int pad = 0; pad < _pads.Length; pad++) HoldButtons(pad, _pads[pad], 0xFF);
             _halted = false;
             Loaded(path);
         }
@@ -219,7 +218,7 @@ namespace EmuSen.Cores.Native
             int pad = PortFor(port);
             if (pad < 0) return;
             _pads[pad] = pressed ? _pads[pad] | (1u << bit) : _pads[pad] & ~(1u << bit);
-            if (IsRomLoaded) base.Machine.SetButtons(pad, _pads[pad], 0xFF);
+            if (IsRomLoaded) HoldButtons(pad, _pads[pad], 0xFF);
         }
 
         // Through the bridge when anything can halt or record, with the first instruction checked unless resuming; else the plain frame.

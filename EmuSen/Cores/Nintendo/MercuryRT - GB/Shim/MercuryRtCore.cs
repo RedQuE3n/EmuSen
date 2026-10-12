@@ -103,8 +103,9 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         protected override void Loaded(string path)
         {
             double cyclesPerSample = 4194304.0 / 44100;
-            ((delegate* unmanaged<nint, double, double, int>)MercuryNative.Engine.Export(SampleRateExport))(Machine.Core.Handle, cyclesPerSample,
-                Math.Pow(EmuSen.Cores.Nintendo.Mercury.Audio.Apu.HighPassSeed, cyclesPerSample));
+            lock (Machine.Core.Gate)
+                ((delegate* unmanaged<nint, double, double, int>)MercuryNative.Engine.Export(SampleRateExport))(Machine.Core.Handle, cyclesPerSample,
+                    Math.Pow(EmuSen.Cores.Nintendo.Mercury.Audio.Apu.HighPassSeed, cyclesPerSample));
             _romPath = path;
             Mirror.LoadRom(path);
             Mirror.Model = _model;

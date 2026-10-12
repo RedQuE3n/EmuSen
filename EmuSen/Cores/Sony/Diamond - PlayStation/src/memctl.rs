@@ -38,16 +38,35 @@ impl Timing {
 #[derive(Clone, Debug)]
 pub struct MemControl {
     pub regs: [u32; 9],
-    pub ram_size: u32,
+    ram_size: u32,
+    /// Both banks' bytes as `ram_banks` gives them, kept with the register since every access asks.
+    ram_window: u32,
     reads: [Timing; 9],
     writes: [Timing; 9],
 }
 
 impl MemControl {
     pub fn new(regs: [u32; 9], ram_size: u32) -> MemControl {
-        let mut m = MemControl { regs, ram_size, reads: [Timing { first: 0, seq: 0, wide: false, increment: false }; 9], writes: [Timing { first: 0, seq: 0, wide: false, increment: false }; 9] };
+        let mut m = MemControl { regs, ram_size: 0, ram_window: 0, reads: [Timing { first: 0, seq: 0, wide: false, increment: false }; 9], writes: [Timing { first: 0, seq: 0, wide: false, increment: false }; 9] };
+        m.set_ram_size(ram_size);
         m.retime();
         m
+    }
+
+    pub fn ram_size(&self) -> u32 {
+        self.ram_size
+    }
+
+    pub fn set_ram_size(&mut self, value: u32) {
+        self.ram_size = value;
+        let (ras0, ras1) = self.ram_banks();
+        self.ram_window = ras0 + ras1;
+    }
+
+    /// The bytes of RAM both banks map.
+    #[inline(always)]
+    pub fn ram_window(&self) -> u32 {
+        self.ram_window
     }
 
     pub fn read(&self, index: usize) -> u32 {
@@ -123,7 +142,8 @@ mod tests {
         assert_eq!(m.window(DEV8), 0x80);
         assert_eq!(m.ram_banks(), (0x80_0000, 0));
         let mut two = m.clone();
-        two.ram_size = 0x888;
+        two.set_ram_size(0x888);
         assert_eq!(two.ram_banks(), (0x20_0000, 0));
+        assert_eq!((m.ram_window(), two.ram_window()), (0x80_0000, 0x20_0000), "the window kept with the register");
     }
 }

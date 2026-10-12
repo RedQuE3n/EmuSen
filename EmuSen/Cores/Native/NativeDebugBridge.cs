@@ -72,12 +72,16 @@ namespace EmuSen.Cores.Native
             uint flags = resuming ? RunUnchecked : 0;
             while (true)
             {
-                PushTables(machine);
                 uint processor;
                 ulong pc, detail;
-                int reasons = api.DebugRunFrame(machine.Handle, flags, &processor, &pc, &detail);
+                int reasons;
+                lock (machine.Gate)
+                {
+                    PushTables(machine);
+                    reasons = api.DebugRunFrame(machine.Handle, flags, &processor, &pc, &detail);
+                    Drain(machine);
+                }
                 flags = RunUnchecked | RunContinue;
-                Drain(machine);
                 if (reasons < 0) throw _failure(reasons, detail);
                 if (reasons == 0)
                 {
@@ -96,9 +100,12 @@ namespace EmuSen.Cores.Native
         public void Observed(Action write)
         {
             CoreMachine machine = Live;
-            PushTables(machine);
-            write();
-            Drain(machine);
+            lock (machine.Gate)
+            {
+                PushTables(machine);
+                write();
+                Drain(machine);
+            }
         }
 
         public void PushTables(CoreMachine machine)
@@ -217,7 +224,7 @@ namespace EmuSen.Cores.Native
         {
             CoreMachine machine = Live;
             long* values = stackalloc long[2];
-            machine.Library.Api.DebugCounters(machine.Handle, values, 2);
+            lock (machine.Gate) machine.Library.Api.DebugCounters(machine.Handle, values, 2);
             return (values[0], values[1]);
         }
 
@@ -226,7 +233,7 @@ namespace EmuSen.Cores.Native
         {
             if (_machine() is not { } machine) return 0;
             ulong pc;
-            return machine.Library.Api.DebugPc(machine.Handle, processor, &pc) == 0 ? (int)pc : 0;
+            lock (machine.Gate) return machine.Library.Api.DebugPc(machine.Handle, processor, &pc) == 0 ? (int)pc : 0;
         }
 
         private static void Grow<T>(ref T[] buffer, int needed)

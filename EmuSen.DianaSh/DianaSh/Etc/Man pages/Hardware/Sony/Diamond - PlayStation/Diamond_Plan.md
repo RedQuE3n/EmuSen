@@ -956,7 +956,10 @@ Each with a recommendation.
   (`Diamond_Native.md` §10.2): the registers half held; the cycles half was wrong in count and subject, 1,022 cases
   under one dispute about an access's width, none about fetch ordering.*
 - **P2.** A heavy 3D scene misses §5.12's budget with the interpreter alone and meets it with the threaded rasteriser
-  and the decoded-instruction cache, before the recompiler.
+  and the decoded-instruction cache, before the recompiler. *Retired 2026-10-12, at stage 13 (`Diamond_Speed.md` §9):
+  the first half held at the quota for three bench games; the second named the wrong levers, the budget being met by
+  idle skipping and the decoded cache's first tier with no threads, since much of what was priced as the interpreter's
+  cost was the interpreter waiting.*
 - **P3.** The whole is about 69 steps (52 and 17); the GPU's timing, the CD-ROM controller and the open BIOS are the stages most
   likely to overrun.
 - **P4.** DMA's timing needs at least one dispute, about chopping or the GPU channel's pacing. *Retired 2026-10-11, at
@@ -975,4 +978,5 @@ Each with a recommendation.
   build geometry on the CPU.
 - **P11.** D-0 is settled in favour of one clock for every NTSC model the tester can measure.
 - **P12.** The handheld runs the accurate core at full speed on battery after stage 13, and 2× internal resolution
-  with the enhanced renderer beside it.
+  with the enhanced renderer beside it. *Its first half reached 2026-10-12 (`Diamond_Speed.md` §6.3): the emulation
+  thread took 4.2 to 5.7 ms a frame on battery before stage 13 and 1.2 to 4.5 after; the second waits on E3 and E5.*

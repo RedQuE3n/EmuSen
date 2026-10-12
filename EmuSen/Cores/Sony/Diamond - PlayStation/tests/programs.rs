@@ -1350,6 +1350,111 @@ fn a_narrow_store_writes_its_register_shifted_to_its_byte() {
     assert_eq!(results(&m, 0x10_0000, 7), [0x0088_0000, 0x0044_0000, 0x0000_0B00, 0, 0x1234, 0x0500, 0x0012_0000]);
 }
 
+// ---- Stage 13, speed (Diamond_Speed.md) ---------------------------------------------------------------------------
+
+/// The digests of `frames` plain frames, the pictures', the sound's and the final state's, and the machine.
+fn plain_digests(mut m: Machine, frames: usize) -> ([u64; 3], Machine) {
+    use emusen_native::ffi::StateMachine;
+    let bytes = |h: u64, b: &[u8]| b.iter().fold(h, |h, &x| (h ^ x as u64).wrapping_mul(0x0000_0100_0000_01B3));
+    let (mut picture, mut sound) = (0xcbf2_9ce4_8422_2325u64, 0xcbf2_9ce4_8422_2325u64);
+    let mut chunk = vec![0i16; 1 << 16];
+    for _ in 0..frames {
+        m.advance();
+        picture = bytes(picture, m.board.gpu.display.frame());
+        let n = m.board.spu.out.drain(&mut chunk, usize::MAX);
+        sound = chunk[..n].iter().fold(sound, |h, &s| bytes(h, &s.to_le_bytes()));
+    }
+    let mut state = vec![0; m.state_size()];
+    let n = m.save_state(&mut state).unwrap();
+    ([picture, sound, bytes(0xcbf2_9ce4_8422_2325, &state[..n])], m)
+}
+
+/// A machine's digests over `frames` plain frames with the exact levers on, which must equal the interpreter's with
+/// them off, every `verify`th skip checked against the interpreter as it is made; the machine run with them.
+fn levers_give_the_interpreters_digests(name: &str, frames: usize, verify: u64, make: impl Fn() -> Machine) -> Machine {
+    let mut off = make();
+    off.idle.on = false;
+    let (plain, _) = plain_digests(off, frames);
+    let mut on = make();
+    on.idle.verify = verify;
+    let (fast, m) = plain_digests(on, frames);
+    eprintln!("{name}, {frames} frames: {:016X} {:016X} {:016X}, {} skips of {} turns", fast[0], fast[1], fast[2], m.idle.skips, m.idle.turns);
+    assert_eq!(fast, plain, "{name}: the levers' run against the interpreter's");
+    m
+}
+
+/// Each loop form of `idle.s` is skipped, and the run with the skipper equals the run without it word for word, in
+/// state, picture and sound: the vblank waits, the timeouts that expire in a register and on the stack at turns either
+/// side of the period, the DMA waits, and a wait on timer 2, which is never skipped.
+#[test]
+fn the_idle_skipper_leaves_the_machine_as_the_interpreter_does() {
+    let on = levers_give_the_interpreters_digests("idle.s", 40, 1, || bare(include_str!("../programs/idle.s")));
+    assert_eq!(on.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program finished");
+    assert!(on.idle.skips > 500 && on.idle.turns > 1_000_000, "the loops were skipped: {} skips, {} turns", on.idle.skips, on.idle.turns);
+}
+
+/// The project's timing programs, whose figures are the console's to the cycle, give the interpreter's digests with
+/// the levers on: delay loops, the timers' waits, the GTE's and the MDEC's.
+#[test]
+fn the_levers_leave_the_projects_timing_programs_as_the_interpreter_does() {
+    for (name, source, frames) in [
+        ("timers.s", include_str!("../programs/timers.s"), 60),
+        ("timer-sync.s", include_str!("../programs/timer-sync.s"), 30),
+        ("gte-loops.s", include_str!("../programs/gte-loops.s"), 10),
+        ("draw-time.s", include_str!("../programs/draw-time.s"), 10),
+        ("spu-voices.s", include_str!("../programs/spu-voices.s"), 20),
+        ("exceptions.s", include_str!("../programs/exceptions.s"), 10),
+    ] {
+        levers_give_the_interpreters_digests(name, frames, 1, || bare(source));
+    }
+    levers_give_the_interpreters_digests("cd-read.s", 60, 1, || {
+        let mut m = bare(include_str!("../programs/cd-read.s"));
+        m.insert_disc(cd_disc());
+        m
+    });
+}
+
+/// The debugger's frame never skips, so each table armed must still give the plain run's digests, now the plain run's
+/// with the skipper (Diamond_Debugger.md §6.1).
+#[test]
+fn every_table_armed_gives_the_plain_runs_digests_on_the_idle_program() {
+    every_table_gives_the_plain_run("idle.s", 40, || bare(include_str!("../programs/idle.s")));
+}
+
+/// ps1-tests' release on the open kernel, its waits in PSn00bSDK's own loops.
+#[test]
+fn the_levers_leave_ps1_tests_as_the_interpreter_does() {
+    let Some(corpus) = records::corpus() else { return };
+    for (path, frames) in [("timers/timers.exe", 120), ("gpu/triangle/triangle.exe", 60), ("gpu/bandwidth/bandwidth.exe", 120), ("spu/test/test.exe", 60), ("mdec/movie/movie-15bit.exe", 60), ("dma/otc-test/otc-test.exe", 60), ("cpu/access-time/access-time.exe", 60), ("gte/test-all/test-all.exe", 60)] {
+        levers_give_the_interpreters_digests(path, frames, 1, || mdec_program(&corpus, path, 0));
+    }
+}
+
+/// One of the tester's discs on the open kernel, named by `EMUSEN_DIAMOND_DISC`: 600 frames with the levers and
+/// without.
+#[test]
+fn the_levers_leave_a_disc_as_the_interpreter_does() {
+    let Some(path) = std::env::var_os("EMUSEN_DIAMOND_DISC") else {
+        eprintln!("skipped: EMUSEN_DIAMOND_DISC names no disc");
+        return;
+    };
+    let path = std::path::PathBuf::from(path);
+    let image = std::fs::read(&path).expect("the disc");
+    let mut files = Vec::new();
+    if diamond::medium::is_sheet(&image) {
+        for name in emusen_disc::set::companions(&String::from_utf8_lossy(&image)).expect("a sheet") {
+            files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
+        }
+    }
+    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
+    levers_give_the_interpreters_digests(&path.file_name().unwrap().to_string_lossy(), 600, 1, || {
+        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(&image, &refs) else { panic!("the disc opens") };
+        let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
+        m.insert_disc(*disc);
+        m
+    });
+}
+
 // --- D-46: a triangle's drawing time by its rows (Diamond_Disputes.md D-46) ---
 
 /// A triangle is charged by the rows it draws, with no fixed setup: one of one pixel is ready within the cycles a 1x1

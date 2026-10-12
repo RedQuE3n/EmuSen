@@ -121,7 +121,7 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -
         return x.exception(code::BP, DEBUG);
     }
     cpu.regs.interrupt_view = None;
-    let word = b.fetch(at);
+    let (word, op) = b.fetch_decoded(at);
     if b.bus_error() {
         let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None, faulted: false };
         return x.exception(code::IBE, GENERAL);
@@ -129,7 +129,7 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -
     cpu.regs.branch = BranchDelay::default();
     cpu.regs.load = LoadDelay::default();
     let mut x = Run { cpu, b, o, at, word, next, slot, pending, result: None, load: None, faulted: false };
-    x.execute()
+    x.execute(op)
 }
 
 impl<B: Bus, O: Observer> Run<'_, B, O> {
@@ -143,6 +143,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
 
     /// The instruction completes: the previous load lands unless this one loads the same register, then this
     /// instruction's own result, and its load waits for the next.
+    #[inline(always)]
     fn finish(&mut self) -> Step {
         if self.faulted {
             return self.exception(code::DBE, GENERAL);
@@ -312,11 +313,10 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         }
     }
 
-    fn execute(&mut self) -> Step {
+    fn execute(&mut self, op: Op) -> Step {
         let w = Word(self.word);
         let (rs, rt, rd) = (w.rs(), w.rt(), w.rd());
         let (a, b) = (self.r(rs), self.r(rt));
-        let op = decode(self.word);
         match op {
             Op::Sll => self.set(rd, b << w.sa()),
             Op::Srl => self.set(rd, b >> w.sa()),

@@ -1076,6 +1076,41 @@ does not close the door:
   core and copies out the picture, which fits v1. A shared-device minor is possible later as an addition; v1.0 leaves
   `pixel_formats` open for a device-image format.
 
+### 6.23 Media: a sheet's companions and the disc in a drive (1.1, 2026-10-11)
+
+*Added at Diamond's stage 11, as `EmuSen_CoreAPI_Extensions.md` §2 and §3 decided on 2026-10-11; the first minor.*
+
+**Image sets.** `EMUSEN_FILE_MEDIA` (65,536) numbers an image set's companions: a core that claims a sheet's extension
+receives the sheet as the image and the files its `FILE` lines name as files `EMUSEN_FILE_MEDIA + n`, in the sheet's
+order, then an `.sbi` found beside the image, which the core tells by its magic. Numbers below 65,536 stay the core's
+own. The host reads the list through `emusen-disc`'s set module (§2.3 there), so a sheet has one parser; an `.m3u`
+never reaches a core, the host passing its first disc and offering the others through `MEDIA`.
+
+**Disc change, `MEDIA` (bit 18).** Two optional exports and a struct:
+
+| Export | What it does | Refusals |
+|---|---|---|
+| `media_lid(machine, drive, open)` | opens (1) or closes (0) the drive's lid or tray, as the player would; the core models what a game sees, the drive stopping, an interrupt, the new disc read at closing | `NO_SUCH_DRIVE`; `NOT_SUPPORTED` for another value of `open` |
+| `media_insert(machine, drive, media)` | replaces the disc in the drive, or empties it for a null image; the core copies what it keeps, as at create | `LID_CLOSED` unless the lid is open or `EMUSEN_MEDIA_RESTORE` is set; `BAD_STRUCT` for a struct shorter than 48 bytes; the core's own refusal of the image, the drive left as it was |
+
+`emusen_media` is `{ size, flags, image, image_len, files, file_count, file_size }`, the files numbered as create's.
+Machine info lists the drives (`drives: [{ drive, label, kind, lid, loaded }]`, absent for a core without `MEDIA`), and
+`emusen-native` writes them from `Core::drives`, so that no core's `MachineInfo` changed shape. **A state holds its
+disc's fingerprint** (the core's choice; Diamond's is FNV-1a of its tracks, its lead-out and its sectors 4 and 16 to
+23), and `state_load` answers `WRONG_MEDIA` over another disc and changes nothing. `RESTORE` lets a host put a state's
+disc back with the lid closed just before it loads the state.
+
+**The host** (`CoreEngine`): `Discs`, `DiscIndex`, `CanChangeDisc` and `LidOpen`; `SetLid`, `InsertDisc` and
+`ChangeDisc`, which opens the lid, inserts the disc and closes the lid `LidOpenSeconds` (1.0) of the game's own time
+later, as ps1-tests' `disc-swap` leaves it; and a state that `WRONG_MEDIA` refuses is loaded again over each other disc
+of the set, put back with `RESTORE`, the drive restored where none is the state's. This is otherwise than
+`EmuSen_CoreAPI_Extensions.md` §3.5 planned, which recorded the disc beside each state: the core's own refusal finds
+the disc, so no record gained a field (`Diamond_Players.md` §3).
+
+**Older and newer peers.** A host that predates 1.1 passes no companions and never calls `MEDIA`; a core that predates
+it claims no sheet and no bit. A newer host with a core without `MEDIA` shows no Change Disc row and plays an `.m3u`'s
+first disc. **The kit** checks it as C16 where `MEDIA` is claimed (§12); C2 checks the bit against both exports.
+
 ---
 
 ## 7. Core discovery and trust
@@ -1774,8 +1809,16 @@ nothing was changed.
 ## 17. Changelog of the ABI, and what was not checked
 
 **Changelog.** v1.0: this page; the header, the baseline and the reference macro committed 2026-10-03 (§18), with the
-host adapter, discovery, the SNES's system pack and the kit's core suite after them (§19–§21). No minor has been
-released.
+host adapter, discovery, the SNES's system pack and the kit's core suite after them (§19–§21).
+
+**v1.1, 2026-10-11** (§6.23), at Diamond's stage 11: `EMUSEN_FILE_MEDIA` and `EMUSEN_MEDIA_RESTORE`; `MEDIA` (bit 18)
+with `emusen_core_media_lid`, `emusen_core_media_insert` and `emusen_media`; `EMUSEN_LID_CLOSED` (−265),
+`EMUSEN_WRONG_MEDIA` (−266) and `EMUSEN_NO_SUCH_DRIVE` (−267); machine info's `drives`. Its reasons are
+`EmuSen_CoreAPI_Extensions.md` §2 and §3. The regeneration also recorded `info.systems[].development`, in use since
+2026-10-06 (§27.4) and missing from the baseline until then; it is tagged @1.1, the minor it was first recorded in. The
+guard now treats `EMUSEN_CORE_ABI_MINOR` and `EMUSEN_CORE_ABI_VERSION` as the header's revision: each minor moves them
+up, `--against` an older baseline accepts a rise and refuses a fall, and every other fact is held as before
+(`emusen-core-abi-check`'s `the_minor_moves_up_and_nothing_else_may`).
 
 **Not checked here.**
 - Layouts were checked on x86-64 Linux only, with gcc 16 and clang. The baseline's other three targets are argued from

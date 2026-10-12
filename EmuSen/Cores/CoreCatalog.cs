@@ -264,7 +264,7 @@ namespace EmuSen.Cores
         public static Native.CoreSystem? DiscoveredSystem(string console) =>
             DiscoveredFor(console) is { } core && PackOf(console) is { } pack ? core.Info.Systems.FirstOrDefault(s => s.Id == pack.Id) : null;
 
-        // Only a console with a stick is listed; every other one reads no axis - see EmuSen_Input.md §7.
+        // Only a console with a stick is listed, a discovered one by its engine's controllers; every other one reads no axis - see EmuSen_Input.md §7.
         private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadAxis>> AxesByConsole =
             new(StringComparer.OrdinalIgnoreCase)
             {
@@ -272,7 +272,9 @@ namespace EmuSen.Cores
             };
 
         public static IReadOnlyList<Galaxia.Input.PadAxis> AxesFor(string console) =>
-            AxesByConsole.TryGetValue(console, out var axes) ? axes : Array.Empty<Galaxia.Input.PadAxis>();
+            AxesByConsole.TryGetValue(console, out var axes) ? axes
+            : DiscoveredSystem(console) is { } system ? system.Controllers.SelectMany(c => c.Axes).Select(a => a.Control).OfType<Galaxia.Input.PadAxis>().Distinct().ToArray()
+            : Array.Empty<Galaxia.Input.PadAxis>();
 
         // What the rebind window lists for a console: its buttons, then each direction of each stick it reads.
         public static IReadOnlyList<Galaxia.Input.PadControl> ControlsFor(string console) =>

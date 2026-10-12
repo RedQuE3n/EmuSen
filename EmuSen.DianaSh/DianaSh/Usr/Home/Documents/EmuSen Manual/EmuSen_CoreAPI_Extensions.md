@@ -112,6 +112,14 @@ because §3 and §8 build on it.*
 65,536; the header constant and the runtime's reading of the companions are not built, and Diamond defines the number
 locally until they are.
 
+*Built 2026-10-11, at Diamond's stage 11 (`Diamond_Players.md` §2):* `EMUSEN_FILE_MEDIA` in `emusen_core.h` and
+`emusen-native` as minor 1.1 (`EmuSen_CoreAPI.md` §6.23), Diamond's `MEDIA_FILE` now the header's; the set module
+through the platform library as `emusen_disc_companions`, `emusen_disc_playlist` and `emusen_disc_sbi_beside`
+(interface 8), read by the runtime's `ImageSets`; the runtime passing a sheet's companions and expanding an `.m3u`; the
+kit's `--image` and `--images` forms the same (its `media` module, a path dependency on the crate); the library
+shelving a set once (`ImageSets.Shelved`). The platform library now links `emusen-disc`, and through it the `chd`
+crate, the stated dependency of §2.3.
+
 ### 2.2 The questions inside the gap
 
 Three facts are mixed in "multi-file images", and each wants its own owner:
@@ -282,6 +290,13 @@ through `check_groups` as every optional group is (`emusen-native/src/core/mod.r
   index the same way.
 - **Determinism.** Lid and insert calls are inputs, recorded at their frames wherever input is recorded (a movie, the
   kit's script). The kit's input script gains `lid <drive> open|close` and `insert <drive> <file>` at a frame [C].
+
+*Built 2026-10-11, at Diamond's stage 11 (`EmuSen_CoreAPI.md` §6.23, `Diamond_Players.md` §3), as §3.4 gives it, but
+for one thing: the struct is 48 bytes, as §3.4's own comment says, and the runtime does not record the disc beside a
+state. A state the core refuses with `EMUSEN_WRONG_MEDIA` is loaded again over each other disc of the set put back with
+`RESTORE`, and the drive is restored where none is the state's; the core's fingerprint is the record. C16 is in the kit.
+Change Disc's interval is 1.0 s of the game's time, from ps1-tests' `disc-swap`, which opens and closes the lid a second
+apart; P5 is not tested, no multi-disc game being among the tester's discs.*
 
 ### 3.6 Older and newer peers
 
@@ -554,6 +569,13 @@ equal", "not equal", "less", "greater") as writes of the compare value (`Var/Cht
 2026-09-18, `EmuSen_Cheats.md` §7) [R]. With `IfLess` and `IfGreater`, all four map to tests; the cross-entry "next"
 is still an import feature, but the types would no longer be the obstacle.
 
+*Built 2026-10-11, at Diamond's stage 11 (`EmuSen_Cheats.md` §10):* `IfLess` and `IfGreater`, unsigned within the
+test's width, the memory against the value; the PlayStation's codecs in `Crystal/Systems/Psx/`, GameShark (with Game
+Buster and Action Replay, the same Datel table) and Xploder with its decryption, told apart by psx-spx's first-digit
+table; `C0`, `C1`, `C2`, `C3` and `D4`-`D6` refused by name; the AND rule kept, since no source was found that says the
+device skips a test as a line. Not done: `ChtFile`'s `cheat_type` 4 to 7, since mapping them means RetroArch's
+cross-entry "next code", which is the import's and not a type's.
+
 ### 6.4 Cost, and what it breaks
 
 Two enum members and their comparison; the codec (about the N64's 170 lines [M, `N64GameSharkCodec.cs`]) with its
@@ -595,6 +617,11 @@ refusals and tests; `cheat list`'s printing of the two new tests. It breaks noth
     once, so the estimate is checked against each run rather than trusted (P2).
   - `--image-memory N` overrides the factor for a core that expands an image (a `.chd` decompressed at create would be
     one) [C, Q9].
+
+*Built 2026-10-11, at Diamond's stage 11 (`EmuSen_CoreAPI.md` §28.7):* `estimate(len) = 256 MiB + 4 × len`, the factor
+`--image-memory` overrides; images admitted by a budget of the memory allowed less the core's own job, one larger than
+it run alone with a line saying so; `summary.json`'s `memory` holding the allowance, the largest sum admitted and the
+peak resident memory.
 
 ### 7.3 Cost, and what it breaks
 
@@ -689,6 +716,16 @@ at the core ABI.
     it must stand alone under the kit and the probe [A].
   - *Container formats* (sheets, sets, CHD) are `emusen-disc`'s.
 
+*Built 2026-10-11, at Diamond's stage 11 (`Diamond_Players.md` §1):* `SystemEntry.Recognise` with `IMediaProbe` and
+`Recognition`; `SystemRouting.Decide`, steps 1 to 4 with a cache by path, length and time; the PlayStation's recogniser
+(the licence, and the serial from `SYSTEM.CNF` through the media module's ISO 9660 lookup, `DiscSectors`), the
+Genesis's (anything that is not a compact disc image) and the Sega CD's (`SEGADISCSYSTEM`); `CoreCatalog.CoreForRom`
+and `Route` the one decision, `ConsoleForRom`, `ShelfFor`, `DiscoveredConsoleForFile`, the factory's engine and the
+battery folder asking it, and Mistress's `ByExtension` callers moved to it. Step 5, the player's choice, is not built:
+a file no step decides opens nowhere, and `Route`'s words name the folders that would decide it. A probe reads a
+`.cue`'s first track, an `.m3u`'s first disc and an archive's entry, but not a `.chd`, which only the PlayStation
+takes. Pharaoh's `LibraryIndexer` keeps its own table of extensions; it is a tool's index, not a player's library.
+
 ### 8.5 Order, and the gap before the crate exists
 
 `.cue` and `.chd` collide only when both Diamond and the Sega CD claim them, from Diamond's stage 7 [R
@@ -777,7 +814,7 @@ By the first stage that needs each [C, Q13]:
 | Diamond stage 7 (discs) | §2 sets and `EMUSEN_FILE_MEDIA`; `emusen-disc` in the platform library; §8's PlayStation recogniser and the `.chd` probe |
 | Diamond stage 11, or Nephrite's Sega CD gate if earlier | §3 `MEDIA` |
 
-### 10.4 Archives (proposed 2026-10-11, at Diamond's stage 7)
+### 10.4 Archives (proposed 2026-10-11, at Diamond's stage 7; built at its stage 11)
 
 The tester's PlayStation folder holds seventeen `.zip`s, each a disc's sheet with its tracks or a "(Track n)" file
 with no sheet (`Diamond_CDROM.md` §8.2). Weighed by §1.1's forms [C]: not the core's (a core receives bytes, never a
@@ -786,8 +823,11 @@ cartridge consoles' zips need the same reading), so **a component of its own**: 
 archive's entries through Galaxia, which owns paths and would gain the naming of a path inside an archive, choosing
 the entry the system pack's extensions name (a sheet first, then a one-file image), reading its companions from the
 same archive, and handing bytes to create as for loose files; with routing by content (§8) deciding the console from
-the chosen entry. Its cost is the inflation at load, on top of the copy at create (`Diamond_CDROM.md` §9.7). Nothing
-is built.
+the chosen entry. Its cost is the inflation at load, on top of the copy at create (`Diamond_CDROM.md` §9.7). ~~Nothing
+is built.~~ *Approved and built 2026-10-11 (`EmuSen_Galaxia.md` §3.7, `Diamond_Players.md` §2): `ArchiveImages` in the
+runtime's media module, for `.zip` only, reading entries through .NET and unpacking into Galaxia's `Unpacked` folder
+rather than handing bytes from the archive, because a sheet's tracks are read by path and a C# core opens its file
+itself; Galaxia names the folder and gained no reading of archives.*
 
 ---
 

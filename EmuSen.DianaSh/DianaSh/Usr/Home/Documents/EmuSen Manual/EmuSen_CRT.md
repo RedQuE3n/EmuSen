@@ -2135,6 +2135,19 @@ is D-0's settled one (53.693175 MHz NTSC, 53.203425 MHz PAL), and only the line'
 clocks) remains provisional, which sets the subcarrier's phase per line and per frame, not the active line or the
 cycles across it. The row itself is still to be written.
 
+*Written 2026-10-11, at Diamond's stage 11.* `ConsoleTiming["PlayStation"]`, and the PlayStation is among the filter's
+consoles. NTSC: 2,560 video clocks of 53.693175 MHz across the picture, 47.68 µs, 170⅔ subcarrier cycles at 15 video
+clocks a cycle; Diamond's line of 3,412.5 video clocks (D-0) is 227½ cycles, so the phase moves half a cycle a line, and
+263 lines leave half a cycle a frame: the broadcast pattern, which cancels over two frames, as the N64's does. PAL: the
+same 2,560 clocks of 53.203425 MHz, 48.12 µs, 213⅓ cycles at 12 clocks a cycle; a line of 3,405 clocks is 283¾ cycles,
+three quarters a line, and 314 lines leave half a cycle a frame, crawling over two; 314 is even, so the V switch does
+not turn over between frames. **The phases are the core's line's**: should D-0 settle on 3,413 and 3,406 instead, they
+become ⁸⁄₁₅ and ⁴⁄₁₅ for NTSC and ⅚ for PAL, as `Diamond_Plan.md` §4.6 tabulated, and the row changes with the core's
+constants. The 368-wide mode needs nothing of its own: the row is in microseconds and cycles, and every width fills
+the same 2,560 clocks. The console's video encoder and its filters were not looked for; the standard's limits stand in,
+as for the SNES. **Coverage**: `ScreenFilterRenderTests.The_playstations_line_is_its_video_clocks_over_the_subcarrier`,
+and the compile test over every variant for every console, the PlayStation among them.
+
 ### 20.7 Questions for the tester
 
 **Decided 2026-10-11:** all four, each as recommended: no whole-rows sizing by default (a per-console setting, off by default, only if it is later wanted); the tube 4:3 and centred with bars on wide displays, a bezel or glow being a separate optional feature; the mask at whole pixels from 1.5 px with the fade below it, as built; the mask drawn flat under curved glass, as built.

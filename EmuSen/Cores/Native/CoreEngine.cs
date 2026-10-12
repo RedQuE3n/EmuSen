@@ -441,6 +441,7 @@ namespace EmuSen.Cores.Native
             using var copy = new MemoryStream();
             stream.CopyTo(copy);
             LoadOverItsDisc(m, copy.ToArray());
+            if (Library.Has(CoreInterface.CapMedia)) m.ReadInfo();
             _cheatVersion = -1;
             IsHaltedAtBreakpoint = false;
             Drain();

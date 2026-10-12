@@ -143,6 +143,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
 
     /// The instruction completes: the previous load lands unless this one loads the same register, then this
     /// instruction's own result, and its load waits for the next.
+    #[inline(always)]
     fn finish(&mut self) -> Step {
         if self.faulted {
             return self.exception(code::DBE, GENERAL);

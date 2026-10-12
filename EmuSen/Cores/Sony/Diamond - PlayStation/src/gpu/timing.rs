@@ -8,8 +8,8 @@ use super::draw::Work;
 pub const CYCLE: u64 = 256;
 /// A command's own time once its words are in.
 pub const COMMAND: u64 = 2 * CYCLE;
-/// A triangle's setup; a rectangle's row drawn; a line's setup [C].
-pub const TRIANGLE: u64 = 876 * CYCLE;
+/// A triangle's row drawn, with no setup (D-46); a rectangle's row drawn; a line's setup [C].
+pub const TRIANGLE_ROW: u64 = 934;
 pub const RECTANGLE_ROW: u64 = 791;
 pub const LINE: u64 = 16 * CYCLE;
 /// A pixel written; one read and written (semi-transparent, or the mask checked); a texel fetched, written or not.

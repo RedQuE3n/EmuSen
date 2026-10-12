@@ -574,7 +574,7 @@ impl Gpu {
                 raster::triangle(p, [v[1], v[2], v[3]], shaded, tex);
             }
         });
-        timing::drawing(timing::TRIANGLE * (n as u64 - 2) + loaded as u64 * timing::CLUT_ENTRY, work)
+        timing::drawing(work.rows as u64 * timing::TRIANGLE_ROW + loaded as u64 * timing::CLUT_ENTRY, work)
     }
 
     fn rectangle(&mut self, w: &[u32; 16], video: &Video, t: u64) -> u64 {

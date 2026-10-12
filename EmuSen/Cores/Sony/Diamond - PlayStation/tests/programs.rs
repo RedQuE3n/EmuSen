@@ -347,14 +347,15 @@ fn the_chopping_record_times_each_transfer() {
 
 /// `gpu/bandwidth`: the hblanks of 400 full-screen transfers or primitives a row, nine of the fourteen equal to the
 /// release's on Diamond and the rest within two (§5), every row within 0.6% of the console's; since D-11's refit, each
-/// row within one hblank of what it read before; since D-41, the textured quads 39,916 where they were 39,976 and 39,975.
+/// row within one hblank of what it read before; since D-41, the textured quads 39,916 where they were 39,976 and 39,975;
+/// since D-46, the clipped quads 5,818 and 3,916 (the console 5,845 and 3,968), each triangle charged by its rows.
 #[test]
 fn the_bandwidth_record_counts_each_rows_hblanks() {
     let Some(source) = carried("bandwidth") else { return };
     let m = run_for(&source, 860, Market::Americas);
     let hblanks: Vec<u32> = results(&m, 0x10_0000, 56).chunks(4).map(|r| r[2]).collect();
-    assert_eq!(hblanks, [15_773, 12_123, 19_127, 1216, 7603, 11_461, 15_134, 15_134, 7721, 11_580, 39_916, 39_916, 5844, 3968]);
-    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0xE174_03F5_2EBD_6467, "the milliseconds and MB/s as well");
+    assert_eq!(hblanks, [15_773, 12_123, 19_127, 1216, 7603, 11_461, 15_134, 15_134, 7720, 11_579, 39_915, 39_915, 5818, 3916]);
+    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0x894D_5C3E_37BB_74F3, "the milliseconds and MB/s as well");
 }
 
 /// `dma/chain-looping`: the RAM loop's ticks with no DMA, an empty chain and two never-ending ones, and their
@@ -407,7 +408,7 @@ fn small_rectangles_and_fills_cost_their_rows() {
     assert_eq!(busy[..4], [7, 7, 7, 7], "the four settings");
     assert_eq!(busy[4..18], [7, 7, 7, 25, 70, 7, 25, 79, 322, 52, 610, 2284, 4444, 7], "flat rectangles 1x1 to 128x64, then GP0(68h)");
     assert_eq!(busy[18..26], [7, 7, 25, 106, 403, 7, 25, 448], "fills");
-    assert_eq!(busy[26..30], [556, 574, 835, 4912], "triangles keep their setup");
+    assert_eq!(busy[26..30], [7, 43, 358, 4651], "triangles charged by their rows (D-46)");
 }
 
 // The printf records of ps1-tests' value programs (Diamond_Records.md §11–§14): each call's format address and arguments.
@@ -1347,4 +1348,17 @@ fn channel_6_runs_beside_a_list_that_waits_or_walks() {
 fn a_narrow_store_writes_its_register_shifted_to_its_byte() {
     let m = run(include_str!("../programs/narrow-stores.s"));
     assert_eq!(results(&m, 0x10_0000, 7), [0x0088_0000, 0x0044_0000, 0x0000_0B00, 0, 0x1234, 0x0500, 0x0012_0000]);
+}
+
+// --- D-46: a triangle's drawing time by its rows (Diamond_Disputes.md D-46) ---
+
+/// A triangle is charged by the rows it draws, with no fixed setup: one of one pixel is ready within the cycles a 1x1
+/// rectangle is, as Beetle PSX and SwanStation read it (10 and 25), and one of 128 rows within a fifth of theirs
+/// (4,006 and 4,129); a setup of 876 GPU cycles had made each 556 cycles, and Tekken 3's fighters vanish.
+#[test]
+fn a_triangle_is_charged_by_its_rows() {
+    let m = run(include_str!("../programs/draw-time.s"));
+    let busy: Vec<u32> = results(&m, 0x10_0000, 38).iter().map(|w| (w >> 16) - (w & 0xFFFF)).collect();
+    assert!(busy[26] <= 30 && busy[27] <= 50, "one pixel and legs of 8: {:?}", &busy[26..30]);
+    assert!(busy[29] < 4129 * 6 / 5, "legs of 128: {}", busy[29]);
 }

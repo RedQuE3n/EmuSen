@@ -441,7 +441,7 @@ impl Board {
     }
 
     /// The SPU brought to the present, the CD-ROM controller first since it feeds the SPU's CD input.
-    pub(crate) fn sync_spu(&mut self) {
+    pub fn sync_spu(&mut self) {
         self.run_spu(self.now);
     }
 

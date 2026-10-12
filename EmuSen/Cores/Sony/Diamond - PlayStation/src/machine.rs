@@ -2,7 +2,7 @@
 //! it, a PS-EXE side-loaded on the kernel it runs or started directly, the TTY, and port 1's pad (Diamond_Native.md
 //! §11, §12; Diamond_Pad.md; Diamond_SPU.md).
 
-use blackmoon_r3000::{R3000, Step};
+use blackmoon_r3000::{Observer, R3000, Step, Unobserved};
 
 use crate::bus::{BIOS_BYTES, Board, RAM_BYTES, SCRATCH_BYTES, power_on_memctl};
 use crate::devices::TTY_BYTES;
@@ -24,6 +24,7 @@ use crate::exe;
 pub const SPACES: [(u32, &str, usize, bool); 6] =
     [(1, "RAM", RAM_BYTES, false), (2, "SCRATCH", SCRATCH_BYTES, false), (3, "VRAM", VRAM_BYTES, false), (4, "SPURAM", SPU_RAM_BYTES, false), (5, "BIOS", BIOS_BYTES, true), (6, "TTY", TTY_BYTES, true)];
 pub const RAM_ID: u32 = 1;
+pub const SCRATCH_ID: u32 = 2;
 pub const BIOS_ID: u32 = 5;
 pub const TTY_ID: u32 = 6;
 
@@ -67,6 +68,8 @@ pub struct Machine {
     pub ports: [Option<&'static str>; 2],
     /// The firmware files given at create, by number.
     pub firmware: Vec<u32>,
+    /// The debugger's hooks and its open frame (Diamond_Native.md §18).
+    pub debug: crate::debugger::Debugger,
 }
 
 /// The console's standard field rate, by its market: NTSC on an NTSC clock, PAL on a PAL one (D-0, provisional).
@@ -117,6 +120,7 @@ impl Machine {
             card_reported: [false; 2],
             ports,
             firmware: Vec::new(),
+            debug: crate::debugger::Debugger::new(),
         }
     }
 
@@ -176,20 +180,7 @@ impl Machine {
 
     /// One step at the boundary, with the kernel's seams: the side-load at the shell's entry and the putchar tap.
     pub fn step(&mut self) {
-        let pc = self.cpu.regs.pc;
-        if self.exe.is_some() && pc & 0x1FFF_FFFF == kernel::SHELL_ENTRY && !self.cpu.regs.branch.slot {
-            let image = self.exe.take().unwrap_or_default();
-            exe::load(&image, &mut self.board.ram, &mut self.cpu);
-            self.board.cache.tags = [0; 256];
-        }
-        let tapped = if self.kernel.taps_putchar() { kernel::putchar(self.cpu.regs.pc, self.cpu.regs.r[9], self.cpu.regs.r[4]) } else { None };
-        let step = self.cpu.step(&mut self.board);
-        if let (Some(c), Step::Instruction) = (tapped, step) {
-            self.board.tty.put(c);
-        }
-        if self.board.now >= self.board.next_event {
-            self.board.events();
-        }
+        step_on(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
     }
 
     /// One frame: the machine runs until a field's vblank begins, its picture complete, or to the field's end when the
@@ -201,7 +192,32 @@ impl Machine {
         }
         self.board.sync_spu();
         self.frames += 1;
+        self.debug.open = false;
     }
+}
+
+/// `Machine::step` over the machine's parts, so that the debugger's frame can lend its observer the hooks beside them;
+/// a step the observer stops runs nothing and leaves the clock where it was (Diamond_Native.md §18).
+#[inline(always)]
+pub(crate) fn step_on<O: Observer>(cpu: &mut R3000, board: &mut Board, exe: &mut Option<Vec<u8>>, kernel: Kernel, o: &mut O) -> Step {
+    let pc = cpu.regs.pc;
+    if exe.is_some() && pc & 0x1FFF_FFFF == kernel::SHELL_ENTRY && !cpu.regs.branch.slot {
+        let image = exe.take().unwrap_or_default();
+        exe::load(&image, &mut board.ram, cpu);
+        board.cache.tags = [0; 256];
+    }
+    let tapped = if kernel.taps_putchar() { kernel::putchar(cpu.regs.pc, cpu.regs.r[9], cpu.regs.r[4]) } else { None };
+    let step = cpu.step_observed(board, o);
+    if let Step::Observed(_) = step {
+        return step;
+    }
+    if let (Some(c), Step::Instruction) = (tapped, step) {
+        board.tty.put(c);
+    }
+    if board.now >= board.next_event {
+        board.events();
+    }
+    step
 }
 
 impl Machine {

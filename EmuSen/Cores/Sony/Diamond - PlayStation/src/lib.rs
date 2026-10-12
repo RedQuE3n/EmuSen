@@ -9,6 +9,7 @@
 pub mod bus;
 pub mod card;
 pub mod cdrom;
+pub mod debugger;
 pub mod devices;
 pub mod dma;
 pub mod exe;

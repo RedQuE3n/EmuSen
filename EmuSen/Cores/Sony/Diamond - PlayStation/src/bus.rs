@@ -1178,10 +1178,93 @@ pub fn power_on_memctl() -> [u32; 9] {
     r
 }
 
+/// The memory a store at a processor address lands in, RAM's offset or the scratchpad's, as `decode` finds it with
+/// `ram_window` bytes of RAM mapped; the debugger's report of a store in the memory's own space (Diamond_Native.md §18).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reached {
+    Ram(u32),
+    Scratch(u32),
+}
+
+pub fn reached(address: u32, ram_window: u32) -> Option<Reached> {
+    if address >= 0xC000_0000 || (0x2000_0000..0x8000_0000).contains(&address) {
+        return None;
+    }
+    let p = address & 0x1FFF_FFFF;
+    if p < ram_window {
+        return Some(Reached::Ram(p & (RAM_BYTES as u32 - 1)));
+    }
+    match p {
+        0x1F80_0000..=0x1F80_03FF if address < 0xA000_0000 => Some(Reached::Scratch(p & 0x3FF)),
+        _ => None,
+    }
+}
+
+impl Board {
+    /// The RAM `decode` maps, both banks.
+    pub fn ram_window(&self) -> u32 {
+        let (ras0, ras1) = self.memctl.ram_banks();
+        ras0 + ras1
+    }
+
+    /// A byte of the processor's address space as a debugger reads it: RAM, the scratchpad and the BIOS as `decode`
+    /// finds them; the I/O ports, the expansion regions and unmapped addresses, whose reads would change or fault, $FF.
+    pub fn peek(&self, address: u32) -> u8 {
+        match self.decode(address) {
+            Target::Ram(r) => self.ram[r],
+            Target::Scratch(s) => self.scratch[s],
+            Target::Bios(b) => self.bios[b],
+            _ => 0xFF,
+        }
+    }
+
+    /// `peek`'s four bytes from `address`, a little-endian word.
+    pub fn peek_word(&self, address: u32) -> u32 {
+        u32::from_le_bytes(std::array::from_fn(|i| self.peek(address.wrapping_add(i as u32))))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::icache::KERNEL_BCC;
+
+    /// `reached` is `decode`'s RAM and scratchpad over every segment, both RAM sizes, the windows' edges and their mirrors.
+    #[test]
+    fn a_store_is_reported_where_decode_lands_it() {
+        for size in [memctl::KERNEL_RAM_SIZE, memctl::KERNEL_RAM_SIZE & !(1 << 9)] {
+            let b = Board::new(false, 2, memctl::KERNEL_VALUES, size, KERNEL_BCC);
+            let w = b.ram_window();
+            for segment in [0x0000_0000u32, 0x8000_0000, 0xA000_0000, 0x2000_0000, 0xC000_0000, 0xE000_0000] {
+                for p in [0, 4, 0x1F_FFFF, 0x20_0000, 0x7F_FFFC, 0x80_0000, w - 1, w, 0x1F7F_FFFF, 0x1F80_0000, 0x1F80_03FF, 0x1F80_0400, 0x1F80_1000, 0x1FC0_0000] {
+                    let a = segment | p;
+                    let want = match b.decode(a) {
+                        Target::Ram(r) => Some(Reached::Ram(r as u32)),
+                        Target::Scratch(s) => Some(Reached::Scratch(s as u32)),
+                        _ => None,
+                    };
+                    assert_eq!(reached(a, w), want, "{a:08X} with {w:#x} of RAM");
+                }
+            }
+        }
+    }
+
+    /// A debugger's read meets memory as the processor would and leaves the ports untouched.
+    #[test]
+    fn a_peek_reads_the_memories_and_nothing_else() {
+        let mut b = board();
+        b.ram[0x1234] = 0x56;
+        b.scratch[0x10] = 0x78;
+        b.bios[0x100] = 0x9A;
+        assert_eq!([b.peek(0x8000_1234), b.peek(0xA020_1234), b.peek(0x0060_1234)], [0x56; 3]);
+        assert_eq!([b.peek(0x1F80_0010), b.peek(0x9F80_0010), b.peek(0xBF80_0010)], [0x78, 0x78, 0xFF]);
+        assert_eq!([b.peek(0xBFC0_0100), b.peek(0x9FC0_0100)], [0x9A, 0x9A]);
+        let before = b.now;
+        assert_eq!([b.peek(0x1F80_1070), b.peek(0x1F80_1100), b.peek(0xFFFE_0130), b.peek(0x4000_0000)], [0xFF; 4]);
+        assert!(before == b.now && !b.bus_error());
+        b.ram[0x2000..0x2004].copy_from_slice(&[1, 2, 3, 4]);
+        assert_eq!(b.peek_word(0x8000_2000), 0x0403_0201);
+    }
 
     fn board() -> Board {
         Board::new(false, 2, memctl::KERNEL_VALUES, memctl::KERNEL_RAM_SIZE, KERNEL_BCC)

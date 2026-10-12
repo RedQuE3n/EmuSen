@@ -43,6 +43,20 @@ fn main() {
         m.insert_disc(d);
         eprintln!("[disc opened in {:.0} ms]", loaded.as_secs_f64() * 1e3);
     }
+    let card_file = args.iter().position(|a| a == "--card").map(|i| args[i + 1].clone());
+    if let Some(f) = &card_file {
+        let data = std::fs::read(f).ok();
+        m.insert_card(0, data.as_deref());
+    }
+    let presses: Vec<(i64, u32, i64)> = args
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| *a == "--press")
+        .map(|(i, _)| {
+            let p: Vec<&str> = args[i + 1].split(':').collect();
+            (p[0].parse().expect("a frame"), u32::from_str_radix(p[1], 16).expect("a hex mask"), p.get(2).map_or(6, |n| n.parse().expect("frames")))
+        })
+        .collect();
     if args.iter().any(|a| a == "--cards") {
         m.insert_card(0, None);
         m.insert_card(1, None);
@@ -65,6 +79,10 @@ fn main() {
     for _ in 0..frames {
         if trace_at == Some(m.frames) {
             m.board.cdrom.trace = true;
+        }
+        if !presses.is_empty() {
+            let mask = presses.iter().filter(|(at, _, n)| (*at..*at + *n).contains(&m.frames)).fold(0, |a, p| a | p.1);
+            m.board.sio0.set_buttons(0, mask);
         }
         if calls {
             m.board.field_done = false;
@@ -131,6 +149,12 @@ fn main() {
                 m.set_lid(false, None);
             }
         }
+    }
+    if let (Some(f), Some(c)) = (&card_file, m.card_in(0))
+        && c.changed
+    {
+        std::fs::write(f, &c.data).expect("the card written");
+        eprintln!("[card written to {f}]");
     }
     for (t, n, count, first) in &seen {
         eprintln!("[call {t}({n:02X}h) {count} times, first at frame {first}]");

@@ -660,3 +660,30 @@ WiseMan's `DiamondTests` with no firmware variable set, all passing (`Diamond_Na
 **Read for this section**: psx-spx `kernelbios.md` lines 1277-1296 (OpenEvent) and 1545-1597 (the timer functions and
 ChangeClearRCnt); `controllersandmemorycards.md`'s "Write Test Frame" again; this page's §22. Nothing else was opened,
 no firmware folder was used, and no reference emulator was run.
+
+## 24. Found in play, for the kernel's writer (2026-10-12)
+
+Three of the tester's games, driven into play on this kernel (`Diamond_Players.md` §13), meet the kernel at points
+this page's design left open. Nothing in `kernel/` was changed; each is recorded with the game's own evidence (its code
+and its calls, read from RAM; no firmware was read or run on Diamond), for a replacement writer's step.
+
+1. **B(51h) Krom2RawAdd** (§19, "absent from an open kernel"). Castlevania: Symphony of the Night asks it for the
+   Shift-JIS codes 8163h and 819Ah when it draws its file screen, takes the −1 it returns as a pointer, and reads a
+   byte at FFFFFFFFh; the bus error never returns, and the game stops at a black screen after PRESS START BUTTON
+   [M, `examples/run --game --game-log`, its code at 80106A30h–80106AC4h]. The game draws its English menus with the
+   call, so "no text where they use them" (§19's player's words) is a stop for this game, not a blank. A kernel that
+   carries no characters could still answer with the address of a blank glyph; whether that is a decision the plan's
+   §5.9 allows is the writer's question.
+2. **B(34h) read and B(35h) write in asynchronous mode** (§14). Spyro the Dragon opens its save asynchronously (access
+   mode 8001h, after creating it with 10200h), then calls read or write in a loop that ends only when the call returns 0 (its code at
+   80067018h–8006702Ch and 800672D4h–800672E8h). This kernel returns the length at once, as psx-spx's "Number of bytes
+   actually read" reads; the game's second call then waits for the first job and returns C00h, and every call after it
+   −1, so "CREATING SAVE FILE…" and "ACCESSING MEMORY CARD…" stand for ever [M]. The loop is the game's evidence that
+   an accepted asynchronous request returns 0; psx-spx does not say what it returns.
+3. **The time an interrupt takes** (§4.3's elements). In Crash Bandicoot's play, timer 2's IRQ, at its target every
+   32,776 cycles, is acknowledged 5,800 to 8,800 cycles after its exception, and a vblank reaches the game's own handler
+   36,434 cycles after its exception: 8,052 before the pads' element, 9,253 for port 1's five bytes, 9,800 for the empty
+   port 2's timeout and 9,191 after [M, the kernel's stores to I_STAT and SIO0 timed at frame 6,660]. Being longer than
+   timer 2's period, the vblank's path always finds timer 2 standing when the game's handler looks, and the game's
+   handler, which counts such looks, prints "intr timeout(0040:004d)" at 2,049 and writes 0 to I_STAT. Nothing was seen
+   to go wrong in that run; it is a cost of the kernel's paths, of which the port 2 timeout is the largest single part.

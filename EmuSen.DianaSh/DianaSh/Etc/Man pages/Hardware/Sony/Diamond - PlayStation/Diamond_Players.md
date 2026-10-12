@@ -500,3 +500,187 @@ left to the branch that owns the catalog [R]. On the run before the merge,
 `MercuryRtCoreTests.A_second_ports_buttons_are_ignored_on_both_engines` failed: it pressed and read the joypad register
 with no frame between, which a latched press no longer reaches, and it now runs a frame after the presses.
 `emusen-native`'s own tests: `cargo test --release`, 63 passed.
+
+## 13. Gameplay: the seven games driven into play (2026-10-12)
+
+*Written 2026-10-12, on WiseMan `66bb54b5` and the merges after it (`c27bbfbf`, D-41; `60dce4e5`, stage 13 and the
+latched input).* After D-45 every one of the tester's seven games reached its title on the open kernel; none had been
+driven past it. Each was then played by a script of presses, the same script on Diamond (open kernel) and on
+SwanStation (`scph5501.bin`, by path), to about frame 18,000. The marks are §12's; [M] is measured on this date.
+
+### 13.1 How they were driven
+
+- **The scripts** are `EmuSen.WiseMan/Reference/analysis/psxplay/*.txt`, buttons and frames only, each counted from an
+  anchor T, the frame the game's title (or its first screen after the BIOS's part) shows on each emulator, since
+  SwanStation boots through the BIOS's intro and every load after it runs on the referee's own clock. Each script's
+  second line gives T on both. `psxplay.py` drives a disc by one of them on Diamond's run tool (`examples/run`, its new
+  `--stick` beside `--press`) or on SwanStation through `psxreferee.py pictures`, which gained the presses, a stick,
+  the device, core options, a card in and out and the sound (`Diamond_Referees.md` §4.16). Pictures every 60 frames on
+  both, kept in the cache, never committed.
+- **The cards.** Every game but Spyro the Dragon was given a card formatted by the open kernel's own card manager
+  (`formatted-by-open-kernel.mcr` of `Diamond_OpenKernel_Phase2.md` §20.4, MD5 `b57f32ef…`); Spyro a blank card of
+  zeros. The same file went to SwanStation as its save RAM.
+- **Ape Escape** needs a DualShock in analog mode: Diamond's DualShock answers the game's own configuration commands;
+  SwanStation was given its DualShock (`--device 1=261`) with `swanstation_Controller1_ForceAnalog=true`.
+- **The comparison**: for each 1,200 frames of Diamond's run, the referee offset (searched within 600 frames of the
+  last) that gives the smallest median mean-absolute grey difference on 80×60, and that median; and by eye, from
+  contact sheets of both runs. Once a game's path depends on its own randomness or on a load's length (Tekken 3's
+  opponent, Spyro's flight), the medians grow without anything being wrong, and the eye decides. **The sound**: the
+  SPU's output and the core's audio, RMS per 1,200 frames at the same offset.
+
+### 13.2 The games
+
+**Crash Bandicoot** (T: 2,520 on Diamond, 3,900 on SwanStation)
+
+| | Diamond | SwanStation |
+|---|---|---|
+| Reaches play | **yes**: the map at T+420, N. Sanity Beach's loading screen, play from T+840 | the same, from T+840 |
+| Play against the referee | the same path step for step; window medians 3.3 to 5.3 grey levels, one window of 12.3 while the camera turns | — |
+| Pictures | nothing wrong seen | — |
+| Sound | −22.9 dB, the same as the referee's (median difference 0.0 dB) | −22.9 dB |
+| Hangs | none: at T+4,600 the script walks Crash into a hollow where he stays, the camera resting on the same scene on both to the end of the run | the same |
+| Cards | no save made by the script | — |
+
+The game's TTY prints `intr timeout(0040:004d)` six times in 15,500 frames: §13.4's third item.
+
+**Spyro the Dragon** (T: 1,980 and 3,480)
+
+| | Diamond | SwanStation |
+|---|---|---|
+| Reaches play | **yes**: the card menus, the opening, the Artisans' home world from T+2,940 | the same |
+| Play against the referee | to T+4,800 within 1.4 to 5.3; then the two flights part, and by eye both play alike (flying, gems, dragons freed, "Entering Stone Hill") | — |
+| Pictures | nothing wrong seen. *Before D-46* the logos and the title came 420 frames late against the referee's pace (title at 2,400) | — |
+| Sound | −22.3 dB (median difference 0.1 dB) | −22.4 dB |
+| Hangs | **on the card**: with a formatted card and "create a save file" chosen, "CREATING SAVE FILE…" stays up for ever; with a card holding a save made on SwanStation, "ACCESSING MEMORY CARD…" stays up for ever (§13.4) | creates the file and goes on; the save it made reads back |
+| Cards | the blank card left as it was (the script declines to format it) | the same |
+
+**Tekken 3** (T: 6,540 and 7,440)
+
+| | Diamond | SwanStation |
+|---|---|---|
+| Reaches play | **yes**: Arcade, Xiaoyu, the first fight from T+1,000; two stages fought, rounds won and lost, "CONTINUE?" at the end of the run | the same course, other opponents |
+| Play against the referee | the opponent is the game's random choice (Hwoarang, Law, Jin, Lei, Paul across runs), so the medians are 31 to 42 throughout; by eye both fight alike | — |
+| Pictures | *before D-46*: the stage drawn and both fighters in pieces, an arm and a leg each, in every fight. *After*: whole, as on the referee | — |
+| Sound | −15.2 dB (median difference 0.6 dB) | −16.8 dB |
+| Hangs | none | none |
+| Cards | the open kernel's formatted card in slot 1; no save made by the script (saves and loads between the kernels are `Diamond_OpenKernel_Phase2.md` §22.1's) | the same |
+
+**Castlevania: Symphony of the Night** (T: 1,320 and 2,340)
+
+| | Diamond | SwanStation |
+|---|---|---|
+| Reaches play | **no**: PRESS START BUTTON taken at T+60, then black to the end of the run | the file screen at T+270, a new game, the name, the prologue (Richter at Dracula's castle) from T+1,800 |
+| Hangs | at T+265, frame 1,585: the game asks B(51h) Krom2RawAdd for the Shift-JIS characters 8163h and 819Ah to draw its file screen, the open kernel answers −1 (it carries no character set), the game reads a byte at FFFFFFFFh and the bus error it takes never returns (§13.4) | — |
+
+**Silent Hill** (T: 1,320 and 2,340, the fear-of-blood screen's text)
+
+| | Diamond | SwanStation |
+|---|---|---|
+| Reaches play | **yes**: New Game, Normal, the opening movie skipped, the opening scene with Cheryl to T+10,500, then Harry walking the foggy street | the same |
+| Play against the referee | window medians 0.9 to 6.6 to T+15,500, at a constant offset of 1,020 frames through the opening | — |
+| Pictures | nothing wrong seen: the fog, the snow, the dialogue boxes | — |
+| Sound | −24.1 dB (median difference 0.0 dB) | −24.1 dB |
+| Hangs | none | none |
+
+**The fear-of-blood screen** (the question D-45's step left): at 10-frame steps, with a blank card, its text fades in
+at frame 1,210 on Diamond and 2,210 on SwanStation, the picture behind it at 1,390 and 2,430, the cut to the movie's
+first picture at 2,180 and 3,210: 180 against 220 frames from the text to the picture, and 970 against 1,000 from the
+text to the cut, so the screen holds as long on both, within 40 frames [M]. With no card, both show the "no MEMORY
+CARD" warning for 300 frames first, and the screen then holds 180 frames on both. The 350 against 90 frames recorded
+in `Diamond_CDROM.md` §9.8 is not reproduced, on this build nor on WiseMan `66bb54b5` before D-46 [M]; what those two
+figures measured is not known.
+
+**Ape Escape** (T: 5,160 and 6,300)
+
+| | Diamond | SwanStation |
+|---|---|---|
+| Reaches play | **yes**: NEW GAME, the professor's scene, the first stage from T+1,800, Spike walked by the left stick about the stage, the tutorial's boxes | the same |
+| Play against the referee | to T+1,200 within 2.0; then the scenes' skips land at different moments and the stage's play parts; by eye both alike | — |
+| Pictures | nothing wrong seen | — |
+| Sound | −17.9 dB (median difference 0.1 dB) | −17.8 dB |
+| Hangs | none | none |
+
+**Rayman** (T: 1,740 and 3,060, the opening movie's first table)
+
+| | Diamond | SwanStation |
+|---|---|---|
+| Reaches play | **yes**: the movie skipped, the title, "Use memory card", a game chosen and named, the Dream Forest from T+3,840 | the same |
+| Play against the referee | to T+2,400 within 0.4 to 5.7; then the scripts' presses meet different menus (Diamond's run opened the options once) and the play parts; by eye both alike | — |
+| Pictures | nothing wrong seen | — |
+| Sound | −29.3 dB (median difference 1.1 dB) | −30.6 dB |
+| Hangs | none | none |
+| Cards | **saved** on the open kernel's formatted card: a file `BISLUS-00005aaa63281` in block 2 and the same name erased in block 1, the game's own create-then-erase; every frame's checksum valid | saved `BISLUS-00005aaa63120` in block 1 on the same card |
+
+### 13.3 What was found and fixed
+
+1. **A triangle's setup of 876 GPU cycles** (D-46). Tekken 3's fights left both fighters half drawn: the frame's 729
+   triangles took 0.71 of a frame in setup alone. The setup is gone and a triangle is charged 3.65 cycles a row it
+   spans, its sides clipped or not, which keeps `gpu/bandwidth` within a hblank of the console's log and makes a small
+   triangle as cheap as the referees read it. *Proof*: `a_triangle_is_charged_by_its_rows`, failing before. Tekken 3's
+   fighters are whole and Spyro's logos keep the referee's pace; Castlevania's pictures to its stop are byte for byte
+   as before, and the other games' attract runs keep their scenes, some of them at a pace that moves by up to a few
+   seconds once their 3D scenes begin, as the referee's alignment above follows [M].
+
+### 13.4 What is still wrong, ranked
+
+1. **Castlevania stops at its file screen on the open kernel** (above): B(51h) Krom2RawAdd answers −1 and the game
+   dereferences it. The kernel's own decision (`Diamond_OpenKernel_Phase2.md` §19, "absent from an open kernel"); the
+   game uses the call for its English menus. The kernel is not this step's to change: recorded for its writer
+   (`Diamond_OpenKernel_Phase2.md` §24).
+2. **Spyro's saves and loads hang on the open kernel**: the game opens its file asynchronously (access mode 8001h), then
+   calls B(34h) read or B(35h) write in a loop that ends only when the call returns 0 (its code at
+   80067018h–8006702Ch and 800672D4h–800672E8h). The open kernel returns the length at once, as psx-spx's "Number of
+   bytes" reads; the second call then waits for the first job and returns C00h, and every call after it −1. That the
+   loop ends on 0 is the game's evidence of what the call returns in asynchronous mode. Kernel territory, recorded for
+   its writer (§24 there). The cards themselves are not at fault: SwanStation reads the open kernel's formatted card
+   as formatted and empty, and creates Spyro's file on it.
+3. **Every interrupt costs the open kernel 6,000 to 9,000 cycles before it is acknowledged** [M, frame 6,660 of Crash
+   Bandicoot's run, the kernel's stores to I_STAT and SIO0 timed]: timer 2, which Crash runs at its target every 32,776
+   cycles, is acknowledged 5,800 to 8,800 cycles after its exception, and on a vblank the game's own handler is reached
+   36,434 cycles after it (8,052 before the pads, 9,253 for port 1's five bytes, 9,800 for empty port 2, 9,191 after),
+   longer than timer 2's period, so timer 2 stands in I_STAT whenever the game's handler looks. That handler counts each
+   look that leaves an interrupt standing and at 2,049 prints "intr timeout" and writes 0 to I_STAT, which would drop any
+   other interrupt standing then. No harm was seen in Crash's run; the console's own figures are not known, since the
+   player's BIOS is never traced. Recorded for the kernel's writer; Diamond's SIO0 bytes take their documented time.
+4. **The scripts are not yet long walks through each game**: Crash's ends in a hollow, and the Tekken, Spyro, Ape
+   Escape and Rayman runs part from the referee's as each game's randomness or a load's length decides, after which
+   only the eye compares them.
+
+### 13.5 The checks kept
+
+- ps1-tests' pictures and records: `cargo test --release` in the crate with `EMUSEN_DIAMOND_PS1TESTS` set and without
+  it, every test passing (§13.7).
+- The seven titles: every game still reaches its title on the open kernel with no presses (runs to frame 7,000 after
+  each change): Castlevania at 1,320, Silent Hill's warnings and movie, Rayman's movie and title, Crash Bandicoot at
+  2,520, Ape Escape at 5,160, Tekken 3 at 6,540, and Spyro the Dragon at 1,980, 420 frames sooner than before (D-46).
+- The cards: the open kernel's formatted card read as formatted by SwanStation on the player's BIOS (Spyro, Rayman) and
+  by the games on the open kernel (Rayman, and Silent Hill, which warns of no card otherwise); Rayman saved to it on both.
+
+### 13.6 The cost
+
+[M, `examples/run` built from WiseMan `60dce4e5` and from this step's last commit, both with
+`RUSTFLAGS="-C llvm-args=-align-all-functions=6"`, run alternately on one processor, the fastest of five, ms a frame,
+before → after]: `timers` 0.337 → 0.338, `gpu/triangle` 2.153 → 2.161, `gpu/bandwidth` 6.683 → 6.673,
+`gpu/benchmark` 3.885 → 3.936, `spu/test` 0.294 → 0.295, `mdec/movie-15bit` 1.656 → 1.662; Crash Bandicoot's first
+600 frames 2.675 → 2.743, Tekken 3's first 3,000 3.015 → 3.118, Spyro the Dragon's first 3,000 3.244 → 3.101.
+The programs differ within what placement moves. The games differ because they now run differently: a GPU that is
+free sooner leaves the idle skipper less to skip in Crash's and Tekken 3's frames [A], and Spyro reaches its title 420
+frames sooner. The change adds no work: one counter moved above a clip and a constant changed.
+
+### 13.7 Tests run (2026-10-12)
+
+`cargo test --release` in Diamond's crate after the merge of `60dce4e5`: 155 unit tests and 69 program tests, with and
+without `EMUSEN_DIAMOND_PS1TESTS`; WiseMan's `Diamond` tests under the test lock, 42 of 42. The probe's own tests
+(`cargo test --release` in `probe-rs`), 50 of 50.
+
+### 13.8 Read for this section, and exposures
+
+psx-spx `6d7d1bc`: `kernelbios.md`'s "BIOS File Functions" (open, lseek, read, write, close), "Asynchronous Access",
+B(19h) HookEntryInt and C(0Ah) ChangeClearRCnt; "DMA Channels" and "GPU Timings" for D-46. ps1-tests' `gpu/benchmark`
+source (`main.cpp`, `modes.h`), its screenshot and the suite's README; the `bandwidth` console log. EmuSen's own: the
+open kernel's `exception.rs` (its chain elements and ChangeClearRCnt's flags), Diamond's GPU, the probe and
+`psxreferee.py`. The games' own code and RAM on the open kernel, through the run tool's `--game` watch and a debugging
+build outside the repository that printed GP0 words, GTE commands and stores by address. The referees ran as black
+boxes, their pictures, sound, card files and RAM at a test program's done word only; the player's BIOS was given to
+them by path and to nothing else, and nothing ran on Diamond but the open kernel. No emulator's source, no firmware or
+listing of one, and none of the documents `DOCS.txt` excludes was opened.

@@ -375,11 +375,14 @@ unsafe extern "C" fn video_refresh(data: *const c_void, width: c_uint, height: c
 
 unsafe extern "C" fn input_poll() {}
 
-unsafe extern "C" fn input_state(port: c_uint, device: c_uint, _index: c_uint, id: c_uint) -> i16 {
+unsafe extern "C" fn input_state(port: c_uint, device: c_uint, index: c_uint, id: c_uint) -> i16 {
+    let Some(state) = shared() else { return 0 };
+    if device == sys::RETRO_DEVICE_ANALOG {
+        return if port == 0 && index < 2 && id < 2 { state.schedule.axis_at(state.frame, index * 2 + id) } else { 0 };
+    }
     if device != sys::RETRO_DEVICE_JOYPAD {
         return 0;
     }
-    let Some(state) = shared() else { return 0 };
 
     for button in ProbeButton::ALL {
         if joypad_id(button) != id {

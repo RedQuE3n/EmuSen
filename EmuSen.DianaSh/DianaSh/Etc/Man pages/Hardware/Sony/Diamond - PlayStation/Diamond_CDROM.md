@@ -395,7 +395,9 @@ WiseMan at `b5051abb` before; pictures kept in the cache, never committed]:
 Against SwanStation's pictures every 10 frames, on 80×60 grey at the best constant offset [M]: Silent Hill's movie
 within 1.9 grey levels (the median of 211 pictures from 1,500 to 3,600, at 810 frames), Tekken 3's within 2.2 (256
 pictures from 450 to 3,000, at 1,000 frames), Castlevania's movie, logo and title at 1,030–1,040 frames. Silent Hill's
-"fear of blood" screen holds 350 frames on Diamond and 90 on SwanStation before the movie; why is not known.
+"fear of blood" screen holds 350 frames on Diamond and 90 on SwanStation before the movie; why is not known. *Since
+the play step (2026-10-12)* not reproduced: at 10-frame steps the screen holds as long on both, within 40 frames
+(`Diamond_Players.md` §13.2).
 Tekken 3's title comes later than before only because the movie before it now plays, as on the referee. Crash
 Bandicoot's, Spyro's and Rayman's pictures are byte for byte the same, since none of the three makes the store.
 

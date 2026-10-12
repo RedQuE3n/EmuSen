@@ -29,6 +29,7 @@ fn usage() {
     println!("  them with sizes and the screen's pixel format.");
     println!("  --press F:BTN[:DUR]  holds BTN on port 1 from frame F for DUR frames");
     println!("  --presson P:F:BTN[:DUR]  the same on pad P, from 1: a multitap's players are further pads");
+    println!("  --stick F:AXIS:VALUE[:DUR]  holds a stick of pad 1: AXIS 0-1 the left x and y, 2-3 the right, VALUE -1 to 1");
     println!("  --device P=NAME  what port P, from 1, holds: a name or number from --list-devices");
     println!("  --list-devices   print what each port may hold, as the core lists it");
     println!("                       (default 4), repeatable - needed to reach any scene");
@@ -308,6 +309,19 @@ fn parse_args(argv: &[String]) -> Result<Args, i32> {
                     let duration = fields.get(3).map_or(4, |f| atoi(f));
                     args.schedule.add_on(port, start, duration, button);
                     println!("[INFO] press {} on pad {} frames {}..{}", fields[2], port + 1, start, start + duration - 1);
+                }
+            }
+            "--stick" => {
+                if let Some(v) = value() {
+                    let fields: Vec<&str> = v.split(':').collect();
+                    let level = fields.get(2).and_then(|f| f.parse::<f64>().ok());
+                    let (Some(level), true) = (level, fields.len() >= 3 && atoi(fields[1]) < 4) else {
+                        println!("[ERROR] --stick wants F:AXIS:VALUE[:DUR], AXIS 0-3, VALUE -1 to 1");
+                        return Err(1);
+                    };
+                    let (start, axis, duration) = (atoi(fields[0]), atoi(fields[1]), fields.get(3).map_or(4, |f| atoi(f)));
+                    args.schedule.add_stick(start, duration, axis, (level.clamp(-1.0, 1.0) * 32767.0).round() as i16);
+                    println!("[INFO] stick axis {axis} at {level} frames {}..{}", start, start + duration - 1);
                 }
             }
             "--press" => {

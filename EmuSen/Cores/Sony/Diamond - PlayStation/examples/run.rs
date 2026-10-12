@@ -8,7 +8,8 @@
 //! `cdrom/disc-swap` does; `--trace-at FRAME` traces the controller from a frame on; `--calls` counts the kernel calls a program makes by table and number, as the program
 //! enters the A0h, B0h and C0h vectors, a BIOS's own calls among them. `--game` observes only the game, from its entry on, on either kernel: the TTY from the entry,
 //! the text it passes to write(1) and putchar, its calls counted, and with `--game-log FILE` each call's arguments and result and its own loads and stores at
-//! the CD, SIO0, DMA and interrupt registers, `--log-frames A:B` limiting the accesses (Diamond_OpenKernel_Phase2.md §22). A development tool for the test programs (Diamond_Native.md §11.11, Diamond_CDROM.md §9):
+//! the CD, SIO0, DMA and interrupt registers, `--log-frames A:B` limiting the accesses (Diamond_OpenKernel_Phase2.md §22); `--game-range LO:HI` adds, for the whole run, its loads and stores in the physical
+//! addresses LO to HI (hex) and each jump of its code into them, with the cycles and instructions until its code runs again and v0 then (§27 there). A development tool for the test programs (Diamond_Native.md §11.11, Diamond_CDROM.md §9):
 //! on the open kernel, a player's own BIOS, or none.
 
 use diamond::kernel::{self, Kernel};
@@ -117,6 +118,10 @@ fn main() {
     let mut chunk = vec![0i16; 8192];
     let mut profile = args.iter().position(|a| a == "--kernel-profile").map(|i| Profile::new(&args[i + 1], args.iter().position(|a| a == "--profile-frames").map(|i| args[i + 1].clone())));
     let mut watch = game.then(|| Watch::new(entry, args.iter().position(|a| a == "--game-log").map(|i| args[i + 1].clone()), args.iter().position(|a| a == "--log-frames").map(|i| args[i + 1].clone())));
+    if let (Some(w), Some(i)) = (&mut watch, args.iter().position(|a| a == "--game-range")) {
+        let (lo, hi) = args[i + 1].split_once(':').expect("LO:HI");
+        w.range = Some((u32::from_str_radix(lo, 16).expect("a hex address"), u32::from_str_radix(hi, 16).expect("a hex address")));
+    }
     let start = std::time::Instant::now();
     for _ in 0..frames {
         if wav.is_some() {
@@ -397,6 +402,10 @@ struct Watch {
     last: Option<(u32, bool, u32, u32)>,
     repeats: u64,
     text: Vec<u8>,
+    /// `--game-range`: the physical addresses watched, and the jump into them not yet returned from (cycle, target,
+    /// instructions since).
+    range: Option<(u32, u32)>,
+    inside: Option<(u64, u32, u32)>,
 }
 
 /// The registers whose accesses `--game-log` records: interrupts, DMA, SIO0 and the CD-ROM controller.
@@ -415,7 +424,7 @@ impl Watch {
             (a.parse().expect("a frame"), b.parse().expect("a frame"))
         });
         let log = log.map(|p| std::io::BufWriter::new(std::fs::File::create(p).expect("the log")));
-        Watch { entry, started: false, tty_from: None, log, window, pending: Vec::new(), counts: Vec::new(), last: None, repeats: 0, text: Vec::new() }
+        Watch { entry, started: false, tty_from: None, log, window, pending: Vec::new(), counts: Vec::new(), last: None, repeats: 0, text: Vec::new(), range: None, inside: None }
     }
 
     fn frame(&mut self, m: &mut Machine) {
@@ -461,18 +470,33 @@ impl Watch {
                 self.pending.push((r[31], t, n));
             }
             let mut access = None;
-            if accesses && self.log.is_some() && user_ram(pc) {
+            let ranged = |at: u32| self.range.is_some_and(|(lo, hi)| (lo..hi).contains(&at));
+            if self.log.is_some() && user_ram(pc) {
                 let w = m.board.ram_word(pc & 0x1FFF_FFFF);
                 let op = w >> 26;
                 if matches!(op, 0x20..=0x26 | 0x28..=0x2B) {
                     let (rs, rt) = ((w >> 21 & 31) as usize, (w >> 16 & 31) as usize);
                     let at = r[rs].wrapping_add(w as i16 as i32 as u32) & 0x1FFF_FFFF;
-                    if watched(at) {
+                    if accesses && watched(at) || ranged(at) {
                         access = Some((op, at, rt, r[rt]));
                     }
                 }
             }
+            let (from_user, ra) = (user_ram(pc), r[31]);
             m.step();
+            if let (Some((lo, hi)), Some(l)) = (self.range, &mut self.log) {
+                let next = m.cpu.regs.pc;
+                if from_user && (lo..hi).contains(&(next & 0x1FFF_FFFF)) {
+                    writeln!(l, "{} {} {pc:08X} ENTERS {next:08X} ra={ra:08X}", m.frames, m.board.now).unwrap();
+                    self.inside = Some((m.board.now, next, 0));
+                } else if let Some((since, at, steps)) = &mut self.inside {
+                    *steps += 1;
+                    if user_ram(next) {
+                        writeln!(l, "{} {} LEAVES {at:08X} to {next:08X} after {} cycles and {steps} instructions v0={:08X}", m.frames, m.board.now, m.board.now - *since, m.cpu.regs.r[2]).unwrap();
+                        self.inside = None;
+                    }
+                }
+            }
             if let Some((op, at, rt, value)) = access {
                 let taken = m.cpu.regs.pc & 0x1FFF_FFFF == 0x80 && m.cpu.regs.epc == pc;
                 let seen = if taken {

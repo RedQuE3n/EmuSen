@@ -1374,6 +1374,19 @@ The harness gained SIO0 with a memory card and the run tool `--kernel-profile`. 
 depend on the kernel's timing are graded by §11.12a's rule since 2026-10-12 (Q8 there). The image's SHA-256 is now
 `4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`.
 
+### 18.7 Mega Man Legends (2026-10-12)
+
+The tester's copy of Mega Man Legends stopped on the open kernel at a black screen; three defects of the kernel were
+each shown by a failing test and fixed: the game's pad library calls and stores at addresses it computes past
+ChangeClearPAD's table entry, where the kernel now holds a stretch of fill that returns (`Diamond_OpenKernel_Phase2.md`
+§27, which replaced §26.1's first form); LoadExec loaded the game's second program over the first with the first's exit
+structure and vblank still live, and now masks the sources and restores the default exit first; and the kernel's
+synchronous CD operations now mask IRQ2, so that a program's handler is never offered one of their responses (§26.2,
+§26.3). The game plays its intro, starts a new game and is played into its first ruin. The crate gained the program
+tests `loadexec_starts_its_program_free_of_the_callers_interrupt_handlers` and
+`calls_and_stores_past_b_5bh_s_entry_come_back_and_leave_the_pads_read`, and the run tool `--game-range`. The image's
+SHA-256 is now `c1a002e88aa4e8b1be0257ca486bdb8309cd63f229e1f5070e36e4c72559c785`.
+
 ## 20. Stage 11, the PlayStation to players (2026-10-11)
 
 Recorded in `Diamond_Players.md`: routing by content, image sets and archives, the disc change under the core ABI's

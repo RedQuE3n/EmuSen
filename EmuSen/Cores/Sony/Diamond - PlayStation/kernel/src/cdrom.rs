@@ -174,14 +174,17 @@ fn finish(ok: bool) {
     }
 }
 
-/// The drive taken: the kernel's element answers IRQ2, which I_MASK lets through while it does.
-fn own() {
+/// The drive taken. An asynchronous operation lets IRQ2 through I_MASK for the kernel's element to answer; a
+/// synchronous one, whose caller services the controller itself, masks it, so that no program's handler is offered
+/// a response of the kernel's (Diamond_OpenKernel_Phase2.md §26.3).
+fn own(asynchronous: bool) {
     unsafe {
         if !OWNED {
             OWNED = true;
             MASKED = rd(io::I_MASK) & 4;
-            wr(io::I_MASK, rd(io::I_MASK) | 4);
         }
+        let others = rd(io::I_MASK) & !4;
+        wr(io::I_MASK, if asynchronous { others | 4 } else { others });
     }
     bank(1);
     wr8(REG2, 0x1F);
@@ -192,9 +195,7 @@ fn release() {
     unsafe {
         if OWNED {
             OWNED = false;
-            if MASKED == 0 {
-                wr(io::I_MASK, rd(io::I_MASK) & !4);
-            }
+            wr(io::I_MASK, rd(io::I_MASK) & !4 | MASKED);
         }
     }
 }
@@ -219,7 +220,7 @@ fn start(steps: &[Step], asynchronous: bool) {
         }
     }
     entry::critical(|| {
-        own();
+        own(asynchronous);
         issue();
     });
 }

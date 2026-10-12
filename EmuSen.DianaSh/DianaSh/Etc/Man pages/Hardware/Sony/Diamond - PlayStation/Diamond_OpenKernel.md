@@ -299,7 +299,10 @@ saved registers within the 20 bytes is not documented [C].
 headerbuf, and Load reads the body to its destination and flushes the cache; 1 or 0 [C on the return value]
 ("A(41h)", "A(42h)") [R]. **LoadExec** copies the name with its path upper-cased and ";1" added when no version is
 given, enables interrupts by syscall 2, loads and runs the program with the given stack by Exec(headerbuf,1,0), and
-then ends in the documented lock-up; the reload of the boot program it would attempt is phase 2's ("A(51h)") [R]. With
+then ends in the documented lock-up; the reload of the boot program it would attempt is phase 2's ("A(51h)") [R]. *Since
+2026-10-12* (`Diamond_OpenKernel_Phase2.md` §26.2): before it loads, LoadExec masks every source in I_MASK and restores
+the default exit, since the load replaces the memory its caller's handlers lie in, and it enters the program with
+I_MASK and I_STAT clear [C]. With
 no device holding files before phase 2, each fails.
 
 **FlushCache** (A(44h)) runs from KSEG1 with interrupts off, sets BCC's tag mode (TAG and IS1), isolates the cache, and
@@ -341,7 +344,9 @@ value for a pad that did not answer or whose second byte was not 5Ah [R]; InitPA
 0088h, the kernel's rate by "Signals" [C on which call does it]; no multitap request is sent [C]; StartPAD2 also sets
 I_MASK's vblank bit, which Peter Lemon's `Cube` needs, calling only PAD_init2 [A]
 (`Diamond_Pad.md` §10). It then calls PAD_dr when button_dest is set, and, while ChangeClearPAD's flag is set,
-acknowledges IRQ0 and returns from the exception [C on the flag's meaning and default, §9 item 4].
+acknowledges IRQ0 and returns from the exception [C on the flag's meaning and default, §9 item 4]. *Since 2026-10-12*
+ChangeClearPAD is four instructions of assembly with a stretch of fill behind its table entry, which Mega Man Legends'
+pad library stores into and calls (`Diamond_OpenKernel_Phase2.md` §27).
 
 ## 5. The call table
 
@@ -654,7 +659,9 @@ SHA-256 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, rebu
 copy at another path (`Diamond_OpenKernel_Phase2.md` §20.4). *Since the card request's fix (2026-10-11, `Diamond_OpenKernel_Phase2.md`
 §23):* 92,504 bytes, SHA-256 `7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`. *Since the three defects found in play
 (2026-10-12, `Diamond_OpenKernel_Phase2.md` §25):* 100,544 bytes, SHA-256
-`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`.
+`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`. *Since the stretch behind B(5Bh)'s entry, with
+LoadExec's and the synchronous CD operations' fixes (2026-10-12, `Diamond_OpenKernel_Phase2.md` §27):* 103,256 bytes,
+SHA-256 `c1a002e88aa4e8b1be0257ca486bdb8309cd63f229e1f5070e36e4c72559c785`.
 
 **Reproducibility** [M]: the harness's `image` tests check the committed bytes against their digest always, and
 against a rebuild whenever the pinned toolchain is present (the project's cache under `~/.cache/emusen/toolchains`,
@@ -674,7 +681,8 @@ arguments in a0-a3 and on the stack, returning to a loop; a test program is MIPS
 PS-EXE and side-loaded as §3.3 describes.
 
 [M] 49 tests, all passing, `cargo test --release` in `kernel-harness/`, the page's table among them (§5); *55 since
-2026-10-12, with a memory card on the harness's SIO0 (`Diamond_OpenKernel_Phase2.md` §25.4)*:
+2026-10-12, with a memory card on the harness's SIO0 (`Diamond_OpenKernel_Phase2.md` §25.4), and 60 with the five of
+`pad_entry.rs` (§27.5 there)*:
 
 | File | Tests | What they show |
 |---|---|---|
@@ -709,7 +717,8 @@ only programs loaded directly run without your BIOS; discs and memory cards need
   which only a console run can supply.
 - **Games that patch the kernel.** psx-spx's excluded "BIOS Patches" section describes patches games apply to the
   kernel's code and tables; a replacement writer learns of them only by a game failing (the plan's P7). The tables are
-  at the documented places, but code a patch expects at a fixed address is not there.
+  at the documented places, but code a patch expects at a fixed address is not there. *Found 2026-10-12*: Mega Man
+  Legends calls three addresses past ChangeClearPAD's entry, which now return (`Diamond_OpenKernel_Phase2.md` §26.1).
 - **Games that read the kernel**: its version string or date to decide on patches (this kernel's are its own), its
   garbage area at 0-0Fh (§10 Q1), or its code.
 - **Undocumented defaults and conventions** (§9): wrong guesses show as misbehaving games rather than failures.

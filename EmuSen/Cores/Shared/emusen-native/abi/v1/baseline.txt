@@ -293,7 +293,7 @@ json info.systems[].controllers[].buttons[].label string required @1.0
 json info.systems[].controllers[].id string required @1.0
 json info.systems[].controllers[].label string required @1.0
 json info.systems[].controllers[].ports array<integer> required @1.0
-json info.systems[].development boolean optional @1.1
+json info.systems[].development boolean optional @1.2
 json info.systems[].extensions array<string> required @1.0
 json info.systems[].firmware array<object> optional @1.0
 json info.systems[].firmware[].label string required @1.0

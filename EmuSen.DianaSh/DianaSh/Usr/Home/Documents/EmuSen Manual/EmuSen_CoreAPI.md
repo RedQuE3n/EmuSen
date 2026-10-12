@@ -523,9 +523,9 @@ No line tagged with a released minor is edited afterwards. A mistake in one is c
 The check takes a new line when its tag names a minor the base branch's baseline does not hold yet and no later than
 the header's minor. Two minors built side by side may therefore merge in either order, each keeping its number: 1.2
 (read watches) reached WiseMan before 1.1 (the disc change), and 1.1's lines arrived after it, still tagged `@1.1`.
-The one line both added, `json info.systems[].development`, was tagged `@1.2` by the first to merge and is `@1.1` after
-the second, its minor being the earlier; checked against the 1.2 baseline it is reported as changed, the only such
-line, and that one report is expected of the merge that brought 1.1. Decided 2026-10-12.
+The one line both added, `json info.systems[].development`, keeps the `@1.2` it was given by the first to merge: a
+line already in a published baseline is not retagged, so the merge that brought 1.1 checks clean against the 1.2
+baseline. Decided 2026-10-12.
 
 ---
 
@@ -1849,7 +1849,7 @@ host adapter, discovery, the SNES's system pack and the kit's core suite after t
 with `emusen_core_media_lid`, `emusen_core_media_insert` and `emusen_media`; `EMUSEN_LID_CLOSED` (−265),
 `EMUSEN_WRONG_MEDIA` (−266) and `EMUSEN_NO_SUCH_DRIVE` (−267); machine info's `drives`. Its reasons are
 `EmuSen_CoreAPI_Extensions.md` §2 and §3. The regeneration also recorded `info.systems[].development`, in use since
-2026-10-06 (§27.4) and missing from the baseline until then; it is tagged @1.1, the minor it was first recorded in. The
+2026-10-06 (§27.4) and missing from the baseline until then; it is tagged @1.2, the minor whose merge first recorded it. The
 guard now treats `EMUSEN_CORE_ABI_MINOR` and `EMUSEN_CORE_ABI_VERSION` as the header's revision: each minor moves them
 up, `--against` an older baseline accepts a rise and refuses a fall, and every other fact is held as before
 (`emusen-core-abi-check`'s `the_minor_moves_up_and_nothing_else_may`).

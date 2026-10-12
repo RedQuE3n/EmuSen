@@ -1700,3 +1700,19 @@ fn runs_leave_a_disc_as_its_steps_do() {
         m
     });
 }
+
+// ---- The tester's games in play, the second step (Diamond_Players.md §14) ----------------------------------------
+
+/// D-47: a primitive whose first vertex and the offset pass 1,023 together is drawn where its vertices fall modulo
+/// 2,048, as Crash Bandicoot's ground at the right of its right buffer needs and DuckStation, SwanStation, Beetle PSX
+/// and PCSX-Redux draw it; the triangle from the screen and the rectangle's wrap of D-23 are unchanged.
+#[test]
+fn a_primitive_past_the_offsets_eleven_bits_is_drawn_modulo_2048() {
+    let m = run(include_str!("../programs/offset-fold.s"));
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E);
+    let px = |x: u32, y: u32| (m.board.ram_word(0x10_0000 + (y * 128 + x - 896) / 2 * 4) >> (16 * (x & 1))) & 0xFFFF;
+    assert_eq!((px(992, 16), px(1023, 16), px(1000, 30), px(991, 20)), (0x001F, 0x001F, 0x001F, 0), "the triangle from 286");
+    assert_eq!((px(992, 64), px(1023, 64), px(1000, 78)), (0x001F, 0x001F, 0x001F), "the triangle from the screen");
+    assert_eq!((px(968, 176), px(1023, 176), px(967, 176)), (0x03E0, 0x03E0, 0), "the line from 300");
+    assert_ne!(px(1000, 115), 0, "the shaded triangle from 300");
+}

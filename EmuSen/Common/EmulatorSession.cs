@@ -53,7 +53,7 @@ namespace EmuSen.Common
         public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath, string? engine = null)
         {
             // A file that opens nowhere asks for nothing; the load after it says why - see Diamond_Players.md §12.
-            try { return FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath, engine).GetFirmwareRequirements(romPath).Where(r => r.Required)); }
+            try { return FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath, engine) is var probe && probe is Cores.Native.CoreEngine v1 ? v1.RequiredFirmwareFor(romPath) : probe.GetFirmwareRequirements(romPath).Where(r => r.Required)); }
             catch (Exception e) when (e is NotSupportedException or System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException) { return Array.Empty<FirmwareRequest>(); }
         }
 

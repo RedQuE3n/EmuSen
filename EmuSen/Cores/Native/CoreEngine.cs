@@ -143,6 +143,14 @@ namespace EmuSen.Cores.Native
         public IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath) =>
             Library.FirmwareFor(File.ReadAllBytes(DiscsOf(romPath)[0])).Select(Request).ToArray();
 
+        // The required entries the image asks for, answered without reading it when the core's info leaves none possible - see Diamond_Players.md §12.8.2.
+        public IReadOnlyList<FirmwareRequest> RequiredFirmwareFor(string romPath) =>
+            CanRequireFirmware(Info) ? GetFirmwareRequirements(romPath).Where(r => r.Required).ToArray() : Array.Empty<FirmwareRequest>();
+
+        // False only when every system lists its firmware and none of it is required, the lists naming every file firmware_for can - see EmuSen_CoreAPI.md §6.3.
+        public static bool CanRequireFirmware(CoreInfo info) =>
+            info.Systems.Count == 0 || info.Systems.Any(s => s.Firmware.Count == 0 || s.Firmware.Any(f => f.Required));
+
         private FirmwareRequest Request(CoreFirmware f) => Request(Info.Name, f);
 
         // A v1 core's firmware entry as the library's request; static so the firmware page asks from a sidecar's info with no library loaded.
@@ -186,8 +194,9 @@ namespace EmuSen.Cores.Native
             string? systemId = CoreCatalog.SystemOfFile(path, Info)?.Id;
             string console = CoreCatalog.DiscoveredConsoleForSystem(systemId) ?? systemId?.ToUpperInvariant() ?? CoreCatalog.ConsoleForRom(path) ?? Info.Id;
             var firmware = new List<(uint, byte[])>();
+            var asked = Library.FirmwareFor(image);
             // Each file whole by its name and size, else its first split form found, part n as file Which + n - see EmuSen_CoreAPI.md §6.2.
-            foreach (var f in Library.FirmwareFor(image))
+            foreach (var f in asked)
             {
                 if (FirmwareLibrary.TryLoad(Request(f)) is { } data) firmware.Add((f.Which, data));
                 else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
@@ -209,7 +218,7 @@ namespace EmuSen.Cores.Native
 
             _machine?.Dispose();
             _machine = machine;
-            FirmwareNotice = NoticeFor(machine, Library.FirmwareFor(image));
+            FirmwareNotice = NoticeFor(machine, asked);
             IsHaltedAtBreakpoint = false;
             AttachDebugger(machine);
             _battery.Clear();

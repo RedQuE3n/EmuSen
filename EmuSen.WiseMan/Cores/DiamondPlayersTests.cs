@@ -154,6 +154,39 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Names(loose), Names(zipped));
         }
 
+        // The question asked before every launch reads no image where the core's info leaves no firmware required: a zip is not unpacked for it, a locked track not opened - see Diamond_Players.md §12.8.2.
+        [Fact]
+        public void The_firmware_question_reads_no_image_where_no_entry_can_be_required()
+        {
+            var disc = SyntheticPsxDisc.Build();
+            string zipped = Zip(Path.Combine(_library, "Opal Vault.zip"), ("Opal Vault/Opal Vault.bin", disc.DataTrack));
+            Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(zipped));
+            Assert.False(Directory.Exists(ArchiveImages.FolderFor(zipped)), "the zip was unpacked for the question");
+
+            string loose = Write("Opal Lock.bin", disc.DataTrack);
+            var engine = (CoreEngine)CoreFactory.ForFirmwareProbe(loose);
+            using (File.Open(loose, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                Assert.Throws<IOException>(() => engine.GetFirmwareRequirements(loose));
+                Assert.Empty(engine.RequiredFirmwareFor(loose));
+            }
+            Assert.Equal(engine.GetFirmwareRequirements(loose).Where(r => r.Required), engine.RequiredFirmwareFor(loose));
+            Assert.Equal("scph5501.bin", engine.GetFirmwareRequirements(loose).Single().FileName);
+        }
+
+        // A required entry, or a system listing no firmware, sends the question to the image as before; Diamond's and the test core's lists of optional files do not.
+        [Fact]
+        public void Only_info_listing_every_system_s_firmware_as_optional_answers_without_the_image()
+        {
+            var diamond = (CoreEngine)CoreFactory.ForFirmwareProbe(Write("Opal Info.bin", SyntheticPsxDisc.Build().DataTrack));
+            var test = CoreAdapterTests.Full.Info;
+            Assert.False(CoreEngine.CanRequireFirmware(diamond.Info));
+            Assert.False(CoreEngine.CanRequireFirmware(test));
+            Assert.True(CoreEngine.CanRequireFirmware(test with { Systems = test.Systems.Select(s => s with { Firmware = s.Firmware.Select(f => f with { Required = true }).ToArray() }).ToArray() }));
+            Assert.True(CoreEngine.CanRequireFirmware(test with { Systems = test.Systems.Select(s => s with { Firmware = Array.Empty<CoreFirmware>() }).ToArray() }));
+            Assert.True(CoreEngine.CanRequireFirmware(test with { Systems = Array.Empty<CoreSystem>() }));
+        }
+
         // A sheet written where names ignore case, or with a Windows separator, names its tracks as the folder or archive holds them - see Diamond_Players.md §12.
         [Fact]
         public void A_sheet_naming_its_tracks_in_another_case_or_with_backslashes_opens_and_is_shelved_once()

@@ -163,6 +163,81 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.StartsWith("Failed to load Opal Fault.bin: Diamond refused the game", s.Window.GetControl<TextBlock>("StatusText").Text);
         }, default);
 
+        // A themed session with one synthetic disc whose load under the screen waits for the gate; the disc's path.
+        private static ThemedSession HeldDisc(System.Threading.ManualResetEventSlim gate, System.Threading.ManualResetEventSlim loaded, List<EmuSen.Cores.ICore> cores, out string bin)
+        {
+            string path = "";
+            var s = new ThemedSession(settings: a => a.BigPictureInterface.LaunchScreenDuration = BigPictureInterface.LaunchNormal, roms: r =>
+            {
+                Directory.CreateDirectory(Path.Combine(r, "psx"));
+                path = Path.Combine(r, "psx", "Opal Wait.bin");
+                File.WriteAllBytes(path, SyntheticPsxDisc.Build().DataTrack);
+            });
+            typeof(MainWindow).GetProperty("EarlyLoader", Hidden)!.SetValue(s.Window, (Func<string, string?, EmuSen.Cores.ICore>)((p, engine) =>
+            {
+                gate.Wait();
+                var core = EmuSen.Cores.CoreFactory.Loaded(p, headless: true, engine);
+                cores.Add(core);
+                loaded.Set();
+                return core;
+            }));
+            for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
+            s.Pad.A();
+            s.Pad.A();
+            bin = path;
+            return s;
+        }
+
+        // Posted work run for a while on the wall clock, as the window's loop would run a continuation that a worker posts.
+        private static void Pump(int ms = 300)
+        {
+            var until = System.Diagnostics.Stopwatch.StartNew();
+            while (until.ElapsedMilliseconds < ms)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                System.Threading.Thread.Sleep(5);
+            }
+        }
+
+        // A load longer than the screen's time keeps the card up and starts the game when it is done - see Diamond_Players.md §12.8.3.
+        [Fact]
+        public Task A_load_longer_than_the_screen_keeps_the_card_and_starts_the_game_when_it_is_done() => Session.Dispatch(() =>
+        {
+            using var gate = new System.Threading.ManualResetEventSlim();
+            using var loaded = new System.Threading.ManualResetEventSlim();
+            var cores = new List<EmuSen.Cores.ICore>();
+            using var s = HeldDisc(gate, loaded, cores, out string bin);
+            s.Run(3000 + 160);
+            Assert.Null(Running(s.Window));
+            Assert.NotNull(Screen(s));
+            gate.Set();
+            Assert.True(loaded.Wait(TimeSpan.FromSeconds(30)));
+            Pump();
+            Assert.Equal(bin, Running(s.Window));
+            Assert.True(GameShown(s));
+            Assert.Null(Screen(s));
+            Stop(s.Window);
+        }, default);
+
+        // A window closed while the load outlasts the screen starts no game when the load ends, and lets its core go.
+        [Fact]
+        public Task A_window_closed_while_the_load_outlasts_the_screen_starts_nothing() => Session.Dispatch(() =>
+        {
+            using var gate = new System.Threading.ManualResetEventSlim();
+            using var loaded = new System.Threading.ManualResetEventSlim();
+            var cores = new List<EmuSen.Cores.ICore>();
+            using var s = HeldDisc(gate, loaded, cores, out _);
+            s.Run(3000 + 160);
+            Assert.Null(Running(s.Window));
+            s.Window.Close();
+            gate.Set();
+            Assert.True(loaded.Wait(TimeSpan.FromSeconds(30)));
+            Pump();
+            Assert.Null(Running(s.Window));
+            Assert.False(GameShown(s));
+            Assert.True(System.Threading.SpinWait.SpinUntil(() => !cores.Single().IsRomLoaded, TimeSpan.FromSeconds(10)), "the core loaded for a closed window was kept");
+        }, default);
+
         [Fact]
         public Task Disabled_starts_the_game_at_once_with_no_screen() => Session.Dispatch(() =>
         {

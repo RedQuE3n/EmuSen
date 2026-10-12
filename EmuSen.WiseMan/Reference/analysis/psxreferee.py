@@ -8,6 +8,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     psxreferee.py ram REFEREE EXE --bios FILE [--for N] [--pal] ADDRESS:WORDS ...
     psxreferee.py tty REFEREE EXE --bios FILE [--for N] [--pal] --heading TEXT
     psxreferee.py wav REFEREE EXE --bios FILE [--for N] [--pal] [--option KEY=VALUE ...] OUT.wav
+    psxreferee.py pictures REFEREE DISC --bios FILE [--for N] [--every K] [--pal] OUTDIR
 
 REFEREE is `duckstation`, `pcsx-redux`, or a libretro core pinned in libretro-cores.sha256 (`mednafen_psx`,
 `swanstation`, `pcsx_rearmed`), which the reference probe drives. --bios names the player's own BIOS file in the
@@ -20,12 +21,19 @@ Every run lives in a user scope of its own, stopped when it returns; DuckStation
 `wav` records a libretro referee's mixed audio through the probe's `--wav` into OUT.wav, as the core gives it to the
 frontend (Diamond_SPU.md §10); the other referees give no audio here. `--option` passes a core option on.
 
+`pictures` runs a libretro referee on a disc image (a sheet, a lone track or an `.iso`) and keeps its screen every K
+frames (30 unless given) to frame N as OUTDIR/fFRAME_WxH.rgba, the form Diamond's run tool writes, so that a disc's
+boot is compared by the screen alone (Diamond_Referees.md §4.14). The spaces the probe dumps beside each screen are
+removed unread: on a player's BIOS they hold its RAM.
+
 `fetch` downloads the two standalone releases pinned in psx-referees.sha256 into the cache, refuses any whose
 SHA-256 differs, unpacks them and prepares them to run headless (§2). Exit codes: 0 done, 1 a refused or failed
 run, 2 a usage error.
 """
+import array
 import fcntl
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -309,6 +317,48 @@ def run_libretro_wav(core, exe, sysdir, frames, pal, options, out):
             die(f"{core}: no audio recorded")
 
 
+def rgba(raw, pixel_format):
+    """A screen of the probe's as RGBA bytes."""
+    if pixel_format == "Rgb565":
+        table = [bytes(((v >> 11) << 3 | v >> 13, (v >> 5 & 63) << 2 | (v >> 9 & 3), (v & 31) << 3 | (v >> 2 & 7), 255)) for v in range(65536)]
+        return b"".join(table[v] for v in array.array("H", raw))
+    if pixel_format == "Xrgb8888":
+        out = bytearray(raw)
+        out[0::4], out[2::4], out[3::4] = raw[2::4], raw[0::4], b"\xff" * (len(raw) // 4)
+        return bytes(out)
+    die(f"a screen format the driver does not know: {pixel_format}")
+
+
+def run_libretro_pictures(core, disc, sysdir, frames, every, pal, out):
+    """The core's screen every `every` frames; nothing else the probe wrote is kept or opened."""
+    out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=CACHE) as tmp:
+        cmd = libretro_command(core, disc, sysdir, frames, pal, tmp)
+        cmd[3:5] = [str(every), str(frames), str(every)]
+        cmd, unit = confined(cmd, core)
+        try:
+            p = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        finally:
+            reap(unit)
+        if p.returncode == 4:
+            die(f"{core}: the probe refused the run (no firmware of the player's own)")
+        for space in Path(tmp).glob("*_f*.bin"):
+            if "_screen_f" not in space.name:
+                space.unlink()
+        kept = 0
+        for manifest in sorted(Path(tmp).glob("*_manifest_f*.json")):
+            m = json.loads(manifest.read_text())
+            screen = m["screen"]
+            if screen is None:
+                continue
+            raw = (Path(tmp) / screen["file"]).read_bytes()
+            (out / f"f{m['frame']:06d}_{screen['width']}x{screen['height']}.rgba").write_bytes(rgba(raw, screen["format"]))
+            kept += 1
+        if kept == 0:
+            die(f"{core}: the core drew no screen at any frame asked for")
+        print(f"{core}: {kept} screens in {out}")
+
+
 def run_libretro(core, exe, sysdir, frames, pal, dumps):
     with tempfile.TemporaryDirectory(dir=CACHE) as tmp:
         cmd = libretro_command(core, exe, sysdir, frames, pal, tmp)
@@ -329,7 +379,7 @@ def run_libretro(core, exe, sysdir, frames, pal, dumps):
 def main(argv):
     if argv[:1] == ["fetch"]:
         return fetch()
-    if len(argv) < 3 or argv[0] not in ("ram", "tty", "wav"):
+    if len(argv) < 3 or argv[0] not in ("ram", "tty", "wav", "pictures"):
         die(__doc__, 2)
     mode, referee, exe = argv[0], argv[1], Path(argv[2]).resolve()
     rest = argv[3:]
@@ -348,6 +398,11 @@ def main(argv):
     pal = "--pal" in rest
     if pal:
         rest.remove("--pal")
+    if mode == "pictures":
+        every = int(option("--every", "30"))
+        if referee not in LIBRETRO or len(rest) != 1:
+            die(__doc__, 2)
+        return run_libretro_pictures(referee, exe, bios.parent, count, every, pal, Path(rest[0]).resolve())
     if mode == "wav":
         options = []
         while "--option" in rest:

@@ -694,7 +694,7 @@ What depends on the game, read after create:
 | **`video`** | `base_width`, `base_height`, `max_width`, `max_height`, `aspect` as a ratio, `formats` the core can produce |
 | **`audio`** | `rate` at start; `channels`: the names `set_mutes`' bits stand for |
 | **`ports`** | which controller each port holds |
-| **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats` and, since 2026-10-07, `view` (§29) (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
+| **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats`, since 2026-10-07 `view` (§29) and, since 1.2, `reports_loads` (§6.14.1) (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
 | `processors` | `{ id, name, pc_bits, registers: [{ name, bits }], code_space }`, main processor first; `IDebugTarget.DebugCpus` and `regs` from data. `code_space`, appended 2026-10-04 for VenusRT's SPC700 (`VenusRT_Native.md` §36), is the id of the space the processor's code is listed from; absent, the host takes the space named `<name>BUS`, else `<name>PRG`, else for processor 0 the first space |
 | `battery` | `{ which, suffix, length }`: `.srm`, the N64's pak; the path rule stays the runtime's (`SaveLibrary.SramPathFor`) |
 | **`state`** | `{ format, version, kinds, loads_from }`: the magic and version a frontend records beside a state (`IStateFormat`), the kinds, and the versions it reads |
@@ -942,6 +942,33 @@ DianaSh (§8.2) or from a core's extension exports. §15 Q10 decided that views 
 What the Rust cores publish against their C# counterparts, item by item with the route each would take, is §30.6
 (2026-10-10); `cpu` as the first processor machine info lists is §30.1.
 
+#### 6.14.1 Read watches and read data breakpoints (since 1.2)
+
+Added 2026-10-11 by `EmuSen_CoreAPI_Extensions.md` §13, which records the forms weighed, the peers and the cost; this
+is the normative text.
+
+- **Claimed by `DEBUG_READS`** (bit 19), only with `DEBUG`. It adds one export, `debug_reads`, two range kinds to
+  `debug_set_ranges`, the flag `READS` and the stop `STOP_READ`. The kinds are named: `RANGE_WATCH` 0 and
+  `RANGE_BREAK` 1, as in 1.0, and `RANGE_READ_WATCH` 2 and `RANGE_READ_BREAK` 3. **Any kind a core does not take is
+  refused** with `EMUSEN_NOT_SUPPORTED` and changes nothing: kinds 2 and 3 without the bit, any kind above 3 always.
+- **The spaces.** Machine info flags with `reports_loads` (§6.4) each space whose loads reach the read ranges. A read
+  range over another space is accepted and never hit.
+- **`READS`** (flag 32 of `debug_set`) reports loads into the read ranges; off, nothing is logged or stopped for them.
+- **Kind 2, a read watch:** each byte a load reads, logged after the read with the value read and the loading
+  instruction's address. Which accesses count as loads is the core's, stated on its page; Diamond's are the R3000A's
+  load instructions and not DMA's or a device's reads, as its stores are (`Diamond_Debugger.md` §9.2).
+- **Kind 3, a read data breakpoint:** before each instruction of processor 0 the core asks whether its load would read
+  a byte in a kind 3 range; if so the frame stops **in front of that instruction with nothing of it run**, with
+  `STOP_READ`, and each such byte is logged with kind 3 and the value `space_read` gives at that address. A host
+  continues with `RUN_UNCHECKED`, which runs the instruction unasked, its load made. A load the core cannot foresee
+  being made (one that meets no device and faults, on Diamond) may stop and then not read; the core's page says
+  which.
+- **`debug_reads(m, out, len)`**: the read log as five words an entry, (space, address, value, pc, kind), copied and
+  forgotten only when it all fits, and `STOP_RING` when it is full, as the other logs.
+- **A host** sets `READS` and sends kinds 2 and 3 only to a core claiming the bit (a core built on 1.0's crate took
+  any kind but 0 for data breakpoints); it gives kind 2 entries to its watches and kind 3 entries to its data
+  breakpoints, and a core without the bit is driven exactly as in 1.0.
+
 ### 6.15 The status-code space
 
 The bands of `EmuSen_NativeCores.md` §3.3 are **In**, fixed for major 1: −1 to −8 the state crate's; −9 to −255 the
@@ -1043,7 +1070,7 @@ tells its host anything, without a callback.
 | Battery | `battery`, `battery_saved` | dirty flags (`BATTERY_DIRTY`) |
 | Cheats | — | `set_rom_patches` (`ROM_PATCHES`), `set_cheat_pokes` (`CHEAT_POKES`) |
 | Settings | — | `set_settings` (`SETTINGS`), `setting_notes` (`SETTING_NOTES`) |
-| Debug | — | ten (`DEBUG`), `debug_set_stack` (`DEBUG_STACK`), `debug_registers` (`DEBUG_REGISTERS`), `debug_disassemble` (`DEBUG_DISASSEMBLE`) |
+| Debug | — | ten (`DEBUG`), `debug_set_stack` (`DEBUG_STACK`), `debug_registers` (`DEBUG_REGISTERS`), `debug_disassemble` (`DEBUG_DISASSEMBLE`); since 1.2 `debug_reads` (`DEBUG_READS`, §6.14.1) |
 
 **55 names: 32 required, 23 optional** (counted in Appendix A's header). The pre-stable set names 24 required and 19
 optional exports (`NativeInterface.cs`), of which the macro generates 14. The eight new required names are all trivial for a core with nothing to say (an empty JSON
@@ -1774,8 +1801,11 @@ nothing was changed.
 ## 17. Changelog of the ABI, and what was not checked
 
 **Changelog.** v1.0: this page; the header, the baseline and the reference macro committed 2026-10-03 (§18), with the
-host adapter, discovery, the SNES's system pack and the kit's core suite after them (§19–§21). No minor has been
-released.
+host adapter, discovery, the SNES's system pack and the kit's core suite after them (§19–§21).
+v1.2, 2026-10-11: read watches and read data breakpoints (§6.14.1; `EmuSen_CoreAPI_Extensions.md` §13), for a
+debugger that could see stores and not loads; Diamond the first core to claim them. The same change refuses an unknown
+range kind, which 1.0's crate took for data breakpoints. Minor 1 is the disc change's (`MEDIA`), built beside it; the
+two are numbered in the order they reach `WiseMan`.
 
 **Not checked here.**
 - Layouts were checked on x86-64 Linux only, with gcc 16 and clang. The baseline's other three targets are argued from

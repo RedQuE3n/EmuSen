@@ -439,3 +439,24 @@ fn a_reset_clears_the_clut_cache() {
     draw(&mut g, &v, 31);
     assert_eq!((px(&g, 0, 30), px(&g, 0, 31)), (0x1234, 0x7FFF));
 }
+
+/// D-41: a triangle's rows from its middle vertex's down, then those above it upward, each left to right, as amidog's
+/// CACHE BLOCK expects of its flat triangles and quads and Beetle PSX draws `programs/triangle-rows.s`.
+#[test]
+fn a_triangle_draws_its_lower_rows_down_and_then_its_upper_rows_up() {
+    let (mut g, v) = gpu();
+    for i in 0..16 {
+        g.vram.set(i, 500, 0x8000 + i as u16);
+    }
+    let kept = |g: &mut Gpu, triangle: [u32; 7], column: u32, line: u32| {
+        send(g, &v, &[0xE100_0404, 0x0220_4088, 0x0000_0100, 0x0100_0100, 0x0100_0000]);
+        send(g, &v, &triangle);
+        send(g, &v, &[0x0240_8810, 0x0000_0100, 0x0100_0100, 0x6580_8080, 0x0000_0064, 0x7D00_4040, 0x0040_0040]);
+        px(g, 100 + column * 16, line) == 0x8001
+    };
+    let flat_bottom = [0x2580_8080, 0x0000_0040, 0x7D00_4080, 0x0048_0000, 0x0004_8840, 0x0048_0040, 0x0000_8880];
+    let middle_low = [0x2580_8080, 0x0000_0020, 0x7D00_4060, 0x0048_0000, 0x0004_8840, 0x0050_0040, 0x0000_9080];
+    assert!(kept(&mut g, flat_bottom, 3, 2), "its top rows fetched last");
+    assert!(kept(&mut g, middle_low, 1, 3), "the upper part drawn upward");
+    assert!(kept(&mut g, middle_low, 1, 8), "the upper part drawn after the lower");
+}

@@ -23,6 +23,8 @@ added its step to D-29.
 *The GPU's rows step (2026-10-12)* took D-41 and D-42, from the two groups of amidog's GPU test that D-23 left open.
 *The intro's step (2026-10-12)* settled D-29 and took D-43, the DMA's arbitration beside a list, and D-44, the European
 BIOS that draws nothing.
+*The stream's step (2026-10-12)* took D-45, a narrow store to a 32-bit register at an address not word-aligned, which
+had kept four of the tester's games from their movies.
 
 ## The rules this log keeps
 
@@ -682,7 +684,7 @@ BIOS that draws nothing.
   `the_status_follows_a_byte_through_the_transmitter_and_the_fifo`.
 - **Implemented in:** `diamond: SIO0 and port 1's digital pad, brought forward from stage 6`.
 
-### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; ~~open~~ the drawing groups settled on its expectations, ~~the FIFO, INTERLACE and cache groups open~~ *since the cache step* INTERLACE, CACHE TAG and the FIFO's read and full tests too, the FIFO's overflow test and CACHE BLOCK's polygons open; *since the rows step* both traced to a rule, D-41 and D-42, each left to the tester
+### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; ~~open~~ the drawing groups settled on its expectations, ~~the FIFO, INTERLACE and cache groups open~~ *since the cache step* INTERLACE, CACHE TAG and the FIFO's read and full tests too, the FIFO's overflow test and CACHE BLOCK's polygons open; *since the rows step* both traced to a rule, D-41 and D-42; *decided 2026-10-12:* D-41 taken, D-42 not, the overflow test left failing
 
 - **Opened:** 2026-10-11, by `psxtest_gpu` 1.7 run to its end once the pad answered (`Diamond_Pad.md` §5.4).
 - **Documents read:** none for this entry beyond `Diamond_GPU.md`'s own sources. *The GPU's step, 2026-10-11:*
@@ -789,7 +791,7 @@ BIOS that draws nothing.
 
   | Group | Rule found | Its sources | Taken? |
   |---|---|---|---|
-  | CACHE BLOCK, tests 1 and 4 | a triangle's rows from the middle vertex's row down, then from above it up, each left to right (D-41) | the model's expectations and Beetle PSX for flat-topped and flat-bottomed triangles and quads; Beetle PSX alone for a triangle's two parts | not here: it moves `gpu/bandwidth`'s textured quad rows from 39,975 and 39,976 hblanks to 39,915 (the console 39,938), which the step was held not to change; built on `diamond-gpu4-rows`, where CACHE BLOCK passes |
+  | CACHE BLOCK, tests 1 and 4 | a triangle's rows from the middle vertex's row down, then from above it up, each left to right (D-41) | the model's expectations and Beetle PSX for flat-topped and flat-bottomed triangles and quads; Beetle PSX alone for a triangle's two parts | ~~not here: it moves `gpu/bandwidth`'s textured quad rows from 39,975 and 39,976 hblanks to 39,915 (the console 39,938), which the step was held not to change; built on `diamond-gpu4-rows`, where CACHE BLOCK passes~~ *on `diamond-gpu4-rows`*: yes, `bandwidth`'s textured quad rows reading 39,915 hblanks (the console 39,938); CACHE BLOCK passes |
   | FIFO, overflow | the FIFO keeps its newest 16 words, NOPs among them, with one command taken aside by the processor; GP1(01h) drops both and stops a fill where it is (D-42) | the harness's own images alone | no: Peter Lemon's programs, drawn whole by his console by his README and by SwanStation and PCSX-ReARMed, would lose words; the five referees draw a fill cut by GP1(01h) whole |
 
 - **Referee:** ~~not consulted~~. *The GPU's step* [M]: DuckStation and PCSX-Redux ran the same local copies for their TTY, each in its own
@@ -829,9 +831,11 @@ BIOS that draws nothing.
   on the harness and DuckStation; GPUREAD's repeat of a longer transfer's first word on the harness and PCSX-ReARMed,
   of the earlier word after a one-word transfer on the harness alone; GP1(00h)'s CLUT clear on psx-spx and the model.
   Open: the FIFO's overflow test, and CACHE BLOCK's quad and triangle cases.
-  *The rows step:* both traced, CACHE BLOCK's cases to D-41 and the overflow test to D-42; neither rule is taken into the
-  core, the first for its change to `bandwidth`'s output, the second for its conflict with Peter Lemon's programs and the
-  referees, and both are the tester's decision (`Diamond_GPU.md` §18). With D-41 taken, the program run whole would fail
+  *The rows step:* both traced, CACHE BLOCK's cases to D-41 and the overflow test to D-42; ~~neither rule is taken into the
+  core, the first for its change to `bandwidth`'s output,~~ *on `diamond-gpu4-rows` D-41 is taken*; D-42 is not, for
+  ~~the second for~~ its conflict with Peter Lemon's programs and the
+  referees, and both are the tester's decision (`Diamond_GPU.md` §18). *Decided 2026-10-12:* D-41 is taken into the
+  core and D-42 is not. With D-41 taken, the program run whole would fail
   only the overflow test's 1,812 lines (`Diamond_GPU.md` §10.3).
 - **Depends on it:** the GPU's line rasteriser, the flip, the area's clipping, GPUSTAT; *since the step* GPUREAD's
   latch, the copy, VRAM reads, sprites' texels, every primitive's placement under the offset.
@@ -1287,14 +1291,18 @@ BIOS that draws nothing.
   for the order of a triangle's two parts on Beetle PSX alone, the strongest single witness on the cache. The order
   changes no pixel; it changes what the texture cache holds and, by its misses, the drawing time: built so,
   `gpu/bandwidth`'s two textured quad rows, whose second triangle is flat at the bottom, read 39,915 hblanks each where
-  they read 39,975 and 39,976, the console's log 39,938 [M]. The step was held to keep `bandwidth`'s output byte for
+  they read 39,975 and 39,976, the console's log 39,938 [M]. ~~The step was held to keep `bandwidth`'s output byte for
   byte, so the rule is not taken into the core here: it is built, tested and measured on the branch
-  `diamond-gpu4-rows`, and waits on the tester's decision (`Diamond_GPU.md` §18, question 4).
+  `diamond-gpu4-rows`, and waits on the tester's decision (`Diamond_GPU.md` §18, question 4).~~ *On
+  `diamond-gpu4-rows`*: built (`raster.rs`), with the bandwidth record's two rows re-pinned; CACHE BLOCK passes,
+  ps1-tests' pictures stay exact, `dma/chopping` prints byte for byte as before, the console logs' readings are
+  unchanged, and the program run whole fails only D-42's overflow test (`Diamond_GPU.md` §10.3).
 - **Depends on it:** what the texture cache holds after each polygon; textured polygons' drawing time.
-- **Pinned by:** here, `the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee`, the two shapes every order
-  reads alike; on `diamond-gpu4-rows`, `a_triangle_draws_its_lower_rows_down_and_then_its_upper_rows_up` and
-  `a_triangles_rows_go_down_from_its_middle_vertex_then_up_as_the_referee_draws_them`.
-- **Implemented in:** nothing yet.
+- **Pinned by:** `a_triangle_draws_its_lower_rows_down_and_then_its_upper_rows_up`,
+  `a_triangles_rows_go_down_from_its_middle_vertex_then_up_as_the_referee_draws_them`, and
+  `the_bandwidth_record_counts_each_rows_hblanks`, re-pinned.
+- **Implemented in:** ~~nothing yet~~ `diamond: a triangle's rows from its middle vertex's down, then up (D-41)`, ~~on
+  `diamond-gpu4-rows`~~ *taken into the core, decided 2026-10-12* (`Diamond_GPU.md` §18, question 4).
 
 ### D-42. A CPU write to a full GP0 FIFO, and GP1(01h) during a fill: Diamond holds the writer and draws a fill whole, where amidog's FIFO overflow test expects the newest sixteen words kept, one command held aside, and the fill stopped
 
@@ -1330,7 +1338,9 @@ BIOS that draws nothing.
   small ones, the large one whole. `programs/fill-reset.s` (`Diamond_Referees.md` §4.13): four white fills of 240x511
   each cut by GP1(01h) after a loop of 0, 100, 400 or 1,600 turns; all five referees draw all 511 lines of every fill,
   as Diamond does [M]. **Witnesses:** none of the five loses a word at a full FIFO.
-- **Conclusion:** open. The model above is the one found to fit amidog's harness; Diamond keeps holding the writer and
+- **Conclusion:** ~~open~~ *decided 2026-10-12: the writer is held* (`Diamond_GPU.md` §18, question 5), on Peter Lemon's
+  programs and the five referees against the harness alone; the overflow test's 1,812 lines stay failing as a known
+  difference. The model above is the one found to fit amidog's harness; Diamond keeps holding the writer and
   drawing a fill whole as it starts, as the five referees read it, and the decision is the tester's (`Diamond_GPU.md`
   §18, question 5). Taking the model would mean a store that loses a word instead of waiting, a command decoded ahead
   while another draws (GPUSTAT bit 28 then clear while it waits, as `gpustat`'s log has it with a second rectangle
@@ -1393,3 +1403,49 @@ BIOS that draws nothing.
 - **Depends on it:** the European players with their own BIOS.
 - **Pinned by:** nothing yet.
 - **Implemented in:** —
+
+### D-45. A byte or halfword store to a 32-bit register at an address not word-aligned writes the whole register, the processor's word shifted to the store's byte
+
+- **Opened:** 2026-10-12, by the tester's report of the current build ("many games don't work or launch") and
+  `Diamond_MDEC.md` §9: on the open kernel Silent Hill went black after its memory card warning, Castlevania: SotN
+  stayed black, Tekken 3 skipped its opening movie and Ape Escape went white after its DUALSHOCK screen.
+- **Documents read:** psx-spx `6d7d1bc`, "Unpredictable Things": the table "I/O Write Datasize", which gives DICR,
+  DPCR, I_STAT and I_MASK, the timers, memory control and every DMA register but the lengths as "(w32) write full
+  32bits (left-shifted if address isn't word-aligned)", and the paragraph after it: "Performing a 8-bit or 16-bit write
+  (`sb`/`sh`) will place the entirety of the GPR on the bus … the data is **not** masked"; "DMA Channels" (DICR's
+  bits 16–23, each channel's interrupt enable).
+- **What the game showed** [M, the game's own code and RAM on the open kernel, the run tool's `--game-log` and the
+  controller's trace from the game's entry]: Silent Hill's stream is right where it reaches RAM: of the last piece DMA
+  channel 3 wrote at each of 474 places, 451 equal the disc's bytes and the 23 others are the nine headers the game
+  rewrites in place and buffers of earlier loads it has since reused (`Diamond_CDROM.md` §9.8); its sector callback stops taking sectors once
+  the first frame's last one is read, waiting for that sector's DMA channel 3 interrupt to mark the frame complete.
+  The callback asks for the interrupt by `sb` of DICR's third byte, read with `lbu` and the channel's bit set, to
+  `1F8010F6h`. Diamond wrote the byte, unshifted, as the whole of DICR, so that the enables and the master enable were
+  cleared and no channel's interrupt came again. Castlevania, Tekken 3 and Ape Escape store to the same byte; Crash
+  Bandicoot, Spyro the Dragon and Rayman, which played already, never do.
+- **Test program:** `programs/narrow-stores.s`: a byte and a halfword to DICR's upper half (the second with `12340044h`
+  and bits 0–5 set before), a byte to DPCR's second byte, a halfword to timer 0's target at its upper half and at its
+  own address, a byte to I_MASK's second byte, a byte to channel 2's MADR's third byte, each read back.
+- **Referee** (`Diamond_Referees.md` §4.15) [M]:
+
+  | Case | Diamond before | Diamond after | DuckStation, SwanStation | Beetle PSX | PCSX-Redux | PCSX-ReARMed |
+  |---|---|---|---|---|---|---|
+  | 0 DICR byte 88h at F6h | `00000008h` | `00880000h` | `00880000h` | `00880000h` | `00880000h` | `0C880000h` |
+  | 1 DICR half `12340044h` at F6h | `00340004h` | `00440000h` | `00440000h` | `00440000h` | `0044003Fh` | `0044003Fh` |
+  | 2 DPCR byte 0Bh at F1h | `0000000Bh` | `00000B00h` | `00000B00h` | `00000B00h` | `00000B00h` | `00000B99h` |
+  | 3, 4 T0 target half at 10Ah, then at 108h | `1234h`, `1234h` | `0`, `1234h` | `0`, `1234h` | `0`, `1234h` | `0`, `1234h` | `0`, `1234h` |
+  | 5 I_MASK byte 05h at 75h | `0005h` | `0500h` | `0500h` | `0500h` | `0500h` | `0500h` |
+  | 6 MADR byte 12h at A2h | `00000012h` | `00120000h` | `00120000h` | `00120000h` | `00120000h` | `00120000h` |
+
+- **Witnesses:** as the referee.
+- **Conclusion** [measured]: the store's 32-bit word, shifted left by eight times the address's low two bits, is
+  written to the register as a word store would write it, the bits outside the store's own byte or halfword included.
+  All five referees shift; DuckStation's and Mednafen's lineages agree in every cell, and with psx-spx's "write full
+  32bits"; the PCSX family keeps DICR's and DPCR's other bits, which psx-spx's text does not support. The DMA lengths,
+  marked "OK" at every width, keep the unshifted write they had; no program here tests them. Not measured: memory
+  control's narrow stores (psx-spx: "Non-4-byte aligned 8bit/16bit writes to DRAM\_CTRL do crash"), which the
+  program leaves alone so as not to stop a referee.
+- **Depends on it:** every game whose libraries set a DMA channel's interrupt enable by a byte store, the four above
+  among them; their movies (`Diamond_MDEC.md` §9).
+- **Pinned by:** `a_narrow_store_writes_its_register_shifted_to_its_byte`, failing before the change.
+- **Implemented in:** `bus.rs`'s `whole_word` and `io_write`, in the commit citing this entry.

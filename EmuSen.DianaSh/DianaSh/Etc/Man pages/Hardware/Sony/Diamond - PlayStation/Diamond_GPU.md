@@ -210,6 +210,10 @@ to ps1-tests' pictures, which are a console's VRAM (D-7):
   first vertex, the quad's second [C: no console picture tells the starting vertex apart, D-7].
 - **Size.** A triangle wider than 1,023 or taller than 511 between its vertices is not drawn, each of a quad's two
   judged alone [R; C for the per-triangle reading].
+- **The rows' order**, *on `diamond-gpu4-rows`* [M, amidog's CACHE BLOCK and Beetle PSX on `programs/triangle-rows.s`,
+  D-41]: a triangle's rows from its middle vertex's row down to its bottom, then from the row above it up to its top,
+  each left to right; a quad's two triangles in turn. It changes no pixel, only what the texture cache holds after a
+  polygon taller than a cache block, and so its misses.
 - **The offset**, *since D-23's step* [M, amidog's OFFSET, 23 primitives at 64 placements each]: a vertex and the
   drawing offset add in 11 bits, wrapping, so a rectangle at -992 with an offset of -1022 lands at 34; and the offset
   moves a primitive whole, each further vertex placed from the first by the distance the command gave it, which is
@@ -287,7 +291,7 @@ load (1) and a per-row cost (none) were chosen with no measurement.
 | Rectangle textured, and (semi) | 15,138, 15,139 | 15,134 | 83 |
 | Polygon quad | 7,727 | 7,721 | 95 |
 | Polygon quad (semi) | 11,648 | 11,580 | 97 |
-| Polygon quad textured, and (semi) | 39,938 | 39,975 | 60 |
+| Polygon quad textured, and (semi) | 39,938 | ~~39,975~~ 39,915 *on `diamond-gpu4-rows`, D-41* | 60 |
 | Polygon quad (1/4 off screen) | 5,845 | 5,845 | 95 |
 | Polygon quad (1/2 off screen) | 3,968 | 3,968 | 96 |
 
@@ -435,8 +439,10 @@ rule, and neither rule is taken into the core here; both are §18's questions 4 
   project's `programs/triangle-rows.s` the same way on all seven of its shapes, among them triangles with both parts,
   which the test does not have. Built so, CACHE BLOCK passes, ps1-tests' eleven pictures stay exact, `dma/chopping`
   prints byte for byte as before, and `gpu/bandwidth`'s two textured quad rows read 39,915 hblanks where they read
-  39,975 and 39,976 (the console 39,938), their second triangle missing the cache fewer times. Since the step was held
-  to keep `bandwidth`'s output, the change is on the branch `diamond-gpu4-rows`, measured and tested, and not here.
+  39,975 and 39,976 (the console 39,938), their second triangle missing the cache fewer times. ~~Since the step was held
+  to keep `bandwidth`'s output, the change is on the branch `diamond-gpu4-rows`, measured and tested, and not here.~~
+  *On `diamond-gpu4-rows`* it is built (§6); the program run whole, every test but DUMP, then fails only the overflow
+  test's 1,812 lines, and every other group passes [M].
 - **The overflow test** expects a FIFO that keeps its newest 16 words, NOPs and GP0(E6h) words taking places, while the
   processor holds the first command after the one drawing aside, and GP1(01h) to drop both and stop a fill where it
   is; that model fits all six of the harness's images, where the cache step's search had found none, missing that the
@@ -497,6 +503,9 @@ up to the colour map the most pixels agree on; the count is the pixels off it:
   8.16-8.25) touching, the others within their spread. The cache's page is compared once a primitive, the interlace
   parity computed once a primitive and only in 480-line interlace; nothing is done per pixel that was not, and nothing
   allocates.
+  *D-41, on `diamond-gpu4-rows`* [M, `examples/run`, 600 frames, five runs each pinned to one core, the builds before
+  and after side by side, with `-C llvm-args=-align-all-functions=6` and without]: aligned medians, ms a frame before and after: `timers` 7.13 and 7.15, `gpu/triangle` 7.69 and 7.68, `gpu/bandwidth` 8.82 and 8.84, Crash Bandicoot from its boot 4.39 and 4.37, each within 0.4% and within its runs' spread; the default builds moved `triangle` +5.0% and `timers` -5.4%, a placement effect the aligned builds do not show; other emulator runs used two other cores throughout. The rows are one
+  iterator of two ranges a triangle, with no allocation.
 
 ## 13. The enhancement layer
 
@@ -523,9 +532,9 @@ by `vertex` and `Texture::new`, which a renderer would share rather than copy.
   page change keeps). None was among the groups this step set out to settle, which were those the first run's record listed (they failed then too); each is left to a step of its own.~~
   ~~*Since the cache step* (§10.2): the FIFO's overflow test (a FIFO overflowed by the CPU, and GP1(01h) stopping a fill
   part-drawn, which a fill drawn whole at its start cannot show), and CACHE BLOCK's quad and triangle cases.~~
-  *Since the rows step* (§10.3): both traced and left to the tester. CACHE BLOCK's cases are the order of a triangle's
-  rows (D-41), built on `diamond-gpu4-rows` and not here because it moves `bandwidth`'s textured quad rows by 60
-  hblanks; the overflow test is a FIFO that keeps its newest words and a fill that GP1(01h) stops (D-42), against
+  *Since the rows step* (§10.3): both traced; *decided 2026-10-12*, D-41 taken and D-42 not (§18). CACHE BLOCK's cases are the order of a triangle's
+  rows (D-41), built ~~on `diamond-gpu4-rows` and not here because it moves~~ *on this branch, moving* `bandwidth`'s
+  textured quad rows by 60 hblanks; the overflow test is a FIFO that keeps its newest words and a fill that GP1(01h) stops (D-42), against
   Peter Lemon's programs drawn whole and the five referees.
 - The texel pairs' rule (§6) beyond rectangles drawn from an even column, and the odd read's halfword beyond one pixel.
 
@@ -556,6 +565,13 @@ and without: `diamond` 147 unit tests and 59 program tests, two new, both pins o
 build before passes too: `a_fill_cut_by_gp1_01h_is_drawn_whole_as_the_referees_draw_it` and
 `the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee`. WiseMan, under the test lock with the corpus:
 the 35 tests named for Diamond, 35 of 35. With stage 11 merged in, 148 unit tests, the same 59, and WiseMan's 40 of 40.
+*D-41, on `diamond-gpu4-rows`*: 149 unit tests and 59 program tests, with the corpus and without;
+`a_triangle_draws_its_lower_rows_down_and_then_its_upper_rows_up` new and seen failing on the build before,
+`the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee` widened to all seven shapes as
+`a_triangles_rows_go_down_from_its_middle_vertex_then_up_as_the_referee_draws_them`, and the bandwidth record re-pinned
+(its textured quads 39,916 where they were 39,976 and 39,975; the release's TTY reads 39,915). ps1-tests' eleven pictures
+exact, `dma/chopping` byte for byte; amidog's program run whole fails only the overflow test's 1,812 lines (3,134
+before).
 
 ## 16. Reading log
 
@@ -682,8 +698,8 @@ Every file opened for this stage, as the protocol of `Diamond_Plan.md` §1.3 ask
 4. **D-41, the order of a triangle's rows** (§10.3), ruled on amidog's expectations and Beetle PSX, passes CACHE BLOCK
    and keeps every picture and log, but `gpu/bandwidth`'s two textured quad rows read 39,915 hblanks where they read
    39,975 and 39,976 (the console's log 39,938, both within 0.2%). Take it (merge `diamond-gpu4-rows`, which re-pins
-   the bandwidth record's two rows), or keep `bandwidth`'s output as it is?
+   the bandwidth record's two rows), or keep `bandwidth`'s output as it is? *Decided 2026-10-12: taken.*
 5. **D-42, a CPU write to a full FIFO** (§10.3): keep holding the writer, as Peter Lemon's programs and the referees
    need, and leave amidog's overflow test failing; or take the model that fits amidog's harness, a store that loses
    the FIFO's oldest word, with one command decoded ahead and fills drawn line by line, at the cost of Peter Lemon's
-   pictures?
+   pictures? *Decided 2026-10-12: the writer is held, and the overflow test stays failing.*

@@ -58,6 +58,16 @@ fn parse_baseline(text: &str) -> Result<Baseline, String> {
     Ok(out)
 }
 
+/// The header's own revision, which every minor moves up and which is therefore no promise (§5.5).
+fn revision(key: &str) -> bool {
+    matches!(key, "const EMUSEN_CORE_ABI_MINOR" | "const EMUSEN_CORE_ABI_VERSION")
+}
+
+/// A revision fact's number, as the baseline writes it.
+fn number(value: &str) -> Option<u64> {
+    u64::from_str_radix(value.strip_prefix("0x")?, 16).ok()
+}
+
 /// The rule of §4.3 a removal or a change of this kind of fact breaks.
 fn rule(key: &str, removed: bool) -> &'static str {
     match key.split(' ').next().unwrap_or("") {
@@ -128,7 +138,7 @@ fn emit(facts: &Facts, old: &Baseline) -> String {
         .iter()
         .map(|(k, v)| {
             let tag = match old.get(k) {
-                Some((ov, tag)) if ov == v => tag.clone(),
+                Some((ov, tag)) if ov == v && !revision(k) => tag.clone(),
                 _ => format!("1.{}", minor()),
             };
             format!("{k} {v} @{tag}")
@@ -151,6 +161,7 @@ fn check(facts: &Facts, committed: &Baseline, base: Option<&Baseline>, problems:
     for (k, v) in facts {
         match committed.get(k) {
             None => problems.push(format!("added in the header but not in the baseline: {k} {v} (section 5.5: add it with --emit-baseline)")),
+            Some((cv, _)) if cv != v && revision(k) => problems.push(format!("{k} is {v} in the header and {cv} in the baseline (section 5.5: regenerate it with --emit-baseline)")),
             Some((cv, _)) if cv != v => problems.push(format!("changed: {k} was {cv}, the header now says {v}; this breaks version 1 ({})", rule(k, false))),
             _ => {}
         }
@@ -165,13 +176,15 @@ fn check(facts: &Facts, committed: &Baseline, base: Option<&Baseline>, problems:
     for (k, (v, tag)) in base {
         match committed.get(k) {
             None => problems.push(format!("removed from the baseline: {k} {v} @{tag}; this breaks version 1 ({})", rule(k, true))),
+            Some((cv, _)) if revision(k) && number(cv) < number(v) => problems.push(format!("{k} went down from {v} to {cv}; a minor only moves up (section 4.1)")),
+            Some(_) if revision(k) => {}
             Some((cv, ct)) if cv != v || ct != tag => problems.push(format!("changed in the baseline: {k} {v} @{tag} became {cv} @{ct}; this breaks version 1 ({})", rule(k, false))),
             _ => {}
         }
     }
     let released = base.values().filter_map(|(_, t)| t.strip_prefix("1.")?.parse::<u32>().ok()).max();
     for (k, (_, tag)) in committed {
-        if !base.contains_key(k) {
+        if !base.contains_key(k) && !revision(k) {
             added = true;
             if *tag != format!("1.{}", minor()) {
                 problems.push(format!("{k} is new and must be tagged @1.{}, the header's minor", minor()));
@@ -242,7 +255,8 @@ mod tests {
         let committed = base(&read(&baseline_path()).unwrap());
         check(&facts, &committed, None, &mut problems);
         assert_eq!(problems, Vec::<String>::new());
-        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 55);
+        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 56);
+        assert_eq!(facts.get("const EMUSEN_CAP_DEBUG_READS").map(String::as_str), Some("0x80000"));
         assert_eq!(facts.get("struct emusen_frame_info").map(String::as_str), Some("size 56 align 8"));
         assert_eq!(facts.get("field emusen_frame_info.serial").map(String::as_str), Some("offset 40 type int64_t"));
         assert_eq!(facts.get("fn emusen_core_advance").map(String::as_str), Some("(emusen_machine*, uint64_t*) -> int32_t"));
@@ -263,14 +277,35 @@ mod tests {
 
     #[test]
     fn an_addition_needs_the_baseline_and_a_new_minor() {
-        let old = base("const EMUSEN_A 0x1 @1.0\n");
+        let released = format!("const EMUSEN_A 0x1 @1.{}\n", minor());
+        let old = base(&released);
         let facts: Facts = [("const EMUSEN_A".to_owned(), "0x1".to_owned()), ("const EMUSEN_B".to_owned(), "0x2".to_owned())].into();
         let mut p = Vec::new();
         check(&facts, &old, Some(&old), &mut p);
         assert_eq!(p, vec!["added in the header but not in the baseline: const EMUSEN_B 0x2 (section 5.5: add it with --emit-baseline)"]);
-        let new = base("const EMUSEN_A 0x1 @1.0\nconst EMUSEN_B 0x2 @1.0\n");
+        let new = base(&format!("{released}const EMUSEN_B 0x2 @1.{}\n", minor()));
         let mut p = Vec::new();
         check(&facts, &new, Some(&old), &mut p);
-        assert_eq!(p, vec!["the baseline gains lines but EMUSEN_CORE_ABI_MINOR is still 0; an addition increments it (section 5.5)"]);
+        assert_eq!(p, vec![format!("the baseline gains lines but EMUSEN_CORE_ABI_MINOR is still {}; an addition increments it (section 5.5)", minor())]);
+    }
+
+    #[test]
+    fn the_minor_moves_up_and_nothing_else_may() {
+        let old = base("const EMUSEN_CORE_ABI_MINOR 0x0 @1.0
+const EMUSEN_A 0x1 @1.0
+");
+        let up = base("const EMUSEN_CORE_ABI_MINOR 0x1 @1.1
+const EMUSEN_A 0x1 @1.0
+");
+        let facts: Facts = [("const EMUSEN_CORE_ABI_MINOR".to_owned(), "0x1".to_owned()), ("const EMUSEN_A".to_owned(), "0x1".to_owned())].into();
+        let mut p = Vec::new();
+        check(&facts, &up, Some(&old), &mut p);
+        assert_eq!(p, Vec::<String>::new());
+        let mut p = Vec::new();
+        check(&[("const EMUSEN_CORE_ABI_MINOR".to_owned(), "0x0".to_owned()), ("const EMUSEN_A".to_owned(), "0x1".to_owned())].into(), &old, Some(&up), &mut p);
+        assert_eq!(p, vec!["const EMUSEN_CORE_ABI_MINOR went down from 0x1 to 0x0; a minor only moves up (section 4.1)"]);
+        let mut p = Vec::new();
+        check(&facts, &old, None, &mut p);
+        assert_eq!(p, vec!["const EMUSEN_CORE_ABI_MINOR is 0x1 in the header and 0x0 in the baseline (section 5.5: regenerate it with --emit-baseline)"]);
     }
 }

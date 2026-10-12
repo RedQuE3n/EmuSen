@@ -2586,6 +2586,12 @@ The unit test builds a synthetic original holding a sine table among noise. A re
 passes with residual zero; one holding the table plus a copied run of ten noise bytes fails, the run reported at its
 offsets.
 
+*Added 2026-10-11, for Diamond's open BIOS:* `--ignore-fill N` leaves stretches of N or more of one byte out of every
+measure, and `--control CONTROL --explained FILE` judges compiled code against unrelated code of the same processor and
+size: no more shared runs than the control, and every run past the control's longest inside a listed pattern of the
+replacement's own words. A literal run limit cannot pass compiled code, which shares register saves and returns with
+any other compiled code; the rule and Diamond's numbers are in `EmuSen_Firmware.md` §0.
+
 ### 3.62 What the test host kept: four roots, two crashes under load, and the harness that now lets go
 
 *Measured 2026-10-04.* At 04:06 that day a WiseMan test host running the user-interface filter

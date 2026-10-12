@@ -24,7 +24,11 @@ setting does. Each also states how much of the original it repeats, measured by
 the longest run common to both at any offsets, by default at most 25% and no run over 6 bytes
 (`EmuSen_Debugging_Tools_Reference_v5.md` §3.61). The tool prints numbers and offsets only. The original it compares
 against is kept outside the repository, in the core's probe cache, and nothing else reads it. The rule does not bind a foreign core (`EmuSen_CoreAPI.md` §6.2). The first cases are VenusRT's SPC700
-boot program and its NEC DSP chips (`VenusRT_Native.md`).
+boot program and its NEC DSP chips (`VenusRT_Native.md`). The first kernel-sized one is Diamond's open PlayStation
+BIOS, measured 2026-10-11 against the 18 images in its probe cache's firmware folder (`Diamond_OpenKernel_Phase2.md`
+§22.6): FAIL on all, by the default thresholds, plain and on the image's 92,440 bytes of content, every long run in
+its zero fill and the few others forced MIPS idioms. A literal run limit cannot pass compiled code: unrelated compiled
+MIPS code shares more with the same images (9,931 runs of 9+ bytes, the longest 32) than the kernel does. *Decided 2026-10-11 (Q5)*: a replacement that is compiled code is judged against a **control**, unrelated code of the same processor and size, with fill left out (`--ignore-fill 8 --min-run 9 --control CONTROL --explained FILE`): it passes when at most 25% of its bytes are equal at the same offset, it shares no more runs of 9 bytes or more with the original than the control does, and every run longer than the control's longest lies in a listed pattern of its own words with the reason the match is forced or generic. For Diamond the control is the first 92,440 bytes of ps1-tests' release programs' bodies, built at run time by `EmuSen.WiseMan/Reference/analysis/firmware/diamond-control.py`, and the patterns are `firmware/diamond-explained.txt` (`setjmp` and `longjmp` storing and loading the registers in the documented buffer order, and the compiler's register save and restore at every frame offset). Measured the same day on the kernel image of SHA-256 7af83c9b… against all 18 images, each compared whole: **PASS on all**, 13.5–15.1% equal at the same offset against the control's 11.0–11.3%, 6,394–16,514 shared runs of 9+ bytes, on every image fewer than the control's 9,916–24,257 with the same image, and 15–26 runs past the control's longest of 32–33 bytes, all explained. The check is rerun whenever the kernel's image changes.
 
 ---
 

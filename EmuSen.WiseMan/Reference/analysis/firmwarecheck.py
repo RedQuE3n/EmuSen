@@ -6,7 +6,7 @@ Every core carries an open replacement for its firmware, written from documents,
 replacement's record cites.
 
     firmwarecheck.py <replacement> <original> [--window START:END] [--max-equal PERCENT] [--max-run N] [--min-run N] [--limit N]
-                     [--forced FORMULA]
+                     [--forced FORMULA] [--ignore-fill N] [--control CONTROL] [--explained FILE]
 
 What it reports, over the window (both images, offsets START to END, END exclusive; the whole of each by default):
 
@@ -27,6 +27,20 @@ coverage**, the share of the original's bytes that some formula run reproduces. 
 residual run is longer than --max-run. The equal-share test does not apply, since a correct table must equal the
 original's where the original's is that formula.
 
+With --ignore-fill N, for a replacement that is code of its own size rather than a table: a stretch of N or more of
+one byte in the replacement is fill (zeroed memory, padding to the image's size), and its offsets are left out of every
+measure; no aligned or common run is counted across or inside it. A shared string of zeros says nothing about where a
+program came from (EmuSen_Firmware.md §0, decided 2026-10-11).
+
+With --control CONTROL, for a replacement that is compiled code: CONTROL is code of the same processor and about the
+same size that has nothing to do with the original (EmuSen_Firmware.md §0 names it for each core). The same measures
+are taken for it against the original, and the verdict is then PASS when the replacement's share equal at the same
+offset is at most --max-equal, it shares no more common runs of --min-run bytes or more than the control does, and every
+common run longer than the control's longest lies inside a pattern of --explained FILE: lines of the replacement's own
+32-bit words in hex, little-endian, each line a pattern, '#' starting a comment that gives the reason. Compiled code
+shares register saves and returns with any other compiled code, so a literal run limit cannot tell copying from
+compiling; the control measures what compiling alone shares (decided 2026-10-11).
+
 The exit code is the verdict: 0 PASS, 1 FAIL, 2 a usage or file error. Nothing of either image's bytes is printed,
 only counts and offsets, so a writer under a clean-room protocol can run it against an image they may not read.
 """
@@ -42,12 +56,32 @@ def window(data, start, end):
     return data[start:end] if start < end else b""
 
 
-def aligned(a, b):
-    """(equal offsets, compared offsets, longest aligned run, its start) of a and b laid over each other."""
+def fill_mask(data, n):
+    """1 at every offset of a stretch of n or more of one byte, 0 elsewhere; all 0 when n is 0."""
+    mask = bytearray(len(data))
+    if n <= 0:
+        return mask
+    i = 0
+    while i < len(data):
+        j = i
+        while j < len(data) and data[j] == data[i]:
+            j += 1
+        if j - i >= n:
+            mask[i:j] = b"\x01" * (j - i)
+        i = j
+    return mask
+
+
+def aligned(a, b, mask=None):
+    """(equal offsets, compared offsets, longest aligned run, its start) of a and b laid over each other, fill left out."""
     n = min(len(a), len(b))
-    same = best = run = 0
+    same = best = run = compared = 0
     at = -1
     for i in range(n):
+        if mask and mask[i]:
+            run = 0
+            continue
+        compared += 1
         if a[i] == b[i]:
             same += 1
             run += 1
@@ -55,10 +89,10 @@ def aligned(a, b):
                 best, at = run, i - run + 1
         else:
             run = 0
-    return same, n, best, at
+    return same, compared, best, at
 
 
-def longest_common(a, b):
+def longest_common(a, b, mask=None):
     """(length, offset in a, offset in b) of the longest string both hold, by a suffix automaton of b."""
     link, length, nxt, end = [-1], [0], [{}], [0]
     last = 0
@@ -92,6 +126,9 @@ def longest_common(a, b):
     state = matched = 0
     best = (0, -1, -1)
     for i, c in enumerate(a):
+        if mask and mask[i]:
+            state = matched = 0
+            continue
         while state and c not in nxt[state]:
             state = link[state]
             matched = length[state]
@@ -103,7 +140,7 @@ def longest_common(a, b):
     return best
 
 
-def common_runs(a, b, k):
+def common_runs(a, b, k, mask=None):
     """Every maximal common run of at least k bytes as (length, offset in a, offset in b), and whether all were seen."""
     if k <= 0 or len(a) < k or len(b) < k:
         return [], True
@@ -112,18 +149,31 @@ def common_runs(a, b, k):
         where.setdefault(b[j:j + k], []).append(j)
     runs, pairs = [], 0
     for i in range(len(a) - k + 1):
+        if mask and any(mask[i:i + k]):
+            continue
         for j in where.get(a[i:i + k], ()):
             pairs += 1
             if pairs > PAIR_BUDGET:
                 return runs, False
-            if i and j and a[i - 1] == b[j - 1]:
+            if i and j and a[i - 1] == b[j - 1] and not (mask and mask[i - 1]):
                 continue
             n = k
-            while i + n < len(a) and j + n < len(b) and a[i + n] == b[j + n]:
+            while i + n < len(a) and j + n < len(b) and a[i + n] == b[j + n] and not (mask and mask[i + n]):
                 n += 1
             runs.append((n, i, j))
     runs.sort(key=lambda r: (-r[0], r[1], r[2]))
     return runs, True
+
+
+def explained_patterns(path):
+    """The byte strings of FILE's lines: hex 32-bit words, little-endian, '#' starting a comment."""
+    patterns = []
+    with open(path) as f:
+        for line in f:
+            words = line.split("#", 1)[0].split()
+            if words:
+                patterns.append(b"".join(int(w, 16).to_bytes(4, "little") for w in words))
+    return patterns
 
 
 def span(text):
@@ -141,12 +191,20 @@ def main(argv=None, out=sys.stdout):
     p.add_argument("--min-run", type=int, default=4, metavar="N")
     p.add_argument("--limit", type=int, default=50, metavar="N")
     p.add_argument("--forced", metavar="FORMULA")
+    p.add_argument("--ignore-fill", type=int, default=0, metavar="N")
+    p.add_argument("--control", metavar="CONTROL")
+    p.add_argument("--explained", metavar="FILE")
     args = p.parse_args(argv)
     try:
         with open(args.replacement, "rb") as f:
             ours_whole = f.read()
         with open(args.original, "rb") as f:
             theirs_whole = f.read()
+        control_whole = patterns = None
+        if args.control:
+            with open(args.control, "rb") as f:
+                control_whole = f.read()
+            patterns = explained_patterns(args.explained) if args.explained else []
         formula_whole = None
         if args.forced:
             with open(args.forced, "rb") as f:
@@ -157,12 +215,15 @@ def main(argv=None, out=sys.stdout):
     start, end = args.window
     ours, theirs = window(ours_whole, start, end), window(theirs_whole, start, end)
 
-    same, compared, run, run_at = aligned(ours, theirs)
+    mask = fill_mask(ours, args.ignore_fill)
+    same, compared, run, run_at = aligned(ours, theirs, mask)
     share = 100.0 * same / compared if compared else 0.0
-    longest, in_ours, in_theirs = longest_common(ours, theirs)
-    runs, complete = common_runs(ours, theirs, args.min_run)
+    longest, in_ours, in_theirs = longest_common(ours, theirs, mask)
+    runs, complete = common_runs(ours, theirs, args.min_run, mask)
 
     print(f"sizes: replacement {len(ours_whole)} bytes, original {len(theirs_whole)} bytes; window {start}:{start + max(len(ours), len(theirs))}", file=out)
+    if args.ignore_fill:
+        print(f"fill left out: {sum(mask)} bytes in stretches of {args.ignore_fill}+ of one byte", file=out)
     print(f"equal at the same offset: {same} of {compared} ({share:.1f}%); longest aligned run {run}" + (f" at {start + run_at}" if run else ""), file=out)
     print(f"longest common run: {longest}" + (f" bytes, replacement offset {start + in_ours}, original offset {start + in_theirs}" if longest else ""), file=out)
     print(f"common runs of {args.min_run}+ bytes: {len(runs)}{'' if complete else ' or more (listing stopped at the pair budget)'}", file=out)
@@ -196,6 +257,22 @@ def main(argv=None, out=sys.stdout):
             print(f"  {n} bytes: replacement offset {start + i}, original offset {start + j}", file=out)
         passed = (not residual or residual[0][0] <= args.max_run) and complete and forced_complete
         print(f"verdict: {'PASS' if passed else 'FAIL'} (forced: no residual run over {args.max_run})", file=out)
+        return 0 if passed else 1
+    if control_whole is not None:
+        control = window(control_whole, start, end)
+        cmask = fill_mask(control, args.ignore_fill)
+        c_same, c_compared, _, _ = aligned(control, theirs, cmask)
+        c_share = 100.0 * c_same / c_compared if c_compared else 0.0
+        c_longest = longest_common(control, theirs, cmask)[0]
+        c_runs, c_complete = common_runs(control, theirs, args.min_run, cmask)
+        print(f"control: {len(control_whole)} bytes; equal at the same offset {c_same} of {c_compared} ({c_share:.1f}%); longest common run {c_longest}; common runs of {args.min_run}+ bytes: {len(c_runs)}{'' if c_complete else ' or more'}", file=out)
+        over = [(n, i) for n, i, _ in runs if n > c_longest]
+        unexplained = sorted({(n, i) for n, i in over if not any(ours[i:i + n] in pat for pat in patterns)}, key=lambda r: (-r[0], r[1]))
+        print(f"runs longer than the control's longest: {len(over)}; unexplained: {len(unexplained)}", file=out)
+        for n, i in unexplained[:args.limit]:
+            print(f"  {n} bytes: replacement offset {start + i}", file=out)
+        passed = share <= args.max_equal and len(runs) <= len(c_runs) and not unexplained and complete and c_complete
+        print(f"verdict: {'PASS' if passed else 'FAIL'} (control: at most {args.max_equal:g}% equal at the same offset, no more runs of {args.min_run}+ than the control, every run past its longest explained)", file=out)
         return 0 if passed else 1
     passed = share <= args.max_equal and longest <= args.max_run
     print(f"verdict: {'PASS' if passed else 'FAIL'} (at most {args.max_equal:g}% equal at the same offset, no run over {args.max_run})", file=out)

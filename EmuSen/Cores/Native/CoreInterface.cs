@@ -7,14 +7,14 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreInterface
     {
         public const uint Major = 1;
-        public const uint Minor = 0;
+        public const uint Minor = 2;
         public const uint Version = (Major << 16) | Minor;
 
         // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
         public const ulong CapReset = 1UL << 0, CapPresent = 1UL << 1, CapSnapshot = 1UL << 2, CapAxes = 1UL << 3, CapAudioPeek = 1UL << 4, CapMutes = 1UL << 5;
         public const ulong CapSettings = 1UL << 6, CapPhases = 1UL << 7, CapFrameSerial = 1UL << 8, CapRowRepeat = 1UL << 9, CapBatteryDirty = 1UL << 10;
         public const ulong CapRomPatches = 1UL << 11, CapDebug = 1UL << 12, CapDebugStack = 1UL << 13, CapCheatPokes = 1UL << 14, CapSettingNotes = 1UL << 15;
-        public const ulong CapDebugRegisters = 1UL << 16, CapDebugDisassemble = 1UL << 17;
+        public const ulong CapDebugRegisters = 1UL << 16, CapDebugDisassemble = 1UL << 17, CapDebugReads = 1UL << 19;
 
         // Each bit's name, as core info lists it.
         public static readonly IReadOnlyList<(ulong Bit, string Name)> CapabilityNames = new[]
@@ -22,7 +22,7 @@ namespace EmuSen.Cores.Native
             (CapReset, "RESET"), (CapPresent, "PRESENT"), (CapSnapshot, "SNAPSHOT"), (CapAxes, "AXES"), (CapAudioPeek, "AUDIO_PEEK"), (CapMutes, "MUTES"),
             (CapSettings, "SETTINGS"), (CapPhases, "PHASES"), (CapFrameSerial, "FRAME_SERIAL"), (CapRowRepeat, "ROW_REPEAT"), (CapBatteryDirty, "BATTERY_DIRTY"),
             (CapRomPatches, "ROM_PATCHES"), (CapDebug, "DEBUG"), (CapDebugStack, "DEBUG_STACK"), (CapCheatPokes, "CHEAT_POKES"), (CapSettingNotes, "SETTING_NOTES"),
-            (CapDebugRegisters, "DEBUG_REGISTERS"), (CapDebugDisassemble, "DEBUG_DISASSEMBLE"),
+            (CapDebugRegisters, "DEBUG_REGISTERS"), (CapDebugDisassemble, "DEBUG_DISASSEMBLE"), (CapDebugReads, "DEBUG_READS"),
         };
 
         // Every export, and the bit that claims it; zero for a required one.
@@ -43,6 +43,7 @@ namespace EmuSen.Cores.Native
             ("emusen_core_debug_writes", CapDebug), ("emusen_core_debug_calls", CapDebug), ("emusen_core_debug_profile", CapDebug),
             ("emusen_core_debug_coverage", CapDebug), ("emusen_core_debug_counters", CapDebug), ("emusen_core_debug_pc", CapDebug),
             ("emusen_core_debug_registers", CapDebugRegisters), ("emusen_core_debug_disassemble", CapDebugDisassemble),
+            ("emusen_core_debug_reads", CapDebugReads),
         };
 
         // The host obligations this host meets, for a core's host_requires - see EmuSen_CoreAPI.md §4.6.
@@ -161,6 +162,7 @@ namespace EmuSen.Cores.Native
         public readonly delegate* unmanaged<nint, uint, ulong*, int> DebugPc;
         public readonly delegate* unmanaged<nint, uint, long*, nuint, long> DebugRegisters;
         public readonly delegate* unmanaged<nint, uint, uint, uint, uint, byte*, nuint, long> DebugDisassemble;
+        public readonly delegate* unmanaged<nint, uint*, nuint, long> DebugReads;
 
         // Each export resolved from a loaded library by name; zero where the library lacks it.
         public CoreInterface(nint library)
@@ -221,6 +223,7 @@ namespace EmuSen.Cores.Native
             DebugPc = (delegate* unmanaged<nint, uint, ulong*, int>)E("debug_pc");
             DebugRegisters = (delegate* unmanaged<nint, uint, long*, nuint, long>)E("debug_registers");
             DebugDisassemble = (delegate* unmanaged<nint, uint, uint, uint, uint, byte*, nuint, long>)E("debug_disassemble");
+            DebugReads = (delegate* unmanaged<nint, uint*, nuint, long>)E("debug_reads");
         }
 
         // The C# field that holds an export: its suffix in PascalCase, and FrameInfoOf where that names the struct.

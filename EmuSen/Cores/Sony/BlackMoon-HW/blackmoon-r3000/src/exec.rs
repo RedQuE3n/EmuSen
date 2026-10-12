@@ -54,6 +54,33 @@ fn fetchable(cpu: &R3000, address: u32) -> bool {
     address & 3 == 0 && (cop0::kernel(&cpu.regs) || address < 0x8000_0000)
 }
 
+/// The bytes the instruction `word` at the PC would read from the bus if it ran now, as (first address, count): none for
+/// an instruction that loads nothing, or whose fetch, debug unit, coprocessor check or address check would end it first,
+/// or with the cache isolated (BlackMoon_R3000.md §12).
+pub(crate) fn load_ahead(cpu: &R3000, word: u32) -> Option<(u32, u32)> {
+    let r = &cpu.regs;
+    let mut probe = *r;
+    if !fetchable(cpu, r.pc) || cop0::pc_break(&mut probe, r.pc) || r.sr & sr::ISC != 0 {
+        return None;
+    }
+    let w = Word(word);
+    let address = r.r[w.rs()].wrapping_add(w.simm());
+    let (bus, first, count, align) = match decode(word) {
+        Op::Lb | Op::Lbu => (address, address, 1, 0),
+        Op::Lh | Op::Lhu => (address, address, 2, 1),
+        Op::Lw => (address, address, 4, 3),
+        Op::Lwl => (address & !3, address & !3, (address & 3) + 1, 0),
+        Op::Lwr => (address, address, 4 - (address & 3), 0),
+        Op::Lwc(z) if r.sr & sr::CU0 << z != 0 => (address, address, 4, 3),
+        _ => return None,
+    };
+    let trap = cop0::data_break(&mut probe, bus, false);
+    if address & align != 0 || (!cop0::kernel(r) && address >= 0x8000_0000) || trap {
+        return None;
+    }
+    Some((first, count))
+}
+
 /// One step at the boundary: an interrupt, then the observer's stop, then the instruction (BlackMoon_R3000.md §5).
 pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -> Step {
     let at = cpu.regs.pc;
@@ -197,7 +224,13 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         }
         let v = self.b.read(address, size);
         self.faulted |= self.b.bus_error();
-        v & mask(size)
+        let v = v & mask(size);
+        if !self.faulted {
+            for i in 0..size.bytes() {
+                self.o.read(self.cpu.space, address.wrapping_add(i), (v >> (8 * i)) as u8, self.at);
+            }
+        }
+        v
     }
 
     fn write(&mut self, address: u32, size: Size, value: u32) {

@@ -6,7 +6,7 @@ Every core carries an open replacement for its firmware, written from documents,
 replacement's record cites.
 
     firmwarecheck.py <replacement> <original> [--window START:END] [--max-equal PERCENT] [--max-run N] [--min-run N] [--limit N]
-                     [--forced FORMULA] [--ignore-fill N]
+                     [--forced FORMULA] [--ignore-fill N] [--control CONTROL] [--explained FILE]
 
 What it reports, over the window (both images, offsets START to END, END exclusive; the whole of each by default):
 
@@ -31,6 +31,15 @@ With --ignore-fill N, for a replacement that is code of its own size rather than
 one byte in the replacement is fill (zeroed memory, padding to the image's size), and its offsets are left out of every
 measure; no aligned or common run is counted across or inside it. A shared string of zeros says nothing about where a
 program came from (EmuSen_Firmware.md §0, decided 2026-10-11).
+
+With --control CONTROL, for a replacement that is compiled code: CONTROL is code of the same processor and about the
+same size that has nothing to do with the original (EmuSen_Firmware.md §0 names it for each core). The same measures
+are taken for it against the original, and the verdict is then PASS when the replacement's share equal at the same
+offset is at most --max-equal, it shares no more common runs of --min-run bytes or more than the control does, and every
+common run longer than the control's longest lies inside a pattern of --explained FILE: lines of the replacement's own
+32-bit words in hex, little-endian, each line a pattern, '#' starting a comment that gives the reason. Compiled code
+shares register saves and returns with any other compiled code, so a literal run limit cannot tell copying from
+compiling; the control measures what compiling alone shares (decided 2026-10-11).
 
 The exit code is the verdict: 0 PASS, 1 FAIL, 2 a usage or file error. Nothing of either image's bytes is printed,
 only counts and offsets, so a writer under a clean-room protocol can run it against an image they may not read.
@@ -156,6 +165,17 @@ def common_runs(a, b, k, mask=None):
     return runs, True
 
 
+def explained_patterns(path):
+    """The byte strings of FILE's lines: hex 32-bit words, little-endian, '#' starting a comment."""
+    patterns = []
+    with open(path) as f:
+        for line in f:
+            words = line.split("#", 1)[0].split()
+            if words:
+                patterns.append(b"".join(int(w, 16).to_bytes(4, "little") for w in words))
+    return patterns
+
+
 def span(text):
     start, _, end = text.partition(":")
     return int(start or "0", 0), (int(end, 0) if end else None)
@@ -172,12 +192,19 @@ def main(argv=None, out=sys.stdout):
     p.add_argument("--limit", type=int, default=50, metavar="N")
     p.add_argument("--forced", metavar="FORMULA")
     p.add_argument("--ignore-fill", type=int, default=0, metavar="N")
+    p.add_argument("--control", metavar="CONTROL")
+    p.add_argument("--explained", metavar="FILE")
     args = p.parse_args(argv)
     try:
         with open(args.replacement, "rb") as f:
             ours_whole = f.read()
         with open(args.original, "rb") as f:
             theirs_whole = f.read()
+        control_whole = patterns = None
+        if args.control:
+            with open(args.control, "rb") as f:
+                control_whole = f.read()
+            patterns = explained_patterns(args.explained) if args.explained else []
         formula_whole = None
         if args.forced:
             with open(args.forced, "rb") as f:
@@ -230,6 +257,22 @@ def main(argv=None, out=sys.stdout):
             print(f"  {n} bytes: replacement offset {start + i}, original offset {start + j}", file=out)
         passed = (not residual or residual[0][0] <= args.max_run) and complete and forced_complete
         print(f"verdict: {'PASS' if passed else 'FAIL'} (forced: no residual run over {args.max_run})", file=out)
+        return 0 if passed else 1
+    if control_whole is not None:
+        control = window(control_whole, start, end)
+        cmask = fill_mask(control, args.ignore_fill)
+        c_same, c_compared, _, _ = aligned(control, theirs, cmask)
+        c_share = 100.0 * c_same / c_compared if c_compared else 0.0
+        c_longest = longest_common(control, theirs, cmask)[0]
+        c_runs, c_complete = common_runs(control, theirs, args.min_run, cmask)
+        print(f"control: {len(control_whole)} bytes; equal at the same offset {c_same} of {c_compared} ({c_share:.1f}%); longest common run {c_longest}; common runs of {args.min_run}+ bytes: {len(c_runs)}{'' if c_complete else ' or more'}", file=out)
+        over = [(n, i) for n, i, _ in runs if n > c_longest]
+        unexplained = sorted({(n, i) for n, i in over if not any(ours[i:i + n] in pat for pat in patterns)}, key=lambda r: (-r[0], r[1]))
+        print(f"runs longer than the control's longest: {len(over)}; unexplained: {len(unexplained)}", file=out)
+        for n, i in unexplained[:args.limit]:
+            print(f"  {n} bytes: replacement offset {start + i}", file=out)
+        passed = share <= args.max_equal and len(runs) <= len(c_runs) and not unexplained and complete and c_complete
+        print(f"verdict: {'PASS' if passed else 'FAIL'} (control: at most {args.max_equal:g}% equal at the same offset, no more runs of {args.min_run}+ than the control, every run past its longest explained)", file=out)
         return 0 if passed else 1
     passed = share <= args.max_equal and longest <= args.max_run
     print(f"verdict: {'PASS' if passed else 'FAIL'} (at most {args.max_equal:g}% equal at the same offset, no run over {args.max_run})", file=out)

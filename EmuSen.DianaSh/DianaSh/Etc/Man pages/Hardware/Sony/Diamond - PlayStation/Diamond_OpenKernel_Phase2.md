@@ -338,7 +338,9 @@ kernel carries none, and returns -1), 346 no function as documented, 6 undocumen
    replacement writers.
 5. **Q5, `firmwarecheck.py`'s thresholds for a kernel-sized replacement** (§22.6). By the defaults the image fails on
    its zero fill and forced idioms. *Recommended*: thresholds for this image decided before it is measured again, with
-   runs of one repeated byte excluded or a `--forced` image of the idioms, before G9 is counted.
+   runs of one repeated byte excluded or a `--forced` image of the idioms, before G9 is counted. *Answered 2026-10-11*:
+   fill excluded and the image judged against a control of unrelated compiled code; **PASS on all 18 images**
+   (`EmuSen_Firmware.md` §0 gives the rule and the numbers).
 
 ### 20.3 The accuracy cost
 
@@ -571,8 +573,9 @@ The thresholds were fixed for VenusRT's 64-byte boot program (`EmuSen_Debugging_
 a run of six caught the case that mattered. For a 92 KB kernel of MIPS code the same rule cannot pass: two nops are 8
 bytes, and so is `jr ra` with the nop in its delay slot. **Q5 for the tester**: whether a
 kernel-sized replacement is measured against thresholds decided for it beforehand, for instance with runs of a single
-repeated byte excluded, or against `--forced` with a generator of the forced idioms, before G9 is counted. Until then
-the gate's `firmwarecheck.py` item is **not met**.
+repeated byte excluded, or against `--forced` with a generator of the forced idioms, before G9 is counted. ~~Until
+then the gate's `firmwarecheck.py` item is **not met**.~~ *Decided 2026-10-11*: judged against a control (Q5's answer,
+`EmuSen_Firmware.md` §0); **PASS on all 18 images**, and the item is **met**.
 
 ### 22.7 What this means for the gate
 

@@ -765,8 +765,9 @@ decision, as the Genesis was offered (`Nephrite_Plan.md` §7). The core carries 
   Diamond it is the tester's again, §11 Q15.)
 - **G9, firmware.** Every game the open BIOS is claimed to run runs with no firmware folder, its machine info naming
   the replacement; with the player's image, the same game runs on it. *2026-10-11*: the games and their cards are met
-  (`Diamond_OpenKernel_Phase2.md` §22.1, §22.7); the open-BIOS condition is not met in full while `firmwarecheck.py`
-  fails by the policy's thresholds (§22.6, its Q5).
+  (`Diamond_OpenKernel_Phase2.md` §22.1, §22.7); ~~the open-BIOS condition is not met in full while `firmwarecheck.py`
+  fails by the policy's thresholds (§22.6, its Q5).~~ *Later the same day*: `firmwarecheck.py` passes on all 18 images
+  against a control (`EmuSen_Firmware.md` §0), so **G9's open-BIOS condition is met**.
 - **GE, the enhancements.** Each enhancement offered only with its stage's gate met and E1's exactness test passing in
   CI on every change to the core.
 

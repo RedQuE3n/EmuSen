@@ -104,6 +104,36 @@ class FirmwareCheckTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("longest common run: 7 bytes", text)
 
+    def test_against_a_control_a_run_past_its_longest_must_be_explained(self):
+        control = replacement_with([(5, 0, 40)])
+        ours = replacement_with([(8, 12, 20)])
+        with tempfile.TemporaryDirectory() as d:
+            c, e = os.path.join(d, "control.bin"), os.path.join(d, "explained.txt")
+            with open(c, "wb") as f:
+                f.write(control)
+            with open(e, "w") as f:
+                f.write("# nothing explained\n")
+            code, text = self.run_check(ours, ORIGINAL, "--control", c, "--explained", e, "--min-run", "5")
+            self.assertEqual(code, 1)
+            self.assertIn("runs longer than the control's longest: 1; unexplained: 1", text)
+            words = " ".join(ours[i:i + 4][::-1].hex() for i in range(12, 20, 4))
+            with open(e, "w") as f:
+                f.write(words + "  # the run's own words\n")
+            code, text = self.run_check(ours, ORIGINAL, "--control", c, "--explained", e, "--min-run", "5")
+            self.assertEqual(code, 0)
+            self.assertIn("unexplained: 0", text)
+
+    def test_against_a_control_more_runs_than_it_shares_fails(self):
+        control = bytes(range(64))
+        ours = replacement_with([(5, 10, 30)])
+        with tempfile.TemporaryDirectory() as d:
+            c = os.path.join(d, "control.bin")
+            with open(c, "wb") as f:
+                f.write(control)
+            code, text = self.run_check(ours, ORIGINAL, "--control", c, "--min-run", "5")
+            self.assertEqual(code, 1)
+            self.assertIn("common runs of 5+ bytes: 0", text)
+
     def test_the_longest_run_agrees_with_a_brute_force_search(self):
         ours = replacement_with([(6, 3, 50), (4, 30, 9), (3, 60, 0)])
         best = max((n for i in range(64) for j in range(64)

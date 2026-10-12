@@ -27,8 +27,8 @@ against is kept outside the repository, in the core's probe cache, and nothing e
 boot program and its NEC DSP chips (`VenusRT_Native.md`). The first kernel-sized one is Diamond's open PlayStation
 BIOS, measured 2026-10-11 against the 18 images in its probe cache's firmware folder (`Diamond_OpenKernel_Phase2.md`
 §22.6): FAIL on all, by the default thresholds, plain and on the image's 92,440 bytes of content, every long run in
-its zero fill and the few others forced MIPS idioms; whether a 92 KB image is held to thresholds set for a 64-byte
-program is that page's Q5, open.
+its zero fill and the few others forced MIPS idioms. A literal run limit cannot pass compiled code: unrelated compiled
+MIPS code shares more with the same images (9,931 runs of 9+ bytes, the longest 32) than the kernel does. *Decided 2026-10-11 (Q5)*: a replacement that is compiled code is judged against a **control**, unrelated code of the same processor and size, with fill left out (`--ignore-fill 8 --min-run 9 --control CONTROL --explained FILE`): it passes when at most 25% of its bytes are equal at the same offset, it shares no more runs of 9 bytes or more with the original than the control does, and every run longer than the control's longest lies in a listed pattern of its own words with the reason the match is forced or generic. For Diamond the control is the first 92,440 bytes of ps1-tests' release programs' bodies, built at run time by `EmuSen.WiseMan/Reference/analysis/firmware/diamond-control.py`, and the patterns are `firmware/diamond-explained.txt` (`setjmp` and `longjmp` storing and loading the registers in the documented buffer order, and two compiler epilogues). Measured the same day on all 18 images: **PASS on all**, 13.5–15.0% equal at the same offset against the control's 11.0–11.3%, 6,384–6,658 shared runs of 9+ bytes against the control's 9,894–10,235, and 15 runs past the control's longest of 32 bytes, all explained.
 
 ---
 

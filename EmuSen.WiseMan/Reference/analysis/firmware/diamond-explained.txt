@@ -1,0 +1,6 @@
+# Diamond's open kernel: its own instruction words that firmwarecheck.py --control may find longer than the control's
+# longest common run, each with the reason the match is forced or generic (EmuSen_Firmware.md §0, decided 2026-10-11).
+ac9f0000 ac9d0004 ac9e0008 ac90000c ac910010 ac920014 ac930018 ac94001c ac950020 ac960024 ac970028  # setjmp, A0(13h): ra, sp, fp, s0-s7 and gp stored in the buffer's order as psx-spx documents it
+8c9f0000 8c9d0004 8c9e0008 8c90000c 8c910010 8c920014 8c930018 8c94001c 8c950020 8c960024 8c970028  # longjmp, A0(14h): the same registers loaded in the same documented order
+8fb00020 8fb10024 8fb20028 8fb3002c 8fb40030 8fb50034 8fb60038 8fb7003c 8fbe0040  # a compiled function's return: s0-s7 and fp reloaded from its frame at 20h-40h, the compiler's own order
+8fb00018 8fb1001c 8fb20020 8fb30024 8fb40028 8fb5002c 8fb60030 8fb70034 8fbe0038  # a compiled function's return: s0-s7 and fp reloaded from its frame at 18h-38h, the compiler's own order

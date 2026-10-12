@@ -347,14 +347,14 @@ fn the_chopping_record_times_each_transfer() {
 
 /// `gpu/bandwidth`: the hblanks of 400 full-screen transfers or primitives a row, nine of the fourteen equal to the
 /// release's on Diamond and the rest within two (§5), every row within 0.6% of the console's; since D-11's refit, each
-/// row within one hblank of what it read before.
+/// row within one hblank of what it read before; since D-41, the textured quads 39,916 where they were 39,976 and 39,975.
 #[test]
 fn the_bandwidth_record_counts_each_rows_hblanks() {
     let Some(source) = carried("bandwidth") else { return };
     let m = run_for(&source, 860, Market::Americas);
     let hblanks: Vec<u32> = results(&m, 0x10_0000, 56).chunks(4).map(|r| r[2]).collect();
-    assert_eq!(hblanks, [15_773, 12_123, 19_127, 1216, 7603, 11_461, 15_134, 15_134, 7721, 11_580, 39_976, 39_975, 5844, 3968]);
-    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0xC54B_955B_DA4F_277C, "the milliseconds and MB/s as well");
+    assert_eq!(hblanks, [15_773, 12_123, 19_127, 1216, 7603, 11_461, 15_134, 15_134, 7721, 11_580, 39_916, 39_916, 5844, 3968]);
+    assert_eq!(fnv(&results(&m, 0x10_0000, 56)), 0xE174_03F5_2EBD_6467, "the milliseconds and MB/s as well");
 }
 
 /// `dma/chain-looping`: the RAM loop's ticks with no DMA, an empty chain and two never-ending ones, and their
@@ -1289,14 +1289,18 @@ fn kept_rows(m: &Machine) -> Vec<[(u32, u32); 4]> {
     (0..7).map(|s| [0, 1, 2, 3].map(|c| kept(s, c))).collect()
 }
 
-/// D-41: the two shapes of `programs/triangle-rows.s` that every order of a triangle's rows reads alike, a triangle
-/// flat at the top and one with its middle vertex high, as Beetle PSX reads them; its other five wait on the rule.
+/// D-41: a triangle's rows from its middle vertex's row down, then from above it up, as Beetle PSX draws all seven
+/// shapes of `programs/triangle-rows.s` and amidog's CACHE BLOCK expects of its flat triangles and quads.
 #[test]
-fn the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee() {
+fn a_triangles_rows_go_down_from_its_middle_vertex_then_up_as_the_referee_draws_them() {
     let m = run_for(include_str!("../programs/triangle-rows.s"), 30, Market::Americas);
-    let rows = kept_rows(&m);
-    assert_eq!(rows[1], [(8, 63), (0, 53), (0, 35), (0, 17)]);
-    assert_eq!(rows[4], [(5, 24), (1, 42), (1, 60), (41, 63)]);
+    let flat_bottom = [(56, 63), (38, 63), (20, 63), (2, 63)];
+    let flat_top = [(8, 63), (0, 53), (0, 35), (0, 17)];
+    let low_left = [(39, 63), (3, 63), (1, 63), (41, 63)];
+    let low_right = [(43, 63), (3, 63), (1, 63), (37, 63)];
+    let high_left = [(5, 24), (1, 42), (1, 60), (41, 63)];
+    let quad = [(8, 63), (8, 63), (8, 63), (2, 63)];
+    assert_eq!(kept_rows(&m), [flat_bottom, flat_top, low_left, low_right, high_left, low_left, quad]);
 }
 
 // --- D-29: DICR's master flag and I_STAT's bit 3 (Diamond_Disputes.md D-29, Diamond_Records.md §16.3) ---
@@ -1333,6 +1337,16 @@ fn channel_6_runs_beside_a_list_that_waits_or_walks() {
         assert_eq!([r[0], r[2], r[3], r[4]], [0x0100_0401, 2, 0x00FF_FFFF, 0x0100_0401], "{what}: the list moving, channel 6 done and its table written");
         assert_eq!(r[5..], [2, 0x00FF_FFFF, 0x0000_0401], "{what}: once the list has ended");
     }
+}
+
+// --- A narrow store to a 32-bit register (Diamond_Native.md §11.2) ---
+
+/// A byte or halfword store to a 32-bit register at an address not word-aligned writes the whole register, the store's
+/// word shifted to its byte (psx-spx "(w32)"), so that `sb` to DICR's third byte sets the channels' interrupt enables.
+#[test]
+fn a_narrow_store_writes_its_register_shifted_to_its_byte() {
+    let m = run(include_str!("../programs/narrow-stores.s"));
+    assert_eq!(results(&m, 0x10_0000, 7), [0x0088_0000, 0x0044_0000, 0x0000_0B00, 0, 0x1234, 0x0500, 0x0012_0000]);
 }
 
 // ---- Stage 13, speed (Diamond_Speed.md) ---------------------------------------------------------------------------

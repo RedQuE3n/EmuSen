@@ -246,6 +246,18 @@ the disc, so the stream reaching that stage, not the MDEC, is the suspect: CD-RO
 Castlevania's black screen is the same at stage 7's commit [M, the same run on `f719b368`]; stage 7's record of its
 Konami logo was not reproduced with this tool's flags.
 
+*Found 2026-10-12* (`Diamond_Disputes.md` D-45, `Diamond_CDROM.md` §9.8): the stream reaching the games was right; the
+suspect named above was not the cause. What they waited on was the interrupt of DMA channel 3's piece that ends a frame,
+which their libraries enable by a byte store to DICR's third byte and which Diamond took as a word store of the byte to
+DICR, clearing every channel's enable. Without it a frame's sectors were never marked complete: Silent Hill's sector
+callback dropped every sector after its first frame's [M, its code and RAM]; Tekken 3 and Castlevania, which store to
+the same byte, handed the decoder a word that is no command, which a frame never finished would explain [A]. With the store shifted to its byte, on the open kernel [M, pictures every 10
+frames against SwanStation's on `scph5501.bin`]: Silent Hill's movie from frame 1,460, within 1.9 grey levels of
+SwanStation's at a constant offset of 810 frames (median over 211 pictures to frame 3,600); Castlevania's movie from
+750, the Konami logo at 1,080 and the title at 1,320, SwanStation's at 1,780, 2,120 and 2,360; Tekken 3's movie from
+600, within 2.2 grey levels at an offset of 1,000 frames, SwanStation's from 1,610. Ape Escape, which never writes the
+MDEC, stored to the same byte and now plays its polygon intro.
+
 **D-29**, observed by the screen only: with a disc in the drive the BIOS draws its logo by frame 450 and holds it to
 frame 1,500, as before [M]. The MDEC was not what the intro waited on; the SPU is the candidate left.
 
@@ -275,8 +287,8 @@ bench of 12,000 blocks; 629 and 1,185 ns before]. At the plan's 1,200 blocks a f
 - D-30, the IDCT's and the colour conversion's arithmetic; D-31, the time a block takes; D-32, Cr's turn in the
   pipeline; D-33, a read's wait. Each would be settled by a console, which is not to be used; D-30's search is the
   record of what the console's pictures exclude.
-- Tekken 3's and Castlevania's movies, and Silent Hill's, behind the stream feeding their software decoders (the CD's
-  streaming or the SPU); Ape Escape's polygon intro. *Stage 8 (2026-10-11)*: with the SPU built, the two games send the same words
+- ~~Tekken 3's and Castlevania's movies, and Silent Hill's, behind the stream feeding their software decoders (the CD's
+  streaming or the SPU); Ape Escape's polygon intro.~~ *Settled 2026-10-12*: all four play, D-45 (§9). *Stage 8 (2026-10-11)*: with the SPU built, the two games send the same words
   (`Diamond_SPU.md` §11), so the SPU is not the cause.
 - The MDEC under DMA chopping, and DMA1 started mid-macroblock, which no program here does.
 

@@ -218,6 +218,7 @@ the toolchain the build names, after removing the mixed artifacts, cured it; not
   "next code" is the import's.
 - `.pbp`; P5 with a multi-disc game; the DualShock's rumble (§4 there).
 - The DualShock's stick directions as regions of their own, if a drawing can give them a way out (§5).
+- Input passed to a v1 machine on the emulation thread, so that no call overlaps another (§12.5).
 
 ## 11. Reading log, and exposures
 
@@ -228,3 +229,133 @@ written from what is known of its list and is to be confirmed. No emulator's sou
 part of psx-spx's "BIOS Patches" or of `Diamond_References.md` §4 and §6, and nothing DOCS.txt excludes was opened;
 DOCS.txt itself was read only for its list of exclusions. The player's BIOS folder was not read, and Diamond's
 `kernel/` and `kernel-harness/` were not changed.
+
+## 12. The launch path, on the tester's library and the handheld (2026-10-12)
+
+*Written 2026-10-12, after the tester ran WiseMan `f5c30e69` on the handheld and reported "slow, and many games don't
+work or launch".* This section concerns only the path from the library to a running game: the scan, the shelf, routing
+by content, unpacking an archive, a sheet's companions, a game in a subfolder and the core's creation. Games that start
+and then stop, and the speed of emulation, are recorded elsewhere. The marks are the page's.
+
+### 12.1 The seven games, in the forms the library holds them
+
+Each was copied as it is (the archives not extracted, the subfolder whole) into a scratch library under the probe's
+cache, the library itself only read, and driven through Mistress's headless window by
+`PlayStationLibraryTests.The_testers_discs_list_route_and_open_from_the_library`, opt-in by
+`EMUSEN_DIAMOND_LAUNCH_LIBRARY` (with `EMUSEN_DIAMOND_LAUNCH_HOME` for the unpacked copies and
+`EMUSEN_DIAMOND_LAUNCH_DEVELOPMENT=1` for development cores shown): the scan, the list, the pad's A on the entry, 120
+frames [M]. Before and after the fixes of §12.4 the table is the same:
+
+| Game | Form | Listed as | Routed | Opened | 120 frames |
+|---|---|---|---|---|---|
+| Ape Escape | a sheet beside its track | the sheet; the track not listed | PlayStation | Diamond, `psx`, the library's path | yes, 3.2–3.3 s |
+| Castlevania: Symphony of the Night | a zip, the sheet and two tracks in a folder inside it | the zip | PlayStation | Diamond, `psx` | yes, 3.2–4.5 s |
+| Crash Bandicoot | a lone track | the track | PlayStation | Diamond, `psx` | yes, 2.9–3.1 s |
+| Rayman | a subfolder holding a sheet and its 51 tracks | the sheet, inside its folder | PlayStation | Diamond, `psx` | yes, 2.7–3.4 s |
+| Silent Hill | a zip, the sheet and one track in a folder | the zip | PlayStation | Diamond, `psx` | yes, 3.1–4.0 s |
+| Spyro the Dragon | a lone track | the track | PlayStation | Diamond, `psx` | yes, 2.9–3.4 s |
+| Tekken 3 | a zip, the sheet, three tracks and a page of text in a folder | the zip | PlayStation | Diamond, `psx` | yes, 3.2–4.9 s |
+
+The times run from the pad's press to the 120th frame on the bench, unpacking included where nothing was unpacked
+before; the library's files were unchanged in name, length and time after every run, and the result was the same with
+development cores shown [M].
+
+### 12.2 The library's other forms
+
+The rest of the PlayStation folder was read by names, sizes and an archive's list of entries, and a sheet's `FILE`
+lines were compared with the names beside them; no other game was opened or run [M]. The handheld's SD card holds the
+same forty files and the same subfolder, name for name and byte count for byte count [M].
+
+- **Fifteen more lone tracks**, five of them a "(Track 1)" file with no sheet and no other track.
+- **One more sheet beside a single track.**
+- **Fourteen more zips**: seven with the sheet and its tracks in a folder inside the archive, seven with them at the
+  archive's root, from two to sixty-one tracks.
+- **No** `.m3u`, `.chd`, `.iso` or `.pbp`, no other subfolder, and no sheet naming a file that differs in case or in name:
+  all 285 `FILE` lines of the twenty sheets name their file exactly. Two files are not games (a Finder `.DS_Store` and
+  ES-DE's `systeminfo.txt`) and are not listed, having no extension a console takes.
+
+Every form is now in `PlayStationLibraryTests.A_zipped_disc_and_a_lone_track_open_from_the_library_and_play` on
+synthetic discs: a zip of a sheet and a track, a lone track, a lone "(Track 1)" file and a zip of a sheet at its root
+with twelve tracks. The forms the library does not hold were probed on synthetic discs through the scan and the
+factory's load [M]: a sheet in
+an upper-case `.CUE`, an ES-DE multi-disc folder (`Game.m3u/` holding the list and both sheets), a cooked `.bin` of
+2,048-byte sectors, a zip of a lone track in a folder and a zip carrying macOS's `__MACOSX/` entries open, and a `._`
+file beside a game is not listed; three forms did not open, which §12.4 and §12.5 take.
+
+### 12.3 What the handheld recorded
+
+Read only, from the tester's session after 00:50 [M, 2026-10-12]. The settings name the SD card's `ROMs` as the library,
+the themed library, and a log folder of the bench's (`/home/red/Documents/Logs/`), which the handheld cannot make, so
+the logs went to `~/.config/EmuSen/Logs`, Galaxia's fallback.
+
+- **Four PlayStation games were opened, and every one ran**: a "(Track 1)" lone file, two lone tracks and a zip, each
+  with its per-game log of frame lines at 59.7–60.5 frames a second and 4–8 ms of emulation in a 16.7 ms frame. The
+  zip was unpacked into `home/Unpacked` as §2 describes. No launch failed: no error log was written that day, and
+  neither `Failed to load` nor a firmware line appears.
+- **The process then aborted**, 15 seconds into the fourth game, on a Rust panic in `emusen_core_debug_registers`,
+  `RefCell already borrowed` at `emusen-native/src/core/exports.rs:115` (the outbox borrowed by `look` to settle the
+  call), with a core dump and no crash file of the program's own. A `RefCell` is borrowed twice only when two calls on
+  one machine overlap, which `EmuSen_CoreAPI.md` §6.16 forbids ("one thread at a time per machine"). The emulation
+  thread calls `debug_registers` after each frame (`RefreshProviders`); the window's gamepad timer, on the interface
+  thread, calls `CoreEngine.SetAxis` on every poll and `SetButton` on each change, and both go into the machine at once
+  (`CoreMachine.SetAxis`, `set_axis` settling through the same outbox) [R]. Diamond is the first v1 engine with a pad's
+  sticks (the DualShock is the default pad), so it is the first whose machine is entered from the interface thread
+  sixty times a second; the overlap is rare per poll, which is why a game ran for minutes first [A]. It is outside the
+  launch path and is not fixed here (§12.5).
+
+So the handheld's record shows the launch path working on every game tried; "doesn't work" in that session is the
+abort, which takes the program down with the game, and is left to the branch that owns the running game.
+
+### 12.4 Defects found and fixed
+
+Each was shown by a WiseMan test failing before the change and passing after [M].
+
+1. **A sheet naming its tracks in another case, or with Windows separators, opened nowhere, and its tracks were
+   shelved as games of their own.** *Cause:* `ImageSets.Companions` joined each `FILE` name to the sheet's folder as
+   written, so on a filesystem that keeps case (the handheld's SD card is ext4) a sheet made where case is ignored named
+   files that do not exist; the shelf's rule then hid nothing, and an audio track was listed on the Genesis shelf (its
+   content is not a disc's sync, which the Genesis's recogniser claims, §12.5). *Proof:*
+   `DiamondPlayersTests.A_sheet_naming_its_tracks_in_another_case_or_with_backslashes_opens_and_is_shelved_once`, a
+   loose sheet naming `TRACKS\` and its tracks in lower case and a zipped one naming them in upper case: before, the
+   shelf listed the tracks and the load threw `FileNotFoundException`. *Fix,* in the media module that owns a sheet's
+   companions: a name is taken as written where that file exists, else part by part as the one entry of the folder that
+   matches it ignoring case, `/` and `\` both separating parts; no match, or two, leaves the name as written, so the
+   load's words name it. The zipped probe already read an entry ignoring case; it now also takes `\`.
+2. **A zipped game was asked for the firmware of the archive's bytes.** *Cause:* `CoreEngine.GetFirmwareRequirements`
+   read the library file whole, so `firmware_for` received the archive (and the whole archive was read from the card
+   once more before the load unpacked it); Diamond reads no disc in a zip and asked for no BIOS, where the same disc
+   loose asks for its market's. *Proof:* `DiamondPlayersTests.A_zipped_disc_is_asked_for_the_firmware_its_image_is`:
+   before, none for the zip and `scph5501.bin` loose. *Fix:* the probe reads the image play opens, `DiscsOf(path)[0]`,
+   which unpacks an archive once, as the load then finds it unpacked.
+3. **A file that opens nowhere closed the program instead of saying why.** *Cause:* every start from the library, the
+   list and big picture asks `EmulatorSession.MissingFirmwareFor` before the load; it creates the core, which for a file
+   routing decides for no console throws the decision's words, and the exception left `StartGameAsync`, which an
+   `async void` handler awaits, so the dispatcher raised it out of the window. *Proof:*
+   `PlayStationLibraryTests.A_file_that_opens_nowhere_says_why_from_the_library`, a `.bin` of sync patterns at the
+   library's root: before, `NotSupportedException` out of the pad's press. *Fix:* the firmware question answers nothing
+   for a file that cannot be opened or read (`NotSupportedException`, `IOException`, `InvalidDataException`,
+   `UnauthorizedAccessException`), and the load after it fails in `LoadGame`'s own handling, the status line reading
+   "Failed to load … could be … move it into a folder named genesis or psx".
+
+### 12.5 Not fixed, and why
+
+- **The abort of §12.3** is the host's: input reaches a v1 machine from the interface thread while the emulation thread
+  is inside it. The form that keeps §6.16 without a surface change is for `CoreEngine` to keep the pad's buttons and
+  axes and pass them to the machine on the emulation thread before each frame, which also changes when a press is seen
+  (at the next frame, as a poll between frames already is). It touches the running game rather than its launch, and
+  wants its own proof (a run with input from a second thread, in a process of its own, since the abort ends the test
+  host), so it is put to the tester rather than built here.
+- **A sheet naming a file by another name** (`Game (USA).bin` beside a file `Game.bin`) opens nowhere, the load's words
+  naming the missing file. Choosing another file for it would be a guess; none of the library's sheets does it.
+- **A loose audio track goes to the Genesis even in a folder named `psx`**: the Genesis's recogniser claims anything
+  that is not a disc's image (§1), and a claim decides before the folder. Only a track left without its sheet meets
+  this; the library holds none. Whether a folder should outweigh a negative rule is the routing design's question.
+- **The image is read twice before the first frame**, once for `firmware_for` and once for `create`, and Diamond copies
+  it once more; on the handheld the three launches the journal times took two to three seconds from the per-game log's
+  start to the first frame line, which is written a second after frames begin, so it is recorded and not changed.
+
+### 12.6 Tests run (2026-10-12)
+
+WiseMan, by area: `PlayStationLibrary`, `Diamond` (with `DiamondPlayers`), `Galaxia`, `RomLibrary`, `SystemPack`,
+`CoreCatalog`, `CoreFactory`, `Firmware` and `EmulatorSession`, 396 cases, 388 passing and 8 skipped (the opt-in ones
+without their folders); the opt-in run of §12.1 on the seven copies, with development cores off and on.

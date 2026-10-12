@@ -51,6 +51,16 @@ pub(crate) enum Target {
     None,
 }
 
+/// A 32-bit register that a narrower store writes whole, the processor's word shifted to the store's byte (psx-spx
+/// "Unpredictable Things", "(w32)"; Diamond_Native.md §11.2).
+fn whole_word(offset: u32) -> bool {
+    match offset {
+        0x000..=0x023 | 0x060..=0x063 | 0x070..=0x077 | 0x0F0..=0x0F7 | 0x100..=0x12B => true,
+        0x080..=0x0EF => offset & 0xC != 4,
+        _ => false,
+    }
+}
+
 /// Which delay register times an I/O address, or none for the internal registers.
 fn io_device(offset: u32) -> Option<usize> {
     match offset {
@@ -429,6 +439,7 @@ impl Board {
                     self.io_write16((offset & !1) + 2, value >> 16);
                 }
             }
+            _ if offset & 3 != 0 && whole_word(offset) => self.io_write32(offset & !3, value << (8 * (offset & 3))),
             _ if size == Size::Half || matches!(offset & 0xFFE, 0x05A | 0x05E) => self.io_write16(offset, value),
             _ => self.io_write32(offset, value),
         }

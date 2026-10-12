@@ -1358,3 +1358,46 @@ minor 1.1 (`MEDIA` in `v1.rs`, the drive, `media_lid` and `media_insert` over st
 `.bin` and `.iso` beside `.psexe`, `.psx` and `.chd`, its system no longer marked in development, the cheats, settings,
 cards, pads, shelf and CRT row, the kit on nine of the tester's discs, and the gate. Diamond is offered to players
 since this stage (§8 there). Diamond's crate tests: 146 and 56.
+
+---
+
+## 21. Stage 13, speed (2026-10-12)
+
+The plan's §7 row 13, with the tester's go of 2026-10-11. Its record is `Diamond_Speed.md`.
+
+### 21.1 What was built
+
+- **The bench** (`examples/bench.rs`): frames timed on the emulation thread alone, every frame's picture, the sound and
+  the state digested outside the timed span, on the open kernel with no firmware; `--plain`, `--verify N`, `--armed`.
+- **Idle skipping, the plan's third lever, built first by the profile** (`src/idle.rs`; `Machine::advance`): a loop's
+  turn proven over the I-cache's words with one induction, observed for four turns against the bus's timing, and its
+  further whole periods passed up to the next event; the debugger's frame never skips. `programs/idle.s` holds the loop
+  forms; `Idle::verify` checks a skip against the interpreter as it is made.
+- **The decoded-instruction cache's first tier** (`src/icache.rs`, `src/bus.rs`; `blackmoon-r3000`'s
+  `Bus::fetch_decoded`, a method with a default, `BlackMoon_R3000.md` §2): each I-cache word decoded as it enters,
+  a hit fetched without decoding the address or the word; memory control's RAM window kept with its register; data
+  accesses to RAM answered before the map is decoded; the debug unit's checks returning at once while it is off.
+- **No state change**: `DMND` stays version 9; neither the skipper's tables nor the decoded words are state, and a
+  state load decodes the cache's words again.
+
+### 21.2 The gate (G6)
+
+| Item | Result |
+|---|---|
+| §5.12's budget at the 33 per cent quota on the bench set | **Met**: 7.1 to 11.2 ms against 13.4; before, Ape Escape, Castlevania and Spyro the Dragon missed it at 15.1 to 17.0 |
+| The desktop's figure of about 3.8 ms | **Met**: 2.3 to 3.7 ms, from 4.1 to 5.5 |
+| Full speed on the Legion Go S on battery | **Met** on the tree before D-29's and D-45's merges (1.2 to 4.5 ms on battery) and on the current tree on the charger (2.6 to 4.1 ms); the current tree's battery run is owed |
+| Each lever bit-identical to the plain path | **Met**: the seven games' digests with and without, each sixteenth skip verified; the kit's and the debugger's armed-against-plain tests on the plain run with the levers |
+
+### 21.3 Tests run (2026-10-12)
+
+`diamond` 155 unit tests and 68 program tests, with and without `EMUSEN_DIAMOND_PS1TESTS`, and the disc tests with
+`EMUSEN_DIAMOND_DISC`; `blackmoon-r3000` with `EMUSEN_BLACKMOON_CORPUS`, 55,000 of 55,000; WiseMan under the test lock
+with the corpus, `DiamondTests` and `DiamondDebugTests`.
+
+### 21.4 What waits
+
+The current tree's battery run on the handheld; the threaded rasteriser, the decoded cache's second tier and the
+recompiler, not needed for G6 (`Diamond_Speed.md` §7); the inexact speed settings and the shipped link, proposed for
+the tester's decision (§8 there). The handheld's emulation thread is at about a fifth of a frame, so the slowness the
+tester reported there is to be looked for outside it. No dispute was taken.

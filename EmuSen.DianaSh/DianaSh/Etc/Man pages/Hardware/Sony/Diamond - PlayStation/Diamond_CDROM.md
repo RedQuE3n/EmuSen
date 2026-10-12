@@ -399,6 +399,17 @@ pictures from 450 to 3,000, at 1,000 frames), Castlevania's movie, logo and titl
 Tekken 3's title comes later than before only because the movie before it now plays, as on the referee. Crash
 Bandicoot's, Spyro's and Rayman's pictures are byte for byte the same, since none of the three makes the store.
 
+**The cost** [M, `examples/run`, 600 frames, both builds aligned (`-C llvm-args=-align-all-functions=6`), run
+alternately on one processor, the fastest of five, ms a frame, before → after]: `timers` 7.030 → 6.955, `gpu/triangle`
+7.491 → 7.444, `gpu/bandwidth` 8.431 → 8.412, `spu/test` 7.364 → 7.344, `mdec/movie-15bit` 5.631 → 5.598, Crash
+Bandicoot's first 600 frames 0.777 → 0.777. The change is one more arm in the I/O write's dispatch, taken only by a
+narrow store at an address not word-aligned; the differences are within what placement moves.
+
+**Tests run** (2026-10-12): `cargo test --release` in the crate, 149 unit tests and 63 program tests, with and without
+`EMUSEN_DIAMOND_PS1TESTS` (and the opt-in disc tests' `EMUSEN_DIAMOND_FIRMWARE` and `EMUSEN_DIAMOND_DISC`, `getloc`,
+`disc-swap` and `timing` among them), all passing; WiseMan's `Diamond` tests under the test lock with the corpus, 42 of
+42.
+
 ## 10. The state
 
 `DMND` version 6 (version 5 was the GPU's cache step): the controller's group, `Bus.Cdrom`, after the GPU's: the

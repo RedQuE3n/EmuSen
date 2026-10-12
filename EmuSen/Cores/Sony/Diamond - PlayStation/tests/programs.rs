@@ -690,7 +690,7 @@ fn swcz_stores_zero_on_the_bus() {
 // --- Stage 7: the CD-ROM controller (Diamond_CDROM.md §9) ---
 
 /// A disc of 40 mode 2 form 1 sectors from 00:02:00 whose user data names each one, sector 16 holding "CD001".
-fn cd_disc() -> emusen_disc::Disc {
+fn cd_disc() -> diamond::medium::Disc {
     let mut bin = Vec::new();
     for i in 0..40u32 {
         let mut user: Vec<u8> = (0..2048u32).map(|k| (k * 7 + i) as u8).collect();
@@ -701,7 +701,7 @@ fn cd_disc() -> emusen_disc::Disc {
         emusen_disc::ecma130::mode2_form1(150 + i, [0, 0, emusen_disc::ecma130::submode::DATA, 0], &user, &mut s);
         bin.extend_from_slice(&s);
     }
-    emusen_disc::Disc::from_image(bin, emusen_disc::IsoForm::Mode2Form1).unwrap()
+    diamond::medium::Disc::from_image(bin.into(), emusen_disc::IsoForm::Mode2Form1).unwrap()
 }
 
 /// The kernel's read sequence of psx-spx's ReadN chapter, polled: each response in order, GetID's licence for the
@@ -724,7 +724,7 @@ fn a_sector_reads_by_the_kernels_sequence() {
 
 /// The opt-in disc tests' inputs: ps1-tests' release, a folder of the player's own BIOS and one of the tester's discs
 /// copied to the cache (a cue sheet with its tracks beside it, or one image), or a message naming what is missing.
-fn disc_inputs() -> Option<(std::path::PathBuf, Vec<u8>, emusen_disc::Disc)> {
+fn disc_inputs() -> Option<(std::path::PathBuf, Vec<u8>, diamond::medium::Disc)> {
     let (Some(corpus), Some(firmware), Some(disc)) = (std::env::var_os("EMUSEN_DIAMOND_PS1TESTS"), std::env::var_os("EMUSEN_DIAMOND_FIRMWARE"), std::env::var_os("EMUSEN_DIAMOND_DISC")) else {
         eprintln!("skipped: EMUSEN_DIAMOND_PS1TESTS, EMUSEN_DIAMOND_FIRMWARE and EMUSEN_DIAMOND_DISC name ps1-tests' release, the player's BIOS folder and a disc");
         return None;
@@ -739,14 +739,14 @@ fn disc_inputs() -> Option<(std::path::PathBuf, Vec<u8>, emusen_disc::Disc)> {
             files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
         }
     }
-    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
-    let Ok(diamond::medium::Opened::Disc(d, _)) = diamond::medium::open(&image, &refs) else { panic!("the disc opens") };
+    let kept = files.into_iter().map(emusen_native::core::Kept::from).collect();
+    let Ok(diamond::medium::Opened::Disc(d, _)) = diamond::medium::open(emusen_native::core::Kept::from(image), kept) else { panic!("the disc opens") };
     Some((std::path::PathBuf::from(corpus), bios, *d))
 }
 
 /// A program run on the player's BIOS with the disc in the drive, the lid worked by `lid` each frame; the TTY from
 /// `heading` on, the BIOS's own messages before the program left out.
-fn run_on_disc(program: &[u8], bios: &[u8], disc: emusen_disc::Disc, frames: usize, heading: &str, mut lid: impl FnMut(&mut Machine, &str)) -> String {
+fn run_on_disc(program: &[u8], bios: &[u8], disc: diamond::medium::Disc, frames: usize, heading: &str, mut lid: impl FnMut(&mut Machine, &str)) -> String {
     let media = Media::read(program).unwrap();
     let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], program, Some((bios, Kernel::Player)));
     m.insert_disc(disc);
@@ -1004,7 +1004,7 @@ fn data_byte(k: usize) -> u8 {
 
 /// The boot disc: SYSTEM.CNF naming `kernel-cd.s` in a subdirectory with an argument and its own TCB, EVENT and STACK,
 /// and a 5,000-byte DATA.BIN; the program's header gives GP 80123450h.
-fn boot_disc() -> emusen_disc::Disc {
+fn boot_disc() -> diamond::medium::Disc {
     let words = emusen_mips::assemble(include_str!("../programs/kernel-cd.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
     let mut exe = exe::build(&words);
     exe[0x14..0x18].copy_from_slice(&0x8012_3450u32.to_le_bytes());
@@ -1014,7 +1014,7 @@ fn boot_disc() -> emusen_disc::Disc {
 }
 
 /// A machine on the open kernel with no program given, as a disc is booted: reset at BFC00000h.
-fn open_machine(disc: Option<emusen_disc::Disc>) -> Machine {
+fn open_machine(disc: Option<diamond::medium::Disc>) -> Machine {
     let media = Media { kind: diamond::media::Kind::Disc { raw: true }, market: Some(Market::Americas) };
     let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &[], kernel::open_kernel().map(|k| (k, Kernel::Open)));
     if let Some(d) = disc {
@@ -1394,7 +1394,7 @@ fn every_table_armed_gives_the_plain_runs_digests_on_a_disc() {
     }
     let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
     every_table_gives_the_plain_run(&path.file_name().unwrap().to_string_lossy(), 120, || {
-        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(&image, &refs) else { panic!("the disc opens") };
+        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), refs.iter().map(|r| emusen_native::core::Kept::from(r.to_vec())).collect()) else { panic!("the disc opens") };
         let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
         m.insert_disc(*disc);
         m
@@ -1579,7 +1579,7 @@ fn the_levers_leave_a_disc_as_the_interpreter_does() {
     }
     let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
     levers_give_the_interpreters_digests(&path.file_name().unwrap().to_string_lossy(), 600, 1, || {
-        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(&image, &refs) else { panic!("the disc opens") };
+        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), refs.iter().map(|r| emusen_native::core::Kept::from(r.to_vec())).collect()) else { panic!("the disc opens") };
         let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
         m.insert_disc(*disc);
         m
@@ -1694,7 +1694,7 @@ fn runs_leave_a_disc_as_its_steps_do() {
     }
     let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
     runs_give_the_steps_digests(&path.file_name().unwrap().to_string_lossy(), 600, 61, || {
-        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(&image, &refs) else { panic!("the disc opens") };
+        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), refs.iter().map(|r| emusen_native::core::Kept::from(r.to_vec())).collect()) else { panic!("the disc opens") };
         let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
         m.insert_disc(*disc);
         m

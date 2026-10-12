@@ -1,16 +1,22 @@
-//! The disc a create opens (Diamond_CDROM.md §8): a cue sheet with its tracks as companion files, a CHD, an `.iso` or a
-//! lone raw track, each through emusen-disc as CD-XA, with an `.sbi` among the companions; its market read from the
-//! licence text in sector 4, as `media.rs` reads a raw image's.
+//! What of a disc is the PlayStation's (Diamond_CDROM.md §8): a disc emusen-disc opens is taken only where the licence
+//! text in sector 4 of its first track names a market, read as `media.rs` reads a raw image's; its 2,048-byte sectors
+//! are framed as CD-XA; and the sectors a state's fingerprint covers. Opening an image with its companions, the
+//! formats and the fingerprint's arithmetic are emusen-disc's (EmuSen_Disc.md §9).
 
-use emusen_disc::cue::Sheet;
-use emusen_disc::{Disc, IsoForm, ecma130};
+use emusen_disc::{IsoForm, Lone, ecma130};
+use emusen_native::core::Kept;
 
 use crate::media::{Kind, Media, Refusal, licensed};
 
+/// The disc in a machine's drive: its bytes the host's where the host lends them, a copy otherwise (BORROW).
+pub type Disc = emusen_disc::Disc<Kept>;
+
+pub use emusen_disc::is_sheet;
+
 /// What opening found: no disc (a PS-EXE), or the disc and what it is.
-pub enum Opened {
+pub enum Opened<B: AsRef<[u8]>> {
     Program,
-    Disc(Box<Disc>, Media),
+    Disc(Box<emusen_disc::Disc<B>>, Media),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -22,39 +28,28 @@ pub enum DiscRefusal {
     Bad(String),
 }
 
-/// Whether `image` reads as a cue sheet: text whose first command is FILE, REM or CATALOG.
-pub fn is_sheet(image: &[u8]) -> bool {
-    let head = &image[..image.len().min(4096)];
-    let Ok(text) = std::str::from_utf8(head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head)) else { return false };
-    text.lines().map(str::trim).find(|l| !l.is_empty()).is_some_and(|l| ["FILE", "REM", "CATALOG", "TITLE", "PERFORMER"].iter().any(|k| l.to_ascii_uppercase().starts_with(k)))
-}
+/// The sectors a state's fingerprint covers, from the first track's index 01: the licence, and the volume
+/// descriptors with the root directory that usually follows them. Nine sectors whatever the disc's size.
+pub const PRINTED: [u32; 9] = [4, 16, 17, 18, 19, 20, 21, 22, 23];
 
-/// Opens `image` with its companions; a PS-EXE is left to `media.rs`.
-pub fn open(image: &[u8], companions: &[&[u8]]) -> Result<Opened, DiscRefusal> {
-    if image.starts_with(crate::media::EXE_MAGIC) {
-        return Media::read(image).map(|_| Opened::Program).map_err(DiscRefusal::Media);
+/// Opens `image` with its companions over the caller's backing: a core's kept bytes at create, bytes borrowed for
+/// the call by a question about the image. A PS-EXE is left to `media.rs`.
+pub fn open<B: AsRef<[u8]>>(image: B, companions: Vec<B>) -> Result<Opened<B>, DiscRefusal> {
+    if image.as_ref().starts_with(crate::media::EXE_MAGIC) {
+        return Media::read(image.as_ref()).map(|_| Opened::Program).map_err(DiscRefusal::Media);
     }
-    let (mut disc, used) = if is_sheet(image) {
-        let sheet = Sheet::parse(&String::from_utf8_lossy(image)).map_err(|e| DiscRefusal::Bad(e.to_string()))?;
-        let needs = sheet.files.len();
-        if companions.len() < needs {
-            return Err(DiscRefusal::Missing { needs, has: companions.len() });
-        }
-        let files = companions[..needs].iter().map(|c| c.to_vec()).collect();
-        (Disc::from_sheet(&sheet, files, IsoForm::Mode2Form1).map_err(|e| DiscRefusal::Bad(e.to_string()))?, needs)
-    } else {
-        let opened = match Media::read(image) {
-            Ok(Media { kind: Kind::Disc { raw: false }, .. }) => Disc::from_user_image(image.to_vec(), IsoForm::Mode2Form1),
-            _ => Disc::from_image(image.to_vec(), IsoForm::Mode2Form1),
-        };
-        match opened {
-            Ok(d) => (d, 0),
-            Err(_) => return Err(DiscRefusal::Media(Refusal::NotPlayStation)),
-        }
+    // Headerless 2,048-byte sectors are a disc only where the licence says so; anything else is told by its own bytes.
+    let lone = match Media::read(image.as_ref()) {
+        Ok(Media { kind: Kind::Disc { raw: false }, .. }) => Lone::User,
+        _ => Lone::Detect,
     };
-    if let Some(sbi) = companions[used..].iter().find(|c| c.starts_with(b"SBI\0")) {
-        disc.apply_sbi(sbi).map_err(|e| DiscRefusal::Bad(e.to_string()))?;
-    }
+    let sheet = is_sheet(image.as_ref());
+    let mut disc = match emusen_disc::open(image, companions, IsoForm::Mode2Form1, lone) {
+        Ok(d) => d,
+        Err(emusen_disc::Refusal::Missing { needs, has }) => return Err(DiscRefusal::Missing { needs, has }),
+        Err(emusen_disc::Refusal::Image(_)) if !sheet => return Err(DiscRefusal::Media(Refusal::NotPlayStation)),
+        Err(e) => return Err(DiscRefusal::Bad(e.to_string())),
+    };
     let mut raw = [0u8; ecma130::RAW];
     let start = disc.tracks()[0].start;
     disc.read(start + 4, &mut raw);
@@ -65,23 +60,7 @@ pub fn open(image: &[u8], companions: &[&[u8]]) -> Result<Opened, DiscRefusal> {
     }
 }
 
-/// A disc's fingerprint, never 0: FNV-1a over its tracks' starts and kinds, its lead-out and the raw sectors 4 and 16 to
-/// 23 of its first track, the licence and the volume descriptors with the root directory that usually follows them,
-/// so that a state is held to the disc it was made on.
-pub fn fingerprint(disc: &mut Disc) -> u64 {
-    let mut h = 0xCBF2_9CE4_8422_2325u64;
-    let mut eat = |bytes: &[u8]| bytes.iter().for_each(|&b| h = (h ^ b as u64).wrapping_mul(0x0100_0000_01B3));
-    let tracks: Vec<(u32, bool)> = disc.tracks().iter().map(|t| (t.start, t.audio)).collect();
-    for (start, audio) in &tracks {
-        eat(&start.to_le_bytes());
-        eat(&[*audio as u8]);
-    }
-    eat(&disc.lead_out().to_le_bytes());
-    let first = tracks.first().map_or(0, |t| t.0);
-    let mut raw = [0u8; ecma130::RAW];
-    for sector in std::iter::once(4).chain(16..24) {
-        disc.read(first + sector, &mut raw);
-        eat(&raw);
-    }
-    h.max(1)
+/// A disc's fingerprint, never 0: emusen-disc's over the sectors `PRINTED` names, as every state since DMND 9 holds it.
+pub fn fingerprint<B: AsRef<[u8]>>(disc: &mut emusen_disc::Disc<B>) -> u64 {
+    disc.fingerprint(PRINTED)
 }

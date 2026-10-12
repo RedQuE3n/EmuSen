@@ -151,7 +151,7 @@ impl Machine {
     }
 
     /// Puts `disc` in the drive, its lid closed, as at power-on.
-    pub fn insert_disc(&mut self, mut disc: emusen_disc::Disc) {
+    pub fn insert_disc(&mut self, mut disc: crate::medium::Disc) {
         self.disc_print = crate::medium::fingerprint(&mut disc);
         self.board.cdrom = crate::cdrom::Cdrom::new(Some(disc), self.config.market);
         self.board.schedule();
@@ -159,7 +159,7 @@ impl Machine {
 
     /// Replaces the disc in the drive, or empties it, whatever the lid: the lid open, as a player would, or for a state
     /// about to load, which brings the drive's own registers.
-    pub fn change_disc(&mut self, disc: Option<emusen_disc::Disc>) {
+    pub fn change_disc(&mut self, disc: Option<crate::medium::Disc>) {
         let now = self.board.now;
         self.board.cdrom.run(now);
         self.disc_print = disc.map_or(0, |mut d| {
@@ -175,7 +175,7 @@ impl Machine {
     }
 
     /// Opens the lid, or closes it on `disc` (another, or the same one when `None`).
-    pub fn set_lid(&mut self, open: bool, disc: Option<emusen_disc::Disc>) {
+    pub fn set_lid(&mut self, open: bool, disc: Option<crate::medium::Disc>) {
         let now = self.board.now;
         if open {
             self.board.cdrom.open_lid(now);

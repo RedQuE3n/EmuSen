@@ -360,6 +360,56 @@ library storage, once with a cold cache (after a reboot, since dropping caches n
 "disc opened" line, and the process's peak memory beside the free memory; a cold read from a microSD card at its
 typical 90 MB/s would make the open about seven seconds, which would argue for the streaming read of Extensions §10.2.
 
+### 9.8 The games that stopped at their movies, and the stream (2026-10-12)
+
+The tester played the build on the handheld and reported "Slow and many games don't work or launch"; making the games
+play was put ahead of disputes no game shows. Three of the seven discs stopped at their movies on the open kernel
+(§9.4): Silent Hill went black after its memory card warning, Castlevania: SotN stayed black, Tekken 3 skipped its
+opening movie. `Diamond_MDEC.md` §9 suspected the stream reaching the games' decoders.
+
+**Where the stream was looked at** [M, the controller's trace and the game's own register accesses from its entry
+(`--trace-game`, `--game-log`), and the game's RAM, on the open kernel; no BIOS runs]: Silent Hill starts its movie with
+Setmode E0h (double speed, XA, whole sectors) and ReadS, reads 12 bytes of each sector by the CPU, then 8 words and
+1F8h words by DMA channel 3. To frame 1,700 the drive delivered all 539 data sectors at once, none left waiting or
+replaced, and sent the 76 XA sectors of file 1 to the decoder; of the last piece DMA channel 3 wrote at each of 474
+places in RAM, 451 equal the disc's bytes at the FIFO's position, the 23 others being the headers the game rewrites
+in place and buffers of earlier loads it has since reused. **The stream was right.** The game's own sector callback
+then dropped every sector after its first frame's, waiting for the interrupt of the DMA piece that ends a frame, which
+it enables by a byte store to DICR's third byte; Diamond wrote that byte as the whole of DICR, clearing every channel's
+enable. That is D-45 (`Diamond_Disputes.md`), a rule of the bus's I/O widths, not of this controller.
+
+**The seven discs, before and after**, on the open kernel to frame 6,000, pictures every 150 frames, against
+SwanStation's on `scph5501.bin` (its BIOS's intro takes some 800 to 1,100 frames more, so its frames run later) [M,
+WiseMan at `b5051abb` before; pictures kept in the cache, never committed]:
+
+| Game | Before | After | SwanStation |
+|---|---|---|---|
+| Ape Escape | the DUALSHOCK screen, then white from 1,650 | **its polygon intro from 1,650, its title by 5,250** | its "not plugged into port 1" screen (§9.4), then the intro from about 3,450 |
+| Castlevania: SotN | black throughout | **the movie from 750, the Konami logo at 1,080, its title at 1,320** | the movie at 1,780, the logo at 2,120, the title at 2,360 |
+| Crash Bandicoot | its title, then the attract demo | every picture identical | the intro, title, the demo |
+| Rayman | the Ubi Soft logo and its opening movie | every picture identical | the same |
+| Silent Hill | the warnings and logos, then black from 1,500 | **"the fear of blood" screen from 1,110, the movie from 1,460**, playing at frame 6,000 | the screen at 2,180, the movie from 2,270 |
+| Spyro the Dragon | its title, then "Entering demo mode" | every picture identical | the intro, title, the demo |
+| Tekken 3 | "NAMCO PRESENTS", title at 1,920, attract fights; the movie skipped | **"NAMCO PRESENTS", the movie from 600, its title at about 6,600 after it, then the attract fights** (to frame 12,000) | the movie from 1,610, the title at about 7,500 |
+
+Against SwanStation's pictures every 10 frames, on 80×60 grey at the best constant offset [M]: Silent Hill's movie
+within 1.9 grey levels (the median of 211 pictures from 1,500 to 3,600, at 810 frames), Tekken 3's within 2.2 (256
+pictures from 450 to 3,000, at 1,000 frames), Castlevania's movie, logo and title at 1,030–1,040 frames. Silent Hill's
+"fear of blood" screen holds 350 frames on Diamond and 90 on SwanStation before the movie; why is not known.
+Tekken 3's title comes later than before only because the movie before it now plays, as on the referee. Crash
+Bandicoot's, Spyro's and Rayman's pictures are byte for byte the same, since none of the three makes the store.
+
+**The cost** [M, `examples/run`, 600 frames, both builds aligned (`-C llvm-args=-align-all-functions=6`), run
+alternately on one processor, the fastest of five, ms a frame, before → after]: `timers` 7.030 → 6.955, `gpu/triangle`
+7.491 → 7.444, `gpu/bandwidth` 8.431 → 8.412, `spu/test` 7.364 → 7.344, `mdec/movie-15bit` 5.631 → 5.598, Crash
+Bandicoot's first 600 frames 0.777 → 0.777. The change is one more arm in the I/O write's dispatch, taken only by a
+narrow store at an address not word-aligned; the differences are within what placement moves.
+
+**Tests run** (2026-10-12): `cargo test --release` in the crate, 149 unit tests and 63 program tests, with and without
+`EMUSEN_DIAMOND_PS1TESTS` (and the opt-in disc tests' `EMUSEN_DIAMOND_FIRMWARE` and `EMUSEN_DIAMOND_DISC`, `getloc`,
+`disc-swap` and `timing` among them), all passing; WiseMan's `Diamond` tests under the test lock with the corpus, 42 of
+42.
+
 ## 10. The state
 
 `DMND` version 6 (version 5 was the GPU's cache step): the controller's group, `Bus.Cdrom`, after the GPU's: the
@@ -393,7 +443,8 @@ per frame: the sectors, the data FIFO and XA's frames use buffers made at create
 
 ## 13. What waits
 
-- D-29, booting through the intro; the SPU (stage 8) and the MDEC (stage 9), which the games' openings need.
+- D-29, booting through the intro; the SPU (stage 8) and the MDEC (stage 9), which the games' openings need. *Since
+  2026-10-12* the seven discs play their openings on the open kernel (§9.8).
 - The sound map; BFEMPT and BFWRDY; Report's peak's L/R bit; the emphasis filter; GetQ's lead-in seek scratch noise.
 - `.m3u` and the disc change (stage 11); the framework's items of §8.4; LibCrypt on a protected disc, of which the
   library has none (the `.sbi` path is tested on a synthetic one).

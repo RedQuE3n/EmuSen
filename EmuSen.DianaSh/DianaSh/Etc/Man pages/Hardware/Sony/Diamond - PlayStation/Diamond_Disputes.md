@@ -23,6 +23,8 @@ added its step to D-29.
 *The GPU's rows step (2026-10-12)* took D-41 and D-42, from the two groups of amidog's GPU test that D-23 left open.
 *The intro's step (2026-10-12)* settled D-29 and took D-43, the DMA's arbitration beside a list, and D-44, the European
 BIOS that draws nothing.
+*The stream's step (2026-10-12)* took D-45, a narrow store to a 32-bit register at an address not word-aligned, which
+had kept four of the tester's games from their movies.
 
 ## The rules this log keeps
 
@@ -1393,3 +1395,49 @@ BIOS that draws nothing.
 - **Depends on it:** the European players with their own BIOS.
 - **Pinned by:** nothing yet.
 - **Implemented in:** —
+
+### D-45. A byte or halfword store to a 32-bit register at an address not word-aligned writes the whole register, the processor's word shifted to the store's byte
+
+- **Opened:** 2026-10-12, by the tester's report of the current build ("many games don't work or launch") and
+  `Diamond_MDEC.md` §9: on the open kernel Silent Hill went black after its memory card warning, Castlevania: SotN
+  stayed black, Tekken 3 skipped its opening movie and Ape Escape went white after its DUALSHOCK screen.
+- **Documents read:** psx-spx `6d7d1bc`, "Unpredictable Things": the table "I/O Write Datasize", which gives DICR,
+  DPCR, I_STAT and I_MASK, the timers, memory control and every DMA register but the lengths as "(w32) write full
+  32bits (left-shifted if address isn't word-aligned)", and the paragraph after it: "Performing a 8-bit or 16-bit write
+  (`sb`/`sh`) will place the entirety of the GPR on the bus … the data is **not** masked"; "DMA Channels" (DICR's
+  bits 16–23, each channel's interrupt enable).
+- **What the game showed** [M, the game's own code and RAM on the open kernel, the run tool's `--game-log` and the
+  controller's trace from the game's entry]: Silent Hill's stream is right where it reaches RAM: of the last piece DMA
+  channel 3 wrote at each of 474 places, 451 equal the disc's bytes and the 23 others are the nine headers the game
+  rewrites in place and buffers of earlier loads it has since reused (`Diamond_CDROM.md` §9.8); its sector callback stops taking sectors once
+  the first frame's last one is read, waiting for that sector's DMA channel 3 interrupt to mark the frame complete.
+  The callback asks for the interrupt by `sb` of DICR's third byte, read with `lbu` and the channel's bit set, to
+  `1F8010F6h`. Diamond wrote the byte, unshifted, as the whole of DICR, so that the enables and the master enable were
+  cleared and no channel's interrupt came again. Castlevania, Tekken 3 and Ape Escape store to the same byte; Crash
+  Bandicoot, Spyro the Dragon and Rayman, which played already, never do.
+- **Test program:** `programs/narrow-stores.s`: a byte and a halfword to DICR's upper half (the second with `12340044h`
+  and bits 0–5 set before), a byte to DPCR's second byte, a halfword to timer 0's target at its upper half and at its
+  own address, a byte to I_MASK's second byte, a byte to channel 2's MADR's third byte, each read back.
+- **Referee** (`Diamond_Referees.md` §4.15) [M]:
+
+  | Case | Diamond before | Diamond after | DuckStation, SwanStation | Beetle PSX | PCSX-Redux | PCSX-ReARMed |
+  |---|---|---|---|---|---|---|
+  | 0 DICR byte 88h at F6h | `00000008h` | `00880000h` | `00880000h` | `00880000h` | `00880000h` | `0C880000h` |
+  | 1 DICR half `12340044h` at F6h | `00340004h` | `00440000h` | `00440000h` | `00440000h` | `0044003Fh` | `0044003Fh` |
+  | 2 DPCR byte 0Bh at F1h | `0000000Bh` | `00000B00h` | `00000B00h` | `00000B00h` | `00000B00h` | `00000B99h` |
+  | 3, 4 T0 target half at 10Ah, then at 108h | `1234h`, `1234h` | `0`, `1234h` | `0`, `1234h` | `0`, `1234h` | `0`, `1234h` | `0`, `1234h` |
+  | 5 I_MASK byte 05h at 75h | `0005h` | `0500h` | `0500h` | `0500h` | `0500h` | `0500h` |
+  | 6 MADR byte 12h at A2h | `00000012h` | `00120000h` | `00120000h` | `00120000h` | `00120000h` | `00120000h` |
+
+- **Witnesses:** as the referee.
+- **Conclusion** [measured]: the store's 32-bit word, shifted left by eight times the address's low two bits, is
+  written to the register as a word store would write it, the bits outside the store's own byte or halfword included.
+  All five referees shift; DuckStation's and Mednafen's lineages agree in every cell, and with psx-spx's "write full
+  32bits"; the PCSX family keeps DICR's and DPCR's other bits, which psx-spx's text does not support. The DMA lengths,
+  marked "OK" at every width, keep the unshifted write they had; no program here tests them. Not measured: memory
+  control's narrow stores (psx-spx: "Non-4-byte aligned 8bit/16bit writes to DRAM\_CTRL do crash"), which the
+  program leaves alone so as not to stop a referee.
+- **Depends on it:** every game whose libraries set a DMA channel's interrupt enable by a byte store, the four above
+  among them; their movies (`Diamond_MDEC.md` §9).
+- **Pinned by:** `a_narrow_store_writes_its_register_shifted_to_its_byte`, failing before the change.
+- **Implemented in:** `bus.rs`'s `whole_word` and `io_write`, in the commit citing this entry.

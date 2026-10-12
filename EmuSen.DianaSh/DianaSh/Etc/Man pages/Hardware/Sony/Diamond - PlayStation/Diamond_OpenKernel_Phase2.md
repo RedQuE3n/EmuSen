@@ -356,7 +356,8 @@ and cards needed the player's BIOS, is withdrawn. The risks of `Diamond_OpenKern
 I/O inside the vblank handler, about 240,000 cycles a sector; the CD handler that leaves interrupts it does not own to
 the program; games that patch the card functions' code, which psx-spx's excluded section is said to describe and which
 on this kernel find ROM, not RAM, at the tables' entries (*since §25.3* the exception path runs from the kernel's RAM,
-while the tables and C(06h) still name its ROM copies).
+while the tables and C(06h) still name its ROM copies; *since §27* a game that stores and calls behind B(5Bh)'s entry
+finds fill that returns, and behind any other entry the kernel's other code).
 
 ### 20.4 The image, and what the cross-kernel step needs
 
@@ -365,7 +366,9 @@ while the tables and C(06h) still name its ROM copies).
 `DIAMOND_KERNEL_REBUILD=require`, and from a copy of `kernel/` at another path to the same digest. *Since §23 (2026-10-11):* SHA-256
 `7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`. *Since §25 (2026-10-12):* SHA-256
 ~~`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`~~
-`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`, the variables ending at A310h.
+`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`, the variables ending at A310h. *Since §27
+(2026-10-12):* 103,256 bytes before the last non-zero byte, SHA-256
+`c1a002e88aa4e8b1be0257ca486bdb8309cd63f229e1f5070e36e4c72559c785`.
 
 **Left to a separate step**, by the stage's terms, and taken in §22: the cards exchanged with the player's BIOS, and `firmwarecheck.py`.
 The cards it needs are in `~/.cache/emusen/probe/diamond/cards/s10/` with a `README.txt`: `tekken3-saved-on-open-kernel.mcr`
@@ -929,3 +932,199 @@ hexadecimal, by a comparison of the kernel's RAM before and after the game's fir
 the kernel, of the kind psx-spx's excluded "BIOS Patches" describes, and so may reflect the original's layout. They were
 not decoded or studied, are not recorded here, and nothing in the kernel depends on them: the fix is to keep their
 target in the ROM.
+
+## 27. The stretch behind B(5Bh)'s entry (2026-10-12)
+
+*Written by the kernel's writer under the replacement writers' rules of the plan's §1.3. §26 is kept for the record of
+the two fixes this section's image also carries, LoadExec's and the synchronous CD operations'.* Mega Man Legends (the
+tester's copy, USA) showed a black screen on the open kernel. The marks are this page's, **[M]** measured on 2026-10-12;
+E is the address the B table gives for B(5Bh), ChangeClearPAD. §27.8 lists what was read and states the exposures.
+
+### 27.1 The game's evidence
+
+**The stop** [M, the run tool's `--game` and a RAM dump, on the image built from §25's sources with §26's two fixes,
+SHA-256 `b2d6c568…`, never committed]. The game enters at frame 201. At frame 204 it calls B(57h) GetB0Table three
+times, each followed by A(44h) FlushCache, with B(5Bh) ChangeClearPAD(0), C(03h), C(02h), B(12h) InitPAD2, B(13h)
+StartPAD2 and B(5Bh) again among them, and makes no call after. The CPU is then in SystemError's loop; the TCB holds
+Cause 0000001Ch, a bus error on a data access, with EPC 9FC03684h and RA 9FC03960h, both in the kernel's ROM.
+
+**The game's pad library** [M, its code in RAM, disassembled: 8001A3F0h-8001A860h in the program the disc boots,
+80080518h-800806A4h in the program that one starts by LoadExec, the same instructions at other addresses]. Three
+routines each call GetB0Table and load the word at 16Ch of the table it returns, entry 5Bh, into a register: E. None
+calls through it. From E they compute addresses, store words at some and keep others to call:
+
+| From E | What the game does there | When, by the run's frames |
+|---|---|---|
+| 3D8h-3E7h | stores four words, one instruction of its own and three zeros | 204 (the booted program), 859 (the second) |
+| 4E0h-4EFh | stores the same four words | 204, 859 |
+| 594h-5BFh | stores eleven zero words | 204, 859 |
+| 62Ch-64Fh | stores nine zero words | 204, 859 |
+| 7A0h | keeps the address, and holds a routine that calls it; nothing in either program's RAM calls or names that routine | never seen called |
+| 884h | calls it, straight after StartPAD2 and ChangeClearPAD(0) | 204, 859 |
+| 894h | calls it, straight before StopPAD2 | 663, eight frames before LoadExec |
+
+Each run of stores is followed by FlushCache, so the game takes the addresses for instructions in RAM that it means to
+change, and the two calls for routines that return [A]. Between them it removes an element from the priority 1 chain
+and queues one of its own there (C(03h), C(02h)); before LoadExec it removes that element again (C(03h) at frame 663).
+On that image E was 9FC030C0h, a Rust function among others in the ROM: E+884h, 9FC03944h, fell inside an unrelated
+function, which ran from its middle, called on (the RA above) and came to the bus error.
+
+**Everything it reaches** [M, the run tool's `--game-range 1FC00000:1FC80000`, added for this section: every load,
+store and jump of the game's code into the ROM, over the 12,600 frames of §27.6's script]. No load. 28 stores at frame
+204 and 42 at frame 859: the 28 of the table above each time, and at 859 fourteen more through GetC0Table's entry 06h
+into the exception handler's ROM copy, the kind of patch §25.3 records for Crash Bandicoot, which the ROM ignores as it
+does there. Three jumps: E+884h twice and E+894h once, as the table gives them. Nothing else, in play as before it.
+
+### 27.2 The design
+
+**The entry** [C]. B(5Bh)'s table entry is still ChangeClearPAD, now four instructions of assembly in `entry.rs`, so that
+its place and what follows it are the kernel's to lay out: the flag (`pad.rs`'s `PAD_CLEAR`) loaded into v0 and the
+argument stored, as before. E lies on a 16-byte boundary, a line of the I-cache.
+
+**The stretch** [C]. From E+10h to E+A00h the ROM holds zero words, which the R3000 runs as `nop`, with `jr ra` in the
+last word but one of every 100h bytes (E+F8h, E+1F8h, … E+9F8h) and a zero word, its delay slot, after it; one more
+`jr ra` and zero word follow at E+A00h, so that a call at the last delay slot returns as well. 2,568 bytes in all. A call
+at any word from E+10h to E+9FCh therefore runs `nop`s, one `jr ra` and its delay slot: it returns to its caller with
+every register as it was, v0, HI and LO among them, touches no memory and takes no exception.
+
+**The stores** [R §25.3, Q7]. The tables name the ROM copies of the kernel's code, so a store behind E is a store to the
+ROM and changes nothing. That is kept, and it is what makes the game's one non-zero word harmless: in RAM a slide from
+E+3D8h would run it.
+
+**Why this form** [R `EmuSen_Firmware.md` §0]. The image is judged for what it repeats with fill left out, a run of
+eight or more identical bytes; a return at every word pair would be one instruction pair repeated over three hundred
+times, which is not fill and would count. Here each return is four bytes that are not fill, between two runs that are.
+
+**Not an imitation** [C]. What the original holds at these offsets is not known and was not sought (§27.8). The game
+shows only that it rewrites instructions there and calls two routines, once each as it starts and stops its pads; on
+this kernel the routines do nothing, and the pads are read each vblank by the kernel's element as for any program.
+Whether a game loses anything by that can only show in a game: this one reads its pad and plays (§27.6).
+
+**How far** [A]. The furthest address the game reaches is E+894h. The 100h bytes holding it end at E+900h; one more
+unit, to E+A00h, is the margin, so that a build of the same library with offsets up to 256 bytes greater would still
+land in fill. No further: by Q9 below the construction follows what games are seen to do.
+
+### 27.3 The cost
+
+[M] `programs/kernel-pad-entry.s` on Diamond's bus, each call made inside a critical section, cold straight after
+FlushCache and then again warm; the game's own calls by `--game-range`, which counts from the jump to the game's next
+instruction:
+
+| Call at | Instructions | Cycles, cold | Cycles, warm | In the game |
+|---|---|---|---|---|
+| E+884h | 31 | 798 | 31 | 984 at frames 204 and 859 |
+| E+7A0h | 24 | 618 | — | not called |
+| E+894h | 27 | 695 | — | 857 at frame 663 |
+| E+FCh, a return's delay slot: the longest slide | 65 | 1,673 | 65 | — |
+
+A cold line of the ROM costs 100 cycles at the memory control values the reset path sets (four words of 25) and 124
+under the game's; the longest slide is one word of a line and sixteen lines. For scale, the game's call of B(5Bh)
+through its vector takes 430 cycles straight after a FlushCache and 147 otherwise, and a frame about 566,000; the game
+enters the stretch three times in 12,600 frames. With E
+unaligned, as first built, each return's delay slot began a line of its own and each call cost a line more (872, 692,
+769 and 1,748 cycles); hence the alignment.
+
+**The spacing** [C]. Returns every 80h bytes would halve the longest slide to about 850 cycles and double the returns to
+twenty. With calls made once as the pads start and stop, 1,673 cycles at worst is 0.3 % of one frame, and the sparser
+form, ten returns and the one after the end, is kept.
+
+In the ROM the stretch costs 2,568 bytes of 524,288; in RAM nothing.
+
+### 27.4 Two decisions
+
+9. **Q9, where the construction goes.** Other entries of the tables may be reached past in the same way by other
+   games, and the stretch could be laid behind every entry, or behind every pad entry, in advance. *Decided 2026-10-12*:
+   it goes only behind a table entry a game is seen to reach past, one entry at a time as games show the need. B(5Bh)
+   is the first.
+10. **Q10, LoadExec and its caller's chain elements.** LoadExec masks the caller's interrupt sources and restores the
+    default exit before it loads (§26); it could also remove the elements the caller queued, whose functions the load
+    overwrites. *Decided 2026-10-12*: LoadExec leaves any chain elements its caller queued, until a game is seen to
+    need them removed. Mega Man Legends does not: it removes its own element before the call (§27.1).
+
+### 27.5 The tests
+
+Each failed on the image before and passes [M].
+
+- `kernel-harness/tests/pad_entry.rs`, five tests: B(5Bh)'s entry found as the game finds it, naming the ROM and still
+  ChangeClearPAD, through the vector and called at its address; a call at E+7A0h, E+884h and E+894h back within 64
+  instructions with R1-R31, HI and LO as set, no store, no exception and RAM unchanged; the same at every word from
+  E+10h to E+9FCh, the longest 65 instructions; the game's 28 stores all at ROM addresses, the ROM as it was and the
+  calls still returning after them; and the form: E on a 16-byte boundary, zero words, `jr ra` at the end of each 100h
+  and after the last. On `b2d6c568…` four of the five fail, the call at E+7A0h never coming back to its caller.
+- Diamond's `calls_and_stores_past_b_5bh_s_entry_come_back_and_leave_the_pads_read` (`programs/kernel-pad-entry.s`): on
+  Diamond's bus, the game's stores, FlushCache, InitPAD2, StartPAD2, ChangeClearPAD, then the calls of §27.3 with v0
+  and S2-S7 checked after each, their instruction counts exact and their cycles bounded (1,000 for the game's three
+  cold, 2,000 for the longest, 100 warm), and port 1's pad read by the kernel's element afterwards. On `b2d6c568…` the
+  program never finishes.
+
+### 27.6 The game
+
+[M, `c1a002e8…`, no firmware folder.] With no presses, pictures every 300 frames to frame 6,000: a burst of green
+particles (300), the CAPCOM logo (600), "now loading…" on black (900, 1,200), and from 1,500 the story's text scrolling
+over sea and sky with the airship, "In a world covered by endless water…" to "Hope… Despair… Charity… Greed… Duty…
+Power…" at 6,000.
+
+`EmuSen.WiseMan/Reference/analysis/psxplay/mega-man-legends.txt` through `psxplay.py`'s Diamond side, T the CAPCOM logo
+at frame 440, to frame 12,600, pictures every 60: Start skips the story; the title with PRESS START BUTTON from T+1,540;
+Start, then Cross on NEW GAME; the opening scene left to play (the ruin, the refractor taken, the run from the closing
+door) to about T+8,380; then the first ruin in play, the life gauge and radar drawn. A step forward brings the scene's lines
+("Wait a second! There should be a Reaverbot around there somewhere…") and its instructions, read through with Cross;
+"Read instructions again?" answered No with Right and Cross; then the corridor run down, "Turn right there.",
+Reaverbots met, the life gauge turning red under their hits, explosions, the turns by R1 and L1 taken and a second
+corridor walked. Every press acts, so the pads the kernel reads reach the game.
+
+**Seen and not the kernel's** [M]: on the title the yellow figures that run across the screen leave copies of
+themselves behind for a few hundred frames at a time (about T+1,760 to T+2,040 and T+2,740 to T+3,000). Whether the
+game draws them so is not known here, no referee having been run; it is left to a step that owns the GPU.
+
+### 27.7 The image and the gates
+
+[M] 524,288 bytes, 103,256 of them before the last non-zero byte; SHA-256
+`c1a002e88aa4e8b1be0257ca486bdb8309cd63f229e1f5070e36e4c72559c785`, rebuilt byte for byte with
+`DIAMOND_KERNEL_REBUILD=require`; the variables still end at A310h. E is 9FC00670h in it. It carries §26's two fixes
+with this section's. `firmwarecheck.py` was not run in this step; it is run apart, as each time the image changes.
+
+- `cargo test --release` in `kernel-harness/` with `DIAMOND_KERNEL_REBUILD=require`: 60 tests, all passing, the five
+  of §27.5 among them.
+- `cargo test --release` in Diamond's crate: 155 unit tests and 72 program tests, with and without
+  `EMUSEN_DIAMOND_PS1TESTS`, §26's and §27.5's among them.
+- WiseMan's `Diamond` tests under the test lock, with `EMUSEN_DIAMOND_PS1TESTS` set and no firmware variable: 43 of 43.
+- The seven games by their scripts on the open kernel with the formatted card, pictures every 300 frames: Crash
+  Bandicoot to N. Sanity Beach and the hollow; Spyro the Dragon's card question, the slot menu and the Artisans' world;
+  Tekken 3's fights, "YOU WIN!", "YOU LOSE" and the final round; Castlevania's file screen, "JOURNEY BACK TO 1792" and
+  Richter's stage; Ape Escape's DUALSHOCK screen, the first stage and its tutorial's boxes; Rayman's slot menu and the
+  Dream Forest; Silent Hill's warning, its title and the foggy street. Each as §25.4 records it.
+
+### 27.8 Reading log, and exposures
+
+Opened for this section, 2026-10-12: psx-spx `6d7d1bc` `kernelbios.md` lines 1598-1700 ("BIOS Joypad Functions", and
+the GPU functions' first entries after it) and 2090-2104 (B(56h) and B(57h)), found by a search confined to lines
+153-2228 for the two calls' names; it gives B(5Bh) a name in its summary and no description. `DOCS.txt`'s first 80 lines:
+its exclusions, and past them the list of the documents fetched. EmuSen's own: this page whole, `Diamond_OpenKernel.md`
+§1-§4 and §6-§11 with §5's head, `Diamond_Plan.md` §1 and §5.9, `Diamond_Players.md` §13, `EmuSen_Firmware.md` §0; the
+kernel's `entry.rs`, `table.rs`, `pad.rs`, `main.rs`, `mem.rs` and its linker script, and §26's change to `exec.rs` and
+`cdrom.rs`; the harness's sources and its `registers`, `image`, `reset`, `kernel` and `card` tests; of Diamond's crate
+`examples/run.rs`, `kernel.rs`, `tests/programs.rs` and `programs/kernel-pad.s`; `psxplay.py`, the scripts' headings and
+the earlier step's script that runs the seven games. The game on the open kernel only: its calls, the code of its pad
+library in RAM at the addresses of §27.1 with two searches of its RAM for that code's callers, the TCB's saved EPC,
+Cause and RA after the stop, its accesses to the ROM, and its pictures.
+
+**Never opened**: any firmware, `~/.cache/emusen/probe/diamond/sysdir/` or `~/Documents/BIOS/`, a BIOS listing,
+disassembly or trace, OpenBIOS, any emulator's source, `Diamond_References.md`, psx-spx's "BIOS Patches" and the other
+passages `DOCS.txt` excludes or holds for screening, ps1-tests' `common/`, the referees' outputs and pictures, the
+branch `diamond-kernel5` and its scratch folder. No reference emulator and no `psxreferee.py` was run, and Diamond
+only on the open kernel.
+
+**Exposures**, stated plainly:
+
+- The game's pad routines were read as its own code, which the step required: they give the offsets behind B(5Bh)'s
+  entry at which the game rewrites and enters the original, and the one instruction it stores there. That is the game's
+  knowledge of the original's layout, of the kind psx-spx's excluded "BIOS Patches" describes. The kernel takes from it
+  only where a call must return and a store must change nothing; the stored instruction is not recorded here and
+  nothing in the kernel answers to it.
+- The watch over the ROM printed, as hexadecimal, the fourteen words the game's second program stores into the
+  exception handler's ROM copy at frame 859. They were not decoded or studied, are not recorded, and nothing depends on
+  them: the handler the tables name stays in the ROM (§25.3).
+- Listings of the probe's cache showed by name the folders this step may not enter (`sysdir`, `realbios`, `mml`,
+  `kernel5`, the `fwcheck-` folders, the referees' folder under `play`); none was entered or listed.
+- No search printed a line of an excluded passage.

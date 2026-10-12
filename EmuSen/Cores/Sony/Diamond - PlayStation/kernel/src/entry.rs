@@ -428,6 +428,28 @@ send_gp1_command:
     jr      $ra
     sw      $a0, 0x1814($t0)
 
+    # B(5Bh) ChangeClearPAD: the flag set and its old value returned. Behind it, to A00h past the entry, zero words
+    # with a return at the end of every 100h bytes and one more after the last, where a game's stores and calls past
+    # the entry land; the entry on a cache line's boundary, so that a return and its delay slot share a line
+    # (Diamond_OpenKernel_Phase2.md §27).
+    .balign 16
+    .globl change_clear_pad
+change_clear_pad:
+    lui     $t0, %hi(PAD_CLEAR)
+    lw      $v0, %lo(PAD_CLEAR)($t0)
+    jr      $ra
+    sw      $a0, %lo(PAD_CLEAR)($t0)
+    .space  0xE8
+    jr      $ra
+    nop
+    .rept   9
+    .space  0xF8
+    jr      $ra
+    nop
+    .endr
+    jr      $ra
+    nop
+
     # The table entries psx-spx lists as no function: return 0, jump to 00000000h, or a jump to itself.
     .globl return_zero
 return_zero:
@@ -480,6 +502,7 @@ unsafe extern "C" {
     pub fn reboot(magic: u32) -> !;
     pub fn send_gp1_command(command: u32);
     pub fn exec(header: u32, param1: u32, param2: u32) -> u32;
+    pub fn change_clear_pad(flag: u32) -> u32;
     pub fn return_zero() -> u32;
     pub fn jump_zero();
     pub fn system_error() -> !;

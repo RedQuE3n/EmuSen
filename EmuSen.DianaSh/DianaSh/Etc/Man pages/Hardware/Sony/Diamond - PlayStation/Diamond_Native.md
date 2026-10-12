@@ -1374,6 +1374,11 @@ The harness gained SIO0 with a memory card and the run tool `--kernel-profile`. 
 depend on the kernel's timing are graded by §11.12a's rule since 2026-10-12 (Q8 there). The image's SHA-256 is now
 `4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`.
 
+*Later the same day* (§27 there): Mega Man Legends' pad library stores words and calls routines at fixed distances
+behind B(5Bh)'s table entry, and stopped the game at a black screen; the entry now has a stretch of fill behind it
+that returns. The run tool gained `--game-range`. The image's SHA-256 is now
+`c1a002e88aa4e8b1be0257ca486bdb8309cd63f229e1f5070e36e4c72559c785`.
+
 ## 20. Stage 11, the PlayStation to players (2026-10-11)
 
 Recorded in `Diamond_Players.md`: routing by content, image sets and archives, the disc change under the core ABI's

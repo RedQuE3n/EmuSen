@@ -3,7 +3,9 @@
 //! ends in its documented lock-up. Diamond_OpenKernel.md §4.11.
 
 use crate::entry;
+use crate::exception;
 use crate::file;
+use crate::layout::io;
 use crate::mem::{rd, rd8, wr, wr8};
 
 static mut SECTOR: [u32; 0x200] = [0; 0x200];
@@ -46,8 +48,10 @@ pub extern "C" fn load(name: u32, header: u32) -> u32 {
 static mut NAME: [u8; 32] = [0; 32];
 static mut HEADER: [u32; 15] = [0; 15];
 
-/// A(51h): the name's path upper-cased and ";1" added, interrupts enabled, the program loaded and run with the given
-/// stack by Exec(headerbuf,1,0), then the lock-up that follows it (the boot program it would reload is phase 2's).
+/// A(51h): the name's path upper-cased and ";1" added; the caller's interrupt sources masked and the default exit
+/// restored, since the load replaces the memory the caller's handlers lie in; interrupts enabled, the program loaded
+/// and run with the given stack by Exec(headerbuf,1,0) with I_MASK and I_STAT clear, as the boot starts its program
+/// (Diamond_OpenKernel_Phase2.md §26.2); then the lock-up that follows it (the boot program it would reload is not).
 pub extern "C" fn load_exec(name: u32, stackbase: u32, stackoffset: u32) -> u32 {
     let copy = &raw mut NAME as u32;
     let mut i = 0;
@@ -69,11 +73,15 @@ pub extern "C" fn load_exec(name: u32, stackbase: u32, stackoffset: u32) -> u32 
         i += 2;
     }
     wr8(copy + i, 0);
+    exception::reset_entry_int();
+    wr(io::I_MASK, 0);
     unsafe { entry::kernel_syscall(2, 0) };
     let header = &raw mut HEADER as u32;
     if load(copy, header) != 0 {
         wr(header + 0x20, stackbase);
         wr(header + 0x24, stackoffset);
+        wr(io::I_MASK, 0);
+        wr(io::I_STAT, 0);
         unsafe { entry::exec(header, 1, 0) };
     }
     unsafe { entry::hang() }

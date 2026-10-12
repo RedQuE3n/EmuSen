@@ -4909,7 +4909,10 @@ engine (a discovered core: VenusRT, Diamond, Nephrite) and is not the game alrea
 when the time is up or when its load is done, whichever is later, and the card goes on drawing meanwhile. Before, the
 load began when the time was up, with the card held still for as long as it took, and a PlayStation disc from the
 handheld's card could hold it there for seconds. The question of required firmware asked before the card no longer
-reads a disc whose core lists no required firmware, so the card is up at the press.
+reads a disc whose core lists no required firmware, so the card is up at the press. A window closed while a load
+outlasts the card starts nothing when the load ends. `LaunchScreenTests` gained four cases for it (24 in all): a disc
+loaded while the card shows, a disc the core refuses under it, a load held past the card's time, and the window closed
+in that wait; `ThemedSession`, whose clock is stepped, loads after the card as before.
 
 **The setting.** Theme Settings ▸ Interface (§4.66.1) gains **Launch Screen Duration**, under *On Screen*. It is kept
 in `appsettings.json` as `BigPictureInterface.LaunchScreenDuration`, spelled as ES-DE's `es_settings.xml` spells it:

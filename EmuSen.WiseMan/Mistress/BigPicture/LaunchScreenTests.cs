@@ -123,11 +123,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 entry.Write(SyntheticPsxDisc.Build().DataTrack);
             });
             string marker = Path.Combine(EmuSen.Crystal.Media.ArchiveImages.FolderFor(zip), ".unpacked");
+            using var loaded = LoadsUnderTheScreen(s);
             for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
             s.Pad.A();
             s.Pad.A();
             Assert.NotNull(Screen(s));
-            Assert.True(System.Threading.SpinWait.SpinUntil(() => File.Exists(marker), TimeSpan.FromSeconds(30)), "the disc was not loaded while the screen showed");
+            Assert.True(loaded.Wait(TimeSpan.FromSeconds(30)), "the disc was not loaded while the screen showed");
+            Assert.True(File.Exists(marker));
             Assert.Null(Running(s.Window));
             s.Run(3000 - 16);
             Assert.Null(Running(s.Window));
@@ -152,16 +154,31 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 File.WriteAllBytes(Path.ChangeExtension(bin, ".sbi"), [.. "SBI\0"u8, 0, 0, 0]);
             });
             Assert.True(EmuSen.Cores.CoreFactory.RunsOnV1Engine(bin, null));
+            using var loaded = LoadsUnderTheScreen(s);
             for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
             s.Pad.A();
             s.Pad.A();
             Assert.NotNull(Screen(s));
+            Assert.True(loaded.Wait(TimeSpan.FromSeconds(30)));
             s.Run(3000);
+            Pump(50);
             Assert.Null(Running(s.Window));
             Assert.False(GameShown(s));
             Assert.Null(Screen(s));
             Assert.StartsWith("Failed to load Opal Fault.bin: Diamond refused the game", s.Window.GetControl<TextBlock>("StatusText").Text);
         }, default);
+
+        // The window's own load under the screen put back, which ThemedSession takes away; set when a load has ended, well or not.
+        private static System.Threading.ManualResetEventSlim LoadsUnderTheScreen(ThemedSession s)
+        {
+            var ended = new System.Threading.ManualResetEventSlim();
+            typeof(MainWindow).GetProperty("EarlyLoader", Hidden)!.SetValue(s.Window, (Func<string, string?, EmuSen.Cores.ICore>)((p, engine) =>
+            {
+                try { return EmuSen.Cores.CoreFactory.Loaded(p, headless: true, engine); }
+                finally { ended.Set(); }
+            }));
+            return ended;
+        }
 
         // A themed session with one synthetic disc whose load under the screen waits for the gate; the disc's path.
         private static ThemedSession HeldDisc(System.Threading.ManualResetEventSlim gate, System.Threading.ManualResetEventSlim loaded, List<EmuSen.Cores.ICore> cores, out string bin)

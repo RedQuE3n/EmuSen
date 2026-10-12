@@ -63,6 +63,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             string? linked = null;
             using var s = new ThemedSession(settings: a => a.BigPictureInterface.LaunchScreenDuration = duration, roms: r => linked = LinkInto(game, Path.Combine(r, "psx")));
+            // The window's own load under the screen, which ThemedSession takes away for its stepped clock; this probe keeps the wall's time.
+            typeof(MainWindow).GetProperty("EarlyLoader", Hidden)!.SetValue(s.Window, (Func<string, string?, EmuSen.Cores.ICore>)((p, engine) => EmuSen.Cores.CoreFactory.Loaded(p, headless: true, engine)));
             if (cold) foreach (string f in ImageSets.AllFiles(linked!)) Evict(f);
             for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
             if (s.System != "psx") return $"no psx system: {s.System}";

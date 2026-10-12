@@ -681,6 +681,22 @@ Each change keeps the launch exact: the same firmware passed, the same battery f
    the screen, and the status line reads "Failed to load … Diamond refused the game" with no game and the screen gone.
    The existing launch-screen cases, whose SNES games now load on the worker through VenusRT, passed three runs of
    three.
+3. **A defect of change 2, found by its own tests' run, proven and fixed** (`edff1ae8`). A wider run of the areas
+   stalled once, 254 cases in, with no failure printed: a dump of the test host showed no interface thread left and
+   xunit waiting on a case dispatched to it. *Cause:* change 2 lets a launch wait for its load past the screen's time,
+   and a window closed in that wait was still given the game when the load ended; `LoadGame` then ran on the closed
+   window and threw out of the pad's handler on the dispatcher, which in a headless run ends the interface thread, and
+   in the program would have been an exception at the moment of quitting. *Proof:*
+   `LaunchScreenTests.A_window_closed_while_the_load_outlasts_the_screen_starts_nothing` holds the load behind a gate
+   past the screen's time, closes the window and lets the load go: before the fix, `InvalidOperationException` from
+   `ShowLibraryEntries` by way of `StartGameAsync`. *Fix:* when the load ends, a launch whose screen has been taken
+   down starts nothing, and the core loaded for it is disposed; after it the case passes, and its companion,
+   `A_load_longer_than_the_screen_keeps_the_card_and_starts_the_game_when_it_is_done`, shows the card kept and the game
+   started when a held load is let go. The same wider run then failed twice in three on two existing cases, the game
+   not yet running at the screen's end: those cases step the interface clock through the screen's seconds in a tenth
+   of a second of the wall's, which a worker's load cannot keep to. *Decided:* `ThemedSession`, whose clock is stepped,
+   loads after the screen as it always did (the window's `EarlyLoader` set to none), and the cases about the load
+   under the screen install the loader and wait on its end; the wider run then passed three times in three.
 
 #### 12.8.4 After
 
@@ -734,9 +750,12 @@ WiseMan, by area, on this branch: the firmware question's change with `Firmware`
 `DiamondPlayers`, `VenusRtCoreAbi`, `CoreRegistrationEquivalence` and `PlayStationLibrary`, 115 passing; the load under
 the screen with `LaunchScreen`, `ThemedLibrary`, `Screensaver`, `PlayStationLibrary`, `EmulatorSession`,
 `CoreFactory`, `DiamondPlayers`, `Resume`, `Firmware` and `CoreAdapter`, 269 passing and 4 skipped (opt-in cases without
-their folders); `LaunchScreen` three times over, 20 passing and 1 skipped each time; the new cases each failing before
-their change where §12.8.3 says so. The two probes ran opt-in on the seven copies, plainly and under the cap, before the
-changes and after them.
+their folders); the new cases each failing before their change where §12.8.3 says so. After WiseMan `992546e4` was
+merged in (the processor run in stretches and the rasteriser by rows, none of the launch path), the same areas with
+all of `Diamond` and `CoreEngine`, 317 cases: once before change 3's fixture rule 311 passing and 2 failing as that
+item records, then three runs of 313 passing and 4 skipped; `LaunchScreen` alone, 24 passing and 1 skipped, three
+times. The two probes ran opt-in on the seven copies, plainly and under the cap, before the changes and after them,
+and big picture's again on the merged tree: 3.03–3.22 s from the press to the first frame at Normal, cold and warm.
 
 #### 12.8.8 Read for this section
 

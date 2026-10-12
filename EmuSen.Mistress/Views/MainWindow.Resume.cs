@@ -56,14 +56,13 @@ namespace EmuSen.Mistress.Views
         // A v1 engine's load begun on a worker as the launch screen opens, so the screen's time covers the disc's read; null loads it after, as before - see Diamond_Players.md §12.8.3.
         private Task<EmuSen.Cores.ICore>? LoadUnderLaunchScreen(string path)
         {
-            if (LaunchScreen.DurationOf(_appSettings.BigPictureInterface.LaunchScreenDuration) <= TimeSpan.Zero || path == _currentRomPath) return null;
+            if (EarlyLoader is not { } load || LaunchScreen.DurationOf(_appSettings.BigPictureInterface.LaunchScreenDuration) <= TimeSpan.Zero || path == _currentRomPath) return null;
             string? engine = EngineChosenFor(path);
-            var load = EarlyLoader;
             return EmuSen.Cores.CoreFactory.RunsOnV1Engine(path, engine) ? Task.Run(() => load(path, engine)) : null;
         }
 
-        // What loads a game's core under the launch screen; a test gives one it can hold back.
-        internal Func<string, string?, EmuSen.Cores.ICore> EarlyLoader { get; set; } = (path, engine) => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine);
+        // What loads a game's core under the launch screen; a test gives one it can hold back, or none where its clock is stepped.
+        internal Func<string, string?, EmuSen.Cores.ICore>? EarlyLoader { get; set; } = (path, engine) => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine);
 
         private string ResumeStatePath(string romPath) => SaveLibrary.ResumeStatePathFor(romPath, _appSettings.StateDirectory);
 

@@ -63,6 +63,8 @@ namespace EmuSen.WiseMan.Fixtures
 
             Window = new MainWindow { Width = width, Height = height };
             Set("UiClock", (Func<TimeSpan>)(() => Now));
+            // On a stepped clock a game is loaded after its launch screen, not under it on a worker, whose time is the wall's - see Diamond_Players.md §12.8.3.
+            typeof(MainWindow).GetProperty("EarlyLoader", Hidden)!.SetValue(Window, null);
             Set("UiSoundSink", (Action<string>)(path => Sounds.Add(Path.GetFileNameWithoutExtension(path))));
             if (status is { } fixedStatus) Set("DeviceStatusSource", (Func<EmuSen.LunaP.Controls.DeviceStatus>)(() => fixedStatus));
             Window.Show();

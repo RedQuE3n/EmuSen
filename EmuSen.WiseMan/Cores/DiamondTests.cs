@@ -223,6 +223,33 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // The timers rule drops one long delay sample as an interrupt's and allows a frame's hblanks ±1, as the rows depend on the kernel's phase - see Diamond_Native.md §11.12.
+        [Fact]
+        public void The_timers_rule_drops_one_interrupted_delay_sample_and_allows_an_hblank_either_way()
+        {
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            var timers = Ps1Tests.Programs.Single(p => p.Path == "timers/timers.exe");
+            string Text(string delay, int hblanks) => "timers test\n"
+                + $"Timer0, clock:   System clock, 5000 cycles delay: {delay}\n"
+                + $"Timer1, clock:         Hblank,       frame delay:    263,    263,    {hblanks},    {hblanks},    {hblanks},\nDone.\n";
+            const string Settled = "5011,   5011,   5011,   5011,   5011,   5011,";
+            string log = Text(Settled, 263);
+            foreach (var (name, delay, hblanks, outcome) in new[]
+            {
+                ("one", "5011,   5011,   5011,   9763,   5011,   5011,", 263, RomOutcome.Passed),
+                ("two", "5011,   5011,   9763,   5011,   9763,   5011,", 263, RomOutcome.Failed),
+                ("short", "5011,   5011,   5011,   4900,   5011,   5011,", 263, RomOutcome.Failed),
+                ("hblank", Settled, 262, RomOutcome.Passed),
+                ("hblanks", Settled, 261, RomOutcome.Failed),
+            })
+            {
+                var run = engine.Run(Write($"timers_{name}.exe", Printing(Text(delay, hblanks))), new[] { 4 });
+                var verdict = Ps1Tests.Grade(timers, run, _ => log);
+                _output.WriteLine($"{name}: {verdict.Outcome} {verdict.Detail}");
+                Assert.Equal(outcome, verdict.Outcome);
+            }
+        }
+
         private static string? Corpus => Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_PS1TESTS") is { } c && Directory.Exists(c) ? c : null;
 
         // Each of ps1-tests' graded programs run to its frame on `files`, and those that did not pass.

@@ -748,9 +748,23 @@ rule, tolerance, named disagreements and create settings.
 | `cpu/cop`, `cpu/code-in-io`, `dma/otc-test`, `dma/dpcr` | pass and fail lines: no `fail`, at least one `pass`, and `Done.` |
 | `cpu/access-time` | the table against the console's `psx.log`, each cell within 0.5 cycles, SPUCNT's 32-bit cell named (D-4) |
 | `dma/chain-looping` | line by line against the log: the words equal, each number within 10% (D-5) |
-| `timers` | each delay and frame row's settled values (the first two dropped) against the log's mean: a frame's hblanks exactly, its dots ±10, its cycles ±60 of the 16-bit count, a delay ±3 cycles or ±2 slower ticks; run as a PAL console (`region=psx.eu`), the log's console being PAL-clocked (D-0); ~~the sync-mode tables not graded~~ *since 2026-10-11* each of the 14 sync tables in the log's shape: every row's first sample at most 1.2 times the log's largest first sample in that table and 2 more, every rise at most 1.1 times its largest rise and 2 more, the rows of modes 0 and 3 never falling (§11.6) |
+| `timers` | each delay and frame row's settled values (the first two dropped) against the log's mean: a frame's hblanks ~~exactly~~ ±1 *since 2026-10-12*, its dots ±10, its cycles ±60 of the 16-bit count, a delay ±3 cycles or ±2 slower ticks, *since 2026-10-12* one delay sample longer than that dropped in each row as one an interrupt landed in (§11.12a); run as a PAL console (`region=psx.eu`), the log's console being PAL-clocked (D-0); ~~the sync-mode tables not graded~~ *since 2026-10-11* each of the 14 sync tables in the log's shape: every row's first sample at most 1.2 times the log's largest first sample in that table and 2 more, every rise at most 1.1 times its largest rise and 2 more, the rows of modes 0 and 3 never falling (§11.6) |
 
 A run with no `tty` space, the references' through the probe among them, is `NoDump` (§11.15).
+
+**§11.12a The `timers` rule and the kernel's phase** (decided 2026-10-12, `Diamond_OpenKernel_Phase2.md` §25.5 Q8). Two
+kinds of `timers` row measure where an interrupt falls against the program's own loops rather than a timer: a delay row
+reads an interrupt's whole cost in the sample it lands in, and a frame's hblank count loses or gains one edge when the
+program's reset of the counter falls within the few dozen cycles after an hblank's edge. Both are set by the kernel's
+timing modulo a frame and a line (its time to the hand-over, the cost of its calls and of its interrupt path), which no
+document gives; the console's log is one draw of them, on a BIOS whose timing is not known. So a delay sample longer
+than the log's mean by more than the row's tolerance is taken as one an interrupt landed in and dropped, at most one a
+row (an interrupt only lengthens a delay, and a vblank fits in a row of 10 samples of 5,000 cycles once); a second, or
+any sample short of the mean, still fails; and a frame's hblanks may differ from the log's by 1. The rule applies to
+every kernel image, the player's BIOS too. `The_timers_rule_drops_one_interrupted_delay_sample_and_allows_an_hblank_either_way`
+pins it [M]: one interrupted sample passes, two or a short one fail, 262 hblanks against 263 passes and 261 fails. With
+it `timers` passes on the open kernel's image of 2026-10-12 (`4e01c2ac…`), which drew a vblank into its fifth 5,000-cycle
+sample and 262 hblanks a frame, and still passes on the image `7af83c9b…` of 2026-10-11, which drew neither.
 
 ### 11.13 The project's own programs, and the witnesses
 
@@ -1353,12 +1367,12 @@ SHA-256 is now `7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4
 ### 18.6 Found in play, and fixed (2026-10-12)
 
 The three defects the gameplay step found (`Diamond_OpenKernel_Phase2.md` §24) were each shown by a failing test and
-fixed (§25 there): Krom2RawAdd answers a box, so that Castlevania passes its file screen; an accepted asynchronous card
+fixed (§25 there): Krom2RawAdd answers the kernel's own letters and a box, so that Castlevania passes its file screen; an accepted asynchronous card
 read or write returns 0, so that Spyro the Dragon creates, writes and reads its file; and the exception path runs from
 the kernel's RAM with an empty port given up 100 µs after its byte, so that Crash Bandicoot prints no "intr timeout".
-The harness gained SIO0 with a memory card and the run tool `--kernel-profile`. ps1-tests' `timers` fails WiseMan's TTY
-gate in two rows that depend on the kernel's timing (§25.3, Q8 there). The image's SHA-256 is now
-`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`.
+The harness gained SIO0 with a memory card and the run tool `--kernel-profile`. Two rows of ps1-tests' `timers` that
+depend on the kernel's timing are graded by §11.12a's rule since 2026-10-12 (Q8 there). The image's SHA-256 is now
+`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`.
 
 ## 20. Stage 11, the PlayStation to players (2026-10-11)
 

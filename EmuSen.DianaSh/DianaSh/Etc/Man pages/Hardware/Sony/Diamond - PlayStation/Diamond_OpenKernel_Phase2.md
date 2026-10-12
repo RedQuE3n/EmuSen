@@ -292,8 +292,8 @@ deleted it there; card 2 then held the save's frames with block 1 in state A1h [
 
 `Diamond_OpenKernel.md` §5 holds the whole table, printed from `kernel/src/table.rs`. With phase 2: 576 entries, 222
 implemented, 2 absent from an open kernel (Krom2RawAdd and Krom2Offset, which address the ROM's character sets: the
-kernel carries none, and ~~returns -1~~ *since §25.1* answers a box for each documented code but the space, which is
-blank), 346 no function as documented, 6 undocumented. No "phase 2 stub" is left.
+kernel carries none, and ~~returns -1~~ *since §25.1* answers the full-width Latin letters, digits and punctuation from
+its own 5x8 font, a blank space and a box for every other documented code), 346 no function as documented, 6 undocumented. No "phase 2 stub" is left.
 
 ## 20. Choices, questions, the cost and the image
 
@@ -350,8 +350,8 @@ blank), 346 no function as documented, 6 undocumented. No "phase 2 stub" is left
 In a player's words (the plan's §5.9, and `v1.rs`'s firmware entry since this stage): "Most games start and save as on a
 console. A game that relies on an undocumented kernel call, reads the kernel's code, or depends on its exact timing may
 behave differently, and the start-up screen is EmuSen's own. Games that use the console's own text characters (mostly
-Japanese ones) show ~~no text~~ *since §25.1* a box for each character where they use them, as EmuSen does not carry
-Sony's fonts." Phase 1's sentence, that discs
+Japanese ones) show ~~no text~~ *since §25.1* the Latin letters, digits and common punctuation in EmuSen's own font
+and a box for every other character where they use them, as EmuSen does not carry Sony's fonts." Phase 1's sentence, that discs
 and cards needed the player's BIOS, is withdrawn. The risks of `Diamond_OpenKernel.md` §8 stand, and phase 2 adds: card
 I/O inside the vblank handler, about 240,000 cycles a sector; the CD handler that leaves interrupts it does not own to
 the program; games that patch the card functions' code, which psx-spx's excluded section is said to describe and which
@@ -364,7 +364,8 @@ while the tables and C(06h) still name its ROM copies).
 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, rebuilt byte for byte with
 `DIAMOND_KERNEL_REBUILD=require`, and from a copy of `kernel/` at another path to the same digest. *Since §23 (2026-10-11):* SHA-256
 `7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`. *Since §25 (2026-10-12):* SHA-256
-`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`, the variables ending at A310h.
+~~`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`~~
+`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`, the variables ending at A310h.
 
 **Left to a separate step**, by the stage's terms, and taken in §22: the cards exchanged with the player's BIOS, and `firmwarecheck.py`.
 The cards it needs are in `~/.cache/emusen/probe/diamond/cards/s10/` with a `README.txt`: `tekken3-saved-on-open-kernel.mcr`
@@ -727,6 +728,21 @@ through the call, NEW GAME, the name entry, "JOURNEY BACK TO 1792", "Now Loading
 3,300 to the run's end at 9,000. The words for the player are now "show a box for each character where they use them"
 (`v1.rs`'s firmware entry and §20.3).
 
+**The kernel's own letters** (decided 2026-10-12, Q6 as recommended). The full-width Latin letters (8260h-8279h,
+8281h-829Ah), digits (824Fh-8258h) and the punctuation of row 1 that the card manager already reads as ASCII (§16) are
+drawn from the kernel's own 5x8 font of §16: each of its five columns doubled across into columns 3-12, its rows 0-6
+doubled down and row 7 once, into rows 0-14. The shapes are that font's, scaled; nothing is drawn after a console's
+characters. 8140h stays blank, every other code of the two ranges keeps the box, and any other code -1; `charset::ascii`
+is now the one owner of the mapping, which the card manager calls too. The glyphs, 95 of them with the space and the
+box, are built at compile time from the font into 2,850 bytes of the ROM; B(53h) answers each one's offset among them.
+`krom2rawadd_draws_the_full_width_latin_from_the_kernels_font_and_a_box_for_the_rest` gives Ａ, １ and ！ row by row, the
+box for 8141h, 8163h, 819Ah, 84BEh, 889Fh and 9872h, and Ｚ's and ｚ's own offsets; it fails on the box image
+(`593817b8…`) at Ａ, and passes [M]. Castlevania's help line now reads "Select file to be loaded" and "Checking Memory
+Card. Do not remove Memory Card", its kanji still boxes, and its text routine ends on every glyph: the game names its
+file and plays its prologue and Richter's stage to frame 9,000 as before [M, pictures every 60 frames]. The words for
+the player: games "show the Latin letters, digits and common punctuation in EmuSen's own font and a box for every other
+character (mostly Japanese ones)".
+
 ### 25.2 Read and write in asynchronous mode
 
 **What the documents say.** "Asynchronous access means that the BIOS function returns immediately after invoking the
@@ -847,21 +863,26 @@ timing decides:
   entry pointed at the RAM copy, give 263.
 
 The console's log is one draw of both phases, on a BIOS whose timing is not known. No change was made for them; it
-is **Q8**.
+is **Q8**. *Decided 2026-10-12, as recommended*: the gate drops one delay sample a row that is longer than its
+tolerance allows, as one an interrupt landed in, and allows a frame's hblanks ±1, for every kernel image; the rule and
+its reason are `Diamond_Native.md` §11.12a. With it `timers` passes on this image and on `7af83c9b…` [M].
 
 ### 25.4 The image and the tests
 
-[M] 524,288 bytes, 97,288 of them before the last non-zero byte; SHA-256
-`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`, rebuilt byte for byte with
-`DIAMOND_KERNEL_REBUILD=require`. The images between: `afc27937…` after §25.1 and `f277cce3…` after §25.2.
+[M] 524,288 bytes, ~~97,288~~ 100,544 of them before the last non-zero byte; SHA-256
+~~`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`~~
+`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b` since the kernel's letters (§25.1, Q6), rebuilt
+byte for byte with `DIAMOND_KERNEL_REBUILD=require`. The images between: `afc27937…` after §25.1's box, `f277cce3…`
+after §25.2 and `593817b8…` after §25.3.
 
-- `cargo test --release` in `kernel-harness/`: 55 tests, all passing, with the rebuild required; new: the box (§25.1),
+- `cargo test --release` in `kernel-harness/`: 55 tests, all passing, with the rebuild required; new: the glyphs (§25.1),
   the card's three (§25.2), the jumps and the vblank from RAM (§25.3); changed: `reset.rs`'s vector and C(06h) and
   `exceptions.rs`'s hook structure, whose RA is now ReturnFromException's RAM copy.
 - `cargo test --release` in Diamond's crate: 155 unit tests and 70 program tests, with and without
   `EMUSEN_DIAMOND_PS1TESTS`, the card round trips among them.
-- WiseMan's `Diamond` tests under the test lock: 42 of 42 without the corpus, and with `EMUSEN_DIAMOND_PS1TESTS` set 41
-  of 42, `timers` failing as §25.3 gives, every other program passing by its TTY.
+- WiseMan's `Diamond` tests under the test lock: ~~42 of 42 without the corpus, and with `EMUSEN_DIAMOND_PS1TESTS` set 41
+  of 42, `timers` failing as §25.3 gives~~ *since Q8's rule* 43 of 43 with `EMUSEN_DIAMOND_PS1TESTS` set, the rule's own
+  test among them, every program passing by its TTY; the gate's test on `7af83c9b…` passes `timers` too.
 - The seven games by their scripts on the open kernel [M, pictures every 300 frames]: Castlevania past its file screen
   (§25.1), Spyro the Dragon's file created, written and read (§25.2), Crash Bandicoot without "intr timeout" (§25.3);
   Ape Escape to its first stage and the tutorial's boxes, Rayman to the Dream Forest, its save made on the card (block 2
@@ -870,14 +891,15 @@ is **Q8**.
 
 ### 25.5 Questions for the tester
 
-6. **Q6, the characters.** Kept: a box for every documented code but the space. *Option*: the kernel's own 5x8 font of
+6. **Q6, the characters.** *Decided 2026-10-12: the option, as recommended (§25.1).* Kept: a box for every documented code but the space. *Option*: the kernel's own 5x8 font of
    §16 drawn into the 16x15 cell for the full-width Latin letters, digits and common punctuation the card manager
    already converts (§16), the box for the rest, so that Castlevania's help line reads; it is EmuSen's own drawing,
    copies no console font, and costs about 2 KiB of ROM. *Recommended*: the option, if a font of EmuSen's own is
    acceptable in the kernel.
-7. **Q7, the two copies.** The tables and C(06h) name ROM copies so that a game's patch does nothing, while the vector
+7. **Q7, the two copies.** *Decided 2026-10-12: kept, as recommended.* The tables and C(06h) name ROM copies so that a game's patch does nothing, while the vector
    runs the RAM copy. *Recommended*: keep, and treat a game that patches through the vector as a defect to record.
-8. **Q8, `timers` in the gate.** Two rows depend on the kernel's timing modulo a frame and a line, which no document
+8. **Q8, `timers` in the gate.** *Decided 2026-10-12: the grading changed, as recommended (§25.3, `Diamond_Native.md`
+   §11.12a).* Two rows depend on the kernel's timing modulo a frame and a line, which no document
    gives (§25.3), and each later change to the kernel re-draws them. *Recommended*: grade a delay row by its settled
    samples with any one an interrupt lands in dropped, and a frame's hblanks within 1, decided before the gate is
    counted; *or* keep the rule and accept that the open kernel's images pass it by phase.

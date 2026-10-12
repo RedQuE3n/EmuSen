@@ -350,8 +350,8 @@ written, `kernel/src/table.rs`, and checked against this page by the harness's `
 documented" is psx-spx's own: return 0, a jump to 00000000h, a jump to itself (SystemError), or for atof and strtod
 the COP1 fault. ~~"Phase 2 stub" returns the failure psx-spx documents for the call~~ *Since phase 2 (2026-10-11,
 `Diamond_OpenKernel_Phase2.md` §19)* no stub is left: "absent from an open kernel" is Krom2RawAdd and Krom2Offset,
-which ~~return -1~~ *since 2026-10-12* answer a box for each documented code but the space, which is blank, and -1
-for any other (`Diamond_OpenKernel_Phase2.md` §25.1), as the kernel carries no character sets. "Undocumented, returns 0" is a call psx-spx names without describing: SysInitKernelVariables,
+which ~~return -1~~ *since 2026-10-12* answer the full-width Latin letters, digits and punctuation from the kernel's
+own 5x8 font, a blank space and a box for every other documented code, and -1 for any other (`Diamond_OpenKernel_Phase2.md` §25.1), as the kernel carries no character sets. "Undocumented, returns 0" is a call psx-spx names without describing: SysInitKernelVariables,
 the four TTY circular-buffer functions C(15h)-C(18h) and AdjustA0Table.
 
 576 entries: 222 implemented, 2 absent from an open kernel, 346 no function as documented, 6 undocumented.
@@ -653,8 +653,8 @@ last non-zero byte, SHA-256 `ef5c8362064bb4cf5bf9ab2fc47af0fffc456ad65eac3808b40
 SHA-256 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, rebuilt byte for byte the same way and from a
 copy at another path (`Diamond_OpenKernel_Phase2.md` §20.4). *Since the card request's fix (2026-10-11, `Diamond_OpenKernel_Phase2.md`
 §23):* 92,504 bytes, SHA-256 `7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`. *Since the three defects found in play
-(2026-10-12, `Diamond_OpenKernel_Phase2.md` §25):* 97,288 bytes, SHA-256
-`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`.
+(2026-10-12, `Diamond_OpenKernel_Phase2.md` §25):* 100,544 bytes, SHA-256
+`4e01c2ac1b8582e46fd002363f3a87f145fe96058c80fdc67222d5a533cfeb7b`.
 
 **Reproducibility** [M]: the harness's `image` tests check the committed bytes against their digest always, and
 against a rebuild whenever the pinned toolchain is present (the project's cache under `~/.cache/emusen/toolchains`,

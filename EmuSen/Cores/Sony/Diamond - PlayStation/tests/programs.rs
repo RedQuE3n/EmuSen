@@ -1011,6 +1011,39 @@ fn the_open_kernel_boots_a_disc_by_its_system_cnf_and_reads_its_files() {
     assert_eq!(r[26] & 0x02, 0x02, "CdGetStatus: the motor on");
 }
 
+/// Mega Man Legends' hand-over (Diamond_OpenKernel_Phase2.md §26) on a synthetic disc: a program with its own exit
+/// structure and vblank enabled makes the kernel's synchronous CD calls, then LoadExec of a 128 KiB program over
+/// itself. No handler of the program is shown IRQ2 while the kernel's own operation runs, its hook never runs once
+/// LoadExec has begun, and the new program finds I_MASK and I_STAT clear and the default exit, not the old one.
+#[test]
+fn loadexec_starts_its_program_free_of_the_callers_interrupt_handlers() {
+    let assemble = |src: &str| emusen_mips::assemble(src, 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    let first = exe::build(&assemble(include_str!("../programs/kernel-loadexec.s")));
+    let mut second = exe::build(&assemble(include_str!("../programs/kernel-loadexec-second.s")));
+    second.resize(0x800 + 0x2_0000, 0);
+    second[0x1C..0x20].copy_from_slice(&0x2_0000u32.to_le_bytes());
+    let cnf = b"BOOT = cdrom:\\FIRST.EXE;1\r\n";
+    let disc = || iso::disc(&[iso::Entry::File("SYSTEM.CNF", cnf), iso::Entry::File("FIRST.EXE", &first), iso::Entry::File("SECOND.EXE", &second)]);
+    let mut m = open_machine(Some(disc()));
+    for _ in 0..1200 {
+        m.advance();
+        if m.board.ram_word(0xFFFF0) == 0xD1A0_D00E {
+            break;
+        }
+    }
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the second program finished at frame {}, pc {:08X}", m.frames, m.cpu.regs.pc);
+    let r = results(&m, 0x18_0100, 14);
+    assert_eq!((r[13], r[12]), (1, 4), "_96_init and CdReadSector");
+    let mut pvd = [0u8; 2352];
+    disc().read(150 + 16, &mut pvd);
+    assert_eq!(&m.board.ram[0x19_0000..0x19_0800], &pvd[24..2072]);
+    assert_eq!(r[1] & 1, 1, "the hook ran while the CD calls did, with vblank enabled");
+    assert_eq!(r[1] & 4, 0, "and was never shown IRQ2 enabled: I_MASK ORed {:X}", r[1]);
+    assert_eq!(r[10], r[2], "no hook ran from LoadExec's start to the new program's entry");
+    assert_eq!((r[8], r[9]), (0, 0), "I_MASK and I_STAT at the new program's entry");
+    assert_eq!(r[11], 0, "the old exit structure was not taken once vblank was enabled again");
+}
+
 /// The card calls of Diamond_OpenKernel_Phase2.md §13-§14 on a blank card: format, files made, written and read, listed,
 /// erased, undeleted and renamed, asynchronous and low-level reads ended by their events; and the card left in the
 /// on-card format of psx-spx's "Memory Card Data Format", every directory frame's checksum and chain as it gives them.

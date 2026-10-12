@@ -259,7 +259,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.Equal((0x10, engine.ReadSpace("SCRATCH", 0x10), "PC=$8001000C"), (scratch[^1].Address, scratch[^1].Value, scratch[^1].Context));
                 Assert.Equal(new[] { (At(0x8002_0004), "PC=$80010010"), (At(0x8002_0005), "PC=$80010010"), (At(0x8002_0006), "PC=$80010014"), (At(0x8002_0007), "PC=$80010014") }, bus.Take(4).Select(e => (e.Address, e.Context)));
                 Assert.All(store, e => Assert.Equal((WatchKind.Write, "PC=$8001001C"), (e.AccessKind, e.Context)));
-                Assert.Equal(t.Watches.GetEventCounts(4).Total, t.Watches.GetEventCounts(1).Total / 4);
+                Assert.InRange(t.Watches.GetEventCounts(1).Total / 4 - t.Watches.GetEventCounts(4).Total, -1, 1); // a frame's edges may split one iteration: Diamond_OpenKernel_Phase2.md §26.5
                 Assert.Contains(" R 0x20000 = 0x", shell.Submit("watch log 1 4").Output);
             }
         }

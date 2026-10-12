@@ -541,6 +541,17 @@ card's save RAM as the last picture leaves it, the one space of the probe's that
 beside it drives a disc by a press script on Diamond's run tool or on SwanStation; `Diamond_Players.md` §13 records the
 seven games so driven. The probe's input reaches only the referee's own pad; nothing of the BIOS is read.
 
+### 4.17 D-47: a primitive carried past 11 bits by the offset — `offset-fold.s`
+
+*Added 2026-10-12.* `programs/offset-fold.s`, side-loaded on SwanStation and Beetle PSX through the probe and on
+DuckStation and PCSX-Redux through their own drivers, the player's BIOS given as each one's firmware, RAM read at its
+done word [M]. The area is VRAM's right half and the offset 768; the program draws a flat triangle from (286,16), the
+same triangle from a first vertex on the screen, a Gouraud triangle from 300 and a flat line from 300 leftward, and
+reads back x 896 to 1023, lines 0 to 191. DuckStation, SwanStation and Beetle PSX read back word for word alike: 783,
+783, 1,326 and 56 pixels drawn, from x 992 for the shapes that start at 286 or 300; Diamond before the change drew only
+the triangle from the screen, after it all four the same as those three. PCSX-Redux fills columns 896 to 991 for every
+shape, the control among them, and is not counted. `Diamond_Disputes.md` D-47 has the table and the ruling.
+
 ## 5. What changed in Diamond
 
 Each a writer's step citing its entry, after the rulings above:
@@ -565,6 +576,9 @@ Each a writer's step citing its entry, after the rulings above:
 - *The stream's step (D-45)*: a byte or halfword store to a 32-bit register at an address not word-aligned writes the
   register whole, the word shifted to the store's byte (`bus.rs`). Pinned by
   `a_narrow_store_writes_its_register_shifted_to_its_byte`.
+
+- *The second play step (D-47)*: a triangle or line reaching left of -1,024 (or above it) is drawn 2,048 further on
+  (`raster.rs`), on three referees of two lineages. Pinned by `a_primitive_past_the_offsets_eleven_bits_is_drawn_modulo_2048`.
 
 The other programs are pinned on Diamond as it reads them: `gpustat_while_each_shape_arrives_and_draws`,
 `the_gpu_is_ready_at_once_after_each_transfer`, `stores_drain_as_the_fit_has_them`.

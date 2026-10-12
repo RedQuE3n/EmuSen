@@ -27,6 +27,8 @@ BIOS that draws nothing.
 had kept four of the tester's games from their movies.
 *The play step (2026-10-12)* took D-46, a triangle's drawing time, which had left Tekken 3's fighters half drawn once its
 fights began (`Diamond_Players.md` §13).
+*The second play step (2026-10-12)* took D-47, a primitive carried past 11 bits by the offset, which had left the right
+of Crash Bandicoot's screen undrawn (`Diamond_Players.md` §14).
 
 ## The rules this log keeps
 
@@ -1507,3 +1509,62 @@ fights began (`Diamond_Players.md` §13).
   3,967.
 - **Implemented in:** `timing.rs`'s `TRIANGLE_ROW` and `raster.rs`'s row count, in the commits citing this entry.
 
+
+### D-47. A primitive and the offset in 11 bits: one placed past -1,024 from its wrapped first vertex is drawn 2,048 further on, so that its pixels fall where its vertices lie modulo 2,048
+
+- **Opened:** 2026-10-12, by the tester's report from the handheld of "weird graphical artifacts to the right of the
+  screen" in Crash Bandicoot's first level, reproduced on the desktop on the open kernel with `psxplay/crash-bandicoot.txt`:
+  on the right of the screen, ground that SwanStation draws sand-textured was the frame's clear colour, olive, in
+  shapes torn along polygon edges (`Diamond_Players.md` §14.1).
+- **Documents read:** psx-spx `6d7d1bc`, "Vertex (Parameter for Polygon, Line, Rectangle commands)" (the coordinates
+  signed 11 bits, the size restriction), "GP0(E5h) - Set Drawing Offset" (the offset signed 11 bits), "GP0(E3h)",
+  "GP0(E4h)"; `Diamond_GPU.md` §6 and D-23 here. psx-spx does not say what the sum of a vertex and the offset does past
+  11 bits.
+- **What the game showed** [M, a debugging build outside the repository that logged each GP0 command, each polygon's
+  vertices as placed, the GTE's RTPT and NCLIP results with their FLAG, and the command that last wrote each VRAM
+  pixel, for the frames that drew the buffer shown at frame 12,600 of the script]: the 5,107 olive pixels of the
+  displayed buffer (x 512 to 1023) were last written by the frame's own clear fill, GP0(02h) with colour 003236h; no
+  polygon wrote them. The game sends as many polygons to that buffer as to the other (1,789 against 1,782 in a buffer
+  whose picture is whole), and the GTE raised no screen-coordinate or divide flag in those frames (only IR0's, bit 12,
+  in 1,018 of 2,297 RTPTs). The game draws its right buffer with the offset at 768, the buffer's centre: a vertex
+  whose SX is 286, past the screen's right edge, sums to 1,054, which D-23's rule wraps to -994, and the polygon's
+  other vertices, placed from it by the command's distances, follow it to about -1,050, off the area. 19 such
+  polygons in that buffer reached left of -1,024 and right of 512 once moved 2,048 on. *Ablation* [M, pictures every
+  30 frames to 12,600]: those polygons moved 2,048 to the right, no picture of the run holds the olive, against 58 of
+  300 pictures before, and the ground at the right is sand-textured as SwanStation draws it.
+- **Test program:** `programs/offset-fold.s` [M]: the area VRAM's right half and the offset 768, as the game sets
+  them; a flat triangle from (286,16) with its other vertices at 224, the same triangle from a first vertex on the
+  screen, a Gouraud triangle from 300, and a flat line from 300 leftward to 200; VRAM x 896 to 1023, lines 0 to 191,
+  read back. *amidog's OFFSET, POSITION, SIZE and AREA groups* (the local copy of D-23's step, verbose word set, run
+  160,000 frames): no failing line before the change or after, the TTY identical line for line.
+- **Referee** (`Diamond_Referees.md` §4.17) [M], `offset-fold.s` read back, pixels differing from Diamond after the
+  change, over the four shapes:
+
+  | Shape | Diamond before | Diamond after | DuckStation | SwanStation | Beetle PSX | PCSX-Redux |
+  |---|---|---|---|---|---|---|
+  | flat triangle from 286 | 783 missing | 783 drawn | 0 | 0 | 0 | drawn elsewhere |
+  | flat triangle from the screen | 0 | 0 | 0 | 0 | 0 | drawn elsewhere |
+  | Gouraud triangle from 300 | 1,326 missing | 1,326 drawn | 0 | 0 | 0 | drawn elsewhere |
+  | line from 300 | 56 missing | 56 drawn | 0 | 0 | 0 | drawn elsewhere |
+
+  DuckStation, SwanStation and Beetle PSX, of two lineages, read back word for word what Diamond reads after the
+  change, the Gouraud triangle's colours included. PCSX-Redux fills columns 896 to 991 where the others draw 992 to
+  1023, the triangle from the screen among them, so its picture of this program measures something else and is not
+  counted; PCSX-ReARMed was not run (the no-firmware exit of §4.16).
+- **Witnesses:** as the referee. Under D-23's rule a rectangle at -992 with an offset of -1,022 lands at 34; DuckStation
+  sums without wrapping and so would draw it nowhere, which is D-23's own disagreement with it and unchanged here.
+- **Conclusion** [measured]: **the GPU's coordinates are 11 bits wide, so a pixel at x and one at x + 2,048 are the
+  same column (and likewise in y); a triangle or line whose vertices, placed as D-23 has it, reach left of -1,024 (or
+  above it) is drawn 2,048 further on**, where the part of it from -1,024 lies past any drawing area. This keeps
+  D-23's rule whole: the rectangle's wrap to 34 is the same column as its unwrapped -2,014, the triangle of 290 to
+  1,265 is unchanged, and the size limit judges the same distances. A rectangle needs no such step: its corner wraps
+  into -1,024 to 1,023 and its width of at most 1,023 leaves it there or past 1,023. The y half is the same rule by
+  the same register width; no game or program here reaches it but the unit test. Not measured: whether the console's
+  rasteriser counts in 11 bits or merely compares in them, which no picture here can tell apart.
+- **Depends on it:** every game that draws a buffer at x 512 with its centre as the offset, a common double-buffer
+  layout: the polygons past the screen's right edge whose first vertex the sum carries past 1,023.
+- **Pinned by:** `a_primitive_past_the_offsets_eleven_bits_is_drawn_modulo_2048` (the program), and
+  `a_primitive_reaching_past_minus_1024_is_drawn_2048_further_on` (`src/gpu/tests.rs`, the x and the y case), both
+  failing before the change; D-23's `a_vertex_and_the_offset_add_in_eleven_bits` and
+  `the_offset_moves_a_polygon_whole_and_its_size_is_judged_before` unchanged.
+- **Implemented in:** `raster.rs`'s `fold`, for triangles and lines, in the commit citing this entry.

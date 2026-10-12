@@ -1179,7 +1179,7 @@ pub fn power_on_memctl() -> [u32; 9] {
 }
 
 /// The memory a store at a processor address lands in, RAM's offset or the scratchpad's, as `decode` finds it with
-/// `ram_window` bytes of RAM mapped; the debugger's report of a store in the memory's own space (Diamond_Native.md §18).
+/// `ram_window` bytes of RAM mapped; the debugger's report of a store in the memory's own space (Diamond_Debugger.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reached {
     Ram(u32),

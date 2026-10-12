@@ -49,7 +49,8 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("diamond", "Diamond", CoreInterface.CapAxes | CoreInterface.CapBatteryDirty), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            const ulong debug = CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble;
+            Assert.Equal(("diamond", "Diamond", CoreInterface.CapAxes | CoreInterface.CapBatteryDirty | debug), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             var system = Assert.Single(library.Info.Systems);
             Assert.Equal((PsxSystem.Id, true), (system.Id, system.Development));
             Assert.Same(PsxSystem.Entry, SystemPacks.For(system.Id)!.Entry);

@@ -68,7 +68,7 @@ pub struct Machine {
     pub ports: [Option<&'static str>; 2],
     /// The firmware files given at create, by number.
     pub firmware: Vec<u32>,
-    /// The debugger's hooks and its open frame (Diamond_Native.md §18).
+    /// The debugger's hooks and its open frame (Diamond_Debugger.md).
     pub debug: crate::debugger::Debugger,
 }
 
@@ -197,7 +197,7 @@ impl Machine {
 }
 
 /// `Machine::step` over the machine's parts, so that the debugger's frame can lend its observer the hooks beside them;
-/// a step the observer stops runs nothing and leaves the clock where it was (Diamond_Native.md §18).
+/// a step the observer stops runs nothing and leaves the clock where it was (Diamond_Debugger.md).
 #[inline(always)]
 pub(crate) fn step_on<O: Observer>(cpu: &mut R3000, board: &mut Board, exe: &mut Option<Vec<u8>>, kernel: Kernel, o: &mut O) -> Step {
     let pc = cpu.regs.pc;

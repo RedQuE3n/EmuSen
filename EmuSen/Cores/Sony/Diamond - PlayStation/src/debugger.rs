@@ -1,7 +1,7 @@
 //! The debugger (Diamond_Plan.md §4.7, stage 12): the R3000A observed through `Observer` in a frame of its own, which
 //! stops where the host's tables say; the call stack, stores reported in the bus and in the memory they land in,
 //! coverage and the profile kept in the shared hooks; the R3000A's and the GTE's registers; code disassembled by
-//! emusen-mips with the GTE's names. The plain frame never meets any of it. Diamond_Native.md §18 records each rule.
+//! emusen-mips with the GTE's names. The plain frame never meets any of it. Diamond_Debugger.md records each rule.
 
 use blackmoon_r3000::{Observer, Step};
 use emusen_mips::{Op, Word, decode, disassemble};

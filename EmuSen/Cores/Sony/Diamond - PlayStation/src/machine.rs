@@ -1,11 +1,12 @@
-//! The machine: the R3000A stepping against the bus, a frame ending as a field's vblank begins, a PS-EXE side-loaded
-//! on the kernel it runs or started directly, the TTY, port 1's pad, and silence at the SPU's rate until stage 8
-//! (Diamond_Native.md §11, §12; Diamond_Pad.md).
+//! The machine: the R3000A stepping against the bus, a frame ending as a field's vblank begins with the SPU brought to
+//! it, a PS-EXE side-loaded on the kernel it runs or started directly, the TTY, and port 1's pad (Diamond_Native.md
+//! §11, §12; Diamond_Pad.md; Diamond_SPU.md).
 
 use blackmoon_r3000::{R3000, Step};
 
 use crate::bus::{BIOS_BYTES, Board, RAM_BYTES, SCRATCH_BYTES, power_on_memctl};
-use crate::devices::{SPU_RAM_BYTES, TTY_BYTES};
+use crate::devices::TTY_BYTES;
+use crate::spu::RAM_BYTES as SPU_RAM_BYTES;
 use crate::gpu::display;
 use crate::gpu::vram::BYTES as VRAM_BYTES;
 use crate::icache::KERNEL_BCC;
@@ -26,9 +27,9 @@ pub const RAM_ID: u32 = 1;
 pub const BIOS_ID: u32 = 5;
 pub const TTY_ID: u32 = 6;
 
-/// The SPU's rate, 33.8688 MHz over 768 (psx-spx "SPU"), at which the silence is made.
+/// The SPU's rate, 33.8688 MHz over 768 (psx-spx "SPU").
 pub const AUDIO_RATE: i32 = 44_100;
-pub const CYCLES_PER_SAMPLE: u64 = 768;
+pub const CYCLES_PER_SAMPLE: u64 = crate::spu::CYCLES_PER_SAMPLE;
 
 /// The nominal picture, 320 wide by 240 lines NTSC and 256 PAL, and the largest the display makes (Diamond_GPU.md §7).
 pub const WIDTH: u32 = 320;
@@ -64,14 +65,8 @@ pub struct Machine {
     /// Whether each card's change was reported to the host since it last saved the card.
     pub card_reported: [bool; 2],
     pub ports: [Option<&'static str>; 2],
-    /// Silent stereo frames made and not yet drained, the bound on them in samples, and the cycle the last sample
-    /// was counted at.
-    pub silence: usize,
-    pub audio_limit: usize,
     /// The firmware files given at create, by number.
     pub firmware: Vec<u32>,
-    /// The CD-ROM controller's audio as the SPU would take it, kept only when a test asks.
-    pub cd_tap: Option<Vec<[i16; 2]>>,
 }
 
 /// The console's standard field rate, by its market: NTSC on an NTSC clock, PAL on a PAL one (D-0, provisional).
@@ -121,10 +116,7 @@ impl Machine {
             skip: false,
             card_reported: [false; 2],
             ports,
-            silence: 0,
-            audio_limit: usize::MAX,
             firmware: Vec::new(),
-            cd_tap: None,
         }
     }
 
@@ -201,16 +193,13 @@ impl Machine {
     }
 
     /// One frame: the machine runs until a field's vblank begins, its picture complete, or to the field's end when the
-    /// display range leaves no vblank; its silence is counted from the clock.
+    /// display range leaves no vblank; the SPU's samples are made up to that cycle.
     pub fn advance(&mut self) {
-        let start = self.board.now;
         self.board.field_done = false;
         while !self.board.field_done {
             self.step();
         }
-        let made = self.board.now / CYCLES_PER_SAMPLE - start / CYCLES_PER_SAMPLE;
-        self.board.cdrom.take_audio(made as usize, self.cd_tap.as_mut());
-        self.silence = (self.silence + made as usize).min(self.audio_limit / 2);
+        self.board.sync_spu();
         self.frames += 1;
     }
 }
@@ -287,7 +276,7 @@ pub mod tests {
     }
 
     #[test]
-    fn a_seconds_frames_make_a_seconds_silence_from_the_clock() {
+    fn a_seconds_frames_make_a_seconds_samples_from_the_clock() {
         let mut m = machine_for(&program("loop: j loop\nnop"), Market::Americas);
         let (num, den) = m.frame_rate();
         let frames = (num / den) as i64;
@@ -296,13 +285,13 @@ pub mod tests {
         for _ in 0..frames {
             m.advance();
         }
-        assert_eq!(m.silence as u64, m.board.now / CYCLES_PER_SAMPLE);
+        assert_eq!(m.board.spu.out.len() as u64, 2 * (m.board.now / CYCLES_PER_SAMPLE));
         let seconds = (m.board.now - first) as f64 / 33_868_800.0;
         assert!((seconds - frames as f64 * den as f64 / num as f64).abs() < 1e-5, "{seconds}");
         assert_eq!(m.board.video.position(first).0, 256, "a frame ends as vblank begins, at line 256 by GP1(07h)'s reset");
-        m.audio_limit = 1000;
+        m.board.spu.out.set_limit(1000);
         m.advance();
-        assert_eq!(m.silence, 500, "the bound drops the oldest");
+        assert_eq!(m.board.spu.out.len(), 1000, "the bound drops the oldest");
     }
 
     #[test]

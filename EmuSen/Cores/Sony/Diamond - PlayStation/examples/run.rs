@@ -1,7 +1,7 @@
 //! Runs a PS-EXE on Diamond for a number of frames and prints its TTY: `run <exe> [frames] [--bios FILE | --bare] [--pal]
 //! [--dump ADDRESS WORDS] [--ram FILE] [--vram FILE] [--picture FILE]`: RAM's words from a hex address, or RAM, VRAM or
 //! the RGBA picture (its size printed) to a file.
-//! `--disasm ADDRESS N` disassembles N words of a game's RAM after the run. `--boot` boots the disc through the kernel's LoadExec from a loader, without the BIOS's intro (Diamond_CDROM.md §9).
+//! `--disasm ADDRESS N` disassembles N words of a game's RAM after the run. `--wav FILE` writes the SPU's output, 16-bit stereo at 44,100 Hz. `--boot` boots the disc through the kernel's LoadExec from a loader, without the BIOS's intro (Diamond_CDROM.md §9).
 //! `--heading TEXT` prints the TTY from TEXT on, leaving out what a BIOS printed before the program; `--trace` then
 //! traces the controller's commands and responses, as `--trace-game` does from the entry of a game booted by `--boot`, once the BIOS has handed over. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
 //! the image itself when PATH is no PS-EXE), `--analog` presses port 1's Analog button at frame 30; `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
@@ -57,8 +57,15 @@ fn main() {
     let trace_game = args.iter().any(|a| a == "--trace-game");
     let lid_at = args.iter().position(|a| a == "--open-at").map(|i| args[i + 1].parse::<i64>().expect("a frame"));
     let every = args.iter().position(|a| a == "--pictures").map(|i| (args[i + 1].clone(), args[i + 2].parse::<i64>().expect("a frame count")));
+    let wav = args.iter().position(|a| a == "--wav").map(|i| args[i + 1].clone());
+    let mut audio: Vec<i16> = Vec::new();
+    let mut chunk = vec![0i16; 8192];
     let start = std::time::Instant::now();
     for _ in 0..frames {
+        if wav.is_some() {
+            let n = m.board.spu.out.drain(&mut chunk, usize::MAX);
+            audio.extend_from_slice(&chunk[..n]);
+        }
         if trace_game && !m.board.cdrom.trace {
             m.board.field_done = false;
             while !m.board.field_done {
@@ -102,6 +109,11 @@ fn main() {
                 m.set_lid(false, None);
             }
         }
+    }
+    if let Some(path) = &wav {
+        let n = m.board.spu.out.drain(&mut chunk, usize::MAX);
+        audio.extend_from_slice(&chunk[..n]);
+        write_wav(path, &audio);
     }
     let tty = m.space(TTY_ID).unwrap();
     let end = tty.iter().position(|&b| b == 0).unwrap_or(tty.len());
@@ -229,4 +241,22 @@ fn rom(bios: &Option<Vec<u8>>, bare: bool) -> Option<(&[u8], Kernel)> {
         None if bare => None,
         None => kernel::open_kernel().map(|k| (k, Kernel::Open)),
     }
+}
+
+/// A canonical WAV of 16-bit stereo at the SPU's 44,100 Hz.
+fn write_wav(path: &str, samples: &[i16]) {
+    let data = samples.len() as u32 * 2;
+    let mut out = Vec::with_capacity(44 + data as usize);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    for v in [16u32, 1 | 2 << 16, 44_100, 44_100 * 4, 4 | 16 << 16] {
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data.to_le_bytes());
+    for s in samples {
+        out.extend_from_slice(&s.to_le_bytes());
+    }
+    std::fs::write(path, out).expect("written");
 }

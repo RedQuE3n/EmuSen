@@ -10,7 +10,8 @@ at stage 5 the GTE computes, ps1-tests' `test-all` passes every case bit for bit
 its commands; at stage 7 the CD-ROM controller reads discs (`.cue` with its tracks, `.chd`, `.iso`, a lone `.bin`)
 through the shared crate `emusen-disc`, and games boot to their title screens through the kernel's own loader; at
 stage 9 the MDEC decodes, ps1-tests' MDEC programs' VRAM equals their pictures but for the rounding D-30 leaves open,
-and a game's opening movie plays. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
+and a game's opening movie plays; at stage 8, built after it, the SPU plays, its voices as its capture buffers record
+them equal to DuckStation's sample for sample, and ps1-tests' SPU programs pass. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
 
 - [`Diamond_Plan.md`](Diamond_Plan.md) — the plan, written 2026-10-10 before any emulation: the machine in scope and
   how accurate each part must be (the R3000A with its cache and scratchpad, the GTE exact, DMA, timers, interrupts, a
@@ -32,7 +33,7 @@ and a game's opening movie plays. Its processors are the BlackMoon crates (`../B
   and stage 2's items, the cost; and stage 5 (§13): the GTE in the machine and its interlock, the gate program by
   program, how the first build failed `test-all`, the timing against the witnesses, the state's version 2, the cost; and stage 6 (§14): SIO0's devices, the state's version 4, the gate; and stage 7 (§15): the CD-ROM, the disc crate, the
 state's version 6, the gate item by item; and stage 9 (§16): the MDEC, DMA channels 0 and 1, the state's version 7,
-the gate.
+the gate; and stage 8 (§17): the SPU, the audio path, DMA4, the state's version 8, the gate.
 - [`Diamond_GPU.md`](Diamond_GPU.md) — the GPU, written 2026-10-11 at stage 4: the FIFO and the command processor,
   GPUSTAT's ready bits against `gpustat`'s console log, DMA channel 2, GP1, VRAM's transfers, texturing with the
   texture and CLUT caches, the pixel pipeline, the rasteriser's rules fitted to ps1-tests' console pictures, the
@@ -65,6 +66,12 @@ the gate.
   (D-32), the decode time by referees (D-31), a read's wait (D-33), DMA channels 0 and 1 with DMA1's macroblock order,
   the state, the gate program by program, Peter Lemon's programs, the tester's games and D-29, the cost, and the reading
   log with its exposures.
+- [`Diamond_SPU.md`](Diamond_SPU.md) — the SPU, written 2026-10-11 at stage 8: what it is written from and without,
+  the registers, the clock and the output, the voices (SPU-ADPCM decoded a word at a time, the Gaussian table
+  transcribed by a script, pitch modulation, the loop flags, key on and off, noise), the envelope and the sweeps, the
+  reverb with its accesses' order and its filter, the transfers with the referees' rates and DMA4 letting the other
+  channels move, IRQ9, capture and the mix, the state, the gate with the voice programs against the references' audio
+  and their capture buffers on five referees, D-29 and the games, the cost, and the reading log with its exposures.
 - [`Diamond_References.md`](Diamond_References.md) — the oracles, documents and reference cores pinned at stage 1
   (2026-10-11): the test programs with their console logs and pictures, the documents and their exclusions, the probe on
   the three libretro cores (only PCSX-ReARMed may run without a BIOS; Beetle PSX and SwanStation boot OpenBIOS and are
@@ -75,7 +82,9 @@ the gate.
   rules), D-8 (the x-flip's offset), D-9 (the drawing area's commands in order), D-10 (GPUSTAT bit 28), D-11 (the
   drawing time) and D-12 (two pictures the programs cannot meet); from the pad, D-22 (SIO0's timing) and D-23 (amidog's GPU test); from stage 7, D-24 to D-29 (the CD-ROM's response delays,
 the drive's mechanics, a seek's reach, XA's arithmetic, getloc's eighth byte, the BIOS's intro); from stage 9, D-30 to
-D-33 (the MDEC's arithmetic, its time, its pipeline, a read's wait). The R3000A's
+D-33 (the MDEC's arithmetic, its time, its pipeline, a read's wait); from stage 8, D-34 to D-40 (SPU-ADPCM's prediction,
+the interpolation's sum, the envelope's step after its sample, the noise's rate change, the transfer's rate, the reverb's
+input instants, the reserved shifts and filters). The R3000A's
   disputes (D-1 to D-3, and D-17 to D-21 from amidog's `psxtest_cpx`) are in
   `../BlackMoon-HW/BlackMoon_R3000.md` §8 and the GTE's (D-13 to D-16, from stage 5) in `../BlackMoon-HW/BlackMoon_GTE.md`
   §12. *2026-10-11*: D-20 and D-21 settled; DICR's bit 6 ruled in `Diamond_Records.md` §16.2.

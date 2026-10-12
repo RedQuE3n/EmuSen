@@ -150,7 +150,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, the GTE, memory, timers, interrupts, DMA and the GPU run a program and show its picture, and port 1's controller answers as a digital pad; the sound is silent until the SPU is built.".into()),
+            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, the GTE, memory, timers, interrupts, DMA, the GPU, the CD-ROM drive, the SPU and the MDEC run a program or a disc with its picture and its sound, and the controllers and memory cards answer on SIO0.".into()),
             systems: vec![emusen_native::core::System {
                 id: "psx".into(),
                 name: "Sony PlayStation".into(),
@@ -315,19 +315,15 @@ impl Core for Machine {
     }
 
     fn audio_buffered(&self) -> usize {
-        self.silence * 2
+        self.board.spu.out.len()
     }
 
     fn drain_audio(&mut self, out: &mut [i16], max_frames: usize) -> usize {
-        let frames = self.silence.min(max_frames).min(out.len() / 2);
-        out[..frames * 2].fill(0);
-        self.silence -= frames;
-        frames * 2
+        self.board.spu.out.drain(out, max_frames)
     }
 
     fn set_audio_limit(&mut self, samples: usize) {
-        self.audio_limit = samples;
-        self.silence = self.silence.min(samples / 2);
+        self.board.spu.out.set_limit(samples);
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
@@ -442,7 +438,7 @@ mod tests {
     }
 
     #[test]
-    fn a_frame_is_black_and_silent_at_the_spus_rate() {
+    fn a_frame_is_black_and_silent_at_the_spus_rate_with_the_spu_off() {
         let mut m = create(&exe(None, 1), &[], vec![]).unwrap();
         let mut out = vec![1i16; 4000];
         let mut total = 0;

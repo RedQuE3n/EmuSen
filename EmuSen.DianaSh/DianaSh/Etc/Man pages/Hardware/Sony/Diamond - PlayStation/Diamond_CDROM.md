@@ -36,7 +36,8 @@ were left unopened, and the test commands that read the HC05's RAM answer zero (
   shares it rather than duplicating up to 700 MB; it is not part of the state (§10).
 - **Audio** leaves the controller at 44,100 Hz into a ring of 8,192 stereo frames, through the volume matrix; the
   machine takes one frame a sample (768 cycles) at each frame's end, which is where the SPU of stage 8 will take its CD
-  input. Until then the frames are dropped, or kept by a test's tap.
+  input. Until then the frames are dropped, or kept by a test's tap. *Since stage 8 (2026-10-11)* the SPU takes one frame a sample at the sample's cycle, the
+  controller brought to it first (`Diamond_SPU.md` §2).
 
 ## 3. The host interface
 

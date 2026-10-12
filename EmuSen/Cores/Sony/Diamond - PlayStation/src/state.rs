@@ -16,7 +16,7 @@ use crate::pad::Controller;
 use crate::sio0::{Phase, Sio0, Target};
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"DMND");
-pub const STATE_VERSION: i32 = 7;
+pub const STATE_VERSION: i32 = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -88,8 +88,7 @@ impl Board {
         });
         w.group("Gpu", |w| self.gpu.write_state(w));
         w.bool("VblankSeen", self.vblank_seen);
-        w.u16s("SpuRegisters", &self.spu.regs);
-        w.u32("SpuCursor", self.spu.cursor);
+        w.group("Spu", |w| self.spu.write_state(w));
         w.group("Cdrom", |w| self.cdrom.write_state(w));
         w.group("Mdec", |w| self.mdec.write_state(w));
         w.u32s("MdecLeft", &self.mdec_left);
@@ -156,8 +155,7 @@ impl Board {
         v.odd = r.bool()?;
         self.gpu.read_state(r)?;
         self.vblank_seen = r.bool()?;
-        r.u16s(&mut self.spu.regs)?;
-        self.spu.cursor = r.u32()?;
+        self.spu.read_state(r)?;
         self.cdrom.read_state(r)?;
         self.cd_line = self.cdrom.line();
         self.mdec.read_state(r)?;
@@ -551,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn the_version_7_layout_is_pinned() {
+    fn the_version_8_layout_is_pinned() {
         let layout = machine().layout();
         let head: Vec<&str> = layout.lines().take(5).collect();
         assert_eq!(head, ["0 4 u32 Magic", "4 4 i32 Version", "8 8 i64 Frames", "16 128 u32[32] Cpu.R", "144 4 u32 Cpu.Hi"]);
@@ -559,16 +557,16 @@ mod tests {
         assert_eq!(
             tail,
             [
-                "3724292 65536 u8[65536] TTY",
-                "3200004 524288 u8[524288] SPURAM",
-                "2151428 1048576 u8[1048576] VRAM",
-                "2150404 1024 u8[1024] SCRATCH",
-                "53252 2097152 u8[2097152] RAM",
-                "53251 1 bool ExePending"
+                "3727428 65536 u8[65536] TTY",
+                "3203140 524288 u8[524288] SPURAM",
+                "2154564 1048576 u8[1048576] VRAM",
+                "2153540 1024 u8[1024] SCRATCH",
+                "56388 2097152 u8[2097152] RAM",
+                "56387 1 bool ExePending"
             ]
         );
-        assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Bus.Sio0.Port1.Controller.Modes") && layout.contains("Cpu.InterruptView.Held") && layout.contains("u16[8192] Bus.Cdrom.OutLeft") && layout.contains("u8[2352] Bus.Cdrom.Waiting") && layout.contains("u32[32] Bus.Mdec.Fifo") && layout.contains("u32[17] Bus.Mdec.Queue") && layout.contains("u32[2] Bus.MdecLeft"), "{layout}");
-        assert_eq!(machine().state_size(), 3_789_828);
+        assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Bus.Sio0.Port1.Controller.Modes") && layout.contains("Cpu.InterruptView.Held") && layout.contains("u16[8192] Bus.Cdrom.OutLeft") && layout.contains("u8[2352] Bus.Cdrom.Waiting") && layout.contains("u32[32] Bus.Mdec.Fifo") && layout.contains("u32[17] Bus.Mdec.Queue") && layout.contains("u32[2] Bus.MdecLeft") && layout.contains("u16[744] Bus.Spu.VoiceSamples") && layout.contains("u16[32] Bus.Spu.Fifo"), "{layout}");
+        assert_eq!(machine().state_size(), 3_792_964);
     }
 
     #[test]

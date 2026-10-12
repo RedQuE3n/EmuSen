@@ -3,8 +3,8 @@
 //!
 //! Stage 4: the R3000A runs against the bus, with memory control, the I-cache, the interrupts, the timers, the seven
 //! DMA channels, the video timing and the GPU, whose display is the picture, and SIO0 with port 1's digital pad,
-//! brought forward from stage 6; the later stages' devices answer as register stubs, and the sound is silent until
-//! stage 8. The processors come from the BlackMoon crates.
+//! brought forward from stage 6; the CD-ROM controller (stage 7), the SPU (stage 8) and the MDEC (stage 9); the serial
+//! port answers as a stub. The processors come from the BlackMoon crates.
 
 pub mod bus;
 pub mod card;
@@ -24,6 +24,7 @@ pub mod memctl;
 pub mod multitap;
 pub mod pad;
 pub mod sio0;
+pub mod spu;
 pub mod state;
 pub mod timers;
 pub mod v1;

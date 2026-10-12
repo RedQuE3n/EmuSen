@@ -993,7 +993,7 @@ fn the_open_kernels_card_files_keep_the_on_card_format() {
     assert_eq!(r[19], 0x8010_0278, "the deleted file found in find mode 1");
     assert_eq!(m.board.ram_word(0x10_0278 + 0x14), 0xA0, "its attribute");
     assert_eq!((r[21], r[22], r[23], r[24]), (1, 1, 1, u32::MAX), "undelete, erase, rename, the old name gone");
-    assert_eq!((r[28], r[29]), (0x80, 1), "the asynchronous read returns at once and its event comes");
+    assert_eq!((r[28], r[29]), (0, 1), "the asynchronous read accepted with 0 (§25.2) and its event comes");
     assert_eq!(&m.board.ram[0x14_0000..0x14_0080], &pattern[..0x80]);
     assert_eq!((r[33], r[34], r[35]), (1, 1, 1), "_card_read queued, its event, _card_status ready");
     assert_eq!((r[38], r[39], r[40], r[41]), (1, 1, 0x11, u32::MAX), "the empty slot: _card_info's timeout, status 11h, open fails");

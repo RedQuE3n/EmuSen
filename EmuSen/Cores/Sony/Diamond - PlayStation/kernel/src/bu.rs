@@ -320,6 +320,8 @@ pub extern "C" fn dev_card_open(f: u32, path: u32, mode: u32) -> u32 {
     0
 }
 
+/// The bytes moved, or in asynchronous mode 0 once the job is accepted, the position moved past them, as Spyro the
+/// Dragon's loops require (Diamond_OpenKernel_Phase2.md §25.2).
 fn transfer(f: u32, buffer: u32, length: u32, kind: Kind) -> u32 {
     let (port, position, size) = (port_of(f), rd(f + fcb::POSITION), rd(f + SIZE));
     let slot = card::slot_of(port);
@@ -345,7 +347,8 @@ fn transfer(f: u32, buffer: u32, length: u32, kind: Kind) -> u32 {
         };
         unsafe { JOBS[slot] = job };
         step(slot);
-        return n;
+        wr(f + fcb::POSITION, position + n);
+        return 0;
     }
     for k in 0..n / FRAME {
         let Some(s) = sector_of(slot, first, position + k * FRAME) else {

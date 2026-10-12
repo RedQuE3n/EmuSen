@@ -126,14 +126,14 @@ pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
         }
         let at = |k: usize, x: i64| base[k] + grads[k].dx * (x - v[b].x as i64) + grads[k].dy * (yy - v[b].y as i64);
         let mut a = [0, 1, 2, 3, 4].map(|k| at(k, lo));
-        for x in lo..=hi {
+        p.row(y, lo as i32, hi as i32, |_| {
             let rgb = if shaded { [0, 1, 2].map(|k| ((a[k] + HALF) >> FRACTION) as i32) } else { v[0].rgb };
             let uv = if textured { (((a[3] + HALF) >> FRACTION) as u8, ((a[4] + HALF) >> FRACTION) as u8) } else { (0, 0) };
-            p.pixel(x as i32, y, rgb, uv);
             for k in 0..5 {
                 a[k] += grads[k].dx;
             }
-        }
+            (rgb, uv)
+        });
     }
 }
 
@@ -170,7 +170,7 @@ pub fn rectangle(p: &mut Painter, s: Sprite) {
             continue;
         }
         let v = (uv.1 as i32 + sv * (yy - y)) as u8;
-        for xx in x1..=x2 {
+        p.row(yy, x1, x2, |xx| {
             let mut u = (u0 + su * (xx - x)) as u8;
             if let Some(t) = pairs.filter(|_| xx & 1 == 1 && xx > x1) {
                 let left = u.wrapping_sub(1);
@@ -179,8 +179,8 @@ pub fn rectangle(p: &mut Painter, s: Sprite) {
                     u = left;
                 }
             }
-            p.pixel(xx, yy, rgb, (u, v));
-        }
+            (rgb, (u, v))
+        });
     }
 }
 

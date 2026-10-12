@@ -355,7 +355,8 @@ on this kernel find ROM, not RAM, at the tables' entries.
 
 [M] 524,288 bytes, 92,440 of them before the last non-zero byte; the kernel's variables end at 8E70h, below DF80h; SHA-256
 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, rebuilt byte for byte with
-`DIAMOND_KERNEL_REBUILD=require`, and from a copy of `kernel/` at another path to the same digest.
+`DIAMOND_KERNEL_REBUILD=require`, and from a copy of `kernel/` at another path to the same digest. *Since §23 (2026-10-11):* SHA-256
+`7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`.
 
 **Left to a separate step**, by the stage's terms, and taken in §22: the cards exchanged with the player's BIOS, and `firmwarecheck.py`.
 The cards it needs are in `~/.cache/emusen/probe/diamond/cards/s10/` with a `README.txt`: `tekken3-saved-on-open-kernel.mcr`
@@ -605,3 +606,52 @@ wrote, and `firmwarecheck.py`'s numbers. **Exposures**, stated plainly:
   The search was then confined to lines before 2741.
 - The call comparison printed the player's BIOS's undefined results and the argument registers it leaves behind
   between calls, a few dozen words. None is recorded; §22.5 names only which calls differ.
+
+## 23. After the cross-kernel step (2026-10-11)
+
+*Written by the kernel's writer, under the same rules; of §22 only its text was read.*
+
+### 23.1 Frame 63, and the half-stored card request
+
+**What frame 63 must hold.** psx-spx's "Write Test Frame (Block 0, Frame 63)": "Reportedly "write test". Usually same as
+Block 0 ("MC", 253 zero-bytes, plus checksum 0Eh)" [R]. `card.rs`'s `test_frame` builds exactly that, and the format
+and the directory read write it; the contents were never the defect.
+
+**The defect** [M]. `submit` stored a slot's request field by field with interrupts on, and the vblank element, which
+carries the request out, could run between two of the stores: it then took a request whose kind and sector were
+already the new ones and whose buffer was not, or cleared the slot under the stores still to come. A write test so
+sent sector 3Fh from address 0, where the kernel keeps its copy of the exception vector (the 80h words, then 02h at 60h
+and FFh at 68h), which is what §22.2 found on frame 63; a request cleared under the stores was lost. Tekken 3's write
+test on a new card hit the window; the stage's own tests, whose writes followed a vblank by most of a frame, did not.
+
+**Shown first, then fixed.** `programs/card-write-race.s` makes one `_card_write` of sector 3Fh with interrupts on;
+`a_vblank_inside_card_write_never_sends_a_half_stored_request` finds the instructions of the call that store into the
+kernel's RAM and raises vblank at each instruction from 40 before them to 40 after, on both ports, checking frame 3Fh
+for the call's bytes each time. On the stage 10 image it fails on port 10h at 1,488 instructions into the call, the
+frame left zero; with `submit` storing the request inside a critical section, and only once the slot is free, it
+passes at every instruction on both ports. The element's own chaining of a job's next request runs at interrupt level
+and is not affected.
+
+### 23.2 The two call results of §22.5
+
+- **ChangeClearRCnt(3, 0)'s first result.** psx-spx gives what the call returns ("the old (previous) flag value") and
+  not the flag a booted program finds; its "Vblank" section says vblank "is internally used by the BIOS for handling
+  joypad and memory card accesses", which the priority 2 element does, and a vblank flag of 1 would make the priority 1
+  handler acknowledge vblank and return before that element ever saw it [R "C(0Ah)", "Vblank", "Priority Chains"]. The
+  documents therefore do not settle it, and `Diamond_OpenKernel.md` §9 item 4's default, 0, which the argument above
+  supports, is kept. Recorded, not changed.
+- **OpenEvent's first descriptor after `_96_remove`.** psx-spx's B(08h): "of the 16 events, only 11 events are available
+  to the game", five "internally used by the BIOS for CDROM functions" [R]. The open kernel's five CD events keep that
+  count; that the other kernel's first descriptor is F1000000h after `_96_remove` is not explained by any document read,
+  and `_96_remove`'s entry describes only its chain element. Recorded, not changed.
+
+### 23.3 The image and the tests
+
+[M] 524,288 bytes, 92,504 of them before the last non-zero byte; SHA-256
+`7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`, rebuilt byte for byte with
+`DIAMOND_KERNEL_REBUILD=require`. The kernel harness, the crate's tests with and without the ps1-tests corpus, and
+WiseMan's `DiamondTests` with no firmware variable set, all passing (`Diamond_Native.md` §18.5).
+
+**Read for this section**: psx-spx `kernelbios.md` lines 1277-1296 (OpenEvent) and 1545-1597 (the timer functions and
+ChangeClearRCnt); `controllersandmemorycards.md`'s "Write Test Frame" again; this page's §22. Nothing else was opened,
+no firmware folder was used, and no reference emulator was run.

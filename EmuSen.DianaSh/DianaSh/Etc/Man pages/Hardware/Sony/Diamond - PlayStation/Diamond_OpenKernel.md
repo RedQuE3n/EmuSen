@@ -650,7 +650,8 @@ last non-zero byte, SHA-256 `ef5c8362064bb4cf5bf9ab2fc47af0fffc456ad65eac3808b40
 `135549cd26268e0a50f56649ac4a1cdfdf6287ca2660698023648bc3bf011629`, rebuilt byte for byte with
 `DIAMOND_KERNEL_REBUILD=require`. *Since phase 2 (stage 10, 2026-10-11):* 92,440 bytes before the last non-zero byte,
 SHA-256 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, rebuilt byte for byte the same way and from a
-copy at another path (`Diamond_OpenKernel_Phase2.md` §20.4).
+copy at another path (`Diamond_OpenKernel_Phase2.md` §20.4). *Since the card request's fix (2026-10-11, `Diamond_OpenKernel_Phase2.md`
+§23):* 92,504 bytes, SHA-256 `7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`.
 
 **Reproducibility** [M]: the harness's `image` tests check the committed bytes against their digest always, and
 against a rebuild whenever the pinned toolchain is present (the project's cache under `~/.cache/emusen/toolchains`,

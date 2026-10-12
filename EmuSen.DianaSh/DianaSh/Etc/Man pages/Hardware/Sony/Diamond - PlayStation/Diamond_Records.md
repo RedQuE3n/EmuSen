@@ -702,6 +702,13 @@ for a dispute step.
 - *Implemented in:* `diamond: DICR's bit 6 reads zero; programs for DICR, SWCz's store and the garbage registers`; `dma.rs` keeps `00FF803Fh` of a write. `io-access-bitwidth`'s
   record now has **91 of its 108 cells** as the console's [M, `psxrecords.py console`].
 
+### 16.3 DICR's master flag and IRQ3
+
+*Changed 2026-10-12* (`Diamond_Disputes.md` D-29): a DICR write keeps bit 31 for its recalculation, so I_STAT's bit 3 is
+set only when bit 31 rises from zero; before, every write with a flag standing set it again. The record programs
+above write DICR with interrupts off and read nothing of I_STAT's bit 3, so none of their cells changed [M,
+`cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS`].
+
 ## 17. What was read for §11–§16
 
 - **ps1-tests** (MIT): `dma/otc-test`'s `main.cpp`, `otc.cpp`, `otc.h` and `Makefile`; `dma/dpcr`'s `main.cpp` and

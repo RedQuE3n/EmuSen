@@ -20,6 +20,8 @@ the changes it led to; no new number was taken for it.
 which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
 *Stage 9 (2026-10-11)* took D-30 to D-33, the MDEC's; the SPU's stage 8, built after it was merged, took D-34 to D-40, and
 added its step to D-29.
+*The intro's step (2026-10-12)* settled D-29 and took D-41, the DMA's arbitration beside a list, and D-42, the European
+BIOS that draws nothing.
 
 ## The rules this log keeps
 
@@ -973,6 +975,45 @@ added its step to D-29.
   ENVX always zero, STATX's IRQ flag always set, ENDX always clear), change nothing on the screen. With stage 9's MDEC,
   the SPU and the MDEC, the two stubs this entry named, are both ruled out as far as their registers show; the entry
   stays open.
+- *Settled 2026-10-12, by device states at frame boundaries and ablations.* **Documents read:** psx-spx `6d7d1bc`, "DMA
+  Channels" (DICR: "Bit 31 is a simple readonly flag that is recalculated on every write to DICR … Upon 0-to-1
+  transition of Bit 31, the IRQ3 flag in I_STAT gets set"; DPCR's priorities; "CPU Operation during DMA"), "Interrupts",
+  "BIOS CDROM Boot", "BIOS Interrupt/Exception Handling" (the handler chains, each handler checking I_STAT itself),
+  "Expansion Port" (the POST register).
+  **What the registers showed** [M, a tool of the step's own printing only device registers, FIFOs, flags and DMA
+  channels after each frame, never the PC, RAM or the scratchpad, on Crash Bandicoot's disc and `scph5501.bin`]: from
+  frame 596, the frame after the licence read, DICR reads `848C0000h`, channel 2's flag standing with bit 31 up and
+  channels 2 and 3 enabled, and I_STAT's bit 3 is found set again at frame after frame though I_MASK holds it; the
+  flag is never acknowledged. Diamond's DICR write cleared bit 31 before recalculating it, so every write made while a
+  flag stood was taken as a 0-to-1 transition and raised IRQ3 again: a handler that acknowledges I_STAT and writes DICR
+  without the standing flag's bit is entered again at once, without end. *Ablation:* keeping bit 31 across a write
+  (psx-spx's rule) lets the intro go on, the second screen drawn from frame 660 and the game started; refusing channel 2
+  its flag instead lets it go on too, which places the cause in channel 2's completion and DICR, not the CD.
+  **Test programs:** `programs/dicr-edge.s` (ten cases of I_STAT's bit 3 and DICR: a completion, a write keeping the
+  flag, the master enable cleared and set again, an acknowledge, the bus error flag written twice) and
+  `programs/dicr-storm.s` (a handler that leaves channel 6's flag up and writes DICR, counted to 1,000 runs).
+  **Referee** (`Diamond_Referees.md` §4.13) [M]: on `dicr-edge.s` DuckStation, Beetle PSX, PCSX-ReARMed and PCSX-Redux
+  read all ten cases alike and as psx-spx, a write that leaves bit 31 up setting nothing (cases 1 and 7);
+  SwanStation sets nothing by any write and never raises bit 31 by one (cases 3, 6 and 7), and sets IRQ3 at a
+  completion with bit 31 already up (case 4), so it too sets nothing in case 1; Diamond set I_STAT in cases 1 and 7. On
+  `dicr-storm.s` all five run the handler once; Diamond ran it 1,000 times.
+  **Conclusion** [measured]: **I_STAT's bit 3 is set only by bit 31 rising from zero, at a completion or at a write; a
+  write that leaves it up sets nothing.** Four lineages agree, on psx-spx's text. Why the intro waited on "neither a
+  CD command nor a CD event": its frames were spent re-entering the DMA's handler; the licence sector mattered only
+  because its read decides whether the intro reaches the step that starts the list. Why the stub ablations missed it:
+  interrupts forced each frame were raised on top of the storm, and nothing ablated DICR's edge.
+  **Pinned by:** `dicr_sets_i_stat_only_when_its_master_flag_rises`, `a_dicr_write_with_a_flag_left_up_does_not_ask_again`
+  and `dma::tests::a_dicr_write_raises_the_master_flag_only_from_zero`, each failing before the change.
+  **Implemented in:** `DICR's master flag sets I_STAT's bit 3 only when it rises from zero … (D-29)` (`dma.rs`).
+  **On the player's BIOS** [M, the seven discs to frame 6,000, pictures against SwanStation and Beetle PSX through
+  `psxreferee.py pictures`]: every disc passes the intro, the second screen drawn at frame 660 where SwanStation draws
+  it at 612 and Beetle PSX at 588 (at two-frame steps; the first screen is already 32 frames later than SwanStation's
+  from power-on), the intro's frames 30–900 within 1.8–1.9 grey levels of SwanStation's nearest frame and 3.6–4.1 of
+  Beetle PSX's on 160×120 grey, and each game then goes as far as on the open kernel (`Diamond_CDROM.md` §9.4). Of the
+  folder's other revisions on Crash Bandicoot's disc, eight still stopped after this change alone (among them
+  `scph5500.bin`, SCPH-1001, SCPH-1002 and SCPH-5552), on D-41; with both changes every revision but `scph5502.bin`
+  (D-42) leaves the first screen, the Japanese ones for their shell's menu, the disc being American (psx-spx "BIOS
+  CDROM Boot": the BIOS refuses "games for other regions").
 
 ### D-30. The MDEC's arithmetic where psx-spx says it does not know it: each IDCT pass truncated toward zero with three and then four fraction bits kept, the 15-bit pixel rounded from that fraction, the colour factors at twelve bits
 
@@ -1185,3 +1226,58 @@ added its step to D-29.
 - **Depends on it:** blocks no encoder writes, which a game's data may still hold.
 - **Pinned by:** the capture record's pin (T1, T8).
 - **Implemented in:** stage 8's commits on `diamond-s8`.
+
+### D-41. The DMA's arbitration: a channel between two pieces of a list or of blocks lets another ready channel run, whichever DPCR ranks first
+
+- **Opened:** 2026-10-12, by D-29's step: with DICR's edge fixed, eight revisions in the firmware folder still stopped
+  at the end of the first screen, `scph5500.bin`'s every frame's registers showing channel 2 started on a list (`01000401h`, MADR fixed
+  at one node from frame to frame, the GPU's FIFO holding a 12-word command and drawing) and channel 6 started and
+  triggered (`11000002h`) behind it, waiting.
+- **Documents read:** psx-spx `6d7d1bc`, "DMA Channels": DPCR ("If two or more channels have the same priority … the
+  priority is determined by the channel number"), CHCR's sync modes ("1=Slice … transfer next block whenever DREQ is
+  asserted", "2=Linked-list mode"), "CPU Operation during DMA" ("the CPU operation resumes during periods when DMA gets
+  interrupted (ie. after SyncMode 1 blocks, after SyncMode 2 list entries)"). None says whether another channel may
+  begin in those periods.
+- **Ablation** [M]: with channel 6's fill run at once beside a waiting channel 2, `scph5500.bin` leaves its first
+  screen for its shell's menu. It is argued, not observed, that the list ran into the ordering
+  table that channel 6 was to clear, so that each waited for the other [A].
+- **Test program:** `programs/dma-beside.s`: channel 2 on a list of four full-screen rectangles (waiting for the GPU's
+  request) or of 4,096 empty nodes (walking with nothing to wait for), channel 6 started beside it, each with channel 2
+  ranked above and below channel 6 in DPCR; channel 6's CHCR and its table read straight after its start and once the
+  list has ended.
+- **Referee** (`Diamond_Referees.md` §4.13) [M]: in all four cases DuckStation, SwanStation and Beetle PSX have channel
+  6 done and its table written straight after the start with channel 2 still moving; PCSX-ReARMed and PCSX-Redux have
+  the table written while channel 6's CHCR still reads started, their CHCR cleared later; PCSX-Redux has already ended
+  channel 2's list. Diamond before: channel 6 waited for the list's end in the two rectangle cases and was not yet done
+  in the two of empty nodes.
+- **Witnesses:** as the referee.
+- **Conclusion** [measured, three lineages on the table, three of them on CHCR]: **a channel in sync mode 1 or 2,
+  between two of its pieces with the bus let go, steps aside for any other ready channel, whatever their ranks; it is
+  arbitrated again when that one ends.** Within a piece the bus is not shared. What DPCR's ranks decide is therefore
+  only which of several channels ready at one moment begins first. Not measured: whether a higher-ranked channel's
+  request cuts a list node or a block short.
+- **Depends on it:** every program that clears an ordering table while a list draws; Spyro the Dragon's
+  "CdRead: sector error" retries on the open kernel (`Diamond_OpenKernel_Phase2.md` §20 Q2), 804 in 3,600 frames before
+  and none after, its demo then reached as on the referees.
+- **Pinned by:** `channel_6_runs_beside_a_list_that_waits_or_walks`, failing before the change.
+- **Implemented in:** `bus.rs`'s `dma_between_pieces`, in the commit citing this entry.
+
+### D-42. `scph5502.bin` draws nothing: the European BIOS of the declared names stops in its first frames on Diamond
+
+- **Opened:** 2026-10-12, by D-29's step: given `scph5502.bin` (and the folder's other copy under another name, which
+  behaves alike), Diamond's screen never changes from power-on to frame 3,000, with Crash Bandicoot's disc or none and
+  the console's market European or American, before and after D-29's and D-41's changes. Beetle PSX boots the same
+  file through its intro to the game [M, pictures]; SwanStation drew no screen in that run. The folder's two other PAL
+  revisions (SCPH-7502, SCPH-5552) pass the intro on Diamond.
+- **What the registers show** [M, frame boundaries only]: from frame 5 nothing moves: POST reads 07h, as on
+  `scph5501.bin` at the same frame, which goes on to 00h, 01h and 02h; DPCR stays `07654321h`, I_MASK 0, the GPU and
+  the SPU untouched, the drive spun up and idle; BCC read `00000800h` at frame 4 alone.
+- **Documents read:** psx-spx `6d7d1bc`, "Expansion Port" (POST), "Memory Control", "Cache Control".
+- **Test program:** none yet. **Referee:** Beetle PSX's pictures only.
+- **Conclusion:** open. A player of a European disc whose own folder holds this file reaches nothing. The next
+  ablations, inside the firmware rule: the expansion regions' answers (EXP1's header at 1F000000h read as FFh or as
+  open bus, EXP2's DUART answering or absent, which `Diamond_Native.md` §11.8 fits for the open kernel's TTY), the RAM
+  size register's effect, and memory control's region widths.
+- **Depends on it:** the European players with their own BIOS.
+- **Pinned by:** nothing yet.
+- **Implemented in:** —

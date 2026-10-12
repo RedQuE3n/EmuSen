@@ -669,6 +669,9 @@ transfer mode, the MDEC's by its control bits, the CD-ROM and PIO always.
   queued stores wait with the DMA. A piece that fell due while the CPU was on the bus delays the CPU by its length.
   A transfer's end, its flags and IRQ3 are an event at the end of its last piece; a read of its registers waits for
   the bus, so CHCR reads done once the CPU can see it (`testOtcControlBitsAfterTransfer`).
+- **IRQ3** is set when DICR's bit 31 rises from zero, at a completion or a write, never by a write that leaves it up
+  (D-29). **Arbitration** (D-41): a channel in sync mode 1 or 2, between two pieces with the bus let go, steps aside
+  for any other ready channel and is arbitrated again when that one ends.
 - **The gaps**, fitted to the console's logs (D-5): 10 cycles between blocks and between list nodes, 4 of a node's own,
   and a chopped window's CPU window held to 32 cycles a word of the DMA's window plus 6. On `dma/chopping`'s 130 rows,
   **129 within 10% of the console and the worst at 10.5%** (one-word windows with a one-cycle CPU window, 18,448

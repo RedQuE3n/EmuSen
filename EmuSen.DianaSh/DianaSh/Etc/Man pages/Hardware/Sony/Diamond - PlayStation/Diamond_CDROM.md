@@ -278,9 +278,33 @@ Seven of the tester's discs, copied or unzipped into the cache, each form repres
 Dragon (lone `.bin`), Ape Escape (`.cue`), Rayman (a folder of a sheet and 51 tracks), Silent Hill and Castlevania:
 Symphony of the Night (zipped sheets), Tekken 3 (a zipped "(Track 1)" with no sheet, opened as a lone track).
 
-**Booted the console's way, none reaches its title**: every BIOS revision in the firmware folder draws the "Sony
+~~**Booted the console's way, none reaches its title**: every BIOS revision in the firmware folder draws the "Sony
 Computer Entertainment" logo by frame 330, as SwanStation does, and stays on it, where SwanStation shows the second
-screen at frame 630 (D-29, open).
+screen at frame 630 (D-29, open).~~ *Settled 2026-10-12* (D-29, DICR's edge; D-41, the DMA's arbitration): on
+`scph5501.bin` every disc passes the intro, its second screen at frame 660 where SwanStation's is at 612, and each game
+then goes as far as on the open kernel. Of the folder's other revisions, all but the European `scph5502.bin` (D-42,
+which draws nothing) pass the intro on Crash Bandicoot's disc.
+
+**The seven discs, before and after, on both kernels** [M, the step's tool, frame boundaries only, pictures every 150
+frames to frame 6,000; "before" WiseMan at `f5c30e69`, "after" with D-29's and D-41's changes; SwanStation and Beetle
+PSX on `scph5501.bin` through `psxreferee.py pictures`, the referees' own pictures kept in the cache, never committed]:
+
+| Game | Open kernel, before | Open kernel, after | Player's BIOS, before | Player's BIOS, after | SwanStation and Beetle PSX |
+|---|---|---|---|---|---|
+| Crash Bandicoot | title by 2,250, the attract demo by 4,350 | title by 2,100, the demo by 4,350, the pictures differing from frame 811 | the first logo, held | the intro, title by 3,000, the demo by 5,100 | the intro, title, the demo |
+| Spyro the Dragon | title by 3,300, held to 6,000; 804 CdRead retries in 3,600 frames | title by 2,400, "Entering demo mode" and the demo by 6,500; no retry | the first logo, held | the intro, title by 3,150, the demo by 7,500 (to frame 8,000) | the intro, title, the demo by 6,000 |
+| Tekken 3 | "NAMCO PRESENTS", title, attract fights; the opening movie skipped | the same | the first logo, held | the intro, then as the open kernel | the opening movie, then title and attract |
+| Rayman | the Ubi Soft logo and its opening movie | the same, every picture identical | the first logo, held | the intro, the logo and the movie | the same |
+| Ape Escape | its DUALSHOCK screen, then white from 1,500 | the same pictures | the first logo, held | the intro, then as the open kernel | Beetle PSX: the DUALSHOCK screen, then its polygon intro; SwanStation: its "not plugged into port 1" screen (§4.13 there) |
+| Silent Hill | the content warning, Konami and KCET logos, the card warning, then black | the same | the first logo, held | the intro, then as the open kernel | the opening movie from 1,950 |
+| Castlevania: SotN | black throughout | the same, every picture identical | the first logo, held | the intro, then black | the movie, the Konami logo, its title by 1,650 |
+
+The three that stop do so the same way before and after and on both kernels, and **none shows a DICR storm**: in their
+last 300 frames DICR stands with no flag and bit 31 up but in passing, and I_STAT's bit 3 is not held. Silent Hill and
+Castlevania are streaming their movies at their stop, the drive thousands of sectors past their Setloc, DMA3 moving
+blocks of 1F8h words (an STR sector's 2,016 bytes of data) and the MDEC idle, which is `Diamond_MDEC.md` §9's
+malformed MDEC words, not this page's; Ape Escape stops in its polygon intro, with I_STAT's SPU bit standing unmasked
+and the CD idle.
 
 **Booted by the kernel's own loader**, a program side-loaded at the shell's entry that calls `_96_init` and `LoadExec`
 on SYSTEM.CNF's BOOT line with its STACK (the run tool's `--boot`), skipping the intro and its licence check; the game

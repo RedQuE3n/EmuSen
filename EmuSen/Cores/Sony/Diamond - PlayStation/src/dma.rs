@@ -90,8 +90,8 @@ impl Dma {
             0x70 => self.dpcr = value,
             0x74 => {
                 let flags = self.dicr & 0x7F00_0000 & !(value & 0x7F00_0000);
-                // Bits 0-5, 15 and 16-23 are kept; bit 6 reads zero (Diamond_Records.md §16.2).
-                self.dicr = flags | value & 0x00FF_803F;
+                // Bits 0-5, 15 and 16-23 are kept; bit 6 reads zero; bit 31 stays for its edge (Diamond_Records.md §16.2, §16.3).
+                self.dicr = self.dicr & 1 << 31 | flags | value & 0x00FF_803F;
                 return self.recompute();
             }
             o if o < 0x70 => {
@@ -109,7 +109,7 @@ impl Dma {
         false
     }
 
-    /// DICR's bit 31: the bus error flag, or the master enable with any flag (psx-spx); whether it rose.
+    /// DICR's bit 31: the bus error flag, or the master enable with any flag (psx-spx); whether it rose from zero.
     fn recompute(&mut self) -> bool {
         let was = self.dicr & 1 << 31 != 0;
         let on = self.dicr & 1 << 15 != 0 || (self.dicr & 1 << 23 != 0 && self.dicr & 0x7F00_0000 != 0);
@@ -168,6 +168,21 @@ mod tests {
         assert_eq!(d.read(0x74) >> 24, 0);
         assert!(!d.flag(3), "channel 3 not enabled");
         assert_eq!(d.read(0x74), 1 << 23 | 1 << 18);
+    }
+
+    #[test]
+    fn a_dicr_write_raises_the_master_flag_only_from_zero() {
+        let mut d = Dma::default();
+        d.write(0x74, 1 << 23 | 1 << 22);
+        assert!(d.flag(6));
+        assert!(!d.write(0x74, 1 << 23 | 1 << 22), "the flag kept and bit 31 still up: no edge");
+        assert_eq!(d.read(0x74), 0xC0C0_0000);
+        assert!(!d.write(0x74, 1 << 22), "the master enable cleared");
+        assert_eq!(d.read(0x74), 0x4040_0000);
+        assert!(d.write(0x74, 1 << 23 | 1 << 22), "bit 31 up again by a write");
+        assert!(!d.write(0x74, 1 << 23 | 1 << 22 | 1 << 30), "acknowledged");
+        assert!(d.write(0x74, 1 << 23 | 1 << 15), "the bus error flag forces bit 31");
+        assert!(!d.write(0x74, 1 << 23 | 1 << 15));
     }
 
     #[test]

@@ -58,7 +58,7 @@ impl Board {
         w.u64("GteReady", self.gte_ready);
         w.u8("Post", self.post);
         w.u32s("MemControl", &self.memctl.regs);
-        w.u32("RamSize", self.memctl.ram_size);
+        w.u32("RamSize", self.memctl.ram_size());
         w.u32("Bcc", self.cache.bcc);
         w.u32s("Tags", &self.cache.tags);
         w.u32s("ICache", &self.cache.words);
@@ -117,12 +117,13 @@ impl Board {
         self.gte_ready = r.u64()?;
         self.post = r.u8()?;
         r.u32s(&mut self.memctl.regs)?;
-        self.memctl.ram_size = r.u32()?;
+        let ram_size = r.u32()?;
         let regs = self.memctl.regs;
-        self.memctl = crate::memctl::MemControl::new(regs, self.memctl.ram_size);
+        self.memctl = crate::memctl::MemControl::new(regs, ram_size);
         self.cache.bcc = r.u32()?;
         r.u32s(&mut self.cache.tags)?;
         r.u32s(&mut self.cache.words)?;
+        self.cache.redecode();
         self.irq.stat = r.u32()?;
         self.irq.mask = r.u32()?;
         for t in &mut self.timers.t {

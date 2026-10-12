@@ -5,6 +5,7 @@
 
 use blackmoon_gte::Gte;
 use blackmoon_r3000::{Bus, Size};
+use emusen_mips::Op;
 
 use crate::cdrom::Cdrom;
 use crate::devices::{Duart, SioStub, Tty};
@@ -175,8 +176,7 @@ impl Board {
         }
         let kseg1 = address >= 0xA000_0000;
         let p = address & 0x1FFF_FFFF;
-        let (ras0, ras1) = self.memctl.ram_banks();
-        if p < ras0 + ras1 {
+        if p < self.memctl.ram_window() {
             return Target::Ram(p as usize & (RAM_BYTES - 1));
         }
         match p {
@@ -255,7 +255,7 @@ impl Board {
             0x054 => self.sio1.status(),
             0x058 => self.sio1.mode as u32 | (self.sio1.control as u32) << 16,
             0x05C => (self.sio1.baud as u32) << 16,
-            0x060 => self.memctl.ram_size,
+            0x060 => self.memctl.ram_size(),
             0x070 => self.irq.stat,
             0x074 => self.irq.mask,
             0x080..=0x0FF => self.dma.read(o - 0x80),
@@ -301,7 +301,7 @@ impl Board {
             0x050 => self.sio1.send(value as u8),
             0x058 => self.sio1.mode = value as u16 & 0xFF,
             0x05C => self.sio1.baud = (value >> 16) as u16,
-            0x060 => self.memctl.ram_size = value,
+            0x060 => self.memctl.set_ram_size(value),
             0x070 => self.irq.acknowledge(value),
             0x074 => self.irq.set_mask(value),
             0x080..=0x0FF => {
@@ -1051,7 +1051,36 @@ impl Board {
     }
 }
 
+impl Board {
+    /// A fetch from KUSEG's or KSEG0's RAM or BIOS that hits the I-cache, as `fetch` makes it, and the word decoded at
+    /// its refill (Diamond_Speed.md §5).
+    #[inline(always)]
+    fn cached_hit(&mut self, address: u32) -> Option<(u32, Op)> {
+        if address >= 0xA000_0000 || (0x2000_0000..0x8000_0000).contains(&address) || !self.cache.enabled() {
+            return None;
+        }
+        let p = address & 0x1FFF_FFFF;
+        if p >= self.memctl.ram_window() && !(p >= 0x1FC0_0000 && p - 0x1FC0_0000 < self.memctl.window(memctl::DEV2)) {
+            return None;
+        }
+        let hit = self.cache.hit(p)?;
+        self.now += 1;
+        Some(hit)
+    }
+}
+
 impl Bus for Board {
+    #[inline(always)]
+    fn fetch_decoded(&mut self, address: u32) -> (u32, Op) {
+        match self.cached_hit(address) {
+            Some(hit) => hit,
+            None => {
+                let w = self.fetch(address);
+                (w, emusen_mips::decode(w))
+            }
+        }
+    }
+
     fn fetch(&mut self, address: u32) -> u32 {
         let target = self.decode(address);
         let cached = address < 0xA000_0000 && self.cache.enabled() && matches!(target, Target::Ram(_) | Target::Bios(_));
@@ -1207,8 +1236,7 @@ pub fn reached(address: u32, ram_window: u32) -> Option<Reached> {
 impl Board {
     /// The RAM `decode` maps, both banks.
     pub fn ram_window(&self) -> u32 {
-        let (ras0, ras1) = self.memctl.ram_banks();
-        ras0 + ras1
+        self.memctl.ram_window()
     }
 
     /// A byte of the processor's address space as a debugger reads it: RAM, the scratchpad and the BIOS as `decode`
@@ -1288,6 +1316,76 @@ mod tests {
 
     fn board() -> Board {
         Board::new(false, 2, memctl::KERNEL_VALUES, memctl::KERNEL_RAM_SIZE, KERNEL_BCC)
+    }
+
+    /// The decoded fetch is `fetch` and `decode` over every segment, both RAM sizes, the BIOS's window shrunk below an
+    /// address, the cache off and on, misses and hits and an isolated store into a cached line: the same word, the
+    /// same decoding, the same time and the same fault (Diamond_Speed.md §5.3).
+    #[test]
+    fn a_decoded_fetch_is_a_fetch_and_its_decoding() {
+        let words: Vec<u32> = (0..64u32).map(|i| i.wrapping_mul(0x9E37_79B9) ^ 0x2400_0000 | (i & 3) << 26).collect();
+        for (size, bcc, dev2) in [(memctl::KERNEL_RAM_SIZE, KERNEL_BCC, None), (memctl::KERNEL_RAM_SIZE & !(1 << 9), KERNEL_BCC, None), (memctl::KERNEL_RAM_SIZE, KERNEL_BCC & !crate::icache::bcc::IS1, None), (memctl::KERNEL_RAM_SIZE, KERNEL_BCC, Some(0x0011_3243))] {
+            let mut a = Board::new(false, 2, memctl::KERNEL_VALUES, size, bcc);
+            if let Some(v) = dev2 {
+                a.memctl.write(memctl::DEV2, v);
+            }
+            for (i, w) in words.iter().enumerate() {
+                let at = 0x1_0000 + 4 * i;
+                a.ram[at..at + 4].copy_from_slice(&w.to_le_bytes());
+                a.ram[0x1F_FFC0 + 4 * (i % 16)..0x1F_FFC4 + 4 * (i % 16)].copy_from_slice(&w.to_le_bytes());
+                a.bios[0x200 + 4 * i..0x204 + 4 * i].copy_from_slice(&w.to_le_bytes());
+            }
+            let mut b = a.clone();
+            for segment in [0x0000_0000u32, 0x8000_0000, 0xA000_0000, 0x2000_0000, 0xC000_0000] {
+                for p in [0x1_0000u32, 0x1_0008, 0x21_0000, 0x1F_FFC0, 0x60_0004, 0x80_0000, 0x1FC0_0200, 0x1FC0_0208, 0x1FC3_FF00, 0x1FC4_0200, 0x1F80_0000, 0x1F80_10F0] {
+                    for round in 0..3 {
+                        if round == 2 {
+                            a.cache.bcc &= !crate::icache::bcc::TAG;
+                            a.cache.isolated_write(p + 4, 0x0000_0021);
+                            b.cache.bcc = a.cache.bcc;
+                            b.cache.isolated_write(p + 4, 0x0000_0021);
+                        }
+                        for k in 0..4 {
+                            let at = segment | p + 4 * k;
+                            let got = a.fetch_decoded(at);
+                            let w = b.fetch(at);
+                            assert_eq!(got, (w, emusen_mips::decode(w)), "{at:08X}");
+                            assert_eq!((a.now, a.bus_error()), (b.now, b.bus_error()), "{at:08X}: the time and the fault");
+                        }
+                    }
+                }
+            }
+            // What was cached while the map was wide and the cache on is not a hit once the BIOS's window is 64 KiB, RAM
+            // 2 MiB, or the cache off: a line's tag outlives the map it was filled under.
+            let whole = dev2.is_none() && bcc & crate::icache::bcc::IS1 != 0 && size == memctl::KERNEL_RAM_SIZE;
+            for (change, affected) in [(0, &[0x9FC3_FF00u32][..]), (1, &[0x8021_0000, 0x0060_0004][..]), (2, &[0x8001_0000, 0x9FC0_0208][..])] {
+                let probes = [0x9FC3_FF00u32, 0x8021_0000, 0x0060_0004, 0x8001_0000, 0x9FC0_0208];
+                for &at in &probes {
+                    for m in [&mut a, &mut b] {
+                        m.fetch(at);
+                        m.bus_error();
+                    }
+                }
+                for m in [&mut a, &mut b] {
+                    match change {
+                        0 => m.memctl.write(memctl::DEV2, 0x0010_3243),
+                        1 => m.memctl.set_ram_size(memctl::KERNEL_RAM_SIZE & !(1 << 9)),
+                        _ => m.cache.bcc &= !crate::icache::bcc::IS1,
+                    }
+                }
+                for &at in &probes {
+                    let before = a.now;
+                    let got = a.fetch_decoded(at);
+                    let w = b.fetch(at);
+                    assert_eq!(got, (w, emusen_mips::decode(w)), "{at:08X} after change {change}");
+                    let fault = a.bus_error();
+                    assert_eq!((a.now, fault), (b.now, b.bus_error()), "{at:08X} after change {change}");
+                    if whole && affected.contains(&at) {
+                        assert!(fault || a.now - before > 1, "{at:08X} after change {change}: no longer a hit");
+                    }
+                }
+            }
+        }
     }
 
     #[test]

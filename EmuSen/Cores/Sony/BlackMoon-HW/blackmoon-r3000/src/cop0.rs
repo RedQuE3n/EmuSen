@@ -139,8 +139,9 @@ fn armed(r: &Registers, enable: u32, address: u32) -> bool {
 }
 
 /// The PC breakpoint before the instruction at `pc`: its status bits set, and whether it traps.
+#[inline(always)]
 pub(crate) fn pc_break(r: &mut Registers, pc: u32) -> bool {
-    if !armed(r, dcic::PCE, pc) || (pc ^ r.bpc) & r.bpcm != 0 {
+    if r.dcic & dcic::DE == 0 || !armed(r, dcic::PCE, pc) || (pc ^ r.bpc) & r.bpcm != 0 {
         return false;
     }
     r.dcic |= dcic::DB | dcic::PC;
@@ -149,9 +150,10 @@ pub(crate) fn pc_break(r: &mut Registers, pc: u32) -> bool {
 
 /// The data breakpoint on a load (`write` false) or store whose bus address is `address`: its status bits set, and
 /// whether it traps.
+#[inline(always)]
 pub(crate) fn data_break(r: &mut Registers, address: u32, write: bool) -> bool {
     let kind = if write { dcic::DW } else { dcic::DR };
-    if !armed(r, dcic::DAE | kind, address) || (address ^ r.bda) & r.bdam != 0 {
+    if r.dcic & dcic::DE == 0 || !armed(r, dcic::DAE | kind, address) || (address ^ r.bda) & r.bdam != 0 {
         return false;
     }
     r.dcic |= dcic::DB | dcic::DA | if write { dcic::W } else { dcic::R };

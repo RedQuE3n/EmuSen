@@ -81,7 +81,7 @@ fn path(card: usize, name: &[u8]) -> u32 {
 }
 
 /// A title frame's Shift-JIS title as ASCII: the full-width letters, digits and punctuation of JIS X 0208's first rows
-/// as their ASCII forms, single bytes 20h-7Eh as they are, anything else "?".
+/// as their ASCII forms (`charset::ascii`), single bytes 20h-7Eh as they are, anything else "?".
 fn ascii(title: u32, out: &mut [u8; 33]) {
     out.fill(0);
     let (mut i, mut n) = (0, 0);
@@ -93,44 +93,7 @@ fn ascii(title: u32, out: &mut [u8; 33]) {
         let c = if (0x81..=0x9F).contains(&a) || (0xE0..=0xEF).contains(&a) {
             let b = rd8(title + i + 1);
             i += 2;
-            match (a, b) {
-                (0x82, 0x4F..=0x58) => b - 0x4F + b'0' as u32,
-                (0x82, 0x60..=0x79) => b - 0x60 + b'A' as u32,
-                (0x82, 0x81..=0x9A) => b - 0x81 + b'a' as u32,
-                (0x81, _) => {
-                    (match b {
-                        0x40 => b' ',
-                        0x43 => b',',
-                        0x44 => b'.',
-                        0x46 => b':',
-                        0x47 => b';',
-                        0x48 => b'?',
-                        0x49 => b'!',
-                        0x5B..=0x5D | 0x7C => b'-',
-                        0x5E => b'/',
-                        0x60 => b'~',
-                        0x62 => b'|',
-                        0x65 | 0x66 => b'\'',
-                        0x67 | 0x68 => b'"',
-                        0x69 => b'(',
-                        0x6A => b')',
-                        0x6D => b'[',
-                        0x6E => b']',
-                        0x7B => b'+',
-                        0x81 => b'=',
-                        0x83 => b'<',
-                        0x84 => b'>',
-                        0x90 => b'$',
-                        0x93 => b'%',
-                        0x94 => b'#',
-                        0x95 => b'&',
-                        0x96 => b'*',
-                        0x97 => b'@',
-                        _ => b'?',
-                    }) as u32
-                }
-                _ => b'?' as u32,
-            }
+            crate::charset::ascii(a << 8 | b).unwrap_or(b'?') as u32
         } else {
             i += 1;
             if (0x20..0x7F).contains(&a) { a } else { b'?' as u32 }

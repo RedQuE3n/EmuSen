@@ -281,27 +281,36 @@ fn the_card_calls_with_no_card_and_the_absent_character_sets() {
 }
 
 /// Krom2RawAdd and Krom2Offset with no character sets in the image (Diamond_OpenKernel_Phase2.md §25.1): the
-/// ideographic space 8140h answers a blank 16x15 glyph and every other code of charset 2 or 3's documented ranges one
-/// box, the missing-character glyph, both inside the kernel's ROM, as Castlevania: Symphony of the Night needs for
-/// 8163h and 819Ah; any other code the documented -1.
+/// full-width letters, digits and punctuation drawn from the kernel's own 5x8 font, doubled across and down; the
+/// ideographic space 8140h blank; every other code of charset 2 or 3's documented ranges one box, the missing-character
+/// glyph; all inside the kernel's ROM, as Castlevania: Symphony of the Night reads them; any other code the documented -1.
 #[test]
-fn krom2rawadd_answers_a_box_in_the_rom_for_every_documented_code_but_the_space() {
+fn krom2rawadd_draws_the_full_width_latin_from_the_kernels_font_and_a_box_for_the_rest() {
     let mut m = booted();
     let rom = 0xBFC0_0000..0xBFC8_0000 - 30;
-    let space = m.b(0x51, &[0x8140]);
-    assert!(rom.contains(&space), "an address in the BIOS ROM: {space:08X}");
-    assert_eq!(m.rig.bytes(space, 30), vec![0; 30], "the space blank");
-    let boxed = m.b(0x51, &[0x8163]);
-    assert!(rom.contains(&boxed), "an address in the BIOS ROM: {boxed:08X}");
-    let mut glyph = vec![0, 0, 0x3F, 0xFC];
-    (0..11).for_each(|_| glyph.extend([0x20, 0x04]));
-    glyph.extend([0x3F, 0xFC, 0, 0]);
-    assert_eq!(m.rig.bytes(boxed, 30), glyph, "a box, each row two bytes, the left pixel in bit 7 of the first");
-    assert_eq!(m.b(0x53, &[0x8140]), 0, "Krom2Offset(8140h)");
-    for code in [0x8141, 0x819A, 0x84BE, 0x889F, 0x9872] {
-        assert_eq!(m.b(0x51, &[code]), boxed, "Krom2RawAdd({code:X}h)");
-        assert_eq!(m.b(0x53, &[code]), 30, "Krom2Offset({code:X}h): the box after the space");
+    let glyph = |m: &mut Machine, code: u32| {
+        let at = m.b(0x51, &[code]);
+        assert!(rom.contains(&at), "Krom2RawAdd({code:X}h) in the BIOS ROM: {at:08X}");
+        let b = m.rig.bytes(at, 30);
+        (0..15).map(|r| (b[2 * r] as u16) << 8 | b[2 * r + 1] as u16).collect::<Vec<u16>>()
+    };
+    let mut boxed = vec![0, 0x3FFC];
+    boxed.extend([0x2004; 11]);
+    boxed.extend([0x3FFC, 0]);
+    let a = [0x07E0, 0x07E0, 0x1818, 0x1818, 0x1818, 0x1818, 0x1FF8, 0x1FF8, 0x1818, 0x1818, 0x1818, 0x1818, 0x1818, 0x1818, 0];
+    let one = [0x0180, 0x0180, 0x0780, 0x0780, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x07E0, 0x07E0, 0];
+    let bang = [0x0180; 10].into_iter().chain([0, 0, 0x0180, 0x0180, 0]).collect::<Vec<u16>>();
+    assert_eq!(glyph(&mut m, 0x8140), vec![0; 15], "the space blank");
+    assert_eq!(glyph(&mut m, 0x8260), a, "Ａ, the font's A");
+    assert_eq!(glyph(&mut m, 0x8250), one, "１, the font's 1");
+    assert_eq!(glyph(&mut m, 0x8149), bang, "！, the font's !");
+    for code in [0x8141, 0x8163, 0x819A, 0x84BE, 0x889F, 0x9872] {
+        assert_eq!(glyph(&mut m, code), boxed, "{code:X}h, not drawn: the box");
     }
+    assert_eq!(m.b(0x53, &[0x8140]), 0, "Krom2Offset(8140h)");
+    assert_eq!(m.b(0x53, &[0x889F]), 30, "Krom2Offset of the box");
+    let (z, y) = (m.b(0x53, &[0x8279]), m.b(0x53, &[0x829A]));
+    assert!(z > 30 && y > z && z % 30 == 0 && y % 30 == 0, "Ｚ and ｚ their own glyphs: {z} {y}");
     for code in [0, 0x41, 0x813F, 0x84BF, 0x889E, 0x9873, 0xFFFF] {
         assert_eq!(m.b(0x51, &[code]), u32::MAX, "Krom2RawAdd({code:X}h)");
         assert_eq!(m.b(0x53, &[code]), u32::MAX, "Krom2Offset({code:X}h)");

@@ -1079,3 +1079,27 @@ before → after, the emulated cycles identical]: `timers` 0.329 → 0.329, `gpu
 Legends 1.810 → 1.812, Tekken 3 2.416 → 2.411 over their first 3,000. The fold's first form, inside the triangle's
 rasteriser, had read `gpu/benchmark` 2.2% to 2.7% slower (D-47); the form kept adds one comparison a triangle and a
 call taken only by a primitive that needs it.
+
+### 14.4 The checks kept, and the tests run (2026-10-12)
+
+- ps1-tests' pictures and records, and every program test: `cargo test --release` in the crate, 157 unit tests and 77
+  program tests, with `EMUSEN_DIAMOND_PS1TESTS` set and without, all passing; WiseMan's `Diamond` tests under the test
+  lock, 46 of 46.
+- amidog's OFFSET, POSITION, SIZE and AREA groups: the same TTY, line for line, on the base and the final build.
+- The eight games' play as §13 records it: the six other games' `d5` runs byte for byte the same pictures before and
+  after the change (§14.1), their titles among them; Crash Bandicoot reaching play by its script, with no olive in any
+  picture; Mega Man Legends through its title, NEW GAME, the first ruin, Roll's lines and the first Reaverbots, on the
+  open kernel and on the player's BIOS.
+
+### 14.5 Read for this section, and exposures
+
+psx-spx `6d7d1bc`: "Vertex", "GP0(E3h)" to "GP0(E5h)" for D-47; `cdromdrive.md`'s "Data/ADPCM Sector Filtering/
+Delivery", "Pause", "GetlocL", "HSTS" and "INT4"'s rows, and `cdromformat.md`'s "Submode" and "Audio/Video
+Interleave", for the stream. EmuSen's own: `PsxCheatFormats.cs`, Diamond's GPU and CD-ROM controller, the run tool and
+the referees' driver. The games' own code and RAM on the open kernel only: Crash Bandicoot's GP0 words and GTE results
+through a debugging build outside the repository, and Mega Man Legends' CD routines disassembled from RAM by the run
+tool's `--disasm` and its accesses to the controller by `--game-log`. On the player's BIOS Diamond logged only its own
+controller's commands and its sectors' delivery, from frame 8,200 after the anchor, long after the BIOS had handed over;
+nothing of the BIOS's code or RAM was read, and no state was saved while it ran. The referees ran as black boxes: their
+pictures, and their RAM at `offset-fold.s`'s done word. No emulator's source, no firmware or listing of one, and none of
+the documents `DOCS.txt` excludes was opened.

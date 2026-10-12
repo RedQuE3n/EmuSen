@@ -10,7 +10,8 @@ named; **[A]** argued; **[C]** a choice where the documents are silent, each lis
 It was written under the replacement writers' rules of the plan's §1.3, as phase 1 was: from psx-spx's descriptions of
 the kernel's interface, its hardware chapters, ECMA-119 and test programs, never from a BIOS image, listing,
 disassembly or trace, an emulator's source, OpenBIOS, PSn00bSDK's or PsyQ's libraries. The games were run as black boxes
-on this kernel only, with no firmware folder. §21 lists every document opened and states the exposures.
+on this kernel only, with no firmware folder. §21 lists every document opened and states the exposures. §22, written
+afterwards by another writer, records the cross-kernel step with the player's BIOS, for this kernel's writer.
 
 ---
 
@@ -253,8 +254,8 @@ which skips that BIOS's intro, read from the pages and not run here.
 | Game | The game's code starts | On the open kernel | On the player's BIOS (by `--boot`) |
 |---|---|---|---|
 | Crash Bandicoot | frame 207 | its title screen by frame 2,400 | its title screen by frame 2,100-2,400 |
-| Spyro the Dragon | frame 229 | its title screen by frame 3,600; its library prints "CdRead: sector error" and "retry" about 400 times from frame 740 (§20 Q2) | its title screen by frame 3,300 |
-| Ape Escape | frame 274 | its DUALSHOCK screen, then black at 1,500 and white from 1,800, the Analog button not pressed (§20 Q3) | waits at its DUALSHOCK screen |
+| Spyro the Dragon | frame 229 | its title screen by frame 3,600; its library prints "CdRead: sector error" and "retry" about 400 times from frame 740 (§20 Q2) | its title screen by frame 3,300; *since §22.3*, the same 402 retries |
+| Ape Escape | frame 274 | its DUALSHOCK screen, then black at 1,500 and white from 1,800, the Analog button not pressed (§20 Q3) | ~~waits at its DUALSHOCK screen~~ *§22.4*: the same as on the open kernel |
 | Castlevania: SotN | frame 252 | black throughout, "MDEC_out_sync timeout" on the TTY | black throughout |
 | Rayman | frame 278 | the Ubi Soft logo and its opening movie | the same |
 | Silent Hill | frame 157 | its content warning, the Konami and KCET logos, "no MEMORY CARD inserted", then black | the same |
@@ -323,14 +324,21 @@ kernel carries none, and returns -1), 346 no function as documented, 6 undocumen
    still reaches its title. Whether it does on the player's BIOS is not in the record; Spyro's own reads go through its
    own handler and DMA, which this kernel leaves alone (§12.1). *Recommended*: the separate step with the player's BIOS
    counts the same lines; if they are absent there, a dispute is opened from D-41 on the controller's side, the kernel's
-   being idle while they occur.
+   being idle while they occur. *Answered 2026-10-11 (§22.3)*: the game prints the same 402 pairs on the player's BIOS,
+   and its CD commands are the same; not the kernel's, so no dispute was opened.
 3. **Q3, Ape Escape's DUALSHOCK screen.** On the open kernel the game leaves the screen by itself at frame 1,500; on the
    player's BIOS it was recorded waiting there. The game replaces the kernel's pad and card element with its own, so
    neither kernel reads its pads afterwards [M, §18.2]. *Recommended*: the same step compares the two kernels' state at
-   the game's entry (I_MASK, the chains, the events), outputs only.
+   the game's entry (I_MASK, the chains, the events), outputs only. *Answered 2026-10-11 (§22.4)*: with the present
+   build the game leaves the screen by itself on the player's BIOS too, its pad exchanges the same on both kernels;
+   the record of its waiting predates stages 8 and 9. The kernels' structures were not compared, only what the game
+   sees (§22.5).
 4. **Q4, the exposure of §21.** One passage of `cdromdrive.md` lists the BIOS's own register accesses after an INT1; it
    was read before it was recognised. *Recommended*: add `cdromdrive.md` lines 714-747 to `DOCS.txt`'s exclusions for
    replacement writers.
+5. **Q5, `firmwarecheck.py`'s thresholds for a kernel-sized replacement** (§22.6). By the defaults the image fails on
+   its zero fill and forced idioms. *Recommended*: thresholds for this image decided before it is measured again, with
+   runs of one repeated byte excluded or a `--forced` image of the idioms, before G9 is counted.
 
 ### 20.3 The accuracy cost
 
@@ -349,7 +357,7 @@ on this kernel find ROM, not RAM, at the tables' entries.
 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, rebuilt byte for byte with
 `DIAMOND_KERNEL_REBUILD=require`, and from a copy of `kernel/` at another path to the same digest.
 
-**Left to a separate step**, by the stage's terms: the cards exchanged with the player's BIOS, and `firmwarecheck.py`.
+**Left to a separate step**, by the stage's terms, and taken in §22: the cards exchanged with the player's BIOS, and `firmwarecheck.py`.
 The cards it needs are in `~/.cache/emusen/probe/diamond/cards/s10/` with a `README.txt`: `tekken3-saved-on-open-kernel.mcr`
 (MD5 `cd4e7b491380fcc67d7ea4bd5da7dc6c`), Tekken 3's save made on this kernel on a blank card, with the presses that made
 it, and `formatted-by-open-kernel.mcr` (MD5 `b57f32efd7912ebd349578d35ee7c565`), a blank card formatted by the manager.
@@ -402,3 +410,198 @@ WiseMan's `DiamondTests.cs` (a search for its firmware variable).
 **Observed, the games as black boxes**: the calls they made by number; their pictures; RAM dumps of the kernel's own
 structures while they ran (the EvCBs, the ExCBs, the card and pad variables); Spyro's own CD traffic through the
 controller's trace and, for one run, the DMA registers it wrote (a print added to the bus for that run and removed).
+
+## 22. The cross-kernel step (2026-10-11)
+
+*Measured 2026-10-11, after stage 10's merge, by a writer who writes no kernel code.* This section closes the two items
+§20.4 left to a separate step, the cards exchanged with the player's BIOS and `firmwarecheck.py`, and looks at Q2 and
+Q3. **It is written for the kernel's writer**: it states only what a game sees at the documented interface (its
+screen, its own text, its own RAM, its own accesses to the hardware registers, its kernel calls by number with their
+arguments and documented results) and what the cards hold. Nothing here describes the player's BIOS's code, its
+internal state or its own I/O; where a difference could only be explained by them, it says so and stops.
+
+**How the player's BIOS was used.** Only as Diamond's firmware: the core's declared American file, `scph5501.bin`,
+given to the run tool's `--bios`, and as `firmwarecheck.py`'s input (§22.5). Its intro does not boot a disc in
+Diamond (D-29, open), so each game was started on it through the kernel's own `LoadExec` (the run tool's `--boot`,
+`Diamond_CDROM.md` §9.4), and on the open kernel by its own SYSTEM.CNF boot (§15). The BIOS's own TTY was never read:
+the run tool's output was discarded on its runs, and what a game prints was taken from the game's own calls (below).
+
+**The run tool's `--game`**, added for this step (`examples/run.rs`), observes the game alone, from the first
+instruction at its PS-EXE entry on, identically on both kernels: a call is counted only when it enters A0h, B0h or C0h
+with RA in user RAM (1_0000h-1F_FFFFh), so that a kernel's calls to itself are never seen; its result is v0 when the
+CPU comes back to that RA; the game's text is the bytes it passes to `write(1, ...)` (A(03h), B(35h)) and to putchar
+(A(3Ch), B(3Dh)), read from its own arguments; and `--game-log` records the loads and stores of code in user RAM at the
+CD-ROM controller, SIO0, the DMA and the interrupt registers, with the values read and written. A kernel's own code
+lives below 1_0000h or in the ROM and is never decoded.
+
+### 22.1 The cards, both ways
+
+Tekken 3 (the tester's copy), with the run tool's `--card` and `--press` [M, pictures every 20 frames]. The path through
+the game's menus is the README's (§20.4): Option Mode, Memory Card, then Card Save or Card Load and Start; on the
+player's BIOS the presses are 60 frames later, its title appearing about 20 frames after the open kernel's.
+
+| Card in slot 1 | Kernel | What the game shows |
+|---|---|---|
+| `tekken3-saved-on-open-kernel.mcr` (§20.4) | the player's BIOS | Card Load: **"LOAD OK!"** |
+| a blank card (zeros) | the player's BIOS | Card Save: "Initialize memory card?", Start: **"SAVE OK!"** (the card kept as `tekken3-saved-on-bios.mcr`) |
+| `tekken3-saved-on-bios.mcr` | the open kernel | Card Load: **"LOAD OK!"** |
+| `formatted-by-open-kernel.mcr` (§20.4) | the player's BIOS | Card Load: **"NO TEKKEN 3 FILE!"**; Card Save: **"SAVE OK!" with no "Initialize memory card?"** |
+| a blank card (zeros), the negative control | either kernel | Card Load: "LOAD ERROR!" |
+
+Each kernel therefore reads the other's save, and the player's BIOS takes the open kernel's freshly formatted card for
+a formatted card with no file, as the same game's three distinct answers show. **The BIOS's own card manager was not
+reached**: with the drive empty and the formatted card in slot 1, the player's BIOS shows its first intro screen from
+frame 360 to frame 2,400 and goes no further, as D-29 records for every revision. The formatted card's validity on that
+BIOS is shown instead through its file functions, by Tekken 3, as above. The cards live in
+`~/.cache/emusen/probe/diamond/xkernel/cards/`, outside the repository, with the run tool's presses beside the
+README's.
+
+### 22.2 The two kernels' cards, compared by the on-card format
+
+By psx-spx's "Memory Card Data Format" [R], with a script over the files [M]; a card is the game's and the kernels'
+data, not firmware.
+
+- **The same**: the header frame (frame 0, "MC", zeros, checksum 0Eh); the directory frames 1-15 of the same save, byte
+  for byte (block 1 in state 51h, size 2000h, link FFFFh, "BASLUS-00402TEKKEN-3", checksum; frames 2-15 free, A0h, link
+  FFFFh, each with its checksum); the save's title frame "SC" and its three icon frames. The save's data frames (block
+  1, frames 4-7) differ in 512 bytes, which is the game's own content from two different runs.
+- **The broken sector list** (frames 16-35): FFFFFFFFh and checksum 00h on both; the player's BIOS's format writes bytes
+  08h-09h as FFFFh, the open kernel's 00h. psx-spx: "Garbage (usually 00h-filled) (some cards have [08h..09h]=FFFFh)".
+- **Frames 36-62**: the open kernel's format writes FFh ("usually FFh-filled"). The player's BIOS's format leaves them as
+  they were: 00h on a blank card of zeros, 55h on a card filled with 55h before Tekken 3 formatted it, where the open
+  kernel's format left no frame of block 0 at 55h [M]. On both, the save leaves 952 of blocks 1-15's 960 frames
+  untouched; the game writes eight.
+- **Frame 63**, the "Write Test Frame" ("Usually same as Block 0"): the open kernel's format writes a copy of the
+  header; on the player's BIOS's cards it is not a copy of the header (its contents are not recorded here). A load
+  changed frame 63 and no other frame, on either kernel.
+- **A defect of the open kernel's write test** [M]: given a blank card of zeros, Tekken 3's Card Load on the open
+  kernel leaves frame 63 holding not the header frame `card.rs`'s `test_frame` builds (§13) but 128 other bytes, whose
+  first three words are the three the kernel keeps at 80h (its exception vector's jump) and the rest zeros but for
+  02h at 60h and FFh at 68h; given a formatted card, the same load leaves the header copy. No game reads frame 63
+  through the file functions, so nothing shows it; *for the writer*: the frame a write test sends on a new card.
+
+No game reads these frames through the file functions, and both kernels' saves load on both. **Nothing for the writer
+to change** to keep the exchange working. Should a game read block 0 raw, frames 36-62 and 08h-09h of frames 16-35 are
+the two places where the kernels' formats differ, each within what psx-spx describes.
+
+### 22.3 Q2: Spyro's "CdRead: sector error"
+
+[M, both kernels to frame 3,600.] **The game prints the same on both kernels**: "ResetGraph:jtb=...", "CD_init:addr=..."
+twice, and **402** pairs of "CdRead: sector error" and "CdRead: retry...", the first pair 514 frames after its entry
+on the open kernel (entry at frame 229) and 517 on the player's BIOS (entry at frame 291). It writes them one byte a
+call, 16,164 calls to B(35h) on each. Its CD-ROM commands and their parameters, from its own accesses to the controller
+over the 700 frames after its entry, are the same sequence on both (183 and 182 commands, the last a Pause at the
+window's edge); each sector it takes by its own handler: the three-word header by DMA channel 3, then 200h words, and
+after a sector it rejects, Pause (09h) and a new read.
+
+So Q2's condition for a dispute, that the lines be absent on the player's BIOS, is not met: **the retries are not the
+kernel's**, and §20.2's Q2 needs no change to the kernel. Why the game rejects those sectors lies on the controller's or
+the copied disc's side and is left to a CD-ROM step; no dispute number was taken.
+
+### 22.4 Q3: Ape Escape's DUALSHOCK screen
+
+[M, both kernels to frame 2,400, pictures every 60 frames.] **The game behaves the same on both kernels**: "Sony Computer
+Entertainment America Presents", its "The DUALSHOCK analog controller is required to play this game." screen from about
+630 frames after its entry to about 990, black, then white from about 1,405 frames after its entry, on the open kernel
+(entry at 273) and on the player's BIOS (entry at 335) alike; the open kernel booted through `LoadExec` (entry at 250)
+does the same. The record's "waits at its DUALSHOCK screen" on the player's BIOS (§18.1) was taken before stages 8
+and 9 and with the Analog button pressed; with the present build it does not hold.
+
+Its pad traffic, read from its own accesses to SIO0, is the same exchange for exchange on both: digital reads (42h:
+41h 5Ah FFh FFh), the configuration of the DualShock (43h, 45h, 4Ch, 47h, 46h, and 43h 00h to leave it), then, 295
+frames after its entry on the open kernel and 298 on the player's BIOS, 44h 01h 03h (analog mode, locked) and analog
+reads (42h: 73h 5Ah FFh FFh 80h 80h 80h 80h) thereafter, port 2 answering FFh. The only difference is how many idle
+digital reads precede the switch, three frames' worth, which is timing. The black and the white that follow are
+therefore not the kernel's either; they are left to the steps that own the GPU and the MDEC.
+
+### 22.5 The kernel calls, compared
+
+The one-time calls the two games make in their first frames, side by side with their arguments and results [M,
+`--game-log`]. The calls, their order and their arguments are the same on both kernels, but for register contents a
+kernel leaves behind in a0-a3, which the documents do not define and which are not recorded. Where the documents give
+a result, two differ:
+
+- **C(0Ah) `ChangeClearRCnt(3, 0)`**, the first call of each game: **returns 1 on the player's BIOS and 0 on the open
+  kernel** (the later calls return 0 on both). psx-spx: "The function returns the old (previous) flag value". So at a
+  booted game's entry the vblank's flag reads 1 on the player's BIOS. *For the writer*: a game that restores the flag
+  it was given would leave vblank IRQs acknowledged by the kernel on one kernel and not on the other; neither game
+  examined does so. Both games were booted on the player's BIOS through `LoadExec`, its own boot being out of reach
+  (D-29), so the value at the end of a console's own boot is not known.
+- **B(08h) `OpenEvent`**: the games' first descriptor is **F1000000h on the player's BIOS and F1000005h on the open
+  kernel**, after the games' own A(72h) `_96_remove`, then consecutive on both. psx-spx's B(08h) entry says five of the
+  events are "internally used by the BIOS for CDROM functions", which the open kernel's five CD events (§12.2) follow;
+  why none is in use on the player's BIOS at that point is **unexplained at the interface** (whether `_96_remove` or
+  the boot path frees them is not visible to a game). Both games use the descriptors only as handles, and behave the
+  same.
+
+Results the documents do not define (B(19h), B(4Bh), B(5Bh), A(39h), A(3Fh), A(44h), A(72h), A(30h)) differ between the
+kernels and are not recorded; so do the addresses B(56h) and B(57h) return, which the documents do not give. No game
+examined depends on any of them.
+
+### 22.6 `firmwarecheck.py`
+
+Run as its docstring and `EmuSen_Firmware.md` §0 give it, with the default thresholds (at most 25% equal at the same
+offset, no common run over 6 bytes), on `kernel/diamond-kernel.bin` (SHA-256 `0efba49b...`) against each of the 18
+images in the firmware folder, the core's three declared files and fifteen others [M]. Its printed numbers only:
+
+| Original | Equal at the same offset | Longest aligned run | Longest common run | Verdict |
+|---|---|---|---|---|
+| `scph5500.bin` | 114,559 of 524,288 (21.9%) | 5,245 | 6,610 bytes, replacement offset 92,440 | FAIL |
+| `scph5501.bin` | 160,929 (30.7%) | 111,108 | 111,108 bytes, replacement offset 92,440 | FAIL |
+| `scph5502.bin` | 116,361 (22.2%) | 18,071 | 18,071 bytes, replacement offset 92,440 | FAIL |
+| the fifteen others | 20.3% to 31.0% | 656 to 114,386 | 656 to 114,386 bytes, each at replacement offset 92,440 | FAIL, all |
+
+Every longest run starts at the replacement's offset 92,440, where its last non-zero byte has ended (§20.4): it is the
+image's zero padding meeting zeros in the original. Run again on the image's first 92,440 bytes, the part that holds
+anything [M]:
+
+| Original | Equal at the same offset | Longest aligned run | Longest common run | Verdict |
+|---|---|---|---|---|
+| each of the 18 | 12,669 to 14,135 of 92,440 (13.7% to 15.3%) | 113 at offset 143 | 200 bytes, replacement offset 56 | FAIL, all |
+
+The equal share is within the threshold; the runs are not. The replacement's bytes at the 200-byte run are its own
+zeros between its vectors (offsets 56-255), and among the runs the tool lists (it stops listing at its pair budget, so
+the list is not complete) every run longer than 8 bytes lies in a run of the replacement's zero bytes, extended by at
+most one byte at an edge; the three others of 8 bytes are a jump through a register with its delay-slot nop, twice,
+and the two instructions that set SP to 801FFF00h, the reset path's value (§15). [A] These are forced by the
+instruction set and the interface rather than taken from an image; but the policy's verdict is the tool's, and
+**the verdict is FAIL**, plain and on the content alone.
+
+The thresholds were fixed for VenusRT's 64-byte boot program (`EmuSen_Debugging_Tools_Reference_v5.md` §3.61), where
+a run of six caught the case that mattered. For a 92 KB kernel of MIPS code the same rule cannot pass: two nops are 8
+bytes, and so is `jr ra` with the nop in its delay slot. **Q5 for the tester**: whether a
+kernel-sized replacement is measured against thresholds decided for it beforehand, for instance with runs of a single
+repeated byte excluded, or against `--forced` with a generator of the forced idioms, before G9 is counted. Until then
+the gate's `firmwarecheck.py` item is **not met**.
+
+### 22.7 What this means for the gate
+
+The stage 10 row's card item is **met** both ways (§22.1); `firmwarecheck.py` is **not met** by the policy's
+thresholds (§22.6, Q5). **G9's open-BIOS condition is therefore not met** in full: every game claimed boots with no
+firmware folder and runs on the player's image too, and their cards cross, but the repetition check fails by its
+letter. Q2 and Q3 close with no change to the kernel: both games behave the same on the two kernels at every point
+observed, and the two differences of documented results (§22.5) are for the writer to weigh.
+
+### 22.8 Reading log, and exposures
+
+Opened for this step, 2026-10-11: this page whole; `Diamond_Plan.md` §5.9, §7 and §8; `Diamond_Native.md` §18;
+`Diamond_Pad.md` §8 and §11; `Diamond_CDROM.md` §9.4-§9.5; `Diamond_Disputes.md`'s headings and D-29; `EmuSen_Firmware.md`
+§0; `EmuSen_Debugging_Tools_Reference_v5.md` §3.61 and `VenusRT_Native.md` §35 (how a firmwarecheck result is
+recorded); `firmwarecheck.py`'s docstring; `DOCS.txt`; the cards' README; psx-spx `6d7d1bc`
+`controllersandmemorycards.md` lines 2466-2540 (the card's data format) and `kernelbios.md`'s entries for B(08h),
+B(4Bh), C(03h), C(0Ah) and B(56h)/B(57h) (lines 1020-1028, 1196-1210, 1277-1300, 1590-1600, 2096-2104) and its
+function summary for names; the run tool's source. No emulator's source, OpenBIOS, BIOS listing or trace; no
+reference emulator was run.
+
+The player's BIOS was observed only as the screen, the games after its hand-over by the means of §22, the cards it
+wrote, and `firmwarecheck.py`'s numbers. **Exposures**, stated plainly:
+
+- A card comparison script printed frame 63 of the cards the player's BIOS had written, twice, as hexadecimal (about
+  a dozen non-zero bytes), before it was recognised that a write-test frame may carry the writing kernel's memory, as
+  the open kernel's does (§22.2). They were not studied further and are not recorded here; §22.2 says only that the
+  frame is not a header copy.
+- A search of `kernelbios.md` for function names printed eight lines of hits from inside "BIOS Patches" (lines 2741-3333,
+  excluded for replacement writers by `DOCS.txt`), each a single line naming B(56h); nothing from them is used here.
+  The search was then confined to lines before 2741.
+- The call comparison printed the player's BIOS's undefined results and the argument registers it leaves behind
+  between calls, a few dozen words. None is recorded; §22.5 names only which calls differ.

@@ -1258,7 +1258,10 @@ is `Diamond_OpenKernel_Phase2.md`, written under the replacement writers' rules.
 | A game saves on the open kernel and loads its save back | **Met**: Tekken 3 formats a blank card, saves ("SAVE OK!") and loads it back ("LOAD OK!"); the card in psx-spx's on-card format (record §18.3) |
 | The image rebuilds byte for byte | **Met**: SHA-256 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, `DIAMOND_KERNEL_REBUILD=require`, and from a copy at another path |
 | Stage 3's seven test programs on the open kernel | **Met**, WiseMan's `DiamondTests` |
-| Cards round-trip with the player's BIOS; `firmwarecheck.py`; G9 | **Not this stage's**, a separate step by the stage's terms; what it needs is the record's §20.4 |
+| Cards round-trip with the player's BIOS; `firmwarecheck.py`; G9 | ~~**Not this stage's**, a separate step by the stage's terms; what it needs is the record's §20.4~~ Taken the same day (record §22, §18.5 below) |
+| The cards a game writes are read by the same game on the player's BIOS, and the reverse | **Met**: Tekken 3's save made on each kernel loads on the other ("LOAD OK!"), and the open kernel's formatted card is a formatted card with no file to the player's BIOS; a blank card fails on both (record §22.1) |
+| `firmwarecheck.py` within the policy's limits | **Not met**: FAIL against all 18 images in the firmware folder, by the default thresholds, plain (20.3% to 31.0% equal, runs to 114,386 bytes, all in the zero padding) and on the image's first 92,440 bytes (13.7% to 15.3% equal, the longest run 200 bytes of its own zero fill); the record's Q5 asks for thresholds for a kernel-sized image (record §22.6) |
+| G9's open-BIOS condition | **Not met in full**: the games and the cards are; the repetition check is not (record §22.7) |
 
 ### 18.3 Tests run (2026-10-11)
 
@@ -1268,9 +1271,31 @@ tests, with and without `EMUSEN_DIAMOND_PS1TESTS`, all passing; WiseMan under th
 
 ### 18.4 What waits
 
-The cross-kernel card exchange and `firmwarecheck.py`; the record's questions Q1 to Q4 (the screened sections, Spyro's
+~~The cross-kernel card exchange and `firmwarecheck.py`; the record's questions Q1 to Q4 (the screened sections, Spyro's
 CdRead retries, Ape Escape's DUALSHOCK screen, an exposure to list); no dispute was taken, D-41 on being the next free
-number.
+number.~~ The exchange and the check are taken (§18.5), Q2 and Q3 answered there; Q1, Q4 and the new Q5
+(`firmwarecheck.py`'s thresholds for a kernel-sized image) wait for the tester. No dispute was taken.
+
+### 18.5 The cross-kernel step (2026-10-11)
+
+Its record is `Diamond_OpenKernel_Phase2.md` §22, written for the kernel's writer in terms of what a game sees at the
+interface; the player's BIOS was used only as the firmware (`scph5501.bin`, games started through `LoadExec`, D-29) and
+as `firmwarecheck.py`'s input.
+
+- **Cards**: met both ways on Tekken 3 (§18.2's rows); the kernels' formats compared frame by frame, with a defect of
+  the open kernel's write test found (frame 63 on a new card is not the header). The BIOS's card manager was not
+  reached (D-29).
+- **Q2**: Spyro prints the same 402 "CdRead: sector error" retries on the player's BIOS, and its CD commands match;
+  not the kernel's. **Q3**: Ape Escape leaves its DUALSHOCK screen by itself and turns white on both kernels, its pad
+  exchanges equal; the earlier "waits" predates stages 8 and 9.
+- **Two documented results differ** (record §22.5): `ChangeClearRCnt(3, 0)`'s first call returns 1 on the player's
+  BIOS and 0 here; the games' first `OpenEvent` descriptor is F1000000h there and F1000005h here.
+- **`firmwarecheck.py`**: FAIL, §18.2.
+- **The run tool** gained `--game`: the game's calls by number with their arguments and results, its own register
+  accesses and its text, counted only for code in user RAM from the game's entry on, so that it serves on a player's
+  BIOS without observing it (`examples/run.rs`).
+- **Tests**: `diamond`'s 145 unit and 56 program tests pass after the run tool's change, merged with stage 12
+  (`cargo test --release`); no test was added, the step's results needing the player's BIOS and the tester's discs.
 
 ## 19. Stage 12, the debugger (2026-10-11)
 

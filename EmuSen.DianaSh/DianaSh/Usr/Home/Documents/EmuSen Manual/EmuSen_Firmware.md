@@ -24,7 +24,11 @@ setting does. Each also states how much of the original it repeats, measured by
 the longest run common to both at any offsets, by default at most 25% and no run over 6 bytes
 (`EmuSen_Debugging_Tools_Reference_v5.md` §3.61). The tool prints numbers and offsets only. The original it compares
 against is kept outside the repository, in the core's probe cache, and nothing else reads it. The rule does not bind a foreign core (`EmuSen_CoreAPI.md` §6.2). The first cases are VenusRT's SPC700
-boot program and its NEC DSP chips (`VenusRT_Native.md`).
+boot program and its NEC DSP chips (`VenusRT_Native.md`). The first kernel-sized one is Diamond's open PlayStation
+BIOS, measured 2026-10-11 against the 18 images in its probe cache's firmware folder (`Diamond_OpenKernel_Phase2.md`
+§22.6): FAIL on all, by the default thresholds, plain and on the image's 92,440 bytes of content, every long run in
+its zero fill and the few others forced MIPS idioms; whether a 92 KB image is held to thresholds set for a 64-byte
+program is that page's Q5, open.
 
 ---
 

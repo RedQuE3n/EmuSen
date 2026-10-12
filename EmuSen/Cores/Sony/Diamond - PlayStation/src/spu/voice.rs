@@ -109,7 +109,7 @@ impl Voice {
         let word = u16::from_le_bytes([ram[at], ram[at + 1]]);
         for k in 0..4 {
             let t = (((word >> (4 * k)) & 0xF) as i32) << 28 >> 16;
-            let s = ((t >> shift) + ((self.history[0] as i32 * f0 + self.history[1] as i32 * f1 + 32) >> 6)).clamp(-0x8000, 0x7FFF) as i16;
+            let s = ((t >> shift) + (self.history[0] as i32 * f0 >> 6) + (self.history[1] as i32 * f1 >> 6)).clamp(-0x8000, 0x7FFF) as i16;
             self.history = [s, self.history[0]];
             self.samples[3 + 4 * w + k] = s;
         }
@@ -138,8 +138,9 @@ impl Voice {
         }
     }
 
-    /// One 44,100 Hz cycle: the sample at the counter, interpolated (or the noise), through the envelope; the counter
-    /// advanced by `step`, past the block's end to the next or to the loop. Returns whether a loop end flag was met.
+    /// One 44,100 Hz cycle: the sample at the counter, interpolated (or the noise), through the envelope as it stood,
+    /// which then takes its step (D-36); the counter advanced by `step`, past the block's end to the next or to the loop.
+    /// Returns whether a loop end flag was met.
     pub fn tick(&mut self, ram: &[u8], step: u32, noise: Option<i16>, watch: &mut Watch) -> bool {
         let i = (self.counter >> 12) as usize;
         let w = i / 4;
@@ -155,11 +156,11 @@ impl Voice {
             None => {
                 let g = ((self.counter >> 4) & 0xFF) as usize;
                 let s = &self.samples[i..i + 4];
-                (GAUSS[0xFF - g] * s[0] as i32 >> 15) + (GAUSS[0x1FF - g] * s[1] as i32 >> 15) + (GAUSS[0x100 + g] * s[2] as i32 >> 15) + (GAUSS[g] * s[3] as i32 >> 15)
+                (GAUSS[0xFF - g] * s[0] as i32 + GAUSS[0x1FF - g] * s[1] as i32 + GAUSS[0x100 + g] * s[2] as i32 + GAUSS[g] * s[3] as i32) >> 15
             }
         };
-        self.envelope_tick();
         self.out = (sample * self.envelope.level as i32 >> 15).clamp(-0x8000, 0x7FFF) as i16;
+        self.envelope_tick();
         self.counter += step;
         if self.counter < BLOCK_SAMPLES << 12 {
             return false;

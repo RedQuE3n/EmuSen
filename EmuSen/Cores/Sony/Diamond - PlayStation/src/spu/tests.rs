@@ -62,7 +62,15 @@ fn a_filter_predicts_from_the_two_samples_before_and_a_reserved_shift_acts_as_ni
     v.decode_word(&s.ram, 0);
     let first = (4 << 12) >> 9;
     assert_eq!(v.samples[3], first, "shift 13 as 9");
-    assert_eq!(v.samples[4] as i32, (first as i32 * 60 + 32) >> 6, "filter 1: 60/64 of the one before");
+    assert_eq!(v.samples[4] as i32, first as i32 * 60 >> 6, "filter 1: 60/64 of the one before, each product shifted apart (D-34)");
+    let mut s = Spu::new();
+    block(&mut s, 0x1000, 0x20, 0, |i| [7, 9, 0, 0][i.min(3)]);
+    let v = &mut s.voices[0];
+    v.start = 0x200;
+    v.key_on(&s.ram);
+    v.decode_word(&s.ram, 0);
+    let (a, b) = (v.samples[3] as i32, v.samples[4] as i32);
+    assert_eq!(v.samples[5] as i32, (b * 115 >> 6) + (a * -52 >> 6), "filter 2, its two products truncated apart");
 }
 
 /// A held level comes out at the Gaussian table's gain, its four taps summing to 7F7Fh-7F81h of 8000h, through a full
@@ -80,7 +88,7 @@ fn a_held_level_interpolates_at_the_tables_gain() {
     ticks(&mut s2, 200);
     let out = s2.voices[0].out as i32;
     let level = 4 << 12;
-    assert!(((level * 0x7F7F >> 15) - 5..=level * 0x7F81 >> 15).contains(&out), "{out:X}: each of the four products truncated, then the envelope's");
+    assert!(((level * 0x7F7F >> 15) - 1..=level * 0x7F81 >> 15).contains(&out), "{out:X}: the four products summed, then shifted (D-35), then the envelope's");
     let mut buf = [0i16; 2];
     while s2.out.len() > 2 {
         s2.out.drain(&mut buf, 1);
@@ -318,4 +326,38 @@ fn the_registers_read_back_and_the_unused_tail_reads_ffff() {
     assert_eq!(s.read16(0x280), 0xFFFF);
     s.write16(0x260, 0xBEEF, 0);
     assert_eq!(s.read16(0x260), 0xBEEF, "1F801E60h holds what is written");
+}
+
+/// D-36: a sample leaves through the envelope as it stood before the sample's step, so that the key on's own sample
+/// is silent and the first step shows in the next, as DuckStation's capture buffers record it.
+#[test]
+fn the_envelope_steps_after_the_sample_it_scales() {
+    let mut s = playing(1, 0x1000, 0x1000);
+    block(&mut s, 0x1000, 0, 7, |_| 7);
+    s.voices[1].adsr = [0x000F, 0x1FC0];
+    let outs: Vec<i16> = (0..5).map(|_| {
+        ticks(&mut s, 1);
+        s.voices[1].out
+    }).collect();
+    let g = |taps: &[usize]| taps.iter().map(|&k| tables::GAUSS[k] * 0x7000).sum::<i32>() >> 15;
+    let (g1, g2, g3) = (g(&[0x100, 0]), g(&[0x1FF, 0x100, 0]), g(&[0xFF, 0x1FF, 0x100, 0]));
+    assert_eq!(outs, [0, (g1 * 14336 >> 15) as i16, (g2 * 28672 >> 15) as i16, (g3 * 0x7FFF >> 15) as i16, (g3 * 0x3FFF >> 15) as i16]);
+}
+
+/// D-37: a write of ATTR that changes the noise's shift or step starts the noise timer again, so that the new rate
+/// holds from the next sample whatever the old one had left.
+#[test]
+fn a_new_noise_rate_holds_at_once() {
+    let mut s = Spu::new();
+    s.write16(reg::ATTR as u32 * 2, 0xC000, 0);
+    for _ in 0..10 {
+        let t = s.next_tick;
+        s.run(t, &mut silent());
+    }
+    assert!(s.noise_timer > 0x1_0000, "shift 0 reloads 20000h");
+    let before = s.noise;
+    s.write16(reg::ATTR as u32 * 2, 0xFF00, s.next_tick - 1);
+    let t = s.next_tick;
+    s.run(t, &mut silent());
+    assert_ne!(s.noise, before, "a new bit at once");
 }

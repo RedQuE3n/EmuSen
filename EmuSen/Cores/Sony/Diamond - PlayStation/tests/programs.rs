@@ -828,3 +828,57 @@ fn the_step_by_step_status_follows_the_consoles_log() {
     let same = ours.iter().zip(&console).take(compared).filter(|(a, b)| a == b).count();
     assert_eq!((compared, same), (422, 414));
 }
+
+// --- Stage 8: the SPU (Diamond_SPU.md) ---
+
+/// `spu-capture.s` (Diamond_SPU.md §10.2): its records as DuckStation's capture buffers and registers read them where
+/// the referees agree, pinned whole: the registers after T1 and T7, LSAX untouched by a key on, and T11's first samples
+/// after a key on, the envelope's step after the sample it scales (D-36).
+#[test]
+fn the_capture_program_records_the_voices_as_the_referees_do() {
+    let m = run_for(include_str!("../programs/spu-capture.s"), 450, Market::Americas);
+    assert_eq!(results(&m, 0x10_0800, 5), [0x3FFF, 0x3FFF, 0x208, 0x208, 0xA], "T1: ENVX, LSAX and ENDX of voices 1 and 3");
+    assert_eq!(results(&m, 0x10_1D00, 6), [0x1234, 0xA, 0, 0xA, 0x1234, 0x208], "T7: LSAX kept by a key on, ENVX zero after an end and mute");
+    let half = |a: u32| m.board.ram_word(a & !3) >> (8 * (a & 2)) & 0xFFFF;
+    assert_eq!((2..6).map(|i| half(0x10_6F80 + 2 * i) as i16).collect::<Vec<_>>(), [1864, 21308, 28559, 14279], "T11");
+    assert_eq!(fnv(&results(&m, 0x10_0000, 0x7380 / 4)), 0xC73B_CF95_4662_8B14, "every record");
+}
+
+/// `spu-voices.s` (Diamond_SPU.md §10.1): its nine scenes run to their end, the output's samples pinned.
+#[test]
+fn the_voice_scenes_play_to_their_end() {
+    let words = emusen_mips::assemble(include_str!("../programs/spu-voices.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    let image = exe::build(&words);
+    let mut m = Machine::new(Media::read(&image).unwrap(), Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, None);
+    let mut chunk = vec![0i16; 4096];
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    let mut loud = 0;
+    for _ in 0..800 {
+        m.advance();
+        let n = m.board.spu.out.drain(&mut chunk, usize::MAX);
+        for &s in &chunk[..n] {
+            h = (h ^ s as u16 as u64).wrapping_mul(0x0000_0100_0000_01B3);
+            loud += (s != 0) as u32;
+        }
+    }
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E);
+    assert_eq!(results(&m, 0x10_0000, 9), [400, 443, 477, 510, 571, 614, 645, 660, 683], "each scene's key on, by frame");
+    assert_eq!((loud, h), (335_782, 0x006B_FB6B_A2C3_9F1B), "the output: its samples not zero, and all of them");
+}
+
+/// ps1-tests' `spu/memory-transfer` on the open kernel passes every test, its DMA timing ones among them, and
+/// `spu/test` reads back every bit of MVOLL and MVOLR written at either width.
+#[test]
+fn the_spu_programs_pass_on_the_open_kernel() {
+    let Some(corpus) = records::corpus() else { return };
+    let tty = |path: &str, frames: usize| {
+        let m = mdec_program(&corpus, path, frames);
+        let t = m.space(diamond::machine::TTY_ID).unwrap();
+        String::from_utf8_lossy(&t[..t.iter().position(|&b| b == 0).unwrap_or(t.len())]).into_owned()
+    };
+    let transfer = tty("spu/memory-transfer/memory-transfer.exe", 200);
+    assert_eq!((transfer.matches("pass - ").count(), transfer.matches("fail").count(), transfer.contains("Done.")), (9, 0, true), "{transfer}");
+    let test = tty("spu/test/test.exe", 400);
+    let lines: Vec<&str> = test[test.find("16 bit access").unwrap_or(0)..].lines().filter(|l| !l.is_empty()).collect();
+    assert_eq!(lines, ["16 bit access", "Done", "32 bit access", "Done, crashing now..."]);
+}

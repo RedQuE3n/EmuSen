@@ -211,6 +211,9 @@ impl Spu {
                 if value & attr::IRQ == 0 || value & attr::ENABLE == 0 {
                     self.irq = false;
                 }
+                if (value ^ self.regs[i]) & 0x3F00 != 0 {
+                    self.noise_timer = 0;
+                }
             }
             _ => {}
         }

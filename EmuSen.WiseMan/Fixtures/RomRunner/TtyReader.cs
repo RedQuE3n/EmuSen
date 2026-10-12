@@ -27,7 +27,7 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
     }
 
     // How a test program's TTY is graded, as data: the program's path suffix, its heading line and the rule.
-    public enum TtyRule { PassFail, TableAgainstLog, LinesAgainstLog, TimersAgainstLog, BandwidthAgainstLog, Expect }
+    public enum TtyRule { PassFail, TableAgainstLog, LinesAgainstLog, TimersAgainstLog, BandwidthAgainstLog, Expect, Exactly }
 
     public sealed record TtyProgram(string Path, string Heading, TtyRule Rule, double Tolerance = 0, string[]? Disputed = null, string Settings = "", int Frame = 900, string[]? Expected = null);
 
@@ -54,6 +54,9 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             new("gpu/version-detect/version-detect.exe", "gpu/version-detect", TtyRule.Expect, Expected: new[] { "* GPU version 2 [New 208pin GPU (LATE-PU-8 and up)]" }),
             // Every case of its table bit for bit, as the console's log reads - see BlackMoon_GTE.md §7.
             new("gte/test-all/test-all.exe", "gte/test-all", TtyRule.Expect, Frame: 300, Expected: new[] { "Passed tests: 1150", "Failed tests: 0" }),
+            new("spu/memory-transfer/memory-transfer.exe", "spu/memory-transfer", TtyRule.PassFail),
+            // It prints a line only for a register that reads back other than written, so from its first heading its text is exactly its headings - see Diamond_SPU.md §10.
+            new("spu/test/test.exe", "16 bit access", TtyRule.Exactly, Expected: new[] { "16 bit access", "Done", "32 bit access", "Done, crashing now..." }),
         };
 
         public static RomProtocol Protocol(TtyProgram p, Func<string, string?> consoleLog) =>
@@ -67,6 +70,7 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             var lines = TtyReader.Lines(TtyReader.From(raw, p.Heading));
             if (p.Rule == TtyRule.PassFail) return PassFail(name, lines);
             if (p.Rule == TtyRule.Expect) return Expect(name, lines, p.Expected ?? Array.Empty<string>());
+            if (p.Rule == TtyRule.Exactly) return Exactly(name, lines, p.Expected ?? Array.Empty<string>());
             if (consoleLog(p.Path) is not { } log) return new RomVerdict(RomOutcome.Incomplete, name, "no console log to compare with");
             var console = TtyReader.Lines(TtyReader.From(log.Replace("\r", ""), p.Heading));
             return p.Rule switch
@@ -91,6 +95,14 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
         {
             var missing = wanted.Where(w => !lines.Contains(w)).ToArray();
             return new RomVerdict(missing.Length == 0 ? RomOutcome.Passed : RomOutcome.Failed, name, missing.Length == 0 ? $"{wanted.Length} lines" : "missing: " + string.Join("; ", missing));
+        }
+
+        // The program's lines, blank ones aside, are exactly these and in this order.
+        private static RomVerdict Exactly(string name, IReadOnlyList<string> lines, string[] wanted)
+        {
+            var have = lines.Where(l => l.Length > 0).ToArray();
+            bool same = have.SequenceEqual(wanted);
+            return new RomVerdict(same ? RomOutcome.Passed : RomOutcome.Failed, name, same ? $"{wanted.Length} lines" : "printed: " + string.Join("; ", have.Take(8)));
         }
 
         private static readonly Regex BandwidthRow = new(@"^(.+?)\s+dT:.*\(hblanks:\s*(\d+)\)");

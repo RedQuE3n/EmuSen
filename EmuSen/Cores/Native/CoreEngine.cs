@@ -7,6 +7,7 @@ using EmuSen.Common.Firmware;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Input;
+using EmuSen.Galaxia.Media;
 
 namespace EmuSen.Cores.Native
 {
@@ -31,6 +32,7 @@ namespace EmuSen.Cores.Native
         private double _lastFrameMs;
         private byte[] _stateBuffer = Array.Empty<byte>();
         private IReadOnlyDictionary<string, string> _notes = new Dictionary<string, string>();
+        private DiscSet? _set;
         private IReadOnlyList<string> _discs = Array.Empty<string>();
         private long _closeLidAt = -1;
 
@@ -139,9 +141,12 @@ namespace EmuSen.Cores.Native
         public bool IsHaltedOnCoprocessor => IsHaltedAtBreakpoint && HaltedProcessor != 0;
         public string HaltedProcessorName => _machine?.Info.Processors.FirstOrDefault(p => p.Id == HaltedProcessor)?.Name ?? "CPU";
 
-        // What the image play opens needs, answered from its bytes without a machine; Purpose says whether the game runs without it.
-        public IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath) =>
-            Library.FirmwareFor(File.ReadAllBytes(DiscsOf(romPath)[0])).Select(Request).ToArray();
+        // What the image play opens needs, answered from its mapped bytes without a machine; Purpose says whether the game runs without it.
+        public IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath)
+        {
+            using DiscFiles disc = DiscSet.Of(romPath, CoreCatalog.IsImageExtension).Open(0);
+            return Library.FirmwareFor(Held(disc.Image)).Select(Request).ToArray();
+        }
 
         // The required entries the image asks for, answered without reading it when the core's info leaves none possible - see Diamond_Players.md §12.8.2.
         public IReadOnlyList<FirmwareRequest> RequiredFirmwareFor(string romPath) =>
@@ -173,46 +178,63 @@ namespace EmuSen.Cores.Native
             return null;
         }
 
-        // The discs of the game: an .m3u's, else the one image; each unpacked where it is an archive - see EmuSen_CoreAPI_Extensions.md §2.4, §10.4.
-        public static IReadOnlyList<string> DiscsOf(string path)
-        {
-            string image = Crystal.Media.ArchiveImages.IsArchive(path) ? Crystal.Media.ArchiveImages.Unpack(path, CoreCatalog.IsImageExtension) : path;
-            return Crystal.Media.ImageSets.IsPlaylist(image) ? Crystal.Media.ImageSets.Discs(image).Select(d => Crystal.Media.ArchiveImages.IsArchive(d) ? Crystal.Media.ArchiveImages.Unpack(d, CoreCatalog.IsImageExtension) : d).ToArray() : new[] { image };
-        }
+        // The discs of the game: an .m3u's, else the one image; each unpacked where it is an archive - see EmuSen_Galaxia.md §3.8.
+        public static IReadOnlyList<string> DiscsOf(string path) => DiscSet.Of(path, CoreCatalog.IsImageExtension).Images;
 
-        // An image's companions as create and media_insert take them, numbered from EMUSEN_FILE_MEDIA.
-        private static List<(uint, byte[])> MediaFiles(string image) =>
-            Crystal.Media.ImageSets.FilesFor(image).Select(f => (f.Which, File.ReadAllBytes(f.Path))).ToList();
+        private static unsafe CoreBytes Held(MappedFile file) => new(file.Pointer, file.Length);
 
-        // The image, its companions, its firmware from the library and its battery files by the runtime's path rule; a second create when machine info names battery files the first could not know.
+        // A disc's companions as create and media_insert take them, numbered from EMUSEN_FILE_MEDIA in Galaxia's order.
+        private static List<(uint, CoreBytes)> MediaOf(DiscFiles disc) => disc.Companions.Select((c, n) => (CoreInterface.FileMedia + (uint)n, Held(c))).ToList();
+
+        // Whether the core reads a disc where Galaxia has it mapped, which the host then keeps so until the loan ends - see EmuSen_CoreAPI.md §6.24.
+        private bool Lends => Library.Has(CoreInterface.CapBorrow);
+
+        // The disc's files from Galaxia, its firmware from the library and its battery files by the runtime's path rule: those core info lists for the system, else file 0 and a second create when machine info names others that exist.
         public virtual void LoadRom(string path)
         {
-            var discs = DiscsOf(path);
-            byte[] image = File.ReadAllBytes(discs[0]);
-            var media = MediaFiles(discs[0]);
+            DiscSet set = DiscSet.Of(path, CoreCatalog.IsImageExtension);
             // The battery folder is the system's, as the library files it: a .gbc game's saves are under GBC, not the shelf's GB; a system only discovery runs, its pack's console's.
-            string? systemId = CoreCatalog.SystemOfFile(path, Info)?.Id;
-            string console = CoreCatalog.DiscoveredConsoleForSystem(systemId) ?? systemId?.ToUpperInvariant() ?? CoreCatalog.ConsoleForRom(path) ?? Info.Id;
+            CoreSystem? system = CoreCatalog.SystemOfFile(path, Info);
+            string console = CoreCatalog.DiscoveredConsoleForSystem(system?.Id) ?? system?.Id?.ToUpperInvariant() ?? CoreCatalog.ConsoleForRom(path) ?? Info.Id;
             var firmware = new List<(uint, byte[])>();
-            var asked = Library.FirmwareFor(image);
-            // Each file whole by its name and size, else its first split form found, part n as file Which + n - see EmuSen_CoreAPI.md §6.2.
-            foreach (var f in asked)
+            IReadOnlyList<CoreFirmware> asked;
+            CoreMachine machine;
+            List<(uint Which, BatterySave Save)> wanted;
+            DiscFiles disc = set.Open(0);
+            // Whether a machine has taken the keeping of the disc's files, as one that borrows does.
+            bool kept = false;
+            try
             {
-                if (FirmwareLibrary.TryLoad(Request(f)) is { } data) firmware.Add((f.Which, data));
-                else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
+                asked = Library.FirmwareFor(Held(disc.Image));
+                // Each file whole by its name and size, else its first split form found, part n as file Which + n - see EmuSen_CoreAPI.md §6.2.
+                foreach (var f in asked)
+                {
+                    if (FirmwareLibrary.TryLoad(Request(f)) is { } data) firmware.Add((f.Which, data));
+                    else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
+                }
+                var saves = system?.Battery is { } listed
+                    ? listed.Select(b => (b.Which, Save: BatteryFile(path, console, b.Which, b.Suffix))).ToList()
+                    : new List<(uint Which, BatterySave Save)> { (0, BatteryFile(path, console, 0, EmuSen.Galaxia.Library.SaveLibrary.SramExtension)) };
+                machine = Create(disc, firmware, saves);
+                kept = Lends;
+                wanted = machine.Info.Battery.Select(b => (b.Which, Save: BatteryFile(path, console, b.Which, b.Suffix))).ToList();
+                // Machine info is the authority: a file it names that exists and was not passed means the machine is made again with it.
+                if (wanted.Any(w => w.Save.Read() is not null && !saves.Any(s => s.Which == w.Which && s.Save.Path == w.Save.Path)))
+                {
+                    machine.Dispose();
+                    kept = false;
+                    if (Lends) disc = set.Open(0);
+                    machine = Create(disc, firmware, wanted);
+                    kept = Lends;
+                }
             }
-
-            firmware.AddRange(media);
-            var saves = new List<(uint Which, BatterySave Save)> { (0, BatteryFile(path, console, 0, EmuSen.Galaxia.Library.SaveLibrary.SramExtension)) };
-            CoreMachine machine = Create(image, firmware, saves);
-            var wanted = machine.Info.Battery.Select(b => (b.Which, Save: BatteryFile(path, console, b.Which, b.Suffix))).ToList();
-            bool differs = wanted.Count != saves.Count || wanted.Zip(saves).Any(p => p.First.Which != p.Second.Which || p.First.Save.Path != p.Second.Save.Path);
-            if (differs && wanted.Any(w => w.Save.Read() is not null))
+            finally
             {
-                machine.Dispose();
-                machine = Create(image, firmware, wanted);
+                // A core that copies has its copy by now; one that borrows holds the files through its machine.
+                if (!kept) disc.Dispose();
             }
-            _discs = discs;
+            _set = set;
+            _discs = set.Images;
             DiscIndex = 0;
             _closeLidAt = -1;
 
@@ -248,12 +270,13 @@ namespace EmuSen.Cores.Native
         // Battery file <which> of a game, by the runtime's path rule; a port's shim opens it as its oracle does.
         protected virtual BatterySave BatteryFile(string path, string console, uint which, string suffix) => BatterySave.Open(path, console, extension: suffix);
 
-        private CoreMachine Create(byte[] image, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves)
+        // The machine for a disc: lent where the core borrows, when the machine takes the files' keeping, else read by the core within the call.
+        private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves)
         {
             var files = new List<(uint, byte[])>(firmware);
             foreach (var (which, save) in saves)
                 if (save.Read() is { } saved) files.Add((which, saved));
-            return new CoreMachine(Library, image, SettingsText(createScope: true), files);
+            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null);
         }
 
         // Every value as key=value lines: create-time and run-time keys at create, run-time keys only after it.
@@ -284,8 +307,13 @@ namespace EmuSen.Cores.Native
         public void InsertDisc(int index, bool restore = false)
         {
             if (!CanChangeDisc) throw new InvalidOperationException($"{Info.DisplayName} cannot change discs.");
-            if (index < 0 || index >= _discs.Count) throw new ArgumentOutOfRangeException(nameof(index), $"the game has {_discs.Count} disc(s)");
-            Machine.MediaInsert(Machine.Info.Drives[0].Drive, File.ReadAllBytes(_discs[index]), MediaFiles(_discs[index]), restore);
+            if (index < 0 || index >= _discs.Count || _set is null) throw new ArgumentOutOfRangeException(nameof(index), $"the game has {_discs.Count} disc(s)");
+            DiscFiles disc = _set.Open(index);
+            try { Machine.MediaInsert(Machine.Info.Drives[0].Drive, Held(disc.Image), MediaOf(disc), restore, Lends ? disc : null); }
+            finally
+            {
+                if (!Lends) disc.Dispose();
+            }
             DiscIndex = index;
         }
 

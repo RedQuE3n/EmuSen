@@ -21,7 +21,7 @@ fn image(payload: &[u8]) -> Vec<u8> {
 }
 
 fn options() -> Options {
-    Options { self_delimiting: true, image: image(&[1, 2, 3, 0x20, 0x41]), frames: 120, settings: String::new(), files: Vec::new(), script: None }
+    Options { self_delimiting: true, image: image(&[1, 2, 3, 0x20, 0x41]), frames: 120, settings: String::new(), files: Vec::new(), script: None, on_disk: None }
 }
 
 fn verdicts(name: &str) -> Vec<(&'static str, bool)> {
@@ -34,36 +34,62 @@ fn verdicts(name: &str) -> Vec<(&'static str, bool)> {
 
 const ALL: [&str; 15] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15"];
 
+/// The cases a core is run through: the fifteen, C16 where it claims MEDIA, and C17.
+fn cases(media: bool) -> Vec<&'static str> {
+    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17"]).copied().collect()
+}
+
 #[test]
 fn both_test_cores_pass_every_case() {
     for (name, media) in [("kit_test_core", true), ("kit_plain_core", false)] {
-        let expected: Vec<_> = ALL.iter().chain(media.then_some(&"C16")).map(|&c| (c, true)).collect();
+        let expected: Vec<_> = cases(media).into_iter().map(|c| (c, true)).collect();
         assert_eq!(verdicts(name), expected, "{name}: C16 runs where MEDIA is claimed");
     }
 }
 
+// C17 on an image that came from a file maps the file, as a host that lends it does, and runs the disc swap through
+// a second mapping; on a core without BORROW it lends nothing and still overwrites its own bytes after create.
+#[test]
+fn c17_lends_a_mapped_image_where_borrow_is_claimed_and_overwrites_its_own_everywhere() {
+    let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-c17.v1tc");
+    std::fs::write(&file, image(&(0..180).collect::<Vec<u8>>())).unwrap();
+    let on_disk = emusen_core_conform::media::on_disk(&file).unwrap();
+    let opts = Options { image: std::fs::read(&file).unwrap(), on_disk: Some(on_disk), ..options() };
+    let of = |name: &str, opts: &Options| run(&library(name), opts).cases.into_iter().find(|c| c.id == "C17").unwrap();
+    let lent = of("kit_test_core", &opts);
+    assert!(lent.passed, "{:?}", lent.evidence);
+    assert_eq!(lent.evidence, ["120 frames and 120 after a disc swap: the image overwritten after create and after the insert changes nothing; lent (1 file(s) mapped, 186 bytes), every frame's picture, sound and state as from a copy"]);
+    let unmapped = of("kit_test_core", &options());
+    assert!(unmapped.passed && unmapped.evidence[0].contains("lent (the kit's own bytes kept in place, the image having come from no file)"), "{:?}", unmapped.evidence);
+    let plain = of("kit_plain_core", &opts);
+    assert!(plain.passed, "{:?}", plain.evidence);
+    assert_eq!(plain.evidence, ["120 frames: the image overwritten after create changes nothing; BORROW is not claimed, so nothing was lent"]);
+}
+
 // Machines that differ and a truncated state accepted break C4, C7, C8 and C10, and through them C9's and C13's
-// comparisons with a solo run and C12's rerun of C6-C8.
+// comparisons with a solo run, C12's rerun of C6-C8 and C17's of one run with another.
 #[test]
 fn the_seeded_faults_fail_the_cases_they_break_and_no_others() {
-    let failing = ["C4", "C7", "C8", "C9", "C10", "C12", "C13"];
-    assert_eq!(verdicts("kit_faulty_core"), ALL.iter().map(|&c| (c, !failing.contains(&c))).collect::<Vec<_>>());
+    let failing = ["C4", "C7", "C8", "C9", "C10", "C12", "C13", "C17"];
+    assert_eq!(verdicts("kit_faulty_core"), cases(false).into_iter().map(|c| (c, !failing.contains(&c))).collect::<Vec<_>>());
 }
 
 // An exact setting that changes the state, a refusal of any host but 1.0, info that drifts, a writable read-only
-// space and an observed frame with other sound break C9, C12, C13, C14 and C15, each alone.
+// space, an observed frame with other sound and a lent image read otherwise than its copy break C9, C12, C13, C14,
+// C15 and C17.
 #[test]
-fn the_faults_of_c9_and_c12_to_c15_fail_those_cases_and_no_others() {
-    let failing = ["C9", "C12", "C13", "C14", "C15"];
-    assert_eq!(verdicts("kit_faulty_full_core"), ALL.iter().map(|&c| (c, !failing.contains(&c))).collect::<Vec<_>>());
+fn the_faults_of_c9_and_c12_to_c17_fail_those_cases_and_no_others() {
+    let failing = ["C9", "C12", "C13", "C14", "C15", "C17"];
+    assert_eq!(verdicts("kit_faulty_full_core"), cases(false).into_iter().map(|c| (c, !failing.contains(&c))).collect::<Vec<_>>());
 }
 
-// Each of those faults alone, in a runner process of its own, fails exactly the case it is for.
+// Each of those faults alone, in a runner process of its own, fails exactly the case it is for; a core that takes
+// only a host of 1.0 also refuses the host of 1.3 that C17 plays to lend.
 #[test]
-fn each_fault_of_c9_and_c12_to_c15_alone_fails_its_case_alone() {
+fn each_fault_of_c9_and_c12_to_c17_alone_fails_its_case_alone() {
     let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-faulty-full.v1tc");
     std::fs::write(&file, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
-    for (fault, case) in [(8, "C9"), (16, "C12"), (32, "C13"), (64, "C14"), (128, "C15")] {
+    for (fault, cases) in [(8, vec!["C9"]), (16, vec!["C12", "C17"]), (32, vec!["C13"]), (64, vec!["C14"]), (128, vec!["C15"]), (256, vec!["C17"])] {
         let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
             .args(["--self-delimiting", "--frames", "120", "--core"])
             .arg(library("kit_faulty_full_core"))
@@ -74,7 +100,10 @@ fn each_fault_of_c9_and_c12_to_c15_alone_fails_its_case_alone() {
             .unwrap();
         let text = String::from_utf8_lossy(&out.stdout);
         let failed: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("FAIL ")).filter_map(|l| l.split_whitespace().next()).collect();
-        assert_eq!(failed, vec![case], "fault {fault}:\n{text}");
+        assert_eq!(failed, cases, "fault {fault}:\n{text}");
+        if fault == 256 {
+            assert!(text.contains("a machine reading an image its host lent differs from the run on a copy at frame 0, in its state"), "{text}");
+        }
         assert_eq!(out.status.code(), Some(1), "fault {fault}");
     }
 }
@@ -108,7 +137,7 @@ fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let v = json::parse(report.json().as_bytes()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
-    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(16));
+    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(17));
     let none = run(&library("no_such_core"), &options());
     assert!(!none.passed());
     assert_eq!(none.cases[0].id, "C1");
@@ -133,8 +162,8 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.2"));
-    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0xFFFFF));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.3"));
+    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x1FFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
     assert!(v.get("development").is_none());
@@ -185,12 +214,13 @@ fn a_corpus_runs_the_cores_cases_once_and_the_images_cases_for_every_image() {
         assert_eq!(c.images.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), list.iter().map(|l| l.0.as_str()).collect::<Vec<_>>());
         for i in &c.images {
             let expected: Vec<_> = corpus::IMAGE_CASES.iter().filter(|&&id| id != "C16" || name == "kit_test_core").map(|&id| (id, true)).collect();
+            assert!(name != "kit_test_core" || i.report.cases.last().unwrap().evidence[0].contains("1 file(s) mapped"), "a corpus's image is lent from its file: {:?}", i.report.cases.last().unwrap().evidence);
             assert_eq!(i.report.cases.iter().map(|x| (x.id, x.passed)).collect::<Vec<_>>(), expected, "{name} {}: C16 where MEDIA is claimed", i.name);
             assert_eq!(i.report.image.as_deref(), Some(i.name.as_str()));
         }
         assert!(c.passed());
         let all: std::collections::BTreeSet<&str> = corpus::CORE_CASES.iter().chain(corpus::IMAGE_CASES.iter()).copied().collect();
-        assert_eq!(all, ALL.iter().chain(&["C16"]).copied().collect());
+        assert_eq!(all, ALL.iter().chain(&["C16", "C17"]).copied().collect());
     }
 }
 
@@ -202,7 +232,7 @@ fn a_corpus_says_of_each_image_what_the_single_image_form_says() {
         for jobs in [1, 3] {
             let c = run_corpus(name, &list, jobs);
             for (n, i) in c.images.iter().enumerate() {
-                let single = run(&library(name), &Options { image: std::fs::read(&list[n].1).unwrap(), ..options() });
+                let single = run(&library(name), &Options { image: std::fs::read(&list[n].1).unwrap(), on_disk: emusen_core_conform::media::on_disk(&list[n].1).ok(), ..options() });
                 let of = |id: &str| single.cases.iter().find(|x| x.id == id).unwrap();
                 // The faulty core's machines each differ from the last, so its digests are no two runs' alike; its verdicts are.
                 for case in i.report.cases.iter().filter(|x| x.id != "C4") {
@@ -234,7 +264,7 @@ fn a_corpus_says_of_each_image_what_the_single_image_form_says() {
 #[test]
 fn the_seeded_faults_fail_the_same_cases_in_a_corpus() {
     let (_, list) = corpus_files("faults");
-    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13"], vec!["C7", "C8"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15"], vec!["C14"])] {
+    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13"], vec!["C7", "C8", "C17"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15"], vec!["C14", "C17"])] {
         let c = run_corpus(name, &list, 2);
         assert_eq!(c.core.cases.iter().filter(|x| !x.passed).map(|x| x.id).collect::<Vec<_>>(), core, "{name}");
         for i in &c.images {
@@ -272,7 +302,7 @@ fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
             let file = i.get("report").and_then(Value::as_str).unwrap();
             let report = json::parse(&std::fs::read(reports.join(file)).unwrap()).unwrap();
             assert_eq!(report.get("image"), i.get("image"));
-            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(6), "the five image cases and C16, MEDIA being claimed");
+            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(7), "the five image cases, C16, MEDIA being claimed, and C17");
         }
         assert_eq!(text.lines().filter(|l| l.starts_with("pass [") || l.starts_with("FAIL [")).count(), count, "{text}");
     }

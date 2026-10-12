@@ -88,8 +88,15 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Every_struct_has_the_headers_size_and_every_field_its_offset_and_type()
         {
+            // A struct's line is its size at the minor that made it; one grown since is its fields' end, rounded to its alignment - see EmuSen_CoreAPI.md §5.4.
             foreach (var w in Lines("struct"))
-                Assert.True(Marshal.SizeOf(Structs[w[1]]) == int.Parse(w[3]), $"{w[1]} is {Marshal.SizeOf(Structs[w[1]])} bytes, the header {w[3]}");
+            {
+                Type s = Structs[w[1]];
+                int align = int.Parse(w[5]), end = s.GetFields().Max(f => Marshal.OffsetOf(s, f.Name).ToInt32() + (f.FieldType.IsPointer ? IntPtr.Size : Marshal.SizeOf(f.FieldType)));
+                Assert.True(Marshal.SizeOf(s) >= int.Parse(w[3]), $"{w[1]} is {Marshal.SizeOf(s)} bytes, less than the {w[3]} the header recorded");
+                Assert.True(Marshal.SizeOf(s) == (end + align - 1) / align * align, $"{w[1]} is {Marshal.SizeOf(s)} bytes, its fields end at {end}");
+            }
+            Assert.Equal(96, Marshal.SizeOf<CoreInterface.CreateParams>());
             int checkedFields = 0;
             foreach (var w in Lines("field"))
             {

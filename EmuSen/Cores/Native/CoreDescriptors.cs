@@ -30,6 +30,9 @@ namespace EmuSen.Cores.Native
     {
         // The core builds the system but does not run its games yet; absent is false - see EmuSen_CoreAPI.md §27.4.
         public bool Development { get; init; }
+
+        // Every battery file a machine of the system can name, by number and suffix, so they are passed at the first create; null for a core that lists none - see EmuSen_CoreAPI.md §6.3.
+        public IReadOnlyList<CoreBatteryFile>? Battery { get; init; }
     }
 
     // A v1 core's info document, with Text the JSON it was read from - see EmuSen_CoreAPI.md §6.3.
@@ -135,7 +138,11 @@ namespace EmuSen.Cores.Native
                 Arr(s, "controllers").Select(c => new CoreController(Str(c, "id"), Str(c, "label"), Arr(c, "ports").Select(p => (uint)p.GetInt64()).ToArray(),
                     Arr(c, "buttons").Select(b => new CoreButton((uint)Long(b, "bit"), EnumNamed<PadButton>(OptStr(b, "control")), Str(b, "label"))).ToArray(),
                     Arr(c, "axes").Select(a => new CoreAxis((uint)Long(a, "axis"), EnumNamed<PadAxis>(OptStr(a, "control")), Str(a, "kind") == "trigger", Str(a, "label"))).ToArray())).ToArray(),
-                Arr(s, "firmware").Select(Firmware).ToArray()) { Development = Bool(s, "development", false) }).ToArray();
+                Arr(s, "firmware").Select(Firmware).ToArray())
+            {
+                Development = Bool(s, "development", false),
+                Battery = s.TryGetProperty("battery", out var battery) && battery.ValueKind == JsonValueKind.Array ? battery.EnumerateArray().Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix"), 0)).ToArray() : null,
+            }).ToArray();
             string name = Str(r, "name");
             return new CoreInfo(Str(r, "abi"), Str(r, "id"), name, OptStr(r, "display_name") ?? name, Str(r, "version"), Str(r, "license"), Strs(r, "authors"),
                 OptStr(r, "description"), systems, Strs(r, "capabilities"), Strs(r, "host_requires"), Bool(r, "deterministic", true), json);

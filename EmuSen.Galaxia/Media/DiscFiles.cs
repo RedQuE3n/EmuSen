@@ -1,0 +1,98 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+namespace EmuSen.Galaxia.Media
+{
+    // A disc's image and the files beside it, mapped read-only and held, with the unpacked folder they are in, for as long as a machine may read them - see EmuSen_Galaxia.md §3.8.
+    public sealed class DiscFiles : IDisposable
+    {
+        private readonly IDisposable? _hold;
+
+        public string Path { get; }
+        public MappedFile Image { get; }
+
+        // A sheet's tracks and then an .sbi, in the order a core numbers them.
+        public IReadOnlyList<MappedFile> Companions { get; }
+
+        private DiscFiles(string path, IDisposable? hold, MappedFile image, IReadOnlyList<MappedFile> companions)
+        {
+            (Path, _hold, Image, Companions) = (path, hold, image, companions);
+        }
+
+        // The image at imagePath with its companions; nothing of any file is read but a sheet's own text.
+        public static DiscFiles Open(string imagePath)
+        {
+            var opened = new List<IDisposable>();
+            try
+            {
+                IDisposable? hold = ArchiveImages.Hold(imagePath);
+                if (hold is not null) opened.Add(hold);
+                MappedFile image = MappedFile.Open(imagePath);
+                opened.Add(image);
+                var companions = new List<MappedFile>();
+                foreach (string file in ImageSets.FilesFor(imagePath))
+                {
+                    companions.Add(MappedFile.Open(file));
+                    opened.Add(companions[^1]);
+                }
+                return new DiscFiles(imagePath, hold, image, companions);
+            }
+            catch
+            {
+                foreach (IDisposable o in opened) o.Dispose();
+                throw;
+            }
+        }
+
+        // Every byte of the disc on its medium, for a figure a player is shown.
+        public long Length => Image.Length + Companions.Sum(c => c.Length);
+
+        public void Dispose()
+        {
+            Image.Dispose();
+            foreach (MappedFile c in Companions) c.Dispose();
+            _hold?.Dispose();
+        }
+    }
+
+    // A game's discs as its library file names them: an .m3u's in its order, else the one image, each unpacked where it is an archive - see EmuSen_Galaxia.md §3.8.
+    public sealed class DiscSet
+    {
+        private readonly (string? Archive, string Image)[] _discs;
+        private readonly Func<string, bool> _isImage;
+
+        private DiscSet((string?, string)[] discs, Func<string, bool> isImage)
+        {
+            (_discs, _isImage) = (discs, isImage);
+        }
+
+        // The set a library file stands for; isImage says which extensions an archive's entry may have.
+        public static DiscSet Of(string path, Func<string, bool> isImage)
+        {
+            (string?, string) Disc(string file) => ArchiveImages.IsArchive(file) ? (file, ArchiveImages.Unpack(file, isImage)) : (null, file);
+            var first = Disc(path);
+            return new DiscSet(ImageSets.IsPlaylist(first.Item2) ? ImageSets.Discs(first.Item2).Select(Disc).ToArray() : new[] { first }, isImage);
+        }
+
+        // Each disc's image, an archive's where it is unpacked.
+        public IReadOnlyList<string> Images => _discs.Select(d => d.Image).ToArray();
+
+        public int Count => _discs.Length;
+
+        // Disc index mapped and held; an archive's unpacked again where its folder has gone since.
+        public DiscFiles Open(int index)
+        {
+            var (archive, image) = _discs[index];
+            if (archive is null) return DiscFiles.Open(image);
+            for (int attempt = 0; ; attempt++)
+            {
+                image = ArchiveImages.Unpack(archive, _isImage);
+                try { return DiscFiles.Open(image); }
+                // Another program's pruning had the folder between the unpacking and the hold.
+                catch (IOException) when (attempt < 2) { }
+            }
+        }
+    }
+}

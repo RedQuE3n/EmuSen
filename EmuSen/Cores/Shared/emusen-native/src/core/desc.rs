@@ -384,7 +384,7 @@ fn write_firmware(j: &mut Json, f: &Firmware) {
 }
 
 /// Core info as JSON.
-pub fn info_json(info: &Info, capabilities: u64) -> String {
+pub fn info_json(info: &Info, capabilities: u64, battery: &dyn Fn(&str) -> Option<Vec<Battery>>) -> String {
     let mut j = Json::new();
     j.begin_object();
     j.field_str("abi", &format!("{}.{}", sys::ABI_MAJOR, sys::ABI_MINOR));
@@ -432,6 +432,13 @@ pub fn info_json(info: &Info, capabilities: u64) -> String {
         j.end_array();
         if s.development {
             j.field_bool("development", true);
+        }
+        if let Some(files) = battery(&s.id) {
+            j.key("battery").begin_array();
+            for b in &files {
+                j.begin_object().field_uint("which", b.which as u64).field_str("suffix", &b.suffix).end_object();
+            }
+            j.end_array();
         }
         j.end_object();
     }

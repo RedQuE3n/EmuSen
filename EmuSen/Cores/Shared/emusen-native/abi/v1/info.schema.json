@@ -39,7 +39,18 @@
         "regions": { "type": "array", "items": { "type": "string" } },
         "controllers": { "type": "array", "items": { "$ref": "#/$defs/controller" } },
         "firmware": { "type": "array", "items": { "$ref": "#/$defs/firmware" } },
-        "development": { "type": "boolean" }
+        "development": { "type": "boolean" },
+        "battery": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["which", "suffix"],
+            "properties": {
+              "which": { "type": "integer", "minimum": 0 },
+              "suffix": { "type": "string" }
+            }
+          }
+        }
       }
     },
     "controller": {

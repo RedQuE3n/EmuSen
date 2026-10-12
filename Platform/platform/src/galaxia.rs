@@ -4,6 +4,7 @@ use crate::{diagnostics_rewind, diagnostics_waiting, fail, fail_io, join_nul, pu
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::migration::{self, Copied};
 use emusen_galaxia::tree::{self, Directory, Override};
+use emusen_galaxia::mapped::Mapped;
 use emusen_galaxia::{atomic, rom_hash, saves};
 
 /// What `emusen_galaxia_save_path` names.
@@ -304,6 +305,54 @@ pub unsafe extern "C" fn emusen_galaxia_rom_md5(file: *const u8, file_len: usize
     answer(result(), out, len)
 }
 
+/// Maps the file whole and read-only, its handle in `mapped`; the bytes stay in place until `emusen_galaxia_unmap`.
+///
+/// # Safety
+/// `file` must be valid for `file_len` bytes, or null; `mapped` must be valid to write, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_map(file: *const u8, file_len: usize, mapped: *mut *mut Mapped) -> i32 {
+    if mapped.is_null() {
+        return fail(status::NULL, "no place for the mapping's handle");
+    }
+    let path = match unsafe { required(file, file_len) } {
+        Ok(path) => path,
+        Err(status) => return status,
+    };
+    match Mapped::open(path) {
+        Ok(map) => {
+            unsafe { *mapped = Box::into_raw(Box::new(map)) };
+            0
+        }
+        Err(error) => fail_io(&error),
+    }
+}
+
+/// The mapped bytes' length, and their address in `bytes`; null and zero for an empty file.
+///
+/// # Safety
+/// `mapped` must come from `emusen_galaxia_map` and not have been unmapped, or be null; `bytes` must be valid to write, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_mapped_bytes(mapped: *const Mapped, bytes: *mut *const u8) -> i64 {
+    let Some(map) = (unsafe { mapped.as_ref() }) else { return fail(status::NULL, "no mapping") as i64 };
+    let held = map.bytes();
+    if !bytes.is_null() {
+        unsafe { *bytes = if held.is_empty() { std::ptr::null() } else { held.as_ptr() } };
+    }
+    held.len() as i64
+}
+
+/// Releases a mapping; null is nothing to release.
+///
+/// # Safety
+/// As `emusen_galaxia_mapped_bytes`, and no address the mapping gave may be read afterwards.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_unmap(mapped: *mut Mapped) -> i32 {
+    if !mapped.is_null() {
+        drop(unsafe { Box::from_raw(mapped) });
+    }
+    0
+}
+
 /// One of .NET's path rules as this library applies it, by its `EMUSEN_GALAXIA_PATH_*` number, so the parity tests can hold each rule to .NET's own answer.
 ///
 /// # Safety
@@ -373,6 +422,37 @@ mod tests {
         assert_eq!(rule(path_op::CHANGE_EXTENSION, "a.state", ".png"), Ok("a.png".to_string()));
         assert_eq!(rule(path_op::DIRECTORY_NAME, "", ""), Err(status::ABSENT as i64));
         assert_eq!(rule(99, "a", ""), Err(status::BAD_ARGUMENT as i64));
+    }
+
+    #[test]
+    fn a_file_is_mapped_read_and_released_through_the_c_layer() {
+        let dir = std::env::temp_dir().join(format!("emusen-platform-map-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (file, empty, absent) = (dir.join("track.bin"), dir.join("empty.bin"), dir.join("absent.bin"));
+        let bytes: Vec<u8> = (0..90_000u32).map(|i| (i * 31) as u8).collect();
+        std::fs::write(&file, &bytes).unwrap();
+        std::fs::write(&empty, b"").unwrap();
+        let map = |path: &std::path::Path| {
+            let (text, mut handle) = (path.to_str().unwrap(), std::ptr::null_mut());
+            (unsafe { emusen_galaxia_map(text.as_ptr(), text.len(), &mut handle) }, handle)
+        };
+        let (status, handle) = map(&file);
+        assert_eq!(status, 0);
+        let mut at = std::ptr::null();
+        assert_eq!(unsafe { emusen_galaxia_mapped_bytes(handle, &mut at) }, bytes.len() as i64);
+        assert_eq!(unsafe { std::slice::from_raw_parts(at, bytes.len()) }, &bytes[..]);
+        assert_eq!(unsafe { emusen_galaxia_mapped_bytes(handle, std::ptr::null_mut()) }, bytes.len() as i64);
+        assert_eq!(unsafe { emusen_galaxia_unmap(handle) }, 0);
+        let (status, handle) = map(&empty);
+        assert_eq!(status, 0);
+        assert_eq!((unsafe { emusen_galaxia_mapped_bytes(handle, &mut at) }, at), (0, std::ptr::null()));
+        assert_eq!(unsafe { emusen_galaxia_unmap(handle) }, 0);
+        assert_eq!(map(&absent), (status::NOT_FOUND, std::ptr::null_mut()));
+        assert_eq!(unsafe { emusen_galaxia_map(std::ptr::null(), 0, &mut std::ptr::null_mut()) }, status::NULL);
+        assert_eq!(unsafe { emusen_galaxia_map(b"x".as_ptr(), 1, std::ptr::null_mut()) }, status::NULL);
+        assert_eq!(unsafe { emusen_galaxia_mapped_bytes(std::ptr::null(), &mut at) }, status::NULL as i64);
+        assert_eq!(unsafe { emusen_galaxia_unmap(std::ptr::null_mut()) }, 0);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

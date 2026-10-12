@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 2;
+pub const ABI_MINOR: u32 = 3;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -25,7 +25,7 @@ pub struct FileEntry {
     pub len: usize,
 }
 
-/// `emusen_create_params`.
+/// `emusen_create_params`. `flags` is since 1.3; a host of an earlier minor passes the 88 bytes before it.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct CreateParams {
@@ -41,6 +41,12 @@ pub struct CreateParams {
     pub pixel_formats: u64,
     pub error: *mut u8,
     pub error_len: usize,
+    pub flags: u32,
+}
+
+impl CreateParams {
+    /// The struct's size at 1.0, the least a core accepts (EmuSen_CoreAPI.md §4.2).
+    pub const SIZE_1_0: usize = std::mem::offset_of!(CreateParams, flags);
 }
 
 /// `emusen_media`, since 1.1: a disc for a drive, with its companions.
@@ -123,8 +129,10 @@ pub mod caps {
     pub const MEDIA: u64 = 1 << 18;
     /// Since 1.2: read watches and read data breakpoints.
     pub const DEBUG_READS: u64 = 1 << 19;
-    /// Bits 20-47, for later minors; a core may not claim them.
-    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 20) - 1);
+    /// Since 1.3: the core keeps pointers into an image and media files a host lends; `core::keep` is how.
+    pub const BORROW: u64 = 1 << 20;
+    /// Bits 21-47, for later minors; a core may not claim them.
+    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 21) - 1);
 }
 
 /// `EMUSEN_OPTION_*`, `EMUSEN_FRAME_*`, `EMUSEN_BATTERY_*`, `EMUSEN_FILE_BATTERY`, `EMUSEN_NO_COMPARE`.
@@ -139,6 +147,10 @@ pub mod flags {
     pub const FILE_MEDIA: u32 = 65_536;
     /// Since 1.1: `emusen_media.flags`, the drive set for a state about to load.
     pub const MEDIA_RESTORE: u32 = 1;
+    /// Since 1.3: `emusen_create_params.flags`, the image and its media files lent until the loan ends.
+    pub const CREATE_LENT: u32 = 1;
+    /// Since 1.3: `emusen_media.flags`, the same for an inserted disc.
+    pub const MEDIA_LENT: u32 = 2;
 }
 
 /// `enum emusen_pixel_format`.
@@ -248,4 +260,5 @@ pub const CAPABILITY_NAMES: &[(u64, &str)] = &[
     (caps::DEBUG_DISASSEMBLE, "DEBUG_DISASSEMBLE"),
     (caps::MEDIA, "MEDIA"),
     (caps::DEBUG_READS, "DEBUG_READS"),
+    (caps::BORROW, "BORROW"),
 ];

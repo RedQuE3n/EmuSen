@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.2.
+/* emusen_core.h - the EmuSen core ABI, version 1.3.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -14,7 +14,7 @@
  *    always gives EMUSEN_NULL. Only abi_version and capabilities return unsigned values, and cannot fail.
  *  - Copy out: a call that fills a buffer takes (out, len) and returns the whole length; a null `out` asks
  *    only the length. No pointer into the core's memory is ever returned; the host owns every buffer, and a
- *    pointer passed in is valid for that call only.
+ *    pointer passed in is valid for that call only, but for an image and its media files a host lends (BORROW).
  *  - A struct crossing the boundary begins with `size`, the bytes its allocator gave it. The callee reads and
  *    writes only the prefix both sides know, never `size` itself; a struct shorter than its 1.0 size is
  *    refused with EMUSEN_BAD_STRUCT. Fields are only appended, and a field's zero means "absent".
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 2u
+#define EMUSEN_CORE_ABI_MINOR 3u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -87,7 +87,8 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_CAP_DEBUG_DISASSEMBLE (1ull << 17)  /* emusen_core_debug_disassemble */
 #define EMUSEN_CAP_MEDIA             (1ull << 18)  /* @since 1.1: emusen_core_media_lid, emusen_core_media_insert */
 #define EMUSEN_CAP_DEBUG_READS       (1ull << 19)  /* @since 1.2, with DEBUG: emusen_core_debug_reads, range kinds 2 and 3 */
-/* Bits 20..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
+#define EMUSEN_CAP_BORROW            (1ull << 20)  /* @since 1.3: the core keeps pointers into an image and media files lent to it */
+/* Bits 21..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
 
 /* ---- Flags and small constants ------------------------------------------------------------------ */
 #define EMUSEN_OPTION_SKIP_RENDERING 1u  /* set_options bit 0; every other bit is reserved and ignored */
@@ -100,6 +101,13 @@ typedef struct emusen_machine emusen_machine;
  * the numbers below it stay the core's (EmuSen_CoreAPI_Extensions.md section 2.4). */
 #define EMUSEN_FILE_MEDIA            65536u
 #define EMUSEN_MEDIA_RESTORE         1u  /* @since 1.1: emusen_media.flags, the drive set for a state about to load */
+/* @since 1.3, BORROW (section 6.24). A host that sets LENT promises that the call's image and every file numbered
+ * EMUSEN_FILE_MEDIA or above stay readable, unchanged and at the same addresses until emusen_core_free returns or a
+ * media_insert on the drive holding that disc succeeds, so the core may keep pointers into them instead of copying.
+ * Set only for a core that claims BORROW; without it, and for every other pointer of the call, the core copies what
+ * it keeps. A call the core refuses lends nothing. */
+#define EMUSEN_CREATE_LENT           1u  /* emusen_create_params.flags */
+#define EMUSEN_MEDIA_LENT            2u  /* emusen_media.flags */
 
 /* Debug: the flags debug_set takes; coverage of processor n is bit (EMUSEN_DEBUG_COVERAGE + n), n < 24. */
 #define EMUSEN_DEBUG_CALLS       1u
@@ -176,7 +184,7 @@ typedef struct emusen_file {        /* a file the host read for this game (secti
     size_t len;
 } emusen_file;
 
-typedef struct emusen_create_params { /* 88 bytes */
+typedef struct emusen_create_params { /* 96 bytes; 88 at 1.0, the least a core accepts */
     uint32_t size;
     uint32_t host_abi_version;      /* EMUSEN_CORE_ABI_VERSION the host was built with */
     const uint8_t *image;           /* the game file's bytes; the core parses it */
@@ -189,6 +197,7 @@ typedef struct emusen_create_params { /* 88 bytes */
     uint64_t pixel_formats;         /* bit n: emusen_pixel_format n accepted; bit 0 is always accepted */
     uint8_t *error;                 /* optional: a refusal's UTF-8 detail, NUL-terminated within error_len */
     size_t error_len;
+    uint32_t flags;                 /* @since 1.3: EMUSEN_CREATE_LENT; absent from a shorter struct, which reads as zero */
 } emusen_create_params;
 
 typedef struct emusen_frame_info {  /* 56 bytes */
@@ -215,7 +224,7 @@ typedef struct emusen_event {       /* 24 bytes */
 
 typedef struct emusen_media {       /* @since 1.1, MEDIA: a disc for a drive (section 6.23); 48 bytes */
     uint32_t size;
-    uint32_t flags;                 /* EMUSEN_MEDIA_RESTORE */
+    uint32_t flags;                 /* EMUSEN_MEDIA_RESTORE, and since 1.3 EMUSEN_MEDIA_LENT */
     const uint8_t *image;           /* the disc's image or sheet, as create's; null empties the drive */
     size_t image_len;
     const emusen_file *files;       /* its companions, from EMUSEN_FILE_MEDIA */
@@ -240,7 +249,8 @@ int64_t  emusen_core_log_drain(emusen_machine *machine, uint8_t *out, size_t len
 
 /* ---- Lifecycle ------------------------------------------------------------------------- */
 /* The machine for params' image; null on refusal with the reason in `status` and the detail in params' error.
- * A failed create leaves nothing to free. Nothing in params is kept past the call. */
+ * A failed create leaves nothing to free. Nothing in params is kept past the call, but for what EMUSEN_CREATE_LENT
+ * lends. */
 emusen_machine *emusen_core_create(const emusen_create_params *params, int32_t *status);
 /* From any thread, provided no other call on that machine is in flight; every thread of the machine has stopped
  * when it returns. */
@@ -341,7 +351,8 @@ int64_t emusen_core_debug_reads(emusen_machine *machine, uint32_t *out, size_t l
 /* MEDIA: opens (1) or closes (0) the drive's lid or tray, as the player would; the core models what follows. */
 int32_t emusen_core_media_lid(emusen_machine *machine, uint32_t drive, uint32_t open);
 /* MEDIA: the disc in the drive replaced, refused with EMUSEN_LID_CLOSED unless the lid is open or RESTORE is set.
- * The core copies what it keeps, as at create; a refused disc leaves the drive as it was. */
+ * The core copies what it keeps, as at create, or borrows what EMUSEN_MEDIA_LENT lends; a refused disc leaves the
+ * drive as it was. When it returns success the core holds no pointer into the disc the drive held before. */
 int32_t emusen_core_media_insert(emusen_machine *machine, uint32_t drive, const emusen_media *media);
 
 /* ---- Function types, one per export, so a host or a check can name each signature ------ */

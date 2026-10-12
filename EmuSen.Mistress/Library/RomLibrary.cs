@@ -37,7 +37,7 @@ namespace EmuSen.Mistress.Library
     public static class RomLibrary
     {
         // Whatever cores this build has, not a second copy of the list, and the archives a game may be packed in - see EmuSen_Multicore.md §3.
-        public static string[] Extensions => EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Crystal.Media.ArchiveImages.Extensions).ToArray();
+        public static string[] Extensions => EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions).ToArray();
 
         private static readonly IReadOnlyList<RomEntry> None = Array.Empty<RomEntry>();
 
@@ -73,7 +73,7 @@ namespace EmuSen.Mistress.Library
                         : shelf.Core.SupportsExtension(EmuSen.Cores.CoreCatalog.ImageExtension(f)))
                     .ToList();
                 // A sheet's tracks and a list's discs are the sheet's and the list's game, not games of their own.
-                entries = EmuSen.Crystal.Media.ImageSets.Shelved(files)
+                entries = EmuSen.Galaxia.Media.ImageSets.Shelved(files)
                     .Select(f => new RomEntry(f))
                     .Where(e => shelf is null || e.Shelf == shelf.Name)
                     .OrderBy(e => e.Title, StringComparer.OrdinalIgnoreCase)

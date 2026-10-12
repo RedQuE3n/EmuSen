@@ -141,15 +141,18 @@ namespace EmuSen.Cores.Native
         // What an image needs from the core, from its bytes alone.
         public IReadOnlyList<CoreFirmware> FirmwareFor(byte[] image)
         {
+            fixed (byte* img = image) return FirmwareFor(new CoreBytes(img, image.Length));
+        }
+
+        // The same from bytes the host holds in place, a mapped image's: the core reads of them what the answer takes.
+        public IReadOnlyList<CoreFirmware> FirmwareFor(CoreBytes image)
+        {
             if (!Available) return Array.Empty<CoreFirmware>();
-            fixed (byte* img = image)
-            {
-                long n = Api.FirmwareFor(img, (nuint)image.Length, null, 0);
-                if (n <= 0 || n > MaxDescriptorBytes) return Array.Empty<CoreFirmware>();
-                var bytes = new byte[n];
-                fixed (byte* b = bytes) Api.FirmwareFor(img, (nuint)image.Length, b, (nuint)n);
-                return Utf8(bytes) is { } text ? CoreDescriptorReader.FirmwareList(text) : Array.Empty<CoreFirmware>();
-            }
+            long n = Api.FirmwareFor(image.Data, image.Length, null, 0);
+            if (n <= 0 || n > MaxDescriptorBytes) return Array.Empty<CoreFirmware>();
+            var bytes = new byte[n];
+            fixed (byte* b = bytes) Api.FirmwareFor(image.Data, image.Length, b, (nuint)n);
+            return Utf8(bytes) is { } text ? CoreDescriptorReader.FirmwareList(text) : Array.Empty<CoreFirmware>();
         }
 
         // One of the core's own extension exports by name, zero when the library is not in use or lacks it - see EmuSen_CoreAPI.md §4.7.

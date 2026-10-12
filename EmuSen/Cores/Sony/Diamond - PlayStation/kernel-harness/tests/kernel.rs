@@ -275,8 +275,35 @@ fn the_card_calls_with_no_card_and_the_absent_character_sets() {
     assert_eq!(m.b(0x5D, &[0]), 0x11, "_card_wait carries it out: failed, no card");
     assert_eq!(m.b(0x5C, &[0]), 0x11, "_card_status");
     assert_eq!(m.b(0x4F, &[0, 0x401, 0x8010_1000]), 0, "a sector past 400h");
-    assert_eq!(m.b(0x51, &[0x8140]), u32::MAX, "Krom2RawAdd: no character sets");
     m.c(0x1A, &[1]);
     assert_eq!(m.c(0x1D, &[]), 1);
     assert_eq!(m.a(0x57, &[]), 0, "return 0");
+}
+
+/// Krom2RawAdd and Krom2Offset with no character sets in the image (Diamond_OpenKernel_Phase2.md §25.1): the
+/// ideographic space 8140h answers a blank 16x15 glyph and every other code of charset 2 or 3's documented ranges one
+/// box, the missing-character glyph, both inside the kernel's ROM, as Castlevania: Symphony of the Night needs for
+/// 8163h and 819Ah; any other code the documented -1.
+#[test]
+fn krom2rawadd_answers_a_box_in_the_rom_for_every_documented_code_but_the_space() {
+    let mut m = booted();
+    let rom = 0xBFC0_0000..0xBFC8_0000 - 30;
+    let space = m.b(0x51, &[0x8140]);
+    assert!(rom.contains(&space), "an address in the BIOS ROM: {space:08X}");
+    assert_eq!(m.rig.bytes(space, 30), vec![0; 30], "the space blank");
+    let boxed = m.b(0x51, &[0x8163]);
+    assert!(rom.contains(&boxed), "an address in the BIOS ROM: {boxed:08X}");
+    let mut glyph = vec![0, 0, 0x3F, 0xFC];
+    (0..11).for_each(|_| glyph.extend([0x20, 0x04]));
+    glyph.extend([0x3F, 0xFC, 0, 0]);
+    assert_eq!(m.rig.bytes(boxed, 30), glyph, "a box, each row two bytes, the left pixel in bit 7 of the first");
+    assert_eq!(m.b(0x53, &[0x8140]), 0, "Krom2Offset(8140h)");
+    for code in [0x8141, 0x819A, 0x84BE, 0x889F, 0x9872] {
+        assert_eq!(m.b(0x51, &[code]), boxed, "Krom2RawAdd({code:X}h)");
+        assert_eq!(m.b(0x53, &[code]), 30, "Krom2Offset({code:X}h): the box after the space");
+    }
+    for code in [0, 0x41, 0x813F, 0x84BF, 0x889E, 0x9873, 0xFFFF] {
+        assert_eq!(m.b(0x51, &[code]), u32::MAX, "Krom2RawAdd({code:X}h)");
+        assert_eq!(m.b(0x53, &[code]), u32::MAX, "Krom2Offset({code:X}h)");
+    }
 }

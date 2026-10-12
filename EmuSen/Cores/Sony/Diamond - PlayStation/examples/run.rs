@@ -6,7 +6,9 @@
 //! traces the controller's commands and responses, as `--trace-game` does from the entry of a game booted by `--boot`, once the BIOS has handed over. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
 //! the image itself when PATH is no PS-EXE), `--analog` presses port 1's Analog button at frame 30; `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
 //! `cdrom/disc-swap` does; `--trace-at FRAME` traces the controller from a frame on; `--calls` counts the kernel calls a program makes by table and number, as the program
-//! enters the A0h, B0h and C0h vectors. A development tool for the test programs (Diamond_Native.md §11.11, Diamond_CDROM.md §9):
+//! enters the A0h, B0h and C0h vectors, a BIOS's own calls among them. `--game` observes only the game, from its entry on, on either kernel: the TTY from the entry,
+//! the text it passes to write(1) and putchar, its calls counted, and with `--game-log FILE` each call's arguments and result and its own loads and stores at
+//! the CD, SIO0, DMA and interrupt registers, `--log-frames A:B` limiting the accesses (Diamond_OpenKernel_Phase2.md §22). A development tool for the test programs (Diamond_Native.md §11.11, Diamond_CDROM.md §9):
 //! on the open kernel, a player's own BIOS, or none.
 
 use diamond::kernel::{self, Kernel};
@@ -25,11 +27,14 @@ fn main() {
     let load = std::time::Instant::now();
     let mut disc = disc_path.map(|p| open_disc(&p));
     let loaded = load.elapsed();
+    let game = args.iter().any(|a| a == "--game");
     if boot {
         let (d, _) = disc.as_mut().expect("a disc to boot");
         let (l, e) = loader(d);
         image = l;
         entry = e;
+    } else if game {
+        entry = boot_program(disc.as_mut().map(|d| &mut d.0).expect("a disc for --game")).2;
     }
     let media = match &disc {
         Some((_, media)) if !image.starts_with(b"PS-X EXE") || boot => if boot { Media { kind: Media::read(&image).unwrap().kind, market: media.market } } else { *media },
@@ -80,6 +85,7 @@ fn main() {
     let wav = args.iter().position(|a| a == "--wav").map(|i| args[i + 1].clone());
     let mut audio: Vec<i16> = Vec::new();
     let mut chunk = vec![0i16; 8192];
+    let mut watch = game.then(|| Watch::new(entry, args.iter().position(|a| a == "--game-log").map(|i| args[i + 1].clone()), args.iter().position(|a| a == "--log-frames").map(|i| args[i + 1].clone())));
     let start = std::time::Instant::now();
     for _ in 0..frames {
         if wav.is_some() {
@@ -131,7 +137,10 @@ fn main() {
         if analog && (30..40).contains(&m.frames) {
             m.board.sio0.set_buttons(0, if m.frames < 35 { 1 << 16 } else { 0 });
         }
-        m.advance();
+        match &mut watch {
+            Some(w) => w.frame(&mut m),
+            None => m.advance(),
+        }
         if let Some((dir, n)) = &every
             && m.frames % n == 0
         {
@@ -176,9 +185,13 @@ fn main() {
     for (t, n, count, first) in &seen {
         eprintln!("[call {t}({n:02X}h) {count} times, first at frame {first}]");
     }
+    if let Some(w) = &mut watch {
+        w.finish();
+    }
     let tty = m.space(TTY_ID).unwrap();
     let end = tty.iter().position(|&b| b == 0).unwrap_or(tty.len());
-    let text = String::from_utf8_lossy(&tty[..end]);
+    let from = watch.as_ref().map_or(0, |w| w.tty_from.unwrap_or(end));
+    let text = String::from_utf8_lossy(&tty[from.min(end)..end]);
     match &heading {
         Some(h) => print!("{}", text.find(h.as_str()).map_or("", |at| &text[at..])),
         None => print!("{text}"),
@@ -224,6 +237,19 @@ fn user(d: &mut emusen_disc::Disc, lba: u32) -> Vec<u8> {
 /// A loader for `--boot`: SYSTEM.CNF's BOOT and STACK read from the disc's root directory (ECMA-119), then the kernel's
 /// A(71h) _96_init and A(51h) LoadExec, so that the player's BIOS loads and starts the game with its own functions.
 fn loader(d: &mut emusen_disc::Disc) -> (Vec<u8>, u32) {
+    let (name, stack, entry) = boot_program(d);
+    eprintln!("[booting {name} with the stack at {stack:08X}, its entry {entry:08X}]");
+    let mut src = String::from("j start\nnop\nstart: lui a3, 0x8010\n");
+    for (i, c) in name.bytes().chain([0]).enumerate() {
+        src += &format!("ori t0, zero, {c}\nsb t0, {}(a3)\n", 0x100 + i);
+    }
+    src += &format!("ori t1, zero, 0x71\nori t2, zero, 0xA0\njalr t2\nnop\nlui a0, 0x8010\nori a0, a0, 0x100\nlui a1, {}\nori a1, a1, {}\nori a2, zero, 0\nori t1, zero, 0x51\nori t2, zero, 0xA0\njalr t2\nnop\ndone: j done\nnop\n", stack >> 16, stack & 0xFFFF);
+    let words = emusen_mips::assemble(&src, 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    (diamond::exe::build(&words), entry)
+}
+
+/// SYSTEM.CNF's BOOT name and STACK, and the boot program's entry from its header.
+fn boot_program(d: &mut emusen_disc::Disc) -> (String, u32, u32) {
     let pvd = user(d, 16);
     let root = u32::from_le_bytes([pvd[158], pvd[159], pvd[160], pvd[161]]);
     let dir = user(d, root);
@@ -245,14 +271,7 @@ fn loader(d: &mut emusen_disc::Disc) -> (Vec<u8>, u32) {
         u32::from_le_bytes([h[0x10], h[0x11], h[0x12], h[0x13]])
     });
     let stack = field("STACK").and_then(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok()).unwrap_or(0x801F_FFF0);
-    eprintln!("[booting {name} with the stack at {stack:08X}, its entry {entry:08X}]");
-    let mut src = String::from("j start\nnop\nstart: lui a3, 0x8010\n");
-    for (i, c) in name.bytes().chain([0]).enumerate() {
-        src += &format!("ori t0, zero, {c}\nsb t0, {}(a3)\n", 0x100 + i);
-    }
-    src += &format!("ori t1, zero, 0x71\nori t2, zero, 0xA0\njalr t2\nnop\nlui a0, 0x8010\nori a0, a0, 0x100\nlui a1, {}\nori a1, a1, {}\nori a2, zero, 0\nori t1, zero, 0x51\nori t2, zero, 0xA0\njalr t2\nnop\ndone: j done\nnop\n", stack >> 16, stack & 0xFFFF);
-    let words = emusen_mips::assemble(&src, 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
-    (diamond::exe::build(&words), entry)
+    (name, stack, entry)
 }
 
 /// A file's first sector by its path from the root, `cdrom:\\DIR\\NAME;1` (ECMA-119 directory records).
@@ -320,4 +339,135 @@ fn write_wav(path: &str, samples: &[i16]) {
         out.extend_from_slice(&s.to_le_bytes());
     }
     std::fs::write(path, out).expect("written");
+}
+
+/// What `--game` sees of the game alone: code in user RAM, from its entry on, so that a kernel's own code is never observed.
+struct Watch {
+    entry: u32,
+    started: bool,
+    tty_from: Option<usize>,
+    log: Option<std::io::BufWriter<std::fs::File>>,
+    window: (i64, i64),
+    pending: Vec<(u32, char, u32)>,
+    counts: Vec<(char, u32, u64, i64)>,
+    last: Option<(u32, bool, u32, u32)>,
+    repeats: u64,
+    text: Vec<u8>,
+}
+
+/// The registers whose accesses `--game-log` records: interrupts, DMA, SIO0 and the CD-ROM controller.
+fn watched(address: u32) -> bool {
+    matches!(address, 0x1F80_1040..=0x1F80_104F | 0x1F80_1070..=0x1F80_1077 | 0x1F80_1080..=0x1F80_10FF | 0x1F80_1800..=0x1F80_1803)
+}
+
+fn user_ram(address: u32) -> bool {
+    (0x1_0000..0x20_0000).contains(&(address & 0x1FFF_FFFF))
+}
+
+impl Watch {
+    fn new(entry: u32, log: Option<String>, window: Option<String>) -> Watch {
+        let window = window.map_or((0, i64::MAX), |w| {
+            let (a, b) = w.split_once(':').expect("A:B");
+            (a.parse().expect("a frame"), b.parse().expect("a frame"))
+        });
+        let log = log.map(|p| std::io::BufWriter::new(std::fs::File::create(p).expect("the log")));
+        Watch { entry, started: false, tty_from: None, log, window, pending: Vec::new(), counts: Vec::new(), last: None, repeats: 0, text: Vec::new() }
+    }
+
+    fn frame(&mut self, m: &mut Machine) {
+        use std::io::Write;
+        m.board.field_done = false;
+        let accesses = (self.window.0..self.window.1).contains(&m.frames);
+        while !m.board.field_done {
+            let (pc, slot) = (m.cpu.regs.pc, m.cpu.regs.branch.slot);
+            if !self.started {
+                if pc == self.entry && !slot {
+                    self.started = true;
+                    self.tty_from = Some(m.board.tty.len);
+                    eprintln!("[the game starts at frame {}]", m.frames);
+                }
+                m.step();
+                continue;
+            }
+            if let Some(k) = self.pending.iter().rposition(|p| p.0 == pc) {
+                let (_, t, n) = self.pending[k];
+                self.pending.truncate(k);
+                if let Some(l) = &mut self.log {
+                    writeln!(l, "{} {} RET {t}({n:02X}h) v0={:08X}", m.frames, m.board.now, m.cpu.regs.r[2]).unwrap();
+                }
+            }
+            let r = &m.cpu.regs.r;
+            if matches!(pc & 0x1FFF_FFFF, 0xA0 | 0xB0 | 0xC0) && !slot && user_ram(r[31]) {
+                let (t, n) = ((b'A' + (((pc & 0xFF) - 0xA0) >> 4) as u8) as char, r[9]);
+                match self.counts.iter_mut().find(|e| e.0 == t && e.1 == n) {
+                    Some(e) => e.2 += 1,
+                    None => self.counts.push((t, n, 1, m.frames)),
+                }
+                match (t, n, r[4]) {
+                    ('A', 0x03, 1) | ('B', 0x35, 1) => (0..r[6].min(0x1000)).for_each(|k| self.text.push(m.board.ram[(r[5].wrapping_add(k) & 0x1F_FFFF) as usize])),
+                    ('A', 0x3C, c) | ('B', 0x3D, c) => self.text.push(c as u8),
+                    _ => {}
+                }
+                if let Some(l) = &mut self.log {
+                    writeln!(l, "{} {} CALL {t}({n:02X}h) a0={:08X} a1={:08X} a2={:08X} a3={:08X} ra={:08X}", m.frames, m.board.now, r[4], r[5], r[6], r[7], r[31]).unwrap();
+                }
+                if self.pending.len() == 64 {
+                    self.pending.remove(0);
+                }
+                self.pending.push((r[31], t, n));
+            }
+            let mut access = None;
+            if accesses && self.log.is_some() && user_ram(pc) {
+                let w = m.board.ram_word(pc & 0x1FFF_FFFF);
+                let op = w >> 26;
+                if matches!(op, 0x20..=0x26 | 0x28..=0x2B) {
+                    let (rs, rt) = ((w >> 21 & 31) as usize, (w >> 16 & 31) as usize);
+                    let at = r[rs].wrapping_add(w as i16 as i32 as u32) & 0x1FFF_FFFF;
+                    if watched(at) {
+                        access = Some((op, at, rt, r[rt]));
+                    }
+                }
+            }
+            m.step();
+            if let Some((op, at, rt, value)) = access {
+                let taken = m.cpu.regs.pc & 0x1FFF_FFFF == 0x80 && m.cpu.regs.epc == pc;
+                let seen = if taken {
+                    None
+                } else if op >= 0x28 {
+                    Some((true, match op { 0x28 => value & 0xFF, 0x29 => value & 0xFFFF, _ => value }))
+                } else if m.cpu.regs.load.register == Some(rt as u8) {
+                    Some((false, m.cpu.regs.load.value))
+                } else {
+                    None
+                };
+                if let Some((write, v)) = seen {
+                    let key = (pc, write, at, v);
+                    if self.last == Some(key) {
+                        self.repeats += 1;
+                    } else {
+                        let l = self.log.as_mut().unwrap();
+                        if self.repeats > 0 {
+                            writeln!(l, "{} {} REPEATED {}", m.frames, m.board.now, self.repeats).unwrap();
+                        }
+                        writeln!(l, "{} {} {pc:08X} {} {at:08X} {v:X}", m.frames, m.board.now, if write { 'W' } else { 'R' }).unwrap();
+                        self.last = Some(key);
+                        self.repeats = 0;
+                    }
+                }
+            }
+        }
+        m.board.sync_spu();
+        m.frames += 1;
+    }
+
+    fn finish(&mut self) {
+        use std::io::Write;
+        if let Some(l) = &mut self.log {
+            l.flush().unwrap();
+        }
+        eprintln!("[the game's text by write(1) and putchar: {} bytes]\n{}[end of the game's text]", self.text.len(), String::from_utf8_lossy(&self.text));
+        for (t, n, count, first) in &self.counts {
+            eprintln!("[game call {t}({n:02X}h) {count} times, first at frame {first}]");
+        }
+    }
 }

@@ -817,8 +817,12 @@ tester's seven discs, copied, with the opt-in probes of `Diamond_Players.md` §1
 
 - **The whole read is the launch's one remaining cost of size.** A cold read of a 430–660 MB image took 0.16–0.27 s
   from the desktop's NVMe drive and 4.8–6.9 s under a 90 MB/s read cap, the speed `Diamond_CDROM.md` §9.7 assumed for
-  the handheld's microSD card; a sheet's tracks, or a zip's unpacked tracks, 1.7–6.8 s. The handheld's own figures
-  are in `Diamond_Players.md` §12.8.6.
+  the handheld's microSD card; a sheet's tracks, or a zip's unpacked tracks, 1.7–6.8 s. **On the handheld itself**
+  (`Diamond_Players.md` §12.8.6) the card read at 88–92 MiB a second: 6.3 s for a 556 MiB track, 6.2 s for a 572 MiB
+  one, 4.6 s for a sheet's 424 MiB track.
+- **On the handheld a second launch is not a warm one.** The launch's own 1.1 GB, the host's buffer and the core's
+  copy, pushes the pages just read out of a page cache that fills the memory: 294 of a track's 556 MiB were still
+  cached after its first launch, and its second read took 3.0 s.
 - **The copy at create** costs 150–290 ms on the desktop per create, the disc's parse being constant in its size
   (`emusen-disc`'s `Disc::from_image` places the tracks and reads nothing): it is the copy into freshly faulted pages,
   as `EmuSen_CoreAPI.md` §6.2 requires ("the core copies what it keeps"). Host and core hold the image twice while
@@ -897,7 +901,8 @@ battery files before a game is created, so the engine creates once with file 0 a
 `battery`, and creates again when the files differ and one exists on disk; it names the remedy, core info carrying
 them per system in a later minor, and leaves it undecided. Diamond names two cards, file 0 as `.mcr` and file 4 as
 `.2.mcr`, so **every launch of a PlayStation game with a memory card on disc creates twice**: a second 150–290 ms on the
-desktop [M, 2026-10-12, `Diamond_Players.md` §12.8.2], the handheld's in §12.8.6 there. Under big picture's launch screen
+desktop [M, 2026-10-12, `Diamond_Players.md` §12.8.2] and 45–214 ms on the handheld, where five games already have a
+card on disc (§12.8.6 there). Under big picture's launch screen
 it is now hidden whenever the whole load ends within the screen's time; from the desktop's list it is waited for.
 
 Weighed by §1.1's forms [C]: **an extension**, a descriptor field `battery` in each system entry of core info, of the

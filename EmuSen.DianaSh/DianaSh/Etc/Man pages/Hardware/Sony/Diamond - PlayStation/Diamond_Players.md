@@ -733,16 +733,48 @@ From the tables above [M, desktop]:
 
 #### 12.8.6 The handheld
 
-*Not measured.* The handheld (`10.1.1.205`) did not answer on 2026-10-12 at any of the attempts made during this work,
-so nothing ran there and none of its logs was read; the card's figures above are the desktop's under a 90 MB/s cap,
-which `Diamond_CDROM.md` §9.7 predicted for the card and which the handheld must confirm or retire. What it needs, built
-and kept in the probe's cache (`launchtime/tool`, a self-contained console over `EmuSen.dll` and `libdiamond.so` that
-runs §12.8.1's engine steps, the question before the change or after it, with its home, configuration and firmware
-folder under `~/launchtime` so that nothing of the player's is read but the disc): copied to `~/launchtime/`, it is run
-read-only on the card's files, as `LaunchTime before|after <game>…`, with Mistress not running, first on a 600 MB lone
-track not launched that day (its cold row) and then again (its warm row), then on a zip; and the folder removed after.
-The prediction it tests: on the handheld the cold read is about 7 s for a 632 MB track, and a create is slower than the
-desktop's 150–290 ms in proportion to its memory bandwidth, so that a warm launch still fits under the 3.0 s screen.
+[M, 2026-10-12, 16:30–16:40, the handheld on its charger, Mistress not running, nothing else under load.] A
+self-contained console over `EmuSen.dll` and `libdiamond.so`, built from this branch before WiseMan `992546e4` was
+merged in and kept in the probe's cache (`launchtime/tool`), ran §12.8.1's engine steps there, the question as it was
+(`before`) or as it is (`after`), from `~/launchtime` on the internal drive, with its home, configuration and firmware
+folder under that folder, so that nothing of the player's was read but the discs on the card. `fincore` chose the
+files, those with none of their pages in the page cache, and showed the cache before each run. The folder was removed
+afterwards, and the card's PlayStation folder was the same in names, sizes and times as that morning's listing.
+
+| Game (form, size) | Sequence, cache | Firmware question | Unpack | Image and tracks read | Create | Create with a card | Total |
+|---|---|---|---|---|---|---|---|
+| Mega Man X5 (track, 556 MiB) | before, cold | 6,305 | 0 | 402 | 84 | 72 | 6,966 |
+| | before, 294 MiB cached | 2,971 | 0 | 62 | 182 | 175 | 3,516 |
+| | before, 472 MiB cached | 973 | 0 | 130 | 129 | 91 | 1,434 |
+| Mega Man X6 (track, 572 MiB) | after, cold | 0 | 0 | 6,247 | 189 | 172 | 6,734 |
+| | after, 519 MiB cached | 0 | 0 | 635 | 171 | 164 | 1,102 |
+| | after, all cached | 0 | 0 | 60 | 64 | 53 | 278 |
+| Star Wars Episode I: Jedi Power Battles (sheet, track of 424 MiB) | after, cold | 1 | 0 | 4,648 | 53 | 45 | 4,839 |
+| | after, all cached | 0 | 0 | 51 | 45 | 45 | 228 |
+| Tekken 3 (zip, 479 MiB) | before, first launch, cold | 5,860 | (in the question) | 131 | 156 | 128 | 6,412 |
+| | after, unpacked | 0 | 5 | 120 | 193 | 214 | 677 |
+| Silent Hill (zip, 320 MiB) | after, first launch, cold | 0 | 3,975 | 86 | 136 | 131 | 4,456 |
+| | after, unpacked | 0 | 4 | 103 | 164 | 151 | 561 |
+
+Milliseconds; the totals include 80–100 ms of routing and of the library's first opening, which a fresh process pays
+and Mistress pays once at its start; the first frame took 3 ms in every row.
+
+- **The card reads at 88–92 MiB a second**, as `Diamond_CDROM.md` §9.7 assumed and the desktop's cap stood for: 6.3 s
+  for a 556 MiB track, 4.6 s for a 424 MiB one. That prediction is confirmed and retired.
+- **Before the change, that read was the frozen carousel**: 6.3 s for a lone track and 5.9 s for a zip's first
+  launch, before the launch screen opened. After it the question takes no time, and the same read runs under the
+  screen.
+- **A second launch is not a warm one there.** After Mega Man X5's first run 294 of its 556 MiB were still in the page
+  cache, and after the second 472: the launch's own memory, the host's buffer and the core's copy, 1.1 GB beside a
+  cache that fills the handheld's 23 GiB, pushes out the pages the launch has just read once. The desktop did not show
+  this. It adds to the case for reading the disc in place (`EmuSen_CoreAPI_Extensions.md` §10.2, shape B), which
+  allocates neither.
+- **A create is 45–214 ms**, no slower than the desktop's, and five games there already have a memory card on disc
+  (their files were listed, not read), so their launches create twice (§12.8.5).
+- **The launch from big picture, put together from these steps** [A; no window ran on the handheld]: a lone track cold
+  took about 10 s before the change (6.3 s of frozen carousel, the screen's 3.0 s, 0.6 s of load) and takes about 6.7 s
+  after it, the read and the creates, the card moving throughout; a zip's first launch about 9.4 s before and
+  4.5–6.3 s after; any game whose files the cache holds, 3.3–3.5 s before and the screen's 3.0 s after.
 
 #### 12.8.7 Tests run (2026-10-12)
 

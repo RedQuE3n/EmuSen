@@ -360,8 +360,9 @@ library storage, once with a cold cache (after a reboot, since dropping caches n
 "disc opened" line, and the process's peak memory beside the free memory; a cold read from a microSD card at its
 typical 90 MB/s would make the open about seven seconds, which would argue for the streaming read of Extensions §10.2.
 *Measured 2026-10-12* (`Diamond_Players.md` §12.8): under a 90 MB/s read cap on the desktop the 632 MB track of Crash
-Bandicoot reads in 6.9 s cold, as predicted; the handheld itself was not reachable that day. The streaming read is
-proposed with those figures in `EmuSen_CoreAPI_Extensions.md` §10.2 (Q15).
+Bandicoot reads in 6.9 s cold, as predicted, and on the handheld itself a 556 MiB track read from the card in 6.3 s
+and a 424 MiB one in 4.6 s, 88–92 MiB a second (§12.8.6 there). The streaming read is proposed with those figures in
+`EmuSen_CoreAPI_Extensions.md` §10.2 (Q15).
 
 ### 9.8 The games that stopped at their movies, and the stream (2026-10-12)
 

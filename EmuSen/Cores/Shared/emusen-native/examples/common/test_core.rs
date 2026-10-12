@@ -9,6 +9,7 @@ pub enum StateError {
     Foreign,
     Truncated,
     TooSmall,
+    WrongMedia,
 }
 
 impl ffi::Status for StateError {
@@ -17,6 +18,7 @@ impl ffi::Status for StateError {
             StateError::Foreign => status::FOREIGN,
             StateError::Truncated => status::TRUNCATED,
             StateError::TooSmall => status::BUFFER_TOO_SMALL,
+            StateError::WrongMedia => status::WRONG_MEDIA,
         }
     }
 }
@@ -97,6 +99,17 @@ pub struct TestCore {
     pokes: Vec<u32>,
     hooks: Hooks,
     threads: u8,
+    /// MEDIA's drive: a fingerprint of the disc in it, 0 for none, and its lid.
+    disc: u32,
+    lid_open: bool,
+}
+
+/// Whether this build of the test core claims MEDIA, which adds the drive to its state.
+const MEDIA: bool = TEST_CAPABILITIES & caps::MEDIA != 0;
+
+/// FNV-1a of a disc's payload, never 0, so that 0 can mean an empty drive.
+fn fingerprint(payload: &[u8]) -> u32 {
+    payload.iter().fold(0x811C_9DC5u32, |h, &b| (h ^ b as u32).wrapping_mul(0x0100_0193)).max(1)
 }
 
 impl TestCore {
@@ -124,14 +137,20 @@ impl StateMachine for TestCore {
             self.frames = i64::from_le_bytes(data[4..12].try_into().unwrap());
             return Ok(());
         }
+        if MEDIA && u32::from_le_bytes(data[268..272].try_into().unwrap()) != self.disc {
+            return Err(StateError::WrongMedia);
+        }
         self.frames = i64::from_le_bytes(data[4..12].try_into().unwrap());
         self.ram.copy_from_slice(&data[12..268]);
+        if MEDIA {
+            self.lid_open = data[272] != 0;
+        }
         self.draw();
         Ok(())
     }
 
     fn state_size(&self) -> usize {
-        4 + 8 + 256
+        4 + 8 + 256 + if MEDIA { 5 } else { 0 }
     }
 
     fn save_state(&self, out: &mut [u8]) -> Result<usize, StateError> {
@@ -139,12 +158,17 @@ impl StateMachine for TestCore {
         let out = out.get_mut(..n).ok_or(StateError::TooSmall)?;
         out[..4].copy_from_slice(MAGIC);
         out[4..12].copy_from_slice(&self.frames.to_le_bytes());
-        out[12..].copy_from_slice(&self.ram);
+        out[12..268].copy_from_slice(&self.ram);
+        if MEDIA {
+            out[268..272].copy_from_slice(&self.disc.to_le_bytes());
+            out[272] = self.lid_open as u8;
+        }
         Ok(n)
     }
 
     fn layout(&self) -> String {
-        "0 4 magic Magic\n4 8 long Frames\n12 256 byte[] Ram\n".to_owned()
+        let drive = if MEDIA { "268 4 uint Disc\n272 1 bool Lid\n" } else { "" };
+        format!("0 4 magic Magic\n4 8 long Frames\n12 256 byte[] Ram\n{drive}")
     }
 }
 
@@ -207,7 +231,7 @@ impl Core for TestCore {
     }
 
     fn create(r: &Create<'_>) -> Result<Self, i32> {
-        if faults() & FAULT_ONLY_HOST_1_0 != 0 && r.host_abi_version != sys::ABI_VERSION {
+        if faults() & FAULT_ONLY_HOST_1_0 != 0 && r.host_abi_version != 1 << 16 {
             detail("this core runs only on a host of core ABI 1.0");
             return Err(status::NOT_SUPPORTED);
         }
@@ -251,6 +275,8 @@ impl Core for TestCore {
             pokes: Vec::new(),
             hooks: Hooks::new(&[8]),
             threads: r.settings.get("Threads").and_then(|v| v.parse().ok()).unwrap_or(1),
+            disc: fingerprint(body),
+            lid_open: false,
         };
         m.draw();
         Ok(m)
@@ -500,6 +526,32 @@ impl Core for TestCore {
 
     fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
         if processor == 0 { Ok(vec![self.frames]) } else { Err(status::NOT_SUPPORTED) }
+    }
+
+    fn drives(&self) -> Vec<Drive> {
+        vec![Drive { drive: 0, label: "Test drive".into(), kind: "cd".into(), lid_open: self.lid_open, loaded: self.disc != 0 }]
+    }
+
+    fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
+        if drive != 0 {
+            return Err(status::NO_SUCH_DRIVE);
+        }
+        self.lid_open = open;
+        Ok(())
+    }
+
+    fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
+        if drive != 0 {
+            return Err(status::NO_SUCH_DRIVE);
+        }
+        if !self.lid_open && !insert.restore {
+            return Err(status::LID_CLOSED);
+        }
+        self.disc = match insert.image {
+            None => 0,
+            Some(image) => fingerprint(payload(image)?),
+        };
+        Ok(())
     }
 
     fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {

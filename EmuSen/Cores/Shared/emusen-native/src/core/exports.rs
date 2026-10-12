@@ -7,7 +7,7 @@ use std::mem::size_of;
 
 use super::outbox::{Inner, Outbox, Route, library_log};
 use super::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine, caps, event, flags, kind, status};
-use super::{Core, Create, File, Settings, SettingKind, desc};
+use super::{Core, Create, File, Insert, Settings, SettingKind, desc};
 use crate::debug;
 use crate::ffi::{Status, copy_text, input};
 
@@ -71,6 +71,9 @@ pub fn shared_words(code: i32) -> Option<String> {
         status::BAD_FILE => "a file this core cannot use",
         status::BAD_STRUCT => "a structure smaller than its version 1.0 size",
         status::BAD_IMAGE => "an image this core cannot run",
+        status::LID_CLOSED => "the drive's lid is closed",
+        status::WRONG_MEDIA => "the drive holds another disc than the state was made with",
+        status::NO_SUCH_DRIVE => "no such drive",
         c if (status::FAULT_BASE - 63..=status::FAULT_BASE - 1).contains(&c) => return Some(format!("a reproduced .NET exception, kind {}", status::FAULT_BASE - c)),
         _ => return None,
     };
@@ -270,6 +273,17 @@ pub unsafe fn log_drain<T: Core>(machine: *mut Machine, out: *mut u8, len: usize
     }
 }
 
+/// The host's array of `count` files of `size` bytes each, at least 1.0's, as slices.
+unsafe fn file_list<'a>(files: *const FileEntry, count: usize, size: usize) -> Vec<File<'a>> {
+    (0..count)
+        .map(|i| {
+            // SAFETY: the host gave `count` elements of `size` bytes, each at least 1.0's.
+            let f = unsafe { std::ptr::read_unaligned((files as *const u8).add(i * size) as *const FileEntry) };
+            File { which: f.which, data: unsafe { input(f.data, f.len) } }
+        })
+        .collect()
+}
+
 // ---- Lifecycle ----------------------------------------------------------------------------------------------
 
 pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32) -> *mut Machine {
@@ -286,12 +300,7 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
             if p.file_count > 0 && p.file_size < size_of::<FileEntry>() {
                 return Err(status::BAD_STRUCT);
             }
-            let mut files = Vec::with_capacity(p.file_count);
-            for i in 0..p.file_count {
-                // SAFETY: the host gave `file_count` elements of `file_size` bytes, each at least 1.0's.
-                let f = unsafe { std::ptr::read_unaligned((p.files as *const u8).add(i * p.file_size) as *const FileEntry) };
-                files.push(File { which: f.which, data: unsafe { input(f.data, f.len) } });
-            }
+            let files = unsafe { file_list(p.files, p.file_count, p.file_size) };
             let settings = resolve(&T::settings_schema(), unsafe { input(p.settings, p.settings_len) }, true, true).map_err(|(code, why)| {
                 super::detail(&why);
                 code
@@ -349,7 +358,8 @@ pub unsafe fn machine_info<T: Core>(machine: *const Machine, out: *mut u8, len: 
         battery_len: &|which| core.battery(which).ok().map(|(d, _)| d.len() as i64),
         capabilities: T::CAPABILITIES,
     };
-    let text = desc::machine_info_json(&core.machine_info(), &measured);
+    let drives = if T::CAPABILITIES & caps::MEDIA != 0 { core.drives() } else { Vec::new() };
+    let text = desc::machine_info_json(&core.machine_info(), &measured, &drives);
     unsafe { copy_text(&text, out, len) }
 }
 
@@ -626,6 +636,34 @@ pub unsafe fn set_settings<T: Core>(machine: *mut Machine, text: *const u8, len:
 pub unsafe fn setting_notes<T: Core>(machine: *const Machine, out: *mut u8, len: usize) -> i64 {
     let Some(inst) = (unsafe { shared::<T>(machine) }) else { return NULL as i64 };
     unsafe { copy_text(&desc::notes_json(&inst.core.setting_notes()), out, len) }
+}
+
+// ---- Media (since 1.1) ---------------------------------------------------------------------------------------
+
+pub unsafe fn media_lid<T: Core>(machine: *mut Machine, drive: u32, open: u32) -> i32 {
+    let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
+    if open > 1 {
+        return status::NOT_SUPPORTED;
+    }
+    let r = call(inst, |c| c.media_lid(drive, open == 1));
+    observe(inst, true);
+    status_of(r)
+}
+
+pub unsafe fn media_insert<T: Core>(machine: *mut Machine, drive: u32, media: *const super::sys::Media) -> i32 {
+    let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
+    let Some(m) = (unsafe { media.as_ref() }) else { return NULL };
+    if (m.size as usize) < size_of::<super::sys::Media>() || (m.file_count > 0 && m.file_size < size_of::<FileEntry>()) {
+        return status::BAD_STRUCT;
+    }
+    let insert = Insert {
+        image: if m.image.is_null() { None } else { Some(unsafe { input(m.image, m.image_len) }) },
+        files: unsafe { file_list(m.files, m.file_count, m.file_size) },
+        restore: m.flags & flags::MEDIA_RESTORE != 0,
+    };
+    let r = call(inst, |c| c.media_insert(drive, &insert));
+    observe(inst, true);
+    status_of(r)
 }
 
 // ---- Debug ---------------------------------------------------------------------------------------------------

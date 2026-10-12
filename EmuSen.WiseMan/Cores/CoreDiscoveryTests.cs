@@ -125,7 +125,7 @@ namespace EmuSen.WiseMan.Cores
 
             CoreDiscovery.UseDirectories(new[] { dir });
             var found = CoreDiscovery.Found.Single();
-            Assert.Equal(("v1-plain-core", 0UL, "1.0", CoreSidecar.HashOf(library)), (found.Info.Id, found.Sidecar.Capabilities, found.Sidecar.Abi, found.Sidecar.Sha256));
+            Assert.Equal(("v1-plain-core", 0UL, "1.1", CoreSidecar.HashOf(library)), (found.Info.Id, found.Sidecar.Capabilities, found.Sidecar.Abi, found.Sidecar.Sha256));
             Assert.False(CoreLibrary.IsOpen(library));
             Assert.NotNull(found.Open());
             Assert.Equal("not yet loaded", new DiscoveredCore(found.Sidecar).Report);

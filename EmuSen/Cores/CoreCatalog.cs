@@ -171,9 +171,40 @@ namespace EmuSen.Cores
 
         // The shelf a ROM sits on, or null for a file no core claims.
         public static string? ShelfFor(string romPath) =>
-            ByExtension(System.IO.Path.GetExtension(romPath)) is not { } core ? null
+            CoreForRom(romPath) is not { } core ? null
             : ReferenceEquals(core, Mercury) && IsGameBoyColor(romPath) ? GameBoyColorShelf
             : core.DisplayName;
+
+        // The extension that decides a file's console: an archive's image entry's, else its own - see EmuSen_CoreAPI_Extensions.md §8.4.
+        public static string ImageExtension(string romPath)
+        {
+            if (!Crystal.Media.ArchiveImages.IsArchive(romPath)) return System.IO.Path.GetExtension(romPath).ToLowerInvariant();
+            var info = new System.IO.FileInfo(romPath);
+            return EntryExtensions.GetOrAdd((info.FullName, info.Exists ? info.Length : -1, info.Exists ? info.LastWriteTimeUtc.Ticks : 0), _ =>
+            {
+                try { return System.IO.Path.GetExtension(Crystal.Media.ArchiveImages.ImageEntry(romPath, IsImageExtension) ?? "").ToLowerInvariant(); }
+                catch (Exception e) when (e is System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException) { return ""; }
+            });
+        }
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string, long, long), string> EntryExtensions = new();
+
+        // An extension some console's engine opens, a catalog core's, a shelf's, or a discovered engine's in development.
+        public static bool IsImageExtension(string extension) => IsRomExtension(extension) || Native.CoreDiscovery.ForExtension(extension.ToLowerInvariant()).Any();
+
+        // The console a file runs as: the only one taking its extension, else the one routing by content decides; null where none does - see EmuSen_CoreAPI_Extensions.md §8.4.
+        public static CoreDescriptor? CoreForRom(string romPath) => Route(romPath).Core;
+
+        // The decision with its words, for a caller that tells the player why a file opens nowhere.
+        public static (CoreDescriptor? Core, Crystal.Systems.Routed? Routed) Route(string romPath)
+        {
+            string extension = ImageExtension(romPath);
+            var candidates = Cores.Where(c => c.SupportsExtension(extension)).ToArray();
+            if (candidates.Length <= 1) return (candidates.FirstOrDefault(), null);
+            var entries = candidates.Select(c => (Core: c, Entry: PackOf(c.Console))).ToArray();
+            var routed = Crystal.Systems.SystemRouting.Decide(romPath, entries.Select(e => e.Entry).OfType<Crystal.Systems.SystemEntry>().ToArray(), () => Crystal.Media.MediaProbe.Of(romPath, IsImageExtension));
+            return (entries.FirstOrDefault(e => e.Entry is not null && ReferenceEquals(e.Entry, routed.System)).Core, routed);
+        }
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> ColorByPath = new();
 
@@ -260,9 +291,8 @@ namespace EmuSen.Cores
         public static CoreDescriptor? ByExtension(string extension) =>
             Cores.FirstOrDefault(c => c.SupportsExtension(extension));
 
-        // The console a ROM will load as, answerable before the core exists - see EmuSen_Multicore.md §12.
-        public static string? ConsoleForRom(string romPath) =>
-            ByExtension(System.IO.Path.GetExtension(romPath))?.Console;
+        // The console a ROM will load as, answerable before the core exists, by content where its extension is several consoles' - see EmuSen_Multicore.md §12.
+        public static string? ConsoleForRom(string romPath) => CoreForRom(romPath)?.Console;
 
         // Null for AllConsoles, an unknown name, or a name from a build that had a core this one lacks.
         public static CoreDescriptor? ByDisplayName(string? displayName) =>
@@ -296,9 +326,16 @@ namespace EmuSen.Cores
         public static string? DiscoveredConsoleForSystem(string? systemId) =>
             systemId is not null && ConsoleForSystem(systemId) is null && Crystal.Systems.SystemPacks.For(systemId) is { } pack ? pack.Entry.Console : null;
 
-        // The console a discovered engine runs a file as, by the pack of the engine's system that claims the extension.
+        // The console a discovered engine runs a file as: the routed one where the engine has its system, else the pack of the engine's system that claims the extension.
         public static string? DiscoveredConsoleForFile(string romPath, Native.CoreInfo info) =>
-            info.SystemFor(System.IO.Path.GetExtension(romPath)) is { } system ? DiscoveredConsoleForSystem(system.Id) : null;
+            SystemOfFile(romPath, info) is { } system ? DiscoveredConsoleForSystem(system.Id) : null;
+
+        // The system of an engine's info a file runs as, routed by content where the engine has several systems of its extension's consoles.
+        public static Native.CoreSystem? SystemOfFile(string romPath, Native.CoreInfo info)
+        {
+            if (CoreForRom(romPath) is { } core && PackOf(core.Console) is { } pack && info.Systems.FirstOrDefault(s => s.Id == pack.Id) is { } routed) return routed;
+            return info.SystemFor(ImageExtension(romPath));
+        }
 
         private static Native.DiscoveredCore? DiscoveredFor(string console) =>
             Crystal.Systems.SystemPacks.All.Where(p => string.Equals(p.Entry.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(p.Entry.Id) is null)

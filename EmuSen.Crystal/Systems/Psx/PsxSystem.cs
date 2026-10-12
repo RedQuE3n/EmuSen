@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
+using EmuSen.Crystal.Media;
 using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Crystal.Systems.Psx
 {
-    // The PlayStation's system pack: its systems-table entry, the formats it will route, its firmware and its screen - see Diamond_Plan.md §4, Diamond_Native.md §2.4.
+    // The PlayStation's system pack: its systems-table entry, its recogniser, its cheat codecs, its firmware and its screen - see Diamond_Plan.md §4, Diamond_Players.md.
     public static class PsxSystem
     {
         public const string Id = "psx";
@@ -18,17 +20,21 @@ namespace EmuSen.Crystal.Systems.Psx
             "PlayStation",
             "Sony",
             1994,
-            new[] { ".psexe", ".psx", ".chd" },
+            new[] { ".psexe", ".psx", ".cue", ".bin", ".iso", ".chd", ".m3u" },
             new[] { "Sony - PlayStation" },
             new[] { "PSX" },
             file => file,
             1.0,
             "psx",
             "Sony PlayStation",
-            SelfDelimitingImages: false);
+            SelfDelimitingImages: false,
+            Recognise: Recognise);
 
-        // A disc's formats the core opens but the host cannot route yet: a sheet's tracks, .iso and a lone .bin's collisions, .m3u, .pbp - see Diamond_CDROM.md §8.
-        public static readonly IReadOnlyList<string> DiscExtensions = new[] { ".cue", ".iso", ".bin", ".m3u", ".pbp" };
+        // A disc's format named and not opened yet: unencrypted .pbp, a later step - see Diamond_CDROM.md §8.2.
+        public static readonly IReadOnlyList<string> DiscExtensions = new[] { ".pbp" };
+
+        // What the core's own info lists: the pack's but .m3u, which the runtime expands and no core receives - see EmuSen_CoreAPI_Extensions.md §2.4.
+        public static readonly IReadOnlyList<string> CoreExtensions = new[] { ".psexe", ".psx", ".cue", ".bin", ".iso", ".chd" };
 
         // The licence text's first line, at the start of sector 4's user data (psx-spx "System Area").
         private static readonly byte[] Licence = System.Text.Encoding.ASCII.GetBytes("          Licensed  by          ");
@@ -42,6 +48,32 @@ namespace EmuSen.Crystal.Systems.Psx
             if (image.Length < raw + 24 + 32 || !image[..12].SequenceEqual(sync) || !image.Slice(raw, 12).SequenceEqual(sync)) return false;
             int data = raw + (image[raw + 15] == 1 ? 16 : 24);
             return image.Slice(data, 32).SequenceEqual(Licence);
+        }
+
+        // The licence's market and the BOOT line's serial, where the first sectors hold them; null for no PlayStation disc - see EmuSen_CoreAPI_Extensions.md §8.4.
+        public static Recognition? Recognise(IMediaProbe probe)
+        {
+            byte[] head = probe.Read(12 * 1024);
+            if (!IsDisc(head)) return null;
+            var sectors = new DiscSectors(probe.Read(160 * 1024));
+            string line2 = Encoding.ASCII.GetString(sectors.Sector(4).Slice(32, Math.Min(38, sectors.Sector(4).Length - 32)));
+            string region = line2.Contains("Amer") ? "Americas" : line2.Contains("Euro") ? "Europe" : "Japan";
+            return new Recognition(Id, SerialOf(sectors.RootFile("SYSTEM.CNF")), region);
+        }
+
+        // SYSTEM.CNF's BOOT line as the game's serial: "cdrom:\SLUS_007.70;1" is SLUS-00770 - see Diamond_Plan.md §4.1.
+        public static string? SerialOf(byte[]? config)
+        {
+            if (config is null) return null;
+            foreach (string line in Encoding.ASCII.GetString(config).Split('\n'))
+            {
+                if (!line.TrimStart().StartsWith("BOOT", StringComparison.OrdinalIgnoreCase) || line.IndexOf('=') < 0) continue;
+                string file = line[(line.IndexOf('=') + 1)..].Trim();
+                file = file[(Math.Max(file.LastIndexOf('\\'), file.LastIndexOf(':')) + 1)..];
+                file = file.Split(';')[0].Replace(".", "").Replace('_', '-').Trim().ToUpperInvariant();
+                return file.Length is >= 6 and <= 12 && file.Contains('-') ? file : null;
+            }
+            return null;
         }
 
         // The BIOS a console of each market holds, all optional, the core's open replacement in their place - see Diamond_Plan.md §5.9.

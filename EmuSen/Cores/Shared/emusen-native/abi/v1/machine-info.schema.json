@@ -112,6 +112,20 @@
         }
       }
     },
+    "drives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["drive", "label", "kind", "lid", "loaded"],
+        "properties": {
+          "drive": { "type": "integer", "minimum": 0 },
+          "label": { "type": "string" },
+          "kind": { "type": "string" },
+          "lid": { "type": "string", "enum": ["open", "closed"] },
+          "loaded": { "type": "boolean" }
+        }
+      }
+    },
     "achievements": {}
   },
   "$defs": {

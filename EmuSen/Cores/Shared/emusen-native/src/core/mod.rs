@@ -31,6 +31,14 @@ pub struct Create<'a> {
     pub host_abi_version: u32,
 }
 
+/// What `media_insert` receives (since 1.1): the disc or nothing, its companions from `flags::FILE_MEDIA`, and
+/// whether the host is setting the drive for a state about to load (EmuSen_CoreAPI.md §6.23).
+pub struct Insert<'a> {
+    pub image: Option<&'a [u8]>,
+    pub files: Vec<File<'a>>,
+    pub restore: bool,
+}
+
 /// What a Rust core implements; `core_exports!` turns it into the C ABI. Every `Err` is a status (§6.15), and
 /// [`detail`] gives it words. Defaults answer as a core without the capability must.
 pub trait Core: Sized + StateMachine {
@@ -197,6 +205,21 @@ pub trait Core: Sized + StateMachine {
         Err(status::NOT_SUPPORTED)
     }
 
+    /// `MEDIA`, since 1.1: machine info's `drives`.
+    fn drives(&self) -> Vec<Drive> {
+        Vec::new()
+    }
+
+    /// `MEDIA`: the drive's lid or tray opened or closed, as the player would.
+    fn media_lid(&mut self, _drive: u32, _open: bool) -> Result<(), i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
+    /// `MEDIA`: the disc in the drive replaced; `LID_CLOSED` unless the lid is open or the insert restores.
+    fn media_insert(&mut self, _drive: u32, _insert: &Insert<'_>) -> Result<(), i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
     /// Clears whatever the core records between calls, after every call that changes the machine.
     fn end_call() {}
 }
@@ -215,7 +238,8 @@ pub const EXPORTING: u64 = caps::RESET
     | caps::DEBUG
     | caps::DEBUG_STACK
     | caps::DEBUG_REGISTERS
-    | caps::DEBUG_DISASSEMBLE;
+    | caps::DEBUG_DISASSEMBLE
+    | caps::MEDIA;
 
 /// `core_exports!`'s compile-time check: the groups named are exactly the claimed bits that have exports.
 #[doc(hidden)]
@@ -242,6 +266,7 @@ macro_rules! __core_capability {
     (debug_stack) => { $crate::core::caps::DEBUG_STACK };
     (debug_registers) => { $crate::core::caps::DEBUG_REGISTERS };
     (debug_disassemble) => { $crate::core::caps::DEBUG_DISASSEMBLE };
+    (media) => { $crate::core::caps::MEDIA };
 }
 
 /// One export: the C signature, forwarding to the generic body of the same name in `core::exports`.
@@ -302,6 +327,10 @@ macro_rules! __core_optional {
     };
     ($t:ty, debug_disassemble) => {
         $crate::__core_export!($t, emusen_core_debug_disassemble => debug_disassemble(machine: *mut $crate::core::sys::Machine, processor: u32, space: u32, address: u32, count: u32, out: *mut u8, len: usize) -> i64);
+    };
+    ($t:ty, media) => {
+        $crate::__core_export!($t, emusen_core_media_lid => media_lid(machine: *mut $crate::core::sys::Machine, drive: u32, open: u32) -> i32);
+        $crate::__core_export!($t, emusen_core_media_insert => media_insert(machine: *mut $crate::core::sys::Machine, drive: u32, media: *const $crate::core::sys::Media) -> i32);
     };
     ($t:ty, debug) => {
         $crate::__core_export!($t, emusen_core_debug_set => debug_set(machine: *mut $crate::core::sys::Machine, flags: u32, depth_target: i32, depth_guard: i32) -> i32);

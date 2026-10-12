@@ -20,9 +20,9 @@ pub const STATUS_TRACKS_MISSING: i32 = -11;
 /// A sheet or a disc image that emusen-disc cannot read.
 pub const STATUS_BAD_DISC: i32 = -12;
 
-/// The first companion file of an image set, `EMUSEN_FILE_MEDIA` of EmuSen_CoreAPI_Extensions.md §2.4: file
-/// `MEDIA_FILE + n` is the sheet's nth file, then an `.sbi` found beside the image.
-pub const MEDIA_FILE: u32 = 65_536;
+/// The first companion file of an image set, the header's `EMUSEN_FILE_MEDIA` since 1.1: file `MEDIA_FILE + n` is the
+/// sheet's nth file, then an `.sbi` found beside the image (EmuSen_CoreAPI_Extensions.md §2.4).
+pub const MEDIA_FILE: u32 = flags::FILE_MEDIA;
 
 /// The pad report's bits (psx-spx "Standard Controllers"), pressed as 1, in the order a bindings screen lists them,
 /// each with its canonical control (Diamond_Plan.md §4.2); L3 and R3 are the DualShock's alone.
@@ -82,9 +82,9 @@ pub fn bios(market: Market) -> Firmware {
 pub const CARD_FILES: [u32; 2] = [0, 4];
 pub const CARD_SUFFIXES: [&str; 2] = [".mcr", ".2.mcr"];
 
-/// The extensions the host routes to the core, the system pack's checked subset: the programs, and since stage 7 the
-/// CHD, a disc in one file (Diamond_CDROM.md §8). A sheet, an .iso and a lone .bin open too, by the image's bytes.
-pub const EXTENSIONS: [&str; 3] = [".psexe", ".psx", ".chd"];
+/// The extensions the core opens, the system pack's checked subset: the programs, a cue sheet with its tracks, an
+/// `.iso`, a lone raw track and a CHD; the pack's `.m3u` the runtime expands and never passes (Diamond_Players.md §2).
+pub const EXTENSIONS: [&str; 6] = [".psexe", ".psx", ".cue", ".bin", ".iso", ".chd"];
 
 /// The settings, read at create; none changes what the stub computes but the region's rate and the ports.
 pub const REGION_KEY: &str = "region";
@@ -139,8 +139,38 @@ fn market_of(media: &Media, setting: Option<&str>) -> Market {
     REGIONS.iter().find(|r| Some(r.0) == setting).map_or(media.market.unwrap_or(Market::Americas), |r| r.2)
 }
 
+/// The disc an image and its companions make, or the status and words of its refusal, as at create.
+fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(crate::medium::Opened, Media), i32> {
+    let mut companions: Vec<(u32, &[u8])> = files.iter().filter(|f| f.which >= MEDIA_FILE).map(|f| (f.which, f.data)).collect();
+    companions.sort_by_key(|c| c.0);
+    let companions: Vec<&[u8]> = companions.into_iter().map(|c| c.1).collect();
+    match crate::medium::open(image, &companions) {
+        Ok(crate::medium::Opened::Program) => Ok((crate::medium::Opened::Program, Media::read(image).map_err(|_| STATUS_NOT_PLAYSTATION)?)),
+        Ok(crate::medium::Opened::Disc(d, m)) => Ok((crate::medium::Opened::Disc(d, m.clone()), m)),
+        Err(crate::medium::DiscRefusal::Media(Refusal::Truncated { needs, has })) => {
+            detail(&format!("the PS-EXE is {has} bytes; its header and the size it states take {needs}"));
+            Err(STATUS_EXE_TRUNCATED)
+        }
+        Err(crate::medium::DiscRefusal::Media(Refusal::NotPlayStation)) => {
+            detail(&format!("the {}-byte image is neither a PS-EXE nor a PlayStation disc", image.len()));
+            Err(STATUS_NOT_PLAYSTATION)
+        }
+        Err(crate::medium::DiscRefusal::Missing { needs, has }) => {
+            detail(&format!("the cue sheet names {needs} track files and {has} were given"));
+            Err(STATUS_TRACKS_MISSING)
+        }
+        Err(crate::medium::DiscRefusal::Bad(words)) => {
+            detail(&words);
+            Err(STATUS_BAD_DISC)
+        }
+    }
+}
+
+/// The console's one drive, the CD-ROM's, as machine info's `drives` and MEDIA's exports number it.
+pub const DRIVE: u32 = 0;
+
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY;
+    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY | caps::MEDIA;
 
     fn info() -> Info {
         Info {
@@ -150,7 +180,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, the GTE, memory, timers, interrupts, DMA, the GPU, the CD-ROM drive, the SPU and the MDEC run a program or a disc with its picture and its sound, and the controllers and memory cards answer on SIO0.".into()),
+            description: Some("The Sony PlayStation in Rust, written from hardware documents and graded by test programs. At this stage the processor, the GTE, memory, timers, interrupts, DMA, the GPU, the CD-ROM drive, the SPU and the MDEC run a program or a disc with its picture and its sound, the controllers and memory cards answer on SIO0, and the disc in the drive changes through its lid.".into()),
             systems: vec![emusen_native::core::System {
                 id: "psx".into(),
                 name: "Sony PlayStation".into(),
@@ -158,7 +188,7 @@ impl Core for Machine {
                 regions: vec![Region::Ntsc, Region::Pal],
                 controllers: controllers(),
                 firmware: vec![bios(Market::Japan), bios(Market::Americas), bios(Market::Europe)],
-                development: true,
+                development: false,
             }],
             deterministic: true,
             ..Info::default()
@@ -193,28 +223,9 @@ impl Core for Machine {
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        let mut companions: Vec<(u32, &[u8])> = request.files.iter().filter(|f| f.which >= MEDIA_FILE).map(|f| (f.which, f.data)).collect();
-        companions.sort_by_key(|c| c.0);
-        let companions: Vec<&[u8]> = companions.into_iter().map(|c| c.1).collect();
-        let (media, disc) = match crate::medium::open(request.image, &companions) {
-            Ok(crate::medium::Opened::Program) => (Media::read(request.image).map_err(|_| STATUS_NOT_PLAYSTATION)?, None),
-            Ok(crate::medium::Opened::Disc(d, m)) => (m, Some(d)),
-            Err(crate::medium::DiscRefusal::Media(Refusal::Truncated { needs, has })) => {
-                detail(&format!("the PS-EXE is {has} bytes; its header and the size it states take {needs}"));
-                return Err(STATUS_EXE_TRUNCATED);
-            }
-            Err(crate::medium::DiscRefusal::Media(Refusal::NotPlayStation)) => {
-                detail(&format!("the {}-byte image is neither a PS-EXE nor a PlayStation disc", request.image.len()));
-                return Err(STATUS_NOT_PLAYSTATION);
-            }
-            Err(crate::medium::DiscRefusal::Missing { needs, has }) => {
-                detail(&format!("the cue sheet names {needs} track files and {has} were given"));
-                return Err(STATUS_TRACKS_MISSING);
-            }
-            Err(crate::medium::DiscRefusal::Bad(words)) => {
-                detail(&words);
-                return Err(STATUS_BAD_DISC);
-            }
+        let (media, disc) = match open_disc(request.image, &request.files)? {
+            (crate::medium::Opened::Program, m) => (m, None),
+            (crate::medium::Opened::Disc(d, _), m) => (m, Some(d)),
         };
         let request_files: Vec<_> = request.files.iter().filter(|f| f.which < MEDIA_FILE).collect();
         if let Some(f) = request_files.iter().find(|f| f.which > BIOS_EUROPE && !CARD_FILES.contains(&f.which)) {
@@ -267,7 +278,7 @@ impl Core for Machine {
                 Processor { id: 1, name: "GTE".into(), pc_bits: 0, registers: registers(&[blackmoon_gte::DATA_REGISTERS, blackmoon_gte::CONTROL_REGISTERS].concat()), code_space: None },
             ],
             battery: (0..2).filter(|&n| self.card_in(n).is_some()).map(|n| Battery { which: CARD_FILES[n], suffix: CARD_SUFFIXES[n].into() }).collect(),
-            state: StateFormat { format: "DMND".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
+            state: StateFormat { format: "DMND".into(), version: STATE_VERSION as i64, loads_from: crate::state::LOADS_FROM.iter().map(|&v| v as i64).collect() },
             phases: Vec::new(),
             patches: None,
             skip_rendering_state_neutral: false,
@@ -380,6 +391,41 @@ impl Core for Machine {
         Ok(())
     }
 
+    fn drives(&self) -> Vec<Drive> {
+        let c = &self.board.cdrom;
+        vec![Drive { drive: DRIVE, label: "CD-ROM drive".into(), kind: "cd".into(), lid_open: c.lid_open, loaded: c.disc.is_some() }]
+    }
+
+    fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
+        if drive != DRIVE {
+            return Err(status::NO_SUCH_DRIVE);
+        }
+        self.set_lid(open, None);
+        Ok(())
+    }
+
+    fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
+        if drive != DRIVE {
+            return Err(status::NO_SUCH_DRIVE);
+        }
+        if !self.board.cdrom.lid_open && !insert.restore {
+            detail("the CD-ROM drive's lid is closed; open it before changing the disc");
+            return Err(status::LID_CLOSED);
+        }
+        let disc = match insert.image {
+            None => None,
+            Some(image) => match open_disc(image, &insert.files)? {
+                (crate::medium::Opened::Disc(d, _), _) => Some(*d),
+                (crate::medium::Opened::Program, _) => {
+                    detail("a PS-EXE is a program, not a disc; it goes in no drive");
+                    return Err(STATUS_NOT_PLAYSTATION);
+                }
+            },
+        };
+        self.change_disc(disc);
+        Ok(())
+    }
+
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
         if let Some(n) = CARD_FILES.iter().position(|&w| w == which)
             && let Some(c) = self.card_in(n)
@@ -393,7 +439,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; axes);
+emusen_native::core_exports!(Machine; axes, media);
 
 #[cfg(test)]
 mod tests {
@@ -482,7 +528,7 @@ mod tests {
     fn the_descriptors_are_the_consoles() {
         let info = Machine::info();
         let psx = &info.systems[0];
-        assert_eq!((psx.id.as_str(), psx.extensions.len(), psx.development), ("psx", 3, true));
+        assert_eq!((psx.id.as_str(), psx.extensions.len(), psx.development), ("psx", 6, false));
         assert_eq!(psx.controllers.iter().map(|c| (c.buttons.len(), c.axes.len())).collect::<Vec<_>>(), [(14, 0), (17, 4)]);
         assert!(psx.firmware.iter().all(|f| !f.required && f.size == 524_288));
         let mut bits: Vec<u32> = psx.controllers[1].buttons.iter().map(|b| b.bit).collect();
@@ -511,6 +557,39 @@ mod tests {
         assert_eq!(create(&exe(None, 1), &[], vec![emusen_native::abi::File { which: 0, data: &short }]).err(), Some(status::BAD_FILE));
         let none = create(&exe(None, 1), &[(CARD_KEYS[0], "none")], vec![]).unwrap();
         assert!(none.machine_info().battery.is_empty());
+    }
+
+    /// MEDIA (EmuSen_CoreAPI.md §6.23): a disc changes only through the open lid, or for a state about to load; the
+    /// drive is machine info's; a state loads only over the disc it was made on.
+    #[test]
+    fn a_disc_changes_through_the_lid_and_a_state_keeps_to_its_disc() {
+        let (us, jp) = (disc(Market::Americas, Some(2)), disc(Market::Japan, Some(2)));
+        let mut m = create(&us, &[], vec![]).unwrap();
+        fn insert(image: Option<&[u8]>, restore: bool) -> Insert<'_> {
+            Insert { image, files: Vec::new(), restore }
+        }
+        assert_eq!(m.drives(), vec![Drive { drive: DRIVE, label: "CD-ROM drive".into(), kind: "cd".into(), lid_open: false, loaded: true }]);
+        assert_eq!(m.media_insert(DRIVE, &insert(Some(&jp), false)), Err(status::LID_CLOSED));
+        assert_eq!(m.media_lid(1, true), Err(status::NO_SUCH_DRIVE));
+        let mut state = vec![0; m.state_size()];
+        m.save_state(&mut state).unwrap();
+        let first = m.disc_print;
+        m.media_lid(DRIVE, true).unwrap();
+        assert!(m.board.cdrom.lid_open && m.drives()[0].lid_open);
+        assert_eq!(m.media_insert(DRIVE, &insert(Some(&exe(None, 1)), false)), Err(STATUS_NOT_PLAYSTATION), "a program is no disc");
+        m.media_insert(DRIVE, &insert(Some(&jp), false)).unwrap();
+        m.media_lid(DRIVE, false).unwrap();
+        assert!(m.disc_print != first && m.disc_print != 0 && !m.board.cdrom.lid_open);
+        assert_eq!(emusen_native::ffi::Status::status(&m.load_state(&state).unwrap_err()), status::WRONG_MEDIA);
+        m.media_insert(DRIVE, &insert(Some(&us), true)).unwrap();
+        assert_eq!(m.disc_print, first);
+        m.load_state(&state).unwrap();
+        m.media_lid(DRIVE, true).unwrap();
+        m.media_insert(DRIVE, &insert(None, false)).unwrap();
+        assert_eq!((m.disc_print, m.drives()[0].loaded), (0, false));
+        Core::advance(&mut m, &mut 0).unwrap();
+        let program = create(&exe(None, 1), &[], vec![]).unwrap();
+        assert!(!program.drives()[0].loaded, "a program's console has an empty drive");
     }
 
     /// The DualShock's sticks through `set_axis` and its Analog button through bit 16 of `set_buttons`.

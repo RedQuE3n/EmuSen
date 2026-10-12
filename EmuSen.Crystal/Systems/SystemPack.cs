@@ -5,7 +5,20 @@ using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.Crystal.Systems
 {
-    // A console's facts that are no one engine's; SelfDelimitingImages says a malformed image must be refused, which C4 asks only of such a format - see EmuSen_CoreAPI.md §8.2, §20, §21.4.
+    // What routing by content shows a recogniser of a file: its path, the image's own name where it is inside an archive, and its first bytes, a sheet's first track's for a sheet - see EmuSen_CoreAPI_Extensions.md §8.4.
+    public interface IMediaProbe
+    {
+        string Path { get; }
+        string ImageName { get; }
+
+        // The image's first bytes, at most length of them, read once and kept.
+        byte[] Read(int length);
+    }
+
+    // A recogniser's claim: the system, and the game's serial and market where the pack can read them.
+    public sealed record Recognition(string SystemId, string? Serial = null, string? Region = null);
+
+    // A console's facts that are no one engine's; SelfDelimitingImages says a malformed image must be refused, which C4 asks only of such a format; Recognise claims a file by its content where several systems take its extension - see EmuSen_CoreAPI.md §8.2, §20, §21.4 and EmuSen_CoreAPI_Extensions.md §8.4.
     public sealed record SystemEntry(
         string Id,
         string Name,
@@ -19,7 +32,8 @@ namespace EmuSen.Crystal.Systems
         double CoverAspect,
         string EsdeSystem,
         string EsdeFullName,
-        bool SelfDelimitingImages = false);
+        bool SelfDelimitingImages = false,
+        Func<IMediaProbe, Recognition?>? Recognise = null);
 
     // A console's system pack: its entry, its cheat codecs and its debugger views, which any engine of the console uses - see EmuSen_CoreAPI.md §8.2, §20, §31.
     // PlayerControllers answers each player's controller id from the console's settings, where its ports can hold adapters - see EmuSen_Settings_Reference.md §4.102.

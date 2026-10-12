@@ -18,6 +18,7 @@ const EMUSEN_CAP_DEBUG_DISASSEMBLE 0x20000 @1.0
 const EMUSEN_CAP_DEBUG_REGISTERS 0x10000 @1.0
 const EMUSEN_CAP_DEBUG_STACK 0x2000 @1.0
 const EMUSEN_CAP_FRAME_SERIAL 0x100 @1.0
+const EMUSEN_CAP_MEDIA 0x40000 @1.1
 const EMUSEN_CAP_MUTES 0x20 @1.0
 const EMUSEN_CAP_PHASES 0x80 @1.0
 const EMUSEN_CAP_PRESENT 0x2 @1.0
@@ -28,8 +29,8 @@ const EMUSEN_CAP_SETTINGS 0x40 @1.0
 const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0x0 @1.0
-const EMUSEN_CORE_ABI_VERSION 0x10000 @1.0
+const EMUSEN_CORE_ABI_MINOR 0x1 @1.1
+const EMUSEN_CORE_ABI_VERSION 0x10001 @1.1
 const EMUSEN_DEBUG_CALLS 0x1 @1.0
 const EMUSEN_DEBUG_COVERAGE 0x8 @1.0
 const EMUSEN_DEBUG_EACH 0x8 @1.0
@@ -37,7 +38,9 @@ const EMUSEN_DEBUG_INTERRUPTS 0x4 @1.0
 const EMUSEN_DEBUG_PROFILING 0x10 @1.0
 const EMUSEN_DEBUG_WRITES 0x2 @1.0
 const EMUSEN_FILE_BATTERY 0x0 @1.0
+const EMUSEN_FILE_MEDIA 0x10000 @1.1
 const EMUSEN_FRAME_WALKED 0x1 @1.0
+const EMUSEN_MEDIA_RESTORE 0x1 @1.1
 const EMUSEN_NO_COMPARE 0xffffffff @1.0
 const EMUSEN_OPTION_SKIP_RENDERING 0x1 @1.0
 const EMUSEN_RUN_CONTINUE 0x2 @1.0
@@ -114,6 +117,8 @@ export emusen_core_info required @1.0
 export emusen_core_last_error required @1.0
 export emusen_core_log_drain required @1.0
 export emusen_core_machine_info required @1.0
+export emusen_core_media_insert optional EMUSEN_CAP_MEDIA @1.1
+export emusen_core_media_lid optional EMUSEN_CAP_MEDIA @1.1
 export emusen_core_phases optional EMUSEN_CAP_PHASES @1.0
 export emusen_core_present optional EMUSEN_CAP_PRESENT @1.0
 export emusen_core_reset optional EMUSEN_CAP_RESET @1.0
@@ -168,6 +173,13 @@ field emusen_frame_info.serial offset 40 type int64_t @1.0
 field emusen_frame_info.size offset 0 type uint32_t @1.0
 field emusen_frame_info.stride offset 16 type int32_t @1.0
 field emusen_frame_info.width offset 8 type int32_t @1.0
+field emusen_media.file_count offset 32 type size_t @1.1
+field emusen_media.file_size offset 40 type size_t @1.1
+field emusen_media.files offset 24 type const emusen_file* @1.1
+field emusen_media.flags offset 4 type uint32_t @1.1
+field emusen_media.image offset 8 type const uint8_t* @1.1
+field emusen_media.image_len offset 16 type size_t @1.1
+field emusen_media.size offset 0 type uint32_t @1.1
 fn emusen_core_abi_version () -> uint32_t @1.0
 fn emusen_core_advance (emusen_machine*, uint64_t*) -> int32_t @1.0
 fn emusen_core_audio_buffered (const emusen_machine*) -> int64_t @1.0
@@ -201,6 +213,8 @@ fn emusen_core_info (uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_last_error (const emusen_machine*, uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_log_drain (emusen_machine*, uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_machine_info (const emusen_machine*, uint8_t*, size_t) -> int64_t @1.0
+fn emusen_core_media_insert (emusen_machine*, uint32_t, const emusen_media*) -> int32_t @1.1
+fn emusen_core_media_lid (emusen_machine*, uint32_t, uint32_t) -> int32_t @1.1
 fn emusen_core_phases (const emusen_machine*, int64_t*, size_t) -> int64_t @1.0
 fn emusen_core_present (emusen_machine*) -> int32_t @1.0
 fn emusen_core_reset (emusen_machine*) -> int32_t @1.0
@@ -270,6 +284,7 @@ json info.systems[].controllers[].buttons[].label string required @1.0
 json info.systems[].controllers[].id string required @1.0
 json info.systems[].controllers[].label string required @1.0
 json info.systems[].controllers[].ports array<integer> required @1.0
+json info.systems[].development boolean optional @1.1
 json info.systems[].extensions array<string> required @1.0
 json info.systems[].firmware array<object> optional @1.0
 json info.systems[].firmware[].label string required @1.0
@@ -295,6 +310,12 @@ json machine_info.battery array<object> optional @1.0
 json machine_info.battery[].length integer required @1.0
 json machine_info.battery[].suffix string required @1.0
 json machine_info.battery[].which integer required @1.0
+json machine_info.drives array<object> optional @1.1
+json machine_info.drives[].drive integer required @1.1
+json machine_info.drives[].kind string required @1.1
+json machine_info.drives[].label string required @1.1
+json machine_info.drives[].lid string required @1.1
+json machine_info.drives[].loaded boolean required @1.1
 json machine_info.firmware array<object> optional @1.0
 json machine_info.firmware[].source string required @1.0
 json machine_info.firmware[].which integer required @1.0
@@ -371,7 +392,9 @@ status EMUSEN_CORE_BAND_FIRST -9 @1.0
 status EMUSEN_CORE_BAND_LAST -255 @1.0
 status EMUSEN_FAULT_BASE -320 @1.0
 status EMUSEN_FOREIGN -3 @1.0
+status EMUSEN_LID_CLOSED -265 @1.1
 status EMUSEN_NOT_SUPPORTED -256 @1.0
+status EMUSEN_NO_SUCH_DRIVE -267 @1.1
 status EMUSEN_NO_SUCH_PORT -261 @1.0
 status EMUSEN_NO_SUCH_SPACE -257 @1.0
 status EMUSEN_NULL -1 @1.0
@@ -379,7 +402,9 @@ status EMUSEN_READ_ONLY -258 @1.0
 status EMUSEN_STATE_VERSION -4 @1.0
 status EMUSEN_TRUNCATED -2 @1.0
 status EMUSEN_UNKNOWN_SETTING -259 @1.0
+status EMUSEN_WRONG_MEDIA -266 @1.1
 struct emusen_create_params size 88 align 8 @1.0
 struct emusen_event size 24 align 8 @1.0
 struct emusen_file size 24 align 8 @1.0
 struct emusen_frame_info size 56 align 8 @1.0
+struct emusen_media size 48 align 8 @1.1

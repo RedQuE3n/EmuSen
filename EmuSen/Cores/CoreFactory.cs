@@ -37,11 +37,13 @@ namespace EmuSen.Cores
     // The one place a ROM path turns into a running core - see EmuSen_Multicore.md §2.
     public static class CoreFactory
     {
-        public static bool IsSupported(string romPath) => CoreCatalog.IsRomExtension(Extension(romPath)) || Native.CoreDiscovery.ForExtension(Extension(romPath)).Any();
+        // A file some console opens: by its extension, an archive's by its image entry's, and where several consoles take it, by its content - see EmuSen_CoreAPI_Extensions.md §8.4.
+        public static bool IsSupported(string romPath) =>
+            CoreCatalog.CoreForRom(romPath) is not null || (CoreCatalog.Cores.All(c => !c.SupportsExtension(Extension(romPath))) && Native.CoreDiscovery.ForExtension(Extension(romPath)).Any());
 
         // <headless> only means anything to a core that owns a window-ish resource; <engine> is a CoreCatalog.EngineFor name, and null is the reference core, not the player's default - see EmuSen_Settings_Reference.md §4.44.
         public static ICore Create(string romPath, bool headless = true, string? engine = null) =>
-            V1Library(Extension(romPath), engine) is { } v1 ? new Native.CoreEngine(v1, StoredSettings(romPath, v1)) : Extension(romPath) switch
+            V1Library(romPath, engine) is { } v1 ? new Native.CoreEngine(v1, StoredSettings(romPath, v1)) : Extension(romPath) switch
         {
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => engine == CoreCatalog.MoonRtEngine && MoonRtCore.Available ? new MoonRtCore() : new MoonCore(),
@@ -60,11 +62,15 @@ namespace EmuSen.Cores
             return library.Settings.Select(s => (s.Key, Value: config.Value(console, s.Key))).Where(p => p.Value is not null).ToDictionary(p => p.Key, p => p.Value!);
         }
 
-        // The one generic branch for v1 engines: the one asked for by name, or the first for an extension no C# core claims; null when it is not loadable - see EmuSen_CoreAPI.md §19.
-        private static Native.CoreLibrary? V1Library(string extension, string? engine)
+        // The one generic branch for v1 engines: the one asked for by name, or the routed console's engine for a file no C# core claims; null when it is not loadable - see EmuSen_CoreAPI.md §19.
+        private static Native.CoreLibrary? V1Library(string romPath, string? engine)
         {
+            string extension = Extension(romPath);
+            var routed = CoreCatalog.CoreForRom(romPath) is { } core && CoreCatalog.IsDiscovered(core) ? Crystal.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console)?.Entry.Id : null;
             var found = engine is not null ? Native.CoreDiscovery.ForExtension(extension).FirstOrDefault(c => c.EngineName == engine)
-                : CoreCatalog.IsCatalogExtension(extension) ? null : Native.CoreDiscovery.ForExtension(extension).FirstOrDefault();
+                : CoreCatalog.IsCatalogExtension(extension) ? null
+                : routed is not null ? Native.CoreDiscovery.ForSystem(routed).FirstOrDefault(c => !CoreCatalog.IsRegisteredEngine(c.EngineName))
+                : Native.CoreDiscovery.ForExtension(extension).FirstOrDefault();
             return found is null || CoreCatalog.IsRegisteredEngine(found.EngineName) ? null : found.Open();
         }
 
@@ -73,9 +79,13 @@ namespace EmuSen.Cores
             Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? venusFrameTimings = null, string? engine = null)
         {
             ICore core = Create(romPath, headless, engine);
-            core.LoadRom(romPath);
+            LoadInto(core, romPath);
             return Bundle(core, cheats, venusFrameTimings) with { Notice = EngineNotice(romPath, engine, core) };
         }
+
+        // A library file into a core: a v1 engine takes the file and its set itself; a C# core takes an archive's image unpacked, named for the archive - see EmuSen_CoreAPI_Extensions.md §10.4.
+        public static void LoadInto(ICore core, string romPath) =>
+            core.LoadRom(core is Native.CoreEngine || !Crystal.Media.ArchiveImages.IsArchive(romPath) ? romPath : Crystal.Media.ArchiveImages.Unpack(romPath, CoreCatalog.IsImageExtension));
 
         // The engine graphics.json stores for the ROM's console, so every frontend makes the one decision Mistress's row records; null where nothing is stored - see EmuSen_Settings_Reference.md §4.44.
         public static string? ConfiguredEngine(string romPath) =>
@@ -211,6 +221,6 @@ namespace EmuSen.Cores
             return (null, null);
         }
 
-        private static string Extension(string romPath) => Path.GetExtension(romPath).ToLowerInvariant();
+        private static string Extension(string romPath) => CoreCatalog.ImageExtension(romPath);
     }
 }

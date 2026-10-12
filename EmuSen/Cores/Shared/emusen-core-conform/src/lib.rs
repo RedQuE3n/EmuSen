@@ -5,6 +5,7 @@
 pub mod api;
 pub mod corpus;
 pub mod digest;
+pub mod media;
 pub mod sidecar;
 
 use std::collections::BTreeSet;
@@ -416,6 +417,9 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c13(&mut s));
     report.cases.push(c14(&mut s));
     report.cases.push(c15(&mut s));
+    if lib.claims(caps::MEDIA) {
+        report.cases.push(c16(&mut s));
+    }
     report
 }
 
@@ -462,7 +466,10 @@ pub(crate) fn core_c11(path: &Path, opts: &Options, statuses: BTreeSet<i32>) -> 
 /// The cases that depend on the image: C4's half image and firmware rule, C6, C7, C8 (its first run C6's) and C14.
 pub(crate) fn image_cases(lib: &Lib, path: &Path, opts: &Options) -> (Vec<Case>, BTreeSet<i32>) {
     let mut s = session(lib, opts);
-    let cases = vec![c4(&mut s, path, C4::IMAGE), c6(&mut s), c7(&mut s), c8(&mut s), c14(&mut s)];
+    let mut cases = vec![c4(&mut s, path, C4::IMAGE), c6(&mut s), c7(&mut s), c8(&mut s), c14(&mut s)];
+    if lib.claims(caps::MEDIA) {
+        cases.push(c16(&mut s));
+    }
     (cases, s.statuses)
 }
 
@@ -1296,6 +1303,56 @@ fn arm(m: &Machine<'_>) {
             g(m.h, 1, none.as_ptr(), 1);
         }
     }
+}
+
+/// C16, MEDIA (since 1.1, EmuSen_CoreAPI_Extensions.md §3.7): an insert while the lid is closed refused; the lid
+/// opened, the same disc inserted, the lid closed and frames run; a state made then loading only over its disc, the
+/// state unchanged by a refusal; RESTORE putting the disc back for it; an empty drive; machine info's drives.
+fn c16(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let settings = s.opts.settings.clone();
+    let (image, media): (Vec<u8>, Vec<(u32, Vec<u8>)>) = (s.opts.image.clone(), s.opts.files.iter().filter(|f| f.0 >= emusen_native::core::flags::FILE_MEDIA).cloned().collect());
+    let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
+        let m = s.machine(&settings)?;
+        let drives = |m: &Machine<'_>| m.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().map(<[Value]>::to_vec)).unwrap_or_default();
+        let listed = drives(&m);
+        c.that(!listed.is_empty(), || "MEDIA is claimed but machine info lists no drives".to_owned());
+        let drive = listed.first().and_then(|d| d.get("drive")).and_then(Value::as_i64).unwrap_or(0) as u32;
+        let lid = |m: &Machine<'_>| drives(m).iter().find(|d| d.get("drive").and_then(Value::as_i64) == Some(drive as i64)).and_then(|d| d.get("lid").and_then(Value::as_str).map(str::to_owned)).unwrap_or_default();
+        s.play(&m, 0, 30, false)?;
+        let r = m.media_insert(drive, Some(&image), &media, 0);
+        c.that(r == status::LID_CLOSED, || format!("an insert with the lid closed answered {r}, not EMUSEN_LID_CLOSED"));
+        let r = m.media_lid(drive, true);
+        c.that(r == 0 && lid(&m) == "open", || format!("opening the lid answered {r}, machine info's lid {:?}", lid(&m)));
+        s.play(&m, 30, 30, false)?;
+        let r = m.media_insert(drive, Some(&image), &media, 0);
+        c.that(r == 0, || format!("the same disc inserted with the lid open answered {r} ({})", m.last_error()));
+        let r = m.media_lid(drive, false);
+        c.that(r == 0 && lid(&m) == "closed", || format!("closing the lid answered {r}, machine info's lid {:?}", lid(&m)));
+        s.play(&m, 60, 120, false)?;
+        let state = m.save(0).map_err(|e| format!("state_save after the swap failed with {e}"))?;
+        m.media_lid(drive, true);
+        let r = m.media_insert(drive, None, &[], 0);
+        c.that(r == 0, || format!("emptying the drive answered {r}"));
+        m.media_lid(drive, false);
+        let before = s.state_digest(&m)?;
+        let r = m.load(&state);
+        c.that(r == status::WRONG_MEDIA, || format!("the state made over the disc loaded over an empty drive with {r}, not EMUSEN_WRONG_MEDIA"));
+        c.that(s.state_digest(&m)? == before, || "a refused load changed the machine".to_owned());
+        let r = m.media_insert(drive, Some(&image), &media, emusen_native::core::flags::MEDIA_RESTORE);
+        c.that(r == 0, || format!("RESTORE with the lid closed answered {r}"));
+        let r = m.load(&state);
+        c.that(r == 0, || format!("the state over its own disc again answered {r}"));
+        s.play(&m, 180, 60, false)?;
+        let r = m.media_lid(u32::MAX, true);
+        c.that(r == status::NO_SUCH_DRIVE, || format!("a drive machine info does not list answered {r}, not EMUSEN_NO_SUCH_DRIVE"));
+        c.note(format!("drive {drive}: insert refused closed, the disc swapped through the lid, a state kept to its disc over 240 frames"));
+        Ok(())
+    };
+    if let Err(e) = body(s, &mut c) {
+        c.that(false, || e);
+    }
+    c.done("C16", "media")
 }
 
 fn c15(s: &mut Session<'_>) -> Case {

@@ -4,7 +4,7 @@ use std::ffi::c_char;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
-use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, caps, status};
+use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, caps, status};
 
 type M = *mut RawMachine;
 type C = *const RawMachine;
@@ -89,6 +89,8 @@ table! {
         debug_pc: fn(C, u32, *mut u64) -> i32,
         debug_registers: fn(C, u32, *mut i64, usize) -> i64,
         debug_disassemble: fn(M, u32, u32, u32, u32, *mut u8, usize) -> i64,
+        media_lid: fn(M, u32, u32) -> i32,
+        media_insert: fn(M, u32, *const Media) -> i32,
     }
 }
 
@@ -348,6 +350,27 @@ impl Machine<'_> {
 
     pub fn has_snapshot(&self) -> bool {
         self.lib.claims(caps::SNAPSHOT)
+    }
+
+    /// MEDIA's lid, open or closed; `NOT_SUPPORTED` where the library lacks it.
+    pub fn media_lid(&self, drive: u32, open: bool) -> i32 {
+        self.lib.f.media_lid.map_or(status::NOT_SUPPORTED, |f| unsafe { f(self.h, drive, open as u32) })
+    }
+
+    /// MEDIA's insert of `image` with its files, or of nothing for `None`.
+    pub fn media_insert(&self, drive: u32, image: Option<&[u8]>, files: &[(u32, Vec<u8>)], flags: u32) -> i32 {
+        let Some(f) = self.lib.f.media_insert else { return status::NOT_SUPPORTED };
+        let entries: Vec<FileEntry> = files.iter().map(|(w, d)| FileEntry { size: std::mem::size_of::<FileEntry>() as u32, which: *w, data: d.as_ptr(), len: d.len() }).collect();
+        let m = Media {
+            size: std::mem::size_of::<Media>() as u32,
+            flags,
+            image: image.map_or(std::ptr::null(), <[u8]>::as_ptr),
+            image_len: image.map_or(0, <[u8]>::len),
+            files: entries.as_ptr(),
+            file_count: entries.len(),
+            file_size: std::mem::size_of::<FileEntry>(),
+        };
+        unsafe { f(self.h, drive, &m) }
     }
 }
 

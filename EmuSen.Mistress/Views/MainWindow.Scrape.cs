@@ -119,11 +119,11 @@ namespace EmuSen.Mistress.Views
 
         private bool HasHandCover(string system, string path)
         {
-            string? console = EmuSen.Cores.CoreCatalog.ByExtension(Path.GetExtension(path))?.Console;
+            string? console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path);
             return console is not null && _artwork.Find(console, Path.GetFileNameWithoutExtension(path)) is not null;
         }
 
-        private static Func<byte[], byte[]>? TransformFor(string path) => EmuSen.Cores.CoreCatalog.ByExtension(Path.GetExtension(path))?.OpenVgdbBytes;
+        private static Func<byte[], byte[]>? TransformFor(string path) => EmuSen.Cores.CoreCatalog.CoreForRom(path)?.OpenVgdbBytes;
 
         private void ReadScrapeSnapshot()
         {

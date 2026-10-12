@@ -14,4 +14,6 @@ crate-type = ["cdylib", "rlib"]
 emusen-endymion = { path = "../endymion" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }
+# The set module, which reads a sheet's companions and an .m3u for the runtime (EmuSen_CoreAPI_Extensions.md §2.3).
+emusen-disc = { path = "../../EmuSen/Cores/Shared/emusen-disc" }
 emusen-serenity = { path = "../serenity" }

@@ -1,7 +1,7 @@
 //! Runs a PS-EXE on Diamond for a number of frames and prints its TTY: `run <exe> [frames] [--bios FILE | --bare] [--pal]
 //! [--dump ADDRESS WORDS] [--ram FILE] [--vram FILE] [--picture FILE]`: RAM's words from a hex address, or RAM, VRAM or
 //! the RGBA picture (its size printed) to a file.
-//! `--disasm ADDRESS N` disassembles N words of a game's RAM after the run. `--armed` runs each frame through the debugger's loop with the kit's C15 tables armed (Diamond_Debugger.md). `--wav FILE` writes the SPU's output, 16-bit stereo at 44,100 Hz. `--boot` boots the disc through the kernel's LoadExec from a loader, without the BIOS's intro (Diamond_CDROM.md §9).
+//! `--disasm ADDRESS N` disassembles N words of a game's RAM after the run. `--armed` runs each frame through the debugger's loop with the kit's C15 tables armed (Diamond_Debugger.md), and `--armed-reads` the read watch and read data breakpoint of 1.2 beside them, with nothing to hit. `--wav FILE` writes the SPU's output, 16-bit stereo at 44,100 Hz. `--boot` boots the disc through the kernel's LoadExec from a loader, without the BIOS's intro (Diamond_CDROM.md §9).
 //! `--heading TEXT` prints the TTY from TEXT on, leaving out what a BIOS printed before the program; `--trace` then
 //! traces the controller's commands and responses, as `--trace-game` does from the entry of a game booted by `--boot`, once the BIOS has handed over. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
 //! the image itself when PATH is no PS-EXE), `--analog` presses port 1's Analog button at frame 30; `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
@@ -20,6 +20,7 @@ fn armed_frame(m: &mut Machine) {
     while m.run_frame_debug(emusen_native::debug::run::CONTINUE) != 0 {
         m.debug.hooks.calls_log.clear();
         m.debug.hooks.writes_log.clear();
+        m.debug.hooks.reads_log.clear();
     }
 }
 
@@ -80,12 +81,17 @@ fn main() {
         m.set_lid(true, None);
     }
     let swap = args.iter().any(|a| a == "--swap");
-    let armed = args.iter().any(|a| a == "--armed");
+    let reads = args.iter().any(|a| a == "--armed-reads");
+    let armed = reads || args.iter().any(|a| a == "--armed");
     if armed {
-        use emusen_native::debug::flag;
-        m.debug.hooks.configure(flag::CALLS | flag::WRITES | flag::PROFILING | 1 << flag::COVERAGE, i32::MIN, -1);
+        use emusen_native::debug::{flag, range};
+        m.debug.hooks.configure(flag::CALLS | flag::WRITES | flag::PROFILING | 1 << flag::COVERAGE | if reads { flag::READS } else { 0 }, i32::MIN, -1);
         m.debug.hooks.set_breakpoints(&[-2, -2]);
-        m.debug.hooks.set_ranges(0, &[diamond::machine::RAM_ID, 0x1F_FFFC, 0x1F_FFFF]);
+        m.debug.hooks.set_ranges(range::WATCH, &[diamond::machine::RAM_ID, 0x1F_FFFC, 0x1F_FFFF]);
+        if reads {
+            m.debug.hooks.set_ranges(range::READ_WATCH, &[diamond::machine::RAM_ID, 0x1F_FFFC, 0x1F_FFFF]);
+            m.debug.hooks.set_ranges(range::READ_BREAK, &[diamond::machine::RAM_ID, 0x1F_FFFC, 0x1F_FFFF]);
+        }
     }
     let heading = args.iter().position(|a| a == "--heading").map(|i| args[i + 1].clone());
     let trace = args.iter().any(|a| a == "--trace");

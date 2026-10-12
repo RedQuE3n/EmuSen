@@ -1136,7 +1136,7 @@ type Arm = fn(&mut Machine);
 /// The debugger's tables, each armed alone and then all at once: what each is set to, and how it is set.
 fn tables() -> Vec<(&'static str, Arm)> {
     use diamond::machine::{RAM_ID, SCRATCH_ID};
-    use emusen_native::debug::flag;
+    use emusen_native::debug::{flag, range};
     vec![
         ("calls", |m| m.debug.hooks.configure(flag::CALLS, i32::MIN, -1)),
         ("writes watched over RAM and the scratchpad", |m| {
@@ -1147,16 +1147,25 @@ fn tables() -> Vec<(&'static str, Arm)> {
             m.debug.hooks.configure(flag::WRITES, i32::MIN, -1);
             m.debug.hooks.set_ranges(1, &[RAM_ID, 0, 0x1F_FFFF]);
         }),
+        ("reads watched over RAM and the scratchpad", |m| {
+            m.debug.hooks.configure(flag::READS, i32::MIN, -1);
+            m.debug.hooks.set_ranges(range::READ_WATCH, &[RAM_ID, 0, 0x1F_FFFF, SCRATCH_ID, 0, 0x3FF]);
+        }),
+        ("read data breakpoints over RAM", |m| {
+            m.debug.hooks.configure(flag::READS, i32::MIN, -1);
+            m.debug.hooks.set_ranges(range::READ_BREAK, &[RAM_ID, 0, 0x1F_FFFF]);
+        }),
         ("profile", |m| m.debug.hooks.configure(flag::CALLS | flag::PROFILING, i32::MIN, -1)),
         ("coverage", |m| m.debug.hooks.configure(1 << flag::COVERAGE, i32::MIN, -1)),
         ("interrupts", |m| m.debug.hooks.configure(flag::CALLS | flag::INTERRUPTS, i32::MIN, -1)),
         ("breakpoints over KSEG0's RAM", |m| m.debug.hooks.set_breakpoints(&[0x8000_0000u32 as i32, 0x801F_FFFFu32 as i32])),
         ("each instruction", |m| m.debug.hooks.configure(flag::EACH | flag::CALLS, i32::MIN, -1)),
         ("the kit's C15, all with nothing to hit", |m| {
-            m.debug.hooks.configure(flag::CALLS | flag::WRITES | flag::PROFILING | 1 << flag::COVERAGE, i32::MIN, -1);
+            m.debug.hooks.configure(flag::CALLS | flag::WRITES | flag::READS | flag::PROFILING | 1 << flag::COVERAGE, i32::MIN, -1);
             m.debug.hooks.set_breakpoints(&[-2, -2]);
-            m.debug.hooks.set_ranges(0, &[u32::MAX - 1, 0, u32::MAX]);
-            m.debug.hooks.set_ranges(1, &[u32::MAX - 1, 0, u32::MAX]);
+            for kind in [range::WATCH, range::BREAK, range::READ_WATCH, range::READ_BREAK] {
+                m.debug.hooks.set_ranges(kind, &[u32::MAX - 1, 0, u32::MAX]);
+            }
         }),
     ]
 }
@@ -1175,6 +1184,7 @@ fn debug_digests(mut m: Machine, frames: usize, observed: bool) -> ([u64; 3], u6
                 stops += 1;
                 m.debug.hooks.calls_log.clear();
                 m.debug.hooks.writes_log.clear();
+                m.debug.hooks.reads_log.clear();
                 flags = emusen_native::debug::run::UNCHECKED;
             }
         } else {

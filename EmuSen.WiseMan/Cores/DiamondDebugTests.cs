@@ -72,12 +72,30 @@ namespace EmuSen.WiseMan.Cores
             return SyntheticPsExe.Build(SyntheticPsExe.Words(w));
         }
 
+        // The read program's loads: LW of the count, LBU of the scratchpad's byte 10h, and LWL and LWR of RAM's 20005h and 20006h.
+        private const uint ReadLoop = 0x8001_0008, ReadByte = 0x8001_000C, ReadLeft = 0x8001_0010, ReadRight = 0x8001_0014;
+
+        // A loop that loads RAM and the scratchpad in three widths and counts in RAM at 80020000h, hand-assembled from IDT's Appendix A - see Diamond_Debugger.md §5.1.
+        private static byte[] LoadsProgram() => SyntheticPsExe.Build(SyntheticPsExe.Words(new uint[]
+        {
+            0x3C10_8002, // lui s0, 0x8002
+            0x3C11_1F80, // lui s1, 0x1F80
+            0x8E09_0000, // loop: lw t1, 0(s0)
+            0x922A_0010, // lbu t2, 0x10(s1)
+            0x8A0B_0005, // lwl t3, 5(s0)
+            0x9A0B_0006, // lwr t3, 6(s0)
+            0x2529_0001, // addiu t1, t1, 1
+            0xAE09_0000, // sw t1, 0(s0)
+            0x0800_4002, // j loop
+            0,
+        }));
+
         // The program loaded through discovery on the open kernel, its first frames run so that the kernel has handed it over.
-        private (CoreEngine Engine, CoreDebugTarget Target) Load(int frames = 10)
+        private (CoreEngine Engine, CoreDebugTarget Target) Load(int frames = 10, bool loads = false)
         {
             var found = CoreDiscovery.Found.Single(c => c.Info.Id == "diamond");
-            string exe = Path.Combine(_root, "calls.psexe");
-            File.WriteAllBytes(exe, CallsProgram());
+            string exe = Path.Combine(_root, loads ? "loads.psexe" : "calls.psexe");
+            File.WriteAllBytes(exe, loads ? LoadsProgram() : CallsProgram());
             var engine = new CoreEngine(found.Open()!);
             engine.LoadRom(exe);
             for (int i = 0; i < frames; i++) engine.RunFrame();
@@ -114,6 +132,8 @@ namespace EmuSen.WiseMan.Cores
                 Assert.Equal(new[] { "R3000BUS", "RAM", "SCRATCH", "VRAM", "SPURAM", "BIOS", "TTY" }, t.GetMemorySpaces().Select(s => s.Name));
                 var spaces = engine.Machine.Info.Spaces;
                 Assert.Equal(new[] { "R3000BUS", "RAM", "SCRATCH" }, spaces.Where(s => s.ReportsStores).Select(s => s.Name));
+                Assert.Equal(new[] { "R3000BUS", "RAM", "SCRATCH" }, spaces.Where(s => s.ReportsLoads).Select(s => s.Name));
+                Assert.True(engine.Library.Has(CoreInterface.CapDebugReads));
                 Assert.True(spaces[0].View && spaces[0].ReadOnly && spaces[0].Size == 1L << 32);
                 var regs = t.CpuRegisters.Current;
                 Assert.Equal(45, regs.Count);
@@ -220,6 +240,64 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // Read watches through DianaSh's command record each byte a load read with the loading instruction, in RAM, the scratchpad and the bus; LWL and LWR at the bytes they reach. A write watch beside them sees only the store.
+        [Fact]
+        public void Read_watches_see_the_loads_in_ram_the_scratchpad_and_the_bus()
+        {
+            var (engine, t) = Load(loads: true);
+            using (engine)
+            {
+                var shell = DianaShInterpreter.CreateDefault(t);
+                Assert.Contains("(read)", shell.Submit("watch add RAM 20000 4 read").Output);
+                shell.Submit("watch add SCRATCH 10 1 read");
+                shell.Submit("watch add R3000BUS 80020004 4 read");
+                shell.Submit("watch add RAM 20000 1 write");
+                engine.RunFrame();
+                var (ram, scratch, bus, store) = (t.Watches.GetEvents(1, 400), t.Watches.GetEvents(2), t.Watches.GetEvents(3, 400), t.Watches.GetEvents(4));
+                Assert.All(ram, e => Assert.Equal((WatchKind.Read, "PC=$80010008"), (e.AccessKind, e.Context)));
+                Assert.Equal(new[] { 0x2_0000, 0x2_0001, 0x2_0002, 0x2_0003 }, ram.Take(4).Select(e => e.Address));
+                Assert.Equal((0x10, engine.ReadSpace("SCRATCH", 0x10), "PC=$8001000C"), (scratch[^1].Address, scratch[^1].Value, scratch[^1].Context));
+                Assert.Equal(new[] { (At(0x8002_0004), "PC=$80010010"), (At(0x8002_0005), "PC=$80010010"), (At(0x8002_0006), "PC=$80010014"), (At(0x8002_0007), "PC=$80010014") }, bus.Take(4).Select(e => (e.Address, e.Context)));
+                Assert.All(store, e => Assert.Equal((WatchKind.Write, "PC=$8001001C"), (e.AccessKind, e.Context)));
+                Assert.Equal(t.Watches.GetEventCounts(4).Total, t.Watches.GetEventCounts(1).Total / 4);
+                Assert.Contains(" R 0x20000 = 0x", shell.Submit("watch log 1 4").Output);
+            }
+        }
+
+        // A read data breakpoint through `bp read` halts in front of the load with nothing of it run, the halt naming the byte; resumed, the load runs and the loop comes round to it again. One on the bus's 80020006h halts at the LWR, which reads it, and not at the LWL beside it.
+        [Fact]
+        public void A_read_data_breakpoint_halts_in_front_of_the_load()
+        {
+            var (engine, t) = Load(loads: true);
+            using (engine)
+            {
+                var shell = DianaShInterpreter.CreateDefault(t);
+                Assert.Contains("added on reads of SCRATCH", shell.Submit("bp read SCRATCH 10").Output);
+                long frames = engine.TotalFrames;
+                engine.RunFrame();
+                Assert.True(engine.IsHaltedAtBreakpoint);
+                Assert.Equal(At(ReadByte), engine.HaltedAddress);
+                Assert.Contains("read SCRATCH 0x10", t.Breakpoints.LastBreakReason);
+                Assert.Equal(frames, engine.TotalFrames);
+                uint count = Word(engine, "RAM", Count);
+                var (before, after) = (new MemoryStream(), new MemoryStream());
+                engine.SaveState(before);
+                engine.RunFrame();
+                Assert.Equal(At(ReadByte), engine.HaltedAddress);
+                Assert.Equal(count + 1, Word(engine, "RAM", Count));
+                engine.SaveState(after);
+                Assert.NotEqual(before.ToArray(), after.ToArray());
+
+                foreach (var bp in t.Breakpoints.GetDataBreakpoints()) t.Breakpoints.RemoveBreakpoint(bp.Id);
+                shell.Submit("bp read R3000BUS 80020006");
+                engine.RunFrame();
+                Assert.True(engine.IsHaltedAtBreakpoint);
+                Assert.Equal(At(ReadRight), engine.HaltedAddress);
+                engine.RunFrame();
+                Assert.Equal(At(ReadRight), engine.HaltedAddress);
+            }
+        }
+
         [Fact]
         public void Coverage_marks_the_routine_and_the_loop()
         {
@@ -269,6 +347,8 @@ namespace EmuSen.WiseMan.Cores
             {
                 t.Breakpoints.AddBreakpoint(At(0xFFFF_FFF0));
                 t.Watches.AddWatch("RAM", 0x1F_FFF0, 4);
+                t.Watches.AddWatch("SCRATCH", 0x3F0, 4, WatchKind.Both);
+                t.Breakpoints.AddDataBreakpoint("SCRATCH", 0x3FF, 0x3FF, -1, onRead: true, changedOnly: false, condition: null);
                 t.Coverage!.Arm();
                 t.CallStack!.ArmProfiler();
                 for (int f = 0; f < 20; f++)

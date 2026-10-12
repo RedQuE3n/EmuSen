@@ -314,7 +314,7 @@ out 1
 status 0
 action none
 $ man BP
-out 12796
+out 13364
 NAME
     bp - manage execution breakpoints
 
@@ -389,6 +389,15 @@ DESCRIPTION
     something, this catches the read that actually happened, including ones
     through a computed pointer that no static scan can resolve - the way to
     find out who consumes a flag rather than who sets it.
+
+    On a core of the core ABI that claims DEBUG_READS (the PlayStation's
+    Diamond is the first), the halt lands IN FRONT of the loading
+    instruction instead, nothing of it run: the core sees the load coming,
+    so 'regs' shows the base register the address was made from and the
+    destination before it is written. A value given is compared with the
+    byte the space holds there just before the load. Resuming runs the
+    load. On a core of the ABI that does not claim it, 'bp read' is
+    accepted and never fires - see EmuSen_CoreAPI.md section 6.14.1.
 
     'bp on'/'bp off' toggle one breakpoint without losing its address,
     condition or hit count - the difference between silencing a breakpoint
@@ -567,7 +576,7 @@ SEE ALSO
 status 0
 action none
 $ man Bp
-out 12796
+out 13364
 NAME
     bp - manage execution breakpoints
 
@@ -642,6 +651,15 @@ DESCRIPTION
     something, this catches the read that actually happened, including ones
     through a computed pointer that no static scan can resolve - the way to
     find out who consumes a flag rather than who sets it.
+
+    On a core of the core ABI that claims DEBUG_READS (the PlayStation's
+    Diamond is the first), the halt lands IN FRONT of the loading
+    instruction instead, nothing of it run: the core sees the load coming,
+    so 'regs' shows the base register the address was made from and the
+    destination before it is written. A value given is compared with the
+    byte the space holds there just before the load. Resuming runs the
+    load. On a core of the ABI that does not claim it, 'bp read' is
+    accepted and never fires - see EmuSen_CoreAPI.md section 6.14.1.
 
     'bp on'/'bp off' toggle one breakpoint without losing its address,
     condition or hit count - the difference between silencing a breakpoint
@@ -1319,7 +1337,7 @@ case the page for watch
 target none
 covers 1
 $ man watch
-out 1049
+out 1471
 NAME
     watch - track reads/writes to a memory range
 
@@ -1343,8 +1361,16 @@ DESCRIPTION
     equivalent of 'readers'/'writers'. 'clear' empties a watch's recorded
     events without removing the watch itself; 'remove' deletes it entirely.
 
+    On a core of the core ABI, a read or both watch sees loads only where
+    the core claims DEBUG_READS, and only in the spaces it reports loads
+    for (on the PlayStation: R3000BUS, RAM and SCRATCH); elsewhere a read
+    watch records nothing and a both watch records the stores. Each
+    event's context is the loading instruction's address - see
+    EmuSen_CoreAPI.md section 6.14.1.
+
 EXAMPLES
     watch add WRAM 13c6 1
+    watch add RAM 20000 4 read
     watch log 1
     watch summary 1
 status 0
@@ -1355,7 +1381,7 @@ case the page for bp
 target none
 covers 1
 $ man bp
-out 12796
+out 13364
 NAME
     bp - manage execution breakpoints
 
@@ -1430,6 +1456,15 @@ DESCRIPTION
     something, this catches the read that actually happened, including ones
     through a computed pointer that no static scan can resolve - the way to
     find out who consumes a flag rather than who sets it.
+
+    On a core of the core ABI that claims DEBUG_READS (the PlayStation's
+    Diamond is the first), the halt lands IN FRONT of the loading
+    instruction instead, nothing of it run: the core sees the load coming,
+    so 'regs' shows the base register the address was made from and the
+    destination before it is written. A value given is compared with the
+    byte the space holds there just before the load. Resuming runs the
+    load. On a core of the ABI that does not claim it, 'bp read' is
+    accepted and never fires - see EmuSen_CoreAPI.md section 6.14.1.
 
     'bp on'/'bp off' toggle one breakpoint without losing its address,
     condition or hit count - the difference between silencing a breakpoint

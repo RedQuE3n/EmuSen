@@ -9,7 +9,8 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreDebugBridge
     {
         // emusen_core.h's debug flags and run flags.
-        public const uint FlagCalls = 1, FlagWrites = 2, FlagInterrupts = 4, FlagEach = 8, FlagProfiling = 16, FlagCoverage = 8;
+        public const uint FlagCalls = 1, FlagWrites = 2, FlagInterrupts = 4, FlagEach = 8, FlagProfiling = 16, FlagCoverage = 8, FlagReads = 32;
+        public const uint RangeWatch = 0, RangeBreak = 1, RangeReadWatch = 2, RangeReadBreak = 3;
         public const uint RunUnchecked = 1, RunContinue = 2;
 
         private readonly CoreEngine _engine;
@@ -30,6 +31,9 @@ namespace EmuSen.Cores.Native
         private CoreMachine? Live => _engine.IsRomLoaded ? _engine.Machine : null;
 
         public bool Supported => _engine.Library.Has(CoreInterface.CapDebug);
+
+        // Loads reach the read ranges only on a core that claims them; any other core is pushed none - see EmuSen_CoreAPI.md §6.14.
+        public bool ReadsSupported => Supported && _engine.Library.Has(CoreInterface.CapDebugReads);
 
         // A game loaded: one registry set a processor, the main one's breakpoints kept as the engine's.
         public void Attach(CoreMachine machine)
@@ -57,6 +61,8 @@ namespace EmuSen.Cores.Native
         }
 
         private bool Listening => _engine.Watches.HasWatches || Breakpoints.Any(b => b.WatchesWrites);
+
+        private bool ListeningToReads => ReadsSupported && (_engine.Watches.GetWatches().Any(w => w.Kind != WatchKind.Write) || Breakpoints.Any(b => b.GetDataBreakpoints().Any(d => d.OnRead)));
 
         // The frame through debug_run_frame; false is a halt on <processor> in front of <haltedAt>, the frame left open.
         public bool RunFrame(bool resuming, out int haltedAt, out uint processor)
@@ -97,6 +103,7 @@ namespace EmuSen.Cores.Native
             BreakpointRegistry main = _engine.Breakpoints;
             uint flags = FlagCalls | FlagInterrupts;
             if (Listening) flags |= FlagWrites;
+            if (ListeningToReads) flags |= FlagReads;
             if (main.IsSingleStepArmed || main.HasPendingBreak) flags |= FlagEach;
             if (CallStack.IsProfiling) flags |= FlagProfiling;
             for (int n = 0; n < Coverage.Count && n < 24; n++) if (Coverage[n].IsArmed) flags |= 1u << (int)(FlagCoverage + n);
@@ -135,27 +142,38 @@ namespace EmuSen.Cores.Native
             }
 
             var watches = new List<uint>();
+            var readWatches = new List<uint>();
             foreach (var w in _engine.Watches.GetWatches())
             {
-                if (w.Kind == WatchKind.Read || ReportedSpace(machine, w.SpaceName) is not { } space || w.Length <= 0) continue;
-                watches.AddRange(new[] { space, (uint)w.StartAddress, (uint)(w.StartAddress + w.Length - 1) });
+                if (w.Length <= 0) continue;
+                if (w.Kind != WatchKind.Read && ReportedSpace(machine, w.SpaceName, loads: false) is { } space) watches.AddRange(new[] { space, (uint)w.StartAddress, (uint)(w.StartAddress + w.Length - 1) });
+                if (w.Kind != WatchKind.Write && ReadsSupported && ReportedSpace(machine, w.SpaceName, loads: true) is { } read) readWatches.AddRange(new[] { read, (uint)w.StartAddress, (uint)(w.StartAddress + w.Length - 1) });
             }
             var breaks = new List<uint>();
+            var readBreaks = new List<uint>();
             foreach (var bp in Breakpoints.SelectMany(b => b.GetDataBreakpoints()))
             {
-                if (!bp.Enabled || bp.OnRead || ReportedSpace(machine, bp.Space) is not { } space) continue;
-                breaks.AddRange(new[] { space, (uint)bp.Address, (uint)bp.EndAddress });
+                if (!bp.Enabled || (bp.OnRead && !ReadsSupported) || ReportedSpace(machine, bp.Space, bp.OnRead) is not { } space) continue;
+                (bp.OnRead ? readBreaks : breaks).AddRange(new[] { space, (uint)bp.Address, (uint)bp.EndAddress });
             }
-            uint[] watched = watches.ToArray(), broken = breaks.ToArray();
-            fixed (uint* data = watched) api.DebugSetRanges(handle, 0, data, (nuint)(watched.Length / 3));
-            fixed (uint* data = broken) api.DebugSetRanges(handle, 1, data, (nuint)(broken.Length / 3));
+            SetRanges(api, handle, RangeWatch, watches);
+            SetRanges(api, handle, RangeBreak, breaks);
+            if (!ReadsSupported) return;
+            SetRanges(api, handle, RangeReadWatch, readWatches);
+            SetRanges(api, handle, RangeReadBreak, readBreaks);
         }
 
-        // A space machine info says reports its stores.
-        private static uint? ReportedSpace(CoreMachine machine, string name) =>
-            machine.Info.Spaces.FirstOrDefault(s => s.ReportsStores && string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
+        private static void SetRanges(CoreInterface api, nint handle, uint kind, List<uint> triples)
+        {
+            uint[] values = triples.ToArray();
+            fixed (uint* data = values) api.DebugSetRanges(handle, kind, data, (nuint)(values.Length / 3));
+        }
 
-        // The logs into the registries in the C# observers' order: stores, then calls and returns, then the counts.
+        // A space machine info says reports its stores, or its loads.
+        private static uint? ReportedSpace(CoreMachine machine, string name, bool loads) =>
+            machine.Info.Spaces.FirstOrDefault(s => (loads ? s.ReportsLoads : s.ReportsStores) && string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
+
+        // The logs into the registries in the C# observers' order: stores, loads, then calls and returns, then the counts.
         public void Drain(CoreMachine machine)
         {
             CoreInterface api = machine.Library.Api;
@@ -175,6 +193,8 @@ namespace EmuSen.Cores.Native
                     foreach (BreakpointRegistry b in Breakpoints) b.NoteWrite(space.Name, address, value);
                 }
             }
+
+            if (ReadsSupported) DrainReads(machine);
 
             long calls = api.DebugCalls(handle, null, 0);
             if (calls > 0)
@@ -209,6 +229,25 @@ namespace EmuSen.Cores.Native
                 long recorded = 0, length;
                 fixed (byte* data = _coverageBits[n]) length = api.DebugCoverage(handle, (uint)n, data, (nuint)_coverageBits[n].Length, &recorded);
                 if (length > 0) Coverage[n].Merge(_coverageBits[n].AsSpan(0, (int)Math.Min(length, _coverageBits[n].Length)), recorded);
+            }
+        }
+
+        // A read watch's byte goes to the watches with the value read; a read data breakpoint's to the breakpoints, ahead of its load - see EmuSen_CoreAPI.md §6.14.
+        private void DrainReads(CoreMachine machine)
+        {
+            CoreInterface api = machine.Library.Api;
+            long reads = api.DebugReads(machine.Handle, null, 0);
+            if (reads <= 0) return;
+            Grow(ref _events, checked((int)(reads * 5)));
+            fixed (uint* data = _events) api.DebugReads(machine.Handle, data, (nuint)_events.Length);
+            for (int i = 0; i < reads; i++)
+            {
+                if (machine.Info.Spaces.FirstOrDefault(s => s.Id == _events[5 * i]) is not { } space) continue;
+                int address = (int)_events[5 * i + 1];
+                byte value = (byte)_events[5 * i + 2];
+                uint pc = _events[5 * i + 3];
+                if (_events[5 * i + 4] == RangeReadWatch) _engine.Watches.RecordRead(space.Name, address, value, () => $"PC=${pc:X4}");
+                else foreach (BreakpointRegistry b in Breakpoints) b.NoteRead(space.Name, address, value);
             }
         }
 

@@ -1222,6 +1222,22 @@ impl Board {
     pub fn peek_word(&self, address: u32) -> u32 {
         u32::from_le_bytes(std::array::from_fn(|i| self.peek(address.wrapping_add(i as u32))))
     }
+
+    /// The word `fetch` would give for `address` now, the I-cache's where it would hit, with nothing changed; none for
+    /// code outside RAM and the BIOS, whose fetch could change a device (Diamond_Debugger.md §9.3).
+    pub fn peek_code(&self, address: u32) -> Option<u32> {
+        let word = match self.decode(address) {
+            Target::Ram(r) => self.ram_read(r, Size::Word),
+            Target::Bios(b) => Self::bytes_read(&self.bios, b, Size::Word),
+            _ => return None,
+        };
+        if address < 0xA000_0000 && self.cache.enabled()
+            && let Lookup::Hit(w) = self.cache.lookup(address & 0x1FFF_FFFF)
+        {
+            return Some(w);
+        }
+        Some(word)
+    }
 }
 
 #[cfg(test)]

@@ -82,9 +82,9 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.0"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.2"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
-    assert_eq!(names.len(), 18);
+    assert_eq!(names.len(), 19);
     assert_eq!(super::desc::capability_names(unsafe { emusen_core_capabilities() }), names);
     let mi = crate::json::parse(cases[3].1.as_bytes()).unwrap();
     let spaces = mi.get("spaces").unwrap().as_array().unwrap();
@@ -408,13 +408,38 @@ fn the_debugger_reports_the_processor_that_stopped_and_refuses_one_it_lacks() {
     unsafe { emusen_core_free(m) };
 }
 
+/// Range kinds 2 and 3 reach the read ranges of a core claiming `DEBUG_READS`; any kind above 3 is refused and changes
+/// nothing, and the read log drains as (space, address, value, pc, kind) records.
+#[test]
+fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
+    use crate::debug::range;
+    let m = make("");
+    let t = [7u32, 0x10, 0x13];
+    for kind in [range::WATCH, range::BREAK, range::READ_WATCH, range::READ_BREAK] {
+        assert_eq!(unsafe { emusen_core_debug_set_ranges(m, kind, t.as_ptr(), 1) }, 0, "kind {kind}");
+    }
+    assert_eq!(unsafe { emusen_core_debug_set_ranges(m, 4, t.as_ptr(), 1) }, status::NOT_SUPPORTED);
+    let h = unsafe { super::exports::core_of_mut::<TestCore>(m) }.unwrap().debug_hooks().unwrap();
+    assert_eq!((h.read_watch_ranges.len(), h.read_break_ranges.len(), h.break_ranges.len()), (1, 1, 1));
+    h.configure(crate::debug::flag::READS, i32::MIN, -1);
+    crate::debug::Observer::read(h, 7, 0x12, 0xAB, 0x8000_0100);
+    assert!(h.note_read_ahead(7, 0x13, 0xCD, 0x8000_0104));
+    assert_eq!(unsafe { emusen_core_debug_reads(m, null_mut(), 0) }, 2);
+    let mut out = [0u32; 10];
+    assert_eq!(unsafe { emusen_core_debug_reads(m, out.as_mut_ptr(), out.len()) }, 2);
+    assert_eq!(out, [7, 0x12, 0xAB, 0x8000_0100, range::READ_WATCH, 7, 0x13, 0xCD, 0x8000_0104, range::READ_BREAK]);
+    assert_eq!(unsafe { emusen_core_debug_reads(m, null_mut(), 0) }, 0, "drained");
+    unsafe { emusen_core_free(m) };
+}
+
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0000);
+    assert_eq!(ABI_VERSION, 0x0001_0002);
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));
-    assert_eq!(EXPORTS.len(), 55);
+    assert_eq!(EXPORTS.len(), 56);
     assert_eq!(EXPORTS.iter().filter(|e| e.1 == 0).count(), 32);
-    assert_eq!(CAPABILITY_NAMES.len(), 18);
+    assert_eq!(CAPABILITY_NAMES.len(), 19);
+    assert_eq!((caps::DEBUG_READS, caps::UNASSIGNED & 1 << 18, caps::UNASSIGNED & caps::DEBUG_READS), (1 << 19, 1 << 18, 0));
     assert_eq!(super::EXPORTING & !(caps::SNAPSHOT | caps::FRAME_SERIAL | caps::ROW_REPEAT | caps::BATTERY_DIRTY), super::EXPORTING);
 }
 

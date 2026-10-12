@@ -207,7 +207,7 @@ impl Core for TestCore {
     }
 
     fn create(r: &Create<'_>) -> Result<Self, i32> {
-        if faults() & FAULT_ONLY_HOST_1_0 != 0 && r.host_abi_version != sys::ABI_VERSION {
+        if faults() & FAULT_ONLY_HOST_1_0 != 0 && r.host_abi_version != 1 << 16 {
             detail("this core runs only on a host of core ABI 1.0");
             return Err(status::NOT_SUPPORTED);
         }

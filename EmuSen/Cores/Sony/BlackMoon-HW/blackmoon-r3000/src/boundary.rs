@@ -484,6 +484,7 @@ fn the_load_delay_corners_the_suite_holds_in_sequence() {
 struct Watch {
     stop_at: Option<u32>,
     wrote: Vec<(u32, u32, u8, u32)>,
+    read: Vec<(u32, u32, u8, u32)>,
     calls: Vec<(u32, u32, u32)>,
     returns: usize,
 }
@@ -494,6 +495,9 @@ impl Observer for Watch {
     }
     fn wrote(&mut self, space: u32, address: u32, value: u8, pc: u32) {
         self.wrote.push((space, address, value, pc));
+    }
+    fn read(&mut self, space: u32, address: u32, value: u8, pc: u32) {
+        self.read.push((space, address, value, pc));
     }
     fn called(&mut self, source: u32, target: u32, kind: u32) {
         self.calls.push((source, target, kind));
@@ -518,4 +522,52 @@ fn the_observer_sees_the_boundary_each_stored_byte_calls_returns_and_exceptions(
     w.stop_at = None;
     assert_eq!(cpu.step_observed(&mut rig, &mut w), Step::Exception(code::SYS as u8));
     assert_eq!(w.calls[1], (ORIGIN + 8, 0x8000_0080, kind::BRK));
+}
+
+/// Each byte a load reads is reported once it has been read, LWL's and LWR's at the bytes of the word they reach; and
+/// `load_ahead`, asked in front of every load in every mode the step distinguishes, names exactly the bytes the step then
+/// reports, except where only the read can tell: a load that meets no device.
+#[test]
+fn every_load_reports_the_bytes_it_read_and_load_ahead_names_them_first() {
+    let (mut cpu, mut rig) = machine("lwl t6, 0x10B(zero)\nlwr t7, 0x109(zero)");
+    rig.put(0x108, 0x4433_2211);
+    cpu.space = 7;
+    let mut w = Watch::default();
+    cpu.step_observed(&mut rig, &mut w);
+    cpu.step_observed(&mut rig, &mut w);
+    assert_eq!(w.read, [(7, 0x108, 0x11, ORIGIN), (7, 0x109, 0x22, ORIGIN), (7, 0x10A, 0x33, ORIGIN), (7, 0x10B, 0x44, ORIGIN), (7, 0x109, 0x22, ORIGIN + 4), (7, 0x10A, 0x33, ORIGIN + 4), (7, 0x10B, 0x44, ORIGIN + 4)]);
+
+    let loads = ["lb", "lbu", "lh", "lhu", "lw", "lwl", "lwr", "lwc2"];
+    let modes: [(&str, u32, u32); 5] = [("kernel", sr::CU2, 0), ("isolated", sr::CU2 | sr::ISC, 0), ("user, KSEG0", sr::CU2 | sr::KUC, 0x8000_0000), ("CU2 off", 0, 0), ("no device", sr::CU2, 0x0008_0000)];
+    let (mut checked, mut unknowable) = (0, 0);
+    for op in loads {
+        for (mode, status, base) in modes {
+            for offset in 0..4u32 {
+                let reg = if op == "lwc2" { "$0" } else { "t1" };
+                let (mut cpu, mut rig) = machine(&format!("{op} {reg}, {:#x}(t0)", 0x200 + offset));
+                for i in 0..16 {
+                    rig.ram[0x200 + i] = 0xA0 + i as u8;
+                }
+                rig.absent = if mode == "no device" { 0x0008_0000 } else { u32::MAX };
+                cpu.regs.r[8] = base;
+                cpu.regs.sr = status;
+                cpu.space = 3;
+                let ahead = cpu.load_ahead(rig.word(ORIGIN));
+                let mut w = Watch::default();
+                cpu.step_observed(&mut rig, &mut w);
+                let seen = w.read.first().map(|r| (r.1, w.read.len() as u32));
+                assert!(w.read.iter().enumerate().all(|(i, r)| r.1 == w.read[0].1 + i as u32 && r.3 == ORIGIN && (mode == "user, KSEG0" || r.2 == rig.ram[at(r.1)])), "{op} {mode} +{offset}: {:x?}", w.read);
+                if mode == "no device" {
+                    assert_eq!(seen, None, "{op} +{offset}: a load that met no device reports nothing");
+                    unknowable += ahead.is_some() as u32;
+                } else {
+                    assert_eq!(ahead, seen, "{op} in {mode} at +{offset}");
+                    checked += 1;
+                }
+            }
+        }
+    }
+    assert_eq!((checked, unknowable), (128, 22), "every load that would reach no device is a case only the read can tell");
+    let (cpu, _) = machine("addiu t0, t0, 4");
+    assert_eq!(cpu.load_ahead(0x2508_0004), None, "no load");
 }

@@ -46,6 +46,8 @@ namespace EmuSen.Cores.Native
         public bool ReadOnly => Flags.Contains("read_only");
         public bool SideEffects => Flags.Contains("side_effects");
         public bool ReportsStores => Flags.Contains("reports_stores");
+        // Its loads reach the read ranges of a core claiming DEBUG_READS - see EmuSen_CoreAPI.md §6.14.
+        public bool ReportsLoads => Flags.Contains("reports_loads");
         // A window onto other spaces' memory, holding none of its own - see EmuSen_CoreAPI.md §29.
         public bool View => Flags.Contains("view");
     }

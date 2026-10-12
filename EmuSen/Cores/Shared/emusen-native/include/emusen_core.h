@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.0.
+/* emusen_core.h - the EmuSen core ABI, version 1.2.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 0u
+#define EMUSEN_CORE_ABI_MINOR 2u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -82,7 +82,8 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_CAP_SETTING_NOTES     (1ull << 15)  /* emusen_core_setting_notes */
 #define EMUSEN_CAP_DEBUG_REGISTERS   (1ull << 16)  /* emusen_core_debug_registers */
 #define EMUSEN_CAP_DEBUG_DISASSEMBLE (1ull << 17)  /* emusen_core_debug_disassemble */
-/* Bits 18..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
+#define EMUSEN_CAP_DEBUG_READS       (1ull << 19)  /* @since 1.2, with DEBUG: emusen_core_debug_reads, range kinds 2 and 3 */
+/* Bit 18 (1.1's MEDIA) and bits 20..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
 
 /* ---- Flags and small constants ------------------------------------------------------------------ */
 #define EMUSEN_OPTION_SKIP_RENDERING 1u  /* set_options bit 0; every other bit is reserved and ignored */
@@ -99,6 +100,12 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_DEBUG_EACH        8u
 #define EMUSEN_DEBUG_PROFILING   16u
 #define EMUSEN_DEBUG_COVERAGE    8u
+#define EMUSEN_DEBUG_READS       32u  /* @since 1.2, DEBUG_READS: loads reported into the read ranges */
+/* Debug: the kinds debug_set_ranges takes; any other kind is refused with EMUSEN_NOT_SUPPORTED. */
+#define EMUSEN_RANGE_WATCH       0u   /* stores logged */
+#define EMUSEN_RANGE_BREAK       1u   /* stores logged, and a stop in front of the next instruction */
+#define EMUSEN_RANGE_READ_WATCH  2u   /* @since 1.2, DEBUG_READS: loads logged after they read */
+#define EMUSEN_RANGE_READ_BREAK  3u   /* @since 1.2, DEBUG_READS: a stop in front of the load, nothing of it run */
 /* Debug: why debug_run_frame stopped, as bits; zero is the frame's end. */
 #define EMUSEN_STOP_BREAKPOINT   1u
 #define EMUSEN_STOP_EACH         2u
@@ -106,6 +113,7 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_STOP_DATA         8u
 #define EMUSEN_STOP_INTERRUPT    16u
 #define EMUSEN_STOP_RING         32u  /* a log is full and must be drained */
+#define EMUSEN_STOP_READ         64u  /* @since 1.2: the next instruction's load reads a byte in a READ_BREAK range */
 /* Debug: the flags debug_run_frame takes. */
 #define EMUSEN_RUN_UNCHECKED     1u   /* the first instruction is not checked against the tables */
 #define EMUSEN_RUN_CONTINUE      2u   /* the frame a stop left open, its budget kept */
@@ -290,7 +298,7 @@ int32_t emusen_core_debug_set(emusen_machine *machine, uint32_t flags, int32_t d
 int32_t emusen_core_debug_set_stack(emusen_machine *machine, const uint32_t *pairs, size_t count);
 /* DEBUG: processor's enabled breakpoints as pairs of first and last address. */
 int32_t emusen_core_debug_set_breakpoints(emusen_machine *machine, uint32_t processor, const int32_t *pairs, size_t count);
-/* DEBUG: stores to report as (space, first, last) triples; kind 0 the watches, 1 the data breakpoints. */
+/* DEBUG: ranges as (space, first, last) triples of an EMUSEN_RANGE_* kind; 2 and 3 only with DEBUG_READS. */
 int32_t emusen_core_debug_set_ranges(emusen_machine *machine, uint32_t kind, const uint32_t *triples, size_t count);
 /* DEBUG: the frame through the observed loop; its EMUSEN_STOP_* bits, zero at the frame's end, with the processor
  * that stopped and its program counter. */
@@ -307,6 +315,9 @@ int64_t emusen_core_debug_registers(const emusen_machine *machine, uint32_t proc
 /* DEBUG_DISASSEMBLE: `count` instructions from `address` as a JSON array of records. */
 int64_t emusen_core_debug_disassemble(emusen_machine *machine, uint32_t processor, uint32_t space, uint32_t address,
                                       uint32_t count, uint8_t *out, size_t len);
+/* @since 1.2, DEBUG_READS: the read log as (space, address, value, pc, kind), kind the range kind that logged it:
+ * READ_WATCH a byte read and its value, READ_BREAK a byte about to be read and the value space_read gives there. */
+int64_t emusen_core_debug_reads(emusen_machine *machine, uint32_t *out, size_t len);
 
 /* ---- Function types, one per export, so a host or a check can name each signature ------ */
 typedef uint32_t (*emusen_core_abi_version_fn)(void);
@@ -364,6 +375,7 @@ typedef int64_t (*emusen_core_debug_counters_fn)(emusen_machine *, int64_t *, si
 typedef int32_t (*emusen_core_debug_pc_fn)(const emusen_machine *, uint32_t, uint64_t *);
 typedef int64_t (*emusen_core_debug_registers_fn)(const emusen_machine *, uint32_t, int64_t *, size_t);
 typedef int64_t (*emusen_core_debug_disassemble_fn)(emusen_machine *, uint32_t, uint32_t, uint32_t, uint32_t, uint8_t *, size_t);
+typedef int64_t (*emusen_core_debug_reads_fn)(emusen_machine *, uint32_t *, size_t);
 
 #ifdef __cplusplus
 }

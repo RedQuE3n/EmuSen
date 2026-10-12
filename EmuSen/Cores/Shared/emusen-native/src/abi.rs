@@ -339,7 +339,8 @@ macro_rules! __native_optional {
         pub unsafe extern "C" fn emusen_native_debug_set_ranges(handle: *mut $t, kind: u32, triples: *const u32, count: usize) -> i32 {
             match $crate::abi::hooks_of(handle) {
                 Ok(h) => {
-                    h.set_ranges(kind, unsafe { $crate::abi::slice(triples, 3 * count) });
+                    // The pre-stable set keeps its two kinds: any but 0 is the data breakpoints, as before 1.2.
+                    h.set_ranges(if kind == 0 { 0 } else { 1 }, unsafe { $crate::abi::slice(triples, 3 * count) });
                     0
                 }
                 Err(e) => e,

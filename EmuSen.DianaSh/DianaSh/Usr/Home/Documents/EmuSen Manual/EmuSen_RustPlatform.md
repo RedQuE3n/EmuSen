@@ -2563,4 +2563,17 @@ three calls; `THIRD_PARTY_NOTICES.md` lists `chd` already, for Diamond. Galaxia'
 `EMUSEN_GALAXIA_DIR_UNPACKED` (`EmuSen_Galaxia.md` §3.7), in both halves. The interface's number went from 7 to 8, in
 `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together, as §3.2's exact rule requires. The C#
 facade is the runtime's `Crystal/Media/ImageSets.cs`, which takes the exports through `PlatformLibrary.Export` as
-Endymion's and Serenity's facades do; it has no C# half, there being no second parser to keep.
+Endymion's and Serenity's facades do; it has no C# half, there being no second parser to keep. *Moved to
+`EmuSen.Galaxia/Media/ImageSets.cs` on 2026-10-12 (§23).*
+
+## 23. Interface 9, 2026-10-12: a mapped file
+
+With the core ABI's minor 1.3 (`EmuSen_CoreAPI.md` §6.24), Galaxia's half gained three calls, `emusen_galaxia_map`,
+`emusen_galaxia_mapped_bytes` and `emusen_galaxia_unmap` (`Platform/platform/src/galaxia.rs` over
+`Platform/galaxia/src/mapped.rs`): a file mapped whole and read-only behind an opaque handle, its address and length,
+and its release. The galaxia crate takes `memmap2` 0.9 (MIT OR Apache-2.0, already in `THIRD_PARTY_NOTICES.md` through
+another crate) for the system's call on each platform. The C# facade is `EmuSen.Galaxia/Media/MappedFile.cs`, whose
+C# half is `System.IO.MemoryMappedFiles`; `GalaxiaParityTests` holds the two alike (`EmuSen_Galaxia.md` §3.8).
+`ImageSets` and `ArchiveImages` moved from the runtime's media module into Galaxia, the set module still reached
+through `emusen_disc_*`. The interface's number went from 8 to 9 in `emusen_platform.h`, `lib.rs` and
+`PlatformLibrary.InterfaceVersion` together.

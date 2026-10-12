@@ -190,9 +190,10 @@ on 2026-10-11.*
 
 `DataStore.Unpacked` is `<home>/Unpacked`, the twenty-first directory of the tree, `EMUSEN_GALAXIA_DIR_UNPACKED` (20)
 in `emusen_platform.h` and `Directory::Unpacked` in `tree.rs`, so both halves name it and `GalaxiaParityTests` holds
-them to one answer. Galaxia names the folder and nothing else; what goes in it is the runtime's archive component
-(`EmuSen.Crystal/Media/ArchiveImages.cs`), which is not part of Galaxia and has no Rust half, since it reads `.zip`
-through .NET's own `System.IO.Compression` and nothing else in the program reads one.
+them to one answer. *Until 2026-10-12* Galaxia named the folder and nothing else, and what went in it was the
+runtime's archive component; since then the component is Galaxia's, `EmuSen.Galaxia/Media/ArchiveImages.cs` (§3.8).
+It has no Rust half, since it reads `.zip` through .NET's own `System.IO.Compression` and nothing else in the program
+reads one.
 
 **The rule** [C]. A game in a `.zip` is unpacked once into `Unpacked/<key>/`, the key the first sixteen hex digits of
 SHA-256 over the archive's full path, its length and its time, so that a changed or moved archive unpacks anew and
@@ -205,9 +206,52 @@ is ever written beside the archive**, and the ROM library is only read.
 
 **Clean-up.** After each unpacking the folder keeps the archives opened most recently, the one opened now always,
 up to `ArchiveImages.KeptBytes` (4 GiB) in all; the least recently opened go first, a folder's time being moved on
-each opening. A partial folder older than an hour, which only a process that stopped part way leaves, is removed. A
-core holds its own copy of the disc from create (§5.11 of `Diamond_Plan.md`), so removing a folder never takes a disc
-from a running game; it only costs the next opening its unpacking.
+each opening. A partial folder older than an hour, which only a process that stopped part way leaves, is removed.
+~~A core holds its own copy of the disc from create, so removing a folder never takes a disc from a running game.~~
+*Since 2026-10-12* a core may read its disc in place (§3.8), so a folder a game holds is never removed: `Prune` takes a
+folder only after opening its marker alone, which a hold refuses, and deletes the marker first, so a folder caught part
+way is never used (`Unpack` clears a folder without its marker and unpacks it anew).
+
+### 3.8 A disc's files: sets, archives and mappings (2026-10-12)
+
+*Decided 2026-10-12 with the core ABI's minor 1.3 (`EmuSen_CoreAPI_Extensions.md` §10.2.3): Galaxia owns where a
+disc's files are and keeping them available; `emusen-disc` owns what a disc is (`EmuSen_Disc.md` §9); Crystal keeps
+which system a disc is for.* Moved from the runtime's media module (`EmuSen.Crystal/Media/`) with their rules
+unchanged: `ImageSets` (a sheet's companions, found as written else part by part ignoring case; an `.m3u`'s discs; the
+`.sbi` beside an image; the shelf's rule) and `ArchiveImages` (§3.7). `ImageSets` asks the platform library's
+`emusen_disc_*` calls what a list means, so Galaxia uses the disc crate's knowledge and the crate knows nothing of
+Galaxia. `MediaProbe` and `DiscSectors` stayed in Crystal: they serve routing.
+
+| Type | What it is |
+|---|---|
+| `MappedFile` | a file mapped whole and read-only: its address and length, `Span` and `Head` for a part, released when disposed. Opening reads none of it; the system reads each page from the medium when it is first touched |
+| `DiscFiles` | a disc's image and companions (a sheet's tracks, then an `.sbi`), each a `MappedFile`, with a hold on the unpacked folder they are in; one `Dispose` lets all go |
+| `DiscSet` | a library file's discs: an `.m3u`'s in order, else the one image, an archive unpacked; `Open(n)` maps disc *n*, unpacking again where the folder has gone since |
+| `ArchiveImages.Hold(path)` | the hold `DiscFiles` takes: the folder's marker opened sharing reading, which `Prune`'s opening of it alone refuses |
+
+**Both halves.** `MappedFile` is in C# over `System.IO.MemoryMappedFiles` and in Rust over the `memmap2` crate
+(`Platform/galaxia/src/mapped.rs`; `emusen_galaxia_map`, `_mapped_bytes` and `_unmap`, interface 9), chosen by the
+switch as every other rule is. `GalaxiaParityTests.A_file_is_mapped_to_the_same_bytes_and_refused_with_the_same_exception_both_ways`
+holds the two to the same bytes and the same exception for a missing file (`FileNotFoundException`), a missing folder
+(`DirectoryNotFoundException`) and a folder (`UnauthorizedAccessException`); writing it found the library answering a
+folder with the system's "no such device", and it now refuses one as .NET does. The conformance kit, which has no C#,
+maps through the Rust module.
+
+**The rule of keeping** [C]. A `DiscFiles` is kept for as long as a machine may read it and no longer: by the host's
+`CoreMachine` while a core that borrows holds the disc, released at `free` or when the drive takes another disc; for a
+core that copies, released as soon as create or the insert returns. Nothing of the program writes a file it maps.
+Another program may: on Linux and macOS a mapped file can be renamed or deleted and stays readable, but one truncated
+or rewritten under a running game is read as it is then, and a page past a truncation ends the process with the
+system's signal for a mapped page that no longer exists; removing the card has the same effect, where a copied disc
+outlived it. On Windows a mapped file cannot be deleted, renamed or written while the game runs; the player is told
+it is in use, until the game is closed or its disc changed. .NET's own advisory locks are not seen by the library's
+mapping, as by any program that is not .NET, so the folder hold, and not a lock on each file, is what keeps pruning
+away.
+
+**Tests** (`DiscStreamingTests`): a held unpacked folder survives `Prune` with nothing kept and goes at the next prune
+once let go; the engine holds a borrowing core's files for the machine's life and a copying core's not past create
+(read from the system's list of the process's mappings); Change Disc lets the earlier disc go only once the core has
+taken the next, and a refused disc leaves the earlier in place.
 
 ### 4.1 Why rename rather than write-in-place
 

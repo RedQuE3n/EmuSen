@@ -27,6 +27,8 @@ pub const DEFAULT_THREADS: u32 = 4;
 pub const DEFAULT_STACKTOP: u32 = 0x801F_FF00;
 /// Where the kernel starts the code that follows its own initialisation ("Mid-Boot Hook").
 pub const SHELL_ENTRY: u32 = 0x8003_0000;
+/// The scratchpad, which carries A(A0h)'s settings through the reset.
+pub const SCRATCH: u32 = 0x1F80_0000;
 
 /// The table of tables at 100h: each entry the address and the size in bytes of its control blocks.
 pub mod table {

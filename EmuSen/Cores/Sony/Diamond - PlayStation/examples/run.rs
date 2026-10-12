@@ -5,7 +5,8 @@
 //! `--heading TEXT` prints the TTY from TEXT on, leaving out what a BIOS printed before the program; `--trace` then
 //! traces the controller's commands and responses, as `--trace-game` does from the entry of a game booted by `--boot`, once the BIOS has handed over. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
 //! the image itself when PATH is no PS-EXE), `--analog` presses port 1's Analog button at frame 30; `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
-//! `cdrom/disc-swap` does. A development tool for the test programs (Diamond_Native.md §11.11, Diamond_CDROM.md §9):
+//! `cdrom/disc-swap` does; `--trace-at FRAME` traces the controller from a frame on; `--calls` counts the kernel calls a program makes by table and number, as the program
+//! enters the A0h, B0h and C0h vectors. A development tool for the test programs (Diamond_Native.md §11.11, Diamond_CDROM.md §9):
 //! on the open kernel, a player's own BIOS, or none.
 
 use diamond::kernel::{self, Kernel};
@@ -50,6 +51,22 @@ fn main() {
         m.insert_disc(d);
         eprintln!("[disc opened in {:.0} ms]", loaded.as_secs_f64() * 1e3);
     }
+    let card_files = ["--card", "--card2"].map(|flag| args.iter().position(|a| a == flag).map(|i| args[i + 1].clone()));
+    for (n, f) in card_files.iter().enumerate() {
+        if let Some(f) = f {
+            let data = std::fs::read(f).ok();
+            m.insert_card(n, data.as_deref());
+        }
+    }
+    let presses: Vec<(i64, u32, i64)> = args
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| *a == "--press")
+        .map(|(i, _)| {
+            let p: Vec<&str> = args[i + 1].split(':').collect();
+            (p[0].parse().expect("a frame"), u32::from_str_radix(p[1], 16).expect("a hex mask"), p.get(2).map_or(6, |n| n.parse().expect("frames")))
+        })
+        .collect();
     if args.iter().any(|a| a == "--cards") {
         m.insert_card(0, None);
         m.insert_card(1, None);
@@ -72,6 +89,9 @@ fn main() {
     let trace_game = args.iter().any(|a| a == "--trace-game");
     let lid_at = args.iter().position(|a| a == "--open-at").map(|i| args[i + 1].parse::<i64>().expect("a frame"));
     let every = args.iter().position(|a| a == "--pictures").map(|i| (args[i + 1].clone(), args[i + 2].parse::<i64>().expect("a frame count")));
+    let calls = args.iter().any(|a| a == "--calls");
+    let trace_at = args.iter().position(|a| a == "--trace-at").map(|i| args[i + 1].parse::<i64>().expect("a frame"));
+    let mut seen: Vec<(char, u32, u64, i64)> = Vec::new();
     let wav = args.iter().position(|a| a == "--wav").map(|i| args[i + 1].clone());
     let mut audio: Vec<i16> = Vec::new();
     let mut chunk = vec![0i16; 8192];
@@ -80,6 +100,36 @@ fn main() {
         if wav.is_some() {
             let n = m.board.spu.out.drain(&mut chunk, usize::MAX);
             audio.extend_from_slice(&chunk[..n]);
+        }
+        if trace_at == Some(m.frames) {
+            m.board.cdrom.trace = true;
+        }
+        if !presses.is_empty() {
+            let mask = presses.iter().filter(|(at, _, n)| (*at..*at + *n).contains(&m.frames)).fold(0, |a, p| a | p.1);
+            m.board.sio0.set_buttons(0, mask);
+        }
+        if calls {
+            m.board.field_done = false;
+            while !m.board.field_done {
+                let (pc, n) = (m.cpu.regs.pc & 0x1FFF_FFFF, m.cpu.regs.r[9]);
+                if matches!(pc, 0xA0 | 0xB0 | 0xC0) && !m.cpu.regs.branch.slot {
+                    let t = (b'A' + ((pc - 0xA0) >> 4) as u8) as char;
+                    match seen.iter_mut().find(|e| e.0 == t && e.1 == n) {
+                        Some(e) => e.2 += 1,
+                        None => seen.push((t, n, 1, m.frames)),
+                    }
+                }
+                m.step();
+            }
+            m.board.sync_spu();
+            m.frames += 1;
+            if let Some((dir, n)) = &every
+                && m.frames % n == 0
+            {
+                let d = &m.board.gpu.display;
+                std::fs::write(format!("{dir}/f{:06}_{}x{}.rgba", m.frames, d.width, d.height), d.frame()).expect("written");
+            }
+            continue;
         }
         if trace_game && !m.board.cdrom.trace {
             m.board.field_done = false;
@@ -133,6 +183,17 @@ fn main() {
         let n = m.board.spu.out.drain(&mut chunk, usize::MAX);
         audio.extend_from_slice(&chunk[..n]);
         write_wav(path, &audio);
+    }
+    for (n, f) in card_files.iter().enumerate() {
+        if let (Some(f), Some(c)) = (f, m.card_in(n))
+            && c.changed
+        {
+            std::fs::write(f, &c.data).expect("the card written");
+            eprintln!("[card written to {f}]");
+        }
+    }
+    for (t, n, count, first) in &seen {
+        eprintln!("[call {t}({n:02X}h) {count} times, first at frame {first}]");
     }
     let tty = m.space(TTY_ID).unwrap();
     let end = tty.iter().position(|&b| b == 0).unwrap_or(tty.len());

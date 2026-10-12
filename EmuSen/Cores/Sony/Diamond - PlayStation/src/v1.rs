@@ -68,7 +68,7 @@ pub const BIOS_JAPAN: u32 = 1;
 pub const BIOS_AMERICAS: u32 = 2;
 pub const BIOS_EUROPE: u32 = 3;
 
-const BIOS_COST: &str = "Most games start and save as on a console. A game that relies on an undocumented kernel call, reads the kernel's code, or depends on its exact timing may behave differently, and the start-up screen is EmuSen's own. Until the rest of the kernel exists, only programs loaded directly run without your BIOS; discs and memory cards need your own.";
+const BIOS_COST: &str = "Most games start and save as on a console. A game that relies on an undocumented kernel call, reads the kernel's code, or depends on its exact timing may behave differently, and the start-up screen is EmuSen's own. Games that use the console's own text characters (mostly Japanese ones) show no text where they use them, as EmuSen does not carry Sony's fonts.";
 
 pub fn bios(market: Market) -> Firmware {
     let (which, name, label) = match market {

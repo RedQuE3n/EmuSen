@@ -52,26 +52,26 @@ namespace EmuSen.WiseMan.DianaSh
         public void Prune_without_apply_only_reports()
         {
             WriteSystem("Nintendo - Super Nintendo Entertainment System", 2);
-            WriteSystem("Sony - PlayStation", 3);
+            WriteSystem("Sony - PlayStation Portable", 3);
 
             string output = NewShell().Execute("cheat db prune");
 
             Assert.Contains("Would delete 1 system(s), 3 file(s)", output);
             Assert.Contains("--apply", output);
-            Assert.True(Directory.Exists(Path.Combine(_root, "Sony - PlayStation")));
+            Assert.True(Directory.Exists(Path.Combine(_root, "Sony - PlayStation Portable")));
         }
 
         [Fact]
         public void Prune_with_apply_deletes_and_says_what_it_kept()
         {
             WriteSystem("Nintendo - Super Nintendo Entertainment System", 2);
-            WriteSystem("Sony - PlayStation", 3);
+            WriteSystem("Sony - PlayStation Portable", 3);
 
             string output = NewShell().Execute("cheat db prune --apply");
 
             Assert.Contains("Deleted 1 system(s), 3 file(s)", output);
             Assert.Contains("Nintendo - Super Nintendo Entertainment System", output);
-            Assert.False(Directory.Exists(Path.Combine(_root, "Sony - PlayStation")));
+            Assert.False(Directory.Exists(Path.Combine(_root, "Sony - PlayStation Portable")));
             Assert.True(Directory.Exists(Path.Combine(_root, "Nintendo - Super Nintendo Entertainment System")));
         }
 
@@ -89,14 +89,14 @@ namespace EmuSen.WiseMan.DianaSh
         public void A_shell_told_nothing_about_cores_prunes_nothing()
         {
             WriteSystem("Nintendo - Super Nintendo Entertainment System", 2);
-            WriteSystem("Sony - PlayStation", 3);
+            WriteSystem("Sony - PlayStation Portable", 3);
 
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
             var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
             string output = DianaShInterpreter.CreateDefault(target).Execute("cheat db prune");
 
             Assert.Contains("Nothing to prune", output);
-            Assert.True(Directory.Exists(Path.Combine(_root, "Sony - PlayStation")));
+            Assert.True(Directory.Exists(Path.Combine(_root, "Sony - PlayStation Portable")));
         }
 
         [Fact]

@@ -443,7 +443,7 @@ namespace EmuSen.WiseMan.Mistress
 
             var tabs = window.GetControl<TabControl>("Tabs");
             var headers = tabs.Items.OfType<TabItem>().Select(t => (string)t.Header!).ToArray();
-            Assert.Equal(new[] { "General", "NES", "GB", "SNES", "N64", "Genesis" }, headers);
+            Assert.Equal(new[] { "General", "NES", "GB", "SNES", "N64", "Genesis", "PlayStation" }, headers);
 
             foreach (TabItem item in tabs.Items.OfType<TabItem>().Skip(1))
             {
@@ -461,7 +461,8 @@ namespace EmuSen.WiseMan.Mistress
                 }
 
                 Assert.True(AddButton(window).IsEnabled, $"{console} should accept a typed code.");
-                Assert.Contains("Game Genie", texts.First(t => t.StartsWith("Accepts:")));
+                // The PlayStation's formats are the GameShark and the Xploder, told apart by their digits - see EmuSen_Cheats.md §10.
+                Assert.Contains(console == "PlayStation" ? "Xploder" : "Game Genie", texts.First(t => t.StartsWith("Accepts:")));
             }
 
             window.Close();

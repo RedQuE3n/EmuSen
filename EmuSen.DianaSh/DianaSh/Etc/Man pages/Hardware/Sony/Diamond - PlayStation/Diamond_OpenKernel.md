@@ -299,7 +299,10 @@ saved registers within the 20 bytes is not documented [C].
 headerbuf, and Load reads the body to its destination and flushes the cache; 1 or 0 [C on the return value]
 ("A(41h)", "A(42h)") [R]. **LoadExec** copies the name with its path upper-cased and ";1" added when no version is
 given, enables interrupts by syscall 2, loads and runs the program with the given stack by Exec(headerbuf,1,0), and
-then ends in the documented lock-up; the reload of the boot program it would attempt is phase 2's ("A(51h)") [R]. With
+then ends in the documented lock-up; the reload of the boot program it would attempt is phase 2's ("A(51h)") [R]. *Since
+2026-10-12* (`Diamond_OpenKernel_Phase2.md` §26.2): before it loads, LoadExec masks every source in I_MASK and restores
+the default exit, since the load replaces the memory its caller's handlers lie in, and it enters the program with
+I_MASK and I_STAT clear [C]. With
 no device holding files before phase 2, each fails.
 
 **FlushCache** (A(44h)) runs from KSEG1 with interrupts off, sets BCC's tag mode (TAG and IS1), isolates the cache, and
@@ -714,7 +717,8 @@ only programs loaded directly run without your BIOS; discs and memory cards need
   which only a console run can supply.
 - **Games that patch the kernel.** psx-spx's excluded "BIOS Patches" section describes patches games apply to the
   kernel's code and tables; a replacement writer learns of them only by a game failing (the plan's P7). The tables are
-  at the documented places, but code a patch expects at a fixed address is not there.
+  at the documented places, but code a patch expects at a fixed address is not there. *Found 2026-10-12*: Mega Man
+  Legends calls three addresses past ChangeClearPAD's entry, which now return (`Diamond_OpenKernel_Phase2.md` §26.1).
 - **Games that read the kernel**: its version string or date to decide on patches (this kernel's are its own), its
   garbage area at 0-0Fh (§10 Q1), or its code.
 - **Undocumented defaults and conventions** (§9): wrong guesses show as misbehaving games rather than failures.

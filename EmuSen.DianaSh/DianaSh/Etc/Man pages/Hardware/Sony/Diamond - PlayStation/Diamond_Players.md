@@ -688,3 +688,17 @@ build outside the repository that printed GP0 words, GTE commands and stores by 
 boxes, their pictures, sound, card files and RAM at a test program's done word only; the player's BIOS was given to
 them by path and to nothing else, and nothing ran on Diamond but the open kernel. No emulator's source, no firmware or
 listing of one, and none of the documents `DOCS.txt` excludes was opened.
+
+### 13.9 An eighth game: Mega Man Legends (2026-10-12)
+
+The tester's copy stopped at a black screen two frames after its entry on the open kernel; the kernel's writer found
+and fixed three defects (`Diamond_OpenKernel_Phase2.md` §26, the first of them in the form of §27). Its script is
+`psxplay/mega-man-legends.txt`, T the CAPCOM logo at frame 440 on the merged image; it has not been run on a referee.
+With §27's image and that script the game was driven to frame 12,600: the opening scene, the first ruin's instructions,
+its corridor and a fight with Reaverbots (§27.6).
+
+| | Diamond |
+|---|---|
+| Reaches play | **yes**: the Capcom animation and logo, "now loading…", the story's text over the sea; with the script the title, NEW GAME, Mega Man in the first ruin from about frame 3,360, moving with the presses, a shutter lifted, a corridor walked and the refractor's scene |
+| Pictures | nothing wrong seen |
+| Cards | the open kernel's formatted card in slot 1; no save made by the script |

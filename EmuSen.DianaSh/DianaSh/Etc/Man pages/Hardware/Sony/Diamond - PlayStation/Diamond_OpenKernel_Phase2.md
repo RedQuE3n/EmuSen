@@ -28,7 +28,8 @@ when the last one's last response arrives, and an INT5 or INT4 ends the operatio
 operation runs at a time.
 
 **Who services it** [C, §20 item 1]. While the kernel has an operation running it *owns* the drive: it sets I_MASK's
-bit 2 (restored on release when it was clear), and its element at priority 0, the first function of
+bit 2 (restored on release when it was clear; *since §26.3* only for an asynchronous operation, a synchronous one
+masking it), and its element at priority 0, the first function of
 `EnqueueCdIntr`'s element (A(90h), `CdromIoIrqFunc1`), services the controller when IRQ2 is pending. A caller waiting
 for an operation services the controller itself between interrupts, inside a short critical section, so that the
 kernel's CD calls work with interrupts disabled too. When the kernel owns no operation, its element answers nothing and
@@ -932,6 +933,202 @@ hexadecimal, by a comparison of the kernel's RAM before and after the game's fir
 the kernel, of the kind psx-spx's excluded "BIOS Patches" describes, and so may reflect the original's layout. They were
 not decoded or studied, are not recorded here, and nothing in the kernel depends on them: the fix is to keep their
 target in the ROM.
+
+## 26. Mega Man Legends (2026-10-12)
+
+*Written by the kernel's writer under the replacement writers' rules of the plan's §1.3.* The tester's copy of Mega Man
+Legends stopped at a black screen on this kernel two frames after its entry at frame 201. The game was run on Diamond's
+open kernel only, with no firmware folder, and read only through its own code and RAM, its calls and its accesses to the
+logged registers (§22's `--game`). Three defects were found in turn, each shown by a test failing on the image before it
+and fixed; the marks are this page's, **[M]** measured on 2026-10-12. §26.7 lists what was read and states the
+exposures.
+
+**Where the game stood** [M]. Its last logged accesses read I_MASK as 0Dh (vblank, CD and DMA enabled) and I_STAT as 0;
+those reads came from the game's own vblank element, run by the exception that followed. The CPU was not waiting on an
+interrupt: it was in SystemError, entered through A(40h) after a data bus error (Cause 1Ch) at 9FC03684h, inside the
+kernel's own code, which the game had jumped into.
+
+### 26.1 Addresses called past ChangeClearPAD's entry
+
+**What the game does** [M, its library's code at 8001A2E4h-8001A85Ch, read from RAM at frame 203]. Its pad library takes
+GetB0Table's table, reads B(5Bh)'s entry, and works on the code it expects past that entry: it stores zeros into nine
+words at entry+62Ch and eleven at entry+594h, stores four words each at entry+3D8h and entry+4E0h, and calls FlushCache;
+it keeps entry+884h, entry+894h and entry+7A0h as function pointers. Its pad start (8001A47Ch) calls StartPAD2,
+ChangeClearPAD(0), then entry+884h; its pad stop (8001A4ACh) calls entry+894h before StopPAD2; entry+7A0h is returned to
+the caller and not called in this game. On §25's image B(5Bh)'s entry was ChangeClearPAD at 9FC030C0h, so entry+884h was
+9FC03944h, the middle of another function, which ran with the game's registers until a load faulted. This is the risk
+the plan's §5.9 names (P7): games call and patch the kernel in ways psx-spx's excluded section describes, which a
+replacement writer learns of only by a game failing.
+
+*Withdrawn 2026-10-12, before merging; §27 replaced it* (§26.8). ~~**The answer** [C]. B(5Bh)'s table entry names a jump to ChangeClearPAD followed by 1000h bytes of `jr ra` and `nop`
+pairs, so that every word from entry+4h to entry+FFCh is a function that returns at once, with v0 and every saved
+register as the caller left them. What the original's code at those offsets does is not known, and is not sought; the
+game needs nothing more from them than a return, as its play shows (§26.4). The stores land in the ROM and do nothing,
+as Q7's decision keeps every table entry in the ROM (§25.3). The span covers the furthest offset this game uses, 894h,
+with room for a library version that reaches further; one that addresses past 1000h, or computes addresses from another
+entry, is not known (**Q9**). The sled costs 4 KiB of the ROM.~~
+
+~~**Shown** [M]. `every_address_a_library_calls_past_change_clear_pads_entry_returns_at_once` (the harness's
+`tests/kernel.rs`) makes the game's stores, calls FlushCache, then calls entry+7A0h, +884h, +894h and every word from
++4h to +FFCh with the saved registers set, and calls ChangeClearPAD at the entry. On §25's image it fails at the first,
++7A0h, the CPU in the exception path after 100 instructions; it passes.~~ The test was not merged with the answer.
+
+### 26.2 LoadExec over its caller
+
+**What the game does** [M]. With §26.1's fix the game shows its Capcom logo and "now loading…", then at frame 1211 calls
+LoadExec("cdrom:\ROCK_NEO.EXE;1"): 823,296 bytes (C9000h) loaded at 80010000h, over the boot program SLUS_006.03 (4A000h
+bytes at 80010000h) that calls it. Before the call the boot program resets its graphics, closes an event, stops its pads
+and calls `_96_init`, but leaves in place its exit structure (HookEntryInt at 80046BB4h, whose RA, 80012ACCh, enters its
+interrupt dispatcher), a vblank callback in its own table (80010C18h, a frame counter) and vblank enabled in I_MASK,
+with ChangeClearRCnt(3, 0) and ChangeClearPAD(0) given, so that no kernel handler acknowledges vblank. Twenty-eight
+frames into the load a vblank's exception ran the chains and then the exit; the dispatcher called 80010C18h, which by
+then held ROCK_NEO.EXE's data, and the load it decoded faulted (Cause 1Ch at 80010C18h), into SystemError.
+
+**What the documents say** [R "A(51h)", "B(19h)"]. LoadExec copies the name, "Enables IRQs via ExitCriticalSection",
+loads by LoadTest and runs the file by Exec(headerbuf,1,0); a hook "is executed only if the ExceptionHandler has been
+fully executed". Nothing is said of I_MASK or of the exit structure across LoadExec. A call that by its description
+loads over its caller works only if the caller's handlers do not run while their memory is replaced [A].
+
+**The answer** [C]. LoadExec, which never returns to its caller, masks every source in I_MASK and restores the default
+exit (ResetEntryInt's) before it loads, since the caller's handlers lie in the memory the load replaces; it then enters
+the program with I_MASK and I_STAT clear, the state §15 gives the boot program, so that the program enables what it
+uses, as a boot program does. The kernel's own reads need no interrupt (§26.3). The chains' elements a caller leaves
+queued are not removed: this game removes its own first, an element left in a chain is reached only through a source the
+new program enables or an exception it takes, and SetConf, which psx-spx gives as the call that clears the chains, is
+not LoadExec's.
+
+**Shown** [M]. Diamond's `loadexec_starts_its_program_free_of_the_callers_interrupt_handlers` boots
+`programs/kernel-loadexec.s` from a synthetic disc: an exit structure whose RA is a hook of its own at 80010008h, vblank
+enabled, then LoadExec of `kernel-loadexec-second.s`, a 128 KiB program at 80010000h whose code at 80010008h marks a
+word if it is ever reached. Each part of the answer was withdrawn in turn, §26.3's change kept: with LoadExec as on
+§25's image the hook runs during the load; without the mask before the load the vblank stands unacknowledged and the
+default exit re-enters the exception for ever (the run ends in the exception path at frame 1,200); without the exit
+restored the new program's first vblank, with SetIrqAutoAck(0, 1), goes to the old structure and reaches the marker.
+With all three the hook's count is the same at LoadExec and at the new program's entry, I_MASK and I_STAT read 0 there,
+and the marker stays 0.
+
+### 26.3 The kernel's synchronous CD operations and the program's handler
+
+**What the game does** [M, the controller's trace and the game's accesses]. With §26.1 and §26.2 the game played its
+intro, but on one build `_96_init` at frame 662 took 549 frames. Init's second response (INT2) arrived during a vblank's
+exception after the kernel's priority 0 element had looked; the game's dispatcher, reached through its exit, read the
+response and acknowledged it at the controller (its code at 80013C8Ch-80013D84h); the kernel's wait then ran its
+4,000,000 polls out. Which builds meet it depends on where the response falls against the exception, so the delay came
+and went with unrelated changes to the image. psx-spx's "Unstable IRQ Handling" describes the same hazard among the
+original's handlers [R].
+
+**The answer** [C]. ~~§12.1: while the kernel owns the drive it sets I_MASK's bit 2.~~ An asynchronous operation, which
+the kernel's element carries on, unmasks IRQ2 as before; a synchronous one, whose caller services the controller itself
+between interrupts (§12.1), masks IRQ2 for its duration and restores the bit on release, so that no program's handler is
+offered a response of the kernel's. The responses still raise I_STAT's bit, which the kernel's servicing acknowledges.
+
+**Shown** [M]. The same Diamond test has its hook OR the I_MASK it finds into a word while the program calls `_96_init`
+and CdReadSector: on §25's image, and on this one with the change withdrawn, the word reads 5, IRQ2 enabled beside
+vblank; with it, 1. With it Mega Man Legends' `_96_init` returns within a frame and LoadExec comes at frame 671.
+
+### 26.4 Mega Man Legends, played
+
+[M, `examples/run` with no presses, pictures every 300 frames to frame 6,000.] Frame 300: Capcom's opening animation, a
+field of glowing cubes joined by lines. 600: the CAPCOM logo on white. 900 and 1,200: "now loading…" on black, the
+second program loading. 1,500: the sky over the sea with the first line of the story, "In a world covered by endless
+water…". 1,800 to 5,400: the story's text scrolling up over the sky and sea, an airship at the right, from "People are
+forced to eke out a living on the small patches of land" through the quantum refractors, the Diggers and the "Mother
+Lode" to "Seeking this Mother Lode, Diggers travel from one island to another in their flying machines". 5,700 and
+6,000: "Hope… Despair… Charity… Greed… Duty… Power…" with a stone tower at the left.
+
+[M, `psxplay.py diamond` by `EmuSen.WiseMan/Reference/analysis/psxplay/mega-man-legends.txt`, T 600, pictures every 120
+frames to 7,200, the open kernel's formatted card in slot 1.] Start at T+1,400 skips the story; PRESS START BUTTON from
+about 2,280; Start at 2,600 gives the menu, NEW GAME, CONTINUE, OPTION; Start at 2,900 begins a new game. From 3,360
+Mega Man stands in a dark ruin and turns and moves with the script's presses; at 4,560 and 4,800 he lifts a shutter;
+from 5,280 he walks a lit corridor away from and then towards the camera; from 6,000 the scene of the refractor on its
+pedestal, which he takes up. An earlier run with Start every 300 frames from 2,000 reached the ruin's corridor by 3,900
+and opened and closed the game's item menu (LIFE, ZENNY, TIME counting 00:00 to 00:02) to frame 12,000. Nothing wrong
+was seen in the pictures. **Not shown**: play beyond the first ruin, and a save.
+
+### 26.5 The image and the tests
+
+~~[M] 524,288 bytes, 104,792 of them before the last non-zero byte, the variables ending at A310h; SHA-256
+`fc1fb50726030c523bb39edaeaffb13b6cbc91e3a644241d10ee763d21f1f420`, rebuilt byte for byte with
+`DIAMOND_KERNEL_REBUILD=require`. The images between: `6255e670…` after §26.1 and `7076b96e…` after §26.2.~~ That image
+was never merged; the merged image, carrying §26.2's and §26.3's fixes with §27's stretch, is §27's,
+`c1a002e8…`. The counts below are of the image this section built.
+
+- `cargo test --release` in `kernel-harness/` with the rebuild required: 56 tests, all passing; new: §26.1's.
+- `cargo test --release` in Diamond's crate: 155 unit tests and 71 program tests, with and without
+  `EMUSEN_DIAMOND_PS1TESTS`; new: §26.2's.
+- WiseMan's `Diamond` tests under the test lock with `EMUSEN_DIAMOND_PS1TESTS` set: 43 of 43, every ps1-tests program
+  passing by its TTY and RAM records. `DiamondDebugTests`' read watch test compared a frame's store count with a
+  quarter of its loaded bytes exactly, which holds only when the frame's edges fall between two of the loop's
+  iterations: on this image the frame the watches see begins after the loop's first load and before its store (pc
+  8001000Ch at frame 10 by the run tool), and the counts were 22,645 against 22,644; it passed on §25's image. The
+  test now allows one iteration at the edges.
+- The seven games by their scripts on the open kernel, `psxplay.py diamond` to frame 18,000 with pictures every 300
+  frames, the formatted card (Spyro the Dragon a blank one) [M]: Crash Bandicoot's N. Sanity Beach and the hollow where
+  the camera rests; Spyro the Dragon's card menus, the Artisans and "Entering Stone Hill"; Castlevania's file screen,
+  "JOURNEY BACK TO 1792" and Richter's stage to the end; Silent Hill's opening, the foggy street and the alley; Ape
+  Escape's first stage and the tutorial's boxes; Rayman's game chosen and named and the Dream Forest; Tekken 3's fights,
+  "GAME OVER" and its attract mode, each as `Diamond_Players.md` §13 records them.
+
+### 26.6 Questions for the tester
+
+*Both decided 2026-10-12 as recommended* (§27.4).
+
+9. **Q9, the returns past ChangeClearPAD.** The game's library calls three offsets past B(5Bh)'s entry; the kernel
+   answers 1000h bytes of returns there and nothing else. Another library may anchor at another entry or reach further.
+   *Recommended*: keep the construction to the entry a game is seen to use, extending it, entry by entry, when a game
+   shows the need, as §26.1 did.
+10. **Q10, LoadExec and the chains.** LoadExec now masks the sources and restores the exit, but leaves the chains'
+    elements a caller queued. *Recommended*: leave them until a game is seen to rely on their removal, since a program
+    may hand over with an element of its own kept in a part of memory the new program does not load over.
+
+### 26.7 Reading log, and exposures
+
+Opened for this section, 2026-10-12: psx-spx `6d7d1bc` `kernelbios.md` lines 1114-1240 (interrupt handling, the priority
+chains, SysEnqIntRP and SysDeqIntRP, the critical sections, C(06h)), 1540-1680 (the timer and joypad functions), 700-840
+(the file execute functions, SetConf, FlushCache), 900-945 (the CD's internal functions' entries) and 2085-2110
+(GetB0Table); `DOCS.txt`'s exclusions. EmuSen's own: this page whole, `Diamond_OpenKernel.md` §1-§4, §6-§11,
+`Diamond_Plan.md` §1 and §5.9, `Diamond_Players.md` §13, the disputes log's rules and headings; the kernel and its
+harness, and of Diamond's crate `examples/run.rs`, `tests/programs.rs` and `programs/kernel-cd.s`; `psxplay.py` and its
+scripts. The game's own code and RAM on the open kernel only: its pad library's calls and stores, its interrupt
+dispatcher and callback table, its boot program's calls before LoadExec, the two executables' headers and its CD
+handler's accesses.
+
+**Never opened**: any firmware, `~/.cache/emusen/probe/diamond/sysdir/` or `~/Documents/BIOS/`, the runs under
+`~/.cache/emusen/probe/diamond/mml/` and `realbios/`, a BIOS listing, disassembly or trace, OpenBIOS, any emulator's
+source, ps1-tests' `common/`, `Diamond_References.md`, and the bodies of psx-spx's "BIOS Patches" and of the sections
+still to be screened. No reference emulator and no `psxreferee.py` was run, and Diamond only on the open kernel.
+
+**Exposures**, stated plainly:
+
+- A search of `kernelbios.md` for ChangeClearPAD, not confined to the permitted lines, printed two lines from inside
+  "BIOS Patches" (lines 3203 and 3236, excluded), each a part of a sentence naming B(5Bh) ChangeClearPAD, and an
+  earlier search printed line 2296, inside "BIOS More Internal Functions" (not yet screened), the call's row in a list
+  with a note that it serves the cards too. Nothing in them was used: §26.1 rests on the game's code, and
+  ChangeClearPAD's meaning is unchanged from `Diamond_OpenKernel.md` §9 item 4. Later searches were confined to the
+  permitted lines.
+- The game's pad library is a patch of the kernel of the kind psx-spx's excluded section describes, and its offsets
+  may reflect the original's layout. Only the offsets it calls and stores at are recorded here, as the fix needs them;
+  the words it stores were seen in the disassembly, are not recorded, and nothing depends on them, since they meet the
+  ROM.
+
+### 26.8 Why §26.1's answer was withdrawn
+
+Two findings came after this section was written, and the tester decided both on 2026-10-12.
+
+- **The image's check.** `firmwarecheck.py` against the 18 images of the firmware folder, by `EmuSen_Firmware.md` §0's
+  control rule, failed on all 18 with this section's image: 36,497-119,757 runs of 9 bytes or more shared with an image,
+  against the control's 11,299-27,599 [M]. The runs were the 4 KiB of `jr ra` and `nop` pairs, a pair any compiled
+  MIPS code holds at the end of each of its functions; with those 4 KiB blanked in a scratch copy the same image passed
+  (6,778 runs against 11,315 on one image, 16,750 against 27,211 on another) [M]. Nothing was copied; the form of the
+  answer fails a check whose purpose is to bound what a replacement shares with an original, and the form was changed,
+  not the check.
+- **The exposure above.** The three lines printed by the unconfined search all concern B(5Bh), the call §26.1 answers.
+
+*Decided 2026-10-12:* §26.1's answer is withdrawn and rebuilt by another of the kernel's writers, who had read none of
+this section, its branch or its scratch files, from the game's own code alone, in a form of fill and sparse returns
+that the check passes (§27); §26.2's and §26.3's fixes stand, carried into §27's image unchanged; the exposure is
+recorded here; and Q9 and Q10 are decided as recommended. §27's image passes the check on all 18 images
+(`EmuSen_Firmware.md` §0).
 
 ## 27. The stretch behind B(5Bh)'s entry (2026-10-12)
 

@@ -1299,6 +1299,42 @@ fn the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee() {
     assert_eq!(rows[4], [(5, 24), (1, 42), (1, 60), (41, 63)]);
 }
 
+// --- D-29: DICR's master flag and I_STAT's bit 3 (Diamond_Disputes.md D-29, Diamond_Records.md §16.3) ---
+
+/// I_STAT's bit 3 is set by bit 31's 0-to-1 transition alone, a completion's or a write's, as psx-spx has it and the
+/// referees of three lineages read all ten cases: a write that leaves the flag up sets nothing (cases 1 and 7).
+#[test]
+fn dicr_sets_i_stat_only_when_its_master_flag_rises() {
+    let m = run(include_str!("../programs/dicr-edge.s"));
+    assert_eq!(
+        results(&m, 0x10_0000, 20),
+        [8, 0xC0C0_0000, 0, 0xC0C0_0000, 0, 0x4040_0000, 8, 0xC0C0_0000, 0, 0xC0C0_0000, 0, 0x00C0_0000, 8, 0x80C0_8000, 0, 0x80C0_8000, 0, 0x00C0_0000, 8, 0xC0C0_0000]
+    );
+}
+
+/// A handler that leaves a channel's flag up and writes DICR runs once, as on all five referees; before the rule it
+/// ran without end, which is how the player's BIOS stopped at its first screen.
+#[test]
+fn a_dicr_write_with_a_flag_left_up_does_not_ask_again() {
+    let m = run(include_str!("../programs/dicr-storm.s"));
+    assert_eq!(results(&m, 0x10_0000, 3), [1, 0xC0C8_0000, 0], "the handler's runs, DICR and I_STAT's bit 3");
+}
+
+// --- D-43: a channel started beside channel 2's list (Diamond_Disputes.md D-43) ---
+
+/// Channel 6, started while channel 2's list waits for the GPU or is between two of its nodes, runs at once whichever
+/// DPCR ranks first, as the referees of three lineages have it: its table is written and its CHCR idle with the list
+/// still moving.
+#[test]
+fn channel_6_runs_beside_a_list_that_waits_or_walks() {
+    let m = run_for(include_str!("../programs/dma-beside.s"), 60, Market::Americas);
+    for (case, what) in ["rectangles, channel 2 first", "rectangles, channel 6 first", "empty nodes, channel 2 first", "empty nodes, channel 6 first"].iter().enumerate() {
+        let r = results(&m, 0x10_0000 + 32 * case as u32, 8);
+        assert_eq!([r[0], r[2], r[3], r[4]], [0x0100_0401, 2, 0x00FF_FFFF, 0x0100_0401], "{what}: the list moving, channel 6 done and its table written");
+        assert_eq!(r[5..], [2, 0x00FF_FFFF, 0x0000_0401], "{what}: once the list has ended");
+    }
+}
+
 // ---- Stage 13, speed (Diamond_Speed.md) ---------------------------------------------------------------------------
 
 /// The digests of `frames` plain frames, the pictures', the sound's and the final state's, and the machine.

@@ -604,9 +604,17 @@ impl Board {
         }
     }
 
-    /// Starts the first-ranked ready channel if none is moving.
+    /// The channel that is moving, if it is between two pieces of a list or of a transfer in blocks with the bus let
+    /// go, where another channel may begin (Diamond_Disputes.md D-43).
+    fn dma_between_pieces(&self) -> Option<usize> {
+        self.dma.active.filter(|&n| self.dma.ch[n].sync() != 0 && !self.dma.finishing && self.bus_free <= self.now)
+    }
+
+    /// Starts the first-ranked ready channel if none is moving. A channel between two of its pieces steps aside for
+    /// another that is ready, and is arbitrated again when that one ends (D-43).
     fn dma_kick(&mut self) {
-        if self.dma.active.is_some() {
+        let aside = self.dma_between_pieces();
+        if self.dma.active.is_some() && aside.is_none() {
             return;
         }
         if self.dma.ch[dma::SPU].chcr & chcr::START != 0 {
@@ -614,7 +622,7 @@ impl Board {
         }
         let mut ready = [false; 7];
         for (n, r) in ready.iter_mut().enumerate() {
-            *r = self.dma.ready(n, self.dma_request(n));
+            *r = aside != Some(n) && self.dma.ready(n, self.dma_request(n));
         }
         if let Some(n) = self.dma.choose(ready) {
             self.dma.ch[n].chcr &= !chcr::TRIGGER;

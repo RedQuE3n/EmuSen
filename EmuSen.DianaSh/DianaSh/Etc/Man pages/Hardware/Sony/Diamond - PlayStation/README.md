@@ -11,7 +11,8 @@ its commands; at stage 7 the CD-ROM controller reads discs (`.cue` with its trac
 through the shared crate `emusen-disc`, and games boot to their title screens through the kernel's own loader; at
 stage 9 the MDEC decodes, ps1-tests' MDEC programs' VRAM equals their pictures but for the rounding D-30 leaves open,
 and a game's opening movie plays; at stage 8, built after it, the SPU plays, its voices as its capture buffers record
-them equal to DuckStation's sample for sample, and ps1-tests' SPU programs pass. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
+them equal to DuckStation's sample for sample, and ps1-tests' SPU programs pass; at stage 10 the open kernel boots
+discs by their SYSTEM.CNF and keeps files on memory cards in their on-card format, with no firmware folder. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
 
 - [`Diamond_Plan.md`](Diamond_Plan.md) — the plan, written 2026-10-10 before any emulation: the machine in scope and
   how accurate each part must be (the R3000A with its cache and scratchpad, the GTE exact, DMA, timers, interrupts, a
@@ -33,7 +34,8 @@ them equal to DuckStation's sample for sample, and ps1-tests' SPU programs pass.
   and stage 2's items, the cost; and stage 5 (§13): the GTE in the machine and its interlock, the gate program by
   program, how the first build failed `test-all`, the timing against the witnesses, the state's version 2, the cost; and stage 6 (§14): SIO0's devices, the state's version 4, the gate; and stage 7 (§15): the CD-ROM, the disc crate, the
 state's version 6, the gate item by item; and stage 9 (§16): the MDEC, DMA channels 0 and 1, the state's version 7,
-the gate; and stage 8 (§17): the SPU, the audio path, DMA4, the state's version 8, the gate.
+the gate; and stage 8 (§17): the SPU, the audio path, DMA4, the state's version 8, the gate; and stage 10 (§18): the
+open kernel's second phase, the gate with the tester's games booting with no firmware folder and a save loaded back.
 - [`Diamond_GPU.md`](Diamond_GPU.md) — the GPU, written 2026-10-11 at stage 4: the FIFO and the command processor,
   GPUSTAT's ready bits against `gpustat`'s console log, DMA channel 2, GP1, VRAM's transfers, texturing with the
   texture and CLUT caches, the pixel pipeline, the rasteriser's rules fitted to ps1-tests' console pictures, the
@@ -48,6 +50,13 @@ the gate; and stage 8 (§17): the SPU, the audio path, DMA4, the state's version
   documented bugs, the call table of 576 entries with each one's status, the pinned toolchain and the reproducible
   image, the harness on blackmoon-r3000 and what it proved, the accuracy cost, the choices, the questions and the
   reading log.
+- [`Diamond_OpenKernel_Phase2.md`](Diamond_OpenKernel_Phase2.md) — the open kernel's second phase, written 2026-10-11 at
+  stage 10 under the same rules, its sections numbered on from the first phase's: the CD driven at its host interface
+  with sectors by DMA, ISO 9660 on "cdrom:", the card's sectors on vblank at the original's pace with the events
+  psx-spx lists, the on-card file system with formatting, the boot by SYSTEM.CNF and its state at the jump, the warm
+  boot, the screen with no disc and its card manager, the tests, the tester's games booting with no firmware folder
+  against the player's BIOS, a save made and loaded on the kernel, the choices, the questions, the cost, the image, what
+  the cross-kernel step needs, and the reading log with its exposure.
 - [`Diamond_Pad.md`](Diamond_Pad.md) — SIO0 and the controllers, from 2026-10-11, when a digital pad on port 1 was
   brought forward from stage 6: the registers, a byte on the wire, /ACK and IRQ7, the pad and the slots, amidog's CPX,
   GPU and GTE tests run from their menus and what they showed (three R3000A defects fixed, the CE and second-load items

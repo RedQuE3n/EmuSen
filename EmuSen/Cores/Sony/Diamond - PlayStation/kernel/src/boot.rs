@@ -1,6 +1,6 @@
 //! The reset path after the entry's first three instructions: the memory control and cache set up from KSEG1, then
-//! the kernel's RAM, the vectors and tables, the control blocks, the TTY and standard I/O, and the start of what
-//! follows the kernel at 80030000h. Diamond_OpenKernel.md §3.
+//! the kernel's RAM, the vectors and tables, the control blocks, the devices and standard I/O, and the start of what
+//! follows the kernel at 80030000h, the shell. Diamond_OpenKernel.md §3.
 
 use crate::layout::{self, io, setting};
 use crate::mem::{rd, wr};
@@ -60,10 +60,13 @@ extern "C" fn boot_cached() -> ! {
     enter_shell()
 }
 
-/// Phase 1 has no shell: 80030000h holds a loop, where a side-loader takes over (Diamond_OpenKernel.md §3.3).
+/// 80030000h holds a jump to the shell in the ROM, where a side-loader takes over instead (Diamond_OpenKernel.md §3.3).
 fn enter_shell() -> ! {
-    wr(layout::SHELL_ENTRY, 0x0800_0000 | (layout::SHELL_ENTRY >> 2 & 0x03FF_FFFF));
-    wr(layout::SHELL_ENTRY + 4, 0);
+    let to = entry::shell_entry as *const () as u32;
+    wr(layout::SHELL_ENTRY, 0x3C08_0000 | to.wrapping_add(0x8000) >> 16);
+    wr(layout::SHELL_ENTRY + 4, 0x2508_0000 | to & 0xFFFF);
+    wr(layout::SHELL_ENTRY + 8, 0x0100_0008);
+    wr(layout::SHELL_ENTRY + 12, 0);
     unsafe {
         entry::flush_cache();
         entry::enter_shell(layout::SHELL_ENTRY, blocks::stacktop(), 0x0000_0401)
@@ -86,7 +89,7 @@ pub static HEADER: Header = Header {
     date: layout::KERNEL_DATE,
     console: layout::CONSOLE_TYPE,
     maker: *b"EmuSen\0\0",
-    version: *b"Diamond open kernel, phase 1\0\0\0\0\0\0\0\0\0\0\0\0",
+    version: *b"Diamond open kernel, phase 2\0\0\0\0\0\0\0\0\0\0\0\0",
 };
 
 pub fn version() -> u32 {

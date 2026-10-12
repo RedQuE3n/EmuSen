@@ -1,14 +1,14 @@
 //! The A0h, B0h and C0h function tables in psx-spx's order ("BIOS Function Summary"), one line a call, and their
 //! installation: the A table at 200h, the C table followed by the B table in the kernel's RAM, as C(80h) and up
-//! read B(00h) and up. Each line's status: D implemented, P phase 2 (the documented failure value), N no function
-//! (psx-spx's return 0, jump to 0 or SystemError), U named but not described (returns 0). The harness reads these
-//! lines to print Diamond_OpenKernel.md's call table. Diamond_OpenKernel.md §5.
+//! read B(00h) and up. Each line's status: D implemented, X absent from an open kernel (the ROM's character sets, the
+//! documented failure value), N no function (psx-spx's return 0, jump to 0 or SystemError), U named but not described
+//! (returns 0). The harness reads these lines to print Diamond_OpenKernel.md's call table. Diamond_OpenKernel.md §5.
 
 use crate::layout::{self, A_ENTRIES, B_ENTRIES, C_ENTRIES};
 use crate::mem::{rd, wr};
 use crate::{
-    blocks, convert, entry, event, exception, exec, file, gpu, heap, memory, misc, pad, phase2, string, thread, timer,
-    tty,
+    blocks, bu, card, cdfs, cdrom, convert, entry, event, exception, exec, file, gpu, heap, memory, misc, pad, phase2,
+    shell, string, thread, timer, tty,
 };
 
 pub struct Table<const N: usize>(pub [*const (); N]);
@@ -122,9 +122,9 @@ const fn build_a() -> [*const (); A_ENTRIES] {
     t[0x51] = e!(D, "LoadExec(filename,stackbase,stackoffset)", exec::load_exec);
     t[0x52] = e!(N, "GetSysSp", entry::system_error);
     t[0x53] = e!(N, "SystemError", entry::system_error);
-    t[0x54] = e!(P, "_96_init()", phase2::nothing);
-    t[0x55] = e!(P, "_bu_init()", phase2::nothing);
-    t[0x56] = e!(P, "_96_remove()", phase2::nothing);
+    t[0x54] = e!(D, "_96_init()", cdrom::init_96);
+    t[0x55] = e!(D, "_bu_init()", bu::bu_init);
+    t[0x56] = e!(D, "_96_remove()", cdrom::remove_96);
     t[0x57] = e!(N, "return 0", entry::return_zero);
     t[0x58] = e!(N, "return 0", entry::return_zero);
     t[0x59] = e!(N, "return 0", entry::return_zero);
@@ -133,41 +133,41 @@ const fn build_a() -> [*const (); A_ENTRIES] {
     t[0x5C] = e!(D, "dev_tty_open(fcb,path,accessmode)", tty::dev_open);
     t[0x5D] = e!(D, "dev_tty_in_out(fcb,cmd)", tty::dev_in_out);
     t[0x5E] = e!(D, "dev_tty_ioctl(fcb,cmd,arg)", tty::dev_ioctl);
-    t[0x5F] = e!(P, "dev_cd_open(fcb,path,accessmode)", phase2::failed);
-    t[0x60] = e!(P, "dev_cd_read(fcb,dst,len)", phase2::failed);
-    t[0x61] = e!(P, "dev_cd_close(fcb)", phase2::failed);
-    t[0x62] = e!(P, "dev_cd_firstfile(fcb,path,direntry)", phase2::nothing);
-    t[0x63] = e!(P, "dev_cd_nextfile(fcb,direntry)", phase2::nothing);
-    t[0x64] = e!(P, "dev_cd_chdir(fcb,path)", phase2::nothing);
-    t[0x65] = e!(P, "dev_card_open(fcb,path,accessmode)", phase2::failed);
-    t[0x66] = e!(P, "dev_card_read(fcb,dst,len)", phase2::failed);
-    t[0x67] = e!(P, "dev_card_write(fcb,src,len)", phase2::failed);
-    t[0x68] = e!(P, "dev_card_close(fcb)", phase2::failed);
-    t[0x69] = e!(P, "dev_card_firstfile(fcb,path,direntry)", phase2::nothing);
-    t[0x6A] = e!(P, "dev_card_nextfile(fcb,direntry)", phase2::nothing);
-    t[0x6B] = e!(P, "dev_card_erase(fcb,path)", phase2::nothing);
-    t[0x6C] = e!(P, "dev_card_undelete(fcb,path)", phase2::nothing);
-    t[0x6D] = e!(P, "dev_card_format(fcb)", phase2::nothing);
-    t[0x6E] = e!(P, "dev_card_rename(fcb1,path1,fcb2,path2)", phase2::nothing);
-    t[0x6F] = e!(P, "card_clear_error(fcb)", phase2::nothing);
-    t[0x70] = e!(P, "_bu_init()", phase2::nothing);
-    t[0x71] = e!(P, "_96_init()", phase2::nothing);
-    t[0x72] = e!(P, "_96_remove()", phase2::nothing);
+    t[0x5F] = e!(D, "dev_cd_open(fcb,path,accessmode)", cdfs::dev_cd_open);
+    t[0x60] = e!(D, "dev_cd_read(fcb,dst,len)", cdfs::dev_cd_read);
+    t[0x61] = e!(D, "dev_cd_close(fcb)", cdfs::dev_cd_close);
+    t[0x62] = e!(D, "dev_cd_firstfile(fcb,path,direntry)", cdfs::dev_cd_firstfile);
+    t[0x63] = e!(D, "dev_cd_nextfile(fcb,direntry)", cdfs::dev_cd_nextfile);
+    t[0x64] = e!(D, "dev_cd_chdir(fcb,path)", cdfs::dev_cd_chdir);
+    t[0x65] = e!(D, "dev_card_open(fcb,path,accessmode)", bu::dev_card_open);
+    t[0x66] = e!(D, "dev_card_read(fcb,dst,len)", bu::dev_card_read);
+    t[0x67] = e!(D, "dev_card_write(fcb,src,len)", bu::dev_card_write);
+    t[0x68] = e!(D, "dev_card_close(fcb)", bu::dev_card_close);
+    t[0x69] = e!(D, "dev_card_firstfile(fcb,path,direntry)", bu::dev_card_firstfile);
+    t[0x6A] = e!(D, "dev_card_nextfile(fcb,direntry)", bu::dev_card_nextfile);
+    t[0x6B] = e!(D, "dev_card_erase(fcb,path)", bu::dev_card_erase);
+    t[0x6C] = e!(D, "dev_card_undelete(fcb,path)", bu::dev_card_undelete);
+    t[0x6D] = e!(D, "dev_card_format(fcb)", bu::dev_card_format);
+    t[0x6E] = e!(D, "dev_card_rename(fcb1,path1,fcb2,path2)", bu::dev_card_rename);
+    t[0x6F] = e!(D, "card_clear_error(fcb)", bu::card_clear_error);
+    t[0x70] = e!(D, "_bu_init()", bu::bu_init);
+    t[0x71] = e!(D, "_96_init()", cdrom::init_96);
+    t[0x72] = e!(D, "_96_remove()", cdrom::remove_96);
     t[0x73] = e!(N, "return 0", entry::return_zero);
     t[0x74] = e!(N, "return 0", entry::return_zero);
     t[0x75] = e!(N, "return 0", entry::return_zero);
     t[0x76] = e!(N, "return 0", entry::return_zero);
     t[0x77] = e!(N, "return 0", entry::return_zero);
-    t[0x78] = e!(P, "CdAsyncSeekL(src)", phase2::nothing);
+    t[0x78] = e!(D, "CdAsyncSeekL(src)", cdrom::cd_async_seek_l);
     t[0x79] = e!(N, "return 0", entry::return_zero);
     t[0x7A] = e!(N, "return 0", entry::return_zero);
     t[0x7B] = e!(N, "return 0", entry::return_zero);
-    t[0x7C] = e!(P, "CdAsyncGetStatus(dst)", phase2::nothing);
+    t[0x7C] = e!(D, "CdAsyncGetStatus(dst)", cdrom::cd_async_get_status);
     t[0x7D] = e!(N, "return 0", entry::return_zero);
-    t[0x7E] = e!(P, "CdAsyncReadSector(count,dst,mode)", phase2::nothing);
+    t[0x7E] = e!(D, "CdAsyncReadSector(count,dst,mode)", cdrom::cd_async_read_sector);
     t[0x7F] = e!(N, "return 0", entry::return_zero);
     t[0x80] = e!(N, "return 0", entry::return_zero);
-    t[0x81] = e!(P, "CdAsyncSetMode(mode)", phase2::nothing);
+    t[0x81] = e!(D, "CdAsyncSetMode(mode)", cdrom::cd_async_set_mode);
     t[0x82] = e!(N, "return 0", entry::return_zero);
     t[0x83] = e!(N, "return 0", entry::return_zero);
     t[0x84] = e!(N, "return 0", entry::return_zero);
@@ -182,38 +182,38 @@ const fn build_a() -> [*const (); A_ENTRIES] {
     t[0x8D] = e!(N, "return 0", entry::return_zero);
     t[0x8E] = e!(N, "return 0", entry::return_zero);
     t[0x8F] = e!(N, "return 0", entry::return_zero);
-    t[0x90] = e!(P, "CdromIoIrqFunc1()", phase2::nothing);
-    t[0x91] = e!(P, "CdromDmaIrqFunc1()", phase2::nothing);
-    t[0x92] = e!(P, "CdromIoIrqFunc2()", phase2::nothing);
-    t[0x93] = e!(P, "CdromDmaIrqFunc2()", phase2::nothing);
-    t[0x94] = e!(P, "CdromGetInt5errCode(dst1,dst2)", phase2::nothing);
-    t[0x95] = e!(P, "CdInitSubFunc()", phase2::nothing);
-    t[0x96] = e!(P, "AddCDROMDevice()", phase2::nothing);
-    t[0x97] = e!(P, "AddMemCardDevice()", phase2::nothing);
+    t[0x90] = e!(D, "CdromIoIrqFunc1()", cdrom::cdrom_io_irq_func1);
+    t[0x91] = e!(D, "CdromDmaIrqFunc1()", cdrom::cdrom_dma_irq_func);
+    t[0x92] = e!(D, "CdromIoIrqFunc2()", cdrom::cdrom_io_irq_func2);
+    t[0x93] = e!(D, "CdromDmaIrqFunc2()", cdrom::cdrom_dma_irq_func);
+    t[0x94] = e!(D, "CdromGetInt5errCode(dst1,dst2)", cdrom::cdrom_get_int5_err_code);
+    t[0x95] = e!(D, "CdInitSubFunc()", cdrom::cd_init_sub_func);
+    t[0x96] = e!(D, "AddCDROMDevice()", file::add_cdrom_device);
+    t[0x97] = e!(D, "AddMemCardDevice()", file::add_mem_card_device);
     t[0x98] = e!(D, "AddDuartTtyDevice()", file::add_duart_tty_device);
     t[0x99] = e!(D, "add_nullcon_driver()", file::add_nullcon_driver);
     t[0x9A] = e!(N, "SystemError", entry::system_error);
     t[0x9B] = e!(N, "SystemError", entry::system_error);
     t[0x9C] = e!(D, "SetConf(num_EvCB,num_TCB,stacktop)", blocks::set_conf);
     t[0x9D] = e!(D, "GetConf(num_EvCB_dst,num_TCB_dst,stacktop_dst)", blocks::get_conf);
-    t[0x9E] = e!(P, "SetCdromIrqAutoAbort(type,flag)", phase2::nothing);
+    t[0x9E] = e!(D, "SetCdromIrqAutoAbort(type,flag)", cdrom::set_cdrom_irq_auto_abort);
     t[0x9F] = e!(D, "SetMem(megabytes)", misc::set_mem);
-    t[0xA0] = e!(P, "_boot()", phase2::boot);
+    t[0xA0] = e!(D, "_boot()", shell::boot);
     t[0xA1] = e!(N, "SystemError(type,errorcode)", entry::system_error);
-    t[0xA2] = e!(P, "EnqueueCdIntr()", phase2::nothing);
-    t[0xA3] = e!(P, "DequeueCdIntr()", phase2::nothing);
-    t[0xA4] = e!(P, "CdGetLbn(filename)", phase2::failed);
-    t[0xA5] = e!(P, "CdReadSector(count,sector,buffer)", phase2::failed);
-    t[0xA6] = e!(P, "CdGetStatus()", phase2::failed);
-    t[0xA7] = e!(P, "bufs_cb_0()", phase2::nothing);
-    t[0xA8] = e!(P, "bufs_cb_1()", phase2::nothing);
-    t[0xA9] = e!(P, "bufs_cb_2()", phase2::nothing);
-    t[0xAA] = e!(P, "bufs_cb_3()", phase2::nothing);
-    t[0xAB] = e!(P, "_card_info(port)", phase2::nothing);
-    t[0xAC] = e!(P, "_card_load(port)", phase2::nothing);
-    t[0xAD] = e!(P, "_card_auto(flag)", phase2::nothing);
-    t[0xAE] = e!(P, "bufs_cb_4()", phase2::nothing);
-    t[0xAF] = e!(P, "card_write_test(port)", phase2::nothing);
+    t[0xA2] = e!(D, "EnqueueCdIntr()", cdrom::enqueue_cd_intr);
+    t[0xA3] = e!(D, "DequeueCdIntr()", cdrom::dequeue_cd_intr);
+    t[0xA4] = e!(D, "CdGetLbn(filename)", cdfs::cd_get_lbn);
+    t[0xA5] = e!(D, "CdReadSector(count,sector,buffer)", cdrom::cd_read_sector);
+    t[0xA6] = e!(D, "CdGetStatus()", cdrom::cd_get_status);
+    t[0xA7] = e!(D, "bufs_cb_0()", card::bufs_cb_0);
+    t[0xA8] = e!(D, "bufs_cb_1()", card::bufs_cb_1);
+    t[0xA9] = e!(D, "bufs_cb_2()", card::bufs_cb_2);
+    t[0xAA] = e!(D, "bufs_cb_3()", card::bufs_cb_3);
+    t[0xAB] = e!(D, "_card_info(port)", card::card_info);
+    t[0xAC] = e!(D, "_card_load(port)", bu::card_load);
+    t[0xAD] = e!(D, "_card_auto(flag)", bu::card_auto);
+    t[0xAE] = e!(D, "bufs_cb_4()", card::bufs_cb_4);
+    t[0xAF] = e!(D, "card_write_test(port)", card::card_write_test);
     t[0xB0] = e!(N, "return 0", entry::return_zero);
     t[0xB1] = e!(N, "return 0", entry::return_zero);
     t[0xB2] = e!(D, "ioabort_raw(param)", misc::ioabort_raw);
@@ -286,26 +286,26 @@ const fn build_b() -> [*const (); B_ENTRIES] {
     t[0x47] = e!(D, "AddDrv(device_info)", file::add_drv);
     t[0x48] = e!(D, "DelDrv(device_name_lowercase)", file::del_drv);
     t[0x49] = e!(D, "PrintInstalledDevices()", file::print_installed_devices);
-    t[0x4A] = e!(P, "InitCARD2(pad_enable)", pad::init_card2);
-    t[0x4B] = e!(P, "StartCARD2()", phase2::nothing);
-    t[0x4C] = e!(P, "StopCARD2()", phase2::nothing);
-    t[0x4D] = e!(P, "_card_info_subfunc(port)", phase2::nothing);
-    t[0x4E] = e!(P, "_card_write(port,sector,src)", phase2::nothing);
-    t[0x4F] = e!(P, "_card_read(port,sector,dst)", phase2::nothing);
-    t[0x50] = e!(P, "_new_card()", phase2::nothing);
-    t[0x51] = e!(P, "Krom2RawAdd(shiftjis_code)", phase2::failed);
+    t[0x4A] = e!(D, "InitCARD2(pad_enable)", card::init_card2);
+    t[0x4B] = e!(D, "StartCARD2()", card::start_card2);
+    t[0x4C] = e!(D, "StopCARD2()", card::stop_card2);
+    t[0x4D] = e!(D, "_card_info_subfunc(port)", card::card_info);
+    t[0x4E] = e!(D, "_card_write(port,sector,src)", card::card_write);
+    t[0x4F] = e!(D, "_card_read(port,sector,dst)", card::card_read);
+    t[0x50] = e!(D, "_new_card()", card::new_card);
+    t[0x51] = e!(X, "Krom2RawAdd(shiftjis_code)", phase2::failed);
     t[0x52] = e!(N, "SystemError", entry::system_error);
-    t[0x53] = e!(P, "Krom2Offset(shiftjis_code)", phase2::failed);
+    t[0x53] = e!(X, "Krom2Offset(shiftjis_code)", phase2::failed);
     t[0x54] = e!(D, "_get_errno()", file::get_errno);
     t[0x55] = e!(D, "_get_error(fd)", file::get_error);
     t[0x56] = e!(D, "GetC0Table", get_c0_table);
     t[0x57] = e!(D, "GetB0Table", get_b0_table);
-    t[0x58] = e!(P, "_card_chan()", phase2::nothing);
+    t[0x58] = e!(D, "_card_chan()", card::card_chan);
     t[0x59] = e!(D, "testdevice(devicename)", file::testdevice);
     t[0x5A] = e!(N, "SystemError", entry::system_error);
     t[0x5B] = e!(D, "ChangeClearPAD(int)", pad::change_clear_pad);
-    t[0x5C] = e!(P, "_card_status(slot)", phase2::card_status);
-    t[0x5D] = e!(P, "_card_wait(slot)", phase2::card_status);
+    t[0x5C] = e!(D, "_card_status(slot)", card::card_status);
+    t[0x5D] = e!(D, "_card_wait(slot)", card::card_wait);
     t
 }
 
@@ -337,10 +337,10 @@ const fn build_c() -> [*const (); C_ENTRIES] {
     t[0x17] = e!(U, "_circgetc(circ)", entry::return_zero);
     t[0x18] = e!(U, "_circputc(char,circ)", entry::return_zero);
     t[0x19] = e!(D, "_ioabort(txt1,txt2)", misc::ioabort);
-    t[0x1A] = e!(D, "set_card_find_mode(mode)", phase2::set_card_find_mode);
+    t[0x1A] = e!(D, "set_card_find_mode(mode)", bu::set_card_find_mode);
     t[0x1B] = e!(D, "KernelRedirect(ttyflag)", file::kernel_redirect);
     t[0x1C] = e!(U, "AdjustA0Table()", entry::return_zero);
-    t[0x1D] = e!(D, "get_card_find_mode()", phase2::get_card_find_mode);
+    t[0x1D] = e!(D, "get_card_find_mode()", bu::get_card_find_mode);
     t
 }
 

@@ -1,5 +1,5 @@
-//! Events, threads, the heaps, programs and the configuration; the timer, GPU and pad entry points; and the phase 2
-//! stubs' documented failures (Diamond_OpenKernel.md §4 and §5).
+//! Events, threads, the heaps, programs and the configuration; the timer, GPU and pad entry points; and the card
+//! calls with no card and the absent character sets (Diamond_OpenKernel.md §4 and §5, Diamond_OpenKernel_Phase2.md).
 
 use diamond_kernel_harness::image;
 use diamond_kernel_harness::machine::{Machine, STACK};
@@ -179,7 +179,7 @@ fn exec_runs_a_loaded_program_with_its_stack_and_gp_and_returns_1() {
 #[test]
 fn load_test_load_and_load_exec_fail_without_a_device_that_holds_files() {
     let mut m = booted();
-    m.text(0x8010_0000, "cdrom:\\PSX.EXE;1");
+    m.text(0x8010_0000, "pcdrv:\\PSX.EXE;1");
     assert_eq!(m.a(0x41, &[0x8010_0000, 0x8011_0000]), 0);
     assert_eq!(m.a(0x42, &[0x8010_0000, 0x8011_0000]), 0);
 }
@@ -211,7 +211,7 @@ fn configuration_system_information_and_set_mem() {
     assert_eq!(m.a(0xB4, &[0]), 0x2026_1011);
     assert_eq!(m.a(0xB4, &[1]), 3);
     let v = m.a(0xB4, &[2]);
-    assert_eq!(m.rig.string(v), "Diamond open kernel, phase 1");
+    assert_eq!(m.rig.string(v), "Diamond open kernel, phase 2");
     assert_eq!(m.rig.string(0xBFC0_0108), "EmuSen");
     assert_eq!(m.a(0xB4, &[5]), 2048);
     assert_eq!((m.a(0xB4, &[7]), m.a(0xB4, &[9]), m.a(0xB4, &[0x10])), (0x400, 0x200, 0));
@@ -269,16 +269,12 @@ fn timers_gpu_and_pads_through_their_documented_ports() {
 }
 
 #[test]
-fn phase_2_stubs_return_their_documented_failures() {
+fn the_card_calls_with_no_card_and_the_absent_character_sets() {
     let mut m = booted();
-    m.text(0x8010_0000, "cdrom:\\X;1");
-    assert_eq!(m.a(0xA4, &[0x8010_0000]), u32::MAX, "CdGetLbn");
-    assert_eq!(m.a(0xA5, &[1, 16, 0x8010_1000]), u32::MAX, "CdReadSector");
-    assert_eq!(m.a(0xA6, &[]), u32::MAX, "CdGetStatus");
-    assert_eq!(m.a(0x78, &[0x8010_0000]), 0, "CdAsyncSeekL");
-    assert_eq!(m.b(0x4F, &[0, 0, 0x8010_1000]), 0, "_card_read");
-    assert_eq!(m.b(0x5C, &[0]), 0x11, "_card_status: failed, no card");
-    assert_eq!(m.b(0x5D, &[1]), 0x11);
+    assert_eq!(m.b(0x4F, &[0, 0, 0x8010_1000]), 1, "_card_read: queued");
+    assert_eq!(m.b(0x5D, &[0]), 0x11, "_card_wait carries it out: failed, no card");
+    assert_eq!(m.b(0x5C, &[0]), 0x11, "_card_status");
+    assert_eq!(m.b(0x4F, &[0, 0x401, 0x8010_1000]), 0, "a sector past 400h");
     assert_eq!(m.b(0x51, &[0x8140]), u32::MAX, "Krom2RawAdd: no character sets");
     m.c(0x1A, &[1]);
     assert_eq!(m.c(0x1D, &[]), 1);

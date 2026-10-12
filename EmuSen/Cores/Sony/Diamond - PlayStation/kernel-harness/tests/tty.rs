@@ -62,7 +62,7 @@ fn the_c_table_reads_on_into_the_b_table() {
 }
 
 #[test]
-fn files_on_the_tty_and_the_errors_of_phase_2_s_devices() {
+fn files_on_the_tty_and_the_errors_of_the_file_layer() {
     let mut m = booted();
     m.text(S, "hi");
     assert_eq!(m.a(0x03, &[1, S, 2]), 2);
@@ -75,11 +75,11 @@ fn files_on_the_tty_and_the_errors_of_phase_2_s_devices() {
     assert_eq!(m.b(0x55, &[1]), 0x16, "the FCB's own error");
     assert_eq!(m.a(0x02, &[0, S, 1]), 0, "no input: nothing read");
     assert_eq!(m.a(0x3B, &[]), 0, "getchar");
-    m.text(S, "cdrom:\\SYSTEM.CNF;1");
-    assert_eq!(m.a(0x00, &[S, 1]), u32::MAX, "no CD device before phase 2");
+    m.text(S, "pcdrv:\\SYSTEM.CNF;1");
+    assert_eq!(m.a(0x00, &[S, 1]), u32::MAX, "no PC file server's device");
     assert_eq!(m.b(0x54, &[]), 0x13, "unknown device");
     m.text(S, "bu00:");
-    assert_eq!(m.b(0x42, &[S, 0x8010_0400]), 0, "firstfile2");
+    assert_eq!(m.b(0x42, &[S, 0x8010_0400]), 0, "firstfile2 with no card answering");
     m.text(S, "tty2:");
     assert_eq!(m.a(0x00, &[S, 2]), u32::MAX);
     assert_eq!(m.b(0x54, &[]), 0x06, "bad device port");
@@ -103,7 +103,11 @@ fn kernel_redirect_mounts_the_dummy_tty_and_back() {
     m.a(0x3C, &['y' as u32]);
     assert_eq!(m.rig.tty_text(), "y");
     m.b(0x49, &[]);
-    assert_eq!(m.rig.tty_text(), "y       tty:    CONSOLE\r\n", "PrintInstalledDevices, its tabs expanded");
+    assert_eq!(
+        m.rig.tty_text(),
+        "y       tty:    CONSOLE\r\n        cdrom:  CD-ROM\r\n        bu:     MEMORY CARD\r\n",
+        "PrintInstalledDevices, its tabs expanded"
+    );
 }
 
 #[test]

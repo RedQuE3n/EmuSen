@@ -327,7 +327,9 @@ PAD_init2 and then waits for its button word, which it could never see otherwise
 
 **`programs/kernel-pad.s`**, run on the open kernel: InitPAD2, StartPAD2, vblank enabled, ExitCriticalSection; port 1's
 buffer then reads 00h 41h F7h BFh with Start and Cross held, and 00h 73h and the sticks once the Analog button is
-pressed; port 2, empty, FFh [M, `the_open_kernels_pad_functions_read_the_pads`]. The image's SHA-256 is now
+pressed; port 2, empty, FFh [M, `the_open_kernels_pad_functions_read_the_pads`]. *Since stage 10 (2026-10-11)* the element is shared
+with the memory cards, whose sectors it carries on vblank, and StartPAD2 queues it before enabling vblank
+(`Diamond_OpenKernel_Phase2.md` §13, §16). The image's SHA-256 is now
 `135549cd26268e0a50f56649ac4a1cdfdf6287ca2660698023648bc3bf011629`.
 
 ## 11. The stage 6 gate

@@ -1,6 +1,7 @@
 # Diamond_OpenKernel — the open BIOS kernel, phase 1
 
-*Written 2026-10-11, at stage 3.* This page records the design of Diamond's open kernel: the program that occupies the
+*Written 2026-10-11, at stage 3; its second phase, stage 10's, is `Diamond_OpenKernel_Phase2.md`, which continues
+this page's numbering from §12.* This page records the design of Diamond's open kernel: the program that occupies the
 PlayStation's BIOS range so that a test program, and later a game, finds a kernel where the documents say it is
 without a firmware file of Sony's (`Diamond_Plan.md` §5.9, option B; `EmuSen_Firmware.md` §0). It covers the first of
 the plan's two phases, the kernel's core; the second (the CD boot, files on the CD and the cards, the screen with no
@@ -347,13 +348,12 @@ acknowledges IRQ0 and returns from the exception [C on the flag's meaning and de
 Printed by `cargo run --release --bin diamond-kernel -- calls` in `kernel-harness/` from the one place each status is
 written, `kernel/src/table.rs`, and checked against this page by the harness's `page` test. "No function, as
 documented" is psx-spx's own: return 0, a jump to 00000000h, a jump to itself (SystemError), or for atof and strtod
-the COP1 fault. "Phase 2 stub" returns the failure psx-spx documents for the call, -1 for those that return a count, a
-handle or a sector, 0 for those that return success or nothing, 11h ("failed/timeout, eg. when no cartridge
-inserted") for `_card_status` and `_card_wait`, -1 for Krom2RawAdd and Krom2Offset as there are no character sets, and a lock-up for
-`_boot`, which needs a disc. "Undocumented, returns 0" is a call psx-spx names without describing: SysInitKernelVariables,
+the COP1 fault. ~~"Phase 2 stub" returns the failure psx-spx documents for the call~~ *Since phase 2 (2026-10-11,
+`Diamond_OpenKernel_Phase2.md` §19)* no stub is left: "absent from an open kernel" is Krom2RawAdd and Krom2Offset,
+which return -1, as the kernel carries no character sets. "Undocumented, returns 0" is a call psx-spx names without describing: SysInitKernelVariables,
 the four TTY circular-buffer functions C(15h)-C(18h) and AdjustA0Table.
 
-576 entries: 161 implemented, 63 phase 2 stubs, 346 no function as documented, 6 undocumented.
+576 entries: 222 implemented, 2 absent from an open kernel, 346 no function as documented, 6 undocumented.
 
 | Call | Name | Status |
 |---|---|---|
@@ -440,74 +440,74 @@ the four TTY circular-buffer functions C(15h)-C(18h) and AdjustA0Table.
 | A(51h) | `LoadExec(filename,stackbase,stackoffset)` | implemented |
 | A(52h) | `GetSysSp` | no function, as documented |
 | A(53h) | `SystemError` | no function, as documented |
-| A(54h) | `_96_init()` | phase 2 stub |
-| A(55h) | `_bu_init()` | phase 2 stub |
-| A(56h) | `_96_remove()` | phase 2 stub |
+| A(54h) | `_96_init()` | implemented |
+| A(55h) | `_bu_init()` | implemented |
+| A(56h) | `_96_remove()` | implemented |
 | A(57h..5Ah) | `return 0` | no function, as documented |
 | A(5Bh) | `dev_tty_init()` | implemented |
 | A(5Ch) | `dev_tty_open(fcb,path,accessmode)` | implemented |
 | A(5Dh) | `dev_tty_in_out(fcb,cmd)` | implemented |
 | A(5Eh) | `dev_tty_ioctl(fcb,cmd,arg)` | implemented |
-| A(5Fh) | `dev_cd_open(fcb,path,accessmode)` | phase 2 stub |
-| A(60h) | `dev_cd_read(fcb,dst,len)` | phase 2 stub |
-| A(61h) | `dev_cd_close(fcb)` | phase 2 stub |
-| A(62h) | `dev_cd_firstfile(fcb,path,direntry)` | phase 2 stub |
-| A(63h) | `dev_cd_nextfile(fcb,direntry)` | phase 2 stub |
-| A(64h) | `dev_cd_chdir(fcb,path)` | phase 2 stub |
-| A(65h) | `dev_card_open(fcb,path,accessmode)` | phase 2 stub |
-| A(66h) | `dev_card_read(fcb,dst,len)` | phase 2 stub |
-| A(67h) | `dev_card_write(fcb,src,len)` | phase 2 stub |
-| A(68h) | `dev_card_close(fcb)` | phase 2 stub |
-| A(69h) | `dev_card_firstfile(fcb,path,direntry)` | phase 2 stub |
-| A(6Ah) | `dev_card_nextfile(fcb,direntry)` | phase 2 stub |
-| A(6Bh) | `dev_card_erase(fcb,path)` | phase 2 stub |
-| A(6Ch) | `dev_card_undelete(fcb,path)` | phase 2 stub |
-| A(6Dh) | `dev_card_format(fcb)` | phase 2 stub |
-| A(6Eh) | `dev_card_rename(fcb1,path1,fcb2,path2)` | phase 2 stub |
-| A(6Fh) | `card_clear_error(fcb)` | phase 2 stub |
-| A(70h) | `_bu_init()` | phase 2 stub |
-| A(71h) | `_96_init()` | phase 2 stub |
-| A(72h) | `_96_remove()` | phase 2 stub |
+| A(5Fh) | `dev_cd_open(fcb,path,accessmode)` | implemented |
+| A(60h) | `dev_cd_read(fcb,dst,len)` | implemented |
+| A(61h) | `dev_cd_close(fcb)` | implemented |
+| A(62h) | `dev_cd_firstfile(fcb,path,direntry)` | implemented |
+| A(63h) | `dev_cd_nextfile(fcb,direntry)` | implemented |
+| A(64h) | `dev_cd_chdir(fcb,path)` | implemented |
+| A(65h) | `dev_card_open(fcb,path,accessmode)` | implemented |
+| A(66h) | `dev_card_read(fcb,dst,len)` | implemented |
+| A(67h) | `dev_card_write(fcb,src,len)` | implemented |
+| A(68h) | `dev_card_close(fcb)` | implemented |
+| A(69h) | `dev_card_firstfile(fcb,path,direntry)` | implemented |
+| A(6Ah) | `dev_card_nextfile(fcb,direntry)` | implemented |
+| A(6Bh) | `dev_card_erase(fcb,path)` | implemented |
+| A(6Ch) | `dev_card_undelete(fcb,path)` | implemented |
+| A(6Dh) | `dev_card_format(fcb)` | implemented |
+| A(6Eh) | `dev_card_rename(fcb1,path1,fcb2,path2)` | implemented |
+| A(6Fh) | `card_clear_error(fcb)` | implemented |
+| A(70h) | `_bu_init()` | implemented |
+| A(71h) | `_96_init()` | implemented |
+| A(72h) | `_96_remove()` | implemented |
 | A(73h..77h) | `return 0` | no function, as documented |
-| A(78h) | `CdAsyncSeekL(src)` | phase 2 stub |
+| A(78h) | `CdAsyncSeekL(src)` | implemented |
 | A(79h..7Bh) | `return 0` | no function, as documented |
-| A(7Ch) | `CdAsyncGetStatus(dst)` | phase 2 stub |
+| A(7Ch) | `CdAsyncGetStatus(dst)` | implemented |
 | A(7Dh) | `return 0` | no function, as documented |
-| A(7Eh) | `CdAsyncReadSector(count,dst,mode)` | phase 2 stub |
+| A(7Eh) | `CdAsyncReadSector(count,dst,mode)` | implemented |
 | A(7Fh..80h) | `return 0` | no function, as documented |
-| A(81h) | `CdAsyncSetMode(mode)` | phase 2 stub |
+| A(81h) | `CdAsyncSetMode(mode)` | implemented |
 | A(82h..8Fh) | `return 0` | no function, as documented |
-| A(90h) | `CdromIoIrqFunc1()` | phase 2 stub |
-| A(91h) | `CdromDmaIrqFunc1()` | phase 2 stub |
-| A(92h) | `CdromIoIrqFunc2()` | phase 2 stub |
-| A(93h) | `CdromDmaIrqFunc2()` | phase 2 stub |
-| A(94h) | `CdromGetInt5errCode(dst1,dst2)` | phase 2 stub |
-| A(95h) | `CdInitSubFunc()` | phase 2 stub |
-| A(96h) | `AddCDROMDevice()` | phase 2 stub |
-| A(97h) | `AddMemCardDevice()` | phase 2 stub |
+| A(90h) | `CdromIoIrqFunc1()` | implemented |
+| A(91h) | `CdromDmaIrqFunc1()` | implemented |
+| A(92h) | `CdromIoIrqFunc2()` | implemented |
+| A(93h) | `CdromDmaIrqFunc2()` | implemented |
+| A(94h) | `CdromGetInt5errCode(dst1,dst2)` | implemented |
+| A(95h) | `CdInitSubFunc()` | implemented |
+| A(96h) | `AddCDROMDevice()` | implemented |
+| A(97h) | `AddMemCardDevice()` | implemented |
 | A(98h) | `AddDuartTtyDevice()` | implemented |
 | A(99h) | `add_nullcon_driver()` | implemented |
 | A(9Ah..9Bh) | `SystemError` | no function, as documented |
 | A(9Ch) | `SetConf(num_EvCB,num_TCB,stacktop)` | implemented |
 | A(9Dh) | `GetConf(num_EvCB_dst,num_TCB_dst,stacktop_dst)` | implemented |
-| A(9Eh) | `SetCdromIrqAutoAbort(type,flag)` | phase 2 stub |
+| A(9Eh) | `SetCdromIrqAutoAbort(type,flag)` | implemented |
 | A(9Fh) | `SetMem(megabytes)` | implemented |
-| A(A0h) | `_boot()` | phase 2 stub |
+| A(A0h) | `_boot()` | implemented |
 | A(A1h) | `SystemError(type,errorcode)` | no function, as documented |
-| A(A2h) | `EnqueueCdIntr()` | phase 2 stub |
-| A(A3h) | `DequeueCdIntr()` | phase 2 stub |
-| A(A4h) | `CdGetLbn(filename)` | phase 2 stub |
-| A(A5h) | `CdReadSector(count,sector,buffer)` | phase 2 stub |
-| A(A6h) | `CdGetStatus()` | phase 2 stub |
-| A(A7h) | `bufs_cb_0()` | phase 2 stub |
-| A(A8h) | `bufs_cb_1()` | phase 2 stub |
-| A(A9h) | `bufs_cb_2()` | phase 2 stub |
-| A(AAh) | `bufs_cb_3()` | phase 2 stub |
-| A(ABh) | `_card_info(port)` | phase 2 stub |
-| A(ACh) | `_card_load(port)` | phase 2 stub |
-| A(ADh) | `_card_auto(flag)` | phase 2 stub |
-| A(AEh) | `bufs_cb_4()` | phase 2 stub |
-| A(AFh) | `card_write_test(port)` | phase 2 stub |
+| A(A2h) | `EnqueueCdIntr()` | implemented |
+| A(A3h) | `DequeueCdIntr()` | implemented |
+| A(A4h) | `CdGetLbn(filename)` | implemented |
+| A(A5h) | `CdReadSector(count,sector,buffer)` | implemented |
+| A(A6h) | `CdGetStatus()` | implemented |
+| A(A7h) | `bufs_cb_0()` | implemented |
+| A(A8h) | `bufs_cb_1()` | implemented |
+| A(A9h) | `bufs_cb_2()` | implemented |
+| A(AAh) | `bufs_cb_3()` | implemented |
+| A(ABh) | `_card_info(port)` | implemented |
+| A(ACh) | `_card_load(port)` | implemented |
+| A(ADh) | `_card_auto(flag)` | implemented |
+| A(AEh) | `bufs_cb_4()` | implemented |
+| A(AFh) | `card_write_test(port)` | implemented |
 | A(B0h..B1h) | `return 0` | no function, as documented |
 | A(B2h) | `ioabort_raw(param)` | implemented |
 | A(B3h) | `return 0` | no function, as documented |
@@ -569,26 +569,26 @@ the four TTY circular-buffer functions C(15h)-C(18h) and AdjustA0Table.
 | B(47h) | `AddDrv(device_info)` | implemented |
 | B(48h) | `DelDrv(device_name_lowercase)` | implemented |
 | B(49h) | `PrintInstalledDevices()` | implemented |
-| B(4Ah) | `InitCARD2(pad_enable)` | phase 2 stub |
-| B(4Bh) | `StartCARD2()` | phase 2 stub |
-| B(4Ch) | `StopCARD2()` | phase 2 stub |
-| B(4Dh) | `_card_info_subfunc(port)` | phase 2 stub |
-| B(4Eh) | `_card_write(port,sector,src)` | phase 2 stub |
-| B(4Fh) | `_card_read(port,sector,dst)` | phase 2 stub |
-| B(50h) | `_new_card()` | phase 2 stub |
-| B(51h) | `Krom2RawAdd(shiftjis_code)` | phase 2 stub |
+| B(4Ah) | `InitCARD2(pad_enable)` | implemented |
+| B(4Bh) | `StartCARD2()` | implemented |
+| B(4Ch) | `StopCARD2()` | implemented |
+| B(4Dh) | `_card_info_subfunc(port)` | implemented |
+| B(4Eh) | `_card_write(port,sector,src)` | implemented |
+| B(4Fh) | `_card_read(port,sector,dst)` | implemented |
+| B(50h) | `_new_card()` | implemented |
+| B(51h) | `Krom2RawAdd(shiftjis_code)` | absent from an open kernel |
 | B(52h) | `SystemError` | no function, as documented |
-| B(53h) | `Krom2Offset(shiftjis_code)` | phase 2 stub |
+| B(53h) | `Krom2Offset(shiftjis_code)` | absent from an open kernel |
 | B(54h) | `_get_errno()` | implemented |
 | B(55h) | `_get_error(fd)` | implemented |
 | B(56h) | `GetC0Table` | implemented |
 | B(57h) | `GetB0Table` | implemented |
-| B(58h) | `_card_chan()` | phase 2 stub |
+| B(58h) | `_card_chan()` | implemented |
 | B(59h) | `testdevice(devicename)` | implemented |
 | B(5Ah) | `SystemError` | no function, as documented |
 | B(5Bh) | `ChangeClearPAD(int)` | implemented |
-| B(5Ch) | `_card_status(slot)` | phase 2 stub |
-| B(5Dh) | `_card_wait(slot)` | phase 2 stub |
+| B(5Ch) | `_card_status(slot)` | implemented |
+| B(5Dh) | `_card_wait(slot)` | implemented |
 | B(5Eh..FFh) | `jump_to_00000000h` | no function, as documented |
 | C(00h) | `EnqueueTimerAndVblankIrqs(priority)` | implemented |
 | C(01h) | `EnqueueSyscallHandler(priority)` | implemented |
@@ -648,7 +648,9 @@ last non-zero byte, SHA-256 `ef5c8362064bb4cf5bf9ab2fc47af0fffc456ad65eac3808b40
 (§4.10; before it `2bb2c125fde742e06738e917c3e99c0dd9277d5ac6df84f1cd078a3aecc3d4ff`). *Since the pads' SIO0 read
 (stage 6, 2026-10-11):* 42232 bytes before the last non-zero byte, SHA-256
 `135549cd26268e0a50f56649ac4a1cdfdf6287ca2660698023648bc3bf011629`, rebuilt byte for byte with
-`DIAMOND_KERNEL_REBUILD=require`.
+`DIAMOND_KERNEL_REBUILD=require`. *Since phase 2 (stage 10, 2026-10-11):* 92,440 bytes before the last non-zero byte,
+SHA-256 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, rebuilt byte for byte the same way and from a
+copy at another path (`Diamond_OpenKernel_Phase2.md` §20.4).
 
 **Reproducibility** [M]: the harness's `image` tests check the committed bytes against their digest always, and
 against a rebuild whenever the pinned toolchain is present (the project's cache under `~/.cache/emusen/toolchains`,
@@ -690,8 +692,9 @@ gate), timing against a console, and input to the TTY.
 
 **In a player's words** (the plan's §5.9, for the whole kernel): "Most games start and save as on a console. A game
 that relies on an undocumented kernel call, reads the kernel's code, or depends on its exact timing may behave
-differently, and the start-up screen is EmuSen's own." **For phase 1** it adds: "Until the rest of the kernel exists,
-only programs loaded directly run without your BIOS; discs and memory cards need your own." `effect: accuracy`.
+differently, and the start-up screen is EmuSen's own." ~~**For phase 1** it adds: "Until the rest of the kernel exists,
+only programs loaded directly run without your BIOS; discs and memory cards need your own."~~ *Withdrawn at phase 2
+(`Diamond_OpenKernel_Phase2.md` §20.3).* `effect: accuracy`.
 
 **The risks** [A]:
 

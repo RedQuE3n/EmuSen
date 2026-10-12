@@ -12,11 +12,14 @@ fn every_implemented_call_that_returns_leaves_gp_and_the_saved_registers_unchang
     m.code(0x8015_0000, "jr ra\naddiu v0, zero, 0");
     m.text(0x8010_0000, "tty:");
     // Calls that do not return to their caller, or whose generic arguments would run for long or wreck the kernel's
-    // RAM (an element count of 80100100h, a DCB copied from text); SetConf is checked with real arguments below.
+    // RAM (an element count of 80100100h, a DCB copied from text); SetConf is checked with real arguments below. The CD
+    // calls wait for a drive this bus does not have; Diamond's `kernel-cd.s` checks their registers on a drive.
     let skip = [
         ('A', 0x06), ('A', 0x14), ('A', 0x31), ('A', 0x3D), ('A', 0x3F), ('A', 0x43), ('A', 0x46), ('A', 0x4A), ('A', 0x51),
         ('A', 0x9C), ('A', 0xB2), ('B', 0x10), ('B', 0x12), ('B', 0x17), ('B', 0x19), ('B', 0x38), ('B', 0x3E),
         ('B', 0x47), ('C', 0x06), ('C', 0x19),
+        ('A', 0x54), ('A', 0x5F), ('A', 0x62), ('A', 0x64), ('A', 0x71), ('A', 0x78), ('A', 0x7C), ('A', 0x7E), ('A', 0x81),
+        ('A', 0x95), ('A', 0xA0), ('A', 0xA4), ('A', 0xA5), ('A', 0xA6), ('B', 0x40),
     ];
     let mut real = Machine::boot(&image::committed());
     real.cpu.regs.r[28] = 0x2828_2828;

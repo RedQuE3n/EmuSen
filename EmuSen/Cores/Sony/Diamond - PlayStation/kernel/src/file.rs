@@ -1,6 +1,6 @@
 //! The file layer of psx-spx's "BIOS File Functions": sixteen FCBs and ten DCBs at fixed places in the kernel's
-//! variables, a name's device found by its DCB, each call passed to the device's function. Phase 1 installs the TTY
-//! only; the CD and the memory cards are phase 2, so their names are unknown devices. Diamond_OpenKernel.md §4.9.
+//! variables, a name's device found by its DCB, each call passed to the device's function: the TTY, "cdrom" and
+//! "bu". Diamond_OpenKernel.md §4.9, Diamond_OpenKernel_Phase2.md §12.
 
 use crate::layout::{DCB_SIZE, DCBS, FCB_SIZE, FCBS, TABLES, table};
 use crate::mem::{call, rd, rd8, wr};
@@ -42,12 +42,16 @@ pub mod dcb {
 
 /// The error numbers of psx-spx's "File Error Numbers".
 pub mod error {
+    pub const NOT_FOUND: u32 = 0x02;
     pub const BAD_PORT: u32 = 0x06;
     pub const BAD_HANDLE: u32 = 0x09;
+    pub const GENERAL: u32 = 0x10;
+    pub const EXISTS: u32 = 0x11;
     pub const OTHER_DEVICE: u32 = 0x12;
     pub const UNKNOWN_DEVICE: u32 = 0x13;
     pub const INVALID: u32 = 0x16;
     pub const NO_HANDLES: u32 = 0x18;
+    pub const NO_BLOCKS: u32 = 0x1C;
 }
 
 const FAIL: u32 = u32::MAX;
@@ -66,6 +70,13 @@ fn dcb_at(i: u32) -> u32 {
 }
 
 fn fail(e: u32) -> u32 {
+    unsafe { ERRNO = e };
+    FAIL
+}
+
+/// A device function's failure: the error in the FCB and as the last error; -1.
+pub fn device_error(f: u32, e: u32) -> u32 {
+    wr(f + fcb::ERROR, e);
     unsafe { ERRNO = e };
     FAIL
 }
@@ -402,14 +413,26 @@ pub extern "C" fn kernel_redirect(flag: u32) -> u32 {
     flush_std_in_out_put()
 }
 
-/// C(12h): the TTY (the CD and the cards join at phase 2).
+/// C(12h): the TTY, the CD-ROM and the memory cards, the three devices psx-spx's DCBs name.
 pub extern "C" fn install_devices(flag: u32) -> u32 {
     if flag != 0 {
         add_duart_tty_device()
     } else {
         add_nullcon_driver()
     };
+    add_cdrom_device();
+    add_mem_card_device();
     0
+}
+
+/// A(96h).
+pub extern "C" fn add_cdrom_device() -> u32 {
+    add_drv(crate::cdfs::device())
+}
+
+/// A(97h).
+pub extern "C" fn add_mem_card_device() -> u32 {
+    add_drv(crate::bu::device())
 }
 
 /// At boot: the tables' FCB and DCB entries, the DUART TTY, standard I/O.

@@ -55,7 +55,7 @@ pub fn source() -> String {
 pub fn status_word(s: char) -> &'static str {
     match s {
         'D' => "implemented",
-        'P' => "phase 2 stub",
+        'X' => "absent from an open kernel",
         'N' => "no function, as documented",
         'U' => "undocumented, returns 0",
         _ => "?",
@@ -68,10 +68,10 @@ pub fn markdown(calls: &[Call]) -> String {
     let count = |s| calls.iter().filter(|c| c.status == s).count();
     writeln!(
         out,
-        "{} entries: {} implemented, {} phase 2 stubs, {} no function as documented, {} undocumented.\n",
+        "{} entries: {} implemented, {} absent from an open kernel, {} no function as documented, {} undocumented.\n",
         calls.len(),
         count('D'),
-        count('P'),
+        count('X'),
         count('N'),
         count('U')
     )

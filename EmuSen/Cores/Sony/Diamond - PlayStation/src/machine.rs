@@ -75,7 +75,7 @@ pub struct Machine {
     pub debug: crate::debugger::Debugger,
     /// The idle skipper, which the plain frame runs and the debugger's never does (Diamond_Speed.md §4).
     pub idle: crate::idle::Idle,
-    /// The runs the plain frame steps in, which the debugger's never does (Diamond_Speed.md §12).
+    /// The runs the plain frame steps in, which the debugger's never does (Diamond_Speed.md §13.1).
     pub runs: Runs,
 }
 
@@ -229,7 +229,7 @@ impl Machine {
 
     /// Up to `limit` steps as `step` makes each, and how many: one run of them where the kernel's two seams have
     /// nothing to do, ended by the processor after the first step that leaves an event due, whose events then run as
-    /// `step` runs them (Diamond_Speed.md §12).
+    /// `step` runs them (Diamond_Speed.md §13.1).
     #[inline(always)]
     fn steps(&mut self, limit: u32) -> u32 {
         if !self.runs.on || self.exe.is_some() || self.kernel.taps_putchar() {
@@ -335,7 +335,7 @@ impl Machine {
 
     /// A run checked against its steps: a copy takes the same number of steps one by one, as `step` makes each, and
     /// must meet an event or a step that is not an instruction only at the last, and reach the state the run leaves,
-    /// byte for byte, before the last step's events (Diamond_Speed.md §12.4).
+    /// byte for byte, before the last step's events (Diamond_Speed.md §13.3).
     fn verified_run(&mut self, limit: u32) -> u32 {
         let (mut cpu, mut board) = (self.cpu.clone(), self.board.clone());
         let from = cpu.regs.pc;

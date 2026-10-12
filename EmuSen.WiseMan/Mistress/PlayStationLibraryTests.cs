@@ -209,5 +209,53 @@ namespace EmuSen.WiseMan.Mistress
             }
             Assert.Equal(before, Library());
         }, default);
+
+        // The frame loop's own line each second on a disc the tester names, opened from the window as a player opens it: what the loop spends in the core and outside it, opt-in - see Diamond_Speed.md §16.
+        [Fact]
+        public Task The_frame_loop_reports_its_pace_on_a_named_disc() => Session.Dispatch(() =>
+        {
+            if (Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_PACE_DISC") is not { Length: > 0 } disc || !File.Exists(disc))
+            {
+                _output.WriteLine("skipped: EMUSEN_DIAMOND_PACE_DISC names a disc of the tester's, copied");
+                return;
+            }
+            int seconds = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_PACE_SECONDS"), out int given) ? given : 20;
+            // The disc's files linked into a library of their own, so that nothing else is listed and nothing of the tester's is written.
+            string stem = Path.GetFileNameWithoutExtension(disc);
+            foreach (string file in Directory.EnumerateFiles(Path.GetDirectoryName(disc)!).Where(f => Path.GetFileName(f).StartsWith(stem, StringComparison.Ordinal)))
+                File.CreateSymbolicLink(Path.Combine(_romDir, Path.GetFileName(file)), file);
+            string logs = Path.Combine(_root, "Logs");
+            CoreDiscovery.UseDevelopment(true);
+            new AppSettings { RomDirectory = _romDir, LogDirectory = logs, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            var window = new MainWindow { Width = 1280, Height = 800 };
+            window.Show();
+            try
+            {
+                var pad = new PadDriver(window);
+                var list = window.GetControl<ListBox>("LibraryList");
+                for (int i = 0; i < 400 && list.Items.Count == 0; i++)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Thread.Sleep(25);
+                }
+                list.SelectedIndex = 0;
+                pad.A();
+                Assert.True(window.GetControl<Control>("GameFrame").IsVisible, window.GetControl<TextBlock>("StatusText").Text);
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                while (clock.Elapsed < TimeSpan.FromSeconds(seconds))
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Thread.Sleep(5);
+                }
+            }
+            finally
+            {
+                typeof(MainWindow).GetMethod("StopEmulationThread", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+                window.Close();
+            }
+            string[] lines = Directory.EnumerateFiles(logs, "general.log", SearchOption.AllDirectories).SelectMany(File.ReadAllLines).Where(l => l.StartsWith("[fps]", StringComparison.Ordinal)).ToArray();
+            foreach (string line in lines) _output.WriteLine(line);
+            Assert.NotEmpty(lines);
+        }, default);
     }
 }

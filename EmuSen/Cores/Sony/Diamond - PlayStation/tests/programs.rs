@@ -1599,7 +1599,7 @@ fn a_triangle_is_charged_by_its_rows() {
     assert!(busy[29] < 4129 * 6 / 5, "legs of 128: {}", busy[29]);
 }
 
-// ---- Speed, the second pass: runs (Diamond_Speed.md §12) -----------------------------------------------------------
+// ---- Speed, the second pass: runs (Diamond_Speed.md §13) -----------------------------------------------------------
 
 /// A machine's digests over `frames` plain frames stepped in runs, which must equal those of the same frames stepped one
 /// at a time, with the skipper off and with it on; every `verify`th run checked against its steps as it is made, and

@@ -1069,6 +1069,18 @@ impl Board {
     }
 }
 
+impl Board {
+    /// Where a data access lands in RAM, as `decode` finds it, or `None` for any other target (Diamond_Speed.md §5).
+    #[inline(always)]
+    fn ram_offset(&self, address: u32) -> Option<usize> {
+        if address >= 0xC000_0000 || (0x2000_0000..0x8000_0000).contains(&address) {
+            return None;
+        }
+        let p = address & 0x1FFF_FFFF;
+        (p < self.memctl.ram_window()).then_some(p as usize & (RAM_BYTES - 1))
+    }
+}
+
 impl Bus for Board {
     #[inline(always)]
     fn fetch_decoded(&mut self, address: u32) -> (u32, Op) {
@@ -1128,6 +1140,13 @@ impl Bus for Board {
     }
 
     fn read(&mut self, address: u32, size: Size) -> u32 {
+        if let Some(a) = self.ram_offset(address) {
+            self.take_bus();
+            self.flush_queue();
+            self.now += RAM_STALL;
+            self.cpu_busy = self.now;
+            return self.ram_word(a as u32 & !3) >> (8 * (a & 3)) & (u32::MAX >> (32 - 8 * size.bytes()));
+        }
         let target = self.decode(address);
         if matches!(target, Target::Scratch(_) | Target::CacheControl) {
             return self.read_at(target, size);
@@ -1141,6 +1160,18 @@ impl Bus for Board {
 
     fn write(&mut self, address: u32, size: Size, value: u32) {
         let queued = address < 0xA000_0000;
+        if let Some(a) = self.ram_offset(address) {
+            if queued {
+                self.queue_store(RAM_DRAIN);
+            } else {
+                self.take_bus();
+                self.flush_queue();
+                self.now += RAM_STALL;
+                self.cpu_busy = self.now;
+            }
+            Self::bytes_write(&mut self.ram, a, size, value);
+            return;
+        }
         if !queued {
             self.take_bus();
             self.flush_queue();

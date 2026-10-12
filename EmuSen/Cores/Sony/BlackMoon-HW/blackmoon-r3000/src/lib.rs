@@ -47,6 +47,12 @@ impl Size {
 pub trait Bus {
     /// An instruction fetch of one word.
     fn fetch(&mut self, address: u32) -> u32;
+    /// The fetch with the word decoded; a bus that keeps decoded words, as a cache's lines, gives its own, which must
+    /// be `decode` of the word (BlackMoon_R3000.md §2).
+    fn fetch_decoded(&mut self, address: u32) -> (u32, emusen_mips::Op) {
+        let w = self.fetch(address);
+        (w, emusen_mips::decode(w))
+    }
     /// A data read of `size` bytes from `address`; the value in the low bits, anything above them ignored.
     fn read(&mut self, address: u32, size: Size) -> u32;
     /// A data write of the low `size` bytes of `value` to `address`. `value` is the register as the processor drives

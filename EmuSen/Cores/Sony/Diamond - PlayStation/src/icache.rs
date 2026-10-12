@@ -3,6 +3,8 @@
 //! bit per word, and the isolated stores the kernel's flush makes. It lives in the console's bus, not the processor's
 //! crate (BlackMoon_R3000.md §2, decided at stage 3).
 
+use emusen_mips::{Op, decode};
+
 pub mod bcc {
     pub const TAG: u32 = 1 << 2;
     pub const IBLKSZ: u32 = 3 << 8;
@@ -20,6 +22,8 @@ pub struct ICache {
     /// Per line: the tag (physical bits 31-12) with the valid bits in 3-0.
     pub tags: [u32; 256],
     pub words: [u32; 1024],
+    /// Each word decoded when it entered the cache, which a hit runs without decoding (Diamond_Speed.md §5); not state.
+    ops: [Op; 1024],
 }
 
 /// A fetch's result: the word, or a miss that refills `count` words from `first` (a word index in the line).
@@ -30,7 +34,27 @@ pub enum Lookup {
 
 impl ICache {
     pub fn new(bcc: u32) -> ICache {
-        ICache { bcc, tags: [0; 256], words: [0; 1024] }
+        ICache { bcc, tags: [0; 256], words: [0; 1024], ops: [decode(0); 1024] }
+    }
+
+    /// The decoded words made again from the words, as after a state load.
+    pub fn redecode(&mut self) {
+        for (op, &w) in self.ops.iter_mut().zip(&self.words) {
+            *op = decode(w);
+        }
+    }
+
+    /// A hit's word and its decoding, or `None` where `lookup` misses.
+    #[inline(always)]
+    pub fn hit(&self, physical: u32) -> Option<(u32, Op)> {
+        let line = (physical >> 4 & 0xFF) as usize;
+        let word = physical >> 2 & 3;
+        let tag = self.tags[line];
+        if tag & !0xFFF == physical & !0xFFF && tag & 1 << word != 0 {
+            let i = line * 4 + word as usize;
+            return Some((self.words[i], self.ops[i]));
+        }
+        None
     }
 
     pub fn enabled(&self) -> bool {
@@ -60,6 +84,7 @@ impl ICache {
         for (i, &w) in words.iter().enumerate() {
             let at = first as usize + i;
             self.words[line * 4 + at] = w;
+            self.ops[line * 4 + at] = decode(w);
             valid |= 1 << at;
         }
         self.tags[line] = tag | valid;
@@ -73,6 +98,7 @@ impl ICache {
             self.tags[line] = address & !0xFFF | value & 0xF;
         } else {
             self.words[line * 4 + (address >> 2 & 3) as usize] = value;
+            self.ops[line * 4 + (address >> 2 & 3) as usize] = decode(value);
         }
     }
 
@@ -93,6 +119,29 @@ impl ICache {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every word the cache holds is held decoded too, after a refill, an isolated store and a state's words.
+    #[test]
+    fn each_word_is_decoded_as_it_enters() {
+        let mut c = ICache::new(KERNEL_BCC);
+        let mut words = [0u32; 4];
+        for (i, w) in words.iter_mut().enumerate() {
+            *w = 0x0C00_0000 | (i as u32) << 2;
+        }
+        c.fill(0x2000, 0, &words);
+        c.isolated_write(0x2008, 0x2408_0001);
+        for at in [0x2000, 0x2004, 0x2008, 0x200C] {
+            let (w, op) = c.hit(at).expect("a hit");
+            assert_eq!(op, decode(w), "{at:X}");
+        }
+        assert_eq!(c.hit(0x2008).unwrap().0, 0x2408_0001);
+        let mut loaded = ICache::new(KERNEL_BCC);
+        loaded.tags = c.tags;
+        loaded.words = c.words;
+        loaded.redecode();
+        assert_eq!(loaded.hit(0x2008), c.hit(0x2008), "decoded again from a state's words");
+        assert_eq!(c.hit(0x3000), None);
+    }
 
     #[test]
     fn a_miss_fills_to_the_end_of_the_line_and_a_tag_flush_empties_it() {

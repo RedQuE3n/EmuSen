@@ -26,6 +26,11 @@ names and layout only; no emulator's source and no firmware was read.
   and takes IBE (ExcCode 6), after a load or store and takes DBE (7), EPC at the instruction, a faulting load landing
   nothing and a faulting store's bytes not reported to the observer (psx-spx "Memory Exceptions": "Bus Error ------>
   Unused Memory Regions"). The suite's flat bus never faults, so its 55,000 cases are unchanged [M].
+  *Stage 13 of Diamond (2026-10-11)* added **`fetch_decoded`**, a default method giving `fetch`'s word with
+  `emusen_mips::decode` of it, which the step now calls in place of the two. A bus that keeps decoded words may answer
+  from them, provided what it answers is the fetch's word, time and fault and the word's decoding: Diamond's bus
+  answers an I-cache hit from the word decoded at its refill (`Diamond_Speed.md` §5). It is an addition with a default,
+  so a bus that does not give it is unchanged, and the suite's 55,000 cases pass through the default [M].
 - **`Size`**: `Byte`, `Half`, `Tribyte` and `Word`. A read's value is in the low bits and anything above them is
   ignored. A write carries the register as the processor drives it, the datum in the low `size` bytes: a byte or
   halfword store passes the whole register, which psx-spx's "Caution - 8/16-bit writes to certain IO registers" says

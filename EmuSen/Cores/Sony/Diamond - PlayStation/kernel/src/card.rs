@@ -227,11 +227,22 @@ fn drain(slot: usize) {
     }
 }
 
+/// The request stored whole with interrupts off, once the slot is free, so that the vblank element never takes a
+/// request half stored (Diamond_OpenKernel_Phase2.md §23).
 fn submit(slot: usize, r: Request) {
-    drain(slot);
-    unsafe {
-        STATUS[slot] = busy(r.kind);
-        REQUESTS[slot] = r;
+    loop {
+        drain(slot);
+        let stored = entry::critical(|| unsafe {
+            if REQUESTS[slot].kind != Kind::None {
+                return false;
+            }
+            STATUS[slot] = busy(r.kind);
+            REQUESTS[slot] = r;
+            true
+        });
+        if stored {
+            return;
+        }
     }
 }
 

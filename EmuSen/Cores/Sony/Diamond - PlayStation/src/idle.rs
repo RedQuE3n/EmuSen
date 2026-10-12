@@ -12,6 +12,12 @@ use crate::kernel;
 /// The longest turn proven, in instructions, and the farthest a backward branch may reach to make a loop's head.
 const MAX_PATH: usize = 64;
 const SPAN: u32 = 0x400;
+/// No head pending: an address no instruction is fetched from.
+const NONE: u32 = 1;
+/// The steps the plain loop runs unwatched between watches, and the steps of a watch, which each window and each skip
+/// begins again: a wait is met within `FREE` steps of its start, and code that never waits pays for one step in nine.
+pub const FREE: u32 = 4096;
+pub const TRACK: u32 = 512;
 /// The turns compared before a skip: the write queue's four entries are each written once in four turns of one store.
 pub const PERIOD: u64 = 4;
 
@@ -475,7 +481,7 @@ struct Window {
 }
 
 fn slot(head: u32) -> usize {
-    (head >> 2) as usize & 255
+    (head >> 2) as usize & 1023
 }
 
 /// What the skipper keeps between arrivals; none of it is the machine's state, so a state saved or loaded never
@@ -485,11 +491,13 @@ pub struct Idle {
     pub on: bool,
     /// Every how many skips one is checked against the interpreter, which runs the same turns on a copy (0: none).
     pub verify: u64,
-    /// The head a backward branch just led to, met once its delay slot has run.
+    /// The steps left of the watch; at zero the machine runs `FREE` steps unwatched.
+    pub tracking: u32,
+    /// The head a backward branch just led to, met once its delay slot has run, or `NONE`.
     pub pending: u32,
     window: Option<Window>,
     /// Heads whose proof failed, and how many arrivals each waits before the next attempt.
-    wait: [(u32, u16, u16); 256],
+    wait: Box<[(u32, u16, u16); 1024]>,
     pub skips: u64,
     pub turns: u64,
     pub cycles: u64,
@@ -501,33 +509,32 @@ pub struct Idle {
 
 impl Default for Idle {
     fn default() -> Idle {
-        Idle { on: true, verify: 0, pending: 0, window: None, wait: [(0, 0, 0); 256], skips: 0, turns: 0, cycles: 0, proofs: 0, refused: 0, dropped: 0, unequal: 0 }
+        Idle { on: true, verify: 0, tracking: TRACK, pending: NONE, window: None, wait: Box::new([(0, 0, 0); 1024]), skips: 0, turns: 0, cycles: 0, proofs: 0, refused: 0, dropped: 0, unequal: 0 }
     }
 }
 
 impl Idle {
+    /// A watch begins after the unwatched steps.
+    pub fn watch(&mut self) {
+        self.tracking = TRACK;
+        self.reset();
+    }
+
     /// Forgets the loop being observed, as an exception, a new frame or a state loaded must.
     pub fn reset(&mut self) {
-        self.pending = 0;
+        self.pending = NONE;
         self.window = None;
     }
 
     /// After a step that completed an instruction: a taken backward branch names its target as the next head, which
-    /// arrives once the delay slot has run.
+    /// arrives once the delay slot has run; written without a branch on the step's kind, which the host cannot predict.
     #[inline(always)]
     pub fn note(&mut self, cpu: &R3000) -> Option<u32> {
         let b = &cpu.regs.branch;
-        if b.slot {
-            if b.taken && cpu.regs.pc.wrapping_sub(b.target).wrapping_sub(1) < SPAN {
-                self.pending = b.target;
-            }
-            return None;
-        }
-        if self.pending == 0 {
-            return None;
-        }
-        let head = std::mem::take(&mut self.pending);
-        (cpu.regs.pc == head).then_some(head)
+        let arrived = !b.slot & (self.pending == cpu.regs.pc);
+        let back = b.taken & (cpu.regs.pc.wrapping_sub(b.target).wrapping_sub(1) < SPAN);
+        self.pending = if back { b.target } else { NONE };
+        if arrived { Some(cpu.regs.pc) } else { None }
     }
 
     /// At a loop's head, its delay slot run: begins a window with a proof, or at the window's fourth arrival checks
@@ -550,6 +557,7 @@ impl Idle {
                 }
                 let w = self.window.take().unwrap();
                 if let Some(skip) = self.plan(&w, cpu, board) {
+                    self.tracking = TRACK;
                     self.wait[slot(head)] = (head, 0, 0);
                     self.skips += 1;
                     self.turns += skip.turns;
@@ -569,6 +577,7 @@ impl Idle {
         match prove(cpu, board, head, seams) {
             Some(proof) if proof.turns > 2 * PERIOD => {
                 let x = proof.induction.map_or(0, |(i, _)| induction_value(cpu, board, i));
+                self.tracking = TRACK;
                 self.window = Some(Window { head, proof, regs: cpu.regs, hilo: cpu.hilo_ready, timing: Timing::of(board), x, events: board.events_run, arrivals: 0 });
             }
             _ => {
@@ -580,10 +589,10 @@ impl Idle {
     }
 
     /// A head whose proof failed, or whose window met an event or did not repeat, waits twice as many arrivals as
-    /// last time before its next proof, up to 1,023.
+    /// last time before its next proof, up to 4,095.
     fn wait_longer(&mut self, head: u32) {
         let (h, _, level) = self.wait[slot(head)];
-        let level = if h == head { (level * 2 + 1).min(1023) } else { 1 };
+        let level = if h == head { (level * 2 + 1).min(4095) } else { 1 };
         self.wait[slot(head)] = (head, level, level);
     }
 

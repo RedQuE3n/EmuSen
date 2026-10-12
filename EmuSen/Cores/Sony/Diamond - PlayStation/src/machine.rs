@@ -219,6 +219,16 @@ impl Machine {
             }
         }
         while !self.board.field_done {
+            if self.idle.tracking == 0 {
+                let mut free = crate::idle::FREE;
+                while free > 0 && !self.board.field_done {
+                    self.step();
+                    free -= 1;
+                }
+                self.idle.watch();
+                continue;
+            }
+            self.idle.tracking -= 1;
             let step = step_on(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
             if step != Step::Instruction {
                 self.idle.reset();

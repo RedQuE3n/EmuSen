@@ -84,7 +84,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
     let v = crate::json::parse(info.as_bytes()).unwrap();
     assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.2"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
-    assert_eq!(names.len(), 19);
+    assert_eq!(names.len(), 20);
     assert_eq!(super::desc::capability_names(unsafe { emusen_core_capabilities() }), names);
     let mi = crate::json::parse(cases[3].1.as_bytes()).unwrap();
     let spaces = mi.get("spaces").unwrap().as_array().unwrap();

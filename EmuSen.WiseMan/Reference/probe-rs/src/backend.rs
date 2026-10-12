@@ -203,6 +203,16 @@ impl Default for ProbeOptions {
 #[derive(Clone, Default, Debug)]
 pub struct InputSchedule {
     pub entries: Vec<ScheduleEntry>,
+    pub sticks: Vec<StickEntry>,
+}
+
+// A stick's axis held at a value: 0 and 1 the left stick's x and y, 2 and 3 the right's, as libretro's analog indices.
+#[derive(Clone, Copy, Debug)]
+pub struct StickEntry {
+    pub start_frame: u32,
+    pub end_frame: u32,
+    pub axis: u32,
+    pub value: i16,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -235,6 +245,20 @@ impl InputSchedule {
     #[allow(dead_code)]
     pub fn held_at(&self, frame: u32, button: ProbeButton) -> bool {
         self.held_on(0, frame, button)
+    }
+
+    pub fn add_stick(&mut self, start: u32, duration: u32, axis: u32, value: i16) {
+        self.sticks.push(StickEntry { start_frame: start, end_frame: start + duration, axis, value });
+    }
+
+    // The first pad's axis at a frame, the last entry that covers it winning; 0 is centred.
+    #[allow(dead_code)]
+    pub fn axis_at(&self, frame: u32, axis: u32) -> i16 {
+        self.sticks
+            .iter()
+            .rev()
+            .find(|e| e.axis == axis && frame >= e.start_frame && frame < e.end_frame)
+            .map_or(0, |e| e.value)
     }
 
     #[allow(dead_code)]

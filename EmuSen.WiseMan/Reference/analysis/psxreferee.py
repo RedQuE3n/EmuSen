@@ -8,7 +8,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     psxreferee.py ram REFEREE EXE --bios FILE [--for N] [--pal] ADDRESS:WORDS ...
     psxreferee.py tty REFEREE EXE --bios FILE [--for N] [--pal] --heading TEXT
     psxreferee.py wav REFEREE EXE --bios FILE [--for N] [--pal] [--option KEY=VALUE ...] OUT.wav
-    psxreferee.py pictures REFEREE DISC --bios FILE [--for N] [--every K] [--pal] OUTDIR
+    psxreferee.py pictures REFEREE DISC --bios FILE [--for N] [--every K] [--pal] [PLAY ...] OUTDIR
 
 REFEREE is `duckstation`, `pcsx-redux`, or a libretro core pinned in libretro-cores.sha256 (`mednafen_psx`,
 `swanstation`, `pcsx_rearmed`), which the reference probe drives. --bios names the player's own BIOS file in the
@@ -24,7 +24,11 @@ frontend (Diamond_SPU.md §10); the other referees give no audio here. `--option
 `pictures` runs a libretro referee on a disc image (a sheet, a lone track or an `.iso`) and keeps its screen every K
 frames (30 unless given) to frame N as OUTDIR/fFRAME_WxH.rgba, the form Diamond's run tool writes, so that a disc's
 boot is compared by the screen alone (Diamond_Referees.md §4.14). The spaces the probe dumps beside each screen are
-removed unread: on a player's BIOS they hold its RAM.
+removed unread: on a player's BIOS they hold its RAM. PLAY drives the game through the probe's input callback:
+`--press F:BTN[:DUR]` and `--presson P:F:BTN[:DUR]` (RetroPad names, B the Cross, A the Circle, Y the Square, X the
+Triangle), `--stick F:AXIS:VALUE[:DUR]` (AXIS 0-3 the left stick's x and y, then the right's, VALUE -1 to 1),
+`--device P=NAME`, `--option KEY=VALUE`, `--card-in FILE` (the first card, as the core's save RAM), `--card-out FILE`
+(that card as it stands at the last picture) and `--wav FILE` (the mixed audio) (Diamond_Players.md §13).
 
 `fetch` downloads the two standalone releases pinned in psx-referees.sha256 into the cache, refuses any whose
 SHA-256 differs, unpacks them and prepares them to run headless (§2). Exit codes: 0 done, 1 a refused or failed
@@ -48,7 +52,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PINS = HERE.parent / "psx-referees.sha256"
 CACHE = Path.home() / ".cache/emusen/probe/diamond/referees"
-PROBE = Path.home() / ".cache/emusen/probe/diamond/probe"
+PROBE = Path(os.environ.get("EMUSEN_PSX_PROBE", Path.home() / ".cache/emusen/probe/diamond/probe"))
 CORES = Path.home() / ".cache/emusen/probe/libretro/cores"
 LIBRETRO = ("mednafen_psx", "swanstation", "pcsx_rearmed")
 GDB_PORT = 2345
@@ -329,12 +333,14 @@ def rgba(raw, pixel_format):
     die(f"a screen format the driver does not know: {pixel_format}")
 
 
-def run_libretro_pictures(core, disc, sysdir, frames, every, pal, out):
-    """The core's screen every `every` frames; nothing else the probe wrote is kept or opened."""
+def run_libretro_pictures(core, disc, sysdir, frames, every, pal, out, play=(), card_out=None):
+    """The core's screen every `every` frames, with the presses, devices, options and card of `play`; of the rest the
+    probe wrote only the card is kept, when `card_out` asks for it."""
     out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=CACHE) as tmp:
         cmd = libretro_command(core, disc, sysdir, frames, pal, tmp)
         cmd[3:5] = [str(every), str(frames), str(every)]
+        cmd += list(play)
         cmd, unit = confined(cmd, core)
         try:
             p = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -342,6 +348,10 @@ def run_libretro_pictures(core, disc, sysdir, frames, every, pal, out):
             reap(unit)
         if p.returncode == 4:
             die(f"{core}: the probe refused the run (no firmware of the player's own)")
+        cards = sorted(Path(tmp).glob("*_sram_f*.bin"), key=lambda c: int(c.stem.rsplit("_f", 1)[1]))
+        if card_out and cards:
+            shutil.copyfile(cards[-1], card_out)
+            print(f"{core}: the card at frame {cards[-1].stem.rsplit('_f', 1)[1]} in {card_out}")
         for space in Path(tmp).glob("*_f*.bin"):
             if "_screen_f" not in space.name:
                 space.unlink()
@@ -400,9 +410,15 @@ def main(argv):
         rest.remove("--pal")
     if mode == "pictures":
         every = int(option("--every", "30"))
+        play = []
+        for flag, probe_flag in (("--press", "--press"), ("--presson", "--presson"), ("--stick", "--stick"), ("--device", "--device"), ("--option", "--option"), ("--card-in", "--sram"), ("--wav", "--wav")):
+            while flag in rest:
+                value = option(flag)
+                play += [probe_flag, str(Path(value).resolve()) if flag in ("--card-in", "--wav") else value]
+        card_out = option("--card-out")
         if referee not in LIBRETRO or len(rest) != 1:
             die(__doc__, 2)
-        return run_libretro_pictures(referee, exe, bios.parent, count, every, pal, Path(rest[0]).resolve())
+        return run_libretro_pictures(referee, exe, bios.parent, count, every, pal, Path(rest[0]).resolve(), play, card_out and Path(card_out).resolve())
     if mode == "wav":
         options = []
         while "--option" in rest:

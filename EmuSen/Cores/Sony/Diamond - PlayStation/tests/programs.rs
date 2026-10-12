@@ -1069,3 +1069,134 @@ fn the_screen_with_no_disc_formats_a_card_and_boots_a_disc_put_in() {
     assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the disc put in booted, by frame {}", m.frames);
     assert_eq!(m.board.ram_word(0x10_0000 + 4 * 8), 0, "and its calls kept the saved registers");
 }
+
+// ---- Stage 12, the debugger (Diamond_Debugger.md) ----------------------------------------------------------------
+
+/// How a table is set on a machine.
+type Arm = fn(&mut Machine);
+
+/// The debugger's tables, each armed alone and then all at once: what each is set to, and how it is set.
+fn tables() -> Vec<(&'static str, Arm)> {
+    use diamond::machine::{RAM_ID, SCRATCH_ID};
+    use emusen_native::debug::flag;
+    vec![
+        ("calls", |m| m.debug.hooks.configure(flag::CALLS, i32::MIN, -1)),
+        ("writes watched over RAM and the scratchpad", |m| {
+            m.debug.hooks.configure(flag::WRITES, i32::MIN, -1);
+            m.debug.hooks.set_ranges(0, &[RAM_ID, 0, 0x1F_FFFF, SCRATCH_ID, 0, 0x3FF]);
+        }),
+        ("data breakpoints over RAM", |m| {
+            m.debug.hooks.configure(flag::WRITES, i32::MIN, -1);
+            m.debug.hooks.set_ranges(1, &[RAM_ID, 0, 0x1F_FFFF]);
+        }),
+        ("profile", |m| m.debug.hooks.configure(flag::CALLS | flag::PROFILING, i32::MIN, -1)),
+        ("coverage", |m| m.debug.hooks.configure(1 << flag::COVERAGE, i32::MIN, -1)),
+        ("interrupts", |m| m.debug.hooks.configure(flag::CALLS | flag::INTERRUPTS, i32::MIN, -1)),
+        ("breakpoints over KSEG0's RAM", |m| m.debug.hooks.set_breakpoints(&[0x8000_0000u32 as i32, 0x801F_FFFFu32 as i32])),
+        ("each instruction", |m| m.debug.hooks.configure(flag::EACH | flag::CALLS, i32::MIN, -1)),
+        ("the kit's C15, all with nothing to hit", |m| {
+            m.debug.hooks.configure(flag::CALLS | flag::WRITES | flag::PROFILING | 1 << flag::COVERAGE, i32::MIN, -1);
+            m.debug.hooks.set_breakpoints(&[-2, -2]);
+            m.debug.hooks.set_ranges(0, &[u32::MAX - 1, 0, u32::MAX]);
+            m.debug.hooks.set_ranges(1, &[u32::MAX - 1, 0, u32::MAX]);
+        }),
+    ]
+}
+
+/// The digests of `frames` frames, plain or through the debugger's frame with every stop continued and every log
+/// drained as a host does: the pictures', the sound's and the final state's, and the stops.
+fn debug_digests(mut m: Machine, frames: usize, observed: bool) -> ([u64; 3], u64) {
+    use emusen_native::ffi::StateMachine;
+    let bytes = |h: u64, b: &[u8]| b.iter().fold(h, |h, &x| (h ^ x as u64).wrapping_mul(0x0000_0100_0000_01B3));
+    let (mut picture, mut sound, mut stops) = (0xcbf2_9ce4_8422_2325u64, 0xcbf2_9ce4_8422_2325u64, 0u64);
+    let mut chunk = vec![0i16; 1 << 16];
+    for _ in 0..frames {
+        if observed {
+            let mut flags = 0;
+            while m.run_frame_debug(flags) != 0 {
+                stops += 1;
+                m.debug.hooks.calls_log.clear();
+                m.debug.hooks.writes_log.clear();
+                flags = emusen_native::debug::run::UNCHECKED;
+            }
+        } else {
+            m.advance();
+        }
+        picture = bytes(picture, m.board.gpu.display.frame());
+        let n = m.board.spu.out.drain(&mut chunk, usize::MAX);
+        sound = chunk[..n].iter().fold(sound, |h, &s| bytes(h, &s.to_le_bytes()));
+    }
+    let mut state = vec![0; m.state_size()];
+    let n = m.save_state(&mut state).unwrap();
+    ([picture, sound, bytes(0xcbf2_9ce4_8422_2325, &state[..n])], stops)
+}
+
+/// G7's oracle on one program: each table armed gives the plain run's digests; the digests and the stops printed.
+fn every_table_gives_the_plain_run(name: &str, frames: usize, make: impl Fn() -> Machine) {
+    let (plain, _) = debug_digests(make(), frames, false);
+    eprintln!("{name}, {frames} frames: plain {:016X} {:016X} {:016X}", plain[0], plain[1], plain[2]);
+    for (table, arm) in tables() {
+        let mut m = make();
+        arm(&mut m);
+        let (got, stops) = debug_digests(m, frames, true);
+        eprintln!("  {table}: {stops} stops, {}", if got == plain { "the plain run's digests" } else { "DIFFERENT" });
+        assert_eq!(got, plain, "{name} with {table} armed");
+    }
+}
+
+/// A project program with no kernel, as `run_set_up` makes it.
+fn bare(source: &str) -> Machine {
+    let words = emusen_mips::assemble(source, 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    let image = exe::build(&words);
+    Machine::new(Media::read(&image).unwrap(), Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, None)
+}
+
+/// The project's programs: exceptions of every kind, the GTE, the SPU's voices, the GPU's raster order, the MDEC and a
+/// sector read from a disc.
+#[test]
+fn every_table_armed_gives_the_plain_runs_digests_on_the_projects_programs() {
+    every_table_gives_the_plain_run("exceptions.s", 10, || bare(include_str!("../programs/exceptions.s")));
+    every_table_gives_the_plain_run("gte-fuzz.s", 10, || bare(include_str!("../programs/gte-fuzz.s")));
+    every_table_gives_the_plain_run("spu-voices.s", 20, || bare(include_str!("../programs/spu-voices.s")));
+    every_table_gives_the_plain_run("raster-order.s", 10, || bare(include_str!("../programs/raster-order.s")));
+    every_table_gives_the_plain_run("mdec-timing.s", 10, || bare(include_str!("../programs/mdec-timing.s")));
+    every_table_gives_the_plain_run("cd-read.s", 60, || {
+        let mut m = bare(include_str!("../programs/cd-read.s"));
+        m.insert_disc(cd_disc());
+        m
+    });
+}
+
+/// ps1-tests' programs of the release on the open kernel, the kernel's own start-up among what is observed.
+#[test]
+fn every_table_armed_gives_the_plain_runs_digests_on_ps1_tests() {
+    let Some(corpus) = records::corpus() else { return };
+    for (path, frames) in [("timers/timers.exe", 30), ("gpu/triangle/triangle.exe", 30), ("gte/test-all/test-all.exe", 30), ("spu/test/test.exe", 30), ("mdec/movie/movie-15bit.exe", 30), ("dma/otc-test/otc-test.exe", 30)] {
+        every_table_gives_the_plain_run(path, frames, || mdec_program(&corpus, path, 0));
+    }
+}
+
+/// One of the tester's discs, copied to the cache and named by `EMUSEN_DIAMOND_DISC`, on the open kernel with no
+/// firmware: what the open kernel does with it at this stage, observed.
+#[test]
+fn every_table_armed_gives_the_plain_runs_digests_on_a_disc() {
+    let Some(path) = std::env::var_os("EMUSEN_DIAMOND_DISC") else {
+        eprintln!("skipped: EMUSEN_DIAMOND_DISC names no disc");
+        return;
+    };
+    let path = std::path::PathBuf::from(path);
+    let image = std::fs::read(&path).expect("the disc");
+    let mut files = Vec::new();
+    if diamond::medium::is_sheet(&image) {
+        for name in emusen_disc::set::companions(&String::from_utf8_lossy(&image)).expect("a sheet") {
+            files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
+        }
+    }
+    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
+    every_table_gives_the_plain_run(&path.file_name().unwrap().to_string_lossy(), 120, || {
+        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(&image, &refs) else { panic!("the disc opens") };
+        let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
+        m.insert_disc(*disc);
+        m
+    });
+}

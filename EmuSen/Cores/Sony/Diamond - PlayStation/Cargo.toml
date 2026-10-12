@@ -14,9 +14,9 @@ emusen-native = { path = "../../Shared/emusen-native" }
 blackmoon-r3000 = { path = "../BlackMoon-HW/blackmoon-r3000" }
 blackmoon-gte = { path = "../BlackMoon-HW/blackmoon-gte" }
 emusen-disc = { path = "../../Shared/emusen-disc" }
+emusen-mips = { path = "../../Shared/emusen-mips" }
 
 [dev-dependencies]
-emusen-mips = { path = "../../Shared/emusen-mips" }
 # Its SHA-256, which pins the release code the record programs carry (tests/support/records.rs).
 emusen-core-conform = { path = "../../Shared/emusen-core-conform" }
 

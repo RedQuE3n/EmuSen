@@ -12,7 +12,7 @@ through the shared crate `emusen-disc`, and games boot to their title screens th
 stage 9 the MDEC decodes, ps1-tests' MDEC programs' VRAM equals their pictures but for the rounding D-30 leaves open,
 and a game's opening movie plays; at stage 8, built after it, the SPU plays, its voices as its capture buffers record
 them equal to DuckStation's sample for sample, and ps1-tests' SPU programs pass; at stage 10 the open kernel boots
-discs by their SYSTEM.CNF and keeps files on memory cards in their on-card format, with no firmware folder. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
+discs by their SYSTEM.CNF and keeps files on memory cards in their on-card format, with no firmware folder. At stage 12 the generic debugger runs on it: breakpoints, stepping, watches, coverage and the call stack on the R3000A, the GTE's registers, and code listed with the GTE's names. Its processors are the BlackMoon crates (`../BlackMoon-HW/README.md`).
 
 - [`Diamond_Plan.md`](Diamond_Plan.md) — the plan, written 2026-10-10 before any emulation: the machine in scope and
   how accurate each part must be (the R3000A with its cache and scratchpad, the GTE exact, DMA, timers, interrupts, a
@@ -35,7 +35,13 @@ discs by their SYSTEM.CNF and keeps files on memory cards in their on-card forma
   program, how the first build failed `test-all`, the timing against the witnesses, the state's version 2, the cost; and stage 6 (§14): SIO0's devices, the state's version 4, the gate; and stage 7 (§15): the CD-ROM, the disc crate, the
 state's version 6, the gate item by item; and stage 9 (§16): the MDEC, DMA channels 0 and 1, the state's version 7,
 the gate; and stage 8 (§17): the SPU, the audio path, DMA4, the state's version 8, the gate; and stage 10 (§18): the
-open kernel's second phase, the gate with the tester's games booting with no firmware folder and a save loaded back.
+open kernel's second phase, the gate with the tester's games booting with no firmware folder and a save loaded back. And stage 12 (§19): the debugger, its gate.
+- [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
+  R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
+  the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a
+  call abandoned by an exception in its slot, coverage over 24 bits, registers and the listing by `emusen-mips`, the
+  tests, read watchpoints proposed as an extension of v1 and not built, each table armed against the plain run's
+  digests, the cost, two framework notes and the reading log.
 - [`Diamond_GPU.md`](Diamond_GPU.md) — the GPU, written 2026-10-11 at stage 4: the FIFO and the command processor,
   GPUSTAT's ready bits against `gpustat`'s console log, DMA channel 2, GP1, VRAM's transfers, texturing with the
   texture and CLUT caches, the pixel pipeline, the rasteriser's rules fitted to ps1-tests' console pictures, the

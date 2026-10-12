@@ -2750,6 +2750,15 @@ the document valid against the schema); Nephrite's `the_processors_and_their_bus
 only they, views and read-only); WiseMan's `NephriteTests.The_stub_runs_each_system_through_the_generic_runner` (the
 runner's snapshots without the two buses, on all three systems).
 
+### 29.4 A view the size of a 32-bit space, 2026-10-11
+
+Diamond's `R3000BUS` (`Diamond_Debugger.md` §1) is a view of 4 GiB. Two hosts are safe with it: WiseMan's runner leaves
+views out, and `CoreDebugTarget.GetMemorySpaces` reads a space byte by byte, its size clamped to `int.MaxValue`. One is
+not, and is not reached today: `CoreDebugTarget.ViewSpaces` copies each space without side effects whole when a system
+pack's views first touch it, so a pack for a system with such a view would ask for a 2 GiB copy. The PlayStation's pack
+has no views. Reading a `view` space live there, as a space with side effects already is, would remove the hazard; it
+is recorded and not changed, since nothing yet calls it on a view.
+
 ---
 
 ## 30. The debug surface as the golden corpus found it, 2026-10-10

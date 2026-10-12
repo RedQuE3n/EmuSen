@@ -506,6 +506,7 @@ impl StateMachine for Machine {
         self.cpu = cpu;
         self.board = board;
         self.card_reported = [false; 2];
+        self.debug.close();
         if !pending {
             self.exe = None;
         } else if self.exe.is_none() {

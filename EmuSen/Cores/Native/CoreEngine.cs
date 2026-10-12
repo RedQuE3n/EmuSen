@@ -21,7 +21,7 @@ namespace EmuSen.Cores.Native
         private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
         private readonly List<(uint Which, BatterySave Save)> _battery = new();
         private readonly List<string> _log = new();
-        private uint[] _buttons = new uint[2];
+        private readonly InputLatch _input = new();
         private CheatRegistry _cheats = new();
         private CheatRegistry _hostCheats = new();
         private int _cheatVersion = -1;
@@ -100,15 +100,15 @@ namespace EmuSen.Cores.Native
         public IReadOnlyList<PadAxis> SupportedAxes =>
             Library.Has(CoreInterface.CapAxes) ? ControllerFor(0)?.Axes.Where(a => a.Control.HasValue).Select(a => a.Control!.Value).Distinct().ToArray() ?? Array.Empty<PadAxis>() : Array.Empty<PadAxis>();
 
+        // Held here from any thread and sent to the machine on its own as the next frame starts - see Diamond_Players.md §12.7.
         public virtual void SetButton(int port, PadButton button, bool pressed)
         {
-            if (port < 0 || port >= _buttons.Length || ControllerFor(port) is not { } pad) return;
+            if (port < 0 || port >= _input.Ports || ControllerFor(port) is not { } pad) return;
             foreach (var b in pad.Buttons)
             {
                 if (b.Control != button || b.Bit > 31) continue;
                 uint bit = 1u << (int)b.Bit;
-                _buttons[port] = pressed ? _buttons[port] | bit : _buttons[port] & ~bit;
-                _machine?.SetButtons(port, _buttons[port], bit);
+                _input.Hold(port, pressed ? bit : 0, bit);
             }
         }
 
@@ -116,8 +116,11 @@ namespace EmuSen.Cores.Native
         {
             if (_machine is null || ControllerFor(port) is not { } pad) return;
             foreach (var a in pad.Axes)
-                if (a.Control == axis) _machine.SetAxis(port, a.Axis, a.Trigger ? Math.Clamp(value, 0, 1) : Math.Clamp(value, -1, 1));
+                if (a.Control == axis) _input.Move(port, a.Axis, a.Trigger ? Math.Clamp(value, 0, 1) : Math.Clamp(value, -1, 1));
         }
+
+        // A shim's own pad routing into the same latch: the bits of changed take mask's values at the next frame.
+        protected void HoldButtons(int port, uint mask, uint changed) => _input.Hold(port, mask, changed);
 
         public bool SkipRendering
         {
@@ -213,7 +216,7 @@ namespace EmuSen.Cores.Native
             _battery.AddRange(wanted);
             RomPath = path;
             Console = console;
-            _buttons = new uint[Math.Max(2, machine.Info.Ports.Count)];
+            _input.Reset(Math.Max(2, machine.Info.Ports.Count), AxesOf(machine));
             _cheatVersion = -1;
             _audioLimitSent = -1;
             _log.Clear();
@@ -225,6 +228,10 @@ namespace EmuSen.Cores.Native
             _shape = machine.FrameInfo;
             _frame = new byte[Math.Max(0, (int)_shape.Bytes)];
         }
+
+        // One past the highest axis any controller of the machine's system names.
+        private int AxesOf(CoreMachine machine) =>
+            (Info.Systems.FirstOrDefault(s => s.Id == machine.Info.System) ?? Info.Systems.FirstOrDefault())?.Controllers.SelectMany(c => c.Axes).Select(a => (int)a.Axis + 1).DefaultIfEmpty(0).Max() ?? 0;
 
         // The adapter's own debugger over a new machine; a port's shim keeps its mirror's instead.
         protected virtual void AttachDebugger(CoreMachine machine) => Debug.Attach(machine);
@@ -288,6 +295,7 @@ namespace EmuSen.Cores.Native
             if (_closeLidAt >= 0 && TotalFrames >= _closeLidAt) SetLid(false);
             RefreshCheats(m);
             SyncAudioLimit(m);
+            _input.Send(m);
             long start = Stopwatch.GetTimestamp();
             if (!AdvanceFrame(m))
             {
@@ -342,7 +350,7 @@ namespace EmuSen.Cores.Native
                         m.ReadInfo();
                         _shape = m.FrameInfo;
                         // A port added while the game runs, as by an adapter plugged in, has its buttons held from now.
-                        if (m.Info.Ports.Count > _buttons.Length) Array.Resize(ref _buttons, m.Info.Ports.Count);
+                        _input.Grow(m.Info.Ports.Count);
                         break;
                 }
             }

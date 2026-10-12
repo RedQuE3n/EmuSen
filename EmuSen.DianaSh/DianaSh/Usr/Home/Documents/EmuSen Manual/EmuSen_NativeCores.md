@@ -826,7 +826,7 @@ It then:
 - loads the library;
 - checks both halves of the version (§3.2);
 - reads the capabilities and checks them against the engine class's declared interfaces;
-- installs the crash log at `DataStore.Logs/<crate>_crash_<pid>.txt`;
+- installs the crash log at `DataStore.Logs/<crate>_crash_<pid>.txt` (since 2026-10-12 in `ErrorLog.Root()`, its folder made first, `Diamond_Players.md` §12.7.5);
 - resolves every export of the common set once;
 - keeps `Available`, `Report` and `Export(name)` for extensions.
 

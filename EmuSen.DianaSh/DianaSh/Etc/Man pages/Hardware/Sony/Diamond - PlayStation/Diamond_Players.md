@@ -339,12 +339,15 @@ Each was shown by a WiseMan test failing before the change and passing after [M]
 
 ### 12.5 Not fixed, and why
 
-- **The abort of §12.3** is the host's: input reaches a v1 machine from the interface thread while the emulation thread
-  is inside it. The form that keeps §6.16 without a surface change is for `CoreEngine` to keep the pad's buttons and
-  axes and pass them to the machine on the emulation thread before each frame, which also changes when a press is seen
-  (at the next frame, as a poll between frames already is). It touches the running game rather than its launch, and
-  wants its own proof (a run with input from a second thread, in a process of its own, since the abort ends the test
-  host), so it is put to the tester rather than built here.
+- **The abort of §12.3** was the host's, and is fixed since; §12.7 has the record. *The cause, proven:* a v1 machine
+  entered from a second thread while its emulation thread was inside it, which `EmuSen_CoreAPI.md` §6.16 forbids; a
+  child test host driving input that way aborted on `RefCell already borrowed` in 10 runs of 10, and one driving the
+  console's read-only lines in 10 of 10 [M]. *The fix:* `CoreEngine` holds the pad's buttons and axes and sends them
+  on the emulation thread as each frame starts, and every call on a machine's handle holds that machine's gate, so no
+  two threads are in it at once; 0 runs of 10 aborted after, either way [M]. *The crossings found:* the pad timer and
+  the keys in both frontends, the console's read-only lines in both, the Hardware Dashboard and Hotaru's feed window,
+  Apply Cheats while paused and Hotaru's bounded shutdown; the rest were already on the emulation thread or behind a
+  stopped one (§12.7.2).
 - **A sheet naming a file by another name** (`Game (USA).bin` beside a file `Game.bin`) opens nowhere, the load's words
   naming the missing file. Choosing another file for it would be a guess; none of the library's sheets does it.
 - **A loose audio track goes to the Genesis even in a folder named `psx`**: the Genesis's recogniser claims anything
@@ -359,3 +362,132 @@ Each was shown by a WiseMan test failing before the change and passing after [M]
 WiseMan, by area: `PlayStationLibrary`, `Diamond` (with `DiamondPlayers`), `Galaxia`, `RomLibrary`, `SystemPack`,
 `CoreCatalog`, `CoreFactory`, `Firmware` and `EmulatorSession`, 396 cases, 388 passing and 8 skipped (the opt-in ones
 without their folders); the opt-in run of §12.1 on the seven copies, with development cores off and on.
+
+### 12.7 The abort of §12.3, proven and fixed (2026-10-12)
+
+*Written 2026-10-12, on WiseMan `3fb0e1e8`.* The marks are §12's; [M] is measured on this date with the test named.
+
+#### 12.7.1 The proof
+
+`CoreEngineThreadTests.A_second_thread_entering_a_running_machine_does_not_end_the_process` runs a synthetic program on
+the open kernel, `DiamondTests.AnalogPadReading` (the DualShock put in analog mode by commands 43h and 44h, then read
+over SIO0 without end), through `EmulatorSession` as Mistress loads it. One thread runs 900 frames unpaced in the
+emulation loop's order, the frame and then the debugger's `RefreshProviders`. A second thread, at once, does one of
+two things:
+
+- **input**: `SetAxis` on both left-stick axes and `SetButton` on Start, in a loop, the calls `PortRouter` makes from
+  the window's pad timer (every axis on each poll, a button on each change);
+- **debugger**: `mem ram 10000 16` and `disasm r3000` through `DianaShInterpreterScheduler.SubmitFromAnyThread`, the
+  console's read-only fast path, and the target's `FrameCount` and `GetSummaryText`, which the Hardware Dashboard and
+  `cpus` read.
+
+A panic across the boundary aborts the whole process, so each case is a child test host that the test starts, judged
+by its exit, its output and a mark file it writes only if it finishes. Ten runs of each case [M]:
+
+| | Before (`3fb0e1e8`) | After |
+|---|---|---|
+| input | 10 of 10 aborted: `exports.rs:105` eight times (the settle of a call), `:115` (the settle of a read, the handheld's line) and `:135` once each | 0 of 10; in the two runs timed, 900 frames in 5.7 and 5.8 s, the second thread making 12.1 and 12.2 million rounds |
+| debugger | 10 of 10 aborted: `:105` five times, `:115` four, `:410` (the events' outbox) once | 0 of 10; in the two runs timed, 900 frames, the second thread finishing 33 and 53 rounds |
+
+The aborted children's runs took 2–3 s in all, against 7 s for a finished one, so each abort came early in the 900
+frames [M]. The panic names whichever of the outbox's borrows met the other thread's, so the
+handheld's line is one of several the race produces, not a separate defect [A].
+
+#### 12.7.2 Every crossing, and what was done with it
+
+Searched in Mistress, Hotaru, the shell's window, Pharaoh, `EmulatorSession` and the engines over `CoreEngine` and
+`CoreMachine` (Diamond, VenusRT, Nephrite, and MoonRT and MercuryRT through `PortEngine`) [R]:
+
+| Path | Thread | Machine calls | Done |
+|---|---|---|---|
+| Mistress's pad timer and keys (`PollGamepad`, `ApplyKeys`, `PortRouter`) | interface | `set_axis`, `set_buttons` | **proven; latched** (§12.7.3) |
+| Hotaru's pad timer and keys | interface | the same | latched |
+| The console's read-only lines (`mem`, `xxd`, `dump`, `disasm`, `cpus`, `regs`, `eval`, `find`, `memfind`, `tile`, `tilemap`, `pal`, `vectors`, …), Mistress's window and Hotaru's reader thread | interface, reader | `space_size`, `space_read`, `debug_disassemble`, `debug_pc`, `debug_registers`, `frame_count` | **proven; behind the gate** |
+| The Hardware Dashboard, 4 Hz | interface | `frame_count`, and `space_size` and `space_read` for the palette and tile sheet | behind the gate |
+| Hotaru's feed window (`feed -w`), 30 Hz | interface | `frame_info`, `frame_copy` | behind the gate; the engine's scratch picture is shared with the emulation thread's copy, so the feed can show a torn frame (a debug view; not changed) |
+| Apply Cheats while paused (`RequestCheatApply`) | interface, the emulation thread parked | `set_rom_patches`, `set_cheat_pokes`, `space_read`, `space_write` | behind the gate; the engine's cheat fields are shared with a request the parked thread would run only if one were queued in the same instant (not observed; not changed) |
+| Hotaru's shutdown: a 500 ms join, then `SaveSram` | interface | `battery`, `battery_saved` | behind the gate, for a frame that outlives the join |
+| States, Change Disc and the lid, live settings, screenshots, the rewind reel, state pictures, running Apply Cheats, the console's queued lines | emulation, by `RequestOnEmulationThread`, the cheats flag and the console's queue | — | already safe: run between frames by the owner (`EmuSen_Settings_Reference.md` §4.21a, §4.26) |
+| Load, reset, the library, closing | interface, after `StopEmulationThread` joins | `create`, `battery`, `state_save`, `free` | already safe: the thread is stopped first |
+| `IsRomLoaded`, `ControllerPorts`, `SupportedAxes`, `CanChangeDisc`, `Discs`, `LidOpen`, `FrameRateHz` | interface | none: managed fields and machine info, replaced whole | safe |
+| `SetControllerConnected` | interface | none for a v1 engine (`ICore`'s default) | safe |
+| Memory card actions | — | none exist in either frontend; a card is a battery file, written on the emulation thread or after it stops | safe |
+| The shell's own window, Pharaoh | — | no emulator, and one thread | safe |
+
+Outside `CoreEngine` and `CoreMachine`, and not changed: **MarsRT's shim** (`MarsRtCore`) presses buttons, moves the
+stick and plugs a pad from the interface thread straight into `mars_machine_press`, `_set_stick` and `_set_present`,
+which take the machine mutably while `advance` may hold it. They are plain stores with no `RefCell`, so nothing
+panics, but by Rust's rules it is a data race; no misbehaviour has been shown, so it is recorded rather than changed, and
+the same latch would take it [R]. The C# cores keep the single-writer race that `EmuSen_Settings_Reference.md` §4.21
+accepts.
+
+#### 12.7.3 The fix
+
+- **The input latch** (`InputLatch.cs`). `CoreEngine.SetButton` and `SetAxis` route by the descriptors as before and
+  hold the result: for each port the buttons held and the bits changed since the last frame, for each port and axis the
+  latest value. `RunFrame` sends it before `advance`, `set_buttons(port, held, changed)` for a port with changes and
+  `set_axis` for each axis moved, copying under the latch's lock into arrays kept between frames, so a frame
+  allocates nothing. `PortEngine`'s whole-pad routing (`changed` = FFh, `EmuSen_NativeCores.md` §3.8) goes into the same
+  latch. The interface thread never enters the machine for input.
+- **The machine's gate** (`CoreMachine.Gate`). Every call on a machine's handle holds a lock of that machine: each of
+  `CoreMachine`'s methods for its whole body, so a status and its `last_error` are one call's, and the debug bridges
+  and the ports' extensions around their own calls on `Handle`. §6.16 asks for one thread at a time, which mutual
+  exclusion gives; it does not ask for one fixed thread [R].
+- **Why both, and not one.** The gate alone would serialise input too, and the pad timer would wait for the advance in
+  flight, about 6 ms on the test's program, on each poll of the interface thread. The latch alone would leave the
+  debugger's reads. Making every read a request to the emulation thread would turn the console's read-only lines,
+  which answer at once by design (`EmuSen_Debugging_Tools_Reference_v5.md` §3.3a), and the dashboard's reads into
+  asynchronous ones; the gate keeps them synchronous, waiting at most for the call in flight [C].
+- **Cost.** Uncontended, the gate costs 8.5 ns a call: 16.4 ns for `TotalFrames` against 7.9 ns for the bare export,
+  five million calls, three rounds [M]. Mistress's loop makes about 25 machine calls a frame on Diamond, counted from
+  the code [R], so about 0.2 µs in a 6.4 ms frame of the test's program [A]. A read on another thread waits for the
+  call in flight and, because a monitor is not fair, for frames run back to back: unpaced, the debugger case's thread
+  finished 33 and 53 rounds of four reads in 5.7 s, `mem`'s sixteen byte reads each waiting about a frame [M]. A paced
+  game leaves the gate free between frames, so the wait is at most one advance; fast-forward is the unpaced case [A].
+- **No surface changed.** The core ABI, `ICore` and `IDebugTarget` are as they were.
+
+#### 12.7.4 When a change reaches the machine
+
+`CoreEngineThreadTests.A_press_and_a_stick_set_before_a_frame_reach_that_frame`: Start, LeftX at 1 and RightY at −1, set
+on another thread that is joined before `RunFrame`, are in that frame's last pad read (F7h, FFh, 00h), and their release
+in the next frame's [M]. It passes before the change and after, so a change made before a frame starts still reaches
+that frame, and input latency has not grown. What differs is a change made while a frame runs: it reached the machine
+part way through that frame, where a game reading the pad later in the frame could see it, and now reaches it as the
+next frame starts. So a press and its release both made after one frame starts and before the next does are now not
+seen at all, as with any frame-start latch; before, the press was seen if the game read the pad after it within the
+frame in flight [R]. The pad timer polls once a frame interval, so only a key tapped and released within one frame can
+meet this [A].
+
+#### 12.7.5 The crash file
+
+- **What the handheld recorded.** No report of Mistress's own (`CrashLog`'s `crash_*.txt`), and §12.3 does not say
+  whether the core's own was written. The core's panic hook writes one (`emusen_core_set_crash_log`, §6.18) [R].
+- **What a run shows** [M]. In the child runs before the change, the hook had been given
+  `DataStore.Logs/diamond_crash_<pid>.txt`, and no such file was written anywhere under the run's folder. The hook
+  writes the file alone (`std::fs::write`); the sandbox's `Logs` folder is made by DianaSh's skeleton when the shell's
+  tree is first touched, which that process never did. A Mistress that had touched it would have written the report
+  to the sandbox's `/Logs`, which is not the folder the tester reads, `ErrorLog.Root()` (§12.3: `~/.config/EmuSen/Logs`
+  on the handheld) [A].
+- **The change**, inside the existing surface: the host passes a path in `ErrorLog.Root()`, the folder of `CrashLog`'s
+  reports and the per-game logs, and makes the folder first (`CoreLibrary.CrashLogPath`, used by the v1 loader and by
+  `NativeCoreLibrary`'s). `set_crash_log` already took any path.
+- **Its proof**: `A_panic_in_the_core_leaves_its_crash_file_in_the_log_folder` provokes the panic on purpose, `set_axis`
+  called on a second thread past the gate as a host ignoring §6.16 would, in a child whose log folder does not exist.
+  Before the change no file was written; after it `diamond_crash_<pid>.txt` is in the log folder, holding
+  `Diamond panic`, `RefCell already borrowed` and the backtrace [M].
+- **What `CrashLog` cannot do.** A core's panic aborts the process (`panic = "abort"`), and no managed code runs after
+  `abort` raises SIGABRT, so a report of Mistress's own cannot be written for it [A]. *Proposed, not built:* Mistress
+  could name, at its next start and in its error log, a core crash file left by a process that is no longer running.
+  It needs no new surface (`ErrorLog`), but it changes start-up, so it is put to the tester.
+
+#### 12.7.6 Tests run (2026-10-12)
+
+`CoreEngineThreadTests` (the two child cases, the crash file and the latency), and WiseMan by area for the blast radius:
+`CoreEngine`, `CoreMachine`, `CoreAdapter`, `CoreAbi`, `CoreDebug`, `CoreFactory`, `Diamond` (with `DiamondPlayers`),
+`PlayStationLibrary`, `Input`, `Controller`, `Pad`, `MoonRt`, `MercuryRt`, `VenusRt`, `Nephrite`,
+`MoonDebugTargetContract`, `NativeHost` and `EmulatorSession`. 1,130 cases: 1,125 passed, 3 skipped (the picture tools,
+opt-in) and 2 failed. `MercuryRtCoreTests.A_second_ports_buttons_are_ignored_on_both_engines` pressed and read the
+joypad register with no frame between, which a latched press no longer reaches; it now runs a frame after the presses
+and passes. `ConsoleBindingsTests.The_catalog_lists_consoles_by_manufacturer_then_release` lists the consoles without
+the PlayStation, which stage 11 offers to players, and fails alone as well; the change does not touch the catalog, and
+it is left to the branch that owns it [R].

@@ -76,8 +76,7 @@ namespace EmuSen.Cores.Native
 
             if (NativeLibrary.TryGetExport(handle, CrashLogExport, out nint crashExport))
             {
-                string log = Path.Combine(EmuSen.Galaxia.Library.DataStore.Logs, $"{CrashLogStem}_{Environment.ProcessId}.txt");
-                nint text = Marshal.StringToCoTaskMemUTF8(log);
+                nint text = Marshal.StringToCoTaskMemUTF8(CoreLibrary.CrashLogPath($"{CrashLogStem}_{Environment.ProcessId}.txt"));
                 ((delegate* unmanaged<nint, void>)crashExport)(text);
             }
             return (handle, IsCommon ? $"{path}, common interface {version >> 16} core {version & 0xFFFF}" : $"{path}, interface {version}");

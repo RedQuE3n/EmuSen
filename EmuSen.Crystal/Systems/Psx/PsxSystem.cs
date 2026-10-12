@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Media;
 using EmuSen.Crystal.Systems;
 
@@ -98,6 +99,13 @@ namespace EmuSen.Crystal.Systems.Psx
             return players;
         }
 
-        public static readonly SystemPack Pack = new(Entry, null, null, PlayerControllers);
+        // A code told GameShark or Xploder by its types' first digits, psx-spx's table, as a cheat file's or a player's code is.
+        public static ICheatCodeCodec GameShark() => new DelegateCheatCodec("GameShark or Xploder", CheatCodeKind.RamPoke, Ram,
+            PsxCheatFormats.IsEither, c => PsxCheatFormats.OneByte(PsxCheatFormats.EitherWrites(c), c), decodeWrites: PsxCheatFormats.EitherWrites);
+
+        public static ICheatCodeCodec Xploder() => new DelegateCheatCodec("Xploder", CheatCodeKind.RamPoke, Ram,
+            PsxCheatFormats.IsXploder, c => PsxCheatFormats.OneByte(PsxCheatFormats.XploderWrites(c), c), decodeWrites: PsxCheatFormats.XploderWrites);
+
+        public static readonly SystemPack Pack = new(Entry, GameShark, Xploder, PlayerControllers);
     }
 }

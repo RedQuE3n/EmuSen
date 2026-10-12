@@ -129,7 +129,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(CoreLibrary.IsOpen(library));
             Assert.NotNull(found.Open());
             Assert.Equal("not yet loaded", new DiscoveredCore(found.Sidecar).Report);
-            Assert.EndsWith("core ABI 1.0", found.Report);
+            Assert.EndsWith("core ABI 1.1", found.Report);
         }
 
         [Fact]

@@ -54,7 +54,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(("Genesis", "Sega CD", "32X"), (CoreCatalog.DiscoveredConsoleForSystem("md"), CoreCatalog.DiscoveredConsoleForSystem("mcd"), CoreCatalog.DiscoveredConsoleForSystem("32x")));
             Assert.Null(CoreCatalog.DiscoveredConsoleForSystem("snes"));
             CoreDiscovery.UseDevelopment(true);
-            Assert.Equal(new[] { "Genesis" }, CoreCatalog.DiscoveredConsoles);
+            Assert.Equal(new[] { "Genesis", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
         }
 
         [Fact]

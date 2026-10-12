@@ -49,11 +49,13 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("diamond", "Diamond", CoreInterface.CapAxes | CoreInterface.CapBatteryDirty), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(("diamond", "Diamond", CoreInterface.CapAxes | CoreInterface.CapBatteryDirty | CoreInterface.CapMedia), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             var system = Assert.Single(library.Info.Systems);
-            Assert.Equal((PsxSystem.Id, true), (system.Id, system.Development));
+            Assert.Equal((PsxSystem.Id, false), (system.Id, system.Development));
             Assert.Same(PsxSystem.Entry, SystemPacks.For(system.Id)!.Entry);
-            Assert.Equal(PsxSystem.Entry.Extensions, system.Extensions);
+            Assert.Equal(PsxSystem.CoreExtensions, system.Extensions);
+            Assert.Empty(system.Extensions.Except(PsxSystem.Entry.Extensions));
+            Assert.Equal(new[] { ".m3u" }, PsxSystem.Entry.Extensions.Except(system.Extensions));
             Assert.Empty(system.Extensions.Intersect(PsxSystem.DiscExtensions));
             Assert.Equal(PsxSystem.Bios.Select(b => (b.Name, b.Size)), system.Firmware.Select(f => (f.Name, f.Size)));
             Assert.All(system.Firmware, f => Assert.False(f.Required));
@@ -117,26 +119,26 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // A developer asking for development cores opens its files; its system says it runs no game yet, so the console gets no tab or shelf - see EmuSen_CoreAPI.md §27.4.
+        // A developer asking for development cores opens its files, and since stage 11 the console has its row, shelf and tabs there - see Diamond_Players.md §1.
         [Fact]
         public void A_program_opens_on_the_discovered_engine_when_development_cores_are_asked_for()
         {
             Assert.Contains(CoreDiscovery.Found, c => c.Info.Id == "diamond");
             string exe = Write("program.psexe", SyntheticPsExe.Build(market: "Europe"));
             Assert.True(CoreFactory.IsSupported(exe));
-            Assert.Null(CoreCatalog.ConsoleForRom(exe));
-            Assert.DoesNotContain("PlayStation", CoreCatalog.DiscoveredConsoles);
+            Assert.Equal("PlayStation", CoreCatalog.ConsoleForRom(exe));
+            Assert.Contains("PlayStation", CoreCatalog.DiscoveredConsoles);
             var bundle = CoreFactory.Load(exe);
             var core = Assert.IsType<CoreEngine>(bundle.Core);
             Assert.Equal(("diamond", "psx", "pal"), (core.Info.Id, core.Machine.Info.System, core.Machine.Info.Region));
             core.RunFrame();
             Assert.Equal((256, 240), (core.ScreenWidth, core.ScreenHeight));
             Assert.InRange(core.FrameRateHz, 49.76, 49.77);
-            Assert.Null(bundle.CheatAutoDetectCodec);
+            Assert.Equal(("GameShark or Xploder", "Xploder"), (bundle.CheatAutoDetectCodec?.Name, bundle.CheatExplicitCodec?.Name));
             Assert.Null(bundle.Notice);
             (core as IDisposable)?.Dispose();
             Assert.True(CoreFactory.IsSupported("game.chd"), "a CHD is one file and no other console claims it");
-            Assert.False(CoreFactory.IsSupported("game.cue"), "a sheet's tracks wait for the host to pass them, a lone track and an .iso for routing by content");
+            Assert.True(CoreFactory.IsSupported("game.cue"), "the host passes a sheet's tracks beside it");
         }
 
         // The core carries the development mark of EmuSen_CoreAPI.md §27 until the tester offers the PlayStation.
@@ -146,12 +148,13 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))?.Development, "the build writes the sidecar marked for development");
             CoreDiscovery.UseDevelopment(false);
             Assert.DoesNotContain(CoreDiscovery.Found, c => c.Info.Id == "diamond");
-            Assert.All(PsxSystem.Entry.Extensions, e => Assert.False(CoreFactory.IsSupported("program" + e)));
+            Assert.All(PsxSystem.Entry.Extensions.Where(e => e != ".bin"), e => Assert.False(CoreFactory.IsSupported("program" + e)));
+            Assert.Equal("Genesis", CoreCatalog.ConsoleForRom("program.bin"));
             Assert.DoesNotContain("PlayStation", CoreCatalog.DiscoveredConsoles);
             Assert.Empty(CoreCatalog.SettingsFor("PlayStation"));
         }
 
-        // The gate of Diamond_Plan.md §7's stage 1: the kit's fifteen cases on a synthetic program and a synthetic disc, single-image form.
+        // The gate of Diamond_Plan.md §7's stage 1: the kit's cases on a synthetic program and a synthetic disc, single-image form, MEDIA's C16 among them since stage 11.
         [Fact]
         public void The_kit_passes_on_a_synthetic_program_and_a_synthetic_disc()
         {
@@ -167,7 +170,7 @@ namespace EmuSen.WiseMan.Cores
                 process.WaitForExit();
                 _output.WriteLine($"{name}:\n{output}{stderr.Result}");
                 Assert.True(process.ExitCode == 0, output + stderr.Result);
-                Assert.Equal(15, output.Split('\n').Count(l => l.StartsWith("pass C")));
+                Assert.Equal(16, output.Split('\n').Count(l => l.StartsWith("pass C")));
             }
         }
 

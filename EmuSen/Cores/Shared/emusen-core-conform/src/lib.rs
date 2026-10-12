@@ -1319,7 +1319,18 @@ fn c16(s: &mut Session<'_>) -> Case {
         c.that(!listed.is_empty(), || "MEDIA is claimed but machine info lists no drives".to_owned());
         let drive = listed.first().and_then(|d| d.get("drive")).and_then(Value::as_i64).unwrap_or(0) as u32;
         let lid = |m: &Machine<'_>| drives(m).iter().find(|d| d.get("drive").and_then(Value::as_i64) == Some(drive as i64)).and_then(|d| d.get("lid").and_then(Value::as_str).map(str::to_owned)).unwrap_or_default();
+        let loaded = listed.first().and_then(|d| d.get("loaded")) == Some(&Value::Bool(true));
         s.play(&m, 0, 30, false)?;
+        if !loaded {
+            let r = m.media_insert(drive, None, &[], 0);
+            c.that(r == status::LID_CLOSED, || format!("an insert with the lid closed answered {r}, not EMUSEN_LID_CLOSED"));
+            c.that(m.media_lid(drive, true) == 0 && lid(&m) == "open", || "the lid did not open".to_owned());
+            c.that(m.media_insert(drive, None, &[], 0) == 0, || "the empty drive was not emptied again".to_owned());
+            c.that(m.media_lid(drive, false) == 0 && lid(&m) == "closed", || "the lid did not close".to_owned());
+            s.play(&m, 30, 60, false)?;
+            c.note(format!("drive {drive} is empty for this image, which is no disc: the lid and an empty insert only"));
+            return Ok(());
+        }
         let r = m.media_insert(drive, Some(&image), &media, 0);
         c.that(r == status::LID_CLOSED, || format!("an insert with the lid closed answered {r}, not EMUSEN_LID_CLOSED"));
         let r = m.media_lid(drive, true);

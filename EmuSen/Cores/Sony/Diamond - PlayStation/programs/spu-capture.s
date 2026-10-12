@@ -110,12 +110,6 @@ vinit:  addu t2, s0, t1
         slti t0, t1, 0x180
         bne t0, zero, vinit
         nop
-        addiu t0, zero, -1
-        sh t0, 0x1D88(s0)                 # every voice keyed on at the silent loop, so that each starts there
-        ori t0, zero, 0xFF
-        sh t0, 0x1D8A(s0)
-        jal frames
-        ori a0, zero, 1
         ori t0, zero, 0x0100
         sh t0, 0x1DA4(s0)                 # IRQA: the first halfword of voice 1's capture buffer
 # sound RAM's image at 80120000h
@@ -174,6 +168,10 @@ zero2:  addu t2, a0, t1
         ori a2, a2, 0xD940
         jal upload
         ori a3, zero, 155
+        addiu t0, zero, -1
+        sh t0, 0x1D88(s0)                 # every voice keyed on at the silent loop, so that each starts there
+        ori t0, zero, 0xFF
+        sh t0, 0x1D8A(s0)
         jal frames
         ori a0, zero, 2
 

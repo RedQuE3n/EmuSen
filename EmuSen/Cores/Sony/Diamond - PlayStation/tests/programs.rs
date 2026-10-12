@@ -831,17 +831,18 @@ fn the_step_by_step_status_follows_the_consoles_log() {
 
 // --- Stage 8: the SPU (Diamond_SPU.md) ---
 
-/// `spu-capture.s` (Diamond_SPU.md §10.2): its records as DuckStation's capture buffers and registers read them where
-/// the referees agree, pinned whole: the registers after T1 and T7, LSAX untouched by a key on, and T11's first samples
-/// after a key on, the envelope's step after the sample it scales (D-36).
+/// `spu-capture.s` (Diamond_SPU.md §10.2): its records pinned whole. T1, T2, T3, T5, T8 and T11 equal DuckStation's
+/// sample for sample; the registers of T1 and T7 equal Beetle PSX's, SwanStation's, DuckStation's and PCSX-Redux's:
+/// LSAX untouched by a key on, ENVX zero after an end and mute; T11's first samples after a key on show the envelope's
+/// step after the sample it scales (D-36).
 #[test]
 fn the_capture_program_records_the_voices_as_the_referees_do() {
     let m = run_for(include_str!("../programs/spu-capture.s"), 450, Market::Americas);
-    assert_eq!(results(&m, 0x10_0800, 5), [0x3FFF, 0x3FFF, 0x208, 0x208, 0xA], "T1: ENVX, LSAX and ENDX of voices 1 and 3");
-    assert_eq!(results(&m, 0x10_1D00, 6), [0x1234, 0xA, 0, 0xA, 0x1234, 0x208], "T7: LSAX kept by a key on, ENVX zero after an end and mute");
+    assert_eq!(results(&m, 0x10_0800, 5), [0x3FFF, 0x3FFF, 0x208, 0x208, 0xFFFF], "T1: ENVX and LSAX of voices 1 and 3, and ENDX");
+    assert_eq!(results(&m, 0x10_1D00, 6), [0x1234, 0xFFFE, 0, 0xFFFE, 0x1234, 0x208], "T7: LSAX kept by a key on, ENVX zero after an end and mute");
     let half = |a: u32| m.board.ram_word(a & !3) >> (8 * (a & 2)) & 0xFFFF;
     assert_eq!((2..6).map(|i| half(0x10_6F80 + 2 * i) as i16).collect::<Vec<_>>(), [1864, 21308, 28559, 14279], "T11");
-    assert_eq!(fnv(&results(&m, 0x10_0000, 0x7380 / 4)), 0xC73B_CF95_4662_8B14, "every record");
+    assert_eq!(fnv(&results(&m, 0x10_0000, 0x7380 / 4)), 0xA09B_0287_3DEF_0CAD, "every record");
 }
 
 /// `spu-voices.s` (Diamond_SPU.md §10.1): its nine scenes run to their end, the output's samples pinned.

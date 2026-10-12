@@ -65,19 +65,16 @@ namespace EmuSen.WiseMan.Cores
             public void Done() => output.WriteLine($"{game} | {condition} | {string.Join(" | ", _parts)} | total {_all.Elapsed.TotalMilliseconds:F0} ms");
         }
 
-        // The steps MissingFirmwareFor and CoreEngine.LoadRom take, one by one through the same public calls, then the first frame.
+        // The steps MissingFirmwareFor and CoreEngine.LoadRom take, one by one through the same public calls, then the first frame; the real Load after them as a check.
         private void Launch(string game, string condition, bool secondCreate)
         {
             var t = new Steps(_output, Path.GetFileName(game), condition);
             string console = t.Time("route", () => CoreCatalog.ConsoleForRom(game) ?? "Unknown");
             string? engine = CoreCatalog.EngineChosen(console, null);
             var probe = t.Time("probe-create", () => (CoreEngine)CoreFactory.ForFirmwareProbe(game, engine));
-            var discs = t.Time("unpack", () => CoreEngine.DiscsOf(game));
-            byte[] first = t.Time("probe-read", () => File.ReadAllBytes(discs[0]));
-            var wanted = t.Time("probe-firmware_for", () => probe.Library.FirmwareFor(first));
-            first = Array.Empty<byte>();
+            t.Time("firmware-question", () => probe.RequiredFirmwareFor(game));
             var engineCore = t.Time("load-create-engine", () => (CoreEngine)CoreFactory.Create(game, true, engine));
-            discs = t.Time("load-discs", () => CoreEngine.DiscsOf(game));
+            var discs = t.Time("load-discs", () => CoreEngine.DiscsOf(game));
             byte[] image = t.Time("load-read", () => File.ReadAllBytes(discs[0]));
             var media = t.Time("load-companions", () => ImageSets.FilesFor(discs[0]).Select(f => (f.Which, File.ReadAllBytes(f.Path))).ToList());
             var firmware = t.Time("load-firmware_for", () => engineCore.Library.FirmwareFor(image));
@@ -90,7 +87,6 @@ namespace EmuSen.WiseMan.Cores
                 files.Add((0, new byte[128 * 1024]));
                 machine = t.Time("create-again", () => new CoreMachine(engineCore.Library, image, settings, files));
             }
-            t.Time("notice-firmware_for", () => engineCore.Library.FirmwareFor(image));
             t.Time("first-frame", () => { machine.Advance(); return 0; });
             machine.Dispose();
             probe.Dispose();
@@ -102,7 +98,7 @@ namespace EmuSen.WiseMan.Cores
             double load = whole.Elapsed.TotalMilliseconds;
             loaded.RunFrame();
             t.Time("check-Load+frame", () => (int)load);
-            _output.WriteLine($"{Path.GetFileName(game)} | {condition} | wants {string.Join(",", wanted.Select(w => w.Name))} | CoreFactory.Load {load:F0} ms, with its first frame {whole.Elapsed.TotalMilliseconds:F0} ms");
+            _output.WriteLine($"{Path.GetFileName(game)} | {condition} | wants {string.Join(",", firmware.Select(w => w.Name))} | CoreFactory.Load {load:F0} ms, with its first frame {whole.Elapsed.TotalMilliseconds:F0} ms");
             t.Done();
             GC.Collect();
         }

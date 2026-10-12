@@ -276,7 +276,8 @@ bench of 12,000 blocks; 629 and 1,185 ns before]. At the plan's 1,200 blocks a f
   pipeline; D-33, a read's wait. Each would be settled by a console, which is not to be used; D-30's search is the
   record of what the console's pictures exclude.
 - Tekken 3's and Castlevania's movies, and Silent Hill's, behind the stream feeding their software decoders (the CD's
-  streaming or the SPU); Ape Escape's polygon intro.
+  streaming or the SPU); Ape Escape's polygon intro. *Stage 8 (2026-10-11)*: with the SPU built, the two games send the same words
+  (`Diamond_SPU.md` §11), so the SPU is not the cause.
 - The MDEC under DMA chopping, and DMA1 started mid-macroblock, which no program here does.
 
 ## 12. Tests run (2026-10-11)

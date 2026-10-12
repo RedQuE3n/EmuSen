@@ -475,7 +475,9 @@ Every voice runs each sample: ADPCM decoded block by block, the pitch counter, t
 documented table, ADSR from its documented rates, then volume and sweep, the mix with CD audio, the reverb at half rate,
 the output. **The output is 44,100 Hz exactly, reported as a fixed rate** as MoonRT's and MercuryRT's are
 (`EmuSen_CoreAPI.md` §6.7); nothing is resampled in the core. XA-ADPCM's own resampling to 44.1 kHz is the hardware's
-and is modelled as documented.
+and is modelled as documented. *Built at stage 8, 2026-10-11 (`Diamond_SPU.md`)*: as planned, each voice
+decoded a word at a time as its counter reaches it; the rules psx-spx leaves open measured against five referees,
+D-34 to D-40.
 
 ### 5.6 The CD-ROM controller
 

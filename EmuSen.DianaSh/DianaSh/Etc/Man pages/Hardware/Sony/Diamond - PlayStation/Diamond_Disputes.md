@@ -18,7 +18,8 @@ MTC0's interrupt latency (D-17), TAR on a branch not taken (D-18), CE (D-19), th
 the changes it led to; no new number was taken for it.
 *2026-10-11*: D-20 and D-21 settled by the test's own model and a referee step; DICR's bit 6,
 which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
-*Stage 9 (2026-10-11)* took D-30 to D-33, the MDEC's; the SPU's stage 8, built beside it, may take numbers from D-30 too, and the merge renumbers.
+*Stage 9 (2026-10-11)* took D-30 to D-33, the MDEC's; the SPU's stage 8, built after it was merged, took D-34 to D-40, and
+added its step to D-29.
 
 ## The rules this log keeps
 
@@ -967,6 +968,11 @@ which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
 - **Depends on it:** every disc booted the console's way; the stage 7 gate's "games boot on the player's BIOS".
 - **Pinned by:** nothing yet.
 - **Implemented in:** —
+- *Stage 8 (2026-10-11), by the screen only*: with the SPU built (`Diamond_SPU.md`), the logo holds from frame 450 to
+  2,400 as before; five variations of the SPU's answers, each to frame 1,500 (STATX showing ATTR at once, ENDX all set,
+  ENVX always zero, STATX's IRQ flag always set, ENDX always clear), change nothing on the screen. With stage 9's MDEC,
+  the SPU and the MDEC, the two stubs this entry named, are both ruled out as far as their registers show; the entry
+  stays open.
 
 ### D-30. The MDEC's arithmetic where psx-spx says it does not know it: each IDCT pass truncated toward zero with three and then four fraction bits kept, the 15-bit pixel rounded from that fraction, the colour factors at twelve bits
 
@@ -1052,3 +1058,130 @@ which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
 - **Depends on it:** any program that reads the MDEC by the CPU without polling.
 - **Pinned by:** `mdec::tests::a_read_while_the_idct_runs_waits_for_its_block`.
 - **Implemented in:** the stage 9 commits on `diamond-s9`.
+
+### D-34. SPU-ADPCM's prediction: each of the filter's two products shifted right by six apart, with no rounding constant, where psx-spx gives XA-ADPCM's sum plus 32 over 64 and calls the SPU's the same
+
+- **Opened:** 2026-10-11, at stage 8, by `spu-capture.s`'s T1 differing from DuckStation's capture buffers in 441 of
+  512 samples by up to 38 (`Diamond_SPU.md` §10.2).
+- **Documents read:** psx-spx `6d7d1bc`, "SPU ADPCM Samples" ("Shift/Filter (reportedly same as for CD-XA)") and
+  `cdromformat.md`'s "decode_28_nibbles" and "Pos/neg Tables".
+- **Test program:** `programs/spu-capture.s` T1 (a 16-block wave of filters 0–4 and shifts 0–15 at pitches E00h and
+  1C00h, its period 512 and 256, the steady capture buffers read back) and `programs/spu-voices.s` scene D; a model of
+  the decode and the interpolation, checked to reproduce Diamond's record exactly, fitted with three predictions:
+  (old·f0 + older·f1 + 32) >> 6, the same without 32, and (old·f0 >> 6) + (older·f1 >> 6).
+- **Referee:** DuckStation and SwanStation (capture, 1,024 samples), Beetle PSX and PCSX-ReARMed (audio, scene D's
+  blocks 1–11 at pitch 1000h, within their output's ×0.75).
+- **Witnesses:** DuckStation and SwanStation equal the products-apart model in all 1,024 samples and no other; Beetle
+  PSX's and PCSX-ReARMed's audio lies within 0.2–0.3 of it per block, against 1.7–17 for the sum plus 32.
+- **Conclusion:** measured: each product shifted apart. Three lineages agree; psx-spx's formula is XA's, and the SPU's
+  only said to be the same.
+- **Depends on it:** every ADPCM sample with a filter other than 0.
+- **Pinned by:** `spu::tests::a_filter_predicts_from_the_two_samples_before_…`; `tests/programs.rs`'s
+  `the_capture_program_records_the_voices_as_the_referees_do`.
+- **Implemented in:** stage 8's commits on `diamond-s8`.
+
+### D-35. The Gaussian interpolation: the four products summed, then shifted right by 15, where psx-spx shifts each
+
+- **Opened:** 2026-10-11, at stage 8, with D-34 by the same record.
+- **Documents read:** psx-spx `6d7d1bc`, "4-Point Gaussian Interpolation".
+- **Test program:** as D-34, the model fitted with each product shifted and with the sum shifted.
+- **Referee:** the five referees' capture buffers (T1, T2, T3, T5).
+- **Witnesses:** DuckStation and SwanStation equal the sum shifted in all 1,024 samples of T1 and in T5; Beetle PSX
+  equals it in T2 and T3, where the index is zero and the two readings differ by a level a sample; at fractional
+  indices Beetle PSX differs by a phase neither reading gives; PCSX-ReARMed does not interpolate by the table.
+- **Conclusion:** measured where two lineages can be compared (the index zero), the strongest single witness,
+  DuckStation, beyond it: the sum shifted once.
+- **Depends on it:** every interpolated sample, by up to three levels.
+- **Pinned by:** `spu::tests::a_held_level_interpolates_at_the_tables_gain`; the capture record's pin.
+- **Implemented in:** stage 8's commits on `diamond-s8`.
+
+### D-36. The envelope steps after the sample it scales: a key on's own sample leaves at level zero
+
+- **Opened:** 2026-10-11, at stage 8, by T5's first samples differing from DuckStation's after a key on with the
+  fastest attack.
+- **Documents read:** psx-spx `6d7d1bc`, "SPU Volume and ADSR Generator", "Envelope Operation …", "KON0".
+- **Test program:** `spu-capture.s` T11: the DC block keyed on at the capture IRQ with ADSR1 000Fh, the next 512
+  samples. Its first samples (Gaussian outputs G1–G3 of 7000h times the level) tell the level each sample was scaled by.
+- **Referee:** the five referees' capture buffers.
+- **Witnesses:** DuckStation and SwanStation: 0, G1 × 14,336, G2 × 28,672, G3 × 7FFFh, G3 × 3FFFh, the level one step
+  behind the samples; Beetle PSX: zeros for four samples more, then G3 × 14,336, its envelope starting after the
+  interpolation's history is full; PCSX-ReARMed: the raw sample at 7FFFh at once.
+- **Conclusion:** the strongest single witness, DuckStation: the sample leaves through the level as it stood, and the
+  level steps after. Beetle PSX agrees that the envelope lags the samples, by more.
+- **Depends on it:** the first samples of every note.
+- **Pinned by:** `spu::tests::the_envelope_steps_after_the_sample_it_scales`; the capture record's pin (T11).
+- **Implemented in:** stage 8's commits on `diamond-s8`.
+
+### D-37. The noise generator's timer starts again when ATTR's noise shift or step is written to a new value
+
+- **Opened:** 2026-10-11, at stage 8, by `spu-voices.s`'s scene F, silent on Diamond for its first two rates where
+  every referee played noise at once.
+- **Documents read:** psx-spx `6d7d1bc`, "SPU Noise Generator".
+- **Test program:** `spu-voices.s` scene F (shift 15 step 7, shift 10 step 4, shift 4 step 6, from shift 0); T6 of
+  `spu-capture.s` (a noise voice keyed on at the capture IRQ, then the rate changed at the next).
+- **Referee:** Beetle PSX, SwanStation and PCSX-ReARMed (audio), the five (capture).
+- **Witnesses:** in every one the new rate holds from the next sample. Read literally, psx-spx's pseudocode carries the
+  old reload of up to 20000h, three quarters of a second at shift 0 and step 4, before the new rate is heard. Beetle
+  PSX's levels and Diamond's after the fix follow the same sequence (the parity rule), where the generators' states
+  coincide.
+- **Conclusion:** measured that the change is at once (two lineages agree); the mechanism, the timer cleared on the
+  write, is a choice that gives it.
+- **Depends on it:** noise whose rate a game changes.
+- **Pinned by:** `spu::tests::a_new_noise_rate_holds_at_once`.
+- **Implemented in:** stage 8's commits on `diamond-s8`.
+
+### D-38. The SPU's transfer: a halfword every 32 cycles between the FIFO and sound RAM, a written mode applied at the next sample
+
+- **Opened:** 2026-10-11, at stage 8, by the transfer's rate, which psx-spx gives as 4 cycles a word and doubts ("XXX
+  is SPU really only 4 clks"), and which its state machine section and ps1-tests' expectation put at 16 cycles a byte.
+- **Documents read:** psx-spx `6d7d1bc`, "DMA Transfer Rates", "SPU Internal State Machine from SPU RAM Timing",
+  "SPU RAM Manual Write", "ATTR", "STATX"; ps1-tests' `spu/memory-transfer/main.cpp` and its log.
+- **Test program:** `programs/spu-dma.s`: 1 KiB by DMA4 in blocks of 16 and of 1 word, in one burst, read in blocks of
+  16; the cycles from ATTR's write to STATX showing it, and of STATX's busy bit after a manual write of 32 halfwords.
+- **Referee:** the five (`Diamond_SPU.md` §6.2's table).
+- **Witnesses:** Beetle PSX 48 cycles a word in every case and the mode at the next sample (606 cycles); DuckStation and
+  SwanStation about 30 a word in blocks, the DMA's own rate in a burst, the mode at once, and the busy bit at once on
+  DuckStation; PCSX-ReARMed 16 a word; PCSX-Redux at once. The console passes 1,638 to 18,022 cycles for 1 KiB in
+  blocks of 16, its author expecting about 16,000; all but Redux lie within it.
+- **Conclusion:** open. Implemented: a halfword a 32-cycle slot, psx-spx's reading of the logic analyser, 15,419 cycles
+  for 1 KiB, within the console's window; the mode at the next sample, as Beetle PSX; a burst beyond the FIFO written
+  at once. The witnesses disagree with each other by a factor of 1.6 and none measures the console.
+- **Depends on it:** the length of a game's sound uploads, and so its loading; `spu/memory-transfer`'s timing tests.
+- **Pinned by:** `tests/programs.rs`'s `the_spus_transfers_take_a_halfword_each_32_cycles`;
+  `spu::tests::a_manual_write_drains_a_halfword_each_32_cycles`.
+- **Implemented in:** stage 8's commits on `diamond-s8`.
+
+### D-39. The reverb's two inputs taken down a sample apart, each at its own side's cycle
+
+- **Opened:** 2026-10-11, at stage 8, by `spu-capture.s`'s T10, whose work area equals DuckStation's on one side and
+  not the other.
+- **Documents read:** psx-spx `6d7d1bc`, "SPU Reverb Formula" and its notes ("The reverb hardware spends one 44100h
+  cycle on left calculations, and the next 44100h cycle on right"), "Reverb Buffer Resampling".
+- **Test program:** T10 (each stage of a pulse's path written apart, the writes stopped a frame on).
+- **Referee:** the five.
+- **Witnesses:** in DuckStation's and SwanStation's work areas the right side is half the left at the same instants
+  (the input's volume 4000h against 7FFFh, within one level), so both sides are taken down together, and the side whose
+  instant coincides with Diamond's equals it in every stage; in Beetle PSX's the right is a sample after the left, as
+  here; PCSX-ReARMed keeps no work area in sound RAM.
+- **Conclusion:** open between two lineages; implemented a sample apart, Beetle PSX's and the reading of psx-spx's note.
+  The arithmetic of every stage is DuckStation's where the instants coincide.
+- **Depends on it:** each reverb sample's input, at a pulse's edges.
+- **Pinned by:** the capture record's pin (T9, T10).
+- **Implemented in:** stage 8's commits on `diamond-s8`.
+
+### D-40. SPU-ADPCM's reserved values: shifts 13–15 act as 9, filters 5–7 predict nothing
+
+- **Opened:** 2026-10-11, at stage 8, by the values psx-spx leaves for the SPU's five filters and gives for XA's shift.
+- **Documents read:** psx-spx `6d7d1bc`, "XA-ADPCM Header Bytes" ("reserved shift values 13..15 will act same as
+  shift=9"), "Pos/neg Tables".
+- **Test program:** T1's blocks 13–15 (shifts 13–15) and T8 (filters 5, 6 and 7 with shifts 0–2, steady at a period of
+  128).
+- **Referee:** the five.
+- **Witnesses:** shifts: DuckStation and SwanStation as 9, PCSX-ReARMed literally (the sample shifted right by 13–15),
+  Beetle PSX neither; filters: DuckStation equal to no prediction in all 512 samples, SwanStation, Beetle PSX,
+  PCSX-ReARMed and PCSX-Redux each otherwise.
+- **Conclusion:** open; implemented as DuckStation, the strongest single witness, which for the shifts is also
+  psx-spx's XA rule.
+- **Depends on it:** blocks no encoder writes, which a game's data may still hold.
+- **Pinned by:** the capture record's pin (T1, T8).
+- **Implemented in:** stage 8's commits on `diamond-s8`.

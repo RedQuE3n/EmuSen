@@ -828,3 +828,67 @@ fn the_step_by_step_status_follows_the_consoles_log() {
     let same = ours.iter().zip(&console).take(compared).filter(|(a, b)| a == b).count();
     assert_eq!((compared, same), (422, 414));
 }
+
+// --- Stage 8: the SPU (Diamond_SPU.md) ---
+
+/// `spu-capture.s` (Diamond_SPU.md §10.2): its records pinned whole. T1, T2, T3, T5, T8 and T11 equal DuckStation's
+/// sample for sample; the registers of T1 and T7 equal Beetle PSX's, SwanStation's, DuckStation's and PCSX-Redux's:
+/// LSAX untouched by a key on, ENVX zero after an end and mute; T11's first samples after a key on show the envelope's
+/// step after the sample it scales (D-36).
+#[test]
+fn the_capture_program_records_the_voices_as_the_referees_do() {
+    let m = run_for(include_str!("../programs/spu-capture.s"), 450, Market::Americas);
+    assert_eq!(results(&m, 0x10_0800, 5), [0x3FFF, 0x3FFF, 0x208, 0x208, 0xFFFF], "T1: ENVX and LSAX of voices 1 and 3, and ENDX");
+    assert_eq!(results(&m, 0x10_1D00, 6), [0x1234, 0xFFFE, 0, 0xFFFE, 0x1234, 0x208], "T7: LSAX kept by a key on, ENVX zero after an end and mute");
+    let half = |a: u32| m.board.ram_word(a & !3) >> (8 * (a & 2)) & 0xFFFF;
+    assert_eq!((2..6).map(|i| half(0x10_6F80 + 2 * i) as i16).collect::<Vec<_>>(), [1864, 21308, 28559, 14279], "T11");
+    assert_eq!(fnv(&results(&m, 0x10_0000, 0x7380 / 4)), 0xA09B_0287_3DEF_0CAD, "every record");
+}
+
+/// `spu-voices.s` (Diamond_SPU.md §10.1): its nine scenes run to their end, the output's samples pinned.
+#[test]
+fn the_voice_scenes_play_to_their_end() {
+    let words = emusen_mips::assemble(include_str!("../programs/spu-voices.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    let image = exe::build(&words);
+    let mut m = Machine::new(Media::read(&image).unwrap(), Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, None);
+    let mut chunk = vec![0i16; 4096];
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    let mut loud = 0;
+    for _ in 0..800 {
+        m.advance();
+        let n = m.board.spu.out.drain(&mut chunk, usize::MAX);
+        for &s in &chunk[..n] {
+            h = (h ^ s as u16 as u64).wrapping_mul(0x0000_0100_0000_01B3);
+            loud += (s != 0) as u32;
+        }
+    }
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E);
+    assert_eq!(results(&m, 0x10_0000, 9), [400, 443, 477, 510, 571, 614, 645, 660, 683], "each scene's key on, by frame");
+    assert_eq!((loud, h), (335_782, 0x006B_FB6B_A2C3_9F1B), "the output: its samples not zero, and all of them");
+}
+
+/// ps1-tests' `spu/memory-transfer` on the open kernel passes every test, its DMA timing ones among them, and
+/// `spu/test` reads back every bit of MVOLL and MVOLR written at either width.
+#[test]
+fn the_spu_programs_pass_on_the_open_kernel() {
+    let Some(corpus) = records::corpus() else { return };
+    let tty = |path: &str, frames: usize| {
+        let m = mdec_program(&corpus, path, frames);
+        let t = m.space(diamond::machine::TTY_ID).unwrap();
+        String::from_utf8_lossy(&t[..t.iter().position(|&b| b == 0).unwrap_or(t.len())]).into_owned()
+    };
+    let transfer = tty("spu/memory-transfer/memory-transfer.exe", 200);
+    assert_eq!((transfer.matches("pass - ").count(), transfer.matches("fail").count(), transfer.contains("Done.")), (9, 0, true), "{transfer}");
+    let test = tty("spu/test/test.exe", 400);
+    let lines: Vec<&str> = test[test.find("16 bit access").unwrap_or(0)..].lines().filter(|l| !l.is_empty()).collect();
+    assert_eq!(lines, ["16 bit access", "Done", "32 bit access", "Done, crashing now..."]);
+}
+
+/// `spu-dma.s` (Diamond_SPU.md §6): DMA4 moves 1 KiB in blocks of 16 words in 15,419 cycles, a halfword every 32 cycles
+/// as the FIFO empties, within `spu/memory-transfer`'s bounds on a console (1,638 to 18,022) where Beetle PSX takes
+/// 12,282 and DuckStation 7,640 (D-38); a mode written to ATTR shows in STATX at the next sample, 582 cycles, as on Beetle PSX.
+#[test]
+fn the_spus_transfers_take_a_halfword_each_32_cycles() {
+    let m = run_for(include_str!("../programs/spu-dma.s"), 30, Market::Americas);
+    assert_eq!(results(&m, 0x10_0000, 7), [15_419, 16_534, 1068, 16_402, 582, 993, 2054]);
+}

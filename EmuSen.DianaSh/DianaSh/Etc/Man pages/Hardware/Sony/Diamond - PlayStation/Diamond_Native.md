@@ -1169,3 +1169,61 @@ could act on (`Diamond_MDEC.md` §9). D-29 is unchanged.
 
 D-30 to D-33; the streams behind three games' movies; the SPU's stage 8, built beside this one, with which the state's
 version and the DMA's channels are merged.
+
+---
+
+## 17. Stage 8, the SPU (2026-10-11)
+
+The plan's §7 row 8, with the tester's go of 2026-10-11, built on WiseMan after stage 9's merge. Its record is
+`Diamond_SPU.md`.
+
+### 17.1 What was built
+
+- **The SPU** (`src/spu/`), replacing stage 3's register stub in `devices.rs`: the 24 voices with SPU-ADPCM decoded a
+  word at a time (D-34, D-40), the Gaussian interpolation from psx-spx's table transcribed by a script (D-35), pitch and
+  pitch modulation, ADSR and the sweeps on psx-spx's envelope step, the envelope's step after its sample (D-36), noise
+  (D-37), the loop flags, ENDX and LSAX, key on and off at the next sample, the reverb at 22,050 Hz with its accesses
+  in the state machine's order and its 39-tap filter (D-39), the capture buffers, IRQ9 on every access to IRQA's unit,
+  the FIFO at a halfword every 32 cycles (D-38), CD audio in from stage 7's ring, MVOL, AVOL, mute and enable.
+- **The audio path**: one sample every 768 cycles into `emusen-native`'s `SampleQueue`, which the core ABI's
+  `drain_audio` empties; the machine's silence counter and its CD tap removed.
+- **DMA4** (`bus.rs`): paced by the SPU's request, its waits letting the other channels move (`Diamond_SPU.md` §6.3, a
+  defect the stage's first build had and a test shows).
+- **The state**: `DMND` version 8, 3,792,964 bytes.
+- **Programs and tools**: `programs/spu-voices.s`, `spu-capture.s` and `spu-dma.s`; the run tool's `--wav`;
+  `psxreferee.py wav`, a libretro referee's audio; `psxaudio.py`, two recordings compared sample for sample; WiseMan's
+  TTY gate grades `spu/memory-transfer` and `spu/test`, the second by a new rule, `Exactly`.
+
+### 17.2 The gate
+
+| Item | Result |
+|---|---|
+| ps1-tests' `spu/memory-transfer` | **9 of 9 pass** on the open kernel, its DMA timing tests among them, as on DuckStation |
+| ps1-tests' `spu/test` | **no mismatch** at either width |
+| Synthetic voice programs against the references' audio | `spu-voices.s`'s scenes equal SwanStation's but where a register write lands a sample apart on the two machines, by their vblanks' cycles (D-0); `spu-capture.s`'s records, synchronised to the SPU's own IRQ, **equal DuckStation's sample for sample in every voice test** (decode, interpolation, envelopes, pitch modulation, reserved filters, the key on), and Beetle PSX's and SwanStation's in the envelope tests |
+| The reverb against the references | the work area equals DuckStation's in every stage of the side whose input instant coincides (D-39); the audio's reverb scene within 148 of SwanStation's, mean 1.2 |
+| `spu/stereo` | not run: graded by ear only |
+
+**Not met exactly**: D-38's rate and D-39's instants are open between the referees, and Beetle PSX's interpolation at
+fractional indices differs from every reading tried.
+
+### 17.3 The games, and D-29
+
+D-29 unchanged by the SPU and by five variations of its answers, by the screen only. Through `--boot`, the seven games
+do what they did at stage 9, Crash Bandicoot once DMA4's waits let the CD-ROM's channel move; Tekken 3's and
+Castlevania's malformed MDEC words are the same (`Diamond_SPU.md` §11).
+
+### 17.4 The cost
+
+0.245 ms a frame for the SPU with every voice and the reverb running; the bench programs within their spread and Crash
+Bandicoot 2–4% slower over 3,600 frames (`Diamond_SPU.md` §12).
+
+### 17.5 Tests run (2026-10-11)
+
+`diamond` 133 unit tests and 49 program tests, with and without `EMUSEN_DIAMOND_PS1TESTS`, all passing; WiseMan under
+the test lock with the corpus: `DiamondTests`, `SystemPack`, `CoreAbi`, `CoreAdapter`, `CoreDiscovery` and
+`CoreRegistration`, 95 of 95, the TTY gate grading the two SPU programs among them.
+
+### 17.6 What waits
+
+D-38 to D-40; the unstable DMA read and RAM_CTRL's other bank sizes; external audio; D-29.

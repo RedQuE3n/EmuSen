@@ -7,7 +7,8 @@ use blackmoon_gte::Gte;
 use blackmoon_r3000::{Bus, Size};
 
 use crate::cdrom::Cdrom;
-use crate::devices::{Duart, SioStub, SpuStub, Tty};
+use crate::devices::{Duart, SioStub, Tty};
+use crate::spu::Spu;
 use crate::mdec::{self, Mdec};
 use crate::sio0::Sio0;
 use crate::dma::{self, Dma, chcr};
@@ -84,7 +85,7 @@ pub struct Board {
     pub dma: Dma,
     pub video: Video,
     pub gpu: Gpu,
-    pub spu: SpuStub,
+    pub spu: Spu,
     pub cdrom: Cdrom,
     /// The controller's IRQ2 line as last seen, so that I_STAT takes its rising edge.
     pub(crate) cd_line: bool,
@@ -135,7 +136,7 @@ impl Board {
             dma: Dma::default(),
             gpu: Gpu::new(gpu_version, video.clock),
             video,
-            spu: SpuStub::new(),
+            spu: Spu::new(),
             cdrom: Cdrom::new(None, crate::media::Market::Americas),
             cd_line: false,
             mdec: Mdec::new(),
@@ -360,8 +361,11 @@ impl Board {
             0x05A => self.sio1.set_control(value as u16),
             0x05E => self.sio1.baud = value as u16,
             o @ 0xC00..=0xFFF => {
-                self.spu.write16(o - 0xC00, value as u16);
+                self.sync_spu();
+                self.spu.write16(o - 0xC00, value as u16, self.now);
+                self.wake_spu_dma();
                 self.dma_kick();
+                self.schedule();
             }
             o => self.io_write32(o & !3, value),
         }
@@ -385,6 +389,7 @@ impl Board {
                 v
             }
             0xC00..=0xFFF => {
+                self.sync_spu();
                 let at = (offset - 0xC00) & !1;
                 let lo = self.spu.read16(at) as u32;
                 let v = if size.bytes() > 2 { lo | (self.spu.read16(at + 2) as u32) << 16 } else { lo };
@@ -414,6 +419,7 @@ impl Board {
                 self.dma_kick();
                 self.schedule();
             }
+            0xC00..=0xFFF if size == Size::Byte && offset & 1 != 0 => {}
             0xC00..=0xFFF => {
                 self.io_write16(offset & !1, value & 0xFFFF);
                 if size.bytes() > 2 {
@@ -431,6 +437,35 @@ impl Board {
     fn sync_sio0(&mut self) {
         if self.sio0.run(self.now) {
             self.irq.raise(irq::SIO0);
+        }
+    }
+
+    /// The SPU brought to the present, the CD-ROM controller first since it feeds the SPU's CD input.
+    pub(crate) fn sync_spu(&mut self) {
+        self.run_spu(self.now);
+    }
+
+    fn run_spu(&mut self, t: u64) {
+        self.cdrom.run(t);
+        self.cd_irq();
+        let out = &mut self.cdrom.out;
+        if self.spu.run(t, &mut || out.take()) {
+            self.irq.raise(irq::SPU);
+        }
+    }
+
+    /// When the SPU must next run unasked: its own events, and while DMA4 is started but not moving, its request's rise,
+    /// at which the channels are arbitrated again (Diamond_SPU.md §6.3).
+    fn spu_event(&self) -> u64 {
+        let t = self.spu.next_event();
+        let waiting = self.dma.active.is_none() && self.dma.ch[dma::SPU].chcr & chcr::START != 0 && self.dma.enabled(dma::SPU) && !self.spu.dreq();
+        if waiting { t.min(self.spu.dreq_change()) } else { t }
+    }
+
+    /// An SPU transfer waiting for the SPU's request looks again once the SPU's registers changed.
+    fn wake_spu_dma(&mut self) {
+        if self.dma.active == Some(dma::SPU) && self.dma.due == u64::MAX {
+            self.dma.due = self.now;
         }
     }
 
@@ -463,7 +498,7 @@ impl Board {
 
     /// The next cycle at which anything is due: a video edge, a timer's target or FFFFh, a DMA piece.
     pub fn schedule(&mut self) {
-        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due).min(self.gpu.next_event()).min(self.sio0.next_event()).min(self.cdrom.next_event()).min(self.mdec.next_event());
+        let mut next = self.video.next_edge(self.wants_hblank()).min(self.dma.due).min(self.gpu.next_event()).min(self.sio0.next_event()).min(self.cdrom.next_event()).min(self.mdec.next_event()).min(self.spu_event());
         for n in 0..3 {
             next = next.min(self.timers.next_hit(n, &self.video));
         }
@@ -483,7 +518,8 @@ impl Board {
             let sio_at = self.sio0.next_event();
             let cd_at = self.cdrom.next_event();
             let mdec_at = self.mdec.next_event();
-            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]).min(gpu_at).min(sio_at).min(cd_at).min(mdec_at);
+            let spu_at = self.spu_event();
+            let first = edge_at.min(self.dma.due).min(due[0]).min(due[1]).min(due[2]).min(gpu_at).min(sio_at).min(cd_at).min(mdec_at).min(spu_at);
             if first > self.now {
                 self.next_event = first;
                 return;
@@ -502,6 +538,10 @@ impl Board {
             }
             if mdec_at == first {
                 self.mdec.run(first);
+                self.dma_kick();
+            }
+            if spu_at == first {
+                self.run_spu(first);
                 self.dma_kick();
             }
             if gpu_at == first {
@@ -565,6 +605,9 @@ impl Board {
         if self.dma.active.is_some() {
             return;
         }
+        if self.dma.ch[dma::SPU].chcr & chcr::START != 0 {
+            self.sync_spu();
+        }
         let mut ready = [false; 7];
         for (n, r) in ready.iter_mut().enumerate() {
             *r = self.dma.ready(n, self.dma_request(n));
@@ -612,10 +655,7 @@ impl Board {
                 self.dma_clock = if taken > at { taken * 16 } else { self.dma_clock } + dma::sixteenths_per_word(dma::GPU, 0);
                 self.take_gpu_irq();
             }
-            dma::SPU => {
-                self.spu.store(word as u16);
-                self.spu.store((word >> 16) as u16);
-            }
+            dma::SPU => self.spu.dma_write(word, self.dma_clock.div_ceil(16)),
             _ => {}
         }
     }
@@ -629,7 +669,7 @@ impl Board {
                 self.next_event = self.next_event.min(self.gpu.next_event());
                 w
             }
-            dma::SPU => self.spu.load() as u32 | (self.spu.load() as u32) << 16,
+            dma::SPU => self.spu.dma_read(self.dma_clock.div_ceil(16)),
             dma::CDROM => self.cdrom.data_word(),
             _ => 0,
         }
@@ -686,6 +726,15 @@ impl Board {
             self.gpu.run(at, &self.video);
             if !self.gpu.dreq(at) {
                 self.dma.due = self.gpu.dreq_change();
+                return;
+            }
+        }
+        if n == dma::SPU && c.sync() == 1 {
+            self.run_spu(at);
+            if !self.spu.dreq() {
+                self.dma.active = None;
+                self.dma.due = u64::MAX;
+                self.dma_kick();
                 return;
             }
         }
@@ -1215,6 +1264,34 @@ mod tests {
         assert_eq!(b.dma.ch[2].madr, 0x00FF_FFFF);
     }
 
+    /// DMA4 waiting between blocks for the SPU's FIFO to empty lets another channel move: OTC, started while DMA4's
+    /// second block waits, finishes before DMA4 (psx-spx "DMA Channels": a channel is interrupted by another between
+    /// pieces; Diamond_SPU.md §6.3).
+    #[test]
+    fn a_channel_waiting_for_its_request_lets_another_move() {
+        let mut b = board();
+        b.write(0x1F80_10F0, Size::Word, 0x0F09_0000 | 0x0B00_0000);
+        b.write(0x1F80_1DAA, Size::Half, 0x20);
+        while b.read(0x1F80_1DAE, Size::Half) & 0x3F != 0x20 {}
+        b.write(0x1F80_10C0, Size::Word, 0x1000);
+        b.write(0x1F80_10C4, Size::Word, 0x0004_0010);
+        b.write(0x1F80_10C8, Size::Word, 0x0100_0201);
+        assert_ne!(b.dma.ch[4].chcr & chcr::START, 0, "DMA4 waits for the FIFO");
+        b.write(0x1F80_10E0, Size::Word, 0x2000C);
+        b.write(0x1F80_10E4, Size::Word, 4);
+        b.write(0x1F80_10E8, Size::Word, 0x1100_0002);
+        let mut otc_done = None;
+        while b.dma.ch[4].chcr & chcr::START != 0 {
+            b.now = b.next_event.max(b.now + 1);
+            b.events();
+            if otc_done.is_none() && b.dma.ch[6].chcr & chcr::START == 0 {
+                otc_done = Some(b.now);
+            }
+        }
+        assert!(otc_done.is_some_and(|t| t < b.now), "OTC at {otc_done:?}, DMA4 at {}", b.now);
+        assert_eq!(b.ram_word(0x2000C), 0x20008);
+    }
+
     #[test]
     fn vblank_interrupts_once_a_field() {
         let mut b = board();
@@ -1234,3 +1311,4 @@ mod tests {
         assert_eq!(vblanks, 3);
     }
 }
+

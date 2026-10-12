@@ -7,6 +7,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     psxreferee.py fetch
     psxreferee.py ram REFEREE EXE --bios FILE [--for N] [--pal] ADDRESS:WORDS ...
     psxreferee.py tty REFEREE EXE --bios FILE [--for N] [--pal] --heading TEXT
+    psxreferee.py wav REFEREE EXE --bios FILE [--for N] [--pal] [--option KEY=VALUE ...] OUT.wav
 
 REFEREE is `duckstation`, `pcsx-redux`, or a libretro core pinned in libretro-cores.sha256 (`mednafen_psx`,
 `swanstation`, `pcsx_rearmed`), which the reference probe drives. --bios names the player's own BIOS file in the
@@ -15,6 +16,9 @@ frames for PCSX-Redux and the libretro cores (counted from power-on, the BIOS's 
 after 60 + N/20 seconds if a program stops its frames) and wall seconds for DuckStation, which runs unthrottled. --pal makes the referee a PAL console. ADDRESS is hexadecimal, WORDS decimal.
 Every run lives in a user scope of its own, stopped when it returns; DuckStation's runs take a lock and a free GDB port
 (Diamond_Referees.md §2.5).
+
+`wav` records a libretro referee's mixed audio through the probe's `--wav` into OUT.wav, as the core gives it to the
+frontend (Diamond_SPU.md §10); the other referees give no audio here. `--option` passes a core option on.
 
 `fetch` downloads the two standalone releases pinned in psx-referees.sha256 into the cache, refuses any whose
 SHA-256 differs, unpacks them and prepares them to run headless (§2). Exit codes: 0 done, 1 a refused or failed
@@ -276,18 +280,38 @@ def run_redux(exe, bios, frames, dumps):
     return "\n".join(lines), words
 
 
-def run_libretro(core, exe, sysdir, frames, pal, dumps):
-    options = {"mednafen_psx": "beetle_psx_region=pal", "swanstation": "swanstation_Console_Region=PAL", "pcsx_rearmed": "pcsx_rearmed_region=PAL"}
+def libretro_command(core, exe, sysdir, frames, pal, tmp):
+    regions = {"mednafen_psx": "beetle_psx_region=pal", "swanstation": "swanstation_Console_Region=PAL", "pcsx_rearmed": "pcsx_rearmed_region=PAL"}
+    cmd = [str(PROBE), str(exe), tmp, str(frames), str(frames), "--core", str(CORES / f"{core}_libretro.so")]
+    if core != "pcsx_rearmed":
+        cmd += ["--sysdir", str(sysdir)]
+    if pal:
+        cmd += ["--option", regions[core]]
+    if core == "swanstation":
+        cmd += ["--option", "swanstation_CPU_ExecutionMode=Interpreter", "--option", "swanstation_GPU_Renderer=Software"]
+    if core == "pcsx_rearmed":
+        cmd += ["--option", "pcsx_rearmed_drc=disabled"]
+    return cmd
+
+
+def run_libretro_wav(core, exe, sysdir, frames, pal, options, out):
+    """The probe's recording of the core's audio, whatever its RAM."""
     with tempfile.TemporaryDirectory(dir=CACHE) as tmp:
-        cmd = [str(PROBE), str(exe), tmp, str(frames), str(frames), "--core", str(CORES / f"{core}_libretro.so")]
-        if core != "pcsx_rearmed":
-            cmd += ["--sysdir", str(sysdir)]
-        if pal:
-            cmd += ["--option", options[core]]
-        if core == "swanstation":
-            cmd += ["--option", "swanstation_CPU_ExecutionMode=Interpreter", "--option", "swanstation_GPU_Renderer=Software"]
-        if core == "pcsx_rearmed":
-            cmd += ["--option", "pcsx_rearmed_drc=disabled"]
+        cmd = libretro_command(core, exe, sysdir, frames, pal, tmp) + [x for o in options for x in ("--option", o)] + ["--wav", str(out)]
+        cmd, unit = confined(cmd, core)
+        try:
+            p = subprocess.run(cmd, capture_output=True)
+        finally:
+            reap(unit)
+        if p.returncode == 4:
+            die(f"{core}: the probe refused the run (no firmware of the player's own)")
+        if not Path(out).exists():
+            die(f"{core}: no audio recorded")
+
+
+def run_libretro(core, exe, sysdir, frames, pal, dumps):
+    with tempfile.TemporaryDirectory(dir=CACHE) as tmp:
+        cmd = libretro_command(core, exe, sysdir, frames, pal, tmp)
         cmd, unit = confined(cmd, core)
         try:
             p = subprocess.run(cmd, capture_output=True)
@@ -305,7 +329,7 @@ def run_libretro(core, exe, sysdir, frames, pal, dumps):
 def main(argv):
     if argv[:1] == ["fetch"]:
         return fetch()
-    if len(argv) < 3 or argv[0] not in ("ram", "tty"):
+    if len(argv) < 3 or argv[0] not in ("ram", "tty", "wav"):
         die(__doc__, 2)
     mode, referee, exe = argv[0], argv[1], Path(argv[2]).resolve()
     rest = argv[3:]
@@ -324,6 +348,13 @@ def main(argv):
     pal = "--pal" in rest
     if pal:
         rest.remove("--pal")
+    if mode == "wav":
+        options = []
+        while "--option" in rest:
+            options.append(option("--option"))
+        if referee not in LIBRETRO or len(rest) != 1:
+            die(__doc__, 2)
+        return run_libretro_wav(referee, exe, bios.parent, count, pal, options, Path(rest[0]).resolve())
     dumps = [(int(a, 16), int(n)) for a, n in (d.split(":") for d in rest)]
     if referee == "duckstation":
         tty, words = run_duckstation(exe, bios.parent, count, pal, dumps)

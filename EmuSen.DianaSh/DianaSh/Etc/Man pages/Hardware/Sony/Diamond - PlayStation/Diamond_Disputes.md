@@ -1567,4 +1567,9 @@ of Crash Bandicoot's screen undrawn (`Diamond_Players.md` §14).
   `a_primitive_reaching_past_minus_1024_is_drawn_2048_further_on` (`src/gpu/tests.rs`, the x and the y case), both
   failing before the change; D-23's `a_vertex_and_the_offset_add_in_eleven_bits` and
   `the_offset_moves_a_polygon_whole_and_its_size_is_judged_before` unchanged.
-- **Implemented in:** `raster.rs`'s `fold`, for triangles and lines, in the commit citing this entry.
+- **Implemented in:** `raster.rs`'s `fold`, applied to each triangle of a polygon and to each line segment as
+  `mod.rs` hands it to the rasteriser, in the commits citing this entry. *Its cost* [M]: first written inside
+  `raster::triangle`, the check made `gpu/benchmark` 2.2% to 2.7% slower in every form tried there, and an ablation of
+  the same tree with the check removed read as before, so the cost was the check's place, not code layout elsewhere;
+  at the call sites, with the move itself in a function kept out of line, it reads as before (§14.3 of
+  `Diamond_Players.md`).

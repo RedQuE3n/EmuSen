@@ -63,6 +63,9 @@ namespace EmuSen.Galaxia.Library
         // A skeleton directory of the shell's tree, not the ROM library - see EmuSen_Galaxia.md §3.3.
         public static string Games => At(GalaxiaDirectory.Games, "Games");
 
+        // Archives opened for play, unpacked here and never beside the library's file - see EmuSen_Galaxia.md §3.7.
+        public static string Unpacked => At(GalaxiaDirectory.Unpacked, "Unpacked");
+
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed
         {

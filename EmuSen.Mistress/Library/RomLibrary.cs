@@ -20,9 +20,9 @@ namespace EmuSen.Mistress.Library
         public string FileName => Path.GetFileName(FullPath);
         public string Title => Path.GetFileNameWithoutExtension(FullPath);
 
-        // Which console this file belongs to, decided by extension - see EmuSen_Multicore.md §10.
+        // Which console this file belongs to, by extension and, where several take it, by content - see EmuSen_Multicore.md §10.
         public string CoreDisplayName =>
-            EmuSen.Cores.CoreCatalog.ByExtension(Path.GetExtension(FullPath))?.DisplayName ?? "Unknown";
+            EmuSen.Cores.CoreCatalog.CoreForRom(FullPath)?.DisplayName ?? "Unknown";
 
         // The library shelf, which splits the Game Boy's core into Game Boy and Game Boy Color - see EmuSen_Settings_Reference.md §4.46.
         public string Shelf => EmuSen.Cores.CoreCatalog.ShelfFor(FullPath) ?? "Unknown";
@@ -36,8 +36,8 @@ namespace EmuSen.Mistress.Library
     // so it stays testable headlessly - see EmuSen_Settings_Reference.md §4.11.
     public static class RomLibrary
     {
-        // Whatever cores this build has, not a second copy of the list - see EmuSen_Multicore.md §3.
-        public static string[] Extensions => EmuSen.Cores.CoreCatalog.RomExtensions.ToArray();
+        // Whatever cores this build has, not a second copy of the list, and the archives a game may be packed in - see EmuSen_Multicore.md §3.
+        public static string[] Extensions => EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Crystal.Media.ArchiveImages.Extensions).ToArray();
 
         private static readonly IReadOnlyList<RomEntry> None = Array.Empty<RomEntry>();
 
@@ -67,10 +67,13 @@ namespace EmuSen.Mistress.Library
             {
                 var shelf = EmuSen.Cores.CoreCatalog.ShelfByName(coreDisplayName);
 
-                entries = Directory.EnumerateFiles(romDirectory, "*", Recursive)
+                var files = Directory.EnumerateFiles(romDirectory, "*", Recursive)
                     .Where(f => shelf is null
                         ? Extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)
-                        : shelf.Core.SupportsExtension(Path.GetExtension(f)))
+                        : shelf.Core.SupportsExtension(EmuSen.Cores.CoreCatalog.ImageExtension(f)))
+                    .ToList();
+                // A sheet's tracks and a list's discs are the sheet's and the list's game, not games of their own.
+                entries = EmuSen.Crystal.Media.ImageSets.Shelved(files)
                     .Select(f => new RomEntry(f))
                     .Where(e => shelf is null || e.Shelf == shelf.Name)
                     .OrderBy(e => e.Title, StringComparer.OrdinalIgnoreCase)

@@ -4,7 +4,7 @@
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use emusen_native::core::jsonw::Json;
@@ -14,13 +14,66 @@ use crate::{Case, Options, Report, cases_json, core_c11, core_cases, image_cases
 
 /// The ids of the cases run once for the core, and of those run for every image; C4 is in both, by its parts.
 pub const CORE_CASES: [&str; 11] = ["C1", "C2", "C3", "C4", "C5", "C9", "C10", "C11", "C12", "C13", "C15"];
-pub const IMAGE_CASES: [&str; 5] = ["C4", "C6", "C7", "C8", "C14"];
+pub const IMAGE_CASES: [&str; 6] = ["C4", "C6", "C7", "C8", "C14", "C16"];
 
 /// How long one image's cases may take before the image is reported as hung and its thread left.
 pub const IMAGE_DEADLINE_SECONDS: u64 = 600;
 
-/// The memory one image's cases are allowed for, when the images run at once are fitted to the memory there is.
+/// The memory one image's cases are allowed for beside the image itself, when the images run at once are fitted to the
+/// memory there is (EmuSen_CoreAPI_Extensions.md §7).
 pub const JOB_MEMORY: u64 = 256 << 20;
+
+/// The machines an image's cases hold at once: C8's three (`b`, `d` and `e`), each with its copy of the image.
+pub const MACHINES_AT_ONCE: u64 = 3;
+
+/// What one image's cases are estimated to take: the base, the kit's own copy of the image and each machine's, or
+/// `factor` copies in all where the author names one for a core that expands its image.
+pub fn estimate(len: u64, factor: Option<u64>) -> u64 {
+    JOB_MEMORY + factor.unwrap_or(MACHINES_AT_ONCE + 1) * len
+}
+
+/// The images admitted at once by their estimates: an image waits until its estimate fits beside the running ones, and
+/// one larger than the whole allowance runs alone. The largest sum admitted is kept for the summary.
+pub struct Budget {
+    allowed: u64,
+    state: Mutex<(u64, usize, u64)>,
+    freed: Condvar,
+}
+
+impl Budget {
+    pub fn new(allowed: u64) -> Budget {
+        Budget { allowed, state: Mutex::new((0, 0, 0)), freed: Condvar::new() }
+    }
+
+    /// Waits for room for `estimate`; whether the image runs alone because it is larger than the allowance.
+    pub fn admit(&self, estimate: u64) -> bool {
+        let mut st = self.state.lock().unwrap();
+        while st.1 > 0 && st.0 + estimate > self.allowed {
+            st = self.freed.wait(st).unwrap();
+        }
+        st.0 += estimate;
+        st.1 += 1;
+        st.2 = st.2.max(st.0);
+        estimate > self.allowed
+    }
+
+    pub fn release(&self, estimate: u64) {
+        let mut st = self.state.lock().unwrap();
+        st.0 -= estimate;
+        st.1 -= 1;
+        self.freed.notify_all();
+    }
+
+    /// The largest sum of estimates admitted at once.
+    pub fn largest(&self) -> u64 {
+        self.state.lock().unwrap().2
+    }
+}
+
+/// This process's peak resident memory, `VmHWM`, where the system reports it.
+pub fn peak_resident() -> Option<u64> {
+    std::fs::read_to_string("/proc/self/status").ok()?.lines().find_map(|l| l.strip_prefix("VmHWM:")?.trim().strip_suffix("kB")?.trim().parse::<u64>().ok()).map(|kb| kb * 1024)
+}
 
 /// One image's cases, and how long they took.
 pub struct ImageResult {
@@ -42,6 +95,11 @@ pub struct Corpus {
     pub images: Vec<ImageResult>,
     pub jobs: usize,
     pub seconds: f64,
+    /// The allowance the images were admitted against, the largest sum of estimates admitted at once, and the
+    /// process's peak resident memory, so that the estimate is checked by every run.
+    pub allowed: u64,
+    pub largest_admitted: u64,
+    pub peak_resident: Option<u64>,
 }
 
 impl Corpus {
@@ -55,6 +113,11 @@ impl Corpus {
         j.begin_object().field_str("kit", concat!("emusen-core-conform ", env!("CARGO_PKG_VERSION"))).field_str("library", &self.core.library);
         j.field_str("abi", &self.core.abi).field_str("id", &self.core.id).field_str("version", &self.core.version).field_uint("frames", self.core.frames);
         j.field_uint("jobs", self.jobs as u64).field_uint("milliseconds", (self.seconds * 1000.0) as u64).field_bool("passed", self.passed());
+        j.key("memory").begin_object().field_uint("allowed", self.allowed).field_uint("largest_admitted", self.largest_admitted);
+        if let Some(peak) = self.peak_resident {
+            j.field_uint("peak_resident", peak);
+        }
+        j.end_object();
         j.key("core").begin_object().field_str("image", &self.reference).field_bool("passed", self.core.passed()).key("cases");
         cases_json(&mut j, &self.core.cases);
         j.end_object();
@@ -112,7 +175,7 @@ pub fn image_list(images: &Path, from: Option<&Path>) -> Result<Vec<(String, Pat
 
 /// The memory this process may use: the tightest `memory.max` of its control groups where there is one, or what the
 /// machine has available.
-fn memory_allowed() -> Option<u64> {
+pub fn memory_allowed() -> Option<u64> {
     let group = std::fs::read_to_string("/proc/self/cgroup").ok().and_then(|t| t.lines().find_map(|l| l.strip_prefix("0::").map(str::to_owned)));
     let mut tightest: Option<u64> = None;
     if let Some(group) = group {
@@ -141,13 +204,15 @@ pub fn default_jobs() -> usize {
     processors.min(by_memory).max(1)
 }
 
-/// One image's cases on `lib`, the image read here so that a corpus is never held in memory whole.
+/// One image's cases on `lib`, the image and its companions read here so that a corpus is never held in memory whole.
 fn one_image(lib: &Lib, library: &Path, base: &Options, name: &str, file: &Path, heading: &Report) -> (ImageResult, BTreeSet<i32>) {
     let started = Instant::now();
     let mut report = Report { library: heading.library.clone(), image: Some(name.to_owned()), abi: heading.abi.clone(), id: heading.id.clone(), version: heading.version.clone(), frames: heading.frames, cases: Vec::new() };
-    let statuses = match std::fs::read(file) {
-        Ok(image) => {
-            let (cases, statuses) = image_cases(lib, library, &Options { image, ..base.clone() });
+    let statuses = match crate::media::open(file) {
+        Ok((image, companions)) => {
+            let mut files = base.files.clone();
+            files.extend(companions);
+            let (cases, statuses) = image_cases(lib, library, &Options { image, files, ..base.clone() });
             report.cases = cases;
             statuses
         }
@@ -164,11 +229,20 @@ enum Message {
     Done(usize, ImageResult, BTreeSet<i32>),
 }
 
-/// Runs the core's cases once on `reference` (its image is `opts.image`) and the image cases on every image, `jobs`
-/// images at a time; `progress` hears of each image as it ends. An image still running at `deadline` is reported hung.
-pub fn run(library: &Path, opts: &Options, reference: &str, images: &[(String, PathBuf)], jobs: usize, deadline: Duration, progress: &mut dyn FnMut(&ImageResult)) -> Corpus {
+/// Runs the core's cases once on `reference` (its image is `opts.image`) and the image cases on every image, at most
+/// `jobs` images at a time and as many as `memory` admits by their estimates (`factor` copies of each, else
+/// `estimate`'s); `progress` hears of each image as it ends. An image still running at `deadline` is reported hung.
+#[allow(clippy::too_many_arguments)]
+pub fn run(library: &Path, opts: &Options, reference: &str, images: &[(String, PathBuf)], jobs: usize, memory: u64, factor: Option<u64>, deadline: Duration, progress: &mut dyn FnMut(&ImageResult)) -> Corpus {
+    run_with(library, opts, opts, reference, images, jobs, memory, factor, deadline, progress)
+}
+
+/// `run`, the core's cases on `opts` (the reference image with its companions) and each image's on `base` with its own.
+#[allow(clippy::too_many_arguments)]
+pub fn run_with(library: &Path, opts: &Options, base: &Options, reference: &str, images: &[(String, PathBuf)], jobs: usize, memory: u64, factor: Option<u64>, deadline: Duration, progress: &mut dyn FnMut(&ImageResult)) -> Corpus {
     let started = Instant::now();
     let jobs = jobs.max(1);
+    let budget = Arc::new(Budget::new(memory.saturating_sub(JOB_MEMORY)));
     let core_thread = {
         let (library, opts) = (library.to_owned(), opts.clone());
         std::thread::spawn(move || core_cases(&library, &opts))
@@ -181,17 +255,23 @@ pub fn run(library: &Path, opts: &Options, reference: &str, images: &[(String, P
     if let Some(lib) = shared {
         let queue = Arc::new(Mutex::new((0..images.len()).collect::<VecDeque<usize>>()));
         let images: Arc<Vec<(String, PathBuf)>> = Arc::new(images.to_vec());
-        let base = Arc::new(Options { image: Vec::new(), ..opts.clone() });
+        let base = Arc::new(Options { image: Vec::new(), ..base.clone() });
         let (tx, rx) = mpsc::channel();
         let worker = || {
-            let (queue, images, base, heading, tx, library) = (queue.clone(), images.clone(), base.clone(), heading.clone(), tx.clone(), library.to_owned());
+            let (queue, images, base, heading, tx, library, budget) = (queue.clone(), images.clone(), base.clone(), heading.clone(), tx.clone(), library.to_owned(), budget.clone());
             std::thread::spawn(move || {
                 loop {
                     let Some(i) = queue.lock().ok().and_then(|mut q| q.pop_front()) else { break };
+                    let need = estimate(crate::media::size(&images[i].1), factor);
+                    if budget.admit(need) {
+                        eprintln!("{}: its estimate, {} MiB, is more than the {} MiB allowed, so it runs alone", images[i].0, need >> 20, budget.allowed >> 20);
+                    }
                     if tx.send(Message::Started(i, Instant::now())).is_err() {
+                        budget.release(need);
                         break;
                     }
                     let (result, statuses) = one_image(lib, &library, &base, &images[i].0, &images[i].1, &heading);
+                    budget.release(need);
                     if tx.send(Message::Done(i, result, statuses)).is_err() {
                         break;
                     }
@@ -245,12 +325,42 @@ pub fn run(library: &Path, opts: &Options, reference: &str, images: &[(String, P
         let at = core.cases.iter().position(|c| c.id == "C12").unwrap_or(core.cases.len());
         core.cases.insert(at, c11);
     }
-    Corpus { core, reference: reference.to_owned(), images: results.into_iter().flatten().collect(), jobs: jobs.min(images.len()).max(1), seconds: started.elapsed().as_secs_f64() }
+    Corpus {
+        core,
+        reference: reference.to_owned(),
+        images: results.into_iter().flatten().collect(),
+        jobs: jobs.min(images.len()).max(1),
+        seconds: started.elapsed().as_secs_f64(),
+        allowed: budget.allowed,
+        largest_admitted: budget.largest(),
+        peak_resident: peak_resident(),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::uncommented;
+    use super::{Budget, estimate, uncommented};
+
+    #[test]
+    fn the_budget_admits_two_images_of_half_the_allowance_and_runs_a_larger_one_alone() {
+        assert_eq!(estimate(700 << 20, None), (256 << 20) + 4 * (700 << 20));
+        assert_eq!(estimate(10, Some(9)), (256 << 20) + 90);
+        let b = std::sync::Arc::new(Budget::new(1000));
+        assert!(!b.admit(500) && !b.admit(500));
+        let waiting = {
+            let b = b.clone();
+            std::thread::spawn(move || b.admit(500))
+        };
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(!waiting.is_finished(), "a third half waits for room");
+        b.release(500);
+        assert!(!waiting.join().unwrap());
+        b.release(500);
+        b.release(500);
+        assert!(b.admit(5000), "an image larger than the allowance runs alone");
+        b.release(5000);
+        assert_eq!(b.largest(), 5000);
+    }
 
     #[test]
     fn a_lists_comment_begins_at_the_lines_start_or_after_two_spaces() {

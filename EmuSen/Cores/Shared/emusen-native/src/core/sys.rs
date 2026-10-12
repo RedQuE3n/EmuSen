@@ -43,6 +43,19 @@ pub struct CreateParams {
     pub error_len: usize,
 }
 
+/// `emusen_media`, since 1.1: a disc for a drive, with its companions.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct Media {
+    pub size: u32,
+    pub flags: u32,
+    pub image: *const u8,
+    pub image_len: usize,
+    pub files: *const FileEntry,
+    pub file_count: usize,
+    pub file_size: usize,
+}
+
 /// `emusen_frame_info`. A core fills everything but `size`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -93,6 +106,10 @@ pub mod status {
     pub use crate::abi::status::{BAD_FILE, BAD_SETTING, FAULT_BASE, NO_SUCH_PORT, NO_SUCH_SPACE, NOT_SUPPORTED, READ_ONLY, UNKNOWN_SETTING};
     pub const BAD_STRUCT: i32 = -263;
     pub const BAD_IMAGE: i32 = -264;
+    /// Since 1.1, `MEDIA`.
+    pub const LID_CLOSED: i32 = -265;
+    pub const WRONG_MEDIA: i32 = -266;
+    pub const NO_SUCH_DRIVE: i32 = -267;
 }
 
 /// The capability bits; 0-13 keep the pre-stable numbering.
@@ -102,10 +119,12 @@ pub mod caps {
     pub const SETTING_NOTES: u64 = 1 << 15;
     pub const DEBUG_REGISTERS: u64 = 1 << 16;
     pub const DEBUG_DISASSEMBLE: u64 = 1 << 17;
+    /// Since 1.1.
+    pub const MEDIA: u64 = 1 << 18;
     /// Since 1.2: read watches and read data breakpoints.
     pub const DEBUG_READS: u64 = 1 << 19;
-    /// Bits 18 (held for 1.1's `MEDIA`) and 20-47, for later minors; a core may not claim them.
-    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 18) - 1) & !DEBUG_READS;
+    /// Bits 20-47, for later minors; a core may not claim them.
+    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 20) - 1);
 }
 
 /// `EMUSEN_OPTION_*`, `EMUSEN_FRAME_*`, `EMUSEN_BATTERY_*`, `EMUSEN_FILE_BATTERY`, `EMUSEN_NO_COMPARE`.
@@ -116,6 +135,10 @@ pub mod flags {
     pub const BATTERY_TRACKED: u32 = 2;
     pub const FILE_BATTERY: u32 = 0;
     pub const NO_COMPARE: u32 = u32::MAX;
+    /// Since 1.1: the first companion of an image set; the nth file a sheet names is `FILE_MEDIA + n`.
+    pub const FILE_MEDIA: u32 = 65_536;
+    /// Since 1.1: `emusen_media.flags`, the drive set for a state about to load.
+    pub const MEDIA_RESTORE: u32 = 1;
 }
 
 /// `enum emusen_pixel_format`.
@@ -198,6 +221,8 @@ pub const EXPORTS: &[(&str, u64)] = &[
     ("emusen_core_debug_pc", caps::DEBUG),
     ("emusen_core_debug_registers", caps::DEBUG_REGISTERS),
     ("emusen_core_debug_disassemble", caps::DEBUG_DISASSEMBLE),
+    ("emusen_core_media_lid", caps::MEDIA),
+    ("emusen_core_media_insert", caps::MEDIA),
     ("emusen_core_debug_reads", caps::DEBUG_READS),
 ];
 
@@ -221,5 +246,6 @@ pub const CAPABILITY_NAMES: &[(u64, &str)] = &[
     (caps::SETTING_NOTES, "SETTING_NOTES"),
     (caps::DEBUG_REGISTERS, "DEBUG_REGISTERS"),
     (caps::DEBUG_DISASSEMBLE, "DEBUG_DISASSEMBLE"),
+    (caps::MEDIA, "MEDIA"),
     (caps::DEBUG_READS, "DEBUG_READS"),
 ];

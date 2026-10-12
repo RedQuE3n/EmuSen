@@ -12,6 +12,10 @@ namespace EmuSen.Crystal.Cheats
         // A test, not a write: the next write that is not a test happens only if it passes - see EmuSen_Cheats.md §7.
         IfEqual,
         IfNotEqual,
+
+        // Unsigned within the test's width: the memory below the value, or above it - see EmuSen_Cheats.md §10.
+        IfLess,
+        IfGreater,
     }
 
     // One write inside a cheat, so one toggle can drive a whole run - see `man cheat`.
@@ -61,7 +65,7 @@ namespace EmuSen.Crystal.Cheats
         public int EffectiveWidth => Width == 2 || Width == 4 ? Width : 1;
         public int EffectiveRepeatCount => RepeatCount < 1 ? 1 : RepeatCount;
 
-        public bool IsTest => Type is CheatWriteType.IfEqual or CheatWriteType.IfNotEqual;
+        public bool IsTest => Type is CheatWriteType.IfEqual or CheatWriteType.IfNotEqual or CheatWriteType.IfLess or CheatWriteType.IfGreater;
 
         // Highest address this write touches, for TryPatchRom's quick reject.
         public int LastAddress

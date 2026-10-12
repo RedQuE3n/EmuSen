@@ -74,7 +74,7 @@ namespace EmuSen.Mistress.Scraping
                 return (MediaSource.OtherGame, borrowed);
 
             string title = Path.GetFileNameWithoutExtension(romPath);
-            string? console = file ? EmuSen.Cores.CoreCatalog.ByExtension(Path.GetExtension(romPath))?.Console : null;
+            string? console = file ? EmuSen.Cores.CoreCatalog.ConsoleForRom(romPath) : null;
             var system = new ThemeSystem(esdeSystem, esdeSystem, esdeSystem);
 
             if (cover && console is not null && _handPlaced(console, title) is string hand) return (MediaSource.HandPlaced, hand);

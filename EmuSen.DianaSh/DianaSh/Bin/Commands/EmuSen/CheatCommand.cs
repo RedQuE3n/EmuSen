@@ -159,6 +159,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
                 CheatWriteType.Decrease => "-=",
                 CheatWriteType.IfEqual => "==",
                 CheatWriteType.IfNotEqual => "!=",
+                CheatWriteType.IfLess => "<",
+                CheatWriteType.IfGreater => ">",
                 _ => "=",
             };
             if (w.IsTest) where = "if " + where;

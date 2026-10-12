@@ -210,11 +210,12 @@ namespace EmuSen.Serenity.Shaders
             ["SNES"] = Timing(new(256 / 5.3693175, 256 * 2.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0), new(256 / 5.3203425, 256 * 5.0 / 6.0, 1.0 / 6.0, 0)),
             ["Genesis"] = Timing(new(256 / 5.3693175, 256 * 2.0 / 3.0, 0, 0), new(256 / 5.3203424, 256 * 5.0 / 6.0, 0, 0, 0, true)),
             ["N64"] = Timing(new(640 / 12.1704545, 640 * 4 / 13.6, 0.5, 0.5), new(640 / 12.41413250, 640 * 4 / 11.2, 0.75, 0, 0.25, true)),
+            ["PlayStation"] = Timing(new(2560 / 53.693175, 2560 / 15.0, 0.5, 0.5), new(2560 / 53.203425, 2560 / 12.0, 0.75, 0, 0.5)),
             [ScreenFilter.AnyConsole] = Timing(new(StandardActiveMicroseconds, StandardActiveMicroseconds * SubcarrierMegahertz, 0.5, 0.5),
                 new(PalActiveMicroseconds, PalActiveMicroseconds * PalSubcarrierMegahertz, PalCyclesPerLine % 1, 0, 0.25, true)),
         };
 
-        public static ScreenFilter Filter { get; } = new(Name, Array.Empty<FilterPass>(), new[] { "NES", "SNES", "Genesis", "N64" },
+        public static ScreenFilter Filter { get; } = new(Name, Array.Empty<FilterPass>(), new[] { "NES", "SNES", "Genesis", "N64", "PlayStation" },
             "EmuSen's own, from the physics and measurements cited in EmuSen_CRT.md", Parameters)
         {
             Build = Passes,

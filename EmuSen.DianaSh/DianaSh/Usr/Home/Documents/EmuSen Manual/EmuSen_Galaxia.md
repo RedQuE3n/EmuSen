@@ -183,6 +183,32 @@ needed no change: when no host value is given it already computes `~/.config` wi
 §4.70 documents it and the handhelds' logs are read from there. A process with no home at all still gets a relative
 path; .NET has nothing to answer with, and no such process was found.
 
+### 3.7 `Unpacked`: archives opened for play (2026-10-11)
+
+*Added at Diamond's stage 11, for the archives `EmuSen_CoreAPI_Extensions.md` §10.4 proposed and the tester approved
+on 2026-10-11.*
+
+`DataStore.Unpacked` is `<home>/Unpacked`, the twenty-first directory of the tree, `EMUSEN_GALAXIA_DIR_UNPACKED` (20)
+in `emusen_platform.h` and `Directory::Unpacked` in `tree.rs`, so both halves name it and `GalaxiaParityTests` holds
+them to one answer. Galaxia names the folder and nothing else; what goes in it is the runtime's archive component
+(`EmuSen.Crystal/Media/ArchiveImages.cs`), which is not part of Galaxia and has no Rust half, since it reads `.zip`
+through .NET's own `System.IO.Compression` and nothing else in the program reads one.
+
+**The rule** [C]. A game in a `.zip` is unpacked once into `Unpacked/<key>/`, the key the first sixteen hex digits of
+SHA-256 over the archive's full path, its length and its time, so that a changed or moved archive unpacks anew and
+two archives of one name do not meet. It is unpacked into `<key>.partial-<process>` first and moved into place
+whole, with `.unpacked` written last, so a folder without that file is never used. The image play opens, a cue sheet
+first and else the first lone image of an extension a console takes, is named with the archive's own stem (an `.sbi`
+of its stem too), so that its saves, states and records follow the archive's name as they would a loose file's; every
+other entry keeps its name, as a sheet names it. An entry whose path would leave the folder is not written. **Nothing
+is ever written beside the archive**, and the ROM library is only read.
+
+**Clean-up.** After each unpacking the folder keeps the archives opened most recently, the one opened now always,
+up to `ArchiveImages.KeptBytes` (4 GiB) in all; the least recently opened go first, a folder's time being moved on
+each opening. A partial folder older than an hour, which only a process that stopped part way leaves, is removed. A
+core holds its own copy of the disc from create (§5.11 of `Diamond_Plan.md`), so removing a folder never takes a disc
+from a running game; it only costs the next opening its unpacking.
+
 ### 4.1 Why rename rather than write-in-place
 
 `File.Move(temp, path, overwrite: true)` is atomic at the filesystem level: the destination is either the whole old file or the whole new one, never a partial write. The truncation risk moves onto the `.tmp` file, which nothing ever reads — `AtomicFileTests.An_abandoned_temp_file_never_becomes_the_live_file` pins that a leftover temp from a killed process is ignored.

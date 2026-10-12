@@ -1,0 +1,14 @@
+# Diamond's sample for the conformance kit's corpus form: the tester's discs by their names, no image, each form the
+# library holds, found in --from (copies in the probe's cache, never the library itself). See Diamond_Players.md §6.
+#
+#   emusen-core-conform --core libdiamond.so --images kit/psx-sample.txt --from ~/.cache/emusen/probe/diamond/discs
+#
+Ape Escape (USA).cue  # a sheet with one track; DualShock-only
+Castlevania - Symphony of the Night (USA)/Castlevania - Symphony of the Night (USA).cue  # a sheet with a data and an audio track
+Crash Bandicoot (USA).bin  # a lone single-track dump
+Spyro the Dragon (USA).bin  # a lone dump, the largest of the sample
+Star Wars - Episode I - Jedi Power Battles (USA).cue  # a sheet beside its track
+Rayman (USA)/Rayman (USA).cue  # a sheet of 51 tracks
+MediEvil (USA) (Track 1).bin  # a "(Track 1)" file whose audio tracks are not there
+Tekken 3/Tekken 3.cue  # unpacked from the library's zip, three tracks
+Silent Hill (USA)/Silent Hill (USA).cue  # unpacked from the library's zip

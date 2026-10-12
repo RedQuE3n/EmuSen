@@ -16,6 +16,8 @@ path = "src/main.rs"
 
 [dependencies]
 emusen-native = { path = "../emusen-native" }
+# The set module, which names a sheet's companions as the runtime's reading does (EmuSen_CoreAPI_Extensions.md §2.3).
+emusen-disc = { path = "../emusen-disc" }
 libloading = "0.8"
 
 # The two test cores, built here as well so that this crate's tests run the kit on them.

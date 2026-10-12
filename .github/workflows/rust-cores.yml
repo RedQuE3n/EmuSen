@@ -223,7 +223,6 @@ jobs:
           - name: diamond
             dir: 'EmuSen/Cores/Sony/Diamond - PlayStation'
             symbol: emusen_core_
-            development: true
           # Not a core: the platform library, built from its workspace and shipped the same way.
           - name: emusen_platform
             dir: 'Platform'

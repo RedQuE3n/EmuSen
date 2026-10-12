@@ -74,6 +74,8 @@ signatures! {
     emusen_core_debug_pc: emusen_core_debug_pc_fn,
     emusen_core_debug_registers: emusen_core_debug_registers_fn,
     emusen_core_debug_disassemble: emusen_core_debug_disassemble_fn,
+    emusen_core_media_lid: emusen_core_media_lid_fn,
+    emusen_core_media_insert: emusen_core_media_insert_fn,
     emusen_core_debug_reads: emusen_core_debug_reads_fn,
 }
 
@@ -103,6 +105,7 @@ layouts! {
     sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len } [files];
     sys::FrameInfo = emusen_frame_info { size, format, width, height, stride, row_repeat, flags, aspect_num, aspect_den, reserved, serial, bytes } [];
     sys::Event = emusen_event { size, kind, a, b } [];
+    sys::Media = emusen_media { size, flags, image, image_len, file_count, file_size } [files];
 }
 
 macro_rules! constants {
@@ -134,6 +137,9 @@ constants! {
     EMUSEN_BAD_FILE = status::BAD_FILE,
     EMUSEN_BAD_STRUCT = status::BAD_STRUCT,
     EMUSEN_BAD_IMAGE = status::BAD_IMAGE,
+    EMUSEN_LID_CLOSED = status::LID_CLOSED,
+    EMUSEN_WRONG_MEDIA = status::WRONG_MEDIA,
+    EMUSEN_NO_SUCH_DRIVE = status::NO_SUCH_DRIVE,
     EMUSEN_FAULT_BASE = status::FAULT_BASE,
     EMUSEN_CAP_RESET = caps::RESET,
     EMUSEN_CAP_PRESENT = caps::PRESENT,
@@ -153,6 +159,7 @@ constants! {
     EMUSEN_CAP_SETTING_NOTES = caps::SETTING_NOTES,
     EMUSEN_CAP_DEBUG_REGISTERS = caps::DEBUG_REGISTERS,
     EMUSEN_CAP_DEBUG_DISASSEMBLE = caps::DEBUG_DISASSEMBLE,
+    EMUSEN_CAP_MEDIA = caps::MEDIA,
     EMUSEN_CAP_DEBUG_READS = caps::DEBUG_READS,
     EMUSEN_OPTION_SKIP_RENDERING = flags::OPTION_SKIP_RENDERING,
     EMUSEN_FRAME_WALKED = flags::FRAME_WALKED,
@@ -160,6 +167,8 @@ constants! {
     EMUSEN_BATTERY_TRACKED = flags::BATTERY_TRACKED,
     EMUSEN_FILE_BATTERY = flags::FILE_BATTERY,
     EMUSEN_NO_COMPARE = flags::NO_COMPARE,
+    EMUSEN_FILE_MEDIA = flags::FILE_MEDIA,
+    EMUSEN_MEDIA_RESTORE = flags::MEDIA_RESTORE,
     EMUSEN_DEBUG_CALLS = debug::flag::CALLS,
     EMUSEN_DEBUG_WRITES = debug::flag::WRITES,
     EMUSEN_DEBUG_INTERRUPTS = debug::flag::INTERRUPTS,

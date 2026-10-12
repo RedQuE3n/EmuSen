@@ -27,7 +27,8 @@ namespace EmuSen.Crystal.Systems.Genesis
             0.7,
             "genesis",
             "Sega Genesis",
-            SelfDelimitingImages: false);
+            SelfDelimitingImages: false,
+            Recognise: probe => IsCompactDisc(probe.Read(0x8010)) ? null : new Recognition(MegaDriveId));
 
         public static readonly SystemEntry MegaCd = new(
             MegaCdId,
@@ -42,7 +43,8 @@ namespace EmuSen.Crystal.Systems.Genesis
             0.7,
             "segacd",
             "Sega CD",
-            SelfDelimitingImages: false);
+            SelfDelimitingImages: false,
+            Recognise: probe => IsSegaCd(probe.Read(0x40)) ? new Recognition(MegaCdId) : null);
 
         public static readonly SystemEntry S32x = new(
             S32xId,
@@ -58,6 +60,19 @@ namespace EmuSen.Crystal.Systems.Genesis
             "sega32x",
             "Sega Mega Drive 32X",
             SelfDelimitingImages: false);
+
+        private static readonly byte[] Sync = { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
+
+        // A compact disc's image rather than a cartridge's: a raw track's sync, or an .iso's volume descriptor at sector 16 - Nephrite's own rule, media.rs.
+        public static bool IsCompactDisc(ReadOnlySpan<byte> head) =>
+            (head.Length >= 12 && head[..12].SequenceEqual(Sync)) || (head.Length >= 0x8006 && head.Slice(0x8001, 5).SequenceEqual("CD001"u8));
+
+        // A Sega CD's disc: SEGADISCSYSTEM at the start of its first sector's data.
+        public static bool IsSegaCd(ReadOnlySpan<byte> head)
+        {
+            int data = head.Length >= 16 && head[..12].SequenceEqual(Sync) ? (head[15] == 1 ? 16 : 24) : 0;
+            return head.Length >= data + 14 && head.Slice(data, 14).SequenceEqual("SEGADISCSYSTEM"u8);
+        }
 
         public static ICheatCodeCodec ActionReplay() => new DelegateCheatCodec("Action Replay", CheatCodeKind.RamPoke, Wram,
             GenesisCheatFormats.IsActionReplay, GenesisCheatFormats.DecodeActionReplay, decodeWrites: GenesisCheatFormats.ActionReplayWrites);

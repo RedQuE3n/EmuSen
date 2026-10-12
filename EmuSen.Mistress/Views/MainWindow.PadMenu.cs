@@ -65,6 +65,7 @@ namespace EmuSen.Mistress.Views
             new(() => $"Save State      <  {SlotValue()}  >", SaveState, StepStateSlot) { Label = () => "Save State", Value = SlotValue, ShowsSlot = true },
             new(() => $"Load State      <  {SlotValue()}  >", LoadState, StepStateSlot) { Label = () => "Load State", Value = SlotValue, ShowsSlot = true },
             new(() => $"Speed      <  {DescribeSpeed(_baseSpeedPercent)}  >", () => StepSpeed(1), StepSpeed, closes: false) { Label = () => "Speed", Value = () => DescribeSpeed(_baseSpeedPercent) },
+            .. DiscRows(),
             Ask("Restart Game...", "Restart Game?", "The game starts again from the beginning. Progress since your last save is lost.", ResetEmulation),
             Submenu(GameSettingsMenu, GameSettingsRows, startsSection: true),
             new(() => "Back to Library", ToggleLibrary) { StartsSection = true },

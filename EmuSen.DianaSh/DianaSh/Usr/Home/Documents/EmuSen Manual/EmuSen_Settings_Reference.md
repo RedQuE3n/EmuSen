@@ -8378,3 +8378,73 @@ ships; the platform library is lent the copies the C# loaded, so a fallback chan
 pads and shaders work on the C# as before. The compiled-shader cache keeps the two implementations' shaders apart,
 so a preset is compiled once more the first time it is drawn after the switch changes (a tenth to a fifth of a second
 for Mega Bezel's presets on the development desktop, `EmuSen_RustPlatform.md` §19).
+
+### 4.105 The PlayStation in the library: its shelf, tabs, pads, cheats and settings (2026-10-11)
+
+*Built at Diamond's stage 11 (`Diamond_Players.md`).* The PlayStation is a console only a discovered engine runs, as
+the Genesis is (§4.92), so it has everything §4.92 to §4.94 gave the Genesis with no code of its own:
+
+- **The shelf**: the sidebar's row "PlayStation", the console filter's "PlayStation (Diamond)", its covers and list, and
+  big picture's `psx` system with ES-DE's full name "Sony PlayStation", first released in 1994 for "Release year"
+  sorting, and ScreenScraper's system id 57 for scraping (from ScreenScraper's system list, to be confirmed against its
+  `systemesListe` at the first scrape of a PlayStation game). Its games are `.cue`, `.bin`, `.iso`, `.chd`, `.m3u`,
+  `.psexe` and `.psx`, and `.zip` archives holding one (§4.107). **A sheet's tracks and an `.m3u`'s discs are not games
+  of their own**: a file that a sheet or a list beside it names is shelved as that sheet's or list's
+  (`ImageSets.Shelved`), as ES-DE expects of a multi-disc folder.
+- **Graphics Settings' PlayStation tab** holds the core's settings in words: *Region* (`region`: from the disc or
+  program, Japan, Americas, Europe; the picture's rate and which BIOS the console has), *Graphics chip* (`gpu`: the
+  208-pin GPU of the later consoles, the default, or the 160-pin one of the first, the console model's one difference a
+  program can see), *Port 1/2 controller* (`pad1`, `pad2`: DualShock, the default, digital controller, or nothing on
+  port 2), *Port 1/2 multitap* (`tap1`, `tap2`) and *Memory card in slot 1/2* (`card1`, `card2`: a card or none, slot
+  1 holding one by default). Each takes effect when a game is next loaded.
+- **Controller Bindings' PlayStation tab** draws the pad the shown player's port is set to (§4.93's rule): LunaP's
+  `ControllerLayout.DualShock`, or `ControllerLayout.PlayStation` for the digital controller (`docs/LunaP.md` §198.13 in
+  the toolkit). A drawn button is the RetroPad control the core gives it, position for position: Triangle is X, Circle
+  is A, Cross is B, Square is Y, L1 is L and R1 is R, L2, R2, L3 and R3 as named (`ControllerDiagrams.RegionFor`); the
+  DualShock's sticks are the left and right sticks, their knobs moved by the pad's sticks in the tester, and its sticks'
+  directions can be bound to keys, since `CoreCatalog.AxesFor` now reads a discovered console's sticks from its
+  engine. The Analog button is drawn and has no RetroPad control (`EmuSen_CoreAPI_Extensions.md` §5).
+- **Active Cheats and the cheat database** take the PlayStation's codes through its pack's two codecs (`EmuSen_Cheats.md`
+  §10), the database's `Sony - PlayStation` folder among the folders `cheat db prune` keeps.
+- **Shader Settings** offers the modelled CRT with the PlayStation's own line (`EmuSen_CRT.md` §20.6).
+- **Memory cards** are battery files under `Saves/PlayStation`, `<game>.mcr` for slot 1 and `<game>.2.mcr` for slot 2,
+  the raw 128 KiB card (`Diamond_Plan.md` §4.4).
+
+**Coverage**: `DiamondTests`, `DiamondPlayersTests`, `PlayStationLibraryTests`, `PsxCheatFormatsTests`, the window fit
+audit's `GraphicsSettingsPlayStation`, `ShaderSettingsPlayStation`, `ActiveCheatsPlayStation`,
+`ControllerBindingsPlayStation` and `ControllerBindingsPlayStationDigital`, and the sidebar and carousel audits with
+the PlayStation shelf, each at 1280×800 and 1920×1200.
+
+### 4.106 Change Disc (2026-10-11)
+
+A game of several discs, an `.m3u` beside its discs, on a core that changes discs (`EmuSen_CoreAPI.md` §6.23), has a
+row in the game's menu: **Change Disc  <  Disc 2 of 3  >**, Left and Right choosing the disc ("(in)" marks the one in
+the drive) and A changing to it. The change is one action, as a player makes it at a console: the lid opens, the disc
+goes in, and the lid closes one second of the game's own time later, which is what a game that asks for the next disc
+watches for. A game of one disc, or a core without the capability, has no row. A save state remembers its disc: loading
+a state made on another disc of the set puts that disc back first.
+
+**Coverage**: `DiamondPlayersTests.An_m3u_changes_its_discs_through_the_lid_and_a_state_brings_its_own_disc_back`; the
+row is built only where `CoreEngine.CanChangeDisc` holds and the game has more than one disc.
+
+### 4.107 Archives, and a file several consoles take (2026-10-11)
+
+- **A `.zip` in the library** is listed by the game inside it and opened as that game: a cue sheet with its tracks, or
+  a lone image (a "(Track 1)" dump, a cartridge). It is unpacked once into the program's own `Unpacked` folder, never
+  beside the archive, which is only read, and the folder keeps the archives opened last up to 4 GiB
+  (`EmuSen_Galaxia.md` §3.7). Its saves and states are named after the archive.
+- **A `.bin` or an `.iso`** that both the Genesis and the PlayStation take is opened as the console its content is: a
+  PlayStation disc by the licence text in its system area, a Genesis cartridge as anything that is not a compact disc
+  image. Where neither recognises it, a folder named for one of them (`genesis`, `psx`, as ES-DE names them) decides,
+  and otherwise the file opens nowhere and says why, naming the folders that would decide it. A chooser asking the
+  player is not built (`EmuSen_CoreAPI_Extensions.md` §8.4's last step).
+
+### 4.108 The PlayStation offered to players (2026-10-11)
+
+*Decided 2026-10-11: the PlayStation is offered to players* (`Diamond_Plan.md` §8, `Diamond_Players.md` §8), its
+stage 11 gate and its firmware gate G9 met. Diamond's build no longer marks the core in development, so every build
+has §4.105's shelf, tabs, pads and cheats, §4.106's Change Disc, the firmware page's Sony PlayStation row with its three
+optional BIOS files and the open BIOS in their place, and `.cue`, `.bin`, `.iso`, `.chd`, `.m3u`, `.psexe` and `.psx`
+opened by Diamond, a `.bin` or `.iso` by its content (§4.107). The kit on the tester's discs, the cards' round trip,
+the fit audit and the cheats' decode are its tests.
+

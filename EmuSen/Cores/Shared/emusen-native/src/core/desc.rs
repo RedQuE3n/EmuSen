@@ -155,6 +155,17 @@ pub enum FirmwareSource {
     Absent,
 }
 
+/// A drive of a machine that claims `MEDIA` (since 1.1, §6.23): its number, words for it, its kind (`cd`, later `gd`,
+/// `dvd`, `floppy`), its lid or tray, and whether it holds a disc.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Drive {
+    pub drive: u32,
+    pub label: String,
+    pub kind: String,
+    pub lid_open: bool,
+    pub loaded: bool,
+}
+
 /// Machine info (§6.4). Space sizes, battery lengths and state kinds are filled by the crate from the exports.
 #[derive(Clone, Debug, Default)]
 pub struct MachineInfo {
@@ -453,8 +464,8 @@ pub struct Measured<'a> {
     pub capabilities: u64,
 }
 
-/// Machine info as JSON.
-pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>) -> String {
+/// Machine info as JSON, with the drives of `Core::drives`.
+pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Drive]) -> String {
     let mut j = Json::new();
     j.begin_object();
     j.field_str("system", &m.system);
@@ -533,6 +544,14 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>) -> String {
                 FirmwareSource::Absent => "absent",
             };
             j.begin_object().field_uint("which", which as u64).field_str("source", source).end_object();
+        }
+        j.end_array();
+    }
+    if !drives.is_empty() {
+        j.key("drives").begin_array();
+        for d in drives {
+            j.begin_object().field_uint("drive", d.drive as u64).field_str("label", &d.label).field_str("kind", &d.kind);
+            j.field_str("lid", if d.lid_open { "open" } else { "closed" }).field_bool("loaded", d.loaded).end_object();
         }
         j.end_array();
     }

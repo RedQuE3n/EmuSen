@@ -68,6 +68,9 @@ pub struct Machine {
     pub ports: [Option<&'static str>; 2],
     /// The firmware files given at create, by number.
     pub firmware: Vec<u32>,
+    /// The fingerprint of the disc in the drive, 0 for none, which a state records and a load is held to (§6.23 of
+    /// EmuSen_CoreAPI.md).
+    pub disc_print: u64,
     /// The debugger's hooks and its open frame (Diamond_Debugger.md).
     pub debug: crate::debugger::Debugger,
 }
@@ -120,13 +123,32 @@ impl Machine {
             card_reported: [false; 2],
             ports,
             firmware: Vec::new(),
+            disc_print: 0,
             debug: crate::debugger::Debugger::new(),
         }
     }
 
     /// Puts `disc` in the drive, its lid closed, as at power-on.
-    pub fn insert_disc(&mut self, disc: emusen_disc::Disc) {
+    pub fn insert_disc(&mut self, mut disc: emusen_disc::Disc) {
+        self.disc_print = crate::medium::fingerprint(&mut disc);
         self.board.cdrom = crate::cdrom::Cdrom::new(Some(disc), self.config.market);
+        self.board.schedule();
+    }
+
+    /// Replaces the disc in the drive, or empties it, whatever the lid: the lid open, as a player would, or for a state
+    /// about to load, which brings the drive's own registers.
+    pub fn change_disc(&mut self, disc: Option<emusen_disc::Disc>) {
+        let now = self.board.now;
+        self.board.cdrom.run(now);
+        self.disc_print = disc.map_or(0, |mut d| {
+            let print = crate::medium::fingerprint(&mut d);
+            self.board.cdrom.disc = Some(crate::cdrom::DiscSlot::new(d));
+            print
+        });
+        if self.disc_print == 0 {
+            self.board.cdrom.disc = None;
+        }
+        self.board.sync_cdrom();
         self.board.schedule();
     }
 

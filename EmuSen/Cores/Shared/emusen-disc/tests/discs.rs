@@ -1,10 +1,13 @@
 //! Synthetic discs built here, read back sector for sector: a two-file dump (mode 2 data, then audio with a stored
 //! pause), the same as one file with an unstored PREGAP, an `.iso`, a lone raw track, subchannel Q and the TOC, an
-//! `.sbi`, and (with chdman named) the same sheets as CHDs. EmuSen_Disc.md §6 lists what each shows.
+//! `.sbi`, and (with chdman named) the same sheets as CHDs. EmuSen_Disc.md §6 lists what each shows, and §9.4 the
+//! cases since 1.3: every form read from borrowed bytes as from owned ones, `open`, and the fingerprint.
+
+use std::sync::Arc;
 
 use emusen_disc::cue::Sheet;
 use emusen_disc::ecma130::{self, Form, RAW};
-use emusen_disc::{Disc, IsoForm, Msf, Sector, samples};
+use emusen_disc::{Disc, IsoForm, Lone, Msf, Refusal, Sector, open, samples};
 
 const DATA: u32 = 40;
 const AUDIO: u32 = 30;
@@ -183,7 +186,10 @@ fn a_chd_reads_as_its_sheet() {
         let run = std::process::Command::new(&chdman).args(["createcd", "-f", "-i"]).arg(dir.join(name)).arg("-o").arg(&chd).output().unwrap();
         assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
         let mut from_sheet = Disc::from_sheet(&Sheet::parse(&text).unwrap(), bytes, IsoForm::Mode1).unwrap();
-        let mut from_chd = Disc::from_image(std::fs::read(&chd).unwrap(), IsoForm::Mode1).unwrap();
+        let packed = std::fs::read(&chd).unwrap();
+        let mut from_chd = Disc::from_image(packed.clone(), IsoForm::Mode1).unwrap();
+        same(&mut from_chd, &mut Disc::from_image(&packed[..], IsoForm::Mode1).unwrap(), name);
+        same(&mut from_chd, &mut open(&packed[..], Vec::new(), IsoForm::Mode1, Lone::Detect).unwrap(), name);
         assert_eq!(from_chd.toc(), from_sheet.toc(), "{name}");
         let (mut x, mut y) = ([0u8; RAW], [0u8; RAW]);
         for at in 0..from_sheet.lead_out() + 10 {
@@ -193,4 +199,143 @@ fn a_chd_reads_as_its_sheet() {
         }
     }
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Two discs that must be one: the tracks, the TOC, the lead-in's items, and every sector's kind, bytes and Q from
+/// the first pause through the lead-out's start.
+fn same<A: AsRef<[u8]>, B: AsRef<[u8]>>(a: &mut Disc<A>, b: &mut Disc<B>, what: &str) {
+    assert_eq!(a.tracks(), b.tracks(), "{what}");
+    assert_eq!((a.toc(), a.lead_out()), (b.toc(), b.lead_out()), "{what}");
+    for pointer in (1..=3).chain([0xA0, 0xA1, 0xA2]) {
+        assert_eq!(a.lead_in(pointer), b.lead_in(pointer), "{what} pointer {pointer:02X}");
+    }
+    let (mut x, mut y) = ([0u8; RAW], [1u8; RAW]);
+    for at in 0..a.lead_out() + 10 {
+        assert_eq!(a.read(at, &mut x), b.read(at, &mut y), "{what} sector {at}");
+        assert_eq!(x, y, "{what} sector {at}");
+        assert_eq!(a.subq(at), b.subq(at), "{what} sector {at}");
+    }
+    assert_eq!(a.fingerprint([0, 4, 16]), b.fingerprint([0, 4, 16]), "{what}");
+}
+
+/// A sheet's disc over each backing: its files owned, borrowed for the call, and shared as a host's lent bytes are.
+fn sheet_over_every_backing(sheet: &str, files: &[Vec<u8>], iso: IsoForm, what: &str) {
+    let sheet = Sheet::parse(sheet).unwrap();
+    let mut owned = Disc::from_sheet(&sheet, files.to_vec(), iso).unwrap();
+    let mut borrowed = Disc::from_sheet(&sheet, files.iter().map(Vec::as_slice).collect(), iso).unwrap();
+    let mut shared = Disc::from_sheet(&sheet, files.iter().map(|f| Arc::<[u8]>::from(&f[..])).collect(), iso).unwrap();
+    same(&mut owned, &mut borrowed, what);
+    same(&mut owned, &mut shared, what);
+}
+
+fn iso_image() -> Vec<u8> {
+    let mut iso = vec![0u8; 24 * 2048];
+    iso[16 * 2048 + 1..16 * 2048 + 6].copy_from_slice(b"CD001");
+    for (i, b) in iso.iter_mut().enumerate().skip(17 * 2048) {
+        *b = (i * 7 + i / 2048) as u8;
+    }
+    iso
+}
+
+const SBI: [u8; 11] = [b'S', b'B', b'I', 0, 0x00, 0x02, 0x05, 3, 0x00, 0x02, 0x09];
+
+/// The exactness rule at this crate's level: a disc opened from borrowed bytes reads sector for sector as one opened
+/// from owned bytes, for every form the crate has.
+#[test]
+fn every_form_reads_the_same_from_borrowed_bytes_as_from_owned() {
+    let (d, a) = files();
+    sheet_over_every_backing(TWO_FILES, &[d.clone(), a.clone()], IsoForm::Mode2Form1, "a sheet of two files");
+    let three = "FILE \"d.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nFILE \"a.bin\" BINARY\nTRACK 02 AUDIO\nFLAGS PRE\nINDEX 00 00:00:00\nINDEX 01 00:00:07\nFILE \"b.bin\" BINARY\nTRACK 03 AUDIO\nPREGAP 00:00:05\nINDEX 01 00:00:00\nINDEX 02 00:00:09\nPOSTGAP 00:00:02\n";
+    sheet_over_every_backing(three, &[d.clone(), a.clone(), a[..20 * RAW].to_vec()], IsoForm::Mode2Form1, "a sheet of three files");
+    let gap = format!("FILE \"x.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nTRACK 02 AUDIO\nPREGAP 00:00:{PAUSE:02}\nINDEX 01 00:00:{DATA:02}\n");
+    sheet_over_every_backing(&gap, &[[d.clone(), a.clone()].concat()], IsoForm::Mode2Form1, "one file with an unstored pregap");
+    let cooked = "FILE \"i.iso\" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\nFILE \"a.bin\" BINARY\nTRACK 02 AUDIO\nINDEX 01 00:00:00\n";
+    for iso in [IsoForm::Mode1, IsoForm::Mode2Form1] {
+        sheet_over_every_backing(cooked, &[iso_image(), a.clone()], iso, "a sheet of user sectors and audio");
+    }
+    let xa: Vec<u8> = d.chunks_exact(RAW).flat_map(|s| s[16..].to_vec()).collect();
+    sheet_over_every_backing("FILE \"m.bin\" BINARY\nTRACK 01 MODE2/2336\nINDEX 01 00:00:00\n", &[xa], IsoForm::Mode2Form1, "a sheet of 2,336-byte sectors");
+
+    let user: Vec<u8> = (0..9 * 2048u32).map(|i| (i * 13) as u8).collect();
+    let lone: [(&str, Vec<u8>, bool); 4] = [("a lone raw track", d.clone(), false), ("a lone audio track", a.clone(), false), ("an .iso", iso_image(), false), ("user sectors with no volume descriptor", user, true)];
+    for (what, image, user) in lone {
+        for iso in [IsoForm::Mode1, IsoForm::Mode2Form1] {
+            let from = |bytes| if user { Disc::from_user_image(bytes, iso) } else { Disc::from_image(bytes, iso) };
+            let mut owned = from(image.clone()).unwrap();
+            let borrow = |bytes| if user { Disc::from_user_image(bytes, iso) } else { Disc::from_image(bytes, iso) };
+            same(&mut owned, &mut borrow(&image[..]).unwrap(), what);
+            let share = |bytes| if user { Disc::from_user_image(bytes, iso) } else { Disc::from_image(bytes, iso) };
+            same(&mut owned, &mut share(Arc::<[u8]>::from(&image[..])).unwrap(), what);
+            let how = if user { Lone::User } else { Lone::Detect };
+            same(&mut owned, &mut open(&image[..], Vec::new(), iso, how).unwrap(), what);
+        }
+    }
+
+    let mut owned = two_files();
+    owned.apply_sbi(&SBI).unwrap();
+    let mut borrowed = open(TWO_FILES.as_bytes(), vec![&d[..], &a[..], &SBI[..]], IsoForm::Mode2Form1, Lone::Detect).unwrap();
+    assert!(!borrowed.subq(155).valid());
+    same(&mut owned, &mut borrowed, "a sheet with its .sbi");
+}
+
+/// `open` as a host's call gives it: the sheet's files from the first companions, an `.sbi` past them, and each
+/// refusal with its words.
+#[test]
+fn an_image_and_its_companions_open_or_are_refused_with_words() {
+    let (d, a) = files();
+    let sheet = TWO_FILES.as_bytes().to_vec();
+    let mut disc = open(sheet.clone(), vec![d.clone(), a.clone()], IsoForm::Mode2Form1, Lone::Detect).unwrap();
+    same(&mut two_files(), &mut disc, "a sheet opened");
+    assert!(disc.subq(155).valid(), "no .sbi was given");
+    assert_eq!(open(sheet.clone(), vec![d.clone()], IsoForm::Mode2Form1, Lone::Detect).err(), Some(Refusal::Missing { needs: 2, has: 1 }));
+    assert_eq!(open(sheet.clone(), vec![SBI.to_vec()], IsoForm::Mode2Form1, Lone::Detect).err(), Some(Refusal::Missing { needs: 2, has: 1 }), "an .sbi is no track");
+    let short = open(sheet.clone(), vec![d.clone(), a[..3 * RAW].to_vec()], IsoForm::Mode2Form1, Lone::Detect).err().unwrap();
+    assert!(matches!(&short, Refusal::Sheet(w) if w.contains("too short")), "{short}");
+    let bad = open(b"FILE \"a.bin\" BINARY\nTRACK 01 NONSENSE\n".to_vec(), vec![d.clone()], IsoForm::Mode1, Lone::Detect).err().unwrap();
+    assert!(matches!(bad, Refusal::Sheet(_)), "{bad}");
+    let unknown = open(vec![1u8; 1000], Vec::new(), IsoForm::Mode1, Lone::Detect).err().unwrap();
+    assert!(matches!(&unknown, Refusal::Image(w) if w.contains("1000 bytes")), "{unknown}");
+    assert!(open(vec![1u8; 5000], Vec::new(), IsoForm::Mode1, Lone::User).is_ok(), "the console's word that they are user sectors is taken");
+    let torn = open(sheet, vec![d, a, b"SBI\0\x00\x02".to_vec()], IsoForm::Mode2Form1, Lone::Detect).err().unwrap();
+    assert!(matches!(torn, Refusal::Sbi(_)), "{torn}");
+}
+
+/// The fingerprint a state is held to: the value Diamond's states have recorded since DMND 9, moved only by the
+/// tracks, the lead-out and the sectors named, and so reading nothing else of the disc.
+#[test]
+fn the_fingerprint_is_the_tracks_the_lead_out_and_the_sectors_named() {
+    let diamond = || std::iter::once(4).chain(16..24);
+    let (d, a) = files();
+    let mut disc = two_files();
+    let print = disc.fingerprint(diamond());
+    let mut h = 0xCBF2_9CE4_8422_2325u64;
+    let mut eat = |bytes: &[u8]| bytes.iter().for_each(|&b| h = (h ^ b as u64).wrapping_mul(0x0100_0000_01B3));
+    for (start, audio) in [(150u32, 0u8), (150 + DATA + PAUSE, 1)] {
+        eat(&start.to_le_bytes());
+        eat(&[audio]);
+    }
+    eat(&(150 + DATA + AUDIO).to_le_bytes());
+    for i in diamond() {
+        eat(&data_sector(i));
+    }
+    assert_eq!(print, h, "FNV-1a as medium.rs computed it before 1.3");
+    assert_eq!(print, 0x1AE5_19C0_EA40_70CD, "pinned: a state made before 1.3 names its disc by this");
+
+    let mut elsewhere = d.clone();
+    for (i, b) in elsewhere.iter_mut().enumerate() {
+        let sector = (i / RAW) as u32;
+        if sector != 4 && !(16..24).contains(&sector) {
+            *b ^= 0xA5;
+        }
+    }
+    let sheet = Sheet::parse(TWO_FILES).unwrap();
+    let silent = vec![0u8; a.len()];
+    let mut other = Disc::from_sheet(&sheet, vec![&elsewhere[..], &silent[..]], IsoForm::Mode2Form1).unwrap();
+    assert_eq!(other.fingerprint(diamond()), print, "no byte outside the named sectors is read into it");
+    let mut one = d.clone();
+    one[20 * RAW + 1000] ^= 1;
+    assert_ne!(Disc::from_sheet(&sheet, vec![&one[..], &a[..]], IsoForm::Mode2Form1).unwrap().fingerprint(diamond()), print);
+    assert_ne!(Disc::from_sheet(&sheet, vec![&d[..], &a[..(AUDIO as usize - 1) * RAW]], IsoForm::Mode2Form1).unwrap().fingerprint(diamond()), print, "the lead-out moved");
+    assert_ne!(disc.fingerprint([4]), print);
+    assert_ne!(Disc::<&[u8]>::from_image(&[0u8; RAW][..], IsoForm::Mode1).unwrap().fingerprint([]), 0, "never the empty drive's 0");
 }

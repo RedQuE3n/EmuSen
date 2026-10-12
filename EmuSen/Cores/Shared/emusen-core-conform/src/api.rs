@@ -91,6 +91,7 @@ table! {
         debug_disassemble: fn(M, u32, u32, u32, u32, *mut u8, usize) -> i64,
         media_lid: fn(M, u32, u32) -> i32,
         media_insert: fn(M, u32, *const Media) -> i32,
+        debug_reads: fn(M, *mut u32, usize) -> i64,
     }
 }
 

@@ -15,6 +15,7 @@ const EMUSEN_CAP_BATTERY_DIRTY 0x400 @1.0
 const EMUSEN_CAP_CHEAT_POKES 0x4000 @1.0
 const EMUSEN_CAP_DEBUG 0x1000 @1.0
 const EMUSEN_CAP_DEBUG_DISASSEMBLE 0x20000 @1.0
+const EMUSEN_CAP_DEBUG_READS 0x80000 @1.2
 const EMUSEN_CAP_DEBUG_REGISTERS 0x10000 @1.0
 const EMUSEN_CAP_DEBUG_STACK 0x2000 @1.0
 const EMUSEN_CAP_FRAME_SERIAL 0x100 @1.0
@@ -29,13 +30,14 @@ const EMUSEN_CAP_SETTINGS 0x40 @1.0
 const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0x1 @1.1
-const EMUSEN_CORE_ABI_VERSION 0x10001 @1.1
+const EMUSEN_CORE_ABI_MINOR 0x2 @1.2
+const EMUSEN_CORE_ABI_VERSION 0x10002 @1.2
 const EMUSEN_DEBUG_CALLS 0x1 @1.0
 const EMUSEN_DEBUG_COVERAGE 0x8 @1.0
 const EMUSEN_DEBUG_EACH 0x8 @1.0
 const EMUSEN_DEBUG_INTERRUPTS 0x4 @1.0
 const EMUSEN_DEBUG_PROFILING 0x10 @1.0
+const EMUSEN_DEBUG_READS 0x20 @1.2
 const EMUSEN_DEBUG_WRITES 0x2 @1.0
 const EMUSEN_FILE_BATTERY 0x0 @1.0
 const EMUSEN_FILE_MEDIA 0x10000 @1.1
@@ -43,6 +45,10 @@ const EMUSEN_FRAME_WALKED 0x1 @1.0
 const EMUSEN_MEDIA_RESTORE 0x1 @1.1
 const EMUSEN_NO_COMPARE 0xffffffff @1.0
 const EMUSEN_OPTION_SKIP_RENDERING 0x1 @1.0
+const EMUSEN_RANGE_BREAK 0x1 @1.2
+const EMUSEN_RANGE_READ_BREAK 0x3 @1.2
+const EMUSEN_RANGE_READ_WATCH 0x2 @1.2
+const EMUSEN_RANGE_WATCH 0x0 @1.2
 const EMUSEN_RUN_CONTINUE 0x2 @1.0
 const EMUSEN_RUN_UNCHECKED 0x1 @1.0
 const EMUSEN_STOP_BREAKPOINT 0x1 @1.0
@@ -50,6 +56,7 @@ const EMUSEN_STOP_DATA 0x8 @1.0
 const EMUSEN_STOP_DEPTH 0x4 @1.0
 const EMUSEN_STOP_EACH 0x2 @1.0
 const EMUSEN_STOP_INTERRUPT 0x10 @1.0
+const EMUSEN_STOP_READ 0x40 @1.2
 const EMUSEN_STOP_RING 0x20 @1.0
 enum emusen_axis.EMUSEN_AXIS_LEFT_TRIGGER 4 @1.0
 enum emusen_axis.EMUSEN_AXIS_LEFT_X 0 @1.0
@@ -100,6 +107,7 @@ export emusen_core_debug_coverage optional EMUSEN_CAP_DEBUG @1.0
 export emusen_core_debug_disassemble optional EMUSEN_CAP_DEBUG_DISASSEMBLE @1.0
 export emusen_core_debug_pc optional EMUSEN_CAP_DEBUG @1.0
 export emusen_core_debug_profile optional EMUSEN_CAP_DEBUG @1.0
+export emusen_core_debug_reads optional EMUSEN_CAP_DEBUG_READS @1.2
 export emusen_core_debug_registers optional EMUSEN_CAP_DEBUG_REGISTERS @1.0
 export emusen_core_debug_run_frame optional EMUSEN_CAP_DEBUG @1.0
 export emusen_core_debug_set optional EMUSEN_CAP_DEBUG @1.0
@@ -196,6 +204,7 @@ fn emusen_core_debug_coverage (emusen_machine*, uint32_t, uint8_t*, size_t, int6
 fn emusen_core_debug_disassemble (emusen_machine*, uint32_t, uint32_t, uint32_t, uint32_t, uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_debug_pc (const emusen_machine*, uint32_t, uint64_t*) -> int32_t @1.0
 fn emusen_core_debug_profile (emusen_machine*, int64_t*, size_t) -> int64_t @1.0
+fn emusen_core_debug_reads (emusen_machine*, uint32_t*, size_t) -> int64_t @1.2
 fn emusen_core_debug_registers (const emusen_machine*, uint32_t, int64_t*, size_t) -> int64_t @1.0
 fn emusen_core_debug_run_frame (emusen_machine*, uint32_t, uint32_t*, uint64_t*, uint64_t*) -> int32_t @1.0
 fn emusen_core_debug_set (emusen_machine*, uint32_t, int32_t, int32_t) -> int32_t @1.0

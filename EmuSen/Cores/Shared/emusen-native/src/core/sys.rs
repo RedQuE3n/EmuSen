@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 1;
+pub const ABI_MINOR: u32 = 2;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -121,8 +121,10 @@ pub mod caps {
     pub const DEBUG_DISASSEMBLE: u64 = 1 << 17;
     /// Since 1.1.
     pub const MEDIA: u64 = 1 << 18;
-    /// Bits 19-47, for later minors; a core may not claim them.
-    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 19) - 1);
+    /// Since 1.2: read watches and read data breakpoints.
+    pub const DEBUG_READS: u64 = 1 << 19;
+    /// Bits 20-47, for later minors; a core may not claim them.
+    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 20) - 1);
 }
 
 /// `EMUSEN_OPTION_*`, `EMUSEN_FRAME_*`, `EMUSEN_BATTERY_*`, `EMUSEN_FILE_BATTERY`, `EMUSEN_NO_COMPARE`.
@@ -221,6 +223,7 @@ pub const EXPORTS: &[(&str, u64)] = &[
     ("emusen_core_debug_disassemble", caps::DEBUG_DISASSEMBLE),
     ("emusen_core_media_lid", caps::MEDIA),
     ("emusen_core_media_insert", caps::MEDIA),
+    ("emusen_core_debug_reads", caps::DEBUG_READS),
 ];
 
 /// Each assigned bit's name, as core info's `capabilities` lists it.
@@ -244,4 +247,5 @@ pub const CAPABILITY_NAMES: &[(u64, &str)] = &[
     (caps::DEBUG_REGISTERS, "DEBUG_REGISTERS"),
     (caps::DEBUG_DISASSEMBLE, "DEBUG_DISASSEMBLE"),
     (caps::MEDIA, "MEDIA"),
+    (caps::DEBUG_READS, "DEBUG_READS"),
 ];

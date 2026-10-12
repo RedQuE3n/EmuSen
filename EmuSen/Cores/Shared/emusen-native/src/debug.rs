@@ -20,6 +20,8 @@ pub mod stop {
     pub const INTERRUPT: u32 = 16;
     /// A log is full and must be drained.
     pub const RING: u32 = 32;
+    /// Since 1.2: the next instruction's load reads a byte in a read data-breakpoint range; nothing of it has run.
+    pub const READ: u32 = 64;
 }
 
 /// The flags `emusen_native_debug_set` takes; coverage of processor n is bit `COVERAGE + n`.
@@ -30,6 +32,16 @@ pub mod flag {
     pub const EACH: u32 = 8;
     pub const PROFILING: u32 = 16;
     pub const COVERAGE: u32 = 8;
+    /// Since 1.2: loads reported into the read ranges.
+    pub const READS: u32 = 32;
+}
+
+/// The kinds of range `set_ranges` takes: store watches and data breakpoints, and since 1.2 their load counterparts.
+pub mod range {
+    pub const WATCH: u32 = 0;
+    pub const BREAK: u32 = 1;
+    pub const READ_WATCH: u32 = 2;
+    pub const READ_BREAK: u32 = 3;
 }
 
 /// The flags `emusen_native_debug_run_frame` takes.
@@ -68,6 +80,17 @@ pub struct Write {
     pub pc: u32,
 }
 
+/// One byte of a load, as the read log holds it (since 1.2): `kind` is the range kind that logged it, `range::READ_WATCH`
+/// for a byte read and its value, `range::READ_BREAK` for a byte about to be read and the value its space holds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Read {
+    pub space: u32,
+    pub address: u32,
+    pub value: u32,
+    pub pc: u32,
+    pub kind: u32,
+}
+
 /// A call-log entry: `kind`, then the source and target of a call or an interrupt; a return's are zero.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -102,6 +125,8 @@ pub struct Hooks {
     pub calls: bool,
     /// Stores reported byte by byte into the ranges below.
     pub writes: bool,
+    /// Loads reported byte by byte into the read ranges (since 1.2).
+    pub reads: bool,
     /// Stop after an interrupt is dispatched.
     pub interrupts: bool,
     /// Stop before every instruction.
@@ -118,12 +143,15 @@ pub struct Hooks {
     pub breakpoints: Vec<(i32, i32)>,
     pub watch_ranges: Vec<Range>,
     pub break_ranges: Vec<Range>,
+    pub read_watch_ranges: Vec<Range>,
+    pub read_break_ranges: Vec<Range>,
     /// Every open call as (source, target), innermost last: the registry's, pushed down, then moved by what runs.
     pub stack: Vec<(u32, u32)>,
     /// Returns with nothing open, which move nothing and are still logged.
     pub unmatched_returns: i64,
     pub calls_log: Vec<Call>,
     pub writes_log: Vec<Write>,
+    pub reads_log: Vec<Read>,
     /// Each processor's coverage while armed; its width is fixed at `new`.
     pub coverage: Vec<Option<Coverage>>,
     widths: Vec<u32>,
@@ -144,6 +172,7 @@ impl Hooks {
         Hooks {
             calls: false,
             writes: false,
+            reads: false,
             interrupts: false,
             each: false,
             profiling: false,
@@ -154,10 +183,13 @@ impl Hooks {
             breakpoints: Vec::new(),
             watch_ranges: Vec::new(),
             break_ranges: Vec::new(),
+            read_watch_ranges: Vec::new(),
+            read_break_ranges: Vec::new(),
             stack: Vec::new(),
             unmatched_returns: 0,
             calls_log: Vec::new(),
             writes_log: Vec::new(),
+            reads_log: Vec::new(),
             coverage: widths.iter().map(|_| None).collect(),
             widths: widths.to_vec(),
             profile: BTreeMap::new(),
@@ -174,6 +206,7 @@ impl Hooks {
         let on = |bit: u32| flags & bit != 0;
         self.calls = on(flag::CALLS);
         self.writes = on(flag::WRITES);
+        self.reads = on(flag::READS);
         self.interrupts = on(flag::INTERRUPTS);
         self.each = on(flag::EACH);
         self.profiling = on(flag::PROFILING);
@@ -191,6 +224,7 @@ impl Hooks {
     pub fn armed(&self) -> bool {
         self.calls
             || self.writes
+            || self.reads
             || self.interrupts
             || self.each
             || self.profiling
@@ -289,7 +323,7 @@ impl Hooks {
             self.interrupt_taken = false;
             why |= stop::INTERRUPT;
         }
-        if self.writes_log.len() >= self.capacity || self.calls_log.len() >= self.capacity {
+        if self.writes_log.len() >= self.capacity || self.calls_log.len() >= self.capacity || self.reads_log.len() >= self.capacity {
             why |= stop::RING;
         }
         if self.covers(pc) {
@@ -319,6 +353,25 @@ impl Hooks {
         }
     }
 
+    /// One byte a load read, since 1.2: logged with its value where a read watch covers it.
+    #[inline(never)]
+    pub fn note_read(&mut self, space: u32, address: u32, value: u8, pc: u32) {
+        if self.read_watch_ranges.iter().any(|r| r.space == space && address >= r.start && address <= r.end) {
+            self.reads_log.push(Read { space, address, value: value as u32, pc, kind: range::READ_WATCH });
+        }
+    }
+
+    /// One byte the load at `pc` is about to read, since 1.2, with the value its space holds: logged where a read data
+    /// breakpoint covers it, and then whether the frame stops in front of the load.
+    #[inline(never)]
+    pub fn note_read_ahead(&mut self, space: u32, address: u32, value: u8, pc: u32) -> bool {
+        let hit = self.read_break_ranges.iter().any(|r| r.space == space && address >= r.start && address <= r.end);
+        if hit {
+            self.reads_log.push(Read { space, address, value: value as u32, pc, kind: range::READ_BREAK });
+        }
+        hit
+    }
+
     /// The storing instruction's address, known once its step has set it, written into what that step logged.
     #[inline(always)]
     pub fn stamp(&mut self, from: usize, pc: u32) {
@@ -332,14 +385,18 @@ impl Hooks {
         self.breakpoints = pairs.chunks_exact(2).map(|p| (p[0], p[1])).collect();
     }
 
-    /// Store ranges as the host sends them, triples of space, first and last offset; `kind` 0 watches, 1 data breakpoints.
-    pub fn set_ranges(&mut self, kind: u32, triples: &[u32]) {
-        let ranges = triples.chunks_exact(3).map(|t| Range { space: t[0], start: t[1], end: t[2] }).collect();
-        if kind == 0 {
-            self.watch_ranges = ranges;
-        } else {
-            self.break_ranges = ranges;
-        }
+    /// Ranges as the host sends them, triples of space, first and last offset, of a `range::` kind; false, and nothing
+    /// changed, for a kind it does not know.
+    pub fn set_ranges(&mut self, kind: u32, triples: &[u32]) -> bool {
+        let slot = match kind {
+            range::WATCH => &mut self.watch_ranges,
+            range::BREAK => &mut self.break_ranges,
+            range::READ_WATCH => &mut self.read_watch_ranges,
+            range::READ_BREAK => &mut self.read_break_ranges,
+            _ => return false,
+        };
+        *slot = triples.chunks_exact(3).map(|t| Range { space: t[0], start: t[1], end: t[2] }).collect();
+        true
     }
 
     /// `emusen_native_debug_counters`: the depth, the unmatched returns, then a core's own.
@@ -399,6 +456,10 @@ pub trait Observer {
     #[inline(always)]
     fn wrote(&mut self, _space: u32, _address: u32, _value: u8, _pc: u32) {}
 
+    /// One byte of a load, after it has been read (since 1.2).
+    #[inline(always)]
+    fn read(&mut self, _space: u32, _address: u32, _value: u8, _pc: u32) {}
+
     /// A call, an interrupt or an exception taken, with `kind::` kinds.
     #[inline(always)]
     fn called(&mut self, _source: u32, _target: u32, _kind: u32) {}
@@ -430,6 +491,13 @@ impl Observer for Hooks {
     fn wrote(&mut self, space: u32, address: u32, value: u8, pc: u32) {
         if self.writes {
             self.note_write(space, address, value, pc);
+        }
+    }
+
+    #[inline(always)]
+    fn read(&mut self, space: u32, address: u32, value: u8, pc: u32) {
+        if self.reads {
+            self.note_read(space, address, value, pc);
         }
     }
 
@@ -566,6 +634,36 @@ mod tests {
         drain(&mut h.writes_log, &mut out, |w: &Write| [w.space, w.address, w.value, w.pc]);
         assert!(h.writes_log.is_empty());
         assert_eq!(out[4..], [5, 0x20, 9, 0x8123]);
+    }
+
+    #[test]
+    fn a_kind_the_hooks_do_not_know_changes_no_range() {
+        let mut h = Hooks::new(&[16]);
+        h.set_ranges(1, &[5, 0x20, 0x20]);
+        h.set_ranges(9, &[3, 0, 0xFFFF]);
+        assert_eq!(h.break_ranges, vec![Range { space: 5, start: 0x20, end: 0x20 }]);
+        assert!(h.watch_ranges.is_empty());
+    }
+
+    #[test]
+    fn a_read_is_logged_after_it_reads_and_a_read_ahead_stops_only_in_a_break_range() {
+        let mut h = Hooks::new(&[16]);
+        assert!(h.set_ranges(range::READ_WATCH, &[3, 0x10, 0x13]) && h.set_ranges(range::READ_BREAK, &[5, 0x20, 0x20]));
+        Observer::read(&mut h, 3, 0x10, 1, 0x100);
+        assert!(h.reads_log.is_empty(), "nothing while READS is off");
+        h.configure(flag::READS, i32::MIN, -1);
+        assert!(h.armed());
+        Observer::read(&mut h, 3, 0x10, 1, 0x100);
+        Observer::read(&mut h, 3, 0x14, 1, 0x100);
+        Observer::read(&mut h, 5, 0x20, 1, 0x100);
+        assert!(!h.note_read_ahead(3, 0x10, 2, 0x104), "a watch is not a breakpoint");
+        assert!(h.note_read_ahead(5, 0x20, 9, 0x108));
+        assert_eq!(h.reads_log, vec![Read { space: 3, address: 0x10, value: 1, pc: 0x100, kind: range::READ_WATCH }, Read { space: 5, address: 0x20, value: 9, pc: 0x108, kind: range::READ_BREAK }]);
+        assert!(h.writes_log.is_empty() && !h.data_pending, "reads touch nothing of the stores'");
+        let h2 = Hooks { capacity: 2, ..h.clone() };
+        let mut h2 = h2;
+        assert_eq!(h2.stop_before(0), stop::RING, "a full read log stops the frame");
+        assert_eq!(Unobserved.before(0, 0), stop::FRAME);
     }
 
     #[test]

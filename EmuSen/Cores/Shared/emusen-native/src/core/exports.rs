@@ -696,8 +696,8 @@ pub unsafe fn debug_set_breakpoints<T: Core>(machine: *mut Machine, processor: u
 
 pub unsafe fn debug_set_ranges<T: Core>(machine: *mut Machine, which: u32, triples: *const u32, count: usize) -> i32 {
     hooks::<T>(machine).map_or_else(|e| e, |h| {
-        h.set_ranges(which, unsafe { slice(triples, 3 * count) });
-        0
+        let known = which <= debug::range::BREAK || (T::CAPABILITIES & caps::DEBUG_READS != 0 && which <= debug::range::READ_BREAK);
+        if known && h.set_ranges(which, unsafe { slice(triples, 3 * count) }) { 0 } else { status::NOT_SUPPORTED }
     })
 }
 
@@ -721,6 +721,10 @@ pub unsafe fn debug_run_frame<T: Core>(machine: *mut Machine, bits: u32, process
 
 pub unsafe fn debug_writes<T: Core>(machine: *mut Machine, out: *mut u32, len: usize) -> i64 {
     hooks::<T>(machine).map_or_else(|e| e as i64, |h| debug::drain(&mut h.writes_log, unsafe { slice_mut(out, len) }, |w: &debug::Write| [w.space, w.address, w.value, w.pc]) as i64)
+}
+
+pub unsafe fn debug_reads<T: Core>(machine: *mut Machine, out: *mut u32, len: usize) -> i64 {
+    hooks::<T>(machine).map_or_else(|e| e as i64, |h| debug::drain(&mut h.reads_log, unsafe { slice_mut(out, len) }, |r: &debug::Read| [r.space, r.address, r.value, r.pc, r.kind]) as i64)
 }
 
 pub unsafe fn debug_calls<T: Core>(machine: *mut Machine, out: *mut u32, len: usize) -> i64 {

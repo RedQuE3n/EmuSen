@@ -171,7 +171,7 @@ fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(cr
 pub const DRIVE: u32 = 0;
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::MEDIA;
+    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::DEBUG_READS | caps::MEDIA;
 
     fn info() -> Info {
         Info {
@@ -273,8 +273,8 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: self.height(), max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: self.host_ports().into_iter().map(|(p, kind)| Port { port: p, controller: kind.map(Into::into) }).collect(),
-            spaces: std::iter::once(Space { read_only: true, reports_stores: true, view: true, ..Space::new(R3000BUS_ID, "R3000BUS") })
-                .chain(SPACES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, reports_stores: id == RAM_ID || id == SCRATCH_ID, ..Space::new(id, name) }))
+            spaces: std::iter::once(Space { read_only: true, reports_stores: true, reports_loads: true, view: true, ..Space::new(R3000BUS_ID, "R3000BUS") })
+                .chain(SPACES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, reports_stores: id == RAM_ID || id == SCRATCH_ID, reports_loads: id == RAM_ID || id == SCRATCH_ID, ..Space::new(id, name) }))
                 .collect(),
             processors: vec![
                 Processor { id: R3000, name: "R3000".into(), pc_bits: 32, registers: registers(&blackmoon_r3000::DEBUG_REGISTERS), code_space: Some(R3000BUS_ID) },
@@ -503,7 +503,7 @@ impl Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; axes, debug, debug_stack, debug_registers, debug_disassemble, media);
+emusen_native::core_exports!(Machine; axes, debug, debug_stack, debug_registers, debug_disassemble, debug_reads, media);
 
 #[cfg(test)]
 mod tests {

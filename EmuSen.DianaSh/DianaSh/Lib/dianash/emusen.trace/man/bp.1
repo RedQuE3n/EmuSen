@@ -73,6 +73,15 @@ DESCRIPTION
     through a computed pointer that no static scan can resolve - the way to
     find out who consumes a flag rather than who sets it.
 
+    On a core of the core ABI that claims DEBUG_READS (the PlayStation's
+    Diamond is the first), the halt lands IN FRONT of the loading
+    instruction instead, nothing of it run: the core sees the load coming,
+    so 'regs' shows the base register the address was made from and the
+    destination before it is written. A value given is compared with the
+    byte the space holds there just before the load. Resuming runs the
+    load. On a core of the ABI that does not claim it, 'bp read' is
+    accepted and never fires - see EmuSen_CoreAPI.md section 6.14.1.
+
     'bp on'/'bp off' toggle one breakpoint without losing its address,
     condition or hit count - the difference between silencing a breakpoint
     for one experiment and having to retype it afterwards.

@@ -219,6 +219,8 @@ pub struct Space {
     pub read_only: bool,
     pub side_effects: bool,
     pub reports_stores: bool,
+    /// Since 1.2, with `DEBUG_READS`: the space's loads are reported to the read ranges.
+    pub reports_loads: bool,
     pub cheats: bool,
     /// A read-only window onto memory other spaces hold, as a processor's bus is: it holds nothing of its own, so a host
     /// that copies every memory leaves it out (EmuSen_CoreAPI.md §29).
@@ -227,7 +229,7 @@ pub struct Space {
 
 impl Space {
     pub fn new(id: u32, name: &str) -> Space {
-        Space { id, name: name.to_owned(), read_only: false, side_effects: false, reports_stores: false, cheats: false, view: false }
+        Space { id, name: name.to_owned(), read_only: false, side_effects: false, reports_stores: false, reports_loads: false, cheats: false, view: false }
     }
 }
 
@@ -491,7 +493,7 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
     j.end_array();
     j.key("spaces").begin_array();
     for s in &m.spaces {
-        let flags: Vec<&str> = [(s.read_only, "read_only"), (s.side_effects, "side_effects"), (s.reports_stores, "reports_stores"), (s.cheats, "cheats"), (s.view, "view")]
+        let flags: Vec<&str> = [(s.read_only, "read_only"), (s.side_effects, "side_effects"), (s.reports_stores, "reports_stores"), (s.reports_loads, "reports_loads"), (s.cheats, "cheats"), (s.view, "view")]
             .iter()
             .filter(|f| f.0)
             .map(|f| f.1)

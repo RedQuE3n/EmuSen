@@ -239,13 +239,15 @@ pub const EXPORTING: u64 = caps::RESET
     | caps::DEBUG_STACK
     | caps::DEBUG_REGISTERS
     | caps::DEBUG_DISASSEMBLE
-    | caps::MEDIA;
+    | caps::MEDIA
+    | caps::DEBUG_READS;
 
 /// `core_exports!`'s compile-time check: the groups named are exactly the claimed bits that have exports.
 #[doc(hidden)]
 pub const fn check_groups<T: Core>(named: u64) {
     assert!(T::CAPABILITIES & EXPORTING == named, "the optional groups named and CAPABILITIES disagree");
     assert!(T::CAPABILITIES & caps::UNASSIGNED == 0, "CAPABILITIES claims a bit no minor has assigned");
+    assert!(T::CAPABILITIES & caps::DEBUG_READS == 0 || T::CAPABILITIES & caps::DEBUG != 0, "DEBUG_READS is claimed without DEBUG");
 }
 
 /// The capability bit of an optional group.
@@ -267,6 +269,7 @@ macro_rules! __core_capability {
     (debug_registers) => { $crate::core::caps::DEBUG_REGISTERS };
     (debug_disassemble) => { $crate::core::caps::DEBUG_DISASSEMBLE };
     (media) => { $crate::core::caps::MEDIA };
+    (debug_reads) => { $crate::core::caps::DEBUG_READS };
 }
 
 /// One export: the C signature, forwarding to the generic body of the same name in `core::exports`.
@@ -331,6 +334,9 @@ macro_rules! __core_optional {
     ($t:ty, media) => {
         $crate::__core_export!($t, emusen_core_media_lid => media_lid(machine: *mut $crate::core::sys::Machine, drive: u32, open: u32) -> i32);
         $crate::__core_export!($t, emusen_core_media_insert => media_insert(machine: *mut $crate::core::sys::Machine, drive: u32, media: *const $crate::core::sys::Media) -> i32);
+    };
+    ($t:ty, debug_reads) => {
+        $crate::__core_export!($t, emusen_core_debug_reads => debug_reads(machine: *mut $crate::core::sys::Machine, out: *mut u32, len: usize) -> i64);
     };
     ($t:ty, debug) => {
         $crate::__core_export!($t, emusen_core_debug_set => debug_set(machine: *mut $crate::core::sys::Machine, flags: u32, depth_target: i32, depth_guard: i32) -> i32);

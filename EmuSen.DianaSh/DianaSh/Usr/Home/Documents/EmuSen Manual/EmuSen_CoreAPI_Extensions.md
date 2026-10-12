@@ -40,7 +40,8 @@ Of the nine gaps, **five need the core ABI**, each through a kind of addition th
 | 10 | **Device kinds; streaming reads** | later | **deferred**, with the shape that would fit recorded | none now |
 
 Read §1 for the one mechanism the five ABI changes share, §2 before §3 and §8, which both build on it, and §12 for the
-questions.
+questions. §13, added 2026-10-11, is a tenth item of a different origin, the debugger's: read watches and read data
+breakpoints as minor 1.2, decided and built that day with Diamond as the first core to claim them.
 
 ---
 
@@ -896,3 +897,121 @@ Each with a recommendation.
     lands with the core that tests it, and nothing enters the baseline unexercised.
 14. **Q14, device kinds.** *Recommended:* none now; adapters such as Diamond's multitap as port settings, as the
     Genesis's are; pointer devices taken up when a gate needs one (§10.1).
+
+---
+
+## 13. Read watches and read data breakpoints (1.2), decided 2026-10-11
+
+*Decided 2026-10-11: the tester approved the extension `Diamond_Debugger.md` §5.1 proposed, and it was built the same
+day with Diamond as its first user. This section is its specification and its record; the normative text it adds to
+the core ABI is `EmuSen_CoreAPI.md` §6.14.1, and the header's lines carry `@since 1.2`. Marks as above; [M] here is
+measured or run on 2026-10-11.*
+
+### 13.1 What existed
+
+- **v1.0 watched stores only.** `debug_set_ranges` took kind 0 (watches) and kind 1 (data breakpoints), both over
+  stores (`emusen_core.h`, `EmuSen_NativeCores.md` §3.14) [R]; the debug flags had `WRITES` and no counterpart for
+  loads; the logs had no read log.
+- **The host skipped what it could not send.** `CoreDebugBridge.PushTables` left out every watch of
+  `WatchKind.Read` and every data breakpoint `OnRead` [M], so `watch add … read` and `bp read …` on a v1 core were
+  accepted by DianaSh and then saw nothing.
+- **The shared observer had no load.** `emusen_native::debug::Observer` reported a step's boundary, each stored byte,
+  calls and returns; a CPU crate had nowhere to report a load [M].
+- **A defect of 1.0's crate, shown and fixed here.** `Hooks::set_ranges` treated every kind but 0 as the data
+  breakpoints, so a kind 2 sent to a 1.0 core would have replaced its data breakpoints, against §4.2's rule that an
+  unknown value of an open enumeration is refused (`EmuSen_CoreAPI.md` §4.2). Shown by
+  `a_kind_the_hooks_do_not_know_changes_no_range` failing on `WiseMan` at `29c1afb9` (kind 9 replaced the data
+  breakpoints) and passing after the fix [M]. No host had ever sent a kind above 1, so nothing a conforming peer
+  could observe changed; the pre-stable `emusen_native_debug_set_ranges` keeps its two kinds exactly as before.
+
+### 13.2 The forms weighed
+
+As `Diamond_Debugger.md` §5.1 weighed them [C, decided]: **an extension** of the debug surface, since a read watch is
+one more of the debugger's tables and not a second job for any component; no module form exists, because loads are
+observed inside the core and cross the core boundary only through `emusen_core.h` (§1.1). A core's own extension
+export would have served Diamond alone and been deprecated the day a second core added reads (§1.1's second point).
+
+### 13.3 The surface change
+
+```c
+#define EMUSEN_CAP_DEBUG_READS       (1ull << 19)  /* @since 1.2, with DEBUG: emusen_core_debug_reads, range kinds 2 and 3 */
+#define EMUSEN_DEBUG_READS       32u   /* debug_set: loads reported into the read ranges */
+#define EMUSEN_RANGE_WATCH       0u    /* the two kinds of 1.0, named */
+#define EMUSEN_RANGE_BREAK       1u
+#define EMUSEN_RANGE_READ_WATCH  2u    /* loads logged after they read */
+#define EMUSEN_RANGE_READ_BREAK  3u    /* a stop in front of the load, nothing of it run */
+#define EMUSEN_STOP_READ         64u   /* the next instruction's load reads a byte in a READ_BREAK range */
+
+/* The read log as (space, address, value, pc, kind) records, kind the range kind that logged the entry. */
+int64_t emusen_core_debug_reads(emusen_machine *machine, uint32_t *out, size_t len);
+```
+
+and one value of a descriptor's open string, **`reports_loads`** in machine info's `spaces[].flags`: the spaces whose
+loads reach the read ranges, as `reports_stores` names those whose stores reach the store ranges.
+
+- **The log's layout.** Five 32-bit words an entry: the space's id, the address within it, the value, the loading
+  instruction's address, and the range kind that logged it. Kind 2 (`READ_WATCH`) is a byte a load read, logged after
+  the read, with the value read. Kind 3 (`READ_BREAK`) is a byte a load is about to read, logged in front of it, with
+  the value `space_read` gives at that address then: for a memory that is the value the load will read unless a DMA
+  lands between; for a bus view it is what the view shows, which may differ from a device's answer. A byte covered by
+  both kinds is logged twice, once ahead and once read. The log drains as the other logs do (copied and forgotten only
+  when it fits, `RING` when full).
+- **The flag.** `READS` gates both read kinds, as `WRITES` gates both store kinds.
+- **The stop.** A read data breakpoint stops the frame **in front of the loading instruction, nothing of it run**, with
+  `STOP_READ`, as a breakpoint stops; continued with `RUN_UNCHECKED`, the instruction runs unasked and its load is
+  made. This differs from a store's data breakpoint, which can stop only once the store has run (`STOP_DATA`, in
+  front of the next instruction), and it is why the stop has a bit of its own.
+- **The bit.** `DEBUG_READS` is claimed only with `DEBUG` (`check_groups` refuses the build otherwise). A core
+  without it answers `EMUSEN_NOT_SUPPORTED` to kinds 2 and 3, and every core to any kind above 3. A host sends kinds 2
+  and 3, and sets `READS`, only to a core that claims the bit, since a core built on 1.0's crate would have taken kind
+  2 for data breakpoints (§13.1).
+- **Bit 19, minor 2.** Bit 18 and minor 1 are the disc change's (`MEDIA`, §3), built on its own branch at Diamond's
+  stage 11. Whichever of the two reaches `WiseMan` second is renumbered to follow the other: the bit stays 19
+  either way, and only the minor and the `@since` tags move.
+
+### 13.4 Older and newer peers
+
+- **A newer host and an older core**, or any core without the bit: the host pushes no kind 2 or 3 and does not set
+  `READS`; `watch add … read` and `bp read …` see nothing, as before 1.2, and a `both` watch sees the stores.
+- **An older host and a core with the bit**: the host never sets `READS`, never sends kinds 2 or 3 and never calls
+  `debug_reads`; the core's read ranges stay empty and its observed frame is 1.0's. The extension is safe never to be
+  used (`EmuSen_CoreAPI.md` §4.6).
+- **The core's cost when unused.** A processor crate reports loads through `Observer::read`, whose default is empty,
+  so a plain frame compiled with `Unobserved` contains no trace of it; Diamond measures it (`Diamond_Debugger.md` §9.5).
+
+### 13.5 The kit and the host
+
+- **The kit.** C2 checks the bit against the export, as for every optional export (`EXPORTS`). C15, where `DEBUG_READS`
+  is claimed, arms `READS` and both read kinds over a space no core has beside the store kinds, and requires the
+  plain run's digests; and on every core claiming `DEBUG` it requires kinds 2 and 3 to answer 0 with the bit and
+  `NOT_SUPPORTED` without it, and kind 4 `NOT_SUPPORTED` always.
+- **The host** (`CoreDebugBridge`): read and both watches over spaces flagged `reports_loads` become kind 2 ranges, and
+  `OnRead` data breakpoints kind 3; drained, a kind 2 entry goes to `WatchRegistry.RecordRead` with its value and the
+  loading instruction as context, a kind 3 entry to each `BreakpointRegistry.NoteRead`, whose value test, condition and
+  log run as they do for a C# core's read; the registry then halts the host at the load. DianaSh needed no change: its
+  `watch` and `bp` commands already took `read` and `both`. Mistress's debugger window lists no watch kinds, so it
+  needed none either.
+- **What a C# core's read breakpoint does differently.** A C# core notes a read as it happens and halts after the
+  instruction (`man bp`); a v1 core claiming `DEBUG_READS` halts in front of it. The registry is the same and so is
+  the halt message; the place differs by what each loop can do, and `man bp` says so.
+
+### 13.6 Cost, and what it breaks
+
+Nine baseline lines (the bit, the flag, four kinds, the stop, the export's two facts) and one string value; the
+`Hooks` fields, `note_read`, `note_read_ahead` and `Observer::read` in `emusen-native`; the export and its group in
+`core_exports!`; the C# table entry and the bridge's push and drain; the kit's checks. Nothing of v1.0 changes for a
+conforming peer. The registration-equivalence golden (`EmuSen_CoreAPI.md` §25) is unchanged except for Diamond, the
+one core that claims the bit (§13.7).
+
+### 13.7 What was built and measured
+
+The record is `Diamond_Debugger.md` §9 for Diamond and its numbers, and `BlackMoon_R3000.md` §12 for the processor's
+two additions. In brief [M]: the header and the baseline (`emusen-core-abi-check`: 392 facts agree on 4 triples, its
+4 tests pass), `emusen-native`'s 62 tests, the processor's 33 (the suite's 55,000 cases unchanged), Diamond's 147 and
+57 program tests, the kit's 5 and 15 (the 15 pass run one at a time; run in parallel, one seeded-fault test failed in
+each of two runs, a different one each time, and passed alone, a race among the tests and not this change), and WiseMan's 324 debugger, ABI and DianaSh golden tests across the v1 cores all pass;
+C15 with the read tables armed gives the plain run's digests on Diamond. Because the minor itself now moves, the check
+treats `EMUSEN_CORE_ABI_MINOR` and `EMUSEN_CORE_ABI_VERSION` as the header's revision, which only goes up, written as
+the disc change's branch wrote it so that the two merge as one. The baseline also gained `json info.systems[].development`,
+a field `info.schema.json` has had since 2026-10-06 that no `--emit-baseline` had recorded; it enters at whichever
+minor first records it.

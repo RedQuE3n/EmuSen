@@ -46,6 +46,10 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   plan's other levers, the skipper's proof, window, skip and verifier with the loop forms of `programs/idle.s`, the
   decoded-instruction cache's first tier, the mutants, the desktop, the quota and the handheld on battery before and
   after, the levers not built and why, the inexact settings and the shipped link proposed, and P2 and P12 retired.
+  Its second pass, the same day (§11 to §18): the base re-recorded on two trees, the profile that found the GPU a third
+  of the slowest games and the step's cost in its shape more than its boundary, runs of steps with the boundary held and
+  the common instructions on a lean path, the rasteriser by rows, their verifier, tests and mutants, the desktop and the
+  quota, the handheld's base on battery with the levers' run there owed, and the frontend's share: the handheld's slow launches ran at the Slow Motion speed.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

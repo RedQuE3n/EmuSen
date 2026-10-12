@@ -21,6 +21,9 @@ struct Rig {
     /// Addresses from here up meet no device, and the access that just met none.
     absent: u32,
     faulted: bool,
+    /// The clock at which a run must end, and the clock's bit that drives the interrupt line when it is not held.
+    until: u64,
+    line_bit: Option<u32>,
 }
 
 fn at(address: u32) -> usize {
@@ -29,7 +32,7 @@ fn at(address: u32) -> usize {
 
 impl Rig {
     fn new() -> Rig {
-        Rig { ram: vec![0; RAM], clock: 0, idled: 0, line: false, commands: Vec::new(), cop2: [0; 32], isolated: Vec::new(), writes: Vec::new(), absent: u32::MAX, faulted: false }
+        Rig { ram: vec![0; RAM], clock: 0, idled: 0, line: false, commands: Vec::new(), cop2: [0; 32], isolated: Vec::new(), writes: Vec::new(), absent: u32::MAX, faulted: false, until: u64::MAX, line_bit: None }
     }
 
     fn word(&self, address: u32) -> u32 {
@@ -85,7 +88,10 @@ impl Bus for Rig {
         self.clock
     }
     fn interrupt(&mut self) -> bool {
-        self.line
+        self.line || self.line_bit.is_some_and(|b| self.clock >> b & 1 != 0)
+    }
+    fn running(&mut self) -> bool {
+        self.clock < self.until
     }
     fn cop2_data(&mut self, register: u8) -> u32 {
         self.cop2[register as usize]
@@ -570,4 +576,189 @@ fn every_load_reports_the_bytes_it_read_and_load_ahead_names_them_first() {
     assert_eq!((checked, unknowable), (128, 22), "every load that would reach no device is a case only the read can tell");
     let (cpu, _) = machine("addiu t0, t0, 4");
     assert_eq!(cpu.load_ahead(0x2508_0004), None, "no load");
+}
+
+// --- Runs (BlackMoon_R3000.md §13) ---
+
+/// What `R3000::run` promises, made from `step`: steps until one is not an instruction, the limit, or the bus's no.
+fn stepped(cpu: &mut R3000, rig: &mut Rig, limit: u32) -> (u32, Step) {
+    let mut n = 0;
+    loop {
+        let s = cpu.step(rig);
+        n += 1;
+        if s != Step::Instruction || n >= limit || !rig.running() {
+            return (n, s);
+        }
+    }
+}
+
+/// A handler at each of the four vectors that returns past the instruction: `mfc0 k0, EPC`, `addiu k0, k0, 4`,
+/// `jr k0`, `rfe`.
+fn handlers(rig: &mut Rig) {
+    for vector in [0x8000_0080, 0x8000_0040, 0xBFC0_0180, 0xBFC0_0140] {
+        rig.program(vector, "mfc0 k0, EPC\naddiu k0, k0, 4\njr k0\nrfe");
+    }
+}
+
+#[test]
+fn a_bus_that_does_not_say_makes_a_run_one_step() {
+    let mut bus = crate::singlestep::FlatBus::new(Vec::new());
+    let mut cpu = R3000::new();
+    cpu.regs.pc = ORIGIN;
+    assert_eq!(cpu.run(&mut bus, 10), (1, Step::Instruction));
+    assert_eq!(cpu.regs.pc, ORIGIN + 4);
+}
+
+#[test]
+fn a_run_ends_at_its_limit_at_the_buss_no_and_at_an_exception() {
+    let source = "addiu t0, t0, 1\naddiu t0, t0, 1\naddiu t0, t0, 1\naddiu t0, t0, 1\naddiu t0, t0, 1\nsyscall\naddiu t0, t0, 1";
+    let (mut cpu, mut rig) = machine(source);
+    assert_eq!((cpu.run(&mut rig, 3), cpu.regs.r[8], cpu.regs.pc), ((3, Step::Instruction), 3, ORIGIN + 12), "the limit");
+    let (mut cpu, mut rig) = machine(source);
+    rig.until = 4;
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.r[8], rig.clock), ((4, Step::Instruction), 4, 4), "the bus's no, after the step that reached it");
+    let (mut cpu, mut rig) = machine(source);
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.r[8], cpu.regs.epc), ((6, Step::Exception(code::SYS as u8)), 5, ORIGIN + 20), "an exception ends it");
+}
+
+/// Inside a run the boundary is the step's: an interrupt whose line rises is taken where the steps take it, one that
+/// MTC0 enables waits one instruction (D-17), a PC break armed by MTC0 breaks, and a jump to an address that cannot be
+/// fetched from faults.
+#[test]
+fn a_runs_boundary_is_the_steps() {
+    let nops = "addiu t0, t0, 1\n".repeat(12);
+    let (mut cpu, mut rig) = machine(&nops);
+    cpu.regs.sr = sr::IEC | 0x0400;
+    rig.line_bit = Some(3);
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.r[8], cpu.regs.epc), ((9, Step::Exception(code::INT as u8)), 8, ORIGIN + 32), "the line rises at the eighth cycle");
+
+    let (mut cpu, mut rig) = machine("addiu t0, zero, 0x401\naddiu t1, t1, 1\nmtc0 t0, SR\naddiu t1, t1, 1\naddiu t1, t1, 1\naddiu t1, t1, 1");
+    rig.line = true;
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.r[9], cpu.regs.epc), ((5, Step::Exception(code::INT as u8)), 2, ORIGIN + 16), "one instruction after the MTC0");
+
+    let (mut cpu, mut rig) = machine("addiu t1, t1, 1\naddiu t1, t1, 1\nmtc0 t0, DCIC\naddiu t1, t1, 1\naddiu t1, t1, 1\naddiu t1, t1, 1");
+    cpu.regs.r[8] = dcic::DE | dcic::PCE | dcic::KD | dcic::TR;
+    (cpu.regs.bpc, cpu.regs.bpcm) = (ORIGIN + 16, u32::MAX);
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.r[9], cpu.regs.pc), ((5, Step::Exception(code::BP as u8)), 3, 0x8000_0040), "the PC break MTC0 armed");
+
+    let (mut cpu, mut rig) = machine("addiu t1, t1, 1\naddiu t1, t1, 1\njr t0\naddiu t1, t1, 1\naddiu t1, t1, 1");
+    cpu.regs.r[8] = ORIGIN + 0x102;
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.r[9], cpu.regs.bad_vaddr), ((5, Step::Exception(code::ADEL as u8)), 3, ORIGIN + 0x102), "a PC that is not a word's");
+
+    let (mut cpu, mut rig) = machine("addiu t1, t1, 1\naddiu t1, t1, 1\njr t0\naddiu t1, t1, 1\naddiu t1, t1, 1");
+    (cpu.regs.pc, cpu.regs.sr, cpu.regs.r[8]) = (ORIGIN & 0x1FFF_FFFF, sr::KUC, ORIGIN + 0x100);
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.r[9], cpu.regs.bad_vaddr), ((5, Step::Exception(code::ADEL as u8)), 3, ORIGIN + 0x100), "kernel space in user mode");
+}
+
+struct Random(u64);
+
+impl Random {
+    fn next(&mut self) -> u32 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 >> 16) as u32
+    }
+    fn below(&mut self, n: u32) -> u32 {
+        self.next() % n
+    }
+    fn of(&mut self, choices: &[u32]) -> u32 {
+        choices[self.below(choices.len() as u32) as usize]
+    }
+}
+
+/// A random instruction over registers 8-15, which hold numbers and addresses, 16-19, which hold values for SR, and
+/// 20-21, which hold values for DCIC: mostly the common instructions, with every other kind among them.
+fn random_word(g: &mut Random) -> u32 {
+    let t = |g: &mut Random| 8 + g.below(8);
+    let (rs, rt, rd, sa, imm) = (t(g), t(g), t(g), g.below(32), g.next() & 0xFFFF);
+    let small = (g.below(32) as i32 - 16) as u32 & 0xFFFF;
+    let r_type = |funct: u32| rs << 21 | rt << 16 | rd << 11 | sa << 6 | funct;
+    let i_type = |op: u32, imm: u32| op << 26 | rs << 21 | rt << 16 | imm;
+    let cop = |z: u32, sub: u32, rt: u32, rd: u32| (0x10 + z) << 26 | sub << 21 | rt << 16 | rd << 11;
+    match g.below(64) {
+        0..=17 => r_type(g.of(&[0x00, 0x02, 0x03, 0x04, 0x06, 0x07, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x2A, 0x2B])),
+        18..=27 => i_type(8 + g.below(8), if g.below(4) == 0 { imm } else { imm & 0xFF }),
+        28..=33 => i_type(4 + g.below(4), small),
+        34 => 1 << 26 | rs << 21 | g.of(&[0, 1, 16, 17]) << 16 | small,
+        35 => g.of(&[2, 3]) << 26 | (ORIGIN >> 2 & 0x03FF_FFFF) + g.below(200),
+        36 => rs << 21 | g.of(&[0, 31, rd]) << 11 | g.of(&[8, 9]),
+        37..=44 => i_type(g.of(&[0x20, 0x21, 0x23, 0x24, 0x25, 0x23, 0x22, 0x26]), g.below(0x200)),
+        45..=50 => i_type(g.of(&[0x28, 0x29, 0x2B, 0x2B, 0x2A, 0x2E]), g.below(0x200)),
+        51..=53 => r_type(g.of(&[0x10, 0x11, 0x12, 0x13, 0x18, 0x19, 0x1A, 0x1B])) & !(31 << 6),
+        54 => cop(0, 0, t(g), g.of(&[3, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 2, 16])),
+        55..=56 => cop(0, 4, 16 + g.below(4), 12),
+        57 => match g.below(4) {
+            0 => cop(0, 4, 20 + g.below(2), 7),
+            1 => cop(0, 4, t(g), g.of(&[13, 3, 5, 9, 11])),
+            2 => 0x4200_0010,
+            _ => cop(0, g.of(&[2, 6]), t(g), 0),
+        },
+        58..=59 => cop(2, g.of(&[0, 2, 4, 6]), t(g), g.below(32)),
+        60 => {
+            let (command, offset) = (g.next() & 0x00FF_FFF0, g.below(0x200));
+            g.of(&[0x4A00_0001 | command, 0x32u32 << 26 | rs << 21 | rt << 16 | offset, 0x3Au32 << 26 | rs << 21 | rt << 16 | offset])
+        }
+        61 => g.of(&[0x0000_000C, 0x0000_000D, 0xFC00_0000, 0x4500_0000 | small, 0x4900_0000 | small]),
+        _ => 0,
+    }
+}
+
+/// Runs against the steps they stand for, over random programs: every kind of instruction, exceptions returned from by
+/// handlers at the four vectors, an interrupt line that rises and falls with the clock, SR written with interrupts on
+/// and off, user mode, the cache isolated and BEV, DCIC armed on a PC and on data, loads and stores that are unaligned
+/// or meet no device; runs of random length and limit. After each run the processor and the bus must be where the
+/// steps left a copy, and the run must have counted the same steps and ended in the same one.
+#[test]
+fn a_run_is_its_steps_on_random_programs() {
+    let mut runs = 0u64;
+    let (mut longest, mut exceptions, mut interrupts) = (0, 0u32, 0u32);
+    for seed in 1..=400u64 {
+        let mut g = Random(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
+        let mut rig = Rig::new();
+        handlers(&mut rig);
+        for i in 0..400 {
+            rig.put(ORIGIN + 4 * i, random_word(&mut g));
+        }
+        for i in 0..0x400 {
+            rig.ram[0x4_0000 + i] = g.next() as u8;
+        }
+        rig.absent = if seed % 5 == 0 { 0x8004_0100 } else { u32::MAX };
+        rig.line_bit = [None, Some(5), Some(7), Some(9)][(seed % 4) as usize];
+        let mut cpu = R3000::new();
+        cpu.regs.pc = ORIGIN;
+        for i in 8..16 {
+            cpu.regs.r[i] = if i < 12 { 0x8004_0000 + g.below(0x80) * 4 + if g.below(8) == 0 { g.below(4) } else { 0 } } else { g.next() };
+        }
+        let interrupts_on = sr::IEC | 0x0400 | sr::CU2;
+        cpu.regs.r[16..22].copy_from_slice(&[interrupts_on, sr::CU2, interrupts_on | sr::BEV, if seed % 7 == 0 { sr::KUC | sr::IEC | 0x0400 } else if seed % 11 == 0 { sr::ISC | sr::CU2 } else { 0x0401 }, dcic::DE | dcic::PCE | dcic::KD | dcic::TR, dcic::DE | dcic::DAE | dcic::DR | dcic::DW | dcic::KD | dcic::TR]);
+        (cpu.regs.bpc, cpu.regs.bpcm, cpu.regs.bda, cpu.regs.bdam) = (ORIGIN + 4 * g.below(400), !0, 0x8004_0000 + 4 * g.below(0x80), !3);
+        cpu.regs.sr = if seed % 3 == 0 { interrupts_on } else { sr::CU2 };
+        let (mut twin, mut twin_rig) = (cpu.clone(), Rig { ram: rig.ram.clone(), ..Rig::new() });
+        (twin_rig.absent, twin_rig.line_bit) = (rig.absent, rig.line_bit);
+        let mut steps = 0;
+        while steps < 4000 {
+            let (limit, until) = (1 + g.below(300), rig.clock + 1 + g.below(400) as u64);
+            (rig.until, twin_rig.until) = (until, until);
+            let ran = cpu.run(&mut rig, limit);
+            let made = stepped(&mut twin, &mut twin_rig, limit);
+            assert_eq!(ran, made, "seed {seed} after {steps} steps: the run's count and end against the steps'");
+            assert_eq!((cpu.regs, cpu.hilo_ready), (twin.regs, twin.hilo_ready), "seed {seed} after {steps} steps");
+            assert!(rig.clock == twin_rig.clock && rig.idled == twin_rig.idled && rig.writes == twin_rig.writes && rig.isolated == twin_rig.isolated && rig.commands == twin_rig.commands && rig.cop2 == twin_rig.cop2, "seed {seed} after {steps} steps: the bus");
+            steps += ran.0;
+            runs += 1;
+            longest = longest.max(ran.0);
+            if let Step::Exception(c) = ran.1 {
+                exceptions |= 1 << c;
+                interrupts += (c == 0) as u32;
+            }
+            (rig.writes.clear(), twin_rig.writes.clear(), rig.isolated.clear(), twin_rig.isolated.clear());
+        }
+        assert!(rig.ram == twin_rig.ram, "seed {seed}: memory");
+    }
+    eprintln!("{runs} runs, the longest {longest} steps; exception codes {exceptions:#b}, {interrupts} interrupts");
+    assert!(longest >= 100 && interrupts > 100, "the programs run and are interrupted: {longest}, {interrupts}");
+    for c in [code::INT, code::ADEL, code::ADES, code::DBE, code::SYS, code::BP, code::RI, code::CPU, code::OV] {
+        assert!(exceptions & 1 << c != 0, "exception {c} was met");
+    }
 }

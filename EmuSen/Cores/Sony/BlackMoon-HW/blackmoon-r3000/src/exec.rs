@@ -5,7 +5,7 @@ use emusen_mips::{Op, Word, decode};
 use emusen_native::debug::kind;
 
 use crate::cop0::{self, cause, code, sr};
-use crate::{BranchDelay, Bus, LoadDelay, Observer, R3000, Size, Step};
+use crate::{BranchDelay, Bus, LoadDelay, Observer, R3000, Registers, Size, Step};
 
 /// The general exception vector, and the debug unit's, with BEV clear and set (psx-spx "Exception Vectors").
 const GENERAL: [u32; 2] = [0x8000_0080, 0xBFC0_0180];
@@ -81,7 +81,51 @@ pub(crate) fn load_ahead(cpu: &R3000, word: u32) -> Option<(u32, u32)> {
     Some((first, count))
 }
 
+/// Whether the boundary after a step that completed an instruction would do nothing but fetch, while SR, Cause, DCIC
+/// and the interrupt line hold: the debug unit off, no MTC0 view pending, and no interrupt it would take with Cause as
+/// it stands; then the line as Cause's IP2 has it, which the boundary before wrote.
+fn quiet(cpu: &R3000) -> Option<bool> {
+    let r = &cpu.regs;
+    let checked = r.dcic & cop0::dcic::DE != 0 || r.interrupt_view.is_some();
+    let taken = r.sr & sr::IEC != 0 && r.sr & r.cause & 0xFF00 != 0;
+    (!checked && !taken).then_some(r.cause & cause::IP2 != 0)
+}
+
+/// `R3000::run`: steps while the bus says the run may go on. After a full step that leaves the boundary quiet, the
+/// steps that follow make only the fetchable check, the fetch and the instruction, until the line moves, the PC cannot
+/// be fetched from, or an instruction that can change SR, Cause or DCIC has run; then a full step again
+/// (BlackMoon_R3000.md §13).
+pub(crate) fn run<B: Bus>(cpu: &mut R3000, b: &mut B, limit: u32) -> (u32, Step) {
+    let mut n = 0;
+    'full: loop {
+        let s = step(cpu, b, &mut crate::Unobserved);
+        n += 1;
+        if s != Step::Instruction || n >= limit || !b.running() {
+            return (n, s);
+        }
+        let Some(line) = quiet(cpu) else { continue };
+        loop {
+            let at = cpu.regs.pc;
+            if b.interrupt() != line || !fetchable(cpu, at) {
+                continue 'full;
+            }
+            let slot = cpu.regs.branch;
+            let pending = cpu.regs.load.register.map(|r| (r as usize, cpu.regs.load.value));
+            let next = if slot.slot && slot.taken { slot.target } else { at.wrapping_add(4) };
+            let (s, moved) = instruction(cpu, b, &mut crate::Unobserved, at, slot, pending, next);
+            n += 1;
+            if s != Step::Instruction || n >= limit || !b.running() {
+                return (n, s);
+            }
+            if moved {
+                continue 'full;
+            }
+        }
+    }
+}
+
 /// One step at the boundary: an interrupt, then the observer's stop, then the instruction (BlackMoon_R3000.md §5).
+#[inline(always)]
 pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -> Step {
     let at = cpu.regs.pc;
     if b.interrupt() {
@@ -121,15 +165,271 @@ pub(crate) fn step<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O) -
         return x.exception(code::BP, DEBUG);
     }
     cpu.regs.interrupt_view = None;
+    instruction(cpu, b, o, at, slot, pending, next).0
+}
+
+/// The fetch and the instruction, once the boundary has let it run: the common instructions by `common`, the rest
+/// by `Run::execute`; and whether the instruction may have changed SR, Cause or DCIC, as only MTC0 and RFE can.
+#[inline(always)]
+fn instruction<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, slot: BranchDelay, pending: Option<(usize, u32)>, next: u32) -> (Step, bool) {
     let (word, op) = b.fetch_decoded(at);
     if b.bus_error() {
-        let mut x = Run { cpu, b, o, at, word: 0, next, slot, pending, result: None, load: None, faulted: false };
-        return x.exception(code::IBE, GENERAL);
+        return (raise(cpu, b, o, at, 0, next, slot, pending, code::IBE, GENERAL), true);
     }
     cpu.regs.branch = BranchDelay::default();
     cpu.regs.load = LoadDelay::default();
+    if let Some(s) = common(cpu, b, o, at, word, op, slot, pending, next) {
+        return (s, false);
+    }
     let mut x = Run { cpu, b, o, at, word, next, slot, pending, result: None, load: None, faulted: false };
-    x.execute(op)
+    (x.execute(op), matches!(op, Op::Mtc(0) | Op::Cop(0)))
+}
+
+/// An exception the instruction at `at` raises, as `Run::exception` enters it.
+#[cold]
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn raise<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, word: u32, next: u32, slot: BranchDelay, pending: Option<(usize, u32)>, code: u32, vectors: [u32; 2]) -> Step {
+    let mut x = Run { cpu, b, o, at, word, next, slot, pending, result: None, load: None, faulted: false };
+    x.exception(code, vectors)
+}
+
+/// The address error or break a data access at `address`, whose bus address is `bus`, raises: the debug unit's
+/// comparison, then alignment and kernel space in user mode, with BadVaddr, then the break (BlackMoon_R3000.md D-20).
+#[inline(always)]
+fn access_fault(r: &mut Registers, address: u32, bus: u32, align: u32, write: bool) -> Option<(u32, [u32; 2])> {
+    let trap = cop0::data_break(r, bus, write);
+    if address & align != 0 || (!cop0::kernel(r) && address >= 0x8000_0000) {
+        r.bad_vaddr = address;
+        return Some((if write { code::ADES } else { code::ADEL }, GENERAL));
+    }
+    trap.then_some((code::BP, DEBUG))
+}
+
+/// A data read through the bus, or from the cache while it is isolated, its bytes told to the observer unless it met
+/// no device; the value and whether it met none.
+#[inline(always)]
+fn bus_read<B: Bus, O: Observer>(cpu: &R3000, b: &mut B, o: &mut O, at: u32, address: u32, size: Size) -> (u32, bool) {
+    if cpu.regs.sr & sr::ISC != 0 {
+        return (b.isolated_read(address, size) & mask(size), false);
+    }
+    let v = b.read(address, size);
+    let faulted = b.bus_error();
+    let v = v & mask(size);
+    if !faulted {
+        for i in 0..size.bytes() {
+            o.read(cpu.space, address.wrapping_add(i), (v >> (8 * i)) as u8, at);
+        }
+    }
+    (v, faulted)
+}
+
+/// A data write through the bus, or to the cache while it is isolated, its bytes told to the observer unless it met no
+/// device; whether it met none.
+#[inline(always)]
+fn bus_write<B: Bus, O: Observer>(cpu: &R3000, b: &mut B, o: &mut O, at: u32, address: u32, size: Size, value: u32) -> bool {
+    if cpu.regs.sr & sr::ISC != 0 {
+        b.isolated_write(address, size, value);
+        return false;
+    }
+    b.write(address, size, value);
+    if b.bus_error() {
+        return true;
+    }
+    for i in 0..size.bytes() {
+        o.wrote(cpu.space, address.wrapping_add(i), (value >> (8 * i)) as u8, at);
+    }
+    false
+}
+
+/// The previous load lands, unless the instruction loads the same register `loads`.
+#[inline(always)]
+fn land(r: &mut Registers, pending: Option<(usize, u32)>, loads: usize) {
+    if let Some((p, y)) = pending
+        && p != loads
+    {
+        r.r[p] = y;
+    }
+}
+
+/// A branch or jump completed: the delay slot's branch recorded, the previous load landed, the link register (0 for
+/// none) given the address after the delay slot.
+#[inline(always)]
+fn jumped(cpu: &mut R3000, pending: Option<(usize, u32)>, next: u32, taken: bool, target: u32, link: usize) -> Step {
+    let r = &mut cpu.regs;
+    r.branch = BranchDelay { slot: true, taken, target };
+    land(r, pending, 32);
+    r.r[link] = next.wrapping_add(4);
+    r.r[0] = 0;
+    r.pc = next;
+    Step::Instruction
+}
+
+/// LB, LBU, LH, LHU and LW: the checks, the read, the value sign-extended or not, landing after the next instruction.
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn load<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, word: u32, next: u32, slot: BranchDelay, pending: Option<(usize, u32)>, size: Size, signed: bool) -> Step {
+    let w = Word(word);
+    let address = cpu.regs.r[w.rs()].wrapping_add(w.simm());
+    if let Some((c, vectors)) = access_fault(&mut cpu.regs, address, address, size.bytes() - 1, false) {
+        return raise(cpu, b, o, at, word, next, slot, pending, c, vectors);
+    }
+    let (x, faulted) = bus_read(cpu, b, o, at, address, size);
+    if faulted {
+        return raise(cpu, b, o, at, word, next, slot, pending, code::DBE, GENERAL);
+    }
+    let x = match (size, signed) {
+        (Size::Byte, true) => x as i8 as u32,
+        (Size::Half, true) => x as i16 as u32,
+        _ => x,
+    };
+    let rt = w.rt();
+    let r = &mut cpu.regs;
+    land(r, pending, rt);
+    r.r[0] = 0;
+    r.load = LoadDelay { register: Some(rt as u8), value: x };
+    r.pc = next;
+    Step::Instruction
+}
+
+/// SB, SH and SW: the checks and the write of rt as it was before the previous load lands.
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn store<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, word: u32, next: u32, slot: BranchDelay, pending: Option<(usize, u32)>, size: Size) -> Step {
+    let w = Word(word);
+    let address = cpu.regs.r[w.rs()].wrapping_add(w.simm());
+    if let Some((c, vectors)) = access_fault(&mut cpu.regs, address, address, size.bytes() - 1, true) {
+        return raise(cpu, b, o, at, word, next, slot, pending, c, vectors);
+    }
+    let v = cpu.regs.r[w.rt()];
+    if bus_write(cpu, b, o, at, address, size, v) {
+        return raise(cpu, b, o, at, word, next, slot, pending, code::DBE, GENERAL);
+    }
+    let r = &mut cpu.regs;
+    land(r, pending, 32);
+    r.r[0] = 0;
+    r.pc = next;
+    Step::Instruction
+}
+
+/// The register an instruction that only computes writes and its value; `None` for any other instruction, and for
+/// ADD, ADDI and SUB when they overflow (IDT R30xx manual, Appendix A).
+#[inline(always)]
+fn computed(op: Op, w: Word, a: u32, b: u32) -> Option<(usize, u32)> {
+    let (rt, rd) = (w.rt(), w.rd());
+    Some(match op {
+        Op::Sll => (rd, b << w.sa()),
+        Op::Srl => (rd, b >> w.sa()),
+        Op::Sra => (rd, ((b as i32) >> w.sa()) as u32),
+        Op::Sllv => (rd, b << (a & 31)),
+        Op::Srlv => (rd, b >> (a & 31)),
+        Op::Srav => (rd, ((b as i32) >> (a & 31)) as u32),
+        Op::Add => (rd, (a as i32).checked_add(b as i32)? as u32),
+        Op::Addu => (rd, a.wrapping_add(b)),
+        Op::Sub => (rd, (a as i32).checked_sub(b as i32)? as u32),
+        Op::Subu => (rd, a.wrapping_sub(b)),
+        Op::And => (rd, a & b),
+        Op::Or => (rd, a | b),
+        Op::Xor => (rd, a ^ b),
+        Op::Nor => (rd, !(a | b)),
+        Op::Slt => (rd, ((a as i32) < (b as i32)) as u32),
+        Op::Sltu => (rd, (a < b) as u32),
+        Op::Addi => (rt, (a as i32).checked_add(w.simm() as i32)? as u32),
+        Op::Addiu => (rt, a.wrapping_add(w.simm())),
+        Op::Slti => (rt, ((a as i32) < (w.simm() as i32)) as u32),
+        Op::Sltiu => (rt, (a < w.simm()) as u32),
+        Op::Andi => (rt, a & w.imm()),
+        Op::Ori => (rt, a | w.imm()),
+        Op::Xori => (rt, a ^ w.imm()),
+        Op::Lui => (rt, w.imm() << 16),
+        _ => return None,
+    })
+}
+
+/// A branch or jump: whether it is taken, its target (a conditional branch's counted from the next instruction's
+/// address) and the register it links, 0 for none.
+#[inline(always)]
+fn transfer(op: Op, w: Word, a: u32, b: u32, next: u32) -> Option<(bool, u32, usize)> {
+    let near = next.wrapping_add(w.simm() << 2);
+    let far = next & 0xF000_0000 | w.target() << 2;
+    Some(match op {
+        Op::Beq => (a == b, near, 0),
+        Op::Bne => (a != b, near, 0),
+        Op::Blez => (a as i32 <= 0, near, 0),
+        Op::Bgtz => (a as i32 > 0, near, 0),
+        Op::Bltz => ((a as i32) < 0, near, 0),
+        Op::Bgez => ((a as i32) >= 0, near, 0),
+        Op::Bltzal => ((a as i32) < 0, near, 31),
+        Op::Bgezal => ((a as i32) >= 0, near, 31),
+        Op::J => (true, far, 0),
+        Op::Jal => (true, far, 31),
+        Op::Jr => (true, a, 0),
+        Op::Jalr => (true, a, w.rd()),
+        _ => return None,
+    })
+}
+
+/// LB, LBU, LH, LHU and LW: the size and whether the value is sign-extended.
+#[inline(always)]
+fn loaded(op: Op) -> Option<(Size, bool)> {
+    Some(match op {
+        Op::Lb => (Size::Byte, true),
+        Op::Lbu => (Size::Byte, false),
+        Op::Lh => (Size::Half, true),
+        Op::Lhu => (Size::Half, false),
+        Op::Lw => (Size::Word, false),
+        _ => return None,
+    })
+}
+
+/// SB, SH and SW: the size.
+#[inline(always)]
+fn stored(op: Op) -> Option<Size> {
+    Some(match op {
+        Op::Sb => Size::Byte,
+        Op::Sh => Size::Half,
+        Op::Sw => Size::Word,
+        _ => return None,
+    })
+}
+
+/// The common instructions, those that compute, branch, jump, load or store a byte, halfword or word, each completed
+/// as `Run::finish` completes one: the previous load lands unless this one loads the same register, then the result,
+/// R0 kept zero, a load left for the next instruction. `None` for any other instruction, before it has done anything.
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn common<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, word: u32, op: Op, slot: BranchDelay, pending: Option<(usize, u32)>, next: u32) -> Option<Step> {
+    let w = Word(word);
+    let (a, v) = (cpu.regs.r[w.rs()], cpu.regs.r[w.rt()]);
+    match computed(op, w, a, v) {
+        Some((i, x)) => {
+            let r = &mut cpu.regs;
+            land(r, pending, 32);
+            r.r[i] = x;
+            r.r[0] = 0;
+            r.pc = next;
+            return Some(Step::Instruction);
+        }
+        None if matches!(op, Op::Add | Op::Addi | Op::Sub) => return Some(raise(cpu, b, o, at, word, next, slot, pending, code::OV, GENERAL)),
+        None => {}
+    }
+    if let Some((taken, target, link)) = transfer(op, w, a, v, next) {
+        match op {
+            Op::Jr if w.rs() == 31 => o.returned(),
+            Op::Jalr if link != 0 => o.called(at, target, kind::CALL),
+            Op::Jal => o.called(at, target, kind::CALL),
+            Op::Bltzal | Op::Bgezal if taken => o.called(at, target, kind::CALL),
+            _ => {}
+        }
+        return Some(jumped(cpu, pending, next, taken, target, link));
+    }
+    if let Some((size, signed)) = loaded(op) {
+        return Some(load(cpu, b, o, at, word, next, slot, pending, size, signed));
+    }
+    if let Some(size) = stored(op) {
+        return Some(store(cpu, b, o, at, word, next, slot, pending, size));
+    }
+    None
 }
 
 impl<B: Bus, O: Observer> Run<'_, B, O> {
@@ -191,62 +491,26 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         Step::Exception(code as u8)
     }
 
-    fn branch(&mut self, taken: bool, target: u32) {
+    /// BC0F, BC0T and their kin: the target counted from the next instruction's address.
+    fn branch_if(&mut self, taken: bool) {
+        let target = self.next.wrapping_add(Word(self.word).simm() << 2);
         self.cpu.regs.branch = BranchDelay { slot: true, taken, target };
     }
 
-    /// A conditional branch: its target is counted from the next instruction's address.
-    fn branch_if(&mut self, taken: bool) {
-        let target = self.next.wrapping_add(Word(self.word).simm() << 2);
-        self.branch(taken, target);
-    }
-
-    fn call(&mut self, target: u32) {
-        self.o.called(self.at, target, kind::CALL);
-    }
-
-    /// The checks of a data access whose bus address is `bus`: the debug unit's comparison, then alignment and kernel
-    /// space in user mode (address error), then the break (BlackMoon_R3000.md D-20).
+    /// The checks of a data access whose bus address is `bus`, as `access_fault` makes them.
     fn check(&mut self, address: u32, bus: u32, align: u32, write: bool) -> Option<Step> {
-        let trap = cop0::data_break(&mut self.cpu.regs, bus, write);
-        if address & align != 0 || (!cop0::kernel(&self.cpu.regs) && address >= 0x8000_0000) {
-            self.cpu.regs.bad_vaddr = address;
-            return Some(self.exception(if write { code::ADES } else { code::ADEL }, GENERAL));
-        }
-        if trap {
-            return Some(self.exception(code::BP, DEBUG));
-        }
-        None
+        let (c, vectors) = access_fault(&mut self.cpu.regs, address, bus, align, write)?;
+        Some(self.exception(c, vectors))
     }
 
     fn read(&mut self, address: u32, size: Size) -> u32 {
-        if self.cpu.regs.sr & sr::ISC != 0 {
-            return self.b.isolated_read(address, size) & mask(size);
-        }
-        let v = self.b.read(address, size);
-        self.faulted |= self.b.bus_error();
-        let v = v & mask(size);
-        if !self.faulted {
-            for i in 0..size.bytes() {
-                self.o.read(self.cpu.space, address.wrapping_add(i), (v >> (8 * i)) as u8, self.at);
-            }
-        }
+        let (v, faulted) = bus_read(self.cpu, self.b, self.o, self.at, address, size);
+        self.faulted |= faulted;
         v
     }
 
     fn write(&mut self, address: u32, size: Size, value: u32) {
-        if self.cpu.regs.sr & sr::ISC != 0 {
-            self.b.isolated_write(address, size, value);
-            return;
-        }
-        self.b.write(address, size, value);
-        if self.b.bus_error() {
-            self.faulted = true;
-            return;
-        }
-        for i in 0..size.bytes() {
-            self.o.wrote(self.cpu.space, address.wrapping_add(i), (value >> (8 * i)) as u8, self.at);
-        }
+        self.faulted |= bus_write(self.cpu, self.b, self.o, self.at, address, size, value);
     }
 
     fn address(&self) -> u32 {
@@ -279,32 +543,6 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         self.cpu.regs.sr & sr::CU0 << z != 0 || (z == 0 && cop0::kernel(&self.cpu.regs))
     }
 
-    /// The load from `address` of `size` bytes, sign-extended or not, into rt after the next instruction.
-    fn load(&mut self, size: Size, signed: bool) -> Step {
-        let address = self.address();
-        if let Some(e) = self.check(address, address, size.bytes() - 1, false) {
-            return e;
-        }
-        let v = self.read(address, size);
-        let v = match (size, signed) {
-            (Size::Byte, true) => v as i8 as u32,
-            (Size::Half, true) => v as i16 as u32,
-            _ => v,
-        };
-        self.load = Some((Word(self.word).rt(), v));
-        self.finish()
-    }
-
-    fn store(&mut self, size: Size) -> Step {
-        let address = self.address();
-        if let Some(e) = self.check(address, address, size.bytes() - 1, true) {
-            return e;
-        }
-        let v = self.r(Word(self.word).rt());
-        self.write(address, size, v);
-        self.finish()
-    }
-
     /// LWL and LWR merge into rt as it will be after the pending load, so the pair needs no delay between them.
     fn merge_base(&self, rt: usize) -> u32 {
         match self.pending {
@@ -318,25 +556,6 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
         let (rs, rt, rd) = (w.rs(), w.rt(), w.rd());
         let (a, b) = (self.r(rs), self.r(rt));
         match op {
-            Op::Sll => self.set(rd, b << w.sa()),
-            Op::Srl => self.set(rd, b >> w.sa()),
-            Op::Sra => self.set(rd, ((b as i32) >> w.sa()) as u32),
-            Op::Sllv => self.set(rd, b << (a & 31)),
-            Op::Srlv => self.set(rd, b >> (a & 31)),
-            Op::Srav => self.set(rd, ((b as i32) >> (a & 31)) as u32),
-            Op::Jr => {
-                if rs == 31 {
-                    self.o.returned();
-                }
-                self.branch(true, a);
-            }
-            Op::Jalr => {
-                self.set(rd, self.next.wrapping_add(4));
-                self.branch(true, a);
-                if rd != 0 {
-                    self.call(a);
-                }
-            }
             Op::Syscall => return self.exception(code::SYS, GENERAL),
             Op::Break => return self.exception(code::BP, GENERAL),
             Op::Mfhi => {
@@ -360,61 +579,6 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 0 => self.divided(u32::MAX, a),
                 d => self.divided(a / d, a % d),
             },
-            Op::Add => match (a as i32).checked_add(b as i32) {
-                Some(v) => self.set(rd, v as u32),
-                None => return self.exception(code::OV, GENERAL),
-            },
-            Op::Addu => self.set(rd, a.wrapping_add(b)),
-            Op::Sub => match (a as i32).checked_sub(b as i32) {
-                Some(v) => self.set(rd, v as u32),
-                None => return self.exception(code::OV, GENERAL),
-            },
-            Op::Subu => self.set(rd, a.wrapping_sub(b)),
-            Op::And => self.set(rd, a & b),
-            Op::Or => self.set(rd, a | b),
-            Op::Xor => self.set(rd, a ^ b),
-            Op::Nor => self.set(rd, !(a | b)),
-            Op::Slt => self.set(rd, ((a as i32) < (b as i32)) as u32),
-            Op::Sltu => self.set(rd, (a < b) as u32),
-            Op::Bltz | Op::Bgez | Op::Bltzal | Op::Bgezal => {
-                let taken = ((a as i32) < 0) != matches!(op, Op::Bgez | Op::Bgezal);
-                self.branch_if(taken);
-                if matches!(op, Op::Bltzal | Op::Bgezal) {
-                    self.set(31, self.next.wrapping_add(4));
-                    if taken {
-                        let target = self.cpu.regs.branch.target;
-                        self.call(target);
-                    }
-                }
-            }
-            Op::J | Op::Jal => {
-                let target = self.next & 0xF000_0000 | w.target() << 2;
-                self.branch(true, target);
-                if op == Op::Jal {
-                    self.set(31, self.next.wrapping_add(4));
-                    self.call(target);
-                }
-            }
-            Op::Beq => self.branch_if(a == b),
-            Op::Bne => self.branch_if(a != b),
-            Op::Blez => self.branch_if(a as i32 <= 0),
-            Op::Bgtz => self.branch_if(a as i32 > 0),
-            Op::Addi => match (a as i32).checked_add(w.simm() as i32) {
-                Some(v) => self.set(rt, v as u32),
-                None => return self.exception(code::OV, GENERAL),
-            },
-            Op::Addiu => self.set(rt, a.wrapping_add(w.simm())),
-            Op::Slti => self.set(rt, ((a as i32) < (w.simm() as i32)) as u32),
-            Op::Sltiu => self.set(rt, (a < w.simm()) as u32),
-            Op::Andi => self.set(rt, a & w.imm()),
-            Op::Ori => self.set(rt, a | w.imm()),
-            Op::Xori => self.set(rt, a ^ w.imm()),
-            Op::Lui => self.set(rt, w.imm() << 16),
-            Op::Lb => return self.load(Size::Byte, true),
-            Op::Lbu => return self.load(Size::Byte, false),
-            Op::Lh => return self.load(Size::Half, true),
-            Op::Lhu => return self.load(Size::Half, false),
-            Op::Lw => return self.load(Size::Word, false),
             Op::Lwl | Op::Lwr => {
                 let address = self.address();
                 let bus = if op == Op::Lwl { address & !3 } else { address };
@@ -432,9 +596,6 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 };
                 self.load = Some((rt, v));
             }
-            Op::Sb => return self.store(Size::Byte),
-            Op::Sh => return self.store(Size::Half),
-            Op::Sw => return self.store(Size::Word),
             Op::Swl | Op::Swr => {
                 let address = self.address();
                 let bus = if op == Op::Swl { address & !3 } else { address };
@@ -481,6 +642,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 }
             }
             Op::Reserved => return self.exception(code::RI, GENERAL),
+            _ => unreachable!("{op:?} is one of the common instructions, which `common` runs"),
         }
         self.finish()
     }

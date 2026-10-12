@@ -79,6 +79,11 @@ pub trait Bus {
     fn bus_error(&mut self) -> bool {
         false
     }
+    /// Whether `R3000::run` may take another step: nothing the core must do between two steps is due. The default
+    /// says no, so a run is one step (BlackMoon_R3000.md §2).
+    fn running(&mut self) -> bool {
+        false
+    }
 }
 
 /// The branch delay: whether the next instruction is a branch's delay slot, whether the branch is taken, and where to.
@@ -169,6 +174,12 @@ impl R3000 {
     /// The step a debugger watches: `observer.before` at the instruction boundary, stores, loads and calls as they happen.
     pub fn step_observed<B: Bus, O: Observer>(&mut self, bus: &mut B, observer: &mut O) -> Step {
         exec::step(self, bus, observer)
+    }
+
+    /// Up to `limit` steps, each as `step` makes it, ending after the first that is not an instruction or after which
+    /// the bus's `running` says no; the steps taken and the last one's result.
+    pub fn run<B: Bus>(&mut self, bus: &mut B, limit: u32) -> (u32, Step) {
+        exec::run(self, bus, limit)
     }
 
     /// For a debugger in front of the instruction `word` at the PC: the first address and the count of the bytes it

@@ -84,7 +84,7 @@ impl TextureCache {
 
     /// The halfword at (x, y) through the cache, and whether it missed: entries are 8 bytes; a 4-bit page indexes them
     /// by x's bits 2-3 and y's bits 0-5, an 8- or 15-bit page by x's bits 2-4 and y's bits 0-4.
-    #[inline]
+    #[inline(always)]
     pub fn read(&mut self, vram: &Vram, x: u32, y: u32, depth: u32) -> (u16, bool) {
         let (x, y) = (x & 1023, y & 511);
         let index = if depth != 0 { (y & 31) << 3 | (x >> 2 & 7) } else { (y & 63) << 2 | (x >> 2 & 3) } as usize;
@@ -92,12 +92,18 @@ impl TextureCache {
         let tag = y << 10 | base;
         let miss = self.tags[index] != tag;
         if miss {
-            self.tags[index] = tag;
-            for k in 0..4 {
-                self.data[index][k] = vram.get(base + k as u32, y);
-            }
+            self.fill(vram, index, base, y);
         }
         (self.data[index][(x & 3) as usize], miss)
+    }
+
+    /// A miss: the entry takes the four halfwords from (`base`, `y`).
+    #[inline(never)]
+    fn fill(&mut self, vram: &Vram, index: usize, base: u32, y: u32) {
+        self.tags[index] = y << 10 | base;
+        for k in 0..4 {
+            self.data[index][k] = vram.get(base + k as u32, y);
+        }
     }
 }
 
@@ -138,7 +144,7 @@ impl ClutCache {
 
 /// The texel at (u, v) with the cache's misses counted: 0000h is transparent, bit 15 the semi-transparency flag; a
 /// page in the second megabyte, which no retail console fits, reads as 0000h ("textures disappearing").
-#[inline]
+#[inline(always)]
 pub fn texel(vram: &Vram, cache: &mut TextureCache, clut: &ClutCache, t: &Texture, u: u8, v: u8, misses: &mut u32) -> u16 {
     let (u, v) = t.window(u, v);
     let (u, v) = (u as u32, v as u32);

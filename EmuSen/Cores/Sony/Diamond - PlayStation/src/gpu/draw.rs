@@ -62,48 +62,73 @@ impl Painter<'_> {
     /// A pixel already inside the area, at eight bits a channel and its texture coordinate.
     #[inline]
     pub fn pixel(&mut self, x: i32, y: i32, rgb: [i32; 3], uv: (u8, u8)) {
-        let p = self.paint;
-        let (xu, yu) = (x as u32, y as u32);
-        let (mut c, flag) = match p.texture {
-            Some(t) => {
-                self.work.texels += 1;
-                let tx = texel(self.vram, self.cache, self.clut, &t, uv.0, uv.1, &mut self.work.misses);
-                if tx == 0 {
-                    return;
-                }
-                let t5 = [(tx & 31) as i32, (tx >> 5 & 31) as i32, (tx >> 10 & 31) as i32];
-                let c = if p.raw {
-                    [t5[0] << 3, t5[1] << 3, t5[2] << 3]
-                } else if p.crop_modulation {
-                    [0, 1, 2].map(|i| ((rgb[i] >> 3) * t5[i]) >> 1)
-                } else {
-                    [0, 1, 2].map(|i| (rgb[i] * t5[i]) >> 4)
-                };
-                (c, tx & 0x8000)
-            }
-            None => (rgb, 0),
-        };
-        if p.dither {
-            let d = DITHER[(y & 3) as usize][(x & 3) as usize];
-            c = c.map(|v| v + d);
-        }
-        let c = c.map(|v| (v.clamp(0, 255) >> 3) as u16);
-        let blended = p.blend.filter(|_| p.texture.is_none() || flag != 0);
-        if blended.is_some() || p.mask.check {
-            self.work.read_writes += 1;
-        } else {
-            self.work.writes += 1;
-        }
-        let old = self.vram.get(xu, yu);
-        if p.mask.check && old & 0x8000 != 0 {
-            return;
-        }
-        let mut out = c[0] | c[1] << 5 | c[2] << 10;
-        if let Some(mode) = blended {
-            out = blend(old, out, mode);
-        }
-        self.vram.set(xu, yu, out | flag | p.mask.set);
+        self.row(y, x, x, |_| (rgb, uv));
     }
+
+    /// A row's pixels from `x1` to `x2`, all inside the area, left to right, each texel fetched and each pixel written
+    /// before the next: `at` gives a pixel's colour at eight bits a channel and its texture coordinate.
+    #[inline(always)]
+    pub fn row(&mut self, y: i32, x1: i32, x2: i32, mut at: impl FnMut(i32) -> ([i32; 3], (u8, u8))) {
+        let p = self.paint;
+        let mut work = Work::default();
+        match p.texture {
+            Some(t) => {
+                for x in x1..x2 + 1 {
+                    let (rgb, uv) = at(x);
+                    work.texels += 1;
+                    let tx = texel(self.vram, self.cache, self.clut, &t, uv.0, uv.1, &mut work.misses);
+                    if tx == 0 {
+                        continue;
+                    }
+                    let t5 = [(tx & 31) as i32, (tx >> 5 & 31) as i32, (tx >> 10 & 31) as i32];
+                    let c = if p.raw {
+                        [t5[0] << 3, t5[1] << 3, t5[2] << 3]
+                    } else if p.crop_modulation {
+                        [0, 1, 2].map(|i| ((rgb[i] >> 3) * t5[i]) >> 1)
+                    } else {
+                        [0, 1, 2].map(|i| (rgb[i] * t5[i]) >> 4)
+                    };
+                    let flag = tx & 0x8000;
+                    put(self.vram, &p, x, y, c, flag, p.blend.filter(|_| flag != 0), &mut work);
+                }
+            }
+            None => {
+                for x in x1..x2 + 1 {
+                    put(self.vram, &p, x, y, at(x).0, 0, p.blend, &mut work);
+                }
+            }
+        }
+        let w = &mut self.work;
+        (w.texels, w.writes, w.read_writes, w.misses) = (w.texels + work.texels, w.writes + work.writes, w.read_writes + work.read_writes, w.misses + work.misses);
+    }
+}
+
+/// A pixel's colour dithered, cut to five bits a channel and written with the texel's flag: blended with the pixel in
+/// VRAM in `blended`'s mode, left alone where the mask is checked and set there; counted as a write or a read and write.
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn put(vram: &mut Vram, p: &Paint, x: i32, y: i32, mut c: [i32; 3], flag: u16, blended: Option<u32>, work: &mut Work) {
+    let (xu, yu) = (x as u32, y as u32);
+    if p.dither {
+        let d = DITHER[(y & 3) as usize][(x & 3) as usize];
+        c = c.map(|v| v + d);
+    }
+    let c = c.map(|v| (v.max(0).min(255) >> 3) as u16);
+    let reads = blended.is_some() || p.mask.check;
+    if reads {
+        work.read_writes += 1;
+    } else {
+        work.writes += 1;
+    }
+    let old = if reads { vram.get(xu, yu) } else { 0 };
+    if p.mask.check && old & 0x8000 != 0 {
+        return;
+    }
+    let mut out = c[0] | c[1] << 5 | c[2] << 10;
+    if let Some(mode) = blended {
+        out = blend(old, out, mode);
+    }
+    vram.set(xu, yu, out | flag | p.mask.set);
 }
 
 /// B the pixel in VRAM, F the new one, each channel at five bits, saturated: B/2+F/2, B+F, B-F, B+F/4.

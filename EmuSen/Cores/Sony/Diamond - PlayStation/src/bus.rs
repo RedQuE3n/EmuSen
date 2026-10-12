@@ -1072,10 +1072,10 @@ impl Board {
 
 impl Board {
     /// A fetch from KUSEG's or KSEG0's RAM or BIOS that hits the I-cache, as `fetch` makes it, and the word decoded at
-    /// its refill (Diamond_Speed.md §5).
+    /// its refill (Diamond_Speed.md §5); bits 30-29 clear are KUSEG's first 512 MiB and KSEG0.
     #[inline(always)]
     fn cached_hit(&mut self, address: u32) -> Option<(u32, Op)> {
-        if address >= 0xA000_0000 || (0x2000_0000..0x8000_0000).contains(&address) || !self.cache.enabled() {
+        if address & 0x6000_0000 != 0 || !self.cache.enabled() {
             return None;
         }
         let p = address & 0x1FFF_FFFF;
@@ -1248,6 +1248,11 @@ impl Bus for Board {
 
     fn bus_error(&mut self) -> bool {
         std::mem::take(&mut self.fault)
+    }
+
+    #[inline(always)]
+    fn running(&mut self) -> bool {
+        self.now < self.next_event
     }
 }
 

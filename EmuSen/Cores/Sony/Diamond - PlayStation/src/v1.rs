@@ -7,7 +7,8 @@ use emusen_native::core::*;
 use crate::bus::BIOS_BYTES;
 use crate::kernel::{self, Kernel};
 use crate::card::CARD_BYTES;
-use crate::machine::{AUDIO_RATE, Config, Gpu, MAX_HEIGHT, MAX_WIDTH, Machine, RAM_ID, SPACES, WIDTH};
+use crate::debugger::{R3000, R3000BUS_ID, R3000BUS_SIZE};
+use crate::machine::{AUDIO_RATE, Config, Gpu, MAX_HEIGHT, MAX_WIDTH, Machine, RAM_ID, SCRATCH_ID, SPACES, WIDTH};
 use crate::media::{Market, Media, Refusal};
 use crate::state::STATE_VERSION;
 
@@ -170,7 +171,7 @@ fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(cr
 pub const DRIVE: u32 = 0;
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY | caps::MEDIA;
+    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::MEDIA;
 
     fn info() -> Info {
         Info {
@@ -272,9 +273,11 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: self.height(), max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: self.host_ports().into_iter().map(|(p, kind)| Port { port: p, controller: kind.map(Into::into) }).collect(),
-            spaces: SPACES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, ..Space::new(id, name) }).collect(),
+            spaces: std::iter::once(Space { read_only: true, reports_stores: true, view: true, ..Space::new(R3000BUS_ID, "R3000BUS") })
+                .chain(SPACES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, reports_stores: id == RAM_ID || id == SCRATCH_ID, ..Space::new(id, name) }))
+                .collect(),
             processors: vec![
-                Processor { id: 0, name: "R3000".into(), pc_bits: 32, registers: registers(&blackmoon_r3000::DEBUG_REGISTERS), code_space: None },
+                Processor { id: R3000, name: "R3000".into(), pc_bits: 32, registers: registers(&blackmoon_r3000::DEBUG_REGISTERS), code_space: Some(R3000BUS_ID) },
                 Processor { id: 1, name: "GTE".into(), pc_bits: 0, registers: registers(&[blackmoon_gte::DATA_REGISTERS, blackmoon_gte::CONTROL_REGISTERS].concat()), code_space: None },
             ],
             battery: (0..2).filter(|&n| self.card_in(n).is_some()).map(|n| Battery { which: CARD_FILES[n], suffix: CARD_SUFFIXES[n].into() }).collect(),
@@ -295,13 +298,50 @@ impl Core for Machine {
 
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
         Machine::advance(self);
-        for (n, &which) in CARD_FILES.iter().enumerate() {
-            if self.card_in(n).is_some_and(|c| c.changed) && !self.card_reported[n] {
-                self.card_reported[n] = true;
-                emit(event::BATTERY, which as i64, 0);
-            }
-        }
+        self.report_cards();
         Ok(())
+    }
+
+    fn debug_hooks(&mut self) -> Option<&mut emusen_native::debug::Hooks> {
+        Some(&mut self.debug.hooks)
+    }
+
+    /// The R3000A's breakpoints are the shared hooks'; the GTE runs no program to stop in.
+    fn debug_breakpoints(&mut self, processor: u32, pairs: &[i32]) -> Result<(), i32> {
+        match processor {
+            R3000 => {
+                self.debug.hooks.set_breakpoints(pairs);
+                Ok(())
+            }
+            _ => Err(status::NOT_SUPPORTED),
+        }
+    }
+
+    fn debug_run_frame(&mut self, flags: u32, _detail: &mut u64) -> Result<u32, i32> {
+        let why = self.run_frame_debug(flags);
+        if why == 0 {
+            self.report_cards();
+        }
+        Ok(why)
+    }
+
+    fn debug_stopped(&self) -> u32 {
+        self.debug.stopped
+    }
+
+    fn debug_pc(&self, processor: u32) -> Option<u64> {
+        Machine::debug_pc(self, processor)
+    }
+
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+        Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
+    }
+
+    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
+        if processor != R3000 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        Machine::debug_disassemble(self, processor, space, address, count).ok_or(status::NO_SUCH_SPACE)
     }
 
     fn set_options(&mut self, flags: u32) {
@@ -359,10 +399,19 @@ impl Core for Machine {
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
+        if space == R3000BUS_ID {
+            return Ok(R3000BUS_SIZE);
+        }
         self.space(space).map(|m| m.len() as i64).ok_or(status::NO_SUCH_SPACE)
     }
 
     fn space_read(&mut self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
+        if space == R3000BUS_ID {
+            for (i, b) in out.iter_mut().enumerate() {
+                *b = self.board.peek(address.wrapping_add(i as u32));
+            }
+            return Ok(());
+        }
         let m = self.space(space).ok_or(status::NO_SUCH_SPACE)?;
         for (i, b) in out.iter_mut().enumerate() {
             *b = m.get(address as usize + i).copied().unwrap_or(0);
@@ -371,6 +420,9 @@ impl Core for Machine {
     }
 
     fn space_write(&mut self, space: u32, address: u32, data: &[u8]) -> Result<(), i32> {
+        if space == R3000BUS_ID {
+            return Err(status::READ_ONLY);
+        }
         if self.space(space).is_none() {
             return Err(status::NO_SUCH_SPACE);
         }
@@ -439,7 +491,19 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; axes, media);
+impl Machine {
+    /// A changed card reported to the host once until it saves it, after each whole frame.
+    fn report_cards(&mut self) {
+        for (n, &which) in CARD_FILES.iter().enumerate() {
+            if self.card_in(n).is_some_and(|c| c.changed) && !self.card_reported[n] {
+                self.card_reported[n] = true;
+                emit(event::BATTERY, which as i64, 0);
+            }
+        }
+    }
+}
+
+emusen_native::core_exports!(Machine; axes, debug, debug_stack, debug_registers, debug_disassemble, media);
 
 #[cfg(test)]
 mod tests {
@@ -457,7 +521,7 @@ mod tests {
         let us = create(&exe(Some("North America"), 64), &[], vec![]).unwrap();
         let info = us.machine_info();
         assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("psx", Some(Region::Ntsc), standard_rate(false)));
-        assert_eq!(info.spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["RAM", "SCRATCH", "VRAM", "SPURAM", "BIOS", "TTY"]);
+        assert_eq!(info.spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["R3000BUS", "RAM", "SCRATCH", "VRAM", "SPURAM", "BIOS", "TTY"]);
         assert_eq!(info.processors.iter().map(|p| (p.name.as_str(), p.registers.len())).collect::<Vec<_>>(), [("R3000", 45), ("GTE", 64)]);
         assert_eq!((info.video.base_width, info.video.base_height, info.video.aspect), (320, 240, (4, 3)));
         assert_eq!(info.ports.iter().map(|p| p.controller.as_deref()).collect::<Vec<_>>(), [Some(DUALSHOCK), Some(DUALSHOCK)]);

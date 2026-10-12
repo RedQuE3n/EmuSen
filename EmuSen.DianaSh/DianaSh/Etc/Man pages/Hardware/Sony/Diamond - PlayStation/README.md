@@ -78,7 +78,9 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   differ, and `firmwarecheck.py`'s FAIL by its default thresholds with Q5; §23, the half-stored card request; §24, three
   defects found in play; and §25, their fixes: a box for the characters the kernel does not carry, asynchronous card
   calls accepted with 0, and the exception path run from the kernel's RAM with the run tool's profile of it before and
-  after, the cost to `timers`, Q6-Q8 and the exposure.
+  after, the cost to `timers`, Q6-Q8 and the exposure; and §27, the stretch of fill behind B(5Bh)'s table entry that
+  Mega Man Legends' pad library stores into and calls: the game's offsets, the form and its cost in cycles, Q9 and Q10,
+  and the game driven into its first ruin.
 - [`Diamond_Pad.md`](Diamond_Pad.md) — SIO0 and the controllers, from 2026-10-11, when a digital pad on port 1 was
   brought forward from stage 6: the registers, a byte on the wire, /ACK and IRQ7, the pad and the slots, amidog's CPX,
   GPU and GTE tests run from their menus and what they showed (three R3000A defects fixed, the CE and second-load items

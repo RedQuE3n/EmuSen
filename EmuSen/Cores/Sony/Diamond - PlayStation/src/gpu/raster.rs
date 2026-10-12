@@ -1,6 +1,6 @@
 //! Which pixels a primitive covers and the colour and texture coordinate at each (Diamond_GPU.md §6): triangles by
 //! their edge functions sampled at whole pixels with the top-left rule, their attributes from the leftmost vertex by
-//! gradients in 12-bit fixed point; rectangles with their texture stepped, or flipped, pixel by pixel; lines stepped along the
+//! gradients in 12-bit fixed point, their rows outward from the middle vertex's; rectangles with their texture stepped, or flipped, pixel by pixel; lines stepped along the
 //! major axis with both ends drawn. Each was fitted to ps1-tests' VRAM pictures.
 
 use super::draw::Painter;
@@ -63,7 +63,8 @@ fn owns(a: (i64, i64), b: (i64, i64)) -> bool {
     dy < 0 || (dy == 0 && dx > 0)
 }
 
-/// The triangle `v`, its attributes from its base vertex: colour when `shaded`, the texture coordinate when `textured`.
+/// The triangle `v`, its attributes from its base vertex: colour when `shaded`, the texture coordinate when `textured`;
+/// its rows from the middle vertex's down, then those above it upward, each left to right (Diamond_Disputes.md D-41).
 pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
     let xs = v.map(|q| q.x);
     let ys = v.map(|q| q.y);
@@ -92,7 +93,11 @@ pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
     let area_rect = p.paint.area;
     let y_from = miny.max(area_rect.y1);
     let y_to = (maxy - 1).min(area_rect.y2);
-    for y in y_from..=y_to {
+    if y_from > y_to {
+        return;
+    }
+    let split = (ys[0] + ys[1] + ys[2] - miny - maxy).clamp(y_from, y_to + 1);
+    for y in (split..=y_to).chain((y_from..split).rev()) {
         let yy = y as i64;
         let (mut lo, mut hi) = (minx as i64, maxx as i64);
         for &((ax, ay), (bx, by), own) in &edges {

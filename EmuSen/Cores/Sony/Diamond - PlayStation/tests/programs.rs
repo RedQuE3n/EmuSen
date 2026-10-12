@@ -1514,3 +1514,105 @@ fn a_triangle_is_charged_by_its_rows() {
     assert!(busy[26] <= 30 && busy[27] <= 50, "one pixel and legs of 8: {:?}", &busy[26..30]);
     assert!(busy[29] < 4129 * 6 / 5, "legs of 128: {}", busy[29]);
 }
+
+// ---- Speed, the second pass: runs (Diamond_Speed.md §12) -----------------------------------------------------------
+
+/// A machine's digests over `frames` plain frames stepped in runs, which must equal those of the same frames stepped one
+/// at a time, with the skipper off and with it on; every `verify`th run checked against its steps as it is made, and
+/// every skip against the interpreter. The machine run with both levers.
+fn runs_give_the_steps_digests(name: &str, frames: usize, verify: u64, make: impl Fn() -> Machine) -> Machine {
+    let mut stepped = make();
+    (stepped.idle.on, stepped.runs.on) = (false, false);
+    let (plain, _) = plain_digests(stepped, frames);
+    let mut run = make();
+    (run.idle.on, run.runs.verify) = (false, verify);
+    let (alone, alone_machine) = plain_digests(run, frames);
+    assert_eq!(alone, plain, "{name}: stepped in runs against stepped one at a time");
+    let mut both = make();
+    (both.idle.verify, both.runs.verify) = (1, verify);
+    let (fast, m) = plain_digests(both, frames);
+    eprintln!("{name}, {frames} frames: {:016X} {:016X} {:016X}; {} runs of {} steps alone, {} of {} beside {} skips", fast[0], fast[1], fast[2], alone_machine.runs.made, alone_machine.runs.steps, m.runs.made, m.runs.steps, m.idle.skips);
+    assert_eq!(fast, plain, "{name}: runs and skips against stepped one at a time");
+    assert!(alone_machine.runs.steps > 2 * alone_machine.runs.made.max(1), "{name}: the frames were stepped in runs");
+    m
+}
+
+/// The project's programs give the digests of their steps when stepped in runs: the loops games wait in, the timers'
+/// figures, the GTE's and the GPU's timing, the SPU's voices, exceptions of every kind and a sector read from a disc.
+#[test]
+fn runs_leave_the_projects_programs_as_their_steps_do() {
+    for (name, source, frames) in [
+        ("idle.s", include_str!("../programs/idle.s"), 40),
+        ("timers.s", include_str!("../programs/timers.s"), 60),
+        ("timer-sync.s", include_str!("../programs/timer-sync.s"), 30),
+        ("gte-loops.s", include_str!("../programs/gte-loops.s"), 10),
+        ("draw-time.s", include_str!("../programs/draw-time.s"), 10),
+        ("spu-voices.s", include_str!("../programs/spu-voices.s"), 20),
+        ("exceptions.s", include_str!("../programs/exceptions.s"), 10),
+        ("gte-fuzz.s", include_str!("../programs/gte-fuzz.s"), 10),
+        ("mdec-timing.s", include_str!("../programs/mdec-timing.s"), 10),
+    ] {
+        runs_give_the_steps_digests(name, frames, 7, || bare(source));
+    }
+    runs_give_the_steps_digests("cd-read.s", 60, 7, || {
+        let mut m = bare(include_str!("../programs/cd-read.s"));
+        m.insert_disc(cd_disc());
+        m
+    });
+}
+
+/// A kernel whose putchar calls are tapped is stepped one instruction at a time, so that a call at the A0h or B0h
+/// entry is met: a kernel image of this test's own, which calls both with a character, gives them to the TTY.
+#[test]
+fn a_tapped_kernels_putchar_calls_are_met_with_runs_on() {
+    let source = "lui t1, 0x03E0\nori t1, t1, 0x0008\nsw t1, 0xA0(zero)\nsw zero, 0xA4(zero)\nsw t1, 0xB0(zero)\nsw zero, 0xB4(zero)\n\
+        addiu t1, zero, 0x3C\naddiu a0, zero, 0x48\naddiu t2, zero, 0xA0\njalr t2\nnop\n\
+        addiu t1, zero, 0x3D\naddiu a0, zero, 0x69\naddiu t2, zero, 0xB0\njalr t2\nnop\nloop: j loop\nnop";
+    let words = emusen_mips::assemble(source, 0xBFC0_0000, &blackmoon_r3000::dialect(None)).expect("assembles");
+    let mut rom = vec![0u8; 0x8_0000];
+    for (i, w) in words.iter().enumerate() {
+        rom[4 * i..4 * i + 4].copy_from_slice(&w.to_le_bytes());
+    }
+    for skipper in [false, true] {
+        let media = Media { kind: diamond::media::Kind::Disc { raw: true }, market: None };
+        let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &[], Some((&rom, Kernel::Player)));
+        m.idle.on = skipper;
+        m.advance();
+        assert_eq!(&m.space(diamond::machine::TTY_ID).unwrap()[..3], b"Hi\0", "the skipper {skipper}");
+        assert_eq!(m.runs.made, 0, "no run was made");
+    }
+}
+
+/// ps1-tests' release on the open kernel, each side-loaded at the shell's entry, stepped in runs and one at a time.
+#[test]
+fn runs_leave_ps1_tests_as_their_steps_do() {
+    let Some(corpus) = records::corpus() else { return };
+    for (path, frames) in [("timers/timers.exe", 120), ("gpu/triangle/triangle.exe", 60), ("gpu/bandwidth/bandwidth.exe", 120), ("spu/test/test.exe", 60), ("mdec/movie/movie-15bit.exe", 60), ("dma/otc-test/otc-test.exe", 60), ("cpu/access-time/access-time.exe", 60), ("gte/test-all/test-all.exe", 60)] {
+        runs_give_the_steps_digests(path, frames, 251, || mdec_program(&corpus, path, 0));
+    }
+}
+
+/// One of the tester's discs on the open kernel, named by `EMUSEN_DIAMOND_DISC`: 600 frames stepped in runs and one at
+/// a time.
+#[test]
+fn runs_leave_a_disc_as_its_steps_do() {
+    let Some(path) = std::env::var_os("EMUSEN_DIAMOND_DISC") else {
+        eprintln!("skipped: EMUSEN_DIAMOND_DISC names no disc");
+        return;
+    };
+    let path = std::path::PathBuf::from(path);
+    let image = std::fs::read(&path).expect("the disc");
+    let mut files = Vec::new();
+    if diamond::medium::is_sheet(&image) {
+        for name in emusen_disc::set::companions(&String::from_utf8_lossy(&image)).expect("a sheet") {
+            files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
+        }
+    }
+    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
+    runs_give_the_steps_digests(&path.file_name().unwrap().to_string_lossy(), 600, 61, || {
+        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(&image, &refs) else { panic!("the disc opens") };
+        let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
+        m.insert_disc(*disc);
+        m
+    });
+}

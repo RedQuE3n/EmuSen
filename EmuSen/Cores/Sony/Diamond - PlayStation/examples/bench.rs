@@ -1,6 +1,7 @@
 //! Times Diamond's frames on the emulation thread and digests what they made (Diamond_Speed.md §2): `bench <image>
-//! [frames] [--from N] [--armed] [--plain] [--verify N] [--times FILE] [--every N]`; `--plain` turns the exact levers off, `--verify N` checks every Nth
-//! skip against the interpreter. The image is a disc (a cue sheet, a CHD, an `.iso` or a
+//! [frames] [--from N] [--armed] [--plain] [--stepped] [--verify N] [--verify-runs N] [--times FILE] [--every N]`;
+//! `--plain` turns the exact levers off and `--stepped` the runs alone, `--verify N` checks every Nth skip against the
+//! interpreter and `--verify-runs N` every Nth run against its steps. The image is a disc (a cue sheet, a CHD, an `.iso` or a
 //! lone `.bin`) or a PS-EXE, run on the open kernel with no firmware; a `.s` source is assembled and run with no kernel.
 //! Prints the mean, median, 95th percentile and worst milliseconds a frame from frame N (default 0), and the digests
 //! of every frame's picture, of the sound and of the final state, each FNV-1a; `--every N` adds the state's digest every
@@ -34,6 +35,8 @@ fn main() {
     let mut m = machine(path);
     m.idle.on = !args.iter().any(|a| a == "--plain");
     m.idle.verify = flag("--verify").map_or(0, |v| v.parse().expect("a count"));
+    m.runs.on = !args.iter().any(|a| a == "--plain" || a == "--stepped");
+    m.runs.verify = flag("--verify-runs").map_or(0, |v| v.parse().expect("a count"));
     if armed {
         use emusen_native::debug::flag;
         m.debug.hooks.configure(flag::CALLS | flag::WRITES | flag::PROFILING | 1 << flag::COVERAGE, i32::MIN, -1);
@@ -78,6 +81,7 @@ fn main() {
         at(1.0),
         state_digest(&m)
     );
+    eprintln!("runs: {} of {} steps, {:.1} a run", m.runs.made, m.runs.steps, m.runs.steps as f64 / m.runs.made.max(1) as f64);
     eprintln!("idle: {} skips, {} turns, {} cycles ({:.1}% of the clock); {} proofs, {} refused, {} windows met an event, {} unequal", m.idle.skips, m.idle.turns, m.idle.cycles, 100.0 * m.idle.cycles as f64 / m.board.now as f64, m.idle.proofs, m.idle.refused, m.idle.dropped, m.idle.unequal);
 }
 

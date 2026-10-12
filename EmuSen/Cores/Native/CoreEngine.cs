@@ -31,6 +31,8 @@ namespace EmuSen.Cores.Native
         private double _lastFrameMs;
         private byte[] _stateBuffer = Array.Empty<byte>();
         private IReadOnlyDictionary<string, string> _notes = new Dictionary<string, string>();
+        private IReadOnlyList<string> _discs = Array.Empty<string>();
+        private long _closeLidAt = -1;
 
         public CoreLibrary Library { get; }
         public CoreInfo Info => Library.Info;
@@ -160,13 +162,25 @@ namespace EmuSen.Cores.Native
             return null;
         }
 
-        // The image, its firmware from the library and its battery files by the runtime's path rule; a second create when machine info names battery files the first could not know.
+        // The discs of the game: an .m3u's, else the one image; each unpacked where it is an archive - see EmuSen_CoreAPI_Extensions.md §2.4, §10.4.
+        public static IReadOnlyList<string> DiscsOf(string path)
+        {
+            string image = Crystal.Media.ArchiveImages.IsArchive(path) ? Crystal.Media.ArchiveImages.Unpack(path, CoreCatalog.IsImageExtension) : path;
+            return Crystal.Media.ImageSets.IsPlaylist(image) ? Crystal.Media.ImageSets.Discs(image).Select(d => Crystal.Media.ArchiveImages.IsArchive(d) ? Crystal.Media.ArchiveImages.Unpack(d, CoreCatalog.IsImageExtension) : d).ToArray() : new[] { image };
+        }
+
+        // An image's companions as create and media_insert take them, numbered from EMUSEN_FILE_MEDIA.
+        private static List<(uint, byte[])> MediaFiles(string image) =>
+            Crystal.Media.ImageSets.FilesFor(image).Select(f => (f.Which, File.ReadAllBytes(f.Path))).ToList();
+
+        // The image, its companions, its firmware from the library and its battery files by the runtime's path rule; a second create when machine info names battery files the first could not know.
         public virtual void LoadRom(string path)
         {
-            byte[] image = File.ReadAllBytes(path);
-            string extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
+            var discs = DiscsOf(path);
+            byte[] image = File.ReadAllBytes(discs[0]);
+            var media = MediaFiles(discs[0]);
             // The battery folder is the system's, as the library files it: a .gbc game's saves are under GBC, not the shelf's GB; a system only discovery runs, its pack's console's.
-            string? systemId = Info.SystemFor(extension)?.Id;
+            string? systemId = CoreCatalog.SystemOfFile(path, Info)?.Id;
             string console = CoreCatalog.DiscoveredConsoleForSystem(systemId) ?? systemId?.ToUpperInvariant() ?? CoreCatalog.ConsoleForRom(path) ?? Info.Id;
             var firmware = new List<(uint, byte[])>();
             // Each file whole by its name and size, else its first split form found, part n as file Which + n - see EmuSen_CoreAPI.md §6.2.
@@ -176,6 +190,7 @@ namespace EmuSen.Cores.Native
                 else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
             }
 
+            firmware.AddRange(media);
             var saves = new List<(uint Which, BatterySave Save)> { (0, BatteryFile(path, console, 0, EmuSen.Galaxia.Library.SaveLibrary.SramExtension)) };
             CoreMachine machine = Create(image, firmware, saves);
             var wanted = machine.Info.Battery.Select(b => (b.Which, Save: BatteryFile(path, console, b.Which, b.Suffix))).ToList();
@@ -185,6 +200,9 @@ namespace EmuSen.Cores.Native
                 machine.Dispose();
                 machine = Create(image, firmware, wanted);
             }
+            _discs = discs;
+            DiscIndex = 0;
+            _closeLidAt = -1;
 
             _machine?.Dispose();
             _machine = machine;
@@ -226,10 +244,48 @@ namespace EmuSen.Cores.Native
         private string SettingsText(bool createScope) =>
             string.Join("\n", Library.Settings.Where(s => createScope || !s.CreateScope).Select(s => $"{s.Key}={_values[s.Key]}"));
 
+        // The discs of the game, an .m3u's in its order, and the one in the drive, by index - see EmuSen_CoreAPI.md §6.23.
+        public IReadOnlyList<string> Discs => _discs;
+        public int DiscIndex { get; private set; }
+
+        // Whether the core changes discs: it claims MEDIA and names a drive.
+        public bool CanChangeDisc => Library.Has(CoreInterface.CapMedia) && _machine?.Info.Drives.Count > 0;
+
+        public bool LidOpen => _machine?.Info.Drives.FirstOrDefault()?.LidOpen ?? false;
+
+        // How long Change disc holds the lid open, in emulated seconds: as long as ps1-tests' disc-swap leaves it - see Diamond_Players.md §3.
+        public const double LidOpenSeconds = 1.0;
+
+        // The player's lid, opened or closed at once.
+        public void SetLid(bool open)
+        {
+            if (!CanChangeDisc) throw new InvalidOperationException($"{Info.DisplayName} cannot change discs.");
+            Machine.MediaLid(Machine.Info.Drives[0].Drive, open);
+            _closeLidAt = -1;
+        }
+
+        // Disc index of the set into the drive, its lid open, or for a state about to load with restore.
+        public void InsertDisc(int index, bool restore = false)
+        {
+            if (!CanChangeDisc) throw new InvalidOperationException($"{Info.DisplayName} cannot change discs.");
+            if (index < 0 || index >= _discs.Count) throw new ArgumentOutOfRangeException(nameof(index), $"the game has {_discs.Count} disc(s)");
+            Machine.MediaInsert(Machine.Info.Drives[0].Drive, File.ReadAllBytes(_discs[index]), MediaFiles(_discs[index]), restore);
+            DiscIndex = index;
+        }
+
+        // Change disc as one action: the lid opened, disc index in, the lid closed after LidOpenSeconds of the game's own time.
+        public void ChangeDisc(int index)
+        {
+            if (!LidOpen) SetLid(true);
+            InsertDisc(index);
+            _closeLidAt = TotalFrames + Math.Max(1, (long)Math.Round(LidOpenSeconds * FrameRateHz));
+        }
+
         // Advance, the frame-end work, present, then the events - the runtime's order of EmuSen_CoreAPI.md §8.2.
         public void RunFrame()
         {
             CoreMachine m = _machine ?? throw new InvalidOperationException("RunFrame() called before LoadRom().");
+            if (_closeLidAt >= 0 && TotalFrames >= _closeLidAt) SetLid(false);
             RefreshCheats(m);
             SyncAudioLimit(m);
             long start = Stopwatch.GetTimestamp();
@@ -384,10 +440,43 @@ namespace EmuSen.Cores.Native
             CoreMachine m = _machine ?? throw new InvalidOperationException("LoadState() called before LoadRom().");
             using var copy = new MemoryStream();
             stream.CopyTo(copy);
-            m.Load(copy.ToArray());
+            LoadOverItsDisc(m, copy.ToArray());
+            if (Library.Has(CoreInterface.CapMedia)) m.ReadInfo();
             _cheatVersion = -1;
             IsHaltedAtBreakpoint = false;
             Drain();
+        }
+
+        // A state made over another disc of the set loads with that disc put back first; with none of the set, the drive is left as it was - see EmuSen_CoreAPI.md §6.23.
+        private void LoadOverItsDisc(CoreMachine m, byte[] state)
+        {
+            try
+            {
+                m.Load(state);
+                return;
+            }
+            catch (InvalidDataException e) when (CoreMachine.StatusOf(e) == CoreInterface.StatusWrongMedia && CanChangeDisc)
+            {
+                int was = DiscIndex;
+                foreach (int i in Enumerable.Range(0, _discs.Count).Where(i => i != was))
+                {
+                    InsertDisc(i, restore: true);
+                    try
+                    {
+                        m.Load(state);
+                        _closeLidAt = -1;
+                        return;
+                    }
+                    catch (InvalidDataException again) when (CoreMachine.StatusOf(again) == CoreInterface.StatusWrongMedia) { }
+                    catch
+                    {
+                        InsertDisc(was, restore: true);
+                        throw;
+                    }
+                }
+                InsertDisc(was, restore: true);
+                throw;
+            }
         }
 
         // Each battery file the machine keeps: written when it changed where the core tracks changes, else whenever asked.

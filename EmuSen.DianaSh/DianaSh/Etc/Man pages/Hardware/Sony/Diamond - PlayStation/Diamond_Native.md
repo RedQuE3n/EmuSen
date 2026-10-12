@@ -1341,3 +1341,12 @@ decision); the console views outside v1. No dispute was taken.
 The cross-kernel step's frame 63 was a half-stored card request taken by the vblank element, shown by a failing test
 and fixed (`Diamond_OpenKernel_Phase2.md` §23.1); its two call results are recorded and unchanged (§23.2). The image's
 SHA-256 is now `7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`.
+
+## 20. Stage 11, the PlayStation to players (2026-10-11)
+
+Recorded in `Diamond_Players.md`: routing by content, image sets and archives, the disc change under the core ABI's
+minor 1.1 (`MEDIA` in `v1.rs`, the drive, `media_lid` and `media_insert` over stage 7's lid), **the state's version 9**
+(version 8 and the disc's fingerprint at the end, a version 8 state loading unheld), the core's extensions now `.cue`,
+`.bin` and `.iso` beside `.psexe`, `.psx` and `.chd`, its system no longer marked in development, the cheats, settings,
+cards, pads, shelf and CRT row, the kit on nine of the tester's discs, and the gate. Diamond is offered to players
+since this stage (§8 there). Diamond's crate tests: 146 and 56.

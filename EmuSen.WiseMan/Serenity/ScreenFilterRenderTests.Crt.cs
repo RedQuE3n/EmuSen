@@ -124,7 +124,7 @@ namespace EmuSen.WiseMan.Serenity
         public void Every_variant_of_the_crt_compiles_for_every_console()
         {
             Type chainType = typeof(GameFrameControl).Assembly.GetType("EmuSen.Serenity.Shaders.FilterChain")!;
-            foreach (string? console in new[] { "NES", "SNES", "Genesis", "N64", null })
+            foreach (string? console in new[] { "NES", "SNES", "Genesis", "N64", "PlayStation", null })
                 for (int quality = 0; quality < 3; quality++) for (int signal = 0; signal < 3; signal++) for (int mask = 0; mask < 5; mask++) for (int decoder = 0; decoder < 3; decoder++)
                     foreach (int screen in signal == 2 && mask == 0 ? Enumerable.Range(0, CrtFilter.Screens.Count) : new[] { CrtFilter.DefaultScreen })
                     {
@@ -137,7 +137,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void The_crt_suits_the_consoles_that_had_a_television_draws_a_4_to_3_tube_and_counts_scanlines()
         {
-            Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64" }, CrtFilter.Filter.Consoles);
+            Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64", "PlayStation" }, CrtFilter.Filter.Consoles);
             foreach (string console in CrtFilter.Filter.Consoles!) Assert.Contains(CrtFilter.Name, ScreenFilters.NamesFor(console));
             Assert.DoesNotContain(CrtFilter.Name, ScreenFilters.NamesFor("GB"));
             Assert.Equal(ScreenFilters.None, ScreenFilters.NamesFor("Genesis")[0]);
@@ -145,6 +145,18 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Equal(4.0 / 3.0, CrtFilter.Filter.Aspect);
             Assert.True(CrtFilter.Filter.RowsOnce);
             foreach (string console in CrtFilter.Filter.Consoles!) Assert.True(CrtFilter.ConsoleTiming.ContainsKey(console), $"{console} has no timing");
+        }
+
+        // The PlayStation's line from its own clocks and Diamond's line lengths, 3,412.5 and 3,405 video clocks (D-0) - see EmuSen_CRT.md §20.6.
+        [Fact]
+        public void The_playstations_line_is_its_video_clocks_over_the_subcarrier()
+        {
+            CrtFilter.LineTiming ntsc = CrtFilter.LineOf(CrtFilter.ConsoleTiming["PlayStation"], pal: false), pal = CrtFilter.LineOf(CrtFilter.ConsoleTiming["PlayStation"], pal: true);
+            Assert.Equal((47.678, 170.667, 0.5, 0.5), (Math.Round(ntsc.ActiveMicroseconds, 3), Math.Round(ntsc.CyclesAcross, 3), ntsc.PhaseLine, ntsc.PhaseFrame));
+            Assert.Equal(3412.5 / 15 % 1, ntsc.PhaseLine, 6);
+            Assert.Equal(263 * 3412.5 / 15 % 1, ntsc.PhaseFrame, 6);
+            Assert.Equal((48.117, 213.333, 0.75, 0.0, 0.5, false), (Math.Round(pal.ActiveMicroseconds, 3), Math.Round(pal.CyclesAcross, 3), pal.PhaseLine, pal.PhaseFrame, pal.PhaseCrawl, pal.SwitchFrame));
+            Assert.Equal(314 * 3405 / 12.0 % 1, pal.PhaseCrawl, 6);
         }
 
         // Through the headless raster path, on a frame small enough for it: a white field's light is the tube's white over the display's peak, and neutral.

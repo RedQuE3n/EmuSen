@@ -154,13 +154,12 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(CoreCatalog.IsRomExtension(ext), ext);
                 Assert.Contains(ext, EmuSen.Mistress.Library.RomLibrary.Extensions);
             }
-            foreach (string ext in new[] { ".iso", ".32x" })
-            {
-                Assert.False(CoreFactory.IsSupported("game" + ext), ext);
-                Assert.DoesNotContain(ext, EmuSen.Mistress.Library.RomLibrary.Extensions);
-            }
+            Assert.False(CoreFactory.IsSupported("game.32x"));
+            Assert.DoesNotContain(".32x", EmuSen.Mistress.Library.RomLibrary.Extensions);
+            // Since Diamond's stage 11 the PlayStation takes .iso, and the Sega CD, in development, still does not.
+            Assert.Equal("PlayStation", CoreCatalog.ConsoleForRom("game.iso"));
             Assert.IsType<CoreEngine>(CoreFactory.Create(Write("game.gen", SyntheticMdRom.Cartridge())));
-            Assert.Equal(new[] { "Genesis" }, CoreCatalog.DiscoveredConsoles);
+            Assert.Equal(new[] { "Genesis", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
             Assert.Contains(CoreCatalog.ShelvesInReleaseOrder, s => s.Name == "Genesis (Nephrite)" && s.EsdeSystem == "genesis");
             Assert.DoesNotContain(CoreCatalog.ShelvesInReleaseOrder, s => s.EsdeSystem is "segacd" or "sega32x");
             Assert.Equal(new[] { "model", "region", "pad1", "pad2" }, CoreCatalog.SettingsFor("Genesis").Select(s => s.Key));

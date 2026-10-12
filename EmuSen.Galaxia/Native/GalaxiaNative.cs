@@ -29,6 +29,7 @@ namespace EmuSen.Galaxia.Native
         Games,
         LegacyRoot,
         LogDefault,
+        Unpacked,
     }
 
     // The redirects a test moves, as EMUSEN_GALAXIA_OVERRIDE_*.

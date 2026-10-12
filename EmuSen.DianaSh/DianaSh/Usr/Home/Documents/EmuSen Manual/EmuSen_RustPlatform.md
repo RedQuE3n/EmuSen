@@ -2551,3 +2551,16 @@ ignoring `listed` (the NUL case), `Takes` judging only its first text, `Takes` a
 the guard taken back out of `ErrorLog`'s writes, `DataMigration.CopyTree` and `ConfigFile<T>.Delete`, the last three
 chosen from late in the case's order so that an earlier failure could not hide them. No Rust changed and the
 interface stays 7. **Not done:** Windows, where §21.2's route through the scan is argued and not run.
+
+## 22. Interface 8, 2026-10-11: the disc crate's set module, and Galaxia's Unpacked folder
+
+At Diamond's stage 11 the library gained three calls over `emusen-disc`'s set module, `emusen_disc_companions`,
+`emusen_disc_playlist` and `emusen_disc_sbi_beside` (`Platform/platform/src/disc.rs`), each a text in and a NUL-joined
+text out by the length-query idiom, so that the runtime reads a cue sheet's companions and an `.m3u` with the parser
+the cores use (`EmuSen_CoreAPI_Extensions.md` §2.3). It is a new dependency of the library on a crate of
+`EmuSen/Cores/Shared/`, stated there, and it brings the `chd` crate and its decoders into the library, unused by these
+three calls; `THIRD_PARTY_NOTICES.md` lists `chd` already, for Diamond. Galaxia's tree gained its twenty-first directory,
+`EMUSEN_GALAXIA_DIR_UNPACKED` (`EmuSen_Galaxia.md` §3.7), in both halves. The interface's number went from 7 to 8, in
+`emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together, as §3.2's exact rule requires. The C#
+facade is the runtime's `Crystal/Media/ImageSets.cs`, which takes the exports through `PlatformLibrary.Export` as
+Endymion's and Serenity's facades do; it has no C# half, there being no second parser to keep.

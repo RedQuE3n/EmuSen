@@ -59,7 +59,10 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_BAD_FILE           (-262)
 #define EMUSEN_BAD_STRUCT         (-263) /* a struct or element size below its 1.0 size */
 #define EMUSEN_BAD_IMAGE          (-264) /* the image refused, for a core without a finer code */
-/* -265 .. -319 are the interface's, unassigned. -320 .. -383: a .NET exception reproduced by a port, -320 less
+#define EMUSEN_LID_CLOSED         (-265) /* @since 1.1, MEDIA: media_insert while the drive's lid or tray is closed */
+#define EMUSEN_WRONG_MEDIA        (-266) /* @since 1.1, MEDIA: state_load with another disc in the drive than the state's */
+#define EMUSEN_NO_SUCH_DRIVE      (-267) /* @since 1.1, MEDIA: a drive machine info does not list */
+/* -268 .. -319 are the interface's, unassigned. -320 .. -383: a .NET exception reproduced by a port, -320 less
  * its kind (ports only). Below -383, reserved. */
 #define EMUSEN_FAULT_BASE         (-320)
 
@@ -82,8 +85,9 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_CAP_SETTING_NOTES     (1ull << 15)  /* emusen_core_setting_notes */
 #define EMUSEN_CAP_DEBUG_REGISTERS   (1ull << 16)  /* emusen_core_debug_registers */
 #define EMUSEN_CAP_DEBUG_DISASSEMBLE (1ull << 17)  /* emusen_core_debug_disassemble */
+#define EMUSEN_CAP_MEDIA             (1ull << 18)  /* @since 1.1: emusen_core_media_lid, emusen_core_media_insert */
 #define EMUSEN_CAP_DEBUG_READS       (1ull << 19)  /* @since 1.2, with DEBUG: emusen_core_debug_reads, range kinds 2 and 3 */
-/* Bit 18 (1.1's MEDIA) and bits 20..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
+/* Bits 20..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
 
 /* ---- Flags and small constants ------------------------------------------------------------------ */
 #define EMUSEN_OPTION_SKIP_RENDERING 1u  /* set_options bit 0; every other bit is reserved and ignored */
@@ -92,6 +96,10 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_BATTERY_TRACKED       2u  /* battery flags bit 1: the core tracks changes (BATTERY_DIRTY) */
 #define EMUSEN_FILE_BATTERY          0u  /* emusen_file.which of the battery save */
 #define EMUSEN_NO_COMPARE            0xFFFFFFFFu /* a patch or poke with no compare value */
+/* @since 1.1: emusen_file.which of an image set's first companion; the nth file a sheet names is MEDIA + n, and
+ * the numbers below it stay the core's (EmuSen_CoreAPI_Extensions.md section 2.4). */
+#define EMUSEN_FILE_MEDIA            65536u
+#define EMUSEN_MEDIA_RESTORE         1u  /* @since 1.1: emusen_media.flags, the drive set for a state about to load */
 
 /* Debug: the flags debug_set takes; coverage of processor n is bit (EMUSEN_DEBUG_COVERAGE + n), n < 24. */
 #define EMUSEN_DEBUG_CALLS       1u
@@ -204,6 +212,16 @@ typedef struct emusen_event {       /* 24 bytes */
     int64_t a;
     int64_t b;
 } emusen_event;
+
+typedef struct emusen_media {       /* @since 1.1, MEDIA: a disc for a drive (section 6.23); 48 bytes */
+    uint32_t size;
+    uint32_t flags;                 /* EMUSEN_MEDIA_RESTORE */
+    const uint8_t *image;           /* the disc's image or sheet, as create's; null empties the drive */
+    size_t image_len;
+    const emusen_file *files;       /* its companions, from EMUSEN_FILE_MEDIA */
+    size_t file_count;
+    size_t file_size;               /* sizeof(emusen_file) as the host knows it */
+} emusen_media;
 
 /* ---- Library-level calls: no machine, any thread, before and after any machine ----------------- */
 uint32_t emusen_core_abi_version(void);                         /* (major << 16) | minor */
@@ -319,6 +337,13 @@ int64_t emusen_core_debug_disassemble(emusen_machine *machine, uint32_t processo
  * READ_WATCH a byte read and its value, READ_BREAK a byte about to be read and the value space_read gives there. */
 int64_t emusen_core_debug_reads(emusen_machine *machine, uint32_t *out, size_t len);
 
+/* ---- Media (section 6.23), @since 1.1 ------------------------------------------------- */
+/* MEDIA: opens (1) or closes (0) the drive's lid or tray, as the player would; the core models what follows. */
+int32_t emusen_core_media_lid(emusen_machine *machine, uint32_t drive, uint32_t open);
+/* MEDIA: the disc in the drive replaced, refused with EMUSEN_LID_CLOSED unless the lid is open or RESTORE is set.
+ * The core copies what it keeps, as at create; a refused disc leaves the drive as it was. */
+int32_t emusen_core_media_insert(emusen_machine *machine, uint32_t drive, const emusen_media *media);
+
 /* ---- Function types, one per export, so a host or a check can name each signature ------ */
 typedef uint32_t (*emusen_core_abi_version_fn)(void);
 typedef uint64_t (*emusen_core_capabilities_fn)(void);
@@ -375,6 +400,8 @@ typedef int64_t (*emusen_core_debug_counters_fn)(emusen_machine *, int64_t *, si
 typedef int32_t (*emusen_core_debug_pc_fn)(const emusen_machine *, uint32_t, uint64_t *);
 typedef int64_t (*emusen_core_debug_registers_fn)(const emusen_machine *, uint32_t, int64_t *, size_t);
 typedef int64_t (*emusen_core_debug_disassemble_fn)(emusen_machine *, uint32_t, uint32_t, uint32_t, uint32_t, uint8_t *, size_t);
+typedef int32_t (*emusen_core_media_lid_fn)(emusen_machine *, uint32_t, uint32_t);
+typedef int32_t (*emusen_core_media_insert_fn)(emusen_machine *, uint32_t, const emusen_media *);
 typedef int64_t (*emusen_core_debug_reads_fn)(emusen_machine *, uint32_t *, size_t);
 
 #ifdef __cplusplus

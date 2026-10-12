@@ -18,12 +18,13 @@ impl bindgen::callbacks::ParseCallbacks for Macros {
     }
 }
 
-const STRUCTS: [(&str, &str); 5] = [
+const STRUCTS: [(&str, &str); 6] = [
     ("emusen_machine", "Machine"),
     ("emusen_create_params", "CreateParams"),
     ("emusen_file", "FileEntry"),
     ("emusen_frame_info", "FrameInfo"),
     ("emusen_event", "Event"),
+    ("emusen_media", "Media"),
 ];
 
 fn main() {

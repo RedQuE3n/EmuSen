@@ -11,6 +11,9 @@ namespace EmuSen.Mistress.Input
         // The three-button pad's controller id in the Genesis engine's info; any other pad of the console is drawn as the six-button one.
         public const string GenesisThreeButton = "md.pad3";
 
+        // The PlayStation's digital pad in its engine's info; any other pad of the console is drawn as the DualShock.
+        public const string PlayStationDigital = "psx.pad";
+
         // <controller> is the pad the port is set to where the window can tell, by its id in the engine's info - see EmuSen_Settings_Reference.md §4.93.
         public static ControllerLayout LayoutFor(string console, string? controller = null) => console.ToUpperInvariant() switch
         {
@@ -19,6 +22,7 @@ namespace EmuSen.Mistress.Input
             "N64" => ControllerLayout.Nintendo64,
             "GB" or "GBC" => ControllerLayout.GameBoy,
             _ when IsGenesis(console) => controller == GenesisThreeButton ? ControllerLayout.Genesis : ControllerLayout.GenesisSixButton,
+            "PLAYSTATION" => controller == PlayStationDigital ? ControllerLayout.PlayStation : ControllerLayout.DualShock,
             _ => ControllerLayout.Gamepad,
         };
 
@@ -34,6 +38,17 @@ namespace EmuSen.Mistress.Input
             [PadControl.X] = "Y",
             [PadControl.R] = "Z",
             [PadControl.Select] = "Mode",
+        };
+
+        // The PlayStation's buttons by the RetroPad controls the core gives them, position for position: Triangle on X, Circle on A, Cross on B, Square on Y - see Diamond_Plan.md §4.2.
+        private static readonly Dictionary<PadControl, string> PlayStation = new()
+        {
+            [PadControl.X] = "Triangle",
+            [PadControl.A] = "Circle",
+            [PadControl.B] = "Cross",
+            [PadControl.Y] = "Square",
+            [PadControl.L] = "L1",
+            [PadControl.R] = "R1",
         };
 
         // The N64's Z is the template's L2, its C buttons the right stick and its stick the left one - see Mars_Core.md §5.
@@ -53,6 +68,7 @@ namespace EmuSen.Mistress.Input
         public static string RegionFor(string console, PadControl control) =>
             LayoutFor(console) == ControllerLayout.Nintendo64 && Nintendo64.TryGetValue(control, out string? region) ? region
             : IsGenesis(console) && Genesis.TryGetValue(control, out string? button) ? button
+            : string.Equals(console, "PlayStation", StringComparison.OrdinalIgnoreCase) && PlayStation.TryGetValue(control, out string? face) ? face
             : control.ToString();
 
         // The control a region stands for on a console, or null for a region it has no control for.

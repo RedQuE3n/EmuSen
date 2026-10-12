@@ -12,7 +12,7 @@ use emusen_core_conform::{Case, Options, Script, corpus, run, sidecar};
 
 fn usage() -> ExitCode {
     eprintln!("usage: emusen-core-conform --core LIB --image FILE [--self-delimiting] [--frames N] [--input SCRIPT] [--settings KEY=VALUE]... [--file WHICH=PATH]... [--report REPORT.json]");
-    eprintln!("       emusen-core-conform --core LIB --images DIR|LIST [--from DIR] [--image FILE] [--jobs N] [--report-dir DIR] [the options above]");
+    eprintln!("       emusen-core-conform --core LIB --images DIR|LIST [--from DIR] [--image FILE] [--jobs N] [--image-memory COPIES] [--report-dir DIR] [the options above]");
     eprintln!("       emusen-core-conform --sidecar LIB [--development]");
     ExitCode::from(2)
 }
@@ -36,7 +36,8 @@ fn report_file(n: usize, name: &str) -> String {
 }
 
 /// The corpus form: the core's cases on the reference image, then a line for each image as it ends and the count.
-fn run_corpus(core: &Path, opts: Options, reference: Option<PathBuf>, images: &Path, from: Option<&Path>, jobs: Option<usize>, report: Option<&Path>, report_dir: Option<&Path>) -> ExitCode {
+#[allow(clippy::too_many_arguments)]
+fn run_corpus(core: &Path, opts: Options, reference: Option<PathBuf>, images: &Path, from: Option<&Path>, jobs: Option<usize>, factor: Option<u64>, report: Option<&Path>, report_dir: Option<&Path>) -> ExitCode {
     let list = match corpus::image_list(images, from) {
         Ok(list) if !list.is_empty() => list,
         Ok(_) => {
@@ -52,13 +53,15 @@ fn run_corpus(core: &Path, opts: Options, reference: Option<PathBuf>, images: &P
         Some(p) => (p.display().to_string(), p),
         None => list[0].clone(),
     };
-    let image = match std::fs::read(&reference_path) {
+    let (image, companions) = match emusen_core_conform::media::open(&reference_path) {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("error: {}: {e}", reference_path.display());
+            eprintln!("error: {e}");
             return ExitCode::from(2);
         }
     };
+    let mut opts = opts;
+    opts.files.extend(companions);
     if let Some(dir) = report_dir {
         if let Err(e) = std::fs::create_dir_all(dir) {
             eprintln!("error: {}: {e}", dir.display());
@@ -68,7 +71,10 @@ fn run_corpus(core: &Path, opts: Options, reference: Option<PathBuf>, images: &P
     let jobs = jobs.unwrap_or_else(corpus::default_jobs);
     let mut done = 0;
     let total = list.len();
-    let result = corpus::run(core, &Options { image, ..opts }, &reference_name, &list, jobs, Duration::from_secs(corpus::IMAGE_DEADLINE_SECONDS), &mut |i| {
+    let memory = corpus::memory_allowed().unwrap_or(u64::MAX);
+    let base = Options { files: opts.files.iter().filter(|f| f.0 < emusen_native::core::flags::FILE_MEDIA).cloned().collect(), ..opts.clone() };
+    let reference_opts = Options { image, ..opts };
+    let result = corpus::run_with(core, &reference_opts, &base, &reference_name, &list, jobs, memory, factor, Duration::from_secs(corpus::IMAGE_DEADLINE_SECONDS), &mut |i| {
         done += 1;
         let failed = i.failed();
         println!("{} [{done}/{total}] {}{}", if failed.is_empty() { "pass" } else { "FAIL" }, i.name, if failed.is_empty() { String::new() } else { format!(": {}", failed.join(" ")) });
@@ -122,7 +128,7 @@ fn main() -> ExitCode {
     let mut files = Vec::new();
     let mut report = None;
     let mut self_delimiting = false;
-    let (mut images, mut from, mut jobs, mut report_dir) = (None, None, None, None);
+    let (mut images, mut from, mut jobs, mut report_dir, mut factor) = (None, None, None, None, None);
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--self-delimiting" {
@@ -176,19 +182,26 @@ fn main() -> ExitCode {
                 Ok(n) if n > 0 => jobs = Some(n),
                 _ => return usage(),
             },
+            "--image-memory" => match v.parse::<u64>() {
+                Ok(n) if n > 0 => factor = Some(n),
+                _ => return usage(),
+            },
             _ => return usage(),
         }
         i += 2;
     }
     if let (Some(core), Some(images)) = (&core, &images) {
         let opts = Options { self_delimiting, image: Vec::new(), frames, settings, files, script };
-        return run_corpus(core, opts, image, images, from.as_deref(), jobs, report.as_deref(), report_dir.as_deref());
+        return run_corpus(core, opts, image, images, from.as_deref(), jobs, factor, report.as_deref(), report_dir.as_deref());
     }
     let (Some(core), Some(image)) = (core, image) else { return usage() };
-    let image = match std::fs::read(&image) {
-        Ok(b) => b,
+    let image = match emusen_core_conform::media::open(&image) {
+        Ok((b, companions)) => {
+            files.extend(companions);
+            b
+        }
         Err(e) => {
-            eprintln!("error: {}: {e}", image.display());
+            eprintln!("error: {e}");
             return ExitCode::from(2);
         }
     };

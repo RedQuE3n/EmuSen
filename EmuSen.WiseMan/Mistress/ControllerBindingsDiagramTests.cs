@@ -82,9 +82,11 @@ namespace EmuSen.WiseMan.Mistress
                 var diagram = new ControllerDiagram { Layout = ControllerDiagrams.LayoutFor(console) };
                 IReadOnlyList<PadControl> controls = CoreCatalog.ControlsFor(console);
                 var regions = diagram.Regions.Select(r => r.Id).ToHashSet();
-                foreach (PadControl control in controls)
+                // The DualShock's sticks show where they are by their knobs, as the modern pad's do, and its Analog button is an extra with no RetroPad control (EmuSen_CoreAPI_Extensions.md §5).
+                bool knobs = diagram.Layout == ControllerLayout.DualShock;
+                foreach (PadControl control in controls.Where(c => !(knobs && c.ToString().Contains("Stick", StringComparison.Ordinal) && c is not (PadControl.L3 or PadControl.R3))))
                     Assert.True(regions.Contains(ControllerDiagrams.RegionFor(console, control)), $"{console} has no region for {control}");
-                foreach (string region in regions)
+                foreach (string region in regions.Where(r => !(knobs && r == "Analog")))
                     Assert.True(ControllerDiagrams.ControlFor(console, region, controls) is not null, $"{console}'s {region} stands for no control");
                 Assert.Equal(regions.Count, diagram.Regions.Count);
             }

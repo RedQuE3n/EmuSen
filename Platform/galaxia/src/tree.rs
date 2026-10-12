@@ -118,10 +118,12 @@ pub enum Directory {
     LegacyRoot = 18,
     /// `ErrorLog.DefaultRoot`.
     LogDefault = 19,
+    /// `DataStore.Unpacked`: archives opened for play, unpacked and kept by their own rule (EmuSen_Galaxia.md §3.7).
+    Unpacked = 20,
 }
 
 impl Directory {
-    pub const ALL: [Directory; 20] = [
+    pub const ALL: [Directory; 21] = [
         Directory::Root,
         Directory::Seed,
         Directory::Config,
@@ -142,6 +144,7 @@ impl Directory {
         Directory::Games,
         Directory::LegacyRoot,
         Directory::LogDefault,
+        Directory::Unpacked,
     ];
 
     pub fn from_u32(value: u32) -> Option<Directory> {
@@ -248,6 +251,7 @@ impl Tree {
             Directory::Games => self.under(&home(), "Games"),
             Directory::LegacyRoot => legacy_root_for(&self.root),
             Directory::LogDefault => path::combine_all(Self::STYLE, &[&self.application_data, PROGRAM_DIR_NAME, "Logs"]),
+            Directory::Unpacked => self.under(&home(), "Unpacked"),
         })
     }
 

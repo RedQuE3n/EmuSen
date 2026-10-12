@@ -327,7 +327,7 @@ Nothing here needs per-core code in a frontend (`EmuSen_CoreAPI.md` §2.4).
 (`Nephrite_Plan.md` §4.1), and both cores will claim `.cue` and `.chd`. The host routes by extension, so a second
 engine claiming one is never reached. Diamond therefore claims no bare `.bin` (its tracks are reached through a cue
 sheet), and the shared extensions need the system pack to decide the system from the contents, as Nephrite's stub
-already does inside one core: a PlayStation disc by the licence text in its system area and by `SYSTEM.CNF`, a Sega
+already does inside one core *(built at stage 11: the pack's recogniser decides, and Diamond claims `.bin`; `Diamond_Players.md` §1)*: a PlayStation disc by the licence text in its system area and by `SYSTEM.CNF`, a Sega
 CD by `SEGADISCSYSTEM`. That is a framework change (§10, §11 Q9).
 
 The game's serial for OpenVGDB and the cheat database is the `BOOT` line of `SYSTEM.CNF` (`cdrom:\SLUS_007.70;1` is
@@ -380,7 +380,8 @@ codes, the `C0`/`C1` delays), **Xploder** and **Game Buster** forms, which the l
 file names]. All are RAM pokes in `RAM`. **A gap** [A]: a conditional code tests one address and writes another, which
 v1's poke quad (space, address, value, compare on the same address) cannot express; either the codec gains a
 conditional form applied by the runtime between frames, or the core claims `CHEAT_POKES` with a richer list. Settled at
-stage 11 (§10).
+stage 11 (§10). *Settled 2026-10-11: the runtime's cheat model already held tests, which `EmuSen_CoreAPI_Extensions.md`
+§6 found; it gained `IfLess` and `IfGreater`, and the codecs are `EmuSen_Cheats.md` §10.*
 
 ### 4.6 The CRT filter's timing
 
@@ -726,7 +727,7 @@ next begins. The order puts a drawn picture at stage 4 and a booting disc at sta
 | **8** | **The SPU**: voices, ADPCM, Gaussian interpolation, ADSR, sweep, noise, pitch modulation, reverb, capture, IRQ, transfers, CD audio in | ps1-tests' `spu/memory-transfer` and `spu/test`; synthetic voice programs against the references' audio, and against the tester's recordings if any (§11 Q16); the reverb against the references | 5 |
 | **9** | **The MDEC** | ps1-tests' `mdec/4bit`, `8bit`, `frame` and `movie`, VRAM exactly; Peter Lemon's DCT decode | 2 |
 | **10** | **The open BIOS, the rest** (§5.9): CD boot, files, the card functions in the real format, the screen without a disc. *Built 2026-10-11 (`Diamond_OpenKernel_Phase2.md`, `Diamond_Native.md` §18); its card exchange with the player's BIOS and `firmwarecheck.py` left to a separate step by the stage's terms, taken the same day (`Diamond_OpenKernel_Phase2.md` §22): the cards cross both ways; `firmwarecheck.py` FAILs by the default thresholds, its Q5 open* | **Games boot with no firmware folder**; the cards they write are read by the same games on the player's BIOS and the reverse; `firmwarecheck.py` within the policy's limits; G9 | 6 |
-| **11** | The PlayStation to players: the system pack's codecs (GameShark, Xploder), settings (region, model, pads, card mode), battery files, the two pad drawings, the CRT timing, `.m3u` and the disc change, the shelf, the kit on games | The kit's C1–C15 on the tester's discs (corpus form); cards round-trip; the fit audit with the PlayStation's tab, drawings and shelf at both sizes; the cheats decode (G4) | 4 |
+| **11** | The PlayStation to players: the system pack's codecs (GameShark, Xploder), settings (region, model, pads, card mode), battery files, the two pad drawings, the CRT timing, `.m3u` and the disc change, the shelf, the kit on games. *Built 2026-10-11 with the four framework pieces stage 7 proposed (`Diamond_Players.md`).* | The kit's C1–C15 on the tester's discs (corpus form); cards round-trip; the fit audit with the PlayStation's tab, drawings and shelf at both sizes; the cheats decode (G4) | 4 |
 | **12** | The debugger: the R3000A through the observer; registers including the GTE's; disassembly; breakpoints, stepping, coverage, the call stack | Each claim a test; every table armed gives the plain run's digests (C15, G7) | 2 |
 | **13** | Speed (§5.12): the exact levers, in order, measured on the bench, under the 33% quota and on the handheld | §5.12's budget (G6) | 4 |
 | **14** | The gates of §8, the goldens, the clone check | §8 | 2 |

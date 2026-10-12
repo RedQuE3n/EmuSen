@@ -172,7 +172,6 @@ fn check(facts: &Facts, committed: &Baseline, base: Option<&Baseline>, problems:
         }
     }
     let Some(base) = base else { return };
-    let mut added = false;
     for (k, (v, tag)) in base {
         match committed.get(k) {
             None => problems.push(format!("removed from the baseline: {k} {v} @{tag}; this breaks version 1 ({})", rule(k, true))),
@@ -182,18 +181,15 @@ fn check(facts: &Facts, committed: &Baseline, base: Option<&Baseline>, problems:
             _ => {}
         }
     }
-    let released = base.values().filter_map(|(_, t)| t.strip_prefix("1.")?.parse::<u32>().ok()).max();
+    // Each minor's lines arrive together: a new line names a minor the base does not hold yet, no later than the
+    // header's, so two minors built side by side may reach the baseline in either order (section 5.5).
+    let held: BTreeSet<u32> = base.values().filter_map(|(_, t)| t.strip_prefix("1.")?.parse::<u32>().ok()).collect();
     for (k, (_, tag)) in committed {
         if !base.contains_key(k) && !revision(k) {
-            added = true;
-            if *tag != format!("1.{}", minor()) {
-                problems.push(format!("{k} is new and must be tagged @1.{}, the header's minor", minor()));
+            let n = tag.strip_prefix("1.").and_then(|n| n.parse::<u32>().ok());
+            if !n.is_some_and(|n| n <= minor() && !held.contains(&n)) {
+                problems.push(format!("{k} is new and tagged @{tag}; it must name a minor the baseline does not hold yet, no later than the header's 1.{} (section 5.5)", minor()));
             }
-        }
-    }
-    if let (true, Some(r)) = (added, released) {
-        if minor() <= r {
-            problems.push(format!("the baseline gains lines but EMUSEN_CORE_ABI_MINOR is still {}; an addition increments it (section 5.5)", minor()));
         }
     }
 }
@@ -255,7 +251,9 @@ mod tests {
         let committed = base(&read(&baseline_path()).unwrap());
         check(&facts, &committed, None, &mut problems);
         assert_eq!(problems, Vec::<String>::new());
-        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 56);
+        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 58);
+        assert_eq!(facts.get("struct emusen_media").map(String::as_str), Some("size 48 align 8"));
+        assert_eq!(facts.get("const EMUSEN_FILE_MEDIA").map(String::as_str), Some("0x10000"));
         assert_eq!(facts.get("const EMUSEN_CAP_DEBUG_READS").map(String::as_str), Some("0x80000"));
         assert_eq!(facts.get("struct emusen_frame_info").map(String::as_str), Some("size 56 align 8"));
         assert_eq!(facts.get("field emusen_frame_info.serial").map(String::as_str), Some("offset 40 type int64_t"));
@@ -286,7 +284,19 @@ mod tests {
         let new = base(&format!("{released}const EMUSEN_B 0x2 @1.{}\n", minor()));
         let mut p = Vec::new();
         check(&facts, &new, Some(&old), &mut p);
-        assert_eq!(p, vec![format!("the baseline gains lines but EMUSEN_CORE_ABI_MINOR is still {}; an addition increments it (section 5.5)", minor())]);
+        assert_eq!(p, vec![format!("const EMUSEN_B is new and tagged @1.{0}; it must name a minor the baseline does not hold yet, no later than the header's 1.{0} (section 5.5)", minor())]);
+    }
+
+    #[test]
+    fn two_minors_built_side_by_side_merge_in_either_order() {
+        let first = base("const EMUSEN_A 0x1 @1.0\nconst EMUSEN_C 0x3 @1.2\n");
+        let both = base("const EMUSEN_A 0x1 @1.0\nconst EMUSEN_B 0x2 @1.1\nconst EMUSEN_C 0x3 @1.2\n");
+        let facts: Facts = [("const EMUSEN_A", "0x1"), ("const EMUSEN_B", "0x2"), ("const EMUSEN_C", "0x3")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let mut p = Vec::new();
+        check(&facts, &both, Some(&first), &mut p);
+        if minor() >= 2 {
+            assert_eq!(p, Vec::<String>::new(), "a 1.1 line arriving after 1.2's is taken");
+        }
     }
 
     #[test]

@@ -64,3 +64,24 @@ pub fn open(image: &[u8], companions: &[&[u8]]) -> Result<Opened, DiscRefusal> {
         None => Err(DiscRefusal::Media(Refusal::NotPlayStation)),
     }
 }
+
+/// A disc's fingerprint, never 0: FNV-1a over its tracks' starts and kinds, its lead-out and the raw sectors 4 and 16 to
+/// 23 of its first track, the licence and the volume descriptors with the root directory that usually follows them,
+/// so that a state is held to the disc it was made on.
+pub fn fingerprint(disc: &mut Disc) -> u64 {
+    let mut h = 0xCBF2_9CE4_8422_2325u64;
+    let mut eat = |bytes: &[u8]| bytes.iter().for_each(|&b| h = (h ^ b as u64).wrapping_mul(0x0100_0000_01B3));
+    let tracks: Vec<(u32, bool)> = disc.tracks().iter().map(|t| (t.start, t.audio)).collect();
+    for (start, audio) in &tracks {
+        eat(&start.to_le_bytes());
+        eat(&[*audio as u8]);
+    }
+    eat(&disc.lead_out().to_le_bytes());
+    let first = tracks.first().map_or(0, |t| t.0);
+    let mut raw = [0u8; ecma130::RAW];
+    for sector in std::iter::once(4).chain(16..24) {
+        disc.read(first + sector, &mut raw);
+        eat(&raw);
+    }
+    h.max(1)
+}

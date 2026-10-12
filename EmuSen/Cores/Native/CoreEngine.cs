@@ -136,9 +136,9 @@ namespace EmuSen.Cores.Native
         public bool IsHaltedOnCoprocessor => IsHaltedAtBreakpoint && HaltedProcessor != 0;
         public string HaltedProcessorName => _machine?.Info.Processors.FirstOrDefault(p => p.Id == HaltedProcessor)?.Name ?? "CPU";
 
-        // What the image needs, answered from its bytes without a machine; Purpose says whether the game runs without it.
+        // What the image play opens needs, answered from its bytes without a machine; Purpose says whether the game runs without it.
         public IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath) =>
-            Library.FirmwareFor(File.ReadAllBytes(romPath)).Select(Request).ToArray();
+            Library.FirmwareFor(File.ReadAllBytes(DiscsOf(romPath)[0])).Select(Request).ToArray();
 
         private FirmwareRequest Request(CoreFirmware f) => Request(Info.Name, f);
 

@@ -52,7 +52,7 @@ namespace EmuSen.Crystal.Media
                 return new MediaProbe(path, entry, n =>
                 {
                     string sheet = System.Text.Encoding.UTF8.GetString(ArchiveImages.ReadEntry(path, entry, 1 << 20));
-                    string? first = ImageSets.CompanionNames(sheet, entry).FirstOrDefault();
+                    string? first = ImageSets.CompanionNames(sheet, entry).FirstOrDefault()?.Replace('\\', '/');
                     string dir = System.IO.Path.GetDirectoryName(entry) ?? "";
                     return first is null ? Array.Empty<byte>() : ArchiveImages.ReadEntry(path, dir.Length == 0 ? first : $"{dir}/{first}", n);
                 });

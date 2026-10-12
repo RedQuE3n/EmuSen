@@ -142,6 +142,40 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { ArchiveImages.FolderFor(track) }, Directory.GetDirectories(DataStore.Unpacked));
         }
 
+        // The firmware a game is asked for before create is its image's, an archive's unpacked image as for play, never the archive's bytes - see Diamond_Players.md §12.
+        [Fact]
+        public void A_zipped_disc_is_asked_for_the_firmware_its_image_is()
+        {
+            var disc = SyntheticPsxDisc.Build();
+            string loose = Write("Opal Shore.bin", disc.DataTrack);
+            string zipped = Zip(Path.Combine(_library, "Opal Shore Zipped.zip"), ("Opal Shore Zipped/Opal Shore Zipped.bin", disc.DataTrack));
+            string[] Names(string path) => CoreFactory.ForFirmwareProbe(path).GetFirmwareRequirements(path).Select(r => r.FileName).ToArray();
+            Assert.Equal(new[] { "scph5501.bin" }, Names(loose));
+            Assert.Equal(Names(loose), Names(zipped));
+        }
+
+        // A sheet written where names ignore case, or with a Windows separator, names its tracks as the folder or archive holds them - see Diamond_Players.md §12.
+        [Fact]
+        public void A_sheet_naming_its_tracks_in_another_case_or_with_backslashes_opens_and_is_shelved_once()
+        {
+            var disc = SyntheticPsxDisc.Build();
+            string folder = Path.Combine(_library, "Quartz Bay");
+            Directory.CreateDirectory(Path.Combine(folder, "Tracks"));
+            File.WriteAllText(Path.Combine(folder, "Quartz Bay.cue"), disc.Cue.Replace("{name}", "TRACKS\\quartz bay"));
+            File.WriteAllBytes(Path.Combine(folder, "Tracks", "Quartz Bay (Track 1).bin"), disc.DataTrack);
+            File.WriteAllBytes(Path.Combine(folder, "Tracks", "Quartz Bay (Track 2).bin"), disc.AudioTrack);
+            string zipped = Zip(Path.Combine(_library, "Quartz Zip.zip"), ("Quartz Zip/Quartz Zip.cue", Encoding.ASCII.GetBytes(disc.Cue.Replace("{name}", "QUARTZ ZIP"))),
+                ("Quartz Zip/Quartz Zip (Track 1).bin", disc.DataTrack), ("Quartz Zip/Quartz Zip (Track 2).bin", disc.AudioTrack));
+            Assert.Equal(new[] { "Quartz Bay.cue", "Quartz Zip.zip" }, ImageSets.Shelved(Directory.EnumerateFiles(_library, "*", SearchOption.AllDirectories).Order().ToList()).Select(Path.GetFileName));
+            foreach (string game in new[] { Path.Combine(folder, "Quartz Bay.cue"), zipped })
+            {
+                Assert.Equal(new[] { "Quartz Bay (Track 1).bin", "Quartz Bay (Track 2).bin" }.Select(n => n.Replace("Quartz Bay", Path.GetFileNameWithoutExtension(game))), ImageSets.FilesFor(CoreEngine.DiscsOf(game)[0]).Select(f => Path.GetFileName(f.Path)));
+                using var core = (CoreEngine)CoreFactory.Load(game).Core;
+                core.RunFrame();
+                Assert.Equal(("psx", true), (core.Machine.Info.System, core.TotalFrames > 0));
+            }
+        }
+
         // Two discs of one game in an .m3u: the shelf shows the list, the first disc goes in, Change Disc opens the lid, swaps and closes it, and a state made on either disc puts that disc back to load.
         [Fact]
         public void An_m3u_changes_its_discs_through_the_lid_and_a_state_brings_its_own_disc_back()

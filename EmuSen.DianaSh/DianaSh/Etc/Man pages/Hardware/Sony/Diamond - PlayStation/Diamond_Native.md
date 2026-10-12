@@ -1227,3 +1227,47 @@ the test lock with the corpus: `DiamondTests`, `SystemPack`, `CoreAbi`, `CoreAda
 ### 17.6 What waits
 
 D-38 to D-40; the unstable DMA read and RAM_CTRL's other bank sizes; external audio; D-29.
+
+## 18. Stage 10, the open kernel's second phase (2026-10-11)
+
+The plan's §7 row 10, with the tester's go of 2026-10-11, built on stage 9's merge and joined with stage 8's. Its record
+is `Diamond_OpenKernel_Phase2.md`, written under the replacement writers' rules.
+
+### 18.1 What was built
+
+- **The kernel** (`kernel/src/`): the CD driven at its host interface with sectors by DMA channel 3 (`cdrom.rs`), ISO
+  9660 on "cdrom:" (`cdfs.rs`), the memory cards' sectors on vblank (`card.rs`, over `sio.rs`, the byte exchange the pads
+  now share) and their on-card file system on "bu00:" and "bu10:" (`bu.rs`), patterns with psx-spx's wildcards
+  (`names.rs`), the boot by SYSTEM.CNF and the warm boot (`shell.rs`), and the screen with no disc, its font and its
+  card manager (`screen.rs`, `font.rs`, `manager.rs`). 222 of the 576 calls implemented; no phase 2 stub left.
+- **Two defects found and fixed**, each shown first: StartPAD2 enabled vblank before queueing the element that
+  acknowledges it, an endless exception with interrupts on (§16 of the record); the low-level card calls delivered only
+  their F0000011h event, where Rayman waits on the callbacks' F4000001h (§13).
+- **The crate**: the firmware entry's cost in `v1.rs`, the phase 1 sentence on discs and cards withdrawn and the
+  character sets named; the bus's SPU catch-up made public for the run tool. No state change: `DMND` stays version 8.
+- **The run tool**: `--calls` (the kernel calls a program makes, by number), `--trace-at FRAME`, `--card` and `--card2`
+  (cards from files and back), `--press FRAME:MASK[:FRAMES]`.
+- **Tests**: `programs/kernel-cd.s` and `kernel-card.s`, an ISO 9660 builder for tests (`tests/support/iso.rs`), four
+  program tests (the record's §17), and the kernel harness's tests brought to phase 2.
+
+### 18.2 The gate
+
+| Item | Result |
+|---|---|
+| Games boot with no firmware folder | **All seven of the tester's copied discs boot by their SYSTEM.CNF on the open kernel**, each as far as it goes on the player's BIOS through `--boot` (record §18.1): Crash Bandicoot, Spyro the Dragon and Tekken 3 to their title screens, Rayman's opening movie, Silent Hill to its card warning; Castlevania black and Ape Escape past its DUALSHOCK screen to white, Q3 |
+| A game saves on the open kernel and loads its save back | **Met**: Tekken 3 formats a blank card, saves ("SAVE OK!") and loads it back ("LOAD OK!"); the card in psx-spx's on-card format (record §18.3) |
+| The image rebuilds byte for byte | **Met**: SHA-256 `0efba49b4d1bf011a5b59ce580e7fc29143ac68a0155012952c1791c72b8ef3f`, `DIAMOND_KERNEL_REBUILD=require`, and from a copy at another path |
+| Stage 3's seven test programs on the open kernel | **Met**, WiseMan's `DiamondTests` |
+| Cards round-trip with the player's BIOS; `firmwarecheck.py`; G9 | **Not this stage's**, a separate step by the stage's terms; what it needs is the record's §20.4 |
+
+### 18.3 Tests run (2026-10-11)
+
+`kernel-harness` 49 tests with `DIAMOND_KERNEL_REBUILD=require`, all passing; `diamond` 133 unit tests and 53 program
+tests, with and without `EMUSEN_DIAMOND_PS1TESTS`, all passing; WiseMan under the test lock with the corpus:
+`DiamondTests`, the result in the record of the merge.
+
+### 18.4 What waits
+
+The cross-kernel card exchange and `firmwarecheck.py`; the record's questions Q1 to Q4 (the screened sections, Spyro's
+CdRead retries, Ape Escape's DUALSHOCK screen, an exposure to list); no dispute was taken, D-41 on being the next free
+number.

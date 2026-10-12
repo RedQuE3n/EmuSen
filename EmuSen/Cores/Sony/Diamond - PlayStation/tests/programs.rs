@@ -1289,3 +1289,18 @@ fn a_dicr_write_with_a_flag_left_up_does_not_ask_again() {
     let m = run(include_str!("../programs/dicr-storm.s"));
     assert_eq!(results(&m, 0x10_0000, 3), [1, 0xC0C8_0000, 0], "the handler's runs, DICR and I_STAT's bit 3");
 }
+
+// --- D-41: a channel started beside channel 2's list (Diamond_Disputes.md D-41) ---
+
+/// Channel 6, started while channel 2's list waits for the GPU or is between two of its nodes, runs at once whichever
+/// DPCR ranks first, as the referees of three lineages have it: its table is written and its CHCR idle with the list
+/// still moving.
+#[test]
+fn channel_6_runs_beside_a_list_that_waits_or_walks() {
+    let m = run_for(include_str!("../programs/dma-beside.s"), 60, Market::Americas);
+    for (case, what) in ["rectangles, channel 2 first", "rectangles, channel 6 first", "empty nodes, channel 2 first", "empty nodes, channel 6 first"].iter().enumerate() {
+        let r = results(&m, 0x10_0000 + 32 * case as u32, 8);
+        assert_eq!([r[0], r[2], r[3], r[4]], [0x0100_0401, 2, 0x00FF_FFFF, 0x0100_0401], "{what}: the list moving, channel 6 done and its table written");
+        assert_eq!(r[5..], [2, 0x00FF_FFFF, 0x0000_0401], "{what}: once the list has ended");
+    }
+}

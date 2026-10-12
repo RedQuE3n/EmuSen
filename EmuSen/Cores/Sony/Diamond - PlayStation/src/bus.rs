@@ -454,7 +454,8 @@ impl Board {
         }
     }
 
-    /// When the SPU must next run unasked: its own events, and while DMA4 is started but not moving, its request's rise.
+    /// When the SPU must next run unasked: its own events, and while DMA4 is started but not moving, its request's rise,
+    /// at which the channels are arbitrated again (Diamond_SPU.md §6.3).
     fn spu_event(&self) -> u64 {
         let t = self.spu.next_event();
         let waiting = self.dma.active.is_none() && self.dma.ch[dma::SPU].chcr & chcr::START != 0 && self.dma.enabled(dma::SPU) && !self.spu.dreq();
@@ -731,7 +732,9 @@ impl Board {
         if n == dma::SPU && c.sync() == 1 {
             self.run_spu(at);
             if !self.spu.dreq() {
-                self.dma.due = self.spu.dreq_change().max(at + 1);
+                self.dma.active = None;
+                self.dma.due = u64::MAX;
+                self.dma_kick();
                 return;
             }
         }
@@ -1259,6 +1262,34 @@ mod tests {
         assert_eq!(b.gpu.env[0] & 0x7FF, 0x123);
         assert_ne!(b.irq.stat & irq::DMA, 0);
         assert_eq!(b.dma.ch[2].madr, 0x00FF_FFFF);
+    }
+
+    /// DMA4 waiting between blocks for the SPU's FIFO to empty lets another channel move: OTC, started while DMA4's
+    /// second block waits, finishes before DMA4 (psx-spx "DMA Channels": a channel is interrupted by another between
+    /// pieces; Diamond_SPU.md §6.3).
+    #[test]
+    fn a_channel_waiting_for_its_request_lets_another_move() {
+        let mut b = board();
+        b.write(0x1F80_10F0, Size::Word, 0x0F09_0000 | 0x0B00_0000);
+        b.write(0x1F80_1DAA, Size::Half, 0x20);
+        while b.read(0x1F80_1DAE, Size::Half) & 0x3F != 0x20 {}
+        b.write(0x1F80_10C0, Size::Word, 0x1000);
+        b.write(0x1F80_10C4, Size::Word, 0x0004_0010);
+        b.write(0x1F80_10C8, Size::Word, 0x0100_0201);
+        assert_ne!(b.dma.ch[4].chcr & chcr::START, 0, "DMA4 waits for the FIFO");
+        b.write(0x1F80_10E0, Size::Word, 0x2000C);
+        b.write(0x1F80_10E4, Size::Word, 4);
+        b.write(0x1F80_10E8, Size::Word, 0x1100_0002);
+        let mut otc_done = None;
+        while b.dma.ch[4].chcr & chcr::START != 0 {
+            b.now = b.next_event.max(b.now + 1);
+            b.events();
+            if otc_done.is_none() && b.dma.ch[6].chcr & chcr::START == 0 {
+                otc_done = Some(b.now);
+            }
+        }
+        assert!(otc_done.is_some_and(|t| t < b.now), "OTC at {otc_done:?}, DMA4 at {}", b.now);
+        assert_eq!(b.ram_word(0x2000C), 0x20008);
     }
 
     #[test]

@@ -882,3 +882,12 @@ fn the_spu_programs_pass_on_the_open_kernel() {
     let lines: Vec<&str> = test[test.find("16 bit access").unwrap_or(0)..].lines().filter(|l| !l.is_empty()).collect();
     assert_eq!(lines, ["16 bit access", "Done", "32 bit access", "Done, crashing now..."]);
 }
+
+/// `spu-dma.s` (Diamond_SPU.md §6): DMA4 moves 1 KiB in blocks of 16 words in 15,419 cycles, a halfword every 32 cycles
+/// as the FIFO empties, within `spu/memory-transfer`'s bounds on a console (1,638 to 18,022) where Beetle PSX takes
+/// 12,282 and DuckStation 7,640 (D-38); a mode written to ATTR shows in STATX at the next sample, 582 cycles, as on Beetle PSX.
+#[test]
+fn the_spus_transfers_take_a_halfword_each_32_cycles() {
+    let m = run_for(include_str!("../programs/spu-dma.s"), 30, Market::Americas);
+    assert_eq!(results(&m, 0x10_0000, 7), [15_419, 16_534, 1068, 16_402, 582, 993, 2054]);
+}

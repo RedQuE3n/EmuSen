@@ -81,6 +81,29 @@ class FirmwareCheckTests(unittest.TestCase):
         tokens = {int(t, 16) for t in re.findall(r"\b[0-9A-Fa-f]{2}\b", text)}
         self.assertFalse(tokens & set(ORIGINAL), "a byte of the original appears in hex")
 
+    def test_fill_is_left_out_only_when_asked_and_no_run_crosses_it(self):
+        theirs = ORIGINAL[:20] + bytes(20) + ORIGINAL[40:]
+        ours = bytearray(range(64))
+        ours[17:20] = theirs[17:20]
+        ours[20:40] = bytes(20)
+        ours = bytes(ours)
+        code, text = self.run_check(ours, theirs)
+        self.assertEqual(code, 1)
+        self.assertIn("longest common run: 23 bytes", text)
+        code, text = self.run_check(ours, theirs, "--ignore-fill", "8")
+        self.assertEqual(code, 0)
+        self.assertIn("fill left out: 20 bytes in stretches of 8+ of one byte", text)
+        self.assertIn("equal at the same offset: 3 of 44", text)
+        self.assertIn("longest common run: 3 bytes", text)
+
+    def test_a_stretch_shorter_than_the_fill_length_still_counts(self):
+        theirs = ORIGINAL[:20] + bytes(7) + ORIGINAL[27:]
+        ours = bytearray(range(64))
+        ours[20:27] = bytes(7)
+        code, text = self.run_check(bytes(ours), theirs, "--ignore-fill", "8")
+        self.assertEqual(code, 1)
+        self.assertIn("longest common run: 7 bytes", text)
+
     def test_the_longest_run_agrees_with_a_brute_force_search(self):
         ours = replacement_with([(6, 3, 50), (4, 30, 9), (3, 60, 0)])
         best = max((n for i in range(64) for j in range(64)

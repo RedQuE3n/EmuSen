@@ -464,7 +464,7 @@ meet this [A].
   whether the core's own was written. The core's panic hook writes one (`emusen_core_set_crash_log`, §6.18) [R].
 - **What a run shows** [M]. In the child runs before the change, the hook had been given
   `DataStore.Logs/diamond_crash_<pid>.txt`, and no such file was written anywhere under the run's folder. The hook
-  writes the file alone (`std::fs::write`); the sandbox's `Logs` folder is made by DianaSh's skeleton when the shell's
+  makes the file and not its folder; the sandbox's `Logs` folder is made by DianaSh's skeleton when the shell's
   tree is first touched, which that process never did. A Mistress that had touched it would have written the report
   to the sandbox's `/Logs`, which is not the folder the tester reads, `ErrorLog.Root()` (§12.3: `~/.config/EmuSen/Logs`
   on the handheld) [A].
@@ -475,6 +475,12 @@ meet this [A].
   called on a second thread past the gate as a host ignoring §6.16 would, in a child whose log folder does not exist.
   Before the change no file was written; after it `diamond_crash_<pid>.txt` is in the log folder, holding
   `Diamond panic`, `RefCell already borrowed` and the backtrace [M].
+- **Two panics at once.** Both threads of a race can see the borrow, and the hook ran once for each: in 30 runs of the
+  provoked child, 4 printed two panics [M]. The hook wrote with `std::fs::write`, which truncates, so a second report
+  started while the first thread aborted could leave the file empty, as one area run did (the test above failed on an
+  empty `diamond_crash_<pid>.txt`) [M]. The hook in `emusen-native` (`abi::install_crash_log`) now appends, and holds a
+  lock while it writes, so the first report is whole before its thread aborts. In 30 runs after it, every file held a
+  whole report and 8 held two [M].
 - **What `CrashLog` cannot do.** A core's panic aborts the process (`panic = "abort"`), and no managed code runs after
   `abort` raises SIGABRT, so a report of Mistress's own cannot be written for it [A]. *Proposed, not built:* Mistress
   could name, at its next start and in its error log, a core crash file left by a process that is no longer running.
@@ -482,12 +488,15 @@ meet this [A].
 
 #### 12.7.6 Tests run (2026-10-12)
 
-`CoreEngineThreadTests` (the two child cases, the crash file and the latency), and WiseMan by area for the blast radius:
-`CoreEngine`, `CoreMachine`, `CoreAdapter`, `CoreAbi`, `CoreDebug`, `CoreFactory`, `Diamond` (with `DiamondPlayers`),
-`PlayStationLibrary`, `Input`, `Controller`, `Pad`, `MoonRt`, `MercuryRt`, `VenusRt`, `Nephrite`,
-`MoonDebugTargetContract`, `NativeHost` and `EmulatorSession`. 1,130 cases: 1,125 passed, 3 skipped (the picture tools,
-opt-in) and 2 failed. `MercuryRtCoreTests.A_second_ports_buttons_are_ignored_on_both_engines` pressed and read the
-joypad register with no frame between, which a latched press no longer reaches; it now runs a frame after the presses
-and passes. `ConsoleBindingsTests.The_catalog_lists_consoles_by_manufacturer_then_release` lists the consoles without
-the PlayStation, which stage 11 offers to players, and fails alone as well; the change does not touch the catalog, and
-it is left to the branch that owns it [R].
+`CoreEngineThreadTests` (the two child cases, the crash file and the latency), and WiseMan by area for the blast radius
+after `git merge WiseMan` (`c27bbfbf`): `CoreEngine`, `CoreMachine`, `CoreAdapter`, `CoreAbi`, `CoreDebug`,
+`CoreFactory`, `Diamond` (with `DiamondPlayers`), `PlayStationLibrary`, `Input`, `Controller`, `Pad`, `MoonRt`,
+`MercuryRt`, `VenusRt`, `Nephrite`, `MoonDebugTargetContract`, `NativeHost` and `EmulatorSession`: 1,130 cases, 1,125
+passed, 3 skipped (the picture tools, opt-in) and 2 failed. One was the crash file's test, on the empty file of two
+panics, fixed as above and passing since. The other,
+`ConsoleBindingsTests.The_catalog_lists_consoles_by_manufacturer_then_release`, lists the consoles without the
+PlayStation, which stage 11 offers to players; it fails alone as well, the change does not touch the catalog, and it is
+left to the branch that owns the catalog [R]. On the run before the merge,
+`MercuryRtCoreTests.A_second_ports_buttons_are_ignored_on_both_engines` failed: it pressed and read the joypad register
+with no frame between, which a latched press no longer reaches, and it now runs a frame after the presses.
+`emusen-native`'s own tests: `cargo test --release`, 63 passed.

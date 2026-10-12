@@ -1036,7 +1036,8 @@ the two sides may use different allocators.
 - **The crash log** keeps `EmuSen_NativeCores.md`'s design: the host passes a path once per library, the core's panic
   hook writes the panic and its backtrace there before the process aborts, and the runtime's own crash record (today
   `EmuSen.Mistress/CrashLog.cs`) names that file. The hook writes only the file, so the host makes its folder; since
-  2026-10-12 the host's path is `<id>_crash_<pid>.txt` in `ErrorLog.Root()`, beside the frontend's own reports
+  2026-10-12 the host's path is `<id>_crash_<pid>.txt` in `ErrorLog.Root()`, beside the frontend's own reports, and
+  `emusen-native`'s hook appends each report whole under a lock, since two threads can panic at once
   (`Diamond_Players.md` §12.7.5). The frontend's record cannot name it after an abort, which ends the process.
 
 ### 6.19 Events

@@ -17,7 +17,11 @@ impl Mapped {
     /// Maps the file at `path` whole. Opening reads none of it.
     pub fn open(path: impl AsRef<Path>) -> io::Result<Mapped> {
         let file = File::open(path)?;
-        if file.metadata()?.len() == 0 {
+        let meta = file.metadata()?;
+        if meta.is_dir() {
+            return Err(io::Error::from(io::ErrorKind::IsADirectory));
+        }
+        if meta.len() == 0 {
             return Ok(Mapped { map: None });
         }
         // SAFETY: the mapping is read-only and private to this value; the file's bytes are the caller's promise not to
@@ -64,7 +68,7 @@ mod tests {
         std::fs::write(&file, b"").unwrap();
         assert!(Mapped::open(&file).unwrap().bytes().is_empty());
         assert_eq!(Mapped::open(temp.join("absent.bin")).err().map(|e| e.kind()), Some(std::io::ErrorKind::NotFound));
-        assert!(Mapped::open(temp.join("")).is_err(), "a directory is no file to map");
+        assert_eq!(Mapped::open(temp.path()).err().map(|e| e.kind()), Some(std::io::ErrorKind::IsADirectory), "a directory is no file to map");
     }
 
     /// Unlinking a mapped file leaves its bytes readable where the system keeps a file's blocks past its name.

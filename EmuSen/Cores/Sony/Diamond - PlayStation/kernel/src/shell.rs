@@ -159,6 +159,8 @@ fn start(s: Settings) {
     }
     wr(header + 0x20, s.stack);
     wr(header + 0x24, 0);
+    wr(layout::io::I_MASK, 0);
+    wr(layout::io::I_STAT, 0);
     unsafe { entry::exec(header, 1, 0) };
     call(rd(A_TABLE + 4 * 0xA1), b'B' as u32, 0x38C, 0, 0);
 }

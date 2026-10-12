@@ -51,9 +51,9 @@ pub extern "C" fn start_pad2() -> u32 {
     1
 }
 
-/// The element the pads and the cards share, queued once at priority 2, with vblank enabled.
+/// The element the pads and the cards share, queued once at priority 2, then vblank enabled, so that a vblank
+/// already pending finds the element that acknowledges it.
 pub fn queue() {
-    wr(I_MASK, rd(I_MASK) | 1);
     unsafe {
         if !STARTED {
             let e = &raw mut ELEMENT as u32;
@@ -63,6 +63,7 @@ pub fn queue() {
             STARTED = true;
         }
     }
+    wr(I_MASK, rd(I_MASK) | 1);
 }
 
 /// The element removed once neither the pads nor the cards use it.

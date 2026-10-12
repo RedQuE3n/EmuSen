@@ -315,6 +315,7 @@ fn service() {
     let t = rd8(REG3) & 7;
     if t == 0 {
         bank(0);
+        acknowledge(2);
         return;
     }
     let result = &raw mut RESULT as u32;

@@ -892,3 +892,180 @@ fn the_spus_transfers_take_a_halfword_each_32_cycles() {
     let m = run_for(include_str!("../programs/spu-dma.s"), 30, Market::Americas);
     assert_eq!(results(&m, 0x10_0000, 7), [15_419, 16_534, 1068, 16_402, 582, 993, 2054]);
 }
+
+// --- Stage 10: the open kernel's second phase (Diamond_OpenKernel_Phase2.md) ---
+
+#[path = "support/iso.rs"]
+mod iso;
+
+/// DATA.BIN's byte k.
+fn data_byte(k: usize) -> u8 {
+    (k * 7 + 3) as u8
+}
+
+/// The boot disc: SYSTEM.CNF naming `kernel-cd.s` in a subdirectory with an argument and its own TCB, EVENT and STACK,
+/// and a 5,000-byte DATA.BIN; the program's header gives GP 80123450h.
+fn boot_disc() -> emusen_disc::Disc {
+    let words = emusen_mips::assemble(include_str!("../programs/kernel-cd.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    let mut exe = exe::build(&words);
+    exe[0x14..0x18].copy_from_slice(&0x8012_3450u32.to_le_bytes());
+    let data: Vec<u8> = (0..5000).map(data_byte).collect();
+    let cnf = b"BOOT = cdrom:\\DIR\\PROG.EXE;1 hello\r\nTCB = 6\r\nEVENT = 14\r\nSTACK = 801FF800\r\n";
+    iso::disc(&[iso::Entry::File("SYSTEM.CNF", cnf), iso::Entry::File("DATA.BIN", &data), iso::Entry::Dir("DIR"), iso::Entry::File("DIR\\PROG.EXE", &exe)])
+}
+
+/// A machine on the open kernel with no program given, as a disc is booted: reset at BFC00000h.
+fn open_machine(disc: Option<emusen_disc::Disc>) -> Machine {
+    let media = Media { kind: diamond::media::Kind::Disc { raw: true }, market: Some(Market::Americas) };
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &[], kernel::open_kernel().map(|k| (k, Kernel::Open)));
+    if let Some(d) = disc {
+        m.insert_disc(d);
+    }
+    m
+}
+
+/// The CD boot of Diamond_OpenKernel_Phase2.md §15 with no firmware: SYSTEM.CNF's program loaded from a subdirectory and
+/// entered with a0 = 1, a1 = 0, SYSTEM.CNF's stack and the header's GP, the argument at 180h, SetConf with TCB and EVENT;
+/// then the kernel's CD and file calls on the same disc, none of them changing S0-S7, GP, SP or FP (§12).
+#[test]
+fn the_open_kernel_boots_a_disc_by_its_system_cnf_and_reads_its_files() {
+    let mut m = open_machine(Some(boot_disc()));
+    for _ in 0..900 {
+        m.advance();
+        if m.board.ram_word(0xFFFF0) == 0xD1A0_D00E {
+            break;
+        }
+    }
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program finished at frame {}, pc {:08X}", m.frames, m.cpu.regs.pc);
+    let r = results(&m, 0x10_0000, 27);
+    assert_eq!(&r[..4], [1, 0, 0x801F_F800, 0x8012_3450], "a0, a1, SYSTEM.CNF's STACK and the header's GP at the entry");
+    assert_eq!(r[4], u32::from_le_bytes(*b"hell"), "the argument at 180h");
+    assert_eq!(&r[5..8], [0x14, 6, 0x801F_F800], "GetConf: EVENT and TCB, hexadecimal, and STACK");
+    assert_eq!(r[8], 0, "no call changed S0-S7, GP, SP or FP");
+    let fd = r[9];
+    assert!(fd >= 2 && fd < 16, "open: {fd:X}");
+    assert_eq!(&r[10..15], [100, 4000, 900, u32::MAX, fd], "lseek, two reads to the file's end and one past it, close");
+    let want: Vec<u8> = (100..5000).map(data_byte).collect();
+    assert_eq!(&m.board.ram[0x11_0000..0x11_0000 + 4000], &want[..4000]);
+    assert_eq!(&m.board.ram[0x11_2000..0x11_2000 + 900], &want[4000..]);
+    let mut pvd = [0u8; 2352];
+    boot_disc().read(150 + 16, &mut pvd);
+    assert!(r[15] > 20 && r[15] < 40, "CdGetLbn: {}", r[15]);
+    assert_eq!(r[16], 1, "CdReadSector");
+    assert_eq!(&m.board.ram[0x11_8000..0x11_8800], &pvd[24..2072]);
+    assert_eq!((r[17], r[18], r[19], r[20]), (0x8010_0200, 0x8010_0228, 0x8010_0250, 0), "firstfile2 and nextfile over the root");
+    let name = |at: usize| String::from_utf8_lossy(&m.board.ram[at..at + 20]).trim_end_matches('\0').to_owned();
+    assert_eq!([name(0x10_0200), name(0x10_0228), name(0x10_0250)], ["DATA.BIN;1", "DIR", "SYSTEM.CNF;1"]);
+    assert_eq!(m.board.ram_word(0x10_0200 + 0x18), 5000, "DATA.BIN's size in its direntry");
+    assert_eq!(r[21], 1, "cd");
+    assert!(r[22] < 16 && r[23] == r[22], "a name relative to cd's directory: {:X} {:X}", r[22], r[23]);
+    assert_eq!((r[24], r[25]), (u32::MAX, 2), "a missing file: -1, error 02h");
+    assert_eq!(r[26] & 0x02, 0x02, "CdGetStatus: the motor on");
+}
+
+/// The card calls of Diamond_OpenKernel_Phase2.md §13-§14 on a blank card: format, files made, written and read, listed,
+/// erased, undeleted and renamed, asynchronous and low-level reads ended by their events; and the card left in the
+/// on-card format of psx-spx's "Memory Card Data Format", every directory frame's checksum and chain as it gives them.
+#[test]
+fn the_open_kernels_card_files_keep_the_on_card_format() {
+    let words = emusen_mips::assemble(include_str!("../programs/kernel-card.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    let image = exe::build(&words);
+    let media = Media::read(&image).unwrap();
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
+    m.insert_card(0, None);
+    for _ in 0..3000 {
+        m.advance();
+        if m.board.ram_word(0xFFFF0) == 0xD1A0_D00E {
+            break;
+        }
+    }
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program finished at frame {}, pc {:08X}", m.frames, m.cpu.regs.pc);
+    let r = results(&m, 0x10_0000, 42);
+    assert_eq!(r[3], 1, "format");
+    assert!(r[4] < 16, "a new file opened: {:X}", r[4]);
+    assert_eq!((r[5], r[6], r[8], r[9]), (0x4000, r[4], 0x4000, r[7]), "16 KiB written, closed, read back, closed");
+    let pattern: Vec<u8> = (0..0x1000u32).flat_map(|k| (k ^ 0xA500_0000).to_le_bytes()).collect();
+    assert_eq!(&m.board.ram[0x13_0000..0x13_4000], &pattern[..]);
+    assert_eq!((r[12], r[13], r[14]), (0x8010_0200, 0x8010_0228, 0), "firstfile2 and nextfile");
+    assert_eq!((r[15], r[16], r[17]), (1, u32::MAX, 2), "erase, then the erased file not found");
+    assert_eq!(r[19], 0x8010_0278, "the deleted file found in find mode 1");
+    assert_eq!(m.board.ram_word(0x10_0278 + 0x14), 0xA0, "its attribute");
+    assert_eq!((r[21], r[22], r[23], r[24]), (1, 1, 1, u32::MAX), "undelete, erase, rename, the old name gone");
+    assert_eq!((r[28], r[29]), (0x80, 1), "the asynchronous read returns at once and its event comes");
+    assert_eq!(&m.board.ram[0x14_0000..0x14_0080], &pattern[..0x80]);
+    assert_eq!((r[33], r[34], r[35]), (1, 1, 1), "_card_read queued, its event, _card_status ready");
+    assert_eq!((r[38], r[39], r[40], r[41]), (1, 1, 0x11, u32::MAX), "the empty slot: _card_info's timeout, status 11h, open fails");
+    let card = &m.card_in(0).unwrap().data;
+    let frame = |i: usize| &card[i * 128..i * 128 + 128];
+    let xor = |f: &[u8]| f[..127].iter().fold(0u8, |a, b| a ^ b);
+    assert_eq!(&m.board.ram[0x15_0000..0x15_0080], frame(0), "_card_read's sector 0");
+    assert_eq!(&frame(0)[..2], b"MC");
+    for i in 0..36 {
+        assert_eq!(xor(frame(i)), frame(i)[127], "frame {i}'s checksum");
+    }
+    let dir = |b: usize| (u32::from_le_bytes(frame(b)[..4].try_into().unwrap()), u32::from_le_bytes(frame(b)[4..8].try_into().unwrap()), u16::from_le_bytes([frame(b)[8], frame(b)[9]]), String::from_utf8_lossy(&frame(b)[10..31]).trim_end_matches('\0').to_owned());
+    assert_eq!(dir(1), (0x51, 0x4000, 1, "BASLUS-00000RENAMED".into()), "the first block of two, linked to block 2");
+    assert_eq!(dir(2), (0x53, 0, 0xFFFF, String::new()), "its last block");
+    assert_eq!(dir(3), (0xA1, 0x2000, 0xFFFF, "BASLUS-00000SECOND".into()), "the erased file");
+    for b in 4..16 {
+        assert_eq!(dir(b), (0xA0, 0, 0xFFFF, String::new()), "block {b} free");
+    }
+    for i in 16..36 {
+        assert_eq!(&frame(i)[..4], [0xFF; 4], "no broken sector in frame {i}");
+    }
+    assert!((36..63).all(|i| frame(i).iter().all(|&b| b == 0xFF)) && frame(63) == frame(0), "frames 36-62 FFh, 63 the header");
+    assert_eq!(&card[0x2000..0x6000], &pattern[..], "the file's 16 KiB in blocks 1 and 2");
+}
+
+/// Stage 7's `cd-kernel.s`, side-loaded on the open kernel instead of the player's BIOS, with the synthetic disc:
+/// _96_init, the drive's status, sector 16 read whole and SYSTEM.CNF found, as the program expects of either kernel.
+#[test]
+fn the_kernels_cd_functions_read_a_disc_on_the_open_kernel() {
+    let words = emusen_mips::assemble(include_str!("../programs/cd-kernel.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).unwrap();
+    let image = exe::build(&words);
+    let media = Media::read(&image).unwrap();
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
+    m.insert_disc(boot_disc());
+    for _ in 0..300 {
+        m.advance();
+    }
+    let r: Vec<u32> = (0..5).map(|i| m.board.ram_word(0x10_0000 + 4 * i)).collect();
+    assert_eq!((r[0], r[1], r[3]), (5, 1, 1), "every call returned, _96_init and CdReadSector with success: {r:08X?}");
+    assert_eq!(r[2] & 0x02, 0x02, "the motor on");
+    assert_eq!(r[4], 21, "SYSTEM.CNF's sector, after the root and DIR");
+    let mut pvd = [0u8; 2352];
+    boot_disc().read(150 + 16, &mut pvd);
+    assert_eq!(&m.board.ram[0x11_0000..0x11_0800], &pvd[24..2072]);
+}
+
+/// The screen with no disc (§16): an empty drive and a blank card, which the card manager formats on Square pressed
+/// twice; then a disc put in, which the shell finds within its two-second poll and boots by its SYSTEM.CNF.
+#[test]
+fn the_screen_with_no_disc_formats_a_card_and_boots_a_disc_put_in() {
+    let mut m = open_machine(None);
+    m.insert_card(0, None);
+    let square = 1 << 15;
+    for _ in 0..1200 {
+        let f = m.frames;
+        m.board.sio0.set_buttons(0, if (400..406).contains(&f) || (420..426).contains(&f) { square } else { 0 });
+        m.advance();
+    }
+    let card = &m.card_in(0).unwrap().data;
+    assert_eq!(&card[..2], b"MC", "formatted from the manager");
+    assert_eq!(&card[128..132], [0xA0, 0, 0, 0], "block 1 free");
+    let at = |x: usize, y: usize| u16::from_le_bytes([m.board.gpu.vram.bytes[2 * (y * 1024 + x)], m.board.gpu.vram.bytes[2 * (y * 1024 + x) + 1]]);
+    assert_eq!(at(2, 120), 2 | 3 << 5 | 5 << 10, "the manager's background");
+    m.set_lid(true, None);
+    for _ in 0..30 {
+        m.advance();
+    }
+    m.set_lid(false, Some(boot_disc()));
+    for _ in 0..1200 {
+        m.advance();
+        if m.board.ram_word(0xFFFF0) == 0xD1A0_D00E {
+            break;
+        }
+    }
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the disc put in booted, by frame {}", m.frames);
+    assert_eq!(m.board.ram_word(0x10_0000 + 4 * 8), 0, "and its calls kept the saved registers");
+}

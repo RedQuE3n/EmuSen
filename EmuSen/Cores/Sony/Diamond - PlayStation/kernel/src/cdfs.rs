@@ -1,6 +1,6 @@
 //! Files on "cdrom:" from the ISO 9660 filesystem (ECMA-119 2nd edition, §8.4 the primary volume descriptor, §9.1
 //! the directory record): paths resolved from the root or the directory `cd` set, names compared without case and,
-//! when the pattern gives none, without the version; the device functions A(5Fh)-A(64h) and CdGetLbn.
+//! when the pattern gives none, without the version; a direntry carries the identifier whole, its version included; the device functions A(5Fh)-A(64h) and CdGetLbn.
 //! Diamond_OpenKernel.md §12.
 
 use crate::cdrom;
@@ -104,15 +104,11 @@ fn scan(dir: (u32, u32), pattern: u32, from: u32, star: bool) -> Option<(u32, u3
                 if index >= from {
                     let mut k = 0;
                     while k < n.min(38) {
-                        let c = rd8(r + 33 + k);
-                        if c == b';' as u32 && !versioned {
-                            break;
-                        }
-                        wr8(name + k, c);
+                        wr8(name + k, rd8(r + 33 + k));
                         k += 1;
                     }
                     wr8(name + k, 0);
-                    if names::matches(pattern, name, 0, star, true) {
+                    if names::matches(pattern, name, if versioned { 0 } else { b';' as u32 }, star, true) {
                         return Some((le32(r + 2), le32(r + 10), rd8(r + 25), index + 1));
                     }
                 }

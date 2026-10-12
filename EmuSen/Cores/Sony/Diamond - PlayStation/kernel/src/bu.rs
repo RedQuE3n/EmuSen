@@ -79,7 +79,7 @@ fn checksum(a: u32) {
     wr8(a + 0x7F, x);
 }
 
-fn state(slot: usize, b: u32) -> u32 {
+fn state_of(slot: usize, b: u32) -> u32 {
     le32(frame(slot, b))
 }
 
@@ -219,7 +219,7 @@ fn format_card(port: u32) -> bool {
 
 /// The first block (1-15) whose state is `wanted` and whose name matches the pattern.
 fn find(slot: usize, pattern: u32, wanted: u32, star: bool) -> Option<u32> {
-    (1..=15).find(|&b| state(slot, b) == wanted && names::matches(pattern, frame(slot, b) + NAME, 0, star, false))
+    (1..=15).find(|&b| state_of(slot, b) == wanted && names::matches(pattern, frame(slot, b) + NAME, 0, star, false))
 }
 
 /// The block holding the file's `index`th 8 KiB, following the chain.
@@ -250,7 +250,7 @@ fn create(port: u32, name: u32, blocks: u32) -> Result<u32, u32> {
     let mut n = 0;
     for wanted in [FREE, 0xA1, 0xA2, 0xA3] {
         for b in 1..=15 {
-            if n < blocks && state(slot, b) == wanted {
+            if n < blocks && state_of(slot, b) == wanted {
                 chosen[n as usize] = b;
                 n += 1;
             }
@@ -374,7 +374,7 @@ pub extern "C" fn dev_card_close(f: u32) -> u32 {
 fn entry(slot: usize, b: u32, direntry: u32) -> u32 {
     let f = frame(slot, b);
     names::copy(direntry, f + NAME, NAME_MAX, 0x14);
-    wr(direntry + 0x14, if state(slot, b) == FIRST { 0x50 } else { 0xA0 });
+    wr(direntry + 0x14, if state_of(slot, b) == FIRST { 0x50 } else { 0xA0 });
     wr(direntry + 0x18, le32(f + 4));
     wr(direntry + 0x1C, 0);
     wr(direntry + 0x20, b * 64);
@@ -387,7 +387,7 @@ fn search(direntry: u32) -> u32 {
     let wanted = if unsafe { FIND_MODE } == 1 { DELETED } else { FIRST };
     let pattern = &raw const PATTERN as u32;
     for b in from..=15 {
-        if state(slot, b) == wanted && names::matches(pattern, frame(slot, b) + NAME, 0, true, false) {
+        if state_of(slot, b) == wanted && names::matches(pattern, frame(slot, b) + NAME, 0, true, false) {
             unsafe { SEARCH = (slot, b + 1) };
             return entry(slot, b, direntry);
         }
@@ -648,8 +648,28 @@ pub fn sector_done(slot: usize, outcome: Outcome) {
     step(slot);
 }
 
-/// The slot's copy of block 0 and whether it is formatted, for the card manager.
-pub fn directory(port: u32) -> Option<u32> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum State {
+    Absent,
+    Blank,
+    Ready,
+}
+
+/// What the slot holds, by the documented read of sector 0, for the card manager.
+pub fn state(port: u32) -> State {
+    let saved = unsafe { AUTO };
+    unsafe { AUTO = 0 };
+    let r = ready(port);
+    unsafe { AUTO = saved };
+    match r {
+        Ok(()) => State::Ready,
+        Err(_) if unsafe { LOADED[card::slot_of(port)] } => State::Blank,
+        Err(_) => State::Absent,
+    }
+}
+
+/// The blocks free on a ready card.
+pub fn free_blocks(port: u32) -> u32 {
     let slot = card::slot_of(port);
-    known(port).ok().map(|_| frame(slot, 0))
+    (1..=15).filter(|&b| (FREE..=0xA3).contains(&state_of(slot, b))).count() as u32
 }

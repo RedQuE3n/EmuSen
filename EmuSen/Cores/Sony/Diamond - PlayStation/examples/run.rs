@@ -43,10 +43,12 @@ fn main() {
         m.insert_disc(d);
         eprintln!("[disc opened in {:.0} ms]", loaded.as_secs_f64() * 1e3);
     }
-    let card_file = args.iter().position(|a| a == "--card").map(|i| args[i + 1].clone());
-    if let Some(f) = &card_file {
-        let data = std::fs::read(f).ok();
-        m.insert_card(0, data.as_deref());
+    let card_files = ["--card", "--card2"].map(|flag| args.iter().position(|a| a == flag).map(|i| args[i + 1].clone()));
+    for (n, f) in card_files.iter().enumerate() {
+        if let Some(f) = f {
+            let data = std::fs::read(f).ok();
+            m.insert_card(n, data.as_deref());
+        }
     }
     let presses: Vec<(i64, u32, i64)> = args
         .iter()
@@ -163,11 +165,13 @@ fn main() {
         audio.extend_from_slice(&chunk[..n]);
         write_wav(path, &audio);
     }
-    if let (Some(f), Some(c)) = (&card_file, m.card_in(0))
-        && c.changed
-    {
-        std::fs::write(f, &c.data).expect("the card written");
-        eprintln!("[card written to {f}]");
+    for (n, f) in card_files.iter().enumerate() {
+        if let (Some(f), Some(c)) = (f, m.card_in(n))
+            && c.changed
+        {
+            std::fs::write(f, &c.data).expect("the card written");
+            eprintln!("[card written to {f}]");
+        }
     }
     for (t, n, count, first) in &seen {
         eprintln!("[call {t}({n:02X}h) {count} times, first at frame {first}]");

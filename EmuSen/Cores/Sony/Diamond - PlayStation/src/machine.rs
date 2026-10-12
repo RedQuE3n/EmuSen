@@ -196,16 +196,21 @@ impl Machine {
     }
 }
 
-/// `Machine::step` over the machine's parts, so that the debugger's frame can lend its observer the hooks beside them;
-/// a step the observer stops runs nothing and leaves the clock where it was (Diamond_Debugger.md).
+/// The shell's program loaded in place of the shell when the processor reaches its entry, once.
 #[inline(always)]
-pub(crate) fn step_on<O: Observer>(cpu: &mut R3000, board: &mut Board, exe: &mut Option<Vec<u8>>, kernel: Kernel, o: &mut O) -> Step {
-    let pc = cpu.regs.pc;
-    if exe.is_some() && pc & 0x1FFF_FFFF == kernel::SHELL_ENTRY && !cpu.regs.branch.slot {
+pub(crate) fn side_load(cpu: &mut R3000, board: &mut Board, exe: &mut Option<Vec<u8>>) {
+    if exe.is_some() && cpu.regs.pc & 0x1FFF_FFFF == kernel::SHELL_ENTRY && !cpu.regs.branch.slot {
         let image = exe.take().unwrap_or_default();
         exe::load(&image, &mut board.ram, cpu);
         board.cache.tags = [0; 256];
     }
+}
+
+/// `Machine::step` over the machine's parts, so that the debugger's frame can lend its observer the hooks beside them;
+/// a step the observer stops runs nothing and leaves the clock where it was (Diamond_Debugger.md).
+#[inline(always)]
+pub(crate) fn step_on<O: Observer>(cpu: &mut R3000, board: &mut Board, exe: &mut Option<Vec<u8>>, kernel: Kernel, o: &mut O) -> Step {
+    side_load(cpu, board, exe);
     let tapped = if kernel.taps_putchar() { kernel::putchar(cpu.regs.pc, cpu.regs.r[9], cpu.regs.r[4]) } else { None };
     let step = cpu.step_observed(board, o);
     if let Step::Observed(_) = step {

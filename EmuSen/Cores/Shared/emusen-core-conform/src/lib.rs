@@ -1226,7 +1226,7 @@ fn c14(s: &mut Session<'_>) -> Case {
     c.done("C14", "descriptors against exports")
 }
 
-use emusen_native::debug::{flag, run as runflag, stop};
+use emusen_native::debug::{flag, range, run as runflag, stop};
 
 /// Every debug log drained, so that a full one does not stop the frame.
 fn drain_debug(m: &Machine<'_>) {
@@ -1240,6 +1240,11 @@ fn drain_debug(m: &Machine<'_>) {
         if let Some(g) = f.debug_calls {
             let n = g(m.h, std::ptr::null_mut(), 0).max(0) as usize;
             let mut b = vec![0u32; 3 * n + 3];
+            g(m.h, b.as_mut_ptr(), b.len());
+        }
+        if let Some(g) = f.debug_reads {
+            let n = g(m.h, std::ptr::null_mut(), 0).max(0) as usize;
+            let mut b = vec![0u32; 5 * n + 5];
             g(m.h, b.as_mut_ptr(), b.len());
         }
         if let Some(g) = f.debug_profile {
@@ -1279,12 +1284,14 @@ fn observed_frame(m: &Machine<'_>) -> Result<(), String> {
 }
 
 /// Every table armed with nothing to hit: calls, stores, the profile and processor 0's coverage tracked, a breakpoint
-/// at an address no 32-bit counter reaches, and watch and data-breakpoint ranges over a space no core has.
+/// at an address no 32-bit counter reaches, and watch and data-breakpoint ranges over a space no core has; with
+/// `DEBUG_READS`, loads too, and the read ranges of both kinds over that space.
 fn arm(m: &Machine<'_>) {
     let f = &m.lib.f;
+    let reads = m.lib.claims(caps::DEBUG_READS);
     unsafe {
         if let Some(g) = f.debug_set {
-            g(m.h, flag::CALLS | flag::WRITES | flag::PROFILING | (1 << flag::COVERAGE), i32::MIN, -1);
+            g(m.h, flag::CALLS | flag::WRITES | flag::PROFILING | (1 << flag::COVERAGE) | if reads { flag::READS } else { 0 }, i32::MIN, -1);
         }
         if let Some(g) = f.debug_set_breakpoints {
             let pairs = [-2i32, -2];
@@ -1292,8 +1299,9 @@ fn arm(m: &Machine<'_>) {
         }
         if let Some(g) = f.debug_set_ranges {
             let none = [u32::MAX - 1, 0, u32::MAX];
-            g(m.h, 0, none.as_ptr(), 1);
-            g(m.h, 1, none.as_ptr(), 1);
+            for kind in if reads { 0..=range::READ_BREAK } else { 0..=range::BREAK } {
+                g(m.h, kind, none.as_ptr(), 1);
+            }
         }
     }
 }
@@ -1348,8 +1356,17 @@ fn c15(s: &mut Session<'_>) -> Case {
                 c.that(at(&m) != before, || format!("step {i} under EACH did not move the machine from {before:?}"));
             }
             set(m.h, 0, i32::MIN, -1);
+
+            let ranges = f.debug_set_ranges.unwrap();
+            let none = [u32::MAX - 1, 0, u32::MAX];
+            let reads = s.lib.claims(caps::DEBUG_READS);
+            for kind in [range::READ_WATCH, range::READ_BREAK, range::READ_BREAK + 1] {
+                let r = ranges(m.h, kind, none.as_ptr(), 1);
+                let want = if reads && kind <= range::READ_BREAK { 0 } else { status::NOT_SUPPORTED };
+                c.that(r == want, || format!("debug_set_ranges of kind {kind} answered {r}, {want} for a core that {} DEBUG_READS", if reads { "claims" } else { "does not claim" }));
+            }
         }
-        c.note(format!("armed against plain over {frames} frames; a breakpoint at the next instruction; eight steps under EACH"));
+        c.note(format!("armed against plain over {frames} frames{}; a breakpoint at the next instruction; eight steps under EACH; range kinds 2-4", if s.lib.claims(caps::DEBUG_READS) { ", loads among them" } else { "" }));
         Ok(())
     };
     if let Err(e) = body(s, &mut c) {

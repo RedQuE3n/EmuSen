@@ -47,7 +47,9 @@ names and layout only; no emulator's source and no firmware was read.
 - **`R3000`**: the registers, `hilo_ready` (the bus cycle at which the multiplier's result can be read, §5.5), PRId,
   and the processor number and store space the observer is told. **`step`** is `step_observed` with `Unobserved`;
   it returns `Instruction`, `Exception(code)` with the Cause code (0 for an interrupt), or `Observed(reasons)` when the
-  observer stopped it before the instruction ran, nothing having run.
+  observer stopped it before the instruction ran, nothing having run. *Since 2026-10-11* the observer is also told
+  each byte a load read, and **`load_ahead`** names the bytes the next instruction would load, for a debugger that
+  stops in front of a load (§12).
 - **`DEBUG_REGISTERS`**: the 45 names a debugger lists, in `debug_registers`' order: the general registers by their
   conventional names, `hi`, `lo`, `pc`, then coprocessor 0's ten. A test holds the first 32 equal to `emusen-mips`'s
   `GPR_NAMES` and the last ten equal to `COP0`'s names for those registers.
@@ -637,3 +639,34 @@ Engine (GTE)" for the command encoding and summary; nocash's single-file psx-spx
 r3000 suite's README, `transcode_json.py` and data; ps1-tests' `cpu/cop` source and console log; amidog's
 `psxtest_cpu.txt` and `psxtest_cpx.txt`. No emulator's source, no firmware and no firmware listing, no PSX_MiSTer
 file, and no MarsRT code.
+
+## 12. Loads for a debugger (2026-10-11)
+
+*Built for the core ABI's minor 1.2, read watches and read data breakpoints (`EmuSen_CoreAPI_Extensions.md` §13,
+`Diamond_Debugger.md` §9).* Two additions, both outside the plain step.
+
+- **`Observer::read`**, `emusen-native`'s, with an empty default: each byte of a load once the bus has answered it,
+  with the processor's space and the loading instruction's address, as `wrote` reports a store. Every load reaches it
+  from the one place the crate reads data (`Run::read`): LB, LBU, LH, LHU, LW, LWL, LWR, and LWCz with CUz set (LWC2's
+  word goes to the GTE; LWC0's, LWC1's and LWC3's is read and dropped, §10). LWL and LWR report the bytes of the word
+  they reach, from `address & !3` up to the address and from the address up to the word's end, D-1's one access of up
+  to three lanes. **Not reported**: a load that met no device (DBE), as a faulting store's bytes are not; a load
+  while IsC isolates the cache, which reaches the cache and not memory (§6.3); and fetches. With `Unobserved` the
+  loop's body is empty and the plain step compiles to the same instructions as before; Diamond's frame cost, before and
+  after with the link's placement held fixed, shows no change (`Diamond_Debugger.md` §9.5).
+- **`R3000::load_ahead(word)`**: for a debugger in front of the instruction `word` at the PC, the first address and
+  the count of the bytes it would load if it ran now, nothing changed. It applies the step's own rules in advance
+  (§5.1, §5.3, §6.2, §6.3): none if the fetch would fault, if the debug unit's PC break would trap, with IsC set, for
+  an instruction that loads nothing, for LWCz with CUz clear, or for an address error or a data break that would
+  trap; the address from rs as the instruction reads it, before a pending load lands. The debug unit is asked on a
+  copy of the registers, so its status bits are not set by asking. What it cannot know is whether the bus will
+  answer: a load to no device is named, and then takes DBE without reading. It takes the word as an argument because
+  the processor never peeks its bus; the caller supplies what a fetch would return (Diamond's `Board::peek_code`,
+  which answers from the I-cache where the fetch would hit).
+- **Tested** (`every_load_reports_the_bytes_it_read_and_load_ahead_names_them_first`, the file's 25th case) [M]: LWL
+  at 10Bh and LWR at 109h report 108h–10Bh and 109h–10Bh with their values and their instruction's address; then each
+  of the eight loads, in five modes (kernel; IsC; user mode at a KSEG0 address; CU2 clear; a bus with no device at the
+  address) at four offsets. In the 128 cases where the bus answers, `load_ahead` named exactly the bytes the step then
+  reported, the misaligned and the refused loads included (both none); in the 32 to no device the step reported
+  nothing, and `load_ahead` had named the 22 of them that were aligned, the one case only the read can tell. The
+  suite's 55,000 cases are unchanged.

@@ -1,5 +1,5 @@
 //! The debugger (Diamond_Plan.md §4.7, stage 12): the R3000A observed through `Observer` in a frame of its own, which
-//! stops where the host's tables say; the call stack, stores reported in the bus and in the memory they land in,
+//! stops where the host's tables say; the call stack, stores and loads reported in the bus and in the memory they land in,
 //! coverage and the profile kept in the shared hooks; the R3000A's and the GTE's registers; code disassembled by
 //! emusen-mips with the GTE's names. The plain frame never meets any of it. Diamond_Debugger.md records each rule.
 
@@ -9,7 +9,7 @@ use emusen_native::core::{Instruction, Reference};
 use emusen_native::debug::{Hooks, kind, run, stop};
 
 use crate::bus::{Reached, reached};
-use crate::machine::{BIOS_ID, Machine, RAM_ID, SCRATCH_ID, step_on};
+use crate::machine::{BIOS_ID, Machine, RAM_ID, SCRATCH_ID, side_load, step_on};
 
 /// The processor's address space as a space, at the id the plan reserved for it (Diamond_Plan.md §4.3).
 pub const R3000BUS_ID: u32 = 0;
@@ -78,13 +78,38 @@ struct Watch<'a> {
     returned: bool,
     /// A call is open whose delay slot this step runs.
     abandon: bool,
+    /// The bytes the step's load would read, its first address and count, with each byte as the bus holds it, when read
+    /// data breakpoints are armed (Diamond_Debugger.md §9.3).
+    ahead: Option<(u32, u32, [u8; 4])>,
+}
+
+impl Watch<'_> {
+    /// A byte of a load, in the bus at its address and in RAM or the scratchpad at the offset it lands at.
+    fn in_spaces(window: u32, address: u32, mut note: impl FnMut(u32, u32)) {
+        note(R3000BUS_ID, address);
+        match reached(address, window) {
+            Some(Reached::Ram(at)) => note(RAM_ID, at),
+            Some(Reached::Scratch(at)) => note(SCRATCH_ID, at),
+            None => {}
+        }
+    }
 }
 
 impl Observer for Watch<'_> {
     #[inline(always)]
     fn before(&mut self, _processor: usize, pc: u32) -> u32 {
         if !std::mem::take(&mut self.skip) {
-            let why = self.hooks.stop_before(pc);
+            let mut why = self.hooks.stop_before(pc);
+            if let Some((first, count, bytes)) = self.ahead {
+                for i in 0..count {
+                    let (hooks, value) = (&mut *self.hooks, bytes[i as usize]);
+                    Self::in_spaces(self.window, first.wrapping_add(i), |space, at| {
+                        if hooks.note_read_ahead(space, at, value, pc) {
+                            why |= stop::READ;
+                        }
+                    });
+                }
+            }
             if why != stop::FRAME {
                 return why;
             }
@@ -101,6 +126,13 @@ impl Observer for Watch<'_> {
                 Some(Reached::Scratch(at)) => self.hooks.note_write(SCRATCH_ID, at, value, pc),
                 None => {}
             }
+        }
+    }
+
+    fn read(&mut self, _space: u32, address: u32, value: u8, pc: u32) {
+        if self.hooks.reads {
+            let hooks = &mut *self.hooks;
+            Self::in_spaces(self.window, address, |space, at| hooks.note_read(space, at, value, pc));
         }
     }
 
@@ -131,7 +163,15 @@ impl Machine {
         while !self.board.field_done {
             let window = self.board.ram_window();
             let d = &mut self.debug;
-            let mut w = Watch { hooks: &mut d.hooks, skip, window, called: false, returned: false, abandon: d.calling };
+            let ahead = if !skip && d.hooks.reads && !d.hooks.read_break_ranges.is_empty() {
+                side_load(&mut self.cpu, &mut self.board, &mut self.exe);
+                let at = self.cpu.regs.pc;
+                let b = &self.board;
+                b.peek_code(at).and_then(|word| self.cpu.load_ahead(word)).map(|(first, count)| (first, count, std::array::from_fn(|i| b.peek(first.wrapping_add(i as u32)))))
+            } else {
+                None
+            };
+            let mut w = Watch { hooks: &mut d.hooks, skip, window, called: false, returned: false, abandon: d.calling, ahead };
             let step = step_on(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut w);
             let (called, returned) = (w.called, w.returned);
             skip = false;
@@ -241,7 +281,7 @@ mod tests {
     use super::*;
     use crate::machine::tests::{machine_for, program};
     use crate::media::Market;
-    use emusen_native::debug::flag;
+    use emusen_native::debug::{flag, range};
     use emusen_native::ffi::StateMachine;
 
     /// A loop at 80010034h that calls a routine at 80010100h through JAL, JALR and BGEZAL, the routine storing a count in RAM and the scratchpad
@@ -303,6 +343,7 @@ routine: lw t1, 0(s0)\nnop\naddiu t1, t1, 1\nsw t1, 0(s0)\nsb t1, 0x10(s1)\nrtps
     fn drain(m: &mut Machine) {
         m.debug.hooks.calls_log.clear();
         m.debug.hooks.writes_log.clear();
+        m.debug.hooks.reads_log.clear();
     }
 
     /// The pc of each stop under `flags` from a stop at `at`, `n` times.
@@ -327,10 +368,12 @@ routine: lw t1, 0(s0)\nnop\naddiu t1, t1, 1\nsw t1, 0(s0)\nsb t1, 0x10(s1)\nrtps
     #[test]
     fn an_armed_frame_with_nothing_to_hit_is_the_plain_frame() {
         let (mut plain, mut armed, mut stepped) = (machine(true), machine(true), machine(true));
-        arm(&mut armed, flag::CALLS | flag::WRITES | flag::PROFILING | 1 << flag::COVERAGE);
+        arm(&mut armed, flag::CALLS | flag::WRITES | flag::READS | flag::PROFILING | 1 << flag::COVERAGE);
         armed.debug.hooks.set_breakpoints(&[-2, -2]);
         armed.debug.hooks.set_ranges(0, &[RAM_ID, 0x1F_FFFC, 0x1F_FFFF, R3000BUS_ID, 0xFFFF_FFF0, 0xFFFF_FFFF]);
         armed.debug.hooks.set_ranges(1, &[SCRATCH_ID, 0x3FF, 0x3FF]);
+        armed.debug.hooks.set_ranges(range::READ_WATCH, &[RAM_ID, 0x1F_FFFC, 0x1F_FFFF, R3000BUS_ID, 0xFFFF_FFF0, 0xFFFF_FFFF]);
+        armed.debug.hooks.set_ranges(range::READ_BREAK, &[SCRATCH_ID, 0x3FF, 0x3FF]);
         arm(&mut stepped, flag::EACH | flag::CALLS);
         let mut steps = 0;
         for frame in 0..6 {
@@ -469,6 +512,75 @@ routine: lw t1, 0(s0)\nnop\naddiu t1, t1, 1\nsw t1, 0(s0)\nsb t1, 0x10(s1)\nrtps
         m.debug.hooks.set_ranges(1, &[SCRATCH_ID, 0x10, 0x10]);
         assert_eq!(m.run_frame_debug(0), stop::DATA);
         assert_eq!((m.cpu.regs.pc, m.board.scratch[0x10] as u32), (0x8001_0114, m.board.ram_word(0x20000) & 0xFF));
+    }
+
+    /// A loop at 80010010h whose loads read RAM and the scratchpad in every width: LW, LBU, LWL and LWR of two bytes each,
+    /// LH, and LWC2 into VXY0, then a count stored back; RAM 80020004h-8002000Bh and the scratchpad's 10h hold constants.
+    fn loads() -> Machine {
+        let source = "lui s0, 0x8002\nlui s1, 0x1F80\nlui t0, 0x4000\nmtc0 t0, SR
+loop: lw t1, 0(s0)\nlbu t2, 0x10(s1)\nlwl t3, 0x5(s0)\nlwr t3, 0x6(s0)\nlh t4, 0x22(s1)\nlwc2 VXY0, 0x8(s0)\naddiu t1, t1, 1\nsw t1, 0(s0)\nsb t1, 0x22(s1)\nj loop\nnop";
+        let mut m = machine_for(&program(source), Market::Americas);
+        m.board.ram[0x2_0004..0x2_000C].copy_from_slice(&[0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]);
+        m.board.scratch[0x10] = 0x5A;
+        m
+    }
+
+    /// Loads are reported byte by byte once read, with the loading instruction: in the bus at the address read, and in RAM
+    /// or the scratchpad at the offset it lands at; LWL and LWR at the bytes of the word they reach, LWC2 at its word.
+    #[test]
+    fn read_watches_see_loads_in_the_bus_ram_and_the_scratchpad() {
+        let mut m = loads();
+        arm(&mut m, flag::READS);
+        m.debug.hooks.set_ranges(range::READ_WATCH, &[RAM_ID, 0x2_0000, 0x2_000B, SCRATCH_ID, 0x10, 0x10, SCRATCH_ID, 0x22, 0x23, R3000BUS_ID, 0x8002_0000, 0x8002_0003]);
+        m.debug.hooks.capacity = 1 << 24;
+        assert_eq!(run_out(&mut m, 0), 0);
+        let log = m.debug.hooks.reads_log.clone();
+        assert!(log.iter().all(|r| r.kind == range::READ_WATCH));
+        let at = |pc: u32, space: u32, n: usize| -> Vec<(u32, u32)> { log.iter().filter(|r| r.pc == pc && r.space == space).map(|r| (r.address, r.value)).take(n).collect() };
+        let base = 0x8001_0010;
+        assert_eq!(at(base + 8, RAM_ID, 2), [(0x2_0004, 0x11), (0x2_0005, 0x22)], "LWL at 80020005h reads the word's first two bytes");
+        assert_eq!(at(base + 12, RAM_ID, 2), [(0x2_0006, 0x33), (0x2_0007, 0x44)], "LWR at 80020006h reads its last two");
+        assert_eq!(at(base + 20, RAM_ID, 4), [(0x2_0008, 0x55), (0x2_0009, 0x66), (0x2_000A, 0x77), (0x2_000B, 0x88)], "LWC2");
+        assert_eq!(at(base + 4, SCRATCH_ID, 1), [(0x10, 0x5A)]);
+        assert_eq!(at(base + 16, SCRATCH_ID, 2).iter().map(|r| r.0).collect::<Vec<_>>(), [0x22, 0x23]);
+        let words: Vec<u32> = log.iter().filter(|r| r.pc == base && r.space == RAM_ID).collect::<Vec<_>>().chunks(4).map(|c| c.iter().enumerate().fold(0, |w, (i, r)| w | r.value << (8 * i))).collect();
+        assert!(words.len() > 1000 && words.windows(2).all(|p| p[1] == p[0] + 1), "each pass's LW reads the count the last one stored");
+        let bus: Vec<_> = log.iter().filter(|r| r.space == R3000BUS_ID).map(|r| (r.address - 0x8000_0000, r.value, r.pc)).collect();
+        let ram: Vec<_> = log.iter().filter(|r| r.space == RAM_ID && r.address < 0x2_0004).map(|r| (r.address, r.value, r.pc)).collect();
+        assert_eq!(bus, ram, "the bus's watch and RAM's name the same loads");
+        assert_eq!(m.debug_registers(GTE).unwrap()[0], 0x8877_6655, "the LWC2 ran");
+    }
+
+    /// A read data breakpoint stops in front of the load with nothing of it run, logging each byte it covers with the
+    /// value its space holds there; asked again it stops again, and resumed the load runs. In the bus or in RAM it names
+    /// the bytes LWL and LWR reach, not the words around them.
+    #[test]
+    fn a_read_data_breakpoint_halts_in_front_of_the_load_and_resumes() {
+        let mut m = loads();
+        m.advance();
+        arm(&mut m, flag::READS);
+        m.debug.hooks.set_ranges(range::READ_BREAK, &[SCRATCH_ID, 0x22, 0x22]);
+        assert_eq!(m.run_frame_debug(0), stop::READ);
+        assert_eq!(m.cpu.regs.pc, 0x8001_0020, "in front of the LH");
+        let (held, now, value) = (state(&m), m.board.now, m.board.scratch[0x22] as u32);
+        assert_eq!(m.run_frame_debug(0), stop::READ, "asked again, the same stop");
+        assert_eq!((held, now), (state(&m), m.board.now), "a stop runs nothing");
+        let logged: Vec<_> = m.debug.hooks.reads_log.iter().map(|r| (r.space, r.address, r.value, r.pc, r.kind)).collect();
+        assert_eq!(logged, [(SCRATCH_ID, 0x22, value, 0x8001_0020, range::READ_BREAK); 2]);
+        drain(&mut m);
+        assert_eq!(m.run_frame_debug(run::UNCHECKED), stop::READ);
+        assert_eq!(m.cpu.regs.pc, 0x8001_0020, "the next pass's LH");
+        assert!(m.board.now > now);
+        assert_eq!(m.cpu.regs.r[12] as u16, u16::from_le_bytes([value as u8, m.board.scratch[0x23]]), "the load ran once resumed");
+
+        for (space, address, pc) in [(R3000BUS_ID, 0x8002_0006, 0x8001_001C), (R3000BUS_ID, 0x8002_0005, 0x8001_0018), (RAM_ID, 0x2_0005, 0x8001_0018), (RAM_ID, 0x2_000B, 0x8001_0024)] {
+            m.debug.hooks.set_ranges(range::READ_BREAK, &[space, address, address]);
+            drain(&mut m);
+            assert_eq!((m.run_frame_debug(run::UNCHECKED), m.cpu.regs.pc), (stop::READ, pc), "{space} {address:08X}");
+            assert_eq!(m.debug.hooks.reads_log.len(), 1, "{space} {address:08X}");
+        }
+        m.debug.hooks.set_ranges(range::READ_BREAK, &[R3000BUS_ID, 0xA002_0005, 0xA002_0005]);
+        assert_eq!(run_out(&mut m, run::UNCHECKED), 0, "KSEG1's mirror is another bus address than the KSEG0 the loop reads");
     }
 
     /// Coverage marks each address that ran, KSEG0's at its 24 bits, and the profile charges the routine its instructions.

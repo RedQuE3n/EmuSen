@@ -89,6 +89,7 @@ table! {
         debug_pc: fn(C, u32, *mut u64) -> i32,
         debug_registers: fn(C, u32, *mut i64, usize) -> i64,
         debug_disassemble: fn(M, u32, u32, u32, u32, *mut u8, usize) -> i64,
+        debug_reads: fn(M, *mut u32, usize) -> i64,
     }
 }
 

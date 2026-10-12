@@ -160,9 +160,15 @@ impl R3000 {
         self.step_observed(bus, &mut Unobserved)
     }
 
-    /// The step a debugger watches: `observer.before` at the instruction boundary, stores and calls as they happen.
+    /// The step a debugger watches: `observer.before` at the instruction boundary, stores, loads and calls as they happen.
     pub fn step_observed<B: Bus, O: Observer>(&mut self, bus: &mut B, observer: &mut O) -> Step {
         exec::step(self, bus, observer)
+    }
+
+    /// For a debugger in front of the instruction `word` at the PC: the first address and the count of the bytes it
+    /// would load if it ran now, as `Observer::read` would then report them; nothing changed.
+    pub fn load_ahead(&self, word: u32) -> Option<(u32, u32)> {
+        exec::load_ahead(self, word)
     }
 }
 

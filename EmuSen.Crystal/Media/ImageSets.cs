@@ -54,7 +54,25 @@ namespace EmuSen.Crystal.Media
         public static IReadOnlyList<string> Companions(string sheetPath)
         {
             string dir = Path.GetDirectoryName(Path.GetFullPath(sheetPath)) ?? ".";
-            return CompanionNames(File.ReadAllText(sheetPath), Path.GetFileName(sheetPath)).Select(n => Path.Combine(dir, n)).ToArray();
+            return CompanionNames(File.ReadAllText(sheetPath), Path.GetFileName(sheetPath)).Select(n => Beside(dir, n)).ToArray();
+        }
+
+        // A name as written where it exists, else the folder's one entry per part that matches it ignoring case, either slash separating parts - see Diamond_Players.md §12.
+        private static string Beside(string dir, string name)
+        {
+            string written = Path.Combine(dir, name);
+            if (File.Exists(written)) return written;
+            string at = dir;
+            foreach (string part in name.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string exact = Path.Combine(at, part);
+                if (File.Exists(exact) || Directory.Exists(exact)) { at = exact; continue; }
+                if (!Directory.Exists(at)) return written;
+                var found = Directory.EnumerateFileSystemEntries(at).Where(e => string.Equals(Path.GetFileName(e), part, StringComparison.OrdinalIgnoreCase)).Take(2).ToArray();
+                if (found.Length != 1) return written;
+                at = found[0];
+            }
+            return at;
         }
 
         // The discs an .m3u lists, as paths beside it.

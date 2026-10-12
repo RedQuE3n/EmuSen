@@ -121,6 +121,11 @@ kit's `--image` and `--images` forms the same (its `media` module, a path depend
 shelving a set once (`ImageSets.Shelved`). The platform library now links `emusen-disc`, and through it the `chd`
 crate, the stated dependency of §2.3.
 
+*Amended 2026-10-12 (`Diamond_Players.md` §12.4):* the runtime finds a companion by its name as written, else part by
+part ignoring case with `/` and `\` both separating parts, so a sheet made where names ignore case opens on a
+filesystem that keeps it; the set module still answers the names as written, and the kit's `media` module joins them
+as written.
+
 ### 2.2 The questions inside the gap
 
 Three facts are mixed in "multi-file images", and each wants its own owner:

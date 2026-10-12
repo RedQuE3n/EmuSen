@@ -233,6 +233,7 @@ namespace EmuSen.Cores.Native
                 // A core that copies has its copy by now; one that borrows holds the files through its machine.
                 if (!kept) disc.Dispose();
             }
+            if (kept) disc.Prefetch();
             _set = set;
             _discs = set.Images;
             DiscIndex = 0;
@@ -314,6 +315,7 @@ namespace EmuSen.Cores.Native
             {
                 if (!Lends) disc.Dispose();
             }
+            if (Lends) disc.Prefetch();
             DiscIndex = index;
         }
 

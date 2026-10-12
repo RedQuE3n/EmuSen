@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace EmuSen.Galaxia.Media
 {
@@ -9,6 +10,9 @@ namespace EmuSen.Galaxia.Media
     public sealed class DiscFiles : IDisposable
     {
         private readonly IDisposable? _hold;
+        private readonly IReadOnlyList<string> _paths;
+        private readonly CancellationTokenSource _stop = new();
+        private Thread? _prefetch;
 
         public string Path { get; }
         public MappedFile Image { get; }
@@ -16,9 +20,49 @@ namespace EmuSen.Galaxia.Media
         // A sheet's tracks and then an .sbi, in the order a core numbers them.
         public IReadOnlyList<MappedFile> Companions { get; }
 
-        private DiscFiles(string path, IDisposable? hold, MappedFile image, IReadOnlyList<MappedFile> companions)
+        private DiscFiles(string path, IDisposable? hold, MappedFile image, IReadOnlyList<MappedFile> companions, IReadOnlyList<string> paths)
         {
-            (Path, _hold, Image, Companions) = (path, hold, image, companions);
+            (Path, _hold, Image, Companions, _paths) = (path, hold, image, companions, paths);
+        }
+
+        // The size of each read the prefetch makes, small so that a game's own read waits behind little of it.
+        public const int PrefetchChunk = 256 * 1024;
+
+        // How long the prefetch rests after a read, as a multiple of the read's own time.
+        public const int RestPerRead = 2;
+
+        // Every file of the disc read once, in order, on a background thread of the lowest priority, so that the system holds the pages before the game asks for them; what a read of the mapping returns never changes - see EmuSen_Galaxia.md §3.8.
+        public void Prefetch()
+        {
+            if (_prefetch is not null) return;
+            CancellationToken stop = _stop.Token;
+            _prefetch = new Thread(() => ReadAhead(_paths, stop)) { IsBackground = true, Priority = ThreadPriority.Lowest, Name = "disc prefetch" };
+            _prefetch.Start();
+        }
+
+        // Whether the prefetch has read every file to its end; false before it starts and when it was stopped.
+        public bool Prefetched { get; private set; }
+
+        private void ReadAhead(IReadOnlyList<string> paths, CancellationToken stop)
+        {
+            byte[] chunk = new byte[PrefetchChunk];
+            try
+            {
+                foreach (string path in paths)
+                {
+                    using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 0, FileOptions.SequentialScan);
+                    while (!stop.IsCancellationRequested)
+                    {
+                        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+                        if (file.Read(chunk, 0, chunk.Length) == 0) break;
+                        // A third of the medium at most, so that the game's own read never queues behind more than a chunk.
+                        stop.WaitHandle.WaitOne(System.Diagnostics.Stopwatch.GetElapsedTime(started) * RestPerRead);
+                    }
+                    if (stop.IsCancellationRequested) return;
+                }
+                Prefetched = true;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
 
         // The image at imagePath with its companions; nothing of any file is read but a sheet's own text.
@@ -32,12 +76,13 @@ namespace EmuSen.Galaxia.Media
                 MappedFile image = MappedFile.Open(imagePath);
                 opened.Add(image);
                 var companions = new List<MappedFile>();
-                foreach (string file in ImageSets.FilesFor(imagePath))
+                var files = ImageSets.FilesFor(imagePath);
+                foreach (string file in files)
                 {
                     companions.Add(MappedFile.Open(file));
                     opened.Add(companions[^1]);
                 }
-                return new DiscFiles(imagePath, hold, image, companions);
+                return new DiscFiles(imagePath, hold, image, companions, files.Prepend(imagePath).ToArray());
             }
             catch
             {
@@ -51,6 +96,7 @@ namespace EmuSen.Galaxia.Media
 
         public void Dispose()
         {
+            _stop.Cancel();
             Image.Dispose();
             foreach (MappedFile c in Companions) c.Dispose();
             _hold?.Dispose();

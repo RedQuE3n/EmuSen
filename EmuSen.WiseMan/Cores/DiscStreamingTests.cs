@@ -72,6 +72,7 @@ namespace EmuSen.WiseMan.Cores
             var disc = DiscFiles.Open(path);
             var media = disc.Companions.Select((c, n) => (CoreInterface.FileMedia + (uint)n, Held(c))).ToList();
             using var lent = new CoreMachine(library, Held(disc.Image), media, Defaults(library), Array.Empty<(uint, byte[])>(), loan: disc);
+            disc.Prefetch();
             var files = ImageSets.FilesFor(path).Select((f, n) => (CoreInterface.FileMedia + (uint)n, File.ReadAllBytes(f))).ToList();
             using var copied = new CoreMachine(library, File.ReadAllBytes(path), Defaults(library), files);
             SameRun(lent, copied, frames, Path.GetFileName(path));
@@ -142,6 +143,32 @@ namespace EmuSen.WiseMan.Cores
             engine.SetLid(true);
             Assert.ThrowsAny<Exception>(() => engine.InsertDisc(0));
             Assert.Equal((false, true, 1), (Mapped(first), Mapped(second), engine.DiscIndex));
+        }
+
+        // The prefetch reads every file of the disc to its end beside the game, rests between reads, and stops when the disc is let go; the mapping's bytes are the file's throughout.
+        [Fact]
+        public void The_prefetch_reads_the_whole_disc_and_changes_no_byte_of_it()
+        {
+            var disc = SyntheticPsxDisc.Build(audioSeconds: 20);
+            string sheet = disc.WriteSet(_root, "Fetched Set");
+            using (DiscFiles files = DiscFiles.Open(sheet))
+            {
+                Assert.False(files.Prefetched);
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                files.Prefetch();
+                files.Prefetch();
+                while (!files.Prefetched && watch.Elapsed < TimeSpan.FromSeconds(30)) System.Threading.Thread.Sleep(5);
+                Assert.True(files.Prefetched, "every file read to its end");
+                Assert.Equal(disc.DataTrack, files.Companions[0].Span(0, disc.DataTrack.Length).ToArray());
+                Assert.Equal(disc.AudioTrack, files.Companions[1].Span(0, disc.AudioTrack.Length).ToArray());
+            }
+            using (DiscFiles stopped = DiscFiles.Open(sheet))
+            {
+                stopped.Prefetch();
+                stopped.Dispose();
+                System.Threading.Thread.Sleep(100);
+                Assert.False(stopped.Prefetched, "let go at once, it stops");
+            }
         }
 
         // An unpacked folder a game has mapped stays through pruning, and goes at the next prune once the game lets it go.

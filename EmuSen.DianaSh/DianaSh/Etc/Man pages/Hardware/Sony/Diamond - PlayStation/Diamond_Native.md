@@ -1294,5 +1294,44 @@ as `firmwarecheck.py`'s input.
 - **The run tool** gained `--game`: the game's calls by number with their arguments and results, its own register
   accesses and its text, counted only for code in user RAM from the game's entry on, so that it serves on a player's
   BIOS without observing it (`examples/run.rs`).
-- **Tests**: `diamond`'s 133 unit and 53 program tests pass after the run tool's change (`cargo test --release`); no
-  test was added, the step's results needing the player's BIOS and the tester's discs.
+- **Tests**: `diamond`'s 145 unit and 56 program tests pass after the run tool's change, merged with stage 12
+  (`cargo test --release`); no test was added, the step's results needing the player's BIOS and the tester's discs.
+
+## 19. Stage 12, the debugger (2026-10-11)
+
+The plan's §7 row 12, with the tester's go of 2026-10-11, built beside stage 10 and merged with it. Its record is
+`Diamond_Debugger.md`.
+
+### 19.1 What was built
+
+- **The observed frame** (`src/debugger.rs`, `machine::step_on`): the plain step made generic over the R3000A's
+  observer, the plain frame passing `Unobserved`; the debugger's frame asks the shared hooks before each instruction,
+  records coverage over 24 bits and the profile, reports each store in `R3000BUS` and in `RAM` or `SCRATCH`, notes calls
+  at the branch and `jr ra`'s return after its delay slot, and abandons a call an exception interrupts in its slot.
+- **The descriptors** (`src/v1.rs`): `DEBUG`, `DEBUG_STACK`, `DEBUG_REGISTERS` and `DEBUG_DISASSEMBLE` claimed;
+  `R3000BUS`, id 0, a read-only 4 GiB view of the processor's space read by `Board::peek` (`src/bus.rs`); the R3000A's
+  code space; the stores `RAM` and `SCRATCH` report; the GTE's 64 registers beside the R3000A's 45.
+- **The listing** by `emusen-mips` with the GTE's names, now a dependency of the crate rather than of its tests.
+- **The run tool**: `--armed`, each frame through the debugger's loop with the kit's C15 tables set.
+- **No state change**: the debugger keeps nothing in the state, and `DMND` stays version 8; a state loaded at a stop
+  closes the open frame.
+
+### 19.2 The gate
+
+| Item | Result |
+|---|---|
+| Each claim a test | **Met**: twelve crate tests, three program tests over nine tables, nine WiseMan tests through DianaSh's commands (`Diamond_Debugger.md` §4) |
+| Every table armed gives the plain run's digests (C15, G7) | **Met**: each of nine tables alone and all together on six of the project's programs, six of ps1-tests' and a copied disc on the open kernel, 117 of 117; the kit's C1–C15 on seven images (§6 of the record) |
+| The plain frame's cost unchanged | **Met**: −3.4% to +1.6% on five programs, inside the runs' spread; armed, 18% to 27% more |
+
+### 19.3 Tests run (2026-10-11)
+
+`diamond` 145 unit tests and 56 program tests, with and without `EMUSEN_DIAMOND_PS1TESTS`, and the disc test with
+`EMUSEN_DIAMOND_DISC`, all passing; `blackmoon-r3000` with `EMUSEN_BLACKMOON_CORPUS`, unchanged by the stage, passing;
+WiseMan under the test lock with the corpus: `DiamondDebugTests`, `DiamondTests`, `CoreAbi`, `CoreDebug`,
+`CoreAdapter`, `CoreDiscovery`, `CoreRegistration`, `NephriteDebug`, `DebugPlumbing` and `SystemPack`, 122 of 122.
+
+### 19.4 What waits
+
+Read watchpoints, which need an extension of v1's ranges (`Diamond_Debugger.md` §5.1, proposed for the tester's
+decision); the console views outside v1. No dispute was taken.

@@ -20,6 +20,7 @@ the changes it led to; no new number was taken for it.
 which reads zero, is ruled in `Diamond_Records.md` §16.2 without a number.
 *Stage 9 (2026-10-11)* took D-30 to D-33, the MDEC's; the SPU's stage 8, built after it was merged, took D-34 to D-40, and
 added its step to D-29.
+*The GPU's rows step (2026-10-12)* took D-41 and D-42, from the two groups of amidog's GPU test that D-23 left open.
 
 ## The rules this log keeps
 
@@ -679,7 +680,7 @@ added its step to D-29.
   `the_status_follows_a_byte_through_the_transmitter_and_the_fifo`.
 - **Implemented in:** `diamond: SIO0 and port 1's digital pad, brought forward from stage 6`.
 
-### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; ~~open~~ the drawing groups settled on its expectations, ~~the FIFO, INTERLACE and cache groups open~~ *since the cache step* INTERLACE, CACHE TAG and the FIFO's read and full tests too, the FIFO's overflow test and CACHE BLOCK's polygons open
+### D-23. amidog's GPU test: polygons' and lines' flags, lines' and flipped rectangles' values, and the untextured primitives at the drawing area's edges, against a console's expectations; ~~open~~ the drawing groups settled on its expectations, ~~the FIFO, INTERLACE and cache groups open~~ *since the cache step* INTERLACE, CACHE TAG and the FIFO's read and full tests too, the FIFO's overflow test and CACHE BLOCK's polygons open; *since the rows step* both traced to a rule, D-41 and D-42, each left to the tester
 
 - **Opened:** 2026-10-11, by `psxtest_gpu` 1.7 run to its end once the pad answered (`Diamond_Pad.md` §5.4).
 - **Documents read:** none for this entry beyond `Diamond_GPU.md`'s own sources. *The GPU's step, 2026-10-11:*
@@ -779,6 +780,16 @@ added its step to D-29.
   and the 46 tests that had given up after a hundred errors (32 line commands, 12 of XYFLIP's, VRAM READ and
   INTERLACE) now run their cases to the end, so the run is longer, not shorter.
 
+  *The rows step, 2026-10-12* [M, R the program's harness]. The two groups left, run alone from local copies as before,
+  their GP0 words logged as written and the harness's images read from RAM at the compare's entry. Both failures
+  reproduce on the open kernel: CACHE BLOCK's 1,322 lines, all of its quad's and its bottom-flat triangle's cases, and the
+  overflow test's 1,812, of which 600 are its "INFO" compare. Each traced to a rule with its own entry:
+
+  | Group | Rule found | Its sources | Taken? |
+  |---|---|---|---|
+  | CACHE BLOCK, tests 1 and 4 | a triangle's rows from the middle vertex's row down, then from above it up, each left to right (D-41) | the model's expectations and Beetle PSX for flat-topped and flat-bottomed triangles and quads; Beetle PSX alone for a triangle's two parts | not here: it moves `gpu/bandwidth`'s textured quad rows from 39,975 and 39,976 hblanks to 39,915 (the console 39,938), which the step was held not to change; built on `diamond-gpu4-rows`, where CACHE BLOCK passes |
+  | FIFO, overflow | the FIFO keeps its newest 16 words, NOPs among them, with one command taken aside by the processor; GP1(01h) drops both and stops a fill where it is (D-42) | the harness's own images alone | no: Peter Lemon's programs, drawn whole by his console by his README and by SwanStation and PCSX-ReARMed, would lose words; the five referees draw a fill cut by GP1(01h) whole |
+
 - **Referee:** ~~not consulted~~. *The GPU's step* [M]: DuckStation and PCSX-Redux ran the same local copies for their TTY, each in its own
   scope with a copy of the referee in the cache. PCSX-Redux stopped twice with an exception in its Lua event listener
   after about eleven minutes, in POLYLINE and in POLY 22h, so it witnesses REG only; DuckStation ran REG to VRAM READ
@@ -816,6 +827,10 @@ added its step to D-29.
   on the harness and DuckStation; GPUREAD's repeat of a longer transfer's first word on the harness and PCSX-ReARMed,
   of the earlier word after a one-word transfer on the harness alone; GP1(00h)'s CLUT clear on psx-spx and the model.
   Open: the FIFO's overflow test, and CACHE BLOCK's quad and triangle cases.
+  *The rows step:* both traced, CACHE BLOCK's cases to D-41 and the overflow test to D-42; neither rule is taken into the
+  core, the first for its change to `bandwidth`'s output, the second for its conflict with Peter Lemon's programs and the
+  referees, and both are the tester's decision (`Diamond_GPU.md` §18). With D-41 taken, the program run whole would fail
+  only the overflow test's 1,812 lines (`Diamond_GPU.md` §10.3).
 - **Depends on it:** the GPU's line rasteriser, the flip, the area's clipping, GPUSTAT; *since the step* GPUREAD's
   latch, the copy, VRAM reads, sprites' texels, every primitive's placement under the offset.
 - **Pinned by:** ~~nothing yet~~. *Since the step:* `bit_28_clears_while_a_polygons_or_a_lines_vertices_arrive`,
@@ -1185,3 +1200,100 @@ added its step to D-29.
 - **Depends on it:** blocks no encoder writes, which a game's data may still hold.
 - **Pinned by:** the capture record's pin (T1, T8).
 - **Implemented in:** stage 8's commits on `diamond-s8`.
+
+### D-41. A triangle's rows: from its middle vertex's row down to its bottom first, then from the row above it up to its top, each row left to right
+
+- **Opened:** 2026-10-12, by the CACHE BLOCK cases D-23 left at the cache step. psx-spx gives the texture cache's
+  blocks and entries but not the order in which a polygon fetches its texels, which decides what the cache holds after
+  a polygon taller or wider than a block.
+- **Documents read:** psx-spx `6d7d1bc`, "GPU Texture Caching" and "GPU Render Polygon Commands"; nothing in
+  `graphicsprocessingunitgpu.md` on the order of a primitive's rows or pixels (searched for it).
+- **Test program:** `psxtest_gpu` 1.7's CACHE BLOCK, run alone from a local copy with the TTY switch set, as D-23
+  describes; its harness read for its cases and its GP0 words logged as written [M, R the harness]. A 4-, 8- or 15-bit
+  page at 256,0 is filled and the cache cleared; a first shape is drawn at 0,0 with U and V stepping by about one texel a
+  pixel from 40h or 38h: a rectangle (test 0), a quad (1), and four right triangles, flat at the top (2: (0,0), (64,0),
+  (0,72); 3: 72 by 64) or at the bottom (4: (64,0), (0,72), (64,72); 5: 72 by 64); a fill changes the texels, and a
+  64x64 rectangle from 40h,40h reads back which texels the cache kept. The 1,322 failing lines left were all of tests 1
+  and 4, a group of 6 lines by 8 or 16 texels in each failing case, the model's image keeping texels from the cache that
+  Diamond had replaced:
+
+  | Test | Depth | Offsets failing | Texels the model kept and Diamond did not |
+  |---|---|---|---|
+  | 1, the quad | 4-bit | U from 38h (2 of 4) | 16 texels of the right column of entries on 6 lines |
+  | 1 | 8-bit | all four | 8 or 16 texels on 2 or 6 lines |
+  | 1 | 15-bit and depth 3 | U from 38h (2 of 4) | 8 texels on 6 lines |
+  | 4, flat at the bottom | every depth | all four | 16 or 8 texels on 5 or 6 lines of the top rows' entries |
+
+  Test 4's triangle is taller than a block, so its texture lines 40h+y and 80h+y share entries; the model keeps the
+  entries of its top rows, which a triangle drawn from the bottom up leaves last. Test 2, flat at the top and as tall,
+  keeps its bottom rows', as drawing from the top down leaves them. Orders tried on Diamond, failing lines [M]: every
+  triangle top-down, as built, 1,322; every triangle bottom-up, 631, test 2's cases; every row right to left, 1,530; the
+  rows above the middle vertex's row drawn upward with those rows right to left, 1,000; the rows above the middle vertex's
+  row drawn upward from it and the rest downward, each left to right: none. Every triangle of the test has two vertices
+  on one row, so it does not tell which of a triangle's two parts is drawn first.
+- **Referee:** `programs/triangle-rows.s` on the five (`Diamond_Referees.md` §4.13): on a 4-bit page with U = 40h + x
+  and V = 40h + y, test 4's and test 2's triangles, three with the middle vertex between the others (low on the left,
+  low on the right, high on the left), the first of them in another vertex order, and a quad, each read back through
+  the cache as the test does. Beetle PSX, the one referee that models the texture cache (§4.12), reads all seven shapes
+  as the rule with the part below the middle vertex drawn first; DuckStation, SwanStation, PCSX-ReARMed and PCSX-Redux
+  read every texel afresh. Of the orders tried on Diamond, that one alone gives Beetle PSX's 28 columns: drawing the
+  part above first differs on three shapes, reversing only triangles flat at the bottom on three, top-down everywhere on
+  five [M]. **Witnesses:** none besides.
+- **Conclusion:** a triangle's rows are drawn from the middle vertex's row down to the bottom, then from the row above
+  the middle vertex's up to the top, each row left to right; a quad's two triangles in turn, as before; the middle
+  vertex's own row in the lower part [C: nothing here separates it from the row below]. Measured, for triangles with a
+  flat top or bottom and for quads on two sources, a console's expectations through amidog's model and Beetle PSX, and
+  for the order of a triangle's two parts on Beetle PSX alone, the strongest single witness on the cache. The order
+  changes no pixel; it changes what the texture cache holds and, by its misses, the drawing time: built so,
+  `gpu/bandwidth`'s two textured quad rows, whose second triangle is flat at the bottom, read 39,915 hblanks each where
+  they read 39,975 and 39,976, the console's log 39,938 [M]. The step was held to keep `bandwidth`'s output byte for
+  byte, so the rule is not taken into the core here: it is built, tested and measured on the branch
+  `diamond-gpu4-rows`, and waits on the tester's decision (`Diamond_GPU.md` §18, question 4).
+- **Depends on it:** what the texture cache holds after each polygon; textured polygons' drawing time.
+- **Pinned by:** here, `the_triangle_rows_program_reads_its_undisputed_shapes_as_the_referee`, the two shapes every order
+  reads alike; on `diamond-gpu4-rows`, `a_triangle_draws_its_lower_rows_down_and_then_its_upper_rows_up` and
+  `a_triangles_rows_go_down_from_its_middle_vertex_then_up_as_the_referee_draws_them`.
+- **Implemented in:** nothing yet.
+
+### D-42. A CPU write to a full GP0 FIFO, and GP1(01h) during a fill: Diamond holds the writer and draws a fill whole, where amidog's FIFO overflow test expects the newest sixteen words kept, one command held aside, and the fill stopped
+
+- **Opened:** 2026-10-12, by the FIFO overflow test D-23 left open at the cache step.
+- **Documents read:** psx-spx `6d7d1bc`, "GPU I/O Ports" ("a 64-byte (16-word) command FIFO buffer"), "GP0(00h)" and
+  "GP0(04h..1Eh,E0h,E7h..EFh)" (NOPs "don't take up space in the FIFO", sent while a VRAM-to-VRAM copy is busy), the GP1
+  preamble and "GP1(01h)", and "Memory/Rendering Timings" (DMA blocks longer than the FIFO cause "lost data on v0
+  GPUs"). Nothing on a CPU write to a full FIFO, nor on GP1(01h) while a command draws.
+- **Test program:** the overflow test of `psxtest_gpu` 1.7, its harness read [R] and its GP0 words logged [M]: VRAM
+  cleared, a white fill of 1024x256 at line 256 written by the CPU, then with no wait 15 fills of 16x16 on lines 0 to
+  111, a NOP or a GP0(E6h) word after each word of six patterns, 64 words in all, stored from the scratchpad in a loop;
+  the harness builds the image it compares itself, without the model. In half the cases it then writes GP1(01h) and
+  compares lines 0 to 259 as errors and 268 to 511 as information. Its six images keep the second fill where the first
+  word after the large fill is not GP0(E6h), the last four fills always, and nothing else; after GP1(01h) no small fill,
+  and the large fill on lines 256 to 260. Measured on the six [M, the cache step's search over FIFO models with one
+  fault fixed, in the cache]: a model fits all six exactly. The processor, drawing the large fill, discards NOPs at a
+  command's place and takes the next command aside; the FIFO keeps the newest 16 words behind it, NOPs and GP0(E6h)
+  words taking places since nothing reads them, the older lost. Of sizes 4 to 32, 16 fits, and 17 and 18, whose further
+  words are parameters read as NOPs; the second fill is the command taken aside, and the last 16 words begin at the
+  twelfth fill in all six patterns. After GP1(01h) the command aside is dropped with the FIFO, and the fill stops where
+  it is: five lines, about 440 cycles at `bandwidth`'s fill rate, after the CPU's 61 further stores.
+- **The conflict** [M]. Diamond holds the writer of a full FIFO until a place frees (`Diamond_GPU.md` §2.1), a choice
+  made for Peter Lemon's programs, which write whole scenes with no wait and which his README says were tested on a
+  console. A CPU store that finds the FIFO full on Diamond's drawing time is made by 58 of his programs: every GPU program
+  but `MemoryTransfer24BPP`, the 31 CPU and GTE tests, the two `HelloWorld` programs and `PSXNICCC`; the tests' 8x8
+  characters are transfers of 35 words written behind a 320x240 clear that draws for some 6,300 cycles. Built so that
+  such a store loses the FIFO's oldest word, the VRAM at frame 120 of each of the 55 in `GPU/` and `CPUTest/` differs
+  from what it is now in 1,280 to 62,881 pixels. SwanStation and PCSX-ReARMed, of two lineages, draw 16 and 11 of the
+  25 GPU programs as Diamond does now (`Diamond_GPU.md` §11). The two sources cannot both hold unless a console draws
+  those programs' primitives fast enough never to fill the FIFO, which no measurement here shows: the clear behind the
+  tests' characters is nearly the size `bandwidth` times, and Diamond meets that row within 0.1%.
+- **Referee:** DuckStation, at the cache step, draws every fill of the overflow test and, after GP1(01h), none of the
+  small ones, the large one whole. `programs/fill-reset.s` (`Diamond_Referees.md` §4.13): four white fills of 240x511
+  each cut by GP1(01h) after a loop of 0, 100, 400 or 1,600 turns; all five referees draw all 511 lines of every fill,
+  as Diamond does [M]. **Witnesses:** none of the five loses a word at a full FIFO.
+- **Conclusion:** open. The model above is the one found to fit amidog's harness; Diamond keeps holding the writer and
+  drawing a fill whole as it starts, as the five referees read it, and the decision is the tester's (`Diamond_GPU.md`
+  §18, question 5). Taking the model would mean a store that loses a word instead of waiting, a command decoded ahead
+  while another draws (GPUSTAT bit 28 then clear while it waits, as `gpustat`'s log has it with a second rectangle
+  queued), NOPs held in the FIFO behind it, and fills drawn line by line in time.
+- **Depends on it:** every program that writes the GPU faster than it draws; GP1(00h) and GP1(01h) during a command.
+- **Pinned by:** `a_fill_cut_by_gp1_01h_is_drawn_whole_as_the_referees_draw_it` (the referees' reading).
+- **Implemented in:** nothing.

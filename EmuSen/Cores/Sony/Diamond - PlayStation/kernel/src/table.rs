@@ -304,7 +304,7 @@ const fn build_b() -> [*const (); B_ENTRIES] {
     t[0x58] = e!(D, "_card_chan()", card::card_chan);
     t[0x59] = e!(D, "testdevice(devicename)", file::testdevice);
     t[0x5A] = e!(N, "SystemError", entry::system_error);
-    t[0x5B] = e!(D, "ChangeClearPAD(int)", pad::change_clear_pad);
+    t[0x5B] = e!(D, "ChangeClearPAD(int)", entry::change_clear_pad);
     t[0x5C] = e!(D, "_card_status(slot)", card::card_status);
     t[0x5D] = e!(D, "_card_wait(slot)", card::card_wait);
     t

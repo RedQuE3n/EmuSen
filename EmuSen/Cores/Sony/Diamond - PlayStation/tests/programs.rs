@@ -321,6 +321,57 @@ fn the_open_kernels_interrupt_path_fits_within_timer_2s_period() {
     assert_eq!(bytes(&m, 0x10_0040, 1), [0xFF], "port 2 empty");
 }
 
+/// The stretch behind B(5Bh)'s table entry (Diamond_OpenKernel_Phase2.md §27) on Diamond's bus: a program stores at the
+/// offsets Mega Man Legends' pad library stores at and calls where it calls, each call coming back with v0 and S2-S7 as
+/// they were, within the cycles §27.3 gives for a cold and a warm I-cache, and the kernel reads the pads afterwards.
+#[test]
+fn calls_and_stores_past_b_5bh_s_entry_come_back_and_leave_the_pads_read() {
+    let words = emusen_mips::assemble(include_str!("../programs/kernel-pad-entry.s"), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+    let image = exe::build(&words);
+    let media = Media::read(&image).unwrap();
+    let rom = kernel::open_kernel().map(|k| (k, Kernel::Open));
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, rom);
+    let user = |pc: u32| (0x8001_0000..0x8020_0000).contains(&pc);
+    let (mut slides, mut inside) = (Vec::new(), None);
+    while m.frames < 30 && m.board.ram_word(0xFFFF0) != 0xD1A0_D00E {
+        let pc = m.cpu.regs.pc;
+        m.step();
+        let next = m.cpu.regs.pc;
+        if user(pc) && next >> 20 == 0x9FC {
+            inside = Some((next, m.board.now, 0u32));
+        } else if let Some((at, since, steps)) = &mut inside {
+            *steps += 1;
+            if user(next) {
+                slides.push((*at, m.board.now - *since, *steps));
+                inside = None;
+            }
+        }
+        if m.board.field_done {
+            m.board.field_done = false;
+            m.frames += 1;
+        }
+    }
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program finished, port 1's pad read: pc {:08X}", m.cpu.regs.pc);
+    let r = results(&m, 0x10_0100, 15);
+    let e = r[0];
+    assert_eq!(e >> 20, 0x9FC, "B(5Bh)'s entry names the ROM");
+    assert_eq!((r[13], r[14]), (1, 0), "ChangeClearPAD's old flags");
+    assert_eq!(r[1..7], [0x1234_5678; 6], "v0 after each call");
+    assert_eq!(r[8..13], [0x8010_011C, 0x5454_0000, 0x5555_0000, 0x5656_0000, 0x5757_0000], "S3-S7 after the calls");
+    assert!(user(r[7]), "S2, the return address the program kept");
+    let offsets: Vec<u32> = slides.iter().map(|s| s.0 - e).collect();
+    assert_eq!(offsets, [0x884, 0x884, 0x7A0, 0x894, 0xFC, 0xFC], "the calls seen entering the stretch");
+    let steps: Vec<u32> = slides.iter().map(|s| s.2).collect();
+    assert_eq!(steps, [31, 31, 24, 27, 65, 65], "instructions to the return's delay slot");
+    // Measured 2026-10-12: 798, 31, 618, 695, 1,673 and 65 cycles; a cold line of the ROM costs 100 at the reset's timing.
+    let cycles: Vec<u64> = slides.iter().map(|s| s.1).collect();
+    assert!(cycles[0] < 1_000 && cycles[2] < 1_000 && cycles[3] < 1_000, "the game's three calls, cold: {cycles:?}");
+    assert!(cycles[4] < 2_000, "the longest slide, cold: {cycles:?}");
+    assert!(cycles[1] < 100 && cycles[5] < 100, "the same calls with the cache warm: {cycles:?}");
+    assert_eq!(bytes(&m, 0x10_0000, 2), [0x00, 0x41], "port 1's pad read");
+    assert_eq!(bytes(&m, 0x10_0040, 1), [0xFF], "port 2 empty");
+}
+
 // The RAM-recording rewrites of ps1-tests' TTY programs (Diamond_Records.md), each record as Diamond answers it. Seven
 // carry the release's code from the corpus and pass unrun without it.
 

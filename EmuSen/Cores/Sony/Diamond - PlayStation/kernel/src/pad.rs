@@ -13,10 +13,13 @@ static mut BUFFERS: [u32; 2] = [0; 2];
 static mut ENABLED: u32 = 0;
 static mut STARTED: bool = false;
 static mut PADS: bool = false;
-static mut CLEAR: u32 = 1;
 static mut BUTTON_DEST: u32 = 0;
 static mut HIDDEN: [[u8; 0x22]; 2] = [[0; 0x22]; 2];
 static mut ELEMENT: [u32; 4] = [0; 4];
+
+/// B(5Bh)'s flag, set by `entry.rs`'s `change_clear_pad`: whether the pads' element acknowledges vblank and returns.
+#[unsafe(no_mangle)]
+pub static mut PAD_CLEAR: u32 = 1;
 
 /// SetConf's reset forgets the element with the chains.
 pub fn forget() {
@@ -137,15 +140,6 @@ fn dr() -> u32 {
     v
 }
 
-/// B(5Bh): whether the pad handler acknowledges vblank and returns; the old flag.
-pub extern "C" fn change_clear_pad(flag: u32) -> u32 {
-    unsafe {
-        let old = CLEAR;
-        CLEAR = flag;
-        old
-    }
-}
-
 /// B(4Ah)'s pad half: InitCARD2's flag enables the pads' reads.
 pub fn enable(pad_enable: u32) {
     unsafe { ENABLED = pad_enable };
@@ -195,7 +189,7 @@ extern "C" fn pad_handler() -> u32 {
         if BUTTON_DEST != 0 {
             pad_dr_ram();
         }
-        if CLEAR != 0 {
+        if PAD_CLEAR != 0 {
             acknowledge(0);
             entry::return_from_exception_ram()
         }

@@ -1,4 +1,4 @@
-# Diamond_Speed — the exact levers, stage 13
+# Diamond_Speed — the exact levers, stage 13 and the second pass
 
 *Written 2026-10-12, at the plan's stage 13 (`Diamond_Plan.md` §5.12, §7 row 13, §8's G6), with the tester's go of
 2026-10-11.* The plan names four levers, each to be bit-identical to the plain path, in an order: the rasteriser on
@@ -372,3 +372,265 @@ quota measurements; and the project's own code: MarsRT's `cpu/idle.rs`, Diamond'
 control, debugger and state, `blackmoon-r3000`'s step and coprocessor 0, and `emusen-mips`'s decoder. No emulator's
 source was read; the player's BIOS was not opened, copied or run; the open kernel ran as the bench's kernel, its image
 untouched.
+
+---
+
+# The second pass (2026-10-12)
+
+*Written 2026-10-12, with the tester's request that the work return to speed after G6.* Sections 11 to 18 record
+the pass: the base re-recorded, the profile, the two levers built (runs of steps with the boundary's work held, and
+the rasteriser painting a row at a time), how each is known to be exact, what they bought on the desktop and under the
+quota, what was measured on the handheld and what is owed there, the frontend's share of a frame, and what was not
+built. The build record's entry is
+`Diamond_Native.md` §22; the processor's side is `BlackMoon_R3000.md` §13. The marks are those of §1.
+
+## 11. The base, and why it moved
+
+Three trees were measured. **c6c3a39e** is the tree the pass started on: D-46 (a triangle's time by its rows), the
+open kernel's exception path in RAM and the game fixes had merged since §6, and the games reach further than §6's
+tree did, so its figures are not §6's. **414cac36** is WiseMan after the open kernel's image c1a002e8 (LoadExec
+masking I_MASK, synchronous CD operations masking IRQ2): the games' timing changed with the kernel, so every digest
+and every figure in §14 is taken against a base built from 414cac36 itself, `b2` in the probe's `speed2/`. The levers
+were built on c6c3a39e and merged onto 414cac36; on both trees the levers' digests equal the base's.
+
+On c6c3a39e the desktop's aligned medians were Ape Escape 3.23 ms, Castlevania 4.40, Crash 3.48, Rayman 2.52, Silent
+Hill 3.01, Spyro 3.21 and Tekken 3 3.42 [M, `cmp.py`, three rounds]: Castlevania had grown from §6's 3.72 to 4.40,
+over the plan's 3.8, because it now plays where it had waited (the skipper passes 7.7 per cent of its clock, against
+§4.5's 17.3). On the handheld's battery (BAT0 discharging, 96 to 95 per cent), the run §6.3 owed, the same tree took
+3.48, 4.70, 3.69, 2.65, 3.19, 3.37 and 3.56 ms [M, `hh-base-bat.txt`]; its digests equalled the desktop's.
+
+## 12. The profile
+
+[M, 2026-10-12, `rtsample.py` at 2 ms on c6c3a39e's base, about 6,000 to 8,000 samples a game; `report.py` and
+`split.py` in the probe's `speed2/` group the samples by their inline chains.]
+
+| Part | Castlevania | Spyro the Dragon | Tekken 3 |
+|---|---|---|---|
+| The CPU's step and the bus | 52.6% | 46.4% | 66.9% |
+| The GPU (pixels, texels, the texture cache, the display read) | 32.9% | 32.2% | 6.2% |
+| The SPU | 4.6% | 5.6% | 6.1% |
+| The MDEC | 1.1% | 0.2% | 8.5% |
+| The bench's own digests (outside the timed span) | 6.4% | 11.1% | 5.4% |
+
+The GPU had grown from §3's 3 to 11 per cent to a third of the two slowest games: Castlevania's play draws 155,000
+texels and 111,000 pixels a frame, 122,000 of them in five 8-bit modulated rectangles, its backgrounds; Spyro draws
+470 primitives a frame, most of them dithered triangles of 13 to 32 pixels a row [M, a counting build kept out of the
+tree]. The plan's §7.1 is therefore no longer a lever of 3 to 11 per cent.
+
+**Where a step's time went.** A count of the host's own events (`pstat.py`, `perf_event_open` on the bench) gave
+Tekken 3 4.0 instructions a cycle and 1.1 branch misses a thousand instructions: the step was not stalling, it was
+long. A nine-instruction loop run in the I-cache with the levers off (`alu.s`) cost 5.9 ms a frame, 10.6 ns a guest
+instruction; stepped under gdb one host instruction at a time it took 1,665 host instructions a turn, 185 a guest
+instruction [M]. By source line they were: the boundary (IP2, the interrupt check with the MTC0 view, the observer,
+the PC break, the fetchable check) 43; the fetch, the I-cache's segment tests, tag and valid bit, 31; building the
+step's `Run` value and calling `execute`, 24; `execute` itself 53, of which the field decoding was 9; the completion
+6; the frame loop's per-step call and the kernel's seams about 24. §7.2 had named the boundary as most of the step;
+it was less than a quarter. The larger part was the shape of the step: one value carrying the instruction's operands,
+delays and results through every arm, which the compiler kept in memory.
+
+## 13. The levers
+
+### 13.1 Runs of steps, and the common instructions' path
+
+`blackmoon-r3000` gains `R3000::run(bus, limit)` and `Bus::running`, a default method answering no
+(`BlackMoon_R3000.md` §2, §13). A run is the loop it replaces, `step` until a step is not an instruction, the limit,
+or `running`'s no, with the boundary's work held while it cannot change: after a full step that leaves the boundary
+quiet (the debug unit off, no MTC0 view pending, no interrupt the next check would take), the steps that follow make
+only the line's comparison, the fetchable check, the fetch and the instruction, until the line moves or an
+instruction that can change SR, Cause or DCIC runs. Inside the step, the instructions that compute, branch, jump,
+load or store a byte, halfword or word take a path with their operands as parameters, and complete as `finish`
+completes one; the rest keep `Run::execute`. In the games 98 to 99 per cent of the instructions take the new path
+(Spyro 92.7, its GTE transfers and commands being the rest) [M, a counting build].
+
+Diamond's bus answers `running` while its clock is short of the next event, which is exactly the condition under
+which `step_on` runs no events after a step. `Machine::steps` makes a run where the kernel's two seams have nothing
+to do (no PS-EXE waiting at the shell's entry, no tapped putchar), runs the last step's events after it, and counts
+steps as the idle skipper's watch counts them, so that the skipper watches the same steps with runs as without
+(§4.3). `Machine::runs` holds the switch (`--stepped` turns it off in the bench), the verifier and the counts; none of
+it is state. The debugger's frame never runs. A run averages 87 to 715 steps in the bench games.
+
+The I-cache fetch's segment test is one mask: bits 30 and 29 clear are KUSEG's first 512 MiB and KSEG0, which are the
+segments `cached_hit` admits.
+
+### 13.2 The rasteriser by rows
+
+`Painter::row` paints a row's pixels from left to right, each texel fetched and each pixel written before the next,
+the same order as before: the paint's settings are read once a row, the textured or the flat loop is chosen once, a
+pixel's VRAM is read only where it is blended or the mask is checked (the old path read it always and used it only
+then), a texture cache miss is filled out of line, and the counts the drawing time is charged by are summed in
+locals. Triangles and rectangles call it with the per-pixel colour and texture coordinate their walks give; lines
+keep `pixel`, which is a row of one. Per pixel on the desktop [M, `gpubench.rs`, a scratch tool beside the probe's
+copy, the same pixels drawn by both builds, digest F4C33AB282682E69 for both]:
+
+| Primitive | Before, ns a pixel | After |
+|---|---|---|
+| Rectangle, flat | 3.45 | 1.44 |
+| Rectangle, flat, blended | 4.61 | 3.28 |
+| Rectangle, 8-bit, modulated | 8.80 | 7.20 |
+| Rectangle, 4-bit, blended, mask checked | 8.62 | 6.68 |
+| Triangle, flat | 5.00 | 2.94 |
+| Triangle, shaded, dithered | 5.54 | 3.57 |
+| Triangle, 4-bit, shaded, dithered | 10.26 | 9.58 |
+| Triangle, 4-bit, shaded, blended | 13.25 | 12.36 |
+
+A loop specialised for the 8-bit modulated rectangle, Castlevania's backgrounds, measured 5.4 ns a pixel against the
+row's 6.8; it would be a second copy of the pixel's rules, and was not kept [C].
+
+### 13.3 How they are known to be exact
+
+1. **The verifier.** `Runs::verify = N` (the bench's `--verify-runs N`) checks every Nth run as it is made: a copy
+   takes the run's count of steps one at a time through `step`, must meet an event or a step that is not an
+   instruction only at the last, must end in the same step, and must reach the run's state byte for byte with the
+   next event and the events' count (`Machine::verified_run`).
+2. **The crate.** The r3000 suite's 55,000 cases pass through the new path; `a_run_is_its_steps_on_random_programs`
+   holds 19,801 runs over 400 random programs, interrupted, faulting, in user mode, isolated and with the debug unit
+   armed, to a copy stepped one step at a time; `a_runs_boundary_is_the_steps` names the five boundaries a run must
+   still see (`BlackMoon_R3000.md` §13).
+3. **The machine's tests** (`tests/programs.rs`, the block *Speed, the second pass*): the project's nine programs, the
+   CD read and ps1-tests' eight programs on the open kernel give the digests of their steps stepped in runs, with the
+   skipper off and on, every 7th (251st for ps1-tests) run and every skip verified; a disc named by
+   `EMUSEN_DIAMOND_DISC` the same over 600 frames; and a kernel of the test's own whose putchar is tapped is stepped
+   one at a time, its calls met. `a_rows_texels_blend_by_their_own_bit_15_and_the_mask_keeps_its_pixels` holds what
+   no test held, that a semi-transparent texture blends only its texels with bit 15 set and the mask keeps its pixels;
+   it passes on the rasteriser before the change and after.
+4. **The games.** The seven bench discs, 3,600 frames each, give the base's picture, sound and state digests every 600
+   frames with runs, with runs and the rows, with every 97th run and 16th skip verified, and stepped one at a time, on
+   both trees [M, `dig-b2.txt`, `dig-h2.txt`, `dig-h4.txt`, `dig-h2-stepped.txt` beside the bench].
+5. **Mutants** [M, `mutants-r3000.py`, `mutants-diamond.py`, `mutants-gpu.py`, each applied, the tests run, the file
+   restored]. In the crate, 24, of which 23 caught: the line not watched in a run, the PC not checked, the bus's no,
+   the limit and an exception not ending the quiet steps, MTC0 and RFE not ending them (each alone), quiet with the
+   debug unit on, with a view pending, with an interrupt due, the line taken as low, a second load not cancelling the
+   first, the link one instruction early, a branch not landing the pending load, LB not sign-extended, SUB's overflow
+   not raised, a faulting load or store completing, JAL not told to the observer, a store's datum read after the load
+   lands, R0 written, a store's address error not raised. The survivor makes the quiet check stricter (a masked
+   request then ends the quiet steps), which costs speed and changes no step. In Diamond, all 7 caught: a run going on
+   at the event's cycle, a run never ending for an event, the last step's events not run, runs made while a program
+   waits to be side-loaded or on a tapped kernel, KSEG1 or KUSEG past 512 MiB taken as cached. In the rasteriser, all
+   6 caught, the two the existing tests missed (an opaque texel blended, the mask checked against nothing) by the new
+   test.
+
+## 14. Measured
+
+Milliseconds of the emulation thread a frame, the mean over 3,600 frames, on 414cac36's tree: *base* is WiseMan
+414cac36 (`b2`), *runs* the branch with runs alone (`h2`), *both* the branch's head with runs and rows (`h4`).
+
+### 14.1 The desktop
+
+[M, 2026-10-12, `cmp.py`: three rounds, the builds interleaved on one core, fastest and median of the means.]
+
+| Game | Base, default | Base, aligned | Runs, default | Runs, aligned | Both, default | Both, aligned | Both ÷ base (aligned medians) |
+|---|---|---|---|---|---|---|---|
+| Ape Escape | 3.297 / 3.297 | 3.118 / 3.123 | 2.438 / 2.441 | 2.415 / 2.416 | 2.302 / 2.302 | 2.302 / 2.302 | 0.74 |
+| Castlevania: SotN | 4.453 / 4.464 | 4.309 / 4.312 | 3.284 / 3.300 | 3.263 / 3.263 | 2.956 / 2.973 | 2.926 / 2.926 | 0.68 |
+| Crash Bandicoot | 3.531 / 3.537 | 3.376 / 3.378 | 2.601 / 2.614 | 2.561 / 2.574 | 2.472 / 2.479 | 2.445 / 2.453 | 0.73 |
+| Rayman | 2.543 / 2.550 | 2.375 / 2.390 | 1.775 / 1.797 | 1.760 / 1.769 | 1.803 / 1.805 | 1.763 / 1.775 | 0.74 |
+| Silent Hill | 3.045 / 3.078 | 2.967 / 2.973 | 2.357 / 2.361 | 2.326 / 2.334 | 2.230 / 2.230 | 2.181 / 2.183 | 0.73 |
+| Spyro the Dragon | 3.257 / 3.263 | 3.142 / 3.145 | 2.595 / 2.597 | 2.573 / 2.573 | 2.417 / 2.420 | 2.408 / 2.413 | 0.77 |
+| Tekken 3 | 3.441 / 3.476 | 3.289 / 3.294 | 2.407 / 2.412 | 2.396 / 2.398 | 2.417 / 2.433 | 2.367 / 2.386 | 0.72 |
+
+Runs bought 18 to 27 per cent of every game; the rows another 5 to 10 per cent where a game draws (Castlevania 10,
+Spyro 6) and nothing where it does not (Rayman, Tekken 3). Every gain exceeds §2's 10 per cent in both links. Every
+game is now at 1.8 to 3.0 ms against the plan's 3.8; Castlevania, over it before the pass, has the most margin it has
+had.
+
+### 14.2 The laptop's proxy, the 33 per cent quota
+
+[M, 2026-10-12, the aligned builds, two rounds under `systemd-run --user --scope -p CPUQuota=33%`.]
+
+| Game | Base | Both | Within 13.4 ms |
+|---|---|---|---|
+| Ape Escape | 10.313 / 10.331 | 7.626 / 7.655 | both |
+| Castlevania: SotN | 13.929 / 14.165 | 9.855 / 9.876 | both only |
+| Crash Bandicoot | 11.175 / 11.335 | 7.990 / 8.091 | both |
+| Rayman | 7.842 / 7.897 | 5.751 / 5.783 | both |
+| Silent Hill | 9.948 / 9.954 | 7.312 / 7.386 | both |
+| Spyro the Dragon | 10.544 / 10.616 | 7.924 / 9.545 | both |
+| Tekken 3 | 10.587 / 10.753 | 7.532 / 7.719 | both |
+
+The base tree had lost G6's first term: Castlevania took 13.9 to 14.2 ms under the quota against 13.4. With the levers
+every game leaves 3.5 to 7.6 ms of the frame. Spyro's second round (9.5) is the quota's own noise, as its first
+(7.9) and the desktop's figures show.
+
+### 14.3 The handheld
+
+[M, 2026-10-12, `bench.sh` beside the bench's discs on the handheld, run by `systemd-run --user` with no Mistress
+running, the default link, one run.] Only the base of c6c3a39e was measured there, on battery (BAT0 discharging, 96 to
+95 per cent), which is the run §6.3 owed:
+
+| Game | Base of c6c3a39e, battery | p95 | Worst frame |
+|---|---|---|---|
+| Ape Escape | 3.481 | 7.562 | 9.461 |
+| Castlevania: SotN | 4.697 | 5.618 | 7.796 |
+| Crash Bandicoot | 3.690 | 6.601 | 8.343 |
+| Rayman | 2.650 | 5.032 | 6.630 |
+| Silent Hill | 3.191 | 4.648 | 6.840 |
+| Spyro the Dragon | 3.374 | 7.156 | 9.065 |
+| Tekken 3 | 3.557 | 4.292 | 6.336 |
+
+Its digests equalled the desktop's for that tree. The slowest mean, 4.7 ms, is 28 per cent of an NTSC frame, and the
+worst frame of any game 9.5 ms: **the emulation thread was at full speed on battery before this pass.** The handheld
+left the network before the levers were measured on it, and stayed away for the rest of the day. **Owed**: the base of
+414cac36 and the branch's head, each on the charger and on battery. From the desktop's ratios (0.68 to 0.77, §14.1)
+the head is expected at 1.9 to 3.3 ms there [A]; that is an expectation to be retired by the run, not a result. The
+bench's disc copies and the one bench build are still in `~/diamond-bench/` on the handheld and are to be removed
+when the runs are done.
+
+## 15. What was not built, and why
+
+- **§7.1, the rasteriser on worker threads.** The GPU is now a third of the two slowest games on the desktop, so the
+  lever is worth more than §7.1 found; but under the quota a worker is charged to the same 33 per cent, and the
+  display's line-by-line read of VRAM would make the emulation thread wait on the worker at every line drawn behind.
+  With every game at 3.0 ms or less on the desktop and inside the quota's budget by 3.5 ms, it is not needed; it
+  remains the lever for a higher internal resolution.
+- **§7.2's block executor in the full sense** (decoded runs with the delays resolved per block, one tag check a line)
+  and **the recompiler.** The second tier the profile named was the step's shape and its boundary, and runs took most
+  of what those cost: a guest instruction is now about 119 host instructions where it was 185 (§12). What remains is
+  the dispatch on the decoded operation, the per-fetch tag compare and the delays' bookkeeping, which a block form
+  would remove only by keeping a second form of each instruction's rules.
+- **The 8-bit rectangle's own loop** (§13.2): 20 per cent of that primitive's pixels, at the price of a second copy of
+  the pixel's rules.
+- **The inexact settings of §8.1** stay proposals.
+
+## 16. The frontend's share
+
+The handheld's Mistress logs a line each second (`general.log`, `[fps]`): the frames run, the core's time (*run*),
+the frames offered to the render thread and shown, the copy and the draw, and the loop's time outside the core
+(requests, audio, the hand-off, sleep and the rest).
+
+**On the desktop, headless** [M, 2026-10-12, WiseMan's opt-in
+`The_frame_loop_reports_its_pace_on_a_named_disc`, Castlevania for 30 s on the branch's head]: 59.8 frames a second
+offered every second after the first; run 1.0 to 3.7 ms; requests 0.01, audio 0.04, hand-off 0.05 ms; the rest of the
+16.7 ms frame asleep; content-paced at 59.83 Hz. Nothing outside the core costs a frame. The headless render timer
+draws in software at 29.9 frames a second (draw 6.3 ms); it is the test host's renderer, not a player's, and the
+handheld's own logs show the GPU path drawing every frame offered (shown 59.8, draw 0.53 to 0.58 ms).
+
+**On the handheld** [R, its logs of 2026-10-12, read, not changed]: in the games launched from 00:53 to 13:00 the loop offers
+59.3 to 60.3 frames a second with run 3.8 to 6.0 ms and the rest of the frame asleep; the seconds below 58 frames
+are a launch's first and last (loading, the window closing). Three launches, 08:58, 08:59 and 08:59, ran every
+second at 15.0 frames a second with run 0.6 to 4.1 ms and the scheduler's reason "speed not 100%": Mistress's speed
+was Slow Motion, 25 per cent, which is a quarter of 59.83. The launch before them (08:56) ended with the same reason
+in its last line. The speed is the pad menu's row "Speed < 100% >", which left and right step through Slow Motion,
+Normal and Fast Forward, and it is kept by the window from one game to the next. **The slowness the tester reported
+playing on the handheld in those launches was the speed setting, not the emulation and not the loop.** Whether a game
+should start at Normal, or the menu's row should take a confirmation, is a question for the tester; it is not a
+defect with a test, and nothing was changed.
+
+## 17. Predictions retired
+
+- **§6.3's** *the slowness ... is to be looked for in what surrounds it there*: held, and found in neither the loop
+  nor the presentation but in the speed setting (§16).
+- **§7.2's** *the step's own boundary ... is most of it* [A]: did not hold. The boundary was 43 of 185 host
+  instructions a guest instruction; the step's shape was the larger cost (§12).
+- **§7.1's** *the GPU is 3 to 11 per cent*: true of §3's tree, retired by the games' progress: a third of Castlevania
+  and Spyro on c6c3a39e.
+- **P12** (*the handheld runs the accurate core at full speed on battery after stage 13*): held on c6c3a39e's base on
+  battery (2.7 to 4.7 ms, §14.3), the run §6.3 owed. The levers' own run there is owed.
+
+## 18. Reading log
+
+Read for this pass: this page's §1 to §10; `Diamond_Plan.md` §5.5 and §5.12; `Diamond_Native.md` §21;
+`BlackMoon_R3000.md` §2 and §5; and the project's own code: `blackmoon-r3000`'s step, Diamond's machine, bus, I-cache,
+idle skipper, GPU (the painter, the rasteriser, the texture cache, the display read), Mistress's frame loop, its
+scheduler and speed controller, and WiseMan's PlayStation library tests. No emulator's source was read; the player's
+BIOS was not opened, copied or run; the open kernel ran as the bench's kernel, its image untouched.
+

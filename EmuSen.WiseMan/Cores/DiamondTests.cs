@@ -353,22 +353,39 @@ namespace EmuSen.WiseMan.Cores
         private static uint I(uint op, int rs, int rt, int imm) => op << 26 | (uint)rs << 21 | (uint)rt << 16 | (ushort)imm;
 
         // A program that reads port 1's pad over SIO0 without end, each byte sent once RXRDY showed the last, its five replies and I_STAT at 80100000h - see Diamond_Pad.md §4.
-        private static byte[] PadReading()
+        internal static byte[] PadReading() => PadProgram(Array.Empty<byte[]>(), new byte[] { 0x01, 0x42, 0, 0, 0 });
+
+        // The DualShock put in analog mode by configuration commands 43h and 44h, then read without end, its nine replies at 80100000h - see Diamond_Pad.md §7.
+        internal static byte[] AnalogPadReading() => PadProgram(new[]
+        {
+            new byte[] { 0x01, 0x43, 0, 1, 0 },
+            new byte[] { 0x01, 0x44, 0, 1, 3, 0, 0, 0, 0 },
+            new byte[] { 0x01, 0x43, 0, 0, 0, 0, 0, 0, 0 },
+        }, new byte[] { 0x01, 0x42, 0, 0, 0, 0, 0, 0, 0 }, status: 12);
+
+        // Each exchange of once sent a single time, its replies at 80100100h + 16n, then loop's without end, its replies at 80100000h and I_STAT at status.
+        private static byte[] PadProgram(byte[][] once, byte[] loop, int status = 8)
         {
             const int t0 = 8, t1 = 9, t2 = 10, t3 = 11, s0 = 16, s1 = 17;
             var w = new List<uint> { I(0x0F, 0, s0, 0x1F80), I(0x0F, 0, s1, 0x8010), I(0x0D, 0, t0, 0x88), I(0x29, s0, t0, 0x104E), I(0x0D, 0, t0, 0x0D), I(0x29, s0, t0, 0x1048) };
-            int loop = w.Count;
-            w.AddRange(new[] { I(0x0D, 0, t0, 0x1003), I(0x29, s0, t0, 0x104A) });
-            foreach (var (b, i) in new[] { 0x01, 0x42, 0, 0, 0 }.Select((b, i) => (b, i)))
+            void Exchange(byte[] bytes, int at)
             {
-                w.AddRange(new[] { I(0x0D, 0, t1, b), I(0x28, s0, t1, 0x1040) });
-                int wait = w.Count;
-                w.AddRange(new[] { I(0x23, s0, t2, 0x1044), 0u, I(0x0C, t2, t2, 2) });
-                w.Add(I(0x04, t2, 0, wait - (w.Count + 1)));
-                w.AddRange(new[] { 0u, I(0x24, s0, t2, 0x1040), 0u, I(0x28, s1, t2, i) });
+                w.AddRange(new[] { I(0x0D, 0, t0, 0x1003), I(0x29, s0, t0, 0x104A) });
+                foreach (var (b, i) in bytes.Select((b, i) => (b, i)))
+                {
+                    w.AddRange(new[] { I(0x0D, 0, t1, b), I(0x28, s0, t1, 0x1040) });
+                    int wait = w.Count;
+                    w.AddRange(new[] { I(0x23, s0, t2, 0x1044), 0u, I(0x0C, t2, t2, 2) });
+                    w.Add(I(0x04, t2, 0, wait - (w.Count + 1)));
+                    w.AddRange(new[] { 0u, I(0x24, s0, t2, 0x1040), 0u, I(0x28, s1, t2, at + i) });
+                }
+                w.Add(I(0x29, s0, 0, 0x104A));
             }
-            w.AddRange(new[] { I(0x29, s0, 0, 0x104A), I(0x23, s0, t3, 0x1070), 0u, I(0x2B, s1, t3, 8) });
-            w.AddRange(new[] { 0x0800_0000u | ((SyntheticPsExe.Origin + 4 * (uint)loop) >> 2 & 0x03FF_FFFF), 0u });
+            for (int n = 0; n < once.Length; n++) Exchange(once[n], 0x100 + 16 * n);
+            int loopAt = w.Count;
+            Exchange(loop, 0);
+            w.AddRange(new[] { I(0x23, s0, t3, 0x1070), 0u, I(0x2B, s1, t3, status) });
+            w.AddRange(new[] { 0x0800_0000u | ((SyntheticPsExe.Origin + 4 * (uint)loopAt) >> 2 & 0x03FF_FFFF), 0u });
             return SyntheticPsExe.Build(SyntheticPsExe.Words(w.ToArray()));
         }
 

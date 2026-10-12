@@ -114,9 +114,17 @@ namespace EmuSen.Cores.Native
 
         private void SetCrashLog(CoreInterface api)
         {
-            string log = System.IO.Path.Combine(EmuSen.Galaxia.Library.DataStore.Logs, $"{Info.Id}_crash_{Environment.ProcessId}.txt");
-            nint text = Marshal.StringToCoTaskMemUTF8(log);
+            nint text = Marshal.StringToCoTaskMemUTF8(CrashLogPath($"{Info.Id}_crash_{Environment.ProcessId}.txt"));
             api.SetCrashLog((byte*)text);
+        }
+
+        // A core's crash log beside the frontend's own crash reports, the folder made first, since a core's hook writes only the file - see Diamond_Players.md §12.7.
+        internal static string CrashLogPath(string fileName)
+        {
+            string root = EmuSen.Galaxia.Library.ErrorLog.Root();
+            try { Directory.CreateDirectory(root); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            return System.IO.Path.Combine(root, fileName);
         }
 
         // Words for a status, from the core's status_text, with the number where it has none.

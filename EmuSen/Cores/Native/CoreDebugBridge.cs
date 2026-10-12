@@ -73,12 +73,16 @@ namespace EmuSen.Cores.Native
             uint flags = resuming ? RunUnchecked : 0;
             while (true)
             {
-                PushTables(machine);
                 uint stopped;
                 ulong pc, detail;
-                int reasons = api.DebugRunFrame(machine.Handle, flags, &stopped, &pc, &detail);
+                int reasons;
+                lock (machine.Gate)
+                {
+                    PushTables(machine);
+                    reasons = api.DebugRunFrame(machine.Handle, flags, &stopped, &pc, &detail);
+                    Drain(machine);
+                }
                 flags = RunUnchecked | RunContinue;
-                Drain(machine);
                 if (reasons < 0) throw new CoreRefusedException(reasons, machine.Words(reasons));
                 if (reasons == 0)
                 {
@@ -256,7 +260,7 @@ namespace EmuSen.Cores.Native
         {
             if (Live is not { } machine || !Supported) return 0;
             ulong pc;
-            return machine.Library.Api.DebugPc(machine.Handle, processor, &pc) == 0 ? (int)pc : 0;
+            lock (machine.Gate) return machine.Library.Api.DebugPc(machine.Handle, processor, &pc) == 0 ? (int)pc : 0;
         }
 
         private static void Grow<T>(ref T[] buffer, int needed)

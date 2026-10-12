@@ -990,6 +990,12 @@ core's; −256 to −319 the interface's; −320 to −383 a reproduced .NET exc
 ### 6.16 Threading and re-entrancy
 
 - **One thread at a time per machine.** Different machines may be driven from different threads at once.
+  *How the host keeps it (2026-10-12):* a frontend's interface thread calls the engine while its emulation thread runs
+  frames, so the rule is the host adapter's to keep, not each frontend's. `CoreEngine` holds input and sends it on the
+  emulation thread as each frame starts, and every call on a machine's handle holds that machine's gate in
+  `CoreMachine`, so a debugger's read from another thread waits for the call in flight rather than overlapping it. A
+  host of its own must do the same or call from one thread: an overlap is undefined behaviour in the core, and a core on
+  `emusen-native` aborts on its outbox's `RefCell` (`Diamond_Players.md` §12.7).
 - **Library-level calls** (§6.1) are safe from any thread, concurrently with each other and with machine calls.
 - **No re-entrancy is possible**, because the core never calls the host.
 - **The core may run threads of its own** behind a machine. They are idle when no call is in flight (or their work is
@@ -1029,7 +1035,10 @@ the two sides may use different allocators.
   operation; the runtime writes the records to the session's log under `/Logs` (§8.5).
 - **The crash log** keeps `EmuSen_NativeCores.md`'s design: the host passes a path once per library, the core's panic
   hook writes the panic and its backtrace there before the process aborts, and the runtime's own crash record (today
-  `EmuSen.Mistress/CrashLog.cs`) names that file.
+  `EmuSen.Mistress/CrashLog.cs`) names that file. The hook writes only the file, so the host makes its folder; since
+  2026-10-12 the host's path is `<id>_crash_<pid>.txt` in `ErrorLog.Root()`, beside the frontend's own reports, and
+  `emusen-native`'s hook appends each report whole under a lock, since two threads can panic at once
+  (`Diamond_Players.md` §12.7.5). The frontend's record cannot name it after an abort, which ends the process.
 
 ### 6.19 Events
 
@@ -1859,6 +1868,10 @@ debugger that could see stores and not loads; Diamond the first core to claim th
 range kind, which 1.0's crate took for data breakpoints. Minor 1 is the disc change's (`MEDIA`), built beside it and
 merged after it, its number kept.
 
+**Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
+and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld
+(`Diamond_Players.md` §12.7); and the crash log's path is in the frontend's log folder, made first (§6.18).
+
 **Not checked here.**
 - Layouts were checked on x86-64 Linux only, with gcc 16 and clang. The baseline's other three targets are argued from
   the C rules the header keeps (fixed-width types, natural alignment, no bit fields, no packing).
@@ -2043,7 +2056,9 @@ where it lacks it the answer is the one a frontend saw before the interface exis
 | `IStateFormat`, `IFrameBufferPool`, `IEngineFeatures`, `ICheatRegistryHost` | as the pre-stable host has them | — |
 
 Input is routed by the descriptors: a `PadButton` to every bit of the port's controller labelled with it, a `PadAxis`
-to `set_axis` with the axis number the controller gives, clamped to the kind's range.
+to `set_axis` with the axis number the controller gives, clamped to the kind's range. *Since 2026-10-12* it is held in
+the engine and sent on the emulation thread as the next frame starts, whatever thread set it (§6.16;
+`Diamond_Players.md` §12.7).
 
 **The frame** follows §8.2's order: `advance`, the frame-end work (frame log, cheats, the breakpoints' frame notice,
 the battery period), `present` when claimed and rendering is not skipped, then the events drained. `GEOMETRY` re-reads

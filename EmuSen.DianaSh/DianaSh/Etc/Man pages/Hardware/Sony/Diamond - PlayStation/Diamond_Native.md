@@ -1350,6 +1350,16 @@ The cross-kernel step's frame 63 was a half-stored card request taken by the vbl
 and fixed (`Diamond_OpenKernel_Phase2.md` §23.1); its two call results are recorded and unchanged (§23.2). The image's
 SHA-256 is now `7af83c9be629827e850b4ce450e0d2fcf3400e428923ea2b676918393f5ea1b4`.
 
+### 18.6 Found in play, and fixed (2026-10-12)
+
+The three defects the gameplay step found (`Diamond_OpenKernel_Phase2.md` §24) were each shown by a failing test and
+fixed (§25 there): Krom2RawAdd answers a box, so that Castlevania passes its file screen; an accepted asynchronous card
+read or write returns 0, so that Spyro the Dragon creates, writes and reads its file; and the exception path runs from
+the kernel's RAM with an empty port given up 100 µs after its byte, so that Crash Bandicoot prints no "intr timeout".
+The harness gained SIO0 with a memory card and the run tool `--kernel-profile`. ps1-tests' `timers` fails WiseMan's TTY
+gate in two rows that depend on the kernel's timing (§25.3, Q8 there). The image's SHA-256 is now
+`593817b8fe850e30685a7feb6a40f6f3c474c519c7485624f441457566e66289`.
+
 ## 20. Stage 11, the PlayStation to players (2026-10-11)
 
 Recorded in `Diamond_Players.md`: routing by content, image sets and archives, the disc change under the core ABI's

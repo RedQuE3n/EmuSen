@@ -75,7 +75,10 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   the cross-kernel step needs, and the reading log with its exposure; then §22, the cross-kernel step itself, written
   for the kernel's writer at the interface only: the cards crossing both ways with Tekken 3, the two kernels' formats
   compared, Spyro's retries and Ape Escape's DUALSHOCK screen the same on both, two documented call results that
-  differ, and `firmwarecheck.py`'s FAIL by its default thresholds with Q5.
+  differ, and `firmwarecheck.py`'s FAIL by its default thresholds with Q5; §23, the half-stored card request; §24, three
+  defects found in play; and §25, their fixes: a box for the characters the kernel does not carry, asynchronous card
+  calls accepted with 0, and the exception path run from the kernel's RAM with the run tool's profile of it before and
+  after, the cost to `timers`, Q6-Q8 and the exposure.
 - [`Diamond_Pad.md`](Diamond_Pad.md) — SIO0 and the controllers, from 2026-10-11, when a digital pad on port 1 was
   brought forward from stage 6: the registers, a byte on the wire, /ACK and IRQ7, the pad and the slots, amidog's CPX,
   GPU and GTE tests run from their menus and what they showed (three R3000A defects fixed, the CE and second-load items

@@ -3,7 +3,7 @@
 
 use crate::layout::{self, EVCB_SIZE, EXCB_SIZE, PCB_SIZE, TABLES, TCB_SIZE, table};
 use crate::mem::{rd, wr};
-use crate::{exception, heap, pad};
+use crate::{cdrom, exception, heap, pad};
 
 static mut EVENTS: u32 = 0;
 static mut THREADS: u32 = 0;
@@ -54,6 +54,7 @@ pub extern "C" fn set_conf(events: u32, threads: u32, stacktop: u32) -> u32 {
     exception::enqueue_timer_and_vblank_irqs(1);
     exception::init_def_int(3);
     pad::forget();
+    cdrom::forget();
     0
 }
 

@@ -353,6 +353,45 @@ enter_shell:
     jr      $a0
     nop
 
+    # SR read, and IEc cleared with the old SR returned, for the kernel's short critical sections.
+    .globl cop0_sr
+cop0_sr:
+    mfc0    $v0, $12
+    nop
+    jr      $ra
+    nop
+    .globl interrupts_off
+interrupts_off:
+    mfc0    $v0, $12
+    addiu   $t0, $zero, -2
+    and     $t0, $v0, $t0
+    mtc0    $t0, $12
+    nop
+    jr      $ra
+    nop
+
+    # The code 80030000h jumps to once the boot is done: the shell's own stack in the kernel's RAM, then the shell, given
+    # k1, which a warm boot sets.
+    .globl shell_entry
+shell_entry:
+    addu    $a0, $k1, $zero
+    lui     $sp, %hi(SHELL_STACK + 0x1800)
+    addiu   $sp, $sp, %lo(SHELL_STACK + 0x1800)
+    addu    $fp, $sp, $zero
+    lui     $t0, %hi(shell_main)
+    addiu   $t0, $t0, %lo(shell_main)
+    jr      $t0
+    nop
+
+    # A(A0h)'s jump to the reset entry with interrupts off, k1 marking the warm boot for the shell.
+    .globl reboot
+reboot:
+    mtc0    $zero, $12
+    addu    $k1, $a0, $zero
+    lui     $t0, 0xBFC0
+    jr      $t0
+    nop
+
     # A(48h): GP1 written, v0 left as the caller had it.
     .globl send_gp1_command
 send_gp1_command:
@@ -403,6 +442,10 @@ unsafe extern "C" {
     pub fn cop0_set_cause(value: u32);
     pub fn cop0_set_dcic(value: u32);
     pub fn enter_shell(pc: u32, sp: u32, sr: u32) -> !;
+    pub fn cop0_sr() -> u32;
+    pub fn interrupts_off() -> u32;
+    pub fn shell_entry() -> !;
+    pub fn reboot(magic: u32) -> !;
     pub fn send_gp1_command(command: u32);
     pub fn exec(header: u32, param1: u32, param2: u32) -> u32;
     pub fn return_zero() -> u32;
@@ -410,4 +453,17 @@ unsafe extern "C" {
     pub fn system_error() -> !;
     pub fn cop1_fault() -> u32;
     pub fn hang() -> !;
+}
+
+/// `f` run with IEc clear, SR restored after: the kernel's short critical sections.
+pub fn critical<R>(f: impl FnOnce() -> R) -> R {
+    let sr = unsafe { interrupts_off() };
+    let r = f();
+    unsafe { cop0_set_sr(sr) };
+    r
+}
+
+/// Whether interrupts reach the CPU now: IEc and IM2 set.
+pub fn interrupts_on() -> bool {
+    (unsafe { cop0_sr() }) & 0x401 == 0x401
 }

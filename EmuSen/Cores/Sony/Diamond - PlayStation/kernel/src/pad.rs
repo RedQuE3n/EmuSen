@@ -4,24 +4,15 @@
 
 use crate::entry;
 use crate::exception::{self, acknowledge, pending};
-use crate::mem::{rd, rd8, rd16, wr, wr8, wr16};
+use crate::mem::{rd, rd8, wr, wr8};
+use crate::{card, sio};
 
-const SIO_DATA: u32 = 0x1F80_1040;
-const SIO_STAT: u32 = 0x1F80_1044;
-const SIO_MODE: u32 = 0x1F80_1048;
-const SIO_CTRL: u32 = 0x1F80_104A;
-const SIO_BAUD: u32 = 0x1F80_104E;
-const I_STAT: u32 = 0x1F80_1070;
 const I_MASK: u32 = 0x1F80_1074;
-/// CR: TXEN, DTR and DSRIEN; bit 13 the port; bit 4 acknowledges.
-const SELECT: u32 = 0x1003;
-/// About 100 µs of polls, psx-spx's timeout for /ACK, and the 100 cycles waited before acknowledging the last one.
-const TIMEOUT: u32 = 1000;
-const SETTLE: u32 = 50;
 
 static mut BUFFERS: [u32; 2] = [0; 2];
 static mut ENABLED: u32 = 0;
 static mut STARTED: bool = false;
+static mut PADS: bool = false;
 static mut CLEAR: u32 = 1;
 static mut BUTTON_DEST: u32 = 0;
 static mut HIDDEN: [[u8; 0x22]; 2] = [[0; 0x22]; 2];
@@ -29,7 +20,11 @@ static mut ELEMENT: [u32; 4] = [0; 4];
 
 /// SetConf's reset forgets the element with the chains.
 pub fn forget() {
-    unsafe { STARTED = false };
+    unsafe {
+        STARTED = false;
+        PADS = false;
+    }
+    card::forget();
 }
 
 /// B(12h): the buffers zero-filled to their sizes and remembered, the pad enabled, the element not yet queued; SIO0
@@ -44,15 +39,20 @@ pub extern "C" fn init_pad2(buf1: u32, size1: u32, buf2: u32, size2: u32) -> u32
         BUFFERS = [buf1, buf2];
         ENABLED = 1;
     }
-    wr16(SIO_CTRL, 0x40);
-    wr16(SIO_MODE, 0x0D);
-    wr16(SIO_BAUD, 0x88);
+    sio::reset();
     1
 }
 
 /// B(13h): the element queued and vblank enabled in I_MASK, without which a program that calls only PAD_init2, as
 /// Peter Lemon's `Cube` does on a console, would never see its buttons (Diamond_OpenKernel.md §4.13) [A].
 pub extern "C" fn start_pad2() -> u32 {
+    unsafe { PADS = true };
+    queue();
+    1
+}
+
+/// The element the pads and the cards share, queued once at priority 2, with vblank enabled.
+pub fn queue() {
     wr(I_MASK, rd(I_MASK) | 1);
     unsafe {
         if !STARTED {
@@ -63,17 +63,27 @@ pub extern "C" fn start_pad2() -> u32 {
             STARTED = true;
         }
     }
-    1
 }
 
-/// B(14h).
-pub extern "C" fn stop_pad2() -> u32 {
+/// The element removed once neither the pads nor the cards use it.
+pub fn unqueue() {
     unsafe {
-        if STARTED {
+        if STARTED && !PADS && !card::started() {
             exception::sys_deq_int_rp(2, &raw const ELEMENT as u32);
             STARTED = false;
         }
     }
+}
+
+/// Whether the shared element is queued.
+pub fn queued() -> bool {
+    unsafe { STARTED }
+}
+
+/// B(14h).
+pub extern "C" fn stop_pad2() -> u32 {
+    unsafe { PADS = false };
+    unqueue();
     1
 }
 
@@ -122,56 +132,25 @@ pub extern "C" fn change_clear_pad(flag: u32) -> u32 {
     }
 }
 
-/// B(4Ah): its pad flag only; the cards are phase 2.
-pub extern "C" fn init_card2(pad_enable: u32) -> u32 {
+/// B(4Ah)'s pad half: InitCARD2's flag enables the pads' reads.
+pub fn enable(pad_enable: u32) {
     unsafe { ENABLED = pad_enable };
-    0
-}
-
-fn spin(n: u32) {
-    for i in 0..n {
-        unsafe { core::ptr::read_volatile(&i) };
-    }
-}
-
-/// One byte sent and its reply taken, as psx-spx's "Emulation Note" describes the driver: about 100 cycles waited,
-/// IRQ7 acknowledged in I_STAT and then in CR, the new IRQ7 awaited unless `last`; the reply, and whether /ACK came.
-fn exchange(control: u32, byte: u32, last: bool) -> (u32, bool) {
-    wr8(SIO_DATA, byte);
-    spin(SETTLE);
-    wr(I_STAT, !0x80);
-    wr16(SIO_CTRL, control | 0x10);
-    let mut acked = false;
-    if !last {
-        for _ in 0..TIMEOUT {
-            if rd(I_STAT) & 0x80 != 0 {
-                acked = true;
-                break;
-            }
-        }
-    }
-    for _ in 0..TIMEOUT {
-        if rd16(SIO_STAT) & 2 != 0 {
-            break;
-        }
-    }
-    (rd8(SIO_DATA), acked)
 }
 
 /// A controller's read into `buffer` (psx-spx "B(12h)"): status 00h and the ID, then the halfwords its ID counts, up
 /// to 22h bytes in all; status FFh when no /ACK came or the second ID byte was not 5Ah.
 fn read_port(port: u32, buffer: u32) {
-    let control = SELECT | port << 13;
-    wr16(SIO_CTRL, control);
+    let control = sio::select(port);
     let mut status = 0xFF;
-    let (_, present) = exchange(control, 0x01, false);
+    let (_, present) = sio::exchange(control, 0x01, sio::TIMEOUT);
     if present {
-        let (id, more) = exchange(control, 0x42, false);
-        let (second, data) = exchange(control, 0x00, false);
+        let (id, more) = sio::exchange(control, 0x42, sio::TIMEOUT);
+        let (second, data) = sio::exchange(control, 0x00, sio::TIMEOUT);
         if more && data && second == 0x5A {
             let halfwords = if id & 0xF == 0 { 16 } else { id & 0xF };
             for i in 0..2 * halfwords {
-                let (v, _) = exchange(control, 0x00, i + 1 == 2 * halfwords);
+                let last = i + 1 == 2 * halfwords;
+                let (v, _) = sio::exchange(control, 0x00, if last { 0 } else { sio::TIMEOUT });
                 wr8(buffer + 2 + i, v);
             }
             wr8(buffer + 1, id);
@@ -179,7 +158,7 @@ fn read_port(port: u32, buffer: u32) {
         }
     }
     wr8(buffer, status);
-    wr16(SIO_CTRL, 0);
+    sio::deselect();
 }
 
 extern "C" fn pad_handler() -> u32 {
@@ -194,6 +173,7 @@ extern "C" fn pad_handler() -> u32 {
                 }
             }
         }
+        card::on_vblank();
         if BUTTON_DEST != 0 {
             pad_dr();
         }

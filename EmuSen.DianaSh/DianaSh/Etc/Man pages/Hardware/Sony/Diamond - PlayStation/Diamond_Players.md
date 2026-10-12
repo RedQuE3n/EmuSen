@@ -199,6 +199,13 @@ PlayStation beside the Genesis, `.iso` now being the PlayStation's while the Seg
 - **LunaP**, branch `diamond-s11`: the whole suite, 1,586, the API baseline approved for the two layouts and for two
   members the `crt-choices` merge had added without approving.
 
+- **After 1.2 merged in** (2026-10-12, the read watches taking minor 2 and bit 19, the disc change keeping minor 1
+  and bit 18, `EmuSen_CoreAPI.md` §5.5): `emusen-native`, 63; `emusen-core-abi-check`, 5, and the check itself, 416
+  facts on four triples, passing against this branch's 1.1 baseline and reporting against WiseMan's 1.2 baseline only
+  `json info.systems[].development`'s tag, the line both minors added; the kit, 7 + 15; Diamond, 148 + 57; WiseMan's
+  `CoreAbi`, `CoreAdapter`, `CoreDiscovery`, `Diamond`, `PlayStation` and registration filters, 93; Galaxia's and
+  the stage's runtime tests on both halves, 216 each; the cheats' and the tabs' tests, 79.
+
 **A build trap met on the way.** Running `dotnet build` once with the private nightly's cargo and once with the
 system's put two layouts of artifacts into one target folder, and a library newer than its sidecar's was copied to the
 outputs, so discovery refused every v1 core's library as "not the library its sidecar describes". Building only with

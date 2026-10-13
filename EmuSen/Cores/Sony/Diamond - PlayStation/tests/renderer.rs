@@ -115,3 +115,27 @@ fn the_renderer_draws_the_projects_programs_as_the_software_rasteriser() {
     }
     assert!(failed.is_empty(), "differing:\n{}", failed.join("\n"));
 }
+
+/// ps1-tests' release on the open kernel, every program for the frames its golden runs (WiseMan's gates' frames): the
+/// renderer's picture equal to the displayed picture at every frame, and its VRAM to the GPU's at the end.
+#[test]
+fn the_renderer_draws_ps1_tests_as_the_software_rasteriser() {
+    let Some(corpus) = records::corpus() else {
+        eprintln!("not run: {} names no ps1-tests build 158", records::CORPUS_VARIABLE);
+        return;
+    };
+    if renderer().is_none() {
+        return;
+    }
+    let mut failed = Vec::new();
+    for path in ps1_tests_programs(&corpus) {
+        let Some(r) = renderer() else { return };
+        let (frames, market) = ps1_tests_run(&path);
+        let (c, counts) = compare(ps1_tests_machine(&corpus, &path, market), r, frames);
+        eprintln!("{}", line(&path, &c, &counts));
+        if c.pixels != 0 || c.vram != 0 {
+            failed.push(line(&path, &c, &counts));
+        }
+    }
+    assert!(failed.is_empty(), "differing:\n{}", failed.join("\n"));
+}

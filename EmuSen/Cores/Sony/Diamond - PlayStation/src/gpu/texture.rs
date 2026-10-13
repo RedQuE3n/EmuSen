@@ -127,11 +127,19 @@ impl ClutCache {
         self.loaded = 0;
     }
 
+    /// Whether a cache at (`x`, `y`) holding `loaded` entries serves `t` without loading: a 15-bit page needs none, a 4- or
+    /// 8-bit one its position and 16 or 256 entries.
+    #[inline]
+    pub fn holds(x: u32, y: u32, loaded: u32, t: &Texture) -> bool {
+        let need = t.entries();
+        need == 0 || (loaded >= need && x == t.clut_x && y == t.clut_y)
+    }
+
     /// Before a 4- or 8-bit primitive: reloaded when its position differs or it holds fewer entries than the depth
     /// needs; the entries loaded, for the drawing time.
     pub fn prepare(&mut self, vram: &Vram, t: &Texture) -> u32 {
         let need = t.entries();
-        if need == 0 || (self.loaded >= need && self.x == t.clut_x && self.y == t.clut_y) {
+        if ClutCache::holds(self.x, self.y, self.loaded, t) {
             return 0;
         }
         for i in 0..need {

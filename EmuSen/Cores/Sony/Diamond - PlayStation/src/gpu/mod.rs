@@ -3,6 +3,7 @@
 //! control; GPUSTAT with its ready bits; GPUREAD; and the display read from VRAM line by line. Times are CPU cycles,
 //! the drawing time counted in GPU cycles of the video clock (`timing`).
 
+pub mod decode;
 pub mod display;
 pub mod draw;
 pub mod raster;
@@ -10,6 +11,7 @@ pub mod texture;
 pub mod timing;
 pub mod vram;
 
+use decode::Drawing;
 use display::Display;
 use draw::{Area, Paint, Painter, Work};
 use raster::Vertex;
@@ -17,6 +19,7 @@ use texture::{ClutCache, Texture, TextureCache};
 use timing::cpu_cycles;
 use vram::{Mask, Rect, Vram};
 
+use crate::layer::{Attached, Command, Part};
 use crate::video::Video;
 
 pub const FIFO_WORDS: usize = 16;
@@ -177,14 +180,9 @@ pub struct Gpu {
     pub carry: u64,
     /// An interrupt GP0(1Fh) raised that the bus has not taken.
     pub irq_rose: bool,
-}
-
-fn sext11(v: u32) -> i32 {
-    ((v << 21) as i32) >> 21
-}
-
-fn rgb(word: u32) -> [i32; 3] {
-    [(word & 0xFF) as i32, (word >> 8 & 0xFF) as i32, (word >> 16 & 0xFF) as i32]
+    /// The enhancement layer attached, if any, told what the command processor and the display do; not state
+    /// (Diamond_Enhancements.md §15.1).
+    pub layer: Attached,
 }
 
 impl Gpu {
@@ -217,6 +215,7 @@ impl Gpu {
             busy_until: 0,
             carry: 0,
             irq_rose: false,
+            layer: Attached::default(),
         }
     }
 
@@ -246,7 +245,7 @@ impl Gpu {
     /// Brought to `now`: the commands run, and the display read up to it.
     pub fn sync(&mut self, now: u64, video: &Video) {
         self.run(now, video);
-        self.display.scan(&self.vram, video, now);
+        self.display.scan(&self.vram, video, now, &mut self.layer);
     }
 
     /// A GP0 word at `now`; returns the cycle it was taken, later than `now` when the FIFO was full. A word that finds
@@ -389,24 +388,30 @@ impl Gpu {
     }
 
     fn area(&self) -> Area {
-        let y = |v: u32| (v >> 10 & if self.v2() { 0x3FF } else { 0x1FF }) as i32;
-        let y2 = if self.two_megabytes() { y(self.env[3]).min(511) } else { y(self.env[3]) };
-        Area { x1: (self.env[2] & 0x3FF) as i32, y1: y(self.env[2]), x2: (self.env[3] & 0x3FF) as i32, y2 }
+        decode::area(self.env[2], self.env[3], self.v2(), self.two_megabytes())
     }
 
-    /// A vertex with the drawing offset added in 11 bits, wrapping (Diamond_Disputes.md D-23).
     fn vertex(&self, xy: u32, colour: u32, uv: u32) -> Vertex {
-        let off = self.env[4];
-        let x = sext11((sext11(xy) + sext11(off)) as u32);
-        let y = sext11((sext11(xy >> 16) + sext11(off >> 11)) as u32);
-        Vertex { x, y, rgb: rgb(colour), u: uv as u8, v: (uv >> 8) as u8 }
+        decode::vertex(self.env[4], xy, colour, uv)
     }
 
-    /// `v` placed from `first` by their distance as the command gave them, the offset moving the primitive whole (D-23).
     fn place(&self, first: Vertex, v: Vertex) -> Vertex {
-        let (ox, oy) = (sext11(self.env[4]), sext11(self.env[4] >> 11));
-        let raw = |p: i32, o: i32| sext11((p - o) as u32);
-        Vertex { x: first.x + raw(v.x, ox) - raw(first.x, ox), y: first.y + raw(v.y, oy) - raw(first.y, oy), ..v }
+        decode::place(self.env[4], first, v)
+    }
+
+    /// The drawing state at `t`, as a layer is told it (`decode::Drawing`).
+    fn drawing(&self, video: &Video, t: u64) -> Drawing {
+        let clut = (self.clut.x, self.clut.y, self.clut.loaded);
+        Drawing { env: self.env, version: self.version, second_megabyte: self.second_megabyte, skip_parity: self.interlace_skip(video, t), clut }
+    }
+
+    /// The attached layer told what the command processor starts at `t` (Diamond_Enhancements.md §15.2).
+    #[inline(never)]
+    fn tell(&mut self, part: Part, words: &[u32], t: u64, video: &Video) {
+        let drawing = self.drawing(video, t);
+        if let Some(l) = self.layer.get() {
+            l.executed(&Command { words, part, at: t, drawing: &drawing });
+        }
     }
 
     fn paint(&self, blended: bool, texture: Option<Texture>, raw: bool, dither: bool, video: &Video, t: u64) -> Paint {
@@ -445,8 +450,11 @@ impl Gpu {
 
     /// A whole command, its words in, at `t`: drawn now, the processor busy for its time.
     fn execute(&mut self, t: u64, video: &Video) {
-        self.display.scan(&self.vram, video, t);
+        self.display.scan(&self.vram, video, t, &mut self.layer);
         let w = self.words;
+        if self.layer.is_some() {
+            self.tell(Part::Whole, &w[..self.need.min(w.len())], t, video);
+        }
         self.have = 0;
         let c = w[0] >> 24;
         let cost = match c >> 5 {
@@ -512,8 +520,7 @@ impl Gpu {
 
     /// A polygon's page attribute into GP0(E1h): bits 0-8, and bit 11 while GP1(09h) allows it.
     fn set_page(&mut self, page: u32) {
-        let bits = 0x1FF | if self.two_megabytes() { 0x800 } else { 0 };
-        self.env[0] = self.env[0] & !bits | page & bits;
+        self.env[0] = decode::with_page(self.env[0], page, self.two_megabytes());
         self.cache.set_page(self.env[0]);
     }
 
@@ -529,37 +536,7 @@ impl Gpu {
     }
 
     fn polygon(&mut self, w: &[u32; 16], video: &Video, t: u64) -> u64 {
-        let c = w[0] >> 24;
-        let (quad, shaded, textured, blended, raw) = (c & 8 != 0, c & 0x10 != 0, c & 4 != 0, c & 2 != 0, c & 1 != 0);
-        let n = if quad { 4 } else { 3 };
-        let mut v = [Vertex::default(); 4];
-        let mut at = 1;
-        let (mut clut, mut page) = (0, 0);
-        for (i, vx) in v.iter_mut().enumerate().take(n) {
-            let colour = if i > 0 && shaded {
-                at += 1;
-                w[at - 1]
-            } else {
-                w[0]
-            };
-            let xy = w[at];
-            at += 1;
-            let uv = if textured {
-                at += 1;
-                w[at - 1]
-            } else {
-                0
-            };
-            if i == 0 {
-                clut = uv >> 16;
-            } else if i == 1 {
-                page = uv >> 16;
-            }
-            *vx = self.vertex(xy, colour, uv);
-        }
-        for i in 1..n {
-            v[i] = self.place(v[0], v[i]);
-        }
+        let decode::Polygon { v, quad, shaded, textured, blended, raw, clut, page } = decode::polygon(w, self.env[4]);
         let mut texture = None;
         if textured {
             self.set_page(page);
@@ -578,35 +555,17 @@ impl Gpu {
     }
 
     fn rectangle(&mut self, w: &[u32; 16], video: &Video, t: u64) -> u64 {
-        let c = w[0] >> 24;
-        let (textured, blended, raw) = (c & 4 != 0, c & 2 != 0, c & 1 != 0);
-        let mut at = 2;
-        let uv = if textured {
-            at += 1;
-            w[2]
-        } else {
-            0
-        };
-        let (sw, sh) = match c >> 3 & 3 {
-            0 => ((w[at] & 0x3FF) as i32, (w[at] >> 16 & 0x1FF) as i32),
-            1 => (1, 1),
-            2 => (8, 8),
-            _ => (16, 16),
-        };
-        let v = self.vertex(w[1], w[0], uv);
-        let texture = textured.then(|| Texture::new(self.env[0], uv >> 16, self.env[1], self.two_megabytes()));
         let flip = if self.v2() { (self.env[0] & 1 << 12 != 0, self.env[0] & 1 << 13 != 0) } else { (false, false) };
+        let decode::Rectangle { sprite, textured, blended, raw, clut } = decode::rectangle(w, self.env[4], flip);
+        let texture = textured.then(|| Texture::new(self.env[0], clut, self.env[1], self.two_megabytes()));
         let paint = self.paint(blended, texture, raw, false, video, t);
-        let sprite = raster::Sprite { x: v.x, y: v.y, w: sw, h: sh, rgb: v.rgb, uv: (v.u, v.v), flip };
         let (work, loaded) = self.draw(paint, |p| raster::rectangle(p, sprite));
         timing::drawing(work.rows as u64 * timing::RECTANGLE_ROW + loaded as u64 * timing::CLUT_ENTRY, work)
     }
 
     fn line_start(&mut self, w: &[u32; 16], video: &Video, t: u64) -> u64 {
         let c = w[0] >> 24;
-        let shaded = c & 0x10 != 0;
-        let a = self.vertex(w[1], w[0], 0);
-        let b = self.place(a, if shaded { self.vertex(w[3], w[2], 0) } else { self.vertex(w[2], w[0], 0) });
+        let (a, b, _) = decode::line(w, self.env[4]);
         if c & 8 != 0 {
             self.polyline = Some(Polyline { command: w[0], last: b, colour: w[0] });
         }
@@ -624,9 +583,13 @@ impl Gpu {
 
     fn polyline_vertex(&mut self, xy: u32, t: u64, video: &Video) {
         let Some(p) = self.polyline else { return };
-        self.display.scan(&self.vram, video, t);
+        self.display.scan(&self.vram, video, t, &mut self.layer);
         let shaded = p.command & 1 << 28 != 0;
-        let b = self.place(p.last, self.vertex(xy, if shaded { p.colour } else { p.command }, 0));
+        let colour = if shaded { p.colour } else { p.command };
+        if self.layer.is_some() {
+            self.tell(Part::Vertex, &[colour, xy], t, video);
+        }
+        let b = self.place(p.last, self.vertex(xy, colour, 0));
         let cost = self.segment(p.command, p.last, b, video, t);
         if let Some(q) = self.polyline.as_mut() {
             q.last = b;
@@ -636,7 +599,10 @@ impl Gpu {
 
     fn data(&mut self, w: u32, t: u64, video: &Video) {
         let Some(mut x) = self.write else { return };
-        self.display.scan(&self.vram, video, t);
+        self.display.scan(&self.vram, video, t, &mut self.layer);
+        if self.layer.is_some() {
+            self.tell(Part::Data, &[w], t, video);
+        }
         let mask = self.mask();
         for half in 0..2 {
             if x.done < x.rect.pixels() {

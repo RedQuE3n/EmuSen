@@ -540,6 +540,16 @@ GPU takes it, so that a layer can keep its side data in a queue beside the FIFO,
 itself carries none. The seam at `Gpu::execute` is E3's to add, as a method of the layer with an empty default. The
 GPU's code is unchanged; the receipt is the board's.
 
+*Stage E3 (2026-10-13, `Diamond_Enhancements.md` §15 to §18).* The seam is built: `Layer::executed` is told each command
+whole from `execute` before it draws, with its words, its cycle and a `decode::Drawing` (GP0(E1h) to (E6h), the chip,
+GP1(09h), the interlaced field's skipped parity, the CLUT cache's tag), and each polyline vertex and transfer word that
+continues one; `Layer::shown` each picture size and each line the display reads, with where from. The attached layer is
+now the GPU's field (`Gpu::layer`), the board reaching it there. The GPU's word decoding moved into `gpu/decode.rs`,
+shared with the renderer; the triangle's setup is stated twice, inline in `raster::triangle` and as `raster::setup` for
+the renderer, held equal by a test, since the shared call cost `gpu/benchmark` 2.8 per cent (§18.2 there). The GPU draws
+what it drew, to every golden. The Vulkan renderer that consumes the seam draws every picture of the programs,
+ps1-tests and the eight bench discs as this rasteriser does; its one unmodelled rule is §4's texture cache.
+
 ## 14. Not modelled, and choices to revisit
 
 - The 160-pin chip's fill at an X ending in Fh; GP1(20h) and the 208-pin prototype; the light gun's latch; GP0(03h)'s

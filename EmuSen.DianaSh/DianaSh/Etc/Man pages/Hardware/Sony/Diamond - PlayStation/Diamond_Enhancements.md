@@ -1,4 +1,4 @@
-# Diamond_Enhancements — the enhancement layer's frame, stage E1
+# Diamond_Enhancements — the enhancement layer, stages E1 and E3
 
 *Written 2026-10-13, at stage E1 of `Diamond_Plan.md` §7, with the tester's go of the same day for precise geometry
 and a shared GPU crate.* E1 builds the frame every enhancement of the plan's §6.3 will stand in, and the proof that the
@@ -6,6 +6,9 @@ frame changes nothing while it is off: the observer on the R3000A and the GTE wi
 the attachment of a layer to the machine, the optional state block, the settings' category, the accurate goldens and
 the exactness harness. No enhancement is built and none is offered: "Precise geometry" (§11 Q14 of the plan) arrives
 with E4, the Vulkan renderer with E3. The build record's entry is `Diamond_Native.md` §24.
+
+*Stage E3, the same day* (§14 on): the Vulkan renderer that draws the picture from the GPU's command stream beside the
+software rasteriser, at 1×, equal to it. §14 is its form, decided and committed before any of its code.
 
 The marks are the plan's: **[M]** measured on 2026-10-13 on the desktop (Ryzen 7 7700X, Fedora 44, Rust nightly
 2026-10-01), with the tool named; **[R]** read from a source, named; **[A]** argued, with no measurement behind it;
@@ -430,3 +433,487 @@ writer and settings, `emusen-core-conform`'s C3 and C9, WiseMan's ps1-tests gate
 press scripts and `psxplay.py`. What precision does was taken from the plan's own description of it (§6.2, §6.3),
 itself written from published descriptions, and from the hardware's behaviour as Diamond already models it: the GTE's
 fixed-point projection and FIFOs, the GPU's integer vertex words, DMA channel 2's lists.
+
+---
+
+## 14. Stage E3: the renderer's form, decided before it was built
+
+*Written 2026-10-13, before any of E3's code.* The plan's row: "The Vulkan renderer at 1×, consuming the command
+stream, beside the software rasteriser. Gate: with no enhancement, its picture equals the software rasteriser's
+display on ps1-tests' GPU programs and the bench discs, exactly or within a stated count of pixels, each difference
+explained; E1's goldens unchanged (the renderer never writes machine state)." The tester added Diamond's own GPU
+programs to the gate, the renderer's run on `emusen-gpu` (`Diamond_Plan.md` §11 Q14(c)), and that the form be argued
+here, in writing, first. `EmuSen_Gpu.md` §6.2 left the form open and named what each would ask of the device.
+
+### 14.1 What the form must serve
+
+- **E3, exactness at 1×.** The software rasteriser's rules, to the pixel (`Diamond_GPU.md` §5, §6): a pixel is the
+  point at its integer coordinates, inside when every edge function is positive or zero on an edge the triangle owns,
+  the bottom row out; colours and texture coordinates from the leftmost vertex by gradients of 12 fractional bits
+  truncated toward zero, a half added before the integer part; the dither matrix by VRAM's coordinates modulo 4; the
+  four blends at five bits with saturation; the mask bit set and checked; the texture window; the 11-bit fold of D-47;
+  the interlaced field's skipped lines; a rectangle's texel pairs; a line's tie rounding. Each is integer arithmetic.
+- **E4, precise geometry.** The same coverage and interpolation with vertices carrying fractional bits, and a division
+  per pixel for perspective-correct texturing (`Diamond_Plan.md` §6.3).
+- **E5, internal resolution.** Drawing at 2× to 4×, with the effects that read back what was drawn: textures sampled
+  from VRAM that earlier primitives drew (render-to-texture), VRAM-to-VRAM copies, CPU uploads into a scaled VRAM, the
+  display read from the scaled VRAM, and the mask bit and the blends reading the very pixel they write.
+
+### 14.2 The two forms, argued
+
+**A compute rasteriser over the renderer's own mirror of VRAM**, or **a graphics pipeline drawing into images**.
+
+1. **Exactness.** A graphics pipeline samples coverage at pixel centres with an implementation's sub-pixel precision
+   and interpolates in floating point; neither is the PlayStation's integer rule. To be exact at 1× such a renderer
+   would rasterise a conservative quad and evaluate the PlayStation's own edge functions and interpolants in its
+   fragment shader, keeping nothing of the fixed-function rasteriser but its enumeration of pixels [A]. A compute
+   shader evaluates the same integer rules per pixel as the software rasteriser states them, and nothing else.
+2. **The mask bit.** A pixel is left alone when the mask is checked and its bit 15 is set. Fixed-function blending
+   cannot make a write depend on the destination's alpha; an ordered read-modify-write of the framebuffer in a fragment
+   shader needs an extension outside core Vulkan (fragment shader interlock) [A]. B−F and B+F/4 at five bits would be
+   blend equations; the mask would not. In compute each invocation owns its pixel and meets the primitives covering it
+   in drawing order, reading and writing it in a register, as Mars's walk does (`Mars_Gpu.md` §5.3, §14.1: "each pixel
+   still meets its rows in drawing order, which is the one thing the binning must keep").
+3. **One surface.** The PlayStation draws into the surface it textures from, copies within it, and displays from it.
+   `Mars_Gpu.md` §5.1's case for one mirror over a set of images ("images overlap and alias; a pixel's address is
+   arithmetic on a base") holds more strongly here, as `EmuSen_Gpu.md` §6.2 says. In a graphics pipeline a primitive
+   textured from the image being drawn is a feedback loop that needs the region copied first; in compute it is a read
+   of another word, sound once the reads are ordered after the writes they depend on (§14.4).
+4. **E4 and E5.** E4's fractional vertices and per-pixel division are arithmetic in the same shader. E5 evaluates the
+   same coverage at N× sample positions over an N² mirror, and the uploads, copies and display reads address that mirror
+   at N×; nothing of the compute form changes shape between E3 and E5. Mars draws at 2× to 4× this way, at 159 to 192
+   per cent of full speed at 4× on this machine (`Mars_Gpu.md` §13.4, §14.6) [R].
+5. **The device crate.** Compute over storage buffers asks of `emusen-gpu` what it has: buffers in both memories,
+   compute programs with push constants, fills, copies, waited submissions. The graphics form would ask images, image
+   views and their layouts, samplers, graphics pipelines with vertex input and blend state, render passes or dynamic
+   rendering, a graphics-capable queue, and rule 2's barrier widened to the graphics stages, which MarsRT records too
+   (`EmuSen_Gpu.md` §6.2) [R].
+
+**Decided [C]: a compute rasteriser over the renderer's own mirror of VRAM**, one 32-bit word a pixel so that no two
+invocations write one word (`Mars_Gpu.md` §5.1's reason, a sixteen-bit pixel being half a `uint`).
+
+### 14.3 The one thing the crate lacks: a program dispatched twice in one submission
+
+`Commands::dispatch_in` writes the program's descriptor set each time it records a dispatch, and a descriptor set
+written after it was bound in a command buffer that is still recording invalidates that buffer. MarsRT dispatches each
+program once a submission [R, `rdp/gpu/mod.rs`], which is why it never met this. **Shown, not assumed** [M, a scratch
+program on the RX 6800 under `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation`]: two dispatches of the crate's test
+program in one `submit` give `VUID-vkCmdBindPipeline-commandBuffer-recording`, "VkCommandBuffer ... is now in an invalid
+state ... VkDescriptorSet ... was destroyed or updated without UPDATE_AFTER_BIND", at the second.
+
+The renderer must dispatch its walk once for every stretch of commands between two that read what an earlier one in
+the stretch drew (§14.4), several a frame when a game draws into a texture. The alternatives were a waited submission
+for each stretch, a round trip to the device each time [A], or a copy of each program per stretch. **Decided [C]: an
+addition to the crate, `Commands::dispatch_again`**, the program dispatched once more in the same recording with the
+buffers its set was written with there, binding the set without writing it, refused (a panic, as the crate's other
+misuses are) when this recording has not written that set. Version 1.1.0, an addition by the crate's rule (§3 of
+`EmuSen_Gpu.md`); nothing MarsRT calls changes.
+
+### 14.4 The design in outline
+
+- **The stream.** The renderer is a `Layer`. The GPU tells it each command whole as the command starts, with its words,
+  its cycle and the drawing state that applies; each further word that continues a command (a polyline's vertex, a
+  CPU-to-VRAM transfer's data); and each line the display reads, with where it reads it from. The display's timing is
+  the machine's (`video.rs`), so the renderer is told which line is read when rather than keeping a second clock; it
+  reads that line from its own VRAM.
+- **The host's share.** Each primitive is decoded by the GPU's own functions, shared and not copied, into a record:
+  its kind, its bounds within the drawing area, its edges, its gradients computed by the software rasteriser's rule,
+  its texture, CLUT, blend and mask. Records are binned into tiles of VRAM in drawing order.
+- **The device's share.** One invocation a pixel and one workgroup a tile: each invocation loads its pixel, meets every
+  record of its tile in order, and stores the pixel once (Mars's walk). Products of a gradient and a distance exceed 32
+  bits; they are made exact in pairs of 32-bit words (`imulExtended`, `uaddCarry`), which core SPIR-V has, rather than
+  by asking for the optional 64-bit integer feature, which the crate does not enable.
+- **Order across pixels.** A texel, a CLUT, a display line and a VRAM-to-VRAM copy read pixels other invocations own.
+  The host keeps the regions written and the regions read as textures within the present stretch, and ends the stretch
+  (another dispatch, the same submission) before a read of a region written in it or a write of a region read in it.
+  CLUT loads and display lines are read at the start of their stretch; a copy is a stretch of its own, read whole into
+  a scratch buffer and then written, in as many steps as its rows require (a copy downward over itself reads rows
+  that its earlier rows wrote).
+- **The CLUT cache** is reproduced: its tag is part of the drawing state, so the renderer loads a palette exactly when
+  the GPU does and keeps it while the GPU keeps its own. **The texture cache is not**: which entries it holds depends
+  on every texel fetched before in an order no parallel walk keeps, so the renderer reads VRAM as it stands. A picture
+  that differs because the cache held a texel VRAM no longer does is the one difference the form predicts.
+- **What it owns.** Its mirror, its picture and its scratch; nothing it computes reaches the machine. It is seeded from
+  the GPU's VRAM, picture and CLUT cache when it is attached or a state is loaded, and keeps nothing of its own across a
+  state at 1×, where what it would keep is the machine's VRAM; at N× (E5) its mirror is what a block would hold.
+
+### 14.5 The shader route, and where the renderer lives
+
+- **Shaders**: GLSL `.comp` sources in the renderer's `shaders/`, each with its `.spv` beside it, taken into the build
+  by `include_bytes!`; compiled by shaderc through `Silk.NET.Shaderc` in WiseMan, with Mars's options
+  (`Mars_Gpu.md` §2); a WiseMan test recompiles every source and requires the bytes on disk, and
+  `EMUSEN_GPU_SHADERS_RECORD=1` writes them. No build needs a compiler. `include_bytes!` makes the embedded copy the file
+  itself, so Mars's third comparison (against the assembly's resource) has no counterpart.
+- **The crate**: `diamond-renderer`, in `Diamond - PlayStation/renderer/`, depending on `diamond` (the `Layer`, the
+  stream's events, the GPU's decoding) and on `emusen-gpu`. `diamond` does not depend on it: the machine cannot reach
+  its renderer. The run tool, the bench and the tests take it as a development dependency. The plan's §6.2 asked for
+  each part of the layer to be a crate of its own; this is the renderer's.
+
+### 14.6 Predictions [recorded before the code]
+
+- **P-E3a.** With no enhancement, the renderer's picture equals the software rasteriser's displayed picture on every
+  ps1-tests GPU program and every program of `programs/` exactly, at every frame compared.
+- **P-E3b.** On the eight bench discs along their golden anchors, every differing pixel, if any, is the texture cache's
+  (§14.4), and there are fewer than a thousand over the anchors.
+- **P-E3c.** E1's goldens are unchanged with the renderer attached, by construction: it is told copies and writes only
+  its own buffers.
+- **P-E3d.** Unattached, the frame's cost is the base's within the bench's noise.
+- **P-E3e.** Attached, with the picture waited for each frame, the emulation thread pays under a millisecond a frame
+  more on the bench discs on the RX 6800, the host's decoding and binning under a third of it.
+
+## 15. The stream seam (E3)
+
+### 15.1 Where the layer hangs
+
+E1 kept the attached layer in the board (`Board::layer`). Since E3 it is the GPU's field, **`Gpu::layer`**, and the
+board reaches it there for what it tells (the GP0 receipts, the processor's moves through `LayeredBus`, the GTE's
+projections) [C]. The renderer's events arise inside the GPU's command processor and its display, which the board
+reaches only through the GPU's own methods (`gp0`, `gp1`, `run`, `sync`, `status`, `gpuread`); held beside them, the
+layer needs no argument threaded through each of those and of the fifty calls the GPU's tests make. It is still no
+part of the state, and a copy of the GPU, as the levers' checks make, carries none.
+
+`Machine::attach` gives the layer the GPU as it stands before attaching it (`Layer::seed`), and a state's load gives it
+the loaded GPU after its own block; `Machine::layer` lends the attached layer to whoever wants to ask it what it made,
+as the renderer's tools do (§16).
+
+### 15.2 What the GPU tells
+
+Three methods of `Layer`, each with an empty default, beside E1's:
+
+- **`executed(&Command)`**, from `Gpu::execute`, before the command draws: `words`, the command's words whole;
+  `part`, `Whole`; `at`, the cycle it starts; and `drawing`, a `gpu::decode::Drawing`: GP0(E1h) to (E6h) as they stand,
+  the chip's version, GP1(09h), the parity of the lines the interlaced field leaves alone at that cycle, and the CLUT
+  cache's tag. Every GP0 command reaches it, the environment commands too. The two kinds of word that continue a
+  command after it started are told the same way, since the GPU acts on each as it comes: **`Vertex`**, a polyline's
+  next vertex, as its colour word (the command's when the line is flat) and its position; and **`Data`**, a CPU-to-VRAM
+  transfer's word.
+- **`shown(Shown)`**, from the display: `Size`, when the picture's size changes and it starts black, and `Line`, each
+  line read, with the row, the VRAM position it is read from, its width, its depth and whether it is blanked. The
+  display reads a line at the time its timing reaches it (`Diamond_GPU.md` §7); a layer is told that time's choice and
+  does the reading itself.
+- **`seed(&Gpu)`**, above.
+
+The decoding a renderer needs is the GPU's own, moved into `gpu/decode.rs` and called by both: the vertex under the
+drawing offset (D-23) and its placing, the drawing area, the page attribute, a polygon's, a rectangle's and a line's
+words, and `Drawing`'s `paint`, `texture`, `with_page` and `loads_clut` (`ClutCache::holds`, the cache's own test).
+The GPU's code calls the same functions it had inlined, with the same arguments.
+
+Nothing is made unless a layer is attached: the command processor tests `layer.is_some()` before building a
+`Drawing`, and the display before each line's event (§18 gives the cost).
+
+**Tested** [M]: `a_layer_is_told_each_command_its_continuations_and_each_line_shown` sends a program's GP0 words (the
+four environment commands, a triangle, a polyline of three vertices, a three-pixel transfer) and holds that the layer
+is told each command whole in order with its words, the polyline's third vertex and the transfer's two data words as
+continuations, the triangle under the state the commands before it set, every line of three fields with its row,
+source and width, and the GPU as it stood when attached; and that the machine is the plain run's to the state's last
+byte. Diamond's suite passed unchanged with the seam, its 49 program goldens among them, plain and with E1's test
+observer.
+
+## 16. The renderer (E3)
+
+### 16.1 The crate
+
+`diamond-renderer` (`Diamond - PlayStation/renderer/`): `lib.rs`, the layer, which reads the stream and plans the
+device's work; `record.rs`, a primitive as the walk reads it; `blocks.rs`, where in VRAM a stretch has drawn or read,
+and which tiles a span covers; `device.rs`, the buffers, the four programs and one submission's commands; and
+`shaders/`, `walk.comp`, `scan.comp`, `clut.comp` and `copy.comp` with their `.spv`. It depends on `diamond`,
+`blackmoon-gte` (the layer's supertrait) and `emusen-gpu` 1.1. `diamond` takes it as a development dependency only, for
+the run tool, the bench and the gate: the core's library links none of it, and nothing in the machine names it.
+
+`Renderer::new(name)` opens the device (`EMUSEN_GPU_DEVICE` when no name is given) or says why not;
+`Machine::attach(Box::new(renderer))` attaches it; `picture()` and `vram()` submit what is planned, wait, and read back
+the picture (RGBA at its size) or VRAM (a halfword a pixel), for a tool or a test that asks.
+
+### 16.2 What the host does with the stream
+
+- **A whole command** is decoded by `gpu::decode` under the `Drawing` it came with. A polygon takes its page attribute
+  into the state first (`Drawing::with_page`), as the GPU does before drawing it; its texture is `Drawing::texture`; its
+  paint `Drawing::paint` with the GPU's own choice of dither; each triangle is folded (D-47) and set up by
+  `raster::setup`, the function the software rasteriser's `triangle` now calls for its own setup, so the edges, the
+  ownership, the base vertex and the gradients are the software's values, not a restatement of them. A rectangle and a
+  line likewise from `decode::rectangle` and `decode::line`; a polyline's further vertices from `decode::place`. A fill,
+  a copy and a transfer from `Rect::fill_params` and `Rect::copy_params`.
+- **A record** is 48 words (`record.rs`, laid out as `walk.comp` reads it): the kind and the paint's flags, the bounds
+  within the drawing area, the texture's page, depth, palette slot and window, and the kind's own words: a triangle's
+  three edges with whether each owns its pixels, its base vertex, its five attributes there and their gradients; a
+  rectangle's corner, first texel and steps; a line's ends, steps, colour and gradients; a fill's rectangle and colour;
+  a transfer's rectangle, the run of its pixels the record holds, and where they are in the submission's data.
+- **A transfer's data** is kept as it comes, two pixels a word, and the open record's count grows with each; the record
+  is placed in its tiles when it can take no more (the next command, or the end of its stretch).
+- **The CLUT cache** is reproduced from the `Drawing`'s tag: a palette is loaded into a new slot of 4,096, at the start
+  of its stretch, exactly when `ClutCache::holds` says the GPU's cache loads; otherwise the slot loaded last is used, as
+  the cache keeps its colours (stale ones included, `clut-cache`'s case).
+- **A display line** is recorded with its row; a row read twice in one stretch keeps the later. A new size clears the
+  picture at the start of the stretch and drops the lines of it recorded before the size changed.
+
+### 16.3 On the device
+
+**The walk** (`walk.comp`): a workgroup of 8 by 8 invocations a tile of VRAM, an invocation a pixel. It loads its
+pixel, meets each record of its tile in drawing order and applies it, and stores the pixel once. A triangle's pixel is
+inside when each edge function `dx·(y−ay) − dy·(x−ax)` is at least 0 on an owned edge and 1 otherwise, which is
+`raster::triangle`'s per-row bound restated for one pixel (the row's `x ≤ ⌊(k−t)/dy⌋` for an edge going down and
+`x ≥ ⌈(t−k)/−dy⌉` for one going up are both that inequality); its attributes are the base vertex's value plus the two
+gradients times the distances from it, plus a half, shifted down twelve, each product made exact in two 32-bit words
+by `imulExtended` and summed by `uaddCarry`. A line's pixel finds its step along the major axis from its own
+coordinate and is drawn where the minor coordinate the software's tie rule gives is its own. A rectangle's texel
+steps, flips and pairs, the texel through the window, page and palette, modulation, the dither matrix, the four
+blends, the mask bit and the interlaced field's skipped lines are `draw.rs`, `texture.rs` and `raster.rs` restated. A
+drawn row past 511 lands on its row modulo 512, as VRAM's index has it. **No texture cache**: texels are read from
+VRAM as it stands (§14.4).
+
+**The other programs**: `clut.comp` copies a palette's entries from VRAM into its slot; `scan.comp` reads a display
+line into the picture, 15-bit as `c<<3 | c>>2`, 24-bit as three bytes a pixel, black when blanked; `copy.comp` reads a
+copy's rows into a scratch buffer, or writes them under the mask.
+
+### 16.4 Order across pixels: stretches
+
+A texel, a palette, a display line and a copy read pixels that invocations other than their own write. The host plans
+the records as **stretches**: within one, no record reads what another of the stretch writes, so every read sees VRAM
+as it stood at the stretch's start, which is VRAM as it stands at the read. `blocks.rs` keeps two sets of VRAM's blocks
+of 16 by 16 for the stretch: those written and those read as texels. The stretch ends before a record whose texels meet
+the written set or whose pixels meet the read set; before a palette load or a display line whose pixels meet the
+written set (both run at the start of their stretch); and at every copy, which is a step of its own. A copy reads its
+rows whole into the scratch buffer and then writes them; when it copies downward over itself, by `d` rows with
+`0 < d < h`, row `j` reads the row that row `j − d` wrote, so it goes in steps of `d` rows, each read and written before
+the next, which is exactly `vram.rs`'s row-by-row order. A transfer's rows are marked written as its data reaches them,
+and a row that meets the read set ends the stretch there. A record whose texels and pixels share a block is counted
+(`Counts::feedback`): the walk does not keep the order of its own pixels' writes and reads.
+
+Each stretch's records are binned into the tiles of 8 by 8 pixels their bounds cover, each tile once (a span of 512
+rows starting mid-tile covers every tile row once), counted, summed and placed in drawing order, as Mars's binning is.
+
+### 16.5 One submission
+
+Everything planned goes to the device in one waited submission when a tool asks for the picture or VRAM, or when an
+array would overflow: the staged arrays (records, tile entries, tiles, palette loads, lines, transfer data) copied from
+host memory to the device's own, then each stretch's commands in order (the picture's clear, its palette loads, its
+lines, its walk) and each copy's steps, each dispatch after the first of its program a `dispatch_again` (§14.3), each
+command followed by the crate's barrier; then the readback. Capacities a submission: 32,768 records, 1,048,576 tile
+entries, 131,072 tiles, 4,096 palette loads, 8,192 lines, 2,097,152 transfer pixels. Device memory: VRAM and a scratch
+of 2 MiB each, one word a pixel; the picture, 1.4 MiB; 4,096 palette slots, 4 MiB; the staged arrays twice, once on each
+side, 33 MiB in all; 44 MiB with the readback buffer, 26 of it the device's own. Nothing is allocated a frame: the host's arrays and lists keep their capacity.
+
+### 16.6 Seeded, and kept nothing across a state
+
+`seed` takes the GPU's VRAM, its picture and size, its CLUT cache's colours (into slot 0) and the transfer or polyline
+it has open, and drops whatever was planned, which was another machine's. The renderer has no state block: at 1× all it
+would keep is the machine's VRAM, which a load gives it back.
+
+## 17. E3's gate
+
+### 17.1 What runs
+
+`tests/renderer.rs` [M, 2026-10-13, the RX 6800 by `EMUSEN_GPU_DEVICE=6800`]: each run is a golden's run
+(`tests/support/goldens.rs`, shared with `programs.rs`, so the renderer is graded on exactly the runs the goldens pin)
+with the renderer attached at power-on. **At every frame** the renderer's picture is read back and compared with the
+software rasteriser's displayed picture (`Display::frame`), size and every byte; **VRAM** is compared halfword for
+halfword at the end of a program and at every 300th frame of a disc; and the run's golden digests, taken with the
+renderer attached, are compared with E1's recorded lines. A machine without a device stands each test down with a
+line, as `emusen-gpu`'s tests do.
+
+### 17.2 The results, item by item
+
+| Item | Frames compared | Pictures | VRAM | E1's goldens with the renderer attached |
+|---|---|---|---|---|
+| The project's programs, 49, as `programs.txt` runs them (60 frames) | 2,940 | **all equal** | equal on 47; `texture-cache.s` 128 halfwords and `triangle-rows.s` 3,680, the texture cache's (below) | `programs.txt`, 49 of 49 lines equal |
+| ps1-tests' release build 158, 48 programs on the open kernel, on their goldens' frames (900, 1,500, 315, 309 or 300) | 22,824 | **all equal** | **all equal** | `ps1-tests.txt`, 48 of 48 |
+| The eight bench discs, each by its press script to frame 3,000 | 24,000 | **all equal** | **equal at all 80 anchors** | `discs.txt`, 8 discs and 80 anchors equal |
+
+ps1-tests' eleven GPU programs with pictures (`Diamond_GPU.md` §9) are among the 48, as are `bandwidth` (8,745
+records, 400 copies, 7,648 stretches), `lines` (98,400 records), `vram-to-vram-overlap` (147 copies over themselves,
+the stepped copy of §16.4 among them), `texture-flip`, `clut-cache` and `uv-interpolation`; the MDEC's movies at 15 and
+24 bits are the 24-bit display and the CPU-to-VRAM transfers. On the discs the renderer drew 3.87 million records in
+32,793 stretches, 3,355 copies among them (Silent Hill 2,999).
+
+**The two differences, explained.** Both are in VRAM, neither reaches a picture (the two programs display nothing),
+and both programs were written to exercise the texture cache: `texture-cache.s` changes VRAM under a page the cache
+holds and draws from it again, `triangle-rows.s` reads back which texels a triangle taller than a cache block left in
+the cache (D-41). The GPU's cache gives the texel it held, the renderer the texel VRAM holds (0x8001 against 0x8002 at
+the first pixel of each). **Shown, not argued** [M]: a scratch build of the GPU whose cache always misses (its
+`TextureCache::read` reading VRAM as it stands) draws both programs as the renderer does, and with it all 49 programs
+are exact in VRAM too; the build was not kept. The counts are pinned in the test (`TEXTURE_CACHE_HALFWORDS`), so that a
+change in either is seen.
+
+No game of the eight, over its first 3,000 frames, draws a picture that depends on a stale texture cache entry.
+
+**The predictions.** P-E3a held: every picture of the programs and of ps1-tests is equal. P-E3b held in its strong
+form: no disc differs in a pixel or in VRAM, where the prediction allowed the texture cache a few hundred pixels.
+P-E3c held: every golden line is the recorded one with the renderer attached. On the programs the picture comparison
+is weak evidence by itself, since most leave the display blanked; VRAM is what grades them there.
+
+### 17.3 The run tool and the bench
+
+`examples/run.rs --renderer` attaches the renderer and writes its picture beside the machine's for `--picture FILE`
+and `--pictures DIR N` (`NAME.renderer.rgba`), and its VRAM beside `--vram FILE`, each with the pixels that differ
+counted (Crash Bandicoot at frames 300, 600 and 900: 0, and VRAM 0). `examples/bench.rs --renderer` waits for the
+renderer's picture each frame and times the wait with the frame (§18).
+
+**The kit is not given an option at E3** [C]. The conformance kit runs the core's library through the core ABI, and
+that library is `diamond`'s own cdylib, which cannot link a crate that depends on `diamond` (§14.5). Attaching the
+renderer there needs what E4 needs for its setting: the core's exports in a crate of their own that links the machine
+and its layers, with the setting attaching and detaching them between frames. **The picture through v1 needs no
+change of the ABI** [A]: `Core::frame` gives the host the core's RGBA picture at the size `frame_info` and the
+`GEOMETRY` event report, and with the renderer attached it would give the renderer's picture in the same form; at 1×
+the size is the display's, and at N× (E5) a larger size is what `GEOMETRY` already announces.
+
+## 18. Cost
+
+### 18.1 The instrument
+
+§9's, unchanged: `examples/bench` on links with every function aligned to 64 bytes, each build in its own target
+folder, the builds alternating on one core (`taskset -c 11`), the fastest mean of five rounds, milliseconds of the
+emulation thread a frame. The base is WiseMan 84dffc65, extracted outside the repository. With `--renderer` the bench
+waits for the renderer's picture after each `advance` and times the two together, as a frontend showing that picture
+each frame would pay; the wait is also printed by itself. The device is the RX 6800 (`EMUSEN_GPU_DEVICE=6800`).
+
+### 18.2 Unattached, and the cost that was there at first
+
+The first build of the branch stood above the base on `gpu/benchmark`, a hundred flat triangles a frame [M]:
+
+| Run | Base | Branch | Difference |
+|---|---|---|---|
+| first series, five rounds | 2.312 | 2.370 | +2.5% |
+| again, seven rounds | 2.301 | 2.365 | +2.8% |
+
+The other four items were within −0.7 and +0.9 per cent. Comparing the links' symbol sizes (`nm -S`), as §9.2 did,
+`raster::triangle` was 319 bytes longer (0x19B7 against 0x1878); the other GPU functions that grew (`execute` by 51
+bytes, `feed` 74, `Display::read_line` 115, the last for the line's test of the layer) are each run once a command or
+a line, not a pixel. The prediction that the triangle's setup, factored into `raster::setup` and called from
+`triangle` so that the renderer would share it, was the cost was tested by ablation: the branch with the triangle's old
+body and `setup` kept for the renderer stood at the base (2.304 against 2.317) [M]; the factored form with `#[inline]`
+in place of `#[inline(always)]` did not (2.380, and a function of 0x1901 bytes). **Decided [C]**: the software
+triangle keeps the base's code, byte for byte in its function's size (0x1878), and the renderer's `setup` makes the same
+values; the two are held equal by `setup_describes_the_pixels_triangle_draws`, which draws 600 random triangles,
+shaded and then textured raw from a page whose texel names its coordinate, and requires each pixel of each to be what
+`setup` describes under the renderer's per-pixel rule (§16.3). A mutant of `setup` alone, its winding taken as given,
+fails it. This is the one place where the GPU and the renderer state a rule twice; the test is what makes it one rule.
+
+The final build against the base, five rounds [M]:
+
+| Run | Frames | Base | Branch | Difference |
+|---|---|---|---|---|
+| `gpu/benchmark` | 1,200 | 2.309 | 2.308 | 0.0% |
+| `gpu/bandwidth` | 1,200 | 2.935 | 2.936 | 0.0% |
+| Crash Bandicoot | 3,000 | 2.294 | 2.286 | −0.3% |
+| Mega Man Legends | 3,000 | 1.793 | 1.788 | −0.3% |
+| Tekken 3 | 3,000 | 2.368 | 2.365 | −0.1% |
+
+Every pair's digests equal. **P-E3d held**: unattached, the frame is the base's within the noise.
+
+### 18.3 Attached
+
+The same runs with the renderer attached and its picture waited for every frame [M, five rounds; the wait the mean of
+three further runs; "the frame's form" the difference made by a scratch build whose frame stays plain with a layer
+attached, five rounds, below]:
+
+| Run | Base | Attached | Difference | The picture's wait | The frame's form | The renderer's host work |
+|---|---|---|---|---|---|---|
+| `gpu/benchmark` | 2.309 | 2.624 | +0.315 (+13.6%) | 0.223 | 0.040 | 0.055 |
+| `gpu/bandwidth` | 2.935 | 3.504 | +0.569 (+19.4%) | 0.284 | 0.139 | 0.148 |
+| Crash Bandicoot | 2.294 | 2.662 | +0.368 (+16.0%) | 0.190 | 0.089 | 0.077 |
+| Mega Man Legends | 1.793 | 2.080 | +0.287 (+16.0%) | 0.147 | 0.069 | 0.066 |
+| Tekken 3 | 2.368 | 2.757 | +0.389 (+16.4%) | 0.130 | 0.149 | 0.134 |
+
+Every frame's two pictures equal in every run. The three shares, each on the emulation thread:
+
+- **The picture's wait**: the submission (the staged arrays copied to the device, every stretch's dispatches) recorded,
+  run and waited for, and the picture read back. Its floor, measured apart on the same device [M, a scratch program,
+  2,000 submissions each]: a waited submission holding nothing, 0.036 ms (median); one copying 1.2 MB to the host,
+  0.111 ms. So on Crash Bandicoot's 512 by 240 picture roughly half of the 0.19 ms is the round trip and the readback,
+  and the device's own drawing about a tenth of a millisecond [A, by subtraction].
+- **The frame's form**: E1's layered frame, chosen whenever a layer is attached, tells the layer every move of the
+  processor and every projection, and the renderer ignores them (its `moved` is the empty default, called through
+  `dyn Layer`). A scratch build with the frame kept plain while the renderer was attached measured this share [M]:
+  2.587, 3.367, 2.561, 2.006 and 2.632 against the table's attached column. It is the same order as E1's test
+  observer's dispatch (§9.3).
+- **The renderer's host work**: the plain-form build's attached frame less the base and the wait: the GPU's events,
+  decoding, records, binning and stretches, 0.05 to 0.15 ms a frame. (The frame's form is taken from the plain-form
+  build's own series against the attached build in the same rotation, 2.627, 3.506, 2.650, 2.075 and 2.781, within
+  0.02 of the table's attached column.)
+
+**P-E3e held in its first part and in most of its second**: under a millisecond a frame more on every item (0.29 to
+0.57); the decoding and binning a sixth to a quarter of it on four items, under the third predicted, and on Tekken 3
+just over (0.134 of 0.389, 34 per cent), where the stream holds the most commands and copies for the fewest pixels.
+With the frame's form counted with them, a third to two thirds.
+
+**What is not done, and could be** [A, proposed, not built]: a layer that watches only the GPU could say so (a method
+of `Layer` with a default of true), and the machine keep the plain frame for it, which would save the middle column;
+E4's precision layer needs the moves, so whether that is worth a method is E4's question. The wait could be taken off
+the emulation thread by `emusen-gpu`'s pending submission (`Mars_Gpu.md` §14.2): the frame's work submitted at the
+frame's end and waited for when the next picture is wanted, which Mars measured worth doing at its multiples; at 1×
+on this device the device's share is a tenth of a millisecond, and the decision is E5's, where it grows by N².
+
+### 18.4 On the handheld, estimated
+
+**An estimate, not a measurement** [A]: the handheld is not part of this stage. Its GPU sits at its 800 MHz floor in
+these loads (the project's record of its governor), the Ryzen Z1 Extreme's integrated Radeon, twelve compute units
+against the RX 6800's sixty (the chips' published figures, not measured here) at 800 MHz against some 2 GHz, reading
+the system's shared memory: some ten to fifteen times less compute throughput. Scaling the device's own share (about 0.1 ms on Crash Bandicoot,
+0.05 to 0.15 across the items) by that gives **one to two milliseconds a frame for the device's drawing at 1×**.
+An integrated device has no bus between the host's arrays and its own memory, so the copies and the readback shrink
+towards a memory copy rather than grow. The host's shares (0.1 to 0.3 ms here) scale with the handheld's slower
+processor, perhaps half again. In all, perhaps **+1.5 to 2.5 ms a frame** at 1× with the picture waited for, against
+the 16.7 ms of a frame at full speed; with the wait made pending (§18.3) most of the device's share would leave the
+emulation thread. E5's internal resolution multiplies the device's share by about N², which at 4× on the handheld would
+not fit a frame without that change; it is E5's to measure.
+
+## 19. Tests run, predictions, and what E4 needs
+
+### 19.1 Tests [M, 2026-10-13]
+
+- **`emusen-gpu`**, `cargo test --release`: 12 (one added, §3.1 of `EmuSen_Gpu.md`), on the RX 6800, and the added one
+  clean under the validation layer with synchronization validation.
+- **MarsRT**, `cargo test --release` on the RX 6800 alone, since `emusen-gpu` changed: 490 of 490.
+- **`diamond`**, `cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS` and `EMUSEN_GPU_DEVICE=6800`: 167 unit tests
+  (two added: the seam's events, `a_layer_is_told_each_command_its_continuations_and_each_line_shown`, and
+  `setup_describes_the_pixels_triangle_draws`), 81 program tests (E1's goldens among them, plain and with the test
+  observer) and 3 renderer gates (`tests/renderer.rs`), all passing; and without the corpus. The disc gate and the disc
+  goldens with `EMUSEN_DIAMOND_DISCS`: passing (§17).
+- **`diamond-renderer`**, its own unit test (the blocks' and tiles' wrapping).
+- **The renderer's gates under the validation layer** (`VK_LAYER_KHRONOS_validation`, `VK_LAYER_VALIDATE_SYNC=1`,
+  `VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1`, `Mars_Gpu.md` §14.4's configuration): the programs' and ps1-tests'
+  gates, no message.
+- **On llvmpipe, for the record**: the programs' and ps1-tests' gates pass, in 6 s and 35 s (against 4 s and 25 s on
+  the RX 6800). The integrated card was not run, by the project's rule for GPU tests.
+- **WiseMan**, under the test lock with the corpus, filtered by `Diamond`, `MarsGpu` and `MarsRt`: 734 of 734, the new
+  `DiamondShaderTests.Every_compiled_shader_of_the_renderer_is_the_compilation_of_its_source` among them.
+
+### 19.2 Predictions
+
+P-E3a, P-E3b, P-E3c, P-E3d and P-E3e held (§17.2, §18.2, §18.3). Retired with them: "the factored setup costs nothing
+inlined", which was not written down beforehand and did not hold (§18.2). P9 of the plan (every accurate golden
+reproduced with every enhancement off) holds for E3, and with the renderer attached too.
+
+### 19.3 What E4 needs next
+
+- **The composition crate.** v1's library is `diamond`'s cdylib and cannot link a layer crate (§14.5, §17.3). E4's
+  setting needs the core's exports in a crate that links the machine, `precision` and `diamond-renderer`, and attaches
+  and detaches them between frames; `Core::frame` then gives the renderer's picture with no change of the ABI (§17.3).
+  The conformance kit gets the renderer through that setting.
+- **Two layers, one attachment.** The machine attaches one layer. E4's precision layer and the renderer are two;
+  either a layer that holds both and passes each event on, or the renderer becoming the consumer of the precision
+  layer's side data by a method of its own. The side data reaches a command as E1's receipts queue it, and the
+  renderer's records gain fractional vertices and a depth: `Command` carries the words, so the precision layer can find
+  each vertex word's entry in its queue by order.
+- **The records' arithmetic.** The walk's per-pixel rule takes fixed-point vertices with a fraction where E3's are
+  integers; the edge functions and interpolants are restated in the same shader, and the 64-bit products already
+  carried in pairs of words leave room for the extra bits. Perspective-correct texturing adds a division per pixel.
+- **The frame's form** (§18.3): whether a GPU-only layer should keep the plain frame is E4's to decide with its own
+  layer's needs.
+- **The texture cache** stays unmodelled; E4's pictures should be graded, as E3's are, with it named as the one rule
+  that differs, and `texture-cache.s` and `triangle-rows.s` its two pinned counts.
+
+## 20. Reading log (E3)
+
+No emulator source of any kind was opened, and no other PlayStation renderer: nothing of DuckStation's or Beetle PSX's
+hardware renderers, parallel-psx, PCSX's or PCSX-Redux's, SwanStation's, ePSXe's plugins or any PGXP code, nor any
+shader of theirs. No firmware, listing or trace of firmware; nothing under `kernel/` or `kernel-harness/` was opened or
+changed, nor the player's BIOS folders. psx-spx was not reopened: what the GPU does came from Diamond's own software
+rasteriser and its pages. Opened: `Diamond_Plan.md` §1, §5.4, §6, §7 and §11 Q14; this page whole; `Diamond_GPU.md`
+whole; `Diamond_Speed.md` §2; `Shared/EmuSen_Gpu.md` whole; `Mars_Gpu.md` §1, §2, §5, §13 to §15; the source of
+`diamond`'s GPU (`gpu/`), `layer.rs`, `bus.rs`, `machine.rs`, `state.rs`, `debugger.rs`, `v1.rs` at its exports,
+`tests/programs.rs` and its support, `examples/run.rs` and `bench.rs`; `emusen-gpu`'s source and tests; MarsRT's
+`rdp/gpu/mod.rs` at its dispatches; `emusen-core-conform`'s command line; WiseMan's `ShaderCompiler.cs`,
+`MarsGpuDeviceTests.cs` and `DiamondTests.cs`; E1's measurement scripts in the probe's `e1/`; the press scripts by way
+of the goldens' code. The validation layer's messages were read as its output. The Vulkan specification was not
+opened; the rule of §14.3 was shown by the validation layer, which quotes it.

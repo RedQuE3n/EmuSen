@@ -5,6 +5,7 @@
 //! as it was when each line was read, which VRAM as it is cannot give again (Diamond_Native.md §23).
 
 use super::vram::Vram;
+use crate::layer::{Attached, Shown};
 use crate::video::Video;
 
 /// The largest picture: 640 dots, and 288 lines a field interleaved.
@@ -52,8 +53,9 @@ impl Display {
         &self.picture[..(self.width * self.height * 4) as usize]
     }
 
-    /// Reads every line of the current field that began before CPU cycle `t`, from VRAM as it is now.
-    pub fn scan(&mut self, vram: &Vram, video: &Video, t: u64) {
+    /// Reads every line of the current field that began before CPU cycle `t`, from VRAM as it is now; an attached layer
+    /// is told each size and line (Diamond_Enhancements.md §15.2).
+    pub fn scan(&mut self, vram: &Vram, video: &Video, t: u64, layer: &mut Attached) {
         let (line, field_line) = video.position(t);
         if field_line != self.field_line {
             self.field_line = field_line;
@@ -64,19 +66,22 @@ impl Display {
             let l = self.next;
             self.next += 1;
             if l == video.y1 {
-                self.resize(size(video));
+                self.resize(size(video), layer);
             }
             if l >= video.y1 && l < video.y2 {
-                self.read_line(vram, video, l - video.y1, video.odd as u32);
+                self.read_line(vram, video, l - video.y1, video.odd as u32, layer);
             }
         }
     }
 
     /// The picture's size, fixed as a field's first displayed line is read; a new size starts black.
-    fn resize(&mut self, (w, h): (u32, u32)) {
+    fn resize(&mut self, (w, h): (u32, u32), layer: &mut Attached) {
         if (w, h) != (self.width, self.height) {
             (self.width, self.height) = (w, h);
             self.clear();
+            if let Some(l) = layer.get() {
+                l.shown(Shown::Size { width: w, height: h });
+            }
         }
     }
 
@@ -93,12 +98,12 @@ impl Display {
         self.clear();
         for row in 0..video.y2.saturating_sub(video.y1) {
             for field in 0..=hires(video) as u32 {
-                self.read_line(vram, video, row, field);
+                self.read_line(vram, video, row, field, &mut Attached::default());
             }
         }
     }
 
-    fn read_line(&mut self, vram: &Vram, video: &Video, row: u32, field: u32) {
+    fn read_line(&mut self, vram: &Vram, video: &Video, row: u32, field: u32, layer: &mut Attached) {
         let hi = hires(video);
         let out_row = if hi { row * 2 + field } else { row };
         if out_row >= self.height {
@@ -107,6 +112,9 @@ impl Display {
         let (sx, sy) = (self.start & 0x3FF, self.start >> 10 & 0x1FF);
         let src_row = sy + if hi { row * 2 + field } else { row };
         let deep = video.mode & 1 << 4 != 0;
+        if let Some(l) = layer.get() {
+            l.shown(Shown::Line { row: out_row, x: sx, y: src_row, width: self.width, deep, blanked: self.blanked });
+        }
         let at = (out_row * self.width * 4) as usize;
         let out = &mut self.picture[at..at + (self.width * 4) as usize];
         for (i, px) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {

@@ -1,6 +1,9 @@
 //! Runs a PS-EXE on Diamond for a number of frames and prints its TTY: `run <exe> [frames] [--bios FILE | --bare] [--pal]
 //! [--dump ADDRESS WORDS] [--ram FILE] [--vram FILE] [--picture FILE]`: RAM's words from a hex address, or RAM, VRAM or
-//! the RGBA picture (its size printed) to a file.
+//! the RGBA picture (its size printed) to a file. `--renderer` attaches stage E3's Vulkan renderer from the start
+//! (Diamond_Enhancements.md §16) on the device `EMUSEN_GPU_DEVICE` names, and `--picture`, `--pictures` and `--vram`
+//! then write its picture or VRAM beside the machine's, as `NAME.renderer.rgba` (or `NAME.renderer`), with the pixels
+//! that differ counted.
 //! `--disasm ADDRESS N` disassembles N words of a game's RAM after the run. `--armed` runs each frame through the debugger's loop with the kit's C15 tables armed (Diamond_Debugger.md), and `--armed-reads` the read watch and read data breakpoint of 1.2 beside them, with nothing to hit. `--wav FILE` writes the SPU's output, 16-bit stereo at 44,100 Hz. `--boot` boots the disc through the kernel's LoadExec from a loader, without the BIOS's intro (Diamond_CDROM.md §9).
 //! `--heading TEXT` prints the TTY from TEXT on, leaving out what a BIOS printed before the program; `--trace` then
 //! traces the controller's commands and responses, as `--trace-game` does from the entry of a game booted by `--boot`, once the BIOS has handed over. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
@@ -102,6 +105,14 @@ fn main() {
         eprintln!("[state loaded at frame {}]", m.frames);
     }
     let base = m.frames;
+    if args.iter().any(|a| a == "--renderer") {
+        let r = diamond_renderer::Renderer::new(None).unwrap_or_else(|e| {
+            eprintln!("no renderer: {e}");
+            std::process::exit(2)
+        });
+        eprintln!("[renderer on {}]", r.report());
+        m.attach(Box::new(r));
+    }
     if args.iter().any(|a| a == "--lid-open") {
         m.set_lid(true, None);
     }
@@ -210,7 +221,9 @@ fn main() {
             && m.frames % n == 0
         {
             let d = &m.board.gpu.display;
-            std::fs::write(format!("{dir}/f{:06}_{}x{}.rgba", m.frames, d.width, d.height), d.frame()).expect("written");
+            let name = format!("{dir}/f{:06}_{}x{}.rgba", m.frames, d.width, d.height);
+            std::fs::write(&name, d.frame()).expect("written");
+            write_rendered(&mut m, &name);
         }
         if lid_at.is_some_and(|f| f == m.frames) {
             m.set_lid(true, None);
@@ -286,13 +299,49 @@ fn main() {
     }
     if let Some(i) = args.iter().position(|a| a == "--vram") {
         std::fs::write(&args[i + 1], &m.board.gpu.vram.bytes).expect("written");
+        if let Some(r) = rendered(&mut m) {
+            let mut v = vec![0u16; 1024 * 512];
+            r.vram(&mut v);
+            let bytes: Vec<u8> = v.iter().flat_map(|h| h.to_le_bytes()).collect();
+            let differ = bytes.chunks(2).zip(m.board.gpu.vram.bytes.chunks(2)).filter(|(a, b)| a != b).count();
+            std::fs::write(beside(&args[i + 1]), &bytes).expect("written");
+            eprintln!("renderer's VRAM: {differ} halfwords differ");
+        }
     }
     if let Some(i) = args.iter().position(|a| a == "--picture") {
         let d = &m.board.gpu.display;
         std::fs::write(&args[i + 1], d.frame()).expect("written");
         eprintln!("picture {}x{}", d.width, d.height);
+        write_rendered(&mut m, &args[i + 1]);
+    }
+    if let Some(r) = rendered(&mut m) {
+        eprintln!("renderer: {:?}", r.counts());
     }
     eprintln!("\n[{} frames, {} cycles, pc {:08X}, {:.1} ms]", m.frames, m.board.now, m.cpu.regs.pc, start.elapsed().as_secs_f64() * 1e3);
+}
+
+/// The renderer, when one is attached.
+fn rendered(m: &mut Machine) -> Option<&mut diamond_renderer::Renderer> {
+    let layer: &mut dyn std::any::Any = m.layer()?;
+    layer.downcast_mut::<diamond_renderer::Renderer>()
+}
+
+/// `path` with `.renderer` before its `.rgba`, or after it.
+fn beside(path: &str) -> String {
+    match path.strip_suffix(".rgba") {
+        Some(stem) => format!("{stem}.renderer.rgba"),
+        None => format!("{path}.renderer"),
+    }
+}
+
+/// The renderer's picture written beside the machine's at `path`, with the pixels that differ counted.
+fn write_rendered(m: &mut Machine, path: &str) {
+    let made = m.board.gpu.display.frame().to_vec();
+    let Some(r) = rendered(m) else { return };
+    let (picture, w, h) = r.picture();
+    let differ = if picture.len() == made.len() { picture.chunks(4).zip(made.chunks(4)).filter(|(a, b)| a != b).count() } else { (w * h) as usize };
+    std::fs::write(beside(path), picture).expect("written");
+    eprintln!("renderer's picture {w}x{h} at frame {}: {differ} pixels differ", m.frames);
 }
 
 /// A sector's 2,048 bytes of user data.

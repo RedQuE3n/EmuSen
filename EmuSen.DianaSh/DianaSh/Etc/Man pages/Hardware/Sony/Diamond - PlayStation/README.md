@@ -60,6 +60,12 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   version and their loading both ways and across builds, the `Enhancement` declaration with none offered, the accurate
   goldens and the rule for recording them again, the exactness harness with a test observer, the kit's cases, the cost
   unobserved and observed and the two causes found of a cost that was there at first, and what E3 and E4 need next.
+  Stage E3, the same day (§14 to §20): the Vulkan renderer's form decided in writing before its code (a compute
+  rasteriser over its own mirror of VRAM, against a graphics pipeline), `emusen-gpu`'s one addition, the GPU's stream
+  seam, the renderer's design (records, tiles, stretches ordered by what they read and write, the CLUT cache
+  reproduced and the texture cache not), its gate (every picture equal on the programs, ps1-tests and the eight discs,
+  the two VRAM differences proven the texture cache's), its cost unattached and attached with the handheld estimated,
+  and what E4 needs next.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

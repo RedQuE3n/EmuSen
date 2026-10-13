@@ -1,0 +1,22 @@
+[package]
+name = "diamond-renderer"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Diamond's picture drawn on a Vulkan compute device from the GPU's command stream, beside the software rasteriser, which
+# keeps VRAM: a layer the machine never reads. See Diamond_Enhancements.md §14 on.
+[lib]
+name = "diamond_renderer"
+
+[dependencies]
+diamond = { path = ".." }
+blackmoon-gte = { path = "../../BlackMoon-HW/blackmoon-gte" }
+emusen-gpu = { path = "../../../Shared/emusen-gpu" }
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"

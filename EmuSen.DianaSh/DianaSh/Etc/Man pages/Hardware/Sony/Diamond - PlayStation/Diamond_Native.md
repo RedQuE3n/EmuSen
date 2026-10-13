@@ -1698,3 +1698,18 @@ The record is `Diamond_Enhancements.md`. In brief:
 - **The harness**: every golden equal with the layer compiled in and off and again with the test observer attached;
   the kit's cases on the eight discs at 1,800 frames; the frame's cost unobserved within the noise, after two causes of
   1 to 2.5 per cent were found and removed (§9 there).
+
+## 25. Stage E3, the Vulkan renderer at 1× (2026-10-13)
+
+The record is `Diamond_Enhancements.md` §14 to §20. In brief:
+
+- **The form**: a compute rasteriser over the renderer's own mirror of VRAM on `emusen-gpu`, argued against a graphics
+  pipeline and committed before the code (§14); the crate gained `dispatch_again`, version 1.1 (`EmuSen_Gpu.md` §3.1).
+- **The seam**: commands, their continuations and the display's lines told to an attached layer by the GPU, the layer
+  now held by the GPU, the GPU's decoding shared from `gpu/decode.rs` (§15).
+- **The renderer**: the crate `diamond-renderer`, a layer, records binned into tiles and planned as stretches ordered by
+  what they read and write, four shaders, seeded from the GPU and keeping no state block (§16).
+- **The gate**: every picture of the 49 programs, ps1-tests' 48 and the eight discs to frame 3,000 equal to the software
+  rasteriser's at every frame, VRAM equal but for the texture cache's halfwords on its two programs, E1's goldens equal
+  with the renderer attached (§17).
+- **The cost**: unattached the base's within noise; attached +0.29 to +0.57 ms a frame on the RX 6800 (§18).

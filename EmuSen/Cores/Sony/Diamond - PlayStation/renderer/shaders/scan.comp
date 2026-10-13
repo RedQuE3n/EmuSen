@@ -1,0 +1,38 @@
+#version 450
+// Diamond's renderer, the display's lines: one workgroup a line the display read, from the renderer's VRAM into its
+// picture, 15- or 24-bit, by display.rs's rules. See Diamond_Enhancements.md §16.
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Vram { uint vram[]; };
+layout(std430, set = 0, binding = 1) buffer Picture { uint picture[]; };
+// Each line: its row, VRAM's x and y, its width, 24-bit, blanked.
+layout(std430, set = 0, binding = 2) readonly buffer Lines { uint lines[]; };
+
+layout(push_constant) uniform Push { uint first; };
+
+uint at(uint x, uint y) {
+    return vram[(y & 511u) * 1024u + (x & 1023u)];
+}
+
+void main() {
+    uint l = (first + gl_WorkGroupID.x) * 8u;
+    uint row = lines[l], sx = lines[l + 1], sy = lines[l + 2], width = lines[l + 3];
+    bool deep = lines[l + 4] != 0u, blanked = lines[l + 5] != 0u;
+    for (uint i = gl_LocalInvocationID.x; i < width; i += 64u) {
+        uvec3 rgb = uvec3(0u);
+        if (blanked) {
+        } else if (deep) {
+            uint byte_ = sx * 2u + i * 3u;
+            for (uint k = 0u; k < 3u; k++) {
+                uint h = at((byte_ + k) / 2u, sy);
+                rgb[k] = ((byte_ + k) & 1u) == 0u ? h & 0xFFu : (h >> 8) & 0xFFu;
+            }
+        } else {
+            uint p = at(sx + i, sy);
+            uvec3 c = uvec3(p & 31u, (p >> 5) & 31u, (p >> 10) & 31u);
+            rgb = (c << 3) | (c >> 2);
+        }
+        picture[row * width + i] = 0xFF000000u | (rgb.b << 16) | (rgb.g << 8) | rgb.r;
+    }
+}

@@ -60,11 +60,11 @@ without a device.
 MarsRT's `rdp/gpu/mod.rs` names the crate's items where it named `device::`'s, and re-exports `GpuDevice` and `Pending`
 for its own callers (`memory/dp.rs`, its tests), so no other file of MarsRT changed beyond the methods above.
 
-## 3. The surface, version 1.0
+## 3. The surface, version 1.1
 
 Rule **R** of `EmuSen_Surfaces.md` §6.1: an internal Rust API, a path dependency built from the same commit, guarded
 by its users' tests. It is nonetheless numbered, so that a second user can rely on its growing by addition: the
-crate's version is 1.0.0; an addition (a lent device, images) is a minor; a change or removal of anything below is a
+crate's version was 1.0.0, and is 1.1.0 since §3.1; an addition (a lent device, images) is a minor; a change or removal of anything below is a
 major, and none is planned.
 
 | Item | What it is |
@@ -80,6 +80,7 @@ major, and none is planned.
 | `AHEAD`, `GpuDevice::submit_ahead(slot, record)`, `wait_ahead(slot)` | two slots submitted without waiting, each waited for only when it is used again |
 | `GpuDevice::finished(Submission) -> bool`, `Submission::{Now, Pending, Ahead(slot)}` | whether a submission has finished, waiting for nothing |
 | `Commands::{fill, copy, dispatch, dispatch_in, submission}` | what a recording holds: a fill of a whole buffer with a word, a copy between buffers at offsets, a dispatch of a program with its buffers and push constants (in descriptor set 0 or a later one), and which submission it is |
+| `Commands::dispatch_again`, `WRITTEN_SETS` | *since 1.1*: the program dispatched once more in the same recording with the buffers `dispatch_in` wrote its set with there (§3.1); 16 sets a recording are kept track of |
 | `DEVICE_VARIABLE` | `"EMUSEN_GPU_DEVICE"` (§4) |
 
 **The rules a user keeps**, unchanged from MarsRT and stated once here [R `device.rs`]:
@@ -92,6 +93,33 @@ major, and none is planned.
    accesses complete but not visible to a host read of mapped memory.
 3. A host buffer read or written by a submission is the submission's until it has finished.
 4. One thread submits. `Pending::wait` is the only call another thread may make, and only while nothing submits.
+5. *Since 1.1.* Within one recording, a program's set is written once, by its first `dispatch_in` there; each later
+   dispatch of that program and set in the recording is a `dispatch_again` (§3.1).
+
+### 3.1 Version 1.1: a program dispatched twice in one submission (2026-10-13)
+
+**The need.** Diamond's renderer dispatches its walk once for every stretch of commands that reads nothing an earlier
+one of the stretch drew, several a frame, and wants them in one submission (`Diamond_Enhancements.md` §14.3). MarsRT
+dispatches each program once a submission [R, `rdp/gpu/mod.rs`].
+
+**The defect it would have met, shown** [M, a scratch program on the RX 6800 under
+`VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation`]: two `dispatch` calls of one program in one `submit` make the layer
+report `VUID-vkCmdBindPipeline-commandBuffer-recording` at the second, the command buffer "now in an invalid state ...
+VkDescriptorSet ... was destroyed or updated without UPDATE_AFTER_BIND". `dispatch_in` writes the set at every call, and
+a set written after it was bound invalidates the recording that bound it. The driver ran the two dispatches anyway;
+nothing promises that it will.
+
+**The addition.** `Commands::dispatch_again(program, set, push, x, y, z)` binds the program and its set and pushes the
+constants without writing the set, so the dispatch sees the buffers that this recording's `dispatch_in` wrote into it.
+`Commands` keeps, for each recording, the sets `dispatch_in` has written there (up to `WRITTEN_SETS`, a fixed array, so
+that recording allocates nothing), and `dispatch_again` on a set it has not written panics with the reason, as the
+crate's other misuses do. `dispatch_in` is unchanged but for noting the set it wrote. Nothing MarsRT calls changed
+meaning, so this is a minor: **1.1.0**.
+
+**Why not the alternatives** [A]: a waited submission for each dispatch costs a round trip to the device each time; a
+`dispatch_in` that skipped the write when the buffers were the same as last time would compare handles, and a handle
+the driver reuses after a buffer is destroyed would then leave a set naming memory that is gone; descriptor sets
+created with `UPDATE_AFTER_BIND` need a feature the crate does not ask for.
 
 ## 4. Choosing a device, and the variable's name
 
@@ -200,6 +228,13 @@ a core with no C# tree**. MarsRT takes its binaries from the C# core's `Rdp/Gpu/
 the same record-and-check test of their own. If E3 decides on the graphics form, the additions of §6.2 come first,
 as a minor of this surface, with MarsRT's bench run across the barrier's change.
 
+*Since E3 (2026-10-13, `Diamond_Enhancements.md` §14 to §18).* E3 took the compute form, as the likelier, and needed of
+this crate one thing §6.2 did not foresee: a program dispatched more than once in one submission, which `dispatch_in`
+made invalid by writing the set at every call; hence 1.1's `dispatch_again` (§3.1). The shader route for a core with
+no C# tree is the renderer's `shaders/` with its SPIR-V checked in and `DiamondShaderTests` in WiseMan. Nothing else
+was added: no image, no graphics pipeline, no 64-bit integer feature (the walk makes its 64-bit products in pairs of
+32-bit words). The second user's buffers come to 44 MiB at 1×, 26 of them in the device's own memory.
+
 ## 7. How it is tested
 
 **On its own** [M, `cargo test --release`, 2026-10-13, 11 tests, on the RX 6800]. Three without a device: the choice
@@ -216,7 +251,12 @@ device has). Eight on the first device by rank, each standing down with a line w
 - two slots ahead over three rounds, each slot's later submissions waiting for its last themselves;
 - a pending submission waited for by a thread that never submits, then a waited submission after it that must land
   last;
-- a device chosen by its name in upper case, and refused by a name none has.
+- a device chosen by its name in upper case, and refused by a name none has;
+- *since 1.1*, one program dispatched three times and a second program twice in one recording, interleaved, each
+  buffer holding its own program's three or two rounds in order; and a `dispatch_again` in a recording that wrote no
+  set refused. Clean under the validation layer with synchronization validation and its shader-access heuristic
+  (`Mars_Gpu.md` §14.4's configuration) [M]. A mutant that bound the pipeline but not the set was killed by the first
+  assertion: the third dispatch then tripled the second program's buffer.
 
 The program is `tests/shaders/triple.comp`, each word tripled plus the push constant, compiled to `triple.spv` by the
 shaderc in `Silk.NET.Shaderc.Native` 2.23.0, the compiler of `Mars_Gpu.md` §2, twice to the same 1,292 bytes. The

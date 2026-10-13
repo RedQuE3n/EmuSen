@@ -1,13 +1,15 @@
 //! Times Diamond's frames on the emulation thread and digests what they made (Diamond_Speed.md §2): `bench <image>
 //! [frames] [--from N] [--armed] [--plain] [--stepped] [--verify N] [--verify-runs N] [--times FILE] [--every N]
-//! [--observed] [--save FILE]`; `--observed` attaches the enhancement layer's test observer (Diamond_Enhancements.md
-//! §7), `--save FILE` writes the state the run ends in, a layer's block with it,
+//! [--observed] [--renderer] [--save FILE]`; `--observed` attaches the enhancement layer's test observer
+//! (Diamond_Enhancements.md §7), `--renderer` stage E3's Vulkan renderer, whose picture each frame then waits for and
+//! is timed with the frame, the two shares and the frames whose pictures differ printed apart (§18); `--save FILE` writes
+//! the state the run ends in, a layer's block with it,
 //! `--plain` turns the exact levers off and `--stepped` the runs alone, `--verify N` checks every Nth skip against the
 //! interpreter and `--verify-runs N` every Nth run against its steps. The image is a disc (a cue sheet, a CHD, an `.iso` or a
 //! lone `.bin`) or a PS-EXE, run on the open kernel with no firmware; a `.s` source is assembled and run with no kernel.
 //! Prints the mean, median, 95th percentile and worst milliseconds a frame from frame N (default 0), and the digests
 //! of every frame's picture, of the sound and of the final state, each FNV-1a; `--every N` adds the state's digest every
-//! N frames. Only `advance` is timed, never the digests.
+//! N frames. Only `advance` is timed, and with `--renderer` the wait for its picture, never the digests.
 
 use diamond::kernel::{self, Kernel};
 use diamond::machine::{Config, Gpu, Machine};
@@ -38,6 +40,11 @@ fn main() {
     if args.iter().any(|a| a == "--observed") {
         m.attach(Box::new(diamond::layer::Tally::new()));
     }
+    let rendering = args.iter().any(|a| a == "--renderer");
+    if rendering {
+        m.attach(Box::new(diamond_renderer::Renderer::new(None).unwrap_or_else(|e| panic!("no renderer: {e}"))));
+    }
+    let (mut waits, mut unequal, mut made) = (Vec::with_capacity(frames), 0, Vec::with_capacity(640 * 576 * 4));
     m.idle.on = !args.iter().any(|a| a == "--plain");
     m.idle.verify = flag("--verify").map_or(0, |v| v.parse().expect("a count"));
     m.runs.on = !args.iter().any(|a| a == "--plain" || a == "--stepped");
@@ -62,7 +69,18 @@ fn main() {
         } else {
             m.advance();
         }
-        times.push(start.elapsed().as_secs_f64() * 1e3);
+        let advanced = start.elapsed().as_secs_f64() * 1e3;
+        if rendering {
+            made.clear();
+            made.extend_from_slice(m.board.gpu.display.frame());
+            let wait = std::time::Instant::now();
+            let layer: &mut dyn std::any::Any = m.layer().expect("the renderer");
+            let r = layer.downcast_mut::<diamond_renderer::Renderer>().expect("the renderer");
+            let drawn = r.picture().0;
+            waits.push(wait.elapsed().as_secs_f64() * 1e3);
+            unequal += (drawn != &made[..]) as usize;
+        }
+        times.push(advanced + waits.last().copied().unwrap_or(0.0));
         picture = fnv(picture, m.board.gpu.display.frame());
         let n = m.board.spu.out.drain(&mut chunk, usize::MAX);
         sound = chunk[..n].iter().fold(sound, |h, &s| fnv(h, &s.to_le_bytes()));
@@ -78,6 +96,13 @@ fn main() {
         let mut s = vec![0; m.state_size()];
         let n = m.save_state(&mut s).expect("saved");
         std::fs::write(file, &s[..n]).expect("written");
+    }
+    if rendering {
+        let w = &waits[from.min(waits.len())..];
+        let wait = w.iter().sum::<f64>() / w.len().max(1) as f64;
+        let layer: Box<dyn std::any::Any> = m.detach().expect("the renderer");
+        let r = layer.downcast::<diamond_renderer::Renderer>().expect("the renderer");
+        eprintln!("renderer: {}; the picture waited for {wait:.3} ms a frame of the mean; {unequal} frames' pictures differ; {:?}", r.report(), r.counts());
     }
     if let Some(layer) = m.detach() {
         let t = *(layer as Box<dyn std::any::Any>).downcast::<diamond::layer::Tally>().expect("the test observer");

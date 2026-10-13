@@ -1,0 +1,293 @@
+#version 450
+// Diamond's renderer, the walk: one invocation a pixel of an 8-by-8 tile of VRAM, one workgroup a tile. Each invocation
+// loads its pixel, meets the tile's records in drawing order and applies each by the software rasteriser's rules, then
+// stores the pixel once. See Diamond_Enhancements.md §16; the record's layout is the renderer's `record.rs`.
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(std430, set = 0, binding = 0) buffer Vram { uint vram[]; };
+layout(std430, set = 0, binding = 1) readonly buffer Records { int records[]; };
+layout(std430, set = 0, binding = 2) readonly buffer Entries { uint entries[]; };
+layout(std430, set = 0, binding = 3) readonly buffer Tiles { uvec4 tiles[]; };
+layout(std430, set = 0, binding = 4) readonly buffer Cluts { uint cluts[]; };
+layout(std430, set = 0, binding = 5) readonly buffer Data { uint data[]; };
+
+layout(push_constant) uniform Push { uint first_tile; };
+
+const int WORDS = 48;
+
+const uint TRIANGLE = 1u;
+const uint RECTANGLE = 2u;
+const uint LINE = 3u;
+const uint FILL = 4u;
+const uint TRANSFER = 5u;
+
+const uint SHADED = 1u << 8;
+const uint TEXTURED = 1u << 9;
+const uint RAW = 1u << 10;
+const uint DITHER = 1u << 11;
+const uint BLEND = 1u << 12;
+const uint CHECK = 1u << 15;
+const uint SET = 1u << 16;
+const uint CROP = 1u << 17;
+const uint SKIP = 1u << 18;
+const uint PARITY = 1u << 19;
+const uint PAIRS = 1u << 20;
+
+// psx-spx's dither offsets, by y and x modulo 4 (draw.rs's DITHER).
+const int DITHERS[16] = int[16](-4, 0, -3, 1, 2, -2, 3, -1, -3, 1, -4, 0, 3, -1, 2, -2);
+
+uint at(int x, int y) {
+    return vram[(uint(y) & 511u) * 1024u + (uint(x) & 1023u)];
+}
+
+// a / b rounded down, for b > 0.
+int floor_div(int a, int b) {
+    return a >= 0 ? a / b : -((-a + b - 1) / b);
+}
+
+// The integer part of (base + g1 * d1 + g2 * d2 + 1/2) at 12 fractional bits, its low 32 bits, the products exact in
+// 64 bits as the software rasteriser makes them in i64.
+int interpolate(int base, int g1, int d1, int g2, int d2) {
+    int h1, l1, h2, l2;
+    imulExtended(g1, d1, h1, l1);
+    imulExtended(g2, d2, h2, l2);
+    uint c1, c2, c3;
+    uint lo = uaddCarry(uint(l1), uint(l2), c1);
+    lo = uaddCarry(lo, uint(base), c2);
+    lo = uaddCarry(lo, 2048u, c3);
+    int hi = h1 + h2 + int(c1) + int(c2) + int(c3) + (base < 0 ? -1 : 0);
+    return int((lo >> 12) | (uint(hi) << 20));
+}
+
+// The texel at (u, v) through the window, the page and the CLUT (texture.rs's `texel`, without the texture cache).
+uint texel(int r, uint u, uint v) {
+    uint w = uint(records[r + 7]);
+    uint mu = w & 0xFFu, mv = (w >> 8) & 0xFFu, ou = (w >> 16) & 0xFFu, ov = w >> 24;
+    u = ((u & ~mu) | (ou & mu)) & 0xFFu;
+    v = ((v & ~mv) | (ov & mv)) & 0xFFu;
+    uint page = uint(records[r + 5]);
+    int y = int(page >> 16) + int(v);
+    if (y >= 512) {
+        return 0u;
+    }
+    int px = int(page & 0xFFFFu);
+    uint ds = uint(records[r + 6]);
+    uint depth = ds & 0xFFu, slot = ds >> 8;
+    if (depth == 0u) {
+        uint half_ = at(px + int(u >> 2), y);
+        return cluts[slot * 256u + ((half_ >> ((u & 3u) * 4u)) & 0xFu)];
+    }
+    if (depth == 1u) {
+        uint half_ = at(px + int(u >> 1), y);
+        return cluts[slot * 256u + ((half_ >> ((u & 1u) * 8u)) & 0xFFu)];
+    }
+    return at(px + int(u), y) & 0xFFFFu;
+}
+
+// B the pixel in VRAM, F the new one, each channel at five bits, saturated: B/2+F/2, B+F, B-F, B+F/4.
+uint blend(uint back, uint front, uint mode) {
+    uint out_ = 0u;
+    for (uint s = 0u; s < 15u; s += 5u) {
+        int b = int((back >> s) & 31u), f = int((front >> s) & 31u), c;
+        if (mode == 0u) {
+            c = (b + f) >> 1;
+        } else if (mode == 1u) {
+            c = min(b + f, 31);
+        } else if (mode == 2u) {
+            c = max(b - f, 0);
+        } else {
+            c = min(b + (f >> 2), 31);
+        }
+        out_ |= uint(c) << s;
+    }
+    return out_;
+}
+
+// draw.rs's `put`: dithered, cut to five bits, left alone over a masked pixel when checking, blended, written with the
+// texel's flag and the mask bit.
+void put(inout uint pixel, uint flags, int x, int y, ivec3 c, uint flag, bool blended) {
+    if ((flags & DITHER) != 0u) {
+        c += DITHERS[(y & 3) * 4 + (x & 3)];
+    }
+    c = clamp(c, 0, 255) >> 3;
+    if ((flags & CHECK) != 0u && (pixel & 0x8000u) != 0u) {
+        return;
+    }
+    uint out_ = uint(c.r) | (uint(c.g) << 5) | (uint(c.b) << 10);
+    if (blended) {
+        out_ = blend(pixel, out_, (flags >> 13) & 3u);
+    }
+    pixel = out_ | flag | ((flags & SET) != 0u ? 0x8000u : 0u);
+}
+
+// draw.rs's `row` for one pixel: the texel and its transparency, modulation or a raw texture, then `put`.
+void shade(inout uint pixel, int r, uint flags, int x, int y, ivec3 rgb, uint u, uint v) {
+    bool blending = (flags & BLEND) != 0u;
+    if ((flags & TEXTURED) == 0u) {
+        put(pixel, flags, x, y, rgb, 0u, blending);
+        return;
+    }
+    uint t = texel(r, u, v);
+    if (t == 0u) {
+        return;
+    }
+    ivec3 t5 = ivec3(int(t & 31u), int((t >> 5) & 31u), int((t >> 10) & 31u));
+    ivec3 c;
+    if ((flags & RAW) != 0u) {
+        c = t5 << 3;
+    } else if ((flags & CROP) != 0u) {
+        c = ((rgb >> 3) * t5) >> 1;
+    } else {
+        c = (rgb * t5) >> 4;
+    }
+    uint flag = t & 0x8000u;
+    put(pixel, flags, x, y, c, flag, blending && flag != 0u);
+}
+
+ivec3 colour(int r) {
+    int w = records[r + 8];
+    return ivec3(w & 0xFF, (w >> 8) & 0xFF, (w >> 16) & 0xFF);
+}
+
+// The drawing row VRAM's row `py` stands for in a primitive spanning rows y_lo..y_hi, at most 512 of them: py or py + 512.
+int row_of(int r, int py) {
+    return py >= records[r + 3] ? py : py + 512;
+}
+
+bool inside(int r, int x, int y) {
+    return x >= records[r + 1] && x <= records[r + 2] && y >= records[r + 3] && y <= records[r + 4];
+}
+
+bool skipped(uint flags, int y) {
+    return (flags & SKIP) != 0u && uint(y & 1) == ((flags >> 19) & 1u);
+}
+
+void triangle(inout uint pixel, int r, uint flags, int x, int py) {
+    int y = row_of(r, py);
+    if (!inside(r, x, y) || skipped(flags, y)) {
+        return;
+    }
+    for (int e = 0; e < 3; e++) {
+        int k = r + 10 + 5 * e;
+        if (records[k + 2] * (y - records[k + 1]) - records[k + 3] * (x - records[k]) < records[k + 4]) {
+            return;
+        }
+    }
+    int dx = x - records[r + 25], dy = y - records[r + 26];
+    ivec3 rgb = colour(r);
+    if ((flags & SHADED) != 0u) {
+        for (int k = 0; k < 3; k++) {
+            rgb[k] = interpolate(records[r + 27 + k], records[r + 32 + 2 * k], dx, records[r + 33 + 2 * k], dy);
+        }
+    }
+    uint u = 0u, v = 0u;
+    if ((flags & TEXTURED) != 0u) {
+        u = uint(interpolate(records[r + 30], records[r + 38], dx, records[r + 39], dy)) & 0xFFu;
+        v = uint(interpolate(records[r + 31], records[r + 40], dx, records[r + 41], dy)) & 0xFFu;
+    }
+    shade(pixel, r, flags, x, y, rgb, u, v);
+}
+
+// A texel's texture cache entry in the window, for a rectangle's pairs (raster.rs's `rectangle`).
+uint entry(int r, uint u) {
+    uint w = uint(records[r + 7]);
+    uint mu = w & 0xFFu, ou = (w >> 16) & 0xFFu;
+    uint depth = uint(records[r + 6]) & 0xFFu;
+    return (((u & ~mu) | (ou & mu)) & 0xFFu) >> (4u - depth);
+}
+
+void rectangle(inout uint pixel, int r, uint flags, int x, int py) {
+    int y = row_of(r, py);
+    if (!inside(r, x, y) || skipped(flags, y)) {
+        return;
+    }
+    uint v = uint(records[r + 13] + records[r + 15] * (y - records[r + 11])) & 0xFFu;
+    uint u = uint(records[r + 12] + records[r + 14] * (x - records[r + 10])) & 0xFFu;
+    if ((flags & PAIRS) != 0u && (x & 1) == 1 && x > records[r + 1]) {
+        uint left = (u - 1u) & 0xFFu;
+        if (entry(r, u) != entry(r, left)) {
+            u = left;
+        }
+    }
+    shade(pixel, r, flags, x, y, colour(r), u, v);
+}
+
+void line(inout uint pixel, int r, uint flags, int x, int py) {
+    int y = row_of(r, py);
+    if (!inside(r, x, y) || skipped(flags, y)) {
+        return;
+    }
+    int ax = records[r + 10], ay = records[r + 11], dx = records[r + 12], dy = records[r + 13], n = records[r + 14];
+    int k = 0;
+    if (n == 0) {
+        if (x != ax || y != ay) {
+            return;
+        }
+    } else if (records[r + 15] != 0) {
+        k = (x - ax) * sign(dx);
+        if (k < 0 || k > n || ay + sign(dy) * floor_div(2 * k * abs(dy) + (dx < 0 ? n - 1 : n), 2 * n) != y) {
+            return;
+        }
+    } else {
+        k = (y - ay) * sign(dy);
+        if (k < 0 || k > n || ax + floor_div(2 * k * dx + n - 1, 2 * n) != x) {
+            return;
+        }
+    }
+    ivec3 rgb;
+    for (int c = 0; c < 3; c++) {
+        rgb[c] = ((records[r + 16 + c] << 12) + records[r + 19 + c] * k + 2048) >> 12;
+    }
+    shade(pixel, r, flags, x, y, rgb, 0u, 0u);
+}
+
+void fill(inout uint pixel, int r, uint flags, int px, int py) {
+    uint i = uint(px - records[r + 10]) & 1023u, j = uint(py - records[r + 11]) & 511u;
+    if (i >= uint(records[r + 12]) || j >= uint(records[r + 13]) || skipped(flags, py)) {
+        return;
+    }
+    pixel = uint(records[r + 14]);
+}
+
+void transfer(inout uint pixel, int r, uint flags, int px, int py) {
+    uint w = uint(records[r + 12]);
+    uint i = uint(px - records[r + 10]) & 1023u, j = uint(py - records[r + 11]) & 511u;
+    if (i >= w || j >= uint(records[r + 13])) {
+        return;
+    }
+    uint k = j * w + i;
+    if (k < uint(records[r + 14]) || k >= uint(records[r + 15])) {
+        return;
+    }
+    if ((flags & CHECK) != 0u && (pixel & 0x8000u) != 0u) {
+        return;
+    }
+    uint d = uint(records[r + 16]) + k - uint(records[r + 14]);
+    pixel = ((data[d >> 1] >> ((d & 1u) * 16u)) & 0xFFFFu) | ((flags & SET) != 0u ? 0x8000u : 0u);
+}
+
+void main() {
+    uvec4 t = tiles[first_tile + gl_WorkGroupID.x];
+    int px = int((t.x & 127u) * 8u + gl_LocalInvocationID.x);
+    int py = int((t.x >> 7) * 8u + gl_LocalInvocationID.y);
+    uint index = uint(py) * 1024u + uint(px);
+    uint pixel = vram[index];
+    for (uint e = t.y; e < t.y + t.z; e++) {
+        int r = int(entries[e]) * WORDS;
+        uint flags = uint(records[r]);
+        uint kind = flags & 0xFu;
+        if (kind == TRIANGLE) {
+            triangle(pixel, r, flags, px, py);
+        } else if (kind == RECTANGLE) {
+            rectangle(pixel, r, flags, px, py);
+        } else if (kind == LINE) {
+            line(pixel, r, flags, px, py);
+        } else if (kind == FILL) {
+            fill(pixel, r, flags, px, py);
+        } else if (kind == TRANSFER) {
+            transfer(pixel, r, flags, px, py);
+        }
+    }
+    vram[index] = pixel;
+}

@@ -196,3 +196,40 @@ fn a_device_is_chosen_by_any_part_of_its_name_in_any_case_and_refused_by_one_it_
     let report = GpuDevice::try_create(Some(wanted)).err().expect("a device opened by a name none has");
     assert_eq!(report, format!("no Vulkan device is named like \"{wanted}\""));
 }
+
+/// A program dispatched again in one recording with the buffers its set was written with there, another program's set bound
+/// between; and a dispatch again before the recording wrote the set refused (EmuSen_Gpu.md §3.1).
+#[test]
+fn a_program_is_dispatched_again_in_one_recording_with_the_buffers_its_set_holds() {
+    let Some(device) = device() else { return };
+    let first = device.create_program(TRIPLE, 1, 4).expect("the program");
+    let second = device.create_program(TRIPLE, 1, 4).expect("the program");
+    let words = 1000;
+    let (a, b) = (device.create_buffer(words as u64 * 4, Where::Host).expect("a host buffer"), device.create_buffer(words as u64 * 4, Where::Host).expect("a host buffer"));
+    let (sent_a, sent_b) = (seeds(words, 21), seeds(words, 22));
+    a.slice_mut::<u32>().copy_from_slice(&sent_a);
+    b.slice_mut::<u32>().copy_from_slice(&sent_b);
+    let groups = (words as u32).div_ceil(64);
+    device.submit(|c| {
+        c.dispatch(&first, &[&a], &1u32, groups, 1, 1);
+        c.dispatch(&second, &[&b], &2u32, groups, 1, 1);
+        c.dispatch_again(&first, 0, &3u32, groups, 1, 1);
+        c.dispatch_again(&second, 0, &4u32, groups, 1, 1);
+        c.dispatch_again(&first, 0, &5u32, groups, 1, 1);
+    });
+    let want_a: Vec<u32> = sent_a.iter().map(|&s| tripled(tripled(tripled(s, 1), 3), 5)).collect();
+    let want_b: Vec<u32> = sent_b.iter().map(|&s| tripled(tripled(s, 2), 4)).collect();
+    assert_eq!(a.slice::<u32>(), &want_a[..], "the first program's buffer, three times in order");
+    assert_eq!(b.slice::<u32>(), &want_b[..], "the second's, twice, never the first's");
+
+    // The next recording has written nothing: a dispatch again there is refused.
+    let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| device.submit(|c| c.dispatch_again(&first, 0, &0u32, groups, 1, 1))));
+    let message = refused.expect_err("dispatched again in a recording that wrote no set");
+    let text = message.downcast_ref::<String>().cloned().unwrap_or_default();
+    assert!(text.contains("before this recording wrote the program's set"), "{text}");
+    for buffer in [a, b] {
+        device.destroy_buffer(buffer);
+    }
+    device.destroy_program(first);
+    device.destroy_program(second);
+}

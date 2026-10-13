@@ -21,21 +21,26 @@ namespace EmuSen.WiseMan.Fixtures
         }
     }
 
-    // GLSL compute source to SPIR-V, for Mars's shaders; the product ships the result and never this - see Mars_Gpu.md §2.
+    // GLSL compute source to SPIR-V, for Mars's and Diamond's shaders; the product ships the result and never this - see Mars_Gpu.md §2.
     public static unsafe class ShaderCompiler
     {
         public const string RecordVariable = "EMUSEN_GPU_SHADERS_RECORD";
 
-        public static string ShaderDirectory
+        public static string RepositoryRoot
         {
             get
             {
                 DirectoryInfo? at = new(AppContext.BaseDirectory);
                 while (at is not null && !File.Exists(Path.Combine(at.FullName, "EmuSen.sln"))) at = at.Parent;
                 if (at is null) throw new DirectoryNotFoundException("the repository is not above the test binaries");
-                return Path.Combine(at.FullName, "EmuSen", "Cores", "Nintendo", "Mars - N64", "Rdp", "Gpu", "Shaders");
+                return at.FullName;
             }
         }
+
+        public static string ShaderDirectory => Path.Combine(RepositoryRoot, "EmuSen", "Cores", "Nintendo", "Mars - N64", "Rdp", "Gpu", "Shaders");
+
+        // Diamond's renderer's shaders, which its crate embeds - see Diamond_Enhancements.md §14.5.
+        public static string DiamondShaderDirectory => Path.Combine(RepositoryRoot, "EmuSen", "Cores", "Sony", "Diamond - PlayStation", "renderer", "shaders");
 
         public static byte[] Compile(string source, string name)
         {

@@ -229,6 +229,7 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<byte*, nuint, nint*, int> _map;
         private static delegate* unmanaged[Cdecl]<nint, byte**, long> _mappedBytes;
         private static delegate* unmanaged[Cdecl]<nint, int> _unmap;
+        private static delegate* unmanaged[Cdecl]<nint, ulong, ulong, int> _mappedAdvise;
 
         // Every export this class calls; a name the library lacks refuses the library - see EmuSen_RustPlatform.md §3.1.
         internal static readonly string[] Exports =
@@ -244,7 +245,7 @@ namespace EmuSen.Galaxia.Native
             "emusen_galaxia_model_save_to", "emusen_galaxia_cheat_names", "emusen_galaxia_cheat_name_valid", "emusen_galaxia_cheat_game_list", "emusen_galaxia_log_root", "emusen_galaxia_log_usable",
             "emusen_galaxia_log_path", "emusen_galaxia_log_format", "emusen_galaxia_log_append", "emusen_galaxia_log_reset", "emusen_galaxia_suggest_distance",
             "emusen_galaxia_suggest", "emusen_galaxia_number_format", "emusen_galaxia_text_decode",
-            "emusen_galaxia_map", "emusen_galaxia_mapped_bytes", "emusen_galaxia_unmap",
+            "emusen_galaxia_map", "emusen_galaxia_mapped_bytes", "emusen_galaxia_unmap", "emusen_galaxia_mapped_advise",
         };
 
         // Resolves the exports and hands the library what only the host knows; the name of a missing export, or null.
@@ -303,6 +304,7 @@ namespace EmuSen.Galaxia.Native
             _map = (delegate* unmanaged[Cdecl]<byte*, nuint, nint*, int>)found[next++];
             _mappedBytes = (delegate* unmanaged[Cdecl]<nint, byte**, long>)found[next++];
             _unmap = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
+            _mappedAdvise = (delegate* unmanaged[Cdecl]<nint, ulong, ulong, int>)found[next++];
 
             // The program's directory and .NET's own application-data folder are passed, not found - see EmuSen_RustPlatform.md §5.5.
             Utf8 home = new(AppContext.BaseDirectory), data = new(ConfigRoot.ApplicationData);
@@ -533,6 +535,9 @@ namespace EmuSen.Galaxia.Native
         }
 
         public static void Unmap(nint mapped) => _unmap(mapped);
+
+        // The system advised that a range of a mapping will be read soon; false where it holds nothing of the file or the system refused - see EmuSen_Galaxia.md §3.9.
+        public static bool MappedAdvise(nint mapped, long offset, long length) => offset >= 0 && length > 0 && _mappedAdvise(mapped, (ulong)offset, (ulong)length) > 0;
 
         public static string RomMd5(string path)
         {

@@ -5,7 +5,7 @@
 use std::any::Any;
 
 use blackmoon_gte::{Observer, Projection};
-use blackmoon_r3000::{Bus, Move, Size};
+use blackmoon_r3000::{Bus, Move, R3000, Size, Step};
 use emusen_mips::Op;
 use emusen_native::{StateReader, StateWriter};
 
@@ -41,41 +41,78 @@ pub trait Layer: Observer + Any {
 }
 
 /// The layer attached to a board, if any. It is no part of the machine's state, so a copy of the board, as the
-/// levers' checks make, carries none.
+/// levers' checks make, carries none. It fills one host cache line, so that the board's fields after it keep their
+/// places in a line (Diamond_Enhancements.md §9.2).
 #[derive(Default)]
-pub struct Attached(Option<Box<dyn Layer>>);
+pub struct Attached {
+    layer: Option<Box<dyn Layer>>,
+    _line: [u64; 6],
+}
 
 impl Clone for Attached {
     fn clone(&self) -> Attached {
-        Attached(None)
+        Attached::default()
     }
 }
 
 impl Attached {
     pub fn is_some(&self) -> bool {
-        self.0.is_some()
+        self.layer.is_some()
     }
 
     #[inline(always)]
     pub(crate) fn get(&mut self) -> Option<&mut dyn Layer> {
-        self.0.as_deref_mut()
+        self.layer.as_deref_mut()
     }
 
     pub(crate) fn get_ref(&self) -> Option<&dyn Layer> {
-        self.0.as_deref()
+        self.layer.as_deref()
     }
 
     pub(crate) fn set(&mut self, layer: Option<Box<dyn Layer>>) -> Option<Box<dyn Layer>> {
-        std::mem::replace(&mut self.0, layer)
+        std::mem::replace(&mut self.layer, layer)
     }
 }
 
-/// The board as the processor's bus while a layer is attached: the board's own answers, with the processor's moves
-/// and the GTE's projections told to the layer. The plain frame steps on the board itself, whose `moved` is the
-/// processor crate's empty default (Diamond_Enhancements.md §3.4).
-pub(crate) struct Layered<'a>(pub &'a mut Board);
+/// The bus the processor steps through, chosen once a frame: the board itself, or the board with its layer told.
+pub(crate) trait Through {
+    fn step<O: emusen_native::debug::Observer>(cpu: &mut R3000, board: &mut Board, o: &mut O) -> Step;
+    fn run(cpu: &mut R3000, board: &mut Board, limit: u32) -> (u32, Step);
+}
 
-impl Bus for Layered<'_> {
+/// The plain frame's: the board itself, whose `MOVES` is the processor crate's false.
+pub(crate) struct Plain;
+
+impl Through for Plain {
+    #[inline(always)]
+    fn step<O: emusen_native::debug::Observer>(cpu: &mut R3000, board: &mut Board, o: &mut O) -> Step {
+        cpu.step_observed(board, o)
+    }
+    #[inline(always)]
+    fn run(cpu: &mut R3000, board: &mut Board, limit: u32) -> (u32, Step) {
+        cpu.run(board, limit)
+    }
+}
+
+impl Through for Layered {
+    #[inline(always)]
+    fn step<O: emusen_native::debug::Observer>(cpu: &mut R3000, board: &mut Board, o: &mut O) -> Step {
+        cpu.step_observed(&mut LayeredBus(board), o)
+    }
+    #[inline(always)]
+    fn run(cpu: &mut R3000, board: &mut Board, limit: u32) -> (u32, Step) {
+        cpu.run(&mut LayeredBus(board), limit)
+    }
+}
+
+/// The frame's form while a layer is attached (Diamond_Enhancements.md §2.3).
+pub(crate) struct Layered;
+
+/// The board as the processor's bus while a layer is attached: the board's own answers, with the processor's moves
+/// and the GTE's projections told to the layer.
+struct LayeredBus<'a>(&'a mut Board);
+
+impl Bus for LayeredBus<'_> {
     #[inline(always)]
     fn fetch(&mut self, address: u32) -> u32 {
         self.0.fetch(address)

@@ -13,7 +13,7 @@ pub mod sbi;
 pub mod set;
 pub mod subq;
 
-pub use disc::{Disc, DiscError, IsoForm, Sector, Toc, Track, samples};
+pub use disc::{Disc, DiscError, IsoForm, Place, Sector, Toc, Track, samples};
 pub use msf::Msf;
 pub use open::{Lone, Refusal, is_sheet, open};
 pub use subq::SubQ;

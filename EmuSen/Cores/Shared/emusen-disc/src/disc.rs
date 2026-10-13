@@ -66,6 +66,16 @@ impl Track {
     }
 }
 
+/// Where a stored sector's bytes lie among the files a disc was opened from: what a host that reads ahead of a drive
+/// needs of a sector (EmuSen_Disc.md §10).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Place {
+    /// The file's position among those a sheet names, or `None` for the image itself: a lone track, an `.iso`, a CHD.
+    pub file: Option<usize>,
+    /// The byte of that file where the sector begins; in a CHD, where the stored hunk holding it does.
+    pub offset: u64,
+}
+
 /// The table of contents (§22.3.4) as a controller reports it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Toc {
@@ -91,6 +101,8 @@ pub struct Disc<B: AsRef<[u8]> = Vec<u8>> {
     sources: Vec<Source<B>>,
     patches: Vec<Patch>,
     iso: IsoForm,
+    /// One file that is the image itself, no sheet naming it: what `place` answers a sector's file by.
+    lone: bool,
     /// A zero block for synthesised sectors' user data.
     zeros: Box<[u8; RAW]>,
 }
@@ -183,7 +195,7 @@ impl<B: AsRef<[u8]>> Disc<B> {
     }
 
     fn new(tracks: Vec<Track>, lead_out: u32, sources: Vec<Source<B>>, iso: IsoForm) -> Disc<B> {
-        Disc { tracks, lead_out, sources, patches: Vec::new(), iso, zeros: Box::new([0; RAW]) }
+        Disc { tracks, lead_out, sources, patches: Vec::new(), iso, lone: false, zeros: Box::new([0; RAW]) }
     }
 
     /// A disc from one file's bytes: a CHD, a lone raw track (data by its sync, else audio), or an `.iso`'s user
@@ -192,7 +204,7 @@ impl<B: AsRef<[u8]>> Disc<B> {
         let head = bytes.as_ref();
         if head.starts_with(CHD_MAGIC) {
             let (image, tracks, lead_out) = ChdImage::open(bytes).map_err(DiscError::Chd)?;
-            return Ok(Disc::new(tracks, lead_out, vec![Source::Chd(Box::new(image))], iso));
+            return Ok(Disc { lone: true, ..Disc::new(tracks, lead_out, vec![Source::Chd(Box::new(image))], iso) });
         }
         let iso_volume = head.get(16 * 2048 + 1..16 * 2048 + 6) == Some(b"CD001");
         let mode = if head.starts_with(&ecma130::SYNC) && head.len() >= RAW {
@@ -205,14 +217,14 @@ impl<B: AsRef<[u8]>> Disc<B> {
             return Err(DiscError::Unknown(format!("{} bytes are neither a CHD, a raw track of 2,352-byte sectors nor an ISO 9660 image of 2,048-byte ones", head.len())));
         };
         let sheet = Sheet::parse(&format!("FILE \"image\" BINARY\nTRACK 01 {mode}\nINDEX 01 00:00:00\n"))?;
-        Disc::from_sheet(&sheet, vec![bytes], iso)
+        Ok(Disc { lone: true, ..Disc::from_sheet(&sheet, vec![bytes], iso)? })
     }
 
     /// An image of 2,048-byte user sectors read as one data track, for a caller that knows it is one though it holds
     /// no ISO 9660 volume descriptor; a partial last sector is left out.
     pub fn from_user_image(bytes: B, iso: IsoForm) -> Result<Disc<B>, DiscError> {
         let sheet = Sheet::parse("FILE \"image\" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\n")?;
-        Disc::from_sheet(&sheet, vec![bytes], iso)
+        Ok(Disc { lone: true, ..Disc::from_sheet(&sheet, vec![bytes], iso)? })
     }
 
     /// The `.sbi` beside the image: each listed sector's Q is the recorded one, its CRC failing.
@@ -247,6 +259,26 @@ impl<B: AsRef<[u8]>> Disc<B> {
         }
         let i = self.tracks.partition_point(|t| t.end <= at);
         self.tracks.get(i)
+    }
+
+    /// The file and byte where sector `at` is stored: the first byte `read` takes for it, or in a CHD the first of
+    /// the stored hunk it decodes. `None` for a sector the image does not hold (§3.2) and for a CHD's hunk that is a
+    /// copy of another, which has no bytes of its own. It reads nothing of the image.
+    pub fn place(&self, at: u32) -> Option<Place> {
+        let s = self.track_at(at)?.store;
+        if at < s.from || at >= s.to {
+            return None;
+        }
+        let n = (at - s.from) as u64;
+        let offset = match &self.sources[s.file] {
+            Source::Chd(c) => c.place(s.offset + n)?,
+            Source::Bytes(b) => {
+                let size = s.mode.bytes() as u64;
+                let o = s.offset + n * size;
+                (o + size <= B::as_ref(b).len() as u64).then_some(o)?
+            }
+        };
+        Some(Place { file: (!self.lone).then_some(s.file), offset })
     }
 
     /// Sector `at`'s raw bytes and what it is. The lead-out continues the last track's kind, synthesised.

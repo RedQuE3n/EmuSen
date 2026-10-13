@@ -320,7 +320,8 @@ pub fn precise_triangle(v: [Vertex; 3], f: [Fraction; 3], shaded: bool, textured
         let o = order[(e + 2) % 3];
         words[42 + e] = v[o].u as i32 | (v[o].v as i32) << 8;
     }
-    let b = raster::base_vertex(&v);
+    // The integer rule's base vertex; a triangle of no integer area, which the console does not draw, takes its first.
+    let b = raster::setup(&v, false, false).map_or(0, |s| s.b);
     [words[25], words[26]] = [p[b].0 as i32, p[b].1 as i32];
     let base = [v[b].rgb[0], v[b].rgb[1], v[b].rgb[2], v[b].u as i32, v[b].v as i32];
     for k in 0..5 {

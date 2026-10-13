@@ -38,6 +38,8 @@ pub const FAULT_READ_ONLY_WRITABLE: u32 = 64;
 pub const FAULT_OBSERVED_FRAME_DIFFERS: u32 = 128;
 /// Seeded fault for the kit's C17: a machine reading an image its host lent runs otherwise than one reading its copy.
 pub const FAULT_LENT_RUN_DIFFERS: u32 = 256;
+/// Seeded fault for the kit's C18: the drive names a place past its image's end.
+pub const FAULT_NAMES_PAST_THE_IMAGE: u32 = 512;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -321,6 +323,11 @@ impl Core for TestCore {
         if !self.rom.is_empty() {
             let differs = faults() & FAULT_LENT_RUN_DIFFERS != 0 && self.rom.is_lent();
             self.ram[ROM_BYTE] = self.rom[self.frames as usize % self.rom.len()] ^ differs as u8;
+            if MEDIA {
+                // The drive names the byte the next frame reads, as a drive names where its head is going (1.4).
+                let past = if faults() & FAULT_NAMES_PAST_THE_IMAGE != 0 { self.rom.len() } else { 0 };
+                seek(0, None, ((self.frames as usize + 1) % self.rom.len() + past) as u64);
+            }
         }
         if faults() & FAULT_EXACT_SETTING_CHANGES_STATE != 0 {
             self.ram[4] = self.ram[4].wrapping_add(self.threads.wrapping_sub(1));

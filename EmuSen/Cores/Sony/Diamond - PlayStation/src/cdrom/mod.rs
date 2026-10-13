@@ -10,10 +10,12 @@ mod drive;
 mod state;
 pub mod xa;
 
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::medium::Disc;
-use emusen_disc::SubQ;
+use emusen_disc::{Place, SubQ};
+use emusen_native::core::{SEEK_SPAN, seek};
 
 use crate::media::Market;
 use audio::Output;
@@ -172,16 +174,63 @@ pub struct Cdrom {
     pub trace: bool,
 }
 
+/// The console's one drive, as machine info's `drives`, MEDIA's exports and the drive's events number it.
+pub const DRIVE: u32 = 0;
+
 /// The disc in the drive, shared by a board and its copies (a state load works on a copy) rather than duplicated.
 #[derive(Clone)]
-pub struct DiscSlot(Arc<Mutex<Disc>>);
+pub struct DiscSlot(Arc<Mutex<InDrive>>);
+
+/// A disc while it is in the drive: the disc, and the place of it last named to the host, which is no state.
+pub struct InDrive {
+    disc: Disc,
+    named: Option<Place>,
+}
+
+impl Deref for InDrive {
+    type Target = Disc;
+
+    fn deref(&self) -> &Disc {
+        &self.disc
+    }
+}
+
+impl DerefMut for InDrive {
+    fn deref_mut(&mut self) -> &mut Disc {
+        &mut self.disc
+    }
+}
+
+impl InDrive {
+    /// Tells the host that the head is coming to sector `at`, by the file and byte that hold it, unless that byte lies
+    /// in the megabyte after the place last named (`EMUSEN_EVENT_MEDIA_SEEK`; Diamond_CDROM.md §5). A hint for a host
+    /// that reads ahead of the drive: nothing here depends on it, and a sector the image does not hold names nothing.
+    pub fn name(&mut self, at: u32) {
+        self.name_unless(at, |named, place| place >= named && place - named < SEEK_SPAN);
+    }
+
+    /// The same for the sector a held head passes over, which lies a few sectors to either side of a place named for
+    /// it: said only where nothing near was named, as after a state loaded with the head elsewhere.
+    pub fn name_held(&mut self, at: u32) {
+        self.name_unless(at, |named, place| named.abs_diff(place) < SEEK_SPAN);
+    }
+
+    fn name_unless(&mut self, at: u32, known: impl Fn(u64, u64) -> bool) {
+        let Some(place) = self.disc.place(at) else { return };
+        if self.named.is_some_and(|n| n.file == place.file && known(n.offset, place.offset)) {
+            return;
+        }
+        self.named = Some(place);
+        seek(DRIVE, place.file.map(|f| f as u32), place.offset);
+    }
+}
 
 impl DiscSlot {
     pub fn new(d: Disc) -> DiscSlot {
-        DiscSlot(Arc::new(Mutex::new(d)))
+        DiscSlot(Arc::new(Mutex::new(InDrive { disc: d, named: None })))
     }
 
-    pub fn get(&self) -> MutexGuard<'_, Disc> {
+    pub fn get(&self) -> MutexGuard<'_, InDrive> {
         self.0.lock().unwrap_or_else(|e| e.into_inner())
     }
 }

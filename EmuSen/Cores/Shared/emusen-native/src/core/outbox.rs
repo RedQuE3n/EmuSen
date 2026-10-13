@@ -119,7 +119,6 @@ pub fn library_log() -> std::sync::MutexGuard<'static, LogQueue> {
 }
 
 /// One machine's queues and the detail of its last failure.
-#[derive(Default)]
 pub struct Inner {
     pub events: VecDeque<Event>,
     pub log: LogQueue,
@@ -128,6 +127,13 @@ pub struct Inner {
     /// The words the core gave for the failure of the call in flight.
     pub detail: Option<String>,
     pub last_error: String,
+}
+
+impl Default for Inner {
+    /// The event queue allocated whole, so that raising an event allocates nothing.
+    fn default() -> Inner {
+        Inner { events: VecDeque::with_capacity(EVENT_CAPACITY), log: LogQueue::default(), announced: false, detail: None, last_error: String::new() }
+    }
 }
 
 impl Inner {
@@ -190,6 +196,19 @@ pub fn emit(kind: u32, a: i64, b: i64) {
         }
     });
 }
+
+/// Since 1.4, `EMUSEN_EVENT_MEDIA_SEEK`: drive `drive` is about to read its disc at byte `offset` of `file`, the nth
+/// media file of the call that gave the drive its disc, or the image itself for `None`. A core raises it at a seek's
+/// start for the target, and again before its head reads 1 MiB or more past the offset last named in that file, or in
+/// another file, so that a host can read there ahead of the drive (EmuSen_CoreAPI.md §6.25). A hint: nothing a
+/// machine does may depend on it. It allocates nothing.
+pub fn seek(drive: u32, file: Option<u32>, offset: u64) {
+    let file = file.map_or(super::sys::flags::FILE_IMAGE, |n| super::sys::flags::FILE_MEDIA + n);
+    emit(event::MEDIA_SEEK, (drive as i64) << 32 | file as i64, offset as i64);
+}
+
+/// The most a drive reads on past a place it named before a core names its place again (EmuSen_CoreAPI.md §6.25).
+pub const SEEK_SPAN: u64 = 1 << 20;
 
 /// A log record: the machine's in its call, the library's otherwise.
 pub fn log(level: Level, category: &str, text: &str) {

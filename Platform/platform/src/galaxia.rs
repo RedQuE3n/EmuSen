@@ -341,6 +341,17 @@ pub unsafe extern "C" fn emusen_galaxia_mapped_bytes(mapped: *const Mapped, byte
     held.len() as i64
 }
 
+/// Advises the system that `len` bytes of the mapping from `offset` will be read soon (`Mapped::advise`): 1 where it
+/// was advised, 0 where the range holds nothing of the file or the system refused. No byte the mapping gives changes.
+///
+/// # Safety
+/// As `emusen_galaxia_mapped_bytes`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_mapped_advise(mapped: *const Mapped, offset: u64, len: u64) -> i32 {
+    let Some(map) = (unsafe { mapped.as_ref() }) else { return fail(status::NULL, "no mapping") };
+    map.advise(offset, len) as i32
+}
+
 /// Releases a mapping; null is nothing to release.
 ///
 /// # Safety
@@ -442,6 +453,10 @@ mod tests {
         assert_eq!(unsafe { emusen_galaxia_mapped_bytes(handle, &mut at) }, bytes.len() as i64);
         assert_eq!(unsafe { std::slice::from_raw_parts(at, bytes.len()) }, &bytes[..]);
         assert_eq!(unsafe { emusen_galaxia_mapped_bytes(handle, std::ptr::null_mut()) }, bytes.len() as i64);
+        assert_eq!(unsafe { emusen_galaxia_mapped_advise(handle, 4096, 8192) }, cfg!(any(unix, windows)) as i32);
+        assert_eq!(unsafe { emusen_galaxia_mapped_advise(handle, bytes.len() as u64, 8192) }, 0, "past the file's end");
+        assert_eq!(unsafe { emusen_galaxia_mapped_advise(std::ptr::null(), 0, 8192) }, status::NULL);
+        assert_eq!(unsafe { std::slice::from_raw_parts(at, bytes.len()) }, &bytes[..], "advice changes no byte");
         assert_eq!(unsafe { emusen_galaxia_unmap(handle) }, 0);
         let (status, handle) = map(&empty);
         assert_eq!(status, 0);

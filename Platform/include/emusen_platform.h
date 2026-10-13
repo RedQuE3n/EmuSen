@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 9u
+#define EMUSEN_PLATFORM_ABI_VERSION 10u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -177,6 +177,14 @@ int32_t emusen_galaxia_map(const uint8_t *file, size_t file_len, emusen_galaxia_
 
 /* The mapped bytes' length, and their address in `bytes`: null and zero for an empty file. */
 int64_t emusen_galaxia_mapped_bytes(const emusen_galaxia_mapped *mapped, const uint8_t **bytes);
+
+/*
+ * Advises the system that the `length` bytes of the mapping from `offset` will be read soon, so that it may read them
+ * from the medium before they are touched (madvise's WILLNEED; PrefetchVirtualMemory on Windows). The range is clipped
+ * to the file. Returns 1 where the system took the advice, 0 where the range holds nothing of the file or the system
+ * refused; the call does not wait for the bytes, and the system may read fewer than were asked. No byte changes.
+ */
+int32_t emusen_galaxia_mapped_advise(const emusen_galaxia_mapped *mapped, uint64_t offset, uint64_t length);
 
 /* Releases the mapping; a null handle is nothing to release. No address it gave may be read afterwards. */
 int32_t emusen_galaxia_unmap(emusen_galaxia_mapped *mapped);

@@ -97,6 +97,21 @@ impl<B: AsRef<[u8]>> ChdImage<B> {
         Ok((ChdImage { hunk: vec![0; hunk_size], at: None, scratch: Vec::new(), units_per_hunk: (hunk_size / UNIT) as u64, chd }, tracks, cursor))
     }
 
+    /// The byte of the file where the hunk holding unit `n` is stored, compressed or not, by the hunk map (`chd`'s
+    /// `Map::get_entry`): where the system must read before the unit can be decoded. `None` for a hunk that is a copy
+    /// of another, here or in a parent, and for a map older than v5, whose entries this crate has not measured.
+    pub fn place(&self, n: u64) -> Option<u64> {
+        use chd::map::{CompressionTypeV5 as Kind, MapEntry};
+        match self.chd.map().get_entry((n / self.units_per_hunk) as usize)? {
+            MapEntry::V5Compressed(e) => match e.hunk_type().ok()? {
+                Kind::CompressionType0 | Kind::CompressionType1 | Kind::CompressionType2 | Kind::CompressionType3 | Kind::CompressionNone => e.block_offset().ok(),
+                _ => None,
+            },
+            MapEntry::V5Uncompressed(e) => e.block_offset().ok(),
+            MapEntry::LegacyEntry(_) => None,
+        }
+    }
+
     /// Unit `n`'s 2,448 bytes.
     pub fn unit(&mut self, n: u64) -> Result<&[u8], String> {
         let h = (n / self.units_per_hunk) as u32;

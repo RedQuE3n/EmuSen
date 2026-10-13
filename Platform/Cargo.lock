@@ -144,6 +144,7 @@ dependencies = [
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "md-5",
  "memmap2",
 ]

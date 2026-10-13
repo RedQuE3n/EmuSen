@@ -42,7 +42,8 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   image sets with the core ABI's `EMUSEN_FILE_MEDIA` and the platform library's set calls, archives unpacked into
   Galaxia's `Unpacked` folder, the disc change (`MEDIA`, minor 1.1) with the state's fingerprint (version 9), the
   cheats, settings and cards, the pads drawn, the shelf and the CRT row, the kit on nine of the tester's discs, the gate
-  item by item, the PlayStation offered to players, and what waits.
+  item by item, the PlayStation offered to players, and what waits; and §12.8 (2026-10-12), launch time, the disc read
+  in place (minor 1.3) and the drive's place named ahead (minor 1.4, §12.8.10), every run under the 90 MiB/s cap.
 - [`Diamond_Speed.md`](Diamond_Speed.md) — the exact levers, written 2026-10-12 at stage 13: the bench of the seven copied
   discs on the open kernel and the link's placement as a source of error, the profile that put idle skipping before the
   plan's other levers, the skipper's proof, window, skip and verifier with the loop forms of `programs/idle.s`, the

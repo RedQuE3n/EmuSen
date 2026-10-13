@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.IO.MemoryMappedFiles;
+using System.Runtime.InteropServices;
 using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Galaxia.Media
@@ -36,6 +37,14 @@ namespace EmuSen.Galaxia.Media
             return new ReadOnlySpan<byte>(Pointer + offset, (int)Math.Min(length, Length - offset));
         }
 
+        // Advises the system that length bytes from offset will be read soon, so that it reads them from the medium before they are touched; one call that does not wait, and may read fewer than asked - see EmuSen_Galaxia.md §3.9.
+        public bool Advise(long offset, long length)
+        {
+            if (Pointer == null || offset < 0 || offset >= Length || length <= 0) return false;
+            length = Math.Min(length, Length - offset);
+            return _native != 0 ? GalaxiaNative.MappedAdvise(_native, offset, length) : Managed.Advise(Pointer, offset, length);
+        }
+
         // The file's first bytes, at most length of them, copied: the only part of it this reads.
         public byte[] Head(int length) => Span(0, length).ToArray();
 
@@ -60,6 +69,44 @@ namespace EmuSen.Galaxia.Media
         // The C# rule: the default, and what the library's is held to - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed
         {
+            private const int WillNeed = 3;
+
+            [DllImport("libc", EntryPoint = "madvise")]
+            private static extern int MemoryAdvise(nint address, nuint length, int advice);
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct MemoryRange
+            {
+                public nint Address;
+                public nuint Bytes;
+            }
+
+            [DllImport("kernel32", EntryPoint = "GetCurrentProcess")]
+            private static extern nint CurrentProcess();
+
+            [DllImport("kernel32", EntryPoint = "PrefetchVirtualMemory")]
+            private static extern int Prefetch(nint process, nuint count, MemoryRange* ranges, uint flags);
+
+            // madvise's WILLNEED on the whole pages of the range, or PrefetchVirtualMemory; a system with neither takes no advice.
+            public static bool Advise(byte* pointer, long offset, long length)
+            {
+                try
+                {
+                    if (OperatingSystem.IsWindows())
+                    {
+                        var range = new MemoryRange { Address = (nint)(pointer + offset), Bytes = (nuint)length };
+                        return Prefetch(CurrentProcess(), 1, &range, 0) != 0;
+                    }
+                    if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS()) return false;
+                    long page = Environment.SystemPageSize, lead = ((long)pointer + offset) % page;
+                    return MemoryAdvise((nint)(pointer + offset - lead), (nuint)(length + lead), WillNeed) == 0;
+                }
+                catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+                {
+                    return false;
+                }
+            }
+
             public static MappedFile Open(string path)
             {
                 var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);

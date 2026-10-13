@@ -1,6 +1,7 @@
-//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C17 on a library loaded through the core
+//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C18 on a library loaded through the core
 //! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
-//! checks and how, §28 the corpus form, which runs the checks that do not depend on the image once, and §6.24 C17.
+//! checks and how, §28 the corpus form, which runs the checks that do not depend on the image once, §6.24 C17 and
+//! §6.25 C18.
 
 pub mod api;
 pub mod corpus;
@@ -211,6 +212,8 @@ struct Trace {
     digests: Digests,
     problems: Vec<String>,
     state_size_events: Vec<u64>,
+    /// The places a drive named (`MEDIA_SEEK`, since 1.4), as (drive, file, byte), for C18.
+    places: Vec<(u32, u32, i64)>,
     /// At the marked frame: the digests up to it and the state saved there; `since` is the digests from it on.
     mark: Option<(Digests, Result<Vec<u8>, i64>)>,
     since: Digests,
@@ -305,6 +308,7 @@ impl<'a> Session<'a> {
                 match e.kind {
                     event::AUDIO_RATE => rate_events.push((f, e.a as i32)),
                     event::STATE_SIZE => t.state_size_events.push(f),
+                    event::MEDIA_SEEK => t.places.push(((e.a >> 32) as u32, e.a as u32, e.b)),
                     _ => {}
                 }
             }
@@ -425,6 +429,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
         report.cases.push(c16(&mut s));
     }
     report.cases.push(c17(&mut s));
+    report.cases.push(c18(&mut s));
     report
 }
 
@@ -476,6 +481,7 @@ pub(crate) fn image_cases(lib: &Lib, path: &Path, opts: &Options) -> (Vec<Case>,
         cases.push(c16(&mut s));
     }
     cases.push(c17(&mut s));
+    cases.push(c18(&mut s));
     (cases, s.statuses)
 }
 
@@ -1482,6 +1488,15 @@ impl<'a> Held<'a> {
         self.overwrite();
     }
 
+    /// The system advised to read file `file` around byte `at`, as the reference host's reader does: the bytes it
+    /// took the advice for, none for bytes that are in no mapped file.
+    fn advise(&self, file: u32, at: u64) -> u64 {
+        let Held::Mapped(image, files) = self else { return 0 };
+        let Some(mapped) = (if file == flags::FILE_IMAGE { Some(image) } else { files.iter().find(|f| f.0 == file).map(|f| &f.1) }) else { return 0 };
+        let (from, to) = (at.saturating_sub(ADVISED_BEFORE) / ADVISED_PIECE * ADVISED_PIECE, (at + ADVISED_PAST).min(mapped.bytes().len() as u64));
+        (from..to).step_by(ADVISED_PIECE as usize).filter(|&piece| mapped.advise(piece, ADVISED_PIECE)).map(|piece| ADVISED_PIECE.min(to - piece)).sum()
+    }
+
     fn describe(&self) -> String {
         match self {
             Held::Mapped(image, files) => format!("{} file(s) mapped, {} bytes", 1 + files.len(), image.bytes().len() as u64 + files.iter().map(|f| f.1.bytes().len() as u64).sum::<u64>()),
@@ -1601,6 +1616,86 @@ fn c17(s: &mut Session<'_>) -> Case {
         c.that(false, || e);
     }
     c.done("C17", "the image's life")
+}
+
+/// How far before and past a named place C18's acting host advises, and in what pieces: the reference host's figures
+/// (EmuSen_Galaxia.md §3.9). What a host reads ahead is its own to choose; the case needs only that it acts.
+const ADVISED_BEFORE: u64 = 256 << 10;
+const ADVISED_PAST: u64 = 2 << 20;
+const ADVISED_PIECE: u64 = 128 << 10;
+
+/// One leg of C18: a machine on the image as a host holds it, lent where `BORROW` is claimed, the session's frames run
+/// one at a time with the events drained after each as a host drains them. Every `MEDIA_SEEK` is checked against what
+/// the call passed, and where `act` is set the mapped file is advised around the place, as a host that reads ahead
+/// does. The frames' digests, how many places were named and how many bytes were advised.
+fn place_leg(s: &mut Session<'_>, act: bool, c: &mut Check) -> Result<(Steps, usize, u64), String> {
+    let opts = s.opts;
+    let lends = s.lib.claims(caps::BORROW);
+    let held = if lends { Held::lent(opts)? } else { Held::own(opts) };
+    let own: Vec<(u32, &[u8])> = opts.files.iter().filter(|f| f.0 < FILE_MEDIA).map(|f| (f.0, &f.1[..])).collect();
+    let files: Vec<(u32, &[u8])> = own.iter().copied().chain(held.files()).collect();
+    let was = s.lib.host();
+    if lends {
+        s.lib.set_host(4, 0);
+    }
+    let made = s.lib.create_from(held.image(), &opts.settings, &files, 1, if lends { flags::CREATE_LENT } else { 0 });
+    s.lib.set_host(was.0, was.1);
+    drop(files);
+    let m = made.map_err(|(code, text)| {
+        s.statuses.insert(code);
+        format!("create refused the image: status {code} ({text})")
+    })?;
+    let drives: Vec<u32> = m.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().map(|d| d.iter().filter_map(|d| d.get("drive")?.as_i64()).map(|d| d as u32).collect())).unwrap_or_default();
+    let (mut steps, mut named, mut advised) = (Steps::new(), 0usize, 0u64);
+    for f in 0..opts.frames {
+        let t = s.play(&m, f, 1, false)?;
+        for &(drive, file, at) in &t.places {
+            named += 1;
+            c.that(drives.contains(&drive), || format!("frame {f}: MEDIA_SEEK names drive {drive}, which machine info does not list ({drives:?})"));
+            let len = if file == flags::FILE_IMAGE { Some(held.image().len()) } else { held.files().iter().find(|h| h.0 == file).map(|h| h.1.len()) };
+            let Some(len) = len else {
+                c.that(false, || format!("frame {f}: MEDIA_SEEK names file {file}, which create was not passed as a media file"));
+                continue;
+            };
+            c.that(at >= 0 && (at as u64) < len as u64, || format!("frame {f}: MEDIA_SEEK names byte {at} of file {file}, which holds {len}"));
+            if act && at >= 0 {
+                advised += held.advise(file, at as u64);
+            }
+        }
+        steps.push((t.digests, s.state_digest(&m)?));
+    }
+    drop(m);
+    held.release();
+    Ok((steps, named, advised))
+}
+
+/// C18, the drive's place (since 1.4, EmuSen_CoreAPI.md §6.25): every `MEDIA_SEEK` a core raises names a drive machine
+/// info lists and a file and byte the call passed; and a machine whose host acts on each, advising the system to read
+/// the mapped file there, runs frame for frame, sample for sample and state for state as one whose host skips them.
+/// A core that raises none passes, with that said.
+fn c18(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
+        let (skipped, named, _) = place_leg(s, false, c)?;
+        let (acted, named_acting, advised) = place_leg(s, true, c)?;
+        c.that(skipped.len() == acted.len(), || format!("the run whose host acted ran {} frames against {}", acted.len(), skipped.len()));
+        if let Some(f) = skipped.iter().zip(&acted).position(|(a, b)| a != b) {
+            let (a, b) = (skipped[f], acted[f]);
+            let which = if a.0.frames != b.0.frames { "picture" } else if (a.0.audio, a.0.samples) != (b.0.audio, b.0.samples) { "sound" } else { "state" };
+            c.that(false, || format!("a machine whose host read ahead at each named place differs from one whose host skipped them at frame {f}, in its {which}: {:?} state {:016X} against {:?} state {:016X}", b.0, b.1, a.0, a.1));
+        }
+        c.that(named == named_acting, || format!("{named_acting} places were named to the host that acted and {named} to the one that did not"));
+        c.note(if named == 0 {
+            format!("{} frames: no MEDIA_SEEK was raised, so there was nothing to check or to act on", s.opts.frames)
+        } else {
+            format!("{} frames: {named} places named, each a drive of machine info and a byte inside a file of the call; acted on ({} KiB advised of the mapped files) and skipped, every frame's picture, sound and state the same", s.opts.frames, advised >> 10)
+        });
+        Ok(())
+    };
+    if let Err(e) = body(s, &mut c) {
+        c.that(false, || e);
+    }
+    c.done("C18", "the drive's place")
 }
 
 fn c15(s: &mut Session<'_>) -> Case {

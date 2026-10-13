@@ -14,7 +14,7 @@ use crate::{Case, Options, Report, cases_json, core_c11, core_cases, image_cases
 
 /// The ids of the cases run once for the core, and of those run for every image; C4 is in both, by its parts.
 pub const CORE_CASES: [&str; 11] = ["C1", "C2", "C3", "C4", "C5", "C9", "C10", "C11", "C12", "C13", "C15"];
-pub const IMAGE_CASES: [&str; 7] = ["C4", "C6", "C7", "C8", "C14", "C16", "C17"];
+pub const IMAGE_CASES: [&str; 8] = ["C4", "C6", "C7", "C8", "C14", "C16", "C17", "C18"];
 
 /// How long one image's cases may take before the image is reported as hung and its thread left.
 pub const IMAGE_DEADLINE_SECONDS: u64 = 600;

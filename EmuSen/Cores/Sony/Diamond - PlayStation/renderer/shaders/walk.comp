@@ -1,7 +1,8 @@
 #version 450
 // Diamond's renderer, the walk: one invocation a pixel of an 8-by-8 tile of VRAM, one workgroup a tile. Each invocation
 // loads its pixel, meets the tile's records in drawing order and applies each by the software rasteriser's rules, then
-// stores the pixel once. See Diamond_Enhancements.md §16; the record's layout is the renderer's `record.rs`.
+// stores the pixel once. See Diamond_Enhancements.md §16 and, for the precise triangle, §22; the record's layout is the
+// renderer's `record.rs`.
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -21,6 +22,7 @@ const uint RECTANGLE = 2u;
 const uint LINE = 3u;
 const uint FILL = 4u;
 const uint TRANSFER = 5u;
+const uint PRECISE = 6u;
 
 const uint SHADED = 1u << 8;
 const uint TEXTURED = 1u << 9;
@@ -33,6 +35,7 @@ const uint CROP = 1u << 17;
 const uint SKIP = 1u << 18;
 const uint PARITY = 1u << 19;
 const uint PAIRS = 1u << 20;
+const uint PERSPECTIVE = 1u << 21;
 
 // psx-spx's dither offsets, by y and x modulo 4 (draw.rs's DITHER).
 const int DITHERS[16] = int[16](-4, 0, -3, 1, 2, -2, 3, -1, -3, 1, -4, 0, 3, -1, 2, -2);
@@ -189,6 +192,75 @@ void triangle(inout uint pixel, int r, uint flags, int x, int py) {
     shade(pixel, r, flags, x, y, rgb, u, v);
 }
 
+// The integer part of (256 base + g1 d1 + g2 d2 + 1/2) at 20 fractional bits, the distances in 256ths of a pixel: the
+// integer rule's interpolate when they are whole pixels (Diamond_Enhancements.md §22.2).
+int interpolate_fine(int base, int g1, int d1, int g2, int d2) {
+    int h1, l1, h2, l2;
+    imulExtended(g1, d1, h1, l1);
+    imulExtended(g2, d2, h2, l2);
+    int b = base * 256 + (1 << 19);
+    uint c1, c2;
+    uint lo = uaddCarry(uint(l1), uint(l2), c1);
+    lo = uaddCarry(lo, uint(b), c2);
+    int hi = h1 + h2 + int(c1) + int(c2) + (b < 0 ? -1 : 0);
+    return int((lo >> 20) | (uint(hi) << 12));
+}
+
+// A triangle with precise vertices in 256ths of a pixel: each edge function exact in 64 bits against its owner's bound,
+// the colour and an untilted texture by the fine gradients, a tilted texture in perspective from the three edge
+// functions and the vertices' depths, a division a pixel (§22.2, §22.3).
+void fine_triangle(inout uint pixel, int r, uint flags, int x, int py) {
+    int y = row_of(r, py);
+    if (!inside(r, x, y) || skipped(flags, y)) {
+        return;
+    }
+    int fx = x * 256, fy = y * 256;
+    float e[3];
+    for (int k = 0; k < 3; k++) {
+        int j = r + 10 + 5 * k;
+        int h1, l1, h2, l2;
+        imulExtended(records[j + 2], fy - records[j + 1], h1, l1);
+        imulExtended(records[j + 3], fx - records[j], h2, l2);
+        uint borrow;
+        uint lo = usubBorrow(uint(l1), uint(l2), borrow);
+        int hi = h1 - h2 - int(borrow);
+        if (hi < 0 || (hi == 0 && lo < uint(records[j + 4]))) {
+            return;
+        }
+        e[k] = float(hi) * 4294967296.0 + float(lo);
+    }
+    int dx = fx - records[r + 25], dy = fy - records[r + 26];
+    ivec3 rgb = colour(r);
+    if ((flags & SHADED) != 0u) {
+        for (int k = 0; k < 3; k++) {
+            rgb[k] = interpolate_fine(records[r + 27 + k], records[r + 32 + 2 * k], dx, records[r + 33 + 2 * k], dy);
+        }
+    }
+    uint u = 0u, v = 0u;
+    if ((flags & PERSPECTIVE) != 0u) {
+        float w = 0.0, su = 0.0, sv = 0.0;
+        int u_lo = 255, u_hi = 0, v_lo = 255, v_hi = 0;
+        for (int k = 0; k < 3; k++) {
+            int uv = records[r + 42 + k];
+            int tu = uv & 0xFF, tv = (uv >> 8) & 0xFF;
+            float a = e[k] * intBitsToFloat(records[r + 45 + k]);
+            w += a;
+            su += a * float(tu);
+            sv += a * float(tv);
+            u_lo = min(u_lo, tu);
+            u_hi = max(u_hi, tu);
+            v_lo = min(v_lo, tv);
+            v_hi = max(v_hi, tv);
+        }
+        u = uint(clamp(int(floor(su / w + 0.5)), u_lo, u_hi));
+        v = uint(clamp(int(floor(sv / w + 0.5)), v_lo, v_hi));
+    } else if ((flags & TEXTURED) != 0u) {
+        u = uint(interpolate_fine(records[r + 30], records[r + 38], dx, records[r + 39], dy)) & 0xFFu;
+        v = uint(interpolate_fine(records[r + 31], records[r + 40], dx, records[r + 41], dy)) & 0xFFu;
+    }
+    shade(pixel, r, flags, x, y, rgb, u, v);
+}
+
 // A texel's texture cache entry in the window, for a rectangle's pairs (raster.rs's `rectangle`).
 uint entry(int r, uint u) {
     uint w = uint(records[r + 7]);
@@ -287,6 +359,8 @@ void main() {
             fill(pixel, r, flags, px, py);
         } else if (kind == TRANSFER) {
             transfer(pixel, r, flags, px, py);
+        } else if (kind == PRECISE) {
+            fine_triangle(pixel, r, flags, px, py);
         }
     }
     vram[index] = pixel;

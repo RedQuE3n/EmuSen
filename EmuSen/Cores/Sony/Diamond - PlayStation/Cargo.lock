@@ -145,6 +145,8 @@ dependencies = [
  "blackmoon-gte",
  "diamond",
  "emusen-gpu",
+ "emusen-native",
+ "precision",
 ]
 
 [[package]]

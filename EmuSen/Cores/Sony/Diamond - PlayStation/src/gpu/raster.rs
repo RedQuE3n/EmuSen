@@ -66,7 +66,7 @@ fn gradient(v: &[Vertex; 3], a: [i64; 3], area: i64) -> Gradient {
 
 /// The vertex the attributes start from: the leftmost; of two in the leftmost column, the one that follows the other
 /// in the command's order, 0 following 2 (the referees, Diamond_Disputes.md D-7).
-fn base_vertex(v: &[Vertex; 3]) -> usize {
+pub fn base_vertex(v: &[Vertex; 3]) -> usize {
     let left = v.iter().map(|q| q.x).min().unwrap_or(0);
     let tied = |i: usize| v[i].x == left;
     (0..3).find(|&i| tied(i) && tied((i + 2) % 3)).or_else(|| (0..3).find(|&i| tied(i))).unwrap_or(0)

@@ -4,6 +4,7 @@
 
 use diamond::gpu::draw::Paint;
 use diamond::gpu::raster::{self, FRACTION, MAX_DX, MAX_DY, Sprite, Vertex};
+use precision::Fraction;
 use diamond::gpu::texture::Texture;
 use diamond::gpu::vram::{Mask, Rect};
 
@@ -14,6 +15,7 @@ pub const RECTANGLE: u32 = 2;
 pub const LINE: u32 = 3;
 pub const FILL: u32 = 4;
 pub const TRANSFER: u32 = 5;
+pub const PRECISE: u32 = 6;
 
 pub const SHADED: u32 = 1 << 8;
 pub const TEXTURED: u32 = 1 << 9;
@@ -26,6 +28,7 @@ pub const CROP: u32 = 1 << 17;
 pub const SKIP: u32 = 1 << 18;
 pub const PARITY: u32 = 1 << 19;
 pub const PAIRS: u32 = 1 << 20;
+pub const PERSPECTIVE: u32 = 1 << 21;
 
 /// Columns `x0..=x1` and rows `y0..=y1` of VRAM, either running past the edge and wrapping round; at most 1,024 columns
 /// and 512 rows.
@@ -234,4 +237,86 @@ pub fn transfer(r: Rect, i0: u32, i1: u32, offset: u32, mask: Mask) -> Record {
     words[10..17].copy_from_slice(&[r.x as i32, r.y as i32, r.w as i32, r.h as i32, i0 as i32, i1 as i32, offset as i32]);
     let (j0, j1) = (i0 / r.w, (i1.max(i0 + 1) - 1) / r.w);
     Record { words, writes: Span::sized(r.x, r.y + j0, r.w, j1 - j0 + 1), texels: None }
+}
+
+/// What a precise triangle makes: its record, nothing when it covers no pixel, or none at all when a gradient does not fit
+/// the record's 32 bits, so that its polygon is drawn on the integer path (Diamond_Enhancements.md §22.2).
+#[derive(Clone, Copy, Debug)]
+pub enum Made {
+    Drawn(Record),
+    Nothing,
+    Integer,
+}
+
+/// The sub-pixel grid's bits, and the shift that brings a fine gradient's product back to the integer rule's 12 bits.
+const FINE: i64 = 8;
+
+/// A triangle with precise vertices, already folded, under `paint`: the integer vertices `v` the GPU decoded moved by
+/// `f`'s offsets in 256ths of a pixel, its texture in perspective by `f`'s depths when they differ (§22.2, §22.3).
+pub fn precise_triangle(v: [Vertex; 3], f: [Fraction; 3], shaded: bool, textured: bool, paint: &Paint, slot: u32) -> Made {
+    let (xs, ys) = (v.map(|q| q.x), v.map(|q| q.y));
+    if xs.iter().max().unwrap() - xs.iter().min().unwrap() > MAX_DX || ys.iter().max().unwrap() - ys.iter().min().unwrap() > MAX_DY {
+        return Made::Nothing;
+    }
+    let p: [(i64, i64); 3] = std::array::from_fn(|i| (((v[i].x as i64) << FINE) + f[i].dx as i64, ((v[i].y as i64) << FINE) + f[i].dy as i64));
+    let area = (p[1].0 - p[0].0) * (p[2].1 - p[0].1) - (p[2].0 - p[0].0) * (p[1].1 - p[0].1);
+    if area == 0 {
+        return Made::Nothing;
+    }
+    let ceil = |a: i64| -((-a) >> FINE);
+    let (min, max) = (|c: fn(&(i64, i64)) -> i64| p.iter().map(c).min().unwrap(), |c: fn(&(i64, i64)) -> i64| p.iter().map(c).max().unwrap());
+    let a = paint.area;
+    let (x_lo, x_hi) = ((ceil(min(|q| q.0)) as i32).max(a.x1), ((max(|q| q.0) >> FINE) as i32).min(a.x2));
+    let (y_lo, y_hi) = ((ceil(min(|q| q.1)) as i32).max(a.y1), (ceil(max(|q| q.1)) as i32 - 1).min(a.y2));
+    if y_lo > y_hi || x_lo > x_hi {
+        return Made::Nothing;
+    }
+    let mut words = [0i32; WORDS];
+    let gradient = |k: usize| -> Option<(i32, i32)> {
+        let at = v.map(|q| if k < 3 { q.rgb[k] as i64 } else if k == 3 { q.u as i64 } else { q.v as i64 });
+        let (dx1, dy1, dx2, dy2) = (p[1].0 - p[0].0, p[1].1 - p[0].1, p[2].0 - p[0].0, p[2].1 - p[0].1);
+        let (da1, da2) = (at[1] - at[0], at[2] - at[0]);
+        let shift = FRACTION as i64 + FINE;
+        Some((i32::try_from(((da1 * dy2 - da2 * dy1) << shift) / area).ok()?, i32::try_from(((dx1 * da2 - dx2 * da1) << shift) / area).ok()?))
+    };
+    for k in 0..5 {
+        if if k < 3 { shaded } else { textured } {
+            let Some((gx, gy)) = gradient(k) else { return Made::Integer };
+            [words[32 + 2 * k], words[33 + 2 * k]] = [gx, gy];
+        }
+    }
+    painted(PRECISE, paint, slot, &mut words);
+    if shaded {
+        words[0] |= SHADED as i32;
+    }
+    bounds(&mut words, (x_lo, x_hi), (y_lo, y_hi));
+    words[8] = colour(v[0].rgb);
+    let order = if area > 0 { [0, 1, 2] } else { [0, 2, 1] };
+    for e in 0..3 {
+        let (s, t) = (order[e], order[(e + 1) % 3]);
+        let (dx, dy) = (p[t].0 - p[s].0, p[t].1 - p[s].1);
+        let own = dy < 0 || (dy == 0 && dx > 0);
+        words[10 + 5 * e..15 + 5 * e].copy_from_slice(&[p[s].0 as i32, p[s].1 as i32, dx as i32, dy as i32, if own { 0 } else { 1 }]);
+        let o = order[(e + 2) % 3];
+        words[42 + e] = v[o].u as i32 | (v[o].v as i32) << 8;
+    }
+    let b = raster::base_vertex(&v);
+    [words[25], words[26]] = [p[b].0 as i32, p[b].1 as i32];
+    let base = [v[b].rgb[0], v[b].rgb[1], v[b].rgb[2], v[b].u as i32, v[b].v as i32];
+    for k in 0..5 {
+        words[27 + k] = base[k] << FRACTION;
+    }
+    let z = f.map(|q| q.z.max(1));
+    if textured && (z[0] != z[1] || z[1] != z[2]) {
+        let near = *z.iter().min().unwrap() as f32;
+        words[0] |= PERSPECTIVE as i32;
+        for e in 0..3 {
+            words[45 + e] = (near / z[order[(e + 2) % 3]] as f32).to_bits() as i32;
+        }
+    }
+    let texels = paint.texture.and_then(|t| {
+        let range = |f: fn(&Vertex) -> u8| (v.iter().map(|q| f(q) as i32).min().unwrap_or(0) - 1, v.iter().map(|q| f(q) as i32).max().unwrap_or(0) + 1);
+        texture_span(&t, range(|q| q.u), range(|q| q.v))
+    });
+    Made::Drawn(Record { words, writes: Span::new(x_lo, x_hi, y_lo, y_hi), texels })
 }

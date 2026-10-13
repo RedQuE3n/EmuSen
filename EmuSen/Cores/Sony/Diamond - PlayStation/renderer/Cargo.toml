@@ -13,6 +13,9 @@ name = "diamond_renderer"
 diamond = { path = ".." }
 blackmoon-gte = { path = "../../BlackMoon-HW/blackmoon-gte" }
 emusen-gpu = { path = "../../../Shared/emusen-gpu" }
+emusen-native = { path = "../../../Shared/emusen-native" }
+# What a polygon's precise vertices are, and the drawer's side of the pairing (Diamond_Enhancements.md §24.1).
+precision = { path = "../precision" }
 
 [profile.release]
 panic = "abort"

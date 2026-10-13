@@ -1,6 +1,7 @@
 //! Times Diamond's frames on the emulation thread and digests what they made (Diamond_Speed.md §2): `bench <image>
 //! [frames] [--from N] [--armed] [--plain] [--stepped] [--verify N] [--verify-runs N] [--times FILE] [--every N]
-//! [--observed]`; `--observed` attaches the enhancement layer's test observer (Diamond_Enhancements.md §7),
+//! [--observed] [--save FILE]`; `--observed` attaches the enhancement layer's test observer (Diamond_Enhancements.md
+//! §7), `--save FILE` writes the state the run ends in, a layer's block with it,
 //! `--plain` turns the exact levers off and `--stepped` the runs alone, `--verify N` checks every Nth skip against the
 //! interpreter and `--verify-runs N` every Nth run against its steps. The image is a disc (a cue sheet, a CHD, an `.iso` or a
 //! lone `.bin`) or a PS-EXE, run on the open kernel with no firmware; a `.s` source is assembled and run with no kernel.
@@ -72,6 +73,11 @@ fn main() {
     if let Some(file) = flag("--times") {
         let text: String = times.iter().map(|t| format!("{t:.4}\n")).collect();
         std::fs::write(file, text).expect("written");
+    }
+    if let Some(file) = flag("--save") {
+        let mut s = vec![0; m.state_size()];
+        let n = m.save_state(&mut s).expect("saved");
+        std::fs::write(file, &s[..n]).expect("written");
     }
     if let Some(layer) = m.detach() {
         let t = *(layer as Box<dyn std::any::Any>).downcast::<diamond::layer::Tally>().expect("the test observer");

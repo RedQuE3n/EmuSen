@@ -41,12 +41,10 @@ pub trait Layer: Observer + Any {
 }
 
 /// The layer attached to a board, if any. It is no part of the machine's state, so a copy of the board, as the
-/// levers' checks make, carries none. It fills one host cache line, so that the board's fields after it keep their
-/// places in a line (Diamond_Enhancements.md §9.2).
+/// levers' checks make, carries none.
 #[derive(Default)]
 pub struct Attached {
     layer: Option<Box<dyn Layer>>,
-    _line: [u64; 6],
 }
 
 impl Clone for Attached {

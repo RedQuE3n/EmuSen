@@ -6,7 +6,7 @@
 //! traces the controller's commands and responses, as `--trace-game` does from the entry of a game booted by `--boot`, once the BIOS has handed over. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
 //! the image itself when PATH is no PS-EXE), `--analog` presses port 1's Analog button at frame 30; `--empty` leaves the drive empty; `--pictures DIR N` writes the picture every N frames as `fFRAME_WxH.rgba`; `--press F:MASK[:N]` holds the buttons of a hex mask of the pad report's bits for N frames, `--stick F:AXIS:VALUE[:N]` a stick (0-1 the left x and y, 2-3 the right, -1 to 1); `--poke ADDR:VALUE:WIDTH` writes VALUE (hex) to RAM at ADDR (hex) before every frame, WIDTH bytes little-endian, as a cheat's constant write does (GameShark 800B521E 00C4 is `--poke B521E:C4:2`); `--swap` opens and closes the lid a second after the TTY asks, as ps1-tests'
 //! `cdrom/disc-swap` does; `--trace-at FRAME` traces the controller from a frame on; `--calls` counts the kernel calls a program makes by table and number, as the program
-//! enters the A0h, B0h and C0h vectors, a BIOS's own calls among them. `--game` observes only the game, from its entry on, on either kernel: the TTY from the entry,
+//! enters the A0h, B0h and C0h vectors, a BIOS's own calls among them. `--load-state FILE` loads a DMND state into the machine made by the other options (its kernel, `--two-pads` and `--card` as the state's were), and `--press` and `--stick` then count from the state's frame. `--game` observes only the game, from its entry on, on either kernel: the TTY from the entry,
 //! the text it passes to write(1) and putchar, its calls counted, and with `--game-log FILE` each call's arguments and result and its own loads and stores at
 //! the CD, SIO0, DMA and interrupt registers, `--log-frames A:B` limiting the accesses (Diamond_OpenKernel_Phase2.md §22); `--game-range LO:HI` adds, for the whole run, its loads and stores in the physical
 //! addresses LO to HI (hex) and each jump of its code into them, with the cycles and instructions until its code runs again and v0 then (§27 there). A development tool for the test programs (Diamond_Native.md §11.11, Diamond_CDROM.md §9):
@@ -96,6 +96,12 @@ fn main() {
         m.insert_card(0, None);
         m.insert_card(1, None);
     }
+    if let Some(i) = args.iter().position(|a| a == "--load-state") {
+        use emusen_native::ffi::StateMachine;
+        m.load_state(&std::fs::read(&args[i + 1]).expect("the state")).expect("the state loads");
+        eprintln!("[state loaded at frame {}]", m.frames);
+    }
+    let base = m.frames;
     if args.iter().any(|a| a == "--lid-open") {
         m.set_lid(true, None);
     }
@@ -145,12 +151,12 @@ fn main() {
             ram[at..at + width].copy_from_slice(&value.to_le_bytes()[..width]);
         }
         if !presses.is_empty() {
-            let mask = presses.iter().filter(|(at, _, n)| (*at..*at + *n).contains(&m.frames)).fold(0, |a, p| a | p.1);
+            let mask = presses.iter().filter(|(at, _, n)| (*at..*at + *n).contains(&(m.frames - base))).fold(0, |a, p| a | p.1);
             m.board.sio0.set_buttons(0, mask);
         }
         for axis in 0..4 {
             if sticks.iter().any(|s| s.1 == axis) {
-                let v = sticks.iter().rev().find(|(at, a, _, n)| *a == axis && (*at..*at + *n).contains(&m.frames)).map_or(0.0, |s| s.2);
+                let v = sticks.iter().rev().find(|(at, a, _, n)| *a == axis && (*at..*at + *n).contains(&(m.frames - base))).map_or(0.0, |s| s.2);
                 if let Some(c) = m.board.sio0.controller(0) {
                     c.set_axis(axis, v);
                 }

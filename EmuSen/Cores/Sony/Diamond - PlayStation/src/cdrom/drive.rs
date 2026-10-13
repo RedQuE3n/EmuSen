@@ -171,15 +171,27 @@ impl Cdrom {
                 self.drive_at = t + self.period();
             }
             Then::Read => {
+                self.found(self.target);
                 self.activity = Activity::Reading;
                 self.double = self.mode & mode::DOUBLE != 0;
                 self.drive_at = t + self.period();
             }
             Then::Play => {
+                self.found(self.target);
                 self.activity = Activity::Playing;
                 self.play_track = self.disc.as_ref().map_or(0, |d| d.get().track_at(self.target).map_or(0, |tr| tr.number));
                 self.drive_at = t + self.period();
             }
+        }
+    }
+
+    /// A seek that goes on into a read or a play has found `at` by subchannel Q (psx-spx "GetlocL": GetlocP works during
+    /// a seek), so the Q left is the sector before it, not the place the seek began (D-48).
+    fn found(&mut self, at: u32) {
+        let Some(slot) = self.disc.clone() else { return };
+        let q = slot.get().subq(at.saturating_sub(1));
+        if q.valid() {
+            self.q = q;
         }
     }
 

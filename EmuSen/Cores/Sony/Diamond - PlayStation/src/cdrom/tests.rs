@@ -152,6 +152,29 @@ fn getlocl_fails_until_a_seek_and_getlocp_reports_the_pause_before_track_one() {
     assert_eq!(&l[4..], &[1, 0, submode::DATA, 0]);
 }
 
+/// D-48: a Read's or a Play's seek finds its target by subchannel Q, so GetlocP asked as soon as Getstat shows the
+/// read or the play reports the place beside the target, not the place the head left.
+#[test]
+fn getlocp_after_a_reads_seek_reports_the_target_not_the_place_left() {
+    let mut h = Host::new(Some(disc()));
+    h.settle();
+    let sector = |q: &[u8]| -> u32 { emusen_disc::Msf::from_bcd([q[5], q[6], q[7]]).expect("BCD").sector() };
+    for (start, want, track) in [(0x06u8, 150 + 100, 1u8), (0x03, 150 + DATA + 150, 2)] {
+        read_sectors(&mut h, 150 + 500, 4, mode::DOUBLE);
+        let (_, q, _) = h.command(0x11, &[]);
+        assert!(sector(&q) > 150 + 490, "held near the read's end: {q:02X?}");
+        h.command(0x02, &emusen_disc::Msf::of(want).bcd());
+        h.command(start, &[]);
+        let bit = if start == 0x06 { stat::READ } else { stat::PLAY };
+        while h.command(0x01, &[]).1[0] & bit == 0 {}
+        let (int, q, _) = h.command(0x11, &[]);
+        assert_eq!((int, q[0]), (3, track), "{q:02X?}");
+        assert!((want - 8..=want).contains(&sector(&q)), "command {start:02X}: GetlocP at {} for a seek to {want}: {q:02X?}", sector(&q));
+        h.command(0x09, &[]);
+        h.next(10_000_000);
+    }
+}
+
 /// Reads `n` sectors from `at` with mode `m`, taking each INT1's sector through BFRD and the data FIFO as DMA would.
 fn read_sectors(h: &mut Host, at: u32, n: usize, m: u8) -> Vec<Vec<u8>> {
     h.command(0x0E, &[m]);

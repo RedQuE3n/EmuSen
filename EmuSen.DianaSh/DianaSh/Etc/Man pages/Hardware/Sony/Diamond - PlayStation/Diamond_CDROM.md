@@ -87,7 +87,7 @@ the lid open, or the TOC not yet read while the drive spins up). The commands ps
 | 0Eh Setmode | mode | INT3; bit 4 keeps the last sector size | — |
 | 0Fh Getparam | — | INT3 status, mode, 0, file, channel | — |
 | 10h GetlocL | — | INT3 the last data header and subheader; 80h before the first seek or read, while seeking, on audio | — |
-| 11h GetlocP | — | INT3 the last valid Q's track, index and times | — |
+| 11h GetlocP | — | INT3 the last valid Q's track, index and times; after a read's or a play's seek, the Q of the sector before its target (D-48) | — |
 | 12h SetSession | session | INT3 for 1, the head to the start; 10h for 0; two INT5 40h above 1 | INT2 |
 | 13h GetTN | — | INT3 status, first, last | — |
 | 14h GetTD | track, BCD | INT3 status, mm, ss of its INDEX 01 (00 the lead-out); 10h past the last | — |
@@ -132,7 +132,9 @@ an acknowledge the next response comes 7,424 cycles later at the earliest (D-24)
   a spin-up or Init it holds at 00:02:00, the window 00:01:67–00:02:00, as the getloc log finds it.
 - **Reads** deliver a sector a period, 451,584 cycles at single speed (psx-spx's "INT1 Rate": 33,868,800 × 930h ÷ 4 ÷
   44,100) and 225,792 at double, the speed taken from the mode at each sector; the first sector a period after the
-  seek's end. **A Read with no new Setloc** begins where the last seek left the head or at the sector received last,
+  seek's end; *since 2026-10-12* that seek leaves the Q of the sector before its target, by which it found the target,
+  so that GetlocP between the seek's end and that first sector reports where the head is rather than where it was
+  (D-48, §9.9). **A Read with no new Setloc** begins where the last seek left the head or at the sector received last,
   "returning that sector once another time" [R "Setloc, Read, Pause"]. *Found 2026-10-11*: beginning at the last
   delivered sector instead made a Setloc–SeekL–ReadN sequence, the kernel's, read the wrong place.
 - **The buffer**: a sector arriving while no interrupt is pending is delivered at once (INT1); otherwise it waits, the
@@ -428,6 +430,22 @@ narrow store at an address not word-aligned; the differences are within what pla
 `disc-swap` and `timing` among them), all passing; WiseMan's `Diamond` tests under the test lock with the corpus, 42 of
 42.
 
+### 9.9 Mega Man Legends' radio line, and the Q a read's seek leaves (2026-10-12)
+
+The tester reported from the handheld a radio line of Mega Man Legends that never closed; from the tester's own states
+on the player's BIOS the box rested on its first line because the game's second XA line was paused before its first
+sector, again and again (`Diamond_Players.md` §14.6). The game asks Getstat and, once the Read bit is set, GetlocP,
+and ends the line once the reported sector is not below the line's end. A seek into a read set the Read bit at its end,
+but the Q stayed the one the head had last passed until the first sector came a period later, so the first GetlocP of
+a line answered the place the line before had ended, which was past this line's end. psx-spx's "GetlocL" says the
+drive decodes subchannel position during a seek, and the console's `cdrom/getloc` log finds the Q beside the target
+after each of its seeks; the seek now leaves the Q of the sector before its target as it turns into a read or a play
+(D-48). *Measured* [M]: from the save state, the walk into the scene started at 30 phases, 29 stopped before the
+change and none after; the line, the instructions after it and the prompt after those play, and the player walks on.
+The seven other games' scripted runs and Mega Man Legends' two scripts give the same pictures byte for byte before and
+after, so no answer any of them acts on was changed. *Not modelled*: the Q while the seek
+is under way, still the place the seek began; no game here asks for it then.
+
 ## 10. The state
 
 `DMND` version 6 (version 5 was the GPU's cache step): the controller's group, `Bus.Cdrom`, after the GPU's: the
@@ -464,6 +482,8 @@ per frame: the sectors, the data FIFO and XA's frames use buffers made at create
 - D-29, booting through the intro; the SPU (stage 8) and the MDEC (stage 9), which the games' openings need. *Since
   2026-10-12* the seven discs play their openings on the open kernel (§9.8).
 - The sound map; BFEMPT and BFWRDY; Report's peak's L/R bit; the emphasis filter; GetQ's lead-in seek scratch noise.
+- The subchannel Q while a seek is under way (D-48's open part): the place the seek began, where psx-spx says GetlocP
+  works during a seek.
 - `.m3u` and the disc change (stage 11); the framework's items of §8.4; LibCrypt on a protected disc, of which the
   library has none (the `.sbi` path is tested on a synthetic one).
 - The handheld's measurement of §9.7; distributions for D-24's and D-25's figures.

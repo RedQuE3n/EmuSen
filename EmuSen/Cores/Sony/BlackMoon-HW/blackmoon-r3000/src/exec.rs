@@ -5,7 +5,7 @@ use emusen_mips::{Op, Word, decode};
 use emusen_native::debug::kind;
 
 use crate::cop0::{self, cause, code, sr};
-use crate::{BranchDelay, Bus, LoadDelay, Observer, R3000, Registers, Size, Step};
+use crate::{BranchDelay, Bus, LoadDelay, Move, Observer, R3000, Registers, Size, Step};
 
 /// The general exception vector, and the debug unit's, with BEV clear and set (psx-spx "Exception Vectors").
 const GENERAL: [u32; 2] = [0x8000_0080, 0xBFC0_0180];
@@ -206,6 +206,12 @@ fn access_fault(r: &mut Registers, address: u32, bus: u32, align: u32, write: bo
     trap.then_some((code::BP, DEBUG))
 }
 
+/// Whether a data access reaches memory, the cache not isolated: only then is a load's or a store's move told.
+#[inline(always)]
+fn reaches(cpu: &R3000) -> bool {
+    cpu.regs.sr & sr::ISC == 0
+}
+
 /// A data read through the bus, or from the cache while it is isolated, its bytes told to the observer unless it met
 /// no device; the value and whether it met none.
 #[inline(always)]
@@ -284,6 +290,9 @@ fn load<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, wor
         _ => x,
     };
     let rt = w.rt();
+    if B::MOVES && reaches(cpu) && rt != 0 {
+        b.moved(Move::Load { at, register: rt as u8, address, size, value: x });
+    }
     let r = &mut cpu.regs;
     land(r, pending, rt);
     r.r[0] = 0;
@@ -304,6 +313,9 @@ fn store<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, wo
     let v = cpu.regs.r[w.rt()];
     if bus_write(cpu, b, o, at, address, size, v) {
         return raise(cpu, b, o, at, word, next, slot, pending, code::DBE, GENERAL);
+    }
+    if B::MOVES && reaches(cpu) {
+        b.moved(Move::Store { at, register: w.rt() as u8, address, size, value: v & mask(size) });
     }
     let r = &mut cpu.regs;
     land(r, pending, 32);
@@ -344,6 +356,19 @@ fn computed(op: Op, w: Word, a: u32, b: u32) -> Option<(usize, u32)> {
         Op::Lui => (rt, w.imm() << 16),
         _ => return None,
     })
+}
+
+/// The register an instruction that only computes gives unchanged, as `Move::Copy` names the forms.
+#[inline(always)]
+fn copied(op: Op, w: Word) -> Option<usize> {
+    let (rs, rt) = (w.rs(), w.rt());
+    match op {
+        Op::Addu | Op::Add | Op::Subu | Op::Sub | Op::Or | Op::Xor if rt == 0 => Some(rs),
+        Op::Addu | Op::Add | Op::Or | Op::Xor if rs == 0 => Some(rt),
+        Op::Addiu | Op::Addi | Op::Ori | Op::Xori if w.imm() == 0 => Some(rs),
+        Op::Sll | Op::Srl | Op::Sra if w.sa() == 0 => Some(rt),
+        _ => None,
+    }
 }
 
 /// A branch or jump: whether it is taken, its target (a conditional branch's counted from the next instruction's
@@ -403,6 +428,12 @@ fn common<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, w
     let (a, v) = (cpu.regs.r[w.rs()], cpu.regs.r[w.rt()]);
     match computed(op, w, a, v) {
         Some((i, x)) => {
+            if B::MOVES
+                && i != 0
+                && let Some(from) = copied(op, w)
+            {
+                b.moved(Move::Copy { at, register: i as u8, from: from as u8, value: x });
+            }
             let r = &mut cpu.regs;
             land(r, pending, 32);
             r.r[i] = x;
@@ -594,6 +625,10 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     let m = self.read(address, Size::of(4 - o));
                     base & !(u32::MAX >> (8 * o)) | m
                 };
+                if B::MOVES && !self.faulted && reaches(self.cpu) && rt != 0 {
+                    let size = Size::of(if op == Op::Lwl { o + 1 } else { 4 - o });
+                    self.b.moved(Move::Load { at: self.at, register: rt as u8, address: bus, size, value: v });
+                }
                 self.load = Some((rt, v));
             }
             Op::Swl | Op::Swr => {
@@ -607,6 +642,10 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     self.write(address & !3, Size::of(o + 1), b >> (24 - 8 * o));
                 } else {
                     self.write(address, Size::of(4 - o), b);
+                }
+                if B::MOVES && !self.faulted && reaches(self.cpu) {
+                    let (size, value) = if op == Op::Swl { (Size::of(o + 1), b >> (24 - 8 * o)) } else { (Size::of(4 - o), b) };
+                    self.b.moved(Move::Store { at: self.at, register: rt as u8, address: bus, size, value: value & mask(size) });
                 }
             }
             Op::Mfc(z) | Op::Cfc(z) | Op::Mtc(z) | Op::Ctc(z) | Op::Cop(z) => return self.coprocessor(z, op),
@@ -630,10 +669,16 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     (2, false) => {
                         let v = self.read(address, Size::Word);
                         self.b.set_cop2_data(rt as u8, v);
+                        if B::MOVES && !self.faulted && reaches(self.cpu) {
+                            self.b.moved(Move::LoadCop2 { at: self.at, cop2: rt as u8, address, value: v });
+                        }
                     }
                     (2, true) => {
                         let v = self.b.cop2_data(rt as u8);
                         self.write(address, Size::Word, v);
+                        if B::MOVES && !self.faulted && reaches(self.cpu) {
+                            self.b.moved(Move::StoreCop2 { at: self.at, cop2: rt as u8, address, value: v });
+                        }
                     }
                     (_, false) => {
                         self.read(address, Size::Word);
@@ -677,9 +722,21 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 0x01 | 0x02 | 0x06 | 0x08 => return self.exception(code::RI, GENERAL),
                 _ => {}
             },
-            (2, Op::Mfc(_)) => self.load = Some((rt, self.b.cop2_data(rd as u8))),
+            (2, Op::Mfc(_)) => {
+                let v = self.b.cop2_data(rd as u8);
+                if B::MOVES && rt != 0 {
+                    self.b.moved(Move::FromCop2 { at: self.at, register: rt as u8, cop2: rd as u8, value: v });
+                }
+                self.load = Some((rt, v));
+            }
             (2, Op::Cfc(_)) => self.load = Some((rt, self.b.cop2_control(rd as u8))),
-            (2, Op::Mtc(_)) => self.b.set_cop2_data(rd as u8, self.r(rt)),
+            (2, Op::Mtc(_)) => {
+                let v = self.r(rt);
+                self.b.set_cop2_data(rd as u8, v);
+                if B::MOVES {
+                    self.b.moved(Move::ToCop2 { at: self.at, register: rt as u8, cop2: rd as u8, value: v });
+                }
+            }
             (2, Op::Ctc(_)) => self.b.set_cop2_control(rd as u8, self.r(rt)),
             (2, _) => self.b.cop2_command(w.cofun()),
             (_, Op::Mfc(_) | Op::Cfc(_)) => self.load = Some((rt, 0)),

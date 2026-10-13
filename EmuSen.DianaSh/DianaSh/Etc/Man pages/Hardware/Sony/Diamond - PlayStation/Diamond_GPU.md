@@ -534,6 +534,12 @@ else draws; an observer there sees the stream in order with its times and the dr
 nothing of VRAM [A]. The texture coordinates, colours and vertices a renderer needs are the command's words, decoded
 by `vertex` and `Texture::new`, which a renderer would share rather than copy.
 
+*Stage E1 (2026-10-13, `Diamond_Enhancements.md` §3.3).* The board tells an attached layer each word GP0 is about to
+take, from the processor's store to 1F801810h or from DMA channel 2 with the word's physical address in RAM, before the
+GPU takes it, so that a layer can keep its side data in a queue beside the FIFO, in the FIFO's order, and the FIFO
+itself carries none. The seam at `Gpu::execute` is E3's to add, as a method of the layer with an empty default. The
+GPU's code is unchanged; the receipt is the board's.
+
 ## 14. Not modelled, and choices to revisit
 
 - The 160-pin chip's fill at an X ending in Fh; GP1(20h) and the 208-pin prototype; the light gun's latch; GP0(03h)'s

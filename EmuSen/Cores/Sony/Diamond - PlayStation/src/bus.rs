@@ -16,6 +16,7 @@ use crate::dma::{self, Dma, chcr};
 use crate::gpu::Gpu;
 use crate::icache::{ICache, Lookup};
 use crate::irq::{self, Irq};
+use crate::layer::{Attached, Receipt};
 use crate::memctl::{self, MemControl, Timing};
 use crate::timers::{self, Timers};
 use crate::video::{Video, edge};
@@ -131,6 +132,8 @@ pub struct Board {
     pub(crate) vblank_seen: bool,
     /// How many times the events ran, which tells the idle skipper a turn met one (Diamond_Speed.md §4); not state.
     pub events_run: u64,
+    /// The enhancement layer attached, if any (Diamond_Enhancements.md §3); not state.
+    pub layer: Attached,
 }
 
 impl Board {
@@ -170,6 +173,7 @@ impl Board {
             dma_clock: 0,
             vblank_seen: false,
             events_run: 0,
+            layer: Attached::default(),
         };
         b.schedule();
         b
@@ -344,6 +348,7 @@ impl Board {
                 }
             }
             0x810 => {
+                self.received(value, Receipt::Cpu);
                 self.now = self.gpu.gp0(value, self.now, &self.video);
                 self.take_gpu_irq();
                 self.wake_gpu_dma();
@@ -669,10 +674,19 @@ impl Board {
         }
     }
 
-    /// A word to the device of channel `n`.
-    fn send_to_device(&mut self, n: usize, word: u32) {
+    /// A word GP0 is about to take, told to the layer if one is attached.
+    #[inline(always)]
+    fn received(&mut self, word: u32, from: Receipt) {
+        if let Some(l) = self.layer.get() {
+            l.received(word, from);
+        }
+    }
+
+    /// A word to the device of channel `n`, read from RAM at `address`.
+    fn send_to_device(&mut self, n: usize, word: u32, address: u32) {
         match n {
             dma::GPU => {
+                self.received(word, Receipt::Dma { address });
                 let at = self.dma_clock.div_ceil(16);
                 let taken = self.gpu.gp0(word, at, &self.video);
                 self.dma_clock = if taken > at { taken * 16 } else { self.dma_clock } + dma::sixteenths_per_word(dma::GPU, 0);
@@ -777,7 +791,7 @@ impl Board {
                 for _ in 0..count {
                     a = a.wrapping_add(4) & 0x00FF_FFFC;
                     let w = self.ram_word(a);
-                    self.send_to_device(n, w);
+                    self.send_to_device(n, w, a);
                 }
                 words = 1 + count as u64;
                 overhead = NODE_OVERHEAD;
@@ -933,7 +947,7 @@ impl Board {
     fn transfer_word(&mut self, n: usize, address: u32, from_ram: bool) {
         if from_ram {
             let w = self.ram_word(address);
-            self.send_to_device(n, w);
+            self.send_to_device(n, w, address);
         } else {
             let w = self.receive_from_device(n);
             self.set_ram_word(address, w);
@@ -1067,6 +1081,18 @@ impl Board {
         if self.now < self.gte_ready {
             self.now = self.gte_ready + 1;
         }
+    }
+}
+
+impl Board {
+    /// `cop2_command` with the attached layer told what the command computes (Diamond_Enhancements.md §3.2).
+    pub(crate) fn cop2_command_observed(&mut self, command: u32) {
+        self.wait_for_gte();
+        let cycles = match self.layer.get() {
+            Some(l) => self.gte.command_observed(command, l),
+            None => self.gte.command(command),
+        };
+        self.gte_ready = self.now + cycles as u64;
     }
 }
 

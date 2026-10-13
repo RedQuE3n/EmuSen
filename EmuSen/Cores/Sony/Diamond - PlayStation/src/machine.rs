@@ -11,6 +11,7 @@ use crate::gpu::display;
 use crate::gpu::vram::BYTES as VRAM_BYTES;
 use crate::icache::KERNEL_BCC;
 use crate::kernel::{self, Kernel};
+use crate::layer::{Layered, Plain, Through};
 use crate::media::{Kind, Market, Media};
 use crate::memctl;
 use crate::card::Card;
@@ -224,20 +225,34 @@ impl Machine {
 
     /// One step at the boundary, with the kernel's seams: the side-load at the shell's entry and the putchar tap.
     pub fn step(&mut self) {
-        step_on(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
+        if self.board.layer.is_some() { self.step_in::<Layered>() } else { self.step_in::<Plain>() }
+    }
+
+    /// `step`, through the board itself or through `Layered` while a layer is attached.
+    fn step_in<T: Through>(&mut self) {
+        step_on::<_, T>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
+    }
+
+    /// Attaches an enhancement layer, in place of any before it, which is returned (Diamond_Enhancements.md §3).
+    pub fn attach(&mut self, layer: Box<dyn crate::layer::Layer>) -> Option<Box<dyn crate::layer::Layer>> {
+        self.board.layer.set(Some(layer))
+    }
+
+    pub fn detach(&mut self) -> Option<Box<dyn crate::layer::Layer>> {
+        self.board.layer.set(None)
     }
 
     /// Up to `limit` steps as `step` makes each, and how many: one run of them where the kernel's two seams have
     /// nothing to do, ended by the processor after the first step that leaves an event due, whose events then run as
     /// `step` runs them (Diamond_Speed.md §13.1).
     #[inline(always)]
-    fn steps(&mut self, limit: u32) -> u32 {
+    fn steps<T: Through>(&mut self, limit: u32) -> u32 {
         if !self.runs.on || self.exe.is_some() || self.kernel.taps_putchar() {
-            self.step();
+            self.step_in::<T>();
             return 1;
         }
         self.runs.made += 1;
-        let n = if self.runs.verify != 0 && self.runs.made % self.runs.verify == 0 { self.verified_run(limit) } else { self.cpu.run(&mut self.board, limit).0 };
+        let n = if self.runs.verify != 0 && self.runs.made % self.runs.verify == 0 { self.verified_run::<T>(limit) } else { T::run(&mut self.cpu, &mut self.board, limit).0 };
         self.runs.steps += n as u64;
         if self.board.now >= self.board.next_event {
             self.board.events();
@@ -248,24 +263,32 @@ impl Machine {
     /// One frame: the machine runs until a field's vblank begins, its picture complete, or to the field's end when the
     /// display range leaves no vblank; the SPU's samples are made up to that cycle.
     pub fn advance(&mut self) {
+        if self.board.layer.is_some() { self.advance_in::<Layered>() } else { self.advance_in::<Plain>() }
+    }
+
+    /// `advance`, the processor stepping through the board itself, or through `Layered` while a layer is attached;
+    /// the levers are the same either way (Diamond_Enhancements.md §2.3). Each kept out of line, so that the plain
+    /// frame's loop is the one it was.
+    #[inline(never)]
+    fn advance_in<T: Through>(&mut self) {
         self.board.field_done = false;
         self.idle.reset();
         if !self.idle.on {
             while !self.board.field_done {
-                self.steps(u32::MAX);
+                self.steps::<T>(u32::MAX);
             }
         }
         while !self.board.field_done {
             if self.idle.tracking == 0 {
                 let mut free = crate::idle::FREE;
                 while free > 0 && !self.board.field_done {
-                    free -= self.steps(free);
+                    free -= self.steps::<T>(free);
                 }
                 self.idle.watch();
                 continue;
             }
             self.idle.tracking -= 1;
-            let step = step_on(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
+            let step = step_on::<_, T>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
             if step != Step::Instruction {
                 self.idle.reset();
             } else if let Some(head) = self.idle.note(&self.cpu) {
@@ -321,7 +344,7 @@ impl Machine {
         let mut turns = crate::idle::Idle::default();
         let mut done = 0;
         while done < skip.turns {
-            let step = step_on(&mut cpu, &mut board, &mut exe, self.kernel, &mut Unobserved);
+            let step = step_on::<_, Plain>(&mut cpu, &mut board, &mut exe, self.kernel, &mut Unobserved);
             assert!(step == Step::Instruction && board.events_run == events, "the skip at {:08X} meets {step:?} or an event after {done} of {} turns", skip.head, skip.turns);
             if turns.note(&cpu) == Some(skip.head) {
                 done += 1;
@@ -336,10 +359,10 @@ impl Machine {
     /// A run checked against its steps: a copy takes the same number of steps one by one, as `step` makes each, and
     /// must meet an event or a step that is not an instruction only at the last, and reach the state the run leaves,
     /// byte for byte, before the last step's events (Diamond_Speed.md §13.3).
-    fn verified_run(&mut self, limit: u32) -> u32 {
+    fn verified_run<T: Through>(&mut self, limit: u32) -> u32 {
         let (mut cpu, mut board) = (self.cpu.clone(), self.board.clone());
         let from = cpu.regs.pc;
-        let (n, last) = self.cpu.run(&mut self.board, limit);
+        let (n, last) = T::run(&mut self.cpu, &mut self.board, limit);
         for i in 1..=n {
             let step = cpu.step(&mut board);
             let ended = step != Step::Instruction || board.now >= board.next_event || i == limit;
@@ -364,12 +387,13 @@ pub(crate) fn side_load(cpu: &mut R3000, board: &mut Board, exe: &mut Option<Vec
 }
 
 /// `Machine::step` over the machine's parts, so that the debugger's frame can lend its observer the hooks beside them;
-/// a step the observer stops runs nothing and leaves the clock where it was (Diamond_Debugger.md).
+/// a step the observer stops runs nothing and leaves the clock where it was (Diamond_Debugger.md). `T` is the bus the
+/// processor steps through: the board itself, or `Layered`, the board's attached layer told what the step moves.
 #[inline(always)]
-pub(crate) fn step_on<O: Observer>(cpu: &mut R3000, board: &mut Board, exe: &mut Option<Vec<u8>>, kernel: Kernel, o: &mut O) -> Step {
+pub(crate) fn step_on<O: Observer, T: Through>(cpu: &mut R3000, board: &mut Board, exe: &mut Option<Vec<u8>>, kernel: Kernel, o: &mut O) -> Step {
     side_load(cpu, board, exe);
     let tapped = if kernel.taps_putchar() { kernel::putchar(cpu.regs.pc, cpu.regs.r[9], cpu.regs.r[4]) } else { None };
-    let step = cpu.step_observed(board, o);
+    let step = T::step(cpu, board, o);
     if let Step::Observed(_) = step {
         return step;
     }

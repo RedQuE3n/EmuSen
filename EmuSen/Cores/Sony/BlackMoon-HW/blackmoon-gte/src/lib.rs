@@ -74,11 +74,17 @@ pub struct Registers {
 }
 
 /// One vertex of RTPS or RTPT as it is projected, for the enhancement layer's precision side-channel
-/// (Diamond_Plan.md §6.2): the screen sums before their shift, so with 16 fraction bits, and what the FIFO kept.
+/// (Diamond_Plan.md §6.2, BlackMoon_GTE.md §9): every value the projection makes before it is cut to the registers'
+/// widths, and what the FIFOs kept.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Projection {
     /// V0, V1 or V2.
     pub vertex: u8,
+    /// TR·1000h + RT·V for MAC1 to MAC3, checked as the accumulators check them and not yet shifted by sf: the vertex in
+    /// the camera's space with 12 fraction bits, the third its depth.
+    pub sums: [i64; 3],
+    /// H divided by SZ3 as the division makes it, with 16 fraction bits.
+    pub quotient: u32,
     /// MAC0's sums for SX and SY, before SAR 16 and saturation.
     pub x: i64,
     pub y: i64,
@@ -91,6 +97,7 @@ pub struct Projection {
 /// What watches the commands. Every method has an empty default and the plain command runs with `Unobserved`, so an
 /// unwatched engine compiles to no call; an observer sees results and never changes them.
 pub trait Observer {
+    #[inline(always)]
     fn projected(&mut self, _p: &Projection) {}
 }
 
@@ -147,7 +154,7 @@ impl Gte {
     }
 
     /// The same, with `observer` told what the command computes.
-    pub fn command_observed<O: Observer>(&mut self, command: u32, observer: &mut O) -> u32 {
+    pub fn command_observed<O: Observer + ?Sized>(&mut self, command: u32, observer: &mut O) -> u32 {
         commands::run(&mut self.regs, command, observer)
     }
 }
@@ -286,6 +293,9 @@ mod tests {
         assert_eq!(seen.0.iter().map(|p| p.vertex).collect::<Vec<_>>(), [0, 1, 2]);
         assert_eq!(seen.0.iter().map(|p| p.word).collect::<Vec<_>>(), [12, 13, 14].map(|r| g.data(r)));
         assert_eq!((seen.0[0].x >> 16, seen.0[0].z), (160 + 0x20 * 0x100 / 0x400, 0x400));
+        let p = seen.0[1];
+        assert_eq!((p.sums, p.quotient), ([0x10 << 12, -0x10 << 12, 0x800 << 12], divide(0x100, 0x800).0), "V1 in the camera's space, and H/SZ3");
+        assert_eq!(p.x, p.quotient as i64 * (p.sums[0] >> 12) + (160 << 16), "SX's sum from the two");
     }
 
     #[test]

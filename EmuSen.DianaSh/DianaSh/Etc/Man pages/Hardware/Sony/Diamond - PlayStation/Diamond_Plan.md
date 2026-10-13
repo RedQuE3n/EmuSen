@@ -734,7 +734,7 @@ next begins. The order puts a drawn picture at stage 4 and a booting disc at sta
 | **12** | The debugger: the R3000A through the observer; registers including the GTE's; disassembly; breakpoints, stepping, coverage, the call stack | Each claim a test; every table armed gives the plain run's digests (C15, G7) | 2 |
 | **13** | Speed (§5.12): the exact levers, in order, measured on the bench, under the 33% quota and on the handheld | §5.12's budget (G6) | 4 |
 | **14** | The gates of §8, the goldens, the clone check | §8 | 2 |
-| **E1** | The enhancement layer's frame: the observer trait on the R3000A and the GTE, the optional state block, the settings' category, the exactness harness | **Every accurate golden reproduced bit for bit with every enhancement compiled in and off**; states made with and without the layer load both ways; C3 and C9 pass | 2 |
+| **E1** | The enhancement layer's frame: the observer trait on the R3000A and the GTE, the optional state block, the settings' category, the exactness harness. *Built 2026-10-13 (`Diamond_Enhancements.md`): the goldens recorded first, the R3000A's moves told to its bus and the GTE's projections to its observer, the GPU's receipts with their RAM addresses, a layer attached to the board, the state's tagged blocks after the picture, the `Enhancement` declaration with none offered; every golden equal compiled in and off and with a test observer attached, the states both ways and across builds, the kit's cases on the eight discs at 1,800 frames, no cost unobserved* | **Every accurate golden reproduced bit for bit with every enhancement compiled in and off**; states made with and without the layer load both ways; C3 and C9 pass | 2 |
 | **E2** | The emulation enhancements: the CPU overclock and the faster CD | Each changes only what it states: off, E1's goldens; on, a bench of slowdown and loading measured; states tagged with their timing | 2 |
 | **E3** | The Vulkan renderer at 1×, consuming the command stream, beside the software rasteriser | With no enhancement, its picture equals the software rasteriser's display on ps1-tests' GPU programs and the bench discs, exactly or within a stated count of pixels, each difference explained; E1's goldens unchanged (the renderer never writes machine state) | 4 |
 | **E4** | The precision side-channel; sub-pixel vertices, perspective-correct texturing and the seam fixes in the renderer | A synthetic program that rotates a textured mesh slowly: vertex jitter and texture warp measured with and without; on the bench discs, the fraction of vertices resolved precisely, recorded per game; E1's goldens unchanged | 4 |
@@ -977,6 +977,8 @@ Each with a recommendation.
   *Reached in part 2026-10-11, at stage 5 (`Diamond_Native.md` §13.2): `test-all` held, 1,150 of 1,150; amidog's test
   waits on the pad; the disputes are four, so the count was wrong.*
 - **P9.** With every enhancement off, the build reproduces every accurate golden from E1 on, with no exception.
+  *Held at E1, 2026-10-13 (`Diamond_Enhancements.md` §7.2): every golden equal with the layer compiled in and off, and
+  with a test observer attached; open for E2 to E6.*
 - **P10.** The precision path resolves most projected vertices on 3D bench games and fewer than half on games that
   build geometry on the CPU.
 - **P11.** D-0 is settled in favour of one clock for every NTSC model the tester can measure.

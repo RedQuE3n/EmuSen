@@ -228,6 +228,13 @@ a core with no C# tree**. MarsRT takes its binaries from the C# core's `Rdp/Gpu/
 the same record-and-check test of their own. If E3 decides on the graphics form, the additions of §6.2 come first,
 as a minor of this surface, with MarsRT's bench run across the barrier's change.
 
+*Since E3 (2026-10-13, `Diamond_Enhancements.md` §14 to §18).* E3 took the compute form, as the likelier, and needed of
+this crate one thing §6.2 did not foresee: a program dispatched more than once in one submission, which `dispatch_in`
+made invalid by writing the set at every call; hence 1.1's `dispatch_again` (§3.1). The shader route for a core with
+no C# tree is the renderer's `shaders/` with its SPIR-V checked in and `DiamondShaderTests` in WiseMan. Nothing else
+was added: no image, no graphics pipeline, no 64-bit integer feature (the walk makes its 64-bit products in pairs of
+32-bit words). The second user's buffers come to 44 MiB at 1×, 26 of them in the device's own memory.
+
 ## 7. How it is tested
 
 **On its own** [M, `cargo test --release`, 2026-10-13, 11 tests, on the RX 6800]. Three without a device: the choice

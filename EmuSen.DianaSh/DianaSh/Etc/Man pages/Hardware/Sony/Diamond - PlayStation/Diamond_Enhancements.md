@@ -599,7 +599,7 @@ words, and `Drawing`'s `paint`, `texture`, `with_page` and `loads_clut` (`ClutCa
 The GPU's code calls the same functions it had inlined, with the same arguments.
 
 Nothing is made unless a layer is attached: the command processor tests `layer.is_some()` before building a
-`Drawing`, and the display before each line's event (§19 gives the cost).
+`Drawing`, and the display before each line's event (§18 gives the cost).
 
 **Tested** [M]: `a_layer_is_told_each_command_its_continuations_and_each_line_shown` sends a program's GP0 words (the
 four environment commands, a triangle, a polyline of three vertices, a three-pixel transfer) and holds that the layer
@@ -691,7 +691,7 @@ lines, its walk) and each copy's steps, each dispatch after the first of its pro
 command followed by the crate's barrier; then the readback. Capacities a submission: 32,768 records, 1,048,576 tile
 entries, 131,072 tiles, 4,096 palette loads, 8,192 lines, 2,097,152 transfer pixels. Device memory: VRAM and a scratch
 of 2 MiB each, one word a pixel; the picture, 1.4 MiB; 4,096 palette slots, 4 MiB; the staged arrays twice, once on each
-side, 34 MiB in all. Nothing is allocated a frame: the host's arrays and lists keep their capacity.
+side, 33 MiB in all; 44 MiB with the readback buffer, 26 of it the device's own. Nothing is allocated a frame: the host's arrays and lists keep their capacity.
 
 ### 16.6 Seeded, and kept nothing across a state
 

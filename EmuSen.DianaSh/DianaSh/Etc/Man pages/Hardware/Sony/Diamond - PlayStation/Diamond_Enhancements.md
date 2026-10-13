@@ -1248,3 +1248,191 @@ for its counts, with no device); the bench gains `--precise`, timed as `--render
 - **P-E4f.** Off, the frame costs the base within the bench's noise; on, the emulation thread pays under 1.5 ms a frame
   more than the plain frame on the three discs on the RX 6800, the precision layer's share under 0.3 ms (P-E1b's twice
   the test observer).
+
+## 25. E4's gate, as run
+
+*Measured 2026-10-13 on the desktop, the RX 6800 by `EMUSEN_GPU_DEVICE=6800`.* What was built is §21 to §24 as
+designed, with two changes the discs forced (§26.2, §26.3) and one counter split (the guard's refusals, §25.4). The
+crates: `precision` (`src/lib.rs`, the shadow, the receipts, `Precise` and `Draw`; six unit tests), the renderer's
+`PRECISE` record (`record.rs`'s `precise_triangle`, `walk.comp`'s `fine_triangle`), its block and its `Draw`, and
+`diamond-v1` (`v1/src/lib.rs`, the `Core` that holds the machine; four unit tests). The gate is `tests/precise.rs`,
+eight tests on the machine crate, beside E1's `programs.rs` and E3's `renderer.rs`.
+
+### 25.1 Off is the accurate path, and on the machine is unchanged
+
+| Item | Result |
+|---|---|
+| E1's goldens with every enhancement compiled in and off | **Equal** [M]: `programs.rs`' three golden tests, plain and with the test observer, 49 + 48 lines and the eight discs' 80 anchors, after every change of this stage's (the processor's store order, the GTE's two fields, the layer's blocks per tag) |
+| The machine's goldens with the setting on, the pair attached from power-on | **Equal** [M]: 49 of 49, 48 of 48, 8 discs and 80 anchors, picture, sound, state, VRAM and TTY; the state's digest taken over the accurate blocks, before the layer's (`goldens.rs`' `state_digest`) |
+| The same through the host | **Equal** [M]: `DiamondPreciseGeometryTests.Turning_precise_geometry_on_and_off_between_frames_changes_only_the_picture`, the setting turned on at frame 3 and off at 9 through `CoreEngine.Set`, the sound and the accurate state equal to a run without it at every frame, the picture differing at frames 3 to 8 alone |
+
+P-E4e held, by construction and by measurement. P9 held for E4.
+
+### 25.2 At zero fraction the precise record is the integer rule
+
+The precision layer's zero form gives every precise vertex an offset of zero and one depth, so every polygon it
+resolves is drawn through the `PRECISE` record and the walk's `fine_triangle`, its 64-bit edge functions, its fine
+gradients and interpolants, its texel hold (§26.3) at its zero-fraction value, and none of it through E3's triangle
+[M]:
+
+| Runs | Frames compared | Precise triangles drawn | Pictures | VRAM |
+|---|---|---|---|---|
+| The project's programs, 49, 60 frames | 2,940 | none: no program's projections reach GP0 as polygons | equal | equal but the texture cache's two pinned counts (§17.2) |
+| ps1-tests' release, 48 | 22,824 | none: `animated-triangle`'s 900 projections are made with the quotient saturated (SZ3 103 or 0 under H 320), which the guard cuts | equal | equal |
+| The eight bench discs to frame 3,000 by their press scripts | 24,000 | 1,438,000: Crash Bandicoot 423,326, Mega Man Legends 282,808, Spyro the Dragon 307,276, Ape Escape 287,102, Silent Hill 137,186, Rayman 4,210 | **equal at every frame** | **equal at every anchor** |
+
+So at zero fraction E3's equality holds through the new record on a million and a half of the discs' own triangles,
+and the exactness argument of §22.2 is a measurement. The programs and ps1-tests test the other half, that with the
+pair attached nothing else moves.
+
+### 25.3 The turning grid: jitter and warp
+
+`the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on`: a grid of 4 by 4 textured quads, 800 units square,
+tilted one radian about x and turned 0.004 radians (0.23°) a frame about y, 1,300 units from the camera, H 280; its
+vertices and every frame's rotation in fixed point put in RAM by the test, its program projecting each quad's corners by
+RTPT and RTPS into packets in a DMA list, double-buffered; the texture every texel of which names its own coordinate.
+120 frames, 25 vertices a frame, about 19,100 textured pixels a frame graded [M]:
+
+| Vertices | Mean error against the ideal projection | Mean change of the error from frame to frame (the wobble) | Worst error |
+|---|---|---|---|
+| Integer, as the console | 0.889 px | 0.467 px | 1.736 px |
+| MAC0's sums (§21.2's alternative) | 0.159 px | 0.117 px | 0.409 px |
+| **Precise** (the projection without its truncations) | **0.008 px** | **0.011 px** | **0.031 px** |
+
+| Texture | Mean texel error against the perspective-correct reference, \|Δu\| + \|Δv\| | Pixels more than a texel off |
+|---|---|---|
+| Setting off: the software rasteriser, affine on integer vertices | 2.75 texels | 99.4% |
+| **Setting on**: the renderer, in perspective on precise vertices | **0.50 texels** | **0.02%** |
+
+The precise vertex's residual, 0.008 px, is the rotation's own fixed point (1.3.12, about 2⁻¹³ of 700 units) and the
+256ths grid; MAC0's sums keep §21.1's second loss, a fifth of the console's error, which decided §21.2 on numbers. The
+texture's 0.50 is the floor of the measure: each axis rounded to a whole texel errs by a quarter of a texel on average.
+
+### 25.4 The 2D program, the strips and the state
+
+- **The 2D program** (`a_2d_program_is_drawn_as_the_software_rasteriser_with_the_setting_on`): sprites, a variable and
+  two fixed rectangles textured and flat, a line, a shaded line, a polyline, flat and shaded triangles and a textured
+  quad the processor builds, and two quads of GTE-projected corners, one with every corner moved a pixel on the
+  processor and one with one corner moved: with the pair attached, ten frames' pictures and VRAM equal to the software
+  rasteriser's to the pixel [M]. The precision layer counted 60 projections, 50 polygons, none precise, 50 vertex words
+  changed and 10 polygons mixed, each drawn wholly as before.
+- **The strips** (`a_strip_of_a_picture_shows_no_texel_past_its_edge`, §26.3's defect held): four textured strips at
+  one depth projected to fractional corners and sent by SWC2 straight to GP0; no pixel shows a texel past its strip
+  (130 did without the hold), and as many pixels are drawn as the software rasteriser draws, 16,705.
+- **The state** (`a_state_with_the_setting_on_continues_its_picture_and_loads_both_ways`, on the grid): a state saved
+  at frame 40 with the pair attached, loaded on a second machine with it, continues the picture frame for frame for 20
+  frames; saved, loaded and saved again it is the same bytes; loaded with the setting off, the machine continues as the
+  first; a state made with it off loads with it on, the machine the same and the polygons precise again within two
+  frames. With the setting on the state is 10,545,574 bytes against 5,398,770 for the kit's machine without it [M, the
+  kit's C7 note]. `diamond-v1`'s `a_state_with_the_setting_on_loads_with_it_off_and_the_reverse` holds the same through
+  the `Core`.
+
+### 25.5 The bench discs: how much is precise (P10)
+
+The pair attached from power-on, each disc by its press script to frame 3,000, counted by the precision layer [M]. A
+projection is *cut* where the console cut it (saturated, at or behind the camera) and *far* where the guard refused a
+position more than two pixels from the console's; a vertex is a polygon vertex word GP0 drew; *changed* is a vertex
+word whose serial was live but whose integer the processor had changed.
+
+| Disc | Projections | Cut | Far | Polygons | Precise | Mixed | Vertices | Precise | Changed |
+|---|---|---|---|---|---|---|---|---|---|
+| Crash Bandicoot | 2,195,348 | 2.13% | 0.70% | 504,381 | 99.3% | 3,495 | 1,523,785 | **99.7%** | 0 |
+| Mega Man Legends | 978,426 | 2.92% | 0.31% | 278,059 | 96.0% | 1,091 | 1,077,932 | **96.0%** | 0 |
+| Ape Escape | 506,206 | 6.00% | 0.44% | 232,789 | 78.5% | 36,896 | 862,886 | **81.1%** | 3,216 |
+| Silent Hill | 176,128 | 5.24% | 0.25% | 231,032 | 35.1% | 7,988 | 897,376 | **34.9%** | 0 |
+| Spyro the Dragon | 3,703,884 | 6.54% | 0.55% | 1,320,706 | 14.8% | 20,775 | 4,427,908 | **17.8%** | 464,915 |
+| Rayman | 9,420 | 0 | 0 | 60,619 | 3.9% | 0 | 240,188 | **3.9%** | 0 |
+| Castlevania | 17,998 | 0.04% | 0 | 13,241 | 0 | 0 | 52,644 | **0** | 0 |
+| Tekken 3, frames 0 to 3,000 | 0 | | | 0 | | | 0 | | |
+| Tekken 3, frames 0 to 12,000 (its attract mode's fights from about 7,500) | 5,788,727 | 5.70% (with far) | | 2,928,129 | 78.2% | 543,134 | 10,430,961 | **89.1%** | 879,756 |
+
+By the counts at the anchors, the precise share rises as each game enters play: Crash Bandicoot's first 1,200 frames
+draw 140 vertices, none precise (its logos), and by frame 1,500 122,138 of 122,318 are. Silent Hill's opening draws
+558,800 vertices to frame 2,400 with none precise and its play then 120,284 of 120,284 more. No serial was found dead on
+any disc (the ring of 32,768 is never outrun within a frame or two of a projection), and no command was unmatched.
+
+**P10 held** [M]: the games that build their 3D scenes from the GTE's words (Crash Bandicoot, Mega Man Legends, Ape
+Escape, Tekken 3's fights) are drawn 81 to 99.7 per cent precise, and those that draw mostly 2D (Rayman, Castlevania)
+or move the GTE's words on the processor (Spyro the Dragon, 464,915 vertex words changed) under a fifth. Silent Hill
+lies between: its scenes in play are wholly precise, its long opening and its fog's overlays not.
+
+**The guard's bound stands** [M]: the far refusals are 0.25 to 0.70 per cent of the projections on every disc, against
+2 to 6.5 per cent the console cut itself. P-E4d held for the guard's own refusals (under 1 per cent everywhere).
+
+### 25.6 The player's path
+
+- **The kit**, the published shape (`cargo build --profile dist` in `v1/`, `libdiamond.so`), the corpus form on the
+  eight discs at 1,800 frames, four at a time: **off**, every case passes on every disc (194 s); **on**
+  (`--settings precision=true`), every case passes on every disc after §26.2's fix (318 s), C3's nine settings among
+  them, C7's state of 10,545,574 bytes loading and continuing, C8 across a save and load, C10's two machines on two
+  threads, each with its own renderer, C17 and C18 [M].
+- **WiseMan**, under the test lock with the corpus, filtered by `Diamond`, `PlayStation`, `GraphicsSettings`,
+  `GenesisSettings`, `WindowFitAudit`, `CoreRegistrationEquivalence` and `CoreAdapter`: 219 of 221 at first, the two
+  failures `DiamondTests`' lists of the library's settings and capabilities, which named neither the new key nor
+  `SETTINGS` and `SETTING_NOTES`; given them, both pass. The three `DiamondPreciseGeometryTests` are among the 221, and
+  the fit audit with the PlayStation's tab at both sizes, its new heading included [M].
+- **The publish**: §28.
+
+## 26. What the pictures showed
+
+### 26.1 How they were looked at
+
+At every 300th frame of the exact form's disc run the machine's picture and the renderer's were written to the probe's
+scratch folder (`EMUSEN_DIAMOND_PICTURES`; no picture of a game is in the repository) and looked at side by side with a
+map of the pixels that differ, then zoomed where the map or the eye found something; Tekken 3 the same every 500th frame
+to 12,000 by the run tool's `--precise --pictures`. A scratch counter listed every black pixel of the renderer's picture
+whose 3-by-3 neighbourhood in the machine's has no black and whose two opposite neighbours in the renderer's are not
+black, a crack through a surface the console draws solid. Most of each map is the expected kind: every edge of a precise
+polygon a pixel either way, and every textured pixel of a polygon in perspective a texel or two off the affine one.
+
+### 26.2 The palette slot's tail reached the state (found by the kit, fixed)
+
+**Shown.** The kit's first run with the setting on failed C7, C8, C17 or C18 on six discs of eight, every failure a
+state digest with the frames' and the sound's digests equal. A scratch run of C7 on Mega Man Legends, machine A to frame
+900, its state loaded on B, both on to 1,800, compared the two states field by field: 431 bytes differed, all in
+`RNDR.Palette` [M]. A 4-bit palette load writes 16 entries of its slot of 256; the other 240 hold whatever the slot's
+device memory held, which the block read back whole, and which differs between machines and between processes.
+
+**Fixed.** The renderer records how many entries its slot's load wrote and saves the rest as zero; no texture reads
+past them, since a 4-bit texture indexes 16 and the CLUT cache reloads for an 8-bit one (`ClutCache::holds`). The same
+C7 then compared equal, and the kit passes every case on every disc with the setting on (§25.6).
+
+### 26.3 A strip's last column showed the next region's texel (found on Crash Bandicoot, fixed)
+
+**Shown.** At frame 1,800 Crash Bandicoot's loading picture showed a dark vertical line at x 351 and another at 414
+[M, looked at]. The picture is drawn as textured strips 64 pixels wide whose corners the GTE projects to 286, 350.16,
+414.32, …, one texel a pixel. VRAM read back from the renderer held at column 350 the dark colours of the next texture
+region where the machine's held the picture. With integer corners the last pixel of a strip is a whole pixel inside its
+right edge, its texture coordinate 63 exactly; with the edge at 350.16 the pixel at 350 is 0.16 inside, its coordinate
+63.84, and the console's rounding of a coordinate (a half added before the integer part, §14.1) gives 64, the first
+texel of the next region. The console never meets this at one texel a pixel; it meets it only on textures magnified
+two times or more, where its own rounding reaches the last coordinate too.
+
+**Fixed** [C]: with sub-pixel corners a precise triangle's texture coordinate is held within the vertices' range and
+short of the end it runs toward across the screen (where both of its gradients are toward the greatest coordinate, that
+coordinate's texel is not drawn; where both are toward the least, the least's), the record carrying the range in its
+word 9. At zero fraction nothing is held, so §25.2's equality is untouched, and it stayed equal on every disc after the
+change. On a polygon whose gradients point opposite ways (a texture turned on the screen) nothing is held beyond the
+vertices' range; no such seam was seen. The strip test holds it (130 pixels past the strip without the hold, none with
+it), and the lines are gone from the frame.
+
+### 26.4 Recorded, not fixed
+
+| Disc, frames | What shows | Why | Fate |
+|---|---|---|---|
+| Ape Escape, 1,500 to 2,700 (the lab's floor) | hairline cracks, black dashes up to a few dozen pixels long, where the floor meets the rainbow ring: 136, 79, 249, 89 and 12 crack pixels at the five anchors | the floor's polygons are precise; the ring's quads are not (their words do not trace to a projection: built or moved on the processor), and they meet the floor's long edge in a T, so the precise edge moves away from the integer corners on it by up to a pixel | **recorded**: §21.4's seam between a precise polygon and an integer one, which the plan names as this enhancement's cost |
+| Spyro the Dragon, 900 and in play | short teal dashes across the snow and the ground, the background showing through | the same: 17.8 per cent of Spyro's vertices are precise and 464,915 of its vertex words were changed on the processor, so precise and integer polygons alternate across the ground | **recorded** |
+| Every 3D game | every edge a pixel either way, textures a texel or two away from the affine picture | the enhancement itself | as designed |
+
+**Looked at and found unchanged in kind**: Tekken 3's fights from frame 7,500 (its health bars, timer and names drawn
+alike, the fighters and the stage precise), Spyro the Dragon's memory card warning, a 2D box over its 3D title, drawn
+alike, Mega Man Legends' hall at frames 2,700 and 3,000, Ape Escape's close-ups, Silent Hill's street in its fog, Crash
+Bandicoot's title and menu letters (projected, precise, whole), Rayman's title at 2,100; Castlevania's pictures are the
+machine's at every anchor, nothing of it being precise. No misplaced vertex was seen: the guard's two pixels keep every
+precise corner beside the console's.
+
+**An experiment, not kept**: drawing a mixed polygon with the precise corners it has and the integer ones at their
+pixels, in place of wholly as before, was tried on the discs. Ape Escape's crack pixels fell at three anchors of five
+(136 to 32, 249 to 131, 89 to 79) and rose at one (79 to 85); the T-junctions remain, since the ring's corners on the
+floor's edge are not the floor's. It is not a fix, the plan's rule (§21.4) stays, and edge expansion (§22.4), the
+planned remedy for this seam, is not built. Both are open for the tester, with their costs as stated there.

@@ -1713,3 +1713,20 @@ The record is `Diamond_Enhancements.md` §14 to §20. In brief:
   rasteriser's at every frame, VRAM equal but for the texture cache's halfwords on its two programs, E1's goldens equal
   with the renderer attached (§17).
 - **The cost**: unattached the base's within noise; attached +0.29 to +0.57 ms a frame on the RX 6800 (§18).
+
+## 26. Stage E4, precise geometry (2026-10-13)
+
+The record is `Diamond_Enhancements.md` §21 to §29. In brief:
+
+- **The design**, committed before the code (§21 to §24): the precise vertex the GTE's projection without its
+  truncations, guarded within two pixels of the console's; serials in a shadow of the FIFO, the registers, RAM and the
+  scratchpad over a ring of 32,768 projections, the integer checked once at the receipt; whole polygons only.
+- **The processor and the GTE**: a store told before it writes (`BlackMoon_R3000.md` §14); `Projection`'s `h` and
+  `offset` (`BlackMoon_GTE.md` §9).
+- **The crates**: `precision`; the renderer's `PRECISE` record and its block; `diamond-v1`, which holds the exports, the
+  machine's crate an rlib whose `impl Core for Machine` it passes on; `RustCores.props`' `Dir` and CI's build at `v1/`.
+- **The state**: a layer's blocks per tag; `PREC` 2.6 MiB and `RNDR` 2.5 MiB with the setting on, none with it off,
+  version 10's layout unchanged.
+- **The gate** (§25): every golden equal off and on; E3's equality through the precise record at zero fraction on the
+  discs; the grid's jitter and warp; the 2D program and the strips; the state both ways; P10; the kit off and on.
+

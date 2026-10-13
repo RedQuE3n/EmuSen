@@ -314,6 +314,11 @@ FIFO; the FIFO's other writes are the processor's MTC2 and LWC2, which `blackmoo
 (`BlackMoon_R3000.md` §14). `command_observed` now takes an observer that need not be sized, so a console can pass
 one behind a pointer (Diamond's `dyn Layer`). The test holds V1's sums and quotient and SX's sum made from them.
 
+*Stage E4 (2026-10-13, `Diamond_Enhancements.md` §21.2).* `Projection` carries **`h`** and **`offset`** too, H and OFX,
+OFY as the command read them: the precision layer evaluates the projection without its truncations,
+`OFX/2¹⁶ + H·sums₁/sums₃`, which needs them, MAC0's sum holding OFX and IR1·q together. Additions to the struct the crate
+owns; the test holds both.
+
 ## 10. Cost
 
 Measured with a throwaway timing loop of 2,000,000 commands each on fixed inputs [M]: 3.2 ns (AVSZ3) to 114 ns (NCDT),

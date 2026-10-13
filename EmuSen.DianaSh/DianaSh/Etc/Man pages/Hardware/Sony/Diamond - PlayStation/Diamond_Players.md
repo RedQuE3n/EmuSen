@@ -1553,3 +1553,40 @@ of RAM below 10000h or of code running there or in ROM was observed. The routine
 loop calls were not followed; what they do is taken from their arguments and results. No referee was run. No
 emulator's source, no firmware or listing of one, and none of the documents `DOCS.txt` excludes was opened (`DOCS.txt`
 itself for its list); Diamond's `kernel/` and `kernel-harness/` were not touched.
+
+---
+
+## 15. Precise geometry, as players meet it (2026-10-13)
+
+*Stage E4 of `Diamond_Plan.md` §7; the design and its gate are `Diamond_Enhancements.md` §21 to §29.* The PlayStation's
+first enhancement, offered with its gate met and every accurate golden held (`Diamond_Plan.md` §8, GE).
+
+**Where it is.** Graphics Settings, the PlayStation's tab, under the heading **Enhancements**: one switch, **Precise
+geometry**, off. Its hint says what it does and what it costs: the picture drawn on the graphics card with each 3D
+corner where the game's geometry puts it, between the pixels, and textures in perspective, so polygons stop wobbling and
+textures stop bending as they move; the game itself running exactly as on a console. Its cost: a Vulkan graphics card,
+some of its time and about half a millisecond of the processor's a frame, save states about twice their size, and the
+corners a game moves itself (2D menus and overlays) left on whole pixels, with a hairline seam where such a polygon
+meets a precise one.
+
+**Turning it on and off.** It applies between frames, at once, while a game runs; the picture changes from the next
+frame and nothing else does (the sound, the game's own state and what it computes are those of a console;
+`DiamondPreciseGeometryTests`). Off is the console's picture, drawn by the software rasteriser as before.
+
+**Without a usable graphics card.** The switch can still be turned on; the game then runs on the console's own picture,
+and a note under the row says so: "No usable Vulkan graphics card was found (the reason), so the console's own picture
+is shown." Where the only Vulkan is the processor's own (llvmpipe) the picture is drawn there, the same, slowly, and
+the note says that instead. Nothing fails to load because of it, and a game's stored setting is never refused.
+
+**Save states.** With it on a state is about 10.5 MB against 5.3 MB, since it holds what the enhancement needs to draw
+the next frame exactly as the machine that saved it would. A state saved with it on loads with it off, and one saved
+with it off loads with it on; the first frame or two after such a load may be drawn with fewer precise corners.
+
+**What to expect, by game** (`Diamond_Enhancements.md` §25.5): Crash Bandicoot, Mega Man Legends, Ape Escape and Tekken
+3's fights are drawn 81 to 99.7 per cent precise; Silent Hill's play wholly, its opening not; Spyro the Dragon under a
+fifth, since it moves the GTE's results on the processor before drawing them; Rayman and Castlevania, which draw in
+2D, almost nothing, and their pictures are the console's. Two kinds of seam were seen and are known: hairline cracks
+in Ape Escape's lab floor where it meets the rainbow ring, and short dashes across Spyro the Dragon's ground
+(`Diamond_Enhancements.md` §26.4).
+
+**The handheld** is not yet measured with it; the estimate is `Diamond_Enhancements.md` §27.

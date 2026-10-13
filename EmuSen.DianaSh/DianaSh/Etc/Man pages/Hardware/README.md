@@ -67,6 +67,10 @@ here.
   controller, timing or filesystem. Built 2026-10-11 at Diamond's stage 7, for the Sega CD
   too; since 2026-10-12 a disc over any backing, owned or lent by the host, opened with its companions, and the
   fingerprint a state is held to (§9).
+- [`Shared/EmuSen_Gpu.md`](Shared/EmuSen_Gpu.md) — `emusen-gpu`, one Vulkan compute device for any core that draws on
+  a GPU: the device chosen by rank or by name (`EMUSEN_GPU_DEVICE`), storage buffers, compute programs, submissions
+  waited for, pending or ahead; no shader and no console. Moved 2026-10-13 out of MarsRT, whose `rdp/gpu/device.rs` it
+  was, for Diamond's enhanced renderer; the seam for the kit's lent device, and what Diamond's renderer will need.
 
 ## Atari
 

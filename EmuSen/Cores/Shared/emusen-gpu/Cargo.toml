@@ -1,0 +1,18 @@
+[package]
+name = "emusen-gpu"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+# One Vulkan compute device for any core that draws on a GPU: buffers, compute programs, submissions waited for, left pending or
+# sent ahead. No shader and no console. See Hardware/Shared/EmuSen_Gpu.md.
+[lib]
+name = "emusen_gpu"
+
+[dependencies]
+# The loader found at run time (the `loaded` feature, by default); MIT OR Apache-2.0, and libloading ISC, both compatible with the
+# GPL-3.0. The version wgpu-hal uses, so that the kit's device can be lent (EmuSen_Gpu.md §5).
+ash = "0.38"
+
+[profile.release]
+opt-level = 3

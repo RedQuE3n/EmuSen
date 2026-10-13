@@ -29,7 +29,9 @@ measurement that did need it, and the one submission left pending that it added.
 
 **Choosing a device.** Discrete before integrated before virtual before software, by the loader's own type field.
 `EMUSEN_MARS_GPU_DEVICE=<part of a name>` overrides, which is how a test names llvmpipe on a machine that has
-something better, and how a player with two adapters picks.
+something better, and how a player with two adapters picks. *Renamed 2026-10-13 to `EMUSEN_GPU_DEVICE`, read by this
+class and by `emusen-gpu`, the shared crate MarsRT's copy of this layer moved into; the old name is not kept, since
+nothing set it (`Hardware/Shared/EmuSen_Gpu.md` §4).*
 
 ## 2. Shaders: GLSL in the tree, SPIR-V in the product, a test between them
 
@@ -74,7 +76,8 @@ cross-check, which is worth doing when a phase of the shader port lands and is r
 retires the plan's §4 sentence that tests run on lavapipe: they can, and by default they do not. The integrated
 adapter has a second use. With two RDNA2 compute units against a Steam Deck's eight it is the machine's stand-in for
 a low-end device, so speed at a multiple is to be measured on it as well as on the discrete card
-(`EMUSEN_MARS_GPU_DEVICE=RAPHAEL`), and a multiple that holds there is a conservative answer for the Deck.
+(`EMUSEN_MARS_GPU_DEVICE=RAPHAEL`, `EMUSEN_GPU_DEVICE` since 2026-10-13), and a multiple that holds there is a
+conservative answer for the Deck.
 
 **What these numbers are and are not.** Thirty milliseconds to create a device is paid once, at the moment the
 setting is turned on, and is nothing. The third column bounds the fixed cost of a flush from above: a submission

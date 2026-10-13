@@ -2,17 +2,16 @@
 //! binaries byte for byte, its 64 by 1 tiles, its pending walk and its device average. C#'s `GpuRasteriser.cs`. See Mars_Gpu.md §5, §13,
 //! §14 and §15, and Mars_Native.md §6.4.
 
-pub mod device;
 mod record;
 
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering::{Acquire, Release};
 use std::sync::{Arc, Condvar, Mutex};
 
-pub use device::{AHEAD, GpuDevice, Pending};
 #[cfg(test)]
-use device::Submission;
-use device::{Commands, GpuBuffer, GpuProgram, Where};
+use emusen_gpu::Submission;
+use emusen_gpu::{Commands, GpuBuffer, GpuProgram, Where};
+pub use emusen_gpu::{AHEAD, GpuDevice, Pending};
 
 /// The C# path's compiled shaders, the same files, so the differential between the two cores' device paths has no shader in it.
 pub mod shaders {
@@ -313,14 +312,14 @@ impl GpuRasteriser {
     #[allow(clippy::result_large_err)]
     pub fn try_create(device: GpuDevice, scaled_rdram_bytes: usize) -> Result<GpuRasteriser, (GpuDevice, String)> {
         let bytes = scaled_rdram_bytes as u64 / 2 * 4;
-        if bytes > device.max_buffer_bytes {
-            let report = format!("{} binds {} MB at most and the memory at this multiple is {} MB", device.name, device.max_buffer_bytes >> 20, bytes >> 20);
+        if bytes > device.max_buffer_bytes() {
+            let report = format!("{} binds {} MB at most and the memory at this multiple is {} MB", device.name(), device.max_buffer_bytes() >> 20, bytes >> 20);
             return Err((device, report));
         }
         match GpuRasteriser::new(&device, (scaled_rdram_bytes / 2) as u32) {
             Ok(make) => Ok(make(device)),
             Err(e) => {
-                let report = format!("{}: {e}", device.name);
+                let report = format!("{}: {e}", device.name());
                 Err((device, report))
             }
         }
@@ -393,7 +392,7 @@ impl GpuRasteriser {
     }
 
     pub fn device_name(&self) -> &str {
-        &self.device.name
+        self.device.name()
     }
 
     pub fn memory_words(&self) -> u32 {
@@ -571,7 +570,7 @@ impl GpuRasteriser {
     fn upload(&mut self, slot: usize, which: usize, count: usize) {
         let bytes = count.max(1) as u64 * 4;
         let staged = &mut self.inputs[slot][which];
-        if staged.host.as_ref().is_none_or(|h| h.bytes < bytes) {
+        if staged.host.as_ref().is_none_or(|h| h.bytes() < bytes) {
             if let Some(h) = staged.host.take() {
                 self.device.destroy_buffer(h);
             }
@@ -697,7 +696,7 @@ impl GpuRasteriser {
         if words == 0 {
             return;
         }
-        if self.readback.as_ref().is_none_or(|r| r.bytes < words as u64 * 4) {
+        if self.readback.as_ref().is_none_or(|r| r.bytes() < words as u64 * 4) {
             if let Some(r) = self.readback.take() {
                 self.device.destroy_buffer(r);
             }
@@ -724,7 +723,7 @@ impl GpuRasteriser {
         let bytes = pixels.max(1) as u64 * 4;
         {
             let mut scanned = self.pictures.scanned.lock().unwrap_or_else(|e| e.into_inner());
-            if self.scan_device.as_ref().is_none_or(|d| d.bytes < bytes) {
+            if self.scan_device.as_ref().is_none_or(|d| d.bytes() < bytes) {
                 if let Some(d) = self.scan_device.take() {
                     self.device.destroy_buffer(d);
                 }
@@ -798,7 +797,7 @@ impl GpuRasteriser {
             buffer.slice_mut::<u8>()[..seed.len()].copy_from_slice(seed);
             buffer
         });
-        if self.spans.as_ref().is_none_or(|s| s.bytes < spans.len().max(1) as u64 * 4) {
+        if self.spans.as_ref().is_none_or(|s| s.bytes() < spans.len().max(1) as u64 * 4) {
             if let Some(s) = self.spans.take() {
                 self.device.destroy_buffer(s);
             }

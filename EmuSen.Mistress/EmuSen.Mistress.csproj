@@ -19,6 +19,8 @@
 
   <!-- macOS: a publish for osx-* is EmuSen.app, laid out by DianaShPublishLayout.targets - see EmuSen_Settings_Reference.md §4.82. The id is the GitHub Pages domain of the project's owner, reversed. -->
   <PropertyGroup>
+    <!-- Published as EmuSen: bin/EmuSen, lib/EmuSen/EmuSen, EmuSen.exe; the assembly stays EmuSen.Mistress.dll - see EmuSen_Settings_Reference.md §4.109. -->
+    <DianaShExecutableName>EmuSen</DianaShExecutableName>
     <DianaShMacAppName>EmuSen</DianaShMacAppName>
     <DianaShMacBundleIdentifier>io.github.redque3n.emusen</DianaShMacBundleIdentifier>
     <DianaShMacAppIcon>$(MSBuildThisFileDirectory)Assets/Icon/emusen.icns</DianaShMacAppIcon>

@@ -135,6 +135,38 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.DoesNotContain("not signed", log);
         }
 
+        // A project that names its executable gets an apphost, launchers and a bundle under that name, and the apphost still runs its assembly - see EmuSen_Settings_Reference.md §4.109.
+        [Fact]
+        public void A_named_executable_is_the_apphost_and_the_launchers_while_the_assembly_keeps_its_name()
+        {
+            (int exit, string log, string dir) = Publish("linux-x64");
+            Assert.True(exit == 0, log);
+            Assert.True(File.Exists(Path.Combine(dir, "lib", "EmuSen", "Probe")));
+
+            (exit, log, dir) = Publish("linux-x64", "-p:DianaShExecutableName=Named");
+            Assert.True(exit == 0, log);
+            Assert.True(File.Exists(Path.Combine(dir, "bin", "Named")));
+            Assert.True(File.Exists(Path.Combine(dir, "bin", "Named.cmd")));
+            Assert.True(File.Exists(Path.Combine(dir, "lib", "EmuSen", "Named")));
+            Assert.True(File.Exists(Path.Combine(dir, "lib", "EmuSen", "Probe.dll")));
+            Assert.False(File.Exists(Path.Combine(dir, "bin", "Probe")), "the launcher of the earlier publish is left behind");
+            Assert.False(File.Exists(Path.Combine(dir, "lib", "EmuSen", "Probe")), "the apphost of the earlier publish is left behind");
+
+            var start = new ProcessStartInfo(Path.Combine(dir, "bin", "Named")) { RedirectStandardOutput = true, UseShellExecute = false };
+            using Process child = Process.Start(start)!;
+            string said = child.StandardOutput.ReadToEnd();
+            Assert.True(child.WaitForExit(60_000));
+            Assert.Equal(0, child.ExitCode);
+            Assert.Equal("probe", said.Trim());
+
+            (exit, log, dir) = Publish("osx-arm64", "-p:DianaShExecutableName=Named");
+            Assert.True(exit == 0, log);
+            string macos = Path.Combine(dir, "EmuSen.app", "Contents", "MacOS");
+            Assert.True(File.Exists(Path.Combine(macos, "Named")));
+            Assert.False(File.Exists(Path.Combine(macos, "Probe")));
+            Assert.Equal("Named", PlistKeys(Path.Combine(dir, "EmuSen.app", "Contents", "Info.plist"))["CFBundleExecutable"]);
+        }
+
         // Mistress is the project that asks for the bundle, with the icon settings §4.55 made.
         [Fact]
         public void Mistress_names_its_bundle()
@@ -142,6 +174,7 @@ namespace EmuSen.WiseMan.DianaSh
             XDocument project = XDocument.Load(Path.Combine(Repo, "EmuSen.Mistress", "EmuSen.Mistress.csproj"));
             string? Property(string name) => project.Descendants(name).SingleOrDefault()?.Value;
 
+            Assert.Equal("EmuSen", Property("DianaShExecutableName"));
             Assert.Equal("EmuSen", Property("DianaShMacAppName"));
             Assert.Equal("io.github.redque3n.emusen", Property("DianaShMacBundleIdentifier"));
             Assert.Equal("public.app-category.games", Property("DianaShMacCategory"));

@@ -35,12 +35,12 @@ if [ "$remove" = 1 ]; then
   rm -f "$apps/$name.desktop" "$desktop_dir/$name.desktop"
   find "$icons" -path "*/apps/$name.*" -delete 2>/dev/null || true
   refresh
-  echo "removed the EmuSen Mistress entry and icons"
+  echo "removed the EmuSen entry and icons"
   exit 0
 fi
 
-if [ ! -x "$root/bin/EmuSen.Mistress" ]; then
-  echo "cannot find $root/bin/EmuSen.Mistress; run this from a published Mistress build" >&2
+if [ ! -x "$root/bin/EmuSen" ]; then
+  echo "cannot find $root/bin/EmuSen; run this from a published EmuSen build" >&2
   exit 1
 fi
 
@@ -54,11 +54,11 @@ mkdir -p "$apps"
 cat > "$apps/$name.desktop" <<ENTRY
 [Desktop Entry]
 Type=Application
-Name=EmuSen Mistress
+Name=EmuSen
 GenericName=Emulator
 Comment=Play your SNES, NES, Game Boy and Nintendo 64 library
-Exec="$root/bin/EmuSen.Mistress" %f
-TryExec=$root/bin/EmuSen.Mistress
+Exec="$root/bin/EmuSen" %f
+TryExec=$root/bin/EmuSen
 Icon=$name
 Terminal=false
 Categories=Game;Emulator;
@@ -75,4 +75,4 @@ if [ "$want_desktop" = 1 ]; then
 fi
 
 refresh
-echo "installed EmuSen Mistress for $USER: $apps/$name.desktop$([ "$want_desktop" = 1 ] && echo " and a desktop shortcut")"
+echo "installed EmuSen for $USER: $apps/$name.desktop$([ "$want_desktop" = 1 ] && echo " and a desktop shortcut")"

@@ -2985,7 +2985,7 @@ committed beside the sources:
 - **The Linux application menu and desktop.** A Linux publish ships `share/icons/hicolor/<size>/apps/emusen-mistress.png`
   (and the scalable SVG) and `bin/install-desktop-entry.sh`. Run once from the unpacked build, it copies the icons into
   `~/.local/share/icons/hicolor` and writes `~/.local/share/applications/emusen-mistress.desktop`, which points at
-  that build's own `bin/EmuSen.Mistress`; `--desktop` adds a desktop shortcut, `--remove` takes everything away. It
+  that build's own `bin/EmuSen` (`bin/EmuSen.Mistress` until 2026-10-12, §4.109) and is named "EmuSen"; `--desktop` adds a desktop shortcut, `--remove` takes everything away. It
   installs for the current user only and needs no root. `StartupWMClass=EmuSen.Mistress` is Avalonia's X11 default
   (the entry assembly's name), which LunaP does not change, so the running window groups under the entry. The entry
   records the build's path, so moving the folder means running the script again.
@@ -8460,3 +8460,36 @@ optional BIOS files and the open BIOS in their place, and `.cue`, `.bin`, `.iso`
 opened by Diamond, a `.bin` or `.iso` by its content (§4.107). The kit on the tester's discs, the cards' round trip,
 the fit audit and the cheats' decode are its tests.
 
+### 4.109 The program is published as EmuSen (2026-10-12)
+
+*Decided 2026-10-12 by the tester:* the published program carries the project's name. Until then a published tree
+held `bin/EmuSen.Mistress` and `lib/EmuSen/EmuSen.Mistress`, the process was `EmuSen.Mistress`, and a Steam shortcut
+added from that file was named after it, although every window was already titled "EmuSen". Two forms were weighed:
+renaming only what the player sees (the desktop entry's name and the shortcut's), which leaves the process and the file
+under the old name, and renaming the program itself. The second was taken.
+
+**What changes.** `DianaShPublishLayout.targets` gains `DianaShExecutableName`, defaulting to `AssemblyName`, so that a
+project which sets nothing publishes as before. It names the apphost, the `bin/` launchers (`launcher.sh` and
+`launcher.cmd` dispatch on their own file name and needed no change) and a Mac bundle's `CFBundleExecutable`.
+`EmuSen.Mistress.csproj` sets it to `EmuSen`, so a Linux publish holds `bin/EmuSen`, `bin/EmuSen.cmd` and
+`lib/EmuSen/EmuSen`, a Windows publish `lib/EmuSen/EmuSen.exe`, and the bundle `EmuSen.app/Contents/MacOS/EmuSen`. The
+process is `EmuSen`. `bin/install-desktop-entry.sh` points its entry at `bin/EmuSen` and names it "EmuSen"; the entry's
+file and icon names (`emusen-mistress`) are unchanged, so an entry written by an earlier build is replaced rather than
+duplicated.
+
+**What does not.** The assembly remains `EmuSen.Mistress.dll`, with its `deps.json` and `runtimeconfig.json`, because
+`EmuSen.dll` is already the name of the emulation library every frontend references; renaming the assembly would
+rename a dependency of every project for no difference the player can see. The rename is possible because an apphost
+locates its application by the assembly name written into it at build time, not by its own file name. The window's
+X11 class remains `EmuSen.Mistress`, which Avalonia takes from the entry assembly, so the desktop entry's
+`StartupWMClass` is unchanged.
+
+**A publish over an earlier one.** `dotnet publish -o` does not clean its folder, so a tree published under the old
+name would keep a second, stale program beside the new one. When the executable's name differs from the assembly's,
+the layout deletes `bin/<assembly>`, `bin/<assembly>.cmd` and the apphost of that name from the application folder.
+A Steam shortcut made from the old file names a path that no longer exists and must be pointed at the new one.
+
+**Tests.** `MacAppBundlePublishTests.A_named_executable_is_the_apphost_and_the_launchers_while_the_assembly_keeps_its_name`
+publishes a scratch project under its own name and then, into the same folder, under another: the launchers and the
+apphost carry the new name, the old ones are gone, the assembly keeps its name, the launcher runs the program, and the
+macOS bundle's executable and `CFBundleExecutable` follow. `Mistress_names_its_bundle` pins Mistress's setting.

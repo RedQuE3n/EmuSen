@@ -75,6 +75,11 @@
     <!-- Must match DianaShSandbox.RootMarkerFileName. -->
     <DianaShRootMarkerFileName Condition="'$(DianaShRootMarkerFileName)' == ''">.dianashroot</DianaShRootMarkerFileName>
     <_DianaShLauncherDir>$(MSBuildThisFileDirectory)</_DianaShLauncherDir>
+    <!-- The name the player sees: the apphost, the bin/ launchers and a Mac bundle's
+         CFBundleExecutable. The apphost carries its .dll's name inside it, so it
+         may be renamed while the assembly keeps AssemblyName - Mistress ships as
+         EmuSen beside the core library EmuSen.dll. See EmuSen_Settings_Reference.md §4.109. -->
+    <DianaShExecutableName Condition="'$(DianaShExecutableName)' == ''">$(AssemblyName)</DianaShExecutableName>
   </PropertyGroup>
 
   <!-- A Mac app bundle instead of the tree above, for a project that names one
@@ -117,6 +122,14 @@
   <Target Name="DianaShRelocatePublishFiles"
           AfterTargets="ComputeFilesToPublish"
           Condition="'$(DianaShPublishLayout)' == 'true'">
+    <ItemGroup Condition="'$(DianaShExecutableName)' != '$(AssemblyName)'">
+      <ResolvedFileToPublish Condition="'%(RelativePath)' == '$(AssemblyName)'">
+        <RelativePath>$(DianaShExecutableName)</RelativePath>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Condition="'%(RelativePath)' == '$(AssemblyName).exe'">
+        <RelativePath>$(DianaShExecutableName).exe</RelativePath>
+      </ResolvedFileToPublish>
+    </ItemGroup>
     <ItemGroup>
       <ResolvedFileToPublish>
         <_DianaShPath Condition="$([System.String]::Copy('%(RelativePath)').StartsWith('$(DianaShStagedRootDirName)'))">$(_DianaShStagedDest)$([System.String]::Copy('%(RelativePath)').Substring($(_DianaShStagedPrefixLength)))</_DianaShPath>
@@ -142,12 +155,15 @@
                       Lines="DianaSh sandbox root. Created at publish time - see 'man hier'."
                       Overwrite="true" WriteOnlyWhenDifferent="true" />
     <Copy SourceFiles="$(_DianaShLauncherDir)launcher.sh"
-          DestinationFiles="$(_DianaShRoot)bin/$(AssemblyName)" />
+          DestinationFiles="$(_DianaShRoot)bin/$(DianaShExecutableName)" />
     <Copy SourceFiles="$(_DianaShLauncherDir)launcher.cmd"
-          DestinationFiles="$(_DianaShRoot)bin/$(AssemblyName).cmd" />
+          DestinationFiles="$(_DianaShRoot)bin/$(DianaShExecutableName).cmd" />
     <!-- Copy does not carry the source's mode bits across. -->
-    <Exec Command="chmod +x &quot;$(_DianaShRoot)bin/$(AssemblyName)&quot;"
+    <Exec Command="chmod +x &quot;$(_DianaShRoot)bin/$(DianaShExecutableName)&quot;"
           Condition="'$(OS)' != 'Windows_NT'" />
+    <!-- A publish over an earlier one under the assembly's name leaves no second, stale program beside the renamed one. -->
+    <Delete Condition="'$(DianaShExecutableName)' != '$(AssemblyName)'"
+            Files="$(_DianaShRoot)bin/$(AssemblyName);$(_DianaShRoot)bin/$(AssemblyName).cmd;$(_DianaShRoot)$(DianaShAppDirName)/$(AssemblyName);$(_DianaShRoot)$(DianaShAppDirName)/$(AssemblyName).exe" />
   </Target>
 
   <!-- Every published build carries the GPL, the third-party notices and the licence texts at its root, or in a Mac bundle's Contents/Resources - see THIRD_PARTY_NOTICES.md. -->
@@ -180,7 +196,7 @@
       <_DianaShMacDisplayName Condition="'$(DianaShMacDisplayName)' != ''">$(DianaShMacDisplayName)</_DianaShMacDisplayName>
       <_DianaShMacInfoPlist>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)Info.plist.in'))</_DianaShMacInfoPlist>
       <_DianaShMacInfoPlist>$(_DianaShMacInfoPlist.Replace('@NAME@', '$(DianaShMacAppName)').Replace('@DISPLAYNAME@', '$(_DianaShMacDisplayName)'))</_DianaShMacInfoPlist>
-      <_DianaShMacInfoPlist>$(_DianaShMacInfoPlist.Replace('@IDENTIFIER@', '$(DianaShMacBundleIdentifier)').Replace('@EXECUTABLE@', '$(AssemblyName)'))</_DianaShMacInfoPlist>
+      <_DianaShMacInfoPlist>$(_DianaShMacInfoPlist.Replace('@IDENTIFIER@', '$(DianaShMacBundleIdentifier)').Replace('@EXECUTABLE@', '$(DianaShExecutableName)'))</_DianaShMacInfoPlist>
       <_DianaShMacInfoPlist>$(_DianaShMacInfoPlist.Replace('@ICON@', '$(_DianaShMacIconName)').Replace('@VERSION@', '$(Version)'))</_DianaShMacInfoPlist>
       <_DianaShMacInfoPlist>$(_DianaShMacInfoPlist.Replace('@MINIMUMSYSTEMVERSION@', '$(DianaShMacMinimumSystemVersion)').Replace('@CATEGORY@', '$(DianaShMacCategory)'))</_DianaShMacInfoPlist>
     </PropertyGroup>
@@ -189,7 +205,7 @@
     <WriteLinesToFile File="$(_DianaShMacBundleDir)Info.plist" Lines="$(_DianaShMacInfoPlist)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <Copy SourceFiles="$(DianaShMacAppIcon)" DestinationFiles="$(_DianaShMacBundleDir)Resources/$(_DianaShMacIconName).icns" SkipUnchangedFiles="true" />
     <!-- Copy does not carry the source's mode bits across, and a bundle zipped on Linux keeps what it has here. -->
-    <Exec Command="chmod +x &quot;$(_DianaShMacBundleDir)MacOS/$(AssemblyName)&quot;"
+    <Exec Command="chmod +x &quot;$(_DianaShMacBundleDir)MacOS/$(DianaShExecutableName)&quot;"
           Condition="'$(OS)' != 'Windows_NT'" />
   </Target>
 

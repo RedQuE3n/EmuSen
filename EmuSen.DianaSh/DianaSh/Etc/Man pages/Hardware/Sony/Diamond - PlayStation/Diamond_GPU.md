@@ -259,7 +259,9 @@ done per line when nothing changed [A].
   up to their colour levels [M].
 - **The picture** is the display area at its own size, at most 640 by 576: lines Y1 to Y2 of a field, interleaved with
   the other field's in 480-line interlace, sized when a field's first displayed line is read, so a mode set in the top
-  border counts [C]. `vram-to-vram-overlap`'s 640x480 interlaced screen reads as its VRAM [M].
+  border counts [C]. `vram-to-vram-overlap`'s 640x480 interlaced screen reads as its VRAM [M]. Between fields the
+  picture holds what VRAM no longer does, a woven one's other field above all, and so is the machine's state
+  (*2026-10-12*, `Diamond_Native.md` §23).
 - **The frame** now ends as a field's vblank begins, or at the field's end where the vertical range leaves no vblank
   (Diamond_Native.md §11.5 is superseded on this point) [C]. The picture is then complete, and a program that draws
   after vblank and waits for the next one, as most do, is caught between its frames; at a field's start it was caught
@@ -502,8 +504,10 @@ up to the colour map the most pixels agree on; the count is the pixels off it:
   GP1(09h), IRQ1's flag, the DMA direction, the latch, the display's start and blanking, the FIFO's sixteen words with
   their arrival times and meanings, the tail's parse state, the command half received, an open transfer or polyline,
   the busy time and its carried fraction, the texture cache's tags and data, the CLUT cache, and the display's scan
-  position; VRAM is the state's own block as before; the picture is not kept, and a state loaded between frames
-  re-reads it within the next frame [C]. **3,747,681 bytes**, pinned by `the_version_1_layout_is_pinned` (*version 2,
+  position; VRAM is the state's own block as before; ~~the picture is not kept, and a state loaded between frames
+  re-reads it within the next frame [C]~~ *retired 2026-10-12: the next frame reads one field, so in 480-line
+  interlace the other field's lines were the loading machine's own, and four of the tester's games failed the kit's C7
+  and C8 by them; the picture is the state's own block since version 10 (`Diamond_Native.md` §23)*. **3,747,681 bytes**, pinned by `the_version_1_layout_is_pinned` (*version 2,
   3,747,689 bytes, since stage 5: `Diamond_Native.md` §13.6*; *version 5, 3,747,806 bytes, since the cache step: the
   word GPUREAD repeats, a transfer's first word and the texture cache's page, pinned by
   `the_version_5_layout_is_pinned`*).

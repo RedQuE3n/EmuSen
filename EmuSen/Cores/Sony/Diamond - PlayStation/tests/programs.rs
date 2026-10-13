@@ -1376,13 +1376,12 @@ fn every_table_armed_gives_the_plain_runs_digests_on_ps1_tests() {
     }
 }
 
-/// One of the tester's discs, copied to the cache and named by `EMUSEN_DIAMOND_DISC`, on the open kernel with no
-/// firmware: what the open kernel does with it at this stage, observed.
-#[test]
-fn every_table_armed_gives_the_plain_runs_digests_on_a_disc() {
+/// The disc `EMUSEN_DIAMOND_DISC` names, one of the tester's copied to the cache: its file's name, and a maker of
+/// machines on the open kernel with it in the drive and no firmware. None, and a line saying so, where it names none.
+fn named_disc() -> Option<(String, impl Fn() -> Machine)> {
     let Some(path) = std::env::var_os("EMUSEN_DIAMOND_DISC") else {
         eprintln!("skipped: EMUSEN_DIAMOND_DISC names no disc");
-        return;
+        return None;
     };
     let path = std::path::PathBuf::from(path);
     let image = std::fs::read(&path).expect("the disc");
@@ -1392,13 +1391,21 @@ fn every_table_armed_gives_the_plain_runs_digests_on_a_disc() {
             files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
         }
     }
-    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
-    every_table_gives_the_plain_run(&path.file_name().unwrap().to_string_lossy(), 120, || {
-        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), refs.iter().map(|r| emusen_native::core::Kept::from(r.to_vec())).collect()) else { panic!("the disc opens") };
+    let make = move || {
+        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), files.iter().map(|f| emusen_native::core::Kept::from(f.clone())).collect()) else { panic!("the disc opens") };
         let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
         m.insert_disc(*disc);
         m
-    });
+    };
+    Some((path.file_name().unwrap().to_string_lossy().into_owned(), make))
+}
+
+/// One of the tester's discs, copied to the cache and named by `EMUSEN_DIAMOND_DISC`, on the open kernel with no
+/// firmware: what the open kernel does with it at this stage, observed.
+#[test]
+fn every_table_armed_gives_the_plain_runs_digests_on_a_disc() {
+    let Some((name, make)) = named_disc() else { return };
+    every_table_gives_the_plain_run(&name, 120, make);
 }
 
 /// D-42: GP1(01h) written while a fill draws leaves the whole fill, after no delay and after 100 to 1,600 loop turns,
@@ -1565,25 +1572,8 @@ fn the_levers_leave_ps1_tests_as_the_interpreter_does() {
 /// without.
 #[test]
 fn the_levers_leave_a_disc_as_the_interpreter_does() {
-    let Some(path) = std::env::var_os("EMUSEN_DIAMOND_DISC") else {
-        eprintln!("skipped: EMUSEN_DIAMOND_DISC names no disc");
-        return;
-    };
-    let path = std::path::PathBuf::from(path);
-    let image = std::fs::read(&path).expect("the disc");
-    let mut files = Vec::new();
-    if diamond::medium::is_sheet(&image) {
-        for name in emusen_disc::set::companions(&String::from_utf8_lossy(&image)).expect("a sheet") {
-            files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
-        }
-    }
-    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
-    levers_give_the_interpreters_digests(&path.file_name().unwrap().to_string_lossy(), 600, 1, || {
-        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), refs.iter().map(|r| emusen_native::core::Kept::from(r.to_vec())).collect()) else { panic!("the disc opens") };
-        let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
-        m.insert_disc(*disc);
-        m
-    });
+    let Some((name, make)) = named_disc() else { return };
+    levers_give_the_interpreters_digests(&name, 600, 1, make);
 }
 
 // --- D-46: a triangle's drawing time by its rows (Diamond_Disputes.md D-46) ---
@@ -1680,25 +1670,46 @@ fn runs_leave_ps1_tests_as_their_steps_do() {
 /// a time.
 #[test]
 fn runs_leave_a_disc_as_its_steps_do() {
-    let Some(path) = std::env::var_os("EMUSEN_DIAMOND_DISC") else {
-        eprintln!("skipped: EMUSEN_DIAMOND_DISC names no disc");
-        return;
+    let Some((name, make)) = named_disc() else { return };
+    runs_give_the_steps_digests(&name, 600, 61, make);
+}
+
+/// One of the tester's discs on the open kernel, named by `EMUSEN_DIAMOND_DISC`: at every 50th of its first 1,500
+/// frames a machine just made loads the state saved there, shows the picture saved, and continues as the first for
+/// three frames, to the state (Diamond_Native.md §23). A single save point can fall where nothing is lost: the kit's,
+/// at frame 300 of 600, met no woven picture on any of the discs.
+#[test]
+fn a_state_loads_as_it_was_saved_all_along_a_disc() {
+    use emusen_native::ffi::StateMachine;
+    let Some((name, make)) = named_disc() else { return };
+    let whole = |m: &Machine| {
+        let mut state = vec![0; m.state_size()];
+        let n = m.save_state(&mut state).unwrap();
+        state.truncate(n);
+        state
     };
-    let path = std::path::PathBuf::from(path);
-    let image = std::fs::read(&path).expect("the disc");
-    let mut files = Vec::new();
-    if diamond::medium::is_sheet(&image) {
-        for name in emusen_disc::set::companions(&String::from_utf8_lossy(&image)).expect("a sheet") {
-            files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
+    let picture = |m: &Machine| m.board.gpu.display.frame().to_vec();
+    let mut a = make();
+    let (mut points, mut woven) = (0, 0);
+    while a.frames < 1500 {
+        a.advance();
+        if a.frames % 50 != 0 {
+            continue;
         }
+        let at = a.frames;
+        points += 1;
+        woven += (a.board.gpu.display.height > 300) as u32;
+        let mut b = make();
+        b.load_state(&whole(&a)).unwrap();
+        assert!(picture(&b) == picture(&a), "{name}: the picture a load shows at frame {at} is not the one saved");
+        for _ in 0..3 {
+            a.advance();
+            b.advance();
+            assert!(picture(&b) == picture(&a), "{name}: loaded at frame {at}, frame {}'s picture is not the first machine's", a.frames);
+        }
+        assert!(whole(&b) == whole(&a), "{name}: loaded at frame {at}, the state three frames on is not the first machine's");
     }
-    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
-    runs_give_the_steps_digests(&path.file_name().unwrap().to_string_lossy(), 600, 61, || {
-        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), refs.iter().map(|r| emusen_native::core::Kept::from(r.to_vec())).collect()) else { panic!("the disc opens") };
-        let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
-        m.insert_disc(*disc);
-        m
-    });
+    eprintln!("{name}: {points} save points, {woven} of them in a woven picture");
 }
 
 // ---- The tester's games in play, the second step (Diamond_Players.md §14) ----------------------------------------

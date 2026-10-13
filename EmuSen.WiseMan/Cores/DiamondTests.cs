@@ -158,13 +158,18 @@ namespace EmuSen.WiseMan.Cores
             Assert.All(bios, f => Assert.Equal(("accuracy", false), (f.Replacement?.Effect, f.Required)));
         }
 
-        // The gate of Diamond_Plan.md §7's stage 1: the kit's cases on a synthetic program and a synthetic disc, single-image form, MEDIA's C16 among them since stage 11.
+        // 640 by 480 interlaced, the whole of it filled in a colour that changes about every field, so a state is saved with one field's lines no longer in VRAM - see Diamond_Native.md §23.
+        private static byte[] Woven() => SyntheticPsExe.Build(SyntheticPsExe.Words(
+            0x3C04_1F80, 0x3C08_0300, 0xAC88_1814, 0x3C08_0800, 0x3508_0027, 0xAC88_1814, 0x3C09_0200, 0x3C0A_01E0, 0x354A_0280,
+            0x2529_0808, 0xAC89_1810, 0xAC80_1810, 0xAC8A_1810, 0x3C0B_0002, 0x256B_FFFF, 0x1560_FFFE, 0, 0x0800_4009, 0));
+
+        // The gate of Diamond_Plan.md §7's stage 1: the kit's cases on a synthetic program, a synthetic disc and a woven picture (§23), single-image form, MEDIA's C16 among them since stage 11.
         [Fact]
         public void The_kit_passes_on_a_synthetic_program_and_a_synthetic_disc()
         {
             string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
             Assert.True(File.Exists(runner), $"no kit runner at {runner}");
-            foreach (var (name, image) in new[] { ("program.psexe", SyntheticPsExe.Build()), ("disc (Track 1).bin", SyntheticPsxDisc.Build().DataTrack) })
+            foreach (var (name, image) in new[] { ("program.psexe", SyntheticPsExe.Build()), ("disc (Track 1).bin", SyntheticPsxDisc.Build().DataTrack), ("woven.psexe", Woven()) })
             {
                 var start = new ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };
                 foreach (string a in new[] { "--core", LibraryPath, "--image", Write(name, image), "--frames", "120" }) start.ArgumentList.Add(a);

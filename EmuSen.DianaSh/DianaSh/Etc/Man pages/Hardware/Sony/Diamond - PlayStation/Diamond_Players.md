@@ -160,6 +160,10 @@ The core's cases (C1–C5, C9–C13, C15) pass on Ape Escape. 42.8 s, nine discs
 10 GiB limit. The first run failed C4 on every sheet: the kit's firmware rule created with no files, the companions
 among them; it now keeps them (§28.7 there).
 
+*2026-10-12*: the passes of C7 and C8 above were those of a save at frame 300, which no disc of the sample reaches in a
+480-line picture. At 1,800 frames, the save at 900, four of them failed, by a defect present on the day of this run;
+it is fixed, and the sample's command is now 1,800 frames (`Diamond_Native.md` §23).
+
 ## 7. The gate, item by item
 
 | Item | Result |

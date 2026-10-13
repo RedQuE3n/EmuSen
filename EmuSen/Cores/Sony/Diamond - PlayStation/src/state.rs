@@ -1,6 +1,6 @@
 //! Diamond's own state format, "DMND" (Diamond_Plan.md §4.7, §5.10): the magic, the version, the frame count, the
-//! R3000A's and the GTE's blocks, the bus with its clock and every device's registers, then every writable memory and
-//! the TTY. The layout listing is pinned by a test.
+//! R3000A's and the GTE's blocks, the bus with its clock and every device's registers, then every writable memory,
+//! the TTY, the disc's fingerprint and the picture. The layout listing is pinned by a test.
 
 use emusen_native::ffi::{StateMachine, Status, status};
 use emusen_native::{State, StateReader, StateWriter, Truncated};
@@ -16,10 +16,11 @@ use crate::pad::Controller;
 use crate::sio0::{Phase, Sio0, Target};
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"DMND");
-pub const STATE_VERSION: i32 = 9;
+pub const STATE_VERSION: i32 = 10;
 
-/// The versions a load reads: 9 adds the disc's fingerprint at the end, which an 8 lacks and is not held to.
-pub const LOADS_FROM: [i32; 2] = [8, 9];
+/// The versions a load reads: 9 adds the disc's fingerprint at the end, which an 8 lacks and is not held to; 10 adds
+/// the picture after it, which an earlier one lacks and has read from VRAM (Diamond_Native.md §23).
+pub const LOADS_FROM: [i32; 3] = [8, 9, 10];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -384,7 +385,7 @@ fn rect_of(v: &[u32]) -> Rect {
 }
 
 impl Gpu {
-    /// The GPU's registers, FIFO, command processor and caches; VRAM is the state's own block, the picture not kept.
+    /// The GPU's registers, FIFO, command processor and caches; VRAM and the picture are the state's own blocks.
     fn write_state(&self, w: &mut StateWriter) {
         w.u32s("Env", &self.env);
         let t = &self.tail;
@@ -481,6 +482,7 @@ impl Machine {
         w.bytes("SPURAM", &b.spu.ram);
         w.bytes("TTY", &b.tty.text);
         w.u64("Disc", self.disc_print);
+        w.bytes("Picture", &b.gpu.display.picture);
     }
 }
 
@@ -514,6 +516,11 @@ impl StateMachine for Machine {
             if print != self.disc_print {
                 return Err(StateError::WrongMedia { state: print, drive: self.disc_print });
             }
+        }
+        if version >= 10 {
+            r.bytes(&mut board.gpu.display.picture)?;
+        } else {
+            board.gpu.display.reread(&board.gpu.vram, &board.video);
         }
         board.schedule();
         self.frames = frames;
@@ -559,19 +566,22 @@ mod tests {
     use crate::machine::tests::{machine_for, program};
     use crate::media::Market;
 
+    const PICTURE: usize = (crate::gpu::display::MAX_WIDTH * crate::gpu::display::MAX_HEIGHT * 4) as usize;
+
     fn machine() -> Machine {
         machine_for(&program("loop: j loop\nnop"), Market::Americas)
     }
 
     #[test]
-    fn the_version_9_layout_is_pinned() {
+    fn the_version_10_layout_is_pinned() {
         let layout = machine().layout();
         let head: Vec<&str> = layout.lines().take(5).collect();
         assert_eq!(head, ["0 4 u32 Magic", "4 4 i32 Version", "8 8 i64 Frames", "16 128 u32[32] Cpu.R", "144 4 u32 Cpu.Hi"]);
-        let tail: Vec<&str> = layout.lines().rev().take(7).collect();
+        let tail: Vec<&str> = layout.lines().rev().take(8).collect();
         assert_eq!(
             tail,
             [
+                "3792972 1474560 u8[1474560] Picture",
                 "3792964 8 u64 Disc",
                 "3727428 65536 u8[65536] TTY",
                 "3203140 524288 u8[524288] SPURAM",
@@ -582,7 +592,7 @@ mod tests {
             ]
         );
         assert!(layout.contains("Bus.Timer2.Flags") && layout.contains("u32[16] Bus.Gpu.FifoWords") && layout.contains("u16[1024] Bus.Gpu.CacheData") && layout.contains("u64[6] Bus.Sio0.Times") && layout.contains("Bus.Sio0.Port1.Controller.Modes") && layout.contains("Cpu.InterruptView.Held") && layout.contains("u16[8192] Bus.Cdrom.OutLeft") && layout.contains("u8[2352] Bus.Cdrom.Waiting") && layout.contains("u32[32] Bus.Mdec.Fifo") && layout.contains("u32[17] Bus.Mdec.Queue") && layout.contains("u32[2] Bus.MdecLeft") && layout.contains("u16[744] Bus.Spu.VoiceSamples") && layout.contains("u16[32] Bus.Spu.Fifo"), "{layout}");
-        assert_eq!(machine().state_size(), 3_792_972);
+        assert_eq!(machine().state_size(), 5_267_532);
     }
 
     #[test]
@@ -610,12 +620,55 @@ mod tests {
         assert_eq!(b.load_state(&v1).unwrap_err().status(), status::VERSION, "a version 1 state, from before the GTE's interlock");
         assert_eq!((b.frames, b.space(RAM_ID).unwrap()), (2, &before[..]));
 
-        let mut v8 = s[..s.len() - 8].to_vec();
+        let mut v9 = s[..s.len() - PICTURE].to_vec();
+        v9[4] = 9;
+        b.load_state(&v9).unwrap();
+        assert_eq!(b.frames, 1, "a version 9 state, from before the picture, loads");
+        let mut v8 = v9[..v9.len() - 8].to_vec();
         v8[4] = 8;
+        b.advance();
         b.load_state(&v8).unwrap();
         assert_eq!(b.frames, 1, "a version 8 state, from before the disc's fingerprint, loads unheld");
         b.disc_print = 7;
         assert_eq!(b.load_state(&s).unwrap_err().status(), emusen_native::core::status::WRONG_MEDIA, "a state over another disc than the drive's");
         assert_eq!(b.frames, 1, "and changes nothing");
+    }
+
+    /// 640 by 480 interlaced with the display on, the whole of it filled in a colour that changes about every field.
+    const WEAVE: &str = "lui a0, 0x1F80\nlui t0, 0x0300\nsw t0, 0x1814(a0)\nlui t0, 0x0800\nori t0, t0, 0x27\nsw t0, 0x1814(a0)\nlui t1, 0x0200\nlui t2, 0x01E0\nori t2, t2, 0x0280\n\
+        loop: addiu t1, t1, 0x0808\nsw t1, 0x1810(a0)\nsw zero, 0x1810(a0)\nsw t2, 0x1810(a0)\nlui t3, 2\nwait: addiu t3, t3, -1\nbne t3, zero, wait\nnop\nj loop\nnop";
+
+    /// The lines of the field not being read are the picture's alone, VRAM having been drawn over since they were
+    /// read: a machine that loads a state shows the picture it was saved with and continues it (Diamond_Native.md §23).
+    #[test]
+    fn a_state_holds_the_picture_whose_other_field_vram_no_longer_has() {
+        let weave = || machine_for(&program(WEAVE), Market::Americas);
+        let mut a = weave();
+        for _ in 0..5 {
+            a.advance();
+        }
+        let d = &a.board.gpu.display;
+        assert_eq!((d.width, d.height), (640, 480));
+        let saved = d.frame().to_vec();
+        let lines: Vec<&[u8]> = saved.chunks(640 * 4).collect();
+        assert!(lines[100] != lines[101] && lines[100].iter().any(|&c| c != 0 && c != 255), "the two fields were read in two colours");
+        let mut s = vec![0; a.state_size()];
+        a.save_state(&mut s).unwrap();
+        a.advance();
+
+        let mut b = weave();
+        b.load_state(&s).unwrap();
+        assert!(b.board.gpu.display.frame() == saved, "the picture a load shows is the one saved");
+        b.advance();
+        assert!(b.board.gpu.display.frame() == a.board.gpu.display.frame(), "and the next field is woven into it");
+
+        let mut v9 = s[..s.len() - PICTURE].to_vec();
+        v9[4] = 9;
+        b.load_state(&v9).unwrap();
+        let read = b.board.gpu.display.frame().to_vec();
+        assert!(read != saved && read.chunks(640 * 4).all(|l| l.iter().any(|&c| c != 0 && c != 255)), "a version 9 state has no picture: VRAM as it is, read whole, is not it");
+        let mut c = machine();
+        c.load_state(&v9).unwrap();
+        assert!(c.board.gpu.display.frame() == read, "whatever the machine loading it showed");
     }
 }

@@ -972,6 +972,16 @@ running game cannot be moved or deleted until it is closed or its disc changed. 
 **Exactness.** `EmuSen_CoreAPI_Extensions.md` §10.2.5: the kit's C17 on the seven discs at 1,800 frames, every frame,
 sample and state of a lent run the copied run's; and WiseMan's `DiscStreamingTests` through the C# host.
 
+**Tests run** (2026-10-12, after `git merge WiseMan`, which brought nothing new). `cargo test --release`: emusen-disc
+12 and 11 (19 before), emusen-native 69 (63), emusen-core-abi-check 6 (5) with `--check --against` the base branch's
+baseline, emusen-core-conform 7 and 16, the kit's tests three parallel runs of three; the platform workspace 25, 85,
+25 and 30; Diamond 157 and 76, with ps1-tests and without; VenusRT 143, Nephrite 140, MoonRT 6, MercuryRT 8, 16 and 4,
+over the new kit. WiseMan by area, `CoreAbi`, `CoreAdapter`, `CoreDiscovery`, `CoreEngine`, `CoreRegistration`,
+`CoreFactory`, `Diamond` (with `DiamondPlayers`), `DiscStreaming`, `PlayStationLibrary`, the whole `Galaxia` folder
+with the parity tests, `RomLibrary`, `SystemPack`, `Firmware`, `EmulatorSession`, `LaunchScreen`, `LeafAssembly`,
+`VenusRt`, `Nephrite`, `MoonRt` and `MercuryRt`: 981 cases, 972 passed and 9 skipped (the opt-in probes without their
+folders) [M]. The registration-equivalence golden is unchanged, so P1 holds for 1.3 too.
+
 ## 13. Gameplay: the seven games driven into play (2026-10-12)
 
 *Written 2026-10-12, on WiseMan `66bb54b5` and the merges after it (`c27bbfbf`, D-41; `60dce4e5`, stage 13 and the

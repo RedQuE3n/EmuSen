@@ -1365,7 +1365,7 @@ lies between: its scenes in play are wholly precise, its long opening and its fo
   eight discs at 1,800 frames, four at a time: **off**, every case passes on every disc (194 s); **on**
   (`--settings precision=true`), every case passes on every disc after §26.2's fix (318 s), C3's nine settings among
   them, C7's state of 10,545,574 bytes loading and continuing, C8 across a save and load, C10's two machines on two
-  threads, each with its own renderer, C17 and C18 [M].
+  threads, each with its own renderer, C17 and C18 [M]; both again on the final library, 192 s and 315 s.
 - **WiseMan**, under the test lock with the corpus, filtered by `Diamond`, `PlayStation`, `GraphicsSettings`,
   `GenesisSettings`, `WindowFitAudit`, `CoreRegistrationEquivalence` and `CoreAdapter`: 219 of 221 at first, the two
   failures `DiamondTests`' lists of the library's settings and capabilities, which named neither the new key nor
@@ -1532,11 +1532,35 @@ frame that is itself half again the opening's there (3.7 ms against 2.4 on the d
 
 ### 28.1 The publish
 
-PUBLISH
+`dotnet publish EmuSen.Mistress -c Release -r linux-x64` into a scratch folder [M]: the build runs cargo in `v1/` with
+the `dist` profile, as `RustCores.props`' row now names it, and the tree carries `lib/EmuSen/libdiamond.so` (2,130,448
+bytes) with `libdiamond.so.core.json` beside it, written by the kit's runner from the library itself: 51
+`emusen_core_` exports, `set_settings` and `setting_notes` among them, and the sidecar's ninth setting `precision`,
+"Precise geometry", with its help and cost. The name, the core's id, the system pack and what Mistress reads are as
+they were; nothing but the row's `Dir` changed in the build, and CI's matrix entry for the crate (§24.1).
+
+Turning the setting on takes 31 to 69 ms on the desktop (the device, its four programs and its buffers made, the pair
+attached and its first picture read; three trials), once, between two frames; turning it off 2 ms [M, a scratch timing
+in `diamond-v1`'s tests].
 
 ### 28.2 Tests [M, 2026-10-13]
 
-TESTS
+All on the final head, after `git merge WiseMan` (WiseMan had not moved from 266a6650).
+
+- **`blackmoon-r3000`** and **`blackmoon-gte`**, `cargo test --release` with `EMUSEN_BLACKMOON_CORPUS`: 38 and 10, the
+  r3000 suite's cases among the first, `an_observer_sees_each_projection_and_changes_nothing` holding H and the offset.
+- **`diamond`**, `cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS`, `EMUSEN_DIAMOND_DISCS` and
+  `EMUSEN_GPU_DEVICE=6800`: 167 unit tests, 81 program tests (E1's three goldens plain and with the test observer, the
+  discs' among them), E3's 3 renderer gates and **E4's 8** (`tests/precise.rs`), all passing; and without the two
+  corpora, the same counts, the corpus tests standing down.
+- **`precision`**: 6. **`diamond-renderer`**: 1. **`diamond-v1`**: 4, and 4 with `EMUSEN_GPU_DEVICE` naming no device,
+  the two that need one standing down with the note printed.
+- **The kit**, the corpus form on the eight discs at 1,800 frames on the `dist` library, off and on: every case on
+  every disc, 192 s and 315 s (§25.6).
+- **WiseMan**, under the test lock with the corpus, the filter of §25.6: 221 of 221.
+- **Not run**: `emusen-gpu`'s and MarsRT's suites, `emusen-gpu` and `emusen-native` being unchanged; the validation
+  layer over the precise record, which E3 ran over the walk it extends (§19.1); the full WiseMan suite; llvmpipe and the
+  integrated card.
 
 ## 29. Predictions
 

@@ -43,7 +43,9 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   Galaxia's `Unpacked` folder, the disc change (`MEDIA`, minor 1.1) with the state's fingerprint (version 9), the
   cheats, settings and cards, the pads drawn, the shelf and the CRT row, the kit on nine of the tester's discs, the gate
   item by item, the PlayStation offered to players, and what waits; and §12.8 (2026-10-12), launch time, the disc read
-  in place (minor 1.3) and the drive's place named ahead (minor 1.4, §12.8.10), every run under the 90 MiB/s cap.
+  in place (minor 1.3) and the drive's place named ahead (minor 1.4, §12.8.10), every run under the 90 MiB/s cap; and
+  §15 (2026-10-13), "Precise geometry" as players meet it: where the switch is, its cost, without a graphics card,
+  states, and what to expect by game.
 - [`Diamond_Speed.md`](Diamond_Speed.md) — the exact levers, written 2026-10-12 at stage 13: the bench of the seven copied
   discs on the open kernel and the link's placement as a source of error, the profile that put idle skipping before the
   plan's other levers, the skipper's proof, window, skip and verifier with the loop forms of `programs/idle.s`, the
@@ -65,7 +67,13 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   seam, the renderer's design (records, tiles, stretches ordered by what they read and write, the CLUT cache
   reproduced and the texture cache not), its gate (every picture equal on the programs, ps1-tests and the eight discs,
   the two VRAM differences proven the texture cache's), its cost unattached and attached with the handheld estimated,
-  and what E4 needs next.
+  and what E4 needs next. Stage E4, the same day (§21 to §31): precise geometry, its design committed before its code
+  (the projection without its truncations, the shadow of serials, the store told before it writes, whole polygons,
+  the precise record exact at zero fraction with a division a pixel for perspective, the crates `precision` and
+  `diamond-v1` with the library still `libdiamond.so`, the setting noted where no Vulkan device is usable, the blocks
+  `PREC` and `RNDR`), its gate (every golden off and on, E3's equality at zero fraction on the discs, the grid's jitter
+  and warp, the 2D program, the state both ways, the precise share by game), the two defects the discs and the kit found
+  and fixed, the seams recorded, the cost off and on with the handheld estimated, and what E5 needs.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

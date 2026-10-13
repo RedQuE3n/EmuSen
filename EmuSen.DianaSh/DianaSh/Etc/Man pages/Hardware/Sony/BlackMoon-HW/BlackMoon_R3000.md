@@ -734,7 +734,8 @@ register. So the processor reports, and its console interprets.
 with an empty body: additions with defaults as `bus_error`, `fetch_decoded` and `running` were (§2), so a bus that does
 not give them is unchanged. Every report is made under `if B::MOVES`, so the step compiled for a bus that leaves the
 constant false holds no trace of the reports, their arguments included; a bus that sets it true is told. `Move` names
-seven moves, each told once its instruction has made it, `at` the instruction's address:
+seven moves, `at` the instruction's address, each a load once it has read and a store before it writes (*since stage
+E4*, below):
 
 | Move | Instructions | Fields |
 |---|---|---|
@@ -746,12 +747,21 @@ seven moves, each told once its instruction has made it, `at` the instruction's 
 | `StoreCop2` | SWC2 | coprocessor 2's data register, the address, the value |
 | `Copy` | ADDU, ADD, SUBU, SUB, OR, XOR with R0 as the second operand; ADDU, ADD, OR, XOR with R0 as the first; ADDIU, ADDI, ORI, XORI of 0; SLL, SRL, SRA by 0 | the register given the value, the register it came from, the value |
 
-Not told: a load or store that met no device (it ends in DBE), one the isolated cache took (it reached no memory), any
+Not told: a load that met no device (it ends in DBE; a store is told before it can know, below), one the isolated cache took (it reached no memory), any
 move whose register is R0 (it holds nothing, so a NOP, `SLL R0, R0, 0`, is not a copy), CFC2 and CTC2 (the control
 registers hold matrices, vectors and offsets, never a projected vertex), and an instruction that computes anything
 else. A load is told when it is made, though its register is written one instruction later; a console that checks
 the value it tracks against the value it later meets is not misled by the delay slot's use of the old value
 (`Diamond_Enhancements.md` §3.2).
+
+**A store is told before it writes** (*since Diamond's stage E4, 2026-10-13*, `Diamond_Enhancements.md` §21.4). A
+device the store reaches may act on the value inside the write: Diamond's GPU starts a command the moment its last word
+arrives with the FIFO empty, and its layer must know which register that word came from before the command draws.
+Told after the write, as at E1, a triangle sent to GP0 by the processor's stores was shown to reach the layer with no
+register known (`precision`'s `a_projected_triangle_is_precise_by_the_processor_and_by_dma` fails on the old order).
+The value is known before the write; whether the write meets a bus error is not, so a store that faults is told too,
+which a console that checks the value it tracks at the use cannot be misled by. Loads stay told after the read, their
+value being the read's.
 
 **Why the bus, and not a second observer.** `README.md` beside this page had said the layer's half would be "a second
 generic parameter". The layer must see the processor's moves, the GTE's projections and the GPU's receipts in one

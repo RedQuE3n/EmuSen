@@ -8493,3 +8493,24 @@ A Steam shortcut made from the old file names a path that no longer exists and m
 publishes a scratch project under its own name and then, into the same folder, under another: the launchers and the
 apphost carry the new name, the old ones are gone, the assembly keeps its name, the launcher runs the program, and the
 macOS bundle's executable and `CFBundleExecutable` follow. `Mistress_names_its_bundle` pins Mistress's setting.
+
+### 4.110 A core's enhancements under their own heading; the PlayStation's Precise geometry (2026-10-13)
+
+The schema's text asks that a frontend show a core's settings of `effect: enhancement` in a group of their own
+(`EmuSen_CoreAPI.md` §6.13); `Diamond_Enhancements.md` §5 left it for the first enhancement offered. Diamond's
+"Precise geometry" is that first one (`Diamond_Enhancements.md` §24.2), so the console tab of Graphics Settings now
+groups them: a core setting read from a sidecar carries its group, `Enhancements` for an enhancement and none
+otherwise (`CoreSettingDescriptor.AsCoreSetting`, `CoreSetting.Group`), and the tab puts a heading before the first row
+of each group, after the core's plain settings in their schema's order. A core with no enhancement looks as before.
+
+**The PlayStation's row.** Under **Enhancements**, *Precise geometry*, a switch, off by default (the console's picture),
+its hint the setting's help and its cost (a Vulkan graphics card and some of its time, about half a millisecond of the
+processor's a frame, save states about twice the size, corners a game moves itself left on whole pixels with a
+hairline seam where they meet a precise one). It applies between frames while a game runs, through `set_settings`,
+and is stored per console as every core setting is. Where no usable Vulkan device exists the row is still turned on and
+the core's note shows under it, "No usable Vulkan graphics card was found (…), so the console's own picture is shown."
+What it does and what players meet: `Diamond_Players.md` §15.
+
+**Tests.** `DiamondPreciseGeometryTests`: the schema's entry with its group and cost, the heading and its row in the
+PlayStation's tab, and the setting turned on and off between frames through the host changing the picture alone. The
+fit audit's PlayStation tab, with the heading, fits at both sizes.

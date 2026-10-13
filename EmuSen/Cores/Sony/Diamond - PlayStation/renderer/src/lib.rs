@@ -1,7 +1,8 @@
 //! Diamond's renderer (stage E3): the PlayStation's picture drawn on a Vulkan compute device from the GPU's command
 //! stream, beside the software rasteriser, which keeps VRAM. A `Layer`: told each command, each word that continues
 //! one and each display line, it keeps its own copy of VRAM in step and reads its own picture from it. Nothing it makes
-//! reaches the machine (Diamond_Enhancements.md §14 on).
+//! reaches the machine (Diamond_Enhancements.md §14 on). Paired with the precision layer it draws a polygon whose
+//! vertices are precise between the pixels, its texture in perspective, and keeps a block in the state (§22).
 
 pub mod blocks;
 pub mod device;
@@ -15,10 +16,15 @@ use diamond::gpu::texture::Texture;
 use diamond::gpu::vram::{Mask, Rect};
 use diamond::layer::{Command, Layer, Part, Shown};
 use emusen_gpu::GpuDevice;
+use emusen_native::{StateReader, StateWriter};
+use precision::{Draw, Fraction};
 
 use blocks::{Blocks, TILES};
-use device::{Back, CopyStep, Device, ENTRIES, LINES, LOADS, PIXELS, RECORDS, SLOTS, Step, TILE_RECORDS, Used};
-use record::{Record, Span, WORDS};
+use device::{Back, CopyStep, Device, ENTRIES, LINES, LOADS, PICTURE_WORDS, PIXELS, RECORDS, SLOTS, Step, TILE_RECORDS, Used, VRAM_WORDS};
+use record::{Made, Record, Span, WORDS};
+
+/// The tag of the renderer's block, written when it draws precisely (Diamond_Enhancements.md §24.4).
+pub const TAG: [u8; 4] = *b"RNDR";
 
 /// What the renderer did, for its tools and its record.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -31,6 +37,21 @@ pub struct Counts {
     pub lines: u64,
     /// Records whose texels lie in VRAM they draw themselves, whose order across pixels the walk does not keep.
     pub feedback: u64,
+    /// Precise triangles drawn, those of them in perspective, and polygons given precise vertices but drawn on the
+    /// integer path because a gradient did not fit 32 bits.
+    pub precise: u64,
+    pub perspective: u64,
+    pub integer: u64,
+}
+
+/// What the renderer keeps across a state when it draws precisely: its mirror a halfword a pixel, its picture at the
+/// largest size with its own, and the palette its CLUT slot holds; and whether a state's block is to seed it.
+struct Kept {
+    mirror: Vec<u16>,
+    picture: Vec<u8>,
+    palette: Vec<u16>,
+    size: [u32; 2],
+    restored: bool,
 }
 
 /// A CPU-to-VRAM transfer the GPU is taking: its rectangle and mask, the pixels in, the open record in this stretch
@@ -68,10 +89,13 @@ pub struct Renderer {
     polyline: Option<(u32, Vertex)>,
     transfer: Option<Transfer>,
     slot: u32,
+    /// How many of the slot's entries its load wrote: the others hold whatever the slot held before, and are never read.
+    slot_entries: u32,
     next_slot: u32,
     width: u32,
     height: u32,
     counts: Counts,
+    kept: Option<Kept>,
 }
 
 impl Observer for Renderer {}
@@ -90,16 +114,30 @@ impl Renderer {
             polyline: None,
             transfer: None,
             slot: 0,
+            slot_entries: 256,
             next_slot: 1,
             width: 256,
             height: 240,
             counts: Counts::default(),
+            kept: None,
         })
+    }
+
+    /// The renderer as precise geometry attaches it: keeping a block in the state, since what it draws is no longer what
+    /// the machine's VRAM gives (§22.5).
+    pub fn keeping(mut self) -> Renderer {
+        self.kept = Some(Kept { mirror: vec![0; VRAM_WORDS], picture: vec![0; PICTURE_WORDS * 4], palette: vec![0; 256], size: [256, 240], restored: false });
+        self
     }
 
     /// The device's report, `"{name}, Vulkan {major}.{minor}"`.
     pub fn report(&self) -> String {
         self.device.gpu.report()
+    }
+
+    /// Whether the device is one the processor implements (llvmpipe), which draws the same picture slowly.
+    pub fn software(&self) -> bool {
+        self.device.gpu.software()
     }
 
     pub fn counts(&self) -> Counts {
@@ -113,6 +151,11 @@ impl Renderer {
         (&self.device.held().back.slice::<u8>()[..words * 4], self.width, self.height)
     }
 
+    /// The picture `picture` last read back, until the next readback.
+    pub fn last_picture(&self) -> (&[u8], u32, u32) {
+        (&self.device.held().back.slice::<u8>()[..(self.width * self.height * 4) as usize], self.width, self.height)
+    }
+
     /// The renderer's VRAM, a halfword a pixel as the GPU's `Vram` holds them, once everything told is drawn.
     pub fn vram(&mut self, out: &mut [u16]) {
         self.submit(Back::Vram);
@@ -123,13 +166,13 @@ impl Renderer {
 
     // --- The stream ---
 
-    fn command(&mut self, w: &[u32], d: &Drawing) {
+    fn command(&mut self, w: &[u32], d: &Drawing, precise: Option<&[Fraction; 4]>) {
         self.end_transfer_record();
         self.polyline = None;
         self.transfer = None;
         let op = w[0] >> 24;
         match op >> 5 {
-            1 => self.polygon(w, d),
+            1 => self.polygon(w, d, precise),
             2 => {
                 let (a, b, shaded) = decode::line(w, d.env[4]);
                 if op & 8 != 0 {
@@ -151,7 +194,7 @@ impl Renderer {
         }
     }
 
-    fn polygon(&mut self, w: &[u32], d: &Drawing) {
+    fn polygon(&mut self, w: &[u32], d: &Drawing, precise: Option<&[Fraction; 4]>) {
         let p = decode::polygon(w, d.env[4]);
         let d = if p.textured { d.with_page(p.page) } else { *d };
         let texture = p.textured.then(|| d.texture(p.clut));
@@ -159,6 +202,21 @@ impl Renderer {
         let modulated = texture.is_some() && !p.raw;
         let paint = d.paint(p.blended, texture, p.raw && texture.is_some(), modulated || (p.shaded && texture.is_none()));
         let tex = texture.is_some();
+        if let Some(f) = precise {
+            let made = |i: [usize; 3]| record::precise_triangle(raster::fold(i.map(|k| p.v[k])), i.map(|k| f[k]), p.shaded, tex, &paint, slot);
+            let made = [made([0, 1, 2]), if p.quad { made([1, 2, 3]) } else { Made::Nothing }];
+            if made.iter().all(|m| !matches!(m, Made::Integer)) {
+                for m in made {
+                    if let Made::Drawn(r) = m {
+                        self.counts.precise += 1;
+                        self.counts.perspective += (r.words[0] as u32 & record::PERSPECTIVE != 0) as u64;
+                        self.add(Some(r));
+                    }
+                }
+                return;
+            }
+            self.counts.integer += 1;
+        }
         self.add(record::triangle(raster::fold([p.v[0], p.v[1], p.v[2]]), p.shaded, tex, &paint, slot));
         if p.quad {
             self.add(record::triangle(raster::fold([p.v[1], p.v[2], p.v[3]]), p.shaded, tex, &paint, slot));
@@ -197,7 +255,7 @@ impl Renderer {
         self.device.held().loads.0.slice_mut::<u32>()[l * 4..l * 4 + 4].copy_from_slice(&[slot, t.clut_x, t.clut_y, t.entries()]);
         self.used.loads += 1;
         self.counts.loads += 1;
-        self.slot = slot;
+        (self.slot, self.slot_entries) = (slot, t.entries());
         slot
     }
 
@@ -408,12 +466,74 @@ impl Renderer {
     }
 }
 
-impl Layer for Renderer {
-    fn executed(&mut self, c: &Command) {
+impl Draw for Renderer {
+    fn executed_with(&mut self, c: &Command, precise: Option<&[Fraction; 4]>) {
         match c.part {
-            Part::Whole => self.command(c.words, c.drawing),
+            Part::Whole => self.command(c.words, c.drawing, precise),
             Part::Vertex => self.polyline_vertex(c.words, c.drawing),
             Part::Data => self.data(c.words[0]),
+        }
+    }
+}
+
+impl Layer for Renderer {
+    fn executed(&mut self, c: &Command) {
+        self.executed_with(c, None);
+    }
+
+    fn tags(&self) -> Vec<[u8; 4]> {
+        if self.kept.is_some() { vec![TAG] } else { Vec::new() }
+    }
+
+    /// Everything planned drawn, and the mirror, the slot's palette and the picture read back to where `save` reads them.
+    fn settle(&mut self) {
+        if self.kept.is_none() {
+            return;
+        }
+        self.submit(Back::Vram);
+        let mirror: Vec<u16> = self.device.held().back.slice::<u32>()[..VRAM_WORDS].iter().map(|&w| w as u16).collect();
+        self.submit(Back::Palette(self.slot));
+        let entries = self.slot_entries as usize;
+        let palette: Vec<u16> = self.device.held().back.slice::<u32>()[..256].iter().enumerate().map(|(i, &w)| if i < entries { w as u16 } else { 0 }).collect();
+        let (picture, w, h) = self.picture();
+        let n = picture.len();
+        let picture = picture.to_vec();
+        let kept = self.kept.as_mut().expect("kept");
+        kept.mirror.copy_from_slice(&mirror);
+        kept.palette.copy_from_slice(&palette);
+        kept.picture[..n].copy_from_slice(&picture);
+        kept.picture[n..].fill(0);
+        kept.size = [w, h];
+    }
+
+    fn save(&self, _tag: [u8; 4], w: &mut StateWriter) {
+        let Some(k) = &self.kept else { return };
+        w.u32s("Size", &k.size);
+        w.u16s("Mirror", &k.mirror);
+        w.bytes("Picture", &k.picture);
+        w.u16s("Palette", &k.palette);
+    }
+
+    fn load(&mut self, tag: [u8; 4], block: &[u8]) {
+        let Some(k) = self.kept.as_mut() else { return };
+        let mut r = StateReader::new(block);
+        let mut size = [0u32; 2];
+        let read = (|| {
+            r.u32s(&mut size)?;
+            r.u16s(&mut k.mirror)?;
+            r.bytes(&mut k.picture)?;
+            r.u16s(&mut k.palette)
+        })();
+        if read.is_err() || r.position() != block.len() || size[0] * size[1] > PICTURE_WORDS as u32 {
+            return self.clear(tag);
+        }
+        k.size = size;
+        k.restored = true;
+    }
+
+    fn clear(&mut self, _tag: [u8; 4]) {
+        if let Some(k) = self.kept.as_mut() {
+            k.restored = false;
         }
     }
 
@@ -421,8 +541,9 @@ impl Layer for Renderer {
         Renderer::shown(self, s);
     }
 
-    /// The GPU's VRAM, picture, CLUT cache and the transfer or polyline it has open, taken as the renderer's own; what was
-    /// planned before is dropped, being of another machine.
+    /// The GPU's VRAM, picture, CLUT cache and the transfer or polyline it has open, taken as the renderer's own, or in
+    /// their place the mirror, picture and palette a state's block gave; what was planned before is dropped, being of
+    /// another machine.
     fn seed(&mut self, gpu: &Gpu) {
         self.steps.clear();
         self.used = Used::default();
@@ -432,20 +553,43 @@ impl Layer for Renderer {
         s.read.clear();
         s.pairs.clear();
         s.serial += 1;
-        (self.width, self.height) = (gpu.display.width, gpu.display.height);
+        let restored = self.kept.as_mut().filter(|k| k.restored).map(|k| {
+            k.restored = false;
+            &*k
+        });
         let held = self.device.held();
-        for (o, h) in held.back.slice_mut::<u32>().iter_mut().zip(gpu.vram.bytes.chunks_exact(2)) {
-            *o = u16::from_le_bytes([h[0], h[1]]) as u32;
-        }
-        let words = (self.width * self.height) as usize;
-        let staged = held.records.0.slice_mut::<u32>();
-        for (o, p) in staged.iter_mut().zip(gpu.display.frame().chunks_exact(4)) {
-            *o = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
-        }
-        for (o, &c) in staged[words..words + 256].iter_mut().zip(gpu.clut.colours.iter()) {
-            *o = c as u32;
-        }
-        (self.slot, self.next_slot) = (0, 1);
+        let (staged, back) = (held.records.0.slice_mut::<u32>(), held.back.slice_mut::<u32>());
+        let words = match restored {
+            Some(k) => {
+                (self.width, self.height) = (k.size[0], k.size[1]);
+                for (o, &h) in back.iter_mut().zip(k.mirror.iter()) {
+                    *o = h as u32;
+                }
+                let words = (self.width * self.height) as usize;
+                for (o, p) in staged.iter_mut().zip(k.picture[..words * 4].chunks_exact(4)) {
+                    *o = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+                }
+                for (o, &c) in staged[words..words + 256].iter_mut().zip(k.palette.iter()) {
+                    *o = c as u32;
+                }
+                words
+            }
+            None => {
+                (self.width, self.height) = (gpu.display.width, gpu.display.height);
+                for (o, h) in back.iter_mut().zip(gpu.vram.bytes.chunks_exact(2)) {
+                    *o = u16::from_le_bytes([h[0], h[1]]) as u32;
+                }
+                let words = (self.width * self.height) as usize;
+                for (o, p) in staged.iter_mut().zip(gpu.display.frame().chunks_exact(4)) {
+                    *o = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+                }
+                for (o, &c) in staged[words..words + 256].iter_mut().zip(gpu.clut.colours.iter()) {
+                    *o = c as u32;
+                }
+                words
+            }
+        };
+        (self.slot, self.slot_entries, self.next_slot) = (0, 256, 1);
         self.device.gpu.submit(|c| {
             c.copy(&held.back, &held.vram, 0, 0, 0);
             c.copy(&held.records.0, &held.picture, (words * 4) as u64, 0, 0);

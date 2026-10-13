@@ -103,6 +103,8 @@ impl Display {
         }
     }
 
+    // Out of line, as the base's link had it: inlined into `scan` it cost Tekken 3 0.4 per cent (Diamond_Enhancements.md §27.2).
+    #[inline(never)]
     fn read_line(&mut self, vram: &Vram, video: &Video, row: u32, field: u32, layer: &mut Attached) {
         let hi = hires(video);
         let out_row = if hi { row * 2 + field } else { row };

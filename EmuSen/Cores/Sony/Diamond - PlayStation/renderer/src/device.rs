@@ -63,6 +63,8 @@ pub enum Back {
     Nothing,
     Picture(usize),
     Vram,
+    /// The 256 colours of a palette slot.
+    Palette(u32),
 }
 
 /// The device and what the renderer made on it, which `Drop` gives back before the device goes.
@@ -148,6 +150,7 @@ impl Held {
                 Back::Picture(words) if words > 0 => c.copy(&self.picture, &self.back, (words * 4) as u64, 0, 0),
                 Back::Picture(_) => {}
                 Back::Vram => c.copy(&self.vram, &self.back, 0, 0, 0),
+                Back::Palette(slot) => c.copy(&self.cluts, &self.back, 256 * 4, slot as u64 * 256 * 4, 0),
             }
         }
     }

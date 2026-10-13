@@ -220,11 +220,14 @@ impl Fold {
     }
 }
 
+/// The machine's state digest: its accurate blocks, up to the first block of an attached layer if there is one, which is
+/// the whole state with none (Diamond_Enhancements.md §4, §23).
 pub fn state_digest(m: &Machine) -> u64 {
     use emusen_native::ffi::StateMachine;
     let mut state = vec![0; m.state_size()];
     let n = m.save_state(&mut state).unwrap();
-    fold_bytes(FNV_BASIS, &state[..n])
+    let end = if m.layer_ref().is_some() { m.layout().lines().find(|l| l.ends_with(".Tag")).and_then(|l| l.split_whitespace().next()?.parse().ok()).unwrap_or(n) } else { n };
+    fold_bytes(FNV_BASIS, &state[..end])
 }
 
 /// A program's golden digests at the end of its run: the pictures and the sound folded, the state, VRAM and the TTY.

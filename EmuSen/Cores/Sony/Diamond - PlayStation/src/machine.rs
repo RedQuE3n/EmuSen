@@ -249,6 +249,17 @@ impl Machine {
         self.board.gpu.layer.get()
     }
 
+    pub fn layer_ref(&self) -> Option<&dyn crate::layer::Layer> {
+        self.board.gpu.layer.get_ref()
+    }
+
+    /// Before a state is saved: the attached layer's own work brought to where its blocks are read from (§24.4).
+    pub fn settle(&mut self) {
+        if let Some(l) = self.board.gpu.layer.get() {
+            l.settle();
+        }
+    }
+
     /// Up to `limit` steps as `step` makes each, and how many: one run of them where the kernel's two seams have
     /// nothing to do, ended by the processor after the first step that leaves an event due, whose events then run as
     /// `step` runs them (Diamond_Speed.md §13.1).

@@ -1,8 +1,10 @@
 //! Times Diamond's frames on the emulation thread and digests what they made (Diamond_Speed.md §2): `bench <image>
 //! [frames] [--from N] [--armed] [--plain] [--stepped] [--verify N] [--verify-runs N] [--times FILE] [--every N]
-//! [--observed] [--renderer] [--save FILE]`; `--observed` attaches the enhancement layer's test observer
+//! [--observed] [--renderer] [--precise] [--precision] [--save FILE]`; `--observed` attaches the enhancement layer's test observer
 //! (Diamond_Enhancements.md §7), `--renderer` stage E3's Vulkan renderer, whose picture each frame then waits for and
-//! is timed with the frame, the two shares and the frames whose pictures differ printed apart (§18); `--save FILE` writes
+//! is timed with the frame, the two shares and the frames whose pictures differ printed apart (§18); `--precise` stage
+//! E4's precise geometry, the precision layer paired with the renderer, timed as `--renderer` is, and `--precision` the
+//! precision layer alone with a drawer that draws nothing, its own share (§25); `--save FILE` writes
 //! the state the run ends in, a layer's block with it,
 //! `--plain` turns the exact levers off and `--stepped` the runs alone, `--verify N` checks every Nth skip against the
 //! interpreter and `--verify-runs N` every Nth run against its steps. The image is a disc (a cue sheet, a CHD, an `.iso` or a
@@ -22,10 +24,32 @@ fn fnv(h: u64, b: &[u8]) -> u64 {
     b.iter().fold(h, |h, &x| (h ^ x as u64).wrapping_mul(0x0000_0100_0000_01B3))
 }
 
+/// The state's accurate blocks, those before an attached layer's own (Diamond_Enhancements.md §4), so that every form of
+/// a run digests alike.
 fn state_digest(m: &Machine) -> u64 {
     let mut s = vec![0; m.state_size()];
     let n = m.save_state(&mut s).expect("saved");
-    fnv(BASIS, &s[..n])
+    let end = if m.layer_ref().is_some() { m.layout().lines().find(|l| l.ends_with(".Tag")).and_then(|l| l.split_whitespace().next()?.parse().ok()).unwrap_or(n) } else { n };
+    fnv(BASIS, &s[..end])
+}
+
+struct Unseen;
+
+impl blackmoon_gte::Observer for Unseen {}
+
+impl diamond::layer::Layer for Unseen {}
+
+impl precision::Draw for Unseen {
+    fn executed_with(&mut self, _c: &diamond::layer::Command, _precise: Option<&[precision::Fraction; 4]>) {}
+}
+
+/// The renderer attached, alone or paired with the precision layer.
+fn renderer(m: &mut Machine) -> &mut diamond_renderer::Renderer {
+    let layer: &mut dyn std::any::Any = m.layer().expect("the renderer");
+    if layer.is::<diamond_renderer::Renderer>() {
+        return layer.downcast_mut::<diamond_renderer::Renderer>().unwrap();
+    }
+    &mut layer.downcast_mut::<precision::Precise<diamond_renderer::Renderer>>().expect("the renderer").drawer
 }
 
 fn main() {
@@ -40,9 +64,18 @@ fn main() {
     if args.iter().any(|a| a == "--observed") {
         m.attach(Box::new(diamond::layer::Tally::new()));
     }
-    let rendering = args.iter().any(|a| a == "--renderer");
+    let precise = args.iter().any(|a| a == "--precise");
+    let rendering = precise || args.iter().any(|a| a == "--renderer");
     if rendering {
-        m.attach(Box::new(diamond_renderer::Renderer::new(None).unwrap_or_else(|e| panic!("no renderer: {e}"))));
+        let r = diamond_renderer::Renderer::new(None).unwrap_or_else(|e| panic!("no renderer: {e}"));
+        if precise {
+            m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r.keeping())));
+        } else {
+            m.attach(Box::new(r));
+        }
+    }
+    if args.iter().any(|a| a == "--precision") {
+        m.attach(Box::new(precision::Precise::new(precision::Precision::default(), Unseen)));
     }
     let (mut waits, mut unequal, mut made) = (Vec::with_capacity(frames), 0, Vec::with_capacity(640 * 576 * 4));
     m.idle.on = !args.iter().any(|a| a == "--plain");
@@ -74,9 +107,7 @@ fn main() {
             made.clear();
             made.extend_from_slice(m.board.gpu.display.frame());
             let wait = std::time::Instant::now();
-            let layer: &mut dyn std::any::Any = m.layer().expect("the renderer");
-            let r = layer.downcast_mut::<diamond_renderer::Renderer>().expect("the renderer");
-            let drawn = r.picture().0;
+            let drawn = renderer(&mut m).picture().0;
             waits.push(wait.elapsed().as_secs_f64() * 1e3);
             unequal += (drawn != &made[..]) as usize;
         }
@@ -93,21 +124,39 @@ fn main() {
         std::fs::write(file, text).expect("written");
     }
     if let Some(file) = flag("--save") {
+        m.settle();
         let mut s = vec![0; m.state_size()];
         let n = m.save_state(&mut s).expect("saved");
         std::fs::write(file, &s[..n]).expect("written");
     }
+    let digest = state_digest(&m);
     if rendering {
         let w = &waits[from.min(waits.len())..];
         let wait = w.iter().sum::<f64>() / w.len().max(1) as f64;
-        let layer: Box<dyn std::any::Any> = m.detach().expect("the renderer");
-        let r = layer.downcast::<diamond_renderer::Renderer>().expect("the renderer");
+        let r = renderer(&mut m);
         eprintln!("renderer: {}; the picture waited for {wait:.3} ms a frame of the mean; {unequal} frames' pictures differ; {:?}", r.report(), r.counts());
+        if precise {
+            let layer: Box<dyn std::any::Any> = m.detach().expect("the pair");
+            eprintln!("precision: {:?}", layer.downcast::<precision::Precise<diamond_renderer::Renderer>>().expect("the pair").precision.counts());
+        } else {
+            m.detach();
+        }
     }
     if let Some(layer) = m.detach() {
-        let t = *(layer as Box<dyn std::any::Any>).downcast::<diamond::layer::Tally>().expect("the test observer");
+        let layer = layer as Box<dyn std::any::Any>;
+        if let Some(p) = layer.downcast_ref::<precision::Precise<Unseen>>() {
+            eprintln!("precision: {:?}", p.precision.counts());
+            return finish(&times, from, path, picture, sound, digest, &m);
+        }
+        let t = *layer.downcast::<diamond::layer::Tally>().expect("the test observer");
         eprintln!("observed: {} loads, {} stores, {} coprocessor 2 moves, {} copies, {} projections, {} words to GP0 from the processor, {} by DMA", t.loads, t.stores, t.cop2, t.copies, t.projections, t.from_cpu, t.from_dma);
     }
+    finish(&times, from, path, picture, sound, digest, &m);
+}
+
+/// The frame times' line and the levers' counts.
+fn finish(times: &[f64], from: usize, path: &str, picture: u64, sound: u64, digest: u64, m: &Machine) {
+    let frames = times.len();
     let mut window = times[from.min(times.len())..].to_vec();
     let mean = window.iter().sum::<f64>() / window.len().max(1) as f64;
     window.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -118,7 +167,7 @@ fn main() {
         at(0.5),
         at(0.95),
         at(1.0),
-        state_digest(&m)
+        digest
     );
     eprintln!("runs: {} of {} steps, {:.1} a run", m.runs.made, m.runs.steps, m.runs.steps as f64 / m.runs.made.max(1) as f64);
     eprintln!("idle: {} skips, {} turns, {} cycles ({:.1}% of the clock); {} proofs, {} refused, {} windows met an event, {} unequal", m.idle.skips, m.idle.turns, m.idle.cycles, 100.0 * m.idle.cycles as f64 / m.board.now as f64, m.idle.proofs, m.idle.refused, m.idle.dropped, m.idle.unequal);

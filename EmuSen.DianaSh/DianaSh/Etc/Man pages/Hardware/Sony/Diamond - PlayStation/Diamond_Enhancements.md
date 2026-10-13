@@ -1,4 +1,4 @@
-# Diamond_Enhancements — the enhancement layer, stages E1 and E3
+# Diamond_Enhancements — the enhancement layer, stages E1, E3 and E4
 
 *Written 2026-10-13, at stage E1 of `Diamond_Plan.md` §7, with the tester's go of the same day for precise geometry
 and a shared GPU crate.* E1 builds the frame every enhancement of the plan's §6.3 will stand in, and the proof that the
@@ -9,6 +9,11 @@ with E4, the Vulkan renderer with E3. The build record's entry is `Diamond_Nativ
 
 *Stage E3, the same day* (§14 on): the Vulkan renderer that draws the picture from the GPU's command stream beside the
 software rasteriser, at 1×, equal to it. §14 is its form, decided and committed before any of its code.
+
+*Stage E4, the same day* (§21 on): precise geometry, the precision layer that carries each projected vertex's
+sub-pixel position and depth to the GPU's receipt of its word, and the renderer drawing such polygons between the pixels
+with their textures in perspective, offered to players as the setting "Precise geometry". §21 to §24 are its design,
+decided and committed before any of its code.
 
 The marks are the plan's: **[M]** measured on 2026-10-13 on the desktop (Ryzen 7 7700X, Fedora 44, Rust nightly
 2026-10-01), with the tool named; **[R]** read from a source, named; **[A]** argued, with no measurement behind it;
@@ -917,3 +922,712 @@ whole; `Diamond_Speed.md` §2; `Shared/EmuSen_Gpu.md` whole; `Mars_Gpu.md` §1, 
 `MarsGpuDeviceTests.cs` and `DiamondTests.cs`; E1's measurement scripts in the probe's `e1/`; the press scripts by way
 of the goldens' code. The validation layer's messages were read as its output. The Vulkan specification was not
 opened; the rule of §14.3 was shown by the validation layer, which quotes it.
+
+---
+
+## 21. Stage E4: precise geometry, decided before it was built
+
+*Written 2026-10-13, before any of E4's code, after the tester's go of the same day.* The plan's row: "The precision
+side-channel; sub-pixel vertices, perspective-correct texturing and the seam fixes in the renderer. Gate: a synthetic
+program that rotates a textured mesh slowly: vertex jitter and texture warp measured with and without; on the bench
+discs, the fraction of vertices resolved precisely, recorded per game; E1's goldens unchanged." Decided in §11 Q14 of
+the plan: the setting is **"Precise geometry"**, the layer's crate **`precision`**. The tester added for this step that
+the setting reach players through the core ABI with the renderer's picture, that it say so honestly where no Vulkan
+device is usable, and that the machine's own goldens hold with it on. Internal resolution, true colour and filtering are
+E5's and are not touched.
+
+### 21.1 What the console loses, and what may be given back
+
+The GTE projects a vertex in fixed point: the vertex rotated and translated into the camera's space with 12 fraction
+bits (`sums`, §3.1), IR1 and IR2 cut from it to whole units, SZ3 to a whole depth, the quotient H/SZ3 from a table with
+16 fraction bits, and SX2 and SY2 from MAC0's sum `OFX + IR1·q` shifted right 16 and saturated to −400h..3FFh
+(`BlackMoon_GTE.md` §5.1) [R]. The GPU takes each vertex as two 11-bit integers (`Diamond_GPU.md` §4) and draws by
+integer edge functions with affine texture coordinates (§14.1). Three losses follow, and each shows as movement:
+
+1. **The screen position is cut to whole pixels** by MAC0's shift: a vertex moving smoothly snaps from pixel to pixel,
+   up to a whole pixel off where the geometry puts it. Neighbouring vertices snap independently, so a slowly turning
+   model wobbles.
+2. **The camera-space position is cut to whole units** before the division (IR1, IR2 from MAC1, MAC2 by sf's shift) and
+   the depth to a whole unit before the quotient (SZ3): up to H/SZ3 pixels for the first, and up to the vertex's distance
+   from the centre over SZ3 for the second. On a near ground plane with H about 300 and SZ3 about 200 either is over a
+   pixel [A, from the formula].
+3. **Texture coordinates are interpolated linearly in screen space** where the geometry is in perspective: a quad
+   receding from the camera has its texture bent along its diagonal, and the bend moves as the quad turns.
+
+The first two are what "sub-pixel vertex precision" gives back, the third "perspective-correct texturing" (the plan's
+§6.3). Both need values the console computed or could have computed at the projection and then discarded, carried to the
+moment the GPU draws the vertex, with nothing in the machine depending on them.
+
+### 21.2 The precise vertex: the projection evaluated without its truncations [C]
+
+**Decided: the precise screen position is `OFX/2¹⁶ + H·sums₁/sums₃`** (and `OFY/2¹⁶ + H·sums₂/sums₃` for y), in double
+precision, from the camera-space sums the GTE made before any shift, and **the precise depth is `sums₃`**, the camera's
+depth with its 12 fraction bits. This is the perspective projection the GTE's RTPS approximates, applied to the very
+vertex the program rotated, so it removes all three of §21.1's losses at once.
+
+Considered and not chosen: **MAC0's sums** `x` and `y` with their 16 fraction bits, the position as the console computed
+it before the last shift. Those remove the first loss alone and agree with the console's integer to within the pixel by
+construction; but they keep the second, which on near geometry is as large as the first. The decision is recorded as
+argued here and **measured on the synthetic mesh** (§23): the mesh's jitter is computed against the ideal projection for
+the integer vertex, for MAC0's sums and for the chosen form, so that the choice stands on numbers.
+
+The projection needs H, OFX and OFY, which the observer was not told at E1 (§3.1); `blackmoon-gte`'s `Projection` gains
+two fields, `h` and `offset`, the control registers as the command read them, an addition to the struct the crate owns.
+
+**The guard.** A precise position is used only where it lies near the console's: within **two pixels of the centre of
+the pixel the console chose** in each axis, with `sums₃` positive and MAC0's sums unsaturated. Where the console's own
+value is far from the geometry, something cut it that is not a rounding: IR saturated (a vertex far off to the side, or
+`lm` clamping a negative IR to 0), the quotient saturated at 1FFFFh for a vertex nearer than H/2, SX or SY saturated at
+the GPU's range, or a vertex behind the camera. In each the console drew the vertex somewhere the geometry does not
+say, and a precise vertex in its place would move the polygon by many pixels; the guard keeps the console's integer
+there. Two pixels is chosen to admit §21.1's second loss on near geometry, which reaches a pixel or two, while refusing
+saturation, which moves a vertex tens to hundreds of pixels [A]; the gate counts the vertices the guard refuses on every
+disc (§23), and the bound is to be revised if the count says so.
+
+**What is carried.** For each projection: the integer word SXY2 as pushed, the offset of the precise position from that
+integer's pixel in 256ths of a pixel (two `i16`), and the depth (`i32`, 12 fraction bits). 256ths are the renderer's
+sub-pixel grid (§22.2), whose products stay within 64 bits; finer bits would be rounded away there.
+
+### 21.3 The shadow, and which moves carry a precise value [C]
+
+The design is §3.4's, made concrete.
+
+- **A ring of the last 32,768 projections.** Each projection takes the next serial number (32 bits, never 0) and writes
+  its entry at the serial's place in the ring: the serial, the integer word, the two offsets and the depth, 16 bytes,
+  512 KiB in all. A refused projection (§21.2) takes no entry: the FIFO's shadow gets 0.
+- **Every place that can hold a projected word holds a serial**, or 0 for none: the GTE's three SXY entries, the 32
+  general registers, every word of RAM (524,288, 2 MiB) and of the scratchpad (256). A serial is found in the ring by its
+  place and is live only while the ring's entry there still has that serial; one 32,768 projections old has been written
+  over and is dead.
+- **Moves copy serials, and nothing else.** A projection pushes the FIFO's shadow; MFC2 from SXY0–SXY2 (SXYP reading
+  SXY2) gives a register its slot's serial; MTC2 and LWC2 to SXY0–SXY2 set the slot, and to SXYP push it, with the
+  register's or the memory word's serial; SWC2 gives a memory word the slot's serial; a word-sized load gives a register
+  the memory word's serial, a word-sized store the memory word the register's, a copy (§3.2) one register another's.
+- **What ends it.** A byte or halfword load gives its register 0; a byte, halfword or partial store gives its word 0; a
+  load from anything but RAM and the scratchpad gives 0. Arithmetic on a register is not told (§3.2), so the register's
+  serial stays while its value changes; that is not checked at the move but at the end:
+- **The integer check, once, at the receipt.** When GP0 receives a vertex word, its serial is taken (from the RAM word
+  DMA read it from, or from the register or GTE slot the store named, below), and the precise vertex is used only if the
+  serial is live **and the ring's integer word equals the word received**. A register changed by arithmetic, a word
+  changed by another DMA channel, by the CD, by the MDEC's output or by a turn the idle skipper passed (§2.4) no longer
+  holds the integer and falls back to the console's vertex. Checking once at the use rather than at every move costs
+  one ring access a vertex instead of one a store, and loses nothing: a value that left the integer and came back to it
+  through untold arithmetic is the same pixel, and its precise offset is the one its projection made.
+
+**Bounded in memory and time, and nothing allocated on the frame's path.** The ring, the RAM and scratchpad shadows and
+the registers' are allocated once when the layer is made (2.5 MiB); a projection writes one ring entry, a move one word.
+An entry lives until 32,768 later projections (about 27 frames of Spyro the Dragon, the bench's heaviest at about 1,235
+projections a frame [M, §7.2's counts]); a static scene re-sent without new projections keeps its precision, since
+nothing advances the ring. A ring 64 times smaller than RAM's shadow cannot leave a stale serial live by accident: a
+dead serial is recognised by the ring's entry, never by an age.
+
+### 21.4 The GPU's receipt of a vertex word, matched [C]
+
+- **By DMA**, the receipt names the RAM address channel 2 read (§3.3): the serial is that word's.
+- **By the processor**, the receipt was told **before** the store that sent it (§3.3), and the GPU may run the command
+  inside the store, before the store's move is told, since a word that finds the FIFO empty and the GPU idle is fed at
+  once (`Gpu::gp0`). The layer would learn which register the word came from only after the command had drawn.
+  **Decided: the R3000A tells a store before it writes**, so that a device the store reaches finds the layer already
+  told. The store's value is known before the write; whether the write meets a bus error is not, so a store that faults
+  is told too. A layer cannot be misled by it: the word was not written, and the integer check at the use rejects a
+  serial the memory word does not hold. The alternative, matching a CPU receipt by its integer against every register's
+  shadow, is ambiguous where two registers hold one pixel with different precision, and was not chosen. Loads stay
+  told after the read, since their value is the read's. The change is to `blackmoon-r3000`'s report order under
+  `if B::MOVES`, so the plain bus's code is unchanged; the GP0 store then records the register's serial (or for SWC2
+  the GTE slot's) as the serial of the next receipt from the processor.
+- **The receipt queue.** Each receipt's word and serial enter a ring of 64; a command's words are found there when the
+  GPU starts it (`executed`, §15.2), as the run of receipts after the last one used whose words are the command's. GP0's
+  words are executed in the order received; the receipts no command uses are the words the GPU drops (no-ops between
+  commands, a polyline's end marker, a word lost to a full FIFO behind an unread transfer), which the search steps over.
+  The GPU's FIFO holds 16 words and a command at most 12 more, well inside 64.
+- **Whole polygons only** [C, the plan's rule]. A polygon's vertex words are found by the command's layout (the same as
+  `decode::polygon`'s); the precise vertices are given to the renderer only when **every** vertex of the polygon is
+  precise, a quad's four together. A polygon with one integer vertex is drawn wholly as before, so no polygon is
+  interpolated half precisely; the seam that can remain is between polygons, where a precise one meets an integer one,
+  and is at most §21.2's two pixels and in practice under one.
+- **Rectangles and lines stay integer.** A rectangle is placed and stepped pixel by pixel from one corner, with no
+  geometry between pixels to recover; a line's rule steps its major axis. Both are drawn as the console draws them
+  (`Diamond_Plan.md` §6.3's "2D overlays fall back"), whatever their words' history.
+
+**The offset and D-47.** The precise vertex is carried as an offset from the integer the console used, never as an
+absolute position. The GPU then adds the drawing offset in 11 bits (D-23), places each vertex from the first by its
+11-bit distance, and folds a primitive past −1,024 by 2,048 (D-47): every one of those is a whole-pixel move of the
+integer, which the offset rides unchanged. The renderer applies them to the integer by the GPU's own `decode` and
+`raster::fold`, and adds the offset after. Nothing about them is restated.
+
+### 21.5 What the frame costs, and the budget
+
+Every move the processor reports becomes one or two word writes, a projection one entry of 16 bytes and a division,
+a receipt one queue entry, a polygon's vertices one ring read each. §9.3's test observer, doing additions where this
+layer does stores, cost 2.6 to 3.5 ns an event; P-E1b predicted at most twice that. The RAM shadow is 2 MiB, beyond the
+level-2 cache, so a load or store to RAM touches a line the processor's own RAM access touched a moment before in a
+different array [A]. Measured in §25.
+
+## 22. The renderer's use of precise vertices [C]
+
+### 22.1 Which path a polygon takes
+
+A polygon the precision layer gave whole precise vertices for is drawn as **one or two precise triangles**: a record of
+a new kind, `PRECISE` (6), laid out within the 48 words of §16.2, read by the same walk. Every other polygon, and every
+rectangle, line, fill, copy and transfer, is the record E3 made. Untextured, flat and 2D polygons with no precise vertex
+are therefore drawn exactly as the accurate picture; the zero-fraction gate (§23) holds that the precise record itself
+is the integer rule when its offsets are zero.
+
+### 22.2 Sub-pixel rasterisation that is the integer rule at zero fraction
+
+- **Positions** in 256ths of a pixel: `256·x + dx`. The checks that refuse a primitive (§14.1: a span past 1,023 or 511)
+  are made on the integer vertices, as the console makes them.
+- **Coverage.** A pixel is its integer point; it is inside when each edge function `dX·(256y − aY) − dY·(256x − aX)` is
+  at least 0 on an edge the triangle owns and 1 otherwise, the ownership by the edge's direction as `raster::owns`. At
+  zero fraction every term is 2¹⁶ times the integer one, and "at least 1" in units of 2⁻¹⁶ is "at least 1" in whole
+  units for an integer, so the set of pixels is the integer rule's exactly. The bounds are `⌈min x⌉..⌊max x⌋` and
+  `⌈min y⌉..⌈max y⌉ − 1`, the integer rule's at zero fraction. The products reach 2³⁷ and are made exact in two 32-bit
+  words, as E3's interpolants are (§16.3).
+- **Interpolants.** The base vertex is the integer rule's (`raster::base_vertex` on the integer vertices); each
+  gradient is `((Δa₁·ΔY₂ − Δa₂·ΔY₁) << 20) / area` truncated toward zero, with the positions and the area in the fine
+  units, which at zero fraction is 2¹⁶ over 2¹⁶ of the integer rule's and so the same quotient; a pixel's value is
+  `(256·base + gx·(256x − bX) + gy·(256y − bY) + 256·½) >> 20`, the integer rule's `(base + gx·Δx + gy·Δy + ½) >> 12`
+  at zero fraction. A gradient that does not fit 32 bits (a sliver of under a thousandth of a pixel's width) cannot be
+  stored in the record; such a polygon is drawn wholly on the integer path and counted.
+- **Colour stays affine**, as the console's Gouraud shading is; only the texture is corrected.
+
+### 22.3 Perspective-correct texturing: a division per pixel
+
+The texture coordinate of a pixel is `Σ Eᵢ·qᵢ·uᵢ / Σ Eᵢ·qᵢ`, where Eᵢ are the pixel's three edge functions (each the
+weight of the vertex opposite it, already computed for its coverage) and `qᵢ = z_min/zᵢ` from the precise depths; the
+same for v. That is the perspective-correct interpolation of u and v, since u/z and 1/z are affine in screen space; the
+pixel's coordinate is the nearest integer, as the integer rule's half and shift take it, held within the vertices' own
+range so that a rounding never wraps a coordinate past 255. **A division per pixel, not per span** [C]: the walk is one
+invocation a pixel with no spans (§16.3), so a span's division would need the very per-pixel interpolation it saves, and
+on the device two floating divisions a pixel are a small part of a walk that already does three 64-bit edge functions
+and the texel's VRAM read [A]; its cost is measured (§25). A triangle whose three depths are equal is in a plane facing
+the screen, where affine is exactly perspective-correct; it takes the affine interpolants of §22.2, so a screen-aligned
+quad's texture is the integer rule's at zero fraction, with no rounding of a division in it.
+
+### 22.4 Seams and gaps
+
+Neighbouring precise polygons share their vertices' entries exactly: one projection, one serial, one offset, so the
+shared edge's two functions are exact negatives in integer arithmetic and the ownership rule gives each pixel on it to
+exactly one of them, with no gap and no pixel drawn twice [A, from the rule; the mesh is the test]. **No edge expansion
+is built** [C]: the plan's §6.3 names its cost (semi-transparent polygons blended twice where they meet, sprite edges
+softened), the precise shared vertices close the gaps it was for, and what is left is the seam of §21.4 between a
+precise polygon and an integer one, which expansion would hide only by drawing both over each other.
+
+### 22.5 What the renderer keeps, now that its picture can differ
+
+At E3 the renderer's mirror was the machine's VRAM at 1×, so it kept nothing across a state (§16.6). With precise
+polygons its mirror holds what it drew, which the machine's VRAM does not: the frame being displayed, and anything a
+game copies or textures from what it drew. **It keeps a block when it draws precisely** (§24.4), and none when attached
+alone, as at E3, so E3's gate and its goldens are unchanged.
+
+## 23. The gate, as it will be run
+
+- **Off is the accurate path.** E1's three goldens with the composition built and the setting off; and **with it on**,
+  the precision layer and the renderer attached from power-on, the machine's digests (state, sound, TTY, VRAM, and its
+  own picture, which the accurate GPU keeps) bit for bit, as E1's test observer was held.
+- **At zero fraction the renderer is E3's.** The precision layer in a test form that gives every precise vertex an
+  offset of zero and one depth: every polygon it resolves goes through the `PRECISE` record, and the pictures and VRAM
+  of the programs, ps1-tests and the eight discs must equal the software rasteriser's as E3's did, the texture cache's
+  two pinned counts the one difference.
+- **A synthetic mesh** (`tests/precise.rs`): a textured grid tilted away from the camera and turned slowly through
+  RTPT and RTPS, its packets in RAM sent by DMA's list, its texture's every texel naming its own coordinate. For each
+  frame: each vertex's screen position as drawn, against the ideal projection of the grid as rotated, for the integer,
+  for MAC0's sums and for the precise vertex (jitter: the error and its change from one frame to the next); and each
+  pixel's texel, read back from the software VRAM and from the renderer's, against a perspective-correct reference
+  computed in the test from the ideal geometry (warp).
+- **A 2D program**: sprites, rectangles, lines, flat and shaded polygons the processor builds, and a menu of quads whose
+  vertices are projected by the GTE and then moved by the processor, one quad with one vertex moved: with the setting
+  on its picture and VRAM must equal the software's to the pixel.
+- **On the eight bench discs**, along their golden anchors with their press scripts: the fraction of polygon vertices
+  resolved precisely and of polygons drawn precisely, by game (P10); the guard's refusals and the ring's dead serials;
+  the machine's goldens with the setting on; pictures looked at, every visible defect listed with its frame. No picture
+  of a game is committed.
+- **The player's path**: the kit on the published library, off and on, the eight discs at 1,800 frames; WiseMan's
+  Diamond tests; the setting in the PlayStation's Enhancements group with its cost; turning it on and off between
+  frames through the host changes only the picture.
+
+## 24. Composition, the setting and the state [C]
+
+### 24.1 The crates
+
+| Crate | Its one job | Depends on |
+|---|---|---|
+| `diamond` (the machine) | the console, exact; the layer's frame; `impl Core for Machine` | as before |
+| `precision` | the shadow, the receipts, the precise vertices of each polygon; a layer | `diamond` |
+| `diamond-renderer` | the picture drawn on the device from the command stream, with precise polygons where given | `diamond`, `precision` (for the vertices' type and the drawer's trait), `emusen-gpu` |
+| `diamond-v1` (new, `v1/`) | the core ABI's exports: the machine with its enhancements, as the host sees it | the three |
+
+- **The machine's library is no longer the published one.** `diamond`'s crate type becomes `rlib` alone and its
+  `core_exports!` moves out: its `impl Core for Machine` stays, with every descriptor and the tests that hold them.
+  `diamond-v1`'s library is named **`diamond`** (its package `diamond-v1`, its dependency on the machine renamed
+  `machine`), so the built file is `libdiamond.so`, its sidecar `libdiamond.so.core.json`, and its exports the machine's
+  through a `Core` that holds a `Machine` and passes each call on, adding the setting and the picture. Rust allows two
+  crates of one name in a graph when their metadata differ, as two versions of a crate are [M, a scratch pair built and
+  linked]. `RustCores.props`'s row for `diamond` changes its `Dir` alone, to `v1\`; the library's name, its core id,
+  its system pack and everything Mistress reads stay as they are.
+- **Why `precision` defines the drawer's side.** The renderer must be told a polygon's precise vertices with the
+  command, and the precision layer must be told every event first. A layer that holds both and passes each event on
+  is the one attachment point (§15.1 kept: the machine attaches one layer). It lives in `precision` as
+  `Precise<D: Draw>`, generic over the drawer: `precision` defines what it gives (`Draw::executed_with`, a polygon's
+  vertices whole or none) and knows nothing of Vulkan; the renderer implements `Draw` and knows nothing of moves. The
+  other arrangements were a pair in the machine's `layer` module, which would give the machine a type for data it never
+  reads, and the pair in `diamond-v1`, which the machine's own tests could not then attach, since a crate named
+  `diamond` cannot be a dependency of the crate named `diamond` that holds the goldens.
+- **The plain frame for a GPU-only layer is not built** [C]. The precision layer needs every move, so with the setting
+  on the layered frame is the right one. A renderer attached alone, which would want the plain frame (E3 measured that
+  share at 0.04 to 0.15 ms, §18.3), happens only in the tools and the gates until E5 offers internal resolution without
+  precise geometry; whether to add `Layer::moves` is E5's to decide with that setting.
+
+### 24.2 The setting
+
+`precision`, "Precise geometry", an `Enhancement` switch in the Enhancements category: `effect: enhancement`, default
+false (the hardware's), `scope: run`, no restart, its help and cost in a player's words (the cost: a Vulkan graphics
+card's time each frame, save states about twice their size, and the hairline seams and the 2D overlays of §21.4). It is
+applied by `set_settings` between frames, and read at create like every key:
+
+- **On**: a renderer on the device `EMUSEN_GPU_DEVICE` names (the first usable one without it), kept in the block form
+  (§22.5), paired with a new precision layer and attached; the frame given to the host is from then the renderer's
+  picture, read back after each frame's `advance` unless the host skips rendering. Attaching seeds the renderer from
+  the GPU as it stands (§16.6), so the picture does not flash.
+- **Off**: the layer detached and dropped; the frame is the machine's own again.
+- **Where no usable Vulkan device exists, or the renderer cannot be made** [C]: the setting is **accepted and
+  reported**, not refused. Refusing would leave a stored value the frontend could not apply on every load, and a host
+  that applies a player's saved settings at create would fail the game's load over a picture setting. Accepted, the
+  machine runs exactly as off; `setting_notes` (`SETTING_NOTES`, `EmuSen_CoreAPI.md` §6.13) gives the sentence "No
+  usable Vulkan graphics card was found (the reason), so the console's own picture is shown," which Mistress already
+  shows under the row (`CoreEngine.Settings`' `Note`). Nothing crashes: `Renderer::new` returns the reason as an error,
+  and the layer is never attached.
+- **The API's events**: `core_exports!` raises `GEOMETRY` when `frame_info`'s size changes and `STATE_SIZE` when the
+  state's does, after `set_settings`, `advance` and `state_load`, so turning the setting on raises `STATE_SIZE` (its
+  blocks, §24.4) and raises `GEOMETRY` only if the sizes differed, which at 1× they never do (the renderer's picture is
+  the display's size).
+- **The frontend's group.** Mistress's Graphics Settings window lists a core's sidecar settings in the console's tab
+  (§5); the schema's text asks for enhancements in a group of their own. Built now, as E1 left it for the first one
+  offered: a core setting carries its group, `Enhancements` for `effect: enhancement`, and the console's tab shows a
+  heading before the first row of each group other than the core's plain settings.
+
+### 24.3 The kit, the run tool and the bench
+
+The kit needs no option: it reaches the renderer through the setting, `--settings precision=true`, on the published
+library, which is what E3 could not do. The run tool gains `--precise` (the pair attached from power-on, its pictures
+written as `--renderer`'s are, and the precision layer's counts printed) and `--precision` (the precision layer alone,
+for its counts, with no device); the bench gains `--precise`, timed as `--renderer` is.
+
+### 24.4 State
+
+- **`PREC`, the precision layer's block, fixed in size**: the next serial, the ring (512 KiB), the shadows of RAM
+  (2 MiB), the scratchpad, the registers and the FIFO, the receipt queue with its cursor, and the serial of the next
+  receipt from the processor; 2.6 MiB. Its counts are not kept: they describe a run, not the machine.
+- **`RNDR`, the renderer's block, written only in the block form**: its mirror of VRAM a halfword a pixel (1 MiB), its
+  picture at the largest size with its width and height (1.4 MiB), and the palette the CLUT cache holds as the renderer
+  has it; read back from the device when the host settles the machine before a save (`Core::settle`, which the export
+  calls), loaded into the mirror in place of the GPU's VRAM when a state is loaded. 2.5 MiB.
+- **Why whole and fixed** [A]. The kit's C7 and C8 compare the pictures of a machine that loaded a state with those of
+  the machine that saved it, and a state's size may not change from frame to frame. A frame drawn after a load must
+  then be the frame the machine that saved it draws: the vertices projected before the save and drawn after (a game's
+  double-buffered ordering table), the receipts in the GPU's FIFO at the save, and what the renderer drew that VRAM does
+  not hold all reach the picture after the load. A block holding only what is live would vary in size. So the state
+  with the setting on is about 10.4 MB against 5.3, and the cost says so.
+- **Both ways** (E1's rule): a state made with the setting on loads with it off, both blocks skipped; one made with it
+  off loads with it on, the precision layer starting empty and the renderer seeded from the GPU's VRAM, so the first
+  frame or two after are drawn with fewer precise vertices; the machine's continuation is the same either way, since
+  nothing in the machine reads a layer. The Layer trait's block methods are made per tag, so that one layer, the pair,
+  can write the two blocks its two parts own: `tags`, and `save`, `load` and `clear` given the tag.
+
+### 24.5 Predictions [recorded before the code]
+
+- **P-E4a.** The mesh's vertex jitter, the mean screen-position error against the ideal projection, falls from about a
+  third of a pixel with integer vertices to under a hundredth with precise ones; with MAC0's sums alone it falls only
+  to between a tenth and a quarter.
+- **P-E4b.** The mesh's texture warp, the mean texel error against the perspective-correct reference, is over a texel
+  with the setting off and under half a texel with it on.
+- **P-E4c.** On Crash Bandicoot, Spyro the Dragon and Ape Escape most polygon vertices drawn in play are precise
+  (over 70 per cent); Castlevania and Rayman, which draw mostly 2D, under 10 per cent (P10's second half).
+- **P-E4d.** The guard refuses under 1 per cent of projections on every disc.
+- **P-E4e.** Every machine golden holds with the setting on, by construction.
+- **P-E4f.** Off, the frame costs the base within the bench's noise; on, the emulation thread pays under 1.5 ms a frame
+  more than the plain frame on the three discs on the RX 6800, the precision layer's share under 0.3 ms (P-E1b's twice
+  the test observer).
+
+## 25. E4's gate, as run
+
+*Measured 2026-10-13 on the desktop, the RX 6800 by `EMUSEN_GPU_DEVICE=6800`.* What was built is §21 to §24 as
+designed, with two changes the discs forced (§26.2, §26.3) and one counter split (the guard's refusals, §25.4). The
+crates: `precision` (`src/lib.rs`, the shadow, the receipts, `Precise` and `Draw`; six unit tests), the renderer's
+`PRECISE` record (`record.rs`'s `precise_triangle`, `walk.comp`'s `fine_triangle`), its block and its `Draw`, and
+`diamond-v1` (`v1/src/lib.rs`, the `Core` that holds the machine; four unit tests). The gate is `tests/precise.rs`,
+eight tests on the machine crate, beside E1's `programs.rs` and E3's `renderer.rs`.
+
+### 25.1 Off is the accurate path, and on the machine is unchanged
+
+| Item | Result |
+|---|---|
+| E1's goldens with every enhancement compiled in and off | **Equal** [M]: `programs.rs`' three golden tests, plain and with the test observer, 49 + 48 lines and the eight discs' 80 anchors, after every change of this stage's (the processor's store order, the GTE's two fields, the layer's blocks per tag) |
+| The machine's goldens with the setting on, the pair attached from power-on | **Equal** [M]: 49 of 49, 48 of 48, 8 discs and 80 anchors, picture, sound, state, VRAM and TTY; the state's digest taken over the accurate blocks, before the layer's (`goldens.rs`' `state_digest`) |
+| The same through the host | **Equal** [M]: `DiamondPreciseGeometryTests.Turning_precise_geometry_on_and_off_between_frames_changes_only_the_picture`, the setting turned on at frame 3 and off at 9 through `CoreEngine.Set`, the sound and the accurate state equal to a run without it at every frame, the picture differing at frames 3 to 8 alone |
+
+P-E4e held, by construction and by measurement. P9 held for E4.
+
+### 25.2 At zero fraction the precise record is the integer rule
+
+The precision layer's zero form gives every precise vertex an offset of zero and one depth, so every polygon it
+resolves is drawn through the `PRECISE` record and the walk's `fine_triangle`, its 64-bit edge functions, its fine
+gradients and interpolants, its texel hold (§26.3) at its zero-fraction value, and none of it through E3's triangle
+[M]:
+
+| Runs | Frames compared | Precise triangles drawn | Pictures | VRAM |
+|---|---|---|---|---|
+| The project's programs, 49, 60 frames | 2,940 | none: no program's projections reach GP0 as polygons | equal | equal but the texture cache's two pinned counts (§17.2) |
+| ps1-tests' release, 48 | 22,824 | none: `animated-triangle`'s 900 projections are made with the quotient saturated (SZ3 103 or 0 under H 320), which the guard cuts | equal | equal |
+| The eight bench discs to frame 3,000 by their press scripts | 24,000 | 1,438,000: Crash Bandicoot 423,326, Mega Man Legends 282,808, Spyro the Dragon 307,276, Ape Escape 287,102, Silent Hill 137,186, Rayman 4,210 | **equal at every frame** | **equal at every anchor** |
+
+So at zero fraction E3's equality holds through the new record on a million and a half of the discs' own triangles,
+and the exactness argument of §22.2 is a measurement. The programs and ps1-tests test the other half, that with the
+pair attached nothing else moves.
+
+### 25.3 The turning grid: jitter and warp
+
+`the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on`: a grid of 4 by 4 textured quads, 800 units square,
+tilted one radian about x and turned 0.004 radians (0.23°) a frame about y, 1,300 units from the camera, H 280; its
+vertices and every frame's rotation in fixed point put in RAM by the test, its program projecting each quad's corners by
+RTPT and RTPS into packets in a DMA list, double-buffered; the texture every texel of which names its own coordinate.
+120 frames, 25 vertices a frame, about 19,100 textured pixels a frame graded [M]:
+
+| Vertices | Mean error against the ideal projection | Mean change of the error from frame to frame (the wobble) | Worst error |
+|---|---|---|---|
+| Integer, as the console | 0.889 px | 0.467 px | 1.736 px |
+| MAC0's sums (§21.2's alternative) | 0.159 px | 0.117 px | 0.409 px |
+| **Precise** (the projection without its truncations) | **0.008 px** | **0.011 px** | **0.031 px** |
+
+| Texture | Mean texel error against the perspective-correct reference, \|Δu\| + \|Δv\| | Pixels more than a texel off |
+|---|---|---|
+| Setting off: the software rasteriser, affine on integer vertices | 2.75 texels | 99.4% |
+| **Setting on**: the renderer, in perspective on precise vertices | **0.50 texels** | **0.02%** |
+
+The precise vertex's residual, 0.008 px, is the rotation's own fixed point (1.3.12, about 2⁻¹³ of 700 units) and the
+256ths grid; MAC0's sums keep §21.1's second loss, a fifth of the console's error, which decided §21.2 on numbers. The
+texture's 0.50 is the floor of the measure: each axis rounded to a whole texel errs by a quarter of a texel on average.
+
+### 25.4 The 2D program, the strips and the state
+
+- **The 2D program** (`a_2d_program_is_drawn_as_the_software_rasteriser_with_the_setting_on`): sprites, a variable and
+  two fixed rectangles textured and flat, a line, a shaded line, a polyline, flat and shaded triangles and a textured
+  quad the processor builds, and two quads of GTE-projected corners, one with every corner moved a pixel on the
+  processor and one with one corner moved: with the pair attached, ten frames' pictures and VRAM equal to the software
+  rasteriser's to the pixel [M]. The precision layer counted 60 projections, 50 polygons, none precise, 50 vertex words
+  changed and 10 polygons mixed, each drawn wholly as before.
+- **The strips** (`a_strip_of_a_picture_shows_no_texel_past_its_edge`, §26.3's defect held): four textured strips at
+  one depth projected to fractional corners and sent by SWC2 straight to GP0; no pixel shows a texel past its strip
+  (130 did without the hold), and as many pixels are drawn as the software rasteriser draws, 16,705.
+- **The state** (`a_state_with_the_setting_on_continues_its_picture_and_loads_both_ways`, on the grid): a state saved
+  at frame 40 with the pair attached, loaded on a second machine with it, continues the picture frame for frame for 20
+  frames; saved, loaded and saved again it is the same bytes; loaded with the setting off, the machine continues as the
+  first; a state made with it off loads with it on, the machine the same and the polygons precise again within two
+  frames. With the setting on the state is 10,545,574 bytes against 5,398,770 for the kit's machine without it [M, the
+  kit's C7 note]. `diamond-v1`'s `a_state_with_the_setting_on_loads_with_it_off_and_the_reverse` holds the same through
+  the `Core`.
+
+### 25.5 The bench discs: how much is precise (P10)
+
+The pair attached from power-on, each disc by its press script to frame 3,000, counted by the precision layer [M]. A
+projection is *cut* where the console cut it (saturated, at or behind the camera) and *far* where the guard refused a
+position more than two pixels from the console's; a vertex is a polygon vertex word GP0 drew; *changed* is a vertex
+word whose serial was live but whose integer the processor had changed.
+
+| Disc | Projections | Cut | Far | Polygons | Precise | Mixed | Vertices | Precise | Changed |
+|---|---|---|---|---|---|---|---|---|---|
+| Crash Bandicoot | 2,195,348 | 2.13% | 0.70% | 504,381 | 99.3% | 3,495 | 1,523,785 | **99.7%** | 0 |
+| Mega Man Legends | 978,426 | 2.92% | 0.31% | 278,059 | 96.0% | 1,091 | 1,077,932 | **96.0%** | 0 |
+| Ape Escape | 506,206 | 6.00% | 0.44% | 232,789 | 78.5% | 36,896 | 862,886 | **81.1%** | 3,216 |
+| Silent Hill | 176,128 | 5.24% | 0.25% | 231,032 | 35.1% | 7,988 | 897,376 | **34.9%** | 0 |
+| Spyro the Dragon | 3,703,884 | 6.54% | 0.55% | 1,320,706 | 14.8% | 20,775 | 4,427,908 | **17.8%** | 464,915 |
+| Rayman | 9,420 | 0 | 0 | 60,619 | 3.9% | 0 | 240,188 | **3.9%** | 0 |
+| Castlevania | 17,998 | 0.04% | 0 | 13,241 | 0 | 0 | 52,644 | **0** | 0 |
+| Tekken 3, frames 0 to 3,000 | 0 | | | 0 | | | 0 | | |
+| Tekken 3, frames 0 to 12,000 (its attract mode's fights from about 7,500) | 5,788,727 | 5.70% (with far) | | 2,928,129 | 78.2% | 543,134 | 10,430,961 | **89.1%** | 879,756 |
+
+By the counts at the anchors, the precise share rises as each game enters play: Crash Bandicoot's first 1,200 frames
+draw 140 vertices, none precise (its logos), and by frame 1,500 122,138 of 122,318 are. Silent Hill's opening draws
+558,800 vertices to frame 2,400 with none precise and its play then 120,284 of 120,284 more. No serial was found dead on
+any disc (the ring of 32,768 is never outrun within a frame or two of a projection), and no command was unmatched.
+
+**P10 held** [M]: the games that build their 3D scenes from the GTE's words (Crash Bandicoot, Mega Man Legends, Ape
+Escape, Tekken 3's fights) are drawn 81 to 99.7 per cent precise, and those that draw mostly 2D (Rayman, Castlevania)
+or move the GTE's words on the processor (Spyro the Dragon, 464,915 vertex words changed) under a fifth. Silent Hill
+lies between: its scenes in play are wholly precise, its long opening and its fog's overlays not.
+
+**The guard's bound stands** [M]: the far refusals are 0.25 to 0.70 per cent of the projections on every disc, against
+2 to 6.5 per cent the console cut itself. P-E4d held for the guard's own refusals (under 1 per cent everywhere).
+
+### 25.6 The player's path
+
+- **The kit**, the published shape (`cargo build --profile dist` in `v1/`, `libdiamond.so`), the corpus form on the
+  eight discs at 1,800 frames, four at a time: **off**, every case passes on every disc (194 s); **on**
+  (`--settings precision=true`), every case passes on every disc after §26.2's fix (318 s), C3's nine settings among
+  them, C7's state of 10,545,574 bytes loading and continuing, C8 across a save and load, C10's two machines on two
+  threads, each with its own renderer, C17 and C18 [M]; both again on the final library, 192 s and 315 s.
+- **WiseMan**, under the test lock with the corpus, filtered by `Diamond`, `PlayStation`, `GraphicsSettings`,
+  `GenesisSettings`, `WindowFitAudit`, `CoreRegistrationEquivalence` and `CoreAdapter`: 219 of 221 at first, the two
+  failures `DiamondTests`' lists of the library's settings and capabilities, which named neither the new key nor
+  `SETTINGS` and `SETTING_NOTES`; given them, both pass. The three `DiamondPreciseGeometryTests` are among the 221, and
+  the fit audit with the PlayStation's tab at both sizes, its new heading included [M].
+- **The publish**: §28.
+
+## 26. What the pictures showed
+
+### 26.1 How they were looked at
+
+At every 300th frame of the exact form's disc run the machine's picture and the renderer's were written to the probe's
+scratch folder (`EMUSEN_DIAMOND_PICTURES`; no picture of a game is in the repository) and looked at side by side with a
+map of the pixels that differ, then zoomed where the map or the eye found something; Tekken 3 the same every 500th frame
+to 12,000 by the run tool's `--precise --pictures`. A scratch counter listed every black pixel of the renderer's picture
+whose 3-by-3 neighbourhood in the machine's has no black and whose two opposite neighbours in the renderer's are not
+black, a crack through a surface the console draws solid. Most of each map is the expected kind: every edge of a precise
+polygon a pixel either way, and every textured pixel of a polygon in perspective a texel or two off the affine one.
+
+### 26.2 The palette slot's tail reached the state (found by the kit, fixed)
+
+**Shown.** The kit's first run with the setting on failed C7, C8, C17 or C18 on six discs of eight, every failure a
+state digest with the frames' and the sound's digests equal. A scratch run of C7 on Mega Man Legends, machine A to frame
+900, its state loaded on B, both on to 1,800, compared the two states field by field: 431 bytes differed, all in
+`RNDR.Palette` [M]. A 4-bit palette load writes 16 entries of its slot of 256; the other 240 hold whatever the slot's
+device memory held, which the block read back whole, and which differs between machines and between processes.
+
+**Fixed.** The renderer records how many entries its slot's load wrote and saves the rest as zero; no texture reads
+past them, since a 4-bit texture indexes 16 and the CLUT cache reloads for an 8-bit one (`ClutCache::holds`). The same
+C7 then compared equal, and the kit passes every case on every disc with the setting on (§25.6).
+
+### 26.3 A strip's last column showed the next region's texel (found on Crash Bandicoot, fixed)
+
+**Shown.** At frame 1,800 Crash Bandicoot's loading picture showed a dark vertical line at x 351 and another at 414
+[M, looked at]. The picture is drawn as textured strips 64 pixels wide whose corners the GTE projects to 286, 350.16,
+414.32, …, one texel a pixel. VRAM read back from the renderer held at column 350 the dark colours of the next texture
+region where the machine's held the picture. With integer corners the last pixel of a strip is a whole pixel inside its
+right edge, its texture coordinate 63 exactly; with the edge at 350.16 the pixel at 350 is 0.16 inside, its coordinate
+63.84, and the console's rounding of a coordinate (a half added before the integer part, §14.1) gives 64, the first
+texel of the next region. The console never meets this at one texel a pixel; it meets it only on textures magnified
+two times or more, where its own rounding reaches the last coordinate too.
+
+**Fixed** [C]: with sub-pixel corners a precise triangle's texture coordinate is held within the vertices' range and
+short of the end it runs toward across the screen (where both of its gradients are toward the greatest coordinate, that
+coordinate's texel is not drawn; where both are toward the least, the least's), the record carrying the range in its
+word 9. At zero fraction nothing is held, so §25.2's equality is untouched, and it stayed equal on every disc after the
+change. On a polygon whose gradients point opposite ways (a texture turned on the screen) nothing is held beyond the
+vertices' range; no such seam was seen. The strip test holds it (130 pixels past the strip without the hold, none with
+it), and the lines are gone from the frame.
+
+### 26.4 Recorded, not fixed
+
+| Disc, frames | What shows | Why | Fate |
+|---|---|---|---|
+| Ape Escape, 1,500 to 2,700 (the lab's floor) | hairline cracks, black dashes up to a few dozen pixels long, where the floor meets the rainbow ring: 136, 79, 249, 89 and 12 crack pixels at the five anchors | the floor's polygons are precise; the ring's quads are not (their words do not trace to a projection: built or moved on the processor), and they meet the floor's long edge in a T, so the precise edge moves away from the integer corners on it by up to a pixel | **recorded**: §21.4's seam between a precise polygon and an integer one, which the plan names as this enhancement's cost |
+| Spyro the Dragon, 900 and in play | short teal dashes across the snow and the ground, the background showing through | the same: 17.8 per cent of Spyro's vertices are precise and 464,915 of its vertex words were changed on the processor, so precise and integer polygons alternate across the ground | **recorded** |
+| Every 3D game | every edge a pixel either way, textures a texel or two away from the affine picture | the enhancement itself | as designed |
+
+**Looked at and found unchanged in kind**: Tekken 3's fights from frame 7,500 (its health bars, timer and names drawn
+alike, the fighters and the stage precise), Spyro the Dragon's memory card warning, a 2D box over its 3D title, drawn
+alike, Mega Man Legends' hall at frames 2,700 and 3,000, Ape Escape's close-ups, Silent Hill's street in its fog, Crash
+Bandicoot's title and menu letters (projected, precise, whole), Rayman's title at 2,100; Castlevania's pictures are the
+machine's at every anchor, nothing of it being precise. No misplaced vertex was seen: the guard's two pixels keep every
+precise corner beside the console's.
+
+**An experiment, not kept**: drawing a mixed polygon with the precise corners it has and the integer ones at their
+pixels, in place of wholly as before, was tried on the discs. Ape Escape's crack pixels fell at three anchors of five
+(136 to 32, 249 to 131, 89 to 79) and rose at one (79 to 85); the T-junctions remain, since the ring's corners on the
+floor's edge are not the floor's. It is not a fix, the plan's rule (§21.4) stays, and edge expansion (§22.4), the
+planned remedy for this seam, is not built. Both are open for the tester, with their costs as stated there.
+
+## 27. Cost
+
+### 27.1 The instrument
+
+§9's and §18.1's, unchanged: `examples/bench` on links with every function aligned to 64 bytes, each build in its own
+target folder, the builds alternating on one core (`taskset -c 11`), the fastest mean of five rounds, milliseconds of
+the emulation thread a frame; with a renderer attached the wait for its picture is timed with the frame. The base is
+WiseMan 266a6650, extracted outside the repository. A sixth item is added, **Tekken 3's fights**: the disc run 10,500
+frames and timed from frame 7,500, its attract mode's fights, since its first 3,000 frames make no projection (§7.2).
+The device is the RX 6800. The bench's `--precise` attaches the pair as the setting does, `--precision` the precision
+layer with a drawer that draws nothing, `--renderer` E3's renderer alone.
+
+### 27.2 Off, against the base, and a cost that was there at first
+
+The first series, five rounds, and a second of seven on three discs, stood Tekken 3 above the base [M]:
+
+| Run | Base | Branch | Difference |
+|---|---|---|---|
+| Tekken 3, first series | 2.383 | 2.400 | +0.7% |
+| Tekken 3, second series | 2.370 | 2.386 | +0.7% |
+| Crash Bandicoot, the two series | 2.309, 2.309 | 2.307, 2.318 | −0.1%, +0.4% |
+| Mega Man Legends, the two series | 1.799, 1.801 | 1.805, 1.800 | +0.3%, 0.0% |
+
+The same figure twice is not the instrument's error. Comparing the links' symbol sizes, as §9.2 and §18.2 did: every
+function of the plain frame was the base's size (`advance_in::<Plain>`, `exec::run` and `Run::execute` for the board)
+but two. `Display::scan` was 0x809 bytes against the base's 0x436, with `Display::read_line` (0x371) gone from the
+link: the branch's link had inlined the one into the other, though neither's source had changed. And
+`raster::triangle` was 0x187F against 0x1878, seven bytes, as was `record::triangle`, which inlines the same helpers.
+**By ablation** [M, seven rounds, the three builds alternating]: with `read_line` held out of line, both functions the
+base's sizes again, Tekken 3 stood at the base, 2.375 against 2.373, where the build without the pin stood at 2.384;
+Crash Bandicoot 2.303 and 2.305 against 2.297. **Decided [C]**: `read_line` is `#[inline(never)]`, the base's shape.
+The triangle's seven bytes stayed with its source and every function it calls unchanged (the base vertex is asked of
+`raster::setup` again, not of a function made public for it, which was tried first and was not the cause);
+`gpu/benchmark`, the item that showed the triangle's shape at E3, shows nothing, so no cause was sought further.
+
+The final build against the base, five rounds [M]:
+
+| Run | Frames | Base | Branch | Difference |
+|---|---|---|---|---|
+| `gpu/benchmark` | 1,200 | 2.321 | 2.315 | −0.3% |
+| `gpu/bandwidth` | 1,200 | 2.951 | 2.954 | +0.1% |
+| Crash Bandicoot | 3,000 | 2.301 | 2.307 | +0.3% |
+| Mega Man Legends | 3,000 | 1.798 | 1.799 | +0.1% |
+| Tekken 3 | 3,000 | 2.372 | 2.379 | +0.3% |
+| Tekken 3's fights | 7,500 to 10,500 | 3.707 | 3.705 | −0.1% |
+
+Every pair's digests equal. **Off, the frame is the base's within the noise.**
+
+### 27.3 On
+
+The same build, five rounds, the four forms alternating [M]; every form's picture, sound and accurate state digests
+equal to the plain run's:
+
+| Run | Plain | The precision layer alone | **Precise geometry** | Over the plain frame | E3's renderer alone | The picture's wait, precise | renderer alone |
+|---|---|---|---|---|---|---|---|
+| `gpu/benchmark` | 2.315 | 2.373 | **2.654** | +0.339 (+14.6%) | 2.636 | 0.221 | 0.221 |
+| `gpu/bandwidth` | 2.943 | 3.175 | **3.601** | +0.658 (+22.4%) | 3.546 | 0.296 | 0.295 |
+| Crash Bandicoot | 2.309 | 2.493 | **2.776** | +0.467 (+20.2%) | 2.677 | 0.200 | 0.192 |
+| Mega Man Legends | 1.806 | 1.910 | **2.141** | +0.335 (+18.5%) | 2.092 | 0.157 | 0.148 |
+| Tekken 3 | 2.382 | 2.620 | **2.890** | +0.508 (+21.3%) | 2.795 | 0.135 | 0.130 |
+| Tekken 3's fights | 3.721 | 3.955 | **5.186** | +1.465 (+39.4%) | 5.008 | 0.980 | 0.943 |
+
+- **The precision layer** with a drawer that draws nothing costs 0.06 to 0.24 ms a frame over the plain frame: the
+  layered frame's dispatch (§9.3, §18.3's middle share) and the layer's own stores, 1.0 to 1.1 times what E1's test
+  observer cost on the three discs (0.184, 0.104 and 0.238 ms against 0.169, 0.102 and 0.216). Its 2 MiB shadow of RAM
+  is not felt beside the dispatch.
+- **Precise geometry over E3's renderer alone** is 0.02 to 0.10 ms on the five items and 0.18 in the fights: the
+  precision layer's stores and resolutions, the renderer already paying the layered frame. The picture's wait is the
+  renderer's within 0.01 ms on the five items and 0.04 in the fights: **the division a pixel and the 64-bit edge
+  functions of the precise record are not measurable on this device**, which settles §22.3's choice of a division a
+  pixel over one a span.
+- **The fights** are the finding: the renderer, as E3 built it, costs 1.29 ms a frame there, 0.94 of it the picture's
+  wait, where no item measured before reached 0.6. Tekken 3 draws its fights at 480 interlaced lines, with about 12.5
+  stretches, a hundred palette loads and a VRAM copy every other frame (150,678 stretches, 1,212,215 loads and 5,371
+  copies over the 12,000 frames [M, the run tool]); the wait was not split further into the device's drawing and the
+  submission's many dispatches. It is the renderer's to look at before E5 multiplies it (§30).
+
+Under §9.3's budget and the plan's (`Diamond_Plan.md` §5.12), the frame with the setting on is 2.1 to 3.6 ms on the
+five items and 5.2 ms in Tekken 3's fights on the desktop, against 16.7 ms.
+
+### 27.4 On the handheld, estimated
+
+**An estimate, not a measurement** [A]; the handheld is not part of this stage and the tester will try the setting
+there. By §18.4's reasoning (the integrated Radeon at its 800 MHz floor, some ten to fifteen times less compute
+throughput than the RX 6800, no bus between the host's arrays and the device's, the host's shares half again slower):
+**about 2 to 3 ms a frame more than the accurate frame where a game draws at 240 lines** (the device's share here 0.05
+to 0.15 ms, the host's 0.12 to 0.37), **and about 10 ms more, 9 to 13, in Tekken 3's interlaced fights** (the wait
+here 0.98 ms, most of it taken as the device's). The first leaves full speed with room; the second, beside an accurate
+frame that is itself half again the opening's there (3.7 ms against 2.4 on the desktop), could stand near the edge of
+16.7 ms, and wants the picture's wait taken off the emulation thread (§18.3, §30) before it is relied on.
+
+## 28. The publish, and the tests run
+
+### 28.1 The publish
+
+`dotnet publish EmuSen.Mistress -c Release -r linux-x64` into a scratch folder [M]: the build runs cargo in `v1/` with
+the `dist` profile, as `RustCores.props`' row now names it, and the tree carries `lib/EmuSen/libdiamond.so` (2,130,448
+bytes) with `libdiamond.so.core.json` beside it, written by the kit's runner from the library itself: 51
+`emusen_core_` exports, `set_settings` and `setting_notes` among them, and the sidecar's ninth setting `precision`,
+"Precise geometry", with its help and cost. The name, the core's id, the system pack and what Mistress reads are as
+they were; nothing but the row's `Dir` changed in the build, and CI's matrix entry for the crate (§24.1).
+
+Turning the setting on takes 31 to 69 ms on the desktop (the device, its four programs and its buffers made, the pair
+attached and its first picture read; three trials), once, between two frames; turning it off 2 ms [M, a scratch timing
+in `diamond-v1`'s tests].
+
+### 28.2 Tests [M, 2026-10-13]
+
+All on the final head, after `git merge WiseMan` (WiseMan had not moved from 266a6650).
+
+- **`blackmoon-r3000`** and **`blackmoon-gte`**, `cargo test --release` with `EMUSEN_BLACKMOON_CORPUS`: 38 and 10, the
+  r3000 suite's cases among the first, `an_observer_sees_each_projection_and_changes_nothing` holding H and the offset.
+- **`diamond`**, `cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS`, `EMUSEN_DIAMOND_DISCS` and
+  `EMUSEN_GPU_DEVICE=6800`: 167 unit tests, 81 program tests (E1's three goldens plain and with the test observer, the
+  discs' among them), E3's 3 renderer gates and **E4's 8** (`tests/precise.rs`), all passing; and without the two
+  corpora, the same counts, the corpus tests standing down.
+- **`precision`**: 6. **`diamond-renderer`**: 1. **`diamond-v1`**: 4, and 4 with `EMUSEN_GPU_DEVICE` naming no device,
+  the two that need one standing down with the note printed.
+- **The kit**, the corpus form on the eight discs at 1,800 frames on the `dist` library, off and on: every case on
+  every disc, 192 s and 315 s (§25.6).
+- **WiseMan**, under the test lock with the corpus, the filter of §25.6: 221 of 221.
+- **Not run**: `emusen-gpu`'s and MarsRT's suites, `emusen-gpu` and `emusen-native` being unchanged; the validation
+  layer over the precise record, which E3 ran over the walk it extends (§19.1); the full WiseMan suite; llvmpipe and the
+  integrated card.
+
+## 29. Predictions
+
+- **P-E4a held** [M, §25.3]: the grid's mean vertex error fell from 0.889 px to 0.008 px (predicted: a third of a pixel
+  to under a hundredth; the integer error was larger than predicted, since §21.1's second loss adds to the first), and
+  with MAC0's sums alone to 0.159 px, inside the predicted tenth to a quarter.
+- **P-E4b held in its first half and failed by its own measure in the second** [M, §25.3]: off 2.75 texels; on 0.5004
+  texels, where "under half a texel" was predicted. The measure, |Δu| + |Δv| against an unrounded reference, has a floor
+  of half a texel for any picture of whole texels; the prediction should have been stated against that floor. Retired.
+- **P-E4c held for two games of three and its second half held** [M, §25.5]: Crash Bandicoot 99.7 and Ape Escape 81.1
+  per cent; Spyro the Dragon 17.8, predicted over 70: it moves the GTE's words on the processor. Castlevania 0 and
+  Rayman 3.9, predicted under 10. P-E1c, of the same games' DMA words, is retired with it: true of Crash Bandicoot, false
+  of Spyro the Dragon.
+- **P-E4d held** for the guard's own refusals, 0.25 to 0.70 per cent (§25.5); the console's own cuts, 2 to 6.5 per cent,
+  were not what it predicted and are counted apart.
+- **P-E4e held** (§25.1). **P9 held** for E4. **P10 held** (§25.5).
+- **P-E4f held** [M, §27]: off, the base within the bench's noise, once the display's `read_line` was held out of
+  line; on, 0.34 to 0.66 ms a frame more than the plain frame on the five items and 0.34 to 0.51 on the three discs,
+  under the 1.5 predicted, the precision layer with a drawer that draws nothing 0.10 to 0.24 ms there, under the 0.3
+  predicted. Tekken 3's fights, which the prediction did not name, cost 1.47 ms more, almost all of it the renderer's as
+  E3 built it.
+- **P-E1b held** [M, §27.3]: the precision layer with a drawer that draws nothing costs 1.0 to 1.1 times what E1's test
+  observer cost over the plain frame on the three discs (0.184, 0.104 and 0.238 ms against 0.169, 0.102 and 0.216),
+  where at most twice was predicted.
+
+## 30. What E5 needs next
+
+- **The walk at N×.** The `PRECISE` record already places vertices in 256ths of a pixel and evaluates edge functions
+  and interpolants at any point of that grid; at N× a sample is a point `256/N` apart, so E5 can draw every triangle
+  through it, the integer ones with zero offsets, which §25.2 shows is the integer rule. The texel hold (§26.3) will
+  matter more there, since every sample but one in N² lies between the console's.
+- **The mirror and its block.** `RNDR` holds the renderer's mirror, 1 MiB at 1×; at N× it is N² that. Whether a state
+  keeps an N× mirror, or keeps the console's and redraws, is E5's first decision about states; the kit's C7 and C8 hold
+  whichever it takes to a picture that continues exactly.
+- **The picture's wait.** It is 0.14 to 0.30 ms here on the five items and 0.98 ms in Tekken 3's fights (§27.3),
+  which no stage had measured before; at N² that share cannot stay on the emulation thread. `emusen-gpu`'s pending
+  submission (§18.3) is the planned form. The fights' cost is mostly stretches and palette loads (12.5 stretches and a
+  hundred palette loads a frame), which is the renderer's planning to look at first.
+- **The frame's form.** With internal resolution offered without precise geometry, the renderer is attached alone and
+  wants the plain frame (§24.1); `Layer::moves` is the method to add then.
+- **The seams** (§26.4): edge expansion, off, with its cost; or mixed polygons drawn with the precise corners they
+  have, which the experiment there found a partial remedy. Both are the tester's to choose.
+- **The composition** stands: `diamond-v1` attaches whatever layer the settings ask for, and a second setting is a
+  second entry in its `ENHANCEMENTS` and another form of the pair.
+
+## 31. Reading log (E4)
+
+**No description of PGXP, and no description of any emulator's precision, enhancement or renderer, was opened**, with
+or without code; the plan allowed prose without code, and none was needed. No emulator source of any kind: nothing of
+DuckStation's, Beetle PSX's (parallel-psx and its rsx among it), PCSX's, PCSX-Redux's, SwanStation's, ePSXe's plugins or
+any fork's, no header, no shader, no snippet. No firmware, no listing or trace of one; the player's BIOS folders were
+not read; nothing under `kernel/` or `kernel-harness/` was opened or changed. psx-spx was not opened. ps1-tests'
+programs were run as built, and none of their sources or `common/` files was opened. No game's code was disassembled
+or traced: the discs were run, their pictures looked at, and the layer's counts and the GPU's command words of two
+frames (Ape Escape's and Crash Bandicoot's polygons near a seam, their vertices, texture coordinates and offsets)
+printed by a scratch test.
+
+Opened, all EmuSen's own: `Diamond_Plan.md` §1, §6, §7, §8, §10, §11 Q14 and §13; this page whole; `Diamond_GPU.md` at
+D-23, D-47 and §13; `BlackMoon_GTE.md` §5 and §9; `BlackMoon_R3000.md` §14; `Diamond_Native.md` §24 and §25;
+`Diamond_Players.md` §4 and its headings; `EmuSen_CoreAPI.md` §6.5 to §6.9, §6.13 and §6.19;
+`EmuSen_Settings_Reference.md` §4.108 and §4.109 for their form. The source of `diamond` (`layer.rs`, `v1.rs`,
+`state.rs`, `machine.rs`, `gpu/mod.rs`, `gpu/decode.rs`, `gpu/raster.rs`, `tests/` and `examples/`), of
+`diamond-renderer` whole, of `blackmoon-gte`'s `rtp` and `blackmoon-r3000`'s loads and stores, of `emusen-native`'s
+`Core`, exports, state reader and writer, of `emusen-gpu`'s interface, of the kit's C6 to C8 and its command line;
+`RustCores.props`, `RustCoresPublish.targets`, `EmuSen.csproj`'s cargo targets and the Rust cores' workflow;
+Mistress's `GraphicsSettingsWindow.cs`, `CoreDescriptors.cs`, `CoreEngine.cs`, `CoreCatalog.cs` and `CoreCapabilities.cs`;
+WiseMan's `DiamondTests.cs`, `GenesisSettingsTests.cs`, `SyntheticPsExe.cs` and the fit audit's list; E1's and E3's
+measurement scripts in the probe. What precision is for came from the plan's §6 and from the hardware as Diamond
+models it: the GTE's fixed-point projection and its FIFO, the GPU's integer vertices and its rounding of a texture
+coordinate, DMA's list.

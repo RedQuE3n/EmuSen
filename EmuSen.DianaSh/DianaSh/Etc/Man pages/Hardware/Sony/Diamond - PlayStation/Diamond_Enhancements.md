@@ -560,3 +560,51 @@ misuses are) when this recording has not written that set. Version 1.1.0, an add
 - **P-E3d.** Unattached, the frame's cost is the base's within the bench's noise.
 - **P-E3e.** Attached, with the picture waited for each frame, the emulation thread pays under a millisecond a frame
   more on the bench discs on the RX 6800, the host's decoding and binning under a third of it.
+
+## 15. The stream seam (E3)
+
+### 15.1 Where the layer hangs
+
+E1 kept the attached layer in the board (`Board::layer`). Since E3 it is the GPU's field, **`Gpu::layer`**, and the
+board reaches it there for what it tells (the GP0 receipts, the processor's moves through `LayeredBus`, the GTE's
+projections) [C]. The renderer's events arise inside the GPU's command processor and its display, which the board
+reaches only through the GPU's own methods (`gp0`, `gp1`, `run`, `sync`, `status`, `gpuread`); held beside them, the
+layer needs no argument threaded through each of those and of the fifty calls the GPU's tests make. It is still no
+part of the state, and a copy of the GPU, as the levers' checks make, carries none.
+
+`Machine::attach` gives the layer the GPU as it stands before attaching it (`Layer::seed`), and a state's load gives it
+the loaded GPU after its own block; `Machine::layer` lends the attached layer to whoever wants to ask it what it made,
+as the renderer's tools do (§16).
+
+### 15.2 What the GPU tells
+
+Three methods of `Layer`, each with an empty default, beside E1's:
+
+- **`executed(&Command)`**, from `Gpu::execute`, before the command draws: `words`, the command's words whole;
+  `part`, `Whole`; `at`, the cycle it starts; and `drawing`, a `gpu::decode::Drawing`: GP0(E1h) to (E6h) as they stand,
+  the chip's version, GP1(09h), the parity of the lines the interlaced field leaves alone at that cycle, and the CLUT
+  cache's tag. Every GP0 command reaches it, the environment commands too. The two kinds of word that continue a
+  command after it started are told the same way, since the GPU acts on each as it comes: **`Vertex`**, a polyline's
+  next vertex, as its colour word (the command's when the line is flat) and its position; and **`Data`**, a CPU-to-VRAM
+  transfer's word.
+- **`shown(Shown)`**, from the display: `Size`, when the picture's size changes and it starts black, and `Line`, each
+  line read, with the row, the VRAM position it is read from, its width, its depth and whether it is blanked. The
+  display reads a line at the time its timing reaches it (`Diamond_GPU.md` §7); a layer is told that time's choice and
+  does the reading itself.
+- **`seed(&Gpu)`**, above.
+
+The decoding a renderer needs is the GPU's own, moved into `gpu/decode.rs` and called by both: the vertex under the
+drawing offset (D-23) and its placing, the drawing area, the page attribute, a polygon's, a rectangle's and a line's
+words, and `Drawing`'s `paint`, `texture`, `with_page` and `loads_clut` (`ClutCache::holds`, the cache's own test).
+The GPU's code calls the same functions it had inlined, with the same arguments.
+
+Nothing is made unless a layer is attached: the command processor tests `layer.is_some()` before building a
+`Drawing`, and the display before each line's event (§19 gives the cost).
+
+**Tested** [M]: `a_layer_is_told_each_command_its_continuations_and_each_line_shown` sends a program's GP0 words (the
+four environment commands, a triangle, a polyline of three vertices, a three-pixel transfer) and holds that the layer
+is told each command whole in order with its words, the polyline's third vertex and the transfer's two data words as
+continuations, the triangle under the state the commands before it set, every line of three fields with its row,
+source and width, and the GPU as it stood when attached; and that the machine is the plain run's to the state's last
+byte. Diamond's suite passed unchanged with the seam, its 49 program goldens among them, plain and with E1's test
+observer.

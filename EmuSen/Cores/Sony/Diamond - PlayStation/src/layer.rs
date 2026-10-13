@@ -1,6 +1,7 @@
-//! The enhancement layer's frame (Diamond_Enhancements.md): what a layer is told by the R3000A, the GTE and GP0, how
-//! one is attached to a board, the bus the processor steps through while it is, and the test observer. A layer only
-//! watches; the accurate machine never reads it, and with none attached nothing here is on the frame's path.
+//! The enhancement layer's frame (Diamond_Enhancements.md): what a layer is told by the R3000A, the GTE, GP0, the GPU's
+//! command processor and its display, how one is attached to a board, the bus the processor steps through while it is,
+//! and the test observer. A layer only watches; the accurate machine never reads it, and with none attached nothing
+//! here is on the frame's path.
 
 use std::any::Any;
 
@@ -10,6 +11,8 @@ use emusen_mips::Op;
 use emusen_native::{StateReader, StateWriter};
 
 use crate::bus::Board;
+use crate::gpu::Gpu;
+use crate::gpu::decode::Drawing;
 
 /// Where a word GP0 received came from (Diamond_Enhancements.md §3.3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,15 +23,49 @@ pub enum Receipt {
     Dma { address: u32 },
 }
 
-/// An enhancement layer: told each value the processor moves, each projection the GTE makes and each word GP0
-/// receives, in the order the machine makes them, and its block of the state (Diamond_Enhancements.md §3, §4). Every
-/// method has an empty default; none can change the machine.
+/// Which part of a command the GPU's command processor starts (Diamond_Enhancements.md §15.2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Part {
+    /// A command whole, its words all in.
+    Whole,
+    /// A polyline's next vertex: its colour word (the command's own when the line is flat) and its position.
+    Vertex,
+    /// A CPU-to-VRAM transfer's data word, two pixels.
+    Data,
+}
+
+/// What the command processor starts: the words, the cycle, and the drawing state that applies.
+#[derive(Clone, Copy, Debug)]
+pub struct Command<'a> {
+    pub words: &'a [u32],
+    pub part: Part,
+    pub at: u64,
+    pub drawing: &'a Drawing,
+}
+
+/// What the display does with the picture: a new size, which starts it black, or a line read into it from VRAM's
+/// (`x`, `y`), `width` dots, at 24 bits when `deep`, black when `blanked` (Diamond_GPU.md §7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shown {
+    Size { width: u32, height: u32 },
+    Line { row: u32, x: u32, y: u32, width: u32, deep: bool, blanked: bool },
+}
+
+/// An enhancement layer: told each value the processor moves, each projection the GTE makes, each word GP0 receives,
+/// each command the GPU starts and each line its display reads, in the order the machine makes them, and its block of
+/// the state (Diamond_Enhancements.md §3, §4, §15). Every method has an empty default; none can change the machine.
 pub trait Layer: Observer + Any {
     #[inline(always)]
     fn moved(&mut self, _m: Move) {}
     /// A word GP0 is about to take.
     #[inline(always)]
     fn received(&mut self, _word: u32, _from: Receipt) {}
+    /// A command, or a part of one, that the GPU's command processor starts, before it draws.
+    fn executed(&mut self, _c: &Command) {}
+    /// A size or a line of the picture the display reads.
+    fn shown(&mut self, _s: Shown) {}
+    /// The GPU as it stands when the layer is attached or a state is loaded, from which what it is told continues.
+    fn seed(&mut self, _gpu: &Gpu) {}
     /// The tag of the layer's block in a state; none for a layer that keeps nothing across one.
     fn tag(&self) -> Option<[u8; 4]> {
         None
@@ -178,7 +215,7 @@ impl Bus for LayeredBus<'_> {
     const MOVES: bool = true;
     #[inline(always)]
     fn moved(&mut self, m: Move) {
-        if let Some(l) = self.0.layer.get() {
+        if let Some(l) = self.0.gpu.layer.get() {
             l.moved(m);
         }
     }
@@ -346,6 +383,85 @@ mod tests {
     fn logged(m: &mut Machine) -> Vec<Told> {
         let layer: Box<dyn Any> = m.detach().expect("attached");
         layer.downcast::<Log>().unwrap().0
+    }
+
+    /// What the GPU's command processor and display tell a layer, in order (Diamond_Enhancements.md §15.2).
+    #[derive(Default)]
+    struct Stream {
+        executed: Vec<(Vec<u32>, Part, u64, Drawing)>,
+        shown: Vec<Shown>,
+        seeded: Vec<u16>,
+    }
+
+    impl Observer for Stream {}
+
+    impl Layer for Stream {
+        fn executed(&mut self, c: &Command) {
+            self.executed.push((c.words.to_vec(), c.part, c.at, *c.drawing));
+        }
+        fn shown(&mut self, s: Shown) {
+            self.shown.push(s);
+        }
+        fn seed(&mut self, gpu: &Gpu) {
+            self.seeded.push(gpu.vram.get(256, 0));
+        }
+    }
+
+    /// A program storing `words` to GP0 one by one, then waiting.
+    fn to_gp0(words: &[u32]) -> String {
+        let stores: String = words.iter().map(|w| format!("lui t0, 0x{:X}\nori t0, t0, 0x{:X}\nsw t0, 0x1810(a0)\n", w >> 16, w & 0xFFFF)).collect();
+        format!("lui a0, 0x1F80\n{stores}loop: j loop\nnop")
+    }
+
+    /// Each command told whole with its words as it starts, a polyline's third vertex and a transfer's two data words as
+    /// they continue them, each with the drawing state then; each line the display reads with where from; the GPU as it
+    /// stood at the attach; and the machine as it would be with no layer.
+    #[test]
+    fn a_layer_is_told_each_command_its_continuations_and_each_line_shown() {
+        let (triangle, polyline, transfer) = ([0x20FF_0000, 0x0010_0010, 0x0010_0030, 0x0030_0020], [0x48FF_FFFF, 0x0040_0040, 0x0040_0060], [0xA000_0000, 0x0000_0100, 0x0001_0003]);
+        let mut words = vec![0xE300_0000, 0xE407_FFFF, 0xE500_0802, 0xE600_0001];
+        words.extend(triangle);
+        words.extend(polyline);
+        words.extend([0x0060_0060, 0x5555_5555]);
+        words.extend(transfer);
+        words.extend([0x2222_1111, 0x0000_3333]);
+        let image = program(&to_gp0(&words));
+        let mut plain = machine_for(&image, Market::Americas);
+        let mut m = machine_for(&image, Market::Americas);
+        m.board.gpu.vram.set(256, 0, 0x4321);
+        plain.board.gpu.vram.set(256, 0, 0x4321);
+        m.attach(Box::new(Stream::default()));
+        for _ in 0..3 {
+            plain.advance();
+            m.advance();
+        }
+        assert!(state(&m) == state(&plain), "the layer changed the machine");
+        let s = *(m.detach().unwrap() as Box<dyn Any>).downcast::<Stream>().unwrap();
+        assert_eq!(s.seeded, [0x4321], "given the GPU as it stood when attached");
+
+        let told: Vec<(Vec<u32>, Part)> = s.executed.iter().map(|e| (e.0.clone(), e.1)).collect();
+        let want = [
+            (vec![0xE300_0000], Part::Whole),
+            (vec![0xE407_FFFF], Part::Whole),
+            (vec![0xE500_0802], Part::Whole),
+            (vec![0xE600_0001], Part::Whole),
+            (triangle.to_vec(), Part::Whole),
+            (polyline.to_vec(), Part::Whole),
+            (vec![0x48FF_FFFF, 0x0060_0060], Part::Vertex),
+            (transfer.to_vec(), Part::Whole),
+            (vec![0x2222_1111], Part::Data),
+            (vec![0x0000_3333], Part::Data),
+        ];
+        assert_eq!(told, want);
+        let (_, _, at, d) = s.executed[4];
+        assert_eq!((d.env[2], d.env[3], d.env[4], d.env[5], d.version, d.skip_parity), (0, 0x07_FFFF, 0x802, 1, 2, None), "the triangle drawn under the state the commands before it set");
+        assert!(s.executed.windows(2).all(|w| w[0].2 <= w[1].2) && at > 0, "in the order and at the cycles they start");
+        assert_eq!(m.board.gpu.vram.get(258, 0), 0x3333 | 0x8000, "the transfer drawn, under the mask");
+
+        let lines: Vec<(u32, u32, u32, bool)> = s.shown.iter().filter_map(|e| if let Shown::Line { row, y, width, blanked, .. } = *e { Some((row, y, width, blanked)) } else { None }).collect();
+        let height = m.board.gpu.display.height;
+        assert_eq!(lines.len() as u32, 3 * height, "every line of three fields");
+        assert!(lines.iter().take(height as usize).enumerate().all(|(i, l)| *l == (i as u32, i as u32, 256, true)), "{:?}", &lines[..4]);
     }
 
     /// Diamond_Enhancements.md §3: the three projections with the words the FIFO kept, each move that carries a word to

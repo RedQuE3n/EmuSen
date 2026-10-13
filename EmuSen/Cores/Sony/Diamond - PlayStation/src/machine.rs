@@ -225,7 +225,7 @@ impl Machine {
 
     /// One step at the boundary, with the kernel's seams: the side-load at the shell's entry and the putchar tap.
     pub fn step(&mut self) {
-        if self.board.layer.is_some() { self.step_in::<Layered>() } else { self.step_in::<Plain>() }
+        if self.board.gpu.layer.is_some() { self.step_in::<Layered>() } else { self.step_in::<Plain>() }
     }
 
     /// `step`, through the board itself or through `Layered` while a layer is attached.
@@ -233,13 +233,20 @@ impl Machine {
         step_on::<_, T>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
     }
 
-    /// Attaches an enhancement layer, in place of any before it, which is returned (Diamond_Enhancements.md §3).
-    pub fn attach(&mut self, layer: Box<dyn crate::layer::Layer>) -> Option<Box<dyn crate::layer::Layer>> {
-        self.board.layer.set(Some(layer))
+    /// Attaches an enhancement layer, in place of any before it, which is returned; the layer is first given the GPU
+    /// as it stands (Diamond_Enhancements.md §3, §15.1).
+    pub fn attach(&mut self, mut layer: Box<dyn crate::layer::Layer>) -> Option<Box<dyn crate::layer::Layer>> {
+        layer.seed(&self.board.gpu);
+        self.board.gpu.layer.set(Some(layer))
     }
 
     pub fn detach(&mut self) -> Option<Box<dyn crate::layer::Layer>> {
-        self.board.layer.set(None)
+        self.board.gpu.layer.set(None)
+    }
+
+    /// The attached layer, to be asked what it made (Diamond_Enhancements.md §15.1).
+    pub fn layer(&mut self) -> Option<&mut dyn crate::layer::Layer> {
+        self.board.gpu.layer.get()
     }
 
     /// Up to `limit` steps as `step` makes each, and how many: one run of them where the kernel's two seams have
@@ -263,7 +270,7 @@ impl Machine {
     /// One frame: the machine runs until a field's vblank begins, its picture complete, or to the field's end when the
     /// display range leaves no vblank; the SPU's samples are made up to that cycle.
     pub fn advance(&mut self) {
-        if self.board.layer.is_some() { self.advance_in::<Layered>() } else { self.advance_in::<Plain>() }
+        if self.board.gpu.layer.is_some() { self.advance_in::<Layered>() } else { self.advance_in::<Plain>() }
     }
 
     /// `advance`, the processor stepping through the board itself, or through `Layered` while a layer is attached;

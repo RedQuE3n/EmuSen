@@ -16,7 +16,7 @@ use crate::dma::{self, Dma, chcr};
 use crate::gpu::Gpu;
 use crate::icache::{ICache, Lookup};
 use crate::irq::{self, Irq};
-use crate::layer::{Attached, Receipt};
+use crate::layer::Receipt;
 use crate::memctl::{self, MemControl, Timing};
 use crate::timers::{self, Timers};
 use crate::video::{Video, edge};
@@ -132,8 +132,6 @@ pub struct Board {
     pub(crate) vblank_seen: bool,
     /// How many times the events ran, which tells the idle skipper a turn met one (Diamond_Speed.md §4); not state.
     pub events_run: u64,
-    /// The enhancement layer attached, if any (Diamond_Enhancements.md §3); not state.
-    pub layer: Attached,
 }
 
 impl Board {
@@ -173,7 +171,6 @@ impl Board {
             dma_clock: 0,
             vblank_seen: false,
             events_run: 0,
-            layer: Attached::default(),
         };
         b.schedule();
         b
@@ -677,7 +674,7 @@ impl Board {
     /// A word GP0 is about to take, told to the layer if one is attached.
     #[inline(always)]
     fn received(&mut self, word: u32, from: Receipt) {
-        if let Some(l) = self.layer.get() {
+        if let Some(l) = self.gpu.layer.get() {
             l.received(word, from);
         }
     }
@@ -1088,7 +1085,7 @@ impl Board {
     /// `cop2_command` with the attached layer told what the command computes (Diamond_Enhancements.md §3.2).
     pub(crate) fn cop2_command_observed(&mut self, command: u32) {
         self.wait_for_gte();
-        let cycles = match self.layer.get() {
+        let cycles = match self.gpu.layer.get() {
             Some(l) => self.gte.command_observed(command, l),
             None => self.gte.command(command),
         };

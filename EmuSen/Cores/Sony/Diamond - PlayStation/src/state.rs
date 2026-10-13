@@ -483,7 +483,7 @@ impl Machine {
         w.bytes("TTY", &b.tty.text);
         w.u64("Disc", self.disc_print);
         w.bytes("Picture", &b.gpu.display.picture);
-        if let Some(layer) = b.layer.get_ref() {
+        if let Some(layer) = b.gpu.layer.get_ref() {
             write_block(w, layer);
         }
     }
@@ -554,13 +554,15 @@ impl StateMachine for Machine {
             board.gpu.display.reread(&board.gpu.vram, &board.video);
             Vec::new()
         };
-        board.layer = std::mem::take(&mut self.board.layer);
-        if let Some(layer) = board.layer.get() {
+        let mut attached = std::mem::take(&mut self.board.gpu.layer);
+        if let Some(layer) = attached.get() {
             match layer.tag().and_then(|t| blocks.iter().find(|b| b.0 == t)) {
                 Some((_, block)) => layer.load(block),
                 None => layer.clear(),
             }
+            layer.seed(&board.gpu);
         }
+        board.gpu.layer = attached;
         board.schedule();
         self.frames = frames;
         self.cpu = cpu;

@@ -20,7 +20,7 @@ pub use crate::debug::Hooks;
 pub use crate::ffi::StateMachine;
 pub use desc::*;
 pub use lend::{Kept, keep};
-pub use outbox::{Level, detail, emit, log};
+pub use outbox::{Level, SEEK_SPAN, detail, emit, log, seek};
 pub use sys::{FrameInfo, caps, event, flags, kind, pixel, status};
 
 /// What `create` receives: the image, the settings resolved against the schema with every key present, the files,

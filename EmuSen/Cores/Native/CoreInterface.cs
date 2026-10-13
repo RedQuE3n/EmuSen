@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreInterface
     {
         public const uint Major = 1;
-        public const uint Minor = 3;
+        public const uint Minor = 4;
         public const uint Version = (Major << 16) | Minor;
 
         // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
@@ -62,8 +62,11 @@ namespace EmuSen.Cores.Native
         // EMUSEN_CREATE_LENT and EMUSEN_MEDIA_LENT: the image and its media files kept in place by the host until the loan ends - see EmuSen_CoreAPI.md §6.24.
         public const uint CreateLent = 1, MediaLent = 2;
 
-        // The event kinds of enum emusen_event_kind.
+        // The event kinds of enum emusen_event_kind; 7 is kept for a controller's outputs.
         public const uint EventAudioRate = 1, EventGeometry = 2, EventStateSize = 3, EventBattery = 4, EventLog = 5, EventMachineInfo = 6;
+
+        // EMUSEN_EVENT_MEDIA_SEEK and EMUSEN_FILE_IMAGE: a drive names the file and byte it reads next, a = (drive << 32) | file - see EmuSen_CoreAPI.md §6.25.
+        public const uint EventMediaSeek = 8, FileImage = 0xFFFFFFFF;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct File

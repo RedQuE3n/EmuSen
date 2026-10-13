@@ -28,7 +28,7 @@ fn hi(v: u32) -> i64 {
 }
 
 /// One command's run: the registers, the FLAG bits it raises, its shift and its lm bit.
-struct Run<'a, O: Observer> {
+struct Run<'a, O: Observer + ?Sized> {
     r: &'a mut Registers,
     o: &'a mut O,
     flag: u32,
@@ -36,7 +36,7 @@ struct Run<'a, O: Observer> {
     lm: bool,
 }
 
-impl<O: Observer> Run<'_, O> {
+impl<O: Observer + ?Sized> Run<'_, O> {
     // --- the inputs ---
 
     fn matrix(&self, base: usize) -> M3 {
@@ -243,7 +243,7 @@ impl<O: Observer> Run<'_, O> {
         let word = self.screen(x, 14) | self.screen(y, 13) << 16;
         self.r.data.copy_within(d::SXY0 + 1..=d::SXY2, d::SXY0);
         self.r.data[d::SXY2] = word;
-        self.o.projected(&Projection { vertex: n as u8, x, y, z: sz, word });
+        self.o.projected(&Projection { vertex: n as u8, sums: sum, quotient: q, x, y, z: sz, word });
         if last {
             let dq = self.mac0(q as i64 * self.r.control[c::DQA] as i32 as i64 + self.r.control[c::DQB] as i32 as i64);
             self.set_ir0(dq);
@@ -371,7 +371,7 @@ impl<O: Observer> Run<'_, O> {
 }
 
 /// Runs `command` (the COP2 instruction's low 25 bits) on `r`; the cycles it takes.
-pub fn run<O: Observer>(r: &mut Registers, command: u32, o: &mut O) -> u32 {
+pub fn run<O: Observer + ?Sized>(r: &mut Registers, command: u32, o: &mut O) -> u32 {
     let mut x = Run { r, o, flag: 0, sh: if command >> 19 & 1 != 0 { 12 } else { 0 }, lm: command >> 10 & 1 != 0 };
     let number = (command & 0x3F) as usize;
     match number {

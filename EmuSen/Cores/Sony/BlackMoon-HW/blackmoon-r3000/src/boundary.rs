@@ -5,7 +5,7 @@
 use emusen_native::debug::{Observer, kind, stop};
 
 use crate::cop0::{cause, code, dcic, sr};
-use crate::{Bus, R3000, Size, Step};
+use crate::{Bus, Move, R3000, Size, Step};
 
 const RAM: usize = 1 << 20;
 
@@ -24,6 +24,8 @@ struct Rig {
     /// The clock at which a run must end, and the clock's bit that drives the interrupt line when it is not held.
     until: u64,
     line_bit: Option<u32>,
+    /// The moves told, while it is kept.
+    moves: Option<Vec<Move>>,
 }
 
 fn at(address: u32) -> usize {
@@ -32,7 +34,7 @@ fn at(address: u32) -> usize {
 
 impl Rig {
     fn new() -> Rig {
-        Rig { ram: vec![0; RAM], clock: 0, idled: 0, line: false, commands: Vec::new(), cop2: [0; 32], isolated: Vec::new(), writes: Vec::new(), absent: u32::MAX, faulted: false, until: u64::MAX, line_bit: None }
+        Rig { ram: vec![0; RAM], clock: 0, idled: 0, line: false, commands: Vec::new(), cop2: [0; 32], isolated: Vec::new(), writes: Vec::new(), absent: u32::MAX, faulted: false, until: u64::MAX, line_bit: None, moves: None }
     }
 
     fn word(&self, address: u32) -> u32 {
@@ -108,6 +110,11 @@ impl Bus for Rig {
     }
     fn bus_error(&mut self) -> bool {
         std::mem::take(&mut self.faulted)
+    }
+    fn moved(&mut self, m: Move) {
+        if let Some(v) = &mut self.moves {
+            v.push(m);
+        }
     }
 }
 
@@ -711,7 +718,7 @@ fn random_word(g: &mut Random) -> u32 {
 /// steps left a copy, and the run must have counted the same steps and ended in the same one.
 #[test]
 fn a_run_is_its_steps_on_random_programs() {
-    let mut runs = 0u64;
+    let (mut runs, mut moves) = (0u64, 0usize);
     let (mut longest, mut exceptions, mut interrupts) = (0, 0u32, 0u32);
     for seed in 1..=400u64 {
         let mut g = Random(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
@@ -735,6 +742,7 @@ fn a_run_is_its_steps_on_random_programs() {
         (cpu.regs.bpc, cpu.regs.bpcm, cpu.regs.bda, cpu.regs.bdam) = (ORIGIN + 4 * g.below(400), !0, 0x8004_0000 + 4 * g.below(0x80), !3);
         cpu.regs.sr = if seed % 3 == 0 { interrupts_on } else { sr::CU2 };
         let (mut twin, mut twin_rig) = (cpu.clone(), Rig { ram: rig.ram.clone(), ..Rig::new() });
+        (rig.moves, twin_rig.moves) = (Some(Vec::new()), Some(Vec::new()));
         (twin_rig.absent, twin_rig.line_bit) = (rig.absent, rig.line_bit);
         let mut steps = 0;
         while steps < 4000 {
@@ -745,6 +753,9 @@ fn a_run_is_its_steps_on_random_programs() {
             assert_eq!(ran, made, "seed {seed} after {steps} steps: the run's count and end against the steps'");
             assert_eq!((cpu.regs, cpu.hilo_ready), (twin.regs, twin.hilo_ready), "seed {seed} after {steps} steps");
             assert!(rig.clock == twin_rig.clock && rig.idled == twin_rig.idled && rig.writes == twin_rig.writes && rig.isolated == twin_rig.isolated && rig.commands == twin_rig.commands && rig.cop2 == twin_rig.cop2, "seed {seed} after {steps} steps: the bus");
+            assert_eq!(rig.moves, twin_rig.moves, "seed {seed} after {steps} steps: the moves told");
+            moves += rig.moves.as_ref().map_or(0, Vec::len);
+            (rig.moves, twin_rig.moves) = (Some(Vec::new()), Some(Vec::new()));
             steps += ran.0;
             runs += 1;
             longest = longest.max(ran.0);
@@ -756,9 +767,60 @@ fn a_run_is_its_steps_on_random_programs() {
         }
         assert!(rig.ram == twin_rig.ram, "seed {seed}: memory");
     }
-    eprintln!("{runs} runs, the longest {longest} steps; exception codes {exceptions:#b}, {interrupts} interrupts");
+    eprintln!("{runs} runs, the longest {longest} steps; exception codes {exceptions:#b}, {interrupts} interrupts; {moves} moves told");
     assert!(longest >= 100 && interrupts > 100, "the programs run and are interrupted: {longest}, {interrupts}");
     for c in [code::INT, code::ADEL, code::ADES, code::DBE, code::SYS, code::BP, code::RI, code::CPU, code::OV] {
         assert!(exceptions & 1 << c != 0, "exception {c} was met");
     }
+}
+
+/// BlackMoon_R3000.md §14: each move is told once its instruction made it, with its register, address, size and value:
+/// the loads and stores of every width, the unaligned four, the four moves of coprocessor 2's data and the copies; an
+/// instruction that computes something else, a load that met no device and a store to the isolated cache tell none.
+#[test]
+fn each_move_is_told_with_its_values() {
+    let source = "lui s0, 0x8004\nlui t0, 0x1234\nori t0, t0, 0x5678\nsw t0, 0(s0)\nsw t0, 4(s0)\nlw t1, 0(s0)\nlh t2, 2(s0)\nlbu t3, 3(s0)\n\
+        sh t0, 8(s0)\nsb t0, 12(s0)\nmtc2 t0, $12\nmfc2 t4, $12\nswc2 $12, 16(s0)\nlwc2 $13, 0(s0)\naddu t5, t0, zero\nor t6, zero, t0\n\
+        addiu t7, t0, 0\nsll s1, t0, 0\naddu s2, t0, t0\nlwl s3, 5(s0)\nlwr s3, 2(s0)\nswl t0, 21(s0)\nswr t0, 26(s0)\nlui s4, 0x8005\nlw t8, 0(s4)\nnop";
+    let (mut cpu, mut rig) = machine(source);
+    cpu.regs.sr = sr::CU2;
+    rig.absent = 0x8005_0000;
+    rig.moves = Some(Vec::new());
+    while cpu.step(&mut rig) == Step::Instruction {}
+    assert_eq!(cpu.regs.cause >> 2 & 0x1F, code::DBE, "the last load met no device");
+    let w = 0x1234_5678;
+    let a = |n: u32| ORIGIN + 4 * n;
+    let d = |o: u32| 0x8004_0000 + o;
+    use Size::*;
+    assert_eq!(
+        rig.moves.unwrap(),
+        [
+            Move::Store { at: a(3), register: 8, address: d(0), size: Word, value: w },
+            Move::Store { at: a(4), register: 8, address: d(4), size: Word, value: w },
+            Move::Load { at: a(5), register: 9, address: d(0), size: Word, value: w },
+            Move::Load { at: a(6), register: 10, address: d(2), size: Half, value: 0x1234 },
+            Move::Load { at: a(7), register: 11, address: d(3), size: Byte, value: 0x12 },
+            Move::Store { at: a(8), register: 8, address: d(8), size: Half, value: 0x5678 },
+            Move::Store { at: a(9), register: 8, address: d(12), size: Byte, value: 0x78 },
+            Move::ToCop2 { at: a(10), register: 8, cop2: 12, value: w },
+            Move::FromCop2 { at: a(11), register: 12, cop2: 12, value: w },
+            Move::StoreCop2 { at: a(12), cop2: 12, address: d(16), value: w },
+            Move::LoadCop2 { at: a(13), cop2: 13, address: d(0), value: w },
+            Move::Copy { at: a(14), register: 13, from: 8, value: w },
+            Move::Copy { at: a(15), register: 14, from: 8, value: w },
+            Move::Copy { at: a(16), register: 15, from: 8, value: w },
+            Move::Copy { at: a(17), register: 17, from: 8, value: w },
+            Move::Load { at: a(19), register: 19, address: d(4), size: Half, value: 0x5678_0000 },
+            Move::Load { at: a(20), register: 19, address: d(2), size: Half, value: 0x5678_1234 },
+            Move::Store { at: a(21), register: 8, address: d(20), size: Half, value: 0x1234 },
+            Move::Store { at: a(22), register: 8, address: d(26), size: Half, value: 0x5678 },
+        ]
+    );
+    assert_eq!(cpu.regs.r[19], 0x5678_1234);
+
+    let (mut cpu, mut rig) = machine("lui s0, 0x8004\nsw s0, 0(s0)\nlw t0, 0(s0)\nnop");
+    cpu.regs.sr = sr::ISC;
+    rig.moves = Some(Vec::new());
+    run(&mut cpu, &mut rig, 4);
+    assert_eq!((rig.moves.unwrap(), rig.isolated.len()), (vec![], 2), "the isolated cache's load and store tell nothing");
 }

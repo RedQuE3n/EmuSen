@@ -84,6 +84,35 @@ pub trait Bus {
     fn running(&mut self) -> bool {
         false
     }
+    /// A value the processor moved, told once the instruction has made the move, for a console that follows values
+    /// through the machine (BlackMoon_R3000.md §14). The default watches nothing, so a bus that does not give it
+    /// compiles to no call; a bus that does may only watch.
+    #[inline(always)]
+    fn moved(&mut self, _m: Move) {}
+}
+
+/// What `Bus::moved` is told: a general register, coprocessor 2's data register or memory given a value, and from
+/// where; `at` is the instruction's address. R0 is given nothing, so no move names it as the register given a value,
+/// and an access the isolated cache takes moves nothing (BlackMoon_R3000.md §14).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Move {
+    /// LB, LBU, LH, LHU, LW, LWL or LWR: general register `register` will hold `value`, after the next instruction,
+    /// from `size` bytes read at `address`.
+    Load { at: u32, register: u8, address: u32, size: Size, value: u32 },
+    /// SB, SH, SW, SWL or SWR: `value`, `size` bytes of general register `register`, written at `address`.
+    Store { at: u32, register: u8, address: u32, size: Size, value: u32 },
+    /// MFC2: general register `register` will hold coprocessor 2's data register `cop2`, `value`, after the next
+    /// instruction.
+    FromCop2 { at: u32, register: u8, cop2: u8, value: u32 },
+    /// MTC2: coprocessor 2's data register `cop2` written with general register `register`, `value`.
+    ToCop2 { at: u32, register: u8, cop2: u8, value: u32 },
+    /// LWC2: coprocessor 2's data register `cop2` written with `value`, read at `address`.
+    LoadCop2 { at: u32, cop2: u8, address: u32, value: u32 },
+    /// SWC2: coprocessor 2's data register `cop2`, `value`, written at `address`.
+    StoreCop2 { at: u32, cop2: u8, address: u32, value: u32 },
+    /// An instruction whose result is a general register unchanged: `register` given `from`'s `value` by ADDU, ADD,
+    /// SUBU, SUB, OR or XOR with R0, ADDIU, ADDI, ORI or XORI of 0, or a shift by 0.
+    Copy { at: u32, register: u8, from: u8, value: u32 },
 }
 
 /// The branch delay: whether the next instruction is a branch's delay slot, whether the branch is taken, and where to.

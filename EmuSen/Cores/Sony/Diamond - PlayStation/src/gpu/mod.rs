@@ -569,9 +569,9 @@ impl Gpu {
         let paint = self.paint(blended, texture, raw && texture.is_some(), modulated || (shaded && texture.is_none()), video, t);
         let tex = texture.is_some();
         let (work, loaded) = self.draw(paint, |p| {
-            raster::triangle(p, [v[0], v[1], v[2]], shaded, tex);
+            raster::triangle(p, raster::fold([v[0], v[1], v[2]]), shaded, tex);
             if quad {
-                raster::triangle(p, [v[1], v[2], v[3]], shaded, tex);
+                raster::triangle(p, raster::fold([v[1], v[2], v[3]]), shaded, tex);
             }
         });
         timing::drawing(work.rows as u64 * timing::TRIANGLE_ROW + loaded as u64 * timing::CLUT_ENTRY, work)
@@ -617,6 +617,7 @@ impl Gpu {
         let c = command >> 24;
         let (shaded, blended) = (c & 0x10 != 0, c & 2 != 0);
         let paint = self.paint(blended, None, false, true, video, t);
+        let [a, b] = raster::fold([a, b]);
         let (work, _) = self.draw(paint, |p| raster::line(p, a, b, shaded));
         timing::drawing(timing::LINE, work)
     }

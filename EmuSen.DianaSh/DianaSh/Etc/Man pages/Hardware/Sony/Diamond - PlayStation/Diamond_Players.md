@@ -1183,3 +1183,107 @@ its corridor and a fight with Reaverbots (§27.6).
 | Reaches play | **yes**: the Capcom animation and logo, "now loading…", the story's text over the sea; with the script the title, NEW GAME, Mega Man in the first ruin from about frame 3,360, moving with the presses, a shutter lifted, a corridor walked and the refractor's scene |
 | Pictures | nothing wrong seen |
 | Cards | the open kernel's formatted card in slot 1; no save made by the script |
+
+## 14. Two reports from the handheld: Crash Bandicoot's right edge, and Mega Man Legends' box (2026-10-12)
+
+*Written 2026-10-12, on WiseMan `6141ad60`.* The tester played on the handheld and reported two faults: in Crash
+Bandicoot "weird graphical artifacts to the right of the screen in game", and in Mega Man Legends, "after Roll said
+some dialogue in game. it wouldnt close the dialogue box", the game closed by hand. The second ran on the player's
+own BIOS (`scph5501.bin`) with one cheat on, "Infinite Life", the GameShark code `800B521E 00C4`, at a steady 60
+frames a second for ten minutes; its log holds pacing lines only. The marks are §12's; [M] is measured on this date.
+
+### 14.1 Crash Bandicoot: the ground at the right of the screen (D-47)
+
+- **Reproduced** [M] on the desktop on the open kernel with `psxplay/crash-bandicoot.txt`: at frame 12,600 a wedge of
+  the right third, ground that SwanStation draws sand-textured, is a flat olive with edges torn along polygons. Counted
+  as pictures holding more than 500 pixels of that olive (49,49,0), 58 of the run's 300 to frame 18,000, in three
+  stretches (3,540–4,200, 12,420–13,680, 15,300–16,680), wherever the camera puts ground just past the screen's right
+  edge.
+- **Cause** [M, a debugging build outside the repository that logged a frame's GP0 commands, every polygon as placed,
+  the GTE's RTPT and NCLIP results and FLAG, and the command that last wrote each VRAM pixel]: the olive is the frame's
+  clear fill, GP0(02h) with 003236h, showing through where no polygon drew. The game sent the polygons (as many to the
+  faulty buffer as to a whole one) and the GTE raised no screen-coordinate flag; the GPU dropped them. The game draws
+  its right buffer with the offset at 768, so a vertex at SX 286, just past the screen, sums to 1,054, which the 11-bit
+  rule of D-23 wraps to -994; the rest of the polygon is placed from it and lies off the area. The coordinates are 11
+  bits, so -994 and 1,054 are the same column; Diamond had treated them as different ones (`Diamond_Disputes.md` D-47).
+- **Proof**: `programs/offset-fold.s` and `a_primitive_past_the_offsets_eleven_bits_is_drawn_modulo_2048` fail before
+  the change (the triangle from 286 reads 0 where the referees draw it), as does the unit test
+  `a_primitive_reaching_past_minus_1024_is_drawn_2048_further_on`. DuckStation, SwanStation and Beetle PSX read the
+  program back word for word as Diamond does after the change.
+- **Fix**: `raster.rs`'s `fold`, applied by `mod.rs` to each triangle and line segment it hands the rasteriser: one
+  reaching left of -1,024 (or above it) is drawn 2,048 further on.
+- **Before and after** [M]: no picture of the run holds the olive after the change (0 of 300). The right third's mean
+  grey difference from SwanStation's picture 1,020 frames later (its BIOS's intro), at 12,600, 13,200, 15,600 and
+  16,200: 17.1, 10.2, 14.3 and 8.4 before, 11.4, 0.7, 5.4 and 0.7 after; at 12,600 the ground is sand to the edge as on
+  the referee, and what remains is the crab, which stands elsewhere on the two.
+- **The other six games** [M, `d5` runs of §13 again with both builds, the same presses]: Silent Hill, Ape Escape,
+  Tekken 3, Spyro the Dragon, Rayman and Castlevania, 280, 344, 367, 291, 287 and 280 pictures, every one byte for byte
+  the same before and after: none of their runs places a primitive past -1,024.
+- amidog's OFFSET, POSITION, SIZE and AREA groups print the same TTY, line for line, before and after (D-47).
+
+### 14.2 Mega Man Legends: the box after Roll's lines
+
+- **The cheat** [R, `PsxCheatFormats.cs`]: `800B521E 00C4` is type 80h, decoded as `Write(l, 2, Set)` at
+  `Command & 1FFFFFh` = 0B521Eh with the line's value 00C4h: a 16-bit write of 00C4h to RAM 0B521Eh each frame, the
+  write the code means in RetroArch's cheat files. A decoding difference was the only way it could matter, and there is
+  none. The run tool gained `--poke ADDR:VALUE:WIDTH` to apply it; every Diamond run below has it on.
+- **The hypothesis** (a voiced box that closes when its clip ends, and a clip whose end Diamond never reports)
+  [M, the controller's trace on both kernels and the game's own code read from RAM on the open kernel]: Roll's radio
+  lines in the first ruin are five clips, channels 0 to 4 of `XA1806E.XA` (32 channels, 18,900 Hz mono, interleaved
+  1/32 with data sectors of channel 0 that the game reads as it plays). Each is Setfilter (1, n), Setloc 10:57:46 (the
+  file's start), ReadS, and ends with a Pause; the game decides the end itself, from GetlocP's position against an end
+  sector (its code at 8001C9D4h–8001CA64h), about 30 sectors past the channel's last sector, the one with the submode's
+  EOF bit. So the box's end depends on neither the EOF bit, INT4, nor the read's end, and on Diamond every clip ends,
+  its box closing as the voice stops. *Rates and phases* [M, 48 runs from a state at frame 8,990, Cross every 7 to 53
+  frames at four or more phases each]: the same five clips, the same CD commands and the same boxes every time; the
+  lines advance with the voice, not with Cross. *The second attempt*: on the open kernel one of channel 0's data
+  sectors (49,713) waited behind an interrupt and was then refused by the filter, as psx-spx's delivery rule has it,
+  and the clip still ended; on the player's BIOS none waited. *The player's BIOS* [M, six runs each kernel with the
+  Cross presses shifted by 7 to 35 frames]: the same commands and boxes on both. The hypothesis is refuted for these
+  clips.
+- **The box that does not close** [M, `psxplay/mega-man-legends-prompt.txt`, Cross every 30 frames after NEW GAME and
+  Up for 90 frames every 900]: when Roll's last line ends the game shows its instructions and then asks "Read
+  instructions again?" with the cursor on **Yes**. Cross takes Yes, and the instructions are shown again, then the
+  question again: to the end of each run (80 seconds of boxes after Roll's lines) on Diamond's open kernel, on Diamond
+  with the player's BIOS, and on SwanStation on `scph5501.bin` with no cheat, whose prompt and cursor are the same
+  picture as Diamond's. The box closes only with Right, then Cross on No, which is what `mega-man-legends.txt` does.
+  This is the game's own prompt, and the course SwanStation follows; it is the fault the tester described as far as
+  the description goes ("after Roll said some dialogue in game", a box that will not close, a game running at full
+  pace), but the tester's play itself was not recorded, so that it is the same box is an inference [A].
+- **The cheat's part**: none: the decoded write is the code's, and the referee loops without it.
+- **Not reached**: the game past the first ruin's corridors (about frame 14,000 of the script, Mega Man in the second
+  corridor after the first Reaverbots); any clip of the game's 47 other XA files.
+
+### 14.3 The cost
+
+[M, `examples/run` built from WiseMan `6141ad60` and from this step's last change, both with
+`RUSTFLAGS="-C llvm-args=-align-all-functions=6"`, run alternately on one processor, the fastest of five, ms a frame,
+before → after, the emulated cycles identical]: `timers` 0.329 → 0.329, `gpu/triangle` 1.516 → 1.516,
+`gpu/bandwidth` 4.427 → 4.418, `gpu/benchmark` 2.325 → 2.322 over 600 frames; Crash Bandicoot 2.323 → 2.322, Mega Man
+Legends 1.810 → 1.812, Tekken 3 2.416 → 2.411 over their first 3,000. The fold's first form, inside the triangle's
+rasteriser, had read `gpu/benchmark` 2.2% to 2.7% slower (D-47); the form kept adds one comparison a triangle and a
+call taken only by a primitive that needs it.
+
+### 14.4 The checks kept, and the tests run (2026-10-12)
+
+- ps1-tests' pictures and records, and every program test: `cargo test --release` in the crate, 157 unit tests and 77
+  program tests, with `EMUSEN_DIAMOND_PS1TESTS` set and without, all passing; WiseMan's `Diamond` tests under the test
+  lock, 46 of 46.
+- amidog's OFFSET, POSITION, SIZE and AREA groups: the same TTY, line for line, on the base and the final build.
+- The eight games' play as §13 records it: the six other games' `d5` runs byte for byte the same pictures before and
+  after the change (§14.1), their titles among them; Crash Bandicoot reaching play by its script, with no olive in any
+  picture; Mega Man Legends through its title, NEW GAME, the first ruin, Roll's lines and the first Reaverbots, on the
+  open kernel and on the player's BIOS.
+
+### 14.5 Read for this section, and exposures
+
+psx-spx `6d7d1bc`: "Vertex", "GP0(E3h)" to "GP0(E5h)" for D-47; `cdromdrive.md`'s "Data/ADPCM Sector Filtering/
+Delivery", "Pause", "GetlocL", "HSTS" and "INT4"'s rows, and `cdromformat.md`'s "Submode" and "Audio/Video
+Interleave", for the stream. EmuSen's own: `PsxCheatFormats.cs`, Diamond's GPU and CD-ROM controller, the run tool and
+the referees' driver. The games' own code and RAM on the open kernel only: Crash Bandicoot's GP0 words and GTE results
+through a debugging build outside the repository, and Mega Man Legends' CD routines disassembled from RAM by the run
+tool's `--disasm` and its accesses to the controller by `--game-log`. On the player's BIOS Diamond logged only its own
+controller's commands and its sectors' delivery, from frame 8,200 after the anchor, long after the BIOS had handed over;
+nothing of the BIOS's code or RAM was read, and no state was saved while it ran. The referees ran as black boxes: their
+pictures, and their RAM at `offset-fold.s`'s done word. No emulator's source, no firmware or listing of one, and none of
+the documents `DOCS.txt` excludes was opened.

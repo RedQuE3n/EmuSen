@@ -1716,7 +1716,7 @@ The record is `Diamond_Enhancements.md` §14 to §20. In brief:
 
 ## 26. Stage E4, precise geometry (2026-10-13)
 
-The record is `Diamond_Enhancements.md` §21 to §29. In brief:
+The record is `Diamond_Enhancements.md` §21 to §31. In brief:
 
 - **The design**, committed before the code (§21 to §24): the precise vertex the GTE's projection without its
   truncations, guarded within two pixels of the console's; serials in a shadow of the FIFO, the registers, RAM and the

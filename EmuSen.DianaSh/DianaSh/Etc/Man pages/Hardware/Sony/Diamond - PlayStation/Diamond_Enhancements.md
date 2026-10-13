@@ -1436,3 +1436,174 @@ pixels, in place of wholly as before, was tried on the discs. Ape Escape's crack
 (136 to 32, 249 to 131, 89 to 79) and rose at one (79 to 85); the T-junctions remain, since the ring's corners on the
 floor's edge are not the floor's. It is not a fix, the plan's rule (§21.4) stays, and edge expansion (§22.4), the
 planned remedy for this seam, is not built. Both are open for the tester, with their costs as stated there.
+
+## 27. Cost
+
+### 27.1 The instrument
+
+§9's and §18.1's, unchanged: `examples/bench` on links with every function aligned to 64 bytes, each build in its own
+target folder, the builds alternating on one core (`taskset -c 11`), the fastest mean of five rounds, milliseconds of
+the emulation thread a frame; with a renderer attached the wait for its picture is timed with the frame. The base is
+WiseMan 266a6650, extracted outside the repository. A sixth item is added, **Tekken 3's fights**: the disc run 10,500
+frames and timed from frame 7,500, its attract mode's fights, since its first 3,000 frames make no projection (§7.2).
+The device is the RX 6800. The bench's `--precise` attaches the pair as the setting does, `--precision` the precision
+layer with a drawer that draws nothing, `--renderer` E3's renderer alone.
+
+### 27.2 Off, against the base, and a cost that was there at first
+
+The first series, five rounds, and a second of seven on three discs, stood Tekken 3 above the base [M]:
+
+| Run | Base | Branch | Difference |
+|---|---|---|---|
+| Tekken 3, first series | 2.383 | 2.400 | +0.7% |
+| Tekken 3, second series | 2.370 | 2.386 | +0.7% |
+| Crash Bandicoot, the two series | 2.309, 2.309 | 2.307, 2.318 | −0.1%, +0.4% |
+| Mega Man Legends, the two series | 1.799, 1.801 | 1.805, 1.800 | +0.3%, 0.0% |
+
+The same figure twice is not the instrument's error. Comparing the links' symbol sizes, as §9.2 and §18.2 did: every
+function of the plain frame was the base's size (`advance_in::<Plain>`, `exec::run` and `Run::execute` for the board)
+but two. `Display::scan` was 0x809 bytes against the base's 0x436, with `Display::read_line` (0x371) gone from the
+link: the branch's link had inlined the one into the other, though neither's source had changed. And
+`raster::triangle` was 0x187F against 0x1878, seven bytes, as was `record::triangle`, which inlines the same helpers.
+**By ablation** [M, seven rounds, the three builds alternating]: with `read_line` held out of line, both functions the
+base's sizes again, Tekken 3 stood at the base, 2.375 against 2.373, where the build without the pin stood at 2.384;
+Crash Bandicoot 2.303 and 2.305 against 2.297. **Decided [C]**: `read_line` is `#[inline(never)]`, the base's shape.
+The triangle's seven bytes stayed with its source and every function it calls unchanged (the base vertex is asked of
+`raster::setup` again, not of a function made public for it, which was tried first and was not the cause);
+`gpu/benchmark`, the item that showed the triangle's shape at E3, shows nothing, so no cause was sought further.
+
+The final build against the base, five rounds [M]:
+
+| Run | Frames | Base | Branch | Difference |
+|---|---|---|---|---|
+| `gpu/benchmark` | 1,200 | 2.321 | 2.315 | −0.3% |
+| `gpu/bandwidth` | 1,200 | 2.951 | 2.954 | +0.1% |
+| Crash Bandicoot | 3,000 | 2.301 | 2.307 | +0.3% |
+| Mega Man Legends | 3,000 | 1.798 | 1.799 | +0.1% |
+| Tekken 3 | 3,000 | 2.372 | 2.379 | +0.3% |
+| Tekken 3's fights | 7,500 to 10,500 | 3.707 | 3.705 | −0.1% |
+
+Every pair's digests equal. **Off, the frame is the base's within the noise.**
+
+### 27.3 On
+
+The same build, five rounds, the four forms alternating [M]; every form's picture, sound and accurate state digests
+equal to the plain run's:
+
+| Run | Plain | The precision layer alone | **Precise geometry** | Over the plain frame | E3's renderer alone | The picture's wait, precise | renderer alone |
+|---|---|---|---|---|---|---|---|
+| `gpu/benchmark` | 2.315 | 2.373 | **2.654** | +0.339 (+14.6%) | 2.636 | 0.221 | 0.221 |
+| `gpu/bandwidth` | 2.943 | 3.175 | **3.601** | +0.658 (+22.4%) | 3.546 | 0.296 | 0.295 |
+| Crash Bandicoot | 2.309 | 2.493 | **2.776** | +0.467 (+20.2%) | 2.677 | 0.200 | 0.192 |
+| Mega Man Legends | 1.806 | 1.910 | **2.141** | +0.335 (+18.5%) | 2.092 | 0.157 | 0.148 |
+| Tekken 3 | 2.382 | 2.620 | **2.890** | +0.508 (+21.3%) | 2.795 | 0.135 | 0.130 |
+| Tekken 3's fights | 3.721 | 3.955 | **5.186** | +1.465 (+39.4%) | 5.008 | 0.980 | 0.943 |
+
+- **The precision layer** with a drawer that draws nothing costs 0.06 to 0.24 ms a frame over the plain frame: the
+  layered frame's dispatch (§9.3, §18.3's middle share) and the layer's own stores, 1.0 to 1.1 times what E1's test
+  observer cost on the three discs (0.184, 0.104 and 0.238 ms against 0.169, 0.102 and 0.216). Its 2 MiB shadow of RAM
+  is not felt beside the dispatch.
+- **Precise geometry over E3's renderer alone** is 0.02 to 0.10 ms on the five items and 0.18 in the fights: the
+  precision layer's stores and resolutions, the renderer already paying the layered frame. The picture's wait is the
+  renderer's within 0.01 ms on the five items and 0.04 in the fights: **the division a pixel and the 64-bit edge
+  functions of the precise record are not measurable on this device**, which settles §22.3's choice of a division a
+  pixel over one a span.
+- **The fights** are the finding: the renderer, as E3 built it, costs 1.29 ms a frame there, 0.94 of it the picture's
+  wait, where no item measured before reached 0.6. Tekken 3 draws its fights at 480 interlaced lines, with about 12.5
+  stretches, a hundred palette loads and a VRAM copy every other frame (150,678 stretches, 1,212,215 loads and 5,371
+  copies over the 12,000 frames [M, the run tool]); the wait was not split further into the device's drawing and the
+  submission's many dispatches. It is the renderer's to look at before E5 multiplies it (§30).
+
+Under §9.3's budget and the plan's (`Diamond_Plan.md` §5.12), the frame with the setting on is 2.1 to 3.6 ms on the
+five items and 5.2 ms in Tekken 3's fights on the desktop, against 16.7 ms.
+
+### 27.4 On the handheld, estimated
+
+**An estimate, not a measurement** [A]; the handheld is not part of this stage and the tester will try the setting
+there. By §18.4's reasoning (the integrated Radeon at its 800 MHz floor, some ten to fifteen times less compute
+throughput than the RX 6800, no bus between the host's arrays and the device's, the host's shares half again slower):
+**about 2 to 3 ms a frame more than the accurate frame where a game draws at 240 lines** (the device's share here 0.05
+to 0.15 ms, the host's 0.12 to 0.37), **and about 10 ms more, 9 to 13, in Tekken 3's interlaced fights** (the wait
+here 0.98 ms, most of it taken as the device's). The first leaves full speed with room; the second, beside an accurate
+frame that is itself half again the opening's there (3.7 ms against 2.4 on the desktop), could stand near the edge of
+16.7 ms, and wants the picture's wait taken off the emulation thread (§18.3, §30) before it is relied on.
+
+## 28. The publish, and the tests run
+
+### 28.1 The publish
+
+PUBLISH
+
+### 28.2 Tests [M, 2026-10-13]
+
+TESTS
+
+## 29. Predictions
+
+- **P-E4a held** [M, §25.3]: the grid's mean vertex error fell from 0.889 px to 0.008 px (predicted: a third of a pixel
+  to under a hundredth; the integer error was larger than predicted, since §21.1's second loss adds to the first), and
+  with MAC0's sums alone to 0.159 px, inside the predicted tenth to a quarter.
+- **P-E4b held in its first half and failed by its own measure in the second** [M, §25.3]: off 2.75 texels; on 0.5004
+  texels, where "under half a texel" was predicted. The measure, |Δu| + |Δv| against an unrounded reference, has a floor
+  of half a texel for any picture of whole texels; the prediction should have been stated against that floor. Retired.
+- **P-E4c held for two games of three and its second half held** [M, §25.5]: Crash Bandicoot 99.7 and Ape Escape 81.1
+  per cent; Spyro the Dragon 17.8, predicted over 70: it moves the GTE's words on the processor. Castlevania 0 and
+  Rayman 3.9, predicted under 10. P-E1c, of the same games' DMA words, is retired with it: true of Crash Bandicoot, false
+  of Spyro the Dragon.
+- **P-E4d held** for the guard's own refusals, 0.25 to 0.70 per cent (§25.5); the console's own cuts, 2 to 6.5 per cent,
+  were not what it predicted and are counted apart.
+- **P-E4e held** (§25.1). **P9 held** for E4. **P10 held** (§25.5).
+- **P-E4f held** [M, §27]: off, the base within the bench's noise, once the display's `read_line` was held out of
+  line; on, 0.34 to 0.66 ms a frame more than the plain frame on the five items and 0.34 to 0.51 on the three discs,
+  under the 1.5 predicted, the precision layer with a drawer that draws nothing 0.10 to 0.24 ms there, under the 0.3
+  predicted. Tekken 3's fights, which the prediction did not name, cost 1.47 ms more, almost all of it the renderer's as
+  E3 built it.
+- **P-E1b held** [M, §27.3]: the precision layer with a drawer that draws nothing costs 1.0 to 1.1 times what E1's test
+  observer cost over the plain frame on the three discs (0.184, 0.104 and 0.238 ms against 0.169, 0.102 and 0.216),
+  where at most twice was predicted.
+
+## 30. What E5 needs next
+
+- **The walk at N×.** The `PRECISE` record already places vertices in 256ths of a pixel and evaluates edge functions
+  and interpolants at any point of that grid; at N× a sample is a point `256/N` apart, so E5 can draw every triangle
+  through it, the integer ones with zero offsets, which §25.2 shows is the integer rule. The texel hold (§26.3) will
+  matter more there, since every sample but one in N² lies between the console's.
+- **The mirror and its block.** `RNDR` holds the renderer's mirror, 1 MiB at 1×; at N× it is N² that. Whether a state
+  keeps an N× mirror, or keeps the console's and redraws, is E5's first decision about states; the kit's C7 and C8 hold
+  whichever it takes to a picture that continues exactly.
+- **The picture's wait.** It is 0.14 to 0.30 ms here on the five items and 0.98 ms in Tekken 3's fights (§27.3),
+  which no stage had measured before; at N² that share cannot stay on the emulation thread. `emusen-gpu`'s pending
+  submission (§18.3) is the planned form. The fights' cost is mostly stretches and palette loads (12.5 stretches and a
+  hundred palette loads a frame), which is the renderer's planning to look at first.
+- **The frame's form.** With internal resolution offered without precise geometry, the renderer is attached alone and
+  wants the plain frame (§24.1); `Layer::moves` is the method to add then.
+- **The seams** (§26.4): edge expansion, off, with its cost; or mixed polygons drawn with the precise corners they
+  have, which the experiment there found a partial remedy. Both are the tester's to choose.
+- **The composition** stands: `diamond-v1` attaches whatever layer the settings ask for, and a second setting is a
+  second entry in its `ENHANCEMENTS` and another form of the pair.
+
+## 31. Reading log (E4)
+
+**No description of PGXP, and no description of any emulator's precision, enhancement or renderer, was opened**, with
+or without code; the plan allowed prose without code, and none was needed. No emulator source of any kind: nothing of
+DuckStation's, Beetle PSX's (parallel-psx and its rsx among it), PCSX's, PCSX-Redux's, SwanStation's, ePSXe's plugins or
+any fork's, no header, no shader, no snippet. No firmware, no listing or trace of one; the player's BIOS folders were
+not read; nothing under `kernel/` or `kernel-harness/` was opened or changed. psx-spx was not opened. ps1-tests'
+programs were run as built, and none of their sources or `common/` files was opened. No game's code was disassembled
+or traced: the discs were run, their pictures looked at, and the layer's counts and the GPU's command words of two
+frames (Ape Escape's and Crash Bandicoot's polygons near a seam, their vertices, texture coordinates and offsets)
+printed by a scratch test.
+
+Opened, all EmuSen's own: `Diamond_Plan.md` §1, §6, §7, §8, §10, §11 Q14 and §13; this page whole; `Diamond_GPU.md` at
+D-23, D-47 and §13; `BlackMoon_GTE.md` §5 and §9; `BlackMoon_R3000.md` §14; `Diamond_Native.md` §24 and §25;
+`Diamond_Players.md` §4 and its headings; `EmuSen_CoreAPI.md` §6.5 to §6.9, §6.13 and §6.19;
+`EmuSen_Settings_Reference.md` §4.108 and §4.109 for their form. The source of `diamond` (`layer.rs`, `v1.rs`,
+`state.rs`, `machine.rs`, `gpu/mod.rs`, `gpu/decode.rs`, `gpu/raster.rs`, `tests/` and `examples/`), of
+`diamond-renderer` whole, of `blackmoon-gte`'s `rtp` and `blackmoon-r3000`'s loads and stores, of `emusen-native`'s
+`Core`, exports, state reader and writer, of `emusen-gpu`'s interface, of the kit's C6 to C8 and its command line;
+`RustCores.props`, `RustCoresPublish.targets`, `EmuSen.csproj`'s cargo targets and the Rust cores' workflow;
+Mistress's `GraphicsSettingsWindow.cs`, `CoreDescriptors.cs`, `CoreEngine.cs`, `CoreCatalog.cs` and `CoreCapabilities.cs`;
+WiseMan's `DiamondTests.cs`, `GenesisSettingsTests.cs`, `SyntheticPsExe.cs` and the fit audit's list; E1's and E3's
+measurement scripts in the probe. What precision is for came from the plan's §6 and from the hardware as Diamond
+models it: the GTE's fixed-point projection and its FIFO, the GPU's integer vertices and its rounding of a texture
+coordinate, DMA's list.

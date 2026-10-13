@@ -1558,7 +1558,7 @@ itself for its list); Diamond's `kernel/` and `kernel-harness/` were not touched
 
 ## 15. Precise geometry, as players meet it (2026-10-13)
 
-*Stage E4 of `Diamond_Plan.md` §7; the design and its gate are `Diamond_Enhancements.md` §21 to §29.* The PlayStation's
+*Stage E4 of `Diamond_Plan.md` §7; the design and its gate are `Diamond_Enhancements.md` §21 to §31.* The PlayStation's
 first enhancement, offered with its gate met and every accurate golden held (`Diamond_Plan.md` §8, GE).
 
 **Where it is.** Graphics Settings, the PlayStation's tab, under the heading **Enhancements**: one switch, **Precise

@@ -67,7 +67,7 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   seam, the renderer's design (records, tiles, stretches ordered by what they read and write, the CLUT cache
   reproduced and the texture cache not), its gate (every picture equal on the programs, ps1-tests and the eight discs,
   the two VRAM differences proven the texture cache's), its cost unattached and attached with the handheld estimated,
-  and what E4 needs next. Stage E4, the same day (§21 to §29): precise geometry, its design committed before its code
+  and what E4 needs next. Stage E4, the same day (§21 to §31): precise geometry, its design committed before its code
   (the projection without its truncations, the shadow of serials, the store told before it writes, whole polygons,
   the precise record exact at zero fraction with a division a pixel for perspective, the crates `precision` and
   `diamond-v1` with the library still `libdiamond.so`, the setting noted where no Vulkan device is usable, the blocks

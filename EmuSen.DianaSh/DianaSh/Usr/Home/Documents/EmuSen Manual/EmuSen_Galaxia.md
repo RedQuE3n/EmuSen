@@ -248,22 +248,52 @@ it is in use, until the game is closed or its disc changed. .NET's own advisory 
 mapping, as by any program that is not .NET, so the folder hold, and not a lock on each file, is what keeps pruning
 away.
 
-**The prefetch** (`DiscFiles.Prefetch`). A page of a mapped file is read from the medium when first touched, on the
-thread that touches it, which for a lent disc is the emulation thread; on the handheld's card that held a frame of
-play 8–32 ms (`Diamond_Players.md` §12.8.9). So the engine starts, for a disc a core borrows, a background thread of
-the lowest priority that reads each of the disc's files once, in order, through a handle of its own, 256 KiB at a
-time (`PrefetchChunk`), resting after each read twice as long as the read took (`RestPerRead`), so that it takes a
-third of the medium at most and the game's own read waits behind one chunk; unrested, it made a game's read wait
-160 ms. It stops when the `DiscFiles` is disposed, and changes nothing a read of the mapping returns. It has no Rust
-half: it is the host's policy over plain file reads, and the kit, which maps through the Rust module, has no use for
-it. What it does not reach in time, the first touches of a game's first seconds, which it appears to lengthen on the
-card (24–50 ms), is recorded there as open.
+**The prefetch, built and removed** (`DiscFiles.Prefetch`, 2026-10-12). A page of a mapped file is read from the
+medium when first touched, on the thread that touches it, which for a lent disc is the emulation thread; on the
+handheld's card that held a frame of play 8–32 ms (`Diamond_Players.md` §12.8.9). 1.3's remedy was a background thread
+of the lowest priority reading each of the disc's files once, in order, 256 KiB at a time, resting twice each read's
+time. It passed the later first touches and not those of a game's first seconds, which it appeared to lengthen.
+**It was removed with minor 1.4**: the drive now names where it is going and the disc's reader advises the system
+there (§3.9), and under the 90 MiB/s cap that left no first touch in 30 s of four games, where the prefetch, raced by
+the game's own reads, held a frame 27–195 ms in six runs of nine (`Diamond_Players.md` §12.8.10).
 
-**Tests** (`DiscStreamingTests`): the prefetch reading every file to its end and stopping when let go; a held
-unpacked folder survives `Prune` with nothing kept and goes at the next prune
+**Tests** (`DiscStreamingTests`): a held unpacked folder survives `Prune` with nothing kept and goes at the next prune
 once let go; the engine holds a borrowing core's files for the machine's life and a copying core's not past create
 (read from the system's list of the process's mappings); Change Disc lets the earlier disc go only once the core has
 taken the next, and a refused disc leaves the earlier in place.
+
+### 3.9 Reading ahead of a drive (2026-10-12)
+
+*Decided 2026-10-12 with the core ABI's minor 1.4 (`EmuSen_CoreAPI.md` §6.25, `EmuSen_CoreAPI_Extensions.md`
+§10.2.6): a core names where its drive is going, and the host has the system read there before the game does.*
+
+- **`MappedFile.Advise(offset, length)`**: the system told that the range will be read soon, so that it reads it from
+  the medium on its own threads before a game touches it. One call, which returns before the bytes arrive; the range
+  is clipped to the file; false for an empty file, a range outside it, or a system that refuses. *Both halves*: the C#
+  calls `madvise` (`MADV_WILLNEED`, 3) on the whole pages of the range on Linux and macOS and `PrefetchVirtualMemory`
+  on Windows, over the view it maps; the library's `Mapped::advise` makes the same calls through `memmap2`
+  (`emusen_galaxia_mapped_advise`, interface 10). What a read of the mapping returns never changes; only when a page
+  reaches memory does.
+- **One call reads no more than the device's largest request** [M, `EmuSen_CoreAPI_Extensions.md` §10.2.6]: 4 MiB on
+  the desktop's drive and 512 KiB on the handheld's card, whatever was asked. So a reader asks in pieces.
+- **`DiscFiles.ReadAhead(file, offset)`**: a place of one of the disc's files handed to the disc's reader, a thread of
+  its own started at the first place and ended when the `DiscFiles` is disposed, which waits for its one call in
+  flight so that no mapping is released under it. The call takes a lock and pulses a monitor; it reads nothing,
+  allocates nothing and never waits on the reader. The reader advises from `ReadAheadBefore` (256 KiB) before the
+  place to `ReadAheadPast` (2 MiB) past it, in pieces of `ReadAheadPiece` (128 KiB): the piece holding the place
+  first, then onward, then the pieces before it. A newer place replaces an older one between two pieces.
+  `Advised` counts the bytes the system took the advice for.
+- **Who calls it**: `CoreEngine`, for each `EMUSEN_EVENT_MEDIA_SEEK` it drains after a frame, finding the drive's lent
+  `DiscFiles` through `CoreMachine.LoanOf` and the file by the numbering create gave it (the image for
+  `EMUSEN_FILE_IMAGE`, companion *n* for `EMUSEN_FILE_MEDIA + n`). A drive lent nothing, a file the call did not pass,
+  and a byte outside the file are dropped.
+- **Tests**: `GalaxiaParityTests.Advice_is_taken_for_the_same_ranges_both_ways_and_the_advised_bytes_reach_memory`;
+  `DiscStreamingTests.A_place_a_drive_names_is_read_ahead_in_the_file_galaxia_holds_for_it` (the reader's ranges at a
+  file's middle, start and end, nothing advised after disposal, the engine's routing and its drops) and
+  `A_run_whose_host_reads_ahead_of_the_drive_is_the_run_whose_host_does_not` (Diamond on a synthetic sheet, 600
+  frames, picture, sound and state equal whether the host acts, through the machine and through the engine); in Rust,
+  `mapped.rs`'s `advice_is_taken_inside_the_file_and_changes_no_byte` and `tests/advise.rs`, which reads the page cache
+  with `mincore`.
 
 ### 4.1 Why rename rather than write-in-place
 

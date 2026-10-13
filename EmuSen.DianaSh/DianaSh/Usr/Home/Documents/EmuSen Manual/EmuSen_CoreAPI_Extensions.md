@@ -1084,6 +1084,8 @@ later ones, appears to lengthen those.** Two remedies are recorded and not built
   still come through the loan, nothing waits on the host, and a host that ignores the event behaves as now. It would
   be a minor of its own.
 
+*The exact remedy was chosen and built as minor 1.4 (§10.2.6, §10.2.7), and the prefetch removed with it.*
+
 #### 10.2.6 The drive's place named ahead: the design (minor 1.4)
 
 *Decided 2026-10-12: of §10.2.5's two remedies the tester chose the exact one, a core event naming where its drive
@@ -1231,6 +1233,85 @@ runs each way of Mega Man X6, every run reported. A frame counts as held by a fi
 16.7 ms and the emulation thread waited in it, by a major fault or by time off the processor that was not spent
 waiting to run; a frame that was only slow is reported beside it.
 
+#### 10.2.7 What was built and measured (2026-10-12)
+
+[M] here is measured or run on 2026-10-12, on this branch, after WiseMan `a253a250` was merged into it.
+
+**Built as §10.2.6 gives it**, items 1 to 7, with these differences and findings:
+
+- *The header and the baseline*: `EMUSEN_EVENT_MEDIA_SEEK` (8) and `EMUSEN_FILE_IMAGE` (`0xFFFFFFFF`), the minor 4;
+  the baseline has 425 facts, two lines added at 1.4 and the revision's two moved, and `--check --against` the base
+  branch's baseline passes. No bit, no export, no struct.
+- *`emusen-native`*: `core::seek` and `SEEK_SPAN`. Raising an event into a full `VecDeque` had allocated once per
+  machine, on the queue's first growth; the queue is now allocated whole at create, and a test holds that 768 events
+  through a full queue leave it where create put it.
+- *`emusen-disc`*: `Disc::place` (`EmuSen_Disc.md` §10). For a CHD it answers the stored hunk's offset from the
+  `chd` crate's map, its documented API, the crate's source not read; a hunk copying another names nothing.
+- *Diamond* names at `start_seek`, and 75 sectors ahead of the head while reading or playing. Building it found a
+  third case the design had not: **the held head** reads the header of the sector it passes over, a few sectors to
+  either side of the place last named, and named the place behind it each time the head stepped back; it now names
+  its place only where nothing within a megabyte of it was named (`Diamond_CDROM.md` §5).
+- *The host*: `DiscFiles.ReadAhead` and its reader thread, `MappedFile.Advise` in both halves (interface 10),
+  `CoreEngine`'s routing through `CoreMachine.LoanOf`; `EmuSen_Galaxia.md` §3.9.
+- *The kit*: C18 as written, with seeded fault 512.
+
+**Exactness** [M]. The kit's C18 on the seven test discs at 1,800 frames passes on all seven, and so does every other
+case, C7 and C8 among them now that Diamond's state holds its picture (DMND 10, from WiseMan): every frame's picture,
+sound and state the same with the places acted on and skipped. The places named and the bytes advised in 30 s:
+
+| Disc | Places named | Advised |
+|---|---|---|
+| Ape Escape | 17 | 40,078 KiB |
+| Castlevania: Symphony of the Night | 14 | 32,641 KiB |
+| Crash Bandicoot | 22 | 51,321 KiB |
+| Rayman | 12 | 24,145 KiB |
+| Silent Hill | 20 | 47,281 KiB |
+| Spyro the Dragon | 12 | 27,933 KiB |
+| Tekken 3 | 18 | 41,861 KiB |
+
+WiseMan's `DiscStreamingTests` hold the same through the C# host on a synthetic sheet, and the run tool's digests
+(`bench`) are the base branch's on all three of the cost's workloads below.
+
+**First touches** [M, `Diamond_Players.md` §12.8.10 has every run]. *Decided 2026-10-12: the measurement is the
+desktop's, under the 90 MiB/s cap; its confirmation on the handheld's card is left to play.* The first 30 s of play
+(1,800 frames), paced at 60 frames a second, from a cold cache, under the cap, four ways in turn: 1.3 as shipped (the
+prefetch), 1.4 (the event acted on), both, and neither. Six runs each way of Mega Man X6, three of Mega Man X5, Crash
+Bandicoot and Spyro the Dragon; load averages 0.8–3.7, other work running on the machine.
+
+| Game | 1.3, the prefetch: runs with a frame held, the held frames | 1.4, the event: frames with a major fault | Neither: frames with a major fault, the slowest |
+|---|---|---|---|
+| Mega Man X6 | 5 of 6: 194.7, 116.2, 47.4, 130.3, 27.0 ms | 0 in every run | 3–4 a run, 4.9–6.5 ms |
+| Mega Man X5 | 0 of 3 | 0 in every run | 2–3 a run, 4.8–8.0 ms |
+| Crash Bandicoot | 1 of 3: 131.7 ms | 0 in every run | 8 a run, 5.4–5.8 ms |
+| Spyro the Dragon | 0 of 3 | 0 in every run | 3 a run, 6.8–7.7 ms |
+
+**With the event no run of any game took a major fault in 30 s**, and its slowest frame was 4.4–8.7 ms. "Both" was the
+event's figures. The prefetch held a frame in six of nine runs of the two games whose first touches come before it
+has passed them, each with one major fault and 23–191 ms of the emulation thread's off the processor: the fault's read
+waited in the cap's throttle behind the bandwidth the prefetch had spent. That is the cap's own way of sharing the
+medium and exaggerates the card's, where the same frames took 24–50 ms (§10.2.5) [A].
+
+**Reads that follow no seek** [M]. Mega Man X6's run of 3,452 sectors from frame 422 on was named at frames 571, 749,
+927 and so on to 1,638, every 1,048,992 bytes, by the read's rule (§10.2.6 item 1 (b)); it, X5's run of 2,633 sectors
+and Spyro's of 2,495 took no fault. So the event covers
+the long reads and the seeks alike, and **the prefetch is removed** (§10.2.6 item 5): it did nothing the event did not
+do sooner, and under a capped medium it made the game's own read wait behind its own.
+
+**What the desktop's cap did not model** [M, A]. Under the cap a cold page took 1.9–3.3 ms, as on the card (2.5–3.1
+ms), and the sustained rate is the card's. A short read is not: an advised 512 KiB arrived in 1.4 ms on the desktop
+and in 7.3 ms on the card, since the cap delays a cgroup's requests only once it has spent its slice's allowance. A
+request-rate cap was tried beside it to add the card's time per request, and does not model it: at 150 and 250
+requests a second it held single reads 50–154 ms, as the throttle's slice is spent, where the card's never exceeded
+28 ms. The argument for the card is therefore §10.2.6 item 3's: the reader's first piece, the one holding the place,
+takes the card 2.3–4.4 ms, and every seek farther than 822 sectors leaves 24 ms or more of real time before its first
+read, the nearer ones being inside a window already advised.
+
+**Cost** [M]. Aligned builds (`RUSTFLAGS="-C llvm-args=-align-all-functions=6"`), the run tool's `bench`, fastest of
+five, alternating with the base branch (`a253a250`), load averages 2.8–8.2: `gpu/benchmark` (1,200 frames) 2.321 →
+2.298 ms a frame (−1.0%), Crash Bandicoot's first 3,000 frames 2.306 → 2.299 ms (−0.3%), Tekken 3's 2.370 → 2.375 ms
+(+0.2%): within the noise, the picture, sound and state digests the same. The host's part is one drain a frame, which
+it made before, and a lock and a pulse for each place named, 12 to 22 in 30 s.
+
 ### 10.3 The order
 
 By the first stage that needs each [C, Q13]:
@@ -1318,11 +1399,16 @@ in `info.schema.json`; `length` is left to machine info, since it is a property 
   54 MiB, since the host's buffer went with the core's copy. **The third is not met**: unpaced, one frame of Mega Man
   X5 took 20.6 ms on the card for a first touch; the prefetch built for it leaves three of four games with none or
   one, and Mega Man X6 with up to three frames of 24–50 ms in its first six seconds, where without it they were
-  8–32 ms (§10.2.5, `Diamond_Players.md` §12.8.9). It stays open with the two remedies §10.2.5 records.
+  8–32 ms (§10.2.5, `Diamond_Players.md` §12.8.9). It stays open with the two remedies §10.2.5 records. *Its third clause is
+  carried by P8 since 2026-10-12.*
 - **P8** (2026-10-12, §10.2.6). With minor 1.4's event acted on, no frame is held past its period by a first touch on
   the handheld's card in a game's first 30 s, paced and from a cold cache, on Mega Man X5, Mega Man X6, Crash
   Bandicoot and Spyro the Dragon. It is P7's third clause, restated for what a host can be held to: a frame the
-  emulation thread waited in, not one that was merely slow beside the handheld's interface.
+  emulation thread waited in, not one that was merely slow beside the handheld's interface. *Tested 2026-10-12 on the
+  desktop under the 90 MiB/s cap (§10.2.7), and its confirmation on the handheld's card left to play, as decided that
+  day:* **it holds there**, and more than it claims: in fifteen runs with the event, six of Mega Man X6, no frame of
+  any of the four games took a major fault, where 1.3's prefetch held one frame 27–195 ms in six of the nine runs of
+  Mega Man X6 and Crash Bandicoot. What the cap does not model, a short read's time on the card, is said in §10.2.7.
 
 ---
 

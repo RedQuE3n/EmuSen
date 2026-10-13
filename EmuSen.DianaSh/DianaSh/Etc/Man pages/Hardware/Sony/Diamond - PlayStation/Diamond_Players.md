@@ -1013,6 +1013,130 @@ was merged in (the GPU's D-47), Diamond's own tests again, 158 and 77 with ps1-t
 `Diamond`, `DiscStreaming`, `PlayStationLibrary`, `CoreEngine`, `CoreAbi`, `CoreAdapter`, `CoreRegistration` and
 `GalaxiaParity`, 152 passing [M].
 
+#### 12.8.10 The drive's place named ahead: minor 1.4 measured (2026-10-12)
+
+*Decided 2026-10-12, of §12.8.9's two remedies, the exact one: the core ABI's minor 1.4, by which Diamond's drive names
+the file and byte it is going to read and the host has the system read there during the emulated seek
+(`EmuSen_CoreAPI.md` §6.25; the design and its record `EmuSen_CoreAPI_Extensions.md` §10.2.6 and §10.2.7). Decided the
+same day: the measurement is the desktop's, under the 90 MiB/s cap; its confirmation on the handheld's card is left to
+play.* The marks are §12's; [M] is measured on this date, after WiseMan `a253a250` was merged.
+
+**How it was measured.** A console tool over this branch's `EmuSen.dll` (`discseek/tool` in the probe's cache) makes
+one launch per process as the engine's steps make it (Galaxia's `DiscSet` and `DiscFiles`, one create lent the
+files, a card file passed), then runs 1,800 frames paced at 60 a second, draining the events after each frame, four
+ways: **1.3's prefetch** (each file read once in order beside the game, as `DiscFiles.Prefetch` did), **the event**
+(each `MEDIA_SEEK` handed to the disc's reader, as `CoreEngine` does), **both**, and **neither**. For each frame it
+records its time, the emulation thread's own major faults (`/proc/thread-self/stat`) and its time off the processor
+without waiting to run (`schedstat`), read without allocating. A frame is *held by a wait* when it took longer than
+16.7 ms and in it the thread took a major fault or spent 1 ms or more off the processor. Each run is cold, the disc's
+pages dropped by `posix_fadvise`, and under `IOReadBandwidthMax=90M` on the library's drive, as §12.8.1's. The four
+discs are copies under the probe's cache. Other work was running on the machine: the load average is beside each run.
+
+**What the cap models.** Under it a cold page took 1.9–3.3 ms, the card's 2.5–3.1 ms, and the sustained rate is the
+card's 88–92 MiB a second. A short read it does not: an advised 512 KiB arrived in 1.4 ms, where the card takes 7.3 ms,
+and a request-rate cap tried beside it held single reads 50–154 ms rather than adding a few milliseconds to each, so
+it was not used (`EmuSen_CoreAPI_Extensions.md` §10.2.7).
+
+Mega Man X6:
+
+| Way | Run | Load | Frames over 16.7 ms, held by a wait | Frames with a major fault, the slowest | Slowest frame | Median, 99th percentile | Places named, KiB advised |
+|---|---|---|---|---|---|---|---|
+| 1.3: the prefetch | 1 | 1.29 | 1, 1 | 3, 194.7 ms | 194.7 ms at 125 | 0.66, 3.43 ms | 18, — |
+| 1.3: the prefetch | 2 | 2.46 | 1, 1 | 3, 116.2 ms | 116.2 ms at 176 | 0.67, 3.60 ms | 18, — |
+| 1.3: the prefetch | 3 | 2.00 | 0, 0 | 4, 5.2 ms | 5.8 ms at 56 | 0.67, 3.46 ms | 18, — |
+| 1.3: the prefetch | 4 | 1.80 | 1, 1 | 4, 47.4 ms | 47.4 ms at 125 | 0.69, 3.64 ms | 18, — |
+| 1.3: the prefetch | 5 | 2.94 | 1, 1 | 3, 130.3 ms | 130.3 ms at 176 | 0.66, 7.49 ms | 18, — |
+| 1.3: the prefetch | 6 | 2.54 | 1, 1 | 3, 27.0 ms | 27.0 ms at 125 | 0.66, 3.37 ms | 18, — |
+| 1.4: the event | 1 | 1.76 | 0, 0 | 0, — | 7.9 ms at 459 | 0.89, 3.75 ms | 18, 41,856 |
+| 1.4: the event | 2 | 1.92 | 0, 0 | 0, — | 6.0 ms at 14 | 0.74, 3.44 ms | 18, 41,856 |
+| 1.4: the event | 3 | 1.80 | 0, 0 | 0, — | 4.4 ms at 439 | 0.66, 3.42 ms | 18, 41,856 |
+| 1.4: the event | 4 | 1.81 | 0, 0 | 0, — | 5.1 ms at 24 | 0.72, 3.69 ms | 18, 41,856 |
+| 1.4: the event | 5 | 2.69 | 0, 0 | 0, — | 5.6 ms at 3 | 0.67, 3.76 ms | 18, 41,856 |
+| 1.4: the event | 6 | 1.77 | 0, 0 | 0, — | 5.7 ms at 216 | 0.66, 3.46 ms | 18, 41,856 |
+| both | 1 | 3.26 | 0, 0 | 0, — | 5.3 ms at 243 | 0.70, 3.62 ms | 18, 41,856 |
+| both | 2 | 2.55 | 0, 0 | 0, — | 5.0 ms at 219 | 0.69, 3.58 ms | 18, 41,856 |
+| both | 3 | 1.68 | 0, 0 | 0, — | 5.9 ms at 133 | 0.73, 3.68 ms | 18, 41,856 |
+| both | 4 | 1.72 | 0, 0 | 0, — | 5.9 ms at 18 | 0.66, 3.50 ms | 18, 41,856 |
+| both | 5 | 2.18 | 0, 0 | 0, — | 5.1 ms at 100 | 0.72, 3.24 ms | 18, 41,856 |
+| both | 6 | 1.32 | 0, 0 | 0, — | 5.6 ms at 89 | 0.65, 3.35 ms | 18, 41,856 |
+| neither | 1 | 2.80 | 0, 0 | 3, 5.6 ms | 6.0 ms at 86 | 0.72, 3.93 ms | 18, — |
+| neither | 2 | 2.32 | 0, 0 | 3, 5.2 ms | 5.2 ms at 176 | 0.69, 3.51 ms | 18, — |
+| neither | 3 | 1.60 | 0, 0 | 4, 5.0 ms | 5.0 ms at 176 | 0.68, 3.67 ms | 18, — |
+| neither | 4 | 1.60 | 0, 0 | 3, 6.5 ms | 6.5 ms at 176 | 0.74, 3.55 ms | 18, — |
+| neither | 5 | 3.74 | 0, 0 | 3, 4.9 ms | 5.6 ms at 53 | 0.65, 3.93 ms | 18, — |
+| neither | 6 | 1.36 | 0, 0 | 3, 5.0 ms | 5.0 ms at 125 | 0.66, 3.64 ms | 18, — |
+
+Mega Man X5:
+
+| Way | Run | Load | Frames over 16.7 ms, held by a wait | Frames with a major fault, the slowest | Slowest frame | Median, 99th percentile | Places named, KiB advised |
+|---|---|---|---|---|---|---|---|
+| 1.3: the prefetch | 1 | 1.15 | 0, 0 | 0, — | 6.8 ms at 1158 | 2.60, 4.53 ms | 16, — |
+| 1.3: the prefetch | 2 | 1.01 | 0, 0 | 0, — | 5.6 ms at 1588 | 2.81, 4.37 ms | 16, — |
+| 1.3: the prefetch | 3 | 0.80 | 0, 0 | 0, — | 7.2 ms at 1540 | 2.65, 5.97 ms | 16, — |
+| 1.4: the event | 1 | 1.16 | 0, 0 | 0, — | 6.1 ms at 1030 | 2.60, 4.54 ms | 16, 37,760 |
+| 1.4: the event | 2 | 0.95 | 0, 0 | 0, — | 6.5 ms at 1521 | 2.80, 4.23 ms | 16, 37,760 |
+| 1.4: the event | 3 | 1.01 | 0, 0 | 0, — | 6.2 ms at 1588 | 2.65, 4.48 ms | 16, 37,760 |
+| both | 1 | 1.15 | 0, 0 | 0, — | 6.1 ms at 1537 | 2.85, 4.60 ms | 16, 37,760 |
+| both | 2 | 0.81 | 0, 0 | 0, — | 5.8 ms at 532 | 2.70, 4.39 ms | 16, 37,760 |
+| both | 3 | 1.60 | 0, 0 | 0, — | 6.7 ms at 854 | 2.72, 4.74 ms | 16, 37,760 |
+| neither | 1 | 1.45 | 0, 0 | 2, 4.8 ms | 6.3 ms at 1009 | 2.67, 4.87 ms | 16, — |
+| neither | 2 | 1.20 | 0, 0 | 2, 5.5 ms | 5.5 ms at 141 | 2.59, 4.39 ms | 16, — |
+| neither | 3 | 1.39 | 0, 0 | 3, 8.0 ms | 8.0 ms at 99 | 2.87, 5.79 ms | 16, — |
+
+Crash Bandicoot (USA):
+
+| Way | Run | Load | Frames over 16.7 ms, held by a wait | Frames with a major fault, the slowest | Slowest frame | Median, 99th percentile | Places named, KiB advised |
+|---|---|---|---|---|---|---|---|
+| 1.3: the prefetch | 1 | 1.86 | 0, 0 | 1, 7.1 ms | 7.1 ms at 145 | 2.31, 4.34 ms | 18, — |
+| 1.3: the prefetch | 2 | 1.06 | 1, 1 | 1, 131.7 ms | 131.7 ms at 145 | 2.22, 4.59 ms | 18, — |
+| 1.3: the prefetch | 3 | 1.74 | 0, 0 | 1, 5.8 ms | 5.8 ms at 145 | 2.34, 4.48 ms | 18, — |
+| 1.4: the event | 1 | 1.67 | 0, 0 | 0, — | 6.3 ms at 74 | 2.32, 4.52 ms | 18, 43,008 |
+| 1.4: the event | 2 | 1.08 | 0, 0 | 0, — | 5.8 ms at 1642 | 2.22, 4.56 ms | 18, 43,008 |
+| 1.4: the event | 3 | 1.39 | 0, 0 | 0, — | 5.8 ms at 1536 | 2.31, 4.39 ms | 18, 43,008 |
+| both | 1 | 1.41 | 0, 0 | 0, — | 5.9 ms at 1632 | 2.32, 4.43 ms | 18, 43,008 |
+| both | 2 | 1.02 | 0, 0 | 0, — | 7.0 ms at 1606 | 2.18, 4.65 ms | 18, 43,008 |
+| both | 3 | 1.20 | 0, 0 | 0, — | 5.9 ms at 1694 | 2.33, 4.38 ms | 18, 43,008 |
+| neither | 1 | 1.26 | 0, 0 | 8, 5.8 ms | 5.8 ms at 145 | 2.33, 4.55 ms | 18, — |
+| neither | 2 | 1.45 | 0, 0 | 8, 5.6 ms | 5.9 ms at 1298 | 2.22, 4.53 ms | 18, — |
+| neither | 3 | 1.23 | 0, 0 | 8, 5.4 ms | 6.3 ms at 1628 | 2.33, 4.63 ms | 18, — |
+
+Spyro the Dragon (USA):
+
+| Way | Run | Load | Frames over 16.7 ms, held by a wait | Frames with a major fault, the slowest | Slowest frame | Median, 99th percentile | Places named, KiB advised |
+|---|---|---|---|---|---|---|---|
+| 1.3: the prefetch | 1 | 1.02 | 0, 0 | 0, — | 8.4 ms at 1369 | 1.03, 6.36 ms | 12, — |
+| 1.3: the prefetch | 2 | 1.29 | 0, 0 | 0, — | 7.8 ms at 1373 | 1.05, 5.94 ms | 12, — |
+| 1.3: the prefetch | 3 | 1.38 | 0, 0 | 0, — | 7.7 ms at 1261 | 1.11, 6.23 ms | 12, — |
+| 1.4: the event | 1 | 0.83 | 0, 0 | 0, — | 8.6 ms at 1761 | 1.05, 6.01 ms | 12, 28,288 |
+| 1.4: the event | 2 | 1.28 | 0, 0 | 0, — | 7.3 ms at 1315 | 1.08, 6.14 ms | 12, 28,288 |
+| 1.4: the event | 3 | 1.22 | 0, 0 | 0, — | 8.7 ms at 793 | 1.08, 6.27 ms | 12, 28,288 |
+| both | 1 | 1.11 | 0, 0 | 0, — | 7.8 ms at 1217 | 1.16, 6.46 ms | 12, 28,288 |
+| both | 2 | 0.96 | 0, 0 | 0, — | 7.6 ms at 1219 | 1.07, 5.94 ms | 12, 28,288 |
+| both | 3 | 1.12 | 0, 0 | 0, — | 8.3 ms at 1513 | 1.06, 6.36 ms | 12, 28,288 |
+| neither | 1 | 0.90 | 0, 0 | 3, 6.8 ms | 8.0 ms at 857 | 1.05, 6.05 ms | 12, — |
+| neither | 2 | 1.06 | 0, 0 | 3, 7.7 ms | 8.7 ms at 1417 | 1.04, 5.99 ms | 12, — |
+| neither | 3 | 1.38 | 0, 0 | 3, 6.8 ms | 8.4 ms at 1403 | 1.04, 6.34 ms | 12, — |
+
+**In brief** [M]: with the event, **no run of any of the four games took a major fault** in its first 30 s, and no frame
+took longer than 8.7 ms; the places named were 12 to 18 a game, 28–42 MiB advised. With 1.3's prefetch, Mega Man X6 had
+one frame held 27–195 ms in five runs of six and Crash Bandicoot one of 132 ms in one run of three, each a single
+fault waiting in the cap's throttle behind the bandwidth the prefetch had spent, which overstates what the card does
+(24–50 ms, §12.8.9). With neither, every game faulted 2 to 8 times, each fault 4.8–8.0 ms on the desktop. "Both" was
+the event's figures. **So `EmuSen_CoreAPI_Extensions.md`'s P8 holds on the desktop under the cap**, and the prefetch,
+which added nothing the event did not do sooner, is removed (`EmuSen_Galaxia.md` §3.8).
+
+**What the player meets.** As in §12.8.9, a launch waits for nothing of the disc; now a game's first seconds read
+the places the drive goes to before it is there, and nothing reads the rest of the disc beside the game. Whether the
+handheld's card agrees is left to play.
+
+**Tests run** (2026-10-12, after `git merge WiseMan`). `cargo test --release`: emusen-native 71, emusen-core-abi-check 6
+with `--check --against` the base branch's baseline, emusen-core-conform 7 and 17, emusen-disc 12 and 12 with chdman
+named and without, the platform workspace 25, 86, 1, 25 and 30; Diamond 161 and 78, with ps1-tests and without; over
+the changed kit crate VenusRT 143, Nephrite 140, MoonRT 6, MercuryRT 8, 16 and 4, MarsRT 490. WiseMan
+by area, `CoreAbi`, `CoreAdapter`, `CoreEngine`, `CoreRegistration`, `CoreDiscovery`, `Diamond`, `DiscStreaming`,
+`PlayStationLibrary`, the whole `Galaxia` folder with the parity tests, and `LaunchScreen`: 353 cases, 344 passed and 9
+skipped (the opt-in probes without their folders) [M].
+
 ## 13. Gameplay: the seven games driven into play (2026-10-12)
 
 *Written 2026-10-12, on WiseMan `66bb54b5` and the merges after it (`c27bbfbf`, D-41; `60dce4e5`, stage 13 and the

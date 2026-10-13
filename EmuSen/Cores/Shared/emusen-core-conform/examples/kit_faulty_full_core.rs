@@ -1,5 +1,5 @@
-//! emusen-native's test core with every capability and the seeded faults C9, C12-C15 and C17 are for, so that this
-//! crate's tests see each of those cases fail it.
+//! emusen-native's test core with every capability and the seeded faults C9, C12-C15, C17 and C18 are for, so that
+//! this crate's tests see each of those cases fail it.
 
 pub const TEST_ID: &str = "v1-faulty-full-core";
 pub const TEST_NAME: &str = "V1FaultyFullCore";
@@ -21,10 +21,11 @@ pub const TEST_CAPABILITIES: u64 = emusen_native::core::caps::RESET
     | emusen_native::core::caps::SETTING_NOTES
     | emusen_native::core::caps::DEBUG_REGISTERS
     | emusen_native::core::caps::DEBUG_DISASSEMBLE
+    | emusen_native::core::caps::MEDIA
     | emusen_native::core::caps::BORROW;
 pub const TEST_FAULTS: u32 =
-    FAULT_EXACT_SETTING_CHANGES_STATE | FAULT_ONLY_HOST_1_0 | FAULT_INFO_DRIFTS | FAULT_READ_ONLY_WRITABLE | FAULT_OBSERVED_FRAME_DIFFERS | FAULT_LENT_RUN_DIFFERS;
+    FAULT_EXACT_SETTING_CHANGES_STATE | FAULT_ONLY_HOST_1_0 | FAULT_INFO_DRIFTS | FAULT_READ_ONLY_WRITABLE | FAULT_OBSERVED_FRAME_DIFFERS | FAULT_LENT_RUN_DIFFERS | FAULT_NAMES_PAST_THE_IMAGE;
 
 include!("../../emusen-native/examples/common/test_core.rs");
 
-emusen_native::core_exports!(TestCore; reset, present, phases, audio_peek, mutes, axes, settings, setting_notes, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble);
+emusen_native::core_exports!(TestCore; reset, present, phases, audio_peek, mutes, axes, settings, setting_notes, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble, media);

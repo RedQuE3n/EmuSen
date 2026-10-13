@@ -1,4 +1,4 @@
-# Diamond_Enhancements — the enhancement layer, stages E1 and E3
+# Diamond_Enhancements — the enhancement layer, stages E1, E3 and E4
 
 *Written 2026-10-13, at stage E1 of `Diamond_Plan.md` §7, with the tester's go of the same day for precise geometry
 and a shared GPU crate.* E1 builds the frame every enhancement of the plan's §6.3 will stand in, and the proof that the
@@ -9,6 +9,11 @@ with E4, the Vulkan renderer with E3. The build record's entry is `Diamond_Nativ
 
 *Stage E3, the same day* (§14 on): the Vulkan renderer that draws the picture from the GPU's command stream beside the
 software rasteriser, at 1×, equal to it. §14 is its form, decided and committed before any of its code.
+
+*Stage E4, the same day* (§21 on): precise geometry, the precision layer that carries each projected vertex's
+sub-pixel position and depth to the GPU's receipt of its word, and the renderer drawing such polygons between the pixels
+with their textures in perspective, offered to players as the setting "Precise geometry". §21 to §24 are its design,
+decided and committed before any of its code.
 
 The marks are the plan's: **[M]** measured on 2026-10-13 on the desktop (Ryzen 7 7700X, Fedora 44, Rust nightly
 2026-10-01), with the tool named; **[R]** read from a source, named; **[A]** argued, with no measurement behind it;
@@ -917,3 +922,329 @@ whole; `Diamond_Speed.md` §2; `Shared/EmuSen_Gpu.md` whole; `Mars_Gpu.md` §1, 
 `MarsGpuDeviceTests.cs` and `DiamondTests.cs`; E1's measurement scripts in the probe's `e1/`; the press scripts by way
 of the goldens' code. The validation layer's messages were read as its output. The Vulkan specification was not
 opened; the rule of §14.3 was shown by the validation layer, which quotes it.
+
+---
+
+## 21. Stage E4: precise geometry, decided before it was built
+
+*Written 2026-10-13, before any of E4's code, after the tester's go of the same day.* The plan's row: "The precision
+side-channel; sub-pixel vertices, perspective-correct texturing and the seam fixes in the renderer. Gate: a synthetic
+program that rotates a textured mesh slowly: vertex jitter and texture warp measured with and without; on the bench
+discs, the fraction of vertices resolved precisely, recorded per game; E1's goldens unchanged." Decided in §11 Q14 of
+the plan: the setting is **"Precise geometry"**, the layer's crate **`precision`**. The tester added for this step that
+the setting reach players through the core ABI with the renderer's picture, that it say so honestly where no Vulkan
+device is usable, and that the machine's own goldens hold with it on. Internal resolution, true colour and filtering are
+E5's and are not touched.
+
+### 21.1 What the console loses, and what may be given back
+
+The GTE projects a vertex in fixed point: the vertex rotated and translated into the camera's space with 12 fraction
+bits (`sums`, §3.1), IR1 and IR2 cut from it to whole units, SZ3 to a whole depth, the quotient H/SZ3 from a table with
+16 fraction bits, and SX2 and SY2 from MAC0's sum `OFX + IR1·q` shifted right 16 and saturated to −400h..3FFh
+(`BlackMoon_GTE.md` §5.1) [R]. The GPU takes each vertex as two 11-bit integers (`Diamond_GPU.md` §4) and draws by
+integer edge functions with affine texture coordinates (§14.1). Three losses follow, and each shows as movement:
+
+1. **The screen position is cut to whole pixels** by MAC0's shift: a vertex moving smoothly snaps from pixel to pixel,
+   up to a whole pixel off where the geometry puts it. Neighbouring vertices snap independently, so a slowly turning
+   model wobbles.
+2. **The camera-space position is cut to whole units** before the division (IR1, IR2 from MAC1, MAC2 by sf's shift) and
+   the depth to a whole unit before the quotient (SZ3): up to H/SZ3 pixels for the first, and up to the vertex's distance
+   from the centre over SZ3 for the second. On a near ground plane with H about 300 and SZ3 about 200 either is over a
+   pixel [A, from the formula].
+3. **Texture coordinates are interpolated linearly in screen space** where the geometry is in perspective: a quad
+   receding from the camera has its texture bent along its diagonal, and the bend moves as the quad turns.
+
+The first two are what "sub-pixel vertex precision" gives back, the third "perspective-correct texturing" (the plan's
+§6.3). Both need values the console computed or could have computed at the projection and then discarded, carried to the
+moment the GPU draws the vertex, with nothing in the machine depending on them.
+
+### 21.2 The precise vertex: the projection evaluated without its truncations [C]
+
+**Decided: the precise screen position is `OFX/2¹⁶ + H·sums₁/sums₃`** (and `OFY/2¹⁶ + H·sums₂/sums₃` for y), in double
+precision, from the camera-space sums the GTE made before any shift, and **the precise depth is `sums₃`**, the camera's
+depth with its 12 fraction bits. This is the perspective projection the GTE's RTPS approximates, applied to the very
+vertex the program rotated, so it removes all three of §21.1's losses at once.
+
+Considered and not chosen: **MAC0's sums** `x` and `y` with their 16 fraction bits, the position as the console computed
+it before the last shift. Those remove the first loss alone and agree with the console's integer to within the pixel by
+construction; but they keep the second, which on near geometry is as large as the first. The decision is recorded as
+argued here and **measured on the synthetic mesh** (§23): the mesh's jitter is computed against the ideal projection for
+the integer vertex, for MAC0's sums and for the chosen form, so that the choice stands on numbers.
+
+The projection needs H, OFX and OFY, which the observer was not told at E1 (§3.1); `blackmoon-gte`'s `Projection` gains
+two fields, `h` and `offset`, the control registers as the command read them, an addition to the struct the crate owns.
+
+**The guard.** A precise position is used only where it lies near the console's: within **two pixels of the centre of
+the pixel the console chose** in each axis, with `sums₃` positive and MAC0's sums unsaturated. Where the console's own
+value is far from the geometry, something cut it that is not a rounding: IR saturated (a vertex far off to the side, or
+`lm` clamping a negative IR to 0), the quotient saturated at 1FFFFh for a vertex nearer than H/2, SX or SY saturated at
+the GPU's range, or a vertex behind the camera. In each the console drew the vertex somewhere the geometry does not
+say, and a precise vertex in its place would move the polygon by many pixels; the guard keeps the console's integer
+there. Two pixels is chosen to admit §21.1's second loss on near geometry, which reaches a pixel or two, while refusing
+saturation, which moves a vertex tens to hundreds of pixels [A]; the gate counts the vertices the guard refuses on every
+disc (§23), and the bound is to be revised if the count says so.
+
+**What is carried.** For each projection: the integer word SXY2 as pushed, the offset of the precise position from that
+integer's pixel in 256ths of a pixel (two `i16`), and the depth (`i32`, 12 fraction bits). 256ths are the renderer's
+sub-pixel grid (§22.2), whose products stay within 64 bits; finer bits would be rounded away there.
+
+### 21.3 The shadow, and which moves carry a precise value [C]
+
+The design is §3.4's, made concrete.
+
+- **A ring of the last 32,768 projections.** Each projection takes the next serial number (32 bits, never 0) and writes
+  its entry at the serial's place in the ring: the serial, the integer word, the two offsets and the depth, 16 bytes,
+  512 KiB in all. A refused projection (§21.2) takes no entry: the FIFO's shadow gets 0.
+- **Every place that can hold a projected word holds a serial**, or 0 for none: the GTE's three SXY entries, the 32
+  general registers, every word of RAM (524,288, 2 MiB) and of the scratchpad (256). A serial is found in the ring by its
+  place and is live only while the ring's entry there still has that serial; one 32,768 projections old has been written
+  over and is dead.
+- **Moves copy serials, and nothing else.** A projection pushes the FIFO's shadow; MFC2 from SXY0–SXY2 (SXYP reading
+  SXY2) gives a register its slot's serial; MTC2 and LWC2 to SXY0–SXY2 set the slot, and to SXYP push it, with the
+  register's or the memory word's serial; SWC2 gives a memory word the slot's serial; a word-sized load gives a register
+  the memory word's serial, a word-sized store the memory word the register's, a copy (§3.2) one register another's.
+- **What ends it.** A byte or halfword load gives its register 0; a byte, halfword or partial store gives its word 0; a
+  load from anything but RAM and the scratchpad gives 0. Arithmetic on a register is not told (§3.2), so the register's
+  serial stays while its value changes; that is not checked at the move but at the end:
+- **The integer check, once, at the receipt.** When GP0 receives a vertex word, its serial is taken (from the RAM word
+  DMA read it from, or from the register or GTE slot the store named, below), and the precise vertex is used only if the
+  serial is live **and the ring's integer word equals the word received**. A register changed by arithmetic, a word
+  changed by another DMA channel, by the CD, by the MDEC's output or by a turn the idle skipper passed (§2.4) no longer
+  holds the integer and falls back to the console's vertex. Checking once at the use rather than at every move costs
+  one ring access a vertex instead of one a store, and loses nothing: a value that left the integer and came back to it
+  through untold arithmetic is the same pixel, and its precise offset is the one its projection made.
+
+**Bounded in memory and time, and nothing allocated on the frame's path.** The ring, the RAM and scratchpad shadows and
+the registers' are allocated once when the layer is made (2.5 MiB); a projection writes one ring entry, a move one word.
+An entry lives until 32,768 later projections (about 27 frames of Spyro the Dragon, the bench's heaviest at about 1,235
+projections a frame [M, §7.2's counts]); a static scene re-sent without new projections keeps its precision, since
+nothing advances the ring. A ring 64 times smaller than RAM's shadow cannot leave a stale serial live by accident: a
+dead serial is recognised by the ring's entry, never by an age.
+
+### 21.4 The GPU's receipt of a vertex word, matched [C]
+
+- **By DMA**, the receipt names the RAM address channel 2 read (§3.3): the serial is that word's.
+- **By the processor**, the receipt was told **before** the store that sent it (§3.3), and the GPU may run the command
+  inside the store, before the store's move is told, since a word that finds the FIFO empty and the GPU idle is fed at
+  once (`Gpu::gp0`). The layer would learn which register the word came from only after the command had drawn.
+  **Decided: the R3000A tells a store before it writes**, so that a device the store reaches finds the layer already
+  told. The store's value is known before the write; whether the write meets a bus error is not, so a store that faults
+  is told too. A layer cannot be misled by it: the word was not written, and the integer check at the use rejects a
+  serial the memory word does not hold. The alternative, matching a CPU receipt by its integer against every register's
+  shadow, is ambiguous where two registers hold one pixel with different precision, and was not chosen. Loads stay
+  told after the read, since their value is the read's. The change is to `blackmoon-r3000`'s report order under
+  `if B::MOVES`, so the plain bus's code is unchanged; the GP0 store then records the register's serial (or for SWC2
+  the GTE slot's) as the serial of the next receipt from the processor.
+- **The receipt queue.** Each receipt's word and serial enter a ring of 64; a command's words are found there when the
+  GPU starts it (`executed`, §15.2), as the run of receipts after the last one used whose words are the command's. GP0's
+  words are executed in the order received; the receipts no command uses are the words the GPU drops (no-ops between
+  commands, a polyline's end marker, a word lost to a full FIFO behind an unread transfer), which the search steps over.
+  The GPU's FIFO holds 16 words and a command at most 12 more, well inside 64.
+- **Whole polygons only** [C, the plan's rule]. A polygon's vertex words are found by the command's layout (the same as
+  `decode::polygon`'s); the precise vertices are given to the renderer only when **every** vertex of the polygon is
+  precise, a quad's four together. A polygon with one integer vertex is drawn wholly as before, so no polygon is
+  interpolated half precisely; the seam that can remain is between polygons, where a precise one meets an integer one,
+  and is at most §21.2's two pixels and in practice under one.
+- **Rectangles and lines stay integer.** A rectangle is placed and stepped pixel by pixel from one corner, with no
+  geometry between pixels to recover; a line's rule steps its major axis. Both are drawn as the console draws them
+  (`Diamond_Plan.md` §6.3's "2D overlays fall back"), whatever their words' history.
+
+**The offset and D-47.** The precise vertex is carried as an offset from the integer the console used, never as an
+absolute position. The GPU then adds the drawing offset in 11 bits (D-23), places each vertex from the first by its
+11-bit distance, and folds a primitive past −1,024 by 2,048 (D-47): every one of those is a whole-pixel move of the
+integer, which the offset rides unchanged. The renderer applies them to the integer by the GPU's own `decode` and
+`raster::fold`, and adds the offset after. Nothing about them is restated.
+
+### 21.5 What the frame costs, and the budget
+
+Every move the processor reports becomes one or two word writes, a projection one entry of 16 bytes and a division,
+a receipt one queue entry, a polygon's vertices one ring read each. §9.3's test observer, doing additions where this
+layer does stores, cost 2.6 to 3.5 ns an event; P-E1b predicted at most twice that. The RAM shadow is 2 MiB, beyond the
+level-2 cache, so a load or store to RAM touches a line the processor's own RAM access touched a moment before in a
+different array [A]. Measured in §25.
+
+## 22. The renderer's use of precise vertices [C]
+
+### 22.1 Which path a polygon takes
+
+A polygon the precision layer gave whole precise vertices for is drawn as **one or two precise triangles**: a record of
+a new kind, `PRECISE` (6), laid out within the 48 words of §16.2, read by the same walk. Every other polygon, and every
+rectangle, line, fill, copy and transfer, is the record E3 made. Untextured, flat and 2D polygons with no precise vertex
+are therefore drawn exactly as the accurate picture; the zero-fraction gate (§23) holds that the precise record itself
+is the integer rule when its offsets are zero.
+
+### 22.2 Sub-pixel rasterisation that is the integer rule at zero fraction
+
+- **Positions** in 256ths of a pixel: `256·x + dx`. The checks that refuse a primitive (§14.1: a span past 1,023 or 511)
+  are made on the integer vertices, as the console makes them.
+- **Coverage.** A pixel is its integer point; it is inside when each edge function `dX·(256y − aY) − dY·(256x − aX)` is
+  at least 0 on an edge the triangle owns and 1 otherwise, the ownership by the edge's direction as `raster::owns`. At
+  zero fraction every term is 2¹⁶ times the integer one, and "at least 1" in units of 2⁻¹⁶ is "at least 1" in whole
+  units for an integer, so the set of pixels is the integer rule's exactly. The bounds are `⌈min x⌉..⌊max x⌋` and
+  `⌈min y⌉..⌈max y⌉ − 1`, the integer rule's at zero fraction. The products reach 2³⁷ and are made exact in two 32-bit
+  words, as E3's interpolants are (§16.3).
+- **Interpolants.** The base vertex is the integer rule's (`raster::base_vertex` on the integer vertices); each
+  gradient is `((Δa₁·ΔY₂ − Δa₂·ΔY₁) << 20) / area` truncated toward zero, with the positions and the area in the fine
+  units, which at zero fraction is 2¹⁶ over 2¹⁶ of the integer rule's and so the same quotient; a pixel's value is
+  `(256·base + gx·(256x − bX) + gy·(256y − bY) + 256·½) >> 20`, the integer rule's `(base + gx·Δx + gy·Δy + ½) >> 12`
+  at zero fraction. A gradient that does not fit 32 bits (a sliver of under a thousandth of a pixel's width) cannot be
+  stored in the record; such a polygon is drawn wholly on the integer path and counted.
+- **Colour stays affine**, as the console's Gouraud shading is; only the texture is corrected.
+
+### 22.3 Perspective-correct texturing: a division per pixel
+
+The texture coordinate of a pixel is `Σ Eᵢ·qᵢ·uᵢ / Σ Eᵢ·qᵢ`, where Eᵢ are the pixel's three edge functions (each the
+weight of the vertex opposite it, already computed for its coverage) and `qᵢ = z_min/zᵢ` from the precise depths; the
+same for v. That is the perspective-correct interpolation of u and v, since u/z and 1/z are affine in screen space; the
+pixel's coordinate is the nearest integer, as the integer rule's half and shift take it, held within the vertices' own
+range so that a rounding never wraps a coordinate past 255. **A division per pixel, not per span** [C]: the walk is one
+invocation a pixel with no spans (§16.3), so a span's division would need the very per-pixel interpolation it saves, and
+on the device two floating divisions a pixel are a small part of a walk that already does three 64-bit edge functions
+and the texel's VRAM read [A]; its cost is measured (§25). A triangle whose three depths are equal is in a plane facing
+the screen, where affine is exactly perspective-correct; it takes the affine interpolants of §22.2, so a screen-aligned
+quad's texture is the integer rule's at zero fraction, with no rounding of a division in it.
+
+### 22.4 Seams and gaps
+
+Neighbouring precise polygons share their vertices' entries exactly: one projection, one serial, one offset, so the
+shared edge's two functions are exact negatives in integer arithmetic and the ownership rule gives each pixel on it to
+exactly one of them, with no gap and no pixel drawn twice [A, from the rule; the mesh is the test]. **No edge expansion
+is built** [C]: the plan's §6.3 names its cost (semi-transparent polygons blended twice where they meet, sprite edges
+softened), the precise shared vertices close the gaps it was for, and what is left is the seam of §21.4 between a
+precise polygon and an integer one, which expansion would hide only by drawing both over each other.
+
+### 22.5 What the renderer keeps, now that its picture can differ
+
+At E3 the renderer's mirror was the machine's VRAM at 1×, so it kept nothing across a state (§16.6). With precise
+polygons its mirror holds what it drew, which the machine's VRAM does not: the frame being displayed, and anything a
+game copies or textures from what it drew. **It keeps a block when it draws precisely** (§24.4), and none when attached
+alone, as at E3, so E3's gate and its goldens are unchanged.
+
+## 23. The gate, as it will be run
+
+- **Off is the accurate path.** E1's three goldens with the composition built and the setting off; and **with it on**,
+  the precision layer and the renderer attached from power-on, the machine's digests (state, sound, TTY, VRAM, and its
+  own picture, which the accurate GPU keeps) bit for bit, as E1's test observer was held.
+- **At zero fraction the renderer is E3's.** The precision layer in a test form that gives every precise vertex an
+  offset of zero and one depth: every polygon it resolves goes through the `PRECISE` record, and the pictures and VRAM
+  of the programs, ps1-tests and the eight discs must equal the software rasteriser's as E3's did, the texture cache's
+  two pinned counts the one difference.
+- **A synthetic mesh** (`tests/precise.rs`): a textured grid tilted away from the camera and turned slowly through
+  RTPT and RTPS, its packets in RAM sent by DMA's list, its texture's every texel naming its own coordinate. For each
+  frame: each vertex's screen position as drawn, against the ideal projection of the grid as rotated, for the integer,
+  for MAC0's sums and for the precise vertex (jitter: the error and its change from one frame to the next); and each
+  pixel's texel, read back from the software VRAM and from the renderer's, against a perspective-correct reference
+  computed in the test from the ideal geometry (warp).
+- **A 2D program**: sprites, rectangles, lines, flat and shaded polygons the processor builds, and a menu of quads whose
+  vertices are projected by the GTE and then moved by the processor, one quad with one vertex moved: with the setting
+  on its picture and VRAM must equal the software's to the pixel.
+- **On the eight bench discs**, along their golden anchors with their press scripts: the fraction of polygon vertices
+  resolved precisely and of polygons drawn precisely, by game (P10); the guard's refusals and the ring's dead serials;
+  the machine's goldens with the setting on; pictures looked at, every visible defect listed with its frame. No picture
+  of a game is committed.
+- **The player's path**: the kit on the published library, off and on, the eight discs at 1,800 frames; WiseMan's
+  Diamond tests; the setting in the PlayStation's Enhancements group with its cost; turning it on and off between
+  frames through the host changes only the picture.
+
+## 24. Composition, the setting and the state [C]
+
+### 24.1 The crates
+
+| Crate | Its one job | Depends on |
+|---|---|---|
+| `diamond` (the machine) | the console, exact; the layer's frame; `impl Core for Machine` | as before |
+| `precision` | the shadow, the receipts, the precise vertices of each polygon; a layer | `diamond` |
+| `diamond-renderer` | the picture drawn on the device from the command stream, with precise polygons where given | `diamond`, `precision` (for the vertices' type and the drawer's trait), `emusen-gpu` |
+| `diamond-v1` (new, `v1/`) | the core ABI's exports: the machine with its enhancements, as the host sees it | the three |
+
+- **The machine's library is no longer the published one.** `diamond`'s crate type becomes `rlib` alone and its
+  `core_exports!` moves out: its `impl Core for Machine` stays, with every descriptor and the tests that hold them.
+  `diamond-v1`'s library is named **`diamond`** (its package `diamond-v1`, its dependency on the machine renamed
+  `machine`), so the built file is `libdiamond.so`, its sidecar `libdiamond.so.core.json`, and its exports the machine's
+  through a `Core` that holds a `Machine` and passes each call on, adding the setting and the picture. Rust allows two
+  crates of one name in a graph when their metadata differ, as two versions of a crate are [M, a scratch pair built and
+  linked]. `RustCores.props`'s row for `diamond` changes its `Dir` alone, to `v1\`; the library's name, its core id,
+  its system pack and everything Mistress reads stay as they are.
+- **Why `precision` defines the drawer's side.** The renderer must be told a polygon's precise vertices with the
+  command, and the precision layer must be told every event first. A layer that holds both and passes each event on
+  is the one attachment point (§15.1 kept: the machine attaches one layer). It lives in `precision` as
+  `Precise<D: Draw>`, generic over the drawer: `precision` defines what it gives (`Draw::executed_with`, a polygon's
+  vertices whole or none) and knows nothing of Vulkan; the renderer implements `Draw` and knows nothing of moves. The
+  other arrangements were a pair in the machine's `layer` module, which would give the machine a type for data it never
+  reads, and the pair in `diamond-v1`, which the machine's own tests could not then attach, since a crate named
+  `diamond` cannot be a dependency of the crate named `diamond` that holds the goldens.
+- **The plain frame for a GPU-only layer is not built** [C]. The precision layer needs every move, so with the setting
+  on the layered frame is the right one. A renderer attached alone, which would want the plain frame (E3 measured that
+  share at 0.04 to 0.15 ms, §18.3), happens only in the tools and the gates until E5 offers internal resolution without
+  precise geometry; whether to add `Layer::moves` is E5's to decide with that setting.
+
+### 24.2 The setting
+
+`precision`, "Precise geometry", an `Enhancement` switch in the Enhancements category: `effect: enhancement`, default
+false (the hardware's), `scope: run`, no restart, its help and cost in a player's words (the cost: a Vulkan graphics
+card's time each frame, save states about twice their size, and the hairline seams and the 2D overlays of §21.4). It is
+applied by `set_settings` between frames, and read at create like every key:
+
+- **On**: a renderer on the device `EMUSEN_GPU_DEVICE` names (the first usable one without it), kept in the block form
+  (§22.5), paired with a new precision layer and attached; the frame given to the host is from then the renderer's
+  picture, read back after each frame's `advance` unless the host skips rendering. Attaching seeds the renderer from
+  the GPU as it stands (§16.6), so the picture does not flash.
+- **Off**: the layer detached and dropped; the frame is the machine's own again.
+- **Where no usable Vulkan device exists, or the renderer cannot be made** [C]: the setting is **accepted and
+  reported**, not refused. Refusing would leave a stored value the frontend could not apply on every load, and a host
+  that applies a player's saved settings at create would fail the game's load over a picture setting. Accepted, the
+  machine runs exactly as off; `setting_notes` (`SETTING_NOTES`, `EmuSen_CoreAPI.md` §6.13) gives the sentence "No
+  usable Vulkan graphics card was found (the reason), so the console's own picture is shown," which Mistress already
+  shows under the row (`CoreEngine.Settings`' `Note`). Nothing crashes: `Renderer::new` returns the reason as an error,
+  and the layer is never attached.
+- **The API's events**: `core_exports!` raises `GEOMETRY` when `frame_info`'s size changes and `STATE_SIZE` when the
+  state's does, after `set_settings`, `advance` and `state_load`, so turning the setting on raises `STATE_SIZE` (its
+  blocks, §24.4) and raises `GEOMETRY` only if the sizes differed, which at 1× they never do (the renderer's picture is
+  the display's size).
+- **The frontend's group.** Mistress's Graphics Settings window lists a core's sidecar settings in the console's tab
+  (§5); the schema's text asks for enhancements in a group of their own. Built now, as E1 left it for the first one
+  offered: a core setting carries its group, `Enhancements` for `effect: enhancement`, and the console's tab shows a
+  heading before the first row of each group other than the core's plain settings.
+
+### 24.3 The kit, the run tool and the bench
+
+The kit needs no option: it reaches the renderer through the setting, `--settings precision=true`, on the published
+library, which is what E3 could not do. The run tool gains `--precise` (the pair attached from power-on, its pictures
+written as `--renderer`'s are, and the precision layer's counts printed) and `--precision` (the precision layer alone,
+for its counts, with no device); the bench gains `--precise`, timed as `--renderer` is.
+
+### 24.4 State
+
+- **`PREC`, the precision layer's block, fixed in size**: the next serial, the ring (512 KiB), the shadows of RAM
+  (2 MiB), the scratchpad, the registers and the FIFO, the receipt queue with its cursor, and the serial of the next
+  receipt from the processor; 2.6 MiB. Its counts are not kept: they describe a run, not the machine.
+- **`RNDR`, the renderer's block, written only in the block form**: its mirror of VRAM a halfword a pixel (1 MiB), its
+  picture at the largest size with its width and height (1.4 MiB), and the palette the CLUT cache holds as the renderer
+  has it; read back from the device when the host settles the machine before a save (`Core::settle`, which the export
+  calls), loaded into the mirror in place of the GPU's VRAM when a state is loaded. 2.5 MiB.
+- **Why whole and fixed** [A]. The kit's C7 and C8 compare the pictures of a machine that loaded a state with those of
+  the machine that saved it, and a state's size may not change from frame to frame. A frame drawn after a load must
+  then be the frame the machine that saved it draws: the vertices projected before the save and drawn after (a game's
+  double-buffered ordering table), the receipts in the GPU's FIFO at the save, and what the renderer drew that VRAM does
+  not hold all reach the picture after the load. A block holding only what is live would vary in size. So the state
+  with the setting on is about 10.4 MB against 5.3, and the cost says so.
+- **Both ways** (E1's rule): a state made with the setting on loads with it off, both blocks skipped; one made with it
+  off loads with it on, the precision layer starting empty and the renderer seeded from the GPU's VRAM, so the first
+  frame or two after are drawn with fewer precise vertices; the machine's continuation is the same either way, since
+  nothing in the machine reads a layer. The Layer trait's block methods are made per tag, so that one layer, the pair,
+  can write the two blocks its two parts own: `tags`, and `save`, `load` and `clear` given the tag.
+
+### 24.5 Predictions [recorded before the code]
+
+- **P-E4a.** The mesh's vertex jitter, the mean screen-position error against the ideal projection, falls from about a
+  third of a pixel with integer vertices to under a hundredth with precise ones; with MAC0's sums alone it falls only
+  to between a tenth and a quarter.
+- **P-E4b.** The mesh's texture warp, the mean texel error against the perspective-correct reference, is over a texel
+  with the setting off and under half a texel with it on.
+- **P-E4c.** On Crash Bandicoot, Spyro the Dragon and Ape Escape most polygon vertices drawn in play are precise
+  (over 70 per cent); Castlevania and Rayman, which draw mostly 2D, under 10 per cent (P10's second half).
+- **P-E4d.** The guard refuses under 1 per cent of projections on every disc.
+- **P-E4e.** Every machine golden holds with the setting on, by construction.
+- **P-E4f.** Off, the frame costs the base within the bench's noise; on, the emulation thread pays under 1.5 ms a frame
+  more than the plain frame on the three discs on the RX 6800, the precision layer's share under 0.3 ms (P-E1b's twice
+  the test observer).

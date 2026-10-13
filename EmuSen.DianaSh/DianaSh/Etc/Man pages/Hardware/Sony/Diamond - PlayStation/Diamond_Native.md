@@ -207,7 +207,8 @@ foreign, of another version as a version, and a truncated one as truncated; a re
 processor blocks being read into copies first. The layout is pinned by `the_version_1_layout_is_pinned`. The disc's
 identity (its hash and its number in a set, the plan's §4.7) is not in it until a disc is read (stage 7); no player
 has a Diamond state, so version 1 is redefined freely until the core is offered. *Since stage 5 (§13.6), version 2,
-the bus block carrying the GTE's deadline, pinned by `the_version_2_layout_is_pinned`.*
+the bus block carrying the GTE's deadline, pinned by `the_version_2_layout_is_pinned`.* *Since 2026-10-12 (§23),
+version 10: the picture after the disc's fingerprint, 5,267,532 bytes, versions 8 and 9 still loading.*
 
 ### 2.8 What was measured (2026-10-11)
 
@@ -1477,3 +1478,201 @@ base's battery run (`Diamond_Speed.md` §14.3), and the removal of the bench's c
 rasteriser, a block form of the step and the recompiler (§15 there); the inexact settings and the shipped link (§8
 there); and the tester's answer on the speed row (§16 there). No dispute was taken.
 
+## 23. The picture in the state (2026-10-12)
+
+A defect found by the kit and fixed between stages; no stage of the plan's §7. The state's earlier record is §2.7,
+§11.16, §13.6 and the devices' own pages.
+
+### 23.1 The defect
+
+The kit's C7 and C8 at 1,800 frames, first run at that length for C17 (`Diamond_Players.md` §12), failed on Ape
+Escape, Rayman, Silent Hill and Tekken 3 and passed on Crash Bandicoot, Spyro the Dragon, Castlevania and Mega Man
+Legends [M]: a machine that loaded the state saved at frame 900 did not continue as the machine that saved it. The
+digest of the pictures differed; the digest of the sound, the count of samples and the state after the run were equal.
+It is no regression: WiseMan `6141ad60`, from before the disc work, gives Ape Escape's two digests to the bit [M, that
+day's record], and both halves of the cause (§23.2), the weaving and the state without the picture, entered with stage
+4's commit `54b8ca2c`, so there was nothing to bisect.
+
+### 23.2 The cause
+
+Two machines were run through the ABI under the kit's own input, the second made new and given the first's state at
+frame 900, and their pictures compared frame by frame [M]:
+
+| Disc | The picture at frame 900 | The first frame that differs | What differs in it | Frames differing of 900 |
+|---|---|---|---|---|
+| Ape Escape | 640 by 480 | 901 | 110 odd lines, 129 to 357 | 1 |
+| Rayman | 640 by 478 | 901 | 81 even lines, 154 to 342 | 1 |
+| Silent Hill | 640 by 448 | 901 | 224 odd lines, 1 to 447 | 1 |
+| Tekken 3 | 368 by 480 | 901 | 224 even lines, 20 to 466 | 1 |
+
+In each the one frame after the load differs, in lines of one parity alone, and the states are equal from that frame
+on. The four are in 480-line interlace at frame 900; the four that pass are not.
+
+**The mechanism.** `display.rs` reads a field's lines from VRAM as the video timing reaches them. In 480-line
+interlace it writes them to alternate lines of the picture, and the lines between, the other field's, stay as they were
+read a field earlier (`Diamond_GPU.md` §7). The state held the display's registers and its place in the field and not
+the picture, by a choice stage 4 recorded: "the picture is not kept, and a state loaded between frames re-reads it
+within the next frame" (`Diamond_GPU.md` §12, [C], now struck there). That holds for a 240-line picture whose range
+stands still; it does not hold for a woven one, half of which is a field old at every frame's end. A machine that
+loaded a state therefore wove the next field into whatever picture it had: black, on a machine just made.
+
+**The ablation.** With the saving machine's picture copied into the loading machine after the load, and nothing else
+changed, no frame of the 900 differs on Ape Escape, Rayman or Silent Hill, run without input [M]; Tekken 3 shows a
+480-line picture only under the kit's input, where the probe goes through the ABI and cannot reach the picture, and
+was confirmed by the fix instead. The picture is thus sufficient for the whole of the difference. The other suspects
+named when the defect was reported were not ablated one by one, since nothing was left for them to explain: the
+texture and CLUT caches, the FIFO and the command in flight are in the state (`Diamond_GPU.md` §12); the decoded
+words are made again at a load and the idle skipper's tables at every frame (§21.1); the interlace field is the video
+timing's `Odd`. The scan of §23.4 looked for a second cause and found none.
+
+**Why it is state and not derived.** The held lines are VRAM as it stood a field ago, and nothing keeps VRAM so: a
+640 by 480 picture leaves no room in VRAM for a second buffer, and a game showing one draws into the lines displayed.
+`a_state_holds_the_picture_whose_other_field_vram_no_longer_has` asserts as much of its program: the picture read
+whole from VRAM at the load is not the picture saved. What cannot be made again from the rest of the state is state.
+
+**A second symptom, found by the scan.** A load did not change the picture until a frame had run: a machine paused at
+a load went on showing what it had shown before. The kit has no case for it. On the base it is seen at 82 to 108 of
+a disc's 119 save points, on all eight discs (§23.4); the fix ends it, the picture being loaded with the rest.
+
+### 23.3 The fix
+
+`DMND` **version 10** [C]: the state ends with `Picture`, the display's picture whole, 640 by 576
+RGBA, **1,474,560 bytes** after `Disc`. The layout before it is version 9's to the byte.
+`the_version_10_layout_is_pinned`: **5,267,532 bytes** for a machine with one DualShock and no card (3,792,972 at
+version 9); with the kit's two DualShocks and a card, 5,398,770 (3,924,210).
+
+- **A state of version 8 or 9 still loads**, and has no picture: the display is read whole from VRAM as the state has
+  it, both fields of a woven one (`Display::reread`). That is not the picture saved, which nothing can give, but it
+  is the nearest the state allows and the same on every machine, where before it was the loading machine's leftover.
+- **The whole picture, not the held field** [C]. The held field alone would be half the bytes at most and exact at a
+  frame's end in a standing mode. The whole is exact wherever a state is taken: at a debugger's stop mid-field, where
+  part of the field being read is new and part old; after a range or a mode written mid-field, which leaves lines the
+  field does not read again; under a range that shows no line. It is also one copy with no case analysis, and it makes
+  a load show the picture saved.
+- **RGBA as the display holds it, not packed to three bytes** [C]: packing saves 368,640 bytes of a constant, which
+  costs a delta nothing (below), for a loop and a scratch buffer at every save.
+- **Not a wider reading of VRAM at the load** (the first form considered, since derived data is better rebuilt than
+  carried): it is exact only where VRAM has not been drawn over, and the test above shows a program for which it is
+  not.
+
+**The cost** [M, a probe in the cache, the desktop, medians of 100]: the state is saved in 0.19 to 0.27 ms where it
+took 0.13 to 0.20, and loaded in 0.33 to 0.44 ms where it took 0.30 to 0.38, on four discs: one copy of the picture
+more each way. The rewind stores what differs between one state and the next it takes, four frames on
+(`RewindBuffer`), and that grows by the picture's changed bytes. From frame 1,500 without input, 100 pairs: Tekken 3 265,795 bytes a pair before and 397,270
+after, Spyro the Dragon 409,817 and 634,091, about half as much again; on a screen that stands still next to nothing
+(Crash Bandicoot 12,264 and 16,435; Ape Escape's 640 by 480 screen from frame 700, 10,066 and 10,834). If the coder's
+output follows the differing bytes, a moving game is kept about two thirds as long under the same budget [A]. That is
+what an exact state costs here, and it is the frontend's budget to weigh (§23.7).
+
+The frame's cost is unchanged, as nothing on the frame's path changed but a parameter passed to the line reader
+[M, the bench of `Diamond_Speed.md` §2 on builds with every function aligned to 64 bytes, the base and the branch
+alternating, the fastest mean of five, ms a frame]:
+
+| Run | Frames | Base | Branch | Difference |
+|---|---|---|---|---|
+| `gpu/benchmark` | 1,200 | 2.313 | 2.306 | −0.3% |
+| `gpu/bandwidth` | 1,200 | 2.972 | 2.970 | −0.1% |
+| Crash Bandicoot | 3,000 | 2.300 | 2.309 | +0.4% |
+| Tekken 3 | 3,000 | 2.386 | 2.395 | +0.4% |
+
+One build's five runs spread by 1 to 29 per cent, other work sharing the machine, which is why the fastest is taken;
+the differences, 0.4 per cent at most and of either sign, are inside it.
+
+Each pair's picture and sound digests are equal, so an unbroken run is what it was; the state digests differ, as they
+must.
+
+### 23.4 What was measured after it
+
+**The kit**, single-image form, each disc at three lengths on the base and three on the branch, the save at each
+length's middle [M]:
+
+| Disc | Base, 600 (save at 300) | Base, 1,400 (700) | Base, 1,800 (900) | Branch, 1,400 | Branch, 1,800 | Branch, 3,000 (1,500) |
+|---|---|---|---|---|---|---|
+| Ape Escape | pass | **C7, C8 fail** | **C7, C8 fail** | pass | pass | pass |
+| Rayman | pass | **C7, C8 fail** | **C7, C8 fail** | pass | pass | pass |
+| Silent Hill | pass | **C7, C8 fail** | **C7, C8 fail** | pass | pass | pass |
+| Tekken 3 | pass | **C7, C8 fail** | **C7, C8 fail** | pass | pass | pass |
+| Castlevania: Symphony of the Night | pass | pass | pass | pass | pass | pass |
+| Crash Bandicoot | pass | pass | pass | pass | pass | pass |
+| Mega Man Legends | pass | pass | pass | pass | pass | pass |
+| Spyro the Dragon | pass | pass | pass | pass | pass | pass |
+
+Where C7 and C8 fail so does C12, which runs them again under a host of another minor; every other case passes in
+all 48 runs, and on the branch all seventeen in every run, the state 5,398,770 bytes. Ape Escape's C6 digests at 1,800
+frames are the base's to the bit (`A02BFAE09D41CF89` for the pictures), so the kit sees an unbroken run unchanged.
+**The corpus form** on the sample's nine discs at 1,800 frames, `kit/psx-sample.txt`'s command: 9 of 9 and the core's
+cases pass, 190 s, nine at once, 8.98 GB peak resident under a 10 GiB limit [M].
+
+The length of 1,400 was chosen from the scan: frame 700 is inside the 480-line stretch of all four discs that failed.
+At 600 frames, the save at 300, the base passes too, which is §23.5's matter.
+
+**The scan** [M]: one machine through the ABI under the kit's input to frame 3,000; at every 25th frame its state
+loaded by a machine just made, the picture at the load compared with the picture saved, then three frames and the
+state compared. 119 save points a disc, 952 in all:
+
+| Disc | Save points in a picture of more than 300 lines | Base: continuation fails | Base: the picture at the load is not the one saved | Branch: either |
+|---|---|---|---|---|
+| Ape Escape | 27, from frame 575 | 24 | 84 | 0 |
+| Rayman | 28, from 500 | 23 | 91 | 0 |
+| Silent Hill | 15, from 575 | 14 | 108 | 0 |
+| Tekken 3 | 100, from 425 | 98 | 100 | 0 |
+| Castlevania: Symphony of the Night | 0 | 0 | 82 | 0 |
+| Crash Bandicoot | 0 | 0 | 88 | 0 |
+| Mega Man Legends | 0 | 0 | 108 | 0 |
+| Spyro the Dragon | 0 | 0 | 108 | 0 |
+
+On the base the continuation fails at 159 of the 170 save points in a picture of more than 300 lines and at none of
+the other 782; in each of the eleven that continue, one field's lines of the picture saved are all black, which is
+what a machine just made holds. On the branch nothing fails at any of the 952.
+
+### 23.5 Why the gate did not see it
+
+- **Stage 11's G4** ran the kit's corpus form on nine discs at the kit's default 600 frames (`Diamond_Players.md` §6).
+  C7 and C8 save once, at the middle: frame 300. Under the kit's input the first save point of the scan in a picture
+  of more than 300 lines is frame 575 on Ape Escape and Silent Hill, 500 on Rayman and 425 on Tekken 3 (§23.4); at 300
+  none is. The base still passes C7 and C8 on all eight at 600 frames [M, §23.4]. The gate's one save point fell
+  before the first frame that could fail.
+- **WiseMan's routine case**, `The_kit_passes_on_a_synthetic_program_and_a_synthetic_disc`, runs a program that
+  jumps to itself, alone and booted from a synthetic disc, at 120 frames. The program never writes to the GPU, and
+  the case has passed at every merge, so its save at frame 60 met no 480-line picture with anything in it.
+- **Stage 14's goldens** (the plan's G5) are not built: no page records them and the tree holds none [R, the pages
+  and WiseMan searched 2026-10-12]. A golden would not have seen this in any case: it compares one unbroken run with
+  another, and an unbroken run was never wrong.
+- **The crate's own state test** round-trips a machine in an idle loop and compares the clock and the program counter,
+  not the picture.
+
+What now sees it:
+
+- `a_state_holds_the_picture_whose_other_field_vram_no_longer_has` (`src/state.rs`): a program of nineteen words
+  shows 640 by 480 interlaced and fills it in a colour that changes about every field; a state is saved after five
+  frames, and a machine just made must show the picture saved and weave the next field into it. On the code before,
+  all 480 lines differ at the load and the held field's 240 after the next frame [M].
+- **WiseMan's routine kit case runs the same program as a third image**, `woven.psexe`: on the base C7, C8 and C12
+  fail on it at 120 frames, the save at frame 60 [M]. It adds one kit run to the case.
+- `a_state_loads_as_it_was_saved_all_along_a_disc` (`tests/programs.rs`, opt-in by `EMUSEN_DIAMOND_DISC` as the
+  three disc tests beside it, which now share `named_disc`): thirty save points in a disc's first 1,500 frames, each
+  loaded by a machine just made, the picture at the load, three frames and the state compared. On the base it fails
+  on Ape Escape at frame 600 [M].
+- `kit/psx-sample.txt`'s command is now 1,800 frames, with the reason beside it.
+
+### 23.6 Tests run (2026-10-12)
+
+`diamond`, `cargo test --release`: 159 unit tests and 78 program tests, with `EMUSEN_DIAMOND_PS1TESTS` and without
+(158 and 77 before; one added to each), and the disc tests with `EMUSEN_DIAMOND_DISC` on Crash Bandicoot, the new one
+on Ape Escape too, where on the base it fails. WiseMan under the test lock with the corpus,
+`FullyQualifiedName~Diamond`: 46 pass, the kit case with its third image among them. The kit: the 48 single-image runs
+of §23.4 and the corpus form at 1,800 frames. `git merge WiseMan` brought nothing, WiseMan standing at `6b4ae644`
+where the work began. No test was run on the handheld, which this work does not touch, and none on a player's BIOS:
+every run above is on the open kernel.
+
+### 23.7 What waits
+
+- **The kit saves once a run.** A C7 that saved at several points, or a rule that the picture after a load is the
+  picture saved, would have caught this at any length and on any core; either changes C7 for every core
+  (`EmuSen_CoreAPI.md` §12.1) and is proposed to the tester, not built [C]. The scan's probe, which does both, stayed
+  in the cache.
+- **The rewind's budget.** Its deltas grow by the picture's changed bytes (§23.3). The form that would avoid it, the
+  picture kept only while it is woven and read from VRAM at a load otherwise, is exact at a frame's end in a standing
+  mode and not elsewhere (§23.3's second item); it is not built, accuracy not being traded by default, and is the
+  tester's to ask for.
+- No dispute was taken: no rule of the hardware is at stake, the display weaving as it did.

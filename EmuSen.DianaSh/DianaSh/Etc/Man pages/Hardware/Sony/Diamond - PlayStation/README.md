@@ -36,6 +36,8 @@ discs by their SYSTEM.CNF and keeps files on memory cards in their on-card forma
 state's version 6, the gate item by item; and stage 9 (§16): the MDEC, DMA channels 0 and 1, the state's version 7,
 the gate; and stage 8 (§17): the SPU, the audio path, DMA4, the state's version 8, the gate; and stage 10 (§18): the
 open kernel's second phase, the gate with the tester's games booting with no firmware folder and a save loaded back. And stage 12 (§19): the debugger, its gate.
+  And §23 (2026-10-12): the picture in the state, version 10: a loaded machine's first frame in 480-line interlace, its
+  cause and the ablation, the kit on eight discs at three save points and a scan of 952, and why the gate had passed.
 - [`Diamond_Players.md`](Diamond_Players.md) — stage 11, written 2026-10-11: routing by content and the recognisers,
   image sets with the core ABI's `EMUSEN_FILE_MEDIA` and the platform library's set calls, archives unpacked into
   Galaxia's `Unpacked` folder, the disc change (`MEDIA`, minor 1.1) with the state's fingerprint (version 9), the

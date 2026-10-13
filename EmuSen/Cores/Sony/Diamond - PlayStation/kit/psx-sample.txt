@@ -1,7 +1,10 @@
 # Diamond's sample for the conformance kit's corpus form: the tester's discs by their names, no image, each form the
 # library holds, found in --from (copies in the probe's cache, never the library itself). See Diamond_Players.md §6.
 #
-#   emusen-core-conform --core libdiamond.so --images kit/psx-sample.txt --from ~/.cache/emusen/probe/diamond/discs
+#   emusen-core-conform --core libdiamond.so --images kit/psx-sample.txt --from ~/.cache/emusen/probe/diamond/discs --frames 1800
+#
+# 1,800 frames, not the kit's 600: C7 and C8 save at the middle, and at frame 300 no disc here shows a 480-line
+# picture yet; at 900 four of them do, and a state must hold its lines (Diamond_Native.md §23).
 #
 Ape Escape (USA).cue  # a sheet with one track; DualShock-only
 Castlevania - Symphony of the Night (USA)/Castlevania - Symphony of the Night (USA).cue  # a sheet with a data and an audio track

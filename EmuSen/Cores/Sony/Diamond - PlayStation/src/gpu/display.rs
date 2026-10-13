@@ -1,7 +1,8 @@
 //! The display: VRAM read a line at a time as the video timing reaches it (Diamond_Plan.md §5.4), from GP1(05h)'s
 //! start for the pixels GP1(06h)'s range holds at GP1(08h)'s dot clock, 15- or 24-bit, and in 480-line interlace a
 //! field's lines interleaved with the other's. The picture is RGBA at the display area's own size, as it stands when a
-//! field's first displayed line is read (Diamond_GPU.md §7).
+//! field's first displayed line is read (Diamond_GPU.md §7). What it holds between fields is the machine's state: VRAM
+//! as it was when each line was read, which VRAM as it is cannot give again (Diamond_Native.md §23).
 
 use super::vram::Vram;
 use crate::video::Video;
@@ -66,7 +67,7 @@ impl Display {
                 self.resize(size(video));
             }
             if l >= video.y1 && l < video.y2 {
-                self.read_line(vram, video, l - video.y1);
+                self.read_line(vram, video, l - video.y1, video.odd as u32);
             }
         }
     }
@@ -75,16 +76,30 @@ impl Display {
     fn resize(&mut self, (w, h): (u32, u32)) {
         if (w, h) != (self.width, self.height) {
             (self.width, self.height) = (w, h);
-            self.picture.fill(0);
-            for p in self.picture.as_chunks_mut::<4>().0 {
-                p[3] = 255;
+            self.clear();
+        }
+    }
+
+    fn clear(&mut self) {
+        self.picture.fill(0);
+        for p in self.picture.as_chunks_mut::<4>().0 {
+            p[3] = 255;
+        }
+    }
+
+    /// The picture read whole from VRAM as it is now, both fields of an interlaced one: what a state from before the
+    /// picture was the state's is given, in place of whatever the machine loading it showed (Diamond_Native.md §23).
+    pub fn reread(&mut self, vram: &Vram, video: &Video) {
+        self.clear();
+        for row in 0..video.y2.saturating_sub(video.y1) {
+            for field in 0..=hires(video) as u32 {
+                self.read_line(vram, video, row, field);
             }
         }
     }
 
-    fn read_line(&mut self, vram: &Vram, video: &Video, row: u32) {
+    fn read_line(&mut self, vram: &Vram, video: &Video, row: u32, field: u32) {
         let hi = hires(video);
-        let field = video.odd as u32;
         let out_row = if hi { row * 2 + field } else { row };
         if out_row >= self.height {
             return;

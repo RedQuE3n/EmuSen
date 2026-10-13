@@ -53,6 +53,13 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   of the slowest games and the step's cost in its shape more than its boundary, runs of steps with the boundary held and
   the common instructions on a lean path, the rasteriser by rows, their verifier, tests and mutants, the desktop and the
   quota, the handheld's base on battery with the levers' run there owed, and the frontend's share: the handheld's slow launches ran at the Slow Motion speed.
+- [`Diamond_Enhancements.md`](Diamond_Enhancements.md) — stage E1, written 2026-10-13: the enhancement layer's frame
+  and the proof that it changes nothing while off: who tells a layer what (the R3000A's moves told to its bus, the GTE's
+  projections, the GPU's receipts with their RAM addresses) and why the processor reports to its bus, the frame's two
+  forms, the events against what E4's precise geometry needs, the state's tagged blocks after the picture with no new
+  version and their loading both ways and across builds, the `Enhancement` declaration with none offered, the accurate
+  goldens and the rule for recording them again, the exactness harness with a test observer, the kit's cases, the cost
+  unobserved and observed and the two causes found of a cost that was there at first, and what E3 and E4 need next.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

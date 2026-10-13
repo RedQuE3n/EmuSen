@@ -208,7 +208,9 @@ processor blocks being read into copies first. The layout is pinned by `the_vers
 identity (its hash and its number in a set, the plan's §4.7) is not in it until a disc is read (stage 7); no player
 has a Diamond state, so version 1 is redefined freely until the core is offered. *Since stage 5 (§13.6), version 2,
 the bus block carrying the GTE's deadline, pinned by `the_version_2_layout_is_pinned`.* *Since 2026-10-12 (§23),
-version 10: the picture after the disc's fingerprint, 5,267,532 bytes, versions 8 and 9 still loading.*
+version 10: the picture after the disc's fingerprint, 5,267,532 bytes, versions 8 and 9 still loading.* *Since 2026-10-13
+(§24), optional tagged blocks after the picture, an enhancement layer's; with none the state is version 10's to the
+byte, and no version was taken.*
 
 ### 2.8 What was measured (2026-10-11)
 
@@ -1676,3 +1678,23 @@ every run above is on the open kernel.
   mode and not elsewhere (§23.3's second item); it is not built, accuracy not being traded by default, and is the
   tester's to ask for.
 - No dispute was taken: no rule of the hardware is at stake, the display weaving as it did.
+
+---
+
+## 24. Stage E1, the enhancement layer's frame (2026-10-13)
+
+The record is `Diamond_Enhancements.md`. In brief:
+
+- **The goldens**, recorded on WiseMan 177f5041 before any of E1's code (`tests/goldens/`): the 49 programs of
+  `programs/`, ps1-tests' 48 and the eight bench discs played by their press scripts to frame 3,000 with 80 anchors;
+  the rule for recording them again is its §6.2.
+- **The observer**: the R3000A's moves told to its bus (`BlackMoon_R3000.md` §14), the GTE's projections with the
+  camera-space sums and the quotient (`BlackMoon_GTE.md` §9), the GPU's receipts with their RAM addresses
+  (`Diamond_GPU.md` §13); a layer attached to the board, the frame stepping through `Layered` only while one is.
+- **The state**: optional blocks after `Picture`, each a tag, a length and its bytes (§4 there); with no layer the state
+  is version 10's to the byte, 5,267,532 bytes, its layout test unchanged; no version was taken.
+- **The settings**: `Enhancement`, a switch or a choice in the "Enhancements" group with the hardware's value its
+  default; none offered (§5 there).
+- **The harness**: every golden equal with the layer compiled in and off and again with the test observer attached;
+  the kit's cases on the eight discs at 1,800 frames; the frame's cost unobserved within the noise, after two causes of
+  1 to 2.5 per cent were found and removed (§9 there).

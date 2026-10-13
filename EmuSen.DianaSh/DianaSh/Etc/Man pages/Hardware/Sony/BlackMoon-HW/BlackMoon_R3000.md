@@ -722,3 +722,57 @@ word's, and kernel space reached in user mode. Twenty-four mutants were applied 
 caught. The survivor, the quiet check's interrupt test without SR's mask bits, makes the check stricter: a masked
 request then sends a run back to full steps, which costs speed and changes no step, so nothing can catch it.
 
+
+## 14. The moves, for the enhancement layer (2026-10-13)
+
+*Built at Diamond's stage E1 (`Diamond_Enhancements.md`, `Diamond_Plan.md` §6.2).* The precision side-channel needs to
+follow a projected vertex from the GTE through the processor's registers and memory to the GPU. The processor is the
+only part that knows which register a value went to or came from; the bus sees an address and a value, never the
+register. So the processor reports, and its console interprets.
+
+**The interface.** `Bus::MOVES`, an associated constant false by default, and `Bus::moved(Move)`, a default method
+with an empty body: additions with defaults as `bus_error`, `fetch_decoded` and `running` were (§2), so a bus that does
+not give them is unchanged. Every report is made under `if B::MOVES`, so the step compiled for a bus that leaves the
+constant false holds no trace of the reports, their arguments included; a bus that sets it true is told. `Move` names
+seven moves, each told once its instruction has made it, `at` the instruction's address:
+
+| Move | Instructions | Fields |
+|---|---|---|
+| `Load` | LB, LBU, LH, LHU, LW, LWL, LWR | the register, the bus address and size of the read, the value the register will hold after the next instruction (extended, or merged for LWL and LWR) |
+| `Store` | SB, SH, SW, SWL, SWR | the register, the bus address and size of the write, the bytes written |
+| `FromCop2` | MFC2 | the register, coprocessor 2's data register, the value |
+| `ToCop2` | MTC2 | the register, coprocessor 2's data register, the value |
+| `LoadCop2` | LWC2 | coprocessor 2's data register, the address, the value |
+| `StoreCop2` | SWC2 | coprocessor 2's data register, the address, the value |
+| `Copy` | ADDU, ADD, SUBU, SUB, OR, XOR with R0 as the second operand; ADDU, ADD, OR, XOR with R0 as the first; ADDIU, ADDI, ORI, XORI of 0; SLL, SRL, SRA by 0 | the register given the value, the register it came from, the value |
+
+Not told: a load or store that met no device (it ends in DBE), one the isolated cache took (it reached no memory), any
+move whose register is R0 (it holds nothing, so a NOP, `SLL R0, R0, 0`, is not a copy), CFC2 and CTC2 (the control
+registers hold matrices, vectors and offsets, never a projected vertex), and an instruction that computes anything
+else. A load is told when it is made, though its register is written one instruction later; a console that checks
+the value it tracks against the value it later meets is not misled by the delay slot's use of the old value
+(`Diamond_Enhancements.md` §3.2).
+
+**Why the bus, and not a second observer.** `README.md` beside this page had said the layer's half would be "a second
+generic parameter". The layer must see the processor's moves, the GTE's projections and the GPU's receipts in one
+order, and the GTE and the GPU are reached through the bus, inside the console's board. A second parameter beside the
+bus would have to be the same object the board holds, borrowed twice. Told to the bus, the moves reach the console's
+board, and a console that wants them steps through a bus of its own that forwards them; Diamond's is `LayeredBus`
+(`Diamond_Enhancements.md` §2.3).
+
+**How it is known.** `each_move_is_told_with_its_values` runs a program of every move against the test bus and holds
+the moves told to a list of nineteen, field for field, including LWL and LWR merged across a pending load and SWL and
+SWR's bytes; a load that met no device, a store and a load to the isolated cache, and a NOP tell nothing.
+`a_run_is_its_steps_on_random_programs` (§13) now records the moves on both buses and holds a run's equal to its
+steps', 15,479 moves over the 19,801 runs [M, 2026-10-13]. The suite's 55,000 cases pass unchanged [M]. Diamond's
+goldens hold the processor's results unchanged with the moves compiled in, and again with a layer told them
+(`Diamond_Enhancements.md` §7).
+
+**Why a constant, measured.** The first build reported through `moved` alone, trusting the empty default to vanish.
+It did, as calls: no call remained in the step for Diamond's board. But the instructions around the reports were
+compiled otherwise, a register move added to each arm of the computing instructions and a shift sunk into its arms,
+and `exec::run` for the board was 95 bytes longer [M, the two links' `nm` sizes and their disassembly compared]. On
+the aligned links of `Diamond_Speed.md` §2, the processor's change alone cost Crash Bandicoot 0.7 per cent and Tekken
+3 1.4 per cent a frame [M, `Diamond_Enhancements.md` §9]. Under `if B::MOVES`, `exec::run` and `Run::execute` for the
+board are the base's to the byte in size, and the cost went with them. The prediction recorded when the reports were
+written, that an empty default compiles to nothing, held for the calls and failed for the code around them.

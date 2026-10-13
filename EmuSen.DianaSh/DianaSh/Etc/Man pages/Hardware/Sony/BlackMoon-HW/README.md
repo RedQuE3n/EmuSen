@@ -57,4 +57,8 @@ two. Its contract, first kept by `blackmoon-gte`:
 - **The enhancement layer's observer** (`Diamond_Plan.md` §6.2, the precision side-channel) is stage E1's, not the
   debugger's `Observer`: it is added then as a second generic parameter, compiled out when unobserved. *Since stage 5*
   the GTE's half exists: `blackmoon_gte::Observer`, one method with an empty default, given to `command_observed`;
-  `command` runs with `Unobserved` (`BlackMoon_GTE.md` §9). The R3000A's half is E1's.
+  `command` runs with `Unobserved` (`BlackMoon_GTE.md` §9). The R3000A's half is E1's. *Built at stage E1
+  (2026-10-13), not as a second parameter:* the R3000A tells its bus each value it moves, `Bus::moved(Move)` with an
+  empty default, since the layer must see the moves in one order with the GTE's projections and the GPU's receipts,
+  which are behind the bus (`BlackMoon_R3000.md` §14); `Projection` gained the camera-space sums and the quotient
+  (`BlackMoon_GTE.md` §9). Both compile to nothing for a bus or a console that does not watch.

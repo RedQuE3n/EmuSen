@@ -303,6 +303,17 @@ SAR 16 and saturation (16 fraction bits), SZ3 and the SXY2 word pushed. Its defa
 `an_observer_sees_each_projection_and_changes_nothing` runs RTPT both ways and holds the registers equal. Stage E1 adds
 what else the layer needs (the CPU's moves of the values) as the README says, as methods with empty defaults.
 
+*Stage E1 (2026-10-13, `Diamond_Enhancements.md` §3.1).* `Projection` carries two values more: **`sums`**, MAC1 to
+MAC3's TR·1000h + RT·V as the accumulators check them and before sf's shift, the vertex in the camera's space with 12
+fraction bits, the third its depth before SZ3's shift and saturation; and **`quotient`**, H/SZ3 as the division makes
+it, 17 bits with 16 fraction. With them a layer can make the screen position from the unsaturated camera-space
+vertex, and the depth a perspective-correct texture needs, where the registers keep only SX and SY cut to 11 bits
+and SZ3 to 16. RTPS and RTPT (and 00h, which runs as RTPS, D-16) are the only commands that make a screen coordinate or
+a vertex's depth: AVSZ3 and AVSZ4 average SZ into OTZ, an index for the program's ordering table, and NCLIP reads the
+FIFO; the FIFO's other writes are the processor's MTC2 and LWC2, which `blackmoon-r3000` tells its bus
+(`BlackMoon_R3000.md` §14). `command_observed` now takes an observer that need not be sized, so a console can pass
+one behind a pointer (Diamond's `dyn Layer`). The test holds V1's sums and quotient and SX's sum made from them.
+
 ## 10. Cost
 
 Measured with a throwaway timing loop of 2,000,000 commands each on fixed inputs [M]: 3.2 ns (AVSZ3) to 114 ns (NCDT),

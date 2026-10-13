@@ -120,6 +120,51 @@ fn setting(key: &str, label: &str, help: &str, choices: Vec<Choice>, default: &s
     }
 }
 
+/// An enhancement's values: a switch, off the hardware's, or a choice whose first value is the hardware's.
+pub enum Values {
+    Switch,
+    Choice(&'static [(&'static str, &'static str)]),
+}
+
+/// An enhancement as the schema declares it (Diamond_Enhancements.md §5): its key and words, its values and what it
+/// costs in a player's words. Its setting is in the console's "Enhancements" group with `effect: enhancement`, the
+/// hardware's value its default by construction, and is applied between frames.
+pub struct Enhancement {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub help: &'static str,
+    pub cost: &'static str,
+    pub values: Values,
+}
+
+pub const ENHANCEMENTS_CATEGORY: &str = "Enhancements";
+
+/// The enhancements offered: none until stage E4's "Precise geometry" (Diamond_Plan.md §7), so that no setting is
+/// shown that does nothing.
+pub const ENHANCEMENTS: &[Enhancement] = &[];
+
+impl Enhancement {
+    pub fn setting(&self) -> Setting {
+        let (kind, hardware) = match self.values {
+            Values::Switch => (SettingKind::Switch, "false"),
+            Values::Choice(values) => (SettingKind::Choice(values.iter().map(|&(v, l)| choice(v, l)).collect()), values.first().map_or("", |v| v.0)),
+        };
+        Setting {
+            key: self.key.into(),
+            label: self.label.into(),
+            help: self.help.into(),
+            kind,
+            default: hardware.into(),
+            scope: Scope::Run,
+            category: Some(ENHANCEMENTS_CATEGORY.into()),
+            effect: Effect::Enhancement { cost: self.cost.into(), hardware: hardware.into() },
+            advanced: false,
+            hidden: false,
+            restart: false,
+        }
+    }
+}
+
 fn schema() -> Vec<Setting> {
     let mut regions = vec![choice("auto", "From the disc or program")];
     regions.extend(REGIONS.iter().map(|&(v, l, _)| choice(v, l)));
@@ -134,6 +179,9 @@ fn schema() -> Vec<Setting> {
         setting(CARD_KEYS[0], "Memory card in slot 1", "A memory card in slot 1, kept for this game beside its file; with none, the game finds no card and saves nothing. Takes effect when a game is next loaded.", vec![choice(CARD, "Memory card"), choice("none", "None")], CARD, "Memory cards"),
         setting(CARD_KEYS[1], "Memory card in slot 2", "A second memory card in slot 2, kept for this game beside the first. Takes effect when a game is next loaded.", vec![choice("none", "None"), choice(CARD, "Memory card")], "none", "Memory cards"),
     ]
+    .into_iter()
+    .chain(ENHANCEMENTS.iter().map(Enhancement::setting))
+    .collect()
 }
 
 fn market_of(media: &Media, setting: Option<&str>) -> Market {
@@ -552,6 +600,26 @@ mod tests {
         for s in schema() {
             assert!(s.check().is_ok(), "{}", s.key);
         }
+    }
+
+    /// Diamond_Enhancements.md §5: an enhancement declared in either form is a setting the kit's C3 accepts, its
+    /// default the hardware's, its cost given, in the console's "Enhancements" group, applied between frames; one whose
+    /// cost is missing is refused by the same rules; and stage E1 declares none.
+    #[test]
+    fn an_enhancement_is_declared_with_the_hardwares_value_its_default_and_none_is_offered_yet() {
+        assert!(ENHANCEMENTS.is_empty() && !schema().iter().any(|s| matches!(s.effect, Effect::Enhancement { .. })), "no enhancement before E4");
+        let forms = [
+            Enhancement { key: "e1.switch", label: "A switch", help: "Off is the console.", cost: "Twice the work.", values: Values::Switch },
+            Enhancement { key: "e1.choice", label: "A choice", help: "1x is the console.", cost: "Four times the drawing at 2x.", values: Values::Choice(&[("1", "1x (the console's)"), ("2", "2x")]) },
+        ];
+        for e in &forms {
+            let s = e.setting();
+            assert!(s.check().is_ok(), "{}: {:?}", s.key, s.check());
+            let Effect::Enhancement { hardware, cost } = &s.effect else { panic!("{}: an enhancement", s.key) };
+            assert_eq!((hardware.as_str(), s.default.as_str(), cost.as_str(), s.category.as_deref(), s.scope), ([("e1.switch", "false"), ("e1.choice", "1")].iter().find(|k| k.0 == s.key).unwrap().1, hardware.as_str(), e.cost, Some(ENHANCEMENTS_CATEGORY), Scope::Run));
+        }
+        let uncosted = Enhancement { cost: " ", ..forms.into_iter().next().unwrap() }.setting();
+        assert!(uncosted.check().unwrap_err().contains("cost"));
     }
 
     #[test]

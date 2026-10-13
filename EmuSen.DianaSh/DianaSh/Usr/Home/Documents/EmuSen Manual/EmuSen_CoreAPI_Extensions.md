@@ -37,7 +37,7 @@ Of the nine gaps, **five need the core ABI**, each through a kind of addition th
 | 7 | **The kit's memory per image** | Diamond's corpus form; any large medium | **inside the kit** | none at the ABI |
 | 8 | **Routing a file by its content** | Diamond and the Sega CD from Diamond's st. 7; every later disc console | **a runtime service** (one function, one owner of the decision) over recognisers in the system packs | none at the ABI; `SystemEntry` gains `Recognise` |
 | 9 | **Memory cards, packs and a console's own memory** | Diamond st. 6, the Sega CD, the N64's Controller Pak | an **extension**: a descriptor field; the path policy the runtime's | machine info's `battery[].kind` |
-| 10 | **Device kinds; streaming reads; battery files before create** | device kinds later; the other two Diamond, then the Sega CD | device kinds **deferred**, with the shape that would fit recorded; streaming reads an **extension**, the image lent for the machine's life (§10.2, decided 2026-10-12); battery files an **extension** of core info (§10.5, decided 2026-10-12) | minor 1.3: `BORROW` (bit 20), `emusen_create_params.flags` with `EMUSEN_CREATE_LENT`, `EMUSEN_MEDIA_LENT`; core info's `systems[].battery` |
+| 10 | **Device kinds; streaming reads; battery files before create** | device kinds later; the other two Diamond, then the Sega CD | device kinds **deferred**, with the shape that would fit recorded; streaming reads an **extension**, the image lent for the machine's life (§10.2, decided 2026-10-12); battery files an **extension** of core info (§10.5, decided 2026-10-12); the drive's place named ahead an **extension**, an event kind (§10.2.6, decided 2026-10-12) | minor 1.3: `BORROW` (bit 20), `emusen_create_params.flags` with `EMUSEN_CREATE_LENT`, `EMUSEN_MEDIA_LENT`; core info's `systems[].battery`. Minor 1.4: `EMUSEN_EVENT_MEDIA_SEEK` (8) and `EMUSEN_FILE_IMAGE` |
 
 Read §1 for the one mechanism the five ABI changes share, §2 before §3 and §8, which both build on it, and §12 for the
 questions. §13, added 2026-10-11, is a tenth item of a different origin, the debugger's: read watches and read data
@@ -70,9 +70,9 @@ three and says why one wins. Two outcomes recur and are worth naming once:
 | Kind of addition (§4.4 there) | Used by | Discovered by |
 |---|---|---|
 | a new optional export with a new capability bit | §3 (`MEDIA`, bit 18; bits 18–47 are free, `emusen_core.h:85` [M]) | the bit and the export's name (§4.2) |
-| a new event kind | §4 (`EMUSEN_EVENT_OUTPUT` = 7; kinds 1–6 assigned, `emusen_core.h:132–139` [M]) | a host skips a kind it does not know |
+| a new event kind | §4 (`EMUSEN_EVENT_OUTPUT` = 7; kinds 1–6 assigned, `emusen_core.h:132–139` [M]); §10.2.6 (`EMUSEN_EVENT_MEDIA_SEEK` = 8, minor 1.4) | a host skips a kind it does not know |
 | a new descriptor field | §3 (`drives`), §4 (`outputs`), §5 (`name`), §9 (`kind`) | a reader ignores fields it does not know |
-| a new header constant | §2 (`EMUSEN_FILE_MEDIA`), §3 (`EMUSEN_MEDIA_RESTORE`) | — |
+| a new header constant | §2 (`EMUSEN_FILE_MEDIA`), §3 (`EMUSEN_MEDIA_RESTORE`), §10.2.6 (`EMUSEN_FILE_IMAGE`) | — |
 | a new status code in the interface's band | §3 (−265 to −267; −256 to −264 assigned, `emusen_core.h:53–61` [M]) | `status_text`, and a generic report for a code a host does not know |
 
 **One rule governs all five ABI changes**, and each section states how it is kept: *every addition is safe never to be
@@ -1084,6 +1084,153 @@ later ones, appears to lengthen those.** Two remedies are recorded and not built
   still come through the loan, nothing waits on the host, and a host that ignores the event behaves as now. It would
   be a minor of its own.
 
+#### 10.2.6 The drive's place named ahead: the design (minor 1.4)
+
+*Decided 2026-10-12: of §10.2.5's two remedies the tester chose the exact one, a core event naming where its drive
+is going, the host reading ahead during the emulated seek, over the prefetch at full speed, because it is exact
+whatever a game reads first and the other only narrows the window. Written 2026-10-12 before the code and committed
+first; §10.2.7 is the record of what was built and measured.* Marks as above; [M] here is measured on 2026-10-12 with
+the scratch tools named, on the desktop and on the handheld's card, before anything of the design was built.
+
+**What was measured first** [M]. The run tool, with a trace of each seek's start and each sector the head reads
+added for the measurement and not kept, ran Mega Man X5, Mega Man X6, Crash Bandicoot and Spyro the Dragon for their
+first 1,800 frames on the open kernel:
+
+- *A seek's start is known long before its first read.* Of 111 seeks with a read after them, the first read came in
+  the frame the seek started for 1, in the next frame for 24, and two to sixteen frames later for 86. The one in its
+  own frame was a seek of no distance, to the place the seek before it had named. Every seek farther than 87 sectors
+  (41 of them) had its first read at least one frame's end later and 23.5 ms or more of the game's time later; every
+  one farther than 822 sectors (34), at least two frames' ends later. The figures follow from the drive
+  (`Diamond_CDROM.md` §5): a jump takes 400,000 cycles and more, 11.8 ms, and a read's first sector a period after
+  it, 6.7 ms at double speed, together 18.5 ms against a frame of 16.7 ms; only a seek that ends where the head holds,
+  whose target the held head reads at the seek's end, or a seek of a few sectors along the spiral, can be read in
+  the frame it starts, and then only within 87 sectors, 205 KiB, of where the head was [A].
+- *What a game reads after a seek.* The median read after a seek is 1 to 26 sectors by game; the long ones are 920
+  and 2,633 sectors (Mega Man X5), 3,452 (Mega Man X6, 8 MiB at the drive's 345 KiB a second), 2,495 (Spyro) and 192
+  (Crash Bandicoot).
+- *The system's advice* (`madvise` with `MADV_WILLNEED` on the mapping, `willneed.py`). The call returns before the
+  bytes arrive but is not free: 0.1–2.8 ms on the desktop by the range's length, 0.3–0.6 ms on the handheld. **One
+  call reads no more than the device's largest request**: 4.1 MiB on the desktop's drive and 512 KiB on the
+  handheld's card, whatever was asked, and the range arrives whole: 64 KiB after 2.3 ms on the card, 256 KiB after
+  4.4 ms, 512 KiB after 7.3 ms. A cold page read by touching it took 2.5–3.1 ms on the card in fifty readings after
+  rests of 0.2 to 10 s (`rest.py`); in another run of eight, 2.6–5.9 ms in seven and 27.9 ms in one.
+- *A read that runs past what was advised* (`readon.py`, 8 MiB read on from a place, 2 MiB of it advised first): on
+  both machines exactly one read waited for the medium, at the advised range's end (2,046–2,099 KiB), 1.6–4.3 ms, and
+  none after it: the system's own read-ahead starts at a miss and then keeps ahead, but an advised range ends with no
+  mark to start it, so the miss is paid once.
+
+**1. The event.**
+
+```c
+EMUSEN_EVENT_MEDIA_SEEK = 8   /* @since 1.4. a: (drive << 32) | file; b: the byte offset in that file */
+#define EMUSEN_FILE_IMAGE 0xFFFFFFFFu  /* @since 1.4: in MEDIA_SEEK's `a`, the image itself, which no emusen_file numbers */
+```
+
+- **What it says.** Drive `drive` (machine info's `drives[].drive`) is about to read file `file` of its disc at byte
+  `offset`: `file` is an `emusen_file.which` of the call that gave the drive its disc, `create` or the last
+  `media_insert` to succeed on it, so `EMUSEN_FILE_MEDIA + n` for a sheet's nth file, or `EMUSEN_FILE_IMAGE` for the
+  image where the image is the disc (a lone track, an `.iso`, a `.chd`). The drive and the file share `a` as §4's
+  `OUTPUT` shares a port and an output; `b` is the whole offset. Kind 7 stays §4's `EMUSEN_EVENT_OUTPUT`, decided and
+  not yet built.
+- **No length** [C]. How far past a place to read is the medium's question, its speed and its latency, and the
+  host's pacing, none of which a core knows; what a core knows is where its head is going, and it says that. In its
+  place the event carries a rule a host can size a window by, the next item.
+- **When a core raises it** [C]. (a) At a seek's start, for the seek's target: the earliest moment the place is
+  known, with the emulated seek still to run. (b) While the drive reads or plays on, **before the head reads a place
+  1 MiB or more past the offset last named in that file, or in another file**: without this a long read runs off the
+  end of what a host advised and waits once for the medium, as measured above. (c) A place within the megabyte after
+  the one last named need not be named again. A host that reads at least 1 MiB and its own delay past each named
+  place therefore always has the head inside what it advised. The megabyte is three seconds of a double-speed
+  drive; it is a number of bytes and not of sectors or seconds so that a host needs nothing of the drive's speed.
+- **A core without the knowledge raises nothing**, and so does a core for a sector its image does not hold (a pause
+  a sheet does not store, the lead-out). A core may raise it whether or not its disc was lent; a host that lent
+  nothing holds no file to read ahead in and skips it, which keeps the flag out of a core's drive [C].
+- **A hint, never state.** Nothing the machine does depends on the event having been raised, drained or acted on:
+  the emulated drive's timing is the core's own count of cycles, the bytes come through the loan as in 1.3, and no
+  state holds what was named. After a state load or a disc change a core names the next place it reads as if nothing
+  had been named.
+
+**2. No capability bit** [C]. `EmuSen_CoreAPI.md` §4.2 has a host skip a kind it does not know, so a bit is owed
+only where a host must know *before* the first event. It need not: it acts on each event as it comes, holds nothing
+ready beforehand (the reader's thread starts at the first event), and a core that never raises one leaves it exactly
+as at 1.3. An older host skips kind 8; an older core raises none. No bit is taken, and bits 21–47 stay free.
+
+**3. When the host learns of it** [M, A]. Events are drained by the host, and the reference host drains them once a
+frame, after `advance`, the frame-end work and `present` (`CoreEngine.RunFrame`); `emusen_core_events` with a null
+buffer costs one call and no allocation when nothing waits. So a place named during frame *n* is heard of at frame
+*n*'s end, and the question is whether its first read can come before that. By the measurement above it cannot,
+but for places within 87 sectors of the head; those lie inside what was advised for the place the head came from,
+given item 4's window, so nothing is read in the frame that first named it [A]. Past the frame's end the host has
+the rest of the emulated seek in real time: paced at 60 frames a second, with a frame's emulation taking *c* ms of
+its 16.7, a first read *k* frames' ends after the seek's start leaves the host at least 16.7 *k* − *c* ms. For the 24
+seeks of *k* = 1 that is 12 ms or more at the handheld's median frame (1.3–4.4 ms by game, §10.2.5's traces) and 7 ms
+at its 99th percentile (5.0–9.6 ms); for every seek farther than 822 sectors, 24 ms or more; against 2.5–3.1 ms for
+the card's usual read of a cold page and 2.3–4.4 ms for an advised piece of 64 to 256 KiB.
+**The drain's timing therefore does not change**, and nothing is added per frame. Unpaced, in fast forward, the lead
+shrinks with the frame's time and a read may be late, as it is today.
+
+**4. What the host does** [C].
+- *Where.* `CoreEngine.Drain` routes the event: it finds the drive's lent `DiscFiles`, the file by the numbering it
+  gave (`MediaOf`'s), and calls `DiscFiles.ReadAhead(file, offset)`. That posts the request to the disc's reader and
+  returns: a lock and a signal, no allocation, no call into the system. The engine names no path and Galaxia no
+  ABI constant.
+- *On which thread.* A reader thread of the `DiscFiles`, started at the first request, because the advice call is
+  not free (0.3–0.6 ms a piece on the handheld). **Nothing in the machine waits on it**: the emulation thread never
+  joins it, never reads what it wrote and takes no lock it holds across a call into the system.
+- *What it advises.* The range from 256 KiB before the named offset to 2 MiB past it, clipped to the file, in pieces
+  of 128 KiB, the piece holding the offset first, then onward, then the part before it. 128 KiB because one call
+  reads no more than the device's largest request and the system's read-ahead size, 128 KiB by default, is the least
+  of those a host can count on; 2 MiB past because item 1's rule bounds the head to 1 MiB past a named place and
+  the second megabyte is the three seconds of reading the host may take to hear of the next; 256 KiB before because
+  the held head steps back up to 8 sectors and a seek that ends in the frame it starts reaches back at most 87. A
+  newer request replaces one not yet finished between two pieces, so a second seek waits behind at most one call.
+- *Through what.* `MappedFile.Advise(offset, length)`, in both of Galaxia's halves: `madvise` with `MADV_WILLNEED`
+  on Linux and macOS and `PrefetchVirtualMemory` on Windows, in the C# over the mapping it holds and in
+  `Platform/galaxia/src/mapped.rs` (`emusen_galaxia_mapped_advise`; the platform library's interface goes from 9 to
+  10). One call each; a range outside the file is clipped; an empty file has nothing to advise; a refusal by the
+  system is not an error, since the read then happens at the touch as before.
+- *Exactness.* Advice changes when a page arrives in memory and nothing else: a read of the mapping returns the
+  file's bytes whether advised or not, so a run with a host that acts on the event is bit for bit the run with one
+  that skips it. The kit holds it (item 7).
+
+**5. Reads that follow no seek** [C, to be confirmed by §10.2.7]. Item 1's rule (b) is the answer: the same event,
+raised as the head moves on, so that every place a drive reads has been named, by a seek or by the read before it.
+The system's own read-ahead was weighed and is not relied on: it costs one wait at the end of each advised range on
+Linux, as measured, and what a mapped view reads ahead on Windows and macOS was not measured at all. **1.3's rested
+background prefetch** (`DiscFiles.Prefetch`) then has nothing left to do that the event does not do sooner and
+without reading the whole disc: it is removed if §10.2.7's traces show no first touch the event leaves and it would
+have caught, and kept, with what it is for said, if they show one.
+
+**6. Loss.** The queue holds 256 events and drops the oldest when full, queueing `MACHINE_INFO`. A lost
+`MEDIA_SEEK` costs a late read of that place and nothing else; the next one is acted on as usual. A host that drains
+once a frame meets a full queue only if a core names 256 places in a frame, which rule (c) keeps it from.
+
+**7. The core's side, the disc crate and the kit** [C].
+- *`emusen-native`*: `core::seek(drive, file, offset)`, `file` being `None` for the image or `Some(n)` for the nth
+  media file, so the numbering has one owner; it queues the event and returns. A machine's event queue is allocated
+  whole at create, so raising one allocates nothing.
+- *`emusen-disc`* owns "which file and byte hold this sector": `Disc::place(sector)` answers the file, by its
+  position among those the disc was opened from or the image itself, and the byte, or nothing for a sector the image
+  does not store. For a `.chd` it answers the compressed hunk's offset in the file, from the `chd` crate's map
+  (`Map::get_entry`, a compressed or uncompressed entry's `block_offset`), which is where the system must read
+  before the hunk can be decoded; a hunk that is a copy of another names nothing. The megabyte's rule then counts
+  the file's bytes, which a compressed disc spends more slowly than a raw one.
+- *Diamond* raises it from its drive: at `start_seek` for the target, and at each sector read or played for the
+  place 75 sectors ahead of the head, half a second at double speed, whenever that place is not in the megabyte
+  after the one last named. The look-ahead names a sheet's next track file before the head crosses into it.
+- *The kit*, **C18, the drive's place** (run with the image cases): the image mapped and lent as C17's third leg
+  lends it, C6's frames run twice with the events drained after every frame, once skipping `MEDIA_SEEK` and once
+  advising the mapped file at each as a host does. Every `MEDIA_SEEK` raised must name a drive machine info lists, a
+  file the call passed (or the image) and an offset inside it; and the two runs' pictures, sound and states must be
+  equal frame for frame. A core that raises none passes with that said. A seeded fault, a core naming an offset past
+  its image's end, fails C18 alone.
+
+**8. Prediction P8** (§11): with the event, no frame is held past its period by a first touch on the handheld's card
+in a game's first 30 s, on Mega Man X5, Mega Man X6, Crash Bandicoot and Spyro the Dragon, paced, cold; at least six
+runs each way of Mega Man X6, every run reported. A frame counts as held by a first touch when it took longer than
+16.7 ms and the emulation thread waited in it, by a major fault or by time off the processor that was not spent
+waiting to run; a frame that was only slow is reported beside it.
+
 ### 10.3 The order
 
 By the first stage that needs each [C, Q13]:
@@ -1172,6 +1319,10 @@ in `info.schema.json`; `length` is left to machine info, since it is a property 
   X5 took 20.6 ms on the card for a first touch; the prefetch built for it leaves three of four games with none or
   one, and Mega Man X6 with up to three frames of 24–50 ms in its first six seconds, where without it they were
   8–32 ms (§10.2.5, `Diamond_Players.md` §12.8.9). It stays open with the two remedies §10.2.5 records.
+- **P8** (2026-10-12, §10.2.6). With minor 1.4's event acted on, no frame is held past its period by a first touch on
+  the handheld's card in a game's first 30 s, paced and from a cold cache, on Mega Man X5, Mega Man X6, Crash
+  Bandicoot and Spyro the Dragon. It is P7's third clause, restated for what a host can be held to: a frame the
+  emulation thread waited in, not one that was merely slow beside the handheld's interface.
 
 ---
 
@@ -1233,6 +1384,14 @@ recommended, in one minor, 1.3, with disc images handled in one shared place (§
 16. **Q16, battery files in core info.** *Recommended:* a `battery` field in core info's system entries, of machine
     info's shape, read by the host for the first create (§10.5). Rejected: a host-side memory of the last machine's
     files.
+
+
+*Raised 2026-10-12 by §10.2.5's handheld traces. **Decided 2026-10-12:** the exact remedy, as minor 1.4 (§10.2.6).*
+
+17. **Q17, a first touch in a game's first seconds on a slow medium.** *Chosen:* an event by which a core names
+    where its drive is going, the host reading ahead during the emulated seek, because it is exact whatever the game
+    reads first. *Not chosen:* the prefetch at the medium's full speed until the first frame, which narrows the
+    window and closes it for no game in particular.
 
 ---
 

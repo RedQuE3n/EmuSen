@@ -1,0 +1,39 @@
+#version 450
+// Diamond's renderer, a VRAM-to-VRAM copy's step: rows of the source read whole into the scratch, or the scratch written
+// to the destination under the mask, as vram.rs's `copy` does a row at a time. See Diamond_Enhancements.md §16.
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) buffer Vram { uint vram[]; };
+layout(std430, set = 0, binding = 1) buffer Scratch { uint scratch[]; };
+
+// write: 0 reads, 1 writes; the rows from `row` on, `rows` of them, `width` pixels each; the mask's check and set.
+layout(push_constant) uniform Push {
+    uint write;
+    uint sx;
+    uint sy;
+    uint dx;
+    uint dy;
+    uint width;
+    uint row;
+    uint rows;
+    uint mask;
+};
+
+void main() {
+    uint n = gl_WorkGroupID.x * 64u + gl_LocalInvocationID.x;
+    if (n >= width * rows) {
+        return;
+    }
+    uint i = n % width, j = row + n / width;
+    uint kept = j * 1024u + i;
+    if (write == 0u) {
+        scratch[kept] = vram[((sy + j) & 511u) * 1024u + ((sx + i) & 1023u)];
+        return;
+    }
+    uint at = ((dy + j) & 511u) * 1024u + ((dx + i) & 1023u);
+    if ((mask & 2u) != 0u && (vram[at] & 0x8000u) != 0u) {
+        return;
+    }
+    vram[at] = scratch[kept] | ((mask & 1u) != 0u ? 0x8000u : 0u);
+}

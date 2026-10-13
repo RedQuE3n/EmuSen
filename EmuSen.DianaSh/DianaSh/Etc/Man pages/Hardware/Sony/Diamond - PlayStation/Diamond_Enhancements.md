@@ -608,3 +608,93 @@ continuations, the triangle under the state the commands before it set, every li
 source and width, and the GPU as it stood when attached; and that the machine is the plain run's to the state's last
 byte. Diamond's suite passed unchanged with the seam, its 49 program goldens among them, plain and with E1's test
 observer.
+
+## 16. The renderer (E3)
+
+### 16.1 The crate
+
+`diamond-renderer` (`Diamond - PlayStation/renderer/`): `lib.rs`, the layer, which reads the stream and plans the
+device's work; `record.rs`, a primitive as the walk reads it; `blocks.rs`, where in VRAM a stretch has drawn or read,
+and which tiles a span covers; `device.rs`, the buffers, the four programs and one submission's commands; and
+`shaders/`, `walk.comp`, `scan.comp`, `clut.comp` and `copy.comp` with their `.spv`. It depends on `diamond`,
+`blackmoon-gte` (the layer's supertrait) and `emusen-gpu` 1.1. `diamond` takes it as a development dependency only, for
+the run tool, the bench and the gate: the core's library links none of it, and nothing in the machine names it.
+
+`Renderer::new(name)` opens the device (`EMUSEN_GPU_DEVICE` when no name is given) or says why not;
+`Machine::attach(Box::new(renderer))` attaches it; `picture()` and `vram()` submit what is planned, wait, and read back
+the picture (RGBA at its size) or VRAM (a halfword a pixel), for a tool or a test that asks.
+
+### 16.2 What the host does with the stream
+
+- **A whole command** is decoded by `gpu::decode` under the `Drawing` it came with. A polygon takes its page attribute
+  into the state first (`Drawing::with_page`), as the GPU does before drawing it; its texture is `Drawing::texture`; its
+  paint `Drawing::paint` with the GPU's own choice of dither; each triangle is folded (D-47) and set up by
+  `raster::setup`, the function the software rasteriser's `triangle` now calls for its own setup, so the edges, the
+  ownership, the base vertex and the gradients are the software's values, not a restatement of them. A rectangle and a
+  line likewise from `decode::rectangle` and `decode::line`; a polyline's further vertices from `decode::place`. A fill,
+  a copy and a transfer from `Rect::fill_params` and `Rect::copy_params`.
+- **A record** is 48 words (`record.rs`, laid out as `walk.comp` reads it): the kind and the paint's flags, the bounds
+  within the drawing area, the texture's page, depth, palette slot and window, and the kind's own words: a triangle's
+  three edges with whether each owns its pixels, its base vertex, its five attributes there and their gradients; a
+  rectangle's corner, first texel and steps; a line's ends, steps, colour and gradients; a fill's rectangle and colour;
+  a transfer's rectangle, the run of its pixels the record holds, and where they are in the submission's data.
+- **A transfer's data** is kept as it comes, two pixels a word, and the open record's count grows with each; the record
+  is placed in its tiles when it can take no more (the next command, or the end of its stretch).
+- **The CLUT cache** is reproduced from the `Drawing`'s tag: a palette is loaded into a new slot of 4,096, at the start
+  of its stretch, exactly when `ClutCache::holds` says the GPU's cache loads; otherwise the slot loaded last is used, as
+  the cache keeps its colours (stale ones included, `clut-cache`'s case).
+- **A display line** is recorded with its row; a row read twice in one stretch keeps the later. A new size clears the
+  picture at the start of the stretch and drops the lines of it recorded before the size changed.
+
+### 16.3 On the device
+
+**The walk** (`walk.comp`): a workgroup of 8 by 8 invocations a tile of VRAM, an invocation a pixel. It loads its
+pixel, meets each record of its tile in drawing order and applies it, and stores the pixel once. A triangle's pixel is
+inside when each edge function `dx·(y−ay) − dy·(x−ax)` is at least 0 on an owned edge and 1 otherwise, which is
+`raster::triangle`'s per-row bound restated for one pixel (the row's `x ≤ ⌊(k−t)/dy⌋` for an edge going down and
+`x ≥ ⌈(t−k)/−dy⌉` for one going up are both that inequality); its attributes are the base vertex's value plus the two
+gradients times the distances from it, plus a half, shifted down twelve, each product made exact in two 32-bit words
+by `imulExtended` and summed by `uaddCarry`. A line's pixel finds its step along the major axis from its own
+coordinate and is drawn where the minor coordinate the software's tie rule gives is its own. A rectangle's texel
+steps, flips and pairs, the texel through the window, page and palette, modulation, the dither matrix, the four
+blends, the mask bit and the interlaced field's skipped lines are `draw.rs`, `texture.rs` and `raster.rs` restated. A
+drawn row past 511 lands on its row modulo 512, as VRAM's index has it. **No texture cache**: texels are read from
+VRAM as it stands (§14.4).
+
+**The other programs**: `clut.comp` copies a palette's entries from VRAM into its slot; `scan.comp` reads a display
+line into the picture, 15-bit as `c<<3 | c>>2`, 24-bit as three bytes a pixel, black when blanked; `copy.comp` reads a
+copy's rows into a scratch buffer, or writes them under the mask.
+
+### 16.4 Order across pixels: stretches
+
+A texel, a palette, a display line and a copy read pixels that invocations other than their own write. The host plans
+the records as **stretches**: within one, no record reads what another of the stretch writes, so every read sees VRAM
+as it stood at the stretch's start, which is VRAM as it stands at the read. `blocks.rs` keeps two sets of VRAM's blocks
+of 16 by 16 for the stretch: those written and those read as texels. The stretch ends before a record whose texels meet
+the written set or whose pixels meet the read set; before a palette load or a display line whose pixels meet the
+written set (both run at the start of their stretch); and at every copy, which is a step of its own. A copy reads its
+rows whole into the scratch buffer and then writes them; when it copies downward over itself, by `d` rows with
+`0 < d < h`, row `j` reads the row that row `j − d` wrote, so it goes in steps of `d` rows, each read and written before
+the next, which is exactly `vram.rs`'s row-by-row order. A transfer's rows are marked written as its data reaches them,
+and a row that meets the read set ends the stretch there. A record whose texels and pixels share a block is counted
+(`Counts::feedback`): the walk does not keep the order of its own pixels' writes and reads.
+
+Each stretch's records are binned into the tiles of 8 by 8 pixels their bounds cover, each tile once (a span of 512
+rows starting mid-tile covers every tile row once), counted, summed and placed in drawing order, as Mars's binning is.
+
+### 16.5 One submission
+
+Everything planned goes to the device in one waited submission when a tool asks for the picture or VRAM, or when an
+array would overflow: the staged arrays (records, tile entries, tiles, palette loads, lines, transfer data) copied from
+host memory to the device's own, then each stretch's commands in order (the picture's clear, its palette loads, its
+lines, its walk) and each copy's steps, each dispatch after the first of its program a `dispatch_again` (§14.3), each
+command followed by the crate's barrier; then the readback. Capacities a submission: 32,768 records, 1,048,576 tile
+entries, 131,072 tiles, 4,096 palette loads, 8,192 lines, 2,097,152 transfer pixels. Device memory: VRAM and a scratch
+of 2 MiB each, one word a pixel; the picture, 1.4 MiB; 4,096 palette slots, 4 MiB; the staged arrays twice, once on each
+side, 34 MiB in all. Nothing is allocated a frame: the host's arrays and lists keep their capacity.
+
+### 16.6 Seeded, and kept nothing across a state
+
+`seed` takes the GPU's VRAM, its picture and size, its CLUT cache's colours (into slot 0) and the transfer or polyline
+it has open, and drops whatever was planned, which was another machine's. The renderer has no state block: at 1× all it
+would keep is the machine's VRAM, which a load gives it back.

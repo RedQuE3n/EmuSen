@@ -42,7 +42,7 @@ fn trunc_div(a: i64, b: i64) -> i64 {
     a / b
 }
 
-fn floor_div(a: i64, b: i64) -> i64 {
+pub fn floor_div(a: i64, b: i64) -> i64 {
     a.div_euclid(b) - if b < 0 && a.rem_euclid(b) != 0 { 1 } else { 0 }
 }
 
@@ -51,10 +51,10 @@ fn ceil_div(a: i64, b: i64) -> i64 {
 }
 
 /// A gradient in x and y of one attribute, in 12-bit fixed point, truncated toward zero.
-#[derive(Clone, Copy, Debug, Default)]
-struct Gradient {
-    dx: i64,
-    dy: i64,
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Gradient {
+    pub dx: i64,
+    pub dy: i64,
 }
 
 fn gradient(v: &[Vertex; 3], a: [i64; 3], area: i64) -> Gradient {
@@ -79,20 +79,33 @@ fn owns(a: (i64, i64), b: (i64, i64)) -> bool {
     dy < 0 || (dy == 0 && dx > 0)
 }
 
-/// The triangle `v`, already folded (`fold`), its attributes from its base vertex: colour when `shaded`, the texture coordinate when `textured`;
-/// its rows from the middle vertex's down, then those above it upward, each left to right (Diamond_Disputes.md D-41).
-pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
+/// What a triangle's pixels are found and shaded by: its bounds, its three edges wound with positive area, each from a
+/// vertex to the next with whether it owns the pixels on it, and its five attributes' gradients and values at the base
+/// vertex `b`, R, G, B, U and V, each in 12-bit fixed point (Diamond_GPU.md §6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Setup {
+    pub min: (i32, i32),
+    pub max: (i32, i32),
+    pub edges: [((i64, i64), (i64, i64), bool); 3],
+    pub grads: [Gradient; 5],
+    pub b: usize,
+    pub base: [i64; 5],
+}
+
+/// The triangle `v`'s setup, or none when it draws nothing whatever the area: too large a span, or no area.
+#[inline(always)]
+pub fn setup(v: &[Vertex; 3], shaded: bool, textured: bool) -> Option<Setup> {
     let xs = v.map(|q| q.x);
     let ys = v.map(|q| q.y);
     let (minx, maxx) = (*xs.iter().min().unwrap_or(&0), *xs.iter().max().unwrap_or(&0));
     let (miny, maxy) = (*ys.iter().min().unwrap_or(&0), *ys.iter().max().unwrap_or(&0));
     if maxx - minx > MAX_DX || maxy - miny > MAX_DY {
-        return;
+        return None;
     }
     let pt = |i: usize| (v[i].x as i64, v[i].y as i64);
     let area = (pt(1).0 - pt(0).0) * (pt(2).1 - pt(0).1) - (pt(2).0 - pt(0).0) * (pt(1).1 - pt(0).1);
     if area == 0 {
-        return;
+        return None;
     }
     let order = if area > 0 { [0, 1, 2] } else { [0, 2, 1] };
     let edges = [(order[0], order[1]), (order[1], order[2]), (order[2], order[0])].map(|(a, b)| (pt(a), pt(b), owns(pt(a), pt(b))));
@@ -102,10 +115,18 @@ pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
             return Gradient::default();
         }
         let a = v.map(|q| if k < 3 { q.rgb[k] as i64 } else if k == 3 { q.u as i64 } else { q.v as i64 });
-        gradient(&v, a, area)
+        gradient(v, a, area)
     });
-    let b = base_vertex(&v);
+    let b = base_vertex(v);
     let base: [i64; 5] = [v[b].rgb[0] as i64, v[b].rgb[1] as i64, v[b].rgb[2] as i64, v[b].u as i64, v[b].v as i64].map(|a| a << FRACTION);
+    Some(Setup { min: (minx, miny), max: (maxx, maxy), edges, grads, b, base })
+}
+
+/// The triangle `v`, already folded (`fold`), its attributes from its base vertex: colour when `shaded`, the texture coordinate when `textured`;
+/// its rows from the middle vertex's down, then those above it upward, each left to right (Diamond_Disputes.md D-41).
+pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
+    let Some(Setup { min: (minx, miny), max: (maxx, maxy), edges, grads, b, base }) = setup(&v, shaded, textured) else { return };
+    let ys = v.map(|q| q.y);
     let area_rect = p.paint.area;
     let y_from = miny.max(area_rect.y1);
     let y_to = (maxy - 1).min(area_rect.y2);

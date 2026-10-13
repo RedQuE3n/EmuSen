@@ -29,6 +29,8 @@ had kept four of the tester's games from their movies.
 fights began (`Diamond_Players.md` §13).
 *The second play step (2026-10-12)* took D-47, a primitive carried past 11 bits by the offset, which had left the right
 of Crash Bandicoot's screen undrawn (`Diamond_Players.md` §14).
+*The third play step (2026-10-12)* took D-48, the subchannel Q a read's seek leaves, which had held a radio line of
+Mega Man Legends on the screen for ever (`Diamond_Players.md` §14.6).
 
 ## The rules this log keeps
 
@@ -1573,3 +1575,55 @@ of Crash Bandicoot's screen undrawn (`Diamond_Players.md` §14).
   the same tree with the check removed read as before, so the cost was the check's place, not code layout elsewhere;
   at the call sites, with the move itself in a function kept out of line, it reads as before (§14.3 of
   `Diamond_Players.md`).
+
+### D-48. The subchannel Q a read's or a play's seek leaves: the sector before its target, so that GetlocP asked as the read begins reports where the head is, not where it was
+
+- **Opened:** 2026-10-12, by the tester's report from the handheld that in Mega Man Legends a radio line "alludes to an
+  enemy on the ceiling, but it just stays on the dialogue", reproduced from the tester's own save state on the
+  player's BIOS (`Diamond_Players.md` §14.6).
+- **Documents read:** psx-spx `6d7d1bc`, `cdromdrive.md`'s "GetlocL" ("During Seek, the drive seems to decode only
+  Subchannel position data (but no header/subheader data) … (however, GetlocP does work during Seek)"), "GetlocP",
+  "Stat Seek/Play/Read bits" (during a seek only the Seek bit is set, Read or Play not until its end) and "Seek-Busy
+  Phase" (reported, under psx-spx's own warning that it is probably wrong); `cdromformat.md`'s subchannel Q. psx-spx
+  does not say what GetlocP reports between a seek's end and the first sector the read or play takes.
+- **The console's log:** ps1-tests' `cdrom/getloc` `psx.log`, a console's: after each of its three seeks the Q that
+  GetlocP reports lies within five sectors of the target (00:02:11 after a seek to 00:02:16, 00:00:33 after one to
+  00:00:30, 74:00:03 after one to 74:00:00), never near the place the seek began. Those are SeekL's, which hold where
+  they arrive; the log has no GetlocP in the moment a read's seek ends.
+- **What Diamond did:** the Q was the last one the head passed: a sector read or played, or, while held, the hold's
+  window. A SeekL or SeekP took the target's Q at its end; a seek that went on into a read or a play kept the Q of the
+  place it began until its first sector, a sector period after the seek's end (225,792 cycles at double speed). For
+  that period Getstat already read 22h and GetlocP answered with the place the head had left.
+- **What the game showed** [M, the controller's trace and the game's own code and RAM above 10000h, from the tester's
+  states on the player's BIOS]: the game plays each radio line as an XA channel of one file (Setfilter 1,n; Setloc
+  10:57:46, the file's start; ReadS), and each time its routine at 8001C9B8h–8001CA64h runs it asks Getstat and, once
+  the Read bit is set, GetlocP; it turns the absolute time into a sector number less 150 (stored at 800989D8h) and ends the
+  line, with a Pause, once that is not below the channel's end (800989B0h, the branch at 8001CA28h). The line before
+  ("I'm picking up a Reaverbot!", channel 24) ended near the file's end, the head then held at sector 49,721; the
+  next (channel 25, "He's above you! Watch out!") ends at 49,523, sector 49,673 of the disc. Its first GetlocP came in the stale period and answered
+  11:02:71, 49,721: not below the end, so the game paused the line before its first sector, then took Init, Demute,
+  Setmode C8h and the same Setloc and ReadS again, whose first GetlocP answered 00:01:68 from Init's hold, which the
+  sum takes for a number past every end; so on for ever, the box resting on the first line. *By phase* [M, the save
+  state, the Up press that walks into the scene started 0 to 87 frames late in steps of 3]: 29 of 30 runs stopped so
+  before the change, none after.
+- **Test program:** none on the console. `cdrom::tests::getlocp_after_a_reads_seek_reports_the_target_not_the_place_left`
+  on a synthetic disc: four sectors read at 650, a Pause, a Setloc to 250 and ReadN, Getstat until the Read bit, then
+  GetlocP; and the same with Play of track 2. Before the change it reads 651 for the seek to 250, and track 1 for the
+  play of track 2.
+- **Referee:** not consulted: `psxreferee.py` runs a PS-EXE without a disc, or a disc with its pictures alone, so a
+  program at the controller's registers with a disc in the drive has no driver yet; the scene was not reached from boot
+  by presses (`Diamond_Players.md` §14.6).
+- **Witnesses:** the tester, who plays the game to its end on RetroArch.
+- **Conclusion** [A, from psx-spx's statement that a seek decodes subchannel position, the log's Q beside each
+  target, and the game, whose loop is written so that its first GetlocP of a line is answered from beside the line's
+  start]: **a seek finds its target by subchannel Q, so one that goes on into a read or a play leaves the Q of the
+  sector before its target**, the sector the head passes before it reads the target; a held seek keeps its hold's
+  window as before. *Open*: the Q while a seek is under way, which Diamond still answers with the place it began, as
+  the Seek bit stands (no game here asks then; the routine above asks only once the Read bit is set); and whether the
+  console's Q at that moment is the target's or the one before it, a sector apart, which no program or game here can
+  tell apart.
+- **Depends on it:** any game that ends a stream by GetlocP against an end sector and asks as soon as the read is
+  reported; the stale answer is past the end whenever the stream before ended further on.
+- **Pinned by:** the unit test above, failing before the change.
+- **Implemented in:** `drive.rs`'s `found`, called by `seek_done` as a seek turns into a read or a play, in the commit
+  citing this entry.

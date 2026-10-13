@@ -1318,3 +1318,82 @@ controller's commands and its sectors' delivery, from frame 8,200 after the anch
 nothing of the BIOS's code or RAM was read, and no state was saved while it ran. The referees ran as black boxes: their
 pictures, and their RAM at `offset-fold.s`'s done word. No emulator's source, no firmware or listing of one, and none of
 the documents `DOCS.txt` excludes was opened.
+
+### 14.6 Mega Man Legends: the radio line that stays (D-48)
+
+*Written 2026-10-12, on WiseMan `6ad01c5d`.* The tester played on the handheld again and reported: "It will likely
+load to the map screen, so hit select/options on the gamepad to get out of the map. Once out of the map, walk forward
+with up on the d-pad until you encounter the dialogue. I believe it's supposed to allude to an enemy on the ceiling,
+but it just stays on the dialogue." The game ran on the player's BIOS with the cheat of §14.2 on. What came from the
+handheld: the save state made just before the scene by Mistress's state slot, at frame 15,795; the state Mistress
+kept when the tester left the game, at frame 17,123; the memory card; the session log, which holds pacing lines only.
+
+- **Not §14.2's prompt** [M]: that box is the game's own question after the instructions, "Read instructions
+  again?", which Cross on Yes repeats; this one is Roll's radio line before any instructions, which from the second
+  state stays on "MegaMan! I'm picking up a Reaverbot!" and never reaches its second line.
+- **The states** [M]: both are Diamond's own `DMND` version 10, unwrapped, 5,398,770 bytes, the size the kit's
+  configuration gives (a DualShock in each port, a card in the first, whose contents the state carries). The run tool
+  gained `--load-state FILE`, which loads one into the machine its other options make, here the player's BIOS as the
+  machine's firmware, `--two-pads` and `--card`, and counts `--press` and `--stick` from the state's frame. The disc's
+  fingerprint in the state matches the cache's copy of the tester's disc.
+- **From the save state** [M, pictures every 30 frames]: the map at the load; Select at +30 leaves it; Up held from
+  +90 for 900 frames walks Mega Man down a corridor of hexagon-lit walls, and Roll's box opens at about +200. Whether
+  the line goes on depends on the moment the walk begins: with Up from +90 it runs on ("He's above you! Watch out!"),
+  then "Use the R2 button to track enemies above and below you that are out of your field of sight" and the prompt;
+  with Up from +93 the box stays on the first line to the end of the run. *By phase*, Up begun at +90 to +177 in steps
+  of 3: the box stays in 29 of 30 runs.
+- **From the second state** [M]: Up from +30 for 200 frames walks into the scene again; the box opens at 17,250 and
+  stays on its first line to the end of every run, the longest's last picture at frame 18,600. Cross every 30 frames from +400 to
+  +1,400, R2 at +300 and Down at +600 change nothing in the box; Mega Man's idle animation runs and the game keeps
+  issuing commands to the drive, so the game is running and waiting.
+- **What the game waits for** [M, the controller's trace from the state's frame, and the game's code and RAM above
+  10000h]: each radio line is an XA channel of one file, started by Setfilter (1, n), Setloc 10:57:46 (the file's
+  start) and ReadS. Each time the game's routine at 8001C9B8h–8001CA64h runs (while the stream's state byte at
+  800988D0h is 2) it asks Getstat through its command routine at 8001D2BCh and, once the Read bit is set, GetlocP; it
+  turns the absolute time into a sector number less 150 (800989D8h) and, once that is not below the line's end
+  (800989B0h, compared at 8001CA28h), pauses the line. The first line, channel 24, plays to near the file's end and is
+  paused there, the head then holding at sector 49,721. The second, channel 25, ends at 49,523 (sector 49,673 of the
+  disc). Its ReadS seeks back to the file's start; Getstat reads 22h as soon as the seek ends; GetlocP, asked then,
+  answers 11:02:71, the place the first line left (800989D8h holds 49,571); 49,571 is not below 49,523, so the game
+  pauses the line before its first sector. It then takes Init, Demute, Pause, Setmode C8h, Setfilter (1, 25), Setloc
+  10:57:46 and ReadS again; that GetlocP answers 00:01:68, Init's hold, which the subtraction turns into a number past
+  every end, and so on: five ReadS and three Inits in 1,500 frames, each line paused before a sector of it plays. The
+  box closes when the line's voice ends, and this line's voice never begins.
+- **The cause** (`Diamond_Disputes.md` D-48): a seek that went on into a read set the Read bit at its end, but kept the
+  subchannel Q of the last sector the head had passed until the first sector it read, a sector period later; for that
+  period GetlocP answered with the place the head had left. psx-spx says a seek decodes subchannel position, and the
+  console's `cdrom/getloc` log finds the Q beside the target after every seek. The game asks at once, so its answer
+  fell in that period at most phases; where the line before ended earlier on the disc than this one's end, or the
+  first GetlocP came after the first sector, the line played, which is why §14.2's five lines and the save state's
+  first phase did.
+- **The proof**: `cdrom::tests::getlocp_after_a_reads_seek_reports_the_target_not_the_place_left`, on a synthetic
+  disc, fails before the change (GetlocP reads 651 for a seek to 250, and track 1 for a play of track 2) and passes
+  after.
+- **The fix**: the seek leaves the Q of the sector before its target as it turns into a read or a play (`drive.rs`'s
+  `found`, called by `seek_done`); a held seek is as before. It is a separate function of the drive beside the
+  seek's end, so it merges beside the drive's other changes in progress.
+- **After the change** [M, the second state, pictures every 20 or 30 frames]: the line runs on, "He's above you! Watch
+  out!" by 17,460, the instructions from 17,580, the prompt; Cross, then Right and Cross on No, close it at about
+  18,180, and Mega Man walks on into the room beyond, the camera tilting with R2. From the save state none of the 30
+  phases stops. The enemy on the ceiling was not seen in the pictures taken (to frame 19,520, R2 held for 400 frames
+  in the room); the scene went on and the player has control again.
+- **The cheat** [M]: none: from the second state, with and without `--poke B521E:C4:2`, each build's pictures are the
+  same byte for byte, the box staying before the change and going on after.
+- **A referee, and the open kernel**: not reached. The states hold the player's BIOS's kernel in RAM, so they run on
+  that firmware only. From boot, `psxplay/mega-man-legends.txt` on the open kernel to frame 14,000 walks the
+  green-walled corridors and fights the first Reaverbots; the tester's scene lies in the hexagon-walled part of the
+  ruin, on a path the script does not take, and the presses to it were not worked out. `psxreferee.py` runs a program
+  without a disc or a disc with its pictures alone, so a program at the controller's registers had no referee either.
+  The cause rests on the controller's trace, the game's code, psx-spx and the console's log.
+
+### 14.7 The checks kept, and the tests run (2026-10-12)
+
+- ps1-tests' pictures and records, and every program test: `cargo test --release` in the crate, 160 unit tests and 78
+  program tests, with `EMUSEN_DIAMOND_PS1TESTS` set and without, all passing.
+- The eight games' play as §13 and §14 record it [M, `d5`'s presses on the open kernel, both builds]: Silent Hill,
+  Ape Escape, Tekken 3, Spyro the Dragon, Rayman, Castlevania and Crash Bandicoot, 280, 344, 367, 291, 287, 280 and 300
+  pictures, every one byte for byte the same before and after; Mega Man Legends by `mega-man-legends.txt` to 14,000
+  frames and by `mega-man-legends-prompt.txt` to 16,000, 233 and 266 pictures, byte for byte the same: no answer
+  that Roll's five lines of §14.2 act on was changed.
+- The kit at 1,800 frames: the corpus form on `kit/psx-sample.txt`'s nine discs, 9 of 9 and the core's cases passing;
+  Mega Man Legends in the single-image form, all seventeen cases, C7 and C8 among them.

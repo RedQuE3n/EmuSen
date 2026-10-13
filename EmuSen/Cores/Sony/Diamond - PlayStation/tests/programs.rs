@@ -1700,47 +1700,10 @@ fn a_primitive_past_the_offsets_eleven_bits_is_drawn_modulo_2048() {
 
 // ---- E1, the accurate goldens (Diamond_Enhancements.md §6) --------------------------------------------------------
 
-/// The goldens' file of that name, beside this one.
-fn golden_file(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens").join(name)
-}
-
 /// Whether this run records the goldens rather than checking them: `EMUSEN_DIAMOND_GOLDENS=record`, by the rule of
 /// Diamond_Enhancements.md §6.3.
 fn recording_goldens() -> bool {
     std::env::var("EMUSEN_DIAMOND_GOLDENS").is_ok_and(|v| v == "record")
-}
-
-fn fold_bytes(h: u64, b: &[u8]) -> u64 {
-    b.iter().fold(h, |h, &x| (h ^ x as u64).wrapping_mul(0x0000_0100_0000_01B3))
-}
-
-const FNV_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
-
-/// Every frame's picture and the sound, each folded from the run's start as the bench folds them.
-struct Fold {
-    picture: u64,
-    sound: u64,
-    chunk: Vec<i16>,
-}
-
-impl Fold {
-    fn new() -> Fold {
-        Fold { picture: FNV_BASIS, sound: FNV_BASIS, chunk: vec![0; 1 << 16] }
-    }
-
-    fn frame(&mut self, m: &mut Machine) {
-        self.picture = fold_bytes(self.picture, m.board.gpu.display.frame());
-        let n = m.board.spu.out.drain(&mut self.chunk, usize::MAX);
-        self.sound = self.chunk[..n].iter().fold(self.sound, |h, &s| fold_bytes(h, &s.to_le_bytes()));
-    }
-}
-
-fn state_digest(m: &Machine) -> u64 {
-    use emusen_native::ffi::StateMachine;
-    let mut state = vec![0; m.state_size()];
-    let n = m.save_state(&mut state).unwrap();
-    fold_bytes(FNV_BASIS, &state[..n])
 }
 
 /// The test observer attached, when `observed`, for the exactness harness (Diamond_Enhancements.md §7).
@@ -1765,9 +1728,7 @@ fn program_digests(mut m: Machine, frames: usize, observed: bool) -> (String, Op
         fold.frame(&mut m);
     }
     let tally = told(&mut m);
-    let tty = m.space(diamond::machine::TTY_ID).unwrap();
-    let line = format!("picture {:016X}\tsound {:016X}\tstate {:016X}\tvram {:016X}\ttty {:016X}", fold.picture, fold.sound, state_digest(&m), fold_bytes(FNV_BASIS, &m.board.gpu.vram.bytes), fold_bytes(FNV_BASIS, tty));
-    (line, tally)
+    (end_digests(&m, &fold), tally)
 }
 
 /// The exactness harness's two runs against one golden file: plain, and with the test observer attached, each line

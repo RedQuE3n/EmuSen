@@ -74,17 +74,29 @@ impl Compared {
 }
 
 /// `m` run `frames` frames with the renderer attached from the start, the pictures compared at every frame and VRAM at
-/// the end.
-fn compare(mut m: Machine, r: Renderer, frames: usize) -> (Compared, diamond_renderer::Counts) {
+/// the end; and the run's golden digests, taken with the renderer attached, which keeps no block in the state.
+fn compare(mut m: Machine, r: Renderer, frames: usize) -> (Compared, diamond_renderer::Counts, String) {
     m.attach(Box::new(r));
     let mut c = Compared::default();
+    let mut fold = Fold::new();
     for _ in 0..frames {
         m.advance();
+        fold.frame(&mut m);
         c.frame(&mut m);
     }
     c.vram(&mut m);
     let counts = attached(&mut m).counts();
-    (c, counts)
+    (c, counts, end_digests(&m, &fold))
+}
+
+/// The goldens' lines a run made against the file's, each that differs named.
+fn goldens_equal(file: &str, made: &[String]) -> Vec<String> {
+    let kept = kept_goldens(file);
+    let mut differ: Vec<String> = made.iter().zip(&kept).filter(|(a, b)| a != b).map(|(a, b)| format!("  made {a}\n  kept {b}")).collect();
+    if made.len() != kept.len() {
+        differ.push(format!("  {} lines made, {} kept", made.len(), kept.len()));
+    }
+    differ
 }
 
 /// The halfwords of VRAM the renderer draws otherwise than the GPU, by program, each the texture cache's: the GPU's cache
@@ -103,17 +115,19 @@ fn the_renderer_draws_the_projects_programs_as_the_software_rasteriser() {
     let Some(r) = renderer() else { return };
     eprintln!("{}", r.report());
     drop(r);
-    let mut failed = Vec::new();
+    let (mut failed, mut goldens) = (Vec::new(), Vec::new());
     for (name, source) in own_programs() {
         let Some(r) = renderer() else { return };
-        let (c, counts) = compare(golden_program(&name, &source), r, GOLDEN_PROGRAM_FRAMES);
+        let (c, counts, digests) = compare(golden_program(&name, &source), r, GOLDEN_PROGRAM_FRAMES);
         eprintln!("{}", line(&name, &c, &counts));
         let cache = TEXTURE_CACHE_HALFWORDS.iter().find(|p| p.0 == name).map_or(0, |p| p.1);
         if c.pixels != 0 || c.vram != cache {
             failed.push(line(&name, &c, &counts));
         }
+        goldens.push(format!("{name}\t{GOLDEN_PROGRAM_FRAMES}\t{digests}"));
     }
-    assert!(failed.is_empty(), "differing:\n{}", failed.join("\n"));
+    let differ = goldens_equal("programs.txt", &goldens);
+    assert!(failed.is_empty() && differ.is_empty(), "differing:\n{}\ngoldens with the renderer attached:\n{}", failed.join("\n"), differ.join("\n"));
 }
 
 /// ps1-tests' release on the open kernel, every program for the frames its golden runs (WiseMan's gates' frames): the
@@ -127,15 +141,62 @@ fn the_renderer_draws_ps1_tests_as_the_software_rasteriser() {
     if renderer().is_none() {
         return;
     }
-    let mut failed = Vec::new();
+    let (mut failed, mut goldens) = (Vec::new(), Vec::new());
     for path in ps1_tests_programs(&corpus) {
         let Some(r) = renderer() else { return };
         let (frames, market) = ps1_tests_run(&path);
-        let (c, counts) = compare(ps1_tests_machine(&corpus, &path, market), r, frames);
+        let (c, counts, digests) = compare(ps1_tests_machine(&corpus, &path, market), r, frames);
         eprintln!("{}", line(&path, &c, &counts));
         if c.pixels != 0 || c.vram != 0 {
             failed.push(line(&path, &c, &counts));
         }
+        goldens.push(format!("{path}\t{frames}\t{digests}"));
     }
-    assert!(failed.is_empty(), "differing:\n{}", failed.join("\n"));
+    let differ = goldens_equal("ps1-tests.txt", &goldens);
+    assert!(failed.is_empty() && differ.is_empty(), "differing:\n{}\ngoldens with the renderer attached:\n{}", failed.join("\n"), differ.join("\n"));
+}
+
+/// The bench discs, each played by its press script to frame 3,000 as its goldens are, the renderer attached from
+/// power-on: its picture against the displayed picture at every frame and its VRAM against the GPU's at every 300th; and
+/// the goldens' digests at those anchors with the renderer attached. Opt-in by `EMUSEN_DIAMOND_DISCS`.
+#[test]
+fn the_renderer_draws_the_bench_discs_as_the_software_rasteriser() {
+    let Some(folder) = std::env::var_os("EMUSEN_DIAMOND_DISCS") else {
+        eprintln!("not run: EMUSEN_DIAMOND_DISCS names no folder of the bench discs");
+        return;
+    };
+    if renderer().is_none() {
+        return;
+    }
+    let folder = std::path::PathBuf::from(folder);
+    let (mut failed, mut goldens) = (Vec::new(), Vec::new());
+    for (file, script) in GOLDEN_DISCS {
+        let Some(r) = renderer() else { return };
+        let (anchor, presses, sticks) = press_script(script);
+        goldens.push(format!("{file}\t{script}\tanchor {anchor}"));
+        let mut m = disc_maker(folder.join(file))();
+        m.insert_card(0, None);
+        m.attach(Box::new(r));
+        let (mut c, mut fold) = (Compared::default(), Fold::new());
+        let mut anchors = Vec::new();
+        while m.frames < GOLDEN_DISC_FRAMES {
+            press(&mut m, &presses, &sticks);
+            m.advance();
+            fold.frame(&mut m);
+            c.frame(&mut m);
+            if m.frames % GOLDEN_DISC_ANCHOR == 0 {
+                let before = c.vram;
+                c.vram(&mut m);
+                anchors.push((m.frames, c.vram - before));
+                goldens.push(format!("\t{}\tpicture {:016X}\tsound {:016X}\tstate {:016X}", m.frames, fold.picture, fold.sound, state_digest(&m)));
+            }
+        }
+        let counts = attached(&mut m).counts();
+        eprintln!("{}; VRAM by anchor {:?}", line(file, &c, &counts), anchors.iter().filter(|a| a.1 > 0).collect::<Vec<_>>());
+        if c.pixels != 0 || c.vram != 0 {
+            failed.push(line(file, &c, &counts));
+        }
+    }
+    let differ = goldens_equal("discs.txt", &goldens);
+    assert!(failed.is_empty() && differ.is_empty(), "differing:\n{}\ngoldens with the renderer attached:\n{}", failed.join("\n"), differ.join("\n"));
 }

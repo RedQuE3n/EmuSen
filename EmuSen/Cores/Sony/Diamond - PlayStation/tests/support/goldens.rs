@@ -189,3 +189,53 @@ pub fn press(m: &mut Machine, presses: &[(i64, u32, i64)], sticks: &[(i64, u32, 
         }
     }
 }
+
+/// The goldens' file of that name, beside this one.
+pub fn golden_file(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens").join(name)
+}
+
+pub fn fold_bytes(h: u64, b: &[u8]) -> u64 {
+    b.iter().fold(h, |h, &x| (h ^ x as u64).wrapping_mul(0x0000_0100_0000_01B3))
+}
+
+pub const FNV_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+
+/// Every frame's picture and the sound, each folded from the run's start as the bench folds them.
+pub struct Fold {
+    pub picture: u64,
+    pub sound: u64,
+    chunk: Vec<i16>,
+}
+
+impl Fold {
+    pub fn new() -> Fold {
+        Fold { picture: FNV_BASIS, sound: FNV_BASIS, chunk: vec![0; 1 << 16] }
+    }
+
+    pub fn frame(&mut self, m: &mut Machine) {
+        self.picture = fold_bytes(self.picture, m.board.gpu.display.frame());
+        let n = m.board.spu.out.drain(&mut self.chunk, usize::MAX);
+        self.sound = self.chunk[..n].iter().fold(self.sound, |h, &s| fold_bytes(h, &s.to_le_bytes()));
+    }
+}
+
+pub fn state_digest(m: &Machine) -> u64 {
+    use emusen_native::ffi::StateMachine;
+    let mut state = vec![0; m.state_size()];
+    let n = m.save_state(&mut state).unwrap();
+    fold_bytes(FNV_BASIS, &state[..n])
+}
+
+/// A program's golden digests at the end of its run: the pictures and the sound folded, the state, VRAM and the TTY.
+pub fn end_digests(m: &Machine, fold: &Fold) -> String {
+    let tty = m.space(diamond::machine::TTY_ID).unwrap();
+    format!("picture {:016X}\tsound {:016X}\tstate {:016X}\tvram {:016X}\ttty {:016X}", fold.picture, fold.sound, state_digest(m), fold_bytes(FNV_BASIS, &m.board.gpu.vram.bytes), fold_bytes(FNV_BASIS, tty))
+}
+
+/// A goldens file's recorded lines, its comments left out.
+pub fn kept_goldens(file: &str) -> Vec<String> {
+    let path = golden_file(file);
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{} holds no goldens", path.display()));
+    text.lines().filter(|l| !l.starts_with('#')).map(str::to_string).collect()
+}

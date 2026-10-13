@@ -1384,20 +1384,7 @@ fn named_disc() -> Option<(String, impl Fn() -> Machine)> {
         return None;
     };
     let path = std::path::PathBuf::from(path);
-    let image = std::fs::read(&path).expect("the disc");
-    let mut files = Vec::new();
-    if diamond::medium::is_sheet(&image) {
-        for name in emusen_disc::set::companions(&String::from_utf8_lossy(&image)).expect("a sheet") {
-            files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
-        }
-    }
-    let make = move || {
-        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), files.iter().map(|f| emusen_native::core::Kept::from(f.clone())).collect()) else { panic!("the disc opens") };
-        let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
-        m.insert_disc(*disc);
-        m
-    };
-    Some((path.file_name().unwrap().to_string_lossy().into_owned(), make))
+    Some((path.file_name().unwrap().to_string_lossy().into_owned(), disc_maker(path)))
 }
 
 /// One of the tester's discs, copied to the cache and named by `EMUSEN_DIAMOND_DISC`, on the open kernel with no
@@ -1726,4 +1713,292 @@ fn a_primitive_past_the_offsets_eleven_bits_is_drawn_modulo_2048() {
     assert_eq!((px(992, 64), px(1023, 64), px(1000, 78)), (0x001F, 0x001F, 0x001F), "the triangle from the screen");
     assert_eq!((px(968, 176), px(1023, 176), px(967, 176)), (0x03E0, 0x03E0, 0), "the line from 300");
     assert_ne!(px(1000, 115), 0, "the shaded triangle from 300");
+}
+
+// ---- E1, the accurate goldens (Diamond_Enhancements.md §6) --------------------------------------------------------
+
+/// The goldens' file of that name, beside this one.
+fn golden_file(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens").join(name)
+}
+
+/// Whether this run records the goldens rather than checking them: `EMUSEN_DIAMOND_GOLDENS=record`, by the rule of
+/// Diamond_Enhancements.md §6.3.
+fn recording_goldens() -> bool {
+    std::env::var("EMUSEN_DIAMOND_GOLDENS").is_ok_and(|v| v == "record")
+}
+
+fn fold_bytes(h: u64, b: &[u8]) -> u64 {
+    b.iter().fold(h, |h, &x| (h ^ x as u64).wrapping_mul(0x0000_0100_0000_01B3))
+}
+
+const FNV_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+
+/// Every frame's picture and the sound, each folded from the run's start as the bench folds them.
+struct Fold {
+    picture: u64,
+    sound: u64,
+    chunk: Vec<i16>,
+}
+
+impl Fold {
+    fn new() -> Fold {
+        Fold { picture: FNV_BASIS, sound: FNV_BASIS, chunk: vec![0; 1 << 16] }
+    }
+
+    fn frame(&mut self, m: &mut Machine) {
+        self.picture = fold_bytes(self.picture, m.board.gpu.display.frame());
+        let n = m.board.spu.out.drain(&mut self.chunk, usize::MAX);
+        self.sound = self.chunk[..n].iter().fold(self.sound, |h, &s| fold_bytes(h, &s.to_le_bytes()));
+    }
+}
+
+fn state_digest(m: &Machine) -> u64 {
+    use emusen_native::ffi::StateMachine;
+    let mut state = vec![0; m.state_size()];
+    let n = m.save_state(&mut state).unwrap();
+    fold_bytes(FNV_BASIS, &state[..n])
+}
+
+/// A program's golden digests after `frames` frames: the pictures, the sound, the state, and VRAM and the TTY apart.
+fn program_digests(mut m: Machine, frames: usize) -> String {
+    let mut fold = Fold::new();
+    for _ in 0..frames {
+        m.advance();
+        fold.frame(&mut m);
+    }
+    let tty = m.space(diamond::machine::TTY_ID).unwrap();
+    format!("picture {:016X}\tsound {:016X}\tstate {:016X}\tvram {:016X}\ttty {:016X}", fold.picture, fold.sound, state_digest(&m), fold_bytes(FNV_BASIS, &m.board.gpu.vram.bytes), fold_bytes(FNV_BASIS, tty))
+}
+
+/// The goldens' text against the file's, or the file written when recording: each line that differs named.
+fn check_goldens(file: &str, header: &str, lines: &[String]) {
+    let text = format!("{header}{}\n", lines.join("\n"));
+    let path = golden_file(file);
+    if recording_goldens() {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, &text).unwrap();
+        eprintln!("recorded {} lines in {}", lines.len(), path.display());
+        return;
+    }
+    let kept = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{} holds no goldens; record them by Diamond_Enhancements.md §6.3", path.display()));
+    let kept: Vec<&str> = kept.lines().filter(|l| !l.starts_with('#')).collect();
+    let made: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
+    let differ: Vec<String> = made.iter().zip(&kept).filter(|(a, b)| a != b).map(|(a, b)| format!("  made {a}\n  kept {b}")).collect();
+    assert!(differ.is_empty() && made.len() == kept.len(), "{file}: {} of {} lines differ ({} made, {} kept):\n{}", differ.len(), kept.len(), made.len(), kept.len(), differ.join("\n"));
+}
+
+/// One of the project's programs as the goldens run it: on the open kernel for the kernel's own, bare otherwise, a card
+/// in slot 1 for the card programs and the stage 7 disc in the drive for the CD's.
+fn golden_program(name: &str, source: &str) -> Machine {
+    let mut m = if name.starts_with("kernel-") || name == "cd-kernel.s" {
+        let words = emusen_mips::assemble(source, 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
+        let image = exe::build(&words);
+        Machine::new(Media::read(&image).unwrap(), Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)))
+    } else {
+        bare(source)
+    };
+    if name.starts_with("card") || name == "kernel-card.s" {
+        m.insert_card(0, None);
+    }
+    if name.starts_with("cd-") || name == "kernel-cd.s" {
+        m.insert_disc(cd_disc());
+    }
+    m
+}
+
+const GOLDEN_PROGRAM_FRAMES: usize = 60;
+
+/// The project's programs in `programs/`, each run as `golden_program` makes it.
+fn own_programs() -> Vec<(String, String)> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("programs");
+    let mut v: Vec<(String, String)> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".s"))
+        .map(|n| (n.clone(), std::fs::read_to_string(dir.join(&n)).unwrap()))
+        .collect();
+    v.sort();
+    v
+}
+
+/// E1's goldens of the project's programs: each of `programs/` for 60 frames, its digests those it gave on the accurate
+/// path when the goldens were recorded (Diamond_Enhancements.md §6).
+#[test]
+fn the_projects_programs_give_their_goldens() {
+    let lines: Vec<String> = own_programs().iter().map(|(name, source)| format!("{name}\t{GOLDEN_PROGRAM_FRAMES}\t{}", program_digests(golden_program(name, source), GOLDEN_PROGRAM_FRAMES))).collect();
+    check_goldens("programs.txt", "# The accurate goldens of programs/ (Diamond_Enhancements.md §6): name, frames, digests.\n", &lines);
+}
+
+/// The frames a ps1-tests program runs for, as WiseMan's gates run it, and its market: 900 for those graded by their
+/// TTY, 1,500 for `gpu/bandwidth`, 300 for the rest; `timers` on a PAL console as its log was.
+fn ps1_tests_run(path: &str) -> (usize, Market) {
+    let tty = ["cpu/cop/", "cpu/code-in-io/", "dma/otc-test/", "dma/dpcr/", "cpu/access-time/", "dma/chain-looping/", "timers/", "gpu/gp0-e1/", "gpu/mask-bit/", "gpu/version-detect/", "spu/memory-transfer/", "spu/test/"];
+    let frames = match path {
+        "gpu/bandwidth/bandwidth.exe" => 1500,
+        "mdec/movie/movie-15bit.exe" => 315,
+        "mdec/movie/movie-24bit.exe" => 309,
+        p if tty.iter().any(|t| p.starts_with(t)) => 900,
+        _ => 300,
+    };
+    (frames, if path.starts_with("timers/") { Market::Europe } else { Market::Americas })
+}
+
+/// Every program of ps1-tests' release but its tools, by path.
+fn ps1_tests_programs(corpus: &std::path::Path) -> Vec<String> {
+    fn walk(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<String>) {
+        for e in std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()) {
+            let p = e.path();
+            if p.is_dir() {
+                walk(root, &p, out);
+            } else if p.extension().is_some_and(|x| x == "exe") {
+                let rel = p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                if !rel.starts_with("tools/") {
+                    out.push(rel);
+                }
+            }
+        }
+    }
+    let mut v = Vec::new();
+    walk(corpus, corpus, &mut v);
+    v.sort();
+    v
+}
+
+fn ps1_tests_machine(corpus: &std::path::Path, path: &str, market: Market) -> Machine {
+    let image = std::fs::read(corpus.join(path)).expect("the release's program");
+    Machine::new(Media::read(&image).unwrap(), Config { market, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)))
+}
+
+/// E1's goldens of ps1-tests' release on the open kernel: every program, its digests those it gave on the accurate path
+/// when the goldens were recorded. WiseMan's gates grade the same runs' verdicts and pictures against the console's.
+#[test]
+fn ps1_tests_give_their_goldens() {
+    let Some(corpus) = records::corpus() else { return };
+    let lines: Vec<String> = ps1_tests_programs(&corpus)
+        .iter()
+        .map(|path| {
+            let (frames, market) = ps1_tests_run(path);
+            format!("{path}\t{frames}\t{}", program_digests(ps1_tests_machine(&corpus, path, market), frames))
+        })
+        .collect();
+    check_goldens("ps1-tests.txt", "# The accurate goldens of ps1-tests' release build 158 on the open kernel (Diamond_Enhancements.md §6): path, frames, digests.\n", &lines);
+}
+
+/// The eight bench discs of the goldens, by their files in the folder `EMUSEN_DIAMOND_DISCS` names, and the press
+/// scripts of `EmuSen.WiseMan/Reference/analysis/psxplay/` they are played by.
+const GOLDEN_DISCS: [(&str, &str); 8] = [
+    ("Ape Escape (USA).cue", "ape-escape.txt"),
+    ("Castlevania - Symphony of the Night (USA)/Castlevania - Symphony of the Night (USA).cue", "castlevania-sotn.txt"),
+    ("Crash Bandicoot (USA).bin", "crash-bandicoot.txt"),
+    ("Mega Man Legends (USA) (Track 1).bin", "mega-man-legends.txt"),
+    ("Rayman (USA)/Rayman (USA).cue", "rayman.txt"),
+    ("Silent Hill (USA)/Silent Hill (USA).cue", "silent-hill.txt"),
+    ("Spyro the Dragon (USA).bin", "spyro-the-dragon.txt"),
+    ("Tekken 3/Tekken 3.cue", "tekken-3.txt"),
+];
+
+const GOLDEN_DISC_FRAMES: i64 = 3000;
+const GOLDEN_DISC_ANCHOR: i64 = 300;
+
+/// A press script as `psxplay.py` reads it, its anchor the frame its second line gives for Diamond's open kernel: the
+/// buttons as (first frame, the report's mask, frames) and the sticks as (first frame, axis, value, frames).
+fn press_script(name: &str) -> (i64, Vec<(i64, u32, i64)>, Vec<(i64, u32, f64, i64)>) {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../EmuSen.WiseMan/Reference/analysis/psxplay").join(name);
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{}", path.display()));
+    let anchor: i64 = text.lines().find_map(|l| l.strip_prefix("# T: frame ")).and_then(|r| r.split_whitespace().next()).and_then(|n| n.parse().ok()).expect("the anchor on Diamond's open kernel");
+    let bits = |b: &str| match b {
+        "Select" => 0x1, "L3" => 0x2, "R3" => 0x4, "Start" => 0x8, "Up" => 0x10, "Right" => 0x20, "Down" => 0x40, "Left" => 0x80,
+        "L2" => 0x100, "R2" => 0x200, "L1" => 0x400, "R1" => 0x800, "Triangle" => 0x1000, "Circle" => 0x2000, "Cross" => 0x4000, "Square" => 0x8000,
+        other => panic!("{name}: the button {other}"),
+    };
+    let (mut presses, mut sticks) = (Vec::new(), Vec::new());
+    for line in text.lines() {
+        let line = line.split('#').next().unwrap().trim();
+        if line.is_empty() {
+            continue;
+        }
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let at = if let Some(n) = f[0].strip_prefix('+') { anchor + n.parse::<i64>().unwrap() } else { f[0][1..].parse().unwrap() };
+        let n: i64 = f[2].parse().unwrap();
+        let mut mask = 0;
+        for b in f[1].split('+') {
+            if let Some(s) = b.strip_prefix("stick:") {
+                let (axis, value) = s.split_once(':').unwrap();
+                sticks.push((at, axis.parse().unwrap(), value.parse().unwrap(), n));
+            } else {
+                mask |= bits(b);
+            }
+        }
+        if mask != 0 {
+            presses.push((at, mask, n));
+        }
+    }
+    (anchor, presses, sticks)
+}
+
+/// A disc's maker: the image at `path`, its tracks beside it, on the open kernel with no firmware and a DualShock in
+/// port 1, Americas.
+fn disc_maker(path: std::path::PathBuf) -> impl Fn() -> Machine {
+    let image = std::fs::read(&path).unwrap_or_else(|_| panic!("the disc {}", path.display()));
+    let mut files = Vec::new();
+    if diamond::medium::is_sheet(&image) {
+        for name in emusen_disc::set::companions(&String::from_utf8_lossy(&image)).expect("a sheet") {
+            files.push(std::fs::read(path.parent().unwrap().join(name)).expect("a track file"));
+        }
+    }
+    move || {
+        let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), files.iter().map(|f| emusen_native::core::Kept::from(f.clone())).collect()) else { panic!("the disc opens") };
+        let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], &image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
+        m.insert_disc(*disc);
+        m
+    }
+}
+
+/// A disc's golden digests: 3,000 frames played by its script with a blank card in slot 1, and at every 300th frame
+/// the pictures and the sound folded from the start and the state then.
+fn disc_digests(mut m: Machine, script: &str) -> Vec<String> {
+    let (_, presses, sticks) = press_script(script);
+    m.insert_card(0, None);
+    let mut fold = Fold::new();
+    let mut out = Vec::new();
+    while m.frames < GOLDEN_DISC_FRAMES {
+        let mask = presses.iter().filter(|(at, _, n)| (*at..*at + *n).contains(&m.frames)).fold(0, |a, p| a | p.1);
+        m.board.sio0.set_buttons(0, mask);
+        for axis in 0..4 {
+            if sticks.iter().any(|s| s.1 == axis) {
+                let v = sticks.iter().rev().find(|(at, a, _, n)| *a == axis && (*at..*at + *n).contains(&m.frames)).map_or(0.0, |s| s.2);
+                if let Some(c) = m.board.sio0.controller(0) {
+                    c.set_axis(axis, v);
+                }
+            }
+        }
+        m.advance();
+        fold.frame(&mut m);
+        if m.frames % GOLDEN_DISC_ANCHOR == 0 {
+            out.push(format!("\t{}\tpicture {:016X}\tsound {:016X}\tstate {:016X}", m.frames, fold.picture, fold.sound, state_digest(&m)));
+        }
+    }
+    out
+}
+
+/// E1's goldens of the eight bench discs, opt-in by `EMUSEN_DIAMOND_DISCS`, the folder holding the tester's copies:
+/// each disc's digests at its anchors those it gave on the accurate path when the goldens were recorded.
+#[test]
+fn the_bench_discs_give_their_goldens() {
+    let Some(folder) = std::env::var_os("EMUSEN_DIAMOND_DISCS") else {
+        eprintln!("skipped: EMUSEN_DIAMOND_DISCS names no folder of the bench discs");
+        return;
+    };
+    let folder = std::path::PathBuf::from(folder);
+    let mut lines = Vec::new();
+    for (file, script) in GOLDEN_DISCS {
+        let (anchor, ..) = press_script(script);
+        let make = disc_maker(folder.join(file));
+        lines.push(format!("{file}\t{script}\tanchor {anchor}"));
+        lines.extend(disc_digests(make(), script));
+        eprintln!("{file}: done");
+    }
+    check_goldens("discs.txt", "# The accurate goldens of the bench discs on the open kernel (Diamond_Enhancements.md §6): each disc, its press script and anchor, then\n# at every 300th frame the pictures and the sound folded from the start and the state then.\n", &lines);
 }

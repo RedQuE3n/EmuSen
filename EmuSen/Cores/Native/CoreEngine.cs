@@ -385,6 +385,7 @@ namespace EmuSen.Cores.Native
                     case CoreInterface.EventAudioRate: _audioRate = (int)e.A; break;
                     case CoreInterface.EventLog: KeepLog(m.DrainLog()); break;
                     case CoreInterface.EventBattery: if (Library.Has(CoreInterface.CapBatteryDirty)) SaveSram(); break;
+                    case CoreInterface.EventMediaSeek: ReadAhead(m, e); break;
                     case CoreInterface.EventMachineInfo:
                         m.ReadInfo();
                         _shape = m.FrameInfo;
@@ -394,6 +395,16 @@ namespace EmuSen.Cores.Native
                 }
             }
             if (_frame.Length < _shape.Bytes) _frame = new byte[_shape.Bytes];
+        }
+
+        // A drive's named place handed to the reader of the files Galaxia holds for it; a drive lent nothing has none, and a place outside its file is dropped - see EmuSen_CoreAPI.md §6.25.
+        public static void ReadAhead(CoreMachine machine, CoreInterface.Event place)
+        {
+            if (machine.LoanOf((uint)(place.A >> 32)) is not DiscFiles disc) return;
+            uint file = (uint)place.A;
+            MappedFile? held = file == CoreInterface.FileImage ? disc.Image
+                : file >= CoreInterface.FileMedia && file - CoreInterface.FileMedia < disc.Companions.Count ? disc.Companions[(int)(file - CoreInterface.FileMedia)] : null;
+            if (held is not null && place.B >= 0 && place.B < held.Length) disc.ReadAhead(held, place.B);
         }
 
         private void KeepLog(IReadOnlyList<string> lines)

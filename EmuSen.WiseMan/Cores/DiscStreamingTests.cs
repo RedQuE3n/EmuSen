@@ -171,6 +171,100 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // Since core ABI 1.4: the place a drive names is handed to the disc's reader, which advises the system around it and no further; a drive lent nothing, a file the call did not pass and a byte outside its file are dropped - see EmuSen_CoreAPI.md §6.25, EmuSen_Galaxia.md §3.9.
+        [Fact]
+        public void A_place_a_drive_names_is_read_ahead_in_the_file_galaxia_holds_for_it()
+        {
+            const int MiB = 1 << 20;
+            string tst = Path.Combine(_root, "long.tst");
+            File.WriteAllBytes(tst, CoreAdapterTests.Image(Enumerable.Range(0, 60_000).Select(i => (byte)i).ToArray()));
+            string big = Path.Combine(_root, "big.bin");
+            File.WriteAllBytes(big, new byte[8 * MiB + 5]);
+            static void Settled(DiscFiles files, long advised)
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                while (files.Advised != advised && watch.Elapsed < TimeSpan.FromSeconds(10)) System.Threading.Thread.Sleep(1);
+                Assert.Equal(advised, files.Advised);
+            }
+            using (DiscFiles files = DiscFiles.Open(big))
+            {
+                if (!files.Image.Advise(0, 4096)) return;
+                files.ReadAhead(files.Image, 4 * MiB);
+                Settled(files, DiscFiles.ReadAheadBefore + DiscFiles.ReadAheadPast);
+                files.ReadAhead(files.Image, 0);
+                Settled(files, 2 * (long)DiscFiles.ReadAheadPast + DiscFiles.ReadAheadBefore);
+                long before = files.Advised;
+                files.ReadAhead(files.Image, 8 * MiB);
+                Settled(files, before + DiscFiles.ReadAheadBefore + 5);
+                files.Dispose();
+                files.ReadAhead(files.Image, 4 * MiB);
+            }
+            var disc = DiscFiles.Open(tst);
+            using var lent = new CoreMachine(CoreAdapterTests.Full, Held(disc.Image), Array.Empty<(uint, CoreBytes)>(), Defaults(CoreAdapterTests.Full), Array.Empty<(uint, byte[])>(), loan: disc);
+            static CoreInterface.Event Place(uint drive, uint file, long at) => new() { Kind = CoreInterface.EventMediaSeek, A = (long)drive << 32 | file, B = at };
+            foreach (var dropped in new[] { Place(1, CoreInterface.FileImage, 0), Place(0, CoreInterface.FileMedia, 0), Place(0, 0, 0), Place(0, CoreInterface.FileImage, disc.Image.Length), Place(0, CoreInterface.FileImage, -1) })
+                CoreEngine.ReadAhead(lent, dropped);
+            System.Threading.Thread.Sleep(50);
+            Assert.Equal(0, disc.Advised);
+            CoreEngine.ReadAhead(lent, Place(0, CoreInterface.FileImage, 100));
+            Settled(disc, disc.Image.Length);
+            using var copied = new CoreMachine(CoreAdapterTests.Full, File.ReadAllBytes(tst), Defaults(CoreAdapterTests.Full), Array.Empty<(uint, byte[])>());
+            CoreEngine.ReadAhead(copied, Place(0, CoreInterface.FileImage, 100));
+        }
+
+        // A machine whose host reads ahead at every place its drive names runs frame for frame as one whose host skips them, through the engine and beside it; Diamond names places as its kernel reads the disc.
+        [Fact]
+        public void A_run_whose_host_reads_ahead_of_the_drive_is_the_run_whose_host_does_not()
+        {
+            var built = SyntheticPsxDisc.Build(audioSeconds: 2);
+            string sheet = built.WriteSet(_root, "Named Set");
+            DiscFiles acted = DiscFiles.Open(sheet), skipped = DiscFiles.Open(sheet);
+            List<(uint, CoreBytes)> Media(DiscFiles d) => d.Companions.Select((c, n) => (CoreInterface.FileMedia + (uint)n, Held(c))).ToList();
+            using var a = new CoreMachine(Diamond, Held(acted.Image), Media(acted), Defaults(Diamond), Array.Empty<(uint, byte[])>(), loan: acted);
+            using var b = new CoreMachine(Diamond, Held(skipped.Image), Media(skipped), Defaults(Diamond), Array.Empty<(uint, byte[])>(), loan: skipped);
+            int named = 0;
+            byte[] sa = Array.Empty<byte>(), sb = Array.Empty<byte>();
+            for (int f = 0; f < 600; f++)
+            {
+                a.Advance();
+                b.Advance();
+                foreach (var e in a.DrainEvents().Where(e => e.Kind == CoreInterface.EventMediaSeek))
+                {
+                    named++;
+                    int file = (int)((uint)e.A - CoreInterface.FileMedia);
+                    Assert.True(e.A >> 32 == 0 && file >= 0 && file < acted.Companions.Count, $"drive {e.A >> 32}, file {(uint)e.A}");
+                    Assert.InRange(e.B, 0, acted.Companions[file].Length - 1);
+                    CoreEngine.ReadAhead(a, e);
+                }
+                b.DrainEvents();
+                byte[] pa = new byte[Math.Max(0, a.CopyFrame(Array.Empty<byte>()))], pb = new byte[Math.Max(0, b.CopyFrame(Array.Empty<byte>()))];
+                a.CopyFrame(pa);
+                b.CopyFrame(pb);
+                Assert.True(pa.AsSpan().SequenceEqual(pb), $"frame {f}'s picture");
+                Assert.True(a.DrainAudio(1 << 16).Samples.AsSpan().SequenceEqual(b.DrainAudio(1 << 16).Samples), $"frame {f}'s sound");
+                if (sa.Length != a.StateSize()) (sa, sb) = (new byte[a.StateSize()], new byte[b.StateSize()]);
+                a.Save(sa);
+                b.Save(sb);
+                Assert.True(sa.AsSpan().SequenceEqual(sb), $"frame {f}'s state");
+            }
+            Assert.True(named > 0, "the kernel's reads of the disc name their places");
+            Assert.Equal(0, skipped.Advised);
+            static bool Acted(DiscFiles files)
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                while (files.Advised == 0 && watch.Elapsed < TimeSpan.FromSeconds(10)) System.Threading.Thread.Sleep(1);
+                return files.Advised > 0;
+            }
+            bool advises = acted.Companions[0].Advise(0, 1);
+            Assert.Equal(advises, Acted(acted));
+
+            using var engine = new CoreEngine(Diamond);
+            engine.LoadRom(sheet);
+            for (int f = 0; f < 600; f++) engine.RunFrame();
+            var held = Assert.IsType<DiscFiles>(engine.Machine.LoanOf(0));
+            Assert.True(!advises || Acted(held), "the engine routes a drive's places to its disc's reader");
+        }
+
         // An unpacked folder a game has mapped stays through pruning, and goes at the next prune once the game lets it go.
         [Fact]
         public void An_unpacked_folder_a_game_holds_is_never_pruned()

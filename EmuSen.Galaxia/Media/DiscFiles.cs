@@ -65,6 +65,63 @@ namespace EmuSen.Galaxia.Media
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
 
+        // How far before and past a named place the reader advises, and the size of each piece it asks for - see EmuSen_Galaxia.md §3.9.
+        public const int ReadAheadBefore = 256 * 1024, ReadAheadPast = 2 * 1024 * 1024, ReadAheadPiece = 128 * 1024;
+
+        private readonly object _ask = new();
+        private MappedFile? _asked;
+        private long _askedAt;
+        private Thread? _reader;
+        private bool _closed;
+        private long _advised;
+
+        // The bytes the reader has advised the system of so far, for a test or a figure.
+        public long Advised => Interlocked.Read(ref _advised);
+
+        // A place of one of the disc's files that a drive is about to read, handed to the disc's reader; returns at once, and nothing waits for the reader - see EmuSen_Galaxia.md §3.9.
+        public void ReadAhead(MappedFile file, long offset)
+        {
+            lock (_ask)
+            {
+                if (_closed) return;
+                (_asked, _askedAt) = (file, offset);
+                if (_reader is null)
+                {
+                    _reader = new Thread(Read) { IsBackground = true, Name = "disc read-ahead" };
+                    _reader.Start();
+                }
+                else Monitor.Pulse(_ask);
+            }
+        }
+
+        // The reader: each place asked for is advised from the piece that holds it onward, then the pieces before it; a newer place ends an older one between two pieces.
+        private void Read()
+        {
+            while (true)
+            {
+                MappedFile file;
+                long at;
+                lock (_ask)
+                {
+                    while (_asked is null && !_closed) Monitor.Wait(_ask);
+                    if (_closed) return;
+                    (file, at, _asked) = (_asked!, _askedAt, null);
+                }
+                long from = Math.Max(0, at - ReadAheadBefore) / ReadAheadPiece * ReadAheadPiece, to = Math.Min(file.Length, at + ReadAheadPast);
+                long held = Math.Clamp(at, from, Math.Max(from, to - 1)) / ReadAheadPiece * ReadAheadPiece;
+                for (long piece = held; piece < to && Current(); piece += ReadAheadPiece) Advise(file, piece);
+                for (long piece = held - ReadAheadPiece; piece >= from && Current(); piece -= ReadAheadPiece) Advise(file, piece);
+            }
+        }
+
+        // Whether the reader's place is still the newest asked for.
+        private bool Current() => Volatile.Read(ref _asked) is null && !Volatile.Read(ref _closed);
+
+        private void Advise(MappedFile file, long piece)
+        {
+            if (file.Advise(piece, ReadAheadPiece)) Interlocked.Add(ref _advised, Math.Min(ReadAheadPiece, file.Length - piece));
+        }
+
         // The image at imagePath with its companions; nothing of any file is read but a sheet's own text.
         public static DiscFiles Open(string imagePath)
         {
@@ -97,6 +154,13 @@ namespace EmuSen.Galaxia.Media
         public void Dispose()
         {
             _stop.Cancel();
+            // The reader is let finish the one call it may be in, so that no mapping is released under it.
+            lock (_ask)
+            {
+                _closed = true;
+                Monitor.PulseAll(_ask);
+            }
+            _reader?.Join();
             Image.Dispose();
             foreach (MappedFile c in Companions) c.Dispose();
             _hold?.Dispose();

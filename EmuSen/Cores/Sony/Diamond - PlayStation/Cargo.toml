@@ -4,10 +4,11 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# Diamond, the Sony PlayStation core in Rust, on the core ABI v1. See Diamond_Plan.md and Diamond_Native.md.
+# Diamond, the Sony PlayStation core in Rust: the machine and its `Core`. The published library is `v1/`'s, which holds
+# it with its enhancements (Diamond_Enhancements.md §24.1). See Diamond_Plan.md and Diamond_Native.md.
 [lib]
 name = "diamond"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [dependencies]
 emusen-native = { path = "../../Shared/emusen-native" }
@@ -21,6 +22,8 @@ emusen-mips = { path = "../../Shared/emusen-mips" }
 emusen-core-conform = { path = "../../Shared/emusen-core-conform" }
 # The Vulkan renderer of stage E3, a layer the machine never reads, for the tools and the gate (Diamond_Enhancements.md §16).
 diamond-renderer = { path = "renderer" }
+# The precision layer of stage E4, for its gate (Diamond_Enhancements.md §23).
+precision = { path = "precision" }
 
 [profile.release]
 panic = "abort"

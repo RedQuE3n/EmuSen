@@ -66,15 +66,18 @@ pub trait Layer: Observer + Any {
     fn shown(&mut self, _s: Shown) {}
     /// The GPU as it stands when the layer is attached or a state is loaded, from which what it is told continues.
     fn seed(&mut self, _gpu: &Gpu) {}
-    /// The tag of the layer's block in a state; none for a layer that keeps nothing across one.
-    fn tag(&self) -> Option<[u8; 4]> {
-        None
+    /// The tags of the layer's blocks in a state, in the order written; none for a layer that keeps nothing across one.
+    /// A layer made of parts writes one block for each part that keeps something (Diamond_Enhancements.md §24.4).
+    fn tags(&self) -> Vec<[u8; 4]> {
+        Vec::new()
     }
-    fn save(&self, _w: &mut StateWriter) {}
-    /// A loaded state's block of the layer's tag; a layer that cannot read it starts empty.
-    fn load(&mut self, _block: &[u8]) {}
-    /// A loaded state held no block of the layer's tag: the layer starts empty.
-    fn clear(&mut self) {}
+    fn save(&self, _tag: [u8; 4], _w: &mut StateWriter) {}
+    /// A loaded state's block of one of the layer's tags; a layer that cannot read it starts that part empty.
+    fn load(&mut self, _tag: [u8; 4], _block: &[u8]) {}
+    /// A loaded state held no block of the tag: that part starts empty.
+    fn clear(&mut self, _tag: [u8; 4]) {}
+    /// Before a state is saved: whatever the layer keeps elsewhere, on a device, brought to where `save` reads it.
+    fn settle(&mut self) {}
 }
 
 /// The layer attached to a board, if any. It is no part of the machine's state, so a copy of the board, as the
@@ -307,23 +310,23 @@ impl Layer for Tally {
         self.fold(&[word]);
     }
 
-    fn tag(&self) -> Option<[u8; 4]> {
-        Some(TALLY_TAG)
+    fn tags(&self) -> Vec<[u8; 4]> {
+        vec![TALLY_TAG]
     }
 
-    fn save(&self, w: &mut StateWriter) {
+    fn save(&self, _tag: [u8; 4], w: &mut StateWriter) {
         w.u64s("Counts", &self.counts());
     }
 
-    fn load(&mut self, block: &[u8]) {
+    fn load(&mut self, tag: [u8; 4], block: &[u8]) {
         let mut c = [0u64; 9];
         if StateReader::new(block).u64s(&mut c).is_err() || block.len() != 72 {
-            return self.clear();
+            return self.clear(tag);
         }
         [self.loads, self.stores, self.cop2, self.copies, self.projections, self.from_cpu, self.from_dma, self.digest, self.cleared] = c;
     }
 
-    fn clear(&mut self) {
+    fn clear(&mut self, _tag: [u8; 4]) {
         *self = Tally { cleared: self.cleared + 1, ..Tally::new() };
     }
 }
@@ -504,7 +507,7 @@ mod tests {
         let by_dma: Vec<(u32, Receipt)> = received.iter().filter(|r| r.1 != Receipt::Cpu).copied().collect();
         assert_eq!(by_dma, (0..4).map(|i| (triangle[i], Receipt::Dma { address: 0x10_0104 + 4 * i as u32 })).collect::<Vec<_>>(), "the node's words with their addresses");
         let gp0_store = told.iter().position(|t| matches!(t, Told::Moved(Move::Store { register: 11, address: 0x1F80_1810, .. }))).unwrap();
-        assert!(matches!(told[gp0_store - 1], Told::Received(w, Receipt::Cpu) if w == sxy[1]), "a word is received before the store that sent it is told");
+        assert!(matches!(told[gp0_store + 1], Told::Received(w, Receipt::Cpu) if w == sxy[1]), "a store is told before the word it sends is received (Diamond_Enhancements.md §21.4)");
     }
 
     /// Diamond_Enhancements.md §4: a state made with a layer's block loads on a machine without the layer, the block

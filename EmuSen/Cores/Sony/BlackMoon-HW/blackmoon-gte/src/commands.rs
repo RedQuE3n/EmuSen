@@ -243,7 +243,8 @@ impl<O: Observer + ?Sized> Run<'_, O> {
         let word = self.screen(x, 14) | self.screen(y, 13) << 16;
         self.r.data.copy_within(d::SXY0 + 1..=d::SXY2, d::SXY0);
         self.r.data[d::SXY2] = word;
-        self.o.projected(&Projection { vertex: n as u8, sums: sum, quotient: q, x, y, z: sz, word });
+        let (h, offset) = (self.r.control[c::H] as u16, [self.r.control[c::OFX] as i32, self.r.control[c::OFY] as i32]);
+        self.o.projected(&Projection { vertex: n as u8, sums: sum, quotient: q, x, y, z: sz, word, h, offset });
         if last {
             let dq = self.mac0(q as i64 * self.r.control[c::DQA] as i32 as i64 + self.r.control[c::DQB] as i32 as i64);
             self.set_ir0(dq);

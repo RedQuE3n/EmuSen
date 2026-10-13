@@ -484,7 +484,9 @@ impl Machine {
         w.u64("Disc", self.disc_print);
         w.bytes("Picture", &b.gpu.display.picture);
         if let Some(layer) = b.gpu.layer.get_ref() {
-            write_block(w, layer);
+            for tag in layer.tags() {
+                write_block(w, layer, tag);
+            }
         }
     }
 }
@@ -492,14 +494,13 @@ impl Machine {
 /// The optional blocks after the accurate ones (Diamond_Enhancements.md §4): each its tag, its length and that many
 /// bytes, which a reader that does not know the tag skips. A state of version 10 with none ends at `Picture`; a reader
 /// of version 10 from before the blocks reads to `Picture` and stops, so a state with one loads there too.
-fn write_block(w: &mut StateWriter, layer: &dyn crate::layer::Layer) {
-    let Some(tag) = layer.tag() else { return };
+fn write_block(w: &mut StateWriter, layer: &dyn crate::layer::Layer, tag: [u8; 4]) {
     let mut counter = StateWriter::counter();
-    layer.save(&mut counter);
+    layer.save(tag, &mut counter);
     w.group(std::str::from_utf8(&tag).unwrap_or("Block"), |w| {
         w.u32("Tag", u32::from_le_bytes(tag));
         w.u32("Length", counter.len() as u32);
-        layer.save(w);
+        layer.save(tag, w);
     });
 }
 
@@ -556,9 +557,11 @@ impl StateMachine for Machine {
         };
         let mut attached = std::mem::take(&mut self.board.gpu.layer);
         if let Some(layer) = attached.get() {
-            match layer.tag().and_then(|t| blocks.iter().find(|b| b.0 == t)) {
-                Some((_, block)) => layer.load(block),
-                None => layer.clear(),
+            for tag in layer.tags() {
+                match blocks.iter().find(|b| b.0 == tag) {
+                    Some((_, block)) => layer.load(tag, block),
+                    None => layer.clear(tag),
+                }
             }
             layer.seed(&board.gpu);
         }

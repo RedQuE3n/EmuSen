@@ -311,11 +311,11 @@ fn store<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, wo
         return raise(cpu, b, o, at, word, next, slot, pending, c, vectors);
     }
     let v = cpu.regs.r[w.rt()];
-    if bus_write(cpu, b, o, at, address, size, v) {
-        return raise(cpu, b, o, at, word, next, slot, pending, code::DBE, GENERAL);
-    }
     if B::MOVES && reaches(cpu) {
         b.moved(Move::Store { at, register: w.rt() as u8, address, size, value: v & mask(size) });
+    }
+    if bus_write(cpu, b, o, at, address, size, v) {
+        return raise(cpu, b, o, at, word, next, slot, pending, code::DBE, GENERAL);
     }
     let r = &mut cpu.regs;
     land(r, pending, 32);
@@ -638,14 +638,14 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     return e;
                 }
                 let o = address & 3;
+                if B::MOVES && reaches(self.cpu) {
+                    let (size, value) = if op == Op::Swl { (Size::of(o + 1), b >> (24 - 8 * o)) } else { (Size::of(4 - o), b) };
+                    self.b.moved(Move::Store { at: self.at, register: rt as u8, address: bus, size, value: value & mask(size) });
+                }
                 if op == Op::Swl {
                     self.write(address & !3, Size::of(o + 1), b >> (24 - 8 * o));
                 } else {
                     self.write(address, Size::of(4 - o), b);
-                }
-                if B::MOVES && !self.faulted && reaches(self.cpu) {
-                    let (size, value) = if op == Op::Swl { (Size::of(o + 1), b >> (24 - 8 * o)) } else { (Size::of(4 - o), b) };
-                    self.b.moved(Move::Store { at: self.at, register: rt as u8, address: bus, size, value: value & mask(size) });
                 }
             }
             Op::Mfc(z) | Op::Cfc(z) | Op::Mtc(z) | Op::Ctc(z) | Op::Cop(z) => return self.coprocessor(z, op),
@@ -675,10 +675,10 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     }
                     (2, true) => {
                         let v = self.b.cop2_data(rt as u8);
-                        self.write(address, Size::Word, v);
-                        if B::MOVES && !self.faulted && reaches(self.cpu) {
+                        if B::MOVES && reaches(self.cpu) {
                             self.b.moved(Move::StoreCop2 { at: self.at, cop2: rt as u8, address, value: v });
                         }
+                        self.write(address, Size::Word, v);
                     }
                     (_, false) => {
                         self.read(address, Size::Word);

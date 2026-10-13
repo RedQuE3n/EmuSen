@@ -1,5 +1,6 @@
-//! Diamond on the core ABI v1: `Core` over the stage 1 machine, and `core_exports!`. The descriptors are the console's
-//! facts of Diamond_Plan.md §4; Diamond_Native.md §2 records what the stub answers.
+//! Diamond on the core ABI v1: `Core` over the machine. The descriptors are the console's facts of Diamond_Plan.md §4;
+//! Diamond_Native.md §2 records what the stub answers. The exports are `diamond-v1`'s, which holds this machine with its
+//! enhancements (Diamond_Enhancements.md §24.1).
 
 use emusen_native::abi::Region;
 use emusen_native::core::*;
@@ -139,10 +140,6 @@ pub struct Enhancement {
 
 pub const ENHANCEMENTS_CATEGORY: &str = "Enhancements";
 
-/// The enhancements offered: none until stage E4's "Precise geometry" (Diamond_Plan.md §7), so that no setting is
-/// shown that does nothing.
-pub const ENHANCEMENTS: &[Enhancement] = &[];
-
 impl Enhancement {
     pub fn setting(&self) -> Setting {
         let (kind, hardware) = match self.values {
@@ -179,9 +176,6 @@ fn schema() -> Vec<Setting> {
         setting(CARD_KEYS[0], "Memory card in slot 1", "A memory card in slot 1, kept for this game beside its file; with none, the game finds no card and saves nothing. Takes effect when a game is next loaded.", vec![choice(CARD, "Memory card"), choice("none", "None")], CARD, "Memory cards"),
         setting(CARD_KEYS[1], "Memory card in slot 2", "A second memory card in slot 2, kept for this game beside the first. Takes effect when a game is next loaded.", vec![choice("none", "None"), choice(CARD, "Memory card")], "none", "Memory cards"),
     ]
-    .into_iter()
-    .chain(ENHANCEMENTS.iter().map(Enhancement::setting))
-    .collect()
 }
 
 fn market_of(media: &Media, setting: Option<&str>) -> Market {
@@ -349,6 +343,10 @@ impl Core for Machine {
                 },
             )],
         }
+    }
+
+    fn settle(&mut self) {
+        Machine::settle(self);
     }
 
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
@@ -558,7 +556,6 @@ impl Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; axes, debug, debug_stack, debug_registers, debug_disassemble, debug_reads, media);
 
 #[cfg(test)]
 mod tests {
@@ -604,10 +601,11 @@ mod tests {
 
     /// Diamond_Enhancements.md §5: an enhancement declared in either form is a setting the kit's C3 accepts, its
     /// default the hardware's, its cost given, in the console's "Enhancements" group, applied between frames; one whose
-    /// cost is missing is refused by the same rules; and stage E1 declares none.
+    /// cost is missing is refused by the same rules; and the machine's own schema offers none, the enhancements being
+    /// `diamond-v1`'s (§24.2).
     #[test]
-    fn an_enhancement_is_declared_with_the_hardwares_value_its_default_and_none_is_offered_yet() {
-        assert!(ENHANCEMENTS.is_empty() && !schema().iter().any(|s| matches!(s.effect, Effect::Enhancement { .. })), "no enhancement before E4");
+    fn an_enhancement_is_declared_with_the_hardwares_value_its_default_and_the_machine_offers_none() {
+        assert!(!schema().iter().any(|s| matches!(s.effect, Effect::Enhancement { .. })), "the machine's schema offers no enhancement");
         let forms = [
             Enhancement { key: "e1.switch", label: "A switch", help: "Off is the console.", cost: "Twice the work.", values: Values::Switch },
             Enhancement { key: "e1.choice", label: "A choice", help: "1x is the console.", cost: "Four times the drawing at 2x.", values: Values::Choice(&[("1", "1x (the console's)"), ("2", "2x")]) },

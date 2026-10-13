@@ -1,0 +1,26 @@
+[package]
+name = "precision"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Diamond's precise geometry (stage E4): each projected vertex's sub-pixel position and depth carried from the GTE to
+# the GPU's receipt of its word, beside the accurate machine, which never reads it. See Diamond_Enhancements.md §21.
+[lib]
+name = "precision"
+
+[dependencies]
+diamond = { path = ".." }
+blackmoon-gte = { path = "../../BlackMoon-HW/blackmoon-gte" }
+blackmoon-r3000 = { path = "../../BlackMoon-HW/blackmoon-r3000" }
+emusen-native = { path = "../../../Shared/emusen-native" }
+
+[dev-dependencies]
+emusen-mips = { path = "../../../Shared/emusen-mips" }
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"

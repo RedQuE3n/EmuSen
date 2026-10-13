@@ -92,6 +92,9 @@ pub struct Projection {
     pub z: u16,
     /// The SXY2 word pushed.
     pub word: u32,
+    /// H and OFX, OFY as the command read them, so that the projection can be evaluated without its truncations.
+    pub h: u16,
+    pub offset: [i32; 2],
 }
 
 /// What watches the commands. Every method has an empty default and the plain command runs with `Unobserved`, so an
@@ -296,6 +299,7 @@ mod tests {
         let p = seen.0[1];
         assert_eq!((p.sums, p.quotient), ([0x10 << 12, -0x10 << 12, 0x800 << 12], divide(0x100, 0x800).0), "V1 in the camera's space, and H/SZ3");
         assert_eq!(p.x, p.quotient as i64 * (p.sums[0] >> 12) + (160 << 16), "SX's sum from the two");
+        assert_eq!((p.h, p.offset), (0x100, [160 << 16, 120 << 16]), "H and the offset as the command read them");
     }
 
     #[test]

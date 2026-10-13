@@ -698,3 +698,60 @@ side, 34 MiB in all. Nothing is allocated a frame: the host's arrays and lists k
 `seed` takes the GPU's VRAM, its picture and size, its CLUT cache's colours (into slot 0) and the transfer or polyline
 it has open, and drops whatever was planned, which was another machine's. The renderer has no state block: at 1× all it
 would keep is the machine's VRAM, which a load gives it back.
+
+## 17. E3's gate
+
+### 17.1 What runs
+
+`tests/renderer.rs` [M, 2026-10-13, the RX 6800 by `EMUSEN_GPU_DEVICE=6800`]: each run is a golden's run
+(`tests/support/goldens.rs`, shared with `programs.rs`, so the renderer is graded on exactly the runs the goldens pin)
+with the renderer attached at power-on. **At every frame** the renderer's picture is read back and compared with the
+software rasteriser's displayed picture (`Display::frame`), size and every byte; **VRAM** is compared halfword for
+halfword at the end of a program and at every 300th frame of a disc; and the run's golden digests, taken with the
+renderer attached, are compared with E1's recorded lines. A machine without a device stands each test down with a
+line, as `emusen-gpu`'s tests do.
+
+### 17.2 The results, item by item
+
+| Item | Frames compared | Pictures | VRAM | E1's goldens with the renderer attached |
+|---|---|---|---|---|
+| The project's programs, 49, as `programs.txt` runs them (60 frames) | 2,940 | **all equal** | equal on 47; `texture-cache.s` 128 halfwords and `triangle-rows.s` 3,680, the texture cache's (below) | `programs.txt`, 49 of 49 lines equal |
+| ps1-tests' release build 158, 48 programs on the open kernel, on their goldens' frames (900, 1,500, 315, 309 or 300) | 22,824 | **all equal** | **all equal** | `ps1-tests.txt`, 48 of 48 |
+| The eight bench discs, each by its press script to frame 3,000 | 24,000 | **all equal** | **equal at all 80 anchors** | `discs.txt`, 8 discs and 80 anchors equal |
+
+ps1-tests' eleven GPU programs with pictures (`Diamond_GPU.md` §9) are among the 48, as are `bandwidth` (8,745
+records, 400 copies, 7,648 stretches), `lines` (98,400 records), `vram-to-vram-overlap` (147 copies over themselves,
+the stepped copy of §16.4 among them), `texture-flip`, `clut-cache` and `uv-interpolation`; the MDEC's movies at 15 and
+24 bits are the 24-bit display and the CPU-to-VRAM transfers. On the discs the renderer drew 3.87 million records in
+32,793 stretches, 3,355 copies among them (Silent Hill 2,999).
+
+**The two differences, explained.** Both are in VRAM, neither reaches a picture (the two programs display nothing),
+and both programs were written to exercise the texture cache: `texture-cache.s` changes VRAM under a page the cache
+holds and draws from it again, `triangle-rows.s` reads back which texels a triangle taller than a cache block left in
+the cache (D-41). The GPU's cache gives the texel it held, the renderer the texel VRAM holds (0x8001 against 0x8002 at
+the first pixel of each). **Shown, not argued** [M]: a scratch build of the GPU whose cache always misses (its
+`TextureCache::read` reading VRAM as it stands) draws both programs as the renderer does, and with it all 49 programs
+are exact in VRAM too; the build was not kept. The counts are pinned in the test (`TEXTURE_CACHE_HALFWORDS`), so that a
+change in either is seen.
+
+No game of the eight, over its first 3,000 frames, draws a picture that depends on a stale texture cache entry.
+
+**The predictions.** P-E3a held: every picture of the programs and of ps1-tests is equal. P-E3b held in its strong
+form: no disc differs in a pixel or in VRAM, where the prediction allowed the texture cache a few hundred pixels.
+P-E3c held: every golden line is the recorded one with the renderer attached. On the programs the picture comparison
+is weak evidence by itself, since most leave the display blanked; VRAM is what grades them there.
+
+### 17.3 The run tool and the bench
+
+`examples/run.rs --renderer` attaches the renderer and writes its picture beside the machine's for `--picture FILE`
+and `--pictures DIR N` (`NAME.renderer.rgba`), and its VRAM beside `--vram FILE`, each with the pixels that differ
+counted (Crash Bandicoot at frames 300, 600 and 900: 0, and VRAM 0). `examples/bench.rs --renderer` waits for the
+renderer's picture each frame and times the wait with the frame (§18).
+
+**The kit is not given an option at E3** [C]. The conformance kit runs the core's library through the core ABI, and
+that library is `diamond`'s own cdylib, which cannot link a crate that depends on `diamond` (§14.5). Attaching the
+renderer there needs what E4 needs for its setting: the core's exports in a crate of their own that links the machine
+and its layers, with the setting attaching and detaching them between frames. **The picture through v1 needs no
+change of the ABI** [A]: `Core::frame` gives the host the core's RGBA picture at the size `frame_info` and the
+`GEOMETRY` event report, and with the renderer attached it would give the renderer's picture in the same form; at 1×
+the size is the display's, and at N× (E5) a larger size is what `GEOMETRY` already announces.

@@ -540,7 +540,7 @@ appears only in the header. Cranelift's `cranelift-jit` allocates its own pages,
 `JITMemoryProvider`. That is a later question, and it rests on upstream implementing the call.
 
 **10. The GPU path: its own device, or RetroArch's.** MarsRT's device path is compute only. It opens its own instance
-and device through `ash` (`rdp/gpu/device.rs`), runs the five shared SPIR-V programs, and reads the picture back to
+and device through `ash` (`rdp/gpu/device.rs`, `emusen-gpu` since 2026-10-13), runs the five shared SPIR-V programs, and reads the picture back to
 the host (`Mars_Native.md` §6.4.2). The two routes:
 
 - **(a) Its own device, output in software.** The path runs unchanged, beside whatever video driver RetroArch uses:

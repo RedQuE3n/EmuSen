@@ -677,8 +677,11 @@ The rules of the decision, and how the design keeps them:
 - **Where an enhancement needs a GPU renderer** (internal resolution, filtering, depth), the enhanced renderer is a
   **Vulkan renderer on the shared device of `EmuSen_LunaP_Kit.md` §5.2**, beside the software rasteriser, so that the
   two never mix: the software rasteriser owns VRAM, the Vulkan renderer owns only the presented image. Until the kit's
-  device exists, it runs on the device MarsRT's GPU path uses, with ash at the version wgpu-hal uses (0.38 today,
-  `EmuSen_LunaP_Kit.md` §5.2) so the move is a change of who creates the device. On a machine without a usable GPU,
+  device exists, it runs on `emusen-gpu`, the device MarsRT's GPU path uses, moved on 2026-10-13 into a shared crate
+  (`Hardware/Shared/EmuSen_Gpu.md`), with ash at the version wgpu-hal uses (0.38 today, `EmuSen_LunaP_Kit.md` §5.2), so
+  the move is a change of who creates the device: one more constructor of that crate, for a device the kit lends
+  (`EmuSen_Gpu.md` §5). What the renderer needs from it beyond what MarsRT uses depends on whether it is a compute
+  rasteriser over a mirror of VRAM or a graphics pipeline, which is E3's first decision (`EmuSen_Gpu.md` §6). On a machine without a usable GPU,
   lavapipe runs the same code (ibid. §5.3), slowly; the enhancements are then honestly costed as such.
 - **Each enhancement is its own setting**, in the console's tab of Graphics Settings, with `effect: enhancement`, its
   `hardware` value the default (the kit's C3 checks it), and a cost in a player's words.

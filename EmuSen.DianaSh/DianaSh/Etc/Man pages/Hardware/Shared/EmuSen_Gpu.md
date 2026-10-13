@@ -196,3 +196,93 @@ a core with no C# tree**. MarsRT takes its binaries from the C# core's `Rdp/Gpu/
 `MarsGpuDeviceTests` through shaderc in WiseMan (`Mars_Gpu.md` §2); Diamond has no C# core, so its `.comp` sources need
 the same record-and-check test of their own. If E3 decides on the graphics form, the additions of §6.2 come first,
 as a minor of this surface, with MarsRT's bench run across the barrier's change.
+
+## 7. How it is tested
+
+**On its own** [M, `cargo test --release`, 2026-10-13, 11 tests, on the RX 6800]. Three without a device: the choice
+of §4 (the first by rank with no name; a part of a name in any case, the first by rank of two that match; a name no
+device has). Eight on the first device by rank, each standing down with a line when the loader lists none:
+
+- the listing and the report (`"AMD Radeon RX 6800 (RADV NAVI21), Vulkan 1.4"`, three devices listed in rank order);
+- **without a driver**: the test binary runs itself as a child with `VK_LOADER_DRIVERS_DISABLE='*'`, and the child
+  finds nothing listed and the device refused with a reason (`"Vulkan is not available: vkCreateInstance returned
+  Unable to find a Vulkan driver"`), the case of a CI runner, shown on a machine that has a device;
+- a buffer of 4,099 words through device memory and back, then a fill and a copy at offsets;
+- a compute program with push constants over 1,000 words, not a whole number of groups, so that the last group's bound
+  check is reached; a SPIR-V a byte short is refused;
+- two slots ahead over three rounds, each slot's later submissions waiting for its last themselves;
+- a pending submission waited for by a thread that never submits, then a waited submission after it that must land
+  last;
+- a device chosen by its name in upper case, and refused by a name none has.
+
+The program is `tests/shaders/triple.comp`, each word tripled plus the push constant, compiled to `triple.spv` by the
+shaderc in `Silk.NET.Shaderc.Native` 2.23.0, the compiler of `Mars_Gpu.md` §2, twice to the same 1,292 bytes. The
+crate has no compiler of its own and no test that recompiles it, as no player's machine and no build needs one.
+
+With every driver hidden (`VK_LOADER_DRIVERS_DISABLE='*'` on the whole run) the eight device tests pass by standing
+down, and the child test still runs.
+
+**Mutants** [M], each a change to `src/lib.rs` and the crate's tests run against it:
+
+| Mutant | Killed by |
+|---|---|
+| the choice by name made case-sensitive | the unit test of any case |
+| no barrier after a command | the round trip through device memory |
+| a slot ahead reused without waiting for its last | the slots' test, once the test stopped waiting for the slot itself (it had, as MarsRT's rasteriser does, which made the mutant invisible) |
+| the push constants never pushed | the program's, the slots' and the pending test |
+| `Pending::wait` returning at once | the pending test |
+
+The barrier to the host at the end of every submission is not among them: the specification asks for it, and the
+driver here does not need it, so no test on this machine tells the two apart (`Mars_Gpu.md` §14.2, §14.4).
+
+**In MarsRT** [M, `cargo test --release`, 2026-10-13]: the whole suite, **490 tests, all passing**, the device's
+sixteen in `tests/gpu.rs` on the RX 6800 alone. Then, with `EMUSEN_MARSRT_STATES` naming a folder of Super Mario 64
+and Ocarina of Time with their play states (the two games the N64's device suites grade), the two game differentials
+of `Mars_Native.md` §6.4.3: `a_machine_at_a_multiple_on_the_device_is_the_machine_at_once_on_the_processor` (2× and 4×,
+deferred and at once) and `a_machine_averaged_on_the_device_split_and_deferred_is_the_device_at_once` (4× by 2, 4× by 4,
+2× by 2), from power-on and from each state: **28 runs of 300 frames, 8,400 frames, every one identical in state and
+picture**, with the 27 tests the filter `the_device` selects passing.
+
+**Before and after, the same pictures** [M]. `examples/threads` from the parent commit (built from an extract of it)
+and from the move, each over 600 frames at 4× and at 1× with 4× antialiasing from each game's play state: the joined
+state's hash and the hash of every picture shown were the same for both builds in every one of the 56 runs of §8.
+
+**In WiseMan** [M]: the tests of MarsRT through its shim, of both N64 device paths (`MarsGpuDeviceTests`,
+`MarsGpuRasteriserTests`, the C# class whose variable was renamed with this crate's), and of the Rust cores'
+registration, discovery and adapter, filtered by `MarsRt`, `MarsGpu`, `CoreDiscovery`, `CoreAdapter` and
+`CoreRegistration`: **708 tests, all passing**.
+
+**The publish** [M]: `dotnet publish EmuSen.Mistress -c Release -r linux-x64 --self-contained true` builds without an
+error and carries `lib/EmuSen/libmarsrt.so`, whose dynamic dependencies are still `libc` and `libgcc_s` alone (the
+loader is opened at run time) and whose strings name `EMUSEN_GPU_DEVICE` and not the old name. The third-party notices
+need no change: MarsRT's dependency tree differs only by the project's own crate, and links the same `ash`
+0.38.0+1.3.281 and `libloading` 0.8.9 that `THIRD_PARTY_NOTICES.md` §1.4 lists for it.
+
+## 8. The cost
+
+**The prediction, before timing** [A]: none. MarsRT's release profile is `lto = "fat"` with one codegen unit, so a
+function of another crate is inlined as freely as one of its own, and the generic submissions (`submit` and its kin
+take the recording as a closure) are instantiated in MarsRT in any case. Nothing the device does per frame changed.
+
+**How it was measured** [M, 2026-10-13]: `examples/threads` (`Mars_Native.md` §6.4.6's 1× tool, here with `gpu`) built
+twice with `RUSTFLAGS="-C llvm-args=-align-all-functions=6"`, so that the moved functions' new addresses cannot move a
+loop across a cache line and pass for a cost: once from an extract of the parent commit (177f5041) and once from the
+move. Each run is 600 frames from the play state, `split 4 blocks`, the device on, every picture hashed; five rounds,
+the order of the two builds reversed every other round; the fastest of five, ms a frame, on the RX 6800:
+
+| Game | Setting | Before | After | Change |
+|---|---|---|---|---|
+| Super Mario 64 | 4× | 9.285 | 9.290 | +0.1% |
+| | 1×, antialiasing 4× | 5.603 | 5.628 | +0.4% |
+| Ocarina of Time | 4× | 10.445 | 10.272 | −1.7% |
+| | 1×, antialiasing 4× | 5.983 | 6.228 | +4.1% |
+
+The last row's fastest "before" was the series' outlier: its five runs spread from 5.983 to 6.649, against 6.228 to
+6.527 after, and the medians were 6.329 and 6.406. That row was run again, eight rounds alternating: before
+6.156 (median 6.219), after 6.104 (median 6.187). **No regression beyond the runs' spread**, as predicted. The medians
+of the first series move by −0.7% to +1.2%, inside each row's spread, 5 to 23% from fastest to slowest.
+
+**The profile-guided build** is not affected further. MarsRT's PGO profile has guided nothing on `linux-x64` since the
+state crate's move renamed every function (`Mars_Native.md` §6.17.12, d84b3bc1), and a new path dependency renames
+them again in the same way. It was not retrained here: the retrain is owed already, and this move adds nothing to what
+it must recover.

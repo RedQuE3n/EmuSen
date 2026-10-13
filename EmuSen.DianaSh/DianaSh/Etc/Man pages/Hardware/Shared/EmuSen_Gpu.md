@@ -24,7 +24,7 @@ with one compute queue; storage buffers in two kinds of memory, the host's (mapp
 device's own (reached by a copy); compute programs whose storage buffers sit at bindings 0 to n−1 of set 0 with one
 block of push constants; the three kinds of submission of `Mars_Gpu.md` §14.2 and `Mars_Performance.md` §42 (waited
 for, one pending, two ahead); and the commands a submission may hold, a fill, a copy and a dispatch, each followed by
-a barrier that orders it before everything later (§3.3).
+a barrier that orders it before everything later (§3, rule 2).
 
 **Not in it**: any shader, any knowledge of what a buffer holds, any console. MarsRT keeps `rdp/gpu/mod.rs` (the
 rasteriser: its memory mirror, rows, 64 by 1 tiles, staging slots, the scan and the average), `rdp/gpu/record.rs` (the
@@ -41,8 +41,8 @@ wgpu-hal uses (`EmuSen_LunaP_Kit.md` §5.2), and must stay so while a lent devic
 
 All of `device.rs`, 555 lines, moved as it stood: the enumeration and ranking (discrete, integrated, virtual, other;
 the portability extensions for MoltenVK, `Mars_Gpu.md` §4), `GpuDevice`, `GpuBuffer`, `GpuProgram`, `Pending`,
-`Submission`, the slots ahead and `Commands`. Three changes were made to its surface on the way, each making it
-narrower, and none to what it does:
+`Submission`, the slots ahead and `Commands`. Three changes were made to its surface on the way, two narrowing it and
+one exposing a query, and none to what it does:
 
 - **No Vulkan type crosses it.** `GpuBuffer::handle` was public; no caller outside the file read it [R], so it is the
   crate's own. With it, MarsRT no longer names `ash` at all and its manifest drops the dependency; `ash` reaches
@@ -53,6 +53,9 @@ narrower, and none to what it does:
 - **`finished(Submission)` lost its `#[cfg(test)]`.** It was MarsRT's tests' look at a fence, which waits for nothing;
   a `cfg(test)` item in another crate is not compiled when MarsRT's tests are, so it is now an ordinary method. It is
   a query of a fence's status and changes nothing.
+
+Inside, the choice by name became a function of its own (`choose`), the same comparison, so that §7 can test it
+without a device.
 
 MarsRT's `rdp/gpu/mod.rs` names the crate's items where it named `device::`'s, and re-exports `GpuDevice` and `Pending`
 for its own callers (`memory/dp.rs`, its tests), so no other file of MarsRT changed beyond the methods above.

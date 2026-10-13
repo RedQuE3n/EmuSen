@@ -1,5 +1,6 @@
-//! One Vulkan compute device and the little of Vulkan the multiple's shading needs: C#'s `GpuDevice.cs` on `ash`, the loader found at
-//! run time so a machine without one gets a report and never a link failure. See Mars_Gpu.md §1 and Mars_Native.md §6.4.
+//! One Vulkan compute device and the little of Vulkan a core's shading needs: buffers, compute programs, and submissions waited for,
+//! left pending or sent ahead. MarsRT's device, C#'s `GpuDevice.cs` on `ash`, the loader found at run time so a machine without one
+//! gets a report and never a link failure. See Hardware/Shared/EmuSen_Gpu.md.
 
 use std::ffi::CStr;
 use std::sync::Arc;
@@ -11,8 +12,8 @@ use ash::vk;
 /// How many shading submissions may be in flight while the host records the next (Mars_Performance.md §42).
 pub const AHEAD: usize = 2;
 
-/// Names a device by a part of its name, for tests and for a machine with more than one.
-pub const DEVICE_VARIABLE: &str = "EMUSEN_MARS_GPU_DEVICE";
+/// Names a device by a part of its name, for tests and for a machine with more than one (EmuSen_Gpu.md §4).
+pub const DEVICE_VARIABLE: &str = "EMUSEN_GPU_DEVICE";
 const PORTABILITY_ENUMERATION: &CStr = c"VK_KHR_portability_enumeration";
 const PORTABILITY_SUBSET: &CStr = c"VK_KHR_portability_subset";
 
@@ -25,9 +26,9 @@ pub enum Where {
 
 /// A storage buffer; a host one is mapped for its whole life and read or written through a slice.
 pub struct GpuBuffer {
-    pub handle: vk::Buffer,
+    handle: vk::Buffer,
     memory: vk::DeviceMemory,
-    pub bytes: u64,
+    bytes: u64,
     mapped: *mut u8,
 }
 
@@ -36,6 +37,10 @@ unsafe impl Send for GpuBuffer {}
 unsafe impl Sync for GpuBuffer {}
 
 impl GpuBuffer {
+    pub fn bytes(&self) -> u64 {
+        self.bytes
+    }
+
     /// The mapped bytes as values, for a host buffer.
     ///
     /// # Panics
@@ -62,8 +67,8 @@ pub struct GpuProgram {
     pool: vk::DescriptorPool,
     /// Plain handles, as the rasteriser's `Drop` copies the program out; the ones past `create_program_with_sets`' count are null.
     sets: [vk::DescriptorSet; AHEAD],
-    pub buffers: usize,
-    pub push_bytes: usize,
+    buffers: usize,
+    push_bytes: usize,
 }
 
 /// The pending submission's fence and flag, shared with a thread that only waits (the presenter's), which never submits.
@@ -99,10 +104,9 @@ pub struct GpuDevice {
     pending: Arc<Pending>,
     ahead: Vec<Ahead>,
     memory: vk::PhysicalDeviceMemoryProperties,
-    pub name: String,
-    pub software: bool,
-    /// The most one storage buffer may bind, which the memory at a multiple is measured against (Mars_Gpu.md §5).
-    pub max_buffer_bytes: u64,
+    name: String,
+    software: bool,
+    max_buffer_bytes: u64,
 }
 
 struct Candidate {
@@ -135,6 +139,12 @@ struct Enumeration {
     entry: ash::Entry,
     instance: ash::Instance,
     candidates: Vec<Candidate>,
+}
+
+/// The first name, in rank order, that contains `wanted` in any case; the first of all when `wanted` is empty.
+fn choose<'a>(names: impl IntoIterator<Item = &'a str>, wanted: &str) -> Option<usize> {
+    let wanted = wanted.to_lowercase();
+    names.into_iter().position(|n| wanted.is_empty() || n.to_lowercase().contains(&wanted))
 }
 
 fn has(extensions: &[vk::ExtensionProperties], name: &CStr) -> bool {
@@ -197,7 +207,7 @@ impl GpuDevice {
             Ok(probe) => probe,
             Err(e) => return Err(format!("Vulkan is not available: {e}")),
         };
-        let chosen = probe.candidates.iter().position(|c| wanted.is_empty() || c.name.to_lowercase().contains(&wanted.to_lowercase()));
+        let chosen = choose(probe.candidates.iter().map(|c| c.name.as_str()), &wanted);
         let Some(index) = chosen else {
             let report = if probe.candidates.is_empty() { "no Vulkan device offers a compute queue".to_string() } else { format!("no Vulkan device is named like \"{wanted}\"") };
             unsafe { probe.instance.destroy_instance(None) };
@@ -214,6 +224,20 @@ impl GpuDevice {
                 Err(format!("Vulkan is not available: {e}"))
             }
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// A device the CPU implements (llvmpipe), which runs the same programs slowly.
+    pub fn software(&self) -> bool {
+        self.software
+    }
+
+    /// The most one storage buffer may bind, which a user measures its largest buffer against (Mars_Gpu.md §5).
+    pub fn max_buffer_bytes(&self) -> u64 {
+        self.max_buffer_bytes
     }
 
     /// `"{name}, Vulkan {major}.{minor}"`, the report of a device that opened.
@@ -425,8 +449,7 @@ impl GpuDevice {
         }
     }
 
-    /// True once the submission has finished, or when it was never made or already waited for; the tests' look, which waits for nothing.
-    #[cfg(test)]
+    /// True once the submission has finished, or when it was never made or already waited for; a look that waits for nothing.
     pub fn finished(&self, submission: Submission) -> bool {
         let done = |fence| unsafe { self.device.get_fence_status(fence) }.unwrap_or(true);
         match submission {
@@ -551,5 +574,30 @@ impl Commands<'_> {
                 &[],
             )
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::choose;
+
+    const RANKED: [&str; 3] = ["AMD Radeon RX 6800 (RADV NAVI21)", "AMD Ryzen 7 7700X 8-Core Processor (RADV RAPHAEL_MENDOCINO)", "llvmpipe (LLVM 22.1.8, 256 bits)"];
+
+    #[test]
+    fn with_no_name_the_first_by_rank_is_chosen() {
+        assert_eq!(choose(RANKED, ""), Some(0));
+    }
+
+    #[test]
+    fn a_name_is_matched_by_any_part_of_it_in_any_case() {
+        assert_eq!(choose(RANKED, "raphael"), Some(1));
+        assert_eq!(choose(RANKED, "LLVMPIPE"), Some(2));
+        assert_eq!(choose(RANKED, "RADV"), Some(0), "the first by rank of two that match");
+    }
+
+    #[test]
+    fn a_name_no_device_has_chooses_none() {
+        assert_eq!(choose(RANKED, "GeForce"), None);
+        assert_eq!(choose([], ""), None);
     }
 }

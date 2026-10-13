@@ -2630,7 +2630,9 @@ resolution times the effective averaging, held to four, and a walk still out is 
 #### 6.4.2 The device
 
 `rdp/gpu/device.rs` is `GpuDevice.cs` on `ash` 0.38, `rdp/gpu/mod.rs` is `GpuRasteriser.cs` and `rdp/gpu/record.rs` is
-`Rdp.Gpu.cs`: the same enumeration and ranking (discrete, integrated, virtual, other; the portability extensions for
+`Rdp.Gpu.cs` (*since 2026-10-13 `device.rs` is `emusen-gpu`, a shared crate in `EmuSen/Cores/Shared/`, so that Diamond's
+enhanced renderer draws on the same layer; nothing of the N64 was in it, and MarsRT keeps the rasteriser and the
+records; `Hardware/Shared/EmuSen_Gpu.md`*): the same enumeration and ranking (discrete, integrated, virtual, other; the portability extensions for
 MoltenVK), the same buffers, one descriptor set a program written at record time, the same barrier after every
 command and to the host at the end, one submission left pending (§14.2), the rows binned into 64 by 1 tiles (§14.1),
 the scan on the device over its own memory (§13) and the average over a raster it keeps (§15). The shaders are not
@@ -2652,7 +2654,7 @@ state read by moving it from the old machine to the new, since MarsRT's read bui
 old one.
 
 **Licences.** `ash` is MIT OR Apache-2.0 and `libloading` ISC, both compatible with the GPL-3.0; recorded in
-`Cargo.toml` beside Cranelift's note.
+`Cargo.toml` beside Cranelift's note (*in `emusen-gpu`'s since 2026-10-13; MarsRT reaches `ash` only through it*).
 
 #### 6.4.3 The evidence
 

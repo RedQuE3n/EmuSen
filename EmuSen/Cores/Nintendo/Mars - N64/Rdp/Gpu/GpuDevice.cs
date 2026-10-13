@@ -11,8 +11,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
     // One Vulkan compute device and the little of Vulkan the multiple's shading needs - see Mars_Gpu.md §1.
     public sealed unsafe class GpuDevice : IDisposable
     {
-        // Names a device by a part of its name, for tests and for a machine with more than one.
-        public const string DeviceVariable = "EMUSEN_MARS_GPU_DEVICE";
+        // Names a device by a part of its name, the variable emusen-gpu reads too - see EmuSen_Gpu.md §4.
+        public const string DeviceVariable = "EMUSEN_GPU_DEVICE";
 
         private readonly Vk _vk;
         private readonly Instance _instance;

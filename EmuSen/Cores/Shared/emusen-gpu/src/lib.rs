@@ -12,6 +12,9 @@ use ash::vk;
 /// How many shading submissions may be in flight while the host records the next (Mars_Performance.md §42).
 pub const AHEAD: usize = 2;
 
+/// How many descriptor sets one recording keeps track of for `Commands::dispatch_again` (EmuSen_Gpu.md §3.1).
+pub const WRITTEN_SETS: usize = 16;
+
 /// Names a device by a part of its name, for tests and for a machine with more than one (EmuSen_Gpu.md §4).
 pub const DEVICE_VARIABLE: &str = "EMUSEN_GPU_DEVICE";
 const PORTABILITY_ENUMERATION: &CStr = c"VK_KHR_portability_enumeration";
@@ -470,7 +473,7 @@ impl GpuDevice {
             None if buffer == self.pending_commands => Submission::Pending,
             None => Submission::Now,
         };
-        let mut commands = Commands { device: &self.device, commands: buffer, submission };
+        let mut commands = Commands { device: &self.device, commands: buffer, submission, written: [vk::DescriptorSet::null(); WRITTEN_SETS], count: 0 };
         record(&mut commands);
         commands.barrier_to_host();
         unsafe {
@@ -498,11 +501,14 @@ impl Drop for GpuDevice {
     }
 }
 
-/// What one submission may hold: copies and dispatches, each made to wait for the one before it.
+/// What one submission may hold: copies and dispatches, each made to wait for the one before it; and the descriptor sets this
+/// recording has written, which `dispatch_again` may bind again.
 pub struct Commands<'a> {
     device: &'a ash::Device,
     commands: vk::CommandBuffer,
     submission: Submission,
+    written: [vk::DescriptorSet; WRITTEN_SETS],
+    count: usize,
 }
 
 impl Commands<'_> {
@@ -541,6 +547,31 @@ impl Commands<'_> {
         let bytes = unsafe { std::slice::from_raw_parts((push as *const T).cast::<u8>(), size_of::<T>()) };
         unsafe {
             self.device.update_descriptor_sets(&writes, &[]);
+            self.device.cmd_bind_pipeline(self.commands, vk::PipelineBindPoint::COMPUTE, program.pipeline);
+            self.device.cmd_bind_descriptor_sets(self.commands, vk::PipelineBindPoint::COMPUTE, program.layout, 0, &[program.sets[set]], &[]);
+            if !bytes.is_empty() {
+                self.device.cmd_push_constants(self.commands, program.layout, vk::ShaderStageFlags::COMPUTE, 0, bytes);
+            }
+            self.device.cmd_dispatch(self.commands, x, y, z);
+        }
+        if self.count < WRITTEN_SETS && !self.written[..self.count].contains(&program.sets[set]) {
+            self.written[self.count] = program.sets[set];
+            self.count += 1;
+        }
+        self.barrier();
+    }
+
+    /// The program dispatched again in this recording with the buffers `dispatch_in` wrote its set with here, the set bound and
+    /// not written: a set written after it was bound would invalidate the recording (EmuSen_Gpu.md §3.1).
+    ///
+    /// # Panics
+    /// When this recording has not written the program's set by `dispatch_in`.
+    pub fn dispatch_again<T: Copy>(&mut self, program: &GpuProgram, set: usize, push: &T, x: u32, y: u32, z: u32) {
+        assert!(self.written[..self.count].contains(&program.sets[set]), "dispatched again before this recording wrote the program's set {set}");
+        assert!(size_of::<T>() == program.push_bytes, "the program takes {} bytes of push constants, not {}", program.push_bytes, size_of::<T>());
+        // SAFETY: the push value is plain data of the program's size, read as bytes.
+        let bytes = unsafe { std::slice::from_raw_parts((push as *const T).cast::<u8>(), size_of::<T>()) };
+        unsafe {
             self.device.cmd_bind_pipeline(self.commands, vk::PipelineBindPoint::COMPUTE, program.pipeline);
             self.device.cmd_bind_descriptor_sets(self.commands, vk::PipelineBindPoint::COMPUTE, program.layout, 0, &[program.sets[set]], &[]);
             if !bytes.is_empty() {

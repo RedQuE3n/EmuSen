@@ -961,7 +961,31 @@ faults in it [M]:
   files read once, in order, beside the game, at most a third of the medium. Paced at 60 frames a second under the
   cap, Crash Bandicoot's faults fell from 8 to 1 and Spyro's from 3 to 0, no frame over 7.5 ms; at full speed the
   prefetch had made one fault wait 160 ms behind it, which is why it rests.
-- *Paced on the handheld's card*, with and without the prefetch: not yet taken, the handheld being in the tester's use.
+- *Paced on the handheld's card*, cold, without the prefetch and with it (21:20–21:40, Mistress not running, load
+  averages 0.3–1.0), the frames with a major fault, the slowest of them, and the frames over 16.7 ms:
+
+  | Game | Without: faults, slowest, over | With: faults, slowest, over | Prefetched in 30 s |
+  |---|---|---|---|
+  | Mega Man X5 (556 MiB) | 4, 13.1 ms, 0 | 0, —, 0 | all |
+  | Crash Bandicoot (603 MiB) | 16, 8.0 ms, 0 | 1, 6.6 ms, 0 | all |
+  | Spyro the Dragon (631 MiB) | 3, 10.1 ms, 0 | 0, —, 0 | all |
+  | Mega Man X6 (572 MiB), four runs each | 5–6; 8.0–31.5 ms; 0, 1, 2, 1 | 4; 23.8–49.6 ms; 2, 1, 1, 3 | 483–564 MiB |
+
+  The prefetch removes the first touches it has had time to pass: three games play their first 30 s with none or one.
+  **It does not remove those of the first seconds, and appears to lengthen them.** Mega Man X6 reads four to six new
+  places of its disc between frames 125 and 343, two to six seconds into play, before a prefetch at a third of the
+  card has reached them. Its slowest faulting frame was 8.5, 8.0, 31.5 and 24.1 ms in four runs without the prefetch
+  and 49.6, 23.8, 38.2 and 25.7 ms in four with it: longer with it in the middle of the range, the two overlapping,
+  and four runs each too few to size the difference. The handheld's interface ran beside every run, and two runs
+  without the prefetch had a frame of 31.5 and of 62.1 ms with no fault in it. So **on the card some games drop one
+  to three frames in their first seconds of play**, which a copied disc did not, having paid for it with 5–7 s before
+  the first frame; the prefetch trades the first touches of a game's later play for somewhat longer ones at its start.
+  P7's third clause is not met for those games.
+  *Not built, for the tester to choose:* the prefetch at the medium's full speed until the game's first frame, which
+  under the launch screen's 3.0 s would have read about 270 MiB before play begins; and, for a remedy that is exact
+  whatever the game reads first, the drive's seek target raised by the core as an event, so that the host reads ahead
+  of the drive during the emulated seek, which is a surface and so a proposal (`EmuSen_CoreAPI_Extensions.md` §10.2.5).
+
 
 **What the player meets.** A launch from the library or big picture no longer waits for the disc, from any medium; a
 game's file is read as the game reads it, and the whole disc soon after, beside it. On Linux and on the handheld a
@@ -980,7 +1004,10 @@ over the new kit. WiseMan by area, `CoreAbi`, `CoreAdapter`, `CoreDiscovery`, `C
 `CoreFactory`, `Diamond` (with `DiamondPlayers`), `DiscStreaming`, `PlayStationLibrary`, the whole `Galaxia` folder
 with the parity tests, `RomLibrary`, `SystemPack`, `Firmware`, `EmulatorSession`, `LaunchScreen`, `LeafAssembly`,
 `VenusRt`, `Nephrite`, `MoonRt` and `MercuryRt`: 981 cases, 972 passed and 9 skipped (the opt-in probes without their
-folders) [M]. The registration-equivalence golden is unchanged, so P1 holds for 1.3 too.
+folders) [M]. The registration-equivalence golden is unchanged, so P1 holds for 1.3 too. After WiseMan `fd680853`
+was merged in (the GPU's D-47), Diamond's own tests again, 158 and 77 with ps1-tests and without, and WiseMan's
+`Diamond`, `DiscStreaming`, `PlayStationLibrary`, `CoreEngine`, `CoreAbi`, `CoreAdapter`, `CoreRegistration` and
+`GalaxiaParity`, 152 passing [M].
 
 ## 13. Gameplay: the seven games driven into play (2026-10-12)
 

@@ -1067,6 +1067,23 @@ it took, so that it takes at most a third of the medium. At full speed it made t
 Spyro's from 3 to 0, every frame within 6.1 and 7.5 ms. What a read of the mapping returns is the file's, whether
 the prefetch has passed or not.
 
+**On the handheld's card, paced** [M, `Diamond_Players.md` §12.8.9]: with the prefetch Mega Man X5 and Spyro the Dragon
+play their first 30 s with no first touch and Crash Bandicoot with one of 6.6 ms, where they had 4, 3 and 16 of up to
+13.1 ms. Mega Man X6's four to six first touches come two to six seconds into play, before a prefetch at a third of
+the card has reached them: the slowest held a frame 8.0–31.5 ms in four runs without the prefetch and 23.8–49.6 ms in
+four with it, zero to three frames over the period in 30 s either way. **So the design's item 9 is met in part: a
+first touch still can hold a frame in a game's first seconds on a slow medium, and the prefetch, which removes the
+later ones, appears to lengthen those.** Two remedies are recorded and not built, the choice being the tester's:
+
+- *host only:* the prefetch at the medium's full speed until the machine's first frame, and rested from then; under
+  the launch screen it would have read about 270 MiB before play. It narrows the window and closes it for no game in
+  particular.
+- *exact, and a surface:* an event by which a core says where its drive is seeking (a file and an offset), raised at
+  the seek's start, so that the host advises the system to read there during the emulated seek, which on the
+  PlayStation's drive takes far longer than the card's read. It is shape A's event without its export: the bytes
+  still come through the loan, nothing waits on the host, and a host that ignores the event behaves as now. It would
+  be a minor of its own.
+
 ### 10.3 The order
 
 By the first stage that needs each [C, Q13]:
@@ -1151,9 +1168,10 @@ in `info.schema.json`; `length` is left to machine info, since it is a property 
   and no frame of the first 30 s of play takes longer than its period on the handheld. *Measured 2026-10-12
   (§10.2.5):* the first two clauses hold, Spyro the Dragon's 662 MB track launching in 115 ms cold under the cap and
   114 ms warm, and in 99 ms and 95 ms from the handheld's card; peak memory fell by more than the image, 1,317 to
-  54 MiB, since the host's buffer went with the core's copy. The third failed as built, one frame of Mega Man X5
-  taking 20.6 ms on the card for a first touch, and is the prefetch's to keep (§10.2.5, `Diamond_Players.md`
-  §12.8.9).
+  54 MiB, since the host's buffer went with the core's copy. **The third is not met**: unpaced, one frame of Mega Man
+  X5 took 20.6 ms on the card for a first touch; the prefetch built for it leaves three of four games with none or
+  one, and Mega Man X6 with up to three frames of 24–50 ms in its first six seconds, where without it they were
+  8–32 ms (§10.2.5, `Diamond_Players.md` §12.8.9). It stays open with the two remedies §10.2.5 records.
 
 ---
 

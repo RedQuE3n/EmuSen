@@ -248,7 +248,19 @@ it is in use, until the game is closed or its disc changed. .NET's own advisory 
 mapping, as by any program that is not .NET, so the folder hold, and not a lock on each file, is what keeps pruning
 away.
 
-**Tests** (`DiscStreamingTests`): a held unpacked folder survives `Prune` with nothing kept and goes at the next prune
+**The prefetch** (`DiscFiles.Prefetch`). A page of a mapped file is read from the medium when first touched, on the
+thread that touches it, which for a lent disc is the emulation thread; on the handheld's card that held a frame of
+play 8–32 ms (`Diamond_Players.md` §12.8.9). So the engine starts, for a disc a core borrows, a background thread of
+the lowest priority that reads each of the disc's files once, in order, through a handle of its own, 256 KiB at a
+time (`PrefetchChunk`), resting after each read twice as long as the read took (`RestPerRead`), so that it takes a
+third of the medium at most and the game's own read waits behind one chunk; unrested, it made a game's read wait
+160 ms. It stops when the `DiscFiles` is disposed, and changes nothing a read of the mapping returns. It has no Rust
+half: it is the host's policy over plain file reads, and the kit, which maps through the Rust module, has no use for
+it. What it does not reach in time, the first touches of a game's first seconds, which it appears to lengthen on the
+card (24–50 ms), is recorded there as open.
+
+**Tests** (`DiscStreamingTests`): the prefetch reading every file to its end and stopping when let go; a held
+unpacked folder survives `Prune` with nothing kept and goes at the next prune
 once let go; the engine holds a borrowing core's files for the machine's life and a copying core's not past create
 (read from the system's list of the process's mappings); Change Disc lets the earlier disc go only once the core has
 taken the next, and a refused disc leaves the earlier in place.

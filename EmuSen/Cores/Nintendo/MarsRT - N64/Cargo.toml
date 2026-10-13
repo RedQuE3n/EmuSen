@@ -11,8 +11,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 emusen-native = { path = "../../Shared/emusen-native" }
-# The device path's Vulkan bindings, the loader found at run time; MIT OR Apache-2.0, and libloading ISC, both compatible with the GPL-3.0. See Mars_Native.md §6.4.
-ash = "0.38"
+# The device path's Vulkan compute device, `ash` behind it with the loader found at run time. See Hardware/Shared/EmuSen_Gpu.md.
+emusen-gpu = { path = "../../Shared/emusen-gpu" }
 # The recompiler's code generator; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. See Mars_Native.md §5.8.
 cranelift-codegen = "0.136.0"
 cranelift-frontend = "0.136.0"

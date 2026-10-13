@@ -107,8 +107,8 @@ fn machine(path: &str) -> Machine {
             files.push(std::fs::read(dir.join(&name)).unwrap_or_else(|_| panic!("the track file {name}")));
         }
     }
-    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
-    let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(&image, &refs) else { panic!("a disc") };
+    let kept = files.into_iter().map(emusen_native::core::Kept::from).collect();
+    let Ok(diamond::medium::Opened::Disc(disc, media)) = diamond::medium::open(emusen_native::core::Kept::from(image.clone()), kept) else { panic!("a disc") };
     let config = Config { market: media.market.unwrap_or(Market::Americas), ..config };
     let mut m = Machine::new(media, config, ports, &image, open);
     m.insert_disc(*disc);

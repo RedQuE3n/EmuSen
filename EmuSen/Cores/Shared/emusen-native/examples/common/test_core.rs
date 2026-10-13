@@ -36,6 +36,8 @@ pub const FAULT_ONLY_HOST_1_0: u32 = 16;
 pub const FAULT_INFO_DRIFTS: u32 = 32;
 pub const FAULT_READ_ONLY_WRITABLE: u32 = 64;
 pub const FAULT_OBSERVED_FRAME_DIFFERS: u32 = 128;
+/// Seeded fault for the kit's C17: a machine reading an image its host lent runs otherwise than one reading its copy.
+pub const FAULT_LENT_RUN_DIFFERS: u32 = 256;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -102,7 +104,12 @@ pub struct TestCore {
     /// MEDIA's drive: a fingerprint of the disc in it, 0 for none, and its lid.
     disc: u32,
     lid_open: bool,
+    /// The image, kept past create and read a byte a frame: lent by a host that lends it, a copy otherwise (BORROW).
+    rom: Kept,
 }
+
+/// Where each frame's byte of the kept image lands in RAM, so that the state and its digests follow what was read.
+const ROM_BYTE: usize = 254;
 
 /// Whether this build of the test core claims MEDIA, which adds the drive to its state.
 const MEDIA: bool = TEST_CAPABILITIES & caps::MEDIA != 0;
@@ -277,6 +284,7 @@ impl Core for TestCore {
             threads: r.settings.get("Threads").and_then(|v| v.parse().ok()).unwrap_or(1),
             disc: fingerprint(body),
             lid_open: false,
+            rom: keep(r.image),
         };
         m.draw();
         Ok(m)
@@ -310,6 +318,10 @@ impl Core for TestCore {
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
         self.frames += 1;
         self.ram[2] = self.ram[2].wrapping_add(1);
+        if !self.rom.is_empty() {
+            let differs = faults() & FAULT_LENT_RUN_DIFFERS != 0 && self.rom.is_lent();
+            self.ram[ROM_BYTE] = self.rom[self.frames as usize % self.rom.len()] ^ differs as u8;
+        }
         if faults() & FAULT_EXACT_SETTING_CHANGES_STATE != 0 {
             self.ram[4] = self.ram[4].wrapping_add(self.threads.wrapping_sub(1));
         }
@@ -528,6 +540,10 @@ impl Core for TestCore {
         if processor == 0 { Ok(vec![self.frames]) } else { Err(status::NOT_SUPPORTED) }
     }
 
+    fn battery_files(system: &str) -> Option<Vec<Battery>> {
+        (system == "test").then(|| vec![Battery { which: 0, suffix: ".srm".into() }])
+    }
+
     fn drives(&self) -> Vec<Drive> {
         vec![Drive { drive: 0, label: "Test drive".into(), kind: "cd".into(), lid_open: self.lid_open, loaded: self.disc != 0 }]
     }
@@ -547,9 +563,9 @@ impl Core for TestCore {
         if !self.lid_open && !insert.restore {
             return Err(status::LID_CLOSED);
         }
-        self.disc = match insert.image {
-            None => 0,
-            Some(image) => fingerprint(payload(image)?),
+        (self.disc, self.rom) = match insert.image {
+            None => (0, Kept::default()),
+            Some(image) => (fingerprint(payload(image)?), keep(image)),
         };
         Ok(())
     }

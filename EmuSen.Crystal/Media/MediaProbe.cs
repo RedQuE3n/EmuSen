@@ -2,10 +2,11 @@ using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Crystal.Systems;
+using EmuSen.Galaxia.Media;
 
 namespace EmuSen.Crystal.Media
 {
-    // The first bytes of the image a library file stands for, as a recogniser reads them: a file's own, a sheet's first track's, an .m3u's first disc's, an archive's image entry's - see EmuSen_CoreAPI_Extensions.md §8.4.
+    // The first bytes of the image a library file stands for, as a recogniser reads them through Galaxia: a file's own, a sheet's first track's, an .m3u's first disc's, an archive's image entry's - see EmuSen_CoreAPI_Extensions.md §8.4.
     public sealed class MediaProbe : IMediaProbe
     {
         private readonly Func<int, byte[]> _read;
@@ -32,13 +33,11 @@ namespace EmuSen.Crystal.Media
             return _head.Length <= length ? _head : _head[..length];
         }
 
+        // A file's first bytes and no more of it, through the mapping a game's launch reads it by.
         private static byte[] Head(string file, int length)
         {
-            using var stream = File.OpenRead(file);
-            var buffer = new byte[Math.Min(length, stream.Length)];
-            int read = 0;
-            while (read < buffer.Length && stream.Read(buffer, read, buffer.Length - read) is var n && n > 0) read += n;
-            return buffer;
+            using MappedFile mapped = MappedFile.Open(file);
+            return mapped.Head(length);
         }
 
         // The probe of a library file; isImage says which extensions an archive's entry may have.

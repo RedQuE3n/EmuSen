@@ -12,7 +12,8 @@ pub mod xa;
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use emusen_disc::{Disc, SubQ};
+use crate::medium::Disc;
+use emusen_disc::SubQ;
 
 use crate::media::Market;
 use audio::Output;

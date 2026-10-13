@@ -1,6 +1,7 @@
 //! A disc as sectors: its tracks placed on the absolute time line from a cue sheet, an `.iso`, a lone raw track or a
 //! CHD; any sector read as its raw 2,352 bytes, those the image does not hold synthesised (ECMA-130); its subchannel Q
-//! synthesised (§22.3), `.sbi` patches applied; the TOC; CD-DA as samples. EmuSen_Disc.md §3 records each rule.
+//! synthesised (§22.3), `.sbi` patches applied; the TOC; CD-DA as samples. EmuSen_Disc.md §3 records each rule, and §9
+//! the backing: the bytes behind a disc are any `AsRef<[u8]>`, owned, borrowed for a call or lent by a host.
 
 use crate::chd::ChdImage;
 use crate::cue::{CueError, Mode, Sheet, flags};
@@ -77,15 +78,17 @@ pub struct Toc {
     pub disc_type: u8,
 }
 
-enum Source {
-    Bytes(Vec<u8>),
-    Chd(Box<ChdImage>),
+enum Source<B: AsRef<[u8]>> {
+    Bytes(B),
+    Chd(Box<ChdImage<B>>),
 }
 
-pub struct Disc {
+/// A disc over backing `B`: `Vec<u8>` where it owns its bytes, `&[u8]` or a host's lent bytes where it does not; one
+/// path reads them all (EmuSen_Disc.md §9.1).
+pub struct Disc<B: AsRef<[u8]> = Vec<u8>> {
     tracks: Vec<Track>,
     lead_out: u32,
-    sources: Vec<Source>,
+    sources: Vec<Source<B>>,
     patches: Vec<Patch>,
     iso: IsoForm,
     /// A zero block for synthesised sectors' user data.
@@ -126,9 +129,9 @@ fn control_of(audio: bool, cue_flags: u8) -> u8 {
     if audio { CONTROL_AUDIO | cue_flags & (flags::PRE | flags::DCP | flags::FOUR_CHANNEL) } else { CONTROL_DATA | cue_flags & flags::DCP }
 }
 
-impl Disc {
+impl<B: AsRef<[u8]>> Disc<B> {
     /// A disc from a cue sheet and its files' bytes, in the sheet's order.
-    pub fn from_sheet(sheet: &Sheet, files: Vec<Vec<u8>>, iso: IsoForm) -> Result<Disc, DiscError> {
+    pub fn from_sheet(sheet: &Sheet, files: Vec<B>, iso: IsoForm) -> Result<Disc<B>, DiscError> {
         if files.len() < sheet.files.len() {
             return Err(DiscError::Files(format!("the sheet names {} files and {} were given", sheet.files.len(), files.len())));
         }
@@ -151,7 +154,7 @@ impl Disc {
                 base += t.pregap as i64;
             }
             let from = (base + first) as u32;
-            let size = files[t.file].len() as u64;
+            let size = files[t.file].as_ref().len() as u64;
             let to = match sheet.tracks.get(k + 1) {
                 Some(n) if n.file == t.file => (base + n.first_frame() as i64) as u32,
                 _ => from + (size.saturating_sub(byte) / t.mode.bytes() as u64) as u32,
@@ -179,26 +182,27 @@ impl Disc {
         Ok(Disc::new(tracks, cursor, files.into_iter().map(Source::Bytes).collect(), iso))
     }
 
-    fn new(tracks: Vec<Track>, lead_out: u32, sources: Vec<Source>, iso: IsoForm) -> Disc {
+    fn new(tracks: Vec<Track>, lead_out: u32, sources: Vec<Source<B>>, iso: IsoForm) -> Disc<B> {
         Disc { tracks, lead_out, sources, patches: Vec::new(), iso, zeros: Box::new([0; RAW]) }
     }
 
     /// A disc from one file's bytes: a CHD, a lone raw track (data by its sync, else audio), or an `.iso`'s user
     /// sectors, each a sheet of one track synthesised here (EmuSen_Disc.md §4).
-    pub fn from_image(bytes: Vec<u8>, iso: IsoForm) -> Result<Disc, DiscError> {
-        if bytes.starts_with(CHD_MAGIC) {
+    pub fn from_image(bytes: B, iso: IsoForm) -> Result<Disc<B>, DiscError> {
+        let head = bytes.as_ref();
+        if head.starts_with(CHD_MAGIC) {
             let (image, tracks, lead_out) = ChdImage::open(bytes).map_err(DiscError::Chd)?;
             return Ok(Disc::new(tracks, lead_out, vec![Source::Chd(Box::new(image))], iso));
         }
-        let iso_volume = bytes.get(16 * 2048 + 1..16 * 2048 + 6) == Some(b"CD001");
-        let mode = if bytes.starts_with(&ecma130::SYNC) && bytes.len() >= RAW {
-            if bytes[15] == 1 { "MODE1/2352" } else { "MODE2/2352" }
+        let iso_volume = head.get(16 * 2048 + 1..16 * 2048 + 6) == Some(b"CD001");
+        let mode = if head.starts_with(&ecma130::SYNC) && head.len() >= RAW {
+            if head[15] == 1 { "MODE1/2352" } else { "MODE2/2352" }
         } else if iso_volume {
             "MODE1/2048"
-        } else if bytes.len() % RAW == 0 && !bytes.is_empty() {
+        } else if head.len() % RAW == 0 && !head.is_empty() {
             "AUDIO"
         } else {
-            return Err(DiscError::Unknown(format!("{} bytes are neither a CHD, a raw track of 2,352-byte sectors nor an ISO 9660 image of 2,048-byte ones", bytes.len())));
+            return Err(DiscError::Unknown(format!("{} bytes are neither a CHD, a raw track of 2,352-byte sectors nor an ISO 9660 image of 2,048-byte ones", head.len())));
         };
         let sheet = Sheet::parse(&format!("FILE \"image\" BINARY\nTRACK 01 {mode}\nINDEX 01 00:00:00\n"))?;
         Disc::from_sheet(&sheet, vec![bytes], iso)
@@ -206,7 +210,7 @@ impl Disc {
 
     /// An image of 2,048-byte user sectors read as one data track, for a caller that knows it is one though it holds
     /// no ISO 9660 volume descriptor; a partial last sector is left out.
-    pub fn from_user_image(bytes: Vec<u8>, iso: IsoForm) -> Result<Disc, DiscError> {
+    pub fn from_user_image(bytes: B, iso: IsoForm) -> Result<Disc<B>, DiscError> {
         let sheet = Sheet::parse("FILE \"image\" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\n")?;
         Disc::from_sheet(&sheet, vec![bytes], iso)
     }
@@ -263,7 +267,7 @@ impl Disc {
             },
             Source::Bytes(b) => {
                 let o = (s.offset + n * size as u64) as usize;
-                match b.get(o..o + size) {
+                match B::as_ref(b).get(o..o + size) {
                     Some(src) => (src, false),
                     None => return self.synthesise(at, audio, s.mode, out),
                 }
@@ -332,6 +336,26 @@ impl Disc {
             }
             Err(_) => q,
         }
+    }
+
+    /// What a state names its disc by, never 0: FNV-1a over each track's index 01 and kind, the lead-out, and the raw
+    /// sectors the console names, counted from the first track's index 01. It reads those sectors and no other, so
+    /// its cost does not grow with the disc (EmuSen_Disc.md §9.3).
+    pub fn fingerprint(&mut self, sectors: impl IntoIterator<Item = u32>) -> u64 {
+        let mut h = 0xCBF2_9CE4_8422_2325u64;
+        let mut eat = |bytes: &[u8]| bytes.iter().for_each(|&b| h = (h ^ b as u64).wrapping_mul(0x0100_0000_01B3));
+        for t in &self.tracks {
+            eat(&t.start.to_le_bytes());
+            eat(&[t.audio as u8]);
+        }
+        eat(&self.lead_out.to_le_bytes());
+        let first = self.tracks.first().map_or(0, |t| t.start);
+        let mut raw = [0u8; RAW];
+        for sector in sectors {
+            self.read(first + sector, &mut raw);
+            eat(&raw);
+        }
+        h.max(1)
     }
 
     /// The lead-in's item for a TOC pointer (01h–99h a track, A0h, A1h, A2h), as GetQ reads it.

@@ -7,9 +7,9 @@ using System.Security.Cryptography;
 using System.Text;
 using EmuSen.Galaxia.Library;
 
-namespace EmuSen.Crystal.Media
+namespace EmuSen.Galaxia.Media
 {
-    // A game in a .zip, read for routing without unpacking and unpacked for play into Galaxia's Unpacked folder, never beside the archive; the folder is kept by size, least recently opened first out - see EmuSen_Galaxia.md §3.7.
+    // A game in a .zip, read for routing without unpacking and unpacked for play into the Unpacked folder, never beside the archive; the folder is kept by size, least recently opened first out, and never while a game holds it - see EmuSen_Galaxia.md §3.7, §3.8.
     public static class ArchiveImages
     {
         public static readonly IReadOnlyList<string> Extensions = new[] { ".zip" };
@@ -21,6 +21,9 @@ namespace EmuSen.Crystal.Media
         public static readonly TimeSpan PartialAge = TimeSpan.FromHours(1);
 
         private const string Marker = ".unpacked";
+
+        // How a pruner opens a folder's marker to learn that no game holds it: with no sharing, and on Windows so that it may still delete it.
+        private static readonly FileShare Alone = OperatingSystem.IsWindows() ? FileShare.Delete : FileShare.None;
 
         public static bool IsArchive(string path) => Extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
 
@@ -64,6 +67,8 @@ namespace EmuSen.Crystal.Media
             string folder = FolderFor(archivePath);
             if (!File.Exists(Path.Combine(folder, Marker)))
             {
+                // A folder without its marker is one a pruner is taking away or a stopped one left: never used, so cleared first.
+                if (Directory.Exists(folder)) TryDelete(new DirectoryInfo(folder));
                 string partial = $"{folder}.partial-{Environment.ProcessId}";
                 if (Directory.Exists(partial)) Directory.Delete(partial, recursive: true);
                 Directory.CreateDirectory(partial);
@@ -99,7 +104,16 @@ namespace EmuSen.Crystal.Media
             return sbi && Path.ChangeExtension(entry, null) == Path.ChangeExtension(chosen, null) ? Path.Combine(dir, stem + ".sbi") : entry;
         }
 
-        // The folders past KeptBytes, least recently opened first, and partial ones a stopped process left; keep is never removed.
+        // A hold on the unpacked folder a file is in, so that Prune leaves it while a game has its files mapped; null for a file that is in none.
+        public static IDisposable? Hold(string path)
+        {
+            string root = Path.GetFullPath(DataStore.Unpacked) + Path.DirectorySeparatorChar, full = Path.GetFullPath(path);
+            if (!full.StartsWith(root, StringComparison.Ordinal)) return null;
+            string folder = Path.Combine(root, full[root.Length..].Split(Path.DirectorySeparatorChar)[0]);
+            return new FileStream(Path.Combine(folder, Marker), FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+
+        // The folders past KeptBytes, least recently opened first, and partial ones a stopped process left; keep and a folder a game holds are never removed.
         public static void Prune(string? keep = null, long keptBytes = KeptBytes)
         {
             if (!Directory.Exists(DataStore.Unpacked)) return;
@@ -110,8 +124,24 @@ namespace EmuSen.Crystal.Media
             foreach (var d in folders.Where(d => !d.Name.Contains(".partial-")).OrderByDescending(d => d.FullName == keep).ThenByDescending(d => d.LastWriteTimeUtc))
             {
                 total += d.EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
-                if (total > keptBytes && d.FullName != keep) TryDelete(d);
+                if (total > keptBytes && d.FullName != keep) TryRemove(d);
             }
+        }
+
+        // An unpacked folder removed unless a game holds it: its marker opened alone, which a hold refuses, and deleted first, so that the folder is never used half gone.
+        private static void TryRemove(DirectoryInfo d)
+        {
+            try
+            {
+                string marker = Path.Combine(d.FullName, Marker);
+                if (File.Exists(marker))
+                {
+                    using var alone = new FileStream(marker, FileMode.Open, FileAccess.Read, Alone);
+                    File.Delete(marker);
+                }
+                d.Delete(recursive: true);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
 
         private static void TryDelete(DirectoryInfo d)

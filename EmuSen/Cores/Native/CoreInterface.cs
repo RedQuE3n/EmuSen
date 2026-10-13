@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreInterface
     {
         public const uint Major = 1;
-        public const uint Minor = 2;
+        public const uint Minor = 3;
         public const uint Version = (Major << 16) | Minor;
 
         // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
@@ -15,6 +15,7 @@ namespace EmuSen.Cores.Native
         public const ulong CapSettings = 1UL << 6, CapPhases = 1UL << 7, CapFrameSerial = 1UL << 8, CapRowRepeat = 1UL << 9, CapBatteryDirty = 1UL << 10;
         public const ulong CapRomPatches = 1UL << 11, CapDebug = 1UL << 12, CapDebugStack = 1UL << 13, CapCheatPokes = 1UL << 14, CapSettingNotes = 1UL << 15;
         public const ulong CapDebugRegisters = 1UL << 16, CapDebugDisassemble = 1UL << 17, CapMedia = 1UL << 18, CapDebugReads = 1UL << 19;
+        public const ulong CapBorrow = 1UL << 20;
 
         // Each bit's name, as core info lists it.
         public static readonly IReadOnlyList<(ulong Bit, string Name)> CapabilityNames = new[]
@@ -23,6 +24,7 @@ namespace EmuSen.Cores.Native
             (CapSettings, "SETTINGS"), (CapPhases, "PHASES"), (CapFrameSerial, "FRAME_SERIAL"), (CapRowRepeat, "ROW_REPEAT"), (CapBatteryDirty, "BATTERY_DIRTY"),
             (CapRomPatches, "ROM_PATCHES"), (CapDebug, "DEBUG"), (CapDebugStack, "DEBUG_STACK"), (CapCheatPokes, "CHEAT_POKES"), (CapSettingNotes, "SETTING_NOTES"),
             (CapDebugRegisters, "DEBUG_REGISTERS"), (CapDebugDisassemble, "DEBUG_DISASSEMBLE"), (CapMedia, "MEDIA"), (CapDebugReads, "DEBUG_READS"),
+            (CapBorrow, "BORROW"),
         };
 
         // Every export, and the bit that claims it; zero for a required one.
@@ -57,6 +59,9 @@ namespace EmuSen.Cores.Native
         // EMUSEN_FILE_MEDIA, the first companion of an image set, and EMUSEN_MEDIA_RESTORE - see EmuSen_CoreAPI.md §6.23.
         public const uint FileMedia = 65536, MediaRestore = 1;
 
+        // EMUSEN_CREATE_LENT and EMUSEN_MEDIA_LENT: the image and its media files kept in place by the host until the loan ends - see EmuSen_CoreAPI.md §6.24.
+        public const uint CreateLent = 1, MediaLent = 2;
+
         // The event kinds of enum emusen_event_kind.
         public const uint EventAudioRate = 1, EventGeometry = 2, EventStateSize = 3, EventBattery = 4, EventLog = 5, EventMachineInfo = 6;
 
@@ -84,6 +89,7 @@ namespace EmuSen.Cores.Native
             public ulong PixelFormats;
             public byte* Error;
             public nuint ErrorLen;
+            public uint Flags;
         }
 
         [StructLayout(LayoutKind.Sequential)]

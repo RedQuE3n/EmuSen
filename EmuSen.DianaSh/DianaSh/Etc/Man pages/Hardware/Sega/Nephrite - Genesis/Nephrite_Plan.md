@@ -541,6 +541,10 @@ Two facts of the v1 ABI meet the Sega CD (argued; to be decided, §9 Q5):
 - **Size.** A disc is up to about 700 MB, which `create` copies (the core copies what it keeps, §6.2). Workable on the
   target machines (8 GB and more), at a load-time cost; a streaming read would need a minor's new export, since the
   core never calls the host. CHD needs zlib, LZMA, FLAC and zstd decoders written without dependencies; later.
+  *Superseded 2026-10-12* by the core ABI's minor 1.3 and `emusen-disc` (`EmuSen_CoreAPI.md` §6.24, `EmuSen_Disc.md`
+  §9): the cue sheet is `emusen-disc`'s, a sheet's tracks are passed as files from `EMUSEN_FILE_MEDIA`, and the image
+  need not be copied: the Sega CD claims `BORROW`, keeps its disc with `keep` as a `Disc<Kept>`, opens it with
+  `emusen_disc::open` (`IsoForm::Mode1`, its signature `SEGADISCSYSTEM` its own), and has CHD through the crate.
 
 ### 5.9 Settings, when their stages arrive
 

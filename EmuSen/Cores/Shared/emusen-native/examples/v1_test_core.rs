@@ -23,7 +23,8 @@ pub const TEST_CAPABILITIES: u64 = emusen_native::core::caps::RESET
     | emusen_native::core::caps::DEBUG_REGISTERS
     | emusen_native::core::caps::DEBUG_DISASSEMBLE
     | emusen_native::core::caps::MEDIA
-    | emusen_native::core::caps::DEBUG_READS;
+    | emusen_native::core::caps::DEBUG_READS
+    | emusen_native::core::caps::BORROW;
 
 pub const TEST_FAULTS: u32 = 0;
 

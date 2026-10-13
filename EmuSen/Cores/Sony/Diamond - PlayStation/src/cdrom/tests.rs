@@ -4,7 +4,9 @@
 use super::*;
 use emusen_disc::cue::Sheet;
 use emusen_disc::ecma130::{self, submode};
-use emusen_disc::{Disc, IsoForm};
+use crate::medium::Disc;
+use emusen_disc::IsoForm;
+use emusen_native::core::Kept;
 
 pub const DATA: u32 = 600;
 pub const AUDIO: u32 = 300;
@@ -28,7 +30,7 @@ pub fn disc() -> Disc {
         }
     }
     let sheet = "FILE \"d\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nFILE \"a\" BINARY\nTRACK 02 AUDIO\nINDEX 00 00:00:00\nINDEX 01 00:02:00\n";
-    Disc::from_sheet(&Sheet::parse(sheet).unwrap(), vec![d, a], IsoForm::Mode2Form1).unwrap()
+    Disc::from_sheet(&Sheet::parse(sheet).unwrap(), vec![Kept::from(d), Kept::from(a)], IsoForm::Mode2Form1).unwrap()
 }
 
 /// A program's side of the registers: the clock it runs at.
@@ -323,7 +325,7 @@ fn xa_adpcm_plays_its_channel_and_delivers_the_data_between() {
         };
         bin.extend_from_slice(&s);
     }
-    let disc = Disc::from_image(bin, IsoForm::Mode2Form1).unwrap();
+    let disc = Disc::from_image(Kept::from(bin), IsoForm::Mode2Form1).unwrap();
     let mut h = Host::new(Some(disc));
     h.settle();
     h.command(0x0D, &[1, 0]);

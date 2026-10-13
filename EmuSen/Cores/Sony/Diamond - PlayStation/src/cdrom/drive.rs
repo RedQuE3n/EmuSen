@@ -343,7 +343,7 @@ impl Cdrom {
     }
 
     /// The lid closes on `disc` (the same one or another); the drive spins up and reads the TOC.
-    pub fn close_lid(&mut self, now: u64, disc: Option<emusen_disc::Disc>) {
+    pub fn close_lid(&mut self, now: u64, disc: Option<crate::medium::Disc>) {
         if !self.lid_open {
             return;
         }

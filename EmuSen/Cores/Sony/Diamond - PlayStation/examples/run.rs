@@ -290,7 +290,7 @@ fn main() {
 }
 
 /// A sector's 2,048 bytes of user data.
-fn user(d: &mut emusen_disc::Disc, lba: u32) -> Vec<u8> {
+fn user(d: &mut diamond::medium::Disc, lba: u32) -> Vec<u8> {
     let mut raw = [0u8; 2352];
     d.read(150 + lba, &mut raw);
     raw[24..2072].to_vec()
@@ -298,7 +298,7 @@ fn user(d: &mut emusen_disc::Disc, lba: u32) -> Vec<u8> {
 
 /// A loader for `--boot`: SYSTEM.CNF's BOOT and STACK read from the disc's root directory (ECMA-119), then the kernel's
 /// A(71h) _96_init and A(51h) LoadExec, so that the player's BIOS loads and starts the game with its own functions.
-fn loader(d: &mut emusen_disc::Disc) -> (Vec<u8>, u32) {
+fn loader(d: &mut diamond::medium::Disc) -> (Vec<u8>, u32) {
     let (name, stack, entry) = boot_program(d);
     eprintln!("[booting {name} with the stack at {stack:08X}, its entry {entry:08X}]");
     let mut src = String::from("j start\nnop\nstart: lui a3, 0x8010\n");
@@ -311,7 +311,7 @@ fn loader(d: &mut emusen_disc::Disc) -> (Vec<u8>, u32) {
 }
 
 /// SYSTEM.CNF's BOOT name and STACK, and the boot program's entry from its header.
-fn boot_program(d: &mut emusen_disc::Disc) -> (String, u32, u32) {
+fn boot_program(d: &mut diamond::medium::Disc) -> (String, u32, u32) {
     let pvd = user(d, 16);
     let root = u32::from_le_bytes([pvd[158], pvd[159], pvd[160], pvd[161]]);
     let dir = user(d, root);
@@ -337,7 +337,7 @@ fn boot_program(d: &mut emusen_disc::Disc) -> (String, u32, u32) {
 }
 
 /// A file's first sector by its path from the root, `cdrom:\\DIR\\NAME;1` (ECMA-119 directory records).
-fn find(d: &mut emusen_disc::Disc, root: u32, path: &str) -> Option<u32> {
+fn find(d: &mut diamond::medium::Disc, root: u32, path: &str) -> Option<u32> {
     let mut dir = root;
     let parts: Vec<&str> = path.trim_start_matches("cdrom:").trim_start_matches('\\').split('\\').collect();
     for (i, part) in parts.iter().enumerate() {
@@ -357,7 +357,7 @@ fn find(d: &mut emusen_disc::Disc, root: u32, path: &str) -> Option<u32> {
 }
 
 /// The disc at `path`: a sheet with its tracks read from beside it, or one image file.
-fn open_disc(path: &str) -> (emusen_disc::Disc, Media) {
+fn open_disc(path: &str) -> (diamond::medium::Disc, Media) {
     let image = std::fs::read(path).expect("the disc image");
     let dir = std::path::Path::new(path).parent().unwrap_or(std::path::Path::new("."));
     let mut files = Vec::new();
@@ -369,8 +369,8 @@ fn open_disc(path: &str) -> (emusen_disc::Disc, Media) {
     if let Ok(sbi) = std::fs::read(emusen_disc::set::sbi_beside(path)) {
         files.push(sbi);
     }
-    let refs: Vec<&[u8]> = files.iter().map(|f| f.as_slice()).collect();
-    match diamond::medium::open(&image, &refs) {
+    let kept = files.into_iter().map(emusen_native::core::Kept::from).collect();
+    match diamond::medium::open(emusen_native::core::Kept::from(image), kept) {
         Ok(diamond::medium::Opened::Disc(d, media)) => (*d, media),
         Ok(_) => panic!("a PS-EXE, not a disc"),
         Err(e) => panic!("the disc was refused: {e:?}"),

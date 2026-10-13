@@ -122,7 +122,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 using var entry = archive.CreateEntry("Opal Reef/Opal Reef.bin").Open();
                 entry.Write(SyntheticPsxDisc.Build().DataTrack);
             });
-            string marker = Path.Combine(EmuSen.Crystal.Media.ArchiveImages.FolderFor(zip), ".unpacked");
+            string marker = Path.Combine(EmuSen.Galaxia.Media.ArchiveImages.FolderFor(zip), ".unpacked");
             using var loaded = LoadsUnderTheScreen(s);
             for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
             s.Pad.A();

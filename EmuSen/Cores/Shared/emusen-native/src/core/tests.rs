@@ -40,6 +40,7 @@ fn params(image: &[u8], settings: &str, files: &[FileEntry]) -> CreateParams {
         pixel_formats: 1,
         error: null_mut(),
         error_len: 0,
+        flags: 0,
     }
 }
 
@@ -82,9 +83,10 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.2"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.3"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
-    assert_eq!(names.len(), 20);
+    assert_eq!(names.len(), 21);
+    assert!(info.contains(r#""battery":[{"which":0,"suffix":".srm"}]"#), "core info lists the system's battery files since 1.3: {info}");
     assert_eq!(super::desc::capability_names(unsafe { emusen_core_capabilities() }), names);
     let mi = crate::json::parse(cases[3].1.as_bytes()).unwrap();
     let spaces = mi.get("spaces").unwrap().as_array().unwrap();
@@ -434,12 +436,14 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0002);
+    assert_eq!(ABI_VERSION, 0x0001_0003);
+    assert_eq!((caps::BORROW, caps::UNASSIGNED & caps::BORROW, flags::CREATE_LENT, flags::MEDIA_LENT), (1 << 20, 0, 1, 2));
+    assert_eq!((CreateParams::SIZE_1_0, std::mem::size_of::<CreateParams>()), (88, 96));
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));
     assert_eq!((status::LID_CLOSED, status::WRONG_MEDIA, status::NO_SUCH_DRIVE, flags::FILE_MEDIA, flags::MEDIA_RESTORE), (-265, -266, -267, 65_536, 1));
     assert_eq!(EXPORTS.len(), 58);
     assert_eq!(EXPORTS.iter().filter(|e| e.1 == 0).count(), 32);
-    assert_eq!(CAPABILITY_NAMES.len(), 20);
+    assert_eq!(CAPABILITY_NAMES.len(), 21);
     assert_eq!((caps::MEDIA, caps::DEBUG_READS, caps::UNASSIGNED & (caps::MEDIA | caps::DEBUG_READS)), (1 << 18, 1 << 19, 0));
     assert_eq!(super::EXPORTING & !(caps::SNAPSHOT | caps::FRAME_SERIAL | caps::ROW_REPEAT | caps::BATTERY_DIRTY), super::EXPORTING);
 }
@@ -500,4 +504,103 @@ fn a_disc_is_changed_through_the_lid_and_a_state_keeps_to_its_disc() {
     short.size = 8;
     assert_eq!(unsafe { emusen_core_media_insert(m, 0, &short) }, status::BAD_STRUCT);
     unsafe { emusen_core_free(m) };
+}
+
+/// The byte of its kept image the test core read at its last frame.
+fn rom_byte(m: *mut Machine) -> u8 {
+    let mut b = [0u8];
+    assert_eq!(unsafe { emusen_core_space_read(m, 0, 254, b.as_mut_ptr(), 1) }, 1);
+    b[0]
+}
+
+fn advance(m: *mut Machine) {
+    assert_eq!(unsafe { emusen_core_advance(m, null_mut()) }, 0);
+}
+
+// §6.24, since 1.3: a lent image is read where the host has it, and a run from it is the run from a copy.
+#[test]
+fn a_lent_image_is_read_in_place_and_runs_as_its_copy() {
+    let mut code = 1;
+    let mut lent_bytes = image(&(0..200).collect::<Vec<u8>>());
+    let copied_bytes = lent_bytes.clone();
+    let lent = unsafe { emusen_core_create(&CreateParams { flags: flags::CREATE_LENT, ..params(&lent_bytes, "", &[]) }, &mut code) };
+    assert_eq!(code, 0);
+    let copied = unsafe { emusen_core_create(&params(&copied_bytes, "", &[]), &mut code) };
+    assert_eq!(code, 0);
+    assert_eq!(digest(lent), digest(copied));
+    for frame in 1..=450usize {
+        advance(lent);
+        advance(copied);
+        assert_eq!(rom_byte(lent), copied_bytes[frame % copied_bytes.len()], "frame {frame} read its own byte of the image");
+        assert_eq!(digest(lent), digest(copied), "frame {frame}");
+    }
+    assert_eq!(bytes(|o, l| unsafe { emusen_core_audio_drain(lent, o as *mut i16, l / 2, 1 << 20, null_mut()) * 2 }).len(), bytes(|o, l| unsafe { emusen_core_audio_drain(copied, o as *mut i16, l / 2, 1 << 20, null_mut()) * 2 }).len());
+    // Not a host's right, since a lent image does not change: done here to see which machine reads the host's bytes.
+    let mut copy_changed = copied_bytes.clone();
+    let at = 451 % lent_bytes.len();
+    (lent_bytes[at], copy_changed[at]) = (lent_bytes[at] ^ 0xFF, copy_changed[at] ^ 0xFF);
+    advance(lent);
+    advance(copied);
+    assert_eq!((rom_byte(lent), rom_byte(copied)), (lent_bytes[at], copied_bytes[at]), "the lent machine reads in place, the other its copy");
+    drop(copy_changed);
+    assert_eq!((unsafe { emusen_core_free(lent) }, unsafe { emusen_core_free(copied) }), (0, 0));
+}
+
+// §4.2's size rule, used for the first time by 1.3's `flags`: a 1.0 host's 88 bytes are taken and nothing past them
+// read; a later host's longer struct is taken and its tail ignored; one byte short of 1.0 is refused.
+#[test]
+fn create_params_of_an_older_and_a_newer_host_are_read_as_far_as_both_know_them() {
+    let mut code = 1;
+    let mut bytes = image(&[7; 40]);
+    // The flag's own bytes say LENT, but an 88-byte struct ends before them: the core must copy.
+    let older = CreateParams { size: 88, flags: flags::CREATE_LENT, ..params(&bytes, "", &[]) };
+    let m = unsafe { emusen_core_create(&older, &mut code) };
+    assert_eq!(code, 0);
+    bytes[1] ^= 0xFF;
+    advance(m);
+    assert_eq!(rom_byte(m), bytes[1] ^ 0xFF, "an older host lends nothing");
+    assert_eq!(unsafe { emusen_core_free(m) }, 0);
+    bytes[1] ^= 0xFF;
+
+    #[repr(C)]
+    struct Newer {
+        params: CreateParams,
+        later: [u64; 4],
+    }
+    let newer = Newer { params: CreateParams { size: std::mem::size_of::<Newer>() as u32, ..params(&bytes, "", &[]) }, later: [u64::MAX; 4] };
+    let m = unsafe { emusen_core_create(&newer.params, &mut code) };
+    assert_eq!(code, 0);
+    assert_eq!(unsafe { emusen_core_free(m) }, 0);
+
+    let short = CreateParams { size: 87, ..params(&bytes, "", &[]) };
+    assert!(unsafe { emusen_core_create(&short, &mut code) }.is_null());
+    assert_eq!(code, status::BAD_STRUCT);
+}
+
+// §6.24: a loan stands until its drive's next successful insert or free, and a refused call lends nothing.
+#[test]
+fn a_lent_disc_is_let_go_when_its_drive_takes_another() {
+    let mut code = 1;
+    let (first, mut second, third) = (image(&[1; 30]), image(&[2; 30]), image(&[3; 30]));
+    let m = unsafe { emusen_core_create(&CreateParams { flags: flags::CREATE_LENT, ..params(&first, "", &[]) }, &mut code) };
+    assert_eq!(code, 0);
+    let lent = flags::MEDIA_LENT;
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(Some(&second), lent)) }, status::LID_CLOSED, "refused: the first disc is still lent, the second not");
+    advance(m);
+    assert_eq!(rom_byte(m), first[1]);
+    assert_eq!(unsafe { emusen_core_media_lid(m, 0, 1) }, 0);
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(Some(b"not an image"), lent)) }, status::BAD_IMAGE);
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(Some(&second), lent)) }, 0);
+    drop(first);
+    second[2] ^= 0xFF;
+    advance(m);
+    assert_eq!(rom_byte(m), second[2], "the second disc is read in place");
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(Some(&third), 0)) }, 0, "a disc that is not lent is copied");
+    drop(second);
+    let third_copy = third.clone();
+    drop(third);
+    advance(m);
+    assert_eq!(rom_byte(m), third_copy[3]);
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(None, lent)) }, 0, "an empty drive lends nothing");
+    assert_eq!(unsafe { emusen_core_free(m) }, 0);
 }

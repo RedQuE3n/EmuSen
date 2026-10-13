@@ -15,12 +15,22 @@ namespace EmuSen.Cores.Native
         public ulong Detail { get; init; }
     }
 
+    // Bytes a call passes where the host already holds them, a mapped file's among them; the host keeps them in place for the call, and past it where it lends them.
+    public readonly unsafe struct CoreBytes(byte* data, long length)
+    {
+        public byte* Data { get; } = data;
+        public nuint Length { get; } = (nuint)length;
+    }
+
     // One machine of a v1 library: its handle and one method per export, every refusal thrown with the core's words, one call at a time - see EmuSen_CoreAPI.md §6.16, §19.
     public sealed unsafe class CoreMachine : IDisposable
     {
         private nint _handle;
         private readonly CoreInterface _api;
         private readonly object _gate = new();
+
+        // What keeps each lent disc in place, by its drive, released when the loan ends: at free, or when that drive takes another disc - see EmuSen_CoreAPI.md §6.24.
+        private readonly Dictionary<uint, IDisposable> _loans = new();
 
         // Held by every call on the handle, here and by a caller of Handle, so no two threads are ever in the machine at once - see Diamond_Players.md §12.7.
         public object Gate => _gate;
@@ -34,20 +44,51 @@ namespace EmuSen.Cores.Native
             if (!library.Available) throw new InvalidOperationException($"{library.Info?.DisplayName ?? library.Path} is not in use: {library.Report}");
             Library = library;
             _api = library.Api;
+            fixed (byte* img = image) _handle = Create(new CoreBytes(img, image.Length), Array.Empty<(uint, CoreBytes)>(), settings, files, lent: false);
+            Info = ReadInfo();
+        }
+
+        // The same from bytes the host holds in place, the media files among them; with a loan they are lent, and the loan is released when the machine is freed or its drive takes another disc.
+        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null)
+        {
+            if (!library.Available) throw new InvalidOperationException($"{library.Info?.DisplayName ?? library.Path} is not in use: {library.Report}");
+            Library = library;
+            _api = library.Api;
+            try { _handle = Create(image, media, settings, files, lent: loan is not null); }
+            catch
+            {
+                // A refused create lends nothing.
+                loan?.Dispose();
+                throw;
+            }
+            Info = ReadInfo();
+            if (loan is not null) _loans[Info.Drives.Count > 0 ? Info.Drives[0].Drive : 0] = loan;
+        }
+
+        // The file entries of a call: the pinned arrays, then the bytes the host holds in place.
+        private static CoreInterface.File[] Entries(IReadOnlyList<(uint Which, byte[] Data)> files, IReadOnlyList<(uint Which, CoreBytes Data)> media, GCHandle[] pins)
+        {
+            var entries = new CoreInterface.File[files.Count + media.Count];
+            for (int i = 0; i < files.Count; i++)
+            {
+                pins[i] = GCHandle.Alloc(files[i].Data, GCHandleType.Pinned);
+                entries[i] = new CoreInterface.File { Size = (uint)sizeof(CoreInterface.File), Which = files[i].Which, Data = (byte*)pins[i].AddrOfPinnedObject(), Len = (nuint)files[i].Data.Length };
+            }
+            for (int i = 0; i < media.Count; i++)
+                entries[files.Count + i] = new CoreInterface.File { Size = (uint)sizeof(CoreInterface.File), Which = media[i].Which, Data = media[i].Data.Data, Len = media[i].Data.Length };
+            return entries;
+        }
+
+        private nint Create(CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, bool lent)
+        {
             byte[] text = Encoding.UTF8.GetBytes(settings);
             var pins = new GCHandle[files.Count];
-            var entries = new CoreInterface.File[files.Count];
             var error = new byte[1024];
             try
             {
-                for (int i = 0; i < files.Count; i++)
-                {
-                    pins[i] = GCHandle.Alloc(files[i].Data, GCHandleType.Pinned);
-                    entries[i] = new CoreInterface.File { Size = (uint)sizeof(CoreInterface.File), Which = files[i].Which, Data = (byte*)pins[i].AddrOfPinnedObject(), Len = (nuint)files[i].Data.Length };
-                }
+                var entries = Entries(files, media, pins);
                 int status;
                 nint handle;
-                fixed (byte* img = image)
                 fixed (byte* s = text)
                 fixed (CoreInterface.File* f = entries)
                 fixed (byte* e = error)
@@ -56,8 +97,8 @@ namespace EmuSen.Cores.Native
                     {
                         Size = (uint)sizeof(CoreInterface.CreateParams),
                         HostAbiVersion = CoreInterface.Version,
-                        Image = img,
-                        ImageLen = (nuint)image.Length,
+                        Image = image.Data,
+                        ImageLen = image.Length,
                         Settings = s,
                         SettingsLen = (nuint)text.Length,
                         Files = f,
@@ -66,22 +107,22 @@ namespace EmuSen.Cores.Native
                         PixelFormats = 1,
                         Error = e,
                         ErrorLen = (nuint)error.Length,
+                        Flags = lent ? CoreInterface.CreateLent : 0,
                     };
                     handle = _api.Create(&p, &status);
                 }
                 if (handle == 0)
                 {
                     int end = Array.IndexOf(error, (byte)0);
-                    string words = end > 0 ? Encoding.UTF8.GetString(error, 0, end) : library.Words(status);
-                    throw new CoreRefusedException(status, $"{library.Info.DisplayName} refused the game: {words}.");
+                    string words = end > 0 ? Encoding.UTF8.GetString(error, 0, end) : Library.Words(status);
+                    throw new CoreRefusedException(status, $"{Library.Info.DisplayName} refused the game: {words}.");
                 }
-                _handle = handle;
+                return handle;
             }
             finally
             {
                 foreach (var pin in pins) if (pin.IsAllocated) pin.Free();
             }
-            Info = ReadInfo();
         }
 
         // Where a refused state's exception carries the core's status, so that a host can tell EMUSEN_WRONG_MEDIA from the rest - see EmuSen_CoreAPI.md §6.23.
@@ -289,33 +330,45 @@ namespace EmuSen.Cores.Native
         // MEDIA: the disc in a drive replaced by image with its companions, or emptied by null; restore for a state about to load.
         public void MediaInsert(uint drive, byte[]? image, IReadOnlyList<(uint Which, byte[] Data)> files, bool restore)
         {
+            fixed (byte* img = image) Insert(drive, image is null ? null : new CoreBytes(img, image.Length), files, Array.Empty<(uint, CoreBytes)>(), restore, null);
+        }
+
+        // The same from bytes the host holds in place; with a loan they are lent, and the drive's earlier loan is released once the core has taken the new disc. A refused disc's loan is released at once.
+        public void MediaInsert(uint drive, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, bool restore, IDisposable? loan = null)
+        {
+            try { Insert(drive, image, Array.Empty<(uint, byte[])>(), media, restore, loan); }
+            catch
+            {
+                loan?.Dispose();
+                throw;
+            }
+        }
+
+        private void Insert(uint drive, CoreBytes? image, IReadOnlyList<(uint Which, byte[] Data)> files, IReadOnlyList<(uint Which, CoreBytes Data)> media, bool restore, IDisposable? loan)
+        {
             var pins = new GCHandle[files.Count];
-            var entries = new CoreInterface.File[files.Count];
             try
             {
-                for (int i = 0; i < files.Count; i++)
-                {
-                    pins[i] = GCHandle.Alloc(files[i].Data, GCHandleType.Pinned);
-                    entries[i] = new CoreInterface.File { Size = (uint)sizeof(CoreInterface.File), Which = files[i].Which, Data = (byte*)pins[i].AddrOfPinnedObject(), Len = (nuint)files[i].Data.Length };
-                }
-                int status;
-                fixed (byte* img = image)
+                var entries = Entries(files, media, pins);
                 fixed (CoreInterface.File* f = entries)
                 {
                     var m = new CoreInterface.Media
                     {
                         Size = (uint)sizeof(CoreInterface.Media),
-                        Flags = restore ? CoreInterface.MediaRestore : 0,
-                        Image = image is null ? null : img,
-                        ImageLen = (nuint)(image?.Length ?? 0),
+                        Flags = (restore ? CoreInterface.MediaRestore : 0) | (loan is not null ? CoreInterface.MediaLent : 0),
+                        Image = image is { } i ? i.Data : null,
+                        ImageLen = image?.Length ?? 0,
                         Files = f,
                         FileCount = (nuint)entries.Length,
                         FileSize = (nuint)sizeof(CoreInterface.File),
                     };
                     lock (_gate)
                     {
-                        status = _api.MediaInsert(Handle, drive, &m);
+                        int status = _api.MediaInsert(Handle, drive, &m);
                         Ok(status, image is null ? "empty the drive" : "take the disc");
+                        // The core holds nothing of the drive's earlier disc now, so what kept it in place may go.
+                        if (_loans.Remove(drive, out IDisposable? earlier)) earlier.Dispose();
+                        if (loan is not null) _loans[drive] = loan;
                         ReadInfo();
                     }
                 }
@@ -472,6 +525,9 @@ namespace EmuSen.Cores.Native
             {
                 if (_handle != 0) _api.Free(_handle);
                 _handle = 0;
+                // The machine is freed, so every loan has ended.
+                foreach (IDisposable loan in _loans.Values) loan.Dispose();
+                _loans.Clear();
             }
             GC.SuppressFinalize(this);
         }

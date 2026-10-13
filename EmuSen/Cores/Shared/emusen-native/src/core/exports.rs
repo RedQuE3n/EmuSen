@@ -4,7 +4,9 @@
 
 use std::ffi::c_char;
 use std::mem::size_of;
+use std::sync::Arc;
 
+use super::lend::{self, Lend, Loan};
 use super::outbox::{Inner, Outbox, Route, library_log};
 use super::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine, caps, event, flags, kind, status};
 use super::{Core, Create, File, Insert, Settings, SettingKind, desc};
@@ -16,6 +18,8 @@ pub struct Instance<T> {
     pub core: T,
     pub outbox: Outbox,
     seen: Seen,
+    /// The loans standing, each by the drive whose disc it lent (BORROW, §6.24).
+    loans: Vec<(u32, Arc<Loan>)>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -234,7 +238,7 @@ pub unsafe fn capabilities<T: Core>() -> u64 {
 }
 
 pub unsafe fn info<T: Core>(out: *mut u8, len: usize) -> i64 {
-    unsafe { copy_text(&desc::info_json(&T::info(), T::CAPABILITIES), out, len) }
+    unsafe { copy_text(&desc::info_json(&T::info(), T::CAPABILITIES, &T::battery_files), out, len) }
 }
 
 pub unsafe fn settings_schema<T: Core>(out: *mut u8, len: usize) -> i64 {
@@ -273,6 +277,31 @@ pub unsafe fn log_drain<T: Core>(machine: *mut Machine, out: *mut u8, len: usize
     }
 }
 
+/// A host's struct as far as both sides know it (§4.2): refused when shorter than `least`, its 1.0 size; else the
+/// first `min(size, ours)` bytes, the rest zero, which is what an absent field means.
+unsafe fn prefix<S: Copy>(given: *const S, least: usize) -> Result<S, i32> {
+    if given.is_null() {
+        return Err(status::NULL);
+    }
+    // SAFETY: every struct of the interface begins with `size`, and the host gave at least those four bytes.
+    let size = unsafe { (given as *const u32).read_unaligned() } as usize;
+    if size < least {
+        return Err(status::BAD_STRUCT);
+    }
+    let mut ours = std::mem::MaybeUninit::<S>::zeroed();
+    // SAFETY: the host gave `size` bytes; no more than our own struct holds are copied, and every struct read this
+    // way is integers and pointers, for which zero is a value.
+    unsafe {
+        std::ptr::copy_nonoverlapping(given as *const u8, ours.as_mut_ptr() as *mut u8, size.min(size_of::<S>()));
+        Ok(ours.assume_init())
+    }
+}
+
+/// What a call lends when its flag is set and the core claims `BORROW`: the image and the files from `FILE_MEDIA` up.
+fn lent<'a, T: Core>(flag: bool, image: &'a [u8], files: &[File<'a>]) -> Option<Lend> {
+    (flag && T::CAPABILITIES & caps::BORROW != 0).then(|| Lend::open(std::iter::once(image).chain(files.iter().filter(|f| f.which >= flags::FILE_MEDIA).map(|f| f.data))))
+}
+
 /// The host's array of `count` files of `size` bytes each, at least 1.0's, as slices.
 unsafe fn file_list<'a>(files: *const FileEntry, count: usize, size: usize) -> Vec<File<'a>> {
     (0..count)
@@ -292,10 +321,7 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
     let made = {
         let _route = Route::to(&outbox);
         let r = (|| {
-            let p = unsafe { params.as_ref() }.ok_or(status::NULL)?;
-            if (p.size as usize) < size_of::<CreateParams>() {
-                return Err(status::BAD_STRUCT);
-            }
+            let p = unsafe { prefix(params, CreateParams::SIZE_1_0) }?;
             error = (p.error, p.error_len);
             if p.file_count > 0 && p.file_size < size_of::<FileEntry>() {
                 return Err(status::BAD_STRUCT);
@@ -306,15 +332,27 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
                 code
             })?;
             let request = Create { image: unsafe { input(p.image, p.image_len) }, settings, files, pixel_formats: p.pixel_formats | 1, host_abi_version: p.host_abi_version };
-            T::create(&request)
+            let lend = lent::<T>(p.flags & flags::CREATE_LENT != 0, request.image, &request.files);
+            let made = T::create(&request);
+            let loan = lend.map(Lend::close);
+            match (made, loan) {
+                (Ok(core), loan) => Ok((core, loan)),
+                (Err(code), loan) => {
+                    if let Some(loan) = loan {
+                        lend::ended(loan, &T::info().name, "after a create it refused");
+                    }
+                    Err(code)
+                }
+            }
         })();
         T::end_call();
         r
     };
     let (machine, code) = match made {
-        Ok(core) => {
+        Ok((core, loan)) => {
             let seen = measure(&core);
-            let inst = Box::new(Instance { core, outbox, seen });
+            let drive = core.drives().first().map_or(0, |d| d.drive);
+            let inst = Box::new(Instance { core, outbox, seen, loans: loan.map(|l| (drive, l)).into_iter().collect() });
             inst.outbox.borrow_mut().announce();
             (Box::into_raw(inst) as *mut Machine, 0)
         }
@@ -337,8 +375,11 @@ pub unsafe fn free<T: Core>(machine: *mut Machine) -> i32 {
         return NULL;
     }
     let inst = unsafe { Box::from_raw(machine as *mut Instance<T>) };
-    let Instance { core, outbox, .. } = *inst;
+    let Instance { core, outbox, loans, .. } = *inst;
     drop(core);
+    for (_, loan) in loans {
+        lend::ended(loan, &T::info().name, "at free");
+    }
     library_log().append(&mut outbox.into_inner().log);
     0
 }
@@ -652,8 +693,11 @@ pub unsafe fn media_lid<T: Core>(machine: *mut Machine, drive: u32, open: u32) -
 
 pub unsafe fn media_insert<T: Core>(machine: *mut Machine, drive: u32, media: *const super::sys::Media) -> i32 {
     let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
-    let Some(m) = (unsafe { media.as_ref() }) else { return NULL };
-    if (m.size as usize) < size_of::<super::sys::Media>() || (m.file_count > 0 && m.file_size < size_of::<FileEntry>()) {
+    let m = match unsafe { prefix(media, size_of::<super::sys::Media>()) } {
+        Ok(m) => m,
+        Err(code) => return code,
+    };
+    if m.file_count > 0 && m.file_size < size_of::<FileEntry>() {
         return status::BAD_STRUCT;
     }
     let insert = Insert {
@@ -661,7 +705,24 @@ pub unsafe fn media_insert<T: Core>(machine: *mut Machine, drive: u32, media: *c
         files: unsafe { file_list(m.files, m.file_count, m.file_size) },
         restore: m.flags & flags::MEDIA_RESTORE != 0,
     };
+    let lend = insert.image.and_then(|image| lent::<T>(m.flags & flags::MEDIA_LENT != 0, image, &insert.files));
     let r = call(inst, |c| c.media_insert(drive, &insert));
+    let loan = lend.map(Lend::close);
+    let name = || T::info().name;
+    match r {
+        // The drive's earlier disc is gone from the core, so its loan ends; the new disc's stands in its place.
+        Ok(()) => {
+            while let Some(at) = inst.loans.iter().position(|l| l.0 == drive) {
+                lend::ended(inst.loans.swap_remove(at).1, &name(), "after an insert replaced that disc");
+            }
+            inst.loans.extend(loan.map(|l| (drive, l)));
+        }
+        Err(_) => {
+            if let Some(loan) = loan {
+                lend::ended(loan, &name(), "after an insert it refused");
+            }
+        }
+    }
     observe(inst, true);
     status_of(r)
 }

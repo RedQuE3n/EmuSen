@@ -101,7 +101,7 @@ pub struct Lib {
     pub path: PathBuf,
     pub f: Fns,
     /// The host this kit plays (C12): the minor it says it was built with, and the bytes its structs carry past
-    /// version 1.0's, each filled with `CANARY`.
+    /// the size that minor knows, each filled with `CANARY`. A host before 1.3 passes the 88-byte create params of 1.0.
     host_minor: AtomicU32,
     pad: AtomicUsize,
     /// Canary bytes a core changed, which must stay zero.
@@ -114,6 +114,11 @@ pub const CANARY: u8 = 0xA5;
 /// Bytes `buf` holds past `from` that are no longer the canary.
 fn broken(buf: &[u8], from: usize) -> usize {
     buf[from..].iter().filter(|&&b| b != CANARY).count()
+}
+
+/// Files as the slices a call passes.
+pub fn slices(files: &[(u32, Vec<u8>)]) -> Vec<(u32, &[u8])> {
+    files.iter().map(|(w, d)| (*w, &d[..])).collect()
 }
 
 /// Reads a text the length-query way.
@@ -177,7 +182,14 @@ impl Lib {
 
     /// A machine, or the refusal's status and its error text.
     pub fn create(&self, image: &[u8], settings: &str, files: &[(u32, Vec<u8>)], pixel_formats: u64) -> Result<Machine<'_>, (i32, String)> {
+        self.create_from(image, settings, &slices(files), pixel_formats, 0)
+    }
+
+    /// `create` from slices, with `emusen_create_params.flags` where the host played is of 1.3 or later; an earlier
+    /// one has no such field, and passes the struct of 1.0.
+    pub fn create_from(&self, image: &[u8], settings: &str, files: &[(u32, &[u8])], pixel_formats: u64, flags: u32) -> Result<Machine<'_>, (i32, String)> {
         let (minor, pad) = self.host();
+        let known = if minor >= 3 { std::mem::size_of::<CreateParams>() } else { CreateParams::SIZE_1_0 };
         let element = std::mem::size_of::<FileEntry>() + pad;
         let mut entries = vec![CANARY; element * files.len()];
         for (i, (w, d)) in files.iter().enumerate() {
@@ -185,7 +197,7 @@ impl Lib {
             unsafe { std::ptr::write_unaligned(entries.as_mut_ptr().add(i * element) as *mut FileEntry, e) };
         }
         let mut error = vec![0u8; 512];
-        let mut params = vec![CANARY; std::mem::size_of::<CreateParams>() + pad];
+        let mut params = vec![CANARY; known + pad];
         let p = CreateParams {
             size: params.len() as u32,
             host_abi_version: (1 << 16) | minor,
@@ -199,10 +211,12 @@ impl Lib {
             pixel_formats,
             error: error.as_mut_ptr(),
             error_len: error.len(),
+            flags,
         };
-        unsafe { std::ptr::write_unaligned(params.as_mut_ptr() as *mut CreateParams, p) };
+        // SAFETY: `params` holds at least `known` bytes, and `known` is no more than the struct.
+        unsafe { std::ptr::copy_nonoverlapping(&p as *const CreateParams as *const u8, params.as_mut_ptr(), known) };
         let made = self.create_raw(params.as_ptr() as *const CreateParams, &mut error);
-        let damaged = broken(&params, std::mem::size_of::<CreateParams>()) + (0..files.len()).map(|i| broken(&entries[i * element..(i + 1) * element], std::mem::size_of::<FileEntry>())).sum::<usize>();
+        let damaged = broken(&params, known) + (0..files.len()).map(|i| broken(&entries[i * element..(i + 1) * element], std::mem::size_of::<FileEntry>())).sum::<usize>();
         self.canaries_broken.fetch_add(damaged, Ordering::Relaxed);
         made
     }
@@ -360,6 +374,11 @@ impl Machine<'_> {
 
     /// MEDIA's insert of `image` with its files, or of nothing for `None`.
     pub fn media_insert(&self, drive: u32, image: Option<&[u8]>, files: &[(u32, Vec<u8>)], flags: u32) -> i32 {
+        self.media_insert_from(drive, image, &slices(files), flags)
+    }
+
+    /// `media_insert` from slices.
+    pub fn media_insert_from(&self, drive: u32, image: Option<&[u8]>, files: &[(u32, &[u8])], flags: u32) -> i32 {
         let Some(f) = self.lib.f.media_insert else { return status::NOT_SUPPORTED };
         let entries: Vec<FileEntry> = files.iter().map(|(w, d)| FileEntry { size: std::mem::size_of::<FileEntry>() as u32, which: *w, data: d.as_ptr(), len: d.len() }).collect();
         let m = Media {

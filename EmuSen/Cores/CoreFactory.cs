@@ -101,7 +101,7 @@ namespace EmuSen.Cores
 
         // A library file into a core: a v1 engine takes the file and its set itself; a C# core takes an archive's image unpacked, named for the archive - see EmuSen_CoreAPI_Extensions.md §10.4.
         public static void LoadInto(ICore core, string romPath) =>
-            core.LoadRom(core is Native.CoreEngine || !Crystal.Media.ArchiveImages.IsArchive(romPath) ? romPath : Crystal.Media.ArchiveImages.Unpack(romPath, CoreCatalog.IsImageExtension));
+            core.LoadRom(core is Native.CoreEngine || !Galaxia.Media.ArchiveImages.IsArchive(romPath) ? romPath : Galaxia.Media.ArchiveImages.Unpack(romPath, CoreCatalog.IsImageExtension));
 
         // The engine graphics.json stores for the ROM's console, so every frontend makes the one decision Mistress's row records; null where nothing is stored - see EmuSen_Settings_Reference.md §4.44.
         public static string? ConfiguredEngine(string romPath) =>

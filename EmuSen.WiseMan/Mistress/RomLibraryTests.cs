@@ -169,7 +169,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void Scanned_extensions_come_from_the_core_catalog()
         {
-            Assert.Equal(EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Crystal.Media.ArchiveImages.Extensions), RomLibrary.Extensions);
+            Assert.Equal(EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions), RomLibrary.Extensions);
         }
 
         [Fact]

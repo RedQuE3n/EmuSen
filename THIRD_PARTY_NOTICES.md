@@ -128,7 +128,7 @@ Rust, links the Rust standard library too and uses these: the MD5 crates for the
 after a rename (versions pinned on 2026-10-07), `libloading`, with `windows-link` on Windows, to call the SDL3, the
 Shaderc and the SQLite the program ships (pinned on 2026-10-08), and `sha2`, with `cpufeatures` and on some processors
 `libc`, for the keys of the compiled-shader cache, and `ash`, without its own loader, for Vulkan's declarations (both
-pinned on 2026-10-09):
+pinned on 2026-10-09), and `memmap2`, with `libc` on Unix, for a disc's files mapped read-only (pinned on 2026-10-12):
 
 | Crate | Version | Licence | Copyright or authors |
 |---|---|---|---|
@@ -142,6 +142,7 @@ pinned on 2026-10-09):
 | [hybrid-array](https://github.com/RustCrypto/hybrid-array) | 0.4.15 | MIT OR Apache-2.0 | Copyright (c) 2022-2026 The RustCrypto Project Developers |
 | [libc](https://github.com/rust-lang/libc) | 0.2.190 | MIT OR Apache-2.0 | Copyright (c) The Rust Project Developers |
 | [libloading](https://github.com/nagisa/rust_libloading/) | 0.9.0 | ISC | Copyright © 2015, Simonas Kazlauskas |
+| [memmap2](https://github.com/RazrFalcon/memmap2-rs) | 0.9.11 | MIT OR Apache-2.0 | Copyright (c) 2020 Yevhenii Reizner |
 | [md-5](https://github.com/RustCrypto/hashes) | 0.11.0 | MIT OR Apache-2.0 | Copyright (c) 2016-2026 The RustCrypto Project Developers; Copyright (c) 2016 Artyom Pavlov; Copyright (c) 2009-2013 Mozilla Foundation; Copyright (c) 2006-2009 Graydon Hoare |
 | [sha2](https://github.com/RustCrypto/hashes) | 0.11.0 | MIT OR Apache-2.0 | Copyright (c) 2016-2026 The RustCrypto Project Developers |
 | [typenum](https://github.com/paholg/typenum) | 1.20.1 | MIT OR Apache-2.0 | Copyright (c) 2014 Paho Lurie-Gregg |

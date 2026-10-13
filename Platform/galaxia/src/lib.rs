@@ -11,6 +11,7 @@ pub mod dotnet_path;
 pub mod dotnet_text;
 pub mod error_log;
 pub mod json;
+pub mod mapped;
 pub mod migration;
 pub mod model;
 pub mod models;

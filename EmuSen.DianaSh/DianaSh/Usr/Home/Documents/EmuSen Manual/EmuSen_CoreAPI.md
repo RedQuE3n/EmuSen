@@ -343,8 +343,14 @@ uint32_t emusen_core_abi_version(void);     // (MAJOR << 16) | MINOR, as built
   never undefined behaviour. A host given an event kind or a descriptor field it does not know skips it.
 - **Descriptors are JSON documents** (§6.3); a reader ignores fields it does not know, and a field a host requires is
   never removed within major 1.
-- **Reserved space**: status codes in the interface's band not yet assigned; capability bits 18–47; event kinds; JSON
-  field names beginning `x-` for a core's private use, never assigned by the specification.
+- **Reserved space**: status codes in the interface's band not yet assigned; capability bits 21–47 (18 to 20 assigned
+  since, by 1.1 to 1.3); event kinds; JSON field names beginning `x-` for a core's private use, never assigned by the
+  specification.
+- **A struct grows only at its end, and 1.3's `emusen_create_params.flags` is the first to.** The callee copies
+  `min(size, its own)` bytes into a struct of its own size zeroed beforehand, so a field a shorter struct lacks reads
+  as zero, and a callee older than the field reads none of the longer struct's tail. `emusen-native` read a whole struct
+  of its own size until 1.3, which was correct only while no struct had grown; C12's host of minor 0 now passes the
+  88-byte struct of 1.0 to hold every core to the rule.
 
 ### 4.3 What breaks version 1
 
@@ -584,7 +590,9 @@ int64_t emusen_core_last_error(const emusen_machine *machine, uint8_t *out, size
   returns null with a status, and copies its detail into `error` when given: at most `error_len − 1` bytes of UTF-8,
   cut at a character boundary, then a NUL, so the host finds the end without a returned length; a failed create
   leaves nothing to free.
-  The core copies what it keeps; no pointer in `params` outlives the call.
+  The core copies what it keeps; no pointer in `params` outlives the call. *Amended at 1.3* (§6.24): where the host
+  sets `EMUSEN_CREATE_LENT` for a core that claims `BORROW`, the image and the media files are lent, and the core may
+  keep pointers into them until the loan ends; every other pointer is the call's alone, as before.
 - **Files.** `which` 0 is the battery save. Other numbers are the core's, named in its machine info (`battery`, §6.11)
   or in `firmware_for`'s answer. **Firmware** is asked for before create, from the image, and passed as files:
 
@@ -670,6 +678,7 @@ Each **system** entry:
 | `controllers` | the devices a port can hold, below |
 | `development` | true when the core does not run the system's games yet; absent is false (§27.4, added 2026-10-06) |
 | `firmware` | every firmware file the system can use, for the firmware window, even before a game. One entry for each image a game can name, with that image's own label, size, parts and replacement, as `firmware_for` gives them; entries for images that are alternatives in one file slot share its `which` (amended 2026-10-05, `VenusRT_Native.md` §67) |
+| `battery` | since 1.3: `[{ which, suffix }]`, every battery file a machine of the system can name whatever its settings, so that a host passes them at the first create. A core that lists a file accepts it at create even where the machine made does not keep it. Machine info stays the authority for the machine; a host creates again only where it names a file that exists and was not passed. Absent, a host passes file 0 by its `.srm` rule and creates again as §19.1 records (`EmuSen_CoreAPI_Extensions.md` §10.5) |
 
 A **controller** names its controls in the canonical vocabulary, so that the bindings screen is built from data and
 the physical bindings stay the frontend's:
@@ -1015,9 +1024,10 @@ core's; −256 to −319 the interface's; −320 to −383 a reproduced .NET exc
 | The machine | the core, in `create` | the core, in `free` | until `free` |
 | A descriptor, a log record, a state, a picture | copied into the host's buffer | the host | the host's |
 | Anything the core keeps from `create`'s params | copied by the core | the core | the machine's |
+| The image and media files of a lending call (1.3, §6.24) | the host, mapped or held | the host, once the loan ends | until `free` or that drive's next successful `media_insert` |
 
 No export returns a pointer except `create`, whose machine is opaque. No pointer passed in may be kept after the call
-returns. The length-query idiom makes every allocation the host's, so neither side ever frees the other's memory, and
+returns, but for what a lending call lends (§6.24). The length-query idiom makes every allocation the host's, so neither side ever frees the other's memory, and
 the two sides may use different allocators.
 
 ### 6.18 Errors, logs and the crash log
@@ -1152,7 +1162,45 @@ the disc, so no record gained a field (`Diamond_Players.md` §3).
 
 **Older and newer peers.** A host that predates 1.1 passes no companions and never calls `MEDIA`; a core that predates
 it claims no sheet and no bit. A newer host with a core without `MEDIA` shows no Change Disc row and plays an `.m3u`'s
-first disc. **The kit** checks it as C16 where `MEDIA` is claimed (§12); C2 checks the bit against both exports.
+first disc. **The kit** checks it as C16 where `MEDIA` is claimed (§12, §28.7); C2 checks the bit against both exports.
+
+### 6.24 A lent image: `BORROW` (1.3, 2026-10-12)
+
+*Added as `EmuSen_CoreAPI_Extensions.md` §10.2 decided on 2026-10-12, with §10.5's battery files in the same minor.
+The design and its record are there, §10.2.4; this section is the normative text.*
+
+```c
+#define EMUSEN_CAP_BORROW    (1ull << 20)  /* the core keeps pointers into an image and media files lent to it */
+#define EMUSEN_CREATE_LENT   1u            /* emusen_create_params.flags, appended at 1.3 (96 bytes; 88 accepted) */
+#define EMUSEN_MEDIA_LENT    2u            /* emusen_media.flags, beside EMUSEN_MEDIA_RESTORE */
+```
+
+- **The promise.** A host that sets `LENT` on a call promises that the call's image, and each of its files numbered
+  `EMUSEN_FILE_MEDIA` or above, stay readable, unchanged and at the same addresses until the loan ends. The core may
+  then keep pointers into them, and read them from any of the machine's threads while the machine exists.
+- **The loan's end.** A loan made at `create` ends when `free` returns, or when a `media_insert` on the drive holding
+  that disc (the first drive machine info lists) returns success; one made at `media_insert`, the same for its drive.
+  When `media_insert` returns success the core holds no pointer into that drive's earlier disc. A refused call lends
+  nothing, and a refused insert leaves the drive's earlier loan standing. An insert of a null image ends the drive's
+  loan and makes none.
+- **Who sets it.** A host sets `LENT` only for a core that claims `BORROW`. A core keeps no pointer from a call without
+  it, whatever it claims: without the flag, or in a struct too short to hold it, it copies what it keeps, as in 1.0.
+  Library-level calls lend nothing; `firmware_for` may still be passed a mapping's address, and reads of it what its
+  answer takes.
+- **States** hold no address and no disc bytes; a state made on a lent disc loads on a copied one and the reverse.
+- **The Rust side.** `emusen_native::core::keep(bytes) -> Kept`, called inside `create` or `media_insert` where a core
+  would have copied: the host's bytes where the call lends them, a copy otherwise; `Kept` dereferences to `[u8]`. Each
+  lending call makes a loan that every `Kept` from it holds; an export that ends a loan while a `Kept` still holds it
+  panics, which aborts the process before the host releases the bytes. A core's own code holds no raw pointer.
+- **The host** (`CoreEngine`): a disc's files come from Galaxia's `DiscSet` and `DiscFiles` (`EmuSen_Galaxia.md`
+  §3.8), mapped; for a core claiming `BORROW` the `DiscFiles` is handed to `CoreMachine` as the loan, released when the
+  machine is freed or its drive takes another disc, and for any other core released as soon as create or the insert
+  returns.
+- **Older and newer peers.** An older host passes 88 bytes and never `LENT`: the core copies. An older core never
+  claims the bit, so a newer host lends it nothing and releases the mapping after create.
+- **The kit** checks it as C17 (§12): the image overwritten after a create that lent nothing, its run unchanged; and,
+  where `BORROW` is claimed, the image mapped and lent, its run equal to a copied one's frame for frame, sample for
+  sample and state for state, across a disc swap where there is a disc.
 
 ---
 
@@ -1867,6 +1915,15 @@ up, `--against` an older baseline accepts a rise and refuses a fall, and every o
 debugger that could see stores and not loads; Diamond the first core to claim them. The same change refuses an unknown
 range kind, which 1.0's crate took for data breakpoints. Minor 1 is the disc change's (`MEDIA`), built beside it and
 merged after it, its number kept.
+
+**v1.3, 2026-10-12** (§6.24, §6.3), from the launch-time measurement of `Diamond_Players.md` §12.8: `BORROW` (bit 20),
+`emusen_create_params.flags` appended (the first struct to grow; 96 bytes, 88 still accepted), `EMUSEN_CREATE_LENT` and
+`EMUSEN_MEDIA_LENT`, so that a core reads its disc where the host has mapped it instead of copying it whole at create;
+and core info's `systems[].battery`, so that a host knows a game's battery files before its first create. Its reasons
+are `EmuSen_CoreAPI_Extensions.md` §10.2 and §10.5. The guard now keeps a struct's baseline line at the size its minor
+gave it and accepts growth only by fields appended at or past it (`emusen-core-abi-check`'s
+`a_struct_grows_only_by_appended_fields_and_keeps_its_line`); the C# check holds each struct to its fields' end. Kit
+case C17 is added, and C13's threads now overlap the run they judge (§24).
 
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
 and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld
@@ -2841,7 +2898,27 @@ frames, under a 10 GiB `MemoryMax`, no firmware folder: the core's cases pass an
 and C16, in 42.8 s, nine at a time. The largest sum of estimates admitted was 10.36 GB of 10.47 GB allowed; the peak
 resident memory was 8.82 GB, below it, so P2 holds on this run. The kit's own tests pass, 7, 0 and 15, one of them, the
 C13 fault case, failing about one run in three on the base commit and after this change alike, its info drift
-sometimes missed by its four threads; it is not this change's and was not chased.
+sometimes missed by its four threads; it is not this change's and was not chased. *Fixed 2026-10-12 (§28.8):* the
+case's run now starts once each thread is calling and ends once each has called beside it.
+
+### 28.8 C17, the image's life, and C14's battery files (1.3, 2026-10-12)
+
+- **C17** (§6.24), run with the image cases on every core. An image that came from files is mapped through Galaxia's
+  Rust module, as a host lends it; one given as bytes is held in place. Three runs of C6's frames with the script's
+  input, each frame's picture, sound and state digest kept: the core copying from the kit's bytes left alone, the
+  reference; the core copying from bytes the kit overwrites, every byte its complement, as soon as create returns,
+  which must change nothing, so a core that keeps a pointer it was not lent is caught on every core; and, where
+  `BORROW` is claimed, the core borrowing the mapped files with `EMUSEN_CREATE_LENT` from a host of minor 3. Where the
+  machine has a disc in a drive and `MEDIA` is claimed, each run opens the lid, inserts the same disc the same way
+  (lent with `EMUSEN_MEDIA_LENT` in the third), releases the first disc's bytes, closes the lid and runs 120 frames
+  more. The first frame where a run differs is named, with what differs. A seeded fault, 256, a machine reading an
+  image lent to it otherwise than its copy, fails C17 alone.
+- **C14** now reads core info's `systems[].battery` for the machine's system where it is written: each `which` listed
+  once, each suffix an extension, every battery file machine info names listed, and a create with every listed file
+  passed empty accepted.
+- **C12**'s host of minor 0 passes the 88-byte `emusen_create_params` of 1.0, whatever the kit's own size.
+- **Measured** [M]: the kit's tests pass, 7 and 16 (three parallel runs of three); on the seven test discs at 1,800
+  frames C17 passes on every one (`EmuSen_CoreAPI_Extensions.md` §10.2.5).
 
 ## 29. A space that is a view, 2026-10-07
 

@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using EmuSen.Cores.Native;
-using EmuSen.Crystal.Media;
+using EmuSen.Galaxia.Media;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;

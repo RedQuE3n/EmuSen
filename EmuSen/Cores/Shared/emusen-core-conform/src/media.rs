@@ -37,13 +37,27 @@ pub fn companions(path: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(files)
 }
 
+/// Where the image `create` receives and its media files are on disk, the files numbered from `FILE_MEDIA`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OnDisk {
+    pub image: PathBuf,
+    pub files: Vec<(u32, PathBuf)>,
+}
+
+/// The files the image at `path` stands for: an `.m3u`'s first disc, and a sheet's companions.
+pub fn on_disk(path: &Path) -> Result<OnDisk, String> {
+    let image = first_disc(path)?;
+    let files = companions(&image)?.into_iter().enumerate().map(|(n, file)| (FILE_MEDIA + n as u32, file)).collect();
+    Ok(OnDisk { image, files })
+}
+
 /// The bytes `create` receives for the image at `path`, and its companions numbered from `FILE_MEDIA`.
 pub fn open(path: &Path) -> Result<(Vec<u8>, Vec<(u32, Vec<u8>)>), String> {
-    let path = first_disc(path)?;
-    let image = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let disk = on_disk(path)?;
+    let image = std::fs::read(&disk.image).map_err(|e| format!("{}: {e}", disk.image.display()))?;
     let mut files = Vec::new();
-    for (n, file) in companions(&path)?.into_iter().enumerate() {
-        files.push((FILE_MEDIA + n as u32, std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?));
+    for (which, file) in disk.files {
+        files.push((which, std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?));
     }
     Ok((image, files))
 }
@@ -72,6 +86,8 @@ mod tests {
         assert!(image.starts_with(b"FILE"));
         assert_eq!(files.iter().map(|(w, d)| (*w, d.len())).collect::<Vec<_>>(), [(FILE_MEDIA, 4), (FILE_MEDIA + 1, 6), (FILE_MEDIA + 2, 4)]);
         assert_eq!(size(&dir.join("a.cue")), std::fs::metadata(dir.join("a.cue")).unwrap().len() + 14);
+        let disk = on_disk(&dir.join("a.m3u")).unwrap();
+        assert_eq!((disk.image, disk.files.len(), &disk.files[2]), (dir.join("a.cue"), 3, &(FILE_MEDIA + 2, dir.join("a.sbi"))));
         assert!(open(&dir.join("a (Track 1).bin")).unwrap().1.is_empty());
         std::fs::remove_file(dir.join("a (Track 2).bin")).unwrap();
         assert!(open(&dir.join("a.cue")).unwrap_err().contains("a (Track 2).bin"));

@@ -3,7 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Crystal.Media;
+using EmuSen.Galaxia.Media;
 using EmuSen.Crystal.Systems;
 using EmuSen.Crystal.Systems.Psx;
 using EmuSen.Galaxia.Library;
@@ -98,7 +98,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var disc = SyntheticPsxDisc.Build();
             string cue = disc.WriteSet(_library, "Amber Set");
-            Assert.Equal(new[] { (ImageSets.FileMedia, "Amber Set (Track 1).bin"), (ImageSets.FileMedia + 1, "Amber Set (Track 2).bin") }, ImageSets.FilesFor(cue).Select(f => (f.Which, Path.GetFileName(f.Path))));
+            Assert.Equal(new[] { "Amber Set (Track 1).bin", "Amber Set (Track 2).bin" }, ImageSets.FilesFor(cue).Select(Path.GetFileName));
             using (var core = (CoreEngine)CoreFactory.Load(cue).Core)
             {
                 core.RunFrame();
@@ -154,7 +154,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Names(loose), Names(zipped));
         }
 
-        // The question asked before every launch reads no image where the core's info leaves no firmware required: a zip is not unpacked for it, a locked track not opened - see Diamond_Players.md §12.8.2.
+        // The question asked before every launch reads no image where the core's info leaves no firmware required: a zip is not unpacked for it, a track gone from its folder not missed - see Diamond_Players.md §12.8.2.
         [Fact]
         public void The_firmware_question_reads_no_image_where_no_entry_can_be_required()
         {
@@ -165,11 +165,10 @@ namespace EmuSen.WiseMan.Cores
 
             string loose = Write("Opal Lock.bin", disc.DataTrack);
             var engine = (CoreEngine)CoreFactory.ForFirmwareProbe(loose);
-            using (File.Open(loose, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            {
-                Assert.Throws<IOException>(() => engine.GetFirmwareRequirements(loose));
-                Assert.Empty(engine.RequiredFirmwareFor(loose));
-            }
+            File.Move(loose, loose + ".away");
+            Assert.ThrowsAny<IOException>(() => engine.GetFirmwareRequirements(loose));
+            Assert.Empty(engine.RequiredFirmwareFor(loose));
+            File.Move(loose + ".away", loose);
             Assert.Equal(engine.GetFirmwareRequirements(loose).Where(r => r.Required), engine.RequiredFirmwareFor(loose));
             Assert.Equal("scph5501.bin", engine.GetFirmwareRequirements(loose).Single().FileName);
         }
@@ -202,7 +201,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { "Quartz Bay.cue", "Quartz Zip.zip" }, ImageSets.Shelved(Directory.EnumerateFiles(_library, "*", SearchOption.AllDirectories).Order().ToList()).Select(Path.GetFileName));
             foreach (string game in new[] { Path.Combine(folder, "Quartz Bay.cue"), zipped })
             {
-                Assert.Equal(new[] { "Quartz Bay (Track 1).bin", "Quartz Bay (Track 2).bin" }.Select(n => n.Replace("Quartz Bay", Path.GetFileNameWithoutExtension(game))), ImageSets.FilesFor(CoreEngine.DiscsOf(game)[0]).Select(f => Path.GetFileName(f.Path)));
+                Assert.Equal(new[] { "Quartz Bay (Track 1).bin", "Quartz Bay (Track 2).bin" }.Select(n => n.Replace("Quartz Bay", Path.GetFileNameWithoutExtension(game))), ImageSets.FilesFor(CoreEngine.DiscsOf(game)[0]).Select(Path.GetFileName));
                 using var core = (CoreEngine)CoreFactory.Load(game).Core;
                 core.RunFrame();
                 Assert.Equal(("psx", true), (core.Machine.Info.System, core.TotalFrames > 0));

@@ -178,11 +178,11 @@ namespace EmuSen.Cores
         // The extension that decides a file's console: an archive's image entry's, else its own - see EmuSen_CoreAPI_Extensions.md §8.4.
         public static string ImageExtension(string romPath)
         {
-            if (!Crystal.Media.ArchiveImages.IsArchive(romPath)) return System.IO.Path.GetExtension(romPath).ToLowerInvariant();
+            if (!Galaxia.Media.ArchiveImages.IsArchive(romPath)) return System.IO.Path.GetExtension(romPath).ToLowerInvariant();
             var info = new System.IO.FileInfo(romPath);
             return EntryExtensions.GetOrAdd((info.FullName, info.Exists ? info.Length : -1, info.Exists ? info.LastWriteTimeUtc.Ticks : 0), _ =>
             {
-                try { return System.IO.Path.GetExtension(Crystal.Media.ArchiveImages.ImageEntry(romPath, IsImageExtension) ?? "").ToLowerInvariant(); }
+                try { return System.IO.Path.GetExtension(Galaxia.Media.ArchiveImages.ImageEntry(romPath, IsImageExtension) ?? "").ToLowerInvariant(); }
                 catch (Exception e) when (e is System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException) { return ""; }
             });
         }

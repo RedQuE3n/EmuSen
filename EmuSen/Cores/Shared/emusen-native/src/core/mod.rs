@@ -7,6 +7,7 @@ pub mod desc;
 #[doc(hidden)]
 pub mod exports;
 pub mod jsonw;
+pub mod lend;
 pub mod outbox;
 pub mod schema;
 pub mod sys;
@@ -18,11 +19,14 @@ pub use crate::abi::{File, Region, Settings};
 pub use crate::debug::Hooks;
 pub use crate::ffi::StateMachine;
 pub use desc::*;
+pub use lend::{Kept, keep};
 pub use outbox::{Level, detail, emit, log};
 pub use sys::{FrameInfo, caps, event, flags, kind, pixel, status};
 
 /// What `create` receives: the image, the settings resolved against the schema with every key present, the files,
-/// and the pixel formats the host accepts (bit 0, RGBA8888, always set).
+/// and the pixel formats the host accepts (bit 0, RGBA8888, always set). Every slice is the host's and valid for the
+/// call only; what a machine needs later it takes with [`keep`], which borrows where the host lends and copies
+/// where it does not (since 1.3, `BORROW`).
 pub struct Create<'a> {
     pub image: &'a [u8],
     pub settings: Settings,
@@ -32,7 +36,8 @@ pub struct Create<'a> {
 }
 
 /// What `media_insert` receives (since 1.1): the disc or nothing, its companions from `flags::FILE_MEDIA`, and
-/// whether the host is setting the drive for a state about to load (EmuSen_CoreAPI.md §6.23).
+/// whether the host is setting the drive for a state about to load (EmuSen_CoreAPI.md §6.23). Its slices are kept
+/// with [`keep`], as create's; a core that returns `Ok` has dropped what it kept of the drive's earlier disc.
 pub struct Insert<'a> {
     pub image: Option<&'a [u8]>,
     pub files: Vec<File<'a>>,
@@ -203,6 +208,12 @@ pub trait Core: Sized + StateMachine {
     /// `DEBUG_DISASSEMBLE`.
     fn debug_disassemble(&mut self, _processor: u32, _space: u32, _address: u32, _count: u32) -> Result<Vec<Instruction>, i32> {
         Err(status::NOT_SUPPORTED)
+    }
+
+    /// Since 1.3: core info's `systems[].battery` for the system `id`, every battery file a machine of it can name
+    /// whatever its settings, so that a host passes them at the first create; `None` writes no field (§6.3).
+    fn battery_files(_system: &str) -> Option<Vec<Battery>> {
+        None
     }
 
     /// `MEDIA`, since 1.1: machine info's `drives`.

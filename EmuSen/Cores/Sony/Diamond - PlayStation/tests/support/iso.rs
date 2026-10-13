@@ -104,12 +104,12 @@ pub fn volume(entries: &[Entry]) -> Vec<[u8; SECTOR]> {
 }
 
 /// The volume as a disc of mode 2 form 1 sectors, as the drive reads a data track.
-pub fn disc(entries: &[Entry]) -> emusen_disc::Disc {
+pub fn disc(entries: &[Entry]) -> diamond::medium::Disc {
     let mut bin = Vec::new();
     for (i, user) in volume(entries).iter().enumerate() {
         let mut s = [0u8; 2352];
         emusen_disc::ecma130::mode2_form1(150 + i as u32, [0, 0, emusen_disc::ecma130::submode::DATA, 0], user, &mut s);
         bin.extend_from_slice(&s);
     }
-    emusen_disc::Disc::from_image(bin, emusen_disc::IsoForm::Mode2Form1).unwrap()
+    diamond::medium::Disc::from_image(bin.into(), emusen_disc::IsoForm::Mode2Form1).unwrap()
 }

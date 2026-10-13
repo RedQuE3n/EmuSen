@@ -37,7 +37,7 @@ Of the nine gaps, **five need the core ABI**, each through a kind of addition th
 | 7 | **The kit's memory per image** | Diamond's corpus form; any large medium | **inside the kit** | none at the ABI |
 | 8 | **Routing a file by its content** | Diamond and the Sega CD from Diamond's st. 7; every later disc console | **a runtime service** (one function, one owner of the decision) over recognisers in the system packs | none at the ABI; `SystemEntry` gains `Recognise` |
 | 9 | **Memory cards, packs and a console's own memory** | Diamond st. 6, the Sega CD, the N64's Controller Pak | an **extension**: a descriptor field; the path policy the runtime's | machine info's `battery[].kind` |
-| 10 | **Device kinds; streaming reads** | later | **deferred**, with the shape that would fit recorded; streaming measured 2026-10-12 and proposed (§10.2, Q15), battery files in core info proposed (§10.5, Q16) | none now |
+| 10 | **Device kinds; streaming reads; battery files before create** | device kinds later; the other two Diamond, then the Sega CD | device kinds **deferred**, with the shape that would fit recorded; streaming reads an **extension**, the image lent for the machine's life (§10.2, decided 2026-10-12); battery files an **extension** of core info (§10.5, decided 2026-10-12) | minor 1.3: `BORROW` (bit 20), `emusen_create_params.flags` with `EMUSEN_CREATE_LENT`, `EMUSEN_MEDIA_LENT`; core info's `systems[].battery` |
 
 Read §1 for the one mechanism the five ABI changes share, §2 before §3 and §8, which both build on it, and §12 for the
 questions. §13, added 2026-10-11, is a tenth item of a different origin, the debugger's: read watches and read data
@@ -811,8 +811,8 @@ with the core reading ahead; it is recorded here so that §3's `emusen_media` is
 
 #### 10.2.1 The measurement (2026-10-12)
 
-*Proposed 2026-10-12, after the tester reported a delay launching PlayStation games from big picture; awaiting the
-tester (Q15). Nothing in this subsection is built.* The measurement the 2026-10-04 decision waited for was taken on the
+*Proposed 2026-10-12, after the tester reported a delay launching PlayStation games from big picture; decided the
+same day (§10.2.3).* The measurement the 2026-10-04 decision waited for was taken on the
 tester's seven discs, copied, with the opt-in probes of `Diamond_Players.md` §12.8 [M, 2026-10-12]:
 
 - **The whole read is the launch's one remaining cost of size.** A cold read of a 430–660 MB image took 0.16–0.27 s
@@ -861,12 +861,228 @@ both leave a host that does not offer them, and a core that does not claim them,
   machine is seen by it, which the host prevents only by holding the files open and refusing to unpack over a mapped
   image; and the promise binds every host, the kit's included.
 
-#### 10.2.3 Recommendation, and what is not done
+#### 10.2.3 Recommendation, and the decision
 
 *Recommended* [C, Q15]: **B**, as the smaller change that removes both the cold read and the doubled memory, with a kit
 case that creates from a mapping, runs, and compares every frame, sample and state with a run from copied bytes; A
-kept as recorded, for a source a mapping cannot serve. **Not built:** this is a stable surface, so the measurement and
-the proposal stop here for the tester's decision. Prediction **P7** (§11) states what B must show if it is built.
+kept as recorded, for a source a mapping cannot serve. Prediction **P7** (§11) states what B must show.
+
+**Decided 2026-10-12: shape B is built, as minor 1.3, with §10.5's battery files in the same minor.** The tester asked
+with it that disc images be handled in one shared place, so that no later disc console writes this again, and the
+ownership was decided the same day:
+
+| Owner | What it owns | Where |
+|---|---|---|
+| **`emusen-disc`** | what a disc is and how its bytes are read: the formats, the sectors, CHD, what a set means, the kinds of backing, and opening a disc from an image and its companions | `EmuSen/Cores/Shared/emusen-disc`, beside the core kit; never depends on Galaxia, since a core builds and runs with no frontend |
+| **Galaxia** | where a disc's files are and keeping them available: a sheet's companions, an `.m3u`'s discs, the unpack cache for archives, and the files mapped read-only and held for a machine's life | `EmuSen.Galaxia/Media/` and `Platform/galaxia`; it asks `emusen-disc` for format knowledge through the platform library, never the reverse |
+| **Crystal** | which system a disc is for: `SystemRouting`, the packs' recognisers, `MediaProbe` and `DiscSectors`, reading through Galaxia | `EmuSen.Crystal` |
+| **The core ABI** | the loan's words | `emusen_core.h`, minor 1.3 |
+
+#### 10.2.4 The design (minor 1.3)
+
+*Written 2026-10-12 before the code and committed first; built the same day as written, but where §10.2.5 says
+otherwise. §10.2.5 is the record of what was built and measured.* Marks as above.
+
+**1. The ABI's words.** One capability bit, one appended field and two flag values; no export, no event, no status.
+
+```c
+#define EMUSEN_CAP_BORROW    (1ull << 20)  /* @since 1.3: the core keeps pointers into a lent image and its media files */
+#define EMUSEN_CREATE_LENT   1u            /* @since 1.3: emusen_create_params.flags */
+#define EMUSEN_MEDIA_LENT    2u            /* @since 1.3: emusen_media.flags, beside EMUSEN_MEDIA_RESTORE */
+
+typedef struct emusen_create_params {      /* 96 bytes; 88 at 1.0, which a callee still accepts */
+    /* ... the twelve fields of 1.0, unchanged ... */
+    uint32_t flags;                        /* @since 1.3: EMUSEN_CREATE_LENT; zero from a host that predates it */
+} emusen_create_params;
+```
+
+- **The loan.** A host that sets `LENT` promises that the image, and every file of the call numbered
+  `EMUSEN_FILE_MEDIA` or above (a sheet's tracks, an `.sbi`), **stay readable, unchanged and at the same addresses until
+  the loan ends**. The core may then keep pointers into them instead of copying, and may read them from any thread of
+  the machine at any time the machine exists. Every other pointer of the call (the settings, the battery and firmware
+  files, the error buffer, the structs themselves) is valid for the call only, as in 1.0.
+- **The loan's end.** A loan made at `create` ends when `emusen_core_free` returns, or when a `media_insert` on the
+  drive holding that disc returns success, whichever is first; the disc `create` receives is in the first drive machine
+  info lists. A loan made at `media_insert` ends the same way, at `free` or at that drive's next successful insert. **A
+  refused call lends nothing**: a core that refuses a create or an insert keeps no pointer from it, and a refused
+  insert leaves the drive's earlier loan standing with its disc. A null image, which empties a drive, ends that drive's
+  loan and makes none.
+- **How the promise is carried: a flag in the request, on each call.** The bit says what the core can do, once, for
+  the library; the flag says what this host does, for this call. A core therefore knows on every create and every insert
+  whether it may borrow, and nothing is inferred from the host's version, which gates nothing (`EmuSen_CoreAPI.md`
+  §4.1).
+
+  | Host | Core | What happens |
+  |---|---|---|
+  | sets `LENT` (only for a core that claims `BORROW`) | claims `BORROW` | the core keeps pointers; the host keeps the files mapped until the loan ends |
+  | does not set it (an older host, or one that read the bytes into a buffer of its own) | claims `BORROW` | the flag is zero, or absent in an 88-byte struct, which reads as zero: **the core copies what it keeps, as in 1.0** |
+  | any | does not claim `BORROW` | the host does not set the flag; the core copies what it keeps, as in 1.0. The host may still pass a mapping's address as the image, which removes the host's own buffer and nothing else |
+
+  A host must not set `LENT` for a core that does not claim `BORROW`: nothing would go wrong, but the promise would bind
+  it for nothing. A core must not keep a pointer from a call without `LENT`, whatever it claims; the kit holds it to
+  that by overwriting its own buffers after such a create (C17, item 12).
+- **Why a field and not an export.** A second `create` behind the bit was weighed and rejected: it would double the
+  lifecycle's most intricate call to carry one bit. `emusen_media` has had `flags` since 1.1; `emusen_create_params` gains
+  it now. This is the first use of §4.2's rule for a struct that grows (`EmuSen_CoreAPI.md` §4.2: "every struct begins
+  with `size` … the callee reads and writes only the prefix both know … a struct shorter than its v1.0 size is
+  refused"), and the first to test it: `emusen-native` read a whole struct of its own size, which is correct only
+  while no struct has grown, and now reads `min(size, its own)` into a zeroed copy.
+- **The baseline.** A struct's `struct … size … align …` line is its size at the minor that introduced it, the least a
+  callee accepts, and is not edited; the appended field's own `field` line, tagged `@1.3`, records the growth. The guard
+  holds the header's size to be no smaller than the line's and its alignment the same, and every earlier field line
+  holds the prefix (`EmuSen_CoreAPI.md` §5.4).
+- **No state holds a pointer.** A state's bytes are the same whether the disc was lent or copied, and a state made on
+  one loads on the other.
+
+**2. The kit's type.** `emusen-native` gives a core `core::keep(bytes) -> Kept`, called inside `create` or
+`media_insert` on the image or a media file (or any part of one): **the bytes to keep for the machine's life, the
+host's own where this call lends them and a copy otherwise.** A core calls it wherever it would have written
+`to_vec()`, and its own code never tests the flag and never holds a raw pointer. `Kept` dereferences to `[u8]`, is
+`Send` and `Sync`, and is made from a `Vec<u8>` for a test or a tool. The `unsafe` is in `Kept` alone, and its
+invariant is checked rather than trusted: each lending call makes a *loan*, every `Kept` made under it holds a
+reference to it, and the export that ends a loan (`free`, a successful `media_insert` on its drive, a refusal) counts
+the references left; one still held is a defect in the core, and the export panics with the loan named, which aborts
+the process before the host can unmap anything, so no safe code in a core can read bytes the host has released.
+
+**3. `emusen-disc`'s backing.** `Disc<B>` for any `B: AsRef<[u8]>`: a `Vec<u8>` (the default, and every existing
+caller), a `&[u8]` for a probe that opens a disc for one call, or the kit's `Kept`. The crate does not depend on
+`emusen-native`; the kit's type meets it through `AsRef<[u8]>` alone. One code path reads every backing, so a disc
+opened from borrowed bytes reads sector for sector as one opened from owned bytes, which the crate's tests hold for
+every format it has (`EmuSen_Disc.md` §9). The crate also takes what is not PlayStation's from Diamond's `medium.rs`:
+opening a disc from an image and its companions (a sheet with its tracks, a lone track, a user-data image, a CHD, an
+`.sbi` among the companions), and the fingerprint's arithmetic, the console naming only which sectors it covers.
+
+**4. Galaxia's part.** `EmuSen.Galaxia/Media/`: `ImageSets` and `ArchiveImages`, moved from the runtime's media module
+(`EmuSen.Crystal/Media/`), `MappedFile`, a file mapped read-only, and `DiscFiles`, a disc's image and companions
+mapped and held, with the unpack folder they came from. `MappedFile` has both of Galaxia's halves, the C# over
+`System.IO.MemoryMappedFiles` and the platform library's (`Platform/galaxia/src/mapped.rs`, interface 9), held to one
+answer by `GalaxiaParityTests`; the kit, which has no C#, maps through the same Rust module. `CoreEngine`'s open path
+asks Galaxia for a disc's files and hands them over; it reads no image itself.
+
+**5. Archives.** A zip still unpacks once into Galaxia's `Unpacked` folder, and the unpacked files are what is mapped
+(§10.4). **A folder in use is never unpacked over or cleaned away**, enforced in two layers: `Unpack` never writes
+into a folder that has its marker (it unpacks beside it and moves the result into place whole, as before), and
+`DiscFiles` holds a *lease* on the folder for as long as it holds a mapping in it, a handle open on the folder's marker
+that shares reading and not deletion. `Prune` removes a folder only after it has opened the marker with no sharing,
+which fails while any process holds a lease, on Windows by the file system's own rule and elsewhere by the advisory lock
+.NET takes for the same call. A process that does not use Galaxia can still delete the folder; on Linux and macOS the
+mapping stays readable until it is released, since the file's blocks outlive its name.
+
+**6. CHD.** The compressed file is what is mapped; the `chd` crate reads its header, map and metadata at open and
+`emusen-disc` decodes one hunk at a time into its cache, as before. Only the hunks a game reads are touched.
+
+**7. Sets and Change Disc.** One path: `InsertDisc` asks Galaxia for the next disc's `DiscFiles`, passes it with
+`EMUSEN_MEDIA_LENT`, and **releases the previous disc's files only after `media_insert` has returned success**, which
+is when the core has let go of them (item 1). A refused insert releases the new disc's files and keeps the old. The
+loop that puts a state's disc back (`EMUSEN_MEDIA_RESTORE`, §3.5) is the same call with both flags.
+
+**8. Save states, rewind and the fingerprint.** A state holds no disc bytes and no address. The fingerprint a state
+records (DMND 9) is FNV-1a over the tracks' starts and kinds, the lead-out and nine sectors (4, and 16 to 23): a read of
+21 KB whatever the disc's size, two hunks of a CHD. It is kept bit for bit, so that every state made before 1.3 loads,
+and a test holds the bound by counting the bytes a fingerprint touches.
+
+**9. Threads.** A lent page not yet in memory is read from the medium on the thread that first touches it, which is
+the emulation thread. Two cases are to be measured on the slow medium, under the 90 MB/s cap and on the handheld's
+card: a cold sequential read at the drive's double speed, and a seek to a region never read. If either can hold a
+frame past its period, the remedy is the host's and changes nothing a core can observe: advice to the system that the
+mapping is read in order, so that it reads ahead of the drive on its own threads, or a reader thread of Galaxia's that
+touches pages ahead. Either way a read returns the same bytes; only when they arrive in memory differs, and the
+emulated drive's timing is the core's own count of cycles, never the wall clock.
+
+**10. Platforms.**
+- *Linux and macOS:* `mmap`, read-only. A mapped file may be renamed or deleted while a game runs and stays readable.
+  Nothing stops another program truncating or rewriting it; the machine then reads the new bytes, or the process is
+  ended by the system's signal for a mapped page that no longer exists. **The same holds when the medium is removed**: a
+  game whose disc was copied at create survived its card being pulled, and one whose disc is mapped does not. This is
+  the cost of reading in place and is put to the tester with the measurements.
+- *Windows:* a file mapping. While a game runs its image and tracks cannot be deleted, renamed, moved or written by
+  the player or another program, which answer that the file is in use; they are released when the game is closed or
+  its disc changed.
+- *All three:* the address space a mapping takes is not memory in use; what counts against the machine is the pages
+  the game has touched, and the system may reclaim those at will, since they are the file's own.
+
+**11. The firmware question, and routing's probes.** `firmware_for` is passed the mapped image, and the core opens it
+as a borrowed disc for the call, so the question touches the sheet, or the sectors that name the market, and nothing
+else. A recogniser's probe reads the first bytes of the image, of a sheet's first track or of an archive's entry
+through Galaxia's `DiscFiles` and `ArchiveImages`, never a whole file.
+
+**12. The kit.** A new case, **C17, borrow** (where `BORROW` is claimed): the image and its companions mapped, created
+with `LENT`, run for C6's frames with the script's input, and every frame's digest, every sample's and the states'
+compared with a run from copied bytes; the same again through `media_insert` where `MEDIA` is claimed; and a create
+without the flag after which the kit overwrites its own buffers, the run's digests unchanged. C12's skew host passes
+an 88-byte `emusen_create_params`, and a struct longer than the core's with bytes past it that the core must not read
+as its own. C2 checks the bit's name in core info.
+
+#### 10.2.5 What was built and measured (2026-10-12)
+
+[M] here is measured or run on 2026-10-12, on this branch.
+
+**Built as §10.2.4 gives it**, items 1 to 8 and 10 to 12, with these differences and findings:
+
+- *The loan's check* (item 2) is `emusen_native::core::lend`; `Kept` and `keep` are re-exported from `core`. A test
+  holds that a slice inside a lending call's ranges is lent and one outside them (a battery or firmware file) copied,
+  that nothing is lent outside a call, and that a loan ended while a piece is held panics with the loan named.
+- *The struct's growth* (item 1) needed `emusen-native` to read a host's struct as far as both know it: until 1.3 it
+  read a whole struct of its own size, correct only while no struct had grown. A test creates from 88 bytes whose
+  flag's bytes say `LENT`, and the core copies; one byte fewer is `BAD_STRUCT`.
+- *The guard* keeps `struct emusen_create_params size 88 align 8 @1.0` and records `field emusen_create_params.flags
+  offset 88 @1.3`; it now refuses a struct that shrinks, changes alignment or grows with nothing appended
+  (`a_struct_grows_only_by_appended_fields_and_keeps_its_line`). The new baseline has 423 facts, 9 lines added at 1.3
+  and the revision's two moved; `--check --against` the base branch's baseline passes.
+- *The kit* (item 12) gained C17 as written, and C14 checks core info's battery list against machine info and creates
+  with every listed file empty. **C13 had a race**, shown by the kit's own tests in parallel: its four threads could
+  make no round before a busy machine's run ended, so a seeded drift of the library-level answers passed. The case
+  now starts the run once each thread is calling and ends it once they have called beside it; three parallel runs of
+  three pass.
+- *Galaxia's half* (item 4): the parity test found the library answering a folder with the system's "no such device"
+  where .NET refuses access; it now refuses one as .NET does. .NET's advisory locks are not seen by a mapping the
+  library makes, so `DiamondPlayersTests`' proof that the firmware question reads no image, which held the track under
+  an exclusive .NET lock, now moves the track away instead.
+- *Threads* (item 9) are measured below, and needed the prefetch the item foresaw.
+
+**Exactness** [M]. The kit's C17 on the seven test discs at 1,800 frames, the image and tracks mapped through Galaxia
+and lent, passes on all seven: every frame's picture, every sample and the state after every frame are those of a run
+from copied bytes, across a disc swap of 120 frames more; and a create that lent nothing, its bytes overwritten by the
+kit, runs unchanged. WiseMan's `DiscStreamingTests` hold the same through the C# host: a sheet with its tracks, a lone
+track and an `.iso` on Diamond and the test core's image, 300 to 600 frames, with the prefetch running. The same
+corpus run found C7 and C8 failing on four of the seven at 1,800 frames (a state saved at frame 900 and loaded gives
+another picture, the sound and state the same); the base branch's library and kit fail the same cases with the same
+digests to the bit, so it is a defect of Diamond's states that predates 1.3, recorded here for the branch that owns
+the states (at 600 frames, `Diamond_Players.md` §6, they passed).
+
+**Launch and memory** [M]: `Diamond_Players.md` §12.8.9 has the tables. In brief: a launch of 1.3 from the press of the
+engine's steps to the first frame is 106–126 ms on the desktop, cold or warm and under the 90 MB/s cap alike, and
+95–120 ms on the handheld from its card, where 1.2's took 4.7–7.1 s cold; peak resident 53–71 MiB, where it was
+878–1,382 MiB; a zip's first launch is its unpacking, which 1.3 does not change.
+
+**First touches** [M]. Traced over the first 30 s (1,800 frames) from a cold cache, unpaced, each frame's time and
+major faults: on the desktop under the cap, 2 to 8 major faults in 30 s on six games, at most 7 ms a frame; Crash
+Bandicoot's one fault at frame 282 held its frame 65–80 ms in three runs of three, and 3.9 ms without the cap. On the
+handheld's card, Mega Man X5's frame 355 took 20.6 ms with one fault, where its emulation takes 2.7 ms: **a first
+touch can hold a frame past its period.** The remedy is item 9's, and is built: `DiscFiles.Prefetch`, which the engine
+starts for a lent disc at the load and at an insert, reads each of the disc's files once in order, 256 KiB at a time,
+through a handle of its own on a background thread of the lowest priority, resting after each read twice as long as
+it took, so that it takes at most a third of the medium. At full speed it made the game's one fault in 30 s wait
+160 ms behind it under the cap; rested, paced at 60 frames a second, Crash Bandicoot's faults fell from 8 to 1 and
+Spyro's from 3 to 0, every frame within 6.1 and 7.5 ms. What a read of the mapping returns is the file's, whether
+the prefetch has passed or not.
+
+**On the handheld's card, paced** [M, `Diamond_Players.md` §12.8.9]: with the prefetch Mega Man X5 and Spyro the Dragon
+play their first 30 s with no first touch and Crash Bandicoot with one of 6.6 ms, where they had 4, 3 and 16 of up to
+13.1 ms. Mega Man X6's four to six first touches come two to six seconds into play, before a prefetch at a third of
+the card has reached them: the slowest held a frame 8.0–31.5 ms in four runs without the prefetch and 23.8–49.6 ms in
+four with it, zero to three frames over the period in 30 s either way. **So the design's item 9 is met in part: a
+first touch still can hold a frame in a game's first seconds on a slow medium, and the prefetch, which removes the
+later ones, appears to lengthen those.** Two remedies are recorded and not built, the choice being the tester's:
+
+- *host only:* the prefetch at the medium's full speed until the machine's first frame, and rested from then; under
+  the launch screen it would have read about 270 MiB before play. It narrows the window and closes it for no game in
+  particular.
+- *exact, and a surface:* an event by which a core says where its drive is seeking (a file and an offset), raised at
+  the seek's start, so that the host advises the system to read there during the emulated seek, which on the
+  PlayStation's drive takes far longer than the card's read. It is shape A's event without its export: the bytes
+  still come through the loan, nothing waits on the host, and a host that ignores the event behaves as now. It would
+  be a minor of its own.
 
 ### 10.3 The order
 
@@ -894,9 +1110,12 @@ runtime's media module, for `.zip` only, reading entries through .NET and unpack
 rather than handing bytes from the archive, because a sheet's tracks are read by path and a C# core opens its file
 itself; Galaxia names the folder and gained no reading of archives.*
 
-### 10.5 Battery files in core info (proposed 2026-10-12)
+### 10.5 Battery files in core info (proposed and decided 2026-10-12)
 
-*Awaiting the tester (Q16). Nothing is built.* `EmuSen_CoreAPI.md` §19.1 records that a v1.0 host cannot know a core's
+*Decided 2026-10-12: built in minor 1.3, with §10.2, as the design below gives it. Diamond lists files 0 (`.mcr`) and
+4 (`.2.mcr`); the test core file 0 (`.srm`); the other cores write no field and behave as before. The engine passes
+the listed files that exist at the first create, so a PlayStation game with its cards on disc is created once: the
+launch tables of `Diamond_Players.md` §12.8.9 have no second create.* `EmuSen_CoreAPI.md` §19.1 records that a v1.0 host cannot know a core's
 battery files before a game is created, so the engine creates once with file 0 as `.srm`, reads machine info's
 `battery`, and creates again when the files differ and one exists on disk; it names the remedy, core info carrying
 them per system in a later minor, and leaves it undecided. Diamond names two cards, file 0 as `.mcr` and file 4 as
@@ -912,6 +1131,21 @@ create and creates again only where machine info then differs; a host that does 
 it, behave as now. Rejected: the host remembering the last machine's files for the same library and settings, which is
 a guess that the first launch after every start of the program still pays for, needs a fallback create where a foreign core refuses a
 file number it does not name, and gives a fact the core owns a second owner in the host.
+
+**The design** [C]. `info.systems[].battery` is an array of `{ "which": n, "suffix": ".mcr" }`, optional and additive
+in `info.schema.json`; `length` is left to machine info, since it is a property of the machine made.
+- **A core that writes the field** lists every battery file any machine of the system can name, whatever its settings,
+  and accepts each of them at create whether or not the machine made keeps it: a card's file passed for a slot the
+  settings leave empty is ignored, not refused. An empty array says that the system keeps no battery file.
+- **A host that reads it** passes, at the first create, each listed file that exists on disk, by the runtime's path
+  rule for its suffix. Machine info stays the authority: after create the host keeps the files machine info names, and
+  **creates again only when machine info names a file that exists on disk and was not passed**, which a core that
+  lists its files truthfully never causes.
+- **A core without the field** gets what it gets now: file 0 by the `.srm` rule at the first create, and a second
+  create where machine info then names other files that exist. **A host that does not read the field** behaves as now
+  with every core.
+- **The kit** (C14): a listed `which` is unique within its system, a suffix begins with a full stop, and every battery
+  file machine info names for a machine of that system is listed, where the system lists any.
 
 ---
 
@@ -931,7 +1165,13 @@ file number it does not name, and gives a fact the core owns a second owner in t
   average loses nothing a player can feel.
 - **P7** (2026-10-12, §10.2). With §10.2's shape B, a cold launch of a 660 MB loose track from a 90 MB/s medium
   reaches its first frame within 0.5 s of the same launch warm, the process's peak memory falls by the image's size,
-  and no frame of the first 30 s of play takes longer than its period on the handheld.
+  and no frame of the first 30 s of play takes longer than its period on the handheld. *Measured 2026-10-12
+  (§10.2.5):* the first two clauses hold, Spyro the Dragon's 662 MB track launching in 115 ms cold under the cap and
+  114 ms warm, and in 99 ms and 95 ms from the handheld's card; peak memory fell by more than the image, 1,317 to
+  54 MiB, since the host's buffer went with the core's copy. **The third is not met**: unpaced, one frame of Mega Man
+  X5 took 20.6 ms on the card for a first touch; the prefetch built for it leaves three of four games with none or
+  one, and Mega Man X6 with up to three frames of 24–50 ms in its first six seconds, where without it they were
+  8–32 ms (§10.2.5, `Diamond_Players.md` §12.8.9). It stays open with the two remedies §10.2.5 records.
 
 ---
 
@@ -984,7 +1224,8 @@ Each with a recommendation.
 14. **Q14, device kinds.** *Recommended:* none now; adapters such as Diamond's multitap as port settings, as the
     Genesis's are; pointer devices taken up when a gate needs one (§10.1).
 
-*Raised 2026-10-12, by the launch-time measurement of `Diamond_Players.md` §12.8; awaiting the tester:*
+*Raised 2026-10-12, by the launch-time measurement of `Diamond_Players.md` §12.8. **Decided 2026-10-12:** both as
+recommended, in one minor, 1.3, with disc images handled in one shared place (§10.2.3).*
 
 15. **Q15, streaming reads.** *Recommended:* §10.2's shape B, the image borrowed for the machine's life behind a
     capability bit, mapped by the host, with a kit case comparing a mapped run with a copied one; shape A kept on

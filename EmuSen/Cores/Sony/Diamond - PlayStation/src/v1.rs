@@ -141,11 +141,14 @@ fn market_of(media: &Media, setting: Option<&str>) -> Market {
 }
 
 /// The disc an image and its companions make, or the status and words of its refusal, as at create.
-fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(crate::medium::Opened, Media), i32> {
+/// The image and its companions are kept with `keep`, which borrows where the host lends them (BORROW).
+fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(crate::medium::Opened<Kept>, Media), i32> {
     let mut companions: Vec<(u32, &[u8])> = files.iter().filter(|f| f.which >= MEDIA_FILE).map(|f| (f.which, f.data)).collect();
     companions.sort_by_key(|c| c.0);
-    let companions: Vec<&[u8]> = companions.into_iter().map(|c| c.1).collect();
-    match crate::medium::open(image, &companions) {
+    let companions: Vec<Kept> = companions.into_iter().map(|c| keep(c.1)).collect();
+    // A program is no disc and keeps nothing here; a sheet's text is parsed and dropped, so only a lone image is kept.
+    let kept = if image.starts_with(crate::media::EXE_MAGIC) || crate::medium::is_sheet(image) { Kept::from(image.to_vec()) } else { keep(image) };
+    match crate::medium::open(kept, companions) {
         Ok(crate::medium::Opened::Program) => Ok((crate::medium::Opened::Program, Media::read(image).map_err(|_| STATUS_NOT_PLAYSTATION)?)),
         Ok(crate::medium::Opened::Disc(d, m)) => Ok((crate::medium::Opened::Disc(d, m.clone()), m)),
         Err(crate::medium::DiscRefusal::Media(Refusal::Truncated { needs, has })) => {
@@ -171,7 +174,7 @@ fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(cr
 pub const DRIVE: u32 = 0;
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::DEBUG_READS | caps::MEDIA;
+    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::DEBUG_READS | caps::MEDIA | caps::BORROW;
 
     fn info() -> Info {
         Info {
@@ -200,13 +203,18 @@ impl Core for Machine {
         schema()
     }
 
+    /// Both cards' files, whatever the settings: a card's file given for an empty slot is ignored.
+    fn battery_files(system: &str) -> Option<Vec<Battery>> {
+        (system == "psx").then(|| (0..2).map(|n| Battery { which: CARD_FILES[n], suffix: CARD_SUFFIXES[n].into() }).collect())
+    }
+
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
         if crate::medium::is_sheet(image) {
             return vec![bios(Market::Japan), bios(Market::Americas), bios(Market::Europe)];
         }
         match Media::read(image) {
             Ok(m) => vec![bios(market_of(&m, None))],
-            Err(_) => match crate::medium::open(image, &[]) {
+            Err(_) => match crate::medium::open(image, Vec::new()) {
                 Ok(crate::medium::Opened::Disc(_, m)) => vec![bios(market_of(&m, None))],
                 _ => Vec::new(),
             },
@@ -621,6 +629,19 @@ mod tests {
         assert_eq!(create(&exe(None, 1), &[], vec![emusen_native::abi::File { which: 0, data: &short }]).err(), Some(status::BAD_FILE));
         let none = create(&exe(None, 1), &[(CARD_KEYS[0], "none")], vec![]).unwrap();
         assert!(none.machine_info().battery.is_empty());
+    }
+
+    /// Since 1.3 (EmuSen_CoreAPI.md §6.3): core info lists both cards' files, so a host passes them at the first create,
+    /// and a card's file given for a slot the settings leave empty is taken and ignored rather than refused.
+    #[test]
+    fn core_info_lists_both_cards_and_an_empty_slots_file_is_ignored() {
+        let listed: Vec<(u32, String)> = Machine::battery_files("psx").unwrap().into_iter().map(|b| (b.which, b.suffix)).collect();
+        assert_eq!(listed, [(0, ".mcr".to_owned()), (4, ".2.mcr".to_owned())]);
+        assert!(Machine::battery_files("snes").is_none());
+        let card = vec![0x5Au8; CARD_BYTES];
+        let m = create(&exe(None, 1), &[], vec![File { which: 0, data: &card }, File { which: 4, data: &card }]).unwrap();
+        assert_eq!(m.machine_info().battery.iter().map(|b| b.which).collect::<Vec<_>>(), [0], "slot 2 is empty by default");
+        assert_eq!(m.battery(0).unwrap().0, &card[..]);
     }
 
     /// MEDIA (EmuSen_CoreAPI.md §6.23): a disc changes only through the open lid, or for a state about to load; the

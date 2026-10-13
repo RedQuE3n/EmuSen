@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 8u
+#define EMUSEN_PLATFORM_ABI_VERSION 9u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -163,6 +163,23 @@ int32_t emusen_galaxia_file_write(const uint8_t *file, size_t file_len, const ui
 
 /* A file's MD5, every byte of it, as 32 lower-case hexadecimal digits. */
 int64_t emusen_galaxia_rom_md5(const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
+
+/* ---- Galaxia: mapped files (EmuSen_Galaxia.md, section 3.8) ---- */
+
+typedef struct emusen_galaxia_mapped emusen_galaxia_mapped;
+
+/*
+ * Maps a file whole and read-only, reading none of it: its handle in `mapped`. NOT_FOUND, ACCESS or IO with words for
+ * a file that cannot be opened or mapped. The bytes stay readable and at one address until emusen_galaxia_unmap; the
+ * system reads each part from the medium when it is first touched.
+ */
+int32_t emusen_galaxia_map(const uint8_t *file, size_t file_len, emusen_galaxia_mapped **mapped);
+
+/* The mapped bytes' length, and their address in `bytes`: null and zero for an empty file. */
+int64_t emusen_galaxia_mapped_bytes(const emusen_galaxia_mapped *mapped, const uint8_t **bytes);
+
+/* Releases the mapping; a null handle is nothing to release. No address it gave may be read afterwards. */
+int32_t emusen_galaxia_unmap(emusen_galaxia_mapped *mapped);
 
 /* ---- Galaxia: migration (EmuSen_Galaxia.md, section 3.2) ---- */
 

@@ -16,8 +16,8 @@ pub const UNIT: usize = 2448;
 const CHT2: u32 = u32::from_be_bytes(*b"CHT2");
 const CHTR: u32 = u32::from_be_bytes(*b"CHTR");
 
-pub struct ChdImage {
-    chd: chd::Chd<Cursor<Vec<u8>>>,
+pub struct ChdImage<B: AsRef<[u8]>> {
+    chd: chd::Chd<Cursor<B>>,
     /// The hunk decompressed last, by number, and the compressed bytes' scratch.
     hunk: Vec<u8>,
     at: Option<u32>,
@@ -60,9 +60,10 @@ fn entry(text: &str) -> Option<Entry> {
     })
 }
 
-impl ChdImage {
-    /// The image, its tracks on the disc's time line and its lead-out.
-    pub fn open(bytes: Vec<u8>) -> Result<(ChdImage, Vec<Track>, u32), String> {
+impl<B: AsRef<[u8]>> ChdImage<B> {
+    /// The image, its tracks on the disc's time line and its lead-out; the header, the map and the metadata are read
+    /// here, and a hunk only when a sector in it is.
+    pub fn open(bytes: B) -> Result<(ChdImage<B>, Vec<Track>, u32), String> {
         let mut chd = chd::Chd::open(Cursor::new(bytes), None).map_err(|e| format!("the CHD could not be opened: {e}"))?;
         let hunk_size = chd.header().hunk_size() as usize;
         if chd.header().unit_bytes() as usize != UNIT || hunk_size % UNIT != 0 {

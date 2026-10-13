@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Crystal.Media;
+using EmuSen.Galaxia.Media;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -76,7 +76,7 @@ namespace EmuSen.WiseMan.Cores
             var engineCore = t.Time("load-create-engine", () => (CoreEngine)CoreFactory.Create(game, true, engine));
             var discs = t.Time("load-discs", () => CoreEngine.DiscsOf(game));
             byte[] image = t.Time("load-read", () => File.ReadAllBytes(discs[0]));
-            var media = t.Time("load-companions", () => ImageSets.FilesFor(discs[0]).Select(f => (f.Which, File.ReadAllBytes(f.Path))).ToList());
+            var media = t.Time("load-companions", () => ImageSets.FilesFor(discs[0]).Select((f, n) => (CoreInterface.FileMedia + (uint)n, File.ReadAllBytes(f))).ToList());
             var firmware = t.Time("load-firmware_for", () => engineCore.Library.FirmwareFor(image));
             string settings = string.Join("\n", engineCore.Library.Settings.Select(s => $"{s.Key}={s.Default}"));
             var files = new List<(uint, byte[])>(media);

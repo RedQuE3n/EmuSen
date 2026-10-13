@@ -73,7 +73,7 @@ fn run_corpus(core: &Path, opts: Options, reference: Option<PathBuf>, images: &P
     let total = list.len();
     let memory = corpus::memory_allowed().unwrap_or(u64::MAX);
     let base = Options { files: opts.files.iter().filter(|f| f.0 < emusen_native::core::flags::FILE_MEDIA).cloned().collect(), ..opts.clone() };
-    let reference_opts = Options { image, ..opts };
+    let reference_opts = Options { image, on_disk: emusen_core_conform::media::on_disk(&reference_path).ok(), ..opts };
     let result = corpus::run_with(core, &reference_opts, &base, &reference_name, &list, jobs, memory, factor, Duration::from_secs(corpus::IMAGE_DEADLINE_SECONDS), &mut |i| {
         done += 1;
         let failed = i.failed();
@@ -191,10 +191,11 @@ fn main() -> ExitCode {
         i += 2;
     }
     if let (Some(core), Some(images)) = (&core, &images) {
-        let opts = Options { self_delimiting, image: Vec::new(), frames, settings, files, script };
+        let opts = Options { self_delimiting, image: Vec::new(), frames, settings, files, script, on_disk: None };
         return run_corpus(core, opts, image, images, from.as_deref(), jobs, factor, report.as_deref(), report_dir.as_deref());
     }
     let (Some(core), Some(image)) = (core, image) else { return usage() };
+    let on_disk = emusen_core_conform::media::on_disk(&image).ok();
     let image = match emusen_core_conform::media::open(&image) {
         Ok((b, companions)) => {
             files.extend(companions);
@@ -205,7 +206,7 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let result = run(&core, &Options { self_delimiting, image, frames, settings, files, script });
+    let result = run(&core, &Options { self_delimiting, image, frames, settings, files, script, on_disk });
     print_cases(&result.cases);
     println!("{} {} {}: {}", result.id, result.version, result.abi, if result.passed() { "EmuSen v1 compliant on this image" } else { "not compliant" });
     if let Some(path) = report {

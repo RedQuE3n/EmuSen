@@ -102,7 +102,7 @@ macro_rules! layouts {
 
 layouts! {
     sys::FileEntry = emusen_file { size, which, data, len } [];
-    sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len } [files];
+    sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len, flags } [files];
     sys::FrameInfo = emusen_frame_info { size, format, width, height, stride, row_repeat, flags, aspect_num, aspect_den, reserved, serial, bytes } [];
     sys::Event = emusen_event { size, kind, a, b } [];
     sys::Media = emusen_media { size, flags, image, image_len, file_count, file_size } [files];
@@ -161,6 +161,7 @@ constants! {
     EMUSEN_CAP_DEBUG_DISASSEMBLE = caps::DEBUG_DISASSEMBLE,
     EMUSEN_CAP_MEDIA = caps::MEDIA,
     EMUSEN_CAP_DEBUG_READS = caps::DEBUG_READS,
+    EMUSEN_CAP_BORROW = caps::BORROW,
     EMUSEN_OPTION_SKIP_RENDERING = flags::OPTION_SKIP_RENDERING,
     EMUSEN_FRAME_WALKED = flags::FRAME_WALKED,
     EMUSEN_BATTERY_CHANGED = flags::BATTERY_CHANGED,
@@ -169,6 +170,8 @@ constants! {
     EMUSEN_NO_COMPARE = flags::NO_COMPARE,
     EMUSEN_FILE_MEDIA = flags::FILE_MEDIA,
     EMUSEN_MEDIA_RESTORE = flags::MEDIA_RESTORE,
+    EMUSEN_CREATE_LENT = flags::CREATE_LENT,
+    EMUSEN_MEDIA_LENT = flags::MEDIA_LENT,
     EMUSEN_DEBUG_CALLS = debug::flag::CALLS,
     EMUSEN_DEBUG_WRITES = debug::flag::WRITES,
     EMUSEN_DEBUG_INTERRUPTS = debug::flag::INTERRUPTS,

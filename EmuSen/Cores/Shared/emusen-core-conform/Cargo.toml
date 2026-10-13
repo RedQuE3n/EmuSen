@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# The conformance kit's core suite: loads a library through the core ABI v1 and nothing else, and runs C1-C15 on an
+# The conformance kit's core suite: loads a library through the core ABI v1 and nothing else, and runs C1-C17 on an
 # image its author supplies, or on a library of images; also writes a library's sidecar. See EmuSen_CoreAPI.md §12,
 # §21, §24 and §28.
 [lib]
@@ -18,6 +18,8 @@ path = "src/main.rs"
 emusen-native = { path = "../emusen-native" }
 # The set module, which names a sheet's companions as the runtime's reading does (EmuSen_CoreAPI_Extensions.md §2.3).
 emusen-disc = { path = "../emusen-disc" }
+# Galaxia's mapped file, the one place a file is mapped, for the case that lends an image as a host does (C17).
+emusen-galaxia = { path = "../../../../Platform/galaxia" }
 libloading = "0.8"
 
 # The two test cores, built here as well so that this crate's tests run the kit on them.

@@ -776,6 +776,7 @@ and Mistress pays once at its start; the first frame took 3 ms in every row.
   after it, the read and the creates, the card moving throughout; a zip's first launch about 9.4 s before and
   4.5–6.3 s after; any game whose files the cache holds, 3.3–3.5 s before and the screen's 3.0 s after.
 
+
 #### 12.8.7 Tests run (2026-10-12)
 
 WiseMan, by area, on this branch: the firmware question's change with `Firmware`, `EmulatorSession`, `CoreAdapter`,
@@ -797,6 +798,216 @@ Mistress's launch path (`MainWindow.Resume.cs`, `MainWindow.LaunchScreen.cs`, `M
 `ImageSets.cs`), Diamond's `v1.rs`, `media.rs` and `medium.rs`, `emusen-disc`'s `disc.rs` and `sbi.rs`,
 `EmuSen_CoreAPI.md` §4.4, §6.2, §6.3 and §19.1, `EmuSen_CoreAPI_Extensions.md` §10, `EmuSen_Firmware.md` §0–§3 and
 `Diamond_CDROM.md` §9.7. No emulator's source and no BIOS image was read; the firmware folder of every run was empty.
+
+#### 12.8.9 Reading the disc in place: minor 1.3 measured (2026-10-12)
+
+*Decided 2026-10-12 and built the same day: the core ABI's minor 1.3, `BORROW` and battery files in core info
+(`EmuSen_CoreAPI.md` §6.24, §6.3; `EmuSen_CoreAPI_Extensions.md` §10.2.5, §10.5).* Diamond claims `BORROW` and reads
+its disc where Galaxia has mapped it (`EmuSen_Galaxia.md` §3.8), and lists both cards' files in core info, so a game
+with its cards on disc is created once. §12.8.5's first three items are thereby done: the cold read of the whole
+image, the second create and the core's copy at create are gone. The marks are §12's; [M] is measured on this date.
+
+**How it was measured.** A console tool over this branch's `EmuSen.dll` (in the probe's cache, `discstream/tool`)
+makes one launch per process in two ways, so that its peak resident memory (`VmHWM`) is the launch's own: **1.2**,
+the launch as it was, reproduced with today's types (the image and its tracks read whole, created from copied bytes,
+then created again with a card file); and **1.3**, the engine's steps (Galaxia's `DiscSet` and `DiscFiles`, the
+firmware question asked of the mapping, one create lent the files with a card file among them). Cold is the files'
+pages dropped from the page cache by `posix_fadvise`, as §12.8.1's; the cap is §12.8.1's. The big picture rows are
+`PlayStationLaunchTimeTests` again, unchanged, on this branch. On the handheld the tool ran from `~/launchtime` on its
+internal drive with Mistress not running, the card only read, the load average written beside each launch (the
+interface used about a core while idle; the averages rose to 1.2–1.4 as the batch went on).
+
+Each 1.2 row's steps are the read of the image and its tracks, the create, and the create with the card; each 1.3
+row's the mapping and its one create. Totals include 100–150 ms of routing, the probe's engine and the library's first
+opening that a fresh process pays and Mistress pays once.
+
+Desktop:
+
+| Game | Condition | 1.2: read, create, create with the card | 1.2: total | 1.3: map, create with the card | 1.3: total | Peak resident, 1.2 → 1.3 |
+|---|---|---|---|---|---|---|
+| Ape Escape (sheet) | cold | 182, 169, 160 | 633 | 3, 10 | 109 | 878 → 53 MiB |
+| Ape Escape (sheet) | warm | 140, 162, 157 | 581 | 3, 8 | 106 | 878 → 53 MiB |
+| Castlevania (zip) | first | unpack 1413, 196, 213, 208 | 2,167 | unpack 1438, 3, 8 | 1,558 | 1,175 → 60 MiB |
+| Castlevania (zip) | cold | 235, 221, 216 | 822 | 3, 9 | 124 | 1,173 → 58 MiB |
+| Castlevania (zip) | warm | 188, 221, 214 | 763 | 3, 8 | 123 | 1,173 → 58 MiB |
+| Crash Bandicoot (track) | cold | 244, 239, 229 | 858 | 2, 8 | 114 | 1,261 → 54 MiB |
+| Crash Bandicoot (track) | warm | 198, 237, 231 | 805 | 2, 8 | 118 | 1,261 → 54 MiB |
+| Rayman (sheet, 51 tracks) | cold | 337, 202, 201 | 869 | 4, 10 | 111 | 1,233 → 53 MiB |
+| Rayman (sheet, 51 tracks) | warm | 206, 204, 200 | 736 | 3, 8 | 108 | 1,233 → 53 MiB |
+| Silent Hill (zip) | first | unpack 1015, 206, 224, 225 | 1,804 | unpack 1019, 3, 8 | 1,136 | 1,238 → 60 MiB |
+| Silent Hill (zip) | cold | 241, 229, 223 | 838 | 3, 10 | 122 | 1,236 → 58 MiB |
+| Silent Hill (zip) | warm | 191, 226, 221 | 782 | 3, 8 | 121 | 1,236 → 58 MiB |
+| Spyro the Dragon (track) | cold | 278, 247, 238 | 905 | 2, 8 | 115 | 1,317 → 54 MiB |
+| Spyro the Dragon (track) | warm | 209, 245, 236 | 825 | 2, 8 | 115 | 1,317 → 53 MiB |
+| Tekken 3 (zip) | first | unpack 1507, 231, 254, 248 | 2,383 | unpack 1482, 3, 8 | 1,598 | 1,375 → 60 MiB |
+| Tekken 3 (zip) | cold | 292, 255, 256 | 950 | 3, 10 | 122 | 1,373 → 58 MiB |
+| Tekken 3 (zip) | warm | 226, 252, 250 | 872 | 3, 8 | 120 | 1,373 → 58 MiB |
+
+Desktop under the 90 MB/s cap:
+
+| Game | Condition | 1.2: read, create, create with the card | 1.2: total | 1.3: map, create with the card | 1.3: total | Peak resident, 1.2 → 1.3 |
+|---|---|---|---|---|---|---|
+| Ape Escape (sheet) | cold | 1819, 170, 162 | 2,274 | 3, 10 | 110 | 879 → 53 MiB |
+| Ape Escape (sheet) | warm | 141, 162, 157 | 578 | 3, 8 | 109 | 878 → 53 MiB |
+| Castlevania (zip) | first | unpack 4488, 191, 222, 216 | 5,255 | unpack 4484, 3, 8 | 4,603 | 1,175 → 60 MiB |
+| Castlevania (zip) | cold | 5275, 216, 211 | 5,846 | 3, 9 | 121 | 1,174 → 58 MiB |
+| Castlevania (zip) | warm | 189, 215, 213 | 757 | 3, 8 | 119 | 1,173 → 58 MiB |
+| Crash Bandicoot (track) | cold | 6799, 239, 233 | 7,416 | 2, 8 | 118 | 1,261 → 53 MiB |
+| Crash Bandicoot (track) | warm | 199, 233, 227 | 798 | 2, 8 | 111 | 1,261 → 54 MiB |
+| Rayman (sheet, 51 tracks) | cold | 6329, 203, 204 | 6,862 | 4, 10 | 112 | 1,233 → 53 MiB |
+| Rayman (sheet, 51 tracks) | warm | 209, 203, 200 | 738 | 3, 8 | 107 | 1,233 → 53 MiB |
+| Silent Hill (zip) | first | unpack 3614, 205, 232, 224 | 4,416 | unpack 3612, 3, 8 | 3,731 | 1,237 → 60 MiB |
+| Silent Hill (zip) | cold | 5093, 233, 221 | 5,688 | 3, 10 | 126 | 1,236 → 58 MiB |
+| Silent Hill (zip) | warm | 201, 230, 223 | 798 | 3, 8 | 120 | 1,236 → 58 MiB |
+| Spyro the Dragon (track) | cold | 4694, 242, 239 | 5,315 | 2, 8 | 115 | 1,317 → 54 MiB |
+| Spyro the Dragon (track) | warm | 210, 252, 246 | 844 | 2, 8 | 114 | 1,317 → 53 MiB |
+| Tekken 3 (zip) | first | unpack 5478, 219, 250, 245 | 6,331 | unpack 5444, 3, 8 | 5,561 | 1,374 → 60 MiB |
+| Tekken 3 (zip) | cold | 6693, 257, 249 | 7,342 | 3, 9 | 121 | 1,373 → 58 MiB |
+| Tekken 3 (zip) | warm | 216, 251, 248 | 856 | 3, 8 | 121 | 1,373 → 58 MiB |
+
+The handheld, from its card (the load average beside each pair):
+
+| Game | Condition | Load | 1.2: read, create, create with the card | 1.2: total | 1.3: create with the card | 1.3: total | Peak resident, 1.2 → 1.3 |
+|---|---|---|---|---|---|---|---|
+| Crash Bandicoot (track) | cold | 0.43–0.43 | 6,612, 63, 53 | 6,822 | 8 | 103 | 1,263 → 58 MiB |
+| Crash Bandicoot (track) | warm | 0.43–0.48 | 63, 59, 53 | 261 | 7 | 96 | 1,263 → 57 MiB |
+| Spyro the Dragon (track) | cold | 0.48–0.48 | 6,923, 64, 56 | 7,136 | 8 | 99 | 1,319 → 57 MiB |
+| Spyro the Dragon (track) | warm | 0.48–0.56 | 65, 61, 56 | 272 | 7 | 95 | 1,321 → 59 MiB |
+| Ape Escape (sheet) | cold | 0.56–0.56 | 4,517, 49, 37 | 4,688 | 10 | 101 | 882 → 59 MiB |
+| Ape Escape (sheet) | warm | 0.56–0.60 | 44, 42, 39 | 216 | 8 | 97 | 887 → 60 MiB |
+| Jedi Power Battles (sheet) | cold | 0.60–0.60 | 4,658, 52, 38 | 4,835 | 10 | 97 | 910 → 63 MiB |
+| Jedi Power Battles (sheet) | warm | 0.60–0.63 | 46, 44, 40 | 213 | 9 | 98 | 909 → 64 MiB |
+| Tekken 3 (zip) | first | 0.63–1.03 | unpack 13,934, 78, 64, 61 | 14,233 | unpack 14,042, 8 | 14,167 | 1,382 → 71 MiB |
+| Tekken 3 (zip) | cold | 1.03–1.23 | 176, 66, 58 | 403 | 7 | 111 | 1,380 → 68 MiB |
+| Tekken 3 (zip) | warm | 1.03–1.23 | 75, 66, 62 | 303 | 7 | 102 | 1,380 → 68 MiB |
+| Silent Hill (zip) | first | 1.23–1.27 | unpack 3,954, 69, 59, 51 | 4,241 | unpack 8,698, 9 | 8,804 | 1,245 → 71 MiB |
+| Silent Hill (zip) | cold | 1.27–1.24 | 156, 58, 51 | 365 | 8 | 120 | 1,243 → 66 MiB |
+| Silent Hill (zip) | warm | 1.27–1.24 | 63, 58, 52 | 271 | 7 | 107 | 1,243 → 68 MiB |
+
+The handheld's zips are unpacked to its internal drive, where the tool's home is, so their cold rows read from it and
+not from the card; their first rows are the unpacking, the same code in both ways, which took 4.0–14.0 s with the load
+rising, against 3.7–5.9 s in the morning's session (§12.8.6).
+
+**A launch twice in a row on the handheld.** §12.8.6 found that a second launch there was not a warm one, the launch's
+1.1 GB pushing the pages it had just read out of a full page cache. This afternoon, with 14 GiB of memory free, 1.2's
+second launch was warm (all of its 539 MiB still cached); and 1.3's launch brings less than 1 MiB of the disc into the
+cache and allocates 57–71 MiB, so it has nothing to push out and nothing to wait for, first or second [M]:
+| Game | Way | Launch | Cached before | Total | Cached after |
+|---|---|---|---|---|---|
+| Spyro 2 - Ripto's Rage! (USA) | 1.2 | 1 | 0 MiB | 6,123 ms | 539 MiB |
+| Spyro 2 - Ripto's Rage! (USA) | 1.2 | 2 | 539 MiB | 244 ms | 539 MiB |
+| Crash Bandicoot - Warped (USA) | 1.3 | 1 | 0 MiB | 99 ms | 0 MiB |
+| Crash Bandicoot - Warped (USA) | 1.3 | 2 | 0 MiB | 97 ms | 0 MiB |
+
+**Big picture, from the pad's press** (the probe of §12.8.1, Normal at 3.0 s and Disabled) [M]:
+
+Desktop, milliseconds from the press:
+
+| Game | Cache | Normal: the step that loaded | Normal: first frame | Disabled: first frame |
+|---|---|---|---|---|
+| Ape Escape (sheet) | cold | 55 | 3,134 | 33 |
+| Ape Escape (sheet) | warm | 22 | 3,043 | 11 |
+| Castlevania (zip) | cold | 16 | 3,035 | 1,359 |
+| Castlevania (zip) | warm | 23 | 3,046 | 1,348 |
+| Crash Bandicoot (track) | cold | 23 | 3,043 | 28 |
+| Crash Bandicoot (track) | warm | 29 | 3,052 | 6 |
+| Rayman (sheet, 51 tracks) | cold | 32 | 3,050 | 33 |
+| Rayman (sheet, 51 tracks) | warm | 20 | 3,037 | 11 |
+| Silent Hill (zip) | cold | 15 | 3,032 | 1,028 |
+| Silent Hill (zip) | warm | 140 | 3,161 | 1,008 |
+| Spyro the Dragon (track) | cold | 22 | 3,044 | 24 |
+| Spyro the Dragon (track) | warm | 20 | 3,044 | 6 |
+| Tekken 3 (zip) | cold | 22 | 3,042 | 1,749 |
+| Tekken 3 (zip) | warm | 20 | 3,040 | 1,634 |
+
+Under the 90 MB/s cap, milliseconds from the press:
+
+| Game | Cache | Normal: the step that loaded | Normal: first frame | Disabled: first frame |
+|---|---|---|---|---|
+| Ape Escape (sheet) | cold | 58 | 3,137 | 29 |
+| Ape Escape (sheet) | warm | 24 | 3,046 | 12 |
+| Castlevania (zip) | cold | 22 | 4,657 | 5,216 |
+| Castlevania (zip) | warm | 19 | 3,041 | 1,304 |
+| Crash Bandicoot (track) | cold | 24 | 3,045 | 6 |
+| Crash Bandicoot (track) | warm | 15 | 3,037 | 7 |
+| Rayman (sheet, 51 tracks) | cold | 19 | 3,037 | 10 |
+| Rayman (sheet, 51 tracks) | warm | 26 | 3,046 | 11 |
+| Silent Hill (zip) | cold | 21 | 3,737 | 3,752 |
+| Silent Hill (zip) | warm | 22 | 3,041 | 1,248 |
+| Spyro the Dragon (track) | cold | 17 | 3,039 | 22 |
+| Spyro the Dragon (track) | warm | 16 | 3,034 | 6 |
+| Tekken 3 (zip) | cold | 22 | 6,488 | 6,139 |
+| Tekken 3 (zip) | warm | 24 | 3,044 | 1,446 |
+
+Every disc that is not a zip starts at the screen's own time, 3.03–3.14 s, cold or warm and capped or not, the load
+under it taking 15–58 ms of the interface's step where it took 0.30–6.6 s before §12.8.3 and 16–113 ms after it; and
+with the screen Disabled, where the read was waited for with nothing moving, the first frame is 5–33 ms after the
+press, against 0.15–7.4 s (§12.8.2). A zip's launch is its unpacking, since every window of the probe has a home of
+its own: 1.0–1.7 s on the desktop and 3.7–6.5 s under the cap.
+
+**Peak memory.** 53–71 MiB a launch, where it was 0.88–1.38 GB: the host's buffer and the core's copy both gone [M].
+
+**First touches, the first 30 s of play.** A page the game has not read is read from the medium on the emulation
+thread when first touched. Traced from a cold cache over 1,800 frames, each frame's time and the process's major
+faults in it [M]:
+
+- *Unpaced on the desktop under the cap*, seven games: 0 to 8 major faults in 30 s, the system's read-ahead covering
+  the drive's sequential reads; the frames that faulted took at most 7 ms, but for Crash Bandicoot's frame 282, 65–80 ms
+  in three runs of three, 3.9 ms without the cap.
+- *Unpaced on the handheld's card*: Crash Bandicoot 16 faults, the slowest frame 6.5 ms; Spyro the Dragon 5, 8.0 ms;
+  **Mega Man X5's frame 355 took 20.6 ms** for one fault, where its emulation takes 2.7 ms. A first touch can hold a
+  frame past its period on the card, so P7's third clause failed as first built.
+- *The remedy*, `DiscFiles.Prefetch` (`EmuSen_Galaxia.md` §3.8, `EmuSen_CoreAPI_Extensions.md` §10.2.5): the disc's
+  files read once, in order, beside the game, at most a third of the medium. Paced at 60 frames a second under the
+  cap, Crash Bandicoot's faults fell from 8 to 1 and Spyro's from 3 to 0, no frame over 7.5 ms; at full speed the
+  prefetch had made one fault wait 160 ms behind it, which is why it rests.
+- *Paced on the handheld's card*, cold, without the prefetch and with it (21:20–21:40, Mistress not running, load
+  averages 0.3–1.0), the frames with a major fault, the slowest of them, and the frames over 16.7 ms:
+
+  | Game | Without: faults, slowest, over | With: faults, slowest, over | Prefetched in 30 s |
+  |---|---|---|---|
+  | Mega Man X5 (556 MiB) | 4, 13.1 ms, 0 | 0, —, 0 | all |
+  | Crash Bandicoot (603 MiB) | 16, 8.0 ms, 0 | 1, 6.6 ms, 0 | all |
+  | Spyro the Dragon (631 MiB) | 3, 10.1 ms, 0 | 0, —, 0 | all |
+  | Mega Man X6 (572 MiB), four runs each | 5–6; 8.0–31.5 ms; 0, 1, 2, 1 | 4; 23.8–49.6 ms; 2, 1, 1, 3 | 483–564 MiB |
+
+  The prefetch removes the first touches it has had time to pass: three games play their first 30 s with none or one.
+  **It does not remove those of the first seconds, and appears to lengthen them.** Mega Man X6 reads four to six new
+  places of its disc between frames 125 and 343, two to six seconds into play, before a prefetch at a third of the
+  card has reached them. Its slowest faulting frame was 8.5, 8.0, 31.5 and 24.1 ms in four runs without the prefetch
+  and 49.6, 23.8, 38.2 and 25.7 ms in four with it: longer with it in the middle of the range, the two overlapping,
+  and four runs each too few to size the difference. The handheld's interface ran beside every run, and two runs
+  without the prefetch had a frame of 31.5 and of 62.1 ms with no fault in it. So **on the card some games drop one
+  to three frames in their first seconds of play**, which a copied disc did not, having paid for it with 5–7 s before
+  the first frame; the prefetch trades the first touches of a game's later play for somewhat longer ones at its start.
+  P7's third clause is not met for those games.
+  *Not built, for the tester to choose:* the prefetch at the medium's full speed until the game's first frame, which
+  under the launch screen's 3.0 s would have read about 270 MiB before play begins; and, for a remedy that is exact
+  whatever the game reads first, the drive's seek target raised by the core as an event, so that the host reads ahead
+  of the drive during the emulated seek, which is a surface and so a proposal (`EmuSen_CoreAPI_Extensions.md` §10.2.5).
+
+
+**What the player meets.** A launch from the library or big picture no longer waits for the disc, from any medium; a
+game's file is read as the game reads it, and the whole disc soon after, beside it. On Linux and on the handheld a
+disc's file must stay where it is while the game runs: renaming or deleting it is harmless, but the card taken out
+or the file rewritten by another program ends the game, where a copied disc outlived it. On Windows the files of a
+running game cannot be moved or deleted until it is closed or its disc changed. A zip's first launch still unpacks it.
+
+**Exactness.** `EmuSen_CoreAPI_Extensions.md` §10.2.5: the kit's C17 on the seven discs at 1,800 frames, every frame,
+sample and state of a lent run the copied run's; and WiseMan's `DiscStreamingTests` through the C# host.
+
+**Tests run** (2026-10-12, after `git merge WiseMan`, which brought nothing new). `cargo test --release`: emusen-disc
+12 and 11 (19 before), emusen-native 69 (63), emusen-core-abi-check 6 (5) with `--check --against` the base branch's
+baseline, emusen-core-conform 7 and 16, the kit's tests three parallel runs of three; the platform workspace 25, 85,
+25 and 30; Diamond 157 and 76, with ps1-tests and without; VenusRT 143, Nephrite 140, MoonRT 6, MercuryRT 8, 16 and 4,
+over the new kit. WiseMan by area, `CoreAbi`, `CoreAdapter`, `CoreDiscovery`, `CoreEngine`, `CoreRegistration`,
+`CoreFactory`, `Diamond` (with `DiamondPlayers`), `DiscStreaming`, `PlayStationLibrary`, the whole `Galaxia` folder
+with the parity tests, `RomLibrary`, `SystemPack`, `Firmware`, `EmulatorSession`, `LaunchScreen`, `LeafAssembly`,
+`VenusRt`, `Nephrite`, `MoonRt` and `MercuryRt`: 981 cases, 972 passed and 9 skipped (the opt-in probes without their
+folders) [M]. The registration-equivalence golden is unchanged, so P1 holds for 1.3 too. After WiseMan `fd680853`
+was merged in (the GPU's D-47), Diamond's own tests again, 158 and 77 with ps1-tests and without, and WiseMan's
+`Diamond`, `DiscStreaming`, `PlayStationLibrary`, `CoreEngine`, `CoreAbi`, `CoreAdapter`, `CoreRegistration` and
+`GalaxiaParity`, 152 passing [M].
 
 ## 13. Gameplay: the seven games driven into play (2026-10-12)
 

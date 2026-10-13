@@ -50,9 +50,10 @@ namespace EmuSen.WiseMan.Cores
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
             const ulong debug = CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble | CoreInterface.CapDebugReads;
-            Assert.Equal(("diamond", "Diamond", CoreInterface.CapAxes | CoreInterface.CapBatteryDirty | CoreInterface.CapMedia | debug), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(("diamond", "Diamond", CoreInterface.CapAxes | CoreInterface.CapBatteryDirty | CoreInterface.CapMedia | CoreInterface.CapBorrow | debug), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             var system = Assert.Single(library.Info.Systems);
             Assert.Equal((PsxSystem.Id, false), (system.Id, system.Development));
+            Assert.Equal(new[] { (0u, ".mcr"), (4u, ".2.mcr") }, system.Battery!.Select(b => (b.Which, b.Suffix)));
             Assert.Same(PsxSystem.Entry, SystemPacks.For(system.Id)!.Entry);
             Assert.Equal(PsxSystem.CoreExtensions, system.Extensions);
             Assert.Empty(system.Extensions.Except(PsxSystem.Entry.Extensions));
@@ -173,7 +174,7 @@ namespace EmuSen.WiseMan.Cores
                 process.WaitForExit();
                 _output.WriteLine($"{name}:\n{output}{stderr.Result}");
                 Assert.True(process.ExitCode == 0, output + stderr.Result);
-                Assert.Equal(16, output.Split('\n').Count(l => l.StartsWith("pass C")));
+                Assert.Equal(17, output.Split('\n').Count(l => l.StartsWith("pass C")));
             }
         }
 

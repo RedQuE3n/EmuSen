@@ -5,14 +5,11 @@ using System.Linq;
 using System.Text;
 using EmuSen.Galaxia.Native;
 
-namespace EmuSen.Crystal.Media
+namespace EmuSen.Galaxia.Media
 {
-    // What a disc image brings beside it, read by emusen-disc's set module through the platform library: a sheet's files, an .m3u's discs, an .sbi - see EmuSen_CoreAPI_Extensions.md §2.
+    // Where the files a disc image brings beside it are: a sheet's tracks, an .m3u's discs, an .sbi; what each list means is emusen-disc's set module, asked through the platform library - see EmuSen_Galaxia.md §3.8.
     public static unsafe class ImageSets
     {
-        // EMUSEN_FILE_MEDIA: the file number of a sheet's first companion; the nth is FileMedia + n.
-        public const uint FileMedia = 65536;
-
         private static readonly Lazy<(nint Companions, nint Playlist, nint SbiBeside)> Exports = new(() =>
             (PlatformLibrary.Export("emusen_disc_companions"), PlatformLibrary.Export("emusen_disc_playlist"), PlatformLibrary.Export("emusen_disc_sbi_beside")));
 
@@ -85,19 +82,19 @@ namespace EmuSen.Crystal.Media
         // Where an image's LibCrypt patches are looked for.
         public static string SbiBeside(string imagePath) => Call(Exports.Value.SbiBeside, imagePath, "The .sbi's name").Single();
 
-        // The files create receives beside the image at imagePath, numbered from FileMedia: a sheet's, then an .sbi found beside it.
-        public static IReadOnlyList<(uint Which, string Path)> FilesFor(string imagePath)
+        // The files a core receives beside the image at imagePath, in the order it numbers them: a sheet's, then an .sbi found beside it.
+        public static IReadOnlyList<string> FilesFor(string imagePath)
         {
             var paths = IsSheet(imagePath) ? Companions(imagePath).ToList() : new List<string>();
             if (paths.Count > 0 || imagePath.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) || imagePath.EndsWith(".iso", StringComparison.OrdinalIgnoreCase))
                 if (SbiBeside(imagePath) is var sbi && File.Exists(sbi)) paths.Add(sbi);
-            return paths.Select((p, n) => (FileMedia + (uint)n, p)).ToArray();
+            return paths;
         }
 
         // Every file an image stands for on disk: itself, a sheet's tracks and an .sbi; for an .m3u, every disc's.
         public static IReadOnlyList<string> AllFiles(string path) =>
             IsPlaylist(path) ? new[] { path }.Concat(Discs(path).SelectMany(AllFiles)).ToArray()
-            : new[] { path }.Concat(FilesFor(path).Select(f => f.Path)).ToArray();
+            : new[] { path }.Concat(FilesFor(path)).ToArray();
 
         // A folder's files as a library shelves them: a file that a sheet or a list among them names is that game's, not a game of its own - see EmuSen_CoreAPI_Extensions.md §2.4.
         public static IReadOnlyList<string> Shelved(IReadOnlyList<string> files)

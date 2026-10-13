@@ -362,7 +362,11 @@ typical 90 MB/s would make the open about seven seconds, which would argue for t
 *Measured 2026-10-12* (`Diamond_Players.md` §12.8): under a 90 MB/s read cap on the desktop the 632 MB track of Crash
 Bandicoot reads in 6.9 s cold, as predicted, and on the handheld itself a 556 MiB track read from the card in 6.3 s
 and a 424 MiB one in 4.6 s, 88–92 MiB a second (§12.8.6 there). The streaming read is proposed with those figures in
-`EmuSen_CoreAPI_Extensions.md` §10.2 (Q15).
+`EmuSen_CoreAPI_Extensions.md` §10.2 (Q15). *Built 2026-10-12* as the core ABI's minor 1.3 (`EmuSen_CoreAPI.md`
+§6.24): Diamond claims `BORROW`, its disc is `emusen_disc::Disc<Kept>`, and the copy at create is gone with the read;
+a launch is 95–126 ms from a cold card or the desktop, and the process's peak memory 53–71 MiB where it was
+0.85–1.94 GB (`Diamond_Players.md` §12.8.9). The drive reads the disc where Galaxia has mapped it; its timing is the
+core's own count of cycles, so a page's arrival changes nothing a game sees.
 
 ### 9.8 The games that stopped at their movies, and the stream (2026-10-12)
 

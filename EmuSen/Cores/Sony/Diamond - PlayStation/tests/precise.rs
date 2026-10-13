@@ -151,8 +151,8 @@ fn goldens_equal(file: &str, made: &[String]) -> Vec<String> {
 fn counts_line(c: &Counts, r: Option<&diamond_renderer::Counts>) -> String {
     let pct = |a: u64, b: u64| if b == 0 { 0.0 } else { 100.0 * a as f64 / b as f64 };
     let mut s = format!(
-        "projections {} (refused {}, {:.2}%); polygons {} precise {} ({:.1}%) mixed {}; vertices {} precise {} ({:.1}%); dead {} changed {} unmatched {}",
-        c.projections, c.refused, pct(c.refused, c.projections), c.polygons, c.precise_polygons, pct(c.precise_polygons, c.polygons), c.mixed_polygons, c.vertices, c.precise_vertices, pct(c.precise_vertices, c.vertices), c.dead, c.changed, c.unmatched
+        "projections {} (cut {}, {:.2}%; far {}, {:.2}%); polygons {} precise {} ({:.1}%) mixed {}; vertices {} precise {} ({:.1}%); dead {} changed {} unmatched {}",
+        c.projections, c.refused, pct(c.refused, c.projections), c.far, pct(c.far, c.projections), c.polygons, c.precise_polygons, pct(c.precise_polygons, c.polygons), c.mixed_polygons, c.vertices, c.precise_vertices, pct(c.precise_vertices, c.vertices), c.dead, c.changed, c.unmatched
     );
     if let Some(r) = r {
         s += &format!("; renderer: precise triangles {} perspective {} integer-fallback polygons {}", r.precise, r.perspective, r.integer);
@@ -558,7 +558,7 @@ fn the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on() {
         return;
     };
     let (exact, counts, off, on) = run(Form::Exact, Some(r));
-    assert_eq!((counts.polygons, counts.precise_polygons, counts.refused), (counts.precise_polygons, counts.polygons, 0), "every quad precise: {counts:?}");
+    assert_eq!((counts.polygons, counts.precise_polygons, counts.refused, counts.far), (counts.precise_polygons, counts.polygons, 0, 0), "every quad precise: {counts:?}");
     assert_eq!(sums_counts.precise_polygons, sums_counts.polygons);
     let frames = MESH_FRAMES.min(exact.len());
     let integer: Vec<Vec<(f64, f64)>> = exact[..frames].iter().map(|f| f.iter().map(|v| v.0).collect()).collect();
@@ -691,4 +691,65 @@ fn a_state_with_the_setting_on_continues_its_picture_and_loads_both_ways() {
     }
     assert!(tap(&mut d).precision.counts().precise_polygons > before && state_digest(&d) == state_digest(&c), "a state without the blocks: precise again, and the machine the same");
     assert!(state.len() > plain.len() + 4_000_000, "{} against {}", state.len(), plain.len());
+}
+
+/// §26.3's defect, held: four strips of a picture side by side at one depth, each its texture's 64 columns at a little
+/// over one texel a pixel, their corners projected by the GTE to fractions of a pixel and sent by SWC2 straight to GP0.
+/// With sub-pixel corners the last column of a strip lies within a fraction of a pixel of its right edge, where the
+/// console's rounding of the texel gives column 64, the next region's; held short of it, no pixel of the strips shows a
+/// texel past its strip, and none is left out.
+#[test]
+fn a_strip_of_a_picture_shows_no_texel_past_its_edge() {
+    let Some(r) = renderer() else { return };
+    let mut s = String::new();
+    s += "lui t9, 0x4000\nmtc0 t9, SR\nlui a0, 0x1F80\n";
+    s += &(gp1(0) + &gp1(0x0800_0001) + &gp1(0x0300_0000));
+    s += &li("t0", 1001);
+    s += "ctc2 t0, $26\nlui t0, 160\nctc2 t0, $24\nlui t0, 120\nctc2 t0, $25\nori t0, zero, 0x1000\nctc2 t0, $0\nctc2 t0, $2\nctc2 t0, $4\nctc2 zero, $5\nctc2 zero, $6\nori t0, zero, 1000\nctc2 t0, $7\n";
+    for w in [0xE100_0508, 0xE300_0000, 0xE400_0000 | 319 | 239 << 10, 0xE500_0000, 0xE600_0000, 0x0200_0000, 0, 0x00F0_0140] {
+        s += &gp0(w);
+    }
+    let v = |x: i32, y: i32| (x as u16 as u32 | (y as u16 as u32) << 16, 0u32);
+    for k in 0..4 {
+        let (x0, x1) = (-128 + 64 * k, -64 + 64 * k);
+        for (i, (x, y)) in [(x0, -32), (x1, -32), (x0, 32)].into_iter().enumerate() {
+            s += &li("t0", v(x, y).0);
+            s += &format!("mtc2 t0, ${}\nmtc2 zero, ${}\n", 2 * i, 2 * i + 1);
+        }
+        s += "nop\n.word 0x4A280030\n";
+        s += &gp0(0x2D80_8080);
+        s += "swc2 $12, 0x1810(a0)\n";
+        s += &gp0(0);
+        s += "swc2 $13, 0x1810(a0)\n";
+        s += &gp0(0x0108_0040);
+        s += "swc2 $14, 0x1810(a0)\n";
+        s += &gp0(0x3F00);
+        s += &li("t0", v(x1, 32).0);
+        s += "mtc2 t0, $0\nmtc2 zero, $1\nnop\n.word 0x4A180001\nswc2 $14, 0x1810(a0)\n";
+        s += &gp0(0x3F40);
+    }
+    s += "loop: j loop\nnop\n";
+    let mut m = machine(&s);
+    coordinate_texture(&mut m);
+    m.attach(Box::new(Precise::new(Precision::default(), Tap::new(Some(r), false))));
+    for _ in 0..3 {
+        m.advance();
+    }
+    let counts = tap(&mut m).precision.counts();
+    assert_eq!(counts.precise_polygons, 4, "{counts:?}");
+    let mut v = vec![0u16; 1024 * 512];
+    drawn(&mut m).vram(&mut v);
+    let (mut past, mut drawn_pixels) = (0u32, 0u32);
+    for y in 80..160u32 {
+        for x in 20..300u32 {
+            let t = v[(y * 1024 + x) as usize];
+            if t & 0x8000 != 0 {
+                drawn_pixels += 1;
+                past += (t & 0xFF >= 64) as u32;
+            }
+        }
+    }
+    let software = (80..160u32).flat_map(|y| (20..300u32).map(move |x| (x, y))).filter(|&(x, y)| m.board.gpu.vram.get(x, y) & 0x8000 != 0).count();
+    eprintln!("{drawn_pixels} pixels of the strips drawn, the software rasteriser's {software}; {past} show a texel past their strip");
+    assert!(past == 0 && drawn_pixels.abs_diff(software as u32) <= 64 * 2, "{past} pixels past the strips' texels");
 }

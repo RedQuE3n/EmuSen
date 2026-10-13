@@ -48,8 +48,10 @@ pub enum Form {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Counts {
     pub projections: u64,
-    /// Projections the guard refused: saturated, behind the camera, or far from the console's pixel.
+    /// Projections the guard refused: those the console cut (saturated, or at or behind the camera), and those whose
+    /// precise position lies farther than `GUARD` from the console's pixel.
     pub refused: u64,
+    pub far: u64,
     pub polygons: u64,
     /// Polygons drawn with every vertex precise, and those with some but not all.
     pub precise_polygons: u64,
@@ -131,15 +133,16 @@ impl Precision {
         self.counts
     }
 
-    /// The precise offsets and depth of a projection, or none where the guard refuses it (§21.2).
-    fn precise(&self, p: &Projection) -> Option<(i32, i32, i32)> {
+    /// The precise offsets and depth of a projection, or why the guard refuses it (§21.2): `Err(false)` for what the
+    /// console cut, `Err(true)` for a position far from the console's.
+    fn precise(&self, p: &Projection) -> Result<(i32, i32, i32), bool> {
         let z = p.sums[2];
         let (sx, sy) = (p.word as u16 as i16 as i64, (p.word >> 16) as u16 as i16 as i64);
         if z <= 0 || z > i32::MAX as i64 || p.x >> 16 != sx || p.y >> 16 != sy {
-            return None;
+            return Err(false);
         }
         let (fx, fy) = match self.form {
-            Form::Zero => return Some((0, 0, 1 << 12)),
+            Form::Zero => return Ok((0, 0, 1 << 12)),
             Form::Sums => ((p.x & 0xFFFF) as f64 / 65536.0, (p.y & 0xFFFF) as f64 / 65536.0),
             Form::Exact => {
                 let h = p.h as f64;
@@ -149,9 +152,9 @@ impl Precision {
             }
         };
         if (fx - 0.5).abs() > GUARD || (fy - 0.5).abs() > GUARD {
-            return None;
+            return Err(true);
         }
-        Some(((fx * SUBPIXEL).round() as i32, (fy * SUBPIXEL).round() as i32, z as i32))
+        Ok(((fx * SUBPIXEL).round() as i32, (fy * SUBPIXEL).round() as i32, z as i32))
     }
 
     /// The shadow of the memory word at `address`, for RAM and the scratchpad.
@@ -271,14 +274,15 @@ impl Observer for Precision {
     fn projected(&mut self, p: &Projection) {
         self.counts.projections += 1;
         let serial = match self.precise(p) {
-            Some((dx, dy, z)) => {
+            Ok((dx, dy, z)) => {
                 self.serial = self.serial.wrapping_add(1).max(1);
                 let at = (self.serial as usize % RING) * 4;
                 self.ring[at..at + 4].copy_from_slice(&[self.serial, p.word, (dx as u16 as u32) | (dy as u16 as u32) << 16, z as u32]);
                 self.serial
             }
-            None => {
-                self.counts.refused += 1;
+            Err(far) => {
+                self.counts.refused += !far as u64;
+                self.counts.far += far as u64;
                 0
             }
         };

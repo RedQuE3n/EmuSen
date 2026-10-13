@@ -3,7 +3,9 @@
 //! the RGBA picture (its size printed) to a file. `--renderer` attaches stage E3's Vulkan renderer from the start
 //! (Diamond_Enhancements.md §16) on the device `EMUSEN_GPU_DEVICE` names, and `--picture`, `--pictures` and `--vram`
 //! then write its picture or VRAM beside the machine's, as `NAME.renderer.rgba` (or `NAME.renderer`), with the pixels
-//! that differ counted.
+//! that differ counted. `--precise` attaches stage E4's precise geometry in its place, the precision layer paired with
+//! the renderer (Diamond_Enhancements.md §24.3), whose pictures are written the same way, and `--precision` the
+//! precision layer alone, with no device; each prints the precision layer's counts at the end.
 //! `--disasm ADDRESS N` disassembles N words of a game's RAM after the run. `--armed` runs each frame through the debugger's loop with the kit's C15 tables armed (Diamond_Debugger.md), and `--armed-reads` the read watch and read data breakpoint of 1.2 beside them, with nothing to hit. `--wav FILE` writes the SPU's output, 16-bit stereo at 44,100 Hz. `--boot` boots the disc through the kernel's LoadExec from a loader, without the BIOS's intro (Diamond_CDROM.md §9).
 //! `--heading TEXT` prints the TTY from TEXT on, leaving out what a BIOS printed before the program; `--trace` then
 //! traces the controller's commands and responses, as `--trace-game` does from the entry of a game booted by `--boot`, once the BIOS has handed over. `--disc PATH` puts a disc in the drive (a cue sheet with its tracks beside it, a CHD, an `.iso` or a lone `.bin`;
@@ -112,6 +114,17 @@ fn main() {
         });
         eprintln!("[renderer on {}]", r.report());
         m.attach(Box::new(r));
+    }
+    if args.iter().any(|a| a == "--precise") {
+        let r = diamond_renderer::Renderer::new(None).unwrap_or_else(|e| {
+            eprintln!("no renderer: {e}");
+            std::process::exit(2)
+        });
+        eprintln!("[precise geometry on {}]", r.report());
+        m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r.keeping())));
+    }
+    if args.iter().any(|a| a == "--precision") {
+        m.attach(Box::new(precision::Precise::new(precision::Precision::default(), Unseen)));
     }
     if args.iter().any(|a| a == "--lid-open") {
         m.set_lid(true, None);
@@ -317,13 +330,39 @@ fn main() {
     if let Some(r) = rendered(&mut m) {
         eprintln!("renderer: {:?}", r.counts());
     }
+    if let Some(c) = precision_counts(&mut m) {
+        eprintln!("precision: {c:?}");
+    }
     eprintln!("\n[{} frames, {} cycles, pc {:08X}, {:.1} ms]", m.frames, m.board.now, m.cpu.regs.pc, start.elapsed().as_secs_f64() * 1e3);
 }
 
-/// The renderer, when one is attached.
+/// The renderer, when one is attached, alone or paired with the precision layer.
 fn rendered(m: &mut Machine) -> Option<&mut diamond_renderer::Renderer> {
     let layer: &mut dyn std::any::Any = m.layer()?;
-    layer.downcast_mut::<diamond_renderer::Renderer>()
+    if layer.is::<diamond_renderer::Renderer>() {
+        return layer.downcast_mut::<diamond_renderer::Renderer>();
+    }
+    layer.downcast_mut::<precision::Precise<diamond_renderer::Renderer>>().map(|p| &mut p.drawer)
+}
+
+/// The drawer of `--precision`, which draws nothing.
+struct Unseen;
+
+impl blackmoon_gte::Observer for Unseen {}
+
+impl diamond::layer::Layer for Unseen {}
+
+impl precision::Draw for Unseen {
+    fn executed_with(&mut self, _c: &diamond::layer::Command, _precise: Option<&[precision::Fraction; 4]>) {}
+}
+
+/// The precision layer's counts, when it is attached.
+fn precision_counts(m: &mut Machine) -> Option<precision::Counts> {
+    let layer: &mut dyn std::any::Any = m.layer()?;
+    if let Some(p) = layer.downcast_mut::<precision::Precise<diamond_renderer::Renderer>>() {
+        return Some(p.precision.counts());
+    }
+    layer.downcast_mut::<precision::Precise<Unseen>>().map(|p| p.precision.counts())
 }
 
 /// `path` with `.renderer` before its `.rgba`, or after it.

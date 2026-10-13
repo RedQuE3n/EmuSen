@@ -13,7 +13,7 @@
   <ItemGroup>
     <!-- Identity is the crate's library name; the fallback names the C# core a console runs on without the library, empty where there is none; CoreAbi 1 marks a library on the core ABI v1, whose sidecar the build writes; InDevelopment true keeps a core from players until its gate, see EmuSen_CoreAPI.md §27. -->
     <EmuSenRustCrate Include="diamond">
-      <Dir>$(MSBuildThisFileDirectory)Sony\Diamond - PlayStation\</Dir>
+      <Dir>$(MSBuildThisFileDirectory)Sony\Diamond - PlayStation\v1\</Dir>
       <Core>Diamond</Core>
       <Console>the PlayStation</Console>
       <Fallback></Fallback>

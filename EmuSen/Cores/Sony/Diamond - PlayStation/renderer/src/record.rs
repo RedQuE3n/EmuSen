@@ -251,6 +251,26 @@ pub enum Made {
 /// The sub-pixel grid's bits, and the shift that brings a fine gradient's product back to the integer rule's 12 bits.
 const FINE: i64 = 8;
 
+/// The range a precise triangle's texture coordinates are held within, packed as u's least and greatest then v's: the
+/// vertices' own, and with sub-pixel vertices short of the end the coordinate runs toward across the screen, since that
+/// texel lies past the right or bottom edge the console's integer edges leave undrawn (Diamond_Enhancements.md §26.3).
+/// At zero fraction nothing is held, so that the record is the integer rule's.
+fn held(v: &[Vertex; 3], f: &[Fraction; 3], gu: [i32; 2], gv: [i32; 2]) -> u32 {
+    if f.iter().all(|q| q.dx == 0 && q.dy == 0) {
+        return 0xFF00_FF00;
+    }
+    let range = |c: [u8; 3], g: [i32; 2]| {
+        let (mut lo, mut hi) = (*c.iter().min().unwrap() as u32, *c.iter().max().unwrap() as u32);
+        if hi > lo && g[0] >= 0 && g[1] >= 0 {
+            hi -= 1;
+        } else if hi > lo && g[0] <= 0 && g[1] <= 0 {
+            lo += 1;
+        }
+        lo | hi << 8
+    };
+    range(v.map(|q| q.u), gu) | range(v.map(|q| q.v), gv) << 16
+}
+
 /// A triangle with precise vertices, already folded, under `paint`: the integer vertices `v` the GPU decoded moved by
 /// `f`'s offsets in 256ths of a pixel, its texture in perspective by `f`'s depths when they differ (§22.2, §22.3).
 pub fn precise_triangle(v: [Vertex; 3], f: [Fraction; 3], shaded: bool, textured: bool, paint: &Paint, slot: u32) -> Made {
@@ -306,6 +326,7 @@ pub fn precise_triangle(v: [Vertex; 3], f: [Fraction; 3], shaded: bool, textured
     for k in 0..5 {
         words[27 + k] = base[k] << FRACTION;
     }
+    words[9] = held(&v, &f, [words[38], words[39]], [words[40], words[41]]) as i32;
     let z = f.map(|q| q.z.max(1));
     if textured && (z[0] != z[1] || z[1] != z[2]) {
         let near = *z.iter().min().unwrap() as f32;

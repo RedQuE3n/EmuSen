@@ -237,27 +237,24 @@ void fine_triangle(inout uint pixel, int r, uint flags, int x, int py) {
         }
     }
     uint u = 0u, v = 0u;
+    uint held = uint(records[r + 9]);
     if ((flags & PERSPECTIVE) != 0u) {
         float w = 0.0, su = 0.0, sv = 0.0;
-        int u_lo = 255, u_hi = 0, v_lo = 255, v_hi = 0;
         for (int k = 0; k < 3; k++) {
             int uv = records[r + 42 + k];
-            int tu = uv & 0xFF, tv = (uv >> 8) & 0xFF;
             float a = e[k] * intBitsToFloat(records[r + 45 + k]);
             w += a;
-            su += a * float(tu);
-            sv += a * float(tv);
-            u_lo = min(u_lo, tu);
-            u_hi = max(u_hi, tu);
-            v_lo = min(v_lo, tv);
-            v_hi = max(v_hi, tv);
+            su += a * float(uv & 0xFF);
+            sv += a * float((uv >> 8) & 0xFF);
         }
-        u = uint(clamp(int(floor(su / w + 0.5)), u_lo, u_hi));
-        v = uint(clamp(int(floor(sv / w + 0.5)), v_lo, v_hi));
+        u = uint(floor(su / w + 0.5));
+        v = uint(floor(sv / w + 0.5));
     } else if ((flags & TEXTURED) != 0u) {
         u = uint(interpolate_fine(records[r + 30], records[r + 38], dx, records[r + 39], dy)) & 0xFFu;
         v = uint(interpolate_fine(records[r + 31], records[r + 40], dx, records[r + 41], dy)) & 0xFFu;
     }
+    u = clamp(u, held & 0xFFu, (held >> 8) & 0xFFu);
+    v = clamp(v, (held >> 16) & 0xFFu, held >> 24);
     shade(pixel, r, flags, x, y, rgb, u, v);
 }
 

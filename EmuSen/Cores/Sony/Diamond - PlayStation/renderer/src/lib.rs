@@ -89,6 +89,8 @@ pub struct Renderer {
     polyline: Option<(u32, Vertex)>,
     transfer: Option<Transfer>,
     slot: u32,
+    /// How many of the slot's entries its load wrote: the others hold whatever the slot held before, and are never read.
+    slot_entries: u32,
     next_slot: u32,
     width: u32,
     height: u32,
@@ -112,6 +114,7 @@ impl Renderer {
             polyline: None,
             transfer: None,
             slot: 0,
+            slot_entries: 256,
             next_slot: 1,
             width: 256,
             height: 240,
@@ -130,6 +133,11 @@ impl Renderer {
     /// The device's report, `"{name}, Vulkan {major}.{minor}"`.
     pub fn report(&self) -> String {
         self.device.gpu.report()
+    }
+
+    /// Whether the device is one the processor implements (llvmpipe), which draws the same picture slowly.
+    pub fn software(&self) -> bool {
+        self.device.gpu.software()
     }
 
     pub fn counts(&self) -> Counts {
@@ -247,7 +255,7 @@ impl Renderer {
         self.device.held().loads.0.slice_mut::<u32>()[l * 4..l * 4 + 4].copy_from_slice(&[slot, t.clut_x, t.clut_y, t.entries()]);
         self.used.loads += 1;
         self.counts.loads += 1;
-        self.slot = slot;
+        (self.slot, self.slot_entries) = (slot, t.entries());
         slot
     }
 
@@ -485,7 +493,8 @@ impl Layer for Renderer {
         self.submit(Back::Vram);
         let mirror: Vec<u16> = self.device.held().back.slice::<u32>()[..VRAM_WORDS].iter().map(|&w| w as u16).collect();
         self.submit(Back::Palette(self.slot));
-        let palette: Vec<u16> = self.device.held().back.slice::<u32>()[..256].iter().map(|&w| w as u16).collect();
+        let entries = self.slot_entries as usize;
+        let palette: Vec<u16> = self.device.held().back.slice::<u32>()[..256].iter().enumerate().map(|(i, &w)| if i < entries { w as u16 } else { 0 }).collect();
         let (picture, w, h) = self.picture();
         let n = picture.len();
         let picture = picture.to_vec();
@@ -580,7 +589,7 @@ impl Layer for Renderer {
                 words
             }
         };
-        (self.slot, self.next_slot) = (0, 1);
+        (self.slot, self.slot_entries, self.next_slot) = (0, 256, 1);
         self.device.gpu.submit(|c| {
             c.copy(&held.back, &held.vram, 0, 0, 0);
             c.copy(&held.records.0, &held.picture, (words * 4) as u64, 0, 0);

@@ -1,0 +1,35 @@
+[package]
+name = "diamond-v1"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Diamond's published library on the core ABI v1: the machine with its enhancements, as a host sees it. Its library is
+# named diamond, so the file is libdiamond.so as before (Diamond_Enhancements.md §24.1).
+[lib]
+name = "diamond"
+crate-type = ["cdylib"]
+
+[dependencies]
+machine = { package = "diamond", path = ".." }
+precision = { path = "../precision" }
+diamond-renderer = { path = "../renderer" }
+emusen-native = { path = "../../../Shared/emusen-native" }
+
+[dev-dependencies]
+emusen-mips = { path = "../../../Shared/emusen-mips" }
+blackmoon-r3000 = { path = "../../BlackMoon-HW/blackmoon-r3000" }
+blackmoon-gte = { path = "../../BlackMoon-HW/blackmoon-gte" }
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"
+
+# What ships: release without the line tables a sampler reads - see Mars_Native.md §6.3.
+[profile.dist]
+inherits = "release"
+debug = false
+strip = "debuginfo"

@@ -102,11 +102,11 @@ fn the_guard_refuses_what_the_console_cut_and_keeps_the_projections_fraction() {
         let word = (x >> 16).clamp(-0x400, 0x3FF) as u16 as u32 | ((y >> 16).clamp(-0x400, 0x3FF) as u16 as u32) << 16;
         p.precise(&Projection { vertex: 0, sums, quotient: 0, x, y, z: 0, word, h: 0x100, offset: [160 << 16, 120 << 16] })
     };
-    assert_eq!(at([-16 << 12, 5 << 12, 0x200 << 12], 152 << 16, (122 << 16) + 0x8000), Some((0, 128, 0x200 << 12)));
-    assert_eq!(at([(1 << 12) + 0x800, 0, 0x100 << 12], 161 << 16, 120 << 16), Some((128, 0, 0x100 << 12)), "IR's lost half of a unit, H/SZ3 = 1");
-    assert_eq!(at([-5000 << 12, 0, 0x100 << 12], -4840 << 16, 120 << 16), None, "SX saturated");
-    assert_eq!(at([16 << 12, 0, -0x100 << 12], 144 << 16, 120 << 16), None, "behind the camera");
-    assert_eq!(at([40000 << 12, 0, 0x4000 << 12], (160 + 499) << 16, 120 << 16), None, "the console's pixel 126 from the geometry's");
+    assert_eq!(at([-16 << 12, 5 << 12, 0x200 << 12], 152 << 16, (122 << 16) + 0x8000), Ok((0, 128, 0x200 << 12)));
+    assert_eq!(at([(1 << 12) + 0x800, 0, 0x100 << 12], 161 << 16, 120 << 16), Ok((128, 0, 0x100 << 12)), "IR's lost half of a unit, H/SZ3 = 1");
+    assert_eq!(at([-5000 << 12, 0, 0x100 << 12], -4840 << 16, 120 << 16), Err(false), "SX saturated");
+    assert_eq!(at([16 << 12, 0, -0x100 << 12], 144 << 16, 120 << 16), Err(false), "behind the camera");
+    assert_eq!(at([40000 << 12, 0, 0x4000 << 12], (160 + 499) << 16, 120 << 16), Err(true), "the console's pixel 126 from the geometry's");
 }
 
 /// §21.3: a serial written over in the ring is dead at the receipt, though the word still holds its integer.

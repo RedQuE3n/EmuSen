@@ -85,14 +85,18 @@ namespace EmuSen.Cores.Native
         // The words each choice is shown by, in the order of Choices; a value is its own label where the schema gives none.
         public IReadOnlyList<string> ChoiceLabels { get; init; } = Array.Empty<string>();
 
-        // As the settings window lists it; a text setting has no row there yet, so null.
+        // As the settings window lists it, an enhancement in a group of its own; a text setting has no row there yet, so null - see EmuSen_CoreAPI.md §6.13.
         public CoreSetting? AsCoreSetting() => Kind switch
         {
-            "switch" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Switch, Default),
-            "count" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Count, Default, Min, Max),
-            "choice" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Choice, Default, Choices: Choices, ChoiceLabels: ChoiceLabels.Count == Choices.Count ? ChoiceLabels : null),
+            "switch" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Switch, Default, Group: Group),
+            "count" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Count, Default, Min, Max, Group: Group),
+            "choice" => new CoreSetting(Key, Label, Hint, CoreSettingKind.Choice, Default, Choices: Choices, ChoiceLabels: ChoiceLabels.Count == Choices.Count ? ChoiceLabels : null, Group: Group),
             _ => null,
         };
+
+        public const string EnhancementsGroup = "Enhancements";
+
+        private string? Group => Effect == "enhancement" ? EnhancementsGroup : null;
 
         private string Hint => Cost is null ? Help : $"{Help} {Cost}";
     }

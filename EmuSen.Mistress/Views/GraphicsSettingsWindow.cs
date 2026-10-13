@@ -176,8 +176,12 @@ namespace EmuSen.Mistress.Views
                 return panel;
             }
 
+            string? group = null;
             foreach (CoreSetting setting in settings)
             {
+                // A heading before each group of rows the schema sets apart, enhancements among them - see EmuSen_Settings_Reference.md §4.110.
+                if (setting.Group is { } g && g != group) panel.Children.Add(new SectionHeader { Name = $"{console}.Group.{g}", Text = g });
+                group = setting.Group;
                 (Control control, Action refresh) = BuildControl(console, setting);
                 refreshers.Add(refresh);
                 if (setting.Note is { } note)

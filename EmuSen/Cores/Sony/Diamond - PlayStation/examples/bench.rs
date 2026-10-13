@@ -1,5 +1,6 @@
 //! Times Diamond's frames on the emulation thread and digests what they made (Diamond_Speed.md §2): `bench <image>
-//! [frames] [--from N] [--armed] [--plain] [--stepped] [--verify N] [--verify-runs N] [--times FILE] [--every N]`;
+//! [frames] [--from N] [--armed] [--plain] [--stepped] [--verify N] [--verify-runs N] [--times FILE] [--every N]
+//! [--observed]`; `--observed` attaches the enhancement layer's test observer (Diamond_Enhancements.md §7),
 //! `--plain` turns the exact levers off and `--stepped` the runs alone, `--verify N` checks every Nth skip against the
 //! interpreter and `--verify-runs N` every Nth run against its steps. The image is a disc (a cue sheet, a CHD, an `.iso` or a
 //! lone `.bin`) or a PS-EXE, run on the open kernel with no firmware; a `.s` source is assembled and run with no kernel.
@@ -33,6 +34,9 @@ fn main() {
     let every: Option<usize> = flag("--every").map(|f| f.parse().expect("a frame count"));
     let armed = args.iter().any(|a| a == "--armed");
     let mut m = machine(path);
+    if args.iter().any(|a| a == "--observed") {
+        m.attach(Box::new(diamond::layer::Tally::new()));
+    }
     m.idle.on = !args.iter().any(|a| a == "--plain");
     m.idle.verify = flag("--verify").map_or(0, |v| v.parse().expect("a count"));
     m.runs.on = !args.iter().any(|a| a == "--plain" || a == "--stepped");
@@ -68,6 +72,10 @@ fn main() {
     if let Some(file) = flag("--times") {
         let text: String = times.iter().map(|t| format!("{t:.4}\n")).collect();
         std::fs::write(file, text).expect("written");
+    }
+    if let Some(layer) = m.detach() {
+        let t = *(layer as Box<dyn std::any::Any>).downcast::<diamond::layer::Tally>().expect("the test observer");
+        eprintln!("observed: {} loads, {} stores, {} coprocessor 2 moves, {} copies, {} projections, {} words to GP0 from the processor, {} by DMA", t.loads, t.stores, t.cop2, t.copies, t.projections, t.from_cpu, t.from_dma);
     }
     let mut window = times[from.min(times.len())..].to_vec();
     let mean = window.iter().sum::<f64>() / window.len().max(1) as f64;

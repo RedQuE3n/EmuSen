@@ -1760,15 +1760,46 @@ fn state_digest(m: &Machine) -> u64 {
     fold_bytes(FNV_BASIS, &state[..n])
 }
 
-/// A program's golden digests after `frames` frames: the pictures, the sound, the state, and VRAM and the TTY apart.
-fn program_digests(mut m: Machine, frames: usize) -> String {
+/// The test observer attached, when `observed`, for the exactness harness (Diamond_Enhancements.md §7).
+fn observe(m: &mut Machine, observed: bool) {
+    if observed {
+        m.attach(Box::new(diamond::layer::Tally::new()));
+    }
+}
+
+/// What the test observer was told over the run, detached; none when it was not attached.
+fn told(m: &mut Machine) -> Option<diamond::layer::Tally> {
+    m.detach().map(|l| *(l as Box<dyn std::any::Any>).downcast::<diamond::layer::Tally>().unwrap())
+}
+
+/// A program's golden digests after `frames` frames: the pictures, the sound, the state, and VRAM and the TTY apart;
+/// with the test observer attached when `observed`, detached before the state is taken, and what it was told.
+fn program_digests(mut m: Machine, frames: usize, observed: bool) -> (String, Option<diamond::layer::Tally>) {
+    observe(&mut m, observed);
     let mut fold = Fold::new();
     for _ in 0..frames {
         m.advance();
         fold.frame(&mut m);
     }
+    let tally = told(&mut m);
     let tty = m.space(diamond::machine::TTY_ID).unwrap();
-    format!("picture {:016X}\tsound {:016X}\tstate {:016X}\tvram {:016X}\ttty {:016X}", fold.picture, fold.sound, state_digest(&m), fold_bytes(FNV_BASIS, &m.board.gpu.vram.bytes), fold_bytes(FNV_BASIS, tty))
+    let line = format!("picture {:016X}\tsound {:016X}\tstate {:016X}\tvram {:016X}\ttty {:016X}", fold.picture, fold.sound, state_digest(&m), fold_bytes(FNV_BASIS, &m.board.gpu.vram.bytes), fold_bytes(FNV_BASIS, tty));
+    (line, tally)
+}
+
+/// The exactness harness's two runs against one golden file: plain, and with the test observer attached, each line
+/// the recorded one; recording takes the plain run's. What the observer was told is summed and printed.
+fn check_both(file: &str, header: &str, run: impl Fn(bool) -> Vec<(String, Option<diamond::layer::Tally>)>) {
+    let plain: Vec<String> = run(false).into_iter().map(|l| l.0).collect();
+    check_goldens(file, header, &plain);
+    if recording_goldens() {
+        return;
+    }
+    let observed = run(true);
+    let told = observed.iter().filter_map(|l| l.1).fold(diamond::layer::Tally::new(), |a, t| diamond::layer::Tally { loads: a.loads + t.loads, stores: a.stores + t.stores, cop2: a.cop2 + t.cop2, copies: a.copies + t.copies, projections: a.projections + t.projections, from_cpu: a.from_cpu + t.from_cpu, from_dma: a.from_dma + t.from_dma, ..a });
+    eprintln!("{file} with the test observer: {} loads, {} stores, {} coprocessor 2 moves, {} copies, {} projections, {} words to GP0 from the processor and {} by DMA", told.loads, told.stores, told.cop2, told.copies, told.projections, told.from_cpu, told.from_dma);
+    assert!(told.loads > 0 && told.stores > 0, "{file}: the observer was told nothing");
+    check_goldens(file, header, &observed.into_iter().map(|l| l.0).collect::<Vec<_>>());
 }
 
 /// The goldens' text against the file's, or the file written when recording: each line that differs named.
@@ -1827,8 +1858,16 @@ fn own_programs() -> Vec<(String, String)> {
 /// path when the goldens were recorded (Diamond_Enhancements.md §6).
 #[test]
 fn the_projects_programs_give_their_goldens() {
-    let lines: Vec<String> = own_programs().iter().map(|(name, source)| format!("{name}\t{GOLDEN_PROGRAM_FRAMES}\t{}", program_digests(golden_program(name, source), GOLDEN_PROGRAM_FRAMES))).collect();
-    check_goldens("programs.txt", "# The accurate goldens of programs/ (Diamond_Enhancements.md §6): name, frames, digests.\n", &lines);
+    let programs = own_programs();
+    check_both("programs.txt", "# The accurate goldens of programs/ (Diamond_Enhancements.md §6): name, frames, digests.\n", |observed| {
+        programs
+            .iter()
+            .map(|(name, source)| {
+                let (digests, told) = program_digests(golden_program(name, source), GOLDEN_PROGRAM_FRAMES, observed);
+                (format!("{name}\t{GOLDEN_PROGRAM_FRAMES}\t{digests}"), told)
+            })
+            .collect()
+    });
 }
 
 /// The frames a ps1-tests program runs for, as WiseMan's gates run it, and its market: 900 for those graded by their
@@ -1876,14 +1915,17 @@ fn ps1_tests_machine(corpus: &std::path::Path, path: &str, market: Market) -> Ma
 #[test]
 fn ps1_tests_give_their_goldens() {
     let Some(corpus) = records::corpus() else { return };
-    let lines: Vec<String> = ps1_tests_programs(&corpus)
-        .iter()
-        .map(|path| {
-            let (frames, market) = ps1_tests_run(path);
-            format!("{path}\t{frames}\t{}", program_digests(ps1_tests_machine(&corpus, path, market), frames))
-        })
-        .collect();
-    check_goldens("ps1-tests.txt", "# The accurate goldens of ps1-tests' release build 158 on the open kernel (Diamond_Enhancements.md §6): path, frames, digests.\n", &lines);
+    let programs = ps1_tests_programs(&corpus);
+    check_both("ps1-tests.txt", "# The accurate goldens of ps1-tests' release build 158 on the open kernel (Diamond_Enhancements.md §6): path, frames, digests.\n", |observed| {
+        programs
+            .iter()
+            .map(|path| {
+                let (frames, market) = ps1_tests_run(path);
+                let (digests, told) = program_digests(ps1_tests_machine(&corpus, path, market), frames, observed);
+                (format!("{path}\t{frames}\t{digests}"), told)
+            })
+            .collect()
+    });
 }
 
 /// The eight bench discs of the goldens, by their files in the folder `EMUSEN_DIAMOND_DISCS` names, and the press
@@ -1957,10 +1999,12 @@ fn disc_maker(path: std::path::PathBuf) -> impl Fn() -> Machine {
 }
 
 /// A disc's golden digests: 3,000 frames played by its script with a blank card in slot 1, and at every 300th frame
-/// the pictures and the sound folded from the start and the state then.
-fn disc_digests(mut m: Machine, script: &str) -> Vec<String> {
+/// the pictures and the sound folded from the start and the state then, the test observer detached for the state's
+/// digest when `observed` and attached again; and what it was told.
+fn disc_digests(mut m: Machine, script: &str, observed: bool) -> (Vec<String>, Option<diamond::layer::Tally>) {
     let (_, presses, sticks) = press_script(script);
     m.insert_card(0, None);
+    observe(&mut m, observed);
     let mut fold = Fold::new();
     let mut out = Vec::new();
     while m.frames < GOLDEN_DISC_FRAMES {
@@ -1977,10 +2021,14 @@ fn disc_digests(mut m: Machine, script: &str) -> Vec<String> {
         m.advance();
         fold.frame(&mut m);
         if m.frames % GOLDEN_DISC_ANCHOR == 0 {
+            let layer = m.detach();
             out.push(format!("\t{}\tpicture {:016X}\tsound {:016X}\tstate {:016X}", m.frames, fold.picture, fold.sound, state_digest(&m)));
+            if let Some(l) = layer {
+                m.attach(l);
+            }
         }
     }
-    out
+    (out, told(&mut m))
 }
 
 /// E1's goldens of the eight bench discs, opt-in by `EMUSEN_DIAMOND_DISCS`, the folder holding the tester's copies:
@@ -1992,13 +2040,19 @@ fn the_bench_discs_give_their_goldens() {
         return;
     };
     let folder = std::path::PathBuf::from(folder);
-    let mut lines = Vec::new();
-    for (file, script) in GOLDEN_DISCS {
-        let (anchor, ..) = press_script(script);
-        let make = disc_maker(folder.join(file));
-        lines.push(format!("{file}\t{script}\tanchor {anchor}"));
-        lines.extend(disc_digests(make(), script));
-        eprintln!("{file}: done");
-    }
-    check_goldens("discs.txt", "# The accurate goldens of the bench discs on the open kernel (Diamond_Enhancements.md §6): each disc, its press script and anchor, then\n# at every 300th frame the pictures and the sound folded from the start and the state then.\n", &lines);
+    check_both("discs.txt", "# The accurate goldens of the bench discs on the open kernel (Diamond_Enhancements.md §6): each disc, its press script and anchor, then\n# at every 300th frame the pictures and the sound folded from the start and the state then.\n", |observed| {
+        let mut lines = Vec::new();
+        for (file, script) in GOLDEN_DISCS {
+            let (anchor, ..) = press_script(script);
+            let make = disc_maker(folder.join(file));
+            lines.push((format!("{file}\t{script}\tanchor {anchor}"), None));
+            let (digests, told) = disc_digests(make(), script, observed);
+            if let Some(t) = told {
+                eprintln!("{file}: {} projections, {} words to GP0 by DMA, {} of {} moves told", t.projections, t.from_dma, t.loads + t.stores + t.cop2 + t.copies, t.total());
+            }
+            lines.extend(digests.into_iter().map(|d| (d, None)));
+            lines.last_mut().unwrap().1 = told;
+        }
+        lines
+    });
 }

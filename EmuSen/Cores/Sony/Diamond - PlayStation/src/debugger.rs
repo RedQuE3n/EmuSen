@@ -172,7 +172,11 @@ impl Machine {
                 None
             };
             let mut w = Watch { hooks: &mut d.hooks, skip, window, called: false, returned: false, abandon: d.calling, ahead };
-            let step = step_on(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut w);
+            let step = if self.board.layer.is_some() {
+                step_on::<_, true>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut w)
+            } else {
+                step_on::<_, false>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut w)
+            };
             let (called, returned) = (w.called, w.returned);
             skip = false;
             match step {

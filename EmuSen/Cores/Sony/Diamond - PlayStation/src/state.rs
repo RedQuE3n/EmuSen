@@ -483,7 +483,37 @@ impl Machine {
         w.bytes("TTY", &b.tty.text);
         w.u64("Disc", self.disc_print);
         w.bytes("Picture", &b.gpu.display.picture);
+        if let Some(layer) = b.layer.get_ref() {
+            write_block(w, layer);
+        }
     }
+}
+
+/// The optional blocks after the accurate ones (Diamond_Enhancements.md §4): each its tag, its length and that many
+/// bytes, which a reader that does not know the tag skips. A state of version 10 with none ends at `Picture`; a reader
+/// of version 10 from before the blocks reads to `Picture` and stops, so a state with one loads there too.
+fn write_block(w: &mut StateWriter, layer: &dyn crate::layer::Layer) {
+    let Some(tag) = layer.tag() else { return };
+    let mut counter = StateWriter::counter();
+    layer.save(&mut counter);
+    w.group(std::str::from_utf8(&tag).unwrap_or("Block"), |w| {
+        w.u32("Tag", u32::from_le_bytes(tag));
+        w.u32("Length", counter.len() as u32);
+        layer.save(w);
+    });
+}
+
+/// The blocks from `at` to the end, as (tag, its bytes); a block that runs past the end is a truncated state.
+fn read_blocks(data: &[u8], mut at: usize) -> Result<Vec<([u8; 4], &[u8])>, StateError> {
+    let mut blocks = Vec::new();
+    while at < data.len() {
+        let head = data.get(at..at + 8).ok_or(StateError::Truncated { at, wanted: 8 })?;
+        let length = u32::from_le_bytes(head[4..8].try_into().unwrap()) as usize;
+        let body = data.get(at + 8..at + 8 + length).ok_or(StateError::Truncated { at: at + 8, wanted: length })?;
+        blocks.push((head[..4].try_into().unwrap(), body));
+        at += 8 + length;
+    }
+    Ok(blocks)
 }
 
 impl StateMachine for Machine {
@@ -517,10 +547,19 @@ impl StateMachine for Machine {
                 return Err(StateError::WrongMedia { state: print, drive: self.disc_print });
             }
         }
-        if version >= 10 {
+        let blocks = if version >= 10 {
             r.bytes(&mut board.gpu.display.picture)?;
+            read_blocks(data, r.position())?
         } else {
             board.gpu.display.reread(&board.gpu.vram, &board.video);
+            Vec::new()
+        };
+        board.layer = std::mem::take(&mut self.board.layer);
+        if let Some(layer) = board.layer.get() {
+            match layer.tag().and_then(|t| blocks.iter().find(|b| b.0 == t)) {
+                Some((_, block)) => layer.load(block),
+                None => layer.clear(),
+            }
         }
         board.schedule();
         self.frames = frames;

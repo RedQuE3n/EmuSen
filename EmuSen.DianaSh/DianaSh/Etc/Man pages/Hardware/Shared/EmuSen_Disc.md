@@ -263,3 +263,46 @@ state made earlier loads; a test pins the value on a synthetic disc.
 
 The cores' side was not changed by a test: Diamond's 157 unit and 76 program tests pass on the kept disc, with and
 without ps1-tests, and every state made before 1.3 loads, its fingerprint being bit for bit the same.
+
+## 10. Which file and byte hold a sector (2026-10-12)
+
+*Decided 2026-10-12 with the core ABI's minor 1.4 (`EmuSen_CoreAPI_Extensions.md` §10.2.6): a disc core names where
+its drive is going by a file and a byte, and the mapping of sector to file and byte is this crate's, since it alone
+knows how a sheet's tracks lie in their files.*
+
+### 10.1 The question
+
+`Disc::place(sector) -> Option<Place>`, `Place { file, offset }`:
+
+- **`file`** is the sector's file by its position among those a sheet names, the order a host numbers them from
+  `EMUSEN_FILE_MEDIA`, or `None` where the disc was opened from one file that is the image itself (a lone raw track, an
+  `.iso`, user sectors, a CHD). The crate records which by a flag set in `from_image` and `from_user_image`.
+- **`offset`** is the byte where `read` begins to take the sector's stored bytes: `store.offset + n ×` the mode's
+  sector size, so 2,352 for a raw sector, 2,336 for a mode 2 sheet's and 2,048 for user sectors.
+- **None** for a sector the image does not store: a pause a sheet does not hold (`PREGAP`), a `POSTGAP`, the lead-out,
+  and any place before the first track. It reads nothing of the image, so a core may ask it on every sector.
+
+### 10.2 A CHD
+
+A CHD stores hunks of eight 2,448-byte units, each compressed by one of four codecs, stored as it is, or a copy of
+another hunk. There is no byte of the file where a sector's 2,352 bytes lie, but there is one the system must read
+before the sector can be decoded: **the hunk's own first byte**, which the `chd` crate's map gives
+(`Map::get_entry(hunk)`, `V5CompressedMapEntry::block_offset` for a hunk compressed or stored, and
+`V5UncompressedMapEntry::block_offset` for a map of uncompressed hunks). `place` answers that, so that a host reading a
+megabyte on from it reads the compressed bytes of the hunks that follow, which a compressed disc spends more slowly
+than a raw one. A hunk that copies another (`CompressionSelf`, `CompressionParent`) names nothing, since its bytes are
+elsewhere, and so does a map older than v5, whose entries were not measured here. The crate's source was not read for
+this: the map's types are its documented API (`cargo doc`).
+
+### 10.3 Tests (2026-10-12)
+
+`a_sector_is_placed_in_the_file_and_at_the_byte_that_hold_it`, on every form the crate reads from files (a sheet of two
+files, of three with FLAGS, PREGAP, a second index and a POSTGAP, one file with an unstored PREGAP, user sectors with
+audio, 2,336-byte sectors, a lone raw track, a lone audio track, an `.iso` and headerless user sectors): every sector
+from 0 through ten of the lead-out is either read from the image and placed, or synthesised and not; a placed sector's
+read changes when the byte named is changed and not when the byte before it is; the numbers pinned on the sheet of two
+files; and a place the same over borrowed bytes. `a_chd_reads_as_its_sheet`, with chdman named, shows each CHD's
+places to be hunks of its own: with sixteen bytes at a place changed every sector placed there reads otherwise (or the
+decoder stops on the hunk: `chd` 0.3.4 indexes past a slice for some changed hunks, which the test catches and counts)
+and every sector placed elsewhere reads as before. `cargo test --release`: 12 and 12, with chdman named and without.
+

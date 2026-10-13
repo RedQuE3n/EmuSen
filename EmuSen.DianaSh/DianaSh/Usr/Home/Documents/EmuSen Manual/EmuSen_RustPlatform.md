@@ -2577,3 +2577,17 @@ C# half is `System.IO.MemoryMappedFiles`; `GalaxiaParityTests` holds the two ali
 `ImageSets` and `ArchiveImages` moved from the runtime's media module into Galaxia, the set module still reached
 through `emusen_disc_*`. The interface's number went from 8 to 9 in `emusen_platform.h`, `lib.rs` and
 `PlatformLibrary.InterfaceVersion` together.
+
+## 24. Interface 10, 2026-10-12: advice on a mapped file
+
+With the core ABI's minor 1.4 (`EmuSen_CoreAPI.md` §6.25), Galaxia's half gained `emusen_galaxia_mapped_advise`
+(`Platform/platform/src/galaxia.rs` over `Mapped::advise` in `Platform/galaxia/src/mapped.rs`): the system advised
+that a range of a mapping will be read soon, `madvise` with `MADV_WILLNEED` through `memmap2` on Linux and macOS and
+`PrefetchVirtualMemory` on Windows, the range clipped to the file, 1 where the advice was taken and 0 where the range
+holds nothing of the file or the system refused. The C# facade is `MappedFile.Advise`, whose C# half makes the same
+system calls over the view it holds; `GalaxiaParityTests.Advice_is_taken_for_the_same_ranges_both_ways_and_the_advised_bytes_reach_memory`
+holds the two to the same answer for eight ranges and, on Linux, shows the advised pages arriving untouched while the
+rest stay on the medium (`EmuSen_Galaxia.md` §3.9). The Windows half was compiled for `x86_64-pc-windows-gnu` and not
+run. The interface's number went from 9 to 10 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion`
+together.
+

@@ -63,7 +63,8 @@ here.
 - [`Shared/EmuSen_Disc.md`](Shared/EmuSen_Disc.md) — `emusen-disc`, a disc as sectors: a cue sheet's tracks placed on
   the time line, an `.iso`, a lone raw track or a CHD (its CD layout measured from chdman's output), ECMA-130's EDC and
   RSPC derived from the standard, subchannel Q and its pause countdown, the TOC, `.sbi` patches, CD-DA samples and the
-  set module's readers; no controller, timing or filesystem. Built 2026-10-11 at Diamond's stage 7, for the Sega CD
+  set module's readers, and since 2026-10-12 (§10) which file and byte hold a sector, a CHD's by its stored hunk; no
+  controller, timing or filesystem. Built 2026-10-11 at Diamond's stage 7, for the Sega CD
   too; since 2026-10-12 a disc over any backing, owned or lent by the host, opened with its companions, and the
   fingerprint a state is held to (§9).
 

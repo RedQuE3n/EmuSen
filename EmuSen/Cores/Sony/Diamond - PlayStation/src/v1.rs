@@ -170,8 +170,7 @@ fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(cr
     }
 }
 
-/// The console's one drive, the CD-ROM's, as machine info's `drives` and MEDIA's exports number it.
-pub const DRIVE: u32 = 0;
+pub use crate::cdrom::DRIVE;
 
 impl Core for Machine {
     const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::DEBUG_READS | caps::MEDIA | caps::BORROW;

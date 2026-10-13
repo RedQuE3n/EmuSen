@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 3;
+pub const ABI_MINOR: u32 = 4;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -151,6 +151,8 @@ pub mod flags {
     pub const CREATE_LENT: u32 = 1;
     /// Since 1.3: `emusen_media.flags`, the same for an inserted disc.
     pub const MEDIA_LENT: u32 = 2;
+    /// Since 1.4: in `MEDIA_SEEK`'s `a`, the call's image itself, which no file entry numbers.
+    pub const FILE_IMAGE: u32 = u32::MAX;
 }
 
 /// `enum emusen_pixel_format`.
@@ -174,6 +176,8 @@ pub mod event {
     pub const BATTERY: u32 = 4;
     pub const LOG: u32 = 5;
     pub const MACHINE_INFO: u32 = 6;
+    /// Since 1.4: a drive is about to read its disc at a place; `core::seek` raises it. 7 is kept for outputs.
+    pub const MEDIA_SEEK: u32 = 8;
 }
 
 /// Every export, and the capability bit that claims it; zero for a required one.

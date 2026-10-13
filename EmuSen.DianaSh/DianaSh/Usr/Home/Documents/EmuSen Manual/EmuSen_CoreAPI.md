@@ -344,7 +344,7 @@ uint32_t emusen_core_abi_version(void);     // (MAJOR << 16) | MINOR, as built
 - **Descriptors are JSON documents** (§6.3); a reader ignores fields it does not know, and a field a host requires is
   never removed within major 1.
 - **Reserved space**: status codes in the interface's band not yet assigned; capability bits 21–47 (18 to 20 assigned
-  since, by 1.1 to 1.3); event kinds; JSON field names beginning `x-` for a core's private use, never assigned by the
+  since, by 1.1 to 1.3); event kinds (8 assigned by 1.4, 7 kept for outputs); JSON field names beginning `x-` for a core's private use, never assigned by the
   specification.
 - **A struct grows only at its end, and 1.3's `emusen_create_params.flags` is the first to.** The callee copies
   `min(size, its own)` bytes into a struct of its own size zeroed beforehand, so a field a shorter struct lacks reads
@@ -1204,6 +1204,42 @@ The design and its record are there, §10.2.4; this section is the normative tex
 
 ---
 
+### 6.25 A drive's place named ahead: `MEDIA_SEEK` (1.4, 2026-10-12)
+
+*Added as `EmuSen_CoreAPI_Extensions.md` §10.2.6 decided on 2026-10-12, the exact remedy of §10.2.5 there; this section
+is the normative text, §10.2.6 the design and §10.2.7 the record.*
+
+```c
+EMUSEN_EVENT_MEDIA_SEEK = 8            /* a: (drive << 32) | file; b: the byte offset in that file */
+#define EMUSEN_FILE_IMAGE 0xFFFFFFFFu  /* in MEDIA_SEEK's a: the call's image itself */
+```
+
+- **What it says.** Drive `drive`, as machine info's `drives` numbers it, is about to read its disc at byte `b` of file
+  `file`. `file` is an `emusen_file.which` of the call that gave the drive its disc (`create`, or the last
+  `media_insert` to succeed on that drive), `EMUSEN_FILE_MEDIA + n` for its nth media file, or `EMUSEN_FILE_IMAGE` for
+  the image where the image is the disc. `b` lies inside that file. Kind 7 is kept for a controller's outputs
+  (`EmuSen_CoreAPI_Extensions.md` §4).
+- **When a core raises it.** At a seek's start, for the seek's target; and while the drive reads or plays on, before it
+  reads a byte 1 MiB (`SEEK_SPAN`) or more past the offset last named in that file, or a byte of another file. A place in
+  the megabyte after the one last named need not be named again. A core raises it for a sector its image stores and for
+  no other, and a core without the knowledge raises none. It may raise it whether or not the disc was lent.
+- **A hint, never state.** Nothing a machine does depends on the event having been raised, drained or acted on; the
+  drive's timing is the core's own count of cycles, and no state records a place named. After a state load or a disc
+  change the core names its next read afresh.
+- **No capability bit.** A host acts on each event as it comes and holds nothing ready beforehand, so §4.2's rule that
+  a host skips a kind it does not know suffices: an older host skips kind 8, an older core raises none.
+- **The host** (`CoreEngine.Drain`, after each frame): the event is routed to the `DiscFiles` lent to that drive, which
+  hands the place to its reader thread and returns; the reader advises the system to read from 256 KiB before the
+  place to 2 MiB past it, in pieces of 128 KiB (`MappedFile.Advise`, `EmuSen_Galaxia.md` §3.9). A drive that was lent
+  nothing, a file the call did not pass and a byte outside its file are dropped. Nothing in the machine waits on the
+  reader. A lost event (the queue's 256, `MACHINE_INFO` queued in its place) costs a late read and nothing else.
+- **The Rust side.** `emusen_native::core::seek(drive, file, offset)`, `file` being `None` for the image or `Some(n)` for
+  the nth media file; it queues the event and allocates nothing, a machine's queue being allocated whole at create.
+  `emusen_disc::Disc::place(sector)` answers which file and byte hold a sector (`EmuSen_Disc.md` §10).
+- **The kit** checks it as C18 (§28.9): every place a drive names is a drive of machine info and a byte inside a file
+  of the call, and a run whose host acts on each place is the run whose host skips them, frame for frame, sample for
+  sample and state for state.
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found
@@ -1924,6 +1960,13 @@ are `EmuSen_CoreAPI_Extensions.md` §10.2 and §10.5. The guard now keeps a stru
 gave it and accepts growth only by fields appended at or past it (`emusen-core-abi-check`'s
 `a_struct_grows_only_by_appended_fields_and_keeps_its_line`); the C# check holds each struct to its fields' end. Kit
 case C17 is added, and C13's threads now overlap the run they judge (§24).
+
+**v1.4, 2026-10-12** (§6.25), from the handheld's first touches of `Diamond_Players.md` §12.8.9: the event kind
+`EMUSEN_EVENT_MEDIA_SEEK` (8) and `EMUSEN_FILE_IMAGE`, by which a core names where its drive is going so that a host
+reads the disc's file there during the emulated seek; no capability bit. Its reasons are `EmuSen_CoreAPI_Extensions.md`
+§10.2.6. `emusen-native` gains `core::seek`, and a machine's event queue is allocated whole at create; kit case C18 is
+added; the host routes the event to Galaxia's reader of the disc's files, and the platform library's interface goes
+from 9 to 10 for `emusen_galaxia_mapped_advise`.
 
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
 and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld
@@ -2919,6 +2962,19 @@ case's run now starts once each thread is calling and ends once each has called 
 - **C12**'s host of minor 0 passes the 88-byte `emusen_create_params` of 1.0, whatever the kit's own size.
 - **Measured** [M]: the kit's tests pass, 7 and 16 (three parallel runs of three); on the seven test discs at 1,800
   frames C17 passes on every one (`EmuSen_CoreAPI_Extensions.md` §10.2.5).
+
+### 28.9 C18, the drive's place (1.4, 2026-10-12)
+
+- **C18** (§6.25), run with the image cases on every core. Two runs of C6's frames with the script's input, the image
+  mapped and lent as C17's third leg lends it where `BORROW` is claimed (from a host of minor 4) and held in place
+  otherwise, the events drained after every frame: one run skips each `MEDIA_SEEK`, the other advises the mapped file
+  from 256 KiB before the place to 2 MiB past it in pieces of 128 KiB, as the reference host's reader does. Every
+  `MEDIA_SEEK` must name a drive machine info lists, a file the call passed or the image, and a byte inside it; the two
+  runs must name the same number of places; and every frame's picture, sound and state must be equal between them,
+  the first that differs named. A core that raises none passes, with that said. A seeded fault, 512, a drive naming a
+  byte past its image's end, fails C18 alone.
+- **Measured** [M]: the kit's tests pass, 7 and 17; on the seven test discs at 1,800 frames C18 passes on every one
+  (`EmuSen_CoreAPI_Extensions.md` §10.2.7).
 
 ## 29. A space that is a view, 2026-10-07
 

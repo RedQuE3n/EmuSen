@@ -20,6 +20,9 @@ pub const SEEK_SPAN: u64 = 33_868_800 * 300 / 1000;
 pub const READ_AHEAD: u32 = 32;
 /// The spindle's stop after the lid opens [C, D-25].
 pub const SPIN_DOWN: u64 = 33_868_800 / 2;
+/// How far ahead of the head a read or a play names its place to the host: half a second at double speed, so that
+/// the megabyte named is ahead of the head and a sheet's next file is named before the head crosses into it.
+pub const NAMED_AHEAD: u32 = 75;
 
 impl Cdrom {
     pub(super) fn period(&self) -> u64 {
@@ -53,6 +56,10 @@ impl Cdrom {
         self.waiting = None;
         self.int1_at = u64::MAX;
         self.target = target;
+        // The seek's target is known here, a seek's time before its first read: the host is told now.
+        if let Some(slot) = &self.disc {
+            slot.get().name(target);
+        }
         if !self.motor || self.activity == Activity::SpinningUp {
             let wait = self.activity == Activity::SpinningUp;
             if !wait {
@@ -197,6 +204,7 @@ impl Cdrom {
             self.q = q;
         }
         if self.header_valid {
+            d.name_held(at);
             let kind = d.read(at, &mut self.scratch);
             if !kind.audio() {
                 self.header.copy_from_slice(&self.scratch[12..20]);
@@ -215,6 +223,7 @@ impl Cdrom {
         if q.valid() {
             self.q = q;
         }
+        d.name(at + NAMED_AHEAD);
         let kind = d.read(at, &mut self.scratch);
         if let Sector::Data { mode: m, .. } = kind {
             self.header.copy_from_slice(&self.scratch[12..20]);
@@ -301,6 +310,7 @@ impl Cdrom {
             return;
         }
         self.play_track = track;
+        d.name(at + NAMED_AHEAD);
         let kind = d.read(at, &mut self.scratch);
         let mut peak = 0u16;
         for c in self.scratch.chunks_exact(4) {

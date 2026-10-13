@@ -13,3 +13,7 @@ name = "emusen_galaxia"
 md-5 = "0.11"
 # A file mapped read-only, on every system the project builds for (mapped.rs).
 memmap2 = "0.9"
+
+# The page cache asked directly, for the test that advised bytes reach memory (tests/advise.rs).
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+libc = "0.2"

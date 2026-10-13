@@ -119,6 +119,14 @@ an acknowledge the next response comes 7,424 cycles later at the earliest (D-24)
 - **Seeks** (D-25): 400,000 cycles plus 300 ms × √(distance ÷ a 74-minute disc), or a sector period for each sector when
   fewer than 32 ahead. A seek that cannot reach its target fails at its end (D-26). A seek from a stopped motor spins up
   first.
+- **The drive's place, named to the host** (since the core ABI's 1.4, `EmuSen_CoreAPI.md` §6.25): `start_seek` names
+  the seek's target by the file and byte that hold it (`emusen_disc::Disc::place`); a read or a play names the sector
+  75 ahead of the head (`NAMED_AHEAD`, half a second at double speed) whenever it lies outside the megabyte after the
+  place last named in that file, or in another file, so a sheet's next track file is named before the head crosses into
+  it; and a held head names its sector only where nothing within a megabyte of it was named, as after a state load.
+  The last place named lives beside the disc in its slot (`InDrive`), not in the state, and starts afresh with each
+  disc. None of it changes the drive's timing or anything a game reads. Tests:
+  `the_drive_names_where_its_head_is_going_before_it_reads_there` and `a_lone_image_is_named_as_the_image`.
 - **The held head** steps through psx-spx's window after a seek or a pause: N−8…N single speed, N−5…N+2 double, a sector
   a period, its Q kept for GetlocP and, once a data header has been read since power-on, its header for GetlocL. After
   a spin-up or Init it holds at 00:02:00, the window 00:01:67–00:02:00, as the getloc log finds it.

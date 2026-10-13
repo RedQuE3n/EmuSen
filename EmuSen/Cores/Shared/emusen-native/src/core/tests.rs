@@ -53,11 +53,16 @@ fn make(settings: &str) -> *mut Machine {
     m
 }
 
-fn drain_events(m: *mut Machine) -> Vec<Event> {
+fn drain_all(m: *mut Machine) -> Vec<Event> {
     let n = unsafe { emusen_core_events(m, null_mut(), 0, 0) } as usize;
     let mut out = vec![Event::default(); n];
     assert_eq!(unsafe { emusen_core_events(m, out.as_mut_ptr(), n, std::mem::size_of::<Event>()) }, n as i64);
     out
+}
+
+/// The events waiting but the drive's places, which the test core names every frame and one test reads.
+fn drain_events(m: *mut Machine) -> Vec<Event> {
+    drain_all(m).into_iter().filter(|e| e.kind != event::MEDIA_SEEK).collect()
 }
 
 fn digest(m: *mut Machine) -> Vec<u8> {
@@ -83,7 +88,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.3"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.4"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 21);
     assert!(info.contains(r#""battery":[{"which":0,"suffix":".srm"}]"#), "core info lists the system's battery files since 1.3: {info}");
@@ -297,8 +302,9 @@ fn structs_below_their_size_are_refused_and_bytes_past_it_are_left_alone() {
     }
     let mut out = [BigEvent { e: Event { size: 32, ..Event::default() }, canary: 7 }; 2];
     assert_eq!(unsafe { emusen_core_events(m, out.as_mut_ptr() as *mut Event, 2, 20) }, status::BAD_STRUCT as i64);
-    assert_eq!(unsafe { emusen_core_events(m, out.as_mut_ptr() as *mut Event, 2, 32) }, 1);
-    assert_eq!((out[0].e.size, out[0].e.kind, out[0].canary, out[1].e.kind), (32, event::LOG, 7, 0));
+    assert_eq!(unsafe { emusen_core_events(m, out.as_mut_ptr() as *mut Event, 2, 32) }, 2);
+    assert_eq!((out[0].e.size, out[0].e.kind, out[0].canary), (32, event::LOG, 7));
+    assert_eq!((out[1].e.size, out[1].e.kind, out[1].canary), (32, event::MEDIA_SEEK, 7), "the frame's place, its canary kept");
     unsafe { emusen_core_free(m) };
 }
 
@@ -382,6 +388,44 @@ fn logs_drain_whole_records_and_a_freed_machine_leaves_its_own_to_the_library() 
     assert_eq!((lines[0], lines[1], lines.len()), ("warn\tlog\t3 records dropped", "debug\ta b\t3 x", super::outbox::LOG_CAPACITY + 1));
 }
 
+// Since 1.4: a drive's place reaches the host as one event, the drive and the file in `a` and the byte in `b`.
+#[test]
+fn a_drive_names_the_place_it_reads_next_in_one_event() {
+    let m = make("");
+    drain_all(m);
+    let mut detail = 0;
+    assert_eq!(unsafe { emusen_core_advance(m, &mut detail) }, 0);
+    assert_eq!(unsafe { emusen_core_advance(m, &mut detail) }, 0);
+    let named: Vec<(i64, i64)> = drain_all(m).iter().filter(|e| e.kind == event::MEDIA_SEEK).map(|e| (e.a, e.b)).collect();
+    assert_eq!(named, vec![(flags::FILE_IMAGE as i64, 2), (flags::FILE_IMAGE as i64, 3)], "drive 0, the image, the byte each next frame reads");
+    assert_eq!(unsafe { emusen_core_free(m) }, 0);
+    let o = super::outbox::Outbox::default();
+    {
+        let _route = super::outbox::Route::to(&o);
+        super::seek(3, Some(2), 0x1_2345_6789);
+        super::seek(0, None, 7);
+    }
+    super::seek(1, None, 1);
+    let got: Vec<(u32, i64, i64)> = o.borrow().events.iter().map(|e| (e.kind, e.a, e.b)).collect();
+    assert_eq!(got, vec![(event::MEDIA_SEEK, 3 << 32 | (flags::FILE_MEDIA as i64 + 2), 0x1_2345_6789), (event::MEDIA_SEEK, flags::FILE_IMAGE as i64, 7)], "outside a machine's call nothing is queued");
+}
+
+#[test]
+fn raising_an_event_allocates_nothing() {
+    let mut o = super::outbox::Inner::default();
+    let (at, room) = (o.events.as_slices().0.as_ptr(), o.events.capacity());
+    assert!(room >= super::outbox::EVENT_CAPACITY);
+    for i in 0..3 * super::outbox::EVENT_CAPACITY {
+        o.push_event(event::MEDIA_SEEK, 0, i as i64);
+        if i % 7 == 0 {
+            o.events.pop_front();
+        }
+    }
+    assert_eq!((o.events.capacity(), o.events.len()), (room, super::outbox::EVENT_CAPACITY));
+    o.events.make_contiguous();
+    assert_eq!(o.events.as_slices().0.as_ptr(), at, "the queue is where create put it");
+}
+
 #[test]
 fn a_full_event_queue_drops_the_oldest_and_asks_for_everything_again() {
     let mut o = super::outbox::Inner::default();
@@ -436,7 +480,8 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0003);
+    assert_eq!(ABI_VERSION, 0x0001_0004);
+    assert_eq!((event::MEDIA_SEEK, flags::FILE_IMAGE, crate::core::SEEK_SPAN), (8, 0xFFFF_FFFF, 1 << 20));
     assert_eq!((caps::BORROW, caps::UNASSIGNED & caps::BORROW, flags::CREATE_LENT, flags::MEDIA_LENT), (1 << 20, 0, 1, 2));
     assert_eq!((CreateParams::SIZE_1_0, std::mem::size_of::<CreateParams>()), (88, 96));
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));

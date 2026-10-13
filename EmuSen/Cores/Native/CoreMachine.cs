@@ -32,6 +32,12 @@ namespace EmuSen.Cores.Native
         // What keeps each lent disc in place, by its drive, released when the loan ends: at free, or when that drive takes another disc - see EmuSen_CoreAPI.md §6.24.
         private readonly Dictionary<uint, IDisposable> _loans = new();
 
+        // What keeps the disc lent to a drive in place, or null where nothing was lent to it - see EmuSen_CoreAPI.md §6.25.
+        public IDisposable? LoanOf(uint drive)
+        {
+            lock (_gate) return _loans.GetValueOrDefault(drive);
+        }
+
         // Held by every call on the handle, here and by a caller of Handle, so no two threads are ever in the machine at once - see Diamond_Players.md §12.7.
         public object Gate => _gate;
 

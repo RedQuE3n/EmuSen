@@ -1,13 +1,14 @@
 //! Synthetic discs built here, read back sector for sector: a two-file dump (mode 2 data, then audio with a stored
 //! pause), the same as one file with an unstored PREGAP, an `.iso`, a lone raw track, subchannel Q and the TOC, an
 //! `.sbi`, and (with chdman named) the same sheets as CHDs. EmuSen_Disc.md §6 lists what each shows, and §9.4 the
-//! cases since 1.3: every form read from borrowed bytes as from owned ones, `open`, and the fingerprint.
+//! cases since 1.3: every form read from borrowed bytes as from owned ones, `open`, and the fingerprint; §10.3 the
+//! place of a sector, since 1.4.
 
 use std::sync::Arc;
 
 use emusen_disc::cue::Sheet;
 use emusen_disc::ecma130::{self, Form, RAW};
-use emusen_disc::{Disc, IsoForm, Lone, Msf, Refusal, Sector, open, samples};
+use emusen_disc::{Disc, IsoForm, Lone, Msf, Place, Refusal, Sector, open, samples};
 
 const DATA: u32 = 40;
 const AUDIO: u32 = 30;
@@ -197,6 +198,31 @@ fn a_chd_reads_as_its_sheet() {
             assert_eq!(x, y, "{name} sector {at}");
             assert_eq!(from_chd.subq(at), from_sheet.subq(at), "{name} sector {at}");
         }
+        // Since 1.4: a sector's place is its stored hunk's first byte in the file. Shown without reading the container's
+        // source: with the sixteen bytes there changed the sector no longer reads as it did (the decoder may refuse
+        // the hunk, or stop on it: chd 0.3.4 indexes past a slice on some, which is caught here and counts), and
+        // every sector whose hunk is stored elsewhere still does; a sector the image does not hold has no place.
+        let mut places: Vec<u64> = Vec::new();
+        for at in 0..from_sheet.lead_out() + 10 {
+            let place = from_chd.place(at);
+            assert!(place.is_none_or(|p| p.file.is_none() && stored(from_chd.read(at, &mut x))), "{name} sector {at}: {place:?}");
+            places.extend(place.map(|p| p.offset).filter(|o| !places.contains(o)));
+        }
+        assert!(!places.is_empty(), "{name}: no hunk of its own");
+        for &offset in &places {
+            let mut changed = packed.clone();
+            changed[offset as usize..offset as usize + 16].iter_mut().for_each(|b| *b ^= 0xFF);
+            let Ok(mut broken) = Disc::from_image(changed, IsoForm::Mode1) else { continue };
+            for at in 0..from_sheet.lead_out() {
+                let was = from_chd.read(at, &mut x);
+                let now = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| broken.read(at, &mut y))).ok();
+                match from_chd.place(at) {
+                    Some(p) if p.offset == offset => assert!(Some(was) != now || x != y, "{name} sector {at} reads the same without its hunk's bytes at {offset}"),
+                    Some(_) => assert!(Some(was) == now && x == y, "{name} sector {at} changed with another hunk's bytes at {offset}"),
+                    None => {}
+                }
+            }
+        }
     }
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -298,6 +324,74 @@ fn an_image_and_its_companions_open_or_are_refused_with_words() {
     assert!(open(vec![1u8; 5000], Vec::new(), IsoForm::Mode1, Lone::User).is_ok(), "the console's word that they are user sectors is taken");
     let torn = open(sheet, vec![d, a, b"SBI\0\x00\x02".to_vec()], IsoForm::Mode2Form1, Lone::Detect).err().unwrap();
     assert!(matches!(torn, Refusal::Sbi(_)), "{torn}");
+}
+
+/// Whether a sector is one the image holds.
+fn stored(kind: Sector) -> bool {
+    matches!(kind, Sector::Data { synthesised: false, .. } | Sector::Audio { synthesised: false })
+}
+
+/// Every sector's place on a disc `make` opens from `files`: a sector the image holds names the file and the byte
+/// where it begins, shown by changing that byte, which changes what the sector reads as, and the byte before it,
+/// which does not; a sector the image does not hold names nothing. `lone` is whether the one file is the image.
+fn every_sector_is_placed(what: &str, files: &[Vec<u8>], lone: bool, make: &dyn Fn(Vec<Vec<u8>>) -> Option<Disc>) {
+    let mut disc = make(files.to_vec()).unwrap();
+    let (mut raw, mut other) = ([0u8; RAW], [0u8; RAW]);
+    let mut placed = 0;
+    for at in 0..disc.lead_out() + 10 {
+        let kind = disc.read(at, &mut raw);
+        let Some(Place { file, offset }) = disc.place(at) else {
+            assert!(!stored(kind), "{what}: sector {at} is read from the image and has no place");
+            continue;
+        };
+        assert!(stored(kind), "{what}: sector {at} has a place and is not in the image");
+        assert_eq!(file.is_none(), lone, "{what}: sector {at}'s file");
+        let (index, offset) = (file.unwrap_or(0), offset as usize);
+        let reads_after = |change: usize, other: &mut [u8; RAW]| {
+            let mut changed = files.to_vec();
+            changed[index][change] ^= 0xFF;
+            make(changed).map(|mut d| d.read(at, other))
+        };
+        assert!(reads_after(offset, &mut other) != Some(kind) || other != raw, "{what}: sector {at} does not begin at byte {offset} of file {index}");
+        if offset > 0 && at > 0 && disc.place(at - 1).is_some() {
+            assert!(reads_after(offset - 1, &mut other) == Some(kind) && other == raw, "{what}: sector {at} begins before byte {offset} of file {index}");
+        }
+        placed += 1;
+    }
+    assert!(placed > 0, "{what}");
+}
+
+/// Since 1.4: which file and byte hold a sector, for every form the crate reads from files.
+#[test]
+fn a_sector_is_placed_in_the_file_and_at_the_byte_that_hold_it() {
+    let (d, a) = files();
+    let sheet = |text: &'static str, iso: IsoForm| move |files: Vec<Vec<u8>>| Disc::from_sheet(&Sheet::parse(text).unwrap(), files, iso).ok();
+    every_sector_is_placed("a sheet of two files", &[d.clone(), a.clone()], false, &sheet(TWO_FILES, IsoForm::Mode2Form1));
+    let three = "FILE \"d.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nFILE \"a.bin\" BINARY\nTRACK 02 AUDIO\nFLAGS PRE\nINDEX 00 00:00:00\nINDEX 01 00:00:07\nFILE \"b.bin\" BINARY\nTRACK 03 AUDIO\nPREGAP 00:00:05\nINDEX 01 00:00:00\nINDEX 02 00:00:09\nPOSTGAP 00:00:02\n";
+    every_sector_is_placed("a sheet of three files", &[d.clone(), a.clone(), a[..20 * RAW].to_vec()], false, &sheet(three, IsoForm::Mode2Form1));
+    let gap = "FILE \"x.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nTRACK 02 AUDIO\nPREGAP 00:00:07\nINDEX 01 00:00:40\n";
+    every_sector_is_placed("one file with an unstored pregap", &[[d.clone(), a.clone()].concat()], false, &sheet(gap, IsoForm::Mode2Form1));
+    let cooked = "FILE \"i.iso\" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\nFILE \"a.bin\" BINARY\nTRACK 02 AUDIO\nINDEX 01 00:00:00\n";
+    every_sector_is_placed("a sheet of user sectors and audio", &[iso_image(), a.clone()], false, &sheet(cooked, IsoForm::Mode2Form1));
+    let xa: Vec<u8> = d.chunks_exact(RAW).flat_map(|s| s[16..].to_vec()).collect();
+    every_sector_is_placed("a sheet of 2,336-byte sectors", &[xa], false, &sheet("FILE \"m.bin\" BINARY\nTRACK 01 MODE2/2336\nINDEX 01 00:00:00\n", IsoForm::Mode2Form1));
+    let lone = |files: Vec<Vec<u8>>| Disc::from_image(files.into_iter().next().unwrap(), IsoForm::Mode2Form1).ok();
+    every_sector_is_placed("a lone raw track", &[d.clone()], true, &lone);
+    every_sector_is_placed("a lone audio track", &[a.clone()], true, &lone);
+    every_sector_is_placed("an .iso", &[iso_image()], true, &lone);
+    let user: Vec<u8> = (0..9 * 2048u32).map(|i| (i * 13) as u8).collect();
+    every_sector_is_placed("user sectors with no volume descriptor", &[user], true, &|files: Vec<Vec<u8>>| Disc::from_user_image(files.into_iter().next().unwrap(), IsoForm::Mode1).ok());
+
+    // The numbers themselves, on the sheet of two files: the data track's sector n at byte 2,352 n of the first file,
+    // the audio track's from its stored pause on in the second, nothing before 00:02:00 or in the lead-out.
+    let disc = two_files();
+    assert_eq!(disc.place(149), None);
+    assert_eq!(disc.place(150 + 7), Some(Place { file: Some(0), offset: 7 * RAW as u64 }));
+    assert_eq!(disc.place(150 + DATA), Some(Place { file: Some(1), offset: 0 }));
+    assert_eq!(disc.place(150 + DATA + AUDIO - 1), Some(Place { file: Some(1), offset: (AUDIO as u64 - 1) * RAW as u64 }));
+    assert_eq!(disc.place(disc.lead_out()), None);
+    let borrowed = open(TWO_FILES.as_bytes(), vec![&d[..], &a[..]], IsoForm::Mode2Form1, Lone::Detect).unwrap();
+    assert!((0..disc.lead_out() + 10).all(|at| borrowed.place(at) == disc.place(at)), "a place is the same over any backing");
 }
 
 /// The fingerprint a state is held to: the value Diamond's states have recorded since DMND 9, moved only by the

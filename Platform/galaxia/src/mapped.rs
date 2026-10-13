@@ -33,6 +33,51 @@ impl Mapped {
     pub fn bytes(&self) -> &[u8] {
         self.map.as_deref().unwrap_or(&[])
     }
+
+    /// Advises the system that the `len` bytes from `offset` will be read soon, so that it may read them from the
+    /// medium before they are touched; the range is clipped to the file. One call to the system, which returns before
+    /// the bytes arrive and may read fewer than were asked, so a caller asks in pieces (§3.9). Whether anything was
+    /// advised: not for a range outside the file or of no length, nor where the system refuses. What a read of the
+    /// bytes returns is the same whichever it was; only when they reach memory differs.
+    pub fn advise(&self, offset: u64, len: u64) -> bool {
+        let Some(map) = &self.map else { return false };
+        let size = map.len() as u64;
+        if offset >= size || len == 0 {
+            return false;
+        }
+        will_need(map, offset as usize, len.min(size - offset) as usize)
+    }
+}
+
+/// `madvise` with `MADV_WILLNEED` on the range, which memmap2 widens to whole pages.
+#[cfg(unix)]
+fn will_need(map: &memmap2::Mmap, offset: usize, len: usize) -> bool {
+    map.advise_range(memmap2::Advice::WillNeed, offset, len).is_ok()
+}
+
+/// `PrefetchVirtualMemory` on the range, Windows' word for the same advice.
+#[cfg(windows)]
+fn will_need(map: &memmap2::Mmap, offset: usize, len: usize) -> bool {
+    /// `WIN32_MEMORY_RANGE_ENTRY`.
+    #[repr(C)]
+    struct Range {
+        address: *const std::ffi::c_void,
+        bytes: usize,
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetCurrentProcess() -> *mut std::ffi::c_void;
+        fn PrefetchVirtualMemory(process: *mut std::ffi::c_void, count: usize, ranges: *const Range, flags: u32) -> i32;
+    }
+    let range = Range { address: map[offset..offset + len].as_ptr().cast(), bytes: len };
+    // SAFETY: the one range lies inside the mapping, which is held for the call; the call writes no memory of the
+    // program's and only asks the system to bring the pages in.
+    unsafe { PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0) != 0 }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn will_need(_map: &memmap2::Mmap, _offset: usize, _len: usize) -> bool {
+    false
 }
 
 impl AsRef<[u8]> for Mapped {
@@ -69,6 +114,24 @@ mod tests {
         assert!(Mapped::open(&file).unwrap().bytes().is_empty());
         assert_eq!(Mapped::open(temp.join("absent.bin")).err().map(|e| e.kind()), Some(std::io::ErrorKind::NotFound));
         assert_eq!(Mapped::open(temp.path()).err().map(|e| e.kind()), Some(std::io::ErrorKind::IsADirectory), "a directory is no file to map");
+    }
+
+    #[test]
+    fn advice_is_taken_inside_the_file_and_changes_no_byte() {
+        let temp = TempDir::new("mapped-advise");
+        let (file, empty) = (temp.join("track.bin"), temp.join("empty.bin"));
+        let bytes: Vec<u8> = (0..700_000u32).map(|i| (i * 13 + i / 97) as u8).collect();
+        std::fs::write(&file, &bytes).unwrap();
+        std::fs::write(&empty, b"").unwrap();
+        let mapped = Mapped::open(&file).unwrap();
+        let size = bytes.len() as u64;
+        if cfg!(any(unix, windows)) {
+            assert!(mapped.advise(0, 4096) && mapped.advise(300_001, 131_072) && mapped.advise(size - 1, 1), "a range inside the file");
+            assert!(mapped.advise(size - 10, 1 << 30), "a range running past the end is clipped to it");
+        }
+        assert!(!mapped.advise(size, 4096) && !mapped.advise(u64::MAX, 1) && !mapped.advise(100, 0), "nothing to advise");
+        assert!(!Mapped::open(&empty).unwrap().advise(0, 4096), "an empty file has no bytes to advise");
+        assert_eq!(mapped.bytes(), &bytes[..]);
     }
 
     /// Unlinking a mapped file leaves its bytes readable where the system keeps a file's blocks past its name.

@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.3.
+/* emusen_core.h - the EmuSen core ABI, version 1.4.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 3u
+#define EMUSEN_CORE_ABI_MINOR 4u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -108,6 +108,8 @@ typedef struct emusen_machine emusen_machine;
  * it keeps. A call the core refuses lends nothing. */
 #define EMUSEN_CREATE_LENT           1u  /* emusen_create_params.flags */
 #define EMUSEN_MEDIA_LENT            2u  /* emusen_media.flags */
+/* @since 1.4: in EMUSEN_EVENT_MEDIA_SEEK's `a`, the call's image itself, which no emusen_file numbers. */
+#define EMUSEN_FILE_IMAGE            0xFFFFFFFFu
 
 /* Debug: the flags debug_set takes; coverage of processor n is bit (EMUSEN_DEBUG_COVERAGE + n), n < 24. */
 #define EMUSEN_DEBUG_CALLS       1u
@@ -159,7 +161,14 @@ enum emusen_event_kind {            /* section 6.19; a host skips kinds it does 
     EMUSEN_EVENT_STATE_SIZE   = 3,  /* a: the new size of state kind b */
     EMUSEN_EVENT_BATTERY      = 4,  /* a: the battery file that changed */
     EMUSEN_EVENT_LOG          = 5,  /* a: records waiting in emusen_core_log_drain */
-    EMUSEN_EVENT_MACHINE_INFO = 6   /* the machine descriptor changed, or events were lost; read everything again */
+    EMUSEN_EVENT_MACHINE_INFO = 6,  /* the machine descriptor changed, or events were lost; read everything again */
+    /* 7 is kept for a controller's outputs (EmuSen_CoreAPI_Extensions.md section 4). */
+    /* @since 1.4 (section 6.25): a drive is about to read its disc at a place. a: (drive << 32) | file, the drive
+     * machine info's and the file an emusen_file.which of the call that gave the drive its disc (EMUSEN_FILE_MEDIA + n)
+     * or EMUSEN_FILE_IMAGE; b: the byte offset in that file. Raised at a seek's start for its target, and again before
+     * the drive reads 1 MiB or more past the offset last named in that file, or in another file. A hint: a host may
+     * read there ahead of the drive or skip it, and the machine runs the same either way. */
+    EMUSEN_EVENT_MEDIA_SEEK   = 8
 };
 
 /* The canonical controls a core maps its pad bits onto; append-only, PadButton's order (section 6.3). */

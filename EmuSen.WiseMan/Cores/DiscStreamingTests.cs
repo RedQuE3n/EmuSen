@@ -72,7 +72,6 @@ namespace EmuSen.WiseMan.Cores
             var disc = DiscFiles.Open(path);
             var media = disc.Companions.Select((c, n) => (CoreInterface.FileMedia + (uint)n, Held(c))).ToList();
             using var lent = new CoreMachine(library, Held(disc.Image), media, Defaults(library), Array.Empty<(uint, byte[])>(), loan: disc);
-            disc.Prefetch();
             var files = ImageSets.FilesFor(path).Select((f, n) => (CoreInterface.FileMedia + (uint)n, File.ReadAllBytes(f))).ToList();
             using var copied = new CoreMachine(library, File.ReadAllBytes(path), Defaults(library), files);
             SameRun(lent, copied, frames, Path.GetFileName(path));
@@ -143,32 +142,6 @@ namespace EmuSen.WiseMan.Cores
             engine.SetLid(true);
             Assert.ThrowsAny<Exception>(() => engine.InsertDisc(0));
             Assert.Equal((false, true, 1), (Mapped(first), Mapped(second), engine.DiscIndex));
-        }
-
-        // The prefetch reads every file of the disc to its end beside the game, rests between reads, and stops when the disc is let go; the mapping's bytes are the file's throughout.
-        [Fact]
-        public void The_prefetch_reads_the_whole_disc_and_changes_no_byte_of_it()
-        {
-            var disc = SyntheticPsxDisc.Build(audioSeconds: 20);
-            string sheet = disc.WriteSet(_root, "Fetched Set");
-            using (DiscFiles files = DiscFiles.Open(sheet))
-            {
-                Assert.False(files.Prefetched);
-                var watch = System.Diagnostics.Stopwatch.StartNew();
-                files.Prefetch();
-                files.Prefetch();
-                while (!files.Prefetched && watch.Elapsed < TimeSpan.FromSeconds(30)) System.Threading.Thread.Sleep(5);
-                Assert.True(files.Prefetched, "every file read to its end");
-                Assert.Equal(disc.DataTrack, files.Companions[0].Span(0, disc.DataTrack.Length).ToArray());
-                Assert.Equal(disc.AudioTrack, files.Companions[1].Span(0, disc.AudioTrack.Length).ToArray());
-            }
-            using (DiscFiles stopped = DiscFiles.Open(sheet))
-            {
-                stopped.Prefetch();
-                stopped.Dispose();
-                System.Threading.Thread.Sleep(100);
-                Assert.False(stopped.Prefetched, "let go at once, it stops");
-            }
         }
 
         // Since core ABI 1.4: the place a drive names is handed to the disc's reader, which advises the system around it and no further; a drive lent nothing, a file the call did not pass and a byte outside its file are dropped - see EmuSen_CoreAPI.md §6.25, EmuSen_Galaxia.md §3.9.

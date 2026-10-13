@@ -92,8 +92,9 @@ pub struct Setup {
     pub base: [i64; 5],
 }
 
-/// The triangle `v`'s setup, or none when it draws nothing whatever the area: too large a span, or no area.
-#[inline(always)]
+/// The triangle `v`'s setup, or none when it draws nothing whatever the area: too large a span, or no area. `triangle`
+/// makes the same values inline, which keeps its code the base's (Diamond_Enhancements.md §18.2);
+/// `setup_describes_the_pixels_triangle_draws` holds the two equal.
 pub fn setup(v: &[Vertex; 3], shaded: bool, textured: bool) -> Option<Setup> {
     let xs = v.map(|q| q.x);
     let ys = v.map(|q| q.y);
@@ -125,8 +126,30 @@ pub fn setup(v: &[Vertex; 3], shaded: bool, textured: bool) -> Option<Setup> {
 /// The triangle `v`, already folded (`fold`), its attributes from its base vertex: colour when `shaded`, the texture coordinate when `textured`;
 /// its rows from the middle vertex's down, then those above it upward, each left to right (Diamond_Disputes.md D-41).
 pub fn triangle(p: &mut Painter, v: [Vertex; 3], shaded: bool, textured: bool) {
-    let Some(Setup { min: (minx, miny), max: (maxx, maxy), edges, grads, b, base }) = setup(&v, shaded, textured) else { return };
+    let xs = v.map(|q| q.x);
     let ys = v.map(|q| q.y);
+    let (minx, maxx) = (*xs.iter().min().unwrap_or(&0), *xs.iter().max().unwrap_or(&0));
+    let (miny, maxy) = (*ys.iter().min().unwrap_or(&0), *ys.iter().max().unwrap_or(&0));
+    if maxx - minx > MAX_DX || maxy - miny > MAX_DY {
+        return;
+    }
+    let pt = |i: usize| (v[i].x as i64, v[i].y as i64);
+    let area = (pt(1).0 - pt(0).0) * (pt(2).1 - pt(0).1) - (pt(2).0 - pt(0).0) * (pt(1).1 - pt(0).1);
+    if area == 0 {
+        return;
+    }
+    let order = if area > 0 { [0, 1, 2] } else { [0, 2, 1] };
+    let edges = [(order[0], order[1]), (order[1], order[2]), (order[2], order[0])].map(|(a, b)| (pt(a), pt(b), owns(pt(a), pt(b))));
+    let grads: [Gradient; 5] = [0, 1, 2, 3, 4].map(|k| {
+        let used = if k < 3 { shaded } else { textured };
+        if !used {
+            return Gradient::default();
+        }
+        let a = v.map(|q| if k < 3 { q.rgb[k] as i64 } else if k == 3 { q.u as i64 } else { q.v as i64 });
+        gradient(&v, a, area)
+    });
+    let b = base_vertex(&v);
+    let base: [i64; 5] = [v[b].rgb[0] as i64, v[b].rgb[1] as i64, v[b].rgb[2] as i64, v[b].u as i64, v[b].v as i64].map(|a| a << FRACTION);
     let area_rect = p.paint.area;
     let y_from = miny.max(area_rect.y1);
     let y_to = (maxy - 1).min(area_rect.y2);
@@ -266,6 +289,61 @@ mod tests {
         assert_eq!((floor_div(-7, 2), floor_div(7, 2), floor_div(7, -2), floor_div(-7, -2)), (-4, 3, -4, 3));
         assert_eq!((ceil_div(-7, 2), ceil_div(7, 2), ceil_div(7, -2)), (-3, 4, -3));
         assert_eq!((trunc_div(-7, 2), trunc_div(7, 2)), (-3, 3));
+    }
+
+    /// Random triangles drawn by `triangle`, shaded and then textured raw from a page whose texel names its coordinate,
+    /// are pixel for pixel what `setup` describes, each pixel inside when every edge function reaches its owner's bound
+    /// and its attributes the base's plus the gradients times the distances (the renderer's rule, Diamond_Enhancements.md
+    /// §16.3, §18.2).
+    #[test]
+    fn setup_describes_the_pixels_triangle_draws() {
+        use super::super::draw::{Area, Paint};
+        use super::super::texture::{ClutCache, Texture, TextureCache};
+        use super::super::vram::{Mask, Vram};
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = |n: u64| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((seed >> 33) % n) as i32
+        };
+        let mut vram = Vram::default();
+        for v in 0..256 {
+            for u in 0..256 {
+                vram.set(512 + u, v, (u | (v & 0x7F) << 8) as u16);
+            }
+        }
+        let page = Texture::new(8 | 2 << 7, 0, 0, false);
+        let (mut cache, clut) = (TextureCache::default(), ClutCache::default());
+        let mut drawn = 0;
+        for trial in 0..600 {
+            let textured = trial % 2 == 1;
+            let v: [Vertex; 3] = std::array::from_fn(|_| Vertex { x: next(200), y: 260 + next(200), rgb: [next(256), next(256), next(256)], u: next(256) as u8, v: next(128) as u8 });
+            for y in 256..512 {
+                for x in 0..256 {
+                    vram.set(x, y, 0);
+                }
+            }
+            let paint = Paint { blend: None, texture: textured.then_some(page), raw: textured, dither: false, mask: Mask::default(), area: Area { x1: 0, y1: 0, x2: 1023, y2: 511 }, skip_parity: None, crop_modulation: false };
+            let mut p = Painter { vram: &mut vram, cache: &mut cache, clut: &clut, paint, work: Default::default() };
+            triangle(&mut p, v, !textured, textured);
+            let s = setup(&v, !textured, textured);
+            for y in 256..512i32 {
+                for x in 0..256i32 {
+                    let at = |k: usize| ((s.unwrap().base[k] + s.unwrap().grads[k].dx * (x - v[s.unwrap().b].x) as i64 + s.unwrap().grads[k].dy * (y - v[s.unwrap().b].y) as i64 + HALF) >> FRACTION) as i32;
+                    let inside = s.is_some_and(|s| y >= s.min.1 && y < s.max.1 && s.edges.iter().all(|&((ax, ay), (bx, by), own)| (bx - ax) * (y as i64 - ay) - (by - ay) * (x as i64 - ax) >= if own { 0 } else { 1 }));
+                    let want = if !inside {
+                        0
+                    } else if textured {
+                        vram.get(512 + (at(3) as u8) as u32, (at(4) as u8) as u32)
+                    } else {
+                        let c = [0, 1, 2].map(|k| (at(k).clamp(0, 255) >> 3) as u16);
+                        c[0] | c[1] << 5 | c[2] << 10
+                    };
+                    assert_eq!(vram.get(x as u32, y as u32), want, "trial {trial} at ({x}, {y}): {v:?}");
+                    drawn += (want != 0) as u32;
+                }
+            }
+        }
+        assert!(drawn > 1_000_000, "{drawn} pixels drawn");
     }
 
     #[test]

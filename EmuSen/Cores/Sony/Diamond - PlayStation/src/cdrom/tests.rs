@@ -428,3 +428,97 @@ fn bfrd_set_again_does_not_restart_the_fifo() {
     h.write(3, 0x80);
     assert_eq!(h.c.data_byte(), 1, "the subheader's file number, not the header again");
 }
+
+/// The places a drive named to its host while `run` ran, as (file, byte): `None` the image, else the sheet's file.
+fn named(run: impl FnOnce()) -> Vec<(Option<u32>, u64)> {
+    use emusen_native::core::{event, flags, outbox};
+    let o = outbox::Outbox::default();
+    {
+        let _route = outbox::Route::to(&o);
+        run();
+    }
+    let events = &o.borrow().events;
+    assert!(events.iter().all(|e| e.kind == event::MEDIA_SEEK && e.a >> 32 == DRIVE as i64), "{events:?}");
+    events.iter().map(|e| ((e.a as u32 != flags::FILE_IMAGE).then(|| e.a as u32 - flags::FILE_MEDIA), e.b as u64)).collect()
+}
+
+/// Since the core ABI's 1.4: the drive tells the host where its head is going, at a seek's start and before it has
+/// read a megabyte on from the place it named, by the file and the byte that hold the sector (Diamond_CDROM.md §5).
+#[test]
+fn the_drive_names_where_its_head_is_going_before_it_reads_there() {
+    let byte = |sector: u32| (sector - 150) as u64 * 2352;
+    let mut h = Host::new(Some(disc()));
+    assert_eq!(named(|| h.settle()), vec![], "spinning up and holding before 00:02:00 reads no stored sector");
+    // A read from 00:03:00: named when the seek starts, before any sector has come.
+    let at_start = named(|| {
+        h.command(0x0E, &[mode::DOUBLE]);
+        h.command(0x02, &[0x00, 0x03, 0x00]);
+        h.command(0x06, &[]);
+    });
+    assert_eq!((at_start, h.c.activity), (vec![(Some(0), byte(225))], Activity::Seeking));
+    // Reading on to the data track's end: the place a megabyte past it, named 75 sectors before the head is there,
+    // then the audio track's file, named 75 sectors before the head crosses into it.
+    let read = |h: &mut Host, to: u32| named(|| {
+        while h.c.position < to {
+            h.next(10_000_000).expect("an INT1");
+        }
+    });
+    let megabyte = 225 + (1 << 20) / 2352 + 1;
+    assert_eq!(read(&mut h, megabyte - 75), vec![], "nothing while the head is in the megabyte named");
+    assert_eq!(read(&mut h, megabyte - 73), vec![(Some(0), byte(megabyte))]);
+    assert_eq!(read(&mut h, 150 + DATA - 73), vec![(Some(1), 0)], "the next track's file before the head is in it");
+    // Held where the read stopped, in the first file again: said once, however long the head holds.
+    let held = named(|| {
+        h.command(0x09, &[]);
+        h.next(10_000_000);
+        h.now += 200 * SECTOR_DOUBLE;
+        h.c.run(h.now);
+    });
+    assert!(matches!(held[..], [(Some(0), b)] if b.abs_diff(byte(150 + DATA - 73)) <= 16 * 2352), "{held:?}");
+    // A seek to a place in the megabyte after the one named says nothing; one behind it, or far ahead, is named.
+    let seek = |h: &mut Host, sector: u32| named(|| {
+        h.command(0x02, &emusen_disc::Msf::of(sector).bcd());
+        h.command(0x16, &[]);
+        assert_eq!(h.next(40_000_000).map(|r| r.0), Some(2), "the seek's end");
+    });
+    assert_eq!(seek(&mut h, 150 + DATA + 100), vec![(Some(1), 100 * 2352)], "another file");
+    assert_eq!(seek(&mut h, 160), vec![(Some(0), byte(160))]);
+    assert_eq!(seek(&mut h, 170), vec![], "in the megabyte after the place named, and the head held there after it");
+    assert_eq!(seek(&mut h, 150 + 500), vec![(Some(0), byte(650))], "a megabyte and more past the place named");
+    assert_eq!(seek(&mut h, 150 + 440), vec![(Some(0), byte(590))], "behind the place named");
+    // Play of track 2 names its index 01, 150 sectors into its file; a state loaded elsewhere is named at its first read.
+    assert_eq!(named(|| { h.command(0x03, &[0x02]); }), vec![(Some(1), 150 * 2352)]);
+    h.command(0x09, &[]);
+    h.next(10_000_000);
+    // A place the image does not hold, and an empty drive, name nothing; another disc starts afresh.
+    assert_eq!(named(|| {
+        h.command(0x02, &emusen_disc::Msf::of(150 + DATA + AUDIO + 40).bcd());
+        h.command(0x16, &[]);
+        h.next(40_000_000);
+    }), vec![]);
+    let mut other = Host::new(Some(disc()));
+    other.settle();
+    assert_eq!(seek(&mut other, 160), vec![(Some(0), byte(160))]);
+    other.c.disc = Some(DiscSlot::new(disc()));
+    assert_eq!(seek(&mut other, 165), vec![(Some(0), byte(165))], "the place named was the other disc's");
+    let mut empty = Host::new(None);
+    assert_eq!(named(|| { empty.command(0x02, &[0x00, 0x03, 0x00]); empty.command(0x16, &[]); }), vec![]);
+}
+
+/// A lone image is named as the image itself, whose sector n is at byte 2,352 n.
+#[test]
+fn a_lone_image_is_named_as_the_image() {
+    let mut track = Vec::new();
+    for i in 0..300u32 {
+        let mut s = [0u8; 2352];
+        ecma130::mode2_form1(150 + i, [1, 0, submode::DATA, 0], &[i as u8; 2048], &mut s);
+        track.extend_from_slice(&s);
+    }
+    let mut h = Host::new(Some(Disc::from_image(Kept::from(track), IsoForm::Mode2Form1).unwrap()));
+    h.settle();
+    let places = named(|| {
+        h.command(0x02, &[0x00, 0x03, 0x00]);
+        h.command(0x06, &[]);
+    });
+    assert_eq!(places, vec![(None, 75 * 2352)]);
+}

@@ -1450,7 +1450,7 @@ load to the map screen, so hit select/options on the gamepad to get out of the m
 with up on the d-pad until you encounter the dialogue. I believe it's supposed to allude to an enemy on the ceiling,
 but it just stays on the dialogue." The game ran on the player's BIOS with the cheat of §14.2 on. What came from the
 handheld: the save state made just before the scene by Mistress's state slot, at frame 15,795; the state Mistress
-kept when the tester left the game, at frame 17,123; the memory card; the session log, which holds pacing lines only.
+kept when the tester left the game, at frame 17,123; the memory card; Mistress's log, which holds pacing lines only.
 
 - **Not §14.2's prompt** [M]: that box is the game's own question after the instructions, "Read instructions
   again?", which Cross on Yes repeats; this one is Roll's radio line before any instructions, which from the second
@@ -1512,12 +1512,44 @@ kept when the tester left the game, at frame 17,123; the memory card; the sessio
 
 ### 14.7 The checks kept, and the tests run (2026-10-12)
 
-- ps1-tests' pictures and records, and every program test: `cargo test --release` in the crate, 160 unit tests and 78
-  program tests, with `EMUSEN_DIAMOND_PS1TESTS` set and without, all passing.
+- ps1-tests' pictures and records, and every program test: `cargo test --release` in the crate after the merge of
+  WiseMan `929ec2e7` (the drive's place named, minor 1.4), 162 unit tests and 78 program tests, with
+  `EMUSEN_DIAMOND_PS1TESTS` set and without, all passing, and with the opt-in disc inputs (`EMUSEN_DIAMOND_FIRMWARE`,
+  `EMUSEN_DIAMOND_DISC`) `cdrom/getloc`, `disc-swap` and `timing` on the player's BIOS among them; WiseMan's `Diamond`
+  tests under the test lock with the corpus, 46 of 46. The second state replayed on the merged build gives the pictures of the
+  change alone, byte for byte.
 - The eight games' play as §13 and §14 record it [M, `d5`'s presses on the open kernel, both builds]: Silent Hill,
   Ape Escape, Tekken 3, Spyro the Dragon, Rayman, Castlevania and Crash Bandicoot, 280, 344, 367, 291, 287, 280 and 300
   pictures, every one byte for byte the same before and after; Mega Man Legends by `mega-man-legends.txt` to 14,000
   frames and by `mega-man-legends-prompt.txt` to 16,000, 233 and 266 pictures, byte for byte the same: no answer
   that Roll's five lines of §14.2 act on was changed.
-- The kit at 1,800 frames: the corpus form on `kit/psx-sample.txt`'s nine discs, 9 of 9 and the core's cases passing;
-  Mega Man Legends in the single-image form, all seventeen cases, C7 and C8 among them.
+- The kit at 1,800 frames, on the change alone and again on the merged build: the corpus form on
+  `kit/psx-sample.txt`'s nine discs, 9 of 9 and the core's cases passing; Mega Man Legends in the single-image form,
+  every case (seventeen, and eighteen with the merge's C18), C7 and C8 among them.
+
+### 14.8 The cost
+
+[M, `examples/run` built from this step's tree before the change and after it, both with
+`RUSTFLAGS="-C llvm-args=-align-all-functions=6"`, run alternately on one processor, the fastest of five, ms a frame,
+before → after, the emulated cycles identical]: `gpu/benchmark` 2.375 → 2.359 over 600 frames; Crash Bandicoot
+2.344 → 2.364, Mega Man Legends 1.855 → 1.838, Tekken 3 2.482 → 2.455 over their first 3,000. The differences are of
+either sign and under one per cent, what placement and the machine's other work move. The change adds one read of a
+sector's Q at the end of a seek that goes on into a read or a play, a few a second at most, and nothing a frame.
+
+### 14.9 Read for this section, and exposures
+
+psx-spx `6d7d1bc`: `cdromdrive.md`'s "Seek-Busy Phase", "Stat Seek/Play/Read bits", "GetlocL", "GetlocP" and the
+command table's rows for them; ps1-tests' `cdrom/getloc` `psx.log` (the console's log; its `main.cpp` no further than
+its include lines, `dma.hpp` among them and not opened). EmuSen's own: Diamond's CD-ROM controller and its tests, the
+state's format, the run tool, `psxplay.py` and `psxreferee.py`'s usage text, the kit's sample.
+
+On the player's BIOS, from the tester's two states: the screen; Diamond's own controller, traced from the state's
+frame on (the game was running; its commands, responses and the head's place); the game's code at 8001C900h–8001CADCh
+by the run tool's `--disasm`, and its RAM at 800988D0h and 800989A0h–800989EFh by `--dump`, all above 10000h. The first
+load printed the end of the state's TTY buffer: an address, the game's graphics library's "ResetGraph…" line and a
+pad driver's banner, which is probably the kernel's own text; printed text only, and later runs suppressed it. The player's BIOS was given to the machine as its firmware by
+path, and to ps1-tests' opt-in disc tests the same way; it was not read, dumped, traced or disassembled, and nothing
+of RAM below 10000h or of code running there or in ROM was observed. The routines at 8001D2BCh and 80077F8Ch that the
+loop calls were not followed; what they do is taken from their arguments and results. No referee was run. No
+emulator's source, no firmware or listing of one, and none of the documents `DOCS.txt` excludes was opened (`DOCS.txt`
+itself for its list); Diamond's `kernel/` and `kernel-harness/` were not touched.

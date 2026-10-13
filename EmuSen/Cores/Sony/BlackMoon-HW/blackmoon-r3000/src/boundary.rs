@@ -111,6 +111,7 @@ impl Bus for Rig {
     fn bus_error(&mut self) -> bool {
         std::mem::take(&mut self.faulted)
     }
+    const MOVES: bool = true;
     fn moved(&mut self, m: Move) {
         if let Some(v) = &mut self.moves {
             v.push(m);

@@ -290,7 +290,7 @@ fn load<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, wor
         _ => x,
     };
     let rt = w.rt();
-    if reaches(cpu) && rt != 0 {
+    if B::MOVES && reaches(cpu) && rt != 0 {
         b.moved(Move::Load { at, register: rt as u8, address, size, value: x });
     }
     let r = &mut cpu.regs;
@@ -314,7 +314,7 @@ fn store<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, wo
     if bus_write(cpu, b, o, at, address, size, v) {
         return raise(cpu, b, o, at, word, next, slot, pending, code::DBE, GENERAL);
     }
-    if reaches(cpu) {
+    if B::MOVES && reaches(cpu) {
         b.moved(Move::Store { at, register: w.rt() as u8, address, size, value: v & mask(size) });
     }
     let r = &mut cpu.regs;
@@ -428,8 +428,9 @@ fn common<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, w
     let (a, v) = (cpu.regs.r[w.rs()], cpu.regs.r[w.rt()]);
     match computed(op, w, a, v) {
         Some((i, x)) => {
-            if let Some(from) = copied(op, w)
+            if B::MOVES
                 && i != 0
+                && let Some(from) = copied(op, w)
             {
                 b.moved(Move::Copy { at, register: i as u8, from: from as u8, value: x });
             }
@@ -617,15 +618,15 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                 }
                 let o = address & 3;
                 let base = self.merge_base(rt);
-                let size = Size::of(if op == Op::Lwl { o + 1 } else { 4 - o });
                 let v = if op == Op::Lwl {
-                    let m = self.read(bus, size);
+                    let m = self.read(address & !3, Size::of(o + 1));
                     base & (0x00FF_FFFF >> (8 * o)) | m << (24 - 8 * o)
                 } else {
-                    let m = self.read(bus, size);
+                    let m = self.read(address, Size::of(4 - o));
                     base & !(u32::MAX >> (8 * o)) | m
                 };
-                if !self.faulted && reaches(self.cpu) && rt != 0 {
+                if B::MOVES && !self.faulted && reaches(self.cpu) && rt != 0 {
+                    let size = Size::of(if op == Op::Lwl { o + 1 } else { 4 - o });
                     self.b.moved(Move::Load { at: self.at, register: rt as u8, address: bus, size, value: v });
                 }
                 self.load = Some((rt, v));
@@ -637,9 +638,13 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     return e;
                 }
                 let o = address & 3;
-                let (size, value) = if op == Op::Swl { (Size::of(o + 1), b >> (24 - 8 * o)) } else { (Size::of(4 - o), b) };
-                self.write(bus, size, value);
-                if !self.faulted && reaches(self.cpu) {
+                if op == Op::Swl {
+                    self.write(address & !3, Size::of(o + 1), b >> (24 - 8 * o));
+                } else {
+                    self.write(address, Size::of(4 - o), b);
+                }
+                if B::MOVES && !self.faulted && reaches(self.cpu) {
+                    let (size, value) = if op == Op::Swl { (Size::of(o + 1), b >> (24 - 8 * o)) } else { (Size::of(4 - o), b) };
                     self.b.moved(Move::Store { at: self.at, register: rt as u8, address: bus, size, value: value & mask(size) });
                 }
             }
@@ -664,14 +669,14 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
                     (2, false) => {
                         let v = self.read(address, Size::Word);
                         self.b.set_cop2_data(rt as u8, v);
-                        if !self.faulted && reaches(self.cpu) {
+                        if B::MOVES && !self.faulted && reaches(self.cpu) {
                             self.b.moved(Move::LoadCop2 { at: self.at, cop2: rt as u8, address, value: v });
                         }
                     }
                     (2, true) => {
                         let v = self.b.cop2_data(rt as u8);
                         self.write(address, Size::Word, v);
-                        if !self.faulted && reaches(self.cpu) {
+                        if B::MOVES && !self.faulted && reaches(self.cpu) {
                             self.b.moved(Move::StoreCop2 { at: self.at, cop2: rt as u8, address, value: v });
                         }
                     }
@@ -719,7 +724,7 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             },
             (2, Op::Mfc(_)) => {
                 let v = self.b.cop2_data(rd as u8);
-                if rt != 0 {
+                if B::MOVES && rt != 0 {
                     self.b.moved(Move::FromCop2 { at: self.at, register: rt as u8, cop2: rd as u8, value: v });
                 }
                 self.load = Some((rt, v));
@@ -728,7 +733,9 @@ impl<B: Bus, O: Observer> Run<'_, B, O> {
             (2, Op::Mtc(_)) => {
                 let v = self.r(rt);
                 self.b.set_cop2_data(rd as u8, v);
-                self.b.moved(Move::ToCop2 { at: self.at, register: rt as u8, cop2: rd as u8, value: v });
+                if B::MOVES {
+                    self.b.moved(Move::ToCop2 { at: self.at, register: rt as u8, cop2: rd as u8, value: v });
+                }
             }
             (2, Op::Ctc(_)) => self.b.set_cop2_control(rd as u8, self.r(rt)),
             (2, _) => self.b.cop2_command(w.cofun()),

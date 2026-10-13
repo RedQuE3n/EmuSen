@@ -140,6 +140,7 @@ impl Bus for Layered<'_> {
     fn running(&mut self) -> bool {
         self.0.running()
     }
+    const MOVES: bool = true;
     #[inline(always)]
     fn moved(&mut self, m: Move) {
         if let Some(l) = self.0.layer.get() {

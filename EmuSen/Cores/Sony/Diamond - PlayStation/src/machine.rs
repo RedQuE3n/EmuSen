@@ -225,11 +225,13 @@ impl Machine {
 
     /// One step at the boundary, with the kernel's seams: the side-load at the shell's entry and the putchar tap.
     pub fn step(&mut self) {
-        if self.board.layer.is_some() {
-            step_on::<_, true>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
-        } else {
-            step_on::<_, false>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
-        }
+        if self.board.layer.is_some() { self.step_in::<true>() } else { self.step_in::<false>() }
+    }
+
+    /// `step`, through `Layered` while a layer is attached; kept out of line, as the plain frame's single steps were.
+    #[inline(never)]
+    fn step_in<const LAYERED: bool>(&mut self) {
+        step_on::<_, LAYERED>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
     }
 
     /// Attaches an enhancement layer, in place of any before it, which is returned (Diamond_Enhancements.md §3).
@@ -247,7 +249,7 @@ impl Machine {
     #[inline(always)]
     fn steps<const LAYERED: bool>(&mut self, limit: u32) -> u32 {
         if !self.runs.on || self.exe.is_some() || self.kernel.taps_putchar() {
-            step_on::<_, LAYERED>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut Unobserved);
+            self.step_in::<LAYERED>();
             return 1;
         }
         self.runs.made += 1;
@@ -272,7 +274,8 @@ impl Machine {
     }
 
     /// `advance`, the processor stepping through `Layered` while a layer is attached; the levers are the same either
-    /// way (Diamond_Enhancements.md §3.4).
+    /// way (Diamond_Enhancements.md §2.3). Each kept out of line, so that the plain frame's loop is the one it was.
+    #[inline(never)]
     fn advance_in<const LAYERED: bool>(&mut self) {
         self.board.field_done = false;
         self.idle.reset();

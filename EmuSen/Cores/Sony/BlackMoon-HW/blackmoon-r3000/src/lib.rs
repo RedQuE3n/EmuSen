@@ -84,9 +84,11 @@ pub trait Bus {
     fn running(&mut self) -> bool {
         false
     }
+    /// Whether the bus is told the processor's moves; a constant, so that the step compiled for a bus that is not holds
+    /// no trace of them (BlackMoon_R3000.md §14).
+    const MOVES: bool = false;
     /// A value the processor moved, told once the instruction has made the move, for a console that follows values
-    /// through the machine (BlackMoon_R3000.md §14). The default watches nothing, so a bus that does not give it
-    /// compiles to no call; a bus that does may only watch.
+    /// through the machine, when `MOVES` is true. A bus may only watch.
     #[inline(always)]
     fn moved(&mut self, _m: Move) {}
 }

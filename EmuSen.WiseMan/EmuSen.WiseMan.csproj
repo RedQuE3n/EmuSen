@@ -102,6 +102,7 @@
   <!-- The SNES corpus's recorded verdicts, which the runner reproduces - see VenusRT_Native.md §3.5. -->
   <ItemGroup>
     <None Include="Cores\VenusRtBaseline.tsv" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Cores\MercuryCorpusBaseline.tsv" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Cores\MercuryCorpusBaseline.tsv')" />
     <None Include="..\EmuSen\Cores\Shared\emusen-native\abi\v1\baseline.txt" Link="Cores\CoreAbiBaseline.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- The core ABI's test cores and the conformance kit's runner, built by cargo and copied beside the tests that drive the v1 adapter; CI copies the shared job's builds instead - see EmuSen_CoreAPI.md §19, §21. -->

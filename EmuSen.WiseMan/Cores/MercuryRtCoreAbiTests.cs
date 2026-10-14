@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { "gb", "gbc" }, Discovered.Info.Systems.Select(s => s.Id));
             var library = Discovered.Open();
             Assert.True(library is { Available: true }, Discovered.Report);
-            Assert.Equal(CoreInterface.CapMutes | CoreInterface.CapRomPatches | CoreInterface.CapDebug | CoreInterface.CapDebugStack, library!.Capabilities);
+            Assert.Equal(CoreInterface.CapAudioPeek | CoreInterface.CapMutes | CoreInterface.CapRomPatches | CoreInterface.CapDebug | CoreInterface.CapDebugStack, library!.Capabilities);
             Assert.Equal(new[] { "Model" }, library.Settings.Select(s => s.Key));
         }
 

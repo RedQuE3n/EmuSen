@@ -136,26 +136,50 @@ namespace EmuSen.WiseMan.Cores
             return $"{Rgb888(bg)}|{Rgb888(obj0)}|{Rgb888(obj1)}";
         }
 
+        // What a Game Boy game on the Color holds in colour RAM before its first instruction, on the engine given.
+        private static string PalettesOn(MercuryEngine engine, byte[] rom)
+        {
+            using MercuryRig core = MercuryRig.Create(engine, rom, GbModel.GameBoyColor);
+            var ppu = core.Bus.Ppu;
+            ushort[] Entries(byte[] ram, int at) => Enumerable.Range(0, 4).Select(i => (ushort)(ram[at + i * 2] | (ram[at + i * 2 + 1] << 8))).ToArray();
+            return $"{Rgb888(Entries(ppu.BgPaletteRam, 0))}|{Rgb888(Entries(ppu.ObjPaletteRam, 0))}|{Rgb888(Entries(ppu.ObjPaletteRam, 8))}";
+        }
+
+        private static TheoryData<T1, T2, T3, MercuryEngine> OnEngines<T1, T2, T3>(TheoryData<T1, T2, T3> rows)
+        {
+            var data = new TheoryData<T1, T2, T3, MercuryEngine>();
+            foreach (object?[] row in rows)
+                foreach (MercuryEngine engine in Enum.GetValues<MercuryEngine>()) data.Add((T1)row[0]!, (T2)row[1]!, (T3)row[2]!, engine);
+            return data;
+        }
+
+        public static TheoryData<int, char?, string, MercuryEngine> TcrfRowsOnEngines => OnEngines(TcrfRows);
+
+        // Each listed game's palettes in TCRF's words, the table's and each machine's colour RAM alike - see Mercury_Native.md §12.1.
         [Theory]
-        [MemberData(nameof(TcrfRows))]
-        public void The_colour_palette_for_a_listed_game_is_the_one_tcrf_documents(int checksum, char? fourth, string expected)
+        [MemberData(nameof(TcrfRowsOnEngines))]
+        public void The_colour_palette_for_a_listed_game_is_the_one_tcrf_documents(int checksum, char? fourth, string expected, MercuryEngine engine)
         {
             byte[] rom = Header(checksum, fourth);
             Assert.Equal((byte)checksum, CompatibilityPalettes.TitleChecksum(rom));
             Assert.Equal(expected, Palettes(rom));
+            Assert.Equal(expected, PalettesOn(engine, rom));
         }
 
         // TCRF lists Radar Mission ($8C) as entry $01 with flags $00; the boot ROM's own tables give $8C palette number 8, entry $00 with flags $01 - see Mercury_Model.md §3.3.
-        [Fact]
-        public void Radar_mission_follows_the_boot_roms_table_where_tcrf_disagrees()
+        [Theory]
+        [InlineData(MercuryEngine.Mercury)]
+        [InlineData(MercuryEngine.MercuryRt)]
+        public void Radar_mission_follows_the_boot_roms_table_where_tcrf_disagrees(MercuryEngine engine)
         {
             byte[] rom = Header(0x8C, null);
             Assert.Equal(8, CompatibilityPalettes.PaletteNumber(rom));
             Assert.Equal("FFFFFF ADAD84 42737B 000000|FFFFFF FF7300 944200 000000|FFFFFF ADAD84 42737B 000000", Palettes(rom));
+            Assert.Equal(Palettes(rom), PalettesOn(engine, rom));
             Assert.NotEqual("FFFF9C 94B5FF 639473 003A3A|FFFF9C 94B5FF 639473 003A3A|FFFF9C 94B5FF 639473 003A3A", Palettes(rom));
         }
 
-        // Pan Docs' default: a game not Nintendo's, not listed, or listed as ambiguous with no matching letter gets palette 0.
+        // Pan Docs' default: a game not Nintendo's, not listed, or listed as ambiguous with no matching letter gets palette 0; each machine loads the number's palettes.
         [Theory]
         [InlineData(0x70, null, 0x00, "\0\0", 0)]
         [InlineData(0x70, null, 0x33, "08", 0)]
@@ -170,16 +194,23 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x46, 'R', 0x01, "\0\0", 80)]
         public void The_palette_number_follows_the_licensee_the_checksum_and_the_fourth_letter(int checksum, char? fourth, byte licensee, string newLicensee, int number)
         {
-            Assert.Equal(number, CompatibilityPalettes.PaletteNumber(Header(checksum, fourth, licensee, newLicensee: newLicensee)));
+            byte[] rom = Header(checksum, fourth, licensee, newLicensee: newLicensee);
+            Assert.Equal(number, CompatibilityPalettes.PaletteNumber(rom));
+            var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(number);
+            string expected = $"{Rgb888(bg)}|{Rgb888(obj0)}|{Rgb888(obj1)}";
+            foreach (MercuryEngine engine in Enum.GetValues<MercuryEngine>()) Assert.Equal(expected, PalettesOn(engine, rom));
         }
 
-        [Fact]
-        public void The_default_palette_is_the_one_pan_docs_gives()
+        [Theory]
+        [InlineData(MercuryEngine.Mercury)]
+        [InlineData(MercuryEngine.MercuryRt)]
+        public void The_default_palette_is_the_one_pan_docs_gives(MercuryEngine engine)
         {
             var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(0);
             Assert.Equal(new ushort[] { 0x7FFF, 0x1BEF, 0x6180, 0x0000 }, bg);
             Assert.Equal(new ushort[] { 0x7FFF, 0x421F, 0x1CF2, 0x0000 }, obj0);
             Assert.Equal(new ushort[] { 0x7FFF, 0x421F, 0x1CF2, 0x0000 }, obj1);
+            Assert.Equal($"{Rgb888(bg)}|{Rgb888(obj0)}|{Rgb888(obj1)}", PalettesOn(engine, Header(0x70, null, licensee: 0x00)));
         }
 
         // Stores A, B, C, D, E, H, L and F at $C000, then reads the colour registers, tries a speed switch and a WRAM bank, and draws four shades.

@@ -71,11 +71,30 @@ impl SampleQueue {
     pub fn clear(&mut self) {
         self.samples.clear();
     }
+
+    /// `Peek`: the samples copied oldest first without draining, as many as `out` holds; returns how many are queued.
+    pub fn peek(&self, out: &mut [i16]) -> usize {
+        for (slot, &sample) in out.iter_mut().zip(self.samples.iter()) {
+            *slot = sample;
+        }
+        self.samples.len()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_peek_copies_without_draining() {
+        let mut q = SampleQueue::new(16);
+        q.push_pair(1, 2);
+        q.push_pair(3, 4);
+        let mut out = [0i16; 3];
+        assert_eq!(q.peek(&mut out), 4);
+        assert_eq!(out, [1, 2, 3]);
+        assert_eq!(q.len(), 4);
+    }
 
     #[test]
     fn the_oldest_pairs_go_first_past_the_limit() {

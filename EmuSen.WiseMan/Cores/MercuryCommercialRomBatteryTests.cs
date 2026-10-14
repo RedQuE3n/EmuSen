@@ -1,24 +1,23 @@
+using EmuSen.WiseMan.Fixtures;
 using static EmuSen.WiseMan.Cores.MercuryCommercialRom;
 
 namespace EmuSen.WiseMan.Cores
 {
     public class MercuryCommercialRomBatteryTests
     {
-        public static TheoryData<string> Cartridges => Roms;
+        public static TheoryData<string, MercuryEngine> Cartridges => Roms;
 
-        // The switch is documented as honoured by every core, and Mercury did not honour it - see §2.
-        // Mercury latches it in LoadSram during LoadRom, so the assertion is about this core's own
-        // load rather than about the switch's value now - which is what makes this safe in parallel.
+        // The switch every core honours, latched at LoadRom, so the claim is about this load and safe in parallel - see Mercury_RealCartridges.md §2.
         [Theory]
         [MemberData(nameof(Cartridges))]
-        public void Disabling_the_battery_leaves_no_save_beside_the_rom_or_in_saves(string path)
+        public void Disabling_the_battery_leaves_no_save_beside_the_rom_or_in_saves(string path, MercuryEngine engine)
         {
             if (path.Length == 0) return;
 
             string beside = Path.ChangeExtension(path, ".srm"), saves = EmuSen.Galaxia.Library.SaveLibrary.SramPathFor(path, EmuSen.Cores.BatterySave.GameBoyFolder(path));
             bool besideBefore = File.Exists(beside), savesBefore = File.Exists(saves);
 
-            var core = Load(path);
+            using var core = Load(path, engine);
             for (int i = 0; i < 320; i++) core.RunFrame();
             core.SaveSram();
 

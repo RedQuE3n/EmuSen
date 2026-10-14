@@ -6,7 +6,7 @@ use emusen_native::core::{
     SettingKind, Space, StateFormat, System, Video, caps, status,
 };
 
-use super::{BATTERY_SPACE, SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ILLEGAL_OPCODE, STATUS_NULL, STATUS_TOO_SHORT, STATUS_UNKNOWN_MODEL, STATUS_UNSUPPORTED_BOARD, build_rom_patches, rom_patch};
+use super::{BATTERY_SPACE, SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ILLEGAL_OPCODE, STATUS_NULL, STATUS_TOO_SHORT, STATUS_UNKNOWN_MODEL, STATUS_UNSUPPORTED_BOARD, build_rom_patches, rom_patch, serial, step};
 use crate::debug::Hooks;
 use crate::machine::{CPU_CLOCK_HZ, CYCLES_PER_FRAME, Machine, Model, OLDEST_READABLE_VERSION, STATE_VERSION};
 use crate::memory::cartridge::RomError;
@@ -41,7 +41,7 @@ fn pad() -> Controller {
 }
 
 impl v1::Core for Machine {
-    const CAPABILITIES: u64 = caps::MUTES | caps::ROM_PATCHES | caps::DEBUG | caps::DEBUG_STACK;
+    const CAPABILITIES: u64 = caps::AUDIO_PEEK | caps::MUTES | caps::ROM_PATCHES | caps::DEBUG | caps::DEBUG_STACK;
 
     fn info() -> Info {
         let system = |id: &str, name: &str, ext: &str| System {
@@ -183,6 +183,11 @@ impl v1::Core for Machine {
         self.bus.apu.mixer.samples.set_limit(samples);
     }
 
+    /// `Apu.Peek`, which the debugger's audio view reads (Mercury_Native.md §12.3).
+    fn peek_audio(&self, out: &mut [i16]) -> usize {
+        self.bus.apu.mixer.samples.peek(out)
+    }
+
     fn set_mutes(&mut self, mask: u32) -> Result<(), i32> {
         for (i, muted) in self.bus.apu.mixer.channel_muted.iter_mut().enumerate() {
             *muted = mask & (1 << i) != 0;
@@ -248,7 +253,7 @@ impl v1::Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; mutes, rom_patches, debug, debug_stack);
+emusen_native::core_exports!(Machine; audio_peek, mutes, rom_patches, debug, debug_stack);
 
 /// `mercuryrt_set_sample_rate` for a machine of the core ABI v1: C#'s `Apu.SetSampleRate`, the division and `Math.Pow`
 /// evaluated by C# so the coefficients are its to the bit (Mercury_Native.md §3.3, EmuSen_CoreAPI.md §26).
@@ -269,4 +274,48 @@ pub unsafe extern "C" fn mercuryrt_core_set_sample_rate(machine: *mut v1::sys::M
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mercuryrt_core_rom_patch(machine: *const v1::sys::Machine, address: u32, original: u32) -> i32 {
     unsafe { v1::exports::core_of::<Machine>(machine) }.map_or(STATUS_NULL, |m| rom_patch(m, address, original))
+}
+
+/// `mercuryrt_step` for a machine of the core ABI v1: one instruction with the frame loop's acknowledge and stall, a test extension
+/// (Mercury_Native.md §12).
+///
+/// # Safety
+/// `machine` must be null or a live handle `emusen_core_create` returned.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercuryrt_core_step(machine: *mut v1::sys::Machine) -> i32 {
+    unsafe { v1::exports::core_of_mut::<Machine>(machine) }.map_or(STATUS_NULL, step)
+}
+
+/// `MemoryBus.Tick`: the machine without its CPU for `cycles` T-cycles, a test extension (Mercury_Native.md §12).
+///
+/// # Safety
+/// `machine` must be null or a live handle `emusen_core_create` returned.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercuryrt_core_tick(machine: *mut v1::sys::Machine, cycles: i32) -> i32 {
+    let Some(m) = (unsafe { v1::exports::core_of_mut::<Machine>(machine) }) else { return STATUS_NULL };
+    if cycles > 0 {
+        m.bus.tick(cycles);
+    }
+    0
+}
+
+/// `MemoryBus.Stop`: the speed switch KEY1 armed, without a STOP instruction around it, a test extension (Mercury_Native.md §12).
+///
+/// # Safety
+/// `machine` must be null or a live handle `emusen_core_create` returned.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercuryrt_core_stop(machine: *mut v1::sys::Machine) -> i32 {
+    let Some(m) = (unsafe { v1::exports::core_of_mut::<Machine>(machine) }) else { return STATUS_NULL };
+    m.bus.stop();
+    0
+}
+
+/// `mercuryrt_serial` for a machine of the core ABI v1: the link port's log, oldest first, copied up to `len`; its count.
+///
+/// # Safety
+/// `machine` must be null or a live handle `emusen_core_create` returned; `out` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercuryrt_core_serial(machine: *const v1::sys::Machine, out: *mut u8, len: usize) -> i64 {
+    let Some(m) = (unsafe { v1::exports::core_of::<Machine>(machine) }) else { return STATUS_NULL as i64 };
+    unsafe { serial(m, out, len) }
 }

@@ -5,45 +5,41 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Mercury's four sound channels and the mixer under them - see Mercury_Apu.md.
-    public class MercuryApuTests : IDisposable
+    // Mercury's four sound channels and the mixer under them - see Mercury_Apu.md; Mercury and MercuryRT are held to the same claims - see Mercury_Native.md §12.
+    public abstract class MercuryApuClaims : IDisposable
     {
         // One turn of the frame sequencer's DIV bit, in T-cycles: 512 Hz off a 4.19 MHz clock.
         private const int SequencerPeriod = 8192;
 
-        private readonly List<string> _temporaryFiles = new();
+        private readonly List<MercuryRig> _rigs = new();
+
+        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
-            foreach (string path in _temporaryFiles)
-            {
-                try { File.Delete(path); } catch (IOException) { }
-            }
+            foreach (MercuryRig rig in _rigs) rig.Dispose();
         }
 
-        private MercuryCore Load(byte cgbFlag = 0x00)
+        private MercuryRig Load(byte cgbFlag = 0x00)
         {
-            string path = SyntheticGbRom.WriteTemp(SyntheticGbRom.Build(cgbFlag: cgbFlag));
-            _temporaryFiles.Add(path);
-
-            var core = new MercuryCore();
-            core.LoadRom(path);
+            var core = MercuryRig.Create(Engine, SyntheticGbRom.Build(cgbFlag: cgbFlag));
+            _rigs.Add(core);
             return core;
         }
 
         // NRx2 with a non-zero top nibble, then a trigger with the length counter off.
-        private static void StartPulse(MercuryCore core, ushort baseAddress, int frequency)
+        private static void StartPulse(MercuryRig core, ushort baseAddress, int frequency)
         {
-            core.Bus!.Write((ushort)(baseAddress + 2), 0xF0);
-            core.Bus.Write((ushort)(baseAddress + 3), (byte)(frequency & 0xFF));
-            core.Bus.Write((ushort)(baseAddress + 4), (byte)(0x80 | ((frequency >> 8) & 0x07)));
+            core.Write((ushort)(baseAddress + 2), 0xF0);
+            core.Write((ushort)(baseAddress + 3), (byte)(frequency & 0xFF));
+            core.Write((ushort)(baseAddress + 4), (byte)(0x80 | ((frequency >> 8) & 0x07)));
         }
 
         [Fact]
         public void The_apu_powers_up_where_the_boot_rom_leaves_it()
         {
             var core = Load();
-            var apu = core.Bus!.Apu;
+            var apu = core.Bus.Apu;
 
             Assert.True(apu.PoweredOn);
             Assert.Equal(7, apu.LeftVolume);
@@ -56,12 +52,12 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            Assert.Equal(0x00, core.Bus!.Read(0xFF26) & 0x01);
+            Assert.Equal(0x00, core.Read(0xFF26) & 0x01);
 
             StartPulse(core, 0xFF10, 0x400);
 
             Assert.True(core.Bus.Apu.Pulse1.Enabled);
-            Assert.Equal(0x01, core.Bus.Read(0xFF26) & 0x01);
+            Assert.Equal(0x01, core.Read(0xFF26) & 0x01);
         }
 
         // The top five bits of NRx2 are the DAC's power, and a dead DAC cannot be triggered on.
@@ -71,12 +67,12 @@ namespace EmuSen.WiseMan.Cores
             var core = Load();
             StartPulse(core, 0xFF10, 0x400);
 
-            core.Bus!.Write(0xFF12, 0x00);
+            core.Write(0xFF12, 0x00);
 
             Assert.False(core.Bus.Apu.Pulse1.DacEnabled);
             Assert.False(core.Bus.Apu.Pulse1.Enabled);
 
-            core.Bus.Write(0xFF14, 0x80);
+            core.Write(0xFF14, 0x80);
             Assert.False(core.Bus.Apu.Pulse1.Enabled);
         }
 
@@ -85,16 +81,15 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF11, 0x80);   // 50% duty
+            core.Write(0xFF11, 0x80);   // 50% duty
             StartPulse(core, 0xFF10, 0x7FF); // the shortest period there is: 4 T-cycles a step
 
-            var pulse = core.Bus.Apu.Pulse1;
             var seen = new HashSet<int>();
 
             for (int i = 0; i < 8; i++)
             {
-                seen.Add(pulse.Output);
-                core.Bus.Tick(4);
+                seen.Add(core.Bus.Apu.Pulse1.Output);
+                core.Tick(4);
             }
 
             // A 50% duty must produce both a loud and a silent half within one period.
@@ -107,19 +102,19 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF11, 0x3F);   // length load 63, so one clock away from zero
-            core.Bus.Write(0xFF12, 0xF0);
-            core.Bus.Write(0xFF14, 0xC0);    // trigger with the length counter enabled
+            core.Write(0xFF11, 0x3F);   // length load 63, so one clock away from zero
+            core.Write(0xFF12, 0xF0);
+            core.Write(0xFF14, 0xC0);    // trigger with the length counter enabled
 
             Assert.True(core.Bus.Apu.Pulse1.Enabled);
 
-            core.Bus.Tick(SequencerPeriod * 2);
+            core.Tick(SequencerPeriod * 2);
             Assert.False(core.Bus.Apu.Pulse1.Enabled);
 
             // With the counter disabled the same wait leaves the channel running.
-            core.Bus.Write(0xFF11, 0x3F);
-            core.Bus.Write(0xFF14, 0x80);
-            core.Bus.Tick(SequencerPeriod * 4);
+            core.Write(0xFF11, 0x3F);
+            core.Write(0xFF14, 0x80);
+            core.Tick(SequencerPeriod * 4);
             Assert.True(core.Bus.Apu.Pulse1.Enabled);
         }
 
@@ -129,15 +124,15 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF12, 0xF1);   // volume 15, decreasing, period 1
-            core.Bus.Write(0xFF14, 0x80);
+            core.Write(0xFF12, 0xF1);   // volume 15, decreasing, period 1
+            core.Write(0xFF14, 0x80);
 
             Assert.Equal(15, core.Bus.Apu.Pulse1.Envelope.Volume);
 
-            core.Bus.Tick(SequencerPeriod * 8);
+            core.Tick(SequencerPeriod * 8);
             Assert.Equal(14, core.Bus.Apu.Pulse1.Envelope.Volume);
 
-            core.Bus.Tick(SequencerPeriod * 8);
+            core.Tick(SequencerPeriod * 8);
             Assert.Equal(13, core.Bus.Apu.Pulse1.Envelope.Volume);
         }
 
@@ -146,10 +141,10 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF12, 0xF0);   // volume 15, decreasing, period 0
-            core.Bus.Write(0xFF14, 0x80);
+            core.Write(0xFF12, 0xF0);   // volume 15, decreasing, period 0
+            core.Write(0xFF14, 0x80);
 
-            core.Bus.Tick(SequencerPeriod * 32);
+            core.Tick(SequencerPeriod * 32);
             Assert.Equal(15, core.Bus.Apu.Pulse1.Envelope.Volume);
         }
 
@@ -158,10 +153,10 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF10, 0x11);   // period 1, increasing, shift 1
+            core.Write(0xFF10, 0x11);   // period 1, increasing, shift 1
             StartPulse(core, 0xFF10, 0x0400);
 
-            core.Bus.Tick(SequencerPeriod * 3);
+            core.Tick(SequencerPeriod * 3);
             Assert.Equal(0x0600, core.Bus.Apu.Pulse1.Frequency);
 
             Assert.False(core.Bus.Apu.Pulse2.HasSweep);
@@ -173,10 +168,10 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF10, 0x11);
+            core.Write(0xFF10, 0x11);
             StartPulse(core, 0xFF10, 0x07C0);
 
-            core.Bus.Tick(SequencerPeriod * 16);
+            core.Tick(SequencerPeriod * 16);
             Assert.False(core.Bus.Apu.Pulse1.Enabled);
         }
 
@@ -185,17 +180,16 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF30, 0xF0);
-            core.Bus.Write(0xFF1A, 0x80);    // DAC on
-            core.Bus.Write(0xFF1C, 0x20);    // volume code 1: full scale
-            core.Bus.Write(0xFF1D, 0xFF);
-            core.Bus.Write(0xFF1E, 0x87);    // trigger, frequency $7FF, two T-cycles a step
+            core.Write(0xFF30, 0xF0);
+            core.Write(0xFF1A, 0x80);    // DAC on
+            core.Write(0xFF1C, 0x20);    // volume code 1: full scale
+            core.Write(0xFF1D, 0xFF);
+            core.Write(0xFF1E, 0x87);    // trigger, frequency $7FF, two T-cycles a step
 
-            var wave = core.Bus.Apu.Wave;
-            Assert.Equal(0x0F, wave.Sample);
+            Assert.Equal(0x0F, core.Bus.Apu.Wave.Sample);
 
-            core.Bus.Tick(2);
-            Assert.Equal(0x00, wave.Sample);
+            core.Tick(2);
+            Assert.Equal(0x00, core.Bus.Apu.Wave.Sample);
         }
 
         [Fact]
@@ -203,20 +197,20 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF30, 0xF0);
-            core.Bus.Write(0xFF1A, 0x80);
-            core.Bus.Write(0xFF1E, 0x80);
+            core.Write(0xFF30, 0xF0);
+            core.Write(0xFF1A, 0x80);
+            core.Write(0xFF1E, 0x80);
 
-            core.Bus.Write(0xFF1C, 0x00);
+            core.Write(0xFF1C, 0x00);
             Assert.Equal(0, core.Bus.Apu.Wave.Output);
 
-            core.Bus.Write(0xFF1C, 0x20);
+            core.Write(0xFF1C, 0x20);
             Assert.Equal(15, core.Bus.Apu.Wave.Output);
 
-            core.Bus.Write(0xFF1C, 0x40);
+            core.Write(0xFF1C, 0x40);
             Assert.Equal(7, core.Bus.Apu.Wave.Output);
 
-            core.Bus.Write(0xFF1C, 0x60);
+            core.Write(0xFF1C, 0x60);
             Assert.Equal(3, core.Bus.Apu.Wave.Output);
         }
 
@@ -225,13 +219,13 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF21, 0xF0);
-            core.Bus.Write(0xFF22, 0x00);    // divisor 8, shift 0
-            core.Bus.Write(0xFF23, 0x80);
+            core.Write(0xFF21, 0xF0);
+            core.Write(0xFF22, 0x00);    // divisor 8, shift 0
+            core.Write(0xFF23, 0x80);
 
             Assert.Equal(0x7FFF, core.Bus.Apu.Noise.Lfsr);
 
-            core.Bus.Tick(8);
+            core.Tick(8);
 
             // 15 ones XOR to zero feedback, so the top bit goes low and the register halves.
             Assert.Equal(0x3FFF, core.Bus.Apu.Noise.Lfsr);
@@ -243,15 +237,15 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF21, 0xF0);
-            core.Bus.Write(0xFF22, 0x08);    // divisor 8, shift 0, short mode
-            core.Bus.Write(0xFF23, 0x80);
+            core.Write(0xFF21, 0xF0);
+            core.Write(0xFF22, 0x08);    // divisor 8, shift 0, short mode
+            core.Write(0xFF23, 0x80);
 
             var seen = new List<int>();
             for (int i = 0; i < 127; i++)
             {
                 seen.Add(core.Bus.Apu.Noise.Lfsr & 0x7F);
-                core.Bus.Tick(8);
+                core.Tick(8);
             }
 
             Assert.Equal(127, seen.Distinct().Count());
@@ -263,21 +257,21 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF30, 0xAB);
+            core.Write(0xFF30, 0xAB);
             StartPulse(core, 0xFF10, 0x400);
 
-            core.Bus.Write(0xFF26, 0x00);
+            core.Write(0xFF26, 0x00);
 
             Assert.False(core.Bus.Apu.PoweredOn);
             Assert.False(core.Bus.Apu.Pulse1.Enabled);
             Assert.Equal(0, core.Bus.Apu.LeftVolume);
-            Assert.Equal(0xAB, core.Bus.Read(0xFF30));
+            Assert.Equal(0xAB, core.Read(0xFF30));
 
             // Every register but NR52 ignores a write while the power is off.
-            core.Bus.Write(0xFF12, 0xF0);
+            core.Write(0xFF12, 0xF0);
             Assert.False(core.Bus.Apu.Pulse1.DacEnabled);
 
-            core.Bus.Write(0xFF26, 0x80);
+            core.Write(0xFF26, 0x80);
             Assert.True(core.Bus.Apu.PoweredOn);
         }
 
@@ -286,16 +280,16 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF13, 0x00);
-            Assert.Equal(0xFF, core.Bus.Read(0xFF13));
+            core.Write(0xFF13, 0x00);
+            Assert.Equal(0xFF, core.Read(0xFF13));
 
-            core.Bus.Write(0xFF14, 0x00);
-            Assert.Equal(0xBF, core.Bus.Read(0xFF14));
+            core.Write(0xFF14, 0x00);
+            Assert.Equal(0xBF, core.Read(0xFF14));
 
-            core.Bus.Write(0xFF1A, 0x00);
-            Assert.Equal(0x7F, core.Bus.Read(0xFF1A));
+            core.Write(0xFF1A, 0x00);
+            Assert.Equal(0x7F, core.Read(0xFF1A));
 
-            Assert.Equal(0x70, core.Bus.Read(0xFF26) & 0x70);
+            Assert.Equal(0x70, core.Read(0xFF26) & 0x70);
         }
 
         [Fact]
@@ -333,8 +327,8 @@ namespace EmuSen.WiseMan.Cores
             var core = Load();
 
             // Volume 15 with no duty step reaching it: DAC on, digital output pinned.
-            core.Bus!.Write(0xFF12, 0xF0);
-            core.Bus.Write(0xFF14, 0x80);
+            core.Write(0xFF12, 0xF0);
+            core.Write(0xFF14, 0x80);
 
             for (int i = 0; i < 30; i++) core.RunFrame();
 
@@ -349,7 +343,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF25, 0x10);   // channel 1 left only
+            core.Write(0xFF25, 0x10);   // channel 1 left only
             StartPulse(core, 0xFF10, 0x600);
 
             core.RunFrame();
@@ -367,11 +361,11 @@ namespace EmuSen.WiseMan.Cores
             var core = Load();
             StartPulse(core, 0xFF10, 0x600);
 
-            core.Bus!.Apu.SetChannelMuted(0, true);
+            core.SetChannelMuted(0, true);
             core.RunFrame();
 
             Assert.True(core.Bus.Apu.Pulse1.Enabled);
-            Assert.True(core.Bus.Apu.IsChannelMuted(0));
+            Assert.True(core.IsChannelMuted(0));
         }
 
         // Double speed doubles the CPU and the timer; the sound hardware keeps its own rate.
@@ -384,8 +378,8 @@ namespace EmuSen.WiseMan.Cores
             int normalSamples = normal.DequeueAudioSamples(8192).Length;
 
             var fast = Load(cgbFlag: 0xC0);
-            fast.Bus!.Write(0xFF4D, 0x01);
-            fast.Bus.Stop();
+            fast.Write(0xFF4D, 0x01);
+            fast.Stop();
             StartPulse(fast, 0xFF10, 0x600);
             fast.RunFrame();
             int fastSamples = fast.DequeueAudioSamples(8192).Length;
@@ -399,12 +393,12 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
             StartPulse(core, 0xFF10, 0x123);
-            core.Bus!.Write(0xFF12, 0x83);
+            core.Write(0xFF12, 0x83);
 
             using var stream = new MemoryStream();
             core.SaveState(stream);
 
-            core.Bus.Write(0xFF26, 0x00);
+            core.Write(0xFF26, 0x00);
             Assert.False(core.Bus.Apu.PoweredOn);
 
             stream.Position = 0;
@@ -419,7 +413,7 @@ namespace EmuSen.WiseMan.Cores
         public void The_debug_target_reports_four_channels_and_a_live_peek()
         {
             var core = Load();
-            var target = new EmuSen.Cores.Nintendo.Mercury.Debug.MercuryDebugTarget(core);
+            var target = core.CreateDebugTarget();
 
             StartPulse(core, 0xFF10, 0x600);
             core.RunFrame();
@@ -437,5 +431,15 @@ namespace EmuSen.WiseMan.Cores
             // The peek is not a drain: what it showed is still there to play.
             Assert.NotEmpty(core.DequeueAudioSamples(4096));
         }
+    }
+
+    public sealed class MercuryApuTests : MercuryApuClaims
+    {
+        protected override MercuryEngine Engine => MercuryEngine.Mercury;
+    }
+
+    public sealed class MercuryRtApuTests : MercuryApuClaims
+    {
+        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
     }
 }

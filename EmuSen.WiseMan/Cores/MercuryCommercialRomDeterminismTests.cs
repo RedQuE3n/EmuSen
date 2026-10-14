@@ -1,21 +1,22 @@
+using EmuSen.WiseMan.Fixtures;
 using static EmuSen.WiseMan.Cores.MercuryCommercialRom;
 
 namespace EmuSen.WiseMan.Cores
 {
     public class MercuryCommercialRomDeterminismTests
     {
-        public static TheoryData<string> Cartridges => Roms;
+        public static TheoryData<string, MercuryEngine> Cartridges => Roms;
 
-        // Two fresh runs of the same image must agree exactly, or nothing else means anything.
-        // Deliberately two independent boots - a shared cached run would assume what this proves.
+        // Two independent fresh boots of one image agree exactly; a shared cached run would assume what this proves.
         [Theory]
         [MemberData(nameof(Cartridges))]
-        public void The_same_cartridge_run_twice_produces_the_same_frame(string path)
+        public void The_same_cartridge_run_twice_produces_the_same_frame(string path, MercuryEngine engine)
         {
             if (path.Length == 0) return;
 
-            ulong first = RunTo(Load(path), BootFrames);
-            ulong second = RunTo(Load(path), BootFrames);
+            using MercuryRig a = Load(path, engine), b = Load(path, engine);
+            ulong first = RunTo(a, BootFrames);
+            ulong second = RunTo(b, BootFrames);
 
             Assert.Equal(first, second);
         }

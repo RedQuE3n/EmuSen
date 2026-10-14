@@ -1,0 +1,175 @@
+# blargg and mooneye verdicts per engine and console, the first 3,600 frames; re-recorded only with EMUSEN_MERCURY_CORPUS_RECORD=1 - see Mercury_Native.md §12.2.
+rom	sha256	Mercury/Auto	Mercury/GameBoy	Mercury/GameBoyColor	MercuryRt/Auto	MercuryRt/GameBoy	MercuryRt/GameBoyColor
+blargg/cgb_sound/cgb_sound.gb	DE2101EB718A2BF5	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/cgb_sound/rom_singles/01-registers.gb	8415D6C69F7954E9	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)
+blargg/cgb_sound/rom_singles/02-len ctr.gb	A1CCF47375A2BEDE	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cgb_sound/rom_singles/03-trigger.gb	70173BE396D14AC9	Failed(3)	Failed(3)	Failed(3)	Failed(3)	Failed(3)	Failed(3)
+blargg/cgb_sound/rom_singles/04-sweep.gb	ABFD1F6FA9E6701E	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cgb_sound/rom_singles/05-sweep details.gb	F51A80C5538FE4B3	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
+blargg/cgb_sound/rom_singles/06-overflow on trigger.gb	5701414D13BA55D2	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cgb_sound/rom_singles/07-len sweep period sync.gb	47D57BA87C3A9305	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cgb_sound/rom_singles/08-len ctr during power.gb	BE7948C70946E0B8	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cgb_sound/rom_singles/09-wave read while on.gb	9B101C68B2DE1930	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/cgb_sound/rom_singles/10-wave trigger while on.gb	CBEA1771A5384F4D	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cgb_sound/rom_singles/11-regs after power.gb	D347DD195A78C2D0	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
+blargg/cgb_sound/rom_singles/12-wave.gb	7BBD2E78E159DE42	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)
+blargg/cpu_instrs/cpu_instrs.gb	8C5E12F41E0BA5BB	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/01-special.gb	FE61349CBAEE10CC	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/02-interrupts.gb	FB90B0D2B9501910	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/03-op sp,hl.gb	CA553E606D9B9C86	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/04-op r,imm.gb	7686AA7A39EF3D25	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/05-op rp.gb	D504ADFA0A4C4793	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/06-ld r,r.gb	17ADA54B0B9C1A33	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb	AB31D3DAAAA3A98B	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/08-misc instrs.gb	974A71FE4C67F70F	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/09-op r,r.gb	B28E1BE5CD95F22B	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/10-bit ops.gb	7F5B8E488C6988B5	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cpu_instrs/individual/11-op a,(hl).gb	0EC0CF9FDA3F00BE	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/dmg_sound/dmg_sound.gb	C34E740664EB14B4	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/dmg_sound/rom_singles/01-registers.gb	C6B9FA4B9D9D2691	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)
+blargg/dmg_sound/rom_singles/02-len ctr.gb	745544125A506572	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/dmg_sound/rom_singles/03-trigger.gb	BB11E7266A7143BA	Failed(3)	Failed(3)	Failed(3)	Failed(3)	Failed(3)	Failed(3)
+blargg/dmg_sound/rom_singles/04-sweep.gb	58BC14541D91BB02	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/dmg_sound/rom_singles/05-sweep details.gb	F582CA3A0B2544B9	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
+blargg/dmg_sound/rom_singles/06-overflow on trigger.gb	1A511E95E84ED6FE	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/dmg_sound/rom_singles/07-len sweep period sync.gb	56BF5B0C18B99692	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/dmg_sound/rom_singles/08-len ctr during power.gb	31CB41F7BE106A70	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/dmg_sound/rom_singles/09-wave read while on.gb	378B86F6A25DAA16	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/dmg_sound/rom_singles/10-wave trigger while on.gb	FA63C8ED7473411E	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/dmg_sound/rom_singles/11-regs after power.gb	D27DAB46E8B88102	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
+blargg/dmg_sound/rom_singles/12-wave write while on.gb	2EFBECD2C6D40928	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/halt_bug.gb	DDEBFB81F9921329	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict
+blargg/instr_timing/instr_timing.gb	646067B3D6C79FDA	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/interrupt_time/interrupt_time.gb	1A8F8F3BC609A92A	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict
+blargg/mem_timing-2/mem_timing.gb	AB9DAF4C51F417C4	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/mem_timing-2/rom_singles/01-read_timing.gb	D9C6E86B7008FDAE	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/mem_timing-2/rom_singles/02-write_timing.gb	9188E5D9CF9DFC9E	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/mem_timing-2/rom_singles/03-modify_timing.gb	818256AB477BB8FB	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/mem_timing/individual/01-read_timing.gb	52724532C5709E38	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/mem_timing/individual/02-write_timing.gb	EEA92D3F4E95AAB5	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/mem_timing/individual/03-modify_timing.gb	2E9067C670FF8B45	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/mem_timing/mem_timing.gb	791CB418FD054B48	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/oam_bug/oam_bug.gb	21F0E7AF73E525D1	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/oam_bug/rom_singles/1-lcd_sync.gb	ABC303A2C644528C	Failed(3)	Failed(3)	Failed(3)	Failed(3)	Failed(3)	Failed(3)
+blargg/oam_bug/rom_singles/2-causes.gb	3F9C0DB75222AAE7	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)
+blargg/oam_bug/rom_singles/3-non_causes.gb	33E474075DEF3C02	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/oam_bug/rom_singles/4-scanline_timing.gb	5527C97665C3AD54	Failed(3)	Failed(3)	Failed(3)	Failed(3)	Failed(3)	Failed(3)
+blargg/oam_bug/rom_singles/5-timing_bug.gb	CA3500D92E77883A	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)
+blargg/oam_bug/rom_singles/6-timing_no_bug.gb	E5EA594DDC7AD9A0	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/oam_bug/rom_singles/7-timing_effect.gb	B4BB86462A570115	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/oam_bug/rom_singles/8-instr_effect.gb	11B372A91F65DD3B	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)
+mooneye/acceptance/add_sp_e_timing.gb	BF736CB8FC06949B	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/bits/mem_oam.gb	EBA5D165AAA55E7D	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/bits/reg_f.gb	4B193E887EE3AC82	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/bits/unused_hwio-GS.gb	1588928B71C596E4	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_div-S.gb	6E9CFD9AB2800AAE	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_div-dmg0.gb	EC3DAA3CA07365D5	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_div-dmgABCmgb.gb	EF2CD0AC53DD2F65	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_div2-S.gb	F4F7E5F7BC8FA283	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_hwio-S.gb	01D718C1D291166A	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_hwio-dmg0.gb	32EEA8917E1A3044	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_hwio-dmgABCmgb.gb	39F29E27E803BAB7	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_regs-dmg0.gb	9FF3FF33A7AAAB3F	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_regs-dmgABC.gb	50B4869BFDF6F69E	Passed	Passed	Failed	Passed	Passed	Failed
+mooneye/acceptance/boot_regs-mgb.gb	4C070979B7FDAC14	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_regs-sgb.gb	4FD002A2D913A0B9	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/boot_regs-sgb2.gb	9B0FD3B63ECAA216	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/call_cc_timing.gb	2EF47505ED501128	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/call_cc_timing2.gb	67D84FC4D97C6439	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/call_timing.gb	249F524368B8B9BB	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/call_timing2.gb	D7EE4CEAE48EF630	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/di_timing-GS.gb	618DD8F765C71C0F	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/div_timing.gb	382A9CD42A60EF0A	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/ei_sequence.gb	DCD7F37E8FE7D8EB	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/ei_timing.gb	E5FA88F83727E799	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/halt_ime0_ei.gb	0768FD3E698047F5	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/halt_ime0_nointr_timing.gb	40A1E614D77A8816	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/halt_ime1_timing.gb	09D9BE4EBDD7645A	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/halt_ime1_timing2-GS.gb	10F0F35025D9D648	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/if_ie_registers.gb	D055B2B4C44902CF	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/instr/daa.gb	1498D92D70592A07	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/interrupts/ie_push.gb	F80DF1B48CA2F81D	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/intr_timing.gb	A795A190830104A4	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/jp_cc_timing.gb	8747FA6F969C8AC1	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/jp_timing.gb	514BA4B96355F507	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ld_hl_sp_e_timing.gb	FE22571B9AEE1681	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/oam_dma/basic.gb	326B747CAC8CC96B	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/oam_dma/reg_read.gb	006516FCB302867A	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/oam_dma/sources-GS.gb	35A38C640047C38B	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/oam_dma_restart.gb	5234EAAA78FCF722	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/oam_dma_start.gb	7C39F8F6F8043FE0	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/oam_dma_timing.gb	E8477C5DA80E4FB7	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/pop_timing.gb	4B658AB238B46319	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/ppu/hblank_ly_scx_timing-GS.gb	3ADEC9174D16B7A4	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/ppu/intr_1_2_timing-GS.gb	3BAC47FC79CE514F	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/ppu/intr_2_0_timing.gb	6EA58D6940AD2DDE	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/ppu/intr_2_mode0_timing.gb	BE1555D577506073	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ppu/intr_2_mode0_timing_sprites.gb	52B10BB0D3073EC3	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ppu/intr_2_mode3_timing.gb	B5CB7D22162E3ED6	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ppu/intr_2_oam_ok_timing.gb	38D7ACFDDCE357C8	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ppu/lcdon_timing-GS.gb	2A9D46B61935AE1A	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ppu/lcdon_write_timing-GS.gb	E28B34CEF8B5D58B	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ppu/stat_irq_blocking.gb	604436AEB6A37BAD	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/ppu/stat_lyc_onoff.gb	29F04AAF6B26085B	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ppu/vblank_stat_intr-GS.gb	F7DE9A3EF1399F73	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/push_timing.gb	F764EE5053F4D1F8	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/rapid_di_ei.gb	4BCFBEE2DCDCA789	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/ret_cc_timing.gb	EB95FE488131F625	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ret_timing.gb	CFB13C7AA11FF299	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/reti_intr_timing.gb	A98440BFB0E4F29E	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/reti_timing.gb	BB90E11FDB8E40F8	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/rst_timing.gb	8BA26360BAD21B45	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/serial/boot_sclk_align-dmgABCmgb.gb	14C48977DDF9C734	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/timer/div_write.gb	2BE1E4DA6FA24B91	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/rapid_toggle.gb	59FE311058895C39	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/timer/tim00.gb	2193036C1628EFD9	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tim00_div_trigger.gb	5CAFDF474DFA7507	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tim01.gb	B6F5043EAE7FD2B2	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tim01_div_trigger.gb	73C1E2677A2A122A	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tim10.gb	FE3B0B292341D5FF	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tim10_div_trigger.gb	D83C7ACF20A03154	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tim11.gb	624FD3AD3EDE2790	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tim11_div_trigger.gb	3F60BC3D2BA63BD9	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tima_reload.gb	1CA70C725BD1E027	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tima_write_reloading.gb	7D9A6D5ADA792596	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/timer/tma_write_reloading.gb	E48FF98D4F363B92	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/emulator-only/mbc1/bits_bank1.gb	77C698CB537D22AB	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/bits_bank2.gb	52CDE75B4EC3C597	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/bits_mode.gb	68417CE068E9B94A	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/bits_ramg.gb	14815D18D1DDB23C	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/multicart_rom_8Mb.gb	71147F7581887799	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/emulator-only/mbc1/ram_256kb.gb	C6FDD46418ADB4B2	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/ram_64kb.gb	DF747907B4639A91	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/emulator-only/mbc1/rom_16Mb.gb	1E6CAAD540828CF7	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/rom_1Mb.gb	22E19E9222B7C531	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/rom_2Mb.gb	1BEBE8536ED61798	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/rom_4Mb.gb	6BA3F62B876BECDE	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/rom_512kb.gb	9848621544E7ACFA	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc1/rom_8Mb.gb	318A9849F2C1A135	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc2/bits_ramg.gb	6B112253BF92C83D	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc2/bits_romb.gb	7D7684F05CE489BE	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc2/bits_unused.gb	14813CB3305E52EC	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc2/ram.gb	DC039F0796C35BC7	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc2/rom_1Mb.gb	D1F772AE92234265	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc2/rom_2Mb.gb	0463C1A364B717D1	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc2/rom_512kb.gb	4748AEDA444BEE65	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc5/rom_16Mb.gb	315AC9D9D7A3ADDA	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc5/rom_1Mb.gb	5170771B8183F7E5	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc5/rom_2Mb.gb	E93C53A71292B006	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc5/rom_32Mb.gb	665B18D5E876F527	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc5/rom_4Mb.gb	188410388F84A556	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc5/rom_512kb.gb	6AAD3B6B80F5B730	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc5/rom_64Mb.gb	E02FF0175932F76E	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/emulator-only/mbc5/rom_8Mb.gb	81E32DC0CFE3940F	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/madness/mgb_oam_dma_halt_sprites.gb	861E670E0F9C65D5	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict
+mooneye/manual-only/sprite_priority.gb	239723F7B96C72A0	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict
+mooneye/misc/bits/unused_hwio-C.gb	0D66303D0035FCF9	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/misc/boot_div-A.gb	256D0042D28A1443	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/misc/boot_div-cgb0.gb	B23832FC1719E1F4	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/misc/boot_div-cgbABCDE.gb	B5B2F6762CC1CBB4	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/misc/boot_hwio-C.gb	DCC7B577B5DEE891	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/misc/boot_regs-A.gb	3F1C2B50B9648CFD	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/misc/boot_regs-cgb.gb	9B466C875EEC05E7	Failed	Failed	Passed	Failed	Failed	Passed
+mooneye/misc/ppu/vblank_stat_intr-C.gb	20C6925C49226416	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/utils/bootrom_dumper.gb	3F8267EA83A33677	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict
+mooneye/utils/dump_boot_hwio.gb	C38E06CB71745082	Passed	Passed	Passed	Passed	Passed	Passed

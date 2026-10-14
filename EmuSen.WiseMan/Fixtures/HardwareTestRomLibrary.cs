@@ -21,7 +21,13 @@ namespace EmuSen.WiseMan.Fixtures
         // ...and failure as six copies of $42, which is why "all B" is not a text verdict.
         public const byte MooneyeFailureByte = 0x42;
 
-        public static string Root => Path.Combine(DianaShSandbox.InstallDirectory, "TestRoms", SubdirectoryName);
+        // A directory that overrides Root for the corpus, searched the same way - see Mercury_Native.md §12.2.
+        public const string Variable = "EMUSEN_MERCURYRT_CORPUS";
+
+        public static string Root => Environment.GetEnvironmentVariable(Variable) is { Length: > 0 } folder ? folder : Path.Combine(DianaShSandbox.InstallDirectory, "TestRoms", SubdirectoryName);
+
+        // blargg's newer suites report through cartridge RAM: $DE $B0 $61 at $A001, the status at $A000, $80 while running - see Mercury_Native.md §3.4.
+        public static readonly byte[] CartRamSignature = { 0xDE, 0xB0, 0x61 };
 
         public static IReadOnlyList<string> Find()
         {
@@ -64,6 +70,15 @@ namespace EmuSen.WiseMan.Fixtures
             if (text.Contains("Passed", StringComparison.Ordinal)) return TestRomVerdict.Passed;
 
             return TestRomVerdict.NoVerdict;
+        }
+
+        // The status byte once a cart-RAM ROM has finished, or null while it runs or has not signed its RAM.
+        public static int? ReadCartRamStatus(Func<int, byte> ram)
+        {
+            for (int i = 0; i < CartRamSignature.Length; i++)
+                if (ram(1 + i) != CartRamSignature[i]) return null;
+            byte status = ram(0);
+            return status == 0x80 ? null : status;
         }
 
         public static string AsText(IReadOnlyList<byte> serial)

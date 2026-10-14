@@ -17,7 +17,7 @@ namespace EmuSen.WiseMan.Cores
         public const string RomsVariable = MercuryRtStateTests.RomsVariable;
 
         // A directory of blargg and mooneye ROMs, searched recursively; absent, that case passes without running.
-        public const string CorpusVariable = "EMUSEN_MERCURYRT_CORPUS";
+        public const string CorpusVariable = HardwareTestRomLibrary.Variable;
 
         private readonly ITestOutputHelper _output;
 

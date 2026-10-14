@@ -98,6 +98,13 @@ namespace EmuSen.WiseMan.Fixtures
             Emit(EvSyn, 0, 0);
         }
 
+        // The d-pad's vertical hat, -1 up, 1 down, 0 let go.
+        public void HatY(int value)
+        {
+            Emit(EvAbs, 0x11, value);
+            Emit(EvSyn, 0, 0);
+        }
+
         private void Emit(ushort type, ushort code, int value)
         {
             byte* e = stackalloc byte[24];

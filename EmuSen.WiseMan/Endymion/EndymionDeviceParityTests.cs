@@ -488,7 +488,6 @@ namespace EmuSen.WiseMan.Endymion
                 {
                     for (int i = 0; i < 40; i++)
                     {
-                        SDL.PumpEvents();
                         manager.Poll();
                         if (manager.Pads.Count == wanted) break;
                         System.Threading.Thread.Sleep(50);

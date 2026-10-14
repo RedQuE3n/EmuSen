@@ -81,11 +81,8 @@ namespace EmuSen.WiseMan.Input
 
         private void Press(uint id, SDL.GamepadButton button, bool down) => SDL.SetJoystickVirtualButton(_joysticks[id], (int)button, down);
 
-        private static void Poll(GamepadManager manager)
-        {
-            SDL.PumpEvents();
-            manager.Poll();
-        }
+        // The manager's own poll pumps SDL's events, as Mistress's does - see EmuSen_Input.md §8.12.
+        private static void Poll(GamepadManager manager) => manager.Poll();
 
         [Fact]
         public void Sdls_virtual_pads_take_seats_reach_their_ports_and_a_replacement_finds_the_seat_kept()

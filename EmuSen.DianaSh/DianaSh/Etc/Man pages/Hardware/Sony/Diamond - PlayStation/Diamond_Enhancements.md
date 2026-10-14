@@ -3249,7 +3249,9 @@ As §52.5 to §52.6 and `EmuSen_CoreAPI_Extensions.md` §14.3 state: the header 
 `CoreMachineInfo.PictureSettles` in the C# reader. The guard: 426 facts agree with the header on four triples, with the
 Rust and with the baseline, `--against` WiseMan's. In the kit, a `progress` module holds the stamp of the image a thread
 runs; C7 and C8 fold a second digest of the pictures past the bound; the note first said "from its 61th frame", corrected
-to "from its frame 61 on" before the gate's last runs.
+to "from its frame 61 on" after the gate's kit runs, which carry the first wording. Those runs used the library and
+the kit built before the seed by rows (§53.4); the seed it replaced fills the same values, which
+`a_state_at_n_is_the_machines_and_a_load_seeds` holds sample for sample.
 
 The kit's own tests hold the rule with a settling test core and its faults, each in a runner process of its own
 (`pictures_that_settle_pass_within_their_bound_and_each_fault_of_the_rule_fails`) [M]:

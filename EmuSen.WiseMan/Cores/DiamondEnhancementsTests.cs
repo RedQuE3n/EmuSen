@@ -15,17 +15,17 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Diamond's "Precise geometry" as a host meets it: the schema's enhancement in the PlayStation's Enhancements group with its cost, and turned on and off between frames it changes the picture alone - see Diamond_Enhancements.md §24.2.
+    // Diamond's enhancements as a host meets them: the schema's four in the PlayStation's Enhancements group with their costs, and turned on and off between frames they change the picture alone - see Diamond_Enhancements.md §24.2 and §42.1.
     [Collection(TestCollections.ProcessGlobals)]
-    public class DiamondPreciseGeometryTests : IDisposable
+    public class DiamondEnhancementsTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =
-            HeadlessUnitTestSession.GetOrStartForAssembly(typeof(DiamondPreciseGeometryTests).GetTypeInfo().Assembly);
+            HeadlessUnitTestSession.GetOrStartForAssembly(typeof(DiamondEnhancementsTests).GetTypeInfo().Assembly);
 
         private readonly ITestOutputHelper _output;
-        private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenDiamondPrecise_" + Guid.NewGuid().ToString("N"));
+        private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenDiamondEnhancements_" + Guid.NewGuid().ToString("N"));
 
-        public DiamondPreciseGeometryTests(ITestOutputHelper output)
+        public DiamondEnhancementsTests(ITestOutputHelper output)
         {
             _output = output;
             Directory.CreateDirectory(_root);
@@ -79,22 +79,34 @@ namespace EmuSen.WiseMan.Cores
             return s.ToArray();
         }
 
+        private static readonly (string Key, string Label, string Kind, string Default)[] Enhancements =
+        {
+            ("precision", "Precise geometry", "switch", "false"), ("resolution", "Internal resolution", "choice", "1"), ("colour", "True colour", "switch", "false"), ("filtering", "Texture filtering", "choice", "off"),
+        };
+
         [Fact]
-        public void Precise_geometry_is_the_playstations_enhancement_off_by_default_with_its_cost()
+        public void The_playstations_four_enhancements_are_offered_at_the_hardwares_values_with_their_costs()
         {
             var library = CoreLibrary.Open(DiamondTests.LibraryPath);
             Assert.True(library.Has(CoreInterface.CapSettings) && library.Has(CoreInterface.CapSettingNotes), library.Report);
-            var s = Assert.Single(library.Settings, x => x.Effect == "enhancement");
-            Assert.Equal(("precision", "Precise geometry", "switch", "false", false, "Enhancements"), (s.Key, s.Label, s.Kind, s.Default, s.CreateScope, s.Category));
-            Assert.Contains("Vulkan", s.Cost);
-            var row = Assert.Single(CoreCatalog.SettingsFor("PlayStation"), x => x.Key == "precision");
-            Assert.Equal((CoreSettingDescriptor.EnhancementsGroup, CoreSettingKind.Switch), (row.Group, row.Kind));
-            Assert.EndsWith(s.Cost!, row.Hint);
-            Assert.All(CoreCatalog.SettingsFor("PlayStation").Where(x => x.Key != "precision"), x => Assert.Null(x.Group));
+            var offered = library.Settings.Where(x => x.Effect == "enhancement").ToList();
+            Assert.Equal(Enhancements, offered.Select(s => (s.Key, s.Label, s.Kind, s.Default)));
+            Assert.All(offered, s => Assert.False(s.CreateScope));
+            Assert.All(offered, s => Assert.Equal("Enhancements", s.Category));
+            Assert.All(offered, s => Assert.Contains("Vulkan", s.Cost));
+            var rows = CoreCatalog.SettingsFor("PlayStation");
+            foreach (var s in offered)
+            {
+                var row = Assert.Single(rows, x => x.Key == s.Key);
+                Assert.Equal(CoreSettingDescriptor.EnhancementsGroup, row.Group);
+                Assert.EndsWith(s.Cost!, row.Hint);
+            }
+            Assert.Equal(new[] { "1", "2", "3", "4" }, rows.Single(x => x.Key == "resolution").Choices);
+            Assert.All(rows.Where(x => offered.All(s => s.Key != x.Key)), x => Assert.Null(x.Group));
         }
 
         [Fact]
-        public Task The_playstations_tab_shows_precise_geometry_under_its_enhancements_heading() => Session.Dispatch(() =>
+        public Task The_playstations_tab_shows_the_enhancements_under_their_heading() => Session.Dispatch(() =>
         {
             var window = new GraphicsSettingsWindow(new GraphicsConfig(), _ => { }, "PlayStation");
             window.Show();
@@ -102,38 +114,50 @@ namespace EmuSen.WiseMan.Cores
             var panel = window.GetVisualDescendants().OfType<StackPanel>().First(p => p.Children.OfType<SectionHeader>().Any(h => h.Name == "PlayStation.Group.Enhancements"));
             var children = panel.Children.ToList();
             int heading = children.FindIndex(c => c.Name == "PlayStation.Group.Enhancements");
-            var next = Assert.IsType<FieldRow>(children[heading + 1]);
-            Assert.Equal("Precise geometry", next.Label);
-            Assert.Contains("Vulkan", next.Hint);
-            Assert.NotNull(next.GetVisualDescendants().OfType<LunaSwitch>().FirstOrDefault(t => t.Name == "PlayStation.precision"));
+            for (int i = 0; i < Enhancements.Length; i++)
+            {
+                var row = Assert.IsType<FieldRow>(children[heading + 1 + i]);
+                Assert.Equal(Enhancements[i].Label, row.Label);
+                Assert.Contains("Vulkan", row.Hint);
+                string name = "PlayStation." + Enhancements[i].Key;
+                Assert.True(Enhancements[i].Kind == "switch"
+                    ? row.GetVisualDescendants().OfType<LunaSwitch>().Any(t => t.Name == name)
+                    : row.GetVisualDescendants().OfType<Control>().Any(c => c.Name == name), name);
+            }
             Assert.Single(children.OfType<SectionHeader>());
             window.Close();
         }, default);
 
         // Through the host, between frames: the sound and the machine's state are those of a run that never had the setting, and the picture differs only while it is on; where no Vulkan device is usable the row's note says so and nothing changes.
-        [Fact]
-        public void Turning_precise_geometry_on_and_off_between_frames_changes_only_the_picture()
+        [Theory]
+        [InlineData("precision=true")]
+        [InlineData("resolution=4")]
+        [InlineData("colour=true")]
+        [InlineData("filtering=3d")]
+        [InlineData("precision=true resolution=2 colour=true filtering=all")]
+        public void Turning_enhancements_on_and_off_between_frames_changes_only_the_picture(string chosen)
         {
             string path = Path.Combine(_root, "triangle.psexe");
             File.WriteAllBytes(path, Triangle());
             using var plain = (CoreEngine)CoreFactory.Load(path).Core;
             using var core = (CoreEngine)CoreFactory.Load(path).Core;
-            Assert.Equal(("diamond", "false"), (core.Info.Id, core.Get("precision")));
+            var pairs = chosen.Split(' ').Select(p => p.Split('=')).Select(p => (Key: p[0], Value: p[1])).ToList();
+            Assert.Equal("diamond", core.Info.Id);
             int differed = 0;
             bool drawn = true;
             for (int f = 0; f < 12; f++)
             {
                 if (f == 3)
                 {
-                    core.Set("precision", "true");
-                    string? note = core.Settings.Single(s => s.Key == "precision").Note?.Invoke(_ => "");
+                    foreach (var (key, value) in pairs) core.Set(key, value);
+                    string? note = core.Settings.Single(s => s.Key == pairs[0].Key).Note?.Invoke(_ => "");
                     _output.WriteLine($"the note: {note ?? "none"}");
                     drawn = note is null || !note.StartsWith("No usable");
                 }
                 if (f == 9)
                 {
-                    core.Set("precision", "false");
-                    Assert.Null(core.Settings.Single(s => s.Key == "precision").Note?.Invoke(_ => ""));
+                    foreach (var (key, _) in pairs) core.Set(key, core.Settings.Single(s => s.Key == key).Default);
+                    Assert.All(pairs, p => Assert.Null(core.Settings.Single(s => s.Key == p.Key).Note?.Invoke(_ => "")));
                 }
                 plain.RunFrame();
                 core.RunFrame();
@@ -143,11 +167,12 @@ namespace EmuSen.WiseMan.Cores
                 if (!plain.GetFrameBufferRgba().AsSpan().SequenceEqual(core.GetFrameBufferRgba()))
                 {
                     differed++;
-                    Assert.InRange(f, 3, 8);
+                    Assert.InRange(f, 3, 9);
                 }
             }
-            if (drawn) Assert.True(differed > 0, "the precise triangle drew no pixel otherwise");
-            else Assert.Equal(0, differed);
+            // The triangle is untextured, which filtering alone leaves as the console draws it.
+            if (drawn && chosen != "filtering=3d") Assert.True(differed > 0, "the enhanced picture never differed");
+            if (!drawn) Assert.Equal(0, differed);
         }
     }
 }

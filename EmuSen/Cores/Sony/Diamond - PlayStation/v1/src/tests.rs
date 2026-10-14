@@ -37,78 +37,96 @@ fn accurate(d: &mut Diamond) -> Vec<u8> {
     s[..end].to_vec()
 }
 
-/// §24.2: "Precise geometry" is the schema's one enhancement, a switch off by default in the Enhancements group, run
-/// scope, with its cost, and passes the rules the kit's C3 applies.
+/// §42.1: the four enhancements, each a setting in the Enhancements group, run scope, its default the hardware's, with
+/// its cost, passing the rules the kit's C3 applies; "Internal resolution" Mars's label and kind of choice.
 #[test]
-fn precise_geometry_is_offered_as_an_enhancement_off_by_default() {
+fn the_four_enhancements_are_offered_at_the_hardwares_values() {
     let schema = Diamond::settings_schema();
     let e: Vec<&Setting> = schema.iter().filter(|s| matches!(s.effect, Effect::Enhancement { .. })).collect();
-    assert_eq!(e.len(), 1);
-    let s = e[0];
-    assert!(s.check().is_ok(), "{:?}", s.check());
-    let Effect::Enhancement { cost, hardware } = &s.effect else { unreachable!() };
-    assert!(matches!(s.kind, SettingKind::Switch));
-    assert_eq!((s.key.as_str(), s.label.as_str(), s.default.as_str(), hardware.as_str(), s.scope, s.category.as_deref(), s.restart), (PRECISION_KEY, "Precise geometry", "false", "false", Scope::Run, Some("Enhancements"), false));
-    assert!(cost.contains("Vulkan") && cost.contains("save states"));
+    let keys: Vec<&str> = e.iter().map(|s| s.key.as_str()).collect();
+    assert_eq!(keys, [PRECISION_KEY, RESOLUTION_KEY, COLOUR_KEY, FILTERING_KEY]);
+    for s in &e {
+        assert!(s.check().is_ok(), "{}: {:?}", s.key, s.check());
+        let Effect::Enhancement { cost, hardware } = &s.effect else { unreachable!() };
+        assert_eq!((s.default.as_str(), s.scope, s.category.as_deref(), s.restart), (hardware.as_str(), Scope::Run, Some("Enhancements"), false), "{}", s.key);
+        assert!(cost.contains("Vulkan") && cost.contains("a frame later"), "{}: {cost}", s.key);
+    }
+    let labels: Vec<&str> = e.iter().map(|s| s.label.as_str()).collect();
+    assert_eq!(labels, ["Precise geometry", "Internal resolution", "True colour", "Texture filtering"]);
+    let SettingKind::Choice(scales) = &e[1].kind else { panic!("a choice") };
+    assert_eq!(scales.iter().map(|c| c.value.as_str()).collect::<Vec<_>>(), ["1", "2", "3", "4"]);
+    assert_eq!((e[0].default.as_str(), e[1].default.as_str(), e[2].default.as_str(), e[3].default.as_str()), ("false", "1", "false", "off"));
     assert_eq!(Diamond::CAPABILITIES & (caps::SETTINGS | caps::SETTING_NOTES), caps::SETTINGS | caps::SETTING_NOTES);
+    let video = create(&[]).machine_info().video;
+    assert_eq!((video.max_width, video.max_height), (640 * 4, 576 * 4), "the largest picture of the largest scale");
 }
 
-/// §24.2: turned on and off between frames, the setting changes the picture alone: the machine's state and sound are
-/// those of a machine that never had it, and with it on the frame is the renderer's, here a triangle half a pixel lower.
+/// §42.1: each enhancement, and all four, turned on and off between frames changes the picture alone: the machine's
+/// state and sound are those of a machine that never had them; at 4x the frame is four times the display.
 #[test]
-fn turned_on_and_off_between_frames_it_changes_only_the_picture() {
-    let (mut plain, mut d) = (create(&[]), create(&[]));
-    let (mut pa, mut pb) = (vec![0i16; 8192], vec![0i16; 8192]);
-    let mut differed = 0;
-    for f in 0..12 {
-        if f == 3 {
-            d.set_settings(&Settings::from_pairs(vec![(PRECISION_KEY.into(), "true".into())])).unwrap();
-            if d.pair_ref().is_none() {
-                eprintln!("no Vulkan device: {:?}", d.setting_notes());
-                return;
+fn turned_on_and_off_between_frames_they_change_only_the_picture() {
+    let all = [(PRECISION_KEY, "true"), (RESOLUTION_KEY, "4"), (COLOUR_KEY, "true"), (FILTERING_KEY, "all")];
+    let cases: Vec<Vec<(&str, &str)>> = vec![vec![all[0]], vec![all[1]], vec![all[2]], vec![all[3]], all.to_vec()];
+    let off = [(PRECISION_KEY, "false"), (RESOLUTION_KEY, "1"), (COLOUR_KEY, "false"), (FILTERING_KEY, "off")];
+    for case in cases {
+        let (mut plain, mut d) = (create(&[]), create(&[]));
+        let (mut pa, mut pb) = (vec![0i16; 8192], vec![0i16; 8192]);
+        let mut differed = 0;
+        for f in 0..12 {
+            if f == 3 {
+                d.set_settings(&Settings::from_pairs(case.iter().map(|&(k, v)| (k.into(), v.into())).collect())).unwrap();
+                if d.renderer_ref().is_none() {
+                    eprintln!("no Vulkan device: {:?}", d.setting_notes());
+                    return;
+                }
+            }
+            if f == 9 {
+                d.set_settings(&Settings::from_pairs(off.iter().map(|&(k, v)| (k.into(), v.into())).collect())).unwrap();
+                assert!(d.renderer_ref().is_none() && d.setting_notes().is_empty());
+            }
+            Core::advance(&mut plain, &mut 0).unwrap();
+            Core::advance(&mut d, &mut 0).unwrap();
+            let (na, nb) = (plain.drain_audio(&mut pa, usize::MAX), d.drain_audio(&mut pb, usize::MAX));
+            assert!(pa[..na] == pb[..nb], "{case:?} frame {f}: the sound differs");
+            assert!(accurate(&mut plain) == accurate(&mut d), "{case:?} frame {f}: the machine differs");
+            let fi = d.frame_info();
+            assert_eq!(d.frame().len(), (fi.width * fi.height * 4) as usize);
+            if (4..9).contains(&f) && case.contains(&(RESOLUTION_KEY, "4")) {
+                assert_eq!((fi.width, fi.height), (4 * plain.frame_info().width, 4 * plain.frame_info().height), "{case:?} frame {f}");
+            }
+            if d.frame() != plain.frame() {
+                differed += 1;
+                assert!((3..10).contains(&f), "{case:?} frame {f}: the picture differs with the settings off");
             }
         }
-        if f == 9 {
-            d.set_settings(&Settings::from_pairs(vec![(PRECISION_KEY.into(), "false".into())])).unwrap();
-            assert!(d.pair_ref().is_none() && d.setting_notes().is_empty());
-        }
-        Core::advance(&mut plain, &mut 0).unwrap();
-        Core::advance(&mut d, &mut 0).unwrap();
-        let (na, nb) = (plain.drain_audio(&mut pa, usize::MAX), d.drain_audio(&mut pb, usize::MAX));
-        assert!(pa[..na] == pb[..nb], "frame {f}: the sound differs");
-        assert!(accurate(&mut plain) == accurate(&mut d), "frame {f}: the machine differs");
-        assert_eq!(d.frame().len(), (d.frame_info().width * d.frame_info().height * 4) as usize);
-        if d.frame() != plain.frame() {
-            differed += 1;
-            assert!((3..9).contains(&f), "frame {f}: the picture differs with the setting off");
-        }
+        // The program's triangle is untextured, which filtering alone leaves as the console draws it.
+        assert!(differed > 0 || case == [(FILTERING_KEY, "all")], "{case:?}: the picture never differed");
     }
-    assert!(differed > 0, "the precise triangle drew no pixel otherwise");
 }
 
-/// §24.2: where the renderer cannot be made, the setting is accepted, the machine runs as with it off, and the note
-/// says why; turned off, the note goes.
+/// §24.2, §42.1: where the renderer cannot be made, the settings are accepted, the machine runs as with them off, and
+/// each one set has the note saying why; turned off, the notes go.
 #[test]
-fn with_no_usable_device_the_setting_is_noted_and_the_console_picture_shown() {
+fn with_no_usable_device_the_settings_are_noted_and_the_console_picture_shown() {
     let (mut plain, mut d) = (create(&[]), create(&[]));
-    d.set_precise_on(true, Some("no device has this name"));
+    d.choose_on(Chosen { precise: true, options: diamond_renderer::Options { scale: 2, ..Default::default() } }, Some("no device has this name"));
     let notes = d.setting_notes();
-    assert!(d.pair_ref().is_none() && notes.len() == 1 && notes[0].0 == PRECISION_KEY && notes[0].1.contains("No usable Vulkan"), "{notes:?}");
+    assert!(d.renderer_ref().is_none() && notes.len() == 2 && notes[0].0 == PRECISION_KEY && notes[1].0 == RESOLUTION_KEY && notes[0].1.contains("No usable Vulkan"), "{notes:?}");
     for _ in 0..3 {
         Core::advance(&mut plain, &mut 0).unwrap();
         Core::advance(&mut d, &mut 0).unwrap();
     }
     assert!(d.frame() == plain.frame() && accurate(&mut d) == accurate(&mut plain));
-    d.set_precise_on(false, None);
+    d.choose_on(Chosen::default(), None);
     assert!(d.setting_notes().is_empty());
 }
 
-/// §24.4: with the setting on the state carries the two blocks, and loads on a machine with it off, which continues
-/// as the first; a state made with it off loads with it on.
+/// §24.4, §42.2: with every enhancement on the state carries the blocks, and loads on a machine with them off, which
+/// continues as the first; a state made with them off loads with them on.
 #[test]
-fn a_state_with_the_setting_on_loads_with_it_off_and_the_reverse() {
-    let mut on = create(&[(PRECISION_KEY, "true")]);
-    if on.pair_ref().is_none() {
+fn a_state_with_the_settings_on_loads_with_them_off_and_the_reverse() {
+    let mut on = create(&[(PRECISION_KEY, "true"), (RESOLUTION_KEY, "2"), (COLOUR_KEY, "true"), (FILTERING_KEY, "3d")]);
+    if on.renderer_ref().is_none() {
         eprintln!("no Vulkan device: {:?}", on.setting_notes());
         return;
     }

@@ -65,7 +65,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.All(system.Firmware, f => Assert.Equal("accuracy", f.Replacement?.Effect));
             Assert.Equal(new[] { (PsxSystem.DigitalPad, 14, 0), (PsxSystem.DualShock, 17, 4) }, system.Controllers.Select(c => (c.Id, c.Buttons.Count, c.Axes.Count)));
             Assert.Null(system.Controllers[1].Buttons.Single(b => b.Bit == 16).Control);
-            Assert.Equal(new[] { "region", "gpu", "pad1", "pad2", "tap1", "tap2", "card1", "card2", "precision" }, library.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { "region", "gpu", "pad1", "pad2", "tap1", "tap2", "card1", "card2", "precision", "resolution", "colour", "filtering" }, library.Settings.Select(s => s.Key));
 
             Assert.Equal("scph5501.bin", library.FirmwareFor(SyntheticPsExe.Build()).Single().Name);
             Assert.Equal("scph5500.bin", library.FirmwareFor(SyntheticPsxDisc.Build("Japan").DataTrack).Single().Name);
@@ -154,7 +154,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.All(PsxSystem.Entry.Extensions, e => Assert.True(CoreFactory.IsSupported("program" + e), e));
             Assert.Equal("PlayStation", CoreCatalog.ConsoleForRom(Write("program.bin", SyntheticPsxDisc.Build().DataTrack)));
             Assert.Contains("PlayStation", CoreCatalog.DiscoveredConsoles);
-            Assert.Equal(new[] { "region", "gpu", "pad1", "pad2", "tap1", "tap2", "card1", "card2", "precision" }, CoreCatalog.SettingsFor("PlayStation").Select(s => s.Key));
+            Assert.Equal(new[] { "region", "gpu", "pad1", "pad2", "tap1", "tap2", "card1", "card2", "precision", "resolution", "colour", "filtering" }, CoreCatalog.SettingsFor("PlayStation").Select(s => s.Key));
             var bios = CoreLibrary.Open(LibraryPath).Info.Systems.Single().Firmware;
             Assert.All(bios, f => Assert.Equal(("accuracy", false), (f.Replacement?.Effect, f.Required)));
         }

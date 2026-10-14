@@ -367,3 +367,12 @@ fn the_bench_discs_keep_their_goldens_at_2x_and_4x() {
     discs_at(Options { scale: 2, ..Options::default() }, "2x");
     discs_at(Options { scale: 4, ..Options::default() }, "4x");
 }
+
+/// The bench discs with every enhancement on, true colour and filtering among them, at 2x filtering 3D polygons and at
+/// 4x everything: every machine golden unchanged (§42.3).
+#[test]
+fn the_bench_discs_keep_their_goldens_with_every_enhancement() {
+    use diamond_renderer::Filter;
+    discs_at(Options { scale: 2, colour: true, filter: Filter::Polygons }, "2x-all");
+    discs_at(Options { scale: 4, colour: true, filter: Filter::All }, "4x-all");
+}

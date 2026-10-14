@@ -16,11 +16,17 @@ namespace EmuSen.WiseMan.Input
     // Runs only with EMUSEN_UINPUT_PADS=1 where /dev/uinput is writable, since the pads it makes are seen by every program on the desk.
     public sealed class UinputTheoryAttribute : TheoryAttribute
     {
-        public UinputTheoryAttribute()
-        {
-            if (Environment.GetEnvironmentVariable("EMUSEN_UINPUT_PADS") != "1") Skip = "Makes kernel pads through /dev/uinput; set EMUSEN_UINPUT_PADS=1 - see EmuSen_Input.md §8.12";
-            else if (UinputPad.Unavailable is { } why) Skip = why;
-        }
+        public UinputTheoryAttribute() => Skip = UinputFactAttribute.Why();
+    }
+
+    public sealed class UinputFactAttribute : FactAttribute
+    {
+        public UinputFactAttribute() => Skip = Why();
+
+        internal static string? Why() =>
+            Environment.GetEnvironmentVariable("EMUSEN_UINPUT_PADS") != "1"
+                ? "Makes kernel pads through /dev/uinput; set EMUSEN_UINPUT_PADS=1 - see EmuSen_Input.md §8.12"
+                : UinputPad.Unavailable;
     }
 
     // Real kernel pads plugged, pulled and plugged back under the real SDL layer, polled as Mistress polls, under each manager - see EmuSen_Input.md §8.12.
@@ -271,6 +277,39 @@ namespace EmuSen.WiseMan.Input
             rig.Expect(2, "slot 2 made");
             Assert.Equal((1, 2), (rig.PlayerAt(builtIn), rig.PlayerAt(xbox)));
             rig.Heard(xbox, 2);
+        }
+
+        // The pump and the flush on the poll's path allocate nothing, with a pad open and pressed between the calls.
+        [UinputFact]
+        public void The_pump_and_the_flush_allocate_nothing()
+        {
+            var pad = new UinputPad(Pad);
+            var sdl = new SdlPadDevices();
+            Assert.True(sdl.Init(), SDL.GetError());
+            try
+            {
+                Thread.Sleep(200);
+                sdl.Update();
+                IntPtr open = sdl.Open(sdl.Attached()[0]);
+                for (int i = 0; i < 100; i++) { sdl.DevicesChanged(); sdl.Update(); }
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                for (int i = 0; i < 1000; i++)
+                {
+                    pad.Press(UinputPad.South, (i & 1) == 0);
+                    sdl.DevicesChanged();
+                    sdl.Update();
+                }
+                long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                bool held = sdl.Button(open, SDL.GamepadButton.South);
+                sdl.Close(open);
+                Assert.Equal(0, allocated);
+                Assert.False(held);
+            }
+            finally
+            {
+                pad.Dispose();
+                sdl.Quit();
+            }
         }
 
         // SDL hides Steam's virtual pads unless told it runs under Steam, which Steam tells it through this variable; SDL reads the C environment.

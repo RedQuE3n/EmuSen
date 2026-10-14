@@ -433,3 +433,29 @@ fn the_fingerprint_is_the_tracks_the_lead_out_and_the_sectors_named() {
     assert_ne!(disc.fingerprint([4]), print);
     assert_ne!(Disc::<&[u8]>::from_image(&[0u8; RAW][..], IsoForm::Mode1).unwrap().fingerprint([]), 0, "never the empty drive's 0");
 }
+
+/// A WAVE file's header in front of the audio track's samples: an `AUDIO` track in a `WAVE` file reads as the same
+/// samples in a `BINARY` one, sector for sector, Q for Q, each placed past the header (EmuSen_Disc.md §11).
+#[test]
+fn a_wave_files_track_reads_as_the_raw_track_it_holds() {
+    let (d, a) = files();
+    let mut wave = b"RIFF\0\0\0\0WAVEfmt \x10\0\0\0\x01\0\x02\0\x44\xAC\0\0\x10\xB1\x02\0\x04\0\x10\0data".to_vec();
+    wave.extend_from_slice(&(a.len() as u32).to_le_bytes());
+    let head = wave.len() as u64;
+    wave.extend_from_slice(&a);
+    let sheet = TWO_FILES.replace("\"a.bin\" BINARY", "\"a.wav\" WAVE");
+    let mut w = Disc::from_sheet(&Sheet::parse(&sheet).unwrap(), vec![d, wave], IsoForm::Mode2Form1).unwrap();
+    let mut b = two_files();
+    assert_eq!((w.toc(), w.lead_out()), (b.toc(), b.lead_out()));
+    let (mut x, mut y) = ([0u8; RAW], [0u8; RAW]);
+    for s in 0..b.lead_out() + 10 {
+        assert_eq!((w.read(s, &mut x), w.subq(s)), (b.read(s, &mut y), b.subq(s)), "sector {s}");
+        assert_eq!(x, y, "sector {s}'s bytes");
+    }
+    let s = 150 + DATA + PAUSE;
+    assert_eq!(w.place(s), Some(Place { file: Some(1), offset: head + PAUSE as u64 * RAW as u64 }));
+    let mut short = TWO_FILES.replace("\"a.bin\" BINARY", "\"a.wav\" WAVE");
+    short.push('\n');
+    let (d, a) = files();
+    assert!(Disc::from_sheet(&Sheet::parse(&short).unwrap(), vec![d, a], IsoForm::Mode2Form1).is_err(), "a raw file named a WAVE one");
+}

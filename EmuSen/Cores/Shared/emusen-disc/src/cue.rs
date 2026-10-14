@@ -71,10 +71,20 @@ impl Track {
     }
 }
 
+/// A FILE line's type: raw sectors, or a RIFF WAVE file whose data chunk holds an audio track's samples.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FileKind {
+    #[default]
+    Binary,
+    Wave,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Sheet {
     /// Each FILE line's name, as written.
     pub files: Vec<String>,
+    /// Each file's type, in the same order.
+    pub kinds: Vec<FileKind>,
     pub tracks: Vec<Track>,
     pub catalog: Option<String>,
 }
@@ -121,10 +131,13 @@ impl Sheet {
                 "FILE" => {
                     let Some(name) = w.get(1) else { return fail(line, "FILE names no file") };
                     let kind = w.get(2).map(|k| k.to_ascii_uppercase());
-                    if !matches!(kind.as_deref(), Some("BINARY") | None) {
-                        return fail(line, &format!("FILE of type {} is not a raw image", kind.unwrap_or_default()));
-                    }
+                    let kind = match kind.as_deref() {
+                        Some("BINARY") | None => FileKind::Binary,
+                        Some("WAVE") => FileKind::Wave,
+                        Some(other) => return fail(line, &format!("FILE of type {other} is neither a raw image nor a WAVE file")),
+                    };
                     sheet.files.push((*name).to_owned());
+                    sheet.kinds.push(kind);
                 }
                 "TRACK" => {
                     if sheet.files.is_empty() {
@@ -133,6 +146,9 @@ impl Sheet {
                     let number = w.get(1).and_then(|t| t.parse::<u8>().ok()).filter(|&t| (1..=99).contains(&t));
                     let mode = w.get(2).and_then(|m| Mode::parse(m));
                     let (Some(number), Some(mode)) = (number, mode) else { return fail(line, "TRACK needs a number 1-99 and a known mode") };
+                    if sheet.kinds.last() == Some(&FileKind::Wave) && !mode.audio() {
+                        return fail(line, "a WAVE file holds only an audio track");
+                    }
                     if sheet.tracks.last().is_some_and(|t| t.number >= number) {
                         return fail(line, "tracks must be numbered upward");
                     }
@@ -207,7 +223,9 @@ mod tests {
         assert_eq!(Sheet::parse("TRACK 01 AUDIO\n").unwrap_err().line, 1);
         assert!(Sheet::parse("FILE a.bin BINARY\nTRACK 01 MODE3/2352\nINDEX 01 00:00:00\n").is_err());
         assert!(Sheet::parse("FILE a.bin BINARY\nTRACK 01 AUDIO\nINDEX 00 00:00:00\n").is_err(), "no INDEX 01");
-        assert!(Sheet::parse("FILE a.wav WAVE\nTRACK 01 AUDIO\nINDEX 01 00:00:00\n").is_err());
+        assert_eq!(Sheet::parse("FILE a.wav WAVE\nTRACK 01 AUDIO\nINDEX 01 00:00:00\n").unwrap().kinds, [FileKind::Wave]);
+        assert!(Sheet::parse("FILE a.wav WAVE\nTRACK 01 MODE1/2352\nINDEX 01 00:00:00\n").is_err(), "a WAVE file's track is audio");
+        assert!(Sheet::parse("FILE a.mp3 MP3\nTRACK 01 AUDIO\nINDEX 01 00:00:00\n").is_err());
         assert!(Sheet::parse("FILE a.bin BINARY\nTRACK 02 AUDIO\nINDEX 01 00:00:00\nTRACK 01 AUDIO\nINDEX 01 00:00:00\n").is_err());
     }
 }

@@ -30,6 +30,9 @@ pub const AUDIO_F32LE: i32 = 0x8120;
 pub const AUDIO_DEVICE_DEFAULT_PLAYBACK: u32 = 0xFFFF_FFFF;
 pub const EVENT_GAMEPAD_ADDED: u32 = 0x653;
 pub const EVENT_GAMEPAD_REMOVED: u32 = 0x654;
+/// The joystick and gamepad events, `SDL_EVENT_JOYSTICK_AXIS_MOTION` to the last before the touch events.
+pub const FIRST_PAD_EVENT: u32 = 0x600;
+pub const LAST_PAD_EVENT: u32 = 0x6FF;
 pub const HINT_AUDIO_DEVICE_SAMPLE_FRAMES: &str = "SDL_AUDIO_DEVICE_SAMPLE_FRAMES";
 
 macro_rules! functions {
@@ -77,7 +80,7 @@ functions! {
     gamepad_connected = "SDL_GamepadConnected": fn(*mut c_void) -> bool;
     has_events = "SDL_HasEvents": fn(u32, u32) -> bool;
     flush_events = "SDL_FlushEvents": fn(u32, u32);
-    update_gamepads = "SDL_UpdateGamepads": fn();
+    pump_events = "SDL_PumpEvents": fn();
     get_gamepad_button = "SDL_GetGamepadButton": fn(*mut c_void, c_int) -> bool;
     get_gamepad_axis = "SDL_GetGamepadAxis": fn(*mut c_void, c_int) -> i16;
     get_gamepad_name = "SDL_GetGamepadName": fn(*mut c_void) -> *const c_char;

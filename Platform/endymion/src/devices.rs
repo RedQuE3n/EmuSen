@@ -20,8 +20,9 @@ pub trait PadDevices: Send {
     fn open(&mut self, id: u32) -> Handle;
     fn close(&mut self, pad: Handle);
     fn is_attached(&mut self, pad: Handle) -> bool;
-    /// True once for each batch of added and removed pads, which it consumes.
+    /// True once for each batch of added and removed pads; it consumes every pad event the devices queued.
     fn devices_changed(&mut self) -> bool;
+    /// Brings the pads' state up to date and lets the devices learn of a pad plugged in.
     fn update(&mut self);
     fn button(&mut self, pad: Handle, button: i32) -> bool;
     fn axis(&mut self, pad: Handle, axis: i32) -> i16;
@@ -91,16 +92,18 @@ impl PadDevices for SdlPads {
         unsafe { (self.sdl.f.gamepad_connected)(Self::pad(pad)) }
     }
 
+    /// Every joystick and gamepad event is flushed, not only the two asked about: nothing else in the process reads
+    /// them, and a queue left to fill drops the added events with the rest. See EmuSen_Input.md §8.12.
     fn devices_changed(&mut self) -> bool {
         let changed = unsafe { (self.sdl.f.has_events)(sdl::EVENT_GAMEPAD_ADDED, sdl::EVENT_GAMEPAD_REMOVED) };
-        if changed {
-            unsafe { (self.sdl.f.flush_events)(sdl::EVENT_GAMEPAD_ADDED, sdl::EVENT_GAMEPAD_REMOVED) };
-        }
+        unsafe { (self.sdl.f.flush_events)(sdl::FIRST_PAD_EVENT, sdl::LAST_PAD_EVENT) };
         changed
     }
 
+    /// Pumped rather than `SDL_UpdateGamepads`: under udev SDL reads the hot-plug monitor only in its event pump, which
+    /// updates the gamepads too. See EmuSen_Input.md §8.12.
     fn update(&mut self) {
-        unsafe { (self.sdl.f.update_gamepads)() }
+        unsafe { (self.sdl.f.pump_events)() }
     }
 
     fn button(&mut self, pad: Handle, button: i32) -> bool {

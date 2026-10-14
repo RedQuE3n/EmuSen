@@ -1,84 +1,174 @@
 //! Diamond on the core ABI v1 as the host sees it: the machine's `Core` passed on call by call, with the enhancements
-//! the machine itself never reads. "Precise geometry" attaches the precision layer paired with the renderer between
-//! frames, and the frame given to the host is then the renderer's picture (Diamond_Enhancements.md §24).
+//! the machine itself never reads. "Internal resolution", "True colour" and "Texture filtering" attach the renderer,
+//! and "Precise geometry" pairs it with the precision layer, between frames; the frame given to the host is then the
+//! renderer's picture (Diamond_Enhancements.md §24, §42).
 
 use std::any::Any;
 
-use diamond_renderer::Renderer;
+use diamond_renderer::{Filter, Options, Renderer};
 use emusen_native::core::*;
 use emusen_native::ffi::StateMachine;
+use machine::layer::Layer;
 use machine::machine::Machine;
 use machine::state::StateError;
 use machine::v1::{Enhancement, Values};
 use precision::{Precise, Precision};
 
 pub const PRECISION_KEY: &str = "precision";
+pub const RESOLUTION_KEY: &str = "resolution";
+pub const COLOUR_KEY: &str = "colour";
+pub const FILTERING_KEY: &str = "filtering";
 
 /// Diamond_Plan.md §11 Q14's setting, as Diamond_Enhancements.md §24.2 words it.
 pub const PRECISE_GEOMETRY: Enhancement = Enhancement {
     key: PRECISION_KEY,
     label: "Precise geometry",
     help: "Draws the picture on the graphics card with each 3D corner where the game's geometry puts it, between the pixels, and textures in perspective, so that polygons stop wobbling and textures stop bending as they move. The game itself runs exactly as on a console; only the picture shown is drawn otherwise.",
-    cost: "Needs a Vulkan graphics card, and takes some of its time and about half a millisecond of the processor's each frame; save states are about twice the size. Corners a game moves itself, as in most 2D menus and overlays, stay on whole pixels, and an outline's top and left edges stay on the console's line.",
+    cost: "Needs a Vulkan graphics card, and takes some of its time and about half a millisecond of the processor's each frame; the picture is shown a frame later, and save states are about twice the size. Corners a game moves itself, as in most 2D menus and overlays, stay on whole pixels, and an outline's top and left edges stay on the console's line.",
     values: Values::Switch,
 };
 
+/// Mars's label and kind of choice for the same fact (MarsCore.cs' RenderScale), Diamond_Enhancements.md §39.
+pub const INTERNAL_RESOLUTION: Enhancement = Enhancement {
+    key: RESOLUTION_KEY,
+    label: "Internal resolution",
+    help: "Draws the picture on the graphics card at a multiple of the console's resolution, so that 3D edges and textures are finer on a large screen; sprites, text and 2D backgrounds stay on the console's pixels, enlarged. The game itself runs exactly as on a console.",
+    cost: "Needs a Vulkan graphics card; each step costs its square in the card's work and memory (2x is four times the drawing, 4x sixteen), the picture is shown a frame later, and save states grow, to about 47 MB at 4x. A CRT filter draws the enlarged picture's lines rather than the console's, and effects a game makes by reading the screen back through the processor stay at the console's resolution.",
+    values: Values::Choice(&[("1", "1x (the console's)"), ("2", "2x"), ("3", "3x"), ("4", "4x")]),
+};
+
+/// Diamond_Enhancements.md §40.
+pub const TRUE_COLOUR: Enhancement = Enhancement {
+    key: COLOUR_KEY,
+    label: "True colour",
+    help: "Draws shading, lighting and see-through effects with eight bits a colour where the console keeps five, and without the console's dither, so that gradients, fog and shadows are smooth instead of grainy.",
+    cost: "Needs a Vulkan graphics card and a little more of its time and memory; the picture is shown a frame later, and save states grow. Games whose art relies on the console's dither, such as a grainy sky or fog, look smoother than they were made to.",
+    values: Values::Switch,
+};
+
+/// Diamond_Enhancements.md §41.
+pub const TEXTURE_FILTERING: Enhancement = Enhancement {
+    key: FILTERING_KEY,
+    label: "Texture filtering",
+    help: "Smooths textures between their texels instead of showing each as a block: on 3D surfaces alone, leaving sprites, text and menus sharp, or on everything. Cut-out shapes keep the console's edges.",
+    cost: "Needs a Vulkan graphics card and a little of its time; the picture is shown a frame later. Pixel art on 3D surfaces softens; with Everything, sprites and text blur once the internal resolution is above 1x; where a game packs its textures tightly an edge can show a trace of its neighbour.",
+    values: Values::Choice(&[("off", "Off (the console's)"), ("3d", "3D polygons"), ("all", "Everything")]),
+};
+
 /// The enhancements this library offers, each its own setting (Diamond_Plan.md §6.2).
-pub const ENHANCEMENTS: &[Enhancement] = &[PRECISE_GEOMETRY];
+pub const ENHANCEMENTS: &[Enhancement] = &[PRECISE_GEOMETRY, INTERNAL_RESOLUTION, TRUE_COLOUR, TEXTURE_FILTERING];
+
+/// The enhancements as set: precise geometry, and the renderer's options.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Chosen {
+    precise: bool,
+    options: Options,
+}
+
+impl Chosen {
+    /// Whether the renderer draws the picture at all: any enhancement not at the hardware's value.
+    fn drawn(&self) -> bool {
+        *self != Chosen::default()
+    }
+
+    /// The keys of the enhancements not at the hardware's value, which a note about the renderer belongs to.
+    fn keys(&self) -> Vec<&'static str> {
+        let o = self.options;
+        [(self.precise, PRECISION_KEY), (o.scale != 1, RESOLUTION_KEY), (o.colour, COLOUR_KEY), (o.filter != Filter::Off, FILTERING_KEY)].iter().filter(|k| k.0).map(|k| k.1).collect()
+    }
+
+    /// The settings' values over these, each key given; a value the schema checked.
+    fn with(mut self, settings: &Settings) -> Chosen {
+        if let Some(v) = settings.get(PRECISION_KEY) {
+            self.precise = v == "true";
+        }
+        if let Some(v) = settings.get(RESOLUTION_KEY) {
+            self.options.scale = v.parse().unwrap_or(1);
+        }
+        if let Some(v) = settings.get(COLOUR_KEY) {
+            self.options.colour = v == "true";
+        }
+        if let Some(v) = settings.get(FILTERING_KEY) {
+            self.options.filter = match v {
+                "3d" => Filter::Polygons,
+                "all" => Filter::All,
+                _ => Filter::Off,
+            };
+        }
+        self
+    }
+}
 
 pub struct Diamond {
     machine: Machine,
-    /// Why "Precise geometry" is on but not drawn, or drawn slowly, for `setting_notes`.
+    chosen: Chosen,
+    /// Why the enhancements are set but not drawn, or drawn slowly, for `setting_notes`.
     note: Option<String>,
 }
 
 impl Diamond {
-    fn pair(&mut self) -> Option<&mut Precise<Renderer>> {
+    /// The renderer attached, alone or paired with the precision layer.
+    fn renderer(&mut self) -> Option<&mut Renderer> {
         let layer: &mut dyn Any = self.machine.layer()?;
-        layer.downcast_mut()
+        if layer.is::<Renderer>() {
+            return layer.downcast_mut();
+        }
+        layer.downcast_mut::<Precise<Renderer>>().map(|p| &mut p.drawer)
     }
 
-    fn pair_ref(&self) -> Option<&Precise<Renderer>> {
+    fn renderer_ref(&self) -> Option<&Renderer> {
         let layer: &dyn Any = self.machine.layer_ref()?;
-        layer.downcast_ref()
+        if layer.is::<Renderer>() {
+            return layer.downcast_ref();
+        }
+        layer.downcast_ref::<Precise<Renderer>>().map(|p| &p.drawer)
     }
 
-    /// "Precise geometry" on or off, between frames: the pair attached and its first picture read, or detached; with no
-    /// usable Vulkan device the machine is left as off and the reason kept for the note (§24.2).
-    fn set_precise(&mut self, on: bool) {
-        self.set_precise_on(on, None);
+    /// The enhancements set between frames (§42.1): with all at the hardware's values the machine's own picture; else
+    /// the renderer, kept across the change and rebuilt for new options, attached alone or paired with the precision
+    /// layer, which seeds it from the machine. With no usable Vulkan device the machine is left as off and the reason
+    /// kept for the note (§24.2).
+    fn choose(&mut self, chosen: Chosen) {
+        self.choose_on(chosen, None);
     }
 
-    /// `set_precise` on the device `device` names a part of, `EMUSEN_GPU_DEVICE`'s or the first usable without one.
-    fn set_precise_on(&mut self, on: bool, device: Option<&str>) {
-        if !on {
-            self.machine.detach();
-            self.note = None;
+    /// `choose` on the device `device` names a part of, `EMUSEN_GPU_DEVICE`'s or the first usable without one.
+    fn choose_on(&mut self, chosen: Chosen, device: Option<&str>) {
+        if chosen == self.chosen && (self.renderer_ref().is_some() || self.note.is_some()) {
             return;
         }
-        if self.pair_ref().is_some() {
+        let kept = self.machine.detach().and_then(|layer| {
+            let layer: Box<dyn Any> = layer;
+            match layer.downcast::<Renderer>() {
+                Ok(r) => Some(*r),
+                Err(layer) => layer.downcast::<Precise<Renderer>>().ok().map(|p| p.drawer),
+            }
+        });
+        self.chosen = chosen;
+        self.note = None;
+        if !chosen.drawn() {
             return;
         }
-        match Renderer::new(device) {
+        let made = match kept {
+            Some(mut r) => r.configure(chosen.options).map(|_| r),
+            None => Renderer::with(device, chosen.options),
+        };
+        match made {
             Ok(r) => {
                 self.note = r.software().then(|| format!("Drawn by {}, a Vulkan the processor runs, since no graphics card was found: the picture is the same, but slow.", r.report()));
-                self.machine.attach(Box::new(Precise::new(Precision::default(), r.keeping())));
-                self.picture();
+                let r = r.keeping(chosen.precise);
+                let layer: Box<dyn Layer> = if chosen.precise { Box::new(Precise::new(Precision::default(), r)) } else { Box::new(r) };
+                self.machine.attach(layer);
             }
-            Err(why) => {
-                self.machine.detach();
-                self.note = Some(format!("No usable Vulkan graphics card was found ({why}), so the console's own picture is shown."));
-            }
+            Err(why) => self.note = Some(format!("No usable Vulkan graphics card was found ({why}), so the console's own picture is shown.")),
         }
     }
 
-    /// The renderer's picture drawn and read back, when it is attached and rendering is not skipped.
-    fn picture(&mut self) {
-        if self.machine.skip {
-            return;
-        }
-        if let Some(p) = self.pair() {
-            p.drawer.picture();
+    /// The frame's work sent to the device, and the picture of the frame before handed to the host (§38.1); also when
+    /// rendering is skipped, since the renderer must keep step.
+    fn frame_end(&mut self) {
+        if let Some(r) = self.renderer() {
+            r.frame_end();
         }
     }
 
@@ -92,7 +182,6 @@ impl StateMachine for Diamond {
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), StateError> {
         self.machine.load_state(data)?;
-        self.picture();
         Ok(())
     }
 
@@ -131,18 +220,23 @@ impl Core for Diamond {
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        let mut d = Diamond { machine: Machine::create(request)?, note: None };
-        d.set_precise(request.settings.get(PRECISION_KEY) == Some("true"));
+        let mut d = Diamond { machine: Machine::create(request)?, chosen: Chosen::default(), note: None };
+        d.choose(Chosen::default().with(&request.settings));
         Ok(d)
     }
 
+    /// The machine's, with the largest picture the largest internal resolution makes, which a host may size its buffer
+    /// from once (§39.4).
     fn machine_info(&self) -> MachineInfo {
-        self.machine.machine_info()
+        let mut info = self.machine.machine_info();
+        info.video.max_width *= diamond_renderer::device::MAX_SCALE;
+        info.video.max_height *= diamond_renderer::device::MAX_SCALE;
+        info
     }
 
     fn advance(&mut self, detail: &mut u64) -> Result<(), i32> {
         Core::advance(&mut self.machine, detail)?;
-        self.picture();
+        self.frame_end();
         Ok(())
     }
 
@@ -155,9 +249,9 @@ impl Core for Diamond {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        match self.pair_ref() {
-            Some(p) => {
-                let (_, w, h) = p.drawer.last_picture();
+        match self.renderer_ref() {
+            Some(r) => {
+                let (_, w, h) = r.handed();
                 FrameInfo { aspect_num: 4, aspect_den: 3, ..FrameInfo::rgba(w as i32, h as i32) }
             }
             None => self.machine.frame_info(),
@@ -165,8 +259,8 @@ impl Core for Diamond {
     }
 
     fn frame(&self) -> &[u8] {
-        match self.pair_ref() {
-            Some(p) => p.drawer.last_picture().0,
+        match self.renderer_ref() {
+            Some(r) => r.handed().0,
             None => self.machine.frame(),
         }
     }
@@ -221,14 +315,12 @@ impl Core for Diamond {
 
     /// Run-scope keys only reach here, checked against the schema: the machine's own are all read at create.
     fn set_settings(&mut self, settings: &Settings) -> Result<(), i32> {
-        if let Some(v) = settings.get(PRECISION_KEY) {
-            self.set_precise(v == "true");
-        }
+        self.choose(self.chosen.with(settings));
         Ok(())
     }
 
     fn setting_notes(&self) -> Vec<(String, String)> {
-        self.note.iter().map(|n| (PRECISION_KEY.to_owned(), n.clone())).collect()
+        self.note.iter().flat_map(|n| self.chosen.keys().into_iter().map(move |k| (k.to_owned(), n.clone()))).collect()
     }
 
     fn debug_hooks(&mut self) -> Option<&mut emusen_native::debug::Hooks> {
@@ -241,7 +333,7 @@ impl Core for Diamond {
 
     fn debug_run_frame(&mut self, flags: u32, detail: &mut u64) -> Result<u32, i32> {
         let why = self.machine.debug_run_frame(flags, detail)?;
-        self.picture();
+        self.frame_end();
         Ok(why)
     }
 

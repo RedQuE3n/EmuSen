@@ -45,7 +45,8 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   item by item, the PlayStation offered to players, and what waits; and §12.8 (2026-10-12), launch time, the disc read
   in place (minor 1.3) and the drive's place named ahead (minor 1.4, §12.8.10), every run under the 90 MiB/s cap; and
   §15 (2026-10-13), "Precise geometry" as players meet it: where the switch is, its cost, without a graphics card,
-  states, and what to expect by game.
+  states, and what to expect by game; and §16 (2026-10-14), internal resolution, true colour and texture filtering, the
+  frame of latency every enhancement now has, and which suit the handheld.
 - [`Diamond_Speed.md`](Diamond_Speed.md) — the exact levers, written 2026-10-12 at stage 13: the bench of the seven copied
   discs on the open kernel and the link's placement as a source of error, the profile that put idle skipping before the
   plan's other levers, the skipper's proof, window, skip and verifier with the loop forms of `programs/idle.s`, the
@@ -80,7 +81,14 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   precise triangle also covering what the console's own covers, with a mark a pixel in the renderer's mirror and its
   state so that an edge two precise polygons share stays where E4 drew it, and a semi-transparent polygon filled only
   over an opaque one's fill; the forms tried with both sides' numbers, the grid's edges, the eight discs, the defect
-  found on Silent Hill and fixed, the decision and the outline's cost put to the tester, the gate and the cost.
+  found on Silent Hill and fixed, the decision and the outline's cost put to the tester, the gate and the cost. Stage
+  E5, 2026-10-14 (§37 to §51): its design committed first; the speed work (the picture handed a frame late, the
+  stretches by row parity, the plain frame for a renderer alone) with Tekken 3's fights from +1.60 to +0.63 ms;
+  internal resolution at 1× to 4× (where a sample lies, each record's form, a texture read from what was drawn, the
+  picture handed at the scale, a coordinate that wrapped found and fixed, the crack fill at N×), true colour as a plane
+  of low bits, texture filtering with sprites kept crisp, the four settings, the state kept at N× against the seeded
+  form measured and a change to the kit proposed, the gate, the pictures and their defects, the cost at each scale and
+  the handheld estimated from the tester's play.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

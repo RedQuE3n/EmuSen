@@ -172,7 +172,7 @@ impl Machine {
                 None
             };
             let mut w = Watch { hooks: &mut d.hooks, skip, window, called: false, returned: false, abandon: d.calling, ahead };
-            let step = if self.board.gpu.layer.is_some() {
+            let step = if self.board.gpu.layer.moves() {
                 step_on::<_, crate::layer::Layered>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut w)
             } else {
                 step_on::<_, crate::layer::Plain>(&mut self.cpu, &mut self.board, &mut self.exe, self.kernel, &mut w)

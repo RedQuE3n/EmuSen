@@ -108,7 +108,7 @@ fn main() {
     }
     let base = m.frames;
     if args.iter().any(|a| a == "--renderer") {
-        let r = diamond_renderer::Renderer::new(None).unwrap_or_else(|e| {
+        let r = diamond_renderer::Renderer::with(None, drawing(&args)).unwrap_or_else(|e| {
             eprintln!("no renderer: {e}");
             std::process::exit(2)
         });
@@ -116,12 +116,12 @@ fn main() {
         m.attach(Box::new(r));
     }
     if args.iter().any(|a| a == "--precise") {
-        let r = diamond_renderer::Renderer::new(None).unwrap_or_else(|e| {
+        let r = diamond_renderer::Renderer::with(None, drawing(&args)).unwrap_or_else(|e| {
             eprintln!("no renderer: {e}");
             std::process::exit(2)
         });
         eprintln!("[precise geometry on {}]", r.report());
-        m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r.keeping())));
+        m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r.keeping(true))));
     }
     if args.iter().any(|a| a == "--precision") {
         m.attach(Box::new(precision::Precise::new(precision::Precision::default(), Unseen)));
@@ -737,4 +737,17 @@ impl Profile {
             eprintln!("[pending {k:03X}h: {} exceptions; min/median/max cycles to user code {}, to the acknowledgement {}, to the return {}]", of.len(), stat(&|d| d.2), stat(&|d| d.3), stat(&|d| Some(d.4)));
         }
     }
+}
+
+/// The renderer's options from `--scale N`, `--colour` and `--filter 3d|all` (Diamond_Enhancements.md §39 to §41).
+fn drawing(args: &[String]) -> diamond_renderer::Options {
+    use diamond_renderer::Filter;
+    let flag = |name: &str| args.iter().position(|a| a == name).map(|i| args[i + 1].clone());
+    let filter = match flag("--filter").as_deref() {
+        None | Some("off") => Filter::Off,
+        Some("3d") => Filter::Polygons,
+        Some("all") => Filter::All,
+        Some(other) => panic!("--filter {other}: off, 3d or all"),
+    };
+    diamond_renderer::Options { scale: flag("--scale").map_or(1, |s| s.parse().expect("a scale")), colour: args.iter().any(|a| a == "--colour"), filter }
 }

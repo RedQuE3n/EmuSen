@@ -1,4 +1,4 @@
-# Diamond_Enhancements — the enhancement layer, stages E1, E3 and E4
+# Diamond_Enhancements — the enhancement layer, stages E1 and E3 to E5
 
 *Written 2026-10-13, at stage E1 of `Diamond_Plan.md` §7, with the tester's go of the same day for precise geometry
 and a shared GPU crate.* E1 builds the frame every enhancement of the plan's §6.3 will stand in, and the proof that the
@@ -18,6 +18,11 @@ decided and committed before any of its code.
 *The crack fill, the same day* (§32 on): the cracks precise geometry left between polygons, reported by the tester
 from the handheld, reproduced, counted and classified; the fill that closes them, a precise polygon also drawn
 wherever the console's own is; its measurement on both sides, the decision, the gate and the cost.
+
+*Stage E5, 2026-10-14* (§37 on): the picture's wait taken off the emulation thread and the renderer's planning made
+cheaper, then internal resolution, true colour and texture filtering, each a setting of its own beside "Precise
+geometry". §37 to §42 are its design, decided and committed before any of its code; §43 to §51 what was built,
+the gate, the pictures, the cost and what is left.
 
 The marks are the plan's: **[M]** measured on 2026-10-13 on the desktop (Ryzen 7 7700X, Fedora 44, Rust nightly
 2026-10-01), with the tool named; **[R]** read from a source, named; **[A]** argued, with no measurement behind it;
@@ -2195,3 +2200,819 @@ of `diamond`, `layer.rs`' interface, `gpu/decode.rs`, `gpu/raster.rs`' setup and
 `gpu/vram.rs`' rectangles, `gpu/display.rs`' scan, the state writer's layout, `tests/precise.rs`, `tests/support/`,
 `examples/run.rs` and `examples/bench.rs`; `blackmoon-r3000`'s moves and `blackmoon-gte`'s projection; `diamond-v1`'s
 setting; WiseMan's `DiamondPreciseGeometryTests.cs`; E4's measurement scripts in the probe.
+
+---
+
+## 37. Stage E5: what it must do, decided before it was built
+
+*Written 2026-10-14, before any of E5's code, after the tester's go of 2026-10-13.* The plan's row: "Internal
+resolution, true colour, texture filtering. Gate: each on the bench discs at 2× and 4×, its cost measured on the
+desktop, the laptop and the handheld; framebuffer-as-texture effects checked on the bench." The tester set the order:
+speed before features, since E4 measured the picture's wait as most of the renderer's cost and estimated it at about
+10 ms a frame on the handheld in Tekken 3's interlaced fights (§27.4); then the three features, each its own setting
+under Enhancements; the laptop of the row is not part of this stage. The seams are handled by the crack fill (§33),
+which at N× must scale with the rest (§38.7). The plan's rules (§6.2 there) stand unchanged: off is the accurate path
+to the bit; the software rasteriser keeps VRAM, the renderer owns only the presented picture; each enhancement is a
+setting with `effect: enhancement`, its `hardware` value the default and a cost in a player's words; states stay
+compatible.
+
+What was known before any change [M, the bench on WiseMan 137a039a, `--precise`, the RX 6800]: in Tekken 3's fights
+(frames 7,500 to 10,500 of the run to 10,500) the renderer made 110,557 stretches over the 10,500 frames, **96,170 of
+them ended by a display line** whose pixels met what the stretch had drawn, 3,866 by a copy, and none of the rest by a
+palette, a transfer or a texel more than a dozen times; it loaded 840,946 palettes and waited 1.07 ms a frame for the
+picture. Crash Bandicoot's first 3,000 frames made 3,003 stretches, one a frame, three of them ended by anything but
+the frame. So the fights' stretches are the display's: at 480 interlaced lines the game draws the field the display is
+not reading into the very rows-of-blocks the display reads the other field from, and the stretch's written set, kept in
+blocks of 16 by 16, cannot tell an odd row from an even one.
+
+## 38. Speed first [C]
+
+### 38.1 The picture handed a frame late, and the machine never waiting
+
+**The form.** At the end of each frame's `advance` the renderer submits everything planned in the frame as the
+device's one pending submission (`emusen-gpu`'s `submit_pending`, `EmuSen_Gpu.md` §3; Mars's form, `Mars_Gpu.md`
+§14.2), ending with a copy of its picture into one of two host-visible picture slots, the frame's parity choosing
+which. The host is handed the other slot: **the picture as it stood at the end of the frame before.** The submission
+of the frame after waits for this one before it records, which is the only wait left on the emulation thread, and it
+falls a whole emulated frame after the submission it waits for (2 to 5 ms on the desktop, about 16.7 in play), where the
+device's drawing took 0.13 to 0.98 ms (§27.3): it waits only when the device cannot keep up with the machine at all.
+
+- **Which picture, and the rule.** Always the previous frame's, never "the newest one finished": a picture chosen by
+  what the device happened to finish would make two identical runs hand different pictures, and the kit's C8 forbids
+  that. The latency is exactly one frame, at every frame, at every scale.
+- **What the host waits for.** Nothing. The picture handed is in host memory before `advance` returns, since the
+  submission that wrote it has been waited for by then.
+- **The host's staging, twice.** The staged arrays (records, tile entries, tiles, palette loads, lines, transfer
+  pixels) are host buffers the pending submission copies from; the host writes the next frame's into a second set
+  while the first is in flight, and the two alternate at each submission, a submission made when an array fills
+  mid-frame included. The device's copies of them stay single: every command ends in a barrier whose second scope is
+  everything later on the queue (§14.2 of `Mars_Gpu.md`), so the next submission's copies wait for this one's walk.
+- **Waited submissions stay** for whoever asks for the picture or VRAM now: the gates, the tools, `settle` before a
+  save, and a seed. Each first waits for the pending submission.
+- **The kit's cases that compare pictures** (C7 and C8: a machine given another's state continues as it, picture for
+  picture, from its first frame). After a load the first picture handed must be the one the saver hands after its
+  next frame: the picture as it stood when the state was saved. `RNDR` already holds the picture read back by
+  `settle` after everything planned is drawn, which is exactly that picture; a seed from a state therefore puts it in
+  the slot the next frame hands. So the kit's cases need no change, and C8's two machines hand the same pictures
+  because both hand the frame before. A seed from the machine (attaching, or a state with no block) puts the GPU's
+  own picture there: the first frame after turning an enhancement on shows the console's picture of the frame before,
+  as a frontend that presents a frame late would.
+- **Rendering skipped** (`set_options` bit 0): the frame's work is submitted all the same, since the mirror must stay
+  in step, and only the host does not look; skipping saves nothing here but was never a saving for the renderer.
+
+The cost of a frame of latency is a frame of latency, about 17 ms at 60 frames a second, added only while the renderer
+draws the picture. It is stated in every setting's cost. A waited form beside it, a choice of latency for a player
+whose device is fast, was considered and not built: the C# frontends present a frame late already when their deferred
+presentation is on (Mars's `DeferredPresentation`), and §15 Q12 of `EmuSen_CoreAPI.md` puts such a choice under
+`effect: latency`, a setting of its own, which this stage does not need to decide.
+
+### 38.2 Stretches: the written set by row parity
+
+A display line at row `y` ends its stretch only when the stretch has drawn into the blocks of row `y`. **The written set
+is kept twice, once for the even rows and once for the odd** [C]: a record that leaves the interlaced field's lines
+alone (`SKIP`, a polygon, rectangle, line or fill drawn with drawing to the displayed field prohibited) marks only the
+set of the parity it draws; every other record, transfer and copy marks both. A display line asks only the set of its
+own row's parity; a palette load and a record's texels ask the union, as before. The dependency is unchanged and only
+finer, so the pictures are those of the coarser planning, which the gates hold (§42). Predicted: Tekken 3's fights fall
+from about 10.5 stretches a frame to about 1.4, and the fights' wait with them.
+
+**Palette loads are not reduced** [C, to be revisited by measurement]. A load is one workgroup at its stretch's start,
+and a stretch's loads are one dispatch; after the parity split the fights' 80 loads a frame should share one or two
+dispatches. Sharing a slot between two loads of one palette would need every write since the first load checked
+against it; it is built only if the fights' wait, measured after §38.1 and this, still shows the loads.
+
+### 38.3 The plain frame for a renderer alone: `Layer::moves`
+
+A layer says whether it wants the processor's moves and the GTE's projections: `Layer::moves`, `true` by default, which
+E1's test observer and the precision layer keep; the renderer answers `false`. `Attached` reads it once, when the layer
+is set, and `Machine::advance` takes the layered frame only for a layer that wants it. The GP0 receipts and the GPU's
+own events are told in both frames, as they always were. This saves §18.3's middle column, 0.04 to 0.15 ms a frame,
+whenever internal resolution, true colour or filtering is on without precise geometry. It is an addition to a trait the
+machine crate owns, with a default, and changes nothing a layer already did.
+
+## 39. Internal resolution [C]
+
+### 39.1 Where an N× sample lies
+
+At N× the mirror holds `1024N × 512N` samples, a 32-bit word each as at 1× (the console's halfword low, the crack
+fill's mark high, §33.3), and the console's pixel `(x, y)` is the block of samples `(Nx + i, Ny + j)`, `0 ≤ i, j < N`.
+
+- **Coverage is tested at the point `(x + i/N, y + j/N)`**, the console's own grid refined: the block's first sample is
+  the console's point, so a block's first sample is covered exactly when the console covers the pixel, and a primitive
+  with whole-pixel edges (a sprite, a rectangle, a quad of integer vertices, a fill)
+  covers whole blocks exactly. 2D stays aligned: a quad and a rectangle of the same corners cover the same samples, and
+  every UI drawn either way lands on the console's pixel grid scaled. A sample centred in its block (`x − 1/2 +
+  (i + 1/2)/N`) was set aside: whole-pixel edges would cut every block in half, and a sprite of quads would sit half a
+  pixel from the same sprite of rectangles.
+- **Colours and texture coordinates are evaluated at the block's centre about the console's point**, `(x + (i + 1/2)/N
+  − 1/2, …)`: the N² samples of a pixel are centred on the point where the console evaluated the pixel, so a texture
+  drawn one texel a pixel (a sprite of quads, a menu, a font) shows each texel as a whole block, crisp, the console's
+  texel in every sample of it, and never the texel past its edge (§26.3's case cannot arise at one texel a pixel: the
+  last block's coordinate stays under the last texel by `(N + 1)/(2N)` of a texel). Smooth shading and minified textures
+  gain the samples between.
+- **In 256ths of a pixel**, the units of the precise record (§22.2), the coverage point is `256X/N`, a whole number only
+  for N of 1, 2 and 4; the edge functions are therefore evaluated multiplied by N, `dX·(256Y − N·aY) − dY·(256X −
+  N·aX)`, exact in the pairs of 32-bit words E4 already uses (at 4× they reach 2⁴⁰), against the same bound of 0 or 1,
+  since multiplying by N keeps a sign and keeps "greater than zero". The attribute point is rounded to the nearest 256th
+  (at 3× a 768th of a pixel at most, far below any attribute's step). At N = 1 every formula is E3's and E4's.
+
+### 39.2 Each kind of record at N×
+
+| Record | At N× |
+|---|---|
+| Triangle, integer vertices | the console's edge functions at the N× coverage point, its gradients at the attribute point; at 1× E3's arithmetic. E4's suggestion to send every integer triangle through the precise record was weighed: the same evaluation, but a precise record writes marks (§33.3), which an integer polygon must not, so the integer record is kept and taught N |
+| Precise triangle | its fine edge functions at the coverage point, its interpolants and its division a pixel at the attribute point, its texel hold as at 1× |
+| Rectangle (a sprite) | the console's pixel, its texel and its pairs rule, in every sample of the block: a sprite is a texel a pixel by definition and is scaled, never resampled |
+| Line | the console's pixels, each a block: a line's pixels are its stepping, and a frame of lines must still meet the rectangles and sprites it encloses; a line keeps the console's jaggedness, scaled |
+| Fill | the console's rectangle scaled, its skipped lines by the console's row |
+| CPU-to-VRAM transfer | each pixel a block, under the mask bit per sample |
+| VRAM-to-VRAM copy | the N× rectangle copied sample for sample, so a copy of something drawn keeps its detail; overlapping copies in steps of `N·d` rows, `vram.rs`'s row order scaled |
+| Palette load | the first sample of each entry's block, the console's point |
+| Display line | N rows of the picture from N rows of the mirror (§39.4) |
+
+**Dither at N×** stays the console's matrix by the console's pixel, so a dithered surface shows the console's pattern
+scaled; true colour (§40) is the remedy for a player who does not want it, and keeping the two apart keeps each
+setting's effect what it says.
+
+**The mask bit and semi-transparency per sample**: each sample is read, tested and blended for itself, as each pixel is
+at 1×; a primitive drawn over a half-masked block draws the unmasked samples.
+
+### 39.3 A texture read from what was drawn
+
+The console textures from VRAM, and VRAM is where it draws: a texture page can be a picture the game drew (a screen
+copied and drawn back distorted, a reflection, a menu's blurred backdrop, a battle's swirl). At N× the renderer's mirror
+holds that picture at N×, so:
+
+- **A 15-bit texel is read at the sample its coordinate falls in**: column `N·page_x + ⌊(u + 1/2)·N⌋` and the like for
+  v, where `u` is the interpolated coordinate before the console's rounding, `⌊u + 1/2⌋` the texel the console reads.
+  Within the texel the sample is chosen by the fraction, so the drawn picture is read back at N× with no seam between
+  texels (the column is continuous and increasing in `u`) and no shrinkage (texel `t`'s N samples are exactly its
+  block). The texture window and a precise triangle's texel hold act on the console's texel, the fraction choosing the
+  sample within it. A texture uploaded by a transfer is a block of one value, so its samples read as the console's.
+- **A 4- or 8-bit texel and a palette** are indices packed into halfwords, which no drawing at N× makes meaningfully;
+  they are read at the first sample of the block, the console's.
+
+What it cannot recover: a picture the game moves through the processor (VRAM to CPU and back), which crosses the
+accurate VRAM and comes back as a transfer at 1×; such an effect is correct and as coarse as the console's.
+
+### 39.4 The picture at N×, and the frame the host receives
+
+A display line read from VRAM's row `y` at column `x`, `w` dots wide, is N rows of the picture, `N·row + j` read from
+the mirror's row `N·y + j`, `N·w` samples each from column `N·x`. A 24-bit line packs three bytes a dot across
+halfwords: dot `i`'s bytes are read from the halfwords as at 1×, each from the first sample of its block in row
+`N·y + j` (24-bit pictures are a movie's, uploaded at 1×). In 480-line interlace a line is the field's row `2r + f`,
+so its N rows are woven with the other field's N rows, which keep what they held, as the console's picture keeps the
+other field (`Diamond_GPU.md` §7). The picture is `N·w` by `N·h`, at most 2,560 by 2,304.
+
+**The host is handed the picture at N×** [C], its size in `frame_info` and announced by `GEOMETRY` when it changes, as
+`EmuSen_CoreAPI.md` §6.6 provides. Reduced to the console's size by an average, as Mars's antialiasing does
+(`Mars_Gpu.md` §15), it would be supersampling, which is a different enhancement with its own setting, and the size a
+reduction should go to is the window's, which the core does not know. The largest frame handed is Tekken 3's 512 by 480
+at 4×, 2,048 by 1,920 or 15.7 MB; it is read back into the host's slot by the pending submission (§38.1), so the
+emulation thread does not wait for it, and `frame_copy` copies it once more into the host's buffer. Machine info's
+`max_width` and `max_height` become 2,560 and 2,304, the largest picture of the largest scale, since a host may size its
+buffer from them once.
+
+**Left for the tester** [proposed, not built]: `EmuSen_CoreAPI.md` §6.6 reserves a word of `frame_info` for "the
+console's own lines" of a frame drawn at a multiple, to be named "in the minor that first has a core to fill it", so
+that a CRT filter draws the console's lines and not the frame's rows. Diamond at N× is that core. Naming the word is a
+change of the ABI's minor (the header, `emusen-native`, the C# host, the baseline and the kit); it is put to the tester
+and not made here. Until it is, a CRT filter over Diamond at N× draws N times the lines, and the player's page says so.
+
+### 39.5 The largest scale, and why
+
+**1×, 2×, 3× and 4×**, Mars's choices and Mars's label, "Internal resolution" (`MarsCore.cs`' `RenderScale`). At 4× the
+mirror is 32 MiB, its copy scratch another 32, the picture 23.6 MB and its two host slots the same each; with true colour
+a second plane of 32 MiB (§40): about 180 MB of the device's memory and 80 of the host's, which the handheld's 16 GB
+shared memory holds. The drawing costs N² the samples. 5× would draw a 640-dot picture 3,200 wide, past any screen the
+player has, for 25 times the work; it is not offered. Each workgroup of the walk is one N×-sample tile of 8 by 8, N² of
+them for each console tile, dispatched as a second dimension so that no dispatch exceeds Vulkan's guaranteed 65,535
+workgroups in a dimension; the host's binning stays in console tiles, so the host's work does not grow with N.
+
+### 39.6 Changing the scale, and a seed at N×
+
+The scale, true colour and filtering are the renderer's options, applied between frames by detaching it, rebuilding
+its buffers at the new size on the device it has, and attaching it again, which seeds it (§16.6): the mirror is the
+GPU's VRAM with each halfword a block, the picture the display's with each dot a block. What was drawn at the old scale
+is dropped, and the next frames redraw it; a game redraws its screen within a frame or two, and a texture page it drew
+long before stays at 1× until it is drawn again.
+
+### 39.7 The crack fill at N×
+
+The fill's rule is a sample's (§36.3): a precise triangle also covers each sample its console triangle covers, that
+triangle's edge functions evaluated at the N× coverage point as an integer triangle's are, and a filled sample takes its
+place in the console triangle at that sample to the same place in the precise one. Marks are per sample, as the mirror's
+high half is per sample. So two precise triangles sharing an edge keep it where they draw it, sample by sample, and a
+crack between a precise polygon and an integer one is closed at the samples where the integer triangle at N× would have
+covered it. Measured at 2× and 4× against §32.2's counts and §34.2's shared-edge figure (§42).
+
+## 40. True colour [C]
+
+**The plan's two forms**: the mirror kept at 24 bits, blending and shading at full precision; or only the dither left
+out. The second alone is worse than the console: without its dither a gradient drawn at five bits a channel bands, and
+the dither exists to hide exactly that. **Chosen: the first.**
+
+- **Where the bits are kept.** The mirror's word is full, the console's halfword and the crack fill's mark. A second
+  plane of one word a sample holds each pixel's three lowest bits a channel, the bits the console's `>> 3` drops; it
+  exists only while true colour is on. A pixel's channel is then `c·8 + low`, eight bits read as the console's five with
+  three more below them.
+- **Drawing.** The colour a primitive makes is kept at eight bits (`(rgb × texel) >> 4` as the console computes it, a
+  Gouraud colour as interpolated, a raw texel's eight bits), with no dither; a blend reads the destination at eight
+  bits and blends at eight (`B/2 + F/2`, `B + F`, `B − F`, `B + F/4`, saturated at 255); the halfword keeps the top five
+  bits and the plane the rest. A texel read from a drawn area brings its plane's bits with it; transparency, the
+  semi-transparency flag and the mask bit are the halfword's, as the console tests them. A fill keeps its colour word's
+  low bits; a transfer writes none; a copy moves them.
+- **Shown.** A channel of eight bits `v` is displayed as `min(255, (33·v) >> 5)`, which for `v = 8c` is exactly the
+  console's expansion `c<<3 | c>>2`: a picture drawn without the plane, or a pixel the plane leaves at zero, shows as the
+  console's to the bit, and a smooth gradient keeps the console's brightness. 24-bit display lines read bytes and ignore
+  the plane.
+- **What the machine sees**: nothing; the accurate VRAM keeps its 15-bit values, and readbacks are unaffected.
+
+**What a player loses**: the console's dither, which some games' art leans on as a texture (a grainy fog, a dithered
+sky that reads as noise on a CRT). Their gradients become smooth where the console's were grained; nothing bands that
+did not band before, since every channel carries more bits than the console's, not fewer. Banding is measured on a
+shaded gradient with and without (§42).
+
+## 41. Texture filtering [C]
+
+- **Bilinear after the palette.** A texel's coordinate before the console's rounding, `u`, lies between texels
+  `⌊u⌋` and `⌊u⌋ + 1` (the console reads `⌊u + 1/2⌋`, so texel `t`'s centre is at `t`); the four texels about `(u, v)`
+  are each read through the window, the page and the palette, and their colours mixed by the fractions, at eight bits a
+  channel. At `u` whole the result is the console's texel; at 1× a texture drawn one texel a pixel has every `u` whole
+  and is unchanged.
+- **Clamped to the primitive's texture rectangle.** The four texels are held within the texels the primitive's own
+  vertices reach (for a precise triangle its texel hold, §26.3; for any other its vertices' least and greatest
+  coordinate, short of the end its coordinates run toward), so a polygon cut from a packed page never mixes in its
+  neighbour's texels. **Within a texture window** the four are each passed through the window instead, which wraps them
+  inside the repeating tile as the console's coordinates wrap, and the rectangle is not applied, the window being the
+  game's own statement of what repeats.
+- **Colour 0.** Whether a pixel is drawn, and whether it blends, is the nearest texel's, the console's own: a cut-out's
+  silhouette is the console's. The colour is mixed from those of the four that are not transparent, their weights
+  renormalised, so no dark fringe of colour 0 bleeds into an edge.
+- **Rectangles and sprites.** A choice of three: **Off** (the console's); **3D polygons**, which filters textured
+  polygons but not rectangles, and not a polygon drawn one texel a pixel and unrotated (its two gradients 1 and 0 in
+  the console's 12-bit units, its vertices whole): the sprites and menus a game builds of polygons; and **Everything**.
+  The second keeps UI and sprites crisp and is the one listed first after Off. A 4- or 8-bit texture drawn into at N×
+  is read at the console's samples (§39.3) and filtered between console texels; a 15-bit one drawn at N× is filtered
+  between the N× samples.
+
+**Known breakage**: text and HUDs drawn as rotated or scaled polygons blur under either filtering choice; a texture
+whose texels are meant as pixels (pixel art on a 3D surface) softens; texture atlases packed without a gap bleed at
+polygon edges a game did not cut along its own coordinates' range (the clamp covers what the vertices reach, no more);
+alpha-tested cut-outs keep the console's hard silhouette, by the colour-0 rule.
+
+## 42. Composition, settings, state, the gate
+
+### 42.1 The renderer's options and the settings
+
+`diamond-renderer` gains `Options { scale, colour, filter }`, given at `Renderer::new` and changed between frames by
+`Renderer::configure` (§39.6), and `Draw`'s drawer and the precision layer are paired or not as before. `diamond-v1`
+offers four enhancements under Enhancements, each `effect: enhancement`, `scope: run`, no restart, default the
+hardware's:
+
+| Key | Label | Values | Default |
+|---|---|---|---|
+| `precision` | Precise geometry | switch | off |
+| `resolution` | Internal resolution | `1` "1× (the console's)", `2` "2×", `3` "3×", `4` "4×" | 1 |
+| `colour` | True colour | switch | off |
+| `filtering` | Texture filtering | `off` "Off (the console's)", `3d` "3D polygons", `all` "Everything" | off |
+
+The renderer is attached whenever any of the four is not its hardware value: alone (with the plain frame, §38.3) unless
+precise geometry is on, paired with the precision layer when it is. Any combination works, the four being options of
+one renderer and one switch of the pairing. Each setting's cost names a graphics card, the frame of latency (§38.1), its
+own price (N² the drawing at N×; little for the other two) and its known breakage, in a player's words. Without a
+usable Vulkan device each is accepted and noted as "Precise geometry" is (§24.2), the console's picture shown.
+`STATE_SIZE` is raised by `core_exports!` when the state's size moves, `GEOMETRY` when the frame's does.
+
+### 42.2 State: keep the N× mirror, or seed and redraw
+
+`RNDR` at N× holds what the renderer cannot get back from the machine: the mirror's halfwords and marks at N× (N²
+times 1 MiB each), the picture at the largest N× size (23.6 MB at 4×), the palette, and with true colour the plane
+(N² times 1 MiB, a halfword a sample for its nine bits). At 4× with everything on a state is about 72 MB
+against 11.6 at E4 with the crack fill. **The alternative** is a block holding only what is small (the palette and the
+picture's size) and a load that seeds the mirror and the picture from the accurate VRAM and the display, as an attach
+does: a state of the accurate size plus a few bytes, the first pictures after a load at 1× detail until the game redraws.
+
+**Built: the kept form** [C], because the kit's C7 and C8 require a loaded machine to hand the saver's pictures from its
+first frame, and a seeded picture is the console's at that frame, not the renderer's (the rule set for this stage: build
+the form the kit passes as it stands). **Measured for both** (§47.2): the state's size, the bytes a rewind's
+delta between consecutive states holds, and on the bench discs how many frames a seeded picture takes to become, pixel
+for pixel, the picture the kept form draws. **Proposed to the tester if the second form wins on those figures**: that
+the kit's C7 and C8 compare an `enhancement` setting's pictures after a load from the frame the core names (a field of
+machine info, "pictures settle after N frames"), or compare only its sound and state, while C6 and C8's first half keep
+checking pictures in a run without a load. That is a change to the kit's cases for every core, not to Diamond.
+
+The block's form is fixed for a configuration (scale, true colour, precise geometry): a state of another configuration
+fails its length and its part starts seeded, as E1's rule for an unreadable block has it; a state of E4 at 1× with
+precise geometry on loads as before, its layout unchanged at that configuration.
+
+### 42.3 The gate, as it will be run
+
+- **Off is the accurate path**: E1's goldens with all four off; with any on, and with all on at 4×, the machine's
+  goldens (state's accurate blocks, sound, TTY, VRAM, the machine's own picture) on the programs, ps1-tests and the
+  eight discs.
+- **1× is E3's equality**: E3's renderer gates and E4's zero-fraction gates unchanged with the new code, at 1× with true
+  colour and filtering off, the texture cache's two pinned counts the one difference.
+- **Synthetic programs** (`tests/scaled.rs`, `tests/colour.rs`, `tests/filtered.rs`): at 2×, 3× and 4× a known scene
+  against a reference computed in the test (triangles' edges at the N× samples, a grid of sprites and rectangles that
+  must stay on the scaled grid with every block one texel, a scene drawn and then textured from, a VRAM copy of a drawn
+  area, a masked area and a semi-transparent one, sample by sample); the crack fill's tests at N×; a shaded gradient's
+  distinct levels and its banding with true colour on and off; filtering on a packed page (no texel of the neighbour),
+  colour-0 edges (the silhouette the console's) and a texture window (wrapping inside the tile).
+- **The eight bench discs at 2× and 4×** along their golden anchors with their press scripts: the machine's goldens
+  unchanged; the pictures looked at, every visible defect listed with its frame and fate; the crack counts of §32.2 and
+  the grid's edges of §34.2 at 2× and 4×.
+- **The player's path**: the kit on the published library with each setting on and with all on, the eight discs at
+  1,800 frames; a Mistress publish carrying the library with the new settings; WiseMan: each setting under Enhancements
+  with its cost, the window fitting at both audited sizes, and the settings changed between frames through the host
+  changing only the picture.
+- **Cost**, by §27.1's instrument: everything off against the base; precise geometry alone before and after the speed
+  work; 1× to 4× with and without precise geometry, true colour and filtering; state sizes; the handheld measured if it
+  is reachable and idle, estimated otherwise.
+
+### 42.4 Predictions [recorded before the code]
+
+- **P-E5a.** With the picture handed a frame late, the emulation thread's cost of the renderer falls by about its wait:
+  precise geometry at 1× within 0.1 ms of the precision layer with a drawer that draws nothing on the five items, where
+  §27.3 had it 0.2 to 1.0 ms above.
+- **P-E5b.** The parity split takes Tekken 3's fights from 10.5 stretches a frame to under 2, and its waited picture
+  under 0.5 ms.
+- **P-E5c.** With `Layer::moves`, the renderer alone costs the plain frame plus its host work: within 0.15 ms of the
+  plain frame on the three discs.
+- **P-E5d.** At 4×, with the wait off the thread, the emulation thread stays within 0.5 ms of 1× on the desktop on
+  every item but the fights; the device's own time at 4× (the wait, measured in the waited form) is under 4 ms a frame
+  on the RX 6800 in the fights.
+- **P-E5e.** At 1× with true colour and filtering off every picture of E3's and E4's gates is unchanged, and with any
+  setting on every machine golden holds.
+- **P-E5f.** True colour gives a shaded gradient across 256 pixels at least 200 distinct levels a channel where the
+  console's dithered picture has 32 levels and its grain.
+
+## 43. The speed work, as built
+
+*Built and measured 2026-10-14, the RX 6800 by `EMUSEN_GPU_DEVICE=6800`.* What was built is §38 as designed.
+
+### 43.1 The picture a frame late
+
+`Renderer::frame_end` closes the frame's last stretch and sends everything planned as the device's pending submission,
+ending in a copy of the picture into one of two host slots, and the host is handed the other (`Renderer::handed`);
+`diamond-v1` calls it after every `advance` and every debugger frame, skipped rendering included, and its `frame` and
+`frame_info` read the handed slot. A submission made because an array filled in the middle of a frame is left pending
+too (`flush`), so no submission on the frame's path is waited for; the waited one stays for `picture`, `vram`,
+`samples`, `settle` and a seed, each of which waits for the pending one first. The host's staging is two sets of the six
+arrays, 16.6 MB more host memory, the device's copy of them one. A seed, from the machine or from a state's block, puts
+its picture in the slot the next frame hands (§38.1), so that a machine given a state hands, from its first frame, the
+picture the machine that saved it hands.
+
+The kit's C7 and C8 compare pictures across a load and between two machines. Both pass on the eight discs with every
+setting (§48), with no change to the kit: the latency is the same frame for both machines, and the block's picture is
+the picture handed next.
+
+### 43.2 Stretches by row parity
+
+`blocks::Written` keeps a stretch's drawn blocks twice, by the parity of the rows drawn; a record with `SKIP` marks the
+parity it draws, a display line asks the parity of its row. The renderer's counts now say why each stretch ended
+(`Counts::ends`: a palette, a copy, a transfer's row, a display line, a record's texels, a record over texels read). On
+the bench run of Tekken 3 to frame 10,500 with precise geometry [M]:
+
+| | Stretches | ended by a display line | by a copy | a frame | The picture waited for (`--waited`), the fights |
+|---|---|---|---|---|---|
+| Before (WiseMan 137a039a) | 110,557 | 96,170 | 3,866 | 10.5 | 1.07 ms |
+| After | 14,550 | 7 | 3,866 | 1.39 | 0.50 ms |
+
+What is left of the fights' stretches is a copy every three frames and one stretch a frame. The 840,946 palette loads
+(80 a frame) now go to the device in one or two dispatches a frame, and the wait that remains is the device's drawing
+of 480 interlaced lines and the readback, not the loads' dispatches: a slot shared between loads of one palette, which
+§38.2 left to this measurement, was not built.
+
+### 43.3 The plain frame for a renderer alone
+
+`Layer::moves` (default `true`), read once by `Attached::set`; the renderer answers `false`, so the machine runs the
+plain frame for it and the layered one only for the precision layer, E1's test observer or any layer that keeps the
+default. The machine's goldens are the same with the renderer attached alone (E3's gates) and with it paired (E4's).
+The cost of each piece is §50.2.
+
+## 44. Internal resolution, as built
+
+*Built 2026-10-14.* §39 as designed, with one defect found by the gate and fixed (§44.2).
+
+### 44.1 What was built
+
+- **The device.** The mirror, its copy scratch and the picture at N² the samples, the picture's host slots and the
+  readback buffer with them (`Held::new(scale, options)`); `Renderer::configure` rebuilds them for another scale on the
+  device it has (`Device::rebuild`). The walk's workgroup is an 8-by-8 tile of samples, dispatched as (console tiles,
+  N²), its push constants the first tile, the scale and the options; the scan's (lines, N), the copy's (runs of 64
+  samples, rows × N); the palette loads read each entry's first sample.
+- **The walk.** An integer triangle's edge functions at the coverage point `(x + i/N, y + j/N)` multiplied by N, its
+  attributes at the attribute point, `(2d − N + 1)/2N` in pixels about the console's point, rounded to a 256th, by the
+  fine interpolation, which at N = 1 is E3's to the bit; a precise triangle the same with its fine edges, its division a
+  pixel at the attribute point's weights, and the fill's console triangle at the sample (§44.4). Rectangles, lines,
+  fills and transfers act on the console's pixel, each sample of its block; a sprite reads the sample of its texel
+  that the pixel's sample is, mirrored with a flip. A 15-bit texel is read at the sample its coordinate's fraction
+  names; a palette's texel and a palette at the first sample. The dither is the console's matrix by the console's pixel.
+- **The integer record kept** (§39.2): E4's suggestion of every triangle through the precise record would have had
+  integer polygons write the crack fill's marks.
+- **The state.** `RNDR` holds the mirror's halfwords and, paired, the marks at the scale, and the picture at the largest
+  size of the scale; its form is fixed by the scale, true colour and the pairing, so a state of another form seeds the
+  renderer from the machine (§47).
+- **The tools.** `run` and `bench` take `--scale N`; the renderer's `samples` reads the mirror back for the tests.
+
+### 44.2 A coordinate that wrapped, found by the grid and fixed
+
+**Shown.** The turning grid's shared edges, graded sample by sample at N× (§44.4), stood 0.0143 px from the ideal at 2×
+and 0.0822 at 4×, where 1× gives 0.0035 [M]. With the fill turned off in a scratch build the figure was the same, so the
+fill was not the cause. At N× a sample's attribute point lies up to `(N − 1)/2N` of a pixel up and to the left of its
+coverage point, so at a polygon's top and left edges it lies a little outside the polygon, where the interpolated
+coordinate runs a little past the vertices' range; a coordinate below zero was cut to eight bits as the console cuts one,
+to 255, and the precise triangle's texel hold then took it to the far end of its range. The quad's texels nearest the
+edge came from its other side, which the grid's grading reads as the neighbour's pixel. The console never meets this:
+its point is inside every pixel it covers. It would show on any texture as a line of the texture's far side along a
+polygon's top and left edges.
+
+**Fixed** [C]: at N > 1 a coordinate is held within the vertices' least and greatest before the console's eight-bit cut
+(`within` in `walk.comp`; the integer record carries the range in its word 9, the precise record has its vertices'
+coordinates already); at N = 1 nothing changes. After it the grid's shared edges stand 0.0035 px from the ideal at 2× and
+at 4×, E4's figure.
+
+### 44.3 The synthetic programs (`tests/scaled.rs`)
+
+Each at 2×, 3× and 4×, every sample compared with a reference computed in the test from §39's rules [M]:
+
+| Test | What | Samples otherwise than the reference |
+|---|---|---|
+| `triangles_at_n_cover_the_samples_their_edges_hold` | six flat triangles of every slope and winding, two sharing an edge, one a sliver, against the console's edge rule at each sample point | 0 at each scale |
+| `sprites_and_quads_stay_on_the_grid_with_every_block_one_texel` | sprites of 16, 8 and variable size, raw and modulated, flipped in x and in y, and quads drawn a texel a pixel, side by side and touching, against the console's pixel in every sample of its block | 0 |
+| `a_picture_drawn_at_n_is_read_back_and_copied_at_n` | a shaded triangle drawn into a page (1,052 to 1,134 values), read back as a 15-bit texture by a sprite, a quad and an x-flipped sprite, copied beside itself and copied over itself five rows down | 0 (the copy over itself against `vram.rs`' row order on the samples) |
+| `the_mask_bit_and_blending_act_on_each_sample` | a triangle drawn with the mask bit set under a rectangle drawn with it checked; a semi-transparent rectangle over a second triangle | 0 |
+| `a_state_at_n_continues_its_picture` | a state at 4× saved, loaded and saved again the same bytes; a second machine handing the first's pictures from its first frame; a state of 4× loaded at 2× seeding the renderer at its own scale | as stated |
+| `the_bench_discs_keep_their_goldens_at_2x_and_4x`, `…_with_every_enhancement` | §48 | |
+
+### 44.4 The crack fill at N×
+
+- **Synthetic** (`at_n_the_fill_closes_every_crack_and_spills_over_no_shared_edge`, `tests/precise.rs`): §33's floor and
+  ring and its two quads sharing a slanted edge, at 2× and 4×. Of the samples the console's own polygons cover at the
+  scale (the renderer drawing the same program without the precision layer), 99,704 at 2× and 398,816 at 4×, none shows
+  the cleared buffer with precise geometry on; of the samples within six pixels of the shared edges, 8,493 and 33,972,
+  none is the other quad's by the side of the precise edge its point lies on [M].
+- **The turning grid's edges** (§34.2's measure, sample by sample: a sample counts an N²th of a pixel;
+  `the_turning_grids_shared_edges_hold_at_n`) [M]:
+
+| Scale | Shared edges: mean distance from the ideal, change frame to frame, worst (px) | The outline: the same |
+|---|---|---|
+| 1× (§34.2) | 0.0036, 0.0066, 0.092 | 0.287, 0.116, 1.339 |
+| 2× | 0.0035, 0.0059, 0.0946 | 0.2847, 0.1151, 1.3436 |
+| 4× | 0.0035, 0.0053, 0.0576 | 0.2816, 0.1141, 1.2943 |
+
+  No sample between two quads was left undrawn at either scale. The outline keeps §34.2's half of the console's edge
+  wobble at every scale: the fill puts the top and left edges on the console's line, and at N× that line is drawn N
+  times finer but no nearer the geometry.
+- **The cracks of §32.2 in play**, by §32.1's model taken to the sample (a scratch layer in the probe's folder, not in the
+  repository: who owns each sample by integer coverage at the scale, and with the precise polygons, unfilled and with the
+  built fill's marks; a crack sample is one the console's polygon owns where the enhanced picture shows an older command
+  the console shows nowhere within two pixels, not a precise neighbour across a shared edge). At 1× the model gives
+  §32.2's and §33.3's figures to the pixel, which is its check [M]:
+
+| Run | Scale | Crack samples unfilled | in pixels' worth | Left by the built fill | in pixels' worth |
+|---|---|---|---|---|---|
+| Ape Escape in play, 265 frames | 1× | 17,611 | 17,611 | 2,149 | 2,149 |
+| | 2× | 53,443 | 13,361 | 4,956 | 1,239 |
+| | 4× | 196,119 | 12,257 | 16,088 | 1,006 |
+| Spyro the Dragon in play, 235 frames | 1× | 58,023 | 58,023 | 194 | 194 |
+| | 2× | 215,299 | 53,825 | 348 | 87 |
+| | 4× | 839,978 | 52,499 | 1,069 | 67 |
+
+  The fill closes the same share at every scale: 88, 91 and 92 per cent of Ape Escape's crack area, 99.7, 99.8 and 99.9
+  of Spyro's. The area of the cracks falls a little with the scale (a crack a pixel wide at 1× is a sliver whose samples
+  half fall on either side at N×), and what is left is §34.3's semi-transparent kind.
+
+## 45. True colour, as built
+
+§40 as designed. The plane (`fine`, binding 6 of the walk, 3 of the scan, 2 of the copy) is made only with true colour
+on, a four-byte buffer standing in otherwise; the walk carries a sample's low bits beside its word, `put` blends and
+stores at eight bits with no dither, a texel of a 15-bit page brings its plane's bits, a fill keeps its colour word's
+three low bits a channel (the record's word 15), a transfer writes none, a copy moves them. The scan shows
+`min(255, (33 v) >> 5)`. The state's block gains `Fine` with true colour on. `run` and `bench` take `--colour`.
+
+`tests/colour.rs` [M]:
+
+- **A dithered Gouraud gradient** from black to (255, 128, 64) across 256 pixels, 60 rows: red has at most **32**
+  distinct levels along a row in the console's picture, a mean run of one value of 2.16 pixels, and falls back **2,820**
+  times along rows that only rise (the dither's grain); with true colour **249** levels, runs of 1.03 pixels, and **no**
+  fall. With true colour off the renderer's picture is the console's to the byte. P-E5f held.
+- **What the console draws alike shows alike**: an uploaded picture, a fill of a colour with low bits (80 80 80h) and
+  flat triangles of colours the five bits hold, with true colour on: the picture equals the console's in every pixel.
+- **The three bits kept**: 3,963 samples of a drawn gradient carry low bits; a semi-transparent rectangle (B + F) over
+  its copy gives each sample the blend at eight bits exactly; a raw sprite reading the gradient as a 15-bit texture
+  carries each sample's halfword and plane, but where the halfword is 0000h, transparent as the console tests it.
+
+What it shows that the console did not is §49's: steps of a fade or a glow below one five-bit step.
+
+## 46. Texture filtering, as built
+
+§41 as designed. A record carries `FILTERED` (bit 30) when the options ask it of its kind (`Renderer::filtered`): every
+textured record with Everything; with 3D polygons a precise triangle, and an integer one unless `record::texel_a_pixel`
+holds (its texture gradients one whole texel along one axis and none along the other, the console's 4,096 in 12-bit
+units, in either orientation), and never a rectangle. The walk's `bilinear` mixes four texels at eight bits, a 15-bit
+page at N× between its samples; `filter_limits` holds them within the primitive's texels (the vertices' range, short of
+the end the gradients run toward; a sprite's whole texel span, the record's word 9), or none on an axis the texture
+window repeats, each texel then passing through the window. Whether the pixel is drawn and blends is the nearest
+texel's. `run` and `bench` take `--filter off|3d|all`.
+
+`tests/filtered.rs` [M], at 1× and 2×:
+
+| Test | Result |
+|---|---|
+| `a_packed_page_mixes_no_texel_of_its_neighbour`: a region of two alternating reds magnified four times, the blue region beside it in the page | no sample with any blue; at 2× 19 shades of red between the two |
+| `a_cut_out_keeps_the_consoles_silhouette_with_no_fringe`: transparent texels beside green ones, magnified | the samples drawn are exactly the unfiltered picture's (2,176 at 1×, 8,576 at 2×), every one wholly green |
+| `a_texture_window_wraps_its_tile`: a window repeating eight grey texels four times, blue texels past the tile in the page | no sample not grey; 15 greys, the tile's mixed across its wrap |
+| `three_d_polygons_leave_sprites_and_flat_quads_crisp` | with 3D polygons a sprite and a quad drawn a texel a pixel are their unfiltered samples exactly and a magnified quad differs; with Everything at 2× the sprite is filtered, and at 1× it is not changed, its coordinates whole |
+
+## 47. The settings and the state
+
+### 47.1 The settings, as built
+
+`diamond-v1` (§42.1): `PRECISE_GEOMETRY`, `INTERNAL_RESOLUTION`, `TRUE_COLOUR` and `TEXTURE_FILTERING`, each an
+`Enhancement` with its help and its cost; `Chosen` (precise geometry and the renderer's `Options`) is read from the
+settings at create and changed by `set_settings`, which detaches the layer, keeps the renderer if there was one
+(`configure`) or makes one, and attaches it alone or paired (`choose`). The note for a missing device is given under each
+key not at its hardware value. Machine info's largest picture is 2,560 by 2,304. Every cost names the frame of latency.
+Turning a setting on takes the time of a device's creation the first time (31 to 69 ms on this machine at E4) and a
+rebuild of its buffers at a new scale after.
+
+### 47.2 State: the kept form and the seeded one, measured
+
+On each bench disc by its press script to frame 1,500, every enhancement on (precise geometry, true colour, 3D
+filtering) at 2× and at 4×: the state kept whole; the bytes in which the states of consecutive frames differ (a
+rewind's delta, the mean of ten), kept whole and in the accurate part alone; and a second machine given the accurate
+part alone, its renderer seeded from the machine (the seeded form), the frames until the picture it hands equals the
+kept machine's pixel for pixel (a scratch test in the probe's folder) [M]:
+
+| Disc | Delta a frame, 2× kept / accurate | 4× kept | Seeded: pixels differing, first five frames, at 4× | Equal from frame |
+|---|---|---|---|---|
+| Ape Escape | 1,143,797 / 119,335 | 4,207,006 | 1.46 M, 1.46 M, 1.46 M, 1.46 M, 0.56 M | 6 |
+| Castlevania | 8,700 / 8,675 | 8,700 | 0 | 1 |
+| Crash Bandicoot | 119,882 / 12,792 | 407,579 | 0.41 M, 0.43 M, 0.43 M, 0.12 M, 0.12 M | 6 |
+| Mega Man Legends | 31,206 / 11,295 | 86,332 | 8,370, 8,322, 8,322, 1,160, 1,160 | 6 |
+| Rayman | 9,071 / 9,070 | 9,071 | 0 | 1 |
+| Silent Hill | 177,856 / 11,033 | 677,837 | 0.78 M, 0.78 M, 0.39 M, 0, 0 | 4 |
+| Spyro the Dragon | 1,496,172 / 190,560 | 5,351,772 | 1.82 M, 1.82 M, 1.82 M, 1.82 M, 0.21 M | 7 |
+| Tekken 3 | 650,199 / 160,506 | 2,118,756 | 0 | 1 |
+
+The state is 26,503,560 bytes at 2× and 81,947,016 at 4× with everything on, against 5,398,740 for the accurate part
+(the same on every disc: the block's form is fixed). The seeded form's state would be the accurate part and the
+precision layer's 2.6 MB.
+
+**Decided, and why** [C]: **the kept form is built**, as §42.2 set out, because it is the form the kit passes as it
+stands. **The measurement favours the seeded form**: a seeded picture is the kept one's within four to seven frames on
+every disc of eight (a game redraws its screen, and the precision layer finds its vertices again within two frames), the
+first frames differing only in detail, the console's own picture enlarged; and the kept form costs a state three to
+fifteen times the accurate one's and a rewind's delta up to 28 times (Spyro at 4×, 5.4 MB a frame against 0.19).
+**Proposed to the tester, not made**: a field of machine info, "pictures settle after N frames", which the kit's C7 and
+C8 read to compare an enhancement's pictures after a load from that frame on, sound and state from the first, C6 and C8's
+first half still comparing every picture of a run without a load. With it Diamond would declare N = 8 with any
+enhancement on and write a block of the palette and the picture's size alone. It is a change to the kit's cases for
+every core, so it waits.
+
+## 48. The gate, item by item
+
+*Run 2026-10-14 on the desktop, the RX 6800.*
+
+| Item | Result |
+|---|---|
+| **Off is the accurate path**: E1's goldens with the four settings off | **Equal** [M]: `programs.rs`' three golden tests, plain and with the test observer, 49 + 48 lines and the eight discs' 80 anchors, after the speed work, the only stage of E5 that touched the machine (`Layer::moves`); the frame's code with no layer attached unchanged in the plain form |
+| With any setting on, the machine's goldens | **Equal** [M]: picture, sound, state, VRAM and TTY on the programs, ps1-tests and the eight discs with precise geometry (`precise.rs`), the renderer alone at 1× (`renderer.rs`), and on the eight discs' 80 anchors at 2× and 4× with precise geometry, at 2× with true colour and 3D filtering beside it and at 4× with everything (`scaled.rs`) |
+| **1× is E3's equality** | **Equal** [M]: E3's three gates (every picture of the programs, ps1-tests and the eight discs to frame 3,000, VRAM at every anchor, the texture cache's two pinned counts the one difference) and E4's at zero fraction, with the scaled, true-colour and filtering code built in and those settings at their hardware values |
+| **Synthetic programs** | **Pass** [M]: `scaled.rs`' five (§44.3), `precise.rs`' two at N× (§44.4), `colour.rs`' three (§45), `filtered.rs`' four (§46), each at the scales stated there |
+| **The eight discs at 2× and 4×**, their goldens and their pictures | goldens **equal**; the pictures looked at, every visible defect in §49 with its fate |
+| The cracks of §32.2 and the shared edges of §34.2 at 2× and 4× | §44.4: the fill closes 88 to 92 per cent of Ape Escape's crack area and 99.7 to 99.9 of Spyro the Dragon's at every scale; the grid's shared edges 0.0035 px at both scales, E4's |
+| **The kit** on the published shape (`cargo build --profile dist` in `v1/`), the eight discs by its corpus form, four at a time | **Every case on every disc** [M] with the settings off (1,800 frames, 195 s), `precision=true` (1,800, 335 s), `resolution=2` (1,800, 470 s), `colour=true` (1,800, 284 s), `filtering=3d` (1,800, 258 s), and all four on at 2× (`filtering=all`, 1,800, 731 s); at 4× alone and with all four on at 300 frames (334 s and 561 s), C7's states 5,398,770, 11,594,150, 15,491,842, 8,971,010, 7,922,434, 26,503,590, 45,769,474 and 81,947,046 bytes |
+| The kit at 4× for 1,800 frames | **not run to its end**: the kit gives an image's cases 600 seconds (`IMAGE_DEADLINE_SECONDS`), and at 4× it hashes each of the frames its cases run, 4.9 MB of Crash Bandicoot's picture byte by byte, some 20 ms a frame (C6, C7 and C8 alone run the image's 1,800 frames five times), so C6 found the deadline passed on the first four discs of the first run; the same cases pass at 300 frames, and the machine at 4× runs its frames at 2.2 ms (§50). A deadline in proportion to the picture's bytes is a change to the kit, put to the tester |
+| **The player's path**: a Mistress publish | §51.1 |
+| WiseMan | **221 of 221** [M] under the test lock with ps1-tests, filtered by `Diamond`, `PlayStation`, `GraphicsSettings`, `WindowFitAudit`, `CoreRegistrationEquivalence` and `CoreAdapter`: `DiamondEnhancementsTests` (the four with their costs, the tab's heading and four rows, each and all turned on and off between frames through the host changing only the picture), `DiamondShaderTests` (the four shaders' bytes the compilation of their sources), the fit audit's PlayStation tab at both sizes |
+
+## 49. What the pictures showed
+
+### 49.1 How they were looked at
+
+The machine's picture and the renderer's at every anchor of the eight discs by their press scripts, written by
+`scaled.rs`' disc gates with `EMUSEN_DIAMOND_PICTURES` (no picture of a game is in the repository): at 2× and 4× with
+precise geometry, at 2× with true colour and 3D filtering beside it, and at 4× with everything; Tekken 3's attract mode
+to frame 10,000 at 4× with everything by the run tool, its fights among it. Each was looked at whole and side by side,
+zoomed where something showed, and screened by a count of the console's pixels whose every sample in the enhanced
+picture is the console's colour [M, 2× with precise geometry]: 100 per cent on every disc's anchors before play and on
+Tekken 3's to frame 3,000; Castlevania 99 to 100; Rayman 73 to 100, its 3D logo the rest; and where a 3D game plays, 45
+to 97, the precise polygons and the finer texels.
+
+### 49.2 Visible defects, each with its frame and fate
+
+| Disc, frames | What shows | Why | Fate |
+|---|---|---|---|
+| The turning grid, every frame at 2× and 4× | the texture's far side along polygons' top and left edges, seen as the grid's shared edges 0.014 and 0.082 px from the ideal | a coordinate past the vertices' range at an edge sample wrapped to eight bits before the texel hold (§44.2) | **fixed** before the discs were run |
+| Silent Hill, 300 to 900 (the publisher's logo), true colour | a faint square about the logo, six levels darker than the grey about it (101 against 107 in each channel) | the logo fades in by a subtractive blend whose colour is below one five-bit step (7 of 255): the console's five bits make it nothing, true colour subtracts it | **recorded**, the cost true colour names; drawing a blend's front colour at the console's five bits would remove it and with it the smooth fog the setting exists for |
+| Ape Escape, 2,700 (the sun over Monkey Park), true colour | the glow's square outer edge, faint where the console's dither hid it | the same: the glow is added in steps below one five-bit step out to its texture's edge | **recorded**, the same cause |
+| Spyro the Dragon, 2,700, Everything at 4× | the memory card warning's text and frame soft | filtering sprites at 4× mixes their texels, as the choice says | as designed; with 3D polygons the same text is the console's, sample for sample |
+| Tekken 3, 7,500 to 10,000 at 4× | the fighters and the backdrop combed in bands four rows tall while the camera moves | the 480-line picture woven from two fields, as the console's is; each field's line is four rows | unchanged in kind: the console's picture combs the same lines |
+| Every 3D disc with true colour off at N× | the dither's grain in blocks of N by N (Ape Escape's lab, Silent Hill's fog) | the console's matrix by the console's pixel (§39.2) | as designed; true colour removes it |
+
+**Looked at and found unchanged in kind, or finer**: Spyro the Dragon's warning box and its "Using Card In Slot 1" line at
+4×, every glyph the console's block for block; Crash Bandicoot's title and menu at 2× and 4×, the letters crisp, the
+logo's model finer; Castlevania's "Now Loading", a sheared textured quad, its letters drawn finer and its 2D the
+console's; Rayman's title, its 3D logo finer and its 2D the console's; Mega Man Legends' hall; Silent Hill's street in
+the fog, with the copy it makes every frame (2,999 copies over 3,000 frames, a framebuffer effect), at 4× its detail
+kept; Tekken 3's copies in its fights (3,866) and its menus' text; Ape Escape's lab and Monkey Park with true colour, the
+rainbow and the sky without grain. No seam between sprites or tiles, no misaligned 2D and no broken framebuffer effect
+was found on the eight discs; their battle transitions and motion blurs lie past frame 3,000 and were not reached.
+
+## 50. Cost
+
+### 50.1 The instrument
+
+§27.1's: `examples/bench` on links with every function aligned to 64 bytes, each build in its own target folder, the
+builds alternating on one core (`taskset -c 11`), the fastest mean of five rounds, milliseconds of the emulation thread a
+frame, the RX 6800. Three builds: **base**, WiseMan 137a039a, E4 with the crack fill, extracted outside the repository;
+**speed**, this branch's first code commit (§43); **final**, the head after the settings (§47). With a renderer attached
+the bench now times what a host pays (`frame_end` with the frame, the picture of the frame before handed); `--waited`
+times E4's form, the frame's picture waited for, and its wait is the device's drawing with the round trip and the
+readback, measured once (a single round) for the device's own time. Every item's digests were the same in every form.
+
+### 50.2 Off, and the speed work
+
+**Off, against the base** [M]: `gpu/benchmark` 2.343 and 2.325, `gpu/bandwidth` 2.965 and 2.972, Crash Bandicoot 2.323
+and 2.330, Mega Man Legends 1.815 and 1.826, Tekken 3's first 3,000 frames 2.397 and 2.395, its fights 3.739 and 3.716:
+within −0.8 and +0.6 per cent, **the base within the noise**.
+
+**On** [M]; "the picture's share" is the bench's own timing of the frame end, or of the waited picture in the base:
+
+| Run | Off (final) | Precise geometry, base | speed | final | the picture's share, base / final | Renderer alone, base | final |
+|---|---|---|---|---|---|---|---|
+| `gpu/benchmark` | 2.325 | 2.671 | 2.532 | 2.524 | 0.221 / 0.069 | 2.655 | 2.459 |
+| `gpu/bandwidth` | 2.972 | 3.614 | 3.395 | 3.375 | 0.295 / 0.041 | 3.546 | 3.169 |
+| Crash Bandicoot | 2.330 | 2.811 | 2.633 | 2.644 | 0.214 / 0.034 | 2.684 | 2.432 |
+| Mega Man Legends | 1.826 | 2.200 | 2.032 | 2.027 | 0.182 / 0.021 | 2.099 | 1.921 |
+| Tekken 3 | 2.395 | 2.909 | 2.817 | 2.800 | 0.138 / 0.017 | 2.792 | 2.591 |
+| Tekken 3's fights | 3.716 | **5.312** | 4.337 | **4.341** | **1.067 / 0.067** | 5.014 | 4.035 |
+
+- **Precise geometry over the plain frame**: from +0.37 to +0.64 ms on the five items to +0.20 to +0.40, and in the
+  fights from **+1.60 to +0.63**. The picture's share fell from 0.14 to 1.07 ms to 0.02 to 0.07: what is left is the
+  submission's recording and, in the fights, the wait for the frame before on a device that drew 1.4 stretches.
+- **What each piece gave**, from the series: the parity split took the fights' waited picture from 1.07 to 0.50 ms
+  (§43.2, the waited form of the speed build); the pending submission took the rest off the thread, 0.2 ms on the
+  five items and 0.5 in the fights; `Layer::moves` takes the renderer alone from base 2.684 to final 2.432 on Crash
+  Bandicoot, of which 0.18 is the wait and the rest, 0.07 to 0.15 ms on the five items, the layered frame (§18.3's
+  middle column), its share in E3's measure.
+- **What is left over the plain frame** is the renderer's host work (events, decoding, records, binning) and, paired, the
+  precision layer's: the renderer alone 0.10 to 0.20 ms on the five items and 0.32 in the fights; paired 0.20 to 0.40 and
+  0.63.
+
+### 50.3 At each scale, and with true colour and filtering
+
+**The emulation thread** [M, final, five rounds]:
+
+| Run | Precise, 1× | 2× | 3× | 4× | Alone, 1× | 2× | 4× | Alone 1×, colour / filter 3D | Alone 4×, colour / filter 3D | Precise 4×, colour, filter all |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `gpu/benchmark` | 2.524 | 2.535 | 2.532 | 2.540 | 2.459 | 2.462 | 2.456 | 2.452 / 2.455 | 2.466 / 2.452 | 2.519 |
+| Crash Bandicoot | 2.644 | 2.635 | 2.636 | 2.634 | 2.432 | 2.429 | 2.426 | 2.427 / 2.430 | 2.427 / 2.428 | 2.627 |
+| Mega Man Legends | 2.027 | 2.037 | 2.034 | 2.037 | 1.921 | 1.918 | 1.921 | 1.914 / 1.913 | 1.916 / 1.913 | 2.065 |
+| Tekken 3 | 2.800 | 2.798 | 2.800 | 2.805 | 2.591 | 2.586 | 2.581 | 2.581 / 2.577 | 2.577 / 2.579 | 2.801 |
+| Tekken 3's fights | 4.341 | 4.319 | 4.311 | 4.303 | 4.035 | 4.020 | 4.006 | 4.023 / 4.021 | 4.002 / 4.001 | 4.296 |
+
+**The scale, true colour and filtering cost the emulation thread nothing measurable on this machine**: every column is
+its 1× column's within 0.04 ms, the 4× ones among them, since the host's work does not grow with the scale (§39.5) and
+the device's runs beside the next frame. The cost is the device's, and shows on the thread only where the device falls
+a frame behind.
+
+**The device's own time** [M, `--waited`, one round: the waited picture, which holds the device's drawing, the round
+trip and the readback of the picture at the scale]:
+
+| Run | 1× | 2× | 3× | 4× | 4×, true colour, filtering everything |
+|---|---|---|---|---|---|
+| Crash Bandicoot | 0.225 | 0.329 | 0.470 | 0.644 | 0.694 |
+| Mega Man Legends | 0.191 | 0.239 | 0.323 | 0.456 | 0.547 |
+| Tekken 3 | 0.139 | 0.199 | 0.281 | 0.375 | 0.394 |
+| Tekken 3's fights | 0.536 | 0.817 | 1.062 | 1.247 | 1.494 |
+
+The device's time grows by 2.3 to 2.9 times from 1× to 4×, not by 16: at 1× most of it is the round trip and the
+submission's fixed work, and the drawing itself grows with the samples. True colour and filtering together add 0.02 to
+0.25 ms at 4×. On the RX 6800 every item draws its 4× picture in under 1.5 ms of a 16.7 ms frame.
+
+### 50.4 State sizes
+
+C7's states on the kit's machine (two DualShocks and a card) [M]: none, 5,398,770 bytes; precise geometry 11,594,150;
+2× 15,491,842; 4× 45,769,474; true colour 8,971,010; filtering 7,922,434 (the renderer's block at 1×); everything at 2×
+26,503,590, at 4× 81,947,046. A rewind's deltas and the seeded form: §47.2.
+
+### 50.5 The handheld, estimated from the tester's play
+
+**Not measured**: the tester was playing on the handheld throughout this stage, and the bench was not run there. The
+estimate rests on the tester's own log of the evening (2026-10-14, 02:00 to 02:46, Mega Man Legends with "Precise
+geometry" on, on battery, WiseMan 137a039a, the build before this stage): the core's frame over 2,735 seconds had a median
+of 11.7 ms, a 90th percentile of 18.4 and a worst of 25.5, play mostly at 6 to 12 ms and a boss fight and the stretch
+after it at 18 to 19.5 for about five minutes, the game then at 48 to 52 frames a second; the same game's frame is about
+2 ms there with the setting off. **§27.4's estimate of +2 to 3 ms was low by three to five times.** Against the desktop's
+figures for the same build (§27.3: Mega Man Legends +0.35 ms over the plain frame, its waited picture 0.16 ms), the
+handheld's renderer share in that game's play, about 9.7 ms at the median, is some 50 times the desktop's waited picture,
+not §18.4's ten to fifteen: the integrated device at its 800 MHz floor pays far more for each submission and its round
+trip than the RX 6800 does [A, by the ratio; the split between drawing and round trip is not measured there].
+
+**What this stage changes there** [A]: with the picture a frame late, the device's time leaves the emulation thread
+whenever it is under a frame, about 16.7 ms. The thread keeps the host's share, 0.20 ms on the desktop for this game with
+precise geometry, perhaps 0.4 to 0.6 there, so **Mega Man Legends' frame there should fall from a median of 11.7 ms to
+about 2.5 to 3**, with the device drawing beside it. **The boss fight** is the case to watch: if its 16 to 17.5 ms over the
+plain frame were all the device's, the device would sit at the edge of a frame, the machine waiting for it by up to a
+millisecond a frame and the game at or just under full speed rather than 48 to 52; the stretches' parity split (§43.2)
+does not help it, the game drawing at 240 lines. **At 2×** the device's time grows by a quarter to a half on the desktop,
+which there would take the boss fight past a frame (about 20 to 25 ms, 40 to 50 frames a second) while play stays
+within one; **at 4×** by 2.3 to 2.9 times, past a frame in most play. True colour and filtering add 0.02 to 0.25 ms to the
+device's time at 4× on the desktop, a tenth or less of what the scale adds, and should add as little there. **The confirmation is left to the
+tester's play**, and the Mega Man Legends boss state the tester saved is the case to measure first when the handheld is
+free; the bench there would time `--waited` and the host's form side by side, as §50.3 does.
+
+## 51. The publish, tests, predictions, what E6 needs, and the reading log
+
+### 51.1 The publish
+
+`dotnet publish EmuSen.Mistress -c Release -r linux-x64` into a scratch folder [M]: the build runs cargo in `v1/` with
+the `dist` profile as before, and the tree carries `lib/EmuSen/libdiamond.so` (2,229,664 bytes) with its sidecar, whose
+Enhancements are the four: `precision` "Precise geometry" (false), `resolution` "Internal resolution" (1), `colour` "True
+colour" (false) and `filtering` "Texture filtering" (off), each with its help and cost. Nothing else in the build
+changed; the scratch folder was removed after.
+
+### 51.2 Tests [M, 2026-10-14]
+
+All on the final head, after `git merge WiseMan` (WiseMan had not moved from 137a039a).
+
+- **`diamond`**, `cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS`, `EMUSEN_DIAMOND_DISCS` and
+  `EMUSEN_GPU_DEVICE=6800`: 167 unit tests, 81 program tests (E1's goldens plain and with the test observer, the discs'
+  among them), E3's 3 renderer gates, 14 in `precise.rs` (E4's and the crack fill's twelve, two at N×), 7 in `scaled.rs`,
+  3 in `colour.rs` and 4 in `filtered.rs`, all passing; and without the two corpora the same counts, the corpus tests
+  standing down.
+- **`precision`**: 6. **`diamond-renderer`**: 2 (one added: the written set by row parity). **`diamond-v1`**: 4, and 4
+  with `EMUSEN_GPU_DEVICE` naming no device, the three that need one standing down with every set key's note printed.
+- **The kit**, the corpus form on the eight discs with each setting and all of them (§48): every case on every disc.
+- **WiseMan**, under the test lock with ps1-tests, the filter of §48: 221 of 221, on the final head.
+- **Not run**: `emusen-gpu`'s and MarsRT's suites (`emusen-gpu` unchanged: the pending submission and everything else
+  the renderer uses were in its version 1.1), the BlackMoon crates' (unchanged), the Vulkan validation layer over the new
+  walk, llvmpipe and the integrated card, the full WiseMan suite, the laptop (not part of this stage), the handheld
+  (in the tester's hands throughout, §50.5).
+
+### 51.3 Predictions
+
+- **P-E5a, partly held and partly retired** [M, §50.2]: the picture's share fell from 0.14 to 1.07 ms to 0.02 to 0.07,
+  as predicted; but precise geometry at 1× stands 0.20 to 0.40 ms over the plain frame on the five items and 0.63 in the
+  fights, more than "within 0.1 ms of the precision layer with a drawer that draws nothing" (E4's 0.06 to 0.24): the
+  renderer's host work, 0.10 to 0.32 ms alone, was counted in the prediction as if it were part of the wait. Retired.
+- **P-E5b, held in its first half and failed narrowly in its second** [M, §43.2, §50.3]: 1.39 stretches a frame in the
+  fights, under 2; the waited picture 0.50 to 0.54 ms, where under 0.5 was predicted.
+- **P-E5c, held on two discs of three** [M, §50.2]: the renderer alone 0.10 ms over the plain frame on Crash Bandicoot and
+  0.10 on Mega Man Legends, 0.20 on Tekken 3's first 3,000 frames, where within 0.15 was predicted; the fights 0.32.
+- **P-E5d held** [M, §50.3]: at 4× the emulation thread is within 0.04 ms of 1× on every item, the fights included (the
+  prediction excepted them); the device's time at 4× in the fights 1.25 ms, 1.49 with true colour and filtering
+  everything, under the 4 predicted.
+- **P-E5e held** [M, §48]: every picture of E3's and E4's gates unchanged at 1× with the new settings off; every machine
+  golden with any setting on.
+- **P-E5f held** [M, §45]: 249 levels of red across the gradient with true colour, against the console's 32.
+- **§27.4's handheld estimate retired** [M, the tester's log, §50.5]: +2 to 3 ms predicted where game play showed about
+  +10 ms at the median and +17 in a boss fight. The ratio of compute that estimate rested on was not the handheld's cost
+  of a submission; §50.5's estimate rests on the measured ratio instead and is itself to be confirmed.
+- **P9** (the plan's) held for E5; **GE**: each enhancement offered with its gate met.
+
+### 51.4 What is left, and what E6 needs
+
+- **Left for the tester** [proposed, not built]: the kit's "pictures settle after N frames" for an enhancement's
+  pictures across a load, which would let the state be the accurate part and a few bytes (§47.2); a deadline in the kit
+  in proportion to a picture's bytes, without which the kit cannot run 1,800 frames at 4× within its 600 seconds
+  (§48); the core ABI's word for "the console's own lines" so that a CRT filter draws the console's lines over a picture
+  at N× (§39.4); and, for true colour, drawing a blend's front colour at the console's five bits, which would remove the
+  faint shapes of §49.2 and with them the smooth fog true colour exists for.
+- **Left**: the handheld's measurement (§50.5); a Mega Man Legends boss state to bench, which the tester has offered to
+  copy; the battle transitions and motion blurs past the bench discs' frame 3,000, which no anchor reached; Mars's
+  "Antialiasing" (the picture reduced from N× to the console's size) as a choice of Diamond's, a further enhancement.
+- **E6, depth from the precision path**: the precise record already carries each vertex's depth (`Fraction::z`, the
+  camera's depth with 12 fraction bits), and the walk evaluates the weights a perspective-correct texture needs; a depth
+  plane beside the mirror at the scale (one word a sample, as true colour's plane is), written by precise triangles and
+  read only to break ties the ordering table leaves (the plan's §6.3: never a plain depth test, which hides HUDs and
+  decals), with a rule for integer polygons, which have no depth, and a measure on the bench discs of where a tie is
+  broken otherwise than the console's order. Its state would add a plane to `RNDR`, which §47.2's proposal would spare.
+- **E6, the widescreen projection**: a scale of the GTE's horizontal projection, which is the machine's arithmetic and
+  so an `accuracy` setting, not an enhancement of the picture alone (the plan's §6.3: "a scale of the GTE's horizontal
+  projection"); the renderer's picture wider than the display area at the scale; and the plan's breakage measured on the
+  bench (geometry culled at the 4:3 edges, the HUD stretched). Its goldens could not hold with it on, so its gate would be
+  P9 with it off and the machine's determinism with it on.
+
+### 51.5 Reading log (E5)
+
+**No emulator's source, shader or snippet was opened, and no description of any emulator's upscaler, true colour or
+texture filter, with or without code**: nothing of DuckStation's, Beetle PSX's (parallel-psx and its rsx among it),
+PCSX's, PCSX-Redux's, SwanStation's, ePSXe's plugins or any fork's; no xBR, JINC or other filter shader. The filter is
+plain bilinear arithmetic and the scale the console's own rules evaluated at more points. No firmware, listing or trace
+of one; the player's BIOS folders were not read; nothing under `kernel/` or `kernel-harness/` was opened or changed.
+psx-spx was not opened. No game's code was read: the discs were run, their pictures looked at. The handheld was reached
+twice, by the project's helper, to check whether it was free (it was in use both times, so nothing was run there).
+
+Opened, all EmuSen's own: this page whole; `Diamond_Plan.md` §1, §6, §7, §8 and §10; `Diamond_GPU.md` §3 to §7;
+`Diamond_Players.md` §15; `EmuSen_CoreAPI.md` §6.5, §6.6, §6.9, §6.13, §6.16 and §12; `EmuSen_Settings_Reference.md`
+§4.110; `Mars_Gpu.md` §13 to §16 and `MarsCore.cs`' `RenderScale`; the source of `diamond-renderer` whole with its
+shaders, of `precision`, `diamond-v1`, `diamond`'s `layer.rs`, `machine.rs`, `gpu/` (`decode.rs`, `display.rs`,
+`draw.rs`, `raster.rs`, `texture.rs`, `vram.rs`), `tests/` and `examples/`; `emusen-gpu`'s interface; the kit's C6 to C8,
+its frame checks and its deadline; Mistress's `GraphicsSettingsWindow.cs` and the host's `CoreEngine.cs` and
+`CoreMachine.cs` at the frame; WiseMan's `DiamondPreciseGeometryTests.cs`, `DiamondTests.cs`, `DiamondShaderTests.cs`
+and `ShaderCompiler.cs`; the crack fill's model and E4's measurement scripts in the probe; the tester's handheld log.

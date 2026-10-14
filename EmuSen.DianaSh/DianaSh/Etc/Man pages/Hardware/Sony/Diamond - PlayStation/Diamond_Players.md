@@ -1572,7 +1572,7 @@ the console's line.
 
 **Turning it on and off.** It applies between frames, at once, while a game runs; the picture changes from the next
 frame and nothing else does (the sound, the game's own state and what it computes are those of a console;
-`DiamondPreciseGeometryTests`). Off is the console's picture, drawn by the software rasteriser as before.
+`DiamondPreciseGeometryTests`, since 2026-10-14 `DiamondEnhancementsTests`). Off is the console's picture, drawn by the software rasteriser as before.
 
 **Without a usable graphics card.** The switch can still be turned on; the game then runs on the console's own picture,
 and a note under the row says so: "No usable Vulkan graphics card was found (the reason), so the console's own picture
@@ -1600,3 +1600,54 @@ that none is tinted twice. Whether the fill should be a switch of its own is the
 (`Diamond_Enhancements.md` §36.2).
 
 **The handheld** is not yet measured with it; the estimate is `Diamond_Enhancements.md` §27.
+
+## 16. Internal resolution, true colour and texture filtering, as players meet them (2026-10-14)
+
+*Stage E5 of `Diamond_Plan.md` §7; the design, the gate and the costs are `Diamond_Enhancements.md` §37 to §51.* Three
+more rows under the PlayStation tab's **Enhancements** heading, after *Precise geometry*, each off by default (the
+console's picture) and each applied at once, between frames, while a game runs. The game itself runs exactly as on a
+console with any of them: its sound, its timing and what it computes are unchanged, and a save state made with them
+loads without them and the reverse.
+
+**Internal resolution** (*1x*, *2x*, *3x*, *4x*). The picture drawn at a multiple of the console's, so that 3D edges and
+textures are finer on a large screen. Sprites, text and 2D backgrounds stay on the console's pixels, enlarged, each a
+square block: nothing in a menu moves or blurs. A screen a game copies and draws back (a backdrop, a reflection, a
+transition) keeps the finer picture. What does not get finer: effects a game makes by reading the screen back through
+its processor, lines, and the console's dither, which shows as a coarser grain unless *True colour* is on. With a CRT
+filter on, the filter draws the enlarged picture's lines rather than the console's (the core does not yet tell the
+frontend the console's line count; `Diamond_Enhancements.md` §39.4). Each step costs its square in the graphics card's
+work and memory: 2x is four times the drawing, 4x sixteen.
+
+**True colour**. Shading, lighting, fog and see-through effects drawn with eight bits a colour where the console keeps
+five, and without the console's dither: gradients and fog smooth instead of grainy. Pictures drawn at the console's own
+precision (menus, 2D, uploaded images, movies) look exactly as on the console. What a player may notice in exchange:
+fades and glows that work in steps smaller than the console could show now show them, a faint square about Silent
+Hill's publisher logo as it fades and the edge of Ape Escape's sun glow; and art made for the dither looks smoother than
+it was drawn to.
+
+**Texture filtering** (*Off*, *3D polygons*, *Everything*). Textures smoothed between their texels instead of shown as
+blocks. *3D polygons* filters 3D surfaces and leaves sprites, text and menus sharp, including menus built of polygons
+drawn one texel to a pixel; *Everything* filters them too, which softens text once the internal resolution is above
+1x. Cut-out shapes keep the console's exact edges with no dark fringe, and a texture packed beside another in memory
+does not take its neighbour's colours.
+
+**Every enhancement shows its picture a frame late**: about 17 ms at 60 frames a second, the same for all four,
+*Precise geometry* included since this stage. It is what lets the game run without ever waiting for the graphics card.
+
+**Save states** grow with them: about 11.6 MB with *Precise geometry* alone at 1x, 26.5 MB at 2x and 82 MB at
+4x with every enhancement on, against 5.4 MB with none.
+
+**Without a usable graphics card** each row can still be turned on; the console's picture is shown and a note under each
+row set says why, as for *Precise geometry* (§15).
+
+**On the handheld.** Not yet measured with this stage: the tester's own play of Mega Man Legends with *Precise geometry* on
+(2026-10-14, the build before this stage) showed the enhancement costing far more there than the desktop had suggested,
+a frame of about 12 ms at the median against 2 ms without it, and 18 to 19.5 ms in a boss fight, where the game slowed to
+48 to 52 frames a second. This stage hands the picture a frame late so that the game no longer waits for the graphics
+card, which should bring that game back to about 2.5 to 3 ms of the processor's time a frame with the card drawing
+beside it, the boss fight at or near full speed (`Diamond_Enhancements.md` §50.5, an estimate to be confirmed in play).
+**Recommended there**: *Precise geometry*, *True colour* and *Texture filtering* on *3D polygons*, at an *Internal
+resolution* of *1x*: true colour and filtering cost the card little, and the handheld's screen is the console's
+resolution or near it, where a higher internal resolution shows least. *2x* is worth trying in a game that runs with
+room to spare; *3x* and *4x* are for a desktop graphics card, where every bench game draws its 4x picture in under 1.5 ms
+of a 16.7 ms frame.

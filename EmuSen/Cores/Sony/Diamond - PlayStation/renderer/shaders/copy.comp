@@ -1,13 +1,17 @@
 #version 450
 // Diamond's renderer, a VRAM-to-VRAM copy's step: rows of the source read whole into the scratch, or the scratch written
-// to the destination under the mask, as vram.rs's `copy` does a row at a time. See Diamond_Enhancements.md §16.
+// to the destination under the mask, as vram.rs's `copy` does a row at a time; at a scale of N every sample of the rows,
+// so that a copy of something drawn keeps its detail (§39.2). See Diamond_Enhancements.md §16.
 
 layout(local_size_x = 64) in;
 
 layout(std430, set = 0, binding = 0) buffer Vram { uint vram[]; };
 layout(std430, set = 0, binding = 1) buffer Scratch { uint scratch[]; };
+// True colour's plane, moved with its samples while it is on (§40).
+layout(std430, set = 0, binding = 2) buffer Fine { uint fine[]; };
 
-// write: 0 reads, 1 writes; the rows from `row` on, `rows` of them, `width` pixels each; the mask's check and set.
+// write: 0 reads, 1 writes; the rows from `row` on, `rows` of them, `width` pixels each; the mask's check and set; the
+// scale. One workgroup a run of 64 samples of a row, the second dimension the sample rows.
 layout(push_constant) uniform Push {
     uint write;
     uint sx;
@@ -18,22 +22,29 @@ layout(push_constant) uniform Push {
     uint row;
     uint rows;
     uint mask;
+    uint scale;
+    uint options;
 };
 
 void main() {
-    uint n = gl_WorkGroupID.x * 64u + gl_LocalInvocationID.x;
-    if (n >= width * rows) {
+    uint i = gl_WorkGroupID.x * 64u + gl_LocalInvocationID.x;
+    if (i >= width * scale) {
         return;
     }
-    uint i = n % width, j = row + n / width;
-    uint kept = j * 1024u + i;
+    uint jj = row * scale + gl_WorkGroupID.y, j = jj / scale, s = jj % scale;
+    uint wide = 1024u * scale, column = i / scale, within = i % scale;
+    uint kept = jj * wide + i;
     if (write == 0u) {
-        scratch[kept] = vram[((sy + j) & 511u) * 1024u + ((sx + i) & 1023u)];
+        uint from = (((sy + j) & 511u) * scale + s) * wide + ((sx + column) & 1023u) * scale + within;
+        scratch[kept] = (vram[from] & 0xFFFFu) | ((options & 1u) != 0u ? fine[from] << 16 : 0u);
         return;
     }
-    uint at = ((dy + j) & 511u) * 1024u + ((dx + i) & 1023u);
+    uint at = (((dy + j) & 511u) * scale + s) * wide + ((dx + column) & 1023u) * scale + within;
     if ((mask & 2u) != 0u && (vram[at] & 0x8000u) != 0u) {
         return;
     }
     vram[at] = (scratch[kept] & 0xFFFFu) | ((mask & 1u) != 0u ? 0x8000u : 0u);
+    if ((options & 1u) != 0u) {
+        fine[at] = scratch[kept] >> 16;
+    }
 }

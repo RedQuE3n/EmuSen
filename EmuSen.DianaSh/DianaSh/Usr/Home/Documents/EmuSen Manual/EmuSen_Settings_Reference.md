@@ -8529,6 +8529,32 @@ and is stored per console as every core setting is. Where no usable Vulkan devic
 the core's note shows under it, "No usable Vulkan graphics card was found (…), so the console's own picture is shown."
 What it does and what players meet: `Diamond_Players.md` §15.
 
-**Tests.** `DiamondPreciseGeometryTests`: the schema's entry with its group and cost, the heading and its row in the
+**Tests.** `DiamondPreciseGeometryTests` (since 2026-10-14 `DiamondEnhancementsTests`, §4.111): the schema's entry with its group and cost, the heading and its row in the
 PlayStation's tab, and the setting turned on and off between frames through the host changing the picture alone. The
 fit audit's PlayStation tab, with the heading, fits at both sizes.
+
+### 4.111 The PlayStation's Internal resolution, True colour and Texture filtering (2026-10-14)
+
+Diamond's stage E5 (`Diamond_Enhancements.md` §37 to §51) adds three rows under the PlayStation tab's **Enhancements**
+heading, after *Precise geometry*, each applied between frames while a game runs and stored per console as every core
+setting is:
+
+- **Internal resolution**, a dropdown of *1x (the console's)*, *2x*, *3x* and *4x*, default 1x. Mars's label and kind of
+  choice for the same fact (`MarsCore.cs`' `RenderScale`, "Internal resolution"), so that one fact has one name across
+  consoles; the PlayStation's key is `resolution`, in the core's own style. The picture the host receives is the
+  console's at the multiple, its size announced by the `GEOMETRY` event, at most 2,560 by 2,304, which machine info's
+  largest picture now says.
+- **True colour**, a switch, off: eight bits a colour for drawing and blending, and no dither.
+- **Texture filtering**, a dropdown of *Off (the console's)*, *3D polygons* and *Everything*, default off. The second
+  leaves sprites, text and menus sharp.
+
+Each hint is the setting's help and its cost: a Vulkan graphics card, the picture shown a frame later than the
+console's (every one of the four, *Precise geometry* included, since the renderer's picture is handed a frame late so
+that the machine never waits for it, `Diamond_Enhancements.md` §38.1), and each its own price and breakage. Without a
+usable Vulkan device each row is still turned on, and the core's note shows under every one set. What players meet and
+the advice for the handheld: `Diamond_Players.md` §16.
+
+**Tests.** `DiamondEnhancementsTests`: the four entries with their keys, labels, kinds, defaults, group and costs, the
+heading followed by the four rows with their controls, and each setting, and all four together, turned on and off
+between frames through the host changing the picture alone. `DiamondTests`' lists of the library's settings name the
+three keys. The fit audit's PlayStation tab, with the four rows, fits at both sizes.

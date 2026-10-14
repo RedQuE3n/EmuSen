@@ -1,6 +1,7 @@
 #version 450
 // Diamond's renderer, the CLUT cache's loads: one workgroup a load, its 16 or 256 entries from the renderer's VRAM into
-// a slot, as texture.rs's `ClutCache::prepare` loads them. See Diamond_Enhancements.md §16.
+// a slot, as texture.rs's `ClutCache::prepare` loads them; at a scale of N, each entry the first sample of its block, the
+// console's own (§39.2). See Diamond_Enhancements.md §16.
 
 layout(local_size_x = 64) in;
 
@@ -9,11 +10,11 @@ layout(std430, set = 0, binding = 1) buffer Cluts { uint cluts[]; };
 // Each load: its slot, VRAM's x and y, and how many entries.
 layout(std430, set = 0, binding = 2) readonly buffer Loads { uvec4 loads[]; };
 
-layout(push_constant) uniform Push { uint first; };
+layout(push_constant) uniform Push { uint first; uint scale; };
 
 void main() {
     uvec4 load = loads[first + gl_WorkGroupID.x];
     for (uint i = gl_LocalInvocationID.x; i < load.w; i += 64u) {
-        cluts[load.x * 256u + i] = vram[(load.z & 511u) * 1024u + ((load.y + i) & 1023u)] & 0xFFFFu;
+        cluts[load.x * 256u + i] = vram[(load.z & 511u) * scale * 1024u * scale + ((load.y + i) & 1023u) * scale] & 0xFFFFu;
     }
 }

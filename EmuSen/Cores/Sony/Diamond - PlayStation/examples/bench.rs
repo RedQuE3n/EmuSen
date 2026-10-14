@@ -71,7 +71,7 @@ fn main() {
     if rendering {
         let r = diamond_renderer::Renderer::with(None, drawing(&args)).unwrap_or_else(|e| panic!("no renderer: {e}"));
         if precise {
-            m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r.keeping(true))));
+            m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r)));
         } else {
             m.attach(Box::new(r));
         }

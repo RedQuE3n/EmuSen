@@ -1596,3 +1596,54 @@ treats `EMUSEN_CORE_ABI_MINOR` and `EMUSEN_CORE_ABI_VERSION` as the header's rev
 the disc change's branch wrote it so that the two merge as one. The baseline also gained `json info.systems[].development`,
 a field `info.schema.json` has had since 2026-10-06 that no `--emit-baseline` had recorded; it enters at whichever
 minor first records it.
+
+## 14. Pictures that settle after a load (1.5), decided 2026-10-14
+
+*Written at Diamond's seeded state (`Diamond_Enhancements.md` §52), before its code.*
+
+### 14.1 What existed
+
+A state reproduced the machine and, through §6.9's determinism rule as the kit's C7 and C8 test it, every picture after
+a load: a machine given another's state handed the pictures that machine handed from the next frame on. Diamond's
+renderer draws its picture at up to four times the console's resolution beside the accurate machine; to meet the rule
+its state kept the renderer's own copy of VRAM and its picture at that scale, 81.9 MB a state at 4× with every
+enhancement on against 5.4 MB for the machine, and rewind's deltas up to 28 times the machine's (§47.2 there). A renderer
+seeded from the machine's VRAM at the load hands the kept form's pictures again within six frames on drawn pictures and
+within 141 on a feedback effect (§52.1 there), but not from the first frame.
+
+### 14.2 The forms weighed
+
+| Form | For | Against |
+|---|---|---|
+| (a) The kit excuses pictures after a load whenever a setting with `effect: enhancement` is not at its hardware value, for a bound of its own | no surface change | the kit chooses one bound for every core without knowing why a picture differs; it excuses cores whose states need no excuse; a host that loads states every frame learns nothing |
+| (b) **Machine info's `state.picture_settles`**, declared by the core | the core states its own bound once, per configuration; the kit holds it to it; a host reads it; absent is today's rule | a new descriptor field, so a minor |
+| (c) A capability bit, or a state kind that keeps the full picture for hosts that need it | a host could ask for exact pictures | a bit carries no bound; a second state kind doubles a core's state code for a need no host has |
+
+**Chosen: (b)** [C], with a maximum of 600 frames so that the field cannot excuse a whole run, and the kit's rule
+(`EmuSen_CoreAPI.md` §28.10).
+
+### 14.3 The surface change
+
+- `machine_info.state.picture_settles`, integer, optional, from 0 to 600: the baseline's line
+  `json machine_info.state.picture_settles integer optional @1.5`, the schema's property with its range, and
+  `EMUSEN_CORE_ABI_MINOR` 5. No export, struct, constant or bit changes.
+- `emusen-native`: `Core::picture_settles(&self) -> u32`, 0 by default, written by `core_exports!` into machine info
+  only when it is not 0, so that no other core's machine info changes by a byte. A core of minor 4 or older never writes
+  it, and a newer host reads its absence as 0.
+- The C# host: `CoreMachineInfo.PictureSettles`, 0 when absent. No host behaviour depends on it today.
+- The kit: C7 and C8 as `EmuSen_CoreAPI.md` §28.10 states, with seeded faults in its test cores (a picture that settles
+  within its bound, one that never settles, one that differs without declaring, sound that differs within the bound,
+  a bound above the maximum).
+
+### 14.4 Older and newer peers
+
+An older host ignores the field and is unaffected: it never relied on a loaded picture's being exact, and its rewind
+and state slots already take a state of any length. An older kit run on a core declaring a bound fails that core's C7
+or C8 when a picture differs after a load, which is the rule it was built with; a core author runs the kit of the
+core's own minor or later.
+
+### 14.5 Cost, and what it breaks
+
+Nothing for a core that does not declare it. For one that does, the kit's comparison of a loaded run's first frames is
+weaker by exactly the frames declared, and what it compares past them is unchanged. The bound is a promise the kit
+checks on the images it is given, not a proof: a game outside them can break it (`Diamond_Enhancements.md` §52.4).

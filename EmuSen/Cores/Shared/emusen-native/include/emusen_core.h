@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.4.
+/* emusen_core.h - the EmuSen core ABI, version 1.5.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 4u
+#define EMUSEN_CORE_ABI_MINOR 5u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -265,7 +265,8 @@ emusen_machine *emusen_core_create(const emusen_create_params *params, int32_t *
  * when it returns. */
 int32_t emusen_core_free(emusen_machine *machine);
 int32_t emusen_core_reset(emusen_machine *machine);                                        /* RESET */
-int64_t emusen_core_machine_info(const emusen_machine *machine, uint8_t *out, size_t len); /* JSON (section 6.4) */
+int64_t emusen_core_machine_info(const emusen_machine *machine, uint8_t *out, size_t len); /* JSON (section 6.4); @since 1.5
+                                    its state.picture_settles, the frames after a load whose pictures may differ (6.9) */
 /* The detail of the last failing call on this machine, in words; never parsed. */
 int64_t emusen_core_last_error(const emusen_machine *machine, uint8_t *out, size_t len);
 

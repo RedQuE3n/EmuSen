@@ -2,13 +2,14 @@
 //! moves and each word GP0 receives, it keeps beside every place that can hold a projected word (the GTE's SXY FIFO,
 //! the general registers, RAM and the scratchpad) the serial of the projection the word came from, and when the GPU
 //! starts a polygon it finds the polygon's words among the receipts and gives its vertices' sub-pixel offsets and
-//! depths, if every vertex is still the integer its projection made. `Precise` pairs it with whoever draws.
+//! depths, if every vertex is still the integer its projection made. `Precise` pairs it with whoever draws. It keeps
+//! nothing in a state, and starts empty at every seed (Diamond_Enhancements.md §52).
 
 use blackmoon_gte::{Observer, Projection};
 use blackmoon_r3000::{Move, Size};
 use diamond::gpu::Gpu;
 use diamond::layer::{Command, Layer, Part, Receipt, Shown};
-use emusen_native::{StateReader, StateWriter};
+use emusen_native::StateWriter;
 
 /// The projections kept, the receipts kept, and the words of RAM and of the scratchpad shadowed.
 pub const RING: usize = 32 * 1024;
@@ -21,8 +22,6 @@ const GP0: u32 = 0x1F80_1810;
 pub const GUARD: f64 = 2.0;
 /// The offsets' unit: 256ths of a pixel, the renderer's sub-pixel grid (§22.2).
 pub const SUBPIXEL: f64 = 256.0;
-
-pub const TAG: [u8; 4] = *b"PREC";
 
 /// A precise vertex as the drawer is given it: its offset from the integer vertex the GPU decodes, in 256ths of a
 /// pixel, and its depth in the camera's space with 12 fraction bits.
@@ -334,41 +333,8 @@ impl Layer for Precision {
         self.resolve(c);
     }
 
-    fn tags(&self) -> Vec<[u8; 4]> {
-        vec![TAG]
-    }
-
-    fn save(&self, _tag: [u8; 4], w: &mut StateWriter) {
-        w.u32s("Serials", &[self.serial, self.cpu, self.head, self.cursor]);
-        w.u32s("Registers", &self.regs);
-        w.u32s("Fifo", &self.fifo);
-        w.u32s("Receipts", &self.queue);
-        w.u32s("Ring", &self.ring);
-        w.u32s("RAM", &self.ram);
-        w.u32s("Scratch", &self.scratch);
-    }
-
-    fn load(&mut self, tag: [u8; 4], block: &[u8]) {
-        let mut next = Precision { counts: self.counts, ..Precision::new(self.form) };
-        let mut r = StateReader::new(block);
-        let mut serials = [0u32; 4];
-        let read = (|| {
-            r.u32s(&mut serials)?;
-            r.u32s(&mut next.regs)?;
-            r.u32s(&mut next.fifo)?;
-            r.u32s(&mut next.queue)?;
-            r.u32s(&mut next.ring)?;
-            r.u32s(&mut next.ram)?;
-            r.u32s(&mut next.scratch)
-        })();
-        if read.is_err() || r.position() != block.len() {
-            return self.clear(tag);
-        }
-        [next.serial, next.cpu, next.head, next.cursor] = serials;
-        *self = next;
-    }
-
-    fn clear(&mut self, _tag: [u8; 4]) {
+    /// A seed, at an attach or a load, starts the layer empty: what it was told before is of another machine (§52.3).
+    fn seed(&mut self, _gpu: &Gpu) {
         self.reset();
     }
 }
@@ -418,21 +384,19 @@ impl<D: Draw> Layer for Precise<D> {
     }
 
     fn tags(&self) -> Vec<[u8; 4]> {
-        let mut t = vec![TAG];
-        t.extend(self.drawer.tags());
-        t
+        self.drawer.tags()
     }
 
     fn save(&self, tag: [u8; 4], w: &mut StateWriter) {
-        if tag == TAG { self.precision.save(tag, w) } else { self.drawer.save(tag, w) }
+        self.drawer.save(tag, w)
     }
 
     fn load(&mut self, tag: [u8; 4], block: &[u8]) {
-        if tag == TAG { self.precision.load(tag, block) } else { self.drawer.load(tag, block) }
+        self.drawer.load(tag, block)
     }
 
     fn clear(&mut self, tag: [u8; 4]) {
-        if tag == TAG { self.precision.clear(tag) } else { self.drawer.clear(tag) }
+        self.drawer.clear(tag)
     }
 
     fn settle(&mut self) {

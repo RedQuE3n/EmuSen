@@ -469,7 +469,12 @@ pub struct Measured<'a> {
     pub space_size: &'a dyn Fn(u32) -> Option<i64>,
     pub battery_len: &'a dyn Fn(u32) -> Option<i64>,
     pub capabilities: u64,
+    /// `Core::picture_settles`, written as `state.picture_settles` when it is not 0 (since 1.5).
+    pub picture_settles: u32,
 }
+
+/// The most frames `state.picture_settles` may name: ten seconds at 60 frames a second (EmuSen_CoreAPI.md §6.9).
+pub const PICTURE_SETTLES_MAX: u32 = 600;
 
 /// Machine info as JSON, with the drives of `Core::drives`.
 pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Drive]) -> String {
@@ -536,7 +541,11 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
     for &v in &m.state.loads_from {
         j.int(v);
     }
-    j.end_array().end_object();
+    j.end_array();
+    if measured.picture_settles != 0 {
+        j.field_uint("picture_settles", measured.picture_settles as u64);
+    }
+    j.end_object();
     j.field_strs("phases", &m.phases);
     if let Some((low, high)) = m.patches {
         j.key("patches").begin_object().field_uint("low", low as u64).field_uint("high", high as u64).end_object();

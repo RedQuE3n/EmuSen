@@ -713,7 +713,7 @@ What depends on the game, read after create:
 | **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats`, since 2026-10-07 `view` (§29) and, since 1.2, `reports_loads` (§6.14.1) (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
 | `processors` | `{ id, name, pc_bits, registers: [{ name, bits }], code_space }`, main processor first; `IDebugTarget.DebugCpus` and `regs` from data. `code_space`, appended 2026-10-04 for VenusRT's SPC700 (`VenusRT_Native.md` §36), is the id of the space the processor's code is listed from; absent, the host takes the space named `<name>BUS`, else `<name>PRG`, else for processor 0 the first space |
 | `battery` | `{ which, suffix, length }`: `.srm`, the N64's pak; the path rule stays the runtime's (`SaveLibrary.SramPathFor`) |
-| **`state`** | `{ format, version, kinds, loads_from }`: the magic and version a frontend records beside a state (`IStateFormat`), the kinds, and the versions it reads |
+| **`state`** | `{ format, version, kinds, loads_from }`: the magic and version a frontend records beside a state (`IStateFormat`), the kinds, and the versions it reads; since 1.5 `picture_settles`, the frames after a load whose pictures may differ from the saving machine's (§6.9) |
 | `phases` | the names `phases` reports, in order |
 | `patches` | `{ low, high }`: the address range `ResolveRomPatches` is kept to |
 | `skip_rendering_state_neutral` | true when skipping rendering leaves the state as a rendered frame would; run-ahead needs it (§6.22), and VenusRT designs for it (`VenusRT_Plan.md` §4.1) |
@@ -724,7 +724,7 @@ Every field a host requires has a stated default when absent, so an older core i
 defaults, as the host adapter applies them (§19): `frame_rate` 60/1; every `video` size 0 and `aspect` 0/0, so that the
 first `frame_info` decides; `audio.rate` the `audio_rate` export's answer; `ports`, `spaces`, `processors`, `battery`,
 `phases` and `firmware` empty; `state.kinds` `[0]`, its `format` empty and `version` 0; no `patches`, so no ROM patches are sent;
-`skip_rendering_state_neutral` false.
+`skip_rendering_state_neutral` false; `state.picture_settles` 0.
 
 ### 6.5 A frame
 
@@ -834,6 +834,15 @@ rumble, would be pulled through events (§6.19); v1.0 defines none.
   not change them. MarsRT's threaded display processor and recompiler are bit-identical by measurement
   (`Mars_Native.md`), so the rule asks nothing they do not already do. The kit tests it (C8).
 - **Saving settles first, loading is whole, a failed load changes nothing**: kept from §3.9 there.
+- **Pictures that settle after a load** (since 1.5, 2026-10-14). Machine info's `state.picture_settles`, an integer from
+  0 to 600, absent meaning 0: after a `state_load`, the pictures of the first `picture_settles` frames the machine
+  advances may differ from those the machine that saved the state handed after the same frames; from the next frame on
+  they may not, and the sound, the events and the state never may. It is for a core whose enhancement draws a picture
+  from more than its state holds and redraws it after a load, as Diamond's renderer does from the machine's VRAM
+  (`Diamond_Enhancements.md` §52); a core whose bound changes with a setting raises `MACHINE_INFO`. The determinism
+  rule above is unchanged for runs without a load, and two machines given the same state still hand the same pictures.
+  A host that shows the pictures of the first frames after a load as final (run-ahead, a rollback of netplay, §6.22)
+  reads it; the kit's C7 and C8 compare pictures after a load from the frame past it (§28.10).
 - **The format is the core's**, versioned by machine info's `state` field (§4.3). A port's format is its C# oracle's;
   VenusRT's is its own (`VenusRT_Plan.md` §5.6).
 
@@ -1968,6 +1977,13 @@ reads the disc's file there during the emulated seek; no capability bit. Its rea
 added; the host routes the event to Galaxia's reader of the disc's files, and the platform library's interface goes
 from 9 to 10 for `emusen_galaxia_mapped_advise`.
 
+**v1.5, 2026-10-14** (§6.4, §6.9, §28.10), from Diamond's seeded state (`Diamond_Enhancements.md` §52): machine
+info's `state.picture_settles`, the frames after a load whose pictures may differ from the saver's, so that a core whose
+enhancement redraws its picture from the machine after a load need not save what it drew; no export, struct or bit.
+`emusen-native` gains `Core::picture_settles`, written into machine info when it is not 0; the C# reader takes it as
+`CoreMachineInfo.PictureSettles`; the kit's C7 and C8 compare pictures after a load from the frame past it, and its
+deadline for an image becomes one on progress. Its reasons are `EmuSen_CoreAPI_Extensions.md` §14.
+
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
 and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld
 (`Diamond_Players.md` §12.7); and the crash log's path is in the frontend's log folder, made first (§6.18).
@@ -2854,8 +2870,8 @@ emusen-core-conform --core LIB --images DIR|LIST [--from DIR] [--image FILE] [--
   allowed holds at 256 MiB an image: the tightest `memory.max` of the process's control groups, or the memory
   available. The core's own cases run beside them on a library handle of their own, since C12's skewed host is a
   property of the handle. The image is read by the thread that runs it, so a corpus is never held whole.
-- **A hang**: an image whose cases have not ended in 600 seconds is reported as failing C6 with those words, its
-  thread left and another started in its place, as C4 leaves a malformed image that hangs (§21.4). A crash ends the
+- **A hang**: an image whose cases have advanced no frame for 600 seconds is reported as failing C6 with those words
+  (until 2026-10-14, one whose cases had not ended in 600 seconds; §28.10), its thread left and another started in its place, as C4 leaves a malformed image that hangs (§21.4). A crash ends the
   process, which is itself the failure, and takes the images running beside it: the single-image form on the image
   named last in the output finds it.
 - **The output**: a line for each image as it ends (`pass` or `FAIL` with the cases failed and their first words),
@@ -2975,6 +2991,24 @@ case's run now starts once each thread is calling and ends once each has called 
   byte past its image's end, fails C18 alone.
 - **Measured** [M]: the kit's tests pass, 7 and 17; on the seven test discs at 1,800 frames C18 passes on every one
   (`EmuSen_CoreAPI_Extensions.md` §10.2.7).
+
+### 28.10 Pictures that settle, and the deadline on progress (1.5, 2026-10-14)
+
+*Decided at Diamond's seeded state (`Diamond_Enhancements.md` §52).*
+
+- **C7 and C8 after a load.** Each machine's `state.picture_settles` (§6.9) is read when it is made. Where a machine
+  was given a state, its run is compared with the saver's by the sound's digest and the end state as before, and by a
+  second digest of the pictures that folds only those of the frames past the bound; the pictures of the first
+  `picture_settles` frames after the load are not compared. With a bound of 0 the second digest is the first, so a core
+  that declares nothing is held exactly as before. A bound above 600, or one that leaves no frame of the run's second
+  half to compare (the run is to be longer than twice the bound), fails C7 and C8 with those words. The case's note
+  names the frame from which pictures were compared. Runs without a load (C6, C8's two machines fed alike, C17, C18)
+  are compared as before; C12 runs C7 and C8 again under the same rule.
+- **The deadline is on progress.** The thread running an image stamps the time at each frame its cases run, and the
+  runner reports an image whose stamp is 600 seconds old as hung (§28.4). An image's cases may take as long as their
+  frames take, which at Diamond's 4× and the kit's 1,800 frames was more than 600 seconds whole (§48 there); a create
+  or a frame that never returns is caught as before. Hashing more cheaply was set aside, the frames' digest being
+  Pharaoh's (§12.1).
 
 ## 29. A space that is a view, 2026-10-07
 

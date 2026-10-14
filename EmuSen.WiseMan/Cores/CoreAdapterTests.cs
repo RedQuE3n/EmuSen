@@ -55,9 +55,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(Full.Available, Full.Report);
             Assert.True(Plain.Available, Plain.Report);
             Assert.Same(Full, CoreLibrary.Open(LibraryPath("v1_test_core")));
-            Assert.Equal(("v1-test-core", 0x1FFFFFUL, 0x10004u, 4), (Full.Info.Id, Full.Capabilities, Full.AbiVersion, Full.Settings.Count));
+            Assert.Equal(("v1-test-core", 0x1FFFFFUL, 0x10005u, 4), (Full.Info.Id, Full.Capabilities, Full.AbiVersion, Full.Settings.Count));
             Assert.Equal(("v1-plain-core", 0UL), (Plain.Info.Id, Plain.Capabilities));
-            Assert.EndsWith("core ABI 1.4", Full.Report);
+            Assert.EndsWith("core ABI 1.5", Full.Report);
             Assert.Equal(new[] { ".tst" }, Full.Info.Systems.Single().Extensions);
             Assert.Equal("the image is empty", Full.Words(-9));
 
@@ -70,6 +70,18 @@ namespace EmuSen.WiseMan.Cores
             var other = CoreLibrary.Open(sqlite);
             Assert.False(other.Available, sqlite);
             Assert.Contains("not on the core ABI", other.Report);
+        }
+
+        // Since 1.5 machine info's state may bound the frames whose pictures settle after a load; a core that writes nothing, every core before 1.5, reads as 0 - see EmuSen_CoreAPI.md §6.9.
+        [Fact]
+        public void A_bound_of_settling_pictures_is_read_from_the_state_and_absent_is_zero()
+        {
+            const string state = "\"state\":{\"format\":\"T\",\"version\":1,\"kinds\":[0]";
+            Assert.Equal(0, CoreDescriptorReader.MachineInfo("{\"system\":\"test\"," + state + "}}", 32000).PictureSettles);
+            Assert.Equal(240, CoreDescriptorReader.MachineInfo("{\"system\":\"test\"," + state + ",\"picture_settles\":240}}", 32000).PictureSettles);
+            using var engine = new CoreEngine(Full);
+            engine.LoadRom(Rom(Image(1, 2, 3)));
+            Assert.Equal(0, engine.Machine.Info.PictureSettles);
         }
 
         [Fact]

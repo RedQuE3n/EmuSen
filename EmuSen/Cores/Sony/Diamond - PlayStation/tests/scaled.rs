@@ -252,20 +252,25 @@ fn the_mask_bit_and_blending_act_on_each_sample() {
     }
 }
 
-/// A state at N x (§42.2): saved by a machine with the renderer at 4x keeping its block, loaded by a second, which then
-/// hands the same pictures from its first frame, as the kit's C7 and C8 ask; saved, loaded and saved again it is the
-/// same bytes; and a state from another scale seeds the renderer from the machine rather than failing.
+/// A state at N x (§52): the renderer writes no block, so a state with it at 4x is a plain machine's to the byte; saved,
+/// loaded and saved again it is the same bytes; a machine given it seeds its renderer from the machine and hands the
+/// console's picture enlarged, each pixel a block, until the program draws again (this one draws once), two such
+/// machines handing the same pictures from their first frame, its mirror the machine's VRAM in blocks; a machine at
+/// another scale seeds at its own.
 #[test]
-fn a_state_at_n_continues_its_picture() {
+fn a_state_at_n_is_the_machines_and_a_load_seeds() {
     use emusen_native::ffi::StateMachine;
     let page = 10u32;
     let mut words = vec![0xE100_0400 | page | 2 << 7, 0x3000_00FF, vertex(640, 0), 0x0000_FF00, vertex(703, 10), 0x00FF_0000, vertex(650, 63)];
     words.extend([0x6580_8080, vertex(10, 10), 0, 0x0040_0040, 0x3000_FF00, vertex(100, 20), 0x00FF_0000, vertex(200, 30), 0x0000_00FF, vertex(120, 120)]);
-    let make = |scale: u32| {
-        let r = renderer(scale)?.keeping(false);
+    let bare = || {
         let code = emusen_mips::assemble(&program(&words), 0x8001_0000, &blackmoon_r3000::dialect(Some(&blackmoon_gte::COPROCESSOR))).expect("assembles");
         let image = diamond::exe::build(&code);
-        let mut m = Machine::new(Media::read(&image).unwrap(), Config { market: Market::Americas, gpu: Chip::Pin208 }, [Some("psx.dualshock"), None], &image, None);
+        Machine::new(Media::read(&image).unwrap(), Config { market: Market::Americas, gpu: Chip::Pin208 }, [Some("psx.dualshock"), None], &image, None)
+    };
+    let make = |scale: u32| {
+        let r = renderer(scale)?;
+        let mut m = bare();
         m.attach(Box::new(r));
         Some(m)
     };
@@ -284,26 +289,40 @@ fn a_state_at_n_continues_its_picture() {
         s
     };
     let Some(mut a) = make(4) else { return };
+    let mut plain = bare();
     for _ in 0..3 {
         a.advance();
         handed(&mut a);
+        plain.advance();
     }
     let state = saved(&mut a);
+    assert!(state == saved(&mut plain), "the state at 4x is the machine's");
     a.load_state(&state).unwrap();
     assert!(saved(&mut a) == state, "save, load, save gives other bytes");
-    let mut b = make(4).unwrap();
+    let (mut b, mut c) = (make(4).unwrap(), make(4).unwrap());
     b.load_state(&state).unwrap();
-    for f in 0..3 {
-        a.advance();
-        b.advance();
-        let (pa, pb) = (handed(&mut a), handed(&mut b));
-        assert!(pa == pb, "frame {f} after the load: the pictures handed differ");
-        assert_eq!((pa.1, pa.2), (4 * 320, 4 * 240));
-    }
-    let mut c = make(2).unwrap();
     c.load_state(&state).unwrap();
-    c.advance();
-    assert_eq!(handed(&mut c).1, 2 * 320, "a state of another scale seeds the renderer at its own");
+    let vram: Vec<u16> = b.board.gpu.vram.bytes.chunks_exact(2).map(|h| u16::from_le_bytes([h[0], h[1]])).collect();
+    let layer: &mut dyn Any = b.layer().unwrap();
+    let samples = layer.downcast_mut::<Renderer>().unwrap().samples().to_vec();
+    assert!(samples.iter().enumerate().all(|(i, &w)| w == vram[(i / 4096 / 4) * 1024 + i % 4096 / 4] as u32), "the mirror seeded is the machine's VRAM, each halfword a block of 16, no mark");
+    for f in 0..3 {
+        b.advance();
+        c.advance();
+        let (pb, pc) = (handed(&mut b), handed(&mut c));
+        assert!(pb == pc, "frame {f} after the load: two machines given one state hand other pictures");
+        assert_eq!((pb.1, pb.2), (4 * 320, 4 * 240));
+        let console = b.board.gpu.display.frame().to_vec();
+        let enlarged = (0..(pb.1 * pb.2) as usize).all(|i| {
+            let (x, y) = (i % pb.1 as usize / 4, i / pb.1 as usize / 4);
+            pb.0[i * 4..i * 4 + 4] == console[(y * 320 + x) * 4..(y * 320 + x) * 4 + 4]
+        });
+        assert!(enlarged, "frame {f} after the load: the picture is not the console's enlarged");
+    }
+    let mut d = make(2).unwrap();
+    d.load_state(&state).unwrap();
+    d.advance();
+    assert_eq!(handed(&mut d).1, 2 * 320, "a machine at another scale seeds the renderer at its own");
     eprintln!("a state at 4x: {} bytes", state.len());
 }
 
@@ -335,7 +354,7 @@ fn discs_at(options: Options, name: &str) {
         goldens.push(format!("{file}\t{script}\tanchor {anchor}"));
         let mut m = disc_maker(folder.join(file))();
         m.insert_card(0, None);
-        let r = Renderer::with(None, options).unwrap().keeping(true);
+        let r = Renderer::with(None, options).unwrap();
         m.attach(Box::new(Precise::new(Precision::default(), r)));
         let mut fold = Fold::new();
         while m.frames < GOLDEN_DISC_FRAMES {

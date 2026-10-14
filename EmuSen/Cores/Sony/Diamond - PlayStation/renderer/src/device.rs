@@ -69,8 +69,6 @@ pub enum Back {
     Nothing,
     Picture(usize),
     Vram,
-    /// The 256 colours of a palette slot.
-    Palette(u32),
     /// True colour's plane.
     Fine,
     /// The picture's first words into one of the two slots the host is handed pictures from (§38.1).
@@ -255,7 +253,6 @@ impl Held {
                 Back::Picture(_) => {}
                 Back::Vram => c.copy(&self.vram, &self.back, 0, 0, 0),
                 Back::Fine => c.copy(&self.fine, &self.back, 0, 0, 0),
-                Back::Palette(slot) => c.copy(&self.cluts, &self.back, 256 * 4, slot as u64 * 256 * 4, 0),
                 Back::Slot(slot, words) if words > 0 => c.copy(&self.picture, &self.slots[slot], (words * 4) as u64, 0, 0),
                 Back::Slot(..) => {}
             }

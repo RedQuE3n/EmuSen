@@ -121,30 +121,32 @@ fn with_no_usable_device_the_settings_are_noted_and_the_console_picture_shown() 
     assert!(d.setting_notes().is_empty());
 }
 
-/// §24.4, §42.2: with every enhancement on the state carries the blocks, and loads on a machine with them off, which
-/// continues as the first; a state made with them off loads with them on.
+/// §52: with every enhancement on the state is the machine's, the bytes a machine with them off saves at the same frame,
+/// and loads both ways; machine info states the bound of settling pictures, 0 with the machine's own picture.
 #[test]
-fn a_state_with_the_settings_on_loads_with_them_off_and_the_reverse() {
+fn a_state_with_the_settings_on_is_the_machines_and_machine_info_states_the_bound() {
     let mut on = create(&[(PRECISION_KEY, "true"), (RESOLUTION_KEY, "2"), (COLOUR_KEY, "true"), (FILTERING_KEY, "3d")]);
+    let mut off = create(&[]);
+    assert_eq!(Core::picture_settles(&off), 0);
     if on.renderer_ref().is_none() {
         eprintln!("no Vulkan device: {:?}", on.setting_notes());
+        assert_eq!(Core::picture_settles(&on), 0, "the console's own picture is shown");
         return;
     }
-    let mut off = create(&[]);
+    assert_eq!(Core::picture_settles(&on), SETTLES_TRUE_COLOUR);
+    on.choose(Chosen { options: Options { colour: false, ..on.chosen.options }, ..on.chosen });
+    assert_eq!(Core::picture_settles(&on), SETTLES);
     for _ in 0..5 {
         Core::advance(&mut on, &mut 0).unwrap();
+        Core::advance(&mut off, &mut 0).unwrap();
     }
     let s = state(&mut on);
-    assert!(s.len() > accurate(&mut on).len() + 4_000_000, "the blocks: {} bytes", s.len());
+    assert!(s == state(&mut off), "{} bytes against {}", s.len(), state(&mut off).len());
     off.load_state(&s).unwrap();
+    on.load_state(&state(&mut off)).unwrap();
     for _ in 0..3 {
         Core::advance(&mut on, &mut 0).unwrap();
         Core::advance(&mut off, &mut 0).unwrap();
     }
-    assert!(accurate(&mut on) == state(&mut off));
-    let plain = state(&mut off);
-    on.load_state(&plain).unwrap();
-    Core::advance(&mut on, &mut 0).unwrap();
-    Core::advance(&mut off, &mut 0).unwrap();
-    assert!(accurate(&mut on) == state(&mut off));
+    assert!(state(&mut on) == state(&mut off));
 }

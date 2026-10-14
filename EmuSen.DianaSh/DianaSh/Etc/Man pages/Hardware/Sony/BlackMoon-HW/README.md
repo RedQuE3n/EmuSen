@@ -61,4 +61,5 @@ two. Its contract, first kept by `blackmoon-gte`:
   (2026-10-13), not as a second parameter:* the R3000A tells its bus each value it moves, `Bus::moved(Move)` with an
   empty default, since the layer must see the moves in one order with the GTE's projections and the GPU's receipts,
   which are behind the bus (`BlackMoon_R3000.md` §14); `Projection` gained the camera-space sums and the quotient
-  (`BlackMoon_GTE.md` §9). Both compile to nothing for a bus or a console that does not watch.
+  (`BlackMoon_GTE.md` §9). Both compile to nothing for a bus or a console that does not watch. *Since 2026-10-14* the
+  moves' version 2 adds a shift by a constant, `Move::Shift` (`BlackMoon_R3000.md` §14).

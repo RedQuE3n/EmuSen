@@ -734,7 +734,7 @@ register. So the processor reports, and its console interprets.
 with an empty body: additions with defaults as `bus_error`, `fetch_decoded` and `running` were (§2), so a bus that does
 not give them is unchanged. Every report is made under `if B::MOVES`, so the step compiled for a bus that leaves the
 constant false holds no trace of the reports, their arguments included; a bus that sets it true is told. `Move` names
-seven moves, `at` the instruction's address, each a load once it has read and a store before it writes (*since stage
+seven moves (eight since version 2, below), `at` the instruction's address, each a load once it has read and a store before it writes (*since stage
 E4*, below):
 
 | Move | Instructions | Fields |
@@ -746,6 +746,7 @@ E4*, below):
 | `LoadCop2` | LWC2 | coprocessor 2's data register, the address, the value |
 | `StoreCop2` | SWC2 | coprocessor 2's data register, the address, the value |
 | `Copy` | ADDU, ADD, SUBU, SUB, OR, XOR with R0 as the second operand; ADDU, ADD, OR, XOR with R0 as the first; ADDIU, ADDI, ORI, XORI of 0; SLL, SRL, SRA by 0 | the register given the value, the register it came from, the value |
+| `Shift` (*version 2*) | SLL, SRL, SRA by a constant of 1 to 31 | the register given the value, the register it came from, the kind (`Shift::Left`, `Right` or `Arithmetic`), the amount, the value shifted |
 
 Not told: a load that met no device (it ends in DBE; a store is told before it can know, below), one the isolated cache took (it reached no memory), any
 move whose register is R0 (it holds nothing, so a NOP, `SLL R0, R0, 0`, is not a copy), CFC2 and CTC2 (the control
@@ -770,9 +771,23 @@ bus would have to be the same object the board holds, borrowed twice. Told to th
 board, and a console that wants them steps through a bus of its own that forwards them; Diamond's is `LayeredBus`
 (`Diamond_Enhancements.md` §2.3).
 
+**Version 2: a shift by a constant** (*2026-10-14*, `Diamond_Enhancements.md` §52). Version 1 is the seven moves of the
+table but the last, with the store told before it writes; version 2 adds `Move::Shift` and changes none of the seven. A shift by a constant
+gives a register another's bits moved, which a console following a value may want to follow as it follows a copy: Spyro
+the Dragon keeps each projected vertex shifted left five bits in another register, with flags in the bits cleared, and
+shifts it back before the GPU takes it. It is told from the arm of the computing instructions that tells a copy, under
+`if B::MOVES`, every shift by a constant whether in place or into another register, so that the report is a class of
+instructions and not one console's policy; a shift by 0 stays a copy, one into R0 is told nothing, and SLLV, SRLV and
+SRAV, shifts by a register's amount, are not told (no vertex's path read in a game shifts that way). `Move` is matched
+exhaustively by its consumers, so a variant is a change to each: within the project Diamond's precision layer and test
+observer and this crate's test bus, all changed with it.
+
 **How it is known.** `each_move_is_told_with_its_values` runs a program of every move against the test bus and holds
 the moves told to a list of nineteen, field for field, including LWL and LWR merged across a pending load and SWL and
-SWR's bytes; a load that met no device, a store and a load to the isolated cache, and a NOP tell nothing.
+SWR's bytes; a load that met no device, a store and a load to the isolated cache, and a NOP tell nothing. Since version
+2 a second program holds four shifts by a constant (left, right, arithmetic by 31, and one in place) told with their
+kinds, amounts and values, a shift by 0 told as a copy, and a shift into R0 and an SLLV told nothing; the random
+programs told 18,156 moves over the same runs [M, 2026-10-14].
 `a_run_is_its_steps_on_random_programs` (§13) now records the moves on both buses and holds a run's equal to its
 steps', 15,479 moves over the 19,801 runs [M, 2026-10-13]. The suite's 55,000 cases pass unchanged [M]. Diamond's
 goldens hold the processor's results unchanged with the moves compiled in, and again with a layer told them

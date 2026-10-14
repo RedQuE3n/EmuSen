@@ -24,6 +24,11 @@ cheaper, then internal resolution, true colour and texture filtering, each a set
 geometry". §37 to §42 are its design, decided and committed before any of its code; §43 to §51 what was built,
 the gate, the pictures, the cost and what is left.
 
+*Following a shift, the same day* (§52 on): a trial of §32.4's proposal, that the processor tell a shift by a constant
+so that precise geometry follows the vertices Spyro the Dragon keeps shifted; the game's pattern read and the design
+with its keep rule committed before the code (§52), then Spyro and the other discs measured both ways, the decision,
+the gate and the cost (§53).
+
 The marks are the plan's: **[M]** measured on 2026-10-13 on the desktop (Ryzen 7 7700X, Fedora 44, Rust nightly
 2026-10-01), with the tool named; **[R]** read from a source, named; **[A]** argued, with no measurement behind it;
 **[C]** a choice.
@@ -1792,7 +1797,7 @@ its projection was refused by the guard (§21.2) or cut by the console; **dead**
   that pixel; more registers carry stale serials, which costs nothing until a word is received. Its cost is one event
   for each such shift, a few per cent of instructions. **It is not built here**: it widens a written interface of the
   processor's crate, which is the tester's to agree first; and it is not needed for the cracks, which §33 closes
-  whatever their cause.
+  whatever their cause. *Accepted as a trial on 2026-10-14 and built: §52 and §53.*
 - **Ape Escape's made vertices and Tekken 3's moved ones** [not proposed]. A precise middle, or a precise moved
   vertex, would need the layer to follow values, not serials: for Ape Escape two halfword loads, an MVMVA, an
   addition and a division, computed beside the game's with precise inputs. Nothing checks such a value but its
@@ -2151,7 +2156,7 @@ All on the final head (WiseMan had not moved from 8a90f127, so there was nothing
    renderer's record and a setting in `diamond-v1`. Recommended: leave it in, with no switch.
 2. **Following a shift** (§32.4), for Spyro the Dragon: one more move told by the processor's crate, which would
    take its precise polygons in play from 37 to about 93 per cent. It widens a written interface, so it waits for a
-   yes.
+   yes. *Accepted as a trial and built 2026-10-14: 95.9 per cent (§53).*
 3. **What to look at on the handheld**: Ape Escape's first level along the ledges and the ground's edges, where the
    lines were; the same edges' top and left sides as the camera turns, for the outline's movement; Spyro the Dragon's
    grass in its first world; Silent Hill's street in the fog, for any bright dash at a polygon's edge (§34.5's
@@ -3166,3 +3171,189 @@ E5's tests; the kit on the published library with the setting on, on the eight d
 and PlayStation areas; the precise share on Spyro at 2× (E5's internal resolution draws through the same records); and
 the cost, off against the base and on before and after, on `gpu/benchmark`, the first 3,000 frames of Crash Bandicoot,
 Spyro the Dragon and Ape Escape, and Tekken 3's fights.
+
+## 53. Following a shift, measured and decided
+
+*Measured 2026-10-14 on the desktop, the RX 6800, at 1× with the crack fill as built.* Each run was made twice by one
+build: as §52 built it, and with every `Move::Shift` dropped before the precision layer (a scratch switch in the crack
+model's layer), which is the layer as it was. The two agree with the base on everything the change does not touch:
+Spyro's model before reproduces §32.2 and §32.3 to the pixel (58,023 cracks, 194 left by the fill, every class).
+
+### 53.1 Spyro the Dragon [M]
+
+| Spyro the Dragon | Before | After |
+|---|---|---|
+| Polygons precise, power-on to frame 17,000 (§32.3's measure) | 36.9% (3,343,597 of 9,050,763) | **95.9%** (8,680,658) |
+| Polygons precise within frames 5,300 to 17,000 | 39.2% | **95.2%** |
+| Vertices precise, power-on to 17,000 | 40.5% | **98.1%** |
+| Polygons precise to frame 3,000 (§25.5's measure) | 14.8% | **98.2%** |
+| Vertex words changed (a live serial, another word) | 997,374 | 70,100 |
+| Serials found dead | 15,924 | 0 |
+| Crack pixels in play, unfilled (§32.2's 235 frames) | 58,023 | 55,144 |
+| … left by the fill (§33.3's model, the built form) | 194 | **135** |
+| Crack pixels at the ten anchors, unfilled / left by the fill | 664 / 0 | 475 / 0 |
+
+The crack classes in play, §32.3's table read before and after, the lost class split by the store that first wrote
+the word:
+
+| Class, crack pixels in play | Before | After |
+|---|---|---|
+| Beside a polygon drawn by the integer rule | 53,924 | 41,959 |
+| … its worst vertex **none** | 32,173 | 33,217 |
+| … **lost**, its word first stored by the three shifting routines of §52.1 | 12,717 | **0** |
+| … **lost**, its word first stored elsewhere | 4,235 | 4,457 |
+| … **changed** | 849 | 334 |
+| … **far**, **cut** | 3,769, 180 | 3,770, 180 |
+| … along a shared edge, at a T, at a corner, apart | 40,364, 5,911, 5,817, 1,832 | 35,775, 4,760, 973, 451 |
+| Between two precise polygons (at a T, apart, along an edge, at a corner) | 2,603 (1,108, 805, 412, 278) | 10,717 (4,920, 2,872, 1,582, 1,343) |
+| Beside a rectangle, a fill, a copy, nothing drawn, or no other owner | 1,496 | 2,468 |
+
+- **Every word the pattern stores is followed.** No crack pixel in play stands beside a vertex lost from the three
+  routines, against 12,717 before; Spyro's changed words fall from 997,374 to 70,100 and its dead serials, which were
+  stale serials in the registers the SLL did not report, to none.
+- **What §32.3 called lost was wider than the pattern.** A word is "lost" in the model when no serial reached it and it
+  equals a recent projection's word. A quarter of the class before (4,235 of 16,952) is words that the pattern never
+  stores: the vertices made between two projected ones by GPF (§52.1), and those a routine about 8004FDACh makes where
+  an edge between two screen vertices crosses a line (its intersection computed by multiplications and a division on
+  the processor), each equal to a projection's word where the made vertex falls on a projected one. They are made
+  vertices, as the class "none" is, and remain integer.
+- **The cracks moved more than they fell.** Where a polygon that was lost met a precise one along an edge, both are
+  now precise and the crack is gone (edge 40,364 to 35,775, corner 5,817 to 973). But the ground that is now precise
+  meets the made vertices of the class "none" and its own T's (between two precise polygons, 2,603 to 10,717), so the
+  unfilled count falls by a twentieth, not by the lost class's 16,952. The fill closes these as it closed the others:
+  left by it, 194 to 135.
+
+### 53.2 The other discs [M]
+
+The precision layer alone (a scratch test of its counts) on every disc by its press script to frame 3,000, Ape Escape
+to 20,500 and Tekken 3 to 12,000; and the crack model at the anchors of every disc, in Ape Escape's play (frames 7,300
+to 20,500) and in Tekken 3's fights (7,500 to 10,500), before and after:
+
+| Disc | Polygons precise before and after | Crack pixels, unfilled / left by the fill |
+|---|---|---|
+| Ape Escape, to 3,000 / to 20,500 | 78.5 / 90.2%, the same | anchors 632 / 0, play 17,611 / 2,149, the same |
+| Crash Bandicoot | 99.3%, the same | anchors 345 / 0, the same |
+| Mega Man Legends | 96.0%, the same | 8 / 0, the same |
+| Silent Hill | 35.1%, the same | 29 / 0, the same |
+| Rayman | 3.9%, the same | 0, the same |
+| Castlevania | 0, the same | 0, the same |
+| Tekken 3, to 12,000 | 75.9%, the same | fights 2,609 / 0, the same |
+
+On every one of them the pictures the model compares (the precise picture's pixels against the machine's, counted at
+every frame looked at) are the same before and after, to the pixel. **No other disc gains**: Ape Escape's 3,216
+changed words to frame 3,000 (8,789 to 20,500) become words with no serial, and every polygon they touch was integer
+before and stays so; the likely reading [A, from the counts] is a shift that now gives its register the serial of an
+operand no projection reached, where the register kept a stale one before. Tekken 3's 1,757,225 changed words are its moved vertices (§32.3) and are unmoved by the
+change.
+
+### 53.3 The keep rule, item by item
+
+| Item (§52.5) | Result |
+|---|---|
+| 1. Spyro's precise polygons to frame 17,000 at least 88% | **Met**: 95.9%, above the 93.5 predicted |
+| 2. The lost class's crack pixels, unfilled, down nine tenths | **Not met by its letter**: 16,952 to 4,457, down 73.7%. **Met for the pattern's part**: 12,717 to 0 (§53.1) |
+| 3. Nothing worse elsewhere | **Met**: the seven other discs' shares and pictures unchanged; Spyro's cracks left by the fill 194 to 135, at the anchors 0 and 0 |
+| 4. Off, the base's frame within the noise | (§53.4) |
+
+**Decided [C]: kept, with item 2 put to the tester.** The rule the tester set was the first and the third: Spyro near
+the predicted share, nothing worse on the other discs; both hold. The second was added in §52.5 to check that the
+pattern accounts for the words it was taken to account for, and its measure turned out to count words the pattern
+never touches; the split, made after the measurement and said so, shows the pattern's words followed without
+exception. Item 2 is recorded as failed as written. Should the tester hold it to its letter, the change is the
+commit that adds the move and the layer's arm, and reverting it restores the layer to the byte.
+
+### 53.4 Cost [M]
+
+§27.1's instrument: `examples/bench` on links with every function aligned to 64 bytes, each build in its own target,
+the builds alternating on one core, the fastest mean of five rounds, milliseconds of the emulation thread a frame. The
+base is WiseMan 00a83847, extracted outside the repository. A third build, **narrow**, told only a shift into another
+register, the form §52.2 named should the cost show. A first series, run while other work loaded the machine (load
+average 7 to 15), is set aside; this one ran at a load of about 3:
+
+| Run | Frames | Off: base | branch | narrow | On: base | branch | narrow | Following a shift, on |
+|---|---|---|---|---|---|---|---|---|
+| `gpu/benchmark` | 1,200 | 2.346 | 2.349 | 2.346 | 2.560 | 2.565 | 2.569 | +0.005 |
+| Crash Bandicoot | 3,000 | 2.325 | 2.321 | 2.316 | 2.645 | 2.683 | 2.702 | +0.038 |
+| Spyro the Dragon | 3,000 | 2.364 | 2.362 | 2.358 | 2.754 | 2.823 | 2.838 | +0.069 |
+| Ape Escape | 3,000 | 2.179 | 2.167 | 2.178 | 2.391 | 2.406 | 2.410 | +0.015 |
+| Tekken 3's fights | 7,500 to 10,500 | 3.720 | 3.705 | 3.708 | 4.319 | 4.446 | 4.433 | +0.127 |
+
+Every item's digests equal across the six forms.
+
+- **Off, the frame is the base's within the noise** (−0.6 to +0.1 per cent): item 4 of §52.5 **met**. The plain
+  frame's functions are the base's to the byte in size (`advance_in::<Plain>`, `exec::run` and `Run::execute` for the
+  board, by `nm`); only the layered frame's `exec::run` and `advance_in::<Layered>` grew, by 177 and 300 bytes.
+- **On, it costs 0.04 to 0.07 ms a frame on the three discs and 0.13 in Tekken 3's fights**, 1 to 3 per cent of the
+  frame with the setting on. Crash Bandicoot's first 3,000 frames tell 37.4 million shifts, 12,500 a frame, where they
+  told 57,000 other events a frame [M, `bench --observed`'s counts]; at §9.3's 3 to 6 ns an event that is the cost
+  measured. Spyro's includes the work of the polygons now drawn precisely.
+- **The narrow form is not taken**: it tells 64 per cent fewer shifts on Crash Bandicoot (4,500 a frame) and was no
+  faster on any item (Crash 2.702 against 2.683, the fights 4.433 against 4.446). The dispatch, not the count, is the
+  floor here, and the uniform report stays.
+
+### 53.5 The gate [M]
+
+| Item | Result |
+|---|---|
+| E1's goldens, the setting off, plain and with the test observer | **Equal**: `programs.rs`' three, the eight discs' 80 anchors among them |
+| The machine's goldens with precise geometry on | **Equal**: the programs, ps1-tests and the eight discs to frame 3,000 |
+| Zero fraction is E3's equality | **Equal** on every disc at every frame and anchor, now through 2,733,994 precise triangles of the discs, Spyro's 1,599,362 among them (307,276 at E4), its pictures differing in none of 3,000 frames |
+| E4's, the fill's and E5's tests | **Pass**: `precise.rs` 14, `scaled.rs` 7, `colour.rs` 3, `filtered.rs` 4 |
+| Spyro at 2× | **The same**: to frame 17,000 the precision layer's counts and the renderer's (10,793,880 precise triangles, 4,864,310 in perspective, 177 polygons to the integer path for a gradient) are those of 1× to the count |
+| The kit, the published library, the setting on, the eight discs at 1,800 frames | **Every case on every disc**, four at a time, 341 s |
+| WiseMan's Diamond and PlayStation areas | **68 of 68** |
+
+### 53.6 What the pictures showed
+
+Spyro's pictures at every 50th frame from 900 to 11,500 were written before and after, and those at 900, 5,900,
+7,250, 10,350 and 11,500 looked at beside the machine's, 5,900 being where the after picture differs most from the
+before (the whole scene precise) and 10,350 where the most unfilled cracks were added. The scenes are steady where
+they wobbled; no corner stands away from the console's by more than the guard's two pixels, which the guard makes
+impossible; no crack is left by the fill there. **Seen and not the change's**: at 7,250 a fan of light and dark wedges
+on the near grass below the dragon, in the picture before and after alike and not in the machine's; those polygons
+were precise before the change. Not traced; recorded for the next look at Spyro's perspective texturing.
+
+### 53.7 Tests [M, 2026-10-14]
+
+- **`blackmoon-r3000`**, `cargo test --release` with `EMUSEN_BLACKMOON_CORPUS`: 38, `each_move_is_told_with_its_values`
+  extended, the random programs telling 18,156 moves (15,479 before), the suite's 55,000 cases unchanged.
+  `blackmoon-gte` unchanged and not run.
+- **`precision`**: 8 (two added: Spyro's sequence, shown integer before the change; the three words not restored).
+- **`diamond`**, with `EMUSEN_DIAMOND_PS1TESTS`, `EMUSEN_DIAMOND_DISCS` and `EMUSEN_GPU_DEVICE=6800`: 279, and 279
+  without the corpora, the corpus tests standing down. **`diamond-renderer`**: 2. **`diamond-v1`**: 4, and 4 naming
+  no device.
+- **The kit** with the setting on (§53.5). **WiseMan**, under the test lock with the corpus, `Diamond` and
+  `PlayStation`: 68 of 68.
+- **Not run**: the full WiseMan suite; the kit with the setting off (the plain frame's functions unchanged, §53.4);
+  `emusen-gpu` and the other cores, unchanged.
+
+### 53.8 Predictions and what is left
+
+- **§32.4's prediction held, and was passed**: Spyro's precise polygons in play from 36.9 per cent to "about 93.5":
+  95.9. "The 16,952 crack pixels of the lost class gone at their source" held for the 12,717 the pattern makes and not
+  for the rest, which are made vertices (§53.1). "More of the 32,173 beside a mixed polygon whose other vertices are
+  lost" did not hold: that class rose to 33,217, since the made vertices now stand beside precise polygons.
+  "A few per cent of instructions" for the events: 22 per cent more events on Crash Bandicoot, 0.04 to 0.13 ms (§53.4).
+- **§25.5's "Spyro the Dragon under a fifth" and P-E4c's failure for Spyro are retired**: 98.2 per cent to frame 3,000.
+- **Left**: Spyro's made vertices (between two projected ones by GPF, and where an edge crosses a line about
+  8004FDACh) stay integer, as Ape Escape's divided polygons do; no exact remedy exists for them (§32.4). The fan on
+  Spyro's near grass (§53.6). Item 2 of the keep rule is the tester's (§53.3).
+
+### 53.9 Reading log
+
+**No emulator's source, shader or snippet, no description of PGXP or of any emulator's precision, and no other
+PlayStation renderer's code were opened**, with or without code. No firmware, listing or trace of one; the player's
+BIOS folders were not read; nothing under `kernel/` or `kernel-harness/` was opened or changed. psx-spx was not opened,
+and no published prose on the subject was read. The handheld was not connected to.
+
+**One game's code was read**, Spyro the Dragon's on the open kernel, from the running machine's RAM at frame 7,250 by
+Diamond's own disassembler in a scratch test: about 8004EE00h to 8004EF2Ch, 80026960h to 800269ACh, 80026B30h to
+80026E1Ch, 800262E0h to 80026354h, 8001FA80h to 8001FDC0h, 80020030h to 800200A4h, 80020330h to 800203A4h, 80027A40h to
+80027BDCh, 80028DA4h to 80028E5Ch, 8004FAB0h to 8004FC0Ch, 8004FDACh to 8004FE68h, 80050040h to 800500DCh and
+80058080h to 8005811Ch. What §52.1 and §53.1 say of them is what those listings show; no listing, picture, state or disc
+image is in the repository.
+
+Opened, all EmuSen's own: this page's §1 to §13, §21 to §36 and §51; `BlackMoon_R3000.md` §14; the BlackMoon and
+Diamond READMEs; `Diamond_Players.md` §15. The source of `blackmoon-r3000`'s `lib.rs`, `exec.rs` and `boundary.rs`;
+of `precision`; of `diamond`'s `layer.rs`, `tests/support/goldens.rs` and `examples/bench.rs`; of `diamond-renderer`'s
+`Renderer` and `Counts`; the crack model and the cost scripts of the crack fill's probe folder.

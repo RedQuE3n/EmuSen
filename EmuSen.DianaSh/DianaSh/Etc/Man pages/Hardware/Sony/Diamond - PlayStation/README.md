@@ -88,7 +88,11 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   picture handed at the scale, a coordinate that wrapped found and fixed, the crack fill at N×), true colour as a plane
   of low bits, texture filtering with sprites kept crisp, the four settings, the state kept at N× against the seeded
   form measured and a change to the kit proposed, the gate, the pictures and their defects, the cost at each scale and
-  the handheld estimated from the tester's play.
+  the handheld estimated from the tester's play. Following a shift, 2026-10-14 (§52, §53): a trial, Spyro the Dragon's
+  pattern read from its running code (SLL by 5 into another register, flags set in place, SRA back in place), the
+  R3000A's new move and the layer carrying a serial through it, the keep rule fixed before measuring, Spyro's precise
+  polygons from 36.9 to 95.9 per cent with the other discs unchanged, the rule's second item failed by its letter and
+  put to the tester, the gate and the cost.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

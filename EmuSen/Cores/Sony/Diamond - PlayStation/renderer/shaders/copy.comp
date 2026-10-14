@@ -35,5 +35,5 @@ void main() {
     if ((mask & 2u) != 0u && (vram[at] & 0x8000u) != 0u) {
         return;
     }
-    vram[at] = scratch[kept] | ((mask & 1u) != 0u ? 0x8000u : 0u);
+    vram[at] = (scratch[kept] & 0xFFFFu) | ((mask & 1u) != 0u ? 0x8000u : 0u);
 }

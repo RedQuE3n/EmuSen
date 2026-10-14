@@ -36,6 +36,10 @@ const uint SKIP = 1u << 18;
 const uint PARITY = 1u << 19;
 const uint PAIRS = 1u << 20;
 const uint PERSPECTIVE = 1u << 21;
+const uint BOUNDS = 22u;
+const uint FILLED = 1u << 25;
+const uint OWN_BOUNDS = 26u;
+const uint TURNED = 1u << 29;
 
 // psx-spx's dither offsets, by y and x modulo 4 (draw.rs's DITHER).
 const int DITHERS[16] = int[16](-4, 0, -3, 1, 2, -2, 3, -1, -3, 1, -4, 0, 3, -1, 2, -2);
@@ -206,9 +210,43 @@ int interpolate_fine(int base, int g1, int d1, int g2, int d2) {
     return int((lo >> 20) | (uint(hi) << 12));
 }
 
+// The mark of an edge of a precise triangle, at `j` in its record: sixteen bits of its two ends, the same from either
+// triangle that has it, and never zero (§33.3).
+uint point_mark(int x, int y) {
+    uint h = uint(x) * 0x9E3779B1u + uint(y) * 0x85EBCA77u;
+    return (h ^ (h >> 15)) * 0xC2B2AE3Du;
+}
+
+uint edge_mark(int j) {
+    uint h = point_mark(records[j], records[j + 1]) + point_mark(records[j] + records[j + 2], records[j + 1] + records[j + 3]);
+    return max((h ^ (h >> 16)) & 0xFFFFu, 1u);
+}
+
+// Whether the console's own triangle covers the pixel, the precise triangle's vertices without their fractions by the
+// integer rule; and the pixel's place in it, the weight of the vertex opposite each edge (§33.2).
+bool console_covers(int r, uint flags, int x, int y, out float place[3]) {
+    ivec2 v[3];
+    for (int k = 0; k < 3; k++) {
+        int j = r + 10 + 5 * k, f = records[j + 4];
+        v[k] = ivec2(records[j] - ((f << 16) >> 16), records[j + 1] - (f >> 16)) >> 8;
+    }
+    int turn = (flags & TURNED) != 0u ? -1 : 1;
+    for (int k = 0; k < 3; k++) {
+        ivec2 a = v[k], d = v[(k + 1) % 3] - a;
+        int edge = turn * (d.x * (y - a.y) - d.y * (x - a.x));
+        if (edge < int((flags >> (OWN_BOUNDS + uint(k))) & 1u)) {
+            return false;
+        }
+        place[k] = float(edge);
+    }
+    return true;
+}
+
 // A triangle with precise vertices in 256ths of a pixel: each edge function exact in 64 bits against its owner's bound,
 // the colour and an untilted texture by the fine gradients, a tilted texture in perspective from the three edge
-// functions and the vertices' depths, a division a pixel (§22.2, §22.3).
+// functions and the vertices' depths, a division a pixel (§22.2, §22.3). A pixel it does not cover and the console's own
+// triangle does is filled, as its place in that triangle taken to this one, unless a precise triangle across the edge it
+// lies beyond drew it (§33).
 void fine_triangle(inout uint pixel, int r, uint flags, int x, int py) {
     int y = row_of(r, py);
     if (!inside(r, x, y) || skipped(flags, y)) {
@@ -216,6 +254,7 @@ void fine_triangle(inout uint pixel, int r, uint flags, int x, int py) {
     }
     int fx = x * 256, fy = y * 256;
     float e[3];
+    uint outside = 0u;
     for (int k = 0; k < 3; k++) {
         int j = r + 10 + 5 * k;
         int h1, l1, h2, l2;
@@ -224,12 +263,33 @@ void fine_triangle(inout uint pixel, int r, uint flags, int x, int py) {
         uint borrow;
         uint lo = usubBorrow(uint(l1), uint(l2), borrow);
         int hi = h1 - h2 - int(borrow);
-        if (hi < 0 || (hi == 0 && lo < uint(records[j + 4]))) {
+        if (hi < 0 || (hi == 0 && lo < ((flags >> (BOUNDS + uint(k))) & 1u))) {
+            if ((flags & FILLED) == 0u) {
+                return;
+            }
+            outside |= 1u << k;
+        } else {
+            e[k] = float(hi) * 4294967296.0 + float(lo);
+        }
+    }
+    uint mark = pixel >> 16;
+    int dx = fx - records[r + 25], dy = fy - records[r + 26];
+    if (outside != 0u) {
+        if (!console_covers(r, flags, x, y, e)) {
             return;
         }
-        e[k] = float(hi) * 4294967296.0 + float(lo);
+        vec2 place = vec2(0.0);
+        for (int k = 0; k < 3; k++) {
+            int j = r + 10 + 5 * k;
+            if ((outside & (1u << k)) != 0u && mark == edge_mark(j)) {
+                return;
+            }
+            place += e[(k + 1) % 3] * vec2(float(records[j]), float(records[j + 1]));
+        }
+        place = floor(place / (e[0] + e[1] + e[2]) + 0.5);
+        dx = int(place.x) - records[r + 25];
+        dy = int(place.y) - records[r + 26];
     }
-    int dx = fx - records[r + 25], dy = fy - records[r + 26];
     ivec3 rgb = colour(r);
     if ((flags & SHADED) != 0u) {
         for (int k = 0; k < 3; k++) {
@@ -255,7 +315,18 @@ void fine_triangle(inout uint pixel, int r, uint flags, int x, int py) {
     }
     u = clamp(u, held & 0xFFu, (held >> 8) & 0xFFu);
     v = clamp(v, (held >> 16) & 0xFFu, held >> 24);
+    if (outside != 0u && (flags & BLEND) != 0u && (texel(r, u, v) & 0x8000u) != 0u) {
+        return;
+    }
+    // A write leaves the pixel's high half clear: the mark is then the nearest edge's, none for a filled pixel.
+    pixel |= 0xFFFF0000u;
     shade(pixel, r, flags, x, y, rgb, u, v);
+    if ((pixel >> 16) != 0u) {
+        pixel = (pixel & 0xFFFFu) | (mark << 16);
+    } else if (outside == 0u) {
+        int n = e[0] <= e[1] ? (e[0] <= e[2] ? 0 : 2) : (e[1] <= e[2] ? 1 : 2);
+        pixel |= edge_mark(r + 10 + 5 * n) << 16;
+    }
 }
 
 // A texel's texture cache entry in the window, for a rectangle's pairs (raster.rs's `rectangle`).

@@ -2,7 +2,8 @@
 //! stream, beside the software rasteriser, which keeps VRAM. A `Layer`: told each command, each word that continues
 //! one and each display line, it keeps its own copy of VRAM in step and reads its own picture from it. Nothing it makes
 //! reaches the machine (Diamond_Enhancements.md §14 on). Paired with the precision layer it draws a polygon whose
-//! vertices are precise between the pixels, its texture in perspective, and keeps a block in the state (§22).
+//! vertices are precise between the pixels, its texture in perspective, and keeps a block in the state (§22); such a
+//! polygon is filled where the console's own covers a pixel it does not, so that none shows through beside it (§33).
 
 pub mod blocks;
 pub mod device;
@@ -44,10 +45,12 @@ pub struct Counts {
     pub integer: u64,
 }
 
-/// What the renderer keeps across a state when it draws precisely: its mirror a halfword a pixel, its picture at the
-/// largest size with its own, and the palette its CLUT slot holds; and whether a state's block is to seed it.
+/// What the renderer keeps across a state when it draws precisely: its mirror a halfword a pixel and the mark beside
+/// each (§33.3), its picture at the largest size with its own, and the palette its CLUT slot holds; and whether a
+/// state's block is to seed it.
 struct Kept {
     mirror: Vec<u16>,
+    marks: Vec<u16>,
     picture: Vec<u8>,
     palette: Vec<u16>,
     size: [u32; 2],
@@ -126,7 +129,7 @@ impl Renderer {
     /// The renderer as precise geometry attaches it: keeping a block in the state, since what it draws is no longer what
     /// the machine's VRAM gives (§22.5).
     pub fn keeping(mut self) -> Renderer {
-        self.kept = Some(Kept { mirror: vec![0; VRAM_WORDS], picture: vec![0; PICTURE_WORDS * 4], palette: vec![0; 256], size: [256, 240], restored: false });
+        self.kept = Some(Kept { mirror: vec![0; VRAM_WORDS], marks: vec![0; VRAM_WORDS], picture: vec![0; PICTURE_WORDS * 4], palette: vec![0; 256], size: [256, 240], restored: false });
         self
     }
 
@@ -492,6 +495,7 @@ impl Layer for Renderer {
         }
         self.submit(Back::Vram);
         let mirror: Vec<u16> = self.device.held().back.slice::<u32>()[..VRAM_WORDS].iter().map(|&w| w as u16).collect();
+        let marks: Vec<u16> = self.device.held().back.slice::<u32>()[..VRAM_WORDS].iter().map(|&w| (w >> 16) as u16).collect();
         self.submit(Back::Palette(self.slot));
         let entries = self.slot_entries as usize;
         let palette: Vec<u16> = self.device.held().back.slice::<u32>()[..256].iter().enumerate().map(|(i, &w)| if i < entries { w as u16 } else { 0 }).collect();
@@ -500,6 +504,7 @@ impl Layer for Renderer {
         let picture = picture.to_vec();
         let kept = self.kept.as_mut().expect("kept");
         kept.mirror.copy_from_slice(&mirror);
+        kept.marks.copy_from_slice(&marks);
         kept.palette.copy_from_slice(&palette);
         kept.picture[..n].copy_from_slice(&picture);
         kept.picture[n..].fill(0);
@@ -512,6 +517,7 @@ impl Layer for Renderer {
         w.u16s("Mirror", &k.mirror);
         w.bytes("Picture", &k.picture);
         w.u16s("Palette", &k.palette);
+        w.u16s("Marks", &k.marks);
     }
 
     fn load(&mut self, tag: [u8; 4], block: &[u8]) {
@@ -522,7 +528,9 @@ impl Layer for Renderer {
             r.u32s(&mut size)?;
             r.u16s(&mut k.mirror)?;
             r.bytes(&mut k.picture)?;
-            r.u16s(&mut k.palette)
+            r.u16s(&mut k.palette)?;
+            // A state of stage E4's has no marks: none are taken, and its first frame fills as it finds.
+            if r.position() == block.len() { Ok(k.marks.fill(0)) } else { r.u16s(&mut k.marks) }
         })();
         if read.is_err() || r.position() != block.len() || size[0] * size[1] > PICTURE_WORDS as u32 {
             return self.clear(tag);
@@ -562,8 +570,8 @@ impl Layer for Renderer {
         let words = match restored {
             Some(k) => {
                 (self.width, self.height) = (k.size[0], k.size[1]);
-                for (o, &h) in back.iter_mut().zip(k.mirror.iter()) {
-                    *o = h as u32;
+                for ((o, &h), &m) in back.iter_mut().zip(k.mirror.iter()).zip(k.marks.iter()) {
+                    *o = h as u32 | (m as u32) << 16;
                 }
                 let words = (self.width * self.height) as usize;
                 for (o, p) in staged.iter_mut().zip(k.picture[..words * 4].chunks_exact(4)) {

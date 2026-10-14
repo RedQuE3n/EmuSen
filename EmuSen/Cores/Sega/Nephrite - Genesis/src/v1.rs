@@ -202,7 +202,8 @@ fn ram_cart_setting() -> Setting {
         category: Some("Sega CD".into()),
         effect: Effect::None,
         advanced: false,
-        hidden: false,
+        // Not shown while the Sega CD is offered to no player (Nephrite_Native.md §53.2).
+        hidden: true,
         restart: true,
     }
 }
@@ -304,11 +305,11 @@ fn system(id: &str, name: &str, extensions: &[&str], firmware: Vec<Firmware>, de
 /// The extensions each system claims (Nephrite_Plan.md §4.1); a `.bin` disc image is told from a cartridge by its
 /// contents.
 pub const MD_EXTENSIONS: [&str; 4] = [".md", ".gen", ".bin", ".smd"];
-pub const MCD_EXTENSIONS: [&str; 3] = [".iso", ".cue", ".chd"];
+pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::SETTING_NOTES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::MEDIA | caps::BORROW;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::SETTING_NOTES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::BORROW;
 
     fn info() -> Info {
         Info {
@@ -659,7 +660,7 @@ impl Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; rom_patches, settings, setting_notes, debug, debug_stack, debug_registers, debug_disassemble, media);
+emusen_native::core_exports!(Machine; rom_patches, settings, setting_notes, debug, debug_stack, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {

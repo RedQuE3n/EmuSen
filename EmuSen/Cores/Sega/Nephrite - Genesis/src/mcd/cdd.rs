@@ -9,15 +9,19 @@ use emusen_native::core::{Kept, SEEK_SPAN, seek};
 /// The disc in the drive, its bytes the host's where the host lends them (`BORROW`).
 pub type Disc = emusen_disc::Disc<Kept>;
 
+/// Whether the drive names its places to the host (`MEDIA_SEEK`): not while the core cannot claim `MEDIA`.
+pub const NAMES_PLACES: bool = false;
+
 /// The drive's number in machine info's `drives`.
 pub const DRIVE: u32 = 0;
 
 /// Sub clocks a sector, 1/75 s: 500,000/3, made of two of 166,667 and one of 166,666.
 pub const SECTOR: [u64; 3] = [166_667, 166_667, 166_666];
 
-/// Exchanges from the host clock's first rise until the disc has spun up, and then until its TOC is read
-/// (the LL logs: 53 to 150 between them; chosen within that).
-pub const SPIN_UP: u32 = 60;
+/// Exchanges from the host clock's first rise until the drive answers, busy till then and deaf to commands, and from
+/// the first report asked for after it until the TOC is read (the LL logs: 53 to 78 between them, the TOC 13 to 35;
+/// chosen within those, D-33).
+pub const SPIN_UP: u32 = 40;
 pub const TOC_READ: u32 = 20;
 /// A seek's exchanges before the head reports a place, and the sectors it lands short of its target (the LL logs: 12,
 /// and 14 to 15).
@@ -95,20 +99,22 @@ pub struct Cdd {
     /// The sub clock of the next exchange and which of the three periods it ends.
     pub next: u64,
     pub phase: u8,
+    /// Whether the TOC has been read since the disc spun up: the first report asked for reads it, and status 9 waits on it.
+    pub toc_read: bool,
     /// The file and byte last named to the host (`MEDIA_SEEK`); not state.
     pub named: Option<Place>,
 }
 
 impl Cdd {
     pub fn new(disc: Option<Disc>, now: u64) -> Cdd {
-        Cdd { disc, mode: Mode::Idle, hock: false, status: [0; 10], command: [0; 10], command_new: false, dts_until: 0, report: 0, report_track: 1, head: 0, data: false, laps: 0, next: now + SECTOR[0], phase: 0, named: None }
+        Cdd { disc, mode: Mode::Idle, hock: false, status: [0; 10], command: [0; 10], command_new: false, dts_until: 0, report: 0, report_track: 1, toc_read: false, head: 0, data: false, laps: 0, next: now + SECTOR[0], phase: 0, named: None }
     }
 
     fn checksum(n: &[u8]) -> u8 {
         !n[..9].iter().fold(0u8, |a, &b| a.wrapping_add(b & 15)) & 15
     }
 
-    /// The host clock's write: its first rise starts the spindle.
+    /// The host clock's write: its first rise starts the drive, which answers once its disc has spun up.
     pub fn set_hock(&mut self, hock: bool) {
         if hock && self.mode == Mode::Idle {
             self.mode = if self.disc.is_some() { Mode::Spinning(SPIN_UP) } else { Mode::Stopped(status::NO_DISC) };
@@ -133,8 +139,12 @@ impl Cdd {
         self.disc.as_ref().and_then(|d| d.track_at(at)).is_some_and(|t| !t.audio)
     }
 
-    /// Tells the host where the head is going, unless that lies in the megabyte after the place last named.
+    /// Tells the host where the head is going, unless that lies in the megabyte after the place last named; only once
+    /// the core can claim `MEDIA`, whose drives the event names (Nephrite_Native.md §53.4).
     fn name(&mut self, at: u32) {
+        if !NAMES_PLACES {
+            return;
+        }
         let Some(place) = self.disc.as_ref().and_then(|d| d.place(at)) else { return };
         if self.named.is_some_and(|n| n.file == place.file && place.offset >= n.offset && place.offset - n.offset < SEEK_SPAN) {
             return;
@@ -163,6 +173,9 @@ impl Cdd {
         match c[0] & 15 {
             0x1 if ready => self.mode = Mode::Stopped(status::STOPPED),
             0x2 => {
+                if !self.toc_read && self.mode == Mode::Stopped(status::STOPPED) {
+                    self.mode = Mode::ReadingToc(TOC_READ);
+                }
                 self.report = c[3] & 15;
                 if self.report == 5 {
                     self.report_track = (c[4] & 15) * 10 + (c[5] & 15);
@@ -216,19 +229,22 @@ impl Cdd {
                 return Tick { sector: None, int4: false };
             }
             Mode::Spinning(n) => {
-                self.mode = if n <= 1 { Mode::ReadingToc(TOC_READ) } else { Mode::Spinning(n - 1) };
+                if n <= 1 {
+                    (self.mode, self.toc_read) = (Mode::Stopped(status::STOPPED), false);
+                } else {
+                    self.mode = Mode::Spinning(n - 1);
+                }
                 report = false;
                 status::STOPPED
             }
             Mode::ReadingToc(n) => {
                 if n <= 1 {
-                    self.mode = Mode::Stopped(status::READY);
-                    self.laps = 0;
+                    (self.mode, self.toc_read, self.laps) = (Mode::Stopped(status::READY), true, 0);
                 } else {
                     self.mode = Mode::ReadingToc(n - 1);
                 }
                 report = false;
-                status::READY
+                status::STOPPED
             }
             Mode::Stopped(s) => {
                 report = self.report >= 3 && s != status::NO_DISC;
@@ -313,6 +329,10 @@ impl Cdd {
         let mut n = [0u8; 10];
         n[0] = refused.unwrap_or(s);
         n[1] = NONE;
+        // Spun up and its TOC not yet read, the drive is stopped and not busy: its report nibble 0, its place zero.
+        if refused.is_none() && self.mode == Mode::Stopped(status::STOPPED) && !self.toc_read && self.disc.is_some() {
+            n[1] = 0;
+        }
         if refused.is_some() {
             n[2..8].copy_from_slice(&self.status[2..8]);
         } else if report && let Some(r) = self.report_nibbles(s) {
@@ -449,14 +469,31 @@ pub(crate) mod tests {
         assert_eq!(Cdd::checksum(&[9, 4, 0, 1, 3, 5, 0, 0, 1, 0]), 8);
     }
 
+    /// The drive spun up and its TOC read, as a host's first report asks for it.
+    fn ready(c: &mut Cdd) {
+        for _ in 0..SPIN_UP {
+            c.exchange();
+        }
+        send(c, [2, 0, 0, 4, 0, 0, 0, 0, 0]);
+        for _ in 0..TOC_READ + 2 {
+            c.exchange();
+        }
+    }
+
     #[test]
     fn the_drive_spins_up_reads_its_toc_and_answers() {
         let mut c = Cdd::new(Some(disc(300, 75)), 0);
         c.set_hock(true);
         c.exchange();
-        assert_eq!(line(&c), "0F.000000.1F", "spinning");
+        assert_eq!(line(&c), "0F.000000.1F", "spinning, busy");
+        for _ in 0..SPIN_UP {
+            c.exchange();
+        }
+        assert_eq!(line(&c), "00.000000.1E", "spun up, stopped, not busy");
         send(&mut c, [2, 0, 0, 4, 0, 0, 0, 0, 0]);
-        for _ in 0..SPIN_UP + TOC_READ {
+        c.exchange();
+        assert_eq!(&line(&c)[..2], "0F", "reading the TOC");
+        for _ in 0..TOC_READ {
             c.exchange();
         }
         assert_eq!(line(&c), "94.010200.1E", "tracks 1 to 2, answered once the TOC is read");
@@ -473,9 +510,7 @@ pub(crate) mod tests {
     fn a_play_seeks_lands_short_and_reads_on() {
         let mut c = Cdd::new(Some(disc(3000, 75)), 0);
         c.set_hock(true);
-        for _ in 0..SPIN_UP + TOC_READ + 1 {
-            c.exchange();
-        }
+        ready(&mut c);
         // Play from 00:20:00 = sector 1500.
         send(&mut c, [3, 0, 0, 0, 2, 0, 0, 0, 0]);
         let mut seen = Vec::new();
@@ -495,9 +530,7 @@ pub(crate) mod tests {
     fn a_seek_pauses_and_loops_short_of_its_target() {
         let mut c = Cdd::new(Some(disc(3000, 75)), 0);
         c.set_hock(true);
-        for _ in 0..SPIN_UP + TOC_READ + 1 {
-            c.exchange();
-        }
+        ready(&mut c);
         send(&mut c, [4, 0, 0, 0, 0, 2, 5, 0, 0]);
         let reads: Vec<Option<u32>> = (0..120).map(|_| c.exchange().sector).collect();
         let target = Msf::new(0, 2, 50).sector();
@@ -511,9 +544,7 @@ pub(crate) mod tests {
     fn a_bad_checksum_is_answered_and_ignored() {
         let mut c = Cdd::new(Some(disc(300, 75)), 0);
         c.set_hock(true);
-        for _ in 0..SPIN_UP + TOC_READ + 1 {
-            c.exchange();
-        }
+        ready(&mut c);
         for k in 0..5 {
             c.write(0x0C + 2 * k, if k == 0 { 0x0300 } else { 0 }, 0xFFFF, 0);
         }

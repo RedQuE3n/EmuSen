@@ -3752,6 +3752,9 @@ It has the five discs and, for its comparisons, the player's BIOS run as a black
    approve installing.
 7. **Recordings** of a console's CD-DA and PCM output, as MDFourier's were for the Genesis (§28). *Recommended:* not
    needed for stage 8; for stage 9 useful but not required.
+8. **`MEDIA` for a core whose machines may have no drive** (added at §53.2): whether a core ABI minor should let a
+   `MEDIA` core answer an empty drive list for a machine without one. *Recommended:* yes; until then Nephrite claims
+   neither `MEDIA` nor `MEDIA_SEEK`.
 
 ## 50. Stage 8, steps 1 and 2: the sub CPU, the gate array and Word RAM (2026-10-14)
 
@@ -3845,8 +3848,8 @@ binary to read the instruction timing of IRQ TEST's checks (`examples/dis.rs`), 
   tracks, a track's start), play, seek, pause, resume, fast forward and back, close and open the tray; a command
   whose checksum fails is answered with status 6 and not taken. **Its statuses**: stopped, playing, seeking, scanning,
   paused, tray open, ready (after the TOC is read), no disc, lead-out.
-- **Its timing**, from the LL logs: after HOCK rises the drive spins up and reads its TOC (80 exchanges, the logs
-  giving 53 to 150), answering reports only then; a seek is 12 exchanges of "seeking" with no report, then a coarse
+- **Its timing**, from the LL logs: ~~after HOCK rises the drive spins up and reads its TOC (80 exchanges, the logs
+  giving 53 to 150), answering reports only then;~~ *the start corrected in §53.1;* a seek is 12 exchanges of "seeking" with no report, then a coarse
   travel of about 0.9 √(sectors) exchanges reporting places on the way, landing 14 sectors short of its target and
   reading on; a play reports "playing" from 3 sectors short, a seek pauses there and loops over the eight sectors
   up to it, an exchange without a report between laps.
@@ -3915,3 +3918,140 @@ held on Sega Retro): §10 (the register tables), §11.1-§11.16, §12.5-§12.6 a
 - **Each rule shown to be held**: DECI cleared after 30,000 sub clocks fails CDC FLAGS 0x40 (22 loops); an even count
   sending its last byte fails CDC DMA2 0x04; DTACK not clearing DTEI fails the run.
 - **The crate's tests**: 152 pass.
+
+## 53. Stage 8, step 5: CD-DA, backup RAM, discs at create, the Sega CD's state (2026-10-14)
+
+### 53.1 What it built
+
+- **CD-DA** (`src/mcd/cdda.rs`): each audio sector the drive plays, while it reports playing, gives its 588 stereo
+  samples spread over the sector's 1/75 s, scaled by the fader (FD10-FD0 of `$FF8034`, `$400` full), to a step
+  synthesiser of its own at the master clock, which the mix adds after the Genesis's output circuit (CD-DA does not
+  pass through it). A full-scale sample is half the output's range (D-35). The fader's ramp and de-emphasis are
+  stage 9's.
+- **The drive's start**, settled again on the player's BIOS (§53.4): from HOCK's first rise the drive is busy (`0F`)
+  for 40 exchanges and deaf to commands, then stopped and not busy (`00`); the first report asked for reads the TOC
+  (busy for 20 exchanges), after which status 9 and the reports, as krikzz's notes say ("9 only after toc cmd") and
+  the LL logs time it (D-33).
+- **Backup RAM**: the internal 8 KiB as battery file 0 (`.brm`, `BRAM`); **the backup RAM cartridge**, Sega's 128 KiB,
+  plugged in by the Create setting `ramcart` (hidden while the Sega CD is offered to no player), its bytes battery
+  file 10 (`.crm`, `CARTRAM`, space 21). The plan's §4.4 named it file 1, which the TMSS ROM already has. Core info
+  lists both files for `mcd` (`battery_files`). mcd-verificator's RAM CART passes with it plugged in (size, write
+  protection, memory) and with it absent.
+- **Discs at create**: a sheet, a CHD or an image whose first sector carries `SEGADISCSYSTEM` is opened through
+  `emusen-disc` with its companions kept by `keep`, so a host's lent bytes are read in place (`BORROW` is claimed);
+  the system is read from the disc's system area at 00:02:00; a sheet whose disc is no Sega CD's is refused with
+  status −11 and words. The region's BIOS (any of the three else) is the boot ROM.
+- **State version 19**: the Sega CD's block after the Genesis's (the sub CPU, its clock, the gate array, Word RAM's
+  switches, the sub CPU's wait and its owed writes, the PCM chip's registers, the drive, the CDC with its 16 KiB
+  buffer, the fader, CD-DA's samples in flight, the cartridge's switch) and the disc's fingerprint (`emusen-disc`'s, of
+  the tracks, the lead-out and the system area's first two sectors). A state over another disc is refused with
+  `WRONG_MEDIA`. A Genesis state of version 16 to 19 loads; a Sega CD state of version 18 or older is refused with
+  the ABI's words, the Sega CD having run in no build before 19. The Genesis's layout is unchanged, 19 adding nothing
+  to a cartridge's state.
+- **What a player sees**: nothing new. The `mcd` system stays marked in development, the firmware's words now saying
+  that a disc runs on the player's BIOS and that without it no disc starts (§49.2).
+
+### 53.2 Not claimed: `MEDIA`, and with it `MEDIA_SEEK`
+
+The tray and a disc change are written (`media_lid`, `media_insert`, `drives`, tested in the crate), and the
+conformance kit's C16 passed on the 240p disc with them claimed. But a capability is the library's, and C16 then
+failed on every Genesis cartridge: "MEDIA is claimed but machine info lists no drives". A Genesis has no drive. So
+`MEDIA` is not claimed, the exports are not made, and the drive names no place to the host (`NAMES_PLACES`), since a
+`MEDIA_SEEK` must name a drive of machine info. **A question for the tester**: whether the core ABI should gain, in a
+minor, a `MEDIA` that a machine with no drive may answer with an empty list (C16 then checking only machines that
+list one), which would let Nephrite claim it; recommended, since every core with a cartridge console and a disc
+attachment (the PC Engine's CD-ROM², the Saturn's cartridge slot) meets the same rule.
+
+### 53.3 The five discs (no BIOS)
+
+`src/mcd/discs.rs`, with `EMUSEN_NEPHRITE_DISCS` naming the copies: each disc's sheet and tracks opened as a host
+passes them, the system area at 00:02:00 reading `SEGADISCSYSTEM`, a data track followed by audio tracks, and the
+drive answering, through its own protocol, the first and last tracks, the disc's length and track 2's start as the
+sheet places them. All five pass: Chuck Rock II (13 tracks), Lunar - Eternal Blue (3), Mickey Mania (28), Sonic CD
+for Europe and for the USA (35 each).
+
+### 53.4 The five discs on the player's BIOS
+
+`examples/disc.rs` runs a disc with a boot ROM given as a firmware path and prints the devices as their registers
+stand (the drive's status and last command, HOCK, the interrupt mask, the communication flags), the picture every
+few frames and the sound's level; nothing of the boot ROM is read or printed. Run on 2026-10-14 with a model 1 and
+two model 2 American BIOS and a European one, 1,800 frames each, Start pressed at frame 900:
+
+- **Every disc stops at the BIOS's first screen**, its own still picture, drawn by frame 180 and unchanged after. No
+  disc's data is read and no sound is made.
+- **What the devices show**: the sub CPU's program writes the interrupt mask (levels 2 and 4) and HOCK at about
+  frame 75, the drive answers its first status, and the program then clears the mask and HOCK, resets the
+  peripherals, waits for RES0 and starts again: after one exchange on the first attempt, after about 45 frames on the
+  second, and after one exchange on every later one, every 7 frames, never sending a drive command but NOP. The
+  main CPU sets its communication flag and waits for the sub CPU's, which never comes.
+- **What was tried, each at the devices only**: the drive's start from power-on rather than from HOCK; a TOC read
+  automatically after the spin-up; the peripheral reset returning the drive to idle; the first status held back by
+  1 to 8 exchanges; the main CPU's level 2 request held while IEN2 is clear (which fails mcd-verificator's IRQ TEST
+  0x06, 127 interrupts of 128). None changed the loop, and none was kept but the drive's start of §53.1. What the
+  BIOS waits for is not visible at the registers; reading its code is not allowed, and stage 9, whose graphics ASIC,
+  PCM and subcode are not yet built, is where it is looked for next (§54.3).
+
+### 53.5 Measured (2026-10-14)
+
+- **The crate's tests**, 157 pass, with the programs and the discs named: the eighteen verdicts and RAM CART with the
+  cartridge; the five discs; CD-DA's samples a sector apart at the fader's volume and silent at 0; a disc's machine
+  through create, its state round trip, `WRONG_MEDIA` over another disc, version 18 refused, the tray and the insert;
+  the cartridge's setting and battery files.
+- **The conformance kit**: the Genesis sample, the core's cases and 64 of 64 images, in 171 s; the 240p disc with
+  mcd-verificator as its boot ROM, all eighteen cases (C17: lent, every frame as from a copy), and with `MEDIA`
+  claimed C16 too before it was withdrawn (§53.2); Mickey Mania's and Sonic CD's sheets, 29 and 36 files lent,
+  compliant, the latter with a player's BIOS as file 2.
+- **`emusen-disc`**: 13 and 13 (§11 there); Diamond's crates, its other user, 167 unit and 81 program tests with the
+  rest, all pass.
+- **WiseMan**: `NephriteTests`, `NephriteDebugTests`, `NephritePlayersTests`, `NephriteStartTests`, the Genesis
+  settings, battery and cheat tests and the registration golden, 83 pass. Three were updated: the library's
+  capabilities (with `BORROW`), the `.iso` stub now running its frames (its picture the VDP's 256 × 224, as a blank
+  cartridge's), and none for the hidden setting, which the frontend does not list.
+
+## 54. Stage 8's gate, and stage 8 closed (2026-10-14)
+
+### 54.1 The gate
+
+| What §49.3 asked | Result |
+|---|---|
+| mcd-verificator's self-graded results, each test passing or a dispute or a named loss | **All eighteen pass**: RAM CART (absent and present), COLOR CALC, VAR TESTS, IRQ TEST, REG X000, REG X002, REG 2006, REG X00C, REG 8030, CDC REGS, PROG RAM, WORD RAM, WRAM PMOD, CDC INIT, CDC FLAGS, CDC DMA2, CDC DMA3, CDC DMA1; "Diagnostics complete." at frame 1,399 |
+| The Genesis's goldens and kit unchanged | The kit's sample 64 of 64; the crate's program tests (BCD verifier, opcode sizes, illegal instructions, VDPFIFOTesting and the rest) pass |
+| The new state version loading, the old ones still loading | Version 19; Genesis states of 16, 17 and 18 load (`a_version_16_state_loads_and_runs`, `a_version_17_...`), 15 and 20 refused; a Sega CD state round trips and is held to its disc |
+| The Genesis's frame cost unchanged | Best of 6 × 3 runs of 600 frames, this build beside the build before stage 8: Sonic the Hedgehog 1.333 ms (1.338), Thunder Force IV 1.320 (1.316), Phantasy Star IV 1.393 (1.390), Sonic the Hedgehog 2 1.215 (1.230), Streets of Rage 2 1.118 (1.127). Unchanged; a 1.4% loss measured on the way, the attachment's checks on every access, was removed by one check for anything attached to the map (the J-Cart's and the Sega CD's), so the cartridge pays what it paid before |
+| The Sega CD's cost recorded | 1.513 ms a frame, mcd-verificator's run on the 240p disc (best of 5 × 1,200 frames), against the plan's 2.5 |
+
+### 54.2 Disputes
+
+D-30 to D-35, each with its evidence; none open but D-33's spin-up length and travel curve and D-34's DMA rate,
+which are argued within what the logs and tests allow.
+
+### 54.3 Carried to stage 9
+
+- **The player's BIOS does not get past its first screen** (§53.4). Stage 9's first task, before the ASIC and the
+  PCM, since its references (the five discs on that BIOS against Genesis Plus GX) need it. Places to look, all at
+  the registers: the subcode registers and level 6 (`$FF8068`, `$FF8100`, not built); the graphics ASIC's registers
+  (`$FF8058`-`$FF8066`, not built, reading 0); the PCM chip's registers, which read 0; the version bits of `$FF8000`;
+  what a peripheral reset resets.
+- **`MEDIA` and `MEDIA_SEEK`**, waiting on the tester's answer to §53.2's question.
+- **`.cue` and `.chd` for the `mcd` system**: the core opens them, but the system pack claims `.iso` alone, since a
+  frontend tells a Sega CD's sheet from a PlayStation's only by opening its first track, which the system pack's
+  recogniser does not yet do. Due with the Sega CD offered (stage 10).
+- mcd-verificator's tests that are in its source but not its binary (the ASIC, the PCM, the CDD at length), with the
+  tester's answer to §49.6 Q6.
+
+### 54.4 Stage 8 closed
+
+Stage 8's oracle, mcd-verificator with no BIOS, is met in full. Its steps were six in the split; 8.1-8.2 and 8.3-8.4
+were each built as one, and 8.5 and 8.6 are §53 and this section.
+
+### 54.5 Reading log (stage 8)
+
+Read: the Mega-CD Hardware Manual's page images (§50.2); Sanyo's LC8950/LC8951 design manual's text and register
+pages (§52.2); the Mega-CD BIOS Manual was not opened; mcd-verificator's readme, its `src/` (all of `test_std.c`,
+`test_cdc_new.c`, `mcd.c`, `mcd.h`, `cdc.c`, `cdc.h`, `cdd.c`, `cdd.h`, `sys.c`, `sys.h`, `main.c`, `main.h`, `sega.s`,
+`sub_bios.s`, `sub_app.s`, the head of `test_cdd2.c` and of `pcm.c`'s memory helpers), its `notes/`, and its
+`cd-log/LL-mcd-tst/` logs read collapsed by repeats; railgun's "Mega CD Docs: Memory Map" (wikitext); the 240p Sega
+CD build's README. Its own binary disassembled at IRQ TEST's checks with Beryl's disassembler. Screened by name and
+not opened: `cd-log/BI-mcd-tst/` and `cd-log/sonic-bios/`, logs made under a BIOS. Not read: any emulator's source,
+any RTL, any BIOS image, listing, trace or log; the player's BIOS was given to Nephrite as a file and nothing of it
+was read or printed. The five discs were read only through the drive and `emusen-disc`, as a console reads them.

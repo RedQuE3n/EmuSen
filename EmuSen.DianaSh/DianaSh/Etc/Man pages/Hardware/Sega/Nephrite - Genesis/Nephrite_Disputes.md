@@ -1520,8 +1520,9 @@ CPUs' disputes in their own record pages.
 - Test program: mcd-verificator's own drive driver and the LL logs it recorded on a console (§51.2), each line a status
   and the command sent with it.
 - Referee: none read.
-- Conclusion: as §51.1 states. The spin-up's length (the logs vary between 53 and 150 exchanges) and the coarse
-  travel's are chosen within what the logs show; the landing 14 short, the 12 busy exchanges, the 3 short and the
+- Conclusion: as §51.1 states, the start as §53.1 corrects it (busy for 40 exchanges from HOCK, then `00` until a
+  report is asked for, which reads the TOC in 20; krikzz's note that status 9 comes only after a TOC command). The
+  spin-up's length and the coarse travel's are chosen within what the logs show; the landing 14 short, the 12 busy exchanges, the 3 short and the
   loop of eight are the logs' own. Measured where the logs are, argued for the travel's curve.
 - Pinned by: `cdd.rs`'s five tests; `mcd_verificator_passes_every_test` (CDC INIT).
 - Implemented in: stage 8 step 3's commit.
@@ -1539,3 +1540,15 @@ CPUs' disputes in their own record pages.
   within a frame, and no measurement of the rate exists here. The count: measured, the DMA2 lengths.
 - Pinned by: `mcd_verificator_passes_every_test` (CDC FLAGS, DMA2); `cdc.rs`'s two tests.
 - Implemented in: stage 8 step 4's commit.
+
+### D-35. CD-DA's level in the mix: a full-scale sample at half the output's range, added after the Genesis's circuit
+- Opened: 2026-10-14, at stage 8 step 5, with CD-DA reaching the mix.
+- Documents read: the Hardware Manual §3-6 (the fader's FD10-FD0, `$400` full).
+- Test program: none yet; the 240p Sega CD build's audio tracks and MDFourier's Sega CD recordings, if any, are
+  stage 9's.
+- Referee: none read.
+- Conclusion: argued, a placeholder for stage 9's measurement: the console mixes the Sega CD's audio with the
+  Genesis's outside the Genesis, so the Genesis's output circuit is not applied to it; its level against the
+  Genesis's is not known here.
+- Pinned by: `an_audio_track_played_reaches_the_mix_at_the_faders_volume`.
+- Implemented in: stage 8 step 5's commit.

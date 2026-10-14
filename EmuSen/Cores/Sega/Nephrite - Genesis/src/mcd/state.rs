@@ -30,7 +30,7 @@ struct CddSaved {
     mode: [u32; 7],
     words: [u64; 5],
     nibbles: [u8; 20],
-    flags: [bool; 3],
+    flags: [bool; 4],
     report: [u8; 2],
 }
 
@@ -88,7 +88,7 @@ impl MegaCd {
         w.u32s("DriveMode", &mode_words(c.mode));
         w.u64s("DriveWords", &[c.dts_until, c.head as u64, c.laps, c.next, c.phase as u64]);
         w.bytes("DriveNibbles", &[c.status, c.command].concat());
-        w.bools("DriveFlags", &[c.hock, c.command_new, c.data]);
+        w.bools("DriveFlags", &[c.hock, c.command_new, c.data, c.toc_read]);
         w.bytes("DriveReport", &[c.report, c.report_track]);
         let k = &h.cdc;
         w.bytes("CdcBuffer", &k.buffer);
@@ -137,7 +137,7 @@ impl MegaCd {
         r.u64s(&mut dw)?;
         let mut nibbles = [0u8; 20];
         r.bytes(&mut nibbles)?;
-        let mut flags = [false; 3];
+        let mut flags = [false; 4];
         r.bools(&mut flags)?;
         let mut report = [0u8; 2];
         r.bytes(&mut report)?;
@@ -180,7 +180,7 @@ impl MegaCd {
         (c.dts_until, c.head, c.laps, c.next, c.phase) = (s.cdd.words[0], s.cdd.words[1] as u32, s.cdd.words[2], s.cdd.words[3], s.cdd.words[4] as u8 % 3);
         c.status.copy_from_slice(&s.cdd.nibbles[..10]);
         c.command.copy_from_slice(&s.cdd.nibbles[10..]);
-        [c.hock, c.command_new, c.data] = s.cdd.flags;
+        [c.hock, c.command_new, c.data, c.toc_read] = s.cdd.flags;
         [c.report, c.report_track] = s.cdd.report;
         c.named = None;
         if let Some(cart) = h.cart.as_mut() {

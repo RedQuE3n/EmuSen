@@ -269,6 +269,23 @@ None is included in this repository.
   disagree, [`Beryl_M68k.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Beryl-HW/Beryl_M68k.md) §6 settles each class.
 - Frank Cringle's ZEXDOC and ZEXALL, for the Z80.
 
+- krikzz, [mcd-verificator](https://github.com/krikzz/MEGA-PRO) V1.02 (GPL-3.0): the Sega CD's hardware tests,
+  run in the place of the Sega CD's boot ROM with no BIOS. Nephrite passes all eighteen. Its source says what each
+  test expects; krikzz's notes and the logs it recorded of a console's drive (not those recorded under a BIOS) gave
+  the drive's protocol and timing.
+- Artemio Urbina, the 240p Test Suite for the Sega CD, version 1.32 (GPL-2.0): a whole disc, data track, pause and
+  audio tracks, for the drive.
+
+**The Sega CD**
+
+- Sega, *Mega-CD Hardware Manual* (version 1.0, 1991), as hosted by
+  [Sega Retro](https://segaretro.org/Mega-CD_official_documentation): the map, the gate array's registers, PRG-RAM,
+  Word RAM, the interrupts, the timers and the CDC's wiring, each use cited by section. A developer document that
+  circulated without Sega's release.
+- Sanyo, *LC8950 Real-Time Error Correction and Host Interface Processor Design Manual*, revised for the LC8951,
+  as hosted by Sega Retro: the CDC's registers, decoder and host transfer.
+- Microsoft's RIFF WAVE format, as commonly documented, for a cue sheet's audio tracks in `emusen-disc`.
+
 **Cheat codes**
 
 - [*Sega Genesis Game Genie Conversion Method*](https://www.segakore.fr/media/segakore/outils/md_gg_codec/md_gg_conv_method.txt),

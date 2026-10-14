@@ -9,6 +9,8 @@ pub mod cdd;
 pub mod state;
 pub mod word;
 #[cfg(test)]
+mod discs;
+#[cfg(test)]
 mod verificator;
 
 use beryl_m68k::{Access, Bus, M68000, Size};
@@ -178,7 +180,9 @@ impl MegaCd {
         MegaCd { cpu: M68000::new(), hw }
     }
 
-    /// The sub CPU brought up to the main CPU's master clock `master`, instruction by instruction.
+    /// The sub CPU brought up to the main CPU's master clock `master`, instruction by instruction. Kept out of line,
+    /// so that the cartridge Genesis's loop, which never calls it, stays as small as it was.
+    #[inline(never)]
     pub fn run_to(&mut self, master: u64) {
         let target = self.hw.to_sub(master);
         while self.hw.clock < target {

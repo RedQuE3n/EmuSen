@@ -76,6 +76,7 @@ mod tests {
         let h = &mut m.hw;
         h.fader = 0x400 << 4;
         h.cdd.set_hock(true);
+        h.cdd.toc_read = true;
         // Play 00:06:10, sector 460, inside track 2 (from 450).
         let mut n = [3u8, 0, 0, 0, 0, 6, 1, 0, 0, 0];
         n[9] = !n[..9].iter().fold(0u8, |a, &b| a.wrapping_add(b)) & 15;

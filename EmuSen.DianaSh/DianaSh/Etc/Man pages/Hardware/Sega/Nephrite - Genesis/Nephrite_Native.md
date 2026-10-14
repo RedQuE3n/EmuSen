@@ -3607,3 +3607,144 @@ Machines 96 falls by 35, the reference finding no J-Cart where Nephrite finds on
   `PlayerBindingsWindowTests`, `ControllerPortTests`, `InputSettingsWindowTests` and `NephriteStartTests`, 79 pass with
   the tester's library named; the fit audit's Controller Bindings cases, 10; `NephriteTests`, the registration golden,
   `GenesisBatteryTests`, `NephriteDebugTests` and `GenesisSettingsTests`, 34.
+
+## 49. Stages 8 to 10, split into steps before stage 8's code (2026-10-14)
+
+*Decided 2026-10-14:* the Genesis line goes on, stages 8 to 14 (the Sega CD, the SH-2 and the 32X, speed and the
+gates), and MercuryRT after it. Stage 8 resumes where it paused on 2026-10-07, at its start. The plan's §6 gives the
+Sega CD three stages: the hardware (8, six steps), the rest of the hardware (9, four) and the open BIOS (10, six). This
+section divides them into steps, says what each step needs and what it can run with, and puts the questions only the
+tester can answer. It was written and committed before stage 8's first line of code.
+
+### 49.1 What there is to run
+
+- **No Sega CD BIOS** exists locally: not in the tester's library, not on the handheld's card, not in the probe's
+  cache. The handheld's `segacd`, `megacd` and `megacdjp` folders hold only a frontend's `systeminfo.txt` (checked
+  read-only on 2026-10-14). The library's 18 `.bin` files with "32X" in their names are 32X cartridges, stage 12's.
+- **Five Sega CD discs**, added to the library by the tester on 2026-10-14 in `SCD/`, each a `.cue` with its `.bin`
+  tracks (114 tracks, 2.6 GB): Chuck Rock II - Son of Chuck (USA), Lunar - Eternal Blue (USA), Mickey Mania - The
+  Timeless Adventures of Mickey Mouse (USA), Sonic CD (Europe) and Sonic CD (USA). They are copied to
+  `~/.cache/emusen/probe/nephrite/discs/` and read from there, never committed. With no BIOS they cannot start; stage 8
+  uses them where it needs no BIOS: each sheet opened through `emusen-disc`, the drive's TOC, subcode and seeks on a
+  real layout, the CDC decoding their data tracks (each disc's sector 0 is a check), and CD-DA from their audio tracks.
+  They are stages 9's and 10's commercial discs.
+- **mcd-verificator** V1.02 (krikzz, GPL-3.0, `MEGA-PRO` at `8b72838`, cached under `roms/mcd-verificator/`). Its
+  header is a Genesis cartridge's. At start it reads the long at `$400100`: "SEGA" there is the boot ROM of a Sega CD
+  beneath a cartridge (mode 1), and anything else means that it is itself the Sega CD's boot ROM at `$000000` (mode 2),
+  the first of the two ways its readme gives. The main CPU loads its own 8 KiB sub-CPU program (`sub_bios.s`, not
+  Sega's) into PRG-RAM and serves read, write, copy and delay commands through the communication registers, the
+  interrupt handlers recording each level in a status word. Its list (`testSTD` in `test_std.c`, the one routine
+  `main.c` calls): RAM CART, COLOR CALC, VAR TESTS, IRQ TEST, REG X000, REG X002, REG 2006, REG X00C, REG 8030,
+  CDC REGS, PROG RAM, WORD RAM, WRAM PMOD, then CDC INIT, CDC FLAGS, CDC DMA2, CDC DMA3 and CDC DMA1. Each prints "OK"
+  or "ERROR: nn" to plane A, a row of 64 words at VRAM `$C000` each holding a character's code, so the verdicts can be
+  read from VRAM. The CDC tests first read sector 00:02:00 of the disc in the drive through the drive and the CDC and
+  compare its header and the "SEGA" that opens the system area, so they need a Sega CD disc: any disc does. Its readme
+  says the results hold on NTSC consoles only. Its other tests (the graphics ASIC, the PCM, the CDD at length) are in
+  its source and not in its binary.
+- **The 240p Test Suite for the Sega CD**, 1.32 (Artemio Urbina, GPL-2.0, cached under `roms/240p-scd/`): one mode 1
+  data track (a 1 MiB `.iso`), a two-second post-gap, and two audio tracks as `.wav` files, with a sheet for each
+  market. It boots only through a BIOS, but as a disc it is whole: the system area, a data track, audio, a pause. It
+  is the disc in the drive for mcd-verificator's runs, being homebrew whose licence lets a test carry it.
+- **Not fetched**: jvisser's mode 1 graphics test (CC0) and viciious's PCM demo (MIT), named at the pause as
+  candidates; fabiodl's `megacdTest` is cached as source only, unbuilt, with no licence stated.
+- **mcd-verificator's `cd-log/`**, "cdd communication logs from real hardware" by its readme, screened by its file
+  names on 2026-10-14. `BI-mcd-tst/` (`bios-start`, `read-sector-bios`, `play-track`, `stop`) and `sonic-bios/`
+  (`boot-log`, `boot-to-player-paused` and six more) record a BIOS driving the drive: **not opened**, and closed to
+  stage 10's writer (the plan's §1.3). `LL-mcd-tst/` ("low level": `seek`, `toc-commands`, `read+get-pos` and eight
+  more) records mcd-verificator's own commands; the first 25 lines of `toc-commands.txt` were opened to confirm it
+  (one status and one command per exchange, no BIOS in the path), and the folder is read as a recording of the drive.
+  `notes/` holds krikzz's research notes (the drive's commands and statuses, Word RAM's mode bits, timings) and is
+  read; its `random notes.txt` includes ten lines of a TOC exchange with a Sonic CD disc whose host it does not name,
+  read as the drive's answers and named to stage 10's writer (§49.6).
+
+### 49.2 Mode 2, and how stage 8 runs with no BIOS
+
+A disc's machine is the Genesis in mode 2 (Mega-CD Hardware Manual, "Mega-CD construction" and §1-1, §1-3): the Sega
+CD's boot ROM at `$000000`, PRG-RAM's window at `$020000`, Word RAM at `$200000`, the cartridge slot moved to `$400000`
+(where a RAM cartridge sits), the gate array's registers at `$A12000`. The boot ROM is the firmware file the core
+already names for a disc (`bios_CD_U.bin`, `_E`, `_J`, files 2 to 4). **The tests place mcd-verificator there**, and it
+runs as the Sega CD's boot ROM; nothing in the core knows of it, and the same path runs a player's BIOS.
+
+With no boot ROM no disc starts: the main CPU's vectors read the open bus, and the machine stands with a black picture,
+machine info naming the firmware `absent`. **What a player sees, decided by the plan** (§5.6 "until it exists, the Sega
+CD runs only with the player's image"; §7, the Sega CD offered after stage 10): nothing. The `mcd` system stays marked
+in development (`EmuSen_CoreAPI.md` §27.4) through stages 8 to 10, so no host offers it; a development build (the kit,
+WiseMan, the crate's tests) runs a disc with whatever boot ROM it is given. The firmware entry's words change from "no
+disc runs, with the image or without it" to say that a disc runs on the player's image and not without one.
+
+Mode 1, a cartridge with the Sega CD beneath it, is not in stage 8 (Q4 below).
+
+### 49.3 Stage 8's steps
+
+| Step | What it builds | Its gate | Its oracle |
+|---|---|---|---|
+| 8.1 | The attachment as its own module (`src/mcd/`): the second Beryl 68000 at 12.5 MHz on its own bus and clock, an exact ratio of the master clock, brought up to the main CPU at each main access to the attachment; mode 2's map; the gate array's registers on both sides (reset and bus request, LEDs and version, the write protection, PRG-RAM's banks, the H-INT vector, the communication flags, commands and statuses, the stopwatch, the timer, the interrupt mask, the sub CPU's levels 2 and 3); backup RAM; the font registers | mcd-verificator's RAM CART (none present), COLOR CALC, VAR TESTS, IRQ TEST, REG X000, REG 2006, REG X00C, REG 8030, PROG RAM | the Hardware Manual §1-§4; mcd-verificator's source for what each test expects |
+| 8.2 | Word RAM: 2M and 1M, the swaps by DMNA and RET from both sides, 1M's dot image at the sub CPU's `$080000`, its bank at `$0C0000`, the main CPU's cell image at `$220000`, the priority modes | REG X002, WORD RAM, WRAM PMOD | the same, with krikzz's mode notes |
+| 8.3 | Discs and the drive: WAVE tracks in `emusen-disc`; the disc opened through `emusen-disc` (`BORROW`, sheets, `.iso`, CHD; `SEGADISCSYSTEM` the console's signature); the CDD by its protocol (the host clock, the ten-nibble status and command with their checksum, level 4 at each exchange), its commands, statuses and TOC reads, the Q subcode it reports, seeks and their timing; `MEDIA` and `MEDIA_SEEK` | CDC INIT's drive half; the drive's exchanges against `LL-mcd-tst`'s sequences; the 240p disc's TOC | krikzz's notes and the LL logs; the LC7883 and LC8951 datasheets for the signals; ECMA-130 through `emusen-disc` |
+| 8.4 | The CDC (LC8951): its registers, the decoder (header, status, `DECI`'s place in the sector), its 16 KiB buffer, host data to either CPU (`DSR`, `EDT`), DMA to PRG-RAM, Word RAM in both modes and PCM RAM (the RF5C164's memory window and bank; its sound is stage 9's) | CDC REGS, CDC INIT, CDC FLAGS, CDC DMA1, DMA2, DMA3 | Sanyo's LC8951 datasheet; the Hardware Manual §3-2, §4-2 |
+| 8.5 | CD-DA into the mix at the fader's volume; the subcode buffer and level 6; the backup RAM cartridge; the battery files (`.brm` the internal RAM, file 0; `.crm` the cartridge, file 1); the Sega CD's state (a new version) with the disc's fingerprint | round trips; the kit's C1-C15 on the 240p disc with mcd-verificator as boot ROM; old states still loading | the Hardware Manual §3-6, §3-9 |
+| 8.6 | The gate (the plan's §7 G2 for the Sega CD): mcd-verificator end to end, each test passing or a dispute or a named loss; the cartridge Genesis unchanged (its program tests, the kit on the sample, the cost of a frame); the Sega CD's cost; the record | as stated | — |
+
+**What runs with no BIOS and no commercial disc:** all of stage 8. mcd-verificator in the boot ROM's place, with the
+240p disc in the drive, is every step's gate; the five commercial discs add the drive's and the CDC's checks on real
+layouts (8.3 to 8.5), and none of them is needed for the gate.
+
+### 49.4 Stage 9's steps
+
+| Step | What it builds | Its oracle | Needs |
+|---|---|---|---|
+| 9.1 | The graphics ASIC: stamps, the stamp map, the trace vector table, the image buffer, level 1 and its timing (krikzz's note: a 16 KiB read takes 29.6 ms with the ASIC running and 23.6 without) | the Hardware Manual §3-8; homebrew; the five discs on the player's BIOS against Genesis Plus GX (Sonic CD's special stages and Mickey Mania use the ASIC) | a BIOS (Q2) |
+| 9.2 | The RF5C164: eight channels, sign-magnitude samples, loops, envelope and pan, its clock | the PCM manual and the RF5C68A datasheet; viciious's demo; references with a BIOS | the same |
+| 9.3 | The fader's ramp, de-emphasis, and the mix's levels between the Genesis, the PCM and CD-DA | the Hardware Manual §3-6; references with a BIOS | the same; recordings optional (Q7) |
+| 9.4 | The stage's close: the 240p Sega CD suite and discs on the player's BIOS against Genesis Plus GX | as stated | the same |
+
+**With no BIOS**: the ASIC's and the PCM's arithmetic as unit tests written from the manuals, and mcd-verificator's
+own ASIC, PCM and CDD tests if a variant of it is built from its source (Q6). No reference runs a Sega CD without a
+BIOS but ClownMDEmu's incomplete one (the plan's §1.6), so the comparisons of 9.1 to 9.4 need Q2's answer.
+
+### 49.5 Stage 10's steps
+
+A fresh writer, under the plan's §1.3 replacement writers' rule: no BIOS image, listing, disassembly or trace, and none
+of `cd-log/BI-mcd-tst/` or `cd-log/sonic-bios/`; the Mega-CD BIOS Manual and the public documents are the
+specification.
+
+| Step | What it builds |
+|---|---|
+| 10.1 | The boot on both CPUs (the system area's check, the initial program loaded, the sub CPU's system program, its interrupt dispatch) and a screen with no disc |
+| 10.2 | `_CDBIOS`'s drive calls (initialise, play, seek, stop, pause, scan, TOC and status, the fader, the LEDs) over the drive of 8.3 |
+| 10.3 | Data reads: `ROMREAD` and its relatives, the CDC's start, stop, read, transfer and acknowledge |
+| 10.4 | `_BURAM` in the real BIOS's format, on the internal RAM and the cartridge |
+| 10.5 | The main CPU's routines and tables that games use by address |
+| 10.6 | The gate: the 240p Sega CD suite, mcd-verificator in mode 1 (it finds a boot ROM at `$400000` by the "SEGA" at `$400100`), games against the same games on the player's BIOS |
+
+It has the five discs (§49.1), and needs a BIOS run as a black box for its comparisons (Q2). Mode 1 arrives with it (Q4).
+
+### 49.6 Questions for the tester
+
+1. **Test discs.** *Narrowed 2026-10-14, when the tester added five discs (§49.1):* stage 8 needs no more, and the five
+   are stages 9's and 10's commercial discs. *Recommended:* add, when convenient, discs that use what the five may not:
+   streaming full-motion video (Sewer Shark, Night Trap, or Snatcher's), the PCM heavily (Silpheed, Popful Mail), and
+   one using backup RAM's cartridge; and fetch jvisser's graphics test and viciious's PCM demo for stage 9, their
+   licences allowing it.
+2. **A BIOS for stage 9's references.** The plan's oracle for stage 9 is the player's BIOS run through Genesis Plus
+   GX; none exists locally, and the firmware policy forbids fetching one. *Recommended:* the tester places a dump of
+   their own console's BIOS in a folder outside the repository and the library, which the probe and Nephrite run as
+   a black box and no one reads; stage 10's writer never handles its bytes. Without it, stage 9 is graded by unit
+   tests and homebrew alone, and its comparisons wait.
+3. **mcd-verificator in the BIOS's place for the references.** Genesis Plus GX, PicoDrive and BlastEm refuse a Sega
+   CD without a BIOS; given mcd-verificator under a BIOS's file name in the probe's own system folder, they would run
+   it as Nephrite does, and each reference's verdicts would show which of krikzz's results it meets. *Recommended:*
+   yes, as a local instrument in the probe's scratch folder, never shipped: a test that Nephrite fails and every
+   reference fails is weak evidence against the test, and one that all pass names Nephrite's defect. It is a homebrew
+   program in a firmware slot, not firmware, so the firmware policy does not forbid it; the decision is the tester's.
+4. **Mode 1** (a cartridge with the Sega CD beneath, mcd-verificator's second way and a few programs').
+   *Recommended:* stage 10, with a Create setting for cartridges, off by default, since the cartridge finds the Sega
+   CD by the boot ROM at `$400000`, which the replacement then supplies.
+5. **The backup RAM cartridge.** *Recommended:* a Create setting, "none" by default as a console without one, or
+   Sega's 128 KiB cartridge, its contents the second battery file (`.crm`).
+6. **A variant of mcd-verificator with its other tests.** Its ASIC, PCM and CDD tests are in its source but not in its
+   binary. *Recommended:* yes for stage 9, built locally with a 68000 compiler as a local instrument and not
+   committed, which GPL-3.0 allows; it needs a toolchain this machine lacks (`m68k-elf-gcc`), which the tester would
+   approve installing.
+7. **Recordings** of a console's CD-DA and PCM output, as MDFourier's were for the Genesis (§28). *Recommended:* not
+   needed for stage 8; for stage 9 useful but not required.

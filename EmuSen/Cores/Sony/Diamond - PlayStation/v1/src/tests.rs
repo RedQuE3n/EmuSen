@@ -122,7 +122,8 @@ fn with_no_usable_device_the_settings_are_noted_and_the_console_picture_shown() 
 }
 
 /// §52: with every enhancement on the state is the machine's, the bytes a machine with them off saves at the same frame,
-/// and loads both ways; machine info states the bound of settling pictures, 0 with the machine's own picture.
+/// and loads both ways, a state of the kept form among them; machine info states the bound of settling pictures, 0 with
+/// the machine's own picture.
 #[test]
 fn a_state_with_the_settings_on_is_the_machines_and_machine_info_states_the_bound() {
     let mut on = create(&[(PRECISION_KEY, "true"), (RESOLUTION_KEY, "2"), (COLOUR_KEY, "true"), (FILTERING_KEY, "3d")]);
@@ -149,4 +150,16 @@ fn a_state_with_the_settings_on_is_the_machines_and_machine_info_states_the_boun
         Core::advance(&mut off, &mut 0).unwrap();
     }
     assert!(state(&mut on) == state(&mut off));
+    // A state of the kept form (§47) ends in PREC and RNDR blocks, skipped by their lengths (§4, §52.3).
+    let mut kept = state(&mut off);
+    for (tag, len) in [(b"PREC", 2_623_132u32), (b"RNDR", 18_481_672)] {
+        kept.extend_from_slice(tag);
+        kept.extend_from_slice(&len.to_le_bytes());
+        kept.extend(std::iter::repeat_n(0x5A, len as usize));
+    }
+    on.load_state(&kept).unwrap();
+    off.load_state(&kept).unwrap();
+    Core::advance(&mut on, &mut 0).unwrap();
+    Core::advance(&mut off, &mut 0).unwrap();
+    assert!(state(&mut on) == state(&mut off), "a state of the kept form loads and the machine continues");
 }

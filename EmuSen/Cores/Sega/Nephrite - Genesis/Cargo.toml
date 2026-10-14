@@ -15,6 +15,7 @@ beryl-m68k = { path = "../Beryl-HW/beryl-m68k" }
 beryl-z80 = { path = "../Beryl-HW/beryl-z80" }
 beryl-sh2 = { path = "../Beryl-HW/beryl-sh2" }
 beryl-sn76489 = { path = "../Beryl-HW/beryl-sn76489" }
+emusen-disc = { path = "../../Shared/emusen-disc" }
 
 [profile.release]
 panic = "abort"

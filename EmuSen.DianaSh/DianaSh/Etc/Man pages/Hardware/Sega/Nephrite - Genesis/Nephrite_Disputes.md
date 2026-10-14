@@ -1511,3 +1511,31 @@ CPUs' disputes in their own record pages.
   other reading of the slot is known.
 - Pinned by: `mcd_verificator_passes_the_tests_built` (RAM CART "not present").
 - Implemented in: stage 8 step 1's commit.
+
+### D-33. The CDD's protocol: ten nibbles each way every 1/75 s with a checksum, its statuses, reports and seek
+- Opened: 2026-10-14, at stage 8 step 3. The Hardware Manual's §3-6 page for `$FF8038`-`$FF804A` is blacked out in
+  the copy held, and says only that level 4 follows the tenth status nibble and that the tenth command nibble starts a
+  transfer.
+- Documents read: the Hardware Manual §3-6, §3-5; krikzz's notes (`cdd-cmd-info.txt`, `random notes.txt`).
+- Test program: mcd-verificator's own drive driver and the LL logs it recorded on a console (§51.2), each line a status
+  and the command sent with it.
+- Referee: none read.
+- Conclusion: as §51.1 states. The spin-up's length (the logs vary between 53 and 150 exchanges) and the coarse
+  travel's are chosen within what the logs show; the landing 14 short, the 12 busy exchanges, the 3 short and the
+  loop of eight are the logs' own. Measured where the logs are, argued for the travel's curve.
+- Pinned by: `cdd.rs`'s five tests; `mcd_verificator_passes_every_test` (CDC INIT).
+- Implemented in: stage 8 step 3's commit.
+
+### D-34. The CDC's decoder interrupt clears itself 40% into a sector; DMA moves a word every 16 sub clocks; a count of DBC moves (DBC + 1) / 2 words
+- Opened: 2026-10-14, at stage 8 step 4. Sanyo's manual gives the decoder interrupt's length as about 2.75 ms
+  (decoding off) or 1.5 to 1.8 ms (§12.6), while mcd-verificator's CDC FLAGS counts it at 49 polling loops set and 72
+  clear, about 40% of a sector, with only DECEN on; the manual gives no transfer rate on the Sega CD's bus.
+- Documents read: Sanyo's manual §11.3-§11.7, §12.6, appendix E; the Hardware Manual §3-2.
+- Test program: mcd-verificator's CDC FLAGS (0x40, 0x41), DMA2 (0x04, 0x05, 0x09, 0x10: odd lengths), DMA3 and DMA1.
+- Referee: none read.
+- Conclusion: DECI set at each sector's start with DECEN and clear 67,000 sub clocks later unless STAT3 is read
+  first: measured, since it gives the program's counts to within one loop and 30,000 does not. The DMA's 16 clocks a
+  word are argued: the tests pass at any rate that lets a transfer start within a command's round trip and finish
+  within a frame, and no measurement of the rate exists here. The count: measured, the DMA2 lengths.
+- Pinned by: `mcd_verificator_passes_every_test` (CDC FLAGS, DMA2); `cdc.rs`'s two tests.
+- Implemented in: stage 8 step 4's commit.

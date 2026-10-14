@@ -79,8 +79,14 @@ impl Machine {
         Machine::with_bios(image, media, model, None)
     }
 
-    /// A machine with `bios` in a Sega CD's boot ROM; a disc's machine has its Sega CD whether a boot ROM is given or not.
+    /// A machine with `bios` in a Sega CD's boot ROM and the image, when it is a disc, in its drive.
     pub fn with_bios(image: &[u8], media: Media, model: Model, bios: Option<Vec<u8>>) -> Machine {
+        let disc = (media.system == System::Mcd).then(|| crate::mcd::open_disc(emusen_native::core::Kept::from(image.to_vec()), Vec::new()).ok()).flatten();
+        Machine::with_disc(image, media, model, bios, disc)
+    }
+
+    /// A machine with `disc` in its Sega CD's drive; a disc's machine has its Sega CD whether a boot ROM is given or not.
+    pub fn with_disc(image: &[u8], media: Media, model: Model, bios: Option<Vec<u8>>, disc: Option<crate::mcd::cdd::Disc>) -> Machine {
         let header = media.header.clone().unwrap_or_default();
         let rom = if media.system == System::Mcd { Vec::new() } else { image.to_vec() };
         let (rom, top, patch) = split_lock_on(rom, &header.serial);
@@ -97,7 +103,7 @@ impl Machine {
         for &(id, name, size) in list {
             extra.push(Memory { id, name, bytes: vec![0; size] });
         }
-        Machine { media, genesis: Genesis::with_mcd(cart, model, bios), extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::io::PADS], plugged: [(crate::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false }
+        Machine { media, genesis: Genesis::with_mcd(cart, model, bios, disc), extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::io::PADS], plugged: [(crate::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false }
     }
 
     /// The spaces in id order: the two buses, the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.

@@ -145,7 +145,7 @@ pub struct Genesis {
 
 impl Genesis {
     pub fn new(cart: Cart, model: Model) -> Genesis {
-        Genesis::with_mcd(cart, model, None)
+        Genesis::with_mcd(cart, model, None, None)
     }
 
     /// The master clock's rate, a fraction in Hz.
@@ -154,7 +154,7 @@ impl Genesis {
     }
 
     /// A Genesis with `bios` as a Sega CD's boot ROM when given, the console in mode 2 (Nephrite_Native.md §50).
-    pub fn with_mcd(cart: Cart, model: Model, bios: Option<Vec<u8>>) -> Genesis {
+    pub fn with_mcd(cart: Cart, model: Model, bios: Option<Vec<u8>>, disc: Option<crate::mcd::cdd::Disc>) -> Genesis {
         let jcart = cart.jcart;
         let hw = Hw {
             clock: START,
@@ -186,7 +186,7 @@ impl Genesis {
             draw: true,
             sound: if model.pal { Sound::new(53_203_425, 1, !model.model2) } else { Sound::new(4_725_000_000, 88, !model.model2) },
             mcd_low: bios.is_some(),
-            mcd: bios.map(|b| Box::new(crate::mcd::MegaCd::new(Genesis::master_hz(model.pal), b, START))),
+            mcd: bios.map(|b| Box::new(crate::mcd::MegaCd::new(Genesis::master_hz(model.pal), b, START, disc))),
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
         g.hw.io.jcart = jcart;

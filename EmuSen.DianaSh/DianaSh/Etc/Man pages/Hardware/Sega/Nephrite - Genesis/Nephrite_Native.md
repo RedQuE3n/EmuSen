@@ -3830,3 +3830,88 @@ binary to read the instruction timing of IRQ TEST's checks (`examples/dis.rs`), 
   1.230-1.233 (1.230-1.231), Thunder Force IV 1.329-1.331 (1.323-1.332), Streets of Rage 2 1.129-1.141
   (1.133-1.139), Phantasy Star IV 1.402-1.409 (1.396-1.398). Unchanged within the runs' spread but for Phantasy
   Star IV's 0.5%, inside its own spread on a second pair.
+
+## 51. Stage 8, step 3: the drive (2026-10-14)
+
+### 51.1 What it built
+
+- **The CDD** (`src/mcd/cdd.rs`), the drive's microcontroller as the sub CPU meets it. The Hardware Manual blacks out
+  its protocol (§3-6, "direct access ... is prohibited"), so its rules are D-33's: an exchange every 1/75 s (500,000/3
+  sub clocks, in periods of 166,667, 166,667 and 166,666 so that three are exact), in which the drive's ten status
+  nibbles reach `$FF8038`-`$FF8041` and level 4 is raised while HOCK is set, and the ten command nibbles written at
+  `$FF8042`-`$FF804B` are taken at the next exchange, the write of the last sending them (DTS set meanwhile). A
+  nibble checksum closes each ten: the first nine summed, inverted, four bits.
+- **Its commands**: stop, the reports (absolute and relative position, track, the disc's length, its first and last
+  tracks, a track's start), play, seek, pause, resume, fast forward and back, close and open the tray; a command
+  whose checksum fails is answered with status 6 and not taken. **Its statuses**: stopped, playing, seeking, scanning,
+  paused, tray open, ready (after the TOC is read), no disc, lead-out.
+- **Its timing**, from the LL logs: after HOCK rises the drive spins up and reads its TOC (80 exchanges, the logs
+  giving 53 to 150), answering reports only then; a seek is 12 exchanges of "seeking" with no report, then a coarse
+  travel of about 0.9 √(sectors) exchanges reporting places on the way, landing 14 sectors short of its target and
+  reading on; a play reports "playing" from 3 sectors short, a seek pauses there and loops over the eight sectors
+  up to it, an exchange without a report between laps.
+- **The Q subcode it reports** is `emusen-disc`'s for the sector under the head: the absolute and relative times and
+  the track as BCD nibbles, the data flag in the status's flags nibble (bit 2), bit 0 set while not playing. A track's
+  start comes, as on the logs, when the lead-in's cycle of TOC items passes that track's.
+- **The disc** is opened through `emusen-disc` (`mcd::open_disc`): a sheet with its tracks, a CHD, a raw track, or
+  2,048-byte sectors whose first bytes are `SEGADISCSYSTEM`, which is the console's signature and so the core's
+  word that headerless sectors are a disc (`Lone::User`), framed as mode 1. Its bytes are a `Kept`, the host's own
+  where the host lends them. Each sector the head reads is named to the host (`MEDIA_SEEK`, file and byte from
+  `Disc::place`) unless it lies in the megabyte after the place last named, as Diamond's drive does.
+
+### 51.2 Sources
+
+mcd-verificator's `cdd.c`, `cdd.h`, `test_cdd2.c` and `test_cdc_new.c` (`cddInitToc`, `cddUpdate`, the command
+builders); krikzz's `notes/cdd-cmd-info.txt` and `random notes.txt` (the commands, statuses and reports, the seek's
+loop); the LL logs of `cd-log/LL-mcd-tst/`, each exchange of a status and a command on a console with mcd-verificator
+as host, read collapsed by repeats (`toc-commands`, `seek`, `seek-resume`, `LL-read-sector`, `read+get-pos`,
+`read+get-relpos`, `read+get-track`, `read-pause-resume`, `read-stopall`, `LL-stop-rd`, `LL-bad-crc`). The Hardware
+Manual §3-6 for the registers' bits. Not read: `cd-log/BI-mcd-tst/`, `cd-log/sonic-bios/`.
+
+### 51.3 Measured (2026-10-14)
+
+The crate's drive tests: the checksum against the logs' exchanges; a spin-up, the TOC read and its reports in the
+logs' form (`94.010200.1E` for tracks 1 to 2); a play that is busy for twelve exchanges, lands 14 short and reports
+playing from 3 short, sector by sector; a seek that loops in the eight sectors short of its target; a bad checksum
+answered with status 6 and not taken. mcd-verificator's CDC INIT, which plays from 00:01:73 through the drive and waits
+for the sector 00:02:00 (§52), passes.
+
+## 52. Stage 8, step 4: the CDC (2026-10-14)
+
+### 52.1 What it built
+
+- **The LC8951** (`src/mcd/cdc.rs`): its sixteen registers through the register address at `$FF8005` (a fifth bit,
+  RS, the gate array's own: with it set no register answers) and the data at `$FF8007`, the address moving on at
+  each access but R0's, from 31 back to 0; IFSTAT, the byte counter, the header, the block pointer, the write
+  address, STAT0-STAT3 on reads; IFCTRL, the counter, the data address, DTTRG, DTACK, the write address, CTRL0,
+  CTRL1, the block pointer and the chip's reset on writes (Sanyo's manual §10-§11 and appendix E).
+- **The decoder**: each 1/75 s with DECEN, the decoder interrupt (DECI), which reading STAT3 clears and which clears
+  itself 67,000 sub clocks (40%) into the sector (D-34); a data sector the drive read written, with WRRQ, into the
+  16 KiB buffer at the write address, its 12 sync bytes first, the block pointer at its header, HEAD0-HEAD3 its
+  header, STAT0 CRCOK, STAT2 its mode.
+- **The host transfer**: DTTRG with DOUTEN sends `DBC + 1` bytes from the data address, a word at a time, the buffer
+  wrapping at 16 KiB. To a CPU (DD 2 or 3) each word waits in the host data register (`$A12008`, `$FF8008`) with DSR
+  set; an access by that side, read or write, takes it and loads the next; the other side reads it as it stands.
+  By DMA (DD 4, 5, 7) a word every 16 sub clocks, a byte to the PCM chip, at the DMA address of `$FF800A` (its bits
+  18-3), into PRG-RAM (not write-protected for it), Word RAM (2M, or the sub CPU's bank in 1M) or the PCM chip's
+  memory in its selected bank (the address counting two a byte); held while the destination is the main CPU's. The
+  last word loaded sets EDT and the transfer end interrupt (DTEI); an even count's last byte is not sent.
+- **Level 5** on each fall of the chip's INT pin, which is low while an interrupt is set and enabled: a second
+  interrupt while the first stands makes no request.
+- **`$FF8004` and `$A12004`**: EDT, DSR and the destination on both sides, the register address on the sub CPU's;
+  a write of the destination clears EDT and DSR and sets the DMA address to 0 without stopping a transfer.
+
+### 52.2 Sources
+
+Sanyo, "LC8950 Real-Time Error Correction and Host Interface Processor Design Manual", revised for the LC8951 (as
+held on Sega Retro): §10 (the register tables), §11.1-§11.16, §12.5-§12.6 and appendix E. The Hardware Manual §3-2,
+§4-2. mcd-verificator's `test_cdc_new.c`, `cdc.c`, `cdc.h`, `test_std.c` (CDC REGS).
+
+### 52.3 Measured (2026-10-14)
+
+- **mcd-verificator**, all eighteen tests: CDC REGS, CDC INIT, CDC FLAGS (with DECI's 49 and 72 polling loops each
+  within one of krikzz's console), CDC DMA2, DMA3 and DMA1 pass beside §50's twelve; the program prints "Diagnostics
+  complete." at frame 1,399. `mcd_verificator_passes_every_test` asserts all eighteen.
+- **Each rule shown to be held**: DECI cleared after 30,000 sub clocks fails CDC FLAGS 0x40 (22 loops); an even count
+  sending its last byte fails CDC DMA2 0x04; DTACK not clearing DTEI fails the run.
+- **The crate's tests**: 152 pass.

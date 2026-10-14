@@ -3,12 +3,16 @@
 //! in mode 2. The Mega-CD Hardware Manual (Sega, 1991) §1-§4 is the source; Nephrite_Native.md §50 is the record, with
 //! what mcd-verificator's tests settled where the manual is silent.
 
+pub mod cdc;
+pub mod cdd;
 pub mod word;
 #[cfg(test)]
 mod verificator;
 
 use beryl_m68k::{Access, Bus, M68000, Size};
 
+use cdc::{Cdc, dest};
+use cdd::{Cdd, SECTOR};
 use word::{Lands, WordRam};
 
 /// Sub CPU clocks a second: the 50 MHz crystal over 4.
@@ -83,11 +87,16 @@ pub struct Sub {
     /// The sub CPU waits for Word RAM the main CPU holds: its writes owed, done when the RAM is its again.
     pub parked: bool,
     pub owed: Vec<(u32, Size, u16)>,
+    /// The drive, the CDC, the sector the drive last read, and the fader's register.
+    pub cdd: Cdd,
+    pub cdc: Cdc,
+    pub raw: Box<[u8; 2352]>,
+    pub fader: u16,
 }
 
 impl MegaCd {
     /// A Sega CD beside a Genesis whose master clock runs at `master_hz` (a fraction), with `bios` in its boot ROM.
-    pub fn new(master_hz: (u64, u64), bios: Vec<u8>, master_now: u64) -> MegaCd {
+    pub fn new(master_hz: (u64, u64), bios: Vec<u8>, master_now: u64, disc: Option<cdd::Disc>) -> MegaCd {
         let ratio = (SUB_HZ * master_hz.1, master_hz.0);
         let g = gcd(ratio.0, ratio.1);
         let mut hw = Sub {
@@ -103,8 +112,13 @@ impl MegaCd {
             g: Gate { reset_held: true, busreq: true, hivect: 0xFFFF, ..Gate::default() },
             parked: false,
             owed: Vec::new(),
+            cdd: Cdd::new(disc, 0),
+            cdc: Cdc::default(),
+            raw: Box::new([0; 2352]),
+            fader: 0,
         };
         hw.clock = hw.to_sub(master_now);
+        hw.cdd.next = hw.clock + SECTOR[0];
         hw.g.res0_at = hw.clock + PERIPHERAL_RESET;
         hw.word.sub_owns = false;
         MegaCd { cpu: M68000::new(), hw }
@@ -143,7 +157,9 @@ impl MegaCd {
         let a = a & 0xFF_FFFE;
         if a >= 0xA1_2000 {
             self.run_to(master);
-            return Some(self.hw.main_reg(a & 0x3E, master));
+            let w = self.hw.main_reg(a & 0x3E, master);
+            self.hw.cdc_irq();
+            return Some(w);
         }
         let h = &self.hw;
         match a {
@@ -167,7 +183,9 @@ impl MegaCd {
     pub fn main_read8(&mut self, a: u32, master: u64) -> Option<u8> {
         if a & 0xFF_FFFF >= 0xA1_2000 {
             self.run_to(master);
-            return Some(self.hw.main_reg8(a & 0x3F, master));
+            let b = self.hw.main_reg8(a & 0x3F, master);
+            self.hw.cdc_irq();
+            return Some(b);
         }
         let w = self.main_read16(a & !1, master)?;
         Some(if a & 1 == 0 { (w >> 8) as u8 } else { w as u8 })
@@ -201,6 +219,20 @@ impl MegaCd {
     }
 }
 
+/// A Sega CD disc from an image and its companions: a sheet with its tracks, a CHD, a raw track, or 2,048-byte
+/// sectors that begin with the system area's signature, the console's own mark of a disc (Nephrite_Native.md §51).
+pub fn open_disc(image: emusen_native::core::Kept, companions: Vec<emusen_native::core::Kept>) -> Result<cdd::Disc, emusen_disc::Refusal> {
+    let lone = if image.starts_with(crate::media::DISC_SIGNATURE) { emusen_disc::Lone::User } else { emusen_disc::Lone::Detect };
+    emusen_disc::open(image, companions, emusen_disc::IsoForm::Mode1, lone)
+}
+
+/// The system area's first 2,048 bytes as the drive reads them from sector 00:02:00, for telling what the disc is.
+pub fn system_area(disc: &mut cdd::Disc) -> Vec<u8> {
+    let mut raw = [0u8; 2352];
+    let k = disc.read(emusen_disc::msf::PROGRAM_START, &mut raw);
+    if k.audio() { Vec::new() } else { raw[16..16 + 2048].to_vec() }
+}
+
 fn gcd(a: u64, b: u64) -> u64 {
     if b == 0 { a } else { gcd(b, a % b) }
 }
@@ -227,22 +259,94 @@ impl Sub {
         (self.g.reset_held || self.g.busreq).then_some((self.g.bank as usize) << 17 | (a & 0x1_FFFF) as usize)
     }
 
-    /// The timer's counts up to the present: at a count of 0 it requests level 3 and starts again from its value.
+    /// Everything timed on the sub side up to the present, in the order it falls: the timer's counts (level 3 at 0),
+    /// the drive's exchanges and the sectors they read, the decoder interrupt clearing itself, the CDC's DMA.
     pub fn events(&mut self) {
-        while self.g.timer != 0 && self.g.timer_next <= self.clock {
-            if self.g.timer_count == 0 {
-                self.raise(3);
-                self.g.timer_count = self.g.timer;
-            } else {
-                self.g.timer_count -= 1;
+        loop {
+            let (timer, deci, dma) = self.times();
+            let t = timer.min(self.cdd.next).min(deci).min(dma);
+            if t > self.clock {
+                return;
             }
-            self.g.timer_next += TICK;
+            if t == timer {
+                if self.g.timer_count == 0 {
+                    self.raise(3);
+                    self.g.timer_count = self.g.timer;
+                } else {
+                    self.g.timer_count -= 1;
+                }
+                self.g.timer_next += TICK;
+            } else if t == self.cdd.next {
+                self.exchange(t);
+            } else if t == deci {
+                self.cdc.clear_deci(t);
+            } else {
+                self.dma_step();
+            }
+            self.cdc_irq();
         }
+    }
+
+    /// The timer's next count, the decoder interrupt's end and the next DMA unit, each `u64::MAX` when none is due.
+    fn times(&self) -> (u64, u64, u64) {
+        let timer = if self.g.timer != 0 { self.g.timer_next } else { u64::MAX };
+        let deci = if self.cdc.deci { self.cdc.deci_until } else { u64::MAX };
+        let dma = if self.cdc.busy { self.cdc.dma_next } else { u64::MAX };
+        (timer, deci, dma)
     }
 
     /// The sub clock of the next event that can make a request.
     fn next_event(&self) -> u64 {
-        if self.g.timer != 0 { self.g.timer_next } else { u64::MAX }
+        let (timer, deci, dma) = self.times();
+        timer.min(self.cdd.next).min(deci).min(dma)
+    }
+
+    /// The drive's exchange at `t`: level 4, and the sector it read handed to the CDC.
+    fn exchange(&mut self, t: u64) {
+        let tick = self.cdd.exchange();
+        if tick.int4 {
+            self.raise(4);
+        }
+        let read = match (tick.sector, self.cdd.disc.as_mut()) {
+            (Some(at), Some(d)) => Some(d.read(at, &mut self.raw)),
+            _ => None,
+        };
+        let data = read.is_some_and(|k| !k.audio());
+        self.cdc.sector(data.then_some(&*self.raw), t);
+        self.cdd.next += SECTOR[self.cdd.phase as usize];
+        self.cdd.phase = (self.cdd.phase + 1) % 3;
+    }
+
+    /// The CDC's INT pin falling: level 5.
+    fn cdc_irq(&mut self) {
+        if self.cdc.edge() {
+            self.raise(5);
+        }
+    }
+
+    /// One unit of the CDC's DMA, held while its destination is the main CPU's.
+    fn dma_step(&mut self) {
+        let a = self.cdc.dma as usize;
+        let free = match self.cdc.dd {
+            dest::PRG => !(self.g.reset_held || self.g.busreq),
+            dest::WORD => self.word.one_m || self.word.sub_owns,
+            _ => true,
+        };
+        if !free {
+            self.cdc.dma_wait();
+            return;
+        }
+        let (b0, b1) = self.cdc.dma_unit();
+        match (self.cdc.dd, b1) {
+            (dest::PCM, _) => self.pcm_ram[((self.pcm_regs[7] as usize & 15) << 12) | (a >> 1 & 0xFFF)] = b0,
+            (dest::PRG, Some(b1)) => (self.prg[a & 0x7_FFFE], self.prg[(a & 0x7_FFFE) + 1]) = (b0, b1),
+            (_, Some(b1)) => {
+                let i = if self.word.one_m { word::bank_byte(self.word.sub_bank(), a & 0x1_FFFE) } else { a & 0x3_FFFE };
+                (self.word.bytes[i], self.word.bytes[i + 1]) = (b0, b1);
+            }
+            _ => {}
+        }
+        self.cdc.dma_done(if b1.is_some() { 2 } else { 1 });
     }
 
     /// A request at `level`, made only while its enable is set.
@@ -278,6 +382,8 @@ impl Sub {
         (g.stopwatch, g.timer, g.timer_count, g.mask, g.pending) = (now / TICK, 0, 0, 0, 0);
         (g.font_color, g.font_bits, g.leds) = (0, 0, 0);
         g.res0_at = now + PERIPHERAL_RESET;
+        self.cdd.hock = false;
+        self.fader = 0;
     }
 
     /// The Word RAM the sub CPU waited for is its own again: its owed writes done, and on it goes.
@@ -301,9 +407,13 @@ impl Sub {
         ((sub_now / TICK).wrapping_sub(self.g.stopwatch) & 0xFFF) as u16
     }
 
-    fn main_reg(&self, off: u32, master: u64) -> u16 {
+    fn main_reg(&mut self, off: u32, master: u64) -> u16 {
+        if off == 0x08 {
+            return self.cdc.host_access(true);
+        }
         let g = &self.g;
         match off {
+            0x04 => self.cdc.mode(false),
             0x00 => ((g.mask & 4 != 0) as u16) << 15 | (self.int2_pending(self.to_sub(master)) as u16) << 8 | (g.busreq as u16) << 1 | !g.reset_held as u16,
             0x02 => (g.wp as u16) << 8 | (g.bank as u16) << 6 | self.word.mode_bits() as u16,
             0x06 => g.hivect,
@@ -315,7 +425,7 @@ impl Sub {
         }
     }
 
-    fn main_reg8(&self, off: u32, master: u64) -> u8 {
+    fn main_reg8(&mut self, off: u32, master: u64) -> u8 {
         let w = self.main_reg(off & !1, master);
         if off & 1 == 0 { (w >> 8) as u8 } else { w as u8 }
     }
@@ -360,6 +470,10 @@ impl Sub {
                 }
             }
             0x06 => self.g.hivect = (self.g.hivect & !mask) | (v & mask),
+            0x08 => {
+                self.cdc.host_access(true);
+                self.cdc_irq();
+            }
             0x0E => self.g.cfm = if mask == 0x00FF { v as u8 } else { (v >> 8) as u8 },
             0x10..=0x1E => {
                 let r = &mut self.g.cmd[(off as usize - 0x10) / 2];
@@ -380,9 +494,19 @@ impl Sub {
         })
     }
 
-    fn sub_reg(&self, off: u32) -> u16 {
+    /// A register read; `low` when the access takes the low byte, which a read of the CDC's register data needs.
+    fn sub_reg(&mut self, off: u32, low: bool) -> u16 {
+        match off {
+            0x06 if low => return self.cdc.read_reg(self.clock) as u16,
+            0x08 => return self.cdc.host_access(false),
+            _ => {}
+        }
         let g = &self.g;
         match off {
+            0x04 => self.cdc.mode(true),
+            0x0A => (self.cdc.dma >> 3) as u16,
+            0x34 => self.fader & 0x7FFC,
+            0x36..=0x4A => self.cdd.read(off - 0x36, self.clock),
             0x00 => (g.leds as u16) << 8 | (self.clock >= g.res0_at) as u16,
             0x02 => (g.wp as u16) << 8 | (self.word.priority as u16) << 3 | self.word.mode_bits() as u16,
             0x0C => self.stopwatch(self.clock),
@@ -414,8 +538,20 @@ impl Sub {
                 self.word.priority = (v >> 3) as u8 & 3;
                 self.word.sub_mode(v & 4 != 0, v & 1 != 0);
             }
+            0x04 => self.cdc.write_mode(v, mask),
+            0x06 => {
+                if mask & 0x00FF != 0 {
+                    self.cdc.write_reg(v as u8, self.clock);
+                }
+            }
+            0x08 => {
+                self.cdc.host_access(false);
+            }
+            0x0A => self.cdc.dma = (v as u32) << 3,
             0x0C => self.g.stopwatch = self.clock / TICK,
             0x0E => self.g.cfs = v as u8,
+            0x34 => self.fader = v,
+            0x36..=0x4A => self.cdd.write(off - 0x36, v, mask, self.clock),
             0x20..=0x2E => {
                 let r = &mut self.g.sta[(off as usize - 0x20) / 2];
                 *r = (*r & !mask) | (v & mask);
@@ -450,7 +586,11 @@ impl Sub {
             }
             0xFE_0000..=0xFE_FFFF => self.bram[(a as usize & 0x3FFF) >> 1] as u16,
             0xFF_0000..=0xFF_7FFF => self.pcm_read((a & 0x3FFF) >> 1) as u16,
-            0xFF_8000..=0xFF_FFFF => self.sub_reg(a & 0x1FE),
+            0xFF_8000..=0xFF_FFFF => {
+                let w = self.sub_reg(a & 0x1FE, size == Size::Word || a & 1 == 1);
+                self.cdc_irq();
+                w
+            }
             _ => 0,
         };
         match size {
@@ -497,7 +637,10 @@ impl Sub {
                     self.pcm_write((a & 0x3FFF) >> 1, v as u8);
                 }
             }
-            0xFF_8000..=0xFF_FFFF => self.sub_reg_write(a & 0x1FE, v, mask),
+            0xFF_8000..=0xFF_FFFF => {
+                self.sub_reg_write(a & 0x1FE, v, mask);
+                self.cdc_irq();
+            }
             _ => {}
         }
     }

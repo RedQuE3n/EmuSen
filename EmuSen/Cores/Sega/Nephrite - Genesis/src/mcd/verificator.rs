@@ -60,11 +60,11 @@ pub fn run(m: &mut Machine, limit: u32) -> Option<u32> {
     None
 }
 
-/// The tests the steps built so far answer "OK" (Nephrite_Native.md §50); the rest are printed.
-const PASSING: [&str; 13] = ["RAM CART", "COLOR CALC", "VAR TESTS", "IRQ TEST", "REG X000", "REG X002", "REG 2006", "REG X00C", "REG 8030", "PROG RAM", "WORD RAM", "WRAM PMOD", "CD hardware detected at 0x00000000"];
+/// Every test of the program's list (Nephrite_Native.md §49.1), in its order.
+pub const TESTS: [&str; 18] = ["RAM CART", "COLOR CALC", "VAR TESTS", "IRQ TEST", "REG X000", "REG X002", "REG 2006", "REG X00C", "REG 8030", "CDC REGS", "PROG RAM", "WORD RAM", "WRAM PMOD", "CDC INIT", "CDC FLAGS", "CDC DMA2", "CDC DMA3", "CDC DMA1"];
 
 #[test]
-fn mcd_verificator_passes_the_tests_built() {
+fn mcd_verificator_passes_every_test() {
     let Some(mut m) = machine() else { return };
     let done = run(&mut m, 3000);
     let rows = screen(&m);
@@ -72,9 +72,10 @@ fn mcd_verificator_passes_the_tests_built() {
         eprintln!("| {r}");
     }
     eprintln!("finished at frame {done:?}");
+    assert!(done.is_some(), "Diagnostics complete.");
+    assert!(rows.iter().any(|r| r.contains("CD hardware detected at 0x00000000")), "mode 2: the program found itself at $000000");
     let v = verdicts(&rows);
-    assert!(rows.iter().any(|r| r.contains(PASSING[12])), "mode 2: the program found itself at $000000");
-    for name in &PASSING[..12] {
+    for name in TESTS {
         let got = v.iter().find(|(n, _)| n == name).map(|(_, r)| r.as_str());
         assert!(got.is_some_and(|r| r.ends_with("OK")), "{name}: {got:?}");
     }

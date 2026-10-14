@@ -1,8 +1,9 @@
 //! Times Diamond's frames on the emulation thread and digests what they made (Diamond_Speed.md §2): `bench <image>
 //! [frames] [--from N] [--armed] [--plain] [--stepped] [--verify N] [--verify-runs N] [--times FILE] [--every N]
-//! [--observed] [--renderer] [--precise] [--precision] [--save FILE]`; `--observed` attaches the enhancement layer's test observer
-//! (Diamond_Enhancements.md §7), `--renderer` stage E3's Vulkan renderer, whose picture each frame then waits for and
-//! is timed with the frame, the two shares and the frames whose pictures differ printed apart (§18); `--precise` stage
+//! [--observed] [--renderer] [--precise] [--precision] [--waited] [--save FILE]`; `--observed` attaches the enhancement layer's test observer
+//! (Diamond_Enhancements.md §7), `--renderer` stage E3's Vulkan renderer, whose frame end is timed with the frame as a
+//! host pays it, the picture of the frame before handed (§38.1), its share printed apart; with `--waited` each frame's
+//! picture is waited for instead and compared with the machine's, the frames that differ printed (§18); `--precise` stage
 //! E4's precise geometry, the precision layer paired with the renderer, timed as `--renderer` is, and `--precision` the
 //! precision layer alone with a drawer that draws nothing, its own share (§25); `--save FILE` writes
 //! the state the run ends in, a layer's block with it,
@@ -66,6 +67,7 @@ fn main() {
     }
     let precise = args.iter().any(|a| a == "--precise");
     let rendering = precise || args.iter().any(|a| a == "--renderer");
+    let waited = args.iter().any(|a| a == "--waited");
     if rendering {
         let r = diamond_renderer::Renderer::new(None).unwrap_or_else(|e| panic!("no renderer: {e}"));
         if precise {
@@ -103,13 +105,17 @@ fn main() {
             m.advance();
         }
         let advanced = start.elapsed().as_secs_f64() * 1e3;
-        if rendering {
+        if rendering && waited {
             made.clear();
             made.extend_from_slice(m.board.gpu.display.frame());
             let wait = std::time::Instant::now();
             let drawn = renderer(&mut m).picture().0;
             waits.push(wait.elapsed().as_secs_f64() * 1e3);
             unequal += (drawn != &made[..]) as usize;
+        } else if rendering {
+            let wait = std::time::Instant::now();
+            renderer(&mut m).frame_end();
+            waits.push(wait.elapsed().as_secs_f64() * 1e3);
         }
         times.push(advanced + waits.last().copied().unwrap_or(0.0));
         picture = fnv(picture, m.board.gpu.display.frame());

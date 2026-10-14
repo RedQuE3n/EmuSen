@@ -225,7 +225,7 @@ impl Machine {
 
     /// One step at the boundary, with the kernel's seams: the side-load at the shell's entry and the putchar tap.
     pub fn step(&mut self) {
-        if self.board.gpu.layer.is_some() { self.step_in::<Layered>() } else { self.step_in::<Plain>() }
+        if self.board.gpu.layer.moves() { self.step_in::<Layered>() } else { self.step_in::<Plain>() }
     }
 
     /// `step`, through the board itself or through `Layered` while a layer is attached.
@@ -281,10 +281,10 @@ impl Machine {
     /// One frame: the machine runs until a field's vblank begins, its picture complete, or to the field's end when the
     /// display range leaves no vblank; the SPU's samples are made up to that cycle.
     pub fn advance(&mut self) {
-        if self.board.gpu.layer.is_some() { self.advance_in::<Layered>() } else { self.advance_in::<Plain>() }
+        if self.board.gpu.layer.moves() { self.advance_in::<Layered>() } else { self.advance_in::<Plain>() }
     }
 
-    /// `advance`, the processor stepping through the board itself, or through `Layered` while a layer is attached;
+    /// `advance`, the processor stepping through the board itself, or through `Layered` while a layer told the moves is attached;
     /// the levers are the same either way (Diamond_Enhancements.md §2.3). Each kept out of line, so that the plain
     /// frame's loop is the one it was.
     #[inline(never)]

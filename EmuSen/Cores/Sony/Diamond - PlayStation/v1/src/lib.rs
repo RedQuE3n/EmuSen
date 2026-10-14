@@ -63,7 +63,6 @@ impl Diamond {
             Ok(r) => {
                 self.note = r.software().then(|| format!("Drawn by {}, a Vulkan the processor runs, since no graphics card was found: the picture is the same, but slow.", r.report()));
                 self.machine.attach(Box::new(Precise::new(Precision::default(), r.keeping())));
-                self.picture();
             }
             Err(why) => {
                 self.machine.detach();
@@ -72,13 +71,11 @@ impl Diamond {
         }
     }
 
-    /// The renderer's picture drawn and read back, when it is attached and rendering is not skipped.
-    fn picture(&mut self) {
-        if self.machine.skip {
-            return;
-        }
+    /// The frame's work sent to the device, and the picture of the frame before handed to the host (§38.1); also when
+    /// rendering is skipped, since the renderer must keep step.
+    fn frame_end(&mut self) {
         if let Some(p) = self.pair() {
-            p.drawer.picture();
+            p.drawer.frame_end();
         }
     }
 
@@ -92,7 +89,6 @@ impl StateMachine for Diamond {
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), StateError> {
         self.machine.load_state(data)?;
-        self.picture();
         Ok(())
     }
 
@@ -142,7 +138,7 @@ impl Core for Diamond {
 
     fn advance(&mut self, detail: &mut u64) -> Result<(), i32> {
         Core::advance(&mut self.machine, detail)?;
-        self.picture();
+        self.frame_end();
         Ok(())
     }
 
@@ -157,7 +153,7 @@ impl Core for Diamond {
     fn frame_info(&self) -> FrameInfo {
         match self.pair_ref() {
             Some(p) => {
-                let (_, w, h) = p.drawer.last_picture();
+                let (_, w, h) = p.drawer.handed();
                 FrameInfo { aspect_num: 4, aspect_den: 3, ..FrameInfo::rgba(w as i32, h as i32) }
             }
             None => self.machine.frame_info(),
@@ -166,7 +162,7 @@ impl Core for Diamond {
 
     fn frame(&self) -> &[u8] {
         match self.pair_ref() {
-            Some(p) => p.drawer.last_picture().0,
+            Some(p) => p.drawer.handed().0,
             None => self.machine.frame(),
         }
     }
@@ -241,7 +237,7 @@ impl Core for Diamond {
 
     fn debug_run_frame(&mut self, flags: u32, detail: &mut u64) -> Result<u32, i32> {
         let why = self.machine.debug_run_frame(flags, detail)?;
-        self.picture();
+        self.frame_end();
         Ok(why)
     }
 

@@ -78,6 +78,11 @@ pub trait Layer: Observer + Any {
     fn clear(&mut self, _tag: [u8; 4]) {}
     /// Before a state is saved: whatever the layer keeps elsewhere, on a device, brought to where `save` reads it.
     fn settle(&mut self) {}
+    /// Whether the layer is told the processor's moves and the GTE's projections; one that watches only the GPU says
+    /// not, and the machine keeps the plain frame for it (Diamond_Enhancements.md §38.3). Asked once, when attached.
+    fn moves(&self) -> bool {
+        true
+    }
 }
 
 /// The layer attached to a board, if any. It is no part of the machine's state, so a copy of the board, as the
@@ -85,6 +90,7 @@ pub trait Layer: Observer + Any {
 #[derive(Default)]
 pub struct Attached {
     layer: Option<Box<dyn Layer>>,
+    moves: bool,
 }
 
 impl Clone for Attached {
@@ -98,6 +104,12 @@ impl Attached {
         self.layer.is_some()
     }
 
+    /// Whether a layer is attached that is told the processor's moves, which the layered frame tells.
+    #[inline(always)]
+    pub fn moves(&self) -> bool {
+        self.moves
+    }
+
     #[inline(always)]
     pub(crate) fn get(&mut self) -> Option<&mut dyn Layer> {
         self.layer.as_deref_mut()
@@ -108,6 +120,7 @@ impl Attached {
     }
 
     pub(crate) fn set(&mut self, layer: Option<Box<dyn Layer>>) -> Option<Box<dyn Layer>> {
+        self.moves = layer.as_ref().is_some_and(|l| l.moves());
         std::mem::replace(&mut self.layer, layer)
     }
 }

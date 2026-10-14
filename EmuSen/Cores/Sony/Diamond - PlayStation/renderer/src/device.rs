@@ -1,5 +1,6 @@
 //! The renderer's device: its buffers on the shared Vulkan device (`emusen-gpu`), the four programs, and the commands one
-//! submission records from the steps the host planned (Diamond_Enhancements.md §16.5).
+//! submission records from the steps the host planned (Diamond_Enhancements.md §16.5), waited for or left pending with
+//! the host's staging in the other of two sets (§38.1).
 
 use emusen_gpu::{Commands, GpuBuffer, GpuDevice, GpuProgram, Where};
 
@@ -65,12 +66,37 @@ pub enum Back {
     Vram,
     /// The 256 colours of a palette slot.
     Palette(u32),
+    /// The picture's first words into one of the two slots the host is handed pictures from (§38.1).
+    Slot(usize, usize),
 }
 
-/// The device and what the renderer made on it, which `Drop` gives back before the device goes.
+/// The device and what the renderer made on it, which `Drop` gives back before the device goes; and which of the two
+/// sets of staged arrays the host is filling, the other being a pending submission's until it finishes (§38.1).
 pub struct Device {
     pub gpu: GpuDevice,
     held: Option<Held>,
+    set: usize,
+}
+
+/// The arrays the host stages a submission in, each a host buffer the submission copies to the device's own.
+pub struct Staged {
+    pub records: GpuBuffer,
+    pub entries: GpuBuffer,
+    pub tiles: GpuBuffer,
+    pub loads: GpuBuffer,
+    pub lines: GpuBuffer,
+    pub pixels: GpuBuffer,
+}
+
+impl Staged {
+    fn new(gpu: &GpuDevice, at: Where) -> Result<Staged, String> {
+        let make = |bytes: usize| gpu.create_buffer(bytes as u64, at);
+        Ok(Staged { records: make(RECORDS * WORDS * 4)?, entries: make(ENTRIES * 4)?, tiles: make(TILE_RECORDS * 16)?, loads: make(LOADS * 16)?, lines: make(LINES * 32)?, pixels: make(PIXELS / 2 * 4)? })
+    }
+
+    fn all(self) -> [GpuBuffer; 6] {
+        [self.records, self.entries, self.tiles, self.loads, self.lines, self.pixels]
+    }
 }
 
 pub struct Held {
@@ -82,19 +108,13 @@ pub struct Held {
     pub picture: GpuBuffer,
     pub cluts: GpuBuffer,
     pub scratch: GpuBuffer,
-    /// The staged arrays on the host and their copies on the device.
-    pub records: (GpuBuffer, GpuBuffer),
-    pub entries: (GpuBuffer, GpuBuffer),
-    pub tiles: (GpuBuffer, GpuBuffer),
-    pub loads: (GpuBuffer, GpuBuffer),
-    pub lines: (GpuBuffer, GpuBuffer),
-    pub pixels: (GpuBuffer, GpuBuffer),
+    /// The staged arrays on the host, two sets, and their one copy on the device.
+    pub staged: [Staged; 2],
+    pub onboard: Staged,
     /// What comes back, and what a seed goes up through.
     pub back: GpuBuffer,
-}
-
-fn pair(gpu: &GpuDevice, bytes: usize) -> Result<(GpuBuffer, GpuBuffer), String> {
-    Ok((gpu.create_buffer(bytes as u64, Where::Host)?, gpu.create_buffer(bytes as u64, Where::Device)?))
+    /// The two pictures the host is handed, a frame apart.
+    pub slots: [GpuBuffer; 2],
 }
 
 impl Device {
@@ -109,34 +129,53 @@ impl Device {
             picture: gpu.create_buffer(words(PICTURE_WORDS), Where::Device)?,
             cluts: gpu.create_buffer(words(SLOTS * 256), Where::Device)?,
             scratch: gpu.create_buffer(words(VRAM_WORDS), Where::Device)?,
-            records: pair(&gpu, RECORDS * WORDS * 4)?,
-            entries: pair(&gpu, ENTRIES * 4)?,
-            tiles: pair(&gpu, TILE_RECORDS * 16)?,
-            loads: pair(&gpu, LOADS * 16)?,
-            lines: pair(&gpu, LINES * 32)?,
-            pixels: pair(&gpu, PIXELS / 2 * 4)?,
+            staged: [Staged::new(&gpu, Where::Host)?, Staged::new(&gpu, Where::Host)?],
+            onboard: Staged::new(&gpu, Where::Device)?,
             back: gpu.create_buffer(words(VRAM_WORDS), Where::Host)?,
+            slots: [gpu.create_buffer(words(PICTURE_WORDS), Where::Host)?, gpu.create_buffer(words(PICTURE_WORDS), Where::Host)?],
         };
-        Ok(Device { gpu, held: Some(held) })
+        Ok(Device { gpu, held: Some(held), set: 0 })
     }
 
     pub fn held(&self) -> &Held {
         self.held.as_ref().expect("held until dropped")
     }
 
+    /// The staged arrays the host fills now.
+    pub fn staged(&self) -> &Staged {
+        &self.held().staged[self.set]
+    }
+
     /// Records `steps` into one submission, after copying what they use of the staged arrays to the device, and what
-    /// is to come back; submits it and waits.
+    /// is to come back; submits it and waits, after the pending submission if there is one.
     pub fn submit(&self, steps: &[Step], used: Used, back: Back) {
-        let held = self.held();
-        self.gpu.submit(|c| held.commands(c, steps, used, back));
+        self.gpu.wait_for_pending();
+        let (held, set) = (self.held(), self.set);
+        self.gpu.submit(|c| held.commands(c, set, steps, used, back));
+    }
+
+    /// The same submission left pending, once the one pending before it has finished; the host then fills the other set
+    /// of staged arrays while this one is read (Diamond_Enhancements.md §38.1).
+    pub fn submit_pending(&mut self, steps: &[Step], used: Used, back: Back) {
+        let (held, set) = (self.held.as_ref().expect("held until dropped"), self.set);
+        self.gpu.submit_pending(|c| held.commands(c, set, steps, used, back));
+        self.set ^= 1;
     }
 }
 
 impl Held {
-    fn commands(&self, c: &mut Commands, steps: &[Step], used: Used, back: Back) {
+    fn commands(&self, c: &mut Commands, set: usize, steps: &[Step], used: Used, back: Back) {
         {
-            let staged = [(&self.records, used.records * WORDS * 4), (&self.entries, used.entries * 4), (&self.tiles, used.tiles * 16), (&self.loads, used.loads * 16), (&self.lines, used.lines * 32), (&self.pixels, used.pixels.div_ceil(2) * 4)];
-            for ((host, device), bytes) in staged {
+            let (host, device) = (&self.staged[set], &self.onboard);
+            let staged = [
+                (&host.records, &device.records, used.records * WORDS * 4),
+                (&host.entries, &device.entries, used.entries * 4),
+                (&host.tiles, &device.tiles, used.tiles * 16),
+                (&host.loads, &device.loads, used.loads * 16),
+                (&host.lines, &device.lines, used.lines * 32),
+                (&host.pixels, &device.pixels, used.pixels.div_ceil(2) * 4),
+            ];
+            for (host, device, bytes) in staged {
                 if bytes > 0 {
                     c.copy(host, device, bytes as u64, 0, 0);
                 }
@@ -151,6 +190,8 @@ impl Held {
                 Back::Picture(_) => {}
                 Back::Vram => c.copy(&self.vram, &self.back, 0, 0, 0),
                 Back::Palette(slot) => c.copy(&self.cluts, &self.back, 256 * 4, slot as u64 * 256 * 4, 0),
+                Back::Slot(slot, words) if words > 0 => c.copy(&self.picture, &self.slots[slot], (words * 4) as u64, 0, 0),
+                Back::Slot(..) => {}
             }
         }
     }
@@ -169,13 +210,13 @@ impl Held {
                     c.fill(&self.picture, 0xFF00_0000);
                 }
                 if loads.1 > 0 {
-                    go(c, 0, &self.clut, &[&self.vram, &self.cluts, &self.loads.1], &loads.0, loads.1, first);
+                    go(c, 0, &self.clut, &[&self.vram, &self.cluts, &self.onboard.loads], &loads.0, loads.1, first);
                 }
                 if lines.1 > 0 {
-                    go(c, 1, &self.scan, &[&self.vram, &self.picture, &self.lines.1], &lines.0, lines.1, first);
+                    go(c, 1, &self.scan, &[&self.vram, &self.picture, &self.onboard.lines], &lines.0, lines.1, first);
                 }
                 if tiles.1 > 0 {
-                    go(c, 2, &self.walk, &[&self.vram, &self.records.1, &self.entries.1, &self.tiles.1, &self.cluts, &self.pixels.1], &tiles.0, tiles.1, first);
+                    go(c, 2, &self.walk, &[&self.vram, &self.onboard.records, &self.onboard.entries, &self.onboard.tiles, &self.cluts, &self.onboard.pixels], &tiles.0, tiles.1, first);
                 }
             }
             Step::Copy(s) => {
@@ -196,12 +237,10 @@ impl Drop for Device {
         for p in [h.walk, h.scan, h.clut, h.copy] {
             self.gpu.destroy_program(p);
         }
-        for b in [h.vram, h.picture, h.cluts, h.scratch, h.back] {
+        let [s0, s1] = h.staged;
+        let [p0, p1] = h.slots;
+        for b in [h.vram, h.picture, h.cluts, h.scratch, h.back, p0, p1].into_iter().chain(s0.all()).chain(s1.all()).chain(h.onboard.all()) {
             self.gpu.destroy_buffer(b);
-        }
-        for (host, device) in [h.records, h.entries, h.tiles, h.loads, h.lines, h.pixels] {
-            self.gpu.destroy_buffer(host);
-            self.gpu.destroy_buffer(device);
         }
     }
 }

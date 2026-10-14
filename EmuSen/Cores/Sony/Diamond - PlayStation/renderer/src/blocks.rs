@@ -49,6 +49,35 @@ impl Blocks {
     }
 }
 
+/// What a stretch has drawn, its blocks kept apart by the parity of the rows drawn, so that a display line reading one
+/// parity is not held up by drawing that leaves those rows alone, as interlaced drawing does (Diamond_Enhancements.md
+/// §38.2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Written([Blocks; 2]);
+
+impl Written {
+    pub fn clear(&mut self) {
+        self.0 = [Blocks::default(); 2];
+    }
+
+    /// A span drawn: every row, or with `rows` only the rows of that parity.
+    pub fn mark(&mut self, s: Span, rows: Option<u32>) {
+        match rows {
+            Some(p) => self.0[p as usize & 1].mark(s),
+            None => self.0.iter_mut().for_each(|b| b.mark(s)),
+        }
+    }
+
+    pub fn meets(&self, s: Span) -> bool {
+        self.0[0].meets(s) || self.0[1].meets(s)
+    }
+
+    /// Whether the row `s` lies in, a span one row tall, has been drawn.
+    pub fn meets_row(&self, s: Span) -> bool {
+        self.0[s.y0 as usize & 1].meets(s)
+    }
+}
+
 /// Tiles across and down: 1,024 by 512 pixels in tiles of 8.
 pub const TILES_ACROSS: u32 = 128;
 pub const TILES_DOWN: u32 = 64;
@@ -85,5 +114,14 @@ mod tests {
         seen.sort();
         seen.dedup();
         assert_eq!(seen.len(), 128);
+    }
+
+    #[test]
+    fn a_row_drawn_with_the_other_parity_alone_is_not_met() {
+        let mut w = Written::default();
+        w.mark(Span { x0: 0, x1: 63, y0: 0, y1: 31 }, Some(1));
+        assert!(!w.meets_row(Span::sized(0, 10, 64, 1)) && w.meets_row(Span::sized(0, 11, 64, 1)) && w.meets(Span::sized(0, 10, 1, 1)));
+        w.mark(Span::sized(0, 40, 8, 1), None);
+        assert!(w.meets_row(Span::sized(0, 32, 8, 1)) && w.meets_row(Span::sized(0, 33, 8, 1)));
     }
 }

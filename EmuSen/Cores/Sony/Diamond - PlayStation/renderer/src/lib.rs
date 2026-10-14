@@ -20,7 +20,7 @@ use emusen_gpu::GpuDevice;
 use emusen_native::{StateReader, StateWriter};
 use precision::{Draw, Fraction};
 
-use blocks::{Blocks, TILES};
+use blocks::{Blocks, TILES, Written};
 use device::{Back, CopyStep, Device, ENTRIES, LINES, LOADS, PICTURE_WORDS, PIXELS, RECORDS, SLOTS, Step, TILE_RECORDS, Used, VRAM_WORDS};
 use record::{Made, Record, Span, WORDS};
 
@@ -43,6 +43,9 @@ pub struct Counts {
     pub precise: u64,
     pub perspective: u64,
     pub integer: u64,
+    /// Why stretches ended: a palette load, a copy, a transfer's row, a display line, a record's texels, a record's
+    /// pixels over texels read.
+    pub ends: [u64; 6],
 }
 
 /// What the renderer keeps across a state when it draws precisely: its mirror a halfword a pixel and the mark beside
@@ -71,7 +74,7 @@ struct Transfer {
 /// The stretch being planned: what it has written and read as texels, its records' tiles in order, where its palette
 /// loads and display lines begin in the staged arrays, and whether it starts by clearing the picture.
 struct Stretch {
-    written: Blocks,
+    written: Written,
     read: Blocks,
     pairs: Vec<(u16, u32)>,
     loads_from: usize,
@@ -99,6 +102,9 @@ pub struct Renderer {
     height: u32,
     counts: Counts,
     kept: Option<Kept>,
+    /// The picture slot, with its size, the host is handed now, and the one the next `frame_end` hands (§38.1).
+    handed: (usize, u32, u32),
+    ahead: (usize, u32, u32),
 }
 
 impl Observer for Renderer {}
@@ -111,7 +117,7 @@ impl Renderer {
             device: Device::new(gpu)?,
             steps: Vec::with_capacity(256),
             used: Used::default(),
-            stretch: Stretch { written: Blocks::default(), read: Blocks::default(), pairs: Vec::with_capacity(1 << 16), loads_from: 0, lines_from: 0, clear: false, serial: 1, rows: vec![(0, 0); 576] },
+            stretch: Stretch { written: Written::default(), read: Blocks::default(), pairs: Vec::with_capacity(1 << 16), loads_from: 0, lines_from: 0, clear: false, serial: 1, rows: vec![(0, 0); 576] },
             counts_per_tile: vec![0; TILES],
             touched: Vec::with_capacity(TILES),
             polyline: None,
@@ -123,6 +129,8 @@ impl Renderer {
             height: 240,
             counts: Counts::default(),
             kept: None,
+            handed: (0, 0, 0),
+            ahead: (0, 0, 0),
         })
     }
 
@@ -154,9 +162,22 @@ impl Renderer {
         (&self.device.held().back.slice::<u8>()[..words * 4], self.width, self.height)
     }
 
-    /// The picture `picture` last read back, until the next readback.
-    pub fn last_picture(&self) -> (&[u8], u32, u32) {
-        (&self.device.held().back.slice::<u8>()[..(self.width * self.height * 4) as usize], self.width, self.height)
+    /// The frame's end, as a host shows the renderer's picture: everything planned goes to the device as its pending
+    /// submission, which copies the picture into a slot, and the host is handed the slot of the frame before; the
+    /// machine waits only if the device has not finished that frame yet (Diamond_Enhancements.md §38.1).
+    pub fn frame_end(&mut self) {
+        let slot = self.ahead.0 ^ 1;
+        self.close();
+        self.device.submit_pending(&self.steps, self.used, Back::Slot(slot, (self.width * self.height) as usize));
+        self.submitted();
+        self.handed = self.ahead;
+        self.ahead = (slot, self.width, self.height);
+    }
+
+    /// The picture a host is handed, RGBA at its own size: the frame before the last `frame_end`'s, or the seed's.
+    pub fn handed(&self) -> (&[u8], u32, u32) {
+        let (slot, w, h) = self.handed;
+        (&self.device.held().slots[slot].slice::<u8>()[..(w * h * 4) as usize], w, h)
     }
 
     /// The renderer's VRAM, a halfword a pixel as the GPU's `Vram` holds them, once everything told is drawn.
@@ -247,15 +268,16 @@ impl Renderer {
         }
         let span = record::clut_span(t);
         if self.stretch.written.meets(span) || self.used.loads - self.stretch.loads_from >= SLOTS - 2 {
+            self.counts.ends[0] += 1;
             self.close();
         }
         if self.used.loads == LOADS {
-            self.submit(Back::Nothing);
+            self.flush();
         }
         let slot = self.next_slot;
         self.next_slot = (self.next_slot + 1) % SLOTS as u32;
         let l = self.used.loads;
-        self.device.held().loads.0.slice_mut::<u32>()[l * 4..l * 4 + 4].copy_from_slice(&[slot, t.clut_x, t.clut_y, t.entries()]);
+        self.device.staged().loads.slice_mut::<u32>()[l * 4..l * 4 + 4].copy_from_slice(&[slot, t.clut_x, t.clut_y, t.entries()]);
         self.used.loads += 1;
         self.counts.loads += 1;
         (self.slot, self.slot_entries) = (slot, t.entries());
@@ -263,6 +285,7 @@ impl Renderer {
     }
 
     fn copy(&mut self, src: Rect, dst: Rect, mask: Mask) {
+        self.counts.ends[1] += 1;
         self.close();
         let dd = (dst.y.wrapping_sub(src.y)) & 511;
         let chunk = if dd >= 1 && dd < src.h { dd } else { src.h };
@@ -276,7 +299,7 @@ impl Renderer {
         }
         self.counts.copies += 1;
         if self.steps.len() > 4096 {
-            self.submit(Back::Nothing);
+            self.flush();
         }
     }
 
@@ -290,16 +313,17 @@ impl Renderer {
             if x.row != Some(row) {
                 let span = Span::sized(x.rect.x, x.rect.y + row, x.rect.w, 1);
                 if self.stretch.read.meets(span) {
+                    self.counts.ends[2] += 1;
                     self.transfer = Some(x);
                     self.close();
                     x = self.transfer.expect("kept");
                 }
-                self.stretch.written.mark(span);
+                self.stretch.written.mark(span, None);
                 x.row = Some(row);
             }
             if self.used.pixels == PIXELS || self.used.records == RECORDS {
                 self.transfer = Some(x);
-                self.submit(Back::Nothing);
+                self.flush();
                 x = self.transfer.expect("kept");
             }
             let r = match x.record {
@@ -312,12 +336,12 @@ impl Renderer {
                 }
             };
             let p = self.used.pixels;
-            let pixels = self.device.held().pixels.0.slice_mut::<u32>();
+            let pixels = self.device.staged().pixels.slice_mut::<u32>();
             let value = word >> (16 * half) & 0xFFFF;
             pixels[p / 2] = if p % 2 == 0 { value } else { pixels[p / 2] & 0xFFFF | value << 16 };
             self.used.pixels += 1;
             x.done += 1;
-            self.device.held().records.0.slice_mut::<i32>()[r * WORDS + 15] = x.done as i32;
+            self.device.staged().records.slice_mut::<i32>()[r * WORDS + 15] = x.done as i32;
         }
         self.transfer = Some(x);
     }
@@ -333,7 +357,8 @@ impl Renderer {
             Shown::Line { row, x, y, width, deep, blanked } => {
                 if !blanked {
                     let n = if deep { (width * 3).div_ceil(2) + 1 } else { width };
-                    if self.stretch.written.meets(Span::sized(x, y, n, 1)) {
+                    if self.stretch.written.meets_row(Span::sized(x, y, n, 1)) {
+                        self.counts.ends[3] += 1;
                         self.close();
                     }
                 }
@@ -342,7 +367,7 @@ impl Renderer {
                     (serial, at) if serial == self.stretch.serial => at,
                     _ => {
                         if self.used.lines == LINES {
-                            self.submit(Back::Nothing);
+                            self.flush();
                         }
                         let at = self.used.lines;
                         self.used.lines += 1;
@@ -350,7 +375,7 @@ impl Renderer {
                         at
                     }
                 };
-                self.device.held().lines.0.slice_mut::<u32>()[at * 8..at * 8 + 8].copy_from_slice(&line);
+                self.device.staged().lines.slice_mut::<u32>()[at * 8..at * 8 + 8].copy_from_slice(&line);
                 self.counts.lines += 1;
             }
         }
@@ -363,13 +388,15 @@ impl Renderer {
     fn add(&mut self, record: Option<Record>) {
         let Some(r) = record else { return };
         self.end_transfer_record();
-        if r.texels.is_some_and(|t| self.stretch.written.meets(t)) || self.stretch.read.meets(r.writes) {
+        let texels = r.texels.is_some_and(|t| self.stretch.written.meets(t));
+        if texels || self.stretch.read.meets(r.writes) {
+            self.counts.ends[if texels { 4 } else { 5 }] += 1;
             self.close();
         }
         let mut tiles = 0;
         blocks::tiles(r.writes, |_| tiles += 1);
         if self.used.records == RECORDS || self.used.entries + self.stretch.pairs.len() + tiles > ENTRIES || self.used.tiles + TILES > TILE_RECORDS {
-            self.submit(Back::Nothing);
+            self.flush();
         }
         if let Some(t) = r.texels {
             let mut own = Blocks::default();
@@ -379,14 +406,16 @@ impl Renderer {
             }
             self.stretch.read.mark(t);
         }
-        self.stretch.written.mark(r.writes);
+        let flags = r.words[0] as u32;
+        let rows = (flags & record::SKIP != 0).then(|| (flags >> 19 & 1) ^ 1);
+        self.stretch.written.mark(r.writes, rows);
         self.put(&r);
     }
 
     /// The record staged at the next index, its tiles listed in the stretch.
     fn put(&mut self, r: &Record) {
         let i = self.used.records;
-        self.device.held().records.0.slice_mut::<i32>()[i * WORDS..(i + 1) * WORDS].copy_from_slice(&r.words);
+        self.device.staged().records.slice_mut::<i32>()[i * WORDS..(i + 1) * WORDS].copy_from_slice(&r.words);
         self.used.records += 1;
         self.counts.records += 1;
         if r.words[0] as u32 & 0xF != record::TRANSFER {
@@ -399,7 +428,7 @@ impl Renderer {
     fn end_transfer_record(&mut self) {
         let Some(mut x) = self.transfer else { return };
         let Some(r) = x.record.take() else { return };
-        let words = &self.device.held().records.0.slice::<i32>()[r * WORDS..(r + 1) * WORDS];
+        let words = &self.device.staged().records.slice::<i32>()[r * WORDS..(r + 1) * WORDS];
         let (i0, i1) = (words[14] as u32, words[15] as u32);
         let span = record::transfer(x.rect, i0, i1, 0, x.mask).writes;
         let pairs = &mut self.stretch.pairs;
@@ -415,8 +444,8 @@ impl Renderer {
         let (loads, lines) = ((s.loads_from as u32, (self.used.loads - s.loads_from) as u32), (s.lines_from as u32, (self.used.lines - s.lines_from) as u32));
         let first_tile = self.used.tiles;
         if !s.pairs.is_empty() {
-            let held = self.device.held();
-            let (entries, tiles) = (held.entries.0.slice_mut::<u32>(), held.tiles.0.slice_mut::<u32>());
+            let staged = self.device.staged();
+            let (entries, tiles) = (staged.entries.slice_mut::<u32>(), staged.tiles.slice_mut::<u32>());
             for &(t, _) in &s.pairs {
                 if self.counts_per_tile[t as usize] == 0 {
                     self.touched.push(t);
@@ -461,6 +490,17 @@ impl Renderer {
     fn submit(&mut self, back: Back) {
         self.close();
         self.device.submit(&self.steps, self.used, back);
+        self.submitted();
+    }
+
+    /// Everything planned submitted without waiting, when an array is full in the middle of a frame.
+    fn flush(&mut self) {
+        self.close();
+        self.device.submit_pending(&self.steps, self.used, Back::Nothing);
+        self.submitted();
+    }
+
+    fn submitted(&mut self) {
         self.counts.submissions += 1;
         self.steps.clear();
         self.used = Used::default();
@@ -549,6 +589,11 @@ impl Layer for Renderer {
         Renderer::shown(self, s);
     }
 
+    /// The renderer watches the GPU alone, so the machine keeps the plain frame for it (§38.3).
+    fn moves(&self) -> bool {
+        false
+    }
+
     /// The GPU's VRAM, picture, CLUT cache and the transfer or polyline it has open, taken as the renderer's own, or in
     /// their place the mirror, picture and palette a state's block gave; what was planned before is dropped, being of
     /// another machine.
@@ -565,8 +610,9 @@ impl Layer for Renderer {
             k.restored = false;
             &*k
         });
+        self.device.gpu.wait_for_pending();
         let held = self.device.held();
-        let (staged, back) = (held.records.0.slice_mut::<u32>(), held.back.slice_mut::<u32>());
+        let (staged, back) = (self.device.staged().records.slice_mut::<u32>(), held.back.slice_mut::<u32>());
         let words = match restored {
             Some(k) => {
                 (self.width, self.height) = (k.size[0], k.size[1]);
@@ -598,10 +644,13 @@ impl Layer for Renderer {
             }
         };
         (self.slot, self.slot_entries, self.next_slot) = (0, 256, 1);
+        let records = &self.device.staged().records;
+        held.slots[0].slice_mut::<u32>()[..words].copy_from_slice(&staged[..words]);
+        (self.handed, self.ahead) = ((0, self.width, self.height), (0, self.width, self.height));
         self.device.gpu.submit(|c| {
             c.copy(&held.back, &held.vram, 0, 0, 0);
-            c.copy(&held.records.0, &held.picture, (words * 4) as u64, 0, 0);
-            c.copy(&held.records.0, &held.cluts, 256 * 4, (words * 4) as u64, 0);
+            c.copy(records, &held.picture, (words * 4) as u64, 0, 0);
+            c.copy(records, &held.cluts, 256 * 4, (words * 4) as u64, 0);
         });
         self.counts.submissions += 1;
         self.polyline = gpu.polyline.map(|p| (p.command, p.last));

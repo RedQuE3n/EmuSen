@@ -368,7 +368,7 @@ fn failed_with(core: &str, mask: u32, frames: u64) -> (Vec<String>, String) {
 fn pictures_that_settle_pass_within_their_bound_and_each_fault_of_the_rule_fails() {
     let (failed, text) = failed_with("kit_settling_core", 1024, 120);
     assert!(failed.is_empty(), "{text}");
-    assert!(text.contains("compared from its 4th frame, machine info's state.picture_settles being 3"), "{text}");
+    assert!(text.contains("compared from its frame 4 on, machine info's state.picture_settles being 3"), "{text}");
     let (failed, text) = failed_with("kit_settling_core", 0, 120);
     assert!(failed.is_empty() && !text.contains("picture_settles"), "a core declaring nothing is held as before: {text}");
     for (mask, cases) in [(1024 | 2048, vec!["C8", "C12"]), (4096, vec!["C8", "C12"]), (8192, vec!["C8", "C12"]), (16384, vec!["C7", "C8", "C12"])] {

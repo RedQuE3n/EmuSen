@@ -386,7 +386,7 @@ fn settle_bound(s: &Session<'_>, half: u64, c: &mut Check) -> Option<String> {
     let max = emusen_native::core::PICTURE_SETTLES_MAX as u64;
     c.that(s.settles <= max, || format!("machine info declares its pictures settle {} frames after a load, more than the {max} allowed", s.settles));
     c.that(s.settles < half, || format!("machine info declares its pictures settle {} frames after a load, which leaves none of the {half} frames after it to compare: run more than {} frames", s.settles, 2 * s.settles));
-    (s.settles > 0).then(|| format!("; pictures after the load compared from its {}th frame, machine info's state.picture_settles being {}", s.settles + 1, s.settles))
+    (s.settles > 0).then(|| format!("; pictures after the load compared from its frame {} on, machine info's state.picture_settles being {}", s.settles + 1, s.settles))
 }
 
 fn frame_checks(f: u64, fi: &FrameInfo, copied: usize, problems: &mut Vec<String>) {

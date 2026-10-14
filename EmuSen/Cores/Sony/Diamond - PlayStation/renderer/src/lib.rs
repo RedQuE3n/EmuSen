@@ -625,16 +625,28 @@ impl Layer for Renderer {
         let n = self.options.scale as usize;
         let held = self.device.held();
         let (staged, back, slot) = (self.device.staged().records.slice_mut::<u32>(), held.back.slice_mut::<u32>(), held.slots[0].slice_mut::<u32>());
-        // At a scale each pixel of the machine's VRAM and picture is a block of the same value (§39.6).
+        // At a scale each pixel of the machine's VRAM and picture is a block of the same value (§39.6): a row of blocks
+        // made once and copied to the block's other rows.
         (self.width, self.height) = (gpu.display.width, gpu.display.height);
-        for (i, o) in back[..VRAM_WORDS * n * n].iter_mut().enumerate() {
-            let (x, y) = ((i % (1024 * n)) / n, i / (1024 * n) / n);
-            *o = gpu.vram.get(x as u32, y as u32) as u32;
+        let row = 1024 * n;
+        for y in 0..512 {
+            for (x, block) in back[y * n * row..][..row].chunks_exact_mut(n).enumerate() {
+                block.fill(gpu.vram.get(x as u32, y as u32) as u32);
+            }
+            for j in 1..n {
+                back.copy_within(y * n * row..(y * n + 1) * row, (y * n + j) * row);
+            }
         }
-        let (w, frame) = (self.width as usize * n, gpu.display.frame());
-        for (i, o) in slot[..w * self.height as usize * n].iter_mut().enumerate() {
-            let at = ((i / w / n) * self.width as usize + (i % w) / n) * 4;
-            *o = u32::from_le_bytes([frame[at], frame[at + 1], frame[at + 2], frame[at + 3]]);
+        let (width, frame) = (self.width as usize, gpu.display.frame());
+        let w = width * n;
+        for y in 0..self.height as usize {
+            for (x, block) in slot[y * n * w..][..w].chunks_exact_mut(n).enumerate() {
+                let at = (y * width + x) * 4;
+                block.fill(u32::from_le_bytes([frame[at], frame[at + 1], frame[at + 2], frame[at + 3]]));
+            }
+            for j in 1..n {
+                slot.copy_within(y * n * w..(y * n + 1) * w, (y * n + j) * w);
+            }
         }
         for (o, &c) in staged[..256].iter_mut().zip(gpu.clut.colours.iter()) {
             *o = c as u32;

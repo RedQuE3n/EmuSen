@@ -255,7 +255,8 @@ fn the_mask_bit_and_blending_act_on_each_sample() {
 /// A state at N x (§52): the renderer writes no block, so a state with it at 4x is a plain machine's to the byte; saved,
 /// loaded and saved again it is the same bytes; a machine given it seeds its renderer from the machine and hands the
 /// console's picture enlarged, each pixel a block, until the program draws again (this one draws once), two such
-/// machines handing the same pictures from their first frame; a machine at another scale seeds at its own.
+/// machines handing the same pictures from their first frame, its mirror the machine's VRAM in blocks; a machine at
+/// another scale seeds at its own.
 #[test]
 fn a_state_at_n_is_the_machines_and_a_load_seeds() {
     use emusen_native::ffi::StateMachine;
@@ -301,6 +302,10 @@ fn a_state_at_n_is_the_machines_and_a_load_seeds() {
     let (mut b, mut c) = (make(4).unwrap(), make(4).unwrap());
     b.load_state(&state).unwrap();
     c.load_state(&state).unwrap();
+    let vram: Vec<u16> = b.board.gpu.vram.bytes.chunks_exact(2).map(|h| u16::from_le_bytes([h[0], h[1]])).collect();
+    let layer: &mut dyn Any = b.layer().unwrap();
+    let samples = layer.downcast_mut::<Renderer>().unwrap().samples().to_vec();
+    assert!(samples.iter().enumerate().all(|(i, &w)| w == vram[(i / 4096 / 4) * 1024 + i % 4096 / 4] as u32), "the mirror seeded is the machine's VRAM, each halfword a block of 16, no mark");
     for f in 0..3 {
         b.advance();
         c.advance();

@@ -1729,4 +1729,7 @@ The record is `Diamond_Enhancements.md` §21 to §31. In brief:
   version 10's layout unchanged.
 - **The gate** (§25): every golden equal off and on; E3's equality through the precise record at zero fraction on the
   discs; the grid's jitter and warp; the 2D program and the strips; the state both ways; P10; the kit off and on.
+- **The crack fill**, the same day (§32 to §36): the renderer's precise record carries each vertex's fraction and the
+  walk fills a precise triangle to the console's own; a mark a pixel in the mirror's spare half; `RNDR` 3.5 MiB with
+  the marks; no crate, export or setting added.
 

@@ -1558,16 +1558,17 @@ itself for its list); Diamond's `kernel/` and `kernel-harness/` were not touched
 
 ## 15. Precise geometry, as players meet it (2026-10-13)
 
-*Stage E4 of `Diamond_Plan.md` §7; the design and its gate are `Diamond_Enhancements.md` §21 to §31.* The PlayStation's
-first enhancement, offered with its gate met and every accurate golden held (`Diamond_Plan.md` §8, GE).
+*Stage E4 of `Diamond_Plan.md` §7; the design and its gate are `Diamond_Enhancements.md` §21 to §31, and the crack
+fill that closed its seams the same day §32 to §36.* The PlayStation's first enhancement, offered with its gate met and
+every accurate golden held (`Diamond_Plan.md` §8, GE).
 
 **Where it is.** Graphics Settings, the PlayStation's tab, under the heading **Enhancements**: one switch, **Precise
 geometry**, off. Its hint says what it does and what it costs: the picture drawn on the graphics card with each 3D
 corner where the game's geometry puts it, between the pixels, and textures in perspective, so polygons stop wobbling and
 textures stop bending as they move; the game itself running exactly as on a console. Its cost: a Vulkan graphics card,
-some of its time and about half a millisecond of the processor's a frame, save states about twice their size, and the
-corners a game moves itself (2D menus and overlays) left on whole pixels, with a hairline seam where such a polygon
-meets a precise one.
+some of its time and about half a millisecond of the processor's a frame, save states about twice their size, the
+corners a game moves itself (2D menus and overlays) left on whole pixels, and an outline's top and left edges left on
+the console's line.
 
 **Turning it on and off.** It applies between frames, at once, while a game runs; the picture changes from the next
 frame and nothing else does (the sound, the game's own state and what it computes are those of a console;
@@ -1578,15 +1579,24 @@ and a note under the row says so: "No usable Vulkan graphics card was found (the
 is shown." Where the only Vulkan is the processor's own (llvmpipe) the picture is drawn there, the same, slowly, and
 the note says that instead. Nothing fails to load because of it, and a game's stored setting is never refused.
 
-**Save states.** With it on a state is about 10.5 MB against 5.3 MB, since it holds what the enhancement needs to draw
+**Save states.** With it on a state is about 11.6 MB against 5.4 MB, since it holds what the enhancement needs to draw
 the next frame exactly as the machine that saved it would. A state saved with it on loads with it off, and one saved
 with it off loads with it on; the first frame or two after such a load may be drawn with fewer precise corners.
 
 **What to expect, by game** (`Diamond_Enhancements.md` §25.5): Crash Bandicoot, Mega Man Legends, Ape Escape and Tekken
 3's fights are drawn 81 to 99.7 per cent precise; Silent Hill's play wholly, its opening not; Spyro the Dragon under a
 fifth, since it moves the GTE's results on the processor before drawing them; Rayman and Castlevania, which draw in
-2D, almost nothing, and their pictures are the console's. Two kinds of seam were seen and are known: hairline cracks
-in Ape Escape's lab floor where it meets the rainbow ring, and short dashes across Spyro the Dragon's ground
-(`Diamond_Enhancements.md` §26.4).
+2D, almost nothing, and their pictures are the console's.
+
+**Cracks between polygons, closed** (`Diamond_Enhancements.md` §32 to §36). As first offered the setting showed
+hairline cracks where a precise polygon met one the game had built itself: lines of the sky's colour along the ledges
+of Ape Escape's first level and its lab's floor, dashes across Spyro the Dragon's grass. The tester reported them from
+the handheld on 2026-10-13, and since the same day a precise polygon is also drawn wherever the console would have
+drawn it, so nothing shows between it and its neighbour. What a player may notice in exchange: where a 3D shape's
+outline has nothing precise beside it, its top and left edges stand on the console's line and move a pixel at a time
+as they do there, while its bottom and right edges, its inner edges, its corners and its textures stay steady; and a
+few cracks are left in see-through surfaces (a haze over the sky, a fade between scenes), which are not filled so
+that none is tinted twice. Whether the fill should be a switch of its own is the tester's to say
+(`Diamond_Enhancements.md` §36.2).
 
 **The handheld** is not yet measured with it; the estimate is `Diamond_Enhancements.md` §27.

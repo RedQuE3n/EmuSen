@@ -29,6 +29,13 @@ pub const SKIP: u32 = 1 << 18;
 pub const PARITY: u32 = 1 << 19;
 pub const PAIRS: u32 = 1 << 20;
 pub const PERSPECTIVE: u32 = 1 << 21;
+/// A precise triangle's: the bit of its first edge's bound, the next two edges' after it; that it is filled to the
+/// console's own triangle; and the first of that triangle's edges' bounds, with whether the console winds it the other
+/// way (Diamond_Enhancements.md §33).
+pub const BOUNDS: u32 = 22;
+pub const FILLED: u32 = 1 << 25;
+pub const OWN_BOUNDS: u32 = 26;
+pub const TURNED: u32 = 1 << 29;
 
 /// Columns `x0..=x1` and rows `y0..=y1` of VRAM, either running past the edge and wrapping round; at most 1,024 columns
 /// and 512 rows.
@@ -272,7 +279,9 @@ fn held(v: &[Vertex; 3], f: &[Fraction; 3], gu: [i32; 2], gv: [i32; 2]) -> u32 {
 }
 
 /// A triangle with precise vertices, already folded, under `paint`: the integer vertices `v` the GPU decoded moved by
-/// `f`'s offsets in 256ths of a pixel, its texture in perspective by `f`'s depths when they differ (§22.2, §22.3).
+/// `f`'s offsets in 256ths of a pixel, its texture in perspective by `f`'s depths when they differ (§22.2, §22.3). Its
+/// record carries each vertex's offset, so that the walk can fill it to the console's own triangle (§33): its bounds
+/// are then the two triangles' together, and one of no precise area whose own has some is the integer path's.
 pub fn precise_triangle(v: [Vertex; 3], f: [Fraction; 3], shaded: bool, textured: bool, paint: &Paint, slot: u32) -> Made {
     let (xs, ys) = (v.map(|q| q.x), v.map(|q| q.y));
     if xs.iter().max().unwrap() - xs.iter().min().unwrap() > MAX_DX || ys.iter().max().unwrap() - ys.iter().min().unwrap() > MAX_DY {
@@ -280,14 +289,20 @@ pub fn precise_triangle(v: [Vertex; 3], f: [Fraction; 3], shaded: bool, textured
     }
     let p: [(i64, i64); 3] = std::array::from_fn(|i| (((v[i].x as i64) << FINE) + f[i].dx as i64, ((v[i].y as i64) << FINE) + f[i].dy as i64));
     let area = (p[1].0 - p[0].0) * (p[2].1 - p[0].1) - (p[2].0 - p[0].0) * (p[1].1 - p[0].1);
+    // The console's own triangle, which fills this one when there is some fraction, since at none the two are one.
+    let console = raster::setup(&v, false, false);
+    let own = console.filter(|_| f.iter().any(|q| q.dx != 0 || q.dy != 0));
     if area == 0 {
-        return Made::Nothing;
+        return if own.is_some() { Made::Integer } else { Made::Nothing };
     }
     let ceil = |a: i64| -((-a) >> FINE);
     let (min, max) = (|c: fn(&(i64, i64)) -> i64| p.iter().map(c).min().unwrap(), |c: fn(&(i64, i64)) -> i64| p.iter().map(c).max().unwrap());
     let a = paint.area;
-    let (x_lo, x_hi) = ((ceil(min(|q| q.0)) as i32).max(a.x1), ((max(|q| q.0) >> FINE) as i32).min(a.x2));
-    let (y_lo, y_hi) = ((ceil(min(|q| q.1)) as i32).max(a.y1), (ceil(max(|q| q.1)) as i32 - 1).min(a.y2));
+    let (mut x, mut y) = ((ceil(min(|q| q.0)) as i32, (max(|q| q.0) >> FINE) as i32), (ceil(min(|q| q.1)) as i32, ceil(max(|q| q.1)) as i32 - 1));
+    if let Some(s) = &own {
+        (x, y) = ((x.0.min(s.min.0), x.1.max(s.max.0)), (y.0.min(s.min.1), y.1.max(s.max.1 - 1)));
+    }
+    let ((x_lo, x_hi), (y_lo, y_hi)) = ((x.0.max(a.x1), x.1.min(a.x2)), (y.0.max(a.y1), y.1.min(a.y2)));
     if y_lo > y_hi || x_lo > x_hi {
         return Made::Nothing;
     }
@@ -312,16 +327,25 @@ pub fn precise_triangle(v: [Vertex; 3], f: [Fraction; 3], shaded: bool, textured
     bounds(&mut words, (x_lo, x_hi), (y_lo, y_hi));
     words[8] = colour(v[0].rgb);
     let order = if area > 0 { [0, 1, 2] } else { [0, 2, 1] };
+    // The console winds its triangle as this one or the other way; its edges are then these, reversed.
+    let c = order.map(|k| (v[k].x as i64, v[k].y as i64));
+    let turned = (c[1].0 - c[0].0) * (c[2].1 - c[0].1) - (c[2].0 - c[0].0) * (c[1].1 - c[0].1) < 0;
+    let owns = |dx: i64, dy: i64| dy < 0 || (dy == 0 && dx > 0);
     for e in 0..3 {
         let (s, t) = (order[e], order[(e + 1) % 3]);
         let (dx, dy) = (p[t].0 - p[s].0, p[t].1 - p[s].1);
-        let own = dy < 0 || (dy == 0 && dx > 0);
-        words[10 + 5 * e..15 + 5 * e].copy_from_slice(&[p[s].0 as i32, p[s].1 as i32, dx as i32, dy as i32, if own { 0 } else { 1 }]);
+        words[10 + 5 * e..15 + 5 * e].copy_from_slice(&[p[s].0 as i32, p[s].1 as i32, dx as i32, dy as i32, f[s].dx & 0xFFFF | f[s].dy << 16]);
+        words[0] |= (!owns(dx, dy) as i32) << (BOUNDS + e as u32);
+        let (dx, dy) = ((v[t].x - v[s].x) as i64, (v[t].y - v[s].y) as i64);
+        words[0] |= (!(if turned { owns(-dx, -dy) } else { owns(dx, dy) }) as i32) << (OWN_BOUNDS + e as u32);
         let o = order[(e + 2) % 3];
         words[42 + e] = v[o].u as i32 | (v[o].v as i32) << 8;
     }
+    if own.is_some() {
+        words[0] |= (FILLED | if turned { TURNED } else { 0 }) as i32;
+    }
     // The integer rule's base vertex; a triangle of no integer area, which the console does not draw, takes its first.
-    let b = raster::setup(&v, false, false).map_or(0, |s| s.b);
+    let b = console.map_or(0, |s| s.b);
     [words[25], words[26]] = [p[b].0 as i32, p[b].1 as i32];
     let base = [v[b].rgb[0], v[b].rgb[1], v[b].rgb[2], v[b].u as i32, v[b].v as i32];
     for k in 0..5 {

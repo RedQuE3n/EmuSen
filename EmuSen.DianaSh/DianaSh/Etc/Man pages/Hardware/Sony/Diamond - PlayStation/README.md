@@ -73,7 +73,14 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   `diamond-v1` with the library still `libdiamond.so`, the setting noted where no Vulkan device is usable, the blocks
   `PREC` and `RNDR`), its gate (every golden off and on, E3's equality at zero fraction on the discs, the grid's jitter
   and warp, the 2D program, the state both ways, the precise share by game), the two defects the discs and the kit found
-  and fixed, the seams recorded, the cost off and on with the handheld estimated, and what E5 needs.
+  and fixed, the seams recorded, the cost off and on with the handheld estimated, and what E5 needs. The crack fill,
+  the same day (§32 to §36), after the tester's report from the handheld: the cracks reproduced in Ape Escape and Spyro
+  the Dragon at their anchors and in play, counted by who draws each pixel and classified by cause (Ape Escape's
+  near polygons divided on the processor, Spyro's vertices kept shifted, T's between precise polygons); the fill, a
+  precise triangle also covering what the console's own covers, with a mark a pixel in the renderer's mirror and its
+  state so that an edge two precise polygons share stays where E4 drew it, and a semi-transparent polygon filled only
+  over an opaque one's fill; the forms tried with both sides' numbers, the grid's edges, the eight discs, the defect
+  found on Silent Hill and fixed, the decision and the outline's cost put to the tester, the gate and the cost.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

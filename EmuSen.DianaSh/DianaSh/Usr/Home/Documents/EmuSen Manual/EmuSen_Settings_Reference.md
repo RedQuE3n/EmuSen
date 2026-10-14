@@ -8505,8 +8505,9 @@ of each group, after the core's plain settings in their schema's order. A core w
 
 **The PlayStation's row.** Under **Enhancements**, *Precise geometry*, a switch, off by default (the console's picture),
 its hint the setting's help and its cost (a Vulkan graphics card and some of its time, about half a millisecond of the
-processor's a frame, save states about twice the size, corners a game moves itself left on whole pixels with a
-hairline seam where they meet a precise one). It applies between frames while a game runs, through `set_settings`,
+processor's a frame, save states about twice the size, corners a game moves itself left on whole pixels, and an
+outline's top and left edges left on the console's line: the hairline seam its first form named is closed since the
+crack fill of the same day, `Diamond_Enhancements.md` §33). It applies between frames while a game runs, through `set_settings`,
 and is stored per console as every core setting is. Where no usable Vulkan device exists the row is still turned on and
 the core's note shows under it, "No usable Vulkan graphics card was found (…), so the console's own picture is shown."
 What it does and what players meet: `Diamond_Players.md` §15.

@@ -526,6 +526,113 @@ fn warp(vram: impl Fn(u32, u32) -> u16, k: usize, sums: &mut (f64, f64, f64)) {
     }
 }
 
+/// The grid's edges, each by its two grid vertices, the quads on its two sides (the second none on the outline) and
+/// whether the texture's u or v names the side: the twenty-four between two quads, then the outline's sixteen.
+fn grid_edges() -> Vec<([usize; 2], [usize; 2], Option<[usize; 2]>, bool)> {
+    let n = GRID - 1;
+    let (mut inner, mut outer) = (Vec::new(), Vec::new());
+    for j in 0..n {
+        for i in 0..=n {
+            let ends = [j * GRID + i, (j + 1) * GRID + i];
+            match i {
+                0 => outer.push((ends, [j, 0], None, true)),
+                _ if i == n => outer.push((ends, [j, n - 1], None, true)),
+                _ => inner.push((ends, [j, i - 1], Some([j, i]), true)),
+            }
+        }
+    }
+    for j in 0..=n {
+        for i in 0..n {
+            let ends = [j * GRID + i, j * GRID + i + 1];
+            match j {
+                0 => outer.push((ends, [0, i], None, false)),
+                _ if j == n => outer.push((ends, [n - 1, i], None, false)),
+                _ => inner.push((ends, [j - 1, i], Some([j, i]), false)),
+            }
+        }
+    }
+    inner.extend(outer);
+    inner
+}
+
+/// Where frame `k`'s picture puts each of the grid's edges, against the ideal projection (§34.2): for the pixels within
+/// 2.5 of an edge and 2.5 clear of its ends, those on one quad's side that the other drew less those the other way,
+/// over the edge's length, which is how far the edge stands from the ideal one, in pixels, toward its second side; the
+/// quad that drew a pixel is read from its texel, whose u or v is near 63 on the first side and near 0 on the second,
+/// and on the outline the second side is the cleared buffer. Pixels neither drew within the grid are counted apart.
+fn edge_places(vram: impl Fn(u32, u32) -> u16, k: usize) -> (Vec<f64>, u32) {
+    const BAND: f64 = 2.5;
+    let centre = |q: [usize; 2]| {
+        let c: Vec<(f64, f64, f64)> = [0, 1, GRID, GRID + 1].iter().map(|d| ideal(q[0] * GRID + q[1] + d, k)).collect();
+        (c.iter().map(|p| p.0).sum::<f64>() / 4.0, c.iter().map(|p| p.1).sum::<f64>() / 4.0)
+    };
+    let (mut places, mut holes) = (Vec::new(), 0);
+    for (ends, first, second, by_u) in grid_edges() {
+        let (a, b) = (ideal(ends[0], k), ideal(ends[1], k));
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let length = dx.hypot(dy);
+        let side = |x: f64, y: f64| (dx * (y - a.1) - dy * (x - a.0)) / length;
+        let c = centre(first);
+        let toward_first = side(c.0, c.1).signum();
+        let (x0, x1) = ((a.0.min(b.0) - BAND).floor() as i32, (a.0.max(b.0) + BAND).ceil() as i32);
+        let (y0, y1) = ((a.1.min(b.1) - BAND).floor() as i32, (a.1.max(b.1) + BAND).ceil() as i32);
+        let (mut moved, mut used) = (0.0, length - 2.0 * BAND);
+        if used < 4.0 {
+            used = f64::INFINITY;
+        }
+        for y in y0.max(256 * (k as i32 & 1))..=y1.min(256 * (k as i32 & 1) + 239) {
+            for x in x0.max(0)..=x1.min(319) {
+                let along = (dx * (x as f64 - a.0) + dy * (y as f64 - a.1)) / length;
+                let s = side(x as f64, y as f64) * toward_first;
+                if along < BAND || along > length - BAND || s.abs() > BAND || s == 0.0 {
+                    continue;
+                }
+                let texel = vram(x as u32, y as u32);
+                let drawn = texel & 0x8000 != 0;
+                let coordinate = if by_u { texel & 0xFF } else { texel >> 8 & 0x7F };
+                // Which side drew the pixel: the first quad's texels end near 63 here and the second's start near 0.
+                let by_first = match second {
+                    Some(_) if !drawn => {
+                        holes += 1;
+                        continue;
+                    }
+                    Some(_) => coordinate >= 32,
+                    None => drawn,
+                };
+                if s > 0.0 && !by_first {
+                    moved -= 1.0;
+                } else if s < 0.0 && by_first {
+                    moved += 1.0;
+                }
+            }
+        }
+        places.push(moved / used);
+    }
+    (places, holes)
+}
+
+/// The edges' figures over the frames: the mean distance of an edge from its ideal place, the mean change of that
+/// distance from one frame to the next (the wobble) and the worst distance, for the edges between two quads and for
+/// the outline's.
+fn edge_figures(frames: &[Vec<f64>]) -> [(f64, f64, f64); 2] {
+    let inner = (GRID - 1) * (GRID - 2) * 2;
+    [0..inner, inner..grid_edges().len()].map(|edges| {
+        let (mut e, mut d, mut worst, mut n, mut nd) = (0.0, 0.0, 0.0f64, 0.0, 0.0);
+        for k in 0..frames.len() {
+            for i in edges.clone() {
+                e += frames[k][i].abs();
+                worst = worst.max(frames[k][i].abs());
+                n += 1.0;
+                if k > 0 {
+                    d += (frames[k][i] - frames[k - 1][i]).abs();
+                    nd += 1.0;
+                }
+            }
+        }
+        (e / n, d / nd, worst)
+    })
+}
+
 /// §23's mesh: the grid turned 0.23° a frame for 120 frames. Its vertices' error against the ideal projection with
 /// integer vertices, with MAC0's sums (§21.2's alternative) and with the precise vertices; and its texture's error
 /// against the perspective-correct reference with the setting off (the software rasteriser's VRAM) and on (the
@@ -536,6 +643,7 @@ fn the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on() {
         let mut m = mesh_machine();
         m.attach(Box::new(Precise::new(Precision::new(form), Tap::new(r, true))));
         let (mut off, mut on) = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0));
+        let (mut edges_off, mut edges_on, mut holes, mut last) = (Vec::new(), Vec::new(), (0, 0), 0);
         while frames_drawn(&mut m) < MESH_FRAMES && m.frames < 4 * MESH_FRAMES as i64 {
             m.advance();
             let k = frames_drawn(&mut m);
@@ -547,17 +655,25 @@ fn the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on() {
             let mut v = vec![0u16; 1024 * 512];
             drawn(&mut m).vram(&mut v);
             warp(|x, y| v[(y * 1024 + x) as usize], k, &mut on);
+            // Each of the grid's frames once, the machine's frames between two of them showing the same one.
+            if k + 1 > last {
+                last = k + 1;
+                let (a, b) = (edge_places(|x, y| m.board.gpu.vram.get(x, y), k), edge_places(|x, y| v[(y * 1024 + x) as usize], k));
+                edges_off.push(a.0);
+                edges_on.push(b.0);
+                holes = (holes.0 + a.1, holes.1 + b.1);
+            }
         }
         let t = tap(&mut m);
-        (vertices_drawn(&t.drawer.polygons), t.precision.counts(), off, on)
+        (vertices_drawn(&t.drawer.polygons), t.precision.counts(), off, on, (edge_figures(&edges_off), edge_figures(&edges_on), holes))
     };
-    let (sums, sums_counts, _, _) = run(Form::Sums, None);
+    let (sums, sums_counts, _, _, _) = run(Form::Sums, None);
     let Some(r) = renderer() else {
         let integer: Vec<Vec<(f64, f64)>> = sums.iter().map(|f| f.iter().map(|v| v.0).collect()).collect();
         eprintln!("integer vertices: {:?}", jitter(&integer[..MESH_FRAMES.min(integer.len())]));
         return;
     };
-    let (exact, counts, off, on) = run(Form::Exact, Some(r));
+    let (exact, counts, off, on, (edges_off, edges_on, holes)) = run(Form::Exact, Some(r));
     assert_eq!((counts.polygons, counts.precise_polygons, counts.refused, counts.far), (counts.precise_polygons, counts.polygons, 0, 0), "every quad precise: {counts:?}");
     assert_eq!(sums_counts.precise_polygons, sums_counts.polygons);
     let frames = MESH_FRAMES.min(exact.len());
@@ -569,8 +685,13 @@ fn the_turning_grid_shows_less_jitter_and_warp_with_the_setting_on() {
     eprintln!("{frames} frames, {} vertices a frame", GRID * GRID);
     eprintln!("jitter (mean error px, mean frame-to-frame change px, worst error px): integer {ji:.4?}, MAC0's sums {jm:.4?}, precise {jp:.4?}");
     eprintln!("warp over {} pixels a frame (mean texel error, share over one texel): off {wo:.4?}, on {wn:.4?}", (off.2 / frames as f64) as u64);
+    eprintln!("edges between two quads (mean distance from the ideal px, mean frame-to-frame change px, worst px): off {:.4?}, on {:.4?}; the outline's: off {:.4?}, on {:.4?}; pixels neither quad drew: off {}, on {}", edges_off[0], edges_on[0], edges_off[1], edges_on[1], holes.0, holes.1);
     assert!(jp.0 < ji.0 / 10.0 && jp.1 < ji.1 / 10.0, "precise vertices are not an order better: {jp:?} against {ji:?}");
     assert!(wn.0 < wo.0 / 2.0 && wn.1 < wo.1 / 4.0, "the texture is not nearer the reference: {wn:?} against {wo:?}");
+    // §34.2: the crack fill leaves the edges two precise quads share where stage E4 drew them, and the outline no
+    // farther from the ideal than the console's.
+    assert!(edges_on[0].0 < 0.05 && edges_on[0].1 < 0.05 && holes.1 == 0, "the shared edges moved: {:?}, {} holes", edges_on[0], holes.1);
+    assert!(edges_on[1].0 < edges_off[1].0 && edges_on[1].1 < edges_off[1].1, "the outline: {:?} against {:?}", edges_on[1], edges_off[1]);
 }
 
 /// §23's 2D program: sprites and rectangles, lines and a polyline, flat, shaded and textured polygons the processor
@@ -639,6 +760,205 @@ fn a_2d_program_is_drawn_as_the_software_rasteriser_with_the_setting_on() {
     assert!(counts.projections >= 30 && counts.changed > 0 && counts.mixed_polygons > 0 && counts.polygons > 0, "{counts:?}");
 }
 
+// --- The crack fill (Diamond_Enhancements.md §33) ---
+
+/// The colour the fill's programs clear their buffer to, and the halfword it is in VRAM.
+const BACK: u32 = 0x0040_2010;
+const BACK_HALF: u16 = 0x2082;
+
+/// The start of the fill's programs: the GTE as the strips' test sets it, with H 1,010 over a plane 1,000 away, so
+/// that a unit is 1.01 pixels and whole coordinates project between the pixels; the buffer cleared.
+fn plane_program() -> String {
+    let mut s = String::new();
+    s += "lui t9, 0x4000\nmtc0 t9, SR\nlui a0, 0x1F80\nlui s5, 0x8002\n";
+    s += &(gp1(0) + &gp1(0x0800_0001) + &gp1(0x0300_0000));
+    s += &li("t0", 1010);
+    s += "ctc2 t0, $26\nlui t0, 160\nctc2 t0, $24\nlui t0, 120\nctc2 t0, $25\nori t0, zero, 0x1000\nctc2 t0, $0\nctc2 t0, $2\nctc2 t0, $4\nctc2 zero, $5\nctc2 zero, $6\nori t0, zero, 1000\nctc2 t0, $7\n";
+    for w in [0xE100_0508, 0xE300_0000, 0xE400_0000 | 319 | 239 << 10, 0xE500_0000, 0xE600_0000, 0x0200_0000 | BACK, 0, 0x00F0_0140] {
+        s += &gp0(w);
+    }
+    s
+}
+
+/// Three vertices on the plane into V0 to V2 and projected.
+fn project3(v: [(i32, i32); 3]) -> String {
+    let mut s = String::new();
+    for (i, (x, y)) in v.into_iter().enumerate() {
+        s += &li("t0", x as u16 as u32 | (y as u16 as u32) << 16);
+        s += &format!("mtc2 t0, ${}\nmtc2 zero, ${}\n", 2 * i, 2 * i + 1);
+    }
+    s + "nop\n.word 0x4A280030\n"
+}
+
+/// A quad on the plane, its corners projected and sent by SWC2 straight to GP0, each with its word of `after` behind it.
+fn projected_quad(command: u32, v: [(i32, i32); 4], after: Option<[u32; 4]>) -> String {
+    let mut s = project3([v[0], v[1], v[2]]) + &gp0(command);
+    for (i, slot) in [12, 13, 14].into_iter().enumerate() {
+        s += &format!("swc2 ${slot}, 0x1810(a0)\n");
+        if let Some(a) = after {
+            s += &gp0(a[i]);
+        }
+    }
+    s += &li("t0", v[3].0 as u16 as u32 | (v[3].1 as u16 as u32) << 16);
+    s += "mtc2 t0, $0\nmtc2 zero, $1\nnop\n.word 0x4A180001\nswc2 $14, 0x1810(a0)\n";
+    if let Some(a) = after {
+        s += &gp0(a[3]);
+    }
+    s
+}
+
+/// A vertex word made on the processor from an x and a y in registers, and sent: no projection stands behind it.
+fn built_vertex(x: &str, y: &str) -> String {
+    format!("andi t6, {x}, 0xFFFF\nsll t7, {y}, 16\nor t6, t6, t7\nsw t6, 0x1810(a0)\n")
+}
+
+/// A floor's top edge from (`xl`, -32) to (`xr`, -32) projected, its two ends read back by halves, and a ring of two
+/// flat quads thirty lines high built on the processor above it, meeting at the middle of the edge: the console's
+/// integer vertices, a T where the two meet on the floor's edge.
+fn ring(xl: i32, xr: i32) -> String {
+    let mut s = project3([(xl, -32), (xr, -32), (xl, 40)]);
+    s += "swc2 $12, 0(s5)\nswc2 $13, 4(s5)\nlh t1, 0(s5)\nlh t2, 2(s5)\nlh t3, 4(s5)\nnop\naddu t5, t1, t3\nsra t5, t5, 1\naddiu t8, t2, -30\n";
+    for (colour, left, right) in [(0x0000_C0C0, "t1", "t5"), (0x00C0_00C0, "t5", "t3")] {
+        s += &gp0(0x2800_0000 | colour);
+        s += &(built_vertex(left, "t8") + &built_vertex(right, "t8") + &built_vertex(left, "t2") + &built_vertex(right, "t2"));
+    }
+    s
+}
+
+fn fill_machine(body: &str) -> Machine {
+    let mut m = machine(&(plane_program() + body + "loop: j loop\nnop\n"));
+    coordinate_texture(&mut m);
+    m
+}
+
+/// The fill's program run three frames with the pair attached: the machine, and the renderer's VRAM.
+fn filled(body: &str, r: Renderer) -> (Machine, Vec<u16>) {
+    let mut m = fill_machine(body);
+    m.attach(Box::new(Precise::new(Precision::default(), Tap::new(Some(r), true))));
+    for _ in 0..3 {
+        m.advance();
+    }
+    let mut v = vec![0u16; 1024 * 512];
+    drawn(&mut m).vram(&mut v);
+    (m, v)
+}
+
+/// §33's defect, held: a precise floor under a ring of integer quads that meet in a T on its top edge, the ring drawn
+/// before the floor and, beside it, after. The floor's edge lies 0.68 of a pixel below the line the console draws it
+/// on, so that without the fill a line of the cleared buffer shows between the two; with it no pixel the console
+/// covers shows the buffer, and the pixels filled along the second floor's edge show its texture's first row, each
+/// the texel of its place in the console's triangle (§33.2). The first floor is drawn twice, opaque and then
+/// semi-transparent over it, as a game that shades in two passes draws: its filled pixels take both or neither, the
+/// console's colour (§33.4).
+#[test]
+fn a_precise_floor_meets_an_integer_ring_with_no_crack() {
+    let Some(r) = renderer() else { return };
+    let floor = |xl: i32, xr: i32| [(xl, -32), (xr, -32), (xl, 40), (xr, 40)];
+    let texture = [0, 0x0108_0078, 0x4800, 0x4878];
+    let body = ring(-140, -20) + &projected_quad(0x2800_C000, floor(-140, -20), None) + &projected_quad(0x2A60_6060, floor(-140, -20), None) + &projected_quad(0x2D80_8080, floor(20, 140), Some(texture)) + &ring(20, 140);
+    let (mut m, v) = filled(&body, r);
+    let counts = tap(&mut m).precision.counts();
+    assert_eq!((counts.polygons, counts.precise_polygons, counts.mixed_polygons), (7, 3, 0), "three floors precise, four ring quads not: {counts:?}");
+    let (mut covered, mut cracks) = (0, 0);
+    for y in 0..240u32 {
+        for x in 0..320u32 {
+            if m.board.gpu.vram.get(x, y) != BACK_HALF {
+                covered += 1;
+                cracks += (v[(y * 1024 + x) as usize] == BACK_HALF) as u32;
+            }
+        }
+    }
+    // The second floor's top row as the console draws it, 87, from its corner at 180 to the one at 301: its corners
+    // project to x 180.2 and 301.4, y 87.68.
+    let (mut filled, mut off) = (0, 0);
+    for x in 181..301u32 {
+        let t = v[(87 * 1024 + x) as usize];
+        let u = (x as f64 - 180.0) * 120.0 / 121.0;
+        filled += (t & 0x8000 != 0) as u32;
+        off += (t & 0x8000 == 0 || t >> 8 & 0x7F != 0 || ((t & 0xFF) as f64 - u).abs() > 0.75) as u32;
+    }
+    // The first floor's top row, 87 from 18 to 138, all of it filled: the console's own colour, both passes.
+    let once = (18..139u32).filter(|&x| v[(87 * 1024 + x) as usize] != m.board.gpu.vram.get(x, 87)).count();
+    eprintln!("{covered} pixels the console covers, {cracks} of them the cleared buffer in the renderer's picture; {filled} of the textured floor's first row filled, {off} off their texel; {once} of the twice-drawn floor's first row not the console's colour");
+    assert!(covered > 20_000 && cracks == 0, "{cracks} pixels of the cleared buffer show where the console draws");
+    assert_eq!((filled, off, once), (120, 0, 0), "the filled rows");
+}
+
+/// Two precise quads sharing a slanted edge, the left drawn first and, beside them, the right: what the later spills
+/// over the earlier. Each pixel of the rows the shared edge crosses belongs to the quad whose side of the precise edge
+/// its centre is on, as stage E4 drew it; a fill that took every pixel of the console's own triangle would give the
+/// later quad the pixels between the console's edge and the precise one (§33.3).
+#[test]
+fn two_precise_quads_sharing_an_edge_spill_nothing() {
+    let Some(r) = renderer() else { return };
+    let pair = |x: i32| ([(x - 60, -40), (x, -40), (x - 70, 40), (x - 10, 40)], [(x, -40), (x + 60, -40), (x - 10, 40), (x + 50, 40)]);
+    let (a, b) = (pair(-70), pair(90));
+    let body = projected_quad(0x2800_00E0, a.0, None) + &projected_quad(0x28E0_0000, a.1, None) + &projected_quad(0x28E0_0000, b.1, None) + &projected_quad(0x2800_00E0, b.0, None);
+    let (mut m, v) = filled(&body, r);
+    let t = tap(&mut m);
+    assert_eq!(t.precision.counts().precise_polygons, 4);
+    let (left, right) = (0x001Cu16, 0x7000u16);
+    let (mut spilled, mut graded) = (0, 0);
+    for first in [0, 2] {
+        // The shared edge by the precise vertices the drawer was given: the left quad's second and fourth.
+        let (words, offset, precise) = &t.drawer.polygons[if first == 0 { 0 } else { 3 }];
+        let (q, f) = (decode::polygon(words, *offset), precise.unwrap());
+        let at = |c: usize| (q.v[c].x as f64 + f[c].dx as f64 / 256.0, q.v[c].y as f64 + f[c].dy as f64 / 256.0);
+        let (top, bottom) = (at(1), at(3));
+        for y in top.1.ceil() as u32 + 2..bottom.1.floor() as u32 - 2 {
+            let edge = top.0 + (bottom.0 - top.0) * (y as f64 - top.1) / (bottom.1 - top.1);
+            for x in edge.floor() as u32 - 6..edge.floor() as u32 + 8 {
+                if (x as f64 - edge).abs() < 0.01 {
+                    continue;
+                }
+                graded += 1;
+                spilled += (v[(y * 1024 + x) as usize] != if (x as f64) < edge { left } else { right }) as u32;
+            }
+        }
+    }
+    eprintln!("{graded} pixels about the two shared edges graded, {spilled} not their quad's");
+    assert!(graded > 1500 && spilled == 0, "{spilled} pixels spilled over a shared edge");
+}
+
+/// Semi-transparent quads are blended once: a flat pair sharing a slanted edge, and a textured pair every texel of
+/// which is semi-transparent, each over the cleared buffer. Every pixel is the buffer's or one quad's blend with it;
+/// none is a blend of a blend, which a fill of a semi-transparent pixel would make where two meet (§33.4).
+#[test]
+fn a_semi_transparent_pair_is_blended_once() {
+    let Some(r) = renderer() else { return };
+    let pair = |x: i32| ([(x - 60, -40), (x, -40), (x - 70, 40), (x - 10, 40)], [(x, -40), (x + 60, -40), (x - 10, 40), (x + 50, 40)]);
+    let (a, b) = (pair(-70), pair(90));
+    let texture = [0, 0x0109_003F, 0x3F00, 0x3F3F];
+    let body = projected_quad(0x2A00_00E0, a.0, None) + &projected_quad(0x2AE0_0000, a.1, None) + &projected_quad(0x2F80_8080, b.0, Some(texture)) + &projected_quad(0x2F80_8080, b.1, Some(texture));
+    let mut m = fill_machine(&body);
+    // A texture page at (576, 0) of one semi-transparent colour.
+    let texel = 0x8000 | 0x0380;
+    for y in 0..64 {
+        for x in 0..64 {
+            m.board.gpu.vram.set(576 + x, y, texel);
+        }
+    }
+    m.attach(Box::new(Precise::new(Precision::default(), Tap::new(Some(r), false))));
+    for _ in 0..3 {
+        m.advance();
+    }
+    assert_eq!(tap(&mut m).precision.counts().precise_polygons, 4);
+    let mut v = vec![0u16; 1024 * 512];
+    drawn(&mut m).vram(&mut v);
+    let half = |b: u16, f: u16| (0..3).map(|c| (((b >> (5 * c) & 31) + (f >> (5 * c) & 31)) >> 1) << (5 * c)).sum::<u16>();
+    let once = [BACK_HALF, half(BACK_HALF, 0x001C), half(BACK_HALF, 0x7000), half(BACK_HALF, texel & 0x7FFF) | 0x8000];
+    let (mut blended, mut other) = (0, 0);
+    for y in 60..180u32 {
+        for x in 0..320u32 {
+            let p = v[(y * 1024 + x) as usize];
+            blended += (p != BACK_HALF) as u32;
+            other += !once.contains(&p) as u32;
+        }
+    }
+    eprintln!("{blended} pixels blended, {other} neither the buffer nor one blend with it");
+    assert!(blended > 15_000 && other == 0, "{other} pixels blended twice");
+}
+
 fn saved(m: &mut Machine) -> Vec<u8> {
     m.settle();
     let mut s = vec![0; m.state_size()];
@@ -649,6 +969,55 @@ fn saved(m: &mut Machine) -> Vec<u8> {
 
 fn paired() -> Option<Box<Precise<Tap>>> {
     Some(Box::new(Precise::new(Precision::default(), Tap::new(Some(renderer()?), false))))
+}
+
+/// §33.5: the marks are the state's. Two precise quads that share a slanted edge, the left drawn at once and the right
+/// three vertical blanks later, and a state saved between the two. The machine that saved it and one that loads it
+/// draw the right quad alike, to the pixel; one given the same state with its marks cleared fills the right quad over
+/// the left's pixels along their edge, as the fill without marks does (§33.3), so the block needs them.
+#[test]
+fn a_state_between_two_quads_that_share_an_edge_keeps_their_marks() {
+    if renderer().is_none() {
+        return;
+    }
+    let (left, right) = ([(-130, -40), (-70, -40), (-140, 40), (-80, 40)], [(-70, -40), (-10, -40), (-80, 40), (-20, 40)]);
+    let acknowledged = li("t0", 0xFFFF_FFFE) + "sw t0, 0x1070(a0)\n";
+    let mut body = projected_quad(0x2800_00E0, left, None) + &acknowledged;
+    for n in 0..3 {
+        body += &format!("blank{n}: lw t0, 0x1070(a0)\nnop\nandi t0, t0, 1\nbeq t0, zero, blank{n}\nnop\n");
+        body += &acknowledged;
+    }
+    body += &projected_quad(0x28E0_0000, right, None);
+    let loaded = |state: &[u8]| {
+        let mut m = fill_machine(&body);
+        m.attach(paired().unwrap());
+        m.load_state(state).unwrap();
+        for _ in 0..3 {
+            m.advance();
+        }
+        (tap(&mut m).precision.counts().precise_polygons, drawn(&mut m).picture().0.to_vec())
+    };
+    let mut a = fill_machine(&body);
+    a.attach(paired().unwrap());
+    a.advance();
+    a.advance();
+    assert_eq!(tap(&mut a).precision.counts().precise_polygons, 1, "the left quad alone before the state");
+    let state = saved(&mut a);
+    for _ in 0..3 {
+        a.advance();
+    }
+    assert_eq!(tap(&mut a).precision.counts().precise_polygons, 2, "the right quad after it");
+    let picture = drawn(&mut a).picture().0.to_vec();
+    let (_, continued) = loaded(&state);
+    let differing = |other: &[u8]| picture.chunks(4).zip(other.chunks(4)).filter(|(x, y)| x != y).count();
+    assert_eq!(differing(&continued), 0, "the machine that loaded the state draws another picture");
+    let layout = a.layout();
+    let marks: Vec<usize> = layout.lines().find(|l| l.ends_with("Marks")).expect("the marks' field").split_whitespace().take(2).map(|n| n.parse().unwrap()).collect();
+    let mut cleared = state.clone();
+    cleared[marks[0]..marks[0] + marks[1]].fill(0);
+    let (_, unmarked) = loaded(&cleared);
+    eprintln!("with the marks cleared from the state {} pixels differ", differing(&unmarked));
+    assert!(differing(&unmarked) > 0, "the marks made no difference: the test no longer holds them");
 }
 
 /// §24.4 on the grid: a state saved with the setting on, loaded on a machine with it on, continues the picture as the
@@ -697,7 +1066,8 @@ fn a_state_with_the_setting_on_continues_its_picture_and_loads_both_ways() {
 /// over one texel a pixel, their corners projected by the GTE to fractions of a pixel and sent by SWC2 straight to GP0.
 /// With sub-pixel corners the last column of a strip lies within a fraction of a pixel of its right edge, where the
 /// console's rounding of the texel gives column 64, the next region's; held short of it, no pixel of the strips shows a
-/// texel past its strip, and none is left out.
+/// texel past its strip, and none the software rasteriser draws is left out: the strips' first rows and the first
+/// strip's first column, which the console's own triangles cover and the precise ones do not, are filled (§33).
 #[test]
 fn a_strip_of_a_picture_shows_no_texel_past_its_edge() {
     let Some(r) = renderer() else { return };
@@ -749,7 +1119,8 @@ fn a_strip_of_a_picture_shows_no_texel_past_its_edge() {
             }
         }
     }
-    let software = (80..160u32).flat_map(|y| (20..300u32).map(move |x| (x, y))).filter(|&(x, y)| m.board.gpu.vram.get(x, y) & 0x8000 != 0).count();
-    eprintln!("{drawn_pixels} pixels of the strips drawn, the software rasteriser's {software}; {past} show a texel past their strip");
-    assert!(past == 0 && drawn_pixels.abs_diff(software as u32) <= 64 * 2, "{past} pixels past the strips' texels");
+    let software: Vec<(u32, u32)> = (80..160u32).flat_map(|y| (20..300u32).map(move |x| (x, y))).filter(|&(x, y)| m.board.gpu.vram.get(x, y) & 0x8000 != 0).collect();
+    let missing = software.iter().filter(|&&(x, y)| v[(y * 1024 + x) as usize] & 0x8000 == 0).count();
+    eprintln!("{drawn_pixels} pixels of the strips drawn, the software rasteriser's {} and {missing} of those not; {past} show a texel past their strip", software.len());
+    assert!(past == 0 && missing == 0 && drawn_pixels as usize - software.len() <= 64 * 6, "{past} pixels past the strips' texels, {missing} left out");
 }

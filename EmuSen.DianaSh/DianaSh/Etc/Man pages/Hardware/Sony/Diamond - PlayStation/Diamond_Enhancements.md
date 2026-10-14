@@ -15,6 +15,10 @@ sub-pixel position and depth to the GPU's receipt of its word, and the renderer 
 with their textures in perspective, offered to players as the setting "Precise geometry". §21 to §24 are its design,
 decided and committed before any of its code.
 
+*The crack fill, the same day* (§32 on): the cracks precise geometry left between polygons, reported by the tester
+from the handheld, reproduced, counted and classified; the fill that closes them, a precise polygon also drawn
+wherever the console's own is; its measurement on both sides, the decision, the gate and the cost.
+
 The marks are the plan's: **[M]** measured on 2026-10-13 on the desktop (Ryzen 7 7700X, Fedora 44, Rust nightly
 2026-10-01), with the tool named; **[R]** read from a source, named; **[A]** argued, with no measurement behind it;
 **[C]** a choice.
@@ -1111,7 +1115,8 @@ shared edge's two functions are exact negatives in integer arithmetic and the ow
 exactly one of them, with no gap and no pixel drawn twice [A, from the rule; the mesh is the test]. **No edge expansion
 is built** [C]: the plan's §6.3 names its cost (semi-transparent polygons blended twice where they meet, sprite edges
 softened), the precise shared vertices close the gaps it was for, and what is left is the seam of §21.4 between a
-precise polygon and an integer one, which expansion would hide only by drawing both over each other.
+precise polygon and an integer one, which expansion would hide only by drawing both over each other. *Closed since,
+without expansion: the crack fill, §33.*
 
 ### 22.5 What the renderer keeps, now that its picture can differ
 
@@ -1431,6 +1436,8 @@ Bandicoot's title and menu letters (projected, precise, whole), Rayman's title a
 machine's at every anchor, nothing of it being precise. No misplaced vertex was seen: the guard's two pixels keep every
 precise corner beside the console's.
 
+*Answered the same day*: §32 reproduces and classifies both rows' cracks, and §33 closes them.
+
 **An experiment, not kept**: drawing a mixed polygon with the precise corners it has and the integer ones at their
 pixels, in place of wholly as before, was tried on the discs. Ape Escape's crack pixels fell at three anchors of five
 (136 to 32, 249 to 131, 89 to 79) and rose at one (79 to 85); the T-junctions remain, since the ring's corners on the
@@ -1602,7 +1609,8 @@ All on the final head, after `git merge WiseMan` (WiseMan had not moved from 266
 - **The frame's form.** With internal resolution offered without precise geometry, the renderer is attached alone and
   wants the plain frame (§24.1); `Layer::moves` is the method to add then.
 - **The seams** (§26.4): edge expansion, off, with its cost; or mixed polygons drawn with the precise corners they
-  have, which the experiment there found a partial remedy. Both are the tester's to choose.
+  have, which the experiment there found a partial remedy. Both are the tester's to choose. *Closed since by neither:
+  §33's crack fill; at N× its marks are the mirror's, N² of them, and its rule a sample's (§36.3).*
 - **The composition** stands: `diamond-v1` attaches whatever layer the settings ask for, and a second setting is a
   second entry in its `ENHANCEMENTS` and another form of the pair.
 
@@ -1631,3 +1639,559 @@ WiseMan's `DiamondTests.cs`, `GenesisSettingsTests.cs`, `SyntheticPsExe.cs` and 
 measurement scripts in the probe. What precision is for came from the plan's §6 and from the hardware as Diamond
 models it: the GTE's fixed-point projection and its FIFO, the GPU's integer vertices and its rounding of a texture
 coordinate, DMA's list.
+
+## 32. The cracks between polygons: reproduced, counted and classified
+
+*Measured 2026-10-13, after the tester's report of the same day from the handheld with "Precise geometry" on: "I am
+seeing cracks in Ape Escape."* §26.4 had recorded the defect at stage E4 and left it; this section says where it shows,
+how much, and why, and §33 to §36 what was built against it, how it was measured on both sides, and what is left.
+
+### 32.1 The measure
+
+§26.4's counter took a black pixel of the renderer's picture between two that are not black, where the machine's has
+no black about it. It counts Ape Escape's lab, whose floor is drawn over a cleared buffer; it does not count a crack
+through which a sky or a far hillside shows, which is what a level in play has behind its ground. **A crack pixel is
+defined here by who draws it** [C]: a displayed pixel whose last writer in the accurate picture is a polygon that
+covers it by the integer rule, where the enhanced picture's last writer is an older command that the accurate picture
+shows nowhere within two pixels, and is not a precise polygon across an edge it shares with the first. The first
+clause is the plain sense, a pixel the console's polygon covers and the enhanced picture leaves to what lies behind;
+the second leaves out an edge that only moved, which shows the neighbour the console also shows beside it; the third
+leaves out the thin precise triangles a game puts along a T, which the console's integer vertices close to nothing
+and the precise ones open to a pixel's width, a neighbour showing and not a hole.
+
+It is computed by a scratch layer beside the pair (`scratch_cracks.rs` in the probe's folder, not in the repository):
+two maps of VRAM by owner, one written by every command's integer coverage and one by the coverage the renderer
+draws, each from the renderer's own records (`record::triangle` and `record::precise_triangle`), read through the
+display's lines at the frame's end. Semi-transparent untextured polygons own nothing, since they tint what is there;
+transparent texels are not modelled, so a polygon owns its whole triangle. The same layer keeps the precision layer's
+shadow a second time with what that one drops, for the classification of §32.3: a projection the guard refused, a
+move by halves, the instruction that last stored each word. §26.4's counter is kept beside it for continuity.
+
+### 32.2 Reproduced
+
+The pair attached from power-on, the discs by their press scripts on the open kernel, the RX 6800 [M]:
+
+| Run | Frames looked at | Crack pixels | A frame | Worst frame | §26.4's counter |
+|---|---|---|---|---|---|
+| Ape Escape, the five anchors 1,500 to 2,700 (the lab) | 5 | 632: 143, 117, 268, 88, 16 | 126 | 268 at 2,100 | 565: 136, 79, 249, 89, 12, as recorded |
+| **Ape Escape in play**, frames 7,300 to 20,500, every 50th | 265 | **17,611** | **66** | 336 at 18,350 | 6,983 |
+| Spyro the Dragon, the ten anchors 300 to 3,000 | 10 | 664 | 66 | 269 at 1,500 | 0 |
+| **Spyro the Dragon in play**, frames 5,300 to 17,000, every 50th | 235 | **58,023** | **247** | 923 at 7,250 | 124 |
+| Tekken 3's fights, frames 7,500 to 10,500, every 250th | 13 | 2,609 | 201 | 329 at 8,000 | 468 |
+
+Ape Escape's press script starts a new game, skips its scenes and from frame 7,260 holds the left stick about the first
+area with a press of Cross every 300 frames; the run was taken to frame 20,500, 220 seconds of play in the first level,
+its hills, ledges and the cliff face in view (looked at, frame 18,350). There the cracks are what the tester saw:
+**lines of the sky's and the far cliff's colours along the edges of the ledges and the ground**, a few pixels to a few
+dozen long, changing from frame to frame as the camera turns. In Spyro the Dragon's first world, flying about from
+frame 5,280, they are dashes of the far ground's lighter green across the grass and along the walls' feet. §26.4's
+counter is no measure of either in play, since neither shows black through a crack: it finds almost none of Spyro's,
+and in Ape Escape's dark cliffs most of what it counts is a black texel that a perspective-correct texture puts a
+pixel from where the affine one does, no crack at all (looked at, frame 18,350: 201 counted, on the cliff's texture).
+Tekken 3's fights are counted on VRAM as it stands at each frame's end; at 480 interlaced lines every other line of
+the picture is a frame older.
+
+Beside the cracks, 8,772 pixels of Ape Escape's 265 frames and 3,213 of Spyro's 235 show a precise neighbour across a
+shared edge that the console does not show (the thin triangles of §32.1), and are not counted.
+
+### 32.3 Classified
+
+Each crack pixel is classed by the polygon the accurate picture shows beside it (among the eight pixels about it, an
+integer polygon before a precise one), by that polygon's vertices' histories, and by how it meets the polygon the
+crack is in: sharing two vertices' pixels (an edge), having a vertex within a pixel of one of its edges and not at its
+ends (a T), sharing one (a corner), or none. A vertex word's history is one of: **precise**; **none**, no projection's
+serial reached it; **lost**, none reached it though the word equals a recent projection's; **changed**, a live serial
+whose word is no longer its projection's; **halves**, it was moved by halfword loads and stores; **far** and **cut**,
+its projection was refused by the guard (§21.2) or cut by the console; **dead** (§21.3). [M]
+
+| Class, crack pixels | Ape Escape, anchors | Ape Escape, play | Spyro, anchors | Spyro, play |
+|---|---|---|---|---|
+| All | 632 | 17,611 | 664 | 58,023 |
+| **Beside a polygon drawn by the integer rule** | 582 (92%) | 10,171 (58%) | 639 (96%) | 53,924 (93%) |
+| … of which a **mixed** polygon, some of its vertices precise | 582 | 9,781 | 89 | 40,550 |
+| … of which a polygon with no precise vertex | 0 | 390 | 550 | 13,374 |
+| … meeting at a **T** | 528 | 8,898 | 75 | 5,911 |
+| … along a shared edge | 0 | 0 | 465 | 40,364 |
+| … at a corner, or apart | 54 | 1,273 | 99 | 7,649 |
+| … its worst vertex **none** | 569 | 10,056 | 90 | 32,173 |
+| … **lost** | 12 | 93 | 189 | 16,952 |
+| … **changed** | 0 | 5 | 360 | 849 |
+| … **halves** | 1 | 17 | 0 | 0 |
+| … refused by the guard, **far** | 0 | 0 | 0 | 3,769 |
+| … **cut** by the console | 0 | 0 | 0 | 180 |
+| **Between two precise polygons** that share no whole edge | 33 | 5,323 (30%) | 25 | 2,603 |
+| … at a T | 6 | 2,614 | 0 | 1,108 |
+| Beside a rectangle, a fill, a copy or nothing drawn | 1 | 1,899 | 0 | 175 |
+| No other owner about it | 16 | 218 | 0 | 1,321 |
+
+**Why the neighbour was integer, by class.**
+
+- **Ape Escape divides its near polygons on the processor** (none: 569 of the anchors' 632, 10,056 of the play's
+  17,611). The routine about 8001DDC4h (read by the run tool's `--disasm` after the tracing named it) takes a polygon
+  whose vertices the GTE projected, reads each screen position and depth by halves, and makes the middle of each edge
+  as the 3D middle projects: the two ends' screen positions weighted by their depths, through MVMVA with the positions
+  as a matrix and the depths as its vector, and a division by the depths' sum; colours and texture coordinates
+  averaged; the new vertex stored by halves. The smaller quads go to the GPU by SWC2 from the FIFO it reloads with
+  them, most with one original corner and three made ones: 209,003 of the play's 465,388 integer polygons have
+  the history none, none, none, precise, and 379,012 of its 4,776,383 polygons are mixed. It is the game's own remedy
+  for the console's affine texturing, applied near the camera. A divided polygon's new vertex lies on its undivided
+  neighbour's edge, a T. On the console the made vertex is a whole pixel on or beside the line between two whole
+  pixels, and its pictures show the T closed (looked at, frames 2,100 and 18,350). With the setting on the undivided
+  neighbour's edge runs between its precise corners, up to a pixel from that line, and the divided one's stays on it. **The neighbour was integer because three of its four
+  vertices never were projections**: there is nothing for the layer to follow.
+- **Spyro the Dragon keeps each projected vertex shifted** (lost: 16,952 of 58,023; and the reason only 37 per cent
+  of its play's polygons are precise). Its routines that project (about 8004EE08h, 80026978h and 8002631Ch) take SXY2
+  by MFC2, shift it left five into another register, add clip flags in the five low bits, and store the word; the
+  routines that emit polygons load it, shift it right five in place, and store it into the packet. The word the GPU
+  receives is the projection's again, but its serial was lost at the first shift: a shift into another register is
+  not a move the processor tells (§3.2), so the new register keeps whatever it had. 5,122,567 of the play's 9,050,763
+  polygons have every vertex lost and no other fault. **The neighbour was integer because the layer follows copies
+  and not arithmetic.** §32.4 says what following this one would take.
+- **Spyro's vertex with none** (32,173; 163,014 quads of three precise vertices and one with none, and 25,951
+  triangles of one precise and two with none): the word comes from a second store of the same routines (80027BCCh,
+  80028E44h) that no projection's word reaches. Not traced further; it is the largest class left unexplained.
+- **The guard's refusals** make 3,949 of Spyro's play (far 3,769, cut 180) and none of Ape Escape's: a polygon with
+  one vertex refused, drawn whole by the integer rule beside precise ones (§21.4's rule). The guard's bound is not
+  the cracks' cause in either game.
+- **Changed** words (Spyro's anchors 360, its play 849) are the same shift made in a register that still held an
+  older projection's serial: the word received is one vertex's and the serial another's, and they differ by tens to
+  hundreds of pixels. §25.5's "changed" count for Spyro, 464,915, is this kind, not an offset added to a vertex. In
+  neither of these two games do the cracks come from a projected vertex moved by a constant, clipped or rounded on the
+  processor.
+- **Tekken 3 moves projected vertices on the processor** (its fights, 2,609 on 13 frames: 1,862 beside a mixed polygon
+  one of whose vertices is changed, at a T (945) or along an edge (534); 635 between two precise polygons). Here the
+  changed words are what §25.5 took them for: 1,167,689 of the run's 10,637,167 vertex words carry a live serial and
+  a word a pixel or a few from its projection's, the commonest differences (0, -1), (-1, -1) and (-1, 0) with
+  80,554, 78,635 and 73,416 words, the rest within about four pixels either way. The differences are not one
+  constant; what the game computes (the vertices at a fighter's joints are the likely ones) was not traced. 586,501
+  of its 3,027,551 polygons are mixed by it. **The neighbour was integer because one of its vertices is no longer its
+  projection's**, which the integer check exists to refuse (§21.3).
+- **Between two precise polygons** (Ape Escape's play 5,323, 30 per cent): two polygons whose vertices are all
+  precise and that meet without sharing an edge's two ends: a T the game left open or closed with a thin triangle,
+  and models set against one another. The console's integer vertices close such a gap about as often as they open
+  one; precise vertices leave it as wide as the geometry has it, a fraction of a pixel, which a pixel's centre falls
+  in now and then. These are cracks the precise geometry itself shows, not a meeting of precise and integer.
+
+### 32.4 What could be removed at the source, proposed and not built
+
+- **Following a shift** [proposed]. If the processor told a shift by a constant into another register as it tells a
+  copy, the layer giving the new register the old one's serial, Spyro's words would carry their serials through the
+  shift left, the flags added in place and the shift right in place, and the integer check at the receipt (§21.3)
+  would pass them: the word received is the projection's. *What it would take*: one more move in
+  `blackmoon-r3000`'s `Move` (`BlackMoon_R3000.md` §14), told under `B::MOVES` where `Copy` is; one arm in the
+  precision layer; a program of the crate's own that shifts, flags and shifts back. *What it would give* [A, from the
+  histories counted]: Spyro's precise polygons in play from 36.9 per cent to about 93.5, and the 16,952 crack pixels
+  of the lost class gone at their source, with more of the 32,173 beside a mixed polygon whose other vertices are
+  lost. *What it would risk*: nothing on the screen that §21.3's argument does not already cover, since a serial on a
+  register whose value is not its projection's word is refused at the receipt, and one whose value is that word is
+  that pixel; more registers carry stale serials, which costs nothing until a word is received. Its cost is one event
+  for each such shift, a few per cent of instructions. **It is not built here**: it widens a written interface of the
+  processor's crate, which is the tester's to agree first; and it is not needed for the cracks, which §33 closes
+  whatever their cause.
+- **Ape Escape's made vertices and Tekken 3's moved ones** [not proposed]. A precise middle, or a precise moved
+  vertex, would need the layer to follow values, not serials: for Ape Escape two halfword loads, an MVMVA, an
+  addition and a division, computed beside the game's with precise inputs. Nothing checks such a value but its
+  nearness to the integer the game made; it is not exact in §21.3's sense, and it is a second, larger enhancement.
+  Drawing a mixed polygon with the precise corners it has (§26.4's experiment) does not close a T either, the made
+  vertex staying where it is.
+
+## 33. The crack fill [C]
+
+*Built 2026-10-13, after §32.* The plan's row foresaw two remedies (`Diamond_Plan.md` §6.3, "Seams and gaps between
+polygons"): precise shared vertices, which E4 built and which leave §32's cracks, and an expansion of every edge by a
+fraction of a pixel, which draws what the console never drew and was left unbuilt (§22.4). What is built is neither.
+
+### 33.1 The rule
+
+On the console there are no such cracks, because every polygon is drawn at whole-pixel vertices and neighbours agree.
+**A precise triangle therefore also covers each pixel that the console's own version of it covers**: the triangle of
+the same vertices without their fractions, by the integer rule (§14.1), under the same drawing area and the same
+skipped lines. Two properties follow by construction, and are the whole argument:
+
+- it never leaves uncovered a pixel the console covered with that polygon, so nothing behind shows where the console
+  shows the polygon;
+- it never draws a pixel the console would not have drawn with that polygon, which an expanded edge does.
+
+The cause of a crack does not enter: a made vertex, a lost serial, a refused projection and a T between two precise
+polygons (§32.3) are closed alike, since each is a pixel the console's triangle has and the precise one has not. At
+zero fraction the two triangles are one and nothing is filled; the record is then E4's, but for where its edges' bounds
+are kept (§33.2), and §25.2's equality holds as before (§35.1). A precise triangle of no area whose integer triangle
+has some, which E4 did not draw, sends its polygon to the integer path, counted with those whose gradients do not fit.
+
+Two refinements were forced by what the rule does where it is not wanted, each shown before it was built: §33.3,
+where two precise polygons share an edge, and §33.4, where a polygon blends.
+
+### 33.2 The console's triangle in the record, and a filled pixel's place
+
+The walk's record for a precise triangle (§22.2) had no word free. Its three edges' bounds, a word each of 0 or 1,
+move to three bits of its flags, and those words now hold each edge's first vertex's fraction, x in the low half and
+y in the high. From a vertex in 256ths less its fraction the walk has the console's integer vertex exactly, and three
+more flag bits give the integer edges' bounds, a fourth whether the console winds the triangle the other way (a thin
+triangle can turn over between its integer and its precise corners), a fifth that the triangle is filled at all. Its
+bounds are the two triangles' together. For a pixel the precise edges refuse, `console_covers` evaluates the three
+integer edge functions in 32 bits, as E3's triangle does.
+
+**A filled pixel takes its place in the console's triangle to the same place in the precise one.** The three integer
+edge functions at the pixel are the pixel's weights in the console's triangle, none negative, their sum its doubled
+area. They are used as the precise triangle's weights: the texture in perspective from them and the depths, as for any
+pixel (§22.3); the colour and an untilted texture by the fine gradients at the point of the precise triangle the
+weights name, rounded to a 256th. The point is inside the precise triangle, so every interpolant is within its
+vertices' range with no extrapolation, the texel hold of §26.3 applies as to any pixel, and at a vertex with no
+fraction the place is the pixel itself. Two other definitions were set aside: the gradients extended to the pixel
+itself, which overshoot on a thin triangle whose gradients are steep, and the nearest point by clamping the precise
+weights, which is the pixel projected from the opposite vertex onto the edge and lands up to 1.1 texels along a
+121-pixel edge from where the console's own interpolation puts it [A, computed for §33's test].
+
+### 33.3 Marks: an edge two precise polygons share stays where E4 drew it
+
+**Shown first.** Filled wholly, the later of two precise polygons that share an edge takes every pixel between the
+console's edge and the precise one from the earlier: `two_precise_quads_sharing_an_edge_spill_nothing` counts 18 such
+pixels of 2,118 about two slanted edges, and the turning grid's shared edges return to the console's places, 0.556
+pixels from the ideal on average where E4 had 0.0035 (§34.2). The console's truncation moves every vertex up and to the
+left of its precise place, so the polygon to the right or below, when drawn later, always wins: on the grid the whole
+of the console's wobble comes back, not half of it.
+
+**Built.** The renderer's mirror of VRAM is a 32-bit word a pixel of which the console's halfword uses 16. The other
+16 are the pixel's **mark**. A precise triangle that covers a pixel writes with it 15 bits made from the two ends, in
+256ths, of the edge the pixel lies nearest in the triangle's own terms (the smallest of its three edge functions);
+the mark is the same from either triangle that has the edge, since two polygons that share an edge exactly share its
+ends' positions, and is never zero. Every other write leaves none: the walk's `put` builds the word from the colour,
+and the copy's shader now masks what it moves. A fill is refused where the pixel's mark is the mark of an edge the
+pixel lies beyond, which is to say where the precise triangle on the other side of that edge drew it. Nothing is kept
+on the host: no table of edges, no neighbour found by search; the test is made at the pixel, in the order pixels are
+written.
+
+What a mark cannot tell [M, by the model of §32.1 extended to each form]: near a shared corner, and across a triangle
+thinner than about two pixels, the earlier triangle's nearest edge is another, and the later one fills there. In Ape
+Escape's play this is 77,983 pixels of the 265 frames against 385,104 for the whole fill, in Spyro's 54,790 against
+371,721. A wrong match of two unrelated edges' marks leaves a crack once in 32,768. Other forms of the mark were
+modelled on the same frames and not built:
+
+| Form of the mark | Shared-edge pixels still taken, Ape Escape / Spyro | Cracks left, of 17,611 / 58,023 |
+|---|---|---|
+| None: the whole fill | 385,104 / 371,721 | 2,324 / 213 |
+| **The nearest edge, 15 bits (built)** | 77,983 / 54,790 | **2,149 / 194** |
+| The nearest edge by distance in pixels | 67,290 / 49,474 | 2,137 / 193 |
+| The two nearest edges, 8 bits each | 32,600 / 24,283 | 2,268 / 239: collisions |
+| The nearest vertex, 16 bits | 10,758 / 5,155 | 3,042 / 689: a polygon behind that has the vertex is taken for the neighbour |
+| The triangle's three vertices, 5 bits each | 28,163 / 23,080 | 2,781 / 423: collisions |
+| A table of edges on the host, no marks | 2,633 / 5,821 | 5,377 / 10,088: a closed edge's neighbour does not cover every pixel past it; and a table is state a loaded machine would not have |
+| A mark of the frame alone: fill only where no precise polygon wrote since the drawing area was set | none | 17,052 / 6,606: in play what shows through a crack is itself a precise polygon |
+
+About 2,150 and 194 of the cracks left are left by every form: those of semi-transparent polygons (§33.4). The last
+form suffices at Ape Escape's anchors, whose floor is drawn over a cleared buffer (26 of 632 left), and fails in play.
+The built form is the one that leaves no crack of its own; the two-edge form halves what is still taken for 0.7 per
+cent of the cracks left open, and is the next to try if the corners are ever seen.
+
+### 33.4 A semi-transparent polygon fills only where an opaque one did
+
+A semi-transparent pixel filled where two semi-transparent polygons meet would be blended by both, the fault the plan
+names for edge expansion. The marks refuse it across an exactly shared edge, but not at a T, where the precise
+neighbour's coverage and the polygon's own integer coverage overlap along the whole edge. So a semi-transparent pixel
+is not filled: an untextured semi-transparent triangle, and a textured one's texel whose bit 15 asks for blending,
+which the walk fetches to see; a textured semi-transparent triangle's opaque texels are filled as an opaque polygon's.
+
+**One case had to be given back, found on Silent Hill** (§34.5). A game that shades in two passes draws each polygon
+twice, opaque and then semi-transparent over it. Filled by the rule above, a crack's pixel took the first pass and
+not the second, and showed the first pass's colour alone where the console shows the two together. **A filled pixel
+therefore carries a mark too**, the mark of the edge it lies beyond with a sixteenth bit set, and a semi-transparent
+triangle fills a pixel exactly where it finds that mark for one of its own edges: where an opaque triangle with the
+same edge filled it and nothing has drawn since. The pixel then takes both passes or neither. No pixel is blended
+twice by it: the pixel is one no precise triangle has covered since the opaque fill, and the semi-transparent
+triangle's own precise coverage does not include it.
+
+### 33.5 The state
+
+`RNDR` gains the marks, a halfword a pixel after its palette, 1,048,576 bytes; a state with the setting on is
+11,594,150 bytes against 10,545,574 at E4 and 5,398,770 with it off [M, the kit's C7]. They are kept because a
+picture depends on them across a save: `a_state_between_two_quads_that_share_an_edge_keeps_their_marks` saves between
+two precise quads that share an edge, and a machine given that state with its marks cleared draws 24 pixels
+otherwise. The kit's C7 and C8 did not show it: with the marks left out of the block they still pass on Spyro the
+Dragon, whose frame at the kit's save has precise polygons, since no polygon there is drawn across the save from its
+neighbour [M]; the test is the proof and the kit the check that nothing else moved. A state made at E4 has no marks
+and loads: none are taken, and its first frame fills as it finds.
+
+## 34. The fill measured on both sides
+
+*Measured 2026-10-13 on the desktop, the RX 6800.* Each form was run with the renderer built for it and, where two
+pictures of one frame were wanted, with two renderers behind one precision layer, one filling and one not (a scratch
+build; the built renderer has one form and no switch).
+
+### 34.1 The forms tried
+
+| Form | Cracks left, Ape Escape's anchors / play | Spyro's anchors / play | Pixels changed from the unfilled picture, Ape Escape's play / Spyro's | The grid's shared edges (§34.2) |
+|---|---|---|---|---|
+| None, E4's picture | 632 / 17,611 | 664 / 58,023 | 0 | 0.0035 px |
+| The whole fill | 7 / 2,294 | 15 / 590 | 705,023 / 662,150 | **0.556 px, the console's** |
+| **The fill with marks, built** | **7 / 2,335** | **15 / 591** | **303,475 / 250,926** | **0.0036 px** |
+| Marks of the frame alone (§33.3) | 26 / 17,052, by the model | 130 / 6,606 | 24,119 / 84,706 | not run |
+| Mixed polygons drawn with the precise corners they have (§26.4's experiment) | 136 to 32, 249 to 131, 89 to 79, 79 to 85 at four anchors by §26.4's counter | not rerun | | not run |
+| Every edge expanded (§22.4) | not built: the one form that draws what the console never drew | | | |
+
+The cracks left are counted in the pictures: a crack pixel of the unfilled picture that the filled one shows
+unchanged. Those of the built form are semi-transparent polygons' (§33.4, §34.3).
+
+### 34.2 The turning grid, and its edges
+
+§25.3's figures are the grid's vertices and the texels well inside its quads, which no fill reaches: with the built
+fill they are §25.3's to the digit (mean vertex error 0.0080 px, change 0.0113, worst 0.0308; texel error 0.5004,
+0.02 per cent over a texel). The fill can cost only at edges, so the grid is graded there too
+(`edge_places` in `tests/precise.rs`). **For each of the grid's edges and each frame, the pixels within 2.5 of the
+ideal edge and 2.5 clear of its ends that lie on one quad's side and were drawn by the other, less those the other
+way, over the edge's length**: the distance, in pixels, at which the picture puts the edge from where the geometry
+has it. Which quad drew a pixel is read from its texel, whose u or v ends near 63 on one side and starts near 0 on the
+other. The grid has 24 edges between two quads, which two precise polygons share, and 16 on its outline, with the
+cleared buffer beyond. 120 frames [M]:
+
+| Picture | Shared edges: mean distance | change, frame to frame | worst | Outline: mean distance | change | worst |
+|---|---|---|---|---|---|---|
+| The console's (the software rasteriser) | 0.558 px | 0.209 px | 1.492 px | 0.584 px | 0.223 px | 1.397 px |
+| E4, unfilled | 0.0035 | 0.0066 | 0.092 | 0.0061 | 0.0110 | 0.113 |
+| The whole fill | 0.556 | 0.203 | 1.492 | 0.287 | 0.116 | 1.339 |
+| **The fill with marks, built** | **0.0036** | **0.0066** | **0.092** | **0.287** | **0.116** | **1.339** |
+
+No pixel between two quads was left undrawn in any of the four. Two things are measured here.
+
+- **On the edges two precise polygons share, the built fill is E4**: 0.0036 px against 0.0035, the change and the
+  worst the same. The whole fill is the console there, as §33.3 says.
+- **On the outline the fill brings half of the console's edge wobble back**, in either form: 0.287 px from the
+  ideal against 0.006, moving 0.116 px a frame against 0.011. A precise polygon's vertices lie to the right of and
+  below the console's, so the fill moves its top and left edges out to the console's line and leaves its bottom and
+  right edges where the geometry has them. This is the fill's cost, and it is not one a mark can remove: at an open
+  edge a crack and an outline are the same pixels, covered by the console's triangle and by nothing precise, and what
+  tells them apart is whether a polygon the console draws stands beyond, which the pixel does not know.
+
+### 34.3 The discs: cracks, and what the fill changes
+
+**Cracks**, in the pictures [M]:
+
+| Run | Crack pixels unfilled | With the built fill | §26.4's counter, unfilled and filled |
+|---|---|---|---|
+| Ape Escape, the five anchors | 632 | **7** | 136, 79, 249, 89, 12 and 0, 0, 0, 5, 6 |
+| Ape Escape in play, 265 frames | 17,611 | **2,335** (13.3%) | 6,983 and 6,494 |
+| Spyro the Dragon, the ten anchors | 664 | **15** | 0 and 0 |
+| Spyro the Dragon in play, 235 frames | 58,023 | **591** (1.0%) | 124 and 105 |
+| Tekken 3's fights, 13 frames | 2,609 | none by the model; its pictures cannot be compared line for line (§32.2) | 468 and 440 |
+
+The lines along Ape Escape's ledges and across Spyro's grass are gone from every frame looked at (§34.5). What is
+left is in semi-transparent polygons, which are not filled: in Ape Escape a haze over the sky and the screen's fade
+between scenes (95 of the 108 at frame 20,000 are in a fade to black, looked at; at 18,800 the pixels differ from the
+console's by two steps of thirty-two in one channel), none of them a line of another surface's colour. §26.4's
+counter barely moves in play because most of what it counts there was never a crack (§32.2).
+
+**What the fill changes**, by who draws the pixel (the model of §32.1, the built form, Ape Escape's play and Spyro's):
+of 259,886 and 243,012 pixels whose owner changes, 16,031 and 57,843 are cracks filled; 142,394 and 97,098 are taken
+from another precise polygon that shares no whole edge with the filler (an outline over the scene behind it, a T
+between two precise polygons); 23,478 and 33,281 from something not precise (a sprite, a cleared buffer, an integer
+polygon); 77,983 and 54,790 from a precise polygon that shares an edge, at a corner or across a thin triangle (§33.3).
+Every one of them is a pixel the console draws with the same polygon.
+
+**On the eight discs' anchors**, every 300th frame to 3,000 by the press scripts [M]:
+
+| Disc | Pixels the precise picture differs from the machine's, unfilled | Pixels the built fill changes | of them brought to the machine's colour | taken from it | The whole fill changes |
+|---|---|---|---|---|---|
+| Ape Escape | 121,450 | 5,688 | 4,799 | 15 | 10,212 |
+| Crash Bandicoot | 44,045 | 6,475 | 5,838 | 12 | 9,439 |
+| Mega Man Legends | 15,580 | 950 | 658 | 0 | 1,207 |
+| Rayman | 3,497 | 514 | 222 | 0 | 837 |
+| Silent Hill | 21,884 | 2,647 | 540 | 0 (370 before §33.4's second rule) | 5,054 |
+| Spyro the Dragon | 97,619 | 6,620 | 3,567 | 16 | 19,142 |
+| Castlevania, Tekken 3 to frame 3,000 | 0 | 0 | | | 0 |
+
+"Brought to the machine's colour" is a changed pixel more than 60 from the machine's picture unfilled (the three
+channels' differences summed) and within 30 filled; "taken from it" the reverse. Most of what the fill changes it
+changes to what the console shows: 15,624 of 22,894 pixels on the six discs, against 43 the other way, which §34.5
+lists. In play the same: of 15,374 pixels changed on 13 of Ape Escape's frames (every 1,000th from 7,600) 7,782
+are brought to the machine's colour and 32 taken from it; of 12,779 on 12 of Spyro's, 7,889 and 13; of 17,872 on
+Tekken 3's 13 fight frames, 11,391 and 14.
+
+### 34.4 The decision
+
+The rule set for this work: the fill becomes part of "Precise geometry", with no setting of its own, if it removes
+the cracks and the turning grid's and the shared edges' figures stay within a small margin of E4's; if it brings
+wobble back measurably, the better form is kept and what remains is put to the tester as a separate choice.
+
+- **The whole fill fails it**: it closes the cracks and returns the shared edges to the console's places (0.556 px
+  against 0.0035).
+- **The fill with marks meets it**: the cracks are closed in every class (99 per cent of them in Ape Escape's lab and
+  in Spyro's play, 87 in Ape Escape's play, the rest semi-transparent); the grid's vertices and texels are E4's to the
+  digit and its shared edges within 0.0001 px of E4's. **It is built into "Precise geometry"**, with no setting.
+- **What remains is the outline**, which the rule did not name and the measurement found: a precise polygon's top
+  and left edges, where no precise polygon shares them, stand on the console's line. It is half of what the
+  enhancement removes at such edges and none of what it removes inside a mesh, in a texture or at a vertex. **It is
+  put to the tester rather than decided** (§36.2): the fill could be made a second switch under the same heading, off
+  or on by default, at the cost of one flag in the renderer; the recommendation here is to keep it in, since a crack
+  is a line of the wrong surface and an outline a pixel away is the console's own picture.
+
+### 34.5 What the pictures showed
+
+Looked at: the eight discs' anchors, unfilled and filled side by side with the changed pixels marked; Ape Escape's
+play at frames 18,350, 18,800 and 20,000 and Spyro's at 7,250; and every anchor screened for a pixel the fill takes
+away from the machine's colour (§34.3's last column), each one then traced to the polygons that draw it.
+
+| Disc, frame | What showed | Why | Fate |
+|---|---|---|---|
+| Silent Hill, 3,000 | 370 bright pixels: dashes at the shelter's edges and along the ground at the walker's feet, twice the brightness of the fog about them | the game draws each polygon opaque and then semi-transparent over it; the fill took the first pass at a crack's pixel and not the second | **fixed**: §33.4's second rule; none after, and the test's twice-drawn floor holds it (121 pixels of its filled row before, none after) |
+| Crash Bandicoot, 1,800 | 12 pixels: a blue-grey wedge of the title's model a pixel wider on its left for twelve lines | the console draws the wedge's edge there too, and then an overlay's opaque texel over it; in the precise picture the overlay's texel at that pixel is the transparent one of the row above [A, from the two polygons' words] | left: §26.4's "a texel or two from the affine picture", shown through a pixel the fill restored |
+| Ape Escape, 2,700 | 15 grey pixels, scattered, on the lab's blue | filled pixels of a cut-out texture whose texel at the pixel's place is opaque where the console's affine texel is transparent [A] | left: the same |
+| Spyro the Dragon, 2,100 to 3,000 | 4 pixels at each anchor, a shade off | the same | left |
+| Ape Escape in play, 18,350 | the white and blue lines along the ledges gone; the ledges' and the ground's outlines a pixel fuller at the top and left, as the console draws them | the fill | as designed |
+| Spyro the Dragon in play, 7,250 | the light dashes across the grass gone | the fill | as designed |
+| Crash Bandicoot, 2,400 | holes of a pixel in the title's figure closed; its outline and its letters' a pixel fuller at the top and left | the fill | as designed |
+| Rayman 2,100, Mega Man Legends 2,700 | a column at a panel's edge; outlines | the fill | as designed |
+| Tekken 3's fights, 8,000 | the fighters' outlines a pixel fuller at the top and left; the health bars, the timer and the names untouched | the fill | as designed |
+| The play frames screened (Ape Escape 13, Spyro 12, Tekken 3 13) | 59 pixels in all taken from the machine's colour, scattered, none a line | cut-out texels, as at Ape Escape's 2,700 [A] | left |
+
+Looked for and not found: a silhouette thickened beyond the console's (it cannot be, by §33.1's second property); a
+wrong texel along a filled edge of a texture drawn at one texel a pixel (the strips of §26.3, whose test now also
+holds that no pixel the software rasteriser draws is left out); a change to a 2D picture or a HUD (the fill touches
+only precise triangles: Castlevania's pictures and Tekken 3's first 3,000 frames are the machine's, and the 2D
+program's are the software rasteriser's to the pixel, §35.1).
+
+## 35. The gate kept, the cost and the tests
+
+### 35.1 The gate
+
+| Item | Result |
+|---|---|
+| E1's goldens with the setting off | **Equal** [M]: `programs.rs`' goldens, plain and with the test observer, the eight discs' 80 anchors among them; nothing off the precise path is changed but one mask in the copy's shader |
+| The machine's goldens with the setting on | **Equal** [M]: the programs' 49, ps1-tests' 48, the discs' 80 anchors, picture, sound, state, VRAM and TTY (`precise.rs`' three golden tests) |
+| Zero fraction is E3's equality | **Equal** [M]: pictures at every frame and VRAM at every anchor on the programs, ps1-tests and the eight discs to frame 3,000, 1,438,000 precise triangles of the discs through the record with its bounds in its flags and no triangle filled; the texture cache's two pinned counts, 128 and 3,680 halfwords, unchanged |
+| E4's eight tests | **Pass** [M], with two of them changed and said so: the strips' test now holds that no pixel the software rasteriser draws is left out (17,026 pixels drawn against 16,705, the 321 more the four strips' first rows and the first strip's first column, filled; none past its strip's texels), where it held the two counts within 128; the grid's test gains §34.2's edges |
+| The fill's four tests | **Pass** [M]: §33's floor and ring (386 pixels of the cleared buffer where the console draws before the fill, none after; the textured floor's filled row, 120 pixels, each the texel of its place; the twice-drawn floor's row the console's colour), the two quads sharing an edge (none of 2,118 pixels spilled; 18 with the whole fill), the semi-transparent pairs (19,627 pixels blended, none twice), the state between two quads (§33.5) |
+| The 2D program | **Equal** to the software rasteriser's to the pixel, pictures and VRAM, as at E4 (§25.4): no polygon of it is precise, so none is filled |
+| The kit on the published shape, the setting on | **Every case on every disc** [M]: `cargo build --profile dist` in `v1/`, the eight discs at 1,800 frames, four at a time, 351 s; C7's state 11,594,150 bytes loading and continuing, C8 across a save and load, C17 and C18; and with the setting off, 194 s |
+| The shaders | `walk.spv` and `copy.spv` are the sources' compilation by WiseMan's shaderc (`DiamondShaderTests`) |
+| WiseMan | 64 of 64, `DiamondShaderTests` (the shaders recompiled to
+  the bytes on disk) and the three `DiamondPreciseGeometryTests` among them; and by `WindowFitAudit` and
+  `GraphicsSettings`, the setting's hint having changed: 143 of 143. |
+
+### 35.2 Cost
+
+§27.1's instrument: `examples/bench` on links with every function aligned to 64 bytes, each build in its own target,
+the builds alternating on one core, the fastest mean of five rounds, milliseconds of the emulation thread a frame,
+the picture's wait timed with the frame. The base is WiseMan 8a90f127, E4 as merged, extracted outside the
+repository. Ape Escape's first 3,000 frames (its lab, §32.2) replace Tekken 3's, which make no projection [M]:
+
+| Run | Frames | Off: base | branch | | On: base | branch | The fill's | The picture's wait, base and branch |
+|---|---|---|---|---|---|---|---|---|
+| `gpu/benchmark` | 1,200 | 2.326 | 2.324 | -0.1% | 2.668 | 2.665 | -0.003 | 0.222, 0.222 |
+| Crash Bandicoot | 3,000 | 2.315 | 2.322 | +0.3% | 2.786 | 2.802 | +0.016 | 0.202, 0.215 |
+| Mega Man Legends | 3,000 | 1.806 | 1.802 | -0.2% | 2.153 | 2.182 | +0.029 | 0.159, 0.183 |
+| Ape Escape | 3,000 | 2.162 | 2.157 | -0.2% | 2.536 | 2.555 | +0.019 | 0.207, 0.221 |
+| Tekken 3's fights | 7,500 to 10,500 | 3.726 | 3.711 | -0.4% | 5.202 | 5.308 | +0.106 | 0.977, 1.072 |
+
+Every pair's digests equal. **Off, the frame is the base's within the noise**: the fill is in the shader and in a
+function only precise polygons reach. **On, the fill costs 0.02 to 0.03 ms a frame on the three discs and
+0.11 ms in Tekken 3's fights**, 0.6 to 2.0 per cent of the frame with the setting on, and all of it is the picture's
+wait (0.013 to 0.024 ms more, 0.095 in the fights): the device evaluating the third edge and the console's triangle
+for the pixels about a precise triangle that it left at the first edge they failed. `gpu/benchmark` projects
+nothing and is unchanged. A first series, before §33.4's second rule, gave the same within 0.02 ms (0.018, 0.020 and
+0.008 on the discs, 0.088 in the fights). **On the handheld, estimated and not measured** [A, by §27.4's reasoning:
+ten to fifteen times less compute throughput]: about a quarter of a millisecond a frame where a game draws at 240
+lines, and a millisecond to a millisecond and a half in Tekken 3's fights, where §27.4 already puts the setting near
+the frame's edge.
+
+### 35.3 Tests [M, 2026-10-13]
+
+All on the final head (WiseMan had not moved from 8a90f127, so there was nothing to merge).
+
+- **`diamond`**, `cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS`, `EMUSEN_DIAMOND_DISCS` and
+  `EMUSEN_GPU_DEVICE=6800`: 167 unit tests, 81 program tests (E1's goldens plain and with the test observer, the
+  discs' among them), E3's 3 renderer gates and **12 in `tests/precise.rs`** (E4's eight, the fill's four), all
+  passing; and without the two corpora the same counts, the corpus tests standing down.
+- **`precision`**: 6. **`diamond-renderer`**: 1. **`diamond-v1`**: 4, and 4 with `EMUSEN_GPU_DEVICE` naming no device.
+- **The kit**, the corpus form on the eight discs at 1,800 frames on the `dist` library, on and off: every case on
+  every disc, 351 s and 194 s; and Spyro the Dragon's on a library built with the marks out of the block, for §33.5.
+- **WiseMan**, under the test lock with the corpus, filtered by `Diamond` and `PlayStation`: 64 of 64, `DiamondShaderTests` (the shaders recompiled to
+  the bytes on disk) and the three `DiamondPreciseGeometryTests` among them; and by `WindowFitAudit` and
+  `GraphicsSettings`, the setting's hint having changed: 143 of 143.
+- **Not run**: `blackmoon-r3000`'s and `blackmoon-gte`'s suites, `emusen-gpu`'s and MarsRT's, none of them changed;
+  the Vulkan validation layer over the changed walk; the full WiseMan suite; llvmpipe and the integrated card; the
+  Mistress publish, whose library is the `dist` one the kit ran.
+
+## 36. Predictions, what is put to the tester, what is left, and the reading log
+
+### 36.1 Predictions and earlier statements
+
+- **§26.4's "the same cause" for Spyro the Dragon is retired** [M, §32.3]. Ape Escape's cracks are T's against
+  polygons the game divides on the processor; Spyro's run along whole shared edges of polygons whose vertices the layer
+  lost at a shift, and of quads with one vertex no projection is behind. One remedy closes both; they are two causes.
+- **§26.4's reading of Ape Escape's ring held**: its quads' words "do not trace to a projection: built or moved on
+  the processor". Built: three of each quad's four, by the game's own division of near polygons.
+- **§25.5's reading of Spyro's 464,915 "changed" words is retired, and of Tekken 3's held**: both were taken for
+  vertices the game moves on the processor. Spyro's are the shifted word made in a register that held another
+  projection's serial, tens to hundreds of pixels from it; the vertices it keeps shifted (§32.3) mostly never reach
+  that count, their serial having been lost. Tekken 3's are within a few pixels of their projections: moved.
+- **§21.4's "at most §21.2's two pixels and in practice under one" held** for the seam's width: the cracks are a
+  pixel wide.
+- **§22.4's argument that precise shared vertices leave no gap held as a measurement**: no pixel between two of the
+  grid's quads was left undrawn in 120 frames of 24 shared edges, unfilled or filled (§34.2).
+- **The risk stated with the proposal held, and more than it said** [M, §33.3]: that the later of two precise
+  polygons sharing an edge would spill up to a pixel over the other "and may bring back some of the wobble". On the
+  grid it brings back all of it at those edges, the console's truncation moving every polygon the same way.
+- **Expected before it was measured, and held**: that the marks would leave the grid's shared edges E4's (0.0036
+  against 0.0035 px), and that an outline's wobble would come half back (0.287 against the console's 0.584 px).
+- **Not expected**: that a game would draw a polygon in two passes, and that filling one of them would show
+  (Silent Hill, §34.5); that the kit's C7 would not need the marks in the state where a test of the crate's own does
+  (§33.5).
+- **P-E4c**, of Spyro's precise share, stays failed, with its reason now known and a remedy proposed (§32.4).
+
+### 36.2 Put to the tester
+
+1. **The outline.** The fill is in "Precise geometry" by the rule of §34.4. Its measured cost is at edges no precise
+   polygon shares: their top and left sides stand on the console's line (the grid's outline 0.287 px from the ideal,
+   moving 0.116 px a frame, against 0.006 and 0.011 unfilled). If steady outlines matter more than closed cracks in
+   some game, the fill can be a second switch under Enhancements, on or off by default; it is one flag in the
+   renderer's record and a setting in `diamond-v1`. Recommended: leave it in, with no switch.
+2. **Following a shift** (§32.4), for Spyro the Dragon: one more move told by the processor's crate, which would
+   take its precise polygons in play from 37 to about 93 per cent. It widens a written interface, so it waits for a
+   yes.
+3. **What to look at on the handheld**: Ape Escape's first level along the ledges and the ground's edges, where the
+   lines were; the same edges' top and left sides as the camera turns, for the outline's movement; Spyro the Dragon's
+   grass in its first world; Silent Hill's street in the fog, for any bright dash at a polygon's edge (§34.5's
+   defect, fixed); and the frame's time, which the desktop puts at 0.02 to 0.03 ms more than E4's where a game draws
+   at 240 lines and 0.11 ms in Tekken 3's fights, and §35.2 estimates at a quarter of a millisecond and about one and
+   a quarter there.
+
+### 36.3 What is left, and why
+
+- **Cracks in semi-transparent polygons** are not filled (§33.4): 2,335 pixels of Ape Escape's 265 frames in play
+  and 591 of Spyro's 235, in a haze, a fade, a shadow. Filling them where no opaque polygon filled first would blend
+  twice along every T between two such polygons.
+- **The corners of shared edges and triangles under two pixels thin** still take the console's pixels from a precise
+  neighbour (§33.3): 77,983 pixels of Ape Escape's play, 294 a frame. The two-edge mark is the form to try.
+- **Ape Escape's divided polygons and Spyro's lost ones stay integer**: their cracks are closed, their wobble is the
+  console's. Spyro's is §36.2's second item; Ape Escape's has no exact remedy (§32.4).
+- **Spyro's vertex with no projection behind it** (§32.3) is not traced to its cause.
+- **Tekken 3's fights** are counted by the model alone, 2,609 cracks on 13 frames and none left; their pictures
+  were looked at and not compared pixel for pixel (§32.2).
+- **At N×** (E5): the marks are the mirror's and grow with it; the fill's rule is a sample's, the console's own
+  triangle at the samples of its pixels. Neither is built for N.
+- **The handheld**: not connected and not measured; §35.2's figures are the desktop's.
+
+### 36.4 Reading log (the crack fill)
+
+**No emulator's source, shader or snippet, no description of PGXP or of any emulator's precision, gap or crack
+handling, and no other PlayStation renderer's code were opened**, with or without code: nothing of DuckStation's,
+Beetle PSX's (parallel-psx and its rsx among it), PCSX's, PCSX-Redux's, SwanStation's, ePSXe's plugins or any
+fork's. The remedy is from the console's own rule as Diamond models it: every polygon drawn at whole-pixel vertices.
+No firmware, listing or trace of one; the player's BIOS folders were not read; nothing under `kernel/` or
+`kernel-harness/` was opened or changed. psx-spx was not opened. No published prose on the subject was read, with or
+without code. The handheld was not connected to.
+
+**Two games' code was read**, on the open kernel, from the running machine's RAM by the run tool's `--disasm` and the
+same disassembler in a scratch test, after the scratch layer had named the instruction that stored each vertex word:
+Ape Escape's about 80016060h to 800161C4h (where it projects), 8001B3A0h to 8001B4B4h and 8001D800h to 8001E820h
+(where it divides and emits); Spyro the Dragon's about 8004EDD0h to 8004EF3Ch, 800262E0h to 80026354h, 80026540h to
+800265CCh, 80026960h to 800269ACh, 80026D40h to 80026DECh, 80020340h to 800203A4h, 8001FC80h to 8001FDC4h and a dozen
+words at 80027B00h and 80029100h. What §32.3 says of them is what those listings show; no listing, picture, state or
+disc image is in the repository. ps1-tests' programs were run as built.
+
+Opened, all EmuSen's own: this page's §1, §21 to §31 and its outline; `Diamond_Plan.md` §6.3's row;
+`Diamond_Players.md` §15; `BlackMoon_R3000.md` §14; `Diamond_Native.md` §25 and §26; the indexes;
+`EmuSen_Settings_Reference.md` §4.110. The source of `precision` and of `diamond-renderer` whole, shaders among it;
+of `diamond`, `layer.rs`' interface, `gpu/decode.rs`, `gpu/raster.rs`' setup and triangle, `gpu/draw.rs`' paint,
+`gpu/vram.rs`' rectangles, `gpu/display.rs`' scan, the state writer's layout, `tests/precise.rs`, `tests/support/`,
+`examples/run.rs` and `examples/bench.rs`; `blackmoon-r3000`'s moves and `blackmoon-gte`'s projection; `diamond-v1`'s
+setting; WiseMan's `DiamondPreciseGeometryTests.cs`; E4's measurement scripts in the probe.

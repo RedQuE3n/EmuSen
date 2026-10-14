@@ -19,7 +19,7 @@ pub const PRECISE_GEOMETRY: Enhancement = Enhancement {
     key: PRECISION_KEY,
     label: "Precise geometry",
     help: "Draws the picture on the graphics card with each 3D corner where the game's geometry puts it, between the pixels, and textures in perspective, so that polygons stop wobbling and textures stop bending as they move. The game itself runs exactly as on a console; only the picture shown is drawn otherwise.",
-    cost: "Needs a Vulkan graphics card, and takes some of its time and about half a millisecond of the processor's each frame; save states are about twice the size. Corners a game moves itself, as in most 2D menus and overlays, stay on whole pixels, and where such a polygon meets a precise one a hairline seam can show.",
+    cost: "Needs a Vulkan graphics card, and takes some of its time and about half a millisecond of the processor's each frame; save states are about twice the size. Corners a game moves itself, as in most 2D menus and overlays, stay on whole pixels, and an outline's top and left edges stay on the console's line.",
     values: Values::Switch,
 };
 

@@ -20,6 +20,7 @@ pub mod io;
 #[allow(dead_code)]
 mod lfo_tables;
 pub mod machine;
+pub mod mcd;
 pub mod render;
 pub mod sound;
 #[cfg(test)]

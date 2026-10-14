@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("nephrite", "Nephrite", CoreInterface.CapRomPatches | CoreInterface.CapSettings | CoreInterface.CapSettingNotes | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(("nephrite", "Nephrite", CoreInterface.CapRomPatches | CoreInterface.CapSettings | CoreInterface.CapSettingNotes | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble | CoreInterface.CapBorrow), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             var packs = new[] { GenesisSystems.MegaDrive, GenesisSystems.MegaCd, GenesisSystems.S32x };
             Assert.Equal(packs.Select(p => p.Id), library.Info.Systems.Select(s => s.Id));
             foreach (var (pack, system) in packs.Zip(library.Info.Systems))
@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.Cores
                 var last = run.At(60)!;
                 Assert.Equal(spaces.Order(), last.Spaces.Keys.Order());
                 Assert.Equal((65536, 128, 80), (last.Spaces["wram"].Length, last.Spaces["cram"].Length, last.Spaces["vsram"].Length));
-                Assert.Equal(name.EndsWith(".md") ? (256, 224) : (320, 224), (last.Picture!.Width, last.Picture.Height));
+                Assert.Equal(name.EndsWith(".32x") ? (320, 224) : (256, 224), (last.Picture!.Width, last.Picture.Height));
                 Assert.All(last.Picture.Rgb, b => Assert.Equal(0, b));
                 Assert.Equal(48000, run.AudioRate);
                 Assert.True(TestRomDifferential.Steady(run, 1, 60));

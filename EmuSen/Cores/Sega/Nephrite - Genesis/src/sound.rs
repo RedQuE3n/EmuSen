@@ -82,6 +82,7 @@ pub struct Sound {
     fm_steps: Steps,
     psg_steps: Steps,
     fm_out: Vec<[i32; 2]>,
+    extra_out: Vec<[i32; 2]>,
     /// The latest master clock an access or a frame's end has brought the sound to: the Z80 runs up to an
     /// instruction past the 68000's clock, and an access from behind it is taken as made then.
     pub time: u64,
@@ -106,6 +107,7 @@ impl Sound {
             fm_steps: Steps::new(num, den, RATE),
             psg_steps: Steps::new(num, den, RATE),
             fm_out: Vec::new(),
+            extra_out: Vec::new(),
             time: 0,
             fm_line: [[0; 2]; 7],
             psg_line: [[0; 2]; 3],
@@ -165,13 +167,24 @@ impl Sound {
     }
 
     /// Both chips up to `t`, and every finished sample, the two sources summed and put through the circuit.
-    pub fn take(&mut self, t: u64, mut out: impl FnMut(i16, i16)) {
+    pub fn take(&mut self, t: u64, out: impl FnMut(i16, i16)) {
+        self.take_with(t, None, out);
+    }
+
+    /// The same with a third source beside the console's output, the Sega CD's CD-DA, synthesised at the same clock and
+    /// added after the circuit, which it does not pass through.
+    pub fn take_with(&mut self, t: u64, mut extra: Option<&mut Steps>, mut out: impl FnMut(i16, i16)) {
         let t = self.now(t);
         self.run_ym(t);
         self.run_psg(t);
         let fm = &mut self.fm_out;
         fm.clear();
         self.fm_steps.take(t, |l, r| fm.push([l, r]));
+        let ex = &mut self.extra_out;
+        ex.clear();
+        if let Some(e) = extra.as_deref_mut() {
+            e.take(t, |l, r| ex.push([l, r]));
+        }
         let (mut i, circuit, sides, fm_line, psg_line) = (0, self.circuit, &mut self.sides, &mut self.fm_line, &mut self.psg_line);
         self.psg_steps.take(t, |l, r| {
             // The FM stream's held samples have their droop undone, three samples late; the PSG waits with it.
@@ -185,7 +198,11 @@ impl Sound {
             let psg = psg_line[0];
             psg_line.rotate_left(1);
             psg_line[2] = [l, r];
-            out(sides[0].step(&circuit, unheld(0) + psg[0]), sides[1].step(&circuit, unheld(1) + psg[1]));
+            let (l, r) = (sides[0].step(&circuit, unheld(0) + psg[0]), sides[1].step(&circuit, unheld(1) + psg[1]));
+            match ex.get(i - 1) {
+                Some(&[a, b]) => out((l as i32 + a).clamp(-32768, 32767) as i16, (r as i32 + b).clamp(-32768, 32767) as i16),
+                None => out(l, r),
+            }
         });
         debug_assert_eq!(i, fm.len(), "both synthesisers finish the same samples");
     }

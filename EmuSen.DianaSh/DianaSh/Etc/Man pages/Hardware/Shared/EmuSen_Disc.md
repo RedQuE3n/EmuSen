@@ -306,3 +306,26 @@ places to be hunks of its own: with sixteen bytes at a place changed every secto
 decoder stops on the hunk: `chd` 0.3.4 indexes past a slice for some changed hunks, which the test catches and counts)
 and every sector placed elsewhere reads as before. `cargo test --release`: 12 and 12, with chdman named and without.
 
+
+## 11. WAVE tracks (2026-10-14)
+
+*Added at Nephrite's stage 8 (`Nephrite_Native.md` §51), its second user's first need of the crate.* A cue sheet's
+`FILE "name.wav" WAVE` names a RIFF WAVE file whose data chunk holds an audio track's samples; the 240p Test Suite's
+Sega CD build ships its two audio tracks so, and the crate refused it before.
+
+- **What is read** [R: Microsoft's RIFF WAVE layout as the format is commonly documented]: `RIFF`, a length, `WAVE`,
+  then chunks of a four-byte identifier, a little-endian length and a body padded to an even length. The `fmt ` chunk
+  must give PCM (format 1), two channels, 44,100 Hz and 16 bits, which is CD-DA's own sample format; anything else is
+  refused with the format's words, since a converted rate or width would not be the disc's samples. The `data`
+  chunk's body is then the track's bytes, stored as a raw `BINARY` audio track stores them, little-endian, left first.
+  Chunks before `data` (`LIST` and the like) are skipped.
+- **Where it changes the crate**: `Sheet` records each file's kind (`FileKind::Binary` or `Wave`, the first the
+  default, so that a sheet built as before means what it did); a `WAVE` file may hold only an `AUDIO` track. Placing a
+  sheet's tracks takes a WAVE file's data chunk in place of the whole file, so a track's first stored byte is past the
+  header, and `read` and `place` name bytes of the file itself: `place` answers the byte within the WAVE file, which is
+  what a host reading ahead needs. Nothing else moves.
+- **Tests** [M, `cargo test --release`, 13 and 13]: `a_wave_files_samples_are_found_and_others_refused` (a header, a
+  `LIST` chunk of odd length before the data, a mono file, a truncated one), the cue parser's three cases, and
+  `a_wave_files_track_reads_as_the_raw_track_it_holds`: the two-file dump of §6 with its audio as a WAVE file reads
+  sector for sector, Q for Q and TOC for TOC as with the raw file, every audio sector placed 44 bytes further in.
+  Diamond's crates, the crate's other user, pass unchanged (167 unit, 81 program and the rest).

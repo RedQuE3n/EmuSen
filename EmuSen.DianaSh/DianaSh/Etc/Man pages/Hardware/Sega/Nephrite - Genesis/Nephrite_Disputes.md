@@ -1460,3 +1460,95 @@ CPUs' disputes in their own record pages.
   bit 8 with the bus request's state. Nephrite's reads of the ten places agree with the board to the byte.
 - Pinned by: `genesis.rs`'s `an_unmapped_read_is_the_word_last_fetched`; the game by `NephriteStartTests`.
 - Implemented in: the commit "Nephrite: four games that stood still".
+
+### D-30. The Sega CD's level 2 from the main CPU: IFL2 reads 1 while the request stands, the request ends when the sub CPU takes it, and a request made while one stands is lost
+- Opened: 2026-10-14, at stage 8 step 1, by mcd-verificator's IRQ TEST.
+- Documents read: the Mega-CD Hardware Manual §4-1 (`$A12000`: "IFL2 ... in the Read mode, '0' = in the process of
+  doing a LEVEL2 interrupt / '1' = Level 2 is not treated yet") and §3-5 (`$FF8032`, the levels).
+- Test program: mcd-verificator V1.02's IRQ TEST, its source and its binary's instructions: a write of IFL2 read back
+  28 main CPU clocks later reads `$80` (taken); two writes 32 clocks apart read `$81` (the second standing); three
+  writes 32 clocks apart give the sub CPU two level 2 interrupts; 8,192 writes each made only while the bit reads 0
+  give 8,192; with IEN2 clear a write gives none.
+- Referee: none read.
+- Conclusion: IFL2 reads the request; the sub CPU's acknowledge ends it; a write while it stands, or while IEN2 is clear,
+  does nothing. The second write of a pair stands because the sub CPU's handler for the first holds the mask at 2 until
+  its RTE. A model with a request queued behind the standing one passed 0x0C and failed 0x0D; the rule above passes
+  all. *A rule of the model, not the console:* the sub CPU runs a whole instruction or exception at a time and may run
+  past the main CPU's present, so the acknowledge's sub clock is kept and a request that a main CPU access finds taken
+  only after that access's own time is treated as standing (without it 0x0E failed: a third write found the second
+  already taken by an exception that the console had not begun). Measured.
+- Pinned by: `mcd_verificator_passes_the_tests_built` (IRQ TEST).
+- Implemented in: stage 8 step 1's commit.
+
+### D-31. Word RAM's swaps: in 2M the main CPU's DMNA gives the RAM to the sub CPU and the sub CPU's RET 1 takes it back; in 1M RET picks the banks and the main CPU's DMNA 0 asks for a swap that a change of RET makes; the 2M holder is kept while 1M runs
+- Opened: 2026-10-14, at stage 8 step 2. The manual's pages disagree: §4-1 (`$A12002`, 1M) gives DMNA "0 = swap
+  request, 1 = no significance" for the main CPU's write, while §3-1's text for 1M, corrected by hand in the scan,
+  says the main CPU sets DMNA to 1 to request a swap.
+- Documents read: the Hardware Manual §3-1 (`$FF8002`), §4-1 (`$A12002`), §1-1's switch diagrams; krikzz's
+  `notes/random notes.txt`, "mem mode".
+- Test program: mcd-verificator V1.02's REG X002, WORD RAM and WRAM PMOD (the active checks only; its own comment
+  says it removed others it was unsure of, two games hanging under them).
+- Referee: none read.
+- Conclusion, as built: in 2M DMNA reads whether the sub CPU holds the RAM and RET reads its inverse; the main CPU's
+  write of DMNA 1 gives it to the sub CPU in either mode, the sub CPU's RET 1 in 2M gives it to the main CPU, and its
+  RET 0 in 2M does nothing; in 1M RET is the sub CPU's to write and picks the banks at once, the main CPU's DMNA 0 sets
+  DMNA (a swap asked for), which the sub CPU's next change of RET clears; DMNA 1 from the main CPU in 1M changes
+  nothing visible but sets the 2M holder, which takes effect when 2M returns (the test's 0x26). Entering 1M clears
+  the request; the test's disabled checks, which would set it to the old RET's difference from the new, are not built.
+  Measured against the test's checks; the disabled ones open.
+- Pinned by: `the_swaps_follow_dmna_and_ret`, `mcd_verificator_passes_the_tests_built`.
+- Implemented in: stage 8 step 2's commit.
+
+### D-32. The cartridge slot in mode 2, empty, reads `$FF`
+- Opened: 2026-10-14, at stage 8 step 1. mcd-verificator's RAM CART takes a byte at `$400001` above 6 for no RAM
+  cartridge; the Genesis's open bus (D-29) would give the next instruction's low byte, which is 6 or less for many
+  instructions.
+- Documents read: the Hardware Manual's "Mega-CD construction" (mode 2 puts the cartridge's area at `$400000`), nothing
+  on an empty slot.
+- Test program: mcd-verificator's RAM CART, whose author's console reads "not present" there.
+- Referee: none read.
+- Conclusion: an empty slot in mode 2 reads `$FF` in each byte. Argued: it meets the program's test on a console, and no
+  other reading of the slot is known.
+- Pinned by: `mcd_verificator_passes_the_tests_built` (RAM CART "not present").
+- Implemented in: stage 8 step 1's commit.
+
+### D-33. The CDD's protocol: ten nibbles each way every 1/75 s with a checksum, its statuses, reports and seek
+- Opened: 2026-10-14, at stage 8 step 3. The Hardware Manual's §3-6 page for `$FF8038`-`$FF804A` is blacked out in
+  the copy held, and says only that level 4 follows the tenth status nibble and that the tenth command nibble starts a
+  transfer.
+- Documents read: the Hardware Manual §3-6, §3-5; krikzz's notes (`cdd-cmd-info.txt`, `random notes.txt`).
+- Test program: mcd-verificator's own drive driver and the LL logs it recorded on a console (§51.2), each line a status
+  and the command sent with it.
+- Referee: none read.
+- Conclusion: as §51.1 states, the start as §53.1 corrects it (busy for 40 exchanges from HOCK, then `00` until a
+  report is asked for, which reads the TOC in 20; krikzz's note that status 9 comes only after a TOC command). The
+  spin-up's length and the coarse travel's are chosen within what the logs show; the landing 14 short, the 12 busy exchanges, the 3 short and the
+  loop of eight are the logs' own. Measured where the logs are, argued for the travel's curve.
+- Pinned by: `cdd.rs`'s five tests; `mcd_verificator_passes_every_test` (CDC INIT).
+- Implemented in: stage 8 step 3's commit.
+
+### D-34. The CDC's decoder interrupt clears itself 40% into a sector; DMA moves a word every 16 sub clocks; a count of DBC moves (DBC + 1) / 2 words
+- Opened: 2026-10-14, at stage 8 step 4. Sanyo's manual gives the decoder interrupt's length as about 2.75 ms
+  (decoding off) or 1.5 to 1.8 ms (§12.6), while mcd-verificator's CDC FLAGS counts it at 49 polling loops set and 72
+  clear, about 40% of a sector, with only DECEN on; the manual gives no transfer rate on the Sega CD's bus.
+- Documents read: Sanyo's manual §11.3-§11.7, §12.6, appendix E; the Hardware Manual §3-2.
+- Test program: mcd-verificator's CDC FLAGS (0x40, 0x41), DMA2 (0x04, 0x05, 0x09, 0x10: odd lengths), DMA3 and DMA1.
+- Referee: none read.
+- Conclusion: DECI set at each sector's start with DECEN and clear 67,000 sub clocks later unless STAT3 is read
+  first: measured, since it gives the program's counts to within one loop and 30,000 does not. The DMA's 16 clocks a
+  word are argued: the tests pass at any rate that lets a transfer start within a command's round trip and finish
+  within a frame, and no measurement of the rate exists here. The count: measured, the DMA2 lengths.
+- Pinned by: `mcd_verificator_passes_every_test` (CDC FLAGS, DMA2); `cdc.rs`'s two tests.
+- Implemented in: stage 8 step 4's commit.
+
+### D-35. CD-DA's level in the mix: a full-scale sample at half the output's range, added after the Genesis's circuit
+- Opened: 2026-10-14, at stage 8 step 5, with CD-DA reaching the mix.
+- Documents read: the Hardware Manual §3-6 (the fader's FD10-FD0, `$400` full).
+- Test program: none yet; the 240p Sega CD build's audio tracks and MDFourier's Sega CD recordings, if any, are
+  stage 9's.
+- Referee: none read.
+- Conclusion: argued, a placeholder for stage 9's measurement: the console mixes the Sega CD's audio with the
+  Genesis's outside the Genesis, so the Genesis's output circuit is not applied to it; its level against the
+  Genesis's is not known here.
+- Pinned by: `an_audio_track_played_reaches_the_mix_at_the_faders_volume`.
+- Implemented in: stage 8 step 5's commit.

@@ -147,6 +147,15 @@ impl<B: AsRef<[u8]>> Disc<B> {
         if files.len() < sheet.files.len() {
             return Err(DiscError::Files(format!("the sheet names {} files and {} were given", sheet.files.len(), files.len())));
         }
+        // Each file's samples or sectors: all its bytes, or a WAVE file's data chunk.
+        let spans = files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| match sheet.kinds.get(i) {
+                Some(crate::cue::FileKind::Wave) => crate::wave::data(f.as_ref()).map_err(|e| DiscError::Files(format!("{}: {e}", sheet.files[i]))),
+                _ => Ok((0, f.as_ref().len())),
+            })
+            .collect::<Result<Vec<(usize, usize)>, DiscError>>()?;
         let mut tracks: Vec<Track> = Vec::new();
         let mut base: i64 = 0;
         let mut byte: u64 = 0;
@@ -166,7 +175,7 @@ impl<B: AsRef<[u8]>> Disc<B> {
                 base += t.pregap as i64;
             }
             let from = (base + first) as u32;
-            let size = files[t.file].as_ref().len() as u64;
+            let (head, size) = (spans[t.file].0 as u64, spans[t.file].1 as u64);
             let to = match sheet.tracks.get(k + 1) {
                 Some(n) if n.file == t.file => (base + n.first_frame() as i64) as u32,
                 _ => from + (size.saturating_sub(byte) / t.mode.bytes() as u64) as u32,
@@ -184,7 +193,7 @@ impl<B: AsRef<[u8]>> Disc<B> {
                 start: (base + t.index(1).unwrap_or(0) as i64) as u32,
                 end,
                 indexes,
-                store: Store { file: t.file, from, to, offset: byte, mode: t.mode },
+                store: Store { file: t.file, from, to, offset: head + byte, mode: t.mode },
             });
             if sheet.tracks.get(k + 1).is_some_and(|n| n.file == t.file) {
                 base += t.postgap as i64;

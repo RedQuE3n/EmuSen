@@ -8,10 +8,12 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 18;
+pub const STATE_VERSION: i32 = 19;
 /// The oldest version a state may have and still load: 16, the first the Genesis was offered to players with, lacks
 /// only what 17 added, which a load supplies as Nephrite_Native.md §39.4 says.
 pub const OLDEST_STATE_VERSION: i32 = 16;
+/// The oldest a Sega CD's state may have: 19, the first with the Sega CD in it (Nephrite_Native.md §53.3).
+pub const OLDEST_MCD_STATE_VERSION: i32 = 19;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -22,6 +24,8 @@ pub enum StateError {
     Version(i32),
     OtherSystem(u8),
     BufferTooSmall { needed: usize },
+    /// A Sega CD's state made over another disc than the drive's: the two fingerprints.
+    WrongMedia { saved: u64, here: u64 },
 }
 
 impl Status for StateError {
@@ -32,6 +36,7 @@ impl Status for StateError {
             StateError::Version(_) => status::VERSION,
             StateError::OtherSystem(_) => STATUS_OTHER_SYSTEM,
             StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
+            StateError::WrongMedia { .. } => emusen_native::core::status::WRONG_MEDIA,
         }
     }
 }
@@ -60,6 +65,14 @@ impl Machine {
             w.bytes(m.name, self.bytes(m.id).expect("a listed space"));
         }
         self.genesis.write_state(w);
+        if let Some(m) = self.genesis.hw.mcd.as_deref() {
+            m.write_state(w, self.disc_print);
+        }
+    }
+
+    /// The oldest version this machine's system reads.
+    pub fn oldest_state_version(&self) -> i32 {
+        if self.media.system == System::Mcd { OLDEST_MCD_STATE_VERSION } else { OLDEST_STATE_VERSION }
     }
 }
 
@@ -73,7 +86,7 @@ impl StateMachine for Machine {
             return Err(StateError::Foreign(magic));
         }
         let version = r.i32()?;
-        if !(OLDEST_STATE_VERSION..=STATE_VERSION).contains(&version) {
+        if !(self.oldest_state_version()..=STATE_VERSION).contains(&version) {
             return Err(StateError::Version(version));
         }
         let system = r.u8()?;
@@ -88,11 +101,21 @@ impl StateMachine for Machine {
             loaded.push((m.id, bytes));
         }
         let registers = self.genesis.read_state(&mut r, version)?;
+        let mcd = match self.genesis.hw.mcd.as_deref() {
+            Some(m) => Some(m.read_state(&mut r)?),
+            None => None,
+        };
+        if let Some(saved) = mcd.as_ref().map(|s| s.print).filter(|&p| p != self.disc_print) {
+            return Err(StateError::WrongMedia { saved, here: self.disc_print });
+        }
         self.frames = frames;
         for (id, bytes) in loaded {
             self.bytes_mut(id).expect("a listed space").copy_from_slice(&bytes);
         }
         self.genesis.apply_state(registers);
+        if let (Some(m), Some(s)) = (self.genesis.hw.mcd.as_deref_mut(), mcd) {
+            m.apply_state(s);
+        }
         self.debug_open = false;
         self.refresh_battery_file();
         Ok(())
@@ -308,7 +331,7 @@ mod tests {
         let a = machine("SEGA GENESIS");
         let mut b = machine("SEGA GENESIS");
         b.frames = 9;
-        for version in [15, 2, 19] {
+        for version in [15, 2, 20] {
             let mut s = as_version_16(&a);
             s[4..8].copy_from_slice(&i32::to_le_bytes(version));
             let e = b.load_state(&s).unwrap_err();

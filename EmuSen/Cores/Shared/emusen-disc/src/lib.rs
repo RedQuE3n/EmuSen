@@ -12,6 +12,7 @@ pub mod open;
 pub mod sbi;
 pub mod set;
 pub mod subq;
+pub mod wave;
 
 pub use disc::{Disc, DiscError, IsoForm, Place, Sector, Toc, Track, samples};
 pub use msf::Msf;

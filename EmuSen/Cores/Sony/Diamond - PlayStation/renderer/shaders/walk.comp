@@ -46,6 +46,7 @@ const uint BOUNDS = 22u;
 const uint FILLED = 1u << 25;
 const uint OWN_BOUNDS = 26u;
 const uint TURNED = 1u << 29;
+const uint FILTERED = 1u << 30;
 
 // psx-spx's dither offsets, by y and x modulo 4 (draw.rs's DITHER).
 const int DITHERS[16] = int[16](-4, 0, -3, 1, 2, -2, 3, -1, -3, 1, -4, 0, 3, -1, 2, -2);
@@ -177,8 +178,54 @@ void put(inout uint pixel, uint flags, int x, int y, ivec3 c, uint flag, bool bl
     pixel = out_ | flag | ((flags & SET) != 0u ? 0x8000u : 0u);
 }
 
-// draw.rs's `row` for one pixel: the texel and its transparency, modulation or a raw texture, then `put`.
-void shade(inout uint pixel, int r, uint flags, int x, int y, ivec3 rgb, uint u, uint v, int su, int sv) {
+// The texels a filtered primitive mixes are held within, per axis (lo, hi), from the least and greatest of its vertices'
+// coordinates `range` and its gradients: short of the end the coordinate runs toward across the screen, which it never
+// reaches; none where the texture window repeats the axis, the window then wrapping each texel (§41).
+ivec2 filter_limits(uint range, int gx, int gy, uint window) {
+    int lo = int(range & 0xFFu), hi = int((range >> 8) & 0xFFu);
+    if (window != 0u) {
+        return ivec2(0, -1);
+    }
+    if (hi > lo && gx >= 0 && gy >= 0) {
+        hi--;
+    } else if (hi > lo && gx <= 0 && gy <= 0) {
+        lo++;
+    }
+    return ivec2(lo, hi);
+}
+
+// Bilinear after the palette (§41): the four texels about the coordinate (fu, fv), (c + 1/2) in 256ths, each through the
+// window, the page and the palette, held within `limits` (u's then v's, none where hi < lo); a 15-bit page at N x
+// mixes its samples, a palette's page its texels. Transparent texels are left out and the others' weights renormalised.
+ivec3 bilinear(int r, int fu, int fv, ivec4 limits, ivec3 nearest) {
+    int n = (uint(records[r + 6]) & 0xFFu) == 2u ? N : 1;
+    int pu = fu * n - 128, pv = fv * n - 128;
+    int u0 = pu >> 8, v0 = pv >> 8, wu = pu & 255, wv = pv & 255;
+    ivec3 sum = ivec3(0);
+    int weights = 0;
+    for (int k = 0; k < 4; k++) {
+        int au = u0 + (k & 1), av = v0 + (k >> 1);
+        if (limits.y >= limits.x) {
+            au = clamp(au, limits.x * n, limits.y * n + n - 1);
+        }
+        if (limits.w >= limits.z) {
+            av = clamp(av, limits.z * n, limits.w * n + n - 1);
+        }
+        int tu = floor_div(au, n), tv = floor_div(av, n);
+        uint t = texel(r, uint(tu) & 0xFFu, uint(tv) & 0xFFu, au - tu * n, av - tv * n);
+        if (t == 0u) {
+            continue;
+        }
+        int w = ((k & 1) != 0 ? wu : 256 - wu) * ((k >> 1) != 0 ? wv : 256 - wv);
+        sum += w * eight(t, TRUE_COLOUR && TEXEL_AT >= 0 ? fine[TEXEL_AT] : 0u);
+        weights += w;
+    }
+    return weights == 0 ? nearest : (sum + weights / 2) / weights;
+}
+
+// draw.rs's `row` for one pixel: the texel and its transparency, modulation or a raw texture, then `put`. Filtered, the
+// colour is `bilinear`'s at (fu, fv), what is drawn and how it blends the nearest texel's, the console's own (§41).
+void shade(inout uint pixel, int r, uint flags, int x, int y, ivec3 rgb, uint u, uint v, int su, int sv, int fu, int fv, ivec4 limits) {
     bool blending = (flags & BLEND) != 0u;
     if ((flags & TEXTURED) == 0u) {
         put(pixel, flags, x, y, rgb, 0u, blending);
@@ -190,7 +237,10 @@ void shade(inout uint pixel, int r, uint flags, int x, int y, ivec3 rgb, uint u,
     }
     ivec3 t5 = ivec3(int(t & 31u), int((t >> 5) & 31u), int((t >> 10) & 31u));
     ivec3 c;
-    if (TRUE_COLOUR && (flags & CROP) == 0u) {
+    if ((flags & FILTERED) != 0u) {
+        ivec3 t8 = bilinear(r, fu, fv, limits, eight(t, TRUE_COLOUR && TEXEL_AT >= 0 ? fine[TEXEL_AT] : 0u));
+        c = (flags & RAW) != 0u ? t8 : (flags & CROP) != 0u ? (((rgb >> 3) * (t8 >> 3)) >> 1) : (rgb * t8) >> 7;
+    } else if (TRUE_COLOUR && (flags & CROP) == 0u) {
         // The texel at eight bits, with the low bits of a 15-bit one drawn with true colour (§40).
         ivec3 t8 = eight(t, TEXEL_AT >= 0 ? fine[TEXEL_AT] : 0u);
         c = (flags & RAW) != 0u ? t8 : (rgb * t8) >> 7;
@@ -261,12 +311,20 @@ void triangle(inout uint pixel, int r, uint flags, int x, int py) {
         }
     }
     uvec2 u = uvec2(0u), v = uvec2(0u);
+    int fu = 0, fv = 0;
+    ivec4 limits = ivec4(0, -1, 0, -1);
     if ((flags & TEXTURED) != 0u) {
         uint range = uint(records[r + 9]);
-        u = texel_of(within(interpolate_fine(records[r + 30], records[r + 38], dx, records[r + 39], dy), range));
-        v = texel_of(within(interpolate_fine(records[r + 31], records[r + 40], dx, records[r + 41], dy), range >> 16));
+        fu = within(interpolate_fine(records[r + 30], records[r + 38], dx, records[r + 39], dy), range);
+        fv = within(interpolate_fine(records[r + 31], records[r + 40], dx, records[r + 41], dy), range >> 16);
+        u = texel_of(fu);
+        v = texel_of(fv);
+        if ((flags & FILTERED) != 0u) {
+            uint window = uint(records[r + 7]);
+            limits = ivec4(filter_limits(range, records[r + 38], records[r + 39], window & 0xFFu), filter_limits(range >> 16, records[r + 40], records[r + 41], (window >> 8) & 0xFFu));
+        }
     }
-    shade(pixel, r, flags, x, y, rgb, u.x, v.x, int(u.y), int(v.y));
+    shade(pixel, r, flags, x, y, rgb, u.x, v.x, int(u.y), int(v.y), fu, fv, limits);
 }
 
 
@@ -305,9 +363,10 @@ bool console_covers(int r, uint flags, int x, int y, out float place[3]) {
     return true;
 }
 
-// A texel and its sample held within `lo..hi`: past an end, that end's texel at its sample nearest the inside.
-uvec2 hold(uvec2 t, uint lo, uint hi) {
-    return t.x < lo ? uvec2(lo, 0u) : t.x > hi ? uvec2(hi, uint(N - 1)) : t;
+// A coordinate, (c + 1/2) in 256ths, held within the texels `lo..hi`: past an end, that end's texel at its sample nearest
+// the inside.
+int hold(int c, uint lo, uint hi) {
+    return clamp(c, int(lo) * 256, int(hi) * 256 + 255);
 }
 
 // A triangle with precise vertices in 256ths of a pixel: each edge function exact in 64 bits against its owner's bound,
@@ -372,10 +431,11 @@ void fine_triangle(inout uint pixel, int r, uint flags, int x, int py) {
         }
     }
     uvec2 u = uvec2(0u), v = uvec2(0u);
+    int fu = 0, fv = 0;
     uint held = uint(records[r + 9]);
     // The vertices' own coordinates' range, packed as the integer record's word 9.
     uint range = 0u;
-    if (N > 1) {
+    if (N > 1 || (flags & FILTERED) != 0u) {
         ivec3 cu = ivec3(records[r + 42], records[r + 43], records[r + 44]) & 0xFF, cv = (ivec3(records[r + 42], records[r + 43], records[r + 44]) >> 8) & 0xFF;
         range = uint(min(cu.x, min(cu.y, cu.z)) | max(cu.x, max(cu.y, cu.z)) << 8 | min(cv.x, min(cv.y, cv.z)) << 16 | max(cv.x, max(cv.y, cv.z)) << 24);
     }
@@ -391,20 +451,29 @@ void fine_triangle(inout uint pixel, int r, uint flags, int x, int py) {
             su += a * float(uv & 0xFF);
             sv += a * float((uv >> 8) & 0xFF);
         }
-        u = texel_of(within(int(floor((su / w + 0.5) * 256.0)), range));
-        v = texel_of(within(int(floor((sv / w + 0.5) * 256.0)), range >> 16));
+        fu = within(int(floor((su / w + 0.5) * 256.0)), range);
+        fv = within(int(floor((sv / w + 0.5) * 256.0)), range >> 16);
     } else if ((flags & TEXTURED) != 0u) {
-        u = texel_of(within(interpolate_fine(records[r + 30], records[r + 38], dx, records[r + 39], dy), range));
-        v = texel_of(within(interpolate_fine(records[r + 31], records[r + 40], dx, records[r + 41], dy), range >> 16));
+        fu = within(interpolate_fine(records[r + 30], records[r + 38], dx, records[r + 39], dy), range);
+        fv = within(interpolate_fine(records[r + 31], records[r + 40], dx, records[r + 41], dy), range >> 16);
     }
-    u = hold(u, held & 0xFFu, (held >> 8) & 0xFFu);
-    v = hold(v, (held >> 16) & 0xFFu, held >> 24);
+    fu = hold(fu, held & 0xFFu, (held >> 8) & 0xFFu);
+    fv = hold(fv, (held >> 16) & 0xFFu, held >> 24);
+    u = texel_of(fu);
+    v = texel_of(fv);
+    ivec4 limits = ivec4(0, -1, 0, -1);
+    if ((flags & FILTERED) != 0u) {
+        uint window = uint(records[r + 7]);
+        limits = ivec4(filter_limits(range, records[r + 38], records[r + 39], window & 0xFFu), filter_limits(range >> 16, records[r + 40], records[r + 41], (window >> 8) & 0xFFu));
+        // The texel hold of §26.3 narrows them further.
+        limits = ivec4(max(limits.x, int(held & 0xFFu)), min(limits.y, int((held >> 8) & 0xFFu)), max(limits.z, int((held >> 16) & 0xFFu)), min(limits.w, int(held >> 24)));
+    }
     if (outside != 0u && (flags & BLEND) != 0u && !follows && ((flags & TEXTURED) == 0u || (texel(r, u.x, v.x, int(u.y), int(v.y)) & 0x8000u) != 0u)) {
         return;
     }
     // A write leaves the pixel's high half clear: the mark is then the nearest edge's, or that of the edge filled past.
     pixel |= 0xFFFF0000u;
-    shade(pixel, r, flags, x, y, rgb, u.x, v.x, int(u.y), int(v.y));
+    shade(pixel, r, flags, x, y, rgb, u.x, v.x, int(u.y), int(v.y), fu, fv, limits);
     if ((pixel >> 16) != 0u) {
         pixel = (pixel & 0xFFFFu) | (mark << 16);
     } else if (outside == 0u) {
@@ -439,7 +508,14 @@ void rectangle(inout uint pixel, int r, uint flags, int x, int py) {
     // A sprite is a texel a pixel: the sample within the texel's block is the sample within the pixel's, mirrored with a
     // flip, so that what was drawn at N x is copied at N x (§39.2).
     int su = records[r + 14] < 0 ? N - 1 - SX : SX, sv = records[r + 15] < 0 ? N - 1 - SY : SY;
-    shade(pixel, r, flags, x, y, colour(r), u, v, su, sv);
+    // Filtered, the sample's place in its texel as a coordinate; held within the sprite's own texels (word 9).
+    int fu = int(u) * 256 + (su * 256 + 128) / N, fv = int(v) * 256 + (sv * 256 + 128) / N;
+    ivec4 limits = ivec4(0, -1, 0, -1);
+    if ((flags & FILTERED) != 0u) {
+        uint range = uint(records[r + 9]), window = uint(records[r + 7]);
+        limits = ivec4(int(range & 0xFFu), (window & 0xFFu) != 0u ? -1 : int((range >> 8) & 0xFFu), int((range >> 16) & 0xFFu), ((window >> 8) & 0xFFu) != 0u ? -1 : int(range >> 24));
+    }
+    shade(pixel, r, flags, x, y, colour(r), u, v, su, sv, fu, fv, limits);
 }
 
 void line(inout uint pixel, int r, uint flags, int x, int py) {
@@ -468,7 +544,7 @@ void line(inout uint pixel, int r, uint flags, int x, int py) {
     for (int c = 0; c < 3; c++) {
         rgb[c] = ((records[r + 16 + c] << 12) + records[r + 19 + c] * k + 2048) >> 12;
     }
-    shade(pixel, r, flags, x, y, rgb, 0u, 0u, 0, 0);
+    shade(pixel, r, flags, x, y, rgb, 0u, 0u, 0, 0, 0, 0, ivec4(0, -1, 0, -1));
 }
 
 void fill(inout uint pixel, int r, uint flags, int px, int py) {

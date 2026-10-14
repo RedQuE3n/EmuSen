@@ -64,7 +64,7 @@ fn run(e1: u32, words: &[u32], options: Options, prepare: impl Fn(&mut Machine))
     Some((m, picture, samples, fine))
 }
 
-const COLOUR: Options = Options { scale: 1, colour: true };
+const COLOUR: Options = Options { scale: 1, colour: true, filter: diamond_renderer::Filter::Off };
 
 /// Along a row of a picture 320 wide, one channel: how many distinct values, the mean run of equal values, and how many
 /// times it falls where the gradient only rises.

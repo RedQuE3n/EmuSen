@@ -36,6 +36,8 @@ pub const BOUNDS: u32 = 22;
 pub const FILLED: u32 = 1 << 25;
 pub const OWN_BOUNDS: u32 = 26;
 pub const TURNED: u32 = 1 << 29;
+/// A textured primitive drawn with its texels mixed bilinearly (Diamond_Enhancements.md §41).
+pub const FILTERED: u32 = 1 << 30;
 
 /// Columns `x0..=x1` and rows `y0..=y1` of VRAM, either running past the edge and wrapping round; at most 1,024 columns
 /// and 512 rows.
@@ -140,6 +142,16 @@ pub fn clut_span(t: &Texture) -> Span {
     Span::sized(t.clut_x, t.clut_y, t.entries(), 1)
 }
 
+/// Whether a textured triangle's texture is drawn a texel a pixel and unrotated: its gradients in the console's 12-bit
+/// units one whole texel along one axis and nothing along the other, the sprites and menus a game builds of polygons,
+/// which the filtering of 3D polygons leaves crisp (Diamond_Enhancements.md §41).
+pub fn texel_a_pixel(r: &Record) -> bool {
+    let w = &r.words;
+    let one = 1 << FRACTION;
+    let unit = |a: i32, b: i32| (a.abs() == one && b == 0) || (a == 0 && b.abs() == one);
+    unit(w[38], w[39]) && unit(w[40], w[41]) && (w[38] == 0) == (w[41] == 0)
+}
+
 /// A triangle, folded, under `paint`, its palette in `slot`; none when it draws nothing (`raster::triangle`).
 pub fn triangle(v: [Vertex; 3], shaded: bool, textured: bool, paint: &Paint, slot: u32) -> Option<Record> {
     let s = raster::setup(&v, shaded, textured)?;
@@ -193,6 +205,14 @@ pub fn rectangle(s: Sprite, paint: &Paint, slot: u32) -> Option<Record> {
     let (su, sv) = (if s.flip.0 { -1 } else { 1 }, if s.flip.1 { -1 } else { 1 });
     let u0 = (if s.flip.0 { s.uv.0 | 1 } else { s.uv.0 }) as i32;
     words[10..16].copy_from_slice(&[s.x, s.y, u0, s.uv.1 as i32, su, sv]);
+    // The texels the whole sprite reads, per axis, which a filtered sprite's are held within: all of them where the
+    // coordinates wrap (§41).
+    let reach = |start: i32, step: i32, n: i32| {
+        let end = start + step * (n - 1);
+        if (0..256).contains(&end) { (start.min(end), start.max(end)) } else { (0, 255) }
+    };
+    let (ru, rv) = (reach(u0, su, s.w), reach(s.uv.1 as i32, sv, s.h));
+    words[9] = ru.0 | ru.1 << 8 | rv.0 << 16 | rv.1 << 24;
     let texels = paint.texture.and_then(|t| {
         let ends = |start: i32, step: i32, from: i32, to: i32| {
             let (a, b) = (start + step * from, start + step * to);

@@ -48,17 +48,28 @@ pub struct Counts {
     pub ends: [u64; 6],
 }
 
-/// How the renderer draws: its scale, the internal resolution, 1 to `MAX_SCALE` (Diamond_Enhancements.md §39); and
-/// true colour (§40).
+/// How the renderer draws: its scale, the internal resolution, 1 to `MAX_SCALE` (Diamond_Enhancements.md §39); true
+/// colour (§40); and which textures it filters (§41).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Options {
     pub scale: u32,
     pub colour: bool,
+    pub filter: Filter,
+}
+
+/// Texture filtering: none, the console's; textured polygons but those drawn a texel a pixel and unrotated, and not
+/// sprites; or every textured primitive.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Filter {
+    #[default]
+    Off,
+    Polygons,
+    All,
 }
 
 impl Default for Options {
     fn default() -> Options {
-        Options { scale: 1, colour: false }
+        Options { scale: 1, colour: false, filter: Filter::Off }
     }
 }
 
@@ -294,7 +305,7 @@ impl Renderer {
                 let texture = r.textured.then(|| d.texture(r.clut));
                 let slot = texture.map_or(0, |t| self.palette(&t, d));
                 let paint = d.paint(r.blended, texture, r.raw, false);
-                self.add(record::rectangle(r.sprite, &paint, slot));
+                self.add(self.filtered(record::rectangle(r.sprite, &paint, slot), false));
             }
             4 => self.copy(Rect::copy_params(w[1], w[3]), Rect::copy_params(w[2], w[3]), d.mask()),
             5 => self.transfer = Some(Transfer { rect: Rect::copy_params(w[1], w[2]), mask: d.mask(), done: 0, record: None, row: None }),
@@ -319,17 +330,33 @@ impl Renderer {
                     if let Made::Drawn(r) = m {
                         self.counts.precise += 1;
                         self.counts.perspective += (r.words[0] as u32 & record::PERSPECTIVE != 0) as u64;
-                        self.add(Some(r));
+                        self.add(self.filtered(Some(r), true));
                     }
                 }
                 return;
             }
             self.counts.integer += 1;
         }
-        self.add(record::triangle(raster::fold([p.v[0], p.v[1], p.v[2]]), p.shaded, tex, &paint, slot));
+        self.add(self.filtered(record::triangle(raster::fold([p.v[0], p.v[1], p.v[2]]), p.shaded, tex, &paint, slot), true));
         if p.quad {
-            self.add(record::triangle(raster::fold([p.v[1], p.v[2], p.v[3]]), p.shaded, tex, &paint, slot));
+            self.add(self.filtered(record::triangle(raster::fold([p.v[1], p.v[2], p.v[3]]), p.shaded, tex, &paint, slot), true));
         }
+    }
+
+    /// A textured record marked to be filtered when the options ask it of its kind: every one with Everything; with 3D
+    /// polygons a polygon's, but not one drawn a texel a pixel and unrotated, nor a sprite's (§41).
+    fn filtered(&self, record: Option<Record>, polygon: bool) -> Option<Record> {
+        let mut r = record?;
+        let textured = r.words[0] as u32 & record::TEXTURED != 0;
+        let on = match self.options.filter {
+            Filter::Off => false,
+            Filter::All => true,
+            Filter::Polygons => polygon && (r.words[0] as u32 & 0xF == record::PRECISE || !record::texel_a_pixel(&r)),
+        };
+        if textured && on {
+            r.words[0] |= record::FILTERED as i32;
+        }
+        Some(r)
     }
 
     fn line(&mut self, command: u32, a: Vertex, b: Vertex, shaded: bool, d: &Drawing) {

@@ -209,8 +209,15 @@ fn machine(path: &str) -> Machine {
     m
 }
 
-/// The renderer's options from `--scale N` and `--colour` (Diamond_Enhancements.md §39, §40).
+/// The renderer's options from `--scale N`, `--colour` and `--filter 3d|all` (Diamond_Enhancements.md §39 to §41).
 fn drawing(args: &[String]) -> diamond_renderer::Options {
+    use diamond_renderer::Filter;
     let flag = |name: &str| args.iter().position(|a| a == name).map(|i| args[i + 1].clone());
-    diamond_renderer::Options { scale: flag("--scale").map_or(1, |s| s.parse().expect("a scale")), colour: args.iter().any(|a| a == "--colour") }
+    let filter = match flag("--filter").as_deref() {
+        None | Some("off") => Filter::Off,
+        Some("3d") => Filter::Polygons,
+        Some("all") => Filter::All,
+        Some(other) => panic!("--filter {other}: off, 3d or all"),
+    };
+    diamond_renderer::Options { scale: flag("--scale").map_or(1, |s| s.parse().expect("a scale")), colour: args.iter().any(|a| a == "--colour"), filter }
 }

@@ -322,7 +322,9 @@ Stated as a player would be told it:
 2. **A pad that is unplugged keeps its number.** Nobody moves up into it, and the other players keep theirs. A notice
    says "Controller disconnected: *name* (Player 2)", and the game is not paused.
 3. **A pad that comes back gets its number back.** It is recognised by SDL's GUID for the device (vendor, product,
-   version and bus, sixteen bytes) and by its device path.
+   version and bus, sixteen bytes) and by its device path. *(2026-10-14: the GUID also carries a CRC of the device's
+   name, which is what tells Steam Input's virtual pads apart, §8.12.4. Until that day the rule was never reached on
+   Linux for a pad plugged in after start, because SDL never listed it, §8.12.)*
 4. **A new pad takes the lowest number that has no pad connected** — counting a number kept for a pad that is gone.
 5. **The keyboard is player 1's** until the player gives it to another player (§8.3).
 6. **Preferences ▸ Controllers shows which pad is which player and changes it** (§8.9); choosing a number that another
@@ -439,7 +441,8 @@ as these verbs do.
 
 ### 8.8 Tests, and what was predicted
 
-No physical pad is needed. Two harnesses stand in: `SimulatedPads`, the device layer's fake, now with a GUID (an MD5 of
+No physical pad is needed. Two harnesses stand in *(and since 2026-10-14 a third, kernel pads made through `/dev/uinput`,
+which found that neither of these reached the defect of §8.12)*: `SimulatedPads`, the device layer's fake, now with a GUID (an MD5 of
 the name unless set, so pads of one name share one, as one model does) and a path per pad; and **SDL's own virtual
 joysticks** beneath the real `SdlPadDevices`, filtered to the ones the test attached, so that SDL's GUIDs and paths are
 the measured ones.
@@ -450,6 +453,7 @@ the measured ones.
 | `PortRouterTests` (9) | each player's pad to its port, nothing past the last, unplugging mid-game, the keyboard's player, the mirror, axes per port, the plugged-in flags, a reset |
 | `PlayerBindingsTests` (10) | player 1's map until changed, own maps, the file's added keys in both directions, files from before players, reset |
 | `ControllerPortTests` (8) | every engine's count; port 1 reaching the NES's `$4017` and the SNES's `$421A` on both engines of each, ports 2-3 reaching nothing; the N64's four ports in Mars and, by state against Mars, in MarsRT |
+| `UinputHotplugTests` (13), `UinputMistressTests` (3) | *added 2026-10-14, opt-in:* kernel pads plugged, pulled and plugged back under the real SDL layer and under Mistress's window (§8.12.5) |
 | `SdlVirtualPadsTests` (1) | three SDL virtual pads seated 1-3, the identical pair sharing a GUID, player 2's press on port 1, a pad detached and a same-model pad attached taking its seat |
 | `MultiplayerTests` (4) | through Mistress's own poll: a second pad on the SNES's second port, its hot-unplug and replug and notices, no pause; player 1's pad going and a spare taking seat 1; the keyboard as player 2; four pads on the N64's four ports in a big-screen session, and a fifth heard by none |
 | `FrameRunnerTests` (+2) | the `tapN` verbs; `hold` on controller 2 reaching the SNES's second pad |
@@ -464,7 +468,8 @@ the measured ones.
   byte of the address itself), with or without presses. The test now compares the register before and after rather
   than against zero; what a real console returns there is a separate question for the PPU's open-bus record, not this
   work.
-- *A pad attached through SDL's virtual-joystick API is seen through the added event within one poll* — confirmed.
+- *A pad attached through SDL's virtual-joystick API is seen through the added event within one poll* — confirmed. It
+  did not hold for a kernel pad, which SDL never listed without its event pump (§8.12.2).
 - *Two virtual pads of one vendor and product share a GUID and have no path* — confirmed (`ff00…` style GUIDs differ
   only by the product word).
 
@@ -564,3 +569,176 @@ and `A_port_taken_away_while_the_game_runs_lets_go_of_its_buttons`;
 `MultiplayerTests.Four_pads_play_a_genesis_team_player_set_while_the_game_runs`, four pads plugged into Mistress, a
 Team Player set on port 1 after the game has started, and players 1, 3 and 4's buttons found in the adapter's packet
 as a test cartridge reads it.
+
+### 8.12 A pad that reconnects was never seen again: SDL's event pump (2026-10-14)
+
+**The report.** On 2026-10-14 the tester reported that a controller which disconnects from the desktop or the handheld
+and is connected again is not recognised by Mistress. Both machines were affected: the desktop (Fedora, KDE) and the
+Legion Go S in SteamOS's Game Mode, where Mistress runs under Steam and gamescope and Steam Input presents virtual pads
+of its own. The handheld's journal of 2026-10-12 showed the Bluetooth Xbox Wireless Controller reconnecting as a new
+`input` device and Steam making its virtual "Microsoft X-Box 360 pad 0" and "pad 1" again.
+
+§8.2 promised the opposite (rule 3), and every test of §8.8 passed. The tests had in common that no kernel device was
+involved: `SimulatedPads` stands in for SDL altogether, and SDL's virtual joysticks are added to SDL's list by the call
+that attaches them. What neither exercises is how SDL learns that a device was plugged in, and that is where the defect
+was.
+
+#### 8.12.1 The reproduction
+
+**A kernel pad made through `/dev/uinput`.** The desktop account can write `/dev/uinput` (an access-control entry grants
+it), so a test can make an input device the kernel, udev and SDL treat as a pad that was plugged in. `UinputPad`
+(`EmuSen.WiseMan/Fixtures/UinputPad.cs`) makes one with an Xbox 360 pad's identity (USB, vendor `045e`, product `028e`,
+version `0114`), its eleven buttons, two sticks, two triggers and the hat, through the uinput ioctls; it presses a
+button by writing an event, and unplugs the pad by destroying it. udev tags the node for the seat's user, as it tags a
+real pad. SDL accepts it as a gamepad from its own database and names it "Xbox 360 Controller", whatever the device's
+own name, so the tests tell their pads by their event node rather than by name.
+
+**Driven as Mistress drives it.** `UinputHotplugTests` runs a `GamepadManager` of each kind (the C# and the library's) on
+the real `SdlPadDevices`, shown only the test's own pads, and ticks it as Mistress's pad timer does: `Poll` every 16 ms
+on one thread, and nothing else. Before any change, under both managers:
+
+- a pad made before the manager started was seen, pressed and heard; pulled, it was announced as disconnected within
+  two polls; made again with the same identity on the same node, it was **never seen**, over four seconds of polls;
+- a pad made after the manager started was never seen at all.
+
+`UinputMistressTests` does the same under Mistress's own window and its real devices, in the desktop library, a
+big-screen session and an SNES game: in each, the notice "Controller disconnected: Xbox 360 Controller (Player 1)"
+appeared, and no reconnection followed. That is the report as the tester described it.
+
+#### 8.12.2 The cause
+
+A probe beside the tests asked SDL directly what it lists, under two ways of keeping it current. With
+`SDL_UpdateGamepads` alone, which is what `SdlPadDevices.Update` called, SDL's list kept a pad that had been destroyed
+and never gained one that had been made. With `SDL_PumpEvents`, both changes were in its list within a few polls.
+
+SDL 3.4.2's source says why. On Linux, outside a container, SDL enumerates input devices through udev
+(`ENUMERATION_LIBUDEV` in `src/joystick/linux/SDL_sysjoystick.c`). The Linux driver's `Detect`, which
+`SDL_UpdateJoysticks` and therefore `SDL_UpdateGamepads` call, does nothing in that case but handle pending removals;
+its comment reads "Polling will happen in the main event loop". The udev monitor is read only by `SDL_UDEV_Poll`, which
+only `SDL_PumpEventMaintenance` calls, which only the event pump (`SDL_PumpEvents`, `SDL_PollEvent`, `SDL_WaitEvent`)
+runs. Nothing in Mistress pumps SDL's events: Avalonia owns the window, and SDL is only an input and audio source here
+(`EmuSen_Settings_Reference.md` §4.10). So no pad plugged in after start ever reached SDL's list. The manager's
+one-a-second rescan asks that list (`SDL_GetGamepads`), and found nothing new in it either.
+
+**Why a disconnect was still seen.** An open pad's node fails its next read with `ENODEV`; the driver marks the pad gone
+and `Detect` removes it, which does not need udev. So a pull was announced at once and the return was not, which is
+exactly the asymmetry in the report. It also explains why the pads present at start were always found: SDL scans
+`/dev/input` once when its joystick subsystem starts.
+
+**What the earlier tests could not see.** `SdlVirtualPadsTests` and the device parity test called `SDL_PumpEvents` before
+each `Poll`, a step Mistress never took, and SDL's virtual joysticks need no detection anyway. §8.8's prediction "*a pad
+attached through SDL's virtual-joystick API is seen through the added event within one poll*" was confirmed and is
+kept, but it did not generalise to kernel devices, and nothing claimed that it did. The defect is in the layer below the
+seating rule; `PlayerSlots` and the managers' bookkeeping were correct and are unchanged.
+
+Where enumeration is not by udev (a Flatpak, Steam's runtime container, or `SDL_JOYSTICK_DISABLE_UDEV`), SDL watches
+`/dev/input` with inotify inside `Detect`, and the old code would have seen a reconnection; on Windows and macOS the
+drivers' own detection also runs in `Detect`. The defect was therefore Linux with udev, which both of the tester's
+machines are.
+
+#### 8.12.3 The fix
+
+`SdlPadDevices.Update` calls `SDL_PumpEvents` where it called `SDL_UpdateGamepads`, and the library's `SdlPads.update`
+does the same (`Platform/endymion/src/devices.rs`, with `SDL_PumpEvents` added to the functions it loads). The pump
+updates the joysticks itself (`SDL_UpdateJoysticks`, under SDL's default `SDL_HINT_AUTO_UPDATE_JOYSTICKS`), so it
+replaces the update rather than adding to it. The order of a poll is unchanged: pads that went are let go, the added
+events and the rescan open new ones, and the pump at the end of the poll brings SDL's list and the pads' state up to
+date, so a pad plugged in is opened at the next poll.
+
+`SDL_PumpEvents` is to be called on SDL's main thread. SDL takes that to be the thread that started its events
+subsystem, which in Mistress is the UI thread (the audio player starts SDL's audio, and with it the events subsystem, in
+the window's constructor, and the gamepad's deferred start of §4.42 posts to the same thread); `Poll` runs on it. Hotaru
+starts and polls its pad on its UI thread too.
+
+The alternative considered was the hint `SDL_JOYSTICK_DISABLE_UDEV`, which moves enumeration to inotify inside
+`Detect`. It would have worked, but it changes how SDL classifies devices for the whole process to avoid calling the
+function SDL documents as the way its devices are kept current, and was not taken.
+
+**The queue nobody reads.** The probe also showed a second defect of the same function. SDL queues an event for every
+change of a pad's state, and nothing in the process takes them: `DevicesChanged` flushed only the added and removed
+events. Each button change left four events in the queue (8,002 after 2,000 changes). At SDL's limit of 65,535 the
+queue refuses every new event, the added events among them, and SDL formats an error for each refusal; with the queue
+full, a second pad made and pumped was in SDL's list while `SDL_HasEvents` for the added event answered false. The
+rescan still found such a pad within a second, so this did not cause the report, but the added event had stopped
+working after a few minutes of play, and every poll walked 65,535 entries. `DevicesChanged` now flushes every joystick
+and gamepad event (types `0x600` to `0x6FF`) after asking about the added and removed ones, in both halves; nothing in
+the process reads the others.
+
+#### 8.12.4 What "the same pad" is on the handheld
+
+**What Steam Input presents.** In Game Mode Steam translates the physical controllers and presents each as a virtual
+pad made through uinput, named "Microsoft X-Box 360 pad *N*" with Valve's vendor `28de` and product `11ff`, where *N* is
+Steam's controller slot; SDL reads the slot from the name (`GetSteamVirtualGamepadSlot`). SDL hides such a pad unless
+`SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD` is set (`SDL_ShouldIgnoreGamepad`), and that variable is how Steam tells
+the programs it launches to use its virtual pads; the physical pads it translates are hidden from SDL through
+`SDL_GAMECONTROLLER_IGNORE_DEVICES`. Both variables are Steam's behaviour as described for its games and were not read on
+the handheld; step 6 below reads them.
+
+**The slot is in the GUID.** SDL3 builds a pad's GUID from the bus, vendor, product and version and a CRC-16 of the
+device's name (`SDL_CreateJoystickGUID`), so §8.2's description of the GUID as "vendor, product, version and bus" was
+incomplete. Two of Steam's virtual pads differ only in the slot number in their names, and their GUIDs differ in that
+CRC: measured on uinput pads of that identity, slot 0 is `030079f6de280000ff11000014010000` and slot 1
+`0300b836de280000ff11000014010000`.
+
+**Decided 2026-10-14: on the handheld, the same pad is the same Steam slot, and §8.2's rule needs no change for it.** A
+reconnect makes the virtual pads again on new nodes, so the path is not kept and is not relied on; the GUID is kept as
+long as Steam gives the controller its slot again, and §8.2's second match (a seat reserved for the same GUID) returns
+the player. Where Steam gives the controller another slot, its GUID is new and rule 4 seats it in the lowest seat with
+no pad connected, which, beside pads that stayed connected, is the seat it left. What the rule cannot do is return a pad
+to its seat when Steam has both renumbered it and removed the pads below it at the same moment; no identity SDL reports
+for the virtual pad survives that, short of the physical controller's own, which SDL exposes only through Steam's
+virtual-gamepad information and which may itself change with each Bluetooth connection. That is not built: it would
+widen `IPadDevices` for a case not yet seen, and the tester's check below will say whether it occurs.
+
+**The pattern, reproduced on the desktop.** With `SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1` set in the C
+environment the test reads, `UinputHotplugTests` makes Valve's two virtual pads, slots 0 and 1, seated as players 1 and
+2; removes both; holds the first freed node with another device so that neither returns to its old node; and makes slot
+1 again before slot 0. Each takes its own player, and each is heard as that player alone. A second case removes slot 1
+and makes slot 2 beside slot 0: it is player 2.
+
+**What the tester should try on the handheld**, with this build published there:
+
+1. In Game Mode, with the Xbox Wireless Controller connected over Bluetooth, start Mistress and open Preferences ▸
+   Controllers. Note which player the built-in controls are and which the Xbox controller is.
+2. In the library, turn the Xbox controller off (hold its Xbox button). Expect "Controller disconnected: … (Player 2)",
+   possibly with a disconnect and reconnect of the built-in controls as Steam makes both virtual pads again.
+3. Turn it on. Expect, within a second or two of Steam showing it connected, "Controller connected: … (Player 2)", and
+   the Xbox controller's d-pad moving the library.
+4. Repeat in a big-screen session's themed view, and in a two-player game (an SNES game is enough), where the Xbox
+   controller should be heard as player 2 after it returns and the built-in controls as player 1 throughout.
+5. Quit Mistress, turn the Xbox controller off, start Mistress, and only then turn it on: it should be seen, as player 2
+   beside the built-in controls.
+6. If a returning controller gets another player number, run `journalctl -b --since "-5 min" | grep -i "x-box 360 pad"`
+   and note the slot numbers in the names before and after: a slot that changed is the case this section leaves open.
+   `tr '\0' '\n' < /proc/$(pidof Mistress)/environ | grep SDL_GAMECONTROLLER` shows the two variables Steam gave
+   Mistress. If the controller is not seen at all, the newest `crash_*.txt` in `~/Documents/Logs` and whether Steam
+   Input is on for Mistress's shortcut are the first things to look at.
+
+**Predictions for the handheld, recorded before it was tried:** the returning controller is seen in every screen;
+Steam makes both virtual pads again with the slots they had, so both players come back by GUID; and the built-in
+controls, if their virtual pad is made again, keep player 1.
+
+#### 8.12.5 Tests
+
+| Test | What it shows |
+|---|---|
+| `UinputHotplugTests` (13, opt-in) | under each manager: a pad present at start pulled and plugged back on the same node; a pad plugged in for the first time after start; a pad plugged back while another device holds its old node; two pads of one model with player 1's replugged elsewhere and player 2's heard as player 2 throughout; Steam's two virtual pads made again in the other order on new nodes; a Steam pad back in another slot. Each case checks the seats and that the pad's button is heard as its player alone. And the pump and the flush allocating nothing |
+| `UinputMistressTests` (3, opt-in) | Mistress's window on its real devices, its pad timer's tick and its game poll driven by the test: a pad pulled and plugged back in the desktop library, a big-screen session and an SNES game, the notices naming Player 1 both ways, and then the pad's d-pad moving the library or its B reaching the game's port 1 |
+| `SdlVirtualPadsTests`, `EndymionDeviceParityTests` | unchanged in what they check, but they no longer pump SDL's events beside the manager's poll, so they take the product's path |
+
+The real-device tests make devices every program on the desk can see, so they run only with `EMUSEN_UINPUT_PADS=1`, and
+are skipped with the reason where `/dev/uinput` cannot be written. Every one of the fifteen pad cases failed before the
+fix and passes with it, measured on 2026-10-14: the two replug cases of `UinputHotplugTests` and the three window cases,
+which begin with a pad present, failed on its return, and the other ten on the first pad made after start. No simulated test
+was added: the defect was not in logic `SimulatedPads` can reach, and a simulated device that learns of a pad only on
+`Update` would have passed before the fix too, since both managers always called it.
+
+#### 8.12.6 Cost
+
+Measured on the desktop on 2026-10-14 with one kernel pad open, best of five rounds of 20,000 calls: `SDL_PumpEvents`
+took 1.84 µs where `SDL_UpdateGamepads` took 0.77 µs, and `DevicesChanged` 0.022 µs where it took 0.011 µs. Mistress
+polls twice a frame while a game runs (the pad timer and the game's poll), so the pump adds about 2 µs a frame, a
+hundredth of a per cent of a 60 Hz frame. Against the old code in the state a session reached, the poll is cheaper: with
+a press between polls, the old pair took 69.1 µs a poll once the queue had filled (each `SDL_HasEvents` walking 65,535
+entries) and the new pair 3.9 µs, both including the press written to the device. Neither call allocates:
+`UinputHotplugTests.The_pump_and_the_flush_allocate_nothing` holds 1,000 polls with presses between them to zero bytes.

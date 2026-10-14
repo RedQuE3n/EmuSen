@@ -13,9 +13,10 @@ namespace EmuSen.Endymion.Input
         void Close(IntPtr pad);
         bool IsAttached(IntPtr pad);
 
-        // True once for each batch of SDL's added and removed events, which it consumes.
+        // True once for each batch of SDL's added and removed events; it consumes every pad event SDL queued - see EmuSen_Input.md §8.12.
         bool DevicesChanged();
 
+        // Brings the pads' state up to date and lets the devices learn of a pad plugged in - see EmuSen_Input.md §8.12.
         void Update();
         bool Button(IntPtr pad, SDL.GamepadButton button);
         short Axis(IntPtr pad, SDL.GamepadAxis axis);
@@ -47,14 +48,18 @@ namespace EmuSen.Endymion.Input
 
         public bool IsAttached(IntPtr pad) => SDL.GamepadConnected(pad);
 
+        // SDL's joystick and gamepad events, 0x600 to 0x6FF; nothing else in the process reads them.
+        private const uint FirstPadEvent = 0x600, LastPadEvent = 0x6FF;
+
         public bool DevicesChanged()
         {
             bool changed = SDL.HasEvents((uint)SDL.EventType.GamepadAdded, (uint)SDL.EventType.GamepadRemoved);
-            if (changed) SDL.FlushEvents((uint)SDL.EventType.GamepadAdded, (uint)SDL.EventType.GamepadRemoved);
+            SDL.FlushEvents(FirstPadEvent, LastPadEvent);
             return changed;
         }
 
-        public void Update() => SDL.UpdateGamepads();
+        // PumpEvents, not UpdateGamepads: under udev SDL learns of a pad plugged in only when events are pumped - see EmuSen_Input.md §8.12.
+        public void Update() => SDL.PumpEvents();
 
         public bool Button(IntPtr pad, SDL.GamepadButton button) => SDL.GetGamepadButton(pad, button);
 

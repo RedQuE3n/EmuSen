@@ -68,8 +68,8 @@ namespace EmuSen.Mistress.Views
         private volatile bool _turboHeld;
         private volatile bool _rewindHeld;
 
-        // Four snapshots a second of console time, and a held rewind still plays back at four times speed - see EmuSen_Settings_Reference.md §4.50.
-        internal const double RewindSnapshotsPerSecond = 4, HeldRewindSpeedup = 4;
+        // Two snapshots a second of console time, and a held rewind still plays back at about four times speed - see EmuSen_Settings_Reference.md §4.112.
+        internal const double RewindSnapshotsPerSecond = 2, HeldRewindSpeedup = 4;
         private int _heldRewindTicks;
 
         internal static int RewindIntervalFor(double frameRateHz) => Math.Max(1, (int)Math.Round(frameRateHz / RewindSnapshotsPerSecond));

@@ -313,7 +313,7 @@ impl Layer for Precision {
                 let serial = self.sxy(cop2);
                 self.store(address, serial);
             }
-            Move::Copy { register, from, .. } => self.regs[register as usize] = self.regs[from as usize],
+            Move::Copy { register, from, .. } | Move::Shift { register, from, .. } => self.regs[register as usize] = self.regs[from as usize],
         }
     }
 

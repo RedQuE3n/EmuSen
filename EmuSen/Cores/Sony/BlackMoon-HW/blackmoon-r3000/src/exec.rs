@@ -5,7 +5,7 @@ use emusen_mips::{Op, Word, decode};
 use emusen_native::debug::kind;
 
 use crate::cop0::{self, cause, code, sr};
-use crate::{BranchDelay, Bus, LoadDelay, Move, Observer, R3000, Registers, Size, Step};
+use crate::{BranchDelay, Bus, LoadDelay, Move, Observer, R3000, Registers, Shift, Size, Step};
 
 /// The general exception vector, and the debug unit's, with BEV clear and set (psx-spx "Exception Vectors").
 const GENERAL: [u32; 2] = [0x8000_0080, 0xBFC0_0180];
@@ -371,6 +371,18 @@ fn copied(op: Op, w: Word) -> Option<usize> {
     }
 }
 
+/// A shift by a constant other than 0, as `Move::Shift` names it.
+#[inline(always)]
+fn shifted(op: Op, w: Word) -> Option<Shift> {
+    match op {
+        _ if w.sa() == 0 => None,
+        Op::Sll => Some(Shift::Left),
+        Op::Srl => Some(Shift::Right),
+        Op::Sra => Some(Shift::Arithmetic),
+        _ => None,
+    }
+}
+
 /// A branch or jump: whether it is taken, its target (a conditional branch's counted from the next instruction's
 /// address) and the register it links, 0 for none.
 #[inline(always)]
@@ -428,11 +440,12 @@ fn common<B: Bus, O: Observer>(cpu: &mut R3000, b: &mut B, o: &mut O, at: u32, w
     let (a, v) = (cpu.regs.r[w.rs()], cpu.regs.r[w.rt()]);
     match computed(op, w, a, v) {
         Some((i, x)) => {
-            if B::MOVES
-                && i != 0
-                && let Some(from) = copied(op, w)
-            {
-                b.moved(Move::Copy { at, register: i as u8, from: from as u8, value: x });
+            if B::MOVES && i != 0 {
+                if let Some(from) = copied(op, w) {
+                    b.moved(Move::Copy { at, register: i as u8, from: from as u8, value: x });
+                } else if let Some(kind) = shifted(op, w) {
+                    b.moved(Move::Shift { at, register: i as u8, from: w.rt() as u8, kind, amount: w.sa() as u8, value: x });
+                }
             }
             let r = &mut cpu.regs;
             land(r, pending, 32);

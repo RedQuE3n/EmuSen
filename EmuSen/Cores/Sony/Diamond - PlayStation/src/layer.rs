@@ -246,6 +246,7 @@ pub struct Tally {
     pub stores: u64,
     /// MFC2, MTC2, LWC2 and SWC2.
     pub cop2: u64,
+    /// Copies and shifts by a constant: a register given another's value, unchanged or shifted.
     pub copies: u64,
     pub projections: u64,
     pub from_cpu: u64,
@@ -308,6 +309,10 @@ impl Layer for Tally {
             Move::Copy { at, register, from, value } => {
                 self.copies += 1;
                 self.fold(&[at, register as u32, from as u32, value]);
+            }
+            Move::Shift { at, register, from, kind, amount, value } => {
+                self.copies += 1;
+                self.fold(&[at, register as u32, from as u32, kind as u32, amount as u32, value]);
             }
         }
     }

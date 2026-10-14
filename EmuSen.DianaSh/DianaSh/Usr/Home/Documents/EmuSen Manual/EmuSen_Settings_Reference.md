@@ -2527,6 +2527,8 @@ none of this has been tried on the handheld.
 
 ### 4.50 Rewind takes four snapshots a second (2026-09-24)
 
+*Since 2026-10-14 two a second: §4.112.*
+
 **What changed.** Mistress used `RewindBuffer`'s default interval, a snapshot every 4 frames: fifteen a second on a
 60 Hz console. The tester found that too many save states once the reel (§4.49) made them visible, and asked for four
 a second. Mistress now sets the interval when a game loads from that console's own frame rate,
@@ -8558,3 +8560,21 @@ the advice for the handheld: `Diamond_Players.md` §16.
 heading followed by the four rows with their controls, and each setting, and all four together, turned on and off
 between frames through the host changing the picture alone. `DiamondTests`' lists of the library's settings name the
 three keys. The fit audit's PlayStation tab, with the four rows, fits at both sizes.
+
+### 4.112 Rewind takes two snapshots a second (2026-10-14)
+
+*Decided 2026-10-14 by the tester:* four snapshots a second (§4.50) are more than rewind needs; two, one every half
+second of console time, are enough. `RewindSnapshotsPerSecond` in `MainWindow` is 2, so `RewindIntervalFor(hz) =
+round(hz / 2)`: 30 frames at 60 Hz, 25 on a 50 Hz PAL game. `RewindBuffer.DefaultIntervalFrames` is unchanged, so the
+harness and every other user of the buffer are as before.
+
+**A held rewind keeps its speed.** It steps once every `round(interval / HeldRewindSpeedup)` frames, with
+`HeldRewindSpeedup` still 4: every 8 frames at 60 Hz (`Math.Round` takes 7.5 to the even 8), half a second of history
+each step, so about 3.75 times real speed and 7.5 pictures a second; every 6 frames on PAL, about 4.2 times.
+
+**What it buys.** Half the captures of §4.50: half the snapshot encoding on the emulation thread and half the reel's
+pictures, and the same memory budget reaching about twice as far back. The cost is granularity: the reel and a held
+rewind land on half-second moments. It matters most where states are large, as Diamond's are with its enhancements on
+(`Diamond_Enhancements.md` §47.2).
+
+**Tests.** `PadRewindReelTests` asserts the interval is half a second of the running console's frames.

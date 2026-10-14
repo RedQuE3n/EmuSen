@@ -94,6 +94,10 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   (six frames on drawn pictures, 141 on Silent Hill's fog with true colour), the bound Diamond declares under the core
   ABI's minor 1.5, the kit's rule and its deadline on progress; then as built, the kit on the eight discs at 1,800 frames
   with every setting and at 4×, states of 5.4 MB where they were up to 82, rewind reaching four to eight times as far.
+  Following a shift, 2026-10-14 (§54, §55): a trial, Spyro the Dragon's pattern read from its running code (SLL by 5
+  into another register, flags set in place, SRA back in place), the R3000A's new move and the layer carrying a serial
+  through it, the keep rule fixed before measuring, Spyro's precise polygons from 36.9 to 95.9 per cent with the other
+  discs unchanged, the rule's second item failed by its letter and put to the tester, the gate and the cost.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

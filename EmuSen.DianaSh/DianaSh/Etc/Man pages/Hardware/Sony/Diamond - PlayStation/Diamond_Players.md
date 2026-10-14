@@ -1585,9 +1585,10 @@ the next frame exactly as the machine that saved it would. A state saved with it
 with it off loads with it on; the first frame or two after such a load may be drawn with fewer precise corners.
 
 **What to expect, by game** (`Diamond_Enhancements.md` §25.5): Crash Bandicoot, Mega Man Legends, Ape Escape and Tekken
-3's fights are drawn 81 to 99.7 per cent precise; Silent Hill's play wholly, its opening not; Spyro the Dragon under a
-fifth, since it moves the GTE's results on the processor before drawing them; Rayman and Castlevania, which draw in
-2D, almost nothing, and their pictures are the console's.
+3's fights are drawn 81 to 99.7 per cent precise; Silent Hill's play wholly, its opening not; Spyro the Dragon 96 to
+98 per cent since 2026-10-14 (`Diamond_Enhancements.md` §55), its corners followed through the shift it keeps them in,
+where at first it was under a fifth, so its grass, walls and hills now stay steady as the camera turns; Rayman and
+Castlevania, which draw in 2D, almost nothing, and their pictures are the console's.
 
 **Cracks between polygons, closed** (`Diamond_Enhancements.md` §32 to §36). As first offered the setting showed
 hairline cracks where a precise polygon met one the game had built itself: lines of the sky's colour along the ledges

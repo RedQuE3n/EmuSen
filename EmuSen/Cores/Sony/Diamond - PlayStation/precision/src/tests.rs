@@ -77,6 +77,32 @@ fn a_vertex_changed_on_the_processor_leaves_its_polygon_integer() {
     assert_eq!((counts.polygons, counts.precise_polygons, counts.mixed_polygons, counts.changed, counts.precise_vertices), (2, 0, 2, 2, 4));
 }
 
+/// §52.1: Spyro the Dragon's form. The word taken by MFC2 is shifted left five into another register, given clip flags
+/// in place in the bits the shift cleared, kept in RAM, loaded and shifted back in place by SRA, which restores it to the
+/// bit; the serial follows the shift (§52.3), and the triangle is precise by the processor's stores and by DMA.
+const SHIFTED: &str = "sll t4, t1, 5\naddi t4, t4, 1\nori t4, t4, 8\nsw t4, 0x200(s0)\nlw t1, 0x200(s0)\nnop\nsra t1, t1, 5";
+
+#[test]
+fn a_vertex_kept_shifted_with_flags_and_shifted_back_is_precise() {
+    let (drawn, counts) = run(&projected(SHIFTED));
+    let (plain, _) = run(&projected(""));
+    assert_eq!(drawn, plain, "the same words, and the same precise vertices");
+    assert!(drawn.iter().all(|d| d.1.is_some()), "{drawn:?}");
+    assert_eq!((counts.polygons, counts.precise_polygons, counts.changed, counts.precise_vertices), (2, 2, 0, 6));
+}
+
+/// §52.3: what the shifts do not give back is refused at the receipt: a shift that discards significant bits (SY 124
+/// kept in seven bits, its top one taken for a sign), a pixel added between the shifts, and a word altered after an
+/// exact pair. Each polygon is drawn wholly as the console's.
+#[test]
+fn a_shifted_vertex_not_restored_to_its_word_stays_integer() {
+    for adjust in ["sll t4, t1, 9\nsra t1, t4, 9", "sll t4, t1, 5\naddi t4, t4, 0x20\nsra t1, t4, 5", "sll t4, t1, 5\nsra t1, t4, 5\naddiu t1, t1, 1"] {
+        let (drawn, counts) = run(&projected(adjust));
+        assert!(drawn.iter().all(|d| d.1.is_none()), "{adjust}: {drawn:?}");
+        assert_eq!((counts.polygons, counts.precise_polygons, counts.mixed_polygons, counts.changed, counts.precise_vertices), (2, 0, 2, 2, 4), "{adjust}");
+    }
+}
+
 /// A halfword store ends a word's precision, and a byte load a register's.
 #[test]
 fn a_partial_store_or_load_ends_precision() {

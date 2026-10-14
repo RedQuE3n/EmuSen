@@ -95,7 +95,7 @@ pub trait Bus {
 }
 
 /// What `Bus::moved` is told: a general register, coprocessor 2's data register or memory given a value, and from
-/// where; `at` is the instruction's address. R0 is given nothing, so no move names it as the register given a value,
+/// where, or a register given another's shifted; `at` is the instruction's address. R0 is given nothing, so no move names it as the register given a value,
 /// and an access the isolated cache takes moves nothing (BlackMoon_R3000.md §14).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Move {
@@ -116,6 +116,17 @@ pub enum Move {
     /// An instruction whose result is a general register unchanged: `register` given `from`'s `value` by ADDU, ADD,
     /// SUBU, SUB, OR or XOR with R0, ADDIU, ADDI, ORI or XORI of 0, or a shift by 0.
     Copy { at: u32, register: u8, from: u8, value: u32 },
+    /// SLL, SRL or SRA by a constant `amount` of 1 to 31: `register` given `from`'s value shifted, `value` (since the
+    /// moves' version 2, BlackMoon_R3000.md §14).
+    Shift { at: u32, register: u8, from: u8, kind: Shift, amount: u8, value: u32 },
+}
+
+/// A shift's direction: left, right filling with zeros, or right filling with the sign.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shift {
+    Left,
+    Right,
+    Arithmetic,
 }
 
 /// The branch delay: whether the next instruction is a branch's delay slot, whether the branch is taken, and where to.

@@ -5,7 +5,7 @@
 use emusen_native::debug::{Observer, kind, stop};
 
 use crate::cop0::{cause, code, dcic, sr};
-use crate::{Bus, Move, R3000, Size, Step};
+use crate::{Bus, Move, R3000, Shift, Size, Step};
 
 const RAM: usize = 1 << 20;
 
@@ -776,8 +776,9 @@ fn a_run_is_its_steps_on_random_programs() {
 }
 
 /// BlackMoon_R3000.md §14: each move is told once its instruction made it, with its register, address, size and value:
-/// the loads and stores of every width, the unaligned four, the four moves of coprocessor 2's data and the copies; an
-/// instruction that computes something else, a load that met no device and a store to the isolated cache tell none.
+/// the loads and stores of every width, the unaligned four, the four moves of coprocessor 2's data, the copies and the
+/// shifts by a constant; an instruction that computes something else, a load that met no device and a store to the
+/// isolated cache tell none.
 #[test]
 fn each_move_is_told_with_its_values() {
     let source = "lui s0, 0x8004\nlui t0, 0x1234\nori t0, t0, 0x5678\nsw t0, 0(s0)\nsw t0, 4(s0)\nlw t1, 0(s0)\nlh t2, 2(s0)\nlbu t3, 3(s0)\n\
@@ -818,6 +819,22 @@ fn each_move_is_told_with_its_values() {
         ]
     );
     assert_eq!(cpu.regs.r[19], 0x5678_1234);
+
+    let (mut cpu, mut rig) = machine("lui t0, 0x8234\nori t0, t0, 0x5678\nsll t1, t0, 5\nsrl t2, t0, 4\nsra t3, t0, 31\nsra t0, t0, 3\nsll zero, t0, 4\nsll t4, t0, 0\nsllv t5, t0, t1\nnop");
+    rig.moves = Some(Vec::new());
+    run(&mut cpu, &mut rig, 10);
+    let (w, v) = (0x8234_5678u32, 0x8234_5678u32 as i32 >> 3);
+    assert_eq!(
+        rig.moves.unwrap(),
+        [
+            Move::Shift { at: a(2), register: 9, from: 8, kind: Shift::Left, amount: 5, value: w << 5 },
+            Move::Shift { at: a(3), register: 10, from: 8, kind: Shift::Right, amount: 4, value: w >> 4 },
+            Move::Shift { at: a(4), register: 11, from: 8, kind: Shift::Arithmetic, amount: 31, value: !0 },
+            Move::Shift { at: a(5), register: 8, from: 8, kind: Shift::Arithmetic, amount: 3, value: v as u32 },
+            Move::Copy { at: a(7), register: 12, from: 8, value: v as u32 },
+        ],
+        "a shift by a constant, in place or not; by 0 a copy; into R0 and by a register's amount nothing"
+    );
 
     let (mut cpu, mut rig) = machine("lui s0, 0x8004\nsw s0, 0(s0)\nlw t0, 0(s0)\nnop");
     cpu.regs.sr = sr::ISC;

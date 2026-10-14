@@ -216,6 +216,12 @@ pub trait Core: Sized + StateMachine {
         None
     }
 
+    /// Since 1.5: machine info's `state.picture_settles`, the frames after a load whose pictures may differ from the
+    /// saving machine's, at most `PICTURE_SETTLES_MAX`; 0, the default, writes nothing (EmuSen_CoreAPI.md §6.9).
+    fn picture_settles(&self) -> u32 {
+        0
+    }
+
     /// `MEDIA`, since 1.1: machine info's `drives`.
     fn drives(&self) -> Vec<Drive> {
         Vec::new()

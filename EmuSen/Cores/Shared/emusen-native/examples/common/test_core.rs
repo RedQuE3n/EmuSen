@@ -40,6 +40,22 @@ pub const FAULT_OBSERVED_FRAME_DIFFERS: u32 = 128;
 pub const FAULT_LENT_RUN_DIFFERS: u32 = 256;
 /// Seeded fault for the kit's C18: the drive names a place past its image's end.
 pub const FAULT_NAMES_PAST_THE_IMAGE: u32 = 512;
+/// Not a fault, since 1.5: after a load the picture of the next `SETTLE_FRAMES` frames is drawn otherwise, as an
+/// enhancement redrawing from the machine would, and machine info's `state.picture_settles` says so.
+pub const SETTLES: u32 = 1024;
+/// Seeded faults for the kit's rule of settling pictures (§28.10): the picture after a load never settles; it differs
+/// without being declared; the sound differs while it settles; and a bound past the maximum is declared.
+pub const FAULT_NEVER_SETTLES: u32 = 2048;
+pub const FAULT_SETTLES_UNDECLARED: u32 = 4096;
+pub const FAULT_SOUND_DIFFERS_WHILE_SETTLING: u32 = 8192;
+pub const FAULT_SETTLES_PAST_THE_MAXIMUM: u32 = 16384;
+/// For the kit's deadline on progress: each frame takes `SLOW_FRAME_MS`; and the tenth frame of an image whose payload
+/// begins with `HANGING_IMAGE` never ends.
+pub const SLOW_FRAMES: u32 = 32768;
+pub const FAULT_HANGS: u32 = 65536;
+pub const SETTLE_FRAMES: u32 = 3;
+pub const SLOW_FRAME_MS: u64 = 4;
+pub const HANGING_IMAGE: u8 = 0xEE;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -108,6 +124,8 @@ pub struct TestCore {
     lid_open: bool,
     /// The image, kept past create and read a byte a frame: lent by a host that lends it, a copy otherwise (BORROW).
     rom: Kept,
+    /// Frames after a load whose picture is still drawn otherwise (`SETTLES`).
+    settling: u32,
 }
 
 /// Where each frame's byte of the kept image lands in RAM, so that the state and its digests follow what was read.
@@ -128,7 +146,8 @@ impl TestCore {
 
     fn draw(&mut self) {
         let n = (self.width() * 4) as usize;
-        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8), 0, 0, 255]).collect();
+        let green = if self.settling > 0 { 0x80 } else { 0 };
+        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8), green, 0, 255]).collect();
     }
 }
 
@@ -153,6 +172,9 @@ impl StateMachine for TestCore {
         self.ram.copy_from_slice(&data[12..268]);
         if MEDIA {
             self.lid_open = data[272] != 0;
+        }
+        if faults() & (SETTLES | FAULT_NEVER_SETTLES | FAULT_SETTLES_UNDECLARED | FAULT_SOUND_DIFFERS_WHILE_SETTLING) != 0 {
+            self.settling = SETTLE_FRAMES;
         }
         self.draw();
         Ok(())
@@ -287,6 +309,7 @@ impl Core for TestCore {
             disc: fingerprint(body),
             lid_open: false,
             rom: keep(r.image),
+            settling: 0,
         };
         m.draw();
         Ok(m)
@@ -318,6 +341,14 @@ impl Core for TestCore {
     }
 
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
+        if faults() & SLOW_FRAMES != 0 {
+            std::thread::sleep(std::time::Duration::from_millis(SLOW_FRAME_MS));
+        }
+        if faults() & FAULT_HANGS != 0 && self.ram[1] == HANGING_IMAGE && self.frames == 10 {
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(3600));
+            }
+        }
         self.frames += 1;
         self.ram[2] = self.ram[2].wrapping_add(1);
         if !self.rom.is_empty() {
@@ -347,7 +378,7 @@ impl Core for TestCore {
             (self.old, self.old_rate) = (self.samples.len(), self.rate);
             self.rate = self.pending_rate;
         }
-        let tone = if self.mutes & 1 != 0 { 0 } else { 1000 };
+        let tone = if self.mutes & 1 != 0 { 0 } else if self.settling > 0 && faults() & FAULT_SOUND_DIFFERS_WHILE_SETTLING != 0 { 999 } else { 1000 };
         for _ in 0..(self.rate / 60) {
             if self.samples.len() + 2 > self.limit {
                 self.samples.drain(..2);
@@ -358,7 +389,18 @@ impl Core for TestCore {
         if !self.skip {
             self.draw();
         }
+        if self.settling > 0 && faults() & FAULT_NEVER_SETTLES == 0 {
+            self.settling -= 1;
+        }
         Ok(())
+    }
+
+    fn picture_settles(&self) -> u32 {
+        match faults() {
+            f if f & FAULT_SETTLES_PAST_THE_MAXIMUM != 0 => PICTURE_SETTLES_MAX + 1,
+            f if f & (SETTLES | FAULT_NEVER_SETTLES | FAULT_SOUND_DIFFERS_WHILE_SETTLING) != 0 => SETTLE_FRAMES,
+            _ => 0,
+        }
     }
 
     fn present(&mut self) -> Result<(), i32> {

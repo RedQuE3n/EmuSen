@@ -91,7 +91,8 @@
         "format": { "type": "string" },
         "version": { "type": "integer" },
         "kinds": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
-        "loads_from": { "type": "array", "items": { "type": "integer" } }
+        "loads_from": { "type": "array", "items": { "type": "integer" } },
+        "picture_settles": { "type": "integer", "minimum": 0, "maximum": 600 }
       }
     },
     "phases": { "type": "array", "items": { "type": "string" } },

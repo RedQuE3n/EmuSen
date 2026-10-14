@@ -180,7 +180,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.4"));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.5"));
     assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x1FFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
@@ -342,4 +342,66 @@ fn a_single_image_report_is_as_it_was() {
     assert!(!report.json().contains("\"image\":\"image"));
     assert!(report.json().starts_with("{\"kit\":\"emusen-core-conform "));
     assert!(report.json().contains("\"library\":") && !json::parse(report.json().as_bytes()).unwrap().get("image").is_some());
+}
+
+/// The runner on `core` with the faults `mask` leaves on, over `frames`: the cases failed, and its output.
+fn failed_with(core: &str, mask: u32, frames: u64) -> (Vec<String>, String) {
+    let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("kit-{core}.v1tc"));
+    std::fs::write(&file, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
+        .args(["--self-delimiting", "--frames", &frames.to_string(), "--core"])
+        .arg(library(core))
+        .arg("--image")
+        .arg(&file)
+        .env("EMUSEN_TEST_CORE_FAULTS", mask.to_string())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    (text.lines().filter_map(|l| l.strip_prefix("FAIL ")).filter_map(|l| l.split_whitespace().next()).map(str::to_owned).collect(), text)
+}
+
+// Since 1.5 (EmuSen_CoreAPI.md §28.10): pictures that differ for the three frames after a load pass where machine info
+// declares three, and C7 and C8 say from which frame they compared; a picture that never settles, one that differs
+// undeclared and sound that differs while it settles fail C8 and C12, which runs it again (C7's two machines both load
+// the state and agree); a bound past the maximum, or one the run is too short to check past, fails C7 and C8 too.
+#[test]
+fn pictures_that_settle_pass_within_their_bound_and_each_fault_of_the_rule_fails() {
+    let (failed, text) = failed_with("kit_settling_core", 1024, 120);
+    assert!(failed.is_empty(), "{text}");
+    assert!(text.contains("compared from its 4th frame, machine info's state.picture_settles being 3"), "{text}");
+    let (failed, text) = failed_with("kit_settling_core", 0, 120);
+    assert!(failed.is_empty() && !text.contains("picture_settles"), "a core declaring nothing is held as before: {text}");
+    for (mask, cases) in [(1024 | 2048, vec!["C8", "C12"]), (4096, vec!["C8", "C12"]), (8192, vec!["C8", "C12"]), (16384, vec!["C7", "C8", "C12"])] {
+        let (failed, text) = failed_with("kit_settling_core", mask, 120);
+        assert_eq!(failed, cases, "faults {mask}:\n{text}");
+    }
+    let (failed, text) = failed_with("kit_settling_core", 1024, 6);
+    assert_eq!(failed, ["C7", "C8", "C12"], "{text}");
+    assert!(text.contains("run more than 6 frames"), "{text}");
+}
+
+// The corpus form's deadline is on progress (§28.10): a core whose image's cases take longer than the deadline, every
+// frame ending, passes; a frame that never ends is reported hung once the deadline has passed with no frame run, and
+// the images beside it pass.
+#[test]
+fn the_deadline_is_on_progress_not_on_the_whole_image() {
+    let (_, list) = corpus_files("slow");
+    let one = &list[..1];
+    let started = std::time::Instant::now();
+    let slow = corpus::run(&library("kit_slow_core"), &Options { image: std::fs::read(&one[0].1).unwrap(), frames: 60, ..options() }, &one[0].0, one, 1, u64::MAX, None, std::time::Duration::from_secs(1), &mut |_| {});
+    assert!(slow.passed() && slow.images[0].seconds > 1.0, "{:?} in {:.1} s", slow.images[0].failed(), slow.images[0].seconds);
+    eprintln!("the slow core's image took {:.1} s against a deadline of 1 s; the run {:.1} s", slow.images[0].seconds, started.elapsed().as_secs_f64());
+
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-corpus-hung");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut list = Vec::new();
+    for (name, payload) in [("image 0.v1tc", vec![1, 2, 3]), ("image 1.v1tc", vec![0xEE, 1, 2])] {
+        std::fs::write(dir.join(name), image(&payload)).unwrap();
+        list.push((name.to_owned(), dir.join(name)));
+    }
+    let hung = corpus::run(&library("kit_hung_core"), &Options { image: std::fs::read(&list[0].1).unwrap(), ..options() }, &list[0].0, &list, 2, u64::MAX, None, std::time::Duration::from_secs(2), &mut |_| {});
+    assert!(hung.core.passed() && hung.images[0].report.passed(), "{:?}", hung.images[0].failed());
+    assert_eq!(hung.images[1].failed(), ["C6"]);
+    assert_eq!(hung.images[1].report.cases[0].evidence, ["the image's cases ran no frame for 2 s; its thread was left running"]);
 }

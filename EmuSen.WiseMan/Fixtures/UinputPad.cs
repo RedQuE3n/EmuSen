@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Fixtures
         public string Name { get; }
 
         // The kernel's name for it, inputN, and its event node, eventN, once made.
-        public string SysName { get; private set; } = "";
+        public string SysName { get; } = "";
 
         public UinputPad(string name, ushort vendor = XboxVendor, ushort product = Xbox360Product, ushort version = 0x0114, string? phys = null)
         {
@@ -85,13 +85,12 @@ namespace EmuSen.WiseMan.Fixtures
             byte* sys = stackalloc byte[64];
             new Span<byte>(sys, 64).Clear();
             if (ioctl(_fd, GetSysName, (nint)sys) >= 0) SysName = Marshal.PtrToStringAnsi((nint)sys) ?? "";
+            string device = $"/sys/devices/virtual/input/{SysName}";
+            if (SysName.Length > 0 && Directory.Exists(device) && Directory.GetDirectories(device, "event*") is [var node, ..]) EventPath = "/dev/input/" + Path.GetFileName(node);
         }
 
-        // The event node the kernel gave it, as SDL reports a pad's path.
-        public string? EventPath =>
-            Directory.Exists($"/sys/devices/virtual/input/{SysName}")
-                ? Directory.GetDirectories($"/sys/devices/virtual/input/{SysName}", "event*") is [var node, ..] ? "/dev/input/" + Path.GetFileName(node) : null
-                : null;
+        // The event node the kernel gave it, as SDL reports a pad's path; kept after it is unplugged.
+        public string? EventPath { get; }
 
         public void Press(ushort key, bool down)
         {

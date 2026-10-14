@@ -27,7 +27,7 @@ mod records;
 
 fn renderer() -> Option<Renderer> {
     match Renderer::new(None) {
-        Ok(r) => Some(r.keeping()),
+        Ok(r) => Some(r.keeping(true)),
         Err(e) => {
             eprintln!("no Vulkan device ({e}): not run");
             None
@@ -559,8 +559,14 @@ fn grid_edges() -> Vec<([usize; 2], [usize; 2], Option<[usize; 2]>, bool)> {
 /// 2.5 of an edge and 2.5 clear of its ends, those on one quad's side that the other drew less those the other way,
 /// over the edge's length, which is how far the edge stands from the ideal one, in pixels, toward its second side; the
 /// quad that drew a pixel is read from its texel, whose u or v is near 63 on the first side and near 0 on the second,
-/// and on the outline the second side is the cleared buffer. Pixels neither drew within the grid are counted apart.
+/// and on the outline the second side is the cleared buffer. Pixels neither drew within the grid are counted apart. At
+/// a scale of N the samples are graded, each at its point (§39.1), each an N²th of a pixel.
 fn edge_places(vram: impl Fn(u32, u32) -> u16, k: usize) -> (Vec<f64>, u32) {
+    edge_places_at(vram, k, 1)
+}
+
+fn edge_places_at(vram: impl Fn(u32, u32) -> u16, k: usize, n: u32) -> (Vec<f64>, u32) {
+    let scale = n as f64;
     const BAND: f64 = 2.5;
     let centre = |q: [usize; 2]| {
         let c: Vec<(f64, f64, f64)> = [0, 1, GRID, GRID + 1].iter().map(|d| ideal(q[0] * GRID + q[1] + d, k)).collect();
@@ -574,16 +580,18 @@ fn edge_places(vram: impl Fn(u32, u32) -> u16, k: usize) -> (Vec<f64>, u32) {
         let side = |x: f64, y: f64| (dx * (y - a.1) - dy * (x - a.0)) / length;
         let c = centre(first);
         let toward_first = side(c.0, c.1).signum();
-        let (x0, x1) = ((a.0.min(b.0) - BAND).floor() as i32, (a.0.max(b.0) + BAND).ceil() as i32);
-        let (y0, y1) = ((a.1.min(b.1) - BAND).floor() as i32, (a.1.max(b.1) + BAND).ceil() as i32);
-        let (mut moved, mut used) = (0.0, length - 2.0 * BAND);
+        let (x0, x1) = (((a.0.min(b.0) - BAND) * scale).floor() as i32, ((a.0.max(b.0) + BAND) * scale).ceil() as i32);
+        let (y0, y1) = (((a.1.min(b.1) - BAND) * scale).floor() as i32, ((a.1.max(b.1) + BAND) * scale).ceil() as i32);
+        let (mut moved, mut used) = (0.0, (length - 2.0 * BAND) * scale * scale);
         if used < 4.0 {
             used = f64::INFINITY;
         }
-        for y in y0.max(256 * (k as i32 & 1))..=y1.min(256 * (k as i32 & 1) + 239) {
-            for x in x0.max(0)..=x1.min(319) {
-                let along = (dx * (x as f64 - a.0) + dy * (y as f64 - a.1)) / length;
-                let s = side(x as f64, y as f64) * toward_first;
+        let (top, n) = (256 * (k as i32 & 1), n as i32);
+        for y in y0.max(top * n)..=y1.min((top + 240) * n - 1) {
+            for x in x0.max(0)..=x1.min(320 * n - 1) {
+                let (px, py) = (x as f64 / scale, y as f64 / scale);
+                let along = (dx * (px - a.0) + dy * (py - a.1)) / length;
+                let s = side(px, py) * toward_first;
                 if along < BAND || along > length - BAND || s.abs() > BAND || s == 0.0 {
                     continue;
                 }
@@ -1123,4 +1131,116 @@ fn a_strip_of_a_picture_shows_no_texel_past_its_edge() {
     let missing = software.iter().filter(|&&(x, y)| v[(y * 1024 + x) as usize] & 0x8000 == 0).count();
     eprintln!("{drawn_pixels} pixels of the strips drawn, the software rasteriser's {} and {missing} of those not; {past} show a texel past their strip", software.len());
     assert!(past == 0 && missing == 0 && drawn_pixels as usize - software.len() <= 64 * 6, "{past} pixels past the strips' texels, {missing} left out");
+}
+
+// --- The crack fill at N x (Diamond_Enhancements.md §39.7) ---
+
+/// A fill program run three frames with the renderer at `scale`, paired with the precision layer or alone (the
+/// console's own polygons at that scale); the machine and every sample of the renderer's mirror.
+fn filled_at(body: &str, scale: u32, paired: bool) -> Option<(Machine, Vec<u32>)> {
+    let r = Renderer::with(None, diamond_renderer::Options { scale, ..Default::default() }).ok()?.keeping(true);
+    let mut m = fill_machine(body);
+    if paired {
+        m.attach(Box::new(Precise::new(Precision::default(), Tap::new(Some(r), true))));
+    } else {
+        m.attach(Box::new(r));
+    }
+    for _ in 0..3 {
+        m.advance();
+    }
+    let layer: &mut dyn Any = m.layer().expect("attached");
+    let samples = match layer.downcast_mut::<Precise<Tap>>() {
+        Some(p) => p.drawer.renderer.as_mut().expect("a renderer").samples().to_vec(),
+        None => layer.downcast_mut::<Renderer>().expect("the renderer").samples().to_vec(),
+    };
+    Some((m, samples))
+}
+
+/// §33's floor and ring at 2x and 4x: no sample the console's own polygons cover at that scale shows the cleared
+/// buffer with precise geometry on; and two precise quads sharing a slanted edge keep it where they draw it, sample by
+/// sample, each sample about the edge its own quad's by the side of the precise edge its point lies on.
+#[test]
+fn at_n_the_fill_closes_every_crack_and_spills_over_no_shared_edge() {
+    if renderer().is_none() {
+        return;
+    }
+    let floor = |xl: i32, xr: i32| [(xl, -32), (xr, -32), (xl, 40), (xr, 40)];
+    let texture = [0, 0x0108_0078, 0x4800, 0x4878];
+    let rings = ring(-140, -20) + &projected_quad(0x2800_C000, floor(-140, -20), None) + &projected_quad(0x2A60_6060, floor(-140, -20), None) + &projected_quad(0x2D80_8080, floor(20, 140), Some(texture)) + &ring(20, 140);
+    let pair = |x: i32| ([(x - 60, -40), (x, -40), (x - 70, 40), (x - 10, 40)], [(x, -40), (x + 60, -40), (x - 10, 40), (x + 50, 40)]);
+    let (a, b) = (pair(-70), pair(90));
+    let quads = projected_quad(0x2800_00E0, a.0, None) + &projected_quad(0x28E0_0000, a.1, None) + &projected_quad(0x28E0_0000, b.1, None) + &projected_quad(0x2800_00E0, b.0, None);
+    for scale in [2u32, 4] {
+        let n = scale as usize;
+        let (_, console) = filled_at(&rings, scale, false).unwrap();
+        let (_, precise) = filled_at(&rings, scale, true).unwrap();
+        let (mut covered, mut cracks) = (0, 0);
+        for y in 0..240 * n {
+            for x in 0..320 * n {
+                let at = y * 1024 * n + x;
+                if console[at] as u16 != BACK_HALF {
+                    covered += 1;
+                    cracks += (precise[at] as u16 == BACK_HALF) as u32;
+                }
+            }
+        }
+        let (mut m, v) = filled_at(&quads, scale, true).unwrap();
+        let t = tap(&mut m);
+        let (left, right) = (0x001Cu16, 0x7000u16);
+        let (mut spilled, mut graded) = (0, 0);
+        for first in [0, 2] {
+            let (words, offset, precise) = &t.drawer.polygons[if first == 0 { 0 } else { 3 }];
+            let (q, f) = (decode::polygon(words, *offset), precise.unwrap());
+            let at = |c: usize| (q.v[c].x as f64 + f[c].dx as f64 / 256.0, q.v[c].y as f64 + f[c].dy as f64 / 256.0);
+            let (top, bottom) = (at(1), at(3));
+            for sy in (top.1.ceil() as usize + 2) * n..(bottom.1.floor() as usize - 2) * n {
+                let y = sy as f64 / scale as f64;
+                let edge = top.0 + (bottom.0 - top.0) * (y - top.1) / (bottom.1 - top.1);
+                let e = (edge * scale as f64).floor() as usize;
+                for sx in e - 6 * n..e + 8 * n {
+                    let x = sx as f64 / scale as f64;
+                    if (x - edge).abs() < 0.01 {
+                        continue;
+                    }
+                    graded += 1;
+                    spilled += (v[sy * 1024 * n + sx] as u16 != if x < edge { left } else { right }) as u32;
+                }
+            }
+        }
+        eprintln!("{scale}x: {covered} samples the console's polygons cover, {cracks} of them the cleared buffer with precise geometry; {graded} samples about the shared edges, {spilled} not their quad's");
+        assert_eq!((cracks, spilled), (0, 0), "at {scale}x");
+        assert!(covered > 20_000 * n * n && graded > 1500 * n * n);
+    }
+}
+
+/// §34.2's figures at 2x and 4x: the turning grid with precise geometry at the scale, its edges graded sample by sample.
+/// The edges two precise quads share stay where the precise vertices put them, as at 1x, and no sample between two
+/// quads is left undrawn; the outline's figures are printed beside them.
+#[test]
+fn the_turning_grids_shared_edges_hold_at_n() {
+    if renderer().is_none() {
+        return;
+    }
+    for scale in [2u32, 4] {
+        let r = Renderer::with(None, diamond_renderer::Options { scale, ..Default::default() }).unwrap().keeping(true);
+        let mut m = mesh_machine();
+        m.attach(Box::new(Precise::new(Precision::default(), Tap::new(Some(r), false))));
+        let (mut edges, mut holes, mut last) = (Vec::new(), 0, 0);
+        while frames_drawn(&mut m) < MESH_FRAMES && m.frames < 4 * MESH_FRAMES as i64 {
+            m.advance();
+            let k = frames_drawn(&mut m);
+            if k == 0 || k <= last {
+                continue;
+            }
+            last = k;
+            let wide = 1024 * scale;
+            let s = drawn(&mut m).samples().to_vec();
+            let (places, h) = edge_places_at(|x, y| s[(y * wide + x) as usize] as u16, k - 1, scale);
+            edges.push(places);
+            holes += h;
+        }
+        let [inner, outline] = edge_figures(&edges);
+        eprintln!("{scale}x, {} frames: edges between two quads {inner:.4?}, the outline {outline:.4?} (mean distance from the ideal px, mean change px, worst px); {holes} samples neither quad drew", edges.len());
+        assert!(inner.0 < 0.05 && inner.1 < 0.05 && holes == 0, "the shared edges at {scale}x: {inner:?}, {holes} holes");
+    }
 }

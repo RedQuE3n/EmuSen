@@ -69,9 +69,9 @@ fn main() {
     let rendering = precise || args.iter().any(|a| a == "--renderer");
     let waited = args.iter().any(|a| a == "--waited");
     if rendering {
-        let r = diamond_renderer::Renderer::new(None).unwrap_or_else(|e| panic!("no renderer: {e}"));
+        let r = diamond_renderer::Renderer::with(None, drawing(&args)).unwrap_or_else(|e| panic!("no renderer: {e}"));
         if precise {
-            m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r.keeping())));
+            m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r.keeping(true))));
         } else {
             m.attach(Box::new(r));
         }
@@ -207,4 +207,10 @@ fn machine(path: &str) -> Machine {
     let mut m = Machine::new(media, config, ports, &image, open);
     m.insert_disc(*disc);
     m
+}
+
+/// The renderer's options from `--scale N` and `--colour` (Diamond_Enhancements.md §39, §40).
+fn drawing(args: &[String]) -> diamond_renderer::Options {
+    let flag = |name: &str| args.iter().position(|a| a == name).map(|i| args[i + 1].clone());
+    diamond_renderer::Options { scale: flag("--scale").map_or(1, |s| s.parse().expect("a scale")), colour: args.iter().any(|a| a == "--colour") }
 }

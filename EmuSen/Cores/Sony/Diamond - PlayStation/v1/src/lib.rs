@@ -62,7 +62,7 @@ impl Diamond {
         match Renderer::new(device) {
             Ok(r) => {
                 self.note = r.software().then(|| format!("Drawn by {}, a Vulkan the processor runs, since no graphics card was found: the picture is the same, but slow.", r.report()));
-                self.machine.attach(Box::new(Precise::new(Precision::default(), r.keeping())));
+                self.machine.attach(Box::new(Precise::new(Precision::default(), r.keeping(true))));
             }
             Err(why) => {
                 self.machine.detach();

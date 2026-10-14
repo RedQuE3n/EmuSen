@@ -1,6 +1,7 @@
 #version 450
-// Diamond's renderer, the display's lines: one workgroup a line the display read, from the renderer's VRAM into its
-// picture, 15- or 24-bit, by display.rs's rules. See Diamond_Enhancements.md §16.
+// Diamond's renderer, the display's lines: one workgroup a line the display read and a row of the N it is at a scale of
+// N, from the renderer's VRAM into its picture, 15- or 24-bit, by display.rs's rules. See Diamond_Enhancements.md §16,
+// and for the scale §39.4.
 
 layout(local_size_x = 64) in;
 
@@ -8,31 +9,40 @@ layout(std430, set = 0, binding = 0) readonly buffer Vram { uint vram[]; };
 layout(std430, set = 0, binding = 1) buffer Picture { uint picture[]; };
 // Each line: its row, VRAM's x and y, its width, 24-bit, blanked.
 layout(std430, set = 0, binding = 2) readonly buffer Lines { uint lines[]; };
+// True colour's plane, read only with it on (§40).
+layout(std430, set = 0, binding = 3) readonly buffer Fine { uint fine[]; };
 
-layout(push_constant) uniform Push { uint first; };
+layout(push_constant) uniform Push { uint first; uint scale; uint options; };
 
-uint at(uint x, uint y) {
-    return vram[(y & 511u) * 1024u + (x & 1023u)];
+// The sample (sx, sy) of the console's pixel (x, y).
+uint index_of(uint x, uint y, uint sx, uint sy) {
+    return ((y & 511u) * scale + sy) * 1024u * scale + (x & 1023u) * scale + sx;
+}
+
+uint at(uint x, uint y, uint sx, uint sy) {
+    return vram[index_of(x, y, sx, sy)];
 }
 
 void main() {
-    uint l = (first + gl_WorkGroupID.x) * 8u;
-    uint row = lines[l], sx = lines[l + 1], sy = lines[l + 2], width = lines[l + 3];
+    uint l = (first + gl_WorkGroupID.x) * 8u, j = gl_WorkGroupID.y;
+    uint row = lines[l], sx = lines[l + 1], sy = lines[l + 2], width = lines[l + 3] * scale;
     bool deep = lines[l + 4] != 0u, blanked = lines[l + 5] != 0u;
     for (uint i = gl_LocalInvocationID.x; i < width; i += 64u) {
         uvec3 rgb = uvec3(0u);
         if (blanked) {
         } else if (deep) {
-            uint byte_ = sx * 2u + i * 3u;
+            uint byte_ = sx * 2u + (i / scale) * 3u;
             for (uint k = 0u; k < 3u; k++) {
-                uint h = at((byte_ + k) / 2u, sy);
+                uint h = at((byte_ + k) / 2u, sy, 0u, j);
                 rgb[k] = ((byte_ + k) & 1u) == 0u ? h & 0xFFu : (h >> 8) & 0xFFu;
             }
         } else {
-            uint p = at(sx + i, sy);
-            uvec3 c = uvec3(p & 31u, (p >> 5) & 31u, (p >> 10) & 31u);
-            rgb = (c << 3) | (c >> 2);
+            uint k = index_of(sx + i / scale, sy, i % scale, j), p = vram[k];
+            // Eight bits a channel shown as the console's five are, c<<3 | c>>2 being 33v/32 for v = 8c (§40).
+            uint low = (options & 1u) != 0u ? fine[k] : 0u;
+            uvec3 v = uvec3((p & 31u) << 3 | (low & 7u), ((p >> 5) & 31u) << 3 | ((low >> 3) & 7u), ((p >> 10) & 31u) << 3 | ((low >> 6) & 7u));
+            rgb = min((v * 33u) >> 5, uvec3(255u));
         }
-        picture[row * width + i] = 0xFF000000u | (rgb.b << 16) | (rgb.g << 8) | rgb.r;
+        picture[(row * scale + j) * width + i] = 0xFF000000u | (rgb.b << 16) | (rgb.g << 8) | rgb.r;
     }
 }

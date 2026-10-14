@@ -165,6 +165,9 @@ pub fn triangle(v: [Vertex; 3], shaded: bool, textured: bool, paint: &Paint, slo
         words[32 + 2 * k] = i32::try_from(s.grads[k].dx).expect("a gradient within 32 bits");
         words[33 + 2 * k] = i32::try_from(s.grads[k].dy).expect("a gradient within 32 bits");
     }
+    // The vertices' coordinates' least and greatest, u's then v's, which hold a sample's coordinate at N x (§39.1).
+    let (lo, hi) = (|f: fn(&Vertex) -> u8| v.iter().map(f).min().unwrap() as i32, |f: fn(&Vertex) -> u8| v.iter().map(f).max().unwrap() as i32);
+    words[9] = lo(|q| q.u) | hi(|q| q.u) << 8 | lo(|q| q.v) << 16 | hi(|q| q.v) << 24;
     let texels = paint.texture.and_then(|t| {
         let range = |f: fn(&Vertex) -> u8| (v.iter().map(|q| f(q) as i32).min().unwrap_or(0) - 1, v.iter().map(|q| f(q) as i32).max().unwrap_or(0) + 1);
         texture_span(&t, range(|q| q.u), range(|q| q.v))
@@ -233,7 +236,9 @@ pub fn fill(r: Rect, colour_word: u32, skip: Option<i32>) -> Option<Record> {
     let mut words = [0i32; WORDS];
     words[0] = (FILL | skip.map_or(0, |p| SKIP | (p as u32 & 1) << 19)) as i32;
     let c = (colour_word >> 3 & 0x1F) | (colour_word >> 11 & 0x1F) << 5 | (colour_word >> 19 & 0x1F) << 10;
-    words[10..15].copy_from_slice(&[r.x as i32, r.y as i32, r.w as i32, r.h as i32, c as i32]);
+    // The colour word's three lowest bits a channel, which true colour keeps (Diamond_Enhancements.md §40).
+    let low = (colour_word & 7) | (colour_word >> 8 & 7) << 3 | (colour_word >> 16 & 7) << 6;
+    words[10..16].copy_from_slice(&[r.x as i32, r.y as i32, r.w as i32, r.h as i32, c as i32, low as i32]);
     Some(Record { words, writes: Span::sized(r.x, r.y, r.w, r.h), texels: None })
 }
 

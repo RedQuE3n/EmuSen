@@ -21,7 +21,7 @@ use emusen_native::{StateReader, StateWriter};
 use precision::{Draw, Fraction};
 
 use blocks::{Blocks, TILES, Written};
-use device::{Back, CopyStep, Device, ENTRIES, LINES, LOADS, PICTURE_WORDS, PIXELS, RECORDS, SLOTS, Step, TILE_RECORDS, Used, VRAM_WORDS};
+use device::{Back, CopyStep, Device, ENTRIES, LINES, LOADS, MAX_SCALE, PICTURE_WORDS, PIXELS, RECORDS, SLOTS, Step, TILE_RECORDS, Used, VRAM_WORDS};
 use record::{Made, Record, Span, WORDS};
 
 /// The tag of the renderer's block, written when it draws precisely (Diamond_Enhancements.md §24.4).
@@ -48,12 +48,35 @@ pub struct Counts {
     pub ends: [u64; 6],
 }
 
-/// What the renderer keeps across a state when it draws precisely: its mirror a halfword a pixel and the mark beside
-/// each (§33.3), its picture at the largest size with its own, and the palette its CLUT slot holds; and whether a
-/// state's block is to seed it.
+/// How the renderer draws: its scale, the internal resolution, 1 to `MAX_SCALE` (Diamond_Enhancements.md §39); and
+/// true colour (§40).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Options {
+    pub scale: u32,
+    pub colour: bool,
+}
+
+impl Default for Options {
+    fn default() -> Options {
+        Options { scale: 1, colour: false }
+    }
+}
+
+impl Options {
+    /// The options' bits the device's programs read.
+    fn bits(&self) -> u32 {
+        if self.colour { device::COLOUR } else { 0 }
+    }
+}
+
+/// What the renderer keeps across a state when its picture is not the machine's: its mirror a halfword a sample and,
+/// paired with the precision layer, the mark beside each (§33.3), its picture at the largest size at its scale with its
+/// own size, and the palette its CLUT slot holds; and whether a state's block is to seed it (§42.2).
 struct Kept {
     mirror: Vec<u16>,
-    marks: Vec<u16>,
+    marks: Option<Vec<u16>>,
+    /// True colour's plane, a halfword a sample for its nine bits.
+    fine: Option<Vec<u16>>,
     picture: Vec<u8>,
     palette: Vec<u16>,
     size: [u32; 2],
@@ -105,6 +128,7 @@ pub struct Renderer {
     /// The picture slot, with its size, the host is handed now, and the one the next `frame_end` hands (§38.1).
     handed: (usize, u32, u32),
     ahead: (usize, u32, u32),
+    options: Options,
 }
 
 impl Observer for Renderer {}
@@ -112,9 +136,15 @@ impl Observer for Renderer {}
 impl Renderer {
     /// A renderer on the device `name` names a part of (`EMUSEN_GPU_DEVICE` when none), or the reason there is none.
     pub fn new(name: Option<&str>) -> Result<Renderer, String> {
+        Renderer::with(name, Options::default())
+    }
+
+    /// `new`, drawing by `options`.
+    pub fn with(name: Option<&str>, options: Options) -> Result<Renderer, String> {
+        let options = Options { scale: options.scale.clamp(1, MAX_SCALE), ..options };
         let gpu = GpuDevice::try_create(name)?;
         Ok(Renderer {
-            device: Device::new(gpu)?,
+            device: Device::new(gpu, options.scale, options.bits())?,
             steps: Vec::with_capacity(256),
             used: Used::default(),
             stretch: Stretch { written: Written::default(), read: Blocks::default(), pairs: Vec::with_capacity(1 << 16), loads_from: 0, lines_from: 0, clear: false, serial: 1, rows: vec![(0, 0); 576] },
@@ -131,14 +161,42 @@ impl Renderer {
             kept: None,
             handed: (0, 0, 0),
             ahead: (0, 0, 0),
+            options,
         })
     }
 
-    /// The renderer as precise geometry attaches it: keeping a block in the state, since what it draws is no longer what
-    /// the machine's VRAM gives (§22.5).
-    pub fn keeping(mut self) -> Renderer {
-        self.kept = Some(Kept { mirror: vec![0; VRAM_WORDS], marks: vec![0; VRAM_WORDS], picture: vec![0; PICTURE_WORDS * 4], palette: vec![0; 256], size: [256, 240], restored: false });
+    /// The renderer as an enhancement attaches it: keeping a block in the state, since what it draws is no longer what
+    /// the machine's VRAM gives (§22.5, §42.2); with `marks` when paired with the precision layer, whose triangles write
+    /// them.
+    pub fn keeping(mut self, marks: bool) -> Renderer {
+        self.keep(marks);
         self
+    }
+
+    fn keep(&mut self, marks: bool) {
+        let samples = VRAM_WORDS * (self.options.scale * self.options.scale) as usize;
+        let picture = PICTURE_WORDS * 4 * (self.options.scale * self.options.scale) as usize;
+        self.kept = Some(Kept { mirror: vec![0; samples], marks: marks.then(|| vec![0; samples]), fine: self.options.colour.then(|| vec![0; samples]), picture: vec![0; picture], palette: vec![0; 256], size: [256, 240], restored: false });
+    }
+
+    pub fn options(&self) -> Options {
+        self.options
+    }
+
+    /// The renderer drawing by other options from the next seed on: its buffers made again at the new scale, what it
+    /// drew dropped. Detached first and attached again after, so that the machine seeds it (§39.6).
+    pub fn configure(&mut self, options: Options) -> Result<(), String> {
+        let options = Options { scale: options.scale.clamp(1, MAX_SCALE), ..options };
+        if (options.scale, options.bits()) != (self.options.scale, self.options.bits()) {
+            self.steps.clear();
+            self.used = Used::default();
+            self.device.rebuild(options.scale, options.bits())?;
+        }
+        self.options = options;
+        if let Some(marks) = self.kept.as_ref().map(|k| k.marks.is_some()) {
+            self.keep(marks);
+        }
+        Ok(())
     }
 
     /// The device's report, `"{name}, Vulkan {major}.{minor}"`.
@@ -155,11 +213,17 @@ impl Renderer {
         self.counts
     }
 
+    /// The picture's size: the display's at the scale.
+    fn size(&self) -> (u32, u32) {
+        (self.width * self.options.scale, self.height * self.options.scale)
+    }
+
     /// The picture as it stands, RGBA at its own size, once the device has drawn everything it was told.
     pub fn picture(&mut self) -> (&[u8], u32, u32) {
-        let words = (self.width * self.height) as usize;
+        let (w, h) = self.size();
+        let words = (w * h) as usize;
         self.submit(Back::Picture(words));
-        (&self.device.held().back.slice::<u8>()[..words * 4], self.width, self.height)
+        (&self.device.held().back.slice::<u8>()[..words * 4], w, h)
     }
 
     /// The frame's end, as a host shows the renderer's picture: everything planned goes to the device as its pending
@@ -167,11 +231,12 @@ impl Renderer {
     /// machine waits only if the device has not finished that frame yet (Diamond_Enhancements.md §38.1).
     pub fn frame_end(&mut self) {
         let slot = self.ahead.0 ^ 1;
+        let (w, h) = self.size();
         self.close();
-        self.device.submit_pending(&self.steps, self.used, Back::Slot(slot, (self.width * self.height) as usize));
+        self.device.submit_pending(&self.steps, self.used, Back::Slot(slot, (w * h) as usize));
         self.submitted();
         self.handed = self.ahead;
-        self.ahead = (slot, self.width, self.height);
+        self.ahead = (slot, w, h);
     }
 
     /// The picture a host is handed, RGBA at its own size: the frame before the last `frame_end`'s, or the seed's.
@@ -180,12 +245,32 @@ impl Renderer {
         (&self.device.held().slots[slot].slice::<u8>()[..(w * h * 4) as usize], w, h)
     }
 
-    /// The renderer's VRAM, a halfword a pixel as the GPU's `Vram` holds them, once everything told is drawn.
+    /// The renderer's VRAM, a halfword a pixel as the GPU's `Vram` holds them, once everything told is drawn; at a scale
+    /// the first sample of each pixel's block, the console's point.
     pub fn vram(&mut self, out: &mut [u16]) {
-        self.submit(Back::Vram);
-        for (o, &w) in out.iter_mut().zip(self.device.held().back.slice::<u32>()) {
-            *o = w as u16;
+        let n = self.options.scale as usize;
+        let samples = self.samples();
+        for (i, o) in out.iter_mut().enumerate().take(VRAM_WORDS) {
+            *o = samples[(i / 1024) * n * 1024 * n + (i % 1024) * n] as u16;
         }
+    }
+
+    /// True colour's plane, a word a sample with its nine bits, once everything told is drawn; empty without it.
+    pub fn fine(&mut self) -> &[u32] {
+        if !self.options.colour {
+            return &[];
+        }
+        self.submit(Back::Fine);
+        let n = (self.options.scale * self.options.scale) as usize;
+        &self.device.held().back.slice::<u32>()[..VRAM_WORDS * n]
+    }
+
+    /// Every sample of the mirror, `1024 N` by `512 N` words, the console's halfword low and the mark high, once
+    /// everything told is drawn.
+    pub fn samples(&mut self) -> &[u32] {
+        self.submit(Back::Vram);
+        let n = (self.options.scale * self.options.scale) as usize;
+        &self.device.held().back.slice::<u32>()[..VRAM_WORDS * n]
     }
 
     // --- The stream ---
@@ -292,7 +377,7 @@ impl Renderer {
         let mut row = 0;
         while row < src.h {
             let rows = chunk.min(src.h - row);
-            let step = CopyStep { write: 0, sx: src.x, sy: src.y, dx: dst.x, dy: dst.y, width: src.w, row, rows, mask: (mask.check as u32) << 1 | (mask.set != 0) as u32 };
+            let step = CopyStep { write: 0, sx: src.x, sy: src.y, dx: dst.x, dy: dst.y, width: src.w, row, rows, mask: (mask.check as u32) << 1 | (mask.set != 0) as u32, scale: 1, options: 0 };
             self.steps.push(Step::Copy(step));
             self.steps.push(Step::Copy(CopyStep { write: 1, ..step }));
             row += rows;
@@ -533,22 +618,31 @@ impl Layer for Renderer {
         if self.kept.is_none() {
             return;
         }
-        self.submit(Back::Vram);
-        let mirror: Vec<u16> = self.device.held().back.slice::<u32>()[..VRAM_WORDS].iter().map(|&w| w as u16).collect();
-        let marks: Vec<u16> = self.device.held().back.slice::<u32>()[..VRAM_WORDS].iter().map(|&w| (w >> 16) as u16).collect();
+        let samples = self.samples();
+        let mirror: Vec<u16> = samples.iter().map(|&w| w as u16).collect();
+        let marks: Vec<u16> = samples.iter().map(|&w| (w >> 16) as u16).collect();
+        let fine: Option<Vec<u16>> = self.options.colour.then(|| {
+            self.submit(Back::Fine);
+            self.device.held().back.slice::<u32>()[..mirror.len()].iter().map(|&w| w as u16).collect()
+        });
         self.submit(Back::Palette(self.slot));
         let entries = self.slot_entries as usize;
         let palette: Vec<u16> = self.device.held().back.slice::<u32>()[..256].iter().enumerate().map(|(i, &w)| if i < entries { w as u16 } else { 0 }).collect();
-        let (picture, w, h) = self.picture();
+        let (width, height) = (self.width, self.height);
+        let picture = self.picture().0.to_vec();
         let n = picture.len();
-        let picture = picture.to_vec();
         let kept = self.kept.as_mut().expect("kept");
         kept.mirror.copy_from_slice(&mirror);
-        kept.marks.copy_from_slice(&marks);
+        if let Some(m) = kept.marks.as_mut() {
+            m.copy_from_slice(&marks);
+        }
+        if let (Some(k), Some(f)) = (kept.fine.as_mut(), fine) {
+            k.copy_from_slice(&f);
+        }
         kept.palette.copy_from_slice(&palette);
         kept.picture[..n].copy_from_slice(&picture);
         kept.picture[n..].fill(0);
-        kept.size = [w, h];
+        kept.size = [width, height];
     }
 
     fn save(&self, _tag: [u8; 4], w: &mut StateWriter) {
@@ -557,7 +651,12 @@ impl Layer for Renderer {
         w.u16s("Mirror", &k.mirror);
         w.bytes("Picture", &k.picture);
         w.u16s("Palette", &k.palette);
-        w.u16s("Marks", &k.marks);
+        if let Some(m) = &k.marks {
+            w.u16s("Marks", m);
+        }
+        if let Some(f) = &k.fine {
+            w.u16s("Fine", f);
+        }
     }
 
     fn load(&mut self, tag: [u8; 4], block: &[u8]) {
@@ -570,7 +669,15 @@ impl Layer for Renderer {
             r.bytes(&mut k.picture)?;
             r.u16s(&mut k.palette)?;
             // A state of stage E4's has no marks: none are taken, and its first frame fills as it finds.
-            if r.position() == block.len() { Ok(k.marks.fill(0)) } else { r.u16s(&mut k.marks) }
+            match k.marks.as_mut() {
+                Some(m) if r.position() == block.len() => m.fill(0),
+                Some(m) => r.u16s(m)?,
+                None => {}
+            }
+            match k.fine.as_mut() {
+                Some(f) => r.u16s(f),
+                None => Ok(()),
+            }
         })();
         if read.is_err() || r.position() != block.len() || size[0] * size[1] > PICTURE_WORDS as u32 {
             return self.clear(tag);
@@ -611,47 +718,61 @@ impl Layer for Renderer {
             &*k
         });
         self.device.gpu.wait_for_pending();
+        let n = self.options.scale as usize;
         let held = self.device.held();
-        let (staged, back) = (self.device.staged().records.slice_mut::<u32>(), held.back.slice_mut::<u32>());
-        let words = match restored {
+        let (staged, back, slot) = (self.device.staged().records.slice_mut::<u32>(), held.back.slice_mut::<u32>(), held.slots[0].slice_mut::<u32>());
+        match restored {
             Some(k) => {
                 (self.width, self.height) = (k.size[0], k.size[1]);
-                for ((o, &h), &m) in back.iter_mut().zip(k.mirror.iter()).zip(k.marks.iter()) {
-                    *o = h as u32 | (m as u32) << 16;
+                for (i, (o, &h)) in back.iter_mut().zip(k.mirror.iter()).enumerate() {
+                    *o = h as u32 | k.marks.as_ref().map_or(0, |m| (m[i] as u32) << 16);
                 }
-                let words = (self.width * self.height) as usize;
-                for (o, p) in staged.iter_mut().zip(k.picture[..words * 4].chunks_exact(4)) {
+                for (o, p) in slot.iter_mut().zip(k.picture.chunks_exact(4)) {
                     *o = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
                 }
-                for (o, &c) in staged[words..words + 256].iter_mut().zip(k.palette.iter()) {
+                for (o, &c) in staged[..256].iter_mut().zip(k.palette.iter()) {
                     *o = c as u32;
                 }
-                words
             }
             None => {
+                // At a scale each pixel of the machine's VRAM and picture is a block of the same value (§39.6).
                 (self.width, self.height) = (gpu.display.width, gpu.display.height);
-                for (o, h) in back.iter_mut().zip(gpu.vram.bytes.chunks_exact(2)) {
-                    *o = u16::from_le_bytes([h[0], h[1]]) as u32;
+                for (i, o) in back[..VRAM_WORDS * n * n].iter_mut().enumerate() {
+                    let (x, y) = ((i % (1024 * n)) / n, i / (1024 * n) / n);
+                    *o = gpu.vram.get(x as u32, y as u32) as u32;
                 }
-                let words = (self.width * self.height) as usize;
-                for (o, p) in staged.iter_mut().zip(gpu.display.frame().chunks_exact(4)) {
-                    *o = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+                let (w, frame) = (self.width as usize * n, gpu.display.frame());
+                for (i, o) in slot[..w * self.height as usize * n].iter_mut().enumerate() {
+                    let at = ((i / w / n) * self.width as usize + (i % w) / n) * 4;
+                    *o = u32::from_le_bytes([frame[at], frame[at + 1], frame[at + 2], frame[at + 3]]);
                 }
-                for (o, &c) in staged[words..words + 256].iter_mut().zip(gpu.clut.colours.iter()) {
+                for (o, &c) in staged[..256].iter_mut().zip(gpu.clut.colours.iter()) {
                     *o = c as u32;
                 }
-                words
             }
-        };
+        }
+        let (w, h) = (self.width * n as u32, self.height * n as u32);
         (self.slot, self.slot_entries, self.next_slot) = (0, 256, 1);
         let records = &self.device.staged().records;
-        held.slots[0].slice_mut::<u32>()[..words].copy_from_slice(&staged[..words]);
-        (self.handed, self.ahead) = ((0, self.width, self.height), (0, self.width, self.height));
+        (self.handed, self.ahead) = ((0, w, h), (0, w, h));
         self.device.gpu.submit(|c| {
             c.copy(&held.back, &held.vram, 0, 0, 0);
-            c.copy(records, &held.picture, (words * 4) as u64, 0, 0);
-            c.copy(records, &held.cluts, 256 * 4, (words * 4) as u64, 0);
+            c.copy(&held.slots[0], &held.picture, (w * h * 4) as u64, 0, 0);
+            c.copy(records, &held.cluts, 256 * 4, 0, 0);
         });
+        if self.options.colour {
+            // True colour's plane: the state's, or none, the machine's VRAM having only the console's five bits.
+            match restored.and_then(|k| k.fine.as_ref()) {
+                Some(f) => {
+                    for (o, &l) in back.iter_mut().zip(f.iter()) {
+                        *o = l as u32;
+                    }
+                    self.device.gpu.submit(|c| c.copy(&held.back, &held.fine, 0, 0, 0));
+                }
+                None => self.device.gpu.submit(|c| c.fill(&held.fine, 0)),
+            }
+            self.counts.submissions += 1;
+        }
         self.counts.submissions += 1;
         self.polyline = gpu.polyline.map(|p| (p.command, p.last));
         self.transfer = gpu.write.map(|w| Transfer { rect: w.rect, mask: Mask::from_e6(gpu.env[5]), done: w.done, record: None, row: None });

@@ -24,6 +24,9 @@ pub const SLOTS: usize = 4096;
 pub const VRAM_WORDS: usize = 1024 * 512;
 pub const PICTURE_WORDS: usize = 640 * 576;
 
+/// The largest scale offered (Diamond_Enhancements.md §39.5).
+pub const MAX_SCALE: u32 = 4;
+
 /// A VRAM-to-VRAM copy's step, as `copy.comp` takes it.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -37,6 +40,8 @@ pub struct CopyStep {
     pub row: u32,
     pub rows: u32,
     pub mask: u32,
+    pub scale: u32,
+    pub options: u32,
 }
 
 /// One planned step of a submission: a stretch's palette loads, display lines and tiles (their ranges in the staged
@@ -66,6 +71,8 @@ pub enum Back {
     Vram,
     /// The 256 colours of a palette slot.
     Palette(u32),
+    /// True colour's plane.
+    Fine,
     /// The picture's first words into one of the two slots the host is handed pictures from (§38.1).
     Slot(usize, usize),
 }
@@ -99,7 +106,33 @@ impl Staged {
     }
 }
 
+/// The walk's push constants: its first tile, the scale and the options' bits.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WalkPush {
+    pub first_tile: u32,
+    pub scale: u32,
+    pub options: u32,
+}
+
+/// The palette loads' and the display lines' push constants: the first of them, the scale and the options' bits.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct RangePush {
+    first: u32,
+    scale: u32,
+    options: u32,
+}
+
+/// The options' bits the programs read: true colour (Diamond_Enhancements.md §40).
+pub const COLOUR: u32 = 1;
+
 pub struct Held {
+    /// The scale the buffers are made for: the mirror, the scratch and the picture hold its square of samples a pixel; and
+    /// the options' bits, true colour's plane being made only with it.
+    pub scale: u32,
+    pub options: u32,
+    pub fine: GpuBuffer,
     pub walk: GpuProgram,
     pub scan: GpuProgram,
     pub clut: GpuProgram,
@@ -117,24 +150,56 @@ pub struct Held {
     pub slots: [GpuBuffer; 2],
 }
 
-impl Device {
-    pub fn new(gpu: GpuDevice) -> Result<Device, String> {
+impl Held {
+    fn new(gpu: &GpuDevice, scale: u32, options: u32) -> Result<Held, String> {
         let words = |n: usize| (n * 4) as u64;
-        let held = Held {
-            walk: gpu.create_program(WALK, 6, 4)?,
-            scan: gpu.create_program(SCAN, 3, 4)?,
-            clut: gpu.create_program(CLUT, 3, 4)?,
-            copy: gpu.create_program(COPY, 2, size_of::<CopyStep>())?,
-            vram: gpu.create_buffer(words(VRAM_WORDS), Where::Device)?,
-            picture: gpu.create_buffer(words(PICTURE_WORDS), Where::Device)?,
+        let square = (scale * scale) as usize;
+        Ok(Held {
+            scale,
+            options,
+            fine: gpu.create_buffer(if options & COLOUR != 0 { words(VRAM_WORDS * square) } else { 4 }, Where::Device)?,
+            walk: gpu.create_program(WALK, 7, size_of::<WalkPush>())?,
+            scan: gpu.create_program(SCAN, 4, size_of::<RangePush>())?,
+            clut: gpu.create_program(CLUT, 3, size_of::<RangePush>())?,
+            copy: gpu.create_program(COPY, 3, size_of::<CopyStep>())?,
+            vram: gpu.create_buffer(words(VRAM_WORDS * square), Where::Device)?,
+            picture: gpu.create_buffer(words(PICTURE_WORDS * square), Where::Device)?,
             cluts: gpu.create_buffer(words(SLOTS * 256), Where::Device)?,
-            scratch: gpu.create_buffer(words(VRAM_WORDS), Where::Device)?,
-            staged: [Staged::new(&gpu, Where::Host)?, Staged::new(&gpu, Where::Host)?],
-            onboard: Staged::new(&gpu, Where::Device)?,
-            back: gpu.create_buffer(words(VRAM_WORDS), Where::Host)?,
-            slots: [gpu.create_buffer(words(PICTURE_WORDS), Where::Host)?, gpu.create_buffer(words(PICTURE_WORDS), Where::Host)?],
-        };
+            scratch: gpu.create_buffer(words(VRAM_WORDS * square), Where::Device)?,
+            staged: [Staged::new(gpu, Where::Host)?, Staged::new(gpu, Where::Host)?],
+            onboard: Staged::new(gpu, Where::Device)?,
+            back: gpu.create_buffer(words(VRAM_WORDS * square), Where::Host)?,
+            slots: [gpu.create_buffer(words(PICTURE_WORDS * square), Where::Host)?, gpu.create_buffer(words(PICTURE_WORDS * square), Where::Host)?],
+        })
+    }
+
+    fn release(self, gpu: &GpuDevice) {
+        for p in [self.walk, self.scan, self.clut, self.copy] {
+            gpu.destroy_program(p);
+        }
+        let [s0, s1] = self.staged;
+        let [p0, p1] = self.slots;
+        for b in [self.vram, self.picture, self.cluts, self.scratch, self.back, self.fine, p0, p1].into_iter().chain(s0.all()).chain(s1.all()).chain(self.onboard.all()) {
+            gpu.destroy_buffer(b);
+        }
+    }
+}
+
+impl Device {
+    pub fn new(gpu: GpuDevice, scale: u32, options: u32) -> Result<Device, String> {
+        let held = Held::new(&gpu, scale, options)?;
         Ok(Device { gpu, held: Some(held), set: 0 })
+    }
+
+    /// The buffers made again for another scale or other options, once nothing is in flight; what they held is gone.
+    pub fn rebuild(&mut self, scale: u32, options: u32) -> Result<(), String> {
+        self.gpu.wait_for_pending();
+        if let Some(h) = self.held.take() {
+            h.release(&self.gpu);
+        }
+        self.held = Some(Held::new(&self.gpu, scale, options)?);
+        self.set = 0;
+        Ok(())
     }
 
     pub fn held(&self) -> &Held {
@@ -189,6 +254,7 @@ impl Held {
                 Back::Picture(words) if words > 0 => c.copy(&self.picture, &self.back, (words * 4) as u64, 0, 0),
                 Back::Picture(_) => {}
                 Back::Vram => c.copy(&self.vram, &self.back, 0, 0, 0),
+                Back::Fine => c.copy(&self.fine, &self.back, 0, 0, 0),
                 Back::Palette(slot) => c.copy(&self.cluts, &self.back, 256 * 4, slot as u64 * 256 * 4, 0),
                 Back::Slot(slot, words) if words > 0 => c.copy(&self.picture, &self.slots[slot], (words * 4) as u64, 0, 0),
                 Back::Slot(..) => {}
@@ -197,35 +263,33 @@ impl Held {
     }
 
     fn record(&self, c: &mut Commands, step: &Step, first: &mut [bool; 4]) {
-        let go = |c: &mut Commands, n: usize, program: &GpuProgram, buffers: &[&GpuBuffer], push: &u32, groups: u32, first: &mut [bool; 4]| {
+        fn go<T: Copy>(c: &mut Commands, n: usize, program: &GpuProgram, buffers: &[&GpuBuffer], push: &T, groups: (u32, u32), first: &mut [bool; 4]) {
             if std::mem::take(&mut first[n]) {
-                c.dispatch(program, buffers, push, groups, 1, 1);
+                c.dispatch(program, buffers, push, groups.0, groups.1, 1);
             } else {
-                c.dispatch_again(program, 0, push, groups, 1, 1);
+                c.dispatch_again(program, 0, push, groups.0, groups.1, 1);
             }
-        };
+        }
+        let (scale, options) = (self.scale, self.options);
         match *step {
             Step::Stretch { clear, loads, lines, tiles } => {
                 if clear {
                     c.fill(&self.picture, 0xFF00_0000);
                 }
                 if loads.1 > 0 {
-                    go(c, 0, &self.clut, &[&self.vram, &self.cluts, &self.onboard.loads], &loads.0, loads.1, first);
+                    go(c, 0, &self.clut, &[&self.vram, &self.cluts, &self.onboard.loads], &RangePush { first: loads.0, scale, options }, (loads.1, 1), first);
                 }
                 if lines.1 > 0 {
-                    go(c, 1, &self.scan, &[&self.vram, &self.picture, &self.onboard.lines], &lines.0, lines.1, first);
+                    go(c, 1, &self.scan, &[&self.vram, &self.picture, &self.onboard.lines, &self.fine], &RangePush { first: lines.0, scale, options }, (lines.1, scale), first);
                 }
                 if tiles.1 > 0 {
-                    go(c, 2, &self.walk, &[&self.vram, &self.onboard.records, &self.onboard.entries, &self.onboard.tiles, &self.cluts, &self.onboard.pixels], &tiles.0, tiles.1, first);
+                    let push = WalkPush { first_tile: tiles.0, scale, options };
+                    go(c, 2, &self.walk, &[&self.vram, &self.onboard.records, &self.onboard.entries, &self.onboard.tiles, &self.cluts, &self.onboard.pixels, &self.fine], &push, (tiles.1, scale * scale), first);
                 }
             }
             Step::Copy(s) => {
-                let groups = (s.width * s.rows).div_ceil(64);
-                if std::mem::take(&mut first[3]) {
-                    c.dispatch(&self.copy, &[&self.vram, &self.scratch], &s, groups, 1, 1);
-                } else {
-                    c.dispatch_again(&self.copy, 0, &s, groups, 1, 1);
-                }
+                let s = CopyStep { scale, options, ..s };
+                go(c, 3, &self.copy, &[&self.vram, &self.scratch, &self.fine], &s, ((s.width * scale).div_ceil(64), s.rows * scale), first);
             }
         }
     }
@@ -233,14 +297,8 @@ impl Held {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        let Some(h) = self.held.take() else { return };
-        for p in [h.walk, h.scan, h.clut, h.copy] {
-            self.gpu.destroy_program(p);
-        }
-        let [s0, s1] = h.staged;
-        let [p0, p1] = h.slots;
-        for b in [h.vram, h.picture, h.cluts, h.scratch, h.back, p0, p1].into_iter().chain(s0.all()).chain(s1.all()).chain(h.onboard.all()) {
-            self.gpu.destroy_buffer(b);
+        if let Some(h) = self.held.take() {
+            h.release(&self.gpu);
         }
     }
 }

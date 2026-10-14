@@ -154,7 +154,9 @@ through `MainWindow.PadTick`). The start value is now `-RescanInterval`, so the 
 subtraction cannot overflow. `GamepadRescanTests` failed on the old value with the same exception, and passes on the new one.
 
 *Since 2026-09-26 (§4.61)* the manager opens every pad, not the first alone, and asks whether a rescan is due at every
-poll rather than only with no pad; a pad plugged in is also opened at once on SDL's added event. The start value above
+poll rather than only with no pad; a pad plugged in is also opened at once on SDL's added event. *(On Linux neither the
+event nor the rescan saw a pad plugged in after start until 2026-10-14, because SDL itself was not told of it without
+its event pump: §4.10, `EmuSen_Input.md` §8.12.)* The start value above
 is kept, and is now exercised on every tick. The game still reads one pad, the first opened.
 
 ### 4.5 Conflict reporting
@@ -265,6 +267,16 @@ The merge resolved three real differences between the two old copies rather than
 `AllowUnsafeBlocks` moved with the code: `EmuSen.Endymion` sets it (for `AudioPlayer`'s pinned sample array), and both frontends dropped it, having no unsafe code of their own left.
 
 **Subsystem init, never `SDL_Init`/`SDL_Quit`.** `AudioPlayer` takes `InitFlags.Audio`, `GamepadManager` takes `InitFlags.Gamepad`, and each calls `QuitSubSystem` for its own flag on dispose. `SDL_Quit` tears down the whole library regardless of who asked, so whichever object disposed first would break the other. `InitSubSystem` is refcounted per subsystem and does not have that problem. Neither one ever asks for `InitFlags.Video`: Avalonia owns the window, and SDL is only ever an input/audio source here. The return type flipped in SDL3 — `true` means success, where SDL2 returned `0`.
+
+**The gamepads are kept current by SDL's event pump (2026-10-14).** Nothing here pumps SDL's events for their own sake,
+since Avalonia owns the window, and until 2026-10-14 the pad layer kept SDL current with `SDL_UpdateGamepads` alone. On
+Linux with udev that never reads udev's monitor, which only the event pump does, so a pad plugged in after start, or
+plugged back, never reached SDL's list, while a pulled pad was still noticed by its failed read. `IPadDevices.Update`
+now calls `SDL_PumpEvents`, which updates the gamepads itself, in the C# and in the library's half alike; it runs on the
+UI thread, which is the thread that started SDL's events subsystem. `DevicesChanged` flushes every joystick and gamepad
+event rather than the added and removed ones alone, since nothing in the process reads the rest and a queue left to
+fill drops the added events with them. The defect, the cause in SDL's source, the measurements and the opt-in tests on
+kernel pads made through `/dev/uinput` are `EmuSen_Input.md` §8.12.
 
 **Audio is a stream, not a queue.** SDL3 deleted `SDL_QueueAudio` outright. `AudioPlayer` now calls `OpenAudioDeviceStream(AudioDeviceDefaultPlayback, …)`, which opens the default playback device and hands back a stream bound to it, then `ResumeAudioStreamDevice` once (streams open paused), `PutAudioStreamData` per pump, and `DestroyAudioStream` on dispose — destroying the stream closes the device it opened, so there is no separate close call. `GetAudioStreamQueued` replaces `GetQueuedAudioSize` and reports bytes still in the stream, in the *input* format, which is what `QueuedFrames` divides down and hands to `DynamicRateControl` (see `EmuSen_Audio_Sync.md` §1). Like SDL2's queue depth, it excludes whatever the device has already pulled, so the rate-control target did not need re-tuning.
 
@@ -3659,7 +3671,10 @@ it; the design record, the measurements and the mutants are §24 of that plan.
 
 **Every pad steers the interface.** `GamepadManager` (Endymion) opens every connected pad, in the order SDL lists them,
 and opens a pad plugged in later as soon as SDL queues its added event, or at the one-a-second rescan of §4.4 if the
-event is missed; a pad pulled out is let go at the next poll. Any pad then drives the library, the themed view of §4.52,
+event is missed; a pad pulled out is let go at the next poll. *(2026-10-14: on Linux SDL learned of a pad plugged in
+only through its event pump, which nothing ran, so a pad plugged in after start or plugged back was never opened, and
+the notice said a pad had disconnected and never that it came back. The pad layer pumps SDL's events since: §4.10,
+`EmuSen_Input.md` §8.12.)* Any pad then drives the library, the themed view of §4.52,
 the pad menu (§4.29), every sheet (§4.45), the game options of §4.59 and the on-screen keyboard: a button is held when any
 pad holds it. Over a running game any pad's guide button, or Back and Start together, opens the pad menu.
 
@@ -3705,7 +3720,9 @@ and a theme's icons). They run on WiseMan's `PadDriver`, which plugs and pulls s
 
 **What it does not cover.**
 - No real device was used. SDL's events and their timing, Steam Input's virtual pads, a pad that registers twice and
-  sleep and wake are for the handheld (plan §24.10).
+  sleep and wake are for the handheld (plan §24.10). *Since 2026-10-14 kernel pads made through `/dev/uinput`, Steam
+  Input's virtual pads among them, are plugged and pulled under the real SDL layer and Mistress's window by opt-in
+  tests (`EmuSen_Input.md` §8.12.5); a pad that registers twice and sleep and wake are still the handheld's.*
 - ~~A second pad as player 2 in a game.~~ Built 2026-10-04: `EmuSen_Input.md` §8.
 - The notice's fade is linear; ES-DE's fits a gentle power curve (plan §24.4). Its words are Mistress's own.
 - ~~The Controller Bindings window still names the first pad alone.~~ *Since 2026-10-04 a Player selector at the end of

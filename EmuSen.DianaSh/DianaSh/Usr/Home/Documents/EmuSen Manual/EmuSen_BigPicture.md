@@ -5123,7 +5123,8 @@ calls the manager made before, and `SimulatedPads`, a set of `SimulatedPad`s a t
 the handles opened and closed. `ConnectedPad` is one open pad; once closed it reads as nothing held and keeps its name and
 type for the notice. `Poll` lets go of every pad SDL reports detached, then opens any new one when SDL has queued a
 `GamepadAdded` or `GamepadRemoved` event (consumed with `SDL_HasEvents` and `SDL_FlushEvents` over those two types alone,
-so the queue's other events are left as they were) or when the one-a-second rescan of §4.4 falls due; each change after
+so the queue's other events are left as they were; *since 2026-10-14 every joystick and gamepad event is flushed and SDL's
+events are pumped, `EmuSen_Input.md` §8.12*) or when the one-a-second rescan of §4.4 falls due; each change after
 `Start` raises `PadChanged`. The rescan fix of 2026-09-26 is kept: `_lastRescan` still starts at `-RescanInterval`, and
 since `RescanDue` is now asked at every poll rather than only with no pad, the fix is exercised on every tick. The
 single-pad members (`IsPressed`, `Axis`, `ControllerName`, `ControllerType`, `ButtonLabel`, `IsRawPressed`, `RawAxis`) read

@@ -4,7 +4,9 @@
 //! what mcd-verificator's tests settled where the manual is silent.
 
 pub mod cdc;
+pub mod cdda;
 pub mod cdd;
+pub mod state;
 pub mod word;
 #[cfg(test)]
 mod verificator;
@@ -92,6 +94,56 @@ pub struct Sub {
     pub cdc: Cdc,
     pub raw: Box<[u8; 2352]>,
     pub fader: u16,
+    pub cdda: cdda::Cdda,
+    /// A backup RAM cartridge in the slot at `$400000`, when one is plugged in.
+    pub cart: Option<RamCart>,
+}
+
+/// A backup RAM cartridge: its RAM on the odd bytes of `$600000`-`$6FFFFF`, its size code on `$400001` (the RAM is
+/// 8 KiB shifted left by it), and its write enable on bit 0 of `$700001`, as mcd-verificator's RAM CART reads it.
+#[derive(Clone)]
+pub struct RamCart {
+    pub bytes: Vec<u8>,
+    pub writable: bool,
+}
+
+impl RamCart {
+    /// Sega's 128 KiB cartridge.
+    pub const SEGA: usize = 0x2_0000;
+
+    pub fn new(size: usize) -> RamCart {
+        RamCart { bytes: vec![0; size], writable: false }
+    }
+
+    fn code(&self) -> u8 {
+        (self.bytes.len() / 0x2000).trailing_zeros() as u8
+    }
+
+    /// A byte of `$400000`-`$7FFFFF`; the even bytes read `$FF`.
+    pub fn read8(&self, a: u32) -> u8 {
+        if a & 1 == 0 {
+            return 0xFF;
+        }
+        match a {
+            0x40_0000..=0x5F_FFFF => self.code(),
+            0x60_0000..=0x6F_FFFF => self.bytes[(a as usize - 0x60_0000) >> 1 & (self.bytes.len() - 1)],
+            _ => 0xFE | self.writable as u8,
+        }
+    }
+
+    pub fn write8(&mut self, a: u32, v: u8) {
+        if a & 1 == 0 {
+            return;
+        }
+        match a {
+            0x60_0000..=0x6F_FFFF if self.writable => {
+                let n = self.bytes.len() - 1;
+                self.bytes[(a as usize - 0x60_0000) >> 1 & n] = v;
+            }
+            0x70_0000..=0x7F_FFFF => self.writable = v & 1 != 0,
+            _ => {}
+        }
+    }
 }
 
 impl MegaCd {
@@ -116,6 +168,8 @@ impl MegaCd {
             cdc: Cdc::default(),
             raw: Box::new([0; 2352]),
             fader: 0,
+            cdda: cdda::Cdda::new(master_hz.0, master_hz.1),
+            cart: None,
         };
         hw.clock = hw.to_sub(master_now);
         hw.cdd.next = hw.clock + SECTOR[0];
@@ -226,6 +280,12 @@ pub fn open_disc(image: emusen_native::core::Kept, companions: Vec<emusen_native
     emusen_disc::open(image, companions, emusen_disc::IsoForm::Mode1, lone)
 }
 
+/// The disc's fingerprint, which a state is held to: its tracks, its lead-out and its first two sectors, the system
+/// area's.
+pub fn fingerprint(disc: &mut cdd::Disc) -> u64 {
+    disc.fingerprint([0, 1])
+}
+
 /// The system area's first 2,048 bytes as the drive reads them from sector 00:02:00, for telling what the disc is.
 pub fn system_area(disc: &mut cdd::Disc) -> Vec<u8> {
     let mut raw = [0u8; 2352];
@@ -251,6 +311,11 @@ impl Sub {
     /// A master clock as a sub clock.
     pub fn to_sub(&self, master: u64) -> u64 {
         (master as u128 * self.ratio.0 as u128 / self.ratio.1 as u128) as u64
+    }
+
+    /// A sub clock as the first master clock at or after it.
+    pub fn to_master(&self, sub: u64) -> u64 {
+        (sub as u128 * self.ratio.1 as u128).div_ceil(self.ratio.0 as u128) as u64
     }
 
     /// PRG-RAM's byte behind a main CPU address of the window, when the main CPU may reach it: the sub CPU held in
@@ -313,7 +378,13 @@ impl Sub {
         };
         let data = read.is_some_and(|k| !k.audio());
         self.cdc.sector(data.then_some(&*self.raw), t);
-        self.cdd.next += SECTOR[self.cdd.phase as usize];
+        let period = SECTOR[self.cdd.phase as usize];
+        if read.is_some_and(|k| k.audio()) && self.cdd.status[0] == cdd::status::PLAYING {
+            let (start, end) = (self.to_master(t), self.to_master(t + period));
+            let volume = (self.fader as i32 >> 4 & 0x7FF).min(cdda::FULL);
+            self.cdda.sector(&self.raw, start, end - start, volume);
+        }
+        self.cdd.next += period;
         self.cdd.phase = (self.cdd.phase + 1) % 3;
     }
 

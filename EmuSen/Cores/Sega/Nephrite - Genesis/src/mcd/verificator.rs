@@ -95,3 +95,19 @@ fn a_disc_with_no_boot_rom_runs_and_stands() {
     assert_eq!(m.frames, 30);
     assert!(m.genesis.hw.mcd.as_ref().unwrap().hw.g.reset_held, "the sub CPU stays held as at power-on");
 }
+
+/// With Sega's backup RAM cartridge plugged in, RAM CART finds it, its size, its protection and its memory.
+#[test]
+fn mcd_verificator_finds_the_ram_cartridge() {
+    let Some(mut m) = machine() else { return };
+    m.genesis.hw.mcd.as_deref_mut().unwrap().hw.cart = Some(crate::mcd::RamCart::new(crate::mcd::RamCart::SEGA));
+    let mut row = None;
+    for _ in 0..600 {
+        m.advance();
+        row = verdicts(&screen(&m)).into_iter().find(|(n, _)| n == "RAM CART").map(|(_, r)| r);
+        if row.as_deref().is_some_and(|r| r.contains("OK") || r.contains("ERROR")) {
+            break;
+        }
+    }
+    assert_eq!(row.as_deref(), Some("OK"));
+}

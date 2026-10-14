@@ -527,28 +527,34 @@ impl Hw {
 
     // ---- the Sega CD's areas in mode 2, and its registers
 
-    /// The cartridge slot at `$400000` in mode 2, empty: it reads `$FF` (argued; Nephrite_Native.md §50).
+    /// The cartridge slot at `$400000` in mode 2: a backup RAM cartridge, or empty and reading `$FF` (D-32).
     fn mcd_read8(&mut self, a: u32) -> u8 {
-        if (0x40_0000..0x80_0000).contains(&a) {
-            return 0xFF;
-        }
         let m = self.mcd.as_deref_mut().expect("a Sega CD");
+        if (0x40_0000..0x80_0000).contains(&a) {
+            return m.hw.cart.as_ref().map_or(0xFF, |c| c.read8(a));
+        }
         m.main_read8(a, self.clock).unwrap_or_else(|| self.open8(a))
     }
 
     fn mcd_read16(&mut self, a: u32) -> u16 {
-        if (0x40_0000..0x80_0000).contains(&a) {
-            return 0xFFFF;
-        }
         let m = self.mcd.as_deref_mut().expect("a Sega CD");
+        if (0x40_0000..0x80_0000).contains(&a) {
+            return m.hw.cart.as_ref().map_or(0xFFFF, |c| (c.read8(a) as u16) << 8 | c.read8(a | 1) as u16);
+        }
         m.main_read16(a, self.clock).unwrap_or(self.prefetch)
     }
 
     fn mcd_write(&mut self, a: u32, v: u16, mask: u16) {
+        let m = self.mcd.as_deref_mut().expect("a Sega CD");
         if (0x40_0000..0x80_0000).contains(&a) {
+            if let Some(c) = m.hw.cart.as_mut()
+                && mask & 0x00FF != 0
+            {
+                c.write8(a | 1, v as u8);
+            }
             return;
         }
-        self.mcd.as_deref_mut().expect("a Sega CD").main_write(a, v, mask, self.clock);
+        m.main_write(a, v, mask, self.clock);
     }
 
     fn set_z80_reset(&mut self, held: bool) {

@@ -116,6 +116,15 @@ impl Cdd {
         self.hock = hock;
     }
 
+    /// The tray opened, the drive stopping; or closed, the disc's TOC read again, or no disc found.
+    pub fn set_tray(&mut self, open: bool) {
+        if open {
+            self.mode = Mode::TrayOpen;
+        } else if self.mode == Mode::TrayOpen {
+            self.mode = if self.disc.is_some() { Mode::Spinning(SPIN_UP) } else { Mode::Stopped(status::NO_DISC) };
+        }
+    }
+
     fn lead_out(&self) -> u32 {
         self.disc.as_ref().map_or(0, |d| d.lead_out())
     }
@@ -364,7 +373,8 @@ impl Cdd {
     /// `$FF8036`-`$FF804B` as the sub CPU reads them, by the word at `off` from `$FF8036`.
     pub fn read(&self, off: u32, now: u64) -> u16 {
         match off {
-            0x00 => (self.data as u16) << 8 | (self.hock as u16) << 2 | (now < self.dts_until) as u16,
+            // D/M: 0 while music plays, 1 for data, a stop or a pause (§3-6).
+            0x00 => (!(self.mode == Mode::Playing && !self.data) as u16) << 8 | (self.hock as u16) << 2 | (now < self.dts_until) as u16,
             0x02..=0x0A => {
                 let i = (off as usize - 2) & !1;
                 (self.status[i] as u16) << 8 | self.status[i + 1] as u16
@@ -406,13 +416,14 @@ impl Cdd {
 pub const DTS: u64 = 2_500;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// A disc of one mode 1 data track of `data` sectors and an audio track of `audio`, kept as a host's copy.
     pub fn disc(data: u32, audio: u32) -> Disc {
         let user: Vec<u8> = (0..data * 2048).map(|i| (i / 2048) as u8).collect();
-        let pcm = vec![0u8; audio as usize * 2352];
+        // Audio sector i's frame k is (i, -k).
+        let pcm: Vec<u8> = (0..audio as usize * 588).flat_map(|n| [((n / 588) as i16).to_le_bytes(), (-((n % 588) as i16)).to_le_bytes()].concat()).collect();
         let sheet = emusen_disc::cue::Sheet::parse("FILE \"d.iso\" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\nFILE \"a.bin\" BINARY\nTRACK 02 AUDIO\nINDEX 01 00:00:00\n").unwrap();
         Disc::from_sheet(&sheet, vec![Kept::from(user), Kept::from(pcm)], emusen_disc::IsoForm::Mode1).unwrap()
     }

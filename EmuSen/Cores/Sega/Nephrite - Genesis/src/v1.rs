@@ -311,7 +311,13 @@ impl Core for Machine {
         let image = cartridge_bytes(request.image);
         let media = Media::read(&image);
         let model = region_model(Model { model2: request.settings.get(MODEL_KEY) == Some("md.model2"), ..default_model(&media) }, request.settings.get(REGION_KEY));
-        let mut m = Machine::with_model(&image, media, model);
+        // A disc's boot ROM: its market's file, else any of the three given (Nephrite_Native.md §49.2).
+        let bios = (media.system == System::Mcd).then(|| {
+            let mine = cd_bios(media.bios_region()).which;
+            let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
+            file.map(|f| f.data.to_vec()).unwrap_or_default()
+        });
+        let mut m = Machine::with_bios(&image, media, model, bios);
         m.apply_pads(&request.settings);
         if let Some(top) = request.files.iter().find(|f| f.which == LOCK_ON) {
             let patch = request.files.iter().find(|f| f.which == SK_PATCH).map_or(Vec::new(), |f| f.data.to_vec());

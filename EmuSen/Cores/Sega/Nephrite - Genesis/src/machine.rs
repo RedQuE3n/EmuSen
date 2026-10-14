@@ -76,6 +76,11 @@ impl Machine {
     }
 
     pub fn with_model(image: &[u8], media: Media, model: Model) -> Machine {
+        Machine::with_bios(image, media, model, None)
+    }
+
+    /// A machine with `bios` in a Sega CD's boot ROM; a disc's machine has its Sega CD whether a boot ROM is given or not.
+    pub fn with_bios(image: &[u8], media: Media, model: Model, bios: Option<Vec<u8>>) -> Machine {
         let header = media.header.clone().unwrap_or_default();
         let rom = if media.system == System::Mcd { Vec::new() } else { image.to_vec() };
         let (rom, top, patch) = split_lock_on(rom, &header.serial);
@@ -85,14 +90,14 @@ impl Machine {
         }
         let mut extra = Vec::new();
         let list: &[(u32, &'static str, usize)] = match media.system {
-            System::Mcd => &MCD_MEMORIES,
             System::S32x => &S32X_MEMORIES,
-            System::Md => &[],
+            System::Md | System::Mcd => &[],
         };
+        let bios = (media.system == System::Mcd).then(|| bios.unwrap_or_default());
         for &(id, name, size) in list {
             extra.push(Memory { id, name, bytes: vec![0; size] });
         }
-        Machine { media, genesis: Genesis::new(cart, model), extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::io::PADS], plugged: [(crate::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false }
+        Machine { media, genesis: Genesis::with_mcd(cart, model, bios), extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::io::PADS], plugged: [(crate::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false }
     }
 
     /// The spaces in id order: the two buses, the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
@@ -109,6 +114,9 @@ impl Machine {
         if self.media.system != System::Mcd {
             v.push(SpaceRef { id: ROM_ID, name: "ROM", read_only: true });
         }
+        if self.genesis.hw.mcd.is_some() {
+            v.extend(MCD_MEMORIES.iter().map(|&(id, name, _)| SpaceRef { id, name, read_only: false }));
+        }
         v.extend(self.extra.iter().map(|m| SpaceRef { id: m.id, name: m.name, read_only: false }));
         v
     }
@@ -123,6 +131,15 @@ impl Machine {
             VSRAM_ID => &hw.vdp.vsram,
             SRAM_ID if hw.cart.has_battery() => hw.cart.battery(),
             ROM_ID if self.media.system != System::Mcd => &hw.cart.rom,
+            17..=20 => {
+                let s = &hw.mcd.as_deref()?.hw;
+                match id {
+                    17 => &s.prg,
+                    18 => &s.word.bytes,
+                    19 => &s.pcm_ram,
+                    _ => &s.bram,
+                }
+            }
             _ => return self.extra.iter().find(|m| m.id == id).map(|m| m.bytes.as_slice()),
         })
     }
@@ -137,6 +154,15 @@ impl Machine {
             CRAM_ID => &mut hw.vdp.cram,
             VSRAM_ID => &mut hw.vdp.vsram,
             SRAM_ID if battery => hw.cart.battery_mut(),
+            17..=20 => {
+                let s = &mut hw.mcd.as_deref_mut()?.hw;
+                match id {
+                    17 => &mut s.prg,
+                    18 => &mut s.word.bytes,
+                    19 => &mut s.pcm_ram,
+                    _ => &mut s.bram,
+                }
+            }
             _ => return self.extra.iter_mut().find(|m| m.id == id).map(|m| m.bytes.as_mut_slice()),
         })
     }
@@ -151,7 +177,7 @@ impl Machine {
 
     /// One frame: a Mega Drive image runs one frame of the Genesis with the pads as set; the attachments only count.
     pub fn advance(&mut self) {
-        if self.media.system == System::Md {
+        if self.runs() {
             self.begin_frame();
             self.genesis.run_frame();
         }
@@ -162,7 +188,7 @@ impl Machine {
     /// and the next call goes on from it; `run::UNCHECKED` runs the stopped processor's next instruction unasked.
     pub fn run_frame_debug(&mut self, flags: u32) -> u32 {
         let skip = (flags & emusen_native::debug::run::UNCHECKED != 0).then_some(self.debug_stopped);
-        if self.media.system == System::Md {
+        if self.runs() {
             if !self.debug_open {
                 self.begin_frame();
                 self.debug_open = true;
@@ -176,6 +202,11 @@ impl Machine {
         self.debug_stopped = 0;
         self.end_frame();
         0
+    }
+
+    /// Whether the machine runs: a Genesis, alone or with its Sega CD; the 32X only counts frames until its stage.
+    pub fn runs(&self) -> bool {
+        self.media.system != System::S32x
     }
 
     /// The pads and the drawing switch as a frame takes them.
@@ -194,7 +225,7 @@ impl Machine {
     /// The frame's sound and picture taken, and the count and the battery file brought up to it.
     fn end_frame(&mut self) {
         self.debug_open = false;
-        if self.media.system == System::Md {
+        if self.runs() {
             let (hw, audio) = (&mut self.genesis.hw, &mut self.audio);
             hw.sound.take(hw.clock, |l, r| audio.push_pair(l, r));
             if !self.skip {

@@ -1460,3 +1460,54 @@ CPUs' disputes in their own record pages.
   bit 8 with the bus request's state. Nephrite's reads of the ten places agree with the board to the byte.
 - Pinned by: `genesis.rs`'s `an_unmapped_read_is_the_word_last_fetched`; the game by `NephriteStartTests`.
 - Implemented in: the commit "Nephrite: four games that stood still".
+
+### D-30. The Sega CD's level 2 from the main CPU: IFL2 reads 1 while the request stands, the request ends when the sub CPU takes it, and a request made while one stands is lost
+- Opened: 2026-10-14, at stage 8 step 1, by mcd-verificator's IRQ TEST.
+- Documents read: the Mega-CD Hardware Manual §4-1 (`$A12000`: "IFL2 ... in the Read mode, '0' = in the process of
+  doing a LEVEL2 interrupt / '1' = Level 2 is not treated yet") and §3-5 (`$FF8032`, the levels).
+- Test program: mcd-verificator V1.02's IRQ TEST, its source and its binary's instructions: a write of IFL2 read back
+  28 main CPU clocks later reads `$80` (taken); two writes 32 clocks apart read `$81` (the second standing); three
+  writes 32 clocks apart give the sub CPU two level 2 interrupts; 8,192 writes each made only while the bit reads 0
+  give 8,192; with IEN2 clear a write gives none.
+- Referee: none read.
+- Conclusion: IFL2 reads the request; the sub CPU's acknowledge ends it; a write while it stands, or while IEN2 is clear,
+  does nothing. The second write of a pair stands because the sub CPU's handler for the first holds the mask at 2 until
+  its RTE. A model with a request queued behind the standing one passed 0x0C and failed 0x0D; the rule above passes
+  all. *A rule of the model, not the console:* the sub CPU runs a whole instruction or exception at a time and may run
+  past the main CPU's present, so the acknowledge's sub clock is kept and a request that a main CPU access finds taken
+  only after that access's own time is treated as standing (without it 0x0E failed: a third write found the second
+  already taken by an exception that the console had not begun). Measured.
+- Pinned by: `mcd_verificator_passes_the_tests_built` (IRQ TEST).
+- Implemented in: stage 8 step 1's commit.
+
+### D-31. Word RAM's swaps: in 2M the main CPU's DMNA gives the RAM to the sub CPU and the sub CPU's RET 1 takes it back; in 1M RET picks the banks and the main CPU's DMNA 0 asks for a swap that a change of RET makes; the 2M holder is kept while 1M runs
+- Opened: 2026-10-14, at stage 8 step 2. The manual's pages disagree: §4-1 (`$A12002`, 1M) gives DMNA "0 = swap
+  request, 1 = no significance" for the main CPU's write, while §3-1's text for 1M, corrected by hand in the scan,
+  says the main CPU sets DMNA to 1 to request a swap.
+- Documents read: the Hardware Manual §3-1 (`$FF8002`), §4-1 (`$A12002`), §1-1's switch diagrams; krikzz's
+  `notes/random notes.txt`, "mem mode".
+- Test program: mcd-verificator V1.02's REG X002, WORD RAM and WRAM PMOD (the active checks only; its own comment
+  says it removed others it was unsure of, two games hanging under them).
+- Referee: none read.
+- Conclusion, as built: in 2M DMNA reads whether the sub CPU holds the RAM and RET reads its inverse; the main CPU's
+  write of DMNA 1 gives it to the sub CPU in either mode, the sub CPU's RET 1 in 2M gives it to the main CPU, and its
+  RET 0 in 2M does nothing; in 1M RET is the sub CPU's to write and picks the banks at once, the main CPU's DMNA 0 sets
+  DMNA (a swap asked for), which the sub CPU's next change of RET clears; DMNA 1 from the main CPU in 1M changes
+  nothing visible but sets the 2M holder, which takes effect when 2M returns (the test's 0x26). Entering 1M clears
+  the request; the test's disabled checks, which would set it to the old RET's difference from the new, are not built.
+  Measured against the test's checks; the disabled ones open.
+- Pinned by: `the_swaps_follow_dmna_and_ret`, `mcd_verificator_passes_the_tests_built`.
+- Implemented in: stage 8 step 2's commit.
+
+### D-32. The cartridge slot in mode 2, empty, reads `$FF`
+- Opened: 2026-10-14, at stage 8 step 1. mcd-verificator's RAM CART takes a byte at `$400001` above 6 for no RAM
+  cartridge; the Genesis's open bus (D-29) would give the next instruction's low byte, which is 6 or less for many
+  instructions.
+- Documents read: the Hardware Manual's "Mega-CD construction" (mode 2 puts the cartridge's area at `$400000`), nothing
+  on an empty slot.
+- Test program: mcd-verificator's RAM CART, whose author's console reads "not present" there.
+- Referee: none read.
+- Conclusion: an empty slot in mode 2 reads `$FF` in each byte. Argued: it meets the program's test on a console, and no
+  other reading of the slot is known.
+- Pinned by: `mcd_verificator_passes_the_tests_built` (RAM CART "not present").
+- Implemented in: stage 8 step 1's commit.

@@ -132,6 +132,9 @@ pub struct Hw {
     pub draw: bool,
     /// The YM2612 and the PSG, and their mix.
     pub sound: Sound,
+    /// The Sega CD beside it, and whether its boot ROM, PRG-RAM and Word RAM fill `$000000`-`$3FFFFF` (mode 2).
+    pub mcd: Option<Box<crate::mcd::MegaCd>>,
+    pub mcd_low: bool,
 }
 
 pub struct Genesis {
@@ -142,6 +145,16 @@ pub struct Genesis {
 
 impl Genesis {
     pub fn new(cart: Cart, model: Model) -> Genesis {
+        Genesis::with_mcd(cart, model, None)
+    }
+
+    /// The master clock's rate, a fraction in Hz.
+    pub fn master_hz(pal: bool) -> (u64, u64) {
+        if pal { (53_203_425, 1) } else { (4_725_000_000, 88) }
+    }
+
+    /// A Genesis with `bios` as a Sega CD's boot ROM when given, the console in mode 2 (Nephrite_Native.md §50).
+    pub fn with_mcd(cart: Cart, model: Model, bios: Option<Vec<u8>>) -> Genesis {
         let jcart = cart.jcart;
         let hw = Hw {
             clock: START,
@@ -172,6 +185,8 @@ impl Genesis {
             prefetch: 0,
             draw: true,
             sound: if model.pal { Sound::new(53_203_425, 1, !model.model2) } else { Sound::new(4_725_000_000, 88, !model.model2) },
+            mcd_low: bios.is_some(),
+            mcd: bios.map(|b| Box::new(crate::mcd::MegaCd::new(Genesis::master_hz(model.pal), b, START))),
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
         g.hw.io.jcart = jcart;
@@ -358,6 +373,9 @@ impl Hw {
     #[inline(always)]
     fn catch_up<O: Observer>(&mut self, z80: &mut Z80, o: &mut O) -> u32 {
         self.run_vdp(self.clock);
+        if let Some(m) = self.mcd.as_deref_mut() {
+            m.run_to(self.clock);
+        }
         if self.z80_reset {
             reset_z80(z80);
         }
@@ -418,7 +436,9 @@ impl Hw {
                 let w = self.io.jcart_read(self.clock);
                 if a & 1 == 0 { (w >> 8) as u8 } else { w as u8 }
             }
+            0x00_0000..=0x7F_FFFF if self.mcd_low => self.mcd_read8(a),
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read8(a),
+            0xA1_2000..=0xA1_203F if self.mcd.is_some() => self.mcd_read8(a),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
                     self.z80_space_read(a as u16 & 0x7FFF, self.clock - Z80_AREA_LEAD - self.area_late)
@@ -438,7 +458,9 @@ impl Hw {
         let a = a & 0xFF_FFFE;
         match a {
             _ if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&a) => self.io.jcart_read(self.clock),
+            0x00_0000..=0x7F_FFFF if self.mcd_low => self.mcd_read16(a),
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read16(a),
+            0xA1_2000..=0xA1_203F if self.mcd.is_some() => self.mcd_read16(a),
             0xA0_0000..=0xA0_FFFF if self.has_z80_bus() => {
                 let b = self.read8(a) as u16;
                 b << 8 | b
@@ -463,7 +485,9 @@ impl Hw {
                     self.io.jcart_write(v as u16, self.clock);
                 }
             }
+            0x00_0000..=0x7F_FFFF if self.mcd_low => self.mcd_write(a, (v as u16) << 8 | v as u16, if a & 1 == 0 { 0xFF00 } else { 0x00FF }),
             0x00_0000..=0x3F_FFFF => self.cart.write8(a, v),
+            0xA1_2000..=0xA1_203F if self.mcd.is_some() => self.mcd_write(a, (v as u16) << 8 | v as u16, if a & 1 == 0 { 0xFF00 } else { 0x00FF }),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
                     self.z80_space_write(a as u16 & 0x7FFF, v, self.clock - Z80_AREA_LEAD - self.area_late);
@@ -484,6 +508,8 @@ impl Hw {
         let a = a & 0xFF_FFFE;
         match a {
             _ if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&a) => self.io.jcart_write(v, self.clock),
+            0x00_0000..=0x7F_FFFF if self.mcd_low => self.mcd_write(a, v, 0xFFFF),
+            0xA1_2000..=0xA1_203F if self.mcd.is_some() => self.mcd_write(a, v, 0xFFFF),
             0xA0_0000..=0xA0_FFFF => self.write8(a, (v >> 8) as u8),
             0xA1_1100 | 0xA1_1200 => self.write8(a, (v >> 8) as u8),
             0xC0_0000..=0xDF_FFFF => self.vdp_write(a, v, self.clock),
@@ -497,6 +523,32 @@ impl Hw {
                 self.write8(a | 1, v as u8);
             }
         }
+    }
+
+    // ---- the Sega CD's areas in mode 2, and its registers
+
+    /// The cartridge slot at `$400000` in mode 2, empty: it reads `$FF` (argued; Nephrite_Native.md §50).
+    fn mcd_read8(&mut self, a: u32) -> u8 {
+        if (0x40_0000..0x80_0000).contains(&a) {
+            return 0xFF;
+        }
+        let m = self.mcd.as_deref_mut().expect("a Sega CD");
+        m.main_read8(a, self.clock).unwrap_or_else(|| self.open8(a))
+    }
+
+    fn mcd_read16(&mut self, a: u32) -> u16 {
+        if (0x40_0000..0x80_0000).contains(&a) {
+            return 0xFFFF;
+        }
+        let m = self.mcd.as_deref_mut().expect("a Sega CD");
+        m.main_read16(a, self.clock).unwrap_or(self.prefetch)
+    }
+
+    fn mcd_write(&mut self, a: u32, v: u16, mask: u16) {
+        if (0x40_0000..0x80_0000).contains(&a) {
+            return;
+        }
+        self.mcd.as_deref_mut().expect("a Sega CD").main_write(a, v, mask, self.clock);
     }
 
     fn set_z80_reset(&mut self, held: bool) {

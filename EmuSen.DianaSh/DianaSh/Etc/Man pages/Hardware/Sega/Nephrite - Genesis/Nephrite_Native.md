@@ -3752,3 +3752,81 @@ It has the five discs and, for its comparisons, the player's BIOS run as a black
    approve installing.
 7. **Recordings** of a console's CD-DA and PCM output, as MDFourier's were for the Genesis (§28). *Recommended:* not
    needed for stage 8; for stage 9 useful but not required.
+
+## 50. Stage 8, steps 1 and 2: the sub CPU, the gate array and Word RAM (2026-10-14)
+
+The two steps were built together, Word RAM being reached through the gate array's memory mode register, and are
+recorded together. Their gate (§49.3) is met: mcd-verificator's twelve tests of them pass.
+
+### 50.1 What they built
+
+- **The attachment** (`src/mcd/`): `MegaCd`, the sub CPU (a second `beryl_m68k::M68000`) and `Sub`, everything on its
+  bus. The Genesis holds it as `Hw::mcd`, present for a disc, with `mcd_low` set when it fills `$000000`-`$3FFFFF`
+  (mode 2). A cartridge's Genesis has none, and its map is the one it had: the two arms the attachment adds to each
+  access are guarded by a field set only for a disc.
+- **The sub CPU's clock** counts its own 12.5 MHz clocks, the 50 MHz crystal over four; the ratio to the master clock is
+  kept as a reduced fraction (44/189 for NTSC's 4,725,000,000/88 Hz, 500,000/2,128,137 for PAL), so nothing drifts.
+  The sub CPU is brought up to the main CPU's present after each main instruction and before each main access to the
+  gate array, instruction by instruction; held in reset, with its bus granted, stopped with no request it can take,
+  or waiting for Word RAM, its clock moves to the present without it. A STOP with nothing to wake it skips to the
+  timer's next count.
+- **Mode 2's map** on the main CPU (the Hardware Manual's §1-1, §1-3): the boot ROM at `$000000`, PRG-RAM's window
+  at `$020000` in four banks by BK1-BK0 and reachable only while SRES holds the sub CPU or SBRQ has its bus, Word RAM
+  at `$200000`, each repeated through its half of `$000000`-`$3FFFFF`; the H-INT vector read at `$000070` as `$FFFF`
+  and `$000072` as `$A12006` (§4-1); the empty cartridge slot at `$400000` reading `$FF` (D-32).
+- **The sub CPU's map** (§1-2): PRG-RAM at `$000000` with WP7-WP0's protection of the first `WP × $200` bytes from
+  the sub CPU alone (not from the main CPU, nor, by mcd-verificator's CDC test, from DMA); Word RAM at `$080000`;
+  backup RAM on the odd bytes of `$FE0000`, 8 KiB repeated every 16 KiB through `$FEFFFF`; the PCM chip's registers
+  and its memory window at `$FF0000` (the window and the bank alone; its sound is stage 9's); the registers at
+  `$FF8000`.
+- **The gate array's registers**, both sides (§3, §4): SRES and SBRQ, the reset exception taken when SRES is
+  released; the LEDs, RES0 (0 for 100 ms after power-on and after a reset of the peripherals); the memory mode and
+  write protection; the H-INT vector, kept through a reset as mcd-verificator's REG 2006 has it; the communication
+  flags (each side's byte written by any write of that side, at either address), commands and statuses; the stopwatch
+  (30.72 µs a count, 384 sub clocks, cleared by a write without restarting its 30.72 µs); the timer (its value counted
+  down at 30.72 µs from a fresh count at each write, level 3 at 0, every `(n + 1) × 30.72 µs`); the interrupt mask,
+  levels 2 and 3 and their requests, autovectored, a request ended by its acknowledge, a level whose enable is clear
+  making no request (D-30); the font registers' colour arithmetic; the forced reset, the main CPU's four writes of
+  §4-1, which returns the sub side's timer, stopwatch, mask, requests, LEDs and font registers to their power-on
+  values and resets the peripherals.
+- **Word RAM** (`src/mcd/word.rs`), stored in 2M order, bank 0's word n at word 2n and bank 1's at 2n + 1 (§1-1,
+  "data arrangement"): 2M held whole by one CPU; 1M as two banks by RET, the main CPU's bank at `$200000` with its
+  cell image at `$220000` in five strips of cells, the sub CPU's at `$0C0000` with its dot image at `$080000`, a pixel a
+  byte, written through the priority modes; the swap rules of D-31. A main CPU access to Word RAM it does not hold
+  reads the open bus and writes nothing. **A sub CPU access waits** (the manual's §3-1 note says the sub CPU hangs
+  until a forced reset; mcd-verificator's WORD RAM test 0x20-0x21 has its write wait and finish once DMNA gives the RAM
+  back): the instruction finishes, its writes held and made when the RAM is the sub CPU's again, and the CPU waits till
+  then. A read in that instruction gets 0, a loss argued to be unseen, no program known reading Word RAM it gave away.
+- **Byte writes to the registers that take words**: the 68000 drives a byte on both halves of the data bus, and those
+  registers take the whole word. This is mcd-verificator's word for `$FF8002`, `$FF8030`, `$FF804C` and `$FF800A`
+  ("not support byte writes", "any writes should hit low byte").
+- **Machine info and the spaces**: `PRGRAM`, `WORDRAM`, `PCMRAM` and `BRAM` are the attachment's memories, no longer
+  stage 0's placeholders. A disc's machine runs its frames from this step: with a boot ROM it runs it, with none its
+  68000 reads the open bus and stands.
+
+### 50.2 Sources
+
+The Mega-CD Hardware Manual (Sega, version 1.0, 1991-10-14), read from its page images: "Mega-CD construction", "Bus
+construction of CD-ROM interior", §1-1 to §1-3, §2, §3-1 to §3-5, §3-7, §3-9, §4-1 to §4-3. Its OCR text is too
+damaged to cite and was used only to find pages. mcd-verificator's source (`test_std.c`, `mcd.c`, `mcd.h`, `sys.c`,
+`sega.s`, `sub_bios.s`, `main.c`) for what each test expects, and krikzz's `notes/` (the Word RAM mode notes and the
+timings). No emulator source and no RTL was read. The disassembler of Beryl's 68000 was run over mcd-verificator's
+binary to read the instruction timing of IRQ TEST's checks (`examples/dis.rs`), the program's own code.
+
+### 50.3 Measured (2026-10-14)
+
+- **mcd-verificator**, the 240p disc as its disc and no BIOS: RAM CART ("not present"), COLOR CALC, VAR TESTS, IRQ
+  TEST, REG X000, REG X002, REG 2006, REG X00C, REG 8030, PROG RAM, WORD RAM and WRAM PMOD answer OK; CDC REGS
+  answers "ERROR: 01" and CDC INIT waits for the drive, both step 8.4's and 8.3's. The program reports the Sega CD at
+  `$00000000`, mode 2. VAR TESTS, X00C, 8030 and IRQ TEST count the main CPU's loops against the sub CPU's work and
+  the timers, so their passes say that the two clocks, the main CPU's refresh waits and the sub CPU's unwaited bus
+  stand in the console's proportion within those tests' windows (the narrowest ±0.2%).
+- **IRQ TEST** failed twice on the way, each failure pointing at a rule: 0x0D with a queue of one request behind the
+  pending one, and 0x0E with the sub CPU's step allowed to take a request past the main CPU's present (D-30).
+- **The crate's tests**: 145 pass, among them `the_swaps_follow_dmna_and_ret`, the cell image's strips and
+  `mcd_verificator_passes_the_tests_built`, which asserts the twelve OKs.
+- **The cartridge Genesis's cost**, `examples/bench` (best of five runs of 600 frames, drawn), this build beside the
+  build before the step, two alternations each: Sonic the Hedgehog 1.344-1.350 ms (before 1.343-1.348), its sequel
+  1.230-1.233 (1.230-1.231), Thunder Force IV 1.329-1.331 (1.323-1.332), Streets of Rage 2 1.129-1.141
+  (1.133-1.139), Phantasy Star IV 1.402-1.409 (1.396-1.398). Unchanged within the runs' spread but for Phantasy
+  Star IV's 0.5%, inside its own spread on a second pair.

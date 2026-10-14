@@ -1238,6 +1238,7 @@ for its counts, with no device); the bench gains `--precise`, timed as `--render
   double-buffered ordering table), the receipts in the GPU's FIFO at the save, and what the renderer drew that VRAM does
   not hold all reach the picture after the load. A block holding only what is live would vary in size. So the state
   with the setting on is about 10.4 MB against 5.3, and the cost says so.
+- *Superseded 2026-10-14 (§52): neither block is written since; a load seeds both parts.*
 - **Both ways** (E1's rule): a state made with the setting on loads with it off, both blocks skipped; one made with it
   off loads with it on, the precision layer starting empty and the renderer seeded from the GPU's VRAM, so the first
   frame or two after are drawn with fewer precise vertices; the machine's continuation is the same either way, since
@@ -1907,6 +1908,8 @@ triangle's own precise coverage does not include it.
 
 ### 33.5 The state
 
+*Superseded 2026-10-14 (§52.2): the marks are no longer kept; a load finds none, as an attach does.*
+
 `RNDR` gains the marks, a halfword a pixel after its palette, 1,048,576 bytes; a state with the setting on is
 11,594,150 bytes against 10,545,574 at E4 and 5,398,770 with it off [M, the kit's C7]. They are kept because a
 picture depends on them across a save: `a_state_between_two_quads_that_share_an_edge_keeps_their_marks` saves between
@@ -2493,7 +2496,7 @@ against 11.6 at E4 with the crack fill. **The alternative** is a block holding o
 picture's size) and a load that seeds the mirror and the picture from the accurate VRAM and the display, as an attach
 does: a state of the accurate size plus a few bytes, the first pictures after a load at 1× detail until the game redraws.
 
-**Built: the kept form** [C], because the kit's C7 and C8 require a loaded machine to hand the saver's pictures from its
+*Superseded 2026-10-14: the seeded form is built (§52, §53).* **Built: the kept form** [C], because the kit's C7 and C8 require a loaded machine to hand the saver's pictures from its
 first frame, and a seeded picture is the console's at that frame, not the renderer's (the rule set for this stage: build
 the form the kit passes as it stands). **Measured for both** (§47.2): the state's size, the bytes a rewind's
 delta between consecutive states holds, and on the bench discs how many frames a seeded picture takes to become, pixel
@@ -2761,7 +2764,7 @@ The state is 26,503,560 bytes at 2× and 81,947,016 at 4× with everything on, a
 (the same on every disc: the block's form is fixed). The seeded form's state would be the accurate part and the
 precision layer's 2.6 MB.
 
-**Decided, and why** [C]: **the kept form is built**, as §42.2 set out, because it is the form the kit passes as it
+*Superseded 2026-10-14 by the tester's choice of the seeded form (§52, §53).* **Decided, and why** [C]: **the kept form is built**, as §42.2 set out, because it is the form the kit passes as it
 stands. **The measurement favours the seeded form**: a seeded picture is the kept one's within four to seven frames on
 every disc of eight (a game redraws its screen, and the precision layer finds its vertices again within two frames), the
 first frames differing only in detail, the console's own picture enlarged; and the kept form costs a state three to
@@ -3216,3 +3219,186 @@ snapshots a second through WiseMan, before and after; save and load times and th
 - **P-S4.** Saving a state with everything on at 4× falls from the readback and copy of 82 MB to the machine's own save;
   loading costs the seed, under 50 ms at 4×.
 - **P-S5.** The frame's cost is unchanged within the bench's noise: no code on the frame's path changes.
+
+## 53. The seeded state, as built
+
+*Built and measured 2026-10-14 on the desktop, the RX 6800 by `EMUSEN_GPU_DEVICE=6800`.* What was built is §52 as
+designed, with one wording of the kit's note changed after its first run (§53.2).
+
+### 53.1 Diamond
+
+- **The renderer** (`diamond-renderer`) lost `Kept`, `keeping`, its block (`RNDR`), its `settle` readback and its
+  reader; `Back::Palette`, which only the readback used, went with them. Its seed is the one an attach always used: the
+  machine's VRAM with each halfword a block of N² samples, no marks, true colour's plane cleared, the display's
+  picture enlarged into the slot the next frame hands, and the CLUT cache's colours in palette slot 0; it is now made a
+  row of blocks at a time, which a load's cost at 4× asked for (§53.4).
+- **The precision layer** (`precision`) writes no block (`PREC` gone) and resets at every seed; `Precise` passes the
+  block calls to its drawer, which has none.
+- **`diamond-v1`** attaches the renderer as is, states `picture_settles` (`SETTLES`, 60, and `SETTLES_TRUE_COLOUR`, 240,
+  §52.4; 0 while the machine's own picture is shown, without a Vulkan device included), and raises `MACHINE_INFO` from
+  `set_settings` when the bound changes; the three costs that spoke of states now speak of the picture after a load
+  (`EmuSen_Settings_Reference.md` §4.113).
+- **The tools.** `run` and `bench` attach the renderer as is; nothing else in them changed.
+
+### 53.2 The core ABI's minor 5 and the kit
+
+As §52.5 to §52.6 and `EmuSen_CoreAPI_Extensions.md` §14.3 state: the header at 1.5 (a comment on
+`emusen_core_machine_info` and the minor), the baseline's `json machine_info.state.picture_settles integer optional
+@1.5` with the two lines of the minor, the schema's property from 0 to 600 (the crate's validator now reads `maximum`),
+`Core::picture_settles` and `PICTURE_SETTLES_MAX` in `emusen-native`, written only when not 0, and
+`CoreMachineInfo.PictureSettles` in the C# reader. The guard: 426 facts agree with the header on four triples, with the
+Rust and with the baseline, `--against` WiseMan's. In the kit, a `progress` module holds the stamp of the image a thread
+runs; C7 and C8 fold a second digest of the pictures past the bound; the note first said "from its 61th frame", corrected
+to "from its frame 61 on" before the gate's last runs.
+
+The kit's own tests hold the rule with a settling test core and its faults, each in a runner process of its own
+(`pictures_that_settle_pass_within_their_bound_and_each_fault_of_the_rule_fails`) [M]:
+
+| The test core's picture after a load | Declared | Cases failed |
+|---|---|---|
+| differs for three frames | 3 | none, and the notes name frame 4 |
+| the same, the core claiming nothing (no fault) | nothing | none, and no note: held as before |
+| never settles | 3 | C8, and C12, which runs it again |
+| differs for three frames | nothing | C8, C12 |
+| differs for three frames, the sound too | 3 | C8, C12 |
+| differs for three frames | 601 | C7, C8, C12 |
+| differs for three frames, a run of 6 frames | 3 | C7, C8, C12: "run more than 6 frames" |
+
+C7 does not see the three faults alone: both its machines load the state, A its own to check that save, load and save
+give the same bytes, so both are seeded alike. C8's third machine is the one that loads against a run that did not.
+The deadline (`the_deadline_is_on_progress_not_on_the_whole_image`): a core taking 4 ms a frame passes an image whose
+cases run for longer than a deadline of one second; a core whose tenth frame never returns on one of two images is
+reported hung on it ("ran no frame for 2 s"), the other image and the core's own cases passing.
+
+### 53.3 The gate, item by item
+
+| Item | Result |
+|---|---|
+| **E1's goldens, settings off** | **Equal** [M]: `programs.rs`' 81 with both corpora, the goldens plain and with the test observer and the eight discs' 80 anchors |
+| **The machine's goldens with any on, and all on at 4×** | **Equal** [M]: `precise.rs`' 14, `renderer.rs`' 3, `scaled.rs`' 7 (the discs at 2× and 4× with each combination of §48), `colour.rs`' 3, `filtered.rs`' 4 |
+| **E3's 1× equality, E4's, the crack fill's and E5's tests** | **Pass** [M], the state tests rewritten to the seeded form's terms: `a_state_with_the_setting_on_is_the_machines_and_its_picture_settles` (the grid's state the plain machine's to the byte; two machines given it equal from the first frame; the picture the saver's from frame 2 after the load and every frame on; the precision layer empty at the load and precise again by frame 2), `a_state_between_two_quads_that_share_an_edge_keeps_no_marks` (85 pixels of the 9,992 the quads cover differ, all on their edges, the machine the same), `a_state_at_n_is_the_machines_and_a_load_seeds` (a state at 4× a plain machine's; the mirror after a load the machine's VRAM and the picture the console's, each pixel a block of 16; two machines alike), `the_layer_keeps_nothing_in_a_state_and_a_load_starts_it_empty`, and diamond-v1's state test with a kept-form state's blocks skipped |
+| **A state of the kept form loads** | **Yes** [M]: Crash Bandicoot at frame 600, every enhancement on at 2×, saved by WiseMan 9c37e7a9 (26,503,560 bytes, `PREC` and `RNDR`), loaded on this build with every enhancement on and with none, run 300 frames by the press script: the machine's state and picture at frame 900 those of the old build loading its own state, both ways (FNV 34FE105E37E2731B and D6B902F2602DBB5F) |
+| **The kit, the published library, eight discs, 1,800 frames** | **Every case on every disc** [M] off (209 s), `precision=true` (222 s), `resolution=2` (254 s), `colour=true` (204 s), `filtering=3d` (207 s), all at 2× (277 s) and **all at 4× (520 s, each image 186 to 270 s)**; C7's state 5,398,770 bytes in every run; C7 and C8 comparing pictures from frame 61 after their loads, or 241 with true colour. With all off every image case's verdict and evidence is E5's run's, 64 of 64 |
+| **Every other core's kit** | **Unchanged** [M]: MoonRT (Super Mario Bros., The Legend of Zelda, self-delimiting), MercuryRT (Tetris, Kirby's Dream Land), VenusRT (A Link to the Past, Donkey Kong Country) and Nephrite (Sonic the Hedgehog, Streets of Rage), each built at WiseMan 9c37e7a9 and on this branch and run by the kit of each: every case passes, and the reports are the same line for line but for the minor (1.4, 1.5) and C13's count of rounds. Their crates' tests pass: MoonRT 6, MercuryRT 8, 16 and 4, VenusRT 143, Nephrite 140, MarsRT 490 |
+| **The settle bound per disc** | §52.1's table, measured on the code the seed has kept unchanged; through the published library the kit's C8 finds every disc's picture settled within the bound after its load at frame 900 under every setting |
+| **Rewind in Mistress** | §53.4 |
+| **WiseMan** | **330 of 330** [M] under the test lock with ps1-tests and the bench's discs, filtered by `Diamond`, `PlayStation`, `CoreAbi`, `CoreAdapter`, `Rewind`, `SaveState`, `StateProperties`, `GraphicsSettings`, `WindowFitAudit` and `CoreRegistrationEquivalence` |
+
+### 53.4 Sizes, rewind and the time to save
+
+**State sizes** [M] with a DualShock and a card (the kit's machine: two pads and a card, 30 bytes more):
+
+| Everything on (precise geometry, true colour, 3D filtering) | Before | After |
+|---|---|---|
+| 1× | 12,642,696 | 5,398,740 |
+| 2× | 26,503,560 | 5,398,740 |
+| 4× | 81,947,016 | 5,398,740 |
+
+**Rewind** (`DiamondRewindTests`) [M]: each disc by its press script, every enhancement on at 2× with filtering of
+everything, a snapshot every 30 frames as Mistress takes them since §4.112 of the settings reference, each encoded
+against the one before by Mistress's codec; the mean delta over the run, and the reach it gives under Mistress's
+96 MiB:
+
+| Disc, frames captured | Before: delta, reach | After: delta, reach | Times as far |
+|---|---|---|---|
+| Spyro the Dragon, 4,000 to 7,000 | 4,987,653 bytes, 10.1 s | 614,696, 81.9 s | 8.1 |
+| Ape Escape, 3,000 to 6,000 | 2,342,375, 21.5 s | 623,716, 80.7 s | 3.8 |
+| Crash Bandicoot, 3,000 to 6,000 | 2,307,814, 21.8 s | 406,153, 123.9 s | 5.7 |
+
+Before, Spyro the Dragon's 20 snapshots of 3,000 frames filled the budget; after, 99 deltas held 49.5 seconds with room
+to spare, and a rewind to the middle moment landed on the state held, byte for byte, on all three.
+
+**Saving and loading** [M, the fastest of five, Crash Bandicoot at frame 1,500, everything on]: the export's settle and save, and a load into a second machine with
+its renderer's seed:
+
+| Scale | Save, before / after (ms) | Load, before / after (ms) |
+|---|---|---|
+| 1× | 2.77 / 0.83 | 1.60 / 1.23 |
+| 2× | 10.31 / 0.84 | 4.40 / 1.80 |
+| 4× | 50.74 / 0.89 | 15.06 / 4.74 |
+
+A save no longer reads the device back or copies its pictures, and costs the machine's own save at every scale. **The
+seed was slower than the kept load at first** [M]: 10.00 ms at 2× and 38.69 at 4×, since it built the mirror and the
+picture sample by sample with a division for each. It now makes each row of blocks once and copies it to the block's
+other rows (`seed`), which gives the figures above; `a_state_at_n_is_the_machines_and_a_load_seeds` holds the seeded
+mirror at 4× to the machine's VRAM, sample for sample, and the handed picture to the display's, pixel for pixel. An
+attach and a change of scale seed the same way and gain the same.
+
+### 53.5 Cost of the frame
+
+No code on the frame's path changed: the seed, the save and the load are not on it. Measured all the same, by §50.1's
+instrument (`examples/bench`, every function aligned to 64 bytes, each build in its own target folder, the builds
+alternating on one core, the fastest mean of five rounds, milliseconds of the emulation thread a frame) [M]: **base**
+WiseMan 9c37e7a9, extracted outside the repository; **final** this branch before the seed by rows, which is off the
+frame's path:
+
+| Run | Off, base / final | Everything on at 2× (precise geometry, true colour, filtering everything), base / final |
+|---|---|---|
+| `gpu/benchmark` | 2.342 / 2.341 | 2.537 / 2.551 |
+| Crash Bandicoot, the first 3,000 frames | 2.347 / 2.334 | 2.663 / 2.649 |
+| Tekken 3's fights, frames 7,500 to 10,500 | 3.726 / 3.750 | 4.401 / 4.362 |
+
+Every pair within 0.6 per cent but the fights' last, 0.9 per cent the faster for the final build, all within the bench's
+noise on a desktop that was busy beside the runs (a load of 3 to 4); every run of an item gave the same digests in both
+builds. Crash Bandicoot's enhanced pair is of seven rounds: in the five of the first series the base's fastest was 2.655
+and the final's 2.805, their medians 2.825 and 2.826, the final build's five rounds all slowed by something beside them;
+the seven of the second series alternate as before.
+
+### 53.6 Tests [M, 2026-10-14]
+
+- **`diamond`**, `cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS`, `EMUSEN_DIAMOND_DISCS` and
+  `EMUSEN_GPU_DEVICE=6800`: 167 unit tests, `programs.rs` 81, `renderer.rs` 3, `precise.rs` 14, `scaled.rs` 7,
+  `colour.rs` 3, `filtered.rs` 4; **`precision`** 6; **`diamond-renderer`** 2; **`diamond-v1`** 4; and without the two corpora the same counts, the corpus tests standing down. The
+  scratch measurement of §52.1 and §53.4 stays in the probe's folder and is not committed.
+- **`emusen-native`** 72 (one new: the bound written only when declared, within the schema's maximum);
+  **`emusen-core-abi-check`** 6 and its check; **`emusen-core-conform`** 7 and 19 (two new).
+- **Every other core's crate**, as §53.3.
+- **WiseMan**, as §53.3: 330 of 330, `DiamondRewindTests` (3) new, `CoreAdapterTests` with the reader's new field.
+- **Not run**: the full WiseMan suite; the handheld and the laptop (not part of this work); `emusen-gpu`'s suite
+  (unchanged); the C# host's skew fixtures of §12.5 of `EmuSen_CoreAPI.md`, which do not exist as builds yet.
+
+### 53.7 Predictions
+
+- **P-S1, held in its first half, held for two discs of three in its second** [M]: the state is 5,398,740 bytes at
+  every scale; rewind reaches 8.1 and 5.7 times as far on Spyro the Dragon and Crash Bandicoot, but 3.8 on Ape Escape,
+  where five times was predicted: its accurate part changes more between snapshots (624 KB of 2.34 MB) than the other
+  two's.
+- **P-S2 held** [M]: every case on every disc with every setting, 4× at 1,800 frames among them, C7 and C8 comparing
+  from frame 61 or 241; with all off E5's evidence. **Its premise did not**: each image's cases at 4× took 186 to 270 s,
+  under even the old whole-image deadline of 600 s, since E5's overrun came mostly from C17's and C18's state digest at
+  every frame of an 82 MB state, which the seeded state removed. The deadline on progress is kept for what it is, a
+  rule that no longer confuses a slow image with a hung one (§52.6), and was not what let this run finish.
+- **P-S3 held** [M]: the other cores' reports are unchanged but for the minor and C13's rounds.
+- **P-S4 held, after a fix** [M]: a save at 4× falls from 50.74 ms to 0.89; a load takes 4.74 ms, under the 50
+  predicted, once the seed made its blocks by rows; its first form took 38.69 and would have made loading slower than the
+  kept form's 15.06 (§53.4).
+- **P-S5 held** [M]: the frame's cost is the base's within the bench's noise, off and on (§53.5).
+
+### 53.8 What is left
+
+- A disc whose picture settles slower than the bound, by a feedback effect or a texture drawn once (§52.4), would fail
+  the kit's C8 under the setting that shows it; none of the bench does in its first 3,000 frames, and a wider corpus of
+  discs with the enhancements on is the way to find one.
+- Silent Hill's fog with true colour on is the one measured case near the bound's scale (141 of 240); a game with a
+  slower-forgetting effect would need the bound raised, or the plane's low bits kept in the state at a cost of 1 MiB
+  × N² (§52.2).
+- A held rewind shows the console's detail (§52.7). A host that wanted the enhanced picture there would keep the
+  pictures of the moments it shows, as Mistress's reel keeps thumbnails, rather than the core keeping them in its
+  state.
+- The handheld's measurement of E5 (§50.5) is still owed.
+
+### 53.9 Reading log
+
+No emulator's source, shader or snippet was opened, and no description of any emulator's save states, rewind or
+upscaler; no firmware, no game's code, nothing under `kernel/` or `kernel-harness/`, and the player's BIOS folders were
+not read. Opened, all EmuSen's own: this page from §2 to §6, §14 to §31 in part, §33.5 and §37 to §51 whole;
+`EmuSen_CoreAPI.md` §4.1 to §4.6, §5.4, §5.5, §6.4 to §6.9, §6.19, §12.5, §17 and §28; `EmuSen_CoreAPI_Extensions.md`
+§1 and §13's shape; `EmuSen_Settings_Reference.md` §4.110 to §4.112; `Diamond_Players.md` §15 and §16; the source of
+`diamond-renderer`, `precision`, `diamond-v1`, `diamond`'s `layer.rs` and `state.rs`, its state tests and the disc
+gates' support; the kit's `lib.rs`, `corpus.rs`, `digest.rs`, `main.rs` and its tests; `emusen-native`'s `desc.rs`,
+`exports.rs`, `mod.rs`, `schema.rs`, `sys.rs`, its header, baseline, machine info schema and test core;
+`emusen-core-abi-check`'s check; the C# host's `CoreDescriptors.cs`, `CoreInterface.cs`, `CoreEngine.cs` and
+`CoreMachine.cs` at the events; Mistress's `RewindBuffer.cs`, `XorDeltaCodec.cs` and `MainWindow.axaml.cs` at the rewind's
+interval; WiseMan's `DiamondEnhancementsTests.cs`, `DiamondTests.cs`, `CoreAdapterTests.cs`, `CoreDiscoveryTests.cs` and
+`MarsRtRewindTests.cs`; E5's measurement scripts in the probe. The ROM library was read, never written, for the other
+cores' kit runs.

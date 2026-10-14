@@ -2,8 +2,9 @@
 //! stream, beside the software rasteriser, which keeps VRAM. A `Layer`: told each command, each word that continues
 //! one and each display line, it keeps its own copy of VRAM in step and reads its own picture from it. Nothing it makes
 //! reaches the machine (Diamond_Enhancements.md §14 on). Paired with the precision layer it draws a polygon whose
-//! vertices are precise between the pixels, its texture in perspective, and keeps a block in the state (§22); such a
-//! polygon is filled where the console's own covers a pixel it does not, so that none shows through beside it (§33).
+//! vertices are precise between the pixels, its texture in perspective (§22); such a polygon is filled where the
+//! console's own covers a pixel it does not, so that none shows through beside it (§33). It keeps nothing in a state:
+//! a load seeds it from the machine, and its picture settles as the game draws again (§52).
 
 pub mod blocks;
 pub mod device;
@@ -17,15 +18,11 @@ use diamond::gpu::texture::Texture;
 use diamond::gpu::vram::{Mask, Rect};
 use diamond::layer::{Command, Layer, Part, Shown};
 use emusen_gpu::GpuDevice;
-use emusen_native::{StateReader, StateWriter};
 use precision::{Draw, Fraction};
 
 use blocks::{Blocks, TILES, Written};
-use device::{Back, CopyStep, Device, ENTRIES, LINES, LOADS, MAX_SCALE, PICTURE_WORDS, PIXELS, RECORDS, SLOTS, Step, TILE_RECORDS, Used, VRAM_WORDS};
+use device::{Back, CopyStep, Device, ENTRIES, LINES, LOADS, MAX_SCALE, PIXELS, RECORDS, SLOTS, Step, TILE_RECORDS, Used, VRAM_WORDS};
 use record::{Made, Record, Span, WORDS};
-
-/// The tag of the renderer's block, written when it draws precisely (Diamond_Enhancements.md §24.4).
-pub const TAG: [u8; 4] = *b"RNDR";
 
 /// What the renderer did, for its tools and its record.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -80,20 +77,6 @@ impl Options {
     }
 }
 
-/// What the renderer keeps across a state when its picture is not the machine's: its mirror a halfword a sample and,
-/// paired with the precision layer, the mark beside each (§33.3), its picture at the largest size at its scale with its
-/// own size, and the palette its CLUT slot holds; and whether a state's block is to seed it (§42.2).
-struct Kept {
-    mirror: Vec<u16>,
-    marks: Option<Vec<u16>>,
-    /// True colour's plane, a halfword a sample for its nine bits.
-    fine: Option<Vec<u16>>,
-    picture: Vec<u8>,
-    palette: Vec<u16>,
-    size: [u32; 2],
-    restored: bool,
-}
-
 /// A CPU-to-VRAM transfer the GPU is taking: its rectangle and mask, the pixels in, the open record in this stretch
 /// that holds the latest of them, and the row last marked written.
 #[derive(Clone, Copy, Debug)]
@@ -135,7 +118,6 @@ pub struct Renderer {
     width: u32,
     height: u32,
     counts: Counts,
-    kept: Option<Kept>,
     /// The picture slot, with its size, the host is handed now, and the one the next `frame_end` hands (§38.1).
     handed: (usize, u32, u32),
     ahead: (usize, u32, u32),
@@ -169,25 +151,10 @@ impl Renderer {
             width: 256,
             height: 240,
             counts: Counts::default(),
-            kept: None,
             handed: (0, 0, 0),
             ahead: (0, 0, 0),
             options,
         })
-    }
-
-    /// The renderer as an enhancement attaches it: keeping a block in the state, since what it draws is no longer what
-    /// the machine's VRAM gives (§22.5, §42.2); with `marks` when paired with the precision layer, whose triangles write
-    /// them.
-    pub fn keeping(mut self, marks: bool) -> Renderer {
-        self.keep(marks);
-        self
-    }
-
-    fn keep(&mut self, marks: bool) {
-        let samples = VRAM_WORDS * (self.options.scale * self.options.scale) as usize;
-        let picture = PICTURE_WORDS * 4 * (self.options.scale * self.options.scale) as usize;
-        self.kept = Some(Kept { mirror: vec![0; samples], marks: marks.then(|| vec![0; samples]), fine: self.options.colour.then(|| vec![0; samples]), picture: vec![0; picture], palette: vec![0; 256], size: [256, 240], restored: false });
     }
 
     pub fn options(&self) -> Options {
@@ -204,9 +171,6 @@ impl Renderer {
             self.device.rebuild(options.scale, options.bits())?;
         }
         self.options = options;
-        if let Some(marks) = self.kept.as_ref().map(|k| k.marks.is_some()) {
-            self.keep(marks);
-        }
         Ok(())
     }
 
@@ -636,89 +600,6 @@ impl Layer for Renderer {
         self.executed_with(c, None);
     }
 
-    fn tags(&self) -> Vec<[u8; 4]> {
-        if self.kept.is_some() { vec![TAG] } else { Vec::new() }
-    }
-
-    /// Everything planned drawn, and the mirror, the slot's palette and the picture read back to where `save` reads them.
-    fn settle(&mut self) {
-        if self.kept.is_none() {
-            return;
-        }
-        let samples = self.samples();
-        let mirror: Vec<u16> = samples.iter().map(|&w| w as u16).collect();
-        let marks: Vec<u16> = samples.iter().map(|&w| (w >> 16) as u16).collect();
-        let fine: Option<Vec<u16>> = self.options.colour.then(|| {
-            self.submit(Back::Fine);
-            self.device.held().back.slice::<u32>()[..mirror.len()].iter().map(|&w| w as u16).collect()
-        });
-        self.submit(Back::Palette(self.slot));
-        let entries = self.slot_entries as usize;
-        let palette: Vec<u16> = self.device.held().back.slice::<u32>()[..256].iter().enumerate().map(|(i, &w)| if i < entries { w as u16 } else { 0 }).collect();
-        let (width, height) = (self.width, self.height);
-        let picture = self.picture().0.to_vec();
-        let n = picture.len();
-        let kept = self.kept.as_mut().expect("kept");
-        kept.mirror.copy_from_slice(&mirror);
-        if let Some(m) = kept.marks.as_mut() {
-            m.copy_from_slice(&marks);
-        }
-        if let (Some(k), Some(f)) = (kept.fine.as_mut(), fine) {
-            k.copy_from_slice(&f);
-        }
-        kept.palette.copy_from_slice(&palette);
-        kept.picture[..n].copy_from_slice(&picture);
-        kept.picture[n..].fill(0);
-        kept.size = [width, height];
-    }
-
-    fn save(&self, _tag: [u8; 4], w: &mut StateWriter) {
-        let Some(k) = &self.kept else { return };
-        w.u32s("Size", &k.size);
-        w.u16s("Mirror", &k.mirror);
-        w.bytes("Picture", &k.picture);
-        w.u16s("Palette", &k.palette);
-        if let Some(m) = &k.marks {
-            w.u16s("Marks", m);
-        }
-        if let Some(f) = &k.fine {
-            w.u16s("Fine", f);
-        }
-    }
-
-    fn load(&mut self, tag: [u8; 4], block: &[u8]) {
-        let Some(k) = self.kept.as_mut() else { return };
-        let mut r = StateReader::new(block);
-        let mut size = [0u32; 2];
-        let read = (|| {
-            r.u32s(&mut size)?;
-            r.u16s(&mut k.mirror)?;
-            r.bytes(&mut k.picture)?;
-            r.u16s(&mut k.palette)?;
-            // A state of stage E4's has no marks: none are taken, and its first frame fills as it finds.
-            match k.marks.as_mut() {
-                Some(m) if r.position() == block.len() => m.fill(0),
-                Some(m) => r.u16s(m)?,
-                None => {}
-            }
-            match k.fine.as_mut() {
-                Some(f) => r.u16s(f),
-                None => Ok(()),
-            }
-        })();
-        if read.is_err() || r.position() != block.len() || size[0] * size[1] > PICTURE_WORDS as u32 {
-            return self.clear(tag);
-        }
-        k.size = size;
-        k.restored = true;
-    }
-
-    fn clear(&mut self, _tag: [u8; 4]) {
-        if let Some(k) = self.kept.as_mut() {
-            k.restored = false;
-        }
-    }
-
     fn shown(&mut self, s: Shown) {
         Renderer::shown(self, s);
     }
@@ -728,9 +609,9 @@ impl Layer for Renderer {
         false
     }
 
-    /// The GPU's VRAM, picture, CLUT cache and the transfer or polyline it has open, taken as the renderer's own, or in
-    /// their place the mirror, picture and palette a state's block gave; what was planned before is dropped, being of
-    /// another machine.
+    /// The GPU's VRAM, picture, CLUT cache and the transfer or polyline it has open, taken as the renderer's own, each
+    /// pixel a block at the scale, with no marks and true colour's plane empty; what was planned before is dropped,
+    /// being of another machine (§16.6, §52.3).
     fn seed(&mut self, gpu: &Gpu) {
         self.steps.clear();
         self.used = Used::default();
@@ -740,43 +621,35 @@ impl Layer for Renderer {
         s.read.clear();
         s.pairs.clear();
         s.serial += 1;
-        let restored = self.kept.as_mut().filter(|k| k.restored).map(|k| {
-            k.restored = false;
-            &*k
-        });
         self.device.gpu.wait_for_pending();
         let n = self.options.scale as usize;
         let held = self.device.held();
         let (staged, back, slot) = (self.device.staged().records.slice_mut::<u32>(), held.back.slice_mut::<u32>(), held.slots[0].slice_mut::<u32>());
-        match restored {
-            Some(k) => {
-                (self.width, self.height) = (k.size[0], k.size[1]);
-                for (i, (o, &h)) in back.iter_mut().zip(k.mirror.iter()).enumerate() {
-                    *o = h as u32 | k.marks.as_ref().map_or(0, |m| (m[i] as u32) << 16);
-                }
-                for (o, p) in slot.iter_mut().zip(k.picture.chunks_exact(4)) {
-                    *o = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
-                }
-                for (o, &c) in staged[..256].iter_mut().zip(k.palette.iter()) {
-                    *o = c as u32;
-                }
+        // At a scale each pixel of the machine's VRAM and picture is a block of the same value (§39.6): a row of blocks
+        // made once and copied to the block's other rows.
+        (self.width, self.height) = (gpu.display.width, gpu.display.height);
+        let row = 1024 * n;
+        for y in 0..512 {
+            for (x, block) in back[y * n * row..][..row].chunks_exact_mut(n).enumerate() {
+                block.fill(gpu.vram.get(x as u32, y as u32) as u32);
             }
-            None => {
-                // At a scale each pixel of the machine's VRAM and picture is a block of the same value (§39.6).
-                (self.width, self.height) = (gpu.display.width, gpu.display.height);
-                for (i, o) in back[..VRAM_WORDS * n * n].iter_mut().enumerate() {
-                    let (x, y) = ((i % (1024 * n)) / n, i / (1024 * n) / n);
-                    *o = gpu.vram.get(x as u32, y as u32) as u32;
-                }
-                let (w, frame) = (self.width as usize * n, gpu.display.frame());
-                for (i, o) in slot[..w * self.height as usize * n].iter_mut().enumerate() {
-                    let at = ((i / w / n) * self.width as usize + (i % w) / n) * 4;
-                    *o = u32::from_le_bytes([frame[at], frame[at + 1], frame[at + 2], frame[at + 3]]);
-                }
-                for (o, &c) in staged[..256].iter_mut().zip(gpu.clut.colours.iter()) {
-                    *o = c as u32;
-                }
+            for j in 1..n {
+                back.copy_within(y * n * row..(y * n + 1) * row, (y * n + j) * row);
             }
+        }
+        let (width, frame) = (self.width as usize, gpu.display.frame());
+        let w = width * n;
+        for y in 0..self.height as usize {
+            for (x, block) in slot[y * n * w..][..w].chunks_exact_mut(n).enumerate() {
+                let at = (y * width + x) * 4;
+                block.fill(u32::from_le_bytes([frame[at], frame[at + 1], frame[at + 2], frame[at + 3]]));
+            }
+            for j in 1..n {
+                slot.copy_within(y * n * w..(y * n + 1) * w, (y * n + j) * w);
+            }
+        }
+        for (o, &c) in staged[..256].iter_mut().zip(gpu.clut.colours.iter()) {
+            *o = c as u32;
         }
         let (w, h) = (self.width * n as u32, self.height * n as u32);
         (self.slot, self.slot_entries, self.next_slot) = (0, 256, 1);
@@ -788,16 +661,8 @@ impl Layer for Renderer {
             c.copy(records, &held.cluts, 256 * 4, 0, 0);
         });
         if self.options.colour {
-            // True colour's plane: the state's, or none, the machine's VRAM having only the console's five bits.
-            match restored.and_then(|k| k.fine.as_ref()) {
-                Some(f) => {
-                    for (o, &l) in back.iter_mut().zip(f.iter()) {
-                        *o = l as u32;
-                    }
-                    self.device.gpu.submit(|c| c.copy(&held.back, &held.fine, 0, 0, 0));
-                }
-                None => self.device.gpu.submit(|c| c.fill(&held.fine, 0)),
-            }
+            // True colour's plane empty, the machine's VRAM having only the console's five bits.
+            self.device.gpu.submit(|c| c.fill(&held.fine, 0));
             self.counts.submissions += 1;
         }
         self.counts.submissions += 1;

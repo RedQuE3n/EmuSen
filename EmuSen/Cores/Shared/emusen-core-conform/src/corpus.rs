@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicU64;
 use std::sync::mpsc;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -10,13 +11,14 @@ use std::time::{Duration, Instant};
 use emusen_native::core::jsonw::Json;
 
 use crate::api::Lib;
+use crate::progress;
 use crate::{Case, Options, Report, cases_json, core_c11, core_cases, image_cases};
 
 /// The ids of the cases run once for the core, and of those run for every image; C4 is in both, by its parts.
 pub const CORE_CASES: [&str; 11] = ["C1", "C2", "C3", "C4", "C5", "C9", "C10", "C11", "C12", "C13", "C15"];
 pub const IMAGE_CASES: [&str; 8] = ["C4", "C6", "C7", "C8", "C14", "C16", "C17", "C18"];
 
-/// How long one image's cases may take before the image is reported as hung and its thread left.
+/// How long one image's cases may run no frame before the image is reported as hung and its thread left (§28.10).
 pub const IMAGE_DEADLINE_SECONDS: u64 = 600;
 
 /// The memory one image's cases are allowed for beside the image itself, when the images run at once are fitted to the
@@ -225,13 +227,14 @@ fn one_image(lib: &Lib, library: &Path, base: &Options, name: &str, file: &Path,
 }
 
 enum Message {
-    Started(usize, Instant),
+    Started(usize, Arc<AtomicU64>),
     Done(usize, ImageResult, BTreeSet<i32>),
 }
 
 /// Runs the core's cases once on `reference` (its image is `opts.image`) and the image cases on every image, at most
 /// `jobs` images at a time and as many as `memory` admits by their estimates (`factor` copies of each, else
-/// `estimate`'s); `progress` hears of each image as it ends. An image still running at `deadline` is reported hung.
+/// `estimate`'s); `progress` hears of each image as it ends. An image whose cases run no frame for `deadline` is
+/// reported hung.
 #[allow(clippy::too_many_arguments)]
 pub fn run(library: &Path, opts: &Options, reference: &str, images: &[(String, PathBuf)], jobs: usize, memory: u64, factor: Option<u64>, deadline: Duration, progress: &mut dyn FnMut(&ImageResult)) -> Corpus {
     run_with(library, opts, opts, reference, images, jobs, memory, factor, deadline, progress)
@@ -266,11 +269,14 @@ pub fn run_with(library: &Path, opts: &Options, base: &Options, reference: &str,
                     if budget.admit(need) {
                         eprintln!("{}: its estimate, {} MiB, is more than the {} MiB allowed, so it runs alone", images[i].0, need >> 20, budget.allowed >> 20);
                     }
-                    if tx.send(Message::Started(i, Instant::now())).is_err() {
+                    let stamp = Arc::new(AtomicU64::new(progress::now()));
+                    progress::watch(Some(stamp.clone()));
+                    if tx.send(Message::Started(i, stamp)).is_err() {
                         budget.release(need);
                         break;
                     }
                     let (result, statuses) = one_image(lib, &library, &base, &images[i].0, &images[i].1, &heading);
+                    progress::watch(None);
                     budget.release(need);
                     if tx.send(Message::Done(i, result, statuses)).is_err() {
                         break;
@@ -281,12 +287,12 @@ pub fn run_with(library: &Path, opts: &Options, base: &Options, reference: &str,
         for _ in 0..jobs.min(images.len()) {
             worker();
         }
-        let mut running: HashMap<usize, Instant> = HashMap::new();
+        let mut running: HashMap<usize, Arc<AtomicU64>> = HashMap::new();
         let mut left = images.len();
         while left > 0 {
             match rx.recv_timeout(Duration::from_millis(500)) {
-                Ok(Message::Started(i, at)) => {
-                    running.insert(i, at);
+                Ok(Message::Started(i, stamp)) => {
+                    running.insert(i, stamp);
                 }
                 Ok(Message::Done(i, result, returned)) => {
                     running.remove(&i);
@@ -299,12 +305,12 @@ pub fn run_with(library: &Path, opts: &Options, base: &Options, reference: &str,
                 }
                 Err(_) => {}
             }
-            let late: Vec<usize> = running.iter().filter(|(_, at)| at.elapsed() >= deadline).map(|(&i, _)| i).collect();
+            let late: Vec<usize> = running.iter().filter(|(_, stamp)| progress::idle(stamp) >= deadline.as_millis() as u64).map(|(&i, _)| i).collect();
             for i in late {
                 running.remove(&i);
                 let seconds = deadline.as_secs();
                 let mut report = Report { image: Some(images[i].0.clone()), cases: Vec::new(), ..crate::heading(library, Some(lib), opts.frames) };
-                report.cases.push(Case { id: "C6", name: "the frame", passed: false, evidence: vec![format!("the image's cases did not finish in {seconds} s; its thread was left running")], images: Vec::new() });
+                report.cases.push(Case { id: "C6", name: "the frame", passed: false, evidence: vec![format!("the image's cases ran no frame for {seconds} s; its thread was left running")], images: Vec::new() });
                 let result = ImageResult { name: images[i].0.clone(), report, seconds: seconds as f64 };
                 progress(&result);
                 results[i] = Some(result);

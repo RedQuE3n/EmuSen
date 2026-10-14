@@ -27,7 +27,7 @@ mod records;
 
 fn renderer() -> Option<Renderer> {
     match Renderer::new(None) {
-        Ok(r) => Some(r.keeping(true)),
+        Ok(r) => Some(r),
         Err(e) => {
             eprintln!("no Vulkan device ({e}): not run");
             None
@@ -979,12 +979,14 @@ fn paired() -> Option<Box<Precise<Tap>>> {
     Some(Box::new(Precise::new(Precision::default(), Tap::new(Some(renderer()?), false))))
 }
 
-/// §33.5: the marks are the state's. Two precise quads that share a slanted edge, the left drawn at once and the right
-/// three vertical blanks later, and a state saved between the two. The machine that saved it and one that loads it
-/// draw the right quad alike, to the pixel; one given the same state with its marks cleared fills the right quad over
-/// the left's pixels along their edge, as the fill without marks does (§33.3), so the block needs them.
+/// §52.2: the marks are no longer the state's. Two precise quads that share a slanted edge, the left drawn at once and
+/// the right three vertical blanks later, and a state saved between the two. A machine given the state seeds its mirror
+/// from the console's VRAM, so it shows the left quad as the console drew it, and draws the right quad finding no mark of
+/// the left's; it differs from the machine that saved it only along the quads' edges, where precise and console
+/// coverage part, and the machine itself is the same. This program never draws the left quad again, so the difference
+/// stays; a game, drawing every frame, settles (§52.1).
 #[test]
-fn a_state_between_two_quads_that_share_an_edge_keeps_their_marks() {
+fn a_state_between_two_quads_that_share_an_edge_keeps_no_marks() {
     if renderer().is_none() {
         return;
     }
@@ -996,78 +998,70 @@ fn a_state_between_two_quads_that_share_an_edge_keeps_their_marks() {
         body += &acknowledged;
     }
     body += &projected_quad(0x28E0_0000, right, None);
-    let loaded = |state: &[u8]| {
-        let mut m = fill_machine(&body);
-        m.attach(paired().unwrap());
-        m.load_state(state).unwrap();
-        for _ in 0..3 {
-            m.advance();
-        }
-        (tap(&mut m).precision.counts().precise_polygons, drawn(&mut m).picture().0.to_vec())
-    };
     let mut a = fill_machine(&body);
     a.attach(paired().unwrap());
     a.advance();
     a.advance();
     assert_eq!(tap(&mut a).precision.counts().precise_polygons, 1, "the left quad alone before the state");
     let state = saved(&mut a);
+    let mut b = fill_machine(&body);
+    b.attach(paired().unwrap());
+    b.load_state(&state).unwrap();
     for _ in 0..3 {
         a.advance();
+        b.advance();
     }
-    assert_eq!(tap(&mut a).precision.counts().precise_polygons, 2, "the right quad after it");
-    let picture = drawn(&mut a).picture().0.to_vec();
-    let (_, continued) = loaded(&state);
-    let differing = |other: &[u8]| picture.chunks(4).zip(other.chunks(4)).filter(|(x, y)| x != y).count();
-    assert_eq!(differing(&continued), 0, "the machine that loaded the state draws another picture");
-    let layout = a.layout();
-    let marks: Vec<usize> = layout.lines().find(|l| l.ends_with("Marks")).expect("the marks' field").split_whitespace().take(2).map(|n| n.parse().unwrap()).collect();
-    let mut cleared = state.clone();
-    cleared[marks[0]..marks[0] + marks[1]].fill(0);
-    let (_, unmarked) = loaded(&cleared);
-    eprintln!("with the marks cleared from the state {} pixels differ", differing(&unmarked));
-    assert!(differing(&unmarked) > 0, "the marks made no difference: the test no longer holds them");
+    assert_eq!((tap(&mut a).precision.counts().precise_polygons, tap(&mut b).precision.counts().precise_polygons), (2, 1), "the right quad after it, precise on both");
+    assert!(saved(&mut a) == saved(&mut b), "the machine is the same");
+    let (pa, pb) = (drawn(&mut a).picture().0.to_vec(), drawn(&mut b).picture().0.to_vec());
+    let differing: Vec<usize> = pa.chunks(4).zip(pb.chunks(4)).enumerate().filter(|(_, (x, y))| x != y).map(|(i, _)| i).collect();
+    let covered = pa.chunks(4).filter(|p| p != &&pa[..4]).count();
+    eprintln!("{} pixels differ, of the {covered} the quads cover", differing.len());
+    assert!(!differing.is_empty() && differing.len() * 20 < covered, "{differing:?}");
 }
 
-/// §24.4 on the grid: a state saved with the setting on, loaded on a machine with it on, continues the picture as the
-/// machine that saved it draws it, frame for frame; saved, loaded and saved again it is the same bytes; loaded with the
-/// setting off the machine continues as the first; and a state made with it off loads with it on and continues the
-/// machine, its polygons precise again within two frames.
+/// §52 on the grid, which draws every frame: a state saved with the setting on is the machine's to the byte; a machine
+/// given it hands the saver's pictures within a few frames and from then on, and two machines given it hand the same
+/// pictures from the first frame; saved, loaded and saved again it is the same bytes; and the precision layer starts
+/// empty at the load and finds its polygons again within two frames.
 #[test]
-fn a_state_with_the_setting_on_continues_its_picture_and_loads_both_ways() {
+fn a_state_with_the_setting_on_is_the_machines_and_its_picture_settles() {
     let Some(pair) = paired() else { return };
     let mut a = mesh_machine();
     a.attach(pair);
+    let mut c = mesh_machine();
     for _ in 0..40 {
         a.advance();
-    }
-    let state = saved(&mut a);
-    a.load_state(&state).unwrap();
-    assert!(saved(&mut a) == state, "save, load, save gives other bytes");
-    let mut b = mesh_machine();
-    b.attach(paired().unwrap());
-    b.load_state(&state).unwrap();
-    let mut c = mesh_machine();
-    c.load_state(&state).unwrap();
-    for f in 0..20 {
-        for m in [&mut a, &mut b, &mut c] {
-            m.advance();
-        }
-        let (pa, pb) = (drawn(&mut a).picture().0.to_vec(), drawn(&mut b).picture().0.to_vec());
-        assert!(pa == pb, "frame {f} after the load: the pictures differ in {} pixels", pa.chunks(4).zip(pb.chunks(4)).filter(|(x, y)| x != y).count());
-    }
-    assert_eq!((state_digest(&a), state_digest(&b)), (state_digest(&c), state_digest(&c)), "the machine continues the same, the layer on or off");
-    assert!(drawn(&mut a).counts().precise > 0);
-    let plain = saved(&mut c);
-    let mut d = mesh_machine();
-    d.attach(paired().unwrap());
-    d.load_state(&plain).unwrap();
-    let before = tap(&mut d).precision.counts().precise_polygons;
-    for _ in 0..2 {
-        d.advance();
         c.advance();
     }
-    assert!(tap(&mut d).precision.counts().precise_polygons > before && state_digest(&d) == state_digest(&c), "a state without the blocks: precise again, and the machine the same");
-    assert!(state.len() > plain.len() + 4_000_000, "{} against {}", state.len(), plain.len());
+    let state = saved(&mut a);
+    assert!(state == saved(&mut c), "the state is the machine's");
+    let (mut b, mut e) = (mesh_machine(), mesh_machine());
+    for m in [&mut b, &mut e] {
+        m.attach(paired().unwrap());
+        m.load_state(&state).unwrap();
+    }
+    assert!(saved(&mut b) == state, "save, load, save gives other bytes");
+    assert_eq!(tap(&mut b).precision.counts().precise_polygons, 0, "the layer starts empty");
+    let mut equal_from = None;
+    for f in 0..20 {
+        for m in [&mut a, &mut b, &mut c, &mut e] {
+            m.advance();
+        }
+        let (pa, pb, pe) = (drawn(&mut a).picture().0.to_vec(), drawn(&mut b).picture().0.to_vec(), drawn(&mut e).picture().0.to_vec());
+        assert!(pb == pe, "frame {f} after the load: two machines given one state differ");
+        match (pa == pb, equal_from) {
+            (true, None) => equal_from = Some(f),
+            (false, Some(_)) => panic!("frame {f}: the picture differs again after settling"),
+            _ => {}
+        }
+        if f == 1 {
+            assert!(tap(&mut b).precision.counts().precise_polygons > 0, "precise again within two frames");
+        }
+    }
+    eprintln!("the picture is the saver's from frame {equal_from:?} after the load");
+    assert!(equal_from.is_some_and(|f| f < 4));
+    assert_eq!((state_digest(&a), state_digest(&b)), (state_digest(&c), state_digest(&c)), "the machine continues the same, the layer on or off");
 }
 
 /// §26.3's defect, held: four strips of a picture side by side at one depth, each its texture's 64 columns at a little
@@ -1138,7 +1132,7 @@ fn a_strip_of_a_picture_shows_no_texel_past_its_edge() {
 /// A fill program run three frames with the renderer at `scale`, paired with the precision layer or alone (the
 /// console's own polygons at that scale); the machine and every sample of the renderer's mirror.
 fn filled_at(body: &str, scale: u32, paired: bool) -> Option<(Machine, Vec<u32>)> {
-    let r = Renderer::with(None, diamond_renderer::Options { scale, ..Default::default() }).ok()?.keeping(true);
+    let r = Renderer::with(None, diamond_renderer::Options { scale, ..Default::default() }).ok()?;
     let mut m = fill_machine(body);
     if paired {
         m.attach(Box::new(Precise::new(Precision::default(), Tap::new(Some(r), true))));
@@ -1222,7 +1216,7 @@ fn the_turning_grids_shared_edges_hold_at_n() {
         return;
     }
     for scale in [2u32, 4] {
-        let r = Renderer::with(None, diamond_renderer::Options { scale, ..Default::default() }).unwrap().keeping(true);
+        let r = Renderer::with(None, diamond_renderer::Options { scale, ..Default::default() }).unwrap();
         let mut m = mesh_machine();
         m.attach(Box::new(Precise::new(Precision::default(), Tap::new(Some(r), false))));
         let (mut edges, mut holes, mut last) = (Vec::new(), 0, 0);

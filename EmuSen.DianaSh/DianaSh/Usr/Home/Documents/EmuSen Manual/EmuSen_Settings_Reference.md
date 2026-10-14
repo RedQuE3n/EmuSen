@@ -8578,3 +8578,19 @@ rewind land on half-second moments. It matters most where states are large, as D
 (`Diamond_Enhancements.md` §47.2).
 
 **Tests.** `PadRewindReelTests` asserts the interval is half a second of the running console's frames.
+
+### 4.113 The PlayStation's enhancements no longer grow its save states (2026-10-14)
+
+*Decided 2026-10-14 by the tester, `Diamond_Enhancements.md` §52.* The four rows of §4.110 and §4.111 are unchanged in
+key, label, choices and default; their costs change. Each said the save states grew (about twice the size with *Precise
+geometry*, to about 47 MB at 4x); a state with any of them on is now the console's alone, the same bytes as with none,
+and after a load the picture is the console's, enlarged, until the game draws it again. *Precise geometry* and
+*Internal resolution* now say "just after a save state is loaded it takes a moment to regain its detail", and *True
+colour* "just after a save state is loaded smooth fog and glows can take a few seconds to settle", which is §52.1's
+measure of Silent Hill's fog there. *Texture filtering* said nothing of states and is unchanged.
+
+Since no setting changes the state's length any more, turning one on no longer restarts the rewind chain of §4.112, and
+the same budget reaches back four to eight times as far with every enhancement on at 2x (`Diamond_Players.md` §17).
+
+**Tests.** `DiamondEnhancementsTests` holds the state with a setting on to the plain run's bytes and reads the bound of
+settling pictures through the host; `DiamondRewindTests` measures rewind's reach.

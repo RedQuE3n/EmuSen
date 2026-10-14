@@ -771,7 +771,7 @@ bus would have to be the same object the board holds, borrowed twice. Told to th
 board, and a console that wants them steps through a bus of its own that forwards them; Diamond's is `LayeredBus`
 (`Diamond_Enhancements.md` §2.3).
 
-**Version 2: a shift by a constant** (*2026-10-14*, `Diamond_Enhancements.md` §52). Version 1 is the seven moves of the
+**Version 2: a shift by a constant** (*2026-10-14*, `Diamond_Enhancements.md` §54). Version 1 is the seven moves of the
 table but the last, with the store told before it writes; version 2 adds `Move::Shift` and changes none of the seven. A shift by a constant
 gives a register another's bits moved, which a console following a value may want to follow as it follows a copy: Spyro
 the Dragon keeps each projected vertex shifted left five bits in another register, with flags in the bits cleared, and

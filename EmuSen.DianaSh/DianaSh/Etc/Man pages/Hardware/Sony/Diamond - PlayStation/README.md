@@ -46,7 +46,8 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   in place (minor 1.3) and the drive's place named ahead (minor 1.4, §12.8.10), every run under the 90 MiB/s cap; and
   §15 (2026-10-13), "Precise geometry" as players meet it: where the switch is, its cost, without a graphics card,
   states, and what to expect by game; and §16 (2026-10-14), internal resolution, true colour and texture filtering, the
-  frame of latency every enhancement now has, and which suit the handheld.
+  frame of latency every enhancement now has, and which suit the handheld; and §17 (2026-10-14), save states and rewind with the enhancements: the same
+  5.4 MB with them on, rewind reaching further, and the moment after a load before the picture settles.
 - [`Diamond_Speed.md`](Diamond_Speed.md) — the exact levers, written 2026-10-12 at stage 13: the bench of the seven copied
   discs on the open kernel and the link's placement as a source of error, the profile that put idle skipping before the
   plan's other levers, the skipper's proof, window, skip and verifier with the loop forms of `programs/idle.s`, the
@@ -88,11 +89,15 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   picture handed at the scale, a coordinate that wrapped found and fixed, the crack fill at N×), true colour as a plane
   of low bits, texture filtering with sprites kept crisp, the four settings, the state kept at N× against the seeded
   form measured and a change to the kit proposed, the gate, the pictures and their defects, the cost at each scale and
-  the handheld estimated from the tester's play. Following a shift, 2026-10-14 (§52, §53): a trial, Spyro the Dragon's
-  pattern read from its running code (SLL by 5 into another register, flags set in place, SRA back in place), the
-  R3000A's new move and the layer carrying a serial through it, the keep rule fixed before measuring, Spyro's precise
-  polygons from 36.9 to 95.9 per cent with the other discs unchanged, the rule's second item failed by its letter and
-  put to the tester, the gate and the cost.
+  the handheld estimated from the tester's play. The seeded state, 2026-10-14 (§52 to §53): decided first, the state
+  the machine's alone with any enhancement on and every load seeding the renderer, the settling measured disc by disc
+  (six frames on drawn pictures, 141 on Silent Hill's fog with true colour), the bound Diamond declares under the core
+  ABI's minor 1.5, the kit's rule and its deadline on progress; then as built, the kit on the eight discs at 1,800 frames
+  with every setting and at 4×, states of 5.4 MB where they were up to 82, rewind reaching four to eight times as far.
+  Following a shift, 2026-10-14 (§54, §55): a trial, Spyro the Dragon's pattern read from its running code (SLL by 5
+  into another register, flags set in place, SRA back in place), the R3000A's new move and the layer carrying a serial
+  through it, the keep rule fixed before measuring, Spyro's precise polygons from 36.9 to 95.9 per cent with the other
+  discs unchanged, the rule's second item failed by its letter and put to the tester, the gate and the cost.
 - [`Diamond_Debugger.md`](Diamond_Debugger.md) — the debugger, written 2026-10-11 at stage 12: what a host is given (the
   R3000A and the GTE as processors, `R3000BUS` as a view), the observed frame and where a stop falls, stores reported in
   the bus and in the memory they land in, the call stack with calls at the branch, returns after the delay slot and a

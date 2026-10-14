@@ -398,6 +398,7 @@ pub unsafe fn machine_info<T: Core>(machine: *const Machine, out: *mut u8, len: 
         space_size: &|id| core.space_size(id).ok(),
         battery_len: &|which| core.battery(which).ok().map(|(d, _)| d.len() as i64),
         capabilities: T::CAPABILITIES,
+        picture_settles: core.picture_settles(),
     };
     let drives = if T::CAPABILITIES & caps::MEDIA != 0 { core.drives() } else { Vec::new() };
     let text = desc::machine_info_json(&core.machine_info(), &measured, &drives);

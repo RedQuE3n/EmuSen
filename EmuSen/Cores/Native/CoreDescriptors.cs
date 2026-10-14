@@ -76,6 +76,9 @@ namespace EmuSen.Cores.Native
 
         // None for a core without MEDIA, which an older core is.
         public IReadOnlyList<CoreDrive> Drives { get; init; } = Array.Empty<CoreDrive>();
+
+        // Since 1.5: the frames after a load whose pictures may differ from the saving machine's; 0 for an older core - see EmuSen_CoreAPI.md §6.9.
+        public int PictureSettles { get; init; }
     }
 
     // One setting of a v1 core's schema, its words and trade-off kept for presentation - see EmuSen_CoreAPI.md §6.13.
@@ -188,6 +191,7 @@ namespace EmuSen.Cores.Native
             {
                 Firmware = Arr(r, "firmware").Select(f => new CoreFirmwareSource((uint)Long(f, "which"), Str(f, "source", "absent"))).ToArray(),
                 Drives = Arr(r, "drives").Select(d => new CoreDrive((uint)Long(d, "drive"), Str(d, "label"), Str(d, "kind"), Str(d, "lid") == "open", Bool(d, "loaded"))).ToArray(),
+                PictureSettles = (int)Long(state, "picture_settles"),
             };
         }
 

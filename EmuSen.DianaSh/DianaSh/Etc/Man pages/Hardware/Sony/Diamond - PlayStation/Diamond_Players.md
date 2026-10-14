@@ -1579,13 +1579,14 @@ and a note under the row says so: "No usable Vulkan graphics card was found (the
 is shown." Where the only Vulkan is the processor's own (llvmpipe) the picture is drawn there, the same, slowly, and
 the note says that instead. Nothing fails to load because of it, and a game's stored setting is never refused.
 
-**Save states.** With it on a state is about 11.6 MB against 5.4 MB, since it holds what the enhancement needs to draw
+**Save states.** *Since 2026-10-14 a state is the same 5.4 MB with it on or off, and the picture settles a moment after a
+load (§17).* With it on a state was about 11.6 MB against 5.4 MB, since it held what the enhancement needs to draw
 the next frame exactly as the machine that saved it would. A state saved with it on loads with it off, and one saved
 with it off loads with it on; the first frame or two after such a load may be drawn with fewer precise corners.
 
 **What to expect, by game** (`Diamond_Enhancements.md` §25.5): Crash Bandicoot, Mega Man Legends, Ape Escape and Tekken
 3's fights are drawn 81 to 99.7 per cent precise; Silent Hill's play wholly, its opening not; Spyro the Dragon 96 to
-98 per cent since 2026-10-14 (`Diamond_Enhancements.md` §53), its corners followed through the shift it keeps them in,
+98 per cent since 2026-10-14 (`Diamond_Enhancements.md` §55), its corners followed through the shift it keeps them in,
 where at first it was under a fifth, so its grass, walls and hills now stay steady as the camera turns; Rayman and
 Castlevania, which draw in 2D, almost nothing, and their pictures are the console's.
 
@@ -1635,8 +1636,8 @@ does not take its neighbour's colours.
 **Every enhancement shows its picture a frame late**: about 17 ms at 60 frames a second, the same for all four,
 *Precise geometry* included since this stage. It is what lets the game run without ever waiting for the graphics card.
 
-**Save states** grow with them: about 11.6 MB with *Precise geometry* alone at 1x, 26.5 MB at 2x and 82 MB at
-4x with every enhancement on, against 5.4 MB with none.
+**Save states** grew with them as first offered: about 11.6 MB with *Precise geometry* alone at 1x, 26.5 MB at 2x and
+82 MB at 4x with every enhancement on, against 5.4 MB with none. *Since 2026-10-14 they do not grow at all (§17).*
 
 **Without a usable graphics card** each row can still be turned on; the console's picture is shown and a note under each
 row set says why, as for *Precise geometry* (§15).
@@ -1652,3 +1653,28 @@ resolution* of *1x*: true colour and filtering cost the card little, and the han
 resolution or near it, where a higher internal resolution shows least. *2x* is worth trying in a game that runs with
 room to spare; *3x* and *4x* are for a desktop graphics card, where every bench game draws its 4x picture in under 1.5 ms
 of a 16.7 ms frame.
+
+## 17. Save states and rewind with the enhancements (2026-10-14)
+
+*`Diamond_Enhancements.md` §52 and §53; decided by the tester the same day.* A save state with any of the four
+enhancements on is now the console's state alone, the same 5.4 MB as with none, at every internal resolution: it no
+longer holds the enhanced picture, which the graphics card draws again after a load.
+
+**What a player gains.** Save states a fifteenth of their size at 4x with everything on, and the same file whichever
+enhancements are set, so a state saved with them loads without them and the reverse, as before. Rewind reaches far
+further back in the same memory: with every enhancement on at 2x, about 82 seconds in Spyro the Dragon where it reached
+10, 81 in Ape Escape where it reached 22, and 124 in Crash Bandicoot where it reached 22, at Mistress's two snapshots a
+second. Turning an enhancement on or off no longer empties the rewind history, since the state's size no longer
+changes. Saving and loading a state no longer waits for the graphics card to copy its pictures back.
+
+**What it costs.** For a moment after a state is loaded, or while a rewind is held, the picture is the console's,
+enlarged, without the enhancements' detail: the game's next frames draw it again. In most games that takes a tenth of a
+second (six frames at the most on the bench discs); in a game that builds its picture from the one before, such as
+Silent Hill's fog, the last traces take about half a second to fade, or two to three seconds with *True colour* on,
+since its finer shades fade more slowly. A game that draws something once and keeps it, as a backdrop drawn at the
+start of a level, shows that at the console's detail until it draws it again. The game itself is never affected: what
+it computes, its sound and its timing are exactly those of the state.
+
+**States made before.** A state saved with the enhancements on by an earlier build loads, its saved pictures set aside,
+and the game continues exactly; its picture settles as from any state.
+

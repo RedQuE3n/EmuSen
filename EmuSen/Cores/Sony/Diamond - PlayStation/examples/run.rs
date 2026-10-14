@@ -121,7 +121,7 @@ fn main() {
             std::process::exit(2)
         });
         eprintln!("[precise geometry on {}]", r.report());
-        m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r.keeping(true))));
+        m.attach(Box::new(precision::Precise::new(precision::Precision::default(), r)));
     }
     if args.iter().any(|a| a == "--precision") {
         m.attach(Box::new(precision::Precise::new(precision::Precision::default(), Unseen)));

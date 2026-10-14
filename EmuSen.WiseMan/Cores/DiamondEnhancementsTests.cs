@@ -128,7 +128,7 @@ namespace EmuSen.WiseMan.Cores
             window.Close();
         }, default);
 
-        // Through the host, between frames: the sound and the machine's state are those of a run that never had the setting, and the picture differs only while it is on; where no Vulkan device is usable the row's note says so and nothing changes.
+        // Through the host, between frames: the sound and the state are those of a run that never had the setting, to the byte, the picture differs only while it is on, and machine info bounds its settling after a load meanwhile; where no Vulkan device is usable the row's note says so and nothing changes - see Diamond_Enhancements.md §52.
         [Theory]
         [InlineData("precision=true")]
         [InlineData("resolution=4")]
@@ -153,17 +153,19 @@ namespace EmuSen.WiseMan.Cores
                     string? note = core.Settings.Single(s => s.Key == pairs[0].Key).Note?.Invoke(_ => "");
                     _output.WriteLine($"the note: {note ?? "none"}");
                     drawn = note is null || !note.StartsWith("No usable");
+                    Assert.Equal(!drawn ? 0 : chosen.Contains("colour=true") ? 240 : 60, core.Machine.Info.PictureSettles);
                 }
                 if (f == 9)
                 {
                     foreach (var (key, _) in pairs) core.Set(key, core.Settings.Single(s => s.Key == key).Default);
                     Assert.All(pairs, p => Assert.Null(core.Settings.Single(s => s.Key == p.Key).Note?.Invoke(_ => "")));
+                    Assert.Equal(0, core.Machine.Info.PictureSettles);
                 }
                 plain.RunFrame();
                 core.RunFrame();
                 Assert.Equal(plain.DequeueAudioSamples(4096), core.DequeueAudioSamples(4096));
                 byte[] a = State(plain), b = State(core);
-                Assert.True(b.Length >= a.Length && a.AsSpan().SequenceEqual(b.AsSpan(0, a.Length)), $"frame {f}: the machine's state differs");
+                Assert.True(a.AsSpan().SequenceEqual(b), $"frame {f}: the state differs");
                 if (!plain.GetFrameBufferRgba().AsSpan().SequenceEqual(core.GetFrameBufferRgba()))
                 {
                     differed++;

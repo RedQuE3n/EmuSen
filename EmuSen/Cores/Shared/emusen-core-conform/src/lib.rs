@@ -7,6 +7,7 @@ pub mod api;
 pub mod corpus;
 pub mod digest;
 pub mod media;
+pub mod progress;
 pub mod sidecar;
 
 use std::collections::BTreeSet;
@@ -217,6 +218,10 @@ struct Trace {
     /// At the marked frame: the digests up to it and the state saved there; `since` is the digests from it on.
     mark: Option<(Digests, Result<Vec<u8>, i64>)>,
     since: Digests,
+    /// `digests` and `since` with the pictures of the first `Session::settles` frames left out, for a run compared with
+    /// one given a state there (EmuSen_CoreAPI.md §28.10).
+    settled: Digests,
+    since_settled: Digests,
 }
 
 /// C6's run as C8's first: both halves' digests, the state between them, the end state and machine info.
@@ -224,6 +229,7 @@ struct FirstRun {
     frames: u64,
     first: Digests,
     second: Digests,
+    second_settled: Digests,
     middle: Vec<u8>,
     end: u64,
     info: Option<String>,
@@ -238,12 +244,17 @@ struct Session<'a> {
     observed: bool,
     /// C6's run, kept for the C8 that follows it.
     first: Option<FirstRun>,
+    /// The frames after a load whose pictures the last machine made declares may differ (since 1.5, §6.9).
+    settles: u64,
 }
 
 impl<'a> Session<'a> {
     fn machine(&mut self, settings: &str) -> Result<Machine<'a>, String> {
         match self.lib.create(&self.opts.image, settings, &self.opts.files, 1) {
-            Ok(m) => Ok(m),
+            Ok(m) => {
+                self.settles = picture_settles(&m);
+                Ok(m)
+            }
             Err((code, text)) => {
                 self.statuses.insert(code);
                 Err(format!("create refused the image: status {code} ({text})"))
@@ -274,9 +285,11 @@ impl<'a> Session<'a> {
         let mut rate_events: Vec<(u64, i32)> = Vec::new();
         let mut skipping = false;
         for f in from..from + count {
+            progress::beat();
             if mark == Some(f) {
                 t.mark = Some((t.digests, m.save(0)));
                 t.since = Digests::default();
+                t.since_settled = Digests::default();
                 for (port, &mask) in masks.iter().enumerate() {
                     m.set_buttons(port as u32, mask, u32::MAX);
                 }
@@ -320,6 +333,12 @@ impl<'a> Session<'a> {
                         let hash = digest::frame_hash(&picture);
                         t.digests.frame_hashed(hash);
                         t.since.frame_hashed(hash);
+                        if f >= from + self.settles {
+                            t.settled.frame_hashed(hash);
+                        }
+                        if mark.is_some_and(|k| f >= k + self.settles) {
+                            t.since_settled.frame_hashed(hash);
+                        }
                         frame_checks(f, &fi, picture.len(), &mut t.problems);
                         let now = (fi.width, fi.height);
                         if shape.is_some_and(|s| s != now) && !events.iter().any(|e| e.kind == event::GEOMETRY && (e.a, e.b) == (now.0 as i64, now.1 as i64)) {
@@ -332,6 +351,8 @@ impl<'a> Session<'a> {
             for (samples, r) in m.drain_audio() {
                 t.digests.sound(&samples);
                 t.since.sound(&samples);
+                t.settled.sound(&samples);
+                t.since_settled.sound(&samples);
                 if rate.is_some_and(|old| old != r) {
                     pending.push((f, r));
                 }
@@ -352,6 +373,20 @@ impl<'a> Session<'a> {
             format!("state_save failed with {e}")
         })
     }
+}
+
+/// Machine info's `state.picture_settles` (since 1.5), 0 where it is absent or the info cannot be read.
+fn picture_settles(m: &Machine<'_>) -> u64 {
+    m.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("state")?.get("picture_settles")?.as_i64()).map_or(0, |n| n.max(0) as u64)
+}
+
+/// Whether the pictures after a load can be held to the session's bound over a run's second half of `half` frames: a
+/// bound above the maximum, or one that leaves no frame to compare, fails the case (§28.10). The note to add, if any.
+fn settle_bound(s: &Session<'_>, half: u64, c: &mut Check) -> Option<String> {
+    let max = emusen_native::core::PICTURE_SETTLES_MAX as u64;
+    c.that(s.settles <= max, || format!("machine info declares its pictures settle {} frames after a load, more than the {max} allowed", s.settles));
+    c.that(s.settles < half, || format!("machine info declares its pictures settle {} frames after a load, which leaves none of the {half} frames after it to compare: run more than {} frames", s.settles, 2 * s.settles));
+    (s.settles > 0).then(|| format!("; pictures after the load compared from its frame {} on, machine info's state.picture_settles being {}", s.settles + 1, s.settles))
 }
 
 fn frame_checks(f: u64, fi: &FrameInfo, copied: usize, problems: &mut Vec<String>) {
@@ -394,7 +429,7 @@ fn session<'a>(lib: &'a Lib, opts: &'a Options) -> Session<'a> {
         .filter_map(|b| b.get("bit").and_then(Value::as_i64).map(|v| v as u32))
         .collect();
     let script = opts.script.clone().unwrap_or_else(|| Script::default_for(&bits));
-    Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None }
+    Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0 }
 }
 
 /// Runs every case on the library at `path`.
@@ -828,7 +863,7 @@ fn c6(s: &mut Session<'_>) -> Case {
     let run = s.machine(&s.opts.settings.clone()).and_then(|m| {
         let t = s.play_marked(&m, 0, frames, false, mark)?;
         if let (Some((first, Ok(middle))), Ok(end)) = (t.mark.clone(), m.save(0)) {
-            s.first = Some(FirstRun { frames, first, second: t.since, middle, end: digest::frame_hash(&end), info: m.machine_info().ok() });
+            s.first = Some(FirstRun { frames, first, second: t.since, second_settled: t.since_settled, middle, end: digest::frame_hash(&end), info: m.machine_info().ok() });
         }
         Ok(t)
     });
@@ -876,9 +911,10 @@ fn c7(s: &mut Session<'_>) -> Case {
         }
         let b = s.machine(&settings)?;
         c.that(b.load(&saved) == 0, || "machine A's state does not load on machine B".to_owned());
+        let settled = settle_bound(s, half, c);
         let ta = s.play(&a, half, half, false)?;
         let tb = s.play(&b, half, half, false)?;
-        c.that(ta.digests == tb.digests && s.state_digest(&a)? == s.state_digest(&b)?, || format!("B, loaded with A's state, did not continue as A: {:?} against {:?}", ta.digests, tb.digests));
+        c.that(ta.settled == tb.settled && s.state_digest(&a)? == s.state_digest(&b)?, || format!("B, loaded with A's state, did not continue as A: {:?} against {:?}", ta.settled, tb.settled));
         if a.has_snapshot() {
             let snap = a.save(1).map_err(|e| format!("the snapshot could not be saved: {e}"))?;
             let full = a.save(0).map_err(|e| format!("state_save failed with {e}"))?;
@@ -886,7 +922,7 @@ fn c7(s: &mut Session<'_>) -> Case {
             c.that(a.load(&snap) == 0, || "the snapshot does not load".to_owned());
             c.that(a.save(0).ok().as_ref() == Some(&full), || "loading the snapshot does not restore the state it was taken from".to_owned());
         }
-        c.note(format!("state {} bytes", saved.len()));
+        c.note(format!("state {} bytes{}", saved.len(), settled.unwrap_or_default()));
         Ok(())
     };
     if let Err(e) = body(s, &mut c) {
@@ -902,14 +938,14 @@ fn c8(s: &mut Session<'_>) -> Case {
     let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
         let settings = s.opts.settings.clone();
         // The first machine's run is C6's where C6 has just made it over the same frames (§28).
-        let (a1, mid, a2, end, info) = match s.first.take().filter(|f| f.frames == n) {
-            Some(f) => (f.first, f.middle, f.second, f.end, f.info),
+        let (a1, mid, a2, a2_settled, end, info) = match s.first.take().filter(|f| f.frames == n) {
+            Some(f) => (f.first, f.middle, f.second, f.second_settled, f.end, f.info),
             None => {
                 let a = s.machine(&settings)?;
                 let a1 = s.play(&a, 0, half, false)?.digests;
                 let mid = a.save(0).map_err(|e| format!("state_save failed with {e}"))?;
-                let a2 = s.play(&a, half, n - half, false)?.digests;
-                (a1, mid, a2, s.state_digest(&a)?, a.machine_info().ok())
+                let a2 = s.play(&a, half, n - half, false)?;
+                (a1, mid, a2.digests, a2.settled, s.state_digest(&a)?, a.machine_info().ok())
             }
         };
         let b = s.machine(&settings)?;
@@ -918,15 +954,16 @@ fn c8(s: &mut Session<'_>) -> Case {
         c.that((a1, a2, end) == (b1, b2, s.state_digest(&b)?), || format!("two machines fed alike differ: {a1:?} {a2:?} against {b1:?} {b2:?}"));
         let d = s.machine(&settings)?;
         c.that(d.load(&mid) == 0, || "the state at the middle does not load".to_owned());
-        let d2 = s.play(&d, half, n - half, false)?.digests;
-        c.that(d2 == a2 && s.state_digest(&d)? == end, || format!("across a save and load at frame {half} the run differs: {d2:?} against {a2:?}"));
+        let settled = settle_bound(s, n - half, c);
+        let d2 = s.play(&d, half, n - half, false)?.settled;
+        c.that(d2 == a2_settled && s.state_digest(&d)? == end, || format!("across a save and load at frame {half} the run differs: {d2:?} against {a2_settled:?}"));
         let neutral = info.and_then(|t| parse(&t)).and_then(|v| v.get("skip_rendering_state_neutral").cloned()) == Some(Value::Bool(true));
         if neutral {
             let e = s.machine(&settings)?;
             s.play(&e, 0, n, true)?;
             c.that(s.state_digest(&e)? == end, || "with rendering skipped on alternate frames the state differs, though skipping is declared state-neutral".to_owned());
         }
-        c.note(format!("{n} frames; frames {:016X} {:016X}, audio {:016X} {:016X}, state {end:016X}{}", a1.frames, a2.frames, a1.audio, a2.audio, if neutral { "; skipped rendering checked" } else { "" }));
+        c.note(format!("{n} frames; frames {:016X} {:016X}, audio {:016X} {:016X}, state {end:016X}{}{}", a1.frames, a2.frames, a1.audio, a2.audio, if neutral { "; skipped rendering checked" } else { "" }, settled.unwrap_or_default()));
         Ok(())
     };
     if let Err(e) = body(s, &mut c) {
@@ -957,7 +994,7 @@ fn c10(s: &mut Session<'_>) -> Case {
             .map(|i| {
                 let (settings, script) = (settings.clone(), script.clone());
                 scope.spawn(move || -> Result<(Digests, u64), String> {
-                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None };
+                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0 };
                     let m = own.machine(&settings)?;
                     let t = own.play(&m, 0, n, false)?;
                     let d = own.state_digest(&m)?;

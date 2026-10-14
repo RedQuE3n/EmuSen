@@ -88,7 +88,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.4"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.5"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 21);
     assert!(info.contains(r#""battery":[{"which":0,"suffix":".srm"}]"#), "core info lists the system's battery files since 1.3: {info}");
@@ -113,10 +113,22 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
     assert!(doc.contains(r#""replacement":{"effect":"accuracy","cost":"slower"}"#), "{doc}");
     assert!(doc.contains(r#""effect":"none""#) && doc.matches("replacement").count() == 2, "{doc}");
     let m = MachineInfo { firmware: vec![(2, FirmwareSource::Replacement), (3, FirmwareSource::File)], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0 };
+    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: 0 };
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#""firmware":[{"which":2,"source":"replacement"},{"which":3,"source":"file"}]"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
+}
+
+// Since 1.5 a bound of settling pictures is written under the state when it is not 0, within the schema's range, which is the crate's maximum.
+#[test]
+fn a_picture_settling_bound_is_written_under_the_state_only_when_declared() {
+    use super::desc::{MachineInfo, PICTURE_SETTLES_MAX};
+    let m = MachineInfo::default();
+    let of = |n: u32| super::desc::machine_info_json(&m, &super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: n }, &[]);
+    assert!(!of(0).contains("picture_settles"), "{}", of(0));
+    assert!(of(240).contains(r#""loads_from":[],"picture_settles":240}"#), "{}", of(240));
+    assert_eq!(schema::validate(schema::MACHINE_INFO, &of(PICTURE_SETTLES_MAX)), Vec::<String>::new());
+    assert_eq!(schema::validate(schema::MACHINE_INFO, &of(PICTURE_SETTLES_MAX + 1)), vec![format!("$.state.picture_settles: {} is above {PICTURE_SETTLES_MAX}", PICTURE_SETTLES_MAX + 1)]);
 }
 
 // A view is written as one more of a space's flags, which the schema leaves open, and a space without it is as before.
@@ -124,7 +136,7 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
 fn a_view_is_a_flag_of_its_space() {
     use super::desc::{MachineInfo, Space};
     let m = MachineInfo { spaces: vec![Space { read_only: true, view: true, ..Space::new(0, "CPUBUS") }, Space::new(1, "WRAM")], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0 };
+    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0, picture_settles: 0 };
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#"{"id":0,"name":"CPUBUS","size":16777216,"flags":["read_only","view"]}"#), "{mi}");
     assert!(mi.contains(r#"{"id":1,"name":"WRAM","size":65536,"flags":[]}"#), "{mi}");
@@ -480,7 +492,7 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0004);
+    assert_eq!(ABI_VERSION, 0x0001_0005);
     assert_eq!((event::MEDIA_SEEK, flags::FILE_IMAGE, crate::core::SEEK_SPAN), (8, 0xFFFF_FFFF, 1 << 20));
     assert_eq!((caps::BORROW, caps::UNASSIGNED & caps::BORROW, flags::CREATE_LENT, flags::MEDIA_LENT), (1 << 20, 0, 1, 2));
     assert_eq!((CreateParams::SIZE_1_0, std::mem::size_of::<CreateParams>()), (88, 96));

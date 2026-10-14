@@ -24,10 +24,10 @@ cheaper, then internal resolution, true colour and texture filtering, each a set
 geometry". §37 to §42 are its design, decided and committed before any of its code; §43 to §51 what was built,
 the gate, the pictures, the cost and what is left.
 
-*Following a shift, the same day* (§52 on): a trial of §32.4's proposal, that the processor tell a shift by a constant
+*Following a shift, the same day* (§54 on): a trial of §32.4's proposal, that the processor tell a shift by a constant
 so that precise geometry follows the vertices Spyro the Dragon keeps shifted; the game's pattern read and the design
-with its keep rule committed before the code (§52), then Spyro and the other discs measured both ways, the decision,
-the gate and the cost (§53).
+with its keep rule committed before the code (§54), then Spyro and the other discs measured both ways, the decision,
+the gate and the cost (§55).
 
 The marks are the plan's: **[M]** measured on 2026-10-13 on the desktop (Ryzen 7 7700X, Fedora 44, Rust nightly
 2026-10-01), with the tool named; **[R]** read from a source, named; **[A]** argued, with no measurement behind it;
@@ -1243,6 +1243,7 @@ for its counts, with no device); the bench gains `--precise`, timed as `--render
   double-buffered ordering table), the receipts in the GPU's FIFO at the save, and what the renderer drew that VRAM does
   not hold all reach the picture after the load. A block holding only what is live would vary in size. So the state
   with the setting on is about 10.4 MB against 5.3, and the cost says so.
+- *Superseded 2026-10-14 (§52): neither block is written since; a load seeds both parts.*
 - **Both ways** (E1's rule): a state made with the setting on loads with it off, both blocks skipped; one made with it
   off loads with it on, the precision layer starting empty and the renderer seeded from the GPU's VRAM, so the first
   frame or two after are drawn with fewer precise vertices; the machine's continuation is the same either way, since
@@ -1797,7 +1798,7 @@ its projection was refused by the guard (§21.2) or cut by the console; **dead**
   that pixel; more registers carry stale serials, which costs nothing until a word is received. Its cost is one event
   for each such shift, a few per cent of instructions. **It is not built here**: it widens a written interface of the
   processor's crate, which is the tester's to agree first; and it is not needed for the cracks, which §33 closes
-  whatever their cause. *Accepted as a trial on 2026-10-14 and built: §52 and §53.*
+  whatever their cause. *Accepted as a trial on 2026-10-14 and built: §54 and §55.*
 - **Ape Escape's made vertices and Tekken 3's moved ones** [not proposed]. A precise middle, or a precise moved
   vertex, would need the layer to follow values, not serials: for Ape Escape two halfword loads, an MVMVA, an
   addition and a division, computed beside the game's with precise inputs. Nothing checks such a value but its
@@ -1911,6 +1912,8 @@ twice by it: the pixel is one no precise triangle has covered since the opaque f
 triangle's own precise coverage does not include it.
 
 ### 33.5 The state
+
+*Superseded 2026-10-14 (§52.2): the marks are no longer kept; a load finds none, as an attach does.*
 
 `RNDR` gains the marks, a halfword a pixel after its palette, 1,048,576 bytes; a state with the setting on is
 11,594,150 bytes against 10,545,574 at E4 and 5,398,770 with it off [M, the kit's C7]. They are kept because a
@@ -2156,7 +2159,7 @@ All on the final head (WiseMan had not moved from 8a90f127, so there was nothing
    renderer's record and a setting in `diamond-v1`. Recommended: leave it in, with no switch.
 2. **Following a shift** (§32.4), for Spyro the Dragon: one more move told by the processor's crate, which would
    take its precise polygons in play from 37 to about 93 per cent. It widens a written interface, so it waits for a
-   yes. *Accepted as a trial and built 2026-10-14: 95.9 per cent (§53).*
+   yes. *Accepted as a trial and built 2026-10-14: 95.9 per cent (§55).*
 3. **What to look at on the handheld**: Ape Escape's first level along the ledges and the ground's edges, where the
    lines were; the same edges' top and left sides as the camera turns, for the outline's movement; Spyro the Dragon's
    grass in its first world; Silent Hill's street in the fog, for any bright dash at a polygon's edge (§34.5's
@@ -2498,7 +2501,7 @@ against 11.6 at E4 with the crack fill. **The alternative** is a block holding o
 picture's size) and a load that seeds the mirror and the picture from the accurate VRAM and the display, as an attach
 does: a state of the accurate size plus a few bytes, the first pictures after a load at 1× detail until the game redraws.
 
-**Built: the kept form** [C], because the kit's C7 and C8 require a loaded machine to hand the saver's pictures from its
+*Superseded 2026-10-14: the seeded form is built (§52, §53).* **Built: the kept form** [C], because the kit's C7 and C8 require a loaded machine to hand the saver's pictures from its
 first frame, and a seeded picture is the console's at that frame, not the renderer's (the rule set for this stage: build
 the form the kit passes as it stands). **Measured for both** (§47.2): the state's size, the bytes a rewind's
 delta between consecutive states holds, and on the bench discs how many frames a seeded picture takes to become, pixel
@@ -2766,7 +2769,7 @@ The state is 26,503,560 bytes at 2× and 81,947,016 at 4× with everything on, a
 (the same on every disc: the block's form is fixed). The seeded form's state would be the accurate part and the
 precision layer's 2.6 MB.
 
-**Decided, and why** [C]: **the kept form is built**, as §42.2 set out, because it is the form the kit passes as it
+*Superseded 2026-10-14 by the tester's choice of the seeded form (§52, §53).* **Decided, and why** [C]: **the kept form is built**, as §42.2 set out, because it is the form the kit passes as it
 stands. **The measurement favours the seeded form**: a seeded picture is the kept one's within four to seven frames on
 every disc of eight (a game redraws its screen, and the precision layer finds its vertices again within two frames), the
 first frames differing only in detail, the console's own picture enlarged; and the kept form costs a state three to
@@ -3024,7 +3027,392 @@ and `ShaderCompiler.cs`; the crack fill's model and E4's measurement scripts in 
 
 ---
 
-## 52. Following a shift: a trial, decided before it was built
+## 52. The seeded state, decided before it was built
+
+*Written 2026-10-14, before any of its code, after the tester's decision of the same day.* §47.2 measured two forms of
+the enhancements' state: the **kept** form built at E5, which saves the renderer's mirror and picture at N× and with
+everything on makes a state 26.5 MB at 2× and 81.9 MB at 4× against 5.4 MB for the machine; and the **seeded** form,
+which saves the accurate part and, at a load, seeds the renderer from the machine's VRAM. The tester chose the seeded
+form, as §47.2 recommended, with the change to the conformance kit it needs: the kit is to learn that an enhancement's
+picture may take some frames to settle after a load. This section settles what the state keeps, how the kit is told
+and how it checks, the kit's deadline, which E5 found too short at 4×, and whether the host needs anything. §53 on is
+what was built.
+
+### 52.1 The measurement it rests on
+
+A scratch test in the probe's folder (never committed) ran each bench disc by its press script to a save point, every
+enhancement on (precise geometry, true colour, filtering of 3D polygons) at 1×, 2× and 4×, saved the kept form, and gave
+the state to three further machines: whole (the kept form), the accurate part with the precision layer's `PREC` (the
+renderer seeded), and the accurate part alone (both seeded). Each ran 120 frames beside the saver with the same input,
+and the last frame whose picture handed differs from the saver's, pixel for pixel, was recorded; the frames after it were
+equal to the end of the run in every case. The rewind's delta is Mistress's XOR codec between states four frames apart,
+the mean of ten [M]:
+
+| Disc | Save at 1,500: last differing frame, `PREC` kept / both seeded (1×, 2×, 4× alike) | Save at 2,700 (2× and 4× alike) | Delta at 2×, kept / with `PREC` / accurate alone (bytes) | Delta at 4×, kept |
+|---|---|---|---|---|
+| Ape Escape | 4 / 5 | 3 / 6 | 6,044,156 / 658,644 / 631,557 | 22,167,325 |
+| Castlevania | 0 / 0 | 2 / 2 | 22,788 / 22,788 / 22,597 | 22,788 |
+| Crash Bandicoot | 3 / 5 | 0 / 0 | 489,360 / 150,193 / 59,839 | 1,493,915 |
+| Mega Man Legends | 3 / 5 | 3 / 5 | 246,190 / 74,684 / 63,294 | 743,523 |
+| Rayman | 0 / 0 | 2 / 2 | 76,767 / 30,851 / 30,840 | 214,124 |
+| Silent Hill | 3 / 3 | **141 / 141** (2×; past 120 at 4×) | 1,310,408 / 91,765 / 91,755 | 4,964,759 |
+| Spyro the Dragon | 4 / 6 | 4 / 6 | 7,353,367 / 1,090,038 / 958,675 | 26,112,121 |
+| Tekken 3 | 0 / 0 | 0 / 0 | 2,625,456 / 607,468 / 607,095 | 8,675,639 |
+
+Two kinds of settling show. **A picture the game draws** settles within six frames: the frame handed late (§38.1) is
+the seed's, the console's picture enlarged; then the buffers the game drew, or was drawing, before the save, which the
+seed holds at the console's detail, are shown until the game has drawn over them (one or two of its frames, which at 30
+frames a second are two to four of the console's); then a frame or two whose polygons lack precise vertices, the
+ordering table drawn after the load having been built before it, while the precision layer is empty. `PREC` removes only
+that last part: two frames on Ape Escape at 2,700, Crash Bandicoot, Mega Man Legends and Spyro the Dragon, none
+elsewhere. **A picture made from the picture before** settles as fast as the effect forgets: Silent Hill's street in the
+fog copies the frame it showed and draws the next over it (§49.1), so the difference the seed made decays frame by frame
+instead of being drawn over. Measured further from the same save at 2,700 over 600 frames [M]:
+
+| Silent Hill from 2,700 | Last differing frame | Differing pixels at frames 30, 60, 90, 120 |
+|---|---|---|
+| Everything on, 2× | 141 | 8,573; 942; 231; 25 |
+| True colour alone, 1× | 121 | 2,084; 253; 59; 6 |
+| Precise geometry and 3D filtering, 2× | 32 | 6; 0 |
+| Precise geometry alone, 1× | 30 | 1; 0 |
+| Internal resolution alone, 2× | 34 | 4; 0 |
+
+With true colour the decay runs four times longer, since its plane's three low bits a channel, which the seed sets to
+zero (§40), are carried through each blend and lost only slowly to its rounding; without it the console's five bits
+lose the seed's difference within about half a second. Every run did settle: no picture differed past 141 frames, and
+the machine's own state was equal at the end of each.
+
+### 52.2 What the state keeps [C]
+
+**The accurate part, and nothing of the enhancements.** With any enhancement on, the state is the state with all of
+them off, to the byte (5,398,740 bytes with a DualShock and a card at version 10). Each candidate was weighed by what
+it measurably buys against its bytes:
+
+| Candidate | Bytes at 1× / 2× / 4× | What it buys | Kept? |
+|---|---|---|---|
+| The renderer's mirror and picture (`RNDR`'s body) | 3,572,240 / 14,287,376 / 57,147,920 with the marks | the picture exact from the first frame after a load | no: the seed gives the same picture within six frames on drawn pictures, and the deltas it adds are up to 28 times the machine's |
+| `PREC`, the precision layer (serials, ring, shadows) | 2,623,140 at every scale | the last one or two frames of a drawn picture's settling (§52.1); nothing on a feedback effect | **no**: it is 49 per cent of the accurate part, and it multiplies a rewind's delta by 2.5 on Crash Bandicoot and 1.14 on Spyro the Dragon for two frames of finer polygons |
+| The crack fill's marks (§33.5) | 1 MiB × N² | the fill where two precise polygons drawn across the save share an edge | no: a frame drawn after the save finds its marks again, as an attach does |
+| True colour's plane | 1 MiB × N² | Silent Hill's fog settling in 32 frames instead of 141 | no: it costs more than the mirror it refines, and buys a shorter wait on one effect |
+| The palette slot and the picture's size (§47.2's proposal) | 528 bytes | nothing: the seed takes the CLUT cache's colours and the display's size from the machine, which are what the renderer's are at every frame boundary | no |
+
+So the renderer and the precision layer write no block. The optional blocks' frame (§4) stays, E1's test observer
+writes one, and no enhancement uses it.
+
+**The state's size no longer moves with a setting.** It was the scale, true colour and the pairing that fixed the kept
+block's form (§42.2); now no setting changes a byte of the state, so `STATE_SIZE` is never raised by a change of
+enhancement, and a host's rewind chain is not restarted by one.
+
+### 52.3 A load [C]
+
+- **Every load seeds**, as an attach does (§16.6, §39.6): the renderer's mirror is the GPU's VRAM with each halfword a
+  block of N², its marks zero, true colour's plane zero, its picture the display's enlarged and put in the slot the next
+  frame hands, its palette slot the CLUT cache's colours; and the precision layer starts empty. The precision layer did
+  not reset at a seed before (`Layer::seed` was empty for it, and a load without its block cleared it through
+  `Layer::clear`); with no block, it is reset by its seed, so that what a machine shows after a load depends on the state
+  alone and never on what the machine ran before it: two machines given one state hand the same pictures from the first
+  frame, whatever each had done.
+- **A state of the kept form loads**: its `RNDR` and `PREC` blocks are tags no attached layer has, which E1's rule skips
+  by their length (§4); the machine continues exactly and the picture settles as from any state. Using a kept block when
+  its form matches the configuration was considered and not chosen: it would keep the kept form's reader (and its
+  buffers of up to 81 MB) alive in the renderer for the states of one day's builds, to spare their first six frames.
+  States of versions 8, 9 and 10 load as before.
+- **A state saved with the enhancements on loads with them off** and the reverse, trivially now, since the two states
+  are the same bytes.
+
+### 52.4 The bound Diamond declares [C]
+
+The kit's rule (§52.5) asks a core to state how many frames after a load its picture may differ. **Diamond states 0
+with every enhancement at its hardware value** (it is then the accurate machine, held to the picture from the first
+frame), **60 with any on and true colour off, and 240 with true colour on.** The figures rest on the two kinds of
+§52.1, not on a proof:
+
+- A drawn picture settles once the game has drawn over the buffers the seed holds and its precision layer has seen
+  one ordering table built: at most about one frame of latency and three of the game's own frames. At 30 frames a second
+  that is seven, measured six; a game at 15 frames a second would take thirteen.
+- A picture fed from the picture before settles as its effect forgets: measured 30 to 34 frames without true colour
+  and 121 to 141 with it, on the one such effect the bench reaches. 60 and 240 are those figures with a margin of
+  about three quarters.
+
+Neither is a guarantee for every game. **What would break it**: a feedback effect that forgets more slowly than Silent
+Hill's fog, and a texture a game draws once and keeps (a backdrop rendered at a level's start and read for the rest of
+it), which the seed holds at the console's detail until the game draws it again, perhaps never; with such a disc the
+kit would find Diamond's pictures unsettled after the bound and fail C7 or C8, which is the kit doing its work. No
+bench disc does the second in its first 3,000 frames. A player meets either as detail finer before a load than after it,
+the game's own state untouched.
+
+### 52.5 The kit's rule [C]
+
+**The field.** Machine info's `state` gains **`picture_settles`**, an integer, absent meaning 0: *after a
+`state_load`, the pictures of the first `picture_settles` frames the machine advances may differ from those the
+machine that saved the state handed after the same frames; from the next frame on they may not; the sound, the events
+and the state never may.* At most 600 (ten seconds at 60 frames a second). It is a field of the machine's descriptor
+because it is a fact of the machine as configured, as `skip_rendering_state_neutral` is, and changes with its settings;
+a core whose bound changes with a setting raises `MACHINE_INFO`. Being a new descriptor field, it is an addition to
+version 1 (`EmuSen_CoreAPI.md` §4.4), recorded in the baseline as the core ABI's **minor 5** with its normative text in
+§6.4 and §6.9 there and its reasons in `EmuSen_CoreAPI_Extensions.md` §14.
+
+**Why the core states it, and not a rule of the kit's.** A kit-side rule tied to `effect: enhancement` settings being
+non-default would need the kit to choose the bound, for every core, without knowing why any picture differs; it would
+excuse every core's enhancements from a check they may pass today, whether or not their states need the excuse; and it would leave a host that loads states every frame (run-ahead, a rollback of netplay, §6.22 there) without
+the fact it needs, that the pictures shown in the first frames after a load are not final. The core knows the bound and
+states it once; the kit holds the core to it.
+
+**What the kit does with it**, in C7 and C8 (and C12, which runs them again):
+
+- **Sound, events and state are compared as now**, from the first frame after the load; only pictures are excused, and
+  only the first `picture_settles` frames after a load. C7's comparison of B (loaded with A's state) with A, and C8's of
+  D (loaded at the middle) with the first machine's second half, fold each frame's picture into a second digest from
+  the frame after the bound on, and compare that, the sound's digest and the end state. Every comparison of runs without
+  a load (C6, C8's two machines fed alike, C17, C18) is unchanged.
+- **A core that declares nothing is held exactly as now**: with a bound of 0 the second digest is the first.
+- **A picture that never settles fails**, since every frame past the bound is compared; **a machine that differs
+  fails**, since sound and state are compared from the first frame.
+- **A bound above 600 fails C7 and C8**, and so does a run whose second half is no longer than the bound, which would
+  leave no picture after a load compared: the kit's author is told to give more frames (at the kit's 600 frames by
+  default a bound of up to 299 is checked).
+- The note of each case says when pictures were compared from past a bound, and from which frame.
+
+### 52.6 The kit's deadline [C]
+
+E5 found that an image's cases at 4× did not finish within 600 seconds (§48): the kit hashes every frame's picture
+(FNV-1a byte by byte, 3.8 ms for 4.9 MB on this processor [M]), C17 and C18 hash the state at every frame, and the
+image's cases run its frames ten times or more. The deadline was a whole image's, set when the cases were fewer and the
+pictures 1×; it confused a slow image with a hung one, and every new case, longer run or larger picture would move it
+again. **It becomes a deadline on progress**: an image is hung when its cases have advanced no frame for 600 seconds.
+The thread running an image stamps the time at each frame it runs; the runner reports an image whose stamp is 600
+seconds old as before (C6 failed, its thread left). A hang from the start (a create that never returns) is caught as
+before, after 600 seconds; an image that runs, however slowly, is not. Hashing more cheaply was set aside: the frames'
+digest is defined as Pharaoh's so that the two compare directly (`EmuSen_CoreAPI.md` §12.1). The seeded state removes
+the other half of E5's cost on its own: C17's and C18's state digest at every frame hashes 5.4 MB instead of 82.
+
+### 52.7 The host [A, read]
+
+Mistress's rewind (`RewindBuffer`, `EmuSen/Common`) saves a state every `IntervalFrames` (30 since the tester's
+change of 2026-10-14: two a second), encodes each against the one before with the XOR codec on another thread, and
+trims the oldest past its budget (96 MiB by default, Mistress's own). It sizes nothing from `STATE_SIZE`: each capture
+allocates or reuses a buffer of the state's length, and a state of another length than the newest restarts the chain
+(`Capture`), which is correct for a state that shrinks or grows. With the seeded form no change of enhancement changes
+the length, so turning one on no longer empties the rewind history either. **The host needs no change** to keep rewind
+and state slots right. The C# reader of machine info gains the field (`CoreMachineInfo.PictureSettles`, 0 when absent),
+as `EmuSen_CoreAPI.md` §5.5 asks of every addition; Mistress has no run-ahead and does not use it.
+
+What a player sees during a held rewind: each step loads a state, and the picture shown after it is the seed's, the
+console's picture enlarged, so a rewound sequence runs at the console's detail and the enhanced picture returns within
+the bound once play resumes.
+
+### 52.8 The gate, as it will be run
+
+E1's goldens with the settings off; the machine's goldens with any on and with all on at 4×; E3's 1× equality; E4's,
+the crack fill's and E5's tests, those that saved the kept form rewritten to the seeded one's terms (the picture equal
+from past the bound; two machines given one state equal from the first frame; a kept-form state loading); the kit's own
+tests with seeded faults (a picture that never settles failing C7 and C8, a machine that differs within the bound
+failing them, a core declaring nothing unchanged, a bound past the limit refused, the deadline on progress); the kit on
+the published library on the eight discs at 1,800 frames with each setting, all at 2× and **all at 4×**, and all off;
+every other core's kit; the settle measured per disc through the published library; rewind's reach in Mistress at two
+snapshots a second through WiseMan, before and after; save and load times and the frame's cost before and after.
+
+### 52.9 Predictions [recorded before the code]
+
+- **P-S1.** With everything on the state is 5,398,740 bytes at every scale, and a rewind's delta at 30 frames is the
+  machine's: rewind's reach under 96 MiB grows by at least five times at 2× on Spyro the Dragon, Ape Escape and Crash
+  Bandicoot.
+- **P-S2.** The kit passes on the eight discs at 1,800 frames with every setting, at 4× included, each image's cases
+  within the new deadline, and C7 and C8 compare pictures from frame 61 or 241 after their loads; with all off the
+  reports are those of E5's run but for the note.
+- **P-S3.** Every other core's kit report is unchanged in verdict and evidence.
+- **P-S4.** Saving a state with everything on at 4× falls from the readback and copy of 82 MB to the machine's own save;
+  loading costs the seed, under 50 ms at 4×.
+- **P-S5.** The frame's cost is unchanged within the bench's noise: no code on the frame's path changes.
+
+## 53. The seeded state, as built
+
+*Built and measured 2026-10-14 on the desktop, the RX 6800 by `EMUSEN_GPU_DEVICE=6800`.* What was built is §52 as
+designed, with one wording of the kit's note changed after its first run (§53.2).
+
+### 53.1 Diamond
+
+- **The renderer** (`diamond-renderer`) lost `Kept`, `keeping`, its block (`RNDR`), its `settle` readback and its
+  reader; `Back::Palette`, which only the readback used, went with them. Its seed is the one an attach always used: the
+  machine's VRAM with each halfword a block of N² samples, no marks, true colour's plane cleared, the display's
+  picture enlarged into the slot the next frame hands, and the CLUT cache's colours in palette slot 0; it is now made a
+  row of blocks at a time, which a load's cost at 4× asked for (§53.4).
+- **The precision layer** (`precision`) writes no block (`PREC` gone) and resets at every seed; `Precise` passes the
+  block calls to its drawer, which has none.
+- **`diamond-v1`** attaches the renderer as is, states `picture_settles` (`SETTLES`, 60, and `SETTLES_TRUE_COLOUR`, 240,
+  §52.4; 0 while the machine's own picture is shown, without a Vulkan device included), and raises `MACHINE_INFO` from
+  `set_settings` when the bound changes; the three costs that spoke of states now speak of the picture after a load
+  (`EmuSen_Settings_Reference.md` §4.113).
+- **The tools.** `run` and `bench` attach the renderer as is; nothing else in them changed.
+
+### 53.2 The core ABI's minor 5 and the kit
+
+As §52.5 to §52.6 and `EmuSen_CoreAPI_Extensions.md` §14.3 state: the header at 1.5 (a comment on
+`emusen_core_machine_info` and the minor), the baseline's `json machine_info.state.picture_settles integer optional
+@1.5` with the two lines of the minor, the schema's property from 0 to 600 (the crate's validator now reads `maximum`),
+`Core::picture_settles` and `PICTURE_SETTLES_MAX` in `emusen-native`, written only when not 0, and
+`CoreMachineInfo.PictureSettles` in the C# reader. The guard: 426 facts agree with the header on four triples, with the
+Rust and with the baseline, `--against` WiseMan's. In the kit, a `progress` module holds the stamp of the image a thread
+runs; C7 and C8 fold a second digest of the pictures past the bound; the note first said "from its 61th frame", corrected
+to "from its frame 61 on" after the gate's kit runs, which carry the first wording. Those runs used the library and
+the kit built before the seed by rows (§53.4); the seed it replaced fills the same values, which
+`a_state_at_n_is_the_machines_and_a_load_seeds` holds sample for sample.
+
+The kit's own tests hold the rule with a settling test core and its faults, each in a runner process of its own
+(`pictures_that_settle_pass_within_their_bound_and_each_fault_of_the_rule_fails`) [M]:
+
+| The test core's picture after a load | Declared | Cases failed |
+|---|---|---|
+| differs for three frames | 3 | none, and the notes name frame 4 |
+| the same, the core claiming nothing (no fault) | nothing | none, and no note: held as before |
+| never settles | 3 | C8, and C12, which runs it again |
+| differs for three frames | nothing | C8, C12 |
+| differs for three frames, the sound too | 3 | C8, C12 |
+| differs for three frames | 601 | C7, C8, C12 |
+| differs for three frames, a run of 6 frames | 3 | C7, C8, C12: "run more than 6 frames" |
+
+C7 does not see the three faults alone: both its machines load the state, A its own to check that save, load and save
+give the same bytes, so both are seeded alike. C8's third machine is the one that loads against a run that did not.
+The deadline (`the_deadline_is_on_progress_not_on_the_whole_image`): a core taking 4 ms a frame passes an image whose
+cases run for longer than a deadline of one second; a core whose tenth frame never returns on one of two images is
+reported hung on it ("ran no frame for 2 s"), the other image and the core's own cases passing.
+
+### 53.3 The gate, item by item
+
+| Item | Result |
+|---|---|
+| **E1's goldens, settings off** | **Equal** [M]: `programs.rs`' 81 with both corpora, the goldens plain and with the test observer and the eight discs' 80 anchors |
+| **The machine's goldens with any on, and all on at 4×** | **Equal** [M]: `precise.rs`' 14, `renderer.rs`' 3, `scaled.rs`' 7 (the discs at 2× and 4× with each combination of §48), `colour.rs`' 3, `filtered.rs`' 4 |
+| **E3's 1× equality, E4's, the crack fill's and E5's tests** | **Pass** [M], the state tests rewritten to the seeded form's terms: `a_state_with_the_setting_on_is_the_machines_and_its_picture_settles` (the grid's state the plain machine's to the byte; two machines given it equal from the first frame; the picture the saver's from frame 2 after the load and every frame on; the precision layer empty at the load and precise again by frame 2), `a_state_between_two_quads_that_share_an_edge_keeps_no_marks` (85 pixels of the 9,992 the quads cover differ, all on their edges, the machine the same), `a_state_at_n_is_the_machines_and_a_load_seeds` (a state at 4× a plain machine's; the mirror after a load the machine's VRAM and the picture the console's, each pixel a block of 16; two machines alike), `the_layer_keeps_nothing_in_a_state_and_a_load_starts_it_empty`, and diamond-v1's state test with a kept-form state's blocks skipped |
+| **A state of the kept form loads** | **Yes** [M]: Crash Bandicoot at frame 600, every enhancement on at 2×, saved by WiseMan 9c37e7a9 (26,503,560 bytes, `PREC` and `RNDR`), loaded on this build with every enhancement on and with none, run 300 frames by the press script: the machine's state and picture at frame 900 those of the old build loading its own state, both ways (FNV 34FE105E37E2731B and D6B902F2602DBB5F) |
+| **The kit, the published library, eight discs, 1,800 frames** | **Every case on every disc** [M] off (209 s), `precision=true` (222 s), `resolution=2` (254 s), `colour=true` (204 s), `filtering=3d` (207 s), all at 2× (277 s) and **all at 4× (520 s, each image 186 to 270 s)**; C7's state 5,398,770 bytes in every run; C7 and C8 comparing pictures from frame 61 after their loads, or 241 with true colour. With all off every image case's verdict and evidence is E5's run's, 64 of 64 |
+| **Every other core's kit** | **Unchanged** [M]: MoonRT (Super Mario Bros., The Legend of Zelda, self-delimiting), MercuryRT (Tetris, Kirby's Dream Land), VenusRT (A Link to the Past, Donkey Kong Country) and Nephrite (Sonic the Hedgehog, Streets of Rage), each built at WiseMan 9c37e7a9 and on this branch and run by the kit of each: every case passes, and the reports are the same line for line but for the minor (1.4, 1.5) and C13's count of rounds. Their crates' tests pass: MoonRT 6, MercuryRT 8, 16 and 4, VenusRT 143, Nephrite 140, MarsRT 490 |
+| **The settle bound per disc** | §52.1's table, measured on the code the seed has kept unchanged; through the published library the kit's C8 finds every disc's picture settled within the bound after its load at frame 900 under every setting |
+| **Rewind in Mistress** | §53.4 |
+| **WiseMan** | **330 of 330** [M] under the test lock with ps1-tests and the bench's discs, filtered by `Diamond`, `PlayStation`, `CoreAbi`, `CoreAdapter`, `Rewind`, `SaveState`, `StateProperties`, `GraphicsSettings`, `WindowFitAudit` and `CoreRegistrationEquivalence` |
+
+### 53.4 Sizes, rewind and the time to save
+
+**State sizes** [M] with a DualShock and a card (the kit's machine: two pads and a card, 30 bytes more):
+
+| Everything on (precise geometry, true colour, 3D filtering) | Before | After |
+|---|---|---|
+| 1× | 12,642,696 | 5,398,740 |
+| 2× | 26,503,560 | 5,398,740 |
+| 4× | 81,947,016 | 5,398,740 |
+
+**Rewind** (`DiamondRewindTests`) [M]: each disc by its press script, every enhancement on at 2× with filtering of
+everything, a snapshot every 30 frames as Mistress takes them since §4.112 of the settings reference, each encoded
+against the one before by Mistress's codec; the mean delta over the run, and the reach it gives under Mistress's
+96 MiB:
+
+| Disc, frames captured | Before: delta, reach | After: delta, reach | Times as far |
+|---|---|---|---|
+| Spyro the Dragon, 4,000 to 7,000 | 4,987,653 bytes, 10.1 s | 614,696, 81.9 s | 8.1 |
+| Ape Escape, 3,000 to 6,000 | 2,342,375, 21.5 s | 623,716, 80.7 s | 3.8 |
+| Crash Bandicoot, 3,000 to 6,000 | 2,307,814, 21.8 s | 406,153, 123.9 s | 5.7 |
+
+Before, Spyro the Dragon's 20 snapshots of 3,000 frames filled the budget; after, 99 deltas held 49.5 seconds with room
+to spare, and a rewind to the middle moment landed on the state held, byte for byte, on all three.
+
+**Saving and loading** [M, the fastest of five, Crash Bandicoot at frame 1,500, everything on]: the export's settle and save, and a load into a second machine with
+its renderer's seed:
+
+| Scale | Save, before / after (ms) | Load, before / after (ms) |
+|---|---|---|
+| 1× | 2.77 / 0.83 | 1.60 / 1.23 |
+| 2× | 10.31 / 0.84 | 4.40 / 1.80 |
+| 4× | 50.74 / 0.89 | 15.06 / 4.74 |
+
+A save no longer reads the device back or copies its pictures, and costs the machine's own save at every scale. **The
+seed was slower than the kept load at first** [M]: 10.00 ms at 2× and 38.69 at 4×, since it built the mirror and the
+picture sample by sample with a division for each. It now makes each row of blocks once and copies it to the block's
+other rows (`seed`), which gives the figures above; `a_state_at_n_is_the_machines_and_a_load_seeds` holds the seeded
+mirror at 4× to the machine's VRAM, sample for sample, and the handed picture to the display's, pixel for pixel. An
+attach and a change of scale seed the same way and gain the same.
+
+### 53.5 Cost of the frame
+
+No code on the frame's path changed: the seed, the save and the load are not on it. Measured all the same, by §50.1's
+instrument (`examples/bench`, every function aligned to 64 bytes, each build in its own target folder, the builds
+alternating on one core, the fastest mean of five rounds, milliseconds of the emulation thread a frame) [M]: **base**
+WiseMan 9c37e7a9, extracted outside the repository; **final** this branch before the seed by rows, which is off the
+frame's path:
+
+| Run | Off, base / final | Everything on at 2× (precise geometry, true colour, filtering everything), base / final |
+|---|---|---|
+| `gpu/benchmark` | 2.342 / 2.341 | 2.537 / 2.551 |
+| Crash Bandicoot, the first 3,000 frames | 2.347 / 2.334 | 2.663 / 2.649 |
+| Tekken 3's fights, frames 7,500 to 10,500 | 3.726 / 3.750 | 4.401 / 4.362 |
+
+Every pair within 0.6 per cent but the fights' last, 0.9 per cent the faster for the final build, all within the bench's
+noise on a desktop that was busy beside the runs (a load of 3 to 4); every run of an item gave the same digests in both
+builds. Crash Bandicoot's enhanced pair is of seven rounds: in the five of the first series the base's fastest was 2.655
+and the final's 2.805, their medians 2.825 and 2.826, the final build's five rounds all slowed by something beside them;
+the seven of the second series alternate as before.
+
+### 53.6 Tests [M, 2026-10-14]
+
+- **`diamond`**, `cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS`, `EMUSEN_DIAMOND_DISCS` and
+  `EMUSEN_GPU_DEVICE=6800`: 167 unit tests, `programs.rs` 81, `renderer.rs` 3, `precise.rs` 14, `scaled.rs` 7,
+  `colour.rs` 3, `filtered.rs` 4; **`precision`** 6; **`diamond-renderer`** 2; **`diamond-v1`** 4; and without the two corpora the same counts, the corpus tests standing down. The
+  scratch measurement of §52.1 and §53.4 stays in the probe's folder and is not committed.
+- **`emusen-native`** 72 (one new: the bound written only when declared, within the schema's maximum);
+  **`emusen-core-abi-check`** 6 and its check; **`emusen-core-conform`** 7 and 19 (two new).
+- **Every other core's crate**, as §53.3.
+- **WiseMan**, as §53.3: 330 of 330, `DiamondRewindTests` (3) new, `CoreAdapterTests` with the reader's new field.
+- **Not run**: the full WiseMan suite; the handheld and the laptop (not part of this work); `emusen-gpu`'s suite
+  (unchanged); the C# host's skew fixtures of §12.5 of `EmuSen_CoreAPI.md`, which do not exist as builds yet.
+
+### 53.7 Predictions
+
+- **P-S1, held in its first half, held for two discs of three in its second** [M]: the state is 5,398,740 bytes at
+  every scale; rewind reaches 8.1 and 5.7 times as far on Spyro the Dragon and Crash Bandicoot, but 3.8 on Ape Escape,
+  where five times was predicted: its accurate part changes more between snapshots (624 KB of 2.34 MB) than the other
+  two's.
+- **P-S2 held** [M]: every case on every disc with every setting, 4× at 1,800 frames among them, C7 and C8 comparing
+  from frame 61 or 241; with all off E5's evidence. **Its premise did not**: each image's cases at 4× took 186 to 270 s,
+  under even the old whole-image deadline of 600 s, since E5's overrun came mostly from C17's and C18's state digest at
+  every frame of an 82 MB state, which the seeded state removed. The deadline on progress is kept for what it is, a
+  rule that no longer confuses a slow image with a hung one (§52.6), and was not what let this run finish.
+- **P-S3 held** [M]: the other cores' reports are unchanged but for the minor and C13's rounds.
+- **P-S4 held, after a fix** [M]: a save at 4× falls from 50.74 ms to 0.89; a load takes 4.74 ms, under the 50
+  predicted, once the seed made its blocks by rows; its first form took 38.69 and would have made loading slower than the
+  kept form's 15.06 (§53.4).
+- **P-S5 held** [M]: the frame's cost is the base's within the bench's noise, off and on (§53.5).
+
+### 53.8 What is left
+
+- A disc whose picture settles slower than the bound, by a feedback effect or a texture drawn once (§52.4), would fail
+  the kit's C8 under the setting that shows it; none of the bench does in its first 3,000 frames, and a wider corpus of
+  discs with the enhancements on is the way to find one.
+- Silent Hill's fog with true colour on is the one measured case near the bound's scale (141 of 240); a game with a
+  slower-forgetting effect would need the bound raised, or the plane's low bits kept in the state at a cost of 1 MiB
+  × N² (§52.2).
+- A held rewind shows the console's detail (§52.7). A host that wanted the enhanced picture there would keep the
+  pictures of the moments it shows, as Mistress's reel keeps thumbnails, rather than the core keeping them in its
+  state.
+- The handheld's measurement of E5 (§50.5) is still owed.
+
+### 53.9 Reading log
+
+No emulator's source, shader or snippet was opened, and no description of any emulator's save states, rewind or
+upscaler; no firmware, no game's code, nothing under `kernel/` or `kernel-harness/`, and the player's BIOS folders were
+not read. Opened, all EmuSen's own: this page from §2 to §6, §14 to §31 in part, §33.5 and §37 to §51 whole;
+`EmuSen_CoreAPI.md` §4.1 to §4.6, §5.4, §5.5, §6.4 to §6.9, §6.19, §12.5, §17 and §28; `EmuSen_CoreAPI_Extensions.md`
+§1 and §13's shape; `EmuSen_Settings_Reference.md` §4.110 to §4.112; `Diamond_Players.md` §15 and §16; the source of
+`diamond-renderer`, `precision`, `diamond-v1`, `diamond`'s `layer.rs` and `state.rs`, its state tests and the disc
+gates' support; the kit's `lib.rs`, `corpus.rs`, `digest.rs`, `main.rs` and its tests; `emusen-native`'s `desc.rs`,
+`exports.rs`, `mod.rs`, `schema.rs`, `sys.rs`, its header, baseline, machine info schema and test core;
+`emusen-core-abi-check`'s check; the C# host's `CoreDescriptors.cs`, `CoreInterface.cs`, `CoreEngine.cs` and
+`CoreMachine.cs` at the events; Mistress's `RewindBuffer.cs`, `XorDeltaCodec.cs` and `MainWindow.axaml.cs` at the rewind's
+interval; WiseMan's `DiamondEnhancementsTests.cs`, `DiamondTests.cs`, `CoreAdapterTests.cs`, `CoreDiscoveryTests.cs` and
+`MarsRtRewindTests.cs`; E5's measurement scripts in the probe. The ROM library was read, never written, for the other
+cores' kit runs.
+
+---
+
+## 54. Following a shift: a trial, decided before it was built
 
 *Written 2026-10-14, before any of its code.* §32.4 proposed that the processor tell a shift by a constant as it tells a
 copy, so that precise geometry could follow the vertices Spyro the Dragon keeps shifted; the prediction was its precise
@@ -3033,7 +3421,7 @@ narrowly, measured on Spyro first, kept only if Spyro comes close to the predict
 reason recorded. It widens `blackmoon-r3000`'s reporting interface (`BlackMoon_R3000.md` §14) by addition, which the
 same yes covers.
 
-### 52.1 The pattern, as the game runs it [R]
+### 54.1 The pattern, as the game runs it [R]
 
 Read on the open kernel from the running machine's RAM at frame 7,250 of Spyro's press script (its first world, in
 play), by Diamond's own disassembler in a scratch test, at the addresses the crack model's tracing had named (§32.3).
@@ -3081,7 +3469,7 @@ and packed into a word. It is a vertex placed between two projected ones, made o
 Escape's divided polygons' are (§32.3). No projection is behind it, and following a shift does not reach it; it stays
 §32.4's second item, for which no exact remedy is proposed.
 
-### 52.2 The move [C]
+### 54.2 The move [C]
 
 **`Move::Shift`**: SLL, SRL or SRA by a constant of 1 to 31, its register given `from`'s value shifted; the fields
 `at`, `register`, `from`, `kind` (left, right logical or right arithmetic), `amount` and `value` (the result). It is
@@ -3092,18 +3480,18 @@ shift into R0 is told nothing, as every move into R0.
 - **Every shift by a constant, in place or not.** The processor reports what it did and the layer decides what it
   means. An in-place shift tells the precision layer nothing it does not hold already; it is told so that the report
   is a plain class of instructions, not the precision layer's policy written into the processor. Its cost is
-  measured (§52.5), and should it show, telling only a shift into another register is the narrower form to take.
-- **Not told: SLLV, SRLV and SRAV**, the shifts by a register's amount. No routine read in §52.1 shifts a vertex word
+  measured (§54.5), and should it show, telling only a shift into another register is the narrower form to take.
+- **Not told: SLLV, SRLV and SRAV**, the shifts by a register's amount. No routine read in §54.1 shifts a vertex word
   that way (the SLLV at 8001FB98h scales model data before RTPS), and nothing is added for a pattern no game here
   shows.
-- **Not told: the arithmetic and logic that sets the flags.** §52.1 shows it in place.
+- **Not told: the arithmetic and logic that sets the flags.** §54.1 shows it in place.
 
 `Move` is an enum the crate owns and its consumers match. A variant added to it is a change to every exhaustive match
 outside the crate, which within the project are three (the precision layer, Diamond's test observer and the r3000's
 own test bus), each changed with it. `BlackMoon_R3000.md` §14 records the moves' interface as **version 2**: version 1
 is E1's seven moves with E4's store order, and version 2 adds this one and changes none of the seven.
 
-### 52.3 What the precision layer does with it [C]
+### 54.3 What the precision layer does with it [C]
 
 **The serial is carried, whatever the kind and the amount**: `Shift` gives `register` the serial of `from`, as `Copy`
 does. **No shift state is kept** beside a serial. A serial names a projection, and the integer check at the receipt
@@ -3122,14 +3510,14 @@ cleared bits.
 **Why no wrong value can reach the screen.** Nothing the layer gives the renderer changes: a precise vertex is given
 only when its serial is live and its projection's word is the word received, and the guard of §21.2 has already refused
 at the projection any position more than two pixels from the console's. More registers now carry serials: a register
-given a shifted vertex for some other use (Spyro's `SLL by 16` of A for its y test, §52.1) holds a serial that no
+given a shifted vertex for some other use (Spyro's `SLL by 16` of A for its y test, §54.1) holds a serial that no
 receipt will match, since its word is not the projection's. The one admission is §21.3's: a word that came to equal a
 projection's by some other route is that projection's pixel, and its offset is within the guard of it.
 
 **The test observer** counts a shift among its copies, a register given another's value, and folds its kind and amount
 with its values; its block keeps its nine counts as before, so its layout is not changed (§4, §7.1).
 
-### 52.4 Tests to be built
+### 54.4 Tests to be built
 
 - **`blackmoon-r3000`**: `each_move_is_told_with_its_values` extended with SLL, SRL and SRA by a constant into another
   register and in place, a shift by 0 told as a copy, and a shift into R0 told nothing; `a_run_is_its_steps_on_random_programs`
@@ -3143,7 +3531,7 @@ with its values; its block keeps its nine counts as before, so its layout is not
 - **The machine's**: E1's goldens plain and with the test observer, and the machine's goldens with precise geometry
   on, unchanged.
 
-### 52.5 The keep rule, fixed before measuring [C]
+### 54.5 The keep rule, fixed before measuring [C]
 
 **Measured on Spyro the Dragon first**, at 1× with the crack fill as built, by §32.2's stretch and §32.1's model:
 frames 5,300 to 17,000 of its press script, every 50th frame looked at; before, on this branch with the change absent,
@@ -3154,7 +3542,7 @@ per cent was counted, and within 5,300 to 17,000 alone), the crack pixels unfill
 **Kept if all of these hold:**
 
 1. **Spyro's precise polygons to frame 17,000 reach at least 88 per cent.** The prediction is 93.5; 88 is 5.5 points
-   short of it, a tenth of the 56.6 points of gain predicted. Anything less means the pattern of §52.1 does not account
+   short of it, a tenth of the 56.6 points of gain predicted. Anything less means the pattern of §54.1 does not account
    for the words it was taken to account for, and the trial is dropped.
 2. **The lost class's crack pixels, unfilled, fall by at least nine tenths** (16,952 before).
 3. **Nothing gets worse elsewhere.** On the other seven discs at their anchors, and on Ape Escape and Tekken 3 where
@@ -3172,14 +3560,14 @@ and PlayStation areas; the precise share on Spyro at 2× (E5's internal resoluti
 the cost, off against the base and on before and after, on `gpu/benchmark`, the first 3,000 frames of Crash Bandicoot,
 Spyro the Dragon and Ape Escape, and Tekken 3's fights.
 
-## 53. Following a shift, measured and decided
+## 55. Following a shift, measured and decided
 
 *Measured 2026-10-14 on the desktop, the RX 6800, at 1× with the crack fill as built.* Each run was made twice by one
-build: as §52 built it, and with every `Move::Shift` dropped before the precision layer (a scratch switch in the crack
+build: as §54 built it, and with every `Move::Shift` dropped before the precision layer (a scratch switch in the crack
 model's layer), which is the layer as it was. The two agree with the base on everything the change does not touch:
 Spyro's model before reproduces §32.2 and §32.3 to the pixel (58,023 cracks, 194 left by the fill, every class).
 
-### 53.1 Spyro the Dragon [M]
+### 55.1 Spyro the Dragon [M]
 
 | Spyro the Dragon | Before | After |
 |---|---|---|
@@ -3200,7 +3588,7 @@ the word:
 |---|---|---|
 | Beside a polygon drawn by the integer rule | 53,924 | 41,959 |
 | … its worst vertex **none** | 32,173 | 33,217 |
-| … **lost**, its word first stored by the three shifting routines of §52.1 | 12,717 | **0** |
+| … **lost**, its word first stored by the three shifting routines of §54.1 | 12,717 | **0** |
 | … **lost**, its word first stored elsewhere | 4,235 | 4,457 |
 | … **changed** | 849 | 334 |
 | … **far**, **cut** | 3,769, 180 | 3,770, 180 |
@@ -3213,7 +3601,7 @@ the word:
   stale serials in the registers the SLL did not report, to none.
 - **What §32.3 called lost was wider than the pattern.** A word is "lost" in the model when no serial reached it and it
   equals a recent projection's word. A quarter of the class before (4,235 of 16,952) is words that the pattern never
-  stores: the vertices made between two projected ones by GPF (§52.1), and those a routine about 8004FDACh makes where
+  stores: the vertices made between two projected ones by GPF (§54.1), and those a routine about 8004FDACh makes where
   an edge between two screen vertices crosses a line (its intersection computed by multiplications and a division on
   the processor), each equal to a projection's word where the made vertex falls on a projected one. They are made
   vertices, as the class "none" is, and remain integer.
@@ -3223,7 +3611,7 @@ the word:
   unfilled count falls by a twentieth, not by the lost class's 16,952. The fill closes these as it closed the others:
   left by it, 194 to 135.
 
-### 53.2 The other discs [M]
+### 55.2 The other discs [M]
 
 The precision layer alone (a scratch test of its counts) on every disc by its press script to frame 3,000, Ape Escape
 to 20,500 and Tekken 3 to 12,000; and the crack model at the anchors of every disc, in Ape Escape's play (frames 7,300
@@ -3246,28 +3634,28 @@ before and stays so; the likely reading [A, from the counts] is a shift that now
 operand no projection reached, where the register kept a stale one before. Tekken 3's 1,757,225 changed words are its moved vertices (§32.3) and are unmoved by the
 change.
 
-### 53.3 The keep rule, item by item
+### 55.3 The keep rule, item by item
 
-| Item (§52.5) | Result |
+| Item (§54.5) | Result |
 |---|---|
 | 1. Spyro's precise polygons to frame 17,000 at least 88% | **Met**: 95.9%, above the 93.5 predicted |
-| 2. The lost class's crack pixels, unfilled, down nine tenths | **Not met by its letter**: 16,952 to 4,457, down 73.7%. **Met for the pattern's part**: 12,717 to 0 (§53.1) |
+| 2. The lost class's crack pixels, unfilled, down nine tenths | **Not met by its letter**: 16,952 to 4,457, down 73.7%. **Met for the pattern's part**: 12,717 to 0 (§55.1) |
 | 3. Nothing worse elsewhere | **Met**: the seven other discs' shares and pictures unchanged; Spyro's cracks left by the fill 194 to 135, at the anchors 0 and 0 |
-| 4. Off, the base's frame within the noise | (§53.4) |
+| 4. Off, the base's frame within the noise | (§55.4) |
 
 **Decided [C]: kept, with item 2 put to the tester.** The rule the tester set was the first and the third: Spyro near
-the predicted share, nothing worse on the other discs; both hold. The second was added in §52.5 to check that the
+the predicted share, nothing worse on the other discs; both hold. The second was added in §54.5 to check that the
 pattern accounts for the words it was taken to account for, and its measure turned out to count words the pattern
 never touches; the split, made after the measurement and said so, shows the pattern's words followed without
 exception. Item 2 is recorded as failed as written. Should the tester hold it to its letter, the change is the
 commit that adds the move and the layer's arm, and reverting it restores the layer to the byte.
 
-### 53.4 Cost [M]
+### 55.4 Cost [M]
 
 §27.1's instrument: `examples/bench` on links with every function aligned to 64 bytes, each build in its own target,
 the builds alternating on one core, the fastest mean of five rounds, milliseconds of the emulation thread a frame. The
 base is WiseMan 00a83847, extracted outside the repository. A third build, **narrow**, told only a shift into another
-register, the form §52.2 named should the cost show. A first series, run while other work loaded the machine (load
+register, the form §54.2 named should the cost show. A first series, run while other work loaded the machine (load
 average 7 to 15), is set aside; this one ran at a load of about 3:
 
 | Run | Frames | Off: base | branch | narrow | On: base | branch | narrow | Following a shift, on |
@@ -3280,7 +3668,7 @@ average 7 to 15), is set aside; this one ran at a load of about 3:
 
 Every item's digests equal across the six forms.
 
-- **Off, the frame is the base's within the noise** (−0.6 to +0.1 per cent): item 4 of §52.5 **met**. The plain
+- **Off, the frame is the base's within the noise** (−0.6 to +0.1 per cent): item 4 of §54.5 **met**. The plain
   frame's functions are the base's to the byte in size (`advance_in::<Plain>`, `exec::run` and `Run::execute` for the
   board, by `nm`); only the layered frame's `exec::run` and `advance_in::<Layered>` grew, by 177 and 300 bytes.
 - **On, it costs 0.04 to 0.07 ms a frame on the three discs and 0.13 in Tekken 3's fights**, 1 to 3 per cent of the
@@ -3291,7 +3679,7 @@ Every item's digests equal across the six forms.
   faster on any item (Crash 2.702 against 2.683, the fights 4.433 against 4.446). The dispatch, not the count, is the
   floor here, and the uniform report stays.
 
-### 53.5 The gate [M]
+### 55.5 The gate [M]
 
 | Item | Result |
 |---|---|
@@ -3300,10 +3688,11 @@ Every item's digests equal across the six forms.
 | Zero fraction is E3's equality | **Equal** on every disc at every frame and anchor, now through 2,733,994 precise triangles of the discs, Spyro's 1,599,362 among them (307,276 at E4), its pictures differing in none of 3,000 frames |
 | E4's, the fill's and E5's tests | **Pass**: `precise.rs` 14, `scaled.rs` 7, `colour.rs` 3, `filtered.rs` 4 |
 | Spyro at 2× | **The same**: to frame 17,000 the precision layer's counts and the renderer's (10,793,880 precise triangles, 4,864,310 in perspective, 177 polygons to the integer path for a gradient) are those of 1× to the count |
-| The kit, the published library, the setting on, the eight discs at 1,800 frames | **Every case on every disc**, four at a time, 341 s |
-| WiseMan's Diamond and PlayStation areas | **68 of 68** |
+| The kit, the published library, the setting on, the eight discs at 1,800 frames | **Every case on every disc**, four at a time: 341 s on this branch, and 205 s after WiseMan's seeded state was merged in (§53), the library at the core ABI's minor 1.5 |
+| After a load, the layer reset at every seed (§52, §53) | **Followed again within five frames**: Spyro saved at frame 7,000 with the setting on and loaded on a second machine; over frames 7,000 to 7,005 the loaded machine draws 1,016 of 1,626 polygons precise where the one that saved draws 1,523, and from 7,005 to 7,030 the two draw the same counts in every five frames. Following a shift keeps nothing a state would need: a register's serial is given at the shift from one the next projection makes |
+| WiseMan's Diamond and PlayStation areas | **68 of 68**, and 71 of 71 on the head with the seeded state merged |
 
-### 53.6 What the pictures showed
+### 55.6 What the pictures showed
 
 Spyro's pictures at every 50th frame from 900 to 11,500 were written before and after, and those at 900, 5,900,
 7,250, 10,350 and 11,500 looked at beside the machine's, 5,900 being where the after picture differs most from the
@@ -3313,7 +3702,7 @@ impossible; no crack is left by the fill there. **Seen and not the change's**: a
 on the near grass below the dragon, in the picture before and after alike and not in the machine's; those polygons
 were precise before the change. Not traced; recorded for the next look at Spyro's perspective texturing.
 
-### 53.7 Tests [M, 2026-10-14]
+### 55.7 Tests [M, 2026-10-14]
 
 - **`blackmoon-r3000`**, `cargo test --release` with `EMUSEN_BLACKMOON_CORPUS`: 38, `each_move_is_told_with_its_values`
   extended, the random programs telling 18,156 moves (15,479 before), the suite's 55,000 cases unchanged.
@@ -3322,24 +3711,26 @@ were precise before the change. Not traced; recorded for the next look at Spyro'
 - **`diamond`**, with `EMUSEN_DIAMOND_PS1TESTS`, `EMUSEN_DIAMOND_DISCS` and `EMUSEN_GPU_DEVICE=6800`: 279, and 279
   without the corpora, the corpus tests standing down. **`diamond-renderer`**: 2. **`diamond-v1`**: 4, and 4 naming
   no device.
-- **The kit** with the setting on (§53.5). **WiseMan**, under the test lock with the corpus, `Diamond` and
-  `PlayStation`: 68 of 68.
-- **Not run**: the full WiseMan suite; the kit with the setting off (the plain frame's functions unchanged, §53.4);
+- **The kit** with the setting on (§55.5). **WiseMan**, under the test lock with the corpus, `Diamond` and
+  `PlayStation`: 68 of 68, and 71 of 71 on the final head.
+- **On the final head**, after `git merge WiseMan` brought in the seeded state (§52, §53): `diamond` 279 with the
+  corpora and 279 without, `precision` 8, `diamond-renderer` 2, `diamond-v1` 4, the kit and WiseMan as above.
+- **Not run**: the full WiseMan suite; the kit with the setting off (the plain frame's functions unchanged, §55.4);
   `emusen-gpu` and the other cores, unchanged.
 
-### 53.8 Predictions and what is left
+### 55.8 Predictions and what is left
 
 - **§32.4's prediction held, and was passed**: Spyro's precise polygons in play from 36.9 per cent to "about 93.5":
   95.9. "The 16,952 crack pixels of the lost class gone at their source" held for the 12,717 the pattern makes and not
-  for the rest, which are made vertices (§53.1). "More of the 32,173 beside a mixed polygon whose other vertices are
+  for the rest, which are made vertices (§55.1). "More of the 32,173 beside a mixed polygon whose other vertices are
   lost" did not hold: that class rose to 33,217, since the made vertices now stand beside precise polygons.
-  "A few per cent of instructions" for the events: 22 per cent more events on Crash Bandicoot, 0.04 to 0.13 ms (§53.4).
+  "A few per cent of instructions" for the events: 22 per cent more events on Crash Bandicoot, 0.04 to 0.13 ms (§55.4).
 - **§25.5's "Spyro the Dragon under a fifth" and P-E4c's failure for Spyro are retired**: 98.2 per cent to frame 3,000.
 - **Left**: Spyro's made vertices (between two projected ones by GPF, and where an edge crosses a line about
   8004FDACh) stay integer, as Ape Escape's divided polygons do; no exact remedy exists for them (§32.4). The fan on
-  Spyro's near grass (§53.6). Item 2 of the keep rule is the tester's (§53.3).
+  Spyro's near grass (§55.6). Item 2 of the keep rule is the tester's (§55.3).
 
-### 53.9 Reading log
+### 55.9 Reading log
 
 **No emulator's source, shader or snippet, no description of PGXP or of any emulator's precision, and no other
 PlayStation renderer's code were opened**, with or without code. No firmware, listing or trace of one; the player's
@@ -3350,7 +3741,7 @@ and no published prose on the subject was read. The handheld was not connected t
 Diamond's own disassembler in a scratch test: about 8004EE00h to 8004EF2Ch, 80026960h to 800269ACh, 80026B30h to
 80026E1Ch, 800262E0h to 80026354h, 8001FA80h to 8001FDC0h, 80020030h to 800200A4h, 80020330h to 800203A4h, 80027A40h to
 80027BDCh, 80028DA4h to 80028E5Ch, 8004FAB0h to 8004FC0Ch, 8004FDACh to 8004FE68h, 80050040h to 800500DCh and
-80058080h to 8005811Ch. What §52.1 and §53.1 say of them is what those listings show; no listing, picture, state or disc
+80058080h to 8005811Ch. What §54.1 and §55.1 say of them is what those listings show; no listing, picture, state or disc
 image is in the repository.
 
 Opened, all EmuSen's own: this page's §1 to §13, §21 to §36 and §51; `BlackMoon_R3000.md` §14; the BlackMoon and

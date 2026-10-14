@@ -160,38 +160,27 @@ fn a_serial_the_ring_has_written_over_is_dead() {
     assert!(send(&mut p).is_none() && p.counts().dead == 3, "{:?}", p.counts());
 }
 
-/// §24.4: the block holds everything a later resolution reads, so a layer loaded from it resolves as the one that
-/// saved; a state without it starts the layer empty; a block cut short is read as none.
+/// §52.3: the layer writes no block, so a state made with it is the machine's to the byte, and a load starts it empty,
+/// whatever it had been told before, as an attach does.
 #[test]
-fn the_block_round_trips_and_a_short_one_clears() {
+fn the_layer_keeps_nothing_in_a_state_and_a_load_starts_it_empty() {
     let mut m = machine(&projected(""));
+    let mut plain = machine(&projected(""));
     m.attach(Box::new(Precise::new(Precision::default(), Log::default())));
     for _ in 0..3 {
         m.advance();
+        plain.advance();
     }
-    let layer: &mut dyn std::any::Any = m.layer().unwrap();
-    let a = &layer.downcast_mut::<Precise<Log>>().unwrap().precision;
-    let mut bytes = vec![0; 3 << 20];
-    let n = {
-        let mut w = StateWriter::new(&mut bytes);
-        a.save(TAG, &mut w);
-        w.len()
-    };
-    assert_eq!(n, (4 + 32 + 3 + 2 * QUEUE + 4 * RING + RAM_WORDS + SCRATCH_WORDS) * 4);
-    let mut b = Precision::default();
-    b.load(TAG, &bytes[..n]);
-    assert!(b.ring == a.ring && b.ram == a.ram && (b.serial, b.head, b.cursor, b.regs, b.fifo) == (a.serial, a.head, a.cursor, a.regs, a.fifo));
-    b.load(TAG, &bytes[..n - 1]);
-    assert!(b.serial == 0 && b.ram.iter().all(|&s| s == 0), "a short block clears");
-
     let mut state = vec![0; m.state_size()];
     let n = m.save_state(&mut state).unwrap();
-    let mut c = machine(&projected(""));
-    c.attach(Box::new(Precise::new(Precision::default(), Log::default())));
-    c.load_state(&state[..n]).unwrap();
-    let layer: &mut dyn std::any::Any = c.layer().unwrap();
-    let loaded = &layer.downcast_mut::<Precise<Log>>().unwrap().precision;
+    let mut bare = vec![0; plain.state_size()];
+    assert_eq!(plain.save_state(&mut bare).unwrap(), n);
+    assert!(state[..n] == bare[..n], "the state with the layer is the machine's");
     let layer: &mut dyn std::any::Any = m.layer().unwrap();
-    let saved = &layer.downcast_mut::<Precise<Log>>().unwrap().precision;
-    assert!(loaded.ram == saved.ram && loaded.serial == saved.serial, "through the machine's state");
+    assert!(layer.downcast_mut::<Precise<Log>>().unwrap().precision.serial > 0, "the layer saw projections");
+    m.load_state(&state[..n]).unwrap();
+    let layer: &mut dyn std::any::Any = m.layer().unwrap();
+    let p = &layer.downcast_mut::<Precise<Log>>().unwrap().precision;
+    assert!(p.serial == 0 && p.head == 0 && p.ram.iter().all(|&s| s == 0) && p.ring.iter().all(|&w| w == 0), "a load starts the layer empty");
+    assert!(p.counts().projections > 0, "its counts describe the run and are kept");
 }

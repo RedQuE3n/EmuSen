@@ -1,5 +1,5 @@
 //! A validator for the subset of JSON Schema that `abi/v1/*.schema.json` use: `type`, `enum`, `pattern` (anchored
-//! classes and literals with `+`), `minimum`, `required`, `properties`, `additionalProperties`, `items` and
+//! classes and literals with `+`), `minimum`, `maximum`, `required`, `properties`, `additionalProperties`, `items` and
 //! same-document `$ref`. Unknown members are allowed, as every reader of a descriptor must allow them (§4.2).
 
 use crate::json::Value;
@@ -77,6 +77,11 @@ fn check(root: &Value, s: &Value, v: &Value, path: &str, errors: &mut Vec<String
         && n < min
     {
         errors.push(format!("{path}: {n} is below {min}"));
+    }
+    if let (Some(max), Some(n)) = (s.get("maximum").and_then(Value::as_i64), v.as_i64())
+        && n > max
+    {
+        errors.push(format!("{path}: {n} is above {max}"));
     }
     if let Value::Object(members) = v {
         for r in s.get("required").and_then(Value::as_array).unwrap_or(&[]) {

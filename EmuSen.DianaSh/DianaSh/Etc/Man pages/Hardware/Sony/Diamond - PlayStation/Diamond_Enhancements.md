@@ -3016,3 +3016,203 @@ shaders, of `precision`, `diamond-v1`, `diamond`'s `layer.rs`, `machine.rs`, `gp
 its frame checks and its deadline; Mistress's `GraphicsSettingsWindow.cs` and the host's `CoreEngine.cs` and
 `CoreMachine.cs` at the frame; WiseMan's `DiamondPreciseGeometryTests.cs`, `DiamondTests.cs`, `DiamondShaderTests.cs`
 and `ShaderCompiler.cs`; the crack fill's model and E4's measurement scripts in the probe; the tester's handheld log.
+
+---
+
+## 52. The seeded state, decided before it was built
+
+*Written 2026-10-14, before any of its code, after the tester's decision of the same day.* §47.2 measured two forms of
+the enhancements' state: the **kept** form built at E5, which saves the renderer's mirror and picture at N× and with
+everything on makes a state 26.5 MB at 2× and 81.9 MB at 4× against 5.4 MB for the machine; and the **seeded** form,
+which saves the accurate part and, at a load, seeds the renderer from the machine's VRAM. The tester chose the seeded
+form, as §47.2 recommended, with the change to the conformance kit it needs: the kit is to learn that an enhancement's
+picture may take some frames to settle after a load. This section settles what the state keeps, how the kit is told
+and how it checks, the kit's deadline, which E5 found too short at 4×, and whether the host needs anything. §53 on is
+what was built.
+
+### 52.1 The measurement it rests on
+
+A scratch test in the probe's folder (never committed) ran each bench disc by its press script to a save point, every
+enhancement on (precise geometry, true colour, filtering of 3D polygons) at 1×, 2× and 4×, saved the kept form, and gave
+the state to three further machines: whole (the kept form), the accurate part with the precision layer's `PREC` (the
+renderer seeded), and the accurate part alone (both seeded). Each ran 120 frames beside the saver with the same input,
+and the last frame whose picture handed differs from the saver's, pixel for pixel, was recorded; the frames after it were
+equal to the end of the run in every case. The rewind's delta is Mistress's XOR codec between states four frames apart,
+the mean of ten [M]:
+
+| Disc | Save at 1,500: last differing frame, `PREC` kept / both seeded (1×, 2×, 4× alike) | Save at 2,700 (2× and 4× alike) | Delta at 2×, kept / with `PREC` / accurate alone (bytes) | Delta at 4×, kept |
+|---|---|---|---|---|
+| Ape Escape | 4 / 5 | 3 / 6 | 6,044,156 / 658,644 / 631,557 | 22,167,325 |
+| Castlevania | 0 / 0 | 2 / 2 | 22,788 / 22,788 / 22,597 | 22,788 |
+| Crash Bandicoot | 3 / 5 | 0 / 0 | 489,360 / 150,193 / 59,839 | 1,493,915 |
+| Mega Man Legends | 3 / 5 | 3 / 5 | 246,190 / 74,684 / 63,294 | 743,523 |
+| Rayman | 0 / 0 | 2 / 2 | 76,767 / 30,851 / 30,840 | 214,124 |
+| Silent Hill | 3 / 3 | **141 / 141** (2×; past 120 at 4×) | 1,310,408 / 91,765 / 91,755 | 4,964,759 |
+| Spyro the Dragon | 4 / 6 | 4 / 6 | 7,353,367 / 1,090,038 / 958,675 | 26,112,121 |
+| Tekken 3 | 0 / 0 | 0 / 0 | 2,625,456 / 607,468 / 607,095 | 8,675,639 |
+
+Two kinds of settling show. **A picture the game draws** settles within six frames: the frame handed late (§38.1) is
+the seed's, the console's picture enlarged; then the buffers the game drew, or was drawing, before the save, which the
+seed holds at the console's detail, are shown until the game has drawn over them (one or two of its frames, which at 30
+frames a second are two to four of the console's); then a frame or two whose polygons lack precise vertices, the
+ordering table drawn after the load having been built before it, while the precision layer is empty. `PREC` removes only
+that last part: two frames on Ape Escape at 2,700, Crash Bandicoot, Mega Man Legends and Spyro the Dragon, none
+elsewhere. **A picture made from the picture before** settles as fast as the effect forgets: Silent Hill's street in the
+fog copies the frame it showed and draws the next over it (§49.1), so the difference the seed made decays frame by frame
+instead of being drawn over. Measured further from the same save at 2,700 over 600 frames [M]:
+
+| Silent Hill from 2,700 | Last differing frame | Differing pixels at frames 30, 60, 90, 120 |
+|---|---|---|
+| Everything on, 2× | 141 | 8,573; 942; 231; 25 |
+| True colour alone, 1× | 121 | 2,084; 253; 59; 6 |
+| Precise geometry and 3D filtering, 2× | 32 | 6; 0 |
+| Precise geometry alone, 1× | 30 | 1; 0 |
+| Internal resolution alone, 2× | 34 | 4; 0 |
+
+With true colour the decay runs four times longer, since its plane's three low bits a channel, which the seed sets to
+zero (§40), are carried through each blend and lost only slowly to its rounding; without it the console's five bits
+lose the seed's difference within about half a second. Every run did settle: no picture differed past 141 frames, and
+the machine's own state was equal at the end of each.
+
+### 52.2 What the state keeps [C]
+
+**The accurate part, and nothing of the enhancements.** With any enhancement on, the state is the state with all of
+them off, to the byte (5,398,740 bytes with a DualShock and a card at version 10). Each candidate was weighed by what
+it measurably buys against its bytes:
+
+| Candidate | Bytes at 1× / 2× / 4× | What it buys | Kept? |
+|---|---|---|---|
+| The renderer's mirror and picture (`RNDR`'s body) | 3,572,240 / 14,287,376 / 57,147,920 with the marks | the picture exact from the first frame after a load | no: the seed gives the same picture within six frames on drawn pictures, and the deltas it adds are up to 28 times the machine's |
+| `PREC`, the precision layer (serials, ring, shadows) | 2,623,140 at every scale | the last one or two frames of a drawn picture's settling (§52.1); nothing on a feedback effect | **no**: it is 49 per cent of the accurate part, and it multiplies a rewind's delta by 2.5 on Crash Bandicoot and 1.14 on Spyro the Dragon for two frames of finer polygons |
+| The crack fill's marks (§33.5) | 1 MiB × N² | the fill where two precise polygons drawn across the save share an edge | no: a frame drawn after the save finds its marks again, as an attach does |
+| True colour's plane | 1 MiB × N² | Silent Hill's fog settling in 32 frames instead of 141 | no: it costs more than the mirror it refines, and buys a shorter wait on one effect |
+| The palette slot and the picture's size (§47.2's proposal) | 528 bytes | nothing: the seed takes the CLUT cache's colours and the display's size from the machine, which are what the renderer's are at every frame boundary | no |
+
+So the renderer and the precision layer write no block. The optional blocks' frame (§4) stays, E1's test observer
+writes one, and no enhancement uses it.
+
+**The state's size no longer moves with a setting.** It was the scale, true colour and the pairing that fixed the kept
+block's form (§42.2); now no setting changes a byte of the state, so `STATE_SIZE` is never raised by a change of
+enhancement, and a host's rewind chain is not restarted by one.
+
+### 52.3 A load [C]
+
+- **Every load seeds**, as an attach does (§16.6, §39.6): the renderer's mirror is the GPU's VRAM with each halfword a
+  block of N², its marks zero, true colour's plane zero, its picture the display's enlarged and put in the slot the next
+  frame hands, its palette slot the CLUT cache's colours; and the precision layer starts empty. The precision layer did
+  not reset at a seed before (`Layer::seed` was empty for it, and a load without its block cleared it through
+  `Layer::clear`); with no block, it is reset by its seed, so that what a machine shows after a load depends on the state
+  alone and never on what the machine ran before it: two machines given one state hand the same pictures from the first
+  frame, whatever each had done.
+- **A state of the kept form loads**: its `RNDR` and `PREC` blocks are tags no attached layer has, which E1's rule skips
+  by their length (§4); the machine continues exactly and the picture settles as from any state. Using a kept block when
+  its form matches the configuration was considered and not chosen: it would keep the kept form's reader (and its
+  buffers of up to 81 MB) alive in the renderer for the states of one day's builds, to spare their first six frames.
+  States of versions 8, 9 and 10 load as before.
+- **A state saved with the enhancements on loads with them off** and the reverse, trivially now, since the two states
+  are the same bytes.
+
+### 52.4 The bound Diamond declares [C]
+
+The kit's rule (§52.5) asks a core to state how many frames after a load its picture may differ. **Diamond states 0
+with every enhancement at its hardware value** (it is then the accurate machine, held to the picture from the first
+frame), **60 with any on and true colour off, and 240 with true colour on.** The figures rest on the two kinds of
+§52.1, not on a proof:
+
+- A drawn picture settles once the game has drawn over the buffers the seed holds and its precision layer has seen
+  one ordering table built: at most about one frame of latency and three of the game's own frames. At 30 frames a second
+  that is seven, measured six; a game at 15 frames a second would take thirteen.
+- A picture fed from the picture before settles as its effect forgets: measured 30 to 34 frames without true colour
+  and 121 to 141 with it, on the one such effect the bench reaches. 60 and 240 are those figures with a margin of
+  about three quarters.
+
+Neither is a guarantee for every game. **What would break it**: a feedback effect that forgets more slowly than Silent
+Hill's fog, and a texture a game draws once and keeps (a backdrop rendered at a level's start and read for the rest of
+it), which the seed holds at the console's detail until the game draws it again, perhaps never; with such a disc the
+kit would find Diamond's pictures unsettled after the bound and fail C7 or C8, which is the kit doing its work. No
+bench disc does the second in its first 3,000 frames. A player meets either as detail finer before a load than after it,
+the game's own state untouched.
+
+### 52.5 The kit's rule [C]
+
+**The field.** Machine info's `state` gains **`picture_settles`**, an integer, absent meaning 0: *after a
+`state_load`, the pictures of the first `picture_settles` frames the machine advances may differ from those the
+machine that saved the state handed after the same frames; from the next frame on they may not; the sound, the events
+and the state never may.* At most 600 (ten seconds at 60 frames a second). It is a field of the machine's descriptor
+because it is a fact of the machine as configured, as `skip_rendering_state_neutral` is, and changes with its settings;
+a core whose bound changes with a setting raises `MACHINE_INFO`. Being a new descriptor field, it is an addition to
+version 1 (`EmuSen_CoreAPI.md` §4.4), recorded in the baseline as the core ABI's **minor 5** with its normative text in
+§6.4 and §6.9 there and its reasons in `EmuSen_CoreAPI_Extensions.md` §14.
+
+**Why the core states it, and not a rule of the kit's.** A kit-side rule tied to `effect: enhancement` settings being
+non-default would need the kit to choose the bound, for every core, without knowing why any picture differs; it would
+excuse every core's enhancements from a check they may pass today, whether or not their states need the excuse; and it would leave a host that loads states every frame (run-ahead, a rollback of netplay, §6.22 there) without
+the fact it needs, that the pictures shown in the first frames after a load are not final. The core knows the bound and
+states it once; the kit holds the core to it.
+
+**What the kit does with it**, in C7 and C8 (and C12, which runs them again):
+
+- **Sound, events and state are compared as now**, from the first frame after the load; only pictures are excused, and
+  only the first `picture_settles` frames after a load. C7's comparison of B (loaded with A's state) with A, and C8's of
+  D (loaded at the middle) with the first machine's second half, fold each frame's picture into a second digest from
+  the frame after the bound on, and compare that, the sound's digest and the end state. Every comparison of runs without
+  a load (C6, C8's two machines fed alike, C17, C18) is unchanged.
+- **A core that declares nothing is held exactly as now**: with a bound of 0 the second digest is the first.
+- **A picture that never settles fails**, since every frame past the bound is compared; **a machine that differs
+  fails**, since sound and state are compared from the first frame.
+- **A bound above 600 fails C7 and C8**, and so does a run whose second half is no longer than the bound, which would
+  leave no picture after a load compared: the kit's author is told to give more frames (at the kit's 600 frames by
+  default a bound of up to 299 is checked).
+- The note of each case says when pictures were compared from past a bound, and from which frame.
+
+### 52.6 The kit's deadline [C]
+
+E5 found that an image's cases at 4× did not finish within 600 seconds (§48): the kit hashes every frame's picture
+(FNV-1a byte by byte, 3.8 ms for 4.9 MB on this processor [M]), C17 and C18 hash the state at every frame, and the
+image's cases run its frames ten times or more. The deadline was a whole image's, set when the cases were fewer and the
+pictures 1×; it confused a slow image with a hung one, and every new case, longer run or larger picture would move it
+again. **It becomes a deadline on progress**: an image is hung when its cases have advanced no frame for 600 seconds.
+The thread running an image stamps the time at each frame it runs; the runner reports an image whose stamp is 600
+seconds old as before (C6 failed, its thread left). A hang from the start (a create that never returns) is caught as
+before, after 600 seconds; an image that runs, however slowly, is not. Hashing more cheaply was set aside: the frames'
+digest is defined as Pharaoh's so that the two compare directly (`EmuSen_CoreAPI.md` §12.1). The seeded state removes
+the other half of E5's cost on its own: C17's and C18's state digest at every frame hashes 5.4 MB instead of 82.
+
+### 52.7 The host [A, read]
+
+Mistress's rewind (`RewindBuffer`, `EmuSen/Common`) saves a state every `IntervalFrames` (30 since the tester's
+change of 2026-10-14: two a second), encodes each against the one before with the XOR codec on another thread, and
+trims the oldest past its budget (96 MiB by default, Mistress's own). It sizes nothing from `STATE_SIZE`: each capture
+allocates or reuses a buffer of the state's length, and a state of another length than the newest restarts the chain
+(`Capture`), which is correct for a state that shrinks or grows. With the seeded form no change of enhancement changes
+the length, so turning one on no longer empties the rewind history either. **The host needs no change** to keep rewind
+and state slots right. The C# reader of machine info gains the field (`CoreMachineInfo.PictureSettles`, 0 when absent),
+as `EmuSen_CoreAPI.md` §5.5 asks of every addition; Mistress has no run-ahead and does not use it.
+
+What a player sees during a held rewind: each step loads a state, and the picture shown after it is the seed's, the
+console's picture enlarged, so a rewound sequence runs at the console's detail and the enhanced picture returns within
+the bound once play resumes.
+
+### 52.8 The gate, as it will be run
+
+E1's goldens with the settings off; the machine's goldens with any on and with all on at 4×; E3's 1× equality; E4's,
+the crack fill's and E5's tests, those that saved the kept form rewritten to the seeded one's terms (the picture equal
+from past the bound; two machines given one state equal from the first frame; a kept-form state loading); the kit's own
+tests with seeded faults (a picture that never settles failing C7 and C8, a machine that differs within the bound
+failing them, a core declaring nothing unchanged, a bound past the limit refused, the deadline on progress); the kit on
+the published library on the eight discs at 1,800 frames with each setting, all at 2× and **all at 4×**, and all off;
+every other core's kit; the settle measured per disc through the published library; rewind's reach in Mistress at two
+snapshots a second through WiseMan, before and after; save and load times and the frame's cost before and after.
+
+### 52.9 Predictions [recorded before the code]
+
+- **P-S1.** With everything on the state is 5,398,740 bytes at every scale, and a rewind's delta at 30 frames is the
+  machine's: rewind's reach under 96 MiB grows by at least five times at 2× on Spyro the Dragon, Ape Escape and Crash
+  Bandicoot.
+- **P-S2.** The kit passes on the eight discs at 1,800 frames with every setting, at 4× included, each image's cases
+  within the new deadline, and C7 and C8 compare pictures from frame 61 or 241 after their loads; with all off the
+  reports are those of E5's run but for the note.
+- **P-S3.** Every other core's kit report is unchanged in verdict and evidence.
+- **P-S4.** Saving a state with everything on at 4× falls from the readback and copy of 82 MB to the machine's own save;
+  loading costs the seed, under 50 ms at 4×.
+- **P-S5.** The frame's cost is unchanged within the bench's noise: no code on the frame's path changes.

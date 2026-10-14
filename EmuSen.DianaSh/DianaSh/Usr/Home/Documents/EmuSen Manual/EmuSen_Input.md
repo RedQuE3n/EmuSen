@@ -710,7 +710,7 @@ and makes slot 2 beside slot 0: it is player 2.
    beside the built-in controls.
 6. If a returning controller gets another player number, run `journalctl -b --since "-5 min" | grep -i "x-box 360 pad"`
    and note the slot numbers in the names before and after: a slot that changed is the case this section leaves open.
-   `tr '\0' '\n' < /proc/$(pidof Mistress)/environ | grep SDL_GAMECONTROLLER` shows the two variables Steam gave
+   `tr '\0' '\n' < /proc/$(pidof EmuSen)/environ | grep SDL_GAMECONTROLLER` shows the two variables Steam gave
    Mistress. If the controller is not seen at all, the newest `crash_*.txt` in `~/Documents/Logs` and whether Steam
    Input is on for Mistress's shortcut are the first things to look at.
 

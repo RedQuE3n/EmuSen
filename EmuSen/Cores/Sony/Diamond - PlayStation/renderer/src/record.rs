@@ -289,10 +289,9 @@ pub fn precise_triangle(v: [Vertex; 3], f: [Fraction; 3], shaded: bool, textured
     }
     let p: [(i64, i64); 3] = std::array::from_fn(|i| (((v[i].x as i64) << FINE) + f[i].dx as i64, ((v[i].y as i64) << FINE) + f[i].dy as i64));
     let area = (p[1].0 - p[0].0) * (p[2].1 - p[0].1) - (p[2].0 - p[0].0) * (p[1].1 - p[0].1);
-    // The console's own triangle, which fills this one: an opaque polygon's, or a textured one's for its opaque texels,
-    // and with some fraction, since at none the two are one (§33.4).
+    // The console's own triangle, which fills this one when there is some fraction, since at none the two are one.
     let console = raster::setup(&v, false, false);
-    let own = console.filter(|_| (paint.blend.is_none() || textured) && f.iter().any(|q| q.dx != 0 || q.dy != 0));
+    let own = console.filter(|_| f.iter().any(|q| q.dx != 0 || q.dy != 0));
     if area == 0 {
         return if own.is_some() { Made::Integer } else { Made::Nothing };
     }

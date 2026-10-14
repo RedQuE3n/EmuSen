@@ -847,16 +847,18 @@ fn filled(body: &str, r: Renderer) -> (Machine, Vec<u16>) {
 /// before the floor and, beside it, after. The floor's edge lies 0.68 of a pixel below the line the console draws it
 /// on, so that without the fill a line of the cleared buffer shows between the two; with it no pixel the console
 /// covers shows the buffer, and the pixels filled along the second floor's edge show its texture's first row, each
-/// the texel of its place in the console's triangle (§33.2).
+/// the texel of its place in the console's triangle (§33.2). The first floor is drawn twice, opaque and then
+/// semi-transparent over it, as a game that shades in two passes draws: its filled pixels take both or neither, the
+/// console's colour (§33.4).
 #[test]
 fn a_precise_floor_meets_an_integer_ring_with_no_crack() {
     let Some(r) = renderer() else { return };
     let floor = |xl: i32, xr: i32| [(xl, -32), (xr, -32), (xl, 40), (xr, 40)];
     let texture = [0, 0x0108_0078, 0x4800, 0x4878];
-    let body = ring(-140, -20) + &projected_quad(0x2800_C000, floor(-140, -20), None) + &projected_quad(0x2D80_8080, floor(20, 140), Some(texture)) + &ring(20, 140);
+    let body = ring(-140, -20) + &projected_quad(0x2800_C000, floor(-140, -20), None) + &projected_quad(0x2A60_6060, floor(-140, -20), None) + &projected_quad(0x2D80_8080, floor(20, 140), Some(texture)) + &ring(20, 140);
     let (mut m, v) = filled(&body, r);
     let counts = tap(&mut m).precision.counts();
-    assert_eq!((counts.polygons, counts.precise_polygons, counts.mixed_polygons), (6, 2, 0), "two floors precise, four ring quads not: {counts:?}");
+    assert_eq!((counts.polygons, counts.precise_polygons, counts.mixed_polygons), (7, 3, 0), "three floors precise, four ring quads not: {counts:?}");
     let (mut covered, mut cracks) = (0, 0);
     for y in 0..240u32 {
         for x in 0..320u32 {
@@ -875,9 +877,11 @@ fn a_precise_floor_meets_an_integer_ring_with_no_crack() {
         filled += (t & 0x8000 != 0) as u32;
         off += (t & 0x8000 == 0 || t >> 8 & 0x7F != 0 || ((t & 0xFF) as f64 - u).abs() > 0.75) as u32;
     }
-    eprintln!("{covered} pixels the console covers, {cracks} of them the cleared buffer in the renderer's picture; {filled} of the textured floor's first row filled, {off} off their texel");
+    // The first floor's top row, 87 from 18 to 138, all of it filled: the console's own colour, both passes.
+    let once = (18..139u32).filter(|&x| v[(87 * 1024 + x) as usize] != m.board.gpu.vram.get(x, 87)).count();
+    eprintln!("{covered} pixels the console covers, {cracks} of them the cleared buffer in the renderer's picture; {filled} of the textured floor's first row filled, {off} off their texel; {once} of the twice-drawn floor's first row not the console's colour");
     assert!(covered > 20_000 && cracks == 0, "{cracks} pixels of the cleared buffer show where the console draws");
-    assert_eq!((filled, off), (120, 0), "the filled row's texels");
+    assert_eq!((filled, off, once), (120, 0, 0), "the filled rows");
 }
 
 /// Two precise quads sharing a slanted edge, the left drawn first and, beside them, the right: what the later spills
@@ -965,6 +969,55 @@ fn saved(m: &mut Machine) -> Vec<u8> {
 
 fn paired() -> Option<Box<Precise<Tap>>> {
     Some(Box::new(Precise::new(Precision::default(), Tap::new(Some(renderer()?), false))))
+}
+
+/// §33.5: the marks are the state's. Two precise quads that share a slanted edge, the left drawn at once and the right
+/// three vertical blanks later, and a state saved between the two. The machine that saved it and one that loads it
+/// draw the right quad alike, to the pixel; one given the same state with its marks cleared fills the right quad over
+/// the left's pixels along their edge, as the fill without marks does (§33.3), so the block needs them.
+#[test]
+fn a_state_between_two_quads_that_share_an_edge_keeps_their_marks() {
+    if renderer().is_none() {
+        return;
+    }
+    let (left, right) = ([(-130, -40), (-70, -40), (-140, 40), (-80, 40)], [(-70, -40), (-10, -40), (-80, 40), (-20, 40)]);
+    let acknowledged = li("t0", 0xFFFF_FFFE) + "sw t0, 0x1070(a0)\n";
+    let mut body = projected_quad(0x2800_00E0, left, None) + &acknowledged;
+    for n in 0..3 {
+        body += &format!("blank{n}: lw t0, 0x1070(a0)\nnop\nandi t0, t0, 1\nbeq t0, zero, blank{n}\nnop\n");
+        body += &acknowledged;
+    }
+    body += &projected_quad(0x28E0_0000, right, None);
+    let loaded = |state: &[u8]| {
+        let mut m = fill_machine(&body);
+        m.attach(paired().unwrap());
+        m.load_state(state).unwrap();
+        for _ in 0..3 {
+            m.advance();
+        }
+        (tap(&mut m).precision.counts().precise_polygons, drawn(&mut m).picture().0.to_vec())
+    };
+    let mut a = fill_machine(&body);
+    a.attach(paired().unwrap());
+    a.advance();
+    a.advance();
+    assert_eq!(tap(&mut a).precision.counts().precise_polygons, 1, "the left quad alone before the state");
+    let state = saved(&mut a);
+    for _ in 0..3 {
+        a.advance();
+    }
+    assert_eq!(tap(&mut a).precision.counts().precise_polygons, 2, "the right quad after it");
+    let picture = drawn(&mut a).picture().0.to_vec();
+    let (_, continued) = loaded(&state);
+    let differing = |other: &[u8]| picture.chunks(4).zip(other.chunks(4)).filter(|(x, y)| x != y).count();
+    assert_eq!(differing(&continued), 0, "the machine that loaded the state draws another picture");
+    let layout = a.layout();
+    let marks: Vec<usize> = layout.lines().find(|l| l.ends_with("Marks")).expect("the marks' field").split_whitespace().take(2).map(|n| n.parse().unwrap()).collect();
+    let mut cleared = state.clone();
+    cleared[marks[0]..marks[0] + marks[1]].fill(0);
+    let (_, unmarked) = loaded(&cleared);
+    eprintln!("with the marks cleared from the state {} pixels differ", differing(&unmarked));
+    assert!(differing(&unmarked) > 0, "the marks made no difference: the test no longer holds them");
 }
 
 /// §24.4 on the grid: a state saved with the setting on, loaded on a machine with it on, continues the picture as the

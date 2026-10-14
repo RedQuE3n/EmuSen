@@ -3618,16 +3618,22 @@ tester can answer. It was written and committed before stage 8's first line of c
 
 ### 49.1 What there is to run
 
-- **No Sega CD BIOS** exists locally: not in the tester's library, not on the handheld's card, not in the probe's
-  cache. The handheld's `segacd`, `megacd` and `megacdjp` folders hold only a frontend's `systeminfo.txt` (checked
+- **The player's BIOS.** *Added 2026-10-14 by the tester:* a set of the tester's own Sega CD BIOS images (American,
+  European and Japanese, models 1 and 2), copied for development to the probe's system folder. It is used only as a
+  firmware path, as Diamond's player's BIOS is: given to Nephrite as its declared firmware, and to a referee as its
+  system directory; never read, dumped, traced, logged, disassembled or broken into, and nothing made with it is kept
+  in the record but results (passes, failures, frames, pictures described in words), so that stage 10's writer sees
+  none of it. Runs on it watch Nephrite's own drive, CDC and CD-DA serve a BIOS and real games; mcd-verificator stays
+  stage 8's gate. The handheld's `segacd`, `megacd` and `megacdjp` folders hold only a frontend's `systeminfo.txt` (checked
   read-only on 2026-10-14). The library's 18 `.bin` files with "32X" in their names are 32X cartridges, stage 12's.
 - **Five Sega CD discs**, added to the library by the tester on 2026-10-14 in `SCD/`, each a `.cue` with its `.bin`
   tracks (114 tracks, 2.6 GB): Chuck Rock II - Son of Chuck (USA), Lunar - Eternal Blue (USA), Mickey Mania - The
   Timeless Adventures of Mickey Mouse (USA), Sonic CD (Europe) and Sonic CD (USA). They are copied to
   `~/.cache/emusen/probe/nephrite/discs/` and read from there, never committed. With no BIOS they cannot start; stage 8
   uses them where it needs no BIOS: each sheet opened through `emusen-disc`, the drive's TOC, subcode and seeks on a
-  real layout, the CDC decoding their data tracks (each disc's sector 0 is a check), and CD-DA from their audio tracks.
-  They are stages 9's and 10's commercial discs.
+  real layout, the CDC decoding their data tracks (each disc's sector 0 is a check), and CD-DA from their audio tracks;
+  and, on the player's BIOS, to watch the drive and the CDC serve real games. They are stages 9's and 10's commercial
+  discs.
 - **mcd-verificator** V1.02 (krikzz, GPL-3.0, `MEGA-PRO` at `8b72838`, cached under `roms/mcd-verificator/`). Its
   header is a Genesis cartridge's. At start it reads the long at `$400100`: "SEGA" there is the boot ROM of a Sega CD
   beneath a cartridge (mode 1), and anything else means that it is itself the Sega CD's boot ROM at `$000000` (mode 2),
@@ -3665,7 +3671,8 @@ CD's boot ROM at `$000000`, PRG-RAM's window at `$020000`, Word RAM at `$200000`
 already names for a disc (`bios_CD_U.bin`, `_E`, `_J`, files 2 to 4). **The tests place mcd-verificator there**, and it
 runs as the Sega CD's boot ROM; nothing in the core knows of it, and the same path runs a player's BIOS.
 
-With no boot ROM no disc starts: the main CPU's vectors read the open bus, and the machine stands with a black picture,
+Given the player's BIOS there, a disc boots as on a console, which is how the five discs are run (§49.1). With no
+boot ROM no disc starts: the main CPU's vectors read the open bus, and the machine stands with a black picture,
 machine info naming the firmware `absent`. **What a player sees, decided by the plan** (§5.6 "until it exists, the Sega
 CD runs only with the player's image"; §7, the Sega CD offered after stage 10): nothing. The `mcd` system stays marked
 in development (`EmuSen_CoreAPI.md` §27.4) through stages 8 to 10, so no host offers it; a development build (the kit,
@@ -3693,14 +3700,15 @@ layouts (8.3 to 8.5), and none of them is needed for the gate.
 
 | Step | What it builds | Its oracle | Needs |
 |---|---|---|---|
-| 9.1 | The graphics ASIC: stamps, the stamp map, the trace vector table, the image buffer, level 1 and its timing (krikzz's note: a 16 KiB read takes 29.6 ms with the ASIC running and 23.6 without) | the Hardware Manual §3-8; homebrew; the five discs on the player's BIOS against Genesis Plus GX (Sonic CD's special stages and Mickey Mania use the ASIC) | a BIOS (Q2) |
+| 9.1 | The graphics ASIC: stamps, the stamp map, the trace vector table, the image buffer, level 1 and its timing (krikzz's note: a 16 KiB read takes 29.6 ms with the ASIC running and 23.6 without) | the Hardware Manual §3-8; homebrew; the five discs on the player's BIOS against Genesis Plus GX (Sonic CD's special stages and Mickey Mania use the ASIC) | the player's BIOS |
 | 9.2 | The RF5C164: eight channels, sign-magnitude samples, loops, envelope and pan, its clock | the PCM manual and the RF5C68A datasheet; viciious's demo; references with a BIOS | the same |
 | 9.3 | The fader's ramp, de-emphasis, and the mix's levels between the Genesis, the PCM and CD-DA | the Hardware Manual §3-6; references with a BIOS | the same; recordings optional (Q7) |
 | 9.4 | The stage's close: the 240p Sega CD suite and discs on the player's BIOS against Genesis Plus GX | as stated | the same |
 
-**With no BIOS**: the ASIC's and the PCM's arithmetic as unit tests written from the manuals, and mcd-verificator's
-own ASIC, PCM and CDD tests if a variant of it is built from its source (Q6). No reference runs a Sega CD without a
-BIOS but ClownMDEmu's incomplete one (the plan's §1.6), so the comparisons of 9.1 to 9.4 need Q2's answer.
+**With the player's BIOS** (§49.1) the references run the five discs and the 240p suite, Genesis Plus GX given the
+BIOS as its system directory, and stage 9 is graded as the plan's §6 says. **With no BIOS**: the ASIC's and the PCM's
+arithmetic as unit tests written from the manuals, and mcd-verificator's own ASIC, PCM and CDD tests if a variant of it
+is built from its source (Q6).
 
 ### 49.5 Stage 10's steps
 
@@ -3717,7 +3725,7 @@ specification.
 | 10.5 | The main CPU's routines and tables that games use by address |
 | 10.6 | The gate: the 240p Sega CD suite, mcd-verificator in mode 1 (it finds a boot ROM at `$400000` by the "SEGA" at `$400100`), games against the same games on the player's BIOS |
 
-It has the five discs (§49.1), and needs a BIOS run as a black box for its comparisons (Q2). Mode 1 arrives with it (Q4).
+It has the five discs and, for its comparisons, the player's BIOS run as a black box (§49.1); its writer sees no run made on that BIOS beyond its results. Mode 1 arrives with it (Q4).
 
 ### 49.6 Questions for the tester
 
@@ -3726,11 +3734,7 @@ It has the five discs (§49.1), and needs a BIOS run as a black box for its comp
    streaming full-motion video (Sewer Shark, Night Trap, or Snatcher's), the PCM heavily (Silpheed, Popful Mail), and
    one using backup RAM's cartridge; and fetch jvisser's graphics test and viciious's PCM demo for stage 9, their
    licences allowing it.
-2. **A BIOS for stage 9's references.** The plan's oracle for stage 9 is the player's BIOS run through Genesis Plus
-   GX; none exists locally, and the firmware policy forbids fetching one. *Recommended:* the tester places a dump of
-   their own console's BIOS in a folder outside the repository and the library, which the probe and Nephrite run as
-   a black box and no one reads; stage 10's writer never handles its bytes. Without it, stage 9 is graded by unit
-   tests and homebrew alone, and its comparisons wait.
+2. ~~**A BIOS for stage 9's references.**~~ *Answered 2026-10-14:* the tester added their own (§49.1).
 3. **mcd-verificator in the BIOS's place for the references.** Genesis Plus GX, PicoDrive and BlastEm refuse a Sega
    CD without a BIOS; given mcd-verificator under a BIOS's file name in the probe's own system folder, they would run
    it as Nephrite does, and each reference's verdicts would show which of krikzz's results it meets. *Recommended:*

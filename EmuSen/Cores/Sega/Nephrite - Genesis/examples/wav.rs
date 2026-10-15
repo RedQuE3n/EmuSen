@@ -17,7 +17,7 @@ fn main() {
     }
     let mut m = Machine::with_model(&image, media, model);
     if std::env::var("NEPHRITE_CIRCUIT").is_ok_and(|v| v == "flat") {
-        m.genesis.hw.sound.circuit = nephrite::sound::Circuit::FLAT;
+        m.hw_mut().sound.circuit = nephrite::sound::Circuit::FLAT;
     }
     let mut samples = Vec::new();
     let mut buf = vec![0i16; 1 << 16];

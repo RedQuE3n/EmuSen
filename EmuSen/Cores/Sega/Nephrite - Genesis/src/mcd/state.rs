@@ -3,7 +3,9 @@
 //! the RAM cartridge's switch and the disc's fingerprint. The memories are the machine's spaces (Nephrite_Native.md §53).
 
 use beryl_m68k::{M68000, Size};
-use emusen_native::{State, StateReader, StateWriter, Truncated};
+use emusen_native::State;
+
+use crate::interface::{AttachmentState, Refusal, StateReader, StateWriter, Truncated};
 
 use super::cdc::Cdc;
 use super::cdd::Mode;
@@ -24,7 +26,7 @@ pub struct Saved {
     cdda: super::cdda::Cdda,
     cart_writable: bool,
     asic: super::asic::Asic,
-    pub print: u64,
+    print: u64,
 }
 
 struct CddSaved {
@@ -65,8 +67,10 @@ fn mode_from(w: [u32; 7]) -> Mode {
     }
 }
 
-impl MegaCd {
-    pub fn write_state(&self, w: &mut StateWriter, print: u64) {
+impl AttachmentState for MegaCd {
+    type Saved = Saved;
+
+    fn write_state(&self, w: &mut StateWriter) {
         w.group("SubCpu", |w| self.cpu.write_state(w));
         let h = &self.hw;
         let g = &h.g;
@@ -115,10 +119,10 @@ impl MegaCd {
         w.bytes("AsicBytes", &[a.size, a.vcells, a.offset, a.vdots, a.busy as u8]);
         w.u16s("AsicWords", &[a.map, a.buffer, a.hdots, a.vector]);
         w.u64s("AsicTimes", &[a.line as u64, a.next, a.refresh]);
-        w.u64("DiscFingerprint", print);
+        w.u64("DiscFingerprint", self.disc_print);
     }
 
-    pub fn read_state(&self, r: &mut StateReader) -> Result<Saved, Truncated> {
+    fn read_state(&self, r: &mut StateReader, _version: i32) -> Result<Saved, Truncated> {
         let mut cpu = self.cpu.clone();
         cpu.read_state(r)?;
         let clock = r.u64()?;
@@ -212,8 +216,13 @@ impl MegaCd {
         Ok(s)
     }
 
+    /// A state is held to the disc it was made over.
+    fn check(&self, s: &Saved) -> Result<(), Refusal> {
+        if s.print == self.disc_print { Ok(()) } else { Err(Refusal::WrongMedia { saved: s.print, here: self.disc_print }) }
+    }
+
     /// A state read whole put in place; the disc stays the drive's own.
-    pub fn apply_state(&mut self, s: Saved) {
+    fn apply_state(&mut self, s: Saved) {
         self.cpu = s.cpu;
         let h = &mut self.hw;
         (h.clock, h.g, h.parked, h.owed, h.pcm, h.fader, h.cdc, h.cdda, h.asic) = (s.clock, s.g, s.parked, s.owed, s.pcm, s.fader, s.cdc, s.cdda, s.asic);

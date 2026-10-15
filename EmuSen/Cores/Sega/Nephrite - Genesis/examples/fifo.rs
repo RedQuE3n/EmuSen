@@ -15,7 +15,7 @@ fn main() {
         m.advance();
     }
     let hex = |b: &[u8]| b.chunks(2).map(|w| format!("{:02X}{:02X}", w[0], w.get(1).copied().unwrap_or(0))).collect::<Vec<_>>().join(" ");
-    let rs = records(&m.genesis.hw.wram);
+    let rs = records(&m.hw().wram);
     for (i, r) in rs.iter().enumerate() {
         if r.passed() {
             println!("{:3} pass {}", i + 1, r.name);
@@ -23,6 +23,6 @@ fn main() {
             println!("{:3} FAIL {}\n      expected {}\n      actual   {}", i + 1, r.name, hex(&r.expected), hex(&r.actual));
         }
     }
-    let ram = &m.genesis.hw.wram;
+    let ram = &m.hw().wram;
     println!("{} of {} pass; the program's own counts: pass {} fail {}", rs.iter().filter(|r| r.passed()).count(), rs.len(), u16::from_be_bytes([ram[0xFF08], ram[0xFF09]]), u16::from_be_bytes([ram[0xFF0A], ram[0xFF0B]]));
 }

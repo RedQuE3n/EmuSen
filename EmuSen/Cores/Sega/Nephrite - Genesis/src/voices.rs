@@ -351,11 +351,11 @@ fn machine_channel(image: &[u8], frames: i64, channel: usize) -> (Machine, Vec<i
 /// The whole machine running `image`, and the trace of `channel`.
 fn machine_placed(image: &[u8], frames: i64, channel: usize) -> (Machine, Vec<i32>) {
     let mut m = Machine::new(image, Media::read(image));
-    m.genesis.hw.sound.ym.trace = Some(Vec::new());
+    m.hw_mut().sound.ym.trace = Some(Vec::new());
     while m.frames < frames {
         m.advance();
     }
-    let trace = m.genesis.hw.sound.ym.trace.take().unwrap().iter().map(|c| c[channel]).collect();
+    let trace = m.hw_mut().sound.ym.trace.take().unwrap().iter().map(|c| c[channel]).collect();
     (m, trace)
 }
 
@@ -528,7 +528,7 @@ fn the_z80s_reset_line_resets_the_ym2612() {
     let last_sound = ours.iter().rposition(|&x| x != 0 && x != -1).unwrap();
     assert!(ours[..last_sound].iter().filter(|&&x| x.abs() > 200).count() > 50, "the voice sounded");
     assert!((250..400).contains(&last_sound), "it stopped at the pulse, about 62 + 208 samples in: {last_sound}");
-    let ym = &m.genesis.hw.sound.ym;
+    let ym = &m.hw().sound.ym;
     assert!(!ym.held);
     assert_eq!((ym.regs[0][0x3C], ym.regs[0][0x4C], ym.regs[0][0xA4], ym.regs[0][0xB4]), (0, 0, 0, 0xC0), "the voice's registers are gone");
     assert_eq!(ym.regs[0][0x2A], 0x55, "a write after the release lands");

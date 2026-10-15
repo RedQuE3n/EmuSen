@@ -300,6 +300,33 @@ presented as the 68000's accesses, as today (§2.5); if stage 9 or 10 finds a tr
 from a 68000 read, the requester is added then. An addition to an internal surface costs one commit; an unused member
 costs a reader's attention in every implementation.
 
+**As built (commit 3, §11.3).** `src/interface.rs` carries the bus side with the members the Sega CD uses, by the
+rule just given, and one the design did not have:
+
+```rust
+pub trait Attachment {
+    const EXPANSION: bool = false;
+    fn read8(&mut self, a: u32, at: Master) -> Answer<u8>;
+    fn read16(&mut self, a: u32, at: Master) -> Answer<u16>;
+    /// A word the VDP's transfer reads from the 68000's bus, which an attachment may answer apart from the 68000's.
+    fn transfer16(&mut self, a: u32, at: Master) -> Answer<u16> { self.read16(a, at) }
+    fn write(&mut self, a: u32, v: u16, mask: u16, at: Master) -> bool;
+    fn run_to(&mut self, to: Master);
+    fn sound(&mut self, to: Master) -> Option<&mut Steps>;
+}
+```
+
+- **`transfer16` is the requester** the paragraph above said would be added if a transfer from Word RAM behaved apart
+  from a 68000 read. Stage 9 found that it does (§2.8): Word RAM answers the VDP a cycle late. The rule moved from the
+  Genesis's `attached_dma_read` into the Sega CD's `transfer16`; the default is the 68000's read, so `Bare` and any
+  attachment without such a rule pay nothing.
+- **Left out until their first user**: `Slot` (the cartridge lent and the wait, the 32X's, stage 11), `Line`, `LINES`
+  and `line` (the 32X's), `reset` (when Nephrite claims `RESET`), `peek` and the `Watch` given to `run_to` (the Sega
+  CD's debugger step, which brings its processor). Each is added by the commit that first needs it, with the Sega CD
+  brought along.
+- **`sound` returns the one stream** rather than lending each stream to a callback, since the Sega CD has one and the
+  mix's `take_with` takes one; CD32X's two streams (§3.10) change it when stage 12 builds them.
+
 ### 3.4 What the Genesis offers in return, and promises
 
 - **`Board`** at construction: the master clock's exact rate, the market, the 68000's first clock (power-on is
@@ -323,6 +350,22 @@ The Genesis's side becomes generic: `Genesis<A>`, `Hw<A>` (the attachment a fiel
 `_ if let Answer::Value(v) = self.att.read16(a, self.clock, &mut slot) => v` with `Answer::Open` falling to the open
 bus, and `catch_up`'s three lines become `self.att.run_to(self.clock, &mut slot, w)`. A Genesis with nothing attached
 is `Genesis<Bare>`, whose methods are empty and inline, so that every attachment arm folds away (§4).
+
+**As built (commit 3, §11.3)**, the parameter is on the Genesis and on what its buses reach, not on its devices:
+`Genesis<A = Bare> { cpu, z80, hw: Wired<A> }`, where `Wired<A> { dev: Hw, att: A }` holds the Genesis's devices,
+`Hw` as before and not generic, with the attachment beside them, and reads as `Hw` through `Deref`, a field projection
+that costs nothing. `MainBus<'_, A>` and `Z80Bus<'_, A>` each hold `&mut Wired<A>`, one pointer, as they held `&mut Hw`;
+the map's methods are `Wired<A>`'s, the devices' own (the refreshes, the HV counter's point, TMSS, the Z80's window's
+address) stay `Hw`'s. `Hw::mcd`, `mcd_low` and `attached` are gone. The machine holds `enum Fitted { Md(Genesis<Bare>),
+Mcd(Genesis<MegaCd>) }`, matched once per call by a macro, `fitted!`, that binds the Genesis with its attachment's type
+known in each arm; the assembly and the tests reach the devices through `Machine::hw()`/`hw_mut()` and the processors
+through `cpu()`/`z80()`, and the Sega CD through `mcd()`/`mcd_mut()`.
+
+*A form tried and rejected, measured:* the attachment lent beside a borrowed `Hw`, `Map<'_, A> { hw: &mut Hw, att: &mut A
+}`, which would have kept the machine's Genesis one type and every test's `m.genesis.hw` as it was. Each access then
+reached the devices through a second pointer, and the cartridge Genesis cost 1.3 to 2.4% more on Phantasy Star IV and
+Sonic the Hedgehog. With the Sega CD's instantiation removed as well the loss stood at 1.3 to 1.4%, so it was the form's,
+not the second instantiation's. `Wired<A>`, one pointer, removed it (§11.3).
 
 ### 3.5 The state and the view: `AttachmentState`, `AttachmentView`
 
@@ -374,6 +417,14 @@ to the highest the configuration lists (`machine.rs` 111 makes `[24, 16]` today)
 `att.peek` first, which closes §2.6's first gap; in the move itself the Sega CD's `peek` answers `None` and its
 processor list is empty, as today, so that the move changes nothing a debugger sees, and its processor arrives with the
 Sega CD's debugger step.
+
+**As built (commit 3, §11.3).** `AttachmentState` as designed, `write_state(&self, w)` with the fingerprint the Sega
+CD's own field (`MegaCd::disc_print`, set at construction and by an insert), moved in this commit rather than the next
+because the trait's writer takes no argument for it. The assembly composes the blocks in `state.rs` with one enum,
+`FittedSaved`, holding the Genesis's block and the attachment's as read, so that a load still reads everything, checks
+the fingerprint and only then applies the spaces, the Genesis and the attachment, in today's order. `AttachmentView` has
+`spaces`, `bytes` and `bytes_mut`; the processors' members arrive with the Sega CD's debugger step, and `SpaceRef` and
+the id ranges (`GENESIS_SPACES`, `MCD_SPACES`, `S32X_SPACES`) are `interface`'s.
 
 ### 3.6 Facts for the frontend: files, media, settings, machine info
 
@@ -537,6 +588,13 @@ is decided again across a crate boundary.
 The choice between (a) and (b) is **local to the assembly**: the Genesis is generic in both, and (b) is one type
 in the `machine` module implementing the traits by `match`. So the build starts with (a), and (b) is measured beside it only if
 (a)'s costs cross the bounds of Q1.
+
+**Decided by measurement (commit 3, §11.3): (a).** Each configuration's frame compiled apart, the cartridge Genesis
+within the runs' spread of the baseline and faster on six of the seven runs, the disc's as well; the `dist` library
+11.3% larger and a clean release build 13 to 23% longer, both far inside Q1's half. Form (b) was therefore not built.
+One cost of (a) the page did not foresee: the Genesis's helpers called from both instantiations (the VDP's
+`line_end`, `slot`, `control`, `data`, `status`; the PSG's write) are no longer called from one place, and the
+compiler keeps ten of them out of line where it had inlined them; with `Wired<A>` this costs nothing measurable.
 
 ### 4.4 The bench that decides
 
@@ -886,3 +944,38 @@ test, and no access pays it on a console without one but the flag's (§3.11).
   the Hedgehog 1.356 ms (1.362), Sonic 2 1.241 (1.249), Thunder Force IV 1.339 (1.348), Streets of Rage 2 1.145 (1.146),
   Phantasy Star IV 1.412 (1.410), Micro Machines 2 1.450 (1.452), the 240p disc 1.590 (1.584). Every difference within
   the runs' spread of §11.1.
+
+### 11.3 Commit 3: the interface, `Genesis<A>`, and the Sega CD on it
+
+- **`src/interface.rs`**: `Master`, `Board`, `Answer`, `Attachment` (§3.3 as built), `Refusal`, `AttachmentState`,
+  `SpaceRef`, the three ranges of space ids, `AttachmentView`, and `Bare`, every member of whose implementations is
+  empty or `None` and inlined.
+- **`genesis.rs`**: `Genesis<A = Bare>`, `Wired<A>`, `MainBus<'_, A>`, `Z80Bus<'_, A>` (§3.4 as built). The map's
+  methods (`run_vdp`, `vdp_wait`, `dma_hold`, `dma_read`, `catch_up`, `read8`, `read16`, `write8`, `write16`, the VDP's
+  ports, the Z80's space) moved, unchanged but for the attachment's calls, from `impl Hw` to `impl<A: Attachment>
+  Wired<A>`; the four guards became `asked8`/`asked16` and `att.write`; `catch_up` calls `att.run_to`; `dma_read` asks
+  `att.transfer16`. `attached_*`, `mcd_*` and `attached_dma_read` left for the Sega CD. Five lines that read one device
+  while calling another through `Deref` name `self.dev` explicitly, as the borrow checker asks.
+- **`mcd/`**: `MegaCd::new(board, bios, disc)`; `Attachment for MegaCd` (`EXPANSION`, its decode in mode 2, the RAM
+  cartridge's slot, Word RAM's transfer a word late, `run_to` as it was, `#[inline(never)]` kept, and `sound`, its one
+  stream); `AttachmentState` in `mcd/state.rs` with the fingerprint its own; `AttachmentView` with `MEMORIES`, `BRAM_ID`
+  and `CARTRAM_ID`, which moved from `machine.rs` (re-exported there).
+- **The assembly**: `Machine::fitted` and `fitted!` (§3.4 as built), `FittedSaved` in `state.rs` (§3.5 as built);
+  `Machine::genesis` is gone, and the tests and examples that read `m.genesis.hw`, `cpu` or `z80` read `m.hw()`,
+  `hw_mut()`, `cpu()` and `z80()`, a mechanical change of 140 lines.
+- **Tests**: the Word RAM test moved to `mcd` at the interface (`a_transfer_from_word_ram_reads_a_word_late`, the
+  attachment's `transfer16` and `read16`), and `genesis.rs` gained one with a stub attachment
+  (`a_transfer_asks_the_attachment_apart_from_the_68000`) showing that the Genesis asks `transfer16` for a transfer and
+  `read16` for the 68000 and falls to its own map where the attachment passes; one more checks each part's spaces stand
+  in its range of ids. 175 pass.
+- **Byte identity**: the 71 digests equal the baseline's; both pinned layouts unchanged; the kit's sample 64 of 64 and the
+  240p disc with mcd-verificator as file 2 compliant (C1–C19); WiseMan's Nephrite, Genesis and Registration tests, 86
+  pass.
+- **Cost**, best of 6 × 3 × 600 (the disc 5 × 1,200), against the baseline's build, alternated, load 1.8 to 3.8: Sonic
+  the Hedgehog 1.355 ms (1.358), Sonic 2 1.241 (1.248), Thunder Force IV 1.353 (1.347), Streets of Rage 2 1.147 (1.151),
+  Phantasy Star IV 1.406 (1.414), Micro Machines 2 1.445 (1.451), the 240p disc 1.575 (1.588). A run with the load at
+  5 to 14 from other work on the machine is not counted. `libnephrite.so` (`dist`) 1,609,128 bytes (1,445,920, +11.3%);
+  a clean release build 5.49 to 6.12 s (4.87 to 4.96, +13 to 23%).
+- **The form rejected on the way** (§3.4): `Map<'_, A>` cost the cartridge 1.3 to 2.4%; measured three ways (as it
+  was, with the Sega CD's instantiation removed, and with `Hw`'s three removed fields put back as padding, 1.3%), so
+  neither the second instantiation nor the devices' layout explained it. Not committed.

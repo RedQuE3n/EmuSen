@@ -4,7 +4,8 @@
 use emusen_native::ffi::{StateMachine, Status, status};
 use emusen_native::{StateReader, StateWriter, Truncated};
 
-use crate::machine::Machine;
+use crate::interface::{AttachmentState, Refusal};
+use crate::machine::{Fitted, Machine};
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
@@ -56,6 +57,44 @@ fn system_byte(s: System) -> u8 {
     }
 }
 
+/// The Genesis's block and the attachment's of a state, read whole, of the configuration fitted.
+enum FittedSaved {
+    Md(crate::genesis::Saved, ()),
+    Mcd(crate::genesis::Saved, <crate::mcd::MegaCd as AttachmentState>::Saved),
+}
+
+impl Fitted {
+    fn read_state(&self, r: &mut StateReader, version: i32) -> Result<FittedSaved, Truncated> {
+        Ok(match self {
+            Fitted::Md(g) => FittedSaved::Md(g.read_state(r, version)?, g.hw.att.read_state(r, version)?),
+            Fitted::Mcd(g) => FittedSaved::Mcd(g.read_state(r, version)?, g.hw.att.read_state(r, version)?),
+        })
+    }
+
+    fn check(&self, saved: &FittedSaved) -> Result<(), StateError> {
+        let refused = match (self, saved) {
+            (Fitted::Md(g), FittedSaved::Md(_, s)) => g.hw.att.check(s),
+            (Fitted::Mcd(g), FittedSaved::Mcd(_, s)) => g.hw.att.check(s),
+            _ => unreachable!("a state read by the configuration fitted"),
+        };
+        refused.map_err(|Refusal::WrongMedia { saved, here }| StateError::WrongMedia { saved, here })
+    }
+
+    fn apply_state(&mut self, saved: FittedSaved) {
+        match (self, saved) {
+            (Fitted::Md(g), FittedSaved::Md(registers, s)) => {
+                g.apply_state(registers);
+                g.hw.att.apply_state(s);
+            }
+            (Fitted::Mcd(g), FittedSaved::Mcd(registers, s)) => {
+                g.apply_state(registers);
+                g.hw.att.apply_state(s);
+            }
+            _ => unreachable!("a state read by the configuration fitted"),
+        }
+    }
+}
+
 impl Machine {
     fn write(&self, w: &mut StateWriter) {
         w.u32("Magic", STATE_MAGIC);
@@ -65,10 +104,10 @@ impl Machine {
         for m in self.spaces().into_iter().filter(|m| !m.read_only) {
             w.bytes(m.name, self.bytes(m.id).expect("a listed space"));
         }
-        self.genesis.write_state(w);
-        if let Some(m) = self.genesis.hw.mcd.as_deref() {
-            m.write_state(w, self.disc_print);
-        }
+        crate::machine::fitted!(&self.fitted, |g| {
+            g.write_state(w);
+            g.hw.att.write_state(w);
+        });
     }
 
     /// The oldest version this machine's system reads.
@@ -101,24 +140,15 @@ impl StateMachine for Machine {
             r.bytes(&mut bytes)?;
             loaded.push((m.id, bytes));
         }
-        let registers = self.genesis.read_state(&mut r, version)?;
-        let mcd = match self.genesis.hw.mcd.as_deref() {
-            Some(m) => Some(m.read_state(&mut r)?),
-            None => None,
-        };
-        if let Some(saved) = mcd.as_ref().map(|s| s.print).filter(|&p| p != self.disc_print) {
-            return Err(StateError::WrongMedia { saved, here: self.disc_print });
-        }
+        let saved = self.fitted.read_state(&mut r, version)?;
+        self.fitted.check(&saved)?;
         self.frames = frames;
         for (id, bytes) in loaded {
             if !self.kept_apart.keeps(id) {
                 self.bytes_mut(id).expect("a listed space").copy_from_slice(&bytes);
             }
         }
-        self.genesis.apply_state(registers);
-        if let (Some(m), Some(s)) = (self.genesis.hw.mcd.as_deref_mut(), mcd) {
-            m.apply_state(s);
-        }
+        self.fitted.apply_state(saved);
         self.debug_open = false;
         self.refresh_battery_file();
         Ok(())
@@ -207,19 +237,19 @@ mod tests {
     #[test]
     fn a_loaded_state_keeps_the_size_line_0_gave_the_frame() {
         let mut a = machine("SEGA GENESIS");
-        (a.genesis.hw.vdp.regs[1], a.genesis.hw.vdp.regs[12]) = (0x44, 0x81);
+        (a.hw_mut().vdp.regs[1], a.hw_mut().vdp.regs[12]) = (0x44, 0x81);
         for _ in 0..3 {
             a.advance();
         }
         // A write at the frame's first slots opens line 0 in H40, and the width is then set to H32 for the frame after.
-        a.genesis.hw.vdp.before_change(None);
-        a.genesis.hw.vdp.regs[12] = 0;
-        assert_eq!((a.genesis.hw.vdp.open, a.genesis.hw.vdp.frame.width, a.genesis.hw.vdp.width()), (Some(0), 320, 256));
+        a.hw_mut().vdp.before_change(None);
+        a.hw_mut().vdp.regs[12] = 0;
+        assert_eq!((a.hw().vdp.open, a.hw().vdp.frame.width, a.hw().vdp.width()), (Some(0), 320, 256));
         let mut s = vec![0; a.state_size()];
         a.save_state(&mut s).unwrap();
         let mut b = machine("SEGA GENESIS");
         b.load_state(&s).unwrap();
-        assert_eq!((b.genesis.hw.vdp.frame.width, b.genesis.hw.vdp.frame.height), (320, a.genesis.hw.vdp.frame.height));
+        assert_eq!((b.hw().vdp.frame.width, b.hw().vdp.frame.height), (320, a.hw().vdp.frame.height));
         a.advance();
         b.advance();
         assert_eq!((b.picture.len(), &b.picture), (320 * 224 * 4, &a.picture));
@@ -234,7 +264,7 @@ mod tests {
             Machine::new(&rom, Media::read(&rom))
         };
         let mut a = eeprom_cart();
-        let e = a.genesis.hw.cart.eeprom.as_mut().expect("the board");
+        let e = a.hw_mut().cart.eeprom.as_mut().expect("the board");
         // SDA on bit 0 of $200001 and SCL on bit 0 of $200000: a start, then three bits of a command clocked in.
         for (sda, scl) in [(1, 1), (0, 1), (0, 0), (1, 0), (1, 1), (0, 0), (0, 1), (1, 0), (1, 1), (1, 0)] {
             e.write(&[(0x20_0001, sda), (0x20_0000, scl)]);
@@ -245,7 +275,7 @@ mod tests {
         a.save_state(&mut s).unwrap();
         let mut b = eeprom_cart();
         b.load_state(&s).unwrap();
-        assert_eq!(b.genesis.hw.cart.eeprom.as_ref().unwrap().protocol(), taken);
+        assert_eq!(b.hw().cart.eeprom.as_ref().unwrap().protocol(), taken);
     }
 
     /// A state as an older version wrote it: this version's bytes without the fields added since (17's `FrameSize` and
@@ -278,13 +308,13 @@ mod tests {
     fn a_version_17_state_loads_with_the_other_pads_at_rest() {
         let mut a = machine("SEGA GENESIS");
         a.advance();
-        a.genesis.hw.io.write(0xA1_0009, 0x40, 0);
-        a.genesis.hw.io.write(0xA1_0003, 0x00, 0);
+        a.hw_mut().io.write(0xA1_0009, 0x40, 0);
+        a.hw_mut().io.write(0xA1_0003, 0x00, 0);
         let old = as_version(&a, 17);
         assert_eq!(old.len(), a.state_size() - 6 - 6 - 48 - 6);
         let mut b = machine("SEGA GENESIS");
         b.load_state(&old).unwrap();
-        let (was, now) = (a.genesis.hw.io.regs_state(), b.genesis.hw.io.regs_state());
+        let (was, now) = (a.hw().io.regs_state(), b.hw().io.regs_state());
         assert_eq!((now.data, now.ctrl, now.th[..2].to_vec(), now.falls[0]), (was.data, was.ctrl, vec![false, true], 1));
         assert_eq!((now.th[2..].to_vec(), now.taps), (vec![true; 6], [1, 1, 0, 1, 1, 0]));
         a.advance();
@@ -296,16 +326,16 @@ mod tests {
     #[test]
     fn a_version_16_state_loads_and_runs() {
         let mut a = machine("SEGA GENESIS");
-        (a.genesis.hw.vdp.regs[1], a.genesis.hw.vdp.regs[12]) = (0x44, 0x81);
+        (a.hw_mut().vdp.regs[1], a.hw_mut().vdp.regs[12]) = (0x44, 0x81);
         for _ in 0..3 {
             a.advance();
         }
-        a.genesis.hw.vdp.before_change(None);
+        a.hw_mut().vdp.before_change(None);
         let old = as_version_16(&a);
         assert_eq!(old.len(), a.state_size() - 4 - 66);
         let mut b = machine("SEGA GENESIS");
         b.load_state(&old).unwrap();
-        assert_eq!((b.genesis.hw.vdp.frame.width, b.genesis.hw.vdp.frame.height), (320, 224));
+        assert_eq!((b.hw().vdp.frame.width, b.hw().vdp.frame.height), (320, 224));
         a.advance();
         b.advance();
         assert_eq!(b.picture, a.picture);
@@ -316,13 +346,13 @@ mod tests {
             Machine::new(&rom, Media::read(&rom))
         };
         let mut c = eeprom_cart();
-        c.genesis.hw.cart.eeprom.as_mut().unwrap().write(&[(0x20_0001, 0), (0x20_0000, 1)]);
-        c.genesis.hw.cart.eeprom.as_mut().unwrap().memory[5] = 0x42;
+        c.hw_mut().cart.eeprom.as_mut().unwrap().write(&[(0x20_0001, 0), (0x20_0000, 1)]);
+        c.hw_mut().cart.eeprom.as_mut().unwrap().memory[5] = 0x42;
         let old = as_version_16(&c);
         assert_eq!(old.len(), c.state_size() - 4 - 22 - 66);
         let mut d = eeprom_cart();
         d.load_state(&old).unwrap();
-        let e = d.genesis.hw.cart.eeprom.as_ref().unwrap();
+        let e = d.hw().cart.eeprom.as_ref().unwrap();
         assert_eq!((e.protocol(), e.memory[5]), (crate::eeprom::Eeprom::IDLE, 0x42));
         assert_eq!(crate::eeprom::Eeprom::IDLE, crate::eeprom::Eeprom::new(e.board).protocol());
         d.advance();

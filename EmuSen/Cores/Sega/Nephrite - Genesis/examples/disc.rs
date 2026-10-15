@@ -33,7 +33,7 @@ fn main() {
     // `NEPHRITE_BRAM` names a backup RAM image to start from, as a battery file would be.
     if let Some(p) = std::env::var_os("NEPHRITE_BRAM") {
         let b = std::fs::read(p).expect("the backup RAM");
-        let ram = &mut m.genesis.hw.mcd.as_mut().unwrap().hw.bram;
+        let ram = &mut m.mcd_mut().unwrap().hw.bram;
         let n = b.len().min(ram.len());
         ram[..n].copy_from_slice(&b[..n]);
     }
@@ -51,8 +51,9 @@ fn main() {
     let mut run: Option<(nephrite::mcd::Seen, u32)> = None;
     while m.frames < frames {
         if let Some((from, to)) = seen_frames {
-            let s = &mut m.genesis.hw.mcd.as_mut().unwrap().hw;
-            if (from..to).contains(&m.frames) {
+            let watched = (from..to).contains(&m.frames);
+            let s = &mut m.mcd_mut().unwrap().hw;
+            if watched {
                 s.seen.get_or_insert_with(Vec::new);
             } else {
                 s.seen = None;
@@ -60,7 +61,7 @@ fn main() {
         }
         m.pads[0] = presses.iter().filter(|p| (p.0..p.0 + p.2).contains(&m.frames)).fold(0, |b, p| b | p.1);
         m.advance();
-        if let Some(list) = m.genesis.hw.mcd.as_mut().unwrap().hw.seen.as_mut().map(std::mem::take) {
+        if let Some(list) = m.mcd_mut().unwrap().hw.seen.as_mut().map(std::mem::take) {
             for a in list {
                 match run.as_mut() {
                     Some((r, n)) if r.what == a.what && r.reg == a.reg && r.value == a.value => *n += 1,
@@ -88,18 +89,18 @@ fn main() {
             }
         }
         // The devices at their registers, as a game or a boot ROM drives them: the drive's command, the gate's switches.
-        let s = &m.genesis.hw.mcd.as_ref().unwrap().hw;
+        let s = &m.mcd().unwrap().hw;
         let seen = (s.cdd.status[0], s.cdd.command[0], s.cdd.hock, s.g.mask, s.g.cfm, s.g.cfs);
         if std::env::var_os("NEPHRITE_DEVICES").is_some() && seen != last {
             println!("  frame {:5}: drive status {:X} command {:X} hock {} interrupt mask {:02X} flags {:02X} {:02X}", m.frames, seen.0, seen.1, seen.2, seen.3, seen.4, seen.5);
             last = seen;
         }
         if m.frames % every == 0 {
-            let f = &m.genesis.hw.vdp.frame;
+            let f = &m.hw().vdp.frame;
             let mut out = format!("{} {}\n", f.width, f.height).into_bytes();
             out.extend_from_slice(&m.picture);
             std::fs::write(dir.join(format!("f{:05}.rgba", m.frames)), out).expect("the picture");
-            let s = &m.genesis.hw.mcd.as_ref().unwrap().hw;
+            let s = &m.mcd().unwrap().hw;
             println!("frame {:5}: drive status {:X} head {:6} report {}  cdc dd {} edt {}  fader {:04X}  audio peak {:5} rms {:7.1}", m.frames, s.cdd.status[0], s.cdd.head, s.cdd.report, s.cdc.dd, s.cdc.edt, s.fader, peak, (sum / (every as f64 * 1600.0)).sqrt());
             (peak, sum) = (0, 0.0);
         }
@@ -107,10 +108,10 @@ fn main() {
     // `NEPHRITE_PRG` and `NEPHRITE_WRAM` name files for PRG-RAM and the main CPU's RAM at the end, for a homebrew boot
     // ROM's records; never with a player's BIOS.
     if let Some(p) = std::env::var_os("NEPHRITE_PRG") {
-        std::fs::write(p, &m.genesis.hw.mcd.as_ref().unwrap().hw.prg).expect("PRG-RAM");
+        std::fs::write(p, &m.mcd().unwrap().hw.prg).expect("PRG-RAM");
     }
     if let Some(p) = std::env::var_os("NEPHRITE_WRAM") {
-        std::fs::write(p, &m.genesis.hw.wram).expect("the main CPU's RAM");
+        std::fs::write(p, &m.hw().wram).expect("the main CPU's RAM");
     }
     if let Some(p) = wav_path {
         let rate = nephrite::sound::RATE;

@@ -148,7 +148,7 @@ impl Machine {
             kinds.extend(vec![six_b; crate::io::pads_of(b)]);
         }
         // A J-Cart's two three-button pads follow, where they fit (§48).
-        if self.genesis.hw.cart.jcart && kinds.len() + 2 <= crate::io::PADS {
+        if self.hw().cart.jcart && kinds.len() + 2 <= crate::io::PADS {
             kinds.extend([false, false]);
         }
         kinds
@@ -388,12 +388,12 @@ impl Core for Machine {
         m.apply_pads(&request.settings);
         if let Some(top) = request.files.iter().find(|f| f.which == LOCK_ON) {
             let patch = request.files.iter().find(|f| f.which == SK_PATCH).map_or(Vec::new(), |f| f.data.to_vec());
-            m.genesis.hw.cart.lock_on(cartridge_bytes(top.data).into_owned(), patch);
+            m.hw_mut().cart.lock_on(cartridge_bytes(top.data).into_owned(), patch);
         }
         m.firmware = request.files.iter().filter(|f| f.which != 0).map(|f| f.which).collect();
         if let (Some(id), Some(file)) = (m.battery_id(), request.files.iter().find(|f| f.which == 0)) {
             if id == crate::machine::SRAM_ID {
-                m.genesis.hw.cart.load_battery(file.data);
+                m.hw_mut().cart.load_battery(file.data);
             } else {
                 let bytes = m.bytes_mut(id).expect("the battery's memory");
                 let n = bytes.len().min(file.data.len());
@@ -405,7 +405,7 @@ impl Core for Machine {
     }
 
     fn machine_info(&self) -> MachineInfo {
-        let pal = self.genesis.hw.model.pal;
+        let pal = self.hw().model.pal;
         let named = |which: u32| (which, if self.firmware.contains(&which) { FirmwareSource::File } else { FirmwareSource::Absent });
         MachineInfo {
             system: self.media.system.id().into(),
@@ -422,7 +422,7 @@ impl Core for Machine {
             patches: (self.media.system == System::Md).then_some((0, 0x3F_FFFF)),
             skip_rendering_state_neutral: true,
             firmware: match self.media.system {
-                System::Md if takes_lock_on(&self.media, self.genesis.hw.cart.rom.len()) => vec![named(LOCK_ON), named(SK_PATCH)],
+                System::Md if takes_lock_on(&self.media, self.hw().cart.rom.len()) => vec![named(LOCK_ON), named(SK_PATCH)],
                 System::Md => Vec::new(),
                 System::Mcd => vec![named(cd_bios(self.media.bios_region()).which)],
                 System::S32x => vec![named(S32X_68K), named(S32X_MASTER), named(S32X_SLAVE)],
@@ -444,7 +444,7 @@ impl Core for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        let f = &self.genesis.hw.vdp.frame;
+        let f = &self.hw().vdp.frame;
         if self.picture.len() == f.width * f.height * 4 { FrameInfo::rgba(f.width as i32, f.height as i32) } else { FrameInfo::rgba(WIDTH as i32, HEIGHT as i32) }
     }
 
@@ -531,7 +531,7 @@ impl Core for Machine {
 
     /// `ROM_PATCHES`: the Game Genie's patches on the cartridge port, compared with the board's byte when a compare is given.
     fn set_rom_patches(&mut self, triples: &[u32]) -> Result<(), i32> {
-        self.genesis.hw.cart.patches = triples.chunks_exact(3).map(|t| (t[0] & 0x3F_FFFF, t[1] as u8, t[2])).collect();
+        self.hw_mut().cart.patches = triples.chunks_exact(3).map(|t| (t[0] & 0x3F_FFFF, t[1] as u8, t[2])).collect();
         Ok(())
     }
 
@@ -582,7 +582,7 @@ impl Core for Machine {
     }
 
     fn drives(&self) -> Vec<Drive> {
-        match self.genesis.hw.mcd.as_deref() {
+        match self.mcd() {
             Some(m) => vec![Drive { drive: crate::mcd::cdd::DRIVE, label: "CD drive".into(), kind: "cd".into(), lid_open: m.hw.cdd.mode == crate::mcd::cdd::Mode::TrayOpen, loaded: m.hw.cdd.disc.is_some() }],
             None => Vec::new(),
         }
@@ -590,13 +590,13 @@ impl Core for Machine {
 
     /// The tray, opened or closed as the player would: the drive stops; closed, it reads its disc's TOC again.
     fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
-        let m = self.genesis.hw.mcd.as_deref_mut().filter(|_| drive == crate::mcd::cdd::DRIVE).ok_or(status::NO_SUCH_DRIVE)?;
+        let m = self.mcd_mut().filter(|_| drive == crate::mcd::cdd::DRIVE).ok_or(status::NO_SUCH_DRIVE)?;
         m.hw.cdd.set_tray(open);
         Ok(())
     }
 
     fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
-        let open = self.genesis.hw.mcd.as_deref().filter(|_| drive == crate::mcd::cdd::DRIVE).ok_or(status::NO_SUCH_DRIVE)?.hw.cdd.mode == crate::mcd::cdd::Mode::TrayOpen;
+        let open = self.mcd().filter(|_| drive == crate::mcd::cdd::DRIVE).ok_or(status::NO_SUCH_DRIVE)?.hw.cdd.mode == crate::mcd::cdd::Mode::TrayOpen;
         if !open && !insert.restore {
             detail("the Sega CD's tray is closed; open it before changing the disc");
             return Err(status::LID_CLOSED);
@@ -605,8 +605,8 @@ impl Core for Machine {
             None => None,
             Some(image) => Some(open_disc(image, &insert.files)?.0),
         };
-        self.disc_print = disc.as_mut().map_or(0, crate::mcd::fingerprint);
-        let m = self.genesis.hw.mcd.as_deref_mut().expect("the drive");
+        let m = self.mcd_mut().expect("the drive");
+        m.disc_print = disc.as_mut().map_or(0, crate::mcd::fingerprint);
         m.hw.cdd.disc = disc;
         m.hw.cdd.named = None;
         Ok(())
@@ -631,7 +631,7 @@ impl Machine {
         m.kept_apart = kept_apart;
         m.apply_pads(&request.settings);
         m.firmware = request.files.iter().filter(|f| (TMSS..=S32X_SLAVE).contains(&f.which)).map(|f| f.which).collect();
-        let s = &mut m.genesis.hw.mcd.as_deref_mut().expect("a disc's Sega CD").hw;
+        let s = &mut m.mcd_mut().expect("a disc's Sega CD").hw;
         if request.settings.get(RAM_CART_KEY) == Some("mcd.ramcart") {
             s.cart = Some(crate::mcd::RamCart::new(crate::mcd::RamCart::SEGA));
         }
@@ -651,7 +651,7 @@ impl Machine {
 
     /// The battery files machine info names: the save RAM's, or the Sega CD's backup RAM and its cartridge's.
     fn batteries(&self) -> Vec<Battery> {
-        match self.genesis.hw.mcd.as_deref() {
+        match self.mcd() {
             Some(m) => {
                 let mut v = vec![backup_ram()];
                 if m.hw.cart.is_some() {
@@ -779,12 +779,12 @@ mod tests {
     fn rom_patches_answer_for_the_cartridge_port() {
         let mut m = create(&cartridge("SEGA GENESIS", "U", None), vec![]).unwrap();
         assert_eq!(m.machine_info().patches, Some((0, 0x3F_FFFF)));
-        let board = m.genesis.hw.cart.read16(0x100);
+        let board = m.hw().cart.read16(0x100);
         assert_eq!(board, u16::from_be_bytes(*b"SE"));
         m.set_rom_patches(&[0x100, 0x12, sys::flags::NO_COMPARE, 0x101, 0x34, b'E' as u32, 0x102, 0x56, 0x00]).unwrap();
-        assert_eq!((m.genesis.hw.cart.read16(0x100), m.genesis.hw.cart.read8(0x102)), (0x1234, b'G'));
+        assert_eq!((m.hw().cart.read16(0x100), m.hw().cart.read8(0x102)), (0x1234, b'G'));
         m.set_rom_patches(&[]).unwrap();
-        assert_eq!(m.genesis.hw.cart.read16(0x100), board);
+        assert_eq!(m.hw().cart.read16(0x100), board);
         assert_eq!(create(&cartridge("SEGA 32X", "U", None), vec![]).unwrap().machine_info().patches, None);
     }
 
@@ -795,14 +795,14 @@ mod tests {
         let made = |region: &str| Machine::create(&Create { image: &image, settings: Settings::from_pairs(vec![(REGION_KEY.into(), region.into())]), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
         for (region, overseas, pal) in [("auto", true, false), ("md.us", true, false), ("md.eu", true, true), ("md.jp", false, false), ("md.asia", false, true)] {
             let m = made(region);
-            let version = m.genesis.hw.io.read(0xA1_0001, 0);
+            let version = m.hw().io.read(0xA1_0001, 0);
             assert_eq!((version >> 7 & 1 != 0, version >> 6 & 1 != 0), (overseas, pal), "{region}");
             assert_eq!(m.machine_info().frame_rate, if pal { PAL_FRAME } else { NTSC_FRAME }, "{region}");
         }
         // From the cartridge: the first of the Americas, Japan and Europe the header allows (the plan's Q6).
         for (header, overseas, pal) in [("JUE", true, false), ("U", true, false), ("JU", true, false), ("UE", true, false), ("J", false, false), ("JE", false, false), ("E", true, true), ("", true, false)] {
             let m = create(&cartridge("SEGA GENESIS", header, None), vec![]).unwrap();
-            let version = m.genesis.hw.io.read(0xA1_0001, 0);
+            let version = m.hw().io.read(0xA1_0001, 0);
             assert_eq!((version >> 7 & 1 != 0, version >> 6 & 1 != 0), (overseas, pal), "a header of {header:?}");
         }
         assert!(Machine::settings_schema().iter().all(|s| s.check().is_ok()));
@@ -830,7 +830,7 @@ mod tests {
         lane.iter().enumerate().for_each(|(i, &b)| pico[2 * i + 1] = b);
         assert_eq!(made(&pico).battery(0).unwrap().0, &gpgx[..]);
         let mut m = made(&lane);
-        assert_eq!(m.genesis.hw.cart.read8(0x20_0003), lane[1]);
+        assert_eq!(m.hw().cart.read8(0x20_0003), lane[1]);
         m.space_write(crate::machine::SRAM_ID, 1, &[0x5A]).unwrap();
         assert_eq!(m.battery(0).unwrap().0[3], 0x5A);
         let state = { let mut b = vec![0; m.state_size()]; let n = m.save_state(&mut b).unwrap(); b.truncate(n); b };
@@ -864,12 +864,12 @@ mod tests {
         image[0x180..0x18E].copy_from_slice(b"GM T-172196-00");
         let mut m = create(&image, vec![]).unwrap();
         assert_eq!(m.machine_info().battery[0].suffix, ".srm");
-        let under = m.genesis.hw.cart.read8(0x20_0000);
-        assert_eq!(m.genesis.hw.cart.read8(0x20_46B5), 0xFF, "empty, where the game finds no table");
-        m.genesis.hw.cart.write8(0x20_0001, 0x44);
-        m.genesis.hw.cart.write8(0x20_FFFF, 0x4A);
-        m.genesis.hw.cart.write8(0x20_0000, 0x99);
-        assert_eq!((m.genesis.hw.cart.read8(0x20_0001), m.genesis.hw.cart.read8(0x20_FFFF), m.genesis.hw.cart.read8(0x20_0000)), (0x44, 0x4A, under));
+        let under = m.hw().cart.read8(0x20_0000);
+        assert_eq!(m.hw().cart.read8(0x20_46B5), 0xFF, "empty, where the game finds no table");
+        m.hw_mut().cart.write8(0x20_0001, 0x44);
+        m.hw_mut().cart.write8(0x20_FFFF, 0x4A);
+        m.hw_mut().cart.write8(0x20_0000, 0x99);
+        assert_eq!((m.hw().cart.read8(0x20_0001), m.hw().cart.read8(0x20_FFFF), m.hw().cart.read8(0x20_0000)), (0x44, 0x4A, under));
         m.refresh_battery_file();
         let file = m.battery(0).unwrap().0;
         assert_eq!((file.len(), file[1], file[0xFFFF]), (0x1_0000, 0x44, 0x4A));
@@ -880,7 +880,7 @@ mod tests {
     fn the_model_setting_chooses_the_sound_chip_and_circuit() {
         let image = cartridge("SEGA GENESIS", "U", None);
         let made = |settings: Vec<(String, String)>| Machine::create(&Create { image: &image, settings: Settings::from_pairs(settings), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
-        let sound = |m: &Machine| (m.genesis.hw.sound.ym.discrete, m.genesis.hw.sound.circuit);
+        let sound = |m: &Machine| (m.hw().sound.ym.discrete, m.hw().sound.circuit);
         assert_eq!(sound(&made(vec![])), (true, crate::sound::Circuit::MODEL1));
         assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model1".into())])), (true, crate::sound::Circuit::MODEL1));
         assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model2".into())])), (false, crate::sound::Circuit::MODEL2));
@@ -897,7 +897,7 @@ mod tests {
         m.set_settings(&Settings::from_pairs(vec![("pad1".into(), "md.pad6".into()), ("pad2".into(), "md.pad3".into())])).unwrap();
         assert_eq!(ports(&m), ["md.pad6", "md.pad3"]);
         m.advance();
-        assert!(m.genesis.hw.io.pads[0].six && !m.genesis.hw.io.pads[1].six);
+        assert!(m.hw().io.pads[0].six && !m.hw().io.pads[1].six);
     }
 
     // A J-Cart's two three-button pads follow the console ports' pads in machine info and take those players' buttons, where they fit (Nephrite_Native.md §48).
@@ -915,7 +915,7 @@ mod tests {
             Core::set_buttons(&mut m, port, 1 << port, u32::MAX).unwrap();
         }
         m.advance();
-        assert_eq!(m.genesis.hw.io.pads.map(|p| (p.buttons, p.six))[..5], [(1, true), (2, true), (4, false), (8, false), (0, false)]);
+        assert_eq!(m.hw().io.pads.map(|p| (p.buttons, p.six))[..5], [(1, true), (2, true), (4, false), (8, false), (0, false)]);
         set(&mut m, "md.teamplayer3", "md.pad3");
         assert_eq!(ports(&m).len(), 7);
         set(&mut m, "md.teamplayer3", "md.teamplayer3");
@@ -946,7 +946,7 @@ mod tests {
             Core::set_buttons(&mut m, port, 1 << port, u32::MAX).unwrap();
         }
         m.advance();
-        let io = &m.genesis.hw.io;
+        let io = &m.hw().io;
         assert_eq!((io.plugs, io.pad_count()), ([Plug::Pad, Plug::TeamPlayer], 5));
         assert_eq!(io.pads.map(|p| (p.buttons, p.six))[..6], [(1, true), (2, false), (4, false), (8, false), (16, false), (0, false)]);
         set(&mut m, "md.teamplayer3", "md.teamplayer6");
@@ -955,7 +955,7 @@ mod tests {
         assert_eq!(ports(&m), ["md.pad3"; 4]);
         assert_eq!(m.setting_notes().iter().map(|n| n.0.as_str()).collect::<Vec<_>>(), ["pad2"]);
         m.advance();
-        assert_eq!(m.genesis.hw.io.plugs[0], Plug::FourWay);
+        assert_eq!(m.hw().io.plugs[0], Plug::FourWay);
         set(&mut m, "md.pad3", "md.4way3");
         assert_eq!(ports(&m), ["md.pad3", "md.pad3"], "the 4 Way Play is port 1's choice alone");
         assert_eq!(Core::set_buttons(&mut m, 8, 1, 1), Err(status::NO_SUCH_PORT));
@@ -1086,6 +1086,19 @@ mod tests {
                 "1156295 8 u64 DiscFingerprint\n",
             )
         );
+    }
+
+    // Each part lists its spaces from its own range of ids, so that an id never moves between systems (Nephrite_Attachments.md §3.5).
+    #[test]
+    fn each_part_lists_its_spaces_in_its_range() {
+        use crate::interface::{AttachmentView, GENESIS_SPACES, MCD_SPACES};
+        let iso = disc_image("A", 40);
+        let m = Machine::create(&Create { image: &iso, settings: Settings::parse(b"ramcart=mcd.ramcart").unwrap(), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
+        let mut sega_cd = Vec::new();
+        m.mcd().unwrap().spaces(&mut sega_cd);
+        assert_eq!(sega_cd.iter().map(|s| s.name).collect::<Vec<_>>(), ["PRGRAM", "WORDRAM", "PCMRAM", "BRAM", "CARTRAM"]);
+        assert!(sega_cd.iter().all(|s| MCD_SPACES.contains(&s.id)));
+        assert!(m.spaces().iter().filter(|s| !sega_cd.contains(s)).all(|s| GENESIS_SPACES.contains(&s.id)));
     }
 
     // The backup RAM cartridge: plugged in by its setting, its bytes the second battery file, loaded at create.

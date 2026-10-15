@@ -127,7 +127,7 @@ impl Machine {
 
     /// The bytes `address` on of a bus space; another space is the caller's.
     pub fn read_bus(&self, space: u32, address: u32, out: &mut [u8]) {
-        let hw = &self.genesis.hw;
+        let hw = self.hw();
         for (i, b) in out.iter_mut().enumerate() {
             let at = address.wrapping_add(i as u32);
             *b = match space {
@@ -140,8 +140,8 @@ impl Machine {
     /// The address of the instruction `processor` stands in front of.
     pub fn debug_pc(&self, processor: u32) -> Option<u64> {
         match processor {
-            M68K => Some((self.genesis.cpu.regs.pc & 0xFF_FFFF) as u64),
-            Z80 => Some(self.genesis.z80.regs.pc as u64),
+            M68K => Some((self.cpu().regs.pc & 0xFF_FFFF) as u64),
+            Z80 => Some(self.z80().regs.pc as u64),
             _ => None,
         }
     }
@@ -150,13 +150,13 @@ impl Machine {
     pub fn debug_registers(&self, processor: u32) -> Option<Vec<i64>> {
         match processor {
             M68K => {
-                let r = &self.genesis.cpu.regs;
+                let r = &self.cpu().regs;
                 let mut v: Vec<i64> = r.d.iter().chain(r.a.iter()).map(|&x| x as i64).collect();
                 v.extend([r.pc as i64, r.sr as i64, r.usp() as i64, r.ssp() as i64]);
                 Some(v)
             }
             Z80 => {
-                let r = &self.genesis.z80.regs;
+                let r = &self.z80().regs;
                 Some(vec![
                     r.af, r.bc, r.de, r.hl, r.af_, r.bc_, r.de_, r.hl_, r.ix, r.iy, r.sp, r.pc,
                     r.i as u16, r.r as u16, r.wz, r.im as u16, r.iff1 as u16, r.iff2 as u16,
@@ -234,8 +234,8 @@ mod tests {
         r[0x200..0x20C].copy_from_slice(&w(&[0x7005, 0x4EB9, 0x0000, 0x0300, 0x60F8, 0x4E71]));
         r[0x300..0x304].copy_from_slice(&w(&[0x5282, 0x4E75]));
         let mut m = Machine::new(&r, Media::read(&r));
-        m.genesis.hw.zram[..4].copy_from_slice(&[0x3C, 0xC3, 0x00, 0x00]);
-        (m.genesis.hw.z80_reset, m.genesis.hw.z80_busreq) = (false, false);
+        m.hw_mut().zram[..4].copy_from_slice(&[0x3C, 0xC3, 0x00, 0x00]);
+        (m.hw_mut().z80_reset, m.hw_mut().z80_busreq) = (false, false);
         m
     }
 
@@ -280,9 +280,9 @@ mod tests {
         m.hooks.set_breakpoints(&[0x300, 0x300]);
         assert_eq!(m.run_frame_debug(0), stop::BREAKPOINT);
         assert_eq!((m.debug_stopped, m.debug_pc(M68K)), (M68K, Some(0x300)));
-        let d2 = m.genesis.cpu.regs.d[2];
+        let d2 = m.cpu().regs.d[2];
         assert_eq!(m.run_frame_debug(emusen_native::debug::run::UNCHECKED | emusen_native::debug::run::CONTINUE), stop::BREAKPOINT);
-        assert_eq!((m.debug_pc(M68K), m.genesis.cpu.regs.d[2]), (Some(0x300), d2 + 1), "one pass of the routine between the stops");
+        assert_eq!((m.debug_pc(M68K), m.cpu().regs.d[2]), (Some(0x300), d2 + 1), "one pass of the routine between the stops");
         assert_eq!(m.frames, 0, "the frame stays open");
     }
 
@@ -293,10 +293,10 @@ mod tests {
         m.z80_breakpoints = vec![(1, 1)];
         assert_eq!(m.run_frame_debug(0), stop::BREAKPOINT);
         assert_eq!((m.debug_stopped, m.debug_pc(Z80)), (Z80, Some(1)));
-        let (a, main_pc) = (m.genesis.z80.regs.af >> 8, m.debug_pc(M68K));
+        let (a, main_pc) = (m.z80().regs.af >> 8, m.debug_pc(M68K));
         assert_eq!(m.run_frame_debug(emusen_native::debug::run::UNCHECKED | emusen_native::debug::run::CONTINUE), stop::BREAKPOINT);
-        assert_eq!((m.debug_stopped, m.debug_pc(Z80), m.genesis.z80.regs.af >> 8), (Z80, Some(1), (a + 1) & 0xFF));
-        assert!(m.genesis.hw.z80_clock <= m.genesis.hw.clock, "the Z80 stopped behind the 68000");
+        assert_eq!((m.debug_stopped, m.debug_pc(Z80), m.z80().regs.af >> 8), (Z80, Some(1), (a + 1) & 0xFF));
+        assert!(m.hw().z80_clock <= m.hw().clock, "the Z80 stopped behind the 68000");
         let _ = main_pc;
     }
 
@@ -341,8 +341,8 @@ mod tests {
         r[0x300..0x30A].copy_from_slice(&w(&[0x5282, 0x13C2, 0x00FF, 0x0020, 0x4E75]));
         r[0x400..0x402].copy_from_slice(&w(&[0x4E73]));
         let mut m = Machine::new(&r, Media::read(&r));
-        m.genesis.hw.zram[..7].copy_from_slice(&[0x3C, 0x32, 0x00, 0x01, 0xC3, 0x00, 0x00]);
-        (m.genesis.hw.z80_reset, m.genesis.hw.z80_busreq) = (false, false);
+        m.hw_mut().zram[..7].copy_from_slice(&[0x3C, 0x32, 0x00, 0x01, 0xC3, 0x00, 0x00]);
+        (m.hw_mut().z80_reset, m.hw_mut().z80_busreq) = (false, false);
         m
     }
 
@@ -361,7 +361,7 @@ mod tests {
             why = m.run_frame_debug(RESUME);
         }
         assert_eq!(seen, [0, 1, 4, 0, 1, 4, 0, 1, 4], "INC A, LD (nn),A, JP");
-        assert_eq!(m.genesis.hw.zram[0x100] as u16, m.genesis.z80.regs.af >> 8, "the third store has run, the third JP not");
+        assert_eq!(m.hw().zram[0x100] as u16, m.z80().regs.af >> 8, "the third store has run, the third JP not");
     }
 
     // Stepping the 68000 while the Z80 is the one stopped finishes the Z80's catch-up first; a frame stepped through on both is the plain frame.
@@ -378,7 +378,7 @@ mod tests {
         let mut steps = 0;
         let mut why = b.run_frame_debug(RESUME);
         assert_eq!((why, b.debug_stopped), (stop::EACH, M68K));
-        assert!(b.genesis.hw.z80_clock >= b.genesis.hw.clock, "the Z80's catch-up finished before the 68000 was asked");
+        assert!(b.hw().z80_clock >= b.hw().clock, "the Z80's catch-up finished before the 68000 was asked");
         while why != 0 {
             steps += 1;
             if steps % 50 == 0 {
@@ -430,7 +430,7 @@ mod tests {
         let main: Vec<_> = log.iter().filter(|w| w.space == WRAM_ID).collect();
         assert!(!main.is_empty());
         assert!(main.iter().all(|w| (w.address, w.pc) == (0x20, 0x302)));
-        assert_eq!(main.last().unwrap().value, m.genesis.cpu.regs.d[2] & 0xFF);
+        assert_eq!(main.last().unwrap().value, m.cpu().regs.d[2] & 0xFF);
         assert_eq!(log.iter().filter(|w| w.space == M68KBUS_ID).count(), main.len(), "the same stores on the bus");
         assert!(log.iter().any(|w| w.space == Z80RAM_ID && w.address == 0x100 && w.pc == 1), "the Z80's store");
         m.hooks.set_ranges(0, &[]);
@@ -468,20 +468,20 @@ mod tests {
         assert_eq!(ps.iter().map(|p| (p.id, p.name.as_str(), p.code_space)).collect::<Vec<_>>(), [(0, "M68K", Some(0)), (1, "Z80", Some(1))]);
         let r = m.debug_registers(M68K).unwrap();
         assert_eq!(r.len(), ps[0].registers.len());
-        let cpu = &m.genesis.cpu.regs;
+        let cpu = &m.cpu().regs;
         assert_eq!((r[0], r[1], r[8], r[15]), (5, 0x1234_5678, 0xFF_0000, cpu.a[7] as i64));
         assert_eq!((r[16], r[17], r[19]), (cpu.pc as i64, cpu.sr as i64, cpu.a[7] as i64), "PC, SR, and SSP in supervisor mode");
         assert_eq!(m.debug_pc(M68K), Some(0x214));
         let z = m.debug_registers(Z80).unwrap();
         assert_eq!(z.len(), ps[1].registers.len());
-        assert_eq!((z[11], z[15]), (m.genesis.z80.regs.pc as i64, m.genesis.z80.regs.im as i64));
+        assert_eq!((z[11], z[15]), (m.z80().regs.pc as i64, m.z80().regs.im as i64));
         assert_eq!((m.debug_registers(2), m.debug_pc(2)), (None, None));
     }
 
     #[test]
     fn the_buses_read_as_the_processors_see_them_and_their_ports_are_not_touched() {
         let mut m = machine();
-        let hw = &mut m.genesis.hw;
+        let hw = m.hw_mut();
         hw.wram[0x10] = 0xAB;
         hw.zram[5] = 0x77;
         assert_eq!((hw.peek_m68k(0xFF_0010), hw.peek_m68k(0xE0_0010), hw.peek_m68k(0x200)), (0xAB, 0xAB, 0x70));
@@ -494,8 +494,8 @@ mod tests {
         assert_eq!(hw.vdp.regs_state(), before);
         let mut out = [0u8; 4];
         m.read_bus(M68KBUS_ID, 0xFF_FFFE, &mut out);
-        assert_eq!(out[..2], [m.genesis.hw.wram[0xFFFE], m.genesis.hw.wram[0xFFFF]]);
-        assert_eq!(out[2], m.genesis.hw.peek_m68k(0), "the bus wraps at 16 MiB");
+        assert_eq!(out[..2], [m.hw().wram[0xFFFE], m.hw().wram[0xFFFF]]);
+        assert_eq!(out[2], m.hw().peek_m68k(0), "the bus wraps at 16 MiB");
     }
 
     #[test]
@@ -511,7 +511,7 @@ mod tests {
             (0x214, "BRA.S $000214".to_owned()),
             (0x216, "DC.W $FFFF".to_owned()),
         ]);
-        m.genesis.hw.zram[..5].copy_from_slice(&[0x3E, 0x05, 0xC3, 0x34, 0x12]);
+        m.hw_mut().zram[..5].copy_from_slice(&[0x3E, 0x05, 0xC3, 0x34, 0x12]);
         for space in [Z80BUS_ID, crate::machine::Z80RAM_ID] {
             let z: Vec<String> = m.debug_disassemble(Z80, space, 0, 2).unwrap().iter().map(|i| format!("{} {}", i.mnemonic, i.operands)).collect();
             assert_eq!(z, ["LD A,$05", "JP $1234"], "space {space}");

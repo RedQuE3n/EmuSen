@@ -181,6 +181,7 @@ mod tests {
         assert!((high + 7.6).abs() < 0.6, "{high}");
     }
 
+    use crate::interface::Attachment;
     use crate::mcd::MegaCd;
     use crate::mcd::cdd::{SECTOR, status};
 
@@ -188,7 +189,8 @@ mod tests {
     #[test]
     fn an_audio_track_played_reaches_the_mix_at_the_faders_volume() {
         let disc = crate::mcd::cdd::tests::disc(300, 150);
-        let mut m = MegaCd::new((4_725_000_000, 88), Vec::new(), 0, Some(disc));
+        let board = crate::interface::Board { master_hz: (4_725_000_000, 88), pal: false, start: 0, rate: crate::sound::RATE };
+        let mut m = MegaCd::new(board, Vec::new(), Some(disc));
         let h = &mut m.hw;
         h.fader = 0x400 << 4;
         h.cdda.att = super::FULL;

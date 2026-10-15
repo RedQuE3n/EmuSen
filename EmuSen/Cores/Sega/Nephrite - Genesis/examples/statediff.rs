@@ -45,13 +45,13 @@ fn main() {
     let state = save(&a);
     let dump = std::env::var("NEPHRITE_DIFF_DUMP").ok();
     if let Some(d) = &dump {
-        std::fs::write(format!("{d}/before_{}x{}.rgba", a.picture.len() / 4 / a.genesis.hw.vdp.frame.height.max(1), a.genesis.hw.vdp.frame.height), &a.picture).unwrap();
+        std::fs::write(format!("{d}/before_{}x{}.rgba", a.picture.len() / 4 / a.hw().vdp.frame.height.max(1), a.hw().vdp.frame.height), &a.picture).unwrap();
     }
     let mut b = Machine::new(&image, Media::read(&image));
     b.load_state(&state).expect("the state loads");
     let layout = a.layout();
     assert_eq!(save(&b), state, "save, load, save");
-    let shape = |m: &Machine| { let v = &m.genesis.hw.vdp; (v.frame.width, v.frame.height, v.open, v.span_x, v.width(), m.genesis.hw.line) };
+    let shape = |m: &Machine| { let v = &m.hw().vdp; (v.frame.width, v.frame.height, v.open, v.span_x, v.width(), m.hw().line) };
     println!("after the load: A {:?}, B {:?}", shape(&a), shape(&b));
     for _ in 0..after {
         let p = pads(a.frames);
@@ -63,20 +63,20 @@ fn main() {
         let picture = a.picture != b.picture;
         if picture || sa != sb {
             let rows: Vec<usize> = {
-                let w = a.picture.len() / a.genesis.hw.vdp.frame.height.max(1);
+                let w = a.picture.len() / a.hw().vdp.frame.height.max(1);
                 (0..a.picture.len() / w.max(1)).filter(|y| a.picture.get(y * w..(y + 1) * w) != b.picture.get(y * w..(y + 1) * w)).collect()
             };
             println!("frame {}: picture {} ({} rows differ, first {:?}), state {}", a.frames, if picture { "differs" } else { "equal" }, rows.len(), rows.first(), if sa == sb { "equal" } else { "differs" });
             if let Some(d) = &dump {
-                let h = a.genesis.hw.vdp.frame.height.max(1);
+                let h = a.hw().vdp.frame.height.max(1);
                 std::fs::write(format!("{d}/a_{}x{h}.rgba", a.picture.len() / 4 / h), &a.picture).unwrap();
                 std::fs::write(format!("{d}/b_{}x{h}.rgba", b.picture.len() / 4 / h), &b.picture).unwrap();
             }
             if let Some(&y) = rows.first() {
-                let w = a.picture.len() / 4 / a.genesis.hw.vdp.frame.height.max(1);
+                let w = a.picture.len() / 4 / a.hw().vdp.frame.height.max(1);
                 let px = |p: &[u8], x: usize| format!("{:02X}{:02X}{:02X}", p[(y * w + x) * 4], p[(y * w + x) * 4 + 1], p[(y * w + x) * 4 + 2]);
                 let xs: Vec<usize> = (0..w).filter(|&x| px(&a.picture, x) != px(&b.picture, x)).collect();
-                println!("  row {y}: {} pixels differ from x {:?} to {:?}; A {} B {} at the first; size {}x{}", xs.len(), xs.first(), xs.last(), xs.first().map(|&x| px(&a.picture, x)).unwrap_or_default(), xs.first().map(|&x| px(&b.picture, x)).unwrap_or_default(), w, a.genesis.hw.vdp.frame.height);
+                println!("  row {y}: {} pixels differ from x {:?} to {:?}; A {} B {} at the first; size {}x{}", xs.len(), xs.first(), xs.last(), xs.first().map(|&x| px(&a.picture, x)).unwrap_or_default(), xs.first().map(|&x| px(&b.picture, x)).unwrap_or_default(), w, a.hw().vdp.frame.height);
                 println!("  rows {:?}", rows);
             }
             for f in fields(&layout, &sa, &sb).iter().take(20) {

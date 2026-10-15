@@ -24,7 +24,7 @@ pub fn machine() -> Option<Machine> {
 
 /// Plane A's rows as text: 28 rows of 40 characters from VRAM `$C000`, 64 words a row.
 pub fn screen(m: &Machine) -> Vec<String> {
-    let vram = &m.genesis.hw.vdp.vram;
+    let vram = &m.hw().vdp.vram;
     (0..28)
         .map(|r| {
             (0..40)
@@ -93,17 +93,17 @@ fn a_disc_with_no_boot_rom_runs_and_stands() {
         m.advance();
     }
     assert_eq!(m.frames, 30);
-    assert!(m.genesis.hw.mcd.as_ref().unwrap().hw.g.reset_held, "the sub CPU stays held as at power-on");
-    assert_eq!(m.genesis.hw.io.version & 0x20, 0, "the version register shows the expansion unit");
+    assert!(m.mcd().unwrap().hw.g.reset_held, "the sub CPU stays held as at power-on");
+    assert_eq!(m.hw().io.version & 0x20, 0, "the version register shows the expansion unit");
     let cart = Machine::new(&[0u8; 0x400], Media::read(&[0u8; 0x400]));
-    assert_eq!(cart.genesis.hw.io.version & 0x20, 0x20, "and a cartridge's console has none");
+    assert_eq!(cart.hw().io.version & 0x20, 0x20, "and a cartridge's console has none");
 }
 
 /// With Sega's backup RAM cartridge plugged in, RAM CART finds it, its size, its protection and its memory.
 #[test]
 fn mcd_verificator_finds_the_ram_cartridge() {
     let Some(mut m) = machine() else { return };
-    m.genesis.hw.mcd.as_deref_mut().unwrap().hw.cart = Some(crate::mcd::RamCart::new(crate::mcd::RamCart::SEGA));
+    m.mcd_mut().unwrap().hw.cart = Some(crate::mcd::RamCart::new(crate::mcd::RamCart::SEGA));
     let mut row = None;
     for _ in 0..600 {
         m.advance();

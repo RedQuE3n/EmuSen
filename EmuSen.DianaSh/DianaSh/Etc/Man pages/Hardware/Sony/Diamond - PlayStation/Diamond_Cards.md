@@ -236,7 +236,7 @@ reads 08h, its command cleared and the port silent, and a change the host has no
 ### 10.3 Per game, unchanged
 
 [M, 2026-10-15] The digests of three per-game states, FNV-1a over the whole state, were taken on WiseMan 76472894 in
-a probe worktree (`~/.cache/emusen/probe/diamond/cards/base`, removed once recorded) and on this branch, from
+a probe checkout (`~/.cache/emusen/probe/diamond/cards/base`, removed once recorded) and on this branch, from
 `card-save.s` saving on a blank card: the state after the save, the same state loaded over a blank card and saved again,
 and five frames on. Both builds give `886135FFEF135A26`, `886135FFEF135A26` and `55CDED3F58B6961E`
 (`per_game_states_are_the_ones_before_the_card_mode`). The project's program goldens hold all 49 lines unchanged, the

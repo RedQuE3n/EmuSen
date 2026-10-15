@@ -1,8 +1,8 @@
 # Nephrite_Attachments — the Sega CD and the 32X behind a written interface
 
 *Written 2026-10-15, before any code.* This page designs the surface between the Genesis and its attachments, so that
-the Sega CD and the 32X become crates of their own while Nephrite stays one library for three machines. It changes no
-code; the build is a separate step, taken after stage 9 merges, from §7 of this page.
+the Sega CD and the 32X stand behind a defined surface, as module trees of the one `nephrite` crate, while Nephrite
+stays one library for three machines. It changes no code; the build is a separate step, taken after stage 9 merges, from §7 of this page.
 
 It keeps the plan's three registers apart (`Nephrite_Plan.md`, opening):
 
@@ -18,15 +18,20 @@ It keeps the plan's three registers apart (`Nephrite_Plan.md`, opening):
 *Decided 2026-10-04 (`Nephrite_Plan.md` §1.1), and standing:* Nephrite is one library for three machines. The Sega CD
 and the 32X are attachments of the Genesis, neither runs without one beneath it, and three system ids are reported.
 
-*Decided 2026-10-15 (the tester's go):* each attachment becomes its own crate behind a written attachment interface,
-in place of a module folder that the Genesis side reaches into. The Beryl crates (`beryl-m68k`, `beryl-z80`,
+*Decided 2026-10-15 (the tester's go):* each attachment stands behind a written attachment interface, in place of a
+module folder that the Genesis side reaches into.
+
+*Decided 2026-10-15: the interface, within the one `nephrite` crate; separate crates not now.* The page's first version
+(the same day) designed four crates in a workspace; that layout is replaced by the module layout of §5, and the crate
+split is recorded as a possible later step (§5.6). The Beryl crates (`beryl-m68k`, `beryl-z80`,
 `beryl-sh2`, `beryl-sn76489`) and `emusen-disc` stay as they are: shared hardware and shared discs.
 
 The aims, in order:
 
-1. **The boundary enforced by the compiler.** The Genesis's crate cannot name an attachment; an attachment reaches the
-   Genesis only through the interface's types.
-2. **A Genesis-only build**, which compiles and tests with no attachment present.
+1. **The boundary held mechanically.** An attachment's internals are private to its module tree and the Genesis's to
+   its own; an attachment reaches the Genesis only through the interface module; what privacy inside one crate cannot
+   hold is held by two checks that fail a test run (§5.3).
+2. **A Genesis-only build**, which compiles and tests with no attachment present, as a cargo feature (§5.4).
 3. **The 32X begins on the interface** (stages 11–12): its SH-2s, system registers, frame buffers, overlay and PWM
    arrive as an implementation of the same traits the Sega CD implements, not as a second set of special cases in
    `genesis.rs`.
@@ -67,7 +72,7 @@ The other ten are the two test files that run a whole machine (`verificator.rs` 
 `discs.rs` 53, 54).
 
 So the Sega CD is far more self-contained than the Genesis is towards it: the Genesis side reaches in at 96 places and
-the Sega CD reaches out at 2. Most of the work of the split is on the Genesis side, and most of that is in `v1.rs` and
+the Sega CD reaches out at 2. Most of the work of the move is on the Genesis side, and most of that is in `v1.rs` and
 `machine.rs`, not in the console.
 
 ### 2.3 The Genesis side's reach into the Sega CD, by kind
@@ -135,7 +140,7 @@ the Sega CD reaches out at 2. Most of the work of the split is on the Genesis si
 
 ### 2.7 The J-Cart's and the 32X's coupling today
 
-**The J-Cart**, 17 sites, all inside what will be the Genesis's crate: `cart.rs` 23, 39, 42, 61 (the board known by
+**The J-Cart**, 17 sites, all inside what will be the Genesis's module tree: `cart.rs` 23, 39, 42, 61 (the board known by
 its header); `io.rs` 150, 154, 199, 206, 210, 218 (players 3 and 4, the word, TH); `genesis.rs` 160, 191, 195 (the flag
 copied and the `attached` check turned on), 519, 527, 536 (the two words decoded ahead of the cartridge); `v1.rs` 151
 (machine info's players).
@@ -201,14 +206,14 @@ is told about files, media and settings is not a trait at all (§3.6).
 3. For an attachment that takes line events (the 32X), each line's start, at its master clock.
 4. **Inside the attachment**: how far it may lag. `run_to` is a bound, not an order: an attachment may stop short of
    `to` when nothing it decodes can have been observed, provided that every answer it gives at `at` is as at `at`. The
-   Sega CD keeps today's rule (it runs to every `to`, instruction by instruction); the 32X keeps §5.4's (to every
+   Sega CD keeps today's rule (it runs to every `to`, instruction by instruction); the 32X keeps the plan's §5.4 (to every
    access to its areas and every line, and otherwise in slices of a measured length, P5's kind of parameter, a
-   setting with `effect: accuracy` only if §5.5's budget is missed). The bound lives in the attachment's crate, so a
+   setting with `effect: accuracy` only if the plan's §5.5 budget is missed). The bound lives in the attachment's module, so a
    change to it never touches the Genesis.
 
 ### 3.3 The bus side: `Attachment`
 
-In `nephrite-genesis`, module `attach` (§5):
+In the module `interface` (§5), the only one an attachment imports from the crate:
 
 ```rust
 /// A time on the Genesis's master clock: master clocks since power-on.
@@ -332,13 +337,13 @@ pub trait AttachmentView {
 ```
 
 **How the state composes.** The format is the library's, one magic and one version (`NPHR`, §7.3). In order: the
-header (magic, version, system byte, frames) written by the assembly crate; every writable space in id order, the
+header (magic, version, system byte, frames) written by the assembly (§5.1); every writable space in id order, the
 Genesis's (2–7) then the attachment's (from 16 for the Sega CD, from 32 for the 32X); the Genesis's block
 (`Genesis::write_state`); then each attachment's block, the Sega CD's before the 32X's. This is today's order exactly
 (`state.rs` 59–71): the spaces listing already puts the Sega CD's after the Genesis's, and its block follows the
 Genesis's. The disc's fingerprint, today `Machine::disc_print` passed in (`state.rs` 69), becomes the Sega CD's own
 field and is written as the block's last eight bytes, where it stands now (`mcd/state.rs` 102). The version is passed
-to every reader; the sequence of versions and each system's oldest are the assembly crate's (§5.4), the branches on a
+to every reader; the sequence of versions and each system's oldest are the assembly's (§5.5), the branches on a
 version inside a block its owner's, as `genesis.rs` 1079 and 1092 are today.
 
 **How spaces and processors compose.** Each owner has a fixed range of ids, so ids never move between systems and a
@@ -351,7 +356,7 @@ configuration's lists are concatenations:
 | 32X | 32–47 | `MSH2BUS` 32, `SSH2BUS` 33, `SDRAM` 34, `FRAMEBUFFER` 35, `PALETTE` 36 | 3–4 | `MSH2` 3, `SSH2` 4 |
 
 The space ids are the plan's (§4.3); the processor ids are proposed here (Q7). The ranges are the interface's, in
-`attach`; each id within a range is its owner's constant. The debugger's `Hooks` are made with a width for each id up
+`interface`; each id within a range is its owner's constant. The debugger's `Hooks` are made with a width for each id up
 to the highest the configuration lists (`machine.rs` 111 makes `[24, 16]` today). The Genesis's `peek_m68k` asks
 `att.peek` first, which closes §2.6's first gap; in the move itself the Sega CD's `peek` answers `None` and its
 processor list is empty, as today, so that the move changes nothing a debugger sees, and its processor arrives with the
@@ -360,19 +365,19 @@ Sega CD's debugger step.
 ### 3.6 Facts for the frontend: files, media, settings, machine info
 
 Batteries, drives and discs, firmware, settings and the system rows are answered once per call between frames and are
-read by one caller, the assembly crate, which knows each configuration's concrete types. They are **plain functions and
-inherent methods of each attachment's crate**, composed by the assembly, not trait members:
+read by one caller, the assembly, which knows each configuration's concrete types. They are **plain functions and
+inherent methods of each attachment's module**, composed by the assembly, not trait members:
 
-- **Firmware**: each crate describes its images by name, label, size and its replacement's words (`nephrite-mcd`:
-  `bios_CD_U/E/J.bin` and `CD_COST`; `nephrite-32x`: the three boot ROMs and `S32X_COST`; the Genesis: TMSS). The ABI's
-  file numbers (1–10 today) are the assembly crate's single table.
-- **Battery files**: each crate names its files by suffix and space (`.brm` on `BRAM`, `.crm` on `CARTRAM`) and loads
+- **Firmware**: each attachment describes its images by name, label, size and its replacement's words (`mcd`:
+  `bios_CD_U/E/J.bin` and `CD_COST`; `s32x`: the three boot ROMs and `S32X_COST`; the Genesis: TMSS). The ABI's
+  file numbers (1–10 today) are the assembly's single table.
+- **Battery files**: each attachment names its files by suffix and space (`.brm` on `BRAM`, `.crm` on `CARTRAM`) and loads
   them; the assembly numbers them (0 and 10 today) and answers `battery`.
 - **Media**: `drives`, `media_lid` and `media_insert` call `MegaCd`'s inherent methods; opening a disc
-  (`open_disc`, `is_disc`, `system_area`, `fingerprint`, `DISC_SIGNATURE`) is `nephrite-mcd`'s, so the assembly no
-  longer depends on `emusen-disc` directly. Whether the library claims `MEDIA` (allowed for a machine with no drive
+  (`open_disc`, `is_disc`, `system_area`, `fingerprint`, `DISC_SIGNATURE`) is `mcd`'s, so the assembly no
+  longer calls `emusen-disc` directly. Whether the library claims `MEDIA` (allowed for a machine with no drive
   since the core ABI's 1.6, `EmuSen_CoreAPI.md` §6.26) is the assembly's decision.
-- **Settings**: each crate lists its settings (`ramcart` in `nephrite-mcd`, a slice bound in `nephrite-32x` if one is
+- **Settings**: each attachment lists its settings (`ramcart` in `mcd`, a slice bound in `s32x` if one is
   ever needed) and applies them at create; the assembly concatenates the schema.
 - **Machine info**: the system id, extensions, the development mark, frame rate, ports and the description are the
   assembly's; spaces, processors, batteries and firmware are composed from the parts.
@@ -383,7 +388,7 @@ inherent methods of each attachment's crate**, composed by the assembly, not tra
 |---|---|---|---|---|
 | Map | `read8`, `read16`, `write`, `peek`; `Answer`; `Slot` | mode 2's `$000000`–`$3FFFFF`, the slot at `$400000` (RAM cartridge, or `$FF`, D-32), `$A12000`–`$A1203F`; mode 1 at `$400000` (stage 10) | its registers, its windows and the vector override; the cartridge beneath through `Slot::cart`; waits through `Slot::wait` | `Both`: the Sega CD asked first |
 | Interrupts | none towards the 68000; into an attachment by the map and by lines | IFL2 and the H-INT vector by the map; the sub CPU's levels inside | V and H from lines, CMD by the map, PWM inside | each its own |
-| Clock and slices | `run_to`, `Board`, `Slot::wait` | to every `to`, instruction by instruction (today) | §5.4's slices, the bound its own | both to the same `to`, the Sega CD first |
+| Clock and slices | `run_to`, `Board`, `Slot::wait` | to every `to`, instruction by instruction (today) | the plan's §5.4 slices, the bound its own | both to the same `to`, the Sega CD first |
 | Reset and power | `Board` (power-on), `reset`, `EXPANSION` | `EXPANSION`; the reset line | the reset line | both |
 | Audio | `sound` | CD-DA, and the PCM from stage 9, one stream | PWM, one stream | two streams |
 | Video | `LINES`, `Line` | none | its VDP's timing and the overlay | the 32X's |
@@ -412,8 +417,8 @@ replacement is an image in the boot ROM's place, which the interface does not se
 
 ### 3.9 The 32X on it (stages 11–12)
 
-`nephrite-32x` holds two `beryl-sh2` processors on their own buses, the system registers, the comm ports, the FIFO from
-the 68000, SDRAM, the frame buffers and the 32X VDP, PWM and the boot-ROM replacements. On the interface:
+The module tree `s32x` holds two `beryl-sh2` processors on their own buses, the system registers, the comm ports, the
+FIFO from the 68000, SDRAM, the frame buffers and the 32X VDP, PWM and the boot-ROM replacements. On the interface:
 
 - **Map**: it answers its registers and windows, takes the vector override, and passes the cartridge's addresses to
   `Slot::cart`, banked as its registers say; an SH-2's read of the cartridge goes to the same `Slot::cart` during
@@ -429,19 +434,25 @@ the 68000, SDRAM, the frame buffers and the 32X VDP, PWM and the boot-ROM replac
 The 32X is the budget's hardest load (`Nephrite_Plan.md` §5.5, P2), which is the strongest argument for §4's choice:
 its `run_to` is called after every 68000 instruction and its map on every access to `$800000`–`$9FFFFF`.
 
+**The 32X's stages may amend the interface once their code exists.** What is written here for the 32X is argued from
+the plan and the documents, before an SH-2 runs in Nephrite; where stage 11 or 12 finds the surface wanting (a
+requester on map calls, a level towards the 68000, the overlay's form, the CD32X pair's decode), the change is a commit
+to `interface.rs` with its reason recorded in `Nephrite_Native.md`, the Sega CD's implementation brought along in the
+same commit and its digests held.
+
 ### 3.10 Both at once (CD32X)
 
-`Both<A, B>` in `attach` composes two attachments with no knowledge of either: the map asks `A` (the expansion port's)
+`Both<A, B>` in `interface` composes two attachments with no knowledge of either: the map asks `A` (the expansion port's)
 then `B` (the slot's); `run_to` takes `A` then `B` to the same `to`; lines go to both; `sound` lends both streams;
 `EXPANSION` is either's; state, spaces and processors are `A`'s then `B`'s. The configuration is
 `Genesis<Both<MegaCd, S32x>>`. If stage 12 finds an address both decode (in mode 2 the Sega CD fills `$000000`–
-`$3FFFFF`, where the 32X's vector override also stands), the pair's rule goes in a type of the assembly crate that
-replaces `Both` for that pair, since only the assembly may name both crates; `nephrite-32x` never depends on
-`nephrite-mcd`. How a disc is known to want the 32X is stage 12's question, with its state (Q5).
+`$3FFFFF`, where the 32X's vector override also stands), the pair's rule goes in a type of the assembly that
+replaces `Both` for that pair, since only the assembly may name both attachments; `s32x` never names `mcd` (§5.3's
+source check). How a disc is known to want the 32X is stage 12's question, with its state (Q5).
 
 ### 3.11 The J-Cart: a cartridge feature, not an attachment
 
-*Recommended, with its reasons:* the J-Cart stays a feature of the cartridge, in the Genesis's crate.
+*Recommended, with its reasons:* the J-Cart stays a feature of the cartridge, in the Genesis's module tree.
 
 - It is on the cartridge's board, selected by the header (`cart.rs` `JCARTS`), and its games are `md` games.
 - Of the interface's kinds it has only a map (two words in the cartridge's own range) and the pads. It has no clock,
@@ -485,7 +496,7 @@ per access or per instruction where a direct one is possible.
   a direct call, inlined where small. For `Bare` every arm folds away: the cartridge Genesis loses even today's one
   check, the J-Cart's moving into the cartridge arm.
 - **(b) One instantiation over an enum.** `Genesis<Attached>`, where `Attached` is an enum of the four in the assembly
-  crate implementing the traits by `match`. The Genesis is compiled once; every access pays a discriminant test, the
+  implementing the traits by `match`. The Genesis is compiled once; every access pays a discriminant test, the
   same as today's `attached` flag; an attached configuration pays the `match` and a direct call.
 - **(c) `Option<Box<dyn Attachment>>`, checked once.** The cartridge pays the `is_some` test (today's cost). An
   attached configuration pays an indirect call on every access to its areas and every instruction (about 13,000 to
@@ -500,14 +511,20 @@ observed and the plain run stay two compilations as in Beryl's `step_observed`. 
 the Genesis, with the 68000 and Z80 interpreters inlined into its buses, compiled for four configurations, each plain
 and observed. (c) is rejected for the attachments' hot path, and for the 32X's budget most of all.
 
-The choice between (a) and (b) is **local to the assembly crate**: the Genesis is generic in both, and (b) is one type
-in `nephrite` implementing the traits by `match`. So the build starts with (a), and (b) is measured beside it only if
+**None of this needs a crate boundary.** Monomorphisation is per type, not per crate: `Genesis<A>` in the `genesis`
+module is instantiated in `machine` for each configuration exactly as it would be from another crate, and within one
+crate, with one codegen unit and fat LTO in the release profile, the instances are optimised together as they are
+today. The argument of the first version of this page carries over unchanged, and loses one of its risks: no inlining
+is decided again across a crate boundary.
+
+The choice between (a) and (b) is **local to the assembly**: the Genesis is generic in both, and (b) is one type
+in the `machine` module implementing the traits by `match`. So the build starts with (a), and (b) is measured beside it only if
 (a)'s costs cross the bounds of Q1.
 
 ### 4.4 The bench that decides
 
 The measurements of §54.1, before and after the commit that makes the Genesis generic (§7.2, commit 3), and again after
-the crates are split (commit 6), since fat LTO across crates should give the same code and that is to be shown, not
+the files move into their module trees (commit 5), since a move should change no code and that is to be shown, not
 assumed:
 
 - **The cartridge Genesis**: `examples/bench` on Sonic the Hedgehog, Sonic the Hedgehog 2, Thunder Force IV, Streets of
@@ -522,101 +539,134 @@ assumed:
 
 ---
 
-## 5. The crates
+## 5. The modules
 
-### 5.1 Layout and dependencies
+*Decided 2026-10-15: the interface, within the one `nephrite` crate; separate crates not now.* The boundary is held by
+module privacy inside the crate and by two checks that privacy cannot replace (§5.3). The library's file, its core id,
+`RustCores.props`'s row, the sidecar and the kit's samples stay exactly as they are.
 
-Diamond set the precedent on 2026-10-13 (`Diamond_Enhancements.md` §24.1): the machine's crate stays at the core's
-root as an `rlib`, the published library moves to `v1/`, its package renamed and its library keeping the core's name,
-so that `RustCores.props` changes its `Dir` alone. Nephrite follows it, and adds one Cargo workspace (Q2):
-
-```
-Sega/Nephrite - Genesis/
-  Cargo.toml       package nephrite-genesis (rlib), and [workspace] members mcd, 32x, v1; the profiles
-  src/             the Genesis: the console, the cartridge and its boards (J-Cart, EEPROM, lock-on), I/O, the VDP,
-                   the sound, the Genesis's debugger, the cartridge's header, and attach.rs (the interface)
-  mcd/             package nephrite-mcd (rlib): the Sega CD
-  32x/             package nephrite-32x (rlib): the 32X, a stub until stage 11
-  v1/              package nephrite-v1, library "nephrite" (cdylib + rlib): the machine the ABI drives
-  kit/             the conformance kit's samples, unchanged
-```
+### 5.1 The layout
 
 ```
-               nephrite-v1  (lib "nephrite": libnephrite.so)
-               │      │      │
-               │      │      └──────────────► nephrite-32x ──► beryl-sh2
-               │      └──► nephrite-mcd ──► emusen-disc            │
-               │              │    └──► beryl-m68k                 │
-               ▼              ▼                                    ▼
-              nephrite-genesis ◄──────────────────────────────────┘
-                 │  ├──► beryl-m68k, beryl-z80, beryl-sn76489
-                 └─────► emusen-native  (every crate above uses it: state, steps, debug, core types)
+src/
+  lib.rs           the module list and the features (§5.4)
+  interface.rs     the interface: the three traits, Master, Board, Slot, Answer, Line, Watch, Refusal, SpaceRef,
+                   Bare, Both, the ranges of space and processor ids; re-exports Cart
+  genesis/         the Genesis: mod.rs (Genesis<A>, Hw<A>, its buses), console.rs (Console<A>: the frame with its
+                   pads, picture, sound, cartridge battery file and debugger state), cart.rs, eeprom.rs, io.rs, vdp.rs,
+                   render.rs, sound.rs, ym2612.rs, fm*.rs, lfo_tables.rs, fifo_records.rs, header.rs (the cartridge's
+                   half of media.rs), debugger.rs; and the tests that run a cartridge (programs, pictures, voices,
+                   sounds, board_*)
+  mcd/             the Sega CD, as today, with its facts for the frontend (§3.6)       [feature "mcd"]
+  s32x/            the 32X: a stub, then stages 11–12                                  [feature "s32x"]
+  machine.rs       the assembly: Machine and Fitted, the composition of spaces, processors and batteries
+  media.rs         System and the decision by contents
+  state.rs         the header, the versions, the order of the blocks, StateError
+  v1.rs            Core and the exports
 ```
 
-The arrows point one way: **no crate depends on `nephrite-v1`**, and **`nephrite-genesis` depends on no `nephrite-*`
-crate**, so the Genesis cannot name an attachment and an attachment cannot name another. Only `nephrite-v1` implements
-`Core` and exports the ABI. `beryl-sh2` moves from the Genesis's dependencies, where it is unused (§2.7), to the 32X's.
+**The assembly** in this page means the four top-level modules `machine`, `media`, `state` and `v1`: the only ones
+that name a concrete attachment, and the only ones a host's call reaches.
 
-The workspace's one lock and one target directory change nothing for the build that ships: `EmuSen.csproj` already
-passes `--target-dir` per crate under `obj/` (`EmuSenCargoTargetRoot`), and Cargo reads profiles only at the workspace
-root, where Nephrite's already are.
+| Today | Becomes |
+|---|---|
+| `genesis.rs` | `genesis/mod.rs`, generic over `A`; 136–139, 190–192, 379–381, 515–579 leave (the Sega CD's half into `mcd`, the J-Cart's into the cartridge arm) |
+| `cart.rs`, `eeprom.rs`, `io.rs`, `vdp.rs`, `render.rs`, `sound.rs`, `ym2612.rs`, `fm.rs`, `fm_tables.rs`, `lfo_tables.rs`, `fifo_records.rs`, `debugger.rs` | the same files under `genesis/`, unchanged but for the J-Cart's arm, the line events' hook in the VDP loop and the debugger's composition, which goes to `machine` |
+| `machine.rs` | split: `Console<A>` to `genesis/console.rs`; `Machine` with `Fitted` stays; `MCD_MEMORIES`, `CARTRAM_ID` to `mcd`, `S32X_MEMORIES` to `s32x` |
+| `media.rs` | split: the header, markets, save RAM and copier images to `genesis/header.rs`; `System` and the decision stay; `DISC_SIGNATURE`, `disc_offset` to `mcd`; `is_32x` to `s32x` |
+| `state.rs`, `v1.rs` | stay; the Sega CD's descriptors, setting and disc helpers to `mcd`, the 32X's to `s32x` |
+| `mcd/` | stays; its tests build `Console<MegaCd>` directly, `verificator.rs` and `discs.rs` included |
+| tests that run a machine | `Machine::new(&image, Media::read(&image))` becomes `Console<Bare>`'s cartridge constructor, mechanically |
+| `examples/` | unchanged in place; they use the crate's `pub` items (§5.3) |
 
-### 5.2 What moves where
+### 5.2 The visibility rules
 
-| Today (`src/`) | To | Notes |
-|---|---|---|
-| `genesis.rs` | `nephrite-genesis` | generic over `A`; 136–139, 190–192, 379–381, 515–579 leave (the Sega CD's half into `nephrite-mcd`, the J-Cart's into the cartridge arm) |
-| `cart.rs`, `eeprom.rs`, `io.rs`, `vdp.rs`, `render.rs`, `sound.rs`, `ym2612.rs`, `fm.rs`, `fm_tables.rs`, `lfo_tables.rs`, `fifo_records.rs` | `nephrite-genesis` | unchanged but for the J-Cart's arm and the line events' hook in the VDP loop |
-| `debugger.rs` | `nephrite-genesis` (the Genesis's processors, peeks, watches); the composition into `nephrite-v1` | |
-| `machine.rs` | split: `Console<A>` in `nephrite-genesis` (the frame with its pads, picture, sound, cartridge battery file and debugger state); `Machine` with `Fitted` and the space and battery composition in `nephrite-v1` | `MCD_MEMORIES`, `CARTRAM_ID` to `nephrite-mcd`; `S32X_MEMORIES` to `nephrite-32x` |
-| `media.rs` | split: the cartridge's header, markets, save RAM, copier images in `nephrite-genesis`; `System` and the decision by contents in `nephrite-v1` | `DISC_SIGNATURE`, `disc_offset` to `nephrite-mcd`; `is_32x` to `nephrite-32x` |
-| `state.rs` | `nephrite-v1` (the header, the versions, the order, `StateError`) | the blocks are their owners' |
-| `v1.rs` | `nephrite-v1` | the Sega CD's descriptors, setting and disc helpers to `nephrite-mcd`, the 32X's to `nephrite-32x` |
-| `mcd/` | `mcd/src/` | `mod.rs` becomes `lib.rs`; its tests build `Console<MegaCd>` directly, `verificator.rs` and `discs.rs` included |
-| tests that run a machine (`programs.rs`, `pictures.rs`, `voices.rs`, `sounds.rs`, the `board_*` files) | `nephrite-genesis`, on `Console<Bare>` | `Machine::new(&image, Media::read(&image))` becomes the cartridge constructor of `Console<Bare>`; mechanical |
-| `examples/` | by what they run: `bench`, `dump`, `statediff`, `regs`, `wav`, `fmtrace` to `v1/`; `chip`, `dis`, `fifo` to the root; `disc` to `mcd/` | `bench` stays on the published path, so that it measures `Fitted`'s match too |
+- **The Genesis's internals are private to `genesis/`.** `Hw<A>`'s fields, the VDP's, I/O's, the sound's and the
+  cartridge's fields are private or `pub(super)`/`pub(in crate::genesis)`. What the assembly needs of the Genesis is a
+  short list of `pub(crate)` methods on `Console<A>`: build, run a frame plain or observed, pads in, picture and sound
+  out, the cartridge's battery and patches, the Genesis's spaces, processors and registers.
+- **An attachment imports from the crate only `crate::interface`.** `interface` re-exports `Cart`, whose fields stay
+  private to `genesis/` and whose methods an attachment may call (`read8`, `read16`, `write8`, `write16`, `answers`)
+  are `pub(crate)`.
+- **An attachment's internals are private to its tree.** In `mcd/`, `Sub`, `Gate`, `Cdc`, `Cdd`, `WordRam`, `Cdda`,
+  `RamCart`'s fields and every register are private or `pub(in crate::mcd)`; `MegaCd`, its three trait
+  implementations and its inherent functions for the frontend (§3.6) are `pub(crate)`, for the assembly.
+- **The generic Genesis cannot call an attachment except through the traits**: it is generic over `A` and names no
+  concrete type.
+- **`pub` is kept to what tools outside the crate use** (`examples/`, the conformance kit through the ABI): `machine`'s
+  `Machine` and the constructors the examples call, and a named, documented accessor for a development tool such as
+  `examples/disc.rs`'s register view and stage 9's `Sub::seen`.
 
-### 5.3 The Genesis-only build
+### 5.3 What privacy enforces, what it cannot, and the two checks
 
-Two forms, both kept:
+**Enforced by the compiler:** no module outside `genesis/` reads or writes the Genesis's state (its clock, its
+refreshes, the VDP's FIFO, the Z80's window), the assembly included; no module outside `mcd/` reaches the Sega CD's
+devices, the Genesis and the assembly going through `MegaCd`'s `pub(crate)` surface; and the Genesis's code reaches
+an attachment only by the traits.
 
-1. **The Genesis's crate alone**: `cargo test -p nephrite-genesis` builds and runs every Genesis test with no
-   attachment in the graph. This is the compiler's proof of the boundary and costs nothing to keep.
-2. **A Genesis-only library**: `nephrite-v1`'s features `mcd` and `s32x`, both default; with
-   `--no-default-features` the library reports the `md` system alone, `Fitted` has its `Md` arm alone, and nothing of
-   `nephrite-mcd`, `nephrite-32x` or `emusen-disc` is linked. *Recommended (Q4):* a development build only, run with
-   the kit's Genesis sample once per change to the interface, never shipped, since a player's library holds the three
-   systems.
+**Not enforced by privacy, as a crate boundary would:**
 
-A separate assembly crate for the Genesis alone was weighed and rejected: it would repeat the systems table, the
-settings and `Core`'s implementation, two owners for each.
+- **The direction.** Rust's privacy is by subtree, and the assembly sits at the crate's top level: whatever is
+  visible to it with `pub(crate)` is visible to every module. So `genesis/` could `use crate::mcd::MegaCd`, and `mcd/`
+  could call `Console<A>`'s `pub(crate)` methods or anything else `pub(crate)` outside `interface`. Between crates
+  Cargo forbids the first outright (no dependency) and the second is limited to `pub` items.
+- **Cycles.** Modules of one crate may name each other both ways; crates may not.
+- **`pub` items.** What `examples/` needs is `pub`, and so visible to every module.
+- **Separate compilation.** The one crate is compiled whole; a crate would build and test the Genesis with no
+  attachment's code present at all.
 
-### 5.4 One owner for each fact
+**The two checks**, which hold what privacy cannot and fail an ordinary test run:
+
+1. **The feature-off builds** (§5.4). `cargo test --no-default-features` compiles neither attachment, so it fails if
+   `genesis/` or `interface.rs` names `mcd` or `s32x`; `--no-default-features --features mcd` and `--features s32x`
+   alone fail if either attachment names the other.
+2. **A source check**, a test in the assembly (`the_attachments_reach_only_the_interface`), reading the files under
+   `src/mcd/` and `src/s32x/` and failing on any path of the crate other than `crate::interface` (and `super::` within
+   the tree), and reading `src/genesis/` and `src/interface.rs` and failing on `crate::mcd`, `crate::s32x`,
+   `crate::machine`, `crate::media`, `crate::state` or `crate::v1`. It is a text test, deliberately simple; an
+   exception is a reviewed line in it.
+
+With both, the direction is held as surely as a crate boundary would hold it at each test run, though not at each
+compilation, and cycles are refused by the source check.
+
+### 5.4 The Genesis-only build: a feature, kept as a check
+
+The features `mcd` and `s32x`, both default, gate `mod mcd`, `mod s32x`, their arms of `Fitted`, their systems' rows
+and their settings. With `--no-default-features` the crate builds a library reporting `md` alone, with nothing of the
+attachments and no `emusen-disc` linked (the dependency made optional with `mcd`).
+
+**Whether it is worth having:** yes, as check 1 of §5.3, its cheapest enforcement of the direction, run in the crate's
+test sweep with each change to `interface.rs` or the Genesis. Not as a shipped library: a player's library holds the
+three systems, and a second artefact would need its own sidecar and kit run for no player (Q4).
+
+### 5.5 One owner for each fact
 
 | Fact | Owner | Read by |
 |---|---|---|
-| The pad's button bits (the order the I/O reads them) | `nephrite-genesis` (`io`) | the controller descriptors in `nephrite-v1` (`BUTTONS`) |
-| The master clock's rates, the frame rates, `START` | `nephrite-genesis` | attachments through `Board`; machine info |
-| The output sample rate (48 kHz) and the output's scale | `nephrite-genesis` (`sound`) | attachments through `Board`; `AUDIO_RATE` |
-| System ids (`md`, `mcd`, `32x`), extensions, the state's system byte | `nephrite-v1` | — |
-| The state's magic, versions, oldest version per system | `nephrite-v1` | blocks are given the version |
-| ABI file numbers (firmware 1–9, batteries 0 and 10) | `nephrite-v1` | — |
-| The ranges of space and processor ids | `nephrite-genesis` (`attach`) | every crate |
+| The pad's button bits (the order the I/O reads them) | `genesis` (`io`) | the controller descriptors in `v1` (`BUTTONS`) |
+| The master clock's rates, the frame rates, `START` | `genesis` | attachments through `Board`; machine info |
+| The output sample rate (48 kHz) and the output's scale | `genesis` (`sound`) | attachments through `Board`; `AUDIO_RATE` |
+| System ids (`md`, `mcd`, `32x`), extensions, the state's system byte | `media`, `v1` | — |
+| The state's magic, versions, oldest version per system | `state` | blocks are given the version |
+| ABI file numbers (firmware 1–9, batteries 0 and 10) | `v1` | — |
+| The ranges of space and processor ids | `interface` | every module |
 | Each space's and processor's id within a range | that range's owner | — |
-| The disc's signature, opening a disc, its fingerprint, the drive's number | `nephrite-mcd` | `nephrite-v1` (recognition, create, insert) |
-| The 32X's header test | `nephrite-32x` | `nephrite-v1` |
-| The J-Cart's boards and word | `nephrite-genesis` (`cart`, `io`) | — |
-| The open bus's rule (D-29) | `nephrite-genesis` | attachments through `Answer::Open` |
+| The disc's signature, opening a disc, its fingerprint, the drive's number | `mcd` | the assembly (recognition, create, insert) |
+| The 32X's header test | `s32x` | `media` |
+| The J-Cart's boards and word | `genesis` (`cart`, `io`) | — |
+| The open bus's rule (D-29) | `genesis` | attachments through `Answer::Open` |
 | An attachment's mix gain against the Genesis's output | that attachment | — |
 
-### 5.5 What the compiler enforces, and what it does not
+### 5.6 Separate crates, a possible later step
 
-The dependency arrows are enforced: `nephrite-genesis` cannot be made to name `MegaCd`. Fields are another matter.
-Today almost every field of `Hw` is `pub`, because `machine.rs`, `v1.rs` and the tests reach them. After the split the
-assembly crate still reads the Genesis's devices directly (the VDP's frame, I/O's pads, the cartridge's battery), and
-an attachment could reach `Slot::cart`'s public fields. *Recommended (Q6):* the move enforces the direction; the
-fields are narrowed afterwards, crate by crate, to what the next crate up uses, each narrowing its own commit with no
-effect at run time.
+The first version of this page (`18e90a20`) laid the same design out as four crates in a workspace
+(`nephrite-genesis`, `nephrite-mcd`, `nephrite-32x`, and `v1/` publishing `nephrite`, after Diamond's arrangement,
+`Diamond_Enhancements.md` §24.1). It is not built now. **What would trigger it:** the boundary broken in review
+despite §5.3's checks, or the checks needing exceptions to pass; a second consumer of an attachment's or the Genesis's
+code outside Nephrite; the one crate's build time in development becoming a cost once the 32X's code lands; or a
+Genesis-only library wanted as a shipped artefact. Because each attachment's tree imports from the crate only
+`interface`, the split would then be a move of files (`interface` into the Genesis's crate, each tree into a crate
+depending on it, the assembly into `v1/`), not a redesign.
 
 ---
 
@@ -625,29 +675,28 @@ effect at run time.
 The design rules ask which form a feature takes before it is built: an extension of a surface, a module or plugin, or
 a component of its own.
 
-- **Chosen: an internal surface inside one library.** The interface is a module of `nephrite-genesis`, of the kind
-  `EmuSen_Surfaces.md` §6.1 calls rule **R**: an internal Rust API, a path dependency built from the same commit,
-  promising nothing across commits. It is versioned by its crate: `nephrite-genesis`'s `version` moves (0.x minor) with
-  any change to the three traits or their types, so that a change to the surface is a reviewed line in a diff, as the
-  Beryl crates' contracts are kept (`Beryl-HW/README.md`). No outer surface changes: the core ABI v1 stays the only one
-  a host sees, the library's file, core id, system pack and sidecar stay as they are, and no new dependency between
-  components is added (every crate here is Nephrite's own, over `emusen-native`, `emusen-disc` and Beryl as today).
+- **Chosen: an internal surface inside one library and one crate.** The interface is the module `interface` of
+  `nephrite`, internal in the sense of `EmuSen_Surfaces.md` §6.1's rules (nothing promised across commits). It has no
+  version of its own: a change to it is a reviewed diff of `interface.rs`, with the Sega CD's implementation brought
+  along in the same commit. No outer surface changes: the core ABI v1 stays the only one a host sees, and no new
+  dependency between components is added.
+- **Not now: separate crates** (§5.6). *Decided 2026-10-15.* The boundary they would add over §5.3's is compile-time
+  rather than test-time, and its costs (a workspace, a lock, `RustCores.props`'s row, cross-crate inlining to measure)
+  buy nothing a player or a second consumer needs today.
 - **Rejected: separate libraries per machine** (`libnephrite-md`, `-mcd`, `-32x`). Each would contain the Genesis,
   which the plan's §1.1 already gives as the reason the Sega CD is not a core of its own; three registrations, three
   sidecars and three system packs for one console; a CD32X library containing two attachments and a Genesis; and the
-  state, the battery files and the debugger's numbering split three ways for one machine. It is "a component of its
-  own" three times over, for machines that cannot stand alone.
+  state, the battery files and the debugger's numbering split three ways for one machine.
 - **Rejected: a runtime plugin** (attachments loaded by Nephrite as dynamic libraries). Rust has no stable ABI, so the
   boundary would be a second C ABI, at the hottest boundary in the core: a call per 68000 instruction and per access,
   through a pointer, never inlined. The attachments share Rust types with the Genesis (`Cart`, `Steps`, `StateWriter`,
   `Hooks`), which a C boundary would have to copy or serialise; the framework already has one plugin boundary for
   cores, the core ABI, and nothing supplies attachments from outside the project.
 
-**Is the interface ever published?** *No.* Its only implementers are Nephrite's crates, and its types are the
+**Is the interface ever published?** *No.* Its only implementers are Nephrite's modules, and its types are the
 Genesis's internals (the cartridge, the master clock's units, the VDP's lines), which no other core shares. A console
 with an attachment of its own (the PC Engine's CD-ROM², the Saturn's cartridge port) would copy the pattern, a bus side
-asked first with a lent slot, not the trait: its buses and its clock differ. Publishing it would turn rule R into rule
-A or C for no client.
+asked first with a lent slot, not the trait: its buses and its clock differ.
 
 ---
 
@@ -656,8 +705,8 @@ A or C for no client.
 ### 7.1 When, and the baseline
 
 After stage 9 merges into WiseMan, and before stage 10's first step (Q3): stage 9 edits exactly the files this move
-splits, and stage 10's mode 1 is the first configuration the move makes easy. The steps run as Nephrite's others, about
-three hours each with a check-in after each (A5).
+rearranges, and stage 10's mode 1 is the first configuration the move makes easy. The steps run as Nephrite's others,
+about three hours each with a check-in after each (A5).
 
 Every commit keeps every test green and the cartridge Genesis byte-identical, and the Sega CD too. Byte identity is
 checked four ways:
@@ -674,19 +723,22 @@ checked four ways:
 
 ### 7.2 The commits
 
+The first version's sixth commit, the crate split, is dropped; the move into module trees takes its place as commit 5
+and carries the measurement it carried.
+
 | # | What | Checks | Measured |
 |---|---|---|---|
 | 1 | The baseline: `examples/digest.rs`; a pinned layout for a disc's machine; the before numbers of §4.4 recorded | all of §7.1 | the bench, the Sega CD, size, build time |
 | 2 | The J-Cart into the cartridge's arm; `attached` guards the Sega CD alone | J-Cart tests; §7.1 | the bench, Micro Machines 2 |
-| 3 | `attach.rs` in the crate; `Genesis<A>`, `Hw<A>`, `Bare`; `MegaCd` on the three traits (`genesis.rs` 518–579 and 379 moved in); `Console<A>` split from `machine.rs`; `Fitted` with `Md` and `Mcd`; state and spaces composed through the traits | §7.1 | **the decision of §4**: the bench, the Sega CD, size, build time |
-| 4 | The Sega CD's facts behind its own module: firmware descriptors, `ramcart`, batteries, drives, the disc helpers and `DISC_SIGNATURE`, the fingerprint into `MegaCd`; `cdda.rs` given the rate by `Board`. Afterwards no `mcd` outside `src/mcd/` but `Fitted`'s arms | §7.1; a `grep` recorded | — |
-| 5 | The 32X's stub: `S32x` on the traits, answering `Pass`, with its three placeholder memories and descriptors; `Fitted::S32x`, still counting frames only (`machine.rs` 225) | §7.1; a 32X state byte-identical | — |
-| 6 | The split: the root package renamed `nephrite-genesis` (rlib) with the workspace; `mcd/`, `32x/`, `v1/`; `RustCores.props`'s `Dir` to `Sega\Nephrite - Genesis\v1\`; examples and tests sorted (§5.2) | §7.1; the kit on the library built by `EmuSen.csproj`; `cargo tree -p nephrite-genesis` naming no `nephrite-*` crate, as a test | the bench and the Sega CD again (LTO across crates) |
-| 7 | The Genesis-only build: `nephrite-v1`'s features; the kit's Genesis sample on `--no-default-features` | the sample, 64 of 64; the digests | the size of the Genesis-only library, for the record |
+| 3 | `interface.rs`; `Genesis<A>`, `Hw<A>`, `Bare`; `MegaCd` on the three traits (`genesis.rs` 518–579 and 379 moved in); `Console<A>` split from `machine.rs`; `Fitted` with `Md` and `Mcd`; state and spaces composed through the traits | §7.1 | **the decision of §4**: the bench, the Sega CD, size, build time |
+| 4 | The Sega CD's facts behind its own module: firmware descriptors, `ramcart`, batteries, drives, the disc helpers and `DISC_SIGNATURE`, the fingerprint into `MegaCd`; `cdda.rs` given the rate by `Board` | §7.1; afterwards no `mcd` outside `src/mcd/` but the assembly's | — |
+| 5 | The module trees and their visibility: the Genesis's files into `src/genesis/`, its internals and the Sega CD's narrowed (§5.2); the source check of §5.3 | §7.1; the source check | the bench and the Sega CD again |
+| 6 | The 32X's stub: `S32x` in `src/s32x/` on the traits, answering `Pass`, with its three placeholder memories and descriptors; `Fitted::S32x`, still counting frames only (`machine.rs` 225) | §7.1; a 32X state byte-identical | — |
+| 7 | The features `mcd` and `s32x`; the three feature-off builds of §5.3 in the test sweep; the kit's Genesis sample on `--no-default-features` | the sample, 64 of 64; the digests | the Genesis-only library's size, for the record |
 | 8 | The record: a section of `Nephrite_Native.md`; this page's predictions retired; the folder's README | — | — |
 
-Commits 3 and 6 are the two where the cost can move; each is measured before the next begins, and a loss stops the
-migration until it is explained (§4.3's fallback is commit 3's alternative).
+Commits 3 and 5 are the two where the cost can move (3 changes the code, 5 moves it); each is measured before the next
+begins, and a loss stops the migration until it is explained (§4.3's fallback is commit 3's alternative).
 
 ### 7.3 The state format
 
@@ -694,7 +746,7 @@ migration until it is explained (§4.3's fallback is commit 3's alternative).
 leaves, argued from the write order (§3.5): the header, the spaces in id order, the Genesis's block and the Sega CD's
 block are written in today's order by today's code, moved; the one field that changes owner, the disc's fingerprint,
 is written by its new owner at the same offset. A 32X machine keeps writing its three placeholder memories through the
-stub (commit 5). The pinned layouts and the digests show it at every commit (A4).
+stub (commit 6). The pinned layouts and the digests show it at every commit (A4).
 
 What the format will need, and the move does not add: a configuration that the system byte does not decide. Today a
 system byte decides the blocks (`md` none, `mcd` the Sega CD's, `32x` none). Mode 1 (a cartridge, `md`, with the Sega
@@ -705,18 +757,18 @@ added to the header with the first stage that builds such a configuration, at th
 
 - **Stage 9's merge.** The move rewrites the files stage 9 edits; starting before stage 9 merges would make every one
   of its commits a conflict. Hence §7.1's order, and the move finished before stage 10 begins.
-- **Cost from crossing crates.** Fat LTO with one codegen unit should give the same code across crates as within one,
-  but inlining is decided again; small cross-crate functions need `#[inline]` for the unoptimised test builds' speed.
-  Measured at commit 6.
 - **Monomorphisation's size and build time** (§4.3), bounded by Q1, with (b) as a local fallback.
 - **Byte identity's subtle orders**: the VDP, attachment, Z80 order in `catch_up`; `run_to` before a register access;
   the open bus supplied by the Genesis; the fingerprint's offset. Each is a line of §3.4 and is held by the digests.
-- **Visibility.** Tests and tools that reach fields across what become crate boundaries (`examples/disc.rs` reads the
-  Sega CD's registers; stage 9's `Sub::seen`) move with their subject (§5.2); a field the assembly genuinely needs
-  stays `pub` until Q6's narrowing.
-- **The lock.** One workspace lock in place of one: path dependencies alone, and `chd` through `emusen-disc`, are
-  resolved again; the old lock is copied in, so that no version moves.
+- **The checks are only as good as the runs that include them.** The feature-off builds and the source check hold the
+  direction at test time, not at each compilation (§5.3); they must be in the crate's ordinary test sweep, not a
+  separate script that can be forgotten.
+- **Visibility churn.** Narrowing `pub` fields that tests, examples and stage 9's tools reach (`examples/disc.rs`
+  reads the Sega CD's registers; `Sub::seen`) needs accessors or moved tests (§5.2); a field the assembly genuinely
+  needs becomes a method of `Console<A>`, not a `pub(crate)` field.
 - **CD32X's overlapping decode**, unknown until stage 12 (§3.10); contained by the assembly's pair type.
+- **The 32X's amendments** (§3.9): a surface written before its second implementer exists will change; each change
+  carries the Sega CD with it and its digests.
 
 ---
 
@@ -725,17 +777,17 @@ added to the header with the first stage that builds such a configuration, at th
 1. **Q1, the dispatch.** *Recommended:* one instantiation per configuration (§4.3, (a)), with the enum (b) measured
    beside it only if (a) grows the shipped library by more than half or a clean release build by more than half; the
    cartridge Genesis's frame cost may not rise beyond the runs' spread in either case.
-2. **Q2, the layout.** *Recommended:* the root stays the Genesis, renamed `nephrite-genesis`; `mcd/`, `32x/` and `v1/`
-   beside `src/`, in one Cargo workspace with one lock. The alternatives were Diamond's separate locks per crate (no
-   gain here, the crates being built together always) and moving the Genesis into `genesis/` (every file of the
-   Genesis renamed in git, for symmetry alone).
+2. **Q2, the Genesis's files.** Privacy by subtree needs the Genesis to be a subtree. *Recommended:* move its files into
+   `src/genesis/` (commit 5), at the cost of git renames, rather than leave them at the top level, where nothing could
+   be private to the Genesis without also being private from the assembly.
 3. **Q3, when.** *Recommended:* the eight commits of §7.2 right after stage 9 merges, before stage 10's first step.
-4. **Q4, the Genesis-only library.** *Recommended:* a cargo feature on `nephrite-v1`, built for development and run
-   with the kit's Genesis sample at each change to the interface, never shipped.
+4. **Q4, the Genesis-only build.** *Recommended:* the features of §5.4, kept as a check in the test sweep, never shipped
+   as a library of its own.
 5. **Q5, a configuration in the state's header.** *Recommended:* a byte of the attachments present, added by the first
    stage that builds mode 1 or CD32X, at that stage's version; the move adds nothing.
-6. **Q6, field visibility.** *Recommended:* the move enforces the dependency direction; `pub` fields are narrowed
-   afterwards, crate by crate, each its own commit.
+6. **Q6, how far visibility is narrowed in the move.** *Recommended:* in commit 5, the Genesis's and the Sega CD's
+   internals to their trees and the assembly's reach to `Console<A>`'s methods, so that the boundary exists when the
+   move ends; any narrowing past that (the examples' `pub` items) later, each its own commit.
 7. **Q7, processor ids.** *Recommended:* `S68K` 2, `MSH2` 3, `SSH2` 4, fixed whatever the configuration, so that an id
    never moves between systems as the plan's space ids do not.
 8. **Q8, battery files in mode 1** (stage 10's, raised here because the numbering becomes the assembly's). *Recommended:*
@@ -759,7 +811,7 @@ added to the header with the first stage that builds such a configuration, at th
 Read for this page: `Nephrite_Plan.md` (§1.1, §1.2, §4, §5.1, §5.4–§5.8, §6, §8, §9); `Nephrite_Native.md` §48 (the
 J-Cart), §49–§54 (the Sega CD's split and stage 8), and the stage 9 branch's §55 (`nephrite-s9` at `77c8ba7f`, read
 from git, not merged here); `Beryl-HW/README.md`; `EmuSen_Surfaces.md` §2.2, §4.6 and §6; `EmuSen_CoreAPI.md`'s section
-list (§2.4, §6.23–§6.26, §27.4); `Diamond_Enhancements.md` §24.1. Code, at `d32a00b3`: Nephrite's `src/` whole for the
+list (§2.4, §6.23–§6.26, §27.4); `Diamond_Enhancements.md` §24.1, for the first version's crate layout. Code, at `d32a00b3`: Nephrite's `src/` whole for the
 count, and in full `genesis.rs`, `machine.rs`, `state.rs`, `v1.rs` (to its tests), `debugger.rs` (its non-test half),
 `mcd/mod.rs`, `mcd/state.rs` (its writer), `mcd/cdda.rs`, the J-Cart's parts of `cart.rs` and `io.rs`, `sound.rs`'s
 `take_with`, `examples/bench.rs`; `RustCores.props` and `EmuSen.csproj`'s cargo targets; Diamond's two manifests; the

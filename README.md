@@ -230,8 +230,9 @@ dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r linux-x64 \
     -p:ErrorOnDuplicatePublishOutputFiles=false -o out/linux-x64
 ```
 
-The output folder is the program's whole tree: the launcher at `bin/EmuSen` (`bin/EmuSen.exe` on Windows), the
-program and its libraries under `lib/EmuSen/`, and the licences beside them. Ship the whole folder. The shell program
+The output folder is the program's whole tree: the launcher at `bin/EmuSen` (`bin\EmuSen.cmd` on Windows), the
+program and its libraries under `lib/EmuSen/` (the Windows program is `lib\EmuSen\EmuSen.exe`), and the licences
+beside them. Ship the whole folder. The shell program
 publishes the same way, from `EmuSen.Shell/EmuSen.Shell.csproj`, with its launcher at `bin/emusen-shell`.
 
 For another platform (`win-x64`, `osx-x64`, `osx-arm64`) the build doesn't cross-compile the Rust libraries. Take them

@@ -1,3 +1,4 @@
+using EmuSen.Cores.Nintendo.Mercury.Video;
 using EmuSen.Galaxia.Input;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.WiseMan.Fixtures;
@@ -494,6 +495,47 @@ namespace EmuSen.WiseMan.Cores
             rig.SetButton(0, PadButton.Down, false);
             rig.RunFrame();
             Assert.False(JoypadRequested(rig));
+        }
+
+        private static void TickUntil(MercuryRig rig, PpuMode mode)
+        {
+            for (int i = 0; i < 456 * 2 && rig.Bus.Ppu.Mode != mode; i++) rig.Tick(1);
+            Assert.Equal(mode, rig.Bus.Ppu.Mode);
+        }
+
+        // H, Pan Docs Palettes.md: in mode 3 "writes are ignored, and reads return $FF", and the index still increments after a failed write.
+        [Theory]
+        [InlineData(0xFF68)]
+        [InlineData(0xFF6A)]
+        public void The_palette_data_ports_are_closed_while_the_ppu_draws(int indexPort)
+        {
+            var rig = Load(cgbFlag: 0xC0);
+            int dataPort = indexPort + 1;
+            TickUntil(rig, PpuMode.HBlank);
+            rig.Write(indexPort, 0x80);
+            rig.Write(dataPort, 0x34);
+            rig.Write(indexPort, 0x80);
+
+            TickUntil(rig, PpuMode.Drawing);
+            Assert.Equal(0xFF, rig.Read(dataPort));
+            rig.Write(dataPort, 0x12);
+            Assert.Equal(0xC1, rig.Read(indexPort));
+
+            TickUntil(rig, PpuMode.HBlank);
+            rig.Write(indexPort, 0x00);
+            Assert.Equal(0x34, rig.Read(dataPort));
+        }
+
+        // H, Pan Docs CGB_Registers.md: SVBK's three bits are read/write, and 0 maps bank 1 without reading back as 1.
+        [Fact]
+        public void Svbk_reads_back_a_written_zero_and_still_maps_bank_one()
+        {
+            var rig = Load(cgbFlag: 0xC0);
+            rig.Write(0xFF70, 0x01);
+            rig.Write(0xD000, 0x11);
+            rig.Write(0xFF70, 0x00);
+            Assert.Equal(0xF8, rig.Read(0xFF70));
+            Assert.Equal(0x11, rig.Read(0xD000));
         }
     }
 

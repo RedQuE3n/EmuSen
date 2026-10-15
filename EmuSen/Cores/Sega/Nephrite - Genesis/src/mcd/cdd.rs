@@ -196,10 +196,12 @@ impl Cdd {
             }
             0x6 if ready => {
                 let high = self.head + 2;
-                self.mode = match self.mode {
-                    Mode::Playing | Mode::Approach { .. } | Mode::Scanning { .. } => Mode::Paused { low: high.saturating_sub(LOOP), high, gap: false },
-                    m => m,
-                };
+                match self.mode {
+                    Mode::Playing | Mode::Approach { .. } | Mode::Scanning { .. } => self.mode = Mode::Paused { low: high.saturating_sub(LOOP), high, gap: false },
+                    // Stopped, a pause is a seek to where the head is, ending paused there (D-39).
+                    Mode::Stopped(_) => self.seek_to(self.head, false),
+                    _ => {}
+                }
             }
             0x7 if ready => match self.mode {
                 Mode::Paused { low, high, .. } => {
@@ -588,6 +590,21 @@ pub(crate) mod tests {
         assert_eq!(*max, target - SETTLE, "never past three short");
         let tail: Vec<u32> = reads[100..].iter().flatten().copied().collect();
         assert!(tail.iter().all(|&a| (target - SETTLE - LOOP..=target - SETTLE).contains(&a)), "looping: {tail:?}");
+    }
+
+    #[test]
+    fn a_pause_when_stopped_seeks_to_the_head_and_pauses_there() {
+        let mut c = Cdd::new(Some(disc(3000, 75)), 0);
+        c.set_hock(true);
+        ready(&mut c);
+        c.head = 600;
+        send(&mut c, [6, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let statuses: Vec<u8> = (0..60).map(|_| {
+            c.exchange();
+            c.status[0]
+        }).collect();
+        assert_eq!(statuses[0], status::SEEKING);
+        assert_eq!(*statuses.last().unwrap(), status::PAUSED, "{statuses:?}");
     }
 
     #[test]

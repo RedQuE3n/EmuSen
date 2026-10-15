@@ -431,11 +431,10 @@ impl Sub {
         let data = read.is_some_and(|k| !k.audio());
         self.cdc.sector(data.then_some(&*self.raw), t);
         let period = SECTOR[self.cdd.phase as usize];
-        if read.is_some_and(|k| k.audio()) && self.cdd.status[0] == cdd::status::PLAYING {
-            let (start, end) = (self.to_master(t), self.to_master(t + period));
-            let volume = (self.fader as i32 >> 4 & 0x7FF).min(cdda::FULL);
-            self.cdda.sector(&self.raw, start, end - start, volume);
-        }
+        let (start, end) = (self.to_master(t), self.to_master(t + period));
+        let volume = (self.fader as i32 >> 4 & 0x7FF).min(cdda::FULL);
+        let sounding = read.is_some_and(|k| k.audio()) && self.cdd.status[0] == cdd::status::PLAYING;
+        self.cdda.sector(sounding.then_some(&*self.raw), start, end - start, volume, (self.fader >> 2) as u8 & 3);
         self.cdd.next += period;
         self.cdd.phase = (self.cdd.phase + 1) % 3;
     }

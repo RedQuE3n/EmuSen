@@ -31,6 +31,9 @@ fn main() {
     let model = default_model(&media);
     let mut m = Machine::with_disc(&[], media, model, bios, Some(disc));
     let mut audio = vec![0i16; 4096];
+    // `NEPHRITE_WAV` names a file for the sound as a 16-bit stereo WAV at the output rate.
+    let wav_path = std::env::var_os("NEPHRITE_WAV");
+    let mut wav: Vec<i16> = Vec::new();
     let (mut peak, mut sum) = (0i32, 0f64);
     let mut last = (0u8, 0u8, false, 0u8, 0u8, 0u8);
     // `NEPHRITE_SEEN=from:to` prints each register access in those frames, a run of the same access as one line.
@@ -69,7 +72,10 @@ fn main() {
             if n == 0 {
                 break;
             }
-            for s in &audio[..2 * n] {
+            if wav_path.is_some() {
+                wav.extend_from_slice(&audio[..n]);
+            }
+            for s in &audio[..n] {
                 peak = peak.max((*s as i32).abs());
                 sum += (*s as f64) * (*s as f64);
             }
@@ -98,5 +104,15 @@ fn main() {
     }
     if let Some(p) = std::env::var_os("NEPHRITE_WRAM") {
         std::fs::write(p, &m.genesis.hw.wram).expect("the main CPU's RAM");
+    }
+    if let Some(p) = wav_path {
+        let rate = nephrite::sound::RATE;
+        let data = (wav.len() * 2) as u32;
+        let mut out = Vec::with_capacity(44 + data as usize);
+        for part in [&b"RIFF"[..], &(36 + data).to_le_bytes(), b"WAVEfmt ", &16u32.to_le_bytes(), &[1, 0, 2, 0], &rate.to_le_bytes(), &(rate * 4).to_le_bytes(), &[4, 0, 16, 0], b"data", &data.to_le_bytes()] {
+            out.extend_from_slice(part);
+        }
+        out.extend(wav.iter().flat_map(|s| s.to_le_bytes()));
+        std::fs::write(p, out).expect("the WAV file");
     }
 }

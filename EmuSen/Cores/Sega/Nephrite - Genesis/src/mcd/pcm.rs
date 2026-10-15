@@ -9,6 +9,10 @@ pub const SAMPLE: u64 = 384;
 /// A sample's address: 16 integer bits above 11 of fraction.
 const FRACTION: u32 = 11;
 const LOOP: u8 = 0xFF;
+/// The analogue stage after the chip: a first-order low-pass at 1,600 Hz, fitted to recordings of three Sega CDs
+/// playing the 240p suite's sweep (Nephrite_Native.md §59), as a one-pole filter at the sample rate.
+pub const LOW_PASS: f64 = 1600.0;
+pub const RATE: f64 = 12_500_000.0 / 384.0;
 
 /// One channel's registers, as the bank of `$07` selects them: ENV, PAN, FD, LS and ST.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -23,7 +27,7 @@ pub struct Channel {
     pub fresh: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Pcm {
     pub ch: [Channel; 8],
     /// `$07`: ON (sounding), and the two banks MOD writes: the wave RAM's 4 KiB window (WB) and the channel (CB).
@@ -35,11 +39,13 @@ pub struct Pcm {
     /// The sub clock of the next sample, and the samples made and not yet mixed, each at its sub clock.
     pub next: u64,
     pub out: Vec<(u64, [i32; 2])>,
+    /// The low-pass's output, each side.
+    pub lp: [f64; 2],
 }
 
 impl Default for Pcm {
     fn default() -> Pcm {
-        Pcm { ch: [Channel { fresh: true, ..Channel::default() }; 8], on: false, wave_bank: 0, chan_bank: 0, off: 0xFF, next: SAMPLE, out: Vec::with_capacity(2048) }
+        Pcm { ch: [Channel { fresh: true, ..Channel::default() }; 8], on: false, wave_bank: 0, chan_bank: 0, off: 0xFF, next: SAMPLE, out: Vec::with_capacity(2048), lp: [0.0; 2] }
     }
 }
 
@@ -54,7 +60,11 @@ impl Pcm {
         while self.next <= now {
             let t = self.next;
             let s = self.sample(ram);
-            self.out.push((t, s));
+            let a = 1.0 - (-2.0 * std::f64::consts::PI * LOW_PASS / RATE).exp();
+            for side in 0..2 {
+                self.lp[side] += a * (s[side] as f64 - self.lp[side]);
+            }
+            self.out.push((t, [self.lp[0].round() as i32, self.lp[1].round() as i32]));
             self.next += SAMPLE;
         }
     }
@@ -187,11 +197,9 @@ mod tests {
         p.write(1, 0x0F);
         p.write(8, 0xFE);
         p.write(7, 0x80);
-        p.run(SAMPLE, &ram);
-        assert_eq!(p.out[0].1, [100 * 255 * 15 >> 5, 0], "left only");
+        assert_eq!(p.sample(&ram), [100 * 255 * 15 >> 5, 0], "left only");
         ram[0] = 100;
-        p.run(SAMPLE * 2, &ram);
-        assert_eq!(p.out[1].1, [-(100 * 255 * 15 >> 5), 0], "bit 7 clear is negative");
+        assert_eq!(p.sample(&ram), [-(100 * 255 * 15 >> 5), 0], "bit 7 clear is negative");
         // Eight channels at full scale overflow and are held at the limit.
         ram[0] = 0xFF - 1;
         for k in 0..8 {
@@ -200,7 +208,12 @@ mod tests {
             p.write(1, 0xFF);
         }
         p.write(8, 0);
-        p.run(SAMPLE * 3, &ram);
-        assert_eq!(p.out[2].1, [0x7FFF, 0x7FFF]);
+        assert_eq!(p.sample(&ram), [0x7FFF, 0x7FFF]);
+        // After the chip, the analogue stage's low-pass: a held level is reached gradually.
+        for k in 1..=40 {
+            p.run(SAMPLE * k, &ram);
+        }
+        let (first, last) = (p.out[0].1[0], p.out[39].1[0]);
+        assert!(first < 0x7FFF / 2 && (last - 0x7FFF).abs() < 2, "{first} {last}");
     }
 }

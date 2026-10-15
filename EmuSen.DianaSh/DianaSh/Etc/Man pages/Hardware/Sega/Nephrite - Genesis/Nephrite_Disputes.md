@@ -1557,6 +1557,9 @@ CPUs' disputes in their own record pages.
   Genesis's is not known here.
 - Pinned by: `an_audio_track_played_reaches_the_mix_at_the_faders_volume`.
 - Implemented in: stage 8 step 5's commit.
+- *Settled 2026-10-15 (stage 9 step 3, D-39):* measured against MDFourier's recordings of two model 1 consoles with a
+  model 1 Sega CD: a full-scale CD-DA sample is 158/1,024 of the output's range, not half; still added after the
+  Genesis's circuit.
 
 ### D-36. The drive at power-on: it spins up whether or not the host clocks it, and once spun up and stopped with no TOC asked for it reports `00.000000.0F`, its flags nibble 0; a play or a seek during the TOC's read is taken
 - Opened: 2026-10-15, at stage 9's first step, when a player's BIOS stood at its first screen (`Nephrite_Native.md`
@@ -1631,3 +1634,39 @@ CPUs' disputes in their own record pages.
   PCM existing here (§49.6 Q7).
 - Pinned by: `samples_are_sign_magnitude_scaled_by_env_and_pan_and_limited`.
 - Implemented in: stage 9 step 2's commit.
+- *Settled 2026-10-15 (stage 9 step 3, D-39):* (3) measured: the limited sum's full scale is 267/1,024 of the output's
+  range, after a first-order low-pass at 1,600 Hz that the chip's output passes through.
+
+### D-39. The Sega CD's sound after its chips: CD-DA through the LC7883's ramping attenuator and de-emphasis, flat to 18 kHz; the PCM through a first-order low-pass at 1.6 kHz; both added to the Genesis's sound at measured levels; and a pause sent to a stopped drive pauses it where its head is
+- Opened: 2026-10-15, at stage 9 step 3, with D-35's and D-38's levels argued and the fader's ramp and de-emphasis
+  unbuilt.
+- Documents read: the Hardware Manual §3-6 (`$FF8034`: "adjustment time = 22 µs × adjusted depth", the decay table,
+  DEF1-DEF0 and their three rates); Sanyo's LC7883 data sheet (the 8× oversampling digital filter, the first-order IIR
+  de-emphasis, the attenuation data's upper ten bits counting above `$004` and the lower two below, the soft mute from
+  `$400` to `$000` in 1/Fs × 1,024).
+- Test program: the 240p suite's MDFourier sequence for the Sega CD (1.32, run on a player's BIOS in Nephrite), whose
+  last part plays a PCM sweep from 200 Hz to 16 kHz over 2 s, then track 2 of its disc, a full-scale sine swept from
+  1 kHz to 22 kHz; and MDFourier's recordings of Sega CDs playing it (2020-06-14: two model 1 consoles, VA3 and VA6,
+  each with a model 1 Sega CD, by its RCA output; a model 2 VA2.3 with a model 2 Sega CD; a CDX), cut by hand at the
+  sections' starts, which the tones' frequencies confirm.
+- Referee: none read.
+- Conclusion: (1) The attenuator steps one unit of FD a CD sample toward the level asked for, the LC7883's soft mute
+  read with the manual's 22 µs a step; its gain is the upper ten bits over 256 from `$004` up, the lower bits below:
+  argued from both documents. (2) De-emphasis, when DEF1-DEF0 ask for it, is the 50/15 µs curve as a first-order filter
+  by the bilinear transform at the rate named, run on the 44.1 kHz samples: argued, the data sheet naming only a
+  first-order IIR. (3) CD-DA is flat across the band, the LC7883 oversampling it: a recorded sweep is within 0.55 dB of
+  flat to 17.8 kHz; Nephrite's synthesiser, which holds samples as steps, lost 2.9 dB at 18.8 kHz until a five-tap
+  filter at 44.1 kHz took the droop out: measured. (4) The PCM's sweep falls 18 dB from 240 Hz to 16 kHz on all three
+  Sega CDs: a one-pole low-pass at 1,600 Hz after the chip fits each (1,590 to 1,610 Hz) to 1.3 to 1.4 dB rms:
+  measured. (5) The two sources against the FM notes: the model 1 pair puts the PCM's sweep 4.7 dB under them and
+  CD-DA's 7.0 dB over (7.3 and 6.7), and Nephrite is within 0.33 dB of each at 267/1,024 and 158/1,024; measured. The
+  PCM-to-CD-DA difference is the same on three of the four Sega CDs within 0.7 dB, but the Sega CD's level against the
+  Genesis is not: the model 2 pair's is 5.1 to 5.6 dB higher and the CDX's 5.0 to 8.4, the Genesis's own output
+  differing. Nephrite holds to the model 1 pair, its Model setting's default, for both of its models. (6) A pause sent
+  to a stopped drive seeks to where the head is and pauses there: with it ignored, as D-33 had it, a player's BIOS asked
+  for a stop and a pause every 600 frames and the 240p suite's CD-DA test played nothing; argued from the BIOS's
+  registers only.
+- Pinned by: `de_emphasis_follows_the_50_15_us_curve`, `an_audio_track_played_reaches_the_mix_at_the_faders_volume`
+  (the ramp), `samples_are_sign_magnitude_scaled_by_env_and_pan_and_limited` (the low-pass),
+  `a_pause_when_stopped_seeks_to_the_head_and_pauses_there`.
+- Implemented in: stage 9 step 3's commit.

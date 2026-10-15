@@ -4250,3 +4250,42 @@ step is not pinned by the three. Both references fail PCM VAR at 2, the address 
 every reference fails and Nephrite passes is not counted against Nephrite, the test's values being krikzz's console's.
 
 - **The crate's tests**: 168 pass, three new for the chip.
+
+## 59. Stage 9, step 3: the fader, de-emphasis and the mix, measured on recordings of Sega CDs (2026-10-15)
+
+### 59.1 What it built
+
+- **The fader** (`cdda.rs`): the LC7883's attenuator moving a unit of FD a sample toward the level `$FF8034` asks for,
+  1,024 samples from full to silent, its gain by the data sheet's table; when the drive gives no audio sector the
+  output falls to silence, which it had held at the last sample. DEF1-DEF0 (bits 3-2) turn on the 50/15 µs
+  de-emphasis for the rate they name. CD-DA's samples pass a five-tap filter that undoes the droop of the
+  synthesiser's held steps (D-39).
+- **The PCM's analogue stage** (`pcm.rs`): a first-order low-pass at 1,600 Hz after the chip.
+- **The levels**: CD-DA's full scale 158/1,024 of the output's range and the PCM's 267/1,024, settling D-35 and D-38.
+- **The drive**: a pause sent while it is stopped seeks to where its head is and pauses there (D-39).
+- **State version 20** gains the attenuator, the two filters' memories and the low-pass's.
+
+### 59.2 The oracle: MDFourier's recordings of Sega CDs
+
+§49.6 Q7 had no recordings of a Sega CD. MDFourier's set already fetched for stage 5 (2020-06-14) has nine, made with
+the 240p suite's MDFourier sequence for the Sega CD, whose last part plays a PCM sweep and then CD-DA (a full-scale
+sweep, the suite's track 2). Nephrite ran the suite's 1.32 disc on a player's BIOS (model 1 American) through its menus
+to the same sequence (`examples/disc.rs` with `NEPHRITE_WAV`); each run was cut at its sections' starts, the FM notes
+being the level each section is held to.
+
+| Console | PCM sweep over the FM notes | CD-DA over the FM notes | Nephrite's error, PCM, CD-DA |
+|---|---|---|---|
+| Model 1 VA3 with a model 1 Sega CD | −4.68 dB | +7.31 dB | −0.07, −0.33 dB |
+| Model 1 VA6 with a model 1 Sega CD | −4.81 dB | +6.69 dB | +0.06, +0.30 dB |
+| Model 2 VA2.3 with a model 2 Sega CD | +0.82 dB | +12.14 dB | −5.57, −5.15 dB |
+| CDX | +0.22 dB | +15.42 dB | −4.97, −8.43 dB |
+
+CD-DA's sweep against the model 1 pair is flat within 0.55 dB to 17.8 kHz (it lost 2.9 dB at 18.8 kHz before the
+droop filter); the PCM's sweep fits the low-pass to 1.3 to 1.4 dB rms on all three Sega CDs measured. Before the step
+CD-DA stood 10.2 dB and the PCM 5.7 dB too loud against the model 1 pair. The X'Eye's recording was not cut.
+
+### 59.3 Measured (2026-10-15)
+
+- **The crate's tests**: 170 pass, among them de-emphasis's curve, the fader's ramp, the low-pass and the pause.
+- **The 240p suite (1.32) on the player's BIOS**: it boots, its menus answer the pad, and its MDFourier sequence runs
+  to the end, PCM and CD-DA included.

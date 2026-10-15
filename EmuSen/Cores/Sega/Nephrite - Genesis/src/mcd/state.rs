@@ -91,6 +91,7 @@ impl MegaCd {
         let addrs: Vec<u32> = p.ch.iter().map(|c| c.addr).collect();
         w.u32s("PcmAddresses", &addrs);
         w.u64("PcmNext", p.next);
+        w.u64s("PcmLowPass", &[p.lp[0].to_bits(), p.lp[1].to_bits()]);
         w.u32("PcmQueued", p.out.len() as u32);
         let q: Vec<u64> = p.out.iter().flat_map(|&(at, [l, r])| [at, l as u32 as u64 | (r as u32 as u64) << 32]).collect();
         w.u64s("PcmQueue", &q);
@@ -156,6 +157,9 @@ impl MegaCd {
         }
         (pcm.on, pcm.wave_bank, pcm.chan_bank, pcm.off) = (pb[32] != 0, pb[33] & 15, pb[34] & 7, pb[35]);
         pcm.next = r.u64()?;
+        let mut lp = [0u64; 2];
+        r.u64s(&mut lp)?;
+        pcm.lp = [f64::from_bits(lp[0]), f64::from_bits(lp[1])];
         let n = r.u32()? as usize;
         let mut q = vec![0u64; 2 * n.min(4096)];
         r.u64s(&mut q)?;

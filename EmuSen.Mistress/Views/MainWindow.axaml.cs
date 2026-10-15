@@ -428,6 +428,9 @@ namespace EmuSen.Mistress.Views
             _ = SheetLayer.Show(window, this);
         }
 
+        // Every console's memory cards and the like, on the running game's console, whose held cards it shows and does not change - see EmuSen_SaveMedia.md §6.5.
+        private void ShowMemoryCards() => _ = SheetLayer.Show(new MemoryCardsWindow(_graphics, _session is null ? null : _activeConsole), this);
+
         // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
         private void ShowShaderSettings() =>
             _ = SheetLayer.Show(new ShaderSettingsWindow(_graphics, ShaderChanged, _session is null ? null : _activeConsole, HttpFactory), this);
@@ -759,6 +762,7 @@ namespace EmuSen.Mistress.Views
                     new LunaAction("_Preferences...", ShowPreferences),
                     new LunaAction("Chea_t Database...", ShowCheatDatabase),
                     new LunaAction("_Active Cheats...", ShowActiveCheats),
+                    new LunaAction("_Memory Cards...", ShowMemoryCards),
                     LunaAction.Separator(),
                     _hardwareDashboard,
                     // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.

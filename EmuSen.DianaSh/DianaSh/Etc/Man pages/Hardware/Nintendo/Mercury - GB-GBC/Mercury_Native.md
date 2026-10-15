@@ -2338,3 +2338,85 @@ the thirteen instruction-timing ROMs are left for it.
 `Mercury - GB-GBC/` and `MercuryRT - GB/` together; the crate's bench and C#'s cost before and after; the corpus
 baseline re-recorded only for the ROMs that move, every move named; hand-made mutants of each fix in both engines, each
 caught by a named oracle; and the four games' state traces, which must not move unless the move is explained.
+
+### 13.1 Step A: what an I/O read answers
+
+**The rule.** An I/O address that no register answers reads `$FF` and keeps nothing written to it. Before this step,
+every `$FF00`–`$FF7F` address that no case claimed fell through to the `Io` array, which stored a write and returned it,
+and read `$00` after power-on. That is the referee's §2.1. The evidence is the tests' own:
+
+- mooneye `acceptance/bits/unused_hwio-GS` lists every unused address of a Game Boy and says "unused bits and unused IO
+  all return 1s", verified on DMG, MGB, SGB and SGB2;
+- its sibling `misc/bits/unused_hwio-C` lists the Color's, verified on CGB, AGB and AGS. It runs a Game Boy cartridge,
+  so it describes the compatibility mode (`Mercury_Model.md` §4). It also fixes what the undocumented registers do
+  there: `$FF72` and `$FF73` keep all eight bits, `$FF75` bits 4–6, `$FF74` reads `$FF`, and `$FF76`/`$FF77` read the
+  silent channels' zero;
+- blargg's `01-registers` ORs each sound register with a mask, and its row for `$FF27`–`$FF2F` is nine `$FF`s
+  (`dmg_sound/source/01-registers.s:115`).
+
+Pan Docs adds the colour mode's side, for which no corpus ROM exists: HDMA1–4 are write-only and read `$FF` after boot
+(`CGB_Registers.md`; `Power_Up_Sequence.md`'s table); `$FF72`–`$FF74` are fully read/write in colour mode and `$FF75`
+bits 4–6; RP (`$FF56`) has its read-enable and LED bits writable and reads `$3E` after boot, bit 1 being 1 while no
+light arrives; OPRI keeps its one bit; PCM12 and PCM34 are the four channels' digital outputs, a nibble each
+(`Audio_details.md`). IR.md's general statement, "like other Game Boy MMIO registers, unused bits read high", is the
+rule the two OPRI and RP read-backs follow.
+
+**The proof.** `MercuryAuditClaims` (`EmuSen.WiseMan/Cores/MercuryAuditTests.cs`) states nine claims, eleven cases with
+the theories, run as `MercuryAuditTests` on C# and `MercuryRtAuditTests` on MercuryRT. Committed while they failed
+(`753654eb`): **18 of 18 failed, on both engines**, the Game Boy's for example with "`$FF03` wrote 00 read 00".
+
+**The fix,** the same in both engines (`MemoryBus.ReadIo` and `WriteIo`, `MemoryBus.Cgb.cs`; `bus.rs`):
+
+- the fall-through reads `$FF` and drops the write, on every console and in both colour modes;
+- `$FF46` gained its own read case, since DMA's read-back had been riding on the fall-through;
+- colour mode answers `$FF4D`, `$FF4F`, `$FF55`, `$FF56`, `$FF68`–`$FF6C` and `$FF70`, then `$FF72`–`$FF77`;
+- the compatibility mode answers `$FF4F`, `$FF68`, `$FF6A`, then `$FF72`, `$FF73`, `$FF75`–`$FF77`; the explicit
+  list of registers it locked is gone, because locking is now what every other address does;
+- `Apu.Pcm12`/`Pcm34` (`pcm12`/`pcm34`) read the channels' existing `Output`.
+
+`$FF56`, `$FF6C` and `$FF72`–`$FF75` keep their bits in the `Io` array, which is already in the state, at their own
+offsets. **The state format is unchanged**: no field was added, and the `Io` bytes of addresses nothing answers now stay
+zero.
+
+**The corpus** (re-recorded, `MercuryCorpusBaseline.tsv`):
+
+| ROM | Before | After |
+|---|---|---|
+| `blargg/dmg_sound/rom_singles/01-registers` | Failed(2), every column | **Passed**, every column |
+| `blargg/cgb_sound/rom_singles/01-registers` | Failed(2), every column | **Passed**, every column |
+| `blargg/dmg_sound/dmg_sound`, `blargg/cgb_sound/cgb_sound` | Failed(1) | Failed(3): the combined ROMs now stop at their third test, `03-trigger` |
+| `mooneye/acceptance/bits/unused_hwio-GS` | Failed | **Passed** under Auto and Game Boy on both engines; Failed under Game Boy Color, where its author's hardware fails it too |
+| `mooneye/misc/bits/unused_hwio-C` | Failed | **Passed** under Game Boy Color on both engines; Failed under Auto and Game Boy, as on a DMG |
+
+So each column gains three passes, 94 → 97 of 173, and the engines agree on every ROM in every column.
+
+**Retired.** The referee page named `boot_hwio-dmgABCmgb` and `misc/bits/unused_hwio-C` as plausible. The second passed,
+but only with the Color's undocumented registers added, which §2.1 did not name. The first still fails, as does
+`misc/boot_hwio-C` under Game Boy Color (`Mercury_Model.md` §6.3 put it down to §2.1). Their tables also require the
+post-boot values the boot ROM leaves, P1 `$CF`, IF `$E1` and DIV `$AD` among them, which is the referee's §3 and not
+part of this audit.
+
+**The four games.** `MercuryDefectTests.D3_real_games_version_5_states_resume_where_the_unmodified_build_went` runs each
+game from the unmodified build's frame-3,000 state for 600 frames on both engines, with the bench's input, and compares
+the result with that build's frame-3,600 state. It had been failing since state version 8 (§10), unnoticed because it
+runs only with `EMUSEN_MERCURY_V5_STATES` set: a version-5 state carries no mixer, so the loaded frame-3,600 state's
+mixer is not the game's. It was shown failing on the unmodified code at Kirby's byte 17,345, the second byte of the
+mixer's first double, and now compares the state up to where version 8's mixer begins. With that repair it passes
+after this step: the four games run exactly as the unmodified build ran them. A scratch trace of 3,600 frames from
+boot on MercuryRT (`~/.cache/emusen/probe/mercury/audit/trace/`) gave the same full-state hash at every 300th frame
+before and after: none of the four games writes an address nothing answers in that time.
+
+**Cost** (p50 ms of 3,000 frames after 900, three interleaved rounds; the crate's `examples/frames`, and C#'s plain
+frame through `MercuryCore` in Release, measured 2026-10-15):
+
+| Game | MercuryRT before | after | C# before | after |
+|---|---|---|---|---|
+| Tetris | 0.4268, 0.4261, 0.4231 | 0.4394, 0.4330, 0.4350 | 0.6284, 0.6401, 0.6214 | 0.6280, 0.6224, 0.6293 |
+| Kirby's Dream Land | 0.4836, 0.4806, 0.4789 | 0.4792, 0.4843, 0.4793 | 0.6703, 0.6762, 0.6676 | 0.6795, 0.6768, 0.6853 |
+| Link's Awakening | 0.3978, 0.3967, 0.3977 | 0.3995, 0.3992, 0.3982 | 0.5542, 0.5570, 0.5576 | 0.5619, 0.5588, 0.5572 |
+| Pokémon Yellow | 0.5298, 0.5285, 0.5314 | 0.5360, 0.5374, 0.5361 | 0.7171, 0.7177, 0.7158 | 0.7149, 0.7415, 0.7155 |
+
+The change is not on the per-cycle path: only the I/O read and write's fall-through moved. Rust's Tetris is 2.4% slower
+and Yellow 1.2%, outside their round-to-round spread; C# moves within 1.3% either way. A read of an unclaimed address
+cannot cost a frame 2%, so this is the placement effect of §8.7.3 on a changed `match`, and is recorded rather than
+explained further.

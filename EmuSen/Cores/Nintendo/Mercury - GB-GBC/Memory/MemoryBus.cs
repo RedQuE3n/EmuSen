@@ -40,7 +40,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public byte[] Oam = new byte[0xA0];
         public byte[] HighRam = new byte[0x7F];
 
-        // $FF00-$FF7F verbatim, for the registers no device has claimed yet.
+        // Storage for the registers kept by their address: P1's select bits, DMA, and the Color's RP, OPRI and $FF72-$FF75 - see Mercury_Native.md §13.1.
         public byte[] Io = new byte[0x80];
 
         public byte InterruptEnable;
@@ -239,12 +239,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             0xFF43 => Ppu.Scx,
             0xFF44 => Ppu.Ly,
             0xFF45 => Ppu.Lyc,
+            0xFF46 => Io[0x46],
             0xFF47 => Ppu.Bgp,
             0xFF48 => Ppu.Obp0,
             0xFF49 => Ppu.Obp1,
             0xFF4A => Ppu.Wy,
             0xFF4B => Ppu.Wx,
-            _ => Cgb ? ReadCgbIo(address) : DmgCompat ? ReadCompatIo(address) : Io[address - 0xFF00],
+            // An address nothing answers reads all ones, and keeps no write - see Mercury_Native.md §13.1.
+            _ => Cgb ? ReadCgbIo(address) : DmgCompat ? ReadCompatIo(address) : (byte)0xFF,
         };
 
         private void WriteIo(ushort address, byte data)
@@ -341,9 +343,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     return;
 
                 default:
-                    if (Cgb && WriteCgbIo(address, data)) return;
-                    if (DmgCompat && WriteCompatIo(address, data)) return;
-                    Io[address - 0xFF00] = data;
+                    if (Cgb) WriteCgbIo(address, data);
+                    else if (DmgCompat) WriteCompatIo(address, data);
                     return;
             }
         }

@@ -263,6 +263,9 @@ namespace EmuSen.WiseMan.Cores
             _ => 0u,
         };
 
+        // The mixer's three doubles at the end of a version-8 state - see Mercury_Native.md §10.
+        private const int MixerStateBytes = 3 * sizeof(double);
+
         // Real games' version-5 states from the unmodified build, at frames 3000 and 3600, from a directory kept outside the repository; absent, not run.
         [Fact]
         public void D3_real_games_version_5_states_resume_where_the_unmodified_build_went()
@@ -286,8 +289,10 @@ namespace EmuSen.WiseMan.Cores
                 MercuryCore then = LoadCs(rom);
                 then.LoadState(new MemoryStream(File.ReadAllBytes(late)));
                 byte[] want = Save(then), got = Save(pair.Csharp);
-                int same = want.AsSpan().CommonPrefixLength(got);
-                Assert.True(same == want.Length && want.Length == got.Length, $"{name}: 600 frames on from the old build's frame-3000 state differ at byte {same} from its frame-3600 state");
+                // Version 5 carries no mixer, so the loaded frame-3600 state's is not the game's: the comparison ends where version 8's begins - see Mercury_Native.md §13.1.
+                int body = want.Length - MixerStateBytes;
+                int same = want.AsSpan(0, body).CommonPrefixLength(got);
+                Assert.True(same == body && want.Length == got.Length, $"{name}: 600 frames on from the old build's frame-3000 state differ at byte {same} from its frame-3600 state");
                 _output.WriteLine($"{name}: version 5 at frame 3000 ({new FileInfo(early).Length} bytes), run 600 frames on both engines, equals the old build's frame 3600 ({want.Length} bytes in version 6); {pair.Summary}");
             }
         }

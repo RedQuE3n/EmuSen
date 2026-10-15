@@ -210,6 +210,15 @@ impl Apu {
         }
     }
 
+    /// PCM12 and PCM34: the channels' digital outputs, a nibble each (Mercury_Native.md §13.1).
+    pub fn pcm12(&self) -> u8 {
+        (self.pulse1.output() | self.pulse2.output() << 4) as u8
+    }
+
+    pub fn pcm34(&self) -> u8 {
+        (self.wave.output() | self.noise.output() << 4) as u8
+    }
+
     pub fn read_register(&self, address: u16) -> u8 {
         if address >= WAVE_RAM_BASE {
             return self.wave.ram[(address - WAVE_RAM_BASE) as usize];

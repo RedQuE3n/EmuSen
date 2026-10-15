@@ -105,6 +105,9 @@ by how little interpretation stands between the code and the claim:
 
 ### 2.1 Unmapped I/O reads back as RAM, starting at `$00` **[V]**
 
+*Proven and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.1): `01-registers` on both suites, `unused_hwio-GS`
+and `unused_hwio-C` now pass.*
+
 **Mercury.**
 - Every `$FF00-$FF7F` address that no case claims falls to a plain array: `MemoryBus.cs:236`
   `_ => Cgb ? ReadCgbIo(address) : Io[address - 0xFF00]`.

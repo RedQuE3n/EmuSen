@@ -168,6 +168,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             if (Noise.Length.Clock()) Noise.Enabled = false;
         }
 
+        // PCM12 and PCM34: the channels' digital outputs, a nibble each - see Mercury_Native.md §13.1.
+        public byte Pcm12 => (byte)(Pulse1.Output | (Pulse2.Output << 4));
+        public byte Pcm34 => (byte)(Wave.Output | (Noise.Output << 4));
+
         public byte ReadRegister(int address)
         {
             if (address >= WaveRamBase) return Wave.Ram[address - WaveRamBase];

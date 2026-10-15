@@ -372,6 +372,7 @@ impl MemoryBus {
             0xFF43 => self.ppu.scx,
             0xFF44 => self.ppu.ly,
             0xFF45 => self.ppu.lyc,
+            0xFF46 => self.io[0x46],
             0xFF47 => self.ppu.bgp,
             0xFF48 => self.ppu.obp0,
             0xFF49 => self.ppu.obp1,
@@ -379,7 +380,8 @@ impl MemoryBus {
             0xFF4B => self.ppu.wx,
             _ if *self.cgb => self.read_cgb_io(address),
             _ if *self.dmg_compat => self.read_compat_io(address),
-            _ => self.io[(address - 0xFF00) as usize],
+            // An address nothing answers reads all ones, and keeps no write (Mercury_Native.md §13.1).
+            _ => 0xFF,
         }
     }
 
@@ -414,15 +416,9 @@ impl MemoryBus {
             0xFF49 => self.ppu.obp1 = data,
             0xFF4A => self.ppu.wy = data,
             0xFF4B => self.ppu.wx = data,
-            _ => {
-                if *self.cgb && self.write_cgb_io(address, data) {
-                    return;
-                }
-                if *self.dmg_compat && self.write_compat_io(address, data) {
-                    return;
-                }
-                self.io[(address - 0xFF00) as usize] = data;
-            }
+            _ if *self.cgb => self.write_cgb_io(address, data),
+            _ if *self.dmg_compat => self.write_compat_io(address, data),
+            _ => {}
         }
     }
 
@@ -442,10 +438,7 @@ impl MemoryBus {
         match address {
             0xFF4D => 0x7E | if self.double_speed { 0x80 } else { 0 } | self.speed_switch_armed as u8,
             0xFF4F => (0xFE | self.vram_bank) as u8,
-            0xFF51 => (self.hdma_source >> 8) as u8,
-            0xFF52 => (self.hdma_source & 0xF0) as u8,
-            0xFF53 => ((self.hdma_destination >> 8) & 0x1F) as u8,
-            0xFF54 => (self.hdma_destination & 0xF0) as u8,
+            // HDMA1-4 are write-only.
             0xFF55 => {
                 if self.hdma_blocks_left == 0 {
                     0xFF
@@ -453,16 +446,19 @@ impl MemoryBus {
                     (self.hdma_blocks_left - 1) as u8
                 }
             }
+            // RP: no partner's light ever arrives, so bit 1 reads 1 whether or not reading is enabled.
+            0xFF56 => 0x3E | self.io[0x56],
             0xFF68 => self.ppu.read_bg_palette_index(),
             0xFF69 => self.ppu.read_bg_palette_data(),
             0xFF6A => self.ppu.read_obj_palette_index(),
             0xFF6B => self.ppu.read_obj_palette_data(),
+            0xFF6C => 0xFE | self.io[0x6C],
             0xFF70 => (0xF8 | self.wram_bank) as u8,
-            _ => self.io[(address - 0xFF00) as usize],
+            _ => self.read_undocumented_io(address, true),
         }
     }
 
-    fn write_cgb_io(&mut self, address: u16, data: u8) -> bool {
+    fn write_cgb_io(&mut self, address: u16, data: u8) {
         match address {
             0xFF4D => self.speed_switch_armed = data & 0x01 != 0,
             0xFF4F => self.vram_bank = (data & 0x01) as i32,
@@ -471,37 +467,57 @@ impl MemoryBus {
             0xFF53 => self.hdma_destination = (((data & 0x1F) as u16) << 8) | (self.hdma_destination & 0xF0),
             0xFF54 => self.hdma_destination = (self.hdma_destination & 0x1F00) | (data & 0xF0) as u16,
             0xFF55 => self.start_hdma(data),
+            0xFF56 => self.io[0x56] = data & 0xC1,
             0xFF68 => self.ppu.write_bg_palette_index(data),
             0xFF69 => self.ppu.write_bg_palette_data(data),
             0xFF6A => self.ppu.write_obj_palette_index(data),
             0xFF6B => self.ppu.write_obj_palette_data(data),
-            0xFF6C => {}
+            // OPRI: kept for its read-back; the renderer's priority follows the mode, not this bit.
+            0xFF6C => self.io[0x6C] = data & 0x01,
             0xFF70 => self.wram_bank = if data & 0x07 == 0 { 1 } else { (data & 0x07) as i32 },
-            _ => return false,
+            _ => self.write_undocumented_io(address, data, true),
         }
-        true
     }
 
-    /// With a Game Boy cartridge the colour registers read $FF and ignore writes, except VRAM bank and the palette indices (Mercury_Model.md §4.2).
+    /// With a Game Boy cartridge the colour registers read $FF and ignore writes, except VRAM bank, the palette indices and $FF72-$FF77
+    /// (Mercury_Model.md §4.2, Mercury_Native.md §13.1).
     fn read_compat_io(&self, address: u16) -> u8 {
         match address {
-            0xFF4C | 0xFF4D | 0xFF56 | 0xFF6C | 0xFF70 | 0xFF51..=0xFF55 | 0xFF69 | 0xFF6B => 0xFF,
             0xFF4F => (0xFE | self.vram_bank) as u8,
             0xFF68 => self.ppu.read_bg_palette_index(),
             0xFF6A => self.ppu.read_obj_palette_index(),
-            _ => self.io[(address - 0xFF00) as usize],
+            _ => self.read_undocumented_io(address, false),
         }
     }
 
-    fn write_compat_io(&mut self, address: u16, data: u8) -> bool {
+    fn write_compat_io(&mut self, address: u16, data: u8) {
         match address {
             0xFF4F => self.vram_bank = (data & 0x01) as i32,
             0xFF68 => self.ppu.write_bg_palette_index(data),
             0xFF6A => self.ppu.write_obj_palette_index(data),
-            0xFF4C | 0xFF4D | 0xFF56 | 0xFF69 | 0xFF6B | 0xFF6C | 0xFF70 | 0xFF51..=0xFF55 => {}
-            _ => return false,
+            _ => self.write_undocumented_io(address, data, false),
         }
-        true
+    }
+
+    /// $FF72-$FF77 on the Color in either mode, $FF74 only in colour mode (Mercury_Native.md §13.1).
+    fn read_undocumented_io(&self, address: u16, colour_mode: bool) -> u8 {
+        match address {
+            0xFF72 | 0xFF73 => self.io[(address - 0xFF00) as usize],
+            0xFF74 if colour_mode => self.io[0x74],
+            0xFF75 => 0x8F | self.io[0x75],
+            0xFF76 => self.apu.pcm12(),
+            0xFF77 => self.apu.pcm34(),
+            _ => 0xFF,
+        }
+    }
+
+    fn write_undocumented_io(&mut self, address: u16, data: u8, colour_mode: bool) {
+        match address {
+            0xFF72 | 0xFF73 => self.io[(address - 0xFF00) as usize] = data,
+            0xFF74 if colour_mode => self.io[0x74] = data,
+            0xFF75 => self.io[0x75] = data & 0x70,
+            _ => {}
+        }
     }
 
     /// STOP performs the switch KEY1 armed; it is not a stop at all on a CGB - see Mercury_Cgb.md §5.

@@ -316,3 +316,26 @@ thirds; no token held it (`LunaHudSurface` is a notice plate of another measured
 colours, since each sheet's frame is a `MenuPanel`; the big-screen menus' rows record the look's colours for their
 hidden chrome (a row is drawn by `MenuRow`, which does not read them), and the two focused dropdowns `#EEEEF0`
 where they had white.
+
+#### 6.3.5 Two tests that counted the consoles before the PlayStation was offered
+
+`ThemedSwitchesTests.The_systems_follow_the_chosen_order_and_the_startup_list_with_them` (three cases) expected seven
+choices for System on Startup and got eight, and `PlayerBindingsWindowTests.Each_console_offers_as_many_players_as_it_has_ports`
+expected five consoles' ports and got six. Both lists are every system the frontend offers, whether the library holds
+its games or not (the Sega Genesis is among the seven with no Genesis game in the test's library).
+
+**Measured on the commits either side [M]**, each built in a scratch checkout with its Rust cores: on 6cd5627f, the
+last before the PlayStation was offered, both tests pass; on cf4554c9, "Diamond's stage 11 gate, and the PlayStation
+offered to players", both fail, the startup list's eighth entry being "Sony PlayStation" in each order and the sixth
+console's count 2. The expectations were stale from that commit, not a defect; they now count the PlayStation, and the
+startup test also asks for it by name.
+
+#### 6.3.6 Two goldens recorded before the PlayStation was offered and Mercury's audit
+
+**`core.golden`** (DianaSh's corpus, recorded 2026-10-10) lists, under `core nosuch x.sfc`, the cores `core` knows.
+Re-recorded with `EMUSEN_DIANASH_GOLDEN=record`, its only change is that line, which gained `diamond` and
+`playstation`, and its byte count (110 to 132).
+
+**`CoreRegistrationGolden.txt`** (`CoreRegistrationEquivalenceTests`) still held the Game Boy's state version 8; the
+Mercury audit's merge (9c0b8721) made it 11. Re-recorded with `EMUSEN_RECORD_REGISTRATION=1`, its 40 changed lines are
+all `factory[GB …].state-version`, 8 to 11, in the four sections that record it; nothing else moved.

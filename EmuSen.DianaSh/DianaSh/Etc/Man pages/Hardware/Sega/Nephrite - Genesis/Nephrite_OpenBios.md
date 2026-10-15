@@ -202,7 +202,7 @@ sector 0 begins `SEGADISCSYSTEM`. The block itself is the game's own code and ru
    BIOS confirms it, the confirmations recorded as disputes D-41 onward. Without an answer stage 10 cannot run a disc.
 
 2. **Q2, where G3 comes from, and how a new machine's backup RAM is formatted.** No document gives the format beyond
-   TB p. 9's three `$40` areas, and the brief forbids reading what the player's BIOS writes. *Recommended:* a public
+   TB p. 9's three `$40` areas, and the replacement writers' rule (§1.3, §5.6) forbids reading what the player's BIOS writes. *Recommended:* a public
    description of the format (save-file converters and RAM cartridge tools publish them; to be fetched and screened as
    in Q1), the open BIOS writing it, graded only by round trips through a game. Once the format module exists and the
    round trips pass, *recommended* that a new machine's internal backup RAM be supplied formatted (both references

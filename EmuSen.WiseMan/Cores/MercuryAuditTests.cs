@@ -752,6 +752,76 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0xFF10, 0x10);
             Assert.Equal(0x01, rig.Read(0xFF26) & 0x01);
         }
+
+        // K: whole lines at a time to line 143, which a line's 456 cycles reach exactly.
+        private static void TickToLine143(MercuryRig rig)
+        {
+            for (int i = 0; i < 154 && rig.Bus.Ppu.Ly != 143; i++) rig.Tick(456);
+            Assert.Equal(143, rig.Bus.Ppu.Ly);
+        }
+
+        // K: the LCD on and LY at 144, the start of vblank, with STAT's sources as given and IF clear.
+        private MercuryRig AtLine144(byte stat, byte lyc, byte cgbFlag = 0x00)
+        {
+            var rig = Load(cgbFlag: cgbFlag);
+            rig.Write(0xFF41, stat);
+            rig.Write(0xFF45, lyc);
+            TickToLine143(rig);
+            TickUntil(rig, PpuMode.VBlank);
+            rig.Write(0xFF0F, 0x00);
+            return rig;
+        }
+
+        // K, mooneye stat_lyc_onoff round 1: with the LCD off "the comparison clock is not running", so STAT's LY=LYC bit keeps its value and LYC writes do not move it.
+        [Fact]
+        public void The_lyc_comparison_bit_freezes_while_the_lcd_is_off()
+        {
+            var rig = AtLine144(0x00, 144);
+            Assert.Equal(0x04, rig.Read(0xFF41) & 0x04);
+            rig.Write(0xFF40, 0x00);
+            Assert.Equal(0x04, rig.Read(0xFF41) & 0x04);
+            rig.Write(0xFF45, 0x01);
+            Assert.Equal(0x04, rig.Read(0xFF41) & 0x04);
+            rig.Write(0xFF40, 0x91);
+            Assert.Equal(0x00, rig.Read(0xFF41) & 0x04);
+        }
+
+        // K, stat_lyc_onoff round 2: a frozen comparison that holds the STAT line raises no interrupt while the LCD is off, nor when it comes back still matching.
+        [Fact]
+        public void No_stat_interrupt_is_raised_while_the_lcd_is_off()
+        {
+            var rig = AtLine144(0x40, 144);
+            rig.Write(0xFF40, 0x00);
+            rig.Write(0xFF45, 0x00);
+            Assert.Equal(0x00, rig.Read(0xFF0F) & 0x02);
+            rig.Write(0xFF40, 0x91);
+            Assert.Equal(0x00, rig.Read(0xFF0F) & 0x02);
+        }
+
+        // K, stat_lyc_onoff round 4: a comparison that starts matching when the LCD comes back raises the interrupt.
+        [Fact]
+        public void A_comparison_that_starts_matching_as_the_lcd_comes_on_raises_the_interrupt()
+        {
+            var rig = AtLine144(0x40, 0);
+            rig.Write(0xFF40, 0x00);
+            rig.Write(0xFF40, 0x91);
+            Assert.Equal(0x02, rig.Read(0xFF0F) & 0x02);
+        }
+
+        // K, mooneye vblank_stat_intr-GS: on a DMG the mode-2 source also fires at line 144, at the same time as vblank; the Color's fails that ROM.
+        [Theory]
+        [InlineData(0x00, 0x03)]
+        [InlineData(0xC0, 0x01)]
+        public void The_mode_2_source_fires_at_line_144_on_a_game_boy(byte cgbFlag, int interrupts)
+        {
+            var rig = Load(cgbFlag: cgbFlag);
+            rig.Write(0xFF41, 0x20);
+            TickToLine143(rig);
+            TickUntil(rig, PpuMode.HBlank);
+            rig.Write(0xFF0F, 0x00);
+            TickUntil(rig, PpuMode.VBlank);
+            Assert.Equal(interrupts, rig.Read(0xFF0F) & 0x03);
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

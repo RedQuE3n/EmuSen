@@ -2505,3 +2505,70 @@ passed: 779 cases.
 | B3 | the window one T-cycle short | at first only the lock-step window program, `The_window_counts_its_lines_with_rendering_skipped_instruction_by_instruction`, which caught each engine's mutant against the other's code; a mutant made in both engines would have survived. A claim was added for the case it needs, a reload on a cycle's first T-cycle after a DIV write: `A_reload_that_lands_early_in_its_cycle_still_ignores_a_tima_write_at_the_cycles_end` |
 | B4 | the window one T-cycle long | `After_the_reload_cycle_tima_and_tma_writes_are_ordinary` |
 | B5 | the window counts away from zero and never closes | `After_the_reload_cycle_tima_and_tma_writes_are_ordinary` |
+
+### 13.3 Step C: the interrupt dispatch, `EI` before it, and STOP's count
+
+**The rules, and their sources.**
+
+- **The vector is chosen between the two pushes** (referee §2.3). mooneye's `interrupts/ie_push` states it round by round
+  in its source: with SP at `$0000` the high byte of PC is written to IE, and if that leaves nothing enabled "PC is set to
+  `$0000` instead of the normal jump address", IF keeps its bit and IME stays clear (rounds 1–2); if it leaves a lower
+  priority enabled, that one is dispatched and the higher stays requested (round 4); the low byte, written to IE with SP
+  at `$0001`, is "too late to cancel" (round 3). Mercury chose the vector from IE & IF at the start of the step.
+- **Where the dispatch's writes fall.** Pan Docs (`Interrupts.md`, "Interrupt handling"): two wait states, then PC pushed
+  in two more machine cycles, then the jump in a fifth. Mercury pushed in the first two and settled the other three at
+  the end. ie_push alone does not need this, since only the order of the two pushes and the choice matters to it; the
+  document does, and the referee page recorded the placement as a three-way disagreement that Pan Docs settles.
+- **`EI` before a dispatch** (referee §2.13). GBCTR gives `EI` as `IR, intr = fetch_cycle(addr=PC); ... IME = 1`: IME is
+  set in the machine cycle after `EI`, which is the next instruction's fetch. After `EI; EI`, the second `EI`'s effect is
+  spent before the dispatch that follows it, and the dispatch clears IME. Mercury kept `_imeScheduled` through the
+  dispatch, so the handler's first step set IME, allowing a nested interrupt the hardware would not take. Pan Docs says
+  only that the effect is "delayed by one instruction", which both readings satisfy. The game the referee page names,
+  Batman – The Video Game, was not run: the document is the evidence here, and the game a witness for later.
+- **STOP's count** (referee §2.14). `STOP` fetches its two bytes, eight T-cycles, and reported four; the frame's budget
+  and `Cpu.Cycles` undercounted every STOP by four. No outside source is needed: the cycle harnesses' existing claim that
+  "the bus advances by exactly what the step reports" fails for `$10`.
+
+**The proof** (committed failing, `67e36e58`):
+
+- `MercuryAuditClaims`: rounds 1 and 4 of ie_push, `EI; EI` with IME read in the handler, and STOP's step, failed on both
+  engines; round 3, the control, passed on both.
+- `MercuryCycleTimingTests` on C# and `tests/cycle_timing.rs` on the crate, the two harnesses that record each tick and
+  access in order (§12.1): the dispatch's writes after 12 and 16 T-cycles, and `$10` in the "bus advances" theory,
+  failed on both.
+
+**The fix**, the same in both engines:
+
+- `ServiceInterrupt` ticks the two wait states, writes the high byte, reads what is pending, writes the low byte and
+  jumps to the vector, or to `$0000`; IME and the scheduled `EI` are both cleared. The bit it reports is the one chosen
+  after the push, or −1 for a cancelled dispatch, so the frame loop's acknowledge clears the right IF bit, or none.
+- What is pending is read through a new member of the CPU's bus, `ICpuBus.PendingInterrupts` (`CpuBus::pending_interrupts`),
+  IE & IF's five live bits, rather than through a read of `$FFFF` and `$FF0F`, which would show in a debugger's trace as
+  accesses the CPU never makes. It is the bus's only new surface; the two harnesses' recording buses answer it from their
+  memory, and their existing dispatch claim now sets IE and IF there as well as passing them to the step.
+- STOP returns eight.
+- **The state format is unchanged.**
+
+**The corpus.** `interrupts/ie_push` passes in all six columns; nothing else moved, so the write placement moved none
+of the timing ROMs (`intr_timing`, `di_timing-GS`, `reti_intr_timing`, `halt_ime1_timing2-GS` and the rest pass as
+before). 100 of 173 in each column.
+
+**The four games** are unchanged: MercuryRT's trace from boot is identical at every 300th frame, and the real-games
+version-5 test passes.
+
+**The recorded platform digests moved, and why** (`MercuryRtPlatformTests`, §8.6, §9.4, §10). After 600 frames, two of
+the four synthetic programs' state digests changed, and nothing else: every sound and picture digest is as recorded, and
+the two engines agree on every digest.
+
+- *colour*: one field differs, `Cpu.Cycles`, by 12: the program executes STOP three times in 600 frames, and each now
+  counts four more T-cycles. That is §2.14 and nothing else.
+- *interrupts*: one byte differs, `$C102`, the timer handler's counter, which reads `$8E` where it read `$B3`, six fewer
+  timer handlers every 100 frames while the vblank and STAT counters are unchanged. The program takes timer interrupts
+  every 256 T-cycles beside vblank and STAT. When vblank or STAT is requested in a timer dispatch's first three machine
+  cycles, the late choice now serves it first, the timer stays requested through a long vblank handler, and its next
+  overflow merges with the pending one. To separate the two halves of the fix, a scratch copy of the crate with the new
+  write placement but the vector chosen at the start of the dispatch was run on the same program: its state after 600
+  frames is byte for byte step B's. The placement moves nothing here; the late choice moves this.
+
+The new digests were recorded for both (the `stateVersion7` column too, which is the same state with its version set back
+and the mixer removed, so it moves with the state). They are linux-x64's; Windows and macOS meet them on CI's next run.

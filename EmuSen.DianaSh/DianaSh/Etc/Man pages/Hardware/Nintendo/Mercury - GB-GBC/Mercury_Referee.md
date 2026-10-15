@@ -156,6 +156,9 @@ increment overflows (`GbTimer.cpp:135`), which the RTL does not share.
 
 ### 2.3 The interrupt vector is chosen before the push **[V]**
 
+*Proven and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.3): `ie_push` passes; the writes now fall on
+the third and fourth machine cycles, as Pan Docs gives them.*
+
 **Mercury.**
 - The vector is picked from IE & IF sampled at the start of `Step` (`Cpu.cs:105`).
 - `ServiceInterrupt` pushes and jumps to it (`:161-167`).
@@ -401,6 +404,8 @@ evidence is blargg's test source**, which states each rule and the failure text 
 
 ### 2.13 `EI; EI` before a dispatch re-enables IME inside the handler **[V Mesen, R RTL]**
 
+*Proven against GBCTR's `EI` and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.3).*
+
 - **Mercury:** `ServiceInterrupt` does not clear `_imeScheduled` (`Cpu.cs:161-167`), so the handler's first `Step` sets
   `Ime` (`:110-114`).
 - **Mesen** clears it (`GbCpu.cpp:96-99`), and its comment names the game: "breaks 'Batman - The Video Game'".
@@ -408,6 +413,8 @@ evidence is blargg's test source**, which states each rule and the failure text 
 - No corpus ROM covers this. **Batman is the witness.**
 
 ### 2.14 Found in passing: an inconsistency inside Mercury **[V]**
+
+*Proven by the cycle harnesses and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.3).*
 
 `STOP` is `Fetch(); _bus.Stop(); return 4;` (`Cpu.Opcodes.cs:47`):
 - Two fetches tick the bus 8 T-cycles.

@@ -688,4 +688,9 @@ impl crate::cpu::CpuBus for MemoryBus {
     fn stop(&mut self) {
         MemoryBus::stop(self)
     }
+
+    #[inline(always)]
+    fn pending_interrupts(&self) -> u8 {
+        self.interrupt_enable & self.interrupt_flags & 0x1F
+    }
 }

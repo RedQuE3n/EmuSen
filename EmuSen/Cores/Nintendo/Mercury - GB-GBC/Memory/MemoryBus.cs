@@ -98,6 +98,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public byte Tma => _tma;
         public byte Tac => _tac;
 
+        public byte PendingInterrupts => (byte)(InterruptEnable & InterruptFlags & 0x1F);
+
         public void Request(Interrupt source) => InterruptFlags |= (byte)(1 << (int)source);
 
         // Every byte the ROM has clocked out of the link port, oldest first - see Mercury_Memory.md §10.

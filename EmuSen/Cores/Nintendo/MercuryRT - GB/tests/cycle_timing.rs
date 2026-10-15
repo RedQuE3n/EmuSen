@@ -27,6 +27,10 @@ impl CpuBus for RecordingBus {
     }
 
     fn stop(&mut self) {}
+
+    fn pending_interrupts(&self) -> u8 {
+        self.memory[0xFFFF] & self.memory[0xFF0F] & 0x1F
+    }
 }
 
 impl RecordingBus {
@@ -80,6 +84,7 @@ fn the_bus_advances_by_exactly_what_the_step_reports() {
 #[test]
 fn servicing_an_interrupt_ticks_its_full_cost() {
     let (mut cpu, mut bus) = machine(&[0x00]);
+    (bus.memory[0xFFFF], bus.memory[0xFF0F]) = (0x01, 0x01);
     cpu.ime = true;
     let (cycles, serviced) = cpu.step(&mut bus, 0x01, 0x01).unwrap();
     assert_eq!(serviced, 0);

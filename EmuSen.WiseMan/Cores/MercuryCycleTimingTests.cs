@@ -28,6 +28,8 @@ namespace EmuSen.WiseMan.Cores
 
             public void Stop() { }
 
+            public byte PendingInterrupts => (byte)(Memory[0xFFFF] & Memory[0xFF0F] & 0x1F);
+
             public int Ticked
             {
                 get
@@ -120,6 +122,8 @@ namespace EmuSen.WiseMan.Cores
         public void Servicing_an_interrupt_ticks_its_full_cost()
         {
             var (cpu, bus) = Machine(0x00);
+            bus.Memory[0xFFFF] = 0x01;
+            bus.Memory[0xFF0F] = 0x01;
             cpu.Ime = true;
 
             int cycles = cpu.Step(0x01, 0x01, out int serviced);

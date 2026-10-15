@@ -88,7 +88,7 @@ mooneye/acceptance/halt_ime1_timing.gb	09D9BE4EBDD7645A	Passed	Passed	Passed	Pas
 mooneye/acceptance/halt_ime1_timing2-GS.gb	10F0F35025D9D648	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/acceptance/if_ie_registers.gb	D055B2B4C44902CF	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/acceptance/instr/daa.gb	1498D92D70592A07	Passed	Passed	Passed	Passed	Passed	Passed
-mooneye/acceptance/interrupts/ie_push.gb	F80DF1B48CA2F81D	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/interrupts/ie_push.gb	F80DF1B48CA2F81D	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/acceptance/intr_timing.gb	A795A190830104A4	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/acceptance/jp_cc_timing.gb	8747FA6F969C8AC1	Failed	Failed	Failed	Failed	Failed	Failed
 mooneye/acceptance/jp_timing.gb	514BA4B96355F507	Failed	Failed	Failed	Failed	Failed	Failed

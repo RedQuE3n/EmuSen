@@ -2876,3 +2876,20 @@ was 1 after a written 0, and now asserts the mapped bank. **The state format is 
 
 **The corpus** did not move. **The four games**, Pokémon Yellow the colour one among them, are unchanged in MercuryRT's
 trace (the full state hash too) and in the real-games test. The whole `Mercury` filter passes, 828 cases.
+
+**Cost.** A work RAM access in the banked window now tests SVBK for 0. The machine was loaded by other work during this
+bench, and several runs on both sides stalled to about twice their time (Tetris 0.904 before, Kirby 0.992 and Yellow
+1.032 after, on MercuryRT; Yellow 1.213 before on C#), so only the unstalled runs are compared:
+
+| Game | MercuryRT step G | step H | C# step G | step H |
+|---|---|---|---|---|
+| Tetris | 0.4511, 0.4615 | 0.4406, 0.4347, 0.4536 | 0.6341, 0.6281, 0.6641 | 0.6287, 0.6366, 0.6428 |
+| Kirby's Dream Land | 0.5013, 0.4933, 0.5124 | 0.4922, 0.5100 | 0.6836, 0.6956, 0.6981 | 0.6819, 0.6758, 0.7226 |
+| Link's Awakening | 0.4050, 0.4029, 0.4083 | 0.4040, 0.4054, 0.4101 | 0.5639, 0.5702, 0.5719 | 0.5595, 0.5597, 0.5875 |
+| Pokémon Yellow | 0.5420, 0.5659 | 0.5562, 0.5485 | 0.7050, 0.7745 | 0.7095, 0.7230, 0.7470 |
+
+No difference stands out from the spread; this step's number is the weakest of the audit and is recorded as such.
+
+**Mutants**, each in C# and in Rust separately, all caught on both engines by the step's two claims: H1, BCPD readable
+in mode 3; H2, OCPD writable in mode 3; H3, a refused write leaves the index where it was; H4, SVBK stores a written 0
+as 1; H5, SVBK 0 maps bank 0.

@@ -444,6 +444,8 @@ Diamond, the latency in frames from a frame's emulation to its picture's present
 
 ## 10. Questions for the tester
 
+*Decided 2026-10-15 by the tester: Q1 to Q3, each as recommended. Avalonia stays on GLX; Skia's filter path stays until a macOS build ships with MoltenVK; every picture stays on the device unless the handheld drops frames.*
+
 | | Question | Recommended |
 |---|---|---|
 | **Q1** | Avalonia's X11 Vulkan mode, with Serenity's device given to it (`CustomSharedDevice`), so that one device reaches the swapchain? | Not now. GLX stays; the mode is measured as an option once (c) is built, since it changes the renderer under every window |

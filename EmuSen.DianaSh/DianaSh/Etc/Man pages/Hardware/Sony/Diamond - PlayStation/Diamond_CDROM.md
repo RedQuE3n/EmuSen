@@ -291,13 +291,13 @@ Symphony of the Night (zipped sheets), Tekken 3 (a zipped "(Track 1)" with no sh
 ~~**Booted the console's way, none reaches its title**: every BIOS revision in the firmware folder draws the "Sony
 Computer Entertainment" logo by frame 330, as SwanStation does, and stays on it, where SwanStation shows the second
 screen at frame 630 (D-29, open).~~ *Settled 2026-10-12* (D-29, DICR's edge; D-43, the DMA's arbitration): on
-`scph5501.bin` every disc passes the intro, its second screen at frame 660 where SwanStation's is at 612, and each game
-then goes as far as on the open kernel. Of the folder's other revisions, all but the European `scph5502.bin` (D-44,
+the player's American BIOS every disc passes the intro, its second screen at frame 660 where SwanStation's is at 612, and each game
+then goes as far as on the open kernel. Of the folder's other revisions, all but the declared European file (D-44,
 which draws nothing) pass the intro on Crash Bandicoot's disc.
 
 **The seven discs, before and after, on both kernels** [M, the step's tool, frame boundaries only, pictures every 150
 frames to frame 6,000; "before" WiseMan at `f5c30e69`, "after" with D-29's and D-43's changes; SwanStation and Beetle
-PSX on `scph5501.bin` through `psxreferee.py pictures`, the referees' own pictures kept in the cache, never committed]:
+PSX on the player's American BIOS through `psxreferee.py pictures`, the referees' own pictures kept in the cache, never committed]:
 
 | Game | Open kernel, before | Open kernel, after | Player's BIOS, before | Player's BIOS, after | SwanStation and Beetle PSX |
 |---|---|---|---|---|---|
@@ -397,7 +397,7 @@ it enables by a byte store to DICR's third byte; Diamond wrote that byte as the 
 enable. That is D-45 (`Diamond_Disputes.md`), a rule of the bus's I/O widths, not of this controller.
 
 **The seven discs, before and after**, on the open kernel to frame 6,000, pictures every 150 frames, against
-SwanStation's on `scph5501.bin` (its BIOS's intro takes some 800 to 1,100 frames more, so its frames run later) [M,
+SwanStation's on the player's American BIOS (its intro takes some 800 to 1,100 frames more, so its frames run later) [M,
 WiseMan at `b5051abb` before; pictures kept in the cache, never committed]:
 
 | Game | Before | After | SwanStation |

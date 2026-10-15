@@ -88,10 +88,13 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.5"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.8"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 21);
-    assert!(info.contains(r#""battery":[{"which":0,"suffix":".srm"}]"#), "core info lists the system's battery files since 1.3: {info}");
+    assert!(
+        info.contains(r#""battery":[{"which":0,"suffix":".srm"},{"which":1,"suffix":".card","kind":"removable","medium":"test.card","label":"Card slot"},{"which":2,"suffix":".mem","kind":"console","medium":"test.memory","label":"Inside the console"}]"#),
+        "core info lists the system's battery files since 1.3, a removable one's kind since 1.7, a console one's and each slot's medium and label since 1.8, and nothing unset: {info}"
+    );
     assert_eq!(super::desc::capability_names(unsafe { emusen_core_capabilities() }), names);
     let mi = crate::json::parse(cases[3].1.as_bytes()).unwrap();
     let spaces = mi.get("spaces").unwrap().as_array().unwrap();
@@ -492,7 +495,9 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0005);
+    assert_eq!(ABI_VERSION, 0x0001_0008);
+    assert_eq!(flags::CREATE_SHARED_REMOVABLE, 2, "since 1.7, beside CREATE_LENT");
+    assert_eq!(flags::CREATE_SHARED_CONSOLE, 4, "since 1.8, beside CREATE_SHARED_REMOVABLE");
     assert_eq!((event::MEDIA_SEEK, flags::FILE_IMAGE, crate::core::SEEK_SPAN), (8, 0xFFFF_FFFF, 1 << 20));
     assert_eq!((caps::BORROW, caps::UNASSIGNED & caps::BORROW, flags::CREATE_LENT, flags::MEDIA_LENT), (1 << 20, 0, 1, 2));
     assert_eq!((CreateParams::SIZE_1_0, std::mem::size_of::<CreateParams>()), (88, 96));
@@ -560,6 +565,34 @@ fn a_disc_is_changed_through_the_lid_and_a_state_keeps_to_its_disc() {
     let mut short = media(None, 0);
     short.size = 8;
     assert_eq!(unsafe { emusen_core_media_insert(m, 0, &short) }, status::BAD_STRUCT);
+    unsafe { emusen_core_free(m) };
+}
+
+// §6.26, since 1.6: a MEDIA core's machine with no drive writes no `drives`, and each media call is refused with
+// NO_SUCH_DRIVE after the refusals of a malformed call, the machine unchanged.
+#[test]
+fn a_media_machine_with_no_drive_lists_none_and_refuses_every_media_call() {
+    let mut code = 1;
+    let img = image(&[CARTRIDGE, 2, 3]);
+    let m = unsafe { emusen_core_create(&params(&img, "", &[]), &mut code) };
+    assert_eq!(code, 0);
+    let info = text(|o, l| unsafe { emusen_core_machine_info(m, o, l) });
+    assert!(!info.contains("drives"), "{info}");
+    let before = digest(m);
+    for drive in [0, 1, u32::MAX] {
+        assert_eq!(unsafe { emusen_core_media_lid(m, drive, 1) }, status::NO_SUCH_DRIVE);
+        assert_eq!(unsafe { emusen_core_media_lid(m, drive, 0) }, status::NO_SUCH_DRIVE);
+        assert_eq!(unsafe { emusen_core_media_insert(m, drive, &media(Some(&image(&[9, 9])), 0)) }, status::NO_SUCH_DRIVE);
+        assert_eq!(unsafe { emusen_core_media_insert(m, drive, &media(None, flags::MEDIA_RESTORE)) }, status::NO_SUCH_DRIVE);
+    }
+    assert_eq!(unsafe { emusen_core_media_lid(m, 0, 2) }, status::NOT_SUPPORTED);
+    let mut short = media(None, 0);
+    short.size = 8;
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &short) }, status::BAD_STRUCT);
+    assert_eq!((digest(m), text(|o, l| unsafe { emusen_core_machine_info(m, o, l) })), (before, info));
+    let mut detail = 0;
+    assert_eq!(unsafe { emusen_core_advance(m, &mut detail) }, 0, "the machine runs on");
+    assert!(drain_all(m).iter().all(|e| e.kind != event::MEDIA_SEEK), "a machine with no drive names no place");
     unsafe { emusen_core_free(m) };
 }
 
@@ -660,4 +693,16 @@ fn a_lent_disc_is_let_go_when_its_drive_takes_another() {
     assert_eq!(rom_byte(m), third_copy[3]);
     assert_eq!(unsafe { emusen_core_media_insert(m, 0, &media(None, lent)) }, 0, "an empty drive lends nothing");
     assert_eq!(unsafe { emusen_core_free(m) }, 0);
+}
+
+// Since 1.8 (EmuSen_CoreAPI.md §6.28): a slot's port is written as a number, with its medium and label, and a file that sets none writes 1.7's form.
+#[test]
+fn a_slots_medium_label_and_port_are_written_only_where_set() {
+    use super::desc::{Battery, Info, System, info_json};
+    let info = Info { id: "x".into(), systems: vec![System { id: "n64".into(), ..Default::default() }], ..Default::default() };
+    let text = info_json(&info, 0, &|_| Some(vec![Battery::game(0, ".eep"), Battery::removable(1, ".2.mpk").medium("n64.pak").label("Controller 2").port(1)]));
+    assert!(text.contains(r#""battery":[{"which":0,"suffix":".eep"},{"which":1,"suffix":".2.mpk","kind":"removable","medium":"n64.pak","label":"Controller 2","port":1}]"#), "{text}");
+    assert_eq!(schema::validate(include_str!("../../abi/v1/info.schema.json"), &text), Vec::<String>::new());
+    let bad = info_json(&info, 0, &|_| Some(vec![Battery::console(0, ".brm").medium("Sega CD")]));
+    assert!(!schema::validate(include_str!("../../abi/v1/info.schema.json"), &bad).is_empty(), "a medium outside [a-z0-9.]+ is refused by the schema");
 }

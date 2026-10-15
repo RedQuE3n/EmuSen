@@ -22,7 +22,7 @@ namespace EmuSen.Mistress.Views
     public partial class MainWindow
     {
         public const string MainMenuTitle = "Main Menu", GameSettingsMenu = "Game Settings", LibraryMenu = "Library", SettingsMenu = "Settings", EmuSenMenu = "EmuSen";
-        public const string QuestionNo = "No", QuestionYes = "Yes";
+        public const string QuestionNo = "No", QuestionYes = "Yes", MemoryCardsMenu = "Memory Cards";
 
         // One page of the menu: its title (null for the first, whose title is the game's or Main Menu), its rows, the row last on, and for a question the sentence under it.
         private sealed class PadMenuPage(string? title, Func<List<PadMenuEntry>> rows, string? detail = null, bool question = false)
@@ -98,6 +98,7 @@ namespace EmuSen.Mistress.Views
                 Opens("Controller Bindings", ShowControllerBindings),
                 Opens("Graphics", ShowGraphicsSettings),
                 Opens("Shaders", ShowShaderSettings),
+                Opens(MemoryCardsMenu, ShowMemoryCards),
             ];
             // The running game's own crop, where its console has an overscan to replace - see EmuSen_Settings_Reference.md §4.100.
             if (_currentRomPath is string rom && GraphicsSettingsWindow.HasOverscan(_activeConsole)) rows.Add(Opens(CropThisGame, () => ShowGameCrop(rom, RunningGameTitle())));
@@ -120,6 +121,7 @@ namespace EmuSen.Mistress.Views
             Opens("Graphics", ShowGraphicsSettings),
             Opens("Shaders", ShowShaderSettings),
             Opens("Cheats", ShowActiveCheats),
+            Opens(MemoryCardsMenu, ShowMemoryCards),
             Opens(PreferencesWindow.FirmwareTab, () => ShowPreferencesAt(PreferencesWindow.FirmwareTab)),
             Opens("Preferences", ShowPreferences),
         ];

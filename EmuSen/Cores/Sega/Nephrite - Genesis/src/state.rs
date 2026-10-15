@@ -8,12 +8,13 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 19;
+pub const STATE_VERSION: i32 = 20;
 /// The oldest version a state may have and still load: 16, the first the Genesis was offered to players with, lacks
 /// only what 17 added, which a load supplies as Nephrite_Native.md §39.4 says.
 pub const OLDEST_STATE_VERSION: i32 = 16;
-/// The oldest a Sega CD's state may have: 19, the first with the Sega CD in it (Nephrite_Native.md §53.3).
-pub const OLDEST_MCD_STATE_VERSION: i32 = 19;
+/// The oldest a Sega CD's state may have: 20, the first with its graphics ASIC, the Sega CD having been offered to no
+/// player before it (Nephrite_Native.md §53.1, §57).
+pub const OLDEST_MCD_STATE_VERSION: i32 = 20;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -110,7 +111,9 @@ impl StateMachine for Machine {
         }
         self.frames = frames;
         for (id, bytes) in loaded {
-            self.bytes_mut(id).expect("a listed space").copy_from_slice(&bytes);
+            if !self.kept_apart.keeps(id) {
+                self.bytes_mut(id).expect("a listed space").copy_from_slice(&bytes);
+            }
         }
         self.genesis.apply_state(registers);
         if let (Some(m), Some(s)) = (self.genesis.hw.mcd.as_deref_mut(), mcd) {
@@ -331,7 +334,7 @@ mod tests {
         let a = machine("SEGA GENESIS");
         let mut b = machine("SEGA GENESIS");
         b.frames = 9;
-        for version in [15, 2, 20] {
+        for version in [15, 2, 21] {
             let mut s = as_version_16(&a);
             s[4..8].copy_from_slice(&i32::to_le_bytes(version));
             let e = b.load_state(&s).unwrap_err();

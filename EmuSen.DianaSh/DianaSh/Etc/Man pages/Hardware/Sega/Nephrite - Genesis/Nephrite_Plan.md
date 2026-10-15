@@ -368,6 +368,11 @@ RAM cartridge as file 1 (`.crm`) when the stage that builds it decides its suffi
 hardware's bus presents them (one lane for an odd- or even-lane SRAM), so that saves move between Nephrite and other
 emulators that also store raw lanes (to be checked against the references at stage 3).
 
+*Since 2026-10-15 (core ABI 1.8):* the backup RAM cartridge is file 10 (`.crm`), and the two Sega CD memories are of
+kinds `console` (the internal backup RAM) and `removable` (the cartridge), each a slot of its medium, so that the
+runtime can share them between games and a state load leaves them as they stand (`Nephrite_Native.md` §61,
+`EmuSen_SaveMedia.md` §7.3).
+
 ### 4.5 Cheats
 
 Both formats are console knowledge and go in the system pack (`EmuSen_CoreAPI.md` §15 Q14), scheduled with stage 6:
@@ -572,10 +577,10 @@ ran. **The effort is predicted** (P3). A stage's oracle must be met, or its miss
 | 6 | The Genesis to players, ending with the `InDevelopment` mark removed (`EmuSen_CoreAPI.md` §27): the system packs' codecs (Game Genie, Pro Action Replay); settings (region, model, pads); battery files and EEPROM by serial; a shelf for consoles with only a discovered engine (a frontend change through the system packs); the kit on games | The kit's C1–C15 on games; `.srm` round trips; the fit audit | 3 |
 | 7 | The debugger: processors `M68K` and `Z80` through the Beryl observers; registers; disassembly; breakpoints, stepping, coverage, the call stack | Each claim a test; every table armed gives the plain run's digests (C15) | 3 (closed 2026-10-07 after 3, `Nephrite_Native.md` §41-§43) |
 | 8 | Sega CD hardware: the sub CPU, gate array, PRG-RAM, Word RAM modes, comm registers, interrupts and timer, backup RAM and cartridge, the CDC and CDD, CD-DA, disc images (§5.8) | mcd-verificator (self-grading, no BIOS) | 6 (closed 2026-10-14 after 4, `Nephrite_Native.md` §49-§54: mcd-verificator 18 of 18) |
-| 9 | Sega CD, the rest: the graphics ASIC, the RF5C164, the fader and mix | Sega CD tests with the player's BIOS against Genesis Plus GX; mcd-verificator | 4 (split, `Nephrite_Native.md` §49.4) |
+| 9 | Sega CD, the rest: the graphics ASIC, the RF5C164, the fader and mix | Sega CD tests with the player's BIOS against Genesis Plus GX; mcd-verificator | 4 (split, `Nephrite_Native.md` §49.4; closed 2026-10-15 after 5, §55-§60: the player's BIOS boots the five discs and the 240p suite, mcd-verificator's PCM tests pass, the mix fitted to recordings of Sega CDs) |
 | 10 | The Sega CD BIOS replacement (§5.6) | The 240p Sega CD suite; mcd-verificator in mode 1; games against the same games on the player's BIOS | 6 (split, `Nephrite_Native.md` §49.5) |
 | 11 | Beryl SH-2: the interpreter, delay slots, the cache, the SH7604's modules; the disassembler and assembler; its test programs | The manual's pseudocode as test programs; the SH-4 suite's shared instructions | 6 |
-| 12 | The 32X: system registers, comm ports, the FIFO, SDRAM, the frame buffers and VDP modes, the palette and the overlay, PWM, interrupts, the boot ROM replacements; CD32X | 240p 32X and homebrew against PicoDrive; S32X_MiSTer in disputes | 6 |
+| 12 | The 32X: system registers, comm ports, the FIFO, SDRAM, the frame buffers and VDP modes, the palette and the overlay, PWM, interrupts, the boot ROM replacements; CD32X | 240p 32X and homebrew against PicoDrive; S32X_MiSTer in disputes; CD32X: Doom CD32X Fusion, a homebrew disc that needs both attachments, booting and played with its CD audio (named 2026-10-15) | 6 |
 | 13 | Speed (§5.5): the exact levers for the 32X, measured on the bench and the handheld | §5.5's budget | 3 |
 | 14 | The gates of §7, the goldens, the clone check | §7 | 2 |
 

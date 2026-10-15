@@ -169,6 +169,9 @@ namespace EmuSen.Mistress.Views
                 panel.Children.Add(new FieldRow { Label = engine.Label, Hint = engine.Hint, Content = control });
             }
 
+            // The runtime's card mode, where the engine lists a card the player carries; the slots' rows only under Named cards - see EmuSen_Settings_Reference.md §4.114.
+            foreach (FieldRow row in BuildCardRows(console, refreshers)) panel.Children.Add(row);
+
             if (settings.Count == 0)
             {
                 panel.Children.Add(new EmptyState { Message = "No core settings yet", Detail = $"The {console} core has nothing else to offer here; what it draws, it draws one way." });
@@ -195,6 +198,38 @@ namespace EmuSen.Mistress.Views
 
             _panels.Add((console, () => { foreach (Action refresh in refreshers) refresh(); }));
             return panel;
+        }
+
+        // Each medium's rows from MemoryCards, a slot's shown while its medium is Named, as the crop's row is while a custom crop is - see EmuSen_SaveMedia.md §3.3.
+        private List<FieldRow> BuildCardRows(string console, List<Action> refreshers)
+        {
+            var rows = new List<FieldRow>();
+            foreach (SaveMedium medium in MemoryCards.MediaFor(console))
+            {
+                var (mode, slots) = MemoryCards.RowsFor(medium);
+                IReadOnlyList<CoreSetting> group = slots.Prepend(mode).ToArray();
+                foreach (CoreSetting setting in group)
+                {
+                    (Control control, Action refresh) = BuildControl(console, setting);
+                    refreshers.Add(refresh);
+                    if (setting.Note is { } note)
+                    {
+                        (Control noted, Action show) = WithNote(console, setting, note, control, group);
+                        control = noted;
+                        refreshers.Add(show);
+                    }
+                    var row = new FieldRow { Name = $"{console}.{setting.Key}.Row", Label = setting.Label, Hint = setting.Hint, Content = control };
+                    if (setting != mode)
+                    {
+                        void Shown() => row.IsVisible = MemoryCards.Read(key => _config.Value(console, key), medium).Mode == MemoryCards.Named;
+                        Shown();
+                        refreshers.Add(Shown);
+                        _notes.Add((console, Shown));
+                    }
+                    rows.Add(row);
+                }
+            }
+            return rows;
         }
 
         // Four numbers, shown while a custom crop is chosen; one that reads as a number is stored as it is typed, and shown as stored when the box is left.

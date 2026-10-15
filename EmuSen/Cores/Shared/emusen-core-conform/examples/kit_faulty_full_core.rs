@@ -1,5 +1,5 @@
-//! emusen-native's test core with every capability and the seeded faults C9, C12-C15, C17 and C18 are for, so that
-//! this crate's tests see each of those cases fail it.
+//! emusen-native's test core with every capability and the seeded faults C9, C12-C19 are for, so that this crate's
+//! tests see each of those cases fail it; C16's are a cartridge's, a machine listing no drive.
 
 pub const TEST_ID: &str = "v1-faulty-full-core";
 pub const TEST_NAME: &str = "V1FaultyFullCore";
@@ -24,7 +24,8 @@ pub const TEST_CAPABILITIES: u64 = emusen_native::core::caps::RESET
     | emusen_native::core::caps::MEDIA
     | emusen_native::core::caps::BORROW;
 pub const TEST_FAULTS: u32 =
-    FAULT_EXACT_SETTING_CHANGES_STATE | FAULT_ONLY_HOST_1_0 | FAULT_INFO_DRIFTS | FAULT_READ_ONLY_WRITABLE | FAULT_OBSERVED_FRAME_DIFFERS | FAULT_LENT_RUN_DIFFERS | FAULT_NAMES_PAST_THE_IMAGE;
+    FAULT_EXACT_SETTING_CHANGES_STATE | FAULT_ONLY_HOST_1_0 | FAULT_INFO_DRIFTS | FAULT_READ_ONLY_WRITABLE | FAULT_OBSERVED_FRAME_DIFFERS | FAULT_LENT_RUN_DIFFERS | FAULT_NAMES_PAST_THE_IMAGE
+        | FAULT_DRIVELESS_ACCEPTS | FAULT_DRIVELESS_FAULTS | FAULT_DRIVELESS_NAMES_PLACES | FAULT_CARD_ROLLED_BACK | FAULT_CONSOLE_ROLLED_BACK | FAULT_MEDIUM_DISAGREES;
 
 include!("../../emusen-native/examples/common/test_core.rs");
 

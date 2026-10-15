@@ -246,7 +246,8 @@ and the build record in [`Nephrite_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20
 
 - Artemio Urbina and contributors, [MDFourier](https://junkerhq.net/MDFourier/), "MegaDrive/Sega Genesis and Sega CD
   recordings 2020-06-14": 21 consoles playing the 240p Test Suite's MDFourier sequence. Nephrite plays the same
-  sequence, and its output circuit, ladder effect and PSG level were fitted to and graded against them.
+  sequence, and its output circuit, ladder effect and PSG level were fitted to and graded against them; the set's
+  Sega CDs gave the Sega CD's PCM filter and its PCM and CD-DA levels against the Genesis.
 - Nemesis's recording of his CSM test on a PAL model 1, the one FM test of his with a recording.
 
 **Test programs**
@@ -280,11 +281,18 @@ None is included in this repository.
 
 - Sega, *Mega-CD Hardware Manual* (version 1.0, 1991), as hosted by
   [Sega Retro](https://segaretro.org/Mega-CD_official_documentation): the map, the gate array's registers, PRG-RAM,
-  Word RAM, the interrupts, the timers and the CDC's wiring, each use cited by section. A developer document that
-  circulated without Sega's release.
+  Word RAM, the interrupts, the timers, the CDC's wiring, the graphics ASIC and the fader, each use cited by section.
+  A developer document that circulated without Sega's release.
 - Sanyo, *LC8950 Real-Time Error Correction and Host Interface Processor Design Manual*, revised for the LC8951,
-  as hosted by Sega Retro: the CDC's registers, decoder and host transfer.
+  as hosted by Sega Retro: the CDC's registers, decoder (its monitor-only mode among them) and host transfer.
+- Sanyo, *LC7883* data sheet, as hosted by Sega Retro: CD-DA's digital filter, de-emphasis and attenuator.
+- Sega, *Mega-CD Hardware Manual*'s "PCM Sound Source" section, and Ricoh's *RF5C68A* data sheet (Console5): the
+  RF5C164's registers, address counters, wave format and mixing.
 - Microsoft's RIFF WAVE format, as commonly documented, for a cue sheet's audio tracks in `emusen-disc`.
+- Plutiedev, [Sub CPU in mode 1](https://plutiedev.com/subcpu-in-mode1): the version register's bit 5 reading 0 with
+  the Sega CD attached.
+- A drive probe written for the purpose (`tools/cddprobe/` in the crate), assembled with GNU binutils for m68k, run as
+  the Sega CD's boot ROM in Nephrite and in the reference emulators below to record what the drive reports.
 
 **Cheat codes**
 

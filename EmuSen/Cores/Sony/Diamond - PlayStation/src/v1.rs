@@ -83,6 +83,9 @@ pub fn bios(market: Market) -> Firmware {
 /// Battery files: the card in port 1's slot (or its multitap's slot A), and port 2's; the BIOS takes 1-3.
 pub const CARD_FILES: [u32; 2] = [0, 4];
 pub const CARD_SUFFIXES: [&str; 2] = [".mcr", ".2.mcr"];
+/// The cards' medium and their slots' words in core info (since 1.8).
+pub const CARD_MEDIUM: &str = "psx.card";
+pub const CARD_LABELS: [&str; 2] = ["Slot 1", "Slot 2"];
 
 /// The extensions the core opens, the system pack's checked subset: the programs, a cue sheet with its tracks, an
 /// `.iso`, a lone raw track and a CHD; the pack's `.m3u` the runtime expands and never passes (Diamond_Players.md §2).
@@ -244,9 +247,11 @@ impl Core for Machine {
         schema()
     }
 
-    /// Both cards' files, whatever the settings: a card's file given for an empty slot is ignored.
+    /// Both cards' files, whatever the settings: a card's file given for an empty slot is ignored. Each is removable,
+    /// a card the player carries, which a state load leaves when the host keeps it apart (Diamond_Cards.md §6); since
+    /// 1.8 each is a slot of the medium `psx.card`, labelled by its slot (EmuSen_SaveMedia.md §7.1).
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "psx").then(|| (0..2).map(|n| Battery { which: CARD_FILES[n], suffix: CARD_SUFFIXES[n].into() }).collect())
+        (system == "psx").then(|| (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n]).medium(CARD_MEDIUM).label(CARD_LABELS[n])).collect())
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
@@ -297,6 +302,7 @@ impl Core for Machine {
         let rom = players.or_else(|| kernel::open_kernel().map(|k| (k, Kernel::Open)));
         let mut m = Machine::new(media, config, [port(PAD_KEYS[0]), port(PAD_KEYS[1])], request.image, rom);
         m.firmware = request_files.iter().filter(|f| !CARD_FILES.contains(&f.which)).map(|f| f.which).collect();
+        m.cards_apart = request.shared_removable;
         if let Some(d) = disc {
             m.insert_disc(*d);
         }
@@ -329,7 +335,7 @@ impl Core for Machine {
                 Processor { id: R3000, name: "R3000".into(), pc_bits: 32, registers: registers(&blackmoon_r3000::DEBUG_REGISTERS), code_space: Some(R3000BUS_ID) },
                 Processor { id: 1, name: "GTE".into(), pc_bits: 0, registers: registers(&[blackmoon_gte::DATA_REGISTERS, blackmoon_gte::CONTROL_REGISTERS].concat()), code_space: None },
             ],
-            battery: (0..2).filter(|&n| self.card_in(n).is_some()).map(|n| Battery { which: CARD_FILES[n], suffix: CARD_SUFFIXES[n].into() }).collect(),
+            battery: (0..2).filter(|&n| self.card_in(n).is_some()).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n])).collect(),
             state: StateFormat { format: "DMND".into(), version: STATE_VERSION as i64, loads_from: crate::state::LOADS_FROM.iter().map(|&v| v as i64).collect() },
             phases: Vec::new(),
             patches: None,
@@ -565,7 +571,7 @@ mod tests {
 
     fn create(image: &[u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
         let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
-        Machine::create(&Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION })
+        Machine::create(&Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false })
     }
 
     #[test]
@@ -702,11 +708,126 @@ mod tests {
     fn core_info_lists_both_cards_and_an_empty_slots_file_is_ignored() {
         let listed: Vec<(u32, String)> = Machine::battery_files("psx").unwrap().into_iter().map(|b| (b.which, b.suffix)).collect();
         assert_eq!(listed, [(0, ".mcr".to_owned()), (4, ".2.mcr".to_owned())]);
+        assert!(Machine::battery_files("psx").unwrap().iter().all(|b| b.kind == BatteryKind::Removable), "cards a player carries (Diamond_Cards.md §6)");
+        let slots: Vec<(Option<String>, Option<String>, Option<u32>)> = Machine::battery_files("psx").unwrap().into_iter().map(|b| (b.medium, b.label, b.port)).collect();
+        assert_eq!(slots, [(Some("psx.card".into()), Some("Slot 1".into()), None), (Some("psx.card".into()), Some("Slot 2".into()), None)], "the console's two slots of one medium (EmuSen_SaveMedia.md §7.1)");
         assert!(Machine::battery_files("snes").is_none());
         let card = vec![0x5Au8; CARD_BYTES];
         let m = create(&exe(None, 1), &[], vec![File { which: 0, data: &card }, File { which: 4, data: &card }]).unwrap();
-        assert_eq!(m.machine_info().battery.iter().map(|b| b.which).collect::<Vec<_>>(), [0], "slot 2 is empty by default");
+        assert_eq!(m.machine_info().battery.iter().map(|b| (b.which, b.kind)).collect::<Vec<_>>(), [(0, BatteryKind::Removable)], "slot 2 is empty by default");
         assert_eq!(m.battery(0).unwrap().0, &card[..]);
+    }
+
+    /// `programs/card-save.s` as a game whose save is `fill` in `sector`, its image told apart by them.
+    fn card_game(sector: u32, fill: u8) -> Vec<u8> {
+        let mut image = crate::machine::tests::program(include_str!("../programs/card-save.s"));
+        image[0x808..0x80C].copy_from_slice(&sector.to_le_bytes());
+        image[0x80C..0x810].copy_from_slice(&(fill as u32).to_le_bytes());
+        image
+    }
+
+    /// A machine for `image` over the card file `card`, kept apart from the game or not.
+    fn over_card(image: &[u8], card: &[u8], apart: bool) -> Machine {
+        let settings = Settings::from_pairs(Vec::new());
+        Machine::create(&Create { image, settings, files: vec![File { which: 0, data: card }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: apart, shared_console: false }).unwrap()
+    }
+
+    /// Run until the game has saved and one ID after it is taken.
+    fn played(mut m: Machine) -> Machine {
+        for _ in 0..60 {
+            Core::advance(&mut m, &mut 0).unwrap();
+            if m.board.ram_word(0xFFFF0) == 0xD1A0_D00E && m.board.ram_word(0x10_0280) > 0 {
+                return m;
+            }
+        }
+        panic!("the save did not finish: {:02X?}", &m.board.ram[0x10_0100..0x10_0110]);
+    }
+
+    /// What a host does at a frame's end: the card's file written when the machine says it changed.
+    fn host_saves(m: &mut Machine, file: &mut Vec<u8>) {
+        let (data, f) = m.battery(0).unwrap();
+        if f & flags::BATTERY_CHANGED != 0 {
+            *file = data.to_vec();
+            m.battery_saved(0).unwrap();
+        }
+    }
+
+    fn sector(file: &[u8], n: usize) -> &[u8] {
+        &file[n * 128..n * 128 + 128]
+    }
+
+    /// One card file used by two games: A saves, a state of A is made, B saves, then A's state is loaded and a frame
+    /// run, the host writing the card whenever the machine says it changed; the card file at the end, and the machine.
+    fn a_then_b_then_as_state(apart: bool) -> (Vec<u8>, Machine) {
+        let (a, b) = (card_game(0x100, 0xA5), card_game(0x140, 0xB6));
+        let mut file = vec![0u8; CARD_BYTES];
+        let mut ma = played(over_card(&a, &file, apart));
+        host_saves(&mut ma, &mut file);
+        assert!(sector(&file, 0x100).iter().all(|&x| x == 0xA5), "A's save is on the card");
+        let mut state = vec![0; ma.state_size()];
+        ma.save_state(&mut state).unwrap();
+        let mut mb = played(over_card(&b, &file, apart));
+        host_saves(&mut mb, &mut file);
+        assert!(sector(&file, 0x140).iter().all(|&x| x == 0xB6), "B's save is on the card");
+        let mut ma = over_card(&a, &file, apart);
+        ma.load_state(&state).unwrap();
+        host_saves(&mut ma, &mut file);
+        let passes = ma.board.ram_word(0x10_0280);
+        while ma.board.ram_word(0x10_0280) == passes {
+            Core::advance(&mut ma, &mut 0).unwrap();
+            host_saves(&mut ma, &mut file);
+        }
+        (file, ma)
+    }
+
+    /// Diamond_Cards.md §1 and §10.1, the hazard: on the code before the card mode, and per game still, A's state puts
+    /// back the card it holds and the host writes it, so B's save is gone though B was never loaded again.
+    #[test]
+    fn per_game_a_state_puts_its_card_back() {
+        let (file, _) = a_then_b_then_as_state(false);
+        assert!(sector(&file, 0x140).iter().all(|&x| x == 0), "B's save is gone");
+        assert!(sector(&file, 0x100).iter().all(|&x| x == 0xA5));
+    }
+
+    /// Diamond_Cards.md §6, the fix: with the cards kept apart, B's save survives A's state, A's with it, and the game
+    /// sees the card as newly inserted, its flag 08h in the next ID's reply.
+    #[test]
+    fn a_shared_cards_save_survives_a_state_of_another_game() {
+        let (file, m) = a_then_b_then_as_state(true);
+        assert!(sector(&file, 0x140).iter().all(|&x| x == 0xB6), "B's save survives A's state: {:02X?}", &sector(&file, 0x140)[..8]);
+        assert!(sector(&file, 0x100).iter().all(|&x| x == 0xA5), "and A's");
+        assert_eq!(m.card_in(0).unwrap().data, file, "the machine's card is the file");
+        assert_eq!(m.board.ram[0x10_0201], crate::card::FLAG_NEW, "the ID after the load answers the flag of a card just inserted");
+    }
+
+    /// Diamond_Cards.md §10.3: per game, a save's states are those of the code before the card mode, byte for byte:
+    /// the state after a game's save, after that state is loaded over a blank card, and five frames on.
+    #[test]
+    fn per_game_states_are_the_ones_before_the_card_mode() {
+        fn fnv(b: &[u8]) -> u64 {
+            b.iter().fold(0xCBF2_9CE4_8422_2325u64, |h, &x| (h ^ x as u64).wrapping_mul(0x100_0000_01B3))
+        }
+        fn digest(m: &Machine) -> u64 {
+            let mut s = vec![0; m.state_size()];
+            m.save_state(&mut s).unwrap();
+            fnv(&s)
+        }
+        let game = card_game(0x100, 0xA5);
+        let blank = vec![0u8; CARD_BYTES];
+        let mut m = create(&game, &[], vec![File { which: 0, data: &blank }]).unwrap();
+        while m.board.ram_word(0xFFFF0) != 0xD1A0_D00E || m.board.ram_word(0x10_0280) == 0 {
+            Core::advance(&mut m, &mut 0).unwrap();
+        }
+        let mut s = vec![0; m.state_size()];
+        m.save_state(&mut s).unwrap();
+        let mut n = create(&game, &[], vec![File { which: 0, data: &blank }]).unwrap();
+        n.load_state(&s).unwrap();
+        let loaded = digest(&n);
+        for _ in 0..5 {
+            Core::advance(&mut n, &mut 0).unwrap();
+        }
+        let got = [fnv(&s), loaded, digest(&n)];
+        assert_eq!(got, [0x8861_35FF_EF13_5A26, 0x8861_35FF_EF13_5A26, 0x55CD_ED3F_58B6_961E], "measured on the code before the card mode, 2026-10-15");
     }
 
     /// MEDIA (EmuSen_CoreAPI.md §6.23): a disc changes only through the open lid, or for a state about to load; the

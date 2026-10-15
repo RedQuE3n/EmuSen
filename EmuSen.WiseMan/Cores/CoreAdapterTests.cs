@@ -55,9 +55,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(Full.Available, Full.Report);
             Assert.True(Plain.Available, Plain.Report);
             Assert.Same(Full, CoreLibrary.Open(LibraryPath("v1_test_core")));
-            Assert.Equal(("v1-test-core", 0x1FFFFFUL, 0x10005u, 4), (Full.Info.Id, Full.Capabilities, Full.AbiVersion, Full.Settings.Count));
+            Assert.Equal(("v1-test-core", 0x1FFFFFUL, 0x10008u, 4), (Full.Info.Id, Full.Capabilities, Full.AbiVersion, Full.Settings.Count));
             Assert.Equal(("v1-plain-core", 0UL), (Plain.Info.Id, Plain.Capabilities));
-            Assert.EndsWith("core ABI 1.5", Full.Report);
+            Assert.EndsWith("core ABI 1.8", Full.Report);
             Assert.Equal(new[] { ".tst" }, Full.Info.Systems.Single().Extensions);
             Assert.Equal("the image is empty", Full.Words(-9));
 
@@ -82,6 +82,33 @@ namespace EmuSen.WiseMan.Cores
             using var engine = new CoreEngine(Full);
             engine.LoadRom(Rom(Image(1, 2, 3)));
             Assert.Equal(0, engine.Machine.Info.PictureSettles);
+        }
+
+        // Since core ABI 1.6: a machine of a MEDIA core that lists no drive offers no disc change and refuses the lid and an insert, the core answering NO_SUCH_DRIVE; it runs and its states load - see EmuSen_CoreAPI.md §6.26.
+        [Fact]
+        public void A_media_core_whose_machine_lists_no_drive_offers_no_disc_change()
+        {
+            using var disc = new CoreEngine(Full);
+            disc.LoadRom(Rom(Image(1, 2, 3)));
+            Assert.Equal((1, true), (disc.Machine.Info.Drives.Count, disc.CanChangeDisc));
+            using var engine = new CoreEngine(Full);
+            engine.LoadRom(Rom(Image(0xCA, 2, 3), "cartridge.tst"));
+            Assert.True(Full.Has(CoreInterface.CapMedia));
+            Assert.Equal((0, false, false, 1), (engine.Machine.Info.Drives.Count, engine.CanChangeDisc, engine.LidOpen, engine.Discs.Count));
+            Assert.Throws<InvalidOperationException>(() => engine.SetLid(true));
+            Assert.Throws<InvalidOperationException>(() => engine.InsertDisc(0));
+            Assert.Throws<InvalidOperationException>(() => engine.ChangeDisc(0));
+            Assert.Equal(-267, Assert.Throws<CoreRefusedException>(() => engine.Machine.MediaLid(0, true)).Status);
+            Assert.Equal(-267, Assert.Throws<CoreRefusedException>(() => engine.Machine.MediaInsert(0, Image(9), Array.Empty<(uint, byte[])>(), restore: false)).Status);
+            for (int i = 0; i < 3; i++) engine.RunFrame();
+            using var saved = new MemoryStream();
+            engine.SaveState(saved);
+            engine.RunFrame();
+            engine.LoadState(new MemoryStream(saved.ToArray()));
+            using var again = new MemoryStream();
+            engine.SaveState(again);
+            Assert.Equal(saved.ToArray(), again.ToArray());
+            Assert.Equal(0, engine.Machine.Info.Drives.Count);
         }
 
         [Fact]
@@ -210,6 +237,17 @@ namespace EmuSen.WiseMan.Cores
             ((ICheatRegistryHost)plain).Cheats = handed;
             plain.ApplyCheats();
             Assert.Equal((byte)0x55, plain.ReadSpace("RAM", 5));
+        }
+
+        // Since 1.8 core info's slots carry a medium and a label, a console file its kind, and a kind this host does not know reads as the game's - see EmuSen_CoreAPI.md §6.28.
+        [Fact]
+        public void Core_infos_battery_slots_are_read_with_kind_medium_and_label()
+        {
+            var listed = Full.Info.Systems.Single().Battery!;
+            Assert.Equal(new (uint, CoreBatteryKind, string?, string?, int?)[] { (0, CoreBatteryKind.Game, null, null, null), (1, CoreBatteryKind.Removable, "test.card", "Card slot", null), (2, CoreBatteryKind.Console, "test.memory", "Inside the console", null) },
+                listed.Select(b => (b.Which, b.Kind, b.Medium, b.Label, b.Port)));
+            var read = CoreDescriptorReader.Info(Full.Info.Text.Replace("\"kind\":\"console\"", "\"kind\":\"later\"").Replace("\"label\":\"Card slot\"", "\"label\":\"Card slot\",\"port\":1"));
+            Assert.Equal((CoreBatteryKind.Game, 1), (read.Systems.Single().Battery![2].Kind, read.Systems.Single().Battery![1].Port));
         }
 
         [Fact]

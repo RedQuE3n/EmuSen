@@ -1009,7 +1009,7 @@ Mega Man Legends on the screen for ever (`Diamond_Players.md` §14.6).
   "BIOS CDROM Boot", "BIOS Interrupt/Exception Handling" (the handler chains, each handler checking I_STAT itself),
   "Expansion Port" (the POST register).
   **What the registers showed** [M, a tool of the step's own printing only device registers, FIFOs, flags and DMA
-  channels after each frame, never the PC, RAM or the scratchpad, on Crash Bandicoot's disc and `scph5501.bin`]: from
+  channels after each frame, never the PC, RAM or the scratchpad, on Crash Bandicoot's disc and the player's American BIOS]: from
   frame 596, the frame after the licence read, DICR reads `848C0000h`, channel 2's flag standing with bit 31 up and
   channels 2 and 3 enabled, and I_STAT's bit 3 is found set again at frame after frame though I_MASK holds it; the
   flag is never acknowledged. Diamond's DICR write cleared bit 31 before recalculating it, so every write made while a
@@ -1039,7 +1039,7 @@ Mega Man Legends on the screen for ever (`Diamond_Players.md` §14.6).
   from power-on), the intro's frames 30–900 within 1.8–1.9 grey levels of SwanStation's nearest frame and 3.6–4.1 of
   Beetle PSX's on 160×120 grey, and each game then goes as far as on the open kernel (`Diamond_CDROM.md` §9.4). Of the
   folder's other revisions on Crash Bandicoot's disc, eight still stopped after this change alone (among them
-  `scph5500.bin`, SCPH-1001, SCPH-1002 and SCPH-5552), on D-43; with both changes every revision but `scph5502.bin`
+  the declared Japanese file, an early American, an early European and a later European one), on D-43; with both changes every revision but the declared European file
   (D-44) leaves the first screen, the Japanese ones for their shell's menu, the disc being American (psx-spx "BIOS
   CDROM Boot": the BIOS refuses "games for other regions").
 
@@ -1361,7 +1361,7 @@ Mega Man Legends on the screen for ever (`Diamond_Players.md` §14.6).
 ### D-43. The DMA's arbitration: a channel between two pieces of a list or of blocks lets another ready channel run, whichever DPCR ranks first
 
 - **Opened:** 2026-10-12, by D-29's step: with DICR's edge fixed, eight revisions in the firmware folder still stopped
-  at the end of the first screen, `scph5500.bin`'s every frame's registers showing channel 2 started on a list (`01000401h`, MADR fixed
+  at the end of the first screen, the declared Japanese file's every frame's registers showing channel 2 started on a list (`01000401h`, MADR fixed
   at one node from frame to frame, the GPU's FIFO holding a 12-word command and drawing) and channel 6 started and
   triggered (`11000002h`) behind it, waiting.
 - **Documents read:** psx-spx `6d7d1bc`, "DMA Channels": DPCR ("If two or more channels have the same priority … the
@@ -1369,7 +1369,7 @@ Mega Man Legends on the screen for ever (`Diamond_Players.md` §14.6).
   asserted", "2=Linked-list mode"), "CPU Operation during DMA" ("the CPU operation resumes during periods when DMA gets
   interrupted (ie. after SyncMode 1 blocks, after SyncMode 2 list entries)"). None says whether another channel may
   begin in those periods.
-- **Ablation** [M]: with channel 6's fill run at once beside a waiting channel 2, `scph5500.bin` leaves its first
+- **Ablation** [M]: with channel 6's fill run at once beside a waiting channel 2, the declared Japanese file leaves its first
   screen for its shell's menu. It is argued, not observed, that the list ran into the ordering
   table that channel 6 was to clear, so that each waited for the other [A].
 - **Test program:** `programs/dma-beside.s`: channel 2 on a list of four full-screen rectangles (waiting for the GPU's
@@ -1393,15 +1393,15 @@ Mega Man Legends on the screen for ever (`Diamond_Players.md` §14.6).
 - **Pinned by:** `channel_6_runs_beside_a_list_that_waits_or_walks`, failing before the change.
 - **Implemented in:** `bus.rs`'s `dma_between_pieces`, in the commit citing this entry.
 
-### D-44. `scph5502.bin` draws nothing: the European BIOS of the declared names stops in its first frames on Diamond
+### D-44. The declared European file draws nothing: a European BIOS stops in its first frames on Diamond
 
-- **Opened:** 2026-10-12, by D-29's step: given `scph5502.bin` (and the folder's other copy under another name, which
+- **Opened:** 2026-10-12, by D-29's step: given the declared European file (and the folder's other copy under another name, which
   behaves alike), Diamond's screen never changes from power-on to frame 3,000, with Crash Bandicoot's disc or none and
   the console's market European or American, before and after D-29's and D-43's changes. Beetle PSX boots the same
   file through its intro to the game [M, pictures]; SwanStation drew no screen in that run. The folder's two other PAL
-  revisions (SCPH-7502, SCPH-5552) pass the intro on Diamond.
+  revisions, both later European ones, pass the intro on Diamond.
 - **What the registers show** [M, frame boundaries only]: from frame 5 nothing moves: POST reads 07h, as on
-  `scph5501.bin` at the same frame, which goes on to 00h, 01h and 02h; DPCR stays `07654321h`, I_MASK 0, the GPU and
+  the player's American BIOS at the same frame, which goes on to 00h, 01h and 02h; DPCR stays `07654321h`, I_MASK 0, the GPU and
   the SPU untouched, the drive spun up and idle; BCC read `00000800h` at frame 4 alone.
 - **Documents read:** psx-spx `6d7d1bc`, "Expansion Port" (POST), "Memory Control", "Cache Control".
 - **Test program:** none yet. **Referee:** Beetle PSX's pictures only.

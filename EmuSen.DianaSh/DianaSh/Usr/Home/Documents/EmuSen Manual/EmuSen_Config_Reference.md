@@ -167,6 +167,20 @@ leaves both maps alone.
 *2026-10-01:* **`SyncToDisplay`**, a boolean, on when absent (`EmuSen_Settings_Reference.md` §4.87.7). Preferences
 writes it into the same object Mistress's graphics window saves, so neither overwrites the other's keys.
 
+*2026-10-15:* a console whose engine lists a removable battery file holds the runtime's **card mode** under its key in
+`Consoles`, beside the core's own keys and never passed to the core: **`Cards`**, `game` (the default, each game's own
+cards), `shared` or `named`, and under `named` **`Card1`** and **`Card2`**, the names of the cards in the two slots,
+`Card 1` and `Card 2` when absent: `"Consoles": { "PlayStation": { "Cards": "named", "Card1": "Blue" } }`. An unknown
+mode reads as `game`, and a name that is not one file name (a separator, a leading dot) as the slot's default, so a hand
+edit can never point a card outside the `Cards` folder (`MemoryCards.Read`; `Diamond_Cards.md` §9;
+`EmuSen_Settings_Reference.md` §4.114).
+
+*2026-10-15, later:* the same keys for every console's save media (`EmuSen_SaveMedia.md` §3.3): a console's first
+removable medium keeps `Cards` and `Card<n>`, its own memory takes **`ConsoleMemory`** and `ConsoleMemory<n>`, any
+further medium **`Media.<id>`** and `Media.<id>.<n>`. Absent, a mode is its medium's default, `shared` for the
+PlayStation's card and `game` for a medium no format module reads. **`<mode key>Offered`** (`CardsOffered`) is `true`
+once Mistress has offered the import of the games' own cards (§4.115 there).
+
 ### 3.4 `cheats/<name>.json` — `CheatFile`
 
 New capability, not a migration: `CheatRegistry` previously had no persistence at all, so every cheat was lost on exit.

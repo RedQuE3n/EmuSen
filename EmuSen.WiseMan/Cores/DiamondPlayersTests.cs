@@ -6,7 +6,9 @@ using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Media;
 using EmuSen.Crystal.Systems;
 using EmuSen.Crystal.Systems.Psx;
+using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
+using EmuSen.Galaxia.Models;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -26,6 +28,7 @@ namespace EmuSen.WiseMan.Cores
             _library = Path.Combine(_root, "Library");
             Directory.CreateDirectory(_library);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+            ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             CoreDiscovery.UseDevelopment(false);
             CoreOptions.BatteryRamDisabled = false;
         }
@@ -37,6 +40,7 @@ namespace EmuSen.WiseMan.Cores
             CoreOptions.BatteryRamDisabled = _batteryWas;
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
+            ConfigStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
@@ -247,7 +251,7 @@ namespace EmuSen.WiseMan.Cores
         private static uint I(uint op, int rs, int rt, int imm) => op << 26 | (uint)rs << 21 | (uint)rt << 16 | (ushort)imm;
 
         // A program that writes one 128-byte frame to the card in slot 1 over SIO0 with psx-spx's write command, each byte sent once RXRDY showed the last, the replies kept at 80100000h.
-        private static byte[] CardWriting(int frame, byte[] data)
+        internal static byte[] CardWriting(int frame, byte[] data)
         {
             const int t0 = 8, t1 = 9, t2 = 10, s0 = 16, s1 = 17;
             byte msb = (byte)(frame >> 8), lsb = (byte)frame;
@@ -278,6 +282,9 @@ namespace EmuSen.WiseMan.Cores
             var data = Enumerable.Range(0, 128).Select(i => (byte)(i * 3 + 1)).ToArray();
             string exe = Write("Card Writer.psexe", CardWriting(0x40, data));
             string card = Path.Combine(DataStore.Saves, "PlayStation", "Card Writer.mcr");
+            var config = GraphicsConfig.Load();
+            config.SetValue("PlayStation", MemoryCards.ModeKey, MemoryCards.PerGame);
+            config.Save();
             using (var core = (CoreEngine)CoreFactory.Load(exe).Core)
             {
                 Assert.Equal(new[] { (0u, ".mcr") }, core.Machine.Info.Battery.Select(b => (b.Which, b.Suffix)));

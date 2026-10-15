@@ -9,8 +9,8 @@ use emusen_native::core::{Kept, SEEK_SPAN, seek};
 /// The disc in the drive, its bytes the host's where the host lends them (`BORROW`).
 pub type Disc = emusen_disc::Disc<Kept>;
 
-/// Whether the drive names its places to the host (`MEDIA_SEEK`): not while the core cannot claim `MEDIA`.
-pub const NAMES_PLACES: bool = false;
+/// Whether the drive names its places to the host (`MEDIA_SEEK`), which core ABI 1.6 lets the core claim.
+pub const NAMES_PLACES: bool = true;
 
 /// The drive's number in machine info's `drives`.
 pub const DRIVE: u32 = 0;
@@ -18,10 +18,10 @@ pub const DRIVE: u32 = 0;
 /// Sub clocks a sector, 1/75 s: 500,000/3, made of two of 166,667 and one of 166,666.
 pub const SECTOR: [u64; 3] = [166_667, 166_667, 166_666];
 
-/// Exchanges from the host clock's first rise until the drive answers, busy till then and deaf to commands, and from
-/// the first report asked for after it until the TOC is read (the LL logs: 53 to 78 between them, the TOC 13 to 35;
-/// chosen within those, D-33).
-pub const SPIN_UP: u32 = 40;
+/// Exchanges from power-on until the drive answers, busy till then and deaf to commands, and from the first report
+/// asked for after it until the TOC is read (the LL logs: 61 to 79 busy exchanges after a host's first, the TOC 13 to
+/// 35; chosen within those, D-33 and D-36).
+pub const SPIN_UP: u32 = 75;
 pub const TOC_READ: u32 = 20;
 /// A seek's exchanges before the head reports a place, and the sectors it lands short of its target (the LL logs: 12,
 /// and 14 to 15).
@@ -106,8 +106,10 @@ pub struct Cdd {
 }
 
 impl Cdd {
+    /// A drive at power-on: with a disc it spins up at once, whether or not the host clocks it (D-36).
     pub fn new(disc: Option<Disc>, now: u64) -> Cdd {
-        Cdd { disc, mode: Mode::Idle, hock: false, status: [0; 10], command: [0; 10], command_new: false, dts_until: 0, report: 0, report_track: 1, toc_read: false, head: 0, data: false, laps: 0, next: now + SECTOR[0], phase: 0, named: None }
+        let mode = if disc.is_some() { Mode::Spinning(SPIN_UP) } else { Mode::Idle };
+        Cdd { disc, mode, hock: false, status: [0; 10], command: [0; 10], command_new: false, dts_until: 0, report: 0, report_track: 1, toc_read: false, head: 0, data: false, laps: 0, next: now + SECTOR[0], phase: 0, named: None }
     }
 
     fn checksum(n: &[u8]) -> u8 {
@@ -139,8 +141,8 @@ impl Cdd {
         self.disc.as_ref().and_then(|d| d.track_at(at)).is_some_and(|t| !t.audio)
     }
 
-    /// Tells the host where the head is going, unless that lies in the megabyte after the place last named; only once
-    /// the core can claim `MEDIA`, whose drives the event names (Nephrite_Native.md §53.4).
+    /// Tells the host where the head is going, unless that lies in the megabyte after the place last named
+    /// (Nephrite_Native.md §53.2, §56).
     fn name(&mut self, at: u32) {
         if !NAMES_PLACES {
             return;
@@ -175,6 +177,9 @@ impl Cdd {
             0x2 => {
                 if !self.toc_read && self.mode == Mode::Stopped(status::STOPPED) {
                     self.mode = Mode::ReadingToc(TOC_READ);
+                } else if self.mode == Mode::Stopped(status::STOPPED) {
+                    // Stopped with its TOC read, a TOC request finds it ready again (krikzz's "9 only after toc cmd"; D-40).
+                    self.mode = Mode::Stopped(status::READY);
                 }
                 self.report = c[3] & 15;
                 if self.report == 5 {
@@ -184,18 +189,22 @@ impl Cdd {
                     }
                 }
             }
-            0x3 | 0x4 if ready => {
+            // A play or a seek during the TOC's read is taken, the read cut short (mcd-verificator's CDC INIT, D-36).
+            0x3 | 0x4 if ready || matches!(self.mode, Mode::ReadingToc(_)) => {
                 if let Some(at) = msf() {
+                    self.toc_read = true;
                     self.report = 0;
                     self.seek_to(at, c[0] & 15 == 3);
                 }
             }
             0x6 if ready => {
                 let high = self.head + 2;
-                self.mode = match self.mode {
-                    Mode::Playing | Mode::Approach { .. } | Mode::Scanning { .. } => Mode::Paused { low: high.saturating_sub(LOOP), high, gap: false },
-                    m => m,
-                };
+                match self.mode {
+                    Mode::Playing | Mode::Approach { .. } | Mode::Scanning { .. } => self.mode = Mode::Paused { low: high.saturating_sub(LOOP), high, gap: false },
+                    // Stopped, a pause is a seek to where the head is, ending paused there (D-39).
+                    Mode::Stopped(_) => self.seek_to(self.head, false),
+                    _ => {}
+                }
             }
             0x7 if ready => match self.mode {
                 Mode::Paused { low, high, .. } => {
@@ -329,17 +338,23 @@ impl Cdd {
         let mut n = [0u8; 10];
         n[0] = refused.unwrap_or(s);
         n[1] = NONE;
-        // Spun up and its TOC not yet read, the drive is stopped and not busy: its report nibble 0, its place zero.
-        if refused.is_none() && self.mode == Mode::Stopped(status::STOPPED) && !self.toc_read && self.disc.is_some() {
-            n[1] = 0;
+        n[8] = flags;
+        // Spun up and its TOC not yet read, the drive is stopped and not busy: its report nibble 0, its place zero, and
+        // its flags 0 (D-36).
+        let idle = refused.is_none() && self.mode == Mode::Stopped(status::STOPPED) && !self.toc_read && self.disc.is_some();
+        if idle {
+            (n[1], n[8]) = (0, 0);
         }
         if refused.is_some() {
             n[2..8].copy_from_slice(&self.status[2..8]);
         } else if report && let Some(r) = self.report_nibbles(s) {
             n[1] = self.report;
             n[2..8].copy_from_slice(&r);
+            // A track's start carries the track's number, its last BCD digit, where the flags go (krikzz's notes; D-33).
+            if self.report == 5 {
+                n[8] = emusen_disc::msf::bcd(self.report_track) & 15;
+            }
         }
-        n[8] = flags;
         n[9] = Cdd::checksum(&n);
         self.status = n;
         Tick { sector, int4: self.hock }
@@ -489,7 +504,7 @@ pub(crate) mod tests {
         for _ in 0..SPIN_UP {
             c.exchange();
         }
-        assert_eq!(line(&c), "00.000000.1E", "spun up, stopped, not busy");
+        assert_eq!(line(&c), "00.000000.0F", "spun up, stopped, not busy");
         send(&mut c, [2, 0, 0, 4, 0, 0, 0, 0, 0]);
         c.exchange();
         assert_eq!(&line(&c)[..2], "0F", "reading the TOC");
@@ -504,6 +519,46 @@ pub(crate) mod tests {
         send(&mut c, [2, 0, 0, 0, 0, 0, 0, 0, 0]);
         c.exchange();
         assert_eq!(&line(&c)[..2], "9F", "no position while stopped");
+        // Track 2's start, when the lead-in's cycle passes it: its number where the flags were (krikzz's notes).
+        send(&mut c, [2, 0, 0, 5, 0, 2, 0, 0, 0]);
+        let answer = (0..40).find_map(|_| {
+            c.exchange();
+            (c.status[1] == 5).then(|| line(&c))
+        });
+        assert_eq!(answer.as_deref().map(|l| &l[..2]), Some("95"));
+        assert_eq!(answer.unwrap().as_bytes()[10], b'2');
+    }
+
+    #[test]
+    fn the_drive_spins_up_from_power_on_and_idles_with_its_flags_clear() {
+        // Unclocked, the drive spins up all the same; a host's first clock then finds it idle (D-36).
+        let mut c = Cdd::new(Some(disc(300, 75)), 0);
+        for _ in 0..SPIN_UP {
+            assert!(!c.exchange().int4);
+        }
+        c.set_hock(true);
+        assert!(c.exchange().int4);
+        assert_eq!(line(&c), "00.000000.0F");
+        let mut empty = Cdd::new(None, 0);
+        assert_eq!(empty.mode, Mode::Idle);
+        empty.set_hock(true);
+        empty.exchange();
+        assert_eq!(empty.status[0], status::NO_DISC);
+    }
+
+    #[test]
+    fn a_play_during_the_tocs_read_is_taken() {
+        let mut c = Cdd::new(Some(disc(3000, 75)), 0);
+        c.set_hock(true);
+        for _ in 0..SPIN_UP {
+            c.exchange();
+        }
+        send(&mut c, [2, 0, 0, 4, 0, 0, 0, 0, 0]);
+        c.exchange();
+        assert!(matches!(c.mode, Mode::ReadingToc(_)));
+        send(&mut c, [3, 0, 0, 0, 0, 2, 0, 0, 0]);
+        c.exchange();
+        assert!(matches!(c.mode, Mode::Seeking { play: true, .. }), "{:?}", c.mode);
     }
 
     #[test]
@@ -538,6 +593,34 @@ pub(crate) mod tests {
         assert_eq!(*max, target - SETTLE, "never past three short");
         let tail: Vec<u32> = reads[100..].iter().flatten().copied().collect();
         assert!(tail.iter().all(|&a| (target - SETTLE - LOOP..=target - SETTLE).contains(&a)), "looping: {tail:?}");
+    }
+
+    #[test]
+    fn a_pause_when_stopped_seeks_to_the_head_and_pauses_there() {
+        let mut c = Cdd::new(Some(disc(3000, 75)), 0);
+        c.set_hock(true);
+        ready(&mut c);
+        c.head = 600;
+        send(&mut c, [6, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let statuses: Vec<u8> = (0..60).map(|_| {
+            c.exchange();
+            c.status[0]
+        }).collect();
+        assert_eq!(statuses[0], status::SEEKING);
+        assert_eq!(*statuses.last().unwrap(), status::PAUSED, "{statuses:?}");
+    }
+
+    #[test]
+    fn a_toc_request_after_a_stop_finds_the_drive_ready() {
+        let mut c = Cdd::new(Some(disc(300, 75)), 0);
+        c.set_hock(true);
+        ready(&mut c);
+        send(&mut c, [1, 0, 0, 0, 0, 0, 0, 0, 0]);
+        c.exchange();
+        assert_eq!(c.status[0], status::STOPPED);
+        send(&mut c, [2, 0, 0, 4, 0, 0, 0, 0, 0]);
+        c.exchange();
+        assert_eq!(&line(&c)[..9], "94.010200");
     }
 
     #[test]

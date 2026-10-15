@@ -32,6 +32,8 @@ pub const SRAM_ID: u32 = 7;
 pub const ROM_ID: u32 = 8;
 /// The Sega CD's backup RAM cartridge, when one is plugged in.
 pub const CARTRAM_ID: u32 = 21;
+/// The backup RAM inside the Sega CD, the last of `MCD_MEMORIES`.
+pub const BRAM_ID: u32 = 20;
 pub const MCD_MEMORIES: [(u32, &str, usize); 4] = [(17, "PRGRAM", 0x8_0000), (18, "WORDRAM", 0x4_0000), (19, "PCMRAM", 0x1_0000), (20, "BRAM", 0x2000)];
 pub const S32X_MEMORIES: [(u32, &str, usize); 3] = [(34, "SDRAM", 0x4_0000), (35, "FRAMEBUFFER", 0x4_0000), (36, "PALETTE", 512)];
 
@@ -64,6 +66,23 @@ pub struct Machine {
     pub debug_open: bool,
     /// The fingerprint of the disc in the Sega CD's drive, 0 for none, which a state records and a load is held to.
     pub disc_print: u64,
+    /// Since core ABI 1.8, the host's create flags: the RAM cartridge (removable) and the backup RAM (the console's) kept
+    /// apart from the game, so a state load leaves each as it stands (EmuSen_SaveMedia.md §7.3). Never part of a state.
+    pub kept_apart: KeptApart,
+}
+
+/// Which of the Sega CD's save memories the host keeps apart from the game.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct KeptApart {
+    pub cartridge: bool,
+    pub backup: bool,
+}
+
+impl KeptApart {
+    /// Whether a state load leaves the memory of space `id` as it stands.
+    pub fn keeps(&self, id: u32) -> bool {
+        (id == CARTRAM_ID && self.cartridge) || (id == BRAM_ID && self.backup)
+    }
 }
 
 /// The model a machine starts as: the first of the Americas, Japan and Europe the header allows (Nephrite_Plan.md §9,
@@ -108,7 +127,7 @@ impl Machine {
         for &(id, name, size) in list {
             extra.push(Memory { id, name, bytes: vec![0; size] });
         }
-        Machine { media, genesis: Genesis::with_mcd(cart, model, bios, disc), extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::io::PADS], plugged: [(crate::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, disc_print }
+        Machine { media, genesis: Genesis::with_mcd(cart, model, bios, disc), extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::io::PADS], plugged: [(crate::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, disc_print, kept_apart: KeptApart::default() }
     }
 
     /// The spaces in id order: the two buses, the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
@@ -245,7 +264,7 @@ impl Machine {
             let (hw, audio) = (&mut self.genesis.hw, &mut self.audio);
             match hw.mcd.as_deref_mut() {
                 Some(m) => {
-                    m.hw.cdda.feed(hw.clock);
+                    m.hw.sound_to(hw.clock);
                     hw.sound.take_with(hw.clock, Some(&mut m.hw.cdda.steps), |l, r| audio.push_pair(l, r));
                 }
                 None => hw.sound.take(hw.clock, |l, r| audio.push_pair(l, r)),

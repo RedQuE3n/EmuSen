@@ -33,6 +33,11 @@ pub struct Create<'a> {
     pub files: Vec<File<'a>>,
     pub pixel_formats: u64,
     pub host_abi_version: u32,
+    /// Since 1.7, `CREATE_SHARED_REMOVABLE`: the host keeps the removable battery files apart from the game, so a
+    /// state load leaves them as they stand (EmuSen_CoreAPI.md §6.27).
+    pub shared_removable: bool,
+    /// Since 1.8, `CREATE_SHARED_CONSOLE`: the same for the console's own battery files (EmuSen_CoreAPI.md §6.28).
+    pub shared_console: bool,
 }
 
 /// What `media_insert` receives (since 1.1): the disc or nothing, its companions from `flags::FILE_MEDIA`, and
@@ -222,7 +227,8 @@ pub trait Core: Sized + StateMachine {
         0
     }
 
-    /// `MEDIA`, since 1.1: machine info's `drives`.
+    /// `MEDIA`, since 1.1: machine info's `drives`. Since 1.6 a machine may have none, and then `media_lid` and
+    /// `media_insert` answer `NO_SUCH_DRIVE` for every drive and change nothing (EmuSen_CoreAPI.md §6.26).
     fn drives(&self) -> Vec<Drive> {
         Vec::new()
     }

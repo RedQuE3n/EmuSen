@@ -56,6 +56,28 @@ pub const FAULT_HANGS: u32 = 65536;
 pub const SETTLE_FRAMES: u32 = 3;
 pub const SLOW_FRAME_MS: u64 = 4;
 pub const HANGING_IMAGE: u8 = 0xEE;
+/// Not a fault, since 1.6: an image whose payload begins with `CARTRIDGE` is a cartridge, whose machine lists no drive
+/// although the library claims MEDIA, as a cartridge console beside its disc attachment does (EmuSen_CoreAPI.md §6.26).
+pub const CARTRIDGE: u8 = 0xCA;
+/// Not a fault, since 1.7: an image whose payload begins with `CARD` has a card in its slot, battery file 1, removable,
+/// which no state holds, so that a load leaves it as it stands (EmuSen_CoreAPI.md §6.27).
+pub const CARD: u8 = 0xCD;
+/// Seeded fault for the kit's C19: a load under `CREATE_SHARED_REMOVABLE` rolls the card back to blank, and marks it
+/// changed, as a core that keeps its card in its state and puts it back would.
+pub const FAULT_CARD_ROLLED_BACK: u32 = 1 << 20;
+/// Not a fault, since 1.8: an image whose payload begins with `CONSOLE_MEMORY` has memory inside the console, battery
+/// file 2, of kind console, which no state holds either (EmuSen_CoreAPI.md §6.28).
+pub const CONSOLE_MEMORY: u8 = 0xCE;
+/// Seeded faults for the kit's C19 and C14 (since 1.8): a load under `CREATE_SHARED_CONSOLE` rolls the console's memory
+/// back to blank and marks it changed; and core info gives file 2 the card's medium, which disagrees in kind and
+/// extension, and port 7, which no machine lists.
+pub const FAULT_CONSOLE_ROLLED_BACK: u32 = 1 << 21;
+pub const FAULT_MEDIUM_DISAGREES: u32 = 1 << 22;
+/// Seeded faults for the kit's C16 and C18 on a machine that lists no drive: a media call taken, a media call answered
+/// with a status of the fault band, and a place named for the drive the machine does not list.
+pub const FAULT_DRIVELESS_ACCEPTS: u32 = 131072;
+pub const FAULT_DRIVELESS_FAULTS: u32 = 262144;
+pub const FAULT_DRIVELESS_NAMES_PLACES: u32 = 524288;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -122,10 +144,20 @@ pub struct TestCore {
     /// MEDIA's drive: a fingerprint of the disc in it, 0 for none, and its lid.
     disc: u32,
     lid_open: bool,
+    /// Whether the image is a cartridge (`CARTRIDGE`), so that the machine has no drive.
+    cartridge: bool,
     /// The image, kept past create and read a byte a frame: lent by a host that lends it, a copy otherwise (BORROW).
     rom: Kept,
     /// Frames after a load whose picture is still drawn otherwise (`SETTLES`).
     settling: u32,
+    /// The card in its slot (`CARD`), whether it changed since saved, and whether the host keeps it apart.
+    card: Option<[u8; 16]>,
+    card_dirty: bool,
+    shared_removable: bool,
+    /// The console's own memory (`CONSOLE_MEMORY`), whether it changed since saved, and whether the host keeps it apart.
+    memory: Option<[u8; 16]>,
+    memory_dirty: bool,
+    shared_console: bool,
 }
 
 /// Where each frame's byte of the kept image lands in RAM, so that the state and its digests follow what was read.
@@ -140,6 +172,15 @@ fn fingerprint(payload: &[u8]) -> u32 {
 }
 
 impl TestCore {
+    /// Drive 0 is the one drive, which a cartridge's machine lacks; the faults answer otherwise for it.
+    fn has_drive(&self, drive: u32) -> Result<(), i32> {
+        match drive {
+            0 if self.cartridge && faults() & FAULT_DRIVELESS_FAULTS != 0 => Err(status::FAULT_BASE - 1),
+            0 if !self.cartridge || faults() & FAULT_DRIVELESS_ACCEPTS != 0 => Ok(()),
+            _ => Err(status::NO_SUCH_DRIVE),
+        }
+    }
+
     fn width(&self) -> i32 {
         if self.wide { 16 } else { 8 }
     }
@@ -175,6 +216,20 @@ impl StateMachine for TestCore {
         }
         if faults() & (SETTLES | FAULT_NEVER_SETTLES | FAULT_SETTLES_UNDECLARED | FAULT_SOUND_DIFFERS_WHILE_SETTLING) != 0 {
             self.settling = SETTLE_FRAMES;
+        }
+        if let Some(card) = &mut self.card
+            && self.shared_removable
+            && faults() & FAULT_CARD_ROLLED_BACK != 0
+        {
+            *card = [0; 16];
+            self.card_dirty = true;
+        }
+        if let Some(memory) = &mut self.memory
+            && self.shared_console
+            && faults() & FAULT_CONSOLE_ROLLED_BACK != 0
+        {
+            *memory = [0; 16];
+            self.memory_dirty = true;
         }
         self.draw();
         Ok(())
@@ -274,9 +329,13 @@ impl Core for TestCore {
             ram[255] = MADE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         let mut sram = [0u8; 16];
+        let mut card = (body.first() == Some(&CARD)).then_some([0u8; 16]);
+        let mut memory = (body.first() == Some(&CONSOLE_MEMORY)).then_some([0u8; 16]);
         for f in &r.files {
             match f.which {
                 0 => sram.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s),
+                1 => card.iter_mut().for_each(|c| c.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s)),
+                2 => memory.iter_mut().for_each(|c| c.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s)),
                 16 => {}
                 _ => {
                     detail(&format!("file {} is not this core's", f.which));
@@ -308,8 +367,15 @@ impl Core for TestCore {
             threads: r.settings.get("Threads").and_then(|v| v.parse().ok()).unwrap_or(1),
             disc: fingerprint(body),
             lid_open: false,
+            cartridge: body.first() == Some(&CARTRIDGE),
             rom: keep(r.image),
             settling: 0,
+            card,
+            card_dirty: false,
+            shared_removable: r.shared_removable,
+            memory,
+            memory_dirty: false,
+            shared_console: r.shared_console,
         };
         m.draw();
         Ok(m)
@@ -325,7 +391,7 @@ impl Core for TestCore {
             ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
             spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, ..Space::new(1, "ROM") }],
             processors: vec![Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None }],
-            battery: vec![Battery { which: 0, suffix: ".srm".into() }],
+            battery: std::iter::once(Battery::game(0, ".srm")).chain(self.card.map(|_| Battery::removable(1, ".card"))).chain(self.memory.map(|_| Battery::console(2, ".mem"))).collect(),
             state: StateFormat { format: "TST1".into(), version: 1, loads_from: vec![1] },
             phases: vec!["count".into()],
             patches: Some((0, 0xFF)),
@@ -354,7 +420,7 @@ impl Core for TestCore {
         if !self.rom.is_empty() {
             let differs = faults() & FAULT_LENT_RUN_DIFFERS != 0 && self.rom.is_lent();
             self.ram[ROM_BYTE] = self.rom[self.frames as usize % self.rom.len()] ^ differs as u8;
-            if MEDIA {
+            if MEDIA && (!self.cartridge || faults() & FAULT_DRIVELESS_NAMES_PLACES != 0) {
                 // The drive names the byte the next frame reads, as a drive names where its head is going (1.4).
                 let past = if faults() & FAULT_NAMES_PAST_THE_IMAGE != 0 { self.rom.len() } else { 0 };
                 seek(0, None, ((self.frames as usize + 1) % self.rom.len() + past) as u64);
@@ -520,14 +586,20 @@ impl Core for TestCore {
     }
 
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
-        if which != 0 {
-            return Err(status::BAD_FILE);
+        match (which, &self.card) {
+            (0, _) => Ok((&self.sram, flags::BATTERY_TRACKED | self.sram_dirty as u32)),
+            (1, Some(card)) => Ok((card, flags::BATTERY_TRACKED | self.card_dirty as u32)),
+            (2, _) if self.memory.is_some() => Ok((self.memory.as_ref().unwrap(), flags::BATTERY_TRACKED | self.memory_dirty as u32)),
+            _ => Err(status::BAD_FILE),
         }
-        Ok((&self.sram, flags::BATTERY_TRACKED | self.sram_dirty as u32))
     }
 
-    fn battery_saved(&mut self, _which: u32) -> Result<(), i32> {
-        self.sram_dirty = false;
+    fn battery_saved(&mut self, which: u32) -> Result<(), i32> {
+        match which {
+            1 => self.card_dirty = false,
+            2 => self.memory_dirty = false,
+            _ => self.sram_dirty = false,
+        }
         Ok(())
     }
 
@@ -590,25 +662,26 @@ impl Core for TestCore {
     }
 
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "test").then(|| vec![Battery { which: 0, suffix: ".srm".into() }])
+        let inside = Battery::console(2, ".mem").label("Inside the console");
+        let inside = if faults() & FAULT_MEDIUM_DISAGREES != 0 { inside.medium("test.card").port(7) } else { inside.medium("test.memory") };
+        (system == "test").then(|| vec![Battery::game(0, ".srm"), Battery::removable(1, ".card").medium("test.card").label("Card slot"), inside])
     }
 
     fn drives(&self) -> Vec<Drive> {
+        if self.cartridge {
+            return Vec::new();
+        }
         vec![Drive { drive: 0, label: "Test drive".into(), kind: "cd".into(), lid_open: self.lid_open, loaded: self.disc != 0 }]
     }
 
     fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
-        if drive != 0 {
-            return Err(status::NO_SUCH_DRIVE);
-        }
+        self.has_drive(drive)?;
         self.lid_open = open;
         Ok(())
     }
 
     fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
-        if drive != 0 {
-            return Err(status::NO_SUCH_DRIVE);
-        }
+        self.has_drive(drive)?;
         if !self.lid_open && !insert.restore {
             return Err(status::LID_CLOSED);
         }

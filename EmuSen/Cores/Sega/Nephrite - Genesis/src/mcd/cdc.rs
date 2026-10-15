@@ -28,6 +28,8 @@ const DTEIEN: u8 = 0x40;
 /// CTRL0's.
 const DECEN: u8 = 0x80;
 const WRRQ: u8 = 0x04;
+/// CTRL1's SHDREN: the header registers show a mode 2 block's subheader.
+const SHDREN: u8 = 0x01;
 
 #[derive(Clone)]
 pub struct Cdc {
@@ -264,18 +266,21 @@ impl Cdc {
         if self.ctrl[0] & DECEN == 0 {
             return;
         }
-        if let Some(raw) = raw
-            && self.ctrl[0] & WRRQ != 0
-        {
-            for (i, &b) in raw.iter().enumerate() {
-                self.buffer[(self.wa as usize + i) & (BUFFER - 1)] = b;
-            }
-            self.pt = self.wa.wrapping_add(12) & (BUFFER as u16 - 1);
-            self.wa = self.wa.wrapping_add(2352) & (BUFFER as u16 - 1);
-            self.head.copy_from_slice(&raw[12..16]);
+        if let Some(raw) = raw {
+            // The header registers and the status follow every block decoded; with WRRQ clear (Sanyo's
+            // "monitor-only mode", §12.5.3) nothing is written to the buffer and the pointers stay.
+            let at = if self.ctrl[1] & SHDREN != 0 { 16 } else { 12 };
+            self.head.copy_from_slice(&raw[at..at + 4]);
             let mode2 = raw[15] == 2;
             // CRCOK, and STAT2's mode bit; no errors to report from an image.
             self.stat = [0x80, 0, (mode2 as u8) << 3, 0];
+            if self.ctrl[0] & WRRQ != 0 {
+                for (i, &b) in raw.iter().enumerate() {
+                    self.buffer[(self.wa as usize + i) & (BUFFER - 1)] = b;
+                }
+                self.pt = self.wa.wrapping_add(12) & (BUFFER as u16 - 1);
+                self.wa = self.wa.wrapping_add(2352) & (BUFFER as u16 - 1);
+            }
         }
         self.deci = true;
         self.deci_until = now + DECI_LENGTH;
@@ -292,6 +297,18 @@ impl Cdc {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn with_wrrq_clear_the_header_is_decoded_and_nothing_written() {
+        let mut c = Cdc { ctrl: [DECEN, 0], wa: 0x100, ..Cdc::default() };
+        let mut raw = [0x55u8; 2352];
+        raw[12..20].copy_from_slice(&[0, 2, 0, 1, 9, 8, 7, 6]);
+        c.sector(Some(&raw), 0);
+        assert_eq!((c.head, c.wa, c.buffer[0x100], c.deci), ([0, 2, 0, 1], 0x100, 0, true), "Sanyo's monitor-only mode");
+        c.ctrl[1] = SHDREN;
+        c.sector(Some(&raw), 0);
+        assert_eq!(c.head, [9, 8, 7, 6], "the subheader");
+    }
 
     #[test]
     fn the_address_counts_up_from_one_and_stops_at_zero() {

@@ -369,7 +369,8 @@ cards. **The format is the raw card**, 131,072 bytes in the card's own frame ord
 files hold, so a card moves between Diamond and other emulators that store raw cards [A; checked against the references
 at stage 6]. DexDrive's `.gme` and the PSP's `.vmp` add headers; importing and exporting them is a later tool, not the
 battery format. **One card per game in slot 1, slot 2 empty**, is the recommended default (§11 Q12): it fits the
-runtime's per-image battery files with no new framework, while a shared card, like a console's, needs a runtime option.
+runtime's per-image battery files with no new framework, while a shared card, like a console's, needs a runtime option. *Built
+2026-10-15 as the runtime's card mode, with Per game the default (`Diamond_Cards.md`).*
 
 ### 4.5 Cheats
 
@@ -861,7 +862,8 @@ searched 2026-10-10], and MarsRT is not on the core ABI v1 (`EmuSen_CoreAPI.md` 
 - **An Analog button**: a `PadButton` appended, or a documented key-only control.
 - **Conditional cheats**: a codec form for "if address A holds X, write Y at B", applied between frames by the runtime.
 - **The kit's memory estimate per image**, from the image's size, for discs.
-- **A shared memory card option** (one card for every game) in the runtime, if the tester wants one.
+- ~~**A shared memory card option** (one card for every game) in the runtime, if the tester wants one.~~ Built
+  2026-10-15 under the core ABI's minor 1.7 (`Diamond_Cards.md`).
 
 ---
 

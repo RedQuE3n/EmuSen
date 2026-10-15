@@ -80,7 +80,8 @@
         "properties": {
           "which": { "type": "integer", "minimum": 0 },
           "suffix": { "type": "string" },
-          "length": { "type": "integer", "minimum": 0 }
+          "length": { "type": "integer", "minimum": 0 },
+          "kind": { "type": "string", "enum": ["game", "removable", "console"] }
         }
       }
     },

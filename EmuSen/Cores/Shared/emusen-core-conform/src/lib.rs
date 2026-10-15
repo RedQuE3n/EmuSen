@@ -1,7 +1,7 @@
-//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C18 on a library loaded through the core
+//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C19 on a library loaded through the core
 //! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
 //! checks and how, §28 the corpus form, which runs the checks that do not depend on the image once, §6.24 C17 and
-//! §6.25 C18.
+//! §6.25 C18, §6.27 and §6.28 C19.
 
 pub mod api;
 pub mod corpus;
@@ -465,6 +465,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     }
     report.cases.push(c17(&mut s));
     report.cases.push(c18(&mut s));
+    report.cases.push(c19(&mut s));
     report
 }
 
@@ -517,6 +518,7 @@ pub(crate) fn image_cases(lib: &Lib, path: &Path, opts: &Options) -> (Vec<Case>,
     }
     cases.push(c17(&mut s));
     cases.push(c18(&mut s));
+    cases.push(c19(&mut s));
     (cases, s.statuses)
 }
 
@@ -1287,20 +1289,33 @@ fn c14(s: &mut Session<'_>) -> Case {
     }
     // Since 1.3: core info's battery files for the machine's system, which a host passes at the first create (§6.3).
     let system = info.get("system").and_then(Value::as_str).unwrap_or("").to_owned();
-    let listed: Option<Vec<(u32, String)>> = s.lib.info().ok().and_then(|t| parse(&t)).and_then(|core| {
+    let entries: Option<Vec<Value>> = s.lib.info().ok().and_then(|t| parse(&t)).and_then(|core| {
         let systems = core.get("systems")?.as_array()?.to_vec();
         let entry = systems.iter().find(|e| e.get("id").and_then(Value::as_str) == Some(&system))?;
-        Some(entry.get("battery")?.as_array()?.iter().map(|b| (b.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32, b.get("suffix").and_then(Value::as_str).unwrap_or("").to_owned())).collect())
+        Some(entry.get("battery")?.as_array()?.to_vec())
     });
+    if let Some(entries) = &entries {
+        slots_agree(&mut c, &system, entries, &list("ports"));
+    }
+    let listed: Option<Vec<(u32, String, String)>> = entries.map(|e| e.iter().map(|b| (b.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32, b.get("suffix").and_then(Value::as_str).unwrap_or("").to_owned(), battery_kind(b))).collect());
+    // Since 1.7: a battery file's kind is "game" or "removable", absent being "game" (§6.27); since 1.8 also "console" (§6.28).
+    for file in list("battery") {
+        let which = file.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32;
+        let kind = battery_kind(&file);
+        c.that(KINDS.contains(&kind.as_str()), || format!("battery file {which} is of kind {kind:?}, which is none of \"game\", \"removable\" and \"console\""));
+    }
     if let Some(listed) = &listed {
-        for (n, (which, suffix)) in listed.iter().enumerate() {
+        for (n, (which, suffix, kind)) in listed.iter().enumerate() {
             c.that(!listed[..n].iter().any(|l| l.0 == *which), || format!("core info lists battery file {which} of system {system} twice"));
             c.that(suffix.starts_with('.') && suffix.len() > 1, || format!("core info's battery file {which} has the suffix {suffix:?}, which is no extension"));
+            c.that(KINDS.contains(&kind.as_str()), || format!("core info's battery file {which} is of kind {kind:?}, which is none of \"game\", \"removable\" and \"console\""));
         }
         for file in list("battery") {
             let which = file.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32;
             let suffix = file.get("suffix").and_then(Value::as_str).unwrap_or("");
+            let kind = battery_kind(&file);
             c.that(listed.iter().any(|l| l.0 == which && l.1 == suffix), || format!("the machine keeps battery file {which} ({suffix}), which core info's list for system {system} does not name"));
+            c.that(listed.iter().all(|l| l.0 != which || l.2 == kind), || format!("the machine's battery file {which} is of kind {kind:?}, and core info's list for system {system} gives it another"));
         }
         let every: Vec<(u32, &[u8])> = s.opts.files.iter().filter(|f| !listed.iter().any(|l| l.0 == f.0)).map(|f| (f.0, &f.1[..])).chain(listed.iter().map(|l| (l.0, &[][..]))).collect();
         if let Err((code, text)) = s.lib.create_from(&s.opts.image, &s.opts.settings, &every, 1, 0) {
@@ -1402,7 +1417,8 @@ fn arm(m: &Machine<'_>) {
 
 /// C16, MEDIA (since 1.1, EmuSen_CoreAPI_Extensions.md §3.7): an insert while the lid is closed refused; the lid
 /// opened, the same disc inserted, the lid closed and frames run; a state made then loading only over its disc, the
-/// state unchanged by a refusal; RESTORE putting the disc back for it; an empty drive; machine info's drives.
+/// state unchanged by a refusal; RESTORE putting the disc back for it; an empty drive; machine info's drives. Since 1.6
+/// a machine may list no drive (EmuSen_CoreAPI.md §6.26), and then every media call is refused (`c16_no_drive`).
 fn c16(s: &mut Session<'_>) -> Case {
     let mut c = Check::new();
     let settings = s.opts.settings.clone();
@@ -1411,7 +1427,9 @@ fn c16(s: &mut Session<'_>) -> Case {
         let m = s.machine(&settings)?;
         let drives = |m: &Machine<'_>| m.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().map(<[Value]>::to_vec)).unwrap_or_default();
         let listed = drives(&m);
-        c.that(!listed.is_empty(), || "MEDIA is claimed but machine info lists no drives".to_owned());
+        if listed.is_empty() {
+            return c16_no_drive(s, c, &m, &image, &media);
+        }
         let drive = listed.first().and_then(|d| d.get("drive")).and_then(Value::as_i64).unwrap_or(0) as u32;
         let lid = |m: &Machine<'_>| drives(m).iter().find(|d| d.get("drive").and_then(Value::as_i64) == Some(drive as i64)).and_then(|d| d.get("lid").and_then(Value::as_str).map(str::to_owned)).unwrap_or_default();
         let loaded = listed.first().and_then(|d| d.get("loaded")) == Some(&Value::Bool(true));
@@ -1459,6 +1477,31 @@ fn c16(s: &mut Session<'_>) -> Case {
         c.that(false, || e);
     }
     c.done("C16", "media")
+}
+
+/// C16 on a machine that lists no drive (since 1.6, EmuSen_CoreAPI.md §6.26): each media call, on drive 0 and on the
+/// last drive number, answers `EMUSEN_NO_SUCH_DRIVE`; none changes the state or machine info; the machine runs on.
+fn c16_no_drive(s: &mut Session<'_>, c: &mut Check, m: &Machine<'_>, image: &[u8], media: &[(u32, Vec<u8>)]) -> Result<(), String> {
+    s.play(m, 0, 30, false)?;
+    let (state, info) = (s.state_digest(m)?, m.machine_info().ok());
+    for drive in [0, u32::MAX] {
+        let calls = [
+            ("open", m.media_lid(drive, true)),
+            ("a disc", m.media_insert(drive, Some(image), media, 0)),
+            ("an empty drive", m.media_insert(drive, None, &[], 0)),
+            ("a restore", m.media_insert(drive, Some(image), media, emusen_native::core::flags::MEDIA_RESTORE)),
+            ("close", m.media_lid(drive, false)),
+        ];
+        for (what, r) in calls {
+            let call = if matches!(what, "open" | "close") { format!("media_lid({drive}, {what})") } else { format!("media_insert({drive}) of {what}") };
+            c.that(r == status::NO_SUCH_DRIVE, || format!("{call} answered {r}, not EMUSEN_NO_SUCH_DRIVE, on a machine that lists no drive"));
+        }
+    }
+    c.that(s.state_digest(m)? == state, || "a media call on a machine that lists no drive changed its state".to_owned());
+    c.that(m.machine_info().ok() == info, || "a media call on a machine that lists no drive changed its machine info".to_owned());
+    s.play(m, 30, 60, false)?;
+    c.note("machine info lists no drive: the lid opened and closed and a disc, an empty drive and a restore inserted on drives 0 and 4294967295, each refused with EMUSEN_NO_SUCH_DRIVE, the machine unchanged and running 60 frames after".to_owned());
+    Ok(())
 }
 
 /// The image and its media files as one leg of C17 holds them.
@@ -1733,6 +1776,122 @@ fn c18(s: &mut Session<'_>) -> Case {
         c.that(false, || e);
     }
     c.done("C18", "the drive's place")
+}
+
+/// A battery entry's kind (since 1.7, EmuSen_CoreAPI.md §6.27), "game" where it gives none.
+fn battery_kind(entry: &Value) -> String {
+    entry.get("kind").and_then(Value::as_str).unwrap_or("game").to_owned()
+}
+
+/// The kinds a battery entry may have: 1.7's two and 1.8's `console`.
+const KINDS: [&str; 3] = ["game", "removable", "console"];
+
+/// The extension of a suffix, its last part: `.mcr` of `.2.mcr`.
+fn extension_of(suffix: &str) -> &str {
+    suffix.rfind('.').map_or(suffix, |i| &suffix[i..])
+}
+
+/// Since 1.8 (EmuSen_CoreAPI.md §6.28), C14 on core info's slots: a medium is `[a-z0-9.]+`, a label is not empty, a port
+/// is one machine info lists, and the entries of one medium agree in kind and extension.
+fn slots_agree(c: &mut Check, system: &str, entries: &[Value], ports: &[Value]) {
+    let ports: Vec<i64> = ports.iter().filter_map(|p| p.get("port").and_then(Value::as_i64)).collect();
+    let mut media: Vec<(String, String, String, u32)> = Vec::new();
+    for b in entries {
+        let which = b.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32;
+        let suffix = b.get("suffix").and_then(Value::as_str).unwrap_or("");
+        if let Some(medium) = b.get("medium") {
+            let id = medium.as_str().unwrap_or("");
+            c.that(!id.is_empty() && id.bytes().all(|x| x.is_ascii_lowercase() || x.is_ascii_digit() || x == b'.'), || format!("core info's battery file {which} of system {system} names the medium {id:?}, which is not [a-z0-9.]+"));
+            let (kind, ext) = (battery_kind(b), extension_of(suffix).to_owned());
+            match media.iter().find(|m| m.0 == id) {
+                Some((_, k, e, first)) => c.that(*k == kind && *e == ext, || format!("core info's battery files {first} and {which} of system {system} are both of medium {id}, and differ in kind or extension ({k} {e} against {kind} {ext})")),
+                None => media.push((id.to_owned(), kind, ext, which)),
+            }
+        }
+        if let Some(label) = b.get("label") {
+            c.that(label.as_str().is_some_and(|l| !l.trim().is_empty()), || format!("core info's battery file {which} of system {system} has the label {:?}, which is no words", label.as_str().unwrap_or("")));
+        }
+        if let Some(port) = b.get("port") {
+            c.that(port.as_i64().is_some_and(|p| ports.contains(&p)), || format!("core info's battery file {which} of system {system} belongs to port {}, which machine info does not list", port.as_i64().map_or("of another type".to_owned(), |p| p.to_string())));
+        }
+    }
+}
+
+/// A battery file's bytes and flags, read whole.
+fn battery_of(m: &Machine<'_>, which: u32) -> (Vec<u8>, u32) {
+    let f = &m.lib.f;
+    let mut flags = 0u32;
+    let len = unsafe { (f.battery)(m.h, which, std::ptr::null_mut(), 0, &mut flags) }.max(0) as usize;
+    let mut out = vec![0u8; len];
+    unsafe { (f.battery)(m.h, which, out.as_mut_ptr(), out.len(), &mut flags) };
+    (out, flags)
+}
+
+/// A machine of the session's image over `files`, made with `SHARED_REMOVABLE` and `SHARED_CONSOLE` by a host of 1.8,
+/// for C19.
+fn created_apart<'a>(s: &mut Session<'a>, settings: &str, files: &[(u32, Vec<u8>)]) -> Result<Machine<'a>, String> {
+    let lib: &'a Lib = s.lib;
+    let was = lib.host();
+    lib.set_host(8, 0);
+    let made = lib.create_from(&s.opts.image, settings, &api::slices(files), 1, flags::CREATE_SHARED_REMOVABLE | flags::CREATE_SHARED_CONSOLE);
+    lib.set_host(was.0, was.1);
+    made.map_err(|(code, text)| {
+        s.statuses.insert(code);
+        format!("create with SHARED_REMOVABLE and SHARED_CONSOLE refused the image: status {code} ({text})")
+    })
+}
+
+/// The frames C19's first machine runs before its state is taken, or the session's where they are fewer.
+const KEPT_APART_FRAMES: u64 = 120;
+
+/// C19, battery files kept apart from the game: removable ones since 1.7 (EmuSen_CoreAPI.md §6.27) and the console's
+/// own since 1.8 (§6.28). Where machine info lists such a file, a machine made with both flags and each such file
+/// holding one pattern makes a state; a second machine, the files holding another pattern as if a second game had
+/// written them since, loads it; each file must read as it did before the load, its changed flag not raised by it. A
+/// machine that lists none passes, with that said.
+fn c19(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
+        let settings = s.opts.settings.clone();
+        let m = s.machine(&settings)?;
+        let info = m.machine_info().ok().and_then(|t| parse(&t)).ok_or("machine info is not JSON")?;
+        let apart: Vec<(u32, usize, String)> = info
+            .get("battery")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter(|b| battery_kind(b) != "game").map(|b| (b.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32, b.get("length").and_then(Value::as_i64).unwrap_or(0).max(0) as usize, battery_kind(b))).collect())
+            .unwrap_or_default();
+        drop(m);
+        if apart.is_empty() {
+            c.note("the machine lists no removable or console battery file, so nothing is kept apart");
+            return Ok(());
+        }
+        let pattern = |seed: u8, len: usize| -> Vec<u8> { (0..len).map(|i| (i as u8).wrapping_mul(37) ^ (i >> 8) as u8 ^ seed).collect() };
+        let files = |seed: u8| -> Vec<(u32, Vec<u8>)> { s.opts.files.iter().filter(|f| !apart.iter().any(|r| r.0 == f.0)).cloned().chain(apart.iter().map(|(w, len, _)| (*w, pattern(seed, *len)))).collect() };
+        let (first, second) = (files(0x5A), files(0xA5));
+        let a = created_apart(s, &settings, &first)?;
+        let frames = s.opts.frames.min(KEPT_APART_FRAMES);
+        s.play(&a, 0, frames, false)?;
+        let state = a.save(0).map_err(|r| format!("state_save answered {r}"))?;
+        drop(a);
+        let b = created_apart(s, &settings, &second)?;
+        s.play(&b, 0, 1, false)?;
+        let before: Vec<(u32, &str, Vec<u8>, u32)> = apart.iter().map(|(w, _, k)| { let (d, f) = battery_of(&b, *w); (*w, k.as_str(), d, f) }).collect();
+        let r = b.load(&state);
+        c.that(r == 0, || format!("state_load of the first machine's state answered {r}"));
+        for (which, kind, was, flags_were) in &before {
+            let (now, flags_now) = battery_of(&b, *which);
+            c.that(&now == was, || format!("{kind} battery file {which} changed across the state load: {} of its {} bytes differ", now.iter().zip(was).filter(|(x, y)| x != y).count(), was.len()));
+            c.that(flags_now & flags::BATTERY_CHANGED == 0 || flags_were & flags::BATTERY_CHANGED != 0, || format!("{kind} battery file {which} reads as changed after the state load, and did not before it"));
+        }
+        let mut kinds: Vec<&str> = apart.iter().map(|r| r.2.as_str()).collect();
+        kinds.dedup();
+        c.note(format!("{} {} file(s), {}: kept as they stood across a state made {frames} frames into a machine whose files held other bytes", apart.len(), kinds.join(" and "), apart.iter().map(|r| format!("file {} ({} bytes)", r.0, r.1)).collect::<Vec<_>>().join(", ")));
+        Ok(())
+    };
+    if let Err(e) = body(s, &mut c) {
+        c.that(false, || e);
+    }
+    c.done("C19", "removable and console files kept apart")
 }
 
 fn c15(s: &mut Session<'_>) -> Case {

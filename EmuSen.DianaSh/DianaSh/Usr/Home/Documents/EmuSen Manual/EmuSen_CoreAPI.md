@@ -678,7 +678,7 @@ Each **system** entry:
 | `controllers` | the devices a port can hold, below |
 | `development` | true when the core does not run the system's games yet; absent is false (§27.4, added 2026-10-06) |
 | `firmware` | every firmware file the system can use, for the firmware window, even before a game. One entry for each image a game can name, with that image's own label, size, parts and replacement, as `firmware_for` gives them; entries for images that are alternatives in one file slot share its `which` (amended 2026-10-05, `VenusRT_Native.md` §67) |
-| `battery` | since 1.3: `[{ which, suffix }]`, every battery file a machine of the system can name whatever its settings, so that a host passes them at the first create. A core that lists a file accepts it at create even where the machine made does not keep it. Machine info stays the authority for the machine; a host creates again only where it names a file that exists and was not passed. Absent, a host passes file 0 by its `.srm` rule and creates again as §19.1 records (`EmuSen_CoreAPI_Extensions.md` §10.5) |
+| `battery` | since 1.3: `[{ which, suffix }]` (since 1.7 `kind`, since 1.8 `medium`, `label` and `port`, §6.27, §6.28), every battery file a machine of the system can name whatever its settings, so that a host passes them at the first create. A core that lists a file accepts it at create even where the machine made does not keep it. Machine info stays the authority for the machine; a host creates again only where it names a file that exists and was not passed. Absent, a host passes file 0 by its `.srm` rule and creates again as §19.1 records (`EmuSen_CoreAPI_Extensions.md` §10.5) |
 
 A **controller** names its controls in the canonical vocabulary, so that the bindings screen is built from data and
 the physical bindings stay the frontend's:
@@ -1156,7 +1156,8 @@ never reaches a core, the host passing its first disc and offering the others th
 | `media_insert(machine, drive, media)` | replaces the disc in the drive, or empties it for a null image; the core copies what it keeps, as at create | `LID_CLOSED` unless the lid is open or `EMUSEN_MEDIA_RESTORE` is set; `BAD_STRUCT` for a struct shorter than 48 bytes; the core's own refusal of the image, the drive left as it was |
 
 `emusen_media` is `{ size, flags, image, image_len, files, file_count, file_size }`, the files numbered as create's.
-Machine info lists the drives (`drives: [{ drive, label, kind, lid, loaded }]`, absent for a core without `MEDIA`), and
+Machine info lists the drives (`drives: [{ drive, label, kind, lid, loaded }]`, absent for a core without `MEDIA` and,
+since 1.6, for a machine without a drive, §6.26), and
 `emusen-native` writes them from `Core::drives`, so that no core's `MachineInfo` changed shape. **A state holds its
 disc's fingerprint** (the core's choice; Diamond's is FNV-1a of its tracks, its lead-out and its sectors 4 and 16 to
 23), and `state_load` answers `WRONG_MEDIA` over another disc and changes nothing. `RESTORE` lets a host put a state's
@@ -1248,6 +1249,135 @@ EMUSEN_EVENT_MEDIA_SEEK = 8            /* a: (drive << 32) | file; b: the byte o
 - **The kit** checks it as C18 (§28.9): every place a drive names is a drive of machine info and a byte inside a file
   of the call, and a run whose host acts on each place is the run whose host skips them, frame for frame, sample for
   sample and state for state.
+
+### 6.26 A `MEDIA` machine with no drive (1.6, 2026-10-14)
+
+*Decided 2026-10-14, the tester's answer to `Nephrite_Native.md` §49.6 Q8, written before its code.* A capability is
+the library's (§6.1), and one library may run a console with a drive and one without: Nephrite is the Genesis, a
+cartridge console, and the Sega CD, a drive beneath it. Claiming `MEDIA` there, the kit's C16 failed on every Genesis
+cartridge with "MEDIA is claimed but machine info lists no drives" (`Nephrite_Native.md` §53.2). The PC Engine's
+CD-ROM² and the Saturn's cartridge slot will meet the same.
+
+**The forms weighed.**
+
+| Form | For | Against |
+|---|---|---|
+| (a) A second bit, "MEDIA where a drive is listed" | nothing in the text of 1.1 changes | a bit is the library's and cannot say which machine has the drive, so it would say nothing machine info's `drives` does not; a host would test two bits for one fact |
+| (b) Two libraries, one per console | no surface change | the Sega CD is the Genesis with an attachment, its state the Genesis's with a block after it (`Nephrite_Native.md` §53.1), and mode 1 is a cartridge with the drive beneath; splitting the library copies the console to serve a test |
+| (c) **The drive list is the per-machine fact**: a machine of a `MEDIA` core may list none, and every media call on it is refused as a call on an unlisted drive is | the fact already exists in machine info; the refusal already exists (`NO_SUCH_DRIVE`, 1.1); the reference host already reads the list | a minor, so that the text and the kit say it |
+
+**Chosen: (c)**, with no new export, struct, constant, status code or capability bit. What changes:
+
+- **Machine info.** `drives` absent or empty means the machine has no drive, for a core claiming `MEDIA` as for one
+  without (1.1 said "absent for a core without `MEDIA`"). `emusen-native` writes nothing for an empty `Core::drives`,
+  as it has since 1.1, so a Rust core's driveless machine gives the absent form and no other core's machine info
+  changes by a byte.
+- **The media calls.** On a machine that lists no drive, `media_lid` and `media_insert` answer `EMUSEN_NO_SUCH_DRIVE`
+  (−267) for every drive number, and change nothing: not the machine's state, not its machine info, not its loans.
+  The refusal follows those of a malformed call, as for any unlisted drive since 1.1: a null machine, an `open`
+  other than 0 or 1, a struct shorter than 48 bytes. It is a status of the interface's band, **not a fault**: the
+  machine runs on, nothing reaches the crash log, and no status of the fault band (§6.15) is answered.
+- **`MEDIA_SEEK`** (1.4) needs nothing: an event must name a drive machine info lists (§6.25), so a driveless
+  machine raises none, and C18 already fails one that does. A core's own switch for naming places (Nephrite's
+  `NAMES_PLACES`) is then a fact of the drive, never of the library.
+- **`BORROW`** (1.3) needs nothing: a loan made at create on a driveless machine ends at `free`, no insert being able to
+  succeed on it.
+- **The host.** A host offers the lid, Change Disc and a set's other discs only for a machine that lists a drive, read
+  from that machine's info, never from the bit alone. The reference host does so since 1.1: `CoreEngine.CanChangeDisc`
+  is `MEDIA` and at least one drive, `SetLid` and `InsertDisc` refuse otherwise, a state refused with `WRONG_MEDIA` is
+  tried over the set's other discs only where `CanChangeDisc`, and `CoreMachine` keeps a lent create's loan until
+  `free` when no drive is listed; Mistress's Change Disc row asks `CanChangeDisc` and two discs. So no host code
+  changes; a WiseMan test holds it (§28.11).
+- **Why a minor.** The text of 1.1 to 1.5 left a `MEDIA` machine without a drive unsaid and their kits failed it; 1.6
+  is the revision whose text and kit accept it. A core whose machines may list no drive is built at 1.6 or later and
+  checked by a kit of its minor or later (`EmuSen_CoreAPI_Extensions.md` §14.4's rule). The minor gates nothing in a
+  host (§4.1).
+- **Older and newer peers.** A host of 1.1 to 1.5 given a core of 1.6 with a driveless machine reads no drive and
+  offers no disc change, as its text said absent drives mean; a host that calls a media export without reading the
+  list gets `NO_SUCH_DRIVE`, the refusal it had to take for any unlisted drive, and the machine is unchanged. A core of
+  1.5 or older is read by a newer host exactly as before.
+- **The kit.** C16 checks the drive rules on a machine that lists a drive, as before, and on one that lists none
+  checks that each media call answers `NO_SUCH_DRIVE`, changes nothing and leaves the machine running (§28.11).
+
+### 6.27 Removable battery files kept apart from the game (1.7, 2026-10-15)
+
+*Decided 2026-10-15, the tester's card mode for the PlayStation (`Diamond_Cards.md`), written before its code.* A
+battery file was always the game's: the runtime named it after the game (§6.11), and a core's state held what it
+needed of it. A memory card or a pak is not the game's; a player carries it between games. Once a host keeps one file
+for several games, a state of game A that puts back the card it holds rolls the card back for every game, B's save made
+since included; `Diamond_Cards.md` §10.1 shows it on Diamond. `EmuSen_CoreAPI_Extensions.md` §9 had foreseen the
+risk and the descriptor field; this section is its smallest form.
+
+**The surface.**
+
+- **`kind` on a battery entry**, in core info's `systems[].battery[]` and in machine info's `battery[]`: absent or
+  `"game"` for memory that belongs with the game, `"removable"` for a card or pak a player carries between games.
+  `emusen-native`'s `Battery` gains `kind: BatteryKind` and writes it only when it is `Removable`, so a core that marks
+  nothing writes what it wrote at 1.6, byte for byte. The third value §9.2 of that page proposed, `"console"`, is not
+  defined until a core needs it.
+- **`EMUSEN_CREATE_SHARED_REMOVABLE`**, bit 1 of `emusen_create_params.flags` (2u): the host keeps every removable
+  file of this machine apart from the game, shared between games. `Create.shared_removable` carries it.
+
+**The rule a core keeps under the flag.** After a successful `state_load` of either kind, `battery(which)` of each
+removable file returns the bytes it returned before the load, and the load raises no `BATTERY_CHANGED` of its own. How
+the machine learns of a card that differs from the state's copy, its flag byte or its presence line, is the core's;
+Diamond's is `Diamond_Cards.md` §6. A refused load changes nothing, as ever. Without the flag, the core's own rule
+stands, a per-game rollback included.
+
+**The host's rule.** A host sets the flag only on a core whose info lists a removable file, and a core that lists one
+honours the flag. That pairing is what makes skew safe: a core of 1.6 lists no kind, so a 1.7 host offers it no shared
+card and never sets the flag on it; a host of 1.6 never sets the flag and reads no kind, so it runs every card per
+game, as before. Where a removable file lives, and whether it is shared, is the host's path rule; the reference host's
+is `Diamond_Cards.md` §9.
+
+**The kit.** C14 checks that each kind is `"game"` or `"removable"` and that a machine's file has the kind core info
+gives it. C19, where machine info lists a removable file, makes one machine with the flag and the file holding one
+pattern, runs it and takes a state, makes a second with the file holding another pattern, as a second game having
+written the shared card since, loads the state into it, and checks that the file still reads as before the load and
+was not marked changed by it; a machine with no removable file passes with that said. The test core lists a removable
+file 1 on an image whose payload begins `CDh`, and its seeded fault `FAULT_CARD_ROLLED_BACK` (1 << 20), a load that
+blanks the card, fails C19 alone (`c19_holds_a_removable_file_as_it_stands_across_a_state_load`).
+
+### 6.28 Save media: the console kind and a slot's medium, label and port (1.8, 2026-10-15)
+
+*Decided 2026-10-15, the tester's go to make the card mode agnostic and modular (`EmuSen_SaveMedia.md`), written before
+its code.* 1.7 told a host which battery files a player carries; it could not say which were memory inside the console,
+nor anything of a slot besides its file. `EmuSen_SaveMedia.md` §5 weighs the forms; this section is the one chosen.
+
+**The surface.**
+
+- **`kind` gains `"console"`**, in core info's `systems[].battery[]` and machine info's `battery[]`: memory inside the
+  console, which every game on it shares (the Sega CD's internal backup RAM, the Saturn's internal memory). A new value
+  of a descriptor's enumerated string (§4.4).
+- **`medium`, `label` and `port`**, each optional, on core info's `systems[].battery[]` entries only: the medium the
+  slot holds, `[a-z0-9.]+` (`psx.card`, `n64.pak`, `mcd.ramcart`); the words a frontend shows for the slot (`Slot 1`,
+  `Controller 2`); and the controller port it belongs to, absent for a slot of the console itself. Which slot a file
+  number is never differs between machines of a system, so machine info does not repeat them. The entries of one medium
+  share a kind and an extension (the last part of the suffix).
+- **`EMUSEN_CREATE_SHARED_CONSOLE`**, bit 2 of `emusen_create_params.flags` (4u): the host keeps every console file of
+  this machine apart from the game. `Create.shared_console` carries it.
+- **`emusen-native`**: `BatteryKind::Console`; `Battery` gains `medium`, `label` and `port`, each written only when set,
+  so a core that sets none writes what it wrote at 1.7, byte for byte; `Battery::console` beside `game` and
+  `removable`, with `.medium(..)`, `.label(..)` and `.port(..)` to set the three.
+
+**The rule a core keeps under the flag** is §6.27's with the kind changed: after a successful `state_load` of either
+kind, `battery(which)` of each console file returns the bytes it returned before the load, and the load raises no
+`BATTERY_CHANGED` of its own. Without the flag the core's own rule stands.
+
+**The host's rule.** A host sets `SHARED_CONSOLE` only on a core whose info lists a console file, as §6.27 pairs its
+flag with a removable file. A host reads an unknown `kind` as `"game"` (enumerations are open, §4.2), so a host of 1.7
+runs a console file per game and never sets the flag; a host of 1.8 given a core of 1.7 finds no `medium`, `label` or
+`port` and takes each kind and extension of a system as one medium (`EmuSen_SaveMedia.md` §3.2). Where each medium's
+files live, and in which mode, is the host's; the reference host's is `EmuSen_SaveMedia.md` §3.
+
+**The kit.** C14 accepts `"console"`, and checks that a `medium` is `[a-z0-9.]+`, a `label` is words, a `port` is one
+machine info lists, and that the entries of one medium agree in kind and extension. C19 keeps console files as it keeps
+removable ones, making its machines with both flags. The test core lists `test.card`'s slot, file 1, and
+`test.memory`'s, file 2, a console file present on an image whose payload begins `CEh`; its seeded faults
+`FAULT_CONSOLE_ROLLED_BACK` (1 << 21), a load that blanks file 2, and `FAULT_MEDIUM_DISAGREES` (1 << 22), file 2 listed
+of the card's medium and of port 7, fail C19 alone and C14 alone (`c19_holds_a_console_file_as_it_stands_across_a_state_load`,
+`each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone`). A core of 1.8 that lists a console file is checked by a
+kit of 1.8 or later, whose C14 accepts it.
 
 ## 7. Core discovery and trust
 
@@ -1977,12 +2107,35 @@ reads the disc's file there during the emulated seek; no capability bit. Its rea
 added; the host routes the event to Galaxia's reader of the disc's files, and the platform library's interface goes
 from 9 to 10 for `emusen_galaxia_mapped_advise`.
 
+**v1.6, 2026-10-14** (§6.26, §28.11), the tester's answer to `Nephrite_Native.md` §49.6 Q8: a machine of a core
+claiming `MEDIA` may list no drive, and on it `media_lid` and `media_insert` answer `EMUSEN_NO_SUCH_DRIVE` for every
+drive and change nothing, so that one library may hold a cartridge console and its disc attachment; no export, struct,
+constant, status or bit, the baseline moving only its minor. `emusen-native` already wrote no `drives` for an empty
+`Core::drives`; the kit's C16 checks the drive rules where a drive is listed and the refusals where none is; the
+reference host already offered disc change only for a machine listing a drive, so it moves only its minor. Its
+reasons are §6.26.
+
 **v1.5, 2026-10-14** (§6.4, §6.9, §28.10), from Diamond's seeded state (`Diamond_Enhancements.md` §52): machine
 info's `state.picture_settles`, the frames after a load whose pictures may differ from the saver's, so that a core whose
 enhancement redraws its picture from the machine after a load need not save what it drew; no export, struct or bit.
 `emusen-native` gains `Core::picture_settles`, written into machine info when it is not 0; the C# reader takes it as
 `CoreMachineInfo.PictureSettles`; the kit's C7 and C8 compare pictures after a load from the frame past it, and its
 deadline for an image becomes one on progress. Its reasons are `EmuSen_CoreAPI_Extensions.md` §14.
+
+**v1.7, 2026-10-15** (§6.27), the tester's card mode for the PlayStation (`Diamond_Cards.md`): battery entries'
+`kind`, `"game"` or `"removable"`, in core info and machine info, and `EMUSEN_CREATE_SHARED_REMOVABLE` (bit 1 of
+`emusen_create_params.flags`), under which a state load leaves a removable file as it stands; no export, struct, status
+or capability bit. `emusen-native` gains `BatteryKind`, `Battery::game` and `Battery::removable` (every core's literal
+moved to them, none of their JSON changing) and `Create.shared_removable`; Diamond lists its two cards removable and
+honours the flag; the C# host reads `kind` and sets the flag for its card mode; kit case C19 is added and C14 checks
+kinds. Its reasons are `EmuSen_CoreAPI_Extensions.md` §9 and `Diamond_Cards.md` §1–§5.
+
+**v1.8, 2026-10-15** (§6.28), the tester's go to make the card mode every console's (`EmuSen_SaveMedia.md`): battery
+entries' kind `"console"`, core info's `medium`, `label` and `port` on battery entries, and
+`EMUSEN_CREATE_SHARED_CONSOLE` (bit 2 of `emusen_create_params.flags`); no export, struct, status or capability bit.
+`emusen-native` gains `BatteryKind::Console`, `Battery::console` and the slot's three fields, written only when set, and
+`Create.shared_console`; the C# host reads the kind as `CoreBatteryKind` with the slot's fields and passes the flag;
+the kit's C14 checks the slots and C19 keeps console files. Its reasons are `EmuSen_SaveMedia.md` §1–§5.
 
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
 and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld
@@ -2948,7 +3101,8 @@ On the development desktop (16 processors), 600 frames, Nephrite's release libra
   count of cases moved: an insert with the lid closed refused; the lid opened, the same disc inserted and the lid closed,
   frames run; a state made then refused over an empty drive with `WRONG_MEDIA` and the machine unchanged, accepted
   after `RESTORE` puts the disc back; a drive machine info does not list refused. An image with an empty drive, a
-  program, has the lid and an empty insert checked alone.
+  program, has the lid and an empty insert checked alone. *Since 1.6* (§28.11), a machine listing no drive passes
+  when each media call is refused; until then C16 failed it.
 - **The memory per image** (`EmuSen_CoreAPI_Extensions.md` §7): `estimate(len) = JOB_MEMORY + 4 × len`, the image's
   length being its files' together; the images admitted by their estimates within the memory allowed less the core's
   own job, one larger than all of it run alone; `--image-memory` names another factor; `summary.json` records
@@ -3012,6 +3166,40 @@ case's run now starts once each thread is calling and ends once each has called 
   frames take, which at Diamond's 4× and the kit's 1,800 frames was more than 600 seconds whole (§48 there); a create
   or a frame that never returns is caught as before. Hashing more cheaply was set aside, the frames' digest being
   Pharaoh's (§12.1).
+
+### 28.11 C16 on a machine with no drive (1.6, 2026-10-14)
+
+*At the minor of §6.26.*
+
+- **C16 on a machine listing no drive** (`drives` absent or empty): 30 frames run; on drive 0 and on drive
+  4,294,967,295 the lid opened, a disc inserted, the drive emptied, a disc inserted with `RESTORE` and the lid
+  closed, each to answer `EMUSEN_NO_SUCH_DRIVE` and nothing else, the call named where one does not; the state's
+  digest and the machine info text the same after the ten calls as before; 60 frames more. A machine listing a drive
+  is held to the rules of §28.7 as before, unchanged by a byte. C16 still runs only where `MEDIA` is claimed, so no
+  core's count of cases moved.
+- **C18** needed nothing: a driveless machine's `MEDIA_SEEK` names a drive machine info does not list, which C18
+  already failed.
+- **The test core's cartridge.** An image whose payload begins `0xCA` (`CARTRIDGE`) is a cartridge, whose machine
+  lists no drive in a library that claims `MEDIA`, as Nephrite's Genesis is beside its Sega CD; its drive names no
+  place, and each media call answers `NO_SUCH_DRIVE`. Three seeded faults act on the cartridge alone: 131,072, a
+  media call taken; 262,144, a media call answered from the fault band (−321); 524,288, a place named for the drive
+  it lacks.
+- **The defect, shown before the change.** The kit of 1.5 on the correct cartridge failed C16 with Nephrite's
+  words, "MEDIA is claimed but machine info lists no drives", and then with the lid's checks, since the machine's
+  refusals were the right ones.
+- **Measured** [M]: the kit's tests pass, 7 and 21. The test core passes all eighteen cases on a disc and on a
+  cartridge, alone and in one corpus; 131,072 and 262,144 on a cartridge fail C16 alone, 524,288 C18 alone, and the
+  three change nothing on a disc. `emusen-native`'s tests pass, 74, one of them the cartridge in process: no `drives`
+  in its machine info, `NO_SUCH_DRIVE` for drives 0, 1 and 4,294,967,295, `NOT_SUPPORTED` and `BAD_STRUCT` for a
+  malformed call first, the state and machine info unchanged, no place named. The guard: 426 facts, the minor's two
+  lines moved. WiseMan's `A_media_core_whose_machine_lists_no_drive_offers_no_disc_change`: the reference host on the
+  cartridge lists no drive, `CanChangeDisc` and `LidOpen` false, `SetLid`, `InsertDisc` and `ChangeDisc` refused
+  before the core is called, `MediaLid` and `MediaInsert` refused with −267, frames run and a state round-trips;
+  Mistress's Change Disc row asks `CanChangeDisc`, so it is not shown. WiseMan's CoreAbi, CoreAdapter,
+  CoreDiscovery, DiscStreaming and Diamond tests pass, 107 of 107.
+- **Diamond unchanged** [M]: its crate's tests pass, 279, and its library's, 4; the kit on its sample
+  (`kit/psx-sample.txt`, 1,800 frames, 10 GiB) reports core ABI 1.6, the core's cases pass and 9 of 9 discs pass, each
+  disc's C16 taking the drive's path with the words it had before, in 258.5 s.
 
 ## 29. A space that is a view, 2026-10-07
 

@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.5.
+/* emusen_core.h - the EmuSen core ABI, version 1.6.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 5u
+#define EMUSEN_CORE_ABI_MINOR 8u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -108,6 +108,15 @@ typedef struct emusen_machine emusen_machine;
  * it keeps. A call the core refuses lends nothing. */
 #define EMUSEN_CREATE_LENT           1u  /* emusen_create_params.flags */
 #define EMUSEN_MEDIA_LENT            2u  /* emusen_media.flags */
+/* @since 1.7 (section 6.27): the host keeps every battery file machine info lists with kind "removable" apart from the
+ * game, shared between games. A state_load of either kind then leaves each such file's contents as they stand and
+ * raises no BATTERY_CHANGED of its own; how the machine learns of a card that differs from the state's copy is the
+ * core's. Set only for a core whose info lists a removable file; a core that lists one honours it. */
+#define EMUSEN_CREATE_SHARED_REMOVABLE 2u  /* emusen_create_params.flags */
+/* @since 1.8 (section 6.28): the same for every battery file machine info lists with kind "console", memory inside the
+ * console that every game shares: a state_load of either kind leaves each such file's contents as they stand and raises
+ * no BATTERY_CHANGED of its own. Set only for a core whose info lists a console file; a core that lists one honours it. */
+#define EMUSEN_CREATE_SHARED_CONSOLE 4u  /* emusen_create_params.flags */
 /* @since 1.4: in EMUSEN_EVENT_MEDIA_SEEK's `a`, the call's image itself, which no emusen_file numbers. */
 #define EMUSEN_FILE_IMAGE            0xFFFFFFFFu
 
@@ -358,6 +367,8 @@ int64_t emusen_core_debug_disassemble(emusen_machine *machine, uint32_t processo
 int64_t emusen_core_debug_reads(emusen_machine *machine, uint32_t *out, size_t len);
 
 /* ---- Media (section 6.23), @since 1.1 ------------------------------------------------- */
+/* @since 1.6 (section 6.26): MEDIA is the library's, so a machine may list no drive in machine info; on one that
+ * lists none, both calls answer EMUSEN_NO_SUCH_DRIVE for every drive and change nothing, which is not a fault. */
 /* MEDIA: opens (1) or closes (0) the drive's lid or tray, as the player would; the core models what follows. */
 int32_t emusen_core_media_lid(emusen_machine *machine, uint32_t drive, uint32_t open);
 /* MEDIA: the disc in the drive replaced, refused with EMUSEN_LID_CLOSED unless the lid is open or RESTORE is set.

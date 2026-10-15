@@ -8,7 +8,7 @@ case the listing, with a target and without
 target none
 covers 1
 $ help
-out 22784
+out 23473
 Available commands:
   help                          this text - every command, one line each, with a brief explanation
   man [command]                 with no argument, same as 'help'; with a command name, its full manual page
@@ -167,6 +167,17 @@ Available commands:
   cheat db load <game>               import that game's cheats, disabled
   cheat db update                    download the libretro cheat database (CC BY-SA 4.0)
   cheat db prune [--apply]           delete the systems no core in this build can use
+  memcard ls [<card>]           every card under Saves, or the saves on one card
+  memcard cp <card>:<save> <card>
+                                copy a save onto another card of its medium
+  memcard mv <card>:<save> <card>
+                                copy a save, read it back, then delete the first
+  memcard rm <card>:<save>      delete a save as the console's own manager does
+  memcard import <card> <from>...
+                                every save of <from> onto <card>, all or none
+  memcard new <card>            a new card, formatted where its medium allows
+  memcard dup <card> <new>      a whole card copied to a new name
+  memcard rename <card> <new>   a card renamed
   search <space> <val> [<w>]    start a new search: find every address currently equal to <val>
                                 (width <w> in bytes: 1, 2, or 4 - default 1, little-endian)
   search refine <val>           narrow the current search to addresses now equal to <val>
@@ -293,7 +304,7 @@ EmuSen_Debugging_Tools_Reference_v5.md for the full writeup and what's NOT suppo
 status 0
 action none
 $ help extra words are ignored
-out 22784
+out 23473
 Available commands:
   help                          this text - every command, one line each, with a brief explanation
   man [command]                 with no argument, same as 'help'; with a command name, its full manual page
@@ -452,6 +463,17 @@ Available commands:
   cheat db load <game>               import that game's cheats, disabled
   cheat db update                    download the libretro cheat database (CC BY-SA 4.0)
   cheat db prune [--apply]           delete the systems no core in this build can use
+  memcard ls [<card>]           every card under Saves, or the saves on one card
+  memcard cp <card>:<save> <card>
+                                copy a save onto another card of its medium
+  memcard mv <card>:<save> <card>
+                                copy a save, read it back, then delete the first
+  memcard rm <card>:<save>      delete a save as the console's own manager does
+  memcard import <card> <from>...
+                                every save of <from> onto <card>, all or none
+  memcard new <card>            a new card, formatted where its medium allows
+  memcard dup <card> <new>      a whole card copied to a new name
+  memcard rename <card> <new>   a card renamed
   search <space> <val> [<w>]    start a new search: find every address currently equal to <val>
                                 (width <w> in bytes: 1, 2, or 4 - default 1, little-endian)
   search refine <val>           narrow the current search to addresses now equal to <val>
@@ -591,7 +613,7 @@ status 0
 action none
 $ help | wc -l
 out 3
-281
+292
 status 0
 action none
 end

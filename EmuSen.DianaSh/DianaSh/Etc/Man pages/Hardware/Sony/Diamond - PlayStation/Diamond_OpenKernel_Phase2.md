@@ -434,7 +434,7 @@ screen, its own text, its own RAM, its own accesses to the hardware registers, i
 arguments and documented results) and what the cards hold. Nothing here describes the player's BIOS's code, its
 internal state or its own I/O; where a difference could only be explained by them, it says so and stops.
 
-**How the player's BIOS was used.** Only as Diamond's firmware: the core's declared American file, `scph5501.bin`,
+**How the player's BIOS was used.** Only as Diamond's firmware: the core's declared American file,
 given to the run tool's `--bios`, and as `firmwarecheck.py`'s input (§22.5). Its intro does not boot a disc in
 Diamond (D-29, open), so each game was started on it through the kernel's own `LoadExec` (the run tool's `--boot`,
 `Diamond_CDROM.md` §9.4), and on the open kernel by its own SYSTEM.CNF boot (§15). The BIOS's own TTY was never read:
@@ -560,9 +560,9 @@ images in the firmware folder, the core's three declared files and fifteen other
 
 | Original | Equal at the same offset | Longest aligned run | Longest common run | Verdict |
 |---|---|---|---|---|
-| `scph5500.bin` | 114,559 of 524,288 (21.9%) | 5,245 | 6,610 bytes, replacement offset 92,440 | FAIL |
-| `scph5501.bin` | 160,929 (30.7%) | 111,108 | 111,108 bytes, replacement offset 92,440 | FAIL |
-| `scph5502.bin` | 116,361 (22.2%) | 18,071 | 18,071 bytes, replacement offset 92,440 | FAIL |
+| the declared Japanese file | 114,559 of 524,288 (21.9%) | 5,245 | 6,610 bytes, replacement offset 92,440 | FAIL |
+| the declared American file | 160,929 (30.7%) | 111,108 | 111,108 bytes, replacement offset 92,440 | FAIL |
+| the declared European file | 116,361 (22.2%) | 18,071 | 18,071 bytes, replacement offset 92,440 | FAIL |
 | the fifteen others | 20.3% to 31.0% | 656 to 114,386 | 656 to 114,386 bytes, each at replacement offset 92,440 | FAIL, all |
 
 Every longest run starts at the replacement's offset 92,440, where its last non-zero byte has ended (§20.4): it is the

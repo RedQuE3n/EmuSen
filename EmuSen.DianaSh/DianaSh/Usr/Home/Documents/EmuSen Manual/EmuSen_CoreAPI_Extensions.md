@@ -321,6 +321,10 @@ same image, close, run N frames without fault; a state saved after the swap load
 null image empties the drive. C2 checks the bit against both exports; C12's skew host never calls them. Synthetic
 discs from WiseMan's planned disc builder [R `Diamond_Plan.md` §3.3] serve, so CI needs no commercial disc.
 
+*Amended at 1.6, 2026-10-14 (`EmuSen_CoreAPI.md` §6.26):* a machine of a `MEDIA` core may list no drive, as a cartridge
+console beside its disc attachment in one library does; C16 then checks that every media call is refused with
+`EMUSEN_NO_SUCH_DRIVE` and changes nothing, and the drive rules above only where a drive is listed.
+
 ### 3.8 Cost, and what it breaks
 
 About fifteen baseline lines (two exports, two function types, the struct and its seven fields, three status codes,
@@ -751,6 +755,14 @@ reaches (the Sega CD is in development) [A]. It breaks nothing at any surface; i
 ---
 
 ## 9. Memory cards, packs, and a console's own memory
+
+*Built 2026-10-15 for the removable kind only, as the core ABI's minor 1.7 (`EmuSen_CoreAPI.md` §6.27,
+`Diamond_Cards.md`): battery entries' `kind`, `"game"` or `"removable"`, and a create flag under which a state load
+leaves a removable file as it stands, which answers §9.3's risk in the core rather than by a warning. The runtime's
+option has a third mode, named cards; `"console"` waits for a core that needs it.*
+
+*`"console"` built the same day as the minor 1.8 (`EmuSen_CoreAPI.md` §6.28), with a slot's medium, label and port and
+a second create flag; the framework's model, the card manager and the default are `EmuSen_SaveMedia.md`.*
 
 *Diamond's §10 lists "a shared memory card option (one card for every game) in the runtime, if the tester wants
 one"; Nephrite's §4.4 has the same question for the Sega CD's internal backup RAM and its RAM cartridge.*

@@ -200,17 +200,91 @@ mod tests {
         assert_eq!(run(&temp.join("old"), &temp.join("home")).unwrap().files, 0);
     }
 
+    /// Every entry under a directory, with a file's bytes and every entry's modification time, in order.
+    fn snapshot(directory: &str) -> Vec<(String, Option<Vec<u8>>, std::time::SystemTime)> {
+        let mut found = Vec::new();
+        let mut pending = vec![directory.to_string()];
+        while let Some(directory) = pending.pop() {
+            for (name, is_directory) in entries(&directory).unwrap() {
+                let entry = path::combine(STYLE, &directory, &name);
+                let modified = std::fs::metadata(&entry).unwrap().modified().unwrap();
+                found.push((entry.clone(), (!is_directory).then(|| std::fs::read(&entry).unwrap()), modified));
+                if is_directory {
+                    pending.push(entry);
+                }
+            }
+        }
+        found.sort();
+        found
+    }
+
+    /// `GetShortPathNameW`: the 8.3 spelling, where the volume keeps short names.
+    #[cfg(windows)]
+    fn short_name(long: &str) -> Option<String> {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetShortPathNameW(long: *const u16, short: *mut u16, length: u32) -> u32;
+        }
+        let wide: Vec<u16> = std::ffi::OsStr::new(long).encode_wide().chain([0]).collect();
+        let mut short = vec![0u16; 1024];
+        // SAFETY: both buffers live for the call, the first ends in a NUL and the second's length is given.
+        let length = unsafe { GetShortPathNameW(wide.as_ptr(), short.as_mut_ptr(), short.len() as u32) } as usize;
+        (length > 0 && length < short.len()).then(|| std::ffi::OsString::from_wide(&short[..length]).to_string_lossy().into_owned())
+    }
+
+    /// The tree's own spellings on this system, links to it made in `links`: each names the tree, or is equal to its spelling without regard to case.
+    fn spellings(temp: &TempDir, home: &str, links: &TempDir) -> Vec<String> {
+        let separator = STYLE.separator();
+        let mut spellings = vec![home.to_string(), format!("{home}{separator}"), temp.join("x/../Caf\u{e9}"), temp.join("CAF\u{c9}"), temp.join("caf\u{e9}")];
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(home, links.join("linked")).unwrap();
+            spellings.push(links.join("linked"));
+        }
+        // The decomposed é, which APFS reads as the composed one.
+        #[cfg(target_os = "macos")]
+        spellings.push(temp.join("Cafe\u{301}"));
+        #[cfg(windows)]
+        {
+            let lower_drive = home[..1].to_lowercase() + &home[1..];
+            spellings.extend([home.replace('\\', "/"), format!(r"\\?\{home}"), lower_drive, format!("{home}."), format!("{home} "), format!("{home}. .")]);
+            spellings.extend(short_name(home).filter(|short| short != home));
+            let junction = links.join("junction");
+            let made = std::process::Command::new("cmd").args(["/C", "mklink", "/J", &junction, home]).output().unwrap();
+            assert!(made.status.success(), "{made:?}");
+            spellings.push(junction);
+            if std::os::windows::fs::symlink_dir(home, links.join("linked")).is_ok() {
+                spellings.push(links.join("linked"));
+            }
+        }
+        spellings
+    }
+
+    /// A migration onto the tree itself, however the system lets it be spelled, copies nothing and changes nothing
+    /// (EmuSen_Galaxia.md §3.2): the roots compare equal, or every file finds itself already there.
     #[test]
-    fn a_tree_is_not_migrated_onto_itself_whatever_the_spelling() {
-        let temp = TempDir::new("migrate");
-        put(&temp, "home/Saves/a.srm", "save");
-        let home = temp.join("home");
-        assert_eq!(run(&home, &home).unwrap().files, 0);
-        assert_eq!(run(&home, &temp.join("x/../home")).unwrap().files, 0);
-        // The C# compares the two roots without regard to case on every platform, so a root spelled in another case is the same root.
-        assert_eq!(run(&home, &temp.join("HOME")).unwrap().files, 0);
-        assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 1, "nothing was made beside the tree");
-        assert_eq!(run(&temp.join("absent"), &home).unwrap().files, 0);
+    fn a_tree_spelled_any_way_the_system_reads_as_itself_is_left_alone() {
+        let (temp, links) = (TempDir::new("migrate-spelling"), TempDir::new("migrate-links"));
+        for (file, contents) in [("Saves/a.srm", "save"), ("Saves/Save States/a.state", "state"), ("Logs/x/run.txt", "log"), ("Firmware/dsp1.rom", "fw"), ("Cheats/SNES/a.cht", "cheat")] {
+            put(&temp, &format!("Caf\u{e9}/{file}"), contents);
+        }
+        let home = temp.join("Caf\u{e9}");
+        let spellings = spellings(&temp, &home, &links);
+        if cfg!(any(windows, target_os = "macos")) {
+            assert!(directory_exists(&temp.join("CAF\u{c9}")), "this file system ignores case");
+        }
+        if cfg!(target_os = "macos") {
+            assert!(directory_exists(&temp.join("Cafe\u{301}")), "this file system ignores the form of a character");
+        }
+        let (tree, beside) = (snapshot(&home), snapshot(temp.path()));
+        for spelling in &spellings {
+            assert_eq!(run(&home, spelling).unwrap(), Copied::default(), "onto {spelling}");
+            assert_eq!(run(spelling, &home).unwrap(), Copied::default(), "from {spelling}");
+        }
+        assert_eq!(snapshot(&home), tree, "the tree is as it was");
+        assert_eq!(snapshot(temp.path()), beside, "nothing was made beside it");
+        assert_eq!(run(&temp.join("absent"), &home).unwrap(), Copied::default());
     }
 
     #[test]

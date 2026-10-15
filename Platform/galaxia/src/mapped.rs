@@ -16,10 +16,13 @@ pub struct Mapped {
 impl Mapped {
     /// Maps the file at `path` whole. Opening reads none of it.
     pub fn open(path: impl AsRef<Path>) -> io::Result<Mapped> {
-        let file = File::open(path)?;
+        let path = path.as_ref();
+        // A directory is refused as one everywhere: Unix opens it and Windows refuses it as access denied (§3.8).
+        let directory = || io::Error::from(io::ErrorKind::IsADirectory);
+        let file = File::open(path).map_err(|error| if path.is_dir() { directory() } else { error })?;
         let meta = file.metadata()?;
         if meta.is_dir() {
-            return Err(io::Error::from(io::ErrorKind::IsADirectory));
+            return Err(directory());
         }
         if meta.len() == 0 {
             return Ok(Mapped { map: None });

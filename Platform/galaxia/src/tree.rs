@@ -335,6 +335,7 @@ mod tests {
     use super::*;
     use crate::test_support::TempDir;
 
+    #[cfg(unix)]
     fn tree_at(root: &str) -> Tree {
         Tree { root: root.to_string(), application_data: "/appdata".to_string(), ..Tree::default() }
     }
@@ -407,9 +408,9 @@ mod tests {
 
         let unmarked = TempDir::new("legacy-bare");
         let bare = unmarked.join("bare");
-        std::fs::create_dir_all(bare.clone() + "/" + LEGACY_PUBLISHED_ROOT_DIR_NAME).unwrap();
+        std::fs::create_dir_all(path::combine(Style::HOST, &bare, LEGACY_PUBLISHED_ROOT_DIR_NAME)).unwrap();
         assert_eq!(root_for(&bare, false, "unused"), path::combine(Style::HOST, &bare, LEGACY_PUBLISHED_ROOT_DIR_NAME));
-        std::fs::create_dir_all(bare.clone() + "/" + PUBLISHED_ROOT_DIR_NAME).unwrap();
+        std::fs::create_dir_all(path::combine(Style::HOST, &bare, PUBLISHED_ROOT_DIR_NAME)).unwrap();
         assert_eq!(root_for(&bare, false, "unused"), path::combine(Style::HOST, &bare, PUBLISHED_ROOT_DIR_NAME));
     }
 

@@ -3,6 +3,7 @@
 //! in mode 2. The Mega-CD Hardware Manual (Sega, 1991) §1-§4 is the source; Nephrite_Native.md §50 is the record, with
 //! what mcd-verificator's tests settled where the manual is silent.
 
+pub mod asic;
 pub mod cdc;
 pub mod cdda;
 pub mod cdd;
@@ -99,6 +100,8 @@ pub struct Sub {
     pub cdda: cdda::Cdda,
     /// A backup RAM cartridge in the slot at `$400000`, when one is plugged in.
     pub cart: Option<RamCart>,
+    /// The graphics ASIC.
+    pub asic: asic::Asic,
     /// The registers' accesses, when a development tool asks for them; never state.
     pub seen: Option<Vec<Seen>>,
 }
@@ -198,6 +201,7 @@ impl MegaCd {
             fader: 0,
             cdda: cdda::Cdda::new(master_hz.0, master_hz.1),
             cart: None,
+            asic: asic::Asic::default(),
             seen: None,
         };
         hw.clock = hw.to_sub(master_now);
@@ -365,16 +369,21 @@ impl Sub {
         (self.g.reset_held || self.g.busreq).then_some((self.g.bank as usize) << 17 | (a & 0x1_FFFF) as usize)
     }
 
-    /// Everything timed on the sub side up to the present, in the order it falls: the timer's counts (level 3 at 0),
-    /// the drive's exchanges and the sectors they read, the decoder interrupt clearing itself, the CDC's DMA.
+    /// Everything timed on the sub side up to the present, in the order it falls: the graphics ASIC's lines (level 1 at
+    /// the last), the timer's counts (level 3 at 0), the drive's exchanges and the sectors they read, the decoder
+    /// interrupt clearing itself, the CDC's DMA.
     pub fn events(&mut self) {
         loop {
             let (timer, deci, dma) = self.times();
-            let t = timer.min(self.cdd.next).min(deci).min(dma);
+            let t = timer.min(self.cdd.next).min(deci).min(dma).min(self.asic.next);
             if t > self.clock {
                 return;
             }
-            if t == timer {
+            if t == self.asic.next {
+                if self.asic.step(&mut self.word.bytes, self.word.priority) {
+                    self.raise(1);
+                }
+            } else if t == timer {
                 if self.g.timer_count == 0 {
                     self.raise(3);
                     self.g.timer_count = self.g.timer;
@@ -404,7 +413,7 @@ impl Sub {
     /// The sub clock of the next event that can make a request.
     fn next_event(&self) -> u64 {
         let (timer, deci, dma) = self.times();
-        timer.min(self.cdd.next).min(deci).min(dma)
+        timer.min(self.cdd.next).min(deci).min(dma).min(self.asic.next)
     }
 
     /// The drive's exchange at `t`: level 4, and the sector it read handed to the CDC.
@@ -453,6 +462,7 @@ impl Sub {
             (dest::PCM, _) => self.pcm_ram[((self.pcm_regs[7] as usize & 15) << 12) | (a >> 1 & 0xFFF)] = b0,
             (dest::PRG, Some(b1)) => (self.prg[a & 0x7_FFFE], self.prg[(a & 0x7_FFFE) + 1]) = (b0, b1),
             (_, Some(b1)) => {
+                self.asic.stolen();
                 let i = if self.word.one_m { word::bank_byte(self.word.sub_bank(), a & 0x1_FFFE) } else { a & 0x3_FFFE };
                 (self.word.bytes[i], self.word.bytes[i + 1]) = (b0, b1);
             }
@@ -496,6 +506,7 @@ impl Sub {
         g.res0_at = now + PERIPHERAL_RESET;
         self.cdd.hock = false;
         self.fader = 0;
+        self.asic = asic::Asic::default();
     }
 
     /// The Word RAM the sub CPU waited for is its own again: its owed writes done, and on it goes.
@@ -630,6 +641,7 @@ impl Sub {
             0x4C => g.font_color as u16,
             0x4E => g.font_bits,
             0x50..=0x56 => self.font_data((off - 0x50) / 2),
+            0x58..=0x66 => self.asic.read(off - 0x58),
             _ => 0,
         }
     }
@@ -680,6 +692,10 @@ impl Sub {
             }
             0x4C => self.g.font_color = v as u8,
             0x4E => self.g.font_bits = (self.g.font_bits & !mask) | (v & mask),
+            0x58..=0x66 => {
+                let two_m = !self.word.one_m;
+                self.asic.write(off - 0x58, v, mask, self.clock, two_m);
+            }
             _ => {}
         }
     }
@@ -690,6 +706,7 @@ impl Sub {
         let word = match a {
             0x00_0000..=0x07_FFFF => u16::from_be_bytes([self.prg[even as usize], self.prg[even as usize + 1]]),
             0x08_0000..=0x0D_FFFF => {
+                self.asic.stolen();
                 let (hi, lo) = (self.word.sub(even), self.word.sub(even | 1));
                 if hi == Lands::Elsewhere {
                     self.parked = true;
@@ -735,6 +752,7 @@ impl Sub {
                 }
             }
             0x08_0000..=0x0D_FFFF => {
+                self.asic.stolen();
                 if self.parked || self.word.sub(even) == Lands::Elsewhere {
                     if !self.parked {
                         self.see(SeenKind::Parked, 1, 0);

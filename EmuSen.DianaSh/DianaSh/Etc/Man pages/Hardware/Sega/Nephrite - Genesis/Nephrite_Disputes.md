@@ -1526,6 +1526,11 @@ CPUs' disputes in their own record pages.
   loop of eight are the logs' own. Measured where the logs are, argued for the travel's curve.
 - Pinned by: `cdd.rs`'s five tests; `mcd_verificator_passes_every_test` (CDC INIT).
 - Implemented in: stage 8 step 3's commit.
+- *Amended 2026-10-15 (stage 9 step 1):* a track's start (report 5) carries the track's number, its last BCD digit, in
+  the flags nibble: krikzz's `cdd-cmd-info.txt` ("flags: number of track") and the LL logs' `95.000280.16` for track
+  1; it had carried the state flags. With the flags there, a player's BIOS asked the drive for track 1's start again
+  every 90 frames and no disc was read; with the number, the disc booted (`Nephrite_Native.md` §57.2). The start and
+  the spin-up are D-36's.
 
 ### D-34. The CDC's decoder interrupt clears itself 40% into a sector; DMA moves a word every 16 sub clocks; a count of DBC moves (DBC + 1) / 2 words
 - Opened: 2026-10-14, at stage 8 step 4. Sanyo's manual gives the decoder interrupt's length as about 2.75 ms
@@ -1585,3 +1590,28 @@ CPUs' disputes in their own record pages.
 - Pinned by: `the_drive_spins_up_from_power_on_and_idles_with_its_flags_clear`, `a_play_during_the_tocs_read_is_taken`,
   `the_drive_spins_up_reads_its_toc_and_answers` (the idle line), `mcd_verificator_passes_every_test` (CDC INIT).
 - Implemented in: stage 9's first commit.
+
+### D-37. The graphics ASIC where the Hardware Manual is silent or hard to read: a quarter turn is counter-clockwise and follows the flip; steps are two's complement; an operation's time is the manual's formula with every sign read as a plus, spent a line at a time; `$FF8066` reads 0
+- Opened: 2026-10-15, at stage 9 step 1, building the ASIC from the Hardware Manual §3-8.
+- Documents read: the Hardware Manual §3-8, its page images at 110 and 300 dpi (`$FF8058`-`$FF8066`, the stamp data
+  organisation and its figure of the flips and turns, the trace vector's bit layout, the image buffer's figures and
+  its offset, "graphics operation time"); krikzz's `notes/asic-render.txt` (the RAM accesses of a line: four vector
+  words, then a stamp map and a stamp read per dot, then one read and one write per four dots) and `asic.c` (an
+  interactive test that sets a step of `$F800`).
+- Test program: none that grades itself (`asic.c` prints a loop count for a person to read). The oracle was a player's
+  BIOS's first screen, whose logo the ASIC draws, against Genesis Plus GX given the same BIOS, as pictures only.
+- Referee: none read.
+- Conclusion: (1) RT counts quarter turns counter-clockwise and HFLP flips the stamp before it turns: read from the
+  manual's figure of a "P" (§3-8, "stamp data organization"), each glyph checked at 300 dpi. (2) ΔX and ΔY are 16-bit
+  two's complement with 11 fraction bits, added to the 13.3 start shifted to 13.11: the manual's bit chart puts a sign
+  at bit 15, and krikzz's `$F800` is −1.0 only so. (3) An operation takes `Vdot × (13 + 2 × (offset and 3) + 9 ×
+  ((Hdot + offset − 1) >> 2))` clocks of 80 ns, the offset the dot offset, plus three clocks for every 192 (the
+  refresh) and three for each access the sub CPU or the CDC's DMA makes to Word RAM meanwhile: the manual's formula,
+  whose operators the copy blurs and which krikzz's access count (13 at a line's start, 9 for each four dots) fits.
+  Vdot counts down a line at a time and level 1 comes with the last. (4) With RPT 0 a dot off the map is 0, and stamp
+  0 is all 0. (5) `$FF8066` is "write only"; it reads 0. (6) The ASIC runs in 2M only ("INT 1 for only 2M mode").
+  Measured against the reference's pictures (§57.3): the logo's frames 300 to 720, still and turning, are Genesis Plus
+  GX's to the pixel up to a colour map. What is not settled: the sub CPU's own wait while the ASIC runs (krikzz's
+  16 KiB read taking 29.6 ms against 23.6), which is not built.
+- Pinned by: `asic.rs`'s four tests.
+- Implemented in: stage 9 step 1's commit.

@@ -370,9 +370,18 @@ impl Hw {
         self.clock = self.clock.max(next);
     }
 
-    /// A word a transfer reads from the 68000's bus; the VDP's own addresses give nothing.
+    /// A word a transfer reads from the 68000's bus; the VDP's own addresses give nothing. Word RAM answers the VDP a
+    /// cycle late, so a transfer from it reads the word before the one addressed (the Mega-CD Hardware Manual's
+    /// "precautions in using DMA of the VDP").
     fn dma_read(&mut self, a: u32) -> u16 {
-        if (0xC0_0000..=0xDF_FFFF).contains(&(a & 0xFF_FFFF)) { 0 } else { self.read16(a) }
+        let a = a & 0xFF_FFFF;
+        if (0xC0_0000..=0xDF_FFFF).contains(&a) {
+            0
+        } else if self.mcd_low && (0x20_0000..0x24_0000).contains(&a) {
+            self.read16(0x20_0000 | (a.wrapping_sub(2) & 0x3_FFFF))
+        } else {
+            self.read16(a)
+        }
     }
 
     /// The line events up to the present, then the Z80 to the same time.
@@ -1219,6 +1228,17 @@ mod tests {
         assert_eq!(hw.vdp.hv(100, 3000), latched, "the counter holds what TH latched");
         hw.vdp.acknowledge();
         assert_eq!(hw.vdp.level(), 0);
+    }
+
+    // A transfer from Word RAM reads the word before the one addressed, which a source set a word later corrects (Nephrite_Native.md §57).
+    #[test]
+    fn a_transfer_from_word_ram_reads_a_word_late() {
+        let model = Model { overseas: true, pal: false, version: 0, model2: false };
+        let mut g = Genesis::with_mcd(Cart::new(Vec::new(), None, "SEGA CD", ""), model, Some(vec![0u8; 0x2_0000]), None);
+        let hw = &mut g.hw;
+        hw.mcd.as_deref_mut().unwrap().hw.word.bytes[..4].copy_from_slice(&[1, 2, 3, 4]);
+        assert_eq!((hw.dma_read(0x20_0002), hw.dma_read(0x20_0004)), (0x0102, 0x0304));
+        assert_eq!(hw.read16(0x20_0002), 0x0304, "the CPU reads it in time");
     }
 
     // The J-Cart's word at both its addresses, as Micro Machines 2 and Genesis Plus GX read it with players 3 and 4 holding Up and Right (Nephrite_Native.md §48.2).

@@ -4166,3 +4166,46 @@ the exports, and the drive naming its places (`cdd::NAMES_PLACES`), which turns 
   same whether the host acted on it or not).
 - The crate's tests, 159; WiseMan's Nephrite, Genesis and Registration tests, 83, the library's capabilities now
   with `MEDIA`.
+
+## 57. Stage 9, step 1: the graphics ASIC, and the three faults it uncovered (2026-10-15)
+
+### 57.1 What it built
+
+- **The graphics ASIC** (`src/mcd/asic.rs`), from the Hardware Manual §3-8: `$FF8058` (GRON, SMS, STS, RPT) to
+  `$FF8066`. A write of the trace vector base in 2M starts an operation; each line reads its four vector words (the
+  13.3 start, the 4.11 steps), steps across the stamp map a dot at a time, and writes each dot into the image buffer,
+  whose cells stand in columns of `Vcell + 1` as the VDP's sprites do, from the buffer's start and offset, by Word
+  RAM's priority mode (overwrite and underwrite as for the CPU's dot image). A map entry's stamp, flip and quarter
+  turns pick the dot from the stamp generator, stamp 0 and dots off the map (RPT 0) being 0. The operation is spent a
+  line at a time on the sub side's events, `Vdot` counting down, GRON set till the last line and level 1 with it; its
+  time, the refresh's share and the three clocks each sub CPU or DMA access to Word RAM costs it are D-37's.
+- **A forced reset** returns the ASIC to rest ("Rotation" in the manual's §4-1 list).
+- **State version 20**: the ASIC's registers, line and times in the Sega CD's block; a Genesis state of 16 to 20
+  loads, the Genesis's layout unchanged; a Sega CD state of 19 is now refused, no player build having run the Sega CD.
+
+### 57.2 Three faults the BIOS's logo and boot showed
+
+Each was proven by a run that failed with it and passed without it, then pinned by a test.
+
+- **The VDP's DMA from Word RAM** reads the word before the one addressed. The manual's "Precautions in using DMA of the
+  VDP of the Mega Drive to transfer Word RAM" (§4, page 61 of the copy): the VDP's read of Word RAM "will be output with
+  a one cycle delay", and programs set the source a word later; krikzz's `asic.c` does the same (`ptr + 1`). Without it
+  the logo's rows were torn, four dots across; with it the frames match (§57.3).
+  `a_transfer_from_word_ram_reads_a_word_late`.
+- **The CDC's monitor-only mode**: with DECEN set and WRRQ clear the decoder still loads HEAD0-HEAD3 (the subheader
+  with SHDREN) and the status for each block, writing nothing to the buffer (Sanyo's manual §12.5.3). Nephrite had
+  loaded them only with WRRQ, so the header read after each decoder interrupt was zero, and the drive was told to play
+  from 00:01:73 again and again. `with_wrrq_clear_the_header_is_decoded_and_nothing_written`.
+- **A track's start carries the track's number** in the flags nibble (D-33, amended). With the state flags there the
+  drive was asked for track 1's start every 90 frames and no disc was read.
+
+### 57.3 Measured (2026-10-15)
+
+- **The player's BIOS (a model 1 American one) with Sonic CD (USA)**, 1,400 frames and no button pressed: the first
+  screen's animated logo, the planet and "Press the START BUTTON.", then at frame 960 the disc boots by itself to
+  Sonic CD's licence screen with its stars. Against Genesis Plus GX given the same BIOS, frames 300, 480, 540, 600
+  and 720, still and turning logos, are its pictures to the pixel up to a colour map; frame 180 differs only in the
+  text, which Nephrite shows from frame 300 and the reference from 180, and the boot is 120 frames later (840 there).
+  The lag is the drive's: the reference answers a track's start at once, and the LL logs, a console's drive, answer it
+  as the lead-in's cycle passes the track (114 exchanges on a 35-track disc), as Nephrite does.
+- **The crate's tests**: 165 pass, the four of the ASIC and three for §57.2 among them.

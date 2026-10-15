@@ -333,19 +333,23 @@ impl Cdd {
         let mut n = [0u8; 10];
         n[0] = refused.unwrap_or(s);
         n[1] = NONE;
+        n[8] = flags;
         // Spun up and its TOC not yet read, the drive is stopped and not busy: its report nibble 0, its place zero, and
         // its flags 0 (D-36).
         let idle = refused.is_none() && self.mode == Mode::Stopped(status::STOPPED) && !self.toc_read && self.disc.is_some();
         if idle {
-            n[1] = 0;
+            (n[1], n[8]) = (0, 0);
         }
         if refused.is_some() {
             n[2..8].copy_from_slice(&self.status[2..8]);
         } else if report && let Some(r) = self.report_nibbles(s) {
             n[1] = self.report;
             n[2..8].copy_from_slice(&r);
+            // A track's start carries the track's number, its last BCD digit, where the flags go (krikzz's notes; D-33).
+            if self.report == 5 {
+                n[8] = emusen_disc::msf::bcd(self.report_track) & 15;
+            }
         }
-        n[8] = if idle { 0 } else { flags };
         n[9] = Cdd::checksum(&n);
         self.status = n;
         Tick { sector, int4: self.hock }
@@ -510,6 +514,14 @@ pub(crate) mod tests {
         send(&mut c, [2, 0, 0, 0, 0, 0, 0, 0, 0]);
         c.exchange();
         assert_eq!(&line(&c)[..2], "9F", "no position while stopped");
+        // Track 2's start, when the lead-in's cycle passes it: its number where the flags were (krikzz's notes).
+        send(&mut c, [2, 0, 0, 5, 0, 2, 0, 0, 0]);
+        let answer = (0..40).find_map(|_| {
+            c.exchange();
+            (c.status[1] == 5).then(|| line(&c))
+        });
+        assert_eq!(answer.as_deref().map(|l| &l[..2]), Some("95"));
+        assert_eq!(answer.unwrap().as_bytes()[10], b'2');
     }
 
     #[test]

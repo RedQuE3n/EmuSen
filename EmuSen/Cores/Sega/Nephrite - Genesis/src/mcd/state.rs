@@ -1,4 +1,4 @@
-//! The Sega CD's block of a state (version 19 on): the sub CPU, its clock and the gate array, Word RAM's switches, the
+//! The Sega CD's block of a state (version 20 on): the sub CPU, its clock and the gate array, Word RAM's switches, the
 //! sub CPU's wait, the PCM chip's registers, the drive, the CDC with its buffer, the fader, CD-DA's samples in flight,
 //! the RAM cartridge's switch and the disc's fingerprint. The memories are the machine's spaces (Nephrite_Native.md §53).
 
@@ -23,6 +23,7 @@ pub struct Saved {
     cdc: Cdc,
     cdda: super::cdda::Cdda,
     cart_writable: bool,
+    asic: super::asic::Asic,
     pub print: u64,
 }
 
@@ -99,6 +100,10 @@ impl MegaCd {
         w.u64s("CdcTimes", &[k.deci_until, k.dma_next, k.dma as u64]);
         w.group("Cdda", |w| h.cdda.write_state(w));
         w.bool("CartWritable", h.cart.as_ref().is_some_and(|c| c.writable));
+        let a = &h.asic;
+        w.bytes("AsicBytes", &[a.size, a.vcells, a.offset, a.vdots, a.busy as u8]);
+        w.u16s("AsicWords", &[a.map, a.buffer, a.hdots, a.vector]);
+        w.u64s("AsicTimes", &[a.line as u64, a.next, a.refresh]);
         w.u64("DiscFingerprint", print);
     }
 
@@ -162,9 +167,19 @@ impl MegaCd {
         let mut cdda = self.hw.cdda.clone();
         cdda.read_state(r)?;
         let cart_writable = r.bool()?;
+        let mut ab = [0u8; 5];
+        r.bytes(&mut ab)?;
+        let mut aw = [0u16; 4];
+        r.u16s(&mut aw)?;
+        let mut at = [0u64; 3];
+        r.u64s(&mut at)?;
+        let asic = super::asic::Asic {
+            size: ab[0] & 7, vcells: ab[1] & 0x1F, offset: ab[2] & 0x3F, vdots: ab[3], busy: ab[4] != 0,
+            map: aw[0], buffer: aw[1], hdots: aw[2] & 0x1FF, vector: aw[3], line: at[0] as u32, next: at[1], refresh: at[2] % super::asic::REFRESH_EVERY,
+        };
         let print = r.u64()?;
         let cdd = CddSaved { mode, words: dw, nibbles, flags, report };
-        let s = Saved { cpu, clock, g, word, parked, owed, pcm_regs, fader, cdd, cdc, cdda, cart_writable, print };
+        let s = Saved { cpu, clock, g, word, parked, owed, pcm_regs, fader, cdd, cdc, cdda, cart_writable, asic, print };
         Ok(s)
     }
 
@@ -172,7 +187,7 @@ impl MegaCd {
     pub fn apply_state(&mut self, s: Saved) {
         self.cpu = s.cpu;
         let h = &mut self.hw;
-        (h.clock, h.g, h.parked, h.owed, h.pcm_regs, h.fader, h.cdc, h.cdda) = (s.clock, s.g, s.parked, s.owed, s.pcm_regs, s.fader, s.cdc, s.cdda);
+        (h.clock, h.g, h.parked, h.owed, h.pcm_regs, h.fader, h.cdc, h.cdda, h.asic) = (s.clock, s.g, s.parked, s.owed, s.pcm_regs, s.fader, s.cdc, s.cdda, s.asic);
         let wr = &mut h.word;
         (wr.one_m, wr.sub_owns, wr.ret, wr.request, wr.priority) = (s.word[0] != 0, s.word[1] != 0, s.word[2] != 0, s.word[3] != 0, s.word[4] & 3);
         let c = &mut h.cdd;

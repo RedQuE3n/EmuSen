@@ -5,10 +5,14 @@ use emusen_native::abi::Region;
 use emusen_native::core::*;
 
 use crate::genesis::Model;
-use crate::io::Plug;
+use crate::genesis::io::Plug;
+#[cfg(feature = "mcd")]
+use crate::mcd::SaveMemory;
+#[cfg(feature = "mcd")]
+use crate::mcd::frontend::ram_cart_setting;
 use crate::machine::{HEIGHT, Machine, WIDTH, default_model};
 use crate::media::{Media, System, cartridge_bytes};
-use crate::debugger::{M68KBUS_ID, M68KBUS_SIZE, Z80BUS_ID, Z80BUS_SIZE};
+use crate::genesis::debugger::{M68KBUS_ID, M68KBUS_SIZE, Z80BUS_ID, Z80BUS_SIZE};
 use crate::state::{STATE_VERSION, STATUS_OTHER_SYSTEM};
 
 /// An image too short for a cartridge's vector table and header.
@@ -16,12 +20,12 @@ pub const STATUS_IMAGE_TOO_SHORT: i32 = -9;
 pub const MIN_IMAGE: usize = 0x200;
 
 /// The output rate, the step synthesisers' (`sound.rs`).
-pub const AUDIO_RATE: i32 = crate::sound::RATE as i32;
+pub const AUDIO_RATE: i32 = crate::genesis::sound::RATE as i32;
 
 /// Master clocks a second over a frame's (argued, Nephrite_Native.md §2.3): NTSC 15 times the colour subcarrier,
 /// 4,725,000,000/88 Hz, over 262 lines of 3,420; PAL 12 times 4.43361875 MHz over 313 lines.
-pub const NTSC_FRAME: (u64, u64) = (4_725_000_000, 88 * 262 * 3420);
-pub const PAL_FRAME: (u64, u64) = (53_203_425, 313 * 3420);
+pub const NTSC_FRAME: (u64, u64) = (crate::genesis::master_hz(false).0, crate::genesis::master_hz(false).1 * 262 * 3420);
+pub const PAL_FRAME: (u64, u64) = (crate::genesis::master_hz(true).0, crate::genesis::master_hz(true).1 * 313 * 3420);
 
 /// The pad's bits in the order the hardware's two reads deliver them, then the six-button pad's four; each with its
 /// canonical control (Nephrite_Plan.md §4.2).
@@ -44,7 +48,7 @@ fn pad(id: &str, label: &str, six: bool) -> Controller {
     Controller {
         id: id.into(),
         label: label.into(),
-        ports: (0..crate::io::PADS as u32).collect(),
+        ports: (0..crate::genesis::io::PADS as u32).collect(),
         buttons: BUTTONS.iter().filter(|b| six || b.0 < 8).map(|&(bit, c, l)| Button { bit, control: Some(c), label: l.into() }).collect(),
         axes: Vec::new(),
     }
@@ -143,12 +147,12 @@ impl Machine {
     /// Each player's pad in order, true a six-button one: port 1's pads, then port 2's unless the 4 Way Play has it.
     pub fn pad_kinds(&self) -> Vec<bool> {
         let [(a, six_a), (b, six_b)] = self.plugged;
-        let mut kinds = vec![six_a; crate::io::pads_of(a)];
+        let mut kinds = vec![six_a; crate::genesis::io::pads_of(a)];
         if a != Plug::FourWay {
-            kinds.extend(vec![six_b; crate::io::pads_of(b)]);
+            kinds.extend(vec![six_b; crate::genesis::io::pads_of(b)]);
         }
         // A J-Cart's two three-button pads follow, where they fit (§48).
-        if self.genesis.hw.cart.jcart && kinds.len() + 2 <= crate::io::PADS {
+        if self.hw().cart.jcart && kinds.len() + 2 <= crate::genesis::io::PADS {
             kinds.extend([false, false]);
         }
         kinds
@@ -180,41 +184,24 @@ pub const LOCK_ON: u32 = 8;
 pub const SK_PATCH: u32 = 9;
 /// The Sega CD's backup RAM cartridge's battery file; 1 being the TMSS ROM's, it takes the next free number.
 pub const RAM_CART: u32 = 10;
+
+/// The battery file of each of the Sega CD's save memories: the backup RAM inside it file 0, its cartridge 10.
+#[cfg(feature = "mcd")]
+fn save_file(memory: SaveMemory) -> u32 {
+    match memory {
+        SaveMemory::Backup => 0,
+        SaveMemory::Cartridge => RAM_CART,
+    }
+}
+
 /// A disc's companions, as the host numbers a sheet's files (EmuSen_CoreAPI.md §6.23).
 pub const MEDIA_FILE: u32 = flags::FILE_MEDIA;
 /// An image that is no disc this core reads, in a sheet, a CHD or 2,048-byte sectors.
 pub const STATUS_BAD_DISC: i32 = -11;
 
-/// The setting that plugs a backup RAM cartridge into a Sega CD's slot, read at create.
-pub const RAM_CART_KEY: &str = "ramcart";
-
-fn ram_cart_setting() -> Setting {
-    Setting {
-        key: RAM_CART_KEY.into(),
-        label: "Backup RAM cartridge".into(),
-        help: "For the Sega CD: whether Sega's Backup RAM Cartridge, 128 KiB of saves beside the 8 KiB inside the unit, is plugged into the cartridge slot. Its saves are kept in a file of their own. Takes effect when a game is next loaded.".into(),
-        kind: SettingKind::Choice(vec![
-            Choice { value: "none".into(), label: "None".into(), help: None },
-            Choice { value: "mcd.ramcart".into(), label: "Backup RAM Cartridge (128 KiB)".into(), help: None },
-        ]),
-        default: "none".into(),
-        scope: Scope::Create,
-        category: Some("Sega CD".into()),
-        effect: Effect::None,
-        advanced: false,
-        // Not shown while the Sega CD is offered to no player (Nephrite_Native.md §53.2).
-        hidden: true,
-        restart: true,
-    }
-}
-
-/// Whether an image is a disc's: a cue sheet, a CHD, or sectors that carry the system area's signature.
-fn is_disc(image: &[u8]) -> bool {
-    emusen_disc::is_sheet(image) || image.starts_with(emusen_disc::disc::CHD_MAGIC) || crate::media::disc_offset(image).is_some()
-}
-
 /// The disc an image and its companions make, kept with `keep`, which borrows where the host lends them (BORROW), and
 /// what it is read from its system area.
+#[cfg(feature = "mcd")]
 fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(crate::mcd::cdd::Disc, Media), i32> {
     let mut companions: Vec<(u32, &[u8])> = files.iter().filter(|f| f.which >= MEDIA_FILE).map(|f| (f.which, f.data)).collect();
     companions.sort_by_key(|c| c.0);
@@ -233,6 +220,17 @@ fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(cr
     Ok((disc, media))
 }
 
+/// A market's Sega CD BIOS as file 2, 3 or 4.
+#[cfg(feature = "mcd")]
+fn cd_bios(region: char) -> Firmware {
+    let which = match region {
+        'J' => CD_BIOS_J,
+        'E' => CD_BIOS_E,
+        _ => CD_BIOS_U,
+    };
+    crate::mcd::frontend::bios_firmware(region, which)
+}
+
 fn firmware(which: u32, name: &str, label: &str, size: u64, cost: &str) -> Firmware {
     Firmware { which, name: name.into(), label: label.into(), size, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: cost.into() }) }
 }
@@ -242,29 +240,9 @@ fn tmss() -> Firmware {
         "Without the image Nephrite runs as a console without TMSS, as the first Genesis and Mega Drive models were: licensed games start the same, without the licence screen.")
 }
 
-const CD_COST: &str = "Nephrite's open replacement for the Sega CD BIOS is not written yet (Nephrite_Plan.md §5.6): a disc runs on the player's BIOS, and without it no disc starts.";
-const S32X_COST: &str = "Nephrite's open replacements for the 32X's boot ROMs are not written yet (Nephrite_Plan.md §5.6): at this stage no 32X game runs, with the images or without them.";
-
-fn cd_bios(region: char) -> Firmware {
-    let which = match region {
-        'J' => CD_BIOS_J,
-        'E' => CD_BIOS_E,
-        _ => CD_BIOS_U,
-    };
-    let market = match region {
-        'J' => "Japanese Mega-CD",
-        'E' => "European Mega-CD",
-        _ => "American Sega CD",
-    };
-    firmware(which, &format!("bios_CD_{region}.bin"), &format!("The {market}'s BIOS (131,072 bytes)"), 131_072, CD_COST)
-}
-
+#[cfg(feature = "s32x")]
 fn s32x_boot() -> Vec<Firmware> {
-    vec![
-        firmware(S32X_68K, "32X_G_BIOS.BIN", "The 32X's 68000 boot ROM (256 bytes)", 256, S32X_COST),
-        firmware(S32X_MASTER, "32X_M_BIOS.BIN", "The 32X's master SH-2 boot ROM (2,048 bytes)", 2048, S32X_COST),
-        firmware(S32X_SLAVE, "32X_S_BIOS.BIN", "The 32X's slave SH-2 boot ROM (1,024 bytes)", 1024, S32X_COST),
-    ]
+    crate::s32x::boot_firmware([S32X_68K, S32X_MASTER, S32X_SLAVE])
 }
 
 /// The files Sonic & Knuckles takes beside its own image: the player's cartridges, not firmware; a combined image
@@ -286,7 +264,7 @@ fn lock_on_files() -> Vec<Firmware> {
 }
 
 fn takes_lock_on(media: &Media, image_len: usize) -> bool {
-    media.header.as_ref().is_some_and(|h| h.serial.starts_with(crate::cart::LOCK_ON_SERIAL)) && image_len <= 0x20_0000
+    media.header.as_ref().is_some_and(|h| h.serial.starts_with(crate::genesis::cart::LOCK_ON_SERIAL)) && image_len <= 0x20_0000
 }
 
 /// A system whose games do not run yet is marked in development, so that no host offers it (EmuSen_CoreAPI.md §27.4).
@@ -305,8 +283,21 @@ fn system(id: &str, name: &str, extensions: &[&str], firmware: Vec<Firmware>, de
 /// The extensions each system claims (Nephrite_Plan.md §4.1); a `.bin` disc image is told from a cartridge by its
 /// contents.
 pub const MD_EXTENSIONS: [&str; 4] = [".md", ".gen", ".bin", ".smd"];
+#[cfg(feature = "mcd")]
 pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
-pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
+#[cfg(feature = "s32x")]
+pub const S32X_EXTENSIONS: [&str; 1] = crate::s32x::EXTENSIONS;
+
+/// The systems the library reports: the Genesis's, and each attachment's built.
+fn systems() -> Vec<emusen_native::core::System> {
+    #[allow(unused_mut)]
+    let mut v = vec![system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()], false)];
+    #[cfg(feature = "mcd")]
+    v.push(system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')], true));
+    #[cfg(feature = "s32x")]
+    v.push(system("32x", "Sega 32X", &S32X_EXTENSIONS, [vec![tmss()], s32x_boot()].concat(), true));
+    v
+}
 
 impl Core for Machine {
     const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::SETTING_NOTES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::BORROW | caps::MEDIA;
@@ -320,17 +311,14 @@ impl Core for Machine {
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
             description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. It runs the Genesis's two processors, buses, cartridges, pads, picture and sound, the PSG and the YM2612 with each model's output; the Sega CD and the 32X are still to come.".into()),
-            systems: vec![
-                system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()], false),
-                system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')], true),
-                system("32x", "Sega 32X", &S32X_EXTENSIONS, [vec![tmss()], s32x_boot()].concat(), true),
-            ],
+            systems: systems(),
             deterministic: true,
             ..Info::default()
         }
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
+        #[cfg(feature = "mcd")]
         if emusen_disc::is_sheet(image) || image.starts_with(emusen_disc::disc::CHD_MAGIC) {
             return vec![cd_bios('U'), cd_bios('E'), cd_bios('J')];
         }
@@ -339,19 +327,26 @@ impl Core for Machine {
         match media.system {
             System::Md if takes_lock_on(&media, image.len()) => lock_on_files(),
             System::Md => Vec::new(),
+            #[cfg(feature = "mcd")]
             System::Mcd => vec![cd_bios(media.bios_region())],
+            #[cfg(feature = "s32x")]
             System::S32x => s32x_boot(),
         }
     }
 
     fn settings_schema() -> Vec<Setting> {
-        vec![model_setting(), region_setting(), pad_setting(0), pad_setting(1), ram_cart_setting()]
+        #[allow(unused_mut)]
+        let mut v = vec![model_setting(), region_setting(), pad_setting(0), pad_setting(1)];
+        #[cfg(feature = "mcd")]
+        v.push(ram_cart_setting());
+        v
     }
 
     fn status_text(code: i32) -> Option<String> {
         match code {
             STATUS_IMAGE_TOO_SHORT => Some("the image is shorter than the 512 bytes of a cartridge's vector table and header".into()),
             STATUS_OTHER_SYSTEM => Some("the state was saved by Nephrite running another of its systems".into()),
+            #[cfg(feature = "mcd")]
             STATUS_BAD_DISC => Some("the cue sheet, CHD or image could not be read as a Sega CD disc".into()),
             _ => None,
         }
@@ -359,12 +354,14 @@ impl Core for Machine {
 
     /// The Sega CD's backup RAM, the console's own memory, and its RAM cartridge, a removable one, each a slot of its
     /// medium since core ABI 1.8 (EmuSen_SaveMedia.md §7.3).
+    #[cfg(feature = "mcd")]
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "mcd").then(|| vec![backup_ram(), ram_cartridge()])
+        (system == "mcd").then(|| [SaveMemory::Backup, SaveMemory::Cartridge].map(|k| crate::mcd::frontend::battery(k, save_file(k))).into())
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        if is_disc(request.image) {
+        #[cfg(feature = "mcd")]
+        if crate::mcd::is_disc(request.image) {
             return Machine::create_disc(request);
         }
         if request.image.len() < MIN_IMAGE {
@@ -379,6 +376,9 @@ impl Core for Machine {
         let media = Media::read(&image);
         let model = region_model(Model { model2: request.settings.get(MODEL_KEY) == Some("md.model2"), ..default_model(&media) }, request.settings.get(REGION_KEY));
         // A disc's boot ROM: its market's file, else any of the three given (Nephrite_Native.md §49.2).
+        #[cfg(not(feature = "mcd"))]
+        let bios = None;
+        #[cfg(feature = "mcd")]
         let bios = (media.system == System::Mcd).then(|| {
             let mine = cd_bios(media.bios_region()).which;
             let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
@@ -388,12 +388,12 @@ impl Core for Machine {
         m.apply_pads(&request.settings);
         if let Some(top) = request.files.iter().find(|f| f.which == LOCK_ON) {
             let patch = request.files.iter().find(|f| f.which == SK_PATCH).map_or(Vec::new(), |f| f.data.to_vec());
-            m.genesis.hw.cart.lock_on(cartridge_bytes(top.data).into_owned(), patch);
+            m.hw_mut().cart.lock_on(cartridge_bytes(top.data).into_owned(), patch);
         }
         m.firmware = request.files.iter().filter(|f| f.which != 0).map(|f| f.which).collect();
         if let (Some(id), Some(file)) = (m.battery_id(), request.files.iter().find(|f| f.which == 0)) {
             if id == crate::machine::SRAM_ID {
-                m.genesis.hw.cart.load_battery(file.data);
+                m.hw_mut().cart.load_battery(file.data);
             } else {
                 let bytes = m.bytes_mut(id).expect("the battery's memory");
                 let n = bytes.len().min(file.data.len());
@@ -405,7 +405,7 @@ impl Core for Machine {
     }
 
     fn machine_info(&self) -> MachineInfo {
-        let pal = self.genesis.hw.model.pal;
+        let pal = self.hw().model.pal;
         let named = |which: u32| (which, if self.firmware.contains(&which) { FirmwareSource::File } else { FirmwareSource::Absent });
         MachineInfo {
             system: self.media.system.id().into(),
@@ -414,7 +414,7 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: 320, max_height: 480, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: self.pad_kinds().iter().enumerate().map(|(p, &six)| Port { port: p as u32, controller: Some(if six { "md.pad6" } else { "md.pad3" }.into()) }).collect(),
-            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::debugger::Z80BUS_ID, reports_stores: crate::debugger::reports_stores(m.id), ..Space::new(m.id, m.name) }).collect(),
+            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::genesis::debugger::Z80BUS_ID, reports_stores: crate::genesis::debugger::reports_stores(m.id), ..Space::new(m.id, m.name) }).collect(),
             processors: self.processors(),
             battery: self.batteries(),
             state: StateFormat { format: "NPHR".into(), version: STATE_VERSION as i64, loads_from: (self.oldest_state_version()..=STATE_VERSION).map(i64::from).collect() },
@@ -422,9 +422,11 @@ impl Core for Machine {
             patches: (self.media.system == System::Md).then_some((0, 0x3F_FFFF)),
             skip_rendering_state_neutral: true,
             firmware: match self.media.system {
-                System::Md if takes_lock_on(&self.media, self.genesis.hw.cart.rom.len()) => vec![named(LOCK_ON), named(SK_PATCH)],
+                System::Md if takes_lock_on(&self.media, self.hw().cart.rom.len()) => vec![named(LOCK_ON), named(SK_PATCH)],
                 System::Md => Vec::new(),
+                #[cfg(feature = "mcd")]
                 System::Mcd => vec![named(cd_bios(self.media.bios_region()).which)],
+                #[cfg(feature = "s32x")]
                 System::S32x => vec![named(S32X_68K), named(S32X_MASTER), named(S32X_SLAVE)],
             },
         }
@@ -444,7 +446,7 @@ impl Core for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        let f = &self.genesis.hw.vdp.frame;
+        let f = &self.hw().vdp.frame;
         if self.picture.len() == f.width * f.height * 4 { FrameInfo::rgba(f.width as i32, f.height as i32) } else { FrameInfo::rgba(WIDTH as i32, HEIGHT as i32) }
     }
 
@@ -531,7 +533,7 @@ impl Core for Machine {
 
     /// `ROM_PATCHES`: the Game Genie's patches on the cartridge port, compared with the board's byte when a compare is given.
     fn set_rom_patches(&mut self, triples: &[u32]) -> Result<(), i32> {
-        self.genesis.hw.cart.patches = triples.chunks_exact(3).map(|t| (t[0] & 0x3F_FFFF, t[1] as u8, t[2])).collect();
+        self.hw_mut().cart.patches = triples.chunks_exact(3).map(|t| (t[0] & 0x3F_FFFF, t[1] as u8, t[2])).collect();
         Ok(())
     }
 
@@ -542,8 +544,8 @@ impl Core for Machine {
     /// The 68000's breakpoints are the shared hooks'; the Z80's the core's own.
     fn debug_breakpoints(&mut self, processor: u32, pairs: &[i32]) -> Result<(), i32> {
         match processor {
-            crate::debugger::M68K => self.hooks.set_breakpoints(pairs),
-            crate::debugger::Z80 => self.z80_breakpoints = pairs.chunks_exact(2).map(|p| (p[0], p[1])).collect(),
+            crate::genesis::debugger::M68K => self.hooks.set_breakpoints(pairs),
+            crate::genesis::debugger::Z80 => self.z80_breakpoints = pairs.chunks_exact(2).map(|p| (p[0], p[1])).collect(),
             _ => return Err(status::NOT_SUPPORTED),
         }
         Ok(())
@@ -566,7 +568,7 @@ impl Core for Machine {
     }
 
     fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
-        if processor > crate::debugger::Z80 {
+        if processor > crate::genesis::debugger::Z80 {
             return Err(status::NOT_SUPPORTED);
         }
         Machine::debug_disassemble(self, processor, space, address, count).ok_or(status::NO_SUCH_SPACE)
@@ -576,39 +578,50 @@ impl Core for Machine {
         match (which, self.battery_id()) {
             (0, Some(_)) => Ok((self.battery_bytes().expect("the battery's memory"), 0)),
             (0, None) => Ok((&[], 0)),
-            (RAM_CART, _) if self.media.system == System::Mcd => Ok((self.bytes(crate::machine::CARTRAM_ID).unwrap_or(&[]), 0)),
+            #[cfg(feature = "mcd")]
+            (RAM_CART, _) if self.media.system == System::Mcd => Ok((self.mcd().and_then(|m| m.save_memory(SaveMemory::Cartridge)).unwrap_or(&[]), 0)),
             _ => Err(status::BAD_FILE),
         }
     }
 
+    /// Without the Sega CD built no machine has a drive, and a media call names none (EmuSen_CoreAPI.md §6.26).
+    #[cfg(not(feature = "mcd"))]
+    fn media_lid(&mut self, _drive: u32, _open: bool) -> Result<(), i32> {
+        Err(status::NO_SUCH_DRIVE)
+    }
+
+    #[cfg(not(feature = "mcd"))]
+    fn media_insert(&mut self, _drive: u32, _insert: &Insert<'_>) -> Result<(), i32> {
+        Err(status::NO_SUCH_DRIVE)
+    }
+
+    #[cfg(feature = "mcd")]
     fn drives(&self) -> Vec<Drive> {
-        match self.genesis.hw.mcd.as_deref() {
-            Some(m) => vec![Drive { drive: crate::mcd::cdd::DRIVE, label: "CD drive".into(), kind: "cd".into(), lid_open: m.hw.cdd.mode == crate::mcd::cdd::Mode::TrayOpen, loaded: m.hw.cdd.disc.is_some() }],
+        match self.mcd() {
+            Some(m) => vec![m.drive()],
             None => Vec::new(),
         }
     }
 
     /// The tray, opened or closed as the player would: the drive stops; closed, it reads its disc's TOC again.
+    #[cfg(feature = "mcd")]
     fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
-        let m = self.genesis.hw.mcd.as_deref_mut().filter(|_| drive == crate::mcd::cdd::DRIVE).ok_or(status::NO_SUCH_DRIVE)?;
-        m.hw.cdd.set_tray(open);
+        self.mcd_mut().filter(|m| drive == m.drive().drive).ok_or(status::NO_SUCH_DRIVE)?.set_lid(open);
         Ok(())
     }
 
+    #[cfg(feature = "mcd")]
     fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
-        let open = self.genesis.hw.mcd.as_deref().filter(|_| drive == crate::mcd::cdd::DRIVE).ok_or(status::NO_SUCH_DRIVE)?.hw.cdd.mode == crate::mcd::cdd::Mode::TrayOpen;
+        let open = self.mcd().filter(|m| drive == m.drive().drive).ok_or(status::NO_SUCH_DRIVE)?.lid_open();
         if !open && !insert.restore {
             detail("the Sega CD's tray is closed; open it before changing the disc");
             return Err(status::LID_CLOSED);
         }
-        let mut disc = match insert.image {
+        let disc = match insert.image {
             None => None,
             Some(image) => Some(open_disc(image, &insert.files)?.0),
         };
-        self.disc_print = disc.as_mut().map_or(0, crate::mcd::fingerprint);
-        let m = self.genesis.hw.mcd.as_deref_mut().expect("the drive");
-        m.hw.cdd.disc = disc;
-        m.hw.cdd.named = None;
+        self.mcd_mut().expect("the drive").insert(disc);
         Ok(())
     }
 }
@@ -616,6 +629,7 @@ impl Core for Machine {
 impl Machine {
     /// A disc's machine: the disc opened from the image and its companions, the region's BIOS as the boot ROM when
     /// given (any of the three else), the RAM cartridge as the setting asks, the battery files loaded.
+    #[cfg(feature = "mcd")]
     fn create_disc(request: &Create<'_>) -> Result<Machine, i32> {
         if let Some(f) = request.files.iter().find(|f| f.which > RAM_CART && f.which < MEDIA_FILE) {
             detail(&format!("file {} is not one Nephrite names", f.which));
@@ -627,23 +641,15 @@ impl Machine {
         let mine = cd_bios(media.bios_region()).which;
         let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
         let bios = file.map(|f| f.data.to_vec()).unwrap_or_default();
-        let mut m = Machine::with_disc(&[], media, model, Some(bios), Some(disc));
+        let mut m = Machine::with_disc(media, model, Some(bios), Some(disc));
         m.kept_apart = kept_apart;
         m.apply_pads(&request.settings);
         m.firmware = request.files.iter().filter(|f| (TMSS..=S32X_SLAVE).contains(&f.which)).map(|f| f.which).collect();
-        let s = &mut m.genesis.hw.mcd.as_deref_mut().expect("a disc's Sega CD").hw;
-        if request.settings.get(RAM_CART_KEY) == Some("mcd.ramcart") {
-            s.cart = Some(crate::mcd::RamCart::new(crate::mcd::RamCart::SEGA));
-        }
+        let s = m.mcd_mut().expect("a disc's Sega CD");
+        s.apply_settings(&request.settings);
         for f in request.files.iter() {
-            let into: Option<&mut Vec<u8>> = match f.which {
-                0 => Some(&mut s.bram),
-                RAM_CART => s.cart.as_mut().map(|c| &mut c.bytes),
-                _ => None,
-            };
-            if let Some(b) = into {
-                let n = b.len().min(f.data.len());
-                b[..n].copy_from_slice(&f.data[..n]);
+            if let Some(&k) = [SaveMemory::Backup, SaveMemory::Cartridge].iter().find(|&&k| save_file(k) == f.which) {
+                s.load_save_memory(k, f.data);
             }
         }
         Ok(m)
@@ -651,27 +657,12 @@ impl Machine {
 
     /// The battery files machine info names: the save RAM's, or the Sega CD's backup RAM and its cartridge's.
     fn batteries(&self) -> Vec<Battery> {
-        match self.genesis.hw.mcd.as_deref() {
-            Some(m) => {
-                let mut v = vec![backup_ram()];
-                if m.hw.cart.is_some() {
-                    v.push(ram_cartridge());
-                }
-                v
-            }
-            None => self.battery_id().map(|_| Battery::game(0, ".srm")).into_iter().collect(),
+        #[cfg(feature = "mcd")]
+        if let Some(m) = self.mcd() {
+            return m.save_memories().into_iter().map(|k| crate::mcd::frontend::battery(k, save_file(k))).collect();
         }
+        self.battery_id().map(|_| Battery::game(0, ".srm")).into_iter().collect()
     }
-}
-
-/// The backup RAM inside the Sega CD: battery file 0, the console's (EmuSen_SaveMedia.md §7.3).
-fn backup_ram() -> Battery {
-    Battery::console(0, ".brm").medium("mcd.backup").label("Inside the console")
-}
-
-/// The backup RAM cartridge in its slot: battery file 10, removable.
-fn ram_cartridge() -> Battery {
-    Battery::removable(RAM_CART, ".crm").medium("mcd.ramcart").label("Cartridge slot")
 }
 
 emusen_native::core_exports!(Machine; rom_patches, settings, setting_notes, debug, debug_stack, debug_registers, debug_disassemble, media);
@@ -716,20 +707,25 @@ mod tests {
         let pal = create(&cartridge("SEGA MEGA DRIVE", "E", None), vec![]).unwrap();
         assert_eq!((pal.machine_info().region, pal.machine_info().frame_rate), (Some(Region::Pal), PAL_FRAME));
 
-        let s32x = create(&cartridge("SEGA 32X", "U", None), vec![]).unwrap();
-        assert_eq!(s32x.machine_info().system, "32x");
-        assert_eq!(Machine::firmware_for(&cartridge("SEGA 32X", "U", None)).len(), 3);
         assert!(Machine::firmware_for(&cartridge("SEGA GENESIS", "U", None)).is_empty());
-
-        let mut iso = vec![0u8; 0x8000];
-        iso[..14].copy_from_slice(crate::media::DISC_SIGNATURE);
-        iso[0x1F0] = b'E';
-        let mcd = create(&iso, vec![]).unwrap();
-        let info = mcd.machine_info();
-        assert_eq!((info.system.as_str(), info.region), ("mcd", Some(Region::Pal)));
-        assert_eq!(info.battery[0].suffix, ".brm");
-        assert_eq!(Machine::firmware_for(&iso)[0].name, "bios_CD_E.bin");
-        assert_eq!(info.firmware, vec![(CD_BIOS_E, FirmwareSource::Absent)]);
+        #[cfg(feature = "s32x")]
+        {
+            let s32x = create(&cartridge("SEGA 32X", "U", None), vec![]).unwrap();
+            assert_eq!(s32x.machine_info().system, "32x");
+            assert_eq!(Machine::firmware_for(&cartridge("SEGA 32X", "U", None)).len(), 3);
+        }
+        #[cfg(feature = "mcd")]
+        {
+            let mut iso = vec![0u8; 0x8000];
+            iso[..14].copy_from_slice(crate::mcd::DISC_SIGNATURE);
+            iso[0x1F0] = b'E';
+            let mcd = create(&iso, vec![]).unwrap();
+            let info = mcd.machine_info();
+            assert_eq!((info.system.as_str(), info.region), ("mcd", Some(Region::Pal)));
+            assert_eq!(info.battery[0].suffix, ".brm");
+            assert_eq!(Machine::firmware_for(&iso)[0].name, "bios_CD_E.bin");
+            assert_eq!(info.firmware, vec![(CD_BIOS_E, FirmwareSource::Absent)]);
+        }
     }
 
     #[test]
@@ -766,7 +762,8 @@ mod tests {
     #[test]
     fn the_descriptors_are_valid_and_every_system_has_both_pads() {
         let info = Machine::info();
-        assert_eq!(info.systems.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), ["md", "mcd", "32x"]);
+        let built = [("md", true), ("mcd", cfg!(feature = "mcd")), ("32x", cfg!(feature = "s32x"))];
+        assert_eq!(info.systems.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), built.iter().filter(|b| b.1).map(|b| b.0).collect::<Vec<_>>());
         for s in &info.systems {
             assert_eq!(s.controllers.iter().map(|c| c.buttons.len()).collect::<Vec<_>>(), [8, 12]);
             assert!(s.firmware.iter().all(|f| !f.required));
@@ -779,12 +776,13 @@ mod tests {
     fn rom_patches_answer_for_the_cartridge_port() {
         let mut m = create(&cartridge("SEGA GENESIS", "U", None), vec![]).unwrap();
         assert_eq!(m.machine_info().patches, Some((0, 0x3F_FFFF)));
-        let board = m.genesis.hw.cart.read16(0x100);
+        let board = m.hw().cart.read16(0x100);
         assert_eq!(board, u16::from_be_bytes(*b"SE"));
         m.set_rom_patches(&[0x100, 0x12, sys::flags::NO_COMPARE, 0x101, 0x34, b'E' as u32, 0x102, 0x56, 0x00]).unwrap();
-        assert_eq!((m.genesis.hw.cart.read16(0x100), m.genesis.hw.cart.read8(0x102)), (0x1234, b'G'));
+        assert_eq!((m.hw().cart.read16(0x100), m.hw().cart.read8(0x102)), (0x1234, b'G'));
         m.set_rom_patches(&[]).unwrap();
-        assert_eq!(m.genesis.hw.cart.read16(0x100), board);
+        assert_eq!(m.hw().cart.read16(0x100), board);
+        #[cfg(feature = "s32x")]
         assert_eq!(create(&cartridge("SEGA 32X", "U", None), vec![]).unwrap().machine_info().patches, None);
     }
 
@@ -795,14 +793,14 @@ mod tests {
         let made = |region: &str| Machine::create(&Create { image: &image, settings: Settings::from_pairs(vec![(REGION_KEY.into(), region.into())]), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None }).unwrap();
         for (region, overseas, pal) in [("auto", true, false), ("md.us", true, false), ("md.eu", true, true), ("md.jp", false, false), ("md.asia", false, true)] {
             let m = made(region);
-            let version = m.genesis.hw.io.read(0xA1_0001, 0);
+            let version = m.hw().io.read(0xA1_0001, 0);
             assert_eq!((version >> 7 & 1 != 0, version >> 6 & 1 != 0), (overseas, pal), "{region}");
             assert_eq!(m.machine_info().frame_rate, if pal { PAL_FRAME } else { NTSC_FRAME }, "{region}");
         }
         // From the cartridge: the first of the Americas, Japan and Europe the header allows (the plan's Q6).
         for (header, overseas, pal) in [("JUE", true, false), ("U", true, false), ("JU", true, false), ("UE", true, false), ("J", false, false), ("JE", false, false), ("E", true, true), ("", true, false)] {
             let m = create(&cartridge("SEGA GENESIS", header, None), vec![]).unwrap();
-            let version = m.genesis.hw.io.read(0xA1_0001, 0);
+            let version = m.hw().io.read(0xA1_0001, 0);
             assert_eq!((version >> 7 & 1 != 0, version >> 6 & 1 != 0), (overseas, pal), "a header of {header:?}");
         }
         assert!(Machine::settings_schema().iter().all(|s| s.check().is_ok()));
@@ -830,7 +828,7 @@ mod tests {
         lane.iter().enumerate().for_each(|(i, &b)| pico[2 * i + 1] = b);
         assert_eq!(made(&pico).battery(0).unwrap().0, &gpgx[..]);
         let mut m = made(&lane);
-        assert_eq!(m.genesis.hw.cart.read8(0x20_0003), lane[1]);
+        assert_eq!(m.hw().cart.read8(0x20_0003), lane[1]);
         m.space_write(crate::machine::SRAM_ID, 1, &[0x5A]).unwrap();
         assert_eq!(m.battery(0).unwrap().0[3], 0x5A);
         let state = { let mut b = vec![0; m.state_size()]; let n = m.save_state(&mut b).unwrap(); b.truncate(n); b };
@@ -864,12 +862,12 @@ mod tests {
         image[0x180..0x18E].copy_from_slice(b"GM T-172196-00");
         let mut m = create(&image, vec![]).unwrap();
         assert_eq!(m.machine_info().battery[0].suffix, ".srm");
-        let under = m.genesis.hw.cart.read8(0x20_0000);
-        assert_eq!(m.genesis.hw.cart.read8(0x20_46B5), 0xFF, "empty, where the game finds no table");
-        m.genesis.hw.cart.write8(0x20_0001, 0x44);
-        m.genesis.hw.cart.write8(0x20_FFFF, 0x4A);
-        m.genesis.hw.cart.write8(0x20_0000, 0x99);
-        assert_eq!((m.genesis.hw.cart.read8(0x20_0001), m.genesis.hw.cart.read8(0x20_FFFF), m.genesis.hw.cart.read8(0x20_0000)), (0x44, 0x4A, under));
+        let under = m.hw().cart.read8(0x20_0000);
+        assert_eq!(m.hw().cart.read8(0x20_46B5), 0xFF, "empty, where the game finds no table");
+        m.hw_mut().cart.write8(0x20_0001, 0x44);
+        m.hw_mut().cart.write8(0x20_FFFF, 0x4A);
+        m.hw_mut().cart.write8(0x20_0000, 0x99);
+        assert_eq!((m.hw().cart.read8(0x20_0001), m.hw().cart.read8(0x20_FFFF), m.hw().cart.read8(0x20_0000)), (0x44, 0x4A, under));
         m.refresh_battery_file();
         let file = m.battery(0).unwrap().0;
         assert_eq!((file.len(), file[1], file[0xFFFF]), (0x1_0000, 0x44, 0x4A));
@@ -880,10 +878,10 @@ mod tests {
     fn the_model_setting_chooses_the_sound_chip_and_circuit() {
         let image = cartridge("SEGA GENESIS", "U", None);
         let made = |settings: Vec<(String, String)>| Machine::create(&Create { image: &image, settings: Settings::from_pairs(settings), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None }).unwrap();
-        let sound = |m: &Machine| (m.genesis.hw.sound.ym.discrete, m.genesis.hw.sound.circuit);
-        assert_eq!(sound(&made(vec![])), (true, crate::sound::Circuit::MODEL1));
-        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model1".into())])), (true, crate::sound::Circuit::MODEL1));
-        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model2".into())])), (false, crate::sound::Circuit::MODEL2));
+        let sound = |m: &Machine| (m.hw().sound.ym.discrete, m.hw().sound.circuit);
+        assert_eq!(sound(&made(vec![])), (true, crate::genesis::sound::Circuit::MODEL1));
+        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model1".into())])), (true, crate::genesis::sound::Circuit::MODEL1));
+        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model2".into())])), (false, crate::genesis::sound::Circuit::MODEL2));
     }
 
     #[test]
@@ -897,7 +895,7 @@ mod tests {
         m.set_settings(&Settings::from_pairs(vec![("pad1".into(), "md.pad6".into()), ("pad2".into(), "md.pad3".into())])).unwrap();
         assert_eq!(ports(&m), ["md.pad6", "md.pad3"]);
         m.advance();
-        assert!(m.genesis.hw.io.pads[0].six && !m.genesis.hw.io.pads[1].six);
+        assert!(m.hw().io.pads[0].six && !m.hw().io.pads[1].six);
     }
 
     // A J-Cart's two three-button pads follow the console ports' pads in machine info and take those players' buttons, where they fit (Nephrite_Native.md §48).
@@ -915,7 +913,7 @@ mod tests {
             Core::set_buttons(&mut m, port, 1 << port, u32::MAX).unwrap();
         }
         m.advance();
-        assert_eq!(m.genesis.hw.io.pads.map(|p| (p.buttons, p.six))[..5], [(1, true), (2, true), (4, false), (8, false), (0, false)]);
+        assert_eq!(m.hw().io.pads.map(|p| (p.buttons, p.six))[..5], [(1, true), (2, true), (4, false), (8, false), (0, false)]);
         set(&mut m, "md.teamplayer3", "md.pad3");
         assert_eq!(ports(&m).len(), 7);
         set(&mut m, "md.teamplayer3", "md.teamplayer3");
@@ -925,7 +923,7 @@ mod tests {
     // A port may hold an adapter: the players are port 1's pads and then port 2's, each of its port's kind, and every player's buttons reach its pad (Nephrite_Native.md §44).
     #[test]
     fn the_pad_settings_plug_in_the_adapters_and_number_the_players() {
-        use crate::io::Plug;
+        use crate::genesis::io::Plug;
         let schema = Machine::settings_schema();
         let choices = |key: &str| match &schema.iter().find(|s| s.key == key).unwrap().kind {
             SettingKind::Choice(c) => c.iter().map(|c| c.value.clone()).collect::<Vec<_>>(),
@@ -946,7 +944,7 @@ mod tests {
             Core::set_buttons(&mut m, port, 1 << port, u32::MAX).unwrap();
         }
         m.advance();
-        let io = &m.genesis.hw.io;
+        let io = &m.hw().io;
         assert_eq!((io.plugs, io.pad_count()), ([Plug::Pad, Plug::TeamPlayer], 5));
         assert_eq!(io.pads.map(|p| (p.buttons, p.six))[..6], [(1, true), (2, false), (4, false), (8, false), (16, false), (0, false)]);
         set(&mut m, "md.teamplayer3", "md.teamplayer6");
@@ -955,13 +953,14 @@ mod tests {
         assert_eq!(ports(&m), ["md.pad3"; 4]);
         assert_eq!(m.setting_notes().iter().map(|n| n.0.as_str()).collect::<Vec<_>>(), ["pad2"]);
         m.advance();
-        assert_eq!(m.genesis.hw.io.plugs[0], Plug::FourWay);
+        assert_eq!(m.hw().io.plugs[0], Plug::FourWay);
         set(&mut m, "md.pad3", "md.4way3");
         assert_eq!(ports(&m), ["md.pad3", "md.pad3"], "the 4 Way Play is port 1's choice alone");
         assert_eq!(Core::set_buttons(&mut m, 8, 1, 1), Err(status::NO_SUCH_PORT));
     }
 
     /// A Sega CD disc of `sectors` 2,048-byte sectors whose system area names `title`.
+    #[cfg(feature = "mcd")]
     fn disc_image(title: &str, sectors: usize) -> Vec<u8> {
         let mut d = vec![0u8; sectors * 2048];
         d[..16].copy_from_slice(b"SEGADISCSYSTEM  ");
@@ -972,6 +971,7 @@ mod tests {
     }
 
     // A disc through create: the Sega CD's machine with its drive, memories, battery files and state, and its refusals (Nephrite_Native.md §53).
+    #[cfg(feature = "mcd")]
     #[test]
     fn a_disc_makes_a_sega_cds_machine() {
         let iso = disc_image("A", 40);
@@ -1017,7 +1017,94 @@ mod tests {
         assert_eq!(bad.err(), Some(STATUS_BAD_DISC));
     }
 
+    // A disc's machine with its RAM cartridge, the layout pinned as the cartridge's is, before the attachment interface (Nephrite_Attachments.md §7.1).
+    #[cfg(feature = "mcd")]
+    #[test]
+    fn a_disc_machines_layout_is_pinned() {
+        let iso = disc_image("A", 40);
+        let m = Machine::create(&Create { image: &iso, settings: Settings::parse(b"ramcart=mcd.ramcart").unwrap(), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None }).unwrap();
+        assert_eq!(
+            m.layout(),
+            concat!(
+                "0 4 u32 Magic\n4 4 i32 Version\n8 1 u8 System\n9 8 i64 Frames\n17 65536 u8[65536] WRAM\n",
+                "65553 8192 u8[8192] Z80RAM\n73745 65536 u8[65536] VRAM\n139281 128 u8[128] CRAM\n",
+                "139409 80 u8[80] VSRAM\n139489 524288 u8[524288] PRGRAM\n663777 262144 u8[262144] WORDRAM\n",
+                "925921 65536 u8[65536] PCMRAM\n991457 8192 u8[8192] BRAM\n999649 131072 u8[131072] CARTRAM\n",
+                "1130721 32 u32[8] M68000.D\n1130753 32 u32[8] M68000.A\n1130785 4 u32 M68000.OtherSp\n",
+                "1130789 2 u16 M68000.Sr\n1130791 4 u32 M68000.Pc\n1130795 4 u16[2] M68000.Prefetch\n",
+                "1130799 1 bool M68000.Stopped\n1130800 1 bool M68000.Halted\n1130801 1 u8 M68000.LastLevel\n",
+                "1130802 1 bool M68000.TracePending\n1130803 4 u32 M68000.TraceResume\n1130807 8 u16[4] Z80.Main\n",
+                "1130815 8 u16[4] Z80.Alternate\n1130823 4 u16[2] Z80.Index\n1130827 2 u16 Z80.Sp\n",
+                "1130829 2 u16 Z80.Pc\n1130831 1 u8 Z80.I\n1130832 1 u8 Z80.R\n1130833 2 u16 Z80.Wz\n",
+                "1130835 1 u8 Z80.Q\n1130836 1 bool Z80.P\n1130837 1 bool Z80.Iff1\n1130838 1 bool Z80.Iff2\n",
+                "1130839 1 u8 Z80.Im\n1130840 1 bool Z80.EiPending\n1130841 1 bool Z80.Halted\n",
+                "1130842 24 u8[24] VdpRegisters\n1130866 5 bool[5] VdpLatches\n1130871 4 u32 HvLatch\n",
+                "1130875 1 u8 VdpCode\n1130876 2 u16 VdpAddress\n1130878 1 u8 VdpLineCounter\n",
+                "1130879 24 u16[12] VdpFifo\n1130903 2 u8[2] VdpFifoPointers\n1130905 32 u64[4] VdpFifoReady\n",
+                "1130937 264 u64[33] VdpLanding\n1131201 2 u16 VdpReadBuffer\n1131203 32 u64[4] VdpDma\n",
+                "1131235 16 u64[2] VdpTimes\n1131251 320 u8[320] SpriteCache\n1131571 3 bool[3] SpriteFlags\n",
+                "1131574 2 u16 VscrollLatch\n1131576 2 u8[2] Field\n1131578 320 u8[320] SpriteLineBuffer\n",
+                "1131898 80 u8[80] LineVsram\n1131978 4 u16[2] LineHscroll\n1131982 2 u8[2] LineWindow\n",
+                "1131984 4 u16[2] OpenLine\n1131988 640 u8[640] OpenLineSprites\n1132628 80 u8[80] OpenLineVsram\n",
+                "1132708 4 u16[2] OpenLineScroll\n1132712 2 u8[2] OpenLineWindow\n1132714 4 u16[2] FrameSize\n",
+                "1132718 3 u8[3] IoData\n1132721 3 u8[3] IoCtrl\n1132724 3 u8[3] IoTx\n1132727 3 u8[3] IoSctrl\n",
+                "1132730 8 bool[8] PadTh\n1132738 8 u8[8] PadFalls\n1132746 64 u64[8] PadLastFall\n",
+                "1132810 6 u8[6] Taps\n1132816 1 u8 SramRegister\n1132817 1 bool Mapper\n",
+                "1132818 8 u8[8] MapperPages\n1132826 80 u64[10] Clocks\n1132906 4 u32 Line\n1132910 2 u16 Z80Bank\n",
+                "1132912 2 u16 OpenBus\n1132914 4 bool[4] Lines\n1132918 4 u8[4] Tmss\n",
+                "1132922 256 u8[256] Sound.Part0\n1133178 256 u8[256] Sound.Part1\n",
+                "1133434 6 u8[6] Sound.AddressPartFlags\n1133440 4 u16[2] Sound.Counters\n",
+                "1133444 24 u64[3] Sound.Times\n1133468 8 i32[2] Sound.Out\n1133476 24 i32[6] Sound.Channels\n",
+                "1133500 5 u8[5] Sound.Timers\n1133505 40 u64[5] Sound.TimersAndCounts\n",
+                "1133545 1024 u64[128] Sound.Writes\n1134569 32 u64[4] Sound.Csm\n",
+                "1134601 1056 u64[132] Sound.FmOperators\n1135657 24 bool[24] Sound.FmKeys\n",
+                "1135681 16 u64[2] Sound.FmEnvelope\n1135697 4 u8[4] Sound.FmLatches\n1135701 3 u8[3] Sound.FmLfo\n",
+                "1135704 31 bool[31] Sound.FmSsgKeys\n1135735 48 u16[24] Sound.FmShown\n1135783 6 u16[3] Sound.Tone\n",
+                "1135789 4 u8[4] Sound.Volume\n1135793 3 u8[3] Sound.NoiseLatchStereo\n",
+                "1135796 8 u16[4] Sound.Counter\n1135804 4 bool[4] Sound.Bit\n1135808 2 u16 Sound.Shift\n",
+                "1135810 16 u64[2] Sound.PsgTimeAndTime\n1135826 80 i32[20] Sound.Lines\n",
+                "1135906 8 i32[2] Sound.Level\n1135914 24 u64[3] Sound.Sum\n1135938 1024 u64[128] Sound.Pending\n",
+                "1136962 8 i32[2] Sound.Level\n1136970 24 u64[3] Sound.Sum\n1136994 1024 u64[128] Sound.Pending\n",
+                "1138018 88 u64[11] Sound.Circuit\n1138106 160 u64[20] Sound.CircuitSides\n",
+                "1138266 32 u32[8] SubCpu.D\n1138298 32 u32[8] SubCpu.A\n1138330 4 u32 SubCpu.OtherSp\n",
+                "1138334 2 u16 SubCpu.Sr\n1138336 4 u32 SubCpu.Pc\n1138340 4 u16[2] SubCpu.Prefetch\n",
+                "1138344 1 bool SubCpu.Stopped\n1138345 1 bool SubCpu.Halted\n1138346 1 u8 SubCpu.LastLevel\n",
+                "1138347 1 bool SubCpu.TracePending\n1138348 4 u32 SubCpu.TraceResume\n1138352 8 u64 SubClock\n",
+                "1138360 3 bool[3] GateLines\n1138363 11 u8[11] GateBytes\n1138374 4 u16[2] GateWords\n",
+                "1138378 16 u16[8] Commands\n1138394 16 u16[8] Statuses\n1138410 32 u64[4] GateTimes\n",
+                "1138442 5 u8[5] WordRamSwitches\n1138447 1 bool SubParked\n1138448 4 u32 SubOwed\n",
+                "1138452 0 u64[0] SubOwedWrites\n1138452 36 u8[36] PcmBytes\n1138488 32 u16[16] PcmWords\n",
+                "1138520 32 u32[8] PcmAddresses\n1138552 8 u64 PcmNext\n1138560 16 u64[2] PcmLowPass\n",
+                "1138576 4 u32 PcmQueued\n1138580 0 u64[0] PcmQueue\n1138580 2 u16 Fader\n",
+                "1138582 28 u32[7] DriveMode\n1138610 40 u64[5] DriveWords\n1138650 20 u8[20] DriveNibbles\n",
+                "1138670 4 bool[4] DriveFlags\n1138674 2 u8[2] DriveReport\n1138676 16384 u8[16384] CdcBuffer\n",
+                "1155060 5 u8[5] CdcBytes\n1155065 10 u16[5] CdcCounters\n1155075 8 u8[8] CdcHeader\n",
+                "1155083 6 bool[6] CdcFlags\n1155089 24 u64[3] CdcTimes\n1155113 8 i32[2] Cdda.Level\n",
+                "1155121 24 u64[3] Cdda.Sum\n1155145 1024 u64[128] Cdda.Pending\n1156169 20 i32[5] Cdda.MixLevels\n",
+                "1156189 32 u64[4] Cdda.Deemphasis\n1156221 32 i32[8] Cdda.CddaHistory\n",
+                "1156253 4 u32 Cdda.CddaQueued\n1156257 0 u64[0] Cdda.CddaQueue\n1156257 1 bool CartWritable\n",
+                "1156258 5 u8[5] AsicBytes\n1156263 8 u16[4] AsicWords\n1156271 24 u64[3] AsicTimes\n",
+                "1156295 8 u64 DiscFingerprint\n",
+            )
+        );
+    }
+
+    // Each part lists its spaces from its own range of ids, so that an id never moves between systems (Nephrite_Attachments.md §3.5).
+    #[cfg(feature = "mcd")]
+    #[test]
+    fn each_part_lists_its_spaces_in_its_range() {
+        use crate::interface::{AttachmentView, GENESIS_SPACES, MCD_SPACES};
+        let iso = disc_image("A", 40);
+        let m = Machine::create(&Create { image: &iso, settings: Settings::parse(b"ramcart=mcd.ramcart").unwrap(), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None }).unwrap();
+        let mut sega_cd = Vec::new();
+        m.mcd().unwrap().spaces(&mut sega_cd);
+        assert_eq!(sega_cd.iter().map(|s| s.name).collect::<Vec<_>>(), ["PRGRAM", "WORDRAM", "PCMRAM", "BRAM", "CARTRAM"]);
+        assert!(sega_cd.iter().all(|s| MCD_SPACES.contains(&s.id)));
+        assert!(m.spaces().iter().filter(|s| !sega_cd.contains(s)).all(|s| GENESIS_SPACES.contains(&s.id)));
+    }
+
     // The backup RAM cartridge: plugged in by its setting, its bytes the second battery file, loaded at create.
+    #[cfg(feature = "mcd")]
     #[test]
     fn the_ram_cartridge_is_a_setting_and_a_battery_file() {
         let iso = disc_image("A", 40);
@@ -1037,6 +1124,7 @@ mod tests {
     /// Since core ABI 1.8 (EmuSen_SaveMedia.md §7.3): the backup RAM is the console's and the cartridge removable, each
     /// a slot of its medium; made with the host's flags, a state load leaves both as they stand, made without them it
     /// puts the state's back, as before.
+    #[cfg(feature = "mcd")]
     #[test]
     fn the_backup_ram_and_the_cartridge_are_kept_apart_under_the_flags() {
         let listed: Vec<(u32, BatteryKind, Option<String>, Option<String>)> = Machine::battery_files("mcd").unwrap().into_iter().map(|b| (b.which, b.kind, b.medium, b.label)).collect();

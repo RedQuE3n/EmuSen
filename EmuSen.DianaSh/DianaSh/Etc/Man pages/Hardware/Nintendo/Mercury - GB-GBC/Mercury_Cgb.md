@@ -118,10 +118,10 @@ written to `$FF55`.
   Games use it to stream tile data in during hblank without touching vblank, which
   is exactly the trick the mode exists for.
 
-Reading `$FF55` reports bit 7 set when nothing is running and the blocks still
-owed, minus one, while one is. Writing bit 7 clear *during* an hblank transfer
-cancels it rather than starting a general-purpose one — the one case where the
-same write means two different things depending on state.
+Reading `$FF55` reports the blocks still owed, minus one, while a transfer runs; `$FF` once it has finished; and the
+blocks it still owed with bit 7 set after it was stopped. Writing bit 7 clear *during* an hblank transfer stops it
+rather than starting a general-purpose one — the one case where the same write means two different things depending
+on state. A transfer whose destination runs past `$9FFF` stops there (Pan Docs; `Mercury_Native.md` §13.9).
 
 The destination register only has bits 12-4; a transfer is always 16-byte aligned
 and always lands in VRAM, in whichever bank `$FF4F` currently selects.
@@ -146,10 +146,12 @@ one with no observer.
 
 Two details follow from the clock rather than from the transfer:
 
-- **Double speed halves it.** The transfer is eight machine cycles either way, and a
-  machine cycle is half as long, so the charge is 16 T-cycles a block rather than
-  32. A test asserts both numbers, because getting this backwards is invisible in
-  single speed.
+- **Double speed does not change the time.** A block takes about 8 µs at either speed (Pan Docs, "Transfer Timings"):
+  8 machine cycles in normal speed and 16 fast ones in double speed, so the charge is 32 CPU T-cycles a block in normal
+  speed and 64 in double. *Corrected 2026-10-15* (`Mercury_Native.md` §13.9): this paragraph said "the transfer is
+  eight machine cycles either way, and a machine cycle is half as long, so the charge is 16 T-cycles". That was wrong
+  twice: eight fast machine cycles are 32 CPU T-cycles, not 16, and the premise itself was not the hardware's. A test
+  asserts both numbers, because getting this backwards is invisible in single speed.
 - **The stall is taken once.** `TakePendingStall` clears as it reads. An accumulator
   that is read without clearing would charge every subsequent instruction for the
   same transfer, and the symptom would be a game that runs progressively slower

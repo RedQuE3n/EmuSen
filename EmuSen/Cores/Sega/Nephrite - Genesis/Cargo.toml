@@ -15,7 +15,26 @@ beryl-m68k = { path = "../Beryl-HW/beryl-m68k" }
 beryl-z80 = { path = "../Beryl-HW/beryl-z80" }
 beryl-sh2 = { path = "../Beryl-HW/beryl-sh2" }
 beryl-sn76489 = { path = "../Beryl-HW/beryl-sn76489" }
-emusen-disc = { path = "../../Shared/emusen-disc" }
+emusen-disc = { path = "../../Shared/emusen-disc", optional = true }
+
+# The attachments, both built by default; each off is a check of the boundary, never a shipped library
+# (Nephrite_Attachments.md §5.4).
+[features]
+default = ["mcd", "s32x"]
+mcd = ["dep:emusen-disc"]
+s32x = []
+
+[[example]]
+name = "bench"
+required-features = ["mcd"]
+
+[[example]]
+name = "digest"
+required-features = ["mcd"]
+
+[[example]]
+name = "disc"
+required-features = ["mcd"]
 
 [profile.release]
 panic = "abort"

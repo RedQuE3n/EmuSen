@@ -4,21 +4,21 @@
 //! (Nephrite_Native.md §50).
 
 /// The RAM's bytes in 2M order: bank 0's word n is word 2n, bank 1's word 2n + 1 (the manual's §1-1 "data arrangement").
-pub const SIZE: usize = 0x4_0000;
+pub(in crate::mcd) const SIZE: usize = 0x4_0000;
 
 #[derive(Clone)]
-pub struct WordRam {
-    pub bytes: Vec<u8>,
+pub(in crate::mcd) struct WordRam {
+    pub(in crate::mcd) bytes: Vec<u8>,
     /// MODE: 1M when true.
-    pub one_m: bool,
+    pub(in crate::mcd) one_m: bool,
     /// In 2M, the RAM is the sub CPU's: DMNA as the main CPU sets it, cleared by the sub CPU's RET.
-    pub sub_owns: bool,
+    pub(in crate::mcd) sub_owns: bool,
     /// In 1M, RET: bank 0 the sub CPU's and bank 1 the main CPU's when set.
-    pub ret: bool,
+    pub(in crate::mcd) ret: bool,
     /// In 1M, DMNA: a swap the main CPU asked for and the sub CPU has not made by changing RET.
-    pub request: bool,
+    pub(in crate::mcd) request: bool,
     /// PM1-PM0: the priority mode of a write to the dot image.
-    pub priority: u8,
+    pub(in crate::mcd) priority: u8,
 }
 
 impl Default for WordRam {
@@ -29,7 +29,7 @@ impl Default for WordRam {
 
 /// Where an access lands in the RAM: a byte of the 2M array, or nowhere the CPU may reach now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Lands {
+pub(in crate::mcd) enum Lands {
     Byte(usize),
     /// A pixel of the 1M dot image: the byte, and whether the pixel is its high nibble.
     Dot(usize, bool),
@@ -38,13 +38,13 @@ pub enum Lands {
 }
 
 /// Bank `b`'s byte `j` in the 2M array.
-pub fn bank_byte(b: usize, j: usize) -> usize {
+pub(in crate::mcd) fn bank_byte(b: usize, j: usize) -> usize {
     ((j >> 1) << 2) | (b << 1) | (j & 1)
 }
 
 /// The cell image's word `i` (0 to `$FFFF`) as the bank word it shows: five strips of cells, 32, 16, 8, 4 and 4 cells
 /// high, each read cell by cell from its dot rows (the manual's §1-3; mcd-verificator's `testVramMapping`).
-pub fn cell_word(i: usize) -> usize {
+pub(in crate::mcd) fn cell_word(i: usize) -> usize {
     let (slot, base) = match i {
         0x0000..=0x7FFF => (0, 0x0000),
         0x8000..=0xBFFF => (1, 0x8000),
@@ -60,13 +60,13 @@ pub fn cell_word(i: usize) -> usize {
 
 impl WordRam {
     /// MODE, DMNA and RET as either CPU reads them.
-    pub fn mode_bits(&self) -> u8 {
+    pub(in crate::mcd) fn mode_bits(&self) -> u8 {
         let (dmna, ret) = if self.one_m { (self.request, self.ret) } else { (self.sub_owns, !self.sub_owns) };
         (self.one_m as u8) << 2 | (dmna as u8) << 1 | ret as u8
     }
 
     /// The main CPU's write of DMNA: 1 gives the 2M RAM to the sub CPU in either mode; 0 asks for a 1M swap.
-    pub fn main_dmna(&mut self, dmna: bool) {
+    pub(in crate::mcd) fn main_dmna(&mut self, dmna: bool) {
         if dmna {
             self.sub_owns = true;
         } else if self.one_m {
@@ -76,7 +76,7 @@ impl WordRam {
 
     /// The sub CPU's write of MODE and RET. Into 1M, RET picks the banks and a change of RET makes a swap the main CPU
     /// asked for; in 2M, RET 1 gives the RAM to the main CPU and 0 does nothing.
-    pub fn sub_mode(&mut self, one_m: bool, ret: bool) {
+    pub(in crate::mcd) fn sub_mode(&mut self, one_m: bool, ret: bool) {
         if one_m {
             if self.one_m && ret != self.ret {
                 self.request = false;
@@ -94,16 +94,16 @@ impl WordRam {
     }
 
     /// The bank the main CPU holds in 1M, and the sub CPU's.
-    pub fn main_bank(&self) -> usize {
+    pub(in crate::mcd) fn main_bank(&self) -> usize {
         self.ret as usize
     }
 
-    pub fn sub_bank(&self) -> usize {
+    pub(in crate::mcd) fn sub_bank(&self) -> usize {
         !self.ret as usize
     }
 
     /// A main CPU address in `$200000`-`$3FFFFF`.
-    pub fn main(&self, a: u32) -> Lands {
+    pub(in crate::mcd) fn main(&self, a: u32) -> Lands {
         let o = (a & 0x3_FFFF) as usize;
         if !self.one_m {
             return if self.sub_owns { Lands::Elsewhere } else { Lands::Byte(o) };
@@ -118,7 +118,7 @@ impl WordRam {
     }
 
     /// A sub CPU address in `$080000`-`$0DFFFF`.
-    pub fn sub(&self, a: u32) -> Lands {
+    pub(in crate::mcd) fn sub(&self, a: u32) -> Lands {
         let a = a as usize;
         if !self.one_m {
             return if self.sub_owns && a < 0xC_0000 { Lands::Byte(a - 0x8_0000) } else { Lands::Elsewhere };
@@ -132,7 +132,7 @@ impl WordRam {
         }
     }
 
-    pub fn read8(&self, at: Lands) -> Option<u8> {
+    pub(in crate::mcd) fn read8(&self, at: Lands) -> Option<u8> {
         match at {
             Lands::Byte(i) => Some(self.bytes[i]),
             Lands::Dot(i, high) => Some(if high { self.bytes[i] >> 4 } else { self.bytes[i] & 15 }),
@@ -141,7 +141,7 @@ impl WordRam {
     }
 
     /// A byte written; a pixel by the priority mode: underwrite (PM0) only over 0, overwrite (PM1) only when not 0.
-    pub fn write8(&mut self, at: Lands, v: u8) {
+    pub(in crate::mcd) fn write8(&mut self, at: Lands, v: u8) {
         match at {
             Lands::Byte(i) => self.bytes[i] = v,
             Lands::Dot(i, high) => {

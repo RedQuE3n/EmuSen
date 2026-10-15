@@ -152,7 +152,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0xBB, core.Read(0xD000));
 
             core.Write(0xFF70, 0x00);
-            Assert.Equal(1, core.Bus.WramBank);
+            Assert.Equal(1, core.Bus.MappedWramBank);
             Assert.Equal(0xAA, core.Read(0xD000));
         }
 
@@ -347,9 +347,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, core.Bus.TakePendingStall());
         }
 
-        // Double speed halves the wall-clock cost of the same transfer - see Mercury_Cgb.md §4.1.
+        // A block takes the same 8 µs in double speed, so twice the CPU's cycles - see Mercury_Cgb.md §4.1, Mercury_Native.md §13.9.
         [Fact]
-        public void A_general_purpose_hdma_costs_half_as_much_in_double_speed()
+        public void A_general_purpose_hdma_costs_twice_the_cycles_in_double_speed()
         {
             var core = Load();
 
@@ -366,7 +366,7 @@ namespace EmuSen.WiseMan.Cores
             core.Bus.TakePendingStall();
             core.Write(0xFF55, 0x03);
 
-            Assert.Equal(4 * 16, core.Bus.TakePendingStall());
+            Assert.Equal(4 * 64, core.Bus.TakePendingStall());
         }
 
         [Fact]
@@ -408,8 +408,9 @@ namespace EmuSen.WiseMan.Cores
 
             core.Write(0xFF55, 0x00);
 
-            Assert.Equal(0xFF, core.Read(0xFF55));
-            Assert.Equal(0, core.Bus.HdmaBlocksLeft);
+            // Stopped, it reads the three blocks it still owed, minus one, with bit 7 set - see Mercury_Native.md §13.9.
+            Assert.Equal(0x82, core.Read(0xFF55));
+            Assert.False(core.Bus.HdmaIsHBlankDriven);
         }
 
         [Fact]

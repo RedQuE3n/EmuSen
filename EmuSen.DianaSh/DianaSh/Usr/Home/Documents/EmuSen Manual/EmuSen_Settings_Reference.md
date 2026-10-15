@@ -6464,6 +6464,8 @@ With the fade switched off, the audit reports the reel at both sizes.
 - **LunaP**: four cases for the fade, the switch's focus, the shoulder pair in a help bar and the compact labels
   (§196.10).
 - **Mutants**: `EmuSen_BigPicture.md` §43.
+- **The interface's specification** (2026-10-15): every state these tests open is also recorded, its tree, focus graph
+  and presses, and held to its recording and to the audit's rules read from the record; `EmuSen_InterfaceSpec.md`.
 
 #### 4.83.5 What it does not cover
 

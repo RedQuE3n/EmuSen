@@ -324,7 +324,7 @@ Slint, which uses it too, is the comparison, so the gate measures the paradigm's
 | `lunap-input` | one event model; the gamepad as a first-class device with EmuSen's canonical buttons | SDL3 | golden event logs |
 | `lunap-gpu` | one Vulkan device; importing a device another component made, or lending its own (§5.2); present and pacing; the output's colour space, HDR metadata and the final encoding (§5.4) | wgpu (Vulkan only), wgpu-hal, ash | device tests on each driver (§5.3); PQ codes read back (§5.4) |
 | `lunap-paint` | the vector scene, images, clips, effects (tint, saturation, gradient, corner radius), composited in half-float linear light | vello_gpu; vello_cpu | golden pictures per driver, with tolerances stated per test |
-| `lunap-text` | shaping, layout, bidi, fallback per platform, editing, composition | chosen in K1 between cosmic-text and Parley | ES-DE's text captures, to 1 to 2 px |
+| `lunap-text` | shaping, layout, bidi, fallback per platform, editing, composition | Parley, chosen by K1 (f) (§9.2) | ES-DE's text captures, to 1 to 2 px |
 | `lunap-layout` | flex and grid for application screens; fractional placement for ES-DE scenes | Taffy | layout dumps against today's (§7.3) |
 | `lunap-media` | decoding and caching; static SVG; Lottie; video into a GPU image | image, usvg, velato, ffmpeg-next | decode tests; ES-DE comparisons |
 | `lunap-a11y` | the accessibility tree from the widget tree | AccessKit | today's 39 accessibility tests, ported |
@@ -567,6 +567,199 @@ No step leaves EmuSen without a working frontend: the C# one runs until K9.
 
 K0 to K5 can start now and run beside the rest of EmuSen's plan; K6 waits for Crystal.
 
+**State (2026-10-15).** The go for K0 to K2, as a track of their own, was given by the tester on 2026-10-15. K0 is
+recorded (§9.1). K1's three desktop parts are answered, each yes (§9.2); its other parts wait for hardware or the
+tester's permission, with their program and steps written (§9.3). K2 is not started; its steps are §9.4.
+
+### 9.1 K0: the specification, recorded
+
+Its form, how it is read and re-recorded, and what it found are `EmuSen_InterfaceSpec.md`; this section keeps the gate.
+
+- **The count is no longer 43.** On 2026-10-10 `WindowFitAuditTests` named 28 in-game and 15 themed window states,
+  which is §2.4's 43; the Genesis and PlayStation cases, the Memory Cards window and the PlayStation's card rows took it
+  to 36 and 15 by 2026-10-15. With `WindowFitScrapeAuditTests`' three scraping states, **54 named window states** are
+  audited, each at 1280 × 800 and 1920 × 1200 **[M]**. The seven Controller Bindings cases are recorded on every tab, as
+  the audit audits them, so the 108 cases make more recordings than cases (`EmuSen_InterfaceSpec.md` §1).
+- **Big Picture's views** are ten, each at both sizes: the system and gamelist scenes, and the main menu, the game
+  options, the metadata editor, Theme Settings, Game Collection Settings, the search keyboard, the launch screen and the
+  screensaver's slideshow drawn over them.
+- **The gate is met (2026-10-15) [M].** 212 recordings cover every state at both sizes and every view; recorded twice in
+  a row, they are identical file for file, after six sources of difference were traced and removed (the run's
+  folders, two wall-clock times, the rewind reel's moments, a keyboard's posted work, and a walk that explored to its
+  limit; `EmuSen_InterfaceSpec.md` §6.1).
+- **§2.4's rules as checks.** The fit audit, pad reachability, accessibility names and palette reach read the recorded
+  structure alone (`InterfaceRules`), so a frontend that writes the format is held to them; the recorded fit rule is
+  held to `FitAudit.Check` on every recorded sheet and every planted fault. **Today's Mistress passes the fit audit
+  everywhere, and fails the other three in places no audit had looked**: 25 controls a reader cannot name, four
+  colours painted outside the palette, one list the d-pad cannot walk past its second row (Cheat Database at 1280 × 800),
+  and the synthetic theme's over-long help bar (`EmuSen_InterfaceSpec.md` §6.2). They stand as recorded faults for the
+  tester to schedule; none was fixed here.
+
+### 9.2 K1 on the desktop (measured 2026-10-15)
+
+Each part is a throwaway program under `~/.cache/emusen/probe/kit/` on the RX 6800 (RADV, Mesa 26.2.4), KDE Plasma
+6.7.5 on Wayland. The programs are not committed; their results are.
+
+**(b) One Vulkan device shared between wgpu and ash: yes.** `kit-share`, on wgpu 30.0.1 with only its Vulkan backend
+and ash 0.38.0 (the version wgpu-hal 30 depends on, and the one `emusen-gpu` pins), both ways round:
+
+| | Who makes the device | Exchange | Texels as written | Validation (syncval with the shader-access heuristic, logged to a file) |
+|---|---|---|---|---|
+| ash owns | ash makes the instance and device; wgpu-hal's `Instance::from_raw`, `expose_adapter` and `device_from_raw` take them, `create_device_from_hal` gives the wgpu device | ash writes an image of its own memory, wgpu imports it (`texture_from_raw`, `create_texture_from_hal`), reads it under a timeline semaphore, writes it by a compute pass and signals; ash waits and reads | 65,536 of 65,536, both directions | 0 messages, 6 runs |
+| wgpu owns | wgpu makes them; ash takes the raw instance, device, queue and the texture's `VkImage` through `as_hal` | wgpu writes first and signals 1; ash waits, reads, writes and signals 2; wgpu waits and reads | 65,536 of 65,536, both directions | 0 messages, 6 runs |
+
+Taking a device costs 41 to 117 ms once **[M]**; a round trip, which includes compiling the compute pipeline on first
+use, 1.8 to 7.8 ms for wgpu's half and 5.3 to 11.8 ms for both halves, the first run of each the slowest **[M]**. Two findings for `lunap-gpu` (§5.2):
+
+- **A texture wgpu made counts as uninitialised to wgpu until wgpu itself has written it.** When the outside side
+  wrote such a texture first, wgpu's lazy clear on first use discarded the write: 0 of 65,536 texels survived, with the
+  layer silent, because nothing was unsynchronised. A shared image is therefore made by the side that writes it first,
+  or imported with `create_texture_from_hal` and the state its writer left it in; which side makes it is part of the
+  sharing protocol, not a detail.
+- **The layer's positive control.** With the semaphore waits removed and the outside side's barriers given no source
+  scope, it reported write-after-write and write-after-read hazards (25 messages); the same omission when both sides
+  submit on one queue in order and keep their barriers produces no hazard, because a barrier's second scope covers
+  later submissions on that queue. The semaphore is what orders work across queues or threads, which the RetroArch
+  runtime's own queue will need.
+
+**(g) HDR on the desktop's session: yes, under Wayland; none under X11.** `kit-hdr` asked for the surface formats of a
+Wayland surface given no role and no buffer (so never mapped, nothing shown) and of an X11 window never mapped:
+
+| | Wayland (KWin 6.7.5, `wp_color_manager_v1` v2) | X11 through XWayland |
+|---|---|---|
+| Colour spaces | sRGB, extended sRGB linear (scRGB), Display P3 linear, BT.709 linear and non-linear, BT.2020 linear, **HDR10 (ST 2084)**, Adobe RGB linear, pass-through | sRGB only |
+| Formats per colour space | 9 on RADV: 8- and 10-bit, 16-bit unsigned and **half-float** | 2 (8-bit) |
+| `VK_EXT_hdr_metadata` | yes, on the RX 6800, the integrated GPU and lavapipe | yes, but no HDR colour space to use it with |
+| Present modes | mailbox, FIFO, immediate | immediate, mailbox, FIFO, FIFO relaxed |
+
+The offer does not depend on the monitor: both of the desktop's monitors report HDR incapable to `kscreen-doctor`, and
+KWin offers HDR10 anyway and maps it to what the output can show. Three things follow, none of them a no:
+
+- **HDR on Linux needs the Wayland backend.** LunaP today is X11 only (§2.5); `lunap-platform-winit` must run as a
+  Wayland client for §5.4's swapchain to exist.
+- **wgpu 30 configures the colour space** (`SurfaceConfiguration::color_space`, with `Bt2100Pq` mapped to
+  `HDR10_ST2084_EXT` and scRGB to `EXTENDED_SRGB_LINEAR_EXT`) **but writes no HDR metadata, and reports no display
+  luminance on Vulkan outside Windows** (`DisplayHdrInfo`, read in its source). §5.4's mastering levels must be set by
+  `lunap-gpu` through the raw swapchain (`vkSetHdrMetadataEXT`), and the display's peak read from the colour-management
+  protocol's description of the output, not from wgpu.
+- **Whether the codes are shown faithfully** stays with the television, where the handheld's gamescope is the route
+  (§9.3), and with Q14's colorimeter.
+
+**(f) cosmic-text against Parley on ES-DE's captures: both meet ES-DE to 2 px; Parley is chosen (§11 Q3).**
+`kit-text` laid out, with each engine, the text of ES-DE 3.4.1's gamelist captures of 2026-09-24 (Art Book Next,
+`gamelist-list-metadata-cover`, medium font size; the captures under `~/.cache/emusen/bigpicture/compare/`): two list
+names (Mulish Medium, 30 and 45 px), the four lines of the description shown before it scrolls (Mulish Light, 30 and
+45 px, line spacing 1.667, wrapped at the theme's width) and the three metadata values (Mulish Medium, 23.3 and 35 px),
+at 1280 × 800 and 1920 × 1200: 12 lines a size, 24 in all. Each engine's glyphs were rasterised by swash, so the
+rasteriser is common and the comparison is of layout, and every line's ink box was found as `measure.py` finds ES-DE's
+(more than 40 levels from the background, coverage scaled to each text's contrast).
+
+| | cosmic-text 0.19 | Parley 0.12 |
+|---|---|---|
+| Line breaks of the wrapped description | ES-DE's, both sizes | ES-DE's, both sizes |
+| Left and right ink edges, fractional advances | within 2 px on 22 of 24 lines; 3 px on two | the same, line for line |
+| Left and right ink edges, advances rounded to whole pixels | **within 2 px on all 24** | **within 2 px on all 24** |
+| Ink height | within 1 px on all 24 | within 1 px on all 24 |
+| Line pitch of the description | 44 against ES-DE's 44; 66 against 65 | the same |
+| Against each other | within 1 px everywhere | |
+
+Two rules for `lunap-esde` fall out, and neither belongs to the engine. **ES-DE advances by whole pixels**: with each
+glyph's advance rounded, as FreeType's hinted advances are, the two lines 3 px out at 1280 × 800 come within 1 px.
+**Where a line's ink sits in its box is ES-DE's convention**: the list names sit 5 to 8 px higher in ES-DE than either
+engine's half-leading puts them, the description 0 to 5 px lower, the metadata 1 to 3 px lower; constant per element
+and size to within 1 px, the same for both engines to 1 px, and already reproduced by Mistress's scene (§13.8 of
+`EmuSen_BigPicture.md`), so it is ported as a rule.
+
+Since both reach the tolerance, §11 Q3's second condition decides, read from their sources (2026-10-15):
+
+- **Font fallback.** cosmic-text 0.19's fallback lists are compiled per platform for Linux, macOS and Windows only; on
+  Android it uses an empty list, and iOS, a Unix target, gets the Linux list of family names, which name no iOS font.
+  Parley's font collection, fontique 0.12, enumerates and falls back through the platform's own service on every target:
+  DirectWrite, Core Text (which covers iOS), fontconfig, and Android's `fonts.xml`.
+- **Input methods.** Parley's `PlainEditor` has a composition API (`set_compose`, `clear_compose`, `is_composing`,
+  `ime_cursor_area`); cosmic-text's editor has none.
+- **A cost of Parley's.** Its system backend links fontconfig on Linux; fontique's `fontconfig-dlopen` feature loads it
+  at run time instead, which the kit should use so a machine without fontconfig still starts.
+
+**Parley for `lunap-text`.** The decision reshapes nothing else in §4; §3.2's row is confirmed.
+
+### 9.3 K1's other parts: the programs and steps for the tester's hardware
+
+None of these was run: each needs a device, or the tester's permission to install or to show a window. One program,
+`kit-probe` under `~/.cache/emusen/probe/kit/probe/`, serves all of them; on the desktop it builds with every feature,
+and its off-screen modes ran on the RX 6800 and lavapipe:
+
+| Mode | What it answers | Desktop result (2026-10-15) |
+|---|---|---|
+| `adapters` | which Vulkan adapters wgpu finds, with their drivers | RX 6800, the integrated GPU, lavapipe |
+| `compute` | a compute write, a copy and a read-back, texel by texel | 65,536 of 65,536 on both, validation silent |
+| `vello [png]` | a Vello scene of a menu's shapes, read back, hashed (FNV-1a) | **`5119d53b7adca9b5` on both, bit for bit**; 0.42 ms a frame on the RX 6800, 2.48 on lavapipe |
+| `window [frames]` | a winit window presenting the scene in FIFO: formats, colour spaces, present modes, present intervals | built, not run (a visible window) |
+| `sdl [seconds]` | SDL3's window and pads, Parley text in four scripts over the platform's fonts, text and composition events | built, not run |
+| `kms [frames]` | the same on a DRM connector with no compositor | built, not run |
+| `diff a.png b.png` | the largest channel difference between two read-backs | RX 6800 against lavapipe: 0 |
+
+The hash is the reference a driver's Vello output is held to; a different hash is then looked at with `diff`.
+
+**(a) wgpu on KosmicKrisp and on MoltenVK, Mac mini (M1, macOS 26.6.2).** Needs the Vulkan SDK 1.4.363 (Q12, decided)
+and a Rust toolchain, both installed only with the tester's word.
+1. Copy `~/.cache/emusen/probe/kit/probe/` to the Mac; `cargo build --release --features window,apple` there.
+2. For each driver, with `VK_DRIVER_FILES` naming the ICD file the SDK installs for it under
+   `$VULKAN_SDK/share/vulkan/icd.d/`: `kit-probe adapters`, `kit-probe compute`, `kit-probe vello kk.png` (or `mvk.png`),
+   then `kit-probe window 600`, which shows a window for about ten seconds.
+3. Yes when `compute` passes, the hash is `5119d53b7adca9b5` (or `kit-probe diff` against the desktop's PNG shows at most
+   a few levels at edges), and the window presents. Record the present modes: §3.3 expects no mailbox on KosmicKrisp.
+   A no for KosmicKrisp with a yes for MoltenVK makes MoltenVK the macOS driver until it passes (§5.3, Q6); a no on both
+   brings §11 Q2's fallback, `lunap-gpu` on ash with `vello_cpu`.
+4. The same run's `window` lines answer **(g) on the Mac**: whether KosmicKrisp offers any HDR or EDR colour space.
+
+**(c) Android, a low-end phone (§11 Q11 still needs it).** `kit-probe sdl 60` built as SDL3's Android project: SDL's
+`android-project` template with the Rust program as the `main` library (`cargo ndk -t arm64-v8a build --release
+--features sdl`, the `.so` copied into the template's `jniLibs`), the NDK and SDK installed by the tester. Run with a pad
+paired and the soft keyboard raised (the program starts text input), type in a composing keyboard (Japanese). Yes when
+the scene and the text draw, every run of the four scripts names a system font, pad buttons print, and composition
+events (`composition: ...`) arrive before the committed text; the present intervals are recorded. A no on Vulkan makes
+§11 Q7's floor wrong for that phone; a no on composition puts the input method in `lunap-text`'s own Android code
+(§3.4, R5) rather than SDL's.
+
+**(d) iOS, an iPhone or iPad through MoltenVK (Q11 still needs one).** The same program as an Xcode project with SDL3's
+xcframework and MoltenVK's, built `--features sdl,apple` for `aarch64-apple-ios`; the same checks. A no on Vulkan is R2
+realised: the kit's renderer for iOS then needs only what MoltenVK conforms on, or Metal (a change to decision 4, for the
+tester).
+
+**(e) `lunap-platform-kms` on the handheld outside gamescope.** From a text console with the session's compositor
+stopped, and through `systemd-run --user`, since the handheld ends a login's processes when ssh closes:
+`KIT_DRM=/dev/dri/card0 kit-probe kms 600`, built `--features kms`. Yes when a DRM surface is made (wgpu's
+`SurfaceTargetUnsafe::Drm`, through `VK_EXT_acquire_drm_display`), the scene presents and the intervals sit at the
+panel's refresh; record the present modes and colour spaces. A no makes the kit's KMS backend its own ash code below
+wgpu (§4.3), a larger `lunap-platform-kms`.
+
+**(g) on the television.** With the handheld docked, inside gamescope: `kit-probe window 600` under gamescope with HDR
+enabled, recording the colour spaces offered. Whether the codes then reach the television as PQ needs gamescope's own
+HDR debug view or the colorimeter (Q14).
+
+**Hardware §11 Q11 still needs:** one low-end Android phone with Vulkan 1.1, one iPhone or iPad, and an ARM board for K2.
+
+### 9.4 K2, as runnable steps (not started)
+
+K2 builds one Big Picture screen twice and fills one table. It needs the handheld, the Mint laptop and an ARM board
+(Q11), and the tester's choice between the two at the end (Q1).
+
+1. **The screen.** The system carousel and a gamelist of the synthetic theme `ThemedSession.Write` defines, at 1280 × 800
+   and 1920 × 1200, driven by the pad: left and right move the carousel, A enters, up and down move the list, B returns.
+   Its specification is K0's `BigPicture-System` and `BigPicture-Gamelist` recordings.
+2. **Prototype A, LunaP's core.** A Cargo workspace beside the C# in LunaP's repository (§4.6), MIT: a retained tree with
+   reactive state (§4.2), Taffy for layout, Parley for text, Vello on wgpu (Vulkan only) for drawing, SDL3 for the pad, a
+   focus graph in the core; it writes K0's format through a `lunap-test` stub, so the two prototypes are held to the
+   same recordings.
+3. **Prototype B, Slint 1.x**, under its GPL-3.0 option, the same screen, the same assets, the same recording writer.
+4. **Each on each machine** (the desktop, the handheld, the laptop, the ARM board), for 60 s of scripted presses:
+   frame time (median and 99th percentile, from present timestamps), resident memory, binary size stripped, the
+   recordings compared with K0's by `Another_frontend_s_recordings_match_these_within_the_tolerances`
+   (`EMUSEN_INTERFACE_SPEC_OTHER=<folder>`), text against ES-DE's captures by `kit-text`'s measure, the pad walk, and
+   the hours each screen took.
+5. **The table**, one row per machine and prototype, into this section; the tester decides Q1 on it.
+
 ---
 
 ## 10. Risks
@@ -596,7 +789,7 @@ Each with a recommendation.
 |---|---|---|
 | **Q1** | LunaP's own core on shared lower layers, or a LunaP layer on Slint? | Decided by K2's table. The plan's argument (§1) favours LunaP's own core; Slint is the fallback if the prototype cannot reach the numbers |
 | **Q2** | The renderer: wgpu with only its Vulkan backend, or a renderer on ash? | wgpu, Vulkan only (§5.1), with ash as the fallback if K1 (a) fails |
-| **Q3** | Text: cosmic-text or Parley? | Decided by K1 (f): the one that meets ES-DE's 1 to 2 px and has a path to mobile fallback |
+| **Q3** | Text: cosmic-text or Parley? | Decided by K1 (f): the one that meets ES-DE's 1 to 2 px and has a path to mobile fallback. **Decided 2026-10-15 by K1 (f): Parley** (§9.2) |
 | **Q4** | LunaP stays MIT, in its own repository, published at 1.0? | Yes (§4.6) |
 | **Q5** | iOS distribution: the App Store, which needs every copyright holder's consent and interpreters only, or sideloading? | Plan for the App Store and keep the option open: record now who holds copyright in every part of EmuSen, and keep every core able to run without its recompiler |
 | **Q6** | macOS: KosmicKrisp only (macOS 26, Apple Silicon), or MoltenVK bundled too for older Macs? | Both bundled, chosen at run time, as LunarG advises |

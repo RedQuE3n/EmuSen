@@ -14,18 +14,26 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory.Mappers
         private int _bank2;       // 2 bits, ROM high bits or RAM bank
         private bool _advancedMode;
 
-        public Mbc1(Cartridge cart) => _cart = cart;
+        // MBC1M rewires BANK1 to four bits and BANK2 to bank bits 4-5 - see Mercury_Native.md §13.6.
+        [EmuSen.Common.SkipInState] private readonly int _bank2Shift;
+
+        public Mbc1(Cartridge cart)
+        {
+            _cart = cart;
+            _bank2Shift = Cartridge.IsMbc1Multicart(cart.Rom) ? 4 : 5;
+        }
 
         public string Name => "MBC1";
 
         // Only mode 1 lets $0000-$3FFF leave bank 0, which is how the 1MB+ carts reach their upper half.
-        private int LowBank => _advancedMode ? (_bank2 << 5) & RomMask : 0;
+        private int LowBank => _advancedMode ? (_bank2 << _bank2Shift) & RomMask : 0;
 
-        private int HighBank => ((_bank2 << 5) | _bank1) & RomMask;
+        private int HighBank => ((_bank2 << _bank2Shift) | (_bank1 & ((1 << _bank2Shift) - 1))) & RomMask;
 
         private int RomMask => Math.Max(1, _cart.RomBanks) - 1;
 
-        private int RamBank => _advancedMode ? _bank2 : 0;
+        // A chip smaller than four banks has no pins for BANK2's upper bits - see Mercury_Native.md §13.6.
+        private int RamBank => (_advancedMode ? _bank2 : 0) % Math.Max(1, _cart.RamBanks);
 
         public byte ReadRom(ushort address)
         {

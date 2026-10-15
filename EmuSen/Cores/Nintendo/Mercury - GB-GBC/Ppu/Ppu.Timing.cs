@@ -12,9 +12,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
 
             Dot++;
 
-            if (Dot >= CyclesPerScanline)
+            // The line's last machine cycle, where a CGB's line-144 mode-2 interrupt comes early, shares the test for the line's end - see Mercury_Native.md §13.11.
+            if (Dot >= CyclesPerScanline - 4)
             {
-                BeginScanline();
+                if (Dot >= CyclesPerScanline) BeginScanline();
+                else if (Dot == CyclesPerScanline - 4 && Ly == ScreenHeight - 1 && _bus.CgbHardware) UpdateStatLine(oamAtVBlank: true);
                 return;
             }
 
@@ -54,7 +56,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
 
             if (Ly == ScreenHeight)
             {
-                EnterMode(PpuMode.VBlank);
+                // On a DMG the mode-2 source also fires as line 144 begins, with vblank - see Mercury_Native.md §13.11.
+                Mode = PpuMode.VBlank;
+                UpdateStatLine(oamAtVBlank: !_bus.CgbHardware);
                 _bus.Request(Interrupt.VBlank);
             }
             else if (Ly < ScreenHeight)
@@ -75,11 +79,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
         }
 
         // Four sources feed one line into the interrupt controller; a source going high while another already - see Mercury_Ppu.md §3.2.
-        private void UpdateStatLine()
+        private void UpdateStatLine(bool oamAtVBlank = false)
         {
+            // With the LCD off the line does not move, so nothing written then raises the interrupt - see Mercury_Native.md §13.11.
+            if (!LcdEnabled) return;
+
             bool line =
                 ((StatEnables & 0x40) != 0 && LycMatches) ||
-                ((StatEnables & 0x20) != 0 && Mode == PpuMode.OamScan) ||
+                ((StatEnables & 0x20) != 0 && (Mode == PpuMode.OamScan || oamAtVBlank)) ||
                 ((StatEnables & 0x10) != 0 && Mode == PpuMode.VBlank) ||
                 ((StatEnables & 0x08) != 0 && Mode == PpuMode.HBlank);
 
@@ -90,12 +97,12 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
         // Switching the LCD off parks it at the top of the frame and blanks the panel - see Mercury_Ppu.md §2.3.
         private void DisableLcd()
         {
+            LycWhileOff = Ly == Lyc;
             Ly = 0;
             Dot = 0;
             Mode = PpuMode.HBlank;
             WindowLine = 0;
             WindowTriggered = false;
-            StatLine = false;
 
             ClearScreen();
         }

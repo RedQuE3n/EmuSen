@@ -20,6 +20,8 @@ pub trait CpuBus {
     /// Runs the rest of the machine forward while the CPU is mid-instruction - see Mercury_Cpu.md §3.
     fn tick(&mut self, cycles: i32);
     fn stop(&mut self);
+    /// IE & IF's five live bits, which a dispatch reads again after its first push (Mercury_Native.md §13.3).
+    fn pending_interrupts(&self) -> u8;
     /// A call, a restart or an interrupt dispatch has pushed its return and jumped; the debugger's seam, empty on the plain bus.
     #[inline(always)]
     fn note_call(&mut self, _source: u16, _target: u16, _kind: u32) {}
@@ -132,8 +134,7 @@ impl Cpu {
         }
 
         if self.ime && pending {
-            let bit = lowest_set_bit(interrupt_enable & interrupt_flags);
-            let cycles = self.service_interrupt(bus, bit);
+            let (cycles, bit) = self.service_interrupt(bus);
             return Ok((self.advance(bus, cycles), bit));
         }
 
@@ -178,13 +179,21 @@ impl Cpu {
         bus.write(address, data);
     }
 
-    fn service_interrupt<B: CpuBus>(&mut self, bus: &mut B, bit: i32) -> i32 {
+    /// Two wait cycles, the high byte, the vector chosen from what is pending then ($0000 if nothing), the low byte, the jump.
+    fn service_interrupt<B: CpuBus>(&mut self, bus: &mut B) -> (i32, i32) {
         self.ime = false;
+        self.ime_scheduled = false;
         let from = self.pc;
-        self.push(bus, from);
-        self.pc = INTERRUPT_VECTORS[bit as usize];
+        bus.tick(8);
+        *self.ticked_this_step += 8;
+        self.sp = self.sp.wrapping_sub(1);
+        self.write_cycle(bus, self.sp, (from >> 8) as u8);
+        let bit = lowest_set_bit(bus.pending_interrupts());
+        self.sp = self.sp.wrapping_sub(1);
+        self.write_cycle(bus, self.sp, from as u8);
+        self.pc = if bit < 0 { 0x0000 } else { INTERRUPT_VECTORS[bit as usize] };
         bus.note_call(from, self.pc, emusen_native::debug::kind::IRQ);
-        20
+        (20, bit)
     }
 
     #[inline(always)]
@@ -201,7 +210,16 @@ impl Cpu {
         low | (high << 8)
     }
 
+    /// One machine cycle of the CPU's own, ticked where it falls rather than settled at the end (Mercury_Native.md §13.5).
+    #[inline(always)]
+    fn internal_cycle<B: CpuBus>(&mut self, bus: &mut B) {
+        bus.tick(4);
+        *self.ticked_this_step += 4;
+    }
+
+    /// SP is decremented in a machine cycle of its own before the first write.
     fn push<B: CpuBus>(&mut self, bus: &mut B, value: u16) {
+        self.internal_cycle(bus);
         self.sp = self.sp.wrapping_sub(1);
         self.write_cycle(bus, self.sp, (value >> 8) as u8);
         self.sp = self.sp.wrapping_sub(1);

@@ -43,8 +43,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             {
                 case 0x00: return 4;
 
-                // Two bytes on real hardware even though the second is ignored.
-                case 0x10: Fetch(); _bus.Stop(); return 4;
+                // Two bytes on real hardware even though the second is ignored, so two fetches' eight T-cycles - see Mercury_Native.md §13.3.
+                case 0x10: Fetch(); _bus.Stop(); return 8;
 
                 case 0x76: return Halt();
 
@@ -277,6 +277,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         {
             if (!taken) return 8;
 
+            // The condition takes its own machine cycle before the pops - see Mercury_Native.md §13.5.
+            InternalCycle();
             PC = Pop();
             ReturnObserver?.Invoke();
             return 20;

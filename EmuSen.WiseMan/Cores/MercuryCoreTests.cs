@@ -113,8 +113,8 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 0xA0; i++) core.Write((ushort)(0xC000 + i), (byte)(i ^ 0x5A));
             core.Write(0xFF46, 0xC0);
 
-            // 160 machine cycles, not an instant copy - see Mercury_Memory.md §6.
-            core.Tick(0xA0 * 4);
+            // 160 machine cycles from the second after the write, not an instant copy - see Mercury_Memory.md §6, Mercury_Native.md §13.4.
+            core.Tick((0xA0 + 1) * 4);
 
             for (int i = 0; i < 0xA0; i++) Assert.Equal((byte)(i ^ 0x5A), core.Bus.Oam[i]);
         }
@@ -128,7 +128,9 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 0xA0; i++) core.Write((ushort)(0xC000 + i), (byte)(i ^ 0x5A));
             core.Write(0xFF46, 0xC0);
 
-            Assert.True(core.Bus.OamDmaActive);
+            // The transfer starts on the second machine cycle after the write - see Mercury_Native.md §13.4.
+            core.Tick(4);
+            Assert.False(core.Bus.OamDmaActive);
 
             core.Tick(0x50 * 4);
 
@@ -140,8 +142,11 @@ namespace EmuSen.WiseMan.Cores
 
             core.Tick(0x50 * 4);
 
-            Assert.False(core.Bus.OamDmaActive);
+            Assert.True(core.Bus.OamDmaActive);
             Assert.Equal((byte)(0x9F ^ 0x5A), core.Bus.Oam[0x9F]);
+
+            core.Tick(4);
+            Assert.False(core.Bus.OamDmaActive);
         }
 
         // The LCD is off so only the DMA's own OAM lock can be answering - see Mercury_Ppu.md §7.
@@ -154,9 +159,16 @@ namespace EmuSen.WiseMan.Cores
             Assert.NotEqual(0xFF, core.Read(0xFE00));
 
             core.Write(0xFF46, 0xC0);
+            core.Tick(4);
+            Assert.NotEqual(0xFF, core.Read(0xFE00));
+
+            core.Tick(4);
             Assert.Equal(0xFF, core.Read(0xFE00));
 
-            core.Tick(0xA0 * 4);
+            core.Tick(0x9F * 4);
+            Assert.Equal(0xFF, core.Read(0xFE00));
+
+            core.Tick(4);
             Assert.NotEqual(0xFF, core.Read(0xFE00));
         }
 

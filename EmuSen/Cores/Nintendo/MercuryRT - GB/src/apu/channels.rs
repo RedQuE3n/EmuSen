@@ -38,6 +38,8 @@ pub struct PulseChannel {
     pub length: LengthCounter,
     pub step: i32,
     pub sweep_negate: bool,
+    /// A sweep calculation was made in negate mode since the last trigger; in the state's version-10 tail, not the walk.
+    pub sweep_negated: bool,
     pub sweep_period: i32,
     pub sweep_running: bool,
     pub sweep_shadow: i32,
@@ -47,6 +49,16 @@ pub struct PulseChannel {
 }
 
 impl PulseChannel {
+    /// Version 10's part of the tail after the mixer (Mercury_Native.md §13.10.3).
+    pub fn write_tail(&self, w: &mut crate::state::StateWriter) {
+        w.bool("SweepNegated", self.sweep_negated);
+    }
+
+    pub fn read_tail(&mut self, r: &mut crate::state::StateReader, version: i32) -> crate::state::StateResult {
+        self.sweep_negated = version >= 10 && r.bool()?; // SweepNegated
+        Ok(())
+    }
+
     pub fn new(has_sweep: bool) -> Self {
         PulseChannel {
             dac_enabled: false,
@@ -58,6 +70,7 @@ impl PulseChannel {
             length: LengthCounter::new(64),
             step: 0,
             sweep_negate: false,
+            sweep_negated: false,
             sweep_period: 0,
             sweep_running: false,
             sweep_shadow: 0,
@@ -155,6 +168,16 @@ impl LengthCounter {
         self.counter = self.maximum.wrapping_sub(value);
     }
 
+    /// Enabling it when the frame sequencer's next step will not clock it clocks it once; true if that empties it.
+    pub fn enable(&mut self, on: bool, first_half: bool) -> bool {
+        let clock = on && !self.enabled && first_half && self.counter != 0;
+        self.enabled = on;
+        clock && {
+            self.counter -= 1;
+            self.counter == 0
+        }
+    }
+
     pub fn trigger(&mut self) {
         if self.counter == 0 {
             self.counter = self.maximum;
@@ -196,6 +219,7 @@ impl PulseChannel {
             return;
         }
         self.sweep_shadow = self.frequency;
+        self.sweep_negated = false;
         self.sweep_timer = if self.sweep_period == 0 { 8 } else { self.sweep_period };
         self.sweep_running = self.sweep_period > 0 || self.sweep_shift > 0;
         if self.sweep_shift > 0 {
@@ -222,6 +246,7 @@ impl PulseChannel {
     fn compute_sweep(&mut self, apply: bool) {
         let delta = self.sweep_shadow >> self.sweep_shift;
         let next = if self.sweep_negate { self.sweep_shadow - delta } else { self.sweep_shadow + delta };
+        self.sweep_negated |= self.sweep_negate;
         if next > 2047 {
             self.enabled = false;
             return;

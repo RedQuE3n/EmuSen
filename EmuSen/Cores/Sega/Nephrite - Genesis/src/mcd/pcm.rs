@@ -5,42 +5,42 @@
 //! they leave open.
 
 /// Sub clocks a sample: the chip runs on the sub CPU's 12.5 MHz and makes a sample every 384 of them.
-pub const SAMPLE: u64 = 384;
+pub(in crate::mcd) const SAMPLE: u64 = 384;
 /// A sample's address: 16 integer bits above 11 of fraction.
 const FRACTION: u32 = 11;
 const LOOP: u8 = 0xFF;
 /// The analogue stage after the chip: a first-order low-pass at 1,600 Hz, fitted to recordings of three Sega CDs
 /// playing the 240p suite's sweep (Nephrite_Native.md §59), as a one-pole filter at the sample rate.
-pub const LOW_PASS: f64 = 1600.0;
-pub const RATE: f64 = 12_500_000.0 / 384.0;
+pub(in crate::mcd) const LOW_PASS: f64 = 1600.0;
+pub(in crate::mcd) const RATE: f64 = 12_500_000.0 / 384.0;
 
 /// One channel's registers, as the bank of `$07` selects them: ENV, PAN, FD, LS and ST.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Channel {
-    pub env: u8,
-    pub pan: u8,
-    pub fd: u16,
-    pub ls: u16,
-    pub st: u8,
+pub(in crate::mcd) struct Channel {
+    pub(in crate::mcd) env: u8,
+    pub(in crate::mcd) pan: u8,
+    pub(in crate::mcd) fd: u16,
+    pub(in crate::mcd) ls: u16,
+    pub(in crate::mcd) st: u8,
     /// The read address, 16.11; and whether the next sample reads ST's without a step (the first after it starts).
-    pub addr: u32,
-    pub fresh: bool,
+    pub(in crate::mcd) addr: u32,
+    pub(in crate::mcd) fresh: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Pcm {
-    pub ch: [Channel; 8],
+pub(in crate::mcd) struct Pcm {
+    pub(in crate::mcd) ch: [Channel; 8],
     /// `$07`: ON (sounding), and the two banks MOD writes: the wave RAM's 4 KiB window (WB) and the channel (CB).
-    pub on: bool,
-    pub wave_bank: u8,
-    pub chan_bank: u8,
+    pub(in crate::mcd) on: bool,
+    pub(in crate::mcd) wave_bank: u8,
+    pub(in crate::mcd) chan_bank: u8,
     /// `$08`: a channel is off while its bit is set.
-    pub off: u8,
+    pub(in crate::mcd) off: u8,
     /// The sub clock of the next sample, and the samples made and not yet mixed, each at its sub clock.
-    pub next: u64,
-    pub out: Vec<(u64, [i32; 2])>,
+    pub(in crate::mcd) next: u64,
+    pub(in crate::mcd) out: Vec<(u64, [i32; 2])>,
     /// The low-pass's output, each side.
-    pub lp: [f64; 2],
+    pub(in crate::mcd) lp: [f64; 2],
 }
 
 impl Default for Pcm {
@@ -51,12 +51,12 @@ impl Default for Pcm {
 
 impl Pcm {
     /// The wave RAM's byte behind window offset `i` (0 to `$FFF`).
-    pub fn window(&self, i: usize) -> usize {
+    pub(in crate::mcd) fn window(&self, i: usize) -> usize {
         (self.wave_bank as usize & 15) << 12 | (i & 0xFFF)
     }
 
     /// The samples due by sub clock `now`, from `ram`.
-    pub fn run(&mut self, now: u64, ram: &[u8]) {
+    pub(in crate::mcd) fn run(&mut self, now: u64, ram: &[u8]) {
         while self.next <= now {
             let t = self.next;
             let s = self.sample(ram);
@@ -107,7 +107,7 @@ impl Pcm {
     }
 
     /// A register read: `$10`-`$1F` give each channel's address, low byte first; the others read 0.
-    pub fn read(&self, reg: u32) -> u8 {
+    pub(in crate::mcd) fn read(&self, reg: u32) -> u8 {
         match reg {
             0x10..=0x1F => {
                 let a = self.ch[(reg as usize - 0x10) / 2].addr >> FRACTION;
@@ -119,7 +119,7 @@ impl Pcm {
 
     /// A register written: `$00`-`$06` to the channel CB selects, `$07` the control register, `$08` the channel
     /// switches.
-    pub fn write(&mut self, reg: u32, v: u8) {
+    pub(in crate::mcd) fn write(&mut self, reg: u32, v: u8) {
         let c = &mut self.ch[self.chan_bank as usize & 7];
         match reg {
             0 => c.env = v,

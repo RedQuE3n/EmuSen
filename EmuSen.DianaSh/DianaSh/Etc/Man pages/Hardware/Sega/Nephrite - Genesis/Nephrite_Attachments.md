@@ -1,13 +1,14 @@
 # Nephrite_Attachments — the Sega CD and the 32X behind a written interface
 
-*Written 2026-10-15, before any code.* This page designs the surface between the Genesis and its attachments, so that
-the Sega CD and the 32X stand behind a defined surface, as module trees of the one `nephrite` crate, while Nephrite
-stays one library for three machines. It changes no code; the build is a separate step, taken after stage 9 merges, from §7 of this page.
+*Written 2026-10-15, before any code; built the same day from §7, after stage 9 merged (§11).* This page designs the
+surface between the Genesis and its attachments, so that the Sega CD and the 32X stand behind a defined surface, as
+module trees of the one `nephrite` crate, while Nephrite stays one library for three machines. The design's sections
+are kept as written, each followed by what was built where the build differed (*As built*); §11 is the build's record.
 
 It keeps the plan's three registers apart (`Nephrite_Plan.md`, opening):
 
-- **Measured** means counted on 2026-10-15 in the tree at WiseMan `d32a00b3`, with the command named; nothing in this
-  page is a timing.
+- **Measured** means counted on 2026-10-15 in the tree at WiseMan `d32a00b3`, recounted at `fa1e4242` (§2), or measured
+  in the build (§11), with the command named.
 - **Argued** means reasoning from the code, the documents or other cores' records, with no measurement behind it.
 - **Predicted** means a claim numbered A1–A5 (§9), kept so that the build can retire it.
 
@@ -46,55 +47,58 @@ pages it cites. No emulator's source, no RTL and no firmware was read to write i
 
 ### 2.1 Method
 
-Counted in `EmuSen/Cores/Sega/Nephrite - Genesis/src/` at `d32a00b3` with `grep -n` over the identifiers and gates
-that belong to the Sega CD (`mcd`, `MegaCd`, `RamCart`, `CARTRAM`, `MCD_`, `RAM_CART`, `disc_print`, `System::Mcd`,
-`cdd::`, `open_disc`, `system_area`, `fingerprint`, `cd_bios`, `CD_BIOS`, `.brm`, `.crm`, `STATUS_BAD_DISC`,
-`MEDIA_FILE`), the J-Cart's (`jcart`, `JCART`, `attached`) and the 32X's (`S32x`, `S32X`). The list is kept in
-`~/.cache/emusen/probe/nephrite/attach/genesis-side.txt`. Each match was read and classified by hand.
+Counted first in `EmuSen/Cores/Sega/Nephrite - Genesis/src/` at `d32a00b3`, and **recounted at `fa1e4242`**, after
+stage 9 (`c8b10080`) and the save media (`Nephrite_Native.md` §61) merged, which is the tree the migration of §7 starts
+from. The recount uses `grep -n` over the identifiers and gates that belong to the Sega CD (`mcd`, `MegaCd`, `RamCart`,
+`CARTRAM`, `MCD_`, `RAM_CART`, `disc_print`, `System::Mcd`, `cdd::`, `open_disc`, `system_area`, `fingerprint`,
+`cd_bios`, `CD_BIOS`, `.brm`, `.crm`, `STATUS_BAD_DISC`, `MEDIA_FILE`, and since the first count `BRAM`, `kept_apart`,
+`KeptApart`, `backup_ram`, `ram_cartridge`, `attached`, `DISC_SIGNATURE`, `disc_offset`, `is_disc`, `CD_COST`,
+`sound_to`, `cdda`), the J-Cart's (`jcart`, `JCART`) and the 32X's (`S32x`, `S32X`, `s32x`, `is_32x`); the script is
+`~/.cache/emusen/probe/nephrite/interface/count.sh`. Each match was read and classified by hand.
 
 A **site** is one line of production code that names an attachment's item, reads or writes its state, or decides by
 whether an attachment is present. Lines inside a file's `#[cfg(test)]` module, and the test-only files, are counted
-apart. Where one statement spans several lines, the line that reaches across is cited once.
+apart. Where one statement spans several lines, the line that reaches across is cited once; a declaration of several
+constants is a site a line, which the first count did not always do (it cited `CD_BIOS_U..J` once).
 
-### 2.2 The figures of 2026-10-15, reconciled
+### 2.2 The figures, recounted at `fa1e4242`
 
-The count taken on 2026-10-15 is lines naming `mcd`: `genesis.rs` 17, `machine.rs` 10, `v1.rs` 23, `state.rs` 4,
-`media.rs` 1, `lib.rs` 1, **55**. Read again: `v1.rs`'s 23 are 16 in production and 7 in its tests, so **48 lines of
-production code name `mcd`**. The inventory below (§2.3) counts **96 production sites**, because it also counts the
-places that reach the Sega CD without naming it: gates on `System::Mcd`, the disc helpers, the firmware and battery
-numbers and the space ids.
+**131 production sites** on the Genesis side reach the Sega CD, where the first count found 96. By kind, the 35 more
+are battery files and save media +13, media and discs +8, firmware +5, state +3, spaces +2, and one each in the map,
+reset and power, settings and machine info. Most are the save media (`KeptApart`, `BRAM_ID`, the kinds of the battery
+declarations and the flags at create, and the state's rule for a memory kept apart) and stage 9's transfer from Word RAM
+and version bit (§2.8); the rest is the finer counting of §2.1 and lines the first count did not cite. Of the 131, 27
+are in `genesis.rs`, 28 in `machine.rs`, 59 in `v1.rs`, 11 in `state.rs`, 5 in `media.rs` and 1 in `lib.rs`: the
+console's own file holds a fifth of the reach, the assembly the rest.
 
-The reverse figure, "about 20" lines of `src/mcd/` reaching `crate::`, is **25 lines** naming `crate::` or `super::`.
-Thirteen name `mcd` itself by an absolute path or its parent (`use super::*` in the test modules, `crate::mcd::` in
-`cdda.rs`'s tests, `discs.rs` and `verificator.rs`, `super::` in `state.rs`). Twelve reach outside the module, and of
-those **two are production code**: `cdda.rs:26` (`crate::sound::RATE`) and `mod.rs:283` (`crate::media::DISC_SIGNATURE`).
-The other ten are the two test files that run a whole machine (`verificator.rs` 5, 6, 13, 14, 21, 90, 91, 103;
-`discs.rs` 53, 54).
+The reverse is unchanged in kind: **two production lines** of `src/mcd/` reach outside it, `cdda.rs:55`
+(`crate::sound::RATE`) and `mod.rs:319` (`crate::media::DISC_SIGNATURE`), and nine test lines do, in the two files that
+run a whole machine (`verificator.rs` 5, 6, 13, 14, 21, 90, 91; `discs.rs` 53, 54). *The first count's figures*, kept for
+the record: 96 sites, 48 lines naming `mcd`, and the reverse's 2 production and 10 test lines.
 
-So the Sega CD is far more self-contained than the Genesis is towards it: the Genesis side reaches in at 96 places and
-the Sega CD reaches out at 2. Most of the work of the move is on the Genesis side, and most of that is in `v1.rs` and
-`machine.rs`, not in the console.
+So the Sega CD is still far more self-contained than the Genesis is towards it, and most of the move's work is in the
+assembly (`v1.rs`, `machine.rs`, `state.rs`), not in the console.
 
 ### 2.3 The Genesis side's reach into the Sega CD, by kind
 
-| Kind | Sites | Where (file:line at `d32a00b3`) |
+| Kind | Sites | Where (file:line at `fa1e4242`) |
 |---|---|---|
-| Construction and ownership | 9 | `genesis.rs` 136 (`Hw::mcd`), 137 (`mcd_low`), 150, 159 (`with_mcd`), 190, 192 (`MegaCd::new` given `master_hz` and `START`); `machine.rs` 93, 111; `lib.rs` 23 |
-| Map | 18 | `genesis.rs` 139 and 191 (the `attached` flag, shared with the J-Cart); the four guards 438, 458, 478, 499; the Sega CD's decode 523, 530, 542; `mcd_read8` 553, 555, 557; `mcd_read16` 561, 563, 565; `mcd_write` 569, 571, 578 (the RAM cartridge reached through `m.hw.cart`, the rest through `main_read*`/`main_write`) |
-| Interrupts | 0 | the 68000's level is the VDP's alone (`genesis.rs` 781–785); the Sega CD's H-INT vector and IFL2 travel through the map (§2.4) |
-| Clock and slices | 1 | `genesis.rs` 379: `m.run_to(self.clock)` in `catch_up`, after each 68000 instruction |
-| Reset and power | 0 | power-on is construction; Nephrite claims no `RESET` (`v1.rs` 312). Stage 9 adds one (§2.8) |
-| Audio | 3 | `machine.rs` 246, 248 (`cdda.feed`), 249 (`take_with` lent the Sega CD's `Steps`) |
+| Construction and ownership | 9 | `genesis.rs` 136 (`Hw::mcd`), 137 (`mcd_low`), 150, 159 (`with_mcd`), 190, 192 (`MegaCd::new` given `master_hz` and `START`); `machine.rs` 112, 130; `lib.rs` 23 |
+| Map | 19 | `genesis.rs` 139 and 191 (the `attached` flag, shared with the J-Cart); the four guards 460, 480, 500, 521; the Sega CD's decode 545, 552, 564, 565; `mcd_read8` 574, 575, `mcd_read16` 582, 583, `mcd_write` 590, 591 (the RAM cartridge reached through `m.hw.cart`, the rest through `main_read*`/`main_write`); stage 9's transfer from Word RAM, 379, 380, 389 (§2.8) |
+| Interrupts | 0 | the 68000's level is the VDP's alone (`genesis.rs` 803–807); the Sega CD's H-INT vector and IFL2 travel through the map (§2.4) |
+| Clock and slices | 1 | `genesis.rs` 401: `m.run_to(self.clock)` in `catch_up`, after each 68000 instruction |
+| Reset and power | 1 | `genesis.rs` 197: the version register's bit 5 cleared with an expansion unit (§2.8). Nephrite claims no `RESET` |
+| Audio | 3 | `machine.rs` 265, 267 (`sound_to`), 268 (`take_with` lent the Sega CD's `Steps`) |
 | Video | 0 | the Sega CD has no picture of its own; the VDP's transfers from Word RAM pass through the map (§2.5) |
 | Pads | 0 | — |
-| State | 8 | `state.rs` 16 (`OLDEST_MCD_STATE_VERSION`), 28 (`WrongMedia`), 68 (the block written), 75 (the oldest version by system), 104 (read), 108 (the fingerprint held), 116 (applied); `machine.rs` 66 (`disc_print`) |
-| Media and discs | 21 | `machine.rs` 88 (`open_disc`), 94 (`fingerprint`), 96 (no ROM for a disc); `media.rs` 144–147 (`DISC_SIGNATURE`, `disc_offset`), 202, 228; `v1.rs` 184 (`MEDIA_FILE`), 186 (`STATUS_BAD_DISC`), 212 (`is_disc`), 218, 224, 228 (`open_disc`, `system_area`), 355, 365 (create's dispatch), 584 (`drives`), 591 (`media_lid`), 597, 604, 606, 607 (`media_insert`), 622 (`create_disc`) |
-| Firmware | 10 | `machine.rs` 107; `v1.rs` 172 (`CD_BIOS_U..J`), 245 (`CD_COST`), 248 (`cd_bios`), 335, 342 (`firmware_for`), 380 (create's choice of boot ROM), 425 (machine info), 624, 629 (`create_disc`) |
-| Battery files | 8 | `machine.rs` 189 (file 0 is `BRAM` on a disc); `v1.rs` 182 (`RAM_CART`), 361 (`battery_files`), 577 (`battery`), 636, 637 (loaded at create), 650, 654 (`batteries`) |
-| Debugger and spaces | 11 | `machine.rs` 34 (`CARTRAM_ID`), 35 (`MCD_MEMORIES`), 125 (no `ROM` on a disc), 128, 129, 131 (`spaces`), 147, 149, 157 (`bytes`), 173, 181 (`bytes_mut`) |
-| Settings | 4 | `v1.rs` 189 (`RAM_CART_KEY`), 191 (`ram_cart_setting`), 348 (the schema), 631 (applied at create) |
-| Machine info | 3 | `v1.rs` 308 (`MCD_EXTENSIONS`), 322 (the description), 325 (the `mcd` row, marked in development) |
-| **Total** | **96** | |
+| State | 11 | `state.rs` 17 (`OLDEST_MCD_STATE_VERSION`), 29 (`WrongMedia`), 54 (the system byte), 69, 70 (the block written), 76 (the oldest version by system), 105 (read), 109, 110 (the fingerprint held), 119 (applied); `machine.rs` 68 (`disc_print`) |
+| Media and discs | 29 | `machine.rs` 107 (`open_disc`), 113 (`fingerprint`), 115 (no ROM for a disc); `media.rs` 144, 146 (`DISC_SIGNATURE`, `disc_offset`), 202; `v1.rs` 184 (`MEDIA_FILE`), 186 (`STATUS_BAD_DISC`), 213 (`is_disc`), 218, 219, 224, 226, 228, 229, 231 (`open_disc`, `system_area`), 355, 367, 368 (create's dispatch), 374, 585, 586 (`drives`), 593 (`media_lid`), 599, 606, 608, 609 (`media_insert`), 620, 624 (`create_disc`) |
+| Firmware | 15 | `machine.rs` 126; `v1.rs` 172, 173, 174 (`CD_BIOS_U..J`), 245 (`CD_COST`), 248 (`cd_bios`), 335, 342 (`firmware_for`), 382, 383, 384 (create's choice of boot ROM), 427 (machine info), 627, 628, 629 (`create_disc`) |
+| Battery files and save media | 21 | `machine.rs` 71, 76, 81, 84 (`KeptApart`), 208 (file 0 is `BRAM` on a disc); `media.rs` 228; `state.rs` 114 (kept apart on a load); `v1.rs` 182 (`RAM_CART`), 363 (`battery_files`), 579 (`battery`), 625, 631 (the flags at create), 640, 641 (loaded at create), 654, 656, 658 (`batteries`), 668, 669, 673, 674 (`backup_ram`, `ram_cartridge`) |
+| Debugger and spaces | 13 | `machine.rs` 34 (`CARTRAM_ID`), 36 (`BRAM_ID`), 37 (`MCD_MEMORIES`), 124, 144 (no `ROM` on a disc), 147, 148, 150 (`spaces`), 166, 168, 176 (`bytes`), 192, 200 (`bytes_mut`) |
+| Settings | 5 | `v1.rs` 189 (`RAM_CART_KEY`), 191 (`ram_cart_setting`), 348 (the schema), 635, 636 (applied at create) |
+| Machine info | 4 | `media.rs` 17 (the id); `v1.rs` 308 (`MCD_EXTENSIONS`), 322 (the description), 325 (the `mcd` row, marked in development) |
+| **Total** | **131** | |
 
 ### 2.4 The Sega CD's reach into the Genesis
 
@@ -140,25 +144,35 @@ the Sega CD reaches out at 2. Most of the work of the move is on the Genesis sid
 
 ### 2.7 The J-Cart's and the 32X's coupling today
 
-**The J-Cart**, 17 sites, all inside what will be the Genesis's module tree: `cart.rs` 23, 39, 42, 61 (the board known by
-its header); `io.rs` 150, 154, 199, 206, 210, 218 (players 3 and 4, the word, TH); `genesis.rs` 160, 191, 195 (the flag
-copied and the `attached` check turned on), 519, 527, 536 (the two words decoded ahead of the cartridge); `v1.rs` 151
-(machine info's players).
+**The J-Cart**, 26 sites at `fa1e4242`, all inside what will be the Genesis's module tree: `cart.rs` 23, 39, 42, 44, 61,
+62 (the board known by its header); `io.rs` 150, 154, 199, 201, 206, 210, 211, 218, 219, 245 (players 3 and 4, the word,
+TH); `genesis.rs` 160, 191, 195 (the flag copied and the `attached` check turned on), 541, 542, 549, 550, 558, 560 (the
+two words decoded ahead of the cartridge); `v1.rs` 151 (machine info's players). The first count's 17 cited the same
+places with a function's lines once.
 
-**The 32X**, 15 sites, none of them hardware, since none is built: `machine.rs` 36 (`S32X_MEMORIES`), 104 (its three
-placeholder memories made), 225 (`runs`: a 32X image counts frames only); `media.rs` 10, 18, 137 (`is_32x`), 205;
-`state.rs` 54 (its system byte); `v1.rs` 175 (`S32X_68K..SLAVE`), 246 (`S32X_COST`), 262 (`s32x_boot`), 309, 326, 343,
-426. The crate already depends on `beryl-sh2` and uses nothing of it.
+**The 32X**, 17 sites, none of them hardware, since none is built: `machine.rs` 38 (`S32X_MEMORIES`), 123 (its three
+placeholder memories made), 244 (`runs`: a 32X image counts frames only); `media.rs` 10, 18, 137 (`is_32x`), 205;
+`state.rs` 55 (its system byte); `v1.rs` 175, 176, 177 (`S32X_68K..SLAVE`), 246 (`S32X_COST`), 262 (`s32x_boot`), 309,
+326, 343, 428. The crate still depends on `beryl-sh2` and uses nothing of it.
 
-### 2.8 What stage 9 adds, read from its branch
+### 2.8 What stage 9 and the save media added, as merged
 
-At `nephrite-s9`'s first step (`889f497f`, merged with WiseMan as `77c8ba7f`), one new site on the Genesis side:
-`genesis.rs` 196–199 clears the version register's bit 5 when a Sega CD is attached ("expansion unit present",
-`Nephrite_Native.md` §55.3), a reset-and-power fact. The step's other additions are inside `src/mcd/` (a watch on the
-registers, `Sub::seen`, and the drive's rules of D-36). The steps still to come in stage 9 (§49.4 there: the graphics
-ASIC with level 1, the RF5C164 with its eight channels, the fader's ramp, de-emphasis and the mix's levels) add, by
-their description, sound into the Sega CD's stream, a sub-CPU interrupt and memories; nothing in them reaches the
-Genesis's picture or its 68000's interrupts. The interface below is written to take them without a change (§3.8).
+The page's first version read stage 9 from its branch at its first step; at `fa1e4242` it is merged whole, with the
+save media after it. On the Genesis side they added:
+
+- **The version register's bit 5** (`genesis.rs` 196–199), cleared when a Sega CD is attached ("expansion unit
+  present", `Nephrite_Native.md` §55.3): a reset-and-power fact, the interface's `EXPANSION` (§3.3).
+- **A transfer from Word RAM a word late** (`genesis.rs` 376–394, §57 there): the VDP's transfer from Word RAM reads
+  the word before the one addressed, where the 68000 reads it in time. This is the case §3.3 named in advance, a
+  transfer from Word RAM behaving apart from a 68000 read, so the requester is added (§3.3, as amended).
+- **The save media** (`Nephrite_Native.md` §61): `KeptApart` and `BRAM_ID` in `machine.rs`, the battery declarations of
+  kind `console` and `removable` in `v1.rs`, and `load_state` skipping a memory kept apart. Facts for the frontend
+  (§3.6), and one rule of the state (§3.5).
+- **`MEDIA` and `MEDIA_SEEK` claimed** (§56 there): the drive's calls were already in place; nothing new crosses.
+
+Inside `src/mcd/`, stage 9 added the graphics ASIC, the RF5C164, the fader's ramp and de-emphasis and the mix's levels,
+the register watch `Sub::seen` and the drive's rules. Nothing of them reaches the Genesis's picture or its 68000's
+interrupts, as §3.8 argued; the PCM sums into the Sega CD's one stream with CD-DA (`Sub::sound_to`, `Cdda::feed`).
 
 ---
 
@@ -287,6 +301,33 @@ presented as the 68000's accesses, as today (§2.5); if stage 9 or 10 finds a tr
 from a 68000 read, the requester is added then. An addition to an internal surface costs one commit; an unused member
 costs a reader's attention in every implementation.
 
+**As built (commit 3, §11.3).** `src/interface.rs` carries the bus side with the members the Sega CD uses, by the
+rule just given, and one the design did not have:
+
+```rust
+pub trait Attachment {
+    const EXPANSION: bool = false;
+    fn read8(&mut self, a: u32, at: Master) -> Answer<u8>;
+    fn read16(&mut self, a: u32, at: Master) -> Answer<u16>;
+    /// A word the VDP's transfer reads from the 68000's bus, which an attachment may answer apart from the 68000's.
+    fn transfer16(&mut self, a: u32, at: Master) -> Answer<u16> { self.read16(a, at) }
+    fn write(&mut self, a: u32, v: u16, mask: u16, at: Master) -> bool;
+    fn run_to(&mut self, to: Master);
+    fn sound(&mut self, to: Master) -> Option<&mut Steps>;
+}
+```
+
+- **`transfer16` is the requester** the paragraph above said would be added if a transfer from Word RAM behaved apart
+  from a 68000 read. Stage 9 found that it does (§2.8): Word RAM answers the VDP a cycle late. The rule moved from the
+  Genesis's `attached_dma_read` into the Sega CD's `transfer16`; the default is the 68000's read, so `Bare` and any
+  attachment without such a rule pay nothing.
+- **Left out until their first user**: `Slot` (the cartridge lent and the wait, the 32X's, stage 11), `Line`, `LINES`
+  and `line` (the 32X's), `reset` (when Nephrite claims `RESET`), `peek` and the `Watch` given to `run_to` (the Sega
+  CD's debugger step, which brings its processor). Each is added by the commit that first needs it, with the Sega CD
+  brought along.
+- **`sound` returns the one stream** rather than lending each stream to a callback, since the Sega CD has one and the
+  mix's `take_with` takes one; CD32X's two streams (§3.10) change it when stage 12 builds them.
+
 ### 3.4 What the Genesis offers in return, and promises
 
 - **`Board`** at construction: the master clock's exact rate, the market, the 68000's first clock (power-on is
@@ -310,6 +351,22 @@ The Genesis's side becomes generic: `Genesis<A>`, `Hw<A>` (the attachment a fiel
 `_ if let Answer::Value(v) = self.att.read16(a, self.clock, &mut slot) => v` with `Answer::Open` falling to the open
 bus, and `catch_up`'s three lines become `self.att.run_to(self.clock, &mut slot, w)`. A Genesis with nothing attached
 is `Genesis<Bare>`, whose methods are empty and inline, so that every attachment arm folds away (§4).
+
+**As built (commit 3, §11.3)**, the parameter is on the Genesis and on what its buses reach, not on its devices:
+`Genesis<A = Bare> { cpu, z80, hw: Wired<A> }`, where `Wired<A> { dev: Hw, att: A }` holds the Genesis's devices,
+`Hw` as before and not generic, with the attachment beside them, and reads as `Hw` through `Deref`, a field projection
+that costs nothing. `MainBus<'_, A>` and `Z80Bus<'_, A>` each hold `&mut Wired<A>`, one pointer, as they held `&mut Hw`;
+the map's methods are `Wired<A>`'s, the devices' own (the refreshes, the HV counter's point, TMSS, the Z80's window's
+address) stay `Hw`'s. `Hw::mcd`, `mcd_low` and `attached` are gone. The machine holds `enum Fitted { Md(Genesis<Bare>),
+Mcd(Genesis<MegaCd>) }`, matched once per call by a macro, `fitted!`, that binds the Genesis with its attachment's type
+known in each arm; the assembly and the tests reach the devices through `Machine::hw()`/`hw_mut()` and the processors
+through `cpu()`/`z80()`, and the Sega CD through `mcd()`/`mcd_mut()`.
+
+*A form tried and rejected, measured:* the attachment lent beside a borrowed `Hw`, `Map<'_, A> { hw: &mut Hw, att: &mut A
+}`, which would have kept the machine's Genesis one type and every test's `m.genesis.hw` as it was. Each access then
+reached the devices through a second pointer, and the cartridge Genesis cost 1.3 to 2.4% more on Phantasy Star IV and
+Sonic the Hedgehog. With the Sega CD's instantiation removed as well the loss stood at 1.3 to 1.4%, so it was the form's,
+not the second instantiation's. `Wired<A>`, one pointer, removed it (§11.3).
 
 ### 3.5 The state and the view: `AttachmentState`, `AttachmentView`
 
@@ -362,6 +419,14 @@ to the highest the configuration lists (`machine.rs` 111 makes `[24, 16]` today)
 processor list is empty, as today, so that the move changes nothing a debugger sees, and its processor arrives with the
 Sega CD's debugger step.
 
+**As built (commit 3, §11.3).** `AttachmentState` as designed, `write_state(&self, w)` with the fingerprint the Sega
+CD's own field (`MegaCd::disc_print`, set at construction and by an insert), moved in this commit rather than the next
+because the trait's writer takes no argument for it. The assembly composes the blocks in `state.rs` with one enum,
+`FittedSaved`, holding the Genesis's block and the attachment's as read, so that a load still reads everything, checks
+the fingerprint and only then applies the spaces, the Genesis and the attachment, in today's order. `AttachmentView` has
+`spaces`, `bytes` and `bytes_mut`; the processors' members arrive with the Sega CD's debugger step, and `SpaceRef` and
+the id ranges (`GENESIS_SPACES`, `MCD_SPACES`, `S32X_SPACES`) are `interface`'s.
+
 ### 3.6 Facts for the frontend: files, media, settings, machine info
 
 Batteries, drives and discs, firmware, settings and the system rows are answered once per call between frames and are
@@ -381,6 +446,13 @@ inherent methods of each attachment's module**, composed by the assembly, not tr
   ever needed) and applies them at create; the assembly concatenates the schema.
 - **Machine info**: the system id, extensions, the development mark, frame rate, ports and the description are the
   assembly's; spaces, processors, batteries and firmware are composed from the parts.
+
+**As built (commit 4, §11.4)** in `src/mcd/frontend.rs`: the disc's signature and offset, `is_disc`, `open_disc`,
+`fingerprint` and `system_area`; `bios_firmware(region, which)`; `ram_cart_setting` and `MegaCd::apply_settings`;
+`SaveMemory { Backup, Cartridge }` with `battery(memory, which)` and `MegaCd`'s `save_memories`, `save_memory` and
+`load_save_memory`; and the drive's `drive`, `lid_open`, `set_lid` and `insert`. Every number is the assembly's: files
+2–4, the battery files 0 and 10 (`v1::save_file`), the companions from `MEDIA_FILE`, `STATUS_BAD_DISC`, and the host's
+companions kept or borrowed (`v1::open_disc`).
 
 ### 3.7 Each kind, answered
 
@@ -525,6 +597,13 @@ The choice between (a) and (b) is **local to the assembly**: the Genesis is gene
 in the `machine` module implementing the traits by `match`. So the build starts with (a), and (b) is measured beside it only if
 (a)'s costs cross the bounds of Q1.
 
+**Decided by measurement (commit 3, §11.3): (a).** Each configuration's frame compiled apart, the cartridge Genesis
+within the runs' spread of the baseline and faster on six of the seven runs, the disc's as well; the `dist` library
+11.3% larger and a clean release build 13 to 23% longer, both far inside Q1's half. Form (b) was therefore not built.
+One cost of (a) the page did not foresee: the Genesis's helpers called from both instantiations (the VDP's
+`line_end`, `slot`, `control`, `data`, `status`; the PSG's write) are no longer called from one place, and the
+compiler keeps ten of them out of line where it had inlined them; with `Wired<A>` this costs nothing measurable.
+
 ### 4.4 The bench that decides
 
 The measurements of §54.1, before and after the commit that makes the Genesis generic (§7.2, commit 3), and again after
@@ -583,6 +662,22 @@ that name a concrete attachment, and the only ones a host's call reaches.
 | tests that run a machine | `Machine::new(&image, Media::read(&image))` becomes `Console<Bare>`'s cartridge constructor, mechanically |
 | `examples/` | unchanged in place; they use the crate's `pub` items (§5.3) |
 
+**As built (commit 5, §11.5).** `src/genesis/` holds `mod.rs` (`genesis.rs` moved), `cart.rs`, `eeprom.rs`,
+`header.rs`, `io.rs`, `vdp.rs`, `render.rs`, `sound.rs`, `ym2612.rs`, `fm.rs`, `fm_tables.rs`, `lfo_tables.rs`,
+`fifo_records.rs`, `debugger.rs` and the cartridge's tests (`board_*.rs`, `pictures.rs`, `programs.rs`, `sounds.rs`,
+`voices.rs`). Three things differ from the table above:
+
+- **No `Console<A>`.** With the parameter on `Genesis<A>` (§3.4 as built), what the table gave `Console<A>` (pads in,
+  picture and sound out, the cartridge's battery file, the debugger's state) is the ABI's side of a frame and stays in
+  `Machine`, which reaches the Genesis through `Genesis<A>`'s `pub(crate)` methods and `Hw`'s devices.
+- **The debugger's composition** (`processors`, `read_bus`, `debug_pc`, `debug_registers`, `debug_disassemble`) moved
+  into `machine.rs`; `genesis/debugger.rs` keeps the processors' numbers and registers, the two watches and the buses'
+  peeks. The Genesis's space ids (`WRAM_ID` to `ROM_ID`) moved into `genesis/mod.rs`, from its range, and `machine.rs`
+  re-exports them.
+- **`header.rs`** holds the header, the markets and the declared save RAM, which the cartridge reads; `cartridge_bytes`
+  stays in `media.rs`, because telling a copier's image from a disc's is a decision by contents that names the Sega
+  CD's signature.
+
 ### 5.2 The visibility rules
 
 - **The Genesis's internals are private to `genesis/`.** `Hw<A>`'s fields, the VDP's, I/O's, the sound's and the
@@ -600,6 +695,17 @@ that name a concrete attachment, and the only ones a host's call reaches.
 - **`pub` is kept to what tools outside the crate use** (`examples/`, the conformance kit through the ABI): `machine`'s
   `Machine` and the constructors the examples call, and a named, documented accessor for a development tool such as
   `examples/disc.rs`'s register view and stage 9's `Sub::seen`.
+
+**As built (commit 5, §11.5).** Every `pub` item of the two trees' production code was narrowed to its tree
+(`pub(in crate::genesis)`, `pub(in crate::mcd)`) and widened by the compiler's privacy errors only as far as a user
+needs: to `pub(crate)` for the assembly and its tests, to `pub` for the examples and the crate's re-exports. Of the
+Genesis's 557 marked items 329 are now private to its tree, 117 the crate's and 111 public; of the Sega CD's 291, 229,
+16 and 46. The library alone reaches 165 of the Genesis's and 33 of the Sega CD's; the assembly's tests 13 more; the
+examples the rest of the public ones, which Q6 leaves for a later commit. The narrowing found seven items no library
+code calls: four only the tests do (`Genesis::new`, `Sound::take`, made so by commit 3's mix, `Fm::increment`,
+`Tables::output`), now `#[cfg(test)]`; and three with no caller at all, kept public as they were, since removing them is
+a decision of its own: the chain of a device on TH (`Hw::device_th`, its own test, no plug driving it yet),
+`Vdp::refresh_sat_cache` and `Cdc::dma_due`.
 
 ### 5.3 What privacy enforces, what it cannot, and the two checks
 
@@ -633,6 +739,15 @@ an attachment only by the traits.
 With both, the direction is held as surely as a crate boundary would hold it at each test run, though not at each
 compilation, and cycles are refused by the source check.
 
+**As built (commit 5, §11.5).** The source check is `src/boundary.rs`, two tests: `the_attachments_reach_only_the_interface`
+reads every production file of `src/genesis/`, `src/mcd/`, `src/s32x/` and `src/interface.rs` and fails on a crossing;
+`the_source_check_catches_each_crossing` holds the rules themselves to lines that cross and lines that do not. A file's
+test module, and the files its tree declares under `#[cfg(test)]`, are not read: a test is the assembly's view of a
+part (mcd-verificator's and the discs' tests build a whole machine, and so do the cartridge's program tests), and the
+direction concerns what the library compiles. Proved by a deliberate crossing, `const _: u32 =
+crate::genesis::sound::RATE;` in `mcd/cdda.rs`, which compiled, since the constant is public, and failed the check
+with the file, the line and the module named.
+
 ### 5.4 The Genesis-only build: a feature, kept as a check
 
 The features `mcd` and `s32x`, both default, gate `mod mcd`, `mod s32x`, their arms of `Fitted`, their systems' rows
@@ -642,6 +757,15 @@ attachments and no `emusen-disc` linked (the dependency made optional with `mcd`
 **Whether it is worth having:** yes, as check 1 of §5.3, its cheapest enforcement of the direction, run in the crate's
 test sweep with each change to `interface.rs` or the Genesis. Not as a shipped library: a player's library holds the
 three systems, and a second artefact would need its own sidecar and kit run for no player (Q4).
+
+**As built (commit 7, §11.7).** `Cargo.toml` declares `mcd` (with `emusen-disc`, now optional) and `s32x`, both
+default, and requires `mcd` for the three examples that open a disc. With either off, its module, its `System`
+variant, its arm of `Fitted` and `FittedSaved`, its system row, its firmware and settings, and its tests are not
+compiled; `System::is_disc` and `is_32x` answer for the rest of the assembly. **The check is in the ordinary test
+sweep**: `boundary.rs`'s `the_genesis_and_each_attachment_build_alone` runs `cargo check --all-targets` with
+`-D warnings` for the three configurations, in a target folder of its own, so that a plain `cargo test` fails if the
+Genesis or the interface names an attachment, or an attachment the other. Proved by a deliberate `use
+crate::mcd::MegaCd` in `genesis/sound.rs`, which failed it with `--no-default-features` named.
 
 ### 5.5 One owner for each fact
 
@@ -778,6 +902,10 @@ added to the header with the first stage that builds such a configuration, at th
 
 ## 8. Questions for the tester
 
+*Decided 2026-10-15 (the tester's go): every recommendation below accepted.* Q1 (a), held by the bench (§4.3); Q2 done
+in commit 5; Q3 done the same day; Q4 the features in the test sweep (§5.4); Q5 for the first stage that needs it; Q6
+done in commit 5, `Console<A>` aside (§5.1 as built); Q7 fixed in `interface`, `mcd` and `s32x` (§11.6); Q8 below.
+
 1. **Q1, the dispatch.** *Recommended:* one instantiation per configuration (§4.3, (a)), with the enum (b) measured
    beside it only if (a) grows the shipped library by more than half or a clean release build by more than half; the
    cartridge Genesis's frame cost may not rise beyond the runs' spread in either case.
@@ -798,9 +926,23 @@ added to the header with the first stage that builds such a configuration, at th
    on a cartridge with the Sega CD beneath it, the cartridge's save RAM stays file 0 (`.srm`) and the backup RAM takes
    file 11 (`.brm`); on a disc, the backup RAM stays file 0, as now.
 
+**Q8 reconciled with the save media** (`Nephrite_Native.md` §61, built after this page was written). §61 declared the
+backup RAM inside the Sega CD file 0 of kind `console`, medium `mcd.backup`, on a disc's machine; Q8 numbers it 11 on a
+cartridge's machine in mode 1, the cartridge's `.srm` keeping 0. The two agree. A file's number is the core's, and
+`EmuSen_SaveMedia.md` §5.1 holds that which slot a file number is never changes between machines *of a system*, core
+info's fact alone. On `mcd`, file 0 is the backup RAM; on `md`, file 0 is the cartridge's save RAM; file 11 is the
+backup RAM on `md` alone. The kind, the medium and the label are the same under both numbers, so in shared mode the
+player's one backup RAM serves a disc and a mode 1 cartridge alike. **The one condition**, for stage 10: mode 1 is a
+machine of the `md` system. Were it reported as `mcd`, file 0 would be a game's `.srm` on some of that system's
+machines and the console's `.brm` on others, which §5.1's rule forbids; that is the question to raise if stage 10
+finds a reason to report it so. As built, `v1::save_file` maps each of the Sega CD's save memories to its number in one
+place, which stage 10 gives the configuration.
+
 ---
 
 ## 9. Predictions to be retired
+
+*Retired 2026-10-15 by the build (§11).* A1, A2, A3 and A4 held; A5 did not.
 
 - **A1.** Under (a), the cartridge Genesis's mean frame cost on the five bench games is equal to the baseline within
   the runs' spread, or lower.
@@ -809,6 +951,16 @@ added to the header with the first stage that builds such a configuration, at th
   again.
 - **A4.** The move keeps every state byte-identical: no new state version, the pinned layouts unchanged.
 - **A5.** The migration takes two steps: commits 1–4 in the first, 5–8 in the second.
+
+- **A1 held**: within the runs' spread at commits 3 and 5 and at the end, six of the seven runs faster at commit 3
+  (§11.3, §11.5, §11.9); only after the form of §3.4 as built, the first form having cost 1.3 to 2.4%.
+- **A2 held**: the 240p disc 1.575 against 1.588 ms at commit 3, within the spread at commit 5 and at the end.
+- **A3 held**, with a margin that the fourth configuration will test: the library +11% at commit 3 and +12.9% at the
+  end, a clean release build +13 to 26%; with the 32X's stub compiling a frame it never runs, +42% (§11.8).
+- **A4 held**: no state version, both pinned layouts unchanged, the 71 digests equal at every commit, a 32X
+  cartridge's state among them.
+- **A5 did not**: the eight commits and a ninth (§11.8) were made in one sitting, the measurements taking most of it.
+
 
 ## 10. Reading log
 
@@ -820,3 +972,197 @@ count, and in full `genesis.rs`, `machine.rs`, `state.rs`, `v1.rs` (to its tests
 `mcd/mod.rs`, `mcd/state.rs` (its writer), `mcd/cdda.rs`, the J-Cart's parts of `cart.rs` and `io.rs`, `sound.rs`'s
 `take_with`, `examples/bench.rs`; `RustCores.props` and `EmuSen.csproj`'s cargo targets; Diamond's two manifests; the
 stage 9 branch's diff of `genesis.rs` and `mcd/mod.rs`. Not read: any emulator's source, any RTL, any firmware.
+
+Read for the build (§11): `Nephrite_Native.md` §53.5, §54.1, §60.4–§60.6 (the gates and measurements to hold) and §61
+(the save media); `EmuSen_SaveMedia.md` §4 and §5.1 (Q8); the conformance kit's usage and its C16; Nephrite's `src/`
+whole at `fa1e4242` as it was moved. Not read: any emulator's source, any RTL, any firmware image, `Nephrite_Native.md`
+§55's register sequences or the stage 9 scratch folder. The player's BIOS was not used: every run that needed a boot
+ROM had mcd-verificator in its place.
+
+---
+
+## 11. As built (2026-10-15)
+
+The migration of §7, commit by commit, from WiseMan `fa1e4242` on the branch `nephrite-interface`. Each commit's
+checks are §7.1's four; what each proved is recorded here as it is made, and `Nephrite_Native.md` §62 summarises it.
+
+### 11.1 Commit 1: the baseline
+
+- **`examples/digest.rs`**: `digest <image>...` or `digest --list <names> --from <dir>` runs an image 1,200 frames, pad
+  1's buttons pressed in turn as the kit presses them, and at frames 300, 600 and 1,200 prints FNV-1a (64-bit) over the
+  state, the picture and every sample drained so far, and the state's length. A disc runs with `NEPHRITE_BIOS` as its
+  boot ROM. The baseline is 71 runs: the kit's Genesis sample (64 images, its 32X cartridge among them), the bench's
+  games not in it under their bench names (Sonic the Hedgehog 2, Thunder Force IV, Streets of Rage 2 and Micro Machines
+  2's J-Cart image), the 240p disc as its 2,048-byte image and as its sheet with both audio tracks, each with
+  mcd-verificator as the boot ROM, and the image again with no boot ROM. Run twice at `fa1e4242`, the two outputs equal
+  byte for byte; kept as `~/.cache/emusen/probe/nephrite/interface/digests-base.txt`.
+- **A disc's machine's layout pinned** (`v1.rs`, `a_disc_machines_layout_is_pinned`): a disc made through create with
+  the backup RAM cartridge plugged in, every field from `Magic` to `DiscFingerprint` at its offset, 1,156,303 bytes.
+  The cartridge's `the_layout_is_pinned` stands as it was.
+- **The before numbers** (§4.4), `examples/bench`, both columns the same build, to show the runs' spread: each run
+  under the shared timing lock (`~/.cache/emusen/probe/timing.lock`) on one core, the builds alternated, load 3.3 to
+  3.5 from other work on the machine:
+
+| Image | Best (ms a frame) | Same build again | Spread |
+|---|---|---|---|
+| Sonic the Hedgehog | 1.365 | 1.360 | 0.4% |
+| Sonic the Hedgehog 2 | 1.254 | 1.249 | 0.4% |
+| Thunder Force IV | 1.347 | 1.349 | 0.2% |
+| Streets of Rage 2 | 1.164 | 1.152 | 1.0% |
+| Phantasy Star IV | 1.420 | 1.416 | 0.3% |
+| Micro Machines 2 (J-Cart) | 1.459 | 1.458 | 0.1% |
+| The 240p disc, mcd-verificator (best of 5 × 1,200) | 1.599 | 1.585 | 0.9% |
+
+- **Size and build time**: `libnephrite.so` built with the `dist` profile, 1,445,920 bytes; a clean `cargo build
+  --release --lib` of the crate, its dependencies built, 4.87 to 4.96 s over three builds.
+- **Tests**: the crate's 173 (172 and the new layout) pass with the programs' and discs' folders set.
+
+### 11.2 Commit 2: the J-Cart in the cartridge's arm
+
+The J-Cart's two words are decoded by two guarded arms ahead of the cartridge's own, inside `$000000`–`$3FFFFF`, in
+each of `read8`, `read16`, `write8` and `write16`; the `attached` flag is set by a Sega CD alone, and `attached_read8`,
+`attached_read16` and `attached_write` lose their J-Cart halves. Only an access to the cartridge's range pays the J-Cart's
+test, and no access pays it on a console without one but the flag's (§3.11).
+
+- **Byte identity**: the 71 digests equal the baseline's; the crate's 173 tests pass, the J-Cart's
+  (`a_j_cart_gives_players_3_and_4_and_reads_back_th`) among them; the kit's sample 64 of 64 and the 240p disc with
+  mcd-verificator as file 2 compliant (C1–C19).
+- **Cost**, the build against the baseline's, alternated, best of 6 × 3 × 600 (the disc 5 × 1,200), load 3 to 4: Sonic
+  the Hedgehog 1.356 ms (1.362), Sonic 2 1.241 (1.249), Thunder Force IV 1.339 (1.348), Streets of Rage 2 1.145 (1.146),
+  Phantasy Star IV 1.412 (1.410), Micro Machines 2 1.450 (1.452), the 240p disc 1.590 (1.584). Every difference within
+  the runs' spread of §11.1.
+
+### 11.3 Commit 3: the interface, `Genesis<A>`, and the Sega CD on it
+
+- **`src/interface.rs`**: `Master`, `Board`, `Answer`, `Attachment` (§3.3 as built), `Refusal`, `AttachmentState`,
+  `SpaceRef`, the three ranges of space ids, `AttachmentView`, and `Bare`, every member of whose implementations is
+  empty or `None` and inlined.
+- **`genesis.rs`**: `Genesis<A = Bare>`, `Wired<A>`, `MainBus<'_, A>`, `Z80Bus<'_, A>` (§3.4 as built). The map's
+  methods (`run_vdp`, `vdp_wait`, `dma_hold`, `dma_read`, `catch_up`, `read8`, `read16`, `write8`, `write16`, the VDP's
+  ports, the Z80's space) moved, unchanged but for the attachment's calls, from `impl Hw` to `impl<A: Attachment>
+  Wired<A>`; the four guards became `asked8`/`asked16` and `att.write`; `catch_up` calls `att.run_to`; `dma_read` asks
+  `att.transfer16`. `attached_*`, `mcd_*` and `attached_dma_read` left for the Sega CD. Five lines that read one device
+  while calling another through `Deref` name `self.dev` explicitly, as the borrow checker asks.
+- **`mcd/`**: `MegaCd::new(board, bios, disc)`; `Attachment for MegaCd` (`EXPANSION`, its decode in mode 2, the RAM
+  cartridge's slot, Word RAM's transfer a word late, `run_to` as it was, `#[inline(never)]` kept, and `sound`, its one
+  stream); `AttachmentState` in `mcd/state.rs` with the fingerprint its own; `AttachmentView` with `MEMORIES`, `BRAM_ID`
+  and `CARTRAM_ID`, which moved from `machine.rs` (re-exported there).
+- **The assembly**: `Machine::fitted` and `fitted!` (§3.4 as built), `FittedSaved` in `state.rs` (§3.5 as built);
+  `Machine::genesis` is gone, and the tests and examples that read `m.genesis.hw`, `cpu` or `z80` read `m.hw()`,
+  `hw_mut()`, `cpu()` and `z80()`, a mechanical change of 140 lines.
+- **Tests**: the Word RAM test moved to `mcd` at the interface (`a_transfer_from_word_ram_reads_a_word_late`, the
+  attachment's `transfer16` and `read16`), and `genesis.rs` gained one with a stub attachment
+  (`a_transfer_asks_the_attachment_apart_from_the_68000`) showing that the Genesis asks `transfer16` for a transfer and
+  `read16` for the 68000 and falls to its own map where the attachment passes; one more checks each part's spaces stand
+  in its range of ids. 175 pass.
+- **Byte identity**: the 71 digests equal the baseline's; both pinned layouts unchanged; the kit's sample 64 of 64 and the
+  240p disc with mcd-verificator as file 2 compliant (C1–C19); WiseMan's Nephrite, Genesis and Registration tests, 86
+  pass.
+- **Cost**, best of 6 × 3 × 600 (the disc 5 × 1,200), against the baseline's build, alternated, load 1.8 to 3.8: Sonic
+  the Hedgehog 1.355 ms (1.358), Sonic 2 1.241 (1.248), Thunder Force IV 1.353 (1.347), Streets of Rage 2 1.147 (1.151),
+  Phantasy Star IV 1.406 (1.414), Micro Machines 2 1.445 (1.451), the 240p disc 1.575 (1.588). A run with the load at
+  5 to 14 from other work on the machine is not counted. `libnephrite.so` (`dist`) 1,609,128 bytes (1,445,920, +11.3%);
+  a clean release build 5.49 to 6.12 s (4.87 to 4.96, +13 to 23%).
+- **The form rejected on the way** (§3.4): `Map<'_, A>` cost the cartridge 1.3 to 2.4%; measured three ways (as it
+  was, with the Sega CD's instantiation removed, and with `Hw`'s three removed fields put back as padding, 1.3%), so
+  neither the second instantiation nor the devices' layout explained it. Not committed.
+
+### 11.4 Commit 4: the Sega CD's facts behind its module
+
+- **`src/mcd/frontend.rs`** (§3.6 as built): `DISC_SIGNATURE` and `disc_offset` from `media.rs`; `is_disc` from `v1.rs`;
+  `open_disc`, `fingerprint` and `system_area` from `mcd/mod.rs` (re-exported there, as the examples name them);
+  `bios_firmware` with the replacement's words from `v1.rs`'s `cd_bios` and `CD_COST`; the `ramcart` setting; the two
+  save memories' declarations, kinds, media and labels, from `v1.rs`'s `backup_ram` and `ram_cartridge`, and their
+  loading at create; the drive's calls from `v1.rs`'s `drives`, `media_lid` and `media_insert`, the fingerprint set by
+  `insert`.
+- **`Cdda::new` takes the mix's rate**, given by `Board::rate`, so `cdda.rs` no longer reads `crate::sound::RATE`. With
+  `DISC_SIGNATURE` the Sega CD's own, **no production line of `src/mcd/` reaches the crate outside it but
+  `crate::interface`** (§2.2 counted two).
+- **After it**, no line outside `src/mcd/` names the Sega CD but the assembly's (`lib.rs`, `machine.rs`, `media.rs`,
+  `state.rs`, `v1.rs`).
+- **Byte identity**: the 71 digests equal the baseline's; the crate's 175 tests; the kit's sample 64 of 64 and the 240p
+  disc compliant; WiseMan's 86. No code on a frame's path changed, so the bench was not run.
+
+### 11.5 Commit 5: the module trees, their visibility and the source check
+
+- **The move** (§5.1 as built): 22 files into `src/genesis/` by `git mv`, the paths `crate::X` of the Genesis's
+  modules rewritten `crate::genesis::X` (and `nephrite::X` in the examples); `genesis/header.rs` from `media.rs`; the
+  debugger's composition into `machine.rs`; the Genesis's space ids into `genesis/mod.rs`. `lib.rs` declares the
+  seven top-level modules and the check.
+- **Visibility** (§5.2 as built), narrowed and widened by the compiler; `Fitted` and `Machine::fitted` became
+  `pub(crate)`, the examples using the accessors.
+- **The source check** (§5.3 as built), with its proof by a deliberate crossing.
+- **Byte identity**: the 71 digests equal the baseline's; the crate's 177 tests (175 and the check's two); the kit's
+  sample 64 of 64 and the 240p disc compliant.
+- **Cost**, the move being a move, measured again (§4.4), against the baseline's build, load 2.5 to 4: Sonic the
+  Hedgehog 1.347 ms (1.369), Sonic 2 1.234 (1.249), Thunder Force IV 1.355 (1.341; again alone, 1.363 against 1.361),
+  Streets of Rage 2 1.129 (1.149), Phantasy Star IV 1.403 (1.415), Micro Machines 2 1.444 (1.458), the 240p disc 1.591
+  (1.585). Within the runs' spread or faster.
+
+### 11.6 Commit 6: the 32X's stub
+
+`src/s32x/mod.rs` declares what the 32X is to the rest of the crate before any of it is built: `S32x` on the three
+traits, answering `Pass` and `false` to every access, with no state block and no sound; its three placeholder memories
+(`SDRAM` 34, `FRAMEBUFFER` 35, `PALETTE` 36, from its range), which `Machine::extra` and `Memory` held since stage 0
+and which are gone from the machine; its processors' ids, `MSH2` 3 and `SSH2` 4 (Q7, with `S68K` 2 in `mcd` and the
+three processor ranges in `interface`); its boot ROMs' descriptions with their replacement's words (`boot_firmware`,
+numbered 5–7 by the assembly); its extension; and the header's test, `is_32x`, which left the Genesis's `Header` for
+the 32X's tree (§5.5). `Fitted::S32x(Genesis<S32x>)` holds a 32X image's machine, which still counts frames only
+(`Machine::runs`). The crate still declares `beryl-sh2` and uses none of it, as before.
+
+- **Byte identity**: the 71 digests equal the baseline's, the kit's 32X cartridge (Knuckles Chaotix) among them, its
+  state of 672,346 bytes the same at frames 300, 600 and 1,200; the crate's 178 tests (one more, the stub's); the kit's
+  sample 64 of 64 and the 240p disc compliant. The stub is on no cartridge's or disc's path, so the bench was not run.
+
+### 11.7 Commit 7: the features and the builds without them
+
+- **The features** (§5.4 as built). Construction became `with_bios` for every system and `with_disc(media, model,
+  bios, disc)` for a disc alone, the image's cartridge built by one function, `cartridge`; the frame rates of machine
+  info are now computed from `genesis::master_hz`, a `const fn`, their one owner, where they repeated its numbers.
+- **Found by the kit on the Genesis-only library**, and fixed: with the Sega CD's `media_lid` and `media_insert` not
+  compiled, the library still claims `MEDIA`, and the core's defaults answered `NOT_SUPPORTED` where a machine with no
+  drive must answer `NO_SUCH_DRIVE` (C16, all 64 images failing it). The Genesis-only build now answers
+  `NO_SUCH_DRIVE`, as the full library does on a cartridge.
+- **The four configurations' tests**: all 179; without either attachment 143; with the Sega CD alone 177; with the
+  32X alone 144. The check of the three builds passes, and fails on a deliberate crossing (§5.4 as built).
+- **The Genesis-only library**, for the record: `dist` 975,960 bytes (the full library 1,768,576); the kit's Genesis
+  sample on it 64 of 64. The 240p disc is not compliant on it, as a library without the Sega CD cannot be.
+- **Byte identity** of the full library: the 71 digests equal the baseline's; the kit's sample 64 of 64 and the 240p
+  disc compliant (C1–C19).
+
+### 11.8 The 32X's stub compiles no frame
+
+Measured after commit 7: the stub's `Genesis<S32x>` made the Genesis's frame, the 68000's and the Z80's interpreters
+and the map a third time, for a machine that runs no frame (`Machine::runs`). The `dist` library was 1,767,504 bytes
+at commit 6 against 1,608,448 at commit 5 (+159 KB, +10%), and a clean release build 6.96 to 7.07 s, 42% over the
+baseline, near Q1's half. `advance` and `run_frame_debug` now match the configurations that run and give the stub's
+none, so that only its construction and its state are compiled: the library 1,631,832 bytes (+12.9% over the
+baseline), a clean release build 6.09 to 6.23 s (+23 to 26%, load 4). Stage 11 compiles the frame for the 32X when it
+runs one, and stage 12's CD32X a fourth; Q1's bound is to be measured again then, with the enum (b) beside it if a
+build has grown by half.
+
+- **Byte identity**: the 71 digests equal the baseline's; the crate's 179 tests, and 143 and 144 without either
+  attachment and with the 32X alone; the kit's sample 64 of 64 and the 240p disc compliant.
+
+### 11.9 The record, and the build at its end
+
+- **Where the coupling stands** (§2 counted 131 Genesis-side sites and 2 back): no production line of `src/genesis/`
+  or `interface.rs` names an attachment or the assembly, and none of `src/mcd/` or `src/s32x/` names the crate outside
+  `crate::interface` and its own tree; the source check holds both at every test run, the feature-off builds hold the
+  direction at compilation, and the compiler holds 329 of the Genesis's items and 229 of the Sega CD's private to their
+  trees. What the Sega CD's 131 sites were is now `Attachment`, `AttachmentState` and `AttachmentView` (map, clock,
+  sound, state, spaces), `frontend.rs` (media, firmware, battery files, the setting) and the assembly's numbers.
+- **Cost at the end**, after `git merge WiseMan` (`9f8092b8`, a page), against the baseline's build, alternated, load
+  4.5 to 11 from other work on the machine: Sonic the Hedgehog 1.361 ms (1.390), Sonic 2 1.245 (1.258), Thunder Force
+  IV 1.350 (1.351), Streets of Rage 2 1.149 (1.148), Phantasy Star IV 1.427 (1.417), Micro Machines 2 1.459 (1.457), the
+  240p disc 1.578 (1.582): within the runs' spread (§11.1) or faster. The run before §11.8, at load 3.5 to 7, agreed
+  (Phantasy Star IV +0.6%, Sonic +0.6%, the rest within 0.6% either way).
+- **After the merge**: the crate's tests in the four configurations, 179, 143, 177 and 144; the 71 digests equal the
+  baseline's; the kit's sample 64 of 64 and the 240p disc with mcd-verificator as file 2 compliant (C1–C19); WiseMan's
+  Nephrite, Genesis and Registration tests, 86 pass.
+- **What the page got wrong, and where it is amended**: the requester it put off was needed (§3.3 as built); `Hw<A>`
+  became `Wired<A>` and `Console<A>` was not built (§3.4, §5.1 as built), after a first form measured slower; tests that
+  run a machine stay in their part's tree, outside the source check (§5.3 as built); the second instantiation keeps
+  ten of the Genesis's helpers out of line (§4.3); the 32X's stub cost a third instantiation until it stopped compiling
+  a frame (§11.8); the Genesis-only library needed its own answers to the media calls (§11.7); and §2's count rose from
+  96 to 131 with what stage 9 and the save media added.

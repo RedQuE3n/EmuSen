@@ -94,6 +94,7 @@ impl NativeCore for Machine {
         if port != 0 {
             return Ok(());
         }
+        let before = self.bus.read_joypad();
         let j = &mut *self.bus.joypad;
         let buttons = [&mut j.right, &mut j.left, &mut j.up, &mut j.down, &mut j.a, &mut j.b, &mut j.select, &mut j.start];
         for (n, button) in buttons.into_iter().enumerate() {
@@ -101,6 +102,7 @@ impl NativeCore for Machine {
                 *button = mask & (1 << n) != 0;
             }
         }
+        self.bus.request_joypad_on_fall(before);
         Ok(())
     }
 

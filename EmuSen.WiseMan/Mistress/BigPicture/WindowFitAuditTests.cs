@@ -408,6 +408,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "ResumeLongTitle":
                     Choose(window, pad, "Quit Game");
                     PadMenu.Answer(window, pad, yes: true);
+                    // The question names when the game was left; a fixed time keeps its words, and so its recording, the same on every run.
+                    foreach (string state in Directory.EnumerateFiles(Path.Combine(_root, "States"), "*", SearchOption.AllDirectories)) File.SetLastWriteTime(state, new DateTime(2026, 10, 15, 9, 30, 0));
                     pad.A();
                     Assert.IsType<ResumeWindow>(Sheets(window).Current);
                     break;

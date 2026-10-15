@@ -31,6 +31,9 @@ namespace EmuSen.WiseMan.Fixtures
             for (int i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); UiTest.Capture(host); }
             before?.Invoke();
             List<string> faults = FitAudit.Check(layer.SheetOf(window)!);
+            // The recorded rules find the same kinds of fault in the recorded sheet - see EmuSen_InterfaceSpec.md §4.
+            SpecDocument spec = InterfaceRecorder.Tree(layer.SheetOf(window)!, new InterfaceRecorder.Options("FitAuditTests", "sheet"));
+            Assert.Equal(faults.Select(InterfaceRules.Category).Order(), InterfaceRules.Fit(spec).Select(InterfaceRules.Category).Order());
             window.Close();
             host.Close();
             return faults;

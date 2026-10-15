@@ -12,7 +12,7 @@ pub const CYCLES_PER_FRAME: i64 = 70_224;
 
 /// "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
 pub const STATE_MAGIC: u32 = 0x4352_454D;
-pub const STATE_VERSION: i32 = 8;
+pub const STATE_VERSION: i32 = 11;
 /// Version 8 adds the mixer after the walks; earlier versions still load, the mixer kept (Mercury_Native.md §10).
 const MIXER_IN_STATE: i32 = 8;
 /// The oldest version a load still reads, its retired fields read and dropped (Mercury_Native.md §9.3).
@@ -246,6 +246,7 @@ impl Machine {
         w.group("Cpu", |w| crate::state::State::write_state(&self.cpu, w));
         w.group("Bus", |w| self.bus.write_state(w));
         w.group("Bus.Apu", |w| self.bus.apu.mixer.write_state(w));
+        w.group("Bus", |w| self.bus.write_tail(w));
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
@@ -276,6 +277,8 @@ impl Machine {
         if version >= MIXER_IN_STATE {
             self.bus.apu.mixer.read_state(r)?;
         }
+        // Fields an older version lacks start clear: no DMA start pending, no subtraction made.
+        self.bus.read_tail(r, version)?;
         Ok(())
     }
 

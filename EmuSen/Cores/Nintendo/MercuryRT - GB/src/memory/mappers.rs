@@ -21,6 +21,8 @@ pub struct Mbc1 {
     pub bank1: i32,
     pub bank2: i32,
     pub ram_enabled: bool,
+    /// MBC1M rewires BANK1 to four bits and BANK2 to bank bits 4-5; from the image, not the state (Mercury_Native.md §13.6).
+    pub bank2_shift: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,7 +55,7 @@ impl Mapper {
     pub fn for_type(kind: u8) -> Option<Mapper> {
         Some(match kind {
             0x00 | 0x08 | 0x09 => Mapper::NoMbc(NoMbc),
-            0x01..=0x03 => Mapper::Mbc1(Mbc1 { advanced_mode: false, bank1: 1, bank2: 0, ram_enabled: false }),
+            0x01..=0x03 => Mapper::Mbc1(Mbc1 { advanced_mode: false, bank1: 1, bank2: 0, ram_enabled: false, bank2_shift: 5 }),
             0x05 | 0x06 => Mapper::Mbc2(Mbc2 { ram_enabled: false, rom_bank: 1 }),
             0x0F..=0x13 => Mapper::Mbc3(Mbc3 {
                 clock: [0; 5],
@@ -147,7 +149,7 @@ impl Mapper {
         };
         match self {
             Mapper::NoMbc(_) => ram.get(address as usize - 0xA000).copied().unwrap_or(0xFF),
-            Mapper::Mbc1(m) => banked(m.ram_enabled, m.ram_bank()),
+            Mapper::Mbc1(m) => banked(m.ram_enabled, m.ram_bank(cart.ram_banks())),
             Mapper::Mbc2(m) => {
                 if !m.ram_enabled || ram.is_empty() {
                     return 0xFF;
@@ -168,6 +170,7 @@ impl Mapper {
     }
 
     pub fn write_ram(&mut self, cart: &mut Cartridge, address: u16, data: u8) {
+        let ram_banks = cart.ram_banks();
         let ram = &mut cart.ram;
         let mut banked = |enabled: bool, bank: i32| {
             if !enabled || ram.is_empty() {
@@ -184,7 +187,7 @@ impl Mapper {
                     *b = data;
                 }
             }
-            Mapper::Mbc1(m) => banked(m.ram_enabled, m.ram_bank()),
+            Mapper::Mbc1(m) => banked(m.ram_enabled, m.ram_bank(ram_banks)),
             Mapper::Mbc2(m) => {
                 if m.ram_enabled && !ram.is_empty() {
                     ram[(address as usize - 0xA000) % 512] = data & 0x0F;
@@ -356,15 +359,16 @@ fn rom_mask(cart: &Cartridge) -> i32 {
 impl Mbc1 {
     /// Only mode 1 lets $0000-$3FFF leave bank 0.
     fn low_bank(&self, cart: &Cartridge) -> i32 {
-        if self.advanced_mode { (self.bank2 << 5) & rom_mask(cart) } else { 0 }
+        if self.advanced_mode { (self.bank2 << self.bank2_shift) & rom_mask(cart) } else { 0 }
     }
 
     fn high_bank(&self, cart: &Cartridge) -> i32 {
-        ((self.bank2 << 5) | self.bank1) & rom_mask(cart)
+        ((self.bank2 << self.bank2_shift) | (self.bank1 & ((1 << self.bank2_shift) - 1))) & rom_mask(cart)
     }
 
-    fn ram_bank(&self) -> i32 {
-        if self.advanced_mode { self.bank2 } else { 0 }
+    /// A chip smaller than four banks has no pins for BANK2's upper bits.
+    fn ram_bank(&self, ram_banks: usize) -> i32 {
+        (if self.advanced_mode { self.bank2 } else { 0 }) % ram_banks.max(1) as i32
     }
 }
 

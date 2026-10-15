@@ -40,7 +40,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public byte[] Oam = new byte[0xA0];
         public byte[] HighRam = new byte[0x7F];
 
-        // $FF00-$FF7F verbatim, for the registers no device has claimed yet.
+        // Storage for the registers kept by their address: P1's select bits, DMA, and the Color's RP, OPRI and $FF72-$FF75 - see Mercury_Native.md §13.1.
         public byte[] Io = new byte[0x80];
 
         public byte InterruptEnable;
@@ -61,6 +61,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         private byte _oamDmaPage;
         private int _oamDmaCyclesLeft;
         private int _oamDmaIndex;
+
+        // T-cycles until a transfer written while another runs takes over; in the state's version-9 tail - see Mercury_Native.md §13.4.
+        [SkipInState] private int _oamDmaStartDelay;
+
+        // A transfer's span: 160 machine cycles and the one its last byte lands in; a fresh write's counter adds the machine cycle before it starts - see Mercury_Native.md §13.4.
+        private const int OamDmaSpan = (0xA0 + 1) * 4;
+        private const int OamDmaFromWrite = OamDmaSpan + 4;
 
         // Cycles a DMA took from the CPU, drained by the core after the instruction - see Mercury_Cgb.md §4.1.
         private int _stallCycles;
@@ -89,6 +96,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             Wram = new byte[WramBankSize * (CgbHardware ? 8 : 2)];
 
             Ppu = new Ppu(this);
+            Apu.CgbHardware = CgbHardware;
         }
 
         public Cartridge Cart => _cart;
@@ -97,6 +105,22 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public byte Tima => _tima;
         public byte Tma => _tma;
         public byte Tac => _tac;
+
+        public byte PendingInterrupts => (byte)(InterruptEnable & InterruptFlags & 0x1F);
+
+        // A button pressed through the frontend, with the interrupt its line's fall requests - see Mercury_Native.md §13.7.
+        public void SetButton(EmuSen.Galaxia.Input.PadButton button, bool pressed)
+        {
+            byte before = Joypad.Read(Io[0x00]);
+            Joypad.Set(button, pressed);
+            RequestJoypadOnFall(before);
+        }
+
+        // Pan Docs' INT $60: any of P1's four lines going from high to low - see Mercury_Native.md §13.7.
+        private void RequestJoypadOnFall(byte before)
+        {
+            if ((before & ~Joypad.Read(Io[0x00]) & 0x0F) != 0) Request(Interrupt.Joypad);
+        }
 
         public void Request(Interrupt source) => InterruptFlags |= (byte)(1 << (int)source);
 
@@ -107,7 +131,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
         public void ClearSerialLog() => _serialLog.Clear();
 
-        public bool OamDmaActive => _oamDmaCyclesLeft > 0;
+        public bool OamDmaActive => _oamDmaCyclesLeft is > 0 and < OamDmaSpan;
 
         // The CPU loses VRAM while the PPU is drawing from it - see Mercury_Ppu.md §7.
         public bool VramAccessibleToCpu => !Ppu.LcdEnabled || Ppu.Mode != PpuMode.Drawing;
@@ -239,12 +263,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             0xFF43 => Ppu.Scx,
             0xFF44 => Ppu.Ly,
             0xFF45 => Ppu.Lyc,
+            0xFF46 => Io[0x46],
             0xFF47 => Ppu.Bgp,
             0xFF48 => Ppu.Obp0,
             0xFF49 => Ppu.Obp1,
             0xFF4A => Ppu.Wy,
             0xFF4B => Ppu.Wx,
-            _ => Cgb ? ReadCgbIo(address) : DmgCompat ? ReadCompatIo(address) : Io[address - 0xFF00],
+            // An address nothing answers reads all ones, and keeps no write - see Mercury_Native.md §13.1.
+            _ => Cgb ? ReadCgbIo(address) : DmgCompat ? ReadCompatIo(address) : (byte)0xFF,
         };
 
         private void WriteIo(ushort address, byte data)
@@ -253,8 +279,12 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             {
                 // Only the two select bits are writable; the button lines are inputs.
                 case 0xFF00:
+                {
+                    byte before = Joypad.Read(Io[0x00]);
                     Io[0x00] = (byte)(data & 0x30);
+                    RequestJoypadOnFall(before);
                     return;
+                }
 
                 case 0xFF01:
                     _serialData = data;
@@ -269,13 +299,16 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     _divCounter = 0;
                     return;
 
+                // In the cycle TMA is reloaded, TIMA keeps taking TMA: a TIMA write is lost and a TMA write reaches both - see Mercury_Native.md §13.2.
                 case 0xFF05:
+                    if (_timaReloadDelay < 0) return;
                     _tima = data;
                     _timaReloadDelay = 0;
                     return;
 
                 case 0xFF06:
                     _tma = data;
+                    if (_timaReloadDelay < 0) _tima = data;
                     return;
 
                 case 0xFF07:
@@ -341,9 +374,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     return;
 
                 default:
-                    if (Cgb && WriteCgbIo(address, data)) return;
-                    if (DmgCompat && WriteCompatIo(address, data)) return;
-                    Io[address - 0xFF00] = data;
+                    if (Cgb) WriteCgbIo(address, data);
+                    else if (DmgCompat) WriteCompatIo(address, data);
                     return;
             }
         }
@@ -362,22 +394,37 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             Request(Interrupt.Serial);
         }
 
-        // 160 machine cycles, one OAM byte each, with OAM closed to the CPU throughout - see Mercury_Memory.md §6.
+        // A fresh transfer starts on the second machine cycle after the write; one written while another runs lets that one carry on until then - see Mercury_Native.md §13.4.
         private void StartOamDma(byte page)
         {
-            _oamDmaPage = page;
-            _oamDmaIndex = 0;
-            _oamDmaCyclesLeft = Oam.Length * 4;
+            if (_oamDmaCyclesLeft == 0)
+            {
+                _oamDmaPage = page;
+                _oamDmaIndex = 0;
+                _oamDmaCyclesLeft = OamDmaFromWrite;
+                return;
+            }
+
+            _oamDmaStartDelay = 5;
+            _oamDmaCyclesLeft = Math.Max(_oamDmaCyclesLeft, _oamDmaStartDelay);
         }
 
+        // 160 machine cycles, one OAM byte each, closing OAM through the cycle of the last byte - see Mercury_Memory.md §6, Mercury_Native.md §13.4.
         private void StepOamDma()
         {
             if (_oamDmaCyclesLeft == 0) return;
 
+            if (_oamDmaStartDelay != 0 && --_oamDmaStartDelay == 0)
+            {
+                _oamDmaPage = Io[0x46];
+                _oamDmaIndex = 0;
+                _oamDmaCyclesLeft = OamDmaSpan;
+            }
+
             _oamDmaCyclesLeft--;
 
             // One byte per machine cycle, which lands the 160th on the last cycle of the transfer.
-            if ((_oamDmaCyclesLeft & 3) != 0 || _oamDmaIndex >= Oam.Length) return;
+            if ((_oamDmaCyclesLeft & 3) != 0 || _oamDmaCyclesLeft > Oam.Length * 4 || _oamDmaIndex >= Oam.Length) return;
 
             Oam[_oamDmaIndex] = ReadForDma((ushort)((_oamDmaPage << 8) + _oamDmaIndex));
             _oamDmaIndex++;
@@ -421,11 +468,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             // The frame sequencer watches a DIV bit, so a DIV write can clock it early - see Mercury_Apu.md §2.
             Apu.OnDivBit((_divCounter & (DoubleSpeed ? 0x2000 : 0x1000)) != 0);
 
-            if (_timaReloadDelay > 0 && --_timaReloadDelay == 0)
-            {
-                _tima = _tma;
-                Request(Interrupt.Timer);
-            }
+            if (_timaReloadDelay != 0) StepTimaReload();
 
             bool edge = (_divCounter & TimerBitMask) != 0 && (_tac & 0x04) != 0;
 
@@ -436,6 +479,21 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             }
 
             _lastTimerEdge = edge;
+        }
+
+        // Positive: cycles until TMA is reloaded; negative: cycles left of the machine cycle it was reloaded in - see Mercury_Native.md §13.2.
+        private void StepTimaReload()
+        {
+            if (_timaReloadDelay < 0)
+            {
+                _timaReloadDelay++;
+                return;
+            }
+
+            if (--_timaReloadDelay != 0) return;
+            _tima = _tma;
+            Request(Interrupt.Timer);
+            _timaReloadDelay = -4;
         }
 
         private void StepBaseClock()
@@ -451,6 +509,21 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             2 => 1 << 5,
             _ => 1 << 7,
         };
+
+        // The tail after the mixer, fields the walk cannot carry without moving every older state's bytes: 9 OAM DMA's delay, 10 the sweep's negate flag, 11 the frozen LY=LYC bit - see Mercury_Native.md §13.
+        internal void WriteTail(System.IO.BinaryWriter w)
+        {
+            w.Write(_oamDmaStartDelay);
+            w.Write(Apu.Pulse1.SweepNegated);
+            w.Write(Ppu.LycWhileOff);
+        }
+
+        internal void ReadTail(System.IO.BinaryReader r, int version)
+        {
+            _oamDmaStartDelay = version >= 9 ? r.ReadInt32() : 0;
+            Apu.Pulse1.SweepNegated = version >= 10 && r.ReadBoolean();
+            Ppu.LycWhileOff = version >= 11 && r.ReadBoolean();
+        }
 
         public void Reset()
         {
@@ -468,6 +541,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             _oamDmaPage = 0;
             _oamDmaCyclesLeft = 0;
             _oamDmaIndex = 0;
+            _oamDmaStartDelay = 0;
             _stallCycles = 0;
             _divCounter = 0;
             _tima = 0;

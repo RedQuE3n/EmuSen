@@ -46,6 +46,15 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         [SkipInState] private EmuSen.Cores.BatterySave _battery = EmuSen.Cores.BatterySave.None;
 
         public int RomBanks => Rom.Length / RomBankSize;
+
+        // MBC1M as Pan Docs identifies it: a 1 MiB MBC1 image whose bank $10 opens with bank 0's logo, a logo that is not blank - see Mercury_Native.md §13.6.
+        public static bool IsMbc1Multicart(byte[] rom)
+        {
+            const int logo = 0x0104, length = 48, bank16 = 0x10 * RomBankSize;
+            if (rom.Length != 64 * RomBankSize || rom[0x0147] is < 0x01 or > 0x03) return false;
+            var first = rom.AsSpan(logo, length);
+            return first.ContainsAnyExcept(first[0]) && first.SequenceEqual(rom.AsSpan(bank16 + logo, length));
+        }
         public int RamBanks => Ram.Length / RamBankSize;
 
         public static Cartridge Load(string path)

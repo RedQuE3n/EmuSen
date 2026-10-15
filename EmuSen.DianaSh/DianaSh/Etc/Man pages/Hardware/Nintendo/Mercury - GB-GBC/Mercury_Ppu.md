@@ -127,6 +127,11 @@ reading as though every source were enabled, spuriously firing the interrupt), i
 not modelled. It is a documented DMG defect that a handful of games rely on
 accidentally rather than deliberately.
 
+**With the LCD off the line does not move** (2026-10-15, `Mercury_Native.md` §13.11). The LY=LYC comparison is taken as
+the LCD goes off and holds until it comes back, and no STAT or LYC write then can raise the interrupt. Before that date
+an LYC write with the LCD off could raise it, which neither the referee's readings nor mooneye's `stat_lyc_onoff` allow.
+Line 144 also raises the mode-2 source: with vblank on a DMG, a machine cycle before it on a CGB.
+
 ## 4. Background and window
 
 ### 4.1 Addressing

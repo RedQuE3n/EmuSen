@@ -66,7 +66,7 @@ impl Cpu {
             0x10 => {
                 self.fetch(bus);
                 bus.stop();
-                4
+                8
             }
             0x76 => {
                 if !self.ime && self.interrupt_pending {
@@ -500,6 +500,8 @@ impl Cpu {
         if !taken {
             return 8;
         }
+        // The condition takes its own machine cycle before the pops.
+        self.internal_cycle(bus);
         self.pc = self.pop(bus);
         bus.note_return();
         20

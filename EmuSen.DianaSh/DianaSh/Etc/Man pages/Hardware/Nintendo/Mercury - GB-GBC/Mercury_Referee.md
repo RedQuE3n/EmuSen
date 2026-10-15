@@ -96,12 +96,17 @@ marks.
 
 ## 2. Both references agree against Mercury: the defect candidates
 
-In each finding below, the RTL and Mesen say the same thing and Mercury says something else. **None of them has a test
-in WiseMan yet.** They are ordered by how little interpretation stands between the code and the claim:
+In each finding below, the RTL and Mesen say the same thing and Mercury says something else. **None of them had a test
+in WiseMan when this page was written.** The audit of 2026-10-15 (`Mercury_Native.md` §13) takes them in steps, each
+graded by a test ROM's source or a public document, and each finding below carries its verdict there. They are ordered
+by how little interpretation stands between the code and the claim:
 - §2.1–§2.4 each rest on a test ROM's own source or on a commit that names the failing ROM.
 - §2.9 also rests on an internal inconsistency in Mercury's own page.
 
 ### 2.1 Unmapped I/O reads back as RAM, starting at `$00` **[V]**
+
+*Proven and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.1): `01-registers` on both suites, `unused_hwio-GS`
+and `unused_hwio-C` now pass.*
 
 **Mercury.**
 - Every `$FF00-$FF7F` address that no case claims falls to a plain array: `MemoryBus.cs:236`
@@ -128,6 +133,9 @@ Mesen has no read case). Mercury reads them back (`MemoryBus.Cgb.cs:38-41`).
 
 ### 2.2 The timer's reload cycle has no write arbitration **[V]**
 
+*Proven and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.2): `tima_write_reloading` and
+`tma_write_reloading` pass. `rapid_toggle` was examined and is out of reach there.*
+
 **Mercury.**
 - The reload is a one-tick event with nothing after it (`MemoryBus.cs:410-414`).
 - A TIMA write always lands and cancels any pending reload (`:261-264`).
@@ -148,6 +156,9 @@ increment overflows (`GbTimer.cpp:135`), which the RTL does not share.
 
 ### 2.3 The interrupt vector is chosen before the push **[V]**
 
+*Proven and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.3): `ie_push` passes; the writes now fall on
+the third and fourth machine cycles, as Pan Docs gives them.*
+
 **Mercury.**
 - The vector is picked from IE & IF sampled at the start of `Step` (`Cpu.cs:105`).
 - `ServiceInterrupt` pushes and jumps to it (`:161-167`).
@@ -166,6 +177,9 @@ and fourth.
 **ROM:** `interrupts/ie_push`. The RTL's fix, `c26731f`, names it, along with Pinball Fantasies.
 
 ### 2.4 OAM DMA locks OAM one M-cycle too early, and this reaches the instruction-timing ROMs **[V]**
+
+*Proven and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.4). The experiment below was run: the three
+`oam_dma_*` ROMs and all eight of the right-hand column pass, and the left-hand five still fail.*
 
 **Mercury** arms the transfer inside the `$FF46` write and blocks OAM from the next M-cycle (`MemoryBus.cs:307-309`,
 `:354-359`, `:99`, `:105-106`).
@@ -199,6 +213,9 @@ Mercury places the access the ROM probes, and the split is not what that paragra
 
 ### 2.5 PUSH, RST and RET cc put their internal cycle at the end **[V]**
 
+*Proven and fixed in both engines with CALL and CALL cc, 2026-10-15 (`Mercury_Native.md` §13.5), against the ROMs'
+headers and GBCTR: all five ROMs pass, and with §2.4 all thirteen instruction-timing ROMs.*
+
 Hardware takes an internal M-cycle *before* the stack accesses of these three instructions. Mercury ticks the accesses
 in place and settles the remainder afterwards (`Cpu.cs:129-134`):
 - PUSH: `Push(BC); return 16` (`Cpu.Opcodes.cs:169`).
@@ -215,6 +232,9 @@ in place and settles the remainder afterwards (`Cpu.cs:129-134`):
 **ROMs:** `push_timing`, `rst_timing`, `ret_cc_timing`, subject to §2.4's caveat.
 
 ### 2.6 STAT and the LCD's edges **[V]**
+
+*Audited 2026-10-15 (`Mercury_Native.md` §13.11): rules 2, 4 and 5 proven and fixed in both engines (`vblank_stat_intr-GS`
+and `-C` pass); rules 1, 3, 6 and the `intr_2_*` skew recorded as one later change to the PPU's line boundary.*
 
 Mercury drives STAT's mode bits, the STAT line and access blocking from one field, on one dot (`Ppu.Timing.cs:71-75`).
 Six rules differ, and in each the RTL and Mesen agree against Mercury.
@@ -268,6 +288,9 @@ fail.
 
 ### 2.7 The joypad interrupt is never requested **[V]**
 
+*Proven against Pan Docs and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.7): a high-to-low change of a
+P1 line, by a press or a select write, requests it.*
+
 `Interrupt.Joypad` is declared (`MemoryBus.cs:17`) and never requested. `Mercury_Native.md` §6.2 already argues this.
 What the referee adds is the witness:
 - The RTL raises it on a falling edge of any input line (`gb.v:679-683`). It was added by `8a15a3b`, "fixed interrupt,
@@ -280,6 +303,9 @@ What the referee adds is the witness:
 **Double Dragon 3 is therefore a candidate test cartridge with a known-sensitive behaviour.**
 
 ### 2.8 The cartridge boards **[V]**
+
+*Audited 2026-10-15 (`Mercury_Native.md` §13.6): the RAM mask (on MBC1) and MBC1M proven and fixed in both engines;
+MBC5's RAM enable a dispute between GBCTR and Pan Docs, put to the tester; MBC3's clock rules out of reach.*
 
 - **A RAM bank beyond the RAM's size is unmapped rather than mirrored.**
   - Mercury: `Mbc1.cs:27` `RamBank => _advancedMode ? _bank2 : 0`, then a bounds check that returns `$FF` and drops
@@ -309,6 +335,10 @@ What the referee adds is the witness:
   - No mooneye ROM tests this.
 
 ### 2.9 HDMA in double speed is four times too cheap, by Mercury's own argument too **[V]**
+
+*Audited 2026-10-15 (`Mercury_Native.md` §13.9): the double-speed cost, `$FF55` after a stop and the overflow stop proven
+against Pan Docs and fixed in both engines; the pause during HALT put to the tester as a surface change; the start in
+hblank and with the LCD off out of reach.*
 
 **Mercury** charges `_stallCycles += DoubleSpeed ? 16 : 32` a block (`MemoryBus.Cgb.cs:154`), drained one CPU T-cycle
 at a time (`MercuryCore.cs:151-152`). A double-speed block therefore costs 4 fast M-cycles.
@@ -341,6 +371,10 @@ Pan Docs' HDMA5 section gives the same, from knowledge.
 
 ### 2.10 The sound quirks blargg tests **[V]**
 
+*Audited 2026-10-15 (`Mercury_Native.md` §13.10): the length quirks (`03-trigger`), the negate rule (`05-sweep details`)
+and the power rules (`08`, `11`) proven and fixed in both engines; the four wave rows out of reach (their timing is
+encoded only in checksums).*
+
 For these rules the RTL is SameBoy's algorithm and Mesen cites SameBoy. Their agreement is one reading, not two. **The
 evidence is blargg's test source**, which states each rule and the failure text Mercury printed.
 
@@ -370,6 +404,8 @@ evidence is blargg's test source**, which states each rule and the failure text 
 
 ### 2.11 Colour registers **[V]**
 
+*Proven against Pan Docs and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.8).*
+
 - **The palette data ports are blocked in mode 3.**
   - Mercury reads and writes `$FF69`/`$FF6B` unconditionally (`Ppu.Cgb.cs:25-39`).
   - RTL: drops the write but still auto-increments (`video.v:545-550`), and reads `$FF` (`:592`, `:594`).
@@ -383,6 +419,10 @@ evidence is blargg's test source**, which states each rule and the failure text 
 
 ### 2.12 On a DMG, LCDC bit 0 shows BGP colour 0, not white **[V]**
 
+*Decided 2026-10-15: a dispute, not a defect. Pan Docs (`LCDC.md`) says the background and window "become blank
+(white)", which is what Mercury draws; the only test named for it changes the bit mid-line, which a per-line renderer
+cannot be graded on. Mercury keeps white, to be revisited with a per-dot renderer (`Mercury_Native.md` §13.0).*
+
 - **Mercury** writes shade 0 directly (`Ppu.Render.cs:34-38`). `Mercury_Ppu.md` §4.3 states the rule as fact: "it does
   not display colour 0 of BGP".
 - **The references** both show BGP's colour 0: RTL `video.v:1154`; Mesen `GbPpu.cpp:465`
@@ -393,6 +433,8 @@ evidence is blargg's test source**, which states each rule and the failure text 
 
 ### 2.13 `EI; EI` before a dispatch re-enables IME inside the handler **[V Mesen, R RTL]**
 
+*Proven against GBCTR's `EI` and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.3).*
+
 - **Mercury:** `ServiceInterrupt` does not clear `_imeScheduled` (`Cpu.cs:161-167`), so the handler's first `Step` sets
   `Ime` (`:110-114`).
 - **Mesen** clears it (`GbCpu.cpp:96-99`), and its comment names the game: "breaks 'Batman - The Video Game'".
@@ -400,6 +442,8 @@ evidence is blargg's test source**, which states each rule and the failure text 
 - No corpus ROM covers this. **Batman is the witness.**
 
 ### 2.14 Found in passing: an inconsistency inside Mercury **[V]**
+
+*Proven by the cycle harnesses and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.3).*
 
 `STOP` is `Fetch(); _bus.Stop(); return 4;` (`Cpu.Opcodes.cs:47`):
 - Two fetches tick the bus 8 T-cycles.

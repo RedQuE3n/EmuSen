@@ -44,19 +44,22 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
 
         public void WriteObjPaletteIndex(byte data) => ObjPaletteIndex = (byte)(data & 0xBF);
 
-        public byte ReadBgPaletteData() => BgPaletteRam[BgPaletteIndex & 0x3F];
+        // The PPU reads colour RAM while it draws, so the data ports are closed then and only the index moves - see Mercury_Native.md §13.8.
+        private bool PaletteRamBusy => LcdEnabled && Mode == PpuMode.Drawing;
 
-        public byte ReadObjPaletteData() => ObjPaletteRam[ObjPaletteIndex & 0x3F];
+        public byte ReadBgPaletteData() => PaletteRamBusy ? (byte)0xFF : BgPaletteRam[BgPaletteIndex & 0x3F];
+
+        public byte ReadObjPaletteData() => PaletteRamBusy ? (byte)0xFF : ObjPaletteRam[ObjPaletteIndex & 0x3F];
 
         public void WriteBgPaletteData(byte data)
         {
-            BgPaletteRam[BgPaletteIndex & 0x3F] = data;
+            if (!PaletteRamBusy) BgPaletteRam[BgPaletteIndex & 0x3F] = data;
             BgPaletteIndex = Advance(BgPaletteIndex);
         }
 
         public void WriteObjPaletteData(byte data)
         {
-            ObjPaletteRam[ObjPaletteIndex & 0x3F] = data;
+            if (!PaletteRamBusy) ObjPaletteRam[ObjPaletteIndex & 0x3F] = data;
             ObjPaletteIndex = Advance(ObjPaletteIndex);
         }
 

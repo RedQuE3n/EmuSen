@@ -2279,3 +2279,957 @@ not to be equivalent, and has its test.
   default take theirs from C#'s `CompatibilityPalettes`, which would need freezing as data when the C# core moves.
 - **The legacy differential project** pins the core ABI, the state format and the input script, and now also the four
   test extensions the rig calls (`mercuryrt_core_step`, `_tick`, `_stop`, `_serial`).
+
+## 13. The audit of the referee's candidates (2026-10-15)
+
+*Decided 2026-10-14:* the defect candidates of `Mercury_Referee.md` §2 are audited before stage 9, so that the goldens C#
+records are recorded after the fixes. Q4's rule holds (§5): a defect is fixed in C# Mercury and MercuryRT together, and
+the two engines stay identical. This section is the audit's record, step by step, in the shape of `Moon_Native.md`
+§3.8–§3.12.
+
+### 13.0 The split, written before any code
+
+**The evidence, and what is not evidence.** The referee page found each candidate by reading two other implementations,
+the MiSTer core's RTL and Mesen 2. Those readings are leads. Nothing in this section rests on them, and neither tree was
+opened for it. A defect is proven by one of two things, and a fix is graded by the same:
+
+- **a test ROM's own source**, which states the rule it checks and, for mooneye, the M-cycle at which each access is
+  expected. blargg's sources ship with the corpus. mooneye's do not ship with the release the corpus was taken from
+  (`mts-20240926-1737-443f6e1`), so the test suite's repository was cloned beside it, MIT-licensed, at `31510e1`
+  (2026-07-14), into the scratch directory (`~/.cache/emusen/probe/mercury/sources/`);
+- **a public document**: Pan Docs (`gbdev/pandocs` at `0191af0`, 2026-10-03), and Gekkio's *Game Boy: Complete Technical
+  Reference* (`Gekkio/gb-ctr` at `5ce83a1`, 2026-08-16, CC BY-SA), whose instruction tables give every access its
+  M-cycle. Both were cloned to the same place. Nothing from either is copied into the tree; each rule is cited by file.
+
+A candidate is **proven** by a WiseMan test that fails on both engines, through `MercuryRig` or `ICore`, before the fix,
+and passes after. It is **refuted** when its own test or the documents contradict it, and the test is kept. It is **out
+of reach** when the only sources for the rule are the forbidden ones. It is **a question** when building it would change
+something a player sees by choice rather than by correction, or would add a setting or a surface.
+
+**The order.** The steps follow the subsystems, in order of how little interpretation stands between the test and the
+claim. §2.1–§2.4 come first, as the referee page asks. §2.5 follows §2.4, because §2.4's experiment decides how many of
+the thirteen instruction-timing ROMs are left for it.
+
+| Step | Candidates | Proven or graded by | Reach |
+|---|---|---|---|
+| A, read-back | §2.1 unmapped I/O reads `$FF`; HDMA1–4 write-only (§2.1's last paragraph); the undocumented `$FF72`–`$FF77` | blargg `dmg_sound`/`cgb_sound` `01-registers` (the mask row at `01-registers.s:115`); mooneye `bits/unused_hwio-GS` and `misc/bits/unused_hwio-C`, whose sources list every address and mask; Pan Docs `CGB_Registers.md` (HDMA1–4 "write-only"; `$FF72`–`$FF75`), `Audio_details.md` (PCM12/PCM34) | reachable |
+| B, timer | §2.2 the reload cycle's write arbitration | mooneye `timer/tima_write_reloading`, `timer/tma_write_reloading`; Pan Docs `Timer_Obscure_Behaviour.md`, "Timer overflow behavior", rules 1–3 | reachable; `rapid_toggle` is examined in the step, not assumed |
+| C, the CPU's dispatch | §2.3 the vector chosen after the high push; §2.14 STOP's cycle count; §2.13 `EI` before a dispatch | `interrupts/ie_push`, whose comments state the rule round by round; §2.14 is Mercury against its own count, a unit test; §2.13 against GBCTR's interrupt and `EI` description | §2.3 and §2.14 reachable; §2.13 reachable only if GBCTR or Pan Docs states it |
+| D, OAM DMA | §2.4 the start delay, then the experiment on the thirteen instruction-timing ROMs | `oam_dma_start`, `oam_dma_timing`, `oam_dma_restart`, whose headers give the M-cycle at which OAM closes; Pan Docs `OAM_DMA_Transfer.md` | reachable |
+| E, access placement | §2.5 PUSH, RST, RET cc; §3's CALL | each `*_timing` ROM's header (e.g. `push_timing.s`: "M = 1: internal delay; M = 2: memory access for high byte"); GBCTR's per-instruction tables | reachable; after D |
+| F, cartridge boards | §2.8: the RAM bank masked by the RAM's size; MBC1M; MBC3's clock; MBC5's RAM enable | `emulator-only/mbc1/ram_64kb` and `multicart_rom_8Mb`, verified by their author on a genuine MBC1; Pan Docs `MBC1.md` (MBC1M, and how such a cartridge is identified), `MBC3.md`, `MBC5.md` | the first two reachable. **MBC5's eight-bit compare is contradicted by Pan Docs** (`MBC5.md:30`, "any value whose bottom 4 bits equal $A"), so it is examined as a refutation. **MBC3's four rules are out of reach**: Pan Docs states none of them, and the ROMs that test them (rtc3test, `mbc3_rtc_prelim`) are not in the corpus |
+| G, the joypad interrupt | §2.7 | Pan Docs `Interrupt_Sources.md`, "INT $60" (a high-to-low change of P1 bits 0–3); a synthetic program | reachable; no corpus ROM tests it |
+| H, colour registers | §2.11 the palette data ports in mode 3; SVBK's read-back | Pan Docs `Palettes.md:56` (writes ignored, reads `$FF`, in mode 3) and `:81` (the index still increments); `CGB_Registers.md`'s SVBK table (bits 2–0 read/write, 0 maps bank 1) | the first reachable from the document; SVBK's rests on reading a bit table, and is built only if the table is unambiguous |
+| I, HDMA | §2.9: the double-speed charge; a cancelled transfer's `$FF55`; the destination's overflow; HDMA during HALT; a start in hblank; a start with the LCD off | Pan Docs `CGB_Registers.md`, "Transfer Timings" (8 µs a block at either speed: 16 fast M-cycles), "Reading from Register FF55" (bit 7 reads 1 with the blocks left), the overflow warning, the HALT paragraph | the first four reachable from the document; **a start in hblank** is left by Pan Docs as "should not be started" and **a start with the LCD off** is not described, so both are out of reach |
+| J, sound | §2.10's rows | each blargg ROM's source, which states the rule and prints the failure Mercury printed | reachable row by row; `10-wave trigger while on` (§3) is examined, not assumed |
+| K, STAT and the LCD's edges | §2.6 rules 1–6 | mooneye `ppu/*` sources and Pan Docs `STAT.md` | reachable; the most interpretation stands here, so it comes last |
+
+**Questions for the tester, written now and not built** (each recommendation is argued in the step that meets it):
+
+- **§2.12, LCDC bit 0 on a Game Boy.** Pan Docs (`LCDC.md:103`) says the background and window "become blank
+  (white)", which is what Mercury draws; the referee's two readings show BGP's colour 0. The only test named for it,
+  Mealybug's `m3_lcdc_bg_en_change`, changes the bit mid-line, which a per-line renderer cannot be graded on. It changes
+  what a player sees in fade routines, and the public evidence sides with Mercury. *Recommendation:* leave it, record
+  the dispute, and revisit with the per-dot renderer.
+  *Decided 2026-10-15, as recommended:* LCDC bit 0 clear on a Game Boy stays blank (white), as Pan Docs has it. The
+  referee's two readings are recorded as a dispute, to be revisited with a per-dot renderer. Nothing is built.
+- **MBC5's RAM enable** (referee §2.8; §13.6). GBCTR says only `$0A` enables RAM; Pan Docs says any value whose low
+  nibble is `$A`. Mercury follows Pan Docs, and no test ROM settles it. *Recommendation:* keep Pan Docs' rule, since the
+  other could cost a game its saves, until a test ROM or a cartridge settles it.
+- **HDMA during HALT** (referee §2.9; §13.9). Pan Docs says an hblank transfer pauses while the CPU is halted. Building
+  it needs the CPU to tell the bus it is halted, a new member of `ICpuBus`/`CpuBus` in both engines. *Recommendation:*
+  add it (`ICpuBus.Halted`, set where HALT is entered and left), with Pan Docs as the oracle and MagenTests' HDMA case
+  fetched as a witness if its licence allows.
+- **§3's further leads** (the speed switch's duration, the serial port's transfer time, DMG `STOP`, the post-boot DIV)
+  are outside §2 and are not part of this audit.
+
+**What a step does.** For each step: a test that fails on both engines first, committed with the step; the fix in
+`Mercury - GB-GBC/` and `MercuryRT - GB/` together; the crate's bench and C#'s cost before and after; the corpus
+baseline re-recorded only for the ROMs that move, every move named; hand-made mutants of each fix in both engines, each
+caught by a named oracle; and the four games' state traces, which must not move unless the move is explained.
+
+### 13.1 Step A: what an I/O read answers
+
+**The rule.** An I/O address that no register answers reads `$FF` and keeps nothing written to it. Before this step,
+every `$FF00`–`$FF7F` address that no case claimed fell through to the `Io` array, which stored a write and returned it,
+and read `$00` after power-on. That is the referee's §2.1. The evidence is the tests' own:
+
+- mooneye `acceptance/bits/unused_hwio-GS` lists every unused address of a Game Boy and says "unused bits and unused IO
+  all return 1s", verified on DMG, MGB, SGB and SGB2;
+- its sibling `misc/bits/unused_hwio-C` lists the Color's, verified on CGB, AGB and AGS. It runs a Game Boy cartridge,
+  so it describes the compatibility mode (`Mercury_Model.md` §4). It also fixes what the undocumented registers do
+  there: `$FF72` and `$FF73` keep all eight bits, `$FF75` bits 4–6, `$FF74` reads `$FF`, and `$FF76`/`$FF77` read the
+  silent channels' zero;
+- blargg's `01-registers` ORs each sound register with a mask, and its row for `$FF27`–`$FF2F` is nine `$FF`s
+  (`dmg_sound/source/01-registers.s:115`).
+
+Pan Docs adds the colour mode's side, for which no corpus ROM exists: HDMA1–4 are write-only and read `$FF` after boot
+(`CGB_Registers.md`; `Power_Up_Sequence.md`'s table); `$FF72`–`$FF74` are fully read/write in colour mode and `$FF75`
+bits 4–6; RP (`$FF56`) has its read-enable and LED bits writable and reads `$3E` after boot, bit 1 being 1 while no
+light arrives; OPRI keeps its one bit; PCM12 and PCM34 are the four channels' digital outputs, a nibble each
+(`Audio_details.md`). IR.md's general statement, "like other Game Boy MMIO registers, unused bits read high", is the
+rule the two OPRI and RP read-backs follow.
+
+**The proof.** `MercuryAuditClaims` (`EmuSen.WiseMan/Cores/MercuryAuditTests.cs`) states nine claims, eleven cases with
+the theories, run as `MercuryAuditTests` on C# and `MercuryRtAuditTests` on MercuryRT. Committed while they failed
+(`753654eb`): **18 of 18 failed, on both engines**, the Game Boy's for example with "`$FF03` wrote 00 read 00".
+
+**The fix,** the same in both engines (`MemoryBus.ReadIo` and `WriteIo`, `MemoryBus.Cgb.cs`; `bus.rs`):
+
+- the fall-through reads `$FF` and drops the write, on every console and in both colour modes;
+- `$FF46` gained its own read case, since DMA's read-back had been riding on the fall-through;
+- colour mode answers `$FF4D`, `$FF4F`, `$FF55`, `$FF56`, `$FF68`–`$FF6C` and `$FF70`, then `$FF72`–`$FF77`;
+- the compatibility mode answers `$FF4F`, `$FF68`, `$FF6A`, then `$FF72`, `$FF73`, `$FF75`–`$FF77`; the explicit
+  list of registers it locked is gone, because locking is now what every other address does;
+- `Apu.Pcm12`/`Pcm34` (`pcm12`/`pcm34`) read the channels' existing `Output`.
+
+`$FF56`, `$FF6C` and `$FF72`–`$FF75` keep their bits in the `Io` array, which is already in the state, at their own
+offsets. **The state format is unchanged**: no field was added, and the `Io` bytes of addresses nothing answers now stay
+zero.
+
+**The corpus** (re-recorded, `MercuryCorpusBaseline.tsv`):
+
+| ROM | Before | After |
+|---|---|---|
+| `blargg/dmg_sound/rom_singles/01-registers` | Failed(2), every column | **Passed**, every column |
+| `blargg/cgb_sound/rom_singles/01-registers` | Failed(2), every column | **Passed**, every column |
+| `blargg/dmg_sound/dmg_sound`, `blargg/cgb_sound/cgb_sound` | Failed(1) | Failed(3): the combined ROMs now stop at their third test, `03-trigger` |
+| `mooneye/acceptance/bits/unused_hwio-GS` | Failed | **Passed** under Auto and Game Boy on both engines; Failed under Game Boy Color, where its author's hardware fails it too |
+| `mooneye/misc/bits/unused_hwio-C` | Failed | **Passed** under Game Boy Color on both engines; Failed under Auto and Game Boy, as on a DMG |
+
+So each column gains three passes, 94 → 97 of 173, and the engines agree on every ROM in every column.
+
+**Retired.** The referee page named `boot_hwio-dmgABCmgb` and `misc/bits/unused_hwio-C` as plausible. The second passed,
+but only with the Color's undocumented registers added, which §2.1 did not name. The first still fails, as does
+`misc/boot_hwio-C` under Game Boy Color (`Mercury_Model.md` §6.3 put it down to §2.1). Their tables also require the
+post-boot values the boot ROM leaves, P1 `$CF`, IF `$E1` and DIV `$AD` among them, which is the referee's §3 and not
+part of this audit.
+
+**The four games.** `MercuryDefectTests.D3_real_games_version_5_states_resume_where_the_unmodified_build_went` runs each
+game from the unmodified build's frame-3,000 state for 600 frames on both engines, with the bench's input, and compares
+the result with that build's frame-3,600 state. It had been failing since state version 8 (§10), unnoticed because it
+runs only with `EMUSEN_MERCURY_V5_STATES` set: a version-5 state carries no mixer, so the loaded frame-3,600 state's
+mixer is not the game's. It was shown failing on the unmodified code at Kirby's byte 17,345, the second byte of the
+mixer's first double, and now compares the state up to where version 8's mixer begins. With that repair it passes
+after this step: the four games run exactly as the unmodified build ran them. A scratch trace of 3,600 frames from
+boot on MercuryRT (`~/.cache/emusen/probe/mercury/audit/trace/`) gave the same full-state hash at every 300th frame
+before and after: none of the four games writes an address nothing answers in that time.
+
+**Cost** (p50 ms of 3,000 frames after 900, three interleaved rounds; the crate's `examples/frames`, and C#'s plain
+frame through `MercuryCore` in Release, measured 2026-10-15):
+
+| Game | MercuryRT before | after | C# before | after |
+|---|---|---|---|---|
+| Tetris | 0.4268, 0.4261, 0.4231 | 0.4394, 0.4330, 0.4350 | 0.6284, 0.6401, 0.6214 | 0.6280, 0.6224, 0.6293 |
+| Kirby's Dream Land | 0.4836, 0.4806, 0.4789 | 0.4792, 0.4843, 0.4793 | 0.6703, 0.6762, 0.6676 | 0.6795, 0.6768, 0.6853 |
+| Link's Awakening | 0.3978, 0.3967, 0.3977 | 0.3995, 0.3992, 0.3982 | 0.5542, 0.5570, 0.5576 | 0.5619, 0.5588, 0.5572 |
+| Pokémon Yellow | 0.5298, 0.5285, 0.5314 | 0.5360, 0.5374, 0.5361 | 0.7171, 0.7177, 0.7158 | 0.7149, 0.7415, 0.7155 |
+
+The change is not on the per-cycle path: only the I/O read and write's fall-through moved. Rust's Tetris is 2.4% slower
+and Yellow 1.2%, outside their round-to-round spread; C# moves within 1.3% either way. A read of an unclaimed address
+cannot cost a frame 2%, so this is the placement effect of §8.7.3 on a changed `match`, and is recorded rather than
+explained further.
+
+**Mutants.** Every mutant of this audit is one edit in a scratch copy of the tree at the step's commit
+(`~/.cache/emusen/probe/mercury/audit/mut/`, `mut.py`): a Rust edit rebuilds the library and runs the crate's tests, a
+C# edit rebuilds `EmuSen.dll`; either goes into a copy of WiseMan's output, which runs the audit's claims and, where
+named, a wider filter; the edit and the output are restored after each. The unmutated control passes first. Step A's,
+each made in C# (c) and in Rust (r) separately:
+
+| # | Mutation | Caught by, in both engines |
+|---|---|---|
+| A1 | the fall-through reads the `Io` array again | `On_a_game_boy_every_unclaimed_io_address_reads_ff_and_keeps_no_write` |
+| A2 | HDMA1 readable in colour mode | `On_a_game_boy_color_in_colour_mode_the_gaps_and_the_hdma_addresses_read_ff` |
+| A3 | `$FF74` readable in the compatibility mode | the undocumented registers' compatibility case, and the compatibility gaps |
+| A4 | `$FF75` stores bits 0–6 | **no read**: bits 0–3 read 1 whatever is stored. Caught only by the lock-step corpus run (`The_hardware_corpus_runs_identically_on_each_console`), where `unused_hwio-C` writes `$FF75` and the two engines' states then differ; a mutant made in both engines at once is equivalent through every read |
+| A5 | RP reads light received | `The_infrared_port_reads_its_writable_bits_and_no_light` |
+| A6 | PCM12's nibbles swapped | both `Pcm12_carries_pulse_twos_digital_output_in_its_high_nibble` cases |
+| A7 | `$FF46`'s read case removed, so DMA's read-back falls to `$FF` | **only the corpus baseline**, three columns; so a claim was added, `The_dma_register_reads_back_the_page_written` |
+| A8 | OPRI's unused bits read 0 | `Opri_reads_back_its_one_bit_in_colour_mode` |
+| A9 | (C#) an unclaimed write still lands in `Io`, reads unchanged | seven lock-step cases: the random programs instruction by instruction, and the corpus rom by rom |
+
+### 13.2 Step B: the timer's reload cycle
+
+**The rule.** Pan Docs (`Timer_Obscure_Behaviour.md`, "Timer overflow behavior") names two machine cycles after TIMA
+overflows: in cycle A TIMA reads `$00`; in cycle B TMA is copied into it and the interrupt is requested. Three rules
+follow, and mooneye's `timer/tima_write_reloading` and `timer/tma_write_reloading` test the last two at exactly those
+cycles, 27 to 30 and 28 to 31 `NOP`s after the timer is armed:
+
+1. a TIMA write in cycle A cancels the reload and the interrupt;
+2. a TIMA write in cycle B is lost: "TIMA will be equal to TMA at the end of the cycle anyway";
+3. a TMA write in cycle B reaches TIMA in the same cycle.
+
+Mercury had rule 1 (§7 of the referee page corroborates it) and not 2 or 3: its reload was a one-T-cycle event with
+nothing after it, and a CPU write lands at the end of its machine cycle, after the reload, so it won.
+
+**The proof.** Four claims (`MercuryAuditClaims`, the timer at 262,144 Hz one count from overflowing): rule 1, rules 2
+and 3, and a control one cycle later. Committed failing (`bc6f6cf5`): rules 2 and 3 failed on both
+engines, TIMA reading `$7F` where `$FE` was expected and `$FE` where `$7F` was; rule 1 and the control passed, as they
+should.
+
+**The fix.** `_timaReloadDelay` (`tima_reload_delay`) already counted the T-cycles to the reload. It now also counts
+the rest of the machine cycle the reload landed in, as a negative number: −4 at the reload, back to 0 four T-cycles
+later. A TIMA write while it is negative is dropped, and a TMA write while it is negative is copied into TIMA. Counting
+in T-cycles rather than flagging "this machine cycle" keeps the rule right when a DIV or TAC write makes the overflow
+fall on the first T-cycle of a machine cycle instead of the fourth.
+
+- **The state format is unchanged.** The field and its width are the same. A state from an older build never holds a
+  negative value, and means the same thing to this one. A state this build writes in the four T-cycles after a reload
+  holds a negative value, which an older build reads as idle: the right answer, since its reload has already happened.
+- **Cost.** The first version tested `< 0` before `> 0` on every T-cycle, and cost the crate 1.3–2.4% on three games
+  (Tetris 0.4278 → 0.4394 ms p50, Kirby 0.4833 → 0.4896). The rare work now sits behind one `!= 0` test, as before the
+  fix, in `StepTimaReload`/`step_tima_reload`:
+
+| Game | MercuryRT step A | step B | C# step A | step B |
+|---|---|---|---|---|
+| Tetris | 0.4349, 0.4337, 0.4305 | 0.4352, 0.4267, 0.4354 | 0.6191, 0.6229, 0.6235 | 0.6270, 0.6251, 0.6306 |
+| Kirby's Dream Land | 0.4838, 0.4824, 0.4809 | 0.4801, 0.4839, 0.4863 | 0.6705, 0.6803, 0.6669 | 0.6927, 0.6875, 0.6803 |
+| Link's Awakening | 0.3958, 0.3973, 0.3949 | 0.3963, 0.3984, 0.4014 | 0.5768, 0.5555, 0.5574 | 0.5550, 0.5591, 0.5534 |
+| Pokémon Yellow | 0.5311, 0.5380, 0.5366 | 0.5342, 0.5363, 0.5378 | 0.7026, 0.7092, 0.7264 | 0.7071, 0.7124, 0.7212 |
+
+  MercuryRT is within its round-to-round spread on all four. C#'s Kirby is 2% slower and the rest within 1%; C# moved
+  by as much between two runs of the same build in step A.
+
+**The corpus.** `tima_write_reloading` and `tma_write_reloading` pass, in all six columns; nothing else moved. 99 of 173
+in each column.
+
+**`timer/rapid_toggle`, examined.** It still fails, and the referee page offered no mechanism. Run to its timer
+interrupt on C#, it arrives with BC = `$FFD8`; its source expects `$FFD9`. So the sixteenth increment comes one loop
+iteration, 17 machine cycles, late. Each iteration enables and disables the timer, and on a DMG a disable while the
+selected bit is high counts once (Pan Docs, "Relation between Timer and Divider register"), which Mercury models; how
+many iterations disable with bit 9 high depends on where in a machine cycle a TAC or DIV write takes effect, which
+Mercury puts at the cycle's end. No public document states that phase (GBCTR has no timer chapter yet), so the ROM is
+**out of reach** for this audit, and its mechanism is recorded as a lead, not a finding.
+
+**The four games** ran as the unmodified build ran them: the real-games version-5 test passed, and MercuryRT's trace of
+3,600 frames from boot is unchanged at every 300th frame. The whole `Mercury` filter, with the games and the corpus,
+passed: 779 cases.
+
+**Mutants**, each in C# and in Rust separately:
+
+| # | Mutation | Caught by, in both engines |
+|---|---|---|
+| B1 | a TIMA write in the reload cycle lands | `A_tima_write_in_the_reload_cycle_is_ignored` |
+| B2 | a TMA write in the reload cycle stays in TMA | `A_tma_write_in_the_reload_cycle_reaches_tima_as_well` |
+| B3 | the window one T-cycle short | at first only the lock-step window program, `The_window_counts_its_lines_with_rendering_skipped_instruction_by_instruction`, which caught each engine's mutant against the other's code; a mutant made in both engines would have survived. A claim was added for the case it needs, a reload on a cycle's first T-cycle after a DIV write: `A_reload_that_lands_early_in_its_cycle_still_ignores_a_tima_write_at_the_cycles_end` |
+| B4 | the window one T-cycle long | `After_the_reload_cycle_tima_and_tma_writes_are_ordinary` |
+| B5 | the window counts away from zero and never closes | `After_the_reload_cycle_tima_and_tma_writes_are_ordinary` |
+
+### 13.3 Step C: the interrupt dispatch, `EI` before it, and STOP's count
+
+**The rules, and their sources.**
+
+- **The vector is chosen between the two pushes** (referee §2.3). mooneye's `interrupts/ie_push` states it round by round
+  in its source: with SP at `$0000` the high byte of PC is written to IE, and if that leaves nothing enabled "PC is set to
+  `$0000` instead of the normal jump address", IF keeps its bit and IME stays clear (rounds 1–2); if it leaves a lower
+  priority enabled, that one is dispatched and the higher stays requested (round 4); the low byte, written to IE with SP
+  at `$0001`, is "too late to cancel" (round 3). Mercury chose the vector from IE & IF at the start of the step.
+- **Where the dispatch's writes fall.** Pan Docs (`Interrupts.md`, "Interrupt handling"): two wait states, then PC pushed
+  in two more machine cycles, then the jump in a fifth. Mercury pushed in the first two and settled the other three at
+  the end. ie_push alone does not need this, since only the order of the two pushes and the choice matters to it; the
+  document does, and the referee page recorded the placement as a three-way disagreement that Pan Docs settles.
+- **`EI` before a dispatch** (referee §2.13). GBCTR gives `EI` as `IR, intr = fetch_cycle(addr=PC); ... IME = 1`: IME is
+  set in the machine cycle after `EI`, which is the next instruction's fetch. After `EI; EI`, the second `EI`'s effect is
+  spent before the dispatch that follows it, and the dispatch clears IME. Mercury kept `_imeScheduled` through the
+  dispatch, so the handler's first step set IME, allowing a nested interrupt the hardware would not take. Pan Docs says
+  only that the effect is "delayed by one instruction", which both readings satisfy. The game the referee page names,
+  Batman – The Video Game, was not run: the document is the evidence here, and the game a witness for later.
+- **STOP's count** (referee §2.14). `STOP` fetches its two bytes, eight T-cycles, and reported four; the frame's budget
+  and `Cpu.Cycles` undercounted every STOP by four. No outside source is needed: the cycle harnesses' existing claim that
+  "the bus advances by exactly what the step reports" fails for `$10`.
+
+**The proof** (committed failing, `67e36e58`):
+
+- `MercuryAuditClaims`: rounds 1 and 4 of ie_push, `EI; EI` with IME read in the handler, and STOP's step, failed on both
+  engines; round 3, the control, passed on both.
+- `MercuryCycleTimingTests` on C# and `tests/cycle_timing.rs` on the crate, the two harnesses that record each tick and
+  access in order (§12.1): the dispatch's writes after 12 and 16 T-cycles, and `$10` in the "bus advances" theory,
+  failed on both.
+
+**The fix**, the same in both engines:
+
+- `ServiceInterrupt` ticks the two wait states, writes the high byte, reads what is pending, writes the low byte and
+  jumps to the vector, or to `$0000`; IME and the scheduled `EI` are both cleared. The bit it reports is the one chosen
+  after the push, or −1 for a cancelled dispatch, so the frame loop's acknowledge clears the right IF bit, or none.
+- What is pending is read through a new member of the CPU's bus, `ICpuBus.PendingInterrupts` (`CpuBus::pending_interrupts`),
+  IE & IF's five live bits, rather than through a read of `$FFFF` and `$FF0F`, which would show in a debugger's trace as
+  accesses the CPU never makes. It is the bus's only new surface; the two harnesses' recording buses answer it from their
+  memory, and their existing dispatch claim now sets IE and IF there as well as passing them to the step.
+- STOP returns eight.
+- **The state format is unchanged.**
+
+**The corpus.** `interrupts/ie_push` passes in all six columns; nothing else moved, so the write placement moved none
+of the timing ROMs (`intr_timing`, `di_timing-GS`, `reti_intr_timing`, `halt_ime1_timing2-GS` and the rest pass as
+before). 100 of 173 in each column.
+
+**The four games** are unchanged: MercuryRT's trace from boot is identical at every 300th frame, and the real-games
+version-5 test passes.
+
+**The recorded platform digests moved, and why** (`MercuryRtPlatformTests`, §8.6, §9.4, §10). After 600 frames, two of
+the four synthetic programs' state digests changed, and nothing else: every sound and picture digest is as recorded, and
+the two engines agree on every digest.
+
+- *colour*: one field differs, `Cpu.Cycles`, by 12: the program executes STOP three times in 600 frames, and each now
+  counts four more T-cycles. That is §2.14 and nothing else.
+- *interrupts*: one byte differs, `$C102`, the timer handler's counter, which reads `$8E` where it read `$B3`, six fewer
+  timer handlers every 100 frames while the vblank and STAT counters are unchanged. The program takes timer interrupts
+  every 256 T-cycles beside vblank and STAT. When vblank or STAT is requested in a timer dispatch's first three machine
+  cycles, the late choice now serves it first, the timer stays requested through a long vblank handler, and its next
+  overflow merges with the pending one. To separate the two halves of the fix, a scratch copy of the crate with the new
+  write placement but the vector chosen at the start of the dispatch was run on the same program: its state after 600
+  frames is byte for byte step B's. The placement moves nothing here; the late choice moves this.
+
+The new digests were recorded for both (the `stateVersion7` column too, which is the same state with its version set back
+and the mixer removed, so it moves with the state). They are linux-x64's; Windows and macOS meet them on CI's next run.
+
+**Cost** (as in §13.1; from this step on other work shared the machine, load average about 3):
+
+| Game | MercuryRT step B | step C | C# step B | step C |
+|---|---|---|---|---|
+| Tetris | 0.4394, 0.4364, 0.4306 | 0.4354, 0.4329 (and one round of 0.8868, a stall) | 0.6343, 0.6253, 0.6310 | 0.6562, 0.6217, 0.6345 |
+| Kirby's Dream Land | 0.4908, 0.4914, 0.4917 | 0.4982, 0.4919, 0.4822 | 0.6904, 0.6930, 0.6926 | 0.7057, 0.6934, 0.6899 |
+| Link's Awakening | 0.4021, 0.4024, 0.3995 | 0.3987, 0.4029, 0.3987 | 0.5610, 0.5679, 0.5636 | 0.5624, 0.5641, 0.5703 |
+| Pokémon Yellow | 0.5302, 0.5284, 0.5348 | 0.5482, 0.5418, 0.5488 | 0.7210, 0.7187, 0.7160 | 0.7226, 0.7154, 0.7238 |
+
+The dispatch runs a few times a frame and STOP never in these games, so the work cannot cost a measurable fraction of a
+frame. Yellow on MercuryRT looked 3% slower; four more alternating pairs gave 0.5326–0.5390 before and 0.5350–0.5452
+after, about 1%, which is within what placement and the shared machine move.
+
+**Mutants**, each in C# and in Rust separately:
+
+| # | Mutation | Caught by |
+|---|---|---|
+| C1 | the vector chosen before the high push | ie_push's rounds 1 and 4, both engines |
+| C2 | a cancelled dispatch jumps to `$0040` | ie_push's round 1, both engines |
+| C3 | the scheduled `EI` survives the dispatch | `Ei_ei_before_a_dispatch_leaves_ime_clear_in_the_handler`, both engines |
+| C4 | the wait states after the push instead of before | C#: `MercuryCycleTimingTests.A_dispatch_pushes_on_its_third_and_fourth_machine_cycles`; Rust: the crate's `a_dispatch_pushes_on_its_third_and_fourth_machine_cycles`. Nothing through the rig sees it, as §12.1 found for every placement claim: the step's total is the same |
+| C5 | STOP reports four | the rig's STOP claim on both engines, and each harness's "bus advances" theory |
+
+### 13.4 Step D: OAM DMA's start delay, and the experiment on the instruction-timing ROMs
+
+**The rule.** mooneye's `oam_dma_start` states the timing in its header: "M = 0: write to `$FF46` happens; M = 1: nothing
+(OAM still accessible); M = 2: new DMA starts, OAM reads will return `$FF`", and for a restart, that the previous
+transfer runs on, OAM closed, through M = 0 and M = 1. `oam_dma_timing` aligns one read to "exactly one cycle before the
+OAM DMA end" and one "exactly after": counting its loop, OAM is closed at the 161st machine cycle after the write and
+open at the 162nd. So the transfer owns OAM for machine cycles 2 to 161, 160 of them, as Pan Docs' "160 M-cycles"
+(`OAM_DMA_Transfer.md`) requires. Mercury started the transfer inside the write and closed OAM from machine cycle 1 to
+159.
+
+**The proof.** Three claims from those headers (`Oam_stays_open_for_one_machine_cycle_after_the_dma_write`,
+`Oam_is_closed_from_the_second_to_the_161st_machine_cycle_after_the_write`,
+`A_restarted_dma_keeps_oam_closed_and_ends_160_cycles_after_its_start`), committed failing on both engines (`2fcd47f9`).
+
+**The fix**, the same in both engines. The write sets a start delay of five T-cycles; the transfer starts on the fifth,
+the first T-cycle of machine cycle 2, latching its page from `$FF46`; a transfer already running carries on until then.
+Mercury lands a CPU access at the end of its machine cycle, after the rest of the machine has run it, so a transfer that
+owns OAM through machine cycle 161 must still read as running at that cycle's end: its counter covers 161 machine cycles
+(644 T-cycles) and copies a byte on the fourth T-cycle of each of cycles 2 to 161. The idle test at the top of the step
+stays one comparison, of the counter and the delay together.
+
+**State version 9.** The delay is machine state the walk cannot carry: a new field in `MemoryBus` would sit in the middle
+of the reflection walk and move every older state's bytes. So it follows the mixer, as version 8's mixer followed the
+walks (§10): `MemoryBus.WriteTail`/`ReadTail` in C#, `write_tail`/`read_tail` under the group `Bus` in Rust, with the
+field `[SkipInState]` in C#. Both engines write 9 and read 5 to 9; a state before 9 loads with no start pending, since
+its transfers started at the write. `A_version_8_state_loads_with_no_dma_start_pending` shows it on both engines: a
+version-9 state saved one T-cycle after a DMA write, cut to version 8, loads with the delay zero and every other byte as
+saved. The layout listing (`MercuryRtStateTests`), the real-games and version-5 tests' tail, and the platform test's
+conversion to version 7 learned the four bytes; that conversion gives each of the four synthetic programs exactly its
+step-C version-7 digest, so nothing but the version and the tail moved in their states, and their state digests were
+re-recorded for that.
+
+**Three older claims described the old model** and were brought to the documented one, in both engines' classes:
+`Oam_dma_copies_a_page_into_sprite_memory` (161 machine cycles, not 160), `Oam_dma_is_still_running_half_way_through`
+(not running one cycle after the write, still running at the 161st, done at the 162nd) and
+`Oam_reads_ff_while_a_dma_is_running` (open at 1, closed from 2 to 161, open at 162).
+
+**The corpus, and the experiment §2.4 asked for.** The referee page argued, without demonstrating it, that the start
+delay rather than CPU access placement explained eight of the thirteen instruction-timing ROMs, and that the first
+experiment was to add the delay and re-run them before touching the CPU. Done, with nothing else changed:
+
+| ROM | Before | After |
+|---|---|---|
+| `oam_dma_start`, `oam_dma_timing`, `oam_dma_restart` | Failed | **Passed** |
+| `call_timing`, `call_cc_timing`, `jp_timing`, `jp_cc_timing`, `ret_timing`, `reti_timing`, `add_sp_e_timing`, `ld_hl_sp_e_timing` | Failed | **Passed** |
+| `push_timing`, `rst_timing`, `ret_cc_timing`, `call_timing2`, `call_cc_timing2` | Failed | Failed |
+
+in all six columns, 111 of 173 in each. **The prediction held exactly**: the eight of the referee's right-hand column
+pass, and the five of its left-hand column, the ones whose probed access Mercury places a machine cycle early, still
+fail. §3.4's "internal cycles settled at the end of an instruction, seen through OAM DMA" was true of
+those five and not of the other eight (the referee page's correction 1, §10, now settled). The five are step E's.
+
+**The four games.** The real-games test passes (their states after 600 frames, up to the tail, are the unmodified
+build's), and MercuryRT's trace from boot keeps the same PC, work RAM and VRAM at every 300th frame; its full-state hash
+moved, by the version and the tail. The whole `Mercury` filter passes, 799 cases.
+
+**Cost:**
+
+| Game | MercuryRT step C | step D | C# step C | step D |
+|---|---|---|---|---|
+| Tetris | 0.4302, 0.4387, 0.4340 | 0.4404, 0.4425, 0.4409 | 0.6325, 0.6301, 0.6247 | 0.6366, 0.6289, 0.6304 |
+| Kirby's Dream Land | 0.4900, 0.4997, 0.4894 | 0.4961, 0.4931, 0.4926 | 0.6944, 0.7006, 0.6840 | 0.6792, 0.6873, 0.6793 |
+| Link's Awakening | 0.4023, 0.4036, 0.3966 | 0.4063, 0.4014, 0.4040 | 0.5614, 0.5590, 0.5570 | 0.5637, 0.5612, 0.5700 |
+| Pokémon Yellow | 0.5365, 0.5402, 0.5398 | 0.5413, 0.5425, 0.5392 | 0.7231, 0.7181, 0.7136 | 0.7499, 0.7199, 0.7140 |
+
+The idle test now reads two fields where it read one, on every T-cycle. MercuryRT's Tetris is 1.6–2.5% slower and the
+rest within 1%; Tetris has moved by as much between runs of identical code in this audit (0.4231–0.4394 for the code of
+steps A and B), so the step's own cost is under the noise of this shared machine and is not claimed. C# is unchanged.
+
+**Mutants**, each in C# and in Rust separately, all caught by the step's claims on both engines:
+
+| # | Mutation | Caught by |
+|---|---|---|
+| D1 | the transfer starts on the T-cycle after the write | all three timing claims and the version-8 claim |
+| D2 | the transfer starts a machine cycle late | the same four |
+| D3 | the counter ends with the last byte, so OAM opens at the 161st cycle | the timing and restart claims |
+| D4 | a write stops the running transfer | the restart claim |
+| D5 | a state before version 9 keeps the delay the machine held | the version-8 claim |
+
+### 13.5 Step E: where PUSH, RST, CALL and RET cc touch the stack
+
+**The rules.** Each of the five instruction-timing ROMs still failing after step D gives its instruction's machine
+cycles in its header, and GBCTR's instruction tables give the same:
+
+- `PUSH rr` and `RST n`: "M = 1: internal delay; M = 2: memory access for high byte; M = 3: memory access for low byte"
+  (`push_timing.s`, `rst_timing.s`). GBCTR's `PUSH rr` shows why: SP is decremented in M2 before the first write.
+- `CALL nn` and `CALL cc, nn` taken: the operand in M1–M2, "M = 3: internal delay", the pushes in M4–M5
+  (`call_timing2.s`, `call_cc_timing2.s`).
+- `RET cc` taken: "M = 1: internal delay; M = 2: PC pop: memory access for low byte; M = 3: … high byte; M = 4:
+  internal delay" (`ret_cc_timing.s`); GBCTR's `RET cc` has the condition in M2 and the pops in M3–M4.
+
+Mercury ticked each access in place and settled every internal cycle at the end of the instruction
+(`Mercury_Cpu.md` §3.1), so all five put their stack accesses one machine cycle early. The referee page found the first
+three (§2.5) and CALL (its §3, with Mesen alone, the RTL having kept the Z80's order); the test sources and GBCTR settle
+all five without either.
+
+**The proof.** `Each_stack_access_lands_on_the_machine_cycle_the_hardware_gives_it`, in both cycle harnesses (C#'s
+`MercuryCycleTimingTests`, the crate's `tests/cycle_timing.rs`), five cases, the T-cycles ticked before each access:
+committed failing on both engines (`7639db9c`). No claim through the rig can see placement, since a step's total is
+unchanged (§12.1); the corpus and the harnesses are the oracles.
+
+**The fix**, the same in both engines. A push begins with an internal machine cycle of its own, ticked in place
+(`InternalCycle`/`internal_cycle`), which covers PUSH, RST and both CALLs at once, since all three push through it; the
+dispatch of step C ticks its own two wait states and does not use it. A taken `RET cc` ticks its condition cycle before
+its pops. Every instruction's total is unchanged. The harnesses' claim that internal cycles settle at the end of an
+instruction kept its meaning and moved to `RET`, whose internal cycle does follow its pops (`ret_timing.s`: "M = 3:
+internal delay").
+
+**The corpus.** `push_timing`, `rst_timing`, `ret_cc_timing`, `call_timing2` and `call_cc_timing2` pass in all six
+columns, and nothing else moved: 116 of 173 in each. With step D, **all thirteen** instruction-timing ROMs of §3.4 pass.
+
+**The four games** are unchanged, at every 300th frame of MercuryRT's trace and in the real-games test, and so are the
+four synthetic programs' recorded digests. The whole `Mercury` filter passes, 806 cases.
+
+**Cost:**
+
+| Game | MercuryRT step D | step E | C# step D | step E |
+|---|---|---|---|---|
+| Tetris | 0.4345, 0.4363, 0.4452 | 0.4360, 0.4495, 0.4419 | 0.6270, 0.6300, 0.6283 | 0.6400, 0.6297, 0.6523 |
+| Kirby's Dream Land | 0.4938, 0.4920, 0.4968 | 0.4935, 0.4940, 0.4961 | 0.6858, 0.6877, 0.6898 | 0.6775, 0.6838, 0.6787 |
+| Link's Awakening | 0.4058, 0.4040, 0.4050 | 0.4061, 0.4068, 0.4057 | 0.5919, 0.5656, 0.5660 | 0.5682, 0.5601, 0.5681 |
+| Pokémon Yellow | 0.5388, 0.5439, 0.5335 | 0.5478, 0.5409, 0.5535 | 0.7207, 0.7207, 0.7254 | 0.7055, 0.7120, 0.7037 |
+
+The same ticks are issued in a different order, a tick of four split from the end into the middle; every pair overlaps
+within the spread of this shared machine, Yellow's MercuryRT by the least (about 1.5% apart at the medians).
+
+**Mutants**, each in C# and in Rust separately: E1, a push's internal cycle settled at the end again; E2, RET cc's
+condition cycle settled at the end again; E3, the push's internal cycle between its two writes. Each is caught by its
+engine's harness, `Each_stack_access_lands_on_the_machine_cycle_the_hardware_gives_it` (C#: four cases for E1 and E3, one
+for E2; Rust: the one test), and by nothing through the rig, as expected of placement. Without the harnesses the corpus
+would be the only oracle, and CI has no corpus.
+
+### 13.6 Step F: the cartridge boards
+
+**MBC1's RAM bank on a chip of one bank** (referee §2.8, first item). mooneye's `emulator-only/mbc1/ram_64kb`, "verified
+using a flash cartridge with a genuine MBC1B1 chip", expects that "since we have only one 8 kB bank, we always access it
+regardless of what we do with `$4000` and `$6000`". GBCTR's MBC1 chapter gives the mechanism: the RAM's A0–A12 come
+from the cartridge bus, and only A13–A14 from BANK2, so a 64 Kbit chip, which has no A13 or A14, ignores them. Mercury
+computed an offset past the RAM's end in mode 1 and answered `$FF`, dropping the write.
+
+**MBC1M** (referee §2.8, second item). mooneye's `multicart_rom_8Mb` gives the expected bank for every register value;
+its source says a multicart "cannot be detected from the header alone" and needs a heuristic. Pan Docs (`MBC1.md`,
+"MBC1M") gives both the wiring, BANK1 read as four bits for the bank (all five still for the 0→1 rule) and BANK2 on
+bank bits 4–5, and the heuristic: such carts "can normally be identified by having a Nintendo copyright header in bank
+`$10`". Mercury had no MBC1M.
+
+**The proof.** Committed failing (`5ad71031`): `An_mbc1_with_one_ram_bank_answers_every_bank_number_with_it` and
+`An_mbc1_multicart_puts_bank2_on_bank_bits_4_and_5` failed on both engines; the control,
+`A_megabyte_mbc1_without_the_second_logo_banks_as_an_ordinary_mbc1`, passed.
+
+**The fix**, the same in both engines:
+
+- MBC1's RAM bank is taken modulo the number of 8 KiB banks the header gives (`Mbc1.RamBank`, `Mbc1::ram_bank`).
+- MBC1M is decided once, from the image, by `Cartridge.IsMbc1Multicart` (`cartridge::is_mbc1_multicart`): an MBC1 image
+  of exactly 1 MiB whose bank `$10` opens, at `$0104`, with the same 48 bytes as bank 0, provided those bytes are not all
+  one value. Comparing with the cartridge's own logo keeps the logo's bytes out of the tree; the second condition keeps
+  a blank synthetic image from matching itself, and has its own claim
+  (`A_megabyte_mbc1_with_a_blank_logo_in_both_banks_is_ordinary`). Of the corpus's thirteen MBC1 images, only the
+  multicart matches. The result is a shift kept beside the board (`_bank2Shift`, `bank2_shift`, 4 or 5), derived from
+  the image and not in the state, as the header's other facts are.
+- **The state format is unchanged.**
+
+**Two of §2.8's items were not built.**
+
+- **MBC5's RAM enable is a dispute between the two documents.** GBCTR (`mbc5.typ`, "based on my MBC5 research") says
+  RAMG is a full eight-bit register and only `$0A` enables RAM, `$8A` included among the values that disable it; Pan
+  Docs (`MBC5.md`) says actual MBCs enable on any value whose low nibble is `$A`. The referee's two readings side with
+  GBCTR; Mercury follows Pan Docs. No test ROM in the corpus, or known to this audit, writes such a value. A game that
+  enabled RAM with `$1A` would lose its saves under GBCTR's rule, which a player would notice, so this is a question for
+  the tester (§13.0), with the recommendation to keep Pan Docs' rule until a test ROM settles it.
+- **MBC3's clock rules** (seconds resetting the sub-second count, the registers' widths, carrying only at 59/59/23): Pan
+  Docs states none of them, GBCTR's MBC3 chapter is five lines long, and the ROMs that test them (rtc3test,
+  `mbc3_rtc_prelim`) are not in the corpus. **Out of reach.**
+
+MBC3's and MBC5's own RAM banks use the same bounds check MBC1 had. The wiring argument would apply to them, but no test
+ROM or document covers a bank number beyond those boards' chips, so they were left as they are and recorded as an
+argued candidate.
+
+**The corpus.** `emulator-only/mbc1/ram_64kb` and `multicart_rom_8Mb` pass in all six columns; nothing else moved: 118
+of 173 in each, and all 28 `emulator-only` ROMs pass. **The four games** are unchanged (Kirby's Dream Land and Link's
+Awakening are MBC1 boards, the latter with 8 KiB of RAM): MercuryRT's trace and the real-games test. The whole `Mercury`
+filter passes, 814 cases.
+
+**Cost.** MBC1's banks now shift by a field rather than a constant on every ROM read through the board.
+
+| Game | MercuryRT step E | step F | C# step E | step F |
+|---|---|---|---|---|
+| Tetris (no MBC) | 0.4468, 0.4425, 0.4411 | 0.4451, 0.4502, 0.4441 | 0.6571, 0.6378, 0.6404 | 0.6324, 0.6349, 0.6367 |
+| Kirby's Dream Land (MBC1) | 0.4974, 0.5008, 0.5357 | 0.5061, 0.5089, 0.5225 | 0.6773, 0.6837, 0.7132 | 0.6791, 0.6965, 0.6966 |
+| Link's Awakening (MBC1) | 0.4301, 0.4194, 0.4096 | 0.4247, 0.4061, 0.4099 | 0.6058, 0.5834, 0.6208 | 0.5715, 0.5699, 0.5766 |
+| Pokémon Yellow (MBC5) | 0.5544, 0.5495, 0.5620 | 0.5523, 0.5442, 0.5637 | 0.7114, 0.7166, 0.7141 | 0.7322, 0.7150, 0.7204 |
+
+The machine was busier than in earlier steps (round-to-round spread up to 7%), and every pair overlaps; Kirby's
+MercuryRT medians are 0.5008 and 0.5089, 1.6% apart, the largest difference, and within the spread.
+
+**Mutants**, each in C# and in Rust separately:
+
+| # | Mutation | Caught by, in both engines |
+|---|---|---|
+| F1 | the RAM bank not taken modulo the chip | `An_mbc1_with_one_ram_bank_answers_every_bank_number_with_it` |
+| F2 | no image is ever taken for a multicart | `An_mbc1_multicart_puts_bank2_on_bank_bits_4_and_5` |
+| F3 | BANK1 keeps all five bits on a multicart | at first **nothing**: the claim's case BANK2 = 1, BANK1 = `$10` gives bank `$10` either way. The claim gained BANK2 = 0, BANK1 = `$10`, which is bank 0 on an MBC1M (the second row of `multicart_rom_8Mb`'s table) and bank `$10` under the mutant; caught after |
+| F4 | a blank logo counts as a logo | `A_megabyte_mbc1_with_a_blank_logo_in_both_banks_is_ordinary` |
+| F5 | the logo compared at bank `$20` instead of `$10` | the multicart claim |
+
+### 13.7 Step G: the joypad interrupt
+
+**The rule.** Pan Docs (`Interrupt_Sources.md`, "INT $60 — Joypad interrupt"): it is requested "when any of P1 bits 0–3
+change from High to Low", which happens when a button is pressed while its half is selected. A select write that
+pulls a held button's line low is the same edge on the same lines, and is treated as one. Mercury declared the
+interrupt and never requested it (`Mercury_Native.md` §6.2 argued it; the referee's §2.7 names Double Dragon 3 as the
+game the references were fixed for). No corpus ROM tests it.
+
+**The proof.** Four claims (`MercuryAuditClaims`, a program spinning with interrupts off): a press on the selected half,
+and a select write that selects a held button, request it; a press on the other half and a release do not. The two
+requests failed on both engines, committed failing (`606801b9`); the two controls passed.
+
+**The fix**, the same in both engines: P1's four lines are read before and after each change that can move them, a
+button set through the frontend (`MemoryBus.SetButton`, which `MercuryCore.SetButton` now calls; the Rust machine's
+`set_buttons`) and a write to `$FF00`, and a line that fell requests the interrupt. No state is added: the lines are a
+function of the select bits and the buttons. A button reaches either engine at a frame's edge, as it did before; the
+request lands there too.
+
+**The corpus** did not move. **The four games** behave as before: MercuryRT's trace from boot keeps the same PC, work
+RAM and VRAM at every 300th frame, while the full-state hash moved at every one. The difference is IF bit 4: each game
+polls P1 with the bench's Start or A held, which now requests the interrupt, and none of them enables it (the IE values
+each game wrote in 3,600 frames: Tetris `$00`, `$01`, `$08`, `$09`; Kirby `$00`, `$05`; Link's Awakening `$00`, `$01`,
+`$03`; Yellow `$00`, `$0C`, `$0D`, `$0F`; no joypad dispatch in any). Tetris, followed instruction by instruction for 400
+frames on step F's crate and this one, runs the same PC and A throughout and differs first in IF. The real-games test,
+which compares with the unmodified build's states, therefore masks IF bit 4 on both sides; with that, it passes.
+
+**Retired.** §6.2's "a game that sleeps in STOP or HALT waiting for a button ... waits forever" is half answered: HALT
+with IE bit 4 now wakes on a press. DMG `STOP` is still not a stop, which is the referee's §3 and outside this audit.
+
+**Cost.** A `$FF00` write now reads the pad twice more; games poll it a few times a frame.
+
+| Game | MercuryRT step F | step G | C# step F | step G |
+|---|---|---|---|---|
+| Tetris | 0.4447, 0.4424, 0.4442 | 0.4378, 0.4371, 0.4370 | 0.6406, 0.6299, 0.6264 | 0.6370, 0.6275, 0.6613 |
+| Kirby's Dream Land | 0.5005, 0.4985, 0.4956 | 0.4925, 0.4951, 0.4965 | 0.6832, 0.6831, 0.6825 | 0.6842, 0.6884, 0.6803 |
+| Link's Awakening | 0.4050, 0.4033, 0.4025 | 0.4045, 0.4028, 0.4030 | 0.5667, 0.7320, 0.5622 | 0.5620, 0.5591, 0.5656 |
+| Pokémon Yellow | 0.5442, 0.5522, 0.5495 | 0.5468, 0.5400, 0.5520 | 0.7079, 0.7039, 0.7124 | 0.7192, 0.7090, 0.7058 |
+
+No change beyond the spread (Tetris's MercuryRT moved 1.5% faster, which is placement).
+
+**Mutants**, each in C# and in Rust separately, all caught on both engines: G1, a select write requests nothing
+(`Selecting_the_half_of_a_held_button_requests_the_joypad_interrupt`); G2, any change of a line requests it
+(`Releasing_a_button_requests_nothing`); G3, a press requests nothing
+(`Pressing_a_selected_button_requests_the_joypad_interrupt`); G4, line 3 not watched (the selecting claim, whose held
+button is Start, line 3).
+
+### 13.8 Step H: the colour registers
+
+**The rules** (referee §2.11), from Pan Docs alone; no corpus ROM tests either.
+
+- `Palettes.md`: "the CRAM data registers are inaccessible when the PPU is reading from CRAM, that is, during Mode 3:
+  writes are ignored, and reads return `$FF`", and the index "is automatically incremented ... after each write to
+  this register, even if the write fails due to CRAM being inaccessible". Mercury read and wrote BCPD and OCPD in every
+  mode.
+- `CGB_Registers.md`: SVBK's bits 2–0 are read/write, and a written 0 "maps bank 1 instead"; its post-boot table gives
+  SVBK as `$F8`, which is a 0 read back. Mercury stored 1 for a written 0, so it read `$F9`.
+
+**The proof.** `The_palette_data_ports_are_closed_while_the_ppu_draws` (a theory over BCPS/BCPD and OCPS/OCPD) and
+`Svbk_reads_back_a_written_zero_and_still_maps_bank_one`, committed failing on both engines (`a5bb10c7`).
+
+**The fix**, the same in both engines: the two data ports answer `$FF` and drop a write while the LCD is on and the
+PPU in mode 3, and the index still steps; SVBK keeps the written three bits, and the work RAM window maps 0 to bank 1
+(`MemoryBus.MappedWramBank`, which the debugger's physical addresses now use too; `wram_offset` in Rust). The power-on
+value stays 1, as the post-boot values are the referee's §3 and not part of this audit, so SVBK reads `$F9` until a
+game writes it. `Svbk_banks_the_upper_wram_window_and_treats_zero_as_one`, a stage-8 claim, asserted the stored bank
+was 1 after a written 0, and now asserts the mapped bank. **The state format is unchanged**; an older state never holds
+0, and means the same.
+
+**The corpus** did not move. **The four games**, Pokémon Yellow the colour one among them, are unchanged in MercuryRT's
+trace (the full state hash too) and in the real-games test. The whole `Mercury` filter passes, 828 cases.
+
+**Cost.** A work RAM access in the banked window now tests SVBK for 0. The machine was loaded by other work during this
+bench, and several runs on both sides stalled to about twice their time (Tetris 0.904 before, Kirby 0.992 and Yellow
+1.032 after, on MercuryRT; Yellow 1.213 before on C#), so only the unstalled runs are compared:
+
+| Game | MercuryRT step G | step H | C# step G | step H |
+|---|---|---|---|---|
+| Tetris | 0.4511, 0.4615 | 0.4406, 0.4347, 0.4536 | 0.6341, 0.6281, 0.6641 | 0.6287, 0.6366, 0.6428 |
+| Kirby's Dream Land | 0.5013, 0.4933, 0.5124 | 0.4922, 0.5100 | 0.6836, 0.6956, 0.6981 | 0.6819, 0.6758, 0.7226 |
+| Link's Awakening | 0.4050, 0.4029, 0.4083 | 0.4040, 0.4054, 0.4101 | 0.5639, 0.5702, 0.5719 | 0.5595, 0.5597, 0.5875 |
+| Pokémon Yellow | 0.5420, 0.5659 | 0.5562, 0.5485 | 0.7050, 0.7745 | 0.7095, 0.7230, 0.7470 |
+
+No difference stands out from the spread; this step's number is the weakest of the audit and is recorded as such.
+
+**Mutants**, each in C# and in Rust separately, all caught on both engines by the step's two claims: H1, BCPD readable
+in mode 3; H2, OCPD writable in mode 3; H3, a refused write leaves the index where it was; H4, SVBK stores a written 0
+as 1; H5, SVBK 0 maps bank 0.
+
+### 13.9 Step I: HDMA
+
+**The rules** (referee §2.9), from Pan Docs' `CGB_Registers.md` (HDMA5); no corpus ROM uses HDMA.
+
+1. **Cost in double speed.** "In both Normal Speed and Double Speed Mode it takes about 8 μs to transfer a block of $10
+   bytes. That is, 8 M-cycles in Normal Speed Mode, and 16 'fast' M-cycles in Double Speed Mode." Mercury charged 16 CPU
+   T-cycles a block in double speed, four fast M-cycles; the hardware's 16 fast M-cycles are 64. The referee page found
+   `Mercury_Cgb.md` §4.1 inconsistent with its own premise; Pan Docs shows the premise was wrong as well.
+2. **`$FF55` after a stop.** "Reading from FF55 will return how many $10 blocks remained (minus 1) in the lower 7 bits,
+   but Bit 7 will be read as 1." Mercury read `$FF`. The referee page listed this as a dispute in which "Pan Docs may
+   differ from both"; this Pan Docs (2026-10-03) agrees with the referee's readings, so it is settled here.
+3. **The destination's overflow.** "If the transfer's destination address overflows, the transfer stops prematurely."
+   Mercury wrapped the destination within VRAM and carried on. What the registers read after such a stop is, in Pan
+   Docs' words, still to be investigated; Mercury reads it as finished, `$FF`.
+
+**The proof.** Three claims, committed failing on both engines (`1632df86`); the normal-speed cost was the control.
+
+**The fix**, the same in both engines: a block charges 32 CPU T-cycles in normal speed and 64 in double; a stop keeps
+`HdmaBlocksLeft` and clears `HdmaIsHBlankDriven`, so "blocks owed and not hblank-driven" is a stopped transfer, which
+reads back with bit 7 set and is never advanced (a general-purpose transfer finishes inside the write, so that pair
+meant nothing before); and a block that leaves the destination at 0 ends the transfer. **The state format is
+unchanged**: an older state never holds a stopped transfer's blocks, and means the same. Two stage-8 claims stated the
+old rules and were brought to Pan Docs' (`A_general_purpose_hdma_costs_twice_the_cycles_in_double_speed`, 4 × 64;
+`Clearing_bit_seven_cancels_a_running_hblank_hdma`, `$82`). `Mercury_Cgb.md` §4 and §4.1 are corrected in place (the
+referee page's correction 2, §10).
+
+**Not built.**
+
+- **HDMA during HALT** (referee §2.9's last rule). Pan Docs states it: "upon halting the CPU, the transfer will also be
+  halted and will be resumed only when the CPU resumes execution", citing a test ROM (alloncm's MagenTests) that is not
+  in the corpus. Mercury's bus moves hblank blocks from inside the PPU's tick and does not know the CPU is halted; the
+  CPU would have to tell it, a new member of the CPU's bus surface in both engines. That is put to the tester (§13.0)
+  rather than added.
+- **A transfer started in hblank, and one started with the LCD off.** Pan Docs says only that an hblank transfer
+  "should not be started (write to FF55) during a HBlank period", and says nothing of the LCD being off. **Out of
+  reach.**
+
+**The corpus** did not move, and **the four games** are unchanged (MercuryRT's trace, the real-games test). The
+*colour* synthetic program's state digest moved, in one field: `Cpu.Cycles`, 230,496 lower after 600 frames. The
+program runs a general-purpose and an hblank transfer every frame in double speed and otherwise sits in HALT, so every
+block now stalls the CPU 48 T-cycles longer and the CPU counts that many fewer of its own; sound and picture are as
+recorded, and both engines agree. Its state and version-7 digests were re-recorded. The whole `Mercury` filter passes,
+836 cases.
+
+**Cost.** Nothing changed on a path the four games take every frame (none of them runs HDMA in the bench):
+
+| Game | MercuryRT step H | step I | C# step H | step I |
+|---|---|---|---|---|
+| Tetris | 0.4446, 0.4527, 0.4402 | 0.4395, 0.4533, 0.4424 | 0.6321, 0.6525, 0.6355 | 0.6341, 0.6532, 0.6398 |
+| Kirby's Dream Land | 0.5032, 0.5070, 0.4986 | 0.5180, 0.5065 (and a 0.9391 stall) | 0.6945, 0.7039, 0.6911 | 0.7742, 0.6994, 0.6897 |
+| Link's Awakening | 0.4290, 0.4134, 0.4064 | 0.4255, 0.4184, 0.4062 | 0.5932, 0.5860, 0.5705 | 0.6245, 0.5901, 0.5641 |
+| Pokémon Yellow | 0.5658, 0.5539, 0.5530 | 0.5752, 0.5558, 0.5615 | 0.7447, 0.7299, 0.7193 | 0.7503, 0.7013, 0.7155 |
+
+**Mutants**, each in C# and in Rust separately, all caught on both engines: I1, a double-speed block charges 16 (the
+cost theory's double-speed case); I2, a stop forgets the blocks owed; I3, a stopped transfer reads without bit 7; I5, a
+stopped transfer still moves at hblank (all three by `A_stopped_hblank_hdma_reads_back_the_blocks_it_still_owed`); I4,
+the destination wraps and the transfer goes on (`A_transfer_that_runs_off_the_end_of_vram_stops`).
+
+### 13.10 Step J: the sound quirks blargg tests
+
+The referee's §2.10 rows are taken one rule at a time, each graded by its blargg ROM and by Pan Docs'
+`Audio_details.md`, "Obscure Behavior", which states the same rules in words. The RTL and Mesen readings the referee
+page compared are SameBoy's algorithm (its §0), and are not used.
+
+#### 13.10.1 The length counter's first half
+
+**The rules** (`03-trigger.s`; Pan Docs, the "extra length clocking" and trigger bullets): when the frame sequencer's
+next step is one that does not clock length, enabling length in NRx4 (it was disabled, it is now enabled, the counter
+is not zero) clocks the counter once, and if that empties it without a trigger the channel is disabled; and a trigger
+that reloads an empty counter while length is enabled loads the maximum less one. `CGB_02` is not defined in either
+suite's source, so both expect the later rule, in which the length must be enabled now as well. Mercury's sequencer
+counter holds the next step to run, so "the next step does not clock length" is an odd `SequencerStep`.
+
+**The proof.** Three claims, six cases with the theory's second-half controls, committed failing on both engines
+(`4790cb4f`).
+
+**The fix**, the same in both engines and for all four channels: `LengthCounter.Enable` (`enable`) clocks on the
+enabling write in the first half and reports whether that emptied it; the NRx4 writers share `WriteLengthEnable`
+(`write_length_enable`), which also sets the counter to the maximum less one ahead of a trigger that would reload an
+empty enabled counter, so the channel's own trigger leaves it there. **The state format is unchanged.**
+
+**The corpus.** `03-trigger` passes on both suites in all six columns, every subtest of it, the enable-in-first-half
+(#3) and trigger cases (#6–#12) alike; the combined `dmg_sound` and `cgb_sound` now stop at `05-sweep details`,
+Failed(5) for Failed(3). 120 of 173 in each column. **The four games** and all four synthetic programs' digests, sound
+included, did not move. The whole `Mercury` filter passes, 848 cases.
+
+**Mutants**, each in C# and in Rust separately: J1, no extra clock; J2, the first half taken as the even step; J3, no
+reload to the maximum less one; J4, an emptied counter leaves the channel on: each caught on both engines by the
+step's claims. J5, enabling an enabled length clocks it too, was caught at first only by the corpus (`03-trigger` #4),
+which CI does not have; `Only_enabling_a_disabled_length_clocks_it` was added and catches it on both engines. The
+step's cost was not measured separately: the change touches only NRx4 writes, a few a frame.
+
+#### 13.10.2 The length counters across a power cycle
+
+**The rules.** `08-len ctr during power.s`: "On CGB, length counters are reset when powered up. On DMG, they are
+unaffected, and not clocked." `11-regs after power.s`, DMG: "While powered off, writes to NR41 are NOT ignored"; CGB:
+"Powering off should clear NR41". Pan Docs (`Audio_Registers.md`, NR52) makes every register read-only while the APU
+is off "except NR52 ... and the length timers (in NRx1) on monochrome models". `Mercury_Apu.md` §4 had kept the CGB
+rule on both consoles and said where to start if a DMG test ROM ever failed on it; two did.
+
+**The proof.** Two theories over a Game Boy and a colour cartridge, committed failing (`a6684d54`): the DMG half of
+the first (a length written while off is kept, NR11's duty bits are not) and the CGB half of the second (a power cycle
+clears the counters) failed on both engines; the other halves passed.
+
+**The fix**, the same in both engines. The APU learns the console (`Apu.CgbHardware`, `cgb_hardware`, set by the bus,
+not in the state): on a DMG a write to NR11, NR21, NR31 or NR41 while the APU is off loads the length counter and
+nothing else; on a CGB powering up clears the four counters. **The state format is unchanged.** `Mercury_Apu.md` §4 is
+revised (the referee page's correction 5, first half).
+
+**The corpus.** Each suite now passes where its own console runs it:
+
+| ROM | Auto | Game Boy | Game Boy Color |
+|---|---|---|---|
+| `dmg_sound` `08-len ctr during power` | Failed(1) → **Passed** | Failed(1) → **Passed** | Failed(1) |
+| `dmg_sound` `11-regs after power` | Failed(4) → **Passed** | Failed(4) → **Passed** | Failed(4) |
+| `cgb_sound` `11-regs after power` | Failed(4) → **Passed** | Failed(4) | Failed(4) → **Passed** |
+| `cgb_sound` `08-len ctr during power` | Passed | **Passed → Failed(1)** | Passed |
+
+on both engines. The one verdict that went from passing to failing is the colour suite's test run on the Game Boy: its
+header says a DMG keeps its counters where the CGB clears them, and the expected checksum is the CGB's, so a DMG fails
+it; it passed before only because Mercury gave the DMG the CGB's rule. (`Auto` runs `cgb_sound` on the Color, since its
+header asks for colour.) Each `dmg_sound` ROM run on the Color still fails for the converse reason. Passes: 123 under
+Auto, 121 under Game Boy and Game Boy Color, the same in both engines.
+
+**The four games**, the recorded digests and the whole `Mercury` filter (858 cases) are unchanged.
+
+**Mutants**, each in C# and in Rust separately, all caught on both engines: J6, a DMG ignores lengths while off; J8, NR11
+written while off loads its duty too (both by the first theory's DMG case); J7, a CGB keeps its counters through a power
+cycle (the second theory's CGB case). Cost was not measured separately: only NR52 and writes while the APU is off
+changed.
+
+#### 13.10.3 Leaving the sweep's negate mode
+
+**The rule** (`05-sweep details.s` #4–#6; Pan Docs): "clearing the sweep direction bit in NR10 after at least one sweep
+calculation has been made using the subtraction mode since the last trigger causes the channel to be immediately
+disabled". Mercury did not model it.
+
+**The proof.** `Leaving_negate_mode_after_a_subtraction_silences_channel_one` failed on both engines, with
+`Leaving_negate_mode_before_any_subtraction_keeps_channel_one` and `A_trigger_forgets_an_earlier_subtraction` as
+controls (`004041c8`).
+
+**The fix**, the same in both engines: channel 1 remembers that a calculation was made in negate mode since its last
+trigger (`PulseChannel.SweepNegated`, `sweep_negated`; set in `ComputeSweep`, cleared by the trigger before its own
+calculation), and an NR10 write that clears the direction bit while it is set disables the channel.
+
+**State version 10.** The flag is machine state the walk cannot carry, so, as §13.4's delay did, it follows the tail:
+both engines write 10 and read 5 to 10, a state before 10 loading with no subtraction made. `The_sweeps_negate_flag_lives_in_version_10s_tail`
+shows it on both engines: a state saved after a subtraction keeps the rule after a load, and the same state cut to
+version 9 loads without it. The version-8 claim of §13.4 now cuts five bytes. The four synthetic programs' state
+digests moved by the version and the byte only (each one's version-7 form is unchanged) and were re-recorded.
+
+**The corpus.** `05-sweep details` passes on both suites in all six columns. The combined `dmg_sound` and `cgb_sound`
+now stop at their eighth test (`08-len ctr during power`) on the console they were not written for, and at their ninth
+(`09-wave read while on`) on their own. Passes: 125 under Auto, 123 under Game Boy and Game Boy Color. **The four
+games** run as before (MercuryRT's trace keeps the same PC, work RAM and VRAM; the real-games test passes); the whole
+`Mercury` filter passes.
+
+**Mutants**, each in C# and in Rust separately, all caught on both engines: J9, leaving negate mode never disables;
+J11, the flag never set (both by the rule's claim and the version-10 claim); J10, a trigger keeps the flag
+(`A_trigger_forgets_an_earlier_subtraction`); J12, the flag lost through the tail (C#: not written; Rust: not read;
+the version-10 claim).
+
+#### 13.10.4 The wave channel: out of reach
+
+The remaining rows, `09-wave read while on`, `12-wave write while on` and `12-wave` (CGB) and `10-wave trigger while on`
+(DMG), test what wave RAM answers while channel 3 plays and what a retrigger corrupts. Pan Docs states the rules in
+words (`Audio_details.md`: a trigger leaves the first sample to the old buffer and plays from the second; a DMG
+retrigger while the channel reads a byte rewrites the first bytes of wave RAM). Each ROM, though, grades them by a
+checksum of 69 reads or rewrites, each taken two T-cycles later than the last, against the channel's fetch position
+after a trigger. That position depends on the exact delay between the trigger and the first fetch, which neither Pan
+Docs nor GBCTR gives, and which the ROMs encode only as a checksum. Finding it by trying delays until the checksum
+matches would be fitting a model to a test, not deriving it from evidence, and the only sources that state it are the
+references this audit does not use. **Out of reach**, with the rules recorded for when a document gives the timing.
+
+### 13.11 Step K: STAT with the LCD off, and line 144's mode-2 interrupt
+
+The referee's §2.6 names six rules; their ROMs' sources are the evidence, Pan Docs' `STAT.md` adding little beyond "the
+PPU mode reports 0 when the PPU is disabled". Three rules are built here; the other three are recorded as one piece of
+work for later (§13.11.3).
+
+#### 13.11.1 The rules built
+
+- **Rule 4, the comparison freezes with the LCD off** (`ppu/stat_lyc_onoff.s`, rounds 1–3): "the bit should be retained
+  and not reset to 0"; "changing LYC should not have an effect, because the comparison clock is not running";
+  "enabling the PPU starts the comparison clock again". Mercury compared `Ly == Lyc` live, with LY parked at 0.
+- **Rule 5, no STAT interrupt with the LCD off** (the same rounds: a frozen comparison holding the line "should suppress
+  the interrupt", and round 4 expects one when the comparison starts matching as the LCD comes on). Mercury dropped the
+  line to low when the LCD went off and recomputed it on every STAT or LYC write, so an LYC write with the LCD off could
+  raise the interrupt.
+- **Rule 2, the mode-2 source at line 144.** `ppu/vblank_stat_intr-GS.s` (verified on DMG, MGB, SGB, SGB2; fails on the
+  Color): "if bit 5 (mode 2 OAM interrupt) is set, an interrupt is also triggered at line 144 when vblank starts ...
+  vblank and stat_m2_144 are triggered at the same time". Its sibling `misc/ppu/vblank_stat_intr-C.s` (verified on CGB,
+  AGB, AGS) says that on the Color "stat_m2_144 is triggered one cycle before a vblank is". Mercury raised neither.
+
+**The proof** (`a6c492ea`): the freeze, the silence with the LCD off and the DMG's line-144 interrupt failed on both
+engines; the comparison that starts matching at LCD-on passed. That commit's Color case expected no interrupt at line
+144, the reading of `-GS`'s "fail: CGB" before its `-C` sibling was read; the `-C` header corrected it, and the Color's
+claim (`On_the_color_line_144s_mode_2_interrupt_comes_a_machine_cycle_before_vblank`) was written with its fix. Its
+before-and-after is the corpus: `vblank_stat_intr-C` failed under Game Boy Color and now passes.
+
+**The fix**, the same in both engines:
+
+- the comparison is taken when the LCD goes off (`Ppu.LycWhileOff`, `lyc_while_off`) and answers STAT's bit 2 and the
+  LYC source until the LCD comes back, when the live comparison resumes;
+- the STAT line does not move while the LCD is off: it keeps its level, and nothing written then can raise it;
+- on a DMG the mode-2 source counts for the update that starts line 144; on a CGB it is raised four T-cycles (a
+  machine cycle) before line 144, from the dot loop's visible-line branch.
+
+**State version 11.** The frozen comparison is machine state for as long as the LCD is off, so it joins the tail:
+both engines write 11 and read 5 to 11, and a state before 11 loads with the bit clear
+(`The_frozen_comparison_lives_in_version_11s_tail`). The four synthetic programs' state digests moved by the version and
+the byte only, their version-7 forms unchanged.
+
+**The corpus.** `ppu/vblank_stat_intr-GS` passes under Auto and Game Boy, and `misc/ppu/vblank_stat_intr-C` under Game
+Boy Color, on both engines: 126 under Auto, 124 under Game Boy and under Game Boy Color. `stat_lyc_onoff` still fails:
+its round 1 also expects STAT to read mode 0 right after the LCD comes on, which is rule 3.
+
+**The four games** keep the same PC, work RAM and VRAM at every 300th frame of MercuryRT's trace, and the real-games
+test passes.
+
+**Mutants**, each in C# and in Rust separately: K1, the comparison runs with the LCD off; K3, no line-144 interrupt on
+a DMG; K5, the frozen bit taken after LY is cleared (C#) or not carried by the tail (Rust): each caught on both engines
+by the step's claims. Two survived the first claims and gained one each: K2, the STAT line moving with the LCD off,
+which the frozen comparison's cases could not see because the line was already high (now
+`A_source_enabled_while_the_lcd_is_off_raises_nothing`, an hblank source enabled while the LCD is parked in mode 0); and
+K4 in Rust, the Color's interrupt a machine cycle too early, which the claim allowed because it only looked at the cycle
+it should arrive in (it now also asserts nothing has arrived a T-cycle before).
+
+#### 13.11.2 Retired
+
+The referee page put `stat_lyc_onoff` down to rules 4 and 5. Both were needed and neither was enough: it waits on rule 3
+too. Its `intr_2_0_timing` pass and three `intr_2_*` failures it read as the skew between the IRQ and STAT's mode bits;
+that reading stands, untested, in §13.11.3.
+
+#### 13.11.3 Not built: the line boundary at T-cycle resolution
+
+Rules 1 (the mode-2 source as a pulse), 3 (no mode 2 on the first line after LCD-on), 6 (LY reading 0 early in line
+153) and the `intr_2_*` skew are one change, not four. `ppu/lcdon_timing-GS.s` gives the table: line 0 "starts with
+mode 0 and goes straight to mode 3", "is late by 2 T-cycles", and LY reads 1 four T-cycles before STAT reports line 1's
+mode 2. Mercury moves LY, the mode and the STAT line together at dot 456. Building these means a line boundary in which
+LY, the mode bits, the STAT sources and access blocking change on their own dots, which is the PPU's structure rather
+than a rule inside it, and it would move every game's timing. It is recorded as the next piece of PPU work, to be
+designed against the `lcdon_*`, `intr_2_*` and `stat_lyc_onoff` tables, and not built in this audit. Rule 3 alone was
+considered and not built: the table shows mode 0 at LCD-on, but no source this audit may use says whether an enabled
+mode-0 source raises the interrupt then, and building half the rule would choose that unproven.
+
+### 13.12 The audit's cost, measured by instructions as well as time
+
+From step H on the machine was shared with other work (load averages of 3 to 11), and wall-clock benches moved by
+several percent between runs of identical code; some runs stalled to twice their time. So the whole audit was also
+measured by the user-space instructions MercuryRT's bench retires (`perf_event_open`, scratch `tools/icount.py`), which
+do not depend on load, for 3,900 frames of each game:
+
+| Snapshot | Tetris | Pokémon Yellow |
+|---|---|---|
+| before the audit | 37,795,896,576 | 38,919,540,695 |
+| step A | 37,795,692,935 | 38,919,044,363 |
+| step B, first form (`< 0` before `> 0`) | 38,069,364,254 (+0.72%) | 39,192,775,825 |
+| step B as committed | 37,795,697,868 | 38,919,033,278 |
+| step C | 37,795,767,074 | 38,919,332,004 |
+| step D, first form (a second field in the idle test) | 38,353,849,297 (**+1.48%**) | 39,477,083,752 |
+| steps E–J | 38,300,425,160 to 38,358,967,638 | 39,451,837,904 to 39,497,762,079 |
+| step K | 38,305,921,129 | 39,489,963,379 |
+| **after the fold below** | **37,763,224,412 (−0.09%)** | **38,947,229,369 (+0.07%)** |
+
+and Kirby's Dream Land +0.42%, Link's Awakening +0.12% over the audit. Step D's idle test, which read the start delay
+beside the counter on every T-cycle, was the one real cost; it was folded (`dae00467`): a fresh write sets the counter
+itself to cover the machine cycle before the transfer starts, so the idle test reads one field again, and the separate
+delay is used only for a restart written while a transfer runs, which keeps the old transfer alive until then. The
+claims, the corpus, the traces and every recorded digest were unchanged by the fold. The version-8 claim of §13.4 now
+holds a restart's delay, since a fresh write no longer uses the tail; states written by this branch's earlier commits
+with a fresh delay pending are not a population anyone holds and are not converted.
+
+**Time is a different matter for MercuryRT after step K.** With the same instruction count as step J (to 0.01%), the
+crate's bench ran 4–6% slower, interleaved run for run (Tetris 0.4475–0.4680 ms at step J against 0.4747–0.4786 after K,
+on a loaded machine). Three variants that each removed a part of step K (the comparison in the STAT read, the frozen
+bit's field, the console field and the dot check) did not recover it; marking the once-a-line `begin_scanline` cold and
+not inlined, and the STAT line's update not inlined, recovered about half (Tetris 0.4552–0.4632, Yellow 0.5749–0.5988
+against step J's 0.5648–0.5781). That is the placement effect §8.7.3 found, with the code doing the same work, and is
+recorded as such: the attributes were kept, as true statements about those paths, and the remainder is left for a
+measurement on a quiet machine before stage 9's goldens, through `ICore` as a player runs it. C#'s frame did not move
+measurably across the audit.
+
+### 13.13 What the audit settled, and what is left
+
+**Verdicts, candidate by candidate:**
+
+| Referee | Candidate | Verdict | Settled by |
+|---|---|---|---|
+| §2.1 | unmapped I/O reads `$FF`; HDMA1–4 write-only | proven, fixed | `01-registers` ×2, `unused_hwio-GS`, `unused_hwio-C` (with the Color's `$FF72`–`$FF77`, RP and OPRI) |
+| §2.2 | the timer's reload cycle | proven, fixed | `tima_write_reloading`, `tma_write_reloading`; `rapid_toggle` out of reach |
+| §2.3 | the vector chosen after the high push | proven, fixed | `ie_push`; the writes on M3/M4 by Pan Docs |
+| §2.4 | OAM DMA's start delay | proven, fixed | the three `oam_dma_*` and the eight instruction-timing ROMs it predicted |
+| §2.5, §3 CALL | PUSH, RST, RET cc, CALL, CALL cc placement | proven, fixed | the five remaining instruction-timing ROMs; GBCTR |
+| §2.6 | STAT edges: rules 2, 4, 5 | proven, fixed | `vblank_stat_intr-GS` and `-C` |
+| §2.6 | rules 1, 3, 6 and the `intr_2_*` skew | not built | one later change to the PPU's line boundary (§13.11.3) |
+| §2.7 | the joypad interrupt | proven, fixed | Pan Docs |
+| §2.8 | MBC1 RAM bank on a small chip; MBC1M | proven, fixed | `ram_64kb`, `multicart_rom_8Mb` |
+| §2.8 | MBC5 RAM enable | a dispute (GBCTR against Pan Docs) | put to the tester |
+| §2.8 | MBC3's four clock rules | out of reach | no document; the ROMs are not in the corpus |
+| §2.9 | HDMA: double-speed cost, `$FF55` after a stop, the overflow stop | proven, fixed | Pan Docs |
+| §2.9 | HDMA during HALT | proven by Pan Docs, not built | needs a new bus member; put to the tester |
+| §2.9 | HDMA started in hblank or with the LCD off | out of reach | Pan Docs silent |
+| §2.10 | the length quirks, the negate rule, the power rules | proven, fixed | `03-trigger`, `05-sweep details`, `08`, `11` |
+| §2.10 | the wave rows (`09`, `10`, `12`) | out of reach | their timing exists only as checksums |
+| §2.11 | palette ports in mode 3; SVBK read-back | proven, fixed | Pan Docs |
+| §2.12 | LCDC bit 0 on a DMG | decided: a dispute, white kept | Pan Docs; the tester, 2026-10-15 |
+| §2.13 | `EI; EI` before a dispatch | proven, fixed | GBCTR's `EI` |
+| §2.14 | STOP's cycle count | proven, fixed | the cycle harnesses |
+
+**The corpus**, from 94 passes in every column to **126 under Auto and 124 under Game Boy and Game Boy Color**, the
+same in both engines: all thirteen instruction-timing ROMs, the three `oam_dma_*`, `ie_push`, both timer reload ROMs,
+both `emulator-only` MBC1 failures, both `unused_hwio` ROMs, `vblank_stat_intr-GS` and `-C`, and nine blargg sound
+ROMs on the consoles they were written for. One verdict went from passing to failing, `cgb_sound`'s `08` run on the
+Game Boy, because a DMG now keeps its length counters as the ROM's header says it does (§13.10.2).
+
+**The referee page's corrections (its §10)** settled here: 1 (§3.4's thirteen ROMs, §13.4), 2 (`Mercury_Cgb.md` §4.1,
+§13.9), 5 (`Mercury_Apu.md` §4, §13.10.2; §3.4's wave read-back remains, out of reach), 6 (the joypad interrupt,
+§13.7). Not settled: 3 (LCDC bit 0, decided as a dispute), 4 (`Mercury_Memory.md` §6's DMA-from-VRAM claim, untested),
+7 (`Mercury_Cgb.md` §6 and §5), 8 (`Mercury_Ppu.md` §3, now true of Mercury: STAT no longer fires with the LCD off).
+
+**The state format** went from version 8 to 11, each addition after the mixer, each read back to version 5:
+9 a restart's OAM DMA delay, 10 channel 1's negate flag, 11 the frozen LY=LYC bit.
+
+**No RTL line was opened.** Every rule rests on a test ROM's source or on Pan Docs or GBCTR; no emulator source was
+read. **The four games** run as the unmodified build ran them throughout, the joypad's IF bit aside (§13.7).
+
+**Questions for the tester** (§13.0): MBC5's RAM enable (keep Pan Docs' rule), and HDMA during HALT (add the bus
+member). The PPU's line boundary is proposed as its own piece of work.
+
+**What changes for stage 9.** The goldens are recorded from C# after this audit, so they carry these rules. The state
+version the goldens and the legacy differential project pin is 11, with its tail. The corpus baseline the goldens
+extend is this one, 126/124/124. `MercuryAuditTests` is a further class of claims on both engines that, like
+`MercuryCycleTimingTests`, stage 10 must keep when the C# core leaves `main`; the four placement claims of §13.5 and the
+dispatch claim of §13.3 live only in the two cycle harnesses.

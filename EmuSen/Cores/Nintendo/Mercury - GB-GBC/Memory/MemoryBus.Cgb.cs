@@ -5,8 +5,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
     {
         public int VramBank;
 
-        // 0 and 1 both select bank 1; there is no second copy of the fixed bank.
+        // SVBK as written; 0 and 1 both map bank 1, there being no second copy of the fixed bank - see Mercury_Native.md §13.8.
         public int WramBank = 1;
+
+        public int MappedWramBank => WramBank == 0 ? 1 : WramBank;
 
         public bool DoubleSpeed;
         public bool SpeedSwitchArmed;
@@ -17,7 +19,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public ushort HdmaSource;
         public ushort HdmaDestination;
 
-        // Blocks of 16 bytes still owed, or 0 when nothing is running.
+        // Blocks of 16 bytes still owed: running while hblank-driven, stopped with that many left otherwise, 0 when none - see Mercury_Native.md §13.9.
         public int HdmaBlocksLeft;
 
         public bool HdmaIsHBlankDriven;
@@ -28,129 +30,154 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         private int WramOffset(int address)
         {
             int offset = address & 0x1FFF;
-            return offset < WramBankSize ? offset : (WramBank * WramBankSize) + (offset - WramBankSize);
+            return offset < WramBankSize ? offset : (MappedWramBank * WramBankSize) + (offset - WramBankSize);
         }
 
         private byte ReadCgbIo(ushort address) => address switch
         {
             0xFF4D => (byte)(0x7E | (DoubleSpeed ? 0x80 : 0x00) | (SpeedSwitchArmed ? 0x01 : 0x00)),
             0xFF4F => (byte)(0xFE | VramBank),
-            0xFF51 => (byte)(HdmaSource >> 8),
-            0xFF52 => (byte)(HdmaSource & 0xF0),
-            0xFF53 => (byte)((HdmaDestination >> 8) & 0x1F),
-            0xFF54 => (byte)(HdmaDestination & 0xF0),
 
-            // Bit 7 set means idle, and the low bits are the blocks still owed minus one.
-            0xFF55 => HdmaBlocksLeft == 0 ? (byte)0xFF : (byte)(HdmaBlocksLeft - 1),
+            // Bit 7 set means idle, and the low bits are the blocks still owed minus one, a stopped transfer's too; HDMA1-4 are write-only.
+            0xFF55 => HdmaBlocksLeft == 0 ? (byte)0xFF : (byte)((HdmaIsHBlankDriven ? 0x00 : 0x80) | (HdmaBlocksLeft - 1)),
 
+            // RP: no partner's light ever arrives, so bit 1 reads 1 whether or not reading is enabled.
+            0xFF56 => (byte)(0x3E | Io[0x56]),
             0xFF68 => Ppu.ReadBgPaletteIndex(),
             0xFF69 => Ppu.ReadBgPaletteData(),
             0xFF6A => Ppu.ReadObjPaletteIndex(),
             0xFF6B => Ppu.ReadObjPaletteData(),
+            0xFF6C => (byte)(0xFE | Io[0x6C]),
             0xFF70 => (byte)(0xF8 | WramBank),
-            _ => Io[address - 0xFF00],
+            _ => ReadUndocumentedIo(address, colourMode: true),
         };
 
-        // True when this address belongs to a colour register, so the generic $FF00 array is left alone.
-        private bool WriteCgbIo(ushort address, byte data)
+        // $FF72-$FF77 on the Color in either mode, $FF74 only in colour mode - see Mercury_Native.md §13.1.
+        private byte ReadUndocumentedIo(ushort address, bool colourMode) => address switch
+        {
+            0xFF72 or 0xFF73 => Io[address - 0xFF00],
+            0xFF74 => colourMode ? Io[0x74] : (byte)0xFF,
+            0xFF75 => (byte)(0x8F | Io[0x75]),
+            0xFF76 => Apu.Pcm12,
+            0xFF77 => Apu.Pcm34,
+            _ => 0xFF,
+        };
+
+        private void WriteUndocumentedIo(ushort address, byte data, bool colourMode)
+        {
+            switch (address)
+            {
+                case 0xFF72 or 0xFF73:
+                    Io[address - 0xFF00] = data;
+                    return;
+
+                case 0xFF74:
+                    if (colourMode) Io[0x74] = data;
+                    return;
+
+                case 0xFF75:
+                    Io[0x75] = (byte)(data & 0x70);
+                    return;
+            }
+        }
+
+        private void WriteCgbIo(ushort address, byte data)
         {
             switch (address)
             {
                 case 0xFF4D:
                     SpeedSwitchArmed = (data & 0x01) != 0;
-                    return true;
+                    return;
 
                 case 0xFF4F:
                     VramBank = data & 0x01;
-                    return true;
+                    return;
 
                 // The source's low four bits are not wired; a transfer always starts 16-byte aligned.
                 case 0xFF51:
                     HdmaSource = (ushort)((data << 8) | (HdmaSource & 0xF0));
-                    return true;
+                    return;
 
                 case 0xFF52:
                     HdmaSource = (ushort)((HdmaSource & 0xFF00) | (data & 0xF0));
-                    return true;
+                    return;
 
                 // The destination is always inside VRAM, so only bits 12-4 of it exist.
                 case 0xFF53:
                     HdmaDestination = (ushort)(((data & 0x1F) << 8) | (HdmaDestination & 0xF0));
-                    return true;
+                    return;
 
                 case 0xFF54:
                     HdmaDestination = (ushort)((HdmaDestination & 0x1F00) | (data & 0xF0));
-                    return true;
+                    return;
 
                 case 0xFF55:
                     StartHdma(data);
-                    return true;
+                    return;
 
                 case 0xFF68:
                     Ppu.WriteBgPaletteIndex(data);
-                    return true;
+                    return;
 
                 case 0xFF69:
                     Ppu.WriteBgPaletteData(data);
-                    return true;
+                    return;
 
                 case 0xFF6A:
                     Ppu.WriteObjPaletteIndex(data);
-                    return true;
+                    return;
 
                 case 0xFF6B:
                     Ppu.WriteObjPaletteData(data);
-                    return true;
+                    return;
 
-                // OPRI: the CGB boot ROM writes it, and Mercury never runs in the DMG-priority mode it selects.
+                case 0xFF56:
+                    Io[0x56] = (byte)(data & 0xC1);
+                    return;
+
+                // OPRI: kept for its read-back; the renderer's priority follows the mode, not this bit - see Mercury_Model.md §4.
                 case 0xFF6C:
-                    return true;
+                    Io[0x6C] = (byte)(data & 0x01);
+                    return;
 
                 case 0xFF70:
-                    WramBank = (data & 0x07) == 0 ? 1 : data & 0x07;
-                    return true;
+                    WramBank = data & 0x07;
+                    return;
 
                 default:
-                    return false;
+                    WriteUndocumentedIo(address, data, colourMode: true);
+                    return;
             }
         }
 
-        // With a Game Boy cartridge the colour registers read $FF and ignore writes, except VRAM bank and the palette indices - see Mercury_Model.md §4.2.
+        // With a Game Boy cartridge the colour registers read $FF and ignore writes, except VRAM bank, the palette indices and $FF72-$FF77 - see Mercury_Model.md §4.2, Mercury_Native.md §13.1.
         private byte ReadCompatIo(ushort address) => address switch
         {
-            0xFF4C or 0xFF4D or 0xFF56 or 0xFF6C or 0xFF70 => 0xFF,
-            >= 0xFF51 and <= 0xFF55 => 0xFF,
             0xFF4F => (byte)(0xFE | VramBank),
             0xFF68 => Ppu.ReadBgPaletteIndex(),
-            0xFF69 => 0xFF,
             0xFF6A => Ppu.ReadObjPaletteIndex(),
-            0xFF6B => 0xFF,
-            _ => Io[address - 0xFF00],
+            _ => ReadUndocumentedIo(address, colourMode: false),
         };
 
-        // True when the address is a colour register, so the generic $FF00 array is left alone.
-        private bool WriteCompatIo(ushort address, byte data)
+        private void WriteCompatIo(ushort address, byte data)
         {
             switch (address)
             {
                 case 0xFF4F:
                     VramBank = data & 0x01;
-                    return true;
+                    return;
 
                 case 0xFF68:
                     Ppu.WriteBgPaletteIndex(data);
-                    return true;
+                    return;
 
                 case 0xFF6A:
                     Ppu.WriteObjPaletteIndex(data);
-                    return true;
-
-                case 0xFF4C or 0xFF4D or 0xFF56 or 0xFF69 or 0xFF6B or 0xFF6C or 0xFF70:
-                case >= 0xFF51 and <= 0xFF55:
-                    return true;
+                    return;
 
                 default:
-                    return false;
+                    WriteUndocumentedIo(address, data, colourMode: false);
+                    return;
             }
         }
 
@@ -169,7 +196,6 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             // Clearing bit 7 during an hblank transfer cancels it rather than starting a new one.
             if (HdmaIsHBlankDriven && HdmaBlocksLeft > 0 && (data & 0x80) == 0)
             {
-                HdmaBlocksLeft = 0;
                 HdmaIsHBlankDriven = false;
                 return;
             }
@@ -189,8 +215,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             if (HdmaIsHBlankDriven && HdmaBlocksLeft > 0) TransferHdmaBlock();
         }
 
-        // Eight machine cycles a block, and they are half as long in double speed - see Mercury_Cgb.md §4.1.
-        private void ChargeHdmaBlock() => _stallCycles += DoubleSpeed ? 16 : 32;
+        // About 8 µs a block at either speed: 8 machine cycles, or 16 in double speed - see Mercury_Cgb.md §4.1, Mercury_Native.md §13.9.
+        private void ChargeHdmaBlock() => _stallCycles += DoubleSpeed ? 64 : 32;
 
         private void TransferHdmaBlock()
         {
@@ -205,6 +231,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                 HdmaDestination = (ushort)((HdmaDestination + 1) & 0x1FFF);
             }
 
+            // A destination run off the end of VRAM ends the transfer - see Mercury_Native.md §13.9.
+            if (HdmaDestination == 0) HdmaBlocksLeft = 1;
             if (--HdmaBlocksLeft == 0) HdmaIsHBlankDriven = false;
         }
 

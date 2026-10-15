@@ -135,7 +135,7 @@ pub struct Hw {
     /// The Sega CD beside it, and whether its boot ROM, PRG-RAM and Word RAM fill `$000000`-`$3FFFFF` (mode 2).
     pub mcd: Option<Box<crate::mcd::MegaCd>>,
     pub mcd_low: bool,
-    /// A J-Cart or a Sega CD adds to the map: the one check the cartridge Genesis's accesses pay for them.
+    /// A Sega CD adds to the map: the one check the cartridge Genesis's accesses pay for it.
     pub attached: bool,
 }
 
@@ -188,7 +188,7 @@ impl Genesis {
             draw: true,
             sound: if model.pal { Sound::new(53_203_425, 1, !model.model2) } else { Sound::new(4_725_000_000, 88, !model.model2) },
             mcd_low: bios.is_some(),
-            attached: jcart || bios.is_some(),
+            attached: bios.is_some(),
             mcd: bios.map(|b| Box::new(crate::mcd::MegaCd::new(Genesis::master_hz(model.pal), b, START, disc))),
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
@@ -458,6 +458,10 @@ impl Hw {
         let a = a & 0xFF_FFFF;
         match a {
             _ if self.attached && let Some(v) = self.attached_read8(a) => v,
+            0x00_0000..=0x3F_FFFF if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&(a & !1)) => {
+                let w = self.io.jcart_read(self.clock);
+                if a & 1 == 0 { (w >> 8) as u8 } else { w as u8 }
+            }
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read8(a),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
@@ -478,6 +482,7 @@ impl Hw {
         let a = a & 0xFF_FFFE;
         match a {
             _ if self.attached && let Some(v) = self.attached_read16(a) => v,
+            0x00_0000..=0x3F_FFFF if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&a) => self.io.jcart_read(self.clock),
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read16(a),
             0xA0_0000..=0xA0_FFFF if self.has_z80_bus() => {
                 let b = self.read8(a) as u16;
@@ -498,6 +503,12 @@ impl Hw {
         let a = a & 0xFF_FFFF;
         match a {
             _ if self.attached && self.attached_write(a, (v as u16) << 8 | v as u16, if a & 1 == 0 { 0xFF00 } else { 0x00FF }) => {}
+            // A byte reaches the J-Cart's TH on the odd address's lane only (argued: the games write words).
+            0x00_0000..=0x3F_FFFF if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&(a & !1)) => {
+                if a & 1 != 0 {
+                    self.io.jcart_write(v as u16, self.clock);
+                }
+            }
             0x00_0000..=0x3F_FFFF => self.cart.write8(a, v),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
@@ -526,6 +537,7 @@ impl Hw {
                 self.wram[a as usize & 0xFFFF] = (v >> 8) as u8;
                 self.wram[(a as usize & 0xFFFF) | 1] = v as u8;
             }
+            0x00_0000..=0x3F_FFFF if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&a) => self.io.jcart_write(v, self.clock),
             0x00_0000..=0x3F_FFFF => self.cart.write16(a, v),
             _ => {
                 self.write8(a, (v >> 8) as u8);
@@ -534,33 +546,19 @@ impl Hw {
         }
     }
 
-    // ---- what a cartridge or an attachment adds to the map: the J-Cart's port, the Sega CD's areas in mode 2
+    // ---- what an attachment adds to the map: the Sega CD's areas in mode 2
 
-    /// A byte the J-Cart or the Sega CD answers, or None where the Genesis's own map does.
+    /// A byte the Sega CD answers, or None where the Genesis's own map does.
     fn attached_read8(&mut self, a: u32) -> Option<u8> {
-        if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&(a & !1)) {
-            let w = self.io.jcart_read(self.clock);
-            return Some(if a & 1 == 0 { (w >> 8) as u8 } else { w as u8 });
-        }
         ((self.mcd_low && a < 0x80_0000) || (self.mcd.is_some() && (0xA1_2000..=0xA1_203F).contains(&a))).then(|| self.mcd_read8(a))
     }
 
     fn attached_read16(&mut self, a: u32) -> Option<u16> {
-        if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&a) {
-            return Some(self.io.jcart_read(self.clock));
-        }
         ((self.mcd_low && a < 0x80_0000) || (self.mcd.is_some() && (0xA1_2000..=0xA1_203F).contains(&a))).then(|| self.mcd_read16(a))
     }
 
-    /// A write the J-Cart or the Sega CD takes, `mask` its lanes; false where the Genesis's own map does. A byte reaches
-    /// the J-Cart's TH on the odd address's lane only (argued: the games write words).
+    /// A write the Sega CD takes, `mask` its lanes; false where the Genesis's own map does.
     fn attached_write(&mut self, a: u32, v: u16, mask: u16) -> bool {
-        if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&(a & !1)) {
-            if mask & 0x00FF != 0 {
-                self.io.jcart_write(if mask == 0xFFFF { v } else { v & 0xFF }, self.clock);
-            }
-            return true;
-        }
         if (self.mcd_low && a < 0x80_0000) || (self.mcd.is_some() && (0xA1_2000..=0xA1_203F).contains(&a)) {
             self.mcd_write(a, v, mask);
             return true;

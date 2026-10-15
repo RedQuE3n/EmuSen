@@ -871,3 +871,18 @@ checks are §7.1's four; what each proved is recorded here as it is made, and `N
 - **Size and build time**: `libnephrite.so` built with the `dist` profile, 1,445,920 bytes; a clean `cargo build
   --release --lib` of the crate, its dependencies built, 4.87 to 4.96 s over three builds.
 - **Tests**: the crate's 173 (172 and the new layout) pass with the programs' and discs' folders set.
+
+### 11.2 Commit 2: the J-Cart in the cartridge's arm
+
+The J-Cart's two words are decoded by two guarded arms ahead of the cartridge's own, inside `$000000`–`$3FFFFF`, in
+each of `read8`, `read16`, `write8` and `write16`; the `attached` flag is set by a Sega CD alone, and `attached_read8`,
+`attached_read16` and `attached_write` lose their J-Cart halves. Only an access to the cartridge's range pays the J-Cart's
+test, and no access pays it on a console without one but the flag's (§3.11).
+
+- **Byte identity**: the 71 digests equal the baseline's; the crate's 173 tests pass, the J-Cart's
+  (`a_j_cart_gives_players_3_and_4_and_reads_back_th`) among them; the kit's sample 64 of 64 and the 240p disc with
+  mcd-verificator as file 2 compliant (C1–C19).
+- **Cost**, the build against the baseline's, alternated, best of 6 × 3 × 600 (the disc 5 × 1,200), load 3 to 4: Sonic
+  the Hedgehog 1.356 ms (1.362), Sonic 2 1.241 (1.249), Thunder Force IV 1.339 (1.348), Streets of Rage 2 1.145 (1.146),
+  Phantasy Star IV 1.412 (1.410), Micro Machines 2 1.450 (1.452), the 240p disc 1.590 (1.584). Every difference within
+  the runs' spread of §11.1.

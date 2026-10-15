@@ -537,6 +537,66 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0xF8, rig.Read(0xFF70));
             Assert.Equal(0x11, rig.Read(0xD000));
         }
+
+        // I: a colour cartridge with HDMA's source at $C000 and the given destination.
+        private MercuryRig HdmaReady(int destination)
+        {
+            var rig = Load(cgbFlag: 0xC0);
+            for (int i = 0; i < 0x40; i++) rig.Write(0xC000 + i, (byte)(0xA0 + i));
+            rig.Write(0xFF51, 0xC0);
+            rig.Write(0xFF52, 0x00);
+            rig.Write(0xFF53, (byte)(destination >> 8));
+            rig.Write(0xFF54, (byte)destination);
+            return rig;
+        }
+
+        // I, Pan Docs CGB_Registers.md "Transfer Timings": about 8 µs a block at either speed, 8 M-cycles in normal speed and 16 "fast" ones in double.
+        [Theory]
+        [InlineData(false, 32)]
+        [InlineData(true, 64)]
+        public void A_general_purpose_hdma_block_takes_the_same_time_at_either_speed(bool doubleSpeed, int cpuCyclesPerBlock)
+        {
+            var rig = HdmaReady(0x8000);
+            if (doubleSpeed)
+            {
+                rig.Write(0xFF4D, 0x01);
+                rig.Stop();
+                Assert.True(rig.Bus.DoubleSpeed);
+            }
+            rig.Bus.TakePendingStall();
+            rig.Write(0xFF55, 0x03);
+            Assert.Equal(4 * cpuCyclesPerBlock, rig.Bus.TakePendingStall());
+        }
+
+        // I, Pan Docs: after an hblank transfer is stopped, $FF55 reads the blocks that remained, minus one, with bit 7 set.
+        [Fact]
+        public void A_stopped_hblank_hdma_reads_back_the_blocks_it_still_owed()
+        {
+            var rig = HdmaReady(0x8000);
+            rig.Write(0xFF55, 0x83);
+            Assert.Equal(0x03, rig.Read(0xFF55));
+            TickUntil(rig, PpuMode.Drawing);
+            TickUntil(rig, PpuMode.HBlank);
+            Assert.Equal(0x02, rig.Read(0xFF55));
+            rig.Write(0xFF55, 0x00);
+            Assert.Equal(0x82, rig.Read(0xFF55));
+            TickUntil(rig, PpuMode.Drawing);
+            TickUntil(rig, PpuMode.HBlank);
+            Assert.Equal(0x82, rig.Read(0xFF55));
+            Assert.Equal(0x00, rig.Bus.Vram[0x10]);
+        }
+
+        // I, Pan Docs: "If the transfer's destination address overflows, the transfer stops prematurely."
+        [Fact]
+        public void A_transfer_that_runs_off_the_end_of_vram_stops()
+        {
+            var rig = HdmaReady(0x9FF0);
+            rig.Write(0xFF55, 0x01);
+            Assert.Equal(0xA0, rig.Bus.Vram[0x1FF0]);
+            Assert.Equal(0x00, rig.Bus.Vram[0x0000]);
+            Assert.Equal(0xFF, rig.Read(0xFF55));
+            Assert.Equal(32, rig.Bus.TakePendingStall());
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

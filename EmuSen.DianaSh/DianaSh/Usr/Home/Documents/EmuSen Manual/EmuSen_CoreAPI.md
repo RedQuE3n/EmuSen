@@ -3102,6 +3102,9 @@ case's run now starts once each thread is calling and ends once each has called 
   before the core is called, `MediaLid` and `MediaInsert` refused with −267, frames run and a state round-trips;
   Mistress's Change Disc row asks `CanChangeDisc`, so it is not shown. WiseMan's CoreAbi, CoreAdapter,
   CoreDiscovery, DiscStreaming and Diamond tests pass, 107 of 107.
+- **Diamond unchanged** [M]: its crate's tests pass, 279, and its library's, 4; the kit on its sample
+  (`kit/psx-sample.txt`, 1,800 frames, 10 GiB) reports core ABI 1.6, the core's cases pass and 9 of 9 discs pass, each
+  disc's C16 taking the drive's path with the words it had before, in 258.5 s.
 
 ## 29. A space that is a view, 2026-10-07
 

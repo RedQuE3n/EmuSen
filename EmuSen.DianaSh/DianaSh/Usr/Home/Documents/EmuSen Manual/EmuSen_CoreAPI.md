@@ -1136,7 +1136,9 @@ does not close the door:
 - **Hardware rendering** (`EmuSen_Libretro.md` §2.8) would need the core to draw into a context the host owns, which
   is a call into the host or a shared device handle. MarsRT's GPU path (`Mars_Gpu.md`) keeps its device inside the
   core and copies out the picture, which fits v1. A shared-device minor is possible later as an addition; v1.0 leaves
-  `pixel_formats` open for a device-image format.
+  `pixel_formats` open for a device-image format. *(2026-10-15: designed as the minor 1.9, the host lending its
+  device and a queue and the core handing its picture as a buffer with a timeline semaphore, `EmuSen_DevicePicture.md`
+  §5.)*
 
 ### 6.23 Media: a sheet's companions and the disc in a drive (1.1, 2026-10-11)
 

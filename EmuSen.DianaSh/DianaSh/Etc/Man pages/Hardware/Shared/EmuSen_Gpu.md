@@ -170,6 +170,11 @@ nothing else [A]:
 
 Nothing of this is built: there is no lender, and the kit's half is the kit's.
 
+*2026-10-15: a lender exists before the kit's, Serenity's slang device, which lends a core a queue of its own rather than
+a lock on a shared one, since a lock across the core ABI would be a callback; the seam is to be built as
+`GpuDevice::lent` in version 1.2, with the picture handed on the device (`PictureOut`), as `EmuSen_DevicePicture.md`
+§5 and §6 design.*
+
 ## 6. A second user: what Diamond's enhanced renderer will need
 
 Read from `Diamond_Plan.md` §6.2, §6.3 and its stages E3 to E5 [R], against the surface as built.

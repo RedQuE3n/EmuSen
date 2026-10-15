@@ -1935,3 +1935,10 @@ question to ask.
   that it is listening.
 - **The still bench swept only the pack's `crt/` presets.** Presets in the other categories (`bezel/`, `handheld/`,
   `ntsc/` and the rest) were run only where the bench cases include them.
+
+## 11. The picture on the device (2026-10-15)
+
+The game's picture, the built-in filters and the hand-over to the compositor are moving off Skia onto the slang
+device of §7: the design and the record of each step are `EmuSen_DevicePicture.md`. §3's filters become passes of
+§7's chain (§3 there), and the readback of §7.4 and §9.1 becomes the fallback where the compositor cannot import the
+chain's image (§4 there).

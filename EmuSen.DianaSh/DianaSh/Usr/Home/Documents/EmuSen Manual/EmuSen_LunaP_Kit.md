@@ -541,7 +541,7 @@ frontend's move does:
 | **P1. Crystal and its frontend API** | there is no frontend API today; three frontends drive cores three ways (`EmuSen_Surfaces.md` §4.1). The Rust frontend must be its first client, not a fourth copy of the loop | `EmuSen_CoreAPI.md` §8.3, `EmuSen_DianaSh.md` §16 Q1 |
 | **P2. Every core in Rust** | a frontend without .NET cannot host C# cores; C# Venus, Mercury and Moon are still in use | the cores' own pages |
 | **P3. DianaSh through S6** | the console is a host of the Rust shell | `EmuSen_DianaSh.md` §13 |
-| **P4. The built-in filters as Vulkan shaders** | the CRT and LCD filters are SkSL, drawn by Skia; on the kit they become shaders on the shared device, beside the RetroArch runtime | `EmuSen_CRT.md`, `EmuSen_Serenity.md` |
+| **P4. The built-in filters as Vulkan shaders** | the CRT and LCD filters are SkSL, drawn by Skia; on the kit they become shaders on the shared device, beside the RetroArch runtime | `EmuSen_CRT.md`, `EmuSen_Serenity.md`; begun 2026-10-15 inside Avalonia, with the one device of §5.2, `EmuSen_DevicePicture.md` |
 | **P5. The surfaces audit's steps S1 to S4** | the core library off the presentation layer, settings as parameters, no frontend naming a core's internals | `EmuSen_Surfaces.md` §7 |
 
 ---

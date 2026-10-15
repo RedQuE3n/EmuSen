@@ -28,14 +28,17 @@ namespace EmuSen.WiseMan.Fixtures
 
         // A pixel of slack, and a pixel and a half at a menu's scale above one, where layout rounds in the scaled content's own units.
         [System.ThreadStatic] private static double _slack;
-        private static double Slack => _slack > 0 ? _slack : 1.0;
+
+        // The slack Check uses for a root, set for the recorder as Check sets it.
+        internal static double SlackFor(Control root) => _slack = System.Math.Max(1.0, (MenuPanel.GetScale(root) is > 0 and var scale ? scale : 1) + 0.5);
+        internal static double Slack => _slack > 0 ? _slack : 1.0;
 
         public static List<string> Check(Control root, IReadOnlyList<Allowance>? allow = null, double smallest = SmallestText)
         {
             allow ??= [];
             var faults = new List<string>();
             LastSmallest = null;
-            _slack = System.Math.Max(1.0, (MenuPanel.GetScale(root) is > 0 and var scale ? scale : 1) + 0.5);
+            SlackFor(root);
             Rect frame = FrameOf(root);
             List<(Control C, Rect R, Rect Seen)> shown = Shown(root, frame).ToList();
             if (root.GetVisualDescendants().OfType<MenuPanel>().FirstOrDefault(m => m.Name == "SheetMenu") is { IsTitleCut: true } menu)
@@ -156,22 +159,22 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // The face a text block's words are drawn in, after any fallback, else the one its typeface names.
-        private static GlyphTypeface? FaceOf(TextBlock text) =>
+        internal static GlyphTypeface? FaceOf(TextBlock text) =>
             text.TextLayout.TextLines.SelectMany(l => l.TextRuns).OfType<ShapedTextRun>().FirstOrDefault()?.ShapedBuffer.GlyphTypeface
             ?? FaceOf(new Typeface(text.FontFamily, text.FontStyle, text.FontWeight));
 
         public static GlyphTypeface? FaceOf(Typeface typeface) => FontManager.Current.TryGetGlyphTypeface(typeface, out GlyphTypeface? face) ? face : null;
 
         // The framed panel's rectangle when the root is a framed sheet, else the root's own.
-        private static Rect FrameOf(Control root) =>
+        internal static Rect FrameOf(Control root) =>
             root.GetVisualDescendants().OfType<MenuPanel>().FirstOrDefault(m => m.Name == "SheetMenu") is { } panel
                 ? panel.PanelBounds.TransformToAABB(panel.TransformToVisual(root) ?? Matrix.Identity)
                 : new Rect(root.Bounds.Size);
 
-        private static Rect Area(Visual v, Visual root) => new Rect(v.Bounds.Size).TransformToAABB(v.TransformToVisual(root) ?? Matrix.Identity);
+        internal static Rect Area(Visual v, Visual root) => new Rect(v.Bounds.Size).TransformToAABB(v.TransformToVisual(root) ?? Matrix.Identity);
 
         // Every visible control with a size, where it is, and what of it shows through every clip above it.
-        private static IEnumerable<(Control C, Rect R, Rect Seen)> Shown(Control root, Rect frame)
+        internal static IEnumerable<(Control C, Rect R, Rect Seen)> Shown(Control root, Rect frame)
         {
             Control content = root.GetVisualDescendants().OfType<MenuPanel>().FirstOrDefault(m => m.Name == "SheetMenu")?.Child ?? root;
             foreach (Control c in content.GetVisualDescendants().OfType<Control>())
@@ -190,7 +193,7 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // The nearest clipping or scrolling ancestor's rectangle, or the panel's.
-        private static (Rect Limit, Visual? By) Limit(Control c, Control root, Rect frame)
+        internal static (Rect Limit, Visual? By) Limit(Control c, Control root, Rect frame)
         {
             for (Visual? a = c.GetVisualParent(); a is not null && !ReferenceEquals(a, root); a = a.GetVisualParent())
             {
@@ -216,23 +219,23 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // How far a scroller's content runs past its view, in the root's pixels as the slack is, not the scroller's own scaled units (§4.83.6).
-        private static double Overflow(ScrollViewer viewer, Visual root) => (viewer.Extent.Height - viewer.Viewport.Height) * (viewer.TransformToVisual(root)?.M22 ?? 1);
+        internal static double Overflow(ScrollViewer viewer, Visual root) => (viewer.Extent.Height - viewer.Viewport.Height) * (viewer.TransformToVisual(root)?.M22 ?? 1);
 
         private static bool Contains(Rect outer, Rect inner) =>
             inner.Left >= outer.Left - Slack && inner.Top >= outer.Top - Slack && inner.Right <= outer.Right + Slack && inner.Bottom <= outer.Bottom + Slack;
 
         // What draws something a player reads or presses: words, a picture, or a control.
-        private static bool Drawn(Control c) => c is TextBlock or Image or FittedImage or RgbaImageView or Button or ToggleButton or TextBox or ComboBox or Slider
+        internal static bool Drawn(Control c) => c is TextBlock or Image or FittedImage or RgbaImageView or Button or ToggleButton or TextBox or ComboBox or Slider
             or ToggleSwitch or ProgressBar or ListBoxItem or TabItem or MeterRow;
 
-        private static bool HitTestable(Control c, Visual root)
+        internal static bool HitTestable(Control c, Visual root)
         {
             for (Visual? v = c; v is not null && !ReferenceEquals(v, root); v = v.GetVisualParent())
                 if (v is InputElement { IsHitTestVisible: false }) return false;
             return true;
         }
 
-        private static bool Allowed(Control c, IReadOnlyList<Allowance> allow) => allow.Any(a => a.Applies(c));
+        internal static bool Allowed(Control c, IReadOnlyList<Allowance> allow) => allow.Any(a => a.Applies(c));
 
         public static string Describe(Visual v) => v switch
         {

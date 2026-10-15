@@ -6,7 +6,9 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum System {
     Md,
+    #[cfg(feature = "mcd")]
     Mcd,
+    #[cfg(feature = "s32x")]
     S32x,
 }
 
@@ -14,15 +16,44 @@ impl System {
     pub const fn id(self) -> &'static str {
         match self {
             System::Md => "md",
+            #[cfg(feature = "mcd")]
             System::Mcd => "mcd",
+            #[cfg(feature = "s32x")]
             System::S32x => "32x",
+        }
+    }
+
+    /// A Sega CD disc's machine.
+    pub fn is_disc(self) -> bool {
+        match self {
+            #[cfg(feature = "mcd")]
+            System::Mcd => true,
+            _ => false,
+        }
+    }
+
+    /// A 32X cartridge's machine.
+    pub fn is_32x(self) -> bool {
+        match self {
+            #[cfg(feature = "s32x")]
+            System::S32x => true,
+            _ => false,
         }
     }
 }
 
 pub use crate::genesis::header::{Header, Markets, SaveRam};
 
+#[cfg(feature = "mcd")]
 use crate::mcd::disc_offset;
+#[cfg(feature = "s32x")]
+use crate::s32x::is_32x;
+
+/// Without the Sega CD built, no image is a disc.
+#[cfg(not(feature = "mcd"))]
+fn disc_offset(_: &[u8]) -> Option<usize> {
+    None
+}
 
 /// A copier's 512-byte header and 16 KiB blocks (Nephrite_Native.md §11.2).
 pub const COPIER_HEADER: usize = 0x200;
@@ -75,12 +106,16 @@ pub struct Media {
 
 impl Media {
     pub fn read(image: &[u8]) -> Media {
+        #[cfg(feature = "mcd")]
         if let Some(o) = disc_offset(image) {
             return Media { system: System::Mcd, header: Header::read(image, o + 0x100), sector: if o == 0 { 2048 } else { 2352 } };
         }
         let header = Header::read(image, 0x100);
-        let system = if header.as_ref().is_some_and(|h| crate::s32x::is_32x(&h.system_type)) { System::S32x } else { System::Md };
-        Media { system, header, sector: 0 }
+        #[cfg(feature = "s32x")]
+        if header.as_ref().is_some_and(|h| is_32x(&h.system_type)) {
+            return Media { system: System::S32x, header, sector: 0 };
+        }
+        Media { system: System::Md, header, sector: 0 }
     }
 
     pub fn pal(&self) -> bool {
@@ -102,6 +137,7 @@ impl Media {
     /// Battery-backed bytes the cartridge declares, zero for none; a disc's internal backup RAM is the machine's.
     pub fn battery_bytes(&self) -> usize {
         match (&self.header, self.system) {
+            #[cfg(feature = "mcd")]
             (_, System::Mcd) => 0,
             (Some(Header { save: Some(s), .. }), _) if s.battery => s.bytes(),
             _ => 0,
@@ -112,7 +148,6 @@ impl Media {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcd::DISC_SIGNATURE;
 
     pub fn cartridge(system: &str, region: &str, save: Option<[u8; 12]>) -> Vec<u8> {
         let mut rom = vec![0u8; 0x8000];
@@ -144,8 +179,10 @@ mod tests {
         assert_eq!(Markets::parse(b"EU "), Markets { japan: false, americas: true, europe: true });
     }
 
+    #[cfg(all(feature = "mcd", feature = "s32x"))]
     #[test]
     fn a_cartridge_is_told_from_a_32x_cartridge_and_a_disc() {
+        use crate::mcd::DISC_SIGNATURE;
         assert_eq!(Media::read(&cartridge("SEGA GENESIS", "U", None)).system, System::Md);
         assert_eq!(Media::read(&cartridge("SEGA 32X", "U", None)).system, System::S32x);
         let mut iso = vec![0u8; 0x800];

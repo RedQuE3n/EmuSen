@@ -89,3 +89,20 @@ fn the_source_check_catches_each_crossing() {
     let text = "use crate::interface::Bare;\n// crate::machine in a comment\n#[cfg(test)]\nmod tests {\n    use crate::machine::Machine;\n}\n";
     assert_eq!(production_lines(text), [(1, "use crate::interface::Bare;")]);
 }
+
+/// The Genesis alone, and each attachment without the other, compiled with their tests and examples: a module that
+/// names an attachment not built fails here (Nephrite_Attachments.md §5.4). Its own target folder, so that the run's
+/// lock is not waited on.
+#[test]
+fn the_genesis_and_each_attachment_build_alone() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/feature-checks");
+    for features in [&["--no-default-features"][..], &["--no-default-features", "--features", "mcd"], &["--no-default-features", "--features", "s32x"]] {
+        let out = std::process::Command::new(env!("CARGO"))
+            .args(["check", "--all-targets", "--quiet", "--target-dir", dir, "--manifest-path", concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")])
+            .args(features)
+            .env("RUSTFLAGS", "-D warnings")
+            .output()
+            .expect("cargo");
+        assert!(out.status.success(), "{features:?}:\n{}", String::from_utf8_lossy(&out.stderr));
+    }
+}

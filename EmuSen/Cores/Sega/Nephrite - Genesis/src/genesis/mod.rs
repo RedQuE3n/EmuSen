@@ -186,7 +186,7 @@ pub(crate) struct Genesis<A = Bare> {
 }
 
 /// The master clock's rate, a fraction in Hz.
-pub(crate) fn master_hz(pal: bool) -> (u64, u64) {
+pub const fn master_hz(pal: bool) -> (u64, u64) {
     if pal { (53_203_425, 1) } else { (4_725_000_000, 88) }
 }
 
@@ -1342,6 +1342,7 @@ mod tests {
         let mut m = crate::machine::Machine::new(&image, crate::media::Media::read(&image));
         // The board's times count from its first cartridge read's strobe, which the refresh pending at the 68000's start
         // holds 14 master clocks after the first bus cycle, itself 98 into Nephrite's start.
+        #[allow(irrefutable_let_patterns)]
         let crate::machine::Fitted::Md(g) = &mut m.fitted else { unreachable!("a cartridge") };
         let end = 0x222 + 2 * (words.len() * count) as u32;
         let mut ends = Vec::new();
@@ -1382,6 +1383,7 @@ mod tests {
         let end = base + 0xFFFE;
         r[0x200..0x218].copy_from_slice(&w(&[0x46FC, 0x2700, 0x207C, (base >> 16) as u16, base as u16, 0x203C, (end >> 16) as u16, end as u16, 0x7200, 0xD258, 0xB088, 0x64FA]));
         let mut m = crate::machine::Machine::new(&r, crate::media::Media::read(&r));
+        #[allow(irrefutable_let_patterns)]
         let crate::machine::Fitted::Md(g) = &mut m.fitted else { unreachable!("a cartridge") };
         let mut times = Vec::new();
         while times.len() < 4000 {

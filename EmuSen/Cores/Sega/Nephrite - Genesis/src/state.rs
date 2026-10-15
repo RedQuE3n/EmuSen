@@ -52,7 +52,9 @@ impl From<Truncated> for StateError {
 fn system_byte(s: System) -> u8 {
     match s {
         System::Md => 0,
+        #[cfg(feature = "mcd")]
         System::Mcd => 1,
+        #[cfg(feature = "s32x")]
         System::S32x => 2,
     }
 }
@@ -60,7 +62,9 @@ fn system_byte(s: System) -> u8 {
 /// The Genesis's block and the attachment's of a state, read whole, of the configuration fitted.
 enum FittedSaved {
     Md(crate::genesis::Saved, ()),
+    #[cfg(feature = "mcd")]
     Mcd(crate::genesis::Saved, <crate::mcd::MegaCd as AttachmentState>::Saved),
+    #[cfg(feature = "s32x")]
     S32x(crate::genesis::Saved, ()),
 }
 
@@ -68,7 +72,9 @@ impl Fitted {
     fn read_state(&self, r: &mut StateReader, version: i32) -> Result<FittedSaved, Truncated> {
         Ok(match self {
             Fitted::Md(g) => FittedSaved::Md(g.read_state(r, version)?, g.hw.att.read_state(r, version)?),
+            #[cfg(feature = "mcd")]
             Fitted::Mcd(g) => FittedSaved::Mcd(g.read_state(r, version)?, g.hw.att.read_state(r, version)?),
+            #[cfg(feature = "s32x")]
             Fitted::S32x(g) => FittedSaved::S32x(g.read_state(r, version)?, g.hw.att.read_state(r, version)?),
         })
     }
@@ -76,8 +82,11 @@ impl Fitted {
     fn check(&self, saved: &FittedSaved) -> Result<(), StateError> {
         let refused = match (self, saved) {
             (Fitted::Md(g), FittedSaved::Md(_, s)) => g.hw.att.check(s),
+            #[cfg(feature = "mcd")]
             (Fitted::Mcd(g), FittedSaved::Mcd(_, s)) => g.hw.att.check(s),
+            #[cfg(feature = "s32x")]
             (Fitted::S32x(g), FittedSaved::S32x(_, s)) => g.hw.att.check(s),
+            #[allow(unreachable_patterns)]
             _ => unreachable!("a state read by the configuration fitted"),
         };
         refused.map_err(|Refusal::WrongMedia { saved, here }| StateError::WrongMedia { saved, here })
@@ -89,14 +98,17 @@ impl Fitted {
                 g.apply_state(registers);
                 g.hw.att.apply_state(s);
             }
+            #[cfg(feature = "mcd")]
             (Fitted::Mcd(g), FittedSaved::Mcd(registers, s)) => {
                 g.apply_state(registers);
                 g.hw.att.apply_state(s);
             }
+            #[cfg(feature = "s32x")]
             (Fitted::S32x(g), FittedSaved::S32x(registers, s)) => {
                 g.apply_state(registers);
                 g.hw.att.apply_state(s);
             }
+            #[allow(unreachable_patterns)]
             _ => unreachable!("a state read by the configuration fitted"),
         }
     }
@@ -119,7 +131,7 @@ impl Machine {
 
     /// The oldest version this machine's system reads.
     pub fn oldest_state_version(&self) -> i32 {
-        if self.media.system == System::Mcd { OLDEST_MCD_STATE_VERSION } else { OLDEST_STATE_VERSION }
+        if self.media.system.is_disc() { OLDEST_MCD_STATE_VERSION } else { OLDEST_STATE_VERSION }
     }
 }
 
@@ -396,6 +408,7 @@ mod tests {
         assert_eq!(b.load_state(&s[..s.len() - 1]).unwrap_err().status(), status::TRUNCATED);
         assert_eq!(b.load_state(b"SNES0000").unwrap_err().status(), status::FOREIGN);
         assert_eq!(b.load_state(&[]).unwrap_err().status(), status::FOREIGN);
+        #[cfg(feature = "s32x")]
         assert_eq!(machine("SEGA 32X").load_state(&s).unwrap_err().status(), STATUS_OTHER_SYSTEM);
         assert_eq!((b.frames, b.bytes(2).unwrap()), (7, &before[..]));
     }

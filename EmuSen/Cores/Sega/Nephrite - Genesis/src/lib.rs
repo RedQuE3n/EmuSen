@@ -12,8 +12,10 @@
 pub mod genesis;
 pub mod interface;
 pub mod machine;
+#[cfg(feature = "mcd")]
 pub mod mcd;
 pub mod media;
+#[cfg(feature = "s32x")]
 pub mod s32x;
 pub mod state;
 pub mod v1;

@@ -4,9 +4,11 @@
 //! counts its frames (Nephrite_Native.md §1, §9).
 
 use crate::genesis::cart::Cart;
-use crate::genesis::{Genesis, Hw, Model, START};
-use crate::interface::{Attachment, AttachmentView, Bare, Board};
+use crate::genesis::{Genesis, Hw, Model};
+use crate::interface::{Attachment, AttachmentView, Bare};
+#[cfg(feature = "mcd")]
 use crate::mcd::MegaCd;
+#[cfg(feature = "s32x")]
 use crate::s32x::S32x;
 use crate::media::{Media, System};
 use crate::genesis::debugger::{M68K, M68K_REGISTERS, M68KBUS_ID, Z80, Z80_REGISTERS, Z80BUS_ID};
@@ -15,6 +17,7 @@ use emusen_native::core::{Instruction, Processor};
 use emusen_native::debug::Hooks;
 
 pub use crate::interface::SpaceRef;
+#[cfg(feature = "mcd")]
 pub use crate::mcd::{BRAM_ID, CARTRAM_ID};
 
 pub use crate::genesis::{CRAM_ID, ROM_ID, SRAM_ID, VRAM_ID, VSRAM_ID, WRAM_ID, Z80RAM_ID};
@@ -26,7 +29,9 @@ pub const HEIGHT: u32 = 224;
 /// The Genesis as fitted: alone, or with the Sega CD for a disc's machine.
 pub(crate) enum Fitted {
     Md(Genesis<Bare>),
+    #[cfg(feature = "mcd")]
     Mcd(Genesis<MegaCd>),
+    #[cfg(feature = "s32x")]
     S32x(Genesis<S32x>),
 }
 
@@ -35,7 +40,9 @@ macro_rules! fitted {
     ($f:expr, |$g:ident| $e:expr) => {
         match $f {
             Fitted::Md($g) => $e,
+            #[cfg(feature = "mcd")]
             Fitted::Mcd($g) => $e,
+            #[cfg(feature = "s32x")]
             Fitted::S32x($g) => $e,
         }
     };
@@ -78,8 +85,15 @@ pub struct KeptApart {
 
 impl KeptApart {
     /// Whether a state load leaves the memory of space `id` as it stands.
+    #[cfg(feature = "mcd")]
     pub fn keeps(&self, id: u32) -> bool {
         (id == CARTRAM_ID && self.cartridge) || (id == BRAM_ID && self.backup)
+    }
+
+    /// Without the Sega CD built, there is no memory to keep apart.
+    #[cfg(not(feature = "mcd"))]
+    pub fn keeps(&self, _: u32) -> bool {
+        false
     }
 }
 
@@ -101,26 +115,35 @@ impl Machine {
     }
 
     /// A machine with `bios` in a Sega CD's boot ROM and the image, when it is a disc, in its drive.
+    #[cfg_attr(not(feature = "mcd"), allow(unused_variables))]
     pub fn with_bios(image: &[u8], media: Media, model: Model, bios: Option<Vec<u8>>) -> Machine {
-        let disc = (media.system == System::Mcd).then(|| crate::mcd::open_disc(emusen_native::core::Kept::from(image.to_vec()), Vec::new()).ok()).flatten();
-        Machine::with_disc(image, media, model, bios, disc)
+        match media.system {
+            #[cfg(feature = "mcd")]
+            System::Mcd => {
+                let disc = crate::mcd::open_disc(emusen_native::core::Kept::from(image.to_vec()), Vec::new()).ok();
+                Machine::with_disc(media, model, bios, disc)
+            }
+            #[cfg(feature = "s32x")]
+            System::S32x => {
+                let cart = cartridge(image.to_vec(), &media);
+                Machine::assembled(media, Fitted::S32x(Genesis::with(cart, model, S32x::new())))
+            }
+            System::Md => {
+                let cart = cartridge(image.to_vec(), &media);
+                Machine::assembled(media, Fitted::Md(Genesis::with(cart, model, Bare)))
+            }
+        }
     }
 
-    /// A machine with `disc` in its Sega CD's drive; a disc's machine has its Sega CD whether a boot ROM is given or not.
-    pub fn with_disc(image: &[u8], media: Media, model: Model, bios: Option<Vec<u8>>, disc: Option<crate::mcd::cdd::Disc>) -> Machine {
-        let header = media.header.clone().unwrap_or_default();
-        let rom = if media.system == System::Mcd { Vec::new() } else { image.to_vec() };
-        let (rom, top, patch) = split_lock_on(rom, &header.serial);
-        let mut cart = Cart::new(rom, header.save, &header.system_type, &header.serial);
-        if let Some(top) = top {
-            cart.lock_on(top, patch);
-        }
-        let board = Board { master_hz: crate::genesis::master_hz(model.pal), pal: model.pal, start: START, rate: crate::genesis::sound::RATE };
-        let fitted = match media.system {
-            System::Mcd => Fitted::Mcd(Genesis::with(cart, model, MegaCd::new(board, bios.unwrap_or_default(), disc))),
-            System::S32x => Fitted::S32x(Genesis::with(cart, model, S32x::new())),
-            System::Md => Fitted::Md(Genesis::with(cart, model, Bare)),
-        };
+    /// A disc's machine with `disc` in its Sega CD's drive, which has its Sega CD whether a boot ROM is given or not.
+    #[cfg(feature = "mcd")]
+    pub fn with_disc(media: Media, model: Model, bios: Option<Vec<u8>>, disc: Option<crate::mcd::cdd::Disc>) -> Machine {
+        let cart = cartridge(Vec::new(), &media);
+        let board = crate::interface::Board { master_hz: crate::genesis::master_hz(model.pal), pal: model.pal, start: crate::genesis::START, rate: crate::genesis::sound::RATE };
+        Machine::assembled(media, Fitted::Mcd(Genesis::with(cart, model, MegaCd::new(board, bios.unwrap_or_default(), disc))))
+    }
+
+    fn assembled(media: Media, fitted: Fitted) -> Machine {
         Machine { media, fitted, frames: 0, picture: blank(), skip: false, pads: [0; crate::genesis::io::PADS], plugged: [(crate::genesis::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, kept_apart: KeptApart::default() }
     }
 
@@ -142,6 +165,7 @@ impl Machine {
     }
 
     /// The Sega CD, on a disc's machine.
+    #[cfg(feature = "mcd")]
     pub fn mcd(&self) -> Option<&MegaCd> {
         match &self.fitted {
             Fitted::Mcd(g) => Some(&g.hw.att),
@@ -149,6 +173,7 @@ impl Machine {
         }
     }
 
+    #[cfg(feature = "mcd")]
     pub fn mcd_mut(&mut self) -> Option<&mut MegaCd> {
         match &mut self.fitted {
             Fitted::Mcd(g) => Some(&mut g.hw.att),
@@ -167,7 +192,7 @@ impl Machine {
         if self.hw().cart.has_battery() {
             v.push(SpaceRef { id: SRAM_ID, name: "SRAM", read_only: false });
         }
-        if self.media.system != System::Mcd {
+        if !self.media.system.is_disc() {
             v.push(SpaceRef { id: ROM_ID, name: "ROM", read_only: true });
         }
         fitted!(&self.fitted, |g| g.hw.att.spaces(&mut v));
@@ -183,7 +208,7 @@ impl Machine {
             CRAM_ID => &hw.vdp.cram,
             VSRAM_ID => &hw.vdp.vsram,
             SRAM_ID if hw.cart.has_battery() => hw.cart.battery(),
-            ROM_ID if self.media.system != System::Mcd => &hw.cart.rom,
+            ROM_ID if !self.media.system.is_disc() => &hw.cart.rom,
             _ => return fitted!(&self.fitted, |g| g.hw.att.bytes(id)),
         })
     }
@@ -207,6 +232,7 @@ impl Machine {
     /// The memory the battery file holds: the cartridge's save RAM, or the Sega CD's internal backup RAM.
     pub fn battery_id(&self) -> Option<u32> {
         match self.media.system {
+            #[cfg(feature = "mcd")]
             System::Mcd => Some(BRAM_ID),
             _ => self.hw().cart.has_battery().then_some(SRAM_ID),
         }
@@ -243,7 +269,7 @@ impl Machine {
 
     /// Whether the machine runs: a Genesis, alone or with its Sega CD; the 32X only counts frames until its stage.
     pub fn runs(&self) -> bool {
-        self.media.system != System::S32x
+        !self.media.system.is_32x()
     }
 
     /// The pads and the drawing switch as a frame takes them.
@@ -295,6 +321,17 @@ impl Machine {
         let id = self.battery_id()?;
         if id == SRAM_ID && !self.battery_file.is_empty() { Some(&self.battery_file) } else { self.bytes(id) }
     }
+}
+
+/// The cartridge in the slot from its image, Sonic & Knuckles' split from what is locked on top; a disc's is empty.
+fn cartridge(rom: Vec<u8>, media: &Media) -> Cart {
+    let header = media.header.clone().unwrap_or_default();
+    let (rom, top, patch) = split_lock_on(rom, &header.serial);
+    let mut cart = Cart::new(rom, header.save, &header.system_type, &header.serial);
+    if let Some(top) = top {
+        cart.lock_on(top, patch);
+    }
+    cart
 }
 
 /// A combined Sonic & Knuckles image, its 2 MiB followed by the cartridge on top and, when the rest is a whole number

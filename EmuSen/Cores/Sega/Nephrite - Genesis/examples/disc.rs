@@ -29,7 +29,7 @@ fn main() {
     let media = Media::read(&nephrite::mcd::system_area(&mut disc));
     let bios = std::env::var_os("NEPHRITE_BIOS").map(|p| std::fs::read(p).expect("the boot ROM"));
     let model = default_model(&media);
-    let mut m = Machine::with_disc(&[], media, model, bios, Some(disc));
+    let mut m = Machine::with_disc(media, model, bios, Some(disc));
     // `NEPHRITE_BRAM` names a backup RAM image to start from, as a battery file would be.
     if let Some(p) = std::env::var_os("NEPHRITE_BRAM") {
         let b = std::fs::read(p).expect("the backup RAM");

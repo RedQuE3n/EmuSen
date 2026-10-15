@@ -757,6 +757,15 @@ attachments and no `emusen-disc` linked (the dependency made optional with `mcd`
 test sweep with each change to `interface.rs` or the Genesis. Not as a shipped library: a player's library holds the
 three systems, and a second artefact would need its own sidecar and kit run for no player (Q4).
 
+**As built (commit 7, §11.7).** `Cargo.toml` declares `mcd` (with `emusen-disc`, now optional) and `s32x`, both
+default, and requires `mcd` for the three examples that open a disc. With either off, its module, its `System`
+variant, its arm of `Fitted` and `FittedSaved`, its system row, its firmware and settings, and its tests are not
+compiled; `System::is_disc` and `is_32x` answer for the rest of the assembly. **The check is in the ordinary test
+sweep**: `boundary.rs`'s `the_genesis_and_each_attachment_build_alone` runs `cargo check --all-targets` with
+`-D warnings` for the three configurations, in a target folder of its own, so that a plain `cargo test` fails if the
+Genesis or the interface names an attachment, or an attachment the other. Proved by a deliberate `use
+crate::mcd::MegaCd` in `genesis/sound.rs`, which failed it with `--no-default-features` named.
+
 ### 5.5 One owner for each fact
 
 | Fact | Owner | Read by |
@@ -1069,3 +1078,19 @@ the 32X's tree (§5.5). `Fitted::S32x(Genesis<S32x>)` holds a 32X image's machin
 - **Byte identity**: the 71 digests equal the baseline's, the kit's 32X cartridge (Knuckles Chaotix) among them, its
   state of 672,346 bytes the same at frames 300, 600 and 1,200; the crate's 178 tests (one more, the stub's); the kit's
   sample 64 of 64 and the 240p disc compliant. The stub is on no cartridge's or disc's path, so the bench was not run.
+
+### 11.7 Commit 7: the features and the builds without them
+
+- **The features** (§5.4 as built). Construction became `with_bios` for every system and `with_disc(media, model,
+  bios, disc)` for a disc alone, the image's cartridge built by one function, `cartridge`; the frame rates of machine
+  info are now computed from `genesis::master_hz`, a `const fn`, their one owner, where they repeated its numbers.
+- **Found by the kit on the Genesis-only library**, and fixed: with the Sega CD's `media_lid` and `media_insert` not
+  compiled, the library still claims `MEDIA`, and the core's defaults answered `NOT_SUPPORTED` where a machine with no
+  drive must answer `NO_SUCH_DRIVE` (C16, all 64 images failing it). The Genesis-only build now answers
+  `NO_SUCH_DRIVE`, as the full library does on a cartridge.
+- **The four configurations' tests**: all 179; without either attachment 143; with the Sega CD alone 177; with the
+  32X alone 144. The check of the three builds passes, and fails on a deliberate crossing (§5.4 as built).
+- **The Genesis-only library**, for the record: `dist` 975,960 bytes (the full library 1,768,576); the kit's Genesis
+  sample on it 64 of 64. The 240p disc is not compliant on it, as a library without the Sega CD cannot be.
+- **Byte identity** of the full library: the 71 digests equal the baseline's; the kit's sample 64 of 64 and the 240p
+  disc compliant (C1–C19).

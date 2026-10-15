@@ -26,7 +26,7 @@ fn machine(path: &std::path::Path, raw: &[u8], bios: &Option<Vec<u8>>) -> Machin
         };
         let mut disc = nephrite::mcd::open_disc(Kept::from(raw.to_vec()), tracks).expect("a disc");
         let media = Media::read(&nephrite::mcd::system_area(&mut disc));
-        return Machine::with_disc(&[], media.clone(), default_model(&media), bios.clone(), Some(disc));
+        return Machine::with_disc(media.clone(), default_model(&media), bios.clone(), Some(disc));
     }
     let image = nephrite::media::cartridge_bytes(raw).into_owned();
     Machine::new(&image, Media::read(&image))

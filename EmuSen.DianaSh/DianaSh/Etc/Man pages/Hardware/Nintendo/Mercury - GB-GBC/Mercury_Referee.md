@@ -298,6 +298,9 @@ What the referee adds is the witness:
 
 ### 2.8 The cartridge boards **[V]**
 
+*Audited 2026-10-15 (`Mercury_Native.md` §13.6): the RAM mask (on MBC1) and MBC1M proven and fixed in both engines;
+MBC5's RAM enable a dispute between GBCTR and Pan Docs, put to the tester; MBC3's clock rules out of reach.*
+
 - **A RAM bank beyond the RAM's size is unmapped rather than mirrored.**
   - Mercury: `Mbc1.cs:27` `RamBank => _advancedMode ? _bank2 : 0`, then a bounds check that returns `$FF` and drops
     writes (`:63-64`, `:71-72`). MBC3 and MBC5 use the same pattern.

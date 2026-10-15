@@ -387,10 +387,10 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // F: a 1 MiB MBC1 image with each bank's number at offset $2000 of the bank, and bank $10 opening with bank 0's logo or not.
-        private MercuryRig Mbc1Megabyte(bool logoInBank16)
+        private MercuryRig Mbc1Megabyte(bool logoInBank16, bool blankLogo = false)
         {
             byte[] image = SyntheticGbRom.Build(romBanks: 64, cartridgeType: 0x01);
-            for (int i = 0; i < 48; i++) image[0x104 + i] = (byte)(0x31 + i * 7);
+            for (int i = 0; i < 48; i++) image[0x104 + i] = blankLogo ? (byte)0x00 : (byte)(0x31 + i * 7);
             if (logoInBank16) Array.Copy(image, 0x104, image, (0x10 * 0x4000) + 0x104, 48);
             for (int bank = 0; bank < 64; bank++) image[(bank * 0x4000) + 0x2000] = (byte)bank;
             var rig = MercuryRig.Create(Engine, image);
@@ -425,6 +425,16 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x20, rig.Read(0x2000));
             rig.Write(0x2000, 0x01);
             Assert.Equal(0x21, rig.Read(0x6000));
+        }
+
+        // F: two blank logo areas are not the same logo, so a synthetic or blank image is never taken for a multicart.
+        [Fact]
+        public void A_megabyte_mbc1_with_a_blank_logo_in_both_banks_is_ordinary()
+        {
+            var rig = Mbc1Megabyte(logoInBank16: true, blankLogo: true);
+            rig.Write(0x6000, 0x01);
+            rig.Write(0x4000, 0x01);
+            Assert.Equal(0x20, rig.Read(0x2000));
         }
     }
 

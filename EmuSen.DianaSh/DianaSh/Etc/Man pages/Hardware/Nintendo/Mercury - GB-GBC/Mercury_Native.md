@@ -2333,6 +2333,9 @@ the thirteen instruction-timing ROMs are left for it.
   the dispute, and revisit with the per-dot renderer.
   *Decided 2026-10-15, as recommended:* LCDC bit 0 clear on a Game Boy stays blank (white), as Pan Docs has it. The
   referee's two readings are recorded as a dispute, to be revisited with a per-dot renderer. Nothing is built.
+- **MBC5's RAM enable** (referee §2.8; §13.6). GBCTR says only `$0A` enables RAM; Pan Docs says any value whose low
+  nibble is `$A`. Mercury follows Pan Docs, and no test ROM settles it. *Recommendation:* keep Pan Docs' rule, since the
+  other could cost a game its saves, until a test ROM or a cartridge settles it.
 - **§3's further leads** (the speed switch's duration, the serial port's transfer time, DMG `STOP`, the post-boot DIV)
   are outside §2 and are not part of this audit.
 
@@ -2729,3 +2732,54 @@ condition cycle settled at the end again; E3, the push's internal cycle between 
 engine's harness, `Each_stack_access_lands_on_the_machine_cycle_the_hardware_gives_it` (C#: four cases for E1 and E3, one
 for E2; Rust: the one test), and by nothing through the rig, as expected of placement. Without the harnesses the corpus
 would be the only oracle, and CI has no corpus.
+
+### 13.6 Step F: the cartridge boards
+
+**MBC1's RAM bank on a chip of one bank** (referee §2.8, first item). mooneye's `emulator-only/mbc1/ram_64kb`, "verified
+using a flash cartridge with a genuine MBC1B1 chip", expects that "since we have only one 8 kB bank, we always access it
+regardless of what we do with `$4000` and `$6000`". GBCTR's MBC1 chapter gives the mechanism: the RAM's A0–A12 come
+from the cartridge bus, and only A13–A14 from BANK2, so a 64 Kbit chip, which has no A13 or A14, ignores them. Mercury
+computed an offset past the RAM's end in mode 1 and answered `$FF`, dropping the write.
+
+**MBC1M** (referee §2.8, second item). mooneye's `multicart_rom_8Mb` gives the expected bank for every register value;
+its source says a multicart "cannot be detected from the header alone" and needs a heuristic. Pan Docs (`MBC1.md`,
+"MBC1M") gives both the wiring, BANK1 read as four bits for the bank (all five still for the 0→1 rule) and BANK2 on
+bank bits 4–5, and the heuristic: such carts "can normally be identified by having a Nintendo copyright header in bank
+`$10`". Mercury had no MBC1M.
+
+**The proof.** Committed failing (`5ad71031`): `An_mbc1_with_one_ram_bank_answers_every_bank_number_with_it` and
+`An_mbc1_multicart_puts_bank2_on_bank_bits_4_and_5` failed on both engines; the control,
+`A_megabyte_mbc1_without_the_second_logo_banks_as_an_ordinary_mbc1`, passed.
+
+**The fix**, the same in both engines:
+
+- MBC1's RAM bank is taken modulo the number of 8 KiB banks the header gives (`Mbc1.RamBank`, `Mbc1::ram_bank`).
+- MBC1M is decided once, from the image, by `Cartridge.IsMbc1Multicart` (`cartridge::is_mbc1_multicart`): an MBC1 image
+  of exactly 1 MiB whose bank `$10` opens, at `$0104`, with the same 48 bytes as bank 0, provided those bytes are not all
+  one value. Comparing with the cartridge's own logo keeps the logo's bytes out of the tree; the second condition keeps
+  a blank synthetic image from matching itself, and has its own claim
+  (`A_megabyte_mbc1_with_a_blank_logo_in_both_banks_is_ordinary`). Of the corpus's thirteen MBC1 images, only the
+  multicart matches. The result is a shift kept beside the board (`_bank2Shift`, `bank2_shift`, 4 or 5), derived from
+  the image and not in the state, as the header's other facts are.
+- **The state format is unchanged.**
+
+**Two of §2.8's items were not built.**
+
+- **MBC5's RAM enable is a dispute between the two documents.** GBCTR (`mbc5.typ`, "based on my MBC5 research") says
+  RAMG is a full eight-bit register and only `$0A` enables RAM, `$8A` included among the values that disable it; Pan
+  Docs (`MBC5.md`) says actual MBCs enable on any value whose low nibble is `$A`. The referee's two readings side with
+  GBCTR; Mercury follows Pan Docs. No test ROM in the corpus, or known to this audit, writes such a value. A game that
+  enabled RAM with `$1A` would lose its saves under GBCTR's rule, which a player would notice, so this is a question for
+  the tester (§13.0), with the recommendation to keep Pan Docs' rule until a test ROM settles it.
+- **MBC3's clock rules** (seconds resetting the sub-second count, the registers' widths, carrying only at 59/59/23): Pan
+  Docs states none of them, GBCTR's MBC3 chapter is five lines long, and the ROMs that test them (rtc3test,
+  `mbc3_rtc_prelim`) are not in the corpus. **Out of reach.**
+
+MBC3's and MBC5's own RAM banks use the same bounds check MBC1 had. The wiring argument would apply to them, but no test
+ROM or document covers a bank number beyond those boards' chips, so they were left as they are and recorded as an
+argued candidate.
+
+**The corpus.** `emulator-only/mbc1/ram_64kb` and `multicart_rom_8Mb` pass in all six columns; nothing else moved: 118
+of 173 in each, and all 28 `emulator-only` ROMs pass. **The four games** are unchanged (Kirby's Dream Land and Link's
+Awakening are MBC1 boards, the latter with 8 KiB of RAM): MercuryRT's trace and the real-games test. The whole `Mercury`
+filter passes, 814 cases.

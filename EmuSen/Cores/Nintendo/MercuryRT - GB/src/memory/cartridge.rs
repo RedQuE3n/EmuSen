@@ -54,7 +54,12 @@ impl Cartridge {
             0x80 => CgbSupport::Enhanced,
             _ => CgbSupport::None,
         };
-        let mapper = Mapper::for_type(kind).ok_or(RomError::UnsupportedType(kind))?;
+        let mut mapper = Mapper::for_type(kind).ok_or(RomError::UnsupportedType(kind))?;
+        if let Mapper::Mbc1(m) = &mut mapper
+            && is_mbc1_multicart(&image)
+        {
+            m.bank2_shift = 4;
+        }
         let cart = Cartridge {
             title: Skip(read_title(&image, cgb != CgbSupport::None)),
             cartridge_type: Skip(kind),
@@ -68,6 +73,10 @@ impl Cartridge {
             rom: Skip(image),
         };
         Ok((cart, mapper))
+    }
+
+    pub fn ram_banks(&self) -> usize {
+        self.ram.len() / RAM_BANK_SIZE
     }
 
     pub fn rom_banks(&self) -> usize {
@@ -170,4 +179,16 @@ mod tests {
         assert_eq!(Cartridge::from_image(image(0x22, 0, 0)).err(), Some(RomError::UnsupportedType(0x22)));
         assert_eq!(Cartridge::from_image(image(0x04, 0, 0)).err(), Some(RomError::UnsupportedType(0x04)));
     }
+}
+
+/// MBC1M as Pan Docs identifies it: a 1 MiB MBC1 image whose bank $10 opens with bank 0's logo, a logo that is not blank
+/// (Mercury_Native.md §13.6).
+pub fn is_mbc1_multicart(rom: &[u8]) -> bool {
+    const LOGO: usize = 0x0104;
+    const BANK16: usize = 0x10 * ROM_BANK_SIZE;
+    if rom.len() != 64 * ROM_BANK_SIZE || !(0x01..=0x03).contains(&rom[0x0147]) {
+        return false;
+    }
+    let first = &rom[LOGO..LOGO + 48];
+    first.iter().any(|&b| b != first[0]) && first == &rom[BANK16 + LOGO..BANK16 + LOGO + 48]
 }

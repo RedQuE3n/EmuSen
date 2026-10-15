@@ -29,7 +29,7 @@ namespace EmuSen.Mistress.Views
     {
         private readonly IFindByNameHost _host;
         private readonly string _path;
-        private readonly TextBox _text = new() { Name = "FindByNameText", PlaceholderText = "The game's name", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly TextBox _text = new() { Name = "FindByNameText", PlaceholderText = "The game's name", HorizontalAlignment = HorizontalAlignment.Stretch, [Avalonia.Automation.AutomationProperties.NameProperty] = "The game's name" };
         private readonly Button _search;
         private readonly HintText _status = new() { Name = "FindByNameStatus" };
         private readonly StackPanel _list = Ui.Stack(4);

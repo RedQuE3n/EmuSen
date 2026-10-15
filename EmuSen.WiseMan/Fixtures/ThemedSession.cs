@@ -175,7 +175,8 @@ namespace EmuSen.WiseMan.Fixtures
 
             if (sounds) foreach (string name in SoundNames) Wav(theme.PathOf($"sounds/{name}.wav"), 220 + 110 * Array.IndexOf(SoundNames, name));
 
-            const string help = "<helpsystem name=\"help\"><pos>0.03 0.95</pos><origin>0 1</origin><entries>all</entries><fontSize>0.035</fontSize>" +
+            // Every entry in one row at a size that fits the screen's width, as a theme that asks for them all must - see EmuSen_InterfaceSpec.md §6.3.4.
+            const string help = "<helpsystem name=\"help\"><pos>0.03 0.95</pos><origin>0 1</origin><entries>all</entries><fontSize>0.025</fontSize>" +
                                 "<textColor>FFFFFF</textColor><iconColor>FFFFFF</iconColor><backgroundColor>202020FF</backgroundColor></helpsystem>";
             string soundElements = sounds ? string.Concat(SoundNames.Select(n => $"<sound name=\"{n}\"><path>./sounds/{n}.wav</path></sound>")) : "";
             theme.Capabilities("").Theme(

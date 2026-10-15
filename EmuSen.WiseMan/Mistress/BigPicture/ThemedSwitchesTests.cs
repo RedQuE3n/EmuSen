@@ -272,7 +272,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(order, string.Join(",", s.Themed.Stage!.Current.Data.Systems.Select(x => x.System.Name)));
             ThemeSettingsWindow sheet = OpenInterface(s);
             string[] startup = ((System.Collections.IEnumerable)Named<Dropdown>(sheet, "StartupSystem").ItemsSource!).Cast<string>().ToArray();
-            Assert.Equal(7, startup.Length);
+            // Default and every system offered, the PlayStation among them since 2026-10-11 - see EmuSen_InterfaceSpec.md §6.3.5.
+            Assert.Equal(8, startup.Length);
+            Assert.Contains("Sony PlayStation", startup);
             Assert.StartsWith("Default", startup[0]);
             PutAway(s);
         }, default);

@@ -49,7 +49,7 @@ namespace EmuSen.Mistress.Views
         private readonly IReadOnlyList<CoverCandidate> _all;
         private readonly Action<CoverCandidate> _chosen;
         private readonly StackPanel _list = Ui.Stack(4);
-        private readonly TextBox _search = new() { Name = "CoverPickerSearch", PlaceholderText = "Search the library", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly TextBox _search = new() { Name = "CoverPickerSearch", PlaceholderText = "Search the library", HorizontalAlignment = HorizontalAlignment.Stretch, [Avalonia.Automation.AutomationProperties.NameProperty] = "Search the library" };
         private readonly Dictionary<string, Bitmap?> _thumbs = new(StringComparer.Ordinal);
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.

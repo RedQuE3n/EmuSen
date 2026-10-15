@@ -11,7 +11,7 @@ frame 233.65,24,812.7,668
 title "Active Cheats"
 footer "Saved 3 cheat(s) as 'A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta)' - they come back automatically next time you start it."
 case ActiveCheatsLongCheat
-palette #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
   0 ContentControl at=234,124,813,465 by=panel limit=234,124,812.35,465 paints=#9C9CA0FF role=none seen=234,124,812.35,465
     1 DockPanel at=258,136,765,437 by=panel limit=234,124,812.35,465 role=none
@@ -34,10 +34,10 @@ tree
           18 TextBlock at=270,194,741,29 box=741,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Add a SNES cheat" layout=142.18,28.8 limit=258,186,765,119 paints=#9C9CA0FF role=text size=24 text="Add a SNES cheat"
           19 HintText at=270,229,741,24 box=741,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Accepts: Game Genie, Pro Action Replay." layout=271.12,24 limit=258,186,765,119 paints=#86868AFF role=text size=20 text="Accepts: Game Genie, Pro Action Replay."
           20 Grid at=270,259,741,46 by=clip limit=258,186,765,119 role=none
-            21 TextBox at=270,259,332,46 by=clip drawn focus limit=258,186,765,119 name=SNESCodeBox op paints=#0E0E10FF,#55555AFF,#D2D2D6FF role=edit
+            21 TextBox at=270,259,332,46 by=clip drawn focus heard="Cheat code" limit=258,186,765,119 name=SNESCodeBox op paints=#0E0E10FF,#55555AFF,#D2D2D6FF role=edit
               22 ScrollViewer allow="a text box scrolls its own text" at=281,266,310,32 name=PART_ScrollViewer paints=#D2D2D6FF part role=scrollviewer
                 23 TextBlock allow="a text box scrolls its own text" at=281,266,310,32 box=310,32 caps=18.1987 drawn face="Barlow Condensed" heard=Code in=22 layout=43.65,31.2 name=PART_Placeholder paints=#86868AFF part role=text size=26 text=Code
-            24 TextBox at=610,259,324,46 by=clip drawn focus limit=258,186,765,119 name=SNESDescriptionBox op paints=#0E0E10FF,#55555AFF,#D2D2D6FF role=edit
+            24 TextBox at=610,259,324,46 by=clip drawn focus heard="Cheat description" limit=258,186,765,119 name=SNESDescriptionBox op paints=#0E0E10FF,#55555AFF,#D2D2D6FF role=edit
               25 ScrollViewer allow="a text box scrolls its own text" at=621,266,302,32 name=PART_ScrollViewer paints=#D2D2D6FF part role=scrollviewer
                 26 TextBlock allow="a text box scrolls its own text" at=621,266,302,32 box=302,32 caps=18.1987 drawn face="Barlow Condensed" heard=Description in=25 layout=101.09,31.2 name=PART_Placeholder paints=#86868AFF part role=text size=26 text=Description
             27 Button at=942,260,69,44 by=clip drawn focus heard=ADD limit=258,186,765,119 name=SNESAddButton op paints=#55555AFF,#9C9CA0FF role=button text=Add
@@ -149,8 +149,8 @@ edge 66 up 59
 edge 66 down 33
 edge 66 left same
 edge 66 right same
-press pageup focus="TextBox GBCodeBox" tab=GB title="Active Cheats" top=ActiveCheatsWindow
-press pagedown focus="TextBox SNESCodeBox" tab=SNES title="Active Cheats" top=ActiveCheatsWindow
-press first focus="TextBox SNESCodeBox" tab=SNES title="Active Cheats" top=ActiveCheatsWindow
-press last focus="TextBox SNESCodeBox" tab=SNES title="Active Cheats" top=ActiveCheatsWindow
+press pageup focus="TextBox GBCodeBox (Cheat code)" tab=GB title="Active Cheats" top=ActiveCheatsWindow
+press pagedown focus="TextBox SNESCodeBox (Cheat code)" tab=SNES title="Active Cheats" top=ActiveCheatsWindow
+press first focus="TextBox SNESCodeBox (Cheat code)" tab=SNES title="Active Cheats" top=ActiveCheatsWindow
+press last focus="TextBox SNESCodeBox (Cheat code)" tab=SNES title="Active Cheats" top=ActiveCheatsWindow
 press back top=none

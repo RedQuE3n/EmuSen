@@ -11,7 +11,7 @@ frame 128,24,1024,668
 title "Cheat Database"
 footer "EmuSen ships no cheat data. Point this at a cheat folder you already have - a RetroArch cheats folder works as-is - or download one. Cheat data comes from the libretro cheat database (github.com/libretro/libretro-database), licensed CC BY-SA 4.0. The codes themselves were collected from community sources, substantially GameHacking.org - credit belongs to their original authors. EmuSen ships none of this data; it is downloaded to your machine at your request."
 case CheatDatabase
-palette #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
   0 ContentControl at=128,124,1024,440 by=panel limit=128,124,1024,440 paints=#9C9CA0FF role=none
     1 DockPanel at=152,136,976,412 by=panel limit=128,124,1024,440 role=none
@@ -73,11 +73,11 @@ edge 12 up 29
 edge 12 down same
 edge 12 left 10
 edge 12 right 14
-edge 14 up 42
+edge 14 up "row:40/0/Hollow Comet (World)"
 edge 14 down same
 edge 14 left 12
 edge 14 right 16
-edge 16 up 42
+edge 16 up "row:40/0/Hollow Comet (World)"
 edge 16 down same
 edge 16 left 14
 edge 16 right same
@@ -88,17 +88,17 @@ edge 23 right 35
 edge 25 up 23
 edge 25 down 27
 edge 25 left same
-edge 25 right 42
+edge 25 right "row:40/0/Fable of Tiles (USA)"
 edge 27 up 25
 edge 27 down 29
 edge 27 left same
 edge 27 right 42
 edge 29 up 27
-edge 29 down row:21/4
+edge 29 down "row:21/4/Nintendo - Nintendo 64  (not downloaded)"
 edge 29 left same
 edge 29 right 35
 edge 35 up 5
-edge 35 down 42
+edge 35 down "row:40/0/Hollow Comet (World)"
 edge 35 left 23
 edge 35 right 16
 edge 42 up 35
@@ -106,25 +106,33 @@ edge 42 down 44
 edge 42 left 25
 edge 42 right same
 edge 44 up 42
-edge 44 down 14
-edge 44 left 27
+edge 44 down 46
+edge 44 left 29
 edge 44 right same
-edge row:21/4 up 29
-edge row:21/4 down row:21/5
-edge row:21/4 left same
-edge row:21/4 right 35
-edge row:21/5 up row:21/4
-edge row:21/5 down row:21/6
-edge row:21/5 left same
-edge row:21/5 right 35
-edge row:21/6 up row:21/5
-edge row:21/6 down row:21/7
-edge row:21/6 left same
-edge row:21/6 right 35
-edge row:21/7 up row:21/6
-edge row:21/7 down 10
-edge row:21/7 left same
-edge row:21/7 right 35
+edge 46 up 44
+edge 46 down "row:40/3/Cobalt Harbor (USA)"
+edge 46 left 27
+edge 46 right same
+edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" up 29
+edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" down "row:21/5/Nintendo - Satellaview  (not downloaded)"
+edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" left same
+edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" right 35
+edge "row:21/5/Nintendo - Satellaview  (not downloaded)" up "row:21/4/Nintendo - Nintendo 64  (not downloaded)"
+edge "row:21/5/Nintendo - Satellaview  (not downloaded)" down "row:21/6/Sega - Mega Drive - Genesis  (not downloaded)"
+edge "row:21/5/Nintendo - Satellaview  (not downloaded)" left same
+edge "row:21/5/Nintendo - Satellaview  (not downloaded)" right 35
+edge "row:40/0/Fable of Tiles (USA)" up 35
+edge "row:40/0/Fable of Tiles (USA)" down "row:40/1/Granite Choir (Japan)"
+edge "row:40/0/Fable of Tiles (USA)" left 25
+edge "row:40/0/Fable of Tiles (USA)" right same
+edge "row:40/0/Hollow Comet (World)" up 35
+edge "row:40/0/Hollow Comet (World)" down 14
+edge "row:40/0/Hollow Comet (World)" left 25
+edge "row:40/0/Hollow Comet (World)" right same
+edge "row:40/1/Granite Choir (Japan)" up "row:40/0/Fable of Tiles (USA)"
+edge "row:40/1/Granite Choir (Japan)" down 14
+edge "row:40/1/Granite Choir (Japan)" left 27
+edge "row:40/1/Granite Choir (Japan)" right same
 press pageup focus="TextBox PART_Path (Choose a cheat folder (a RetroArch cheats folder works as-is))" title="Cheat Database" top=CheatDatabaseWindow
 press pagedown focus="TextBox PART_Path (Choose a cheat folder (a RetroArch cheats folder works as-is))" title="Cheat Database" top=CheatDatabaseWindow
 press first focus="TextBox PART_Path (Choose a cheat folder (a RetroArch cheats folder works as-is))" title="Cheat Database" top=CheatDatabaseWindow

@@ -511,7 +511,7 @@ built.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
 built.factory[GB plain <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB plain <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB plain <null>].axes = []
-built.factory[GB plain <null>].state-version = 8
+built.factory[GB plain <null>].state-version = 11
 built.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -527,7 +527,7 @@ built.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <n
 built.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB plain Mercury (C#)].axes = []
-built.factory[GB plain Mercury (C#)].state-version = 8
+built.factory[GB plain Mercury (C#)].state-version = 11
 built.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB plain Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -543,7 +543,7 @@ built.factory[GB plain MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch 
 built.factory[GB plain MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB plain MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB plain MercuryRT (Rust)].axes = []
-built.factory[GB plain MercuryRT (Rust)].state-version = 8
+built.factory[GB plain MercuryRT (Rust)].state-version = 11
 built.factory[GB plain MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB plain MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB plain MercuryRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -559,7 +559,7 @@ built.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
 built.factory[GB plain Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB plain Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB plain Nope].axes = []
-built.factory[GB plain Nope].state-version = 8
+built.factory[GB plain Nope].state-version = 11
 built.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -575,7 +575,7 @@ built.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <nul
 built.factory[GB plain Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB plain Venus (C#)].axes = []
-built.factory[GB plain Venus (C#)].state-version = 8
+built.factory[GB plain Venus (C#)].state-version = 11
 built.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -591,7 +591,7 @@ built.factory[GB battery <null>].codec-explicit = Game Genie | RomPatch | <null>
 built.factory[GB battery <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB battery <null>].axes = []
-built.factory[GB battery <null>].state-version = 8
+built.factory[GB battery <null>].state-version = 11
 built.factory[GB battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB battery <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB battery <null>].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -608,7 +608,7 @@ built.factory[GB battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | 
 built.factory[GB battery Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB battery Mercury (C#)].axes = []
-built.factory[GB battery Mercury (C#)].state-version = 8
+built.factory[GB battery Mercury (C#)].state-version = 11
 built.factory[GB battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB battery Mercury (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -625,7 +625,7 @@ built.factory[GB battery MercuryRT (Rust)].codec-explicit = Game Genie | RomPatc
 built.factory[GB battery MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB battery MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB battery MercuryRT (Rust)].axes = []
-built.factory[GB battery MercuryRT (Rust)].state-version = 8
+built.factory[GB battery MercuryRT (Rust)].state-version = 11
 built.factory[GB battery MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB battery MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB battery MercuryRT (Rust)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -642,7 +642,7 @@ built.factory[GB battery Nope].codec-explicit = Game Genie | RomPatch | <null>
 built.factory[GB battery Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB battery Nope].axes = []
-built.factory[GB battery Nope].state-version = 8
+built.factory[GB battery Nope].state-version = 11
 built.factory[GB battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB battery Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB battery Nope].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -659,7 +659,7 @@ built.factory[GB battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <n
 built.factory[GB battery Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB battery Venus (C#)].axes = []
-built.factory[GB battery Venus (C#)].state-version = 8
+built.factory[GB battery Venus (C#)].state-version = 11
 built.factory[GB battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB battery Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB battery Venus (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -676,7 +676,7 @@ built.factory[GB colour-battery <null>].codec-explicit = Game Genie | RomPatch |
 built.factory[GB colour-battery <null>].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB colour-battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB colour-battery <null>].axes = []
-built.factory[GB colour-battery <null>].state-version = 8
+built.factory[GB colour-battery <null>].state-version = 11
 built.factory[GB colour-battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB colour-battery <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB colour-battery <null>].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
@@ -693,7 +693,7 @@ built.factory[GB colour-battery Mercury (C#)].codec-explicit = Game Genie | RomP
 built.factory[GB colour-battery Mercury (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB colour-battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB colour-battery Mercury (C#)].axes = []
-built.factory[GB colour-battery Mercury (C#)].state-version = 8
+built.factory[GB colour-battery Mercury (C#)].state-version = 11
 built.factory[GB colour-battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB colour-battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB colour-battery Mercury (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
@@ -710,7 +710,7 @@ built.factory[GB colour-battery MercuryRT (Rust)].codec-explicit = Game Genie | 
 built.factory[GB colour-battery MercuryRT (Rust)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB colour-battery MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB colour-battery MercuryRT (Rust)].axes = []
-built.factory[GB colour-battery MercuryRT (Rust)].state-version = 8
+built.factory[GB colour-battery MercuryRT (Rust)].state-version = 11
 built.factory[GB colour-battery MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB colour-battery MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB colour-battery MercuryRT (Rust)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
@@ -727,7 +727,7 @@ built.factory[GB colour-battery Nope].codec-explicit = Game Genie | RomPatch | <
 built.factory[GB colour-battery Nope].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB colour-battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB colour-battery Nope].axes = []
-built.factory[GB colour-battery Nope].state-version = 8
+built.factory[GB colour-battery Nope].state-version = 11
 built.factory[GB colour-battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB colour-battery Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB colour-battery Nope].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
@@ -744,7 +744,7 @@ built.factory[GB colour-battery Venus (C#)].codec-explicit = Game Genie | RomPat
 built.factory[GB colour-battery Venus (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB colour-battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB colour-battery Venus (C#)].axes = []
-built.factory[GB colour-battery Venus (C#)].state-version = 8
+built.factory[GB colour-battery Venus (C#)].state-version = 11
 built.factory[GB colour-battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[GB colour-battery Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB colour-battery Venus (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
@@ -1428,7 +1428,7 @@ nothing-discovered.factory[GB plain <null>].codec-explicit = Game Genie | RomPat
 nothing-discovered.factory[GB plain <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[GB plain <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 nothing-discovered.factory[GB plain <null>].axes = []
-nothing-discovered.factory[GB plain <null>].state-version = 8
+nothing-discovered.factory[GB plain <null>].state-version = 11
 nothing-discovered.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[GB plain Mercury (C#)].supported = True
@@ -1442,7 +1442,7 @@ nothing-discovered.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | 
 nothing-discovered.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 nothing-discovered.factory[GB plain Mercury (C#)].axes = []
-nothing-discovered.factory[GB plain Mercury (C#)].state-version = 8
+nothing-discovered.factory[GB plain Mercury (C#)].state-version = 11
 nothing-discovered.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[GB plain MercuryRT (Rust)].supported = True
@@ -1456,7 +1456,7 @@ nothing-discovered.factory[GB plain MercuryRT (Rust)].codec-explicit = Game Geni
 nothing-discovered.factory[GB plain MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[GB plain MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 nothing-discovered.factory[GB plain MercuryRT (Rust)].axes = []
-nothing-discovered.factory[GB plain MercuryRT (Rust)].state-version = 8
+nothing-discovered.factory[GB plain MercuryRT (Rust)].state-version = 11
 nothing-discovered.factory[GB plain MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[GB plain Nope].supported = True
@@ -1470,7 +1470,7 @@ nothing-discovered.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch
 nothing-discovered.factory[GB plain Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[GB plain Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 nothing-discovered.factory[GB plain Nope].axes = []
-nothing-discovered.factory[GB plain Nope].state-version = 8
+nothing-discovered.factory[GB plain Nope].state-version = 11
 nothing-discovered.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[GB plain Venus (C#)].supported = True
@@ -1484,7 +1484,7 @@ nothing-discovered.factory[GB plain Venus (C#)].codec-explicit = Game Genie | Ro
 nothing-discovered.factory[GB plain Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 nothing-discovered.factory[GB plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 nothing-discovered.factory[GB plain Venus (C#)].axes = []
-nothing-discovered.factory[GB plain Venus (C#)].state-version = 8
+nothing-discovered.factory[GB plain Venus (C#)].state-version = 11
 nothing-discovered.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[N64 plain <null>].supported = True
@@ -1762,7 +1762,7 @@ refused-discovered.factory[GB plain <null>].codec-explicit = Game Genie | RomPat
 refused-discovered.factory[GB plain <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 refused-discovered.factory[GB plain <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 refused-discovered.factory[GB plain <null>].axes = []
-refused-discovered.factory[GB plain <null>].state-version = 8
+refused-discovered.factory[GB plain <null>].state-version = 11
 refused-discovered.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[GB plain Mercury (C#)].supported = True
@@ -1776,7 +1776,7 @@ refused-discovered.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | 
 refused-discovered.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 refused-discovered.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 refused-discovered.factory[GB plain Mercury (C#)].axes = []
-refused-discovered.factory[GB plain Mercury (C#)].state-version = 8
+refused-discovered.factory[GB plain Mercury (C#)].state-version = 11
 refused-discovered.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[GB plain MercuryRT (Rust)].supported = True
@@ -1790,7 +1790,7 @@ refused-discovered.factory[GB plain MercuryRT (Rust)].codec-explicit = Game Geni
 refused-discovered.factory[GB plain MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 refused-discovered.factory[GB plain MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 refused-discovered.factory[GB plain MercuryRT (Rust)].axes = []
-refused-discovered.factory[GB plain MercuryRT (Rust)].state-version = 8
+refused-discovered.factory[GB plain MercuryRT (Rust)].state-version = 11
 refused-discovered.factory[GB plain MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[GB plain Nope].supported = True
@@ -1804,7 +1804,7 @@ refused-discovered.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch
 refused-discovered.factory[GB plain Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 refused-discovered.factory[GB plain Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 refused-discovered.factory[GB plain Nope].axes = []
-refused-discovered.factory[GB plain Nope].state-version = 8
+refused-discovered.factory[GB plain Nope].state-version = 11
 refused-discovered.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[GB plain Venus (C#)].supported = True
@@ -1818,7 +1818,7 @@ refused-discovered.factory[GB plain Venus (C#)].codec-explicit = Game Genie | Ro
 refused-discovered.factory[GB plain Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 refused-discovered.factory[GB plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 refused-discovered.factory[GB plain Venus (C#)].axes = []
-refused-discovered.factory[GB plain Venus (C#)].state-version = 8
+refused-discovered.factory[GB plain Venus (C#)].state-version = 11
 refused-discovered.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[N64 plain <null>].supported = True
@@ -2440,7 +2440,7 @@ off.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[GB plain <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB plain <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB plain <null>].axes = []
-off.factory[GB plain <null>].state-version = 8
+off.factory[GB plain <null>].state-version = 11
 off.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -2456,7 +2456,7 @@ off.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <nul
 off.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB plain Mercury (C#)].axes = []
-off.factory[GB plain Mercury (C#)].state-version = 8
+off.factory[GB plain Mercury (C#)].state-version = 11
 off.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB plain Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -2472,7 +2472,7 @@ off.factory[GB plain MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch | 
 off.factory[GB plain MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB plain MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB plain MercuryRT (Rust)].axes = []
-off.factory[GB plain MercuryRT (Rust)].state-version = 8
+off.factory[GB plain MercuryRT (Rust)].state-version = 11
 off.factory[GB plain MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB plain MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB plain MercuryRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -2488,7 +2488,7 @@ off.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[GB plain Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB plain Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB plain Nope].axes = []
-off.factory[GB plain Nope].state-version = 8
+off.factory[GB plain Nope].state-version = 11
 off.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -2504,7 +2504,7 @@ off.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[GB plain Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB plain Venus (C#)].axes = []
-off.factory[GB plain Venus (C#)].state-version = 8
+off.factory[GB plain Venus (C#)].state-version = 11
 off.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
@@ -2520,7 +2520,7 @@ off.factory[GB battery <null>].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[GB battery <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB battery <null>].axes = []
-off.factory[GB battery <null>].state-version = 8
+off.factory[GB battery <null>].state-version = 11
 off.factory[GB battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB battery <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB battery <null>].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -2537,7 +2537,7 @@ off.factory[GB battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <n
 off.factory[GB battery Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB battery Mercury (C#)].axes = []
-off.factory[GB battery Mercury (C#)].state-version = 8
+off.factory[GB battery Mercury (C#)].state-version = 11
 off.factory[GB battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB battery Mercury (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -2554,7 +2554,7 @@ off.factory[GB battery MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch 
 off.factory[GB battery MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB battery MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB battery MercuryRT (Rust)].axes = []
-off.factory[GB battery MercuryRT (Rust)].state-version = 8
+off.factory[GB battery MercuryRT (Rust)].state-version = 11
 off.factory[GB battery MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB battery MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB battery MercuryRT (Rust)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -2571,7 +2571,7 @@ off.factory[GB battery Nope].codec-explicit = Game Genie | RomPatch | <null>
 off.factory[GB battery Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB battery Nope].axes = []
-off.factory[GB battery Nope].state-version = 8
+off.factory[GB battery Nope].state-version = 11
 off.factory[GB battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB battery Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB battery Nope].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -2588,7 +2588,7 @@ off.factory[GB battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <nul
 off.factory[GB battery Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB battery Venus (C#)].axes = []
-off.factory[GB battery Venus (C#)].state-version = 8
+off.factory[GB battery Venus (C#)].state-version = 11
 off.factory[GB battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB battery Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB battery Venus (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
@@ -2605,7 +2605,7 @@ off.factory[GB colour-battery <null>].codec-explicit = Game Genie | RomPatch | <
 off.factory[GB colour-battery <null>].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB colour-battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB colour-battery <null>].axes = []
-off.factory[GB colour-battery <null>].state-version = 8
+off.factory[GB colour-battery <null>].state-version = 11
 off.factory[GB colour-battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB colour-battery <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB colour-battery <null>].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
@@ -2622,7 +2622,7 @@ off.factory[GB colour-battery Mercury (C#)].codec-explicit = Game Genie | RomPat
 off.factory[GB colour-battery Mercury (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB colour-battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB colour-battery Mercury (C#)].axes = []
-off.factory[GB colour-battery Mercury (C#)].state-version = 8
+off.factory[GB colour-battery Mercury (C#)].state-version = 11
 off.factory[GB colour-battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB colour-battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB colour-battery Mercury (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
@@ -2639,7 +2639,7 @@ off.factory[GB colour-battery MercuryRT (Rust)].codec-explicit = Game Genie | Ro
 off.factory[GB colour-battery MercuryRT (Rust)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB colour-battery MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB colour-battery MercuryRT (Rust)].axes = []
-off.factory[GB colour-battery MercuryRT (Rust)].state-version = 8
+off.factory[GB colour-battery MercuryRT (Rust)].state-version = 11
 off.factory[GB colour-battery MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB colour-battery MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB colour-battery MercuryRT (Rust)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
@@ -2656,7 +2656,7 @@ off.factory[GB colour-battery Nope].codec-explicit = Game Genie | RomPatch | <nu
 off.factory[GB colour-battery Nope].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB colour-battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB colour-battery Nope].axes = []
-off.factory[GB colour-battery Nope].state-version = 8
+off.factory[GB colour-battery Nope].state-version = 11
 off.factory[GB colour-battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB colour-battery Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB colour-battery Nope].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
@@ -2673,7 +2673,7 @@ off.factory[GB colour-battery Venus (C#)].codec-explicit = Game Genie | RomPatch
 off.factory[GB colour-battery Venus (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 off.factory[GB colour-battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 off.factory[GB colour-battery Venus (C#)].axes = []
-off.factory[GB colour-battery Venus (C#)].state-version = 8
+off.factory[GB colour-battery Venus (C#)].state-version = 11
 off.factory[GB colour-battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[GB colour-battery Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 off.factory[GB colour-battery Venus (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f

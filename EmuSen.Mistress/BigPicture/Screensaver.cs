@@ -4,8 +4,8 @@ using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
-using Avalonia.Media.Immutable;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Media;
@@ -24,7 +24,6 @@ namespace EmuSen.Mistress.BigPicture
         public const double BoxLeft = 17.0 / 800, BoxTop = 16.0 / 800, BoxHeight = 84.0 / 800, TextInset = 14.0 / 800, TextEnd = 17.0 / 800;
         public const double Cap = 19.0 / 800, NameCapTop = 12.0 / 800, SystemCapTop = 54.0 / 800, StarGap = 13.0 / 800, StarSize = 25.0 / 800;
         private const string StarPath = "M 50,0 L 61.8,35.1 98.1,35.1 68.8,56.7 79.4,90.5 50,69.5 20.6,90.5 31.2,56.7 1.9,35.1 38.2,35.1 Z";
-        public static readonly Color BoxColour = Color.FromArgb(0xAA, 0, 0, 0);
 
         // ES-DE's order for a game's slideshow picture; a game with none of these is left out.
         public static readonly string[] SlideKinds = ["miximage", "screenshot", "titlescreen", "cover"];
@@ -54,7 +53,7 @@ namespace EmuSen.Mistress.BigPicture
         private readonly DimLayer _dim = new();
         private readonly Border _black = new() { Background = Brushes.Black };
         private readonly CrossFadeImage _picture = new();
-        private readonly Border _box = new() { Background = new ImmutableSolidColorBrush(BoxColour) };
+        private readonly Border _box = new() { [!Border.BackgroundProperty] = new DynamicResourceExtension("LunaCaptionSurface") };
         private readonly FontText _name = Line();
         private readonly FontText _system = Line();
         private readonly Avalonia.Controls.Shapes.Path _star = new() { Fill = Brushes.White, Stretch = Stretch.Uniform, Data = Geometry.Parse(StarPath) };
@@ -62,6 +61,8 @@ namespace EmuSen.Mistress.BigPicture
 
         public Screensaver()
         {
+            // The caption box's colour is the look's, as ES-DE draws it - see EmuSen_InterfaceSpec.md §6.3.3.
+            Resources.MergedDictionaries.Add(MenuLook.CreatePalette());
             IsVisible = false;
             Background = Brushes.Transparent;
             _overlay.Children.Add(_box);

@@ -88,7 +88,7 @@ facts as `key=value` or a bare flag:
 
 `focus <id>` names where the focus starts; `edge <from> <direction> <to>` is one press of the walk, `to` being a
 control's id, `same` when the focus stayed, `none` when it was lost, or a reference to a control built only once
-scrolled to: `row:<list>/<index>`, `item:<owner>/<index>/<path>/<name>` or `path:<path>`. `press <button> key=value...`
+scrolled to: `row:<list>/<index>/<name>`, `item:<owner>/<index>/<path>/<name>` or `path:<path>`. `press <button> key=value...`
 is a press of the grammar and what it reached: `focus` (the control, described), `top` (the sheet on top, or `none`),
 `tab`, `title` and `menu`; or, in a scene, `view`, `system`, `game` and `sheet`.
 
@@ -112,10 +112,18 @@ change; where that does not bring the focus in, a press down. Each recorded wind
 the focus on the tab's header, as choosing it by the pad leaves it. 20 of the 212 recordings were entered, 14 by the
 shoulders and 6 by a press down **[M]**.
 
-A control is keyed as the audit keys it: a row by its list and index; a control inside an item's container by the
-items control, the index, its way down and its name; anything else by its path of child indices from the window. The
+A control is keyed as the audit keys it: a row by its list, its index and the name a reader hears for it; a control
+inside an item's container by the items control, the index, its way down and its name; anything else by its path of child indices from the window. The
 last can change when a press rebuilds part of the window, which is why a control can appear in the graph twice, once
 by id and once by `path:`: the walk sees it as two, and both are recorded.
+
+**Why a row carries its name (2026-10-15).** Until then a row was its list and index alone. A list that another
+selection refills, such as the Cheat Database's games, which follow the system chosen beside them, then had one key for
+the third row of every system's list, and the walk explored each key once, in the state it first found it in. At
+1280 × 800 it first reached the games list from the Nintendo Entertainment System's row, whose list holds two games, so
+down from the second row left the list, correctly for that list; the Super Nintendo's four were never walked, and the
+recording reported their third row unreachable (§6.3.1). With the name in the key a refilled list's rows are rows the
+walk has not seen, explored in their own state. A row whose name a reader cannot hear keys as before, by list and index.
 
 ## 4. §2.4's rules as checks
 
@@ -153,7 +161,9 @@ ES-DE's captures instead (`EmuSen_BigPicture.md` §13.8).
 ### 4.5 Faults that stand
 
 `WindowFitAuditTests.Known` lists the faults the rules find in today's Mistress, each with why it stands; the tests
-pass over them and fail on any other, and an entry is removed when its fault is fixed. §6.2 lists them.
+pass over them and fail on any other, and an entry is removed when its fault is fixed. §6.2 lists them. Since 2026-10-15 it is
+empty: every fault §6.2 lists was worked through (§6.3), and a new one fails the tests until it is fixed or entered
+with its reason.
 
 ## 5. Recording, reading and re-recording
 
@@ -213,28 +223,50 @@ rules (§4) read them where they can and skip them where they cannot.
 
 **The rules, against today's Mistress.** The recorded fit rule finds exactly what `FitAudit.Check` finds in every
 recorded sheet (none, as the audit requires) and in every one of `FitAuditTests`' planted faults. The other three rules
-find what §6.2 lists. Nothing else fails.
+found what §6.2 lists; since §6.3 they find nothing.
 
-### 6.2 Faults that stand in today's Mistress
+### 6.2 Faults the rules found
 
-These are what the rules found that no audit had looked for; each is in `WindowFitAuditTests.Known` with its reason,
-and `Every_fault_recorded_as_standing_still_stands` fails when one stops being found, so the table cannot outlive its
-faults. None was fixed here: the step records the interface as it is, and each is a change to Mistress or LunaP for
-the tester to schedule.
+These are what the rules found, when the specification was first recorded, that no audit had looked for. Each stood
+in `WindowFitAuditTests.Known` with its reason, and `Every_fault_recorded_as_standing_still_stands` fails when one
+stops being found, so the table cannot outlive its faults. The recording step changed none of them; each was worked
+through on 2026-10-15 (§6.3).
 
-| Rule | What | Where |
-|---|---|---|
-| Accessibility names | 10 choices whose label is drawn beside them but not given to them: Overscan and Picture Shape on the SNES, NES, Genesis and PlayStation tabs, the N64's Antialiasing, the PlayStation's card choice; the rest of each page's choices are named | Graphics Settings, Memory Cards |
-| | 4 big-screen menu option rows (Jump To, Sort By, Collection Grouping, Transitions), whose row label is drawn by `MenuRows` and not given to the control | Game options, Game Collection Settings, Theme Settings |
-| | 11 text boxes labelled only by a placeholder or a menu row: the cheat code and description boxes, the cover picker's and Find by Name's search, the metadata editor's seven fields | Active Cheats, Cover Picker, Find by Name, the metadata editor |
-| Palette reach | `#55555A`, the menu look's border colour, painted by the big-screen menus' own buttons where no scope that declares it is in reach | Theme Settings, Game Collection Settings, Game options, the metadata editor |
-| | `#FFFFFFCC`, painted by a dropdown while it has the focus, from a part of its stock template no resource declares | Memory Cards, the N64's tab |
-| | the screensaver's caption box (`Screensaver.BoxColour`) and the launch screen's card (MenuPanel's default panel colour), literal colours rather than tokens | the screensaver, the launch screen |
-| Pad reachability | down from the games list's second row leaves the list for the button below instead of scrolling to the third row, which shows 5 pixels; the rows after it are reached by no direction | Cheat Database at 1280 × 800 only |
-| Fit (a scene) | the synthetic theme's help bar asks for every entry in one row and is laid out wider than the screen; ES-DE lays such a bar out the same, and Art Book Next asks for three entries | the gamelist scene, both sizes |
+| Rule | What | Where | Worked through |
+|---|---|---|---|
+| Pad reachability | down from the games list's second row left the list; the third row, showing 5 pixels, and the fourth were reached by no direction | Cheat Database at 1280 × 800 | the walk's, not the window's (§6.3.1) |
+| Accessibility names | 10 choices whose label is drawn beside them but not given to them; 4 big-screen option rows and 7 metadata rows whose label `MenuRows` draws; 4 text boxes labelled only by a placeholder | Graphics Settings, Memory Cards, the big-screen menus, the metadata editor, Active Cheats, Cover Picker, Find by Name | named (§6.3.2) |
+| Palette reach | `#55555A` on the big-screen menus' push buttons, `#FFFFFFCC` on a focused dropdown, the screensaver's box and the launch screen's card painted as literals | the big-screen menus, Memory Cards, the N64's tab, the screensaver, the launch screen | tokens (§6.3.3) |
+| Fit (a scene) | the synthetic theme's help bar asks for every entry in one row and is laid out wider than the screen | the gamelist scene, both sizes | the test theme's (§6.3.4) |
 
-The last is the theme's, not Mistress's, and stays for that reason. The Cheat Database's is the one a player meets: its
-list of games cannot be walked past its second row by the d-pad at 1280 × 800.
+### 6.3 The faults of §6.2 worked through (2026-10-15)
+
+Each was proven before it was changed, and the recordings re-recorded after; `git diff` of the `.spec` files shows the
+interface each change made.
+
+#### 6.3.1 The Cheat Database's games: the walk's, not the window's
+
+**What was reported.** Down from the games list's second row went to Download from libretro; the third row, showing
+5 pixels, and the fourth were reached by no direction.
+
+**What a player meets [M].** `The_cheat_database_s_games_are_walked_to_the_last_by_the_pad`, at both sizes: from the
+folder box, down three times to the Super Nintendo's row, right into its four games and down three times reaches and
+selects each row in turn, the third scrolled into view from its 5 pixels. Mistress was right before the change; the
+router sends Down to a list's row unless it is the last (`PadWindowRouter`), and Avalonia's list brings the next row
+into view.
+
+**What the walk did.** A row was keyed by its list and index (§3). Breadth first, the walk first reached the games list
+by right from the Nintendo Entertainment System's row, where the list holds two games; down from the second of those
+correctly left the list. Each key is explored once, so index 2 was never explored, and the Super Nintendo's third row,
+recorded in the tree, had no edge to it. At 1920 × 1200 the walk reached the Super Nintendo's list first by up from the
+buttons, which is why only the smaller size reported it.
+
+**The fix** is in the walk: `PadAudit.KeyOf` keys a row by its list, index and the name a reader hears, so every
+audit that walks (the pad audits and the recorder) treats a refilled list's rows as new. The re-recording changed six
+files: the Cheat Database at both sizes, where `44 down 46` and `46 down "row:40/3/Cobalt Harbor (USA)"` now stand and
+the other systems' rows appear by name; and the Shaders sheets with sliders and a long parameter, whose `row:` edges
+gained their names. No other list in a recorded state is refilled by another control's selection, so no other graph
+changed.
 
 ## 7. What it does not cover
 
@@ -246,3 +278,81 @@ list of games cannot be walked past its second row by the d-pad at 1280 × 800.
   stay with Big Picture's own tests.
 - **Presses that change the screen.** A, Start, Select and North are recorded only where they open a state that is
   itself recorded; their effects on settings are other tests' business.
+
+#### 6.3.2 25 controls a reader could not name
+
+**Before [M].** `Named` found 10 choices whose label is drawn beside them (Overscan and Picture Shape on four consoles'
+tabs, the N64's Antialiasing, the PlayStation's card), 4 big-screen option rows and 7 metadata rows whose label
+`MenuRows` draws, and 4 text boxes labelled only by their placeholders.
+
+**Where each belonged.** The first ten sit in a `FieldRow` whose content is a panel: the choice with a note under it,
+or beside the Shaders button. The row lent its label to the panel alone. LunaP's `FieldRow` now lends it on to the
+dropdowns, text boxes, sliders and number boxes inside, not to a button or switch, which have words of their own
+(LunaP's `docs/LunaP.md` §200.1). The next eleven are rows `MenuRows` draws from a label it was given and never told a
+reader; `MenuRows.Label` is now the name, below any the caller sets (§200.2). Those 21 are fixed once, in the two kit
+controls, and every other window built from them gains the same. The last four have no visible label but a
+placeholder, and the window names them with the same words: "Cheat code" and "Cheat description" on every console's
+tab of Active Cheats, "Search the library" and "The game's name". A placeholder vanishes as the player types, so the
+toolkit does not use one as a name on its own (§24.2 of LunaP's page).
+
+**After [M].** No recording has an operable control without `heard`. The picture shape's dropdown hears "Shader and
+shape", its row's label, which is the words beside it; four main-menu rows and Create New Custom Collection now hear
+the label their rows draw ("Library", not "Library  ›"). The presses that land on a named text box describe it with
+its name.
+
+#### 6.3.3 Four colours no theme could reach
+
+**Before [M].** `PaletteReach` found `#55555A` on the big-screen menus' push buttons, `#FFFFFFCC` on a focused
+dropdown, and the screensaver's box and the launch screen's card painted from literals.
+
+**Where each belonged.** The menu look's colours were resources only under an element the look was applied to; a
+menu drawing itself had none in reach. LunaP's `Theme/MenuPalette.axaml` now holds them, every `MenuPanel` merges a
+copy, and `MenuRows.ApplyButton` paints from the theme's button keys (§200.3 of LunaP's page). The focused dropdown's
+words and arrow came from two stock keys the look never declared; they are now the look's bar text, `#EEEEF0`, which
+is the one change a player can see. The launch screen merges the same palette and paints its card and words from
+`LunaSurface` and `LunaSectionHeader`, the same values as before. The screensaver's box is ES-DE's black at two
+thirds; no token held it (`LunaHudSurface` is a notice plate of another measured colour), so LunaP gained one,
+`LunaCaptionSurface`, and `Screensaver.BoxColour` is gone.
+
+**After [M].** No recording paints outside its palette. Every sheet's `palette` line gained the menu palette's
+colours, since each sheet's frame is a `MenuPanel`; the big-screen menus' rows record the look's colours for their
+hidden chrome (a row is drawn by `MenuRow`, which does not read them), and the two focused dropdowns `#EEEEF0`
+where they had white.
+
+#### 6.3.4 The help bar wider than the screen: the test theme's
+
+**What it was.** The synthetic theme the Big Picture tests write (`ThemedSession.Write`) asks for its help bar at
+3% from the left, every entry (`<entries>all</entries>`) in one row, at a font of 3.5% of the height. The gamelist's
+twelve entries then measure 1,650 pixels at 1280 × 800 and 2,475 at 1920 × 1200, from 38 and 58; the system view's
+four, 630 and 946, fit. Mistress lays a help bar out as the theme asks, in one row from its position, as ES-DE does;
+it does not shrink or wrap a bar a theme sized, and a real theme chooses its entries to fit (Art Book Next's gamelist
+asks for two, `back,a`).
+
+**Proven the theme's [M].** With nothing changed but the theme's font, 2.5% of the height, the same bar measures
+1,230 and 1,846 pixels and ends 11 and 17 pixels inside the screen, and the fault is gone at both sizes; the
+system view's bar shrinks with it. The theme is a fixture, so it is the theme that is changed: it still asks for every
+entry, at a size that fits. The re-recording changes the help bar's rectangle in the four scene recordings and
+nothing else.
+
+#### 6.3.5 Two tests that counted the consoles before the PlayStation was offered
+
+`ThemedSwitchesTests.The_systems_follow_the_chosen_order_and_the_startup_list_with_them` (three cases) expected seven
+choices for System on Startup and got eight, and `PlayerBindingsWindowTests.Each_console_offers_as_many_players_as_it_has_ports`
+expected five consoles' ports and got six. Both lists are every system the frontend offers, whether the library holds
+its games or not (the Sega Genesis is among the seven with no Genesis game in the test's library).
+
+**Measured on the commits either side [M]**, each built in a scratch checkout with its Rust cores: on 6cd5627f, the
+last before the PlayStation was offered, both tests pass; on cf4554c9, "Diamond's stage 11 gate, and the PlayStation
+offered to players", both fail, the startup list's eighth entry being "Sony PlayStation" in each order and the sixth
+console's count 2. The expectations were stale from that commit, not a defect; they now count the PlayStation, and the
+startup test also asks for it by name.
+
+#### 6.3.6 Two goldens recorded before the PlayStation was offered and Mercury's audit
+
+**`core.golden`** (DianaSh's corpus, recorded 2026-10-10) lists, under `core nosuch x.sfc`, the cores `core` knows.
+Re-recorded with `EMUSEN_DIANASH_GOLDEN=record`, its only change is that line, which gained `diamond` and
+`playstation`, and its byte count (110 to 132).
+
+**`CoreRegistrationGolden.txt`** (`CoreRegistrationEquivalenceTests`) still held the Game Boy's state version 8; the
+Mercury audit's merge (9c0b8721) made it 11. Re-recorded with `EMUSEN_RECORD_REGISTRATION=1`, its 40 changed lines are
+all `factory[GB …].state-version`, 8 to 11, in the four sections that record it; nothing else moved.

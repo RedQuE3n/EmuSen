@@ -278,7 +278,7 @@ namespace EmuSen.WiseMan.Fixtures
                 if (byKey.TryGetValue(key, out int id)) return id.ToString(CultureInfo.InvariantCulture);
                 return key switch
                 {
-                    (ListBox list, int index) => $"row:{Ref(list)}/{index}",
+                    (ListBox list, int index, string heard) => $"row:{Ref(list)}/{index}/{Normalise(heard)}",
                     (ItemsControl owner, int item, string path, string heard) => $"item:{Ref(owner)}/{item}/{path}/{Normalise(heard)}",
                     string path => $"path:{path}",
                     _ => "other",

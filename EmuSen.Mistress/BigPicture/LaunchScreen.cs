@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
-using Avalonia.Media.Immutable;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Media;
@@ -146,17 +146,16 @@ namespace EmuSen.Mistress.BigPicture
 
         private double Fraction(TimeSpan now, TimeSpan span) => Math.Clamp((now - Opened).Ticks / (double)span.Ticks, 0, 1);
 
-        // The menus' own colours and typeface, which stand for ES-DE's menu colour scheme here.
+        // The menus' own colours, from the look's palette, and typeface, which stand for ES-DE's menu colour scheme here - see EmuSen_InterfaceSpec.md §6.3.3.
         private void ApplyLook()
         {
-            Color panel = MenuPanel.PanelColorProperty.GetDefaultValue(typeof(MenuPanel));
-            Color text = MenuPanel.TitleColorProperty.GetDefaultValue(typeof(MenuPanel));
+            if (Resources.MergedDictionaries.Count == 0) Resources.MergedDictionaries.Add(MenuLook.CreatePalette());
             string? font = MenuPanel.GetFontPath(this);
-            _card.Background = new ImmutableSolidColorBrush(panel);
-            _pill.Background = new ImmutableSolidColorBrush(panel);
+            _card[!Border.BackgroundProperty] = new DynamicResourceExtension("LunaSurface");
+            _pill[!FontText.BackgroundProperty] = new DynamicResourceExtension("LunaSurface");
             foreach (FontText t in new[] { _title, _name, _system, _pill })
             {
-                t.Foreground = new ImmutableSolidColorBrush(text);
+                t[!FontText.ForegroundProperty] = new DynamicResourceExtension("LunaSectionHeader");
                 t.FontPath = font;
             }
         }

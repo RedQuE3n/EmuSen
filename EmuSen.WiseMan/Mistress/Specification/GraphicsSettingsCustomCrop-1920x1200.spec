@@ -11,7 +11,7 @@ frame 350.48,37,1219.05,1002
 title "Graphics Settings"
 case GraphicsSettingsCustomCrop
 entered shoulders
-palette #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
   0 ContentControl at=350,187,1221,822 by=panel limit=350.48,187,1219.05,822 paints=#9C9CA0FF role=none seen=350.48,187,1219.05,822
     1 DockPanel at=410,229,1101,756 by=panel limit=350.48,187,1219.05,822 role=none
@@ -42,7 +42,7 @@ tree
               26 DockPanel at=428,530.5,1065,66 by=clip heard="Shader and shape" in=21 limit=428,403,1065,193.5 role=none
                 27 Button at=428,530.5,192,66 by=clip drawn focus heard=SHADERS... in=21 limit=428,403,1065,193.5 name=NES.Shaders op paints=#55555AFF,#9C9CA0FF role=button text=Shaders...
                   28 TextBlock at=453.5,539.5,141,48 box=94,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SHADERS... in=21 layout=93.96,31.2 limit=428,530.5,192,66 owner=27 paints=#EEEEF0FF role=text size=26 text=SHADERS...
-                29 Dropdown at=1305.5,530.5,187.5,66 by=clip drawn focus in=21 limit=428,403,1065,193.5 name=NES.PictureShape op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+                29 Dropdown at=1305.5,530.5,187.5,66 by=clip drawn focus heard="Shader and shape" in=21 limit=428,403,1065,193.5 name=NES.PictureShape op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
                   30 TextBlock at=1323.5,538,121.5,48 box=81,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="TV shape" in=21 layout=80.81,31.2 limit=1323.5,538,121.5,48 owner=29 paints=#9C9CA0FF role=text size=26 text="TV shape"
                   31 ViewboxContainer at=1460,558.6,18,9.81 by=clip in=21 limit=1460,558.6,18,9.81 nohit role=none
                 32 TextBlock at=638,542.5,649.5,43.5 box=433,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=21 layout=41.74,28.8 limit=428,403,1065,193.5 name=NES.ShaderInUse paints=#9C9CA0FF role=text size=24 text=None
@@ -50,7 +50,7 @@ tree
               34 TextBlock at=428,614.5,1065,43.5 box=710,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Overscan in=21 layout=75.29,28.8 limit=428,614.5,1065,157.5 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Overscan
               35 HintText at=428,664,1065,36 box=710,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The whole picture, the part a television showed, or a crop of your own." in=21 layout=474.92,24 limit=428,614.5,1065,157.5 paints=#86868AFF part role=text size=20 text="The whole picture, the part a television showed, or a crop of your own."
               36 StackPanel at=428,706,1065,66 by=clip heard=Overscan in=21 limit=428,614.5,1065,157.5 role=none
-                37 Dropdown at=428,706,234,66 by=clip drawn focus in=21 limit=428,614.5,1065,157.5 name=NES.Overscan op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+                37 Dropdown at=428,706,234,66 by=clip drawn focus heard=Overscan in=21 limit=428,614.5,1065,157.5 name=NES.Overscan op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
                   38 TextBlock at=446,713.5,168,48 box=112,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Custom crop" in=21 layout=111.98,31.2 limit=446,713.5,168,48 owner=37 paints=#9C9CA0FF role=text size=26 text="Custom crop"
                   39 ViewboxContainer at=629,734.1,18,9.81 by=clip in=21 limit=629,734.1,18,9.81 nohit role=none
             40 FieldRow at=428,790,1065,196.5 by=scroll heard="Crop, % of the picture" in=21 limit=428,391,1065,513 name=NES.Crop paints=#0E0E10FF,#55555AFF,#9C9CA0FF,#D2D2D6FF role=group seen=428,790,1065,114

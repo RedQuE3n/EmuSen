@@ -7,30 +7,30 @@ use emusen_native::steps::Steps;
 use emusen_native::{StateReader, StateWriter, Truncated};
 use beryl_sn76489::{Sn76489, Variant};
 
-use crate::ym2612::Ym2612;
+use crate::genesis::ym2612::Ym2612;
 
 /// Master clocks a PSG clock: the Z80's clock, over 16 inside the chip.
-pub const PSG_CLOCK: u64 = 15 * 16;
+pub(in crate::genesis) const PSG_CLOCK: u64 = 15 * 16;
 /// The output rate.
 pub const RATE: u32 = 48_000;
 /// The output's units for one step of the YM2612's nine-bit output, and the PSG's level against it: a PSG channel at
 /// full volume, 8,192 from the chip, is 0.324 of the DAC's whole swing of 512 steps, as seven model 1 consoles have
 /// it (Nephrite_Disputes.md D-27).
-pub const FM_GAIN: i32 = 16;
-pub const PSG_GAIN: (i32, i32) = (81, 250);
+pub(in crate::genesis) const FM_GAIN: i32 = 16;
+pub(in crate::genesis) const PSG_GAIN: (i32, i32) = (81, 250);
 /// The YM2612's pins carry each channel for a part of its sixth of the sample, not a held level, so the band has its
 /// samples at full strength where a held sample droops by 2.1 dB at 20 kHz. The synthesiser holds each sample, which
 /// keeps its images down; these seven taps at the output rate, the centre's and three each side in 24-bit fractions,
 /// undo the hold's droop to 0.08 dB up to 20 kHz (D-27).
-pub const UNHOLD: [i64; 4] = [18_804_106, -1_231_811, 289_733, -71_367];
+pub(in crate::genesis) const UNHOLD: [i64; 4] = [18_804_106, -1_231_811, 289_733, -71_367];
 
 /// A model's output circuit as a filter at the output rate, its coefficients in 24-bit fractions: two low-pass
 /// sections, each `(b0 + b1 z^-1 + b2 z^-2) / (1 - a1 z^-1 - a2 z^-2)` as `[b0, b1, b2, a1, a2]`, fitted to the
 /// analogue ones' magnitudes up to 20 kHz, and the pole of the coupling's first-order high-pass.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Circuit {
-    pub sections: [[i64; 5]; 2],
-    pub high_pass: i64,
+    pub(in crate::genesis) sections: [[i64; 5]; 2],
+    pub(in crate::genesis) high_pass: i64,
 }
 
 const THROUGH: [i64; 5] = [1 << 24, 0, 0, 0, 0];
@@ -38,11 +38,11 @@ const THROUGH: [i64; 5] = [1 << 24, 0, 0, 0, 0];
 impl Circuit {
     /// Model 1, boards VA3 to VA6.5: a first-order low-pass at 3,216 Hz and a high-pass at 23 Hz, as seven consoles'
     /// recordings have them (D-27).
-    pub const MODEL1: Circuit = Circuit { sections: [[5_015_895, 2_578_393, 162_973, 5_223_622, 3_796_332], THROUGH], high_pass: 16_726_781 };
+    pub(crate) const MODEL1: Circuit = Circuit { sections: [[5_015_895, 2_578_393, 162_973, 5_223_622, 3_796_332], THROUGH], high_pass: 16_726_781 };
     /// Model 2, boards VA0 to VA1.8, whose YM3438 is in the main chip: a second-order low-pass at 5,805 Hz with a Q
     /// of 1.16, a first-order one at 4,111 Hz and a high-pass at 16 Hz, the nearest a filter comes to four recordings
     /// of an amplifier that also distorts (D-27).
-    pub const MODEL2: Circuit = Circuit {
+    pub(crate) const MODEL2: Circuit = Circuit {
         sections: [[-266_812, 5_006_049, 1_993_670, 18_750_050, -8_705_742], [6_080_632, 3_145_731, 200_960, 3_932_671, 3_417_222]],
         high_pass: 16_742_115,
     };
@@ -76,16 +76,16 @@ impl Side {
 #[derive(Clone)]
 pub struct Sound {
     pub ym: Ym2612,
-    pub psg: Sn76489,
+    pub(in crate::genesis) psg: Sn76489,
     /// The master clock the PSG has reached, on its clock's boundaries.
-    pub psg_time: u64,
+    pub(in crate::genesis) psg_time: u64,
     fm_steps: Steps,
     psg_steps: Steps,
     fm_out: Vec<[i32; 2]>,
     extra_out: Vec<[i32; 2]>,
     /// The latest master clock an access or a frame's end has brought the sound to: the Z80 runs up to an
     /// instruction past the 68000's clock, and an access from behind it is taken as made then.
-    pub time: u64,
+    pub(in crate::genesis) time: u64,
     /// The FM stream's last seven samples at the output rate, and the PSG's last three, waiting beside them.
     fm_line: [[i32; 2]; 7],
     psg_line: [[i32; 2]; 3],
@@ -97,7 +97,7 @@ pub struct Sound {
 impl Sound {
     /// The sound of a board whose master clock is `num / den` Hz: a model 1's discrete YM2612 and circuit, or a model
     /// 2's YM3438 and circuit.
-    pub fn new(num: u64, den: u64, model1: bool) -> Sound {
+    pub(in crate::genesis) fn new(num: u64, den: u64, model1: bool) -> Sound {
         Sound {
             circuit: if model1 { Circuit::MODEL1 } else { Circuit::MODEL2 },
             sides: [Side::default(); 2],
@@ -120,13 +120,13 @@ impl Sound {
     }
 
     /// The YM2612 up to `t`: each sample's sum over the rest level, held until the next.
-    pub fn run_ym(&mut self, t: u64) {
+    pub(in crate::genesis) fn run_ym(&mut self, t: u64) {
         let (steps, rest) = (&mut self.fm_steps, self.ym.rest());
         self.ym.run(t, |at, out| steps.set(at, [(out[0] - rest) * FM_GAIN, (out[1] - rest) * FM_GAIN]));
     }
 
     /// The PSG up to the last of its clocks at or before `t`.
-    pub fn run_psg(&mut self, t: u64) {
+    pub(in crate::genesis) fn run_psg(&mut self, t: u64) {
         if t <= self.psg_time {
             return;
         }
@@ -137,7 +137,7 @@ impl Sound {
     }
 
     /// A write takes effect at once: a level it changes is the output from `t`, after the PSG's last clock.
-    pub fn psg_write(&mut self, v: u8, t: u64) {
+    pub(in crate::genesis) fn psg_write(&mut self, v: u8, t: u64) {
         let t = self.now(t);
         self.run_psg(t);
         self.psg.write(v);
@@ -145,14 +145,14 @@ impl Sound {
         self.psg_steps.set(t, [psg_level(out[0]), psg_level(out[1])]);
     }
 
-    pub fn ym_write(&mut self, port: u16, v: u8, t: u64) {
+    pub(in crate::genesis) fn ym_write(&mut self, port: u16, v: u8, t: u64) {
         let t = self.now(t);
         self.run_ym(t);
         self.ym.write(port, v, t);
     }
 
     /// The reset line the YM2612 shares with the Z80, changed at `t`.
-    pub fn ym_reset(&mut self, held: bool, t: u64) {
+    pub(in crate::genesis) fn ym_reset(&mut self, held: bool, t: u64) {
         let t = self.now(t);
         self.run_ym(t);
         let (steps, rest) = (&mut self.fm_steps, self.ym.rest());
@@ -160,20 +160,21 @@ impl Sound {
         self.ym.reset_line(held, t);
     }
 
-    pub fn ym_read(&mut self, port: u16, t: u64) -> u8 {
+    pub(in crate::genesis) fn ym_read(&mut self, port: u16, t: u64) -> u8 {
         let t = self.now(t);
         self.run_ym(t);
         self.ym.read(port, t)
     }
 
     /// Both chips up to `t`, and every finished sample, the two sources summed and put through the circuit.
-    pub fn take(&mut self, t: u64, out: impl FnMut(i16, i16)) {
+    #[cfg(test)]
+    pub(in crate::genesis) fn take(&mut self, t: u64, out: impl FnMut(i16, i16)) {
         self.take_with(t, None, out);
     }
 
     /// The same with a third source beside the console's output, the Sega CD's CD-DA, synthesised at the same clock and
     /// added after the circuit, which it does not pass through.
-    pub fn take_with(&mut self, t: u64, mut extra: Option<&mut Steps>, mut out: impl FnMut(i16, i16)) {
+    pub(crate) fn take_with(&mut self, t: u64, mut extra: Option<&mut Steps>, mut out: impl FnMut(i16, i16)) {
         let t = self.now(t);
         self.run_ym(t);
         self.run_psg(t);
@@ -207,7 +208,7 @@ impl Sound {
         debug_assert_eq!(i, fm.len(), "both synthesisers finish the same samples");
     }
 
-    pub fn write_state(&self, w: &mut StateWriter) {
+    pub(in crate::genesis) fn write_state(&self, w: &mut StateWriter) {
         self.ym.write_state(w);
         self.psg.write_state(w);
         w.u64s("PsgTimeAndTime", &[self.psg_time, self.time]);
@@ -222,7 +223,7 @@ impl Sound {
         w.u64s("CircuitSides", &sides);
     }
 
-    pub fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
+    pub(in crate::genesis) fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
         self.ym.read_state(r)?;
         self.psg.read_state(r)?;
         let mut t = [0u64; 2];

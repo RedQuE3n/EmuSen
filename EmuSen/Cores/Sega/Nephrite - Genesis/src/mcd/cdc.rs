@@ -5,20 +5,20 @@
 //! what they leave open (Nephrite_Native.md §52, D-34).
 
 /// The buffer's size, and where its addresses wrap.
-pub const BUFFER: usize = 0x4000;
+pub(in crate::mcd) const BUFFER: usize = 0x4000;
 /// The decoder interrupt stays set for this part of a sector after it is raised, unless STAT3 is read first
 /// (mcd-verificator's CDC FLAGS 0x40-0x41: about 40% of the period).
-pub const DECI_LENGTH: u64 = 67_000;
+pub(in crate::mcd) const DECI_LENGTH: u64 = 67_000;
 /// Sub clocks between the host transfer's words by DMA (argued; D-34).
-pub const DMA_WORD: u64 = 16;
+pub(in crate::mcd) const DMA_WORD: u64 = 16;
 
 /// The device destinations, DD2-DD0.
-pub mod dest {
-    pub const MAIN: u8 = 2;
-    pub const SUB: u8 = 3;
-    pub const PCM: u8 = 4;
-    pub const PRG: u8 = 5;
-    pub const WORD: u8 = 7;
+pub(in crate::mcd) mod dest {
+    pub(in crate::mcd) const MAIN: u8 = 2;
+    pub(in crate::mcd) const SUB: u8 = 3;
+    pub(in crate::mcd) const PCM: u8 = 4;
+    pub(in crate::mcd) const PRG: u8 = 5;
+    pub(in crate::mcd) const WORD: u8 = 7;
 }
 
 /// IFCTRL's bits.
@@ -33,34 +33,34 @@ const SHDREN: u8 = 0x01;
 
 #[derive(Clone)]
 pub struct Cdc {
-    pub buffer: Vec<u8>,
+    pub(in crate::mcd) buffer: Vec<u8>,
     /// The register address, its fifth bit RS: the gate array's own, which reaches no register of the chip.
-    pub ar: u8,
-    pub ifctrl: u8,
-    pub ctrl: [u8; 2],
+    pub(in crate::mcd) ar: u8,
+    pub(in crate::mcd) ifctrl: u8,
+    pub(in crate::mcd) ctrl: [u8; 2],
     /// The byte counter, the data address counter, the write address and the block pointer.
-    pub dbc: u16,
-    pub dac: u16,
-    pub wa: u16,
-    pub pt: u16,
-    pub head: [u8; 4],
-    pub stat: [u8; 4],
+    pub(in crate::mcd) dbc: u16,
+    pub(in crate::mcd) dac: u16,
+    pub(in crate::mcd) wa: u16,
+    pub(in crate::mcd) pt: u16,
+    pub(in crate::mcd) head: [u8; 4],
+    pub(in crate::mcd) stat: [u8; 4],
     /// The interrupts as set (the chip's register reads them inverted), and the sub clock the decoder's clears itself.
-    pub dtei: bool,
-    pub deci: bool,
-    pub deci_until: u64,
+    pub(in crate::mcd) dtei: bool,
+    pub(in crate::mcd) deci: bool,
+    pub(in crate::mcd) deci_until: u64,
     /// The INT pin as last seen, for its edges.
-    pub pin: bool,
+    pub(in crate::mcd) pin: bool,
     /// The gate array's side: the destination, End of Data Transfer, Data Set Ready, the host data register and the
     /// DMA address in bytes.
     pub dd: u8,
     pub edt: bool,
-    pub dsr: bool,
-    pub host: u16,
-    pub dma: u32,
+    pub(in crate::mcd) dsr: bool,
+    pub(in crate::mcd) host: u16,
+    pub(in crate::mcd) dma: u32,
     /// A transfer under way, and the sub clock of its next DMA word.
-    pub busy: bool,
-    pub dma_next: u64,
+    pub(in crate::mcd) busy: bool,
+    pub(in crate::mcd) dma_next: u64,
 }
 
 impl Default for Cdc {
@@ -72,7 +72,7 @@ impl Default for Cdc {
 
 impl Cdc {
     /// The INT pin: an interrupt set whose enable is set. True when it has just fallen, which requests level 5.
-    pub fn edge(&mut self) -> bool {
+    pub(in crate::mcd) fn edge(&mut self) -> bool {
         let pin = (self.dtei && self.ifctrl & DTEIEN != 0) || (self.deci && self.ifctrl & DECIEN != 0);
         let fell = pin && !self.pin;
         self.pin = pin;
@@ -87,12 +87,12 @@ impl Cdc {
     // ---- `$FF8004`-`$FF8007`
 
     /// `$FF8004` as a word: EDT, DSR, DD; the register address on the sub CPU's side alone.
-    pub fn mode(&self, sub: bool) -> u16 {
+    pub(in crate::mcd) fn mode(&self, sub: bool) -> u16 {
         (self.edt as u16) << 15 | (self.dsr as u16) << 14 | (self.dd as u16) << 8 | if sub { self.ar as u16 } else { 0 }
     }
 
     /// A write of the destination ends the transfer's flags and sets its address to 0; the transfer itself goes on.
-    pub fn write_mode(&mut self, v: u16, mask: u16) {
+    pub(in crate::mcd) fn write_mode(&mut self, v: u16, mask: u16) {
         if mask & 0xFF00 != 0 {
             (self.dd, self.dma, self.edt, self.dsr) = ((v >> 8) as u8 & 7, 0, false, false);
         }
@@ -108,7 +108,7 @@ impl Cdc {
         }
     }
 
-    pub fn read_reg(&mut self, now: u64) -> u8 {
+    pub(in crate::mcd) fn read_reg(&mut self, now: u64) -> u8 {
         let r = self.ar;
         self.advance();
         if r >= 16 {
@@ -138,7 +138,7 @@ impl Cdc {
     }
 
     /// A register written; DTTRG returns true when it starts a transfer.
-    pub fn write_reg(&mut self, v: u8, now: u64) {
+    pub(in crate::mcd) fn write_reg(&mut self, v: u8, now: u64) {
         let r = self.ar;
         self.advance();
         if r >= 16 {
@@ -214,7 +214,7 @@ impl Cdc {
 
     /// `$A12008` or `$FF8008` read or written by `main` (true) or the sub CPU: the side the transfer is for takes the
     /// word, and the next follows; the other side reads the register as it stands.
-    pub fn host_access(&mut self, main: bool) -> u16 {
+    pub(in crate::mcd) fn host_access(&mut self, main: bool) -> u16 {
         let w = self.host;
         let mine = self.dd == if main { dest::MAIN } else { dest::SUB };
         if mine && self.dsr {
@@ -234,7 +234,7 @@ impl Cdc {
     }
 
     /// The bytes of the next DMA unit, the counter counting them; the caller writes them and then calls `dma_done`.
-    pub fn dma_unit(&mut self) -> (u8, Option<u8>) {
+    pub(in crate::mcd) fn dma_unit(&mut self) -> (u8, Option<u8>) {
         if self.dd == dest::PCM {
             (self.take(), None)
         } else {
@@ -243,7 +243,7 @@ impl Cdc {
     }
 
     /// The unit written: the address moved on, the counter down, the next unit timed or the transfer ended.
-    pub fn dma_done(&mut self, bytes: u32) {
+    pub(in crate::mcd) fn dma_done(&mut self, bytes: u32) {
         self.dma += if self.dd == dest::PCM { 2 * bytes } else { bytes };
         let n = if self.dd == dest::PCM { 1 } else { 2 };
         if self.dbc < 2 * n - 1 {
@@ -256,13 +256,13 @@ impl Cdc {
     }
 
     /// A DMA unit that cannot be written now: tried again a word's time later.
-    pub fn dma_wait(&mut self) {
+    pub(in crate::mcd) fn dma_wait(&mut self) {
         self.dma_next += DMA_WORD;
     }
 
     /// A sector's period begins: with the decoder on, the decoder interrupt; and a data sector `raw` from the drive
     /// written into the buffer when WRRQ asks, the header and block pointer taken from it.
-    pub fn sector(&mut self, raw: Option<&[u8; 2352]>, now: u64) {
+    pub(in crate::mcd) fn sector(&mut self, raw: Option<&[u8; 2352]>, now: u64) {
         if self.ctrl[0] & DECEN == 0 {
             return;
         }
@@ -287,7 +287,7 @@ impl Cdc {
     }
 
     /// The decoder interrupt clearing itself part-way through the sector.
-    pub fn clear_deci(&mut self, now: u64) {
+    pub(in crate::mcd) fn clear_deci(&mut self, now: u64) {
         if self.deci && now >= self.deci_until {
             self.deci = false;
         }

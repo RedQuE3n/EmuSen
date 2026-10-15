@@ -5,12 +5,12 @@ use emusen_native::abi::Region;
 use emusen_native::core::*;
 
 use crate::genesis::Model;
-use crate::io::Plug;
+use crate::genesis::io::Plug;
 use crate::mcd::SaveMemory;
 use crate::mcd::frontend::ram_cart_setting;
 use crate::machine::{HEIGHT, Machine, WIDTH, default_model};
 use crate::media::{Media, System, cartridge_bytes};
-use crate::debugger::{M68KBUS_ID, M68KBUS_SIZE, Z80BUS_ID, Z80BUS_SIZE};
+use crate::genesis::debugger::{M68KBUS_ID, M68KBUS_SIZE, Z80BUS_ID, Z80BUS_SIZE};
 use crate::state::{STATE_VERSION, STATUS_OTHER_SYSTEM};
 
 /// An image too short for a cartridge's vector table and header.
@@ -18,7 +18,7 @@ pub const STATUS_IMAGE_TOO_SHORT: i32 = -9;
 pub const MIN_IMAGE: usize = 0x200;
 
 /// The output rate, the step synthesisers' (`sound.rs`).
-pub const AUDIO_RATE: i32 = crate::sound::RATE as i32;
+pub const AUDIO_RATE: i32 = crate::genesis::sound::RATE as i32;
 
 /// Master clocks a second over a frame's (argued, Nephrite_Native.md §2.3): NTSC 15 times the colour subcarrier,
 /// 4,725,000,000/88 Hz, over 262 lines of 3,420; PAL 12 times 4.43361875 MHz over 313 lines.
@@ -46,7 +46,7 @@ fn pad(id: &str, label: &str, six: bool) -> Controller {
     Controller {
         id: id.into(),
         label: label.into(),
-        ports: (0..crate::io::PADS as u32).collect(),
+        ports: (0..crate::genesis::io::PADS as u32).collect(),
         buttons: BUTTONS.iter().filter(|b| six || b.0 < 8).map(|&(bit, c, l)| Button { bit, control: Some(c), label: l.into() }).collect(),
         axes: Vec::new(),
     }
@@ -145,12 +145,12 @@ impl Machine {
     /// Each player's pad in order, true a six-button one: port 1's pads, then port 2's unless the 4 Way Play has it.
     pub fn pad_kinds(&self) -> Vec<bool> {
         let [(a, six_a), (b, six_b)] = self.plugged;
-        let mut kinds = vec![six_a; crate::io::pads_of(a)];
+        let mut kinds = vec![six_a; crate::genesis::io::pads_of(a)];
         if a != Plug::FourWay {
-            kinds.extend(vec![six_b; crate::io::pads_of(b)]);
+            kinds.extend(vec![six_b; crate::genesis::io::pads_of(b)]);
         }
         // A J-Cart's two three-button pads follow, where they fit (§48).
-        if self.hw().cart.jcart && kinds.len() + 2 <= crate::io::PADS {
+        if self.hw().cart.jcart && kinds.len() + 2 <= crate::genesis::io::PADS {
             kinds.extend([false, false]);
         }
         kinds
@@ -263,7 +263,7 @@ fn lock_on_files() -> Vec<Firmware> {
 }
 
 fn takes_lock_on(media: &Media, image_len: usize) -> bool {
-    media.header.as_ref().is_some_and(|h| h.serial.starts_with(crate::cart::LOCK_ON_SERIAL)) && image_len <= 0x20_0000
+    media.header.as_ref().is_some_and(|h| h.serial.starts_with(crate::genesis::cart::LOCK_ON_SERIAL)) && image_len <= 0x20_0000
 }
 
 /// A system whose games do not run yet is marked in development, so that no host offers it (EmuSen_CoreAPI.md §27.4).
@@ -391,7 +391,7 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: 320, max_height: 480, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: self.pad_kinds().iter().enumerate().map(|(p, &six)| Port { port: p as u32, controller: Some(if six { "md.pad6" } else { "md.pad3" }.into()) }).collect(),
-            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::debugger::Z80BUS_ID, reports_stores: crate::debugger::reports_stores(m.id), ..Space::new(m.id, m.name) }).collect(),
+            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::genesis::debugger::Z80BUS_ID, reports_stores: crate::genesis::debugger::reports_stores(m.id), ..Space::new(m.id, m.name) }).collect(),
             processors: self.processors(),
             battery: self.batteries(),
             state: StateFormat { format: "NPHR".into(), version: STATE_VERSION as i64, loads_from: (self.oldest_state_version()..=STATE_VERSION).map(i64::from).collect() },
@@ -519,8 +519,8 @@ impl Core for Machine {
     /// The 68000's breakpoints are the shared hooks'; the Z80's the core's own.
     fn debug_breakpoints(&mut self, processor: u32, pairs: &[i32]) -> Result<(), i32> {
         match processor {
-            crate::debugger::M68K => self.hooks.set_breakpoints(pairs),
-            crate::debugger::Z80 => self.z80_breakpoints = pairs.chunks_exact(2).map(|p| (p[0], p[1])).collect(),
+            crate::genesis::debugger::M68K => self.hooks.set_breakpoints(pairs),
+            crate::genesis::debugger::Z80 => self.z80_breakpoints = pairs.chunks_exact(2).map(|p| (p[0], p[1])).collect(),
             _ => return Err(status::NOT_SUPPORTED),
         }
         Ok(())
@@ -543,7 +543,7 @@ impl Core for Machine {
     }
 
     fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
-        if processor > crate::debugger::Z80 {
+        if processor > crate::genesis::debugger::Z80 {
             return Err(status::NOT_SUPPORTED);
         }
         Machine::debug_disassemble(self, processor, space, address, count).ok_or(status::NO_SUCH_SPACE)
@@ -830,9 +830,9 @@ mod tests {
         let image = cartridge("SEGA GENESIS", "U", None);
         let made = |settings: Vec<(String, String)>| Machine::create(&Create { image: &image, settings: Settings::from_pairs(settings), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
         let sound = |m: &Machine| (m.hw().sound.ym.discrete, m.hw().sound.circuit);
-        assert_eq!(sound(&made(vec![])), (true, crate::sound::Circuit::MODEL1));
-        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model1".into())])), (true, crate::sound::Circuit::MODEL1));
-        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model2".into())])), (false, crate::sound::Circuit::MODEL2));
+        assert_eq!(sound(&made(vec![])), (true, crate::genesis::sound::Circuit::MODEL1));
+        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model1".into())])), (true, crate::genesis::sound::Circuit::MODEL1));
+        assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model2".into())])), (false, crate::genesis::sound::Circuit::MODEL2));
     }
 
     #[test]
@@ -874,7 +874,7 @@ mod tests {
     // A port may hold an adapter: the players are port 1's pads and then port 2's, each of its port's kind, and every player's buttons reach its pad (Nephrite_Native.md §44).
     #[test]
     fn the_pad_settings_plug_in_the_adapters_and_number_the_players() {
-        use crate::io::Plug;
+        use crate::genesis::io::Plug;
         let schema = Machine::settings_schema();
         let choices = |key: &str| match &schema.iter().find(|s| s.key == key).unwrap().kind {
             SettingKind::Choice(c) => c.iter().map(|c| c.value.clone()).collect::<Vec<_>>(),

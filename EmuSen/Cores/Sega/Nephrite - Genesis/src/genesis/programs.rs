@@ -80,10 +80,10 @@ fn every_illegal_opcode_takes_its_exception() {
 fn vdpfifotesting_passes_every_test() {
     let Some(mut m) = program("exodus-techdocs/vdp_port_access/VDPFIFOTesting.bin") else { return };
     while m.frames < 3000 {
-        m.pads[0] = crate::fifo_records::press(m.frames);
+        m.pads[0] = crate::genesis::fifo_records::press(m.frames);
         m.advance();
     }
-    let rs = crate::fifo_records::records(&m.hw().wram);
+    let rs = crate::genesis::fifo_records::records(&m.hw().wram);
     let failed: Vec<&str> = rs.iter().filter(|r| !r.passed()).map(|r| r.name.as_str()).collect();
     eprintln!("VDPFIFOTesting: {} of {} pass; failing {failed:?}", rs.len() - failed.len(), rs.len());
     assert_eq!((rs.len(), failed), (122, Vec::<&str>::new()));
@@ -129,7 +129,7 @@ fn the_window_bug_takes_the_partial_column_from_the_next() {
     let at = image.windows(4).position(|p| p == [0xE8, 0x48, 0x02, 0x40]).expect("the scroll's shift");
     image[at..at + 2].copy_from_slice(&[0x4E, 0x71]);
     let mut m = Machine::new(&image, Media::read(&image));
-    let px = |m: &Machine, x: usize, y: usize| m.hw().vdp.frame.rgba[(y * crate::render::MAX_W + x) * 4..][..3].to_vec();
+    let px = |m: &Machine, x: usize, y: usize| m.hw().vdp.frame.rgba[(y * crate::genesis::render::MAX_W + x) * 4..][..3].to_vec();
     for _ in 0..24 {
         m.advance();
     }
@@ -164,7 +164,7 @@ fn md1536_shows_the_boards_picture() {
     let mut h = 0x811c9dc5u32;
     for y in 0..f.height {
         for x in 0..f.width {
-            for &c in &f.rgba[(y * crate::render::MAX_W + x) * 4..][..3] {
+            for &c in &f.rgba[(y * crate::genesis::render::MAX_W + x) * 4..][..3] {
                 h = (h ^ c as u32).wrapping_mul(0x01000193);
             }
         }
@@ -177,7 +177,7 @@ fn md1536_shows_the_boards_picture() {
 /// kind first and `ST A C B R L D U` at +2 and, for six buttons, `MD X Y Z` at +4. Nephrite_Native.md §44.3.
 #[test]
 fn segas_io_check_program_reads_the_team_player_and_its_pads() {
-    use crate::io::Plug;
+    use crate::genesis::io::Plug;
     let path = "exodus-techdocs/io_sample/Multitap - IO Sample Program (U) (Nov 28 1992).gen";
     let run = |plugged: [(Plug, bool); 2], pads: &[u32]| -> Option<Vec<u8>> {
         let mut m = program(path)?;

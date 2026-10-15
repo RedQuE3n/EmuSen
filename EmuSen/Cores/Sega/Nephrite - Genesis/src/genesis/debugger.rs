@@ -1,36 +1,35 @@
 //! The debugger's view of the Genesis: its two processors with their registers, the two buses as spaces read without
-//! side effects, and each processor's code disassembled from its bus (Nephrite_Native.md §41).
+//! side effects, and each processor's watch; the machine composes them and disassembles each processor's code from its
+//! bus (Nephrite_Native.md §41).
 
-use emusen_native::core::{Instruction, Processor};
 use emusen_native::debug::{Hooks, Observer, stop};
 
 use crate::genesis::Hw;
-use crate::machine::Machine;
 
 /// The 68000's bus and the Z80's, as the plan numbers them so that ids never move (Nephrite_Plan.md §4.3).
-pub const M68KBUS_ID: u32 = 0;
-pub const Z80BUS_ID: u32 = 1;
-pub const M68KBUS_SIZE: usize = 1 << 24;
-pub const Z80BUS_SIZE: usize = 1 << 16;
+pub(crate) const M68KBUS_ID: u32 = 0;
+pub(crate) const Z80BUS_ID: u32 = 1;
+pub(crate) const M68KBUS_SIZE: usize = 1 << 24;
+pub(crate) const Z80BUS_SIZE: usize = 1 << 16;
 
 /// The processors' numbers: the 68000 is processor 0, whose breakpoints the shared hooks keep.
-pub const M68K: u32 = 0;
-pub const Z80: u32 = 1;
+pub(crate) const M68K: u32 = 0;
+pub(crate) const Z80: u32 = 1;
 
-pub const M68K_REGISTERS: [(&str, u32); 20] = [
+pub(crate) const M68K_REGISTERS: [(&str, u32); 20] = [
     ("D0", 32), ("D1", 32), ("D2", 32), ("D3", 32), ("D4", 32), ("D5", 32), ("D6", 32), ("D7", 32),
     ("A0", 32), ("A1", 32), ("A2", 32), ("A3", 32), ("A4", 32), ("A5", 32), ("A6", 32), ("A7", 32),
     ("PC", 32), ("SR", 16), ("USP", 32), ("SSP", 32),
 ];
 
-pub const Z80_REGISTERS: [(&str, u32); 18] = [
+pub(crate) const Z80_REGISTERS: [(&str, u32); 18] = [
     ("AF", 16), ("BC", 16), ("DE", 16), ("HL", 16), ("AF'", 16), ("BC'", 16), ("DE'", 16), ("HL'", 16),
     ("IX", 16), ("IY", 16), ("SP", 16), ("PC", 16), ("I", 8), ("R", 8), ("WZ", 16), ("IM", 2), ("IFF1", 1), ("IFF2", 1),
 ];
 
 /// The 68000's observer in the observed frame: its stop is asked before its step, so here it records the step, its
 /// stores and its calls into the hooks.
-pub struct MainWatch<'a>(pub &'a mut Hooks);
+pub(in crate::genesis) struct MainWatch<'a>(pub &'a mut Hooks);
 
 impl Observer for MainWatch<'_> {
     fn before(&mut self, _processor: usize, pc: u32) -> u32 {
@@ -43,8 +42,8 @@ impl Observer for MainWatch<'_> {
             self.0.note_write(M68KBUS_ID, a, value, pc);
             // The same store in the memory it lands in, so a watch on WRAM or Z80RAM sees it.
             match a {
-                0xE0_0000..=0xFF_FFFF => self.0.note_write(crate::machine::WRAM_ID, a & 0xFFFF, value, pc),
-                0xA0_0000..=0xA0_3FFF => self.0.note_write(crate::machine::Z80RAM_ID, a & 0x1FFF, value, pc),
+                0xE0_0000..=0xFF_FFFF => self.0.note_write(crate::genesis::WRAM_ID, a & 0xFFFF, value, pc),
+                0xA0_0000..=0xA0_3FFF => self.0.note_write(crate::genesis::Z80RAM_ID, a & 0x1FFF, value, pc),
                 _ => {}
             }
         }
@@ -59,11 +58,11 @@ impl Observer for MainWatch<'_> {
 
 /// The Z80's observer: its own breakpoints asked before each instruction, its coverage and its stores into the hooks.
 /// Its calls are not the call stack's, which is the 68000's.
-pub struct Z80Watch<'a> {
-    pub hooks: &'a mut Hooks,
-    pub breakpoints: &'a [(i32, i32)],
+pub(in crate::genesis) struct Z80Watch<'a> {
+    pub(in crate::genesis) hooks: &'a mut Hooks,
+    pub(in crate::genesis) breakpoints: &'a [(i32, i32)],
     /// The first instruction runs unasked, as the host's resume past a Z80 stop asks.
-    pub skip: &'a mut bool,
+    pub(in crate::genesis) skip: &'a mut bool,
 }
 
 impl Observer for Z80Watch<'_> {
@@ -78,21 +77,21 @@ impl Observer for Z80Watch<'_> {
         if self.hooks.writes {
             self.hooks.note_write(Z80BUS_ID, address & 0xFFFF, value, pc);
             if address & 0xFFFF < 0x4000 {
-                self.hooks.note_write(crate::machine::Z80RAM_ID, address & 0x1FFF, value, pc);
+                self.hooks.note_write(crate::genesis::Z80RAM_ID, address & 0x1FFF, value, pc);
             }
         }
     }
 }
 
 /// The spaces a store is reported in: the two buses, and the RAMs a store through either lands in.
-pub fn reports_stores(space: u32) -> bool {
-    matches!(space, M68KBUS_ID | Z80BUS_ID | crate::machine::WRAM_ID | crate::machine::Z80RAM_ID)
+pub(crate) fn reports_stores(space: u32) -> bool {
+    matches!(space, M68KBUS_ID | Z80BUS_ID | crate::genesis::WRAM_ID | crate::genesis::Z80RAM_ID)
 }
 
 impl Hw {
     /// A byte of the 68000's space as a debugger reads it: the cartridge, the Z80's RAM and the 68000's RAM as the bus
     /// gives them; the ports, whose reads change what they read, and unmapped addresses as $FF.
-    pub fn peek_m68k(&self, a: u32) -> u8 {
+    pub(crate) fn peek_m68k(&self, a: u32) -> u8 {
         let a = a & 0xFF_FFFF;
         match a {
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read8(a),
@@ -104,7 +103,7 @@ impl Hw {
 
     /// A byte of the Z80's space as a debugger reads it: its RAM, and through the bank window the 68000's space; the
     /// YM2612, the bank register, the PSG and the VDP as $FF.
-    pub fn peek_z80(&self, a: u16) -> u8 {
+    pub(crate) fn peek_z80(&self, a: u16) -> u8 {
         match a {
             0x0000..=0x3FFF => self.zram[a as usize & 0x1FFF],
             0x8000..=0xFFFF => {
@@ -116,96 +115,10 @@ impl Hw {
     }
 }
 
-impl Machine {
-    pub fn processors(&self) -> Vec<Processor> {
-        let named = |r: &[(&str, u32)]| r.iter().map(|&(n, b)| (n.to_owned(), b)).collect::<Vec<_>>();
-        vec![
-            Processor { id: M68K, name: "M68K".into(), pc_bits: 24, registers: named(&M68K_REGISTERS), code_space: Some(M68KBUS_ID) },
-            Processor { id: Z80, name: "Z80".into(), pc_bits: 16, registers: named(&Z80_REGISTERS), code_space: Some(Z80BUS_ID) },
-        ]
-    }
-
-    /// The bytes `address` on of a bus space; another space is the caller's.
-    pub fn read_bus(&self, space: u32, address: u32, out: &mut [u8]) {
-        let hw = self.hw();
-        for (i, b) in out.iter_mut().enumerate() {
-            let at = address.wrapping_add(i as u32);
-            *b = match space {
-                M68KBUS_ID => hw.peek_m68k(at),
-                _ => hw.peek_z80(at as u16),
-            };
-        }
-    }
-
-    /// The address of the instruction `processor` stands in front of.
-    pub fn debug_pc(&self, processor: u32) -> Option<u64> {
-        match processor {
-            M68K => Some((self.cpu().regs.pc & 0xFF_FFFF) as u64),
-            Z80 => Some(self.z80().regs.pc as u64),
-            _ => None,
-        }
-    }
-
-    /// A processor's registers in the order its list gives them.
-    pub fn debug_registers(&self, processor: u32) -> Option<Vec<i64>> {
-        match processor {
-            M68K => {
-                let r = &self.cpu().regs;
-                let mut v: Vec<i64> = r.d.iter().chain(r.a.iter()).map(|&x| x as i64).collect();
-                v.extend([r.pc as i64, r.sr as i64, r.usp() as i64, r.ssp() as i64]);
-                Some(v)
-            }
-            Z80 => {
-                let r = &self.z80().regs;
-                Some(vec![
-                    r.af, r.bc, r.de, r.hl, r.af_, r.bc_, r.de_, r.hl_, r.ix, r.iy, r.sp, r.pc,
-                    r.i as u16, r.r as u16, r.wz, r.im as u16, r.iff1 as u16, r.iff2 as u16,
-                ].into_iter().map(i64::from).collect())
-            }
-            _ => None,
-        }
-    }
-
-    /// `count` instructions from `address`, each in its processor's set: the 68000's on its bus, the Z80's on its own
-    /// bus and in its RAM; another space is read as the processor asked would see it.
-    pub fn debug_disassemble(&self, processor: u32, space: u32, address: u32, count: u32) -> Option<Vec<Instruction>> {
-        let z80 = match space {
-            Z80BUS_ID => true,
-            M68KBUS_ID => false,
-            crate::machine::Z80RAM_ID => true,
-            _ => processor == Z80,
-        };
-        let byte = |a: u32| -> u8 {
-            match space {
-                M68KBUS_ID | Z80BUS_ID => {
-                    let mut b = [0];
-                    self.read_bus(space, a, &mut b);
-                    b[0]
-                }
-                _ => self.bytes(space).and_then(|m| m.get(a as usize).copied()).unwrap_or(0xFF),
-            }
-        };
-        if processor > Z80 || (space > 1 && self.bytes(space).is_none()) {
-            return None;
-        }
-        let mut out = Vec::with_capacity(count as usize);
-        let mut at = address;
-        for _ in 0..count {
-            let i = if z80 {
-                beryl_z80::disasm::disassemble(&|a: u16| byte(a as u32), at as u16)
-            } else {
-                beryl_m68k::disasm::disassemble(&|a: u32| (byte(a) as u16) << 8 | byte(a.wrapping_add(1)) as u16, at & 0xFF_FFFE)
-            };
-            at = i.address.wrapping_add(i.bytes.len().max(1) as u32);
-            out.push(i);
-        }
-        Some(out)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::machine::Machine;
     use crate::media::Media;
 
     fn w(words: &[u16]) -> Vec<u8> {
@@ -421,7 +334,7 @@ mod tests {
     #[test]
     fn watches_and_data_breakpoints_see_each_processors_stores() {
         use emusen_native::debug::flag;
-        use crate::machine::{WRAM_ID, Z80RAM_ID};
+        use crate::genesis::{WRAM_ID, Z80RAM_ID};
         let mut m = calls();
         m.hooks.configure(flag::WRITES, i32::MIN, -1);
         m.hooks.set_ranges(0, &[WRAM_ID, 0x20, 0x20, M68KBUS_ID, 0xFF_0020, 0xFF_0020, Z80RAM_ID, 0x100, 0x100]);
@@ -512,11 +425,11 @@ mod tests {
             (0x216, "DC.W $FFFF".to_owned()),
         ]);
         m.hw_mut().zram[..5].copy_from_slice(&[0x3E, 0x05, 0xC3, 0x34, 0x12]);
-        for space in [Z80BUS_ID, crate::machine::Z80RAM_ID] {
+        for space in [Z80BUS_ID, crate::genesis::Z80RAM_ID] {
             let z: Vec<String> = m.debug_disassemble(Z80, space, 0, 2).unwrap().iter().map(|i| format!("{} {}", i.mnemonic, i.operands)).collect();
             assert_eq!(z, ["LD A,$05", "JP $1234"], "space {space}");
         }
-        assert_eq!(m.debug_disassemble(M68K, crate::machine::ROM_ID, 0x20E, 1).unwrap()[0].bytes, [0x4E, 0xB9, 0, 0, 3, 0]);
+        assert_eq!(m.debug_disassemble(M68K, crate::genesis::ROM_ID, 0x20E, 1).unwrap()[0].bytes, [0x4E, 0xB9, 0, 0, 3, 0]);
         assert!(m.debug_disassemble(M68K, 99, 0, 1).is_none());
     }
 }

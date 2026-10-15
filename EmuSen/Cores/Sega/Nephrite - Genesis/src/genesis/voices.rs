@@ -3,12 +3,12 @@
 //! 68000's or the Z80's timing is in the comparison (`board_fm.rs`; Nephrite_Disputes.md D-16 to D-19,
 //! Nephrite_Native.md §21).
 
-use crate::board_chip::CHIP_VOICES;
-use crate::board_fm::{BLOCK, BoardVoice, LFO_VOICES, REPLAY_WRITES, REPLAYS, VOICE_RELEASE, VOICE_WRITES, VOICES};
+use crate::genesis::board_chip::CHIP_VOICES;
+use crate::genesis::board_fm::{BLOCK, BoardVoice, LFO_VOICES, REPLAY_WRITES, REPLAYS, VOICE_RELEASE, VOICE_WRITES, VOICES};
 use crate::machine::Machine;
 use crate::media::Media;
-use crate::pictures::program;
-use crate::ym2612::{SAMPLE, Ym2612};
+use crate::genesis::pictures::program;
+use crate::genesis::ym2612::{SAMPLE, Ym2612};
 
 /// An operator's registers `$30`-`$80`: detune and multiple, TL, key scaling and AR, DR, SR, SL and RR.
 type Op = [u8; 6];
@@ -399,16 +399,16 @@ fn chip_channel(asserted: u64, released: u64, writes: impl Iterator<Item = (u64,
 /// samples on the voice's channel.
 fn on_the_chip(name: &str, channel: usize, samples: usize) -> Vec<i32> {
     let v = voice(name);
-    let times = crate::board_chip::WRITE_TIMES.iter().find(|w| w.0 == name).unwrap_or_else(|| panic!("{name}: no write times")).1;
+    let times = crate::genesis::board_chip::WRITE_TIMES.iter().find(|w| w.0 == name).unwrap_or_else(|| panic!("{name}: no write times")).1;
     let ports: Vec<(u16, u8)> = v.writes.iter().map(|&(part, r, value, _)| (part, r, value)).chain(v.extra.iter().map(|&(part, r, value, _, _)| (part, r, value)))
         .flat_map(|(part, r, value)| [(2 * part as u16, r), (2 * part as u16 + 1, value)]).collect();
     assert_eq!(times.len(), ports.len(), "{name}: the board's writes are not the program's");
-    let mut t = crate::board_chip::WRITES_RELEASE;
+    let mut t = crate::genesis::board_chip::WRITES_RELEASE;
     let writes = times.iter().zip(ports).map(move |(&d, (port, value))| {
         t += d as u64;
         (t / 2, port, value)
     });
-    chip_channel(0, crate::board_chip::WRITES_RELEASE / 2, writes, samples, channel)
+    chip_channel(0, crate::genesis::board_chip::WRITES_RELEASE / 2, writes, samples, channel)
 }
 
 /// How many of `samples` of ours are the board's, by its blocks of 64.
@@ -554,7 +554,7 @@ fn the_lfo_voices_are_the_boards_sample_for_sample() {
 
 /// A chip voice on the whole machine: the samples held that are the board's,
 /// from the first sample that is not at rest (Nephrite_Native.md §24).
-fn chip_equal(v: &crate::board_chip::BoardChipVoice) -> usize {
+fn chip_equal(v: &crate::genesis::board_chip::BoardChipVoice) -> usize {
     let image = voice(v.name).image();
     assert_eq!(fnv(image.iter().copied()), v.image, "{}: the program is not the one the board ran", v.name);
     let (_, ours) = machine_placed(&image, 8600 / 880 + 5, v.channel);
@@ -594,7 +594,7 @@ fn the_chip_voices_on_the_whole_machine_at_the_boards_placement() {
 #[test]
 fn keys_and_the_timers_load_land_in_the_boards_samples() {
     let mut wrong = Vec::new();
-    for &(kind, board) in crate::board_chip::SWEEPS {
+    for &(kind, board) in crate::genesis::board_chip::SWEEPS {
         let channel = if kind == "csm" { 2 } else { kind[3..4].parse::<usize>().unwrap() - 1 };
         let firsts: Vec<usize> = (0..40)
             .map(|k| {
@@ -667,20 +667,20 @@ fn the_lfo_voices_on_the_chip_are_the_boards() {
 
 /// One run of a landing sweep on the chip alone, each write at the master clock the board's 68000 made it: the first
 /// sample not at rest and how many of the samples held from it are the board's.
-fn landing_run(l: &crate::board_chip::Landing, run: usize) -> (usize, usize) {
+fn landing_run(l: &crate::genesis::board_chip::Landing, run: usize) -> (usize, usize) {
     let (moved, _, _, blocks) = l.runs[run];
-    let mut t = crate::board_chip::WRITES_RELEASE;
+    let mut t = crate::genesis::board_chip::WRITES_RELEASE;
     let writes = l.writes.iter().enumerate().map(move |(k, &(port, v, gap))| {
         t += moved.iter().find(|m| m.0 == k).map_or(gap, |m| m.1) as u64;
         (t / 2, port, v)
     });
-    let ours = chip_channel(0, crate::board_chip::WRITES_RELEASE / 2, writes, l.samples, l.channel);
+    let ours = chip_channel(0, crate::genesis::board_chip::WRITES_RELEASE / 2, writes, l.samples, l.channel);
     let first = ours.iter().position(|&x| x != 0 && x != -1).expect("the voice sounds");
     (first, equal(&ours[first..], l.samples, blocks))
 }
 
 /// Whether a run is the board's: its samples, and where it leaves rest against the sweep's first run.
-fn landing_equal(l: &crate::board_chip::Landing, run: usize) -> bool {
+fn landing_equal(l: &crate::genesis::board_chip::Landing, run: usize) -> bool {
     let ((first, equal), (first0, _)) = (landing_run(l, run), landing_run(l, 0));
     equal == l.samples && first as i32 - first0 as i32 == l.runs[run].1
 }
@@ -692,7 +692,7 @@ fn landing_equal(l: &crate::board_chip::Landing, run: usize) -> bool {
 #[test]
 fn every_write_is_taken_by_the_boards_sample() {
     let mut wrong = Vec::new();
-    for l in crate::board_chip::LANDINGS {
+    for l in crate::genesis::board_chip::LANDINGS {
         let runs: Vec<usize> = (0..l.runs.len()).filter(|&k| !landing_equal(l, k)).collect();
         if !runs.is_empty() {
             wrong.push((l.kind, runs.len()));
@@ -741,7 +741,7 @@ fn landing_image(kind: &str, k: u16) -> Vec<u8> {
 #[test]
 fn every_write_is_taken_by_the_boards_sample_on_the_whole_machine() {
     let mut wrong = Vec::new();
-    for l in crate::board_chip::LANDINGS {
+    for l in crate::genesis::board_chip::LANDINGS {
         let mut firsts = Vec::new();
         let mut unlike = 0;
         for (k, &(_, shift, image, blocks)) in l.runs.iter().enumerate() {
@@ -824,7 +824,7 @@ fn reads_on_the_chip(name: &str, image: u32, events: &str) -> (usize, usize) {
     let bytes: Vec<u8> = (0..events.len()).step_by(2).map(|k| u8::from_str_radix(&events[k..k + 2], 16).unwrap()).collect();
     let mut y = Ym2612::new(true);
     (y.held, y.next, y.timers_next, y.held_at) = (true, BOARD_POWER_ON, BOARD_POWER_ON, BOARD_POWER_ON);
-    let mut t = crate::board_reads::READS_RELEASE / 2;
+    let mut t = crate::genesis::board_reads::READS_RELEASE / 2;
     y.run(t, |_, _| {});
     y.reset_line(false, t);
     let (mut equal, mut reads) = (0, 0);
@@ -850,7 +850,7 @@ fn reads_on_the_chip(name: &str, image: u32, events: &str) -> (usize, usize) {
 #[test]
 fn the_test_read_is_the_boards() {
     let mut wrong = Vec::new();
-    for &(name, image, board) in crate::board_reads::TEST_READS {
+    for &(name, image, board) in crate::genesis::board_reads::TEST_READS {
         let held = match name {
             "read-decay" => 1527,
             "read-decay-c1" => 956,

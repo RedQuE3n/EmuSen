@@ -10,8 +10,8 @@ const DISC: &str = "240p-scd/240p_SegaCD_USA.iso";
 
 /// The machine with mcd-verificator as its boot ROM and the disc in its drive.
 pub fn machine() -> Option<Machine> {
-    let Some(root) = std::env::var_os(crate::programs::ROMS_VARIABLE) else {
-        eprintln!("{} is not set: mcd-verificator not run", crate::programs::ROMS_VARIABLE);
+    let Some(root) = std::env::var_os(crate::genesis::programs::ROMS_VARIABLE) else {
+        eprintln!("{} is not set: mcd-verificator not run", crate::genesis::programs::ROMS_VARIABLE);
         return None;
     };
     let root = std::path::Path::new(&root);

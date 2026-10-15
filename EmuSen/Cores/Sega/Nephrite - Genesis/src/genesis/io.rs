@@ -5,13 +5,13 @@
 
 /// Master clocks after TH's last fall before a six-button pad forgets its count: MacDonald's "about 8192 68000
 /// cycles", taken as given.
-pub const SIX_BUTTON_TIMEOUT: u64 = 8192 * 7;
+pub(in crate::genesis) const SIX_BUTTON_TIMEOUT: u64 = 8192 * 7;
 
 /// A pad's buttons as the ABI's mask holds them (`v1.rs`'s table), pressed as 1.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Pad {
-    pub buttons: u32,
-    pub six: bool,
+pub(crate) struct Pad {
+    pub(crate) buttons: u32,
+    pub(crate) six: bool,
     /// TH as the pad sees it, and the falls since the count was last reset.
     th: bool,
     falls: u8,
@@ -56,7 +56,7 @@ impl Pad {
 }
 
 /// The most pads the two ports hold: a Team Player on each.
-pub const PADS: usize = 8;
+pub(crate) const PADS: usize = 8;
 
 /// What is plugged into a port.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -73,7 +73,7 @@ pub enum Plug {
 
 /// A Team Player's place in its packet: TH and TR as the console drives them, and the nibbles asked for since TH fell.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Tap {
+pub(in crate::genesis) struct Tap {
     th: bool,
     tr: bool,
     asked: u8,
@@ -122,44 +122,44 @@ fn packet(pads: &[Pad]) -> Vec<u8> {
 /// The ports' registers, the pads' TH and count and the taps' places, for the state; the buttons and the plugs are
 /// input, set each frame.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct IoRegs {
-    pub data: [u8; 3],
-    pub ctrl: [u8; 3],
-    pub tx: [u8; 3],
-    pub sctrl: [u8; 3],
-    pub th: [bool; PADS],
-    pub falls: [u8; PADS],
-    pub last_fall: [u64; PADS],
+pub(crate) struct IoRegs {
+    pub(crate) data: [u8; 3],
+    pub(crate) ctrl: [u8; 3],
+    pub(in crate::genesis) tx: [u8; 3],
+    pub(in crate::genesis) sctrl: [u8; 3],
+    pub(crate) th: [bool; PADS],
+    pub(crate) falls: [u8; PADS],
+    pub(in crate::genesis) last_fall: [u64; PADS],
     /// Each port's tap: TH, TR and the nibbles asked for.
-    pub taps: [u8; 6],
+    pub(crate) taps: [u8; 6],
 }
 
-pub struct Io {
-    pub version: u8,
+pub(crate) struct Io {
+    pub(crate) version: u8,
     data: [u8; 3],
     ctrl: [u8; 3],
     tx: [u8; 3],
     sctrl: [u8; 3],
     /// The pads in the players' order: port A's, then port B's (`first_pad`).
-    pub pads: [Pad; PADS],
-    pub plugs: [Plug; 2],
+    pub(crate) pads: [Pad; PADS],
+    pub(crate) plugs: [Plug; 2],
     taps: [Tap; 2],
     /// TH as a device drives it, for the external interrupt.
     th_in: [bool; 3],
     /// A Codemasters J-Cart: two pad ports on the cartridge, its players after the console ports' (§48).
-    pub jcart: bool,
+    pub(in crate::genesis) jcart: bool,
 }
 
 /// The J-Cart's word: TH written as bit 0, read back as bit 6 (Nephrite_Native.md §48).
-pub const JCART_ADDRESSES: [u32; 2] = [0x38_FFFE, 0x3F_FFFE];
+pub(in crate::genesis) const JCART_ADDRESSES: [u32; 2] = [0x38_FFFE, 0x3F_FFFE];
 
 /// How many pads `plug` holds.
-pub fn pads_of(plug: Plug) -> usize {
+pub(crate) fn pads_of(plug: Plug) -> usize {
     if plug == Plug::Pad { 1 } else { 4 }
 }
 
 impl Io {
-    pub fn regs_state(&self) -> IoRegs {
+    pub(crate) fn regs_state(&self) -> IoRegs {
         IoRegs {
             data: self.data,
             ctrl: self.ctrl,
@@ -172,7 +172,7 @@ impl Io {
         }
     }
 
-    pub fn set_regs_state(&mut self, s: IoRegs) {
+    pub(in crate::genesis) fn set_regs_state(&mut self, s: IoRegs) {
         (self.data, self.ctrl, self.tx, self.sctrl) = (s.data, s.ctrl, s.tx, s.sctrl);
         for (i, p) in self.pads.iter_mut().enumerate() {
             (p.th, p.falls, p.last_fall) = (s.th[i], s.falls[i], s.last_fall[i]);
@@ -183,12 +183,12 @@ impl Io {
     }
 
     /// The first of port `port`'s pads among `pads`: port B's follow port A's.
-    pub fn first_pad(&self, port: usize) -> usize {
+    pub(crate) fn first_pad(&self, port: usize) -> usize {
         if port == 0 { 0 } else { pads_of(self.plugs[0]) }
     }
 
     /// How many pads are plugged in: the players the two ports hold.
-    pub fn pad_count(&self) -> usize {
+    pub(crate) fn pad_count(&self) -> usize {
         match self.plugs[0] {
             Plug::FourWay => 4,
             a => pads_of(a) + pads_of(if self.plugs[1] == Plug::FourWay { Plug::Pad } else { self.plugs[1] }),
@@ -196,18 +196,18 @@ impl Io {
     }
 
     /// The J-Cart's first pad, after the console ports' pads, where two more fit among the eight.
-    pub fn jcart_first(&self) -> Option<usize> {
+    pub(in crate::genesis) fn jcart_first(&self) -> Option<usize> {
         let first = self.pad_count();
         (self.jcart && first + 2 <= PADS).then_some(first)
     }
 
     /// Every player: the console ports' pads and the J-Cart's two.
-    pub fn players(&self) -> usize {
+    pub(crate) fn players(&self) -> usize {
         self.pad_count() + if self.jcart_first().is_some() { 2 } else { 0 }
     }
 
     /// A word written to the J-Cart: bit 0 is TH for both its pads.
-    pub fn jcart_write(&mut self, v: u16, clock: u64) {
+    pub(in crate::genesis) fn jcart_write(&mut self, v: u16, clock: u64) {
         if let Some(first) = self.jcart_first() {
             self.pads[first..first + 2].iter_mut().for_each(|p| p.set_th(v & 1 != 0, clock));
         }
@@ -215,7 +215,7 @@ impl Io {
 
     /// The J-Cart's word: the second pad's six lines in bits 13-8 and bits 15-14 low, which Micro Machines 2's own
     /// J-Cart test requires; bit 7 high, TH in bit 6 and the first pad's lines in bits 5-0 (Nephrite_Native.md §48.2).
-    pub fn jcart_read(&self, clock: u64) -> u16 {
+    pub(in crate::genesis) fn jcart_read(&self, clock: u64) -> u16 {
         let Some(first) = self.jcart_first() else { return 0 };
         let (a, b) = (&self.pads[first], &self.pads[first + 1]);
         (b.lines(clock) as u16) << 8 | 0x80 | (a.th as u16) << 6 | a.lines(clock) as u16
@@ -238,7 +238,7 @@ impl Io {
     }
 
     /// The version register: overseas, PAL, no expansion unit, and the model's version (TMSS from 1).
-    pub fn new(overseas: bool, pal: bool, version: u8) -> Io {
+    pub(in crate::genesis) fn new(overseas: bool, pal: bool, version: u8) -> Io {
         let v = (overseas as u8) << 7 | (pal as u8) << 6 | 1 << 5 | (version & 0xF);
         let pads = [Pad { th: true, ..Pad::default() }; PADS];
         let taps = [Tap { th: true, tr: true, asked: 0 }; 2];
@@ -290,7 +290,7 @@ impl Io {
     }
 
     /// A byte of `$A10000`-`$A1001F`, the even and odd address of each register alike.
-    pub fn read(&self, a: u32, clock: u64) -> u8 {
+    pub(crate) fn read(&self, a: u32, clock: u64) -> u8 {
         let reg = (a >> 1) & 0xF;
         match reg {
             0 => self.version,
@@ -308,7 +308,7 @@ impl Io {
         }
     }
 
-    pub fn write(&mut self, a: u32, v: u8, clock: u64) {
+    pub(crate) fn write(&mut self, a: u32, v: u8, clock: u64) {
         let reg = (a >> 1) & 0xF;
         match reg {
             1..=3 => {

@@ -3,12 +3,14 @@
 //! §4); the 32X's memories beside it until its stage. A Mega Drive image and a disc run; a 32X image is recognised
 //! and held (Nephrite_Native.md §1, §9).
 
-use crate::cart::Cart;
+use crate::genesis::cart::Cart;
 use crate::genesis::{Genesis, Hw, Model, START};
 use crate::interface::{Attachment, AttachmentView, Bare, Board};
 use crate::mcd::MegaCd;
 use crate::media::{Media, System};
+use crate::genesis::debugger::{M68K, M68K_REGISTERS, M68KBUS_ID, Z80, Z80_REGISTERS, Z80BUS_ID};
 use emusen_native::SampleQueue;
+use emusen_native::core::{Instruction, Processor};
 use emusen_native::debug::Hooks;
 
 pub use crate::interface::SpaceRef;
@@ -21,13 +23,7 @@ pub struct Memory {
     pub bytes: Vec<u8>,
 }
 
-pub const WRAM_ID: u32 = 2;
-pub const Z80RAM_ID: u32 = 3;
-pub const VRAM_ID: u32 = 4;
-pub const CRAM_ID: u32 = 5;
-pub const VSRAM_ID: u32 = 6;
-pub const SRAM_ID: u32 = 7;
-pub const ROM_ID: u32 = 8;
+pub use crate::genesis::{CRAM_ID, ROM_ID, SRAM_ID, VRAM_ID, VSRAM_ID, WRAM_ID, Z80RAM_ID};
 pub const S32X_MEMORIES: [(u32, &str, usize); 3] = [(34, "SDRAM", 0x4_0000), (35, "FRAMEBUFFER", 0x4_0000), (36, "PALETTE", 512)];
 
 /// The picture's size before the first frame: H40, 28 rows of tiles; each frame then has the VDP's width and height.
@@ -35,7 +31,7 @@ pub const WIDTH: u32 = 320;
 pub const HEIGHT: u32 = 224;
 
 /// The Genesis as fitted: alone, or with the Sega CD for a disc's machine.
-pub enum Fitted {
+pub(crate) enum Fitted {
     Md(Genesis<Bare>),
     Mcd(Genesis<MegaCd>),
 }
@@ -53,15 +49,15 @@ pub(crate) use fitted;
 
 pub struct Machine {
     pub media: Media,
-    pub fitted: Fitted,
+    pub(crate) fitted: Fitted,
     pub extra: Vec<Memory>,
     pub frames: i64,
     pub picture: Vec<u8>,
     pub skip: bool,
     /// Each pad's buttons in the players' order: port 1's pads, then port 2's (`io::Io::first_pad`).
-    pub pads: [u32; crate::io::PADS],
+    pub pads: [u32; crate::genesis::io::PADS],
     /// What each port holds, and whether its pads are six-button ones (the settings `pad1` and `pad2`).
-    pub plugged: [(crate::io::Plug, bool); 2],
+    pub plugged: [(crate::genesis::io::Plug, bool); 2],
     /// The firmware files given at create, by number; none is used yet.
     pub firmware: Vec<u32>,
     /// The samples made and not yet drained, stereo at `sound::RATE`.
@@ -133,12 +129,12 @@ impl Machine {
         for &(id, name, size) in list {
             extra.push(Memory { id, name, bytes: vec![0; size] });
         }
-        let board = Board { master_hz: crate::genesis::master_hz(model.pal), pal: model.pal, start: START, rate: crate::sound::RATE };
+        let board = Board { master_hz: crate::genesis::master_hz(model.pal), pal: model.pal, start: START, rate: crate::genesis::sound::RATE };
         let fitted = match media.system {
             System::Mcd => Fitted::Mcd(Genesis::with(cart, model, MegaCd::new(board, bios.unwrap_or_default(), disc))),
             System::Md | System::S32x => Fitted::Md(Genesis::with(cart, model, Bare)),
         };
-        Machine { media, fitted, extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::io::PADS], plugged: [(crate::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, kept_apart: KeptApart::default() }
+        Machine { media, fitted, extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::genesis::io::PADS], plugged: [(crate::genesis::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, kept_apart: KeptApart::default() }
     }
 
     /// The Genesis's devices, whatever is fitted.
@@ -176,8 +172,8 @@ impl Machine {
     /// The spaces in id order: the two buses, the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
     pub fn spaces(&self) -> Vec<SpaceRef> {
         let mut v = vec![
-            SpaceRef { id: crate::debugger::M68KBUS_ID, name: "M68KBUS", read_only: true },
-            SpaceRef { id: crate::debugger::Z80BUS_ID, name: "Z80BUS", read_only: true },
+            SpaceRef { id: crate::genesis::debugger::M68KBUS_ID, name: "M68KBUS", read_only: true },
+            SpaceRef { id: crate::genesis::debugger::Z80BUS_ID, name: "Z80BUS", read_only: true },
         ];
         v.extend([(WRAM_ID, "WRAM"), (Z80RAM_ID, "Z80RAM"), (VRAM_ID, "VRAM"), (CRAM_ID, "CRAM"), (VSRAM_ID, "VSRAM")]
             .map(|(id, name)| SpaceRef { id, name, read_only: false }));
@@ -276,7 +272,7 @@ impl Machine {
         for (i, pad) in io.pads.iter_mut().enumerate() {
             pad.buttons = if i < count { self.pads[i] } else { 0 };
             // The J-Cart's ports take three-button pads (§48).
-            pad.six = i < ports && self.plugged[(i >= second && self.plugged[0].0 != crate::io::Plug::FourWay) as usize].1;
+            pad.six = i < ports && self.plugged[(i >= second && self.plugged[0].0 != crate::genesis::io::Plug::FourWay) as usize].1;
         }
         let draw = !self.skip;
         self.hw_mut().draw = draw;
@@ -295,7 +291,7 @@ impl Machine {
                 let f = &fitted!(&self.fitted, |g| &g.hw.dev).vdp.frame;
                 self.picture.clear();
                 for y in 0..f.height {
-                    self.picture.extend_from_slice(&f.rgba[y * crate::render::MAX_W * 4..][..f.width * 4]);
+                    self.picture.extend_from_slice(&f.rgba[y * crate::genesis::render::MAX_W * 4..][..f.width * 4]);
                 }
             }
         }
@@ -323,7 +319,7 @@ impl Machine {
 /// of mebibytes and 256 KiB, the patch ROM last.
 pub fn split_lock_on(image: Vec<u8>, serial: &str) -> (Vec<u8>, Option<Vec<u8>>, Vec<u8>) {
     const SK: usize = 0x20_0000;
-    if !serial.starts_with(crate::cart::LOCK_ON_SERIAL) || image.len() <= SK {
+    if !serial.starts_with(crate::genesis::cart::LOCK_ON_SERIAL) || image.len() <= SK {
         return (image, None, Vec::new());
     }
     let mut sk = image;
@@ -335,4 +331,92 @@ pub fn split_lock_on(image: Vec<u8>, serial: &str) -> (Vec<u8>, Option<Vec<u8>>,
 /// An opaque black frame, RGBA.
 pub fn blank() -> Vec<u8> {
     (0..(WIDTH * HEIGHT) as usize).flat_map(|_| [0, 0, 0, 255]).collect()
+}
+
+/// The debugger's composition: the Genesis's processors and buses, read without side effects (Nephrite_Native.md §41).
+impl Machine {
+    pub fn processors(&self) -> Vec<Processor> {
+        let named = |r: &[(&str, u32)]| r.iter().map(|&(n, b)| (n.to_owned(), b)).collect::<Vec<_>>();
+        vec![
+            Processor { id: M68K, name: "M68K".into(), pc_bits: 24, registers: named(&M68K_REGISTERS), code_space: Some(M68KBUS_ID) },
+            Processor { id: Z80, name: "Z80".into(), pc_bits: 16, registers: named(&Z80_REGISTERS), code_space: Some(Z80BUS_ID) },
+        ]
+    }
+
+    /// The bytes `address` on of a bus space; another space is the caller's.
+    pub fn read_bus(&self, space: u32, address: u32, out: &mut [u8]) {
+        let hw = self.hw();
+        for (i, b) in out.iter_mut().enumerate() {
+            let at = address.wrapping_add(i as u32);
+            *b = match space {
+                M68KBUS_ID => hw.peek_m68k(at),
+                _ => hw.peek_z80(at as u16),
+            };
+        }
+    }
+
+    /// The address of the instruction `processor` stands in front of.
+    pub fn debug_pc(&self, processor: u32) -> Option<u64> {
+        match processor {
+            M68K => Some((self.cpu().regs.pc & 0xFF_FFFF) as u64),
+            Z80 => Some(self.z80().regs.pc as u64),
+            _ => None,
+        }
+    }
+
+    /// A processor's registers in the order its list gives them.
+    pub fn debug_registers(&self, processor: u32) -> Option<Vec<i64>> {
+        match processor {
+            M68K => {
+                let r = &self.cpu().regs;
+                let mut v: Vec<i64> = r.d.iter().chain(r.a.iter()).map(|&x| x as i64).collect();
+                v.extend([r.pc as i64, r.sr as i64, r.usp() as i64, r.ssp() as i64]);
+                Some(v)
+            }
+            Z80 => {
+                let r = &self.z80().regs;
+                Some(vec![
+                    r.af, r.bc, r.de, r.hl, r.af_, r.bc_, r.de_, r.hl_, r.ix, r.iy, r.sp, r.pc,
+                    r.i as u16, r.r as u16, r.wz, r.im as u16, r.iff1 as u16, r.iff2 as u16,
+                ].into_iter().map(i64::from).collect())
+            }
+            _ => None,
+        }
+    }
+
+    /// `count` instructions from `address`, each in its processor's set: the 68000's on its bus, the Z80's on its own
+    /// bus and in its RAM; another space is read as the processor asked would see it.
+    pub fn debug_disassemble(&self, processor: u32, space: u32, address: u32, count: u32) -> Option<Vec<Instruction>> {
+        let z80 = match space {
+            Z80BUS_ID => true,
+            M68KBUS_ID => false,
+            Z80RAM_ID => true,
+            _ => processor == Z80,
+        };
+        let byte = |a: u32| -> u8 {
+            match space {
+                M68KBUS_ID | Z80BUS_ID => {
+                    let mut b = [0];
+                    self.read_bus(space, a, &mut b);
+                    b[0]
+                }
+                _ => self.bytes(space).and_then(|m| m.get(a as usize).copied()).unwrap_or(0xFF),
+            }
+        };
+        if processor > Z80 || (space > 1 && self.bytes(space).is_none()) {
+            return None;
+        }
+        let mut out = Vec::with_capacity(count as usize);
+        let mut at = address;
+        for _ in 0..count {
+            let i = if z80 {
+                beryl_z80::disasm::disassemble(&|a: u16| byte(a as u32), at as u16)
+            } else {
+                beryl_m68k::disasm::disassemble(&|a: u32| (byte(a) as u16) << 8 | byte(a.wrapping_add(1)) as u16, at & 0xFF_FFFE)
+            };
+            at = i.address.wrapping_add(i.bytes.len().max(1) as u32);
+            out.push(i);
+        }
+        Some(out)
+    }
 }

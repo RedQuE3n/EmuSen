@@ -270,7 +270,7 @@ mod tests {
             e.write(&[(0x20_0001, sda), (0x20_0000, scl)]);
         }
         let taken = e.protocol();
-        assert_ne!(taken, crate::eeprom::Eeprom::new(e.board).protocol());
+        assert_ne!(taken, crate::genesis::eeprom::Eeprom::new(e.board).protocol());
         let mut s = vec![0; a.state_size()];
         a.save_state(&mut s).unwrap();
         let mut b = eeprom_cart();
@@ -353,8 +353,8 @@ mod tests {
         let mut d = eeprom_cart();
         d.load_state(&old).unwrap();
         let e = d.hw().cart.eeprom.as_ref().unwrap();
-        assert_eq!((e.protocol(), e.memory[5]), (crate::eeprom::Eeprom::IDLE, 0x42));
-        assert_eq!(crate::eeprom::Eeprom::IDLE, crate::eeprom::Eeprom::new(e.board).protocol());
+        assert_eq!((e.protocol(), e.memory[5]), (crate::genesis::eeprom::Eeprom::IDLE, 0x42));
+        assert_eq!(crate::genesis::eeprom::Eeprom::IDLE, crate::genesis::eeprom::Eeprom::new(e.board).protocol());
         d.advance();
     }
 

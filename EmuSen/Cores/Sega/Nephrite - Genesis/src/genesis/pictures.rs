@@ -3,7 +3,7 @@
 
 use crate::machine::Machine;
 use crate::media::Media;
-use crate::render::{vram4_address, MAX_W};
+use crate::genesis::render::{vram4_address, MAX_W};
 
 pub(crate) fn w(words: &[u16]) -> Vec<u8> {
     words.iter().flat_map(|v| v.to_be_bytes()).collect()
@@ -290,7 +290,7 @@ fn row_hashes(m: &Machine) -> Vec<u32> {
 /// pixels wide (Nephrite_Disputes.md D-9; `mdboard.py picture cram-dma`, `cram-dma-one`, `vsram-dma`, `pattern-dma`).
 #[test]
 fn mid_line_transfers_draw_as_the_board_does() {
-    use crate::board_rows::*;
+    use crate::genesis::board_rows::*;
     let regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A63, 0x8C81, 0x8D3F, 0x8F02, 0x9001];
     let column_names: Vec<u16> = (0..32 * 64).map(|i| ((i % 64) % 16 | ((i % 64) / 16 % 4) << 13) as u16).collect();
     let cram_values: Vec<u16> = (0..1024u16).map(|k| (k.wrapping_mul(0x2B5).wrapping_add((k >> 3).wrapping_mul(0x13))) & 0xEEE).collect();

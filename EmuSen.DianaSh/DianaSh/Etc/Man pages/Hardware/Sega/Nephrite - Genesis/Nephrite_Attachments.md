@@ -661,6 +661,22 @@ that name a concrete attachment, and the only ones a host's call reaches.
 | tests that run a machine | `Machine::new(&image, Media::read(&image))` becomes `Console<Bare>`'s cartridge constructor, mechanically |
 | `examples/` | unchanged in place; they use the crate's `pub` items (§5.3) |
 
+**As built (commit 5, §11.5).** `src/genesis/` holds `mod.rs` (`genesis.rs` moved), `cart.rs`, `eeprom.rs`,
+`header.rs`, `io.rs`, `vdp.rs`, `render.rs`, `sound.rs`, `ym2612.rs`, `fm.rs`, `fm_tables.rs`, `lfo_tables.rs`,
+`fifo_records.rs`, `debugger.rs` and the cartridge's tests (`board_*.rs`, `pictures.rs`, `programs.rs`, `sounds.rs`,
+`voices.rs`). Three things differ from the table above:
+
+- **No `Console<A>`.** With the parameter on `Genesis<A>` (§3.4 as built), what the table gave `Console<A>` (pads in,
+  picture and sound out, the cartridge's battery file, the debugger's state) is the ABI's side of a frame and stays in
+  `Machine`, which reaches the Genesis through `Genesis<A>`'s `pub(crate)` methods and `Hw`'s devices.
+- **The debugger's composition** (`processors`, `read_bus`, `debug_pc`, `debug_registers`, `debug_disassemble`) moved
+  into `machine.rs`; `genesis/debugger.rs` keeps the processors' numbers and registers, the two watches and the buses'
+  peeks. The Genesis's space ids (`WRAM_ID` to `ROM_ID`) moved into `genesis/mod.rs`, from its range, and `machine.rs`
+  re-exports them.
+- **`header.rs`** holds the header, the markets and the declared save RAM, which the cartridge reads; `cartridge_bytes`
+  stays in `media.rs`, because telling a copier's image from a disc's is a decision by contents that names the Sega
+  CD's signature.
+
 ### 5.2 The visibility rules
 
 - **The Genesis's internals are private to `genesis/`.** `Hw<A>`'s fields, the VDP's, I/O's, the sound's and the
@@ -678,6 +694,17 @@ that name a concrete attachment, and the only ones a host's call reaches.
 - **`pub` is kept to what tools outside the crate use** (`examples/`, the conformance kit through the ABI): `machine`'s
   `Machine` and the constructors the examples call, and a named, documented accessor for a development tool such as
   `examples/disc.rs`'s register view and stage 9's `Sub::seen`.
+
+**As built (commit 5, §11.5).** Every `pub` item of the two trees' production code was narrowed to its tree
+(`pub(in crate::genesis)`, `pub(in crate::mcd)`) and widened by the compiler's privacy errors only as far as a user
+needs: to `pub(crate)` for the assembly and its tests, to `pub` for the examples and the crate's re-exports. Of the
+Genesis's 557 marked items 329 are now private to its tree, 117 the crate's and 111 public; of the Sega CD's 291, 229,
+16 and 46. The library alone reaches 165 of the Genesis's and 33 of the Sega CD's; the assembly's tests 13 more; the
+examples the rest of the public ones, which Q6 leaves for a later commit. The narrowing found seven items no library
+code calls: four only the tests do (`Genesis::new`, `Sound::take`, made so by commit 3's mix, `Fm::increment`,
+`Tables::output`), now `#[cfg(test)]`; and three with no caller at all, kept public as they were, since removing them is
+a decision of its own: the chain of a device on TH (`Hw::device_th`, its own test, no plug driving it yet),
+`Vdp::refresh_sat_cache` and `Cdc::dma_due`.
 
 ### 5.3 What privacy enforces, what it cannot, and the two checks
 
@@ -710,6 +737,15 @@ an attachment only by the traits.
 
 With both, the direction is held as surely as a crate boundary would hold it at each test run, though not at each
 compilation, and cycles are refused by the source check.
+
+**As built (commit 5, §11.5).** The source check is `src/boundary.rs`, two tests: `the_attachments_reach_only_the_interface`
+reads every production file of `src/genesis/`, `src/mcd/`, `src/s32x/` and `src/interface.rs` and fails on a crossing;
+`the_source_check_catches_each_crossing` holds the rules themselves to lines that cross and lines that do not. A file's
+test module, and the files its tree declares under `#[cfg(test)]`, are not read: a test is the assembly's view of a
+part (mcd-verificator's and the discs' tests build a whole machine, and so do the cartridge's program tests), and the
+direction concerns what the library compiles. Proved by a deliberate crossing, `const _: u32 =
+crate::genesis::sound::RATE;` in `mcd/cdda.rs`, which compiled, since the constant is public, and failed the check
+with the file, the line and the module named.
 
 ### 5.4 The Genesis-only build: a feature, kept as a check
 
@@ -1002,3 +1038,19 @@ test, and no access pays it on a console without one but the flag's (§3.11).
   `state.rs`, `v1.rs`).
 - **Byte identity**: the 71 digests equal the baseline's; the crate's 175 tests; the kit's sample 64 of 64 and the 240p
   disc compliant; WiseMan's 86. No code on a frame's path changed, so the bench was not run.
+
+### 11.5 Commit 5: the module trees, their visibility and the source check
+
+- **The move** (§5.1 as built): 22 files into `src/genesis/` by `git mv`, the paths `crate::X` of the Genesis's
+  modules rewritten `crate::genesis::X` (and `nephrite::X` in the examples); `genesis/header.rs` from `media.rs`; the
+  debugger's composition into `machine.rs`; the Genesis's space ids into `genesis/mod.rs`. `lib.rs` declares the
+  seven top-level modules and the check.
+- **Visibility** (§5.2 as built), narrowed and widened by the compiler; `Fitted` and `Machine::fitted` became
+  `pub(crate)`, the examples using the accessors.
+- **The source check** (§5.3 as built), with its proof by a deliberate crossing.
+- **Byte identity**: the 71 digests equal the baseline's; the crate's 177 tests (175 and the check's two); the kit's
+  sample 64 of 64 and the 240p disc compliant.
+- **Cost**, the move being a move, measured again (§4.4), against the baseline's build, load 2.5 to 4: Sonic the
+  Hedgehog 1.347 ms (1.369), Sonic 2 1.234 (1.249), Thunder Force IV 1.355 (1.341; again alone, 1.363 against 1.361),
+  Streets of Rage 2 1.129 (1.149), Phantasy Star IV 1.403 (1.415), Micro Machines 2 1.444 (1.458), the 240p disc 1.591
+  (1.585). Within the runs' spread or faster.

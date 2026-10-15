@@ -8,33 +8,33 @@ use emusen_native::steps::Steps;
 use emusen_native::{StateReader, StateWriter, Truncated};
 
 /// Samples a sector.
-pub const FRAMES: usize = 588;
+pub(in crate::mcd) const FRAMES: usize = 588;
 /// The fader's full volume, `$400` in FD10-FD0 (the Hardware Manual §3-6).
-pub const FULL: i32 = 0x400;
+pub(in crate::mcd) const FULL: i32 = 0x400;
 /// CD-DA's full-scale sample, and the PCM chip's limited sum, against the output's range: fitted to recordings of two
 /// model 1 consoles with a model 1 Sega CD playing the 240p suite's MDFourier sequence, each level held to the
 /// Genesis's FM notes (D-35, D-38; Nephrite_Native.md §59).
-pub const GAIN: (i32, i32) = (158, 1024);
-pub const PCM_GAIN: (i32, i32) = (267, 1024);
+pub(in crate::mcd) const GAIN: (i32, i32) = (158, 1024);
+pub(in crate::mcd) const PCM_GAIN: (i32, i32) = (267, 1024);
 
 #[derive(Clone)]
-pub struct Cdda {
-    pub steps: Steps,
+pub(in crate::mcd) struct Cdda {
+    pub(in crate::mcd) steps: Steps,
     /// Samples not yet given to the synthesiser, each at its master clock.
-    pub queue: VecDeque<(u64, [i32; 2])>,
+    pub(in crate::mcd) queue: VecDeque<(u64, [i32; 2])>,
     /// The two sources' levels now, CD-DA's and the PCM chip's, which the synthesiser holds the sum of.
-    pub levels: [[i32; 2]; 2],
+    pub(in crate::mcd) levels: [[i32; 2]; 2],
     /// The attenuator's level now, in the fader's units (`FULL` the whole), which moves a step a sample to the one asked.
-    pub att: i32,
+    pub(in crate::mcd) att: i32,
     /// The de-emphasis filter's last input and output, each side.
-    pub emph: [[f64; 2]; 2],
+    pub(in crate::mcd) emph: [[f64; 2]; 2],
     /// The last four samples each side, for undoing the droop of the synthesiser's held steps (`UNHOLD`).
-    pub hist: [[i32; 4]; 2],
+    pub(in crate::mcd) hist: [[i32; 4]; 2],
 }
 
 /// A five-tap filter at 44.1 kHz, in 16,384ths summing to one, that undoes the droop of samples held as steps to within 0.4 dB up to
 /// 20 kHz: the LC7883 oversamples CD-DA through its digital filter, flat across the band (Nephrite_Native.md §59).
-pub const UNHOLD: [i32; 5] = [365, -1623, 18900, -1623, 365];
+pub(in crate::mcd) const UNHOLD: [i32; 5] = [365, -1623, 18900, -1623, 365];
 
 /// The LC7883's de-emphasis, 50 µs and 15 µs, as a first-order filter by the bilinear transform at `fs`, the rate
 /// DEF1-DEF0 names (D-39): the coefficients b0, b1 and a1.
@@ -52,14 +52,14 @@ fn gain(att: i32) -> i32 {
 
 impl Cdda {
     /// CD-DA for a Genesis whose master clock runs at `num`/`den` Hz, synthesised at the mix's `rate`.
-    pub fn new(num: u64, den: u64, rate: u32) -> Cdda {
+    pub(in crate::mcd) fn new(num: u64, den: u64, rate: u32) -> Cdda {
         Cdda { steps: Steps::new(num, den, rate), queue: VecDeque::with_capacity(2 * FRAMES), levels: [[0; 2]; 2], att: 0, emph: [[0.0; 2]; 2], hist: [[0; 4]; 2] }
     }
 
     /// A sector's samples from master clock `start`, `period` master clocks long, toward `volume` of `FULL`, through
     /// the de-emphasis DEF1-DEF0 (`def`) asks for; None for a sector that gives no sound, the fader moving on all the
     /// same and the output falling silent.
-    pub fn sector(&mut self, raw: Option<&[u8; 2352]>, start: u64, period: u64, volume: i32, def: u8) {
+    pub(in crate::mcd) fn sector(&mut self, raw: Option<&[u8; 2352]>, start: u64, period: u64, volume: i32, def: u8) {
         let Some(raw) = raw else {
             self.att += (volume - self.att).clamp(-(FRAMES as i32), FRAMES as i32);
             if self.queue.back().map_or(self.levels[0], |e| e.1) != [0, 0] {
@@ -99,7 +99,7 @@ impl Cdda {
 
     /// The samples due by master clock `t`, CD-DA's queued and the PCM chip's in `pcm` (each at its master clock, in
     /// order), given to the synthesiser in time order as the sum of the two; the PCM's taken are removed.
-    pub fn feed(&mut self, t: u64, pcm: &mut Vec<(u64, [i32; 2])>) {
+    pub(in crate::mcd) fn feed(&mut self, t: u64, pcm: &mut Vec<(u64, [i32; 2])>) {
         let mut i = 0;
         loop {
             let cd = self.queue.front().copied().filter(|e| e.0 <= t);
@@ -122,7 +122,7 @@ impl Cdda {
         pcm.drain(..i);
     }
 
-    pub fn write_state(&self, w: &mut StateWriter) {
+    pub(in crate::mcd) fn write_state(&self, w: &mut StateWriter) {
         self.steps.write_state(w);
         let q: Vec<u64> = self.queue.iter().flat_map(|&(at, [l, r])| [at, l as u32 as u64 | (r as u32 as u64) << 32]).collect();
         w.i32s("MixLevels", &[self.levels[0][0], self.levels[0][1], self.levels[1][0], self.levels[1][1], self.att]);
@@ -132,7 +132,7 @@ impl Cdda {
         w.u64s("CddaQueue", &q);
     }
 
-    pub fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
+    pub(in crate::mcd) fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
         self.steps.read_state(r)?;
         let mut l = [0i32; 5];
         r.i32s(&mut l)?;

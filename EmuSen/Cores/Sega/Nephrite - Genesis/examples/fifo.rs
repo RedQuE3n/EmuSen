@@ -1,7 +1,7 @@
 //! Runs Nemesis's VDPFIFOTesting with A pressed for its results and prints each test's record against its expected
 //! data (Nephrite_Native.md §13). `fifo <image> [frames]`.
 
-use nephrite::fifo_records::{press, records};
+use nephrite::genesis::fifo_records::{press, records};
 use nephrite::machine::Machine;
 use nephrite::media::Media;
 

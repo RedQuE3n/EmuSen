@@ -3,7 +3,7 @@
 
 use crate::machine::Machine;
 use crate::media::Media;
-use crate::pictures::program;
+use crate::genesis::pictures::program;
 
 /// RESET released and the Z80's bus requested and granted, then `lea $A04000,a2`.
 const Z80_BUS: [u16; 16] = [0x33FC, 0x0100, 0x00A1, 0x1200, 0x33FC, 0x0100, 0x00A1, 0x1100, 0x0839, 0x0000, 0x00A1, 0x1100, 0x66F6, 0x45F9, 0x00A0, 0x4000];

@@ -42,7 +42,7 @@ pub fn system_area(disc: &mut Disc) -> Vec<u8> {
 const BIOS_COST: &str = "Nephrite's open replacement for the Sega CD BIOS is not written yet (Nephrite_Plan.md §5.6): a disc runs on the player's BIOS, and without it no disc starts.";
 
 /// The boot ROM of a market's console (`U`, `E` or `J`), as the frontend's file `which`.
-pub fn bios_firmware(region: char, which: u32) -> Firmware {
+pub(crate) fn bios_firmware(region: char, which: u32) -> Firmware {
     let market = match region {
         'J' => "Japanese Mega-CD",
         'E' => "European Mega-CD",
@@ -61,10 +61,10 @@ pub fn bios_firmware(region: char, which: u32) -> Firmware {
 }
 
 /// The setting that plugs a backup RAM cartridge into the cartridge slot, read at create.
-pub const RAM_CART_KEY: &str = "ramcart";
+pub(in crate::mcd) const RAM_CART_KEY: &str = "ramcart";
 const RAM_CART_VALUE: &str = "mcd.ramcart";
 
-pub fn ram_cart_setting() -> Setting {
+pub(crate) fn ram_cart_setting() -> Setting {
     Setting {
         key: RAM_CART_KEY.into(),
         label: "Backup RAM cartridge".into(),
@@ -94,7 +94,7 @@ pub enum SaveMemory {
 }
 
 /// Each save memory's battery file as the frontend's file `which`: its kind, suffix, medium and label.
-pub fn battery(memory: SaveMemory, which: u32) -> Battery {
+pub(crate) fn battery(memory: SaveMemory, which: u32) -> Battery {
     match memory {
         SaveMemory::Backup => Battery::console(which, ".brm").medium("mcd.backup").label("Inside the console"),
         SaveMemory::Cartridge => Battery::removable(which, ".crm").medium("mcd.ramcart").label("Cartridge slot"),
@@ -103,14 +103,14 @@ pub fn battery(memory: SaveMemory, which: u32) -> Battery {
 
 impl MegaCd {
     /// The settings read at create: the backup RAM cartridge plugged in when asked for.
-    pub fn apply_settings(&mut self, settings: &Settings) {
+    pub(crate) fn apply_settings(&mut self, settings: &Settings) {
         if settings.get(RAM_CART_KEY) == Some(RAM_CART_VALUE) {
             self.hw.cart = Some(RamCart::new(RamCart::SEGA));
         }
     }
 
     /// The save memories present, the backup RAM first.
-    pub fn save_memories(&self) -> Vec<SaveMemory> {
+    pub(crate) fn save_memories(&self) -> Vec<SaveMemory> {
         let mut v = vec![SaveMemory::Backup];
         if self.hw.cart.is_some() {
             v.push(SaveMemory::Cartridge);
@@ -118,7 +118,7 @@ impl MegaCd {
         v
     }
 
-    pub fn save_memory(&self, memory: SaveMemory) -> Option<&[u8]> {
+    pub(crate) fn save_memory(&self, memory: SaveMemory) -> Option<&[u8]> {
         match memory {
             SaveMemory::Backup => Some(&self.hw.bram),
             SaveMemory::Cartridge => self.hw.cart.as_ref().map(|c| c.bytes.as_slice()),
@@ -126,7 +126,7 @@ impl MegaCd {
     }
 
     /// A battery file's bytes loaded into its memory, as far as both reach.
-    pub fn load_save_memory(&mut self, memory: SaveMemory, data: &[u8]) {
+    pub(crate) fn load_save_memory(&mut self, memory: SaveMemory, data: &[u8]) {
         let into = match memory {
             SaveMemory::Backup => Some(&mut self.hw.bram),
             SaveMemory::Cartridge => self.hw.cart.as_mut().map(|c| &mut c.bytes),
@@ -138,21 +138,21 @@ impl MegaCd {
     }
 
     /// The drive as the frontend lists it.
-    pub fn drive(&self) -> Drive {
+    pub(crate) fn drive(&self) -> Drive {
         Drive { drive: cdd::DRIVE, label: "CD drive".into(), kind: "cd".into(), lid_open: self.lid_open(), loaded: self.hw.cdd.disc.is_some() }
     }
 
-    pub fn lid_open(&self) -> bool {
+    pub(crate) fn lid_open(&self) -> bool {
         self.hw.cdd.mode == Mode::TrayOpen
     }
 
     /// The tray, opened or closed as the player would: the drive stops; closed, it reads its disc's TOC again.
-    pub fn set_lid(&mut self, open: bool) {
+    pub(crate) fn set_lid(&mut self, open: bool) {
         self.hw.cdd.set_tray(open);
     }
 
     /// A disc put in the drive, or taken out, and the fingerprint a state is held to with it.
-    pub fn insert(&mut self, mut disc: Option<Disc>) {
+    pub(crate) fn insert(&mut self, mut disc: Option<Disc>) {
         self.disc_print = disc.as_mut().map_or(0, fingerprint);
         self.hw.cdd.disc = disc;
         self.hw.cdd.named = None;

@@ -114,7 +114,7 @@ fn main() {
         std::fs::write(p, &m.hw().wram).expect("the main CPU's RAM");
     }
     if let Some(p) = wav_path {
-        let rate = nephrite::sound::RATE;
+        let rate = nephrite::genesis::sound::RATE;
         let data = (wav.len() * 2) as u32;
         let mut out = Vec::with_capacity(44 + data as usize);
         for part in [&b"RIFF"[..], &(36 + data).to_le_bytes(), b"WAVEfmt ", &16u32.to_le_bytes(), &[1, 0, 2, 0], &rate.to_le_bytes(), &(rate * 4).to_le_bytes(), &[4, 0, 16, 0], b"data", &data.to_le_bytes()] {

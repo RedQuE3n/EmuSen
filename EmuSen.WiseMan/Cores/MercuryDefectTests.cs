@@ -202,8 +202,8 @@ namespace EmuSen.WiseMan.Cores
             return stream.ToArray();
         }
 
-        // Version 8's mixer after the walks: the cycle fraction and the two capacitors.
-        private const int MixerBytes = 3 * 8;
+        // What follows the walks since version 9: the mixer's cycle fraction and two capacitors, and OAM DMA's start delay - see Mercury_Native.md §13.4.
+        private const int MixerBytes = 3 * 8 + 4;
 
         private static string Sha(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16];
 
@@ -239,7 +239,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(MercuryCore.StateVersion, BitConverter.ToInt32(v6, 4));
             Assert.DoesNotContain("mercury-v5", System.Text.Encoding.UTF8.GetString(v6));
 
-            // Version 5 carries no mixer, so a machine reading it keeps its own: the bytes before the mixer are the source's.
+            // Version 5 carries no mixer or DMA delay, so a machine reading it keeps its own mixer: the bytes before the tail are the source's.
             MercuryCore cs = LoadCs(rom);
             cs.LoadState(new MemoryStream(v5));
             byte[] read = Save(cs);
@@ -263,8 +263,8 @@ namespace EmuSen.WiseMan.Cores
             _ => 0u,
         };
 
-        // The mixer's three doubles at the end of a version-8 state - see Mercury_Native.md §10.
-        private const int MixerStateBytes = 3 * sizeof(double);
+        // What a version-9 state carries after the walks, which version 5 does not: the mixer's three doubles and OAM DMA's start delay - see Mercury_Native.md §10, §13.4.
+        private const int MixerStateBytes = 3 * sizeof(double) + sizeof(int);
 
         // Real games' version-5 states from the unmodified build, at frames 3000 and 3600, from a directory kept outside the repository; absent, not run.
         [Fact]
@@ -289,7 +289,7 @@ namespace EmuSen.WiseMan.Cores
                 MercuryCore then = LoadCs(rom);
                 then.LoadState(new MemoryStream(File.ReadAllBytes(late)));
                 byte[] want = Save(then), got = Save(pair.Csharp);
-                // Version 5 carries no mixer, so the loaded frame-3600 state's is not the game's: the comparison ends where version 8's begins - see Mercury_Native.md §13.1.
+                // Version 5 carries no mixer, so the loaded frame-3600 state's is not the game's: the comparison ends where version 8's begins - see Mercury_Native.md §13.1, §13.4.
                 int body = want.Length - MixerStateBytes;
                 int same = want.AsSpan(0, body).CommonPrefixLength(got);
                 Assert.True(same == body && want.Length == got.Length, $"{name}: 600 frames on from the old build's frame-3000 state differ at byte {same} from its frame-3600 state");

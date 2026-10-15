@@ -350,6 +350,24 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x56, rig.Read(0xFE00));
             Assert.Equal(0x56, rig.Read(0xFE9F));
         }
+
+        // D: version 9 appends the start delay after the mixer; a version-8 state, which has none, loads with no start pending and the rest as it was.
+        [Fact]
+        public void A_version_8_state_loads_with_no_dma_start_pending()
+        {
+            var rig = DmaReady();
+            rig.Write(0xFF46, 0xC0);
+            byte[] v9 = rig.State();
+            Assert.Equal(9, BitConverter.ToInt32(v9, 4));
+            Assert.Equal(5, BitConverter.ToInt32(v9, v9.Length - 4));
+
+            byte[] v8 = v9[..^4];
+            BitConverter.GetBytes(8).CopyTo(v8, 4);
+            rig.LoadState(new MemoryStream(v8));
+            byte[] back = rig.State();
+            Assert.Equal(0, BitConverter.ToInt32(back, back.Length - 4));
+            Assert.True(back.AsSpan(8, back.Length - 12).SequenceEqual(v9.AsSpan(8, v9.Length - 12)));
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

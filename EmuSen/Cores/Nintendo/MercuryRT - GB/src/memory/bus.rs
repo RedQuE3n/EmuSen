@@ -48,6 +48,8 @@ pub struct MemoryBus {
     pub oam_dma_cycles_left: i32,
     pub oam_dma_index: i32,
     pub oam_dma_page: u8,
+    /// T-cycles until a written transfer starts; in the state's version-9 tail, not the walk (Mercury_Native.md §13.4).
+    pub oam_dma_start_delay: i32,
     pub serial_control: u8,
     pub serial_data: u8,
     pub stall_cycles: i32,
@@ -103,6 +105,7 @@ impl MemoryBus {
             oam_dma_cycles_left: 0,
             oam_dma_index: 0,
             oam_dma_page: 0,
+            oam_dma_start_delay: 0,
             serial_control: 0,
             serial_data: 0,
             stall_cycles: 0,
@@ -134,6 +137,7 @@ impl MemoryBus {
         self.oam_dma_page = 0;
         self.oam_dma_cycles_left = 0;
         self.oam_dma_index = 0;
+        self.oam_dma_start_delay = 0;
         self.stall_cycles = 0;
         self.div_counter = 0;
         self.tima = 0;
@@ -194,6 +198,16 @@ impl MemoryBus {
         w.u8("_tima", self.tima);
         w.i32("_timaReloadDelay", self.tima_reload_delay);
         w.u8("_tma", self.tma);
+    }
+
+    /// Version 9's tail, after the mixer.
+    pub fn write_tail(&self, w: &mut StateWriter) {
+        w.i32("_oamDmaStartDelay", self.oam_dma_start_delay);
+    }
+
+    pub fn read_tail(&mut self, r: &mut StateReader) -> StateResult {
+        self.oam_dma_start_delay = r.i32()?; // _oamDmaStartDelay
+        Ok(())
     }
 
     pub fn read_state(&mut self, r: &mut StateReader) -> StateResult {
@@ -415,9 +429,7 @@ impl MemoryBus {
             0xFF45 => self.ppu.write_lyc(data, &mut self.interrupt_flags),
             0xFF46 => {
                 self.io[0x46] = data;
-                self.oam_dma_page = data;
-                self.oam_dma_index = 0;
-                self.oam_dma_cycles_left = 0xA0 * 4;
+                self.oam_dma_start_delay = 5;
             }
             0xFF47 => self.ppu.bgp = data,
             0xFF48 => self.ppu.obp0 = data,
@@ -586,9 +598,21 @@ impl MemoryBus {
         }
     }
 
-    /// 160 machine cycles, one OAM byte each - see Mercury_Memory.md §6.
+    /// 160 machine cycles, one OAM byte each, closing OAM through the cycle of the last byte - see Mercury_Memory.md §6.
     #[inline(always)]
     fn step_oam_dma(&mut self) {
+        if self.oam_dma_cycles_left | self.oam_dma_start_delay == 0 {
+            return;
+        }
+        // A transfer already running carries on until the written one starts.
+        if self.oam_dma_start_delay != 0 {
+            self.oam_dma_start_delay -= 1;
+            if self.oam_dma_start_delay == 0 {
+                self.oam_dma_page = self.io[0x46];
+                self.oam_dma_index = 0;
+                self.oam_dma_cycles_left = (0xA0 + 1) * 4;
+            }
+        }
         if self.oam_dma_cycles_left == 0 {
             return;
         }

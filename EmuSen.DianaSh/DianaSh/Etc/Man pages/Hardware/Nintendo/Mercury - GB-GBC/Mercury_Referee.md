@@ -178,6 +178,9 @@ and fourth.
 
 ### 2.4 OAM DMA locks OAM one M-cycle too early, and this reaches the instruction-timing ROMs **[V]**
 
+*Proven and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.4). The experiment below was run: the three
+`oam_dma_*` ROMs and all eight of the right-hand column pass, and the left-hand five still fail.*
+
 **Mercury** arms the transfer inside the `$FF46` write and blocks OAM from the next M-cycle (`MemoryBus.cs:307-309`,
 `:354-359`, `:99`, `:105-106`).
 

@@ -2595,3 +2595,59 @@ after, about 1%, which is within what placement and the shared machine move.
 | C3 | the scheduled `EI` survives the dispatch | `Ei_ei_before_a_dispatch_leaves_ime_clear_in_the_handler`, both engines |
 | C4 | the wait states after the push instead of before | C#: `MercuryCycleTimingTests.A_dispatch_pushes_on_its_third_and_fourth_machine_cycles`; Rust: the crate's `a_dispatch_pushes_on_its_third_and_fourth_machine_cycles`. Nothing through the rig sees it, as §12.1 found for every placement claim: the step's total is the same |
 | C5 | STOP reports four | the rig's STOP claim on both engines, and each harness's "bus advances" theory |
+
+### 13.4 Step D: OAM DMA's start delay, and the experiment on the instruction-timing ROMs
+
+**The rule.** mooneye's `oam_dma_start` states the timing in its header: "M = 0: write to `$FF46` happens; M = 1: nothing
+(OAM still accessible); M = 2: new DMA starts, OAM reads will return `$FF`", and for a restart, that the previous
+transfer runs on, OAM closed, through M = 0 and M = 1. `oam_dma_timing` aligns one read to "exactly one cycle before the
+OAM DMA end" and one "exactly after": counting its loop, OAM is closed at the 161st machine cycle after the write and
+open at the 162nd. So the transfer owns OAM for machine cycles 2 to 161, 160 of them, as Pan Docs' "160 M-cycles"
+(`OAM_DMA_Transfer.md`) requires. Mercury started the transfer inside the write and closed OAM from machine cycle 1 to
+159.
+
+**The proof.** Three claims from those headers (`Oam_stays_open_for_one_machine_cycle_after_the_dma_write`,
+`Oam_is_closed_from_the_second_to_the_161st_machine_cycle_after_the_write`,
+`A_restarted_dma_keeps_oam_closed_and_ends_160_cycles_after_its_start`), committed failing on both engines (`2fcd47f9`).
+
+**The fix**, the same in both engines. The write sets a start delay of five T-cycles; the transfer starts on the fifth,
+the first T-cycle of machine cycle 2, latching its page from `$FF46`; a transfer already running carries on until then.
+Mercury lands a CPU access at the end of its machine cycle, after the rest of the machine has run it, so a transfer that
+owns OAM through machine cycle 161 must still read as running at that cycle's end: its counter covers 161 machine cycles
+(644 T-cycles) and copies a byte on the fourth T-cycle of each of cycles 2 to 161. The idle test at the top of the step
+stays one comparison, of the counter and the delay together.
+
+**State version 9.** The delay is machine state the walk cannot carry: a new field in `MemoryBus` would sit in the middle
+of the reflection walk and move every older state's bytes. So it follows the mixer, as version 8's mixer followed the
+walks (§10): `MemoryBus.WriteTail`/`ReadTail` in C#, `write_tail`/`read_tail` under the group `Bus` in Rust, with the
+field `[SkipInState]` in C#. Both engines write 9 and read 5 to 9; a state before 9 loads with no start pending, since
+its transfers started at the write. `A_version_8_state_loads_with_no_dma_start_pending` shows it on both engines: a
+version-9 state saved one T-cycle after a DMA write, cut to version 8, loads with the delay zero and every other byte as
+saved. The layout listing (`MercuryRtStateTests`), the real-games and version-5 tests' tail, and the platform test's
+conversion to version 7 learned the four bytes; that conversion gives each of the four synthetic programs exactly its
+step-C version-7 digest, so nothing but the version and the tail moved in their states, and their state digests were
+re-recorded for that.
+
+**Three older claims described the old model** and were brought to the documented one, in both engines' classes:
+`Oam_dma_copies_a_page_into_sprite_memory` (161 machine cycles, not 160), `Oam_dma_is_still_running_half_way_through`
+(not running one cycle after the write, still running at the 161st, done at the 162nd) and
+`Oam_reads_ff_while_a_dma_is_running` (open at 1, closed from 2 to 161, open at 162).
+
+**The corpus, and the experiment §2.4 asked for.** The referee page argued, without demonstrating it, that the start
+delay rather than CPU access placement explained eight of the thirteen instruction-timing ROMs, and that the first
+experiment was to add the delay and re-run them before touching the CPU. Done, with nothing else changed:
+
+| ROM | Before | After |
+|---|---|---|
+| `oam_dma_start`, `oam_dma_timing`, `oam_dma_restart` | Failed | **Passed** |
+| `call_timing`, `call_cc_timing`, `jp_timing`, `jp_cc_timing`, `ret_timing`, `reti_timing`, `add_sp_e_timing`, `ld_hl_sp_e_timing` | Failed | **Passed** |
+| `push_timing`, `rst_timing`, `ret_cc_timing`, `call_timing2`, `call_cc_timing2` | Failed | Failed |
+
+in all six columns, 111 of 173 in each. **The prediction held exactly**: the eight of the referee's right-hand column
+pass, and the five of its left-hand column, the ones whose probed access Mercury places a machine cycle early, still
+fail. `Mercury_Native.md` §3.4's "internal cycles settled at the end of an instruction, seen through OAM DMA" was true of
+those five and not of the other eight (the referee page's correction 1, §10, now settled). The five are step E's.
+
+**The four games.** The real-games test passes (their states after 600 frames, up to the tail, are the unmodified
+build's), and MercuryRT's trace from boot keeps the same PC, work RAM and VRAM at every 300th frame; its full-state hash
+moved, by the version and the tail. The whole `Mercury` filter passes, 799 cases.

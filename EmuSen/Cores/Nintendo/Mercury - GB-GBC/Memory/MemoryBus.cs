@@ -62,6 +62,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         private int _oamDmaCyclesLeft;
         private int _oamDmaIndex;
 
+        // T-cycles until a written transfer starts, on the second machine cycle after the write; in the state's version-9 tail - see Mercury_Native.md §13.4.
+        [SkipInState] private int _oamDmaStartDelay;
+
         // Cycles a DMA took from the CPU, drained by the core after the instruction - see Mercury_Cgb.md §4.1.
         private int _stallCycles;
 
@@ -324,7 +327,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
                 case 0xFF46:
                     Io[0x46] = data;
-                    StartOamDma(data);
+                    _oamDmaStartDelay = 5;
                     return;
 
                 case 0xFF47:
@@ -368,16 +371,19 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             Request(Interrupt.Serial);
         }
 
-        // 160 machine cycles, one OAM byte each, with OAM closed to the CPU throughout - see Mercury_Memory.md §6.
-        private void StartOamDma(byte page)
-        {
-            _oamDmaPage = page;
-            _oamDmaIndex = 0;
-            _oamDmaCyclesLeft = Oam.Length * 4;
-        }
-
+        // 160 machine cycles, one OAM byte each, closing OAM through the cycle of the last byte - see Mercury_Memory.md §6, Mercury_Native.md §13.4.
         private void StepOamDma()
         {
+            if ((_oamDmaCyclesLeft | _oamDmaStartDelay) == 0) return;
+
+            // A transfer already running carries on until the written one starts.
+            if (_oamDmaStartDelay != 0 && --_oamDmaStartDelay == 0)
+            {
+                _oamDmaPage = Io[0x46];
+                _oamDmaIndex = 0;
+                _oamDmaCyclesLeft = (Oam.Length + 1) * 4;
+            }
+
             if (_oamDmaCyclesLeft == 0) return;
 
             _oamDmaCyclesLeft--;
@@ -469,6 +475,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             _ => 1 << 7,
         };
 
+        // Version 9's tail, after the mixer: the one field the walk cannot carry without moving every older state's bytes - see Mercury_Native.md §13.4.
+        internal void WriteTail(System.IO.BinaryWriter w) => w.Write(_oamDmaStartDelay);
+
+        internal void ReadTail(System.IO.BinaryReader r, bool present) => _oamDmaStartDelay = present ? r.ReadInt32() : 0;
+
         public void Reset()
         {
             Array.Clear(Vram);
@@ -485,6 +496,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             _oamDmaPage = 0;
             _oamDmaCyclesLeft = 0;
             _oamDmaIndex = 0;
+            _oamDmaStartDelay = 0;
             _stallCycles = 0;
             _divCounter = 0;
             _tima = 0;

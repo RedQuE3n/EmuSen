@@ -620,6 +620,54 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(32, rig.Bus.TakePendingStall());
         }
 
+        // I, the HALT rule: IE vblank alone, a four-block hblank transfer started, then HALT, or a NOP in its place for the control.
+        private MercuryRig HdmaThenHalt(bool halt)
+        {
+            var rig = HdmaReady(0x8000);
+            byte[] program = { 0x3E, 0x01, 0xE0, 0xFF, 0xAF, 0xE0, 0x0F, 0x3E, 0x83, 0xE0, 0x55, (byte)(halt ? 0x76 : 0x00), 0x00, 0x18, 0xFE };
+            for (int i = 0; i < program.Length; i++) rig.Write(0xC100 + i, program[i]);
+            rig.Cpu.PC = 0xC100;
+            for (int i = 0; i < 6; i++) rig.Step();
+            Assert.Equal(0x03, rig.Read(0xFF55));
+            rig.Step();
+            return rig;
+        }
+
+        private static void StepToLine(MercuryRig rig, int line)
+        {
+            for (int i = 0; i < 70224 && rig.Read(0xFF44) != line; i++) rig.Step();
+            Assert.Equal(line, rig.Read(0xFF44));
+        }
+
+        // I, Pan Docs CGB_Registers.md: "Upon halting the CPU ... the transfer will also be halted and will be resumed only when the CPU resumes execution."
+        [Fact]
+        public void An_hblank_hdma_moves_nothing_while_the_cpu_is_halted_and_resumes_after()
+        {
+            var rig = HdmaThenHalt(halt: true);
+            Assert.True(rig.Cpu.Halted);
+            StepToLine(rig, 144);
+            rig.Step();
+            Assert.False(rig.Cpu.Halted);
+            Assert.Equal(0x03, rig.Read(0xFF55));
+            Assert.Equal(0x00, rig.Read(0x8000));
+            StepToLine(rig, 4);
+            Assert.Equal(0xFF, rig.Read(0xFF55));
+            StepToLine(rig, 144);
+            for (int i = 0; i < 0x40; i++) Assert.Equal(0xA0 + i, rig.Read(0x8000 + i));
+        }
+
+        // I, the HALT rule's control: the same transfer with the CPU running is done by line 4.
+        [Fact]
+        public void An_hblank_hdma_beside_a_running_cpu_moves_a_block_each_line()
+        {
+            var rig = HdmaThenHalt(halt: false);
+            Assert.False(rig.Cpu.Halted);
+            StepToLine(rig, 4);
+            Assert.Equal(0xFF, rig.Read(0xFF55));
+            StepToLine(rig, 144);
+            for (int i = 0; i < 0x40; i++) Assert.Equal(0xA0 + i, rig.Read(0x8000 + i));
+        }
+
         // J: the APU on, channel 1's DAC on and its length 2 with length disabled, the frame sequencer's next step as given.
         private MercuryRig LengthTwo(int nextSequencerStep)
         {

@@ -691,6 +691,48 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0xFF23, 0x80);
             Assert.Equal(lengthAfterTrigger, rig.Bus.Apu.Noise.Length.Counter);
         }
+
+        // J: channel 1 triggered with sweep as given, the APU on, its DAC on.
+        private MercuryRig SweepTriggered(byte nr10)
+        {
+            var rig = Load();
+            rig.Write(0xFF26, 0x80);
+            rig.Write(0xFF12, 0xF0);
+            rig.Write(0xFF10, nr10);
+            rig.Write(0xFF13, 0x00);
+            rig.Write(0xFF14, 0x84);
+            return rig;
+        }
+
+        // J, blargg 05-sweep details #4 and Pan Docs: leaving negate mode after a subtraction since the trigger disables channel 1.
+        [Fact]
+        public void Leaving_negate_mode_after_a_subtraction_silences_channel_one()
+        {
+            var rig = SweepTriggered(0x09);
+            Assert.Equal(0x01, rig.Read(0xFF26) & 0x01);
+            rig.Write(0xFF10, 0x01);
+            Assert.Equal(0x00, rig.Read(0xFF26) & 0x01);
+        }
+
+        // J, 05-sweep details #6: leaving negate mode before any subtraction was made changes nothing.
+        [Fact]
+        public void Leaving_negate_mode_before_any_subtraction_keeps_channel_one()
+        {
+            var rig = SweepTriggered(0x18);
+            rig.Write(0xFF10, 0x10);
+            Assert.Equal(0x01, rig.Read(0xFF26) & 0x01);
+        }
+
+        // J: a trigger forgets the subtraction made before it.
+        [Fact]
+        public void A_trigger_forgets_an_earlier_subtraction()
+        {
+            var rig = SweepTriggered(0x09);
+            rig.Write(0xFF10, 0x18);
+            rig.Write(0xFF14, 0x84);
+            rig.Write(0xFF10, 0x10);
+            Assert.Equal(0x01, rig.Read(0xFF26) & 0x01);
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

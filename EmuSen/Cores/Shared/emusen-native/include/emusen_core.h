@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.5.
+/* emusen_core.h - the EmuSen core ABI, version 1.6.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 5u
+#define EMUSEN_CORE_ABI_MINOR 6u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -358,6 +358,8 @@ int64_t emusen_core_debug_disassemble(emusen_machine *machine, uint32_t processo
 int64_t emusen_core_debug_reads(emusen_machine *machine, uint32_t *out, size_t len);
 
 /* ---- Media (section 6.23), @since 1.1 ------------------------------------------------- */
+/* @since 1.6 (section 6.26): MEDIA is the library's, so a machine may list no drive in machine info; on one that
+ * lists none, both calls answer EMUSEN_NO_SUCH_DRIVE for every drive and change nothing, which is not a fault. */
 /* MEDIA: opens (1) or closes (0) the drive's lid or tray, as the player would; the core models what follows. */
 int32_t emusen_core_media_lid(emusen_machine *machine, uint32_t drive, uint32_t open);
 /* MEDIA: the disc in the drive replaced, refused with EMUSEN_LID_CLOSED unless the lid is open or RESTORE is set.

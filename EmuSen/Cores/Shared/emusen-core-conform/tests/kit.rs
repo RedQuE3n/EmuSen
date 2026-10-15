@@ -180,7 +180,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.5"));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.6"));
     assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x1FFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
@@ -346,8 +346,13 @@ fn a_single_image_report_is_as_it_was() {
 
 /// The runner on `core` with the faults `mask` leaves on, over `frames`: the cases failed, and its output.
 fn failed_with(core: &str, mask: u32, frames: u64) -> (Vec<String>, String) {
-    let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("kit-{core}.v1tc"));
-    std::fs::write(&file, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
+    failed_on(core, &[1, 2, 3, 0x20, 0x41], mask, frames)
+}
+
+/// The same on an image of `payload`.
+fn failed_on(core: &str, payload: &[u8], mask: u32, frames: u64) -> (Vec<String>, String) {
+    let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("kit-{core}-{:02x}-{mask}.v1tc", payload[0]));
+    std::fs::write(&file, image(payload)).unwrap();
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
         .args(["--self-delimiting", "--frames", &frames.to_string(), "--core"])
         .arg(library(core))
@@ -404,4 +409,55 @@ fn the_deadline_is_on_progress_not_on_the_whole_image() {
     assert!(hung.core.passed() && hung.images[0].report.passed(), "{:?}", hung.images[0].failed());
     assert_eq!(hung.images[1].failed(), ["C6"]);
     assert_eq!(hung.images[1].report.cases[0].evidence, ["the image's cases ran no frame for 2 s; its thread was left running"]);
+}
+
+/// The test core's payload that makes a cartridge, whose machine lists no drive (`CARTRIDGE`, since 1.6).
+const CARTRIDGE: &[u8] = &[0xCA, 2, 3, 0x20, 0x41];
+
+// Since 1.6 (EmuSen_CoreAPI.md §6.26, §28.11): one MEDIA library whose disc lists a drive and whose cartridge lists
+// none passes every case on both, in either form; C16 holds the drive rules on the disc and, on the cartridge, each
+// media call refused with EMUSEN_NO_SUCH_DRIVE and nothing changed; the cartridge's drive names no place.
+#[test]
+fn a_media_core_passes_c16_on_a_machine_with_a_drive_and_on_one_with_none() {
+    fn of<'a>(report: &'a emusen_core_conform::Report, id: &str) -> &'a emusen_core_conform::Case {
+        report.cases.iter().find(|c| c.id == id).unwrap()
+    }
+    let disc = run(&library("kit_test_core"), &options());
+    let cartridge = run(&library("kit_test_core"), &Options { image: image(CARTRIDGE), ..options() });
+    for (name, report) in [("disc", &disc), ("cartridge", &cartridge)] {
+        assert_eq!(report.cases.iter().map(|c| (c.id, c.passed)).collect::<Vec<_>>(), cases(true).into_iter().map(|c| (c, true)).collect::<Vec<_>>(), "{name}: {:?}", report.cases.iter().filter(|c| !c.passed).map(|c| &c.evidence).collect::<Vec<_>>());
+    }
+    assert!(of(&disc, "C16").evidence[0].starts_with("drive 0: insert refused closed"), "{:?}", of(&disc, "C16").evidence);
+    assert_eq!(of(&cartridge, "C16").evidence, ["machine info lists no drive: the lid opened and closed and a disc, an empty drive and a restore inserted on drives 0 and 4294967295, each refused with EMUSEN_NO_SUCH_DRIVE, the machine unchanged and running 60 frames after"]);
+    assert_eq!(of(&cartridge, "C18").evidence, ["120 frames: no MEDIA_SEEK was raised, so there was nothing to check or to act on"]);
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-corpus-cartridge");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let list: Vec<(String, PathBuf)> = [("disc.v1tc", &[1u8, 2, 3, 0x20, 0x41][..]), ("cartridge.v1tc", CARTRIDGE)]
+        .iter()
+        .map(|(name, payload)| {
+            std::fs::write(dir.join(name), image(payload)).unwrap();
+            (name.to_string(), dir.join(name))
+        })
+        .collect();
+    let c = run_corpus("kit_test_core", &list, 2);
+    assert!(c.passed(), "{:?}", c.images.iter().map(|i| i.failed()).collect::<Vec<_>>());
+}
+
+// The negative controls: a cartridge's machine that lists no drive but takes a media call, or answers one with a
+// status of the fault band, fails C16 alone; one that names a place for the drive it lacks fails C18 alone. On a disc,
+// whose machine lists its drive, the same faults change nothing.
+#[test]
+fn a_machine_listing_no_drive_that_takes_a_media_call_faults_or_names_a_place_fails() {
+    for (mask, cases, words) in [
+        (131072, vec!["C16"], "media_lid(0, open) answered 0, not EMUSEN_NO_SUCH_DRIVE"),
+        (262144, vec!["C16"], "media_lid(0, open) answered -321, not EMUSEN_NO_SUCH_DRIVE"),
+        (524288, vec!["C18"], "MEDIA_SEEK names drive 0, which machine info does not list ([])"),
+    ] {
+        let (failed, text) = failed_on("kit_faulty_full_core", CARTRIDGE, mask, 120);
+        assert_eq!(failed, cases, "faults {mask}:\n{text}");
+        assert!(text.contains(words), "faults {mask}:\n{text}");
+        let (failed, text) = failed_on("kit_faulty_full_core", &[1, 2, 3, 0x20, 0x41], mask, 120);
+        assert!(failed.is_empty(), "faults {mask} on a disc:\n{text}");
+    }
 }

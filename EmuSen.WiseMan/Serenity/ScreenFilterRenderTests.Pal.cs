@@ -23,6 +23,7 @@ namespace EmuSen.WiseMan.Serenity
                 ["SNES"] = (21.28137, 4, 1364, 4.8, 312, 0, 256),
                 ["Genesis"] = (53.203424, 10, 3420, 12, 313, 0, 256),
                 ["N64"] = (49.65653, 4, 3178, 11.2, 313, (6 + 5 + 6 + 5 + 6) / 5.0 / 11.2, 640),
+                ["PlayStation"] = (53.203425, 1, 3405, 12, 314, 0, 2560),
             };
             foreach (string console in CrtFilter.Filter.Consoles!)
             {

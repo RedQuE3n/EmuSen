@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 8;
+pub const ABI_MINOR: u32 = 9;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -42,11 +42,48 @@ pub struct CreateParams {
     pub error: *mut u8,
     pub error_len: usize,
     pub flags: u32,
+    /// Since 1.9, `DEVICE_PICTURE`: the host's device lent, or null; absent from a shorter struct.
+    pub device: *const DeviceLend,
 }
 
 impl CreateParams {
     /// The struct's size at 1.0, the least a core accepts (EmuSen_CoreAPI.md §4.2).
     pub const SIZE_1_0: usize = std::mem::offset_of!(CreateParams, flags);
+}
+
+/// `emusen_device_lend`, since 1.9: the host's Vulkan device and a queue the core alone submits to, as Vulkan's
+/// handles in integers, and the host's timeline semaphore `done` (EmuSen_CoreAPI.md §6.29).
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DeviceLend {
+    pub size: u32,
+    pub api_version: u32,
+    pub get_instance_proc_addr: Option<unsafe extern "C" fn()>,
+    pub instance: u64,
+    pub physical_device: u64,
+    pub device: u64,
+    pub queue_family: u32,
+    pub queue_index: u32,
+    pub host_queue_family: u32,
+    pub reserved: u32,
+    pub done: u64,
+}
+
+/// `emusen_device_frame`, since 1.9: the frame's picture where it lies on the lent device, and the core's timeline
+/// semaphore with the value it reaches once the picture is written. A core fills everything but `size`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DeviceFrame {
+    pub size: u32,
+    pub format: u32,
+    pub buffer: u64,
+    pub offset: u64,
+    pub width: i32,
+    pub height: i32,
+    pub stride: i32,
+    pub reserved: u32,
+    pub ready: u64,
+    pub value: u64,
 }
 
 /// `emusen_media`, since 1.1: a disc for a drive, with its companions.
@@ -131,8 +168,10 @@ pub mod caps {
     pub const DEBUG_READS: u64 = 1 << 19;
     /// Since 1.3: the core keeps pointers into an image and media files a host lends; `core::keep` is how.
     pub const BORROW: u64 = 1 << 20;
-    /// Bits 21-47, for later minors; a core may not claim them.
-    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 21) - 1);
+    /// Since 1.9: the core draws on a device the host lends and hands its picture there (`frame_device`).
+    pub const DEVICE_PICTURE: u64 = 1 << 21;
+    /// Bits 22-47, for later minors; a core may not claim them.
+    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 22) - 1);
 }
 
 /// `EMUSEN_OPTION_*`, `EMUSEN_FRAME_*`, `EMUSEN_BATTERY_*`, `EMUSEN_FILE_BATTERY`, `EMUSEN_NO_COMPARE`.
@@ -244,6 +283,7 @@ pub const EXPORTS: &[(&str, u64)] = &[
     ("emusen_core_media_lid", caps::MEDIA),
     ("emusen_core_media_insert", caps::MEDIA),
     ("emusen_core_debug_reads", caps::DEBUG_READS),
+    ("emusen_core_frame_device", caps::DEVICE_PICTURE),
 ];
 
 /// Each assigned bit's name, as core info's `capabilities` lists it.
@@ -269,4 +309,5 @@ pub const CAPABILITY_NAMES: &[(u64, &str)] = &[
     (caps::MEDIA, "MEDIA"),
     (caps::DEBUG_READS, "DEBUG_READS"),
     (caps::BORROW, "BORROW"),
+    (caps::DEVICE_PICTURE, "DEVICE_PICTURE"),
 ];

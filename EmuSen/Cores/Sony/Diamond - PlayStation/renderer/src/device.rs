@@ -2,7 +2,9 @@
 //! submission records from the steps the host planned (Diamond_Enhancements.md §16.5), waited for or left pending with
 //! the host's staging in the other of two sets (§38.1).
 
-use emusen_gpu::{Commands, GpuBuffer, GpuDevice, GpuProgram, Where};
+use std::cell::Cell;
+
+use emusen_gpu::{Commands, GpuBuffer, GpuDevice, GpuProgram, Handed, PictureOut, Where};
 
 use crate::record::WORDS;
 
@@ -81,6 +83,8 @@ pub struct Device {
     pub gpu: GpuDevice,
     held: Option<Held>,
     set: usize,
+    /// The lender's `done`, when the device is lent and the host takes the picture on it (EmuSen_DevicePicture.md §7).
+    done: Option<u64>,
 }
 
 /// The arrays the host stages a submission in, each a host buffer the submission copies to the device's own.
@@ -144,12 +148,14 @@ pub struct Held {
     pub onboard: Staged,
     /// What comes back, and what a seed goes up through.
     pub back: GpuBuffer,
-    /// The two pictures the host is handed, a frame apart.
-    pub slots: [GpuBuffer; 2],
+    /// The two pictures the host is handed: in host memory a frame apart, or on a lent device the frame's own.
+    pub out: PictureOut,
+    /// What the last submission that handed a picture handed.
+    pub handed: Cell<Handed>,
 }
 
 impl Held {
-    fn new(gpu: &GpuDevice, scale: u32, options: u32) -> Result<Held, String> {
+    fn new(gpu: &GpuDevice, scale: u32, options: u32, done: Option<u64>) -> Result<Held, String> {
         let words = |n: usize| (n * 4) as u64;
         let square = (scale * scale) as usize;
         Ok(Held {
@@ -167,7 +173,8 @@ impl Held {
             staged: [Staged::new(gpu, Where::Host)?, Staged::new(gpu, Where::Host)?],
             onboard: Staged::new(gpu, Where::Device)?,
             back: gpu.create_buffer(words(VRAM_WORDS * square), Where::Host)?,
-            slots: [gpu.create_buffer(words(PICTURE_WORDS * square), Where::Host)?, gpu.create_buffer(words(PICTURE_WORDS * square), Where::Host)?],
+            out: PictureOut::new(gpu, words(PICTURE_WORDS * square), done)?,
+            handed: Cell::new(Handed::default()),
         })
     }
 
@@ -176,8 +183,8 @@ impl Held {
             gpu.destroy_program(p);
         }
         let [s0, s1] = self.staged;
-        let [p0, p1] = self.slots;
-        for b in [self.vram, self.picture, self.cluts, self.scratch, self.back, self.fine, p0, p1].into_iter().chain(s0.all()).chain(s1.all()).chain(self.onboard.all()) {
+        self.out.destroy(gpu);
+        for b in [self.vram, self.picture, self.cluts, self.scratch, self.back, self.fine].into_iter().chain(s0.all()).chain(s1.all()).chain(self.onboard.all()) {
             gpu.destroy_buffer(b);
         }
     }
@@ -185,8 +192,18 @@ impl Held {
 
 impl Device {
     pub fn new(gpu: GpuDevice, scale: u32, options: u32) -> Result<Device, String> {
-        let held = Held::new(&gpu, scale, options)?;
-        Ok(Device { gpu, held: Some(held), set: 0 })
+        Device::handing(gpu, scale, options, None)
+    }
+
+    /// A device whose pictures are handed on it to the lender, whose `done` is given, where the device is lent.
+    pub fn handing(gpu: GpuDevice, scale: u32, options: u32, done: Option<u64>) -> Result<Device, String> {
+        let held = Held::new(&gpu, scale, options, done)?;
+        Ok(Device { gpu, held: Some(held), set: 0, done })
+    }
+
+    /// Whether the host is handed the picture on the device.
+    pub fn on_device(&self) -> bool {
+        self.held().out.on_device()
     }
 
     /// The buffers made again for another scale or other options, once nothing is in flight; what they held is gone.
@@ -195,7 +212,7 @@ impl Device {
         if let Some(h) = self.held.take() {
             h.release(&self.gpu);
         }
-        self.held = Some(Held::new(&self.gpu, scale, options)?);
+        self.held = Some(Held::new(&self.gpu, scale, options, self.done)?);
         self.set = 0;
         Ok(())
     }
@@ -253,7 +270,7 @@ impl Held {
                 Back::Picture(_) => {}
                 Back::Vram => c.copy(&self.vram, &self.back, 0, 0, 0),
                 Back::Fine => c.copy(&self.fine, &self.back, 0, 0, 0),
-                Back::Slot(slot, words) if words > 0 => c.copy(&self.picture, &self.slots[slot], (words * 4) as u64, 0, 0),
+                Back::Slot(slot, words) if words > 0 => self.handed.set(self.out.hand(c, &self.picture, (words * 4) as u64, slot)),
                 Back::Slot(..) => {}
             }
         }
@@ -294,6 +311,8 @@ impl Held {
 
 impl Drop for Device {
     fn drop(&mut self) {
+        // The pending submission reads and writes what is about to go.
+        self.gpu.wait_for_pending();
         if let Some(h) = self.held.take() {
             h.release(&self.gpu);
         }

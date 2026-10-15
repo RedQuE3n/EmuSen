@@ -56,6 +56,9 @@ namespace EmuSen.Serenity.Slang
 
         public static string DeviceReport => Shared.Value.Report;
 
+        // The process's one device, made on first use, for the presenter that hands its pictures to the compositor - see EmuSen_DevicePicture.md §2.
+        internal static SlangVulkan? SharedDevice => Shared.Value.Device;
+
         private SlangChain? Build()
         {
             try
@@ -117,6 +120,41 @@ namespace EmuSen.Serenity.Slang
             canvas.DrawImage(_output, destination, new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None));
             return true;
         }
+
+        // On the UI thread: a new frame advanced, and the chain run into the presenter when the frame, the values or the size changed; false when the chain cannot draw, and the caller draws otherwise - see EmuSen_DevicePicture.md §4.3.
+        internal bool Present(DevicePresenter presenter, byte[] rgba, int width, int height, int rowRepeat, bool newFrame, int pixelWidth, int pixelHeight, byte[]? raw, SlangLend? lend = null)
+        {
+            if (_disposed || !_build.IsCompletedSuccessfully || _build.Result is not { } chain || !chain.CanPresent) return false;
+            (int pw, int ph) = (Math.Max(1, pixelWidth), Math.Max(1, pixelHeight));
+            try
+            {
+                bool retuned = _appliedVersion != _valuesVersion;
+                if (retuned) { chain.SetParameters(_values); _appliedVersion = _valuesVersion; }
+                if (newFrame || !_advanced)
+                {
+                    if (raw is not null && raw.Length == width * height * 4) chain.ReplaceLut(Shaders.BuiltInPreset.RawTexture, raw, width, height);
+                    // A core's picture on the device is read there; with none taken yet the chain has no frame to draw.
+                    if (lend is not null) { if (!chain.AdvanceLent(lend) && !_advanced) return false; }
+                    else chain.Advance(rgba, width, height, rowRepeat);
+                    _advanced = true;
+                }
+                if (newFrame || retuned || pw != _presentedWidth || ph != _presentedHeight)
+                {
+                    if (!presenter.Present(chain, pw, ph)) return true;
+                    (_presentedWidth, _presentedHeight) = (pw, ph);
+                }
+            }
+            catch (Exception e) when (e is InvalidOperationException or ArgumentException)
+            {
+                Fail($"{Path.GetFileName(PresetPath)} stopped: {e.Message}");
+                chain.Dispose();
+                _disposed = true;
+                return false;
+            }
+            return true;
+        }
+
+        private int _presentedWidth, _presentedHeight;
 
         // Under the owner's lock, so no draw is using the chain; one still building is freed when it finishes.
         public void Dispose()

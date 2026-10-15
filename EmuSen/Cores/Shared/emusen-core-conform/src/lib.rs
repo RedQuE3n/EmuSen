@@ -4,6 +4,7 @@
 //! §6.25 C18, §6.27 and §6.28 C19.
 
 pub mod api;
+mod lender;
 pub mod corpus;
 pub mod digest;
 pub mod media;
@@ -466,6 +467,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c17(&mut s));
     report.cases.push(c18(&mut s));
     report.cases.push(c19(&mut s));
+    report.cases.push(c20(&mut s));
     report
 }
 
@@ -519,6 +521,7 @@ pub(crate) fn image_cases(lib: &Lib, path: &Path, opts: &Options) -> (Vec<Case>,
     cases.push(c17(&mut s));
     cases.push(c18(&mut s));
     cases.push(c19(&mut s));
+    cases.push(c20(&mut s));
     (cases, s.statuses)
 }
 
@@ -1077,6 +1080,7 @@ fn c11(s: &mut Session<'_>) -> Case {
             error: std::ptr::null_mut(),
             error_len: 0,
             flags: 0,
+            device: std::ptr::null(),
         };
         let mut code = 0;
         let h = unsafe { (s.lib.f.create)(&p, &mut code) };
@@ -1892,6 +1896,127 @@ fn c19(s: &mut Session<'_>) -> Case {
         c.that(false, || e);
     }
     c.done("C19", "removable and console files kept apart")
+}
+
+/// The frames C20 runs on each machine, or the session's where they are fewer.
+const DEVICE_FRAMES: u64 = 120;
+
+/// C20, the picture on the device (since 1.9, EmuSen_CoreAPI.md §6.29). Where `DEVICE_PICTURE` is claimed: a machine
+/// nobody lent a device never answers a picture on one; a lend in a struct shorter than 1.9's is refused or not read;
+/// and, where the kit can lend a device of its own, a machine made with it runs as one made without it: its `frame_copy`
+/// the other's at the same frame or a frame sooner, the frame of latency a core without the device pays, and every
+/// picture it hands on the device its own `frame_copy`, read by the kit on its own queue once `ready` reaches the
+/// picture's value; one picture is held through the next two advances before `done` lets go of it, and must still be
+/// the picture it was.
+fn c20(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    if !s.lib.claims(caps::DEVICE_PICTURE) {
+        c.note("DEVICE_PICTURE is not claimed");
+        return c.done("C20", "the picture on the device");
+    }
+    let frames = s.opts.frames.min(DEVICE_FRAMES);
+    let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
+        let settings = s.opts.settings.clone();
+        let step = |m: &Machine<'_>| -> Result<Option<emusen_native::core::sys::DeviceFrame>, String> {
+            m.advance().map_err(|r| format!("advance answered {r}"))?;
+            m.present();
+            match m.frame_device() {
+                Some(Ok(f)) => Ok(f),
+                Some(Err(r)) => Err(format!("frame_device answered {r}")),
+                None => Err("DEVICE_PICTURE is claimed but emusen_core_frame_device is missing".to_owned()),
+            }
+        };
+        let alone = s.machine(&settings)?;
+        for f in 0..frames {
+            if let Some(d) = step(&alone)? {
+                return Err(format!("frame {f}: a picture answered on a device nobody lent (buffer {:#x}, value {})", d.buffer, d.value));
+            }
+        }
+        drop(alone);
+
+        let opts = s.opts;
+        let short = emusen_native::core::sys::DeviceLend { size: 32, api_version: 0, get_instance_proc_addr: None, instance: 1, physical_device: 1, device: 1, queue_family: 0, queue_index: 0, host_queue_family: 0, reserved: 0, done: 1 };
+        let files = api::slices(&opts.files);
+        match s.lib.create_lending(&opts.image, &settings, &files, 1, 0, &short) {
+            Err((code, _)) => c.that(code == status::BAD_STRUCT, || format!("a lend of 32 bytes was refused with {code}, not BAD_STRUCT")),
+            Ok(m) => {
+                if let Some(d) = step(&m)? {
+                    return Err(format!("a lend of 32 bytes was taken: a picture answered on its device (buffer {:#x})", d.buffer));
+                }
+            }
+        }
+
+        let mut lender = match lender::Lender::new() {
+            Ok(lender) => lender,
+            Err(why) => {
+                c.note(format!("not lent a device: {why}; the machine nobody lent one ran {frames} frames handing every picture by frame_copy"));
+                return Ok(());
+            }
+        };
+        let lend = lender.lend();
+        let lent = s.lib.create_lending(&opts.image, &settings, &files, 1, 0, &lend).map_err(|(code, text)| format!("create with a device lent refused the image: status {code} ({text})"))?;
+        let plain = s.machine(&settings)?;
+        let digest = |bytes: &[u8]| {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            bytes.hash(&mut h);
+            h.finish()
+        };
+        // One picture is held through the next frame and the advance after it: done does not reach its value until the
+        // core has had the time to write over it, which it must not.
+        let hold = frames / 2;
+        let (mut handed, mut held, mut held_expected): (u64, Option<emusen_native::core::sys::DeviceFrame>, Vec<u8>) = (0, None, Vec::new());
+        let (mut lent_copies, mut plain_copies) = (Vec::new(), Vec::new());
+        for f in 0..frames {
+            let on_device = step(&lent)?;
+            if f == hold + 2 {
+                if let Some(earlier) = held.take() {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    let picture = lender.read(&earlier, true)?;
+                    c.that(picture == held_expected, || format!("frame {f}: the picture of frame {hold}, held until now, was written over before done let go of it"));
+                }
+            }
+            step(&plain)?;
+            let copied = lent.frame();
+            lent_copies.push(digest(&copied));
+            plain_copies.push(digest(&plain.frame()));
+            let Some(d) = on_device else { continue };
+            handed += 1;
+            c.that(d.width > 0 && d.height > 0 && d.stride >= d.width * 4 && d.format == emusen_native::core::pixel::RGBA8888, || format!("frame {f}: a picture on the device of {}x{}, stride {}, format {}", d.width, d.height, d.stride, d.format));
+            if f == hold {
+                held_expected = copied;
+                held = Some(d);
+                continue;
+            }
+            // While one is held, done cannot pass it, so the next picture is read without letting go of anything.
+            let picture = lender.read(&d, held.is_none())?;
+            c.that(picture == copied, || format!("frame {f}: the picture on the device differs from frame_copy's in {} of its {} bytes", picture.iter().zip(&copied).filter(|(a, b)| a != b).count(), copied.len()));
+        }
+        if let Some(earlier) = held.take() {
+            let picture = lender.read(&earlier, true)?;
+            c.that(picture == held_expected, || "the last picture held was written over".to_owned());
+        }
+        // Lent a device, a core may hand each picture the frame it is drawn where without one it hands it a frame later.
+        let n = lent_copies.len();
+        let lead = (0..=1).find(|&lead| n > lead && (0..n - lead).all(|f| lent_copies[f] == plain_copies[f + lead]));
+        c.that(lead.is_some(), || format!("frame_copy on the machine lent a device is not the one without's, at the same frame or a frame sooner, from frame {}", (0..n).find(|&f| lent_copies[f] != plain_copies[f]).unwrap_or(0)));
+        drop(lent);
+        lender.release(u64::MAX >> 1)?;
+        c.note(if handed == 0 {
+            format!("lent a device, the machine handed every one of {frames} pictures by frame_copy, as the one without did")
+        } else {
+            format!("lent a device, the machine handed {handed} of {frames} pictures on it, each its own frame_copy and the other machine's {}, one held through two advances before it was let go of", if lead == Some(1) { "a frame later" } else { "at the same frame" })
+        });
+        Ok(())
+    };
+    // A host of 1.9, the first whose create passes a lend.
+    let was = s.lib.host();
+    s.lib.set_host(9, 0);
+    if let Err(e) = body(s, &mut c) {
+        c.that(false, || e);
+    }
+    s.lib.set_host(was.0, was.1);
+    c.done("C20", "the picture on the device")
 }
 
 fn c15(s: &mut Session<'_>) -> Case {

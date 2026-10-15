@@ -176,6 +176,34 @@ namespace EmuSen.Serenity.Slang
             return (Format)format;
         }
 
+        // Every pass run for a view no larger than the target and its picture copied into the target's corner, with no readback and no wait - see EmuSen_DevicePicture.md §4.2.
+        public void Present(SlangShown target, int width, int height, bool waitFree)
+        {
+            if (_managed is not null) throw new InvalidOperationException("The C#'s chain presents nothing; its picture is read back.");
+            int status = SerenityNative.ChainPresent(_native!.Value, target.Value, width, height, waitFree ? 1 : 0);
+            GC.KeepAlive(target);
+            After(status);
+        }
+
+        // Whether this chain can present to a target, which only the library's can.
+        public bool CanPresent => _managed is null;
+
+        // A lookup image of the preset given new pixels, written in place when its size is unchanged: a built-in filter's raw frame - see EmuSen_DevicePicture.md §3.4.
+        public void ReplaceLut(string name, ReadOnlySpan<byte> rgba, int width, int height)
+        {
+            if (_managed is not null)
+            {
+                _managed.ReplaceLut(name, rgba, width, height);
+                return;
+            }
+            int index = -1;
+            for (int i = 0; i < Preset.Textures.Count; i++) if (Preset.Textures[i].Name == name) { index = i; break; }
+            if (index < 0) throw new ArgumentException($"The preset has no lookup image called '{name}'.", nameof(name));
+            int status;
+            fixed (byte* p = rgba) status = SerenityNative.ChainLut(_native!.Value, (uint)index, width, height, p, (nuint)rgba.Length);
+            After(status);
+        }
+
         // A new frame joins the history with its repeated rows, since a slang pass sees the picture as the screen would; the rows are repeated on the device - see EmuSen_Serenity.md §9.2.
         public void Advance(ReadOnlySpan<byte> rgba, int width, int height, int rowRepeat)
         {
@@ -187,6 +215,16 @@ namespace EmuSen.Serenity.Slang
             int status;
             fixed (byte* p = rgba) status = SerenityNative.ChainAdvance(_native!.Value, p, (nuint)rgba.Length, width, height, rowRepeat);
             After(status);
+        }
+
+        // The newest picture a core handed through lend as the new frame, read on the device by the next render or present; false when there is none newer - see EmuSen_DevicePicture.md §17.
+        public bool AdvanceLent(SlangLend lend)
+        {
+            if (_managed is not null) throw new InvalidOperationException("The C#'s chain takes no picture on the device.");
+            int status = SerenityNative.ChainAdvanceLent(_native!.Value, lend.Value);
+            GC.KeepAlive(lend);
+            After(status);
+            return status == 1;
         }
 
         // Runs every pass for the viewport's size and returns a copy of the last one's pixels, RGBA8, a row after row.
@@ -527,6 +565,25 @@ namespace EmuSen.Serenity.Slang
                 SlangVulkan.Check(_vk.CreateDescriptorPool(_gpu.Device, &poolInfo, null, out pass.Pool), "vkCreateDescriptorPool");
                 var allocate = new DescriptorSetAllocateInfo { SType = StructureType.DescriptorSetAllocateInfo, DescriptorPool = pass.Pool, DescriptorSetCount = 1, PSetLayouts = &setLayout };
                 SlangVulkan.Check(_vk.AllocateDescriptorSets(_gpu.Device, &allocate, out pass.Set), "vkAllocateDescriptorSets");
+            }
+
+            private readonly Dictionary<string, SlangBuffer> _lutStaging = new(StringComparer.Ordinal);
+
+            public void ReplaceLut(string name, ReadOnlySpan<byte> rgba, int width, int height)
+            {
+                if (!_lutSpecs.TryGetValue(name, out SlangTextureSpec? spec)) throw new ArgumentException($"The preset has no lookup image called '{name}'.", nameof(name));
+                if (_luts.TryGetValue(name, out SlangImage? held) && !spec.Mipmap && held.Width == (uint)width && held.Height == (uint)height && _lutStaging.TryGetValue(name, out SlangBuffer? kept))
+                {
+                    _gpu.Upload(held, rgba, kept);
+                    return;
+                }
+                SlangImage image = _gpu.CreateImage((uint)width, (uint)height, Format.R8G8B8A8Unorm, spec.Mipmap);
+                SlangBuffer staging = _gpu.CreateBuffer((ulong)(width * height * 4), BufferUsageFlags.TransferSrcBit);
+                _gpu.Upload(image, rgba, staging);
+                if (_luts.Remove(name, out SlangImage? old)) old.Dispose();
+                if (_lutStaging.Remove(name, out SlangBuffer? before)) before.Dispose();
+                _luts[name] = image;
+                _lutStaging[name] = staging;
             }
 
             private SlangImage LoadLut(SlangTextureSpec lut)
@@ -898,6 +955,7 @@ namespace EmuSen.Serenity.Slang
                 foreach (Pass pass in _passes) FreePass(pass);
                 foreach (SlangImage? image in _history ?? []) image?.Dispose();
                 foreach (SlangImage lut in _luts.Values) lut.Dispose();
+                foreach (SlangBuffer staging in _lutStaging.Values) staging.Dispose();
                 _blank?.Dispose();
                 _vertices?.Dispose();
                 _staging?.Dispose();

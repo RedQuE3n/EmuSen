@@ -8,11 +8,12 @@
 //! EmuSen_RustPlatform.md §3.3 and §17.
 
 use crate::compiler::Stage;
+use crate::lend::{Lend, Taken};
 use crate::preset::{PassSpec, Preset, ScaleType, TextureSpec, Wrap};
 use crate::reflection::{self, Block, Fault, Reflection};
 use crate::source::{self, Parameter};
 use crate::text::parse_int;
-use crate::vulkan::{Buffer, Checked, Device, Image, point};
+use crate::vulkan::{Buffer, Checked, Device, Image, Shown, point};
 use crate::{Error, format, parameters};
 use ash::vk;
 use std::collections::{BTreeMap, HashMap};
@@ -408,6 +409,7 @@ struct Texture<'a> {
 struct Lut {
     spec: TextureSpec,
     image: Option<Image>,
+    staging: Option<Buffer>,
 }
 
 /// One readback and whether a picture holds it.
@@ -481,6 +483,13 @@ pub struct Chain {
     upload_rows: u32,
     upload_repeat: u32,
     frame_count: u32,
+    /// A frame written into the staging buffer whose copy to the device waits for the next render or present's
+    /// submission, so that a frame costs one submission (EmuSen_DevicePicture.md §13).
+    upload_pending: bool,
+    /// Where the pending frame is on the device, when it is a core's picture taken through a lend rather than pixels in
+    /// the staging buffer; and the last such picture's value (EmuSen_DevicePicture.md §17).
+    from_lend: Option<(Lend, Taken)>,
+    lent_value: u64,
     readbacks: Vec<Arc<Slot>>,
     scratch: Option<Buffer>,
     copied_images: i32,
@@ -526,7 +535,7 @@ impl Chain {
             device: device.clone(),
             passes,
             textures: preset.textures.clone(),
-            luts: preset.textures.iter().map(|texture| (texture.name.clone(), Lut { spec: texture.clone(), image: None })).collect(),
+            luts: preset.textures.iter().map(|texture| (texture.name.clone(), Lut { spec: texture.clone(), image: None, staging: None })).collect(),
             parameters,
             values: HashMap::new(),
             history: (0..depth).map(|_| None).collect(),
@@ -540,6 +549,9 @@ impl Chain {
             upload_rows: 0,
             upload_repeat: 0,
             frame_count: 0,
+            upload_pending: false,
+            from_lend: None,
+            lent_value: 0,
             readbacks: Vec::new(),
             scratch: None,
             copied_images: 0,
@@ -591,13 +603,20 @@ impl Chain {
         self.readbacks.len()
     }
 
-    /// The preset's lookup image at `index`, from its pixels in RGBA8, a row after a row.
+    /// The preset's lookup image at `index`, from its pixels in RGBA8, a row after a row. An image already loaded at
+    /// the same size and with no mip chain is written in place, so that one replaced with every frame (a built-in
+    /// filter's raw frame, EmuSen_DevicePicture.md §3.4) makes nothing per frame.
     pub fn load_lut(&mut self, index: usize, width: i32, height: i32, rgba: &[u8]) -> Result<(), String> {
         let Some(spec) = self.textures.get(index).cloned() else { return Err("The preset has no such lookup image.".to_string()) };
+        if let Some(Lut { image: Some(image), staging: Some(staging), .. }) = self.luts.get(&spec.name) {
+            if !spec.mipmap && image.width == width as u32 && image.height == height as u32 {
+                return self.device.upload(image, rgba, staging);
+            }
+        }
         let image = self.device.create_image(width as u32, height as u32, UNORM, spec.mipmap)?;
         let staging = self.device.create_buffer(width.wrapping_mul(height).wrapping_mul(4) as i64 as u64, vk::BufferUsageFlags::TRANSFER_SRC)?;
         self.device.upload(&image, rgba, &staging)?;
-        self.luts.insert(spec.name.clone(), Lut { spec, image: Some(image) });
+        self.luts.insert(spec.name.clone(), Lut { spec, image: Some(image), staging: Some(staging) });
         Ok(())
     }
 
@@ -605,10 +624,26 @@ impl Chain {
     /// would; the rows are repeated on the device (EmuSen_Serenity.md §9.2).
     pub fn advance(&mut self, rgba: &[u8], width: i32, height: i32, row_repeat: i32) -> Result<(), Unfed> {
         self.device.phase(point::ADVANCE_BEGIN);
+        self.device.settle()?;
+        self.flush_upload()?;
+        self.let_go_of_lend();
         let repeat = row_repeat.max(1) as u32;
         let (w, rows) = (width as u32, height as u32);
-        let h = rows.wrapping_mul(repeat);
         let bytes = w.wrapping_mul(rows).wrapping_mul(4);
+        self.shape(w, rows, repeat)?;
+        self.head = (self.head + self.history.len() - 1) % self.history.len();
+        let picture = usize::try_from(bytes as i32).ok().and_then(|length| rgba.get(..length)).ok_or(Unfed::Short)?;
+        let (Some(_), Some(staging)) = (&self.history[self.head], &self.staging) else { return Err(Unfed::Device("The chain has no frame to write.".to_string())) };
+        self.device.write_staging(staging, picture);
+        (self.upload_pending, self.from_lend) = (true, None);
+        self.frame_count = self.frame_count.wrapping_add(1);
+        self.device.phase(point::ADVANCE_END);
+        Ok(())
+    }
+
+    /// The history and the staging made for a frame of this size, when it differs from the last.
+    fn shape(&mut self, w: u32, rows: u32, repeat: u32) -> Result<(), String> {
+        let h = rows.wrapping_mul(repeat);
         if w != self.original_width || h != self.original_height || rows != self.upload_rows || repeat != self.upload_repeat {
             self.device.wait_idle();
             for i in 0..self.history.len() {
@@ -616,21 +651,72 @@ impl Chain {
                 self.history[i] = Some(cleared(&self.device, w, h, UNORM, self.passes[0].spec.mipmap_input)?);
             }
             self.staging = None;
-            self.staging = Some(self.device.create_buffer(bytes as u64, vk::BufferUsageFlags::TRANSFER_SRC)?);
+            self.staging = Some(self.device.create_buffer(w.wrapping_mul(rows).wrapping_mul(4) as u64, vk::BufferUsageFlags::TRANSFER_SRC)?);
             self.rows = None;
             self.rows = if repeat > 1 { Some(self.device.create_image(w, rows, UNORM, false)?) } else { None };
             (self.original_width, self.original_height, self.upload_rows, self.upload_repeat) = (w, h, rows, repeat);
         }
+        Ok(())
+    }
+
+    /// The newest picture a core handed through `lend` joins the history, read on the device by the next render or
+    /// present, which waits for its copy: false when there is none newer than the last (EmuSen_DevicePicture.md §17).
+    pub fn advance_lent(&mut self, lend: &Lend) -> Result<bool, String> {
+        self.device.phase(point::ADVANCE_BEGIN);
+        self.device.settle()?;
+        self.flush_upload()?;
+        // The last submission has been waited for, so the copy it read may be written again.
+        self.let_go_of_lend();
+        let after = if self.from_lend.as_ref().is_some_and(|(held, _)| held.same(lend)) { self.lent_value } else { 0 };
+        let Some(taken) = lend.claim(after) else { return Ok(false) };
+        self.shape(taken.width, taken.height, 1)?;
         self.head = (self.head + self.history.len() - 1) % self.history.len();
-        let picture = usize::try_from(bytes as i32).ok().and_then(|length| rgba.get(..length)).ok_or(Unfed::Short)?;
-        let (Some(image), Some(staging)) = (&self.history[self.head], &self.staging) else { return Err(Unfed::Device("The chain has no frame to write.".to_string())) };
-        match &self.rows {
-            None => self.device.upload(image, picture, staging)?,
-            Some(rows) => self.device.upload_repeated(image, picture, rows, repeat, staging)?,
-        }
+        (self.upload_pending, self.lent_value) = (true, taken.value);
+        self.from_lend = Some((lend.clone(), taken));
         self.frame_count = self.frame_count.wrapping_add(1);
         self.device.phase(point::ADVANCE_END);
-        Ok(())
+        Ok(true)
+    }
+
+    /// The lend's copy given back once nothing of this chain reads it, keeping which lend and value it was.
+    fn let_go_of_lend(&mut self) {
+        if let Some((lend, _)) = &self.from_lend {
+            lend.release();
+        }
+    }
+
+    /// The timeline wait of the frame pending, when it is a lent picture's copy.
+    fn upload_wait(&self, upload: bool) -> Option<(vk::Semaphore, u64)> {
+        if !upload {
+            return None;
+        }
+        self.from_lend.as_ref().map(|(_, taken)| (taken.semaphore, taken.value))
+    }
+
+    /// The frame's upload recorded into a submission that is about to run its passes, when `upload` says one waits.
+    fn record_pending_upload(&self, commands: vk::CommandBuffer, upload: bool) {
+        if !upload {
+            return;
+        }
+        if let (Some(image), Some((_, taken))) = (&self.history[self.head], &self.from_lend) {
+            self.device.record_copy_in(commands, image, taken.buffer, taken.row_pixels);
+            return;
+        }
+        let (Some(image), Some(staging)) = (&self.history[self.head], &self.staging) else { return };
+        match &self.rows {
+            None => self.device.record_upload(commands, image, staging),
+            Some(rows) => self.device.record_upload_repeated(commands, image, rows, self.upload_repeat, staging),
+        }
+    }
+
+    /// An upload still waiting run on its own, before anything else that would write what it reads.
+    fn flush_upload(&mut self) -> Result<(), String> {
+        if !self.upload_pending {
+            return Ok(());
+        }
+        self.upload_pending = false;
+        let wait = self.upload_wait(true);
+        self.device.run_after(|commands| self.record_pending_upload(commands, true), wait)
     }
 
     fn original_at(&self, back: usize) -> &Image {
@@ -712,11 +798,79 @@ impl Chain {
         Ok(())
     }
 
+    /// Every pass run for the view's size and the last one's picture copied into the target's corner, with no readback
+    /// and no wait:
+    /// the submission waits on the device for the compositor's `free` when `wait_free`, and signals `ready`
+    /// (EmuSen_DevicePicture.md §4.2). The next call that writes what a pass reads waits for it first.
+    pub fn present(&mut self, target: &Shown, view_width: i32, view_height: i32, wait_free: bool) -> Result<(), String> {
+        if self.original_width == 0 {
+            return Err("No frame has been given to the chain yet.".to_string());
+        }
+        let (vw, vh) = (view_width.max(1) as u32, view_height.max(1) as u32);
+        if vw > target.image.width || vh > target.image.height {
+            return Err("The picture is larger than its target.".to_string());
+        }
+        self.device.settle()?;
+        self.device.phase(point::RENDER_BEGIN);
+        self.size_passes(vw, vh)?;
+        let count = self.passes.len();
+        for i in 0..count {
+            self.bind(i, vw, vh)?;
+        }
+        self.device.phase(point::BOUND);
+        let upload = std::mem::take(&mut self.upload_pending);
+        let wait = self.upload_wait(upload);
+        let device = &self.device;
+        device.run_unwaited(
+            |commands| {
+                self.record_pending_upload(commands, upload);
+                for i in 0..count {
+                    self.draw(commands, i);
+                    device.mark(commands, i as i32);
+                }
+                let Some(last) = &self.passes[count - 1].output else { return };
+                device.transition(commands, &last.image, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, 0, None, None);
+                device.external(commands, &target.image, false);
+                let region = vk::ImageCopy::default()
+                    .src_subresource(vk::ImageSubresourceLayers { aspect_mask: vk::ImageAspectFlags::COLOR, mip_level: 0, base_array_layer: 0, layer_count: 1 })
+                    .dst_subresource(vk::ImageSubresourceLayers { aspect_mask: vk::ImageAspectFlags::COLOR, mip_level: 0, base_array_layer: 0, layer_count: 1 })
+                    .extent(vk::Extent3D { width: vw, height: vh, depth: 1 });
+                unsafe { device.vk().cmd_copy_image(commands, last.image.handle, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, target.image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[region]) };
+                device.external(commands, &target.image, true);
+                device.transition(commands, &last.image, READ, 0, None, None);
+            },
+            wait_free.then_some(target.free),
+            target.ready,
+            wait,
+        )?;
+        self.device.phase(point::RAN);
+        for pass in &mut self.passes {
+            if pass.wants_feedback {
+                std::mem::swap(&mut pass.output, &mut pass.previous);
+            }
+        }
+        Ok(())
+    }
+
+    /// Each pass's output made the size the viewport and the scale types give it.
+    fn size_passes(&mut self, vw: u32, vh: u32) -> Result<(), String> {
+        let count = self.passes.len();
+        let (mut sw, mut sh) = (self.original_width, self.original_height);
+        for i in 0..count {
+            let spec = &self.passes[i].spec;
+            let (w, h) = if i == count - 1 { (vw, vh) } else { (axis(spec.scale_type_x, spec.scale_x, sw, vw), axis(spec.scale_type_y, spec.scale_y, sh, vh)) };
+            self.resize(i, w, h)?;
+            (sw, sh) = (w, h);
+        }
+        Ok(())
+    }
+
     /// The passes run for the viewport's size and the last one's pixels left in the readback, visible to the host.
     fn render_into(&mut self, readback: &mut Option<Buffer>, view_width: i32, view_height: i32) -> Result<u64, String> {
         if self.original_width == 0 {
             return Err("No frame has been given to the chain yet.".to_string());
         }
+        self.device.settle()?;
         self.device.phase(point::RENDER_BEGIN);
         let (vw, vh) = (view_width.max(1) as u32, view_height.max(1) as u32);
         let count = self.passes.len();
@@ -741,8 +895,11 @@ impl Chain {
         }
         self.device.phase(point::BOUND);
 
+        let upload = std::mem::take(&mut self.upload_pending);
+        let wait = self.upload_wait(upload);
         let device = &self.device;
-        device.run(|commands| {
+        device.run_after(|commands| {
+            self.record_pending_upload(commands, upload);
             for i in 0..count {
                 self.draw(commands, i);
                 device.mark(commands, i as i32);
@@ -755,7 +912,7 @@ impl Chain {
             unsafe { device.vk().cmd_copy_image_to_buffer(commands, last.image.handle, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, readback.handle, &region) };
             device.host_read_barrier(commands, readback);
             device.transition(commands, &last.image, READ, 0, None, None);
-        })?;
+        }, wait)?;
 
         self.device.phase(point::RAN);
         for pass in &mut self.passes {
@@ -794,7 +951,7 @@ impl Chain {
         if let Some(n) = pass_numbered("PassFeedback", count) {
             return Some(output(n, true));
         }
-        if let Some(Lut { spec, image: Some(image) }) = self.luts.get(name) {
+        if let Some(Lut { spec, image: Some(image), .. }) = self.luts.get(name) {
             return Some(Texture { image, linear: spec.linear, wrap: spec.wrap, mipmap: spec.mipmap });
         }
         for (n, pass) in self.passes.iter().enumerate() {

@@ -60,12 +60,12 @@ without a device.
 MarsRT's `rdp/gpu/mod.rs` names the crate's items where it named `device::`'s, and re-exports `GpuDevice` and `Pending`
 for its own callers (`memory/dp.rs`, its tests), so no other file of MarsRT changed beyond the methods above.
 
-## 3. The surface, version 1.1
+## 3. The surface, version 1.2
 
 Rule **R** of `EmuSen_Surfaces.md` §6.1: an internal Rust API, a path dependency built from the same commit, guarded
 by its users' tests. It is nonetheless numbered, so that a second user can rely on its growing by addition: the
-crate's version was 1.0.0, and is 1.1.0 since §3.1; an addition (a lent device, images) is a minor; a change or removal of anything below is a
-major, and none is planned.
+crate's version was 1.0.0, 1.1.0 since §3.1, and is 1.2.0 since §5 (a lent device and the picture handed on it); an
+addition (images, say) is a minor; a change or removal of anything below is a major, and none is planned.
 
 | Item | What it is |
 |---|---|
@@ -82,6 +82,11 @@ major, and none is planned.
 | `Commands::{fill, copy, dispatch, dispatch_in, submission}` | what a recording holds: a fill of a whole buffer with a word, a copy between buffers at offsets, a dispatch of a program with its buffers and push constants (in descriptor set 0 or a later one), and which submission it is |
 | `Commands::dispatch_again`, `WRITTEN_SETS` | *since 1.1*: the program dispatched once more in the same recording with the buffers `dispatch_in` wrote its set with there (§3.1); 16 sets a recording are kept track of |
 | `DEVICE_VARIABLE` | `"EMUSEN_GPU_DEVICE"` (§4) |
+| `Lent`, `Lent::from_raw`, `GpuDevice::lent(&Lent)`, `is_lent` | *since 1.2*: a device another made, with a queue the borrower alone submits to (§5); `from_raw` takes the loader's entry as the plain function pointer an ABI carries |
+| `GpuDevice::create_buffer_shared(bytes)` | *since 1.2*: a device buffer the lender's queue family may read as well (concurrent sharing), for a picture handed on the device |
+| `Timeline`, `GpuDevice::{create_timeline, timeline_value, destroy_timeline}`, `Timeline::raw`, `GpuBuffer::raw` | *since 1.2*: a timeline semaphore of a lent device, and the handles as integers for a lender on the same device |
+| `Commands::{wait_for, signal}` | *since 1.2*: the submission waits on the device for a timeline value before its commands and signals one after them |
+| `PictureOut::{new, on_device, slot, tell, ready, hand, destroy}`, `Handed` | *since 1.2*: the picture handed at the end of a submission into one of two slots, host memory on a device of the crate's own, device memory on a lent one with `ready` signalled and the slot written again only once the lender's `done` has passed the value it was told of (§5) |
 
 **The rules a user keeps**, unchanged from MarsRT and stated once here [R `device.rs`]:
 
@@ -95,6 +100,9 @@ major, and none is planned.
 4. One thread submits. `Pending::wait` is the only call another thread may make, and only while nothing submits.
 5. *Since 1.1.* Within one recording, a program's set is written once, by its first `dispatch_in` there; each later
    dispatch of that program and set in the recording is a `dispatch_again` (§3.1).
+6. *Since 1.2.* On a lent device rule 4 is per queue: the borrower's thread submits to the lent queue, the lender's to
+   its own, and nothing is locked between them. A submission holds at most one wait and one signal, which is all
+   `PictureOut` needs.
 
 ### 3.1 Version 1.1: a program dispatched twice in one submission (2026-10-13)
 
@@ -143,7 +151,7 @@ report. One name read in one place is the simpler arrangement.
 not changed: it chooses a different device made by a different component (§6.3), and the two meet only in the kit's
 one device (§5).
 
-## 5. A lent device: the seam, stated and not built
+## 5. A lent device: the seam, stated, then built in version 1.2 (2026-10-15)
 
 The kit's `lunap-gpu` will either make the device and lend it, or import one (`EmuSen_LunaP_Kit.md` §5.2). This crate
 must then draw on a device it did not create, without its users' code changing. The seam is the constructor and
@@ -169,6 +177,55 @@ nothing else [A]:
   and refuses with a reason.
 
 Nothing of this is built: there is no lender, and the kit's half is the kit's.
+
+*2026-10-15: a lender exists before the kit's, Serenity's slang device, which lends a core a queue of its own rather than
+a lock on a shared one, since a lock across the core ABI would be a callback; the seam is to be built as
+`GpuDevice::lent` in version 1.2, with the picture handed on the device (`PictureOut`), as `EmuSen_DevicePicture.md`
+§5 and §6 design.*
+
+### 5.1 As built (2026-10-15)
+
+**Three of the plan's predictions above were retired by building it** [A]. The lender's lock on a shared queue became
+a queue of the borrower's own, since a lock across the core ABI would be a callback (`EmuSen_DevicePicture.md` §5.2).
+`ash` types do not cross: `Lent` carries the handles as integers and the loader's `vkGetInstanceProcAddr`, so that a
+lender in C, C# or another `ash` is the same to the crate, and the crate loads the device's functions itself. And the
+least version is **Vulkan 1.2**, not 1.1, for timeline semaphores.
+
+**`GpuDevice::lent`** loads the instance's and the device's functions through the lender's entry, checks the version
+(1.2 or later) and that the queue named exists in a family with compute, reads the memory properties and limits as
+`open` does, and makes its own command pool, buffers and fences. On drop it waits for its own submissions (its pending
+fence and its slots ahead), never `vkDeviceWaitIdle`, and destroys only what it made. It records the lender's queue
+family, which a shared buffer names beside its own.
+
+**`PictureOut`** replaces each core's own pair of host slots. On a device of the crate's own, or lent with no `done`,
+`hand` records a copy of the picture into a host slot, as Diamond's `Back::Slot` did. On a lent device with the
+lender's `done`, the slots are device buffers shared with the lender's family; `hand` records the copy, makes the
+submission wait for `done` to reach the value the slot last held and signal `ready` with the new picture's value, and
+answers the slot and value. **The wait is only for a value the lender was told of** (`tell`): a host that lends but
+takes its pictures by `frame_copy` and never by the device signals nothing, and a slot it never heard of must not stall
+the core for it. This is §5.3 of `EmuSen_DevicePicture.md`'s rule as built.
+
+**Tested** [M, `cargo test --release`, the RX 6800, 2026-10-15]: **17 tests**, the 12 of §7 and 5 in `tests/lent.rs`,
+in which the test is its own lender (a Vulkan 1.2 device with timeline semaphores, a graphics queue for itself and a
+compute queue of another family for the borrower, as Serenity's will be): a lent device runs a program and leaves the
+lender's device alive after its drop; a lend before 1.2 or of a queue the device lacks is refused with a reason; six
+pictures handed on the device are each read by the lender, on its own queue after waiting for `ready`, as drawn; with
+two pictures held, the third waits on the device for 200 ms with `ready` unmoved, and the slot still holds the first
+until the lender lets go; a picture the lender was never told of is not waited for; on a device of its own the
+picture lands in host memory with value 0. Clean under the validation layer with synchronisation validation and its
+shader-access heuristic.
+
+**Mutants** [M]:
+
+| Mutant | Killed by |
+|---|---|
+| the slot written with no wait for `done` | the held-pictures test (the third picture landed in the first's slot), and the kit's C20 on Diamond (`EmuSen_DevicePicture.md` §16) |
+| `ready` signalled with no value | the validation layer (`VUID-VkSubmitInfo-pNext-03242`) and the held test's wait, which then never ended |
+| the shared slots made with exclusive sharing | **survived**: RADV reads a buffer of another family without an ownership transfer, so no test on this machine tells the two apart; concurrent sharing rests on the specification, as the barrier to the host of §7 does |
+
+**In MarsRT** [M]: the crate's users' suites run against 1.2 with no change of theirs (§7's MarsRT row, rerun
+2026-10-15); MarsRT neither lends nor is lent, and adopts `PictureOut` only with the minor (`EmuSen_DevicePicture.md`
+§7).
 
 ## 6. A second user: what Diamond's enhanced renderer will need
 

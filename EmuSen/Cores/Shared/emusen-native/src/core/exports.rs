@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use super::lend::{self, Lend, Loan};
 use super::outbox::{Inner, Outbox, Route, library_log};
-use super::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine, caps, event, flags, kind, status};
+use super::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine, caps, event, flags, kind, status};
 use super::{Core, Create, File, Insert, Settings, SettingKind, desc};
 use crate::debug;
 use crate::ffi::{Status, copy_text, input};
@@ -331,7 +331,15 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
                 super::detail(&why);
                 code
             })?;
-            let request = Create { image: unsafe { input(p.image, p.image_len) }, settings, files, pixel_formats: p.pixel_formats | 1, host_abi_version: p.host_abi_version, shared_removable: p.flags & flags::CREATE_SHARED_REMOVABLE != 0, shared_console: p.flags & flags::CREATE_SHARED_CONSOLE != 0 };
+            // A lend reaches only a core that claims the bit, and only whole: a struct shorter than 1.9's is no lend.
+            let device = match (T::CAPABILITIES & caps::DEVICE_PICTURE != 0, p.device.is_null()) {
+                (true, false) => {
+                    let lend = unsafe { prefix(p.device, size_of::<DeviceLend>()) }?;
+                    (lend.get_instance_proc_addr.is_some() && lend.device != 0).then_some(lend)
+                }
+                _ => None,
+            };
+            let request = Create { image: unsafe { input(p.image, p.image_len) }, settings, files, pixel_formats: p.pixel_formats | 1, host_abi_version: p.host_abi_version, shared_removable: p.flags & flags::CREATE_SHARED_REMOVABLE != 0, shared_console: p.flags & flags::CREATE_SHARED_CONSOLE != 0, device };
             let lend = lent::<T>(p.flags & flags::CREATE_LENT != 0, request.image, &request.files);
             let made = T::create(&request);
             let loan = lend.map(Lend::close);
@@ -487,6 +495,26 @@ pub unsafe fn frame_info<T: Core>(machine: *const Machine, out: *mut FrameInfo) 
     // Everything after `size`, which stays the host's.
     unsafe { std::ptr::copy_nonoverlapping((&f as *const FrameInfo as *const u8).add(4), (out as *mut u8).add(4), size_of::<FrameInfo>() - 4) };
     0
+}
+
+/// 1 with the frame's picture on the device, 0 when `frame_copy` has it (since 1.9, `DEVICE_PICTURE`).
+pub unsafe fn frame_device<T: Core>(machine: *mut Machine, out: *mut DeviceFrame) -> i32 {
+    let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
+    if out.is_null() {
+        return NULL;
+    }
+    if (unsafe { std::ptr::read_unaligned(out as *const u32) } as usize) < size_of::<DeviceFrame>() {
+        return status::BAD_STRUCT;
+    }
+    match inst.core.frame_device() {
+        Ok(Some(f)) => {
+            // Everything after `size`, which stays the host's.
+            unsafe { std::ptr::copy_nonoverlapping((&f as *const DeviceFrame as *const u8).add(4), (out as *mut u8).add(4), size_of::<DeviceFrame>() - 4) };
+            1
+        }
+        Ok(None) => 0,
+        Err(code) => code,
+    }
 }
 
 pub unsafe fn frame_copy<T: Core>(machine: *const Machine, out: *mut u8, len: usize) -> i64 {

@@ -63,6 +63,9 @@ namespace EmuSen.Common
         // The engine the frontend's setting asks for, a CoreCatalog.EngineFor name; null is the console's default - see EmuSen_Settings_Reference.md §4.44.
         public string? Engine { get; set; }
 
+        // Set by the frontend before LoadRom: the device a core may draw its picture on - see EmuSen_DevicePicture.md §17.
+        public Func<EmuSen.Serenity.Slang.SlangLend?>? DeviceLender { get; set; }
+
         // Why the engine asked for is not the one running, or null - see CoreFactory.EngineNotice.
         public string? EngineNotice { get; private set; }
 
@@ -74,7 +77,7 @@ namespace EmuSen.Common
         // <loaded> is CoreFactory.Loaded's core of <path> on <Engine>, made off this thread; null loads it here.
         public void LoadRom(string path, ICore? loaded)
         {
-            var bundle = loaded is null ? CoreFactory.Load(path, headless: true, Cheats, engine: Engine)
+            var bundle = loaded is null ? CoreFactory.Load(path, headless: true, Cheats, engine: Engine, lender: DeviceLender)
                 : CoreFactory.Bundle(loaded, Cheats) with { Notice = CoreFactory.EngineNotice(path, Engine, loaded) };
             _core = bundle.Core;
             EngineNotice = bundle.Notice;

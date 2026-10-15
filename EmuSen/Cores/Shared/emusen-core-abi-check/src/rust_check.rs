@@ -77,6 +77,7 @@ signatures! {
     emusen_core_media_lid: emusen_core_media_lid_fn,
     emusen_core_media_insert: emusen_core_media_insert_fn,
     emusen_core_debug_reads: emusen_core_debug_reads_fn,
+    emusen_core_frame_device: emusen_core_frame_device_fn,
 }
 
 macro_rules! layouts {
@@ -102,10 +103,12 @@ macro_rules! layouts {
 
 layouts! {
     sys::FileEntry = emusen_file { size, which, data, len } [];
-    sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len, flags } [files];
+    sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len, flags } [files, device];
     sys::FrameInfo = emusen_frame_info { size, format, width, height, stride, row_repeat, flags, aspect_num, aspect_den, reserved, serial, bytes } [];
     sys::Event = emusen_event { size, kind, a, b } [];
     sys::Media = emusen_media { size, flags, image, image_len, file_count, file_size } [files];
+    sys::DeviceLend = emusen_device_lend { size, api_version, get_instance_proc_addr, instance, physical_device, device, queue_family, queue_index, host_queue_family, reserved, done } [];
+    sys::DeviceFrame = emusen_device_frame { size, format, buffer, offset, width, height, stride, reserved, ready, value } [];
 }
 
 macro_rules! constants {
@@ -162,6 +165,7 @@ constants! {
     EMUSEN_CAP_MEDIA = caps::MEDIA,
     EMUSEN_CAP_DEBUG_READS = caps::DEBUG_READS,
     EMUSEN_CAP_BORROW = caps::BORROW,
+    EMUSEN_CAP_DEVICE_PICTURE = caps::DEVICE_PICTURE,
     EMUSEN_OPTION_SKIP_RENDERING = flags::OPTION_SKIP_RENDERING,
     EMUSEN_FRAME_WALKED = flags::FRAME_WALKED,
     EMUSEN_BATTERY_CHANGED = flags::BATTERY_CHANGED,

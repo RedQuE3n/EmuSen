@@ -34,8 +34,8 @@ tree
           18 TextBlock at=543,216,86,36 box=86,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=85.47,36 limit=531,210,110,48 owner=17 paints=#86868AFF role=text size=30 text=GENESIS
         19 TabItem at=641,210,156,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 op paints=#EEEEF0FF role=tabitem sideways text=PlayStation
           20 TextBlock at=653,216,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=641,210,156,48 owner=19 paints=#EEEEF0FF role=text size=30 text=PLAYSTATION
-        21 ScrollViewer at=286,260,709,342 by=clip fades=b limit=274,260,733,342 overflow=2343 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,342
-          22 StackPanel at=286,268,709,2677 by=scroll in=21 limit=286,260,709,342 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#B4B4B8FF role=none seen=286,268,709,334
+        21 ScrollViewer at=286,260,709,342 by=clip fades=b limit=274,260,733,342 overflow=2415 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,342
+          22 StackPanel at=286,268,709,2749 by=scroll in=21 limit=286,260,709,342 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#B4B4B8FF role=none seen=286,268,709,334
             23 FieldRow at=286,268,709,129 by=scroll heard="Shader and shape" in=21 limit=286,260,709,342 paints=#9C9CA0FF role=group
               24 TextBlock at=286,268,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=21 layout=145.94,28.8 limit=286,268,709,129 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Shader and shape"
               25 HintText at=286,301,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=21 layout=699.98,48 limit=286,268,709,129 paints=#86868AFF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."

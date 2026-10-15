@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreInterface
     {
         public const uint Major = 1;
-        public const uint Minor = 8;
+        public const uint Minor = 9;
         public const uint Version = (Major << 16) | Minor;
 
         // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
@@ -15,7 +15,7 @@ namespace EmuSen.Cores.Native
         public const ulong CapSettings = 1UL << 6, CapPhases = 1UL << 7, CapFrameSerial = 1UL << 8, CapRowRepeat = 1UL << 9, CapBatteryDirty = 1UL << 10;
         public const ulong CapRomPatches = 1UL << 11, CapDebug = 1UL << 12, CapDebugStack = 1UL << 13, CapCheatPokes = 1UL << 14, CapSettingNotes = 1UL << 15;
         public const ulong CapDebugRegisters = 1UL << 16, CapDebugDisassemble = 1UL << 17, CapMedia = 1UL << 18, CapDebugReads = 1UL << 19;
-        public const ulong CapBorrow = 1UL << 20;
+        public const ulong CapBorrow = 1UL << 20, CapDevicePicture = 1UL << 21;
 
         // Each bit's name, as core info lists it.
         public static readonly IReadOnlyList<(ulong Bit, string Name)> CapabilityNames = new[]
@@ -24,7 +24,7 @@ namespace EmuSen.Cores.Native
             (CapSettings, "SETTINGS"), (CapPhases, "PHASES"), (CapFrameSerial, "FRAME_SERIAL"), (CapRowRepeat, "ROW_REPEAT"), (CapBatteryDirty, "BATTERY_DIRTY"),
             (CapRomPatches, "ROM_PATCHES"), (CapDebug, "DEBUG"), (CapDebugStack, "DEBUG_STACK"), (CapCheatPokes, "CHEAT_POKES"), (CapSettingNotes, "SETTING_NOTES"),
             (CapDebugRegisters, "DEBUG_REGISTERS"), (CapDebugDisassemble, "DEBUG_DISASSEMBLE"), (CapMedia, "MEDIA"), (CapDebugReads, "DEBUG_READS"),
-            (CapBorrow, "BORROW"),
+            (CapBorrow, "BORROW"), (CapDevicePicture, "DEVICE_PICTURE"),
         };
 
         // Every export, and the bit that claims it; zero for a required one.
@@ -46,7 +46,7 @@ namespace EmuSen.Cores.Native
             ("emusen_core_debug_coverage", CapDebug), ("emusen_core_debug_counters", CapDebug), ("emusen_core_debug_pc", CapDebug),
             ("emusen_core_debug_registers", CapDebugRegisters), ("emusen_core_debug_disassemble", CapDebugDisassemble),
             ("emusen_core_media_lid", CapMedia), ("emusen_core_media_insert", CapMedia),
-            ("emusen_core_debug_reads", CapDebugReads),
+            ("emusen_core_debug_reads", CapDebugReads), ("emusen_core_frame_device", CapDevicePicture),
         };
 
         // The host obligations this host meets, for a core's host_requires - see EmuSen_CoreAPI.md §4.6.
@@ -99,6 +99,40 @@ namespace EmuSen.Cores.Native
             public byte* Error;
             public nuint ErrorLen;
             public uint Flags;
+            public DeviceLend* Device;
+        }
+
+        // emusen_device_lend, since 1.9: the host's Vulkan device lent to a core, with a queue the core alone submits to - see EmuSen_CoreAPI.md §6.29.
+        [StructLayout(LayoutKind.Sequential)]
+        public struct DeviceLend
+        {
+            public uint Size;
+            public uint ApiVersion;
+            public nint GetInstanceProcAddr;
+            public ulong Instance;
+            public ulong PhysicalDevice;
+            public ulong Device;
+            public uint QueueFamily;
+            public uint QueueIndex;
+            public uint HostQueueFamily;
+            public uint Reserved;
+            public ulong Done;
+        }
+
+        // emusen_device_frame, since 1.9: the frame's picture on the lent device, written once Ready reaches Value.
+        [StructLayout(LayoutKind.Sequential)]
+        public struct DeviceFrame
+        {
+            public uint Size;
+            public uint Format;
+            public ulong Buffer;
+            public ulong Offset;
+            public int Width;
+            public int Height;
+            public int Stride;
+            public uint Reserved;
+            public ulong Ready;
+            public ulong Value;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -197,6 +231,7 @@ namespace EmuSen.Cores.Native
         public readonly delegate* unmanaged<nint, uint, uint, int> MediaLid;
         public readonly delegate* unmanaged<nint, uint, Media*, int> MediaInsert;
         public readonly delegate* unmanaged<nint, uint*, nuint, long> DebugReads;
+        public readonly delegate* unmanaged<nint, DeviceFrame*, int> FrameDevice;
 
         // Each export resolved from a loaded library by name; zero where the library lacks it.
         public CoreInterface(nint library)
@@ -260,6 +295,7 @@ namespace EmuSen.Cores.Native
             MediaLid = (delegate* unmanaged<nint, uint, uint, int>)E("media_lid");
             MediaInsert = (delegate* unmanaged<nint, uint, Media*, int>)E("media_insert");
             DebugReads = (delegate* unmanaged<nint, uint*, nuint, long>)E("debug_reads");
+            FrameDevice = (delegate* unmanaged<nint, DeviceFrame*, int>)E("frame_device");
         }
 
         // The C# field that holds an export: its suffix in PascalCase, and FrameInfoOf where that names the struct.

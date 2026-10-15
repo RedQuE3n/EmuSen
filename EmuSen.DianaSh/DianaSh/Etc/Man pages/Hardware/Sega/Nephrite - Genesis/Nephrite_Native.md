@@ -4446,3 +4446,52 @@ the same game leaves it as it stands, while per game the game's own `.brm` is pu
   next changes the Sega CD's state.
 - **The format module** for `mcd.backup` and `mcd.ramcart`, and a formatted image for a new machine, both deferred to
   stage 10 (decided 2026-10-15).
+
+## 62. The attachment interface built (2026-10-15)
+
+*Decided 2026-10-15 (the tester's go):* `Nephrite_Attachments.md` built as designed, its §8 recommendations accepted,
+after stage 9 and before stage 10. That page's §11 is the record, commit by commit; this section is its summary.
+
+### 62.1 What changed
+
+- **`src/interface.rs`**, the only module an attachment imports: `Attachment` (the 68000's map asked first, the VDP's
+  transfer apart, `run_to`, the one sound stream, `EXPANSION`), `AttachmentState`, `AttachmentView`, `Board`, `Answer`,
+  `Refusal`, `SpaceRef`, the ranges of space and processor ids, and `Bare`.
+- **`Genesis<A = Bare>`** over `Wired<A>`, the Genesis's devices (`Hw`, not generic) with the attachment beside them,
+  each configuration compiled apart and reached through one pointer; the machine's `Fitted` matched once per ABI call.
+- **The Sega CD** on the three traits, its frontend's facts in `mcd/frontend.rs`, CD-DA given the mix's rate by
+  `Board`; **the 32X's stub** in `src/s32x/`, holding the three memories a 32X image's machine had and its facts, and
+  compiling no frame.
+- **The J-Cart** decoded in the cartridge's arm; **the Genesis's files** in `src/genesis/`, its header out of
+  `media.rs`, the debugger's composition in the machine; every item of the two trees narrowed to its tree and widened
+  by the compiler only as far as it is used.
+- **Two checks in the ordinary test sweep**: `boundary.rs`'s source check, and the three builds without the
+  attachments (`--no-default-features`, with `mcd` alone, with `s32x` alone) compiled with their tests and examples.
+- **`examples/digest.rs`** and two pinned layouts (a cartridge's, and now a disc's).
+
+### 62.2 Held at every commit
+
+The 71 digests (state, picture and sound at frames 300, 600 and 1,200 over the kit's Genesis sample, the bench's games,
+the 240p disc as an image and as a sheet with mcd-verificator and without a boot ROM) equal to the baseline's; state
+version 20 and both pinned layouts unchanged; mcd-verificator's eighteen and the crate's tests; the kit's sample 64 of
+64 and the 240p disc with mcd-verificator as file 2 compliant (C1–C19, core ABI 1.8).
+
+### 62.3 Measured
+
+- **Cost**: the cartridge Genesis and the 240p disc within the runs' spread of the baseline (about 1%) at commits 3 and
+  5 and at the end. A first form of the generic Genesis, the attachment lent beside a borrowed `Hw`, cost 1.3 to 2.4%
+  and was not committed.
+- **Size and build**: the `dist` library 1,445,920 bytes at the baseline, 1,631,832 at the end (+12.9%); a clean
+  release build of the crate 4.9 s, then 6.1 to 6.2 s (+23 to 26%), under Q1's half. The Genesis-only library, for the
+  record, 975,960 bytes, its kit sample 64 of 64.
+- **Found on the way**: seven items no library code calls, which `pub` had hidden (four test-only, now `#[cfg(test)]`;
+  three kept); and the Genesis-only library's media calls answering `NOT_SUPPORTED` where a machine with no drive must
+  answer `NO_SUCH_DRIVE`, fixed.
+
+### 62.4 For stage 10
+
+Mode 1 is `Genesis<MegaCd>` with the cartridge in the slot and the Sega CD declining `$000000`–`$3FFFFF`; its battery
+numbering is Q8's, consistent with §61 if mode 1 is a machine of the `md` system (`Nephrite_Attachments.md` §8); its
+state needs the configuration in the header (Q5). The Sega CD's processor, `S68K` 2, arrives with its debugger step,
+which adds `peek` and the `Watch` to the interface.
+

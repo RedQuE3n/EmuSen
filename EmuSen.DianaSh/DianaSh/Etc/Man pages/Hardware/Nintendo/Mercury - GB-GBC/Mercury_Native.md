@@ -2941,3 +2941,17 @@ program runs a general-purpose and an hblank transfer every frame in double spee
 block now stalls the CPU 48 T-cycles longer and the CPU counts that many fewer of its own; sound and picture are as
 recorded, and both engines agree. Its state and version-7 digests were re-recorded. The whole `Mercury` filter passes,
 836 cases.
+
+**Cost.** Nothing changed on a path the four games take every frame (none of them runs HDMA in the bench):
+
+| Game | MercuryRT step H | step I | C# step H | step I |
+|---|---|---|---|---|
+| Tetris | 0.4446, 0.4527, 0.4402 | 0.4395, 0.4533, 0.4424 | 0.6321, 0.6525, 0.6355 | 0.6341, 0.6532, 0.6398 |
+| Kirby's Dream Land | 0.5032, 0.5070, 0.4986 | 0.5180, 0.5065 (and a 0.9391 stall) | 0.6945, 0.7039, 0.6911 | 0.7742, 0.6994, 0.6897 |
+| Link's Awakening | 0.4290, 0.4134, 0.4064 | 0.4255, 0.4184, 0.4062 | 0.5932, 0.5860, 0.5705 | 0.6245, 0.5901, 0.5641 |
+| Pokémon Yellow | 0.5658, 0.5539, 0.5530 | 0.5752, 0.5558, 0.5615 | 0.7447, 0.7299, 0.7193 | 0.7503, 0.7013, 0.7155 |
+
+**Mutants**, each in C# and in Rust separately, all caught on both engines: I1, a double-speed block charges 16 (the
+cost theory's double-speed case); I2, a stop forgets the blocks owed; I3, a stopped transfer reads without bit 7; I5, a
+stopped transfer still moves at hblank (all three by `A_stopped_hblank_hdma_reads_back_the_blocks_it_still_owed`); I4,
+the destination wraps and the transfer goes on (`A_transfer_that_runs_off_the_end_of_vram_stops`).

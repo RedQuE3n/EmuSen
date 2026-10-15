@@ -1249,6 +1249,55 @@ EMUSEN_EVENT_MEDIA_SEEK = 8            /* a: (drive << 32) | file; b: the byte o
   of the call, and a run whose host acts on each place is the run whose host skips them, frame for frame, sample for
   sample and state for state.
 
+### 6.26 A `MEDIA` machine with no drive (1.6, 2026-10-14)
+
+*Decided 2026-10-14, the tester's answer to `Nephrite_Native.md` §49.6 Q8, written before its code.* A capability is
+the library's (§6.1), and one library may run a console with a drive and one without: Nephrite is the Genesis, a
+cartridge console, and the Sega CD, a drive beneath it. Claiming `MEDIA` there, the kit's C16 failed on every Genesis
+cartridge with "MEDIA is claimed but machine info lists no drives" (`Nephrite_Native.md` §53.2). The PC Engine's
+CD-ROM² and the Saturn's cartridge slot will meet the same.
+
+**The forms weighed.**
+
+| Form | For | Against |
+|---|---|---|
+| (a) A second bit, "MEDIA where a drive is listed" | nothing in the text of 1.1 changes | a bit is the library's and cannot say which machine has the drive, so it would say nothing machine info's `drives` does not; a host would test two bits for one fact |
+| (b) Two libraries, one per console | no surface change | the Sega CD is the Genesis with an attachment, its state the Genesis's with a block after it (`Nephrite_Native.md` §53.1), and mode 1 is a cartridge with the drive beneath; splitting the library copies the console to serve a test |
+| (c) **The drive list is the per-machine fact**: a machine of a `MEDIA` core may list none, and every media call on it is refused as a call on an unlisted drive is | the fact already exists in machine info; the refusal already exists (`NO_SUCH_DRIVE`, 1.1); the reference host already reads the list | a minor, so that the text and the kit say it |
+
+**Chosen: (c)**, with no new export, struct, constant, status code or capability bit. What changes:
+
+- **Machine info.** `drives` absent or empty means the machine has no drive, for a core claiming `MEDIA` as for one
+  without (1.1 said "absent for a core without `MEDIA`"). `emusen-native` writes nothing for an empty `Core::drives`,
+  as it has since 1.1, so a Rust core's driveless machine gives the absent form and no other core's machine info
+  changes by a byte.
+- **The media calls.** On a machine that lists no drive, `media_lid` and `media_insert` answer `EMUSEN_NO_SUCH_DRIVE`
+  (−267) for every drive number, and change nothing: not the machine's state, not its machine info, not its loans.
+  The refusal follows those of a malformed call, as for any unlisted drive since 1.1: a null machine, an `open`
+  other than 0 or 1, a struct shorter than 48 bytes. It is a status of the interface's band, **not a fault**: the
+  machine runs on, nothing reaches the crash log, and no status of the fault band (§6.15) is answered.
+- **`MEDIA_SEEK`** (1.4) needs nothing: an event must name a drive machine info lists (§6.25), so a driveless
+  machine raises none, and C18 already fails one that does. A core's own switch for naming places (Nephrite's
+  `NAMES_PLACES`) is then a fact of the drive, never of the library.
+- **`BORROW`** (1.3) needs nothing: a loan made at create on a driveless machine ends at `free`, no insert being able to
+  succeed on it.
+- **The host.** A host offers the lid, Change Disc and a set's other discs only for a machine that lists a drive, read
+  from that machine's info, never from the bit alone. The reference host does so since 1.1: `CoreEngine.CanChangeDisc`
+  is `MEDIA` and at least one drive, `SetLid` and `InsertDisc` refuse otherwise, a state refused with `WRONG_MEDIA` is
+  tried over the set's other discs only where `CanChangeDisc`, and `CoreMachine` keeps a lent create's loan until
+  `free` when no drive is listed; Mistress's Change Disc row asks `CanChangeDisc` and two discs. So no host code
+  changes; a WiseMan test holds it (§28.11).
+- **Why a minor.** The text of 1.1 to 1.5 left a `MEDIA` machine without a drive unsaid and their kits failed it; 1.6
+  is the revision whose text and kit accept it. A core whose machines may list no drive is built at 1.6 or later and
+  checked by a kit of its minor or later (`EmuSen_CoreAPI_Extensions.md` §14.4's rule). The minor gates nothing in a
+  host (§4.1).
+- **Older and newer peers.** A host of 1.1 to 1.5 given a core of 1.6 with a driveless machine reads no drive and
+  offers no disc change, as its text said absent drives mean; a host that calls a media export without reading the
+  list gets `NO_SUCH_DRIVE`, the refusal it had to take for any unlisted drive, and the machine is unchanged. A core of
+  1.5 or older is read by a newer host exactly as before.
+- **The kit.** C16 checks the drive rules on a machine that lists a drive, as before, and on one that lists none
+  checks that each media call answers `NO_SUCH_DRIVE`, changes nothing and leaves the machine running (§28.11).
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found

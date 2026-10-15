@@ -583,8 +583,17 @@ Its form, how it is read and re-recorded, and what it found are `EmuSen_Interfac
 - **Big Picture's views** are ten, each at both sizes: the system and gamelist scenes, and the main menu, the game
   options, the metadata editor, Theme Settings, Game Collection Settings, the search keyboard, the launch screen and the
   screensaver's slideshow drawn over them.
-- **The gate** (every state at both sizes, every view, two recordings identical) and the rules as checks are reported
-  in `EmuSen_InterfaceSpec.md` §6 and §4.
+- **The gate is met (2026-10-15) [M].** 212 recordings cover every state at both sizes and every view; recorded twice in
+  a row, they are identical file for file, after six sources of difference were traced and removed (the run's
+  folders, two wall-clock times, the rewind reel's moments, a keyboard's posted work, and a walk that explored to its
+  limit; `EmuSen_InterfaceSpec.md` §6.1).
+- **§2.4's rules as checks.** The fit audit, pad reachability, accessibility names and palette reach read the recorded
+  structure alone (`InterfaceRules`), so a frontend that writes the format is held to them; the recorded fit rule is
+  held to `FitAudit.Check` on every recorded sheet and every planted fault. **Today's Mistress passes the fit audit
+  everywhere, and fails the other three in places no audit had looked**: 25 controls a reader cannot name, four
+  colours painted outside the palette, one list the d-pad cannot walk past its second row (Cheat Database at 1280 × 800),
+  and the synthetic theme's over-long help bar (`EmuSen_InterfaceSpec.md` §6.2). They stand as recorded faults for the
+  tester to schedule; none was fixed here.
 
 ### 9.2 K1 on the desktop (measured 2026-10-15)
 

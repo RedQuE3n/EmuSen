@@ -22,7 +22,7 @@ namespace EmuSen.WiseMan.Fixtures
             root.GetVisualDescendants().OfType<InputElement>().Where(e => IsOperable(e) && !Unseen(e)).ToList();
 
         // A row a virtualising panel keeps built outside its view is the panel's bookkeeping, not a control the window shows - see EmuSen_Settings_Reference.md §4.48.10.
-        private static bool Unseen(InputElement e)
+        public static bool Unseen(InputElement e)
         {
             for (Visual? at = e; at is not null && at is not TopLevel; at = at.GetVisualParent())
             {
@@ -56,6 +56,23 @@ namespace EmuSen.WiseMan.Fixtures
             return root.GetVisualDescendants().OfType<InputElement>().Where(e => paths.ContainsKey(KeyOf(e))).ToHashSet();
         }
 
+        // A control that takes left and right itself, so the walk presses only up and down from it.
+        public static bool TakesSideways(InputElement e) => e is ComboBox or Slider or TabItem or EmuSen.LunaP.Controls.ISidewaysAdjustable;
+
+        // The whole focus graph from the focus: each direction from each control reached and where it lands, and whether the limit cut the walk short - see EmuSen_InterfaceSpec.md §3.
+        public static (object Start, List<(object From, int Direction, object? To)> Edges, bool Truncated) Graph(Control root, PadDriver pad, IReadOnlyCollection<object> shown, int limit = 400)
+        {
+            TopLevel top = TopLevel.GetTopLevel(root)!;
+            object start = KeyOf((InputElement)top.FocusManager!.GetFocusedElement()!);
+            var edges = new List<(object, int, object?)>();
+            var explored = new HashSet<object>();
+            System.Action[] presses = { () => pad.Up(), () => pad.Down(), () => pad.Left(), () => pad.Right() };
+            // The walk ends once every control shown when it began has been found and left in every direction, rather than exploring rows built only by scrolling to the limit.
+            Dictionary<object, List<int>> paths = Walk(root, presses, _ => false, limit, out _, p => shown.All(k => explored.Contains(k)),
+                edge: (f, d, t) => { explored.Add(f); edges.Add((f, d, t)); });
+            return (start, edges, paths.Count >= limit);
+        }
+
         // Finds a pad path from the focus to a control, then goes back and walks it with the pad alone; the search is repeated from where a walk ends, since a move can depend on the scroll position it left.
         public static InputElement Reach(Control root, PadDriver pad, System.Func<InputElement, bool> target, int limit = 400)
         {
@@ -80,7 +97,7 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // Breadth first over every direction from every control reached, each left from as the walk found it, by replaying its path - see EmuSen_Settings_Reference.md §4.48.5.
-        private static Dictionary<object, List<int>> Walk(Control root, System.Action[] presses, System.Func<InputElement, bool> target, int limit, out object? found, System.Func<Dictionary<object, List<int>>, bool>? enough = null)
+        private static Dictionary<object, List<int>> Walk(Control root, System.Action[] presses, System.Func<InputElement, bool> target, int limit, out object? found, System.Func<Dictionary<object, List<int>>, bool>? enough = null, System.Action<object, int, object?>? edge = null)
         {
             TopLevel top = TopLevel.GetTopLevel(root)!;
             InputElement? Focused() => top.FocusManager!.GetFocusedElement() as InputElement;
@@ -117,13 +134,14 @@ namespace EmuSen.WiseMan.Fixtures
             {
                 object key = queue.Dequeue();
                 if (At(key) is not { } from) { failed.Add(key); continue; }
-                bool takesSideways = from is ComboBox or Slider or TabItem or EmuSen.LunaP.Controls.ISidewaysAdjustable;
+                bool takesSideways = TakesSideways(from);
                 foreach (int direction in takesSideways ? new[] { 0, 1 } : new[] { 0, 1, 2, 3 })
                 {
                     if (At(key) is null) { failed.Add(key); break; }
                     presses[direction]();
-                    if (Focused() is not { } to) continue;
+                    if (Focused() is not { } to) { edge?.Invoke(key, direction, null); continue; }
                     object toKey = KeyOf(to);
+                    edge?.Invoke(key, direction, toKey);
                     // A control first found by a path that would not replay is explored again from the next path that reaches it.
                     if (paths.ContainsKey(toKey) && !failed.Remove(toKey)) continue;
                     paths[toKey] = new List<int>(paths[key]) { direction };
@@ -137,7 +155,7 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // A row is its list and index; a control in an item's container its items control, index, way down and the name a reader hears, since containers are recycled and items rebuilt; else its place in the tree - see EmuSen_Settings_Reference.md §4.48.10.
-        private static object KeyOf(InputElement e)
+        public static object KeyOf(InputElement e)
         {
             if (e is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { } list && list.IndexFromContainer(row) is var index and >= 0) return (list, index);
             for (Visual? at = e; at is not null && at is not TopLevel; at = at.GetVisualParent())

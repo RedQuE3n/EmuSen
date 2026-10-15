@@ -30,6 +30,35 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [MemberData(nameof(Cases))]
         public Task Nothing_in_the_window_is_cut_off_past_its_panel_or_drawn_over_anything_else(string which, int width, int height) => OnUi(() =>
         {
+            MainWindow window = Opened(which, width, height);
+            List<string> faults = WindowFitAuditTests.Audit(window, $"{which}-{width}x{height}", Out);
+            Server.Gate?.Release(1000);
+            Assert.Empty(faults);
+        });
+
+        // The same states recorded as the interface's specification - see EmuSen_InterfaceSpec.md.
+        [Theory]
+        [MemberData(nameof(Cases))]
+        public Task Every_scraping_state_is_as_its_specification_records_it(string which, int width, int height) => OnUi(() =>
+        {
+            MainWindow window = Opened(which, width, height);
+            InterfaceRecorder.Normalise = InterfaceSpecFiles.Normaliser(Root);
+            InterfaceRecorder.Volatile = WindowFitAuditTests.Volatile;
+            try
+            {
+                Assert.Empty(WindowFitAuditTests.RecordSheet(window, new PadDriver(window), which, $"{which}-{width}x{height}", presses: true, Out));
+            }
+            finally
+            {
+                InterfaceRecorder.Normalise = x => x;
+                InterfaceRecorder.Volatile = _ => null;
+                Server.Gate?.Release(1000);
+            }
+        });
+
+        // The window in the state the case names, over the fake ScreenScraper.
+        private MainWindow Opened(string which, int width, int height)
+        {
             string[] names = ["Aurora Drift (USA)", "Brass Lantern (USA)", "Cobalt Harbor (USA)", "Dune Relay (USA)", "A Game With A Very Long Name Indeed, Special Edition (USA) (Rev 1)", "Zzz Unknown Dump"];
             string first = "";
             for (int i = 0; i < names.Length; i++)
@@ -65,9 +94,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     WaitFor(() => find.Results.Count() == 2, "the results");
                     break;
             }
-            List<string> faults = WindowFitAuditTests.Audit(window, $"{which}-{width}x{height}", Out);
-            Server.Gate?.Release(1000);
-            Assert.Empty(faults);
-        });
+            return window;
+        }
     }
 }

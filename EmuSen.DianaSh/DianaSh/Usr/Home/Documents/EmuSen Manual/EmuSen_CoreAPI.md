@@ -5,7 +5,7 @@ and §13.2's items 1 and 2 built: the header, the `core` module with `core_expor
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
 conformance kit's core suite (§21); and MoonRT's and MercuryRT's exports onto v1 beside their pre-stable ones (§22,
 §23). Since then, 2026-10-04: the registration-equivalence test, D1's oracle (§25), and MoonRT's and MercuryRT's
-shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28) and the `view` flag of a space (§29). 2026-10-10: §0.2 item 2, §8.1, §8.2 and §15 Q13 revised by `EmuSen_DianaSh.md` §16 Q1: the runtime is a component of its own, and DianaSh a shell that is its client (§17.2 there). 2026-10-15: the kit's C7 at several points (§28.13). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28) and the `view` flag of a space (§29). 2026-10-10: §0.2 item 2, §8.1, §8.2 and §15 Q13 revised by `EmuSen_DianaSh.md` §16 Q1: the runtime is a component of its own, and DianaSh a shell that is its client (§17.2 there). 2026-10-15: the kit's C7 at several points (§28.13, §28.14). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -3340,18 +3340,20 @@ another makes the second continue exactly as the first. What changes is where it
 
 **Why eight, and why a point near the end** [C]. The frames C7 runs do not depend on the number of points: A runs N
 and the loaded machines together run N less the first point, since each runs only to the next. What grows with the
-points is a create, five loads (three of them refused) and seven saves each, which on every core measured here is
-small beside the frames (§28.14). Eight puts a point in any stretch longer than an eighth of
-the run, 75 frames at the default 600, and makes the default catch Diamond's defect (below). The evenly spaced points
+points is a create, five loads (three of them refused) and seven saves each: on four of the five cores measured a
+fraction of a frame or a few frames, on Diamond a create of about 70 frames' time (§28.14). Eight puts a point in any
+stretch longer than an eighth of the run, 75 frames at the default 600, and makes the default catch Diamond's defect (below). The evenly spaced points
 leave the run's last eighth without a save; the point `picture_settles + 8` frames from the end covers it, with eight
 frames past the settling bound to compare. A defect that shows only in the last eight frames of a run, or only between
 two points and gone by the next, is still not seen; a longer run, or another script, moves the points.
 
 **The cost** [C, from the design; measured in §28.14]. C7's frames for a run of N go from 1.5 N (A's N, B's N/2) to
 1.875 N (A's N, the loaded machines' 7N/8), two more for a snapshot in either; its creates from 2 to 9 at most. In the
-corpus form at 600 frames an image costs 3,525 frames in place of 3,300 (C4's half image 300, C6 600, C7 1,125, C8
-1,500), 7 per cent more; the core's cases, whose C12 runs C7 twice more, 8,850 in place of 8,400. At most two machines
-and two states live at once, as before, so the memory estimate of §28.7 stands.
+corpus form at 600 frames C7 runs 1,125 frames in place of 900. An image's cases run about 6,400 frames there on a
+cartridge (C4's half image 300, C6 600, C7 900, C8 1,500, C16 90 where `MEDIA` is claimed, C17's three runs 1,800 and
+C18's two 1,200), so an image costs about 3.5 per cent more in frames; the core's cases, whose C12 runs C7 twice more,
+450 frames more. At most two machines and two states live at once, as before, so the memory estimate of §28.7
+stands.
 
 **The options.** None is added. `--frames` sets N and with it the points; the corpus form runs C7 for every image as
 before, and `--jobs`, `--image-memory` and the deadline on progress are unchanged; C12 runs it again under its two
@@ -3383,6 +3385,56 @@ the fault alone, on the test image [M]:
 The faults seeded before are unchanged in what they fail but for the three settling ones above: the first faulty
 build fails C4, C7, C8, C9, C10, C12, C13, C17 and C18 as before; each fault of the full one alone fails the cases it
 failed, the new one C7 and C12; `FAULT_TAKES_TRUNCATED_STATE` still fails C7 at every point by the refused-load check.
+
+### 28.14 Measured on the samples (2026-10-15)
+
+On the development desktop (16 processors) under other work: the load average was 12 to 58 over the runs, so wall
+times are given with the processor time the run used (user and system, `/usr/bin/time`), which moves less with the
+load but not by nothing. Each run is the corpus form under a 12 GiB `MemoryMax`, the kit as it was (`f99d1c2a`) and
+with the points built from the same tree, on copies of the images in the probe's cache [M].
+
+| Core, sample, frames | Kit as it was: wall, processor | With the points: wall, processor | Verdicts |
+|---|---|---|---|
+| Nephrite, `genesis-sample.txt` (64 images), 600 | 151.1 s; 103.5 s, 1,124 s; 148.0 s, 1,150 s | 144.0 s; 119.0 s, 1,177 s; 191.0 s, 1,212 s | 64 of 64 pass in each |
+| Diamond, `psx-sample.txt` (9 discs), 1,800 | 261.6 s, 1,131 s | 262.3 s, 1,151 s | 9 of 9 pass in each |
+| Diamond, the same, 600 | 100.4 s, 453 s; 134.4 s, 543 s | 129.0 s, 545 s; 145.8 s, 570 s | 9 of 9 pass in each |
+| VenusRT, A Link to the Past and Donkey Kong Country, 600 | 15.6 s, 38.4 s | 18.6 s, 44.9 s | 2 of 2 |
+| MoonRT, Super Mario Bros., The Legend of Zelda, Super Mario Bros. 3, Punch-Out!!, `--self-delimiting`, 600 | 9.7 s, 42.1 s | 11.3 s, 45.3 s | 4 of 4 |
+| MercuryRT, Tetris, Kirby's Dream Land, Link's Awakening, Pokémon Yellow, 600 | 5.1 s, 20.3 s | 5.2 s, 20.4 s | 4 of 4 |
+
+- **No core has a latent state defect that the points find.** Every image of every sample passes the new C7 at every
+  point, and the core's cases pass. Every other case of every image has the old run's verdict and evidence to the word
+  (576 of 576 on the Genesis sample twice, 81 of 81 on the discs at each length, 32, 32 and 16 on the others); C7's
+  note now lists its points. The samples are those the kit's pages record: Nephrite's and Diamond's lists, and the
+  images of §24.3 for the three cores before them.
+- **MarsRT is not run.** On WiseMan its library defines no `emusen_core_` export (`RustCores.props` gives it no
+  `CoreAbi`), so C1 cannot load it; it waits for its move onto the core ABI.
+- **The cost.** On the Genesis sample the processor time rose by 5 per cent in both pairs, against the 3.5 per cent
+  of frames §28.13 predicts for an image; the rest is the creates, loads and saves. What a point adds besides frames was timed
+  on one image of each core after 600 frames, the median of five [M, a probe in the cache]: Diamond's create 216 ms
+  (its frame 3.1 ms, so about 70 frames) and a point's five loads and seven saves 16 ms over its 5,398,770-byte state;
+  VenusRT's create 10 ms and the loads and saves 1.4 ms; Nephrite's 2.6 ms and 0.4 ms; MoonRT's and MercuryRT's under
+  0.2 ms. Diamond's seven creates more an image are thus about 1.5 s, which is why its run at 600 frames rose by 12
+  per cent in processor time over the two pairs and at 1,800 by 2. The peak resident memory was unchanged within the
+  runs' spread: 9.1 to 11.1 GiB on the discs, 0.27 to 0.28 GiB on the Genesis sample.
+
+**Diamond's defect, on the build before its fix.** Diamond as it stood before `6a8b8a45` (WiseMan `6b4ae644`, core ABI
+1.3), built from that tree into the probe's cache, on the same nine discs at the kit's default 600 frames [M]:
+
+| Kit | Result |
+|---|---|
+| As it was | 9 of 9 discs and the core's cases pass, as stage 11's gate found (`Diamond_Native.md` §23.5) |
+| With the points | C7 fails on **Ape Escape** at frame 592, **Rayman** at 592, **Silent Hill** at 592, **Tekken 3** at 450 and 525, and **MediEvil** at 375, 450, 525 and 592, each with "its pictures differing" by the next point; C12 fails with it on the reference disc, Ape Escape, under both hosts. Jedi Power Battles, Castlevania, Crash Bandicoot and Spyro the Dragon pass |
+
+The four discs of §23 there fail where their 480-line stretches begin (from frame 425 to 575 under the kit's input),
+and a fifth, MediEvil, which that record's scan did not include, fails from frame 375. On the build with the fix every
+disc passes at 600 and at 1,800 frames (the table above). Three of the five fail only at the point near the end, 592:
+the points at every eighth alone would have found two.
+
+**Tests** [M]: `emusen-core-conform`, 8 and 24 (one new in each: `c7_saves_at_every_eighth_and_near_the_end` and
+`a_state_wrong_only_late_in_the_run_fails_c7_at_its_points_where_one_middle_misses_it`); `emusen-native`, 75. WiseMan
+was not run: no C# expectation of the kit changed, the C# tests that run the runner counting passing cases and reading
+a sidecar.
 
 ## 29. A space that is a view, 2026-10-07
 

@@ -3,8 +3,9 @@
 #
 #   emusen-core-conform --core libdiamond.so --images kit/psx-sample.txt --from ~/.cache/emusen/probe/diamond/discs --frames 1800
 #
-# 1,800 frames, not the kit's 600: C7 and C8 save at the middle, and at frame 300 no disc here shows a 480-line
-# picture yet; at 900 four of them do, and a state must hold its lines (Diamond_Native.md §23).
+# 1,800 frames, not the kit's 600: C8 saves at the middle, and at frame 300 no disc here shows a 480-line picture
+# yet; at 900 four of them do, and a state must hold its lines (Diamond_Native.md §23). C7 saves at every eighth of
+# the run and near its end since 2026-10-15, which sees them at 600 too (EmuSen_CoreAPI.md §28.13).
 #
 Ape Escape (USA).cue  # a sheet with one track; DualShock-only
 Castlevania - Symphony of the Night (USA)/Castlevania - Symphony of the Night (USA).cue  # a sheet with a data and an audio track

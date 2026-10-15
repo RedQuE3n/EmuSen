@@ -1672,7 +1672,10 @@ every run above is on the open kernel.
 - **The kit saves once a run.** A C7 that saved at several points, or a rule that the picture after a load is the
   picture saved, would have caught this at any length and on any core; either changes C7 for every core
   (`EmuSen_CoreAPI.md` §12.1) and is proposed to the tester, not built [C]. The scan's probe, which does both, stayed
-  in the cache.
+  in the cache. *Built 2026-10-15* (`EmuSen_CoreAPI.md` §28.13): C7 saves at every eighth of the run
+  and near its end, each state loaded by a machine just made and held to one that never loads. On the build before
+  this fix, at the default 600 frames, it fails Ape Escape, Rayman, Silent Hill and Tekken 3, and MediEvil from frame
+  375, where the kit as it was passed all nine discs (§28.14 there) [M].
 - **The rewind's budget.** Its deltas grow by the picture's changed bytes (§23.3). The form that would avoid it, the
   picture kept only while it is woven and read from VRAM at a load otherwise, is exact at a frame's end in a standing
   mode and not elsewhere (§23.3's second item); it is not built, accuracy not being traded by default, and is the

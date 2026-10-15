@@ -2805,3 +2805,32 @@ MercuryRT medians are 0.5008 and 0.5089, 1.6% apart, the largest difference, and
 | F3 | BANK1 keeps all five bits on a multicart | at first **nothing**: the claim's case BANK2 = 1, BANK1 = `$10` gives bank `$10` either way. The claim gained BANK2 = 0, BANK1 = `$10`, which is bank 0 on an MBC1M (the second row of `multicart_rom_8Mb`'s table) and bank `$10` under the mutant; caught after |
 | F4 | a blank logo counts as a logo | `A_megabyte_mbc1_with_a_blank_logo_in_both_banks_is_ordinary` |
 | F5 | the logo compared at bank `$20` instead of `$10` | the multicart claim |
+
+### 13.7 Step G: the joypad interrupt
+
+**The rule.** Pan Docs (`Interrupt_Sources.md`, "INT $60 — Joypad interrupt"): it is requested "when any of P1 bits 0–3
+change from High to Low", which happens when a button is pressed while its half is selected. A select write that
+pulls a held button's line low is the same edge on the same lines, and is treated as one. Mercury declared the
+interrupt and never requested it (`Mercury_Native.md` §6.2 argued it; the referee's §2.7 names Double Dragon 3 as the
+game the references were fixed for). No corpus ROM tests it.
+
+**The proof.** Four claims (`MercuryAuditClaims`, a program spinning with interrupts off): a press on the selected half,
+and a select write that selects a held button, request it; a press on the other half and a release do not. The two
+requests failed on both engines, committed failing (`606801b9`); the two controls passed.
+
+**The fix**, the same in both engines: P1's four lines are read before and after each change that can move them, a
+button set through the frontend (`MemoryBus.SetButton`, which `MercuryCore.SetButton` now calls; the Rust machine's
+`set_buttons`) and a write to `$FF00`, and a line that fell requests the interrupt. No state is added: the lines are a
+function of the select bits and the buttons. A button reaches either engine at a frame's edge, as it did before; the
+request lands there too.
+
+**The corpus** did not move. **The four games** behave as before: MercuryRT's trace from boot keeps the same PC, work
+RAM and VRAM at every 300th frame, while the full-state hash moved at every one. The difference is IF bit 4: each game
+polls P1 with the bench's Start or A held, which now requests the interrupt, and none of them enables it (the IE values
+each game wrote in 3,600 frames: Tetris `$00`, `$01`, `$08`, `$09`; Kirby `$00`, `$05`; Link's Awakening `$00`, `$01`,
+`$03`; Yellow `$00`, `$0C`, `$0D`, `$0F`; no joypad dispatch in any). Tetris, followed instruction by instruction for 400
+frames on step F's crate and this one, runs the same PC and A throughout and differs first in IF. The real-games test,
+which compares with the unmodified build's states, therefore masks IF bit 4 on both sides; with that, it passes.
+
+**Retired.** §6.2's "a game that sleeps in STOP or HALT waiting for a button ... waits forever" is half answered: HALT
+with IE bit 4 now wakes on a press. DMG `STOP` is still not a stop, which is the referee's §3 and outside this audit.

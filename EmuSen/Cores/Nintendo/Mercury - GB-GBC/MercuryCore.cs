@@ -173,7 +173,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public void SetButton(int port, PadButton button, bool pressed)
         {
             if (port != 0) return;
-            Bus?.Joypad.Set(button, pressed);
+            Bus?.SetButton(button, pressed);
         }
 
         public void RunFrame()

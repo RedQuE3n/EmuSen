@@ -285,6 +285,9 @@ fail.
 
 ### 2.7 The joypad interrupt is never requested **[V]**
 
+*Proven against Pan Docs and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.7): a high-to-low change of a
+P1 line, by a press or a select write, requests it.*
+
 `Interrupt.Joypad` is declared (`MemoryBus.cs:17`) and never requested. `Mercury_Native.md` §6.2 already argues this.
 What the referee adds is the witness:
 - The RTL raises it on a falling edge of any input line (`gb.v:679-683`). It was added by `8a15a3b`, "fixed interrupt,

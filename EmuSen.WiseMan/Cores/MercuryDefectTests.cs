@@ -288,6 +288,9 @@ namespace EmuSen.WiseMan.Cores
                 pair.Run(600, f => GameScript(f + 3000));
                 MercuryCore then = LoadCs(rom);
                 then.LoadState(new MemoryStream(File.ReadAllBytes(late)));
+                // The joypad's request (§13.7) is one the unmodified build never made; none of the four games enables it, so it is masked on both sides.
+                then.Bus!.InterruptFlags &= 0x0F;
+                pair.Csharp.Bus!.InterruptFlags &= 0x0F;
                 byte[] want = Save(then), got = Save(pair.Csharp);
                 // Version 5 carries no mixer, so the loaded frame-3600 state's is not the game's: the comparison ends where version 8's begins - see Mercury_Native.md §13.1, §13.4.
                 int body = want.Length - MixerStateBytes;

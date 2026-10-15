@@ -248,6 +248,7 @@ impl MemoryBus {
 
 const TIMER: u8 = 1 << 2;
 const SERIAL: u8 = 1 << 3;
+const JOYPAD: u8 = 1 << 4;
 
 impl MemoryBus {
     #[inline(always)]
@@ -356,7 +357,14 @@ impl MemoryBus {
         }
     }
 
-    fn read_joypad(&self) -> u8 {
+    /// Pan Docs' INT $60: any of P1's four lines going from high to low (Mercury_Native.md §13.7).
+    pub fn request_joypad_on_fall(&mut self, before: u8) {
+        if before & !self.read_joypad() & 0x0F != 0 {
+            self.interrupt_flags |= JOYPAD;
+        }
+    }
+
+    pub fn read_joypad(&self) -> u8 {
         let select = self.io[0x00];
         let j = &*self.joypad;
         let mut low = 0x0F;
@@ -401,7 +409,11 @@ impl MemoryBus {
 
     fn write_io(&mut self, address: u16, data: u8) {
         match address {
-            0xFF00 => self.io[0x00] = data & 0x30,
+            0xFF00 => {
+                let before = self.read_joypad();
+                self.io[0x00] = data & 0x30;
+                self.request_joypad_on_fall(before);
+            }
             0xFF01 => self.serial_data = data,
             0xFF02 => self.write_serial_control(data),
             0xFF04 => self.div_counter = 0,

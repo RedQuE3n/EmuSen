@@ -103,6 +103,20 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
         public byte PendingInterrupts => (byte)(InterruptEnable & InterruptFlags & 0x1F);
 
+        // A button pressed through the frontend, with the interrupt its line's fall requests - see Mercury_Native.md §13.7.
+        public void SetButton(EmuSen.Galaxia.Input.PadButton button, bool pressed)
+        {
+            byte before = Joypad.Read(Io[0x00]);
+            Joypad.Set(button, pressed);
+            RequestJoypadOnFall(before);
+        }
+
+        // Pan Docs' INT $60: any of P1's four lines going from high to low - see Mercury_Native.md §13.7.
+        private void RequestJoypadOnFall(byte before)
+        {
+            if ((before & ~Joypad.Read(Io[0x00]) & 0x0F) != 0) Request(Interrupt.Joypad);
+        }
+
         public void Request(Interrupt source) => InterruptFlags |= (byte)(1 << (int)source);
 
         // Every byte the ROM has clocked out of the link port, oldest first - see Mercury_Memory.md §10.
@@ -260,8 +274,12 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             {
                 // Only the two select bits are writable; the button lines are inputs.
                 case 0xFF00:
+                {
+                    byte before = Joypad.Read(Io[0x00]);
                     Io[0x00] = (byte)(data & 0x30);
+                    RequestJoypadOnFall(before);
                     return;
+                }
 
                 case 0xFF01:
                     _serialData = data;

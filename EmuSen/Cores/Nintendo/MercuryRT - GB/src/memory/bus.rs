@@ -391,11 +391,19 @@ impl MemoryBus {
             0xFF01 => self.serial_data = data,
             0xFF02 => self.write_serial_control(data),
             0xFF04 => self.div_counter = 0,
+            // In the cycle TMA is reloaded, TIMA keeps taking TMA: a TIMA write is lost and a TMA write reaches both (Mercury_Native.md §13.2).
             0xFF05 => {
-                self.tima = data;
-                self.tima_reload_delay = 0;
+                if self.tima_reload_delay >= 0 {
+                    self.tima = data;
+                    self.tima_reload_delay = 0;
+                }
             }
-            0xFF06 => self.tma = data,
+            0xFF06 => {
+                self.tma = data;
+                if self.tima_reload_delay < 0 {
+                    self.tima = data;
+                }
+            }
             0xFF07 => self.tac = data & 0x07,
             0xFF0F => self.interrupt_flags = data & 0x1F,
             0xFF10..=0xFF26 | 0xFF30..=0xFF3F => self.apu.write_register(address, data),
@@ -618,12 +626,8 @@ impl MemoryBus {
         self.div_counter = self.div_counter.wrapping_add(1);
         self.apu.on_div_bit(self.div_counter & if self.double_speed { 0x2000 } else { 0x1000 } != 0);
 
-        if self.tima_reload_delay > 0 {
-            self.tima_reload_delay -= 1;
-            if self.tima_reload_delay == 0 {
-                self.tima = self.tma;
-                self.interrupt_flags |= TIMER;
-            }
+        if self.tima_reload_delay != 0 {
+            self.step_tima_reload();
         }
 
         let mask: u16 = match self.tac & 0x03 {
@@ -640,6 +644,20 @@ impl MemoryBus {
             }
         }
         self.last_timer_edge = edge;
+    }
+
+    /// Positive: cycles until TMA is reloaded; negative: cycles left of the machine cycle it was reloaded in (Mercury_Native.md §13.2).
+    fn step_tima_reload(&mut self) {
+        if self.tima_reload_delay < 0 {
+            self.tima_reload_delay += 1;
+            return;
+        }
+        self.tima_reload_delay -= 1;
+        if self.tima_reload_delay == 0 {
+            self.tima = self.tma;
+            self.interrupt_flags |= TIMER;
+            self.tima_reload_delay = -4;
+        }
     }
 
     #[inline(always)]

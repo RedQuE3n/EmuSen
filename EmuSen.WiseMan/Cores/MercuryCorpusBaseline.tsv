@@ -131,8 +131,8 @@ mooneye/acceptance/timer/tim10_div_trigger.gb	D83C7ACF20A03154	Passed	Passed	Pas
 mooneye/acceptance/timer/tim11.gb	624FD3AD3EDE2790	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/acceptance/timer/tim11_div_trigger.gb	3F60BC3D2BA63BD9	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/acceptance/timer/tima_reload.gb	1CA70C725BD1E027	Passed	Passed	Passed	Passed	Passed	Passed
-mooneye/acceptance/timer/tima_write_reloading.gb	7D9A6D5ADA792596	Failed	Failed	Failed	Failed	Failed	Failed
-mooneye/acceptance/timer/tma_write_reloading.gb	E48FF98D4F363B92	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/timer/tima_write_reloading.gb	7D9A6D5ADA792596	Passed	Passed	Passed	Passed	Passed	Passed
+mooneye/acceptance/timer/tma_write_reloading.gb	E48FF98D4F363B92	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/emulator-only/mbc1/bits_bank1.gb	77C698CB537D22AB	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/emulator-only/mbc1/bits_bank2.gb	52CDE75B4EC3C597	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/emulator-only/mbc1/bits_mode.gb	68417CE068E9B94A	Passed	Passed	Passed	Passed	Passed	Passed

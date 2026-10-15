@@ -2420,3 +2420,60 @@ The change is not on the per-cycle path: only the I/O read and write's fall-thro
 and Yellow 1.2%, outside their round-to-round spread; C# moves within 1.3% either way. A read of an unclaimed address
 cannot cost a frame 2%, so this is the placement effect of §8.7.3 on a changed `match`, and is recorded rather than
 explained further.
+
+### 13.2 Step B: the timer's reload cycle
+
+**The rule.** Pan Docs (`Timer_Obscure_Behaviour.md`, "Timer overflow behavior") names two machine cycles after TIMA
+overflows: in cycle A TIMA reads `$00`; in cycle B TMA is copied into it and the interrupt is requested. Three rules
+follow, and mooneye's `timer/tima_write_reloading` and `timer/tma_write_reloading` test the last two at exactly those
+cycles, 27 to 30 and 28 to 31 `NOP`s after the timer is armed:
+
+1. a TIMA write in cycle A cancels the reload and the interrupt;
+2. a TIMA write in cycle B is lost: "TIMA will be equal to TMA at the end of the cycle anyway";
+3. a TMA write in cycle B reaches TIMA in the same cycle.
+
+Mercury had rule 1 (§7 of the referee page corroborates it) and not 2 or 3: its reload was a one-T-cycle event with
+nothing after it, and a CPU write lands at the end of its machine cycle, after the reload, so it won.
+
+**The proof.** Four claims (`MercuryAuditClaims`, the timer at 262,144 Hz one count from overflowing): rule 1, rules 2
+and 3, and a control one cycle later. Committed failing (`bc6f6cf5`): rules 2 and 3 failed on both
+engines, TIMA reading `$7F` where `$FE` was expected and `$FE` where `$7F` was; rule 1 and the control passed, as they
+should.
+
+**The fix.** `_timaReloadDelay` (`tima_reload_delay`) already counted the T-cycles to the reload. It now also counts
+the rest of the machine cycle the reload landed in, as a negative number: −4 at the reload, back to 0 four T-cycles
+later. A TIMA write while it is negative is dropped, and a TMA write while it is negative is copied into TIMA. Counting
+in T-cycles rather than flagging "this machine cycle" keeps the rule right when a DIV or TAC write makes the overflow
+fall on the first T-cycle of a machine cycle instead of the fourth.
+
+- **The state format is unchanged.** The field and its width are the same. A state from an older build never holds a
+  negative value, and means the same thing to this one. A state this build writes in the four T-cycles after a reload
+  holds a negative value, which an older build reads as idle: the right answer, since its reload has already happened.
+- **Cost.** The first version tested `< 0` before `> 0` on every T-cycle, and cost the crate 1.3–2.4% on three games
+  (Tetris 0.4278 → 0.4394 ms p50, Kirby 0.4833 → 0.4896). The rare work now sits behind one `!= 0` test, as before the
+  fix, in `StepTimaReload`/`step_tima_reload`:
+
+| Game | MercuryRT step A | step B | C# step A | step B |
+|---|---|---|---|---|
+| Tetris | 0.4349, 0.4337, 0.4305 | 0.4352, 0.4267, 0.4354 | 0.6191, 0.6229, 0.6235 | 0.6270, 0.6251, 0.6306 |
+| Kirby's Dream Land | 0.4838, 0.4824, 0.4809 | 0.4801, 0.4839, 0.4863 | 0.6705, 0.6803, 0.6669 | 0.6927, 0.6875, 0.6803 |
+| Link's Awakening | 0.3958, 0.3973, 0.3949 | 0.3963, 0.3984, 0.4014 | 0.5768, 0.5555, 0.5574 | 0.5550, 0.5591, 0.5534 |
+| Pokémon Yellow | 0.5311, 0.5380, 0.5366 | 0.5342, 0.5363, 0.5378 | 0.7026, 0.7092, 0.7264 | 0.7071, 0.7124, 0.7212 |
+
+  MercuryRT is within its round-to-round spread on all four. C#'s Kirby is 2% slower and the rest within 1%; C# moved
+  by as much between two runs of the same build in step A.
+
+**The corpus.** `tima_write_reloading` and `tma_write_reloading` pass, in all six columns; nothing else moved. 99 of 173
+in each column.
+
+**`timer/rapid_toggle`, examined.** It still fails, and the referee page offered no mechanism. Run to its timer
+interrupt on C#, it arrives with BC = `$FFD8`; its source expects `$FFD9`. So the sixteenth increment comes one loop
+iteration, 17 machine cycles, late. Each iteration enables and disables the timer, and on a DMG a disable while the
+selected bit is high counts once (Pan Docs, "Relation between Timer and Divider register"), which Mercury models; how
+many iterations disable with bit 9 high depends on where in a machine cycle a TAC or DIV write takes effect, which
+Mercury puts at the cycle's end. No public document states that phase (GBCTR has no timer chapter yet), so the ROM is
+**out of reach** for this audit, and its mechanism is recorded as a lead, not a finding.
+
+**The four games** ran as the unmodified build ran them: the real-games version-5 test passed, and MercuryRT's trace of
+3,600 frames from boot is unchanged at every 300th frame. The whole `Mercury` filter, with the games and the corpus,
+passed: 779 cases.

@@ -133,6 +133,9 @@ Mesen has no read case). Mercury reads them back (`MemoryBus.Cgb.cs:38-41`).
 
 ### 2.2 The timer's reload cycle has no write arbitration **[V]**
 
+*Proven and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.2): `tima_write_reloading` and
+`tma_write_reloading` pass. `rapid_toggle` was examined and is out of reach there.*
+
 **Mercury.**
 - The reload is a one-tick event with nothing after it (`MemoryBus.cs:410-414`).
 - A TIMA write always lands and cancels any pending reload (`:261-264`).

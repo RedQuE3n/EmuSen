@@ -271,13 +271,16 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     _divCounter = 0;
                     return;
 
+                // In the cycle TMA is reloaded, TIMA keeps taking TMA: a TIMA write is lost and a TMA write reaches both - see Mercury_Native.md §13.2.
                 case 0xFF05:
+                    if (_timaReloadDelay < 0) return;
                     _tima = data;
                     _timaReloadDelay = 0;
                     return;
 
                 case 0xFF06:
                     _tma = data;
+                    if (_timaReloadDelay < 0) _tima = data;
                     return;
 
                 case 0xFF07:
@@ -422,11 +425,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             // The frame sequencer watches a DIV bit, so a DIV write can clock it early - see Mercury_Apu.md §2.
             Apu.OnDivBit((_divCounter & (DoubleSpeed ? 0x2000 : 0x1000)) != 0);
 
-            if (_timaReloadDelay > 0 && --_timaReloadDelay == 0)
-            {
-                _tima = _tma;
-                Request(Interrupt.Timer);
-            }
+            if (_timaReloadDelay != 0) StepTimaReload();
 
             bool edge = (_divCounter & TimerBitMask) != 0 && (_tac & 0x04) != 0;
 
@@ -437,6 +436,21 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             }
 
             _lastTimerEdge = edge;
+        }
+
+        // Positive: cycles until TMA is reloaded; negative: cycles left of the machine cycle it was reloaded in - see Mercury_Native.md §13.2.
+        private void StepTimaReload()
+        {
+            if (_timaReloadDelay < 0)
+            {
+                _timaReloadDelay++;
+                return;
+            }
+
+            if (--_timaReloadDelay != 0) return;
+            _tima = _tma;
+            Request(Interrupt.Timer);
+            _timaReloadDelay = -4;
         }
 
         private void StepBaseClock()

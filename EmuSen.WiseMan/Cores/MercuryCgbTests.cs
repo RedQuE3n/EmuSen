@@ -152,7 +152,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0xBB, core.Read(0xD000));
 
             core.Write(0xFF70, 0x00);
-            Assert.Equal(1, core.Bus.WramBank);
+            Assert.Equal(1, core.Bus.MappedWramBank);
             Assert.Equal(0xAA, core.Read(0xD000));
         }
 

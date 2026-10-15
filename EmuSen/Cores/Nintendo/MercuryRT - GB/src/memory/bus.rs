@@ -260,7 +260,9 @@ impl MemoryBus {
     #[inline(always)]
     fn wram_offset(&self, address: u16) -> usize {
         let offset = address as usize & 0x1FFF;
-        if offset < WRAM_BANK_SIZE { offset } else { (self.wram_bank as usize).wrapping_mul(WRAM_BANK_SIZE).wrapping_add(offset - WRAM_BANK_SIZE) }
+        // SVBK as written; 0 maps bank 1 (Mercury_Native.md §13.8).
+        let bank = if self.wram_bank == 0 { 1 } else { self.wram_bank as usize };
+        if offset < WRAM_BANK_SIZE { offset } else { bank.wrapping_mul(WRAM_BANK_SIZE).wrapping_add(offset - WRAM_BANK_SIZE) }
     }
 
     pub fn oam_dma_active(&self) -> bool {
@@ -506,7 +508,7 @@ impl MemoryBus {
             0xFF6B => self.ppu.write_obj_palette_data(data),
             // OPRI: kept for its read-back; the renderer's priority follows the mode, not this bit.
             0xFF6C => self.io[0x6C] = data & 0x01,
-            0xFF70 => self.wram_bank = if data & 0x07 == 0 { 1 } else { (data & 0x07) as i32 },
+            0xFF70 => self.wram_bank = (data & 0x07) as i32,
             _ => self.write_undocumented_io(address, data, true),
         }
     }

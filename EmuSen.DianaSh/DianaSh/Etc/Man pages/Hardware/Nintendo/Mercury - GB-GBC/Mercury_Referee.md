@@ -393,6 +393,8 @@ evidence is blargg's test source**, which states each rule and the failure text 
 
 ### 2.11 Colour registers **[V]**
 
+*Proven against Pan Docs and fixed in both engines, 2026-10-15 (`Mercury_Native.md` §13.8).*
+
 - **The palette data ports are blocked in mode 3.**
   - Mercury reads and writes `$FF69`/`$FF6B` unconditionally (`Ppu.Cgb.cs:25-39`).
   - RTL: drops the write but still auto-increments (`video.v:545-550`), and reads `$FF` (`:592`, `:594`).

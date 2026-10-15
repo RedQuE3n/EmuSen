@@ -609,7 +609,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
             if (cpuAddress < 0xA000) return new PhysicalAddress(MercuryCore.SpaceVram, (bus.VramBank * MemoryBus.VramBankSize) + (cpuAddress - 0x8000));
             if (cpuAddress < 0xC000) return null;
             if (cpuAddress < 0xD000) return new PhysicalAddress(MercuryCore.SpaceWram, cpuAddress - 0xC000);
-            if (cpuAddress < 0xE000) return new PhysicalAddress(MercuryCore.SpaceWram, (bus.WramBank * MemoryBus.WramBankSize) + (cpuAddress - 0xD000));
+            if (cpuAddress < 0xE000) return new PhysicalAddress(MercuryCore.SpaceWram, (bus.MappedWramBank * MemoryBus.WramBankSize) + (cpuAddress - 0xD000));
             if (cpuAddress < 0xFE00) return null;
             if (cpuAddress < 0xFEA0) return new PhysicalAddress(MercuryCore.SpaceOam, cpuAddress - 0xFE00);
             if (cpuAddress < 0xFF00) return new PhysicalAddress("PROHIBITED", cpuAddress - 0xFEA0, false);

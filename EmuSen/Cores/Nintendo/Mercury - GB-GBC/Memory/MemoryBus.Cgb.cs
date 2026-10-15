@@ -5,8 +5,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
     {
         public int VramBank;
 
-        // 0 and 1 both select bank 1; there is no second copy of the fixed bank.
+        // SVBK as written; 0 and 1 both map bank 1, there being no second copy of the fixed bank - see Mercury_Native.md §13.8.
         public int WramBank = 1;
+
+        public int MappedWramBank => WramBank == 0 ? 1 : WramBank;
 
         public bool DoubleSpeed;
         public bool SpeedSwitchArmed;
@@ -28,7 +30,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         private int WramOffset(int address)
         {
             int offset = address & 0x1FFF;
-            return offset < WramBankSize ? offset : (WramBank * WramBankSize) + (offset - WramBankSize);
+            return offset < WramBankSize ? offset : (MappedWramBank * WramBankSize) + (offset - WramBankSize);
         }
 
         private byte ReadCgbIo(ushort address) => address switch
@@ -139,7 +141,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     return;
 
                 case 0xFF70:
-                    WramBank = (data & 0x07) == 0 ? 1 : data & 0x07;
+                    WramBank = data & 0x07;
                     return;
 
                 default:

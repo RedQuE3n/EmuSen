@@ -2851,3 +2851,28 @@ No change beyond the spread (Tetris's MercuryRT moved 1.5% faster, which is plac
 (`Releasing_a_button_requests_nothing`); G3, a press requests nothing
 (`Pressing_a_selected_button_requests_the_joypad_interrupt`); G4, line 3 not watched (the selecting claim, whose held
 button is Start, line 3).
+
+### 13.8 Step H: the colour registers
+
+**The rules** (referee §2.11), from Pan Docs alone; no corpus ROM tests either.
+
+- `Palettes.md`: "the CRAM data registers are inaccessible when the PPU is reading from CRAM, that is, during Mode 3:
+  writes are ignored, and reads return `$FF`", and the index "is automatically incremented ... after each write to
+  this register, even if the write fails due to CRAM being inaccessible". Mercury read and wrote BCPD and OCPD in every
+  mode.
+- `CGB_Registers.md`: SVBK's bits 2–0 are read/write, and a written 0 "maps bank 1 instead"; its post-boot table gives
+  SVBK as `$F8`, which is a 0 read back. Mercury stored 1 for a written 0, so it read `$F9`.
+
+**The proof.** `The_palette_data_ports_are_closed_while_the_ppu_draws` (a theory over BCPS/BCPD and OCPS/OCPD) and
+`Svbk_reads_back_a_written_zero_and_still_maps_bank_one`, committed failing on both engines (`a5bb10c7`).
+
+**The fix**, the same in both engines: the two data ports answer `$FF` and drop a write while the LCD is on and the
+PPU in mode 3, and the index still steps; SVBK keeps the written three bits, and the work RAM window maps 0 to bank 1
+(`MemoryBus.MappedWramBank`, which the debugger's physical addresses now use too; `wram_offset` in Rust). The power-on
+value stays 1, as the post-boot values are the referee's §3 and not part of this audit, so SVBK reads `$F9` until a
+game writes it. `Svbk_banks_the_upper_wram_window_and_treats_zero_as_one`, a stage-8 claim, asserted the stored bank
+was 1 after a written 0, and now asserts the mapped bank. **The state format is unchanged**; an older state never holds
+0, and means the same.
+
+**The corpus** did not move. **The four games**, Pokémon Yellow the colour one among them, are unchanged in MercuryRT's
+trace (the full state hash too) and in the real-games test. The whole `Mercury` filter passes, 828 cases.

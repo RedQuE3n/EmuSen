@@ -367,6 +367,23 @@ let bit = |on: bool, b: u32| if on { b } else { 0 };
         }
     }
 
+    /// Whether a transfer is under way with the card in slot `n`, numbered as `card` numbers them.
+    pub fn transfer_with_card(&self, n: usize) -> bool {
+        let (port, slot) = match n {
+            0 | 1 => (n, 0),
+            2..=4 => (0, n - 1),
+            5..=7 => (1, n - 4),
+            _ => return false,
+        };
+        let tapped = self.ports[port].tap.is_some();
+        self.port() == port
+            && match self.phase {
+                Phase::Device(Target::Card, _) => !tapped && slot == 0,
+                Phase::Device(Target::TapCard(s), _) => tapped && s as usize == slot,
+                _ => false,
+            }
+    }
+
     pub fn set_buttons(&mut self, n: usize, mask: u32) {
         if let Some(c) = self.controller(n) {
             c.set_buttons(mask);

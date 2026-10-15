@@ -1299,6 +1299,45 @@ CD-ROM² and the Saturn's cartridge slot will meet the same.
 - **The kit.** C16 checks the drive rules on a machine that lists a drive, as before, and on one that lists none
   checks that each media call answers `NO_SUCH_DRIVE`, changes nothing and leaves the machine running (§28.11).
 
+### 6.27 Removable battery files kept apart from the game (1.7, 2026-10-15)
+
+*Decided 2026-10-15, the tester's card mode for the PlayStation (`Diamond_Cards.md`), written before its code.* A
+battery file was always the game's: the runtime named it after the game (§6.11), and a core's state held what it
+needed of it. A memory card or a pak is not the game's; a player carries it between games. Once a host keeps one file
+for several games, a state of game A that puts back the card it holds rolls the card back for every game, B's save made
+since included; `Diamond_Cards.md` §10.1 shows it on Diamond. `EmuSen_CoreAPI_Extensions.md` §9 had foreseen the
+risk and the descriptor field; this section is its smallest form.
+
+**The surface.**
+
+- **`kind` on a battery entry**, in core info's `systems[].battery[]` and in machine info's `battery[]`: absent or
+  `"game"` for memory that belongs with the game, `"removable"` for a card or pak a player carries between games.
+  `emusen-native`'s `Battery` gains `kind: BatteryKind` and writes it only when it is `Removable`, so a core that marks
+  nothing writes what it wrote at 1.6, byte for byte. The third value §9.2 of that page proposed, `"console"`, is not
+  defined until a core needs it.
+- **`EMUSEN_CREATE_SHARED_REMOVABLE`**, bit 1 of `emusen_create_params.flags` (2u): the host keeps every removable
+  file of this machine apart from the game, shared between games. `Create.shared_removable` carries it.
+
+**The rule a core keeps under the flag.** After a successful `state_load` of either kind, `battery(which)` of each
+removable file returns the bytes it returned before the load, and the load raises no `BATTERY_CHANGED` of its own. How
+the machine learns of a card that differs from the state's copy, its flag byte or its presence line, is the core's;
+Diamond's is `Diamond_Cards.md` §6. A refused load changes nothing, as ever. Without the flag, the core's own rule
+stands, a per-game rollback included.
+
+**The host's rule.** A host sets the flag only on a core whose info lists a removable file, and a core that lists one
+honours the flag. That pairing is what makes skew safe: a core of 1.6 lists no kind, so a 1.7 host offers it no shared
+card and never sets the flag on it; a host of 1.6 never sets the flag and reads no kind, so it runs every card per
+game, as before. Where a removable file lives, and whether it is shared, is the host's path rule; the reference host's
+is `Diamond_Cards.md` §9.
+
+**The kit.** C14 checks that each kind is `"game"` or `"removable"` and that a machine's file has the kind core info
+gives it. C19, where machine info lists a removable file, makes one machine with the flag and the file holding one
+pattern, runs it and takes a state, makes a second with the file holding another pattern, as a second game having
+written the shared card since, loads the state into it, and checks that the file still reads as before the load and
+was not marked changed by it; a machine with no removable file passes with that said. The test core lists a removable
+file 1 on an image whose payload begins `CDh`, and its seeded fault `FAULT_CARD_ROLLED_BACK` (1 << 20), a load that
+blanks the card, fails C19 alone (`c19_holds_a_removable_file_as_it_stands_across_a_state_load`).
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found
@@ -2041,6 +2080,14 @@ enhancement redraws its picture from the machine after a load need not save what
 `emusen-native` gains `Core::picture_settles`, written into machine info when it is not 0; the C# reader takes it as
 `CoreMachineInfo.PictureSettles`; the kit's C7 and C8 compare pictures after a load from the frame past it, and its
 deadline for an image becomes one on progress. Its reasons are `EmuSen_CoreAPI_Extensions.md` §14.
+
+**v1.7, 2026-10-15** (§6.27), the tester's card mode for the PlayStation (`Diamond_Cards.md`): battery entries'
+`kind`, `"game"` or `"removable"`, in core info and machine info, and `EMUSEN_CREATE_SHARED_REMOVABLE` (bit 1 of
+`emusen_create_params.flags`), under which a state load leaves a removable file as it stands; no export, struct, status
+or capability bit. `emusen-native` gains `BatteryKind`, `Battery::game` and `Battery::removable` (every core's literal
+moved to them, none of their JSON changing) and `Create.shared_removable`; Diamond lists its two cards removable and
+honours the flag; the C# host reads `kind` and sets the flag for its card mode; kit case C19 is added and C14 checks
+kinds. Its reasons are `EmuSen_CoreAPI_Extensions.md` §9 and `Diamond_Cards.md` §1–§5.
 
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
 and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld

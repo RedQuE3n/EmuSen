@@ -111,7 +111,8 @@ market, so the rate, the height and which BIOS file is asked for, `the_settings_
 *Graphics chip* (the console model's one difference a program can see, GPUSTAT's version, `Diamond_GPU.md`), the two
 ports' pads and multitaps (the ports machine info lists) and the two memory card slots (which battery files exist). The
 plan's "card mode" is the slots' setting; a card shared between games (`EmuSen_CoreAPI_Extensions.md` §9) is not built,
-per game being the decided default.
+per game being the decided default. *Built 2026-10-15 as a card mode of the runtime's, Per game, Shared and Named
+cards, with Per game still the default (`Diamond_Cards.md`).*
 
 **The cards round-trip through their battery files** [M,
 `DiamondPlayersTests.A_card_a_program_writes_round_trips_through_its_battery_file`]: a program of the test's own writes
@@ -218,7 +219,7 @@ the toolchain the build names, after removing the mixed artifacts, cured it; not
 ## 10. What waits
 
 - The player's chooser for a file no recogniser decides (§1); a `.chd` probe; Pharaoh's own extension table.
-- A card shared between games (`EmuSen_CoreAPI_Extensions.md` §9); `ChtFile`'s RetroArch `cheat_type` 4 to 7, whose
+- ~~A card shared between games (`EmuSen_CoreAPI_Extensions.md` §9)~~ built 2026-10-15 (`Diamond_Cards.md`); `ChtFile`'s RetroArch `cheat_type` 4 to 7, whose
   "next code" is the import's.
 - `.pbp`; P5 with a multi-disc game; the DualShock's rumble (§4 there).
 - The DualShock's stick directions as regions of their own, if a drawing can give them a way out (§5).

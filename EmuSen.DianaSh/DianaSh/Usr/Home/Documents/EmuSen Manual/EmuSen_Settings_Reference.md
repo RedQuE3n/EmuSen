@@ -8594,3 +8594,38 @@ the same budget reaches back four to eight times as far with every enhancement o
 
 **Tests.** `DiamondEnhancementsTests` holds the state with a setting on to the plain run's bytes and reads the bound of
 settling pictures through the host; `DiamondRewindTests` measures rewind's reach.
+
+### 4.114 Memory cards a player carries between games: the card mode (2026-10-15)
+
+*Decided 2026-10-15 by the tester; designed in `Diamond_Cards.md` before its code.* The PlayStation's tab in Graphics
+Settings gains **Memory cards**, a row of the runtime's own placed with the other rows of the frontend at the head of
+the tab, after *Engine* where there is one: *Per game* (`game`, the default), *Shared* (`shared`) or *Named cards*
+(`named`). Under *Named cards* two more rows appear beneath it, **Card in slot 1** and **Card in slot 2**, each a
+dropdown of `Card 1` to `Card 8` and every card already in the console's `Cards` folder; they are hidden under the
+other modes, as the crop's row is hidden until a custom crop is chosen (§4.99). With one card named in both slots,
+slot 2's row says that the same card cannot be in both slots and that slot 2 keeps the game's own card while they
+match. Each takes effect when a game is next loaded. The core's own *Memory card in slot 1/2* rows (§4.105) still
+decide whether a slot holds a card at all.
+
+**Where the cards are.** Per game, as before, `Saves/PlayStation/<game>.mcr` and `<game>.2.mcr`. Shared,
+`Saves/PlayStation/Cards/Card 1.mcr`, and `Card 2.mcr` when the second slot holds a card. Named, the slot's name in the
+same folder. A shared or named card is a raw 128 KiB card like the per-game ones, so one can be copied in or out by
+hand. **Changing the mode moves, copies and deletes nothing**: each game's own cards are used again when *Per game* is
+chosen again.
+
+**States and rewind.** Under *Shared* and *Named cards* a save state or a rewind never puts back the card it holds:
+the card stays as it is in its file, and a game that finds it changed reads it again, as after a card is swapped on a
+console. Under *Per game* a state puts back the game's own card, as before. A state made with a shared card, loaded per
+game, leaves the game's own card alone (`Diamond_Cards.md` §7, §8).
+
+**For any console.** The rows appear for a console whose engine's core info lists a battery file of kind `removable`
+(`EmuSen_CoreAPI.md` §6.27), read through `CoreCatalog.DiscoveredSystem`; the PlayStation is the only one today. The
+values are stored as the *Engine* row's are, in `graphics.json` under the console, keys `Cards`, `Card1` and `Card2`
+(`EmuSen_Config_Reference.md` §3.3), and `CoreFactory` reads them for `CoreEngine.Cards`.
+
+**Tests.** `DiamondCardsTests`: the rows and their choices, a card copied into the folder offered by name, a stored
+value that is not a mode or not a name read safely; per game, a save stays with its game; shared, game A's save is on
+game B's card and both are on the file; named, the card follows the slot's name; a state of A loaded after B saved
+leaves B's save; rewinding past a save takes it off a game's own card and leaves it on a shared one. The window fit
+audit's `GraphicsSettingsPlayStationNamedCards` opens the tab under *Named cards* with both slots' rows and the note
+shown, at 1280×800 and 1920×1200.

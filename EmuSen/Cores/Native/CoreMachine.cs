@@ -50,17 +50,18 @@ namespace EmuSen.Cores.Native
             if (!library.Available) throw new InvalidOperationException($"{library.Info?.DisplayName ?? library.Path} is not in use: {library.Report}");
             Library = library;
             _api = library.Api;
-            fixed (byte* img = image) _handle = Create(new CoreBytes(img, image.Length), Array.Empty<(uint, CoreBytes)>(), settings, files, lent: false);
+            fixed (byte* img = image) _handle = Create(new CoreBytes(img, image.Length), Array.Empty<(uint, CoreBytes)>(), settings, files, lent: false, sharedRemovable: false);
             Info = ReadInfo();
         }
 
         // The same from bytes the host holds in place, the media files among them; with a loan they are lent, and the loan is released when the machine is freed or its drive takes another disc.
-        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null)
+        // sharedRemovable asks the core to leave its removable battery files out of what a state load restores - see EmuSen_CoreAPI.md §6.27.
+        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false)
         {
             if (!library.Available) throw new InvalidOperationException($"{library.Info?.DisplayName ?? library.Path} is not in use: {library.Report}");
             Library = library;
             _api = library.Api;
-            try { _handle = Create(image, media, settings, files, lent: loan is not null); }
+            try { _handle = Create(image, media, settings, files, lent: loan is not null, sharedRemovable); }
             catch
             {
                 // A refused create lends nothing.
@@ -85,7 +86,7 @@ namespace EmuSen.Cores.Native
             return entries;
         }
 
-        private nint Create(CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, bool lent)
+        private nint Create(CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, bool lent, bool sharedRemovable)
         {
             byte[] text = Encoding.UTF8.GetBytes(settings);
             var pins = new GCHandle[files.Count];
@@ -113,7 +114,7 @@ namespace EmuSen.Cores.Native
                         PixelFormats = 1,
                         Error = e,
                         ErrorLen = (nuint)error.Length,
-                        Flags = lent ? CoreInterface.CreateLent : 0,
+                        Flags = (lent ? CoreInterface.CreateLent : 0) | (sharedRemovable ? CoreInterface.CreateSharedRemovable : 0),
                     };
                     handle = _api.Create(&p, &status);
                 }

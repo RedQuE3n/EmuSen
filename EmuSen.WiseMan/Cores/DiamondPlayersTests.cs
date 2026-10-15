@@ -247,7 +247,7 @@ namespace EmuSen.WiseMan.Cores
         private static uint I(uint op, int rs, int rt, int imm) => op << 26 | (uint)rs << 21 | (uint)rt << 16 | (ushort)imm;
 
         // A program that writes one 128-byte frame to the card in slot 1 over SIO0 with psx-spx's write command, each byte sent once RXRDY showed the last, the replies kept at 80100000h.
-        private static byte[] CardWriting(int frame, byte[] data)
+        internal static byte[] CardWriting(int frame, byte[] data)
         {
             const int t0 = 8, t1 = 9, t2 = 10, s0 = 16, s1 = 17;
             byte msb = (byte)(frame >> 8), lsb = (byte)frame;

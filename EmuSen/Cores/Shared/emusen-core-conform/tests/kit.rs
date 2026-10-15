@@ -94,10 +94,11 @@ fn the_seeded_faults_fail_the_cases_they_break_and_no_others() {
 
 // An exact setting that changes the state, a refusal of any host but 1.0, info that drifts, a writable read-only
 // space, an observed frame with other sound, a lent image read otherwise than its copy and a drive that names a place
-// past its image's end break C9, C12, C13, C14, C15, C17 and C18, and a picture answered on a device nobody lent C20.
+// past its image's end break C9, C12, C13, C14, C15, C17 and C18, a picture answered on a device nobody lent C20, and
+// a picture showing what no state holds from frame 90 on C7.
 #[test]
 fn the_faults_of_c9_and_c12_to_c18_fail_those_cases_and_no_others() {
-    let failing = ["C9", "C12", "C13", "C14", "C15", "C17", "C18", "C20"];
+    let failing = ["C7", "C9", "C12", "C13", "C14", "C15", "C17", "C18", "C20"];
     assert_eq!(verdicts("kit_faulty_full_core"), cases(true).into_iter().map(|c| (c, !failing.contains(&c))).collect::<Vec<_>>());
 }
 
@@ -107,7 +108,7 @@ fn the_faults_of_c9_and_c12_to_c18_fail_those_cases_and_no_others() {
 fn each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone() {
     let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-faulty-full.v1tc");
     std::fs::write(&file, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
-    for (fault, cases) in [(8, vec!["C9"]), (16, vec!["C12", "C17", "C18", "C20"]), (32, vec!["C13"]), (64, vec!["C14"]), (128, vec!["C15"]), (256, vec!["C17"]), (512, vec!["C18"]), (1 << 22, vec!["C14"]), (1 << 23, vec!["C20"])] {
+    for (fault, cases) in [(8, vec!["C9"]), (16, vec!["C12", "C17", "C18", "C20"]), (32, vec!["C13"]), (64, vec!["C14"]), (128, vec!["C15"]), (256, vec!["C17"]), (512, vec!["C18"]), (1 << 22, vec!["C14"]), (1 << 23, vec!["C20"]), (1 << 24, vec!["C7", "C12"])] {
         let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
             .args(["--self-delimiting", "--frames", "120", "--core"])
             .arg(library("kit_faulty_full_core"))
@@ -327,7 +328,7 @@ fn a_corpus_says_of_each_image_what_the_single_image_form_says() {
 #[test]
 fn the_seeded_faults_fail_the_same_cases_in_a_corpus() {
     let (_, list) = corpus_files("faults");
-    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13"], vec!["C7", "C8", "C17", "C18"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15"], vec!["C14", "C17", "C18", "C20"])] {
+    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13"], vec!["C7", "C8", "C17", "C18"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15"], vec!["C7", "C14", "C17", "C18", "C20"])] {
         let c = run_corpus(name, &list, 2);
         assert_eq!(c.core.cases.iter().filter(|x| !x.passed).map(|x| x.id).collect::<Vec<_>>(), core, "{name}");
         for i in &c.images {
@@ -409,8 +410,9 @@ fn failed_on(core: &str, payload: &[u8], mask: u32, frames: u64) -> (Vec<String>
 
 // Since 1.5 (EmuSen_CoreAPI.md §28.10): pictures that differ for the three frames after a load pass where machine info
 // declares three, and C7 and C8 say from which frame they compared; a picture that never settles, one that differs
-// undeclared and sound that differs while it settles fail C8 and C12, which runs it again (C7's two machines both load
-// the state and agree); a bound past the maximum, or one the run is too short to check past, fails C7 and C8 too.
+// undeclared and sound that differs while it settles fail C7, C8 and C12, which runs them again (until C7 held each
+// loaded machine to one that never loaded, §28.13, its two machines both loaded the state and agreed, and it passed);
+// a bound past the maximum, or one the run is too short to check past, fails them too.
 #[test]
 fn pictures_that_settle_pass_within_their_bound_and_each_fault_of_the_rule_fails() {
     let (failed, text) = failed_with("kit_settling_core", 1024, 120);
@@ -418,7 +420,7 @@ fn pictures_that_settle_pass_within_their_bound_and_each_fault_of_the_rule_fails
     assert!(text.contains("compared from its frame 4 on, machine info's state.picture_settles being 3"), "{text}");
     let (failed, text) = failed_with("kit_settling_core", 0, 120);
     assert!(failed.is_empty() && !text.contains("picture_settles"), "a core declaring nothing is held as before: {text}");
-    for (mask, cases) in [(1024 | 2048, vec!["C8", "C12"]), (4096, vec!["C8", "C12"]), (8192, vec!["C8", "C12"]), (16384, vec!["C7", "C8", "C12"])] {
+    for (mask, cases) in [(1024 | 2048, vec!["C7", "C8", "C12"]), (4096, vec!["C7", "C8", "C12"]), (8192, vec!["C7", "C8", "C12"]), (16384, vec!["C7", "C8", "C12"])] {
         let (failed, text) = failed_with("kit_settling_core", mask, 120);
         assert_eq!(failed, cases, "faults {mask}:\n{text}");
     }
@@ -502,4 +504,18 @@ fn a_machine_listing_no_drive_that_takes_a_media_call_faults_or_names_a_place_fa
         let (failed, text) = failed_on("kit_faulty_full_core", &[1, 2, 3, 0x20, 0x41], mask, 120);
         assert!(failed.is_empty(), "faults {mask} on a disc:\n{text}");
     }
+}
+
+// Since 2026-10-15 (EmuSen_CoreAPI.md §28.13): a state that leaves out what the picture shows from frame 90 on passes a
+// round trip at frame 60, C8's middle and C7's one point before, over 120 frames; C7's points catch it at frame 90 and
+// after, each failure naming its point, and over 240 frames C8's middle at 120 catches it too.
+#[test]
+fn a_state_wrong_only_late_in_the_run_fails_c7_at_its_points_where_one_middle_misses_it() {
+    let (failed, text) = failed_with("kit_faulty_full_core", 1 << 24, 120);
+    assert_eq!(failed, ["C7", "C12"], "{text}");
+    assert!(text.contains("frame 90: a machine just made and given the state saved there did not continue as the machine that saved it and never loaded, its pictures differing by frame 105"), "{text}");
+    assert!(!text.contains("frame 75: ") && text.contains("saved at frames 15, 30, 45, 60, 75, 90, 105, 112 of 120"), "{text}");
+    let (failed, text) = failed_with("kit_faulty_full_core", 1 << 24, 240);
+    assert_eq!(failed, ["C7", "C8", "C12"], "{text}");
+    assert!(text.contains("across a save and load at frame 120 the run differs"), "{text}");
 }

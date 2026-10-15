@@ -82,6 +82,11 @@ pub const FAULT_DRIVELESS_NAMES_PLACES: u32 = 524288;
 /// the host would then read from a buffer that does not exist (EmuSen_CoreAPI.md §6.29). Without it the test core,
 /// which draws on no device, answers that every picture is in `frame_copy`.
 pub const FAULT_DEVICE_PICTURE_UNLENT: u32 = 1 << 23;
+/// Seeded fault for the kit's C7 (EmuSen_CoreAPI.md §28.13): from frame `STATE_LOST_FROM` on, each picture shows a
+/// byte of the frame before that no state holds, as a woven picture's other field does, so that only a machine given a
+/// state there by another shows it wrong, for one frame; a machine loading its own state does not see it.
+pub const FAULT_STATE_LOST_LATE: u32 = 1 << 24;
+pub const STATE_LOST_FROM: i64 = 90;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -164,6 +169,8 @@ pub struct TestCore {
     shared_console: bool,
     /// Whether the host lent a device, which this core keeps but draws nothing on (since 1.9).
     lent: bool,
+    /// The last frame's count, kept out of the state (`FAULT_STATE_LOST_LATE`).
+    held: u8,
 }
 
 /// Where each frame's byte of the kept image lands in RAM, so that the state and its digests follow what was read.
@@ -194,7 +201,8 @@ impl TestCore {
     fn draw(&mut self) {
         let n = (self.width() * 4) as usize;
         let green = if self.settling > 0 { 0x80 } else { 0 };
-        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8), green, 0, 255]).collect();
+        let blue = if faults() & FAULT_STATE_LOST_LATE != 0 && self.frames >= STATE_LOST_FROM { self.held } else { 0 };
+        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8), green, blue, 255]).collect();
     }
 }
 
@@ -383,6 +391,7 @@ impl Core for TestCore {
             memory_dirty: false,
             shared_console: r.shared_console,
             lent: r.device.is_some(),
+            held: 0,
         };
         m.draw();
         Ok(m)
@@ -462,6 +471,7 @@ impl Core for TestCore {
         if !self.skip {
             self.draw();
         }
+        self.held = self.frames as u8;
         if self.settling > 0 && faults() & FAULT_NEVER_SETTLES == 0 {
             self.settling -= 1;
         }

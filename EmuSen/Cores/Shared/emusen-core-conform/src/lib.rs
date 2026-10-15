@@ -223,6 +223,8 @@ struct Trace {
     /// one given a state there (EmuSen_CoreAPI.md §28.10).
     settled: Digests,
     since_settled: Digests,
+    /// The first frame of the watched machine whose state changed size with no STATE_SIZE event before it, for C7.
+    size_problem: Option<String>,
 }
 
 /// C6's run as C8's first: both halves' digests, the state between them, the end state and machine info.
@@ -247,6 +249,8 @@ struct Session<'a> {
     first: Option<FirstRun>,
     /// The frames after a load whose pictures the last machine made declares may differ (since 1.5, §6.9).
     settles: u64,
+    /// C7's machine that never loads, and its state's size when made, watched after every frame until a STATE_SIZE event.
+    size_watch: Option<(api::M, i64)>,
 }
 
 impl<'a> Session<'a> {
@@ -324,6 +328,15 @@ impl<'a> Session<'a> {
                     event::STATE_SIZE => t.state_size_events.push(f),
                     event::MEDIA_SEEK => t.places.push(((e.a >> 32) as u32, e.a as u32, e.b)),
                     _ => {}
+                }
+            }
+            if let Some((_, size0)) = self.size_watch.filter(|w| w.0 == m.h) {
+                let now = m.state_size(0);
+                if events.iter().any(|e| e.kind == event::STATE_SIZE) {
+                    self.size_watch = None;
+                } else if now != size0 {
+                    t.size_problem = Some(format!("frame {f}: the state's size went from {size0} to {now} with no STATE_SIZE event"));
+                    self.size_watch = None;
                 }
             }
             if !skip {
@@ -430,7 +443,7 @@ fn session<'a>(lib: &'a Lib, opts: &'a Options) -> Session<'a> {
         .filter_map(|b| b.get("bit").and_then(Value::as_i64).map(|v| v as u32))
         .collect();
     let script = opts.script.clone().unwrap_or_else(|| Script::default_for(&bits));
-    Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0 }
+    Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0, size_watch: None }
 }
 
 /// Runs every case on the library at `path`.
@@ -884,55 +897,90 @@ fn c6(s: &mut Session<'_>) -> Case {
     c.done("C6", "the frame")
 }
 
+/// C7's evenly spaced save points divide the run into this many parts.
+const SAVE_PARTS: u64 = 8;
+/// The frames past the settling bound between C7's last save point and the run's end.
+const SAVE_TAIL: u64 = 8;
+
+/// C7's save points over `n` frames (EmuSen_CoreAPI.md §28.13): every eighth, and one `settles + SAVE_TAIL` frames
+/// before the end, each more than `settles` frames before the next; the middle where the run is too short for either.
+fn save_points(n: u64, settles: u64) -> Vec<u64> {
+    let near_end = n.saturating_sub(settles + SAVE_TAIL);
+    let step = (n / SAVE_PARTS).max(settles + 1);
+    let mut points: Vec<u64> = (1..).map(|k| k * step).take_while(|&f| f + settles < near_end).collect();
+    if near_end > 0 {
+        points.push(near_end);
+    }
+    if points.is_empty() {
+        points.push((n / 2).max(1));
+    }
+    points
+}
+
 fn c7(s: &mut Session<'_>) -> Case {
     let mut c = Check::new();
-    let half = (s.opts.frames / 2).max(1);
+    let n = s.opts.frames.max(2);
     let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
         let settings = s.opts.settings.clone();
+        // Machine A runs the whole length and never loads; each point's state is loaded by a machine just made and held to A until the next.
         let a = s.machine(&settings)?;
-        let size0 = a.state_size(0);
-        let mut sizes_moved = 0u64;
-        for f in 0..half {
-            s.play(&a, f, 1, false).map(|t| sizes_moved += t.state_size_events.len() as u64)?;
-            let now = a.state_size(0);
-            c.that(now == size0 || sizes_moved > 0, || format!("frame {f}: the state's size went from {size0} to {now} with no STATE_SIZE event"));
-        }
-        let saved = a.save(0).map_err(|e| format!("state_save failed with {e}"))?;
-        c.that(a.load(&saved) == 0, || "the state just saved does not load".to_owned());
-        let again = a.save(0).map_err(|e| format!("state_save failed with {e}"))?;
-        c.that(saved == again, || "save, load, save is not byte-identical".to_owned());
+        let settled = settle_bound(s, n / 2, c);
+        let points = save_points(n, s.settles);
+        s.size_watch = Some((a.h, a.state_size(0)));
+        let mut size_problem = s.play(&a, 0, points[0], false)?.size_problem;
+        let mut saved = a.save(0).map_err(|e| format!("frame {}: state_save failed with {e}", points[0]))?;
+        let bytes = saved.len();
         let mut x: u32 = 0x9E3779B9;
-        let random: Vec<u8> = (0..saved.len().max(16)).map(|_| {
-            x ^= x << 13;
-            x ^= x >> 17;
-            x ^= x << 5;
-            x as u8
-        }).collect();
-        for (what, bad) in [("a truncated state", saved[..saved.len() / 2].to_vec()), ("a foreign state", random), ("an empty state", Vec::new())] {
-            let r = a.load(&bad);
-            s.statuses.insert(r);
-            c.that(r != 0, || format!("{what} was accepted"));
-            c.that(a.save(0).ok().as_ref() == Some(&saved), || format!("{what} was refused but changed the machine"));
+        for (i, &p) in points.iter().enumerate() {
+            let next = points.get(i + 1).copied().unwrap_or(n);
+            let b = s.machine(&settings)?;
+            let r = b.load(&saved);
+            c.that(r == 0, || format!("frame {p}: the state saved there does not load on a machine just made: status {r}"));
+            if r == 0 {
+                let own = b.save(0).map_err(|e| format!("frame {p}: state_save after the load failed with {e}"))?;
+                c.that(b.load(&own) == 0 && b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: save, load, save is not byte-identical"));
+                let random: Vec<u8> = (0..own.len().max(16)).map(|_| {
+                    x ^= x << 13;
+                    x ^= x >> 17;
+                    x ^= x << 5;
+                    x as u8
+                }).collect();
+                for (what, bad) in [("a truncated state", own[..own.len() / 2].to_vec()), ("a foreign state", random), ("an empty state", Vec::new())] {
+                    let r = b.load(&bad);
+                    s.statuses.insert(r);
+                    c.that(r != 0, || format!("frame {p}: {what} was accepted"));
+                    c.that(b.save(0).ok().as_ref() == Some(&own), || format!("frame {p}: {what} was refused but changed the machine"));
+                }
+            }
+            let ta = s.play(&a, p, next - p, false)?;
+            size_problem = size_problem.or(ta.size_problem);
+            let after = a.save(0).map_err(|e| format!("frame {next}: state_save failed with {e}"))?;
+            if r == 0 {
+                let tb = s.play(&b, p, next - p, false)?;
+                let state_same = b.save(0).ok().as_ref() == Some(&after);
+                let what = if tb.settled.frames != ta.settled.frames { "pictures" } else if (tb.settled.audio, tb.settled.samples) != (ta.settled.audio, ta.settled.samples) { "sound" } else { "state" };
+                c.that(tb.settled == ta.settled && state_same, || format!("frame {p}: a machine just made and given the state saved there did not continue as the machine that saved it and never loaded, its {what} differing by frame {next}: {:?} against {:?}", tb.settled, ta.settled));
+            }
+            saved = after;
         }
-        let b = s.machine(&settings)?;
-        c.that(b.load(&saved) == 0, || "machine A's state does not load on machine B".to_owned());
-        let settled = settle_bound(s, half, c);
-        let ta = s.play(&a, half, half, false)?;
-        let tb = s.play(&b, half, half, false)?;
-        c.that(ta.settled == tb.settled && s.state_digest(&a)? == s.state_digest(&b)?, || format!("B, loaded with A's state, did not continue as A: {:?} against {:?}", ta.settled, tb.settled));
+        if let Some(problem) = size_problem {
+            c.that(false, || problem);
+        }
         if a.has_snapshot() {
             let snap = a.save(1).map_err(|e| format!("the snapshot could not be saved: {e}"))?;
             let full = a.save(0).map_err(|e| format!("state_save failed with {e}"))?;
-            s.play(&a, 2 * half, 2, false)?;
+            s.play(&a, n, 2, false)?;
             c.that(a.load(&snap) == 0, || "the snapshot does not load".to_owned());
             c.that(a.save(0).ok().as_ref() == Some(&full), || "loading the snapshot does not restore the state it was taken from".to_owned());
         }
-        c.note(format!("state {} bytes{}", saved.len(), settled.unwrap_or_default()));
+        let list = points.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        c.note(format!("state {bytes} bytes; saved at frames {list} of {n} by a machine that never loaded, each loaded by a machine just made and held to it to the next{}", settled.unwrap_or_default()));
         Ok(())
     };
     if let Err(e) = body(s, &mut c) {
         c.that(false, || e);
     }
+    s.size_watch = None;
     c.done("C7", "state")
 }
 
@@ -999,7 +1047,7 @@ fn c10(s: &mut Session<'_>) -> Case {
             .map(|i| {
                 let (settings, script) = (settings.clone(), script.clone());
                 scope.spawn(move || -> Result<(Digests, u64), String> {
-                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0 };
+                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0, size_watch: None };
                     let m = own.machine(&settings)?;
                     let t = own.play(&m, 0, n, false)?;
                     let d = own.state_digest(&m)?;
@@ -2128,6 +2176,18 @@ mod tests {
             let whole = s.machine("").and_then(|m| s.play(&m, 0, frames, false)).unwrap().digests;
             assert!(six.evidence.iter().any(|e| e.contains(&format!("frames digest {:016X}, audio digest {:016X}", whole.frames, whole.audio))), "{name}: {:?}", six.evidence);
         }
+    }
+
+    // C7's points: every eighth of the run and one near its end, each more than the settling bound before the next.
+    #[test]
+    fn c7_saves_at_every_eighth_and_near_the_end() {
+        assert_eq!(save_points(120, 0), [15, 30, 45, 60, 75, 90, 105, 112]);
+        assert_eq!(save_points(600, 0), [75, 150, 225, 300, 375, 450, 525, 592]);
+        assert_eq!(save_points(1800, 0), [225, 450, 675, 900, 1125, 1350, 1575, 1792]);
+        assert_eq!(save_points(120, 3), [15, 30, 45, 60, 75, 90, 105, 109]);
+        assert_eq!(save_points(600, 60), [75, 150, 225, 300, 375, 450, 532]);
+        assert_eq!(save_points(10, 0), [1, 2]);
+        assert_eq!((save_points(2, 0), save_points(6, 3)), (vec![1], vec![3]));
     }
 
     // A run of one frame has no middle for C8, so C6 leaves nothing and C8 runs its own two frames as before.

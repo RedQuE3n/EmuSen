@@ -5,7 +5,7 @@ and §13.2's items 1 and 2 built: the header, the `core` module with `core_expor
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
 conformance kit's core suite (§21); and MoonRT's and MercuryRT's exports onto v1 beside their pre-stable ones (§22,
 §23). Since then, 2026-10-04: the registration-equivalence test, D1's oracle (§25), and MoonRT's and MercuryRT's
-shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28) and the `view` flag of a space (§29). 2026-10-10: §0.2 item 2, §8.1, §8.2 and §15 Q13 revised by `EmuSen_DianaSh.md` §16 Q1: the runtime is a component of its own, and DianaSh a shell that is its client (§17.2 there). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28) and the `view` flag of a space (§29). 2026-10-10: §0.2 item 2, §8.1, §8.2 and §15 Q13 revised by `EmuSen_DianaSh.md` §16 Q1: the runtime is a component of its own, and DianaSh a shell that is its client (§17.2 there). 2026-10-15: the kit's C7 at several points (§28.13). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -1811,7 +1811,7 @@ supplies. The cases:
 | **C4, create and refusal** | **a malformed image never harms the core** (decided 2026-10-03): each of an empty, a garbage and a truncated image is either refused with null, a documented status and an error text, leaving nothing to free, or accepted and run for the kit's frames without crashing, hanging or corrupting the host. Refusal is required only where the system pack declares its image format self-delimiting (it records its own length, or a checksum the core must verify); the report says of each image whether it was refused or accepted and ran; **a machine created with no settings equals one created with every default stated, over N frames** |
 | **C5, capability honesty** | every claimed capability works on a running machine; every unclaimed one is refused with `NOT_SUPPORTED` or absent; an unknown kind, space, port, axis, format or option bit is refused or ignored as the header says |
 | **C6, the frame** | N frames run; `frame_info` agrees with `frame_copy`'s length and the format is one offered; a size change is preceded by `GEOMETRY`; samples drain at the rates the drain reports, with an `AUDIO_RATE` event at each change |
-| **C7, state** | save, load, save is byte-identical; a kind's size is constant over N frames except after a `STATE_SIZE` event; a truncated, foreign or random state is refused and the machine's state hash is unchanged; a state saved on machine A and loaded on machine B makes B continue exactly as A; the snapshot kind, if claimed, loads |
+| **C7, state** | save, load, save is byte-identical; a kind's size is constant over N frames except after a `STATE_SIZE` event; a truncated, foreign or random state is refused and the machine's state hash is unchanged; a state saved on machine A and loaded on machine B makes B continue exactly as A; the snapshot kind, if claimed, loads; *since 2026-10-15* the state saved at each of eight points and one near the end, each loaded on a machine just made and held to A, which never loads, until the next (§28.13) |
 | **C8, determinism** | two machines fed the same image, settings, files and scripted input give identical picture, sound and state digests over N frames; again across a save and load at frame N/2; and, where `skip_rendering_state_neutral` is claimed, with rendering skipped on alternate frames |
 | **C9, exact settings** | for every setting with `effect: exact`, every value (each choice; a count's bounds and middle) gives digests identical to the default's |
 | **C10, isolation** | two machines on two threads, interleaved, each equal to its solo run; one freed while the other runs |
@@ -2200,6 +2200,11 @@ where the picture is presented on it (`EmuSen_DevicePicture.md` §17); kit case
 C20 is added, with the kit's own lender; Diamond claims the bit (`EmuSen_DevicePicture.md` §16). Its reasons are
 `EmuSen_DevicePicture.md` §5.
 
+**Kit, 2026-10-15**, no change to the ABI: C7 saves at every eighth of the run and once near its end, each state
+loaded by a machine just made and held to a machine that never loads, in place of once at the middle against a machine
+that had loaded its own state (§28.13). Its question and its words for a passing core are kept but for the list of
+points; a core's state that is wrong away from the middle, or in a part a machine's own load keeps, now fails it.
+
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
 and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld
 (`Diamond_Players.md` §12.7); and the crash log's path is in the frontend's log folder, made first (§6.18).
@@ -2533,7 +2538,7 @@ as the library wrote them, for the build step §7.1 asks for. (*The corpus form,
 | C4 | an empty, a garbage and a half-length image each refused with a negative status that `status_text` names and an error text, or, unless `--self-delimiting` is given, accepted and run for up to 300 frames on a thread of its own within 60 seconds (a frame refused with a status is a clean stop); each image's outcome in the report as `refused`, `accepted and ran`, `accepted and stopped` or `hung`; a machine with no settings equal to one with every default stated, frames, sound and state, over up to 300 frames; each firmware entry's `replacement.effect` one of `exact`, `accuracy`, `none`, with a `cost` unless `exact`, and an image whose entries are all `required: false` created with no files |
 | C5 | each claimed capability answers on a running machine without `NOT_SUPPORTED`; an unclaimed snapshot and state kind 77 refused; an unlisted space refused; reserved option bits ignored; port 99 ignored or `NO_SUCH_PORT`; an unknown pixel-format bit accepted with RGBA8888 produced |
 | C6 | over N frames: `frame_info`'s length is `frame_copy`'s, the format the one offered, the size within its stride; a size change preceded by `GEOMETRY`; each change of the drained rate met by an `AUDIO_RATE` of that rate in its frame or the next |
-| C7 | the state's size constant until a `STATE_SIZE`; save, load, save byte-identical; a truncated, a foreign and an empty state refused with the machine unchanged; machine B loaded with A's state continuing as A; a claimed snapshot loading and restoring the state it was taken from |
+| C7 | the state's size constant until a `STATE_SIZE`; save, load, save byte-identical; a truncated, a foreign and an empty state refused with the machine unchanged; machine B loaded with A's state continuing as A; a claimed snapshot loading and restoring the state it was taken from. *Since 2026-10-15* at every eighth of the run and near its end, A never loading (§28.13) |
 | C8 | two machines alike giving identical digests in both halves and the same end state; a machine loaded with the state at N/2 continuing identically; where skipping is declared state-neutral, rendering skipped on odd frames leaving the same end state |
 | C10 | two machines on two threads, each equal to the solo run, with a third created and freed while they run |
 | C11 | every machine export with a null machine answering `EMUSEN_NULL`, and create with null params; the length query with a one-byte buffer; `create_params` of 80 bytes, a 16-byte file element, a 48-byte `frame_info` and 16-byte events each `BAD_STRUCT`; `status_text` answering for every code the core returned in the run |
@@ -3287,6 +3292,97 @@ only a host of 1.0 fails it with C12, C17 and C18 (`each_fault_of_c9_and_c12_to_
 Diamond at 2× (`animated-triangle.exe`, 200 frames): 120 of 120 pictures handed on the device, each the machine's own
 `frame_copy` and the lendless machine's a frame later; with `PictureOut`'s wait for `done` removed, C20 fails with
 "the picture of frame 60, held until now, was written over" (`EmuSen_DevicePicture.md` §16).
+
+### 28.13 C7 at several points (2026-10-15)
+
+*Proposed 2026-10-12 after Diamond's interlaced picture (`Diamond_Native.md` §23.7); decided 2026-10-15: C7 saves at
+several points, each a full round trip.* The case's question is unchanged: a state saved by one machine and loaded by
+another makes the second continue exactly as the first. What changes is where it is asked and of what it is asked.
+
+**Two weaknesses of the case as it was.**
+
+- **One point.** C7 saved once, at frame N/2, so a state that is wrong only in some stretch of a game passed at every
+  length whose middle fell outside the stretch. Diamond's state lacked the held field of a 480-line interlaced picture;
+  it passed C7 and C8 at 600 frames, the save at 300, and failed both at 1,400 and 1,800, the save at 700 and 900, the
+  four discs concerned entering the interlaced stretch between frames 425 and 575 under the kit's input (§23.4–§23.5
+  there). The sample's length was raised to 1,800 to bring the middle into the stretch, which moves the blind spot and
+  does not remove it.
+- **A reference that had loaded.** Machine A ran to the middle, saved, *loaded its own state* (the first leg of "save,
+  load, save"), took the three refusals, and then ran on beside machine B. Both machines therefore continued from a
+  load, and a part of the machine that the state leaves out and a load leaves in place was invisible wherever A's own
+  copy of it was already right. Diamond's defect was caught at 1,400 frames only because B, a machine just made, held
+  a black picture where A held its own. The same blindness is recorded in the kit's tests since 1.5 (§28.10): a picture
+  that never settles after a load failed C8, whose loaded machine is compared with C6's, and passed C7, "its two
+  machines both loading the state and agreeing".
+
+**The design.**
+
+- **The reference never loads.** Machine A is made, runs the run's N frames (`--frames`, at least 2) under the script,
+  and is only ever saved. Each point's state is loaded by a machine just made, which is held to A.
+- **The points.** One at every eighth of the run, N/8, 2N/8 and so on, for as long as a point lies more than the
+  settling bound (§28.10) before the next one; and one near the end, `picture_settles + 8` frames before frame N. Where
+  the run is too short for either, the middle, as before. At 600 frames with no bound: 75, 150, …, 525 and 592; at 1,800:
+  225, …, 1,575 and 1,792; at 120: 15, …, 105 and 112. A bound of 60 at 600 frames gives 75, …, 450 and 532.
+- **Each point is a round trip.** A's state is saved there; a machine just made loads it; on that machine, save, load,
+  save must be byte-identical, and a truncated, a foreign and an empty state must each be refused and leave its state
+  as it was; then A and it run on to the next point (the last to frame N), and its sound, its pictures past the settling
+  bound and its state at the next point must be A's. It is then dropped. Its state at the next point is compared with
+  the state A saves there, which is also that point's state, so each point costs A one save.
+- **The other checks**, which do not depend on a point: the state's size is watched after every frame of A's whole run
+  (before, of its first half) and may change only after a `STATE_SIZE` event; a claimed snapshot is taken at frame N,
+  two frames run, and loaded back, as before.
+- **A failure names its point and what differed**: "frame 90: a machine just made and given the state saved there did
+  not continue as the machine that saved it and never loaded, its pictures differing by frame 105", then the two
+  digests; "frame 300: a truncated state was accepted". The note lists the points: "state 273 bytes; saved at frames 15,
+  30, 45, 60, 75, 90, 105, 112 of 120 by a machine that never loaded, each loaded by a machine just made and held to it
+  to the next". Every point is run whether or not an earlier one failed, so a report gives the extent of a defect, not
+  only its first sign.
+
+**Why eight, and why a point near the end** [C]. The frames C7 runs do not depend on the number of points: A runs N
+and the loaded machines together run N less the first point, since each runs only to the next. What grows with the
+points is a create, five loads (three of them refused) and seven saves each, which on every core measured here is
+small beside the frames (§28.14). Eight puts a point in any stretch longer than an eighth of
+the run, 75 frames at the default 600, and makes the default catch Diamond's defect (below). The evenly spaced points
+leave the run's last eighth without a save; the point `picture_settles + 8` frames from the end covers it, with eight
+frames past the settling bound to compare. A defect that shows only in the last eight frames of a run, or only between
+two points and gone by the next, is still not seen; a longer run, or another script, moves the points.
+
+**The cost** [C, from the design; measured in §28.14]. C7's frames for a run of N go from 1.5 N (A's N, B's N/2) to
+1.875 N (A's N, the loaded machines' 7N/8), two more for a snapshot in either; its creates from 2 to 9 at most. In the
+corpus form at 600 frames an image costs 3,525 frames in place of 3,300 (C4's half image 300, C6 600, C7 1,125, C8
+1,500), 7 per cent more; the core's cases, whose C12 runs C7 twice more, 8,850 in place of 8,400. At most two machines
+and two states live at once, as before, so the memory estimate of §28.7 stands.
+
+**The options.** None is added. `--frames` sets N and with it the points; the corpus form runs C7 for every image as
+before, and `--jobs`, `--image-memory` and the deadline on progress are unchanged; C12 runs it again under its two
+hosts.
+
+**C8 is not hardened in the same way**, because its own question has no single point: its two machines fed alike are
+compared over the whole run, both halves' digests and the end state, and skipped rendering over the whole run too. Its
+remaining leg, a machine loaded with the state at N/2 and compared with C6's run, is the round trip C7 now makes at
+nine points or fewer; asking it at eight more points in C8 would repeat C7's work at C8's cost and test nothing new.
+It is kept as it was, so that C8's verdict and words do not move and C6's run stays its first (§28.3).
+
+**What now fails C7 that passed it.** A state wrong at a point other than the middle; and a part left out of the
+state that a machine's load of its own state kept. The second is why the three faults of §28.10 that leave a picture
+unsettled now fail C7 as well as C8 and C12: they were faults of the round trip all along, and C7 now makes it against
+a machine that never loaded. A core that passed C7 before and fails it now has a state that does not round-trip at
+the point named; nothing that passes now would have failed before.
+
+**The proof: a seeded fault.** Fault `1 << 24` of the test core (`FAULT_STATE_LOST_LATE`, in `kit_faulty_full_core`):
+from frame 90 on, each picture's blue channel shows the frame count of the frame before, a byte no state holds, as a
+woven picture's other field is VRAM of a field ago. A machine given a state at frame 90 or later by another shows 0
+there for one frame; a machine that loads its own state, or a state saved before frame 90, shows nothing wrong. With
+the fault alone, on the test image [M]:
+
+| Kit | 120 frames | 240 frames |
+|---|---|---|
+| As it was (`f99d1c2a`) | every case passes (C7's one point 60, C8's 60) | C7, C8 and C12 fail (both at 120) |
+| With the points | **C7** and C12 fail, at frames 90, 105 and 112; C8 passes (its point 60) | C7, C8 and C12 fail |
+
+The faults seeded before are unchanged in what they fail but for the three settling ones above: the first faulty
+build fails C4, C7, C8, C9, C10, C12, C13, C17 and C18 as before; each fault of the full one alone fails the cases it
+failed, the new one C7 and C12; `FAULT_TAKES_TRUNCATED_STATE` still fails C7 at every point by the refused-load check.
 
 ## 29. A space that is a view, 2026-10-07
 

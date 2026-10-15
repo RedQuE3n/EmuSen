@@ -382,7 +382,7 @@ impl Core for Machine {
         let bios = (media.system == System::Mcd).then(|| {
             let mine = cd_bios(media.bios_region()).which;
             let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
-            file.map(|f| f.data.to_vec()).unwrap_or_default()
+            file.map_or_else(|| crate::mcd::bios::OPEN_BIOS.to_vec(), |f| f.data.to_vec())
         });
         let mut m = Machine::with_bios(&image, media, model, bios);
         m.apply_pads(&request.settings);
@@ -425,7 +425,10 @@ impl Core for Machine {
                 System::Md if takes_lock_on(&self.media, self.hw().cart.rom.len()) => vec![named(LOCK_ON), named(SK_PATCH)],
                 System::Md => Vec::new(),
                 #[cfg(feature = "mcd")]
-                System::Mcd => vec![named(cd_bios(self.media.bios_region()).which)],
+                System::Mcd => {
+                    let (which, source) = named(cd_bios(self.media.bios_region()).which);
+                    vec![(which, if source == FirmwareSource::Absent { FirmwareSource::Replacement } else { source })]
+                }
                 #[cfg(feature = "s32x")]
                 System::S32x => vec![named(S32X_68K), named(S32X_MASTER), named(S32X_SLAVE)],
             },
@@ -640,7 +643,8 @@ impl Machine {
         let model = region_model(Model { model2: request.settings.get(MODEL_KEY) == Some("md.model2"), ..default_model(&media) }, request.settings.get(REGION_KEY));
         let mine = cd_bios(media.bios_region()).which;
         let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
-        let bios = file.map(|f| f.data.to_vec()).unwrap_or_default();
+        // With no image of the player's, Nephrite's own (Nephrite_OpenBios.md).
+        let bios = file.map_or_else(|| crate::mcd::bios::OPEN_BIOS.to_vec(), |f| f.data.to_vec());
         let mut m = Machine::with_disc(media, model, Some(bios), Some(disc));
         m.kept_apart = kept_apart;
         m.apply_pads(&request.settings);
@@ -724,7 +728,7 @@ mod tests {
             assert_eq!((info.system.as_str(), info.region), ("mcd", Some(Region::Pal)));
             assert_eq!(info.battery[0].suffix, ".brm");
             assert_eq!(Machine::firmware_for(&iso)[0].name, "bios_CD_E.bin");
-            assert_eq!(info.firmware, vec![(CD_BIOS_E, FirmwareSource::Absent)]);
+            assert_eq!(info.firmware, vec![(CD_BIOS_E, FirmwareSource::Replacement)]);
         }
     }
 

@@ -219,6 +219,12 @@ public description stay unopened by the writer.
    *Decided 2026-10-15:* the format comes from a screened public description and is graded only by round trips
    through games; once those pass, a new machine is given an internal backup RAM formatted by the format module, and
    the Sega CD's console memory becomes Shared by default.
+   *Decided 2026-10-15, further:* the screened description is `docs/bram/emutos-mcd_bram-filesystem.md`, for the
+   footer (the ID area, the free-block and file counts) and the odd-byte layout, with SpritesMind topic 826 for the
+   cartridge's memory map, ID register and write protection; the rest of the format (directory entries, file names,
+   allocation, the protected encoding) comes by a two-person method: an observer who does not write the BIOS runs games
+   on the player's BIOS as a black box, examines only the backup RAM images the games leave, and writes the format in
+   plain words; `_BURAM` is built from that specification alone.
 
 3. **Q3, the security check (G5).** *Recommended:* none; every disc with `SEGADISCSYSTEM` boots, which §4's words
    state. The alternative, checking the disc ID's region letters against the console's, would refuse discs the real
@@ -247,7 +253,47 @@ Built in `beryl-m68k` behind its `asm` feature, as Q5 decided: `Beryl_M68k.md` �
 absolute address with no size is the one choice it makes for the writer (§8.2 there). One change to the disassembler
 came with it: the PC-relative indexed mode now prints its target, as the PC-relative mode does.
 
-## 6. Reading log (stage 10, to the plan)
+## 8. The boot, the drive and the data reads, first proof (2026-10-15)
+
+Built with Q1's constants (D-41) in `src/mcd/bios/` (`main.s`, `sub.s`, `font.txt`), assembled by `build.rs` into a
+128 KiB boot ROM (`mcd::bios::OPEN_BIOS`): the main CPU's program from `$2000`, the font at `$E000`, the sub CPU's
+program at `$10000`, copied to PRG-RAM.
+
+- **The main CPU** (BM §4-2; TB p. 12-18): TMSS answered where the version register asks it; the Z80 held and the PSG
+  silenced; the VDP set up with the BIOS's own registers kept at `$FFFDB4`; the gate array reset (HM §4-1), the sub
+  CPU held, its program copied through bank 0, `$0000`-`$53FF` write-protected, Word RAM given to it, and the sub CPU
+  released; the jump table at `$FFFD00` with `_reset`, the levels, the traps and the errors; H-INT through
+  `_mlevel4`; a V-INT that raises the sub CPU's level 2 each frame (TB p. 18). Its own screen shows the drive's state
+  ("NO DISC", "THE TRAY IS OPEN", "READING THE DISC", "AN AUDIO CD", "NOT A SEGA CD GAME DISC") in its own font, and
+  START opens or closes the tray. When the sub CPU reports the initial program in Word RAM, it is copied to `$FF0000`
+  and started with the stack at `$FFFD00`. `$0200`-`$1FFF` hold an RTS in each word but for `$0368` (D-42, D-43).
+- **The sub CPU** (BM §1-4, §2-1, §2-4, §3, §4-3, §5): the vectors through the jump table at `$5EE0`-`$5FFF`; levels 2,
+  4 and 5 enabled; the drive clocked and its TOC read through its reports (the disc's length, its tracks, each track's
+  start); the system area read, `SEGADISCSYSTEM` checked (Q3: no security check), the initial program put in Word RAM
+  from the system area and, beyond `$600` bytes, from its disc address; the system program read to `$6000` and its user
+  calls placed from its header; `_USERCALL0` with level 2 masked, then `_USERCALL1` with `_USERMODE` after each level 2.
+- **`_CDBIOS`**: every call of BM §3 dispatched by its number; the drive's, CD-DA's and CD-ROM's posted for the level 4
+  exchange (CDBCHK busy until taken), the others at once. The drive's course: play, seek, pause and resume, scan,
+  stop, the tray; MSCPLAY1's pause at the next track, MSCPLAYR's repeat, MSCSEEK1's play after its pause, the lead-out's
+  stop and CDBPAUSE's stand-by. A read seeks two sectors short, turns the decoder on once the drive seeks, queues each
+  wanted sector's block (five at most, the buffer's writes held when full and the sector asked for again), and
+  ROMREADN's last sector pauses the drive. CDCREAD hands the head of the queue to the destination the caller set (2,048
+  bytes, or 2,336 in CDCSETMODE's mode 2), CDCTRN reads it through the host data register, CDCACK drops it (D-44).
+  The status table at `$5E80` as BM p. 20-21 lays it out; the fader's set and ramp; the LEDs by the drive's state or
+  LEDSET. Subcode reads answer "no data", and `_BURAM` finds no RAM until step 10.4.
+- **Found on the way**: the decoder raises its interrupt with the last header while the head travels in a seek, which a
+  read took for a sector far past its target and sought again without end; a header that repeats the last is now no
+  sector (argued: a real decoder in a seek reports blocks that fail their check, which Nephrite's does not model). And
+  a BCD conversion that left a word of the caller's in the result's high half, which put every sector beyond reach;
+  both shown by the drive seeking without end and fixed.
+
+**Measured (2026-10-15).** The 240p Test Suite (Sega CD 1.32, the American disc) boots on the open BIOS in Nephrite:
+the BIOS's screen reads "READING THE DISC" at frame 120, the initial program starts at frame 156, and at frame 1,200 the
+suite's main menu is on screen ("Test Patterns", "Video tests", "Audio tests", "Hardware tools", "DRV VER: 0x00"),
+its V-INT installed through `$0368`. `the_open_bios_boots_the_240p_suite_to_its_menu` holds it. The crate's 180 tests
+pass, mcd-verificator's eighteen in mode 2 among them, unchanged.
+
+## 9. Reading log (stage 10)
 
 Opened and read: `Nephrite_Plan.md` whole; `Nephrite_Native.md` §49–§52, §53.1–§53.3, §53.5, §54.1, §54.2, §54.3 from
 its second bullet, §54.4, §54.5, §56, §57.1, §57.3, §58, §59, §60.4–§60.7, §61, §62, and its headings; the
@@ -258,7 +304,14 @@ register pages); the Sega-CD Technical Bulletins through their text layer, with 
 map and "The status after booting is completed" from their images at 150 dpi; the Sega-CD Software Standards' first
 300 lines of text; plutiedev's `subcpu-in-mode1` and `megacd-leds`; `DOCS.txt`'s sections X, A, C and D. Searched by
 text, without opening files: the corpus's `docs/` for the calls' names, the excluded and unscreened files skipped by
-name. Listed by name only: the test-program sources under `roms/_src/`. Read in code: `Cargo.toml`, the source
+name. Listed by name only: the test-program sources under `roms/_src/`.
+
+*Since the plan was committed:* the 240p Test Suite's `segacdfiles/LukeProjectCD/_boot/_inc/cdbios.asm` whole, after
+the screener cleared it (2026-10-15; DOCS.txt §X records the verdict); the same suite's `_boot/sp.asm`,
+`_boot/ip-us.asm` and `segacdfiles/segacd.s` (its start-up's first 200 lines), a test program's own sources; the
+headings of `Nephrite_Disputes.md` (by `grep -n '^#'`, which shows D-36's and D-40's rule titles) and its head and
+D-32 for the entry shape. The security block the suite's initial program includes (`security/*.bin`) was not opened,
+listed or disassembled. Runs on the open BIOS only; the player's BIOS was not run. Read in code: `Cargo.toml`, the source
 listing of `beryl-m68k`, and the firmware declaration in `src/mcd/frontend.rs`.
 
 **Seen by accident.** `Nephrite_Native.md` lines 3997–4033 were printed to read §53.5–§54.2; the last line was the
@@ -271,5 +324,8 @@ closed parts was read by its headings' exact boundaries.
 **Not opened, by the rule:** `spritesmind/t2061_p001.html`, `t1018_*`, `t3020_*`, `t458_*`, `t3218_*`,
 `railgun/Trademark_Security_System.wiki`; mcd-verificator's `cd-log/BI-mcd-tst/` and `cd-log/sonic-bios/`; MiSTer's
 `docs/mcd logs` and every RTL file; `Nephrite_Native.md` §53.4, §54.3's first bullet beyond the line above, §55,
-§57.2, §60.1–§60.3; `Nephrite_Disputes.md` in any part; `~/.cache/emusen/probe/nephrite/s9/`; the player's BIOS
-(`sysdir/scd/`), which was neither read nor run; any emulator's source. No register watch was run.
+§57.2, §60.1–§60.3; `Nephrite_Disputes.md`'s D-36 and D-40 beyond their headings; `~/.cache/emusen/probe/nephrite/s9/`;
+`docs/bram/`; the player's BIOS (`sysdir/scd/`), which was neither read nor run; any emulator's source. The register
+watch was run only with the open BIOS, never with a player's. *As of 2026-10-15, after the screening:*
+`spritesmind/t458_*` and `t3218_*` are cleared and not yet opened; `t1018_*` is cleared but for named posts, and not yet
+opened; `t3020_*` and `t2061_p001.html` stay closed.

@@ -4,6 +4,7 @@
 //! what mcd-verificator's tests settled where the manual is silent.
 
 pub(in crate::mcd) mod asic;
+pub mod bios;
 pub(in crate::mcd) mod cdc;
 pub(in crate::mcd) mod cdda;
 pub(crate) mod cdd;
@@ -13,6 +14,8 @@ pub(in crate::mcd) mod state;
 pub(in crate::mcd) mod word;
 #[cfg(test)]
 mod discs;
+#[cfg(test)]
+mod openbios;
 #[cfg(test)]
 mod verificator;
 
@@ -89,6 +92,17 @@ pub struct Gate {
     pub(in crate::mcd) font_bits: u16,
     /// How far the main CPU is through the forced reset's four writes (§4-1).
     pub(in crate::mcd) forced: u8,
+}
+
+impl Gate {
+    /// The communication words, for development tools to read: the main CPU's commands and the sub CPU's statuses.
+    pub fn cmd_word(&self, i: usize) -> u16 {
+        self.cmd[i]
+    }
+
+    pub fn sta_word(&self, i: usize) -> u16 {
+        self.sta[i]
+    }
 }
 
 /// The sub CPU's side: its clock, its memories and the gate array.
@@ -229,6 +243,11 @@ impl MegaCd {
         hw.g.res0_at = hw.clock + PERIPHERAL_RESET;
         hw.word.sub_owns = false;
         MegaCd { cpu: M68000::new(), hw, disc_print }
+    }
+
+    /// The sub CPU, for development tools to read.
+    pub fn sub_cpu(&self) -> &M68000 {
+        &self.cpu
     }
 
     // ---- the main CPU's side, mode 2

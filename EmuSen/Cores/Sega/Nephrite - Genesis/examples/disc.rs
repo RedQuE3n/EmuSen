@@ -27,7 +27,8 @@ fn main() {
     };
     let mut disc = nephrite::mcd::open_disc(Kept::from(image), companions).expect("a disc");
     let media = Media::read(&nephrite::mcd::system_area(&mut disc));
-    let bios = std::env::var_os("NEPHRITE_BIOS").map(|p| std::fs::read(p).expect("the boot ROM"));
+    // `NEPHRITE_BIOS=open` runs Nephrite's own BIOS (Nephrite_OpenBios.md).
+    let bios = std::env::var_os("NEPHRITE_BIOS").map(|p| if p == "open" { nephrite::mcd::bios::OPEN_BIOS.to_vec() } else { std::fs::read(p).expect("the boot ROM") });
     let model = default_model(&media);
     let mut m = Machine::with_disc(media, model, bios, Some(disc));
     // `NEPHRITE_BRAM` names a backup RAM image to start from, as a battery file would be.

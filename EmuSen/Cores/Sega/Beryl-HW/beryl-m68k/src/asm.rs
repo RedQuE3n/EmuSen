@@ -457,7 +457,7 @@ fn parse_operand(t: &str, sc: &str) -> Result<Op, String> {
     }
     // (expr).W / (expr).L / expr.W / expr.L
     for (suf, long) in [(".W", false), (".L", true)] {
-        if u.ends_with(suf) && !u.ends_with(')') && !u.contains("(PC") && !u.contains("(A") && !u.contains("(SP") {
+        if u.len() > 2 && u.ends_with(suf) && !u.contains("(PC") && !u.contains("(A") && !u.contains("(SP") {
             let e = parse_expr(&t[..t.len() - 2], sc)?;
             return Ok(if long { Op::AbsL(e) } else { Op::AbsW(e) });
         }
@@ -1674,6 +1674,8 @@ far:    nop
         assert!(assemble(" bra.s *+2\n", 0).is_err(), "a short branch to the next word is the word form's marker");
         assert!(assemble(" move.w d0,undefined\n", 0).is_err());
         assert!(assemble(" moveq #300,d0\n", 0).is_err());
+        let p = assemble("a: bra .w\n.w: nop\n", 0).unwrap();
+        assert_eq!(p.bytes, [0x60, 0x00, 0x00, 0x02, 0x4E, 0x71], "a local label named like a size");
     }
 
     /// Extension words with the fields the 68000 ignores clear, so that every word is the disassembler's to print.

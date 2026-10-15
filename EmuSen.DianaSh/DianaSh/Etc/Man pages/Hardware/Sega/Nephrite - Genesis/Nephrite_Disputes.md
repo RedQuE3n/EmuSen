@@ -1687,3 +1687,66 @@ CPUs' disputes in their own record pages.
   GX's 840, the same lead as on the American disc (`Nephrite_Native.md` §60.2).
 - Pinned by: `a_toc_request_after_a_stop_finds_the_drive_ready`.
 - Implemented in: stage 9 step 4's commit.
+
+### D-41. The open BIOS's interface constants: the sub CPU's entries from `$5F0A` and the function numbers are those of the 240p Test Suite's `cdbios.asm`, each confirmed by a program's call
+- Opened: 2026-10-15, at stage 10, by `Nephrite_OpenBios.md` §2.2's G1 and G2: the Mega-CD BIOS Manual names every call
+  but leaves its number to `CDBIOS.I` (BM p. 6, p. 11) and the jump table's slots to `cabios.i` (BM §5-1).
+- Documents read: the Mega-CD BIOS Manual, every page; the 240p Test Suite's Sega CD include file
+  (`segacdfiles/LukeProjectCD/_boot/_inc/cdbios.asm`, GPL-2.0), cleared whole for the writer on 2026-10-15 by a screener
+  who neither writes nor reviews the BIOS: constants, call macros and register comments, no BIOS code.
+- Test program: the 240p Test Suite's Sega CD build on the open BIOS, the functions its programs call recorded by the
+  sub CPU's program as they come (a bit a function, cleared at the hand-over). On the way to its menu its system
+  program reaches `_CDBIOS` at `$5F22` with DRVINIT (`$10`, the table `$01,$FF`), ROMREADN (`$20`, two longs), CDBCHK
+  (`$80`), CDBSTAT (`$81`, the table read at its BP12-BP14), CDCSTOP (`$89`), CDCSTAT (`$8A`), CDCREAD (`$8B`),
+  CDCTRN (`$8C`, a0 and a1) and CDCACK (`$8D`), each with the parameters BM's reference gives that call; its user calls
+  are found through its header and placed at `$5F28`-`$5F3A`, and run. Its menu is reached (`Nephrite_OpenBios.md` §8).
+- Referee: none.
+- Conclusion: the numbers and slots as the include file gives them. Those nine numbers and the entries `_CDBIOS`,
+  `_USERCALL0`, `_USERCALL1`, `_LEVEL2`, `_LEVEL4` and `_LEVEL5` are measured by the suite; every other number and slot is
+  argued until a program calls it, each added here as one does.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-42. The main CPU's boot ROM at `$0368`: a1 a V-INT handler, set in `_mlevel6` and V-INT enabled
+- Opened: 2026-10-15, at stage 10: the 240p Test Suite's main program stood with its picture black, its V-INT never
+  taken.
+- Documents read: the Technical Bulletins' "The status after booting is completed" (p. 15: "Subroutine in the boot ROM
+  may also be used (please see mainent.i, rom_util.doc)", neither in the corpus); the 240p Test Suite's start-up source
+  (`segacdfiles/segacd.s`, a test program's source), which comments the call "Enable VBlank" and passes its V-INT
+  handler in a1 before `jsr 0x0368`.
+- Test program: the suite on the open BIOS: with an RTS at `$0368` its V-INT is never installed; with the routine, its
+  menu runs.
+- Referee: none.
+- Conclusion: `$0368` takes a1 as the V-INT handler, stores it at `_mlevel6 + 2` (`$FFFD08`) and sets V-INT's enable in
+  the VDP's register 1, keeping every register. Measured by the suite; whether the BIOS's routine does more (the
+  display, the other interrupts) no document says.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-43. The main CPU's boot ROM at `$0364`: called by every disc's initial program at its first instruction; here it returns at once
+- Opened: 2026-10-15, at stage 10: the main CPU, started at `$FF0000`, called `$0364` within its first eight bytes
+  (the return address stacked was `$FF0008`), which lay inside the open BIOS's own code and restarted its boot.
+- Documents read: none describes the routine. The first bytes of every initial program are Sega's security block
+  (the Technical Bulletins' "The U.S. BIOS" and "PAL conversion" §IV), which a disc carries and the BIOS checks; the
+  call is that block's.
+- Test program: the 240p Test Suite on the open BIOS, the call caught by a breakpoint over the boot ROM's range after
+  the hand-over; the block itself was not disassembled.
+- Referee: none.
+- Conclusion: the open BIOS fills `$0200`-`$1FFF` with RTS, but for `$0368` (D-42), so that a routine no document
+  describes returns at once; with that, the block goes on to the program it heads. What a player's BIOS shows meanwhile
+  (its logo and sound, by the bulletin) the open BIOS does not. Open: what `$0364` does.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-44. CDCREAD and CDCTRN once each a sector: a second CDCREAD before CDCACK fails, and so does a second CDCTRN after its transfer
+- Opened: 2026-10-15, at stage 10. BM §3-C says CDCREAD prepares one sector and CDCTRN reads one, without saying what
+  a second call before CDCACK returns.
+- Documents read: BM §3-C; the load sample of BM p. 44-45 (one CDCREAD, one CDCTRN, one CDCACK a sector).
+- Test program: the 240p Test Suite's system program (`_boot/sp.asm`, `ReadCD`), which calls CDCREAD again while it
+  returns carry clear and CDCTRN again while it returns carry clear, so that each must fail the second time for a
+  read to end.
+- Referee: none.
+- Conclusion: CDCREAD succeeds once a sector until CDCACK, and CDCTRN once a sector after its CDCREAD. Measured by the
+  suite's loads; argued as the BIOS's behaviour, the suite having been made on consoles.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".

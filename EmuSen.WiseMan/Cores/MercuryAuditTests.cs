@@ -368,6 +368,64 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, BitConverter.ToInt32(back, back.Length - 4));
             Assert.True(back.AsSpan(8, back.Length - 12).SequenceEqual(v9.AsSpan(8, v9.Length - 12)));
         }
+
+        // F, mooneye emulator-only/mbc1/ram_64kb and GBCTR's MBC1 RAM wiring: an 8 KiB chip has no pins for BANK2, so every RAM bank is the one bank.
+        [Fact]
+        public void An_mbc1_with_one_ram_bank_answers_every_bank_number_with_it()
+        {
+            var rig = MercuryRig.Create(Engine, SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x03, ramSizeCode: 0x02));
+            _rigs.Add(rig);
+            rig.Write(0x0000, 0x0A);
+            rig.Write(0x6000, 0x01);
+            rig.Write(0x4000, 0xFF);
+            rig.Write(0xA123, 0x5A);
+            foreach (byte bank in new byte[] { 0x00, 0x01, 0x02, 0x03 })
+            {
+                rig.Write(0x4000, bank);
+                Assert.Equal(0x5A, rig.Read(0xA123));
+            }
+        }
+
+        // F: a 1 MiB MBC1 image with each bank's number at offset $2000 of the bank, and bank $10 opening with bank 0's logo or not.
+        private MercuryRig Mbc1Megabyte(bool logoInBank16)
+        {
+            byte[] image = SyntheticGbRom.Build(romBanks: 64, cartridgeType: 0x01);
+            for (int i = 0; i < 48; i++) image[0x104 + i] = (byte)(0x31 + i * 7);
+            if (logoInBank16) Array.Copy(image, 0x104, image, (0x10 * 0x4000) + 0x104, 48);
+            for (int bank = 0; bank < 64; bank++) image[(bank * 0x4000) + 0x2000] = (byte)bank;
+            var rig = MercuryRig.Create(Engine, image);
+            _rigs.Add(rig);
+            return rig;
+        }
+
+        // F, mooneye multicart_rom_8Mb and Pan Docs MBC1.md "MBC1M": BANK1 is four bits wide and BANK2 selects banks $00, $10, $20, $30.
+        [Fact]
+        public void An_mbc1_multicart_puts_bank2_on_bank_bits_4_and_5()
+        {
+            var rig = Mbc1Megabyte(logoInBank16: true);
+            rig.Write(0x6000, 0x01);
+            rig.Write(0x4000, 0x01);
+            Assert.Equal(0x10, rig.Read(0x2000));
+            rig.Write(0x2000, 0x01);
+            Assert.Equal(0x11, rig.Read(0x6000));
+            rig.Write(0x2000, 0x10);
+            Assert.Equal(0x10, rig.Read(0x6000));
+            rig.Write(0x4000, 0x03);
+            rig.Write(0x2000, 0x0F);
+            Assert.Equal(0x3F, rig.Read(0x6000));
+        }
+
+        // F: without bank 0's logo in bank $10 the same image is an ordinary MBC1, BANK2 on bits 5 and 6.
+        [Fact]
+        public void A_megabyte_mbc1_without_the_second_logo_banks_as_an_ordinary_mbc1()
+        {
+            var rig = Mbc1Megabyte(logoInBank16: false);
+            rig.Write(0x6000, 0x01);
+            rig.Write(0x4000, 0x01);
+            Assert.Equal(0x20, rig.Read(0x2000));
+            rig.Write(0x2000, 0x01);
+            Assert.Equal(0x21, rig.Read(0x6000));
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

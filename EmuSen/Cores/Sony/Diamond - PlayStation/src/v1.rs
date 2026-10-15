@@ -83,6 +83,9 @@ pub fn bios(market: Market) -> Firmware {
 /// Battery files: the card in port 1's slot (or its multitap's slot A), and port 2's; the BIOS takes 1-3.
 pub const CARD_FILES: [u32; 2] = [0, 4];
 pub const CARD_SUFFIXES: [&str; 2] = [".mcr", ".2.mcr"];
+/// The cards' medium and their slots' words in core info (since 1.8).
+pub const CARD_MEDIUM: &str = "psx.card";
+pub const CARD_LABELS: [&str; 2] = ["Slot 1", "Slot 2"];
 
 /// The extensions the core opens, the system pack's checked subset: the programs, a cue sheet with its tracks, an
 /// `.iso`, a lone raw track and a CHD; the pack's `.m3u` the runtime expands and never passes (Diamond_Players.md §2).
@@ -245,9 +248,10 @@ impl Core for Machine {
     }
 
     /// Both cards' files, whatever the settings: a card's file given for an empty slot is ignored. Each is removable,
-    /// a card the player carries, which a state load leaves when the host keeps it apart (Diamond_Cards.md §6).
+    /// a card the player carries, which a state load leaves when the host keeps it apart (Diamond_Cards.md §6); since
+    /// 1.8 each is a slot of the medium `psx.card`, labelled by its slot (EmuSen_SaveMedia.md §7.1).
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "psx").then(|| (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n])).collect())
+        (system == "psx").then(|| (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n]).medium(CARD_MEDIUM).label(CARD_LABELS[n])).collect())
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
@@ -567,7 +571,7 @@ mod tests {
 
     fn create(image: &[u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
         let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
-        Machine::create(&Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false })
+        Machine::create(&Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false })
     }
 
     #[test]
@@ -705,6 +709,8 @@ mod tests {
         let listed: Vec<(u32, String)> = Machine::battery_files("psx").unwrap().into_iter().map(|b| (b.which, b.suffix)).collect();
         assert_eq!(listed, [(0, ".mcr".to_owned()), (4, ".2.mcr".to_owned())]);
         assert!(Machine::battery_files("psx").unwrap().iter().all(|b| b.kind == BatteryKind::Removable), "cards a player carries (Diamond_Cards.md §6)");
+        let slots: Vec<(Option<String>, Option<String>, Option<u32>)> = Machine::battery_files("psx").unwrap().into_iter().map(|b| (b.medium, b.label, b.port)).collect();
+        assert_eq!(slots, [(Some("psx.card".into()), Some("Slot 1".into()), None), (Some("psx.card".into()), Some("Slot 2".into()), None)], "the console's two slots of one medium (EmuSen_SaveMedia.md §7.1)");
         assert!(Machine::battery_files("snes").is_none());
         let card = vec![0x5Au8; CARD_BYTES];
         let m = create(&exe(None, 1), &[], vec![File { which: 0, data: &card }, File { which: 4, data: &card }]).unwrap();
@@ -723,7 +729,7 @@ mod tests {
     /// A machine for `image` over the card file `card`, kept apart from the game or not.
     fn over_card(image: &[u8], card: &[u8], apart: bool) -> Machine {
         let settings = Settings::from_pairs(Vec::new());
-        Machine::create(&Create { image, settings, files: vec![File { which: 0, data: card }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: apart }).unwrap()
+        Machine::create(&Create { image, settings, files: vec![File { which: 0, data: card }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: apart, shared_console: false }).unwrap()
     }
 
     /// Run until the game has saved and one ID after it is taken.

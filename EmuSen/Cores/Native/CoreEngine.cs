@@ -36,8 +36,13 @@ namespace EmuSen.Cores.Native
         private IReadOnlyList<string> _discs = Array.Empty<string>();
         private long _closeLidAt = -1;
 
-        // The card mode the frontend stored for the console, read at each load; Per game unless set - see Diamond_Cards.md §9.
-        public CardChoice Cards { get; set; } = CardChoice.PerGame;
+        // Each save medium's mode the frontend stored for the console, by medium id, read at each load; Per game where absent - see EmuSen_SaveMedia.md §3.3.
+        public IReadOnlyDictionary<string, CardChoice> Media { get; set; } = new Dictionary<string, CardChoice>();
+
+        // Why a slot runs on the game's own file this load, or null: its shared file is in another slot or another program - see EmuSen_SaveMedia.md §3.5.
+        public string? MediaNotice { get; private set; }
+
+        private MediaPlacement? _placement;
 
         public CoreLibrary Library { get; }
         public CoreInfo Info => Library.Info;
@@ -203,6 +208,7 @@ namespace EmuSen.Cores.Native
             IReadOnlyList<CoreFirmware> asked;
             CoreMachine machine;
             List<(uint Which, BatterySave Save)> wanted;
+            MediaPlacement? placement = null;
             DiscFiles disc = set.Open(0);
             // Whether a machine has taken the keeping of the disc's files, as one that borrows does.
             bool kept = false;
@@ -215,29 +221,37 @@ namespace EmuSen.Cores.Native
                     if (FirmwareLibrary.TryLoad(Request(f)) is { } data) firmware.Add((f.Which, data));
                     else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
                 }
+                ReleaseMedia();
+                placement = MemoryCards.Place(console, system, Media, System.IO.Path.GetFileNameWithoutExtension(path), b => BatteryFile(path, console, b.Which, b.Suffix));
+                BatterySave SaveFor(CoreBatteryFile b) => placement!.Files.TryGetValue(b.Which, out BatterySave? placed) ? placed : BatteryFile(path, console, b.Which, b.Suffix);
                 var saves = system?.Battery is { } listed
-                    ? listed.Select(b => (b.Which, Save: SaveFor(path, console, b, listed))).ToList()
+                    ? listed.Select(b => (b.Which, Save: SaveFor(b))).ToList()
                     : new List<(uint Which, BatterySave Save)> { (0, BatteryFile(path, console, 0, EmuSen.Galaxia.Library.SaveLibrary.SramExtension)) };
-                bool apart = Cards.Apart && (system?.Battery ?? Array.Empty<CoreBatteryFile>()).Any(b => b.Removable);
-                machine = Create(disc, firmware, saves, apart);
+                machine = Create(disc, firmware, saves, placement);
                 kept = Lends;
-                IReadOnlyList<CoreBatteryFile> slots = system?.Battery ?? machine.Info.Battery;
-                wanted = machine.Info.Battery.Select(b => (b.Which, Save: SaveFor(path, console, b, slots))).ToList();
+                wanted = machine.Info.Battery.Select(b => (b.Which, Save: SaveFor(b))).ToList();
                 // Machine info is the authority: a file it names that exists and was not passed means the machine is made again with it.
                 if (wanted.Any(w => w.Save.Read() is not null && !saves.Any(s => s.Which == w.Which && s.Save.Path == w.Save.Path)))
                 {
                     machine.Dispose();
                     kept = false;
                     if (Lends) disc = set.Open(0);
-                    machine = Create(disc, firmware, wanted, Cards.Apart && machine.Info.Battery.Any(b => b.Removable));
+                    machine = Create(disc, firmware, wanted, placement);
                     kept = Lends;
                 }
+            }
+            catch
+            {
+                placement?.Dispose();
+                throw;
             }
             finally
             {
                 // A core that copies has its copy by now; one that borrows holds the files through its machine.
                 if (!kept) disc.Dispose();
             }
+            _placement = placement!;
+            MediaNotice = placement.Notices.Count == 0 ? null : string.Join(" ", placement.Notices);
             _set = set;
             _discs = set.Images;
             DiscIndex = 0;
@@ -275,17 +289,20 @@ namespace EmuSen.Cores.Native
         // Battery file <which> of a game, by the runtime's path rule; a port's shim opens it as its oracle does.
         protected virtual BatterySave BatteryFile(string path, string console, uint which, string suffix) => BatterySave.Open(path, console, extension: suffix);
 
-        // A removable file under a card mode other than Per game is its slot's card, every other file the game's own - see Diamond_Cards.md §9.2.
-        private BatterySave SaveFor(string path, string console, CoreBatteryFile file, IEnumerable<CoreBatteryFile> listed) =>
-            MemoryCards.CardFor(console, file, MemoryCards.SlotOf(listed, file.Which), Cards) ?? BatteryFile(path, console, file.Which, file.Suffix);
+        // Lets go of the locks on the game's save media, which a frontend calls when it leaves the game; a load takes them again - see EmuSen_SaveMedia.md §3.5.
+        public void ReleaseMedia()
+        {
+            _placement?.Dispose();
+            _placement = null;
+        }
 
         // The machine for a disc: lent where the core borrows, when the machine takes the files' keeping, else read by the core within the call.
-        private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, bool apart)
+        private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, MediaPlacement placement)
         {
             var files = new List<(uint, byte[])>(firmware);
             foreach (var (which, save) in saves)
                 if (save.Read() is { } saved) files.Add((which, saved));
-            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null, sharedRemovable: apart);
+            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart);
         }
 
         // Every value as key=value lines: create-time and run-time keys at create, run-time keys only after it.
@@ -661,6 +678,7 @@ namespace EmuSen.Cores.Native
 
         public void Dispose()
         {
+            ReleaseMedia();
             _machine?.Dispose();
             _machine = null;
             _lending.Close();

@@ -23,7 +23,7 @@ namespace EmuSen.Mistress.Views
         // Every way a game is started from outside it: firmware, then the resume question, then from big picture the launch screen (§4.71), then the load.
         private async Task StartGameAsync(string path, string displayName, BigPicture.Scene.SceneGame? bigPicture = null)
         {
-            await PromptForMissingFirmwareAsync(path);
+            await PrepareGameAsync(path);
             if (await ChooseResumeAsync(path) is not { } choice) return;
             Task<EmuSen.Cores.ICore>? loading = bigPicture is not null ? LoadUnderLaunchScreen(path) : null;
             if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture))

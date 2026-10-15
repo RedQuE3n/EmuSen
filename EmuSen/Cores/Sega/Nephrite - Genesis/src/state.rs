@@ -111,7 +111,9 @@ impl StateMachine for Machine {
         }
         self.frames = frames;
         for (id, bytes) in loaded {
-            self.bytes_mut(id).expect("a listed space").copy_from_slice(&bytes);
+            if !self.kept_apart.keeps(id) {
+                self.bytes_mut(id).expect("a listed space").copy_from_slice(&bytes);
+            }
         }
         self.genesis.apply_state(registers);
         if let (Some(m), Some(s)) = (self.genesis.hw.mcd.as_deref_mut(), mcd) {

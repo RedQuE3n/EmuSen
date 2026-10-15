@@ -52,8 +52,9 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   carries between games, *Per game* (unchanged), *Shared* and *Named cards*; who owns which fact; the core ABI's minor
   1.7 (a battery file's `removable` kind and `EMUSEN_CREATE_SHARED_REMOVABLE`); the hazard of a state rolling a shared
   card back, proven on the unchanged core and fixed, a card that differs from the state's copy presented as newly
-  inserted; rewind and states across modes; per-game states unchanged byte for byte; the settings; and a card manager
-  weighed in writing and not built, with the questions for the tester.
+  inserted; rewind and states across modes; per-game states unchanged byte for byte; and, since the card mode became
+  every console's the same day (`EmuSen_SaveMedia.md`), the PlayStation's part only: its slots of `psx.card`, its
+  default *Shared* with the import offered once, and the card's format module, `PsxCardFormat`.
 - [`Diamond_Speed.md`](Diamond_Speed.md) — the exact levers, written 2026-10-12 at stage 13: the bench of the seven copied
   discs on the open kernel and the link's placement as a source of error, the profile that put idle skipping before the
   plan's other levers, the skipper's proof, window, skip and verifier with the loop forms of `programs/idle.s`, the

@@ -175,6 +175,12 @@ mode reads as `game`, and a name that is not one file name (a separator, a leadi
 edit can never point a card outside the `Cards` folder (`MemoryCards.Read`; `Diamond_Cards.md` §9;
 `EmuSen_Settings_Reference.md` §4.114).
 
+*2026-10-15, later:* the same keys for every console's save media (`EmuSen_SaveMedia.md` §3.3): a console's first
+removable medium keeps `Cards` and `Card<n>`, its own memory takes **`ConsoleMemory`** and `ConsoleMemory<n>`, any
+further medium **`Media.<id>`** and `Media.<id>.<n>`. Absent, a mode is its medium's default, `shared` for the
+PlayStation's card and `game` for a medium no format module reads. **`<mode key>Offered`** (`CardsOffered`) is `true`
+once Mistress has offered the import of the games' own cards (§4.115 there).
+
 ### 3.4 `cheats/<name>.json` — `CheatFile`
 
 New capability, not a migration: `CheatRegistry` previously had no persistence at all, so every cheat was lost on exit.

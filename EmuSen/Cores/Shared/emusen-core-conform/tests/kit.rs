@@ -107,7 +107,7 @@ fn the_faults_of_c9_and_c12_to_c18_fail_those_cases_and_no_others() {
 fn each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone() {
     let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-faulty-full.v1tc");
     std::fs::write(&file, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
-    for (fault, cases) in [(8, vec!["C9"]), (16, vec!["C12", "C17", "C18"]), (32, vec!["C13"]), (64, vec!["C14"]), (128, vec!["C15"]), (256, vec!["C17"]), (512, vec!["C18"])] {
+    for (fault, cases) in [(8, vec!["C9"]), (16, vec!["C12", "C17", "C18"]), (32, vec!["C13"]), (64, vec!["C14"]), (128, vec!["C15"]), (256, vec!["C17"]), (512, vec!["C18"]), (1 << 22, vec!["C14"])] {
         let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
             .args(["--self-delimiting", "--frames", "120", "--core"])
             .arg(library("kit_faulty_full_core"))
@@ -119,6 +119,9 @@ fn each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone() {
         let text = String::from_utf8_lossy(&out.stdout);
         let failed: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("FAIL ")).filter_map(|l| l.split_whitespace().next()).collect();
         assert_eq!(failed, cases, "fault {fault}:\n{text}");
+        if fault == 1 << 22 {
+            assert!(text.contains("battery files 1 and 2 of system test are both of medium test.card, and differ in kind or extension (removable .card against console .mem)") && text.contains("belongs to port 7, which machine info does not list"), "{text}");
+        }
         if fault == 256 {
             assert!(text.contains("a machine reading an image its host lent differs from the run on a copy at frame 0, in its state"), "{text}");
         }
@@ -139,12 +142,30 @@ fn c19_holds_a_removable_file_as_it_stands_across_a_state_load() {
     assert!(carded.cases.iter().all(|c| c.passed), "{:?}", carded.cases.iter().filter(|c| !c.passed).map(|c| (c.id, &c.evidence)).collect::<Vec<_>>());
     assert_eq!(c19.evidence, ["1 removable file(s), file 1 (16 bytes): kept as they stood across a state made 120 frames into a machine whose files held other bytes"]);
     let plain = run(&library("kit_test_core"), &options());
-    assert_eq!(plain.cases.iter().find(|c| c.id == "C19").unwrap().evidence, ["the machine lists no removable battery file, so nothing is kept apart"]);
+    assert_eq!(plain.cases.iter().find(|c| c.id == "C19").unwrap().evidence, ["the machine lists no removable or console battery file, so nothing is kept apart"]);
     let (failed, text) = failed_on("kit_faulty_full_core", CARD, 1 << 20, 120);
     assert_eq!(failed, ["C19"], "{text}");
     assert!(text.contains("removable battery file 1 changed across the state load: 16 of its 16 bytes differ") && text.contains("reads as changed after the state load"), "{text}");
     let (failed, text) = failed_on("kit_faulty_full_core", &[1, 2, 3, 0x20, 0x41], 1 << 20, 120);
     assert!(failed.is_empty(), "no card, nothing to roll back:\n{text}");
+}
+
+/// The test core's payload whose machine has memory inside the console, battery file 2 (`CONSOLE_MEMORY`, since 1.8).
+const CONSOLE_MEMORY: &[u8] = &[0xCE, 2, 3, 0x20, 0x41];
+
+// Since 1.8 (EmuSen_CoreAPI.md §6.28): a machine that lists a console file keeps it as it stands across a state load under
+// SHARED_CONSOLE and passes C19; a core that rolls the console's memory back on such a load fails C19 alone, and the
+// card's fault, with no card, changes nothing there.
+#[test]
+fn c19_holds_a_console_file_as_it_stands_across_a_state_load() {
+    let held = run(&library("kit_test_core"), &Options { image: image(CONSOLE_MEMORY), ..options() });
+    assert!(held.cases.iter().all(|c| c.passed), "{:?}", held.cases.iter().filter(|c| !c.passed).map(|c| (c.id, &c.evidence)).collect::<Vec<_>>());
+    assert_eq!(held.cases.iter().find(|c| c.id == "C19").unwrap().evidence, ["1 console file(s), file 2 (16 bytes): kept as they stood across a state made 120 frames into a machine whose files held other bytes"]);
+    let (failed, text) = failed_on("kit_faulty_full_core", CONSOLE_MEMORY, 1 << 21, 120);
+    assert_eq!(failed, ["C19"], "{text}");
+    assert!(text.contains("console battery file 2 changed across the state load: 16 of its 16 bytes differ"), "{text}");
+    let (failed, text) = failed_on("kit_faulty_full_core", CONSOLE_MEMORY, 1 << 20, 120);
+    assert!(failed.is_empty(), "the card's fault on a machine with no card:\n{text}");
 }
 
 // Refusal passes C4 whether or not the system's format is self-delimiting.
@@ -201,7 +222,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.7"));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.8"));
     assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x1FFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));

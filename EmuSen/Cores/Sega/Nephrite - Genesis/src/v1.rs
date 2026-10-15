@@ -357,8 +357,10 @@ impl Core for Machine {
         }
     }
 
+    /// The Sega CD's backup RAM, the console's own memory, and its RAM cartridge, a removable one, each a slot of its
+    /// medium since core ABI 1.8 (EmuSen_SaveMedia.md §7.3).
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "mcd").then(|| vec![Battery::game(0, ".brm"), Battery::game(RAM_CART, ".crm")])
+        (system == "mcd").then(|| vec![backup_ram(), ram_cartridge()])
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
@@ -620,11 +622,13 @@ impl Machine {
             return Err(status::BAD_FILE);
         }
         let (disc, media) = open_disc(request.image, &request.files)?;
+        let kept_apart = crate::machine::KeptApart { cartridge: request.shared_removable, backup: request.shared_console };
         let model = region_model(Model { model2: request.settings.get(MODEL_KEY) == Some("md.model2"), ..default_model(&media) }, request.settings.get(REGION_KEY));
         let mine = cd_bios(media.bios_region()).which;
         let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
         let bios = file.map(|f| f.data.to_vec()).unwrap_or_default();
         let mut m = Machine::with_disc(&[], media, model, Some(bios), Some(disc));
+        m.kept_apart = kept_apart;
         m.apply_pads(&request.settings);
         m.firmware = request.files.iter().filter(|f| (TMSS..=S32X_SLAVE).contains(&f.which)).map(|f| f.which).collect();
         let s = &mut m.genesis.hw.mcd.as_deref_mut().expect("a disc's Sega CD").hw;
@@ -649,15 +653,25 @@ impl Machine {
     fn batteries(&self) -> Vec<Battery> {
         match self.genesis.hw.mcd.as_deref() {
             Some(m) => {
-                let mut v = vec![Battery::game(0, ".brm")];
+                let mut v = vec![backup_ram()];
                 if m.hw.cart.is_some() {
-                    v.push(Battery::game(RAM_CART, ".crm"));
+                    v.push(ram_cartridge());
                 }
                 v
             }
             None => self.battery_id().map(|_| Battery::game(0, ".srm")).into_iter().collect(),
         }
     }
+}
+
+/// The backup RAM inside the Sega CD: battery file 0, the console's (EmuSen_SaveMedia.md §7.3).
+fn backup_ram() -> Battery {
+    Battery::console(0, ".brm").medium("mcd.backup").label("Inside the console")
+}
+
+/// The backup RAM cartridge in its slot: battery file 10, removable.
+fn ram_cartridge() -> Battery {
+    Battery::removable(RAM_CART, ".crm").medium("mcd.ramcart").label("Cartridge slot")
 }
 
 emusen_native::core_exports!(Machine; rom_patches, settings, setting_notes, debug, debug_stack, debug_registers, debug_disassemble, media);
@@ -668,7 +682,7 @@ mod tests {
     use crate::media::cartridge;
 
     fn create(image: &[u8], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
-        Machine::create(&Create { image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false })
+        Machine::create(&Create { image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false })
     }
 
     // The debugger's two processors and their buses through the ABI: listed, sized, read without side effects, refused a write (Nephrite_Native.md §41).
@@ -778,7 +792,7 @@ mod tests {
     #[test]
     fn the_region_setting_chooses_the_market_and_the_rate() {
         let image = cartridge("SEGA GENESIS", "U", None);
-        let made = |region: &str| Machine::create(&Create { image: &image, settings: Settings::from_pairs(vec![(REGION_KEY.into(), region.into())]), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap();
+        let made = |region: &str| Machine::create(&Create { image: &image, settings: Settings::from_pairs(vec![(REGION_KEY.into(), region.into())]), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
         for (region, overseas, pal) in [("auto", true, false), ("md.us", true, false), ("md.eu", true, true), ("md.jp", false, false), ("md.asia", false, true)] {
             let m = made(region);
             let version = m.genesis.hw.io.read(0xA1_0001, 0);
@@ -865,7 +879,7 @@ mod tests {
     #[test]
     fn the_model_setting_chooses_the_sound_chip_and_circuit() {
         let image = cartridge("SEGA GENESIS", "U", None);
-        let made = |settings: Vec<(String, String)>| Machine::create(&Create { image: &image, settings: Settings::from_pairs(settings), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap();
+        let made = |settings: Vec<(String, String)>| Machine::create(&Create { image: &image, settings: Settings::from_pairs(settings), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
         let sound = |m: &Machine| (m.genesis.hw.sound.ym.discrete, m.genesis.hw.sound.circuit);
         assert_eq!(sound(&made(vec![])), (true, crate::sound::Circuit::MODEL1));
         assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model1".into())])), (true, crate::sound::Circuit::MODEL1));
@@ -877,7 +891,7 @@ mod tests {
         assert!(Machine::settings_schema().iter().all(|s| s.check().is_ok()));
         let image = cartridge("SEGA GENESIS", "U", None);
         let settings = Settings::from_pairs(vec![("pad2".into(), "md.pad6".into())]);
-        let mut m = Machine::create(&Create { image: &image, settings, files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap();
+        let mut m = Machine::create(&Create { image: &image, settings, files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
         let ports = |m: &Machine| m.machine_info().ports.iter().map(|p| p.controller.clone().unwrap()).collect::<Vec<_>>();
         assert_eq!(ports(&m), ["md.pad3", "md.pad6"]);
         m.set_settings(&Settings::from_pairs(vec![("pad1".into(), "md.pad6".into()), ("pad2".into(), "md.pad3".into())])).unwrap();
@@ -1011,12 +1025,37 @@ mod tests {
         let mut crm = vec![0u8; 0x2_0000];
         crm[7] = 0x5A;
         let brm = vec![0x11u8; 0x2000];
-        let m = Machine::create(&Create { image: &iso, settings, files: vec![emusen_native::abi::File { which: 0, data: &brm }, emusen_native::abi::File { which: RAM_CART, data: &crm }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap();
+        let m = Machine::create(&Create { image: &iso, settings, files: vec![emusen_native::abi::File { which: 0, data: &brm }, emusen_native::abi::File { which: RAM_CART, data: &crm }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
         let info = m.machine_info();
         assert_eq!(info.battery.iter().map(|b| (b.which, b.suffix.as_str())).collect::<Vec<_>>(), [(0, ".brm"), (RAM_CART, ".crm")]);
         assert_eq!(m.battery(RAM_CART).unwrap().0[7], 0x5A);
         assert_eq!(m.battery(0).unwrap().0[0], 0x11);
         assert!(info.spaces.iter().any(|s| s.name == "CARTRAM"));
         assert_eq!(Machine::battery_files("mcd").unwrap().len(), 2);
+    }
+
+    /// Since core ABI 1.8 (EmuSen_SaveMedia.md §7.3): the backup RAM is the console's and the cartridge removable, each
+    /// a slot of its medium; made with the host's flags, a state load leaves both as they stand, made without them it
+    /// puts the state's back, as before.
+    #[test]
+    fn the_backup_ram_and_the_cartridge_are_kept_apart_under_the_flags() {
+        let listed: Vec<(u32, BatteryKind, Option<String>, Option<String>)> = Machine::battery_files("mcd").unwrap().into_iter().map(|b| (b.which, b.kind, b.medium, b.label)).collect();
+        assert_eq!(listed, [(0, BatteryKind::Console, Some("mcd.backup".into()), Some("Inside the console".into())), (RAM_CART, BatteryKind::Removable, Some("mcd.ramcart".into()), Some("Cartridge slot".into()))]);
+        let iso = disc_image("A", 40);
+        let made = |brm: &[u8], crm: &[u8], apart: bool| {
+            let files = vec![emusen_native::abi::File { which: 0, data: brm }, emusen_native::abi::File { which: RAM_CART, data: crm }];
+            Machine::create(&Create { image: &iso, settings: Settings::parse(b"ramcart=mcd.ramcart").unwrap(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: apart, shared_console: apart }).unwrap()
+        };
+        assert_eq!(made(&[0; 0x2000], &[0; 0x2_0000], false).machine_info().battery.iter().map(|b| b.kind).collect::<Vec<_>>(), [BatteryKind::Console, BatteryKind::Removable]);
+        for apart in [false, true] {
+            let mut a = made(&[0x11; 0x2000], &[0x22; 0x2_0000], apart);
+            Machine::advance(&mut a);
+            let mut state = vec![0u8; a.state_size()];
+            let n = a.save_state(&mut state).unwrap();
+            let mut b = made(&[0x33; 0x2000], &[0x44; 0x2_0000], apart);
+            b.load_state(&state[..n]).unwrap();
+            let (brm, crm) = (b.battery(0).unwrap().0[5], b.battery(RAM_CART).unwrap().0[5]);
+            assert_eq!((brm, crm), if apart { (0x33, 0x44) } else { (0x11, 0x22) }, "apart {apart}: the files after the load");
+        }
     }
 }

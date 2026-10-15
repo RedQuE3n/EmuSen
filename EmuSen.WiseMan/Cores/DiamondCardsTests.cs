@@ -82,7 +82,7 @@ namespace EmuSen.WiseMan.Cores
             var rows = MemoryCards.SettingsFor("PlayStation");
             Assert.Equal(new[] { "Cards", "Card1", "Card2" }, rows.Select(r => r.Key));
             Assert.Equal(new[] { "game", "shared", "named" }, rows[0].Choices);
-            Assert.Equal("game", rows[0].Default);
+            Assert.Equal("shared", rows[0].Default);
             Assert.Equal(Enumerable.Range(1, 8).Select(n => $"Card {n}"), rows[1].Choices);
             Directory.CreateDirectory(Path.GetDirectoryName(Card("Blue"))!);
             File.WriteAllBytes(Card("Blue"), new byte[131_072]);
@@ -97,6 +97,7 @@ namespace EmuSen.WiseMan.Cores
         public void Per_game_a_save_stays_with_its_game()
         {
             var (a, b) = Games();
+            Mode(MemoryCards.PerGame);
             using (Played(a)) { }
             Assert.Equal(SaveA, Frame(File.ReadAllBytes(Own(a)), 0x40));
             using var next = (CoreEngine)CoreFactory.Load(b).Core;

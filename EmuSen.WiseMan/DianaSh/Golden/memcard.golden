@@ -1,0 +1,153 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command memcard
+usage 1   memcard ls [<card>]           every card under Saves, or the saves on one card
+usage 2   memcard cp <card>:<save> <card>
+usage 3                                 copy a save onto another card of its medium
+usage 4   memcard mv <card>:<save> <card>
+usage 5                                 copy a save, read it back, then delete the first
+usage 6   memcard rm <card>:<save>      delete a save as the console's own manager does
+usage 7   memcard import <card> <from>...
+usage 8                                 every save of <from> onto <card>, all or none
+usage 9   memcard new <card>            a new card, formatted where its medium allows
+usage 10   memcard dup <card> <new>      a whole card copied to a new name
+usage 11   memcard rename <card> <new>   a card renamed
+
+case the cards of every console, and new ones
+target none
+covers 1,9
+$ memcard ls
+out 72
+No cards: nothing under Saves is a file of a medium a system pack names.
+status 0
+action none
+$ memcard new Saves/PlayStation/Cards/Blue.mcr
+out 38
+Blue.mcr made, a formatted memory card
+status 0
+action none
+$ memcard ls
+out 92
+PlayStation
+  Saves/PlayStation/Cards/Blue.mcr  Memory Card  0 save(s), 15 of 15 blocks free
+status 0
+action none
+$ memcard ls Saves/PlayStation/Cards/Blue.mcr
+out 78
+Saves/PlayStation/Cards/Blue.mcr  Memory Card  0 save(s), 15 of 15 blocks free
+status 0
+action none
+$ memcard new Saves/PlayStation/Cards/Blue.mcr
+out 32
+memcard: Blue.mcr already exists
+status 1
+action none
+$ memcard new "Saves/Sega CD/Cards/Cartridge 1.crm"
+out 95
+Cartridge 1.crm is named; with no file yet it is a new, blank cartridge, which the game formats
+status 0
+action none
+end
+
+case copy, move, delete and import on cards with no saves
+target none
+covers 2-8
+$ memcard new Saves/PlayStation/Cards/Blue.mcr
+out 38
+Blue.mcr made, a formatted memory card
+status 0
+action none
+$ memcard new Saves/PlayStation/Cards/Red.mcr
+out 37
+Red.mcr made, a formatted memory card
+status 0
+action none
+$ memcard cp Saves/PlayStation/Cards/Blue.mcr:1 Saves/PlayStation/Cards/Red.mcr
+out 33
+memcard: no save 1 is on Blue.mcr
+status 1
+action none
+$ memcard mv Saves/PlayStation/Cards/Blue.mcr:BASLUS-00067 Saves/PlayStation/Cards/Red.mcr
+out 44
+memcard: no save BASLUS-00067 is on Blue.mcr
+status 1
+action none
+$ memcard rm Saves/PlayStation/Cards/Blue.mcr
+out 130
+memcard: 'Saves/PlayStation/Cards/Blue.mcr' names no save; write <card>:<save>, the save by its name or its number in 'memcard ls'
+status 1
+action none
+$ memcard rm Saves/PlayStation/Cards/Blue.mcr:1
+out 33
+memcard: no save 1 is on Blue.mcr
+status 1
+action none
+$ memcard import Saves/PlayStation/Cards/Red.mcr Saves/PlayStation/Cards/Blue.mcr
+out 44
+0 save(s), 0 block(s), imported onto Red.mcr
+status 0
+action none
+end
+
+case a whole card duplicated and renamed
+target none
+covers 9-11
+$ memcard new Saves/PlayStation/Cards/Blue.mcr
+out 38
+Blue.mcr made, a formatted memory card
+status 0
+action none
+$ memcard dup Saves/PlayStation/Cards/Blue.mcr Saves/PlayStation/Cards/Green.mcr
+out 34
+Blue.mcr copied whole to Green.mcr
+status 0
+action none
+$ memcard dup Saves/PlayStation/Cards/Blue.mcr Saves/PlayStation/Cards/Green.mcr
+out 65
+memcard: Green.mcr already exists; nothing is written over a card
+status 1
+action none
+$ memcard rename Saves/PlayStation/Cards/Green.mcr Saves/PlayStation/Cards/Teal.mcr
+out 26
+Green.mcr renamed Teal.mcr
+status 0
+action none
+$ memcard ls
+out 173
+PlayStation
+  Saves/PlayStation/Cards/Blue.mcr  Memory Card  0 save(s), 15 of 15 blocks free
+  Saves/PlayStation/Cards/Teal.mcr  Memory Card  0 save(s), 15 of 15 blocks free
+status 0
+action none
+end
+
+case what it refuses
+target none
+covers 1
+$ memcard
+out 72
+Usage: memcard ls|cp|mv|rm|import|new|dup|rename ... (see 'man memcard')
+status 1
+action none
+$ memcard frob
+out 72
+Usage: memcard ls|cp|mv|rm|import|new|dup|rename ... (see 'man memcard')
+status 1
+action none
+$ memcard ls /../x.mcr
+out 60
+memcard: '/../x.mcr' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ memcard ls notes.txt
+out 126
+memcard: notes.txt is no card: the media known are .crm (Backup RAM Cartridge), .brm (Internal Backup RAM), .mcr (Memory Card)
+status 1
+action none
+$ memcard cp notes.txt Saves/PlayStation/Cards/Blue.mcr
+out 107
+memcard: 'notes.txt' names no save; write <card>:<save>, the save by its name or its number in 'memcard ls'
+status 1
+action none
+end

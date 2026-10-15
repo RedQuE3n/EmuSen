@@ -93,6 +93,12 @@ namespace EmuSen.Common
 
         public void SaveSram() => _core?.SaveSram();
 
+        // Lets go of the game's save media, as the frontend leaves the game, so its cards can be managed - see EmuSen_SaveMedia.md §3.5.
+        public void ReleaseMedia() => (_core as Cores.Native.CoreEngine)?.ReleaseMedia();
+
+        // Why a slot of the game runs on the game's own file, or null - see CoreEngine.MediaNotice.
+        public string? MediaNotice => (_core as Cores.Native.CoreEngine)?.MediaNotice;
+
         // Before the caller's log writer is disposed, or a still-open trace loop never reaches the log.
         public void FlushVerboseLogs()
         {

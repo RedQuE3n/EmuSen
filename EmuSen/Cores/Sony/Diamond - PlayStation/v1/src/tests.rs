@@ -19,7 +19,7 @@ fn create(settings: &[(&str, &str)]) -> Diamond {
     for (k, v) in settings {
         pairs.iter_mut().find(|p| p.0 == *k).unwrap().1 = v.to_string();
     }
-    Diamond::create(&Create { image: &image, settings: Settings::from_pairs(pairs), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap()
+    Diamond::create(&Create { image: &image, settings: Settings::from_pairs(pairs), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap()
 }
 
 fn state(d: &mut Diamond) -> Vec<u8> {

@@ -57,8 +57,16 @@ namespace EmuSen.Cores.Native
 
     public sealed record CoreProcessor(uint Id, string Name, int PcBits, IReadOnlyList<(string Name, int Bits)> Registers, uint? CodeSpace = null);
 
-    // Removable since 1.7: a card or pak the player carries between games, which the card mode may keep apart from the game - see EmuSen_CoreAPI.md §6.27.
-    public sealed record CoreBatteryFile(uint Which, string Suffix, long Length, bool Removable = false);
+    // Whom a battery file belongs with: removable since 1.7, console since 1.8; a kind this host does not know reads as the game's - see EmuSen_CoreAPI.md §6.27, §6.28.
+    public enum CoreBatteryKind { Game, Removable, Console }
+
+    // Medium, Label and Port since 1.8, from core info only: the slot a frontend shows - see EmuSen_SaveMedia.md §3.2.
+    public sealed record CoreBatteryFile(uint Which, string Suffix, long Length, CoreBatteryKind Kind = CoreBatteryKind.Game, string? Medium = null, string? Label = null, int? Port = null)
+    {
+        public bool Removable => Kind == CoreBatteryKind.Removable;
+
+        public static CoreBatteryKind KindNamed(string? kind) => kind switch { "removable" => CoreBatteryKind.Removable, "console" => CoreBatteryKind.Console, _ => CoreBatteryKind.Game };
+    }
 
     public sealed record CorePort(uint Port, string? Controller);
 
@@ -149,7 +157,7 @@ namespace EmuSen.Cores.Native
                 Arr(s, "firmware").Select(Firmware).ToArray())
             {
                 Development = Bool(s, "development", false),
-                Battery = s.TryGetProperty("battery", out var battery) && battery.ValueKind == JsonValueKind.Array ? battery.EnumerateArray().Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix"), 0, Str(b, "kind") == "removable")).ToArray() : null,
+                Battery = s.TryGetProperty("battery", out var battery) && battery.ValueKind == JsonValueKind.Array ? battery.EnumerateArray().Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix"), 0, CoreBatteryFile.KindNamed(OptStr(b, "kind")), OptStr(b, "medium"), OptStr(b, "label"), b.TryGetProperty("port", out var port) && port.ValueKind == JsonValueKind.Number ? (int)port.GetInt64() : null)).ToArray() : null,
             }).ToArray();
             string name = Str(r, "name");
             return new CoreInfo(Str(r, "abi"), Str(r, "id"), name, OptStr(r, "display_name") ?? name, Str(r, "version"), Str(r, "license"), Strs(r, "authors"),
@@ -184,7 +192,7 @@ namespace EmuSen.Cores.Native
                 Arr(r, "processors").Select(p => new CoreProcessor((uint)Long(p, "id"), Str(p, "name"), (int)Long(p, "pc_bits"),
                     Arr(p, "registers").Select(g => (Str(g, "name"), (int)Long(g, "bits"))).ToArray(),
                     p.TryGetProperty("code_space", out var code) && code.ValueKind == JsonValueKind.Number ? (uint)code.GetInt64() : null)).ToArray(),
-                Arr(r, "battery").Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix", ".srm"), Long(b, "length"), Str(b, "kind") == "removable")).ToArray(),
+                Arr(r, "battery").Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix", ".srm"), Long(b, "length"), CoreBatteryFile.KindNamed(OptStr(b, "kind")))).ToArray(),
                 Str(state, "format"), Long(state, "version"), kinds.Length == 0 ? new uint[] { 0 } : kinds,
                 Strs(r, "phases"),
                 patches.ValueKind == JsonValueKind.Object ? Long(patches, "low") : null, patches.ValueKind == JsonValueKind.Object ? Long(patches, "high") : null,

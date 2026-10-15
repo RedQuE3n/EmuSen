@@ -1384,6 +1384,7 @@ and a module's build can take its folder whole:
 | `emusen.debug` | 26 | §8.1's debug module |
 | `emusen.trace` | 16 | §8.1's trace module, `log` and `resume` included |
 | `emusen.cheat` | 1 | `cheat` |
+| `emusen.memcard` | 1 | `memcard`, the card manager, added 2026-10-15 (`EmuSen_SaveMedia.md` §6.4) |
 | `emusen.session` | 4 | `core`, `state`, `summary`, `coretop` |
 | `nano` | 1 | the one shipped program |
 | `host` | 5 | what a frontend registers or reads itself: `pause`, `feed`, `vstop` (§16 Q14), `hotaru`, `theme` |

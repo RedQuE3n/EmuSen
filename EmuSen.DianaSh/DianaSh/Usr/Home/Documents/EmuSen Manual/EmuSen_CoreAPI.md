@@ -678,7 +678,7 @@ Each **system** entry:
 | `controllers` | the devices a port can hold, below |
 | `development` | true when the core does not run the system's games yet; absent is false (§27.4, added 2026-10-06) |
 | `firmware` | every firmware file the system can use, for the firmware window, even before a game. One entry for each image a game can name, with that image's own label, size, parts and replacement, as `firmware_for` gives them; entries for images that are alternatives in one file slot share its `which` (amended 2026-10-05, `VenusRT_Native.md` §67) |
-| `battery` | since 1.3: `[{ which, suffix }]`, every battery file a machine of the system can name whatever its settings, so that a host passes them at the first create. A core that lists a file accepts it at create even where the machine made does not keep it. Machine info stays the authority for the machine; a host creates again only where it names a file that exists and was not passed. Absent, a host passes file 0 by its `.srm` rule and creates again as §19.1 records (`EmuSen_CoreAPI_Extensions.md` §10.5) |
+| `battery` | since 1.3: `[{ which, suffix }]` (since 1.7 `kind`, since 1.8 `medium`, `label` and `port`, §6.27, §6.28), every battery file a machine of the system can name whatever its settings, so that a host passes them at the first create. A core that lists a file accepts it at create even where the machine made does not keep it. Machine info stays the authority for the machine; a host creates again only where it names a file that exists and was not passed. Absent, a host passes file 0 by its `.srm` rule and creates again as §19.1 records (`EmuSen_CoreAPI_Extensions.md` §10.5) |
 
 A **controller** names its controls in the canonical vocabulary, so that the bindings screen is built from data and
 the physical bindings stay the frontend's:
@@ -1337,6 +1337,47 @@ written the shared card since, loads the state into it, and checks that the file
 was not marked changed by it; a machine with no removable file passes with that said. The test core lists a removable
 file 1 on an image whose payload begins `CDh`, and its seeded fault `FAULT_CARD_ROLLED_BACK` (1 << 20), a load that
 blanks the card, fails C19 alone (`c19_holds_a_removable_file_as_it_stands_across_a_state_load`).
+
+### 6.28 Save media: the console kind and a slot's medium, label and port (1.8, 2026-10-15)
+
+*Decided 2026-10-15, the tester's go to make the card mode agnostic and modular (`EmuSen_SaveMedia.md`), written before
+its code.* 1.7 told a host which battery files a player carries; it could not say which were memory inside the console,
+nor anything of a slot besides its file. `EmuSen_SaveMedia.md` §5 weighs the forms; this section is the one chosen.
+
+**The surface.**
+
+- **`kind` gains `"console"`**, in core info's `systems[].battery[]` and machine info's `battery[]`: memory inside the
+  console, which every game on it shares (the Sega CD's internal backup RAM, the Saturn's internal memory). A new value
+  of a descriptor's enumerated string (§4.4).
+- **`medium`, `label` and `port`**, each optional, on core info's `systems[].battery[]` entries only: the medium the
+  slot holds, `[a-z0-9.]+` (`psx.card`, `n64.pak`, `mcd.ramcart`); the words a frontend shows for the slot (`Slot 1`,
+  `Controller 2`); and the controller port it belongs to, absent for a slot of the console itself. Which slot a file
+  number is never differs between machines of a system, so machine info does not repeat them. The entries of one medium
+  share a kind and an extension (the last part of the suffix).
+- **`EMUSEN_CREATE_SHARED_CONSOLE`**, bit 2 of `emusen_create_params.flags` (4u): the host keeps every console file of
+  this machine apart from the game. `Create.shared_console` carries it.
+- **`emusen-native`**: `BatteryKind::Console`; `Battery` gains `medium`, `label` and `port`, each written only when set,
+  so a core that sets none writes what it wrote at 1.7, byte for byte; `Battery::console` beside `game` and
+  `removable`, with `.medium(..)`, `.label(..)` and `.port(..)` to set the three.
+
+**The rule a core keeps under the flag** is §6.27's with the kind changed: after a successful `state_load` of either
+kind, `battery(which)` of each console file returns the bytes it returned before the load, and the load raises no
+`BATTERY_CHANGED` of its own. Without the flag the core's own rule stands.
+
+**The host's rule.** A host sets `SHARED_CONSOLE` only on a core whose info lists a console file, as §6.27 pairs its
+flag with a removable file. A host reads an unknown `kind` as `"game"` (enumerations are open, §4.2), so a host of 1.7
+runs a console file per game and never sets the flag; a host of 1.8 given a core of 1.7 finds no `medium`, `label` or
+`port` and takes each kind and extension of a system as one medium (`EmuSen_SaveMedia.md` §3.2). Where each medium's
+files live, and in which mode, is the host's; the reference host's is `EmuSen_SaveMedia.md` §3.
+
+**The kit.** C14 accepts `"console"`, and checks that a `medium` is `[a-z0-9.]+`, a `label` is words, a `port` is one
+machine info lists, and that the entries of one medium agree in kind and extension. C19 keeps console files as it keeps
+removable ones, making its machines with both flags. The test core lists `test.card`'s slot, file 1, and
+`test.memory`'s, file 2, a console file present on an image whose payload begins `CEh`; its seeded faults
+`FAULT_CONSOLE_ROLLED_BACK` (1 << 21), a load that blanks file 2, and `FAULT_MEDIUM_DISAGREES` (1 << 22), file 2 listed
+of the card's medium and of port 7, fail C19 alone and C14 alone (`c19_holds_a_console_file_as_it_stands_across_a_state_load`,
+`each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone`). A core of 1.8 that lists a console file is checked by a
+kit of 1.8 or later, whose C14 accepts it.
 
 ## 7. Core discovery and trust
 
@@ -2088,6 +2129,13 @@ or capability bit. `emusen-native` gains `BatteryKind`, `Battery::game` and `Bat
 moved to them, none of their JSON changing) and `Create.shared_removable`; Diamond lists its two cards removable and
 honours the flag; the C# host reads `kind` and sets the flag for its card mode; kit case C19 is added and C14 checks
 kinds. Its reasons are `EmuSen_CoreAPI_Extensions.md` §9 and `Diamond_Cards.md` §1–§5.
+
+**v1.8, 2026-10-15** (§6.28), the tester's go to make the card mode every console's (`EmuSen_SaveMedia.md`): battery
+entries' kind `"console"`, core info's `medium`, `label` and `port` on battery entries, and
+`EMUSEN_CREATE_SHARED_CONSOLE` (bit 2 of `emusen_create_params.flags`); no export, struct, status or capability bit.
+`emusen-native` gains `BatteryKind::Console`, `Battery::console` and the slot's three fields, written only when set, and
+`Create.shared_console`; the C# host reads the kind as `CoreBatteryKind` with the slot's fields and passes the flag;
+the kit's C14 checks the slots and C19 keeps console files. Its reasons are `EmuSen_SaveMedia.md` §1–§5.
 
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
 and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld

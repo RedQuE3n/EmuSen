@@ -368,6 +368,11 @@ RAM cartridge as file 1 (`.crm`) when the stage that builds it decides its suffi
 hardware's bus presents them (one lane for an odd- or even-lane SRAM), so that saves move between Nephrite and other
 emulators that also store raw lanes (to be checked against the references at stage 3).
 
+*Since 2026-10-15 (core ABI 1.8):* the backup RAM cartridge is file 10 (`.crm`), and the two Sega CD memories are of
+kinds `console` (the internal backup RAM) and `removable` (the cartridge), each a slot of its medium, so that the
+runtime can share them between games and a state load leaves them as they stand (`Nephrite_Native.md` §61,
+`EmuSen_SaveMedia.md` §7.3).
+
 ### 4.5 Cheats
 
 Both formats are console knowledge and go in the system pack (`EmuSen_CoreAPI.md` §15 Q14), scheduled with stage 6:

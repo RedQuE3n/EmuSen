@@ -107,6 +107,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 new DmaCommand(),
                 new FrameLogCommand(),
                 new CheatCommand(cheatAutoDetectCodec, cheatExplicitCodec, supportedCheatSystems),
+                new MemcardCommand(),
                 new SearchCommand(),
                 new MemFindCommand(),
                 new SnapshotCommand(snapshotStore),

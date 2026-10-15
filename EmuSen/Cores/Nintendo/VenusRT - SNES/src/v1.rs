@@ -532,7 +532,7 @@ mod tests {
     fn machine() -> Machine {
         let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
         (image[0x7FD6], image[0x7FD8]) = (0x02, 0x03);
-        let request = Create { image: &image, settings: Settings::default(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false };
+        let request = Create { image: &image, settings: Settings::default(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false };
         <Machine as Core>::create(&request).unwrap()
     }
 
@@ -602,7 +602,7 @@ mod tests {
         // LDA #$80, STA $0000, LDA #$FE, STA $0001, JMP $0000: a BRA to itself in WRAM.
         let mut image = crate::machine::tests::rom(&[0xA9, 0x80, 0x8D, 0x00, 0x00, 0xA9, 0xFE, 0x8D, 0x01, 0x00, 0x4C, 0x00, 0x00]);
         (image[0x7FD5], image[0x7FD6], image[0x7FD8]) = (0x23, 0x34, 0x03);
-        let make = |text: &[u8]| <Machine as Core>::create(&Create { image: &image, settings: Settings::parse(text).unwrap(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false });
+        let make = |text: &[u8]| <Machine as Core>::create(&Create { image: &image, settings: Settings::parse(text).unwrap(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false });
         assert_eq!(make(b"").unwrap().sys.sa1_every, 1);
         assert_eq!(make(b"sa1_catch_up=3").err(), Some(status::BAD_SETTING));
         let lag = |m: &mut Machine| {
@@ -631,7 +631,7 @@ mod tests {
         let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
         image[0x7FD6] = 0x03;
         let (program, data) = (vec![0u8; 6_144], vec![0u8; 2_048]);
-        let make = |files: Vec<File<'_>>| <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false });
+        let make = |files: Vec<File<'_>>| <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false });
         let whole = [program.as_slice(), data.as_slice()].concat();
         assert!(make(vec![File { which: 2, data: &whole }]).unwrap().sys.cart.dsp.is_some());
         assert!(make(vec![File { which: 2, data: &program }, File { which: 3, data: &data }]).unwrap().sys.cart.dsp.is_some());
@@ -647,7 +647,7 @@ mod tests {
     }
 
     fn create(image: &[u8], files: Vec<File<'_>>) -> Result<Machine, i32> {
-        <Machine as Core>::create(&Create { image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false })
+        <Machine as Core>::create(&Create { image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false })
     }
 
     // VenusRT_DspHle.md §7: no file is required, each entry names its replacement's effect, and create picks the
@@ -821,7 +821,7 @@ mod tests {
         let firmware = vec![0u8; 53_248];
         let saved: Vec<u8> = (0..4096).map(|i| (i * 5 + 1) as u8).collect();
         let files = vec![File { which: 0, data: &saved }, File { which: 2, data: &firmware }];
-        let mut m = <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap();
+        let mut m = <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
         assert_eq!(Core::battery(&m, 0).unwrap(), (&saved[..], flags::BATTERY_TRACKED));
         assert_eq!(m.sys.read_value(0x68_0003, false), Some(saved[3]));
         Core::space_write(&mut m, 0, 0x68_0003, &[0xEE]).unwrap();

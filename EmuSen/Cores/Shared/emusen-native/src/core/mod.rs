@@ -36,6 +36,8 @@ pub struct Create<'a> {
     /// Since 1.7, `CREATE_SHARED_REMOVABLE`: the host keeps the removable battery files apart from the game, so a
     /// state load leaves them as they stand (EmuSen_CoreAPI.md §6.27).
     pub shared_removable: bool,
+    /// Since 1.8, `CREATE_SHARED_CONSOLE`: the same for the console's own battery files (EmuSen_CoreAPI.md §6.28).
+    pub shared_console: bool,
 }
 
 /// What `media_insert` receives (since 1.1): the disc or nothing, its companions from `flags::FILE_MEDIA`, and

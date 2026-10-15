@@ -4399,3 +4399,50 @@ sound and the RAM of homebrew programs (the drive probe's, the patched mcd-verif
 trace or log. The player's BIOS was given to Nephrite and to the references as a file; of its runs only their devices'
 registers, pictures, sound and frame numbers were looked at, never its code, its RAM before a game's hand-over or a
 program counter.
+
+## 61. The Sega CD's save media on core ABI 1.8 (2026-10-15)
+
+*Decided 2026-10-15 that the card mode is every console's (`EmuSen_SaveMedia.md`).* The Sega CD has two save memories
+of different kinds, and core ABI 1.8 lets the core say so: the backup RAM inside the unit, which every game on the
+console shares, is of kind `console`; the backup RAM cartridge, which a player carries between consoles, is
+`removable`. Under the host's create flags a state load leaves each as it stands, so a player's saves on a shared
+backup RAM survive another game's state, as `Diamond_Cards.md` §1 showed the PlayStation's did not before 1.7.
+
+### 61.1 Exactly what changed
+
+This section is the whole of the change, kept to the battery declarations and what they need, since the attachment
+interface (`Nephrite_Attachments.md`) is built next on another branch:
+
+| File | Change |
+|---|---|
+| `src/v1.rs` | `battery_files("mcd")` and `batteries()` list file 0 `.brm` as `Battery::console(..).medium("mcd.backup").label("Inside the console")` and file 10 `.crm` as `Battery::removable(..).medium("mcd.ramcart").label("Cartridge slot")`, through two functions `backup_ram()` and `ram_cartridge()`, in place of two `Battery::game` each; `create_disc` sets `Machine::kept_apart` from `Create.shared_removable` and `Create.shared_console`; every test's `Create` literal gains `shared_console: false`; one test added |
+| `src/machine.rs` | `BRAM_ID` (20, the last of `MCD_MEMORIES`, which is unchanged); `Machine::kept_apart`, a `KeptApart { cartridge, backup }` set at create and never part of a state, with `keeps(id)`; the constructor's literal sets it to the default |
+| `src/state.rs` | `load_state` skips copying the state's bytes of `CARTRAM` when the cartridge is kept apart and of `BRAM` when the backup RAM is, and is otherwise as it was |
+
+The state's format and version are unchanged: a state still holds both memories, and a machine made without the flags
+loads them as before, so per-game behaviour, every state's bytes and the pinned layout are unchanged (the crate's
+172 unit tests pass, the layout's among them). The Genesis cartridge's `.srm` stays of kind `game`. Machine info
+names the same files with their kinds; core info gains each slot's medium and label.
+
+**The new test**, `the_backup_ram_and_the_cartridge_are_kept_apart_under_the_flags`: core info's two slots with their
+kinds, media and labels; machine info's kinds; and a disc machine with the cartridge plugged in, made over backup RAM
+11h and cartridge 22h, whose state is loaded into one made over 33h and 44h: with both flags the second keeps 33h and
+44h, without them it takes 11h and 22h back.
+
+**Through the host** (`NephriteMediaTests`): the Genesis pack names the two media (`Internal Backup RAM`, noun `Backup
+RAM`; `Backup RAM Cartridge`, noun `Cartridge`), each the first of its kind, so their rows are `ConsoleMemory` and
+`Cards`; with the backup RAM shared, `Saves/Sega CD/Console/Backup RAM 1.brm` is given to the machine and a state of
+the same game leaves it as it stands, while per game the game's own `.brm` is put back by the state.
+
+### 61.2 Not done here
+
+- **What the BIOS sees of a changed memory.** Nephrite presents nothing on a load that keeps a memory: unlike the
+  PlayStation's card, the Sega CD's backup RAM has no flag of insertion, and whether the BIOS's backup RAM calls read the
+  directory from the RAM each time, as argued in `EmuSen_SaveMedia.md` §7.3 [A], is to be confirmed against Sega's
+  *Mega-CD BIOS Manual* at stage 10, when the BIOS replacement writes the same format.
+- **A state marking its memories as kept apart**, as Diamond's `SHRD` block does: a state made with the backup RAM
+  shared and loaded per game puts the shared memory's contents into the game's own `.brm`. Nothing shared is lost by it,
+  and the game's own file is rolled back as any per-game load rolls it back; the mark is a refinement for the stage that
+  next changes the Sega CD's state.
+- **The format module** for `mcd.backup` and `mcd.ramcart`, and a formatted image for a new machine, both deferred to
+  stage 10 (decided 2026-10-15).

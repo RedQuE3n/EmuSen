@@ -2783,3 +2783,25 @@ argued candidate.
 of 173 in each, and all 28 `emulator-only` ROMs pass. **The four games** are unchanged (Kirby's Dream Land and Link's
 Awakening are MBC1 boards, the latter with 8 KiB of RAM): MercuryRT's trace and the real-games test. The whole `Mercury`
 filter passes, 814 cases.
+
+**Cost.** MBC1's banks now shift by a field rather than a constant on every ROM read through the board.
+
+| Game | MercuryRT step E | step F | C# step E | step F |
+|---|---|---|---|---|
+| Tetris (no MBC) | 0.4468, 0.4425, 0.4411 | 0.4451, 0.4502, 0.4441 | 0.6571, 0.6378, 0.6404 | 0.6324, 0.6349, 0.6367 |
+| Kirby's Dream Land (MBC1) | 0.4974, 0.5008, 0.5357 | 0.5061, 0.5089, 0.5225 | 0.6773, 0.6837, 0.7132 | 0.6791, 0.6965, 0.6966 |
+| Link's Awakening (MBC1) | 0.4301, 0.4194, 0.4096 | 0.4247, 0.4061, 0.4099 | 0.6058, 0.5834, 0.6208 | 0.5715, 0.5699, 0.5766 |
+| Pokémon Yellow (MBC5) | 0.5544, 0.5495, 0.5620 | 0.5523, 0.5442, 0.5637 | 0.7114, 0.7166, 0.7141 | 0.7322, 0.7150, 0.7204 |
+
+The machine was busier than in earlier steps (round-to-round spread up to 7%), and every pair overlaps; Kirby's
+MercuryRT medians are 0.5008 and 0.5089, 1.6% apart, the largest difference, and within the spread.
+
+**Mutants**, each in C# and in Rust separately:
+
+| # | Mutation | Caught by, in both engines |
+|---|---|---|
+| F1 | the RAM bank not taken modulo the chip | `An_mbc1_with_one_ram_bank_answers_every_bank_number_with_it` |
+| F2 | no image is ever taken for a multicart | `An_mbc1_multicart_puts_bank2_on_bank_bits_4_and_5` |
+| F3 | BANK1 keeps all five bits on a multicart | at first **nothing**: the claim's case BANK2 = 1, BANK1 = `$10` gives bank `$10` either way. The claim gained BANK2 = 0, BANK1 = `$10`, which is bank 0 on an MBC1M (the second row of `multicart_rom_8Mb`'s table) and bank `$10` under the mutant; caught after |
+| F4 | a blank logo counts as a logo | `A_megabyte_mbc1_with_a_blank_logo_in_both_banks_is_ordinary` |
+| F5 | the logo compared at bank `$20` instead of `$10` | the multicart claim |

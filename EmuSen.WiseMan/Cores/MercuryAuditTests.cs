@@ -410,6 +410,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x11, rig.Read(0x6000));
             rig.Write(0x2000, 0x10);
             Assert.Equal(0x10, rig.Read(0x6000));
+            rig.Write(0x4000, 0x00);
+            Assert.Equal(0x00, rig.Read(0x6000));
             rig.Write(0x4000, 0x03);
             rig.Write(0x2000, 0x0F);
             Assert.Equal(0x3F, rig.Read(0x6000));

@@ -673,3 +673,20 @@ The handheld (§11), Windows and macOS (the fallback is chosen there by §4.4; n
 test covers the import's layout and pitch, not a driver's other choices), GPU timings in the window, and a mutant of
 the external acquire that the layer could see. Hotaru and `FramePresenter` take the device path too, as hosts of
 `GameFrameControl`; only Mistress logs why a window does not.
+
+---
+
+## 14. Step (a): `emusen-gpu` 1.2, as built (2026-10-15)
+
+`GpuDevice::lent`, `Timeline`, `Commands::{wait_for, signal}`, `create_buffer_shared` and `PictureOut`, as §6 lists;
+`EmuSen_Gpu.md` §3 and §5.1 are the surface and the record. Three things differ from §5 and §6 as designed [A]:
+
+- **The handles cross as integers** with the loader's `vkGetInstanceProcAddr`, not as `ash` types (`Lent::from_raw`
+  takes the plain function pointer the core ABI carries), so the crate's `ash` is not a lender's concern.
+- **`PictureOut` waits only for a picture the lender was told of** (`tell`), which is §5.3's "handed" made exact.
+- **`hand` takes `&self`**, its counters in cells, since Diamond records a picture's hand-over inside a recording
+  that borrows its owner.
+
+Proof [M]: 17 tests of the crate on the RX 6800, 5 of them a lent device with the test as its own lender; clean under
+the validation layer with synchronisation validation; three mutants, two killed and one (exclusive sharing) surviving
+on a driver that does not need the ownership transfer, recorded in `EmuSen_Gpu.md` §5.1.

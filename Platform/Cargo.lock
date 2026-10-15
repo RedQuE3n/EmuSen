@@ -126,6 +126,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-dianash"
+version = "0.1.0"
+dependencies = [
+ "emusen-galaxia",
+ "libc",
+ "sha2",
+]
+
+[[package]]
 name = "emusen-disc"
 version = "0.1.0"
 dependencies = [
@@ -157,6 +166,7 @@ version = "0.1.0"
 name = "emusen-platform"
 version = "0.1.0"
 dependencies = [
+ "emusen-dianash",
  "emusen-disc",
  "emusen-endymion",
  "emusen-galaxia",

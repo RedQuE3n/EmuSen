@@ -11,6 +11,8 @@ name = "emusen_platform"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# DianaSh's shell core, whose host API this library exports (EmuSen_DianaSh.md §10).
+emusen-dianash = { path = "../dianash" }
 emusen-endymion = { path = "../endymion" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }

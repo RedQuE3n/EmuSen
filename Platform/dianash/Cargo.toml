@@ -1,0 +1,25 @@
+[package]
+name = "emusen-dianash"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# DianaSh's shell core: the language, its builtins, sessions, accounts, the sandbox, command lookup and the host
+# commands' calling convention. It names no emulator type; Galaxia's crate gives it the tree. See EmuSen_DianaSh.md §4.
+[lib]
+name = "emusen_dianash"
+
+# The standalone shell of EmuSen_DianaSh.md §10.4: this crate, Galaxia's tree and a line editor, in one file.
+[[bin]]
+name = "dianash"
+path = "src/bin/dianash/main.rs"
+
+[dependencies]
+emusen-galaxia = { path = "../galaxia" }
+# passwd's stored hash, as DianaShUserRegistry computes it.
+sha2 = "0.11"
+
+# The terminal's raw mode for the line editor (termios).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

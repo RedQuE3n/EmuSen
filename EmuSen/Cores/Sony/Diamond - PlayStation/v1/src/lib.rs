@@ -110,6 +110,9 @@ pub struct Diamond {
     chosen: Chosen,
     /// Why the enhancements are set but not drawn, or drawn slowly, for `setting_notes`.
     note: Option<String>,
+    /// The device the host lent at create, which the renderer draws on and hands its picture on (since 1.9,
+    /// EmuSen_DevicePicture.md §7).
+    lend: Option<DeviceLend>,
 }
 
 impl Diamond {
@@ -157,7 +160,7 @@ impl Diamond {
         }
         let made = match kept {
             Some(mut r) => r.configure(chosen.options).map(|_| r),
-            None => Renderer::with(device, chosen.options),
+            None => self.renderer_on_lend(chosen.options).unwrap_or_else(|| Renderer::with(device, chosen.options)),
         };
         match made {
             Ok(r) => {
@@ -175,6 +178,16 @@ impl Diamond {
         if let Some(r) = self.renderer() {
             r.frame_end();
         }
+    }
+
+    /// The renderer on the lent device, or `None` when nothing is lent or the lend cannot be drawn on, the renderer
+    /// then making a device of its own.
+    fn renderer_on_lend(&self, options: Options) -> Option<Result<Renderer, String>> {
+        let l = self.lend?;
+        // SAFETY: the lend's handles and loader are the host's, live until the machine is destroyed (EmuSen_CoreAPI.md §6.29).
+        let lent = unsafe { diamond_renderer::Lent::from_raw(l.get_instance_proc_addr?, l.instance, l.physical_device, l.device, l.api_version, l.queue_family, l.queue_index, l.host_queue_family) };
+        // SAFETY: as above.
+        unsafe { Renderer::lent_or(None, options, Some((lent, l.done))) }.ok().map(Ok)
     }
 
     pub fn machine(&self) -> &Machine {
@@ -204,7 +217,7 @@ impl StateMachine for Diamond {
 }
 
 impl Core for Diamond {
-    const CAPABILITIES: u64 = <Machine as Core>::CAPABILITIES | caps::SETTINGS | caps::SETTING_NOTES;
+    const CAPABILITIES: u64 = <Machine as Core>::CAPABILITIES | caps::SETTINGS | caps::SETTING_NOTES | caps::DEVICE_PICTURE;
 
     fn info() -> Info {
         Machine::info()
@@ -225,7 +238,7 @@ impl Core for Diamond {
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        let mut d = Diamond { machine: Machine::create(request)?, chosen: Chosen::default(), note: None };
+        let mut d = Diamond { machine: Machine::create(request)?, chosen: Chosen::default(), note: None, lend: request.device };
         d.choose(Chosen::default().with(&request.settings));
         Ok(d)
     }
@@ -256,7 +269,7 @@ impl Core for Diamond {
     fn frame_info(&self) -> FrameInfo {
         match self.renderer_ref() {
             Some(r) => {
-                let (_, w, h) = r.handed();
+                let (w, h) = r.handed_size();
                 FrameInfo { aspect_num: 4, aspect_den: 3, ..FrameInfo::rgba(w as i32, h as i32) }
             }
             None => self.machine.frame_info(),
@@ -268,6 +281,23 @@ impl Core for Diamond {
             Some(r) => r.handed().0,
             None => self.machine.frame(),
         }
+    }
+
+    /// The renderer's picture where it lies on the lent device, this frame's; `None` with no renderer or no lend.
+    fn frame_device(&mut self) -> Result<Option<DeviceFrame>, i32> {
+        let Some(r) = self.renderer_ref() else { return Ok(None) };
+        Ok(r.tell_handed().map(|(buffer, w, h, ready, value)| DeviceFrame {
+            size: 0,
+            format: pixel::RGBA8888,
+            buffer: buffer.raw(),
+            offset: 0,
+            width: w as i32,
+            height: h as i32,
+            stride: w as i32 * 4,
+            reserved: 0,
+            ready: ready.raw(),
+            value,
+        }))
     }
 
     fn audio_rate(&self) -> i32 {
@@ -389,7 +419,7 @@ impl Core for Diamond {
     }
 }
 
-emusen_native::core_exports!(Diamond; axes, debug, debug_stack, debug_registers, debug_disassemble, debug_reads, media, settings, setting_notes);
+emusen_native::core_exports!(Diamond; axes, debug, debug_stack, debug_registers, debug_disassemble, debug_reads, media, settings, setting_notes, device_picture);
 
 #[cfg(test)]
 mod tests;

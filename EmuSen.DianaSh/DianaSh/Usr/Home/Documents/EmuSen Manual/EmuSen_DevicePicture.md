@@ -719,3 +719,50 @@ alone (`FAULT_DEVICE_PICTURE_UNLENT` C20 alone; `FAULT_ONLY_HOST_1_0` now C20 wi
 host of 1.9); WiseMan's `CoreAbi` tests. A defect of the kit's own C20 was found by running it on Diamond: the case
 played the session's host minor, 0 by default, so its create passed 88 bytes and no lend reached the core, and the
 test core, which answers 0 lent or not, could not show it. C20 now plays 1.9; the Diamond run of §16 is its proof.
+
+## 16. Step (e): Diamond on 1.9, as built (2026-10-15)
+
+### 16.1 The core
+
+`Diamond_Enhancements.md` §56 is the record: the renderer's slots became `PictureOut`; lent a device, the picture is
+handed the frame it is drawn, `frame_copy` reading it back on demand; a seed goes up through the readback buffer; the
+bit is claimed. A defect of the renderer's drop, older than this work (478 validation findings with no lend, objects
+destroyed under a pending submission), was found by the validation layer and fixed: 0 findings after.
+
+### 16.2 What was shown
+
+- **No device lent**: Diamond's suites unchanged, the goldens and the state digests among them [M].
+- **A device lent** (the kit's, C20, `animated-triangle.exe` at 2×, 200 frames): 120 of 120 pictures handed on the
+  device, each equal to the machine's own `frame_copy`; the lent machine's pictures equal to the lendless machine's a
+  frame later, every frame; the held picture unchanged; the other 19 cases passing. Under the validation layer with
+  synchronisation validation, 0 findings over the whole run [M].
+- **The latency, in frames**: one frame without a lend (§38.1 there), **none** with one, the core's part of §8's
+  "from a frame's emulation to its picture's presentation" [M, the same run].
+- **A mutant** of `PictureOut` with no wait for `done` fails C20 alone [M].
+
+### 16.3 What is not built: the reference host's lend
+
+The reference host reads 1.9 and lends nothing, so in Mistress Diamond's picture is still the frame before, read back
+and uploaded, until the host lends. What the host needs, in order, each its own step:
+
+1. **The device grows** (§2's table): Vulkan 1.2 where offered, `timelineSemaphore` enabled, a second queue (on the
+   RX 6800 one of the four in the compute family, §1.3) and a timeline `done`; the platform library's interface
+   answers the lend.
+2. **The intake.** A device picture taken by the chain instead of pixels: the copy of the core's buffer into the
+   chain's history image, recorded into the frame's submission as uploads now are (§13.1), waiting for `ready` and
+   signalling `done` with the picture's value.
+3. **The frames a host does not show.** The UI thread takes the newest picture and drops older ones, and a dropped
+   picture must be let go of in order (§5.3); when nothing is shown at all (a minimised window, fast-forward with
+   rendering skipped), `done` must still advance or the machine stalls within two frames. The form argued here [A] is
+   an intake ring on the emulation thread: right after `frame_device`, a copy of the slot into one of three host-owned
+   device buffers, on a third queue of the host's, waiting for `ready` and signalling `done`, so that the core is let
+   go of at the device's pace whatever the window does; the chain then reads the newest ring buffer. It costs one
+   copy on the device a frame (of the order of 0.02 to 0.1 ms at 4×) and keeps every rule of §5.3 inside the host.
+4. **The C# path**: `CoreMachine` lending at create where the core claims the bit and the device can lend, calling
+   `frame_device` after `advance`, and handing the frame hand-off a device picture; the Managed chain, which cannot
+   take one, keeping `frame_copy`.
+5. **Measured**: the latency in frames from a frame's emulation to its presentation, in a window, with and without
+   the lend.
+
+Each is the host's and changes no surface of §5.
+

@@ -29,6 +29,10 @@ so that precise geometry follows the vertices Spyro the Dragon keeps shifted; th
 with its keep rule committed before the code (§54), then Spyro and the other discs measured both ways, the decision,
 the gate and the cost (§55).
 
+*The picture on the device, 2026-10-15* (§56): the renderer on a device the host lends through the core ABI's 1.9,
+its picture handed on that device the frame it is drawn, so that §38.1's frame of latency goes where a host lends;
+and a defect of the renderer's drop found on the way.
+
 The marks are the plan's: **[M]** measured on 2026-10-13 on the desktop (Ryzen 7 7700X, Fedora 44, Rust nightly
 2026-10-01), with the tool named; **[R]** read from a source, named; **[A]** argued, with no measurement behind it;
 **[C]** a choice.
@@ -3748,3 +3752,67 @@ Opened, all EmuSen's own: this page's §1 to §13, §21 to §36 and §51; `Black
 Diamond READMEs; `Diamond_Players.md` §15. The source of `blackmoon-r3000`'s `lib.rs`, `exec.rs` and `boundary.rs`;
 of `precision`; of `diamond`'s `layer.rs`, `tests/support/goldens.rs` and `examples/bench.rs`; of `diamond-renderer`'s
 `Renderer` and `Counts`; the crack model and the cost scripts of the crack fill's probe folder.
+
+---
+
+## 56. The picture on the device (core ABI 1.9), as built, 2026-10-15
+
+*The tester's go of 2026-10-15 to move the game's picture off Skia (`EmuSen_DevicePicture.md`); its §7 is this
+section's design and its §16 the step's record.*
+
+### 56.1 What changed
+
+- **The slots are `emusen-gpu`'s.** The renderer's two host picture slots and `Back::Slot`'s copy became
+  `PictureOut` (`EmuSen_Gpu.md` §5.1): on a device of the renderer's own, the same copy into the same host slots; on a
+  lent device with the host's `done`, device slots shared with the host's queue family, the copy followed by `ready`
+  signalled with the picture's value.
+- **Lent, the picture is the frame's own.** `frame_end` submits the frame as §38.1 does, and the host is handed **the
+  picture of this frame**, not the one before: the host waits for it on the device (`ready`), so nothing needs it in
+  host memory before `advance` returns. Off the device the rule of §38.1 stands unchanged, the frame before.
+- **`frame_copy` still answers.** On the device `handed` waits for the pending submission and copies the slot into
+  the readback buffer (`back`), which is what a screenshot, the kit and every tool read; a host that presents from the
+  device never calls it.
+- **A seed on the device** goes up through `back`: VRAM and the palette cache first, then the picture, handed into
+  slot 0 with its own value, so that after a load or an attach the first picture handed is the one §38.1 names.
+- **`frame_device`**, the core ABI's export, answers the slot, size, `ready` and value of the picture handed, and tells
+  `PictureOut` that the host has it, after which the slot is not written until `done` passes that value. A picture
+  never asked for binds nothing, so a host that lends and reads `frame_copy` alone never stalls the machine.
+- **Lent or not is decided at create.** `Diamond::create` keeps the lend; the renderer is made on it when the
+  enhancements first draw, and on a device of its own when nothing is lent or the lend is refused (a version below
+  1.2, a queue without compute). A renderer rebuilt for new options keeps its device.
+- **The capability bit `DEVICE_PICTURE` is claimed**, and `core_exports!` gives the export.
+
+### 56.2 A defect of the renderer's drop, found by the validation layer
+
+The kit's run under the validation layer (`VK_LAYER_KHRONOS_validation`, `VK_LAYER_VALIDATE_SYNC=1`,
+`VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1`) gave 961 findings with the device lent: `vkDestroyBuffer`,
+`vkDestroyPipeline` and `vkDestroyDescriptorPool` on objects a submission was still using
+(`VUID-vkDestroyBuffer-buffer-00922` and its two kin). **The defect is older than the lend** [M]: with the lend
+disabled and the code otherwise as before, the same run gave 478 findings of the same three kinds. `Device`'s drop
+released its buffers and programs before `GpuDevice`'s own drop waited for the device, so a machine dropped with a
+frame's submission pending destroyed what that submission read; nothing in the gates drops a machine mid-run, and the
+kit does at every case. `Device::drop` now waits for the pending submission first: **0 findings** over the kit's 20
+cases on `animated-triangle.exe` at 2×, the lent machines of C20 included.
+
+### 56.3 Proof
+
+- **Unchanged with no device lent** [M, `cargo test --release`, the RX 6800, `EMUSEN_DIAMOND_PS1TESTS` set]: the
+  renderer's 2 tests, `diamond-v1`'s 4, and the machine's suites, the accurate goldens, the scaled, true-colour,
+  filtered and precise gates and the state digests among them, all passing as before.
+- **With a device lent** [M, the kit, `emusen-core-conform --core libdiamond.so --image animated-triangle.exe --frames
+  200 --settings resolution=2`]: C20 passes, 120 of 120 pictures handed on the device, each read by the kit on its own
+  queue equal to the machine's `frame_copy` of that frame, and the lent machine's `frame_copy`s equal to the lendless
+  machine's **a frame later**, every one of 120; the picture held through two `advance` calls unchanged. The other 19
+  cases pass. At `resolution=1` the renderer is off and every picture goes by `frame_copy`, as C20 notes.
+- **The latency, in frames** [M, the same run]: one frame without a device lent, as §38.1 states; **none** with one,
+  the picture handed the frame it is drawn. What the host then adds before the picture is presented is the host's
+  (`EmuSen_DevicePicture.md` §16).
+- **A mutant**: `PictureOut::hand` with the wait for `done` removed fails C20 with "the picture of frame 60, held
+  until now, was written over before done let go of it".
+
+### 56.4 What it leaves
+
+The setting's cost still states §38.1's frame of latency, which holds for every host that lends nothing, the
+reference host included until it lends (`EmuSen_DevicePicture.md` §16). The latency a player sees is the host's to
+measure once it presents from the device.
+

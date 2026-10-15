@@ -18,6 +18,7 @@ use diamond::gpu::texture::Texture;
 use diamond::gpu::vram::{Mask, Rect};
 use diamond::layer::{Command, Layer, Part, Shown};
 use emusen_gpu::GpuDevice;
+pub use emusen_gpu::Lent;
 use precision::{Draw, Fraction};
 
 use blocks::{Blocks, TILES, Written};
@@ -134,10 +135,23 @@ impl Renderer {
 
     /// `new`, drawing by `options`.
     pub fn with(name: Option<&str>, options: Options) -> Result<Renderer, String> {
+        // SAFETY: no lend, so a device of its own.
+        unsafe { Renderer::lent_or(name, options, None) }
+    }
+
+    /// `with` on the device a host lends where it lends one, the picture then handed on it the frame it is drawn, and
+    /// on a device of its own otherwise (EmuSen_DevicePicture.md §7).
+    ///
+    /// # Safety
+    /// A lend's handles are live and of one device, which outlives the renderer, as `GpuDevice::lent` asks.
+    pub unsafe fn lent_or(name: Option<&str>, options: Options, lend: Option<(Lent, u64)>) -> Result<Renderer, String> {
         let options = Options { scale: options.scale.clamp(1, MAX_SCALE), ..options };
-        let gpu = GpuDevice::try_create(name)?;
+        let (gpu, done) = match lend {
+            Some((lent, done)) => (unsafe { GpuDevice::lent(&lent) }?, Some(done)),
+            None => (GpuDevice::try_create(name)?, None),
+        };
         Ok(Renderer {
-            device: Device::new(gpu, options.scale, options.bits())?,
+            device: Device::handing(gpu, options.scale, options.bits(), done)?,
             steps: Vec::with_capacity(256),
             used: Used::default(),
             stretch: Stretch { written: Written::default(), read: Blocks::default(), pairs: Vec::with_capacity(1 << 16), loads_from: 0, lines_from: 0, clear: false, serial: 1, rows: vec![(0, 0); 576] },
@@ -210,14 +224,40 @@ impl Renderer {
         self.close();
         self.device.submit_pending(&self.steps, self.used, Back::Slot(slot, (w * h) as usize));
         self.submitted();
-        self.handed = self.ahead;
+        // On the device the host waits for the picture there, so it is handed the frame it is drawn (DevicePicture §7).
+        self.handed = if self.device.on_device() { (slot, w, h) } else { self.ahead };
         self.ahead = (slot, w, h);
     }
 
-    /// The picture a host is handed, RGBA at its own size: the frame before the last `frame_end`'s, or the seed's.
+    /// The picture a host is handed, RGBA at its own size: the frame before the last `frame_end`'s, or the seed's; on
+    /// the device, the frame's own, read back for a host that asks for it by `frame_copy`.
     pub fn handed(&self) -> (&[u8], u32, u32) {
         let (slot, w, h) = self.handed;
-        (&self.device.held().slots[slot].slice::<u8>()[..(w * h * 4) as usize], w, h)
+        let held = self.device.held();
+        if !self.device.on_device() {
+            return (&held.out.slot(slot).slice::<u8>()[..(w * h * 4) as usize], w, h);
+        }
+        self.device.gpu.wait_for_pending();
+        self.device.gpu.submit(|c| c.copy(held.out.slot(slot), &held.back, (w * h * 4) as u64, 0, 0));
+        (&held.back.slice::<u8>()[..(w * h * 4) as usize], w, h)
+    }
+
+    /// The size of the picture `handed` answers, without reading it.
+    pub fn handed_size(&self) -> (u32, u32) {
+        (self.handed.1, self.handed.2)
+    }
+
+    /// The picture the host is handed, where it lies on the lent device: its slot, its size and the value the
+    /// device's `ready` reaches once it is written, the host then told of it; `None` off the device.
+    pub fn tell_handed(&self) -> Option<(&emusen_gpu::GpuBuffer, u32, u32, &emusen_gpu::Timeline, u64)> {
+        let held = self.device.held();
+        let (slot, w, h) = self.handed;
+        let value = held.handed.get();
+        if !self.device.on_device() || value.value == 0 || value.slot != slot {
+            return None;
+        }
+        held.out.tell(value.value);
+        Some((held.out.slot(slot), w, h, held.out.ready().expect("on the device"), value.value))
     }
 
     /// The renderer's VRAM, a halfword a pixel as the GPU's `Vram` holds them, once everything told is drawn; at a scale
@@ -624,7 +664,8 @@ impl Layer for Renderer {
         self.device.gpu.wait_for_pending();
         let n = self.options.scale as usize;
         let held = self.device.held();
-        let (staged, back, slot) = (self.device.staged().records.slice_mut::<u32>(), held.back.slice_mut::<u32>(), held.slots[0].slice_mut::<u32>());
+        let on_device = self.device.on_device();
+        let (staged, back) = (self.device.staged().records.slice_mut::<u32>(), held.back.slice_mut::<u32>());
         // At a scale each pixel of the machine's VRAM and picture is a block of the same value (§39.6): a row of blocks
         // made once and copied to the block's other rows.
         (self.width, self.height) = (gpu.display.width, gpu.display.height);
@@ -637,8 +678,22 @@ impl Layer for Renderer {
                 back.copy_within(y * n * row..(y * n + 1) * row, (y * n + j) * row);
             }
         }
+        for (o, &c) in staged[..256].iter_mut().zip(gpu.clut.colours.iter()) {
+            *o = c as u32;
+        }
         let (width, frame) = (self.width as usize, gpu.display.frame());
         let w = width * n;
+        let records = &self.device.staged().records;
+        let (pw, ph) = (self.width * n as u32, self.height * n as u32);
+        // On the device the slots are the device's own, so the picture goes up through the scratch after VRAM has.
+        if on_device {
+            self.device.gpu.submit(|c| {
+                c.copy(&held.back, &held.vram, 0, 0, 0);
+                c.copy(records, &held.cluts, 256 * 4, 0, 0);
+            });
+            self.counts.submissions += 1;
+        }
+        let slot = if on_device { held.back.slice_mut::<u32>() } else { held.out.slot(0).slice_mut::<u32>() };
         for y in 0..self.height as usize {
             for (x, block) in slot[y * n * w..][..w].chunks_exact_mut(n).enumerate() {
                 let at = (y * width + x) * 4;
@@ -648,18 +703,21 @@ impl Layer for Renderer {
                 slot.copy_within(y * n * w..(y * n + 1) * w, (y * n + j) * w);
             }
         }
-        for (o, &c) in staged[..256].iter_mut().zip(gpu.clut.colours.iter()) {
-            *o = c as u32;
-        }
-        let (w, h) = (self.width * n as u32, self.height * n as u32);
+        let (w, h) = (pw, ph);
         (self.slot, self.slot_entries, self.next_slot) = (0, 256, 1);
-        let records = &self.device.staged().records;
         (self.handed, self.ahead) = ((0, w, h), (0, w, h));
-        self.device.gpu.submit(|c| {
-            c.copy(&held.back, &held.vram, 0, 0, 0);
-            c.copy(&held.slots[0], &held.picture, (w * h * 4) as u64, 0, 0);
-            c.copy(records, &held.cluts, 256 * 4, 0, 0);
-        });
+        if on_device {
+            self.device.gpu.submit(|c| {
+                c.copy(&held.back, &held.picture, (w * h * 4) as u64, 0, 0);
+                held.handed.set(held.out.hand(c, &held.picture, (w * h * 4) as u64, 0));
+            });
+        } else {
+            self.device.gpu.submit(|c| {
+                c.copy(&held.back, &held.vram, 0, 0, 0);
+                c.copy(held.out.slot(0), &held.picture, (w * h * 4) as u64, 0, 0);
+                c.copy(records, &held.cluts, 256 * 4, 0, 0);
+            });
+        }
         if self.options.colour {
             // True colour's plane empty, the machine's VRAM having only the console's five bits.
             self.device.gpu.submit(|c| c.fill(&held.fine, 0));

@@ -3,13 +3,14 @@
 //! in mode 2. The Mega-CD Hardware Manual (Sega, 1991) §1-§4 is the source; Nephrite_Native.md §50 is the record, with
 //! what mcd-verificator's tests settled where the manual is silent.
 
-pub mod asic;
-pub mod cdc;
-pub mod cdda;
-pub mod cdd;
-pub mod pcm;
-pub mod state;
-pub mod word;
+pub(in crate::mcd) mod asic;
+pub(in crate::mcd) mod cdc;
+pub(in crate::mcd) mod cdda;
+pub(crate) mod cdd;
+pub(crate) mod frontend;
+pub(in crate::mcd) mod pcm;
+pub(in crate::mcd) mod state;
+pub(in crate::mcd) mod word;
 #[cfg(test)]
 mod discs;
 #[cfg(test)]
@@ -17,93 +18,107 @@ mod verificator;
 
 use beryl_m68k::{Access, Bus, M68000, Size};
 
+use crate::interface::{Answer, Attachment, AttachmentView, Board, Master, SpaceRef, Steps};
+
 use cdc::{Cdc, dest};
 use cdd::{Cdd, SECTOR};
 use word::{Lands, WordRam};
 
+pub use frontend::{DISC_SIGNATURE, SaveMemory, disc_offset, fingerprint, is_disc, open_disc, system_area};
+
 /// Sub CPU clocks a second: the 50 MHz crystal over 4.
-pub const SUB_HZ: u64 = 12_500_000;
+pub(in crate::mcd) const SUB_HZ: u64 = 12_500_000;
 /// The stopwatch's and the timer's count, 30.72 µs (the manual's §3-3, §3-4), in sub CPU clocks.
-pub const TICK: u64 = 384;
+pub(in crate::mcd) const TICK: u64 = 384;
 /// RES0 reads 0 for about 100 ms after power-on or a reset of the peripherals (§3-1).
-pub const PERIPHERAL_RESET: u64 = SUB_HZ / 10;
+pub(in crate::mcd) const PERIPHERAL_RESET: u64 = SUB_HZ / 10;
 
-pub const PRG_SIZE: usize = 0x8_0000;
-pub const BRAM_SIZE: usize = 0x2000;
-pub const PCM_RAM_SIZE: usize = 0x1_0000;
-pub const BIOS_SIZE: usize = 0x2_0000;
+pub(in crate::mcd) const PRG_SIZE: usize = 0x8_0000;
+pub(in crate::mcd) const BRAM_SIZE: usize = 0x2000;
+pub(in crate::mcd) const PCM_RAM_SIZE: usize = 0x1_0000;
+pub(in crate::mcd) const BIOS_SIZE: usize = 0x2_0000;
 
-/// The sub CPU and everything on its bus.
+/// The Sega CD's memories by their space ids, from its range (Nephrite_Plan.md §4.3): the backup RAM inside the unit
+/// is the last of `MEMORIES`, and the backup RAM cartridge's, when one is plugged in, follows.
+pub(in crate::mcd) const MEMORIES: [(u32, &str, usize); 4] = [(17, "PRGRAM", PRG_SIZE), (18, "WORDRAM", 0x4_0000), (19, "PCMRAM", PCM_RAM_SIZE), (20, "BRAM", BRAM_SIZE)];
+pub const BRAM_ID: u32 = 20;
+/// The sub CPU's processor id, from the Sega CD's range (Nephrite_Attachments.md Q7).
+pub const S68K: u32 = 2;
+pub const CARTRAM_ID: u32 = 21;
+
+/// The sub CPU and everything on its bus, and the fingerprint of the disc in its drive (0 for none), which a state
+/// records and a load is held to.
 pub struct MegaCd {
-    pub cpu: M68000,
+    pub(in crate::mcd) cpu: M68000,
     pub hw: Sub,
+    pub(in crate::mcd) disc_print: u64,
 }
 
 /// The gate array's registers, both sides'.
 #[derive(Clone, Default)]
 pub struct Gate {
     /// SRES held at 0 by the main CPU, SBRQ set, and the reset exception owed when SRES is released.
-    pub reset_held: bool,
-    pub busreq: bool,
-    pub reset_due: bool,
-    pub leds: u8,
+    pub(in crate::mcd) reset_held: bool,
+    pub(in crate::mcd) busreq: bool,
+    pub(in crate::mcd) reset_due: bool,
+    pub(in crate::mcd) leds: u8,
     /// The sub clock from which RES0 reads 1 again.
-    pub res0_at: u64,
+    pub(in crate::mcd) res0_at: u64,
     /// WP7-WP0, and BK1-BK0 of `$A12003`.
-    pub wp: u8,
-    pub bank: u8,
-    pub hivect: u16,
+    pub(in crate::mcd) wp: u8,
+    pub(in crate::mcd) bank: u8,
+    pub(in crate::mcd) hivect: u16,
     /// The communication flags (the main CPU's, the sub CPU's), commands and statuses.
     pub cfm: u8,
     pub cfs: u8,
-    pub cmd: [u16; 8],
-    pub sta: [u16; 8],
+    pub(in crate::mcd) cmd: [u16; 8],
+    pub(in crate::mcd) sta: [u16; 8],
     /// The 30.72 µs count at which the stopwatch read 0.
-    pub stopwatch: u64,
+    pub(in crate::mcd) stopwatch: u64,
     /// The timer's value, its count, and the sub clock of its next count.
-    pub timer: u8,
-    pub timer_count: u8,
-    pub timer_next: u64,
+    pub(in crate::mcd) timer: u8,
+    pub(in crate::mcd) timer_count: u8,
+    pub(in crate::mcd) timer_next: u64,
     /// IEN1-IEN6 in bits 1-6, and the levels requested and not yet taken.
     pub mask: u8,
-    pub pending: u8,
+    pub(in crate::mcd) pending: u8,
     /// The sub clock at which level 2 was last taken: a step of the sub CPU can run past the main CPU's present, and
     /// a request taken after it was still pending then.
-    pub taken2: u64,
-    pub font_color: u8,
-    pub font_bits: u16,
+    pub(in crate::mcd) taken2: u64,
+    pub(in crate::mcd) font_color: u8,
+    pub(in crate::mcd) font_bits: u16,
     /// How far the main CPU is through the forced reset's four writes (§4-1).
-    pub forced: u8,
+    pub(in crate::mcd) forced: u8,
 }
 
 /// The sub CPU's side: its clock, its memories and the gate array.
 pub struct Sub {
     /// Sub CPU clocks since power-on.
-    pub clock: u64,
+    pub(in crate::mcd) clock: u64,
     /// Sub clocks a master clock, as a fraction.
     ratio: (u64, u64),
     /// The boot ROM, empty when none was given.
-    pub bios: Vec<u8>,
+    pub(in crate::mcd) bios: Vec<u8>,
     pub prg: Vec<u8>,
-    pub word: WordRam,
+    pub(in crate::mcd) word: WordRam,
     pub bram: Vec<u8>,
-    pub pcm_ram: Vec<u8>,
+    pub(in crate::mcd) pcm_ram: Vec<u8>,
     /// The RF5C164.
-    pub pcm: pcm::Pcm,
+    pub(in crate::mcd) pcm: pcm::Pcm,
     pub g: Gate,
     /// The sub CPU waits for Word RAM the main CPU holds: its writes owed, done when the RAM is its again.
-    pub parked: bool,
-    pub owed: Vec<(u32, Size, u16)>,
+    pub(in crate::mcd) parked: bool,
+    pub(in crate::mcd) owed: Vec<(u32, Size, u16)>,
     /// The drive, the CDC, the sector the drive last read, and the fader's register.
     pub cdd: Cdd,
     pub cdc: Cdc,
-    pub raw: Box<[u8; 2352]>,
+    pub(in crate::mcd) raw: Box<[u8; 2352]>,
     pub fader: u16,
-    pub cdda: cdda::Cdda,
+    pub(in crate::mcd) cdda: cdda::Cdda,
     /// A backup RAM cartridge in the slot at `$400000`, when one is plugged in.
-    pub cart: Option<RamCart>,
+    pub(in crate::mcd) cart: Option<RamCart>,
     /// The graphics ASIC.
-    pub asic: asic::Asic,
+    pub(in crate::mcd) asic: asic::Asic,
     /// The registers' accesses, when a development tool asks for them; never state.
     pub seen: Option<Vec<Seen>>,
 }
@@ -135,16 +150,16 @@ pub enum SeenKind {
 /// A backup RAM cartridge: its RAM on the odd bytes of `$600000`-`$6FFFFF`, its size code on `$400001` (the RAM is
 /// 8 KiB shifted left by it), and its write enable on bit 0 of `$700001`, as mcd-verificator's RAM CART reads it.
 #[derive(Clone)]
-pub struct RamCart {
-    pub bytes: Vec<u8>,
-    pub writable: bool,
+pub(in crate::mcd) struct RamCart {
+    pub(in crate::mcd) bytes: Vec<u8>,
+    pub(in crate::mcd) writable: bool,
 }
 
 impl RamCart {
     /// Sega's 128 KiB cartridge.
-    pub const SEGA: usize = 0x2_0000;
+    pub(in crate::mcd) const SEGA: usize = 0x2_0000;
 
-    pub fn new(size: usize) -> RamCart {
+    pub(in crate::mcd) fn new(size: usize) -> RamCart {
         RamCart { bytes: vec![0; size], writable: false }
     }
 
@@ -153,7 +168,7 @@ impl RamCart {
     }
 
     /// A byte of `$400000`-`$7FFFFF`; the even bytes read `$FF`.
-    pub fn read8(&self, a: u32) -> u8 {
+    pub(in crate::mcd) fn read8(&self, a: u32) -> u8 {
         if a & 1 == 0 {
             return 0xFF;
         }
@@ -164,7 +179,7 @@ impl RamCart {
         }
     }
 
-    pub fn write8(&mut self, a: u32, v: u8) {
+    pub(in crate::mcd) fn write8(&mut self, a: u32, v: u8) {
         if a & 1 == 0 {
             return;
         }
@@ -180,8 +195,11 @@ impl RamCart {
 }
 
 impl MegaCd {
-    /// A Sega CD beside a Genesis whose master clock runs at `master_hz` (a fraction), with `bios` in its boot ROM.
-    pub fn new(master_hz: (u64, u64), bios: Vec<u8>, master_now: u64, disc: Option<cdd::Disc>) -> MegaCd {
+    /// A Sega CD beside the Genesis `board` describes, at its power-on, with `bios` in its boot ROM and `disc` in its
+    /// drive.
+    pub(crate) fn new(board: Board, bios: Vec<u8>, mut disc: Option<cdd::Disc>) -> MegaCd {
+        let disc_print = disc.as_mut().map_or(0, fingerprint);
+        let master_hz = board.master_hz;
         let ratio = (SUB_HZ * master_hz.1, master_hz.0);
         let g = gcd(ratio.0, ratio.1);
         let mut hw = Sub {
@@ -201,50 +219,23 @@ impl MegaCd {
             cdc: Cdc::default(),
             raw: Box::new([0; 2352]),
             fader: 0,
-            cdda: cdda::Cdda::new(master_hz.0, master_hz.1),
+            cdda: cdda::Cdda::new(master_hz.0, master_hz.1, board.rate),
             cart: None,
             asic: asic::Asic::default(),
             seen: None,
         };
-        hw.clock = hw.to_sub(master_now);
+        hw.clock = hw.to_sub(board.start);
         hw.cdd.next = hw.clock + SECTOR[0];
         hw.g.res0_at = hw.clock + PERIPHERAL_RESET;
         hw.word.sub_owns = false;
-        MegaCd { cpu: M68000::new(), hw }
-    }
-
-    /// The sub CPU brought up to the main CPU's master clock `master`, instruction by instruction. Kept out of line,
-    /// so that the cartridge Genesis's loop, which never calls it, stays as small as it was.
-    #[inline(never)]
-    pub fn run_to(&mut self, master: u64) {
-        let target = self.hw.to_sub(master);
-        while self.hw.clock < target {
-            let h = &mut self.hw;
-            h.events();
-            if h.g.reset_due && !h.g.reset_held {
-                h.g.reset_due = false;
-                self.cpu.reset(&mut SubBus(h));
-                continue;
-            }
-            if h.g.reset_held || h.g.busreq || h.parked || self.cpu.halted {
-                h.clock = target;
-                h.events();
-                break;
-            }
-            if self.cpu.stopped && h.level() <= ((self.cpu.regs.sr >> 8) & 7) as u8 {
-                // STOP waits for a request, which only a count or the main CPU makes: the next count, or the target.
-                h.clock = target.min(h.next_event()).max(h.clock + 4);
-                continue;
-            }
-            self.cpu.step(&mut SubBus(h));
-        }
+        MegaCd { cpu: M68000::new(), hw, disc_print }
     }
 
     // ---- the main CPU's side, mode 2
 
     /// A word of `$000000`-`$3FFFFF` or `$A12000`-`$A1203F` as the main CPU reads it at master clock `master`; None
     /// for the open bus.
-    pub fn main_read16(&mut self, a: u32, master: u64) -> Option<u16> {
+    pub(in crate::mcd) fn main_read16(&mut self, a: u32, master: u64) -> Option<u16> {
         let a = a & 0xFF_FFFE;
         if a >= 0xA1_2000 {
             self.run_to(master);
@@ -272,7 +263,7 @@ impl MegaCd {
         }
     }
 
-    pub fn main_read8(&mut self, a: u32, master: u64) -> Option<u8> {
+    pub(in crate::mcd) fn main_read8(&mut self, a: u32, master: u64) -> Option<u8> {
         if a & 0xFF_FFFF >= 0xA1_2000 {
             self.run_to(master);
             let b = self.hw.main_reg8(a & 0x3F, master);
@@ -286,7 +277,7 @@ impl MegaCd {
 
     /// A write by the main CPU: `mask` is `$FF00` for a byte at an even address, `$00FF` at an odd one, `$FFFF` for a
     /// word; a byte's value is on both halves of `v`, as the 68000 drives it.
-    pub fn main_write(&mut self, a: u32, v: u16, mask: u16, master: u64) {
+    pub(in crate::mcd) fn main_write(&mut self, a: u32, v: u16, mask: u16, master: u64) {
         let a = a & 0xFF_FFFF;
         if a >= 0xA1_2000 {
             self.run_to(master);
@@ -313,24 +304,124 @@ impl MegaCd {
     }
 }
 
-/// A Sega CD disc from an image and its companions: a sheet with its tracks, a CHD, a raw track, or 2,048-byte
-/// sectors that begin with the system area's signature, the console's own mark of a disc (Nephrite_Native.md §51).
-pub fn open_disc(image: emusen_native::core::Kept, companions: Vec<emusen_native::core::Kept>) -> Result<cdd::Disc, emusen_disc::Refusal> {
-    let lone = if image.starts_with(crate::media::DISC_SIGNATURE) { emusen_disc::Lone::User } else { emusen_disc::Lone::Detect };
-    emusen_disc::open(image, companions, emusen_disc::IsoForm::Mode1, lone)
+/// Whether the Sega CD decodes a main CPU address in mode 2: its boot ROM, PRG-RAM's window and Word RAM below
+/// `$400000`, the cartridge slot to `$7FFFFF`, and its registers.
+fn decodes(a: u32) -> bool {
+    a < 0x80_0000 || (0xA1_2000..=0xA1_203F).contains(&a)
 }
 
-/// The disc's fingerprint, which a state is held to: its tracks, its lead-out and its first two sectors, the system
-/// area's.
-pub fn fingerprint(disc: &mut cdd::Disc) -> u64 {
-    disc.fingerprint([0, 1])
+impl Attachment for MegaCd {
+    const EXPANSION: bool = true;
+
+    fn read8(&mut self, a: u32, at: Master) -> Answer<u8> {
+        if !decodes(a) {
+            return Answer::Pass;
+        }
+        // The cartridge slot at `$400000` in mode 2: a backup RAM cartridge, or empty and reading `$FF` (D-32).
+        if (0x40_0000..0x80_0000).contains(&a) {
+            return Answer::Value(self.hw.cart.as_ref().map_or(0xFF, |c| c.read8(a)));
+        }
+        self.main_read8(a, at).map_or(Answer::Open, Answer::Value)
+    }
+
+    fn read16(&mut self, a: u32, at: Master) -> Answer<u16> {
+        if !decodes(a) {
+            return Answer::Pass;
+        }
+        if (0x40_0000..0x80_0000).contains(&a) {
+            return Answer::Value(self.hw.cart.as_ref().map_or(0xFFFF, |c| (c.read8(a) as u16) << 8 | c.read8(a | 1) as u16));
+        }
+        self.main_read16(a, at).map_or(Answer::Open, Answer::Value)
+    }
+
+    /// Word RAM answers the VDP a cycle late, so a transfer from it reads the word before the one addressed (the
+    /// Mega-CD Hardware Manual's "precautions in using DMA of the VDP").
+    fn transfer16(&mut self, a: u32, at: Master) -> Answer<u16> {
+        let a = if (0x20_0000..0x24_0000).contains(&a) { 0x20_0000 | (a.wrapping_sub(2) & 0x3_FFFF) } else { a };
+        self.read16(a, at)
+    }
+
+    fn write(&mut self, a: u32, v: u16, mask: u16, at: Master) -> bool {
+        if !decodes(a) {
+            return false;
+        }
+        if (0x40_0000..0x80_0000).contains(&a) {
+            if let Some(c) = self.hw.cart.as_mut()
+                && mask & 0x00FF != 0
+            {
+                c.write8(a | 1, v as u8);
+            }
+            return true;
+        }
+        self.main_write(a, v, mask, at);
+        true
+    }
+
+    /// The sub CPU brought up to the main CPU's master clock `master`, instruction by instruction. Kept out of line,
+    /// so that the Genesis's loop stays as small as it was.
+    #[inline(never)]
+    fn run_to(&mut self, master: Master) {
+        let target = self.hw.to_sub(master);
+        while self.hw.clock < target {
+            let h = &mut self.hw;
+            h.events();
+            if h.g.reset_due && !h.g.reset_held {
+                h.g.reset_due = false;
+                self.cpu.reset(&mut SubBus(h));
+                continue;
+            }
+            if h.g.reset_held || h.g.busreq || h.parked || self.cpu.halted {
+                h.clock = target;
+                h.events();
+                break;
+            }
+            if self.cpu.stopped && h.level() <= ((self.cpu.regs.sr >> 8) & 7) as u8 {
+                // STOP waits for a request, which only a count or the main CPU makes: the next count, or the target.
+                h.clock = target.min(h.next_event()).max(h.clock + 4);
+                continue;
+            }
+            self.cpu.step(&mut SubBus(h));
+        }
+    }
+
+    /// The PCM chip's and CD-DA's samples, one stream.
+    fn sound(&mut self, to: Master) -> Option<&mut Steps> {
+        self.hw.sound_to(to);
+        Some(&mut self.hw.cdda.steps)
+    }
 }
 
-/// The system area's first 2,048 bytes as the drive reads them from sector 00:02:00, for telling what the disc is.
-pub fn system_area(disc: &mut cdd::Disc) -> Vec<u8> {
-    let mut raw = [0u8; 2352];
-    let k = disc.read(emusen_disc::msf::PROGRAM_START, &mut raw);
-    if k.audio() { Vec::new() } else { raw[16..16 + 2048].to_vec() }
+impl AttachmentView for MegaCd {
+    fn spaces(&self, out: &mut Vec<SpaceRef>) {
+        out.extend(MEMORIES.iter().map(|&(id, name, _)| SpaceRef { id, name, read_only: false }));
+        if self.hw.cart.is_some() {
+            out.push(SpaceRef { id: CARTRAM_ID, name: "CARTRAM", read_only: false });
+        }
+    }
+
+    fn bytes(&self, id: u32) -> Option<&[u8]> {
+        let s = &self.hw;
+        Some(match id {
+            17 => &s.prg,
+            18 => &s.word.bytes,
+            19 => &s.pcm_ram,
+            BRAM_ID => &s.bram,
+            CARTRAM_ID => &s.cart.as_ref()?.bytes,
+            _ => return None,
+        })
+    }
+
+    fn bytes_mut(&mut self, id: u32) -> Option<&mut [u8]> {
+        let s = &mut self.hw;
+        Some(match id {
+            17 => &mut s.prg,
+            18 => &mut s.word.bytes,
+            19 => &mut s.pcm_ram,
+            BRAM_ID => &mut s.bram,
+            CARTRAM_ID => &mut s.cart.as_mut()?.bytes,
+            _ => return None,
+        })
+    }
 }
 
 fn gcd(a: u64, b: u64) -> u64 {
@@ -356,12 +447,12 @@ impl Sub {
     }
 
     /// A master clock as a sub clock.
-    pub fn to_sub(&self, master: u64) -> u64 {
+    pub(in crate::mcd) fn to_sub(&self, master: u64) -> u64 {
         (master as u128 * self.ratio.0 as u128 / self.ratio.1 as u128) as u64
     }
 
     /// A sub clock as the first master clock at or after it.
-    pub fn to_master(&self, sub: u64) -> u64 {
+    pub(in crate::mcd) fn to_master(&self, sub: u64) -> u64 {
         (sub as u128 * self.ratio.1 as u128).div_ceil(self.ratio.0 as u128) as u64
     }
 
@@ -374,7 +465,7 @@ impl Sub {
     /// Everything timed on the sub side up to the present, in the order it falls: the graphics ASIC's lines (level 1 at
     /// the last), the timer's counts (level 3 at 0), the drive's exchanges and the sectors they read, the decoder
     /// interrupt clearing itself, the CDC's DMA.
-    pub fn events(&mut self) {
+    pub(in crate::mcd) fn events(&mut self) {
         loop {
             let (timer, deci, dma) = self.times();
             let t = timer.min(self.cdd.next).min(deci).min(dma).min(self.asic.next);
@@ -476,14 +567,14 @@ impl Sub {
     }
 
     /// A request at `level`, made only while its enable is set.
-    pub fn raise(&mut self, level: u8) {
+    pub(in crate::mcd) fn raise(&mut self, level: u8) {
         if self.g.mask & 1 << level != 0 {
             self.g.pending |= 1 << level;
         }
     }
 
     /// The highest level requested and enabled.
-    pub fn level(&self) -> u8 {
+    pub(in crate::mcd) fn level(&self) -> u8 {
         let p = self.g.pending & self.g.mask & 0x7E;
         if p == 0 { 0 } else { 7 - p.leading_zeros() as u8 }
     }
@@ -817,7 +908,7 @@ impl Sub {
 
     /// The attachment's sound up to master clock `master`: the PCM chip's samples made, and with CD-DA's handed to
     /// the mix's synthesiser.
-    pub fn sound_to(&mut self, master: u64) {
+    pub(in crate::mcd) fn sound_to(&mut self, master: u64) {
         let now = self.to_sub(master).min(self.clock);
         self.pcm.run(now, &self.pcm_ram);
         let (num, den) = self.ratio;
@@ -829,7 +920,7 @@ impl Sub {
 }
 
 /// The sub CPU's bus: four clocks an access.
-pub struct SubBus<'a>(pub &'a mut Sub);
+pub(in crate::mcd) struct SubBus<'a>(pub &'a mut Sub);
 
 impl Bus for SubBus<'_> {
     fn read(&mut self, a: Access) -> u16 {
@@ -860,5 +951,21 @@ impl Bus for SubBus<'_> {
             self.0.g.taken2 = self.0.clock;
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A transfer from Word RAM reads the word before the one addressed, which a source set a word later corrects; the main CPU reads it in time (Nephrite_Native.md §57).
+    #[test]
+    fn a_transfer_from_word_ram_reads_a_word_late() {
+        let board = Board { master_hz: (4_725_000_000, 88), pal: false, start: 0, rate: 48_000 };
+        let mut m = MegaCd::new(board, vec![0u8; BIOS_SIZE], None);
+        m.hw.word.bytes[..4].copy_from_slice(&[1, 2, 3, 4]);
+        assert_eq!((m.transfer16(0x20_0002, 0), m.transfer16(0x20_0004, 0)), (Answer::Value(0x0102), Answer::Value(0x0304)));
+        assert_eq!(m.read16(0x20_0002, 0), Answer::Value(0x0304), "the CPU reads it in time");
+        assert_eq!((m.read16(0xA1_3000, 0), m.write(0xC0_0000, 0, 0xFFFF, 0)), (Answer::Pass, false), "outside its areas");
     }
 }

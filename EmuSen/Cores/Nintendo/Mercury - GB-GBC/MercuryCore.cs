@@ -21,8 +21,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         public const uint StateMagic = 0x4352454D;
 
-        // 2 PPU, 3 colour banks and HDMA, 4 APU, 5 serial, 6 no save path or cartridge copies, 7 the console, 8 the mixer - see EmuSen_Save_States.md §7, Mercury_Native.md §10.
-        public const int StateVersion = 8;
+        // 2 PPU, 3 colour banks and HDMA, 4 APU, 5 serial, 6 no save path or cartridge copies, 7 the console, 8 the mixer, 9 OAM DMA's start delay, 10 the sweep's negate flag, 11 the frozen LY=LYC bit - see Mercury_Native.md §10, §13.
+        public const int StateVersion = 11;
 
         // Version 6 dropped the save path and the cartridge copies; version 7 names the console before the walks - see Mercury_Model.md §5.
         private const int RetiredCartCopies = 6;
@@ -172,7 +172,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public void SetButton(int port, PadButton button, bool pressed)
         {
             if (port != 0) return;
-            Bus?.Joypad.Set(button, pressed);
+            Bus?.SetButton(button, pressed);
         }
 
         public void RunFrame()
@@ -278,6 +278,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
             StateSerializer.Write(w, Cpu);
             StateSerializer.Write(w, Bus);
             Bus.Apu.WriteMixer(w);
+            Bus.WriteTail(w);
         }
 
         public void LoadState(Stream stream)
@@ -308,6 +309,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
             StateSerializer.Read(r, Bus, includeRetired: retired);
             // Before version 8 the mixer was not in the state: it keeps what it held, as it did then.
             if (version >= MixerInState) Bus.Apu.ReadMixer(r);
+            // Fields an older version lacks start clear: no DMA start pending, no subtraction made - see Mercury_Native.md §13.4, §13.10.3.
+            Bus.ReadTail(r, version);
         }
     }
 }

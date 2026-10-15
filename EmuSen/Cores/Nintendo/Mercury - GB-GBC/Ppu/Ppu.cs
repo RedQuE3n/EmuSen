@@ -97,7 +97,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
         public bool SpritesEnabled => (Lcdc & 0x02) != 0;
         public bool BgEnabled => (Lcdc & 0x01) != 0;
 
-        public bool LycMatches => Ly == Lyc;
+        // The comparison as it stood when the LCD went off; it does not run while the LCD is off - see Mercury_Native.md §13.11.
+        [EmuSen.Common.SkipInState] public bool LycWhileOff;
+
+        public bool LycMatches => LcdEnabled ? Ly == Lyc : LycWhileOff;
 
         // Bit 7 is unwired and reads back set; bits 2-0 are the hardware's own state, not stored bits.
         public byte ReadStat() =>
@@ -145,6 +148,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
             WindowLine = 0;
             WindowTriggered = false;
             StatLine = false;
+            LycWhileOff = false;
             FrameCount = 0;
             FrameComplete = false;
 

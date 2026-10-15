@@ -4,7 +4,7 @@ pub mod channels;
 
 use crate::Skip;
 use emusen_native::SampleQueue;
-use crate::apu::channels::{NoiseChannel, PulseChannel, WaveChannel};
+use crate::apu::channels::{LengthCounter, NoiseChannel, PulseChannel, WaveChannel};
 use crate::state::{State, StateReader, StateResult, StateWriter};
 
 pub const CHANNEL_COUNT: usize = 4;
@@ -67,6 +67,8 @@ pub struct Apu {
     pub sequencer_step: i32,
     pub wave: WaveChannel,
     pub mixer: Skip<Mixer>,
+    /// The console, not the cartridge: the length counters' power rules differ between the two (Mercury_Native.md §13.10.2).
+    pub cgb_hardware: Skip<bool>,
 }
 
 impl Default for Apu {
@@ -84,6 +86,7 @@ impl Default for Apu {
             sequencer_step: 0,
             wave: WaveChannel::default(),
             mixer: Skip(Mixer::default()),
+            cgb_hardware: Skip(false),
         }
     }
 }
@@ -210,6 +213,15 @@ impl Apu {
         }
     }
 
+    /// PCM12 and PCM34: the channels' digital outputs, a nibble each (Mercury_Native.md §13.1).
+    pub fn pcm12(&self) -> u8 {
+        (self.pulse1.output() | self.pulse2.output() << 4) as u8
+    }
+
+    pub fn pcm34(&self) -> u8 {
+        (self.wave.output() | self.noise.output() << 4) as u8
+    }
+
     pub fn read_register(&self, address: u16) -> u8 {
         if address >= WAVE_RAM_BASE {
             return self.wave.ram[(address - WAVE_RAM_BASE) as usize];
@@ -238,24 +250,39 @@ impl Apu {
         if index >= REGISTER_COUNT {
             return;
         }
+        // With the power off every register but NR52 ignores its write, except NRx1's length on a DMG.
         if !self.powered_on && address != 0xFF26 {
+            if !*self.cgb_hardware {
+                match address {
+                    0xFF11 => self.pulse1.length.load((value & 0x3F) as i32),
+                    0xFF16 => self.pulse2.length.load((value & 0x3F) as i32),
+                    0xFF1B => self.wave.length.load(value as i32),
+                    0xFF20 => self.noise.length.load((value & 0x3F) as i32),
+                    _ => {}
+                }
+            }
             return;
         }
         self.registers[index] = value;
         match address {
             0xFF10 => {
+                let was_negate = self.pulse1.sweep_negate;
                 self.pulse1.sweep_period = ((value >> 4) & 0x07) as i32;
                 self.pulse1.sweep_negate = value & 0x08 != 0;
                 self.pulse1.sweep_shift = (value & 0x07) as i32;
+                // Leaving negate mode after a subtraction since the trigger disables the channel (Mercury_Native.md §13.10.3).
+                if was_negate && !self.pulse1.sweep_negate && self.pulse1.sweep_negated {
+                    self.pulse1.enabled = false;
+                }
             }
             0xFF11 => write_duty_length(&mut self.pulse1, value),
             0xFF12 => write_envelope(&mut self.pulse1, value),
             0xFF13 => self.pulse1.frequency = (self.pulse1.frequency & 0x0700) | value as i32,
-            0xFF14 => write_pulse_control(&mut self.pulse1, value),
+            0xFF14 => write_pulse_control(&mut self.pulse1, value, self.sequencer_step & 1 != 0),
             0xFF16 => write_duty_length(&mut self.pulse2, value),
             0xFF17 => write_envelope(&mut self.pulse2, value),
             0xFF18 => self.pulse2.frequency = (self.pulse2.frequency & 0x0700) | value as i32,
-            0xFF19 => write_pulse_control(&mut self.pulse2, value),
+            0xFF19 => write_pulse_control(&mut self.pulse2, value, self.sequencer_step & 1 != 0),
             0xFF1A => {
                 self.wave.dac_enabled = value & 0x80 != 0;
                 if !self.wave.dac_enabled {
@@ -267,7 +294,9 @@ impl Apu {
             0xFF1D => self.wave.frequency = (self.wave.frequency & 0x0700) | value as i32,
             0xFF1E => {
                 self.wave.frequency = (self.wave.frequency & 0x00FF) | (((value & 0x07) as i32) << 8);
-                self.wave.length.enabled = value & 0x40 != 0;
+                if write_length_enable(&mut self.wave.length, value, self.sequencer_step & 1 != 0) {
+                    self.wave.enabled = false;
+                }
                 if value & 0x80 != 0 {
                     self.wave.trigger();
                 }
@@ -286,7 +315,9 @@ impl Apu {
                 self.noise.divisor_code = (value & 0x07) as i32;
             }
             0xFF23 => {
-                self.noise.length.enabled = value & 0x40 != 0;
+                if write_length_enable(&mut self.noise.length, value, self.sequencer_step & 1 != 0) {
+                    self.noise.enabled = false;
+                }
                 if value & 0x80 != 0 {
                     self.noise.trigger();
                 }
@@ -304,6 +335,12 @@ impl Apu {
                 if on {
                     self.powered_on = true;
                     self.sequencer_step = 0;
+                    // A CGB clears the length counters as it powers up; a DMG keeps them.
+                    if *self.cgb_hardware {
+                        for length in [&mut self.pulse1.length, &mut self.pulse2.length, &mut self.wave.length, &mut self.noise.length] {
+                            length.counter = 0;
+                        }
+                    }
                 } else {
                     self.power_off();
                 }
@@ -381,9 +418,23 @@ fn write_envelope(pulse: &mut PulseChannel, value: u8) {
     }
 }
 
-fn write_pulse_control(pulse: &mut PulseChannel, value: u8) {
+/// NRx4's length half, with the two quirks of the frame sequencer's first half; true when the channel must go quiet
+/// (Mercury_Native.md §13.10).
+fn write_length_enable(length: &mut LengthCounter, value: u8, first_half: bool) -> bool {
+    let trigger = value & 0x80 != 0;
+    let emptied = length.enable(value & 0x40 != 0, first_half);
+    // A trigger reloading an empty counter that is enabled loads one less in the first half.
+    if trigger && first_half && length.enabled && length.counter == 0 {
+        length.counter = length.maximum - 1;
+    }
+    emptied && !trigger
+}
+
+fn write_pulse_control(pulse: &mut PulseChannel, value: u8, first_half: bool) {
     pulse.frequency = (pulse.frequency & 0x00FF) | (((value & 0x07) as i32) << 8);
-    pulse.length.enabled = value & 0x40 != 0;
+    if write_length_enable(&mut pulse.length, value, first_half) {
+        pulse.enabled = false;
+    }
     if value & 0x80 != 0 {
         pulse.trigger();
     }

@@ -3,7 +3,7 @@
 
 use crate::machine::Machine;
 use crate::media::Media;
-use crate::pictures::program;
+use crate::genesis::pictures::program;
 
 /// RESET released and the Z80's bus requested and granted, then `lea $A04000,a2`.
 const Z80_BUS: [u16; 16] = [0x33FC, 0x0100, 0x00A1, 0x1200, 0x33FC, 0x0100, 0x00A1, 0x1100, 0x0839, 0x0000, 0x00A1, 0x1100, 0x66F6, 0x45F9, 0x00A0, 0x4000];
@@ -22,7 +22,7 @@ fn polls(setup: &[u16], offset: u16, bit: u16, until_set: bool) -> u16 {
     while m.frames < 3 {
         m.advance();
     }
-    u16::from_be_bytes([m.genesis.hw.wram[0], m.genesis.hw.wram[1]])
+    u16::from_be_bytes([m.hw().wram[0], m.hw().wram[1]])
 }
 
 /// The busy flag reads set for 192 of the 68000's clocks after a data write, about six rounds of 30 clocks, and only
@@ -54,11 +54,11 @@ fn voice(writes: &[(u8, u8, u8)], frames: i64) -> Vec<i32> {
     code.extend_from_slice(&[0x60FE]);
     let image = program(&[0x8004, 0x8104, 0x8F02], &[], &code);
     let mut m = Machine::new(&image, Media::read(&image));
-    m.genesis.hw.sound.ym.trace = Some(Vec::new());
+    m.hw_mut().sound.ym.trace = Some(Vec::new());
     while m.frames < frames {
         m.advance();
     }
-    let t: Vec<i32> = m.genesis.hw.sound.ym.trace.take().unwrap().iter().map(|c| c[0]).collect();
+    let t: Vec<i32> = m.hw_mut().sound.ym.trace.take().unwrap().iter().map(|c| c[0]).collect();
     let first = t.iter().position(|&v| v != 0).unwrap_or(0);
     t[first..].to_vec()
 }

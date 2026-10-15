@@ -28,6 +28,8 @@ namespace EmuSen.WiseMan.Cores
 
             public void Stop() { }
 
+            public byte PendingInterrupts => (byte)(Memory[0xFFFF] & Memory[0xFF0F] & 0x1F);
+
             public int Ticked
             {
                 get
@@ -67,17 +69,17 @@ namespace EmuSen.WiseMan.Cores
                 bus.Trace);
         }
 
-        // PUSH BC: one cycle of the sixteen is internal, and it settles at the end - see Mercury_Cpu.md §6.1.
+        // RET: one cycle of the sixteen is internal, and it follows the pops, so it settles at the end - see Mercury_Cpu.md §6.1, Mercury_Native.md §13.5.
         [Fact]
         public void Internal_cycles_settle_at_the_end_of_the_instruction()
         {
-            var (cpu, bus) = Machine(0xC5);
+            var (cpu, bus) = Machine(0xC9);
 
             int cycles = cpu.Step(0, 0, out _);
 
             Assert.Equal(16, cycles);
             Assert.Equal(
-                new[] { "T:4", "R:0100", "T:4", "W:FFFD", "T:4", "W:FFFC", "T:4" },
+                new[] { "T:4", "R:0100", "T:4", "R:FFFE", "T:4", "R:FFFF", "T:4" },
                 bus.Trace);
         }
 
@@ -105,6 +107,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0xE8)]
         [InlineData(0xF0)]
         [InlineData(0x76)]
+        [InlineData(0x10)]
         public void The_bus_advances_by_exactly_what_the_step_reports(byte opcode)
         {
             var (cpu, bus) = Machine(opcode, 0x04, 0x01);
@@ -119,6 +122,8 @@ namespace EmuSen.WiseMan.Cores
         public void Servicing_an_interrupt_ticks_its_full_cost()
         {
             var (cpu, bus) = Machine(0x00);
+            bus.Memory[0xFFFF] = 0x01;
+            bus.Memory[0xFF0F] = 0x01;
             cpu.Ime = true;
 
             int cycles = cpu.Step(0x01, 0x01, out int serviced);
@@ -127,6 +132,58 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(20, cycles);
             Assert.Equal(20, bus.Ticked);
             Assert.Equal(0x0040, cpu.PC);
+        }
+
+        // Pan Docs' dispatch: two wait states, the push on the third and fourth machine cycles, the jump on the fifth - see Mercury_Native.md §13.3.
+        [Fact]
+        public void A_dispatch_pushes_on_its_third_and_fourth_machine_cycles()
+        {
+            var (cpu, bus) = Machine(0x00);
+            bus.Memory[0xFFFF] = 0x01;
+            bus.Memory[0xFF0F] = 0x01;
+            cpu.Ime = true;
+
+            cpu.Step(0x01, 0x01, out _);
+
+            var ticksBefore = new List<int>();
+            int sum = 0;
+            foreach (string entry in bus.Trace)
+            {
+                if (entry.StartsWith("T:", StringComparison.Ordinal)) sum += int.Parse(entry[2..]);
+                else ticksBefore.Add(sum);
+            }
+            Assert.Equal(new[] { 12, 16 }, ticksBefore);
+            Assert.Equal(20, bus.Ticked);
+        }
+
+        // Where each access lands, as the T-cycles ticked before it, then the total.
+        private static int[] AccessTimes(RecordingBus bus)
+        {
+            var times = new List<int>();
+            int sum = 0;
+            foreach (string entry in bus.Trace)
+            {
+                if (entry.StartsWith("T:", StringComparison.Ordinal)) sum += int.Parse(entry[2..]);
+                else times.Add(sum);
+            }
+            times.Add(sum);
+            return times.ToArray();
+        }
+
+        // mooneye's *_timing headers and GBCTR: the internal cycle that decrements SP comes before a push's writes, and RET cc's condition cycle before its pops - see Mercury_Native.md §13.5.
+        [Theory]
+        [InlineData(new byte[] { 0xC5 }, new[] { 4, 12, 16, 16 })]
+        [InlineData(new byte[] { 0xCF }, new[] { 4, 12, 16, 16 })]
+        [InlineData(new byte[] { 0xCD, 0x34, 0x12 }, new[] { 4, 8, 12, 20, 24, 24 })]
+        [InlineData(new byte[] { 0xCC, 0x34, 0x12 }, new[] { 4, 8, 12, 20, 24, 24 })]
+        [InlineData(new byte[] { 0xC8 }, new[] { 4, 12, 16, 20 })]
+        public void Each_stack_access_lands_on_the_machine_cycle_the_hardware_gives_it(byte[] program, int[] times)
+        {
+            var (cpu, bus) = Machine(program);
+
+            cpu.Step(0, 0, out _);
+
+            Assert.Equal(times, AccessTimes(bus));
         }
 
         // A halted CPU still runs the machine, or nothing would ever wake it.

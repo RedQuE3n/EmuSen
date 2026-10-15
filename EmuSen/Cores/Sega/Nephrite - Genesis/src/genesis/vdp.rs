@@ -8,36 +8,36 @@ use std::sync::OnceLock;
 
 /// The VRAM byte a 128 KiB-mode access to `a` reaches on a board with 64 KiB: address bit 1 inverted at bit 0, bits
 /// 2-9 in place, bit 10 at bit 1 and bits 11-15 one place down (measured on the board, Nephrite_Disputes.md D-10).
-pub fn vram128_address(a: usize) -> usize {
+pub(in crate::genesis) fn vram128_address(a: usize) -> usize {
     (a >> 1 & 1 ^ 1) | (a & 0x3FC) | (a >> 9 & 2) | (a & 0xF800) >> 1
 }
 
 /// Pixels before a 2-cell column is shown that the VDP reads its vertical scroll (bracketed on the board between 20 and
 /// 34), and its name table and patterns (between 20 and 32, weakly); Nephrite_Disputes.md D-9.
-pub const VSCROLL_LEAD: i64 = 27;
-pub const PATTERN_LEAD: u64 = 24;
+pub(in crate::genesis) const VSCROLL_LEAD: i64 = 27;
+pub(in crate::genesis) const PATTERN_LEAD: u64 = 24;
 
 /// Master clocks before a word that arrives with nothing queued can be written: the write path's start, measured on
 /// the board in both widths, the display on and off (Nephrite_Disputes.md D-11).
-pub const WRITE_START: u64 = 176;
+pub(in crate::genesis) const WRITE_START: u64 = 176;
 
 /// Master clocks a line.
-pub const LINE: u64 = 3420;
+pub(in crate::genesis) const LINE: u64 = 3420;
 
 /// One width's line: where each H counter value and each access slot falls, in master clocks from the line's start.
-pub struct Timing {
+pub(in crate::genesis) struct Timing {
     /// The 9-bit H counter at each master clock of the line.
     h: Vec<u16>,
     /// The external access slots of an active line, and of a blank one, as master clocks into the line, ascending.
-    pub active: Vec<u16>,
-    pub blank: Vec<u16>,
+    pub(in crate::genesis) active: Vec<u16>,
+    pub(in crate::genesis) blank: Vec<u16>,
     /// The first blank line's: the active pattern until H $14E or $10E, the blank one after (measured, D-6).
-    pub first_blank: Vec<u16>,
+    pub(in crate::genesis) first_blank: Vec<u16>,
     /// Where the vertical interrupt and the blanking flag's change fall.
-    pub vint: u64,
-    pub vblank: u64,
+    pub(in crate::genesis) vint: u64,
+    pub(in crate::genesis) vblank: u64,
     /// Where the line's pixel 0 begins (H $18), in master clocks from the line's start.
-    pub pixel0: u64,
+    pub(in crate::genesis) pixel0: u64,
     hblank_set: u16,
     hblank_clear: u16,
 }
@@ -121,17 +121,17 @@ fn build(h40: bool) -> Timing {
     }
 }
 
-pub fn timing(h40: bool) -> &'static Timing {
+pub(in crate::genesis) fn timing(h40: bool) -> &'static Timing {
     static T: OnceLock<[Timing; 2]> = OnceLock::new();
     &T.get_or_init(|| [build(false), build(true)])[h40 as usize]
 }
 
 impl Timing {
-    pub fn h(&self, offset: u64) -> u16 {
+    pub(in crate::genesis) fn h(&self, offset: u64) -> u16 {
         self.h[(offset.min(LINE - 1)) as usize]
     }
 
-    pub fn hblank(&self, offset: u64) -> bool {
+    pub(in crate::genesis) fn hblank(&self, offset: u64) -> bool {
         let h = self.h(offset);
         !(self.hblank_clear..self.hblank_set).contains(&h)
     }
@@ -140,15 +140,15 @@ impl Timing {
 /// A word the 68000 or a DMA transfer wrote, waiting for a slot: its target, address and data, and the bytes of a
 /// VRAM write done.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Entry {
-    pub code: u8,
-    pub address: u16,
-    pub data: u16,
-    pub half: bool,
+pub(in crate::genesis) struct Entry {
+    pub(in crate::genesis) code: u8,
+    pub(in crate::genesis) address: u16,
+    pub(in crate::genesis) data: u16,
+    pub(in crate::genesis) half: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Dma {
+pub(in crate::genesis) enum Dma {
     #[default]
     None,
     /// From the 68000's bus: the next source address and the words left.
@@ -169,100 +169,100 @@ pub struct Vdp {
     code: u8,
     address: u16,
     pub vram: Vec<u8>,
-    pub cram: Vec<u8>,
-    pub vsram: Vec<u8>,
+    pub(crate) cram: Vec<u8>,
+    pub(crate) vsram: Vec<u8>,
     /// The four-word write FIFO: a ring whose entries keep their data after they are written out.
     fifo: [Entry; 4],
     fifo_count: u8,
     fifo_next: u8,
     /// The time from which a slot may write each FIFO entry to memory, and the words that have left the FIFO and not
     /// yet reached memory, with theirs (Nephrite_Disputes.md D-11).
-    pub fifo_at: [u64; 4],
-    pub landing: std::collections::VecDeque<(u64, Entry)>,
+    pub(in crate::genesis) fifo_at: [u64; 4],
+    pub(in crate::genesis) landing: std::collections::VecDeque<(u64, Entry)>,
     /// The read buffer and whether it holds the word the next data port read returns.
     read_buf: u16,
     read_ready: bool,
-    pub dma: Dma,
-    pub vint_pending: bool,
-    pub hint_pending: bool,
+    pub(in crate::genesis) dma: Dma,
+    pub(in crate::genesis) vint_pending: bool,
+    pub(in crate::genesis) hint_pending: bool,
     hint_counter: u8,
-    pub pal: bool,
+    pub(in crate::genesis) pal: bool,
     /// The external interrupt, and the HV counter latched by it while register 0's bit 1 is set.
-    pub ext_pending: bool,
+    pub(in crate::genesis) ext_pending: bool,
     hv_latch: Option<u16>,
     /// The master clock the slots have been run to, and the earliest a transfer's next bus read may come.
-    pub time: u64,
-    pub fetch_at: u64,
+    pub(in crate::genesis) time: u64,
+    pub(in crate::genesis) fetch_at: u64,
     /// The first four bytes of each sprite's entry, as the VDP caches them from writes into the table (Nemesis,
     /// SpritesMind topic 1291: the cache follows writes, not the register).
-    pub sat_cache: Vec<u8>,
+    pub(in crate::genesis) sat_cache: Vec<u8>,
     /// The sprite flags of the status register, whether the last line drawn ended in a dot overflow, and the last
     /// vertical scroll value the renderer read.
-    pub sprite_overflow: bool,
-    pub sprite_collision: bool,
-    pub dot_overflow_line: bool,
-    pub vscroll_latch: u16,
+    pub(in crate::genesis) sprite_overflow: bool,
+    pub(in crate::genesis) sprite_collision: bool,
+    pub(in crate::genesis) dot_overflow_line: bool,
+    pub(in crate::genesis) vscroll_latch: u16,
     /// The interlace mode latched at vertical blanking (0, 1, or 3 for double resolution), and the odd field.
-    pub interlace: u8,
-    pub odd: bool,
+    pub(in crate::genesis) interlace: u8,
+    pub(in crate::genesis) odd: bool,
     /// The next line's sprite pixels as parsed on this one (colour, priority in bit 7), and the line the slots are
     /// in and where it began.
-    pub sprite_buffer: Vec<u8>,
-    pub cur_line: u32,
-    pub cur_line_start: u64,
+    pub(in crate::genesis) sprite_buffer: Vec<u8>,
+    pub(in crate::genesis) cur_line: u32,
+    pub(in crate::genesis) cur_line_start: u64,
     /// VSRAM and the line's horizontal scroll as the line began, which its fetches read (Nephrite_Native.md §14.1).
-    pub line_vsram: Vec<u8>,
-    pub line_hscroll: (u16, u16),
+    pub(in crate::genesis) line_vsram: Vec<u8>,
+    pub(in crate::genesis) line_hscroll: (u16, u16),
     /// Registers 17 and 18 as the line began: a write later in it moves the next line's window (measured, D-5).
-    pub line_window: [u8; 2],
+    pub(in crate::genesis) line_window: [u8; 2],
     /// The line whose pixels are being drawn, drawn up to `span_x` in its one or two rows, with the sprite pixels it
     /// took as it opened: each change to what the picture reads draws the line up to the beam first (Nephrite_Native.md
     /// §16).
     pub open: Option<usize>,
     pub span_x: usize,
-    pub span_rgba: Vec<u8>,
-    pub span_sprites: Vec<u8>,
+    pub(in crate::genesis) span_rgba: Vec<u8>,
+    pub(in crate::genesis) span_sprites: Vec<u8>,
     /// The open line's scroll and window values as it began, since the next line's are taken before its last pixels.
-    pub span_latch: (Vec<u8>, (u16, u16), [u8; 2]),
+    pub(in crate::genesis) span_latch: (Vec<u8>, (u16, u16), [u8; 2]),
     /// The 64 colours at the three intensities as CRAM and register 0 give them, made again after either changes.
-    pub palette: [[u8; 4]; 192],
-    pub palette_dirty: bool,
+    pub(in crate::genesis) palette: [[u8; 4]; 192],
+    pub(in crate::genesis) palette_dirty: bool,
     /// The picture being drawn, and whether this frame's is drawn at all (the sprite pass runs either way).
-    pub frame: crate::render::Frame,
-    pub draw: bool,
+    pub frame: crate::genesis::render::Frame,
+    pub(in crate::genesis) draw: bool,
 }
 
 /// The VDP's registers and latches, for the state; the memories are spaces of their own.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct VdpRegs {
-    pub regs: [u8; 24],
-    pub pending: bool,
-    pub code: u8,
-    pub address: u16,
-    pub vint_pending: bool,
-    pub hint_pending: bool,
-    pub hint_counter: u8,
-    pub ext_pending: bool,
-    pub hv_latch: Option<u16>,
-    pub fifo: [Entry; 4],
-    pub fifo_count: u8,
-    pub fifo_next: u8,
-    pub read_buf: u16,
-    pub read_ready: bool,
-    pub dma: Dma,
-    pub time: u64,
-    pub fetch_at: u64,
-    pub sprite_flags: [bool; 3],
-    pub vscroll_latch: u16,
-    pub interlace: u8,
-    pub odd: bool,
+pub(in crate::genesis) struct VdpRegs {
+    pub(in crate::genesis) regs: [u8; 24],
+    pub(in crate::genesis) pending: bool,
+    pub(in crate::genesis) code: u8,
+    pub(in crate::genesis) address: u16,
+    pub(in crate::genesis) vint_pending: bool,
+    pub(in crate::genesis) hint_pending: bool,
+    pub(in crate::genesis) hint_counter: u8,
+    pub(in crate::genesis) ext_pending: bool,
+    pub(in crate::genesis) hv_latch: Option<u16>,
+    pub(in crate::genesis) fifo: [Entry; 4],
+    pub(in crate::genesis) fifo_count: u8,
+    pub(in crate::genesis) fifo_next: u8,
+    pub(in crate::genesis) read_buf: u16,
+    pub(in crate::genesis) read_ready: bool,
+    pub(in crate::genesis) dma: Dma,
+    pub(in crate::genesis) time: u64,
+    pub(in crate::genesis) fetch_at: u64,
+    pub(in crate::genesis) sprite_flags: [bool; 3],
+    pub(in crate::genesis) vscroll_latch: u16,
+    pub(in crate::genesis) interlace: u8,
+    pub(in crate::genesis) odd: bool,
 }
 
 const CRAM_BITS: u16 = 0x0EEE;
 const VSRAM_BITS: u16 = 0x07FF;
 
 impl Vdp {
-    pub fn regs_state(&self) -> VdpRegs {
+    pub(in crate::genesis) fn regs_state(&self) -> VdpRegs {
         VdpRegs {
             regs: self.regs,
             pending: self.pending,
@@ -288,7 +288,7 @@ impl Vdp {
         }
     }
 
-    pub fn set_regs_state(&mut self, s: VdpRegs) {
+    pub(in crate::genesis) fn set_regs_state(&mut self, s: VdpRegs) {
         self.palette_dirty = true;
         self.regs = s.regs;
         self.pending = s.pending;
@@ -312,7 +312,7 @@ impl Vdp {
         (self.interlace, self.odd) = (s.interlace, s.odd);
     }
 
-    pub fn new(pal: bool) -> Vdp {
+    pub(in crate::genesis) fn new(pal: bool) -> Vdp {
         Vdp {
             regs: [0; 24],
             pending: false,
@@ -352,12 +352,12 @@ impl Vdp {
             line_window: [0, 0],
             open: None,
             span_x: 0,
-            span_rgba: vec![0; 2 * crate::render::MAX_W * 4],
-            span_sprites: vec![0; 2 * crate::render::MAX_W],
+            span_rgba: vec![0; 2 * crate::genesis::render::MAX_W * 4],
+            span_sprites: vec![0; 2 * crate::genesis::render::MAX_W],
             span_latch: (vec![0; 80], (0, 0), [0, 0]),
             palette: [[0; 4]; 192],
             palette_dirty: true,
-            frame: crate::render::Frame::new(),
+            frame: crate::genesis::render::Frame::new(),
             draw: true,
         }
     }
@@ -367,22 +367,22 @@ impl Vdp {
         if self.regs[1] & 4 == 0 { 1 } else { self.regs[15] as u16 }
     }
 
-    pub fn h40(&self) -> bool {
+    pub(in crate::genesis) fn h40(&self) -> bool {
         self.regs[12] & 0x01 != 0
     }
 
-    pub fn timing(&self) -> &'static Timing {
+    pub(in crate::genesis) fn timing(&self) -> &'static Timing {
         timing(self.h40())
     }
 
-    pub fn display(&self) -> bool {
+    pub(in crate::genesis) fn display(&self) -> bool {
         self.regs[1] & 0x40 != 0
     }
 
     /// Lines in a frame, the active lines, and the line of the vertical interrupt (240 in PAL's V30).
     /// Interlace alternates fields of 262 and 263 lines (NTSC) or 313 and 312 (PAL), the odd field the longer, and
     /// NTSC's V30 lets the V counter run its 512 lines (measured on Nuked-MD's board, Nephrite_Disputes.md D-4).
-    pub fn lines(&self) -> u32 {
+    pub(in crate::genesis) fn lines(&self) -> u32 {
         if !self.pal && self.regs[1] & 0x0C == 0x0C {
             return 512;
         }
@@ -395,7 +395,7 @@ impl Vdp {
     }
 
     /// With the frame interrupt the interlace setting is latched and, interlaced, the field changes.
-    pub fn field_start(&mut self) {
+    pub(in crate::genesis) fn field_start(&mut self) {
         self.interlace = match (self.regs[12] >> 1) & 3 {
             1 => 1,
             3 => 3,
@@ -405,7 +405,7 @@ impl Vdp {
     }
     /// Mode 4 shows 192 lines and raises its frame interrupt at line $C0 (MacDonald's `vdpint.txt`), the TMS9918's
     /// modes (register 0's bit 2 clear too) 224 as the board shows at power-on; V30 shows 240 on either board (D-4).
-    pub fn vint_line(&self) -> u32 {
+    pub(in crate::genesis) fn vint_line(&self) -> u32 {
         if self.regs[1] & 4 == 0 && self.regs[0] & 4 != 0 {
             192
         } else if self.regs[1] & 8 != 0 {
@@ -417,12 +417,12 @@ impl Vdp {
 
     /// Whether `line`'s slots follow the active pattern: the display on and the line drawn, or the last line of the
     /// frame, whose sprites the first line shows (Eke, SpritesMind topic 1291: the blanking flag clears there).
-    pub fn active_line(&self, line: u32) -> bool {
+    pub(in crate::genesis) fn active_line(&self, line: u32) -> bool {
         self.display() && (line < self.vint_line() || line == self.lines() - 1)
     }
 
     /// The external slots of `line`, as master clocks into it.
-    pub fn slots(&self, line: u32) -> &'static [u16] {
+    pub(in crate::genesis) fn slots(&self, line: u32) -> &'static [u16] {
         let t = self.timing();
         if self.active_line(line) {
             &t.active
@@ -433,16 +433,16 @@ impl Vdp {
         }
     }
 
-    pub fn fifo_empty(&self) -> bool {
+    pub(in crate::genesis) fn fifo_empty(&self) -> bool {
         self.fifo_count == 0
     }
 
-    pub fn fifo_full(&self) -> bool {
+    pub(in crate::genesis) fn fifo_full(&self) -> bool {
         self.fifo_count >= 4
     }
 
     /// Whether a slot has anything to do: the FIFO to drain, a DMA to run, or a read to fetch.
-    pub fn busy(&self) -> bool {
+    pub(in crate::genesis) fn busy(&self) -> bool {
         self.fifo_count > 0 || !self.landing.is_empty() || !matches!(self.dma, Dma::None | Dma::FillWait) || (self.reads() && !self.read_ready)
     }
 
@@ -451,12 +451,12 @@ impl Vdp {
     }
 
     /// Whether the 68000 is held for a transfer from its bus.
-    pub fn bus_dma(&self) -> bool {
+    pub(in crate::genesis) fn bus_dma(&self) -> bool {
         matches!(self.dma, Dma::Bus { .. })
     }
 
     /// The word a bus transfer wants next, when the FIFO has room for it.
-    pub fn dma_fetch(&self) -> Option<u32> {
+    pub(in crate::genesis) fn dma_fetch(&self) -> Option<u32> {
         match self.dma {
             Dma::Bus { source, .. } if !self.fifo_full() => Some(source),
             _ => None,
@@ -464,7 +464,7 @@ impl Vdp {
     }
 
     /// A word fetched for a bus transfer: into the FIFO, the source advanced within its 128 KiB, the registers kept.
-    pub fn dma_fetched(&mut self, w: u16) {
+    pub(in crate::genesis) fn dma_fetched(&mut self, w: u16) {
         let Dma::Bus { source, left } = self.dma else { return };
         self.push(w);
         let next = (source & 0xFE_0000) | (source.wrapping_add(2) & 0x1_FFFF);
@@ -504,7 +504,7 @@ impl Vdp {
 
     /// One external access slot: the FIFO's oldest entry (a VRAM word takes two), else a step of a fill or a copy,
     /// else the read the read buffer waits for.
-    pub fn slot(&mut self) {
+    pub(in crate::genesis) fn slot(&mut self) {
         if self.fifo_count > 0 {
             let i = ((self.fifo_next + 4 - self.fifo_count) & 3) as usize;
             let e = self.fifo[i];
@@ -581,7 +581,7 @@ impl Vdp {
     }
 
     /// A byte into VRAM, the sprite cache taking it when it falls in the first half of a sprite's entry.
-    pub fn vram_write(&mut self, a: usize, v: u8) {
+    pub(in crate::genesis) fn vram_write(&mut self, a: usize, v: u8) {
         let a = a & 0xFFFF;
         // The pixels the VDP has fetched already are drawn from the old data (D-9).
         self.before_change_after(None, PATTERN_LEAD * if self.h40() { 8 } else { 10 });
@@ -597,7 +597,7 @@ impl Vdp {
         Self::word(&self.vsram, 2 * i)
     }
 
-    pub fn cram_word(cram: &[u8], i: usize) -> u16 {
+    pub(in crate::genesis) fn cram_word(cram: &[u8], i: usize) -> u16 {
         Self::word(cram, 2 * i)
     }
 
@@ -623,7 +623,7 @@ impl Vdp {
                 let (hi, lo) = ((e.data >> 8) as u8, e.data as u8);
                 let (x, y) = if a & 1 == 0 { (hi, lo) } else { (lo, hi) };
                 // Mode 4 writes the word where its 16 KiB puts the address (D-7).
-                let w = if self.regs[1] & 4 == 0 { crate::render::vram4_address(a & 0x3FFE) & 0xFFFE } else { a & 0xFFFE };
+                let w = if self.regs[1] & 4 == 0 { crate::genesis::render::vram4_address(a & 0x3FFE) & 0xFFFE } else { a & 0xFFFE };
                 self.vram_write(w, x);
                 self.vram_write(w | 1, y);
             }
@@ -700,7 +700,7 @@ impl Vdp {
 
     /// The control port. A register write, or a command's first or second word; a second word with CD5 set and DMA
     /// enabled starts a DMA, which disabling DMA does not stop, as VDPFIFOTesting's toggled fill shows.
-    pub fn control(&mut self, v: u16) {
+    pub(in crate::genesis) fn control(&mut self, v: u16) {
         if self.pending {
             self.pending = false;
             self.address = (self.address & 0x3FFF) | (v & 3) << 14;
@@ -752,7 +752,7 @@ impl Vdp {
     }
 
     /// A word through the data port into the FIFO; a fill waiting for its data starts once this word is written.
-    pub fn data(&mut self, v: u16) {
+    pub(in crate::genesis) fn data(&mut self, v: u16) {
         self.pending = false;
         if self.dma == Dma::FillWait {
             self.dma = Dma::Fill { data: v, left: self.dma_length(), started: false };
@@ -761,12 +761,12 @@ impl Vdp {
     }
 
     /// Whether a data port read can be answered now.
-    pub fn read_ready(&self) -> bool {
+    pub(in crate::genesis) fn read_ready(&self) -> bool {
         self.read_ready || !self.reads()
     }
 
     /// A word read through the data port: the read buffer, the address advanced and the next read awaited.
-    pub fn read_data(&mut self) -> u16 {
+    pub(in crate::genesis) fn read_data(&mut self) -> u16 {
         self.pending = false;
         let v = self.read_buf;
         if self.reads() {
@@ -777,7 +777,7 @@ impl Vdp {
     }
 
     /// The status register at `line` and `offset` master clocks into it; reading it ends a command half written.
-    pub fn status(&mut self, line: u32, offset: u64) -> u16 {
+    pub(in crate::genesis) fn status(&mut self, line: u32, offset: u64) -> u16 {
         self.pending = false;
         let t = self.timing();
         let vl = self.vint_line();
@@ -805,7 +805,7 @@ impl Vdp {
 
     /// The V counter's 9-bit value on `line`: NTSC's jump from $EA to $1E5 (MacDonald §5), PAL's from $102 to $1CA in
     /// V28 and from $10A to $1D2 in V30 (argued from the line count).
-    pub fn v_counter(&self, line: u32) -> u16 {
+    pub(in crate::genesis) fn v_counter(&self, line: u32) -> u16 {
         let (mut last, mut to) = match (self.pal, self.regs[1] & 8 != 0) {
             (false, false) => (0xEA, 0x1E5),
             (false, true) => (0x1FF, 0x1FF),
@@ -824,7 +824,7 @@ impl Vdp {
 
     /// The V counter as the HV port gives it: its low byte, or with bit 0 replaced by bit 8 in interlace mode 1 and
     /// the counter doubled with bit 8 below it in mode 2 (the board).
-    pub fn v_read(&self, line: u32) -> u16 {
+    pub(in crate::genesis) fn v_read(&self, line: u32) -> u16 {
         let v = self.v_counter(line);
         match self.interlace {
             1 => (v & 0xFE) | (v >> 8 & 1),
@@ -834,7 +834,7 @@ impl Vdp {
     }
 
     /// The HV counter: the V counter's low byte and the H counter's top eight bits.
-    pub fn hv(&self, line: u32, offset: u64) -> u16 {
+    pub(in crate::genesis) fn hv(&self, line: u32, offset: u64) -> u16 {
         if let Some(l) = self.hv_latch.filter(|_| self.regs[0] & 2 != 0) {
             return l;
         }
@@ -843,7 +843,7 @@ impl Vdp {
 
     /// Register 0's bit 1 set: the HV counter held at its present value until the bit is cleared (VDPFIFOTesting's
     /// latch test), and from then on taken by TH.
-    pub fn latch_hv(&mut self, line: u32, offset: u64) {
+    pub(in crate::genesis) fn latch_hv(&mut self, line: u32, offset: u64) {
         self.hv_latch = None;
         self.hv_latch = Some(self.hv(line, offset));
     }
@@ -859,7 +859,7 @@ impl Vdp {
 
     /// The line counter at the start of `line`: decremented through the active lines and line 224, an interrupt where
     /// it expires, reloaded from register 10 then and on every other line.
-    pub fn line_start(&mut self, line: u32) {
+    pub(in crate::genesis) fn line_start(&mut self, line: u32) {
         if line <= self.vint_line() {
             if self.hint_counter == 0 {
                 self.hint_counter = self.regs[10];
@@ -873,7 +873,7 @@ impl Vdp {
     }
 
     /// The level the 68000 is asked for: 6 for a pending vertical interrupt it enabled, else 4 for a line interrupt.
-    pub fn level(&self) -> u8 {
+    pub(in crate::genesis) fn level(&self) -> u8 {
         if self.vint_pending && self.regs[1] & 0x20 != 0 {
             6
         } else if self.hint_pending && self.regs[0] & 0x10 != 0 {
@@ -888,7 +888,7 @@ impl Vdp {
     /// The 68000's acknowledge. The VDP is not told which level is acknowledged: it clears the request it is making,
     /// the vertical interrupt's before the line's, so a line interrupt acknowledged after the vertical one has been
     /// enabled clears the vertical flag and is asked again (measured on the board, Nephrite_Disputes.md D-28).
-    pub fn acknowledge(&mut self) {
+    pub(in crate::genesis) fn acknowledge(&mut self) {
         match self.level() {
             6 => self.vint_pending = false,
             4 => self.hint_pending = false,

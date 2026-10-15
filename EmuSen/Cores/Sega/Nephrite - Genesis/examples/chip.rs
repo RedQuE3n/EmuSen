@@ -4,7 +4,7 @@
 //! (Nephrite_Native.md §24). `chip <events> <samples> <out>`; the events are lines of `a <clock>` (the line
 //! asserted), `z <clock>` (released), `w <clock> <port> <value>` and `r <clock> <port>`, in time order.
 
-use nephrite::ym2612::{SAMPLE, Ym2612};
+use nephrite::genesis::ym2612::{SAMPLE, Ym2612};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

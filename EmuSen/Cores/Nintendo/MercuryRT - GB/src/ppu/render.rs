@@ -185,21 +185,30 @@ impl Ppu {
         self.obj_palette_index = data & 0xBF;
     }
 
+    /// The PPU reads colour RAM while it draws, so the data ports are closed then and only the index moves (Mercury_Native.md §13.8).
+    fn palette_ram_busy(&self) -> bool {
+        self.lcd_enabled() && self.is_mode(super::PpuMode::Drawing)
+    }
+
     pub fn read_bg_palette_data(&self) -> u8 {
-        self.bg_palette_ram[(self.bg_palette_index & 0x3F) as usize]
+        if self.palette_ram_busy() { 0xFF } else { self.bg_palette_ram[(self.bg_palette_index & 0x3F) as usize] }
     }
 
     pub fn read_obj_palette_data(&self) -> u8 {
-        self.obj_palette_ram[(self.obj_palette_index & 0x3F) as usize]
+        if self.palette_ram_busy() { 0xFF } else { self.obj_palette_ram[(self.obj_palette_index & 0x3F) as usize] }
     }
 
     pub fn write_bg_palette_data(&mut self, data: u8) {
-        self.bg_palette_ram[(self.bg_palette_index & 0x3F) as usize] = data;
+        if !self.palette_ram_busy() {
+            self.bg_palette_ram[(self.bg_palette_index & 0x3F) as usize] = data;
+        }
         self.bg_palette_index = advance(self.bg_palette_index);
     }
 
     pub fn write_obj_palette_data(&mut self, data: u8) {
-        self.obj_palette_ram[(self.obj_palette_index & 0x3F) as usize] = data;
+        if !self.palette_ram_busy() {
+            self.obj_palette_ram[(self.obj_palette_index & 0x3F) as usize] = data;
+        }
         self.obj_palette_index = advance(self.obj_palette_index);
     }
 }

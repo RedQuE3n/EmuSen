@@ -3,7 +3,7 @@
 
 use crate::machine::Machine;
 use crate::media::Media;
-use crate::render::{vram4_address, MAX_W};
+use crate::genesis::render::{vram4_address, MAX_W};
 
 pub(crate) fn w(words: &[u16]) -> Vec<u8> {
     words.iter().flat_map(|v| v.to_be_bytes()).collect()
@@ -52,13 +52,13 @@ fn run(image: &[u8], frames: u32) -> (Machine, usize, usize) {
     for _ in 0..frames {
         m.advance();
     }
-    let f = &m.genesis.hw.vdp.frame;
+    let f = &m.hw().vdp.frame;
     let (wd, ht) = (f.width, f.height);
     (m, wd, ht)
 }
 
 fn px(m: &Machine, x: usize, y: usize) -> [u8; 3] {
-    let p = &m.genesis.hw.vdp.frame.rgba[(y * MAX_W + x) * 4..][..3];
+    let p = &m.hw().vdp.frame.rgba[(y * MAX_W + x) * 4..][..3];
     [p[0], p[1], p[2]]
 }
 
@@ -121,9 +121,9 @@ fn each_field_draws_in_the_colour_its_status_bit_chose() {
         if f < 2 {
             continue;
         }
-        assert_eq!(m.genesis.hw.vdp.frame.height, 448);
+        assert_eq!(m.hw().vdp.frame.height, 448);
         // The field just drawn is the one before the flag's change at this frame's vertical blanking.
-        let want = if m.genesis.hw.vdp.odd { [0, 255, 0] } else { [255, 0, 0] };
+        let want = if m.hw().vdp.odd { [0, 255, 0] } else { [255, 0, 0] };
         for y in [0, 101, 446, 447] {
             assert_eq!(px(&m, 100, y), want, "frame {f}, row {y}");
         }
@@ -162,12 +162,12 @@ fn mode_4_writes_land_where_the_board_put_them() {
     let bytes = w(&code);
     image[at..at + bytes.len()].copy_from_slice(&bytes);
     let (m, _, _) = run(&image, 2);
-    let v = &m.genesis.hw.vdp.vram;
+    let v = &m.hw().vdp.vram;
     let word = |a: usize| u16::from_be_bytes([v[a], v[a + 1]]);
     assert_eq!((word(0x0000), word(0x0002), word(0x0200), word(0x0060)), (0xC0C0, 0xC9C9, 0xC8C8, 0x5151));
     assert_eq!(word(0x3020), 0x7856);
     assert_eq!((word(0x1200), word(0x1204)), (0x6262, 0x6464));
-    let c = &m.genesis.hw.vdp.cram;
+    let c = &m.hw().vdp.cram;
     assert_eq!((u16::from_be_bytes([c[0], c[1]]) & 0xEEE, u16::from_be_bytes([c[2], c[3]]) & 0xEEE), (0x204, 0x040));
     assert_eq!((vram4_address(0), vram4_address(1), vram4_address(0x200), vram4_address(0x3FFF)), (1, 0, 3, 0x3FFE));
 }
@@ -235,10 +235,10 @@ fn ntsc_v30_runs_the_counter_to_512_lines() {
     regs[1] = 0x814C;
     let image = program(&regs, &[(cram(0), colours(16)), (vram(0), tiles), (vram(0xC000), names)], &[0x60FE]);
     let (mut m, _, ht) = run(&image, 3);
-    let before = m.genesis.hw.clock;
+    let before = m.hw().clock;
     m.advance();
-    let lines = ((m.genesis.hw.clock - before) as f64 / 3420.0).round();
-    assert_eq!((ht, m.genesis.hw.vdp.frame.height, lines), (240, 240, 512.0));
+    let lines = ((m.hw().clock - before) as f64 / 3420.0).round();
+    assert_eq!((ht, m.hw().vdp.frame.height, lines), (240, 240, 512.0));
 }
 
 fn solid_tiles() -> Vec<u16> {
@@ -270,7 +270,7 @@ fn dma_into(target: u32, values: &[u16], regs: &[u16], blocks: &[(u32, Vec<u16>)
 
 /// Each row's FNV-1a hash of red, green and blue, as `board_rows.rs` holds the board's.
 fn row_hashes(m: &Machine) -> Vec<u32> {
-    let f = &m.genesis.hw.vdp.frame;
+    let f = &m.hw().vdp.frame;
     (0..f.height)
         .map(|y| {
             let mut h = 0x811c9dc5u32;
@@ -290,7 +290,7 @@ fn row_hashes(m: &Machine) -> Vec<u32> {
 /// pixels wide (Nephrite_Disputes.md D-9; `mdboard.py picture cram-dma`, `cram-dma-one`, `vsram-dma`, `pattern-dma`).
 #[test]
 fn mid_line_transfers_draw_as_the_board_does() {
-    use crate::board_rows::*;
+    use crate::genesis::board_rows::*;
     let regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A63, 0x8C81, 0x8D3F, 0x8F02, 0x9001];
     let column_names: Vec<u16> = (0..32 * 64).map(|i| ((i % 64) % 16 | ((i % 64) / 16 % 4) << 13) as u16).collect();
     let cram_values: Vec<u16> = (0..1024u16).map(|k| (k.wrapping_mul(0x2B5).wrapping_add((k >> 3).wrapping_mul(0x13))) & 0xEEE).collect();
@@ -327,7 +327,7 @@ fn register_offsets(first: u16, second: u16, regs: &[u16], blocks: &[(u32, Vec<u
     let tail = [0x303C, first, 0x323C, second, 0x47F9, 0x00FF, 0x0000, 0x3639, 0x00C0, 0x0008, 0x3280, 0x36C3, 0x3639, 0x00C0, 0x0008, 0x3281, 0x36C3, 0x60EA];
     let image = program(regs, blocks, &tail);
     let (m, wd, _) = run(&image, 3);
-    let ram = &m.genesis.hw.wram;
+    let ram = &m.hw().wram;
     let records: Vec<u16> = (0..0x8000).map(|i| u16::from_be_bytes([ram[2 * i], ram[2 * i + 1]])).take_while(|&r| r != 0).collect();
     // The records split into frames where the V counter comes back past its jump; the last two are frames 2 and 3.
     let mut starts = vec![0];

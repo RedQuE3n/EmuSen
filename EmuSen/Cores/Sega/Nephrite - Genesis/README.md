@@ -10,3 +10,8 @@ are still to come. The plan is `Man pages/Hardware/Sega/Nephrite - Genesis/Nephr
 
 The crate is named plainly, without the `RT` suffix of the Rust ports (MoonRT, VenusRT), because it has no C#
 predecessor to be told from (`EmuSen_Core_Naming_Scheme.md` §3).
+
+The source keeps the Genesis in `src/genesis/` and its attachments behind `src/interface.rs`, the Sega CD in
+`src/mcd/` and the 32X in `src/s32x/`, each a cargo feature built by default; `machine`, `media`, `state` and `v1` put
+them together for the ABI. `cargo test` checks that boundary from the source and by building without each attachment
+(`Man pages/Hardware/Sega/Nephrite - Genesis/Nephrite_Attachments.md`).

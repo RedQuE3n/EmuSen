@@ -8,15 +8,15 @@
 //! board showed where they are silent (Nephrite_Disputes.md D-4 to D-10). Nephrite_Native.md §14 to §16 are the
 //! record, with what is argued.
 
-use crate::vdp::Vdp;
+use crate::genesis::vdp::Vdp;
 
 /// The output levels of the 15-step ladder a channel can take: shadow uses steps 0-7, normal the even steps,
 /// highlight steps 7-14 (TmEE's measurements).
-pub const LADDER: [u8; 15] = [0, 29, 52, 70, 87, 101, 116, 130, 144, 158, 172, 187, 206, 228, 255];
+pub(in crate::genesis) const LADDER: [u8; 15] = [0, 29, 52, 70, 87, 101, 116, 130, 144, 158, 172, 187, 206, 228, 255];
 
 /// The widest line and the tallest frame (interlace's double resolution in V30).
-pub const MAX_W: usize = 320;
-pub const MAX_H: usize = 480;
+pub(crate) const MAX_W: usize = 320;
+pub(in crate::genesis) const MAX_H: usize = 480;
 
 /// A pixel of a layer: its CRAM index with 0 transparent in its low nibble, and its priority bit.
 #[derive(Clone, Copy, Default)]
@@ -41,11 +41,11 @@ impl Px {
 }
 
 /// What the sprite pass of one line leaves: the sprites' pixels, and whether the line overflowed or collided.
-pub struct SpriteLine {
+pub(in crate::genesis) struct SpriteLine {
     px: [Px; MAX_W],
-    pub overflow: bool,
-    pub dot_overflow: bool,
-    pub collision: bool,
+    pub(in crate::genesis) overflow: bool,
+    pub(in crate::genesis) dot_overflow: bool,
+    pub(in crate::genesis) collision: bool,
 }
 
 impl SpriteLine {
@@ -56,13 +56,13 @@ impl SpriteLine {
 
 /// The frame being drawn, as RGBA, with the width and height it is drawn at.
 pub struct Frame {
-    pub rgba: Vec<u8>,
+    pub(crate) rgba: Vec<u8>,
     pub width: usize,
     pub height: usize,
 }
 
 impl Frame {
-    pub fn new() -> Frame {
+    pub(in crate::genesis) fn new() -> Frame {
         Frame { rgba: vec![0; MAX_W * MAX_H * 4], width: 320, height: 224 }
     }
 }
@@ -90,7 +90,7 @@ const MODE4_RG: [u8; 4] = [0, 95, 161, 255];
 const MODE4_B: [u8; 4] = [0, 109, 161, 255];
 
 /// Where mode 4's byte address `a` lies in VRAM: bits 1-8 one place up, bit 9 at bit 1, an even address the low byte.
-pub fn vram4_address(a: usize) -> usize {
+pub(in crate::genesis) fn vram4_address(a: usize) -> usize {
     (a & 0x3C00) | (a & 0x1FE) << 1 | (a >> 8) & 2 | (a & 1) ^ 1
 }
 
@@ -100,7 +100,7 @@ fn tile_px(vram: &[u8], entry: u16, x: usize, y: usize, rows: usize) -> Px {
 }
 
 impl Vdp {
-    pub fn mode4(&self) -> bool {
+    pub(in crate::genesis) fn mode4(&self) -> bool {
         self.regs[1] & 4 == 0
     }
 
@@ -108,7 +108,7 @@ impl Vdp {
         if self.h40() && !self.mode4() { 320 } else { 256 }
     }
 
-    pub fn height(&self) -> usize {
+    pub(in crate::genesis) fn height(&self) -> usize {
         self.vint_line() as usize
     }
 
@@ -132,7 +132,7 @@ impl Vdp {
 
     /// The scroll values a line's fetches read, taken as it begins: a line interrupt's write lands after the line's
     /// first fetches and so is the next line's (OutRun's road, which writes VSRAM every line, shows it).
-    pub fn latch_line(&mut self, line: usize) {
+    pub(in crate::genesis) fn latch_line(&mut self, line: usize) {
         self.line_vsram.copy_from_slice(&self.vsram);
         self.line_hscroll = self.hscroll(line);
         self.line_window = [self.regs[17], self.regs[18]];
@@ -233,7 +233,7 @@ impl Vdp {
     /// frame and 16 or 20 sprites and 256 or 320 dots a line; a sprite at X 0 masks the rest of the line once a sprite
     /// not at 0 precedes it, or after a line that ended in a dot overflow (Nemesis). In double resolution the sprites'
     /// Y has ten bits and their cells sixteen rows.
-    pub fn sprites(&mut self, y: usize) -> SpriteLine {
+    pub(in crate::genesis) fn sprites(&mut self, y: usize) -> SpriteLine {
         let h40 = self.h40();
         let doubled = self.doubled();
         let (rows, ymask, yoff) = if doubled { (16, 0x3FF, 256) } else { (8, 0x1FF, 128) };
@@ -314,7 +314,7 @@ impl Vdp {
 
     /// The sprites of `line` parsed on the line before it, as the VDP fills its line buffer: nothing when the display
     /// is off at that point (Nemesis, Eke and MacDonald, topics 851 and 740), and the flags set then.
-    pub fn parse_sprites(&mut self, line: usize) {
+    pub(in crate::genesis) fn parse_sprites(&mut self, line: usize) {
         if self.display() && !self.mode4() && !self.doubled() {
             let s = self.sprites(line);
             self.sprite_overflow |= s.overflow;
@@ -352,14 +352,14 @@ impl Vdp {
 
     /// A line not drawn still fetches plane B's vertical scroll, which VSRAM past its 40 words reads (argued from
     /// VDPFIFOTesting's VSRAM fills, made in blanking).
-    pub fn blank_line(&mut self) {
+    pub(in crate::genesis) fn blank_line(&mut self) {
         self.vscroll_latch = self.vsram_word(1) & 0x3FF;
     }
 
     /// The line and pixel the beam is on: a line's pixels run from H $18 to its width past it, through the V
     /// counter's step into the next line's first H values; between them, before the next line's pixel 0 (`false`).
     fn beam(&self, delay: u64) -> (usize, usize, bool) {
-        let at = (self.time + delay).saturating_sub(self.cur_line_start).min(crate::vdp::LINE - 1);
+        let at = (self.time + delay).saturating_sub(self.cur_line_start).min(crate::genesis::vdp::LINE - 1);
         let h = self.timing().h(at) as usize;
         let (step, width) = if self.h40() { (0x14A, 320) } else { (0x10A, 256) };
         let line = self.cur_line as usize;
@@ -374,12 +374,12 @@ impl Vdp {
 
     /// Before a write that changes what mode 5's picture reads: the line under the beam drawn up to it, and a CRAM
     /// write's dot of its colour on the beam's pixel (D-6).
-    pub fn before_change(&mut self, dot: Option<u16>) {
+    pub(crate) fn before_change(&mut self, dot: Option<u16>) {
         self.before_change_after(dot, 0);
     }
 
     /// The same for a change that shows `delay` master clocks after it is made.
-    pub fn before_change_after(&mut self, dot: Option<u16>, delay: u64) {
+    pub(in crate::genesis) fn before_change_after(&mut self, dot: Option<u16>, delay: u64) {
         if self.mode4() {
             return;
         }
@@ -412,7 +412,7 @@ impl Vdp {
 
     /// The display enable changed mid-line: blanking begins twelve pixels after a register write would show, and the
     /// planes return at the first 16-pixel boundary from 24 pixels after it (measured in part, D-9).
-    pub fn display_change(&mut self, on: bool, delay: u64) {
+    pub(in crate::genesis) fn display_change(&mut self, on: bool, delay: u64) {
         if self.mode4() {
             return;
         }
@@ -447,7 +447,7 @@ impl Vdp {
     }
 
     /// The picture's size as a frame's line 0 takes it, for the frame the machine starts in the middle of.
-    pub fn size_frame(&mut self) {
+    pub(in crate::genesis) fn size_frame(&mut self) {
         if self.mode4() {
             (self.frame.width, self.frame.height) = (self.width(), self.height());
         } else {
@@ -515,7 +515,7 @@ impl Vdp {
     }
 
     /// After a state's load: the open line's pixels so far drawn again from the state.
-    pub fn redraw_open_line(&mut self) {
+    pub(in crate::genesis) fn redraw_open_line(&mut self) {
         if self.open.is_some() {
             let x = std::mem::take(&mut self.span_x);
             self.advance(x);
@@ -552,7 +552,7 @@ impl Vdp {
     /// The V counter's step that ends `line`: mode 5's line drawn to the beam (its last pixels come after the step),
     /// the line before finished, and the next line's sprites parsed (or, after the last line of the frame, line 0's);
     /// mode 4's line drawn whole. Drawing is skipped when the frame is not drawn; the sprite pass runs either way.
-    pub fn line_end(&mut self, line: usize) {
+    pub(in crate::genesis) fn line_end(&mut self, line: usize) {
         if self.mode4() {
             self.open = None;
             if line < self.height() {

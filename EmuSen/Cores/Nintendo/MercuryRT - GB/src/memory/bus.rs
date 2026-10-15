@@ -48,6 +48,8 @@ pub struct MemoryBus {
     pub oam_dma_cycles_left: i32,
     pub oam_dma_index: i32,
     pub oam_dma_page: u8,
+    /// T-cycles until a transfer written while another runs takes over; in the state's version-9 tail, not the walk (Mercury_Native.md §13.4).
+    pub oam_dma_start_delay: i32,
     pub serial_control: u8,
     pub serial_data: u8,
     pub stall_cycles: i32,
@@ -77,10 +79,13 @@ impl MemoryBus {
         let (cgb, compat) = (cgb_hardware && cart.is_cgb(), cgb_hardware && !cart.is_cgb());
         let mut ppu = Ppu::default();
         *ppu.compat = compat;
+        *ppu.cgb_hardware = cgb_hardware;
+        let mut apu = Apu::default();
+        *apu.cgb_hardware = cgb_hardware;
         MemoryBus {
             cart,
             mapper,
-            apu: Apu::default(),
+            apu,
             double_speed: false,
             hdma_blocks_left: 0,
             hdma_destination: 0,
@@ -103,6 +108,7 @@ impl MemoryBus {
             oam_dma_cycles_left: 0,
             oam_dma_index: 0,
             oam_dma_page: 0,
+            oam_dma_start_delay: 0,
             serial_control: 0,
             serial_data: 0,
             stall_cycles: 0,
@@ -134,6 +140,7 @@ impl MemoryBus {
         self.oam_dma_page = 0;
         self.oam_dma_cycles_left = 0;
         self.oam_dma_index = 0;
+        self.oam_dma_start_delay = 0;
         self.stall_cycles = 0;
         self.div_counter = 0;
         self.tima = 0;
@@ -196,6 +203,19 @@ impl MemoryBus {
         w.u8("_tma", self.tma);
     }
 
+    /// The tail after the mixer: 9 OAM DMA's start delay, 10 the sweep's negate flag, 11 the frozen LY=LYC bit; a field an older version lacks starts clear.
+    pub fn write_tail(&self, w: &mut StateWriter) {
+        w.i32("_oamDmaStartDelay", self.oam_dma_start_delay);
+        w.group("Apu.Pulse1", |w| self.apu.pulse1.write_tail(w));
+        w.group("Ppu", |w| self.ppu.write_tail(w));
+    }
+
+    pub fn read_tail(&mut self, r: &mut StateReader, version: i32) -> StateResult {
+        self.oam_dma_start_delay = if version >= 9 { r.i32()? } else { 0 }; // _oamDmaStartDelay
+        self.apu.pulse1.read_tail(r, version)?;
+        self.ppu.read_tail(r, version)
+    }
+
     pub fn read_state(&mut self, r: &mut StateReader) -> StateResult {
         r.class(&mut self.apu)?; // Apu
         self.double_speed = r.bool()?; // DoubleSpeed
@@ -233,7 +253,11 @@ impl MemoryBus {
 }
 
 const TIMER: u8 = 1 << 2;
+/// A transfer's span: 160 machine cycles and the one its last byte lands in; a fresh write's counter adds the machine cycle before it starts.
+const OAM_DMA_SPAN: i32 = (0xA0 + 1) * 4;
+const OAM_DMA_FROM_WRITE: i32 = OAM_DMA_SPAN + 4;
 const SERIAL: u8 = 1 << 3;
+const JOYPAD: u8 = 1 << 4;
 
 impl MemoryBus {
     #[inline(always)]
@@ -245,11 +269,13 @@ impl MemoryBus {
     #[inline(always)]
     fn wram_offset(&self, address: u16) -> usize {
         let offset = address as usize & 0x1FFF;
-        if offset < WRAM_BANK_SIZE { offset } else { (self.wram_bank as usize).wrapping_mul(WRAM_BANK_SIZE).wrapping_add(offset - WRAM_BANK_SIZE) }
+        // SVBK as written; 0 maps bank 1 (Mercury_Native.md §13.8).
+        let bank = if self.wram_bank == 0 { 1 } else { self.wram_bank as usize };
+        if offset < WRAM_BANK_SIZE { offset } else { bank.wrapping_mul(WRAM_BANK_SIZE).wrapping_add(offset - WRAM_BANK_SIZE) }
     }
 
     pub fn oam_dma_active(&self) -> bool {
-        self.oam_dma_cycles_left > 0
+        (1..OAM_DMA_SPAN).contains(&self.oam_dma_cycles_left)
     }
 
     /// The CPU loses VRAM while the PPU draws from it, and OAM for the scan too and a whole OAM DMA - see Mercury_Ppu.md §7.
@@ -342,7 +368,14 @@ impl MemoryBus {
         }
     }
 
-    fn read_joypad(&self) -> u8 {
+    /// Pan Docs' INT $60: any of P1's four lines going from high to low (Mercury_Native.md §13.7).
+    pub fn request_joypad_on_fall(&mut self, before: u8) {
+        if before & !self.read_joypad() & 0x0F != 0 {
+            self.interrupt_flags |= JOYPAD;
+        }
+    }
+
+    pub fn read_joypad(&self) -> u8 {
         let select = self.io[0x00];
         let j = &*self.joypad;
         let mut low = 0x0F;
@@ -372,6 +405,7 @@ impl MemoryBus {
             0xFF43 => self.ppu.scx,
             0xFF44 => self.ppu.ly,
             0xFF45 => self.ppu.lyc,
+            0xFF46 => self.io[0x46],
             0xFF47 => self.ppu.bgp,
             0xFF48 => self.ppu.obp0,
             0xFF49 => self.ppu.obp1,
@@ -379,21 +413,34 @@ impl MemoryBus {
             0xFF4B => self.ppu.wx,
             _ if *self.cgb => self.read_cgb_io(address),
             _ if *self.dmg_compat => self.read_compat_io(address),
-            _ => self.io[(address - 0xFF00) as usize],
+            // An address nothing answers reads all ones, and keeps no write (Mercury_Native.md §13.1).
+            _ => 0xFF,
         }
     }
 
     fn write_io(&mut self, address: u16, data: u8) {
         match address {
-            0xFF00 => self.io[0x00] = data & 0x30,
+            0xFF00 => {
+                let before = self.read_joypad();
+                self.io[0x00] = data & 0x30;
+                self.request_joypad_on_fall(before);
+            }
             0xFF01 => self.serial_data = data,
             0xFF02 => self.write_serial_control(data),
             0xFF04 => self.div_counter = 0,
+            // In the cycle TMA is reloaded, TIMA keeps taking TMA: a TIMA write is lost and a TMA write reaches both (Mercury_Native.md §13.2).
             0xFF05 => {
-                self.tima = data;
-                self.tima_reload_delay = 0;
+                if self.tima_reload_delay >= 0 {
+                    self.tima = data;
+                    self.tima_reload_delay = 0;
+                }
             }
-            0xFF06 => self.tma = data,
+            0xFF06 => {
+                self.tma = data;
+                if self.tima_reload_delay < 0 {
+                    self.tima = data;
+                }
+            }
             0xFF07 => self.tac = data & 0x07,
             0xFF0F => self.interrupt_flags = data & 0x1F,
             0xFF10..=0xFF26 | 0xFF30..=0xFF3F => self.apu.write_register(address, data),
@@ -405,24 +452,16 @@ impl MemoryBus {
             0xFF45 => self.ppu.write_lyc(data, &mut self.interrupt_flags),
             0xFF46 => {
                 self.io[0x46] = data;
-                self.oam_dma_page = data;
-                self.oam_dma_index = 0;
-                self.oam_dma_cycles_left = 0xA0 * 4;
+                self.start_oam_dma(data);
             }
             0xFF47 => self.ppu.bgp = data,
             0xFF48 => self.ppu.obp0 = data,
             0xFF49 => self.ppu.obp1 = data,
             0xFF4A => self.ppu.wy = data,
             0xFF4B => self.ppu.wx = data,
-            _ => {
-                if *self.cgb && self.write_cgb_io(address, data) {
-                    return;
-                }
-                if *self.dmg_compat && self.write_compat_io(address, data) {
-                    return;
-                }
-                self.io[(address - 0xFF00) as usize] = data;
-            }
+            _ if *self.cgb => self.write_cgb_io(address, data),
+            _ if *self.dmg_compat => self.write_compat_io(address, data),
+            _ => {}
         }
     }
 
@@ -442,27 +481,28 @@ impl MemoryBus {
         match address {
             0xFF4D => 0x7E | if self.double_speed { 0x80 } else { 0 } | self.speed_switch_armed as u8,
             0xFF4F => (0xFE | self.vram_bank) as u8,
-            0xFF51 => (self.hdma_source >> 8) as u8,
-            0xFF52 => (self.hdma_source & 0xF0) as u8,
-            0xFF53 => ((self.hdma_destination >> 8) & 0x1F) as u8,
-            0xFF54 => (self.hdma_destination & 0xF0) as u8,
+            // HDMA1-4 are write-only.
+            // A stopped transfer's blocks still owed read with bit 7 set (Mercury_Native.md §13.9).
             0xFF55 => {
                 if self.hdma_blocks_left == 0 {
                     0xFF
                 } else {
-                    (self.hdma_blocks_left - 1) as u8
+                    (if self.hdma_is_h_blank_driven { 0x00 } else { 0x80 }) | (self.hdma_blocks_left - 1) as u8
                 }
             }
+            // RP: no partner's light ever arrives, so bit 1 reads 1 whether or not reading is enabled.
+            0xFF56 => 0x3E | self.io[0x56],
             0xFF68 => self.ppu.read_bg_palette_index(),
             0xFF69 => self.ppu.read_bg_palette_data(),
             0xFF6A => self.ppu.read_obj_palette_index(),
             0xFF6B => self.ppu.read_obj_palette_data(),
+            0xFF6C => 0xFE | self.io[0x6C],
             0xFF70 => (0xF8 | self.wram_bank) as u8,
-            _ => self.io[(address - 0xFF00) as usize],
+            _ => self.read_undocumented_io(address, true),
         }
     }
 
-    fn write_cgb_io(&mut self, address: u16, data: u8) -> bool {
+    fn write_cgb_io(&mut self, address: u16, data: u8) {
         match address {
             0xFF4D => self.speed_switch_armed = data & 0x01 != 0,
             0xFF4F => self.vram_bank = (data & 0x01) as i32,
@@ -471,37 +511,57 @@ impl MemoryBus {
             0xFF53 => self.hdma_destination = (((data & 0x1F) as u16) << 8) | (self.hdma_destination & 0xF0),
             0xFF54 => self.hdma_destination = (self.hdma_destination & 0x1F00) | (data & 0xF0) as u16,
             0xFF55 => self.start_hdma(data),
+            0xFF56 => self.io[0x56] = data & 0xC1,
             0xFF68 => self.ppu.write_bg_palette_index(data),
             0xFF69 => self.ppu.write_bg_palette_data(data),
             0xFF6A => self.ppu.write_obj_palette_index(data),
             0xFF6B => self.ppu.write_obj_palette_data(data),
-            0xFF6C => {}
-            0xFF70 => self.wram_bank = if data & 0x07 == 0 { 1 } else { (data & 0x07) as i32 },
-            _ => return false,
+            // OPRI: kept for its read-back; the renderer's priority follows the mode, not this bit.
+            0xFF6C => self.io[0x6C] = data & 0x01,
+            0xFF70 => self.wram_bank = (data & 0x07) as i32,
+            _ => self.write_undocumented_io(address, data, true),
         }
-        true
     }
 
-    /// With a Game Boy cartridge the colour registers read $FF and ignore writes, except VRAM bank and the palette indices (Mercury_Model.md §4.2).
+    /// With a Game Boy cartridge the colour registers read $FF and ignore writes, except VRAM bank, the palette indices and $FF72-$FF77
+    /// (Mercury_Model.md §4.2, Mercury_Native.md §13.1).
     fn read_compat_io(&self, address: u16) -> u8 {
         match address {
-            0xFF4C | 0xFF4D | 0xFF56 | 0xFF6C | 0xFF70 | 0xFF51..=0xFF55 | 0xFF69 | 0xFF6B => 0xFF,
             0xFF4F => (0xFE | self.vram_bank) as u8,
             0xFF68 => self.ppu.read_bg_palette_index(),
             0xFF6A => self.ppu.read_obj_palette_index(),
-            _ => self.io[(address - 0xFF00) as usize],
+            _ => self.read_undocumented_io(address, false),
         }
     }
 
-    fn write_compat_io(&mut self, address: u16, data: u8) -> bool {
+    fn write_compat_io(&mut self, address: u16, data: u8) {
         match address {
             0xFF4F => self.vram_bank = (data & 0x01) as i32,
             0xFF68 => self.ppu.write_bg_palette_index(data),
             0xFF6A => self.ppu.write_obj_palette_index(data),
-            0xFF4C | 0xFF4D | 0xFF56 | 0xFF69 | 0xFF6B | 0xFF6C | 0xFF70 | 0xFF51..=0xFF55 => {}
-            _ => return false,
+            _ => self.write_undocumented_io(address, data, false),
         }
-        true
+    }
+
+    /// $FF72-$FF77 on the Color in either mode, $FF74 only in colour mode (Mercury_Native.md §13.1).
+    fn read_undocumented_io(&self, address: u16, colour_mode: bool) -> u8 {
+        match address {
+            0xFF72 | 0xFF73 => self.io[(address - 0xFF00) as usize],
+            0xFF74 if colour_mode => self.io[0x74],
+            0xFF75 => 0x8F | self.io[0x75],
+            0xFF76 => self.apu.pcm12(),
+            0xFF77 => self.apu.pcm34(),
+            _ => 0xFF,
+        }
+    }
+
+    fn write_undocumented_io(&mut self, address: u16, data: u8, colour_mode: bool) {
+        match address {
+            0xFF72 | 0xFF73 => self.io[(address - 0xFF00) as usize] = data,
+            0xFF74 if colour_mode => self.io[0x74] = data,
+            0xFF75 => self.io[0x75] = data & 0x70,
+            _ => {}
+        }
     }
 
     /// STOP performs the switch KEY1 armed; it is not a stop at all on a CGB - see Mercury_Cgb.md §5.
@@ -516,7 +576,6 @@ impl MemoryBus {
 
     fn start_hdma(&mut self, data: u8) {
         if self.hdma_is_h_blank_driven && self.hdma_blocks_left > 0 && data & 0x80 == 0 {
-            self.hdma_blocks_left = 0;
             self.hdma_is_h_blank_driven = false;
             return;
         }
@@ -536,15 +595,19 @@ impl MemoryBus {
         }
     }
 
-    /// Eight machine cycles a block, half as long in double speed - see Mercury_Cgb.md §4.1.
+    /// About 8 µs a block at either speed: 8 machine cycles, or 16 in double speed (Mercury_Native.md §13.9).
     fn transfer_hdma_block(&mut self) {
-        self.stall_cycles += if self.double_speed { 16 } else { 32 };
+        self.stall_cycles += if self.double_speed { 64 } else { 32 };
         for _ in 0..16 {
             let value = self.read(self.hdma_source);
             let offset = (self.vram_bank as usize).wrapping_mul(VRAM_BANK_SIZE).wrapping_add((self.hdma_destination & 0x1FFF) as usize);
             self.vram[offset] = value;
             self.hdma_source = self.hdma_source.wrapping_add(1);
             self.hdma_destination = (self.hdma_destination.wrapping_add(1)) & 0x1FFF;
+        }
+        // A destination run off the end of VRAM ends the transfer.
+        if self.hdma_destination == 0 {
+            self.hdma_blocks_left = 1;
         }
         self.hdma_blocks_left -= 1;
         if self.hdma_blocks_left == 0 {
@@ -562,14 +625,34 @@ impl MemoryBus {
         }
     }
 
-    /// 160 machine cycles, one OAM byte each - see Mercury_Memory.md §6.
+    /// A fresh transfer starts on the second machine cycle after the write; one written while another runs lets that one carry on until then.
+    fn start_oam_dma(&mut self, page: u8) {
+        if self.oam_dma_cycles_left == 0 {
+            self.oam_dma_page = page;
+            self.oam_dma_index = 0;
+            self.oam_dma_cycles_left = OAM_DMA_FROM_WRITE;
+            return;
+        }
+        self.oam_dma_start_delay = 5;
+        self.oam_dma_cycles_left = self.oam_dma_cycles_left.max(self.oam_dma_start_delay);
+    }
+
+    /// 160 machine cycles, one OAM byte each, closing OAM through the cycle of the last byte - see Mercury_Memory.md §6.
     #[inline(always)]
     fn step_oam_dma(&mut self) {
         if self.oam_dma_cycles_left == 0 {
             return;
         }
+        if self.oam_dma_start_delay != 0 {
+            self.oam_dma_start_delay -= 1;
+            if self.oam_dma_start_delay == 0 {
+                self.oam_dma_page = self.io[0x46];
+                self.oam_dma_index = 0;
+                self.oam_dma_cycles_left = OAM_DMA_SPAN;
+            }
+        }
         self.oam_dma_cycles_left -= 1;
-        if self.oam_dma_cycles_left & 3 != 0 || self.oam_dma_index >= 0xA0 {
+        if self.oam_dma_cycles_left & 3 != 0 || self.oam_dma_cycles_left > 0xA0 * 4 || self.oam_dma_index >= 0xA0 {
             return;
         }
         let address = ((self.oam_dma_page as u16) << 8).wrapping_add(self.oam_dma_index as u16);
@@ -602,12 +685,8 @@ impl MemoryBus {
         self.div_counter = self.div_counter.wrapping_add(1);
         self.apu.on_div_bit(self.div_counter & if self.double_speed { 0x2000 } else { 0x1000 } != 0);
 
-        if self.tima_reload_delay > 0 {
-            self.tima_reload_delay -= 1;
-            if self.tima_reload_delay == 0 {
-                self.tima = self.tma;
-                self.interrupt_flags |= TIMER;
-            }
+        if self.tima_reload_delay != 0 {
+            self.step_tima_reload();
         }
 
         let mask: u16 = match self.tac & 0x03 {
@@ -624,6 +703,20 @@ impl MemoryBus {
             }
         }
         self.last_timer_edge = edge;
+    }
+
+    /// Positive: cycles until TMA is reloaded; negative: cycles left of the machine cycle it was reloaded in (Mercury_Native.md §13.2).
+    fn step_tima_reload(&mut self) {
+        if self.tima_reload_delay < 0 {
+            self.tima_reload_delay += 1;
+            return;
+        }
+        self.tima_reload_delay -= 1;
+        if self.tima_reload_delay == 0 {
+            self.tima = self.tma;
+            self.interrupt_flags |= TIMER;
+            self.tima_reload_delay = -4;
+        }
     }
 
     #[inline(always)]
@@ -653,5 +746,10 @@ impl crate::cpu::CpuBus for MemoryBus {
 
     fn stop(&mut self) {
         MemoryBus::stop(self)
+    }
+
+    #[inline(always)]
+    fn pending_interrupts(&self) -> u8 {
+        self.interrupt_enable & self.interrupt_flags & 0x1F
     }
 }

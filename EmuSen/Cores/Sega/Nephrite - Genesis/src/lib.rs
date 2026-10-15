@@ -8,41 +8,20 @@
 //! YM2612's ports, timers, busy flag and DAC, mixed and resampled to 48 kHz. Step 2: the FM operators, then held to
 //! the board's samples, with the reset line the YM2612 shares with the Z80; the LFO, SSG-EG, CSM, the timers and the
 //! test register, measured on the board.
+//!
+//! The modules (Nephrite_Attachments.md §5): the Genesis in `genesis/`; the attachments, the Sega CD in `mcd/` and the
+//! 32X in `s32x/`, each behind `interface`, the only module of the crate it imports, and each a feature; and the
+//! assembly that names them all, `machine`, `media`, `state` and `v1`.
 
-pub mod cart;
-pub mod debugger;
-pub mod eeprom;
-pub mod fifo_records;
-pub mod fm;
-pub mod fm_tables;
 pub mod genesis;
-pub mod io;
-#[allow(dead_code)]
-mod lfo_tables;
+pub mod interface;
 pub mod machine;
+#[cfg(feature = "mcd")]
 pub mod mcd;
-pub mod render;
-pub mod sound;
-#[cfg(test)]
-mod sounds;
 pub mod media;
-#[cfg(test)]
-mod board_bus;
-#[cfg(test)]
-mod board_fm;
-#[cfg(test)]
-mod board_chip;
-#[cfg(test)]
-mod board_reads;
-#[cfg(test)]
-mod board_rows;
-#[cfg(test)]
-pub(crate) mod pictures;
-#[cfg(test)]
-mod programs;
+#[cfg(feature = "s32x")]
+pub mod s32x;
 pub mod state;
 pub mod v1;
-pub mod vdp;
 #[cfg(test)]
-mod voices;
-pub mod ym2612;
+mod boundary;

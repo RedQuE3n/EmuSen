@@ -7,50 +7,50 @@ use emusen_disc::{Msf, Place};
 use emusen_native::core::{Kept, SEEK_SPAN, seek};
 
 /// The disc in the drive, its bytes the host's where the host lends them (`BORROW`).
-pub type Disc = emusen_disc::Disc<Kept>;
+pub(crate) type Disc = emusen_disc::Disc<Kept>;
 
 /// Whether the drive names its places to the host (`MEDIA_SEEK`), which core ABI 1.6 lets the core claim.
-pub const NAMES_PLACES: bool = true;
+pub(in crate::mcd) const NAMES_PLACES: bool = true;
 
 /// The drive's number in machine info's `drives`.
-pub const DRIVE: u32 = 0;
+pub(in crate::mcd) const DRIVE: u32 = 0;
 
 /// Sub clocks a sector, 1/75 s: 500,000/3, made of two of 166,667 and one of 166,666.
-pub const SECTOR: [u64; 3] = [166_667, 166_667, 166_666];
+pub(in crate::mcd) const SECTOR: [u64; 3] = [166_667, 166_667, 166_666];
 
 /// Exchanges from power-on until the drive answers, busy till then and deaf to commands, and from the first report
 /// asked for after it until the TOC is read (the LL logs: 61 to 79 busy exchanges after a host's first, the TOC 13 to
 /// 35; chosen within those, D-33 and D-36).
-pub const SPIN_UP: u32 = 75;
-pub const TOC_READ: u32 = 20;
+pub(in crate::mcd) const SPIN_UP: u32 = 75;
+pub(in crate::mcd) const TOC_READ: u32 = 20;
 /// A seek's exchanges before the head reports a place, and the sectors it lands short of its target (the LL logs: 12,
 /// and 14 to 15).
-pub const SEEK_BUSY: u32 = 12;
-pub const LAND_SHORT: u32 = 14;
+pub(in crate::mcd) const SEEK_BUSY: u32 = 12;
+pub(in crate::mcd) const LAND_SHORT: u32 = 14;
 /// A play reports playing, and a seek pauses, from three sectors short of the target; a pause loops over the eight
 /// sectors up to there (krikzz's notes: "seek pos 250, loop range 240-247").
-pub const SETTLE: u32 = 3;
-pub const LOOP: u32 = 7;
+pub(in crate::mcd) const SETTLE: u32 = 3;
+pub(in crate::mcd) const LOOP: u32 = 7;
 
 /// The status's first nibble.
-pub mod status {
-    pub const STOPPED: u8 = 0x0;
-    pub const PLAYING: u8 = 0x1;
-    pub const SEEKING: u8 = 0x2;
-    pub const SCANNING: u8 = 0x3;
-    pub const PAUSED: u8 = 0x4;
-    pub const TRAY_OPEN: u8 = 0x5;
-    pub const CHECKSUM: u8 = 0x6;
-    pub const READY: u8 = 0x9;
-    pub const NO_DISC: u8 = 0xB;
-    pub const LEAD_OUT: u8 = 0xC;
+pub(in crate::mcd) mod status {
+    pub(in crate::mcd) const STOPPED: u8 = 0x0;
+    pub(in crate::mcd) const PLAYING: u8 = 0x1;
+    pub(in crate::mcd) const SEEKING: u8 = 0x2;
+    pub(in crate::mcd) const SCANNING: u8 = 0x3;
+    pub(in crate::mcd) const PAUSED: u8 = 0x4;
+    pub(in crate::mcd) const TRAY_OPEN: u8 = 0x5;
+    pub(in crate::mcd) const CHECKSUM: u8 = 0x6;
+    pub(in crate::mcd) const READY: u8 = 0x9;
+    pub(in crate::mcd) const NO_DISC: u8 = 0xB;
+    pub(in crate::mcd) const LEAD_OUT: u8 = 0xC;
 }
 
 /// The second nibble when the status carries no report: busy, or nothing to say.
 const NONE: u8 = 0xF;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Mode {
+pub(in crate::mcd) enum Mode {
     /// The host clock has not yet risen: the drive waits.
     Idle,
     Spinning(u32),
@@ -72,42 +72,42 @@ pub enum Mode {
 
 /// What one exchange did: the sector read, if any, and whether the status went to the host.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Tick {
-    pub sector: Option<u32>,
-    pub int4: bool,
+pub(in crate::mcd) struct Tick {
+    pub(in crate::mcd) sector: Option<u32>,
+    pub(in crate::mcd) int4: bool,
 }
 
 pub struct Cdd {
-    pub disc: Option<Disc>,
-    pub mode: Mode,
+    pub(in crate::mcd) disc: Option<Disc>,
+    pub(in crate::mcd) mode: Mode,
     /// HOCK, the host clock: set, the drive and the host exchange status and command each sector.
     pub hock: bool,
     pub status: [u8; 10],
     pub command: [u8; 10],
     /// A command written and not yet taken; the sub clock DTS falls at.
-    pub command_new: bool,
-    pub dts_until: u64,
+    pub(in crate::mcd) command_new: bool,
+    pub(in crate::mcd) dts_until: u64,
     /// The report the status carries (0 absolute time, 1 relative, 2 track, 3 the disc's length, 4 its tracks, 5 a
     /// track's start), and the track that 5 asks for.
     pub report: u8,
-    pub report_track: u8,
+    pub(in crate::mcd) report_track: u8,
     pub head: u32,
     /// The status's flags nibble: bit 2 the place last reported is in a data track, bit 0 the drive is not playing.
-    pub data: bool,
+    pub(in crate::mcd) data: bool,
     /// Exchanges since the drive spun up, for the lead-in's cycle of TOC items.
-    pub laps: u64,
+    pub(in crate::mcd) laps: u64,
     /// The sub clock of the next exchange and which of the three periods it ends.
-    pub next: u64,
-    pub phase: u8,
+    pub(in crate::mcd) next: u64,
+    pub(in crate::mcd) phase: u8,
     /// Whether the TOC has been read since the disc spun up: the first report asked for reads it, and status 9 waits on it.
-    pub toc_read: bool,
+    pub(in crate::mcd) toc_read: bool,
     /// The file and byte last named to the host (`MEDIA_SEEK`); not state.
-    pub named: Option<Place>,
+    pub(in crate::mcd) named: Option<Place>,
 }
 
 impl Cdd {
     /// A drive at power-on: with a disc it spins up at once, whether or not the host clocks it (D-36).
-    pub fn new(disc: Option<Disc>, now: u64) -> Cdd {
+    pub(in crate::mcd) fn new(disc: Option<Disc>, now: u64) -> Cdd {
         let mode = if disc.is_some() { Mode::Spinning(SPIN_UP) } else { Mode::Idle };
         Cdd { disc, mode, hock: false, status: [0; 10], command: [0; 10], command_new: false, dts_until: 0, report: 0, report_track: 1, toc_read: false, head: 0, data: false, laps: 0, next: now + SECTOR[0], phase: 0, named: None }
     }
@@ -117,7 +117,7 @@ impl Cdd {
     }
 
     /// The host clock's write: its first rise starts the drive, which answers once its disc has spun up.
-    pub fn set_hock(&mut self, hock: bool) {
+    pub(in crate::mcd) fn set_hock(&mut self, hock: bool) {
         if hock && self.mode == Mode::Idle {
             self.mode = if self.disc.is_some() { Mode::Spinning(SPIN_UP) } else { Mode::Stopped(status::NO_DISC) };
         }
@@ -125,7 +125,7 @@ impl Cdd {
     }
 
     /// The tray opened, the drive stopping; or closed, the disc's TOC read again, or no disc found.
-    pub fn set_tray(&mut self, open: bool) {
+    pub(in crate::mcd) fn set_tray(&mut self, open: bool) {
         if open {
             self.mode = Mode::TrayOpen;
         } else if self.mode == Mode::TrayOpen {
@@ -228,7 +228,7 @@ impl Cdd {
     }
 
     /// One exchange at its sub clock: the command taken, the head moved a sector, the status composed.
-    pub fn exchange(&mut self) -> Tick {
+    pub(in crate::mcd) fn exchange(&mut self) -> Tick {
         let refused = self.take();
         self.laps += 1;
         let mut sector = None;
@@ -406,7 +406,7 @@ impl Cdd {
     // ---- the registers
 
     /// `$FF8036`-`$FF804B` as the sub CPU reads them, by the word at `off` from `$FF8036`.
-    pub fn read(&self, off: u32, now: u64) -> u16 {
+    pub(in crate::mcd) fn read(&self, off: u32, now: u64) -> u16 {
         match off {
             // D/M: 0 while music plays, 1 for data, a stop or a pause (§3-6).
             0x00 => (!(self.mode == Mode::Playing && !self.data) as u16) << 8 | (self.hock as u16) << 2 | (now < self.dts_until) as u16,
@@ -422,7 +422,7 @@ impl Cdd {
     }
 
     /// A write: HOCK at `$FF8037`, the command's nibbles from `$FF8042`; the last, `$FF804B`, sends it.
-    pub fn write(&mut self, off: u32, v: u16, mask: u16, now: u64) {
+    pub(in crate::mcd) fn write(&mut self, off: u32, v: u16, mask: u16, now: u64) {
         match off {
             0x00 => {
                 if mask & 0x00FF != 0 {
@@ -448,14 +448,14 @@ impl Cdd {
 }
 
 /// DTS stays set while the ten nibbles go to the drive: about 200 µs (argued; the manual's 240 µs abort bound).
-pub const DTS: u64 = 2_500;
+pub(in crate::mcd) const DTS: u64 = 2_500;
 
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
 
     /// A disc of one mode 1 data track of `data` sectors and an audio track of `audio`, kept as a host's copy.
-    pub fn disc(data: u32, audio: u32) -> Disc {
+    pub(in crate::mcd) fn disc(data: u32, audio: u32) -> Disc {
         let user: Vec<u8> = (0..data * 2048).map(|i| (i / 2048) as u8).collect();
         // Audio sector i's frame k is (i, -k).
         let pcm: Vec<u8> = (0..audio as usize * 588).flat_map(|n| [((n / 588) as i16).to_le_bytes(), (-((n % 588) as i16)).to_le_bytes()].concat()).collect();

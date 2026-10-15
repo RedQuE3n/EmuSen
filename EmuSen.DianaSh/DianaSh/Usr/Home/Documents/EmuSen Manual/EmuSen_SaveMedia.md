@@ -486,6 +486,8 @@ window, `memcard import`, and *Per game* in Graphics Settings, under which each 
 
 ## 10. Questions for the tester
 
+*Decided 2026-10-15 by the tester: Q1 to Q3, each as recommended.*
+
 1. **Q1, the window's name.** Built as **Memory Cards**, the word players use, though it also manages paks and backup
    RAM, each named inside by its own title. *Recommended:* as built; the alternative, *Save Media*, is exact but not a
    player's word.

@@ -60,6 +60,8 @@ pub struct Ppu {
     pub scy: u8,
     pub stat_enables: u8,
     pub stat_line: bool,
+    /// The comparison as it stood when the LCD went off; in the state's version-11 tail, not the walk (Mercury_Native.md §13.11).
+    pub lyc_while_off: bool,
     pub window_line: i32,
     pub window_triggered: bool,
     pub wx: u8,
@@ -68,6 +70,8 @@ pub struct Ppu {
     pub skip_rendering: Skip<bool>,
     /// A Game Boy cartridge on a Game Boy Color: DMG rendering, its shades looked up in colour palettes (Mercury_Model.md §4.1).
     pub compat: Skip<bool>,
+    /// The console itself; line 144's mode-2 interrupt is a DMG's (Mercury_Native.md §13.11).
+    pub cgb_hardware: Skip<bool>,
 }
 
 impl Default for Ppu {
@@ -93,6 +97,7 @@ impl Default for Ppu {
             scy: 0,
             stat_enables: 0,
             stat_line: false,
+            lyc_while_off: false,
             window_line: 0,
             window_triggered: false,
             wx: 0,
@@ -100,6 +105,7 @@ impl Default for Ppu {
             frame_rgba: Skip(vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * 4]),
             skip_rendering: Skip(false),
             compat: Skip(false),
+            cgb_hardware: Skip(false),
         }
     }
 }
@@ -125,6 +131,7 @@ impl Ppu {
         self.window_line = 0;
         self.window_triggered = false;
         self.stat_line = false;
+        self.lyc_while_off = false;
         self.frame_count = 0;
         self.frame_complete = false;
         self.reset_cgb_palettes();

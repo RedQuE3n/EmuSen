@@ -47,6 +47,9 @@ RAM size codes are `$02`=8K, `$03`=32K, `$04`=128K, `$05`=64K — note that `$04
 
 The **prohibited region** reads back `$00` on a DMG rather than open bus.
 
+An **I/O address that no register answers** reads `$FF` and keeps nothing written to it, on every console and in both
+colour modes (`Mercury_Native.md` §13.1).
+
 The banking in the VRAM and work RAM rows is the only change the colour hardware makes to this table — same ranges, more storage behind two of them. `Mercury_Cgb.md` §1 covers how the sizes are chosen, and the register block that selects between the banks.
 
 ---

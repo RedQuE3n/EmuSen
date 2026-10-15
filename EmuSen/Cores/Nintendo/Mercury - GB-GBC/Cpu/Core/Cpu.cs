@@ -116,11 +116,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 Halted = false;
             }
 
-            if (Ime && pending)
-            {
-                servicedBit = LowestSetBit((byte)(interruptEnable & interruptFlags));
-                return Advance(ServiceInterrupt(servicedBit));
-            }
+            if (Ime && pending) return Advance(ServiceInterrupt(out servicedBit));
 
             // Scheduled by EI on the previous instruction, so the one after it runs with IME set.
             if (_imeScheduled)
@@ -173,13 +169,18 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             return -1;
         }
 
-        // Two wait cycles, the push, then the vector: 20 T-cycles with IME cleared behind it.
-        private int ServiceInterrupt(int bit)
+        // Two wait cycles, the high byte, the vector chosen from what is pending then ($0000 if nothing), the low byte, the jump - see Mercury_Native.md §13.3.
+        private int ServiceInterrupt(out int bit)
         {
             Ime = false;
+            _imeScheduled = false;
             ushort from = PC;
-            Push(from);
-            PC = InterruptVectors[bit];
+            _bus.Tick(8);
+            _tickedThisStep += 8;
+            WriteCycle(--SP, (byte)(from >> 8));
+            bit = LowestSetBit(_bus.PendingInterrupts);
+            WriteCycle(--SP, (byte)from);
+            PC = bit < 0 ? (ushort)0x0000 : InterruptVectors[bit];
             InterruptObserver?.Invoke(from, PC);
             return 20;
         }
@@ -193,8 +194,17 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             return (ushort)(low | (high << 8));
         }
 
+        // One machine cycle of the CPU's own, ticked where it falls rather than settled at the end - see Mercury_Native.md §13.5.
+        private void InternalCycle()
+        {
+            _bus.Tick(4);
+            _tickedThisStep += 4;
+        }
+
+        // SP is decremented in a machine cycle of its own before the first write - see Mercury_Native.md §13.5.
         private void Push(ushort value)
         {
+            InternalCycle();
             WriteCycle(--SP, (byte)(value >> 8));
             WriteCycle(--SP, (byte)value);
         }

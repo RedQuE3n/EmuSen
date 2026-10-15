@@ -7,32 +7,32 @@
 /// Sub clocks a line costs before its dots, a dot of the buffer's offset costs within its group of four, and a group
 /// of four dots costs (the manual's "graphics operation time": `Vdot × (13 + 2 × (3 and offset) + 9 × ((Hdot + offset
 /// − 1) >> 2))`, a clock 80 ns).
-pub const LINE_CLOCKS: u64 = 13;
-pub const OFFSET_CLOCKS: u64 = 2;
-pub const GROUP_CLOCKS: u64 = 9;
+pub(in crate::mcd) const LINE_CLOCKS: u64 = 13;
+pub(in crate::mcd) const OFFSET_CLOCKS: u64 = 2;
+pub(in crate::mcd) const GROUP_CLOCKS: u64 = 9;
 /// A refresh of three clocks every 192, and three clocks for each access the sub CPU or the CDC's DMA makes to Word
 /// RAM while the ASIC runs.
-pub const REFRESH_EVERY: u64 = 192;
-pub const STOLEN: u64 = 3;
+pub(in crate::mcd) const REFRESH_EVERY: u64 = 192;
+pub(in crate::mcd) const STOLEN: u64 = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Asic {
+pub(in crate::mcd) struct Asic {
     /// `$FF8058`'s SMS, STS and RPT (bits 2-0).
-    pub size: u8,
+    pub(in crate::mcd) size: u8,
     /// `$FF805A`, `$FF805C`, `$FF805E`, `$FF8060`, `$FF8062` as written; `$FF8064` counted down a line at a time.
-    pub map: u16,
-    pub vcells: u8,
-    pub buffer: u16,
-    pub offset: u8,
-    pub hdots: u16,
-    pub vdots: u8,
+    pub(in crate::mcd) map: u16,
+    pub(in crate::mcd) vcells: u8,
+    pub(in crate::mcd) buffer: u16,
+    pub(in crate::mcd) offset: u8,
+    pub(in crate::mcd) hdots: u16,
+    pub(in crate::mcd) vdots: u8,
     /// `$FF8066`, the trace vector table's address in units of 4 bytes, and the line the operation is on.
-    pub vector: u16,
-    pub line: u32,
+    pub(in crate::mcd) vector: u16,
+    pub(in crate::mcd) line: u32,
     /// GRON: an operation is running; the sub clock its current line ends, and the clocks the refresh owes.
-    pub busy: bool,
-    pub next: u64,
-    pub refresh: u64,
+    pub(in crate::mcd) busy: bool,
+    pub(in crate::mcd) next: u64,
+    pub(in crate::mcd) refresh: u64,
 }
 
 impl Default for Asic {
@@ -57,7 +57,7 @@ impl Asic {
     }
 
     /// A register as the sub CPU reads it, by its offset from `$FF8058`.
-    pub fn read(&self, off: u32) -> u16 {
+    pub(in crate::mcd) fn read(&self, off: u32) -> u16 {
         match off {
             0x0 => (self.busy as u16) << 15 | self.size as u16,
             0x2 => self.map,
@@ -72,7 +72,7 @@ impl Asic {
 
     /// A register written; `$FF8066` starts an operation at sub clock `now` when Word RAM is in 2M, the only mode it
     /// runs in. True when it started.
-    pub fn write(&mut self, off: u32, v: u16, mask: u16, now: u64, two_m: bool) -> bool {
+    pub(in crate::mcd) fn write(&mut self, off: u32, v: u16, mask: u16, now: u64, two_m: bool) -> bool {
         let w = |old: u16| (old & !mask) | (v & mask);
         match off {
             0x0 => self.size = w(self.size as u16) as u8 & 7,
@@ -107,7 +107,7 @@ impl Asic {
 
     /// An access to Word RAM by the sub CPU or the DMA, which delays the operation.
     #[inline]
-    pub fn stolen(&mut self) {
+    pub(in crate::mcd) fn stolen(&mut self) {
         if self.busy {
             self.next += STOLEN;
         }
@@ -115,7 +115,7 @@ impl Asic {
 
     /// The line due at its end: drawn into `ram` (Word RAM in 2M order) with `priority`'s rule; true when it was the
     /// last, the operation done and level 1 owed.
-    pub fn step(&mut self, ram: &mut [u8], priority: u8) -> bool {
+    pub(in crate::mcd) fn step(&mut self, ram: &mut [u8], priority: u8) -> bool {
         self.draw(ram, priority);
         self.line += 1;
         self.vdots = self.vdots.wrapping_sub(1);

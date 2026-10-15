@@ -1,10 +1,10 @@
 //! The YM2612's vibrato: the offset the LFO adds to a channel's frequency number, measured on the board (Nephrite_LfoTables.md).
 
 /// The vibrato's steps a cycle: `lfo_step` runs from 0 to 31.
-pub const PM_STEPS: u8 = 32;
+pub(in crate::genesis) const PM_STEPS: u8 = 32;
 
 /// For each PMS and quarter-wave step, the terms summed: bit k adds the frequency number's top seven bits shifted right by k.
-pub const PM_TERMS: [[u8; 8]; 8] = [
+pub(in crate::genesis) const PM_TERMS: [[u8; 8]; 8] = [
     [0, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 1, 1, 1, 1],
     [0, 0, 0, 1, 1, 1, 1, 1],
@@ -16,7 +16,7 @@ pub const PM_TERMS: [[u8; 8]; 8] = [
 ];
 
 /// For each PMS and quarter-wave step, how far right the sum of the terms is shifted.
-pub const PM_SHIFT: [[u8; 8]; 8] = [
+pub(in crate::genesis) const PM_SHIFT: [[u8; 8]; 8] = [
     [0, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 4, 4, 4, 4],
     [0, 0, 0, 4, 4, 4, 3, 3],
@@ -28,13 +28,13 @@ pub const PM_SHIFT: [[u8; 8]; 8] = [
 ];
 
 /// The quarter-wave step of an LFO step: steps 0-7 rise through it, 8-15 fall back, 16-31 repeat the two negated.
-pub fn quarter(lfo_step: u8) -> usize {
+pub(in crate::genesis) fn quarter(lfo_step: u8) -> usize {
     let s = lfo_step & 15;
     (if s & 8 == 0 { s } else { 15 - s }) as usize
 }
 
 /// The offset added at `lfo_step` (0-31) to an 11-bit frequency number at `pms` (0-7), in half frequency-number steps.
-pub fn pm_offset(fnum: u16, pms: u8, lfo_step: u8) -> i16 {
+pub(in crate::genesis) fn pm_offset(fnum: u16, pms: u8, lfo_step: u8) -> i16 {
     let top = (fnum >> 4) & 0x7F;
     let (pms, q) = ((pms & 7) as usize, quarter(lfo_step));
     let sum: u16 = (0..3).filter(|k| PM_TERMS[pms][q] >> k & 1 != 0).map(|k| top >> k).sum();
@@ -43,7 +43,7 @@ pub fn pm_offset(fnum: u16, pms: u8, lfo_step: u8) -> i16 {
 }
 
 /// The modulated frequency number in half steps, twelve bits, wrapped: the phase increment's base is `(this << block) >> 2`.
-pub fn pm_fnum(fnum: u16, pms: u8, lfo_step: u8) -> u16 {
+pub(in crate::genesis) fn pm_fnum(fnum: u16, pms: u8, lfo_step: u8) -> u16 {
     ((((fnum & 0x7FF) << 1) as i16).wrapping_add(pm_offset(fnum, pms, lfo_step)) as u16) & 0xFFF
 }
 

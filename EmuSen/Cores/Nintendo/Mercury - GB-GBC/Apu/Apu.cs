@@ -27,6 +27,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
         public bool PoweredOn;
 
+        // The console, not the cartridge: the length counters' power rules differ between the two - see Mercury_Native.md §13.10.2.
+        [SkipInState] public bool CgbHardware;
+
         // NR50's two three-bit master volumes, and NR51's eight panning switches.
         public int LeftVolume;
         public int RightVolume;
@@ -168,6 +171,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             if (Noise.Length.Clock()) Noise.Enabled = false;
         }
 
+        // PCM12 and PCM34: the channels' digital outputs, a nibble each - see Mercury_Native.md §13.1.
+        public byte Pcm12 => (byte)(Pulse1.Output | (Pulse2.Output << 4));
+        public byte Pcm34 => (byte)(Wave.Output | (Noise.Output << 4));
+
         public byte ReadRegister(int address)
         {
             if (address >= WaveRamBase) return Wave.Ram[address - WaveRamBase];
@@ -213,8 +220,12 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             int index = address - RegisterBase;
             if ((uint)index >= RegisterCount) return;
 
-            // With the power off every register but NR52 ignores its write - see Mercury_Apu.md §4.
-            if (!PoweredOn && address != 0xFF26) return;
+            // With the power off every register but NR52 ignores its write, except NRx1's length on a DMG - see Mercury_Apu.md §4.
+            if (!PoweredOn && address != 0xFF26)
+            {
+                if (!CgbHardware) WriteLengthWhileOff(address, value);
+                return;
+            }
 
             Registers[index] = value;
 
@@ -257,10 +268,25 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             }
         }
 
+        private void WriteLengthWhileOff(int address, byte value)
+        {
+            switch (address)
+            {
+                case 0xFF11: Pulse1.Length.Load(value & 0x3F); return;
+                case 0xFF16: Pulse2.Length.Load(value & 0x3F); return;
+                case 0xFF1B: Wave.Length.Load(value); return;
+                case 0xFF20: Noise.Length.Load(value & 0x3F); return;
+            }
+        }
+
         private void WriteSweep(byte value)
         {
+            bool wasNegate = Pulse1.SweepNegate;
             Pulse1.SweepPeriod = (value >> 4) & 0x07;
             Pulse1.SweepNegate = (value & 0x08) != 0;
+
+            // Leaving negate mode after a subtraction since the trigger disables the channel - see Mercury_Native.md §13.10.3.
+            if (wasNegate && !Pulse1.SweepNegate && Pulse1.SweepNegated) Pulse1.Enabled = false;
             Pulse1.SweepShift = value & 0x07;
         }
 
@@ -278,10 +304,22 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             if (!pulse.DacEnabled) pulse.Enabled = false;
         }
 
-        private static void WritePulseControl(PulseChannel pulse, byte value)
+        // NRx4's length half, with the two quirks of the frame sequencer's first half; true when the channel must go quiet - see Mercury_Native.md §13.10.
+        private bool WriteLengthEnable(LengthCounter length, byte value)
+        {
+            bool firstHalf = (SequencerStep & 1) != 0;
+            bool trigger = (value & 0x80) != 0;
+            bool emptied = length.Enable((value & 0x40) != 0, firstHalf);
+
+            // A trigger reloading an empty counter that is enabled loads one less in the first half.
+            if (trigger && firstHalf && length.Enabled && length.Counter == 0) length.Counter = length.Maximum - 1;
+            return emptied && !trigger;
+        }
+
+        private void WritePulseControl(PulseChannel pulse, byte value)
         {
             pulse.Frequency = (pulse.Frequency & 0x00FF) | ((value & 0x07) << 8);
-            pulse.Length.Enabled = (value & 0x40) != 0;
+            if (WriteLengthEnable(pulse.Length, value)) pulse.Enabled = false;
             if ((value & 0x80) != 0) pulse.Trigger();
         }
 
@@ -294,7 +332,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
         private void WriteWaveControl(byte value)
         {
             Wave.Frequency = (Wave.Frequency & 0x00FF) | ((value & 0x07) << 8);
-            Wave.Length.Enabled = (value & 0x40) != 0;
+            if (WriteLengthEnable(Wave.Length, value)) Wave.Enabled = false;
             if ((value & 0x80) != 0) Wave.Trigger();
         }
 
@@ -314,7 +352,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
         private void WriteNoiseControl(byte value)
         {
-            Noise.Length.Enabled = (value & 0x40) != 0;
+            if (WriteLengthEnable(Noise.Length, value)) Noise.Enabled = false;
             if ((value & 0x80) != 0) Noise.Trigger();
         }
 
@@ -329,6 +367,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
                 // A power-up restarts the sequencer, so the first length clock is a known distance away.
                 SequencerStep = 0;
+
+                // A CGB clears the length counters as it powers up; a DMG keeps them - see Mercury_Native.md §13.10.2.
+                if (CgbHardware) Pulse1.Length.Counter = Pulse2.Length.Counter = Wave.Length.Counter = Noise.Length.Counter = 0;
                 return;
             }
 

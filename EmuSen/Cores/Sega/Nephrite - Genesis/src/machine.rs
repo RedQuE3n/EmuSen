@@ -242,7 +242,14 @@ impl Machine {
     pub fn advance(&mut self) {
         if self.runs() {
             self.begin_frame();
-            fitted!(&mut self.fitted, |g| g.run_frame());
+            match &mut self.fitted {
+                Fitted::Md(g) => g.run_frame(),
+                #[cfg(feature = "mcd")]
+                Fitted::Mcd(g) => g.run_frame(),
+                // The 32X's stub runs no frame (`runs`), so none is compiled for it until its stage.
+                #[cfg(feature = "s32x")]
+                Fitted::S32x(_) => {}
+            }
         }
         self.end_frame();
     }
@@ -256,7 +263,13 @@ impl Machine {
                 self.begin_frame();
                 self.debug_open = true;
             }
-            let (why, processor) = fitted!(&mut self.fitted, |g| g.run_frame_observed(&mut self.hooks, &self.z80_breakpoints, skip));
+            let (why, processor) = match &mut self.fitted {
+                Fitted::Md(g) => g.run_frame_observed(&mut self.hooks, &self.z80_breakpoints, skip),
+                #[cfg(feature = "mcd")]
+                Fitted::Mcd(g) => g.run_frame_observed(&mut self.hooks, &self.z80_breakpoints, skip),
+                #[cfg(feature = "s32x")]
+                Fitted::S32x(_) => (0, 0),
+            };
             if why != 0 {
                 self.debug_stopped = processor;
                 return why;

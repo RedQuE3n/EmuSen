@@ -1094,3 +1094,17 @@ the 32X's tree (§5.5). `Fitted::S32x(Genesis<S32x>)` holds a 32X image's machin
   sample on it 64 of 64. The 240p disc is not compliant on it, as a library without the Sega CD cannot be.
 - **Byte identity** of the full library: the 71 digests equal the baseline's; the kit's sample 64 of 64 and the 240p
   disc compliant (C1–C19).
+
+### 11.8 The 32X's stub compiles no frame
+
+Measured after commit 7: the stub's `Genesis<S32x>` made the Genesis's frame, the 68000's and the Z80's interpreters
+and the map a third time, for a machine that runs no frame (`Machine::runs`). The `dist` library was 1,767,504 bytes
+at commit 6 against 1,608,448 at commit 5 (+159 KB, +10%), and a clean release build 6.96 to 7.07 s, 42% over the
+baseline, near Q1's half. `advance` and `run_frame_debug` now match the configurations that run and give the stub's
+none, so that only its construction and its state are compiled: the library 1,631,832 bytes (+12.9% over the
+baseline), a clean release build 6.09 to 6.23 s (+23 to 26%, load 4). Stage 11 compiles the frame for the 32X when it
+runs one, and stage 12's CD32X a fourth; Q1's bound is to be measured again then, with the enum (b) beside it if a
+build has grown by half.
+
+- **Byte identity**: the 71 digests equal the baseline's; the crate's 179 tests, and 143 and 144 without either
+  attachment and with the 32X alone; the kit's sample 64 of 64 and the 240p disc compliant.

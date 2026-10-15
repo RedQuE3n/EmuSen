@@ -178,6 +178,12 @@ it is held, so that the operating system releases it if the program ends without
 the same program as in another. A lock held in the same program also names its holder (the running game's title), so
 that a refusal can say who holds the card.
 
+- **Within one program the machines share a lock** [C]: a program runs one game at a time, and Mistress makes the next
+  game's machine under its launch screen before it leaves the last (`Diamond_Players.md` §12.8.3), so an exclusive lock
+  per machine would send the next game's shared card per game at every change of game. The program's own machines
+  therefore take the lock shared, the latest naming the holder, while the card manager takes it alone; another
+  program is refused either way.
+
 - **A running machine holds the lock** on every removable and console file it was given, from its creation to its
   release, in every mode.
 - **A shared or named file already locked** is not given to a second machine: that slot runs per game, with words in
@@ -449,7 +455,7 @@ Nothing of the runtime, Galaxia, the manager or the window changes for any of th
 | `CardChoice(Mode, Slot1, Slot2)` | a medium's choice, `Mode` and N names; `Slot1`, `Slot2` kept as its first two |
 | keys `Cards`, `Card1`, `Card2` | the first removable medium's keys (§3.3), read and written as before |
 | `SaveLibrary.CardsFolder`, `CardPathFor`, `CardNames` | unchanged, the removable kind's; `MediumPathFor(console, kind, name, ext)` and `MediumNames` beside them |
-| `CoreEngine.Cards` | `CoreEngine.Media`, a choice per medium; `Cards` kept as the first removable medium's |
+| `CoreEngine.Cards` | `CoreEngine.Media`, a choice per medium by its id; `CoreEngine.ReleaseMedia` lets go of the locks when a frontend leaves the game |
 | the rows of Graphics Settings | one group per medium: its mode, and under *Named* a row per slot labelled by the core; the PlayStation's rows keep their keys and words |
 | `Diamond_Cards.md` | the PlayStation's part only: the hazard as Diamond met it, its flag byte, `SHRD`, its measurements; the framework is this page |
 

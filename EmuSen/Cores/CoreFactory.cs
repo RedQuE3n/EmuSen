@@ -42,7 +42,7 @@ namespace EmuSen.Cores
 
         // <headless> only means anything to a core that owns a window-ish resource; <engine> is a CoreCatalog.EngineFor name, and null is the reference core, not the player's default - see EmuSen_Settings_Reference.md §4.44.
         public static ICore Create(string romPath, bool headless = true, string? engine = null) =>
-            V1Library(romPath, engine) is { } v1 ? new Native.CoreEngine(v1, StoredSettings(romPath, v1)) { Cards = StoredCards(romPath, v1) } : Extension(romPath) switch
+            V1Library(romPath, engine) is { } v1 ? new Native.CoreEngine(v1, StoredSettings(romPath, v1)) { Media = StoredMedia(romPath, v1) } : Extension(romPath) switch
         {
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => engine == CoreCatalog.MoonRtEngine && MoonRtCore.Available ? new MoonRtCore() : new MoonCore(),
@@ -61,13 +61,13 @@ namespace EmuSen.Cores
             return library.Settings.Select(s => (s.Key, Value: config.Value(console, s.Key))).Where(p => p.Value is not null).ToDictionary(p => p.Key, p => p.Value!);
         }
 
-        // The card mode graphics.json holds for the console the file runs as - see Diamond_Cards.md §9.
-        private static CardChoice StoredCards(string romPath, Native.CoreLibrary library)
+        // Each save medium's mode graphics.json holds for the console the file runs as - see EmuSen_SaveMedia.md §3.3.
+        private static IReadOnlyDictionary<string, CardChoice> StoredMedia(string romPath, Native.CoreLibrary library)
         {
             string? console = CoreCatalog.ConsoleForRom(romPath) ?? CoreCatalog.DiscoveredConsoleForFile(romPath, library.Info);
-            if (console is null) return CardChoice.PerGame;
+            if (console is null) return new Dictionary<string, CardChoice>();
             var config = GraphicsConfig.Load();
-            return MemoryCards.Read(key => config.Value(console, key));
+            return MemoryCards.Stored(MemoryCards.MediaOf(console, CoreCatalog.SystemOfFile(romPath, library.Info)), key => config.Value(console, key));
         }
 
         // The one generic branch for v1 engines: the one asked for by name, or the routed console's engine for a file no C# core claims; null when it is not loadable - see EmuSen_CoreAPI.md §19.

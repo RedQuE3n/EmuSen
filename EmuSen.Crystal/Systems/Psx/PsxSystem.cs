@@ -106,6 +106,9 @@ namespace EmuSen.Crystal.Systems.Psx
         public static ICheatCodeCodec Xploder() => new DelegateCheatCodec("Xploder", CheatCodeKind.RamPoke, Ram,
             PsxCheatFormats.IsXploder, c => PsxCheatFormats.OneByte(PsxCheatFormats.XploderWrites(c), c), decodeWrites: PsxCheatFormats.XploderWrites);
 
-        public static readonly SystemPack Pack = new(Entry, GameShark, Xploder, PlayerControllers);
+        // The memory card, its two slots the core's files 0 and 4 - see EmuSen_SaveMedia.md §7.1.
+        public static readonly SaveMedia.SaveMediumEntry Card = new("psx.card", "Memory Card", "Card", ".mcr");
+
+        public static readonly SystemPack Pack = new(Entry, GameShark, Xploder, PlayerControllers, Media: new[] { Card });
     }
 }

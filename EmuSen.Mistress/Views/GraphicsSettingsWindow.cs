@@ -200,30 +200,34 @@ namespace EmuSen.Mistress.Views
             return panel;
         }
 
-        // MemoryCards' rows, each slot's shown while Named cards is chosen, as the crop's row is while a custom crop is.
+        // Each medium's rows from MemoryCards, a slot's shown while its medium is Named, as the crop's row is while a custom crop is - see EmuSen_SaveMedia.md §3.3.
         private List<FieldRow> BuildCardRows(string console, List<Action> refreshers)
         {
-            IReadOnlyList<CoreSetting> cards = MemoryCards.SettingsFor(console);
             var rows = new List<FieldRow>();
-            foreach (CoreSetting setting in cards)
+            foreach (SaveMedium medium in MemoryCards.MediaFor(console))
             {
-                (Control control, Action refresh) = BuildControl(console, setting);
-                refreshers.Add(refresh);
-                if (setting.Note is { } note)
+                var (mode, slots) = MemoryCards.RowsFor(medium);
+                IReadOnlyList<CoreSetting> group = slots.Prepend(mode).ToArray();
+                foreach (CoreSetting setting in group)
                 {
-                    (Control noted, Action show) = WithNote(console, setting, note, control, cards);
-                    control = noted;
-                    refreshers.Add(show);
+                    (Control control, Action refresh) = BuildControl(console, setting);
+                    refreshers.Add(refresh);
+                    if (setting.Note is { } note)
+                    {
+                        (Control noted, Action show) = WithNote(console, setting, note, control, group);
+                        control = noted;
+                        refreshers.Add(show);
+                    }
+                    var row = new FieldRow { Name = $"{console}.{setting.Key}.Row", Label = setting.Label, Hint = setting.Hint, Content = control };
+                    if (setting != mode)
+                    {
+                        void Shown() => row.IsVisible = MemoryCards.Read(key => _config.Value(console, key), medium).Mode == MemoryCards.Named;
+                        Shown();
+                        refreshers.Add(Shown);
+                        _notes.Add((console, Shown));
+                    }
+                    rows.Add(row);
                 }
-                var row = new FieldRow { Name = $"{console}.{setting.Key}.Row", Label = setting.Label, Hint = setting.Hint, Content = control };
-                if (setting.Key != MemoryCards.ModeKey)
-                {
-                    void Shown() => row.IsVisible = MemoryCards.Read(key => _config.Value(console, key)).Mode == MemoryCards.Named;
-                    Shown();
-                    refreshers.Add(Shown);
-                    _notes.Add((console, Shown));
-                }
-                rows.Add(row);
             }
             return rows;
         }

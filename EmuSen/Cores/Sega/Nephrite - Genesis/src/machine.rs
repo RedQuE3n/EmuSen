@@ -245,7 +245,7 @@ impl Machine {
             let (hw, audio) = (&mut self.genesis.hw, &mut self.audio);
             match hw.mcd.as_deref_mut() {
                 Some(m) => {
-                    m.hw.cdda.feed(hw.clock);
+                    m.hw.sound_to(hw.clock);
                     hw.sound.take_with(hw.clock, Some(&mut m.hw.cdda.steps), |l, r| audio.push_pair(l, r));
                 }
                 None => hw.sound.take(hw.clock, |l, r| audio.push_pair(l, r)),

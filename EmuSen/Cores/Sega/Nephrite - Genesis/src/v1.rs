@@ -309,7 +309,7 @@ pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
 pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::SETTING_NOTES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::BORROW;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::SETTING_NOTES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::BORROW | caps::MEDIA;
 
     fn info() -> Info {
         Info {
@@ -660,7 +660,7 @@ impl Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; rom_patches, settings, setting_notes, debug, debug_stack, debug_registers, debug_disassemble);
+emusen_native::core_exports!(Machine; rom_patches, settings, setting_notes, debug, debug_stack, debug_registers, debug_disassemble, media);
 
 #[cfg(test)]
 mod tests {
@@ -677,7 +677,7 @@ mod tests {
         let mut m = create(&cartridge("SEGA GENESIS", "JUE", None), vec![]).unwrap();
         let info = m.machine_info();
         assert_eq!(info.processors.iter().map(|p| (p.name.as_str(), p.pc_bits, p.registers.len(), p.code_space)).collect::<Vec<_>>(), [("M68K", 24, 20, Some(0)), ("Z80", 16, 18, Some(1))]);
-        assert_eq!(info.state.loads_from, [16, 17, 18, 19]);
+        assert_eq!(info.state.loads_from, [16, 17, 18, 19, 20]);
         assert_eq!(info.spaces.iter().filter(|s| s.view).map(|s| (s.name.as_str(), s.read_only)).collect::<Vec<_>>(), [("M68KBUS", true), ("Z80BUS", true)]);
         assert_eq!((Core::space_size(&m, 0), Core::space_size(&m, 1)), (Ok(1 << 24), Ok(1 << 16)));
         let mut out = [0u8; 16];
@@ -964,7 +964,7 @@ mod tests {
         let mut m = create(&iso, vec![]).unwrap();
         let info = m.machine_info();
         assert_eq!(info.system, "mcd");
-        assert_eq!(info.state.loads_from, [19]);
+        assert_eq!(info.state.loads_from, [20]);
         assert_eq!(info.battery.iter().map(|b| (b.which, b.suffix.as_str())).collect::<Vec<_>>(), [(0, ".brm")]);
         for name in ["PRGRAM", "WORDRAM", "PCMRAM", "BRAM"] {
             assert!(info.spaces.iter().any(|s| s.name == name), "{name}");
@@ -982,7 +982,7 @@ mod tests {
         let mut other = create(&disc_image("B", 41), vec![]).unwrap();
         assert_eq!(emusen_native::ffi::Status::status(&other.load_state(&st).unwrap_err()), status::WRONG_MEDIA);
         let mut old = st.clone();
-        old[4..8].copy_from_slice(&18i32.to_le_bytes());
+        old[4..8].copy_from_slice(&19i32.to_le_bytes());
         assert_eq!(emusen_native::ffi::Status::status(&same.load_state(&old).unwrap_err()), emusen_native::ffi::status::VERSION);
         // The tray: a disc changes only with it open.
         let insert = |image: &'static [u8]| Insert { image: Some(image), files: Vec::new(), restore: false };

@@ -3,9 +3,11 @@
 //! in mode 2. The Mega-CD Hardware Manual (Sega, 1991) §1-§4 is the source; Nephrite_Native.md §50 is the record, with
 //! what mcd-verificator's tests settled where the manual is silent.
 
+pub mod asic;
 pub mod cdc;
 pub mod cdda;
 pub mod cdd;
+pub mod pcm;
 pub mod state;
 pub mod word;
 #[cfg(test)]
@@ -86,7 +88,8 @@ pub struct Sub {
     pub word: WordRam,
     pub bram: Vec<u8>,
     pub pcm_ram: Vec<u8>,
-    pub pcm_regs: [u8; 9],
+    /// The RF5C164.
+    pub pcm: pcm::Pcm,
     pub g: Gate,
     /// The sub CPU waits for Word RAM the main CPU holds: its writes owed, done when the RAM is its again.
     pub parked: bool,
@@ -99,6 +102,34 @@ pub struct Sub {
     pub cdda: cdda::Cdda,
     /// A backup RAM cartridge in the slot at `$400000`, when one is plugged in.
     pub cart: Option<RamCart>,
+    /// The graphics ASIC.
+    pub asic: asic::Asic,
+    /// The registers' accesses, when a development tool asks for them; never state.
+    pub seen: Option<Vec<Seen>>,
+}
+
+/// One access at the attachment's register interfaces, as a development tool watches the devices: which side, which
+/// register (an offset from `$FF8000`, `$A12000` or, for the PCM chip, `$FF0000`), and the value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Seen {
+    pub clock: u64,
+    pub what: SeenKind,
+    pub reg: u32,
+    pub value: u16,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SeenKind {
+    SubRead,
+    SubWrite,
+    PcmRead,
+    PcmWrite,
+    MainRead,
+    MainWrite,
+    /// The sub CPU took the level in `reg`.
+    Taken,
+    /// The sub CPU began to wait for Word RAM the main CPU holds, by a read (0) or a write (1).
+    Parked,
 }
 
 /// A backup RAM cartridge: its RAM on the odd bytes of `$600000`-`$6FFFFF`, its size code on `$400001` (the RAM is
@@ -161,7 +192,7 @@ impl MegaCd {
             word: WordRam::default(),
             bram: vec![0; BRAM_SIZE],
             pcm_ram: vec![0; PCM_RAM_SIZE],
-            pcm_regs: [0; 9],
+            pcm: pcm::Pcm::default(),
             // `$A12000` reads `$0002` at power-on: the sub CPU held in reset with its bus requested (§2, the initial values).
             g: Gate { reset_held: true, busreq: true, hivect: 0xFFFF, ..Gate::default() },
             parked: false,
@@ -172,6 +203,8 @@ impl MegaCd {
             fader: 0,
             cdda: cdda::Cdda::new(master_hz.0, master_hz.1),
             cart: None,
+            asic: asic::Asic::default(),
+            seen: None,
         };
         hw.clock = hw.to_sub(master_now);
         hw.cdd.next = hw.clock + SECTOR[0];
@@ -216,6 +249,7 @@ impl MegaCd {
         if a >= 0xA1_2000 {
             self.run_to(master);
             let w = self.hw.main_reg(a & 0x3E, master);
+            self.hw.see(SeenKind::MainRead, a & 0x3E, w);
             self.hw.cdc_irq();
             return Some(w);
         }
@@ -242,6 +276,7 @@ impl MegaCd {
         if a & 0xFF_FFFF >= 0xA1_2000 {
             self.run_to(master);
             let b = self.hw.main_reg8(a & 0x3F, master);
+            self.hw.see(SeenKind::MainRead, a & 0x3F, b as u16);
             self.hw.cdc_irq();
             return Some(b);
         }
@@ -255,6 +290,7 @@ impl MegaCd {
         let a = a & 0xFF_FFFF;
         if a >= 0xA1_2000 {
             self.run_to(master);
+            self.hw.see(SeenKind::MainWrite, a & 0x3E, v & mask);
             self.hw.main_reg_write(a & 0x3E, v, mask, master);
             return;
         }
@@ -312,6 +348,13 @@ fn write_masked(b: &mut [u8], v: u16, mask: u16) {
 }
 
 impl Sub {
+    #[inline]
+    fn see(&mut self, what: SeenKind, reg: u32, value: u16) {
+        if let Some(v) = self.seen.as_mut() {
+            v.push(Seen { clock: self.clock, what, reg, value });
+        }
+    }
+
     /// A master clock as a sub clock.
     pub fn to_sub(&self, master: u64) -> u64 {
         (master as u128 * self.ratio.0 as u128 / self.ratio.1 as u128) as u64
@@ -328,16 +371,21 @@ impl Sub {
         (self.g.reset_held || self.g.busreq).then_some((self.g.bank as usize) << 17 | (a & 0x1_FFFF) as usize)
     }
 
-    /// Everything timed on the sub side up to the present, in the order it falls: the timer's counts (level 3 at 0),
-    /// the drive's exchanges and the sectors they read, the decoder interrupt clearing itself, the CDC's DMA.
+    /// Everything timed on the sub side up to the present, in the order it falls: the graphics ASIC's lines (level 1 at
+    /// the last), the timer's counts (level 3 at 0), the drive's exchanges and the sectors they read, the decoder
+    /// interrupt clearing itself, the CDC's DMA.
     pub fn events(&mut self) {
         loop {
             let (timer, deci, dma) = self.times();
-            let t = timer.min(self.cdd.next).min(deci).min(dma);
+            let t = timer.min(self.cdd.next).min(deci).min(dma).min(self.asic.next);
             if t > self.clock {
                 return;
             }
-            if t == timer {
+            if t == self.asic.next {
+                if self.asic.step(&mut self.word.bytes, self.word.priority) {
+                    self.raise(1);
+                }
+            } else if t == timer {
                 if self.g.timer_count == 0 {
                     self.raise(3);
                     self.g.timer_count = self.g.timer;
@@ -367,7 +415,7 @@ impl Sub {
     /// The sub clock of the next event that can make a request.
     fn next_event(&self) -> u64 {
         let (timer, deci, dma) = self.times();
-        timer.min(self.cdd.next).min(deci).min(dma)
+        timer.min(self.cdd.next).min(deci).min(dma).min(self.asic.next)
     }
 
     /// The drive's exchange at `t`: level 4, and the sector it read handed to the CDC.
@@ -383,11 +431,10 @@ impl Sub {
         let data = read.is_some_and(|k| !k.audio());
         self.cdc.sector(data.then_some(&*self.raw), t);
         let period = SECTOR[self.cdd.phase as usize];
-        if read.is_some_and(|k| k.audio()) && self.cdd.status[0] == cdd::status::PLAYING {
-            let (start, end) = (self.to_master(t), self.to_master(t + period));
-            let volume = (self.fader as i32 >> 4 & 0x7FF).min(cdda::FULL);
-            self.cdda.sector(&self.raw, start, end - start, volume);
-        }
+        let (start, end) = (self.to_master(t), self.to_master(t + period));
+        let volume = (self.fader as i32 >> 4 & 0x7FF).min(cdda::FULL);
+        let sounding = read.is_some_and(|k| k.audio()) && self.cdd.status[0] == cdd::status::PLAYING;
+        self.cdda.sector(sounding.then_some(&*self.raw), start, end - start, volume, (self.fader >> 2) as u8 & 3);
         self.cdd.next += period;
         self.cdd.phase = (self.cdd.phase + 1) % 3;
     }
@@ -413,9 +460,13 @@ impl Sub {
         }
         let (b0, b1) = self.cdc.dma_unit();
         match (self.cdc.dd, b1) {
-            (dest::PCM, _) => self.pcm_ram[((self.pcm_regs[7] as usize & 15) << 12) | (a >> 1 & 0xFFF)] = b0,
+            (dest::PCM, _) => {
+                self.pcm.run(self.clock, &self.pcm_ram);
+                self.pcm_ram[self.pcm.window(a >> 1)] = b0;
+            }
             (dest::PRG, Some(b1)) => (self.prg[a & 0x7_FFFE], self.prg[(a & 0x7_FFFE) + 1]) = (b0, b1),
             (_, Some(b1)) => {
+                self.asic.stolen();
                 let i = if self.word.one_m { word::bank_byte(self.word.sub_bank(), a & 0x1_FFFE) } else { a & 0x3_FFFE };
                 (self.word.bytes[i], self.word.bytes[i + 1]) = (b0, b1);
             }
@@ -459,6 +510,7 @@ impl Sub {
         g.res0_at = now + PERIPHERAL_RESET;
         self.cdd.hock = false;
         self.fader = 0;
+        self.asic = asic::Asic::default();
     }
 
     /// The Word RAM the sub CPU waited for is its own again: its owed writes done, and on it goes.
@@ -593,6 +645,7 @@ impl Sub {
             0x4C => g.font_color as u16,
             0x4E => g.font_bits,
             0x50..=0x56 => self.font_data((off - 0x50) / 2),
+            0x58..=0x66 => self.asic.read(off - 0x58),
             _ => 0,
         }
     }
@@ -643,6 +696,10 @@ impl Sub {
             }
             0x4C => self.g.font_color = v as u8,
             0x4E => self.g.font_bits = (self.g.font_bits & !mask) | (v & mask),
+            0x58..=0x66 => {
+                let two_m = !self.word.one_m;
+                self.asic.write(off - 0x58, v, mask, self.clock, two_m);
+            }
             _ => {}
         }
     }
@@ -653,16 +710,25 @@ impl Sub {
         let word = match a {
             0x00_0000..=0x07_FFFF => u16::from_be_bytes([self.prg[even as usize], self.prg[even as usize + 1]]),
             0x08_0000..=0x0D_FFFF => {
+                self.asic.stolen();
                 let (hi, lo) = (self.word.sub(even), self.word.sub(even | 1));
                 if hi == Lands::Elsewhere {
                     self.parked = true;
+                    self.see(SeenKind::Parked, 0, 0);
                 }
                 (self.word.read8(hi).unwrap_or(0) as u16) << 8 | self.word.read8(lo).unwrap_or(0) as u16
             }
             0xFE_0000..=0xFE_FFFF => self.bram[(a as usize & 0x3FFF) >> 1] as u16,
-            0xFF_0000..=0xFF_7FFF => self.pcm_read((a & 0x3FFF) >> 1) as u16,
+            0xFF_0000..=0xFF_7FFF => {
+                let b = self.pcm_read((a & 0x3FFF) >> 1);
+                if (a & 0x3FFF) >> 1 < 0x1000 {
+                    self.see(SeenKind::PcmRead, (a & 0x3FFF) >> 1, b as u16);
+                }
+                b as u16
+            }
             0xFF_8000..=0xFF_FFFF => {
                 let w = self.sub_reg(a & 0x1FE, size == Size::Word || a & 1 == 1);
+                self.see(SeenKind::SubRead, a & 0x1FF, w);
                 self.cdc_irq();
                 w
             }
@@ -690,7 +756,11 @@ impl Sub {
                 }
             }
             0x08_0000..=0x0D_FFFF => {
+                self.asic.stolen();
                 if self.parked || self.word.sub(even) == Lands::Elsewhere {
+                    if !self.parked {
+                        self.see(SeenKind::Parked, 1, 0);
+                    }
                     self.parked = true;
                     self.owed.push((a, size, v));
                     return;
@@ -709,10 +779,14 @@ impl Sub {
             }
             0xFF_0000..=0xFF_7FFF => {
                 if mask & 0x00FF != 0 {
+                    if (a & 0x3FFF) >> 1 < 0x1000 {
+                        self.see(SeenKind::PcmWrite, (a & 0x3FFF) >> 1, v & 0xFF);
+                    }
                     self.pcm_write((a & 0x3FFF) >> 1, v as u8);
                 }
             }
             0xFF_8000..=0xFF_FFFF => {
+                self.see(SeenKind::SubWrite, a & 0x1FF, v & mask);
                 self.sub_reg_write(a & 0x1FE, v, mask);
                 self.cdc_irq();
             }
@@ -720,29 +794,37 @@ impl Sub {
         }
     }
 
-    // ---- the RF5C164's memory as the sub CPU reaches it; its sound is stage 9's
+    // ---- the RF5C164 as the sub CPU reaches it
 
-    /// The PCM chip's register or RAM at its own address `r` (`$FF0000` + 2r + 1): registers 0-8, the RAM's window of
-    /// 4 KiB from `$1000` in the bank register 7 chose when its bit 6 was 0 (the PCM manual's register map).
-    fn pcm_read(&self, r: u32) -> u8 {
+    /// The PCM chip's register or RAM at its own address `r` (`$FF0000` + 2r + 1): its registers, and the wave RAM's
+    /// window of 4 KiB from `$1000` in the bank WB chose (the PCM manual's §4-1). The chip is brought up to the present
+    /// first.
+    fn pcm_read(&mut self, r: u32) -> u8 {
+        self.pcm.run(self.clock, &self.pcm_ram);
         match r {
-            0x1000..=0x1FFF => self.pcm_ram[((self.pcm_regs[7] as usize & 15) << 12) | (r as usize & 0xFFF)],
-            _ => 0,
+            0x1000..=0x1FFF => self.pcm_ram[self.pcm.window(r as usize)],
+            _ => self.pcm.read(r),
         }
     }
 
     fn pcm_write(&mut self, r: u32, v: u8) {
+        self.pcm.run(self.clock, &self.pcm_ram);
         match r {
-            0x0..=0x8 => {
-                if r != 7 || v & 0x40 == 0 {
-                    self.pcm_regs[r as usize] = v;
-                } else {
-                    self.pcm_regs[7] = (self.pcm_regs[7] & 0x0F) | (v & 0xF0);
-                }
-            }
-            0x1000..=0x1FFF => self.pcm_ram[((self.pcm_regs[7] as usize & 15) << 12) | (r as usize & 0xFFF)] = v,
-            _ => {}
+            0x1000..=0x1FFF => self.pcm_ram[self.pcm.window(r as usize)] = v,
+            _ => self.pcm.write(r, v),
         }
+    }
+
+    /// The attachment's sound up to master clock `master`: the PCM chip's samples made, and with CD-DA's handed to
+    /// the mix's synthesiser.
+    pub fn sound_to(&mut self, master: u64) {
+        let now = self.to_sub(master).min(self.clock);
+        self.pcm.run(now, &self.pcm_ram);
+        let (num, den) = self.ratio;
+        for e in self.pcm.out.iter_mut() {
+            e.0 = (e.0 as u128 * den as u128).div_ceil(num as u128) as u64;
+        }
+        self.cdda.feed(master, &mut self.pcm.out);
     }
 }
 
@@ -773,6 +855,7 @@ impl Bus for SubBus<'_> {
     fn acknowledge(&mut self, level: u8) -> Option<u8> {
         self.0.clock += 4;
         self.0.g.pending &= !(1 << level);
+        self.0.see(SeenKind::Taken, level as u32, 0);
         if level == 2 {
             self.0.g.taken2 = self.0.clock;
         }

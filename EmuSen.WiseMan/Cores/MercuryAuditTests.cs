@@ -1,3 +1,4 @@
+using EmuSen.Galaxia.Input;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.WiseMan.Fixtures;
 
@@ -437,6 +438,62 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0x6000, 0x01);
             rig.Write(0x4000, 0x01);
             Assert.Equal(0x20, rig.Read(0x2000));
+        }
+
+        // G: a program spinning on JR -2 with interrupts off, P1 selecting the given half, IF clear.
+        private MercuryRig PadSelecting(byte select)
+        {
+            var rig = Load(patches: (0, new byte[] { 0x18, 0xFE }));
+            rig.Write(0xFF00, select);
+            rig.Write(0xFF0F, 0x00);
+            return rig;
+        }
+
+        private static bool JoypadRequested(MercuryRig rig) => (rig.Read(0xFF0F) & 0x10) != 0;
+
+        // G, Pan Docs Interrupt_Sources.md "INT $60": a P1 line going from high to low requests the joypad interrupt.
+        [Fact]
+        public void Pressing_a_selected_button_requests_the_joypad_interrupt()
+        {
+            var rig = PadSelecting(0x20);
+            rig.SetButton(0, PadButton.Right, true);
+            rig.RunFrame();
+            Assert.True(JoypadRequested(rig));
+        }
+
+        // G: a button on the half P1 does not select moves no line.
+        [Fact]
+        public void Pressing_an_unselected_button_requests_nothing()
+        {
+            var rig = PadSelecting(0x20);
+            rig.SetButton(0, PadButton.A, true);
+            rig.RunFrame();
+            Assert.False(JoypadRequested(rig));
+        }
+
+        // G: selecting the half a held button is on pulls its line low, which is the same edge.
+        [Fact]
+        public void Selecting_the_half_of_a_held_button_requests_the_joypad_interrupt()
+        {
+            var rig = PadSelecting(0x30);
+            rig.SetButton(0, PadButton.Start, true);
+            rig.RunFrame();
+            Assert.False(JoypadRequested(rig));
+            rig.Write(0xFF00, 0x10);
+            Assert.True(JoypadRequested(rig));
+        }
+
+        // G: a release is a rising edge, and requests nothing.
+        [Fact]
+        public void Releasing_a_button_requests_nothing()
+        {
+            var rig = PadSelecting(0x20);
+            rig.SetButton(0, PadButton.Down, true);
+            rig.RunFrame();
+            rig.Write(0xFF0F, 0x00);
+            rig.SetButton(0, PadButton.Down, false);
+            rig.RunFrame();
+            Assert.False(JoypadRequested(rig));
         }
     }
 

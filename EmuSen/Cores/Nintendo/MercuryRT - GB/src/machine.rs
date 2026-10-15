@@ -245,10 +245,7 @@ impl Machine {
         w.group("Mapper", |w| self.bus.mapper.write_state(w));
         w.group("Cpu", |w| crate::state::State::write_state(&self.cpu, w));
         w.group("Bus", |w| self.bus.write_state(w));
-        let mix = &*self.bus.apu.mixer;
-        w.f64("Bus.Apu._cycleFraction", mix.cycle_fraction);
-        w.f64("Bus.Apu._leftCapacitor", mix.left_capacitor);
-        w.f64("Bus.Apu._rightCapacitor", mix.right_capacitor);
+        w.group("Bus.Apu", |w| self.bus.apu.mixer.write_state(w));
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
@@ -277,10 +274,7 @@ impl Machine {
         self.bus.read_state(r)?;
         // Before version 8 the mixer was not in the state: it keeps what it held, as it did then.
         if version >= MIXER_IN_STATE {
-            let mix = &mut *self.bus.apu.mixer;
-            mix.cycle_fraction = r.f64()?;
-            mix.left_capacitor = r.f64()?;
-            mix.right_capacitor = r.f64()?;
+            self.bus.apu.mixer.read_state(r)?;
         }
         Ok(())
     }

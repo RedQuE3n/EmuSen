@@ -218,6 +218,14 @@ pub unsafe extern "C" fn mercuryrt_set_sample_rate(handle: *mut Machine, cycles_
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mercuryrt_serial(handle: *const Machine, out: *mut u8, len: usize) -> i64 {
     let Some(m) = (unsafe { handle.as_ref() }) else { return STATUS_NULL as i64 };
+    unsafe { serial(m, out, len) }
+}
+
+/// The serial log copied up to `len`, which both interfaces' extensions give.
+///
+/// # Safety
+/// `out` valid for `len` bytes, or null.
+unsafe fn serial(m: &Machine, out: *mut u8, len: usize) -> i64 {
     let log = &m.bus.serial_log;
     if !out.is_null() {
         unsafe { ptr::copy_nonoverlapping(log.as_ptr(), out, log.len().min(len)) };
@@ -241,6 +249,11 @@ pub unsafe extern "C" fn mercuryrt_cgb_hardware(handle: *const Machine) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mercuryrt_step(handle: *mut Machine) -> i32 {
     let Some(m) = (unsafe { handle.as_mut() }) else { return STATUS_NULL };
+    step(m)
+}
+
+/// The step both interfaces' extensions give: the T-cycles, or the illegal-opcode status.
+fn step(m: &mut Machine) -> i32 {
     let (ie, iflags) = (m.bus.interrupt_enable, m.bus.interrupt_flags);
     match m.cpu.step(&mut m.bus, ie, iflags) {
         Ok((cycles, serviced)) => {

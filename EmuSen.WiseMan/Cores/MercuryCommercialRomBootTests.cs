@@ -1,21 +1,20 @@
-using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.WiseMan.Fixtures;
 using static EmuSen.WiseMan.Cores.MercuryCommercialRom;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // One theory per class, so xUnit can run the seven cartridges' worth of emulation
-    // in each of these concurrently with the other six - see §3.56.
+    // One theory per class, so xUnit runs the seven classes' emulation concurrently - see §3.56.
     public class MercuryCommercialRomBootTests
     {
-        public static TheoryData<string> Cartridges => Roms;
+        public static TheoryData<string, MercuryEngine> Cartridges => Roms;
 
         [Theory]
         [MemberData(nameof(Cartridges))]
-        public void A_real_cartridge_boots_and_reaches_a_title_screen(string path)
+        public void A_real_cartridge_boots_and_reaches_a_title_screen(string path, MercuryEngine engine)
         {
             if (path.Length == 0) return;
 
-            var core = Load(path);
+            using var core = Load(path, engine);
             RunTo(core, BootFrames);
 
             Assert.Equal(BootFrames, core.TotalFrames);

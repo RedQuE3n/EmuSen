@@ -1,3 +1,4 @@
+using EmuSen.WiseMan.Fixtures;
 using System.IO;
 using static EmuSen.WiseMan.Cores.MercuryCommercialRom;
 
@@ -6,18 +7,18 @@ namespace EmuSen.WiseMan.Cores
     // What the $0143 flag is worth on screen, measured per cartridge - see Mercury_RealCartridges.md §6.2.
     public class MercuryCommercialRomColourTests
     {
-        public static TheoryData<string> Cartridges => Roms;
+        public static TheoryData<string, MercuryEngine> Cartridges => Roms;
 
         [Theory]
         [MemberData(nameof(Cartridges))]
-        public void The_header_flag_decides_the_mode_and_the_mode_reaches_the_screen(string path)
+        public void The_header_flag_decides_the_mode_and_the_mode_reaches_the_screen(string path, MercuryEngine engine)
         {
             if (path.Length == 0) return;
 
             bool colour = HeaderFlag(path) is 0x80 or 0xC0;
             string name = Path.GetFileName(path);
 
-            var core = Load(path);
+            using var core = Load(path, engine);
             RunTo(core, BootFrames);
 
             Assert.Equal(colour ? "GBC" : "GB", core.CoreName);

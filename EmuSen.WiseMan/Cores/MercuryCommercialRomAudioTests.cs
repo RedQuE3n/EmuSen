@@ -6,21 +6,19 @@ namespace EmuSen.WiseMan.Cores
 {
     public class MercuryCommercialRomAudioTests
     {
-        public static TheoryData<string> Cartridges => Roms;
+        public static TheoryData<string, MercuryEngine> Cartridges => Roms;
 
-        // Real music, not a synthetic trigger. Start is tapped because some games
-        // never call their sound driver on the title screen - see Mercury_RealCartridges.md §4.
+        // Real music, Start tapped because some title screens never call their sound driver - see Mercury_RealCartridges.md §4.
         [Theory]
         [MemberData(nameof(Cartridges))]
-        public void A_real_cartridge_plays_music_rather_than_holding_one_note(string path)
+        public void A_real_cartridge_plays_music_rather_than_holding_one_note(string path, MercuryEngine engine)
         {
             if (path.Length == 0) return;
 
-            var core = Load(path);
+            using var core = Load(path, engine);
             var samples = new List<short>();
 
-            // A stuck note from the boot-time channel setup would satisfy "not silent" on its own,
-            // so what is asserted is that the note *changes* - see Mercury_RealCartridges.md §4.1.
+            // The note must change, since a stuck boot-time note is not silent either - see Mercury_RealCartridges.md §4.1.
             var notes = new HashSet<(int, int, int, int)>();
 
             for (int frame = 0; frame < PlayFrames; frame++)
@@ -32,7 +30,7 @@ namespace EmuSen.WiseMan.Cores
                 core.RunFrame();
                 samples.AddRange(core.DequeueAudioSamples(4096));
 
-                var apu = core.Bus!.Apu;
+                var apu = core.Bus.Apu;
                 notes.Add((apu.Pulse1.Frequency, apu.Pulse2.Frequency, apu.Wave.Frequency, apu.Noise.ClockShift));
             }
 

@@ -71,7 +71,8 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp) => _view.DecodeTilePixels(space, address, bpp);
         public (byte[] Rgba, int Width, int Height) RenderTileSheet() => _view.RenderTileSheet();
         public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => _view.RenderPaletteSwatch();
-        public (short[] Samples, int SampleRate) GetAudioSamples() => _view.GetAudioSamples();
+        // MercuryRT's own queue, peeked; the mirror's is in no state and stays empty - see Mercury_Native.md §12.3.
+        public (short[] Samples, int SampleRate) GetAudioSamples() => (_core.IsRomLoaded ? _core.Machine.Core.PeekAudio() : System.Array.Empty<short>(), _core.AudioSampleRate);
         public string GetSummaryText() => _view.GetSummaryText();
     }
 }

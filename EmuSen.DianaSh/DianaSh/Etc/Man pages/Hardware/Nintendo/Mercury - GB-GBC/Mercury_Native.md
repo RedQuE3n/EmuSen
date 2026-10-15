@@ -539,7 +539,7 @@ memory-space naming (110).
 | 5 | Shim and frontends: `MercuryRtCore`; an Engine row for GB in `CoreCatalog.EngineFor`; `CoreFactory.Create`; battery saves; cheats, both codecs, with the Game Genie table; `FrameLog`; exception mapping; crash log | The seven commercial-ROM suites on both engines; states crossing engines in both directions; the fallback when the library is absent | a day |
 | 6 | Debugger hooks: breakpoints, stepping, coverage and the write log as pushed tables and drained logs; `MercuryRtDebugTarget` over the state view (*done 2026-09-24, §8.5*) | `MercuryDebugTargetTests` on both engines; games with every table armed identical to plain runs | 1–2 days |
 | 7 | Platforms and CI: the second crate in the workflow's matrix; `MarsRtPublish.targets` and `EmuSen.csproj`'s single-library build generalised to a list of crates | Crate tests on four platforms; WiseMan's synthetic systems per platform | hours to half a day |
-| 8 | Parity: the rest of WiseMan's Mercury tests through `MercuryRig`; mutants for every stage not yet covered | §3.5, §3.6 | a day |
+| 8 | Parity: the rest of WiseMan's Mercury tests through `MercuryRig`; mutants for every stage not yet covered (*done 2026-10-14, §12*) | §3.5, §3.6 | a day |
 | 9 | Goldens: traces and interval states recorded from C# (§3.7), MercuryRT graded against them on `main`, and the legacy-branch differential project written and run once | Every golden reproduced by MercuryRT; one deliberately broken trace caught | half a day |
 | 10 | The C# core's move to its legacy branch (Q5) | A decision, and stage 9 passing on `main` without it | — |
 
@@ -1943,3 +1943,339 @@ path has no outbox and drops it. The shim's `CoreName` follows machine info.
   The fixture now ends the version-5 state before the mixer.
 
 The reader was right in both cases; the fixtures described the format before version 8. All 28 crate tests pass.
+
+## 12. Stage 8: parity (2026-10-14)
+
+*Decided 2026-10-14:* MercuryRT is finished now, stage by stage: this stage, then the goldens (stage 9), then the C#
+core's move to its legacy branch (stage 10), then the Game Boy's default flipped to MercuryRT after a session of play on
+the handheld (Q5). This section is stage 8's record. The older branch `mercuryrt-parity`, opened 2026-09-24 and left at
+the stage's first step, holds no work and was not used.
+
+### 12.1 WiseMan's tests on both engines
+
+**The count before.** 554 WiseMan cases named for Mercury were listed at `175f9c36`. Most already ran both engines:
+the state, machine, random-program, game, corpus, platform, debugger, defect, ABI and Model suites. 243 ran on C#
+Mercury alone:
+
+| Class | Cases | What it drove |
+|---|---|---|
+| `MercuryPpuTests` | 27 | `Bus.Tick`, `Bus.Write`, VRAM and OAM arrays, the picture |
+| `MercuryApuTests` | 23 | the APU's registers through the bus, channel fields, samples, mutes, the debug target's peek |
+| `MercuryCgbTests` | 23 | banking, palettes, HDMA's stall, `Bus.Stop`, single instructions |
+| `MercuryCpuTests` | 18 | `Cpu.Step` on a loaded machine |
+| `MercuryCycleTimingTests` | 15 | C#'s `Cpu` on a fake `ICpuBus` that records each access |
+| `MercurySerialTests` | 14 | the link port, the serial log, and the verdict reader |
+| `MercuryCoreTests` | 13 | the `ICore` surface, the timer, OAM DMA, a breakpoint |
+| `MercuryCartridgeTests` | 12 | `Cartridge.FromImage` and the boards' objects |
+| `MercuryAccessBlockingTests` | 4 | the PPU's blocking of VRAM and OAM, a dot at a time |
+| `MercuryCommercialRom*Tests` | 7 | seven classes over the commercial images, one case each without them |
+| `MercuryHardwareTestRomTests` | 1 | the corpus, asserting `Passed` (§12.2) |
+| `MercuryModelTests`, the palette tables | 86 | `CompatibilityPalettes`, C#'s table of the Color's palettes for Game Boy games |
+
+**The rig.** `MercuryRig` (`EmuSen.WiseMan/Fixtures/MercuryRig.cs`) is §3.5's proposal, built as proposed with one
+change of place: the engine is held through its `ICore`, as a frontend holds it, so a test's frames go through the
+shim a player runs and not around it. It has one implementation per engine:
+
+- **Reads** go through `View`, a C# `MercuryCore`. On C# it is the core itself. On MercuryRT it is a second
+  `MercuryCore` on the same ROM and model, loaded from MercuryRT's state whenever it is read after the machine moved.
+  So `rig.Bus.Ppu.Ly`, `rig.Cpu.A` and `rig.Bus.Apu.Pulse1.Envelope.Volume` mean the same on both engines.
+- **Setup writes** are of two kinds. A write the CPU would make (`rig.Write`, `rig.Read`) goes through the bus's
+  decode on each engine: `Bus.Write` on C#, `write_space` on `CPUBUS` on MercuryRT. A field edit (`rig.Bus.Vram[i] = x`,
+  `rig.Cpu.PC = a`, `rig.Bus.InterruptFlags = 0`) is made on the view and reaches MercuryRT by a state round trip. A
+  view that was read is saved before the machine next runs, and loaded into MercuryRT only when its bytes differ from
+  what was pulled.
+- **Timing** is `RunFrame` through `ICore`, `Step` (one instruction with the frame loop's acknowledge and stall) and
+  `Tick` (`MemoryBus.Tick`, the machine without its CPU). `Stop` is `MemoryBus.Stop`, the speed switch KEY1 armed.
+- **What no state carries** goes through the engine: the picture, the samples, the serial log, the pad, the mutes,
+  the breakpoints and the debug target.
+
+Four test extensions were added to the library for the rig, under the crate's prefix and outside the ABI's promise
+(`EmuSen_CoreAPI.md` §4.7): `mercuryrt_core_step`, `mercuryrt_core_tick`, `mercuryrt_core_stop` and
+`mercuryrt_core_serial`. `step` and `serial` share their bodies with the pre-stable `mercuryrt_step` and
+`mercuryrt_serial`, as `rom_patch` and `set_sample_rate` already did. They are on the v1 handle so that the rig
+survives the pre-stable set's deletion (`EmuSen_CoreAPI.md` §26.5). Nothing a frontend calls changed.
+
+**The classes.** Each converted class is an abstract set of claims, `Mercury*Claims`, run as `Mercury*Tests` on C# and
+as `MercuryRt*Tests` on MercuryRT, as `MercuryDebugClaims` already was (§8.5.4) and as `Mars_Native.md` §6.5 did for
+MarsRT. The `MercuryRt` prefix puts the Rust half in CI's `MercuryRt` filter, so the workflow's `wiseman` job runs it on
+Windows and macOS too. The commercial-image classes and the corpus class take the engine as a theory argument instead,
+because their cases already came from data.
+
+**The prediction, retired.** §3.5 argued that "most assertions carry over unedited". It held for the assertions: no
+expected value in the converted classes changed. What had to change was every call that runs machine logic, because a call on the view would have run C#'s logic on MercuryRT's
+state and passed for the wrong reason: `Bus.Write`, `Bus.Read`, `Bus.Tick`, `Bus.Stop` and `Cpu.Step` became the rig's.
+Five assertions were rewritten, each for a reason the rig's design forces:
+
+- Two captured sub-objects (`var pulse = core.Bus.Apu.Pulse1`, `var wave = ...`) were read after the machine ran. A
+  captured view object goes stale on MercuryRT, so the reads go through `rig.Bus` each time.
+- `The_flag_register_never_keeps_its_low_nibble` set `Cpu.AF` and read `F`, which tests a C# property setter. It now
+  runs `LD BC,$12FF / PUSH BC / POP AF`, the SM83's own way of writing F.
+- `A_save_state_carries_the_port_registers_but_not_the_transcript` cleared the C# serial log by hand, which no
+  interface offers. It now clocks a second byte out after the save and asserts that the load leaves both bytes in the
+  log, the same claim from the other side.
+- `Reset_clears_both_the_port_and_the_transcript` called `MemoryBus.Reset`. It now loads the game again, which is where
+  the bus is reset on either engine.
+
+The two CPU-test helpers also changed what a step is. They ran `Cpu.Step` and then ticked the bus by the step's cycles
+again, so the machine ran each instruction twice over. That had no effect on any assertion; the rig's step is the
+frame loop's.
+
+**The count after.** 762 cases are named for Mercury; 750 run under the `Mercury` filter, and all pass.
+
+| | Claims | Cases |
+|---|---|---|
+| Now on both engines | 215 | 4 + 23 + 4 + 23 + 7 + 13 + 18 + 27 + 9 + 1 + 86 claims; 208 new MercuryRT cases in WiseMan (the eleven palette-number rows run both engines inside one case) |
+| C#-only, by design | 23 | listed below |
+| On no engine | 5 | the verdict reader's own cases, `HardwareTestRomLibrary.ReadVerdict` on bytes |
+
+The commercial-image classes were run with the four scratch copies (Tetris, Kirby's Dream Land, Link's Awakening and
+Pokémon Yellow) linked into the gitignored `TestRoms/`: 56 of 56 pass, seven claims × four games × two engines.
+
+**C#-only, and why.**
+
+- **`MercuryCycleTimingTests`, all 15.** They hand C#'s `Cpu` a fake `ICpuBus` that records every read, write and tick
+  in order. A WiseMan test cannot hand MercuryRT a bus. The same claims now run on the Rust SM83 in the crate, through
+  its `CpuBus` trait: `tests/cycle_timing.rs`, six tests that cover the fifteen cases (the ten opcodes of the theory are
+  one loop). Both pass, so the claims are on both engines, in two harnesses.
+- **`MercuryCartridgeTests`, the eight header cases**: the title, the checksum, the three values of the colour flag,
+  the shorter colour title, MBC2's built-in RAM size, and an image too short for a header. They test
+  `Cartridge.FromImage`. MercuryRT's shim parses the header with that same C# class before the image reaches Rust
+  (`MercuryRtCore.Prepare`), so the C# answer is the one a player of either engine gets. MercuryRT's own reading of the
+  board and the RAM size is held by the four board claims, which now run on both engines through the bus, and by the
+  state tests, whose layouts depend on it. The board claims replace `mapper.ReadRom` and `mapper.WriteRom` on C#'s
+  objects with the CPU's reads and writes.
+- **§3.5's two named examples.** The reflection serializer's own tests are `StateSerializerTests`, outside the Mercury
+  classes, and stay about C#. `SkipRendering`'s allocation checks do not exist for the Game Boy: no WiseMan test
+  measures what a Mercury frame allocates, on either engine, so there was nothing to keep C#-only.
+
+**The palette tables.** The 86 cases called C#'s `CompatibilityPalettes` directly. MercuryRT has its own copy of the
+table (`ppu/compat.rs`), which §8's tests held only through one representative title per palette number
+(`Every_palette_number_renders_identically_on_both_engines`): a wrong entry for one listed game in Rust would have
+survived. Each row now also builds the game's header, creates the machine as a Game Boy Color on each engine, and reads
+colour RAM through the view before the first instruction. TCRF's 73 rows and Radar Mission are a case per engine; the
+eleven palette-number rows check both engines in one case; the default palette is a case per engine.
+
+### 12.2 The corpus as a recorded baseline
+
+*Decided 2026-09-24 (Q6, §5):* the corpus stays gitignored under `TestRoms/hardware/`, and the committed theory becomes
+"matches the recorded baseline".
+
+**What existed.** The committed form was `MercuryHardwareTestRomTests.A_hardware_test_rom_reports_a_pass`, one case per
+ROM asserting `Passed`, on C# only and through the serial port only. It would have failed 79 of 173 ROMs with the corpus
+installed (§3.4), so it was an assertion nobody could run green. The two lock-step corpus runs
+(`MercuryRtCorpusTests` and `MercuryModelTests.The_hardware_corpus_runs_identically_on_each_console`) compare the engines
+with each other every frame, but against nothing recorded, so a change made to both engines alike passes them. The
+per-ROM verdict tables of §3.4, §9.3 and `Mercury_Model.md` were scratch transcripts, never committed. The theory was
+completed in place rather than added beside it.
+
+**The form.** `MercuryHardwareTestRomTests.Each_hardware_test_rom_says_what_the_baseline_recorded` is six cases, one per
+engine and Model (Auto, Game Boy, Game Boy Color). Each runs every ROM of the corpus to its verdict or 3,600 frames, with
+rendering skipped (§6.5) and battery saves off, and compares each verdict with its column of
+`EmuSen.WiseMan/Cores/MercuryCorpusBaseline.tsv`. The file has one row per ROM: its path under the corpus, the first
+sixteen hex digits of its SHA-256, and the six verdicts. A verdict is read in the order the ROMs report:
+
+- the serial log, by `HardwareTestRomLibrary.ReadVerdict` (§2 of `Mercury_HardwareTests.md`): `Passed`, `Failed`;
+- blargg's cart-RAM protocol (§3.4), by `HardwareTestRomLibrary.ReadCartRamStatus`: `Passed` for status 0, `Failed(n)`
+  for status n, so a change in which subtest fails also shows;
+- `NoVerdict` at the cap, and `IllegalOpcode` if the machine stops on one.
+
+The case fails on any difference in either direction, a regression or an improvement, and names the ROM, the recorded
+verdict, the new one and the frame it was reached on. A ROM whose hash differs from the recorded one is reported as a
+different ROM rather than as a moved verdict, so a newer corpus does not pass for a behaviour change. A ROM recorded and
+absent, or present and unrecorded, also fails. With no corpus, each case says so and passes, as the class always has.
+
+**Where the corpus is found.** `HardwareTestRomLibrary.Root`, `TestRoms/hardware/` under the configuration root, searched
+recursively; `EMUSEN_MERCURYRT_CORPUS` overrides it, and is now owned there and read by the lock-step tests too, so the
+two cannot point at different corpora.
+
+**Re-recording** is deliberate, as LunaP's `EMUSEN_API_APPROVE` is:
+
+```
+EMUSEN_MERCURY_CORPUS_RECORD=1 dotnet test EmuSen.WiseMan --filter "FullyQualifiedName~MercuryHardwareTestRomTests"
+```
+
+Each case then writes its column into the source tree's file (found from the test's own source path), keeping the
+other columns, and passes. The diff of that file is the review, and the commit that carries it states its reason, as
+§3.7 asks of a re-baseline. A filter naming one engine and model re-records one column.
+
+**The baseline, recorded 2026-10-14** on the 173 ROMs of §3.4 (blargg's `gb-test-roms` and mooneye's
+`mts-20240926-1737-443f6e1`):
+
+| Engine | Auto | Game Boy | Game Boy Color |
+|---|---|---|---|
+| Mercury (C#) | 94 passed, 74 failed, 5 no verdict | 94, 74, 5 | 94, 74, 5 |
+| MercuryRT | 94, 74, 5 | 94, 74, 5 | 94, 74, 5 |
+
+The two engines agree on every ROM in every column. Auto and Game Boy agree everywhere; Game Boy Color differs from them
+on two ROMs only, in opposite directions: `acceptance/boot_regs-dmgABC` passes on a Game Boy and fails on the Color, and
+`misc/boot_regs-cgb` the reverse (`Mercury_Model.md`). The equal counts across the columns are those two cancelling.
+
+**Checked against what was recorded before.** The Auto column reproduces §3.4's 94 of 173, and all three columns equal,
+ROM by ROM, the three scratch transcripts of 2026-09-24 that the Model work recorded (`Mercury_Model.md`), up to the
+spelling of "no verdict". So the baseline is not a new measurement of the machines; it is the old one, now committed.
+
+**That it fails both ways** was shown before it was committed: with `cpu_instrs.gb` recorded as `Failed` in the C#/Auto
+column and `boot_regs-dmgABC` recorded as `Passed` in the MercuryRT/Game Boy Color column, those two cases failed, each
+naming its ROM ("recorded Failed, now Passed at frame 1784"; "recorded Passed, now Failed at frame 11"), and the other
+four passed. The run takes 1 min 52 s for all six with the corpus, most of it the C# columns: about 33 s each against 4 s
+for MercuryRT's, with four ROMs at a time. That ratio was not investigated; it is the harness's cost, not the machines'.
+
+### 12.3 What the engines disagreed on
+
+Two differences appeared, both in the first run of the converted classes on MercuryRT. Neither is in the machine.
+
+**E1: MercuryRT's debug target had no audio peek.** `MercuryRtApuTests.The_debug_target_reports_four_channels_and_a_live_peek`
+failed ("Assert.NotEmpty() Failure: Collection was empty") on the unchanged library and shim. §8.5.6 listed this as
+known: the target read the mirror's APU queue, and the queue is in no state, so the mirror's is always empty. C# Mercury
+peeks its live queue. *Fixed by addition:* MercuryRT now has the v1 capability `AUDIO_PEEK` (`peek_audio`, a copy of the
+queue without draining it), the shared `SampleQueue` gained `peek` with a test of its own, and `MercuryRtDebugTarget`
+reads `CoreMachine.PeekAudio`. The capability word in `MercuryRtCoreAbiTests` gained the bit. After the fix the case
+passes on both engines, and nothing a game hears changed: the peek does not drain.
+
+**E2: a button pressed between frames.** `MercuryRtCoreSurfaceTests.A_pressed_button_pulls_its_line_low_in_the_selected_nibble`
+failed (expected 0, read 8): pressed through `ICore.SetButton`, the button did not show in `$FF00` before the next frame.
+C# Mercury writes the joypad at once. The v1 adapter holds the pad in its input latch and hands it to the machine before
+each frame, so that a frontend may press from any thread (`Diamond_Players.md` §12.7). This is a choice of the adapter's,
+shared by every v1 core, and it is not a defect of either machine. It shows only to a read made between frames by a
+host: a game reads the pad while it runs, which is inside a frame, and §8.2's frame-by-frame comparisons with input
+scripts are identical on both engines. The claim now presses, runs a frame, and then reads, and it passes on both. The
+difference is kept and written down here; a debugger poke of `$FF00` between frames is the one place a person would see
+it.
+
+**Nothing else differed.** Every other converted claim passed on MercuryRT at the first run, and the corpus baseline's
+columns agree ROM for ROM.
+
+**The frame's cost.** The machine's per-cycle code did not change (`cpu/`, `memory/`, `ppu/`, the APU's channels and
+mixing); the library gained four test extensions and a peek, and the mixer's state walk moved into `Mixer` (§12.4).
+The crate's bench (`examples/frames`, 3,000 frames after 900, p50 in ms) was run on the crate at `175f9c36` and at this
+stage, three interleaved rounds under the timing lock each time, measured 2026-10-14 after the extensions and again
+2026-10-15 after the walk moved:
+
+| Game | before (14th) | after (14th) | before (15th) | after (15th) |
+|---|---|---|---|---|
+| Tetris | 0.4325, 0.4355, 0.4366 | 0.4308, 0.4363, 0.4364 | 0.4320, 0.4305, 0.4302 | 0.4294, 0.4275, 0.4293 |
+| Kirby's Dream Land | 0.4924, 0.4908, 0.4887 | 0.4843, 0.4895, 0.4958 | 0.4867, 0.4841, 0.4842 | 0.4813, 0.4786, 0.4800 |
+| Link's Awakening | 0.4004, 0.3996, 0.3993 | 0.3998, 0.4010, 0.3988 | 0.3988, 0.3977, 0.3984 | 0.3989, 0.3976, 0.3979 |
+| Pokémon Yellow | 0.5396, 0.5378, 0.5408 | 0.5378, 0.5312, 0.5377 | 0.5374, 0.5287, 0.5370 | 0.5290, 0.5286, 0.5304 |
+
+Every pair is within 1.6%. On the 15th every "after" is at or under its "before", by up to 1.6% on Yellow; a cold
+state walk cannot make a frame faster, so that is placement or noise, and is not claimed. The example links the
+machine and not the cdylib's export table, so this says the machine's code is where it was; §8.7.3's finding that
+placement in the shipped library can move a frame was not re-measured through `ICore`.
+
+### 12.4 Mutants for what had none
+
+**What was already covered.** Stage 1 (§8.1, 10), stages 2–5 (§8.4, 23), stage 6 (§8.5.4, 19 and two wide-table ones),
+stage 7's digests (§8.6), the move onto the common interface (§8.7.4, 19), D1–D3 (§9.5, 14) and the Model setting
+(`Mercury_Model.md` §6.8, 23). Nothing covered state version 8's mixer (§10), the v1 adapter's own code (§11), the
+Color's palette table in Rust, the machine areas that only the converted claims reach, or this stage's extensions.
+§3.6 also asked for two classes on purpose.
+
+**Method,** run 2026-10-14. The crate and `emusen-native` were copied to scratch space, and a copy of WiseMan's build
+output was made there, so that no source and no output in the tree was touched. For each mutant the runner
+(`mutants.py`, scratch) applied one edit to the copy, built the library with release settings less LTO, ran the
+crate's tests, put the library in the output copy (its sidecar's hash updated), and ran WiseMan's `MercuryRt`,
+`MercuryModelTests` and `MercuryDefectTests` filters with the four games (`EMUSEN_MERCURYRT_ROMS`), then restored the
+file. The unmutated control passed: the crate, and 514 of 514 WiseMan cases. The four ordering mutants were then run a
+second time against the corpus alone: the baseline (§12.2) and the lock-step `MercuryRtCorpusTests`. Each WiseMan run is
+bounded twice: vstest's hang detector at five minutes, which names the test that hung and aborts the run, and an outer
+limit that kills the run's whole process group.
+
+**The first round hung once.** The first runner bounded each command at an hour and killed only its direct child.
+Mutant X2 (the tick extension one T-cycle short) turned `Tick(1)` into no tick at all, so the access-blocking claims'
+`while (Dot != dot) Tick(1)` never returned. The runner's hour expired, and the test host it had started outlived it,
+holding the shared test lock until it was killed by hand two hours later. The runner now starts each command in its own
+session and kills the group, and the hang detector catches the same mutant in five minutes. A hang is a catch: it
+is recorded below with the test that hung.
+
+| # | Mutation | Caught by |
+|---|---|---|
+| **The ordering of `step_one_cycle`** (§3.6's first class) | | |
+| O1 | TIMA's reload counted down after the edge detector, not before | the interrupts program on all eleven boards, `The_window_counts_its_lines…` and the rendering-skip pair; **not** by the four games, the corpus's verdicts, or its lock-step run |
+| O2 | the OAM DMA byte before the PPU and APU, not after | **survived** the first round and the corpus; caught by the new `An_oam_dma_byte_landing_on_the_composite_dot_draws_identically` |
+| O3 | the frame sequencer reads DIV before its increment | 38 cases: the rig's envelope and sweep claims, the synthetic programs, the games, the platform digests; in the corpus, the lock-step run |
+| O4 | DIV incremented after the timer, so its edge sees the old counter | 22 cases: the interrupts program, random programs, the games, the platform digests; in the corpus, the lock-step run and all three MercuryRT columns of the baseline |
+| **Same-width neighbours in the state** (§3.6's second class, as it stands since D3) | | |
+| S1 | the writer puts each capacitor under the other's name | 23 cases, the games' byte round trip and the lock-step programs among them; **not** by the crate |
+| S2 | the reader takes the capacitors in the other order | `Real_games_states_come_back_from_rust_byte_for_byte` only, a case that needs the games |
+| S3 | the capacitors written in the other order, their labels with them | 45 cases; the running-machine and noise round trips among them |
+| S4 | MBC3 writes its ROM and RAM banks under each other's names | the crate's naming rule and board round trip; 19 WiseMan cases |
+| S1b, S2b | S1 and S2 again, after the mixer moved into `Mixer::write_state` and `read_state` | the crate's naming rule; and as before (23 and 1 cases) |
+| **State version 8 and the v1 adapter** (§10, §11) | | |
+| V1 | version 8's mixer not read back | the crate; 22 cases, the sound-resume claim among them |
+| V2 | no `MACHINE_INFO` for a state from the other console | `A_state_from_the_other_console_tells_the_host_its_machine_info_changed`; the debugger's call stack across a rebuild |
+| V3 | the setting "Game Boy" builds Auto | `The_debugger_shows_the_console_the_game_runs_on_on_both_engines` only |
+| V4 | a write to a space the machine does not have accepted | **survived**; caught by the new crate test `a_space_the_machine_does_not_have_is_refused_through_the_core_abi` |
+| **This stage's additions** | | |
+| X1 | the audio peek returns nothing | E1's claim, `The_debug_target_reports_four_channels_and_a_live_peek` |
+| X2 | the tick extension one T-cycle short | 19 rig claims (PPU, APU, CGB, OAM DMA, the O2 test); then **a hang** in `MercuryRtAccessBlockingTests.Oam_is_closed_for_the_scan_as_well_as_the_draw`, stopped by the hang detector |
+| X3 | the stop extension does nothing | four rig claims: the APU's and the CGB's double speed, the colour state's round trip |
+| X4 | a step leaves an HDMA stall pending | the random programs, instruction by instruction |
+| T1 | two checksums of the Color's palette table swapped | the TCRF rows on MercuryRT; `Every_palette_number_renders_identically_on_both_engines` |
+| **Machine areas the converted claims reach** | | |
+| N1 | noise's short mode feeds bit 5, not 6 | `Short_mode_makes_the_noise_repeat_after_127_steps`; a game; the platform digests; random programs |
+| N2 | wave volume code 2 shifts by two | the games only |
+| N3 | NRx4 reads its length-enable bit as 1 | `The_unreadable_register_bits_all_read_back_as_one`; the games |
+| N4 | STAT's unwired top bit reads 0 | `Stat_reports_the_mode_the_lyc_match_and_its_unwired_top_bit`; the games |
+| N5 | eleven sprites a line | `Only_the_first_ten_sprites_on_a_line_are_drawn`; the games |
+| N6 | SVBK 0 selects bank 0 | `Svbk_banks_the_upper_wram_window_and_treats_zero_as_one`; the HDMA program; random programs |
+| N7 | cancelling an hblank HDMA keeps its blocks | `Clearing_bit_seven_cancels_a_running_hblank_hdma` only |
+| N8 | SC's clock-speed bit read as 0 on a Game Boy | `Unused_control_bits_read_back_as_ones_on_a_dmg`; three Model cases |
+| N9 | a write to echo RAM dropped | `Echo_ram_is_the_same_storage_as_work_ram`; random programs |
+| N10 | writing DIV clears only its visible byte | the random programs only |
+| N11 | the palette index steps without bit 7 | `The_palette_index_auto_increments_only_when_its_top_bit_is_set` only |
+| N12 | the window line counts before WY is reached | the window claim; the window step test; the games |
+
+**Result.** All 31 are caught; three needed a new test (O2, V4, and S1/S2's move under the naming rule). The converted
+claims are the only oracle for three of them (N7, N11, X1), and the only one without the games for three more (N3–N5);
+CI has no games. N2 is caught by the games alone, and N10 by the random programs alone: the converted
+`Writing_div_resets_the_counter` cannot see N10, because DIV is the counter's high byte and a test that reads only DIV
+reads zero either way. The claim was left as it was: it says what C# says, and the random programs hold the rest.
+
+**§3.6's two predictions, retired.**
+
+- *"Ordering could hide below game-level comparison and be caught only by mooneye's timer ROMs."* Half right. O1 hid
+  below the four games, as predicted, but it hid below the corpus too: no verdict moved and the lock-step run stayed
+  identical. What caught it was a synthetic program that takes timer, STAT and vblank interrupts every frame and is
+  compared state for state. O2 hid below everything until a test aligned a DMA with the composite dot, which §8.4 had
+  argued was the only place it could show (M7). O3 and O4 were caught widely. The class is real, and the corpus is not
+  its oracle; the lock-step synthetic programs are.
+- *"The cartridge copies could hide below a byte round trip and be caught only by `naming.rs`."* The copies are gone
+  (D3, §9.3), and §9.5's M11 is their last trace. The class that replaces them is any two same-width neighbours in the
+  walk, and the prediction failed for the first such pair tried: `naming.rs` never saw the mixer's three doubles,
+  because the rule reads only lines of the form `w.f64("Label", self.field)` and `self.field = r.f64()?; // Label`, and
+  version 8 wrote them as `mix.left_capacitor` with no comment on the read. S1 was caught by WiseMan's comparisons with
+  C#, and S2 by one case that needs the games. The mixer's walk now lives in `Mixer::write_state` and `read_state`,
+  under the group `Bus.Apu`, so the bytes and the layout listing are the same and every line is under the rule; S1b and
+  S2b fail the crate's naming test. A layout that is self-consistent (S3) is outside any rule that compares a line with
+  itself, and is caught only against C#'s walk; when C# leaves `main`, the committed layout listings of §3.7 take that
+  role.
+
+**Divergence kept.** None. **Equivalents argued.** None this round: O2, the one candidate (§8.4's M7), is now shown
+not to be equivalent, and has its test.
+
+### 12.5 What is not done, and what stage 9 needs
+
+**Not done.**
+
+- MBC2's built-in RAM size, the header's title and checksum, and the short-image refusal are held on C# alone (§12.1).
+- E2 is kept, not changed (§12.3).
+- The C# columns of the corpus baseline take eight times MercuryRT's; not investigated.
+- The frame's cost through `ICore`, as a player runs it, was not re-measured; only the machine's, by the crate's bench.
+- The handheld was not part of this stage.
+
+**What stage 9 needs from this one.**
+
+- **The view.** `MercuryRig` reads MercuryRT through a C# `MercuryCore` loaded from its state. When the C# core leaves
+  `main` (stage 10), the claims lose both their C# half, which goes to the legacy branch with it, and the view their
+  MercuryRT half reads through. Either the state classes stay on `main` as a reader with no machine behind them, or
+  the view becomes a reader driven by the committed layout listings of §3.7. That choice is stage 9's to propose.
+- **The corpus.** The verdicts are recorded (§12.2). The goldens add, per ROM, the frame of the verdict, the serial
+  bytes and per-frame hashes, from C#. The baseline's C# columns then stand as the record of what C# said.
+- **The traces** of §3.7 for the synthetic programs (`MercuryRtMachineTests`' busy, interrupts and colour programs on
+  eleven boards, the random programs), the corpus and the four games. O1 shows which matter most: the lock-step
+  synthetic programs caught what neither the games nor the corpus did.
+- **The palette expectations.** The TCRF rows carry their own expected strings; the palette-number rows and the
+  default take theirs from C#'s `CompatibilityPalettes`, which would need freezing as data when the C# core moves.
+- **The legacy differential project** pins the core ABI, the state format and the input script, and now also the four
+  test extensions the rig calls (`mercuryrt_core_step`, `_tick`, `_stop`, `_serial`).

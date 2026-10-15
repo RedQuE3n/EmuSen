@@ -5,26 +5,22 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // MercuryCore's ICore surface - see Mercury_Core.md.
-    public class MercuryCoreTests : IDisposable
+    // A Game Boy engine's ICore surface, the same claims on Mercury and MercuryRT - see Mercury_Core.md, Mercury_Native.md §12.
+    public abstract class MercuryCoreClaims : IDisposable
     {
-        private readonly List<string> _temporaryFiles = new();
+        private readonly List<MercuryRig> _rigs = new();
+
+        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
-            foreach (string path in _temporaryFiles)
-            {
-                try { File.Delete(path); } catch (IOException) { }
-            }
+            foreach (MercuryRig rig in _rigs) rig.Dispose();
         }
 
-        private MercuryCore Load(params (int Offset, byte[] Bytes)[] patches)
+        private MercuryRig Load(params (int Offset, byte[] Bytes)[] patches)
         {
-            string path = SyntheticGbRom.WriteTemp(SyntheticGbRom.Build(patches: patches));
-            _temporaryFiles.Add(path);
-
-            var core = new MercuryCore();
-            core.LoadRom(path);
+            var core = MercuryRig.Create(Engine, SyntheticGbRom.Build(patches: patches));
+            _rigs.Add(core);
             return core;
         }
 
@@ -34,9 +30,9 @@ namespace EmuSen.WiseMan.Cores
             var core = Load();
 
             Assert.Equal("GB", core.CoreName);
-            Assert.Equal(160, core.ScreenWidth);
-            Assert.Equal(144, core.ScreenHeight);
-            Assert.InRange(core.FrameRateHz, 59.7, 59.8);
+            Assert.Equal(160, core.Core.ScreenWidth);
+            Assert.Equal(144, core.Core.ScreenHeight);
+            Assert.InRange(core.Core.FrameRateHz, 59.7, 59.8);
         }
 
         [Fact]
@@ -48,14 +44,14 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 3; i++) core.RunFrame();
 
             Assert.Equal(3, core.TotalFrames);
-            Assert.True(core.Cpu!.Cycles >= 3 * MercuryCore.CyclesPerFrame);
+            Assert.True(core.Cpu.Cycles >= 3 * MercuryCore.CyclesPerFrame);
         }
 
         [Fact]
         public void The_frame_buffer_is_the_size_the_screen_advertises()
         {
             var core = Load();
-            Assert.Equal(core.ScreenWidth * core.ScreenHeight * 4, core.GetFrameBufferRgba().Length);
+            Assert.Equal(core.Core.ScreenWidth * core.Core.ScreenHeight * 4, core.GetFrameBufferRgba().Length);
         }
 
         [Fact]
@@ -63,22 +59,23 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            Assert.Equal(8, core.SupportedButtons.Count);
-            Assert.DoesNotContain(PadButton.L, core.SupportedButtons);
+            Assert.Equal(8, core.Core.SupportedButtons.Count);
+            Assert.DoesNotContain(PadButton.L, core.Core.SupportedButtons);
         }
 
-        // A pressed button reads back as 0, and only the selected nibble answers.
+        // A pressed button reads back as 0, and only the selected nibble answers; the press lands by the next frame, when the adapter hands MercuryRT its pad (Mercury_Native.md §12.3).
         [Fact]
         public void A_pressed_button_pulls_its_line_low_in_the_selected_nibble()
         {
-            var core = Load();
+            var core = Load((0, new byte[] { 0x18, 0xFE }));
             core.SetButton(0, PadButton.Start, pressed: true);
+            core.RunFrame();
 
-            core.Bus!.Write(0xFF00, 0x10);   // select the action buttons
-            Assert.Equal(0x00, core.Bus.Read(0xFF00) & 0x08);
+            core.Write(0xFF00, 0x10);   // select the action buttons
+            Assert.Equal(0x00, core.Read(0xFF00) & 0x08);
 
-            core.Bus.Write(0xFF00, 0x20);    // select the d-pad instead
-            Assert.Equal(0x08, core.Bus.Read(0xFF00) & 0x08);
+            core.Write(0xFF00, 0x20);    // select the d-pad instead
+            Assert.Equal(0x08, core.Read(0xFF00) & 0x08);
         }
 
         [Fact]
@@ -86,11 +83,11 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Write(0xFF06, 0x00);   // TMA
-            core.Bus.Write(0xFF05, 0xFF);    // TIMA, one tick from overflowing
-            core.Bus.Write(0xFF07, 0x05);    // TAC: enabled, the fastest divider
+            core.Write(0xFF06, 0x00);   // TMA
+            core.Write(0xFF05, 0xFF);    // TIMA, one tick from overflowing
+            core.Write(0xFF07, 0x05);    // TAC: enabled, the fastest divider
 
-            core.Bus.Tick(64);
+            core.Tick(64);
 
             Assert.NotEqual(0, core.Bus.InterruptFlags & (1 << (int)Interrupt.Timer));
         }
@@ -101,10 +98,10 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Bus!.Tick(1024);
+            core.Tick(1024);
             Assert.NotEqual(0, core.Bus.Div);
 
-            core.Bus.Write(0xFF04, 0x00);
+            core.Write(0xFF04, 0x00);
             Assert.Equal(0, core.Bus.Div);
         }
 
@@ -113,11 +110,11 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            for (int i = 0; i < 0xA0; i++) core.Bus!.Write((ushort)(0xC000 + i), (byte)(i ^ 0x5A));
-            core.Bus!.Write(0xFF46, 0xC0);
+            for (int i = 0; i < 0xA0; i++) core.Write((ushort)(0xC000 + i), (byte)(i ^ 0x5A));
+            core.Write(0xFF46, 0xC0);
 
             // 160 machine cycles, not an instant copy - see Mercury_Memory.md §6.
-            core.Bus.Tick(0xA0 * 4);
+            core.Tick(0xA0 * 4);
 
             for (int i = 0; i < 0xA0; i++) Assert.Equal((byte)(i ^ 0x5A), core.Bus.Oam[i]);
         }
@@ -128,12 +125,12 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            for (int i = 0; i < 0xA0; i++) core.Bus!.Write((ushort)(0xC000 + i), (byte)(i ^ 0x5A));
-            core.Bus!.Write(0xFF46, 0xC0);
+            for (int i = 0; i < 0xA0; i++) core.Write((ushort)(0xC000 + i), (byte)(i ^ 0x5A));
+            core.Write(0xFF46, 0xC0);
 
             Assert.True(core.Bus.OamDmaActive);
 
-            core.Bus.Tick(0x50 * 4);
+            core.Tick(0x50 * 4);
 
             Assert.True(core.Bus.OamDmaActive);
             Assert.Equal((byte)(0x00 ^ 0x5A), core.Bus.Oam[0x00]);
@@ -141,7 +138,7 @@ namespace EmuSen.WiseMan.Cores
             // The far end of the page has not been reached yet.
             Assert.Equal(0x00, core.Bus.Oam[0x9F]);
 
-            core.Bus.Tick(0x50 * 4);
+            core.Tick(0x50 * 4);
 
             Assert.False(core.Bus.OamDmaActive);
             Assert.Equal((byte)(0x9F ^ 0x5A), core.Bus.Oam[0x9F]);
@@ -152,15 +149,15 @@ namespace EmuSen.WiseMan.Cores
         public void Oam_reads_ff_while_a_dma_is_running()
         {
             var core = Load();
-            core.Bus!.Write(0xFF40, 0x00);
+            core.Write(0xFF40, 0x00);
 
-            Assert.NotEqual(0xFF, core.Bus.Read(0xFE00));
+            Assert.NotEqual(0xFF, core.Read(0xFE00));
 
-            core.Bus.Write(0xFF46, 0xC0);
-            Assert.Equal(0xFF, core.Bus.Read(0xFE00));
+            core.Write(0xFF46, 0xC0);
+            Assert.Equal(0xFF, core.Read(0xFE00));
 
-            core.Bus.Tick(0xA0 * 4);
-            Assert.NotEqual(0xFF, core.Bus.Read(0xFE00));
+            core.Tick(0xA0 * 4);
+            Assert.NotEqual(0xFF, core.Read(0xFE00));
         }
 
         [Fact]
@@ -168,20 +165,20 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load((0, new byte[] { 0x18, 0xFE }));
             core.RunFrame();
-            core.Bus!.Write(0xC123, 0x99);
+            core.Write(0xC123, 0x99);
 
             using var stream = new MemoryStream();
             core.SaveState(stream);
             long framesAtSave = core.TotalFrames;
 
             core.RunFrame();
-            core.Bus.Write(0xC123, 0x11);
+            core.Write(0xC123, 0x11);
 
             stream.Position = 0;
             core.LoadState(stream);
 
             Assert.Equal(framesAtSave, core.TotalFrames);
-            Assert.Equal(0x99, core.Bus.Read(0xC123));
+            Assert.Equal(0x99, core.Read(0xC123));
         }
 
         [Fact]
@@ -203,7 +200,17 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Running_before_a_rom_is_loaded_is_an_error_rather_than_a_crash()
         {
-            Assert.Throws<InvalidOperationException>(() => new MercuryCore().RunFrame());
+            Assert.Throws<InvalidOperationException>(() => MercuryRig.Unloaded(Engine).RunFrame());
         }
+    }
+
+    public sealed class MercuryCoreTests : MercuryCoreClaims
+    {
+        protected override MercuryEngine Engine => MercuryEngine.Mercury;
+    }
+
+    public sealed class MercuryRtCoreSurfaceTests : MercuryCoreClaims
+    {
+        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
     }
 }

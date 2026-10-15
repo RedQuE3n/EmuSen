@@ -80,6 +80,10 @@ ROMs. They are kept out anyway, because a test corpus is an input to the researc
 rather than part of it, and because vendoring binaries whose provenance the project
 does not control is a habit worth not starting.
 
+*Since 2026-10-14 the theory asserts a recorded baseline, not a pass* (`Mercury_Native.md` §12.2): each ROM's verdict
+on each engine and console is held to `EmuSen.WiseMan/Cores/MercuryCorpusBaseline.tsv`, in either direction, and
+`EMUSEN_MERCURY_CORPUS_RECORD=1` re-records it. blargg's cart-RAM verdicts are read beside the serial ones.
+
 ## 4. What the corpus is expected to say
 
 These are predictions, recorded before the ROMs were obtained so that being wrong is

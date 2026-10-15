@@ -17,7 +17,7 @@ namespace EmuSen.WiseMan.Cores
         public const string RomsVariable = MercuryRtStateTests.RomsVariable;
 
         // A directory of blargg and mooneye ROMs, searched recursively; absent, that case passes without running.
-        public const string CorpusVariable = "EMUSEN_MERCURYRT_CORPUS";
+        public const string CorpusVariable = HardwareTestRomLibrary.Variable;
 
         private readonly ITestOutputHelper _output;
 
@@ -159,6 +159,35 @@ namespace EmuSen.WiseMan.Cores
                 windowLines = Math.Max(windowLines, pair.Csharp.Bus!.Ppu.WindowLine);
             }
             Assert.True(windowLines > 50, $"the window drew {windowLines} lines");
+        }
+
+        // An OAM DMA started a T-cycle at a time across line 0's composite, so one of its bytes lands on the dot the sprites are read - mutants O2 (§12.4) and M7 (§8.4).
+        [Fact]
+        public void An_oam_dma_byte_landing_on_the_composite_dot_draws_identically()
+        {
+            const int composite = EmuSen.Cores.Nintendo.Mercury.Video.Ppu.OamScanCycles + EmuSen.Cores.Nintendo.Mercury.Video.Ppu.BaseDrawingCycles;
+            var drawn = new HashSet<string>();
+            for (int start = composite - 40; start <= composite; start++)
+            {
+                var pictures = new List<byte[]>();
+                foreach (MercuryEngine engine in Enum.GetValues<MercuryEngine>())
+                {
+                    using MercuryRig core = MercuryRig.Create(engine, SyntheticGbRom.Build());
+                    for (int row = 0; row < 16; row++) core.Bus.Vram[16 + row] = 0xFF;
+                    for (int slot = 0; slot < 4; slot++) core.Bus.Oam[slot * 4 + 0] = 16;
+                    for (int i = 0; i < 16; i++) core.Bus.Wram[i] = (byte)(i % 4 == 0 ? 16 : i % 4 == 1 ? 8 + 32 * (i / 4) + 16 : i % 4 == 2 ? 1 : 0);
+                    core.Write(0xFF48, 0xE4);
+                    core.Write(0xFF40, 0x93);
+                    core.Tick(start);
+                    core.Write(0xFF46, 0xC0);
+                    core.Tick(EmuSen.Cores.Nintendo.Mercury.Video.Ppu.CyclesPerScanline);
+                    pictures.Add(core.GetFrameBufferRgba()[..(160 * 4)]);
+                }
+                int same = pictures[0].AsSpan().CommonPrefixLength(pictures[1]);
+                Assert.True(same == pictures[0].Length, $"a DMA started at dot {start}: line 0 differs first at x {same / 4}");
+                drawn.Add(Convert.ToHexString(pictures[0]));
+            }
+            Assert.True(drawn.Count > 2, $"only {drawn.Count} distinct lines: no DMA byte landed while the line was composited");
         }
 
         // On a colour console, map attributes with the priority bit over a solid tile, and a black sprite the background must hide - mutant M14 (§8.4).

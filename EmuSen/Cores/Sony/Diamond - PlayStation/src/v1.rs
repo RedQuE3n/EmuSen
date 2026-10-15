@@ -567,7 +567,7 @@ mod tests {
 
     fn create(image: &[u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
         let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
-        Machine::create(&Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false })
+        Machine::create(&Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false })
     }
 
     #[test]
@@ -723,7 +723,7 @@ mod tests {
     /// A machine for `image` over the card file `card`, kept apart from the game or not.
     fn over_card(image: &[u8], card: &[u8], apart: bool) -> Machine {
         let settings = Settings::from_pairs(Vec::new());
-        Machine::create(&Create { image, settings, files: vec![File { which: 0, data: card }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: apart }).unwrap()
+        Machine::create(&Create { image, settings, files: vec![File { which: 0, data: card }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: apart, shared_console: false }).unwrap()
     }
 
     /// Run until the game has saved and one ID after it is taken.

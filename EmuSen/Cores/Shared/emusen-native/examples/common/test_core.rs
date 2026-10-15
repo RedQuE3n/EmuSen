@@ -65,6 +65,14 @@ pub const CARD: u8 = 0xCD;
 /// Seeded fault for the kit's C19: a load under `CREATE_SHARED_REMOVABLE` rolls the card back to blank, and marks it
 /// changed, as a core that keeps its card in its state and puts it back would.
 pub const FAULT_CARD_ROLLED_BACK: u32 = 1 << 20;
+/// Not a fault, since 1.8: an image whose payload begins with `CONSOLE_MEMORY` has memory inside the console, battery
+/// file 2, of kind console, which no state holds either (EmuSen_CoreAPI.md §6.28).
+pub const CONSOLE_MEMORY: u8 = 0xCE;
+/// Seeded faults for the kit's C19 and C14 (since 1.8): a load under `CREATE_SHARED_CONSOLE` rolls the console's memory
+/// back to blank and marks it changed; and core info gives file 2 the card's medium, which disagrees in kind and
+/// extension, and port 7, which no machine lists.
+pub const FAULT_CONSOLE_ROLLED_BACK: u32 = 1 << 21;
+pub const FAULT_MEDIUM_DISAGREES: u32 = 1 << 22;
 /// Seeded faults for the kit's C16 and C18 on a machine that lists no drive: a media call taken, a media call answered
 /// with a status of the fault band, and a place named for the drive the machine does not list.
 pub const FAULT_DRIVELESS_ACCEPTS: u32 = 131072;
@@ -146,6 +154,10 @@ pub struct TestCore {
     card: Option<[u8; 16]>,
     card_dirty: bool,
     shared_removable: bool,
+    /// The console's own memory (`CONSOLE_MEMORY`), whether it changed since saved, and whether the host keeps it apart.
+    memory: Option<[u8; 16]>,
+    memory_dirty: bool,
+    shared_console: bool,
 }
 
 /// Where each frame's byte of the kept image lands in RAM, so that the state and its digests follow what was read.
@@ -211,6 +223,13 @@ impl StateMachine for TestCore {
         {
             *card = [0; 16];
             self.card_dirty = true;
+        }
+        if let Some(memory) = &mut self.memory
+            && self.shared_console
+            && faults() & FAULT_CONSOLE_ROLLED_BACK != 0
+        {
+            *memory = [0; 16];
+            self.memory_dirty = true;
         }
         self.draw();
         Ok(())
@@ -311,10 +330,12 @@ impl Core for TestCore {
         }
         let mut sram = [0u8; 16];
         let mut card = (body.first() == Some(&CARD)).then_some([0u8; 16]);
+        let mut memory = (body.first() == Some(&CONSOLE_MEMORY)).then_some([0u8; 16]);
         for f in &r.files {
             match f.which {
                 0 => sram.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s),
                 1 => card.iter_mut().for_each(|c| c.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s)),
+                2 => memory.iter_mut().for_each(|c| c.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s)),
                 16 => {}
                 _ => {
                     detail(&format!("file {} is not this core's", f.which));
@@ -352,6 +373,9 @@ impl Core for TestCore {
             card,
             card_dirty: false,
             shared_removable: r.shared_removable,
+            memory,
+            memory_dirty: false,
+            shared_console: r.shared_console,
         };
         m.draw();
         Ok(m)
@@ -367,7 +391,7 @@ impl Core for TestCore {
             ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
             spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, ..Space::new(1, "ROM") }],
             processors: vec![Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None }],
-            battery: std::iter::once(Battery::game(0, ".srm")).chain(self.card.map(|_| Battery::removable(1, ".card"))).collect(),
+            battery: std::iter::once(Battery::game(0, ".srm")).chain(self.card.map(|_| Battery::removable(1, ".card"))).chain(self.memory.map(|_| Battery::console(2, ".mem"))).collect(),
             state: StateFormat { format: "TST1".into(), version: 1, loads_from: vec![1] },
             phases: vec!["count".into()],
             patches: Some((0, 0xFF)),
@@ -565,6 +589,7 @@ impl Core for TestCore {
         match (which, &self.card) {
             (0, _) => Ok((&self.sram, flags::BATTERY_TRACKED | self.sram_dirty as u32)),
             (1, Some(card)) => Ok((card, flags::BATTERY_TRACKED | self.card_dirty as u32)),
+            (2, _) if self.memory.is_some() => Ok((self.memory.as_ref().unwrap(), flags::BATTERY_TRACKED | self.memory_dirty as u32)),
             _ => Err(status::BAD_FILE),
         }
     }
@@ -572,6 +597,7 @@ impl Core for TestCore {
     fn battery_saved(&mut self, which: u32) -> Result<(), i32> {
         match which {
             1 => self.card_dirty = false,
+            2 => self.memory_dirty = false,
             _ => self.sram_dirty = false,
         }
         Ok(())
@@ -636,7 +662,9 @@ impl Core for TestCore {
     }
 
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "test").then(|| vec![Battery::game(0, ".srm"), Battery::removable(1, ".card")])
+        let inside = Battery::console(2, ".mem").label("Inside the console");
+        let inside = if faults() & FAULT_MEDIUM_DISAGREES != 0 { inside.medium("test.card").port(7) } else { inside.medium("test.memory") };
+        (system == "test").then(|| vec![Battery::game(0, ".srm"), Battery::removable(1, ".card").medium("test.card").label("Card slot"), inside])
     }
 
     fn drives(&self) -> Vec<Drive> {

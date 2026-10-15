@@ -331,7 +331,7 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
                 super::detail(&why);
                 code
             })?;
-            let request = Create { image: unsafe { input(p.image, p.image_len) }, settings, files, pixel_formats: p.pixel_formats | 1, host_abi_version: p.host_abi_version, shared_removable: p.flags & flags::CREATE_SHARED_REMOVABLE != 0 };
+            let request = Create { image: unsafe { input(p.image, p.image_len) }, settings, files, pixel_formats: p.pixel_formats | 1, host_abi_version: p.host_abi_version, shared_removable: p.flags & flags::CREATE_SHARED_REMOVABLE != 0, shared_console: p.flags & flags::CREATE_SHARED_CONSOLE != 0 };
             let lend = lent::<T>(p.flags & flags::CREATE_LENT != 0, request.image, &request.files);
             let made = T::create(&request);
             let loan = lend.map(Lend::close);

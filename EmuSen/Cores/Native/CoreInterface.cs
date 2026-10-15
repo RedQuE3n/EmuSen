@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreInterface
     {
         public const uint Major = 1;
-        public const uint Minor = 7;
+        public const uint Minor = 8;
         public const uint Version = (Major << 16) | Minor;
 
         // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
@@ -64,6 +64,9 @@ namespace EmuSen.Cores.Native
 
         // EMUSEN_CREATE_SHARED_REMOVABLE: the host keeps the removable battery files apart from the game, so a state load leaves them - see EmuSen_CoreAPI.md §6.27.
         public const uint CreateSharedRemovable = 2;
+
+        // EMUSEN_CREATE_SHARED_CONSOLE: the same for the console's own battery files - see EmuSen_CoreAPI.md §6.28.
+        public const uint CreateSharedConsole = 4;
 
         // The event kinds of enum emusen_event_kind; 7 is kept for a controller's outputs.
         public const uint EventAudioRate = 1, EventGeometry = 2, EventStateSize = 3, EventBattery = 4, EventLog = 5, EventMachineInfo = 6;

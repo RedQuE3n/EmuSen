@@ -111,6 +111,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Structs.Values.Sum(t => t.GetFields().Length), checkedFields);
             Assert.Contains(Lines("const"), w => w[1] == "EMUSEN_CORE_ABI_VERSION" && Convert.ToUInt32(w[2], 16) == CoreInterface.Version);
             Assert.Contains(Lines("const"), w => w[1] == "EMUSEN_FILE_IMAGE" && Convert.ToUInt32(w[2], 16) == CoreInterface.FileImage);
+            Assert.Contains(Lines("const"), w => w[1] == "EMUSEN_CREATE_SHARED_REMOVABLE" && Convert.ToUInt32(w[2], 16) == CoreInterface.CreateSharedRemovable);
+            Assert.Contains(Lines("const"), w => w[1] == "EMUSEN_CREATE_SHARED_CONSOLE" && Convert.ToUInt32(w[2], 16) == CoreInterface.CreateSharedConsole);
             Assert.Contains(Lines("enum"), w => w[1] == "emusen_event_kind.EMUSEN_EVENT_MEDIA_SEEK" && uint.Parse(w[2]) == CoreInterface.EventMediaSeek);
         }
 

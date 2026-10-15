@@ -250,27 +250,61 @@ pub struct Battery {
     pub suffix: String,
     /// Since 1.7: whom the file belongs with (EmuSen_CoreAPI.md §6.27).
     pub kind: BatteryKind,
+    /// Since 1.8, core info only: the medium the slot holds (`psx.card`), the words a frontend shows for the slot, and
+    /// the controller port it belongs to, each written only when set (EmuSen_CoreAPI.md §6.28).
+    pub medium: Option<String>,
+    pub label: Option<String>,
+    pub port: Option<u32>,
 }
 
 /// Since 1.7: `"game"`, memory that belongs with the game, written as nothing; or `"removable"`, a card or pak a
 /// player carries between games, which a core listing it keeps as it stands across a state load under
-/// `CREATE_SHARED_REMOVABLE`.
+/// `CREATE_SHARED_REMOVABLE`. Since 1.8, `"console"`: memory inside the console that every game shares, kept so
+/// under `CREATE_SHARED_CONSOLE`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BatteryKind {
     #[default]
     Game,
     Removable,
+    Console,
 }
 
 impl Battery {
+    fn of(which: u32, suffix: &str, kind: BatteryKind) -> Battery {
+        Battery { which, suffix: suffix.into(), kind, medium: None, label: None, port: None }
+    }
+
     /// A file that belongs with the game.
     pub fn game(which: u32, suffix: &str) -> Battery {
-        Battery { which, suffix: suffix.into(), kind: BatteryKind::Game }
+        Battery::of(which, suffix, BatteryKind::Game)
     }
 
     /// A card or pak a player carries between games.
     pub fn removable(which: u32, suffix: &str) -> Battery {
-        Battery { which, suffix: suffix.into(), kind: BatteryKind::Removable }
+        Battery::of(which, suffix, BatteryKind::Removable)
+    }
+
+    /// Since 1.8: memory inside the console, shared by every game.
+    pub fn console(which: u32, suffix: &str) -> Battery {
+        Battery::of(which, suffix, BatteryKind::Console)
+    }
+
+    /// Since 1.8: the medium the slot holds, `[a-z0-9.]+`.
+    pub fn medium(mut self, medium: &str) -> Battery {
+        self.medium = Some(medium.into());
+        self
+    }
+
+    /// Since 1.8: the slot's words for a frontend.
+    pub fn label(mut self, label: &str) -> Battery {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Since 1.8: the controller port the slot belongs to.
+    pub fn port(mut self, port: u32) -> Battery {
+        self.port = Some(port);
+        self
     }
 }
 
@@ -386,8 +420,27 @@ pub fn capability_names(bits: u64) -> Vec<&'static str> {
 
 /// A battery file's kind, written only where it is not the game's, so that a core of 1.6 or before writes what it wrote.
 fn write_kind(j: &mut Json, kind: BatteryKind) {
-    if kind == BatteryKind::Removable {
-        j.field_str("kind", "removable");
+    match kind {
+        BatteryKind::Game => {}
+        BatteryKind::Removable => {
+            j.field_str("kind", "removable");
+        }
+        BatteryKind::Console => {
+            j.field_str("kind", "console");
+        }
+    }
+}
+
+/// Since 1.8, in core info: a slot's medium, label and port, each written only when set, so a core of 1.7 writes what it wrote.
+fn write_slot(j: &mut Json, b: &Battery) {
+    if let Some(m) = &b.medium {
+        j.field_str("medium", m);
+    }
+    if let Some(l) = &b.label {
+        j.field_str("label", l);
+    }
+    if let Some(p) = b.port {
+        j.field_uint("port", p as u64);
     }
 }
 
@@ -469,6 +522,7 @@ pub fn info_json(info: &Info, capabilities: u64, battery: &dyn Fn(&str) -> Optio
             for b in &files {
                 j.begin_object().field_uint("which", b.which as u64).field_str("suffix", &b.suffix);
                 write_kind(&mut j, b.kind);
+                write_slot(&mut j, b);
                 j.end_object();
             }
             j.end_array();

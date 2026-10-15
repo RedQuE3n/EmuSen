@@ -48,7 +48,10 @@
             "properties": {
               "which": { "type": "integer", "minimum": 0 },
               "suffix": { "type": "string" },
-              "kind": { "type": "string", "enum": ["game", "removable"] }
+              "kind": { "type": "string", "enum": ["game", "removable", "console"] },
+              "medium": { "type": "string", "pattern": "^[a-z0-9.]+$" },
+              "label": { "type": "string" },
+              "port": { "type": "integer", "minimum": 0 }
             }
           }
         }

@@ -55,9 +55,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(Full.Available, Full.Report);
             Assert.True(Plain.Available, Plain.Report);
             Assert.Same(Full, CoreLibrary.Open(LibraryPath("v1_test_core")));
-            Assert.Equal(("v1-test-core", 0x1FFFFFUL, 0x10007u, 4), (Full.Info.Id, Full.Capabilities, Full.AbiVersion, Full.Settings.Count));
+            Assert.Equal(("v1-test-core", 0x1FFFFFUL, 0x10008u, 4), (Full.Info.Id, Full.Capabilities, Full.AbiVersion, Full.Settings.Count));
             Assert.Equal(("v1-plain-core", 0UL), (Plain.Info.Id, Plain.Capabilities));
-            Assert.EndsWith("core ABI 1.7", Full.Report);
+            Assert.EndsWith("core ABI 1.8", Full.Report);
             Assert.Equal(new[] { ".tst" }, Full.Info.Systems.Single().Extensions);
             Assert.Equal("the image is empty", Full.Words(-9));
 
@@ -237,6 +237,17 @@ namespace EmuSen.WiseMan.Cores
             ((ICheatRegistryHost)plain).Cheats = handed;
             plain.ApplyCheats();
             Assert.Equal((byte)0x55, plain.ReadSpace("RAM", 5));
+        }
+
+        // Since 1.8 core info's slots carry a medium and a label, a console file its kind, and a kind this host does not know reads as the game's - see EmuSen_CoreAPI.md §6.28.
+        [Fact]
+        public void Core_infos_battery_slots_are_read_with_kind_medium_and_label()
+        {
+            var listed = Full.Info.Systems.Single().Battery!;
+            Assert.Equal(new (uint, CoreBatteryKind, string?, string?, int?)[] { (0, CoreBatteryKind.Game, null, null, null), (1, CoreBatteryKind.Removable, "test.card", "Card slot", null), (2, CoreBatteryKind.Console, "test.memory", "Inside the console", null) },
+                listed.Select(b => (b.Which, b.Kind, b.Medium, b.Label, b.Port)));
+            var read = CoreDescriptorReader.Info(Full.Info.Text.Replace("\"kind\":\"console\"", "\"kind\":\"later\"").Replace("\"label\":\"Card slot\"", "\"label\":\"Card slot\",\"port\":1"));
+            Assert.Equal((CoreBatteryKind.Game, 1), (read.Systems.Single().Battery![2].Kind, read.Systems.Single().Battery![1].Port));
         }
 
         [Fact]

@@ -30,6 +30,13 @@ fn main() {
     let bios = std::env::var_os("NEPHRITE_BIOS").map(|p| std::fs::read(p).expect("the boot ROM"));
     let model = default_model(&media);
     let mut m = Machine::with_disc(&[], media, model, bios, Some(disc));
+    // `NEPHRITE_BRAM` names a backup RAM image to start from, as a battery file would be.
+    if let Some(p) = std::env::var_os("NEPHRITE_BRAM") {
+        let b = std::fs::read(p).expect("the backup RAM");
+        let ram = &mut m.genesis.hw.mcd.as_mut().unwrap().hw.bram;
+        let n = b.len().min(ram.len());
+        ram[..n].copy_from_slice(&b[..n]);
+    }
     let mut audio = vec![0i16; 4096];
     // `NEPHRITE_WAV` names a file for the sound as a 16-bit stereo WAV at the output rate.
     let wav_path = std::env::var_os("NEPHRITE_WAV");

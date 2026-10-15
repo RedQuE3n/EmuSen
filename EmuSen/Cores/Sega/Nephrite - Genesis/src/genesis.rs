@@ -374,10 +374,19 @@ impl Hw {
     /// cycle late, so a transfer from it reads the word before the one addressed (the Mega-CD Hardware Manual's
     /// "precautions in using DMA of the VDP").
     fn dma_read(&mut self, a: u32) -> u16 {
-        let a = a & 0xFF_FFFF;
-        if (0xC0_0000..=0xDF_FFFF).contains(&a) {
+        if (0xC0_0000..=0xDF_FFFF).contains(&(a & 0xFF_FFFF)) {
             0
-        } else if self.mcd_low && (0x20_0000..0x24_0000).contains(&a) {
+        } else if self.attached {
+            self.attached_dma_read(a)
+        } else {
+            self.read16(a)
+        }
+    }
+
+    #[inline(never)]
+    fn attached_dma_read(&mut self, a: u32) -> u16 {
+        let a = a & 0xFF_FFFF;
+        if self.mcd_low && (0x20_0000..0x24_0000).contains(&a) {
             self.read16(0x20_0000 | (a.wrapping_sub(2) & 0x3_FFFF))
         } else {
             self.read16(a)

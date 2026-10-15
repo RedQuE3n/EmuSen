@@ -1670,3 +1670,19 @@ CPUs' disputes in their own record pages.
   (the ramp), `samples_are_sign_magnitude_scaled_by_env_and_pan_and_limited` (the low-pass),
   `a_pause_when_stopped_seeks_to_the_head_and_pauses_there`.
 - Implemented in: stage 9 step 3's commit.
+
+### D-40. A TOC request to a stopped drive whose TOC has been read finds it ready (status 9)
+- Opened: 2026-10-15, at stage 9 step 4, when Sonic CD (Europe) on a European BIOS stood at "Press RESET to open the CD
+  tray".
+- Documents read: krikzz's `cdd-cmd-info.txt` ("9: disk initialized and stopped. this state only after toc cmd5 or toc
+  cmd2 first time"); the LL logs (`read-stopall`: after a stop the drive answers `0F.000000.5B`, stopped with no
+  report, for the 89 exchanges the log has left, no TOC being asked for).
+- Test program: none; the registers a European BIOS drove. It asked for the TOC's tracks and length and track 1's
+  start, stopped the drive when the start had not come 44 frames later (the lead-in's cycle, D-33, takes up to 114
+  exchanges), asked for the tracks and the length again, and with the answers carrying status 0 asked for nothing more.
+- Referee: none read.
+- Conclusion: argued. A stopped drive that has read its TOC goes to status 9 when a TOC request comes, as it does the
+  first time; the note's "first time" read as the TOC's first reading, not the state's only entry. With it the BIOS
+  asked for track 1's start again and the disc booted, at frame 840 as Genesis Plus GX's does.
+- Pinned by: `a_toc_request_after_a_stop_finds_the_drive_ready`.
+- Implemented in: stage 9 step 4's commit.

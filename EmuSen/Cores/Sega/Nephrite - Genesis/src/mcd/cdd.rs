@@ -177,6 +177,9 @@ impl Cdd {
             0x2 => {
                 if !self.toc_read && self.mode == Mode::Stopped(status::STOPPED) {
                     self.mode = Mode::ReadingToc(TOC_READ);
+                } else if self.mode == Mode::Stopped(status::STOPPED) {
+                    // Stopped with its TOC read, a TOC request finds it ready again (krikzz's "9 only after toc cmd"; D-40).
+                    self.mode = Mode::Stopped(status::READY);
                 }
                 self.report = c[3] & 15;
                 if self.report == 5 {
@@ -605,6 +608,19 @@ pub(crate) mod tests {
         }).collect();
         assert_eq!(statuses[0], status::SEEKING);
         assert_eq!(*statuses.last().unwrap(), status::PAUSED, "{statuses:?}");
+    }
+
+    #[test]
+    fn a_toc_request_after_a_stop_finds_the_drive_ready() {
+        let mut c = Cdd::new(Some(disc(300, 75)), 0);
+        c.set_hock(true);
+        ready(&mut c);
+        send(&mut c, [1, 0, 0, 0, 0, 0, 0, 0, 0]);
+        c.exchange();
+        assert_eq!(c.status[0], status::STOPPED);
+        send(&mut c, [2, 0, 0, 4, 0, 0, 0, 0, 0]);
+        c.exchange();
+        assert_eq!(&line(&c)[..9], "94.010200");
     }
 
     #[test]

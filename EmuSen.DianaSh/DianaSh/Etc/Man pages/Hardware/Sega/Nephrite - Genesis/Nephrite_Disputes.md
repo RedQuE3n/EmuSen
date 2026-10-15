@@ -1552,3 +1552,36 @@ CPUs' disputes in their own record pages.
   Genesis's is not known here.
 - Pinned by: `an_audio_track_played_reaches_the_mix_at_the_faders_volume`.
 - Implemented in: stage 8 step 5's commit.
+
+### D-36. The drive at power-on: it spins up whether or not the host clocks it, and once spun up and stopped with no TOC asked for it reports `00.000000.0F`, its flags nibble 0; a play or a seek during the TOC's read is taken
+- Opened: 2026-10-15, at stage 9's first step, when a player's BIOS stood at its first screen (`Nephrite_Native.md`
+  §55). D-33 had the drive spin up from HOCK's first rise and report `00.000000.1E` once spun up, flags bit 0 set
+  as for every state but play.
+- Documents read: the Hardware Manual §3-6 (`$FF8036`: HOCK "starts communication to the CDD"; DRS and DTS);
+  krikzz's notes (`cdd-cmd-info.txt`: "F0: 0-play, 1-pause/stop"; "9 only after toc cmd"); the LL logs again,
+  counted by status and flags nibble.
+- Test program: a drive probe written for the purpose (`tools/cddprobe/`, 68000 assembly, run as the Sega CD's boot
+  ROM in mode 2): the sub CPU clocks the drive, answers every level 4 with a NOP and records each status with the
+  stopwatch in PRG-RAM, in four phases (from power-on; after a reset of the peripherals; after one TOC request; after
+  HOCK dropped and raised). Run in Nephrite and, as a black box, in Genesis Plus GX through the probe. Genesis Plus
+  GX answers `00.000000.0F` once and then `90.000000.06`, status 9 with its flags 0, with no TOC requested and no
+  busy period; Nephrite answered `0F.000000.1F` for its spin-up and then `00.000000.1E`. The LL logs, a console's
+  drive under mcd-verificator, have flags bit 0 set in every stopped, seeking and busy status (`9F`, `94`, `0F`,
+  `2F`) and clear in play (`10`); their one status from a drive before its first busy exchange, in
+  `LL-read-sector`, is `00.000000.0F`.
+- Referee: none read.
+- Conclusion: three rules, argued from the observations, none measured on a console. (1) Spun up and stopped with
+  its TOC not asked for, the drive reports `00.000000.0F`, flags 0: the LL logs' one idle status before a busy
+  period, and the reference's idle flags. With bit 0 set there, a BIOS clocking the drive never asked it for its TOC
+  and dropped HOCK and reset the peripherals at the next level 2 (§55.2). (2) The drive spins up from power-on: a BIOS
+  that met a busy status in its first exchanges did the same, so a drive spinning from HOCK costs every boot two
+  restarts (about a second) that a drive already turning, at the BIOS's first clock 1.25 s after power-on, does not;
+  the spin-up stays 75 exchanges, the LL logs' busy period from a host's first exchange (61 to 79), the host there
+  clocking the drive from its start. (3) Rule 2 leaves a drive idle when mcd-verificator's CDC INIT asks for its TOC,
+  its status then read before the request is taken, so the program's wait for a busy report ends at once and its
+  play follows 17 exchanges later, inside the TOC's read of D-33; the program passes on a console, so a play or a seek
+  during that read is taken, the read cut short. What a reset of the peripherals does to the drive is unchanged:
+  nothing, as rule 2 needs, the drive being its own microcontroller.
+- Pinned by: `the_drive_spins_up_from_power_on_and_idles_with_its_flags_clear`, `a_play_during_the_tocs_read_is_taken`,
+  `the_drive_spins_up_reads_its_toc_and_answers` (the idle line), `mcd_verificator_passes_every_test` (CDC INIT).
+- Implemented in: stage 9's first commit.

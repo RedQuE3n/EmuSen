@@ -285,6 +285,10 @@ None is included in this repository.
 - Sanyo, *LC8950 Real-Time Error Correction and Host Interface Processor Design Manual*, revised for the LC8951,
   as hosted by Sega Retro: the CDC's registers, decoder and host transfer.
 - Microsoft's RIFF WAVE format, as commonly documented, for a cue sheet's audio tracks in `emusen-disc`.
+- Plutiedev, [Sub CPU in mode 1](https://plutiedev.com/subcpu-in-mode1): the version register's bit 5 reading 0 with
+  the Sega CD attached.
+- A drive probe written for the purpose (`tools/cddprobe/` in the crate), assembled with GNU binutils for m68k, run as
+  the Sega CD's boot ROM in Nephrite and in the reference emulators below to record what the drive reports.
 
 **Cheat codes**
 

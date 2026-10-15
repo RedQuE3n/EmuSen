@@ -33,9 +33,37 @@ fn main() {
     let mut audio = vec![0i16; 4096];
     let (mut peak, mut sum) = (0i32, 0f64);
     let mut last = (0u8, 0u8, false, 0u8, 0u8, 0u8);
+    // `NEPHRITE_SEEN=from:to` prints each register access in those frames, a run of the same access as one line.
+    let seen_frames: Option<(i64, i64)> = std::env::var("NEPHRITE_SEEN").ok().map(|v| {
+        let p: Vec<i64> = v.split(':').map(|x| x.parse().expect("frames")).collect();
+        (p[0], p[1])
+    });
+    let mut run: Option<(nephrite::mcd::Seen, u32)> = None;
     while m.frames < frames {
+        if let Some((from, to)) = seen_frames {
+            let s = &mut m.genesis.hw.mcd.as_mut().unwrap().hw;
+            if (from..to).contains(&m.frames) {
+                s.seen.get_or_insert_with(Vec::new);
+            } else {
+                s.seen = None;
+            }
+        }
         m.pads[0] = presses.iter().filter(|p| (p.0..p.0 + p.2).contains(&m.frames)).fold(0, |b, p| b | p.1);
         m.advance();
+        if let Some(list) = m.genesis.hw.mcd.as_mut().unwrap().hw.seen.as_mut().map(std::mem::take) {
+            for a in list {
+                match run.as_mut() {
+                    Some((r, n)) if r.what == a.what && r.reg == a.reg && r.value == a.value => *n += 1,
+                    _ => {
+                        if let Some((r, n)) = run.take() {
+                            println!("  {:12} {:?} {:03X} {:04X} x{}", r.clock, r.what, r.reg, r.value, n);
+                        }
+                        run = Some((a, 1));
+                    }
+                }
+            }
+            println!("  -- frame {}", m.frames);
+        }
         loop {
             let n = emusen_native::core::Core::drain_audio(&mut m, &mut audio, 2048);
             if n == 0 {
@@ -62,5 +90,9 @@ fn main() {
             println!("frame {:5}: drive status {:X} head {:6} report {}  cdc dd {} edt {}  fader {:04X}  audio peak {:5} rms {:7.1}", m.frames, s.cdd.status[0], s.cdd.head, s.cdd.report, s.cdc.dd, s.cdc.edt, s.fader, peak, (sum / (every as f64 * 1600.0)).sqrt());
             (peak, sum) = (0, 0.0);
         }
+    }
+    // `NEPHRITE_PRG` names a file for PRG-RAM at the end, for a homebrew boot ROM's records; never with a player's BIOS.
+    if let Some(p) = std::env::var_os("NEPHRITE_PRG") {
+        std::fs::write(p, &m.genesis.hw.mcd.as_ref().unwrap().hw.prg).expect("PRG-RAM");
     }
 }

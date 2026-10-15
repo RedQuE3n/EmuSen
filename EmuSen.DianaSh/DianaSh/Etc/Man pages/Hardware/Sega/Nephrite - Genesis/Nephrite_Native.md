@@ -4055,3 +4055,92 @@ CD build's README. Its own binary disassembled at IRQ TEST's checks with Beryl's
 not opened: `cd-log/BI-mcd-tst/` and `cd-log/sonic-bios/`, logs made under a BIOS. Not read: any emulator's source,
 any RTL, any BIOS image, listing, trace or log; the player's BIOS was given to Nephrite as a file and nothing of it
 was read or printed. The five discs were read only through the drive and `emusen-disc`, as a console reads them.
+
+## 55. Stage 9, first step: the player's BIOS past its first screen's stall (2026-10-15)
+
+§53.4 left every disc standing at a player's BIOS's first screen, and §54.3 listed where to look. This step looked at
+the devices' register interfaces only, as the firmware rule of §49.1 requires, and found the stall in the drive.
+
+### 55.1 What was built to look
+
+- **A watch on the registers** (`Sub::seen`, `mcd::Seen`): when a development tool asks for it, every access at the
+  attachment's register interfaces is kept with its sub clock: the sub CPU's reads and writes of `$FF8000`-`$FF81FF`,
+  the PCM chip's registers, the main CPU's of `$A12000`-`$A1203F`, each level the sub CPU takes, and each time the sub
+  CPU begins to wait for Word RAM. Nothing of memory is kept. `examples/disc.rs` prints it for a span of frames
+  (`NEPHRITE_SEEN`), a run of one access as one line, and writes PRG-RAM at the end (`NEPHRITE_PRG`) for a homebrew
+  boot ROM's records, never with a player's BIOS. The watch is `None` in every other use, at the cost of one branch
+  on a register access.
+- **A drive probe** (`tools/cddprobe/`, 68000 assembly, D-36): a boot ROM for mode 2 whose sub program records every
+  status the drive sends while it is answered with NOPs, through four phases.
+- **The references in the BIOS's slot** (§49.6 Q3): the probe's libretro backend given a scratch system folder whose
+  BIOS names are links to a program's file, so the program runs as the Sega CD's boot ROM. Genesis Plus GX and
+  PicoDrive run mcd-verificator and the drive probe this way; BlastEm loads neither.
+
+### 55.2 What the devices saw
+
+With a model 1 American BIOS and Sonic CD (USA), the gate array and the drive saw this, by frame: the sub CPU
+released at frame 4; the interrupt mask written with levels 2 and 4 and HOCK set at frame 75; one exchange, its
+status `0F.000000.1F` read at `$FF8038`-`$FF8041` after `$FF8037` was read with DRS 0, a NOP sent, `$FF8034` read
+and the LEDs written; then the main CPU's level 2, and the sub side's mask cleared, HOCK cleared and the peripherals
+reset (`$FF8001` written 0). After RES0 the same again, every time a level 2 followed an exchange, whether the status
+was busy (`0F`) or the stopped `00.000000.1E` of D-33. A level 2 before any exchange changed nothing, and with level
+4 withheld nothing was reset. The sub side never read `$FF8058`-`$FF8068`, the subcode buffer or the PCM chip before
+this point, and never touched backup RAM, PCM RAM or an unmapped address: none of §54.3's unbuilt registers was
+involved.
+
+Varied one at a time at the registers, each a run of 300 frames: the version bits of `$FF8000` (all sixteen values),
+EFDT and the de-emphasis bits of `$FF8034`, DM and DTS of `$FF8036`, DRS set for up to 3,000 sub clocks after each
+exchange, the first status after HOCK all zeros (as three of the LL logs open), and the drive reading its TOC on its
+own after the spin-up: none changed the reset. DRS held at 1 for 20,000 clocks, or always, stopped it, the status
+then never read (DRS polled and, after about 6,700 clocks, written 0, which the manual says aborts the reception).
+**The flags nibble decided it**: with bit 0 clear in the stopped, not busy status before a TOC is asked for, the
+first level 2 after such a status reset nothing and the drive was asked for its TOC; a busy status earlier in the
+same attempt still led to a reset. D-36 has the drive probe's evidence and the three rules taken from it.
+
+### 55.3 What changed
+
+- **The drive** (D-36): it spins up from power-on, 75 exchanges, whether or not HOCK is set; spun up and stopped with
+  no TOC asked for, it reports `00.000000.0F`; a play or a seek during the TOC's read is taken.
+- **The version register's bit 5** reads 0 with the Sega CD attached ("Check if bit 5 of HwVersion is 0", plutiedev's
+  "Sub CPU in mode 1"); a cartridge's console keeps 1.
+
+### 55.4 The discs on the player's BIOS now (Nephrite)
+
+The four American discs on a model 1 American BIOS, 1,800 frames, Start at frame 900: the drive is asked for its TOC
+at frame 79, answers status 9 at frame 96, and the communication flags move from frame 82 on; the sub side writes the
+graphics ASIC's eight registers once, the last the trace vector base, with level 1 enabled, and the PCM chip's
+registers from then on; the drive seeks and pauses near the disc's start (sector 152 to 157 at frame 1,800), the CDC
+interrupts (level 5) are taken, and the BIOS's music plays (peak about 3,300 of 32,767). The picture is the first
+screen's background and its copyright line without the logo, which Genesis Plus GX draws over it by frame 180 with
+"Press the START BUTTON." below; Start does not leave it. The ASIC has no level 1 to give (step 9.1). Sonic CD (Europe)
+on a model 1 European BIOS shows its first screen and, from frame 1,080, "Press RESET to open the CD tray.", the
+drive stopped with no data read: taken up after the ASIC (§56 on).
+
+### 55.5 mcd-verificator in the references' slot
+
+Each run on the 240p disc, 1,800 frames, the verdicts read from the picture:
+
+| Test | Nephrite | Genesis Plus GX | PicoDrive |
+|---|---|---|---|
+| RAM CART | OK (none) | OK | ERROR: 01 |
+| COLOR CALC | OK | OK | OK |
+| VAR TESTS | OK | OK | ERROR: 02 (17) |
+| IRQ TEST | OK | ERROR: 08 (850) | ERROR: 06 (127) |
+| REG X000, X002, 2006, X00C | OK | OK | OK |
+| REG 8030 | OK | ERROR: 07 (1281) | ERROR: 07 (1281) |
+| CDC REGS, PROG RAM, WORD RAM, WRAM PMOD | OK | OK | OK |
+| CDC INIT | OK | ERROR: 02 (no CDC interrupt in time) | OK |
+| CDC FLAGS | OK | not run | ERROR: 41 (74) |
+| CDC DMA2 | OK | not run | OK |
+| CDC DMA3 | OK | not run | ERROR: 44 |
+| CDC DMA1 | OK | not run | OK |
+
+BlastEm loads no Sega CD from the slot. Neither reference passes everything krikzz's console passes, and they fail
+different tests; REG 8030's 0x07 in both, the timer's period, Nephrite passes as the console does (§50.3).
+
+### 55.6 Measured (2026-10-15)
+
+- **The crate's tests**: 159 pass, two new for D-36 and the version bit in the boot-ROM-less test.
+- **The drive probe** in Nephrite after the change: 67 busy exchanges after its HOCK, early in its first frames, then
+  `00.000000.0F`; after a reset of the peripherals the same idle status at once; a TOC request busy for 20 exchanges,
+  then `94.013500.18`.

@@ -193,6 +193,10 @@ impl Genesis {
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
         g.hw.io.jcart = jcart;
+        // The version register's bit 5 reads 0 with an expansion unit, the Sega CD, attached (plutiedev's "Sub CPU in mode 1").
+        if g.hw.mcd.is_some() {
+            g.hw.io.version &= !0x20;
+        }
         // The debugger's numbers: each processor's, and the bus its stores are reported in (crate::debugger).
         (g.cpu.processor, g.cpu.space) = (0, crate::debugger::M68KBUS_ID);
         (g.z80.processor, g.z80.space) = (1, crate::debugger::Z80BUS_ID);

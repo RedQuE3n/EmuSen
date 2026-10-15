@@ -322,6 +322,16 @@ load_ip:
         move.w  BOOT_BUFFER+$3A,GA_STA0+4
         moveq   #6,d0
         bsr     set_state
+        ; The hand-over: the main CPU acknowledges with $FFFF in its first command word, the statuses are cleared, and
+        ; the main CPU clears its commands, so that the program starts with every communication word 0.
+.ack:   cmp.w   #-1,GA_CMD0
+        bne     .ack
+        lea     GA_STA0,a0
+        moveq   #7,d0
+.sta:   clr.w   (a0)+
+        dbra    d0,.sta
+.clr:   tst.w   GA_CMD0
+        bne     .clr
         andi    #$FE,ccr
         rts
 .fail:  ori     #1,ccr
@@ -362,10 +372,6 @@ load_sp:
 ; The user program's turn (BM §5-3): its initialisation before level 2 is enabled, then its main routine, called with
 ; _USERMODE and again after each level 2.
 run_user:
-        lea     GA_STA0,a0
-        moveq   #7,d0
-.sta:   clr.w   (a0)+
-        dbra    d0,.sta
         lea     CALLSEEN,a0         ; from here the calls are the program's
         moveq   #9,d0
 .seen:  clr.b   (a0)+

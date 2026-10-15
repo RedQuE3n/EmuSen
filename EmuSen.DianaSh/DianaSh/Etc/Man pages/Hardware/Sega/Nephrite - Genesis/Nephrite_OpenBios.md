@@ -293,6 +293,21 @@ suite's main menu is on screen ("Test Patterns", "Video tests", "Audio tests", "
 its V-INT installed through `$0368`. `the_open_bios_boots_the_240p_suite_to_its_menu` holds it. The crate's 180 tests
 pass, mcd-verificator's eighteen in mode 2 among them, unchanged.
 
+### 8.1 The five discs, first runs (2026-10-15)
+
+Each of the five discs, run on the open BIOS for 2,400 frames with no pad pressed, after two rules of the hand-over that
+Sonic CD's program needs (D-45: interrupts open and every communication word 0; D-46: the Z80 running, its bus free):
+
+| Disc | What the game shows by frame 2,400 |
+|---|---|
+| Chuck Rock II (USA) | its own pictures: a prehistoric landscape with palms and rocks, its intro under way |
+| Lunar - Eternal Blue (USA) | its own message, "Backup RAM is not formatted! Please consult your system manual for details on how to format RAM before playing. Press any key" |
+| Mickey Mania (USA) | a black screen at frames 1,200 and 2,400, its main program running |
+| Sonic CD (USA, Europe) | its own message over Dr. Robotnik: "Internal RAM is not initialized. Use the SEGA-CD control panel to format the RAM." |
+
+The two messages are the games' answers to `_BURAM`, which finds no RAM until step 10.4 (§5 Q2). Not yet compared with
+the player's BIOS.
+
 ## 9. Reading log (stage 10)
 
 Opened and read: `Nephrite_Plan.md` whole; `Nephrite_Native.md` §49–§52, §53.1–§53.3, §53.5, §54.1, §54.2, §54.3 from

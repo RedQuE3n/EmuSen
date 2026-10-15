@@ -1750,3 +1750,36 @@ CPUs' disputes in their own record pages.
   suite's loads; argued as the BIOS's behaviour, the suite having been made on consoles.
 - Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
 - Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-45. The hand-over: the initial program starts with the interrupt mask at 0, V-INT on, and every communication word 0
+- Opened: 2026-10-15, at stage 10. Sonic CD's initial program sets its own V-INT handler (one that raises the sub
+  CPU's level 2) and then waits on a command its system program answers only after level 2, without ever lowering the
+  mask; started with the mask at 7, it waited for ever. Started while the boot's own state code still stood in the sub
+  CPU's first status word, it took that word for its command's answer and jumped into Word RAM before its program was
+  there.
+- Documents read: BM §4-2 and §5-3 (the user calls wait for level 2); the Technical Bulletins p. 18 (the main CPU must
+  raise level 2 every 16 ms while the system program loads). Neither says what the status register or the
+  communication words hold at the hand-over.
+- Test program: Sonic CD (USA and Europe) on the open BIOS: with the mask at 0 and the words cleared, its program goes on
+  to its own screens.
+- Referee: none.
+- Conclusion: the main CPU starts the initial program with the status register at `$2000` and the VDP's V-INT on, the
+  boot's V-INT raising level 2 until the program sets its own; the boot's last exchange (the main CPU's `$FFFF` in its
+  first command word, the sub CPU's statuses cleared, then the main CPU's commands cleared) leaves every communication
+  word 0 before the program's first instruction. Measured by the game; argued as the BIOS's, the game having been made
+  on consoles.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`; the discs' runs (`Nephrite_OpenBios.md` §8).
+- Implemented in: stage 10's commit "the discs after the hand-over".
+
+### D-46. The hand-over: the Z80 out of reset, running a DI and a HALT, its bus released
+- Opened: 2026-10-15, at stage 10. Sonic CD's program asks for the Z80's bus and waits for the grant; the open BIOS had
+  left the Z80 held in reset, which never grants it.
+- Documents read: plutiedev, "Using the Z80" (the Z80's RAM cannot be reached while the Z80 is held in reset; the bus
+  is asked for and the grant read back).
+- Test program: Sonic CD on the open BIOS: with the Z80 running a DI and a HALT and its bus free, the program takes the
+  bus and goes on.
+- Referee: none.
+- Conclusion: the BIOS loads `DI`, `HALT` at the Z80's `$0000`, resets it as plutiedev's sequence does, and releases
+  both its reset and its bus. Measured by the game; what a player's BIOS leaves in the Z80 no document says.
+- Pinned by: the discs' runs (`Nephrite_OpenBios.md` §8).
+- Implemented in: stage 10's commit "the discs after the hand-over".

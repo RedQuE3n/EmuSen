@@ -101,9 +101,18 @@ cold:   lea     STACK_TOP,sp
         moveq   #(jump_template_end-jump_template)/2-1,d0
 .jumps: move.w  (a0)+,(a1)+
         dbra    d0,.jumps
-        ; The Z80 held in reset with its bus taken, and the PSG silent.
-        move.w  #$100,Z80_BUSREQ
+        ; The Z80 given a DI and a HALT and let run, its bus released: a program may ask for the bus and wait for the
+        ; grant, which a Z80 held in reset never gives (plutiedev, "Using the Z80"; D-46). The PSG silent.
         move.w  #0,Z80_RESET
+        move.w  #$100,Z80_BUSREQ
+        move.w  #$100,Z80_RESET
+        move.b  #$F3,$A00000
+        move.b  #$76,$A00001
+        move.w  #0,Z80_RESET
+        moveq   #20,d0
+.zw:    dbra    d0,.zw
+        move.w  #$100,Z80_RESET
+        move.w  #0,Z80_BUSREQ
         move.b  #$9F,PSG
         move.b  #$BF,PSG
         move.b  #$DF,PSG
@@ -146,6 +155,9 @@ start_ip:
         move    #$2700,sr
         move.w  #$8134,d0           ; the display off, V-INT on
         bsr     vdp_reg
+        move.w  #-1,GA_CMD0         ; the hand-over (sub.s, load_ip)
+.sta:   tst.w   GA_STA0
+        bne     .sta
         lea     GA_CMD0,a0
         moveq   #7,d0
 .cmd:   clr.w   (a0)+
@@ -158,6 +170,8 @@ start_ip:
         lea     STACK_TOP,sp
         moveq   #0,d0
         moveq   #0,d1
+        ; Interrupts open, V-INT on: a program may wait on its own V-INT without setting the mask (D-45).
+        move    #$2000,sr
         jmp     (a0)
 
 ; The sub CPU: the gate array reset (HM §4-1; plutiedev), the sub CPU held and its bus taken, its program into PRG-RAM

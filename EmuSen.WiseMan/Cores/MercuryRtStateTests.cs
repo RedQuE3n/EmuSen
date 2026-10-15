@@ -277,6 +277,7 @@ namespace EmuSen.WiseMan.Cores
             foreach (string field in new[] { "_cycleFraction", "_leftCapacitor", "_rightCapacitor" }) layout.Line("Bus.Apu." + field, "f64", 8);
             layout.Line("Bus._oamDmaStartDelay", "i32", 4);
             layout.Line("Bus.Apu.Pulse1.SweepNegated", "bool", 1);
+            layout.Line("Bus.Ppu.LycWhileOff", "bool", 1);
             Assert.Equal(state.Length, layout.Offset);
             return layout.Text;
         }

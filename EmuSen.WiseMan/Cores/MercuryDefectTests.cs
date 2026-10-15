@@ -202,8 +202,8 @@ namespace EmuSen.WiseMan.Cores
             return stream.ToArray();
         }
 
-        // What follows the walks since version 10: the mixer's cycle fraction and two capacitors, OAM DMA's start delay, the sweep's flag - see Mercury_Native.md §13.
-        private const int MixerBytes = 3 * 8 + 4 + 1;
+        // What follows the walks since version 11: the mixer's cycle fraction and two capacitors, OAM DMA's start delay, the sweep's flag, the frozen LY=LYC bit - see Mercury_Native.md §13.
+        private const int MixerBytes = 3 * 8 + 4 + 1 + 1;
 
         private static string Sha(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16];
 
@@ -263,8 +263,8 @@ namespace EmuSen.WiseMan.Cores
             _ => 0u,
         };
 
-        // What a version-10 state carries after the walks, which version 5 does not: the mixer's three doubles, OAM DMA's start delay, the sweep's flag - see Mercury_Native.md §10, §13.
-        private const int MixerStateBytes = 3 * sizeof(double) + sizeof(int) + sizeof(bool);
+        // What a version-11 state carries after the walks, which version 5 does not: the mixer's three doubles, OAM DMA's start delay, the sweep's flag, the frozen LY=LYC bit - see Mercury_Native.md §10, §13.
+        private const int MixerStateBytes = 3 * sizeof(double) + sizeof(int) + sizeof(bool) + sizeof(bool);
 
         // Real games' version-5 states from the unmodified build, at frames 3000 and 3600, from a directory kept outside the repository; absent, not run.
         [Fact]

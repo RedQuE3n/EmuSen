@@ -12,7 +12,7 @@ pub const CYCLES_PER_FRAME: i64 = 70_224;
 
 /// "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
 pub const STATE_MAGIC: u32 = 0x4352_454D;
-pub const STATE_VERSION: i32 = 10;
+pub const STATE_VERSION: i32 = 11;
 /// Version 8 adds the mixer after the walks; earlier versions still load, the mixer kept (Mercury_Native.md §10).
 const MIXER_IN_STATE: i32 = 8;
 /// The oldest version a load still reads, its retired fields read and dropped (Mercury_Native.md §9.3).

@@ -3071,3 +3071,67 @@ after a trigger. That position depends on the exact delay between the trigger an
 Docs nor GBCTR gives, and which the ROMs encode only as a checksum. Finding it by trying delays until the checksum
 matches would be fitting a model to a test, not deriving it from evidence, and the only sources that state it are the
 references this audit does not use. **Out of reach**, with the rules recorded for when a document gives the timing.
+
+### 13.11 Step K: STAT with the LCD off, and line 144's mode-2 interrupt
+
+The referee's §2.6 names six rules; their ROMs' sources are the evidence, Pan Docs' `STAT.md` adding little beyond "the
+PPU mode reports 0 when the PPU is disabled". Three rules are built here; the other three are recorded as one piece of
+work for later (§13.11.3).
+
+#### 13.11.1 The rules built
+
+- **Rule 4, the comparison freezes with the LCD off** (`ppu/stat_lyc_onoff.s`, rounds 1–3): "the bit should be retained
+  and not reset to 0"; "changing LYC should not have an effect, because the comparison clock is not running";
+  "enabling the PPU starts the comparison clock again". Mercury compared `Ly == Lyc` live, with LY parked at 0.
+- **Rule 5, no STAT interrupt with the LCD off** (the same rounds: a frozen comparison holding the line "should suppress
+  the interrupt", and round 4 expects one when the comparison starts matching as the LCD comes on). Mercury dropped the
+  line to low when the LCD went off and recomputed it on every STAT or LYC write, so an LYC write with the LCD off could
+  raise the interrupt.
+- **Rule 2, the mode-2 source at line 144.** `ppu/vblank_stat_intr-GS.s` (verified on DMG, MGB, SGB, SGB2; fails on the
+  Color): "if bit 5 (mode 2 OAM interrupt) is set, an interrupt is also triggered at line 144 when vblank starts ...
+  vblank and stat_m2_144 are triggered at the same time". Its sibling `misc/ppu/vblank_stat_intr-C.s` (verified on CGB,
+  AGB, AGS) says that on the Color "stat_m2_144 is triggered one cycle before a vblank is". Mercury raised neither.
+
+**The proof** (`a6c492ea`): the freeze, the silence with the LCD off and the DMG's line-144 interrupt failed on both
+engines; the comparison that starts matching at LCD-on passed. That commit's Color case expected no interrupt at line
+144, the reading of `-GS`'s "fail: CGB" before its `-C` sibling was read; the `-C` header corrected it, and the Color's
+claim (`On_the_color_line_144s_mode_2_interrupt_comes_a_machine_cycle_before_vblank`) was written with its fix. Its
+before-and-after is the corpus: `vblank_stat_intr-C` failed under Game Boy Color and now passes.
+
+**The fix**, the same in both engines:
+
+- the comparison is taken when the LCD goes off (`Ppu.LycWhileOff`, `lyc_while_off`) and answers STAT's bit 2 and the
+  LYC source until the LCD comes back, when the live comparison resumes;
+- the STAT line does not move while the LCD is off: it keeps its level, and nothing written then can raise it;
+- on a DMG the mode-2 source counts for the update that starts line 144; on a CGB it is raised four T-cycles (a
+  machine cycle) before line 144, from the dot loop's visible-line branch.
+
+**State version 11.** The frozen comparison is machine state for as long as the LCD is off, so it joins the tail:
+both engines write 11 and read 5 to 11, and a state before 11 loads with the bit clear
+(`The_frozen_comparison_lives_in_version_11s_tail`). The four synthetic programs' state digests moved by the version and
+the byte only, their version-7 forms unchanged.
+
+**The corpus.** `ppu/vblank_stat_intr-GS` passes under Auto and Game Boy, and `misc/ppu/vblank_stat_intr-C` under Game
+Boy Color, on both engines: 126 under Auto, 124 under Game Boy and under Game Boy Color. `stat_lyc_onoff` still fails:
+its round 1 also expects STAT to read mode 0 right after the LCD comes on, which is rule 3.
+
+**The four games** keep the same PC, work RAM and VRAM at every 300th frame of MercuryRT's trace, and the real-games
+test passes.
+
+#### 13.11.2 Retired
+
+The referee page put `stat_lyc_onoff` down to rules 4 and 5. Both were needed and neither was enough: it waits on rule 3
+too. Its `intr_2_0_timing` pass and three `intr_2_*` failures it read as the skew between the IRQ and STAT's mode bits;
+that reading stands, untested, in §13.11.3.
+
+#### 13.11.3 Not built: the line boundary at T-cycle resolution
+
+Rules 1 (the mode-2 source as a pulse), 3 (no mode 2 on the first line after LCD-on), 6 (LY reading 0 early in line
+153) and the `intr_2_*` skew are one change, not four. `ppu/lcdon_timing-GS.s` gives the table: line 0 "starts with
+mode 0 and goes straight to mode 3", "is late by 2 T-cycles", and LY reads 1 four T-cycles before STAT reports line 1's
+mode 2. Mercury moves LY, the mode and the STAT line together at dot 456. Building these means a line boundary in which
+LY, the mode bits, the STAT sources and access blocking change on their own dots, which is the PPU's structure rather
+than a rule inside it, and it would move every game's timing. It is recorded as the next piece of PPU work, to be
+designed against the `lcdon_*`, `intr_2_*` and `stat_lyc_onoff` tables, and not built in this audit. Rule 3 alone was
+considered and not built: the table shows mode 0 at LCD-on, but no source this audit may use says whether an enabled
+mode-0 source raises the interrupt then, and building half the rule would choose that unproven.

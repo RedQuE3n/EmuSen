@@ -233,6 +233,9 @@ in place and settles the remainder afterwards (`Cpu.cs:129-134`):
 
 ### 2.6 STAT and the LCD's edges **[V]**
 
+*Audited 2026-10-15 (`Mercury_Native.md` §13.11): rules 2, 4 and 5 proven and fixed in both engines (`vblank_stat_intr-GS`
+and `-C` pass); rules 1, 3, 6 and the `intr_2_*` skew recorded as one later change to the PPU's line boundary.*
+
 Mercury drives STAT's mode bits, the STAT line and access blocking from one field, on one dot (`Ppu.Timing.cs:71-75`).
 Six rules differ, and in each the RTL and Mesen agree against Mercury.
 

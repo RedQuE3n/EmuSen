@@ -79,6 +79,7 @@ impl MemoryBus {
         let (cgb, compat) = (cgb_hardware && cart.is_cgb(), cgb_hardware && !cart.is_cgb());
         let mut ppu = Ppu::default();
         *ppu.compat = compat;
+        *ppu.cgb_hardware = cgb_hardware;
         let mut apu = Apu::default();
         *apu.cgb_hardware = cgb_hardware;
         MemoryBus {
@@ -202,15 +203,17 @@ impl MemoryBus {
         w.u8("_tma", self.tma);
     }
 
-    /// The tail after the mixer: 9 OAM DMA's start delay, 10 the sweep's negate flag; a field an older version lacks starts clear.
+    /// The tail after the mixer: 9 OAM DMA's start delay, 10 the sweep's negate flag, 11 the frozen LY=LYC bit; a field an older version lacks starts clear.
     pub fn write_tail(&self, w: &mut StateWriter) {
         w.i32("_oamDmaStartDelay", self.oam_dma_start_delay);
         w.group("Apu.Pulse1", |w| self.apu.pulse1.write_tail(w));
+        w.group("Ppu", |w| self.ppu.write_tail(w));
     }
 
     pub fn read_tail(&mut self, r: &mut StateReader, version: i32) -> StateResult {
         self.oam_dma_start_delay = if version >= 9 { r.i32()? } else { 0 }; // _oamDmaStartDelay
-        self.apu.pulse1.read_tail(r, version)
+        self.apu.pulse1.read_tail(r, version)?;
+        self.ppu.read_tail(r, version)
     }
 
     pub fn read_state(&mut self, r: &mut StateReader) -> StateResult {

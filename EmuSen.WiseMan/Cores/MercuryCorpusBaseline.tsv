@@ -111,7 +111,7 @@ mooneye/acceptance/ppu/lcdon_timing-GS.gb	2A9D46B61935AE1A	Failed	Failed	Failed	
 mooneye/acceptance/ppu/lcdon_write_timing-GS.gb	E28B34CEF8B5D58B	Failed	Failed	Failed	Failed	Failed	Failed
 mooneye/acceptance/ppu/stat_irq_blocking.gb	604436AEB6A37BAD	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/acceptance/ppu/stat_lyc_onoff.gb	29F04AAF6B26085B	Failed	Failed	Failed	Failed	Failed	Failed
-mooneye/acceptance/ppu/vblank_stat_intr-GS.gb	F7DE9A3EF1399F73	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/acceptance/ppu/vblank_stat_intr-GS.gb	F7DE9A3EF1399F73	Passed	Passed	Failed	Passed	Passed	Failed
 mooneye/acceptance/push_timing.gb	F764EE5053F4D1F8	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/acceptance/rapid_di_ei.gb	4BCFBEE2DCDCA789	Passed	Passed	Passed	Passed	Passed	Passed
 mooneye/acceptance/ret_cc_timing.gb	EB95FE488131F625	Passed	Passed	Passed	Passed	Passed	Passed
@@ -170,6 +170,6 @@ mooneye/misc/boot_div-cgbABCDE.gb	B5B2F6762CC1CBB4	Failed	Failed	Failed	Failed	F
 mooneye/misc/boot_hwio-C.gb	DCC7B577B5DEE891	Failed	Failed	Failed	Failed	Failed	Failed
 mooneye/misc/boot_regs-A.gb	3F1C2B50B9648CFD	Failed	Failed	Failed	Failed	Failed	Failed
 mooneye/misc/boot_regs-cgb.gb	9B466C875EEC05E7	Failed	Failed	Passed	Failed	Failed	Passed
-mooneye/misc/ppu/vblank_stat_intr-C.gb	20C6925C49226416	Failed	Failed	Failed	Failed	Failed	Failed
+mooneye/misc/ppu/vblank_stat_intr-C.gb	20C6925C49226416	Failed	Failed	Passed	Failed	Failed	Passed
 mooneye/utils/bootrom_dumper.gb	3F8267EA83A33677	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict
 mooneye/utils/dump_boot_hwio.gb	C38E06CB71745082	Passed	Passed	Passed	Passed	Passed	Passed

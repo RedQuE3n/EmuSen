@@ -353,10 +353,10 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x56, rig.Read(0xFE9F));
         }
 
-        // The current state cut back to an older version's tail: version 9 adds OAM DMA's delay (4 bytes), version 10 the sweep's flag (1).
+        // The current state cut back to an older version's tail: version 9 adds OAM DMA's delay (4 bytes), 10 the sweep's flag (1), 11 the frozen LY=LYC bit (1).
         private static byte[] AsVersion(byte[] state, int version)
         {
-            byte[] older = state[..^(version == 9 ? 1 : 5)];
+            byte[] older = state[..^(version switch { 10 => 1, 9 => 2, _ => 6 })];
             BitConverter.GetBytes(version).CopyTo(older, 4);
             return older;
         }
@@ -369,16 +369,17 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0xFF46, 0xC0);
             byte[] now = rig.State();
             Assert.Equal(MercuryCore.StateVersion, BitConverter.ToInt32(now, 4));
-            Assert.Equal(5, BitConverter.ToInt32(now, now.Length - 5));
+            Assert.Equal(5, BitConverter.ToInt32(now, now.Length - 6));
 
             rig.LoadState(new MemoryStream(AsVersion(now, 8)));
             byte[] back = rig.State();
-            Assert.Equal(0, BitConverter.ToInt32(back, back.Length - 5));
-            Assert.True(back.AsSpan(8, back.Length - 13).SequenceEqual(now.AsSpan(8, now.Length - 13)));
+            Assert.Equal(0, BitConverter.ToInt32(back, back.Length - 6));
+            Assert.True(back.AsSpan(8, back.Length - 14).SequenceEqual(now.AsSpan(8, now.Length - 14)));
         }
 
         // J: version 10 carries the sweep's negate flag; a version-9 state, which has none, loads with no subtraction made.
         [Theory]
+        [InlineData(11, 0x00)]
         [InlineData(10, 0x00)]
         [InlineData(9, 0x01)]
         public void The_sweeps_negate_flag_lives_in_version_10s_tail(int version, int channelOneAfter)
@@ -808,10 +809,10 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x02, rig.Read(0xFF0F) & 0x02);
         }
 
-        // K, mooneye vblank_stat_intr-GS: on a DMG the mode-2 source also fires at line 144, at the same time as vblank; the Color's fails that ROM.
+        // K, mooneye vblank_stat_intr-GS and vblank_stat_intr-C: the mode-2 source also fires for line 144, with vblank on a DMG and one machine cycle earlier on a CGB.
         [Theory]
         [InlineData(0x00, 0x03)]
-        [InlineData(0xC0, 0x01)]
+        [InlineData(0xC0, 0x03)]
         public void The_mode_2_source_fires_at_line_144_on_a_game_boy(byte cgbFlag, int interrupts)
         {
             var rig = Load(cgbFlag: cgbFlag);
@@ -821,6 +822,36 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0xFF0F, 0x00);
             TickUntil(rig, PpuMode.VBlank);
             Assert.Equal(interrupts, rig.Read(0xFF0F) & 0x03);
+        }
+
+        // K: version 11 carries the frozen comparison; a version-10 state, which has none, loads with it clear.
+        [Theory]
+        [InlineData(11, 0x04)]
+        [InlineData(10, 0x00)]
+        public void The_frozen_comparison_lives_in_version_11s_tail(int version, int bit)
+        {
+            var rig = AtLine144(0x00, 144);
+            rig.Write(0xFF40, 0x00);
+            byte[] state = rig.State();
+            rig.LoadState(new MemoryStream(version == MercuryCore.StateVersion ? state : AsVersion(state, version)));
+            Assert.Equal(bit, rig.Read(0xFF41) & 0x04);
+        }
+
+        // K, vblank_stat_intr-C: "stat_m2_144 is triggered one cycle before a vblank is" on the Color; on a DMG the two coincide.
+        [Theory]
+        [InlineData(0x00, 0x00)]
+        [InlineData(0xC0, 0x02)]
+        public void On_the_color_line_144s_mode_2_interrupt_comes_a_machine_cycle_before_vblank(byte cgbFlag, int interruptsBefore)
+        {
+            var rig = Load(cgbFlag: cgbFlag);
+            rig.Write(0xFF41, 0x20);
+            TickToLine143(rig);
+            TickUntil(rig, PpuMode.HBlank);
+            rig.Write(0xFF0F, 0x00);
+            while (rig.Bus.Ppu.Dot < 452) rig.Tick(1);
+            Assert.Equal(interruptsBefore, rig.Read(0xFF0F) & 0x03);
+            rig.Tick(4);
+            Assert.Equal(0x03, rig.Read(0xFF0F) & 0x03);
         }
     }
 

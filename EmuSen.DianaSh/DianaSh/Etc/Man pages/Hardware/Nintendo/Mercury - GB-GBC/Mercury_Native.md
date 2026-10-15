@@ -2834,3 +2834,20 @@ which compares with the unmodified build's states, therefore masks IF bit 4 on b
 
 **Retired.** §6.2's "a game that sleeps in STOP or HALT waiting for a button ... waits forever" is half answered: HALT
 with IE bit 4 now wakes on a press. DMG `STOP` is still not a stop, which is the referee's §3 and outside this audit.
+
+**Cost.** A `$FF00` write now reads the pad twice more; games poll it a few times a frame.
+
+| Game | MercuryRT step F | step G | C# step F | step G |
+|---|---|---|---|---|
+| Tetris | 0.4447, 0.4424, 0.4442 | 0.4378, 0.4371, 0.4370 | 0.6406, 0.6299, 0.6264 | 0.6370, 0.6275, 0.6613 |
+| Kirby's Dream Land | 0.5005, 0.4985, 0.4956 | 0.4925, 0.4951, 0.4965 | 0.6832, 0.6831, 0.6825 | 0.6842, 0.6884, 0.6803 |
+| Link's Awakening | 0.4050, 0.4033, 0.4025 | 0.4045, 0.4028, 0.4030 | 0.5667, 0.7320, 0.5622 | 0.5620, 0.5591, 0.5656 |
+| Pokémon Yellow | 0.5442, 0.5522, 0.5495 | 0.5468, 0.5400, 0.5520 | 0.7079, 0.7039, 0.7124 | 0.7192, 0.7090, 0.7058 |
+
+No change beyond the spread (Tetris's MercuryRT moved 1.5% faster, which is placement).
+
+**Mutants**, each in C# and in Rust separately, all caught on both engines: G1, a select write requests nothing
+(`Selecting_the_half_of_a_held_button_requests_the_joypad_interrupt`); G2, any change of a line requests it
+(`Releasing_a_button_requests_nothing`); G3, a press requests nothing
+(`Pressing_a_selected_button_requests_the_joypad_interrupt`); G4, line 3 not watched (the selecting claim, whose held
+button is Start, line 3).

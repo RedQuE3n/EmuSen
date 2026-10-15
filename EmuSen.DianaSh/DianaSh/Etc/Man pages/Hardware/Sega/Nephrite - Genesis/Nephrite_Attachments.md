@@ -1152,10 +1152,14 @@ build has grown by half.
   direction at compilation, and the compiler holds 329 of the Genesis's items and 229 of the Sega CD's private to their
   trees. What the Sega CD's 131 sites were is now `Attachment`, `AttachmentState` and `AttachmentView` (map, clock,
   sound, state, spaces), `frontend.rs` (media, firmware, battery files, the setting) and the assembly's numbers.
-- **Cost at the end**, against the baseline's build, alternated, load 3.5 to 7: Sonic the Hedgehog 1.375 ms (1.367),
-  Sonic 2 1.259 (1.260), Thunder Force IV 1.350 (1.356), Streets of Rage 2 1.149 (1.156), Phantasy Star IV 1.431
-  (1.422), Micro Machines 2 1.463 (1.460), the 240p disc 1.596 (1.601): within the runs' spread (§11.1). Measured with
-  the 32X's stub still compiling its frame, which runs on no cartridge's or disc's path.
+- **Cost at the end**, after `git merge WiseMan` (`9f8092b8`, a page), against the baseline's build, alternated, load
+  4.5 to 11 from other work on the machine: Sonic the Hedgehog 1.361 ms (1.390), Sonic 2 1.245 (1.258), Thunder Force
+  IV 1.350 (1.351), Streets of Rage 2 1.149 (1.148), Phantasy Star IV 1.427 (1.417), Micro Machines 2 1.459 (1.457), the
+  240p disc 1.578 (1.582): within the runs' spread (§11.1) or faster. The run before §11.8, at load 3.5 to 7, agreed
+  (Phantasy Star IV +0.6%, Sonic +0.6%, the rest within 0.6% either way).
+- **After the merge**: the crate's tests in the four configurations, 179, 143, 177 and 144; the 71 digests equal the
+  baseline's; the kit's sample 64 of 64 and the 240p disc with mcd-verificator as file 2 compliant (C1–C19); WiseMan's
+  Nephrite, Genesis and Registration tests, 86 pass.
 - **What the page got wrong, and where it is amended**: the requester it put off was needed (§3.3 as built); `Hw<A>`
   became `Wired<A>` and `Console<A>` was not built (§3.4, §5.1 as built), after a first form measured slower; tests that
   run a machine stay in their part's tree, outside the source check (§5.3 as built); the second instantiation keeps

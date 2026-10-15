@@ -294,6 +294,62 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(before + 8, rig.Cpu.Cycles);
             Assert.Equal(SyntheticGbRom.EntryPoint + 2, rig.Cpu.PC);
         }
+
+        // D: the LCD off, so only DMA closes OAM; OAM holds $12 and the pages at $C000 and $C100 hold $34 and $56.
+        private MercuryRig DmaReady()
+        {
+            var rig = Load();
+            rig.Write(0xFF40, 0x00);
+            for (int i = 0; i < 0xA0; i++)
+            {
+                rig.Write(0xFE00 + i, 0x12);
+                rig.Write(0xC000 + i, 0x34);
+                rig.Write(0xC100 + i, 0x56);
+            }
+            return rig;
+        }
+
+        // D, mooneye oam_dma_start: "M = 1: nothing (OAM still accessible); M = 2: new DMA starts, OAM reads will return $FF".
+        [Fact]
+        public void Oam_stays_open_for_one_machine_cycle_after_the_dma_write()
+        {
+            var rig = DmaReady();
+            rig.Write(0xFF46, 0xC0);
+            rig.Tick(4);
+            Assert.Equal(0x12, rig.Read(0xFE00));
+            rig.Tick(4);
+            Assert.Equal(0xFF, rig.Read(0xFE00));
+        }
+
+        // D, mooneye oam_dma_timing: a read 161 machine cycles after the write still sees $FF, one at 162 sees the copy.
+        [Fact]
+        public void Oam_is_closed_from_the_second_to_the_161st_machine_cycle_after_the_write()
+        {
+            var rig = DmaReady();
+            rig.Write(0xFF46, 0xC0);
+            rig.Tick(4 * 161);
+            Assert.Equal(0xFF, rig.Read(0xFE00));
+            rig.Tick(4);
+            Assert.Equal(0x34, rig.Read(0xFE00));
+            Assert.Equal(0x34, rig.Read(0xFE9F));
+        }
+
+        // D, mooneye oam_dma_restart: a second write keeps OAM closed while the first transfer runs on, and the second's own 160 cycles follow.
+        [Fact]
+        public void A_restarted_dma_keeps_oam_closed_and_ends_160_cycles_after_its_start()
+        {
+            var rig = DmaReady();
+            rig.Write(0xFF46, 0xC0);
+            rig.Tick(4 * 10);
+            rig.Write(0xFF46, 0xC1);
+            rig.Tick(4);
+            Assert.Equal(0xFF, rig.Read(0xFE00));
+            rig.Tick(4 * 160);
+            Assert.Equal(0xFF, rig.Read(0xFE00));
+            rig.Tick(4);
+            Assert.Equal(0x56, rig.Read(0xFE00));
+            Assert.Equal(0x56, rig.Read(0xFE9F));
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

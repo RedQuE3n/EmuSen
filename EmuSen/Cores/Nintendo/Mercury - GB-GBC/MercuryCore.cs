@@ -21,14 +21,13 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         public const uint StateMagic = 0x4352454D;
 
-        // 2 PPU, 3 colour banks and HDMA, 4 APU, 5 serial, 6 no save path or cartridge copies, 7 the console, 8 the mixer, 9 OAM DMA's start delay - see Mercury_Native.md §10, §13.4.
-        public const int StateVersion = 9;
+        // 2 PPU, 3 colour banks and HDMA, 4 APU, 5 serial, 6 no save path or cartridge copies, 7 the console, 8 the mixer, 9 OAM DMA's start delay, 10 the sweep's negate flag - see Mercury_Native.md §10, §13.
+        public const int StateVersion = 10;
 
         // Version 6 dropped the save path and the cartridge copies; version 7 names the console before the walks - see Mercury_Model.md §5.
         private const int RetiredCartCopies = 6;
         private const int ConsoleInHeader = 7;
         private const int MixerInState = 8;
-        private const int OamDmaDelayInState = 9;
 
         // The oldest version LoadState still reads, its retired fields walked and dropped - see Mercury_Native.md §9.3.
         public const int OldestReadableVersion = 5;
@@ -310,8 +309,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
             StateSerializer.Read(r, Bus, includeRetired: retired);
             // Before version 8 the mixer was not in the state: it keeps what it held, as it did then.
             if (version >= MixerInState) Bus.Apu.ReadMixer(r);
-            // Before version 9 a written DMA started at once, so no start is pending.
-            Bus.ReadTail(r, present: version >= OamDmaDelayInState);
+            // Fields an older version lacks start clear: no DMA start pending, no subtraction made - see Mercury_Native.md §13.4, §13.10.3.
+            Bus.ReadTail(r, version);
         }
     }
 }

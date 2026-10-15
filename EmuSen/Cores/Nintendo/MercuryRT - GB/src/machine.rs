@@ -12,11 +12,9 @@ pub const CYCLES_PER_FRAME: i64 = 70_224;
 
 /// "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
 pub const STATE_MAGIC: u32 = 0x4352_454D;
-pub const STATE_VERSION: i32 = 9;
+pub const STATE_VERSION: i32 = 10;
 /// Version 8 adds the mixer after the walks; earlier versions still load, the mixer kept (Mercury_Native.md §10).
 const MIXER_IN_STATE: i32 = 8;
-/// Version 9 adds OAM DMA's start delay after the mixer (Mercury_Native.md §13.4).
-const OAM_DMA_DELAY_IN_STATE: i32 = 9;
 /// The oldest version a load still reads, its retired fields read and dropped (Mercury_Native.md §9.3).
 pub const OLDEST_READABLE_VERSION: i32 = 5;
 /// The first version to name its console before the walks (Mercury_Model.md §5).
@@ -279,12 +277,8 @@ impl Machine {
         if version >= MIXER_IN_STATE {
             self.bus.apu.mixer.read_state(r)?;
         }
-        // Before version 9 a written DMA started at once, so no start is pending.
-        if version >= OAM_DMA_DELAY_IN_STATE {
-            self.bus.read_tail(r)?;
-        } else {
-            self.bus.oam_dma_start_delay = 0;
-        }
+        // Fields an older version lacks start clear: no DMA start pending, no subtraction made.
+        self.bus.read_tail(r, version)?;
         Ok(())
     }
 

@@ -353,22 +353,41 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x56, rig.Read(0xFE9F));
         }
 
+        // The current state cut back to an older version's tail: version 9 adds OAM DMA's delay (4 bytes), version 10 the sweep's flag (1).
+        private static byte[] AsVersion(byte[] state, int version)
+        {
+            byte[] older = state[..^(version == 9 ? 1 : 5)];
+            BitConverter.GetBytes(version).CopyTo(older, 4);
+            return older;
+        }
+
         // D: version 9 appends the start delay after the mixer; a version-8 state, which has none, loads with no start pending and the rest as it was.
         [Fact]
         public void A_version_8_state_loads_with_no_dma_start_pending()
         {
             var rig = DmaReady();
             rig.Write(0xFF46, 0xC0);
-            byte[] v9 = rig.State();
-            Assert.Equal(9, BitConverter.ToInt32(v9, 4));
-            Assert.Equal(5, BitConverter.ToInt32(v9, v9.Length - 4));
+            byte[] now = rig.State();
+            Assert.Equal(MercuryCore.StateVersion, BitConverter.ToInt32(now, 4));
+            Assert.Equal(5, BitConverter.ToInt32(now, now.Length - 5));
 
-            byte[] v8 = v9[..^4];
-            BitConverter.GetBytes(8).CopyTo(v8, 4);
-            rig.LoadState(new MemoryStream(v8));
+            rig.LoadState(new MemoryStream(AsVersion(now, 8)));
             byte[] back = rig.State();
-            Assert.Equal(0, BitConverter.ToInt32(back, back.Length - 4));
-            Assert.True(back.AsSpan(8, back.Length - 12).SequenceEqual(v9.AsSpan(8, v9.Length - 12)));
+            Assert.Equal(0, BitConverter.ToInt32(back, back.Length - 5));
+            Assert.True(back.AsSpan(8, back.Length - 13).SequenceEqual(now.AsSpan(8, now.Length - 13)));
+        }
+
+        // J: version 10 carries the sweep's negate flag; a version-9 state, which has none, loads with no subtraction made.
+        [Theory]
+        [InlineData(10, 0x00)]
+        [InlineData(9, 0x01)]
+        public void The_sweeps_negate_flag_lives_in_version_10s_tail(int version, int channelOneAfter)
+        {
+            var rig = SweepTriggered(0x09);
+            byte[] state = rig.State();
+            rig.LoadState(new MemoryStream(version == MercuryCore.StateVersion ? state : AsVersion(state, version)));
+            rig.Write(0xFF10, 0x01);
+            Assert.Equal(channelOneAfter, rig.Read(0xFF26) & 0x01);
         }
 
         // F, mooneye emulator-only/mbc1/ram_64kb and GBCTR's MBC1 RAM wiring: an 8 KiB chip has no pins for BANK2, so every RAM bank is the one bank.

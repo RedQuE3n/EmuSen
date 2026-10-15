@@ -368,6 +368,10 @@ Pan Docs' HDMA5 section gives the same, from knowledge.
 
 ### 2.10 The sound quirks blargg tests **[V]**
 
+*Audited 2026-10-15 (`Mercury_Native.md` §13.10): the length quirks (`03-trigger`), the negate rule (`05-sweep details`)
+and the power rules (`08`, `11`) proven and fixed in both engines; the four wave rows out of reach (their timing is
+encoded only in checksums).*
+
 For these rules the RTL is SameBoy's algorithm and Mesen cites SameBoy. Their agreement is one reading, not two. **The
 evidence is blargg's test source**, which states each rule and the failure text Mercury printed.
 

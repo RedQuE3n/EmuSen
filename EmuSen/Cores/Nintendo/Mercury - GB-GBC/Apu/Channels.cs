@@ -106,6 +106,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
         public int SweepShift;
         public bool SweepNegate;
 
+        // A sweep calculation was made in negate mode since the last trigger; in the state's version-10 tail - see Mercury_Native.md §13.10.3.
+        [EmuSen.Common.SkipInState] public bool SweepNegated;
+
         public int SweepTimer;
         public int SweepShadow;
         public bool SweepRunning;
@@ -134,6 +137,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             if (!HasSweep) return;
 
             SweepShadow = Frequency;
+            SweepNegated = false;
             SweepTimer = SweepPeriod == 0 ? 8 : SweepPeriod;
             SweepRunning = SweepPeriod > 0 || SweepShift > 0;
 
@@ -159,6 +163,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
         {
             int delta = SweepShadow >> SweepShift;
             int next = SweepNegate ? SweepShadow - delta : SweepShadow + delta;
+            SweepNegated |= SweepNegate;
 
             if (next > 2047)
             {

@@ -494,10 +494,18 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             _ => 1 << 7,
         };
 
-        // Version 9's tail, after the mixer: the one field the walk cannot carry without moving every older state's bytes - see Mercury_Native.md §13.4.
-        internal void WriteTail(System.IO.BinaryWriter w) => w.Write(_oamDmaStartDelay);
+        // The tail after the mixer, fields the walk cannot carry without moving every older state's bytes: 9 OAM DMA's delay, 10 the sweep's negate flag - see Mercury_Native.md §13.4, §13.10.3.
+        internal void WriteTail(System.IO.BinaryWriter w)
+        {
+            w.Write(_oamDmaStartDelay);
+            w.Write(Apu.Pulse1.SweepNegated);
+        }
 
-        internal void ReadTail(System.IO.BinaryReader r, bool present) => _oamDmaStartDelay = present ? r.ReadInt32() : 0;
+        internal void ReadTail(System.IO.BinaryReader r, int version)
+        {
+            _oamDmaStartDelay = version >= 9 ? r.ReadInt32() : 0;
+            Apu.Pulse1.SweepNegated = version >= 10 && r.ReadBoolean();
+        }
 
         public void Reset()
         {

@@ -1,11 +1,11 @@
 # blargg and mooneye verdicts per engine and console, the first 3,600 frames; re-recorded only with EMUSEN_MERCURY_CORPUS_RECORD=1 - see Mercury_Native.md §12.2.
 rom	sha256	Mercury/Auto	Mercury/GameBoy	Mercury/GameBoyColor	MercuryRt/Auto	MercuryRt/GameBoy	MercuryRt/GameBoyColor
-blargg/cgb_sound/cgb_sound.gb	DE2101EB718A2BF5	Failed(5)	Failed(5)	Failed(5)	Failed(5)	Failed(5)	Failed(5)
+blargg/cgb_sound/cgb_sound.gb	DE2101EB718A2BF5	Failed(9)	Failed(8)	Failed(9)	Failed(9)	Failed(8)	Failed(9)
 blargg/cgb_sound/rom_singles/01-registers.gb	8415D6C69F7954E9	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cgb_sound/rom_singles/02-len ctr.gb	A1CCF47375A2BEDE	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cgb_sound/rom_singles/03-trigger.gb	70173BE396D14AC9	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cgb_sound/rom_singles/04-sweep.gb	ABFD1F6FA9E6701E	Passed	Passed	Passed	Passed	Passed	Passed
-blargg/cgb_sound/rom_singles/05-sweep details.gb	F51A80C5538FE4B3	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
+blargg/cgb_sound/rom_singles/05-sweep details.gb	F51A80C5538FE4B3	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cgb_sound/rom_singles/06-overflow on trigger.gb	5701414D13BA55D2	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cgb_sound/rom_singles/07-len sweep period sync.gb	47D57BA87C3A9305	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cgb_sound/rom_singles/08-len ctr during power.gb	BE7948C70946E0B8	Passed	Failed(1)	Passed	Passed	Failed(1)	Passed
@@ -25,12 +25,12 @@ blargg/cpu_instrs/individual/08-misc instrs.gb	974A71FE4C67F70F	Passed	Passed	Pa
 blargg/cpu_instrs/individual/09-op r,r.gb	B28E1BE5CD95F22B	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cpu_instrs/individual/10-bit ops.gb	7F5B8E488C6988B5	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cpu_instrs/individual/11-op a,(hl).gb	0EC0CF9FDA3F00BE	Passed	Passed	Passed	Passed	Passed	Passed
-blargg/dmg_sound/dmg_sound.gb	C34E740664EB14B4	Failed(5)	Failed(5)	Failed(5)	Failed(5)	Failed(5)	Failed(5)
+blargg/dmg_sound/dmg_sound.gb	C34E740664EB14B4	Failed(9)	Failed(9)	Failed(8)	Failed(9)	Failed(9)	Failed(8)
 blargg/dmg_sound/rom_singles/01-registers.gb	C6B9FA4B9D9D2691	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/dmg_sound/rom_singles/02-len ctr.gb	745544125A506572	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/dmg_sound/rom_singles/03-trigger.gb	BB11E7266A7143BA	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/dmg_sound/rom_singles/04-sweep.gb	58BC14541D91BB02	Passed	Passed	Passed	Passed	Passed	Passed
-blargg/dmg_sound/rom_singles/05-sweep details.gb	F582CA3A0B2544B9	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
+blargg/dmg_sound/rom_singles/05-sweep details.gb	F582CA3A0B2544B9	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/dmg_sound/rom_singles/06-overflow on trigger.gb	1A511E95E84ED6FE	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/dmg_sound/rom_singles/07-len sweep period sync.gb	56BF5B0C18B99692	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/dmg_sound/rom_singles/08-len ctr during power.gb	31CB41F7BE106A70	Passed	Passed	Failed(1)	Passed	Passed	Failed(1)

@@ -281,8 +281,12 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
         private void WriteSweep(byte value)
         {
+            bool wasNegate = Pulse1.SweepNegate;
             Pulse1.SweepPeriod = (value >> 4) & 0x07;
             Pulse1.SweepNegate = (value & 0x08) != 0;
+
+            // Leaving negate mode after a subtraction since the trigger disables the channel - see Mercury_Native.md §13.10.3.
+            if (wasNegate && !Pulse1.SweepNegate && Pulse1.SweepNegated) Pulse1.Enabled = false;
             Pulse1.SweepShift = value & 0x07;
         }
 

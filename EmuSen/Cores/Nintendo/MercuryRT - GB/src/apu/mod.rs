@@ -266,9 +266,14 @@ impl Apu {
         self.registers[index] = value;
         match address {
             0xFF10 => {
+                let was_negate = self.pulse1.sweep_negate;
                 self.pulse1.sweep_period = ((value >> 4) & 0x07) as i32;
                 self.pulse1.sweep_negate = value & 0x08 != 0;
                 self.pulse1.sweep_shift = (value & 0x07) as i32;
+                // Leaving negate mode after a subtraction since the trigger disables the channel (Mercury_Native.md §13.10.3).
+                if was_negate && !self.pulse1.sweep_negate && self.pulse1.sweep_negated {
+                    self.pulse1.enabled = false;
+                }
             }
             0xFF11 => write_duty_length(&mut self.pulse1, value),
             0xFF12 => write_envelope(&mut self.pulse1, value),

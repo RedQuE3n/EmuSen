@@ -3028,3 +3028,41 @@ Auto, 121 under Game Boy and Game Boy Color, the same in both engines.
 written while off loads its duty too (both by the first theory's DMG case); J7, a CGB keeps its counters through a power
 cycle (the second theory's CGB case). Cost was not measured separately: only NR52 and writes while the APU is off
 changed.
+
+#### 13.10.3 Leaving the sweep's negate mode
+
+**The rule** (`05-sweep details.s` #4–#6; Pan Docs): "clearing the sweep direction bit in NR10 after at least one sweep
+calculation has been made using the subtraction mode since the last trigger causes the channel to be immediately
+disabled". Mercury did not model it.
+
+**The proof.** `Leaving_negate_mode_after_a_subtraction_silences_channel_one` failed on both engines, with
+`Leaving_negate_mode_before_any_subtraction_keeps_channel_one` and `A_trigger_forgets_an_earlier_subtraction` as
+controls (`004041c8`).
+
+**The fix**, the same in both engines: channel 1 remembers that a calculation was made in negate mode since its last
+trigger (`PulseChannel.SweepNegated`, `sweep_negated`; set in `ComputeSweep`, cleared by the trigger before its own
+calculation), and an NR10 write that clears the direction bit while it is set disables the channel.
+
+**State version 10.** The flag is machine state the walk cannot carry, so, as §13.4's delay did, it follows the tail:
+both engines write 10 and read 5 to 10, a state before 10 loading with no subtraction made. `The_sweeps_negate_flag_lives_in_version_10s_tail`
+shows it on both engines: a state saved after a subtraction keeps the rule after a load, and the same state cut to
+version 9 loads without it. The version-8 claim of §13.4 now cuts five bytes. The four synthetic programs' state
+digests moved by the version and the byte only (each one's version-7 form is unchanged) and were re-recorded.
+
+**The corpus.** `05-sweep details` passes on both suites in all six columns. The combined `dmg_sound` and `cgb_sound`
+now stop at their eighth test (`08-len ctr during power`) on the console they were not written for, and at their ninth
+(`09-wave read while on`) on their own. Passes: 125 under Auto, 123 under Game Boy and Game Boy Color. **The four
+games** run as before (MercuryRT's trace keeps the same PC, work RAM and VRAM; the real-games test passes); the whole
+`Mercury` filter passes.
+
+#### 13.10.4 The wave channel: out of reach
+
+The remaining rows, `09-wave read while on`, `12-wave write while on` and `12-wave` (CGB) and `10-wave trigger while on`
+(DMG), test what wave RAM answers while channel 3 plays and what a retrigger corrupts. Pan Docs states the rules in
+words (`Audio_details.md`: a trigger leaves the first sample to the old buffer and plays from the second; a DMG
+retrigger while the channel reads a byte rewrites the first bytes of wave RAM). Each ROM, though, grades them by a
+checksum of 69 reads or rewrites, each taken two T-cycles later than the last, against the channel's fetch position
+after a trigger. That position depends on the exact delay between the trigger and the first fetch, which neither Pan
+Docs nor GBCTR gives, and which the ROMs encode only as a checksum. Finding it by trying delays until the checksum
+matches would be fitting a model to a test, not deriving it from evidence, and the only sources that state it are the
+references this audit does not use. **Out of reach**, with the rules recorded for when a document gives the timing.

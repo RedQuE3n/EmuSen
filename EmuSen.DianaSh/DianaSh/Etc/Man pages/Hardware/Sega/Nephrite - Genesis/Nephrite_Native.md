@@ -4030,7 +4030,7 @@ which are argued within what the logs and tests allow.
 
 ### 54.3 Carried to stage 9
 
-- **The player's BIOS does not get past its first screen** (§53.4). Stage 9's first task, before the ASIC and the
+- ~~**The player's BIOS does not get past its first screen** (§53.4).~~ *Found and fixed 2026-10-15 (§55).* Stage 9's first task, before the ASIC and the
   PCM, since its references (the five discs on that BIOS against Genesis Plus GX) need it. Places to look, all at
   the registers: the subcode registers and level 6 (`$FF8068`, `$FF8100`, not built); the graphics ASIC's registers
   (`$FF8058`-`$FF8066`, not built, reading 0); the PCM chip's registers, which read 0; the version bits of `$FF8000`;
@@ -4289,3 +4289,113 @@ CD-DA stood 10.2 dB and the PCM 5.7 dB too loud against the model 1 pair. The X'
 - **The crate's tests**: 170 pass, among them de-emphasis's curve, the fader's ramp, the low-pass and the pause.
 - **The 240p suite (1.32) on the player's BIOS**: it boots, its menus answer the pad, and its MDFourier sequence runs
   to the end, PCM and CD-DA included.
+
+## 60. Stage 9's close: the discs and the 240p suite on the player's BIOS, and stage 9 closed (2026-10-15)
+
+### 60.1 Found on the way: a stopped drive's TOC request
+
+Sonic CD (Europe) on a European model 1 BIOS stood at the first screen's "Press RESET to open the CD tray.": the BIOS
+stopped the drive when track 1's start had not come in 44 frames, asked for the TOC again, and answers carrying status
+0 ended its asking. A stopped drive that has read its TOC now goes to status 9 on a TOC request (D-40), and the disc
+boots.
+
+### 60.2 The five discs on the player's BIOS against Genesis Plus GX
+
+Each disc run 4,800 frames (the two slowest 7,200) with no button pressed, on a model 1 American BIOS (the European
+disc on a model 1 European one), and in Genesis Plus GX given the same BIOS as its system folder; pictures every 30
+frames, each reference picture matched to Nephrite's best up to a one-to-one colour map. Genesis Plus GX and PicoDrive
+start with a formatted backup RAM, a console whose RAM was never formatted does not: Nephrite's runs were made both
+ways, the formatted RAM an 8 KiB image PicoDrive made (a reference's output, kept in the scratch folder).
+
+| Disc | Unformatted RAM | Formatted RAM | Against Genesis Plus GX |
+|---|---|---|---|
+| Sonic CD (USA) | boots at frame 960; stops at "Internal RAM is not initialized." | title at 1,740; its streamed intro from 5,160 | the first screen's frames 300-720 exact; the title exact (1,470 there); the intro from 3,600 there |
+| Sonic CD (Europe) | boots at 960; stops at the same message | title at 1,860; the intro plays | title at 1,500 there, 16% of pixels apart by the clouds' phase |
+| Lunar - Eternal Blue | "BACKUP RAM IS NOT FORMATTED!" at 1,860, as there | the LUNAR logo at 3,870 | the message and the logo exact (1,680 and 3,000 there) |
+| Mickey Mania | its own credits at 3,240, the title at 3,870, then its attract play | — | both exact (2,520 and 2,880 there) |
+| Chuck Rock II | its intro's scenes from 2,910 | — | the scenes exact (1,440 there), the lead growing to about 1,900 frames by 6,240 |
+
+Every picture the two have in common is the reference's to the pixel up to a colour map but for animation's phase;
+Nephrite is later throughout. The lead is the drive's: 120 frames at the boot from the lead-in's cycle (§57.3), and
+more wherever a game plays in short steps (each play at least 26 exchanges, D-33's busy, travel and approach from the
+LL logs) or seeks far: Sonic CD's seek from its title's track 2 to its data, 200,000 sectors, takes 5 s on D-33's
+curve, which the LL logs measured only over short distances. A console's load times were not measured; whether the
+reference or Nephrite is nearer a console is not known.
+
+PicoDrive, given the BIOS, boots Sonic CD (USA) to its title by frame 1,440; BlastEm loads no Sega CD from the slot.
+
+### 60.3 The 240p Sega CD suite on the player's BIOS
+
+It boots by the BIOS's Start, shows its intro and menus, answers the pad, and runs its MDFourier sequence to the end
+(§59). Against Genesis Plus GX, the same presses given: the main menu at frames 1,400 and 1,500 and the audio menu at
+1,600 and 1,800 are its pictures exactly, and frame 1,700 all but 80 pixels.
+
+### 60.4 The gate
+
+| What §49.4 asked | Result |
+|---|---|
+| The player's BIOS past its first screen (§54.3) | Done (§55): the drive's idle status and its start; the BIOS then needed the ASIC, three faults it uncovered (§57.2) and D-40 |
+| 9.1 the graphics ASIC | Built (§57); the BIOS's turning logo the reference's to the pixel |
+| 9.2 the RF5C164 | Built (§58); mcd-verificator's PCM RAM, CLOCK and VAR pass (the references fail VAR) |
+| 9.3 the fader and the mix | Built (§59); against two model 1 Sega CDs' recordings, PCM and CD-DA within 0.33 dB; D-35 settled |
+| 9.4 the discs and the 240p suite on the player's BIOS against Genesis Plus GX | §60.2, §60.3: all five discs and the suite boot and play; pictures equal, Nephrite later |
+| mcd-verificator in the references' slot (Q3) | §55.5 |
+| mcd-verificator's other tests (Q6) | The PCM's three pass (§58). Its ASIC test (`asic.c`) and its CDD tests (`test_cdd2.c`) print counts for a person to read and grade nothing, so they give no verdict to hold Nephrite to |
+| The Genesis unchanged | The kit's Genesis sample 64 of 64 (C1-C19, core ABI 1.7); the crate's program tests pass; the cost as §60.6 |
+
+Stage 9 is closed. Stage 10, the open BIOS, is a fresh writer's (§49.5): nothing of §55-§60's BIOS runs but their
+results is for it, and the register watch of §55.1 records nothing of a BIOS but its devices' registers.
+
+### 60.5 What stands open
+
+- **The backup RAM a new console has.** A disc that needs a formatted internal backup RAM stops at its message until
+  the player formats it with the BIOS's control panel; both references start formatted. Whether Nephrite should supply
+  a formatted RAM on a machine's first run is a question for the tester (the format is the BIOS's, stage 10's).
+- **The drive's long seeks and load times** (§60.2), and **its DRS timing** (no status is read during reception).
+- **The sub CPU's wait while the ASIC runs** (D-37), not built.
+- **EFDT** reads 0: no document says how long a fader write takes to reach the LC7883.
+- **The mix on other consoles**: the Sega CD's level against the Genesis is 5 to 8 dB higher on the model 2 pair and the
+  CDX than on the model 1 pair Nephrite holds to (D-39).
+- **The PCM's RAM read while it sounds**, which the manual calls impossible, still answers.
+- **Mode 1** is stage 10's (Q4).
+
+### 60.6 Measured (2026-10-15)
+
+- **The crate's tests**: 171 pass (159 at stage 9's start), mcd-verificator's eighteen among them.
+- **The conformance kit**, core ABI 1.7: the Genesis sample 64 of 64 with the core's cases; the 240p disc with
+  mcd-verificator as file 2, Sonic CD (USA), Mickey Mania and Lunar with a player's BIOS as file 2 and Sonic CD (Europe)
+  with a European one as file 3, 600 frames each: compliant (C1-C19), state round trips with the ASIC, the PCM and the
+  filters in them included.
+- **WiseMan**: the Nephrite, Genesis and Registration tests, 83 pass after the merge of core ABI 1.7.
+- **The cartridge Genesis's cost**, `examples/bench`, best of 10 runs of 600 frames on one core, this build beside the
+  build before stage 9, three alternations, with other work running on the machine (load 4 to 7): Sonic the Hedgehog
+  1.370-1.409 ms (before 1.370-1.409), its sequel 1.261-1.274 (1.247-1.255), Thunder Force IV 1.347-1.372
+  (1.353-1.373), Streets of Rage 2 1.152-1.192 (1.145-1.155 but one run of 1.897), Phantasy Star IV 1.438-1.452
+  (1.407-1.455). The only change on a cartridge's path is one test of the attachment flag in a DMA's read; each stage 9
+  commit built alone, on a quieter run, measured within 0.3% of the build before. A 1% difference cannot be told from
+  the noise of a loaded machine here.
+- **The Sega CD's cost**: mcd-verificator on the 240p disc 1.589-1.624 ms (the build before 1.574-1.589); the player's
+  BIOS's first screen, the ASIC turning its logo, 2.193 ms; Mickey Mania's title and attract play 2.085 ms; against the
+  plan's 2.5.
+- **State version 20**: a Genesis state of 16 to 20 loads; a Sega CD state of 20 round trips and is held to its disc;
+  19 is refused.
+- **What a player sees**: nothing new. The `mcd` system stays marked in development until stage 10 (§49.2); a
+  development build runs a disc on the player's BIOS through to its games, the attachment's sound mixed as §59 measured.
+
+### 60.7 Reading log (stage 9)
+
+Read: the Mega-CD Hardware Manual's page images at 110 and 300 dpi: the register table (§2), §3-1 and the initial
+values, §3-6 (`$FF8034`, `$FF8036`), §3-8 whole, §3-9, §4-1, and §4's "precautions in using DMA of the VDP"; its "PCM
+Sound Source" section, §1-§4.9; Ricoh's RF5C68A data sheet (its text); Sanyo's LC7883 data sheet (the filter,
+de-emphasis and attenuation sections, in its text); Sanyo's LC8950/LC8951 manual §12.5; plutiedev's "Sub CPU in mode
+1"; mcd-verificator's `pcm.c`, `pcm.h`, `asic.c`, `main.c`, `cdd.c`, `cdd.h`, the head of `test_cdd2.c`, `test_cdc_new.c`'s
+CDC INIT, `sub_bios.s`, its `Makefile` and `rom.ld`; krikzz's `notes/` (`asic-render.txt`, `cdd-cmd-info.txt`, `random
+notes.txt`); the LL logs, counted by status and flags; the 240p suite's Genesis/Sega CD source (`mdfourier.c`'s
+sequence and its PCM and CD-DA parts, `main.c`'s menus); MDFourier's recordings (§59.2); the repository's
+`mdrecordings.py`. Disassembled, with Beryl's disassembler: mcd-verificator V1.02's own binary, to find its PCM tests
+and `main`'s pointer to its test list. Run as black boxes: Genesis Plus GX, PicoDrive and BlastEm, by their pictures,
+sound and the RAM of homebrew programs (the drive probe's, the patched mcd-verificator's). Screened and not opened:
+`cd-log/BI-mcd-tst/`, `cd-log/sonic-bios/`. Not read: any emulator's source, any RTL file, any BIOS image, listing,
+trace or log. The player's BIOS was given to Nephrite and to the references as a file; of its runs only their devices'
+registers, pictures, sound and frame numbers were looked at, never its code, its RAM before a game's hand-over or a
+program counter.

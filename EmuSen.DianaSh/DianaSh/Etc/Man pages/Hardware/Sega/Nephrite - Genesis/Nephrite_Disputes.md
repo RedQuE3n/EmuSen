@@ -1683,6 +1683,7 @@ CPUs' disputes in their own record pages.
 - Referee: none read.
 - Conclusion: argued. A stopped drive that has read its TOC goes to status 9 when a TOC request comes, as it does the
   first time; the note's "first time" read as the TOC's first reading, not the state's only entry. With it the BIOS
-  asked for track 1's start again and the disc booted, at frame 840 as Genesis Plus GX's does.
+  asked for track 1's start again and the disc booted, its licence screen at frame 960 against Genesis Plus
+  GX's 840, the same lead as on the American disc (`Nephrite_Native.md` §60.2).
 - Pinned by: `a_toc_request_after_a_stop_finds_the_drive_ready`.
 - Implemented in: stage 9 step 4's commit.
